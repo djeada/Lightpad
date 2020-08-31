@@ -1,7 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "lightpadpage.h"
-#include "findreplacepanel.h"
 
 #include <QDebug>
 #include <QStackedWidget>
@@ -10,6 +9,7 @@
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
+    findReplacePanel(nullptr),
     ui(new Ui::MainWindow) {
         QApplication::instance()->installEventFilter(this);
         ui->setupUi(this);
@@ -174,7 +174,16 @@ void MainWindow::on_actionClose_All_Tabs_triggered()
 
 void MainWindow::on_actionFind_in_file_triggered()
 {
-    qobject_cast<QBoxLayout*>(ui->tabWidget->currentWidget()->layout())->addWidget(new FindReplacePanel(), 0);
+  if (!findReplacePanel) {
+      findReplacePanel = new FindReplacePanel();
+      ui->tabWidget->currentWidget()->layout()->addWidget(findReplacePanel);
+  }
+
+  else if (findReplacePanel->isHidden())
+      findReplacePanel->show();
+
+  else
+      findReplacePanel->hide();
 
 }
 

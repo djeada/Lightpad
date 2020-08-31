@@ -24,6 +24,7 @@ SOURCES     = main.cpp \
       textarea.cpp
 
 FORMS += \
+    findreplacepanel.ui \
     mainwindow.ui
 
 RESOURCES += \

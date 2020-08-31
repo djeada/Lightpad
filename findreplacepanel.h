@@ -2,30 +2,27 @@
 #define FINDREPLACEPANEL_H
 
 #include <QWidget>
-#include <QLabel>
-#include <QPushButton>
-#include <QDialogButtonBox>
-#include <QCheckBox>
-#include <QLineEdit>
 
-class FindReplacePanel : public QWidget
+namespace Ui {
+    class FindReplacePanel;
+}
+
+
+class  FindReplacePanel : public QWidget
 {
     Q_OBJECT
-public:
-    explicit FindReplacePanel(QWidget *parent = nullptr);
+    public:
+        FindReplacePanel(QWidget *parent = nullptr);
+        ~FindReplacePanel();
+        void toggleExtensionVisibility();
 
-private:
-    QLabel *label;
-    QLineEdit *lineEdit;
-    QCheckBox *caseCheckBox;
-    QCheckBox *fromStartCheckBox;
-    QCheckBox *wholeWordsCheckBox;
-    QCheckBox *searchSelectionCheckBox;
-    QCheckBox *backwardCheckBox;
-    QDialogButtonBox *buttonBox;
-    QPushButton *findButton;
-    QPushButton *moreButton;
-    QWidget *extension;
+    private slots:
+        void on_more_clicked();
+        void on_find_clicked();
+
+    private:
+        QWidget* extension;
+        Ui::FindReplacePanel *ui;
 };
 
 #endif // FINDREPLACEPANEL_H

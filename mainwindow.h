@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include "textarea.h"
+#include "findreplacepanel.h"
 
 namespace Ui {
     class MainWindow;
@@ -45,6 +46,7 @@ private:
         void open(const QString &filePath);
         void save(const QString &filePath);
         TextArea* getCurrentTextArea();
+        FindReplacePanel* findReplacePanel;
 };
 
 #endif // MAINWINDOW_H

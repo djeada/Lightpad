@@ -1,60 +1,45 @@
 #include "findreplacepanel.h"
+#include "ui_findreplacepanel.h"
 #include <QVBoxLayout>
+#include <QDebug>
 
-FindReplacePanel::FindReplacePanel(QWidget *parent) : QWidget(parent)
+FindReplacePanel::FindReplacePanel(QWidget *parent) :
+    QWidget(parent),
+    ui(new Ui::FindReplacePanel)
 {
-    label = new QLabel(tr("Find &what:"));
-    lineEdit = new QLineEdit;
-    label->setBuddy(lineEdit);
+    ui->setupUi(this);
 
-    caseCheckBox = new QCheckBox(tr("Match &case"));
-    fromStartCheckBox = new QCheckBox(tr("Search from &start"));
-    fromStartCheckBox->setChecked(true);
+     show();
 
-    findButton = new QPushButton(tr("&Find"));
-    findButton->setDefault(true);
+     ui->wholeWords->setVisible(false);
+     ui->searchBackward->setVisible(false);
 
-    moreButton = new QPushButton(tr("&More"));
-    moreButton->setCheckable(true);
-    moreButton->setAutoDefault(false);
 
-    extension = new QWidget;
+     ui->find->setFixedSize(ui->more->width(), ui->find->height());
+}
 
-    wholeWordsCheckBox = new QCheckBox(tr("&Whole words"));
-    backwardCheckBox = new QCheckBox(tr("Search &backward"));
-    searchSelectionCheckBox = new QCheckBox(tr("Search se&lection"));
+FindReplacePanel::~FindReplacePanel()
+{
+    delete ui;
+}
 
-    buttonBox = new QDialogButtonBox(Qt::Vertical);
-    buttonBox->addButton(findButton, QDialogButtonBox::ActionRole);
-    buttonBox->addButton(moreButton, QDialogButtonBox::ActionRole);
+void FindReplacePanel::on_more_clicked()
+{
 
-    connect(moreButton, &QAbstractButton::toggled, extension, &QWidget::setVisible);
+    if ( !ui->wholeWords->isVisible()) {
+        ui->wholeWords->setVisible(true);
+        ui->searchBackward->setVisible(true);
+    }
 
-    QVBoxLayout *extensionLayout = new QVBoxLayout;
-    extensionLayout->setContentsMargins(QMargins());
-    extensionLayout->addWidget(wholeWordsCheckBox);
-    extensionLayout->addWidget(backwardCheckBox);
-    extensionLayout->addWidget(searchSelectionCheckBox);
-    extension->setLayout(extensionLayout);
+    else {
+        ui->wholeWords->setVisible(false);
+        ui->searchBackward->setVisible(false);
+    }
 
-    QHBoxLayout *topLeftLayout = new QHBoxLayout;
-    topLeftLayout->addWidget(label);
-    topLeftLayout->addWidget(lineEdit);
 
-    QVBoxLayout *leftLayout = new QVBoxLayout;
-    leftLayout->addLayout(topLeftLayout);
-    leftLayout->addWidget(caseCheckBox);
-    leftLayout->addWidget(fromStartCheckBox);
+}
 
-    QGridLayout *mainLayout = new QGridLayout;
-    mainLayout->setSizeConstraint(QLayout::SetNoConstraint);
-    mainLayout->addLayout(leftLayout, 0, 0);
-    mainLayout->addWidget(buttonBox, 0, 1);
-    mainLayout->addWidget(extension, 1, 0, 1, 2);
-    mainLayout->setRowStretch(2, 1);
+void FindReplacePanel::on_find_clicked()
+{
 
-    setLayout(mainLayout);
-    extension->hide();
-
-    show();
 }
