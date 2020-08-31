@@ -1,0 +1,247 @@
+#include "mainwindow.h"
+#include "ui_mainwindow.h"
+#include "lightpadpage.h"
+#include "findreplacepanel.h"
+
+#include <QDebug>
+#include <QStackedWidget>
+#include <QMessageBox>
+#include <QFileDialog>
+
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    ui(new Ui::MainWindow) {
+        QApplication::instance()->installEventFilter(this);
+        ui->setupUi(this);
+        show();
+        ui->tabWidget->correctTabButtonPosition();
+        setWindowTitle("LightPad");
+}
+
+MainWindow::~MainWindow()
+{
+    delete ui;
+}
+
+bool MainWindow::eventFilter(QObject *object, QEvent *event)
+{
+    switch (event->type()){
+            case QEvent::KeyPress: {
+
+                QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+
+                if (keyEvent->matches(QKeySequence::Undo)) {
+                        undo();
+                        return true;
+                }
+
+                else if (keyEvent->matches(QKeySequence::Redo)) {
+                        redo();
+                        return true;
+                }
+
+                else if (keyEvent->matches(QKeySequence::ZoomIn)) {
+                    on_actionIncrease_Font_Size_triggered();
+                    return true;
+                }
+
+                else if (keyEvent->matches(QKeySequence::ZoomOut)) {
+                    on_actionDecrease_Font_Size_triggered();
+                    return true;
+                }
+
+                else if (keyEvent->matches(QKeySequence::Save)) {
+                    on_actionSave_triggered();
+                    return true;
+                }
+
+
+                else if (keyEvent->matches(QKeySequence::SaveAs)) {
+                    on_actionSave_as_triggered();
+                    return true;
+                }
+
+                return false;
+            }
+
+             default:
+                return false;
+    }
+
+    return false;
+}
+
+void MainWindow::on_actionToggle_Full_Screen_triggered()
+{
+    if (isMaximized())
+        showNormal();
+
+    else
+        showMaximized();
+}
+
+void MainWindow::on_actionQuit_triggered()
+{
+    close();
+}
+
+void MainWindow::undo()
+{
+    if (getCurrentTextArea())
+        getCurrentTextArea()->undo();
+}
+
+void MainWindow::redo()
+{
+    if (getCurrentTextArea())
+        getCurrentTextArea()->redo();
+}
+
+TextArea *MainWindow::getCurrentTextArea()
+{
+    if (ui->tabWidget->currentWidget()->findChild<LightpadPage*>("widget"))
+        return ui->tabWidget->currentWidget()->findChild<LightpadPage*>("widget")->getTextArea();
+
+    else if (ui->tabWidget->currentWidget()->findChild<TextArea*>(""))
+        return ui->tabWidget->currentWidget()->findChild<TextArea*>("");
+
+    return nullptr;
+}
+
+void MainWindow::on_actionToggle_Undo_triggered()
+{
+    undo();
+}
+
+void MainWindow::on_actionToggle_Redo_triggered()
+{
+    redo();
+}
+
+void MainWindow::on_actionIncrease_Font_Size_triggered()
+{
+    if (getCurrentTextArea())
+        getCurrentTextArea()->increaseFontSize();
+}
+
+void MainWindow::on_actionDecrease_Font_Size_triggered()
+{
+    if (getCurrentTextArea())
+        getCurrentTextArea()->decreaseFontSize();
+}
+
+void MainWindow::on_actionReset_Font_Size_triggered()
+{
+    if (getCurrentTextArea())
+        getCurrentTextArea()->changeFontSize(QFontMetrics(QApplication::font()).height());
+}
+
+void MainWindow::on_actionCut_triggered()
+{
+    if (getCurrentTextArea())
+        getCurrentTextArea()->cut();
+}
+
+
+void MainWindow::on_actionCopy_triggered()
+{
+    if (getCurrentTextArea())
+        getCurrentTextArea()->copy();
+}
+
+void MainWindow::on_actionPaste_triggered()
+{
+    if (getCurrentTextArea())
+        getCurrentTextArea()->paste();
+}
+
+void MainWindow::on_actionNew_Window_triggered()
+{
+    new MainWindow();
+}
+
+void MainWindow::on_actionClose_Tab_triggered()
+{
+    if (ui->tabWidget->currentIndex() > -1)
+     ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
+}
+
+void MainWindow::on_actionClose_All_Tabs_triggered()
+{
+    while (ui->tabWidget->currentIndex() > -1)
+     ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
+}
+
+void MainWindow::on_actionFind_in_file_triggered()
+{
+    qobject_cast<QBoxLayout*>(ui->tabWidget->currentWidget()->layout())->addWidget(new FindReplacePanel(), 0);
+
+}
+
+void MainWindow::on_actionNew_File_triggered()
+{
+
+}
+
+void MainWindow::on_actionOpen_File_triggered()
+{
+    QString filePath = QFileDialog::getOpenFileName(this, tr("Open Document"), QDir::homePath());
+
+    if (filePath.isEmpty())
+        return;
+
+    open(filePath);
+}
+
+void MainWindow::on_actionSave_triggered()
+{
+
+    if (windowFilePath().isEmpty()) {
+        on_actionSave_as_triggered();
+        return;
+    }
+
+    save(windowFilePath());
+}
+
+void MainWindow::on_actionSave_as_triggered()
+{
+    //tr("JavaScript Documents (*.js)")
+    QString filePath = QFileDialog::getSaveFileName(this, tr("Save Document"), QDir::homePath());
+
+    if(filePath.isEmpty())
+        return;
+
+    setWindowFilePath(filePath);
+    on_actionSave_triggered();
+}
+
+
+void MainWindow::open(const QString &filePath)
+{
+    QFile file(filePath);
+
+    if (!file.open(QFile::ReadOnly | QFile::Text)) {
+        QMessageBox::critical(this, tr("Error"), tr("Can't open file."));
+        return;
+    }
+
+    setWindowFilePath(filePath);
+
+    if ( getCurrentTextArea())
+      getCurrentTextArea()->setPlainText(QString::fromUtf8(file.readAll()));
+}
+
+void MainWindow::save(const QString &filePath)
+{
+    QFile file(filePath);
+
+    if (!file.open(QFile::WriteOnly|QFile::Truncate|QFile::Text)) {
+        return;
+    }
+
+    if (getCurrentTextArea()) {
+        file.write(getCurrentTextArea()->toPlainText().toUtf8());
+        getCurrentTextArea()->document()->setModified(false);
+    }
+}

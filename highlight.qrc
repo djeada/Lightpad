@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/new/highlight">
+        <file>highlight/Cpp/0.txt</file>
+    </qresource>
+</RCC>
