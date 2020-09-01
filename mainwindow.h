@@ -42,12 +42,15 @@ class MainWindow : public QMainWindow {
 
         void on_actionToggle_Menu_Bar_triggered();
 
+        void on_actionReplace_in_file_triggered();
+
 private:
         Ui::MainWindow *ui;
         void undo();
         void redo();
         void open(const QString &filePath);
         void save(const QString &filePath);
+        void showFindReplace(bool onlyFind = true);
         TextArea* getCurrentTextArea();
         FindReplacePanel* findReplacePanel;
 };

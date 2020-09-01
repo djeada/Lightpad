@@ -6,6 +6,7 @@
 #include <QStackedWidget>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -182,17 +183,7 @@ void MainWindow::on_actionClose_All_Tabs_triggered()
 
 void MainWindow::on_actionFind_in_file_triggered()
 {
-  if (!findReplacePanel) {
-      findReplacePanel = new FindReplacePanel();
-      ui->tabWidget->currentWidget()->layout()->addWidget(findReplacePanel);
-  }
-
-  else if (findReplacePanel->isHidden())
-      findReplacePanel->show();
-
-  else
-      findReplacePanel->hide();
-
+    showFindReplace();
 }
 
 void MainWindow::on_actionNew_File_triggered()
@@ -263,7 +254,23 @@ void MainWindow::save(const QString &filePath)
     }
 }
 
+void MainWindow::showFindReplace(bool onlyFind)
+{
+    if (!findReplacePanel) {
+        findReplacePanel = new FindReplacePanel(onlyFind);
+        qobject_cast<QBoxLayout*>(ui->tabWidget->currentWidget()->layout())->addWidget(findReplacePanel, 0);
+    }
+
+    findReplacePanel->setVisible(!findReplacePanel->isVisible() || findReplacePanel->isOnlyFind() != onlyFind);
+    findReplacePanel->setReplaceVisibility(!onlyFind);
+}
+
 void MainWindow::on_actionToggle_Menu_Bar_triggered()
 {
     ui->menubar->setVisible(!ui->menubar->isVisible());
+}
+
+void MainWindow::on_actionReplace_in_file_triggered()
+{
+showFindReplace(false);
 }
