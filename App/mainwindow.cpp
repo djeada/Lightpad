@@ -13,7 +13,7 @@ class Popup: public QDialog {
 
 public:
     Popup(QWidget* parent = nullptr) : QDialog(parent) {
-        setWindowFlags(Qt::Popup | Qt::Tool);
+        setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
         show();
     }
 
