@@ -97,7 +97,7 @@ TextArea::TextArea(QWidget *parent) :
         QTextEdit::ExtraSelection selection;
         selection.format.setBackground(highlightColor);
         updateStyle();
-        updateSyntaxHighlightTags(":/new/highlight/highlight/Cpp/0.txt");
+        updateSyntaxHighlightTags(":/highlight/Cpp/0.txt");
         show();
 
         syntaxHihglighter = new LightpadSyntaxHighlighter(highlightTags, document());

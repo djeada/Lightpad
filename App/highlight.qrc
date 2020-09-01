@@ -1,5 +1,7 @@
 <RCC>
-    <qresource prefix="/new/highlight">
+    <qresource prefix="/">
         <file>highlight/Cpp/0.txt</file>
+        <file>highlight/Python/0.txt</file>
+        <file>highlight/JavaScript/0.txt</file>
     </qresource>
 </RCC>

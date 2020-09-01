@@ -2,12 +2,30 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QListView>
 #include "textarea.h"
 #include "findreplacepanel.h"
+#include <QDebug>
 
 namespace Ui {
     class MainWindow;
 }
+
+class ListView: public QListView
+{
+Q_OBJECT
+public:
+ListView(QWidget *p = 0): QListView(p) {
+setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+}
+
+QSize sizeHint() const {
+    if (model()->rowCount() == 0) return QSize(width(), 0);
+        int nToShow = 10 < model()->rowCount() ? 10 : model()->rowCount();
+        return QSize(width(), nToShow*sizeHintForRow(0));
+
+}
+};
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -38,11 +56,10 @@ class MainWindow : public QMainWindow {
         void on_actionOpen_File_triggered();
         void on_actionSave_triggered();
         void on_actionSave_as_triggered();
-
-
         void on_actionToggle_Menu_Bar_triggered();
-
         void on_actionReplace_in_file_triggered();
+
+        void on_languageHighlight_clicked();
 
 private:
         Ui::MainWindow *ui;
@@ -52,6 +69,8 @@ private:
         void save(const QString &filePath);
         void showFindReplace(bool onlyFind = true);
         TextArea* getCurrentTextArea();
+        ListView* listView;
+        QString highlightLanguage;
         FindReplacePanel* findReplacePanel;
 };
 

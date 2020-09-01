@@ -7,10 +7,23 @@
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QBoxLayout>
+#include <QStringListModel>
+
+class Popup: public QDialog {
+
+public:
+    Popup(QWidget* parent = nullptr) : QDialog(parent) {
+        setWindowFlags(Qt::Popup | Qt::Tool);
+        show();
+    }
+
+};
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
+    listView(nullptr),
+    highlightLanguage(""),
     findReplacePanel(nullptr) {
         QApplication::instance()->installEventFilter(this);
         ui->setupUi(this);
@@ -273,4 +286,32 @@ void MainWindow::on_actionToggle_Menu_Bar_triggered()
 void MainWindow::on_actionReplace_in_file_triggered()
 {
 showFindReplace(false);
+}
+
+void MainWindow::on_languageHighlight_clicked()
+{
+    // Create model
+
+    if (!listView) {
+        Popup* widget = new Popup(this);
+        QStringListModel* model = new QStringListModel(this);
+        listView = new ListView(this);
+
+        QStringList List = QDir(":/highlight").entryList(QStringList(), QDir::Dirs);
+        model->setStringList(List);
+
+        listView->setModel(model);
+      listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+
+          QVBoxLayout *layout = new QVBoxLayout(widget);
+          layout->addWidget(listView);
+
+          //listView->setGeometry(ui->languageHighlight->x(), ui->languageHighlight->y(), listView->width(), listView-height());
+
+    }
+
+
+
+
 }

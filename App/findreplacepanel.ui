@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>443</width>
-    <height>189</height>
+    <height>205</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -112,6 +112,12 @@
        <layout class="QVBoxLayout" name="verticalLayout">
         <property name="sizeConstraint">
          <enum>QLayout::SetNoConstraint</enum>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
         </property>
         <item>
          <widget class="QCheckBox" name="matchCase">
