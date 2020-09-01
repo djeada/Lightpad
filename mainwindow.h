@@ -39,6 +39,9 @@ class MainWindow : public QMainWindow {
         void on_actionSave_triggered();
         void on_actionSave_as_triggered();
 
+
+        void on_actionToggle_Menu_Bar_triggered();
+
 private:
         Ui::MainWindow *ui;
         void undo();

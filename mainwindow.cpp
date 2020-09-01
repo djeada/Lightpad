@@ -9,8 +9,8 @@
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    findReplacePanel(nullptr),
-    ui(new Ui::MainWindow) {
+    ui(new Ui::MainWindow),
+    findReplacePanel(nullptr) {
         QApplication::instance()->installEventFilter(this);
         ui->setupUi(this);
         show();
@@ -25,6 +25,8 @@ MainWindow::~MainWindow()
 
 bool MainWindow::eventFilter(QObject *object, QEvent *event)
 {
+    Q_UNUSED(object);
+
     switch (event->type()){
             case QEvent::KeyPress: {
 
@@ -60,6 +62,12 @@ bool MainWindow::eventFilter(QObject *object, QEvent *event)
                     on_actionSave_as_triggered();
                     return true;
                 }
+
+                else if (keyEvent->key() == Qt::Key_Alt) {
+                    on_actionToggle_Menu_Bar_triggered();
+                    return true;
+                }
+
 
                 return false;
             }
@@ -253,4 +261,9 @@ void MainWindow::save(const QString &filePath)
         file.write(getCurrentTextArea()->toPlainText().toUtf8());
         getCurrentTextArea()->document()->setModified(false);
     }
+}
+
+void MainWindow::on_actionToggle_Menu_Bar_triggered()
+{
+    ui->menubar->setVisible(!ui->menubar->isVisible());
 }

@@ -18,24 +18,13 @@ FindReplacePanel::FindReplacePanel(QWidget *parent) :
      ui->find->setFixedSize(ui->more->width(), ui->find->height());
 }
 
-FindReplacePanel::~FindReplacePanel()
-{
+FindReplacePanel::~FindReplacePanel() {
     delete ui;
 }
 
-void FindReplacePanel::on_more_clicked()
-{
-
-    if ( !ui->wholeWords->isVisible()) {
-        ui->wholeWords->setVisible(true);
-        ui->searchBackward->setVisible(true);
-    }
-
-    else {
-        ui->wholeWords->setVisible(false);
-        ui->searchBackward->setVisible(false);
-    }
-
+void FindReplacePanel::on_more_clicked() {
+    ui->wholeWords->setVisible(!ui->wholeWords->isVisible());
+    ui->searchBackward->setVisible(!ui->searchBackward->isVisible());
 
 }
 
