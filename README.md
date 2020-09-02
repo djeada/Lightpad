@@ -6,9 +6,8 @@ Open source code editor, developed with Qt framework.
 Follow those instructions.
 
 <h2>Get the sources</h2>
-&nbsp;
 Clone the Lightpad repository: </br>
-
+&nbsp;
 <code>git clone https://github.com/djeada/Lightpad.git</code>
 
 </h2>Install Build-Tools</h2>
@@ -20,11 +19,11 @@ Clone the Lightpad repository: </br>
 <code>sudo apt-get install libqt5webkit5-dev qttools5-dev-tools qt5-default</code>
                      
 <h2>Building with Qmake</h2>
-&nbsp;
 Open the terminal in app direcory and write: </br>
-
-<code>qmake Lightpad.pro</code>
-<code>make</code>
+&nbsp;
+<code>qmake Lightpad.pro
+&nbsp;
+make</code>
 
 <h2>Run</h2>
 &nbsp;
