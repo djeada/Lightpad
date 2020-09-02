@@ -18,4 +18,4 @@ Open the terminal in app direcory and write:
 make</code>
 
 <h2>Run</h2>
-Go to app directory and double click cutemarked.app to run.
+Go to app directory and double click Lightpad to run.
