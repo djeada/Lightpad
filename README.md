@@ -10,7 +10,7 @@ Clone the Lightpad repository: </br>
 &nbsp;
 <code>git clone https://github.com/djeada/Lightpad.git</code>
 
-</h2>Install Build-Tools</h2>
+<h2>Install Build-Tools</h2>
 &nbsp;
 <code>sudo apt-get install build-essential</code>
 
