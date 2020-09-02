@@ -13,7 +13,7 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
         });
 
         newTabButton = new QToolButton(parent);
-        newTabButton->setIcon(QIcon(":/icons/icons/add.svg"));
+        newTabButton->setIcon(QIcon(":/icons/add.svg"));
         newTabButton->setIconSize(QSize(25, 25));
         newTabButton->setFixedSize(newTabButton->iconSize());
         newTabButton->setStyleSheet("border: none;");
@@ -23,7 +23,6 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
             correctTabButtonPosition();
         });
 }
-
 
 void LightpadTabWidget::resizeEvent(QResizeEvent *event) {
     QTabWidget::resizeEvent(event);

@@ -3,5 +3,6 @@
         <file>highlight/Cpp/0.txt</file>
         <file>highlight/Python/0.txt</file>
         <file>highlight/JavaScript/0.txt</file>
+        <file>highlight/LanguageToExtension.txt</file>
     </qresource>
 </RCC>

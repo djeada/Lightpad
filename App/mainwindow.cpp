@@ -9,20 +9,72 @@
 #include <QBoxLayout>
 #include <QStringListModel>
 
-class Popup: public QDialog {
 
-public:
-    Popup(QWidget* parent = nullptr) : QDialog(parent) {
-        setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
-        show();
+static void loadLanguageExtensions(QMap<QString, QString>& map) {
+    QFile TextFile(":/highlight/LanguageToExtension.txt");
+
+    if (TextFile.open(QIODevice::ReadOnly)) {
+        while (!TextFile.atEnd()) {
+                QString line = TextFile.readLine();
+                QStringList words = line.split(" ");
+                if (words.size() == 2)
+                    map.insert(words[0], words[1]);
+
+       }
     }
 
-};
+    TextFile.close();
+}
+
+ListView::ListView(QWidget *parent):
+    QListView(parent) {
+        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+}
+
+QSize ListView::sizeHint() const {
+
+    if (model()->rowCount() == 0)
+        return QSize(width(), 0);
+
+    int nToShow = 10 < model()->rowCount() ? 10 : model()->rowCount();
+    return QSize(width(), nToShow*sizeHintForRow(0));
+}
+
+Popup::Popup(QWidget* parent) :
+    QDialog(parent) {
+        setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
+        QStringListModel* model = new QStringListModel(this);
+        listView = new ListView(this);
+
+        QStringList List = QDir(":/highlight").entryList(QStringList(), QDir::Dirs);
+        model->setStringList(List);
+
+        listView->setModel(model);
+        listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+        QVBoxLayout *layout = new QVBoxLayout(this);
+        layout->addWidget(listView);
+        layout->setContentsMargins(0, 0, 0, 0);
+
+        connect(listView,SIGNAL(clicked(QModelIndex)),this,SLOT(on_listView_clicked(QModelIndex)));
+
+        show();
+}
+
+void Popup::on_listView_clicked(const QModelIndex &index){
+
+    QString lang = index.data().toString();
+
+    if (qobject_cast<MainWindow*>(parentWidget()) != 0)
+        qobject_cast<MainWindow*>(parentWidget())->updateFileExtension(lang);
+
+    close();
+}
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
-    listView(nullptr),
+    popup(nullptr),
     highlightLanguage(""),
     findReplacePanel(nullptr) {
         QApplication::instance()->installEventFilter(this);
@@ -30,6 +82,24 @@ MainWindow::MainWindow(QWidget *parent) :
         show();
         ui->tabWidget->correctTabButtonPosition();
         setWindowTitle("LightPad");
+        loadLanguageExtensions(langToExt);
+}
+
+void MainWindow::updateFileExtension(QString lang)
+{
+    QString ext = langToExt.value(lang);
+    int tabIndex = ui->tabWidget->currentIndex();
+    QString tabText = ui->tabWidget->tabText(tabIndex);
+
+    if (windowTitle().contains(".")) {
+        setWindowTitle(windowTitle().left(windowTitle().lastIndexOf(".")) + ext);
+        ui->tabWidget->setTabText(tabIndex, tabText.left(tabText.lastIndexOf("."));
+    }
+
+    else {
+        setWindowTitle(windowTitle() + ext);
+        ui->tabWidget->setTabText(tabIndex, ui->tabWidget->tabText(ui->tabWidget->currentIndex()) + ext));
+    }
 }
 
 MainWindow::~MainWindow()
@@ -257,9 +327,8 @@ void MainWindow::save(const QString &filePath)
 {
     QFile file(filePath);
 
-    if (!file.open(QFile::WriteOnly|QFile::Truncate|QFile::Text)) {
+    if (!file.open(QFile::WriteOnly|QFile::Truncate|QFile::Text))
         return;
-    }
 
     if (getCurrentTextArea()) {
         file.write(getCurrentTextArea()->toPlainText().toUtf8());
@@ -285,33 +354,20 @@ void MainWindow::on_actionToggle_Menu_Bar_triggered()
 
 void MainWindow::on_actionReplace_in_file_triggered()
 {
-showFindReplace(false);
+    showFindReplace(false);
 }
 
 void MainWindow::on_languageHighlight_clicked()
 {
-    // Create model
-
-    if (!listView) {
-        Popup* widget = new Popup(this);
-        QStringListModel* model = new QStringListModel(this);
-        listView = new ListView(this);
-
-        QStringList List = QDir(":/highlight").entryList(QStringList(), QDir::Dirs);
-        model->setStringList(List);
-
-        listView->setModel(model);
-      listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-
-
-          QVBoxLayout *layout = new QVBoxLayout(widget);
-          layout->addWidget(listView);
-
-          //listView->setGeometry(ui->languageHighlight->x(), ui->languageHighlight->y(), listView->width(), listView-height());
-
+    if (!popup) {
+        Popup* popup = new Popup(this);
+        QPoint point = mapToGlobal(ui->languageHighlight->pos());
+        popup->setGeometry(point.x(), point.y() - popup->height(), popup->width(), popup->height());
     }
 
+    else if (popup->isHidden())
+        popup->show();
 
-
-
+    else
+        popup->hide();
 }
