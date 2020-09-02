@@ -9,3 +9,13 @@ Follow those instructions.
 Clone the Lightpad repository:
 
 <code>git clone https://github.com/djeada/Lightpad.git</code>
+
+
+<h2>Building with Qmake</h2>
+Open the terminal in app direcory and write:
+
+<code>qmake Lightpad.pro </br>
+make</code>
+
+<h2>Run</h2>
+Go to app directory and double click cutemarked.app to run.
