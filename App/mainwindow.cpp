@@ -93,12 +93,12 @@ void MainWindow::updateFileExtension(QString lang)
 
     if (windowTitle().contains(".")) {
         setWindowTitle(windowTitle().left(windowTitle().lastIndexOf(".")) + ext);
-        ui->tabWidget->setTabText(tabIndex, tabText.left(tabText.lastIndexOf("."));
+        ui->tabWidget->setTabText(tabIndex, tabText.left(tabText.lastIndexOf(".")) + ext);
     }
 
     else {
         setWindowTitle(windowTitle() + ext);
-        ui->tabWidget->setTabText(tabIndex, ui->tabWidget->tabText(ui->tabWidget->currentIndex()) + ext));
+        ui->tabWidget->setTabText(tabIndex, tabText + ext);
     }
 }
 
