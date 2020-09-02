@@ -18,7 +18,8 @@ class LightpadSyntaxHighlighter : public QSyntaxHighlighter
 
     public:
     LightpadSyntaxHighlighter(QStringList patternList, QTextDocument* parent = nullptr);
-        void setKeywordPattern(QStringList patternList);
+    ~LightpadSyntaxHighlighter();
+      //  void setKeywordPattern(QStringList patternList);
 
     protected:
         void highlightBlock(const QString &text) override;

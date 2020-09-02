@@ -100,7 +100,6 @@ TextArea::TextArea(QWidget *parent) :
         updateSyntaxHighlightTags(":/highlight/Cpp/0.txt");
         show();
 
-        syntaxHihglighter = new LightpadSyntaxHighlighter(highlightTags, document());
 }
 
 int TextArea::lineNumberAreaWidth() {
@@ -163,6 +162,7 @@ void TextArea::updateStyle() {
 void TextArea::updateSyntaxHighlightTags(QString path) {
 
     QFile TextFile(path);
+    highlightTags.clear();
 
     if (TextFile.open(QIODevice::ReadOnly)) {
         while (!TextFile.atEnd()) {
@@ -173,4 +173,9 @@ void TextArea::updateSyntaxHighlightTags(QString path) {
     }
 
     TextFile.close();
+
+    if (syntaxHihglighter)
+        delete syntaxHihglighter;
+
+    syntaxHihglighter = new LightpadSyntaxHighlighter(highlightTags, document());
 }

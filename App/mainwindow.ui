@@ -29,6 +29,15 @@
     </property>
     <item>
      <widget class="LightpadTabWidget" name="tabWidget">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>1</horstretch>
+        <verstretch>1</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="toolTipDuration">
+       <number>0</number>
+      </property>
       <property name="styleSheet">
        <string notr="true"/>
       </property>
@@ -129,7 +138,7 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>21</height>
+     <height>27</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">

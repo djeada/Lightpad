@@ -38,10 +38,18 @@ LightpadSyntaxHighlighter::LightpadSyntaxHighlighter(QStringList patternList, QT
     commentEndExpression = QRegularExpression(QStringLiteral("\\*/"));
 }
 
+LightpadSyntaxHighlighter::~LightpadSyntaxHighlighter()
+{
+    qDebug() << "I'm called";
+
+    highlightingRules.clear();
+}
+
+/*
 void LightpadSyntaxHighlighter::setKeywordPattern(QStringList patternList)
 {
     keywordPatterns = patternList;
-}
+}*/
 
 void LightpadSyntaxHighlighter::highlightBlock(const QString &text) {
 

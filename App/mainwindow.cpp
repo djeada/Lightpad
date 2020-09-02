@@ -19,7 +19,6 @@ static void loadLanguageExtensions(QMap<QString, QString>& map) {
                 QStringList words = line.split(" ");
                 if (words.size() == 2)
                     map.insert(words[0], words[1]);
-
        }
     }
 
@@ -87,19 +86,25 @@ MainWindow::MainWindow(QWidget *parent) :
 
 void MainWindow::updateFileExtension(QString lang)
 {
+    if (getCurrentTextArea())
+        getCurrentTextArea()->updateSyntaxHighlightTags(":/highlight/" + lang + "/0.txt");
+
+    /*
     QString ext = langToExt.value(lang);
     int tabIndex = ui->tabWidget->currentIndex();
     QString tabText = ui->tabWidget->tabText(tabIndex);
 
     if (windowTitle().contains(".")) {
         setWindowTitle(windowTitle().left(windowTitle().lastIndexOf(".")) + ext);
-        ui->tabWidget->setTabText(tabIndex, tabText.left(tabText.lastIndexOf(".")) + ext);
+
+        tabText =  tabText.left(tabText.lastIndexOf(".")) + ext;
+        ui->tabWidget->insertTab(tabIndex, ui->tabWidget->widget(tabIndex), tabText);
     }
 
     else {
         setWindowTitle(windowTitle() + ext);
         ui->tabWidget->setTabText(tabIndex, tabText + ext);
-    }
+    }*/
 }
 
 MainWindow::~MainWindow()

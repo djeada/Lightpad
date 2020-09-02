@@ -4,6 +4,8 @@
 #include <QDebug>
 #include <QTextEdit>
 #include <QTabBar>
+#include <QFontMetrics>
+#include <QApplication>
 
 LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
     QTabWidget(parent)  {
@@ -22,6 +24,12 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
             insertTab(count(), new LightpadPage(), "Unsaved Document");
             correctTabButtonPosition();
         });
+        setStyleSheet(
+                 "QTabBar::tab { background: gray; color: white; padding: 10px; } "
+                 "QTabBar::tab:selected { background: lightgray; } "
+                 "QTabWidget::pane { border: 0; } "
+                 "QWidget { background: lightgray; } ");
+
 }
 
 void LightpadTabWidget::resizeEvent(QResizeEvent *event) {
