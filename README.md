@@ -21,8 +21,8 @@ Clone the Lightpad repository:
 <h2>Building with Qmake</h2>
 Open the terminal in app direcory and write: 
 &nbsp;
-<code>qmake Lightpad.pro <br>
-make</code>
+<pre>qmake Lightpad.pro <br>
+make</pre>
 
 <h2>Run</h2>
 &nbsp;
