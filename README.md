@@ -20,7 +20,7 @@ Open the terminal in app direcory and write:
 <pre>mkdir build
 cd build
 cmake -GNinja ..
-ninja ../Lightpad<pre>
+ninja ../Lightpad</pre>
 
 <h2>Building with Qmake</h2>
 Open the terminal in app direcory and write: 
