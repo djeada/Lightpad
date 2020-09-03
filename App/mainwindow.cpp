@@ -111,6 +111,11 @@ void MainWindow::updateFileExtension(QString lang)
     }*/
 }
 
+void MainWindow::setRowCol(int row, int col)
+{
+    ui->rowCol->setText("Ln " + QString::number(row) + ", Col " +  QString::number(col));
+}
+
 MainWindow::~MainWindow()
 {
     delete ui;

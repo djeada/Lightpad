@@ -4,6 +4,8 @@
 #include <QPlainTextEdit>
 #include "lightpadsyntaxhighlighter.h"
 
+class MainWindow;
+
 class TextArea : public QPlainTextEdit {
 
     Q_OBJECT
@@ -17,12 +19,14 @@ class TextArea : public QPlainTextEdit {
         void increaseFontSize();
         void decreaseFontSize();
         void setFontSize(int size);
+        void setMainWindow(MainWindow* window);
         int fontSize();
 
     protected:
         void resizeEvent(QResizeEvent *event) override;
 
     private:
+        MainWindow* mainWindow;
         QWidget *lineNumberArea;
         QColor highlightColor;
         QColor lineNumberAreaPenColor;

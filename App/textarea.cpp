@@ -1,4 +1,5 @@
 #include "textarea.h"
+#include "mainwindow.h"
 
 #include <QPainter>
 #include <QTextBlock>
@@ -51,6 +52,7 @@ class LineNumberArea : public QWidget {
 
 TextArea::TextArea(QWidget *parent) :
     QPlainTextEdit(parent),
+    mainWindow(nullptr),
     highlightColor(QColor(Qt::green).darker(250)),
     lineNumberAreaPenColor(QColor(Qt::gray).lighter(150)),
     defaultPenColor(QColor(Qt::white)),
@@ -79,16 +81,19 @@ TextArea::TextArea(QWidget *parent) :
         connect(this, &TextArea::cursorPositionChanged, this, [&] {
             QList<QTextEdit::ExtraSelection> extraSelections;
 
-            if (!isReadOnly()) {
-                QTextEdit::ExtraSelection selection;
-                selection.format.setBackground(highlightColor);
-                selection.format.setProperty(QTextFormat::FullWidthSelection, true);
-                selection.cursor = textCursor();
-                selection.cursor.clearSelection();
-                extraSelections.append(selection);
-            }
+            QTextEdit::ExtraSelection selection;
+            selection.format.setBackground(highlightColor);
+            selection.format.setProperty(QTextFormat::FullWidthSelection, true);
+            selection.cursor = textCursor();
+            selection.cursor.clearSelection();
+            extraSelections.append(selection);
 
             setExtraSelections(extraSelections);
+
+            if (mainWindow)
+                mainWindow->setRowCol(textCursor().blockNumber(), textCursor().positionInBlock());
+
+
          });
 
         mainFont = QApplication::font();
@@ -122,6 +127,11 @@ void TextArea::setFontSize(int size) {
     QTextDocument *doc = document();
     mainFont.setPointSize(size);
     doc->setDefaultFont(mainFont);
+}
+
+void TextArea::setMainWindow(MainWindow *window)
+{
+    mainWindow = window;
 }
 
 int TextArea::fontSize()

@@ -39,6 +39,7 @@ class MainWindow : public QMainWindow {
     public:
         explicit MainWindow(QWidget* parent = nullptr);
         void updateFileExtension(QString ext);
+        void setRowCol(int row, int col);
         ~MainWindow();
 
     protected:

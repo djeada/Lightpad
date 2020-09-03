@@ -1,4 +1,5 @@
 #include "lightpadpage.h"
+#include "mainwindow.h"
 #include <QHBoxLayout>
 #include <QDebug>
 
@@ -9,6 +10,18 @@ LightpadPage::LightpadPage(bool treeViewHidden, QWidget* parent) :
 
         treeView = new QTreeView();
         textArea = new TextArea();
+
+
+        QWidget* mainWindow = nullptr;
+        if (parentWidget())
+            if (parentWidget()->parentWidget())
+                if (parentWidget()->parentWidget()->parentWidget())
+                    mainWindow = parentWidget()->parentWidget()->parentWidget();
+
+        qDebug() << parent;
+
+        if (qobject_cast<MainWindow*>( mainWindow ) != 0 && mainWindow)
+            textArea->setMainWindow(qobject_cast<MainWindow*>( mainWindow ));
 
         layoutHor->addWidget(treeView);
         layoutHor->addWidget(textArea);

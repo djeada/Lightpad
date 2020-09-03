@@ -59,7 +59,7 @@ void LightpadTabWidget::correctTabButtonPosition()
 
 void LightpadTabWidget::addNewTab()
 {
-    LightpadPage* newPage = new LightpadPage();
+    LightpadPage* newPage = new LightpadPage(this);
 
      //work in progress fonts
     //if(count() > 3)
