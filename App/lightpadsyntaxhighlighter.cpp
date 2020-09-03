@@ -12,6 +12,7 @@ LightpadSyntaxHighlighter::LightpadSyntaxHighlighter(QStringList patternList, QT
     QSyntaxHighlighter(parent),
     keywordPatterns(patternList)
 {
+
     keywordFormat.setForeground(Qt::darkBlue);
     keywordFormat.setFontWeight(QFont::Bold);
 
@@ -31,18 +32,11 @@ LightpadSyntaxHighlighter::LightpadSyntaxHighlighter(QStringList patternList, QT
 
     singleLineCommentFormat.setForeground(Qt::red);
 
-    highlightingRules.append(HighlightingRule( QRegularExpression(QStringLiteral("//[^\n]*")), singleLineCommentFormat));
+    highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("//[^\n]*")), singleLineCommentFormat));
 
     multiLineCommentFormat.setForeground(Qt::red);
     commentStartExpression = QRegularExpression(QStringLiteral("/\\*"));
     commentEndExpression = QRegularExpression(QStringLiteral("\\*/"));
-}
-
-LightpadSyntaxHighlighter::~LightpadSyntaxHighlighter()
-{
-    qDebug() << "I'm called";
-
-    highlightingRules.clear();
 }
 
 /*
@@ -72,15 +66,14 @@ void LightpadSyntaxHighlighter::highlightBlock(const QString &text) {
        QRegularExpressionMatch match = commentEndExpression.match(text, startIndex);
        int endIndex = match.capturedStart();
        int commentLength = 0;
+
        if (endIndex == -1) {
            setCurrentBlockState(1);
            commentLength = text.length() - startIndex;
        }
 
-       else {
-           commentLength = endIndex - startIndex
-                           + match.capturedLength();
-       }
+       else
+           commentLength = endIndex - startIndex + match.capturedLength();
 
        setFormat(startIndex, commentLength, multiLineCommentFormat);
        startIndex = text.indexOf(commentStartExpression, startIndex + commentLength);

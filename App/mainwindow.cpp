@@ -9,7 +9,6 @@
 #include <QBoxLayout>
 #include <QStringListModel>
 
-
 static void loadLanguageExtensions(QMap<QString, QString>& map) {
     QFile TextFile(":/highlight/LanguageToExtension.txt");
 
@@ -82,6 +81,11 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->tabWidget->correctTabButtonPosition();
         setWindowTitle("LightPad");
         loadLanguageExtensions(langToExt);
+
+        QObject::connect(ui->tabWidget, &QTabWidget::currentChanged, this, [&] (int index) {
+            setMainWindowTitle(ui->tabWidget->tabText(index));
+        });
+
 }
 
 void MainWindow::updateFileExtension(QString lang)
@@ -157,6 +161,15 @@ bool MainWindow::eventFilter(QObject *object, QEvent *event)
                     return true;
                 }
 
+                else if (keyEvent->matches(QKeySequence::Find)) {
+                    showFindReplace();
+                    return true;
+                }
+
+                else if (keyEvent->matches(QKeySequence::Replace)) {
+                    showFindReplace(false);
+                    return true;
+                }
 
                 return false;
             }
@@ -217,20 +230,23 @@ void MainWindow::on_actionToggle_Redo_triggered()
 
 void MainWindow::on_actionIncrease_Font_Size_triggered()
 {
-    if (getCurrentTextArea())
-        getCurrentTextArea()->increaseFontSize();
+    QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
+    foreach (TextArea* textArea, textAreas)
+       textArea->increaseFontSize();
 }
 
 void MainWindow::on_actionDecrease_Font_Size_triggered()
 {
-    if (getCurrentTextArea())
-        getCurrentTextArea()->decreaseFontSize();
+    QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
+    foreach (TextArea* textArea, textAreas)
+       textArea->decreaseFontSize();
 }
 
 void MainWindow::on_actionReset_Font_Size_triggered()
 {
-    if (getCurrentTextArea())
-        getCurrentTextArea()->changeFontSize(QFontMetrics(QApplication::font()).height());
+    QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
+    foreach (TextArea* textArea, textAreas)
+       textArea->setFontSize(QFontMetrics(QApplication::font()).height());
 }
 
 void MainWindow::on_actionCut_triggered()
@@ -276,17 +292,39 @@ void MainWindow::on_actionFind_in_file_triggered()
 
 void MainWindow::on_actionNew_File_triggered()
 {
-
+    ui->tabWidget->addNewTab();
 }
 
 void MainWindow::on_actionOpen_File_triggered()
 {
     QString filePath = QFileDialog::getOpenFileName(this, tr("Open Document"), QDir::homePath());
 
-    if (filePath.isEmpty())
+    if (filePath.isEmpty() || !QFileInfo(filePath).exists())
         return;
 
     open(filePath);
+
+    QString fileName = QFileInfo(filePath).fileName();
+
+    int tabIndex = ui->tabWidget->currentIndex();
+    QString tabText = ui->tabWidget->tabText(tabIndex);
+
+    setMainWindowTitle(fileName);
+    ui->tabWidget->setTabText(tabIndex, fileName);
+    ui->tabWidget->correctTabButtonPosition();
+
+    LightpadPage* page = nullptr;
+
+    if (qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget()) != 0)
+        page = qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget());
+
+    else if (ui->tabWidget->findChild<LightpadPage*>("widget"))
+        page =ui->tabWidget->findChild<LightpadPage*>("widget");
+
+    if (page) {
+        page->setTreeViewVisible(true);
+        page->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
+    }
 }
 
 void MainWindow::on_actionSave_triggered()
@@ -311,7 +349,6 @@ void MainWindow::on_actionSave_as_triggered()
     setWindowFilePath(filePath);
     on_actionSave_triggered();
 }
-
 
 void MainWindow::open(const QString &filePath)
 {
@@ -345,11 +382,24 @@ void MainWindow::showFindReplace(bool onlyFind)
 {
     if (!findReplacePanel) {
         findReplacePanel = new FindReplacePanel(onlyFind);
-        qobject_cast<QBoxLayout*>(ui->tabWidget->currentWidget()->layout())->addWidget(findReplacePanel, 0);
+        QBoxLayout* layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
+
+        if (layout != 0)
+           layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
     }
 
     findReplacePanel->setVisible(!findReplacePanel->isVisible() || findReplacePanel->isOnlyFind() != onlyFind);
-    findReplacePanel->setReplaceVisibility(!onlyFind);
+    findReplacePanel->setOnlyFind(onlyFind);
+
+    if (findReplacePanel->isVisible() && getCurrentTextArea()){
+        findReplacePanel->setReplaceVisibility(!onlyFind);
+        findReplacePanel->setDocument(getCurrentTextArea()->document());
+    }
+}
+
+void MainWindow::setMainWindowTitle(QString title)
+{
+    setWindowTitle(title + " - Lightpad");
 }
 
 void MainWindow::on_actionToggle_Menu_Bar_triggered()

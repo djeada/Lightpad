@@ -2,10 +2,27 @@
 #define FINDREPLACEPANEL_H
 
 #include <QWidget>
+#include <QSyntaxHighlighter>
+#include <QRegularExpression>
 
 namespace Ui {
     class FindReplacePanel;
 }
+
+class KeyWordsHighlighter : public QSyntaxHighlighter
+{
+    Q_OBJECT
+
+    public:
+        KeyWordsHighlighter(QString key, QTextDocument* parent = nullptr);
+
+    protected:
+        void highlightBlock(const QString &text) override;
+
+    private:
+        QTextCharFormat format;
+        QRegularExpression pattern;
+};
 
 
 class  FindReplacePanel : public QWidget
@@ -17,15 +34,17 @@ class  FindReplacePanel : public QWidget
         void toggleExtensionVisibility();
         void setReplaceVisibility(bool flag);
         bool isOnlyFind();
+        void setOnlyFind(bool flag);
+        void setDocument(QTextDocument* doc);
 
     private slots:
         void on_more_clicked();
         void on_find_clicked();
-
         void on_close_clicked();
 
 private:
         QWidget* extension;
+        QTextDocument* document;
         Ui::FindReplacePanel *ui;
         bool onlyFind;
 };

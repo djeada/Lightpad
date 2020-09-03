@@ -4,21 +4,25 @@
 #include "textarea.h"
 
 #include <QWidget>
-#include <QListView>
+#include <QTreeView>
+#include <QFileSystemModel>
 
 class LightpadPage: public QWidget {
 
     Q_OBJECT
 
     public:
-        LightpadPage(bool listViewHidden = true, QWidget* parent = nullptr);
+        LightpadPage(bool treeViewHidden = true, QWidget* parent = nullptr);
         virtual ~LightpadPage() {};
-        QListView* getListView();
+        QTreeView* getTreeView();
         TextArea* getTextArea();
+        void setTreeViewVisible(bool flag);
+        void setModelRootIndex(QString path);
 
     private:
-       QListView* listView;
+       QTreeView* treeView;
        TextArea* textArea;
+       QFileSystemModel* model;
 
 };
 

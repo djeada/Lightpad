@@ -74,6 +74,7 @@ class MainWindow : public QMainWindow {
         void open(const QString &filePath);
         void save(const QString &filePath);
         void showFindReplace(bool onlyFind = true);
+        void setMainWindowTitle(QString title);
         TextArea* getCurrentTextArea();
         Popup* popup;
         QString highlightLanguage;

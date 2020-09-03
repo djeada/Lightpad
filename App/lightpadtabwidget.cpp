@@ -21,9 +21,9 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
         newTabButton->setStyleSheet("border: none;");
 
         QWidget::connect(newTabButton, &QToolButton::clicked, this, [this] {
-            insertTab(count(), new LightpadPage(), "Unsaved Document");
-            correctTabButtonPosition();
+            addNewTab();
         });
+
         setStyleSheet(
                  "QTabBar::tab { background: gray; color: white; padding: 10px; } "
                  "QTabBar::tab:selected { background: lightgray; } "
@@ -54,6 +54,18 @@ void LightpadTabWidget::correctTabButtonPosition()
         parentWidget()->parentWidget()->resize(parentWidget()->parentWidget()->width() + 3 + newTabButton->width(), parentWidget()->parentWidget()->height());
 
   //  else if (tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width()*2 < newTabButton->x())
-      //  newTabButton->setGeometry(tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width() + 3, newTabButton->y(), newTabButton->width(), newTabButton->height());
+    //  newTabButton->setGeometry(tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width() + 3, newTabButton->y(), newTabButton->width(), newTabButton->height());
+}
+
+void LightpadTabWidget::addNewTab()
+{
+    LightpadPage* newPage = new LightpadPage();
+
+     //work in progress fonts
+    //if(count() > 3)
+    //    newPage->getTextArea()->setFontSize(qobject_cast<LightpadPage*>(widget(0))->getTextArea()->fontSize());
+
+    insertTab(count(), newPage, "Unsaved Document");
+    correctTabButtonPosition();
 }
 

@@ -16,7 +16,8 @@ class TextArea : public QPlainTextEdit {
         int lineNumberAreaWidth();
         void increaseFontSize();
         void decreaseFontSize();
-        void changeFontSize(int size);
+        void setFontSize(int size);
+        int fontSize();
 
     protected:
         void resizeEvent(QResizeEvent *event) override;

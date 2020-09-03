@@ -56,7 +56,8 @@ TextArea::TextArea(QWidget *parent) :
     defaultPenColor(QColor(Qt::white)),
     backgroundColor(QColor(Qt::gray).darker(200)),
     bufferText(""),
-    prevWordCount(1)
+    prevWordCount(1),
+    syntaxHihglighter(nullptr)
      {
 
         lineNumberArea = new LineNumberArea(this);
@@ -97,9 +98,8 @@ TextArea::TextArea(QWidget *parent) :
         QTextEdit::ExtraSelection selection;
         selection.format.setBackground(highlightColor);
         updateStyle();
-        updateSyntaxHighlightTags(":/highlight/Cpp/0.txt");
         show();
-
+        updateSyntaxHighlightTags(":/highlight/Cpp/0.txt");
 }
 
 int TextArea::lineNumberAreaWidth() {
@@ -110,18 +110,23 @@ int TextArea::lineNumberAreaWidth() {
 
 void TextArea::increaseFontSize()
 {
-    changeFontSize(mainFont.pointSize() + 1);
+    setFontSize(mainFont.pointSize() + 1);
 }
 
 void TextArea::decreaseFontSize()
 {
-    changeFontSize(mainFont.pointSize() - 1);
+    setFontSize(mainFont.pointSize() - 1);
 }
 
-void TextArea::changeFontSize(int size) {
+void TextArea::setFontSize(int size) {
     QTextDocument *doc = document();
     mainFont.setPointSize(size);
     doc->setDefaultFont(mainFont);
+}
+
+int TextArea::fontSize()
+{
+    return mainFont.pointSize();
 }
 
 void TextArea::resizeEvent(QResizeEvent *e) {
@@ -170,12 +175,14 @@ void TextArea::updateSyntaxHighlightTags(QString path) {
                 if (line.size() > 2)
                     highlightTags.append("\\b" + line.left(line.size() - 1) + "\\b");
        }
+
+        if (syntaxHihglighter)
+            delete syntaxHihglighter;
+
+        if (document() && !highlightTags.isEmpty())
+            syntaxHihglighter = new LightpadSyntaxHighlighter(highlightTags, document());
+
+        TextFile.close();
     }
 
-    TextFile.close();
-
-    if (syntaxHihglighter)
-        delete syntaxHihglighter;
-
-    syntaxHihglighter = new LightpadSyntaxHighlighter(highlightTags, document());
 }

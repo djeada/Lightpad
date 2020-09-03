@@ -11,6 +11,7 @@ class LightpadTabWidget : public QTabWidget
     public:
         LightpadTabWidget(QWidget* parent = nullptr);
         void correctTabButtonPosition();
+        void addNewTab();
 
     protected:
         void resizeEvent(QResizeEvent *event) override;
