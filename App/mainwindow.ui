@@ -61,7 +61,7 @@
       </property>
       <widget class="QWidget" name="tab">
        <attribute name="title">
-        <string>Untitled Document</string>
+        <string>Unsaved Document</string>
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <property name="spacing">
@@ -165,7 +165,7 @@ border: 1;
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>21</height>
+     <height>27</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
