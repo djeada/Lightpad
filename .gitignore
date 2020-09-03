@@ -61,3 +61,8 @@ Desktop.ini
 
 #Translations
 *.mo
+
+############
+## Builds
+############
+*build*
