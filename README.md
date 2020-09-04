@@ -7,13 +7,13 @@ Follow those instructions.
 <h2>Get the sources</h2>
 Clone the Lightpad repository:
 <br>
-<code>git clone https://github.com/djeada/Lightpad.git</code>
+<pre>git clone https://github.com/djeada/Lightpad.git</pre>
 
 <h2>Install Build-Tools</h2>
-<code>sudo apt-get install build-essential</code>
+<pre>sudo apt-get install build-essential</pre>
 
 <h2>Install dependencies</h2>
-<code>sudo apt-get install libqt5webkit5-dev qttools5-dev-tools qt5-default</code>
+<pre>sudo apt-get install libqt5webkit5-dev qttools5-dev-tools qt5-default</pre>
                      
 <h2>Building with Cmake</h2>
 Open the terminal in app direcory and write: 
