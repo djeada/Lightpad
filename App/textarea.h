@@ -21,6 +21,8 @@ class TextArea : public QPlainTextEdit {
         void setFontSize(int size);
         void setMainWindow(MainWindow* window);
         int fontSize();
+        void addHighlightingRule(QRegularExpression pattern, QTextCharFormat format);
+
 
     protected:
         void resizeEvent(QResizeEvent *event) override;
@@ -36,7 +38,7 @@ class TextArea : public QPlainTextEdit {
         int prevWordCount;
         QFont mainFont;
         QStringList highlightTags;
-        LightpadSyntaxHighlighter* syntaxHihglighter;
+        LightpadSyntaxHighlighter* syntaxHighlighter;
 };
 
 #endif

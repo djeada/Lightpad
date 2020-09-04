@@ -1,10 +1,12 @@
 #include "findreplacepanel.h"
 #include "ui_findreplacepanel.h"
+#include "textarea.h"
+
 #include <QVBoxLayout>
 #include <QDebug>
 #include <QTextDocument>
 
-//HighlightingRule::HighlightingRule(QRegularExpression pattern, QTextCharFormat format) :
+/*HighlightingRule::HighlightingRule(QRegularExpression pattern, QTextCharFormat format) :
 
  KeyWordsHighlighter::KeyWordsHighlighter(QString key, QTextDocument* parent):
     QSyntaxHighlighter(parent)
@@ -26,6 +28,7 @@ void KeyWordsHighlighter::highlightBlock(const QString &text) {
 
     setCurrentBlockState(0);
 }
+*/
 
 FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent) :
     QWidget(parent),
@@ -69,16 +72,22 @@ void FindReplacePanel::setDocument(QTextDocument *doc)
     document = doc;
 }
 
+void FindReplacePanel::setTextArea(TextArea *area)
+{
+    textArea = area;
+}
+
 void FindReplacePanel::on_more_clicked() {
     ui->options->setVisible(!ui->wholeWords->isVisible());
 }
 
 void FindReplacePanel::on_find_clicked()
 {
-    if (document) {
-        KeyWordsHighlighter* highlighter = new KeyWordsHighlighter(ui->searchFind->text(), document);
-
-
+    if (textArea) {
+       // KeyWordsHighlighter* highlighter = new KeyWordsHighlighter(ui->searchFind->text(), document);
+        QTextCharFormat format;
+        format.setBackground(QColor("#646464"));
+        textArea->addHighlightingRule(QRegularExpression(ui->searchFind->text()), format);
     }
 }
 

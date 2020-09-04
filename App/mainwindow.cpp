@@ -79,6 +79,11 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->setupUi(this);
         show();
         ui->tabWidget->correctTabButtonPosition();
+        ui->tabWidget->setMainWindow(this);
+
+        if (getCurrentTextArea())
+            getCurrentTextArea()->setMainWindow(this);
+
         setWindowTitle("LightPad");
         loadLanguageExtensions(langToExt);
 
@@ -422,7 +427,7 @@ void MainWindow::on_languageHighlight_clicked()
     if (!popup) {
         Popup* popup = new Popup(this);
         QPoint point = mapToGlobal(ui->languageHighlight->pos());
-        popup->setGeometry(point.x(), point.y() - popup->height(), popup->width(), popup->height());
+        popup->setGeometry(point.x(), point.y() - 2*popup->height() + height(), popup->width(), popup->height());
     }
 
     else if (popup->isHidden())

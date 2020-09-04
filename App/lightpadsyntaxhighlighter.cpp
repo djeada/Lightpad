@@ -39,6 +39,17 @@ LightpadSyntaxHighlighter::LightpadSyntaxHighlighter(QStringList patternList, QT
     commentEndExpression = QRegularExpression(QStringLiteral("\\*/"));
 }
 
+void LightpadSyntaxHighlighter::addHighlightingRule(QRegularExpression pattern, QTextCharFormat format) {
+    qDebug() << "TUPAK";
+    highlightingRules.append(HighlightingRule(pattern, format));
+    qDebug() << "SHAKUR";
+}
+
+void LightpadSyntaxHighlighter::removeLastHighlightingRule()
+{
+
+}
+
 /*
 void LightpadSyntaxHighlighter::setKeywordPattern(QStringList patternList)
 {

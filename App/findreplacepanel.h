@@ -5,10 +5,13 @@
 #include <QSyntaxHighlighter>
 #include <QRegularExpression>
 
+class TextArea;
+
 namespace Ui {
     class FindReplacePanel;
 }
 
+/*
 class KeyWordsHighlighter : public QSyntaxHighlighter
 {
     Q_OBJECT
@@ -22,8 +25,7 @@ class KeyWordsHighlighter : public QSyntaxHighlighter
     private:
         QTextCharFormat format;
         QRegularExpression pattern;
-};
-
+};*/
 
 class  FindReplacePanel : public QWidget
 {
@@ -36,6 +38,7 @@ class  FindReplacePanel : public QWidget
         bool isOnlyFind();
         void setOnlyFind(bool flag);
         void setDocument(QTextDocument* doc);
+        void setTextArea(TextArea* area);
 
     private slots:
         void on_more_clicked();
@@ -45,6 +48,7 @@ class  FindReplacePanel : public QWidget
 private:
         QWidget* extension;
         QTextDocument* document;
+        TextArea* textArea;
         Ui::FindReplacePanel *ui;
         bool onlyFind;
 };

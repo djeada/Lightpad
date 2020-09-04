@@ -18,6 +18,8 @@ class LightpadSyntaxHighlighter : public QSyntaxHighlighter
 
     public:
     LightpadSyntaxHighlighter(QStringList patternList, QTextDocument* parent = nullptr);
+    void addHighlightingRule(QRegularExpression pattern, QTextCharFormat format);
+    void removeLastHighlightingRule();
       //  void setKeywordPattern(QStringList patternList);
 
     protected:

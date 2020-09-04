@@ -59,13 +59,18 @@ void LightpadTabWidget::correctTabButtonPosition()
 
 void LightpadTabWidget::addNewTab()
 {
-    LightpadPage* newPage = new LightpadPage(this);
-
+    LightpadPage* newPage = new LightpadPage();
+    newPage->setMainWindow(mainWindow);
      //work in progress fonts
     //if(count() > 3)
     //    newPage->getTextArea()->setFontSize(qobject_cast<LightpadPage*>(widget(0))->getTextArea()->fontSize());
 
     insertTab(count(), newPage, "Unsaved Document");
     correctTabButtonPosition();
+}
+
+void LightpadTabWidget::setMainWindow(MainWindow *window)
+{
+    mainWindow = window;
 }
 

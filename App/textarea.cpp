@@ -59,7 +59,7 @@ TextArea::TextArea(QWidget *parent) :
     backgroundColor(QColor(Qt::gray).darker(200)),
     bufferText(""),
     prevWordCount(1),
-    syntaxHihglighter(nullptr)
+    syntaxHighlighter(nullptr)
      {
 
         lineNumberArea = new LineNumberArea(this);
@@ -132,11 +132,21 @@ void TextArea::setFontSize(int size) {
 void TextArea::setMainWindow(MainWindow *window)
 {
     mainWindow = window;
+
+    qDebug() << "MAIN: " << mainWindow;
 }
 
 int TextArea::fontSize()
 {
     return mainFont.pointSize();
+}
+
+void TextArea::addHighlightingRule(QRegularExpression pattern, QTextCharFormat format)
+{
+
+   if (syntaxHighlighter)
+       syntaxHighlighter->addHighlightingRule(pattern, format);
+
 }
 
 void TextArea::resizeEvent(QResizeEvent *e) {
@@ -186,11 +196,11 @@ void TextArea::updateSyntaxHighlightTags(QString path) {
                     highlightTags.append("\\b" + line.left(line.size() - 1) + "\\b");
        }
 
-        if (syntaxHihglighter)
-            delete syntaxHihglighter;
+        if (syntaxHighlighter)
+            delete syntaxHighlighter;
 
         if (document() && !highlightTags.isEmpty())
-            syntaxHihglighter = new LightpadSyntaxHighlighter(highlightTags, document());
+            syntaxHighlighter = new LightpadSyntaxHighlighter(highlightTags, document());
 
         TextFile.close();
     }

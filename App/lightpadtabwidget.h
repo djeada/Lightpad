@@ -4,6 +4,8 @@
 #include <QTabWidget>
 #include <QToolButton>
 
+class MainWindow;
+
 class LightpadTabWidget : public QTabWidget
 {
     Q_OBJECT
@@ -12,12 +14,14 @@ class LightpadTabWidget : public QTabWidget
         LightpadTabWidget(QWidget* parent = nullptr);
         void correctTabButtonPosition();
         void addNewTab();
+        void setMainWindow(MainWindow* window);
 
     protected:
-        void resizeEvent(QResizeEvent *event) override;
+        void resizeEvent(QResizeEvent* event) override;
         void tabRemoved(int index) override;
 
     private:
+        MainWindow* mainWindow;
         QToolButton* newTabButton;
 };
 
