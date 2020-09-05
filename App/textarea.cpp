@@ -192,8 +192,18 @@ void TextArea::updateSyntaxHighlightTags(QString path) {
     if (TextFile.open(QIODevice::ReadOnly)) {
         while (!TextFile.atEnd()) {
                 QString line = TextFile.readLine();
-                if (line.size() > 2)
-                    highlightTags.append("\\b" + line.left(line.size() - 1) + "\\b");
+                qDebug() << line;
+                if (line.size() > 3) {
+                    if( line.indexOf("\r") > 0 ) {
+                        highlightTags.append("\\b" + line.left(line.size() - 2) + "\\b");
+                        qDebug() << line.left(line.indexOf("\r") + 1);
+                    }
+                    else {
+                        highlightTags.append("\\b" + line.left(line.size() - 1) + "\\b");
+                        qDebug() << line.left(line.indexOf("\r") + 1);
+                    }
+
+                }
        }
 
         if (syntaxHighlighter)
