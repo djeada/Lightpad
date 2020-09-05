@@ -15,7 +15,7 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
         });
 
         newTabButton = new QToolButton(parent);
-        newTabButton->setIcon(QIcon(":/icons/add.svg"));
+        newTabButton->setIcon(QIcon(":/resources/icons/add.svg"));
         newTabButton->setIconSize(QSize(25, 25));
         newTabButton->setFixedSize(newTabButton->iconSize());
         newTabButton->setStyleSheet("border: none;");

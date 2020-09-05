@@ -104,7 +104,7 @@ TextArea::TextArea(QWidget *parent) :
         selection.format.setBackground(highlightColor);
         updateStyle();
         show();
-        updateSyntaxHighlightTags(":/highlight/Cpp/0.txt");
+        updateSyntaxHighlightTags(":/resources/highlight/Cpp/0.txt");
 }
 
 int TextArea::lineNumberAreaWidth() {

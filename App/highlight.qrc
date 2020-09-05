@@ -1,8 +1,8 @@
 <RCC>
     <qresource prefix="/">
-        <file>highlight/Cpp/0.txt</file>
-        <file>highlight/Python/0.txt</file>
-        <file>highlight/JavaScript/0.txt</file>
-        <file>highlight/LanguageToExtension.txt</file>
+        <file>resources/highlight/Cpp/0.txt</file>
+        <file>resources/highlight/Python/0.txt</file>
+        <file>resources/highlight/JavaScript/0.txt</file>
+        <file>resources/highlight/LanguageToExtension.txt</file>
     </qresource>
 </RCC>

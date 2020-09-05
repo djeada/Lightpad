@@ -10,7 +10,7 @@
 #include <QStringListModel>
 
 static void loadLanguageExtensions(QMap<QString, QString>& map) {
-    QFile TextFile(":/highlight/LanguageToExtension.txt");
+    QFile TextFile(":/resources/highlight/LanguageToExtension.txt");
 
     if (TextFile.open(QIODevice::ReadOnly)) {
         while (!TextFile.atEnd()) {
@@ -96,7 +96,7 @@ MainWindow::MainWindow(QWidget *parent) :
 void MainWindow::updateFileExtension(QString lang)
 {
     if (getCurrentTextArea())
-        getCurrentTextArea()->updateSyntaxHighlightTags(":/highlight/" + lang + "/0.txt");
+        getCurrentTextArea()->updateSyntaxHighlightTags(":/resources/highlight/" + lang + "/0.txt");
 
     /*
     QString ext = langToExt.value(lang);
@@ -439,7 +439,7 @@ void MainWindow::on_languageHighlight_clicked()
 
 void MainWindow::on_actionAbout_triggered()
 {
-    QFile TextFile(":/messages/About.txt");
+    QFile TextFile(":/resources/messages/About.txt");
 
     if (TextFile.open(QIODevice::ReadOnly)) {
         QTextStream in(&TextFile);
