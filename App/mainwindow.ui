@@ -160,6 +160,9 @@ border: 1;
        </item>
        <item>
         <widget class="QToolButton" name="toolButton">
+         <property name="styleSheet">
+          <string notr="true">background-image: url(:/resources/icons/wand.svg);</string>
+         </property>
          <property name="text">
           <string>...</string>
          </property>

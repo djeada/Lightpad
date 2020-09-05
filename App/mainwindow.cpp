@@ -44,7 +44,7 @@ Popup::Popup(QWidget* parent) :
         QStringListModel* model = new QStringListModel(this);
         listView = new ListView(this);
 
-        QStringList List = QDir(":/highlight").entryList(QStringList(), QDir::Dirs);
+        QStringList List = QDir(":/resources/highlight").entryList(QStringList(), QDir::Dirs);
         model->setStringList(List);
 
         listView->setModel(model);
@@ -54,7 +54,7 @@ Popup::Popup(QWidget* parent) :
         layout->addWidget(listView);
         layout->setContentsMargins(0, 0, 0, 0);
 
-        connect(listView,SIGNAL(clicked(QModelIndex)),this,SLOT(on_listView_clicked(QModelIndex)));
+        connect(listView,SIGNAL(clicked(QModelIndex)), this, SLOT(on_listView_clicked(QModelIndex)));
 
         show();
 }
