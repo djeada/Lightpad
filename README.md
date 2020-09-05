@@ -2,7 +2,7 @@
 Open source code editor, developed with Qt framework.
 
 <h1>Build</h1>
-Follow those instructions.
+To build Lightpad, you need some libraries and tools.  Follow those instructions for the platform you're compiling on.
 
 <h2>Get the sources</h2>
 Clone the Lightpad repository:
@@ -10,6 +10,11 @@ Clone the Lightpad repository:
 <pre>git clone https://github.com/djeada/Lightpad.git</pre>
 
 <h2>Install Build-Tools</h2>
+
+<ul>  
+<li> A C++ compiler supporting C++14 </li>
+<li> Cmake </li>
+</ul>
 <pre>sudo apt-get install build-essential</pre>
 
 <h2>Install dependencies</h2>
