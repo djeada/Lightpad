@@ -72,7 +72,7 @@ void Popup::on_listView_clicked(const QModelIndex &index){
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
-    popup(nullptr),
+    popupHighlightLanguage(nullptr),
     highlightLanguage(""),
     findReplacePanel(nullptr) {
         QApplication::instance()->installEventFilter(this);
@@ -424,15 +424,33 @@ void MainWindow::on_actionReplace_in_file_triggered()
 
 void MainWindow::on_languageHighlight_clicked()
 {
-    if (!popup) {
-        Popup* popup = new Popup(this);
+    if (!popupHighlightLanguage) {
+        Popup* popupHighlightLanguage = new Popup(this);
         QPoint point = mapToGlobal(ui->languageHighlight->pos());
-        popup->setGeometry(point.x(), point.y() - 2*popup->height() + height(), popup->width(), popup->height());
+        popupHighlightLanguage->setGeometry(point.x(), point.y() - 2*popupHighlightLanguage->height() + height(), popupHighlightLanguage->width(), popupHighlightLanguage->height());
     }
 
-    else if (popup->isHidden())
-        popup->show();
+    else if (popupHighlightLanguage->isHidden())
+        popupHighlightLanguage->show();
 
     else
-        popup->hide();
+        popupHighlightLanguage->hide();
+}
+
+void MainWindow::on_actionAbout_triggered()
+{
+    QFile TextFile(":/messages/About.txt");
+
+    if (TextFile.open(QIODevice::ReadOnly)) {
+        QTextStream in(&TextFile);
+        QString license = in.readAll();
+        QMessageBox::information(this, tr("About Geist"), license, QMessageBox::Close);
+        TextFile.close();
+    }
+
+}
+
+void MainWindow::on_tabWidth_clicked()
+{
+
 }

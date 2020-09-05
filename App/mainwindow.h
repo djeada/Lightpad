@@ -68,7 +68,11 @@ class MainWindow : public QMainWindow {
         void on_actionReplace_in_file_triggered();
         void on_languageHighlight_clicked();
 
-    private:
+        void on_actionAbout_triggered();
+
+        void on_tabWidth_clicked();
+
+private:
         Ui::MainWindow *ui;
         void undo();
         void redo();
@@ -77,7 +81,7 @@ class MainWindow : public QMainWindow {
         void showFindReplace(bool onlyFind = true);
         void setMainWindowTitle(QString title);
         TextArea* getCurrentTextArea();
-        Popup* popup;
+        Popup* popupHighlightLanguage;
         QString highlightLanguage;
         FindReplacePanel* findReplacePanel;
         QMap<QString, QString> langToExt = {};

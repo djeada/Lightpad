@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file>messages/About.txt</file>
+    </qresource>
+</RCC>

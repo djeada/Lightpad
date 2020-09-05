@@ -29,4 +29,5 @@ FORMS += \
 
 RESOURCES += \
     highlight.qrc \
-    icons.qrc
+    icons.qrc \
+    messages.qrc
