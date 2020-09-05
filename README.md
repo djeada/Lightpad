@@ -35,3 +35,5 @@ make</pre>
 
 <h2>Run</h2>
 Go to app directory and double click Lightpad to run.
+
+If you had problems compiling from source, raise a new issue in the <a href = https://github.com/djeada/lightpad/issues> link </href>.
