@@ -36,4 +36,10 @@ make</pre>
 <h2>Run</h2>
 Go to app directory and double click Lightpad to run.
 
-If you had problems compiling from source, raise a new issue in the <a href = https://github.com/djeada/lightpad/issues> link </href>.
+If you had problems compiling from source, raise a new issue in the <a href = https://github.com/djeada/lightpad/issues> link</href>.
+
+<h1>Contributing </h1>
+All contributions are welcomed.
+
+<h1>License</h1>
+This project is licensed under  GNU GENERAL PUBLIC LICENSE - see the <a href='https://github.com/djeada/Md-table-of-contents-generator/blob/master/LICENSE.txt'> LICENSE.txt </a> file for details.
