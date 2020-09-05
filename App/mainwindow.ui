@@ -118,6 +118,38 @@
         </spacer>
        </item>
        <item>
+        <widget class="QToolButton" name="magicButton">
+         <property name="minimumSize">
+          <size>
+           <width>28</width>
+           <height>28</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QToolButton {qproperty-icon: url(&quot;:/resources/icons/wand.svg&quot;) ; border: none; background: &quot;white&quot;;     border-radius: 10px;}</string>
+         </property>
+         <property name="text">
+          <string>...</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer_3">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeType">
+          <enum>QSizePolicy::Minimum</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>5</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
         <widget class="QToolButton" name="languageHighlight">
          <property name="styleSheet">
           <string notr="true">QPushButton {
@@ -152,6 +184,22 @@ border: 1;
         </widget>
        </item>
        <item>
+        <spacer name="horizontalSpacer_2">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeType">
+          <enum>QSizePolicy::Minimum</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>5</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
         <widget class="QToolButton" name="tabWidth">
          <property name="text">
           <string>Tab Width: 4</string>
@@ -159,14 +207,20 @@ border: 1;
         </widget>
        </item>
        <item>
-        <widget class="QToolButton" name="toolButton">
-         <property name="styleSheet">
-          <string notr="true">background-image: url(:/resources/icons/wand.svg);</string>
+        <spacer name="horizontalSpacer_4">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
          </property>
-         <property name="text">
-          <string>...</string>
+         <property name="sizeType">
+          <enum>QSizePolicy::Minimum</enum>
          </property>
-        </widget>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>5</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
        </item>
        <item>
         <widget class="QLabel" name="rowCol">
