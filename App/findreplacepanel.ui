@@ -35,7 +35,7 @@
             <string>Find what :</string>
            </property>
            <property name="textFormat">
-            <enum>Qt::MarkdownText</enum>
+            <enum>Qt::PlainText</enum>
            </property>
           </widget>
          </item>
@@ -79,7 +79,7 @@
              <string>Replace: </string>
             </property>
             <property name="textFormat">
-             <enum>Qt::MarkdownText</enum>
+             <enum>Qt::PlainText</enum>
             </property>
            </widget>
           </item>

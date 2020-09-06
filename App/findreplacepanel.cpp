@@ -84,7 +84,6 @@ void FindReplacePanel::on_more_clicked() {
 void FindReplacePanel::on_find_clicked()
 {
     if (textArea) {
-       // KeyWordsHighlighter* highlighter = new KeyWordsHighlighter(ui->searchFind->text(), document);
         QTextCharFormat format;
         format.setBackground(QColor("#646464"));
         textArea->addHighlightingRule(QRegularExpression(ui->searchFind->text()), format);

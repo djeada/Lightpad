@@ -28,10 +28,6 @@ static int numberOfDigits(int x) {
     return count;
 }
 
-//static int countWords(QString text) {
-//    return text.split(QRegularExpression("(\\s|\\n|\\r)+"), QString::SkipEmptyParts).count();
-//}
-
 class LineNumberArea : public QWidget {
     public:
         LineNumberArea(TextArea *editor) : QWidget(editor), textArea(editor)
@@ -193,12 +189,11 @@ void TextArea::updateSyntaxHighlightTags(QString path) {
         while (!TextFile.atEnd()) {
                 QString line = TextFile.readLine();
                 if (line.size() > 3) {
-                    if( line.indexOf("\r") > 0 ) {
+                    if ( line.indexOf("\r") > 0 )
                         highlightTags.append("\\b" + line.left(line.size() - 2) + "\\b");
-                    }
-                    else {
+
+                    else
                         highlightTags.append("\\b" + line.left(line.size() - 1) + "\\b");
-                    }
                 }
        }
 

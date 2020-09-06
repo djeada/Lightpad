@@ -52,15 +52,13 @@ void LightpadTabWidget::correctTabButtonPosition()
 
     if (tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width() + 3 + newTabButton->width() > width())
         parentWidget()->parentWidget()->resize(parentWidget()->parentWidget()->width() + 3 + newTabButton->width(), parentWidget()->parentWidget()->height());
-
-  //  else if (tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width()*2 < newTabButton->x())
-    //  newTabButton->setGeometry(tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width() + 3, newTabButton->y(), newTabButton->width(), newTabButton->height());
 }
 
 void LightpadTabWidget::addNewTab()
 {
     LightpadPage* newPage = new LightpadPage();
     newPage->setMainWindow(mainWindow);
+
      //work in progress fonts
     //if(count() > 3)
     //    newPage->getTextArea()->setFontSize(qobject_cast<LightpadPage*>(widget(0))->getTextArea()->fontSize());
