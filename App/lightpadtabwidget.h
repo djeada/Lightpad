@@ -16,6 +16,7 @@ class LightpadTabWidget : public QTabWidget
         void addNewTab();
         void setMainWindow(MainWindow* window);
         void ensureNewTabButtonVisible();
+        void setTheme(QString backgroundColor, QString foregroundColor);
 
     protected:
         void resizeEvent(QResizeEvent* event) override;

@@ -77,6 +77,11 @@ void FindReplacePanel::setTextArea(TextArea *area)
     textArea = area;
 }
 
+void FindReplacePanel::setTheme(QString backgroundColor, QString foregroundColor)
+{
+
+}
+
 void FindReplacePanel::on_more_clicked() {
     ui->options->setVisible(!ui->wholeWords->isVisible());
 }

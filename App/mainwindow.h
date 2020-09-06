@@ -84,6 +84,7 @@ private:
         void save(const QString& filePath);
         void showFindReplace(bool onlyFind = true);
         void setMainWindowTitle(QString title);
+        void setTheme(QString backgroundColor, QString foregroundColor);
         TextArea* getCurrentTextArea();
         Popup* popupHighlightLanguage;
         Popup* popupTabWidth;

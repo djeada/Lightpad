@@ -122,7 +122,6 @@ MainWindow::MainWindow(QWidget *parent) :
         QApplication::instance()->installEventFilter(this);
         ui->setupUi(this);
         show();
-        ui->tabWidget->correctTabButtonPosition();
         ui->tabWidget->setMainWindow(this);
 
         if (getCurrentTextArea())
@@ -136,7 +135,8 @@ MainWindow::MainWindow(QWidget *parent) :
         });
 
         ui->magicButton->setIconSize(0.8*ui->magicButton->size());
-        setTabWidth(defaultTabWidth);
+        setTabWidth(tabWidth);
+        setTheme("black", "white");
 
 }
 
@@ -464,6 +464,29 @@ void MainWindow::showFindReplace(bool onlyFind)
 void MainWindow::setMainWindowTitle(QString title)
 {
     setWindowTitle(title + " - Lightpad");
+}
+
+void MainWindow::setTheme(QString backgroundColor, QString foregroundColor)
+{
+    setStyleSheet(
+
+    "QMenu {"
+        "background-color: " + backgroundColor + ";"
+        "color: white;"
+        "selection-background-color: #404f4f;"
+        "border: 1px solid #404f4f;"
+        "border-radius: 3px 3px 3px 3px;"
+     "}"
+
+    "QMenuBar {background-color: " + backgroundColor + ";}"
+
+     "QMenuBar::item {"
+        "color: " + foregroundColor + ";}"
+
+     "QMainWindow#MainWindow {background-color: rgb(5, 0, 17); }");
+
+    ui->tabWidget->setTheme(backgroundColor, foregroundColor);
+    ui->tabWidget->correctTabButtonPosition();
 }
 
 void MainWindow::on_actionToggle_Menu_Bar_triggered()

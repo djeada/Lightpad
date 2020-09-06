@@ -39,6 +39,7 @@ class  FindReplacePanel : public QWidget
         void setOnlyFind(bool flag);
         void setDocument(QTextDocument* doc);
         void setTextArea(TextArea* area);
+        void setTheme(QString backgroundColor, QString foregroundColor);
 
     private slots:
         void on_more_clicked();

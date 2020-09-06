@@ -24,15 +24,6 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
         QWidget::connect(newTabButton, &QToolButton::clicked, this, [this] {
             addNewTab();
         });
-
-        setStyleSheet(
-            "QTabBar::tab {background-color: rgb(111,0,0); border: 2px solid #C4C4C3; padding: 2px;} \
-            QTabBar::tab:hover { background-color: rgb(255, 255, 255);}    \
-            QTabBar::tab:selected {background-color: rgb(255, 255, 255); } \
-            QTabBar::tab:!selected { margin-top: 2px; } \
-            QTabWidget::pane { border: 0; } \
-            QWidget { background-color: rgb(5, 0, 17); } ");
-
 }
 
 void LightpadTabWidget::resizeEvent(QResizeEvent *event) {
@@ -80,5 +71,30 @@ void LightpadTabWidget::ensureNewTabButtonVisible()
 {
     newTabButton->show();
     correctTabButtonPosition();
+}
+
+void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColor)
+{
+
+    setStyleSheet(
+         "QScrollBar:vertical{background: " +  backgroundColor  +";}"
+
+         "QScrollBar:horizontal{background: " +  backgroundColor  +";}"
+
+         "QTabBar::tab:selected{ "
+            "color: " + foregroundColor + ";"
+            "border-bottom: 3px solid white;"
+         "}"
+
+         "QTabBar::tab {"
+            "height: " + QString::number(newTabButton->height() + 2) + ";"
+            "color:" + foregroundColor + ";"
+            "margin: 0 -2px;"
+            "padding: 1px 5px;"
+            "background-color: #262626;"
+         "}"
+
+            "QTabWidget#tabWidget {background-color:  " +  backgroundColor  +"; }");
+
 }
 

@@ -14,7 +14,7 @@
    <string>MainWindow</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QMainWindow#MainWindow {background-color: rgb(5, 0, 17); }</string>
+   <string notr="true"/>
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="styleSheet">
@@ -48,7 +48,7 @@
        <number>0</number>
       </property>
       <property name="styleSheet">
-       <string notr="true">QTabWidget#tabWidget {background-color: rgb(5, 0, 17); }</string>
+       <string notr="true"/>
       </property>
       <property name="tabPosition">
        <enum>QTabWidget::North</enum>
