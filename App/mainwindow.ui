@@ -13,7 +13,13 @@
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QMainWindow#MainWindow {background-color: rgb(5, 0, 17); }</string>
+  </property>
   <widget class="QWidget" name="centralwidget">
+   <property name="styleSheet">
+    <string notr="true"/>
+   </property>
    <layout class="QVBoxLayout" name="verticalLayout">
     <property name="spacing">
      <number>0</number>
@@ -42,7 +48,7 @@
        <number>0</number>
       </property>
       <property name="styleSheet">
-       <string notr="true"/>
+       <string notr="true">QTabWidget#tabWidget {background-color: rgb(5, 0, 17); }</string>
       </property>
       <property name="tabPosition">
        <enum>QTabWidget::North</enum>
@@ -121,12 +127,12 @@
         <widget class="QToolButton" name="magicButton">
          <property name="minimumSize">
           <size>
-           <width>28</width>
-           <height>28</height>
+           <width>25</width>
+           <height>25</height>
           </size>
          </property>
          <property name="styleSheet">
-          <string notr="true">QToolButton {qproperty-icon: url(&quot;:/resources/icons/wand.svg&quot;) ; border: none; background: &quot;white&quot;;     border-radius: 10px;}</string>
+          <string notr="true">QToolButton {qproperty-icon: url(&quot;:/resources/icons/wand_dark.png&quot;) ; border: none;}</string>
          </property>
          <property name="text">
           <string>...</string>

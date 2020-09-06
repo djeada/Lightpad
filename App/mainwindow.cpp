@@ -91,6 +91,8 @@ MainWindow::MainWindow(QWidget *parent) :
             setMainWindowTitle(ui->tabWidget->tabText(index));
         });
 
+        ui->magicButton->setIconSize(ui->magicButton->size());
+
 }
 
 void MainWindow::updateFileExtension(QString lang)
@@ -307,8 +309,6 @@ void MainWindow::on_actionOpen_File_triggered()
         page->setTreeViewVisible(true);
         page->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
     }
-
-
 }
 
 void MainWindow::on_actionSave_triggered()
