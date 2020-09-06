@@ -3,7 +3,7 @@
 #include <QHBoxLayout>
 #include <QDebug>
 
-LightpadPage::LightpadPage(bool treeViewHidden, QWidget* parent) :
+LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden) :
     QWidget(parent) {
 
         auto* layoutHor = new QHBoxLayout();
@@ -31,6 +31,7 @@ LightpadPage::LightpadPage(bool treeViewHidden, QWidget* parent) :
         treeView->setColumnHidden(1, true);
         treeView->setColumnHidden(2, true);
         treeView->setColumnHidden(3, true);
+
 }
 
 QTreeView *LightpadPage::getTreeView()
@@ -58,6 +59,10 @@ void LightpadPage::setMainWindow(MainWindow *window)
 {
  mainWindow = window;
 
- if (textArea)
+ if (textArea) {
      textArea->setMainWindow(mainWindow);
+     textArea->setFontSize(mainWindow->getFontSize());
+     textArea->setTabWidth(mainWindow->getTabWidth());
+
+ }
 };

@@ -12,7 +12,7 @@ class LightpadPage: public QWidget {
     Q_OBJECT
 
     public:
-        LightpadPage(bool treeViewHidden = true, QWidget* parent = nullptr);
+        LightpadPage(QWidget* parent = nullptr, bool treeViewHidden = true);
         virtual ~LightpadPage() {};
         QTreeView* getTreeView();
         TextArea* getTextArea();

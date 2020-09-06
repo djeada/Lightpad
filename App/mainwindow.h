@@ -48,6 +48,8 @@ class MainWindow : public QMainWindow {
         void setTabWidthLabel(QString text);
         void setLanguageHighlightLabel(QString text);
         void keyPressEvent(QKeyEvent *event);
+        int getTabWidth();
+        int getFontSize();
 
     private slots:
         void on_actionQuit_triggered();

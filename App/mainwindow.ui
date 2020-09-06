@@ -127,12 +127,26 @@
         <widget class="QToolButton" name="magicButton">
          <property name="minimumSize">
           <size>
-           <width>25</width>
-           <height>25</height>
+           <width>28</width>
+           <height>28</height>
           </size>
          </property>
          <property name="styleSheet">
-          <string notr="true">QToolButton {qproperty-icon: url(&quot;:/resources/icons/wand_dark.png&quot;) ; border: none;}</string>
+          <string notr="true">QToolButton {
+qproperty-icon: url(&quot;:/resources/icons/wand_dark.png&quot;) ; border: none;
+}
+
+QToolButton:hover {
+	background: rgb(85, 87, 83);
+	border: 1;
+	border-radius: 3;
+}
+
+QToolButton:pressed {
+	background: rgb(46, 52, 54);
+	border: 1;
+	border-radius: 3;
+}</string>
          </property>
          <property name="text">
           <string>...</string>
@@ -158,30 +172,24 @@
        <item>
         <widget class="QToolButton" name="languageHighlight">
          <property name="styleSheet">
-          <string notr="true">QPushButton {
-color: #333;
-border: None;
-background: qradialgradient(
-cx: 0.3, cy: -0.4, fx: 0.3, fy: -0.4,
-radius: 1.35, stop: 0 #fff, stop: 1 #888
-);
-padding: 5px;
+          <string notr="true">QToolButton {
+	color: &quot;white&quot;;
+	border: None;
+	padding: 5px;
+	background-color: rgb(5, 0, 17);
 }
 
-QPushButton:hover {
-background: qradialgradient(
-cx: 0.3, cy: -0.4, fx: 0.3, fy: -0.4,
-radius: 1.35, stop: 0 #fff, stop: 1 #bbb
-);
+QToolButton:hover {
+	background: rgb(85, 87, 83);
+	border: 1;
+	border-radius: 5;
 }
 
-QPushButton:pressed {
-border-style: inset;
-background: qradialgradient(
-cx: 0.4, cy: -0.1, fx: 0.4, fy: -0.1,
-radius: 1.35, stop: 0 #fff, stop: 1 #ddd
-);
-border: 1;
+QToolButton:pressed {
+	background: rgb(46, 52, 54);
+	border: 1;
+	border-radius: 5;
+
 }</string>
          </property>
          <property name="text">
@@ -207,6 +215,27 @@ border: 1;
        </item>
        <item>
         <widget class="QToolButton" name="tabWidth">
+         <property name="styleSheet">
+          <string notr="true">QToolButton {
+	color: &quot;white&quot;;
+	border: None;
+	padding: 5px;
+	background-color: rgb(5, 0, 17);
+}
+
+QToolButton:hover {
+	background: rgb(85, 87, 83);
+	border: 1;
+	border-radius: 5;
+}
+
+QToolButton:pressed {
+	background: rgb(46, 52, 54);
+	border: 1;
+	border-radius: 5;
+
+}</string>
+         </property>
          <property name="text">
           <string>Tab Width: 4</string>
          </property>

@@ -9,6 +9,9 @@
 #include <QBoxLayout>
 #include <QStringListModel>
 
+const int defaultTabWidth = 4;
+const int defaultFontSize = 12;
+
 static void loadLanguageExtensions(QMap<QString, QString>& map) {
     QFile TextFile(":/resources/highlight/LanguageToExtension.txt");
 
@@ -113,7 +116,9 @@ MainWindow::MainWindow(QWidget *parent) :
     popupHighlightLanguage(nullptr),
     popupTabWidth(nullptr),
     highlightLanguage(""),
-    findReplacePanel(nullptr) {
+    findReplacePanel(nullptr),
+    fontSize(defaultFontSize),
+    tabWidth(defaultTabWidth) {
         QApplication::instance()->installEventFilter(this);
         ui->setupUi(this);
         show();
@@ -130,7 +135,8 @@ MainWindow::MainWindow(QWidget *parent) :
             setMainWindowTitle(ui->tabWidget->tabText(index));
         });
 
-        ui->magicButton->setIconSize(ui->magicButton->size());
+        ui->magicButton->setIconSize(0.8*ui->magicButton->size());
+        setTabWidth(defaultTabWidth);
 
 }
 
@@ -208,6 +214,16 @@ void MainWindow::keyPressEvent(QKeyEvent *keyEvent){
 
 }
 
+int MainWindow::getTabWidth()
+{
+    return tabWidth;
+}
+
+int MainWindow::getFontSize()
+{
+    return fontSize;
+}
+
 void MainWindow::on_actionToggle_Full_Screen_triggered()
 {
     if (isMaximized())
@@ -268,6 +284,9 @@ void MainWindow::on_actionIncrease_Font_Size_triggered()
     QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
     foreach (TextArea* textArea, textAreas)
        textArea->increaseFontSize();
+
+    fontSize = getCurrentTextArea()->fontSize();
+
 }
 
 void MainWindow::on_actionDecrease_Font_Size_triggered()
@@ -275,13 +294,17 @@ void MainWindow::on_actionDecrease_Font_Size_triggered()
     QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
     foreach (TextArea* textArea, textAreas)
        textArea->decreaseFontSize();
+
+    fontSize = getCurrentTextArea()->fontSize();
 }
 
 void MainWindow::on_actionReset_Font_Size_triggered()
 {
     QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
     foreach (TextArea* textArea, textAreas)
-       textArea->setFontSize(QFontMetrics(QApplication::font()).height());
+       textArea->setFontSize(defaultFontSize);
+
+    fontSize = getCurrentTextArea()->fontSize();
 }
 
 void MainWindow::on_actionCut_triggered()

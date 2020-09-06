@@ -1,5 +1,6 @@
 #include "lightpadtabwidget.h"
 #include "lightpadpage.h"
+#include "mainwindow.h"
 
 #include <QDebug>
 #include <QTextEdit>
@@ -25,10 +26,12 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
         });
 
         setStyleSheet(
-                 "QTabBar::tab { background: gray; color: white; padding: 10px; } "
-                 "QTabBar::tab:selected { background: lightgray; } "
-                 "QTabWidget::pane { border: 0; } "
-                 "QWidget { background: lightgray; } ");
+            "QTabBar::tab {background-color: rgb(111,0,0); border: 2px solid #C4C4C3; padding: 2px;} \
+            QTabBar::tab:hover { background-color: rgb(255, 255, 255);}    \
+            QTabBar::tab:selected {background-color: rgb(255, 255, 255); } \
+            QTabBar::tab:!selected { margin-top: 2px; } \
+            QTabWidget::pane { border: 0; } \
+            QWidget { background-color: rgb(5, 0, 17); } ");
 
 }
 
@@ -60,15 +63,12 @@ void LightpadTabWidget::correctTabButtonPosition()
 
 void LightpadTabWidget::addNewTab()
 {
-    LightpadPage* newPage = new LightpadPage();
-    newPage->setMainWindow(mainWindow);
-
-     //work in progress fonts
-    //if(count() > 3)
-    //    newPage->getTextArea()->setFontSize(qobject_cast<LightpadPage*>(widget(0))->getTextArea()->fontSize());
-
-    insertTab(count(), newPage, "Unsaved Document");
-    correctTabButtonPosition();
+    if (mainWindow) {
+        LightpadPage* newPage = new LightpadPage(this);
+        newPage->setMainWindow(mainWindow);
+        insertTab(count(), newPage, "Unsaved Document");
+        correctTabButtonPosition();
+    }
 }
 
 void LightpadTabWidget::setMainWindow(MainWindow *window)

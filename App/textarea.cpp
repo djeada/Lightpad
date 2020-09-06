@@ -128,8 +128,6 @@ void TextArea::setFontSize(int size) {
 void TextArea::setMainWindow(MainWindow *window)
 {
     mainWindow = window;
-
-    qDebug() << "MAIN: " << mainWindow;
 }
 
 int TextArea::fontSize()
