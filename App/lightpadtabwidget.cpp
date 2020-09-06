@@ -43,6 +43,10 @@ void LightpadTabWidget::tabRemoved(int index)
 {
     Q_UNUSED(index);
     correctTabButtonPosition();
+
+    if (count() == 0) {
+        newTabButton->hide();
+    }
 }
 
 void LightpadTabWidget::correctTabButtonPosition()
@@ -70,5 +74,11 @@ void LightpadTabWidget::addNewTab()
 void LightpadTabWidget::setMainWindow(MainWindow *window)
 {
     mainWindow = window;
+}
+
+void LightpadTabWidget::ensureNewTabButtonVisible()
+{
+    newTabButton->show();
+    correctTabButtonPosition();
 }
 

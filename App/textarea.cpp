@@ -150,6 +150,15 @@ void TextArea::resizeEvent(QResizeEvent *e) {
     lineNumberArea->setGeometry(0, 0, lineNumberAreaWidth(), height());
 }
 
+void TextArea::keyPressEvent(QKeyEvent *keyEvent)
+{
+    if (keyEvent->matches(QKeySequence::ZoomOut) || keyEvent->matches(QKeySequence::ZoomIn))
+        mainWindow->keyPressEvent(keyEvent);
+
+    else
+        QPlainTextEdit::keyPressEvent(keyEvent);
+}
+
 void TextArea::lineNumberAreaPaintEvent(QPaintEvent *event) {
     QPainter painter(lineNumberArea);
     painter.setFont(mainFont);

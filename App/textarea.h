@@ -23,9 +23,9 @@ class TextArea : public QPlainTextEdit {
         int fontSize();
         void addHighlightingRule(QRegularExpression pattern, QTextCharFormat format);
 
-
     protected:
         void resizeEvent(QResizeEvent *event) override;
+        void keyPressEvent(QKeyEvent *event);
 
     private:
         MainWindow* mainWindow;

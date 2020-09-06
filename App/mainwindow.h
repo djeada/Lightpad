@@ -38,12 +38,10 @@ class MainWindow : public QMainWindow {
 
     public:
         explicit MainWindow(QWidget* parent = nullptr);
+        ~MainWindow();
         void updateFileExtension(QString ext);
         void setRowCol(int row, int col);
-        ~MainWindow();
-
-    protected:
-        bool eventFilter(QObject* object, QEvent *event);
+        void keyPressEvent(QKeyEvent *event);
 
     private slots:
         void on_actionQuit_triggered();
@@ -67,17 +65,15 @@ class MainWindow : public QMainWindow {
         void on_actionToggle_Menu_Bar_triggered();
         void on_actionReplace_in_file_triggered();
         void on_languageHighlight_clicked();
-
         void on_actionAbout_triggered();
-
         void on_tabWidth_clicked();
 
 private:
-        Ui::MainWindow *ui;
+        Ui::MainWindow* ui;
         void undo();
         void redo();
-        void open(const QString &filePath);
-        void save(const QString &filePath);
+        void open(const QString& filePath);
+        void save(const QString& filePath);
         void showFindReplace(bool onlyFind = true);
         void setMainWindowTitle(QString title);
         TextArea* getCurrentTextArea();

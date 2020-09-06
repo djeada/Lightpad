@@ -126,69 +126,35 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-bool MainWindow::eventFilter(QObject *object, QEvent *event)
-{
-    Q_UNUSED(object);
+void MainWindow::keyPressEvent(QKeyEvent *keyEvent){
 
-    switch (event->type()){
-            case QEvent::KeyPress: {
+    if (keyEvent->matches(QKeySequence::Undo))
+        undo();
 
-                QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+    else if (keyEvent->matches(QKeySequence::Redo))
+        redo();
 
-                if (keyEvent->matches(QKeySequence::Undo)) {
-                        undo();
-                        return true;
-                }
+    else if (keyEvent->matches(QKeySequence::ZoomIn))
+        on_actionIncrease_Font_Size_triggered();
 
-                else if (keyEvent->matches(QKeySequence::Redo)) {
-                        redo();
-                        return true;
-                }
+    else if (keyEvent->matches(QKeySequence::ZoomOut))
+        on_actionDecrease_Font_Size_triggered();
 
-                else if (keyEvent->matches(QKeySequence::ZoomIn)) {
-                    on_actionIncrease_Font_Size_triggered();
-                    return true;
-                }
+    else if (keyEvent->matches(QKeySequence::Save))
+        on_actionSave_triggered();
 
-                else if (keyEvent->matches(QKeySequence::ZoomOut)) {
-                    on_actionDecrease_Font_Size_triggered();
-                    return true;
-                }
+    else if (keyEvent->matches(QKeySequence::SaveAs))
+        on_actionSave_as_triggered();
 
-                else if (keyEvent->matches(QKeySequence::Save)) {
-                    on_actionSave_triggered();
-                    return true;
-                }
+    else if (keyEvent->key() == Qt::Key_Alt)
+        on_actionToggle_Menu_Bar_triggered();
 
+    else if (keyEvent->matches(QKeySequence::Find))
+        showFindReplace();
 
-                else if (keyEvent->matches(QKeySequence::SaveAs)) {
-                    on_actionSave_as_triggered();
-                    return true;
-                }
+    else if (keyEvent->matches(QKeySequence::Replace))
+        showFindReplace(false);
 
-                else if (keyEvent->key() == Qt::Key_Alt) {
-                    on_actionToggle_Menu_Bar_triggered();
-                    return true;
-                }
-
-                else if (keyEvent->matches(QKeySequence::Find)) {
-                    showFindReplace();
-                    return true;
-                }
-
-                else if (keyEvent->matches(QKeySequence::Replace)) {
-                    showFindReplace(false);
-                    return true;
-                }
-
-                return false;
-            }
-
-             default:
-                return false;
-    }
-
-    return false;
 }
 
 void MainWindow::on_actionToggle_Full_Screen_triggered()
@@ -314,6 +280,12 @@ void MainWindow::on_actionOpen_File_triggered()
 
     open(filePath);
 
+    if (ui->tabWidget->count() == 0) {
+        ui->tabWidget->addNewTab();
+        ui->tabWidget->ensureNewTabButtonVisible();
+    }
+
+
     QString fileName = QFileInfo(filePath).fileName();
 
     int tabIndex = ui->tabWidget->currentIndex();
@@ -335,6 +307,8 @@ void MainWindow::on_actionOpen_File_triggered()
         page->setTreeViewVisible(true);
         page->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
     }
+
+
 }
 
 void MainWindow::on_actionSave_triggered()
@@ -429,7 +403,6 @@ void MainWindow::on_languageHighlight_clicked()
         QPoint point = mapToGlobal(ui->languageHighlight->pos());
         popupHighlightLanguage->setGeometry(point.x(), point.y() - 2*popupHighlightLanguage->height() + height(), popupHighlightLanguage->width(), popupHighlightLanguage->height());
     }
-
     else if (popupHighlightLanguage->isHidden())
         popupHighlightLanguage->show();
 
