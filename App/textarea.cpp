@@ -145,6 +145,13 @@ void TextArea::addHighlightingRule(QRegularExpression pattern, QTextCharFormat f
 
 }
 
+void TextArea::setTabWidth(int width)
+{
+    QFontMetrics metrics(mainFont);
+    setTabStopWidth(width * metrics.width(' '));
+
+}
+
 void TextArea::resizeEvent(QResizeEvent *e) {
     QPlainTextEdit::resizeEvent(e);
     lineNumberArea->setGeometry(0, 0, lineNumberAreaWidth(), height());

@@ -22,10 +22,11 @@ class TextArea : public QPlainTextEdit {
         void setMainWindow(MainWindow* window);
         int fontSize();
         void addHighlightingRule(QRegularExpression pattern, QTextCharFormat format);
+        void setTabWidth(int width);
 
     protected:
         void resizeEvent(QResizeEvent *event) override;
-        void keyPressEvent(QKeyEvent *event);
+        void keyPressEvent(QKeyEvent *event) override;
 
     private:
         MainWindow* mainWindow;

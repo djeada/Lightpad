@@ -24,13 +24,16 @@ class Popup: public QDialog {
     Q_OBJECT
 
     public:
-        Popup(QWidget* parent = nullptr);
+        Popup(QStringList list, QWidget* parent = nullptr);
 
-    private slots:
-        void on_listView_clicked(const QModelIndex &index);
+   // private slots:
+     //   void on_listView_clicked(const QModelIndex &index);
+
+    protected:
+        ListView* listView;
 
     private:
-        ListView* listView;
+        QStringList list;
 };
 
 class MainWindow : public QMainWindow {
@@ -41,6 +44,9 @@ class MainWindow : public QMainWindow {
         ~MainWindow();
         void updateFileExtension(QString ext);
         void setRowCol(int row, int col);
+        void setTabWidth(int width);
+        void setTabWidthLabel(QString text);
+        void setLanguageHighlightLabel(QString text);
         void keyPressEvent(QKeyEvent *event);
 
     private slots:
@@ -78,9 +84,12 @@ private:
         void setMainWindowTitle(QString title);
         TextArea* getCurrentTextArea();
         Popup* popupHighlightLanguage;
+        Popup* popupTabWidth;
         QString highlightLanguage;
         FindReplacePanel* findReplacePanel;
         QMap<QString, QString> langToExt = {};
+        int fontSize;
+        int tabWidth;
 };
 
 #endif // MAINWINDOW_H

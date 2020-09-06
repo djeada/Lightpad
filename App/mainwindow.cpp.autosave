@@ -113,7 +113,9 @@ MainWindow::MainWindow(QWidget *parent) :
     popupHighlightLanguage(nullptr),
     popupTabWidth(nullptr),
     highlightLanguage(""),
-    findReplacePanel(nullptr) {
+    findReplacePanel(nullptr),
+    fontSize(12),
+    tabWidth(4) {
         QApplication::instance()->installEventFilter(this);
         ui->setupUi(this);
         show();
