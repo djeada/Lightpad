@@ -1,3 +1,5 @@
+![Lightpad](https://github.com/djeada/Lightpad/blob/master/App/resources/icons/app.png)
+
 # Lightpad
 Open source code editor, developed with Qt framework.
 
