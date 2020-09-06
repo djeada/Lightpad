@@ -127,8 +127,8 @@
         <widget class="QToolButton" name="magicButton">
          <property name="minimumSize">
           <size>
-           <width>28</width>
-           <height>28</height>
+           <width>32</width>
+           <height>32</height>
           </size>
          </property>
          <property name="styleSheet">

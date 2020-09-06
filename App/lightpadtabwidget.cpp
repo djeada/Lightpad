@@ -8,6 +8,30 @@
 #include <QFontMetrics>
 #include <QApplication>
 
+class MyButton : public QToolButton
+{
+public:
+    MyButton(QWidget* p) : QToolButton(p) { }
+
+    void enterEvent(QEvent *event) {
+        Q_UNUSED(event);
+
+        move(x(), -1);
+
+        setIconSize(QSize(30, 30));
+        setFixedSize(iconSize());
+    }
+
+    void leaveEvent(QEvent *event) {
+        Q_UNUSED(event);
+
+        move(x(), 3);
+
+        setIconSize(QSize(25, 25));
+        setFixedSize(iconSize());
+    }
+};
+
 LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
     QTabWidget(parent)  {
 
@@ -15,11 +39,10 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
             removeTab(index);
         });
 
-        newTabButton = new QToolButton(parent);
+        newTabButton = new MyButton(parent);
         newTabButton->setIcon(QIcon(":/resources/icons/add_dark.png"));
         newTabButton->setIconSize(QSize(25, 25));
         newTabButton->setFixedSize(newTabButton->iconSize());
-        newTabButton->setStyleSheet("border: none;");
 
         QWidget::connect(newTabButton, &QToolButton::clicked, this, [this] {
             addNewTab();
@@ -46,7 +69,7 @@ void LightpadTabWidget::tabRemoved(int index)
 void LightpadTabWidget::correctTabButtonPosition()
 {
     QRect rect = tabBar()->tabRect(count() - 1);
-    newTabButton->setGeometry(rect.x() + rect.width() + 3, rect.y() + 3, newTabButton->width(), newTabButton->height());
+    newTabButton->setGeometry(rect.x() + rect.width() + 3, 3, newTabButton->width(), newTabButton->height());
 
     if (tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width() + 3 + newTabButton->width() > width())
         parentWidget()->parentWidget()->resize(parentWidget()->parentWidget()->width() + 3 + newTabButton->width(), parentWidget()->parentWidget()->height());
