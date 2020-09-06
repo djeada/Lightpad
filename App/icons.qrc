@@ -4,5 +4,6 @@
         <file>resources/icons/wand.png</file>
         <file>resources/icons/add_dark.png</file>
         <file>resources/icons/add.png</file>
+        <file>resources/icons/app.png</file>
     </qresource>
 </RCC>
