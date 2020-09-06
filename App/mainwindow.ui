@@ -98,7 +98,7 @@
     <item>
      <widget class="QWidget" name="backgroundBottom" native="true">
       <property name="styleSheet">
-       <string notr="true">QWidget#backgroundBottom { background-color: rgb(5, 0, 17)};</string>
+       <string notr="true"/>
       </property>
       <layout class="QHBoxLayout" name="horizontalLayout">
        <property name="spacing">
@@ -172,25 +172,7 @@ QToolButton:pressed {
        <item>
         <widget class="QToolButton" name="languageHighlight">
          <property name="styleSheet">
-          <string notr="true">QToolButton {
-	color: &quot;white&quot;;
-	border: None;
-	padding: 5px;
-	background-color: rgb(5, 0, 17);
-}
-
-QToolButton:hover {
-	background: rgb(85, 87, 83);
-	border: 1;
-	border-radius: 5;
-}
-
-QToolButton:pressed {
-	background: rgb(46, 52, 54);
-	border: 1;
-	border-radius: 5;
-
-}</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>Choose lang.</string>
@@ -216,25 +198,7 @@ QToolButton:pressed {
        <item>
         <widget class="QToolButton" name="tabWidth">
          <property name="styleSheet">
-          <string notr="true">QToolButton {
-	color: &quot;white&quot;;
-	border: None;
-	padding: 5px;
-	background-color: rgb(5, 0, 17);
-}
-
-QToolButton:hover {
-	background: rgb(85, 87, 83);
-	border: 1;
-	border-radius: 5;
-}
-
-QToolButton:pressed {
-	background: rgb(46, 52, 54);
-	border: 1;
-	border-radius: 5;
-
-}</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>Tab Width: 4</string>

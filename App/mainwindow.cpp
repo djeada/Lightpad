@@ -468,22 +468,60 @@ void MainWindow::setMainWindowTitle(QString title)
 
 void MainWindow::setTheme(QString backgroundColor, QString foregroundColor)
 {
+    //todo logic for selection Color
+
     setStyleSheet(
 
+    "QWidget {background-color: " + backgroundColor + ";}"
+
     "QMenu {"
-        "background-color: " + backgroundColor + ";"
-        "color: white;"
+        "color: " + foregroundColor + ";"
         "selection-background-color: #404f4f;"
         "border: 1px solid #404f4f;"
         "border-radius: 3px 3px 3px 3px;"
      "}"
 
-    "QMenuBar {background-color: " + backgroundColor + ";}"
+    "QMenuBar::item {color: " + foregroundColor + ";}"
 
-     "QMenuBar::item {"
-        "color: " + foregroundColor + ";}"
+    "QMessageBox QLabel {color: " + foregroundColor + ";}"
 
-     "QMainWindow#MainWindow {background-color: rgb(5, 0, 17); }");
+    "QAbstractButton {"
+        "color: " + foregroundColor + ";"
+        "border: None;"
+        "padding: 5px;"
+        "background-color: " + backgroundColor + ";"
+    "}"
+
+     "QTreeView {"
+         "color: " + foregroundColor + ";"
+         "outline: 0;"
+
+     "}"
+
+   "QTreetView::item {color: " + foregroundColor + ";}"
+
+   "QTreeView::item:hover {"
+       " background: #f3f3f3;"
+       " color: #252424;"
+    "}"
+
+    "QTreeView::item:selected { background: #bbdde6; }"
+
+    "QAbstractButton:hover {"
+        "background: rgb(85, 87, 83);"
+        "border: 1;"
+        "border-radius: 5;"
+    "}"
+
+    "QAbstractButton:pressed {"
+        "background: rgb(46, 52, 54);"
+        "border: 1;"
+        "border-radius: 5;"
+    "}"
+
+    "QLineEdit {background: " + foregroundColor + ";}"
+
+    "QLabel {color: " + foregroundColor + ";}");
 
     ui->tabWidget->setTheme(backgroundColor, foregroundColor);
     ui->tabWidget->correctTabButtonPosition();
@@ -521,7 +559,7 @@ void MainWindow::on_actionAbout_triggered()
     if (TextFile.open(QIODevice::ReadOnly)) {
         QTextStream in(&TextFile);
         QString license = in.readAll();
-        QMessageBox::information(this, tr("About Geist"), license, QMessageBox::Close);
+        QMessageBox::information(this, tr("About Lightpad"), license, QMessageBox::Close);
         TextFile.close();
     }
 

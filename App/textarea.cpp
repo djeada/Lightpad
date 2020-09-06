@@ -191,7 +191,11 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent *event) {
 }
 
 void TextArea::updateStyle() {
-    setStyleSheet("TextArea {color: " + defaultPenColor.name() + "; background-color: " + backgroundColor.name() + "; }");
+    setStyleSheet(""
+                  "TextArea {"
+                  "color: " + defaultPenColor.name() + "; "
+                  "border-left: 3px solid rgb(255, 255, 255);"
+                  "background-color: " + backgroundColor.name() + "; }");
 }
 
 void TextArea::updateSyntaxHighlightTags(QString path) {

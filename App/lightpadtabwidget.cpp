@@ -83,7 +83,7 @@ void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColo
 
          "QTabBar::tab:selected{ "
             "color: " + foregroundColor + ";"
-            "border-bottom: 3px solid white;"
+            "border-bottom: 3px solid "  + foregroundColor + ";"
          "}"
 
          "QTabBar::tab {"
