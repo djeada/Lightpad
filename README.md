@@ -3,20 +3,20 @@ Open source code editor, developed with Qt framework.
 
 <h1>Features</h1>
 
-<ol>
+<ul>
   <li>Searching</li>
   <li>Syntax highlighting</li>
   <li>Editing shortcuts</li>
   <li>Color themes</li>
   <li>Auto parentheses</li>
   <li>Code templates</li>
-</ol>
+</ul>
 
 <h2>Features to be added</h2>
-<ol>
+<ul>
   <li>Full VIM compatibility </li>
   <li>Auto-completion</li>
-</ol>
+</ul>
 
 <h1>Build</h1>
 To build Lightpad, you need some libraries and tools.  Follow those instructions for the platform you're compiling on.
