@@ -4,7 +4,7 @@ Open source code editor, developed with Qt framework.
 <h1>Features</h1>
 
 <ul>
-  <li>Searching</li>
+  <li>Search and replace</li>
   <li>Syntax highlighting</li>
   <li>Editing shortcuts</li>
   <li>Color themes</li>
