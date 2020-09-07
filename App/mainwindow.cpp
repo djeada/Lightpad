@@ -138,6 +138,9 @@ MainWindow::MainWindow(QWidget *parent) :
         setTabWidth(tabWidth);
         setTheme("black", "white");
 
+        getCurrentTextArea()->setFontSize(defaultFontSize);
+        getCurrentTextArea()->setTabWidth(defaultTabWidth);
+
 }
 
 void MainWindow::updateFileExtension(QString lang)
@@ -492,20 +495,20 @@ void MainWindow::setTheme(QString backgroundColor, QString foregroundColor)
         "background-color: " + backgroundColor + ";"
     "}"
 
-     "QTreeView {"
+     "QAbstractItemView {"
          "color: " + foregroundColor + ";"
          "outline: 0;"
 
      "}"
 
-   "QTreetView::item {color: " + foregroundColor + ";}"
+   "QAbstractItemView::item {color: " + foregroundColor + ";}"
 
-   "QTreeView::item:hover {"
+   "QAbstractItemView::item:hover {"
        " background: #f3f3f3;"
        " color: #252424;"
     "}"
 
-    "QTreeView::item:selected { background: #bbdde6; }"
+    "QAbstractItemView::item:selected { background: #bbdde6; }"
 
     "QAbstractButton:hover {"
         "background: rgb(85, 87, 83);"
