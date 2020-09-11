@@ -194,7 +194,6 @@ void TextArea::updateStyle() {
     setStyleSheet(""
                   "TextArea {"
                   "color: " + defaultPenColor.name() + "; "
-                  "border-left: 3px solid rgb(255, 255, 255);"
                   "background-color: " + backgroundColor.name() + "; }");
 }
 
