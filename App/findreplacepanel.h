@@ -11,22 +11,6 @@ namespace Ui {
     class FindReplacePanel;
 }
 
-/*
-class KeyWordsHighlighter : public QSyntaxHighlighter
-{
-    Q_OBJECT
-
-    public:
-        KeyWordsHighlighter(QString key, QTextDocument* parent = nullptr);
-
-    protected:
-        void highlightBlock(const QString &text) override;
-
-    private:
-        QTextCharFormat format;
-        QRegularExpression pattern;
-};*/
-
 class  FindReplacePanel : public QWidget
 {
     Q_OBJECT

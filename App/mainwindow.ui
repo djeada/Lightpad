@@ -57,7 +57,7 @@
        <enum>QTabWidget::Rounded</enum>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>-1</number>
       </property>
       <property name="usesScrollButtons">
        <bool>false</bool>
@@ -68,31 +68,6 @@
       <property name="movable">
        <bool>true</bool>
       </property>
-      <widget class="QWidget" name="tab">
-       <attribute name="title">
-        <string>Unsaved Document</string>
-       </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_2">
-        <property name="spacing">
-         <number>0</number>
-        </property>
-        <property name="leftMargin">
-         <number>0</number>
-        </property>
-        <property name="topMargin">
-         <number>0</number>
-        </property>
-        <property name="rightMargin">
-         <number>0</number>
-        </property>
-        <property name="bottomMargin">
-         <number>0</number>
-        </property>
-        <item>
-         <widget class="LightpadPage" name="widget" native="true"/>
-        </item>
-       </layout>
-      </widget>
      </widget>
     </item>
     <item>
@@ -449,12 +424,6 @@ QToolButton:pressed {
    <class>LightpadTabWidget</class>
    <extends>QTabWidget</extends>
    <header>lightpadtabwidget.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>LightpadPage</class>
-   <extends>QWidget</extends>
-   <header>lightpadpage.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

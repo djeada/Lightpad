@@ -124,8 +124,11 @@ MainWindow::MainWindow(QWidget *parent) :
         show();
         ui->tabWidget->setMainWindow(this);
 
-        if (getCurrentTextArea())
+        if (getCurrentTextArea()) {
             getCurrentTextArea()->setMainWindow(this);
+            getCurrentTextArea()->setFontSize(defaultFontSize);
+            getCurrentTextArea()->setTabWidth(defaultTabWidth);
+         }
 
         setWindowTitle("LightPad");
         loadLanguageExtensions(langToExt);
@@ -138,8 +141,7 @@ MainWindow::MainWindow(QWidget *parent) :
         setTabWidth(tabWidth);
         setTheme("black", "white");
 
-        getCurrentTextArea()->setFontSize(defaultFontSize);
-        getCurrentTextArea()->setTabWidth(defaultTabWidth);
+
 
 }
 
@@ -225,6 +227,56 @@ int MainWindow::getTabWidth()
 int MainWindow::getFontSize()
 {
     return fontSize;
+}
+
+//use current page if empty
+//else add new tab
+void MainWindow::openFileAndAddToNewTab(QString filePath)
+{
+    if (filePath.isEmpty() || !QFileInfo(filePath).exists())
+        return;
+
+
+    //check if file not already edited
+    for (int i = 0; i < ui->tabWidget->count(); i++) {
+        LightpadPage* page = ui->tabWidget->getPage(i);
+
+        if (page && page->getFilePath() == filePath) {
+            ui->tabWidget->setCurrentIndex(i);
+            return;
+        }
+    }
+
+    if (ui->tabWidget->count() == 0 || !getCurrentTextArea()->toPlainText().isEmpty()) {
+        ui->tabWidget->addNewTab();
+        ui->tabWidget->ensureNewTabButtonVisible();
+        ui->tabWidget->setCurrentIndex(ui->tabWidget->count() - 1);
+    }
+
+    open(filePath);
+
+    QString fileName = QFileInfo(filePath).fileName();
+
+    int tabIndex = ui->tabWidget->currentIndex();
+    QString tabText = ui->tabWidget->tabText(tabIndex);
+
+    setMainWindowTitle(fileName);
+    ui->tabWidget->setTabText(tabIndex, fileName);
+    ui->tabWidget->correctTabButtonPosition();
+
+    LightpadPage* page = nullptr;
+
+    if (qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget()) != 0)
+        page = qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget());
+
+    else if (ui->tabWidget->findChild<LightpadPage*>("widget"))
+        page =ui->tabWidget->findChild<LightpadPage*>("widget");
+
+    if (page) {
+        page->setTreeViewVisible(true);
+        page->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
+        page->setFilePath(filePath);
+    }
 }
 
 void MainWindow::on_actionToggle_Full_Screen_triggered()
@@ -360,38 +412,7 @@ void MainWindow::on_actionOpen_File_triggered()
 {
     QString filePath = QFileDialog::getOpenFileName(this, tr("Open Document"), QDir::homePath());
 
-    if (filePath.isEmpty() || !QFileInfo(filePath).exists())
-        return;
-
-    open(filePath);
-
-    if (ui->tabWidget->count() == 0) {
-        ui->tabWidget->addNewTab();
-        ui->tabWidget->ensureNewTabButtonVisible();
-    }
-
-
-    QString fileName = QFileInfo(filePath).fileName();
-
-    int tabIndex = ui->tabWidget->currentIndex();
-    QString tabText = ui->tabWidget->tabText(tabIndex);
-
-    setMainWindowTitle(fileName);
-    ui->tabWidget->setTabText(tabIndex, fileName);
-    ui->tabWidget->correctTabButtonPosition();
-
-    LightpadPage* page = nullptr;
-
-    if (qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget()) != 0)
-        page = qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget());
-
-    else if (ui->tabWidget->findChild<LightpadPage*>("widget"))
-        page =ui->tabWidget->findChild<LightpadPage*>("widget");
-
-    if (page) {
-        page->setTreeViewVisible(true);
-        page->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
-    }
+    openFileAndAddToNewTab(filePath);
 }
 
 void MainWindow::on_actionSave_triggered()
@@ -428,7 +449,7 @@ void MainWindow::open(const QString &filePath)
 
     setWindowFilePath(filePath);
 
-    if ( getCurrentTextArea())
+    if (getCurrentTextArea())
       getCurrentTextArea()->setPlainText(QString::fromUtf8(file.readAll()));
 }
 

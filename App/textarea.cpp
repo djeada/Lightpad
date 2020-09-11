@@ -120,9 +120,12 @@ void TextArea::decreaseFontSize()
 }
 
 void TextArea::setFontSize(int size) {
-    QTextDocument *doc = document();
-    mainFont.setPointSize(size);
-    doc->setDefaultFont(mainFont);
+    QTextDocument* doc = document();
+
+    if (doc) {
+        mainFont.setPointSize(size);
+        doc->setDefaultFont(mainFont);
+    }
 }
 
 void TextArea::setMainWindow(MainWindow *window)

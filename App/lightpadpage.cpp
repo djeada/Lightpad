@@ -4,12 +4,14 @@
 #include <QDebug>
 
 LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden) :
-    QWidget(parent) {
+    QWidget(parent),
+    mainWindow(nullptr),
+    filePath("") {
 
-        auto* layoutHor = new QHBoxLayout();
+        auto* layoutHor = new QHBoxLayout(this);
 
-        treeView = new QTreeView();
-        textArea = new TextArea();
+        treeView = new QTreeView(this);
+        textArea = new TextArea(this);
 
         layoutHor->addWidget(treeView);
         layoutHor->addWidget(textArea);
@@ -32,6 +34,14 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden) :
         treeView->setColumnHidden(2, true);
         treeView->setColumnHidden(3, true);
 
+        QObject::connect(treeView, &QAbstractItemView::clicked, this, [&] (const QModelIndex &index) {
+            if (mainWindow) {
+                QString path = model->filePath(index);
+                mainWindow->openFileAndAddToNewTab(path);
+                treeView->clearSelection();
+                treeView->setCurrentIndex(index);
+            }
+        });
 }
 
 QTreeView *LightpadPage::getTreeView()
@@ -52,7 +62,6 @@ void LightpadPage::setTreeViewVisible(bool flag)
 void LightpadPage::setModelRootIndex(QString path)
 {
     treeView->setRootIndex(model->index(path));
-
 }
 
 void LightpadPage::setMainWindow(MainWindow *window)
@@ -65,4 +74,14 @@ void LightpadPage::setMainWindow(MainWindow *window)
      textArea->setTabWidth(mainWindow->getTabWidth());
 
  }
+}
+
+void LightpadPage::setFilePath(QString path)
+{
+    filePath = path;
+}
+
+QString LightpadPage::getFilePath()
+{
+    return filePath;
 };

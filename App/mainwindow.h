@@ -27,7 +27,7 @@ class Popup: public QDialog {
         Popup(QStringList list, QWidget* parent = nullptr);
 
    // private slots:
-     //   void on_listView_clicked(const QModelIndex &index);
+          //void on_listView_clicked(const QModelIndex &index);
 
     protected:
         ListView* listView;
@@ -50,6 +50,7 @@ class MainWindow : public QMainWindow {
         void keyPressEvent(QKeyEvent *event);
         int getTabWidth();
         int getFontSize();
+        void openFileAndAddToNewTab(QString path);
 
     private slots:
         void on_actionQuit_triggered();

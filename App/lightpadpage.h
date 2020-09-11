@@ -13,18 +13,21 @@ class LightpadPage: public QWidget {
 
     public:
         LightpadPage(QWidget* parent = nullptr, bool treeViewHidden = true);
-        virtual ~LightpadPage() {};
+        ~LightpadPage() {};
         QTreeView* getTreeView();
         TextArea* getTextArea();
         void setTreeViewVisible(bool flag);
         void setModelRootIndex(QString path);
         void setMainWindow(MainWindow* window);
+        void setFilePath(QString path);
+        QString getFilePath();
 
     private:
        MainWindow* mainWindow;
        QTreeView* treeView;
        TextArea* textArea;
        QFileSystemModel* model;
+       QString filePath;
 
 };
 

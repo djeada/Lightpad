@@ -5,6 +5,7 @@
 #include <QToolButton>
 
 class MainWindow;
+class LightpadPage;
 
 class LightpadTabWidget : public QTabWidget
 {
@@ -17,6 +18,7 @@ class LightpadTabWidget : public QTabWidget
         void setMainWindow(MainWindow* window);
         void ensureNewTabButtonVisible();
         void setTheme(QString backgroundColor, QString foregroundColor);
+        LightpadPage* getPage(int index);
 
     protected:
         void resizeEvent(QResizeEvent* event) override;

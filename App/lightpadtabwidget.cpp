@@ -8,6 +8,9 @@
 #include <QFontMetrics>
 #include <QApplication>
 
+int buttonSize = 25;
+
+
 class MyButton : public QToolButton
 {
 public:
@@ -18,7 +21,7 @@ public:
 
         move(x(), -1);
 
-        setIconSize(QSize(30, 30));
+        setIconSize(1.2*QSize(buttonSize, buttonSize));
         setFixedSize(iconSize());
     }
 
@@ -27,7 +30,7 @@ public:
 
         move(x(), 3);
 
-        setIconSize(QSize(25, 25));
+        setIconSize(QSize(buttonSize, buttonSize));
         setFixedSize(iconSize());
     }
 };
@@ -88,6 +91,10 @@ void LightpadTabWidget::addNewTab()
 void LightpadTabWidget::setMainWindow(MainWindow *window)
 {
     mainWindow = window;
+    QList<LightpadPage*> pages = findChildren<LightpadPage*>();
+
+    for (auto& page : pages)
+        page->setMainWindow(window);
 }
 
 void LightpadTabWidget::ensureNewTabButtonVisible()
@@ -119,5 +126,13 @@ void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColo
 
             "QTabWidget#tabWidget {background-color:  " +  backgroundColor  +"; }");
 
+}
+
+LightpadPage* LightpadTabWidget::getPage(int index)
+{
+    if(index < 0 || index >= count())
+       return nullptr;
+
+   return qobject_cast<LightpadPage*>(widget(index));
 }
 
