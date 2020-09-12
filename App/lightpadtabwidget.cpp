@@ -10,7 +10,6 @@
 
 int buttonSize = 25;
 
-
 class MyButton : public QToolButton
 {
 public:
@@ -64,9 +63,8 @@ void LightpadTabWidget::tabRemoved(int index)
     Q_UNUSED(index);
     correctTabButtonPosition();
 
-    if (count() == 0) {
-        newTabButton->hide();
-    }
+    //if (count() == 0)
+    //    newTabButton->hide();
 }
 
 void LightpadTabWidget::correctTabButtonPosition()

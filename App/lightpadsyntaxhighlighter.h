@@ -17,26 +17,18 @@ class LightpadSyntaxHighlighter : public QSyntaxHighlighter
     Q_OBJECT
 
     public:
-    LightpadSyntaxHighlighter(QStringList patternList, QTextDocument* parent = nullptr);
-    void addHighlightingRule(QRegularExpression pattern, QTextCharFormat format);
-    void removeLastHighlightingRule();
-      //  void setKeywordPattern(QStringList patternList);
+        LightpadSyntaxHighlighter(QVector<HighlightingRule> highlightingRules, QRegularExpression commentStartExpression, QRegularExpression commentEndExpression, QTextDocument* parent = nullptr);
 
     protected:
         void highlightBlock(const QString &text) override;
 
     private:
         QVector<HighlightingRule> highlightingRules;
-        QStringList keywordPatterns;
         QRegularExpression commentStartExpression;
         QRegularExpression commentEndExpression;
-        QTextCharFormat keywordFormat;
-
-        QTextCharFormat classFormat;
-        QTextCharFormat singleLineCommentFormat;
         QTextCharFormat multiLineCommentFormat;
-        QTextCharFormat quotationFormat;
-        QTextCharFormat functionFormat;
 };
+
+QVector<HighlightingRule> highlightingRulesCpp(QString searchKeyword = "");
 
 #endif // LIGHTPADSYNTAXHIGHLIGHTER_H

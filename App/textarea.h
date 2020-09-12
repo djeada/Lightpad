@@ -14,14 +14,13 @@ class TextArea : public QPlainTextEdit {
         TextArea(QWidget *parent = nullptr);
         void lineNumberAreaPaintEvent(QPaintEvent *event);
         void updateStyle();
-        void updateSyntaxHighlightTags(QString path);
+        void updateSyntaxHighlightTags(QString chosenLang = "", QString searchKey = "");
         int lineNumberAreaWidth();
         void increaseFontSize();
         void decreaseFontSize();
         void setFontSize(int size);
         void setMainWindow(MainWindow* window);
         int fontSize();
-        void addHighlightingRule(QRegularExpression pattern, QTextCharFormat format);
         void setTabWidth(int width);
 
     protected:
@@ -36,9 +35,9 @@ class TextArea : public QPlainTextEdit {
         QColor defaultPenColor;
         QColor backgroundColor;
         QString bufferText;
+        QString highlightLang;
         int prevWordCount;
         QFont mainFont;
-        QStringList highlightTags;
         LightpadSyntaxHighlighter* syntaxHighlighter;
 };
 

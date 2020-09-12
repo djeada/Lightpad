@@ -54,6 +54,7 @@ TextArea::TextArea(QWidget *parent) :
     defaultPenColor(QColor(Qt::white)),
     backgroundColor(QColor(Qt::gray).darker(200)),
     bufferText(""),
+    highlightLang(""),
     prevWordCount(1),
     syntaxHighlighter(nullptr)
      {
@@ -89,7 +90,6 @@ TextArea::TextArea(QWidget *parent) :
             if (mainWindow)
                 mainWindow->setRowCol(textCursor().blockNumber(), textCursor().positionInBlock());
 
-
          });
 
         mainFont = QApplication::font();
@@ -100,7 +100,7 @@ TextArea::TextArea(QWidget *parent) :
         selection.format.setBackground(highlightColor);
         updateStyle();
         show();
-        updateSyntaxHighlightTags(":/resources/highlight/Cpp/0.txt");
+        updateSyntaxHighlightTags();
 }
 
 int TextArea::lineNumberAreaWidth() {
@@ -138,19 +138,10 @@ int TextArea::fontSize()
     return mainFont.pointSize();
 }
 
-void TextArea::addHighlightingRule(QRegularExpression pattern, QTextCharFormat format)
-{
-
-   if (syntaxHighlighter)
-       syntaxHighlighter->addHighlightingRule(pattern, format);
-
-}
-
 void TextArea::setTabWidth(int width)
 {
     QFontMetrics metrics(mainFont);
-    setTabStopWidth(width * metrics.width(' '));
-
+    setTabStopWidth(metrics.horizontalAdvance(' ') * width);
 }
 
 void TextArea::resizeEvent(QResizeEvent *e) {
@@ -197,33 +188,37 @@ void TextArea::updateStyle() {
     setStyleSheet(""
                   "TextArea {"
                   "color: " + defaultPenColor.name() + "; "
-                  "background-color: " + backgroundColor.name() + "; }");
+                  "background-color: " + backgroundColor.name() + "; }"
+                  );
 }
 
-void TextArea::updateSyntaxHighlightTags(QString path) {
+enum lang {cpp, js, py};
+QMap<QString, lang> convertStrToEnum = {{"cpp", cpp}, {"js", js}, {"py", py}};
 
-    QFile TextFile(path);
-    highlightTags.clear();
+void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) {
 
-    if (TextFile.open(QIODevice::ReadOnly)) {
-        while (!TextFile.atEnd()) {
-                QString line = TextFile.readLine();
-                if (line.size() > 3) {
-                    if ( line.indexOf("\r") > 0 )
-                        highlightTags.append("\\b" + line.left(line.size() - 2) + "\\b");
+    if (!chosenLang.isEmpty())
+        highlightLang = chosenLang;
 
-                    else
-                        highlightTags.append("\\b" + line.left(line.size() - 1) + "\\b");
-                }
-       }
+    if (syntaxHighlighter)
+        delete syntaxHighlighter;
 
-        if (syntaxHighlighter)
-            delete syntaxHighlighter;
+    if (document()) {
 
-        if (document() && !highlightTags.isEmpty())
-            syntaxHighlighter = new LightpadSyntaxHighlighter(highlightTags, document());
+        switch(convertStrToEnum[highlightLang]) {
+          case cpp:
+            syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
+            break;
 
-        TextFile.close();
+            case js:
+              syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
+              break;
+
+            case py:
+              syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
+              break;
+         }
+
     }
 
 }

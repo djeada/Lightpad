@@ -6,33 +6,10 @@
 #include <QDebug>
 #include <QTextDocument>
 
-/*HighlightingRule::HighlightingRule(QRegularExpression pattern, QTextCharFormat format) :
-
- KeyWordsHighlighter::KeyWordsHighlighter(QString key, QTextDocument* parent):
-    QSyntaxHighlighter(parent)
-{
-   format.setBackground(QColor("#646464"));
-   pattern = QRegularExpression(key);
-
-}
-
-
-void KeyWordsHighlighter::highlightBlock(const QString &text) {
-
-    QRegularExpressionMatchIterator matchIterator = pattern.globalMatch(text);
-
-    while (matchIterator.hasNext()) {
-        QRegularExpressionMatch match = matchIterator.next();
-        setFormat(match.capturedStart(), match.capturedLength(), format);
-    }
-
-    setCurrentBlockState(0);
-}
-*/
-
 FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent) :
     QWidget(parent),
     document(nullptr),
+    textArea(nullptr),
     ui(new Ui::FindReplacePanel),
     onlyFind(onlyFind)
 {
@@ -77,25 +54,24 @@ void FindReplacePanel::setTextArea(TextArea *area)
     textArea = area;
 }
 
-void FindReplacePanel::setTheme(QString backgroundColor, QString foregroundColor)
+void FindReplacePanel::setFocusOnSearchBox()
 {
-
+    ui->searchFind->setFocus();
 }
 
-void FindReplacePanel::on_more_clicked() {
+void FindReplacePanel::on_more_clicked()
+{
     ui->options->setVisible(!ui->wholeWords->isVisible());
 }
 
 void FindReplacePanel::on_find_clicked()
 {
-    if (textArea) {
-        QTextCharFormat format;
-        format.setBackground(QColor("#646464"));
-        textArea->addHighlightingRule(QRegularExpression(ui->searchFind->text()), format);
-    }
+    if (textArea)
+        textArea->updateSyntaxHighlightTags(ui->searchFind->text());
 }
 
 void FindReplacePanel::on_close_clicked()
 {
+    textArea->updateSyntaxHighlightTags();
     close();
 }

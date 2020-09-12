@@ -140,32 +140,13 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->magicButton->setIconSize(0.8*ui->magicButton->size());
         setTabWidth(tabWidth);
         setTheme("black", "white");
-
-
-
 }
 
 void MainWindow::updateFileExtension(QString lang)
 {
     if (getCurrentTextArea())
-        getCurrentTextArea()->updateSyntaxHighlightTags(":/resources/highlight/" + lang + "/0.txt");
+        getCurrentTextArea()->updateSyntaxHighlightTags(lang);
 
-    /*
-    QString ext = langToExt.value(lang);
-    int tabIndex = ui->tabWidget->currentIndex();
-    QString tabText = ui->tabWidget->tabText(tabIndex);
-
-    if (windowTitle().contains(".")) {
-        setWindowTitle(windowTitle().left(windowTitle().lastIndexOf(".")) + ext);
-
-        tabText =  tabText.left(tabText.lastIndexOf(".")) + ext;
-        ui->tabWidget->insertTab(tabIndex, ui->tabWidget->widget(tabIndex), tabText);
-    }
-
-    else {
-        setWindowTitle(windowTitle() + ext);
-        ui->tabWidget->setTabText(tabIndex, tabText + ext);
-    }*/
 }
 
 void MainWindow::setRowCol(int row, int col)
@@ -479,9 +460,12 @@ void MainWindow::showFindReplace(bool onlyFind)
     findReplacePanel->setVisible(!findReplacePanel->isVisible() || findReplacePanel->isOnlyFind() != onlyFind);
     findReplacePanel->setOnlyFind(onlyFind);
 
-    if (findReplacePanel->isVisible() && getCurrentTextArea()){
+    if (findReplacePanel->isVisible() && getCurrentTextArea())
         findReplacePanel->setReplaceVisibility(!onlyFind);
-        findReplacePanel->setDocument(getCurrentTextArea()->document());
+
+    if (findReplacePanel->isVisible()) {
+        findReplacePanel->setTextArea(getCurrentTextArea());
+        findReplacePanel->setFocusOnSearchBox();
     }
 }
 
@@ -586,13 +570,10 @@ void MainWindow::on_actionAbout_triggered()
         QMessageBox::information(this, tr("About Lightpad"), license, QMessageBox::Close);
         TextFile.close();
     }
-
 }
 
 void MainWindow::on_tabWidth_clicked()
 {
-
-
     if (!popupTabWidth) {
         Popup* popupTabWidth = new  PopupTabWidth(QStringList({"2", "4", "8"}), this);
         QPoint point = mapToGlobal(ui->tabWidth->pos());
