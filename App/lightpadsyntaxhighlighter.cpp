@@ -1,9 +1,11 @@
 #include "lightpadsyntaxhighlighter.h"
 #include <QDebug>
 
-const QString keyWords_Cpp_1 = ":/resources/highlight/Cpp/0.txt";
+const QString keyWords_Cpp_0 = ":/resources/highlight/Cpp/0.txt";
+const QString keyWords_Cpp_1 = ":/resources/highlight/Cpp/1.txt";
+const QString keyWords_Cpp_2 = ":/resources/highlight/Cpp/2.txt";
 
-static void loadKeyWordPatterns(QStringList& keywordPatterns, QString path) {
+static void loadkeywordPatterns(QStringList& keywordPatterns, QString path) {
 
     QFile TextFile(path);
 
@@ -71,46 +73,69 @@ void LightpadSyntaxHighlighter::highlightBlock(const QString &text) {
    }
 }
 
-QVector<HighlightingRule> highlightingRulesCpp(QString searchKeyword)
+static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, const QStringList& keywordPatterns_0, const QStringList& keywordPatterns_1, const QStringList& keywordPatterns_2, const QString& searchKeyword){
+    QTextCharFormat keywordFormat;
+    keywordFormat.setForeground(Qt::darkGreen);
+    keywordFormat.setFontWeight(QFont::Bold);
+
+    for (auto &pattern : keywordPatterns_0)
+        highlightingRules.append(HighlightingRule(QRegularExpression(pattern), keywordFormat));
+
+    QTextCharFormat keywordFormat_1;
+    keywordFormat_1.setForeground(Qt::darkYellow);
+    keywordFormat_1.setFontWeight(QFont::Bold);
+
+    for (auto &pattern : keywordPatterns_1)
+        highlightingRules.append(HighlightingRule(QRegularExpression(pattern), keywordFormat_1));
+
+    QTextCharFormat keywordFormat_2;
+    keywordFormat_2.setForeground(Qt::darkMagenta);
+
+    for (auto &pattern : keywordPatterns_2)
+        highlightingRules.append(HighlightingRule(QRegularExpression(pattern), keywordFormat_2));
+
+    QTextCharFormat numberFormat;
+    numberFormat.setForeground(Qt::darkYellow);
+    highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\\b[-+.,]*\\d{1,}f*\\b")), numberFormat));
+
+    QTextCharFormat classFormat;
+    classFormat.setForeground(Qt::darkMagenta);
+    classFormat.setFontWeight(QFont::Bold);
+    highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\\bQ[A-Za-z]+\\b")), classFormat));
+
+    QTextCharFormat quotationFormat;
+    quotationFormat.setForeground(Qt::darkGreen);
+    highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\".*\"")), quotationFormat));
+
+    QTextCharFormat functionFormat;
+    functionFormat.setFontItalic(true);
+    functionFormat.setForeground(Qt::blue);
+    highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\\b[A-Za-z0-9_]+(?=\\()")), functionFormat));
+
+    QTextCharFormat singleLineCommentFormat;
+    singleLineCommentFormat.setForeground(Qt::gray);
+    highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("//[^\n]*")), singleLineCommentFormat));
+
+    if (!searchKeyword.isEmpty()) {
+        QTextCharFormat searchFormat;
+        searchFormat.setBackground(QColor("#646464"));
+        highlightingRules.append(HighlightingRule(QRegularExpression(searchKeyword,  QRegularExpression::CaseInsensitiveOption), searchFormat));
+    }
+}
+
+
+QVector<HighlightingRule> highlightingRulesCpp(const QString& searchKeyword)
 {
     QVector<HighlightingRule> highlightingRules;
-    QStringList keywordPatterns;
-    loadKeyWordPatterns(keywordPatterns, keyWords_Cpp_1);
+    QStringList keywordPatterns_0;
+    QStringList keywordPatterns_1;
+    QStringList keywordPatterns_2;
+    loadkeywordPatterns(keywordPatterns_0, keyWords_Cpp_0);
+    loadkeywordPatterns(keywordPatterns_1, keyWords_Cpp_1);
+    loadkeywordPatterns(keywordPatterns_2, keyWords_Cpp_2);
 
-    if (!keywordPatterns.isEmpty()) {
-
-        QTextCharFormat keywordFormat;
-        QTextCharFormat classFormat;
-        QTextCharFormat singleLineCommentFormat;
-        QTextCharFormat quotationFormat;
-        QTextCharFormat functionFormat;
-
-        keywordFormat.setForeground(Qt::darkBlue);
-        keywordFormat.setFontWeight(QFont::Bold);
-
-        for (auto &pattern : keywordPatterns)
-            highlightingRules.append(HighlightingRule(QRegularExpression(pattern), keywordFormat));
-
-        classFormat.setForeground(Qt::darkMagenta);
-        classFormat.setFontWeight(QFont::Bold);
-        highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\\bQ[A-Za-z]+\\b")), classFormat));
-
-        quotationFormat.setForeground(Qt::darkGreen);
-        highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\".*\"")), quotationFormat));
-
-        functionFormat.setFontItalic(true);
-        functionFormat.setForeground(Qt::blue);
-        highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\\b[A-Za-z0-9_]+(?=\\()")), functionFormat));
-
-        singleLineCommentFormat.setForeground(Qt::gray);
-        highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("//[^\n]*")), singleLineCommentFormat));
-
-        if (!searchKeyword.isEmpty()) {
-            QTextCharFormat searchFormat;
-            searchFormat.setBackground(QColor("#646464"));
-            highlightingRules.append(HighlightingRule(QRegularExpression(searchKeyword,  QRegularExpression::CaseInsensitiveOption), searchFormat));
-        }
-    }
+    if (!keywordPatterns_0.isEmpty() && !keywordPatterns_1.isEmpty() && !keywordPatterns_2.isEmpty())
+        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword);
 
     return highlightingRules;
 }

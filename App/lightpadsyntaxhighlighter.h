@@ -29,6 +29,6 @@ class LightpadSyntaxHighlighter : public QSyntaxHighlighter
         QTextCharFormat multiLineCommentFormat;
 };
 
-QVector<HighlightingRule> highlightingRulesCpp(QString searchKeyword = "");
+QVector<HighlightingRule> highlightingRulesCpp(const QString& searchKeyword = "");
 
 #endif // LIGHTPADSYNTAXHIGHLIGHTER_H
