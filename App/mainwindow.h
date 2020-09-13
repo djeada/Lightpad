@@ -90,7 +90,6 @@ private:
         Popup* popupTabWidth;
         QString highlightLanguage;
         FindReplacePanel* findReplacePanel;
-        QMap<QString, QString> langToExt = {};
         int fontSize;
         int tabWidth;
 };

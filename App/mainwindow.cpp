@@ -12,7 +12,9 @@
 const int defaultTabWidth = 4;
 const int defaultFontSize = 12;
 
-/*static void loadLanguageExtensions(QMap<QString, QString>& map) {
+QMap<QString, QString> langToExt = {};
+
+static void loadLanguageExtensions(QMap<QString, QString>& map) {
     QFile TextFile(":/resources/highlight/LanguageToExtension.txt");
 
     if (TextFile.open(QIODevice::ReadOnly)) {
@@ -20,12 +22,12 @@ const int defaultFontSize = 12;
                 QString line = TextFile.readLine();
                 QStringList words = line.split(" ");
                 if (words.size() == 2)
-                    map.insert(words[0], words[1]);
+                    map.insert(words[0], cutEndOfLine(words[1]));
        }
     }
 
     TextFile.close();
-}*/
+}
 
 ListView::ListView(QWidget *parent):
     QListView(parent) {
@@ -74,7 +76,7 @@ class PopupLanguageHighlight : public Popup
 
                     MainWindow* mainWindow = qobject_cast<MainWindow*>(parentWidget());
                     if (mainWindow != 0 && mainWindow->getCurrentTextArea()) {
-                        mainWindow->getCurrentTextArea()->updateSyntaxHighlightTags("", lang);
+                        mainWindow->getCurrentTextArea()->updateSyntaxHighlightTags("",  langToExt[lang]);
                         mainWindow->setLanguageHighlightLabel(lang);
                      }
 
@@ -139,6 +141,8 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->magicButton->setIconSize(0.8*ui->magicButton->size());
         setTabWidth(tabWidth);
         setTheme("black", "white");
+
+        loadLanguageExtensions(langToExt);
 }
 
 

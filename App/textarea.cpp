@@ -197,13 +197,15 @@ void TextArea::updateStyle() {
 
 void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) {
 
-       qDebug() << chosenLang;
+    qDebug() << chosenLang;
 
     if (!chosenLang.isEmpty())
         highlightLang = chosenLang;
 
-    if (syntaxHighlighter)
+    if (syntaxHighlighter) {
         delete syntaxHighlighter;
+        syntaxHighlighter = nullptr;
+    }
 
     if (document() && convertStrToEnum.contains(highlightLang)) {
 

@@ -4,12 +4,24 @@
 const QString keyWords_Cpp_0 = ":/resources/highlight/Cpp/0.txt";
 const QString keyWords_Cpp_1 = ":/resources/highlight/Cpp/1.txt";
 const QString keyWords_Cpp_2 = ":/resources/highlight/Cpp/2.txt";
-const QString keyWords_Js_0 = ":/resources/highlight/Js/0.txt";
-const QString keyWords_Js_1 = ":/resources/highlight/Js/1.txt";
-const QString keyWords_Js_2 = ":/resources/highlight/Js/2.txt";
-const QString keyWords_Py_0 = ":/resources/highlight/Py/0.txt";
-const QString keyWords_Py_1 = ":/resources/highlight/Py/1.txt";
-const QString keyWords_Py_2 = ":/resources/highlight/Py/2.txt";
+const QString keyWords_Js_0 = ":/resources/highlight/JavaScript/0.txt";
+const QString keyWords_Js_1 = ":/resources/highlight/JavaScript/1.txt";
+const QString keyWords_Js_2 = ":/resources/highlight/JavaScript/2.txt";
+const QString keyWords_Py_0 = ":/resources/highlight/Python/0.txt";
+const QString keyWords_Py_1 = ":/resources/highlight/Python/1.txt";
+const QString keyWords_Py_2 = ":/resources/highlight/Python/2.txt";
+
+QString cutEndOfLine(QString line) {
+    if (line.size() > 2) {
+        if (line.indexOf("\r") > 0 )
+            return line.left(line.size() - 2);
+
+        else
+            return line.left(line.size() - 1);
+    }
+
+   return line;
+}
 
 static void loadkeywordPatterns(QStringList& keywordPatterns, QString path) {
 
@@ -18,13 +30,7 @@ static void loadkeywordPatterns(QStringList& keywordPatterns, QString path) {
     if (TextFile.open(QIODevice::ReadOnly)) {
         while (!TextFile.atEnd()) {
                 QString line = TextFile.readLine();
-                if (line.size() > 3) {
-                    if ( line.indexOf("\r") > 0 )
-                        keywordPatterns.append("\\b" + line.left(line.size() - 2) + "\\b");
-
-                    else
-                        keywordPatterns.append("\\b" + line.left(line.size() - 1) + "\\b");
-                }
+                keywordPatterns.append("\\b" +  cutEndOfLine(line) + "\\b");
        }
 
         TextFile.close();
