@@ -9,6 +9,9 @@
 #include <QTextCursor>
 #include <QApplication>
 
+enum lang {cpp, js, py};
+QMap<QString, lang> convertStrToEnum = {{"cpp", cpp}, {"h", cpp}, {"js", js}, {"py", py}};
+
 static int numberOfDigits(int x) {
 
     if (x == 0)
@@ -100,7 +103,7 @@ TextArea::TextArea(QWidget *parent) :
         selection.format.setBackground(highlightColor);
         updateStyle();
         show();
-        updateSyntaxHighlightTags();
+        //updateSyntaxHighlightTags();
 }
 
 int TextArea::lineNumberAreaWidth() {
@@ -192,9 +195,6 @@ void TextArea::updateStyle() {
                   );
 }
 
-enum lang {cpp, js, py};
-QMap<QString, lang> convertStrToEnum = {{"cpp", cpp}, {"js", js}, {"py", py}};
-
 void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) {
 
     if (!chosenLang.isEmpty())
@@ -203,22 +203,20 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) 
     if (syntaxHighlighter)
         delete syntaxHighlighter;
 
-    if (document()) {
+    if (document() && convertStrToEnum.contains(highlightLang)) {
 
         switch(convertStrToEnum[highlightLang]) {
-          case cpp:
-            syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
-            break;
+            case cpp:
+                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
+                break;
 
             case js:
-              syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
-              break;
+                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
+                break;
 
             case py:
-              syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
-              break;
+                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
+                break;
          }
-
     }
-
 }

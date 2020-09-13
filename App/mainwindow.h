@@ -42,7 +42,6 @@ class MainWindow : public QMainWindow {
     public:
         explicit MainWindow(QWidget* parent = nullptr);
         ~MainWindow();
-        void updateFileExtension(QString ext);
         void setRowCol(int row, int col);
         void setTabWidth(int width);
         void setTabWidthLabel(QString text);
@@ -51,6 +50,7 @@ class MainWindow : public QMainWindow {
         int getTabWidth();
         int getFontSize();
         void openFileAndAddToNewTab(QString path);
+        TextArea* getCurrentTextArea();
 
     private slots:
         void on_actionQuit_triggered();
@@ -86,7 +86,6 @@ private:
         void showFindReplace(bool onlyFind = true);
         void setMainWindowTitle(QString title);
         void setTheme(QString backgroundColor, QString foregroundColor);
-        TextArea* getCurrentTextArea();
         Popup* popupHighlightLanguage;
         Popup* popupTabWidth;
         QString highlightLanguage;

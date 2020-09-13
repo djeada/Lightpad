@@ -12,7 +12,7 @@
 const int defaultTabWidth = 4;
 const int defaultFontSize = 12;
 
-static void loadLanguageExtensions(QMap<QString, QString>& map) {
+/*static void loadLanguageExtensions(QMap<QString, QString>& map) {
     QFile TextFile(":/resources/highlight/LanguageToExtension.txt");
 
     if (TextFile.open(QIODevice::ReadOnly)) {
@@ -25,7 +25,7 @@ static void loadLanguageExtensions(QMap<QString, QString>& map) {
     }
 
     TextFile.close();
-}
+}*/
 
 ListView::ListView(QWidget *parent):
     QListView(parent) {
@@ -73,8 +73,8 @@ class PopupLanguageHighlight : public Popup
 
 
                     MainWindow* mainWindow = qobject_cast<MainWindow*>(parentWidget());
-                    if (mainWindow != 0) {
-                        mainWindow->updateFileExtension(lang);
+                    if (mainWindow != 0 && mainWindow->getCurrentTextArea()) {
+                        mainWindow->getCurrentTextArea()->updateSyntaxHighlightTags("", lang);
                         mainWindow->setLanguageHighlightLabel(lang);
                      }
 
@@ -131,7 +131,6 @@ MainWindow::MainWindow(QWidget *parent) :
          }
 
         setWindowTitle("LightPad");
-        loadLanguageExtensions(langToExt);
 
         QObject::connect(ui->tabWidget, &QTabWidget::currentChanged, this, [&] (int index) {
             setMainWindowTitle(ui->tabWidget->tabText(index));
@@ -142,12 +141,6 @@ MainWindow::MainWindow(QWidget *parent) :
         setTheme("black", "white");
 }
 
-void MainWindow::updateFileExtension(QString lang)
-{
-    if (getCurrentTextArea())
-        getCurrentTextArea()->updateSyntaxHighlightTags(lang);
-
-}
 
 void MainWindow::setRowCol(int row, int col)
 {
@@ -251,13 +244,17 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
         page = qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget());
 
     else if (ui->tabWidget->findChild<LightpadPage*>("widget"))
-        page =ui->tabWidget->findChild<LightpadPage*>("widget");
+        page = ui->tabWidget->findChild<LightpadPage*>("widget");
 
     if (page) {
         page->setTreeViewVisible(true);
         page->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
         page->setFilePath(filePath);
     }
+
+    if (getCurrentTextArea())
+        getCurrentTextArea()->updateSyntaxHighlightTags("", QFileInfo(filePath).completeSuffix());
+
 }
 
 void MainWindow::on_actionToggle_Full_Screen_triggered()
