@@ -30,5 +30,7 @@ class LightpadSyntaxHighlighter : public QSyntaxHighlighter
 };
 
 QVector<HighlightingRule> highlightingRulesCpp(const QString& searchKeyword = "");
+QVector<HighlightingRule> highlightingRulesJs(const QString& searchKeyword = "");
+QVector<HighlightingRule> highlightingRulesPy(const QString& searchKeyword = "");
 
 #endif // LIGHTPADSYNTAXHIGHLIGHTER_H

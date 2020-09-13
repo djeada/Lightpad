@@ -197,6 +197,8 @@ void TextArea::updateStyle() {
 
 void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) {
 
+       qDebug() << chosenLang;
+
     if (!chosenLang.isEmpty())
         highlightLang = chosenLang;
 
@@ -211,11 +213,11 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) 
                 break;
 
             case js:
-                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
+                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesJs(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
                 break;
 
             case py:
-                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
+                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesPy(searchKey), QRegularExpression(QStringLiteral("/'''")),  QRegularExpression(QStringLiteral("\\'''")), document());
                 break;
          }
     }

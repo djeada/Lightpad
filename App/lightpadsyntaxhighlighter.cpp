@@ -4,6 +4,12 @@
 const QString keyWords_Cpp_0 = ":/resources/highlight/Cpp/0.txt";
 const QString keyWords_Cpp_1 = ":/resources/highlight/Cpp/1.txt";
 const QString keyWords_Cpp_2 = ":/resources/highlight/Cpp/2.txt";
+const QString keyWords_Js_0 = ":/resources/highlight/Js/0.txt";
+const QString keyWords_Js_1 = ":/resources/highlight/Js/1.txt";
+const QString keyWords_Js_2 = ":/resources/highlight/Js/2.txt";
+const QString keyWords_Py_0 = ":/resources/highlight/Py/0.txt";
+const QString keyWords_Py_1 = ":/resources/highlight/Py/1.txt";
+const QString keyWords_Py_2 = ":/resources/highlight/Py/2.txt";
 
 static void loadkeywordPatterns(QStringList& keywordPatterns, QString path) {
 
@@ -73,7 +79,7 @@ void LightpadSyntaxHighlighter::highlightBlock(const QString &text) {
    }
 }
 
-static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, const QStringList& keywordPatterns_0, const QStringList& keywordPatterns_1, const QStringList& keywordPatterns_2, const QString& searchKeyword){
+static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, const QStringList& keywordPatterns_0, const QStringList& keywordPatterns_1, const QStringList& keywordPatterns_2, const QString& searchKeyword, QRegularExpression singleLineComment){
     QTextCharFormat keywordFormat;
     keywordFormat.setForeground(Qt::darkGreen);
     keywordFormat.setFontWeight(QFont::Bold);
@@ -114,7 +120,7 @@ static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, 
 
     QTextCharFormat singleLineCommentFormat;
     singleLineCommentFormat.setForeground(Qt::gray);
-    highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("//[^\n]*")), singleLineCommentFormat));
+    highlightingRules.append(HighlightingRule(singleLineComment, singleLineCommentFormat));
 
     if (!searchKeyword.isEmpty()) {
         QTextCharFormat searchFormat;
@@ -135,7 +141,40 @@ QVector<HighlightingRule> highlightingRulesCpp(const QString& searchKeyword)
     loadkeywordPatterns(keywordPatterns_2, keyWords_Cpp_2);
 
     if (!keywordPatterns_0.isEmpty() && !keywordPatterns_1.isEmpty() && !keywordPatterns_2.isEmpty())
-        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword);
+        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword, QRegularExpression(QStringLiteral("//[^\n]*")));
 
     return highlightingRules;
 }
+
+QVector<HighlightingRule> highlightingRulesJs(const QString& searchKeyword)
+{
+    QVector<HighlightingRule> highlightingRules;
+    QStringList keywordPatterns_0;
+    QStringList keywordPatterns_1;
+    QStringList keywordPatterns_2;
+    loadkeywordPatterns(keywordPatterns_0, keyWords_Js_0);
+    loadkeywordPatterns(keywordPatterns_1, keyWords_Js_1);
+    loadkeywordPatterns(keywordPatterns_2, keyWords_Js_2);
+
+    if (!keywordPatterns_0.isEmpty() && !keywordPatterns_1.isEmpty() && !keywordPatterns_2.isEmpty())
+        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword, QRegularExpression(QStringLiteral("//[^\n]*")));
+
+    return highlightingRules;
+}
+
+QVector<HighlightingRule> highlightingRulesPy(const QString& searchKeyword)
+{
+    QVector<HighlightingRule> highlightingRules;
+    QStringList keywordPatterns_0;
+    QStringList keywordPatterns_1;
+    QStringList keywordPatterns_2;
+    loadkeywordPatterns(keywordPatterns_0, keyWords_Py_0);
+    loadkeywordPatterns(keywordPatterns_1, keyWords_Py_1);
+    loadkeywordPatterns(keywordPatterns_2, keyWords_Py_2);
+
+    if (!keywordPatterns_0.isEmpty() && !keywordPatterns_1.isEmpty() && !keywordPatterns_2.isEmpty())
+        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword, QRegularExpression(QStringLiteral("#[^\n]*")));
+
+    return highlightingRules;
+}
+
