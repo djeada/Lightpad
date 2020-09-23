@@ -31,6 +31,7 @@ class  FindReplacePanel : public QWidget
         void on_close_clicked();
 
 private:
+        QTextCharFormat colorFormat;
         QWidget* extension;
         QTextDocument* document;
         TextArea* textArea;
@@ -39,6 +40,7 @@ private:
         QVector<int> positions;
         int position;
         QTextCharFormat prevFormat;
+        void selectSearchWord(QTextCursor cursor, int n);
         void clearSelectionFormat(QTextCursor cursor, int n);
 };
 

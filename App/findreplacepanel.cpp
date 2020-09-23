@@ -20,6 +20,9 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent) :
     ui->options->setVisible(false);
     setReplaceVisibility(onlyFind);
 
+    colorFormat.setBackground(Qt::red);
+    colorFormat.setForeground(Qt::white);
+
     ui->find->setFixedSize(ui->more->width(), ui->find->height());
 }
 
@@ -72,10 +75,6 @@ void FindReplacePanel::on_find_clicked()
 
         QString searchWord = ui->searchFind->text();
 
-        QTextCharFormat colorFormat;
-        colorFormat.setBackground(Qt::red);
-        colorFormat.setForeground(Qt::white);
-
         if (textArea->getSearchWord() != searchWord) {
             QTextCursor newCursor(textArea->document());
 
@@ -95,17 +94,9 @@ void FindReplacePanel::on_find_clicked()
             }
 
             if (!positions.isEmpty()) {
-                position = 0;
+                position = -1;
 
-                newCursor.setPosition(positions[position]);
-
-               if (!newCursor.isNull()) {
-                   newCursor.setPosition(positions[position] + searchWord.size(), QTextCursor::KeepAnchor);
-                   prevFormat = newCursor.charFormat();
-                   newCursor.setCharFormat(colorFormat);
-                   textArea->setTextCursor(newCursor);
-               }
-
+                selectSearchWord(newCursor, searchWord.size());
             }
 
             ui->currentIndex->setText(QString::number(position + 1));
@@ -123,15 +114,8 @@ void FindReplacePanel::on_find_clicked()
            if (position >= positions.size() - 1)
                  position = -1;
 
-            newCursor.setPosition(positions[++position]);
-
-            if (!newCursor.isNull()) {
-                newCursor.setPosition(positions[position] + searchWord.size(), QTextCursor::KeepAnchor);
-                newCursor.setCharFormat(colorFormat);
-                textArea->setTextCursor(newCursor);
-            }
-
-            ui->currentIndex->setText(QString::number(position));
+            selectSearchWord(newCursor, searchWord.size());
+            ui->currentIndex->setText(QString::number(position + 1));
         }
     }
 }
@@ -140,6 +124,18 @@ void FindReplacePanel::on_close_clicked()
 {
     textArea->updateSyntaxHighlightTags();
     close();
+}
+
+void FindReplacePanel::selectSearchWord(QTextCursor cursor, int n)
+{
+    cursor.setPosition(positions[++position]);
+
+   if (!cursor.isNull()) {
+       cursor.setPosition(positions[position] + n, QTextCursor::KeepAnchor);
+       prevFormat = cursor.charFormat();
+       cursor.setCharFormat(colorFormat);
+       textArea->setTextCursor(cursor);
+   }
 }
 
 void FindReplacePanel::clearSelectionFormat(QTextCursor cursor, int n)
