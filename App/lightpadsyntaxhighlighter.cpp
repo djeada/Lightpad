@@ -111,6 +111,7 @@ static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, 
     highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\\b[-+.,]*\\d{1,}f*\\b")), numberFormat));
 
     QTextCharFormat classFormat;
+
     classFormat.setForeground(Qt::darkMagenta);
     classFormat.setFontWeight(QFont::Bold);
     highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\\bQ[A-Za-z]+\\b")), classFormat));

@@ -13,7 +13,8 @@ HEADERS     = \
     lightpadsyntaxhighlighter.h \
     lightpadtabwidget.h \
     mainwindow.h \
-    textarea.h
+    textarea.h \
+    theme.h
 
 SOURCES     = main.cpp \
       findreplacepanel.cpp \
@@ -21,7 +22,8 @@ SOURCES     = main.cpp \
       lightpadsyntaxhighlighter.cpp \
       lightpadtabwidget.cpp \
       mainwindow.cpp \
-      textarea.cpp
+      textarea.cpp \
+      theme.cpp
 
 FORMS += \
     findreplacepanel.ui \

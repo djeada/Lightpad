@@ -36,6 +36,10 @@ private:
         TextArea* textArea;
         Ui::FindReplacePanel *ui;
         bool onlyFind;
+        QVector<int> positions;
+        int position;
+        QTextCharFormat prevFormat;
+        void clearSelectionFormat(QTextCursor cursor, int n);
 };
 
 #endif // FINDREPLACEPANEL_H

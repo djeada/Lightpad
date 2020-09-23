@@ -59,7 +59,8 @@ TextArea::TextArea(QWidget *parent) :
     bufferText(""),
     highlightLang(""),
     prevWordCount(1),
-    syntaxHighlighter(nullptr)
+    syntaxHighlighter(nullptr),
+    searchWord("")
      {
 
         lineNumberArea = new LineNumberArea(this);
@@ -147,6 +148,11 @@ void TextArea::setTabWidth(int width)
     setTabStopWidth(metrics.horizontalAdvance(' ') * width);
 }
 
+QString TextArea::getSearchWord()
+{
+    return searchWord;
+}
+
 void TextArea::resizeEvent(QResizeEvent *e) {
     QPlainTextEdit::resizeEvent(e);
     lineNumberArea->setGeometry(0, 0, lineNumberAreaWidth(), height());
@@ -197,7 +203,7 @@ void TextArea::updateStyle() {
 
 void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) {
 
-    qDebug() << chosenLang;
+    searchWord = searchKey;
 
     if (!chosenLang.isEmpty())
         highlightLang = chosenLang;
