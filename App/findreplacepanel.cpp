@@ -95,21 +95,8 @@ void FindReplacePanel::on_replaceSingle_clicked()
         QString replaceWord = ui->fieldReplace->text();
         QTextCursor newCursor(textArea->document());
 
-        if (textArea->getSearchWord() != searchWord) {
-            findInitial(newCursor, searchWord);
-            replaceNext(newCursor, replaceWord);
-        }
-
-        else {
-            findNext(newCursor, searchWord);
-            replaceNext(newCursor, replaceWord);
-
-            if (position >= positions.size() - 1) {
-                positions.clear();
-                position = -1;
-            }
-        }
-
+        findInitial(newCursor, searchWord);
+        replaceNext(newCursor, replaceWord);
         updateCounterLabels();
     }
 }
@@ -125,6 +112,7 @@ void FindReplacePanel::selectSearchWord(QTextCursor& cursor, int n)
     cursor.setPosition(positions[++position]);
 
    if (!cursor.isNull()) {
+       cursor.clearSelection();
        cursor.setPosition(positions[position] + n, QTextCursor::KeepAnchor);
        prevFormat = cursor.charFormat();
        cursor.setCharFormat(colorFormat);
@@ -148,7 +136,6 @@ void FindReplacePanel::clearSelectionFormat(QTextCursor& cursor, int n)
 void FindReplacePanel::replaceNext(QTextCursor &cursor, const QString &replaceWord)
 {
     if (!cursor.selectedText().isEmpty() && !positions.isEmpty()) {
-        qDebug() << cursor.selectedText();
         cursor.removeSelectedText();
         cursor.insertText(replaceWord);
         textArea->setTextCursor(cursor);
