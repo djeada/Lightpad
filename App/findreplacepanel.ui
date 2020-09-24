@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>443</width>
+    <width>447</width>
     <height>205</height>
    </rect>
   </property>
@@ -100,7 +100,7 @@
            </spacer>
           </item>
           <item>
-           <widget class="QLineEdit" name="searchReplace"/>
+           <widget class="QLineEdit" name="fieldReplace"/>
           </item>
          </layout>
         </widget>

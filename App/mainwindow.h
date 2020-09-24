@@ -76,6 +76,7 @@ class MainWindow : public QMainWindow {
         void on_languageHighlight_clicked();
         void on_actionAbout_triggered();
         void on_tabWidth_clicked();
+        void on_actionFind_file_triggered();
 
 private:
         Ui::MainWindow* ui;

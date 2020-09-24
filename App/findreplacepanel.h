@@ -30,18 +30,24 @@ class  FindReplacePanel : public QWidget
         void on_find_clicked();
         void on_close_clicked();
 
+        void on_replaceSingle_clicked();
+
 private:
-        QTextCharFormat colorFormat;
         QWidget* extension;
         QTextDocument* document;
         TextArea* textArea;
         Ui::FindReplacePanel *ui;
-        bool onlyFind;
         QVector<int> positions;
-        int position;
         QTextCharFormat prevFormat;
-        void selectSearchWord(QTextCursor cursor, int n);
-        void clearSelectionFormat(QTextCursor cursor, int n);
+        QTextCharFormat colorFormat;
+        bool onlyFind;
+        int position;
+        void updateCounterLabels();
+        void selectSearchWord(QTextCursor& cursor, int n);
+        void clearSelectionFormat(QTextCursor& cursor, int n);
+        void findInitial(QTextCursor& cursor, const QString& searchWord);
+        void findNext(QTextCursor& cursor, const QString& searchWord);
+        void replaceNext(QTextCursor& cursor, const QString& replaceWord);
 };
 
 #endif // FINDREPLACEPANEL_H

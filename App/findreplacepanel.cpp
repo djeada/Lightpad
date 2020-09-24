@@ -24,6 +24,7 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent) :
     colorFormat.setForeground(Qt::white);
 
     ui->find->setFixedSize(ui->more->width(), ui->find->height());
+    updateCounterLabels();
 }
 
 FindReplacePanel::~FindReplacePanel() {
@@ -72,51 +73,44 @@ void FindReplacePanel::on_find_clicked()
     if (textArea) {
 
         textArea->setFocus();
-
         QString searchWord = ui->searchFind->text();
+        QTextCursor newCursor(textArea->document());
+
+        if (textArea->getSearchWord() != searchWord)
+           findInitial(newCursor, searchWord);
+
+        else
+            findNext(newCursor, searchWord);
+
+        updateCounterLabels();
+    }
+}
+
+void FindReplacePanel::on_replaceSingle_clicked()
+{
+    if (textArea) {
+
+        textArea->setFocus();
+        QString searchWord = ui->searchFind->text();
+        QString replaceWord = ui->fieldReplace->text();
+        QTextCursor newCursor(textArea->document());
 
         if (textArea->getSearchWord() != searchWord) {
-            QTextCursor newCursor(textArea->document());
-
-            if (!positions.isEmpty()) {
-                clearSelectionFormat(newCursor, searchWord.size());
-                positions.clear();
-            }
-
-            textArea->updateSyntaxHighlightTags(searchWord);
-
-
-            int j = 0;
-
-            while ((j = textArea->toPlainText().indexOf(searchWord, j)) != -1) {
-                positions.push_back(j);
-                ++j;
-            }
-
-            if (!positions.isEmpty()) {
-                position = -1;
-
-                selectSearchWord(newCursor, searchWord.size());
-            }
-
-            ui->currentIndex->setText(QString::number(position + 1));
-            ui->totalFound->setText(QString::number(positions.size()));
-
+            findInitial(newCursor, searchWord);
+            replaceNext(newCursor, replaceWord);
         }
-
 
         else {
+            findNext(newCursor, searchWord);
+            replaceNext(newCursor, replaceWord);
 
-            QTextCursor newCursor(textArea->document());
-
-            clearSelectionFormat(newCursor, searchWord.size());
-
-           if (position >= positions.size() - 1)
-                 position = -1;
-
-            selectSearchWord(newCursor, searchWord.size());
-            ui->currentIndex->setText(QString::number(position + 1));
+            if (position >= positions.size() - 1) {
+                positions.clear();
+                position = -1;
+            }
         }
+
+        updateCounterLabels();
     }
 }
 
@@ -126,7 +120,7 @@ void FindReplacePanel::on_close_clicked()
     close();
 }
 
-void FindReplacePanel::selectSearchWord(QTextCursor cursor, int n)
+void FindReplacePanel::selectSearchWord(QTextCursor& cursor, int n)
 {
     cursor.setPosition(positions[++position]);
 
@@ -138,13 +132,81 @@ void FindReplacePanel::selectSearchWord(QTextCursor cursor, int n)
    }
 }
 
-void FindReplacePanel::clearSelectionFormat(QTextCursor cursor, int n)
+void FindReplacePanel::clearSelectionFormat(QTextCursor& cursor, int n)
 {
-    cursor.setPosition(positions[position]);
+    if (!positions.isEmpty()) {
+        cursor.setPosition(positions[position]);
 
-    if (!cursor.isNull()) {
-        cursor.setPosition(positions[position] + n, QTextCursor::KeepAnchor);
-        cursor.setCharFormat(prevFormat);
+        if (!cursor.isNull()) {
+            cursor.setPosition(positions[position] + n, QTextCursor::KeepAnchor);
+            cursor.setCharFormat(prevFormat);
+            textArea->setTextCursor(cursor);
+        }
+    }
+}
+
+void FindReplacePanel::replaceNext(QTextCursor &cursor, const QString &replaceWord)
+{
+    if (!cursor.selectedText().isEmpty() && !positions.isEmpty()) {
+        qDebug() << cursor.selectedText();
+        cursor.removeSelectedText();
+        cursor.insertText(replaceWord);
         textArea->setTextCursor(cursor);
     }
 }
+
+void FindReplacePanel::updateCounterLabels()
+{
+    if (positions.isEmpty()) {
+        ui->currentIndex->hide();
+        ui->totalFound->hide();
+        ui->label->hide();
+    }
+
+    else {
+        if (ui->currentIndex->isHidden()) {
+            ui->currentIndex->show();
+            ui->totalFound->show();
+            ui->label->show();
+        }
+
+        ui->currentIndex->setText(QString::number(position + 1));
+        ui->totalFound->setText(QString::number(positions.size()));
+    }
+}
+
+void FindReplacePanel::findInitial(QTextCursor& cursor, const QString& searchWord)
+{
+    if (!positions.isEmpty()) {
+        clearSelectionFormat(cursor, searchWord.size());
+        positions.clear();
+    }
+
+    textArea->updateSyntaxHighlightTags(searchWord);
+
+    int j = 0;
+
+    while ((j = textArea->toPlainText().indexOf(searchWord, j)) != -1) {
+        positions.push_back(j);
+        ++j;
+    }
+
+    if (!positions.isEmpty()) {
+        position = -1;
+        selectSearchWord(cursor, searchWord.size());
+    }
+}
+
+void FindReplacePanel::findNext(QTextCursor& cursor, const QString& searchWord)
+{
+    clearSelectionFormat(cursor, searchWord.size());
+
+    if (!positions.isEmpty()) {
+        if (position >= positions.size() - 1)
+            position = -1;
+
+        selectSearchWord(cursor, searchWord.size());
+    }
+}
+
+

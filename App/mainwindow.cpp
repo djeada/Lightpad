@@ -382,7 +382,7 @@ void MainWindow::on_actionClose_All_Tabs_triggered()
 
 void MainWindow::on_actionFind_in_file_triggered()
 {
-    showFindReplace();
+    showFindReplace(true);
 }
 
 void MainWindow::on_actionNew_File_triggered()
@@ -541,11 +541,6 @@ void MainWindow::on_actionToggle_Menu_Bar_triggered()
     ui->menubar->setVisible(!ui->menubar->isVisible());
 }
 
-void MainWindow::on_actionReplace_in_file_triggered()
-{
-    showFindReplace(false);
-}
-
 void MainWindow::on_languageHighlight_clicked()
 {
     if (!popupHighlightLanguage) {
@@ -586,4 +581,15 @@ void MainWindow::on_tabWidth_clicked()
 
     else
         popupTabWidth->hide();
+}
+
+void MainWindow::on_actionReplace_in_file_triggered()
+{
+    showFindReplace(false);
+}
+
+void MainWindow::on_actionFind_file_triggered()
+{
+    showFindReplace(true);
+
 }

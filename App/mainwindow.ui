@@ -272,7 +272,6 @@ QToolButton:pressed {
     </property>
     <addaction name="actionFind_in_file"/>
     <addaction name="actionFind_in_project"/>
-    <addaction name="actionFind_file"/>
     <addaction name="separator"/>
     <addaction name="actionReplace_in_file"/>
     <addaction name="actionReplace_in_project"/>
@@ -396,11 +395,6 @@ QToolButton:pressed {
   <action name="actionFind_in_project">
    <property name="text">
     <string>Find in project</string>
-   </property>
-  </action>
-  <action name="actionFind_file">
-   <property name="text">
-    <string>Find file</string>
    </property>
   </action>
   <action name="actionReplace_in_file">
