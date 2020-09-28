@@ -13,6 +13,7 @@ HEADERS     = \
     lightpadsyntaxhighlighter.h \
     lightpadtabwidget.h \
     mainwindow.h \
+    shortcuts.h \
     textarea.h \
     theme.h
 
@@ -22,12 +23,14 @@ SOURCES     = main.cpp \
       lightpadsyntaxhighlighter.cpp \
       lightpadtabwidget.cpp \
       mainwindow.cpp \
+      shortcuts.cpp \
       textarea.cpp \
       theme.cpp
 
 FORMS += \
     findreplacepanel.ui \
-    mainwindow.ui
+    mainwindow.ui \
+    shortcuts.ui
 
 RESOURCES += \
     highlight.qrc \

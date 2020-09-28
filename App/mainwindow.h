@@ -78,6 +78,8 @@ class MainWindow : public QMainWindow {
         void on_tabWidth_clicked();
         void on_actionFind_file_triggered();
 
+        void on_actionKeyboard_shortcuts_triggered();
+
 private:
         Ui::MainWindow* ui;
         void undo();

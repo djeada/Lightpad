@@ -32,6 +32,8 @@ class  FindReplacePanel : public QWidget
 
         void on_replaceSingle_clicked();
 
+        void on_replaceAll_clicked();
+
 private:
         QWidget* extension;
         QTextDocument* document;
@@ -43,10 +45,10 @@ private:
         bool onlyFind;
         int position;
         void updateCounterLabels();
-        void selectSearchWord(QTextCursor& cursor, int n);
+        void selectSearchWord(QTextCursor& cursor, int n, int offset = 0);
         void clearSelectionFormat(QTextCursor& cursor, int n);
         void findInitial(QTextCursor& cursor, const QString& searchWord);
-        void findNext(QTextCursor& cursor, const QString& searchWord);
+        void findNext(QTextCursor& cursor, const QString& searchWord, int offset = 0);
         void replaceNext(QTextCursor& cursor, const QString& replaceWord);
 };
 

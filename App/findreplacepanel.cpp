@@ -107,13 +107,13 @@ void FindReplacePanel::on_close_clicked()
     close();
 }
 
-void FindReplacePanel::selectSearchWord(QTextCursor& cursor, int n)
+void FindReplacePanel::selectSearchWord(QTextCursor& cursor, int n, int offset)
 {
-    cursor.setPosition(positions[++position]);
+    cursor.setPosition(positions[++position] - offset);
 
    if (!cursor.isNull()) {
        cursor.clearSelection();
-       cursor.setPosition(positions[position] + n, QTextCursor::KeepAnchor);
+       cursor.setPosition(positions[position] - offset + n, QTextCursor::KeepAnchor);
        prevFormat = cursor.charFormat();
        cursor.setCharFormat(colorFormat);
        textArea->setTextCursor(cursor);
@@ -122,7 +122,7 @@ void FindReplacePanel::selectSearchWord(QTextCursor& cursor, int n)
 
 void FindReplacePanel::clearSelectionFormat(QTextCursor& cursor, int n)
 {
-    if (!positions.isEmpty()) {
+    if (!positions.isEmpty() && position >= 0) {
         cursor.setPosition(positions[position]);
 
         if (!cursor.isNull()) {
@@ -184,7 +184,7 @@ void FindReplacePanel::findInitial(QTextCursor& cursor, const QString& searchWor
     }
 }
 
-void FindReplacePanel::findNext(QTextCursor& cursor, const QString& searchWord)
+void FindReplacePanel::findNext(QTextCursor& cursor, const QString& searchWord, int offset)
 {
     clearSelectionFormat(cursor, searchWord.size());
 
@@ -192,8 +192,43 @@ void FindReplacePanel::findNext(QTextCursor& cursor, const QString& searchWord)
         if (position >= positions.size() - 1)
             position = -1;
 
-        selectSearchWord(cursor, searchWord.size());
+        selectSearchWord(cursor, searchWord.size(), offset);
     }
 }
 
 
+
+void FindReplacePanel::on_replaceAll_clicked()
+{
+
+    if (textArea) {
+
+        textArea->setFocus();
+        QString searchWord = ui->searchFind->text();
+        QString replaceWord = ui->fieldReplace->text();
+        QTextCursor newCursor(textArea->document());
+
+        position = -1;
+        positions.clear();
+
+        int j = 0;
+
+        while ((j = textArea->toPlainText().indexOf(searchWord, j)) != -1) {
+            positions.push_back(j);
+            ++j;
+        }
+
+        int offset = 0;
+
+        for (int i = 0; i < positions.size(); i++) {
+            findNext(newCursor, replaceWord, offset);
+            replaceNext(newCursor, replaceWord);
+            offset += (replaceWord.size() - searchWord.size());
+        }
+
+        position = -1;
+        positions.clear();
+        updateCounterLabels();
+    }
+
+}

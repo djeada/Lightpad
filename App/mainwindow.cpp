@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "lightpadpage.h"
+#include "shortcuts.h"
 
 #include <QDebug>
 #include <QStackedWidget>
@@ -592,4 +593,9 @@ void MainWindow::on_actionFind_file_triggered()
 {
     showFindReplace(true);
 
+}
+
+void MainWindow::on_actionKeyboard_shortcuts_triggered()
+{
+    new ShortcutsDialog(this);
 }
