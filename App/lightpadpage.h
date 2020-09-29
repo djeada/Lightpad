@@ -7,6 +7,25 @@
 #include <QTreeView>
 #include <QFileSystemModel>
 
+class LightpadPage;
+
+class LightpadTreeView: public QTreeView {
+
+    Q_OBJECT
+
+    public:
+        LightpadTreeView(LightpadPage* parent = nullptr);
+        ~LightpadTreeView() {};
+
+    protected:
+        void mouseReleaseEvent(QMouseEvent *e) override;
+
+    private:
+        LightpadPage* parentPage;
+        void removeFile(QString filePath);
+
+};
+
 class LightpadPage: public QWidget {
 
     Q_OBJECT
@@ -20,14 +39,16 @@ class LightpadPage: public QWidget {
         void setModelRootIndex(QString path);
         void setMainWindow(MainWindow* window);
         void setFilePath(QString path);
+        void updateModel();
         QString getFilePath();
+        QString getFilePath(const QModelIndex &index);
 
     private:
-       MainWindow* mainWindow;
-       QTreeView* treeView;
-       TextArea* textArea;
-       QFileSystemModel* model;
-       QString filePath;
+        MainWindow* mainWindow;
+        QTreeView* treeView;
+        TextArea* textArea;
+        QFileSystemModel* model;
+        QString filePath;
 
 };
 

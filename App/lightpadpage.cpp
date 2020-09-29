@@ -2,6 +2,44 @@
 #include "mainwindow.h"
 #include <QHBoxLayout>
 #include <QDebug>
+#include <QMenu>
+
+LightpadTreeView::LightpadTreeView(LightpadPage* parent):
+    QTreeView(parent),
+    parentPage(parent) {
+
+}
+
+void LightpadTreeView::mouseReleaseEvent(QMouseEvent *e) {
+
+    if (e->button() == Qt::RightButton) {
+        QModelIndex idx = indexAt(e->pos());
+        if (idx.isValid()) {
+            QMenu m;
+            m.addAction("Remove");
+
+            QAction *selected = m.exec(mapToGlobal(e->pos()));
+
+            if (selected) {
+                if (selected->text() == "Remove")
+                    removeFile(parentPage->getFilePath(idx));
+            }
+        }
+    }
+
+    else
+        QTreeView::mouseReleaseEvent(e);
+}
+
+void LightpadTreeView::removeFile(QString filePath)
+{
+    if (QFileInfo(filePath).isFile()) {
+        QFile::remove(filePath);
+        parentPage->updateModel();
+        parentPage->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
+    }
+}
+
 
 LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden) :
     QWidget(parent),
@@ -10,7 +48,7 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden) :
 
         auto* layoutHor = new QHBoxLayout(this);
 
-        treeView = new QTreeView(this);
+        treeView = new LightpadTreeView(this);
         textArea = new TextArea(this);
 
         layoutHor->addWidget(treeView);
@@ -24,15 +62,7 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden) :
         layoutHor->setStretch(1, 1);
 
         setLayout(layoutHor);
-
-
-        model = new QFileSystemModel(this);
-        model->setRootPath(QDir::home().path());
-        treeView->setModel(model);
-
-        treeView->setColumnHidden(1, true);
-        treeView->setColumnHidden(2, true);
-        treeView->setColumnHidden(3, true);
+        updateModel();
 
         QObject::connect(treeView, &QAbstractItemView::clicked, this, [&] (const QModelIndex &index) {
             if (mainWindow) {
@@ -81,7 +111,23 @@ void LightpadPage::setFilePath(QString path)
     filePath = path;
 }
 
+void LightpadPage::updateModel()
+{
+    model = new QFileSystemModel(this);
+    model->setRootPath(QDir::home().path());
+    treeView->setModel(model);
+
+    treeView->setColumnHidden(1, true);
+    treeView->setColumnHidden(2, true);
+    treeView->setColumnHidden(3, true);
+}
+
 QString LightpadPage::getFilePath()
 {
     return filePath;
+}
+
+QString LightpadPage::getFilePath(const QModelIndex &index)
+{
+    return model->filePath(index);
 };
