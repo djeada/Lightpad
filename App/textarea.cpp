@@ -1,5 +1,7 @@
 #include "textarea.h"
 #include "mainwindow.h"
+#include "lightpadpage.h"
+#include "lightpadtabwidget.h"
 
 #include <QPainter>
 #include <QTextBlock>
@@ -8,6 +10,7 @@
 #include <QFileInfo>
 #include <QTextCursor>
 #include <QApplication>
+#include <QStackedWidget>
 
 enum lang {cpp, js, py};
 QMap<QString, lang> convertStrToEnum = {{"cpp", cpp}, {"h", cpp}, {"js", js}, {"py", py}};
@@ -33,7 +36,7 @@ static int numberOfDigits(int x) {
 
 class LineNumberArea : public QWidget {
     public:
-        LineNumberArea(TextArea *editor) : QWidget(editor), textArea(editor)
+        LineNumberArea(TextArea* editor) : QWidget(editor), textArea(editor)
         {}
 
         QSize sizeHint() const override {
@@ -41,15 +44,15 @@ class LineNumberArea : public QWidget {
         }
 
     protected:
-        void paintEvent(QPaintEvent *event) override {
+        void paintEvent(QPaintEvent* event) override {
             textArea->lineNumberAreaPaintEvent(event);
         }
 
     private:
-        TextArea *textArea;
+        TextArea* textArea;
 };
 
-TextArea::TextArea(QWidget *parent) :
+TextArea::TextArea(QWidget* parent) :
     QPlainTextEdit(parent),
     mainWindow(nullptr),
     highlightColor(QColor(Qt::green).darker(250)),
@@ -58,9 +61,9 @@ TextArea::TextArea(QWidget *parent) :
     backgroundColor(QColor(Qt::gray).darker(200)),
     bufferText(""),
     highlightLang(""),
-    prevWordCount(1),
     syntaxHighlighter(nullptr),
-    searchWord("")
+    searchWord(""),
+    prevWordCount(1)
      {
 
         lineNumberArea = new LineNumberArea(this);
@@ -96,6 +99,28 @@ TextArea::TextArea(QWidget *parent) :
 
          });
 
+        connect(document(), &QTextDocument::undoCommandAdded, this, [&] {
+
+            LightpadPage* page = qobject_cast<LightpadPage*>(parentWidget());
+
+            if (page) {
+
+                QStackedWidget* stackedWidget = qobject_cast<QStackedWidget*>(parentWidget()->parentWidget());
+
+                if (stackedWidget) {
+
+                    LightpadTabWidget* tabWidget =  qobject_cast<LightpadTabWidget*>(parentWidget()->parentWidget()->parentWidget());
+
+                    if (tabWidget) {
+                        int index = tabWidget->indexOf(page);
+
+                        if (index != -1)
+                            tabWidget->setTabIcon(index, QIcon(":/resources/icons/unsaved.png"));
+                    }
+                }
+            }
+        });
+
         mainFont = QApplication::font();
         document()->setDefaultFont(mainFont);
 
@@ -105,12 +130,13 @@ TextArea::TextArea(QWidget *parent) :
         updateStyle();
         show();
         //updateSyntaxHighlightTags();
+
 }
 
 int TextArea::lineNumberAreaWidth() {
     QFontMetrics fm(mainFont);
 
-    return 3 + fm.horizontalAdvance(QLatin1Char('9')) * 1.8 * numberOfDigits(blockCount());
+    return 3 + fm.horizontalAdvance(QLatin1Char('9'))*  1.8*  numberOfDigits(blockCount());
 }
 
 void TextArea::increaseFontSize()
@@ -132,9 +158,10 @@ void TextArea::setFontSize(int size) {
     }
 }
 
-void TextArea::setMainWindow(MainWindow *window)
+void TextArea::setMainWindow(MainWindow* window)
 {
     mainWindow = window;
+
 }
 
 int TextArea::fontSize()
@@ -145,7 +172,7 @@ int TextArea::fontSize()
 void TextArea::setTabWidth(int width)
 {
     QFontMetrics metrics(mainFont);
-    setTabStopWidth(metrics.horizontalAdvance(' ') * width);
+    setTabStopWidth(metrics.horizontalAdvance(' ')*  width);
 }
 
 QString TextArea::getSearchWord()
@@ -153,12 +180,12 @@ QString TextArea::getSearchWord()
     return searchWord;
 }
 
-void TextArea::resizeEvent(QResizeEvent *e) {
+void TextArea::resizeEvent(QResizeEvent* e) {
     QPlainTextEdit::resizeEvent(e);
     lineNumberArea->setGeometry(0, 0, lineNumberAreaWidth(), height());
 }
 
-void TextArea::keyPressEvent(QKeyEvent *keyEvent)
+void TextArea::keyPressEvent(QKeyEvent* keyEvent)
 {
     if (keyEvent->matches(QKeySequence::ZoomOut) || keyEvent->matches(QKeySequence::ZoomIn))
         mainWindow->keyPressEvent(keyEvent);
@@ -167,7 +194,7 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent)
         QPlainTextEdit::keyPressEvent(keyEvent);
 }
 
-void TextArea::lineNumberAreaPaintEvent(QPaintEvent *event) {
+void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event) {
     QPainter painter(lineNumberArea);
     painter.setFont(mainFont);
     painter.fillRect(event->rect(), backgroundColor);

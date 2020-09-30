@@ -11,8 +11,8 @@ class TextArea : public QPlainTextEdit {
     Q_OBJECT
 
     public:
-        TextArea(QWidget *parent = nullptr);
-        void lineNumberAreaPaintEvent(QPaintEvent *event);
+        TextArea(QWidget* parent = nullptr);
+        void lineNumberAreaPaintEvent(QPaintEvent* event);
         void updateStyle();
         void updateSyntaxHighlightTags(QString searchKey = "", QString chosenLang = "");
         int lineNumberAreaWidth();
@@ -25,22 +25,22 @@ class TextArea : public QPlainTextEdit {
         QString getSearchWord();
 
     protected:
-        void resizeEvent(QResizeEvent *event) override;
-        void keyPressEvent(QKeyEvent *event) override;
+        void resizeEvent(QResizeEvent* event) override;
+        void keyPressEvent(QKeyEvent* event) override;
 
     private:
         MainWindow* mainWindow;
-        QWidget *lineNumberArea;
+        QWidget* lineNumberArea;
         QColor highlightColor;
         QColor lineNumberAreaPenColor;
         QColor defaultPenColor;
         QColor backgroundColor;
         QString bufferText;
         QString highlightLang;
-        int prevWordCount;
         QFont mainFont;
         LightpadSyntaxHighlighter* syntaxHighlighter;
         QString searchWord;
+        int prevWordCount;
 };
 
 #endif

@@ -37,9 +37,11 @@ class LineEdit : public QLineEdit {
                 close();
             }
 
+            else if(event->key() == Qt::Key_Escape)
+                close();
+
             else
                 QLineEdit::keyPressEvent(event);
-
         }
 
     private:
