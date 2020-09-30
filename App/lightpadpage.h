@@ -16,12 +16,15 @@ class LightpadTreeView: public QTreeView {
     public:
         LightpadTreeView(LightpadPage* parent = nullptr);
         ~LightpadTreeView() {};
+        void renameFile(QString oldFilePath, QString newFilePath);
+
 
     protected:
         void mouseReleaseEvent(QMouseEvent *e) override;
 
     private:
         LightpadPage* parentPage;
+        void duplicateFile(QString filePath);
         void removeFile(QString filePath);
 
 };
