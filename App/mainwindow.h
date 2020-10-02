@@ -50,6 +50,7 @@ class MainWindow : public QMainWindow {
         int getTabWidth();
         int getFontSize();
         void openFileAndAddToNewTab(QString path);
+        void closeTabPage(QString filePath);
         TextArea* getCurrentTextArea();
 
     private slots:
@@ -76,8 +77,6 @@ class MainWindow : public QMainWindow {
         void on_languageHighlight_clicked();
         void on_actionAbout_triggered();
         void on_tabWidth_clicked();
-        void on_actionFind_file_triggered();
-
         void on_actionKeyboard_shortcuts_triggered();
 
 private:
@@ -89,6 +88,7 @@ private:
         void showFindReplace(bool onlyFind = true);
         void setMainWindowTitle(QString title);
         void setTheme(QString backgroundColor, QString foregroundColor);
+        void setFilePathAsTabText(QString filePath);
         Popup* popupHighlightLanguage;
         Popup* popupTabWidth;
         QString highlightLanguage;

@@ -42,6 +42,7 @@ class LightpadPage: public QWidget {
         void setModelRootIndex(QString path);
         void setMainWindow(MainWindow* window);
         void setFilePath(QString path);
+        void closeTabPage(QString path);
         void updateModel();
         QString getFilePath();
         QString getFilePath(const QModelIndex &index);

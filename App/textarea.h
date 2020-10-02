@@ -22,6 +22,7 @@ class TextArea : public QPlainTextEdit {
         void setMainWindow(MainWindow* window);
         int fontSize();
         void setTabWidth(int width);
+        void removeIconUnsaved();
         QString getSearchWord();
 
     protected:
@@ -40,6 +41,7 @@ class TextArea : public QPlainTextEdit {
         QFont mainFont;
         LightpadSyntaxHighlighter* syntaxHighlighter;
         QString searchWord;
+        void setTabWidgetIcon(QIcon icon);
         int prevWordCount;
 };
 

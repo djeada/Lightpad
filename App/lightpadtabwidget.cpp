@@ -49,6 +49,7 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
         QWidget::connect(newTabButton, &QToolButton::clicked, this, [this] {
             addNewTab();
         });
+
 }
 
 void LightpadTabWidget::resizeEvent(QResizeEvent *event) {
@@ -81,7 +82,7 @@ void LightpadTabWidget::addNewTab()
     if (mainWindow) {
         LightpadPage* newPage = new LightpadPage(this);
         newPage->setMainWindow(mainWindow);
-        insertTab(count(), newPage, "Unsaved Document");
+        insertTab(count(), newPage, unsavedDocumentLabel);
         correctTabButtonPosition();
     }
 }
@@ -126,11 +127,33 @@ void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColo
 
 }
 
+void LightpadTabWidget::setFilePath(int index, QString filePath)
+{
+    if (index >= 0 && index < count()) {
+        LightpadPage* page = qobject_cast<LightpadPage*>(widget(index));
+
+        if (page)
+            page->setFilePath(filePath);
+    }
+}
+
 LightpadPage* LightpadTabWidget::getPage(int index)
 {
-    if(index < 0 || index >= count())
+    if (index < 0 || index >= count())
        return nullptr;
 
-   return qobject_cast<LightpadPage*>(widget(index));
+    return qobject_cast<LightpadPage*>(widget(index));
+}
+
+QString LightpadTabWidget::getFilePath(int index)
+{
+    if (index >= 0 && index < count()) {
+        LightpadPage* page = qobject_cast<LightpadPage*>(widget(index));
+
+        if (page)
+           return page->getFilePath();
+    }
+
+    return "";
 }
 

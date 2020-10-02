@@ -141,6 +141,7 @@ void LightpadTreeView::removeFile(QString filePath)
         QFile::remove(filePath);
         parentPage->updateModel();
         parentPage->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
+        parentPage->closeTabPage(filePath);
     }
 }
 
@@ -197,21 +198,31 @@ void LightpadPage::setModelRootIndex(QString path)
     treeView->setRootIndex(model->index(path));
 }
 
-void LightpadPage::setMainWindow(MainWindow *window)
-{
- mainWindow = window;
+void LightpadPage::setMainWindow(MainWindow *window) {
 
- if (textArea) {
-     textArea->setMainWindow(mainWindow);
-     textArea->setFontSize(mainWindow->getFontSize());
-     textArea->setTabWidth(mainWindow->getTabWidth());
+     mainWindow = window;
 
- }
+     if (textArea) {
+         textArea->setMainWindow(mainWindow);
+         textArea->setFontSize(mainWindow->getFontSize());
+         textArea->setTabWidth(mainWindow->getTabWidth());
+     }
 }
 
 void LightpadPage::setFilePath(QString path)
 {
     filePath = path;
+
+    if (!path.isEmpty()) {
+        setTreeViewVisible(true);
+        setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
+    }
+}
+
+void LightpadPage::closeTabPage(QString path)
+{
+    if (mainWindow)
+        mainWindow->closeTabPage(path);
 }
 
 void LightpadPage::updateModel()

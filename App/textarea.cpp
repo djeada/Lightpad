@@ -100,25 +100,7 @@ TextArea::TextArea(QWidget* parent) :
          });
 
         connect(document(), &QTextDocument::undoCommandAdded, this, [&] {
-
-            LightpadPage* page = qobject_cast<LightpadPage*>(parentWidget());
-
-            if (page) {
-
-                QStackedWidget* stackedWidget = qobject_cast<QStackedWidget*>(parentWidget()->parentWidget());
-
-                if (stackedWidget) {
-
-                    LightpadTabWidget* tabWidget =  qobject_cast<LightpadTabWidget*>(parentWidget()->parentWidget()->parentWidget());
-
-                    if (tabWidget) {
-                        int index = tabWidget->indexOf(page);
-
-                        if (index != -1)
-                            tabWidget->setTabIcon(index, QIcon(":/resources/icons/unsaved.png"));
-                    }
-                }
-            }
+            setTabWidgetIcon(QIcon(":/resources/icons/unsaved.png"));
         });
 
         mainFont = QApplication::font();
@@ -175,6 +157,11 @@ void TextArea::setTabWidth(int width)
     setTabStopWidth(metrics.horizontalAdvance(' ')*  width);
 }
 
+void TextArea::removeIconUnsaved()
+{
+    setTabWidgetIcon(QIcon());
+}
+
 QString TextArea::getSearchWord()
 {
     return searchWord;
@@ -192,6 +179,30 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
 
     else
         QPlainTextEdit::keyPressEvent(keyEvent);
+}
+
+void TextArea::setTabWidgetIcon(QIcon icon)
+{
+    LightpadPage* page = qobject_cast<LightpadPage*>(parentWidget());
+
+    if (page) {
+
+        QStackedWidget* stackedWidget = qobject_cast<QStackedWidget*>(parentWidget()->parentWidget());
+
+        if (stackedWidget) {
+
+            LightpadTabWidget* tabWidget =  qobject_cast<LightpadTabWidget*>(parentWidget()->parentWidget()->parentWidget());
+
+            if (tabWidget) {
+                int index = tabWidget->indexOf(page);
+
+                if (index != -1) {
+                    tabWidget->setTabIcon(index, icon);
+                    tabWidget->correctTabButtonPosition();
+                 }
+            }
+        }
+    }
 }
 
 void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event) {

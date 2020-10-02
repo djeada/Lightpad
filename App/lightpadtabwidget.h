@@ -4,6 +4,8 @@
 #include <QTabWidget>
 #include <QToolButton>
 
+const QString unsavedDocumentLabel = "Unsaved Document";
+
 class MainWindow;
 class LightpadPage;
 
@@ -18,7 +20,9 @@ class LightpadTabWidget : public QTabWidget
         void setMainWindow(MainWindow* window);
         void ensureNewTabButtonVisible();
         void setTheme(QString backgroundColor, QString foregroundColor);
+        void setFilePath(int index, QString filePath);
         LightpadPage* getPage(int index);
+        QString getFilePath(int index);
 
     protected:
         void resizeEvent(QResizeEvent* event) override;

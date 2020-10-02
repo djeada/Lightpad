@@ -228,20 +228,13 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
 
     if (ui->tabWidget->count() == 0 || !getCurrentTextArea()->toPlainText().isEmpty()) {
         ui->tabWidget->addNewTab();
-        ui->tabWidget->ensureNewTabButtonVisible();
+        //ui->tabWidget->ensureNewTabButtonVisible();
         ui->tabWidget->setCurrentIndex(ui->tabWidget->count() - 1);
     }
 
     open(filePath);
 
-    QString fileName = QFileInfo(filePath).fileName();
-
-    int tabIndex = ui->tabWidget->currentIndex();
-    QString tabText = ui->tabWidget->tabText(tabIndex);
-
-    setMainWindowTitle(fileName);
-    ui->tabWidget->setTabText(tabIndex, fileName);
-    ui->tabWidget->correctTabButtonPosition();
+    setFilePathAsTabText(filePath);
 
     LightpadPage* page = nullptr;
 
@@ -260,6 +253,14 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     if (getCurrentTextArea())
         getCurrentTextArea()->updateSyntaxHighlightTags("", QFileInfo(filePath).completeSuffix());
 
+}
+
+void MainWindow::closeTabPage(QString filePath)
+{
+    for (int i = 0; i < ui->tabWidget->count(); i++) {
+        if (ui->tabWidget->getFilePath(i) == filePath)
+            ui->tabWidget->removeTab(i);
+    }
 }
 
 void MainWindow::on_actionToggle_Full_Screen_triggered()
@@ -400,13 +401,17 @@ void MainWindow::on_actionOpen_File_triggered()
 
 void MainWindow::on_actionSave_triggered()
 {
+    int tabIndex = ui->tabWidget->currentIndex();
+    QString filePath = ui->tabWidget->getFilePath(tabIndex);
 
-    if (windowFilePath().isEmpty()) {
+    qDebug() << filePath;
+
+    if (filePath.isEmpty()) {
         on_actionSave_as_triggered();
         return;
     }
 
-    save(windowFilePath());
+    save(filePath);
 }
 
 void MainWindow::on_actionSave_as_triggered()
@@ -414,11 +419,13 @@ void MainWindow::on_actionSave_as_triggered()
     //tr("JavaScript Documents (*.js)")
     QString filePath = QFileDialog::getSaveFileName(this, tr("Save Document"), QDir::homePath());
 
-    if(filePath.isEmpty())
+    if (filePath.isEmpty())
         return;
 
-    setWindowFilePath(filePath);
-    on_actionSave_triggered();
+    int tabIndex = ui->tabWidget->currentIndex();
+    ui->tabWidget->setFilePath(tabIndex, filePath);
+
+    save(filePath);
 }
 
 void MainWindow::open(const QString &filePath)
@@ -430,7 +437,8 @@ void MainWindow::open(const QString &filePath)
         return;
     }
 
-    setWindowFilePath(filePath);
+    int tabIndex = ui->tabWidget->currentIndex();
+    ui->tabWidget->setFilePath(tabIndex, filePath);
 
     if (getCurrentTextArea())
       getCurrentTextArea()->setPlainText(QString::fromUtf8(file.readAll()));
@@ -444,8 +452,13 @@ void MainWindow::save(const QString &filePath)
         return;
 
     if (getCurrentTextArea()) {
+        int tabIndex = ui->tabWidget->currentIndex();
+        ui->tabWidget->setFilePath(tabIndex, filePath);
+
         file.write(getCurrentTextArea()->toPlainText().toUtf8());
         getCurrentTextArea()->document()->setModified(false);
+        getCurrentTextArea()->removeIconUnsaved();
+        setFilePathAsTabText(filePath);
     }
 }
 
@@ -537,6 +550,18 @@ void MainWindow::setTheme(QString backgroundColor, QString foregroundColor)
     ui->tabWidget->correctTabButtonPosition();
 }
 
+void MainWindow::setFilePathAsTabText(QString filePath)
+{
+    QString fileName = QFileInfo(filePath).fileName();
+
+    int tabIndex = ui->tabWidget->currentIndex();
+    QString tabText = ui->tabWidget->tabText(tabIndex);
+
+    setMainWindowTitle(fileName);
+    ui->tabWidget->setTabText(tabIndex, fileName);
+    ui->tabWidget->correctTabButtonPosition();
+}
+
 void MainWindow::on_actionToggle_Menu_Bar_triggered()
 {
     ui->menubar->setVisible(!ui->menubar->isVisible());
@@ -587,12 +612,6 @@ void MainWindow::on_tabWidth_clicked()
 void MainWindow::on_actionReplace_in_file_triggered()
 {
     showFindReplace(false);
-}
-
-void MainWindow::on_actionFind_file_triggered()
-{
-    showFindReplace(true);
-
 }
 
 void MainWindow::on_actionKeyboard_shortcuts_triggered()
