@@ -3,8 +3,10 @@
 
 #include <QTabWidget>
 #include <QToolButton>
+#include <QTabBar>
 
 const QString unsavedDocumentLabel = "Unsaved Document";
+const int buttonSize = 25;
 
 class MainWindow;
 class LightpadPage;

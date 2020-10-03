@@ -52,6 +52,7 @@ class MainWindow : public QMainWindow {
         void openFileAndAddToNewTab(QString path);
         void closeTabPage(QString filePath);
         TextArea* getCurrentTextArea();
+        Theme getTheme();
 
     private slots:
         void on_actionQuit_triggered();
@@ -95,6 +96,7 @@ private:
         FindReplacePanel* findReplacePanel;
         int fontSize;
         int tabWidth;
+        Theme colors;
 };
 
 #endif // MAINWINDOW_H

@@ -3,6 +3,7 @@
 
 #include <QSyntaxHighlighter>
 #include <QRegularExpression>
+#include "theme.h"
 
 class HighlightingRule {
 
@@ -23,6 +24,7 @@ class LightpadSyntaxHighlighter : public QSyntaxHighlighter
         void highlightBlock(const QString &text) override;
 
     private:
+        Theme colors;
         QVector<HighlightingRule> highlightingRules;
         QRegularExpression commentStartExpression;
         QRegularExpression commentEndExpression;
@@ -30,8 +32,8 @@ class LightpadSyntaxHighlighter : public QSyntaxHighlighter
 };
 
 QString cutEndOfLine(QString line);
-QVector<HighlightingRule> highlightingRulesCpp(const QString& searchKeyword = "");
-QVector<HighlightingRule> highlightingRulesJs(const QString& searchKeyword = "");
-QVector<HighlightingRule> highlightingRulesPy(const QString& searchKeyword = "");
+QVector<HighlightingRule> highlightingRulesCpp(Theme colors, const QString& searchKeyword = "");
+QVector<HighlightingRule> highlightingRulesJs(Theme colors, const QString& searchKeyword = "");
+QVector<HighlightingRule> highlightingRulesPy(Theme colors, const QString& searchKeyword = "");
 
 #endif // LIGHTPADSYNTAXHIGHLIGHTER_H

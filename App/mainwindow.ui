@@ -39,7 +39,7 @@
     <item>
      <widget class="LightpadTabWidget" name="tabWidget">
       <property name="sizePolicy">
-       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+       <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
         <horstretch>1</horstretch>
         <verstretch>1</verstretch>
        </sizepolicy>
@@ -58,6 +58,9 @@
       </property>
       <property name="currentIndex">
        <number>-1</number>
+      </property>
+      <property name="elideMode">
+       <enum>Qt::ElideLeft</enum>
       </property>
       <property name="usesScrollButtons">
        <bool>false</bool>

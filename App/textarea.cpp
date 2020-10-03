@@ -86,7 +86,9 @@ TextArea::TextArea(QWidget* parent) :
             QList<QTextEdit::ExtraSelection> extraSelections;
 
             QTextEdit::ExtraSelection selection;
-            selection.format.setBackground(highlightColor);
+
+            QColor color = mainWindow ? mainWindow->getTheme().highlightColor : highlightColor;
+            selection.format.setBackground(color);
             selection.format.setProperty(QTextFormat::FullWidthSelection, true);
             selection.cursor = textCursor();
             selection.cursor.clearSelection();
@@ -109,10 +111,8 @@ TextArea::TextArea(QWidget* parent) :
         setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
         QTextEdit::ExtraSelection selection;
         selection.format.setBackground(highlightColor);
-        updateStyle();
         show();
         //updateSyntaxHighlightTags();
-
 }
 
 int TextArea::lineNumberAreaWidth() {
@@ -154,7 +154,7 @@ int TextArea::fontSize()
 void TextArea::setTabWidth(int width)
 {
     QFontMetrics metrics(mainFont);
-    setTabStopWidth(metrics.horizontalAdvance(' ')*  width);
+    setTabStopWidth(metrics.horizontalAdvance(' ') * width);
 }
 
 void TextArea::removeIconUnsaved()
@@ -208,19 +208,23 @@ void TextArea::setTabWidgetIcon(QIcon icon)
 void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event) {
     QPainter painter(lineNumberArea);
     painter.setFont(mainFont);
-    painter.fillRect(event->rect(), backgroundColor);
+
+    QColor color = mainWindow ? mainWindow->getTheme().lineNumberAreaColor : backgroundColor;
+
+    painter.fillRect(event->rect(), color);
 
     QTextBlock block = firstVisibleBlock();
     int blockNumber = block.blockNumber();
     int height = QFontMetrics(mainFont).height();
     int top = blockBoundingGeometry(block).translated(contentOffset()).top();
     int bottom = height + top;
+    color = mainWindow ? mainWindow->getTheme().foregroundColor : lineNumberAreaPenColor;
 
     while (block.isValid() && top <= event->rect().bottom()) {
 
         if (block.isVisible() && bottom >= event->rect().top()) {
             QString number = QString::number(blockNumber + 1);
-            painter.setPen(lineNumberAreaPenColor);
+            painter.setPen(color);
             painter.drawText(0, top, lineNumberArea->width(), height, Qt::AlignCenter, number);
         }
 
@@ -231,17 +235,11 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event) {
     }
 }
 
-void TextArea::updateStyle() {
-    setStyleSheet(""
-                  "TextArea {"
-                  "color: " + defaultPenColor.name() + "; "
-                  "background-color: " + backgroundColor.name() + "; }"
-                  );
-}
-
 void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) {
 
     searchWord = searchKey;
+
+    Theme colors = mainWindow->getTheme();
 
     if (!chosenLang.isEmpty())
         highlightLang = chosenLang;
@@ -255,15 +253,15 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) 
 
         switch(convertStrToEnum[highlightLang]) {
             case cpp:
-                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
+                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(colors, searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
                 break;
 
             case js:
-                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesJs(searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
+                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesJs(colors, searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
                 break;
 
             case py:
-                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesPy(searchKey), QRegularExpression(QStringLiteral("/'''")),  QRegularExpression(QStringLiteral("\\'''")), document());
+                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesPy(colors, searchKey), QRegularExpression(QStringLiteral("/'''")),  QRegularExpression(QStringLiteral("\\'''")), document());
                 break;
          }
     }

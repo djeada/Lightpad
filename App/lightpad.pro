@@ -24,8 +24,7 @@ SOURCES     = main.cpp \
       lightpadtabwidget.cpp \
       mainwindow.cpp \
       shortcuts.cpp \
-      textarea.cpp \
-      theme.cpp
+      textarea.cpp
 
 FORMS += \
     findreplacepanel.ui \

@@ -141,7 +141,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
         ui->magicButton->setIconSize(0.8*ui->magicButton->size());
         setTabWidth(tabWidth);
-        setTheme("black", "white");
+        setTheme("black", "lightGray");
 
         loadLanguageExtensions(langToExt);
 }
@@ -298,6 +298,11 @@ TextArea *MainWindow::getCurrentTextArea()
         return ui->tabWidget->currentWidget()->findChild<TextArea*>("");
 
     return nullptr;
+}
+
+Theme MainWindow::getTheme()
+{
+    return colors;
 }
 
 void MainWindow::setTabWidth(int width) {
@@ -493,6 +498,20 @@ void MainWindow::setTheme(QString backgroundColor, QString foregroundColor)
 {
     //todo logic for selection Color
 
+    colors.backgroundColor = QColor(backgroundColor);
+    colors.foregroundColor = QColor(foregroundColor);
+    colors.highlightColor =  QColor(foregroundColor).darker(250);
+    colors.lineNumberAreaColor = QColor(backgroundColor);
+
+    colors.keywordFormat_0 = QColor("green").lighter(130);
+    colors.keywordFormat_1 = QColor("yellow").darker(140);
+    colors.keywordFormat_2 = QColor("violet");
+    colors.classFormat = QColor("green").darker(150);
+    colors.functionFormat = QColor(foregroundColor).darker(150);
+    colors.numberFormat = QColor("orange");
+    colors.singleLineCommentFormat = QColor("blue").lighter(150);
+    colors.quotationFormat = QColor("#ff405d");
+
     setStyleSheet(
 
     "QWidget {background-color: " + backgroundColor + ";}"
@@ -544,7 +563,11 @@ void MainWindow::setTheme(QString backgroundColor, QString foregroundColor)
 
     "QLineEdit {background: " + foregroundColor + ";}"
 
-    "QLabel {color: " + foregroundColor + ";}");
+    "QLabel {color: " + foregroundColor + ";}"
+
+    "QPlainTextEdit {color: " + foregroundColor + "; background-color: " + backgroundColor + "; }"
+
+     );
 
     ui->tabWidget->setTheme(backgroundColor, foregroundColor);
     ui->tabWidget->correctTabButtonPosition();

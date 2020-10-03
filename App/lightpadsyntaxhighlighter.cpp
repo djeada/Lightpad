@@ -85,48 +85,48 @@ void LightpadSyntaxHighlighter::highlightBlock(const QString &text) {
    }
 }
 
-static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, const QStringList& keywordPatterns_0, const QStringList& keywordPatterns_1, const QStringList& keywordPatterns_2, const QString& searchKeyword, QRegularExpression singleLineComment){
+static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, const QStringList& keywordPatterns_0, const QStringList& keywordPatterns_1, const QStringList& keywordPatterns_2, const QString& searchKeyword, QRegularExpression singleLineComment, Theme colors){
     QTextCharFormat keywordFormat;
-    keywordFormat.setForeground(Qt::darkGreen);
+    keywordFormat.setForeground(colors.keywordFormat_0);
     keywordFormat.setFontWeight(QFont::Bold);
 
     for (auto &pattern : keywordPatterns_0)
         highlightingRules.append(HighlightingRule(QRegularExpression(pattern), keywordFormat));
 
     QTextCharFormat keywordFormat_1;
-    keywordFormat_1.setForeground(Qt::darkYellow);
+    keywordFormat_1.setForeground(colors.keywordFormat_1);
     keywordFormat_1.setFontWeight(QFont::Bold);
 
     for (auto &pattern : keywordPatterns_1)
         highlightingRules.append(HighlightingRule(QRegularExpression(pattern), keywordFormat_1));
 
     QTextCharFormat keywordFormat_2;
-    keywordFormat_2.setForeground(Qt::darkMagenta);
+    keywordFormat_2.setForeground(colors.keywordFormat_2);
 
     for (auto &pattern : keywordPatterns_2)
         highlightingRules.append(HighlightingRule(QRegularExpression(pattern), keywordFormat_2));
 
     QTextCharFormat numberFormat;
-    numberFormat.setForeground(Qt::darkYellow);
+    numberFormat.setForeground(colors.numberFormat);
     highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\\b[-+.,]*\\d{1,}f*\\b")), numberFormat));
 
     QTextCharFormat classFormat;
 
-    classFormat.setForeground(Qt::darkMagenta);
+    classFormat.setForeground(colors.classFormat);
     classFormat.setFontWeight(QFont::Bold);
     highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\\bQ[A-Za-z]+\\b")), classFormat));
 
     QTextCharFormat quotationFormat;
-    quotationFormat.setForeground(Qt::darkGreen);
+    quotationFormat.setForeground(colors.quotationFormat);
     highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\".*\"")), quotationFormat));
 
     QTextCharFormat functionFormat;
     functionFormat.setFontItalic(true);
-    functionFormat.setForeground(Qt::blue);
+    functionFormat.setForeground(colors.functionFormat);
     highlightingRules.append(HighlightingRule(QRegularExpression(QStringLiteral("\\b[A-Za-z0-9_]+(?=\\()")), functionFormat));
 
     QTextCharFormat singleLineCommentFormat;
-    singleLineCommentFormat.setForeground(Qt::gray);
+    singleLineCommentFormat.setForeground(colors.singleLineCommentFormat);
     highlightingRules.append(HighlightingRule(singleLineComment, singleLineCommentFormat));
 
     if (!searchKeyword.isEmpty()) {
@@ -137,7 +137,7 @@ static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, 
 }
 
 
-QVector<HighlightingRule> highlightingRulesCpp(const QString& searchKeyword)
+QVector<HighlightingRule> highlightingRulesCpp(Theme colors, const QString& searchKeyword)
 {
     QVector<HighlightingRule> highlightingRules;
     QStringList keywordPatterns_0;
@@ -148,12 +148,12 @@ QVector<HighlightingRule> highlightingRulesCpp(const QString& searchKeyword)
     loadkeywordPatterns(keywordPatterns_2, keyWords_Cpp_2);
 
     if (!keywordPatterns_0.isEmpty() && !keywordPatterns_1.isEmpty() && !keywordPatterns_2.isEmpty())
-        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword, QRegularExpression(QStringLiteral("//[^\n]*")));
+        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword, QRegularExpression(QStringLiteral("//[^\n]*")), colors);
 
     return highlightingRules;
 }
 
-QVector<HighlightingRule> highlightingRulesJs(const QString& searchKeyword)
+QVector<HighlightingRule> highlightingRulesJs(Theme colors, const QString& searchKeyword)
 {
     QVector<HighlightingRule> highlightingRules;
     QStringList keywordPatterns_0;
@@ -164,12 +164,12 @@ QVector<HighlightingRule> highlightingRulesJs(const QString& searchKeyword)
     loadkeywordPatterns(keywordPatterns_2, keyWords_Js_2);
 
     if (!keywordPatterns_0.isEmpty() && !keywordPatterns_1.isEmpty() && !keywordPatterns_2.isEmpty())
-        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword, QRegularExpression(QStringLiteral("//[^\n]*")));
+        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword, QRegularExpression(QStringLiteral("//[^\n]*")), colors);
 
     return highlightingRules;
 }
 
-QVector<HighlightingRule> highlightingRulesPy(const QString& searchKeyword)
+QVector<HighlightingRule> highlightingRulesPy(Theme colors, const QString& searchKeyword)
 {
     QVector<HighlightingRule> highlightingRules;
     QStringList keywordPatterns_0;
@@ -180,7 +180,7 @@ QVector<HighlightingRule> highlightingRulesPy(const QString& searchKeyword)
     loadkeywordPatterns(keywordPatterns_2, keyWords_Py_2);
 
     if (!keywordPatterns_0.isEmpty() && !keywordPatterns_1.isEmpty() && !keywordPatterns_2.isEmpty())
-        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword, QRegularExpression(QStringLiteral("#[^\n]*")));
+        loadHighlightingRules(highlightingRules, keywordPatterns_0, keywordPatterns_1, keywordPatterns_2, searchKeyword, QRegularExpression(QStringLiteral("#[^\n]*")), colors);
 
     return highlightingRules;
 }

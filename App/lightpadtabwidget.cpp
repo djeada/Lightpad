@@ -8,8 +8,6 @@
 #include <QFontMetrics>
 #include <QApplication>
 
-int buttonSize = 25;
-
 class MyButton : public QToolButton
 {
 public:
@@ -50,13 +48,17 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
             addNewTab();
         });
 
+        tabBar()->setExpanding(false);
+
+
 }
 
 void LightpadTabWidget::resizeEvent(QResizeEvent *event) {
     QTabWidget::resizeEvent(event);
 
     if (tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width() + 3 + newTabButton->width() > width())
-        parentWidget()->parentWidget()->resize(parentWidget()->parentWidget()->width() + 3 + newTabButton->width(), parentWidget()->parentWidget()->height());
+     parentWidget()->parentWidget()->resize(parentWidget()->parentWidget()->width() + 3 + newTabButton->width(), parentWidget()->parentWidget()->height());
+
 }
 
 void LightpadTabWidget::tabRemoved(int index)
@@ -115,6 +117,8 @@ void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColo
             "border-bottom: 3px solid "  + foregroundColor + ";"
          "}"
 
+         "QTabBar {background: " +  backgroundColor  +";}"
+
          "QTabBar::tab {"
             "height: " + QString::number(newTabButton->height() + 2) + ";"
             "color:" + foregroundColor + ";"
@@ -123,7 +127,7 @@ void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColo
             "background-color: #262626;"
          "}"
 
-            "QTabWidget#tabWidget {background-color:  " +  backgroundColor  +"; }");
+        "QTabWidget#tabWidget {background-color:  " +  backgroundColor  +"; }");
 
 }
 

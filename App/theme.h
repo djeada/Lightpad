@@ -3,12 +3,11 @@
 
 #include <QColor>
 
-class Theme
-{
-public:
-    Theme();
-
-private:
+struct Theme {
+    QColor backgroundColor;
+    QColor foregroundColor;
+    QColor highlightColor;
+    QColor lineNumberAreaColor;
     QColor keywordFormat_0;
     QColor keywordFormat_1;
     QColor keywordFormat_2;

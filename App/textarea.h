@@ -13,7 +13,6 @@ class TextArea : public QPlainTextEdit {
     public:
         TextArea(QWidget* parent = nullptr);
         void lineNumberAreaPaintEvent(QPaintEvent* event);
-        void updateStyle();
         void updateSyntaxHighlightTags(QString searchKey = "", QString chosenLang = "");
         int lineNumberAreaWidth();
         void increaseFontSize();
