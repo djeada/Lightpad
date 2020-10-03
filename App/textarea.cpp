@@ -174,11 +174,21 @@ void TextArea::resizeEvent(QResizeEvent* e) {
 
 void TextArea::keyPressEvent(QKeyEvent* keyEvent)
 {
-    if (keyEvent->matches(QKeySequence::ZoomOut) || keyEvent->matches(QKeySequence::ZoomIn))
+    if (keyEvent->matches(QKeySequence::ZoomOut) || keyEvent->matches(QKeySequence::ZoomIn)) {
         mainWindow->keyPressEvent(keyEvent);
+        return;
+     }
 
-    else
-        QPlainTextEdit::keyPressEvent(keyEvent);
+    QPlainTextEdit::keyPressEvent(keyEvent);
+
+    if (keyEvent->key() == Qt::Key_BraceLeft)
+        closeparentheses("}");
+
+    else if (keyEvent->key() == Qt::Key_ParenLeft)
+        closeparentheses(")");
+
+    else if (keyEvent->key() == Qt::Key_BracketLeft)
+        closeparentheses("]");
 }
 
 void TextArea::setTabWidgetIcon(QIcon icon)
@@ -203,6 +213,15 @@ void TextArea::setTabWidgetIcon(QIcon icon)
             }
         }
     }
+}
+
+void TextArea::closeparentheses(QString closeStr)
+{
+    QTextCursor cursor = textCursor();
+    int pos = cursor.position();
+    cursor.setPosition(pos, cursor.MoveAnchor);
+    cursor.insertText(closeStr);
+    setTextCursor(cursor);
 }
 
 void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event) {

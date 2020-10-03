@@ -40,8 +40,9 @@ class TextArea : public QPlainTextEdit {
         QFont mainFont;
         LightpadSyntaxHighlighter* syntaxHighlighter;
         QString searchWord;
-        void setTabWidgetIcon(QIcon icon);
         int prevWordCount;
+        void setTabWidgetIcon(QIcon icon);
+        void closeparentheses(QString closeStr);
 };
 
 #endif
