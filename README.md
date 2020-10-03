@@ -13,7 +13,7 @@
 Open source code editor, developed with Qt framework.
 
 <h1>Screenshot</h1>
-![Alt text](https://raw.github.com/djeada/Lightpad/blob/master/screenshot.png)
+![ScreenShot](https://raw.github.com/djeada/Lightpad/blob/master/screenshot.png)
 
 <h1>Features</h1>
 
