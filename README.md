@@ -23,14 +23,15 @@ Open source code editor, developed with Qt framework.
   <li>Syntax highlighting</li>
   <li>Editing shortcuts</li>
   <li>Color themes</li>
-  <li>Auto parentheses</li>
   <li>Code templates</li>
+  <li>Auto parentheses</li>
+  <li>Auto indenting</li>
 </ul>
 
 <h2>Features to be added</h2>
 <ul>
   <li>Full VIM compatibility </li>
-  <li>Auto-completion</li>
+  <li>Auto completion</li>
 </ul>
 
 <h1>Build</h1>
