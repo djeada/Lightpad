@@ -103,7 +103,9 @@ void FindReplacePanel::on_replaceSingle_clicked()
 
 void FindReplacePanel::on_close_clicked()
 {
-    textArea->updateSyntaxHighlightTags();
+    if (textArea)
+        textArea->updateSyntaxHighlightTags();
+
     close();
 }
 
