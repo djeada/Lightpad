@@ -124,7 +124,7 @@ TextArea::TextArea(QWidget* parent) :
             setExtraSelections(extraSelections);
 
             if (mainWindow)
-                mainWindow->setRowCol(textCursor().blockNumber() + 1, textCursor().positionInBlock());
+                mainWindow->setRowCol(textCursor().blockNumber(), textCursor().positionInBlock());
 
          });
 
@@ -170,7 +170,6 @@ void TextArea::setFontSize(int size) {
 void TextArea::setMainWindow(MainWindow* window)
 {
     mainWindow = window;
-
 }
 
 int TextArea::fontSize()
@@ -292,7 +291,7 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event) {
     while (block.isValid() && top <= event->rect().bottom()) {
 
         if (block.isVisible() && bottom >= event->rect().top()) {
-            QString number = QString::number(blockNumber + 1);
+            QString number = QString::number(blockNumber);
             painter.setPen(color);
             painter.drawText(0, top, lineNumberArea->width(), height, Qt::AlignCenter, number);
         }
