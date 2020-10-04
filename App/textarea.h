@@ -42,7 +42,8 @@ class TextArea : public QPlainTextEdit {
         QString searchWord;
         int prevWordCount;
         void setTabWidgetIcon(QIcon icon);
-        void closeparentheses(QString closeStr);
+        void closeParentheses(QString closeStr);
+        void handleKeyEnterPressed();
 };
 
 #endif

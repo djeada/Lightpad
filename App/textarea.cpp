@@ -15,6 +15,33 @@
 enum lang {cpp, js, py};
 QMap<QString, lang> convertStrToEnum = {{"cpp", cpp}, {"h", cpp}, {"js", js}, {"py", py}};
 
+static int leadingSpaces(const QString& str, int tabWidth) {
+
+    int n = 0;
+
+    for (int i = 0; i < str.size(); i++) {
+
+        //check if character tabulation
+        if (str[i] == '\x9')
+            n += (tabWidth - 1);
+
+        else if (!str[i].isSpace())
+            return i + n;
+    }
+
+    return str.size();
+}
+
+static bool isLastNonSpaceCharacterOpenBrace(const QString& str) {
+
+    for (int i = str.size() - 1; i >= 0; i--) {
+        if (!str[i].isSpace() && str[i] == '{')
+            return true;
+    }
+
+    return false;
+}
+
 static int numberOfDigits(int x) {
 
     if (x == 0)
@@ -97,7 +124,7 @@ TextArea::TextArea(QWidget* parent) :
             setExtraSelections(extraSelections);
 
             if (mainWindow)
-                mainWindow->setRowCol(textCursor().blockNumber(), textCursor().positionInBlock());
+                mainWindow->setRowCol(textCursor().blockNumber() + 1, textCursor().positionInBlock());
 
          });
 
@@ -182,13 +209,16 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
     QPlainTextEdit::keyPressEvent(keyEvent);
 
     if (keyEvent->key() == Qt::Key_BraceLeft)
-        closeparentheses("}");
+        closeParentheses("}");
 
     else if (keyEvent->key() == Qt::Key_ParenLeft)
-        closeparentheses(")");
+        closeParentheses(")");
 
     else if (keyEvent->key() == Qt::Key_BracketLeft)
-        closeparentheses("]");
+        closeParentheses("]");
+
+    if (keyEvent->key()==Qt::Key_Enter || keyEvent->key()==Qt::Key_Return)
+        handleKeyEnterPressed();
 }
 
 void TextArea::setTabWidgetIcon(QIcon icon)
@@ -215,13 +245,33 @@ void TextArea::setTabWidgetIcon(QIcon icon)
     }
 }
 
-void TextArea::closeparentheses(QString closeStr)
+void TextArea::closeParentheses(QString closeStr)
 {
     QTextCursor cursor = textCursor();
     int pos = cursor.position();
     cursor.setPosition(pos, cursor.MoveAnchor);
     cursor.insertText(closeStr);
     setTextCursor(cursor);
+}
+
+void TextArea::handleKeyEnterPressed()
+{
+    if (mainWindow) {
+        QTextCursor cursor = textCursor();
+        int pos = cursor.position();
+        cursor.movePosition(QTextCursor::PreviousBlock);
+
+        const QString prevLine = cursor.block().text();
+        int tabWidth = mainWindow->getTabWidth();
+        int n = leadingSpaces(prevLine, tabWidth);
+
+        if (isLastNonSpaceCharacterOpenBrace(prevLine))
+            n += tabWidth;
+
+        cursor.setPosition(pos, cursor.MoveAnchor);
+        cursor.insertText(QString(" ").repeated(n));
+        setTextCursor(cursor);
+    }
 }
 
 void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event) {
