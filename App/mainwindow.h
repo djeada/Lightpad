@@ -80,6 +80,8 @@ class MainWindow : public QMainWindow {
         void on_tabWidth_clicked();
         void on_actionKeyboard_shortcuts_triggered();
 
+        void on_actionPrefrences_triggered();
+
 private:
         Ui::MainWindow* ui;
         void undo();

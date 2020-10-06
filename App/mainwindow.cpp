@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 #include "lightpadpage.h"
 #include "shortcuts.h"
+#include "colorpicker.h"
 
 #include <QDebug>
 #include <QStackedWidget>
@@ -640,4 +641,9 @@ void MainWindow::on_actionReplace_in_file_triggered()
 void MainWindow::on_actionKeyboard_shortcuts_triggered()
 {
     new ShortcutsDialog(this);
+}
+
+void MainWindow::on_actionPrefrences_triggered()
+{
+    new ColorPicker(colors);
 }

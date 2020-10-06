@@ -250,6 +250,8 @@ QToolButton:pressed {
     <addaction name="actionCut"/>
     <addaction name="actionCopy"/>
     <addaction name="actionPaste"/>
+    <addaction name="separator"/>
+    <addaction name="actionPrefrences"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
@@ -413,6 +415,11 @@ QToolButton:pressed {
   <action name="actionKeyboard_shortcuts">
    <property name="text">
     <string>Keyboard shortcuts</string>
+   </property>
+  </action>
+  <action name="actionPrefrences">
+   <property name="text">
+    <string>Preferences</string>
    </property>
   </action>
  </widget>

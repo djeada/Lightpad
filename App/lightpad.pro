@@ -8,6 +8,7 @@ TEMPLATE = app
 DEFINES += QT_DEPRECATED_WARNINGS
 
 HEADERS     = \
+    colorpicker.h \
     findreplacepanel.h \
     lightpadpage.h \
     lightpadsyntaxhighlighter.h \
@@ -18,6 +19,7 @@ HEADERS     = \
     theme.h
 
 SOURCES     = main.cpp \
+      colorpicker.cpp \
       findreplacepanel.cpp \
       lightpadpage.cpp \
       lightpadsyntaxhighlighter.cpp \
@@ -27,6 +29,7 @@ SOURCES     = main.cpp \
       textarea.cpp
 
 FORMS += \
+    colorpicker.ui \
     findreplacepanel.ui \
     mainwindow.ui \
     shortcuts.ui
