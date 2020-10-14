@@ -14,7 +14,23 @@
 const int defaultTabWidth = 4;
 const int defaultFontSize = 12;
 
+Theme defaultTheme = {QColor("black"),
+                      QColor("lightGray"),
+                      QColor("lightGray").darker(250),
+                      QColor("black"),
+                      QColor("green").lighter(130),
+                      QColor("yellow").darker(140),
+                      QColor("violet"),
+                      QColor("yellow"),
+                      QColor("green").darker(150),
+                      QColor("lightGray").darker(150),
+                      QColor("orange"),
+                      QColor("blue").lighter(150),
+                      QColor("#ff405d")
+                     };
+
 QMap<QString, QString> langToExt = {};
+
 
 static void loadLanguageExtensions(QMap<QString, QString>& map) {
     QFile TextFile(":/resources/highlight/LanguageToExtension.txt");
@@ -142,7 +158,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
         ui->magicButton->setIconSize(0.8*ui->magicButton->size());
         setTabWidth(tabWidth);
-        setTheme("black", "lightGray");
+        setTheme(defaultTheme);
 
         loadLanguageExtensions(langToExt);
 }
@@ -495,53 +511,39 @@ void MainWindow::setMainWindowTitle(QString title)
     setWindowTitle(title + " - Lightpad");
 }
 
-void MainWindow::setTheme(QString backgroundColor, QString foregroundColor)
+void MainWindow::setTheme(Theme themeColors)
 {
-    //todo logic for selection Color
-
-    colors.backgroundColor = QColor(backgroundColor);
-    colors.foregroundColor = QColor(foregroundColor);
-    colors.highlightColor =  QColor(foregroundColor).darker(250);
-    colors.lineNumberAreaColor = QColor(backgroundColor);
-
-    colors.keywordFormat_0 = QColor("green").lighter(130);
-    colors.keywordFormat_1 = QColor("yellow").darker(140);
-    colors.keywordFormat_2 = QColor("violet");
-    colors.classFormat = QColor("green").darker(150);
-    colors.functionFormat = QColor(foregroundColor).darker(150);
-    colors.numberFormat = QColor("orange");
-    colors.singleLineCommentFormat = QColor("blue").lighter(150);
-    colors.quotationFormat = QColor("#ff405d");
+    colors = themeColors;
 
     setStyleSheet(
 
-    "QWidget {background-color: " + backgroundColor + ";}"
+    "QWidget {background-color: " + colors.backgroundColor.name() + ";}"
 
     "QMenu {"
-        "color: " + foregroundColor + ";"
+        "color: " + colors.foregroundColor.name() + ";"
         "selection-background-color: #404f4f;"
         "border: 1px solid #404f4f;"
         "border-radius: 3px 3px 3px 3px;"
      "}"
 
-    "QMenuBar::item {color: " + foregroundColor + ";}"
+    "QMenuBar::item {color: " + colors.foregroundColor.name() + ";}"
 
-    "QMessageBox QLabel {color: " + foregroundColor + ";}"
+    "QMessageBox QLabel {color: " + colors.foregroundColor.name() + ";}"
 
     "QAbstractButton {"
-        "color: " + foregroundColor + ";"
+        "color: " + colors.foregroundColor.name() + ";"
         "border: None;"
         "padding: 5px;"
-        "background-color: " + backgroundColor + ";"
+        "background-color: " + colors.backgroundColor.name() + ";"
     "}"
 
      "QAbstractItemView {"
-         "color: " + foregroundColor + ";"
+         "color: " + colors.foregroundColor.name() + ";"
          "outline: 0;"
 
      "}"
 
-   "QAbstractItemView::item {color: " + foregroundColor + ";}"
+   "QAbstractItemView::item {color: " + colors.foregroundColor.name() + ";}"
 
    "QAbstractItemView::item:hover {"
        " background: #f3f3f3;"
@@ -562,15 +564,15 @@ void MainWindow::setTheme(QString backgroundColor, QString foregroundColor)
         "border-radius: 5;"
     "}"
 
-    "QLineEdit {background: " + foregroundColor + ";}"
+    "QLineEdit {background: " + colors.foregroundColor.name() + ";}"
 
-    "QLabel {color: " + foregroundColor + ";}"
+    "QLabel {color: " + colors.foregroundColor.name() + ";}"
 
-    "QPlainTextEdit {color: " + foregroundColor + "; background-color: " + backgroundColor + "; }"
+    "QPlainTextEdit {color: " + colors.foregroundColor.name() + "; background-color: " + colors.backgroundColor.name() + "; }"
 
      );
 
-    ui->tabWidget->setTheme(backgroundColor, foregroundColor);
+    ui->tabWidget->setTheme(colors.backgroundColor.name(), colors.foregroundColor.name());
     ui->tabWidget->correctTabButtonPosition();
 }
 
@@ -645,5 +647,6 @@ void MainWindow::on_actionKeyboard_shortcuts_triggered()
 
 void MainWindow::on_actionPrefrences_triggered()
 {
-    new ColorPicker(colors);
+    ColorPicker* colorPicker = new ColorPicker(colors);
+    colorPicker->setParentWindow(this);
 }

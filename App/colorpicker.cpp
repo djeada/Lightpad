@@ -2,8 +2,24 @@
 #include "ui_colorpicker.h"
 
 #include <QFontDialog>
+#include <QColorDialog>
+#include <QDebug>
+#include <QGraphicsDropShadowEffect>
 
 const QString buttonStyleSheet = "border-radius: 13px;";
+
+class DropShadowEffect : public QGraphicsDropShadowEffect {
+    using QGraphicsDropShadowEffect::QGraphicsDropShadowEffect;
+
+    public:
+        DropShadowEffect(QWidget* parent = nullptr) :
+            QGraphicsDropShadowEffect(parent) {
+            setBlurRadius(2);
+            setOffset(2, 2);
+            setColor(QColor("black"));
+
+        }
+};
 
 ColorPicker::ColorPicker(Theme theme, QWidget *parent) :
     QDialog(parent),
@@ -21,7 +37,74 @@ ColorPicker::ColorPicker(Theme theme, QWidget *parent) :
     ui->buttonKeywords1->setStyleSheet(buttonStyleSheet + "background: " + theme.keywordFormat_0.name() + ";");
     ui->buttonKeywords2->setStyleSheet(buttonStyleSheet + "background: " + theme.keywordFormat_1.name() + ";");
     ui->buttonKeywords3->setStyleSheet(buttonStyleSheet + "background: " + theme.keywordFormat_2.name() + ";");
-    ui->buttonKeywords3->setStyleSheet(buttonStyleSheet + "background: " + theme.numberFormat.name() + ";");
+    ui->buttonNumbers->setStyleSheet(buttonStyleSheet + "background: " + theme.numberFormat.name() + ";");
+
+
+    colorButtons = ui->colorButtonsContainer->findChildren<QToolButton*>();
+
+    for (auto& button : colorButtons) {
+
+        button->setGraphicsEffect(new DropShadowEffect());
+
+        connect(button, &QToolButton::clicked, this, [&] {
+
+            QColor color = QColorDialog::getColor(QColor(), this);
+
+            if (color.isValid()) {
+                button->setStyleSheet(buttonStyleSheet + "background: " + color.name() + ";");
+
+                if (parentWindow) {
+                    Theme colors = parentWindow->getTheme();
+
+                    switch (colorButtons.indexOf(button)) {
+
+                        case 0:
+                            colors.backgroundColor = color;
+                            break;
+
+                        case 1:
+                            colors.foregroundColor = color;
+                            break;
+
+                        case 2:
+                            colors.keywordFormat_0 = color;
+                            break;
+
+                        case 3:
+                            colors.keywordFormat_1 = color;
+                            break;
+
+                        case 4:
+                          colors.keywordFormat_2 = color;
+                          break;
+
+                        case 5:
+                            colors.singleLineCommentFormat = color;
+                            break;
+
+                        case 6:
+                            colors.functionFormat = color;
+                            break;
+
+                        case 7:
+                            colors.quotationFormat = color;
+                            break;
+
+                        case 8:
+                            colors.classFormat = color;
+                            break;
+
+                        case 9:
+                            colors.numberFormat = color;
+                            break;
+                    }
+
+                    parentWindow->setTheme(colors);
+                 }
+            }
+        });
+
+    }
 
     show();
 }
@@ -31,15 +114,21 @@ ColorPicker::~ColorPicker()
     delete ui;
 }
 
+void ColorPicker::setParentWindow(MainWindow *window)
+{
+    parentWindow = window;
+}
 
 void ColorPicker::on_buttonFontChooser_clicked()
 {
     bool ok;
-    QFont font = QFontDialog::getFont(
-                    &ok, QFont("Helvetica [Cronyx]", 10), this);
+    QFont font = QFontDialog::getFont(&ok, QFont("Helvetica [Cronyx]", 10), this);
+
     if (ok) {
         // the user clicked OK and font is set to the font the user selected
-    } else {
+    }
+
+    else {
         // the user canceled the dialog; font is set to the initial
         // value, in this case Helvetica [Cronyx], 10
     }

@@ -42,15 +42,16 @@ class MainWindow : public QMainWindow {
     public:
         explicit MainWindow(QWidget* parent = nullptr);
         ~MainWindow();
+        void keyPressEvent(QKeyEvent *event);
+        void openFileAndAddToNewTab(QString path);
+        void closeTabPage(QString filePath);
         void setRowCol(int row, int col);
         void setTabWidth(int width);
         void setTabWidthLabel(QString text);
         void setLanguageHighlightLabel(QString text);
-        void keyPressEvent(QKeyEvent *event);
+        void setTheme(Theme theme);
         int getTabWidth();
         int getFontSize();
-        void openFileAndAddToNewTab(QString path);
-        void closeTabPage(QString filePath);
         TextArea* getCurrentTextArea();
         Theme getTheme();
 
@@ -79,19 +80,10 @@ class MainWindow : public QMainWindow {
         void on_actionAbout_triggered();
         void on_tabWidth_clicked();
         void on_actionKeyboard_shortcuts_triggered();
-
         void on_actionPrefrences_triggered();
 
-private:
+    private:
         Ui::MainWindow* ui;
-        void undo();
-        void redo();
-        void open(const QString& filePath);
-        void save(const QString& filePath);
-        void showFindReplace(bool onlyFind = true);
-        void setMainWindowTitle(QString title);
-        void setTheme(QString backgroundColor, QString foregroundColor);
-        void setFilePathAsTabText(QString filePath);
         Popup* popupHighlightLanguage;
         Popup* popupTabWidth;
         QString highlightLanguage;
@@ -99,6 +91,13 @@ private:
         int fontSize;
         int tabWidth;
         Theme colors;
+        void undo();
+        void redo();
+        void open(const QString& filePath);
+        void save(const QString& filePath);
+        void showFindReplace(bool onlyFind = true);
+        void setMainWindowTitle(QString title);
+        void setFilePathAsTabText(QString filePath);
 };
 
 #endif // MAINWINDOW_H
