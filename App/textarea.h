@@ -18,6 +18,7 @@ class TextArea : public QPlainTextEdit {
         void increaseFontSize();
         void decreaseFontSize();
         void setFontSize(int size);
+        void setFont(QFont font);
         void setMainWindow(MainWindow* window);
         int fontSize();
         void setTabWidth(int width);

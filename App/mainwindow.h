@@ -50,10 +50,12 @@ class MainWindow : public QMainWindow {
         void setTabWidthLabel(QString text);
         void setLanguageHighlightLabel(QString text);
         void setTheme(Theme theme);
+        void setFont(QFont font);
         int getTabWidth();
         int getFontSize();
         TextArea* getCurrentTextArea();
         Theme getTheme();
+        QFont getFont();
 
     private slots:
         void on_actionQuit_triggered();
@@ -88,6 +90,7 @@ class MainWindow : public QMainWindow {
         Popup* popupTabWidth;
         QString highlightLanguage;
         FindReplacePanel* findReplacePanel;
+        QFont font;
         int fontSize;
         int tabWidth;
         Theme colors;

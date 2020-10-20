@@ -167,6 +167,15 @@ void TextArea::setFontSize(int size) {
     }
 }
 
+void TextArea::setFont(QFont font)
+{
+    mainFont = font;
+    QTextDocument* doc = document();
+
+    if (doc)
+      doc->setDefaultFont(font);
+}
+
 void TextArea::setMainWindow(MainWindow* window)
 {
     mainWindow = window;

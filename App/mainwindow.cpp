@@ -137,6 +137,7 @@ MainWindow::MainWindow(QWidget *parent) :
     popupTabWidth(nullptr),
     highlightLanguage(""),
     findReplacePanel(nullptr),
+    font(QApplication::font()),
     fontSize(defaultFontSize),
     tabWidth(defaultTabWidth) {
         QApplication::instance()->installEventFilter(this);
@@ -320,6 +321,11 @@ TextArea *MainWindow::getCurrentTextArea()
 Theme MainWindow::getTheme()
 {
     return colors;
+}
+
+QFont MainWindow::getFont()
+{
+    return font;
 }
 
 void MainWindow::setTabWidth(int width) {
@@ -574,6 +580,15 @@ void MainWindow::setTheme(Theme themeColors)
 
     ui->tabWidget->setTheme(colors.backgroundColor.name(), colors.foregroundColor.name());
     ui->tabWidget->correctTabButtonPosition();
+}
+
+void MainWindow::setFont(QFont newFont)
+{
+    font = newFont;
+
+    QList<TextArea*> textAreas = findChildren<TextArea*>();
+    for (auto textArea : textAreas)
+        textArea->setFont(newFont);
 }
 
 void MainWindow::setFilePathAsTabText(QString filePath)

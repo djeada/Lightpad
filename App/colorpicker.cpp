@@ -17,9 +17,13 @@ class DropShadowEffect : public QGraphicsDropShadowEffect {
             setBlurRadius(2);
             setOffset(2, 2);
             setColor(QColor("black"));
-
         }
 };
+
+static const QString getFontInfo(const QFont& font) {
+    const QString fontInfo = font.toString();
+    return fontInfo.split(",")[0] + " " + fontInfo.split(",")[1];
+}
 
 ColorPicker::ColorPicker(Theme theme, QWidget *parent) :
     QDialog(parent),
@@ -38,6 +42,8 @@ ColorPicker::ColorPicker(Theme theme, QWidget *parent) :
     ui->buttonKeywords2->setStyleSheet(buttonStyleSheet + "background: " + theme.keywordFormat_1.name() + ";");
     ui->buttonKeywords3->setStyleSheet(buttonStyleSheet + "background: " + theme.keywordFormat_2.name() + ";");
     ui->buttonNumbers->setStyleSheet(buttonStyleSheet + "background: " + theme.numberFormat.name() + ";");
+
+    ui->buttonFontChooser->setGraphicsEffect(new DropShadowEffect());
 
 
     colorButtons = ui->colorButtonsContainer->findChildren<QToolButton*>();
@@ -117,6 +123,11 @@ ColorPicker::~ColorPicker()
 void ColorPicker::setParentWindow(MainWindow *window)
 {
     parentWindow = window;
+
+    if (parentWindow) {
+        QFont font = parentWindow->getFont();
+        ui->buttonFontChooser->setText(getFontInfo(font));
+    }
 }
 
 void ColorPicker::on_buttonFontChooser_clicked()
@@ -124,12 +135,8 @@ void ColorPicker::on_buttonFontChooser_clicked()
     bool ok;
     QFont font = QFontDialog::getFont(&ok, QFont("Helvetica [Cronyx]", 10), this);
 
-    if (ok) {
-        // the user clicked OK and font is set to the font the user selected
-    }
-
-    else {
-        // the user canceled the dialog; font is set to the initial
-        // value, in this case Helvetica [Cronyx], 10
+    if (ok && parentWindow) {
+        parentWindow->setFont(font);
+        ui->buttonFontChooser->setText(getFontInfo(font));
     }
 }
