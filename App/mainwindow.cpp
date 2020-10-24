@@ -2,7 +2,6 @@
 #include "ui_mainwindow.h"
 #include "lightpadpage.h"
 #include "shortcuts.h"
-#include "colorpicker.h"
 
 #include <QDebug>
 #include <QStackedWidget>
@@ -134,6 +133,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow),
     popupHighlightLanguage(nullptr),
     popupTabWidth(nullptr),
+    prefrences(nullptr),
     highlightLanguage(""),
     findReplacePanel(nullptr),
     font(QApplication::font()),
@@ -181,7 +181,15 @@ void MainWindow::setLanguageHighlightLabel(QString text)
 
 MainWindow::~MainWindow()
 {
+
     delete ui;
+}
+
+void MainWindow::closeEvent( QCloseEvent* event )
+{
+if (prefrences) {
+    prefrences->close();
+ }
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *keyEvent){
@@ -661,6 +669,12 @@ void MainWindow::on_actionKeyboard_shortcuts_triggered()
 
 void MainWindow::on_actionPrefrences_triggered()
 {
-    ColorPicker* colorPicker = new ColorPicker(colors);
-    colorPicker->setParentWindow(this);
+    if (!prefrences) {
+        prefrences = new Prefrences(this);
+
+        connect(prefrences, &QObject::destroyed, this, [&] {
+            prefrences = nullptr;
+        });
+    }
+
 }

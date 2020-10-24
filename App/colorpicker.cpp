@@ -6,7 +6,7 @@
 #include <QDebug>
 #include <QGraphicsDropShadowEffect>
 
-const QString buttonStyleSheet = "border-radius: 13px;";
+const QString buttonStyleSheet = "border-radius: 12px;";
 
 class DropShadowEffect : public QGraphicsDropShadowEffect {
     using QGraphicsDropShadowEffect::QGraphicsDropShadowEffect;
@@ -111,8 +111,6 @@ ColorPicker::ColorPicker(Theme theme, QWidget *parent) :
         });
 
     }
-
-    show();
 }
 
 ColorPicker::~ColorPicker()

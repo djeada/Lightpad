@@ -3,10 +3,14 @@
 
 #include <QMainWindow>
 #include <QListView>
-#include "textarea.h"
-#include "findreplacepanel.h"
 #include <QDebug>
 #include <QDialog>
+
+#include "textarea.h"
+#include "findreplacepanel.h"
+#include "prefrences.h"
+
+class Prefrences;
 
 namespace Ui {
     class MainWindow;
@@ -88,6 +92,7 @@ class MainWindow : public QMainWindow {
         Ui::MainWindow* ui;
         Popup* popupHighlightLanguage;
         Popup* popupTabWidth;
+        Prefrences* prefrences;
         QString highlightLanguage;
         FindReplacePanel* findReplacePanel;
         QFont font;
@@ -101,6 +106,7 @@ class MainWindow : public QMainWindow {
         void showFindReplace(bool onlyFind = true);
         void setMainWindowTitle(QString title);
         void setFilePathAsTabText(QString filePath);
+        void closeEvent( QCloseEvent* event );
 };
 
 #endif // MAINWINDOW_H

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>320</width>
-    <height>310</height>
+    <width>366</width>
+    <height>329</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -146,7 +146,7 @@ background: lightGray;
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout_14" stretch="1,0,1">
       <property name="bottomMargin">
-       <number>0</number>
+       <number>9</number>
       </property>
       <item>
        <layout class="QVBoxLayout" name="verticalLayout">

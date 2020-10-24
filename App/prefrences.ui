@@ -23,23 +23,8 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>0</number>
+    <number>-1</number>
    </property>
-   <widget class="QWidget" name="tab">
-    <attribute name="title">
-     <string>View</string>
-    </attribute>
-   </widget>
-   <widget class="QWidget" name="tab_2">
-    <attribute name="title">
-     <string>Editor</string>
-    </attribute>
-   </widget>
-   <widget class="QWidget" name="tab_3">
-    <attribute name="title">
-     <string>Font &amp; Colors</string>
-    </attribute>
-   </widget>
   </widget>
  </widget>
  <resources/>
