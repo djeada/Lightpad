@@ -14,7 +14,8 @@
 const int defaultTabWidth = 4;
 const int defaultFontSize = 12;
 
-Theme defaultTheme = {QColor("black"),
+Theme defaultTheme = {
+                      QColor("black"),
                       QColor("lightGray"),
                       QColor("lightGray").darker(250),
                       QColor("black"),
@@ -114,7 +115,6 @@ class PopupTabWidth : public Popup
 
                 QObject::connect(listView, &QListView::clicked, this, [&] (const QModelIndex &index) {
 
-
                     QString width = index.data().toString();
 
                     MainWindow* mainWindow = qobject_cast<MainWindow*>(parentWidget());
@@ -124,7 +124,6 @@ class PopupTabWidth : public Popup
                      }
 
                     close();
-
                 });
         }
 };

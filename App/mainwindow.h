@@ -91,9 +91,9 @@ class MainWindow : public QMainWindow {
         QString highlightLanguage;
         FindReplacePanel* findReplacePanel;
         QFont font;
+        Theme colors;
         int fontSize;
         int tabWidth;
-        Theme colors;
         void undo();
         void redo();
         void open(const QString& filePath);
