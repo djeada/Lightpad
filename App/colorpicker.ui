@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>404</width>
+    <width>373</width>
     <height>357</height>
    </rect>
   </property>
@@ -32,7 +32,9 @@ background: white;
      <item>
       <widget class="QLabel" name="label_12">
        <property name="styleSheet">
-        <string notr="true">font-weight: 600;</string>
+        <string notr="true">QLabel {
+font-weight: 600;
+}</string>
        </property>
        <property name="text">
         <string>Font</string>
@@ -109,7 +111,9 @@ QToolButton:hover {
      <item>
       <widget class="QLabel" name="label_11">
        <property name="styleSheet">
-        <string notr="true">font-weight: 600;</string>
+        <string notr="true">QLabel {
+font-weight: 600;
+}</string>
        </property>
        <property name="text">
         <string>Color Scheme</string>

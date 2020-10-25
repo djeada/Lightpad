@@ -3,6 +3,8 @@
 
 #include <QWidget>
 
+class MainWindow;
+
 namespace Ui {
 class PrefrencesView;
 }
@@ -12,11 +14,12 @@ class PrefrencesView : public QWidget
     Q_OBJECT
 
 public:
-    explicit PrefrencesView(QWidget *parent = nullptr);
+    PrefrencesView(MainWindow* parent);
     ~PrefrencesView();
 
 private:
     Ui::PrefrencesView *ui;
+    MainWindow* parentWindow;
 };
 
 #endif // PREFRENCESVIEW_H

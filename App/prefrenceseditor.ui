@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>PrefrencesView</class>
- <widget class="QWidget" name="PrefrencesView">
+ <class>PrefrencesEditor</class>
+ <widget class="QWidget" name="PrefrencesEditor">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>357</width>
-    <height>256</height>
+    <width>400</width>
+    <height>300</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,66 +18,60 @@
 border-width: 1;
 border-color: black;
 background: white;
+}
+QLabel {
+font-weight: 600;
 }</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
-   <property name="spacing">
-    <number>6</number>
-   </property>
    <item>
     <widget class="QLabel" name="label">
      <property name="styleSheet">
-      <string notr="true">QLabel {
-font-weight: 600;
-}</string>
+      <string notr="true"/>
      </property>
      <property name="text">
-      <string>Line numbers</string>
+      <string>Tab Stops</string>
      </property>
     </widget>
    </item>
    <item>
-    <widget class="QCheckBox" name="checkBox">
-     <property name="text">
-      <string>Display line numbers</string>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QToolButton" name="tabWidth">
+       <property name="styleSheet">
+        <string notr="true">QToolButton { 
+background-color: white;
+border-style: outset;
+border-width: 1px;
+border-radius: 5px;
+border-color: black;
+font: bold 14px;
+}
+QToolButton:hover { 
+	background: lightGray;
+}</string>
+       </property>
+       <property name="text">
+        <string>...</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QLabel" name="label_2">
      <property name="styleSheet">
-      <string notr="true">QLabel {
-font-weight: 600;
-}</string>
+      <string notr="true"/>
      </property>
      <property name="text">
-      <string>Current Line</string>
+      <string>Automatic Indentation</string>
      </property>
     </widget>
    </item>
    <item>
     <widget class="QCheckBox" name="checkBox_2">
      <property name="text">
-      <string>Highlight current line</string>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QLabel" name="label_3">
-     <property name="styleSheet">
-      <string notr="true">QLabel {
-font-weight: 600;
-}</string>
-     </property>
-     <property name="text">
-      <string>Bracket Matching</string>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QCheckBox" name="checkBox_3">
-     <property name="text">
-      <string>Highlight matching bracket</string>
+      <string>Enable automatic indentation</string>
      </property>
     </widget>
    </item>

@@ -9,36 +9,13 @@
 #include "textarea.h"
 #include "findreplacepanel.h"
 #include "prefrences.h"
+#include "popup.h"
 
 class Prefrences;
 
 namespace Ui {
     class MainWindow;
 }
-
-class ListView: public QListView {
-    Q_OBJECT
-
-    public:
-        ListView(QWidget *parent = nullptr);
-        QSize sizeHint() const;
-};
-
-class Popup: public QDialog {
-    Q_OBJECT
-
-    public:
-        Popup(QStringList list, QWidget* parent = nullptr);
-
-   // private slots:
-          //void on_listView_clicked(const QModelIndex &index);
-
-    protected:
-        ListView* listView;
-
-    private:
-        QStringList list;
-};
 
 class MainWindow : public QMainWindow {
     Q_OBJECT

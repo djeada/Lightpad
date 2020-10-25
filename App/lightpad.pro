@@ -14,7 +14,9 @@ HEADERS     = \
     lightpadsyntaxhighlighter.h \
     lightpadtabwidget.h \
     mainwindow.h \
+    popup.h \
     prefrences.h \
+    prefrenceseditor.h \
     prefrencesview.h \
     shortcuts.h \
     textarea.h \
@@ -27,7 +29,9 @@ SOURCES     = main.cpp \
       lightpadsyntaxhighlighter.cpp \
       lightpadtabwidget.cpp \
       mainwindow.cpp \
+      popup.cpp \
       prefrences.cpp \
+      prefrenceseditor.cpp \
       prefrencesview.cpp \
       shortcuts.cpp \
       textarea.cpp
@@ -37,6 +41,7 @@ FORMS += \
     findreplacepanel.ui \
     mainwindow.ui \
     prefrences.ui \
+    prefrenceseditor.ui \
     prefrencesview.ui \
     shortcuts.ui
 

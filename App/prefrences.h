@@ -4,6 +4,10 @@
 #include <QDialog>
 #include "mainwindow.h"
 
+class ColorPicker;
+class PrefrencesView;
+class PrefrencesEditor;
+
 namespace Ui {
 class Prefrences;
 }
@@ -15,6 +19,7 @@ class Prefrences : public QDialog
 public:
     Prefrences(MainWindow *parent);
     ~Prefrences();
+    void setTabWidthLabel(const QString& text);
 
 protected:
     void closeEvent( QCloseEvent* event );
@@ -25,6 +30,10 @@ private slots:
 private:
     Ui::Prefrences *ui;
     MainWindow* parentWindow;
+    ColorPicker* colorPicker;
+    PrefrencesView* prefrencesView;
+    PrefrencesEditor* prefrencesEditor;
+
 };
 
 #endif // PREFRENCES_H

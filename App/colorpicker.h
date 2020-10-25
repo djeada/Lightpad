@@ -4,7 +4,8 @@
 #include <QDialog>
 #include <QToolButton>
 #include "theme.h"
-#include "mainwindow.h"
+
+class MainWindow;
 
 namespace Ui {
     class ColorPicker;
@@ -15,7 +16,7 @@ class ColorPicker : public QDialog
     Q_OBJECT
 
 public:
-    ColorPicker(Theme theme, QWidget *parent = nullptr);
+    ColorPicker(Theme theme, MainWindow* parent);
     ~ColorPicker();
     void setParentWindow(MainWindow* window);
 

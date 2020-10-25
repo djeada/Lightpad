@@ -1,5 +1,6 @@
 #include "colorpicker.h"
 #include "ui_colorpicker.h"
+#include "mainwindow.h"
 
 #include <QFontDialog>
 #include <QColorDialog>
@@ -25,9 +26,10 @@ static const QString getFontInfo(const QFont& font) {
     return fontInfo.split(",")[0] + " " + fontInfo.split(",")[1];
 }
 
-ColorPicker::ColorPicker(Theme theme, QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::ColorPicker)
+ColorPicker::ColorPicker(Theme theme, MainWindow *parent) :
+    QDialog(nullptr),
+    ui(new Ui::ColorPicker),
+    parentWindow(parent)
 {
     setWindowFlag(Qt::Popup);
     ui->setupUi(this);
@@ -111,6 +113,11 @@ ColorPicker::ColorPicker(Theme theme, QWidget *parent) :
         });
 
     }
+
+    if (parentWindow) {
+        QFont font = parentWindow->getFont();
+        ui->buttonFontChooser->setText(getFontInfo(font));
+    }
 }
 
 ColorPicker::~ColorPicker()
@@ -121,11 +128,6 @@ ColorPicker::~ColorPicker()
 void ColorPicker::setParentWindow(MainWindow *window)
 {
     parentWindow = window;
-
-    if (parentWindow) {
-        QFont font = parentWindow->getFont();
-        ui->buttonFontChooser->setText(getFontInfo(font));
-    }
 }
 
 void ColorPicker::on_buttonFontChooser_clicked()
