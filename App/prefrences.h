@@ -19,6 +19,9 @@ public:
 protected:
     void closeEvent( QCloseEvent* event );
 
+private slots:
+    void on_toolButton_clicked();
+
 private:
     Ui::Prefrences *ui;
     MainWindow* parentWindow;

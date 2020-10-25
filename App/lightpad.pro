@@ -15,6 +15,7 @@ HEADERS     = \
     lightpadtabwidget.h \
     mainwindow.h \
     prefrences.h \
+    prefrencesview.h \
     shortcuts.h \
     textarea.h \
     theme.h
@@ -27,6 +28,7 @@ SOURCES     = main.cpp \
       lightpadtabwidget.cpp \
       mainwindow.cpp \
       prefrences.cpp \
+      prefrencesview.cpp \
       shortcuts.cpp \
       textarea.cpp
 
@@ -35,6 +37,7 @@ FORMS += \
     findreplacepanel.ui \
     mainwindow.ui \
     prefrences.ui \
+    prefrencesview.ui \
     shortcuts.ui
 
 RESOURCES += \
