@@ -29,11 +29,8 @@ class  FindReplacePanel : public QWidget
         void on_more_clicked();
         void on_find_clicked();
         void on_close_clicked();
-
         void on_replaceSingle_clicked();
-
         void on_replaceAll_clicked();
-
 private:
         QWidget* extension;
         QTextDocument* document;

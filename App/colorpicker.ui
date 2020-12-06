@@ -392,7 +392,7 @@ background: lightGray;
           <item>
            <widget class="QLabel" name="label_7">
             <property name="text">
-             <string>Qutations</string>
+             <string>Quotations</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>

@@ -7,6 +7,7 @@
 #include <QTabBar>
 #include <QFontMetrics>
 #include <QApplication>
+#include <QSizePolicy>
 
 class MyButton : public QToolButton
 {
@@ -48,17 +49,14 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
             addNewTab();
         });
 
-        tabBar()->setExpanding(false);
-
-
 }
 
 void LightpadTabWidget::resizeEvent(QResizeEvent *event) {
+
     QTabWidget::resizeEvent(event);
 
     if (tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width() + 3 + newTabButton->width() > width())
      parentWidget()->parentWidget()->resize(parentWidget()->parentWidget()->width() + 3 + newTabButton->width(), parentWidget()->parentWidget()->height());
-
 }
 
 void LightpadTabWidget::tabRemoved(int index)

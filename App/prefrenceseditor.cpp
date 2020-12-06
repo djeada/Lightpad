@@ -25,6 +25,7 @@ void PrefrencesEditor::setTabWidthLabel(const QString &text)
 
 void PrefrencesEditor::on_tabWidth_clicked()
 {
+
     if (!popupTabWidth) {
         Popup* popupTabWidth = new  PopupTabWidth(QStringList({"2", "4", "8"}), parentWindow);
         QPoint point = mapToGlobal(ui->tabWidth->pos());

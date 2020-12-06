@@ -90,6 +90,7 @@ TextArea::TextArea(QWidget* parent) :
     highlightLang(""),
     syntaxHighlighter(nullptr),
     searchWord(""),
+    autoIndent(true),
     prevWordCount(1)
      {
 
@@ -159,7 +160,7 @@ void TextArea::decreaseFontSize()
 }
 
 void TextArea::setFontSize(int size) {
-    QTextDocument* doc = document();
+    auto* doc = document();
 
     if (doc) {
         mainFont.setPointSize(size);
@@ -170,7 +171,7 @@ void TextArea::setFontSize(int size) {
 void TextArea::setFont(QFont font)
 {
     mainFont = font;
-    QTextDocument* doc = document();
+    auto* doc = document();
 
     if (doc)
       doc->setDefaultFont(font);
@@ -197,6 +198,11 @@ void TextArea::removeIconUnsaved()
     setTabWidgetIcon(QIcon());
 }
 
+void TextArea::setAutoIdent(bool flag)
+{
+    autoIndent = flag;
+}
+
 QString TextArea::getSearchWord()
 {
     return searchWord;
@@ -214,16 +220,32 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
         return;
      }
 
+    if (keyEvent->key() == Qt::Key_BraceLeft) {
+        closeParentheses("{", "}");
+        return;
+    }
+
+    else if (keyEvent->key() == Qt::Key_ParenLeft) {
+        closeParentheses("(", ")");
+        return;
+    }
+
+    else if (keyEvent->key() == Qt::Key_BracketLeft) {
+        closeParentheses("[","]");
+        return;
+    }
+
+    else if (keyEvent->key() == Qt::Key_QuoteDbl) {
+        closeParentheses("\"", "\"");
+        return;
+    }
+
+    else if (keyEvent->key() == Qt::Key_Apostrophe) {
+        closeParentheses("\'", "\'");
+        return;
+    }
+
     QPlainTextEdit::keyPressEvent(keyEvent);
-
-    if (keyEvent->key() == Qt::Key_BraceLeft)
-        closeParentheses("}");
-
-    else if (keyEvent->key() == Qt::Key_ParenLeft)
-        closeParentheses(")");
-
-    else if (keyEvent->key() == Qt::Key_BracketLeft)
-        closeParentheses("]");
 
     if (keyEvent->key()==Qt::Key_Enter || keyEvent->key()==Qt::Key_Return)
         handleKeyEnterPressed();
@@ -253,25 +275,45 @@ void TextArea::setTabWidgetIcon(QIcon icon)
     }
 }
 
-void TextArea::closeParentheses(QString closeStr)
+void TextArea::closeParentheses(QString startStr, QString closeStr)
 {
-    QTextCursor cursor = textCursor();
-    int pos = cursor.position();
-    cursor.setPosition(pos, cursor.MoveAnchor);
-    cursor.insertText(closeStr);
+    auto cursor = textCursor();
+
+    if (cursor.hasSelection()) {
+        auto start = cursor.selectionStart();
+        auto end = cursor.selectionEnd();
+        cursor.setPosition(start, cursor.MoveAnchor);
+        cursor.insertText(startStr);
+        cursor.setPosition(end + startStr.size(), cursor.MoveAnchor);
+        cursor.insertText(closeStr);
+    }
+
+    else if (startStr == "{") {
+        auto pos = cursor.position();
+        cursor.setPosition(pos, cursor.MoveAnchor);
+        cursor.insertText("{\n\t\n}");
+        cursor.setPosition(pos + 3);
+    }
+
+    else {
+        auto pos = cursor.position();
+        cursor.setPosition(pos, cursor.MoveAnchor);
+        cursor.insertText(startStr + closeStr);
+    }
+
     setTextCursor(cursor);
 }
 
 void TextArea::handleKeyEnterPressed()
 {
-    if (mainWindow) {
-        QTextCursor cursor = textCursor();
-        int pos = cursor.position();
+    if (mainWindow && autoIndent) {
+        auto cursor = textCursor();
+        auto pos = cursor.position();
         cursor.movePosition(QTextCursor::PreviousBlock);
 
-        const QString prevLine = cursor.block().text();
-        int tabWidth = mainWindow->getTabWidth();
-        int n = leadingSpaces(prevLine, tabWidth);
+        const auto prevLine = cursor.block().text();
+        auto tabWidth = mainWindow->getTabWidth();
+        auto n = leadingSpaces(prevLine, tabWidth);
 
         if (isLastNonSpaceCharacterOpenBrace(prevLine))
             n += tabWidth;
