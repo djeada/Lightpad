@@ -19,7 +19,7 @@ public:
 
         move(x(), -1);
 
-        setIconSize(1.2*QSize(buttonSize, buttonSize));
+        setIconSize(1.1*QSize(buttonSize, buttonSize));
         setFixedSize(iconSize());
     }
 
