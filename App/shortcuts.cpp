@@ -2,6 +2,42 @@
 #include "ui_shortcuts.h"
 #include <QDebug>
 
+QList<QList<QString>> shortcuts {
+    {"Close", ""},
+    {"Save", ""},
+    {"SaveAs", ""},
+    {"Delete", ""},
+    {"Cut", ""},
+    {"Copy", ""},
+    {"Paste", ""},
+    {"Undo", ""},
+    {"Redo", ""},
+    {"ZoomIn", ""},
+    {"ZoomOut", ""},
+    {"AddTab", ""},
+    {"Find", ""},
+    {"FindPrevious", ""},
+    {"Replace", ""},
+    {"MoveToNextChar", ""},
+    {"MoveToPreviousChar", ""},
+    {"MoveToNextWord", ""},
+    {"MoveToPreviousWord", ""},
+    {"MoveToNextLine", ""},
+    {"MoveToPreviousLine", ""},
+    {"MoveToStartOfLine", ""},
+    {"MoveToEndOfLine", ""},
+    {"MoveToStartOfDocument", ""},
+    {"MoveToEndOfDocument", ""},
+    {"SelectNextChar", ""},
+    {"SelectPreviousChar", ""},
+    {"SelectNextWord", ""},
+    {"SelectPreviousWord", ""},
+    {"SelectNextLine", ""},
+    {"SelectPreviousLine", ""},
+    {"SelectStartOfLine", ""},
+    {"SelectEndOfLine", ""},
+};
+
 ShortcutsModel::ShortcutsModel(QObject *parent)
     : QAbstractTableModel(parent),
       parentWindow(nullptr)
@@ -11,22 +47,24 @@ ShortcutsModel::ShortcutsModel(QObject *parent)
 
 int ShortcutsModel::rowCount(const QModelIndex& idx) const {
    Q_UNUSED(idx);
-   return 3;
+   return 10;
 }
 
 int ShortcutsModel::columnCount(const QModelIndex& idx) const {
     Q_UNUSED(idx);
-    return 3;
+    return 2;
 }
 
 QVariant ShortcutsModel::data(const QModelIndex& index, int role) const
 {
-    qDebug() << parentWindow->getSelectedButton();
 
-    if (role == Qt::DisplayRole)
-       return QString("Row%1, Column%2")
-                   .arg(index.row() + 1)
-                   .arg(index.column() +1);
+    if (role == Qt::DisplayRole) {
+        int i = index.row() + 10*(index.column() + parentWindow->getSelectedButton());
+        if (i < shortcuts.size())
+            return QString(shortcuts[i][0] + " : " + shortcuts[i][1])
+                    .arg(index.row() + 1)
+                    .arg(index.column() +1);
+    }
 
     return QVariant();
 }
