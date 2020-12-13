@@ -316,8 +316,7 @@ void MainWindow::on_actionClose_Tab_triggered()
 
 void MainWindow::on_actionClose_All_Tabs_triggered()
 {
-    while (ui->tabWidget->currentIndex() > -1)
-     ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
+     ui->tabWidget->closeAllTabs();
 }
 
 void MainWindow::on_actionFind_in_file_triggered()
@@ -489,7 +488,6 @@ void MainWindow::setTheme(Theme themeColors)
      );
 
     ui->tabWidget->setTheme(colors.backgroundColor.name(), colors.foregroundColor.name());
-    ui->tabWidget->correctTabButtonPosition();
 }
 
 void MainWindow::setFont(QFont newFont)
@@ -510,7 +508,6 @@ void MainWindow::setFilePathAsTabText(QString filePath)
 
     setMainWindowTitle(fileName);
     ui->tabWidget->setTabText(tabIndex, fileName);
-    ui->tabWidget->correctTabButtonPosition();
 }
 
 void MainWindow::on_actionToggle_Menu_Bar_triggered()

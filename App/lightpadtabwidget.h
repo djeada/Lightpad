@@ -17,12 +17,11 @@ class LightpadTabWidget : public QTabWidget
 
     public:
         LightpadTabWidget(QWidget* parent = nullptr);
-        void correctTabButtonPosition();
         void addNewTab();
         void setMainWindow(MainWindow* window);
-        void ensureNewTabButtonVisible();
         void setTheme(QString backgroundColor, QString foregroundColor);
         void setFilePath(int index, QString filePath);
+        void closeAllTabs();
         LightpadPage* getPage(int index);
         QString getFilePath(int index);
 

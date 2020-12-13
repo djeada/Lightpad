@@ -9,30 +9,6 @@
 #include <QApplication>
 #include <QSizePolicy>
 
-class MyButton : public QToolButton
-{
-public:
-    MyButton(QWidget* p) : QToolButton(p) { }
-
-    void enterEvent(QEvent *event) {
-        Q_UNUSED(event);
-
-        move(x(), -1);
-
-        setIconSize(1.1*QSize(buttonSize, buttonSize));
-        setFixedSize(iconSize());
-    }
-
-    void leaveEvent(QEvent *event) {
-        Q_UNUSED(event);
-
-        move(x(), 3);
-
-        setIconSize(QSize(buttonSize, buttonSize));
-        setFixedSize(iconSize());
-    }
-};
-
 LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
     QTabWidget(parent)  {
 
@@ -40,41 +16,49 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
             removeTab(index);
         });
 
-        newTabButton = new MyButton(parent);
+        setTabsClosable(true);
+        setMovable(true);
+
+        newTabButton = new QToolButton(this);
+        newTabButton->setObjectName("AddTabButton");
         newTabButton->setIcon(QIcon(":/resources/icons/add_dark.png"));
         newTabButton->setIconSize(QSize(25, 25));
         newTabButton->setFixedSize(newTabButton->iconSize());
+
+        addTab(new QWidget(), QString());
+        setTabEnabled(0, false);
+        tabBar()->setTabButton(0, QTabBar::RightSide, newTabButton);
 
         QWidget::connect(newTabButton, &QToolButton::clicked, this, [this] {
             addNewTab();
         });
 
+        QWidget::connect(tabBar(), &QTabBar::tabMoved, this, [this](int from, int to){
+            if (from == count() - 1)
+                tabBar()->moveTab(to, from);
+        });
+
+
+        QWidget::connect(tabBar(), &QTabBar::currentChanged, this, [this](int index){
+            if (index == count() - 1)
+                setCurrentIndex(0);
+        });
+
+        addNewTab();
 }
 
 void LightpadTabWidget::resizeEvent(QResizeEvent *event) {
 
     QTabWidget::resizeEvent(event);
-
-    if (tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width() + 3 + newTabButton->width() > width())
-     parentWidget()->parentWidget()->resize(parentWidget()->parentWidget()->width() + 3 + newTabButton->width(), parentWidget()->parentWidget()->height());
 }
 
 void LightpadTabWidget::tabRemoved(int index)
 {
     Q_UNUSED(index);
-    correctTabButtonPosition();
 
-    //if (count() == 0)
-    //    newTabButton->hide();
-}
 
-void LightpadTabWidget::correctTabButtonPosition()
-{
-    QRect rect = tabBar()->tabRect(count() - 1);
-    newTabButton->setGeometry(rect.x() + rect.width() + 3, 3, newTabButton->width(), newTabButton->height());
-
-    if (tabBar()->tabRect(count() - 1).x() + tabBar()->tabRect(count() - 1).width() + 3 + newTabButton->width() > width())
-        parentWidget()->parentWidget()->resize(parentWidget()->parentWidget()->width() + 3 + newTabButton->width(), parentWidget()->parentWidget()->height());
+    if (count() <= 1)
+        addNewTab();
 }
 
 void LightpadTabWidget::addNewTab()
@@ -82,8 +66,8 @@ void LightpadTabWidget::addNewTab()
     if (mainWindow) {
         LightpadPage* newPage = new LightpadPage(this);
         newPage->setMainWindow(mainWindow);
-        insertTab(count(), newPage, unsavedDocumentLabel);
-        correctTabButtonPosition();
+        insertTab(count() - 1, newPage, unsavedDocumentLabel);
+        setCurrentIndex(count() - 2);
     }
 }
 
@@ -94,12 +78,6 @@ void LightpadTabWidget::setMainWindow(MainWindow *window)
 
     for (auto& page : pages)
         page->setMainWindow(window);
-}
-
-void LightpadTabWidget::ensureNewTabButtonVisible()
-{
-    newTabButton->show();
-    correctTabButtonPosition();
 }
 
 void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColor)
@@ -117,8 +95,11 @@ void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColo
 
          "QTabBar {background: " +  backgroundColor  +";}"
 
+        "QToolButton#AddTabButton {background: #262626;}"
+
+        "QToolButton#AddTabButton:hover {background: #505050;}"
+
          "QTabBar::tab {"
-            "height: " + QString::number(newTabButton->height() + 2) + ";"
             "color:" + foregroundColor + ";"
             "margin: 0 -2px;"
             "padding: 1px 5px;"
@@ -137,6 +118,15 @@ void LightpadTabWidget::setFilePath(int index, QString filePath)
         if (page)
             page->setFilePath(filePath);
     }
+}
+
+void LightpadTabWidget::closeAllTabs()
+{
+    if (count() == 1)
+          return;
+
+    for (int i = count() - 2; i >= 0; i--)
+        removeTab(i);
 }
 
 LightpadPage* LightpadTabWidget::getPage(int index)

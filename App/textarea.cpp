@@ -268,7 +268,6 @@ void TextArea::setTabWidgetIcon(QIcon icon)
 
                 if (index != -1) {
                     tabWidget->setTabIcon(index, icon);
-                    tabWidget->correctTabButtonPosition();
                  }
             }
         }
