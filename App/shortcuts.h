@@ -3,6 +3,9 @@
 
 #include <QDialog>
 #include <QAbstractTableModel>
+#include <QButtonGroup>
+
+class ShortcutsDialog;
 
 class ShortcutsModel: public QAbstractTableModel {
     Q_OBJECT
@@ -11,6 +14,9 @@ class ShortcutsModel: public QAbstractTableModel {
         int rowCount(const QModelIndex &parent = QModelIndex()) const override;
         int columnCount(const QModelIndex &parent = QModelIndex()) const override;
         QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+        void setParentWindow(ShortcutsDialog* window);
+   private:
+        ShortcutsDialog* parentWindow;
 };
 
 namespace Ui {
@@ -24,6 +30,7 @@ class ShortcutsDialog : public QDialog
     public:
         ShortcutsDialog(QWidget* parent = nullptr);
         ~ShortcutsDialog();
+        int getSelectedButton();
 
     protected:
         void resizeEvent(QResizeEvent *event) override;
@@ -31,6 +38,7 @@ class ShortcutsDialog : public QDialog
     private:
         Ui::ShortcutsDialog *ui;
         ShortcutsModel myModel;
+        QButtonGroup radioButtonsGroup;
 };
 
 #endif // SHORTCUTS_H

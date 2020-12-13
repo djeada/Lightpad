@@ -485,6 +485,18 @@ void MainWindow::setTheme(Theme themeColors)
 
     "QPlainTextEdit {color: " + colors.foregroundColor.name() + "; background-color: " + colors.backgroundColor.name() + "; }"
 
+    "QRadioButton::indicator:checked { "
+                                        "background-color: " + colors.foregroundColor.name() + "; "
+                                        "border: 2px solid " + colors.foregroundColor.name() + "; "
+                                        "border-radius: 6px; "
+   "}"
+
+    "QRadioButton::indicator:unchecked { "
+                                         "background-color: " + colors.backgroundColor.name() + ";  "
+                                         "border: 2px solid " + colors.foregroundColor.name() + "; "
+                                         "border-radius: 6px; "
+    "}"
+
      );
 
     ui->tabWidget->setTheme(colors.backgroundColor.name(), colors.foregroundColor.name());
