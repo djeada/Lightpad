@@ -22,6 +22,7 @@ class LightpadTabWidget : public QTabWidget
         void setTheme(QString backgroundColor, QString foregroundColor);
         void setFilePath(int index, QString filePath);
         void closeAllTabs();
+        void closeCurrentTab();
         LightpadPage* getPage(int index);
         QString getFilePath(int index);
 

@@ -18,7 +18,6 @@ class LightpadTreeView: public QTreeView {
         ~LightpadTreeView() {};
         void renameFile(QString oldFilePath, QString newFilePath);
 
-
     protected:
         void mouseReleaseEvent(QMouseEvent *e) override;
 
@@ -26,7 +25,6 @@ class LightpadTreeView: public QTreeView {
         LightpadPage* parentPage;
         void duplicateFile(QString filePath);
         void removeFile(QString filePath);
-
 };
 
 class LightpadPage: public QWidget {

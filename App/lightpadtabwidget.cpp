@@ -44,7 +44,6 @@ LightpadTabWidget:: LightpadTabWidget(QWidget* parent) :
                 setCurrentIndex(0);
         });
 
-        addNewTab();
 }
 
 void LightpadTabWidget::resizeEvent(QResizeEvent *event) {
@@ -78,6 +77,9 @@ void LightpadTabWidget::setMainWindow(MainWindow *window)
 
     for (auto& page : pages)
         page->setMainWindow(window);
+
+    if (count() <= 1)
+        addNewTab();
 }
 
 void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColor)
@@ -127,6 +129,14 @@ void LightpadTabWidget::closeAllTabs()
 
     for (int i = count() - 2; i >= 0; i--)
         removeTab(i);
+}
+
+void LightpadTabWidget::closeCurrentTab()
+{
+    if (count() == 1)
+        return;
+
+    removeTab(currentIndex());
 }
 
 LightpadPage* LightpadTabWidget::getPage(int index)

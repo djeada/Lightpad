@@ -90,6 +90,7 @@ TextArea::TextArea(QWidget* parent) :
     highlightLang(""),
     syntaxHighlighter(nullptr),
     searchWord(""),
+    areChangesUnsaved(false),
     autoIndent(true),
     prevWordCount(1)
      {
@@ -130,7 +131,10 @@ TextArea::TextArea(QWidget* parent) :
          });
 
         connect(document(), &QTextDocument::undoCommandAdded, this, [&] {
-            setTabWidgetIcon(QIcon(":/resources/icons/unsaved.png"));
+            if (!areChangesUnsaved) {
+                setTabWidgetIcon(QIcon(":/resources/icons/unsaved.png"));
+                areChangesUnsaved = true;
+            }
         });
 
         mainFont = QApplication::font();
@@ -196,6 +200,7 @@ void TextArea::setTabWidth(int width)
 void TextArea::removeIconUnsaved()
 {
     setTabWidgetIcon(QIcon());
+    areChangesUnsaved = false;
 }
 
 void TextArea::setAutoIdent(bool flag)
@@ -206,6 +211,11 @@ void TextArea::setAutoIdent(bool flag)
 QString TextArea::getSearchWord()
 {
     return searchWord;
+}
+
+bool TextArea::changesUnsaved()
+{
+    return areChangesUnsaved;
 }
 
 void TextArea::resizeEvent(QResizeEvent* e) {

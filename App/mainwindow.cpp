@@ -14,20 +14,20 @@ const int defaultTabWidth = 4;
 const int defaultFontSize = 12;
 
 Theme defaultTheme = {
-                      QColor("black"),
-                      QColor("lightGray"),
-                      QColor("lightGray").darker(250),
-                      QColor("black"),
-                      QColor("green").lighter(130),
-                      QColor("yellow").darker(140),
-                      QColor("violet"),
-                      QColor("yellow"),
-                      QColor("green").darker(150),
-                      QColor("lightGray").darker(150),
-                      QColor("orange"),
-                      QColor("blue").lighter(150),
-                      QColor("#ff405d")
-                     };
+  QColor("black"),
+  QColor("lightGray"),
+  QColor("lightGray").darker(250),
+  QColor("black"),
+  QColor("green").lighter(130),
+  QColor("yellow").darker(140),
+  QColor("violet"),
+  QColor("yellow"),
+  QColor("green").darker(150),
+  QColor("lightGray").darker(150),
+  QColor("orange"),
+  QColor("blue").lighter(150),
+  QColor("#ff405d")
+};
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -83,16 +83,15 @@ void MainWindow::setLanguageHighlightLabel(QString text)
 
 MainWindow::~MainWindow()
 {
-
     delete ui;
 }
 
 void MainWindow::closeEvent( QCloseEvent* event )
 {
     Q_UNUSED(event);
-if (prefrences) {
-    prefrences->close();
- }
+    if (prefrences) {
+        prefrences->close();
+     }
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *keyEvent){
@@ -124,6 +123,11 @@ void MainWindow::keyPressEvent(QKeyEvent *keyEvent){
     else if (keyEvent->matches(QKeySequence::Replace))
         showFindReplace(false);
 
+    else if (keyEvent->matches(QKeySequence::Close))
+        closeCurrentTab();
+
+    else if (keyEvent->matches(QKeySequence::AddTab))
+        ui->tabWidget->addNewTab();
 }
 
 int MainWindow::getTabWidth()
@@ -240,7 +244,7 @@ QFont MainWindow::getFont()
 
 void MainWindow::setTabWidth(int width) {
     QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
-    foreach (TextArea* textArea, textAreas)
+    for (auto& textArea : textAreas)
        textArea->setTabWidth(width);
 
     tabWidth = width;
@@ -258,8 +262,8 @@ void MainWindow::on_actionToggle_Redo_triggered()
 
 void MainWindow::on_actionIncrease_Font_Size_triggered()
 {
-    QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
-    foreach (TextArea* textArea, textAreas)
+    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
+    for (auto& textArea : textAreas)
        textArea->increaseFontSize();
 
     fontSize = getCurrentTextArea()->fontSize();
@@ -268,8 +272,8 @@ void MainWindow::on_actionIncrease_Font_Size_triggered()
 
 void MainWindow::on_actionDecrease_Font_Size_triggered()
 {
-    QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
-    foreach (TextArea* textArea, textAreas)
+    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
+    for (auto& textArea : textAreas)
        textArea->decreaseFontSize();
 
     fontSize = getCurrentTextArea()->fontSize();
@@ -277,8 +281,8 @@ void MainWindow::on_actionDecrease_Font_Size_triggered()
 
 void MainWindow::on_actionReset_Font_Size_triggered()
 {
-    QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
-    foreach (TextArea* textArea, textAreas)
+    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
+    for (auto& textArea : textAreas)
        textArea->setFontSize(defaultFontSize);
 
     fontSize = getCurrentTextArea()->fontSize();
@@ -338,10 +342,8 @@ void MainWindow::on_actionOpen_File_triggered()
 
 void MainWindow::on_actionSave_triggered()
 {
-    int tabIndex = ui->tabWidget->currentIndex();
-    QString filePath = ui->tabWidget->getFilePath(tabIndex);
-
-    qDebug() << filePath;
+    auto tabIndex = ui->tabWidget->currentIndex();
+    auto filePath = ui->tabWidget->getFilePath(tabIndex);
 
     if (filePath.isEmpty()) {
         on_actionSave_as_triggered();
@@ -354,7 +356,7 @@ void MainWindow::on_actionSave_triggered()
 void MainWindow::on_actionSave_as_triggered()
 {
     //tr("JavaScript Documents (*.js)")
-    QString filePath = QFileDialog::getSaveFileName(this, tr("Save Document"), QDir::homePath());
+    auto filePath = QFileDialog::getSaveFileName(this, tr("Save Document"), QDir::homePath());
 
     if (filePath.isEmpty())
         return;
@@ -389,7 +391,7 @@ void MainWindow::save(const QString &filePath)
         return;
 
     if (getCurrentTextArea()) {
-        int tabIndex = ui->tabWidget->currentIndex();
+        auto tabIndex = ui->tabWidget->currentIndex();
         ui->tabWidget->setFilePath(tabIndex, filePath);
 
         file.write(getCurrentTextArea()->toPlainText().toUtf8());
@@ -403,7 +405,7 @@ void MainWindow::showFindReplace(bool onlyFind)
 {
     if (!findReplacePanel) {
         findReplacePanel = new FindReplacePanel(onlyFind);
-        QBoxLayout* layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
+        auto* layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
 
         if (layout != 0)
            layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
@@ -506,20 +508,29 @@ void MainWindow::setFont(QFont newFont)
 {
     font = newFont;
 
-    QList<TextArea*> textAreas = findChildren<TextArea*>();
-    for (auto textArea : textAreas)
+    auto textAreas = findChildren<TextArea*>();
+    for (auto& textArea : textAreas)
         textArea->setFont(newFont);
 }
 
 void MainWindow::setFilePathAsTabText(QString filePath)
 {
-    QString fileName = QFileInfo(filePath).fileName();
+    auto fileName = QFileInfo(filePath).fileName();
 
-    int tabIndex = ui->tabWidget->currentIndex();
-    QString tabText = ui->tabWidget->tabText(tabIndex);
+    auto tabIndex = ui->tabWidget->currentIndex();
+    auto tabText = ui->tabWidget->tabText(tabIndex);
 
     setMainWindowTitle(fileName);
     ui->tabWidget->setTabText(tabIndex, fileName);
+}
+
+void MainWindow::closeCurrentTab() {
+    auto textArea = getCurrentTextArea();
+
+    if (textArea && textArea->changesUnsaved())
+        on_actionSave_triggered();
+
+    ui->tabWidget->closeCurrentTab();
 }
 
 void MainWindow::on_actionToggle_Menu_Bar_triggered()
@@ -530,8 +541,9 @@ void MainWindow::on_actionToggle_Menu_Bar_triggered()
 void MainWindow::on_languageHighlight_clicked()
 {
     if (!popupHighlightLanguage) {
-        Popup* popupHighlightLanguage = new  PopupLanguageHighlight(QDir(":/resources/highlight").entryList(QStringList(), QDir::Dirs), this);
-        QPoint point = mapToGlobal(ui->languageHighlight->pos());
+        auto dir = QDir(":/resources/highlight").entryList(QStringList(), QDir::Dirs);
+        auto* popupHighlightLanguage = new  PopupLanguageHighlight(dir, this);
+        auto point = mapToGlobal(ui->languageHighlight->pos());
         popupHighlightLanguage->setGeometry(point.x(), point.y() - 2*popupHighlightLanguage->height() + height(), popupHighlightLanguage->width(), popupHighlightLanguage->height());
     }
 
@@ -557,8 +569,8 @@ void MainWindow::on_actionAbout_triggered()
 void MainWindow::on_tabWidth_clicked()
 {
     if (!popupTabWidth) {
-        Popup* popupTabWidth = new  PopupTabWidth(QStringList({"2", "4", "8"}), this);
-        QPoint point = mapToGlobal(ui->tabWidth->pos());
+        auto* popupTabWidth = new  PopupTabWidth(QStringList({"2", "4", "8"}), this);
+        auto point = mapToGlobal(ui->tabWidth->pos());
         popupTabWidth->setGeometry(point.x(), point.y() - 2*popupTabWidth->height() + height(), popupTabWidth->width(), popupTabWidth->height());
     }
 

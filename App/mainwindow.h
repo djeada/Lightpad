@@ -83,6 +83,7 @@ class MainWindow : public QMainWindow {
         void showFindReplace(bool onlyFind = true);
         void setMainWindowTitle(QString title);
         void setFilePathAsTabText(QString filePath);
+        void closeCurrentTab();
         void closeEvent( QCloseEvent* event );
 };
 

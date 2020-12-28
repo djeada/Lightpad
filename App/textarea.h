@@ -25,6 +25,7 @@ class TextArea : public QPlainTextEdit {
         void removeIconUnsaved();
         void setAutoIdent(bool flag);
         QString getSearchWord();
+        bool changesUnsaved();
 
     protected:
         void resizeEvent(QResizeEvent* event) override;
@@ -42,6 +43,7 @@ class TextArea : public QPlainTextEdit {
         QFont mainFont;
         LightpadSyntaxHighlighter* syntaxHighlighter;
         QString searchWord;
+        bool areChangesUnsaved;
         bool autoIndent;
         int prevWordCount;
         void setTabWidgetIcon(QIcon icon);
