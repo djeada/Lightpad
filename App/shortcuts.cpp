@@ -1,6 +1,8 @@
 #include "shortcuts.h"
 #include "ui_shortcuts.h"
+#include "mainwindow.h"
 #include <QDebug>
+#include <QKeyEvent>
 
 const int NUM_ROWS = 10;
 const int NUM_COLS = 2;
@@ -40,6 +42,32 @@ QList<QList<QString>> shortcuts {
     {"Select Start Of Line", "Shift + PgDown"},
     {"Select End Of Line", "Shift + PgUp"},
 };
+
+static int strToKey(QString str) {
+
+    int i = str.lastIndexOf(" ");
+    QKeySequence seq = QKeySequence(str.mid(i + 1, str.size()));
+
+    if (seq.count() != 1)
+            return -1;
+
+    return seq[0];
+}
+
+static Qt::KeyboardModifiers strToModifiers(QString str) {
+    Qt::KeyboardModifiers modifiers;
+
+    if (str.contains("Alt"))
+        modifiers |= Qt::AltModifier;
+
+    if (str.contains("Shift"))
+        modifiers |= Qt::ShiftModifier;
+
+    if (str.contains("Ctrl"))
+        modifiers |= Qt::ControlModifier;
+
+    return modifiers;
+}
 
 ShortcutsModel::ShortcutsModel(QObject *parent)
     : QAbstractTableModel(parent),
@@ -96,6 +124,16 @@ ShortcutsDialog::ShortcutsDialog(QWidget* parent) :
     }
 
     show();
+
+    connect(ui->tableView, &QAbstractItemView::clicked, this, [this](const QModelIndex &index) {
+       auto data = index.data().toString();
+       auto modifiers = strToModifiers(data);
+       auto key = strToKey(data);
+       auto event = new QKeyEvent (QEvent::KeyPress, key, modifiers);
+       auto window = qobject_cast<MainWindow*>(parentWidget());
+       window->setFocus();
+       QCoreApplication::postEvent(window, event, Qt::HighEventPriority);
+    });
 }
 
 ShortcutsDialog::~ShortcutsDialog() {

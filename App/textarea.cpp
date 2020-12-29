@@ -223,8 +223,8 @@ void TextArea::resizeEvent(QResizeEvent* e) {
     lineNumberArea->setGeometry(0, 0, lineNumberAreaWidth(), height());
 }
 
-void TextArea::keyPressEvent(QKeyEvent* keyEvent)
-{
+void TextArea::keyPressEvent(QKeyEvent* keyEvent) {
+
     if (keyEvent->matches(QKeySequence::ZoomOut) || keyEvent->matches(QKeySequence::ZoomIn)) {
         mainWindow->keyPressEvent(keyEvent);
         return;
