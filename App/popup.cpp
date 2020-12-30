@@ -1,5 +1,6 @@
 #include "popup.h"
 #include "mainwindow.h"
+#include "textarea.h"
 #include <QStringListModel>
 #include <QVBoxLayout>
 

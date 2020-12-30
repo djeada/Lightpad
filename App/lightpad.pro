@@ -45,7 +45,8 @@ FORMS += \
     prefrences.ui \
     prefrenceseditor.ui \
     prefrencesview.ui \
-    shortcuts.ui
+    shortcuts.ui \
+    terminal.ui
 
 RESOURCES += \
     highlight.qrc \

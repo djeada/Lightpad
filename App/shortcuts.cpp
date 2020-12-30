@@ -147,6 +147,5 @@ int ShortcutsDialog::getSelectedButton() {
 void ShortcutsDialog::resizeEvent(QResizeEvent *event) {
     ui->tableView->setColumnWidth(0, width()/2);
     ui->tableView->setColumnWidth(1, width()/2);
-
     QDialog::resizeEvent(event);
 }

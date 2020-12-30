@@ -6,12 +6,13 @@
 #include <QDebug>
 #include <QDialog>
 
-#include "textarea.h"
-#include "findreplacepanel.h"
-#include "prefrences.h"
-#include "popup.h"
+#include "theme.h"
 
 class Prefrences;
+class Terminal;
+class Popup;
+class FindReplacePanel;
+class TextArea;
 
 namespace Ui {
     class MainWindow;
@@ -64,14 +65,16 @@ class MainWindow : public QMainWindow {
         void on_tabWidth_clicked();
         void on_actionKeyboard_shortcuts_triggered();
         void on_actionPrefrences_triggered();
+        void on_runButton_clicked();
 
-    private:
+private:
         Ui::MainWindow* ui;
         Popup* popupHighlightLanguage;
         Popup* popupTabWidth;
         Prefrences* prefrences;
         QString highlightLanguage;
         FindReplacePanel* findReplacePanel;
+        Terminal* terminal;
         QFont font;
         Theme colors;
         int fontSize;
@@ -81,10 +84,12 @@ class MainWindow : public QMainWindow {
         void open(const QString& filePath);
         void save(const QString& filePath);
         void showFindReplace(bool onlyFind = true);
+        void showTerminal();
         void setMainWindowTitle(QString title);
         void setFilePathAsTabText(QString filePath);
         void closeCurrentTab();
-        void closeEvent( QCloseEvent* event );
+        void setupTextArea();
+        void closeEvent(QCloseEvent* event );
 };
 
 #endif // MAINWINDOW_H

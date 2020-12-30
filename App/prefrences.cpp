@@ -3,6 +3,7 @@
 #include "colorpicker.h"
 #include "prefrencesview.h"
 #include "prefrenceseditor.h"
+#include <QCloseEvent>
 
 Prefrences::Prefrences(MainWindow *parent) :
     QDialog(nullptr),

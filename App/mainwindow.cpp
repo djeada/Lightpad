@@ -2,6 +2,11 @@
 #include "ui_mainwindow.h"
 #include "lightpadpage.h"
 #include "shortcuts.h"
+#include "textarea.h"
+#include "findreplacepanel.h"
+#include "popup.h"
+#include "terminal.h"
+#include "prefrences.h"
 
 #include <QDebug>
 #include <QStackedWidget>
@@ -13,22 +18,6 @@
 const int defaultTabWidth = 4;
 const int defaultFontSize = 12;
 
-Theme defaultTheme = {
-  QColor("black"),
-  QColor("lightGray"),
-  QColor("lightGray").darker(250),
-  QColor("black"),
-  QColor("green").lighter(130),
-  QColor("yellow").darker(140),
-  QColor("violet"),
-  QColor("yellow"),
-  QColor("green").darker(150),
-  QColor("lightGray").darker(150),
-  QColor("orange"),
-  QColor("blue").lighter(150),
-  QColor("#ff405d")
-};
-
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
@@ -37,6 +26,7 @@ MainWindow::MainWindow(QWidget *parent) :
     prefrences(nullptr),
     highlightLanguage(""),
     findReplacePanel(nullptr),
+    terminal(nullptr),
     font(QApplication::font()),
     fontSize(defaultFontSize),
     tabWidth(defaultTabWidth) {
@@ -45,12 +35,7 @@ MainWindow::MainWindow(QWidget *parent) :
         show();
         ui->tabWidget->setMainWindow(this);
 
-        if (getCurrentTextArea()) {
-            getCurrentTextArea()->setMainWindow(this);
-            getCurrentTextArea()->setFontSize(defaultFontSize);
-            getCurrentTextArea()->setTabWidth(defaultTabWidth);
-         }
-
+        setupTextArea();
         setWindowTitle("LightPad");
 
         QObject::connect(ui->tabWidget, &QTabWidget::currentChanged, this, [&] (int index) {
@@ -59,8 +44,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
         ui->magicButton->setIconSize(0.8*ui->magicButton->size());
         setTabWidth(tabWidth);
-        setTheme(defaultTheme);
-
+        setTheme(colors);
 }
 
 void MainWindow::setRowCol(int row, int col)
@@ -184,7 +168,6 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
 
     if (getCurrentTextArea())
         getCurrentTextArea()->updateSyntaxHighlightTags("", QFileInfo(filePath).completeSuffix());
-
 }
 
 void MainWindow::closeTabPage(QString filePath)
@@ -423,6 +406,17 @@ void MainWindow::showFindReplace(bool onlyFind)
     }
 }
 
+void MainWindow::showTerminal()
+{
+    if (!terminal) {
+        terminal = new Terminal();
+        auto* layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
+
+        if (layout != 0)
+           layout->insertWidget(layout->count() - 1, terminal, 0);
+    }
+}
+
 void MainWindow::setMainWindowTitle(QString title)
 {
     setWindowTitle(title + " - Lightpad");
@@ -533,6 +527,15 @@ void MainWindow::closeCurrentTab() {
     ui->tabWidget->closeCurrentTab();
 }
 
+void MainWindow::setupTextArea()
+{
+    if (getCurrentTextArea()) {
+        getCurrentTextArea()->setMainWindow(this);
+        getCurrentTextArea()->setFontSize(defaultFontSize);
+        getCurrentTextArea()->setTabWidth(defaultTabWidth);
+     }
+}
+
 void MainWindow::on_actionToggle_Menu_Bar_triggered()
 {
     ui->menubar->setVisible(!ui->menubar->isVisible());
@@ -601,4 +604,9 @@ void MainWindow::on_actionPrefrences_triggered()
         });
     }
 
+}
+
+void MainWindow::on_runButton_clicked()
+{
+    showTerminal();
 }
