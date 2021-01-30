@@ -15,9 +15,6 @@
 #include <QBoxLayout>
 #include <QStringListModel>
 
-const int defaultTabWidth = 4;
-const int defaultFontSize = 12;
-
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
@@ -47,32 +44,28 @@ MainWindow::MainWindow(QWidget *parent) :
         setTheme(colors);
 }
 
-void MainWindow::setRowCol(int row, int col)
-{
+void MainWindow::setRowCol(int row, int col) {
     ui->rowCol->setText("Ln " + QString::number(row) + ", Col " +  QString::number(col));
 }
 
-void MainWindow::setTabWidthLabel(QString text)
-{
+void MainWindow::setTabWidthLabel(QString text) {
      ui->tabWidth->setText(text);
 
      if (prefrences)
          prefrences->setTabWidthLabel(text);
 }
 
-void MainWindow::setLanguageHighlightLabel(QString text)
-{
+void MainWindow::setLanguageHighlightLabel(QString text) {
      ui->languageHighlight->setText(text);
 }
 
-MainWindow::~MainWindow()
-{
+MainWindow::~MainWindow() {
     delete ui;
 }
 
-void MainWindow::closeEvent( QCloseEvent* event )
-{
+void MainWindow::closeEvent( QCloseEvent* event ) {
     Q_UNUSED(event);
+
     if (prefrences) {
         prefrences->close();
      }
@@ -114,27 +107,24 @@ void MainWindow::keyPressEvent(QKeyEvent *keyEvent){
         ui->tabWidget->addNewTab();
 }
 
-int MainWindow::getTabWidth()
-{
+int MainWindow::getTabWidth() {
     return tabWidth;
 }
 
-int MainWindow::getFontSize()
-{
+int MainWindow::getFontSize() {
     return fontSize;
 }
 
 //use current page if empty
 //else add new tab
-void MainWindow::openFileAndAddToNewTab(QString filePath)
-{
+void MainWindow::openFileAndAddToNewTab(QString filePath) {
+
     if (filePath.isEmpty() || !QFileInfo(filePath).exists())
         return;
 
-
     //check if file not already edited
     for (int i = 0; i < ui->tabWidget->count(); i++) {
-        LightpadPage* page = ui->tabWidget->getPage(i);
+        auto page = ui->tabWidget->getPage(i);
 
         if (page && page->getFilePath() == filePath) {
             ui->tabWidget->setCurrentIndex(i);
@@ -144,7 +134,6 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
 
     if (ui->tabWidget->count() == 0 || !getCurrentTextArea()->toPlainText().isEmpty()) {
         ui->tabWidget->addNewTab();
-        //ui->tabWidget->ensureNewTabButtonVisible();
         ui->tabWidget->setCurrentIndex(ui->tabWidget->count() - 1);
     }
 
@@ -170,16 +159,16 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
         getCurrentTextArea()->updateSyntaxHighlightTags("", QFileInfo(filePath).completeSuffix());
 }
 
-void MainWindow::closeTabPage(QString filePath)
-{
+void MainWindow::closeTabPage(QString filePath) {
+
     for (int i = 0; i < ui->tabWidget->count(); i++) {
         if (ui->tabWidget->getFilePath(i) == filePath)
             ui->tabWidget->removeTab(i);
     }
 }
 
-void MainWindow::on_actionToggle_Full_Screen_triggered()
-{
+void MainWindow::on_actionToggle_Full_Screen_triggered() {
+
     if (isMaximized())
         showNormal();
 
@@ -187,25 +176,24 @@ void MainWindow::on_actionToggle_Full_Screen_triggered()
         showMaximized();
 }
 
-void MainWindow::on_actionQuit_triggered()
-{
+void MainWindow::on_actionQuit_triggered() {
     close();
 }
 
-void MainWindow::undo()
-{
+void MainWindow::undo() {
+
     if (getCurrentTextArea())
         getCurrentTextArea()->undo();
 }
 
-void MainWindow::redo()
-{
+void MainWindow::redo() {
+
     if (getCurrentTextArea())
         getCurrentTextArea()->redo();
 }
 
-TextArea *MainWindow::getCurrentTextArea()
-{
+TextArea *MainWindow::getCurrentTextArea() {
+
     if (ui->tabWidget->currentWidget()->findChild<LightpadPage*>("widget"))
         return ui->tabWidget->currentWidget()->findChild<LightpadPage*>("widget")->getTextArea();
 
@@ -215,31 +203,29 @@ TextArea *MainWindow::getCurrentTextArea()
     return nullptr;
 }
 
-Theme MainWindow::getTheme()
-{
+Theme MainWindow::getTheme() {
     return colors;
 }
 
-QFont MainWindow::getFont()
-{
+QFont MainWindow::getFont() {
     return font;
 }
 
 void MainWindow::setTabWidth(int width) {
-    QList<TextArea*> textAreas = ui->tabWidget->findChildren<TextArea*>();
+
+    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
+
     for (auto& textArea : textAreas)
        textArea->setTabWidth(width);
 
     tabWidth = width;
 }
 
-void MainWindow::on_actionToggle_Undo_triggered()
-{
+void MainWindow::on_actionToggle_Undo_triggered() {
     undo();
 }
 
-void MainWindow::on_actionToggle_Redo_triggered()
-{
+void MainWindow::on_actionToggle_Redo_triggered() {
     redo();
 }
 
@@ -253,8 +239,8 @@ void MainWindow::on_actionIncrease_Font_Size_triggered()
 
 }
 
-void MainWindow::on_actionDecrease_Font_Size_triggered()
-{
+void MainWindow::on_actionDecrease_Font_Size_triggered() {
+
     auto textAreas = ui->tabWidget->findChildren<TextArea*>();
     for (auto& textArea : textAreas)
        textArea->decreaseFontSize();
@@ -262,8 +248,8 @@ void MainWindow::on_actionDecrease_Font_Size_triggered()
     fontSize = getCurrentTextArea()->fontSize();
 }
 
-void MainWindow::on_actionReset_Font_Size_triggered()
-{
+void MainWindow::on_actionReset_Font_Size_triggered() {
+
     auto textAreas = ui->tabWidget->findChildren<TextArea*>();
     for (auto& textArea : textAreas)
        textArea->setFontSize(defaultFontSize);
@@ -271,32 +257,32 @@ void MainWindow::on_actionReset_Font_Size_triggered()
     fontSize = getCurrentTextArea()->fontSize();
 }
 
-void MainWindow::on_actionCut_triggered()
-{
+void MainWindow::on_actionCut_triggered() {
+
     if (getCurrentTextArea())
         getCurrentTextArea()->cut();
 }
 
 
-void MainWindow::on_actionCopy_triggered()
-{
+void MainWindow::on_actionCopy_triggered() {
+
     if (getCurrentTextArea())
         getCurrentTextArea()->copy();
 }
 
-void MainWindow::on_actionPaste_triggered()
-{
+void MainWindow::on_actionPaste_triggered() {
+
     if (getCurrentTextArea())
         getCurrentTextArea()->paste();
 }
 
-void MainWindow::on_actionNew_Window_triggered()
-{
+void MainWindow::on_actionNew_Window_triggered() {
+
     new MainWindow();
 }
 
-void MainWindow::on_actionClose_Tab_triggered()
-{
+void MainWindow::on_actionClose_Tab_triggered() {
+
     if (ui->tabWidget->currentIndex() > -1)
      ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
 }
@@ -306,8 +292,8 @@ void MainWindow::on_actionClose_All_Tabs_triggered()
      ui->tabWidget->closeAllTabs();
 }
 
-void MainWindow::on_actionFind_in_file_triggered()
-{
+void MainWindow::on_actionFind_in_file_triggered() {
+
     showFindReplace(true);
 }
 
@@ -316,15 +302,15 @@ void MainWindow::on_actionNew_File_triggered()
     ui->tabWidget->addNewTab();
 }
 
-void MainWindow::on_actionOpen_File_triggered()
-{
+void MainWindow::on_actionOpen_File_triggered() {
+
     QString filePath = QFileDialog::getOpenFileName(this, tr("Open Document"), QDir::homePath());
 
     openFileAndAddToNewTab(filePath);
 }
 
-void MainWindow::on_actionSave_triggered()
-{
+void MainWindow::on_actionSave_triggered() {
+
     auto tabIndex = ui->tabWidget->currentIndex();
     auto filePath = ui->tabWidget->getFilePath(tabIndex);
 
@@ -336,9 +322,8 @@ void MainWindow::on_actionSave_triggered()
     save(filePath);
 }
 
-void MainWindow::on_actionSave_as_triggered()
-{
-    //tr("JavaScript Documents (*.js)")
+void MainWindow::on_actionSave_as_triggered() {
+
     auto filePath = QFileDialog::getSaveFileName(this, tr("Save Document"), QDir::homePath());
 
     if (filePath.isEmpty())
@@ -350,8 +335,8 @@ void MainWindow::on_actionSave_as_triggered()
     save(filePath);
 }
 
-void MainWindow::open(const QString &filePath)
-{
+void MainWindow::open(const QString &filePath) {
+
     QFile file(filePath);
 
     if (!file.open(QFile::ReadOnly | QFile::Text)) {
@@ -366,8 +351,8 @@ void MainWindow::open(const QString &filePath)
       getCurrentTextArea()->setPlainText(QString::fromUtf8(file.readAll()));
 }
 
-void MainWindow::save(const QString &filePath)
-{
+void MainWindow::save(const QString &filePath) {
+
     QFile file(filePath);
 
     if (!file.open(QFile::WriteOnly|QFile::Truncate|QFile::Text))
@@ -384,10 +369,11 @@ void MainWindow::save(const QString &filePath)
     }
 }
 
-void MainWindow::showFindReplace(bool onlyFind)
-{
+void MainWindow::showFindReplace(bool onlyFind) {
+
     if (!findReplacePanel) {
         findReplacePanel = new FindReplacePanel(onlyFind);
+
         auto* layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
 
         if (layout != 0)
@@ -406,24 +392,23 @@ void MainWindow::showFindReplace(bool onlyFind)
     }
 }
 
-void MainWindow::showTerminal()
-{
+void MainWindow::showTerminal() {
+
     if (!terminal) {
         terminal = new Terminal();
-        auto* layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
+        auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
 
         if (layout != 0)
            layout->insertWidget(layout->count() - 1, terminal, 0);
     }
 }
 
-void MainWindow::setMainWindowTitle(QString title)
-{
+void MainWindow::setMainWindowTitle(QString title) {
     setWindowTitle(title + " - Lightpad");
 }
 
-void MainWindow::setTheme(Theme themeColors)
-{
+void MainWindow::setTheme(Theme themeColors) {
+
     colors = themeColors;
 
     setStyleSheet(
@@ -498,8 +483,8 @@ void MainWindow::setTheme(Theme themeColors)
     ui->tabWidget->setTheme(colors.backgroundColor.name(), colors.foregroundColor.name());
 }
 
-void MainWindow::setFont(QFont newFont)
-{
+void MainWindow::setFont(QFont newFont) {
+
     font = newFont;
 
     auto textAreas = findChildren<TextArea*>();
@@ -507,8 +492,8 @@ void MainWindow::setFont(QFont newFont)
         textArea->setFont(newFont);
 }
 
-void MainWindow::setFilePathAsTabText(QString filePath)
-{
+void MainWindow::setFilePathAsTabText(QString filePath) {
+
     auto fileName = QFileInfo(filePath).fileName();
 
     auto tabIndex = ui->tabWidget->currentIndex();
@@ -527,8 +512,8 @@ void MainWindow::closeCurrentTab() {
     ui->tabWidget->closeCurrentTab();
 }
 
-void MainWindow::setupTextArea()
-{
+void MainWindow::setupTextArea() {
+
     if (getCurrentTextArea()) {
         getCurrentTextArea()->setMainWindow(this);
         getCurrentTextArea()->setFontSize(defaultFontSize);
@@ -541,8 +526,8 @@ void MainWindow::on_actionToggle_Menu_Bar_triggered()
     ui->menubar->setVisible(!ui->menubar->isVisible());
 }
 
-void MainWindow::on_languageHighlight_clicked()
-{
+void MainWindow::on_languageHighlight_clicked() {
+
     if (!popupHighlightLanguage) {
         auto dir = QDir(":/resources/highlight").entryList(QStringList(), QDir::Dirs);
         auto* popupHighlightLanguage = new  PopupLanguageHighlight(dir, this);
@@ -557,8 +542,8 @@ void MainWindow::on_languageHighlight_clicked()
         popupHighlightLanguage->hide();
 }
 
-void MainWindow::on_actionAbout_triggered()
-{
+void MainWindow::on_actionAbout_triggered() {
+
     QFile TextFile(":/resources/messages/About.txt");
 
     if (TextFile.open(QIODevice::ReadOnly)) {
@@ -569,8 +554,8 @@ void MainWindow::on_actionAbout_triggered()
     }
 }
 
-void MainWindow::on_tabWidth_clicked()
-{
+void MainWindow::on_tabWidth_clicked() {
+
     if (!popupTabWidth) {
         auto* popupTabWidth = new  PopupTabWidth(QStringList({"2", "4", "8"}), this);
         auto point = mapToGlobal(ui->tabWidth->pos());
@@ -584,18 +569,16 @@ void MainWindow::on_tabWidth_clicked()
         popupTabWidth->hide();
 }
 
-void MainWindow::on_actionReplace_in_file_triggered()
-{
+void MainWindow::on_actionReplace_in_file_triggered() {
     showFindReplace(false);
 }
 
-void MainWindow::on_actionKeyboard_shortcuts_triggered()
-{
+void MainWindow::on_actionKeyboard_shortcuts_triggered() {
     new ShortcutsDialog(this);
 }
 
-void MainWindow::on_actionPrefrences_triggered()
-{
+void MainWindow::on_actionPrefrences_triggered() {
+
     if (!prefrences) {
         prefrences = new Prefrences(this);
 
@@ -606,7 +589,6 @@ void MainWindow::on_actionPrefrences_triggered()
 
 }
 
-void MainWindow::on_runButton_clicked()
-{
+void MainWindow::on_runButton_clicked() {
     showTerminal();
 }

@@ -92,4 +92,7 @@ private:
         void closeEvent(QCloseEvent* event );
 };
 
+const int defaultTabWidth = 4;
+const int defaultFontSize = 12;
+
 #endif // MAINWINDOW_H
