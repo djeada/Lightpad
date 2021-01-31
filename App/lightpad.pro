@@ -18,6 +18,7 @@ HEADERS     = \
     prefrences.h \
     prefrenceseditor.h \
     prefrencesview.h \
+    runconfigurations.h \
     shortcuts.h \
     terminal.h \
     textarea.h \
@@ -34,6 +35,7 @@ SOURCES     = main.cpp \
       prefrences.cpp \
       prefrenceseditor.cpp \
       prefrencesview.cpp \
+      runconfigurations.cpp \
       shortcuts.cpp \
       terminal.cpp \
       textarea.cpp
@@ -45,6 +47,7 @@ FORMS += \
     prefrences.ui \
     prefrenceseditor.ui \
     prefrencesview.ui \
+    runconfigurations.ui \
     shortcuts.ui \
     terminal.ui
 

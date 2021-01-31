@@ -67,6 +67,10 @@ class MainWindow : public QMainWindow {
         void on_actionPrefrences_triggered();
         void on_runButton_clicked();
 
+        void on_actionRun_file_name_triggered();
+
+        void on_actionEdit_Configurations_triggered();
+
 private:
         Ui::MainWindow* ui;
         Popup* popupHighlightLanguage;
@@ -88,6 +92,7 @@ private:
         void setMainWindowTitle(QString title);
         void setFilePathAsTabText(QString filePath);
         void closeCurrentTab();
+        void setupTabWidget();
         void setupTextArea();
         void closeEvent(QCloseEvent* event );
 };

@@ -7,6 +7,7 @@
 #include "popup.h"
 #include "terminal.h"
 #include "prefrences.h"
+#include "runconfigurations.h"
 
 #include <QDebug>
 #include <QStackedWidget>
@@ -33,12 +34,8 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->tabWidget->setMainWindow(this);
 
         setupTextArea();
+        setupTabWidget();
         setWindowTitle("LightPad");
-
-        QObject::connect(ui->tabWidget, &QTabWidget::currentChanged, this, [&] (int index) {
-            setMainWindowTitle(ui->tabWidget->tabText(index));
-        });
-
         ui->magicButton->setIconSize(0.8*ui->magicButton->size());
         setTabWidth(tabWidth);
         setTheme(colors);
@@ -157,6 +154,8 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
 
     if (getCurrentTextArea())
         getCurrentTextArea()->updateSyntaxHighlightTags("", QFileInfo(filePath).completeSuffix());
+
+    ui->tabWidget->currentChanged(ui->tabWidget->currentIndex());
 }
 
 void MainWindow::closeTabPage(QString filePath) {
@@ -512,6 +511,18 @@ void MainWindow::closeCurrentTab() {
     ui->tabWidget->closeCurrentTab();
 }
 
+void MainWindow::setupTabWidget() {
+    QObject::connect(ui->tabWidget, &QTabWidget::currentChanged, this, [&] (int index) {
+        auto text = ui->tabWidget->tabText(index);
+        setMainWindowTitle(text);
+
+        if (!ui->menuRun->actions().empty())
+            ui->menuRun->actions().front()->setText("Run " + text);
+    });
+
+    ui->tabWidget->currentChanged(0);
+}
+
 void MainWindow::setupTextArea() {
 
     if (getCurrentTextArea()) {
@@ -591,4 +602,12 @@ void MainWindow::on_actionPrefrences_triggered() {
 
 void MainWindow::on_runButton_clicked() {
     showTerminal();
+}
+
+void MainWindow::on_actionRun_file_name_triggered() {
+}
+
+void MainWindow::on_actionEdit_Configurations_triggered() {
+    new RunConfigurations(this);
+
 }

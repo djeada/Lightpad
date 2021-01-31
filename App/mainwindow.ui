@@ -305,10 +305,18 @@ QToolButton:pressed {
     <addaction name="actionReplace_in_file"/>
     <addaction name="actionReplace_in_project"/>
    </widget>
+   <widget class="QMenu" name="menuRun">
+    <property name="title">
+     <string>Run</string>
+    </property>
+    <addaction name="actionRun_file_name"/>
+    <addaction name="actionEdit_Configurations"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
    <addaction name="menuView"/>
    <addaction name="menuSearch"/>
+   <addaction name="menuRun"/>
    <addaction name="menuHelp"/>
   </widget>
   <action name="actionToggle_Undo">
@@ -446,6 +454,20 @@ QToolButton:pressed {
     <string>Preferences</string>
    </property>
   </action>
+  <action name="actionRun_file_name">
+   <property name="icon">
+    <iconset resource="icons.qrc">
+     <normaloff>:/resources/icons/run.png</normaloff>:/resources/icons/run.png</iconset>
+   </property>
+   <property name="text">
+    <string>Run file_name</string>
+   </property>
+  </action>
+  <action name="actionEdit_Configurations">
+   <property name="text">
+    <string>Edit Configurations</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>
@@ -455,6 +477,8 @@ QToolButton:pressed {
    <container>1</container>
   </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="icons.qrc"/>
+ </resources>
  <connections/>
 </ui>

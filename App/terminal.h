@@ -16,6 +16,7 @@ public:
     ~Terminal();
 
 private:
+    void setupTextEdit();
     Ui::Terminal *ui;
 };
 
