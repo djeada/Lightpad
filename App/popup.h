@@ -19,9 +19,6 @@ class Popup: public QDialog {
     public:
         Popup(QStringList list, QWidget* parent = nullptr);
 
-   // private slots:
-          //void on_listView_clicked(const QModelIndex &index);
-
     protected:
         ListView* listView;
 
@@ -43,5 +40,7 @@ class PopupTabWidth : public Popup
 };
 
 void loadLanguageExtensions(QMap<QString, QString>& map);
+
+const QString languageToExtensionPath = ":/resources/highlight/LanguageToExtension.txt";
 
 #endif // POPUP_H

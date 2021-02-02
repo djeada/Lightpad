@@ -395,6 +395,10 @@ void MainWindow::showTerminal() {
 
     if (!terminal) {
         terminal = new Terminal();
+
+        connect(terminal, &QObject::destroyed, this, [&]() {
+            terminal = nullptr;
+        });
         auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
 
         if (layout != 0)
@@ -489,6 +493,11 @@ void MainWindow::setFont(QFont newFont) {
     auto textAreas = findChildren<TextArea*>();
     for (auto& textArea : textAreas)
         textArea->setFont(newFont);
+}
+
+void MainWindow::runCurrentScript()
+{
+    showTerminal();
 }
 
 void MainWindow::setFilePathAsTabText(QString filePath) {
@@ -601,10 +610,11 @@ void MainWindow::on_actionPrefrences_triggered() {
 }
 
 void MainWindow::on_runButton_clicked() {
-    showTerminal();
+    runCurrentScript();
 }
 
 void MainWindow::on_actionRun_file_name_triggered() {
+    runCurrentScript();
 }
 
 void MainWindow::on_actionEdit_Configurations_triggered() {

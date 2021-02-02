@@ -20,7 +20,7 @@ QSize ListView::sizeHint() const {
 
 Popup::Popup(QStringList list, QWidget* parent) :
     QDialog(parent),
-    list(list){
+    list(list) {
         setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
         QStringListModel* model = new QStringListModel(this);
         listView = new ListView(this);
@@ -76,7 +76,7 @@ PopupTabWidth::PopupTabWidth(QStringList list, QWidget* parent) :
 }
 
 void loadLanguageExtensions(QMap<QString, QString>& map) {
-    QFile TextFile(":/resources/highlight/LanguageToExtension.txt");
+    QFile TextFile(languageToExtensionPath);
 
     if (TextFile.open(QIODevice::ReadOnly)) {
         while (!TextFile.atEnd()) {

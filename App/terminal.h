@@ -15,6 +15,9 @@ public:
     explicit Terminal(QWidget *parent = nullptr);
     ~Terminal();
 
+private slots:
+    void on_closeButton_clicked();
+
 private:
     void setupTextEdit();
     Ui::Terminal *ui;

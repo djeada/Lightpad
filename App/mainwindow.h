@@ -33,6 +33,7 @@ class MainWindow : public QMainWindow {
         void setLanguageHighlightLabel(QString text);
         void setTheme(Theme theme);
         void setFont(QFont font);
+        void runCurrentScript();
         int getTabWidth();
         int getFontSize();
         TextArea* getCurrentTextArea();
@@ -66,9 +67,7 @@ class MainWindow : public QMainWindow {
         void on_actionKeyboard_shortcuts_triggered();
         void on_actionPrefrences_triggered();
         void on_runButton_clicked();
-
         void on_actionRun_file_name_triggered();
-
         void on_actionEdit_Configurations_triggered();
 
 private:

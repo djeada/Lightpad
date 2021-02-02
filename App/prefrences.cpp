@@ -34,8 +34,7 @@ Prefrences::~Prefrences()
     delete ui;
 }
 
-void Prefrences::setTabWidthLabel(const QString &text)
-{
+void Prefrences::setTabWidthLabel(const QString &text) {
     if (prefrencesEditor)
         prefrencesEditor->setTabWidthLabel(text);
 }
