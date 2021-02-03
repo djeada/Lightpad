@@ -15,6 +15,7 @@
 #include <QFileDialog>
 #include <QBoxLayout>
 #include <QStringListModel>
+#include <QPushButton>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -138,13 +139,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
 
     setFilePathAsTabText(filePath);
 
-    LightpadPage* page = nullptr;
-
-    if (qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget()) != 0)
-        page = qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget());
-
-    else if (ui->tabWidget->findChild<LightpadPage*>("widget"))
-        page = ui->tabWidget->findChild<LightpadPage*>("widget");
+    auto page = ui->tabWidget->getCurrentPage();
 
     if (page) {
         page->setTreeViewVisible(true);
@@ -391,7 +386,42 @@ void MainWindow::showFindReplace(bool onlyFind) {
     }
 }
 
+void MainWindow::openDialog(Dialog dialog)
+{
+    switch (dialog) {
+        case Dialog::runConfiguration:
+            if (findChildren<RunConfigurations*>().isEmpty())
+                new RunConfigurations(this);
+            break;
+
+        case Dialog::shortcuts:
+            if (findChildren<ShortcutsDialog*>().isEmpty())
+                new ShortcutsDialog(this);
+            break;
+
+        default:
+            return;
+    }
+}
+
+void MainWindow::openConfigurationDialog()
+{
+    openDialog(Dialog::runConfiguration);
+}
+
+void MainWindow::openShortcutsDialog()
+{
+    openDialog(Dialog::shortcuts);
+}
+
 void MainWindow::showTerminal() {
+
+    auto page = ui->tabWidget->getCurrentPage();
+
+    if (!page->scriptAssigned()) {
+        noScriptAssignedWarning();
+        return;
+    }
 
     if (!terminal) {
         terminal = new Terminal();
@@ -468,6 +498,7 @@ void MainWindow::setFont(QFont newFont) {
     font = newFont;
 
     auto textAreas = findChildren<TextArea*>();
+
     for (auto& textArea : textAreas)
         textArea->setFont(newFont);
 }
@@ -515,7 +546,23 @@ void MainWindow::setupTextArea() {
         getCurrentTextArea()->setMainWindow(this);
         getCurrentTextArea()->setFontSize(defaultFontSize);
         getCurrentTextArea()->setTabWidth(defaultTabWidth);
-     }
+    }
+}
+
+void MainWindow::noScriptAssignedWarning()
+{
+    QMessageBox msgBox(this);
+    msgBox.setText("No build script asociated with this file.");
+    auto connectButton = msgBox.addButton(tr("Connect"), QMessageBox::ActionRole);
+    auto abortButton = msgBox.addButton(QMessageBox::Abort);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == connectButton)
+        openConfigurationDialog();
+
+    else
+       msgBox.close();
 }
 
 void MainWindow::on_actionToggle_Menu_Bar_triggered()
@@ -571,7 +618,7 @@ void MainWindow::on_actionReplace_in_file_triggered() {
 }
 
 void MainWindow::on_actionKeyboard_shortcuts_triggered() {
-    new ShortcutsDialog(this);
+    openShortcutsDialog();
 }
 
 void MainWindow::on_actionPrefrences_triggered() {
@@ -583,7 +630,6 @@ void MainWindow::on_actionPrefrences_triggered() {
             prefrences = nullptr;
         });
     }
-
 }
 
 void MainWindow::on_runButton_clicked() {
@@ -595,6 +641,5 @@ void MainWindow::on_actionRun_file_name_triggered() {
 }
 
 void MainWindow::on_actionEdit_Configurations_triggered() {
-    new RunConfigurations(this);
-
+    openConfigurationDialog();
 }

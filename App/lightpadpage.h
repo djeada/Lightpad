@@ -44,6 +44,7 @@ class LightpadPage: public QWidget {
         void updateModel();
         QString getFilePath();
         QString getFilePath(const QModelIndex &index);
+        bool scriptAssigned();
 
     private:
         MainWindow* mainWindow;
@@ -51,6 +52,7 @@ class LightpadPage: public QWidget {
         TextArea* textArea;
         QFileSystemModel* model;
         QString filePath;
+        QString scriptPath;
 
 };
 

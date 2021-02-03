@@ -147,6 +147,19 @@ LightpadPage* LightpadTabWidget::getPage(int index)
     return qobject_cast<LightpadPage*>(widget(index));
 }
 
+LightpadPage* LightpadTabWidget::getCurrentPage()
+{
+    LightpadPage* page = nullptr;
+
+    if (qobject_cast<LightpadPage*>(currentWidget()) != 0)
+        page = qobject_cast<LightpadPage*>(currentWidget());
+
+    else if (findChild<LightpadPage*>("widget"))
+        page = findChild<LightpadPage*>("widget");
+
+    return page;
+}
+
 QString LightpadTabWidget::getFilePath(int index)
 {
     if (index >= 0 && index < count()) {

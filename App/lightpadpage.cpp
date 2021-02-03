@@ -244,4 +244,9 @@ QString LightpadPage::getFilePath()
 QString LightpadPage::getFilePath(const QModelIndex &index)
 {
     return model->filePath(index);
+}
+
+bool LightpadPage::scriptAssigned()
+{
+    return !scriptPath.isEmpty();
 };

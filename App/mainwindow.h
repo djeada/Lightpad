@@ -5,7 +5,6 @@
 #include <QListView>
 #include <QDebug>
 #include <QDialog>
-
 #include "theme.h"
 
 class Prefrences;
@@ -13,6 +12,8 @@ class Terminal;
 class Popup;
 class FindReplacePanel;
 class TextArea;
+
+enum class Dialog { shortcuts, runConfiguration };
 
 namespace Ui {
     class MainWindow;
@@ -87,12 +88,16 @@ private:
         void open(const QString& filePath);
         void save(const QString& filePath);
         void showFindReplace(bool onlyFind = true);
+        void openDialog(Dialog dialog);
+        void openConfigurationDialog();
+        void openShortcutsDialog();
         void showTerminal();
         void setMainWindowTitle(QString title);
         void setFilePathAsTabText(QString filePath);
         void closeCurrentTab();
         void setupTabWidget();
         void setupTextArea();
+        void noScriptAssignedWarning();
         void closeEvent(QCloseEvent* event );
 };
 

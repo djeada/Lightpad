@@ -73,6 +73,7 @@ RunConfigurations::RunConfigurations(QWidget *parent) :
     ui->editParameters->setIcon(QIcon(":/resources/icons/add.png"));
     ui->editScriptPath->connectFunctionWithIcon(&RunConfigurations::choosePath);
     setWindowTitle("Run Configuration");
+    setAttribute(Qt::WA_DeleteOnClose);
     show();
 }
 

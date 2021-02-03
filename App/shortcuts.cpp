@@ -134,6 +134,8 @@ ShortcutsDialog::ShortcutsDialog(QWidget* parent) :
        window->setFocus();
        QCoreApplication::postEvent(window, event, Qt::HighEventPriority);
     });
+
+    setAttribute(Qt::WA_DeleteOnClose);
 }
 
 ShortcutsDialog::~ShortcutsDialog() {

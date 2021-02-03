@@ -24,6 +24,7 @@ class LightpadTabWidget : public QTabWidget
         void closeAllTabs();
         void closeCurrentTab();
         LightpadPage* getPage(int index);
+        LightpadPage* getCurrentPage();
         QString getFilePath(int index);
 
     protected:
