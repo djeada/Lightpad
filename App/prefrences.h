@@ -2,6 +2,7 @@
 #define PREFRENCES_H
 
 #include <QDialog>
+
 #include "mainwindow.h"
 
 class ColorPicker;
@@ -9,11 +10,10 @@ class PrefrencesView;
 class PrefrencesEditor;
 
 namespace Ui {
-class Prefrences;
+    class Prefrences;
 }
 
-class Prefrences : public QDialog
-{
+class Prefrences : public QDialog {
     Q_OBJECT
 
 public:

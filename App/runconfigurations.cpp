@@ -54,7 +54,6 @@ void LineEditIcon::leaveEvent(QEvent* event)
 
     QWidget::leaveEvent(event);
 }
-#include <QDebug>
 
 void LineEditIcon::connectFunctionWithIcon(void (RunConfigurations::*f)())
 {
@@ -62,6 +61,17 @@ void LineEditIcon::connectFunctionWithIcon(void (RunConfigurations::*f)())
         auto parent = qobject_cast<RunConfigurations*>(parentWidget());
         (parent->*f)();
     });
+}
+
+void LineEditIcon::setText(const QString &text)
+{
+    edit.setText(text);
+    edit.setCursorPosition(0);
+}
+
+QString LineEditIcon::text()
+{
+    return edit.text();
 }
 
 RunConfigurations::RunConfigurations(QWidget *parent) :
@@ -84,5 +94,19 @@ RunConfigurations::~RunConfigurations()
 
 void RunConfigurations::choosePath()
 {
-    scriptPath = QFileDialog::getOpenFileName(this, tr("Open Document"), QDir::homePath());
+    auto scriptPath = QFileDialog::getOpenFileName(this, tr("Select script path"), QDir::homePath());
+    ui->editScriptPath->setText(scriptPath);
+
 }
+
+QString RunConfigurations::getScriptPath()
+{
+    return ui->editScriptPath->text();
+}
+
+QString RunConfigurations::getParameters()
+{
+    return ui->editParameters->text();
+}
+
+

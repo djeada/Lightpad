@@ -1,3 +1,11 @@
+#include <QDebug>
+#include <QStackedWidget>
+#include <QMessageBox>
+#include <QFileDialog>
+#include <QBoxLayout>
+#include <QStringListModel>
+#include <QPushButton>
+
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "lightpadpage.h"
@@ -8,14 +16,6 @@
 #include "terminal.h"
 #include "prefrences.h"
 #include "runconfigurations.h"
-
-#include <QDebug>
-#include <QStackedWidget>
-#include <QMessageBox>
-#include <QFileDialog>
-#include <QBoxLayout>
-#include <QStringListModel>
-#include <QPushButton>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -136,7 +136,6 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
     }
 
     open(filePath);
-
     setFilePathAsTabText(filePath);
 
     auto page = ui->tabWidget->getCurrentPage();
@@ -390,8 +389,16 @@ void MainWindow::openDialog(Dialog dialog)
 {
     switch (dialog) {
         case Dialog::runConfiguration:
-            if (findChildren<RunConfigurations*>().isEmpty())
-                new RunConfigurations(this);
+            if (findChildren<RunConfigurations*>().isEmpty()) {
+                auto configurationDialog = new RunConfigurations(this);
+
+                connect(configurationDialog, &RunConfigurations::accepted, this, [&, configurationDialog]() {
+                       auto scriptPath = configurationDialog->getScriptPath();
+                       auto parameters = configurationDialog->getParameters();
+                       qDebug() << scriptPath;
+                       qDebug() << parameters;
+                });
+             }
             break;
 
         case Dialog::shortcuts:
@@ -554,8 +561,8 @@ void MainWindow::noScriptAssignedWarning()
     QMessageBox msgBox(this);
     msgBox.setText("No build script asociated with this file.");
     auto connectButton = msgBox.addButton(tr("Connect"), QMessageBox::ActionRole);
-    auto abortButton = msgBox.addButton(QMessageBox::Abort);
 
+    msgBox.addButton(QMessageBox::Abort);
     msgBox.exec();
 
     if (msgBox.clickedButton() == connectButton)

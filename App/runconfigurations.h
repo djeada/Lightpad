@@ -17,6 +17,8 @@ public:
     ~LineEditIcon();
     void setIcon(QIcon icon);
     void connectFunctionWithIcon(void (RunConfigurations::*f)());
+    void setText(const QString& text);
+    QString text();
 
 protected:
     virtual void paintEvent(QPaintEvent* event) override;
@@ -29,7 +31,7 @@ private:
 };
 
 namespace Ui {
-class runconfigurations;
+    class runconfigurations;
 }
 
 class RunConfigurations : public QDialog
@@ -40,10 +42,11 @@ public:
     RunConfigurations(QWidget *parent = nullptr);
     ~RunConfigurations();
     void choosePath();
+    QString getScriptPath();
+    QString getParameters();
 
 private:
     Ui::runconfigurations *ui;
-    QString scriptPath;
 };
 
 #endif // RUNCOFIGURATIONS_H
