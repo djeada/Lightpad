@@ -303,7 +303,7 @@ void MainWindow::on_actionNew_File_triggered()
 
 void MainWindow::on_actionOpen_File_triggered() {
 
-    QString filePath = QFileDialog::getOpenFileName(this, tr("Open Document"), QDir::homePath());
+    auto filePath = QFileDialog::getOpenFileName(this, tr("Open Document"), QDir::homePath());
 
     openFileAndAddToNewTab(filePath);
 }
@@ -399,6 +399,7 @@ void MainWindow::showTerminal() {
         connect(terminal, &QObject::destroyed, this, [&]() {
             terminal = nullptr;
         });
+
         auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
 
         if (layout != 0)
@@ -422,8 +423,7 @@ void MainWindow::setTheme(Theme themeColors) {
         "color: " + colors.foregroundColor.name() + ";"
         "selection-background-color: #404f4f;"
         "border: 1px solid #404f4f;"
-        "border-radius: 3px 3px 3px 3px;"
-     "}"
+        "border-radius: 3px 3px 3px 3px;}"
 
     "QMenuBar::item {color: " + colors.foregroundColor.name() + ";}"
 
@@ -433,35 +433,29 @@ void MainWindow::setTheme(Theme themeColors) {
         "color: " + colors.foregroundColor.name() + ";"
         "border: None;"
         "padding: 5px;"
-        "background-color: " + colors.backgroundColor.name() + ";"
-    "}"
+        "background-color: " + colors.backgroundColor.name() + ";}"
 
      "QAbstractItemView {"
          "color: " + colors.foregroundColor.name() + ";"
-         "outline: 0;"
+         "outline: 0;}"
 
-     "}"
+    "QAbstractItemView::item {color: " + colors.foregroundColor.name() + ";}"
 
-   "QAbstractItemView::item {color: " + colors.foregroundColor.name() + ";}"
-
-   "QAbstractItemView::item:hover {"
+    "QAbstractItemView::item:hover {"
        " background: #f3f3f3;"
-       " color: #252424;"
-    "}"
+       " color: #252424;}"
 
     "QAbstractItemView::item:selected { background: #bbdde6; }"
 
     "QAbstractButton:hover {"
         "background: rgb(85, 87, 83);"
         "border: 1;"
-        "border-radius: 5;"
-    "}"
+        "border-radius: 5;}"
 
     "QAbstractButton:pressed {"
         "background: rgb(46, 52, 54);"
         "border: 1;"
-        "border-radius: 5;"
-    "}"
+        "border-radius: 5;}"
 
     "QLineEdit {background: " + colors.foregroundColor.name() + ";}"
 
@@ -472,16 +466,13 @@ void MainWindow::setTheme(Theme themeColors) {
     "QRadioButton::indicator:checked { "
                                         "background-color: " + colors.foregroundColor.name() + "; "
                                         "border: 2px solid " + colors.foregroundColor.name() + "; "
-                                        "border-radius: 6px; "
-   "}"
+                                        "border-radius: 6px; }"
 
     "QRadioButton::indicator:unchecked { "
                                          "background-color: " + colors.backgroundColor.name() + ";  "
                                          "border: 2px solid " + colors.foregroundColor.name() + "; "
                                          "border-radius: 6px; "
-    "}"
-
-     );
+    "}");
 
     ui->tabWidget->setTheme(colors.backgroundColor.name(), colors.foregroundColor.name());
 }

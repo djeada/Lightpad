@@ -10,6 +10,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 HEADERS     = \
     colorpicker.h \
     findreplacepanel.h \
+    formatter.h \
     lightpadpage.h \
     lightpadsyntaxhighlighter.h \
     lightpadtabwidget.h \
@@ -27,6 +28,7 @@ HEADERS     = \
 SOURCES     = main.cpp \
       colorpicker.cpp \
       findreplacepanel.cpp \
+      formatter.cpp \
       lightpadpage.cpp \
       lightpadsyntaxhighlighter.cpp \
       lightpadtabwidget.cpp \

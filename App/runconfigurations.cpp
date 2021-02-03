@@ -3,6 +3,9 @@
 
 #include <QPainter>
 #include <QStyleOption>
+#include <QDir>
+#include <QFileDialog>
+
 LineEditIcon::LineEditIcon(QWidget* parent)
     : QLineEdit(parent)
 {
@@ -16,7 +19,7 @@ LineEditIcon::LineEditIcon(QWidget* parent)
     setStyleSheet("QLineEdit { border: none; background: white } QToolButton { background: white }");
     setMouseTracking(true);
     setAttribute(Qt::WA_Hover);
-
+    button.setCursor(Qt::ArrowCursor);
 }
 
 LineEditIcon::~LineEditIcon()
@@ -31,10 +34,10 @@ void LineEditIcon::setIcon(QIcon icon)
 void LineEditIcon::paintEvent(QPaintEvent* event)
 {
     Q_UNUSED(event);
-  QStyleOption option;
-  option.initFrom(this);
-  QPainter painter(this);
-  style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
+    QStyleOption option;
+    option.initFrom(this);
+    QPainter painter(this);
+    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
 };
 
 void LineEditIcon::enterEvent(QEvent* event)
@@ -51,6 +54,15 @@ void LineEditIcon::leaveEvent(QEvent* event)
 
     QWidget::leaveEvent(event);
 }
+#include <QDebug>
+
+void LineEditIcon::connectFunctionWithIcon(void (RunConfigurations::*f)())
+{
+    connect(&button, &QAbstractButton::clicked, this, [&, f]() {
+        auto parent = qobject_cast<RunConfigurations*>(parentWidget());
+        (parent->*f)();
+    });
+}
 
 RunConfigurations::RunConfigurations(QWidget *parent) :
     QDialog(parent),
@@ -58,10 +70,18 @@ RunConfigurations::RunConfigurations(QWidget *parent) :
 {
     ui->setupUi(this);
     ui->editScriptPath->setIcon(QIcon(":/resources/icons/folder.png"));
+    ui->editParameters->setIcon(QIcon(":/resources/icons/add.png"));
+    ui->editScriptPath->connectFunctionWithIcon(&RunConfigurations::choosePath);
+    setWindowTitle("Run Configuration");
     show();
 }
 
 RunConfigurations::~RunConfigurations()
 {
     delete ui;
+}
+
+void RunConfigurations::choosePath()
+{
+    scriptPath = QFileDialog::getOpenFileName(this, tr("Open Document"), QDir::homePath());
 }
