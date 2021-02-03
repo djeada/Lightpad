@@ -417,62 +417,48 @@ void MainWindow::setTheme(Theme themeColors) {
 
     setStyleSheet(
 
-    "QWidget {background-color: " + colors.backgroundColor.name() + ";}"
+        "QWidget { background-color: " + colors.backgroundColor.name() + ";}"
 
-    "QMenu {"
-        "color: " + colors.foregroundColor.name() + ";"
-        "selection-background-color: #404f4f;"
-        "border: 1px solid #404f4f;"
-        "border-radius: 3px 3px 3px 3px;}"
+        "QMenu { color: " + colors.foregroundColor.name() + ";"
+                 "selection-background-color: #404f4f;"
+                 "border: 1px solid #404f4f;"
+                 "border-radius: 3px 3px 3px 3px;}"
 
-    "QMenuBar::item {color: " + colors.foregroundColor.name() + ";}"
+        "QMenuBar::item {color: " + colors.foregroundColor.name() + ";}"
 
-    "QMessageBox QLabel {color: " + colors.foregroundColor.name() + ";}"
+        "QMessageBox QLabel {color: " + colors.foregroundColor.name() + ";}"
 
-    "QAbstractButton {"
-        "color: " + colors.foregroundColor.name() + ";"
-        "border: None;"
-        "padding: 5px;"
-        "background-color: " + colors.backgroundColor.name() + ";}"
+        "QAbstractButton { color: " + colors.foregroundColor.name() + ";"
+                           "border: None;"
+                           "padding: 5px;"
+                           "background-color: " + colors.backgroundColor.name() + ";}"
 
-     "QAbstractItemView {"
-         "color: " + colors.foregroundColor.name() + ";"
-         "outline: 0;}"
+        "QAbstractItemView {color: " + colors.foregroundColor.name() + "; outline: 0;}"
 
-    "QAbstractItemView::item {color: " + colors.foregroundColor.name() + ";}"
+        "QAbstractItemView::item {color: " + colors.foregroundColor.name() + ";}"
 
-    "QAbstractItemView::item:hover {"
-       " background: #f3f3f3;"
-       " color: #252424;}"
+        "QAbstractItemView::item:hover { background: #f3f3f3; color: #252424;}"
 
-    "QAbstractItemView::item:selected { background: #bbdde6; }"
+        "QAbstractItemView::item:selected { background: #bbdde6; }"
 
-    "QAbstractButton:hover {"
-        "background: rgb(85, 87, 83);"
-        "border: 1;"
-        "border-radius: 5;}"
+        "QAbstractButton:hover { background: rgb(85, 87, 83); border: 1; border-radius: 5;}"
 
-    "QAbstractButton:pressed {"
-        "background: rgb(46, 52, 54);"
-        "border: 1;"
-        "border-radius: 5;}"
+        "QAbstractButton:pressed { background: rgb(46, 52, 54); border: 1; border-radius: 5;}"
 
-    "QLineEdit {background: " + colors.foregroundColor.name() + ";}"
+        "QLineEdit {background: " + colors.foregroundColor.name() + ";}"
 
-    "QLabel {color: " + colors.foregroundColor.name() + ";}"
+        "QLabel {color: " + colors.foregroundColor.name() + ";}"
 
-    "QPlainTextEdit {color: " + colors.foregroundColor.name() + "; background-color: " + colors.backgroundColor.name() + "; }"
+        "QPlainTextEdit {color: " + colors.foregroundColor.name() + "; background-color: " + colors.backgroundColor.name() + "; }"
 
-    "QRadioButton::indicator:checked { "
-                                        "background-color: " + colors.foregroundColor.name() + "; "
-                                        "border: 2px solid " + colors.foregroundColor.name() + "; "
-                                        "border-radius: 6px; }"
+        "QRadioButton::indicator:checked { background-color: " + colors.foregroundColor.name() + ";"
+                                           "border: 2px solid " + colors.foregroundColor.name() + ";"
+                                           "border-radius: 6px; }"
 
-    "QRadioButton::indicator:unchecked { "
-                                         "background-color: " + colors.backgroundColor.name() + ";  "
-                                         "border: 2px solid " + colors.foregroundColor.name() + "; "
-                                         "border-radius: 6px; "
-    "}");
+        "QRadioButton::indicator:unchecked { background-color: " + colors.backgroundColor.name() + ";"
+                                             "border: 2px solid " + colors.foregroundColor.name() + ";"
+                                             "border-radius: 6px;}"
+    );
 
     ui->tabWidget->setTheme(colors.backgroundColor.name(), colors.foregroundColor.name());
 }
