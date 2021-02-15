@@ -512,7 +512,10 @@ void MainWindow::setFont(QFont newFont) {
 void MainWindow::runCurrentScript()
 {
     on_actionSave_triggered();
-    showTerminal();
+    auto textArea = getCurrentTextArea();
+
+    if (textArea && !textArea->changesUnsaved())
+        showTerminal();
 }
 
 void MainWindow::setFilePathAsTabText(QString filePath) {

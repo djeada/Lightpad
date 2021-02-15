@@ -51,12 +51,40 @@
      <item>
       <widget class="QToolButton" name="toolButton">
        <property name="styleSheet">
-        <string notr="true">border: none;</string>
+        <string notr="true">QToolButton {
+	border: None;
+}
+:hover:pressed
+{
+color:#66cccc;
+background:#D3D3D3;
+}
+
+:hover:!pressed
+{
+background:#D3D3D3;
+}</string>
        </property>
        <property name="text">
         <string>Close</string>
        </property>
       </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeType">
+        <enum>QSizePolicy::Fixed</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>5</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
      </item>
     </layout>
    </item>
