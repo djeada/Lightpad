@@ -33,11 +33,10 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->setupUi(this);
         show();
         ui->tabWidget->setMainWindow(this);
-
+        ui->magicButton->setIconSize(0.8*ui->magicButton->size());
         setupTextArea();
         setupTabWidget();
         setWindowTitle("LightPad");
-        ui->magicButton->setIconSize(0.8*ui->magicButton->size());
         setTabWidth(tabWidth);
         setTheme(colors);
 }
@@ -512,6 +511,7 @@ void MainWindow::setFont(QFont newFont) {
 
 void MainWindow::runCurrentScript()
 {
+    on_actionSave_triggered();
     showTerminal();
 }
 
@@ -581,7 +581,7 @@ void MainWindow::on_languageHighlight_clicked() {
 
     if (!popupHighlightLanguage) {
         auto dir = QDir(":/resources/highlight").entryList(QStringList(), QDir::Dirs);
-        auto* popupHighlightLanguage = new  PopupLanguageHighlight(dir, this);
+        auto popupHighlightLanguage = new  PopupLanguageHighlight(dir, this);
         auto point = mapToGlobal(ui->languageHighlight->pos());
         popupHighlightLanguage->setGeometry(point.x(), point.y() - 2*popupHighlightLanguage->height() + height(), popupHighlightLanguage->width(), popupHighlightLanguage->height());
     }
