@@ -509,6 +509,30 @@ void MainWindow::setFont(QFont newFont) {
         textArea->setFont(newFont);
 }
 
+void MainWindow::showLineNumbers(bool flag)
+{
+    auto textAreas = findChildren<TextArea*>();
+
+    for (auto& textArea : textAreas)
+        textArea->showLineNumbers(flag);
+}
+
+void MainWindow::highlihtCurrentLine(bool flag)
+{
+    auto textAreas = findChildren<TextArea*>();
+
+    for (auto& textArea : textAreas)
+        textArea->highlihtCurrentLine(flag);
+}
+
+void MainWindow::highlihtMatchingBracket(bool flag)
+{
+    auto textAreas = findChildren<TextArea*>();
+
+    for (auto& textArea : textAreas)
+        textArea->highlihtMatchingBracket(flag);
+}
+
 void MainWindow::runCurrentScript()
 {
     on_actionSave_triggered();

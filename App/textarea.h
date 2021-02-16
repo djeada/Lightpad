@@ -24,6 +24,9 @@ class TextArea : public QPlainTextEdit {
         void setTabWidth(int width);
         void removeIconUnsaved();
         void setAutoIdent(bool flag);
+        void showLineNumbers(bool flag);
+        void highlihtCurrentLine(bool flag);
+        void highlihtMatchingBracket(bool flag);
         QString getSearchWord();
         bool changesUnsaved();
 
@@ -45,6 +48,7 @@ class TextArea : public QPlainTextEdit {
         QString searchWord;
         bool areChangesUnsaved;
         bool autoIndent;
+        bool showLineNumberArea;
         int prevWordCount;
         void setTabWidgetIcon(QIcon icon);
         void closeParentheses(QString startSr, QString closeStr);

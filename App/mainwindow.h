@@ -35,6 +35,9 @@ class MainWindow : public QMainWindow {
         void setLanguageHighlightLabel(QString text);
         void setTheme(Theme theme);
         void setFont(QFont font);
+        void showLineNumbers(bool flag);
+        void highlihtCurrentLine(bool flag);
+        void highlihtMatchingBracket(bool flag);
         void runCurrentScript();
         int getTabWidth();
         int getFontSize();

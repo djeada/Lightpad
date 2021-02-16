@@ -54,13 +54,7 @@
         <string notr="true">QToolButton {
 	border: None;
 }
-:hover:pressed
-{
-color:#66cccc;
-background:#D3D3D3;
-}
-
-:hover:!pressed
+:hover
 {
 background:#D3D3D3;
 }</string>

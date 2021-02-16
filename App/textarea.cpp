@@ -92,6 +92,7 @@ TextArea::TextArea(QWidget* parent) :
     searchWord(""),
     areChangesUnsaved(false),
     autoIndent(true),
+    showLineNumberArea(true),
     prevWordCount(1)
      {
 
@@ -148,9 +149,12 @@ TextArea::TextArea(QWidget* parent) :
 }
 
 int TextArea::lineNumberAreaWidth() {
-    QFontMetrics fm(mainFont);
+    if (showLineNumberArea) {
+        QFontMetrics fm(mainFont);
+        return 3 + fm.horizontalAdvance(QLatin1Char('9'))*  1.8*  numberOfDigits(blockCount());
+    }
 
-    return 3 + fm.horizontalAdvance(QLatin1Char('9'))*  1.8*  numberOfDigits(blockCount());
+    return 0;
 }
 
 void TextArea::increaseFontSize()
@@ -206,6 +210,23 @@ void TextArea::removeIconUnsaved()
 void TextArea::setAutoIdent(bool flag)
 {
     autoIndent = flag;
+}
+
+void TextArea::showLineNumbers(bool flag)
+{
+    showLineNumberArea = flag;
+    resizeEvent(new QResizeEvent(size(), size()));
+    setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+}
+
+void TextArea::highlihtCurrentLine(bool flag)
+{
+
+}
+
+void TextArea::highlihtMatchingBracket(bool flag)
+{
+
 }
 
 QString TextArea::getSearchWord()
