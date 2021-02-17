@@ -53,6 +53,8 @@ class TextArea : public QPlainTextEdit {
         void setTabWidgetIcon(QIcon icon);
         void closeParentheses(QString startSr, QString closeStr);
         void handleKeyEnterPressed();
+        void drawCurrentLineHighlight();
+        void clearLineHighlight();
 };
 
 #endif

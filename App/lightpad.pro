@@ -23,6 +23,7 @@ HEADERS     = \
     shortcuts.h \
     terminal.h \
     textarea.h \
+    textareasettings.h \
     theme.h
 
 SOURCES     = main.cpp \

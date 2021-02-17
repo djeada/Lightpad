@@ -15,6 +15,23 @@
 enum lang {cpp, js, py};
 QMap<QString, lang> convertStrToEnum = {{"cpp", cpp}, {"h", cpp}, {"js", js}, {"py", py}};
 
+static int findOpenParen(const QString& text, int pos) {
+
+    int counter = 1;
+
+    while (counter > 0) {
+        auto chr = text[--pos];
+        if (chr == '(')
+            counter--;
+
+        else if (chr == ')')
+            counter++;
+    }
+
+    return pos;
+}
+
+
 static int leadingSpaces(const QString& str, int tabWidth) {
 
     int n = 0;
@@ -112,24 +129,12 @@ TextArea::TextArea(QWidget* parent) :
                 setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
         });
 
-        connect(this, &TextArea::cursorPositionChanged, this, [&] {
-            QList<QTextEdit::ExtraSelection> extraSelections;
-
-            QTextEdit::ExtraSelection selection;
-
-            QColor color = mainWindow ? mainWindow->getTheme().highlightColor : highlightColor;
-            selection.format.setBackground(color);
-            selection.format.setProperty(QTextFormat::FullWidthSelection, true);
-            selection.cursor = textCursor();
-            selection.cursor.clearSelection();
-            extraSelections.append(selection);
-
-            setExtraSelections(extraSelections);
+        connect(this, &TextArea::cursorPositionChanged, this, [&]() {
+            drawCurrentLineHighlight();
 
             if (mainWindow)
                 mainWindow->setRowCol(textCursor().blockNumber(), textCursor().positionInBlock());
-
-         });
+        });
 
         connect(document(), &QTextDocument::undoCommandAdded, this, [&] {
             if (!areChangesUnsaved) {
@@ -221,7 +226,27 @@ void TextArea::showLineNumbers(bool flag)
 
 void TextArea::highlihtCurrentLine(bool flag)
 {
+    disconnect(this, &TextArea::cursorPositionChanged, 0, 0);
 
+    if (flag) {
+        connect(this, &TextArea::cursorPositionChanged, this, [&]() {
+            drawCurrentLineHighlight();
+
+            if (mainWindow)
+                mainWindow->setRowCol(textCursor().blockNumber(), textCursor().positionInBlock());
+        });
+    }
+
+    else {
+
+        clearLineHighlight();
+        connect(this, &TextArea::cursorPositionChanged, this, [&]() {
+            if (mainWindow)
+                mainWindow->setRowCol(textCursor().blockNumber(), textCursor().positionInBlock());
+        });
+    }
+
+    emit cursorPositionChanged();
 }
 
 void TextArea::highlihtMatchingBracket(bool flag)
@@ -352,6 +377,28 @@ void TextArea::handleKeyEnterPressed()
         cursor.insertText(QString(" ").repeated(n));
         setTextCursor(cursor);
     }
+}
+
+void TextArea::drawCurrentLineHighlight()
+{
+    QList<QTextEdit::ExtraSelection> extraSelections;
+
+    QTextEdit::ExtraSelection selection;
+
+    QColor color = mainWindow ? mainWindow->getTheme().highlightColor : highlightColor;
+    selection.format.setBackground(color);
+    selection.format.setProperty(QTextFormat::FullWidthSelection, true);
+    selection.cursor = textCursor();
+    selection.cursor.clearSelection();
+    extraSelections.append(selection);
+
+    setExtraSelections(extraSelections);
+}
+
+void TextArea::clearLineHighlight()
+{
+    QList<QTextEdit::ExtraSelection> extraSelections;
+    setExtraSelections(extraSelections);
 }
 
 void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event) {
