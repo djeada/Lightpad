@@ -2,9 +2,9 @@
 #define CODEEDITOR_H
 
 #include <QPlainTextEdit>
-#include "lightpadsyntaxhighlighter.h"
 
 class MainWindow;
+class LightpadSyntaxHighlighter;
 
 class TextArea : public QPlainTextEdit {
 
@@ -49,12 +49,17 @@ class TextArea : public QPlainTextEdit {
         bool areChangesUnsaved;
         bool autoIndent;
         bool showLineNumberArea;
+        bool lineHighlighted;
+        bool matchingBracketsHighlighted;
         int prevWordCount;
         void setTabWidgetIcon(QIcon icon);
         void closeParentheses(QString startSr, QString closeStr);
         void handleKeyEnterPressed();
         void drawCurrentLineHighlight();
         void clearLineHighlight();
+        void updateRowColDisplay();
+        void drawMatchingBrackets();
+        void updateCursorPositionChangedCallbacks();
 };
 
 #endif
