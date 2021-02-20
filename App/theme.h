@@ -37,7 +37,4 @@ struct Theme {
 };
 
 
-
-
-
 #endif // THEME_H

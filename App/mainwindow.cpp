@@ -5,6 +5,7 @@
 #include <QBoxLayout>
 #include <QStringListModel>
 #include <QPushButton>
+#include <cstdio>
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
@@ -17,15 +18,16 @@
 #include "prefrences.h"
 #include "runconfigurations.h"
 
-MainWindow::MainWindow(QWidget *parent) :
+
+MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
     popupHighlightLanguage(nullptr),
     popupTabWidth(nullptr),
     prefrences(nullptr),
-    highlightLanguage(""),
-    findReplacePanel(nullptr),
+    findReplacePanel(nullptr),    
     terminal(nullptr),
+    highlightLanguage(""),
     font(QApplication::font()),
     fontSize(defaultFontSize),
     tabWidth(defaultTabWidth) {
@@ -65,10 +67,29 @@ void MainWindow::closeEvent( QCloseEvent* event ) {
 
     if (prefrences) {
         prefrences->close();
-     }
+    }
 }
 
-void MainWindow::keyPressEvent(QKeyEvent *keyEvent){
+void MainWindow::loadSettings()
+{
+    
+}
+
+void MainWindow::saveSettings()
+{
+    
+}
+
+template<typename... Args>
+void MainWindow::updateAllTextAreas(void (TextArea::*f)(Args... args), Args... args)
+{
+    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
+    for (auto& textArea : textAreas)
+            (textArea->*f)(args...);
+
+}
+
+void MainWindow::keyPressEvent(QKeyEvent* keyEvent){
 
     if (keyEvent->matches(QKeySequence::Undo))
         undo();
@@ -105,11 +126,11 @@ void MainWindow::keyPressEvent(QKeyEvent *keyEvent){
 }
 
 int MainWindow::getTabWidth() {
-    return tabWidth;
+    return settings.tabWidth;
 }
 
 int MainWindow::getFontSize() {
-    return fontSize;
+    return settings.mainFont.pointSize();
 }
 
 //use current page if empty
@@ -184,7 +205,7 @@ void MainWindow::redo() {
         getCurrentTextArea()->redo();
 }
 
-TextArea *MainWindow::getCurrentTextArea() {
+TextArea* MainWindow::getCurrentTextArea() {
 
     if (ui->tabWidget->currentWidget()->findChild<LightpadPage*>("widget"))
         return ui->tabWidget->currentWidget()->findChild<LightpadPage*>("widget")->getTextArea();
@@ -200,17 +221,13 @@ Theme MainWindow::getTheme() {
 }
 
 QFont MainWindow::getFont() {
-    return font;
+    return settings.mainFont;
 }
 
-void MainWindow::setTabWidth(int width) {
-
-    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
-
-    for (auto& textArea : textAreas)
-       textArea->setTabWidth(width);
-
-    tabWidth = width;
+void MainWindow::setTabWidth(int width)
+{
+    updateAllTextAreas(&TextArea::setTabWidth, width);
+    settings.tabWidth = width;
 }
 
 void MainWindow::on_actionToggle_Undo_triggered() {
@@ -223,29 +240,19 @@ void MainWindow::on_actionToggle_Redo_triggered() {
 
 void MainWindow::on_actionIncrease_Font_Size_triggered()
 {
-    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
-    for (auto& textArea : textAreas)
-       textArea->increaseFontSize();
-
-    fontSize = getCurrentTextArea()->fontSize();
-
-}
-
-void MainWindow::on_actionDecrease_Font_Size_triggered() {
-
-    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
-    for (auto& textArea : textAreas)
-       textArea->decreaseFontSize();
-
+    updateAllTextAreas(&TextArea::increaseFontSize);
     fontSize = getCurrentTextArea()->fontSize();
 }
 
-void MainWindow::on_actionReset_Font_Size_triggered() {
+void MainWindow::on_actionDecrease_Font_Size_triggered()
+{
+    updateAllTextAreas(&TextArea::decreaseFontSize);
+    fontSize = getCurrentTextArea()->fontSize();
+}
 
-    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
-    for (auto& textArea : textAreas)
-       textArea->setFontSize(defaultFontSize);
-
+void MainWindow::on_actionReset_Font_Size_triggered()
+{
+    updateAllTextAreas(&TextArea::setFontSize, defaultFontSize);
     fontSize = getCurrentTextArea()->fontSize();
 }
 
@@ -268,15 +275,15 @@ void MainWindow::on_actionPaste_triggered() {
         getCurrentTextArea()->paste();
 }
 
-void MainWindow::on_actionNew_Window_triggered() {
-
+void MainWindow::on_actionNew_Window_triggered()
+{
     new MainWindow();
 }
 
-void MainWindow::on_actionClose_Tab_triggered() {
-
+void MainWindow::on_actionClose_Tab_triggered()
+{
     if (ui->tabWidget->currentIndex() > -1)
-     ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
+        ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
 }
 
 void MainWindow::on_actionClose_All_Tabs_triggered()
@@ -284,8 +291,8 @@ void MainWindow::on_actionClose_All_Tabs_triggered()
      ui->tabWidget->closeAllTabs();
 }
 
-void MainWindow::on_actionFind_in_file_triggered() {
-
+void MainWindow::on_actionFind_in_file_triggered()
+{
     showFindReplace(true);
 }
 
@@ -294,8 +301,8 @@ void MainWindow::on_actionNew_File_triggered()
     ui->tabWidget->addNewTab();
 }
 
-void MainWindow::on_actionOpen_File_triggered() {
-
+void MainWindow::on_actionOpen_File_triggered()
+{
     auto filePath = QFileDialog::getOpenFileName(this, tr("Open Document"), QDir::homePath());
 
     openFileAndAddToNewTab(filePath);
@@ -343,8 +350,8 @@ void MainWindow::open(const QString &filePath) {
       getCurrentTextArea()->setPlainText(QString::fromUtf8(file.readAll()));
 }
 
-void MainWindow::save(const QString &filePath) {
-
+void MainWindow::save(const QString &filePath)
+{
     QFile file(filePath);
 
     if (!file.open(QFile::WriteOnly|QFile::Truncate|QFile::Text))
@@ -361,12 +368,12 @@ void MainWindow::save(const QString &filePath) {
     }
 }
 
-void MainWindow::showFindReplace(bool onlyFind) {
-
+void MainWindow::showFindReplace(bool onlyFind)
+{
     if (!findReplacePanel) {
         findReplacePanel = new FindReplacePanel(onlyFind);
 
-        auto* layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
+        auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
 
         if (layout != 0)
            layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
@@ -377,7 +384,7 @@ void MainWindow::showFindReplace(bool onlyFind) {
 
     if (findReplacePanel->isVisible() && getCurrentTextArea())
         findReplacePanel->setReplaceVisibility(!onlyFind);
-
+ 
     if (findReplacePanel->isVisible()) {
         findReplacePanel->setTextArea(getCurrentTextArea());
         findReplacePanel->setFocusOnSearchBox();
@@ -392,12 +399,10 @@ void MainWindow::openDialog(Dialog dialog)
                 auto configurationDialog = new RunConfigurations(this);
 
                 connect(configurationDialog, &RunConfigurations::accepted, this, [&, configurationDialog]() {
-                       auto scriptPath = configurationDialog->getScriptPath();
-                       auto parameters = configurationDialog->getParameters();
-                       qDebug() << scriptPath;
-                       qDebug() << parameters;
+                    auto scriptPath = configurationDialog->getScriptPath();
+                    auto parameters = configurationDialog->getParameters();
                 });
-             }
+            }
             break;
 
         case Dialog::shortcuts:
@@ -447,90 +452,25 @@ void MainWindow::setMainWindowTitle(QString title) {
     setWindowTitle(title + " - Lightpad");
 }
 
-void MainWindow::setTheme(Theme themeColors) {
-
-    colors = themeColors;
-
-    setStyleSheet(
-
-        "QWidget { background-color: " + colors.backgroundColor.name() + ";}"
-
-        "QMenu { color: " + colors.foregroundColor.name() + ";"
-                 "selection-background-color: #404f4f;"
-                 "border: 1px solid #404f4f;"
-                 "border-radius: 3px 3px 3px 3px;}"
-
-        "QMenuBar::item {color: " + colors.foregroundColor.name() + ";}"
-
-        "QMessageBox QLabel {color: " + colors.foregroundColor.name() + ";}"
-
-        "QAbstractButton { color: " + colors.foregroundColor.name() + ";"
-                           "border: None;"
-                           "padding: 5px;"
-                           "background-color: " + colors.backgroundColor.name() + ";}"
-
-        "QAbstractItemView {color: " + colors.foregroundColor.name() + "; outline: 0;}"
-
-        "QAbstractItemView::item {color: " + colors.foregroundColor.name() + ";}"
-
-        "QAbstractItemView::item:hover { background: #f3f3f3; color: #252424;}"
-
-        "QAbstractItemView::item:selected { background: #bbdde6; }"
-
-        "QAbstractButton:hover { background: rgb(85, 87, 83); border: 1; border-radius: 5;}"
-
-        "QAbstractButton:pressed { background: rgb(46, 52, 54); border: 1; border-radius: 5;}"
-
-        "QLineEdit {background: " + colors.foregroundColor.name() + ";}"
-
-        "QLabel {color: " + colors.foregroundColor.name() + ";}"
-
-        "QPlainTextEdit {color: " + colors.foregroundColor.name() + "; background-color: " + colors.backgroundColor.name() + "; }"
-
-        "QRadioButton::indicator:checked { background-color: " + colors.foregroundColor.name() + ";"
-                                           "border: 2px solid " + colors.foregroundColor.name() + ";"
-                                           "border-radius: 6px; }"
-
-        "QRadioButton::indicator:unchecked { background-color: " + colors.backgroundColor.name() + ";"
-                                             "border: 2px solid " + colors.foregroundColor.name() + ";"
-                                             "border-radius: 6px;}"
-    );
-
-    ui->tabWidget->setTheme(colors.backgroundColor.name(), colors.foregroundColor.name());
-}
-
-void MainWindow::setFont(QFont newFont) {
-
+void MainWindow::setFont(QFont newFont)
+{
+    updateAllTextAreas(&TextArea::setFont, newFont);
     font = newFont;
-
-    auto textAreas = findChildren<TextArea*>();
-
-    for (auto& textArea : textAreas)
-        textArea->setFont(newFont);
 }
 
 void MainWindow::showLineNumbers(bool flag)
 {
-    auto textAreas = findChildren<TextArea*>();
-
-    for (auto& textArea : textAreas)
-        textArea->showLineNumbers(flag);
+    updateAllTextAreas(&TextArea::showLineNumbers, flag);
 }
 
 void MainWindow::highlihtCurrentLine(bool flag)
 {
-    auto textAreas = findChildren<TextArea*>();
-
-    for (auto& textArea : textAreas)
-        textArea->highlihtCurrentLine(flag);
+    updateAllTextAreas(&TextArea::highlihtCurrentLine, flag);
 }
 
 void MainWindow::highlihtMatchingBracket(bool flag)
 {
-    auto textAreas = findChildren<TextArea*>();
-
-    for (auto& textArea : textAreas)
-        textArea->highlihtMatchingBracket(flag);
+    updateAllTextAreas(&TextArea::highlihtMatchingBracket, flag);
 }
 
 void MainWindow::runCurrentScript()
@@ -553,7 +493,8 @@ void MainWindow::setFilePathAsTabText(QString filePath) {
     ui->tabWidget->setTabText(tabIndex, fileName);
 }
 
-void MainWindow::closeCurrentTab() {
+void MainWindow::closeCurrentTab()
+{
     auto textArea = getCurrentTextArea();
 
     if (textArea && textArea->changesUnsaved())
@@ -562,7 +503,8 @@ void MainWindow::closeCurrentTab() {
     ui->tabWidget->closeCurrentTab();
 }
 
-void MainWindow::setupTabWidget() {
+void MainWindow::setupTabWidget()
+{
     QObject::connect(ui->tabWidget, &QTabWidget::currentChanged, this, [&] (int index) {
         auto text = ui->tabWidget->tabText(index);
         setMainWindowTitle(text);
@@ -578,8 +520,8 @@ void MainWindow::setupTextArea() {
 
     if (getCurrentTextArea()) {
         getCurrentTextArea()->setMainWindow(this);
-        getCurrentTextArea()->setFontSize(defaultFontSize);
-        getCurrentTextArea()->setTabWidth(defaultTabWidth);
+        getCurrentTextArea()->setFontSize(settings.mainFont.pointSize());
+        getCurrentTextArea()->setTabWidth(settings.tabWidth);
     }
 }
 
@@ -635,9 +577,10 @@ void MainWindow::on_actionAbout_triggered() {
 void MainWindow::on_tabWidth_clicked() {
 
     if (!popupTabWidth) {
-        auto* popupTabWidth = new  PopupTabWidth(QStringList({"2", "4", "8"}), this);
+        auto popupTabWidth = new PopupTabWidth(QStringList({"2", "4", "8"}), this);
         auto point = mapToGlobal(ui->tabWidth->pos());
-        popupTabWidth->setGeometry(point.x(), point.y() - 2*popupTabWidth->height() + height(), popupTabWidth->width(), popupTabWidth->height());
+        QRect rect(point.x(), point.y() - 2*popupTabWidth->height() + height(), popupTabWidth->width(), popupTabWidth->height());
+        popupTabWidth->setGeometry(rect);
     }
 
     else if (popupTabWidth->isHidden())
@@ -647,16 +590,18 @@ void MainWindow::on_tabWidth_clicked() {
         popupTabWidth->hide();
 }
 
-void MainWindow::on_actionReplace_in_file_triggered() {
+void MainWindow::on_actionReplace_in_file_triggered()
+{
     showFindReplace(false);
 }
 
-void MainWindow::on_actionKeyboard_shortcuts_triggered() {
+void MainWindow::on_actionKeyboard_shortcuts_triggered()
+{
     openShortcutsDialog();
 }
 
-void MainWindow::on_actionPrefrences_triggered() {
-
+void MainWindow::on_actionPrefrences_triggered()
+{
     if (!prefrences) {
         prefrences = new Prefrences(this);
 
@@ -666,14 +611,70 @@ void MainWindow::on_actionPrefrences_triggered() {
     }
 }
 
-void MainWindow::on_runButton_clicked() {
+void MainWindow::on_runButton_clicked()
+{
     runCurrentScript();
 }
 
-void MainWindow::on_actionRun_file_name_triggered() {
+void MainWindow::on_actionRun_file_name_triggered()
+{
     runCurrentScript();
 }
 
-void MainWindow::on_actionEdit_Configurations_triggered() {
+void MainWindow::on_actionEdit_Configurations_triggered()
+{
     openConfigurationDialog();
 }
+
+void MainWindow::setTheme(Theme theme) {
+
+    colors = theme;
+
+    setStyleSheet(
+
+        "QWidget { background-color: " + colors.backgroundColor.name() + ";}"
+
+        "QMenu { color: " + colors.foregroundColor.name() + ";"
+                 "selection-background-color: #404f4f;"
+                 "border: 1px solid #404f4f;"
+                 "border-radius: 3px 3px 3px 3px;}"
+
+        "QMenuBar::item {color: " + colors.foregroundColor.name() + ";}"
+
+        "QMessageBox QLabel {color: " + colors.foregroundColor.name() + ";}"
+
+        "QAbstractButton { color: " + colors.foregroundColor.name() + ";"
+                           "border: None;"
+                           "padding: 5px;"
+                           "background-color: " + colors.backgroundColor.name() + ";}"
+
+        "QAbstractItemView {color: " + colors.foregroundColor.name() + "; outline: 0;}"
+
+        "QAbstractItemView::item {color: " + colors.foregroundColor.name() + ";}"
+
+        "QAbstractItemView::item:hover { background: #f3f3f3; color: #252424;}"
+
+        "QAbstractItemView::item:selected { background: #bbdde6; }"
+
+        "QAbstractButton:hover { background: rgb(85, 87, 83); border: 1; border-radius: 5;}"
+
+        "QAbstractButton:pressed { background: rgb(46, 52, 54); border: 1; border-radius: 5;}"
+
+        "QLineEdit {background: " + colors.foregroundColor.name() + ";}"
+
+        "QLabel {color: " + colors.foregroundColor.name() + ";}"
+
+        "QPlainTextEdit {color: " + colors.foregroundColor.name() + "; background-color: " + colors.backgroundColor.name() + "; }"
+
+        "QRadioButton::indicator:checked { background-color: " + colors.foregroundColor.name() + ";"
+                                           "border: 2px solid " + colors.foregroundColor.name() + ";"
+                                           "border-radius: 6px; }"
+
+        "QRadioButton::indicator:unchecked { background-color: " + colors.backgroundColor.name() + ";"
+                                             "border: 2px solid " + colors.foregroundColor.name() + ";"
+                                             "border-radius: 6px;}"
+    );
+
+    ui->tabWidget->setTheme(colors.backgroundColor.name(), colors.foregroundColor.name());
+}
+

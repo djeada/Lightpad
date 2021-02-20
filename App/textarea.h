@@ -5,6 +5,7 @@
 
 class MainWindow;
 class LightpadSyntaxHighlighter;
+struct TextAreaSettings;
 
 class TextArea : public QPlainTextEdit {
 
@@ -12,6 +13,7 @@ class TextArea : public QPlainTextEdit {
 
     public:
         TextArea(QWidget* parent = nullptr);
+        TextArea(TextAreaSettings settings, QWidget* parent = nullptr);
         void lineNumberAreaPaintEvent(QPaintEvent* event);
         void updateSyntaxHighlightTags(QString searchKey = "", QString chosenLang = "");
         int lineNumberAreaWidth();
@@ -33,7 +35,7 @@ class TextArea : public QPlainTextEdit {
     protected:
         void resizeEvent(QResizeEvent* event) override;
         void keyPressEvent(QKeyEvent* event) override;
-
+        void contextMenuEvent(QContextMenuEvent* event) override;
     private:
         MainWindow* mainWindow;
         QWidget* lineNumberArea;
@@ -52,6 +54,7 @@ class TextArea : public QPlainTextEdit {
         bool lineHighlighted;
         bool matchingBracketsHighlighted;
         int prevWordCount;
+        void setupTextArea();
         void setTabWidgetIcon(QIcon icon);
         void closeParentheses(QString startSr, QString closeStr);
         void handleKeyEnterPressed();

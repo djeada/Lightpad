@@ -4,19 +4,28 @@
 #include <QColor>
 #include <QString>
 #include <QFont>
+#include <QApplication>
+
+#include "theme.h"
 
 struct TextAreaSettings {
-    QColor highlightColor;
-    QColor lineNumberAreaPenColor;
-    QColor defaultPenColor;
-    QColor backgroundColor;
-    QString bufferText;
-    QString highlightLang;
     QFont mainFont;
-    QString searchWord;
-    bool areChangesUnsaved;
+    Theme theme;
     bool autoIndent;
     bool showLineNumberArea;
+    bool lineHighlighted;
+    bool matchingBracketsHighlighted;
+    int tabWidth;
+
+    TextAreaSettings() :
+      mainFont(QApplication::font()),
+      autoIndent(true),
+      showLineNumberArea(true),
+      lineHighlighted(true),
+      matchingBracketsHighlighted(true),
+      tabWidth(4) {
+
+    };
 };
 
 #endif // TEXTAREASETTINGS_H

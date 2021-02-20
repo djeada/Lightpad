@@ -1,9 +1,3 @@
-#include "textarea.h"
-#include "mainwindow.h"
-#include "lightpadpage.h"
-#include "lightpadtabwidget.h"
-#include "lightpadsyntaxhighlighter.h"
-
 #include <QPainter>
 #include <QTextBlock>
 #include <QDebug>
@@ -12,9 +6,16 @@
 #include <QTextCursor>
 #include <QApplication>
 #include <QStackedWidget>
+#include <QMenu>
 
-enum lang {cpp, js, py};
-QMap<QString, lang> convertStrToEnum = {{"cpp", cpp}, {"h", cpp}, {"js", js}, {"py", py}};
+#include "textarea.h"
+#include "mainwindow.h"
+#include "lightpadpage.h"
+#include "lightpadtabwidget.h"
+#include "lightpadsyntaxhighlighter.h"
+#include "textareasettings.h"
+
+QMap<QString, Lang> convertStrToEnum = {{"cpp", Lang::cpp}, {"h", Lang::cpp}, {"js", Lang::js}, {"py", Lang::py}};
 QMap<QChar, QChar> brackets = {{'{', '}'}, {'(', ')'}, {'[', ']'}};
 
 static int findClosingParentheses(const QString& text, int pos, QChar startStr, QChar endStr) {
@@ -138,41 +139,64 @@ TextArea::TextArea(QWidget* parent) :
     lineHighlighted(true),
     matchingBracketsHighlighted(true),
     prevWordCount(1)
-     {
-
-        lineNumberArea = new LineNumberArea(this);
-
-        connect(this, &TextArea::blockCountChanged, this, [&] {
-            setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
-        });
-
-        connect(this, &TextArea::updateRequest, this, [&] (const QRect &rect, int dy) {
-            if (dy)
-                lineNumberArea->scroll(0, dy);
-            else
-                lineNumberArea->update(0, rect.y(), lineNumberArea->width(), rect.height());
-
-            if (rect.contains(viewport()->rect()))
-                setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
-        });
-
-        connect(document(), &QTextDocument::undoCommandAdded, this, [&] {
-            if (!areChangesUnsaved) {
-                setTabWidgetIcon(QIcon(":/resources/icons/unsaved.png"));
-                areChangesUnsaved = true;
-            }
-        });
-
-        updateCursorPositionChangedCallbacks();
-        clearLineHighlight();
-
+     {       
+        setupTextArea();
         mainFont = QApplication::font();
         document()->setDefaultFont(mainFont);
-
-        setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
-        QTextEdit::ExtraSelection selection;
-        selection.format.setBackground(highlightColor);
         show();
+}
+
+TextArea::TextArea(TextAreaSettings settings, QWidget* parent) :
+    QPlainTextEdit(parent),
+    mainWindow(nullptr),
+    highlightColor(settings.theme.highlightColor),
+    lineNumberAreaPenColor(settings.theme.lineNumberAreaColor),
+    defaultPenColor(settings.theme.foregroundColor),
+    backgroundColor(settings.theme.backgroundColor),
+    bufferText(""),
+    highlightLang(""),
+    syntaxHighlighter(nullptr),
+    searchWord(""),
+    areChangesUnsaved(false),
+    autoIndent(settings.autoIndent),
+    showLineNumberArea(settings.showLineNumberArea),
+    lineHighlighted(settings.lineHighlighted),
+    matchingBracketsHighlighted(settings.matchingBracketsHighlighted),
+    prevWordCount(1) {
+        setupTextArea();
+        mainFont = settings.mainFont;
+        document()->setDefaultFont(mainFont);
+        show();
+}
+
+void TextArea::setupTextArea()
+{
+    lineNumberArea = new LineNumberArea(this);
+
+    connect(this, &TextArea::blockCountChanged, this, [&] {
+        setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+    });
+
+    connect(this, &TextArea::updateRequest, this, [&] (const QRect &rect, int dy) {
+        if (dy)
+            lineNumberArea->scroll(0, dy);
+        else
+            lineNumberArea->update(0, rect.y(), lineNumberArea->width(), rect.height());
+
+        if (rect.contains(viewport()->rect()))
+            setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+    });
+
+    connect(document(), &QTextDocument::undoCommandAdded, this, [&] {
+        if (!areChangesUnsaved) {
+            setTabWidgetIcon(QIcon(":/resources/icons/unsaved.png"));
+            areChangesUnsaved = true;
+        }
+    });
+
+    setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+    updateCursorPositionChangedCallbacks();
+    clearLineHighlight();
 }
 
 int TextArea::lineNumberAreaWidth() {
@@ -225,7 +249,7 @@ int TextArea::fontSize()
 void TextArea::setTabWidth(int width)
 {
     QFontMetrics metrics(mainFont);
-    setTabStopWidth(metrics.horizontalAdvance(' ') * width);
+   setTabStopDistance(QFontMetricsF(mainFont).horizontalAdvance(' ') * width);
 }
 
 void TextArea::removeIconUnsaved()
@@ -309,6 +333,15 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent) {
 
     if (keyEvent->key()==Qt::Key_Enter || keyEvent->key()==Qt::Key_Return)
         handleKeyEnterPressed();
+}
+
+void TextArea::contextMenuEvent(QContextMenuEvent *event)
+{
+    auto menu = createStandardContextMenu();
+    menu->addSeparator();
+    menu->addAction(tr("Refactor"));
+    menu->exec(event->globalPos());
+    delete menu;
 }
 
 void TextArea::setTabWidgetIcon(QIcon icon)
@@ -544,15 +577,15 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) 
     if (document() && convertStrToEnum.contains(highlightLang)) {
 
         switch(convertStrToEnum[highlightLang]) {
-            case cpp:
+            case Lang::cpp:
                 syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(colors, searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
                 break;
 
-            case js:
+            case Lang::js:
                 syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesJs(colors, searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
                 break;
 
-            case py:
+            case Lang::py:
                 syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesPy(colors, searchKey), QRegularExpression(QStringLiteral("/'''")),  QRegularExpression(QStringLiteral("\\'''")), document());
                 break;
          }

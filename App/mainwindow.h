@@ -7,6 +7,7 @@
 #include <QDialog>
 
 #include "theme.h"
+#include "textareasettings.h"
 
 class Prefrences;
 class Terminal;
@@ -14,6 +15,7 @@ class Popup;
 class FindReplacePanel;
 class TextArea;
 
+enum class Lang {cpp, js, py};
 enum class Dialog { shortcuts, runConfiguration };
 
 namespace Ui {
@@ -80,9 +82,10 @@ private:
         Popup* popupHighlightLanguage;
         Popup* popupTabWidth;
         Prefrences* prefrences;
-        QString highlightLanguage;
         FindReplacePanel* findReplacePanel;
         Terminal* terminal;
+        TextAreaSettings settings;
+        QString highlightLanguage;
         QFont font;
         Theme colors;
         int fontSize;
@@ -103,6 +106,10 @@ private:
         void setupTextArea();
         void noScriptAssignedWarning();
         void closeEvent(QCloseEvent* event );
+        void loadSettings();
+        void saveSettings();
+
+        template<typename... Args> void updateAllTextAreas(void (TextArea::*f)(Args... args), Args... args);
 };
 
 const int defaultTabWidth = 4;

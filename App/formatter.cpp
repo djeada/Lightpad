@@ -1,6 +1,6 @@
 #include "formatter.h"
 
-Formatter::Formatter()
-{
+Formatter::Formatter(QString text, Lang lang):
+    text(text) {
 
 }
