@@ -87,9 +87,6 @@ private:
         TextAreaSettings settings;
         QString highlightLanguage;
         QFont font;
-        Theme colors;
-        int fontSize;
-        int tabWidth;
         void undo();
         void redo();
         void open(const QString& filePath);

@@ -28,9 +28,7 @@ MainWindow::MainWindow(QWidget* parent) :
     findReplacePanel(nullptr),    
     terminal(nullptr),
     highlightLanguage(""),
-    font(QApplication::font()),
-    fontSize(defaultFontSize),
-    tabWidth(defaultTabWidth) {
+    font(QApplication::font()) {
         QApplication::instance()->installEventFilter(this);
         ui->setupUi(this);
         show();
@@ -62,7 +60,8 @@ MainWindow::~MainWindow() {
     delete ui;
 }
 
-void MainWindow::closeEvent( QCloseEvent* event ) {
+void MainWindow::closeEvent(QCloseEvent* event )
+{
     Q_UNUSED(event);
 
     if (prefrences) {
@@ -75,10 +74,10 @@ void MainWindow::loadSettings()
     if (QFileInfo(settingsPath).exists())
         settings.loadSettings(settingsPath);
 
-    else {
-        setTabWidth(tabWidth);
-        setTheme(colors);
-    }
+    else
+        setTabWidth(defaultTabWidth);
+
+    setTheme(settings.theme);
 }
 
 void MainWindow::saveSettings()
@@ -186,8 +185,8 @@ void MainWindow::closeTabPage(QString filePath) {
     }
 }
 
-void MainWindow::on_actionToggle_Full_Screen_triggered() {
-
+void MainWindow::on_actionToggle_Full_Screen_triggered()
+{
     if (isMaximized())
         showNormal();
 
@@ -195,24 +194,25 @@ void MainWindow::on_actionToggle_Full_Screen_triggered() {
         showMaximized();
 }
 
-void MainWindow::on_actionQuit_triggered() {
+void MainWindow::on_actionQuit_triggered()
+{
     close();
 }
 
-void MainWindow::undo() {
-
+void MainWindow::undo()
+{
     if (getCurrentTextArea())
         getCurrentTextArea()->undo();
 }
 
-void MainWindow::redo() {
-
+void MainWindow::redo()
+{
     if (getCurrentTextArea())
         getCurrentTextArea()->redo();
 }
 
-TextArea* MainWindow::getCurrentTextArea() {
-
+TextArea* MainWindow::getCurrentTextArea()
+{
     if (ui->tabWidget->currentWidget()->findChild<LightpadPage*>("widget"))
         return ui->tabWidget->currentWidget()->findChild<LightpadPage*>("widget")->getTextArea();
 
@@ -222,8 +222,9 @@ TextArea* MainWindow::getCurrentTextArea() {
     return nullptr;
 }
 
-Theme MainWindow::getTheme() {
-    return colors;
+Theme MainWindow::getTheme()
+{
+    return settings.theme;
 }
 
 QFont MainWindow::getFont() {
@@ -247,19 +248,19 @@ void MainWindow::on_actionToggle_Redo_triggered() {
 void MainWindow::on_actionIncrease_Font_Size_triggered()
 {
     updateAllTextAreas(&TextArea::increaseFontSize);
-    fontSize = getCurrentTextArea()->fontSize();
+    settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
 }
 
 void MainWindow::on_actionDecrease_Font_Size_triggered()
 {
     updateAllTextAreas(&TextArea::decreaseFontSize);
-    fontSize = getCurrentTextArea()->fontSize();
+    settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
 }
 
 void MainWindow::on_actionReset_Font_Size_triggered()
 {
     updateAllTextAreas(&TextArea::setFontSize, defaultFontSize);
-    fontSize = getCurrentTextArea()->fontSize();
+    settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
 }
 
 void MainWindow::on_actionCut_triggered() {
@@ -634,29 +635,29 @@ void MainWindow::on_actionEdit_Configurations_triggered()
 
 void MainWindow::setTheme(Theme theme) {
 
-    colors = theme;
+    settings.theme = theme;
 
     setStyleSheet(
 
-        "QWidget { background-color: " + colors.backgroundColor.name() + ";}"
+        "QWidget { background-color: " + settings.theme.backgroundColor.name() + ";}"
 
-        "QMenu { color: " + colors.foregroundColor.name() + ";"
+        "QMenu { color: " + settings.theme.foregroundColor.name() + ";"
                  "selection-background-color: #404f4f;"
                  "border: 1px solid #404f4f;"
                  "border-radius: 3px 3px 3px 3px;}"
 
-        "QMenuBar::item {color: " + colors.foregroundColor.name() + ";}"
+        "QMenuBar::item {color: " + settings.theme.foregroundColor.name() + ";}"
 
-        "QMessageBox QLabel {color: " + colors.foregroundColor.name() + ";}"
+        "QMessageBox QLabel {color: " + settings.theme.foregroundColor.name() + ";}"
 
-        "QAbstractButton { color: " + colors.foregroundColor.name() + ";"
+        "QAbstractButton { color: " + settings.theme.foregroundColor.name() + ";"
                            "border: None;"
                            "padding: 5px;"
-                           "background-color: " + colors.backgroundColor.name() + ";}"
+                           "background-color: " + settings.theme.backgroundColor.name() + ";}"
 
-        "QAbstractItemView {color: " + colors.foregroundColor.name() + "; outline: 0;}"
+        "QAbstractItemView {color: " + settings.theme.foregroundColor.name() + "; outline: 0;}"
 
-        "QAbstractItemView::item {color: " + colors.foregroundColor.name() + ";}"
+        "QAbstractItemView::item {color: " + settings.theme.foregroundColor.name() + ";}"
 
         "QAbstractItemView::item:hover { background: #f3f3f3; color: #252424;}"
 
@@ -666,21 +667,21 @@ void MainWindow::setTheme(Theme theme) {
 
         "QAbstractButton:pressed { background: rgb(46, 52, 54); border: 1; border-radius: 5;}"
 
-        "QLineEdit {background: " + colors.foregroundColor.name() + ";}"
+        "QLineEdit {background: " + settings.theme.foregroundColor.name() + ";}"
 
-        "QLabel {color: " + colors.foregroundColor.name() + ";}"
+        "QLabel {color: " + settings.theme.foregroundColor.name() + ";}"
 
-        "QPlainTextEdit {color: " + colors.foregroundColor.name() + "; background-color: " + colors.backgroundColor.name() + "; }"
+        "QPlainTextEdit {color: " + settings.theme.foregroundColor.name() + "; background-color: " + settings.theme.backgroundColor.name() + "; }"
 
-        "QRadioButton::indicator:checked { background-color: " + colors.foregroundColor.name() + ";"
-                                           "border: 2px solid " + colors.foregroundColor.name() + ";"
+        "QRadioButton::indicator:checked { background-color: " + settings.theme.foregroundColor.name() + ";"
+                                           "border: 2px solid " + settings.theme.foregroundColor.name() + ";"
                                            "border-radius: 6px; }"
 
-        "QRadioButton::indicator:unchecked { background-color: " + colors.backgroundColor.name() + ";"
-                                             "border: 2px solid " + colors.foregroundColor.name() + ";"
+        "QRadioButton::indicator:unchecked { background-color: " + settings.theme.backgroundColor.name() + ";"
+                                             "border: 2px solid " + settings.theme.foregroundColor.name() + ";"
                                              "border-radius: 6px;}"
     );
 
-    ui->tabWidget->setTheme(colors.backgroundColor.name(), colors.foregroundColor.name());
+    ui->tabWidget->setTheme(settings.theme.backgroundColor.name(), settings.theme.foregroundColor.name());
 }
 
