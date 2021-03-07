@@ -34,13 +34,12 @@ MainWindow::MainWindow(QWidget* parent) :
         QApplication::instance()->installEventFilter(this);
         ui->setupUi(this);
         show();
+        loadSettings();
         ui->tabWidget->setMainWindow(this);
         ui->magicButton->setIconSize(0.8*ui->magicButton->size());
         setupTextArea();
         setupTabWidget();
         setWindowTitle("LightPad");
-        setTabWidth(tabWidth);
-        setTheme(colors);
 }
 
 void MainWindow::setRowCol(int row, int col) {
@@ -59,6 +58,7 @@ void MainWindow::setLanguageHighlightLabel(QString text) {
 }
 
 MainWindow::~MainWindow() {
+    saveSettings();
     delete ui;
 }
 
@@ -72,12 +72,18 @@ void MainWindow::closeEvent( QCloseEvent* event ) {
 
 void MainWindow::loadSettings()
 {
-    
+    if (QFileInfo(settingsPath).exists())
+        settings.loadSettings(settingsPath);
+
+    else {
+        setTabWidth(tabWidth);
+        setTheme(colors);
+    }
 }
 
 void MainWindow::saveSettings()
 {
-    
+    settings.saveSettings(settingsPath);
 }
 
 template<typename... Args>

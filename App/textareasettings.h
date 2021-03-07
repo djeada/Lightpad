@@ -17,15 +17,13 @@ struct TextAreaSettings {
     bool matchingBracketsHighlighted;
     int tabWidth;
 
-    TextAreaSettings() :
-      mainFont(QApplication::font()),
-      autoIndent(true),
-      showLineNumberArea(true),
-      lineHighlighted(true),
-      matchingBracketsHighlighted(true),
-      tabWidth(4) {
+    TextAreaSettings();
+    void loadSettings(const QString& path);
+    void saveSettings(const QString& path);
 
-    };
+    private:
+        void read(const QJsonObject& json);
+        void write(QJsonObject& json);
 };
 
 #endif // TEXTAREASETTINGS_H

@@ -41,7 +41,9 @@ SOURCES     = main.cpp \
       runconfigurations.cpp \
       shortcuts.cpp \
       terminal.cpp \
-      textarea.cpp
+      textarea.cpp \
+      textareasettings.cpp \
+      theme.cpp
 
 FORMS += \
     colorpicker.ui \

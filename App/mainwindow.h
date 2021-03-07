@@ -114,5 +114,6 @@ private:
 
 const int defaultTabWidth = 4;
 const int defaultFontSize = 12;
+const QString settingsPath = "settings.json";
 
 #endif // MAINWINDOW_H
