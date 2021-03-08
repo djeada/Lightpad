@@ -16,16 +16,7 @@ Prefrences::Prefrences(MainWindow *parent) :
     ui->setupUi(this);
 
     setWindowTitle("Lightpad Prefrences");
-
-    if (parentWindow) {
-        colorPicker = new ColorPicker(parentWindow->getTheme(), parentWindow);
-        prefrencesView =  new PrefrencesView(parent);
-        prefrencesEditor = new PrefrencesEditor(parent);
-        ui->tabWidget->addTab(prefrencesView, "View");
-        ui->tabWidget->addTab(prefrencesEditor, "Editor");
-        ui->tabWidget->addTab(colorPicker, "Font " + QString(u8"\uFF06") + " Colors");
-    }
-
+    setupParent();
     show();
 }
 
@@ -49,3 +40,16 @@ void Prefrences::on_toolButton_clicked()
 {
     close();
 }
+
+void Prefrences::setupParent()
+{
+    if (parentWindow) {
+        colorPicker = new ColorPicker(parentWindow->getTheme(), parentWindow);
+        prefrencesView =  new PrefrencesView(parentWindow);
+        prefrencesEditor = new PrefrencesEditor(parentWindow);
+        ui->tabWidget->addTab(prefrencesView, "View");
+        ui->tabWidget->addTab(prefrencesEditor, "Editor");
+        ui->tabWidget->addTab(colorPicker, "Font " + QString(u8"\uFF06") + " Colors");
+    }
+}
+

@@ -33,6 +33,7 @@ private:
     ColorPicker* colorPicker;
     PrefrencesView* prefrencesView;
     PrefrencesEditor* prefrencesEditor;
+    void setupParent();
 
 };
 

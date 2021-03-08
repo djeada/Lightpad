@@ -8,6 +8,13 @@ PrefrencesView::PrefrencesView(MainWindow* parent) :
     parentWindow(parent)
 {
     ui->setupUi(this);
+
+    if (parentWindow) {
+        auto settings = parentWindow->getSettings();
+        ui->checkBoxBracket->setChecked(settings.matchingBracketsHighlighted);
+        ui->checkBoxCurrentLine->setChecked(settings.lineHighlighted);
+        ui->checkBoxLineNumbers->setChecked(settings.showLineNumberArea);
+    }
 }
 
 PrefrencesView::~PrefrencesView()

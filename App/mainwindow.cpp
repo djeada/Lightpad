@@ -18,7 +18,6 @@
 #include "prefrences.h"
 #include "runconfigurations.h"
 
-
 MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
@@ -32,11 +31,11 @@ MainWindow::MainWindow(QWidget* parent) :
         QApplication::instance()->installEventFilter(this);
         ui->setupUi(this);
         show();
-        loadSettings();
         ui->tabWidget->setMainWindow(this);
         ui->magicButton->setIconSize(0.8*ui->magicButton->size());
         setupTextArea();
         setupTabWidget();
+        loadSettings();
         setWindowTitle("LightPad");
 }
 
@@ -77,11 +76,13 @@ void MainWindow::loadSettings()
     else
         setTabWidth(defaultTabWidth);
 
+    updateAllTextAreas(&TextArea::loadSettings, settings);
     setTheme(settings.theme);
 }
 
 void MainWindow::saveSettings()
 {
+    qDebug() << settings.showLineNumberArea;
     settings.saveSettings(settingsPath);
 }
 
@@ -229,6 +230,11 @@ Theme MainWindow::getTheme()
 
 QFont MainWindow::getFont() {
     return settings.mainFont;
+}
+
+TextAreaSettings MainWindow::getSettings()
+{
+    return settings;
 }
 
 void MainWindow::setTabWidth(int width)
@@ -468,16 +474,19 @@ void MainWindow::setFont(QFont newFont)
 void MainWindow::showLineNumbers(bool flag)
 {
     updateAllTextAreas(&TextArea::showLineNumbers, flag);
+    settings.showLineNumberArea = flag;
 }
 
 void MainWindow::highlihtCurrentLine(bool flag)
 {
     updateAllTextAreas(&TextArea::highlihtCurrentLine, flag);
+    settings.lineHighlighted = flag;
 }
 
 void MainWindow::highlihtMatchingBracket(bool flag)
 {
     updateAllTextAreas(&TextArea::highlihtMatchingBracket, flag);
+    settings.matchingBracketsHighlighted = flag;
 }
 
 void MainWindow::runCurrentScript()

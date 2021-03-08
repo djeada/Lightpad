@@ -146,7 +146,7 @@ TextArea::TextArea(QWidget* parent) :
         show();
 }
 
-TextArea::TextArea(TextAreaSettings settings, QWidget* parent) :
+TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent) :
     QPlainTextEdit(parent),
     mainWindow(nullptr),
     highlightColor(settings.theme.highlightColor),
@@ -266,6 +266,7 @@ void TextArea::setAutoIdent(bool flag)
 void TextArea::showLineNumbers(bool flag)
 {
     showLineNumberArea = flag;
+    qDebug() << "SHOW: " << flag;
     resizeEvent(new QResizeEvent(size(), size()));
     setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
 }
@@ -280,6 +281,18 @@ void TextArea::highlihtMatchingBracket(bool flag)
 {
     matchingBracketsHighlighted = flag;
     updateCursorPositionChangedCallbacks();
+}
+
+void TextArea::loadSettings(const TextAreaSettings settings)
+{
+    highlightColor = settings.theme.highlightColor;
+    lineNumberAreaPenColor = settings.theme.lineNumberAreaColor;
+    defaultPenColor = settings.theme.foregroundColor;
+    backgroundColor = settings.theme.backgroundColor;
+    setAutoIdent(settings.autoIndent);
+    showLineNumbers(settings.showLineNumberArea);
+    highlihtCurrentLine(settings.lineHighlighted);
+    highlihtMatchingBracket(settings.matchingBracketsHighlighted);
 }
 
 QString TextArea::getSearchWord()

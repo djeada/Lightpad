@@ -40,7 +40,6 @@ void TextAreaSettings::loadSettings(const QString &path)
 
 void TextAreaSettings::saveSettings(const QString &path)
 {
-    qDebug() << path;
     if (QFileInfo(path).completeSuffix() != "json") {
         qWarning("Wrong file format.");
         return;
@@ -87,13 +86,13 @@ void TextAreaSettings::read(const QJsonObject &json)
         autoIndent = json["autoIndent"].toBool();
 
     if (json.contains("showLineNumberArea") && json["showLineNumberArea"].isBool())
-        fontItalic = json["showLineNumberArea"].toBool();
+        showLineNumberArea = json["showLineNumberArea"].toBool();
 
     if (json.contains("lineHighlighted") && json["lineHighlighted"].isBool())
-        autoIndent = json["lineHighlighted"].toBool();
+        lineHighlighted = json["lineHighlighted"].toBool();
 
     if (json.contains("matchingBracketsHighlighted") && json["matchingBracketsHighlighted"].isBool())
-        fontItalic = json["matchingBracketsHighlighted"].toBool();
+        matchingBracketsHighlighted = json["matchingBracketsHighlighted"].toBool();
 
     if (json.contains("tabWidth") && json["tabWidth"].isDouble())
         tabWidth = json["tabWidth"].toInt();

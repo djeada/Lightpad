@@ -46,6 +46,7 @@ class MainWindow : public QMainWindow {
         TextArea* getCurrentTextArea();
         Theme getTheme();
         QFont getFont();
+        TextAreaSettings getSettings();
 
     private slots:
         void on_actionQuit_triggered();

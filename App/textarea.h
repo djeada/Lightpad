@@ -13,22 +13,23 @@ class TextArea : public QPlainTextEdit {
 
     public:
         TextArea(QWidget* parent = nullptr);
-        TextArea(TextAreaSettings settings, QWidget* parent = nullptr);
+        TextArea(const TextAreaSettings& settings, QWidget* parent = nullptr);
         void lineNumberAreaPaintEvent(QPaintEvent* event);
         void updateSyntaxHighlightTags(QString searchKey = "", QString chosenLang = "");
-        int lineNumberAreaWidth();
         void increaseFontSize();
         void decreaseFontSize();
         void setFontSize(int size);
         void setFont(QFont font);
         void setMainWindow(MainWindow* window);
-        int fontSize();
         void setTabWidth(int width);
         void removeIconUnsaved();
         void setAutoIdent(bool flag);
         void showLineNumbers(bool flag);
         void highlihtCurrentLine(bool flag);
         void highlihtMatchingBracket(bool flag);
+        void loadSettings(const TextAreaSettings settings);
+        int lineNumberAreaWidth();
+        int fontSize();
         QString getSearchWord();
         bool changesUnsaved();
 
@@ -36,6 +37,7 @@ class TextArea : public QPlainTextEdit {
         void resizeEvent(QResizeEvent* event) override;
         void keyPressEvent(QKeyEvent* event) override;
         void contextMenuEvent(QContextMenuEvent* event) override;
+
     private:
         MainWindow* mainWindow;
         QWidget* lineNumberArea;
