@@ -1,24 +1,25 @@
-#include <QPainter>
-#include <QTextBlock>
-#include <QDebug>
-#include <QRegularExpression>
-#include <QFileInfo>
-#include <QTextCursor>
 #include <QApplication>
-#include <QStackedWidget>
+#include <QDebug>
+#include <QFileInfo>
 #include <QMenu>
+#include <QPainter>
+#include <QRegularExpression>
+#include <QStackedWidget>
+#include <QTextBlock>
+#include <QTextCursor>
 
-#include "textarea.h"
-#include "mainwindow.h"
 #include "lightpadpage.h"
-#include "lightpadtabwidget.h"
 #include "lightpadsyntaxhighlighter.h"
+#include "lightpadtabwidget.h"
+#include "mainwindow.h"
+#include "textarea.h"
 #include "textareasettings.h"
 
-QMap<QString, Lang> convertStrToEnum = {{"cpp", Lang::cpp}, {"h", Lang::cpp}, {"js", Lang::js}, {"py", Lang::py}};
-QMap<QChar, QChar> brackets = {{'{', '}'}, {'(', ')'}, {'[', ']'}};
+QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp }, { "js", Lang::js }, { "py", Lang::py } };
+QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };
 
-static int findClosingParentheses(const QString& text, int pos, QChar startStr, QChar endStr) {
+static int findClosingParentheses(const QString& text, int pos, QChar startStr, QChar endStr)
+{
 
     int counter = 1;
 
@@ -37,12 +38,13 @@ static int findClosingParentheses(const QString& text, int pos, QChar startStr, 
     return pos;
 }
 
-static int findOpeningParentheses(const QString& text, int pos, QChar startStr, QChar endStr) {
+static int findOpeningParentheses(const QString& text, int pos, QChar startStr, QChar endStr)
+{
 
     int counter = 1;
     pos--;
 
-    while (counter > 0  && pos > 0) {
+    while (counter > 0 && pos > 0) {
         auto chr = text[--pos];
         if (chr == startStr)
             counter--;
@@ -57,8 +59,8 @@ static int findOpeningParentheses(const QString& text, int pos, QChar startStr, 
     return ++pos;
 }
 
-
-static int leadingSpaces(const QString& str, int tabWidth) {
+static int leadingSpaces(const QString& str, int tabWidth)
+{
 
     int n = 0;
 
@@ -75,7 +77,8 @@ static int leadingSpaces(const QString& str, int tabWidth) {
     return str.size();
 }
 
-static bool isLastNonSpaceCharacterOpenBrace(const QString& str) {
+static bool isLastNonSpaceCharacterOpenBrace(const QString& str)
+{
 
     for (int i = str.size() - 1; i >= 0; i--) {
         if (!str[i].isSpace() && str[i] == '{')
@@ -85,7 +88,8 @@ static bool isLastNonSpaceCharacterOpenBrace(const QString& str) {
     return false;
 }
 
-static int numberOfDigits(int x) {
+static int numberOfDigits(int x)
+{
 
     if (x == 0)
         return 1;
@@ -94,7 +98,6 @@ static int numberOfDigits(int x) {
 
     if (x < 0)
         x *= -1;
-
 
     while (x > 0) {
         x /= 10;
@@ -105,68 +108,74 @@ static int numberOfDigits(int x) {
 }
 
 class LineNumberArea : public QWidget {
-    public:
-        LineNumberArea(TextArea* editor) : QWidget(editor), textArea(editor)
-        {}
+public:
+    LineNumberArea(TextArea* editor)
+        : QWidget(editor)
+        , textArea(editor)
+    {
+    }
 
-        QSize sizeHint() const override {
-            return QSize(textArea->lineNumberAreaWidth(), 0);
-        }
+    QSize sizeHint() const override
+    {
+        return QSize(textArea->lineNumberAreaWidth(), 0);
+    }
 
-    protected:
-        void paintEvent(QPaintEvent* event) override {
-            textArea->lineNumberAreaPaintEvent(event);
-        }
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        textArea->lineNumberAreaPaintEvent(event);
+    }
 
-    private:
-        TextArea* textArea;
+private:
+    TextArea* textArea;
 };
 
-TextArea::TextArea(QWidget* parent) :
-    QPlainTextEdit(parent),
-    mainWindow(nullptr),
-    highlightColor(QColor(Qt::green).darker(250)),
-    lineNumberAreaPenColor(QColor(Qt::gray).lighter(150)),
-    defaultPenColor(QColor(Qt::white)),
-    backgroundColor(QColor(Qt::gray).darker(200)),
-    bufferText(""),
-    highlightLang(""),
-    syntaxHighlighter(nullptr),
-    searchWord(""),
-    areChangesUnsaved(false),
-    autoIndent(true),
-    showLineNumberArea(true),
-    lineHighlighted(true),
-    matchingBracketsHighlighted(true),
-    prevWordCount(1)
-     {       
-        setupTextArea();
-        mainFont = QApplication::font();
-        document()->setDefaultFont(mainFont);
-        show();
+TextArea::TextArea(QWidget* parent)
+    : QPlainTextEdit(parent)
+    , mainWindow(nullptr)
+    , highlightColor(QColor(Qt::green).darker(250))
+    , lineNumberAreaPenColor(QColor(Qt::gray).lighter(150))
+    , defaultPenColor(QColor(Qt::white))
+    , backgroundColor(QColor(Qt::gray).darker(200))
+    , bufferText("")
+    , highlightLang("")
+    , syntaxHighlighter(nullptr)
+    , searchWord("")
+    , areChangesUnsaved(false)
+    , autoIndent(true)
+    , showLineNumberArea(true)
+    , lineHighlighted(true)
+    , matchingBracketsHighlighted(true)
+    , prevWordCount(1)
+{
+    setupTextArea();
+    mainFont = QApplication::font();
+    document()->setDefaultFont(mainFont);
+    show();
 }
 
-TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent) :
-    QPlainTextEdit(parent),
-    mainWindow(nullptr),
-    highlightColor(settings.theme.highlightColor),
-    lineNumberAreaPenColor(settings.theme.lineNumberAreaColor),
-    defaultPenColor(settings.theme.foregroundColor),
-    backgroundColor(settings.theme.backgroundColor),
-    bufferText(""),
-    highlightLang(""),
-    syntaxHighlighter(nullptr),
-    searchWord(""),
-    areChangesUnsaved(false),
-    autoIndent(settings.autoIndent),
-    showLineNumberArea(settings.showLineNumberArea),
-    lineHighlighted(settings.lineHighlighted),
-    matchingBracketsHighlighted(settings.matchingBracketsHighlighted),
-    prevWordCount(1) {
-        setupTextArea();
-        mainFont = settings.mainFont;
-        document()->setDefaultFont(mainFont);
-        show();
+TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent)
+    : QPlainTextEdit(parent)
+    , mainWindow(nullptr)
+    , highlightColor(settings.theme.highlightColor)
+    , lineNumberAreaPenColor(settings.theme.lineNumberAreaColor)
+    , defaultPenColor(settings.theme.foregroundColor)
+    , backgroundColor(settings.theme.backgroundColor)
+    , bufferText("")
+    , highlightLang("")
+    , syntaxHighlighter(nullptr)
+    , searchWord("")
+    , areChangesUnsaved(false)
+    , autoIndent(settings.autoIndent)
+    , showLineNumberArea(settings.showLineNumberArea)
+    , lineHighlighted(settings.lineHighlighted)
+    , matchingBracketsHighlighted(settings.matchingBracketsHighlighted)
+    , prevWordCount(1)
+{
+    setupTextArea();
+    mainFont = settings.mainFont;
+    document()->setDefaultFont(mainFont);
+    show();
 }
 
 void TextArea::setupTextArea()
@@ -177,7 +186,7 @@ void TextArea::setupTextArea()
         setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
     });
 
-    connect(this, &TextArea::updateRequest, this, [&] (const QRect &rect, int dy) {
+    connect(this, &TextArea::updateRequest, this, [&](const QRect& rect, int dy) {
         if (dy)
             lineNumberArea->scroll(0, dy);
         else
@@ -199,10 +208,11 @@ void TextArea::setupTextArea()
     clearLineHighlight();
 }
 
-int TextArea::lineNumberAreaWidth() {
+int TextArea::lineNumberAreaWidth()
+{
     if (showLineNumberArea) {
         QFontMetrics fm(mainFont);
-        return 3 + fm.horizontalAdvance(QLatin1Char('9'))*  1.8*  numberOfDigits(blockCount());
+        return 3 + fm.horizontalAdvance(QLatin1Char('9')) * 1.8 * numberOfDigits(blockCount());
     }
 
     return 0;
@@ -218,7 +228,8 @@ void TextArea::decreaseFontSize()
     setFontSize(mainFont.pointSize() - 1);
 }
 
-void TextArea::setFontSize(int size) {
+void TextArea::setFontSize(int size)
+{
     auto doc = document();
 
     if (doc) {
@@ -233,7 +244,7 @@ void TextArea::setFont(QFont font)
     auto doc = document();
 
     if (doc)
-      doc->setDefaultFont(font);
+        doc->setDefaultFont(font);
 }
 
 void TextArea::setMainWindow(MainWindow* window)
@@ -249,7 +260,7 @@ int TextArea::fontSize()
 void TextArea::setTabWidth(int width)
 {
     QFontMetrics metrics(mainFont);
-   setTabStopDistance(QFontMetricsF(mainFont).horizontalAdvance(' ') * width);
+    setTabStopDistance(QFontMetricsF(mainFont).horizontalAdvance(' ') * width);
 }
 
 void TextArea::removeIconUnsaved()
@@ -273,8 +284,8 @@ void TextArea::showLineNumbers(bool flag)
 
 void TextArea::highlihtCurrentLine(bool flag)
 {
-   lineHighlighted = flag;
-   updateCursorPositionChangedCallbacks();
+    lineHighlighted = flag;
+    updateCursorPositionChangedCallbacks();
 }
 
 void TextArea::highlihtMatchingBracket(bool flag)
@@ -305,17 +316,19 @@ bool TextArea::changesUnsaved()
     return areChangesUnsaved;
 }
 
-void TextArea::resizeEvent(QResizeEvent* e) {
+void TextArea::resizeEvent(QResizeEvent* e)
+{
     QPlainTextEdit::resizeEvent(e);
     lineNumberArea->setGeometry(0, 0, lineNumberAreaWidth(), height());
 }
 
-void TextArea::keyPressEvent(QKeyEvent* keyEvent) {
+void TextArea::keyPressEvent(QKeyEvent* keyEvent)
+{
 
     if (keyEvent->matches(QKeySequence::ZoomOut) || keyEvent->matches(QKeySequence::ZoomIn)) {
         mainWindow->keyPressEvent(keyEvent);
         return;
-     }
+    }
 
     if (keyEvent->key() == Qt::Key_BraceLeft) {
         closeParentheses("{", "}");
@@ -328,7 +341,7 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent) {
     }
 
     else if (keyEvent->key() == Qt::Key_BracketLeft) {
-        closeParentheses("[","]");
+        closeParentheses("[", "]");
         return;
     }
 
@@ -344,11 +357,11 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent) {
 
     QPlainTextEdit::keyPressEvent(keyEvent);
 
-    if (keyEvent->key()==Qt::Key_Enter || keyEvent->key()==Qt::Key_Return)
+    if (keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return)
         handleKeyEnterPressed();
 }
 
-void TextArea::contextMenuEvent(QContextMenuEvent *event)
+void TextArea::contextMenuEvent(QContextMenuEvent* event)
 {
     auto menu = createStandardContextMenu();
     menu->addSeparator();
@@ -367,7 +380,7 @@ void TextArea::setTabWidgetIcon(QIcon icon)
 
         if (stackedWidget) {
 
-            auto tabWidget =  qobject_cast<LightpadTabWidget*>(parentWidget()->parentWidget()->parentWidget());
+            auto tabWidget = qobject_cast<LightpadTabWidget*>(parentWidget()->parentWidget()->parentWidget());
 
             if (tabWidget) {
                 auto index = tabWidget->indexOf(page);
@@ -458,9 +471,8 @@ void TextArea::updateRowColDisplay()
 
 void TextArea::drawMatchingBrackets()
 {
-    auto _drawMatchingBrackets  = [&](QTextCursor::MoveOperation op, const QChar& startStr,
-            const QChar& endStr, std::function<int(const QString&, int, QChar, QChar)> function){
-        
+    auto _drawMatchingBrackets = [&](QTextCursor::MoveOperation op, const QChar& startStr,
+                                     const QChar& endStr, std::function<int(const QString&, int, QChar, QChar)> function) {
         QList<QTextEdit::ExtraSelection> extraSelections;
 
         if (lineHighlighted) {
@@ -491,7 +503,7 @@ void TextArea::drawMatchingBrackets()
 
     auto cursor = textCursor();
     auto result = cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
-    auto startStr =  result ? cursor.selectedText().front() : QChar(' ');
+    auto startStr = result ? cursor.selectedText().front() : QChar(' ');
 
     cursor = textCursor();
     result = cursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
@@ -543,7 +555,8 @@ void TextArea::updateCursorPositionChangedCallbacks()
     emit cursorPositionChanged();
 }
 
-void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event) {
+void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event)
+{
     QPainter painter(lineNumberArea);
     painter.setFont(mainFont);
 
@@ -573,7 +586,8 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event) {
     }
 }
 
-void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) {
+void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang)
+{
 
     searchWord = searchKey;
 
@@ -589,18 +603,18 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang) 
 
     if (document() && convertStrToEnum.contains(highlightLang)) {
 
-        switch(convertStrToEnum[highlightLang]) {
-            case Lang::cpp:
-                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(colors, searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
-                break;
+        switch (convertStrToEnum[highlightLang]) {
+        case Lang::cpp:
+            syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesCpp(colors, searchKey), QRegularExpression(QStringLiteral("/\\*")), QRegularExpression(QStringLiteral("\\*/")), document());
+            break;
 
-            case Lang::js:
-                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesJs(colors, searchKey), QRegularExpression(QStringLiteral("/\\*")),  QRegularExpression(QStringLiteral("\\*/")), document());
-                break;
+        case Lang::js:
+            syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesJs(colors, searchKey), QRegularExpression(QStringLiteral("/\\*")), QRegularExpression(QStringLiteral("\\*/")), document());
+            break;
 
-            case Lang::py:
-                syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesPy(colors, searchKey), QRegularExpression(QStringLiteral("/'''")),  QRegularExpression(QStringLiteral("\\'''")), document());
-                break;
-         }
+        case Lang::py:
+            syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesPy(colors, searchKey), QRegularExpression(QStringLiteral("/'''")), QRegularExpression(QStringLiteral("\\'''")), document());
+            break;
+        }
     }
 }

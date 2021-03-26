@@ -7,7 +7,7 @@ class PopupTabWidth;
 class MainWindow;
 
 namespace Ui {
-    class PrefrencesEditor;
+class PrefrencesEditor;
 }
 
 class PrefrencesEditor : public QWidget {

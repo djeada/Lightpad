@@ -1,23 +1,23 @@
 #include "textareasettings.h"
 
-#include <QJsonObject>
 #include <QFile>
-#include <QJsonDocument>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 const int defaultTabWidth = 4;
 
-TextAreaSettings::TextAreaSettings() :
-  mainFont(QApplication::font()),
-  autoIndent(true),
-  showLineNumberArea(true),
-  lineHighlighted(true),
-  matchingBracketsHighlighted(true),
-  tabWidth(defaultTabWidth) {
+TextAreaSettings::TextAreaSettings()
+    : mainFont(QApplication::font())
+    , autoIndent(true)
+    , showLineNumberArea(true)
+    , lineHighlighted(true)
+    , matchingBracketsHighlighted(true)
+    , tabWidth(defaultTabWidth){
 
-};
+    };
 
-void TextAreaSettings::loadSettings(const QString &path)
+void TextAreaSettings::loadSettings(const QString& path)
 {
     if (QFileInfo(path).completeSuffix() != "json") {
         qWarning("Wrong file format.");
@@ -38,7 +38,7 @@ void TextAreaSettings::loadSettings(const QString &path)
     read(loadDoc.object());
 }
 
-void TextAreaSettings::saveSettings(const QString &path)
+void TextAreaSettings::saveSettings(const QString& path)
 {
     if (QFileInfo(path).completeSuffix() != "json") {
         qWarning("Wrong file format.");
@@ -58,7 +58,7 @@ void TextAreaSettings::saveSettings(const QString &path)
     saveFile.write(QJsonDocument(jsonObject).toJson());
 }
 
-void TextAreaSettings::read(const QJsonObject &json)
+void TextAreaSettings::read(const QJsonObject& json)
 {
     QString fontFamily = QApplication::font().family();
     int fontPontSize = QApplication::font().pointSize();
@@ -66,7 +66,7 @@ void TextAreaSettings::read(const QJsonObject &json)
     bool fontItalic = false;
 
     if (json.contains("fontFamily") && json["fontFamily"].isString())
-       fontFamily = json["fontFamily"].toString();
+        fontFamily = json["fontFamily"].toString();
 
     if (json.contains("fontPontSize") && json["fontPontSize"].isDouble())
         fontPontSize = json["fontPontSize"].toInt();
@@ -80,7 +80,7 @@ void TextAreaSettings::read(const QJsonObject &json)
     mainFont = QFont(fontFamily, fontPontSize, fontWeight, fontItalic);
 
     if (json.contains("theme"))
-       theme.read(json);
+        theme.read(json);
 
     if (json.contains("autoIndent") && json["autoIndent"].isBool())
         autoIndent = json["autoIndent"].toBool();
@@ -98,7 +98,7 @@ void TextAreaSettings::read(const QJsonObject &json)
         tabWidth = json["tabWidth"].toInt();
 }
 
-void TextAreaSettings::write(QJsonObject &json)
+void TextAreaSettings::write(QJsonObject& json)
 {
 
     json["fontFamily"] = mainFont.family();
@@ -115,5 +115,4 @@ void TextAreaSettings::write(QJsonObject &json)
     json["lineHighlighted"] = lineHighlighted;
     json["matchingBracketsHighlighted"] = showLineNumberArea;
     json["tabWidth"] = tabWidth;
-
 }

@@ -1,10 +1,10 @@
 #ifndef TEXTAREASETTINGS_H
 #define TEXTAREASETTINGS_H
 
-#include <QColor>
-#include <QString>
-#include <QFont>
 #include <QApplication>
+#include <QColor>
+#include <QFont>
+#include <QString>
 
 #include "theme.h"
 
@@ -21,9 +21,9 @@ struct TextAreaSettings {
     void loadSettings(const QString& path);
     void saveSettings(const QString& path);
 
-    private:
-        void read(const QJsonObject& json);
-        void write(QJsonObject& json);
+private:
+    void read(const QJsonObject& json);
+    void write(QJsonObject& json);
 };
 
 #endif // TEXTAREASETTINGS_H

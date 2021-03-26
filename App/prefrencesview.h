@@ -9,8 +9,7 @@ namespace Ui {
 class PrefrencesView;
 }
 
-class PrefrencesView : public QWidget
-{
+class PrefrencesView : public QWidget {
     Q_OBJECT
 
 public:
@@ -21,9 +20,9 @@ private slots:
     void on_checkBoxLineNumbers_clicked(bool checked);
     void on_checkBoxCurrentLine_clicked(bool checked);
     void on_checkBoxBracket_clicked(bool checked);
-    
+
 private:
-    Ui::PrefrencesView *ui;
+    Ui::PrefrencesView* ui;
     MainWindow* parentWindow;
 };
 

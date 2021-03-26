@@ -1,10 +1,10 @@
 #include "runconfigurations.h"
 #include "ui_runconfigurations.h"
 
-#include <QPainter>
-#include <QStyleOption>
 #include <QDir>
 #include <QFileDialog>
+#include <QPainter>
+#include <QStyleOption>
 
 LineEditIcon::LineEditIcon(QWidget* parent)
     : QLineEdit(parent)
@@ -63,7 +63,7 @@ void LineEditIcon::connectFunctionWithIcon(void (RunConfigurations::*f)())
     });
 }
 
-void LineEditIcon::setText(const QString &text)
+void LineEditIcon::setText(const QString& text)
 {
     edit.setText(text);
     edit.setCursorPosition(0);
@@ -74,9 +74,9 @@ QString LineEditIcon::text()
     return edit.text();
 }
 
-RunConfigurations::RunConfigurations(QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::runconfigurations)
+RunConfigurations::RunConfigurations(QWidget* parent)
+    : QDialog(parent)
+    , ui(new Ui::runconfigurations)
 {
     ui->setupUi(this);
     ui->editScriptPath->setIcon(QIcon(":/resources/icons/folder.png"));
@@ -96,7 +96,6 @@ void RunConfigurations::choosePath()
 {
     auto scriptPath = QFileDialog::getOpenFileName(this, tr("Select script path"), QDir::homePath());
     ui->editScriptPath->setText(scriptPath);
-
 }
 
 QString RunConfigurations::getScriptPath()
@@ -108,5 +107,3 @@ QString RunConfigurations::getParameters()
 {
     return ui->editParameters->text();
 }
-
-

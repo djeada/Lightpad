@@ -7,12 +7,11 @@ namespace Ui {
 class Terminal;
 }
 
-class Terminal : public QWidget
-{
+class Terminal : public QWidget {
     Q_OBJECT
 
 public:
-    explicit Terminal(QWidget *parent = nullptr);
+    explicit Terminal(QWidget* parent = nullptr);
     ~Terminal();
 
 private slots:
@@ -20,7 +19,7 @@ private slots:
 
 private:
     void setupTextEdit();
-    Ui::Terminal *ui;
+    Ui::Terminal* ui;
 };
 
 #endif // TERMINAL_H

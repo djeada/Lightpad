@@ -1,61 +1,66 @@
 #include "lightpadpage.h"
 #include "mainwindow.h"
-#include <QHBoxLayout>
 #include <QDebug>
-#include <QMenu>
+#include <QHBoxLayout>
 #include <QLineEdit>
+#include <QMenu>
 
 class LineEdit : public QLineEdit {
 
     using QLineEdit::QLineEdit;
 
-    public:
-        LineEdit (QRect rect, QString filePath, QWidget* parent) :
-            QLineEdit(parent),
-            oldFilePath(filePath) {
-            show();
-            setGeometry(QRect(rect.x(), rect.y() + rect.height() + 1, 1.1*rect.width(), 1.1*rect.height()));
-            setFocus(Qt::MouseFocusReason);
-        }
+public:
+    LineEdit(QRect rect, QString filePath, QWidget* parent)
+        : QLineEdit(parent)
+        , oldFilePath(filePath)
+    {
+        show();
+        setGeometry(QRect(rect.x(), rect.y() + rect.height() + 1, 1.1 * rect.width(), 1.1 * rect.height()));
+        setFocus(Qt::MouseFocusReason);
+    }
 
-    protected:
-        void focusOutEvent(QFocusEvent *event) override {
-            Q_UNUSED(event);
+protected:
+    void focusOutEvent(QFocusEvent* event) override
+    {
+        Q_UNUSED(event);
 
-            LightpadTreeView* treeView = qobject_cast<LightpadTreeView*>(parentWidget());
+        LightpadTreeView* treeView = qobject_cast<LightpadTreeView*>(parentWidget());
 
-            if (treeView)
-                treeView->renameFile(oldFilePath, QFileInfo(oldFilePath).absoluteDir().path() + QDir::separator() + text());
+        if (treeView)
+            treeView->renameFile(oldFilePath, QFileInfo(oldFilePath).absoluteDir().path() + QDir::separator() + text());
 
+        close();
+    }
+
+    void keyPressEvent(QKeyEvent* event) override
+    {
+
+        if ((event->key() == Qt::Key_Enter) || (event->key() == Qt::Key_Return)) {
+            renameTreeViewEntry();
             close();
         }
 
-        void keyPressEvent(QKeyEvent *event) override {
+        else if (event->key() == Qt::Key_Escape)
+            close();
 
-            if( (event->key() == Qt::Key_Enter) || (event->key() == Qt::Key_Return)) {
-                renameTreeViewEntry();
-                close();
-            }
+        else
+            QLineEdit::keyPressEvent(event);
+    }
 
-            else if(event->key() == Qt::Key_Escape)
-                close();
+private:
+    QString oldFilePath;
 
-            else
-                QLineEdit::keyPressEvent(event);
-        }
+    void renameTreeViewEntry()
+    {
+        LightpadTreeView* treeView = qobject_cast<LightpadTreeView*>(parentWidget());
 
-    private:
-        QString oldFilePath;
-
-        void renameTreeViewEntry() {
-            LightpadTreeView* treeView = qobject_cast<LightpadTreeView*>(parentWidget());
-
-            if (treeView)
-                treeView->renameFile(oldFilePath, QFileInfo(oldFilePath).absoluteDir().path() + QDir::separator() + text());
-        }
+        if (treeView)
+            treeView->renameFile(oldFilePath, QFileInfo(oldFilePath).absoluteDir().path() + QDir::separator() + text());
+    }
 };
 
-QString addUniqueSuffix(const QString &fileName) {
+QString addUniqueSuffix(const QString& fileName)
+{
     if (!QFile::exists(fileName))
         return fileName;
 
@@ -70,7 +75,7 @@ QString addUniqueSuffix(const QString &fileName) {
     } else
         firstPart = fileName;
 
-    for (int ii = 1; ; ii++) {
+    for (int ii = 1;; ii++) {
         ret = QString("%1 (%2)%3").arg(firstPart).arg(ii).arg(secondPart);
         if (!QFile::exists(ret)) {
             return ret;
@@ -78,13 +83,14 @@ QString addUniqueSuffix(const QString &fileName) {
     }
 }
 
-LightpadTreeView::LightpadTreeView(LightpadPage* parent):
-    QTreeView(parent),
-    parentPage(parent) {
-
+LightpadTreeView::LightpadTreeView(LightpadPage* parent)
+    : QTreeView(parent)
+    , parentPage(parent)
+{
 }
 
-void LightpadTreeView::mouseReleaseEvent(QMouseEvent *e) {
+void LightpadTreeView::mouseReleaseEvent(QMouseEvent* e)
+{
 
     if (e->button() == Qt::RightButton) {
         QModelIndex idx = indexAt(e->pos());
@@ -94,7 +100,7 @@ void LightpadTreeView::mouseReleaseEvent(QMouseEvent *e) {
             m.addAction("Rename");
             m.addAction("Remove");
 
-            QAction *selected = m.exec(mapToGlobal(e->pos()));
+            QAction* selected = m.exec(mapToGlobal(e->pos()));
 
             if (selected) {
 
@@ -134,7 +140,6 @@ void LightpadTreeView::duplicateFile(QString filePath)
     }
 }
 
-
 void LightpadTreeView::removeFile(QString filePath)
 {
     if (QFileInfo(filePath).isFile()) {
@@ -145,45 +150,46 @@ void LightpadTreeView::removeFile(QString filePath)
     }
 }
 
-LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden) :
-    QWidget(parent),
-    mainWindow(nullptr),
-    filePath("") {
+LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
+    : QWidget(parent)
+    , mainWindow(nullptr)
+    , filePath("")
+{
 
-        auto* layoutHor = new QHBoxLayout(this);
+    auto* layoutHor = new QHBoxLayout(this);
 
-        treeView = new LightpadTreeView(this);
-        textArea = new TextArea(this);
+    treeView = new LightpadTreeView(this);
+    textArea = new TextArea(this);
 
-        layoutHor->addWidget(treeView);
-        layoutHor->addWidget(textArea);
+    layoutHor->addWidget(treeView);
+    layoutHor->addWidget(textArea);
 
-        if (treeViewHidden)
-            treeView->hide();
+    if (treeViewHidden)
+        treeView->hide();
 
-        layoutHor->setContentsMargins(0, 0, 0, 0);
-        layoutHor->setStretch(0, 0);
-        layoutHor->setStretch(1, 1);
+    layoutHor->setContentsMargins(0, 0, 0, 0);
+    layoutHor->setStretch(0, 0);
+    layoutHor->setStretch(1, 1);
 
-        setLayout(layoutHor);
-        updateModel();
+    setLayout(layoutHor);
+    updateModel();
 
-        QObject::connect(treeView, &QAbstractItemView::clicked, this, [&] (const QModelIndex &index) {
-            if (mainWindow) {
-                QString path = model->filePath(index);
-                mainWindow->openFileAndAddToNewTab(path);
-                treeView->clearSelection();
-                treeView->setCurrentIndex(index);
-            }
-        });
+    QObject::connect(treeView, &QAbstractItemView::clicked, this, [&](const QModelIndex& index) {
+        if (mainWindow) {
+            QString path = model->filePath(index);
+            mainWindow->openFileAndAddToNewTab(path);
+            treeView->clearSelection();
+            treeView->setCurrentIndex(index);
+        }
+    });
 }
 
-QTreeView *LightpadPage::getTreeView()
+QTreeView* LightpadPage::getTreeView()
 {
     return treeView;
 }
 
-TextArea *LightpadPage::getTextArea()
+TextArea* LightpadPage::getTextArea()
 {
     return textArea;
 }
@@ -198,15 +204,16 @@ void LightpadPage::setModelRootIndex(QString path)
     treeView->setRootIndex(model->index(path));
 }
 
-void LightpadPage::setMainWindow(MainWindow *window) {
+void LightpadPage::setMainWindow(MainWindow* window)
+{
 
-     mainWindow = window;
+    mainWindow = window;
 
-     if (textArea) {
-         textArea->setMainWindow(mainWindow);
-         textArea->setFontSize(mainWindow->getFontSize());
-         textArea->setTabWidth(mainWindow->getTabWidth());
-     }
+    if (textArea) {
+        textArea->setMainWindow(mainWindow);
+        textArea->setFontSize(mainWindow->getFontSize());
+        textArea->setTabWidth(mainWindow->getTabWidth());
+    }
 }
 
 void LightpadPage::setFilePath(QString path)
@@ -241,7 +248,7 @@ QString LightpadPage::getFilePath()
     return filePath;
 }
 
-QString LightpadPage::getFilePath(const QModelIndex &index)
+QString LightpadPage::getFilePath(const QModelIndex& index)
 {
     return model->filePath(index);
 }

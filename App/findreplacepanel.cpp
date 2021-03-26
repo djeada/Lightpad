@@ -1,17 +1,17 @@
 #include "findreplacepanel.h"
-#include "ui_findreplacepanel.h"
 #include "textarea.h"
+#include "ui_findreplacepanel.h"
 
-#include <QVBoxLayout>
 #include <QDebug>
 #include <QTextDocument>
+#include <QVBoxLayout>
 
-FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent) :
-    QWidget(parent),
-    document(nullptr),
-    textArea(nullptr),
-    ui(new Ui::FindReplacePanel),
-    onlyFind(onlyFind)
+FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget* parent)
+    : QWidget(parent)
+    , document(nullptr)
+    , textArea(nullptr)
+    , ui(new Ui::FindReplacePanel)
+    , onlyFind(onlyFind)
 {
     ui->setupUi(this);
 
@@ -27,7 +27,8 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent) :
     updateCounterLabels();
 }
 
-FindReplacePanel::~FindReplacePanel() {
+FindReplacePanel::~FindReplacePanel()
+{
     delete ui;
 }
 
@@ -48,12 +49,12 @@ void FindReplacePanel::setOnlyFind(bool flag)
     onlyFind = flag;
 }
 
-void FindReplacePanel::setDocument(QTextDocument *doc)
+void FindReplacePanel::setDocument(QTextDocument* doc)
 {
     document = doc;
 }
 
-void FindReplacePanel::setTextArea(TextArea *area)
+void FindReplacePanel::setTextArea(TextArea* area)
 {
     textArea = area;
 }
@@ -77,7 +78,7 @@ void FindReplacePanel::on_find_clicked()
         QTextCursor newCursor(textArea->document());
 
         if (textArea->getSearchWord() != searchWord)
-           findInitial(newCursor, searchWord);
+            findInitial(newCursor, searchWord);
 
         else
             findNext(newCursor, searchWord);
@@ -113,13 +114,13 @@ void FindReplacePanel::selectSearchWord(QTextCursor& cursor, int n, int offset)
 {
     cursor.setPosition(positions[++position] - offset);
 
-   if (!cursor.isNull()) {
-       cursor.clearSelection();
-       cursor.setPosition(positions[position] - offset + n, QTextCursor::KeepAnchor);
-       prevFormat = cursor.charFormat();
-       cursor.setCharFormat(colorFormat);
-       textArea->setTextCursor(cursor);
-   }
+    if (!cursor.isNull()) {
+        cursor.clearSelection();
+        cursor.setPosition(positions[position] - offset + n, QTextCursor::KeepAnchor);
+        prevFormat = cursor.charFormat();
+        cursor.setCharFormat(colorFormat);
+        textArea->setTextCursor(cursor);
+    }
 }
 
 void FindReplacePanel::clearSelectionFormat(QTextCursor& cursor, int n)
@@ -135,7 +136,7 @@ void FindReplacePanel::clearSelectionFormat(QTextCursor& cursor, int n)
     }
 }
 
-void FindReplacePanel::replaceNext(QTextCursor &cursor, const QString &replaceWord)
+void FindReplacePanel::replaceNext(QTextCursor& cursor, const QString& replaceWord)
 {
     if (!cursor.selectedText().isEmpty() && !positions.isEmpty()) {
         cursor.removeSelectedText();
@@ -198,8 +199,6 @@ void FindReplacePanel::findNext(QTextCursor& cursor, const QString& searchWord, 
     }
 }
 
-
-
 void FindReplacePanel::on_replaceAll_clicked()
 {
 
@@ -232,5 +231,4 @@ void FindReplacePanel::on_replaceAll_clicked()
         positions.clear();
         updateCounterLabels();
     }
-
 }

@@ -5,8 +5,7 @@
 
 #include "mainwindow.h"
 
-class Formatter
-{
+class Formatter {
 public:
     Formatter(QString text, Lang lang);
 

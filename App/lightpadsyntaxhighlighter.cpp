@@ -11,48 +11,53 @@ const QString keyWords_Py_0 = ":/resources/highlight/Python/0.txt";
 const QString keyWords_Py_1 = ":/resources/highlight/Python/1.txt";
 const QString keyWords_Py_2 = ":/resources/highlight/Python/2.txt";
 
-QString cutEndOfLine(QString line) {
+QString cutEndOfLine(QString line)
+{
     if (line.size() > 2) {
-        if (line.indexOf("\r") > 0 )
+        if (line.indexOf("\r") > 0)
             return line.left(line.size() - 2);
 
         else
             return line.left(line.size() - 1);
     }
 
-   return line;
+    return line;
 }
 
-static void loadkeywordPatterns(QStringList& keywordPatterns, QString path) {
+static void loadkeywordPatterns(QStringList& keywordPatterns, QString path)
+{
 
     QFile TextFile(path);
 
     if (TextFile.open(QIODevice::ReadOnly)) {
         while (!TextFile.atEnd()) {
-                QString line = TextFile.readLine();
-                keywordPatterns.append("\\b" +  cutEndOfLine(line) + "\\b");
-       }
+            QString line = TextFile.readLine();
+            keywordPatterns.append("\\b" + cutEndOfLine(line) + "\\b");
+        }
 
         TextFile.close();
     }
 }
 
-HighlightingRule::HighlightingRule(QRegularExpression pattern, QTextCharFormat format) :
-    pattern(pattern),
-    format(format) {
+HighlightingRule::HighlightingRule(QRegularExpression pattern, QTextCharFormat format)
+    : pattern(pattern)
+    , format(format)
+{
 }
 
-LightpadSyntaxHighlighter::LightpadSyntaxHighlighter(QVector<HighlightingRule> highlightingRules, QRegularExpression commentStartExpression, QRegularExpression commentEndExpression, QTextDocument* parent):
-    QSyntaxHighlighter(parent),
-    highlightingRules(highlightingRules),
-    commentStartExpression(commentStartExpression),
-    commentEndExpression(commentEndExpression) {
-        multiLineCommentFormat.setForeground(Qt::gray);
+LightpadSyntaxHighlighter::LightpadSyntaxHighlighter(QVector<HighlightingRule> highlightingRules, QRegularExpression commentStartExpression, QRegularExpression commentEndExpression, QTextDocument* parent)
+    : QSyntaxHighlighter(parent)
+    , highlightingRules(highlightingRules)
+    , commentStartExpression(commentStartExpression)
+    , commentEndExpression(commentEndExpression)
+{
+    multiLineCommentFormat.setForeground(Qt::gray);
 }
 
-void LightpadSyntaxHighlighter::highlightBlock(const QString &text) {
+void LightpadSyntaxHighlighter::highlightBlock(const QString& text)
+{
 
-    for (const HighlightingRule &rule : qAsConst(highlightingRules)) {
+    for (const HighlightingRule& rule : qAsConst(highlightingRules)) {
         QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
 
         while (matchIterator.hasNext()) {
@@ -61,49 +66,50 @@ void LightpadSyntaxHighlighter::highlightBlock(const QString &text) {
         }
     }
 
-   setCurrentBlockState(0);
+    setCurrentBlockState(0);
 
-   int startIndex = 0;
-   if (previousBlockState() != 1)
-       startIndex = text.indexOf(commentStartExpression);
+    int startIndex = 0;
+    if (previousBlockState() != 1)
+        startIndex = text.indexOf(commentStartExpression);
 
-   while (startIndex >= 0) {
-       QRegularExpressionMatch match = commentEndExpression.match(text, startIndex);
-       int endIndex = match.capturedStart();
-       int commentLength = 0;
+    while (startIndex >= 0) {
+        QRegularExpressionMatch match = commentEndExpression.match(text, startIndex);
+        int endIndex = match.capturedStart();
+        int commentLength = 0;
 
-       if (endIndex == -1) {
-           setCurrentBlockState(1);
-           commentLength = text.length() - startIndex;
-       }
+        if (endIndex == -1) {
+            setCurrentBlockState(1);
+            commentLength = text.length() - startIndex;
+        }
 
-       else
-           commentLength = endIndex - startIndex + match.capturedLength();
+        else
+            commentLength = endIndex - startIndex + match.capturedLength();
 
-       setFormat(startIndex, commentLength, multiLineCommentFormat);
-       startIndex = text.indexOf(commentStartExpression, startIndex + commentLength);
-   }
+        setFormat(startIndex, commentLength, multiLineCommentFormat);
+        startIndex = text.indexOf(commentStartExpression, startIndex + commentLength);
+    }
 }
 
-static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, const QStringList& keywordPatterns_0, const QStringList& keywordPatterns_1, const QStringList& keywordPatterns_2, const QString& searchKeyword, QRegularExpression singleLineComment, Theme colors){
+static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, const QStringList& keywordPatterns_0, const QStringList& keywordPatterns_1, const QStringList& keywordPatterns_2, const QString& searchKeyword, QRegularExpression singleLineComment, Theme colors)
+{
     QTextCharFormat keywordFormat;
     keywordFormat.setForeground(colors.keywordFormat_0);
     keywordFormat.setFontWeight(QFont::Bold);
 
-    for (auto &pattern : keywordPatterns_0)
+    for (auto& pattern : keywordPatterns_0)
         highlightingRules.append(HighlightingRule(QRegularExpression(pattern), keywordFormat));
 
     QTextCharFormat keywordFormat_1;
     keywordFormat_1.setForeground(colors.keywordFormat_1);
     keywordFormat_1.setFontWeight(QFont::Bold);
 
-    for (auto &pattern : keywordPatterns_1)
+    for (auto& pattern : keywordPatterns_1)
         highlightingRules.append(HighlightingRule(QRegularExpression(pattern), keywordFormat_1));
 
     QTextCharFormat keywordFormat_2;
     keywordFormat_2.setForeground(colors.keywordFormat_2);
 
-    for (auto &pattern : keywordPatterns_2)
+    for (auto& pattern : keywordPatterns_2)
         highlightingRules.append(HighlightingRule(QRegularExpression(pattern), keywordFormat_2));
 
     QTextCharFormat numberFormat;
@@ -132,10 +138,9 @@ static void loadHighlightingRules(QVector<HighlightingRule>& highlightingRules, 
     if (!searchKeyword.isEmpty()) {
         QTextCharFormat searchFormat;
         searchFormat.setBackground(QColor("#646464"));
-        highlightingRules.append(HighlightingRule(QRegularExpression(searchKeyword,  QRegularExpression::CaseInsensitiveOption), searchFormat));
+        highlightingRules.append(HighlightingRule(QRegularExpression(searchKeyword, QRegularExpression::CaseInsensitiveOption), searchFormat));
     }
 }
-
 
 QVector<HighlightingRule> highlightingRulesCpp(Theme colors, const QString& searchKeyword)
 {
@@ -184,4 +189,3 @@ QVector<HighlightingRule> highlightingRulesPy(Theme colors, const QString& searc
 
     return highlightingRules;
 }
-

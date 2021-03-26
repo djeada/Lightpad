@@ -1,11 +1,11 @@
 #include "prefrencesview.h"
-#include "ui_prefrencesview.h"
 #include "mainwindow.h"
+#include "ui_prefrencesview.h"
 
-PrefrencesView::PrefrencesView(MainWindow* parent) :
-    QWidget(nullptr),
-    ui(new Ui::PrefrencesView),
-    parentWindow(parent)
+PrefrencesView::PrefrencesView(MainWindow* parent)
+    : QWidget(nullptr)
+    , ui(new Ui::PrefrencesView)
+    , parentWindow(parent)
 {
     ui->setupUi(this);
 

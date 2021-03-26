@@ -1,34 +1,33 @@
 #ifndef LIGHTPADSYNTAXHIGHLIGHTER_H
 #define LIGHTPADSYNTAXHIGHLIGHTER_H
 
-#include <QSyntaxHighlighter>
-#include <QRegularExpression>
 #include "theme.h"
+#include <QRegularExpression>
+#include <QSyntaxHighlighter>
 
 class HighlightingRule {
 
-    public:
-        HighlightingRule(QRegularExpression pattern, QTextCharFormat format);
-        QRegularExpression pattern;
-        QTextCharFormat format;
+public:
+    HighlightingRule(QRegularExpression pattern, QTextCharFormat format);
+    QRegularExpression pattern;
+    QTextCharFormat format;
 };
 
-class LightpadSyntaxHighlighter : public QSyntaxHighlighter
-{
+class LightpadSyntaxHighlighter : public QSyntaxHighlighter {
     Q_OBJECT
 
-    public:
-        LightpadSyntaxHighlighter(QVector<HighlightingRule> highlightingRules, QRegularExpression commentStartExpression, QRegularExpression commentEndExpression, QTextDocument* parent = nullptr);
+public:
+    LightpadSyntaxHighlighter(QVector<HighlightingRule> highlightingRules, QRegularExpression commentStartExpression, QRegularExpression commentEndExpression, QTextDocument* parent = nullptr);
 
-    protected:
-        void highlightBlock(const QString &text) override;
+protected:
+    void highlightBlock(const QString& text) override;
 
-    private:
-        Theme colors;
-        QVector<HighlightingRule> highlightingRules;
-        QRegularExpression commentStartExpression;
-        QRegularExpression commentEndExpression;
-        QTextCharFormat multiLineCommentFormat;
+private:
+    Theme colors;
+    QVector<HighlightingRule> highlightingRules;
+    QRegularExpression commentStartExpression;
+    QRegularExpression commentEndExpression;
+    QTextCharFormat multiLineCommentFormat;
 };
 
 QString cutEndOfLine(QString line);

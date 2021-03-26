@@ -2,9 +2,9 @@
 #include "ui_terminal.h"
 #include <QStyle>
 
-Terminal::Terminal(QWidget* parent) :
-    QWidget(parent),
-    ui(new Ui::Terminal)
+Terminal::Terminal(QWidget* parent)
+    : QWidget(parent)
+    , ui(new Ui::Terminal)
 {
     ui->setupUi(this);
     ui->closeButton->setIcon(qApp->style()->standardIcon(QStyle::SP_TitleBarCloseButton));

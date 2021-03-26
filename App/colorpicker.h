@@ -1,18 +1,17 @@
 #ifndef COLORPICKER_H
 #define COLORPICKER_H
 
+#include "theme.h"
 #include <QDialog>
 #include <QToolButton>
-#include "theme.h"
 
 class MainWindow;
 
 namespace Ui {
-    class ColorPicker;
+class ColorPicker;
 }
 
-class ColorPicker : public QDialog
-{
+class ColorPicker : public QDialog {
     Q_OBJECT
 
 public:
@@ -24,7 +23,7 @@ private slots:
     void on_buttonFontChooser_clicked();
 
 private:
-    Ui::ColorPicker *ui;
+    Ui::ColorPicker* ui;
     QList<QToolButton*> colorButtons;
     MainWindow* parentWindow;
 };

@@ -1,65 +1,70 @@
-#include <QDebug>
-#include <QStackedWidget>
-#include <QMessageBox>
-#include <QFileDialog>
 #include <QBoxLayout>
-#include <QStringListModel>
+#include <QDebug>
+#include <QFileDialog>
+#include <QMessageBox>
 #include <QPushButton>
+#include <QStackedWidget>
+#include <QStringListModel>
 #include <cstdio>
 
-#include "mainwindow.h"
-#include "ui_mainwindow.h"
-#include "lightpadpage.h"
-#include "shortcuts.h"
-#include "textarea.h"
 #include "findreplacepanel.h"
+#include "lightpadpage.h"
+#include "mainwindow.h"
 #include "popup.h"
-#include "terminal.h"
 #include "prefrences.h"
 #include "runconfigurations.h"
+#include "shortcuts.h"
+#include "terminal.h"
+#include "textarea.h"
+#include "ui_mainwindow.h"
 
-MainWindow::MainWindow(QWidget* parent) :
-    QMainWindow(parent),
-    ui(new Ui::MainWindow),
-    popupHighlightLanguage(nullptr),
-    popupTabWidth(nullptr),
-    prefrences(nullptr),
-    findReplacePanel(nullptr),    
-    terminal(nullptr),
-    highlightLanguage(""),
-    font(QApplication::font()) {
-        QApplication::instance()->installEventFilter(this);
-        ui->setupUi(this);
-        show();
-        ui->tabWidget->setMainWindow(this);
-        ui->magicButton->setIconSize(0.8*ui->magicButton->size());
-        setupTextArea();
-        setupTabWidget();
-        loadSettings();
-        setWindowTitle("LightPad");
+MainWindow::MainWindow(QWidget* parent)
+    : QMainWindow(parent)
+    , ui(new Ui::MainWindow)
+    , popupHighlightLanguage(nullptr)
+    , popupTabWidth(nullptr)
+    , prefrences(nullptr)
+    , findReplacePanel(nullptr)
+    , terminal(nullptr)
+    , highlightLanguage("")
+    , font(QApplication::font())
+{
+    QApplication::instance()->installEventFilter(this);
+    ui->setupUi(this);
+    show();
+    ui->tabWidget->setMainWindow(this);
+    ui->magicButton->setIconSize(0.8 * ui->magicButton->size());
+    setupTextArea();
+    setupTabWidget();
+    loadSettings();
+    setWindowTitle("LightPad");
 }
 
-void MainWindow::setRowCol(int row, int col) {
-    ui->rowCol->setText("Ln " + QString::number(row) + ", Col " +  QString::number(col));
+void MainWindow::setRowCol(int row, int col)
+{
+    ui->rowCol->setText("Ln " + QString::number(row) + ", Col " + QString::number(col));
 }
 
-void MainWindow::setTabWidthLabel(QString text) {
-     ui->tabWidth->setText(text);
+void MainWindow::setTabWidthLabel(QString text)
+{
+    ui->tabWidth->setText(text);
 
-     if (prefrences)
-         prefrences->setTabWidthLabel(text);
+    if (prefrences)
+        prefrences->setTabWidthLabel(text);
 }
 
-void MainWindow::setLanguageHighlightLabel(QString text) {
-     ui->languageHighlight->setText(text);
+void MainWindow::setLanguageHighlightLabel(QString text)
+{
+    ui->languageHighlight->setText(text);
 }
 
-MainWindow::~MainWindow() {
+MainWindow::~MainWindow()
+{
     saveSettings();
     delete ui;
 }
 
-void MainWindow::closeEvent(QCloseEvent* event )
+void MainWindow::closeEvent(QCloseEvent* event)
 {
     Q_UNUSED(event);
 
@@ -86,16 +91,16 @@ void MainWindow::saveSettings()
     settings.saveSettings(settingsPath);
 }
 
-template<typename... Args>
+template <typename... Args>
 void MainWindow::updateAllTextAreas(void (TextArea::*f)(Args... args), Args... args)
 {
     auto textAreas = ui->tabWidget->findChildren<TextArea*>();
     for (auto& textArea : textAreas)
-            (textArea->*f)(args...);
-
+        (textArea->*f)(args...);
 }
 
-void MainWindow::keyPressEvent(QKeyEvent* keyEvent){
+void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
+{
 
     if (keyEvent->matches(QKeySequence::Undo))
         undo();
@@ -131,17 +136,20 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent){
         ui->tabWidget->addNewTab();
 }
 
-int MainWindow::getTabWidth() {
+int MainWindow::getTabWidth()
+{
     return settings.tabWidth;
 }
 
-int MainWindow::getFontSize() {
+int MainWindow::getFontSize()
+{
     return settings.mainFont.pointSize();
 }
 
 //use current page if empty
 //else add new tab
-void MainWindow::openFileAndAddToNewTab(QString filePath) {
+void MainWindow::openFileAndAddToNewTab(QString filePath)
+{
 
     if (filePath.isEmpty() || !QFileInfo(filePath).exists())
         return;
@@ -178,7 +186,8 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
     ui->tabWidget->currentChanged(ui->tabWidget->currentIndex());
 }
 
-void MainWindow::closeTabPage(QString filePath) {
+void MainWindow::closeTabPage(QString filePath)
+{
 
     for (int i = 0; i < ui->tabWidget->count(); i++) {
         if (ui->tabWidget->getFilePath(i) == filePath)
@@ -228,7 +237,8 @@ Theme MainWindow::getTheme()
     return settings.theme;
 }
 
-QFont MainWindow::getFont() {
+QFont MainWindow::getFont()
+{
     return settings.mainFont;
 }
 
@@ -243,11 +253,13 @@ void MainWindow::setTabWidth(int width)
     settings.tabWidth = width;
 }
 
-void MainWindow::on_actionToggle_Undo_triggered() {
+void MainWindow::on_actionToggle_Undo_triggered()
+{
     undo();
 }
 
-void MainWindow::on_actionToggle_Redo_triggered() {
+void MainWindow::on_actionToggle_Redo_triggered()
+{
     redo();
 }
 
@@ -269,20 +281,22 @@ void MainWindow::on_actionReset_Font_Size_triggered()
     settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
 }
 
-void MainWindow::on_actionCut_triggered() {
+void MainWindow::on_actionCut_triggered()
+{
 
     if (getCurrentTextArea())
         getCurrentTextArea()->cut();
 }
 
-
-void MainWindow::on_actionCopy_triggered() {
+void MainWindow::on_actionCopy_triggered()
+{
 
     if (getCurrentTextArea())
         getCurrentTextArea()->copy();
 }
 
-void MainWindow::on_actionPaste_triggered() {
+void MainWindow::on_actionPaste_triggered()
+{
 
     if (getCurrentTextArea())
         getCurrentTextArea()->paste();
@@ -301,7 +315,7 @@ void MainWindow::on_actionClose_Tab_triggered()
 
 void MainWindow::on_actionClose_All_Tabs_triggered()
 {
-     ui->tabWidget->closeAllTabs();
+    ui->tabWidget->closeAllTabs();
 }
 
 void MainWindow::on_actionFind_in_file_triggered()
@@ -321,7 +335,8 @@ void MainWindow::on_actionOpen_File_triggered()
     openFileAndAddToNewTab(filePath);
 }
 
-void MainWindow::on_actionSave_triggered() {
+void MainWindow::on_actionSave_triggered()
+{
 
     auto tabIndex = ui->tabWidget->currentIndex();
     auto filePath = ui->tabWidget->getFilePath(tabIndex);
@@ -334,7 +349,8 @@ void MainWindow::on_actionSave_triggered() {
     save(filePath);
 }
 
-void MainWindow::on_actionSave_as_triggered() {
+void MainWindow::on_actionSave_as_triggered()
+{
 
     auto filePath = QFileDialog::getSaveFileName(this, tr("Save Document"), QDir::homePath());
 
@@ -347,7 +363,8 @@ void MainWindow::on_actionSave_as_triggered() {
     save(filePath);
 }
 
-void MainWindow::open(const QString &filePath) {
+void MainWindow::open(const QString& filePath)
+{
 
     QFile file(filePath);
 
@@ -360,14 +377,14 @@ void MainWindow::open(const QString &filePath) {
     ui->tabWidget->setFilePath(tabIndex, filePath);
 
     if (getCurrentTextArea())
-      getCurrentTextArea()->setPlainText(QString::fromUtf8(file.readAll()));
+        getCurrentTextArea()->setPlainText(QString::fromUtf8(file.readAll()));
 }
 
-void MainWindow::save(const QString &filePath)
+void MainWindow::save(const QString& filePath)
 {
     QFile file(filePath);
 
-    if (!file.open(QFile::WriteOnly|QFile::Truncate|QFile::Text))
+    if (!file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text))
         return;
 
     if (getCurrentTextArea()) {
@@ -389,7 +406,7 @@ void MainWindow::showFindReplace(bool onlyFind)
         auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
 
         if (layout != 0)
-           layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
+            layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
     }
 
     findReplacePanel->setVisible(!findReplacePanel->isVisible() || findReplacePanel->isOnlyFind() != onlyFind);
@@ -397,7 +414,7 @@ void MainWindow::showFindReplace(bool onlyFind)
 
     if (findReplacePanel->isVisible() && getCurrentTextArea())
         findReplacePanel->setReplaceVisibility(!onlyFind);
- 
+
     if (findReplacePanel->isVisible()) {
         findReplacePanel->setTextArea(getCurrentTextArea());
         findReplacePanel->setFocusOnSearchBox();
@@ -407,24 +424,24 @@ void MainWindow::showFindReplace(bool onlyFind)
 void MainWindow::openDialog(Dialog dialog)
 {
     switch (dialog) {
-        case Dialog::runConfiguration:
-            if (findChildren<RunConfigurations*>().isEmpty()) {
-                auto configurationDialog = new RunConfigurations(this);
+    case Dialog::runConfiguration:
+        if (findChildren<RunConfigurations*>().isEmpty()) {
+            auto configurationDialog = new RunConfigurations(this);
 
-                connect(configurationDialog, &RunConfigurations::accepted, this, [&, configurationDialog]() {
-                    auto scriptPath = configurationDialog->getScriptPath();
-                    auto parameters = configurationDialog->getParameters();
-                });
-            }
-            break;
+            connect(configurationDialog, &RunConfigurations::accepted, this, [&, configurationDialog]() {
+                auto scriptPath = configurationDialog->getScriptPath();
+                auto parameters = configurationDialog->getParameters();
+            });
+        }
+        break;
 
-        case Dialog::shortcuts:
-            if (findChildren<ShortcutsDialog*>().isEmpty())
-                new ShortcutsDialog(this);
-            break;
+    case Dialog::shortcuts:
+        if (findChildren<ShortcutsDialog*>().isEmpty())
+            new ShortcutsDialog(this);
+        break;
 
-        default:
-            return;
+    default:
+        return;
     }
 }
 
@@ -438,7 +455,8 @@ void MainWindow::openShortcutsDialog()
     openDialog(Dialog::shortcuts);
 }
 
-void MainWindow::showTerminal() {
+void MainWindow::showTerminal()
+{
 
     auto page = ui->tabWidget->getCurrentPage();
 
@@ -457,11 +475,12 @@ void MainWindow::showTerminal() {
         auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
 
         if (layout != 0)
-           layout->insertWidget(layout->count() - 1, terminal, 0);
+            layout->insertWidget(layout->count() - 1, terminal, 0);
     }
 }
 
-void MainWindow::setMainWindowTitle(QString title) {
+void MainWindow::setMainWindowTitle(QString title)
+{
     setWindowTitle(title + " - Lightpad");
 }
 
@@ -498,7 +517,8 @@ void MainWindow::runCurrentScript()
         showTerminal();
 }
 
-void MainWindow::setFilePathAsTabText(QString filePath) {
+void MainWindow::setFilePathAsTabText(QString filePath)
+{
 
     auto fileName = QFileInfo(filePath).fileName();
 
@@ -521,7 +541,7 @@ void MainWindow::closeCurrentTab()
 
 void MainWindow::setupTabWidget()
 {
-    QObject::connect(ui->tabWidget, &QTabWidget::currentChanged, this, [&] (int index) {
+    QObject::connect(ui->tabWidget, &QTabWidget::currentChanged, this, [&](int index) {
         auto text = ui->tabWidget->tabText(index);
         setMainWindowTitle(text);
 
@@ -532,7 +552,8 @@ void MainWindow::setupTabWidget()
     ui->tabWidget->currentChanged(0);
 }
 
-void MainWindow::setupTextArea() {
+void MainWindow::setupTextArea()
+{
 
     if (getCurrentTextArea()) {
         getCurrentTextArea()->setMainWindow(this);
@@ -554,7 +575,7 @@ void MainWindow::noScriptAssignedWarning()
         openConfigurationDialog();
 
     else
-       msgBox.close();
+        msgBox.close();
 }
 
 void MainWindow::on_actionToggle_Menu_Bar_triggered()
@@ -562,13 +583,14 @@ void MainWindow::on_actionToggle_Menu_Bar_triggered()
     ui->menubar->setVisible(!ui->menubar->isVisible());
 }
 
-void MainWindow::on_languageHighlight_clicked() {
+void MainWindow::on_languageHighlight_clicked()
+{
 
     if (!popupHighlightLanguage) {
         auto dir = QDir(":/resources/highlight").entryList(QStringList(), QDir::Dirs);
-        auto popupHighlightLanguage = new  PopupLanguageHighlight(dir, this);
+        auto popupHighlightLanguage = new PopupLanguageHighlight(dir, this);
         auto point = mapToGlobal(ui->languageHighlight->pos());
-        popupHighlightLanguage->setGeometry(point.x(), point.y() - 2*popupHighlightLanguage->height() + height(), popupHighlightLanguage->width(), popupHighlightLanguage->height());
+        popupHighlightLanguage->setGeometry(point.x(), point.y() - 2 * popupHighlightLanguage->height() + height(), popupHighlightLanguage->width(), popupHighlightLanguage->height());
     }
 
     else if (popupHighlightLanguage->isHidden())
@@ -578,7 +600,8 @@ void MainWindow::on_languageHighlight_clicked() {
         popupHighlightLanguage->hide();
 }
 
-void MainWindow::on_actionAbout_triggered() {
+void MainWindow::on_actionAbout_triggered()
+{
 
     QFile TextFile(":/resources/messages/About.txt");
 
@@ -590,12 +613,13 @@ void MainWindow::on_actionAbout_triggered() {
     }
 }
 
-void MainWindow::on_tabWidth_clicked() {
+void MainWindow::on_tabWidth_clicked()
+{
 
     if (!popupTabWidth) {
-        auto popupTabWidth = new PopupTabWidth(QStringList({"2", "4", "8"}), this);
+        auto popupTabWidth = new PopupTabWidth(QStringList({ "2", "4", "8" }), this);
         auto point = mapToGlobal(ui->tabWidth->pos());
-        QRect rect(point.x(), point.y() - 2*popupTabWidth->height() + height(), popupTabWidth->width(), popupTabWidth->height());
+        QRect rect(point.x(), point.y() - 2 * popupTabWidth->height() + height(), popupTabWidth->width(), popupTabWidth->height());
         popupTabWidth->setGeometry(rect);
     }
 
@@ -642,7 +666,8 @@ void MainWindow::on_actionEdit_Configurations_triggered()
     openConfigurationDialog();
 }
 
-void MainWindow::setTheme(Theme theme) {
+void MainWindow::setTheme(Theme theme)
+{
 
     settings.theme = theme;
 
@@ -650,47 +675,59 @@ void MainWindow::setTheme(Theme theme) {
 
         "QWidget { background-color: " + settings.theme.backgroundColor.name() + ";}"
 
-        "QMenu { color: " + settings.theme.foregroundColor.name() + ";"
-                 "selection-background-color: #404f4f;"
-                 "border: 1px solid #404f4f;"
-                 "border-radius: 3px 3px 3px 3px;}"
+                                                                                 "QMenu { color: "
+        + settings.theme.foregroundColor.name() + ";"
+                                                  "selection-background-color: #404f4f;"
+                                                  "border: 1px solid #404f4f;"
+                                                  "border-radius: 3px 3px 3px 3px;}"
 
-        "QMenuBar::item {color: " + settings.theme.foregroundColor.name() + ";}"
+                                                  "QMenuBar::item {color: "
+        + settings.theme.foregroundColor.name() + ";}"
 
-        "QMessageBox QLabel {color: " + settings.theme.foregroundColor.name() + ";}"
+                                                  "QMessageBox QLabel {color: "
+        + settings.theme.foregroundColor.name() + ";}"
 
-        "QAbstractButton { color: " + settings.theme.foregroundColor.name() + ";"
-                           "border: None;"
-                           "padding: 5px;"
-                           "background-color: " + settings.theme.backgroundColor.name() + ";}"
+                                                  "QAbstractButton { color: "
+        + settings.theme.foregroundColor.name() + ";"
+                                                  "border: None;"
+                                                  "padding: 5px;"
+                                                  "background-color: "
+        + settings.theme.backgroundColor.name() + ";}"
 
-        "QAbstractItemView {color: " + settings.theme.foregroundColor.name() + "; outline: 0;}"
+                                                  "QAbstractItemView {color: "
+        + settings.theme.foregroundColor.name() + "; outline: 0;}"
 
-        "QAbstractItemView::item {color: " + settings.theme.foregroundColor.name() + ";}"
+                                                  "QAbstractItemView::item {color: "
+        + settings.theme.foregroundColor.name() + ";}"
 
-        "QAbstractItemView::item:hover { background: #f3f3f3; color: #252424;}"
+                                                  "QAbstractItemView::item:hover { background: #f3f3f3; color: #252424;}"
 
-        "QAbstractItemView::item:selected { background: #bbdde6; }"
+                                                  "QAbstractItemView::item:selected { background: #bbdde6; }"
 
-        "QAbstractButton:hover { background: rgb(85, 87, 83); border: 1; border-radius: 5;}"
+                                                  "QAbstractButton:hover { background: rgb(85, 87, 83); border: 1; border-radius: 5;}"
 
-        "QAbstractButton:pressed { background: rgb(46, 52, 54); border: 1; border-radius: 5;}"
+                                                  "QAbstractButton:pressed { background: rgb(46, 52, 54); border: 1; border-radius: 5;}"
 
-        "QLineEdit {background: " + settings.theme.foregroundColor.name() + ";}"
+                                                  "QLineEdit {background: "
+        + settings.theme.foregroundColor.name() + ";}"
 
-        "QLabel {color: " + settings.theme.foregroundColor.name() + ";}"
+                                                  "QLabel {color: "
+        + settings.theme.foregroundColor.name() + ";}"
 
-        "QPlainTextEdit {color: " + settings.theme.foregroundColor.name() + "; background-color: " + settings.theme.backgroundColor.name() + "; }"
+                                                  "QPlainTextEdit {color: "
+        + settings.theme.foregroundColor.name() + "; background-color: " + settings.theme.backgroundColor.name() + "; }"
 
-        "QRadioButton::indicator:checked { background-color: " + settings.theme.foregroundColor.name() + ";"
-                                           "border: 2px solid " + settings.theme.foregroundColor.name() + ";"
-                                           "border-radius: 6px; }"
+                                                                                                                   "QRadioButton::indicator:checked { background-color: "
+        + settings.theme.foregroundColor.name() + ";"
+                                                  "border: 2px solid "
+        + settings.theme.foregroundColor.name() + ";"
+                                                  "border-radius: 6px; }"
 
-        "QRadioButton::indicator:unchecked { background-color: " + settings.theme.backgroundColor.name() + ";"
-                                             "border: 2px solid " + settings.theme.foregroundColor.name() + ";"
-                                             "border-radius: 6px;}"
-    );
+                                                  "QRadioButton::indicator:unchecked { background-color: "
+        + settings.theme.backgroundColor.name() + ";"
+                                                  "border: 2px solid "
+        + settings.theme.foregroundColor.name() + ";"
+                                                  "border-radius: 6px;}");
 
     ui->tabWidget->setTheme(settings.theme.backgroundColor.name(), settings.theme.foregroundColor.name());
 }
-

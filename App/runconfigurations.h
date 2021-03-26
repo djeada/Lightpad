@@ -2,14 +2,13 @@
 #define RUNCOFIGURATIONS_H
 
 #include <QDialog>
-#include <QLineEdit>
 #include <QIcon>
+#include <QLineEdit>
 #include <QToolButton>
 
 class RunConfigurations;
 
-class LineEditIcon : public QLineEdit
-{
+class LineEditIcon : public QLineEdit {
     Q_OBJECT
 
 public:
@@ -31,22 +30,21 @@ private:
 };
 
 namespace Ui {
-    class runconfigurations;
+class runconfigurations;
 }
 
-class RunConfigurations : public QDialog
-{
+class RunConfigurations : public QDialog {
     Q_OBJECT
 
 public:
-    RunConfigurations(QWidget *parent = nullptr);
+    RunConfigurations(QWidget* parent = nullptr);
     ~RunConfigurations();
     void choosePath();
     QString getScriptPath();
     QString getParameters();
 
 private:
-    Ui::runconfigurations *ui;
+    Ui::runconfigurations* ui;
 };
 
 #endif // RUNCOFIGURATIONS_H

@@ -1,10 +1,10 @@
 #include "colorpicker.h"
-#include "ui_colorpicker.h"
 #include "mainwindow.h"
+#include "ui_colorpicker.h"
 
-#include <QFontDialog>
 #include <QColorDialog>
 #include <QDebug>
+#include <QFontDialog>
 #include <QGraphicsDropShadowEffect>
 
 const QString buttonStyleSheet = "border-radius: 12px;";
@@ -12,24 +12,26 @@ const QString buttonStyleSheet = "border-radius: 12px;";
 class DropShadowEffect : public QGraphicsDropShadowEffect {
     using QGraphicsDropShadowEffect::QGraphicsDropShadowEffect;
 
-    public:
-        DropShadowEffect(QWidget* parent = nullptr) :
-            QGraphicsDropShadowEffect(parent) {
-            setBlurRadius(2);
-            setOffset(2, 2);
-            setColor(QColor("black"));
-        }
+public:
+    DropShadowEffect(QWidget* parent = nullptr)
+        : QGraphicsDropShadowEffect(parent)
+    {
+        setBlurRadius(2);
+        setOffset(2, 2);
+        setColor(QColor("black"));
+    }
 };
 
-static const QString getFontInfo(const QFont& font) {
+static const QString getFontInfo(const QFont& font)
+{
     const QString fontInfo = font.toString();
     return fontInfo.split(",")[0] + " " + fontInfo.split(",")[1];
 }
 
-ColorPicker::ColorPicker(Theme theme, MainWindow *parent) :
-    QDialog(nullptr),
-    ui(new Ui::ColorPicker),
-    parentWindow(parent)
+ColorPicker::ColorPicker(Theme theme, MainWindow* parent)
+    : QDialog(nullptr)
+    , ui(new Ui::ColorPicker)
+    , parentWindow(parent)
 {
     setWindowFlag(Qt::Popup);
     ui->setupUi(this);
@@ -47,7 +49,6 @@ ColorPicker::ColorPicker(Theme theme, MainWindow *parent) :
 
     ui->buttonFontChooser->setGraphicsEffect(new DropShadowEffect());
 
-
     colorButtons = ui->colorButtonsContainer->findChildren<QToolButton*>();
 
     for (auto& button : colorButtons) {
@@ -55,7 +56,6 @@ ColorPicker::ColorPicker(Theme theme, MainWindow *parent) :
         button->setGraphicsEffect(new DropShadowEffect());
 
         connect(button, &QToolButton::clicked, this, [&] {
-
             QColor color = QColorDialog::getColor(QColor(), this);
 
             if (color.isValid()) {
@@ -66,52 +66,51 @@ ColorPicker::ColorPicker(Theme theme, MainWindow *parent) :
 
                     switch (colorButtons.indexOf(button)) {
 
-                        case 0:
-                            colors.backgroundColor = color;
-                            break;
+                    case 0:
+                        colors.backgroundColor = color;
+                        break;
 
-                        case 1:
-                            colors.foregroundColor = color;
-                            break;
+                    case 1:
+                        colors.foregroundColor = color;
+                        break;
 
-                        case 2:
-                            colors.keywordFormat_0 = color;
-                            break;
+                    case 2:
+                        colors.keywordFormat_0 = color;
+                        break;
 
-                        case 3:
-                            colors.keywordFormat_1 = color;
-                            break;
+                    case 3:
+                        colors.keywordFormat_1 = color;
+                        break;
 
-                        case 4:
-                          colors.keywordFormat_2 = color;
-                          break;
+                    case 4:
+                        colors.keywordFormat_2 = color;
+                        break;
 
-                        case 5:
-                            colors.singleLineCommentFormat = color;
-                            break;
+                    case 5:
+                        colors.singleLineCommentFormat = color;
+                        break;
 
-                        case 6:
-                            colors.functionFormat = color;
-                            break;
+                    case 6:
+                        colors.functionFormat = color;
+                        break;
 
-                        case 7:
-                            colors.quotationFormat = color;
-                            break;
+                    case 7:
+                        colors.quotationFormat = color;
+                        break;
 
-                        case 8:
-                            colors.classFormat = color;
-                            break;
+                    case 8:
+                        colors.classFormat = color;
+                        break;
 
-                        case 9:
-                            colors.numberFormat = color;
-                            break;
+                    case 9:
+                        colors.numberFormat = color;
+                        break;
                     }
 
                     parentWindow->setTheme(colors);
-                 }
+                }
             }
         });
-
     }
 
     if (parentWindow) {
@@ -125,7 +124,7 @@ ColorPicker::~ColorPicker()
     delete ui;
 }
 
-void ColorPicker::setParentWindow(MainWindow *window)
+void ColorPicker::setParentWindow(MainWindow* window)
 {
     parentWindow = window;
 }

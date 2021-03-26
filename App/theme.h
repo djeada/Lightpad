@@ -24,5 +24,4 @@ struct Theme {
     void write(QJsonObject& json);
 };
 
-
 #endif // THEME_H
