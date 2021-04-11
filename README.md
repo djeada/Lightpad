@@ -61,7 +61,7 @@ cmake -GNinja ..
 ninja ../Lightpad</pre>
 
 <h2>Building with Qmake</h2>
-Open the terminal in app direcory and write: 
+Open the terminal in app directory and write: 
 <br>
 <pre>qmake Lightpad.pro
 make</pre>
