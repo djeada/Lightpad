@@ -21,12 +21,13 @@ public:
 
 protected:
     virtual void paintEvent(QPaintEvent* event) override;
+    virtual void enterEvent(QEnterEvent* event) override;
+    virtual void leaveEvent(QEvent* event) override;
 
 private:
     QLineEdit edit;
     QToolButton button;
-    virtual void enterEvent(QEvent* event) override;
-    virtual void leaveEvent(QEvent* event) override;
+
 };
 
 namespace Ui {

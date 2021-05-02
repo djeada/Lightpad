@@ -4,6 +4,7 @@
 #include "textarea.h"
 #include <QStringListModel>
 #include <QVBoxLayout>
+#include <QFile>
 
 ListView::ListView(QWidget* parent)
     : QListView(parent)
@@ -13,7 +14,6 @@ ListView::ListView(QWidget* parent)
 
 QSize ListView::sizeHint() const
 {
-
     if (model()->rowCount() == 0)
         return QSize(width(), 0);
 
@@ -26,7 +26,7 @@ Popup::Popup(QStringList list, QWidget* parent)
     , list(list)
 {
     setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
-    QStringListModel* model = new QStringListModel(this);
+    auto model = new QStringListModel(this);
     listView = new ListView(this);
 
     model->setStringList(list);
@@ -46,9 +46,9 @@ PopupLanguageHighlight ::PopupLanguageHighlight(QStringList list, QWidget* paren
 {
 
     QObject::connect(listView, &QListView::clicked, this, [&](const QModelIndex& index) {
-        QString lang = index.data().toString();
+        auto lang = index.data().toString();
+        auto mainWindow = qobject_cast<MainWindow*>(parentWidget());
 
-        MainWindow* mainWindow = qobject_cast<MainWindow*>(parentWidget());
         if (mainWindow != 0 && mainWindow->getCurrentTextArea()) {
             QMap<QString, QString> langToExt = {};
             loadLanguageExtensions(langToExt);
@@ -65,9 +65,10 @@ PopupTabWidth::PopupTabWidth(QStringList list, QWidget* parent)
 {
 
     QObject::connect(listView, &QListView::clicked, this, [&](const QModelIndex& index) {
-        QString width = index.data().toString();
 
-        MainWindow* mainWindow = qobject_cast<MainWindow*>(parentWidget());
+        auto width = index.data().toString();
+        auto mainWindow = qobject_cast<MainWindow*>(parentWidget());
+
         if (mainWindow != 0) {
             mainWindow->setTabWidthLabel("Tab Width: " + width);
             mainWindow->setTabWidth(width.toInt());
@@ -83,8 +84,10 @@ void loadLanguageExtensions(QMap<QString, QString>& map)
 
     if (TextFile.open(QIODevice::ReadOnly)) {
         while (!TextFile.atEnd()) {
+
             QString line = TextFile.readLine();
-            QStringList words = line.split(" ");
+            auto words = line.split(" ");
+
             if (words.size() == 2)
                 map.insert(words[0], cutEndOfLine(words[1]));
         }

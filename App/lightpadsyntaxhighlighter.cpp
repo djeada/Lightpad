@@ -1,5 +1,6 @@
 #include "lightpadsyntaxhighlighter.h"
 #include <QDebug>
+#include <QFile>
 
 const QString keyWords_Cpp_0 = ":/resources/highlight/Cpp/0.txt";
 const QString keyWords_Cpp_1 = ":/resources/highlight/Cpp/1.txt";

@@ -40,7 +40,7 @@ void LineEditIcon::paintEvent(QPaintEvent* event)
     style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
 };
 
-void LineEditIcon::enterEvent(QEvent* event)
+void LineEditIcon::enterEvent(QEnterEvent* event)
 {
     setStyleSheet("QLineEdit {border-width: 1px; border-style: solid; border-color: #add8e6; }"
                   "QLineEdit#edit { border: none; background: white } QToolButton { background: white }");
