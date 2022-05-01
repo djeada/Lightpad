@@ -73,6 +73,7 @@ All contributions are welcomed.
 - [ ] Autocompletion.
 - [ ] Switch to QProcess for multiprocessing.
 - [ ] Allow for custom highlithing rules. 
+- [ ] Avoid using QMake for building and instead use CMake.
 
 <h1>License</h1>
 This project is licensed under  GNU GENERAL PUBLIC LICENSE - see the <a href='https://github.com/djeada/Lightpad/blob/master/LICENSE.txt'> LICENSE.txt </a> file for details.
