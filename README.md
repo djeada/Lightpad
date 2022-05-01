@@ -18,21 +18,13 @@ Open source code editor, developed with Qt framework.
 
 <h1>Features</h1>
 
-<ul>
-  <li>Search and replace</li>
-  <li>Syntax highlighting</li>
-  <li>Editing shortcuts</li>
-  <li>Color themes</li>
-  <li>Code templates</li>
-  <li>Auto parentheses</li>
-  <li>Auto indenting</li>
-</ul>
-
-<h2>Features to be added</h2>
-<ul>
-  <li>Full VIM compatibility </li>
-  <li>Auto completion</li>
-</ul>
+* Search and replace
+* Syntax highlighting
+* Editing shortcuts
+* Color themes
+* Code templates
+* Auto parentheses
+* Auto indenting
 
 <h1>Build</h1>
 To build Lightpad, you need some libraries and tools.  Follow those instructions for the platform you're compiling on.
@@ -73,6 +65,14 @@ If you had problems compiling from source, raise a new issue in the <a href = ht
 
 <h1>Contributing </h1>
 All contributions are welcomed.
+
+## TODO
+
+- [ ] User prefrences should be saved in the home directory. 
+- [ ] Full VIM compatibility.
+- [ ] Autocompletion.
+- [ ] Switch to QProcess for multiprocessing.
+- [ ] Allow for custom highlithing rules. 
 
 <h1>License</h1>
 This project is licensed under  GNU GENERAL PUBLIC LICENSE - see the <a href='https://github.com/djeada/Lightpad/blob/master/LICENSE.txt'> LICENSE.txt </a> file for details.
