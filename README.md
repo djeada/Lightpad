@@ -10,7 +10,11 @@
 ![Lightpad](https://github.com/djeada/Lightpad/blob/master/App/resources/icons/app.png)
 
 # Lightpad
-Open source code editor, developed with Qt framework.
+Welcome to Lightpad, a powerful and intuitive code editor developed with the Qt framework. Lightpad is designed to make it easy for you to write, edit, and debug code in a variety of languages. Whether you are a beginner just starting to learn how to code or an experienced developer looking for a reliable and efficient tool, Lightpad has something to offer.
+
+With a clean and modern interface, Lightpad is designed to be easy to use and customize. You can choose from a variety of color schemes and fonts, and use a wide range of features such as syntax highlighting, code completion, and code folding to streamline your workflow. Lightpad also supports a wide range of programming languages, so you can use it no matter what type of project you are working on.
+
+So why wait? Try Lightpad today and see how it can help you write better code, faster.
 
 <h1>Screenshot</h1>
 
