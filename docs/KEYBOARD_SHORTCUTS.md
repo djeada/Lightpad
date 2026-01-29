@@ -33,7 +33,7 @@ This document lists all keyboard shortcuts available in Lightpad.
 |----------|--------|
 | `Ctrl+F` | Find |
 | `Ctrl+H` | Find and Replace |
-| `F3` / `Ctrl+G` | Find next |
+| `F3` | Find next |
 | `Shift+F3` | Find previous |
 | `Ctrl+Shift+F` | Find in files |
 
@@ -76,7 +76,10 @@ This document lists all keyboard shortcuts available in Lightpad.
 
 ## VIM Mode
 
-When VIM mode is enabled, additional shortcuts are available:
+When VIM mode is enabled, the editor uses modal editing with different shortcuts:
+
+> **Note:** In VIM Normal mode, `Ctrl+D` means "Page down" instead of "Duplicate line".
+> Use `:set novim` or disable VIM mode in preferences to use standard shortcuts.
 
 ### Normal Mode
 

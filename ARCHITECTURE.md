@@ -27,6 +27,9 @@ Lightpad follows a modular architecture with clear separation of concerns:
 │  ┌────────┐ ┌───────────┐ ┌───────────┐ ┌───────────────┐  │
 │  │ Logger │ │AsyncWorker│ │ LspClient │ │   VimMode     │  │
 │  └────────┘ └───────────┘ └───────────┘ └───────────────┘  │
+│  ┌────────┐ ┌─────────────────────┐                        │
+│  │  I18n  │ │AccessibilityManager │                        │
+│  └────────┘ └─────────────────────┘                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -35,6 +38,8 @@ Lightpad follows a modular architecture with clear separation of concerns:
 ```
 Lightpad/
 ├── App/
+│   ├── accessibility/  # Accessibility features
+│   │   └── accessibilitymanager.h/cpp
 │   ├── core/           # Core editing components
 │   │   ├── async/      # Async operations (AsyncWorker, AsyncTask)
 │   │   ├── io/         # File I/O (FileManager)
@@ -46,6 +51,8 @@ Lightpad/
 │   ├── editor/         # Editor features
 │   │   └── vimmode.h/cpp   # VIM modal editing
 │   ├── filetree/       # File tree/explorer
+│   ├── i18n/           # Internationalization
+│   │   └── i18n.h/cpp      # Translation management
 │   ├── lsp/            # Language Server Protocol
 │   │   └── lspclient.h/cpp
 │   ├── plugins/        # Plugin system
