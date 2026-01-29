@@ -63,7 +63,7 @@ public:
 
     /**
      * @brief Set a setting value
-     * @param key Setting key (supports dot notation for nested keys)
+     * @param key Setting key (top-level keys only, nested keys not yet supported)
      * @param value Value to set
      */
     void setValue(const QString& key, const QVariant& value);

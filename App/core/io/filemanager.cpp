@@ -102,5 +102,5 @@ QString FileManager::getFileName(const QString& filePath)
 
 QString FileManager::getDirectory(const QString& filePath)
 {
-    return QFileInfo(filePath).absoluteDir().path();
+    return QFileInfo(filePath).dir().path();
 }

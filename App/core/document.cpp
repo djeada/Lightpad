@@ -3,10 +3,12 @@
 #include "logging/logger.h"
 
 #include <QFileInfo>
+#include <QHash>
 
 Document::Document(QObject* parent)
     : QObject(parent)
     , m_state(State::New)
+    , m_lastModified(QDateTime())
 {
 }
 
@@ -14,6 +16,7 @@ Document::Document(const QString& filePath, QObject* parent)
     : QObject(parent)
     , m_filePath(filePath)
     , m_state(State::New)
+    , m_lastModified(QDateTime())
 {
     if (!filePath.isEmpty()) {
         load();
@@ -111,7 +114,7 @@ bool Document::load()
     }
 
     m_content = result.content;
-    m_lastModified = QDateTime::currentDateTime();
+    m_lastModified = QFileInfo(m_filePath).lastModified();
     updateState(State::Saved);
     
     LOG_INFO(QString("Document loaded: %1").arg(m_filePath));

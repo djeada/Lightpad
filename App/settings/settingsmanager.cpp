@@ -58,8 +58,12 @@ QString SettingsManager::getSettingsDirectory() const
     QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     
     if (configPath.isEmpty()) {
-        // Fallback to home directory
+        // Fallback to home directory with platform-appropriate path
+#ifdef Q_OS_WIN
+        configPath = QDir::homePath() + "/AppData/Local/Lightpad";
+#else
         configPath = QDir::homePath() + "/.config/lightpad";
+#endif
     }
 
     return configPath;
@@ -67,7 +71,7 @@ QString SettingsManager::getSettingsDirectory() const
 
 QString SettingsManager::getSettingsFilePath() const
 {
-    return getSettingsDirectory() + "/settings.json";
+    return getSettingsDirectory() + QDir::separator() + "settings.json";
 }
 
 bool SettingsManager::ensureSettingsDirectoryExists()

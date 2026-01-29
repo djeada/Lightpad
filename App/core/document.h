@@ -9,7 +9,7 @@
  * @brief Represents a document in the editor
  * 
  * Separates document data from the view (TextArea).
- * Manages file content, path, modification state, and undo/redo stack.
+ * Manages file content, path, and modification state.
  */
 class Document : public QObject {
     Q_OBJECT
