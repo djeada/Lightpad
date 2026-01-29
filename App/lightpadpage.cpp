@@ -214,7 +214,8 @@ void LightpadTreeView::dropEvent(QDropEvent* event)
                         emit fileModel->modelUpdated();
                     }
                 } else if (srcInfo.isDir()) {
-                    // Use model's copyRecursively for directory copy
+                    // For directory copy, we need to temporarily use the clipboard
+                    fileModel->copyToClipboard(srcPath);
                     success = fileModel->pasteFromClipboard(destPath);
                 }
             }
