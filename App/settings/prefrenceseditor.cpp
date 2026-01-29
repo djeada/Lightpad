@@ -1,6 +1,6 @@
 #include "prefrenceseditor.h"
-#include "mainwindow.h"
-#include "popup.h"
+#include "../ui/mainwindow.h"
+#include "../ui/popup.h"
 #include "ui_prefrenceseditor.h"
 
 PrefrencesEditor::PrefrencesEditor(MainWindow* parent)

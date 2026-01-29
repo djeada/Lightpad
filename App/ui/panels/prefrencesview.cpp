@@ -1,5 +1,5 @@
 #include "prefrencesview.h"
-#include "mainwindow.h"
+#include "../mainwindow.h"
 #include "ui_prefrencesview.h"
 
 PrefrencesView::PrefrencesView(MainWindow* parent)

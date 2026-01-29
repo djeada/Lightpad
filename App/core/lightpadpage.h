@@ -2,8 +2,8 @@
 #define LIGHTPADPAGE_H
 
 #include "textarea.h"
-#include "filedirtreemodel.h"
-#include "filedirtreecontroller.h"
+#include "../filetree/filedirtreemodel.h"
+#include "../filetree/filedirtreecontroller.h"
 
 #include <QFileSystemModel>
 #include <QTreeView>

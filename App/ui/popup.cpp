@@ -1,7 +1,7 @@
 #include "popup.h"
-#include "lightpadsyntaxhighlighter.h"
+#include "../syntax/lightpadsyntaxhighlighter.h"
 #include "mainwindow.h"
-#include "textarea.h"
+#include "../core/textarea.h"
 #include <QStringListModel>
 #include <QVBoxLayout>
 #include <QFile>

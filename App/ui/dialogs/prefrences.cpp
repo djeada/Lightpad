@@ -1,7 +1,7 @@
 #include "prefrences.h"
 #include "colorpicker.h"
-#include "prefrenceseditor.h"
-#include "prefrencesview.h"
+#include "../../settings/prefrenceseditor.h"
+#include "../panels/prefrencesview.h"
 #include "ui_prefrences.h"
 #include <QCloseEvent>
 

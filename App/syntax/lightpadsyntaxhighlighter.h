@@ -1,7 +1,7 @@
 #ifndef LIGHTPADSYNTAXHIGHLIGHTER_H
 #define LIGHTPADSYNTAXHIGHLIGHTER_H
 
-#include "theme.h"
+#include "../settings/theme.h"
 #include <QRegularExpression>
 #include <QSyntaxHighlighter>
 

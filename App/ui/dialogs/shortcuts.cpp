@@ -1,5 +1,5 @@
 #include "shortcuts.h"
-#include "mainwindow.h"
+#include "../mainwindow.h"
 #include "ui_shortcuts.h"
 #include <QDebug>
 #include <QKeyEvent>

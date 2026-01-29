@@ -3,7 +3,7 @@
 
 #include <QString>
 
-#include "mainwindow.h"
+#include "../ui/mainwindow.h"
 
 class Formatter {
 public:

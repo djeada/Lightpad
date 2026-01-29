@@ -1,5 +1,5 @@
 #include "findreplacepanel.h"
-#include "textarea.h"
+#include "../../core/textarea.h"
 #include "ui_findreplacepanel.h"
 
 #include <QDebug>

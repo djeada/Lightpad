@@ -6,8 +6,8 @@
 #include <QListView>
 #include <QMainWindow>
 
-#include "textareasettings.h"
-#include "theme.h"
+#include "../settings/textareasettings.h"
+#include "../settings/theme.h"
 
 class MainWindow;
 class Terminal;
@@ -15,6 +15,7 @@ class Popup;
 class FindReplacePanel;
 class TextArea;
 class QCompleter;
+class Prefrences;
 
 enum class Lang { cpp,
     js,
