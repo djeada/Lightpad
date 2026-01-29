@@ -27,6 +27,7 @@ MainWindow::MainWindow(QWidget* parent)
     , prefrences(nullptr)
     , findReplacePanel(nullptr)
     , terminal(nullptr)
+    , completer(nullptr)
     , highlightLanguage("")
     , font(QApplication::font())
 {
@@ -35,6 +36,57 @@ MainWindow::MainWindow(QWidget* parent)
     show();
     ui->tabWidget->setMainWindow(this);
     ui->magicButton->setIconSize(0.8 * ui->magicButton->size());
+    
+    // Initialize shared completer
+    QStringList wordList;
+    
+    // Common keywords across languages
+    wordList << "break" << "case" << "continue" << "default" << "do" << "else" 
+             << "for" << "if" << "return" << "switch" << "while";
+    
+    // C/C++ specific keywords
+    wordList << "auto" << "char" << "const" << "double" << "enum" << "extern" << "float"
+             << "goto" << "int" << "long" << "register" << "short" << "signed" << "sizeof" 
+             << "static" << "struct" << "typedef" << "union" << "unsigned" << "void" << "volatile"
+             << "class" << "namespace" << "template" << "public" << "private" << "protected"
+             << "virtual" << "override" << "final" << "explicit" << "inline" << "constexpr"
+             << "nullptr" << "delete" << "new" << "this" << "try" << "catch" << "throw"
+             << "bool" << "true" << "false";
+    
+    // C++ STL types and functions
+    wordList << "std" << "string" << "vector" << "map" << "set" << "list" << "queue" 
+             << "stack" << "pair" << "cout" << "cin" << "endl" << "include" << "define" 
+             << "ifdef" << "ifndef" << "endif";
+    
+    // Python specific keywords
+    wordList << "and" << "as" << "assert" << "async" << "await" << "class" << "def" 
+             << "del" << "elif" << "except" << "finally" << "from" << "global" << "import" 
+             << "in" << "is" << "lambda" << "nonlocal" << "not" << "or" << "pass" << "raise"
+             << "with" << "yield" << "True" << "False" << "None" << "self";
+    
+    // Python built-ins
+    wordList << "print" << "range" << "len" << "str" << "int" << "float" << "list" << "dict"
+             << "tuple" << "set" << "open" << "file" << "read" << "write" << "append";
+    
+    // JavaScript specific keywords
+    wordList << "abstract" << "arguments" << "boolean" << "byte" << "debugger" 
+             << "eval" << "export" << "extends" << "final" << "function" << "implements"
+             << "instanceof" << "interface" << "let" << "native" << "package" 
+             << "super" << "synchronized" << "throws" << "transient" << "typeof" << "var"
+             << "const";
+    
+    // JavaScript DOM/Browser
+    wordList << "console" << "log" << "document" << "window" << "alert" << "prompt" 
+             << "confirm" << "getElementById" << "querySelector" << "addEventListener" 
+             << "setTimeout" << "setInterval";
+    
+    wordList.sort();
+    wordList.removeDuplicates();
+    
+    completer = new QCompleter(wordList, this);
+    completer->setCaseSensitivity(Qt::CaseInsensitive);
+    completer->setModelSorting(QCompleter::CaseInsensitivelySortedModel);
+    
     setupTextArea();
     setupTabWidget();
     loadSettings();
@@ -561,49 +613,9 @@ void MainWindow::setupTextArea()
         getCurrentTextArea()->setFontSize(settings.mainFont.pointSize());
         getCurrentTextArea()->setTabWidth(settings.tabWidth);
         
-        // Setup autocompletion
-        QStringList wordList;
-        // C++ keywords
-        wordList << "auto" << "break" << "case" << "char" << "const" << "continue" << "default"
-                 << "do" << "double" << "else" << "enum" << "extern" << "float" << "for"
-                 << "goto" << "if" << "int" << "long" << "register" << "return" << "short"
-                 << "signed" << "sizeof" << "static" << "struct" << "switch" << "typedef"
-                 << "union" << "unsigned" << "void" << "volatile" << "while"
-                 << "class" << "namespace" << "template" << "public" << "private" << "protected"
-                 << "virtual" << "override" << "final" << "explicit" << "inline" << "constexpr"
-                 << "nullptr" << "delete" << "new" << "this" << "try" << "catch" << "throw"
-                 << "bool" << "true" << "false" << "std" << "string" << "vector" << "map"
-                 << "set" << "list" << "queue" << "stack" << "pair" << "cout" << "cin" << "endl"
-                 << "include" << "define" << "ifdef" << "ifndef" << "endif"
-                 // Python keywords
-                 << "and" << "as" << "assert" << "async" << "await" << "break" << "class"
-                 << "continue" << "def" << "del" << "elif" << "else" << "except" << "finally"
-                 << "for" << "from" << "global" << "if" << "import" << "in" << "is" << "lambda"
-                 << "nonlocal" << "not" << "or" << "pass" << "raise" << "return" << "try"
-                 << "while" << "with" << "yield" << "True" << "False" << "None" << "self"
-                 << "print" << "range" << "len" << "str" << "int" << "float" << "list" << "dict"
-                 << "tuple" << "set" << "open" << "file" << "read" << "write" << "append"
-                 // JavaScript keywords
-                 << "abstract" << "arguments" << "await" << "boolean" << "break" << "byte"
-                 << "case" << "catch" << "char" << "class" << "const" << "continue" << "debugger"
-                 << "default" << "delete" << "do" << "double" << "else" << "enum" << "eval"
-                 << "export" << "extends" << "false" << "final" << "finally" << "float" << "for"
-                 << "function" << "goto" << "if" << "implements" << "import" << "in" << "instanceof"
-                 << "int" << "interface" << "let" << "long" << "native" << "new" << "null"
-                 << "package" << "private" << "protected" << "public" << "return" << "short"
-                 << "static" << "super" << "switch" << "synchronized" << "this" << "throw"
-                 << "throws" << "transient" << "true" << "try" << "typeof" << "var" << "void"
-                 << "volatile" << "while" << "with" << "yield" << "console" << "log" << "document"
-                 << "window" << "alert" << "prompt" << "confirm" << "getElementById"
-                 << "querySelector" << "addEventListener" << "setTimeout" << "setInterval";
-        
-        wordList.sort();
-        wordList.removeDuplicates();
-        
-        QCompleter* completer = new QCompleter(wordList, this);
-        completer->setCaseSensitivity(Qt::CaseInsensitive);
-        completer->setModelSorting(QCompleter::CaseInsensitivelySortedModel);
-        getCurrentTextArea()->setCompleter(completer);
+        // Setup autocompletion with shared completer
+        if (completer)
+            getCurrentTextArea()->setCompleter(completer);
     }
 }
 

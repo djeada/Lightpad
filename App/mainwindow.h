@@ -9,11 +9,12 @@
 #include "textareasettings.h"
 #include "theme.h"
 
-class Prefrences;
+class MainWindow;
 class Terminal;
 class Popup;
 class FindReplacePanel;
 class TextArea;
+class QCompleter;
 
 enum class Lang { cpp,
     js,
@@ -88,6 +89,7 @@ private:
     Prefrences* prefrences;
     FindReplacePanel* findReplacePanel;
     Terminal* terminal;
+    QCompleter* completer;
     TextAreaSettings settings;
     QString highlightLanguage;
     QFont font;

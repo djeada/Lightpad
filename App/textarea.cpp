@@ -335,7 +335,7 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
         return;
     }
 
-    // Handle completer
+    // Handle completer popup navigation
     if (m_completer && m_completer->popup()->isVisible()) {
         // The following keys are forwarded by the completer to the widget
         switch (keyEvent->key()) {
@@ -351,48 +351,49 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
         }
     }
 
-    // Check for completion shortcut
+    // Handle auto-parentheses before processing other keys
+    if (keyEvent->key() == Qt::Key_BraceLeft) {
+        closeParentheses("{", "}");
+        return;
+    }
+
+    else if (keyEvent->key() == Qt::Key_ParenLeft) {
+        closeParentheses("(", ")");
+        return;
+    }
+
+    else if (keyEvent->key() == Qt::Key_BracketLeft) {
+        closeParentheses("[", "]");
+        return;
+    }
+
+    else if (keyEvent->key() == Qt::Key_QuoteDbl) {
+        closeParentheses("\"", "\"");
+        return;
+    }
+
+    else if (keyEvent->key() == Qt::Key_Apostrophe) {
+        closeParentheses("\'", "\'");
+        return;
+    }
+
+    // Check for completion shortcut (Ctrl+Space)
     bool isShortcut = ((keyEvent->modifiers() & Qt::ControlModifier) && keyEvent->key() == Qt::Key_Space);
     
-    if (!m_completer || !isShortcut) {
-        if (keyEvent->key() == Qt::Key_BraceLeft) {
-            closeParentheses("{", "}");
-            return;
-        }
-
-        else if (keyEvent->key() == Qt::Key_ParenLeft) {
-            closeParentheses("(", ")");
-            return;
-        }
-
-        else if (keyEvent->key() == Qt::Key_BracketLeft) {
-            closeParentheses("[", "]");
-            return;
-        }
-
-        else if (keyEvent->key() == Qt::Key_QuoteDbl) {
-            closeParentheses("\"", "\"");
-            return;
-        }
-
-        else if (keyEvent->key() == Qt::Key_Apostrophe) {
-            closeParentheses("\'", "\'");
-            return;
-        }
-
+    if (!isShortcut) {
+        // Normal key processing
         QPlainTextEdit::keyPressEvent(keyEvent);
 
         if (keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return)
             handleKeyEnterPressed();
-        
-        return;
     }
 
-    // ctrl+space: completion shortcut
-    const bool ctrlOrShift = keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
-    if (!m_completer || (ctrlOrShift && keyEvent->text().isEmpty()))
+    // Handle autocompletion (both manual trigger and auto-popup)
+    if (!m_completer)
         return;
 
+    const bool ctrlOrShift = keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
+    
     static QString eow("~!@#$%^&*()_+{}|:\"<>?,./;'[]\\-="); // end of word
     bool hasModifier = (keyEvent->modifiers() != Qt::NoModifier) && !ctrlOrShift;
     QString completionPrefix = textUnderCursor();
@@ -699,7 +700,6 @@ void TextArea::insertCompletion(const QString& completion)
         return;
     QTextCursor tc = textCursor();
     int extra = completion.length() - m_completer->completionPrefix().length();
-    tc.movePosition(QTextCursor::Left);
     tc.movePosition(QTextCursor::EndOfWord);
     tc.insertText(completion.right(extra));
     setTextCursor(tc);
