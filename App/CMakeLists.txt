@@ -1,10 +1,4 @@
-cmake_minimum_required(VERSION 3.10.0 FATAL_ERROR)
-
-project(Lightpad LANGUAGES CXX)
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
  
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -74,16 +68,16 @@ set(project_resources
     icons.qrc
     messages.qrc)
 
-add_executable(${PROJECT_NAME} 
+add_executable(Lightpad 
     ${project_headers} 
     ${project_sources}
     ${project_resources})
 
-target_link_libraries(${PROJECT_NAME} 
+target_link_libraries(Lightpad 
     PRIVATE 
     Qt5::Core
     Qt5::Gui
     Qt5::Widgets)
 
 # Add QT_DEPRECATED_WARNINGS definition
-target_compile_definitions(${PROJECT_NAME} PRIVATE QT_DEPRECATED_WARNINGS)
+target_compile_definitions(Lightpad PRIVATE QT_DEPRECATED_WARNINGS)

@@ -75,7 +75,7 @@ All contributions are welcomed.
 - [ ] Full VIM compatibility.
 - [ ] Autocompletion.
 - [ ] Switch to QProcess for multiprocessing.
-- [ ] Allow for custom highlithing rules.
+- [ ] Allow for custom highlighting rules.
 
 <h1>License</h1>
 This project is licensed under  GNU GENERAL PUBLIC LICENSE - see the <a href='https://github.com/djeada/Lightpad/blob/master/LICENSE'> LICENSE.txt </a> file for details.
