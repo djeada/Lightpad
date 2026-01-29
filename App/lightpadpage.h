@@ -2,6 +2,8 @@
 #define LIGHTPADPAGE_H
 
 #include "textarea.h"
+#include "filedirtreemodel.h"
+#include "filedirtreecontroller.h"
 
 #include <QFileSystemModel>
 #include <QTreeView>
@@ -15,16 +17,23 @@ class LightpadTreeView : public QTreeView {
 
 public:
     LightpadTreeView(LightpadPage* parent = nullptr);
-    ~LightpadTreeView(){};
+    ~LightpadTreeView();
     void renameFile(QString oldFilePath, QString newFilePath);
 
 protected:
     void mouseReleaseEvent(QMouseEvent* e) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     LightpadPage* parentPage;
+    FileDirTreeModel* fileModel;
+    FileDirTreeController* fileController;
+    
     void duplicateFile(QString filePath);
     void removeFile(QString filePath);
+    void showContextMenu(const QPoint& pos);
 };
 
 class LightpadPage : public QWidget {

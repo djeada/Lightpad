@@ -4,6 +4,10 @@
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QMenu>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
 
 class LineEdit : public QLineEdit {
 
@@ -59,67 +63,177 @@ private:
     }
 };
 
-QString addUniqueSuffix(const QString& fileName)
-{
-    if (!QFile::exists(fileName))
-        return fileName;
-
-    QFileInfo fileInfo(fileName);
-    QString ret;
-
-    QString secondPart = fileInfo.completeSuffix();
-    QString firstPart;
-    if (!secondPart.isEmpty()) {
-        secondPart = "." + secondPart;
-        firstPart = fileName.left(fileName.size() - secondPart.size());
-    } else
-        firstPart = fileName;
-
-    for (int ii = 1;; ii++) {
-        ret = QString("%1 (%2)%3").arg(firstPart).arg(ii).arg(secondPart);
-        if (!QFile::exists(ret)) {
-            return ret;
-        }
-    }
-}
-
 LightpadTreeView::LightpadTreeView(LightpadPage* parent)
     : QTreeView(parent)
     , parentPage(parent)
+    , fileModel(new FileDirTreeModel(this))
+    , fileController(new FileDirTreeController(fileModel, this))
 {
+    // Enable drag and drop
+    setDragEnabled(true);
+    setAcceptDrops(true);
+    setDropIndicatorShown(true);
+    setDragDropMode(QAbstractItemView::DragDrop);
+    setDefaultDropAction(Qt::MoveAction);
+    
+    // Connect signals
+    connect(fileController, &FileDirTreeController::actionCompleted, 
+            parentPage, &LightpadPage::updateModel);
+    connect(fileController, &FileDirTreeController::fileRemoved,
+            parentPage, &LightpadPage::closeTabPage);
+}
+
+LightpadTreeView::~LightpadTreeView()
+{
+    // Qt parent-child relationship will handle cleanup automatically
 }
 
 void LightpadTreeView::mouseReleaseEvent(QMouseEvent* e)
 {
-
     if (e->button() == Qt::RightButton) {
-        QModelIndex idx = indexAt(e->pos());
-        if (idx.isValid()) {
-            QMenu m;
-            m.addAction("Duplicate");
-            m.addAction("Rename");
-            m.addAction("Remove");
+        showContextMenu(e->pos());
+    } else {
+        QTreeView::mouseReleaseEvent(e);
+    }
+}
 
-            QAction* selected = m.exec(mapToGlobal(e->pos()));
-
-            if (selected) {
-
-                QString filePath = parentPage->getFilePath(idx);
-
-                if (selected->text() == "Duplicate")
-                    duplicateFile(filePath);
-
-                else if (selected->text() == "Rename")
-                    new LineEdit(visualRect(idx), filePath, this);
-
-                else if (selected->text() == "Remove")
-                    removeFile(filePath);
-            }
-        }
+void LightpadTreeView::showContextMenu(const QPoint& pos)
+{
+    QModelIndex idx = indexAt(pos);
+    if (!idx.isValid()) {
+        return;
     }
 
-    else
-        QTreeView::mouseReleaseEvent(e);
+    QString filePath = parentPage->getFilePath(idx);
+    QFileInfo fileInfo(filePath);
+    QString parentPath = fileInfo.isDir() ? filePath : fileInfo.absolutePath();
+
+    QMenu menu;
+    
+    // Add context menu actions
+    QAction* newFileAction = menu.addAction("New File");
+    QAction* newDirAction = menu.addAction("New Directory");
+    menu.addSeparator();
+    QAction* duplicateAction = menu.addAction("Duplicate");
+    QAction* renameAction = menu.addAction("Rename");
+    menu.addSeparator();
+    QAction* copyAction = menu.addAction("Copy");
+    QAction* cutAction = menu.addAction("Cut");
+    QAction* pasteAction = menu.addAction("Paste");
+    menu.addSeparator();
+    QAction* removeAction = menu.addAction("Remove");
+    menu.addSeparator();
+    QAction* copyPathAction = menu.addAction("Copy Absolute Path");
+
+    QAction* selected = menu.exec(mapToGlobal(pos));
+
+    if (selected) {
+        if (selected == newFileAction) {
+            fileController->handleNewFile(parentPath);
+        } else if (selected == newDirAction) {
+            fileController->handleNewDirectory(parentPath);
+        } else if (selected == duplicateAction) {
+            fileController->handleDuplicate(filePath);
+        } else if (selected == renameAction) {
+            fileController->handleRename(filePath);
+        } else if (selected == copyAction) {
+            fileController->handleCopy(filePath);
+        } else if (selected == cutAction) {
+            fileController->handleCut(filePath);
+        } else if (selected == pasteAction) {
+            fileController->handlePaste(parentPath);
+        } else if (selected == removeAction) {
+            fileController->handleRemove(filePath);
+        } else if (selected == copyPathAction) {
+            fileController->handleCopyAbsolutePath(filePath);
+        }
+    }
+}
+
+void LightpadTreeView::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        QTreeView::dragEnterEvent(event);
+    }
+}
+
+void LightpadTreeView::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        QTreeView::dragMoveEvent(event);
+    }
+}
+
+void LightpadTreeView::dropEvent(QDropEvent* event)
+{
+    QModelIndex dropIndex = indexAt(event->pos());
+    
+    if (!dropIndex.isValid()) {
+        event->ignore();
+        return;
+    }
+    
+    QString destPath = parentPage->getFilePath(dropIndex);
+    QFileInfo destInfo(destPath);
+    
+    // If dropping on a file, use its parent directory
+    if (destInfo.isFile()) {
+        destPath = destInfo.absolutePath();
+    }
+    
+    if (event->mimeData()->hasUrls()) {
+        QList<QUrl> urls = event->mimeData()->urls();
+        bool anySuccess = false;
+        
+        for (const QUrl& url : urls) {
+            QString srcPath = url.toLocalFile();
+            QFileInfo srcInfo(srcPath);
+            
+            // Check if source and destination are the same
+            if (srcInfo.absolutePath() == destPath) {
+                continue;  // Skip if dropping in same directory
+            }
+            
+            QString fileName = srcInfo.fileName();
+            QString targetPath = destPath + QDir::separator() + fileName;
+            
+            // Use the model to handle the move with unique suffix
+            targetPath = fileModel->addUniqueSuffix(targetPath);
+            
+            bool success = false;
+            if (event->dropAction() == Qt::MoveAction) {
+                success = fileModel->renameFileOrDirectory(srcPath, targetPath);
+            } else if (event->dropAction() == Qt::CopyAction) {
+                if (srcInfo.isFile()) {
+                    if (QFile::copy(srcPath, targetPath)) {
+                        success = true;
+                        emit fileModel->modelUpdated();
+                    }
+                } else if (srcInfo.isDir()) {
+                    // For directory copy, we need to temporarily use the clipboard
+                    fileModel->copyToClipboard(srcPath);
+                    success = fileModel->pasteFromClipboard(destPath);
+                }
+            }
+            
+            if (success) {
+                anySuccess = true;
+            }
+        }
+        
+        if (anySuccess) {
+            parentPage->updateModel();
+            event->acceptProposedAction();
+        } else {
+            event->ignore();
+        }
+    } else {
+        QTreeView::dropEvent(event);
+    }
 }
 
 void LightpadTreeView::renameFile(QString oldFilePath, QString newFilePath)
@@ -133,21 +247,12 @@ void LightpadTreeView::renameFile(QString oldFilePath, QString newFilePath)
 
 void LightpadTreeView::duplicateFile(QString filePath)
 {
-    if (QFileInfo(filePath).isFile()) {
-        QFile(filePath).copy(addUniqueSuffix(filePath));
-        parentPage->updateModel();
-        parentPage->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
-    }
+    fileController->handleDuplicate(filePath);
 }
 
 void LightpadTreeView::removeFile(QString filePath)
 {
-    if (QFileInfo(filePath).isFile()) {
-        QFile::remove(filePath);
-        parentPage->updateModel();
-        parentPage->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
-        parentPage->closeTabPage(filePath);
-    }
+    fileController->handleRemove(filePath);
 }
 
 LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)

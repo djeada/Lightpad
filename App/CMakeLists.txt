@@ -41,6 +41,8 @@ set(project_headers
     terminal.h
     textarea.h
     textareasettings.h
+    filedirtreemodel.h
+    filedirtreecontroller.h)
     theme.h)
 
 set(project_sources 
@@ -61,6 +63,8 @@ set(project_sources
     terminal.cpp
     textarea.cpp
     textareasettings.cpp
+    filedirtreemodel.cpp
+    filedirtreecontroller.cpp)
     theme.cpp)
 
 set(project_resources
