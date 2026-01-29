@@ -41,9 +41,9 @@ set(project_headers
     terminal.h
     textarea.h
     textareasettings.h
-    theme.h
     filedirtreemodel.h
     filedirtreecontroller.h)
+    theme.h)
 
 set(project_sources 
     main.cpp
@@ -63,9 +63,9 @@ set(project_sources
     terminal.cpp
     textarea.cpp
     textareasettings.cpp
-    theme.cpp
     filedirtreemodel.cpp
     filedirtreecontroller.cpp)
+    theme.cpp)
 
 set(project_resources
     highlight.qrc
