@@ -48,23 +48,22 @@ Clone the Lightpad repository:
 <pre>sudo apt-get install build-essential</pre>
 
 <h2>Install dependencies</h2>
-<pre>sudo apt-get install libqt5webkit5-dev qttools5-dev-tools qt5-default</pre>
+<pre>sudo apt-get install qtbase5-dev qttools5-dev-tools</pre>
                      
-<h2>Building with Cmake</h2>
-Open the terminal in app direcory and write: 
+<h2>Building with CMake</h2>
+Open the terminal in the root directory of the project and run: 
 <pre>mkdir build
 cd build
-cmake -GNinja ..
-ninja ../Lightpad</pre>
+cmake ..
+cmake --build .</pre>
 
-<h2>Building with Qmake</h2>
-Open the terminal in app directory and write: 
-<br>
-<pre>qmake Lightpad.pro
-make</pre>
+The executable will be located at <code>build/App/Lightpad</code>.
 
 <h2>Run</h2>
-To run Lightpad, navigate to the program directory and double-click Lightpad icon.
+To run Lightpad from the build directory:
+<pre>./App/Lightpad</pre>
+
+Or navigate to the program directory and double-click the Lightpad executable.
 
 If you had problems compiling from source, raise a new issue in the <a href = https://github.com/djeada/lightpad/issues> link</href>.
 
@@ -77,8 +76,7 @@ All contributions are welcomed.
 - [ ] Full VIM compatibility.
 - [x] Autocompletion.
 - [ ] Switch to QProcess for multiprocessing.
-- [ ] Allow for custom highlithing rules. 
-- [ ] Avoid using QMake for building and instead use CMake.
+- [ ] Allow for custom highlighting rules.
 
 <h1>License</h1>
 This project is licensed under  GNU GENERAL PUBLIC LICENSE - see the <a href='https://github.com/djeada/Lightpad/blob/master/LICENSE'> LICENSE.txt </a> file for details.
