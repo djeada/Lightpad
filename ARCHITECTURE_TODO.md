@@ -125,7 +125,7 @@ This document outlines major architectural improvements and refactoring tasks ne
 
 ### 10. Code Quality Improvements
 - [ ] **Fix naming inconsistencies**
-  - "prefrences" is misspelled (should be "preferences") in multiple files
+  - "preferences" is misspelled as "prefrences" in multiple files (prefrences.cpp, prefrences.h, etc.)
   - Standardize naming conventions across codebase
   - Use consistent naming for similar patterns (e.g., get/set vs accessor methods)
   
@@ -244,6 +244,8 @@ This document outlines major architectural improvements and refactoring tasks ne
 
 ## Implementation Strategy
 
+**Note:** The timeline below is a rough estimate for planning purposes and should be adjusted based on available resources, team size, and project priorities.
+
 ### Phase 1: Foundation (Weeks 1-4)
 - Set up testing infrastructure
 - Implement logging framework
@@ -281,7 +283,7 @@ When working on any of these items:
 
 ## Notes
 
-- This list is living document and should be updated as priorities change
+- This list is a living document and should be updated as priorities change
 - Some items may be split into smaller tasks when implementation begins
 - Cross-reference with existing README.md TODO section
 - Consider user feedback and feature requests when prioritizing
