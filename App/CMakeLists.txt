@@ -27,11 +27,17 @@ set(project_ui
 set(project_headers 
     ui/dialogs/colorpicker.h
     ui/panels/findreplacepanel.h
+    core/async/asyncworker.h
     core/document.h
     core/formatter.h
     core/io/filemanager.h
     core/lightpadpage.h
     core/logging/logger.h
+    editor/vimmode.h
+    lsp/lspclient.h
+    plugins/iplugin.h
+    plugins/isyntaxplugin.h
+    plugins/pluginmanager.h
     syntax/lightpadsyntaxhighlighter.h
     core/lightpadtabwidget.h
     ui/mainwindow.h
@@ -53,11 +59,15 @@ set(project_sources
     main.cpp
     ui/dialogs/colorpicker.cpp
     ui/panels/findreplacepanel.cpp
+    core/async/asyncworker.cpp
     core/document.cpp
     core/formatter.cpp
     core/io/filemanager.cpp
     core/lightpadpage.cpp
     core/logging/logger.cpp
+    editor/vimmode.cpp
+    lsp/lspclient.cpp
+    plugins/pluginmanager.cpp
     syntax/lightpadsyntaxhighlighter.cpp
     core/lightpadtabwidget.cpp
     ui/mainwindow.cpp
