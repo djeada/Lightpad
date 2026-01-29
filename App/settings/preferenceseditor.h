@@ -1,5 +1,5 @@
-#ifndef EDITORPREFERENCES_H
-#define EDITORPREFERENCES_H
+#ifndef PREFERENCESEDITOR_H
+#define PREFERENCESEDITOR_H
 
 #include <QWidget>
 
@@ -27,4 +27,4 @@ private:
     PopupTabWidth* popupTabWidth;
 };
 
-#endif // EDITORPREFERENCES_H
+#endif // PREFERENCESEDITOR_H

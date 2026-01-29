@@ -28,6 +28,7 @@ void Logger::setLogLevel(LogLevel level)
 
 LogLevel Logger::logLevel() const
 {
+    QMutexLocker locker(&m_mutex);
     return m_logLevel;
 }
 
@@ -59,6 +60,7 @@ void Logger::setFileLoggingEnabled(bool enabled, const QString& filePath)
 
 bool Logger::isFileLoggingEnabled() const
 {
+    QMutexLocker locker(&m_mutex);
     return m_fileLoggingEnabled;
 }
 
@@ -70,6 +72,7 @@ void Logger::setConsoleLoggingEnabled(bool enabled)
 
 bool Logger::isConsoleLoggingEnabled() const
 {
+    QMutexLocker locker(&m_mutex);
     return m_consoleLoggingEnabled;
 }
 

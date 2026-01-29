@@ -122,7 +122,7 @@ private:
     bool m_consoleLoggingEnabled;
     QFile m_logFile;
     QTextStream m_logStream;
-    QMutex m_mutex;
+    mutable QMutex m_mutex;
 };
 
 // Convenience macros for logging with file and line info

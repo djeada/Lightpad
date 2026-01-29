@@ -57,8 +57,10 @@ void TestTheme::testReadFromJson()
     
     theme.read(json);
     
-    // Verify the color was read (note: there's a bug in the original code 
-    // that assigns all values to backgroundColor, but we test current behavior)
+    // TODO: The Theme::read() method has a bug where all JSON values are assigned
+    // to backgroundColor instead of their respective member variables.
+    // This test only verifies basic functionality until the bug is fixed.
+    // See ARCHITECTURE_TODO.md for planned improvements to settings management.
     QVERIFY(theme.backgroundColor.isValid());
 }
 
