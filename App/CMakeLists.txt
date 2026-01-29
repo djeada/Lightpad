@@ -1,7 +1,3 @@
-cmake_minimum_required(VERSION 3.10.0 FATAL_ERROR)
-
-project(Lightpad LANGUAGES CXX)
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
  
 set(CMAKE_AUTOMOC ON)
@@ -14,43 +10,78 @@ if(WIN32)
   set(CMAKE_WIN32_EXECUTABLE ON)
 endif()
 
+# Subprocess library is available in libs/ but not currently used by the main application
+# add_subdirectory(libs)
+
 set(project_ui 
+    colorpicker.ui
+    findreplacepanel.ui
     mainwindow.ui
-    findreplacepanel.ui)
+    prefrences.ui
+    prefrenceseditor.ui
+    prefrencesview.ui
+    runconfigurations.ui
+    shortcuts.ui
+    terminal.ui)
 
 set(project_headers 
-    mainwindow.h
+    colorpicker.h
     findreplacepanel.h
+    formatter.h
     lightpadpage.h
     lightpadsyntaxhighlighter.h
     lightpadtabwidget.h
+    mainwindow.h
+    popup.h
+    prefrences.h
+    prefrenceseditor.h
+    prefrencesview.h
+    runconfigurations.h
+    shortcuts.h
+    terminal.h
     textarea.h
+    textareasettings.h
+    theme.h
     filedirtreemodel.h
     filedirtreecontroller.h)
 
 set(project_sources 
     main.cpp
-    mainwindow.cpp
+    colorpicker.cpp
     findreplacepanel.cpp
+    formatter.cpp
     lightpadpage.cpp
     lightpadsyntaxhighlighter.cpp
     lightpadtabwidget.cpp
+    mainwindow.cpp
+    popup.cpp
+    prefrences.cpp
+    prefrenceseditor.cpp
+    prefrencesview.cpp
+    runconfigurations.cpp
+    shortcuts.cpp
+    terminal.cpp
     textarea.cpp
+    textareasettings.cpp
+    theme.cpp
     filedirtreemodel.cpp
     filedirtreecontroller.cpp)
 
-list (APPEND RESOURCES icons.qrc)
-list (APPEND RESOURCES highlight.qrc)
+set(project_resources
+    highlight.qrc
+    icons.qrc
+    messages.qrc)
 
-qt5_add_resources (RCC_SOURCES ${RESOURCES})
-qt5_wrap_ui(project_headers_wrapped ${project_ui})
-qt5_wrap_cpp(project_sources_moc ${project_headers})
+add_executable(Lightpad 
+    ${project_headers} 
+    ${project_sources}
+    ${project_resources})
 
-add_executable(${PROJECT_NAME} ${project_headers} ${project_sources}
-    ${project_sources_moc} ${project_headers_wrapped} ${RCC_SOURCES})
-
-target_link_libraries(${PROJECT_NAME} 
-    PUBLIC 
+target_link_libraries(Lightpad 
+    PRIVATE 
     Qt5::Core
     Qt5::Gui
     Qt5::Widgets)
+
+# Add QT_DEPRECATED_WARNINGS definition
+target_compile_definitions(Lightpad PRIVATE QT_DEPRECATED_WARNINGS)

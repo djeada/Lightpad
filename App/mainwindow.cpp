@@ -5,6 +5,7 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QStringListModel>
+#include <QCompleter>
 #include <cstdio>
 
 #include "findreplacepanel.h"
@@ -26,6 +27,7 @@ MainWindow::MainWindow(QWidget* parent)
     , prefrences(nullptr)
     , findReplacePanel(nullptr)
     , terminal(nullptr)
+    , completer(nullptr)
     , highlightLanguage("")
     , font(QApplication::font())
 {
@@ -34,6 +36,57 @@ MainWindow::MainWindow(QWidget* parent)
     show();
     ui->tabWidget->setMainWindow(this);
     ui->magicButton->setIconSize(0.8 * ui->magicButton->size());
+    
+    // Initialize shared completer
+    QStringList wordList;
+    
+    // Common keywords across languages
+    wordList << "break" << "case" << "continue" << "default" << "do" << "else" 
+             << "for" << "if" << "return" << "switch" << "while";
+    
+    // C/C++ specific keywords
+    wordList << "auto" << "char" << "const" << "double" << "enum" << "extern" << "float"
+             << "goto" << "int" << "long" << "register" << "short" << "signed" << "sizeof" 
+             << "static" << "struct" << "typedef" << "union" << "unsigned" << "void" << "volatile"
+             << "class" << "namespace" << "template" << "public" << "private" << "protected"
+             << "virtual" << "override" << "final" << "explicit" << "inline" << "constexpr"
+             << "nullptr" << "delete" << "new" << "this" << "try" << "catch" << "throw"
+             << "bool" << "true" << "false";
+    
+    // C++ STL types and functions
+    wordList << "std" << "string" << "vector" << "map" << "set" << "list" << "queue" 
+             << "stack" << "pair" << "cout" << "cin" << "endl" << "include" << "define" 
+             << "ifdef" << "ifndef" << "endif";
+    
+    // Python specific keywords
+    wordList << "and" << "as" << "assert" << "async" << "await" << "class" << "def" 
+             << "del" << "elif" << "except" << "finally" << "from" << "global" << "import" 
+             << "in" << "is" << "lambda" << "nonlocal" << "not" << "or" << "pass" << "raise"
+             << "with" << "yield" << "True" << "False" << "None" << "self";
+    
+    // Python built-ins
+    wordList << "print" << "range" << "len" << "str" << "int" << "float" << "list" << "dict"
+             << "tuple" << "set" << "open" << "file" << "read" << "write" << "append";
+    
+    // JavaScript specific keywords
+    wordList << "abstract" << "arguments" << "boolean" << "byte" << "debugger" 
+             << "eval" << "export" << "extends" << "final" << "function" << "implements"
+             << "instanceof" << "interface" << "let" << "native" << "package" 
+             << "super" << "synchronized" << "throws" << "transient" << "typeof" << "var"
+             << "const";
+    
+    // JavaScript DOM/Browser
+    wordList << "console" << "log" << "document" << "window" << "alert" << "prompt" 
+             << "confirm" << "getElementById" << "querySelector" << "addEventListener" 
+             << "setTimeout" << "setInterval";
+    
+    wordList.sort();
+    wordList.removeDuplicates();
+    
+    completer = new QCompleter(wordList, this);
+    completer->setCaseSensitivity(Qt::CaseInsensitive);
+    completer->setModelSorting(QCompleter::CaseInsensitivelySortedModel);
+    
     setupTextArea();
     setupTabWidget();
     loadSettings();
@@ -559,6 +612,10 @@ void MainWindow::setupTextArea()
         getCurrentTextArea()->setMainWindow(this);
         getCurrentTextArea()->setFontSize(settings.mainFont.pointSize());
         getCurrentTextArea()->setTabWidth(settings.tabWidth);
+        
+        // Setup autocompletion with shared completer
+        if (completer)
+            getCurrentTextArea()->setCompleter(completer);
     }
 }
 

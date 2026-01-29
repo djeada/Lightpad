@@ -7,6 +7,9 @@
 #include <QStackedWidget>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <QCompleter>
+#include <QAbstractItemView>
+#include <QScrollBar>
 
 #include "lightpadpage.h"
 #include "lightpadsyntaxhighlighter.h"
@@ -140,6 +143,7 @@ TextArea::TextArea(QWidget* parent)
     , bufferText("")
     , highlightLang("")
     , syntaxHighlighter(nullptr)
+    , m_completer(nullptr)
     , searchWord("")
     , areChangesUnsaved(false)
     , autoIndent(true)
@@ -164,6 +168,7 @@ TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent)
     , bufferText("")
     , highlightLang("")
     , syntaxHighlighter(nullptr)
+    , m_completer(nullptr)
     , searchWord("")
     , areChangesUnsaved(false)
     , autoIndent(settings.autoIndent)
@@ -330,6 +335,23 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
         return;
     }
 
+    // Handle completer popup navigation
+    if (m_completer && m_completer->popup()->isVisible()) {
+        // The following keys are forwarded by the completer to the widget
+        switch (keyEvent->key()) {
+        case Qt::Key_Enter:
+        case Qt::Key_Return:
+        case Qt::Key_Escape:
+        case Qt::Key_Tab:
+        case Qt::Key_Backtab:
+            keyEvent->ignore();
+            return; // let the completer do default behavior
+        default:
+            break;
+        }
+    }
+
+    // Handle auto-parentheses before processing other keys
     if (keyEvent->key() == Qt::Key_BraceLeft) {
         closeParentheses("{", "}");
         return;
@@ -355,10 +377,41 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
         return;
     }
 
-    QPlainTextEdit::keyPressEvent(keyEvent);
+    // Check for completion shortcut (Ctrl+Space)
+    bool isShortcut = ((keyEvent->modifiers() & Qt::ControlModifier) && keyEvent->key() == Qt::Key_Space);
+    
+    if (!isShortcut) {
+        // Normal key processing
+        QPlainTextEdit::keyPressEvent(keyEvent);
 
-    if (keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return)
-        handleKeyEnterPressed();
+        if (keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return)
+            handleKeyEnterPressed();
+    }
+
+    // Handle autocompletion (both manual trigger and auto-popup)
+    if (!m_completer)
+        return;
+
+    const bool ctrlOrShift = keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
+    
+    static QString eow("~!@#$%^&*()_+{}|:\"<>?,./;'[]\\-="); // end of word
+    bool hasModifier = (keyEvent->modifiers() != Qt::NoModifier) && !ctrlOrShift;
+    QString completionPrefix = textUnderCursor();
+
+    if (!isShortcut && (hasModifier || keyEvent->text().isEmpty() || completionPrefix.length() < 3
+                          || eow.contains(keyEvent->text().right(1)))) {
+        m_completer->popup()->hide();
+        return;
+    }
+
+    if (completionPrefix != m_completer->completionPrefix()) {
+        m_completer->setCompletionPrefix(completionPrefix);
+        m_completer->popup()->setCurrentIndex(m_completer->completionModel()->index(0, 0));
+    }
+    QRect cr = cursorRect();
+    cr.setWidth(m_completer->popup()->sizeHintForColumn(0)
+                + m_completer->popup()->verticalScrollBar()->sizeHint().width());
+    m_completer->complete(cr); // popup it up!
 }
 
 void TextArea::contextMenuEvent(QContextMenuEvent* event)
@@ -617,4 +670,44 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang)
             break;
         }
     }
+}
+
+void TextArea::setCompleter(QCompleter* completer)
+{
+    if (m_completer)
+        m_completer->disconnect(this);
+
+    m_completer = completer;
+
+    if (!m_completer)
+        return;
+
+    m_completer->setWidget(this);
+    m_completer->setCompletionMode(QCompleter::PopupCompletion);
+    m_completer->setCaseSensitivity(Qt::CaseInsensitive);
+    QObject::connect(m_completer, QOverload<const QString&>::of(&QCompleter::activated),
+                     this, &TextArea::insertCompletion);
+}
+
+QCompleter* TextArea::completer() const
+{
+    return m_completer;
+}
+
+void TextArea::insertCompletion(const QString& completion)
+{
+    if (m_completer->widget() != this)
+        return;
+    QTextCursor tc = textCursor();
+    int extra = completion.length() - m_completer->completionPrefix().length();
+    tc.movePosition(QTextCursor::EndOfWord);
+    tc.insertText(completion.right(extra));
+    setTextCursor(tc);
+}
+
+QString TextArea::textUnderCursor() const
+{
+    QTextCursor tc = textCursor();
+    tc.select(QTextCursor::WordUnderCursor);
+    return tc.selectedText();
 }

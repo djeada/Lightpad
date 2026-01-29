@@ -5,6 +5,7 @@
 
 class MainWindow;
 class LightpadSyntaxHighlighter;
+class QCompleter;
 struct TextAreaSettings;
 
 class TextArea : public QPlainTextEdit {
@@ -28,6 +29,8 @@ public:
     void highlihtCurrentLine(bool flag);
     void highlihtMatchingBracket(bool flag);
     void loadSettings(const TextAreaSettings settings);
+    void setCompleter(QCompleter* completer);
+    QCompleter* completer() const;
     int lineNumberAreaWidth();
     int fontSize();
     QString getSearchWord();
@@ -49,6 +52,7 @@ private:
     QString highlightLang;
     QFont mainFont;
     LightpadSyntaxHighlighter* syntaxHighlighter;
+    QCompleter* m_completer;
     QString searchWord;
     bool areChangesUnsaved;
     bool autoIndent;
@@ -65,6 +69,8 @@ private:
     void updateRowColDisplay();
     void drawMatchingBrackets();
     void updateCursorPositionChangedCallbacks();
+    void insertCompletion(const QString& completion);
+    QString textUnderCursor() const;
 };
 
 #endif
