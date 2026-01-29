@@ -19,6 +19,7 @@ set(CMAKE_AUTORCC ON)
 # Include directories for application sources
 include_directories(${CMAKE_SOURCE_DIR}/App)
 include_directories(${CMAKE_SOURCE_DIR}/App/core)
+include_directories(${CMAKE_SOURCE_DIR}/App/core/io)
 include_directories(${CMAKE_SOURCE_DIR}/App/core/logging)
 include_directories(${CMAKE_SOURCE_DIR}/App/settings)
 include_directories(${CMAKE_SOURCE_DIR}/App/syntax)
@@ -56,18 +57,73 @@ target_link_libraries(test_theme
 
 target_compile_definitions(test_theme PRIVATE QT_DEPRECATED_WARNINGS)
 
+# FileManager test executable
+add_executable(test_filemanager
+    unit/test_filemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/io/filemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_link_libraries(test_filemanager
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_filemanager PRIVATE QT_DEPRECATED_WARNINGS)
+
+# Document test executable
+add_executable(test_document
+    unit/test_document.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/document.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/io/filemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_link_libraries(test_document
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_document PRIVATE QT_DEPRECATED_WARNINGS)
+
+# SettingsManager test executable
+add_executable(test_settingsmanager
+    unit/test_settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_link_libraries(test_settingsmanager
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_settingsmanager PRIVATE QT_DEPRECATED_WARNINGS)
+
 # Register tests with CTest
 add_test(NAME LoggerTests COMMAND test_logger)
 add_test(NAME ThemeTests COMMAND test_theme)
+add_test(NAME FileManagerTests COMMAND test_filemanager)
+add_test(NAME DocumentTests COMMAND test_document)
+add_test(NAME SettingsManagerTests COMMAND test_settingsmanager)
 
 # Set environment variable for headless testing
-set_tests_properties(LoggerTests ThemeTests PROPERTIES
+set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
 # Custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_logger test_theme
+    DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

@@ -27,7 +27,9 @@ set(project_ui
 set(project_headers 
     ui/dialogs/colorpicker.h
     ui/panels/findreplacepanel.h
+    core/document.h
     core/formatter.h
+    core/io/filemanager.h
     core/lightpadpage.h
     core/logging/logger.h
     syntax/lightpadsyntaxhighlighter.h
@@ -36,6 +38,7 @@ set(project_headers
     ui/popup.h
     ui/dialogs/preferences.h
     settings/preferenceseditor.h
+    settings/settingsmanager.h
     ui/panels/preferencesview.h
     ui/dialogs/runconfigurations.h
     ui/dialogs/shortcuts.h
@@ -50,7 +53,9 @@ set(project_sources
     main.cpp
     ui/dialogs/colorpicker.cpp
     ui/panels/findreplacepanel.cpp
+    core/document.cpp
     core/formatter.cpp
+    core/io/filemanager.cpp
     core/lightpadpage.cpp
     core/logging/logger.cpp
     syntax/lightpadsyntaxhighlighter.cpp
@@ -59,6 +64,7 @@ set(project_sources
     ui/popup.cpp
     ui/dialogs/preferences.cpp
     settings/preferenceseditor.cpp
+    settings/settingsmanager.cpp
     ui/panels/preferencesview.cpp
     ui/dialogs/runconfigurations.cpp
     ui/dialogs/shortcuts.cpp
