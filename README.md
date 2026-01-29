@@ -74,7 +74,7 @@ All contributions are welcomed.
 
 - [ ] User prefrences should be saved in the home directory. 
 - [ ] Full VIM compatibility.
-- [ ] Autocompletion.
+- [x] Autocompletion.
 - [ ] Switch to QProcess for multiprocessing.
 - [ ] Allow for custom highlithing rules. 
 - [ ] Avoid using QMake for building and instead use CMake.

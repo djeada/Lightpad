@@ -5,6 +5,7 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QStringListModel>
+#include <QCompleter>
 #include <cstdio>
 
 #include "findreplacepanel.h"
@@ -559,6 +560,50 @@ void MainWindow::setupTextArea()
         getCurrentTextArea()->setMainWindow(this);
         getCurrentTextArea()->setFontSize(settings.mainFont.pointSize());
         getCurrentTextArea()->setTabWidth(settings.tabWidth);
+        
+        // Setup autocompletion
+        QStringList wordList;
+        // C++ keywords
+        wordList << "auto" << "break" << "case" << "char" << "const" << "continue" << "default"
+                 << "do" << "double" << "else" << "enum" << "extern" << "float" << "for"
+                 << "goto" << "if" << "int" << "long" << "register" << "return" << "short"
+                 << "signed" << "sizeof" << "static" << "struct" << "switch" << "typedef"
+                 << "union" << "unsigned" << "void" << "volatile" << "while"
+                 << "class" << "namespace" << "template" << "public" << "private" << "protected"
+                 << "virtual" << "override" << "final" << "explicit" << "inline" << "constexpr"
+                 << "nullptr" << "delete" << "new" << "this" << "try" << "catch" << "throw"
+                 << "bool" << "true" << "false" << "std" << "string" << "vector" << "map"
+                 << "set" << "list" << "queue" << "stack" << "pair" << "cout" << "cin" << "endl"
+                 << "include" << "define" << "ifdef" << "ifndef" << "endif"
+                 // Python keywords
+                 << "and" << "as" << "assert" << "async" << "await" << "break" << "class"
+                 << "continue" << "def" << "del" << "elif" << "else" << "except" << "finally"
+                 << "for" << "from" << "global" << "if" << "import" << "in" << "is" << "lambda"
+                 << "nonlocal" << "not" << "or" << "pass" << "raise" << "return" << "try"
+                 << "while" << "with" << "yield" << "True" << "False" << "None" << "self"
+                 << "print" << "range" << "len" << "str" << "int" << "float" << "list" << "dict"
+                 << "tuple" << "set" << "open" << "file" << "read" << "write" << "append"
+                 // JavaScript keywords
+                 << "abstract" << "arguments" << "await" << "boolean" << "break" << "byte"
+                 << "case" << "catch" << "char" << "class" << "const" << "continue" << "debugger"
+                 << "default" << "delete" << "do" << "double" << "else" << "enum" << "eval"
+                 << "export" << "extends" << "false" << "final" << "finally" << "float" << "for"
+                 << "function" << "goto" << "if" << "implements" << "import" << "in" << "instanceof"
+                 << "int" << "interface" << "let" << "long" << "native" << "new" << "null"
+                 << "package" << "private" << "protected" << "public" << "return" << "short"
+                 << "static" << "super" << "switch" << "synchronized" << "this" << "throw"
+                 << "throws" << "transient" << "true" << "try" << "typeof" << "var" << "void"
+                 << "volatile" << "while" << "with" << "yield" << "console" << "log" << "document"
+                 << "window" << "alert" << "prompt" << "confirm" << "getElementById"
+                 << "querySelector" << "addEventListener" << "setTimeout" << "setInterval";
+        
+        wordList.sort();
+        wordList.removeDuplicates();
+        
+        QCompleter* completer = new QCompleter(wordList, this);
+        completer->setCaseSensitivity(Qt::CaseInsensitive);
+        completer->setModelSorting(QCompleter::CaseInsensitivelySortedModel);
+        getCurrentTextArea()->setCompleter(completer);
     }
 }
 
