@@ -70,23 +70,13 @@ void FileDirTreeController::handleDuplicate(const QString& path)
 void FileDirTreeController::handleCopy(const QString& path)
 {
     model->copyToClipboard(path);
-    showInfo("Item copied to clipboard");
+    // No modal dialog - just silently copy to clipboard
 }
 
 void FileDirTreeController::handleCut(const QString& path)
 {
     model->cutToClipboard(path);
-    showInfo("Item cut to clipboard");
-}
-
-void FileDirTreeController::handleDelete(const QString& path)
-{
-    if (confirmAction("Are you sure you want to permanently delete this item?")) {
-        if (model->removeFileOrDirectory(path)) {
-            emit fileRemoved(path);
-            emit actionCompleted();
-        }
-    }
+    // No modal dialog - just silently cut to clipboard
 }
 
 void FileDirTreeController::handlePaste(const QString& destPath)

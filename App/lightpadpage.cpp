@@ -85,8 +85,7 @@ LightpadTreeView::LightpadTreeView(LightpadPage* parent)
 
 LightpadTreeView::~LightpadTreeView()
 {
-    delete fileController;
-    delete fileModel;
+    // Qt parent-child relationship will handle cleanup automatically
 }
 
 void LightpadTreeView::mouseReleaseEvent(QMouseEvent* e)
@@ -123,7 +122,6 @@ void LightpadTreeView::showContextMenu(const QPoint& pos)
     QAction* pasteAction = menu.addAction("Paste");
     menu.addSeparator();
     QAction* removeAction = menu.addAction("Remove");
-    QAction* deleteAction = menu.addAction("Delete");
     menu.addSeparator();
     QAction* copyPathAction = menu.addAction("Copy Absolute Path");
 
@@ -146,8 +144,6 @@ void LightpadTreeView::showContextMenu(const QPoint& pos)
             fileController->handlePaste(parentPath);
         } else if (selected == removeAction) {
             fileController->handleRemove(filePath);
-        } else if (selected == deleteAction) {
-            fileController->handleDelete(filePath);
         } else if (selected == copyPathAction) {
             fileController->handleCopyAbsolutePath(filePath);
         }
@@ -191,28 +187,49 @@ void LightpadTreeView::dropEvent(QDropEvent* event)
     
     if (event->mimeData()->hasUrls()) {
         QList<QUrl> urls = event->mimeData()->urls();
+        bool anySuccess = false;
+        
         for (const QUrl& url : urls) {
             QString srcPath = url.toLocalFile();
             QFileInfo srcInfo(srcPath);
+            
+            // Check if source and destination are the same
+            if (srcInfo.absolutePath() == destPath) {
+                continue;  // Skip if dropping in same directory
+            }
+            
             QString fileName = srcInfo.fileName();
             QString targetPath = destPath + QDir::separator() + fileName;
             
-            // Use the model to handle the move
+            // Use the model to handle the move with unique suffix
             targetPath = fileModel->addUniqueSuffix(targetPath);
             
+            bool success = false;
             if (event->dropAction() == Qt::MoveAction) {
-                if (QFile::rename(srcPath, targetPath)) {
-                    parentPage->updateModel();
-                }
+                success = fileModel->renameFileOrDirectory(srcPath, targetPath);
             } else if (event->dropAction() == Qt::CopyAction) {
                 if (srcInfo.isFile()) {
                     if (QFile::copy(srcPath, targetPath)) {
-                        parentPage->updateModel();
+                        success = true;
+                        emit fileModel->modelUpdated();
                     }
+                } else if (srcInfo.isDir()) {
+                    // Use model's copyRecursively for directory copy
+                    success = fileModel->pasteFromClipboard(destPath);
                 }
             }
+            
+            if (success) {
+                anySuccess = true;
+            }
         }
-        event->acceptProposedAction();
+        
+        if (anySuccess) {
+            parentPage->updateModel();
+            event->acceptProposedAction();
+        } else {
+            event->ignore();
+        }
     } else {
         QTreeView::dropEvent(event);
     }

@@ -23,7 +23,6 @@ public:
     void handleDuplicate(const QString& path);
     void handleCopy(const QString& path);
     void handleCut(const QString& path);
-    void handleDelete(const QString& path);
     void handlePaste(const QString& destPath);
     void handleCopyAbsolutePath(const QString& path);
 
