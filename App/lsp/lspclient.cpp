@@ -227,6 +227,11 @@ void LspClient::sendRequest(const QString& method, const QJsonObject& params, in
     QJsonDocument doc(message);
     QByteArray content = doc.toJson(QJsonDocument::Compact);
     
+    if (!m_process) {
+        LOG_WARNING("LSP: Cannot send request, process not started");
+        return;
+    }
+    
     QString header = QString("Content-Length: %1\r\n\r\n").arg(content.size());
     m_process->write(header.toUtf8());
     m_process->write(content);
@@ -246,6 +251,11 @@ void LspClient::sendNotification(const QString& method, const QJsonObject& param
     QJsonDocument doc(message);
     QByteArray content = doc.toJson(QJsonDocument::Compact);
     
+    if (!m_process) {
+        LOG_WARNING("LSP: Cannot send notification, process not started");
+        return;
+    }
+    
     QString header = QString("Content-Length: %1\r\n\r\n").arg(content.size());
     m_process->write(header.toUtf8());
     m_process->write(content);
@@ -255,10 +265,18 @@ void LspClient::sendNotification(const QString& method, const QJsonObject& param
 
 void LspClient::onReadyReadStandardOutput()
 {
+    if (!m_process) {
+        return;
+    }
     m_buffer += QString::fromUtf8(m_process->readAllStandardOutput());
     
-    // Parse LSP messages from buffer
-    while (true) {
+    // Parse LSP messages from buffer (limit iterations to prevent infinite loops)
+    const int maxIterations = 100;
+    int iterations = 0;
+    
+    while (iterations < maxIterations) {
+        ++iterations;
+        
         int headerEnd = m_buffer.indexOf("\r\n\r\n");
         if (headerEnd == -1) {
             break;
@@ -277,7 +295,7 @@ void LspClient::onReadyReadStandardOutput()
         }
         
         if (contentLength == 0) {
-            LOG_WARNING("LSP message without Content-Length");
+            LOG_WARNING("LSP message without Content-Length, skipping header");
             m_buffer = m_buffer.mid(headerEnd + 4);
             continue;
         }

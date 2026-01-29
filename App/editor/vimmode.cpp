@@ -5,6 +5,9 @@
 #include <QApplication>
 #include <QClipboard>
 
+// Constants
+static const int VIM_PAGE_SIZE = 20;
+
 VimMode::VimMode(QPlainTextEdit* editor, QObject* parent)
     : QObject(parent)
     , m_editor(editor)
@@ -214,6 +217,15 @@ bool VimMode::handleNormalMode(QKeyEvent* event)
         return true;
         
     case Qt::Key_J:
+        if (mods & Qt::ShiftModifier) {
+            // Shift+J - Join lines
+            joinLines();
+        } else {
+            // j - Move down
+            executeMotion(VimMotion::Down, count);
+        }
+        return true;
+        
     case Qt::Key_Down:
         executeMotion(VimMotion::Down, count);
         return true;
@@ -294,11 +306,6 @@ bool VimMode::handleNormalMode(QKeyEvent* event)
         setMode(VimEditMode::Insert);
         return true;
         
-    case Qt::Key_R:
-        // Replace mode - wait for next char
-        m_commandBuffer = "r";
-        return true;
-        
     case Qt::Key_P:
         if (!m_registerBuffer.isEmpty()) {
             QTextCursor cursor = m_editor->textCursor();
@@ -324,12 +331,14 @@ bool VimMode::handleNormalMode(QKeyEvent* event)
         }
         return true;
         
-    case Qt::Key_R | Qt::ControlModifier:
-        m_editor->redo();
-        return true;
-        
-    case Qt::Key_J | Qt::ShiftModifier:
-        joinLines();
+    case Qt::Key_R:
+        if (mods & Qt::ControlModifier) {
+            // Ctrl+R - Redo
+            m_editor->redo();
+        } else {
+            // r - Replace mode - wait for next char
+            m_commandBuffer = "r";
+        }
         return true;
 
     default:
@@ -552,10 +561,10 @@ void VimMode::executeMotion(VimMotion motion, int count)
             cursor.movePosition(QTextCursor::End);
             break;
         case VimMotion::PageUp:
-            cursor.movePosition(QTextCursor::Up, QTextCursor::MoveAnchor, 20);
+            cursor.movePosition(QTextCursor::Up, QTextCursor::MoveAnchor, VIM_PAGE_SIZE);
             break;
         case VimMotion::PageDown:
-            cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, 20);
+            cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, VIM_PAGE_SIZE);
             break;
         default:
             break;
