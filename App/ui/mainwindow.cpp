@@ -1,5 +1,4 @@
 #include <QBoxLayout>
-#include <QDebug>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QPushButton>
@@ -10,9 +9,10 @@
 
 #include "panels/findreplacepanel.h"
 #include "../core/lightpadpage.h"
+#include "../core/logging/logger.h"
 #include "mainwindow.h"
 #include "popup.h"
-#include "dialogs/prefrences.h"
+#include "dialogs/preferences.h"
 #include "dialogs/runconfigurations.h"
 #include "dialogs/shortcuts.h"
 #include "panels/terminal.h"
@@ -24,7 +24,7 @@ MainWindow::MainWindow(QWidget* parent)
     , ui(new Ui::MainWindow)
     , popupHighlightLanguage(nullptr)
     , popupTabWidth(nullptr)
-    , prefrences(nullptr)
+    , preferences(nullptr)
     , findReplacePanel(nullptr)
     , terminal(nullptr)
     , completer(nullptr)
@@ -102,8 +102,8 @@ void MainWindow::setTabWidthLabel(QString text)
 {
     ui->tabWidth->setText(text);
 
-    if (prefrences)
-        prefrences->setTabWidthLabel(text);
+    if (preferences)
+        preferences->setTabWidthLabel(text);
 }
 
 void MainWindow::setLanguageHighlightLabel(QString text)
@@ -121,8 +121,8 @@ void MainWindow::closeEvent(QCloseEvent* event)
 {
     Q_UNUSED(event);
 
-    if (prefrences) {
-        prefrences->close();
+    if (preferences) {
+        preferences->close();
     }
 }
 
@@ -140,7 +140,7 @@ void MainWindow::loadSettings()
 
 void MainWindow::saveSettings()
 {
-    qDebug() << settings.showLineNumberArea;
+    LOG_DEBUG(QString("Saving settings, showLineNumberArea: %1").arg(settings.showLineNumberArea));
     settings.saveSettings(settingsPath);
 }
 
@@ -697,13 +697,13 @@ void MainWindow::on_actionKeyboard_shortcuts_triggered()
     openShortcutsDialog();
 }
 
-void MainWindow::on_actionPrefrences_triggered()
+void MainWindow::on_actionPreferences_triggered()
 {
-    if (!prefrences) {
-        prefrences = new Prefrences(this);
+    if (!preferences) {
+        preferences = new Preferences(this);
 
-        connect(prefrences, &QObject::destroyed, this, [&] {
-            prefrences = nullptr;
+        connect(preferences, &QObject::destroyed, this, [&] {
+            preferences = nullptr;
         });
     }
 }

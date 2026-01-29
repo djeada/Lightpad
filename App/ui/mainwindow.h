@@ -1,7 +1,6 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QDebug>
 #include <QDialog>
 #include <QListView>
 #include <QMainWindow>
@@ -15,7 +14,7 @@ class Popup;
 class FindReplacePanel;
 class TextArea;
 class QCompleter;
-class Prefrences;
+class Preferences;
 
 enum class Lang { cpp,
     js,
@@ -78,7 +77,7 @@ private slots:
     void on_actionAbout_triggered();
     void on_tabWidth_clicked();
     void on_actionKeyboard_shortcuts_triggered();
-    void on_actionPrefrences_triggered();
+    void on_actionPreferences_triggered();
     void on_runButton_clicked();
     void on_actionRun_file_name_triggered();
     void on_actionEdit_Configurations_triggered();
@@ -87,7 +86,7 @@ private:
     Ui::MainWindow* ui;
     Popup* popupHighlightLanguage;
     Popup* popupTabWidth;
-    Prefrences* prefrences;
+    Preferences* preferences;
     FindReplacePanel* findReplacePanel;
     Terminal* terminal;
     QCompleter* completer;

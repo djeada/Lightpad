@@ -1,5 +1,5 @@
-#ifndef EDITORPREFRENCES_H
-#define EDITORPREFRENCES_H
+#ifndef EDITORPREFERENCES_H
+#define EDITORPREFERENCES_H
 
 #include <QWidget>
 
@@ -7,24 +7,24 @@ class PopupTabWidth;
 class MainWindow;
 
 namespace Ui {
-class PrefrencesEditor;
+class PreferencesEditor;
 }
 
-class PrefrencesEditor : public QWidget {
+class PreferencesEditor : public QWidget {
     Q_OBJECT
 
 public:
-    explicit PrefrencesEditor(MainWindow* parent);
-    ~PrefrencesEditor();
+    explicit PreferencesEditor(MainWindow* parent);
+    ~PreferencesEditor();
     void setTabWidthLabel(const QString& text);
 
 private slots:
     void on_tabWidth_clicked();
 
 private:
-    Ui::PrefrencesEditor* ui;
+    Ui::PreferencesEditor* ui;
     MainWindow* parentWindow;
     PopupTabWidth* popupTabWidth;
 };
 
-#endif // EDITORPREFRENCES_H
+#endif // EDITORPREFERENCES_H

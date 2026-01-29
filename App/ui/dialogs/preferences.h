@@ -1,24 +1,24 @@
-#ifndef PREFRENCES_H
-#define PREFRENCES_H
+#ifndef PREFERENCES_H
+#define PREFERENCES_H
 
 #include <QDialog>
 
 #include "../mainwindow.h"
 
 class ColorPicker;
-class PrefrencesView;
-class PrefrencesEditor;
+class PreferencesView;
+class PreferencesEditor;
 
 namespace Ui {
-class Prefrences;
+class Preferences;
 }
 
-class Prefrences : public QDialog {
+class Preferences : public QDialog {
     Q_OBJECT
 
 public:
-    Prefrences(MainWindow* parent);
-    ~Prefrences();
+    Preferences(MainWindow* parent);
+    ~Preferences();
     void setTabWidthLabel(const QString& text);
 
 protected:
@@ -28,12 +28,12 @@ private slots:
     void on_toolButton_clicked();
 
 private:
-    Ui::Prefrences* ui;
+    Ui::Preferences* ui;
     MainWindow* parentWindow;
     ColorPicker* colorPicker;
-    PrefrencesView* prefrencesView;
-    PrefrencesEditor* prefrencesEditor;
+    PreferencesView* preferencesView;
+    PreferencesEditor* preferencesEditor;
     void setupParent();
 };
 
-#endif // PREFRENCES_H
+#endif // PREFERENCES_H

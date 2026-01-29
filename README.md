@@ -72,7 +72,7 @@ All contributions are welcomed.
 
 ## TODO
 
-- [ ] User prefrences should be saved in the home directory. 
+- [ ] User preferences should be saved in the home directory. 
 - [ ] Full VIM compatibility.
 - [x] Autocompletion.
 - [ ] Switch to QProcess for multiprocessing.

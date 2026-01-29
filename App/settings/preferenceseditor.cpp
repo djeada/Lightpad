@@ -1,11 +1,11 @@
-#include "prefrenceseditor.h"
+#include "preferenceseditor.h"
 #include "../ui/mainwindow.h"
 #include "../ui/popup.h"
-#include "ui_prefrenceseditor.h"
+#include "ui_preferenceseditor.h"
 
-PrefrencesEditor::PrefrencesEditor(MainWindow* parent)
+PreferencesEditor::PreferencesEditor(MainWindow* parent)
     : QWidget(nullptr)
-    , ui(new Ui::PrefrencesEditor)
+    , ui(new Ui::PreferencesEditor)
     , parentWindow(parent)
     , popupTabWidth(nullptr)
 {
@@ -13,17 +13,17 @@ PrefrencesEditor::PrefrencesEditor(MainWindow* parent)
     ui->tabWidth->setText("Tab width: " + QString::number(parent->getTabWidth()));
 }
 
-PrefrencesEditor::~PrefrencesEditor()
+PreferencesEditor::~PreferencesEditor()
 {
     delete ui;
 }
 
-void PrefrencesEditor::setTabWidthLabel(const QString& text)
+void PreferencesEditor::setTabWidthLabel(const QString& text)
 {
     ui->tabWidth->setText(text);
 }
 
-void PrefrencesEditor::on_tabWidth_clicked()
+void PreferencesEditor::on_tabWidth_clicked()
 {
 
     if (!popupTabWidth) {

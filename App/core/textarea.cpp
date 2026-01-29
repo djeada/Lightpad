@@ -1,5 +1,4 @@
 #include <QApplication>
-#include <QDebug>
 #include <QFileInfo>
 #include <QMenu>
 #include <QPainter>
@@ -12,6 +11,7 @@
 #include <QScrollBar>
 
 #include "lightpadpage.h"
+#include "logging/logger.h"
 #include "../syntax/lightpadsyntaxhighlighter.h"
 #include "lightpadtabwidget.h"
 #include "../ui/mainwindow.h"
@@ -282,7 +282,7 @@ void TextArea::setAutoIdent(bool flag)
 void TextArea::showLineNumbers(bool flag)
 {
     showLineNumberArea = flag;
-    qDebug() << "SHOW: " << flag;
+    LOG_DEBUG(QString("Show line numbers: %1").arg(flag ? "true" : "false"));
     resizeEvent(new QResizeEvent(size(), size()));
     setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
 }

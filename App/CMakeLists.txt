@@ -17,9 +17,9 @@ set(project_ui
     ui/dialogs/colorpicker.ui
     ui/panels/findreplacepanel.ui
     ui/mainwindow.ui
-    ui/dialogs/prefrences.ui
-    settings/prefrenceseditor.ui
-    ui/panels/prefrencesview.ui
+    ui/dialogs/preferences.ui
+    settings/preferenceseditor.ui
+    ui/panels/preferencesview.ui
     ui/dialogs/runconfigurations.ui
     ui/dialogs/shortcuts.ui
     ui/panels/terminal.ui)
@@ -29,13 +29,14 @@ set(project_headers
     ui/panels/findreplacepanel.h
     core/formatter.h
     core/lightpadpage.h
+    core/logging/logger.h
     syntax/lightpadsyntaxhighlighter.h
     core/lightpadtabwidget.h
     ui/mainwindow.h
     ui/popup.h
-    ui/dialogs/prefrences.h
-    settings/prefrenceseditor.h
-    ui/panels/prefrencesview.h
+    ui/dialogs/preferences.h
+    settings/preferenceseditor.h
+    ui/panels/preferencesview.h
     ui/dialogs/runconfigurations.h
     ui/dialogs/shortcuts.h
     ui/panels/terminal.h
@@ -51,13 +52,14 @@ set(project_sources
     ui/panels/findreplacepanel.cpp
     core/formatter.cpp
     core/lightpadpage.cpp
+    core/logging/logger.cpp
     syntax/lightpadsyntaxhighlighter.cpp
     core/lightpadtabwidget.cpp
     ui/mainwindow.cpp
     ui/popup.cpp
-    ui/dialogs/prefrences.cpp
-    settings/prefrenceseditor.cpp
-    ui/panels/prefrencesview.cpp
+    ui/dialogs/preferences.cpp
+    settings/preferenceseditor.cpp
+    ui/panels/preferencesview.cpp
     ui/dialogs/runconfigurations.cpp
     ui/dialogs/shortcuts.cpp
     ui/panels/terminal.cpp
