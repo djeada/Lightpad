@@ -29,6 +29,7 @@ So why wait? Try Lightpad today and see how it can help you write better code, f
 * Code templates
 * Auto parentheses
 * Auto indenting
+* **Autocompletion** (Press `Ctrl+Space` - see [AUTOCOMPLETION.md](App/AUTOCOMPLETION.md) for details)
 
 <h1>Build</h1>
 To build Lightpad, you need some libraries and tools.  Follow those instructions for the platform you're compiling on.
@@ -74,7 +75,7 @@ All contributions are welcomed.
 
 - [ ] User prefrences should be saved in the home directory. 
 - [ ] Full VIM compatibility.
-- [ ] Autocompletion.
+- [x] Autocompletion.
 - [ ] Switch to QProcess for multiprocessing.
 - [ ] Allow for custom highlithing rules. 
 - [ ] Avoid using QMake for building and instead use CMake.
