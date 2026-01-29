@@ -18,11 +18,13 @@ set(CMAKE_AUTORCC ON)
 
 # Include directories for application sources
 include_directories(${CMAKE_SOURCE_DIR}/App)
+include_directories(${CMAKE_SOURCE_DIR}/App/accessibility)
 include_directories(${CMAKE_SOURCE_DIR}/App/core)
 include_directories(${CMAKE_SOURCE_DIR}/App/core/async)
 include_directories(${CMAKE_SOURCE_DIR}/App/core/io)
 include_directories(${CMAKE_SOURCE_DIR}/App/core/logging)
 include_directories(${CMAKE_SOURCE_DIR}/App/editor)
+include_directories(${CMAKE_SOURCE_DIR}/App/i18n)
 include_directories(${CMAKE_SOURCE_DIR}/App/lsp)
 include_directories(${CMAKE_SOURCE_DIR}/App/plugins)
 include_directories(${CMAKE_SOURCE_DIR}/App/settings)
@@ -164,6 +166,41 @@ target_link_libraries(test_vimmode
 
 target_compile_definitions(test_vimmode PRIVATE QT_DEPRECATED_WARNINGS)
 
+# I18n test executable
+add_executable(test_i18n
+    unit/test_i18n.cpp
+    ${CMAKE_SOURCE_DIR}/App/i18n/i18n.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_link_libraries(test_i18n
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_i18n PRIVATE QT_DEPRECATED_WARNINGS)
+
+# Accessibility test executable
+add_executable(test_accessibility
+    unit/test_accessibility.cpp
+    ${CMAKE_SOURCE_DIR}/App/accessibility/accessibilitymanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_link_libraries(test_accessibility
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_accessibility PRIVATE QT_DEPRECATED_WARNINGS)
+
 # Register tests with CTest
 add_test(NAME LoggerTests COMMAND test_logger)
 add_test(NAME ThemeTests COMMAND test_theme)
@@ -173,10 +210,12 @@ add_test(NAME SettingsManagerTests COMMAND test_settingsmanager)
 add_test(NAME AsyncWorkerTests COMMAND test_asyncworker)
 add_test(NAME PluginManagerTests COMMAND test_pluginmanager)
 add_test(NAME VimModeTests COMMAND test_vimmode)
+add_test(NAME I18nTests COMMAND test_i18n)
+add_test(NAME AccessibilityTests COMMAND test_accessibility)
 
 # Set environment variable for headless testing
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
-    AsyncWorkerTests PluginManagerTests VimModeTests PROPERTIES
+    AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
@@ -184,6 +223,6 @@ set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests Setti
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
-            test_asyncworker test_pluginmanager test_vimmode
+            test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

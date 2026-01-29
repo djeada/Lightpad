@@ -25,6 +25,7 @@ set(project_ui
     ui/panels/terminal.ui)
 
 set(project_headers 
+    accessibility/accessibilitymanager.h
     ui/dialogs/colorpicker.h
     ui/panels/findreplacepanel.h
     core/async/asyncworker.h
@@ -34,6 +35,7 @@ set(project_headers
     core/lightpadpage.h
     core/logging/logger.h
     editor/vimmode.h
+    i18n/i18n.h
     lsp/lspclient.h
     plugins/iplugin.h
     plugins/isyntaxplugin.h
@@ -57,6 +59,7 @@ set(project_headers
 
 set(project_sources 
     main.cpp
+    accessibility/accessibilitymanager.cpp
     ui/dialogs/colorpicker.cpp
     ui/panels/findreplacepanel.cpp
     core/async/asyncworker.cpp
@@ -66,6 +69,7 @@ set(project_sources
     core/lightpadpage.cpp
     core/logging/logger.cpp
     editor/vimmode.cpp
+    i18n/i18n.cpp
     lsp/lspclient.cpp
     plugins/pluginmanager.cpp
     syntax/lightpadsyntaxhighlighter.cpp
