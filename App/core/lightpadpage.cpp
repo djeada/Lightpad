@@ -1,5 +1,5 @@
 #include "lightpadpage.h"
-#include "mainwindow.h"
+#include "../ui/mainwindow.h"
 #include <QDebug>
 #include <QHBoxLayout>
 #include <QLineEdit>

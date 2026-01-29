@@ -12,11 +12,11 @@
 #include <QScrollBar>
 
 #include "lightpadpage.h"
-#include "lightpadsyntaxhighlighter.h"
+#include "../syntax/lightpadsyntaxhighlighter.h"
 #include "lightpadtabwidget.h"
-#include "mainwindow.h"
+#include "../ui/mainwindow.h"
 #include "textarea.h"
-#include "textareasettings.h"
+#include "../settings/textareasettings.h"
 
 QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp }, { "js", Lang::js }, { "py", Lang::py } };
 QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };

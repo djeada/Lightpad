@@ -1,7 +1,7 @@
 #ifndef COLORPICKER_H
 #define COLORPICKER_H
 
-#include "theme.h"
+#include "../../settings/theme.h"
 #include <QDialog>
 #include <QToolButton>
 

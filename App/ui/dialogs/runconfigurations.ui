@@ -71,7 +71,7 @@
   <customwidget>
    <class>LineEditIcon</class>
    <extends>QWidget</extends>
-   <header>runconfigurations.h</header>
+   <header>ui/dialogs/runconfigurations.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

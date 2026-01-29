@@ -8,15 +8,15 @@
 #include <QCompleter>
 #include <cstdio>
 
-#include "findreplacepanel.h"
-#include "lightpadpage.h"
+#include "panels/findreplacepanel.h"
+#include "../core/lightpadpage.h"
 #include "mainwindow.h"
 #include "popup.h"
-#include "prefrences.h"
-#include "runconfigurations.h"
-#include "shortcuts.h"
-#include "terminal.h"
-#include "textarea.h"
+#include "dialogs/prefrences.h"
+#include "dialogs/runconfigurations.h"
+#include "dialogs/shortcuts.h"
+#include "panels/terminal.h"
+#include "../core/textarea.h"
 #include "ui_mainwindow.h"
 
 MainWindow::MainWindow(QWidget* parent)

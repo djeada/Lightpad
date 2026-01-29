@@ -1,6 +1,6 @@
 #include "lightpadtabwidget.h"
 #include "lightpadpage.h"
-#include "mainwindow.h"
+#include "../ui/mainwindow.h"
 
 #include <QApplication>
 #include <QDebug>

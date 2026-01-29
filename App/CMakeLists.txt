@@ -14,58 +14,58 @@ endif()
 # add_subdirectory(libs)
 
 set(project_ui 
-    colorpicker.ui
-    findreplacepanel.ui
-    mainwindow.ui
-    prefrences.ui
-    prefrenceseditor.ui
-    prefrencesview.ui
-    runconfigurations.ui
-    shortcuts.ui
-    terminal.ui)
+    ui/dialogs/colorpicker.ui
+    ui/panels/findreplacepanel.ui
+    ui/mainwindow.ui
+    ui/dialogs/prefrences.ui
+    settings/prefrenceseditor.ui
+    ui/panels/prefrencesview.ui
+    ui/dialogs/runconfigurations.ui
+    ui/dialogs/shortcuts.ui
+    ui/panels/terminal.ui)
 
 set(project_headers 
-    colorpicker.h
-    findreplacepanel.h
-    formatter.h
-    lightpadpage.h
-    lightpadsyntaxhighlighter.h
-    lightpadtabwidget.h
-    mainwindow.h
-    popup.h
-    prefrences.h
-    prefrenceseditor.h
-    prefrencesview.h
-    runconfigurations.h
-    shortcuts.h
-    terminal.h
-    textarea.h
-    textareasettings.h
-    filedirtreemodel.h
-    filedirtreecontroller.h)
-    theme.h)
+    ui/dialogs/colorpicker.h
+    ui/panels/findreplacepanel.h
+    core/formatter.h
+    core/lightpadpage.h
+    syntax/lightpadsyntaxhighlighter.h
+    core/lightpadtabwidget.h
+    ui/mainwindow.h
+    ui/popup.h
+    ui/dialogs/prefrences.h
+    settings/prefrenceseditor.h
+    ui/panels/prefrencesview.h
+    ui/dialogs/runconfigurations.h
+    ui/dialogs/shortcuts.h
+    ui/panels/terminal.h
+    core/textarea.h
+    settings/textareasettings.h
+    filetree/filedirtreemodel.h
+    filetree/filedirtreecontroller.h
+    settings/theme.h)
 
 set(project_sources 
     main.cpp
-    colorpicker.cpp
-    findreplacepanel.cpp
-    formatter.cpp
-    lightpadpage.cpp
-    lightpadsyntaxhighlighter.cpp
-    lightpadtabwidget.cpp
-    mainwindow.cpp
-    popup.cpp
-    prefrences.cpp
-    prefrenceseditor.cpp
-    prefrencesview.cpp
-    runconfigurations.cpp
-    shortcuts.cpp
-    terminal.cpp
-    textarea.cpp
-    textareasettings.cpp
-    filedirtreemodel.cpp
-    filedirtreecontroller.cpp)
-    theme.cpp)
+    ui/dialogs/colorpicker.cpp
+    ui/panels/findreplacepanel.cpp
+    core/formatter.cpp
+    core/lightpadpage.cpp
+    syntax/lightpadsyntaxhighlighter.cpp
+    core/lightpadtabwidget.cpp
+    ui/mainwindow.cpp
+    ui/popup.cpp
+    ui/dialogs/prefrences.cpp
+    settings/prefrenceseditor.cpp
+    ui/panels/prefrencesview.cpp
+    ui/dialogs/runconfigurations.cpp
+    ui/dialogs/shortcuts.cpp
+    ui/panels/terminal.cpp
+    core/textarea.cpp
+    settings/textareasettings.cpp
+    filetree/filedirtreemodel.cpp
+    filetree/filedirtreecontroller.cpp
+    settings/theme.cpp)
 
 set(project_resources
     highlight.qrc
