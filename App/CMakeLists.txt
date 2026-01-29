@@ -24,7 +24,9 @@ set(project_headers
     lightpadpage.h
     lightpadsyntaxhighlighter.h
     lightpadtabwidget.h
-    textarea.h)
+    textarea.h
+    filedirtreemodel.h
+    filedirtreecontroller.h)
 
 set(project_sources 
     main.cpp
@@ -33,7 +35,9 @@ set(project_sources
     lightpadpage.cpp
     lightpadsyntaxhighlighter.cpp
     lightpadtabwidget.cpp
-    textarea.cpp)
+    textarea.cpp
+    filedirtreemodel.cpp
+    filedirtreecontroller.cpp)
 
 list (APPEND RESOURCES icons.qrc)
 list (APPEND RESOURCES highlight.qrc)

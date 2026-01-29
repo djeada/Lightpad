@@ -24,7 +24,9 @@ HEADERS     = \
     terminal.h \
     textarea.h \
     textareasettings.h \
-    theme.h
+    theme.h \
+    filedirtreemodel.h \
+    filedirtreecontroller.h
 
 SOURCES     = main.cpp \
       colorpicker.cpp \
@@ -43,7 +45,9 @@ SOURCES     = main.cpp \
       terminal.cpp \
       textarea.cpp \
       textareasettings.cpp \
-      theme.cpp
+      theme.cpp \
+      filedirtreemodel.cpp \
+      filedirtreecontroller.cpp
 
 FORMS += \
     colorpicker.ui \
