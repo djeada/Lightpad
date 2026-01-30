@@ -868,66 +868,221 @@ void MainWindow::on_actionEdit_Format_Configurations_triggered()
 
 void MainWindow::setTheme(Theme theme)
 {
-
     settings.theme = theme;
 
+    QString bgColor = settings.theme.backgroundColor.name();
+    QString fgColor = settings.theme.foregroundColor.name();
+    QString surfaceColor = "#313244";  // Slightly lighter surface
+    QString accentColor = "#89b4fa";   // Soft blue accent
+    QString hoverColor = "#45475a";    // Subtle hover
+    QString pressedColor = "#585b70";  // Pressed state
+
     setStyleSheet(
+        // Base widget styling
+        "QWidget { background-color: " + bgColor + "; }"
 
-        "QWidget { background-color: " + settings.theme.backgroundColor.name() + ";}"
+        // Modern menu styling
+        "QMenu { "
+            "color: " + fgColor + "; "
+            "background-color: " + surfaceColor + "; "
+            "selection-background-color: " + hoverColor + "; "
+            "border: 1px solid " + hoverColor + "; "
+            "border-radius: 8px; "
+            "padding: 4px; "
+        "}"
+        "QMenu::item { "
+            "padding: 6px 24px 6px 12px; "
+            "border-radius: 4px; "
+            "margin: 2px 4px; "
+        "}"
+        "QMenu::item:selected { "
+            "background-color: " + hoverColor + "; "
+        "}"
+        "QMenu::separator { "
+            "height: 1px; "
+            "background: " + hoverColor + "; "
+            "margin: 4px 8px; "
+        "}"
 
-                                                                                 "QMenu { color: "
-        + settings.theme.foregroundColor.name() + ";"
-                                                  "selection-background-color: #404f4f;"
-                                                  "border: 1px solid #404f4f;"
-                                                  "border-radius: 3px 3px 3px 3px;}"
+        // Menu bar styling
+        "QMenuBar { "
+            "background-color: " + bgColor + "; "
+            "spacing: 4px; "
+        "}"
+        "QMenuBar::item { "
+            "color: " + fgColor + "; "
+            "padding: 6px 12px; "
+            "border-radius: 6px; "
+        "}"
+        "QMenuBar::item:selected { "
+            "background-color: " + hoverColor + "; "
+        "}"
 
-                                                  "QMenuBar::item {color: "
-        + settings.theme.foregroundColor.name() + ";}"
+        // Message box styling
+        "QMessageBox { background-color: " + surfaceColor + "; }"
+        "QMessageBox QLabel { color: " + fgColor + "; }"
 
-                                                  "QMessageBox QLabel {color: "
-        + settings.theme.foregroundColor.name() + ";}"
+        // Modern button styling
+        "QAbstractButton { "
+            "color: " + fgColor + "; "
+            "border: none; "
+            "padding: 6px 12px; "
+            "background-color: " + surfaceColor + "; "
+            "border-radius: 6px; "
+        "}"
+        "QAbstractButton:hover { "
+            "background-color: " + hoverColor + "; "
+        "}"
+        "QAbstractButton:pressed { "
+            "background-color: " + pressedColor + "; "
+        "}"
 
-                                                  "QAbstractButton { color: "
-        + settings.theme.foregroundColor.name() + ";"
-                                                  "border: None;"
-                                                  "padding: 5px;"
-                                                  "background-color: "
-        + settings.theme.backgroundColor.name() + ";}"
+        // Tree view and list styling
+        "QAbstractItemView { "
+            "color: " + fgColor + "; "
+            "background-color: " + bgColor + "; "
+            "outline: 0; "
+            "border: none; "
+        "}"
+        "QAbstractItemView::item { "
+            "color: " + fgColor + "; "
+            "padding: 4px 8px; "
+            "border-radius: 4px; "
+        "}"
+        "QAbstractItemView::item:hover { "
+            "background-color: " + hoverColor + "; "
+            "color: " + fgColor + "; "
+        "}"
+        "QAbstractItemView::item:selected { "
+            "background-color: " + accentColor + "; "
+            "color: " + bgColor + "; "
+        "}"
 
-                                                  "QAbstractItemView {color: "
-        + settings.theme.foregroundColor.name() + "; outline: 0;}"
+        // Modern text input styling
+        "QLineEdit { "
+            "background-color: " + surfaceColor + "; "
+            "color: " + fgColor + "; "
+            "border: 1px solid " + hoverColor + "; "
+            "border-radius: 6px; "
+            "padding: 6px 10px; "
+            "selection-background-color: " + accentColor + "; "
+        "}"
+        "QLineEdit:focus { "
+            "border: 1px solid " + accentColor + "; "
+        "}"
 
-                                                  "QAbstractItemView::item {color: "
-        + settings.theme.foregroundColor.name() + ";}"
+        // Label styling
+        "QLabel { color: " + fgColor + "; }"
 
-                                                  "QAbstractItemView::item:hover { background: #f3f3f3; color: #252424;}"
+        // Text editor styling
+        "QPlainTextEdit { "
+            "color: " + fgColor + "; "
+            "background-color: " + bgColor + "; "
+            "selection-background-color: " + hoverColor + "; "
+            "border: none; "
+        "}"
 
-                                                  "QAbstractItemView::item:selected { background: #bbdde6; }"
+        // Modern radio button styling
+        "QRadioButton { color: " + fgColor + "; }"
+        "QRadioButton::indicator { "
+            "width: 14px; "
+            "height: 14px; "
+            "border-radius: 8px; "
+        "}"
+        "QRadioButton::indicator:checked { "
+            "background-color: " + accentColor + "; "
+            "border: 2px solid " + accentColor + "; "
+        "}"
+        "QRadioButton::indicator:unchecked { "
+            "background-color: " + bgColor + "; "
+            "border: 2px solid " + fgColor + "; "
+        "}"
 
-                                                  "QAbstractButton:hover { background: rgb(85, 87, 83); border: 1; border-radius: 5;}"
+        // Checkbox styling
+        "QCheckBox { color: " + fgColor + "; }"
+        "QCheckBox::indicator { "
+            "width: 16px; "
+            "height: 16px; "
+            "border-radius: 4px; "
+            "border: 2px solid " + fgColor + "; "
+            "background-color: " + bgColor + "; "
+        "}"
+        "QCheckBox::indicator:checked { "
+            "background-color: " + accentColor + "; "
+            "border: 2px solid " + accentColor + "; "
+        "}"
 
-                                                  "QAbstractButton:pressed { background: rgb(46, 52, 54); border: 1; border-radius: 5;}"
+        // Modern scrollbar styling
+        "QScrollBar:vertical { "
+            "background-color: " + bgColor + "; "
+            "width: 12px; "
+            "margin: 0; "
+            "border-radius: 6px; "
+        "}"
+        "QScrollBar::handle:vertical { "
+            "background-color: " + hoverColor + "; "
+            "min-height: 30px; "
+            "border-radius: 6px; "
+            "margin: 2px; "
+        "}"
+        "QScrollBar::handle:vertical:hover { "
+            "background-color: " + pressedColor + "; "
+        "}"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
+            "height: 0; "
+        "}"
+        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { "
+            "background: none; "
+        "}"
+        "QScrollBar:horizontal { "
+            "background-color: " + bgColor + "; "
+            "height: 12px; "
+            "margin: 0; "
+            "border-radius: 6px; "
+        "}"
+        "QScrollBar::handle:horizontal { "
+            "background-color: " + hoverColor + "; "
+            "min-width: 30px; "
+            "border-radius: 6px; "
+            "margin: 2px; "
+        "}"
+        "QScrollBar::handle:horizontal:hover { "
+            "background-color: " + pressedColor + "; "
+        "}"
+        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { "
+            "width: 0; "
+        "}"
+        "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { "
+            "background: none; "
+        "}"
 
-                                                  "QLineEdit {background: "
-        + settings.theme.foregroundColor.name() + ";}"
+        // Tooltip styling
+        "QToolTip { "
+            "background-color: " + surfaceColor + "; "
+            "color: " + fgColor + "; "
+            "border: 1px solid " + hoverColor + "; "
+            "border-radius: 6px; "
+            "padding: 4px 8px; "
+        "}"
 
-                                                  "QLabel {color: "
-        + settings.theme.foregroundColor.name() + ";}"
+        // Splitter styling
+        "QSplitter::handle { "
+            "background-color: " + hoverColor + "; "
+        "}"
+        "QSplitter::handle:horizontal { width: 2px; }"
+        "QSplitter::handle:vertical { height: 2px; }"
 
-                                                  "QPlainTextEdit {color: "
-        + settings.theme.foregroundColor.name() + "; background-color: " + settings.theme.backgroundColor.name() + "; }"
+        // Status bar styling
+        "QStatusBar { "
+            "background-color: " + surfaceColor + "; "
+            "color: " + fgColor + "; "
+        "}"
 
-                                                                                                                   "QRadioButton::indicator:checked { background-color: "
-        + settings.theme.foregroundColor.name() + ";"
-                                                  "border: 2px solid "
-        + settings.theme.foregroundColor.name() + ";"
-                                                  "border-radius: 6px; }"
+        // Bottom toolbar styling
+        "QWidget#backgroundBottom { "
+            "background-color: " + surfaceColor + "; "
+        "}"
+    );
 
-                                                  "QRadioButton::indicator:unchecked { background-color: "
-        + settings.theme.backgroundColor.name() + ";"
-                                                  "border: 2px solid "
-        + settings.theme.foregroundColor.name() + ";"
-                                                  "border-radius: 6px;}");
-
-    ui->tabWidget->setTheme(settings.theme.backgroundColor.name(), settings.theme.foregroundColor.name());
+    ui->tabWidget->setTheme(bgColor, fgColor);
 }

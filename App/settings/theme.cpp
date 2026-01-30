@@ -3,19 +3,19 @@
 #include <QJsonObject>
 
 Theme::Theme()
-    : backgroundColor(QColor("black"))
-    , foregroundColor(QColor("lightGray"))
-    , highlightColor(QColor("lightGray").darker(250))
-    , lineNumberAreaColor(QColor("black"))
-    , keywordFormat_0(QColor("green").lighter(130))
-    , keywordFormat_1(QColor("yellow").darker(140))
-    , keywordFormat_2(QColor("violet"))
-    , searchFormat(QColor("yellow"))
-    , singleLineCommentFormat(QColor("green").darker(150))
-    , functionFormat(QColor("lightGray").darker(150))
-    , quotationFormat(QColor("orange"))
-    , classFormat(QColor("blue").lighter(150))
-    , numberFormat(QColor("#ff405d"))
+    : backgroundColor(QColor("#1e1e2e"))          // Softer dark background (catppuccin-inspired)
+    , foregroundColor(QColor("#cdd6f4"))          // Softer light foreground
+    , highlightColor(QColor("#313244"))           // Subtle line highlight
+    , lineNumberAreaColor(QColor("#1e1e2e"))      // Match main background
+    , keywordFormat_0(QColor("#a6e3a1"))          // Soft green for keywords
+    , keywordFormat_1(QColor("#f9e2af"))          // Soft yellow for types
+    , keywordFormat_2(QColor("#cba6f7"))          // Soft purple for special
+    , searchFormat(QColor("#f9e2af"))             // Soft yellow for search
+    , singleLineCommentFormat(QColor("#6c7086"))  // Muted gray for comments
+    , functionFormat(QColor("#89b4fa"))           // Soft blue for functions
+    , quotationFormat(QColor("#fab387"))          // Soft peach for strings
+    , classFormat(QColor("#89dceb"))              // Soft cyan for classes
+    , numberFormat(QColor("#f38ba8"))             // Soft pink for numbers
 {
 }
 

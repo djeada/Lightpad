@@ -15,11 +15,11 @@ void TestTheme::testDefaultConstructor()
 {
     Theme theme;
     
-    // Verify default colors are set
-    QCOMPARE(theme.backgroundColor, QColor("black"));
-    QCOMPARE(theme.foregroundColor, QColor("lightGray"));
+    // Verify default colors are set (modern dark theme)
+    QCOMPARE(theme.backgroundColor, QColor("#1e1e2e"));
+    QCOMPARE(theme.foregroundColor, QColor("#cdd6f4"));
     QVERIFY(theme.highlightColor.isValid());
-    QCOMPARE(theme.lineNumberAreaColor, QColor("black"));
+    QCOMPARE(theme.lineNumberAreaColor, QColor("#1e1e2e"));
 }
 
 void TestTheme::testWriteToJson()
