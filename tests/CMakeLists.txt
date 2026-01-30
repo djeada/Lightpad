@@ -285,6 +285,22 @@ target_include_directories(test_terminaltabwidget PRIVATE
 )
 
 target_link_libraries(test_terminaltabwidget
+# SyntaxPluginRegistry test executable
+add_executable(test_syntaxpluginregistry
+    unit/test_syntaxpluginregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/syntaxpluginregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/cppsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/javascriptsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/pythonsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_syntaxpluginregistry PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/syntax
+)
+
+target_link_libraries(test_syntaxpluginregistry
     PRIVATE
     Qt5::Core
     Qt5::Gui
@@ -293,6 +309,7 @@ target_link_libraries(test_terminaltabwidget
 )
 
 target_compile_definitions(test_terminaltabwidget PRIVATE QT_DEPRECATED_WARNINGS)
+target_compile_definitions(test_syntaxpluginregistry PRIVATE QT_DEPRECATED_WARNINGS)
 
 # Register tests with CTest
 add_test(NAME LoggerTests COMMAND test_logger)
@@ -309,11 +326,13 @@ add_test(NAME RunTemplateManagerTests COMMAND test_runtemplatemanager)
 add_test(NAME FormatTemplateManagerTests COMMAND test_formattemplatemanager)
 add_test(NAME TerminalTests COMMAND test_terminal)
 add_test(NAME TerminalTabWidgetTests COMMAND test_terminaltabwidget)
+add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
 
 # Set environment variable for headless testing
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
     AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
     RunTemplateManagerTests FormatTemplateManagerTests TerminalTests TerminalTabWidgetTests PROPERTIES
+    RunTemplateManagerTests FormatTemplateManagerTests TerminalTests SyntaxPluginRegistryTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
@@ -326,5 +345,6 @@ add_custom_target(run_tests
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
             test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
             test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
+            test_runtemplatemanager test_formattemplatemanager test_terminal test_syntaxpluginregistry
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
