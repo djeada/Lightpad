@@ -478,13 +478,16 @@ bool Terminal::eventFilter(QObject* obj, QEvent* event)
             return true;
 
         case Qt::Key_C:
-            if (keyEvent->modifiers() & Qt::ControlModifier) {
-                // Ctrl+C with selection - copy to clipboard
+            if ((keyEvent->modifiers() & Qt::ControlModifier) && 
+                (keyEvent->modifiers() & Qt::ShiftModifier)) {
+                // Ctrl+Shift+C - copy to clipboard (terminal convention)
                 if (ui->textEdit->textCursor().hasSelection()) {
                     ui->textEdit->copy();
-                    return true;
                 }
-                // Ctrl+C without selection - send interrupt signal
+                return true;
+            }
+            if (keyEvent->modifiers() & Qt::ControlModifier) {
+                // Ctrl+C - send interrupt signal
                 if (isRunning()) {
                     m_process->write("\x03");  // Ctrl+C character
                 }
@@ -494,27 +497,10 @@ bool Terminal::eventFilter(QObject* obj, QEvent* event)
             break;
 
         case Qt::Key_V:
-            if (keyEvent->modifiers() & Qt::ControlModifier) {
-                // Ctrl+V - paste from clipboard at cursor position
+            if ((keyEvent->modifiers() & Qt::ControlModifier) && 
+                (keyEvent->modifiers() & Qt::ShiftModifier)) {
+                // Ctrl+Shift+V - paste from clipboard (terminal convention)
                 ui->textEdit->paste();
-                return true;
-            }
-            break;
-
-        case Qt::Key_X:
-            if (keyEvent->modifiers() & Qt::ControlModifier) {
-                // Ctrl+X - cut selected text
-                if (ui->textEdit->textCursor().hasSelection()) {
-                    ui->textEdit->cut();
-                    return true;
-                }
-            }
-            break;
-
-        case Qt::Key_A:
-            if (keyEvent->modifiers() & Qt::ControlModifier) {
-                // Ctrl+A - select all
-                ui->textEdit->selectAll();
                 return true;
             }
             break;

@@ -123,13 +123,12 @@ private slots:
 private:
     void setupUI();
     void setupToolbar();
-    void updateTabTitle(int index);
     QString generateTerminalName();
 
     QTabWidget* m_tabWidget;
     QToolButton* m_newTerminalButton;
     QToolButton* m_clearButton;
-    QToolButton* m_closeAllButton;
+    QToolButton* m_closeTerminalButton;
     QToolButton* m_closeButton;
     int m_terminalCounter;
     QString m_currentWorkingDirectory;

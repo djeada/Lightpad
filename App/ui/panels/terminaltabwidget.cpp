@@ -15,7 +15,7 @@ TerminalTabWidget::TerminalTabWidget(QWidget* parent)
     , m_tabWidget(nullptr)
     , m_newTerminalButton(nullptr)
     , m_clearButton(nullptr)
-    , m_closeAllButton(nullptr)
+    , m_closeTerminalButton(nullptr)
     , m_closeButton(nullptr)
     , m_terminalCounter(0)
 {
@@ -75,11 +75,11 @@ void TerminalTabWidget::setupToolbar()
     connect(m_clearButton, &QToolButton::clicked, 
             this, &TerminalTabWidget::onClearTerminalClicked);
 
-    // Close all terminals button
-    m_closeAllButton = new QToolButton(toolbar);
-    m_closeAllButton->setToolTip(tr("Close All Terminals"));
-    m_closeAllButton->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogCloseButton));
-    connect(m_closeAllButton, &QToolButton::clicked,
+    // Close current terminal button
+    m_closeTerminalButton = new QToolButton(toolbar);
+    m_closeTerminalButton->setToolTip(tr("Close Terminal"));
+    m_closeTerminalButton->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogCloseButton));
+    connect(m_closeTerminalButton, &QToolButton::clicked,
             this, &TerminalTabWidget::onCloseTerminalClicked);
 
     // Close terminal panel button
@@ -91,7 +91,7 @@ void TerminalTabWidget::setupToolbar()
 
     toolbarLayout->addWidget(m_newTerminalButton);
     toolbarLayout->addWidget(m_clearButton);
-    toolbarLayout->addWidget(m_closeAllButton);
+    toolbarLayout->addWidget(m_closeTerminalButton);
     toolbarLayout->addStretch();
     toolbarLayout->addWidget(m_closeButton);
 
@@ -206,14 +206,9 @@ void TerminalTabWidget::setWorkingDirectory(const QString& directory)
 void TerminalTabWidget::applyTheme(const Theme& theme)
 {
     // Use theme colors for terminal
-    QString bgColor = theme.backgroundColor.name();
-    QString textColor = theme.foregroundColor.name();
-    QString borderColor = theme.lineNumberAreaColor.name();
-    
-    // Set default colors if theme values are missing
-    if (bgColor.isEmpty() || bgColor == "#000000") bgColor = "#0e1116";
-    if (textColor.isEmpty() || textColor == "#000000") textColor = "#e6edf3";
-    if (borderColor.isEmpty() || borderColor == "#000000") borderColor = "#30363d";
+    QString bgColor = theme.backgroundColor.isValid() ? theme.backgroundColor.name() : "#0e1116";
+    QString textColor = theme.foregroundColor.isValid() ? theme.foregroundColor.name() : "#e6edf3";
+    QString borderColor = theme.lineNumberAreaColor.isValid() ? theme.lineNumberAreaColor.name() : "#30363d";
 
     QString tabWidgetStyle = QString(
         "QTabWidget::pane {"
@@ -250,6 +245,7 @@ void TerminalTabWidget::onNewTerminalClicked()
 
 void TerminalTabWidget::onCloseTerminalClicked()
 {
+    // Close the current terminal
     int currentIndex = m_tabWidget->currentIndex();
     if (currentIndex >= 0) {
         closeTerminal(currentIndex);
@@ -275,15 +271,6 @@ void TerminalTabWidget::onCurrentTabChanged(int index)
 {
     Q_UNUSED(index);
     // Could update status bar or other UI elements here
-}
-
-void TerminalTabWidget::updateTabTitle(int index)
-{
-    Terminal* terminal = terminalAt(index);
-    if (terminal) {
-        // Could update with current directory or running command
-        // For now, just keep the terminal number
-    }
 }
 
 QString TerminalTabWidget::generateTerminalName()
