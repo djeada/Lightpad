@@ -53,7 +53,18 @@ public:
     void updateModel();
     QString getFilePath();
     QString getFilePath(const QModelIndex& index);
-    bool scriptAssigned();
+    
+    /**
+     * @brief Check if a run template is assigned to the current file
+     * @return true if a template is assigned or can be auto-detected
+     */
+    bool hasRunTemplate() const;
+    
+    /**
+     * @brief Get the assigned template ID for the current file
+     * @return Template ID or empty string if none
+     */
+    QString getAssignedTemplateId() const;
 
 private:
     MainWindow* mainWindow;
@@ -61,7 +72,6 @@ private:
     TextArea* textArea;
     QFileSystemModel* model;
     QString filePath;
-    QString scriptPath;
 };
 
 #endif // LIGHTPADPAGE_H

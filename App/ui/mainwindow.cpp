@@ -5,6 +5,7 @@
 #include <QStackedWidget>
 #include <QStringListModel>
 #include <QCompleter>
+#include <QProcess>
 #include <cstdio>
 
 #include "panels/findreplacepanel.h"
@@ -14,9 +15,13 @@
 #include "popup.h"
 #include "dialogs/preferences.h"
 #include "dialogs/runconfigurations.h"
+#include "dialogs/runtemplateselector.h"
+#include "dialogs/formattemplateselector.h"
 #include "dialogs/shortcuts.h"
 #include "panels/terminal.h"
 #include "../core/textarea.h"
+#include "../run_templates/runtemplatemanager.h"
+#include "../format_templates/formattemplatemanager.h"
 #include "ui_mainwindow.h"
 
 MainWindow::MainWindow(QWidget* parent)
@@ -477,16 +482,43 @@ void MainWindow::showFindReplace(bool onlyFind)
 void MainWindow::openDialog(Dialog dialog)
 {
     switch (dialog) {
-    case Dialog::runConfiguration:
-        if (findChildren<RunConfigurations*>().isEmpty()) {
-            auto configurationDialog = new RunConfigurations(this);
-
-            connect(configurationDialog, &RunConfigurations::accepted, this, [&, configurationDialog]() {
-                auto scriptPath = configurationDialog->getScriptPath();
-                auto parameters = configurationDialog->getParameters();
-            });
+    case Dialog::runConfiguration: {
+        // Use new template selector
+        auto page = ui->tabWidget->getCurrentPage();
+        QString filePath = page ? page->getFilePath() : QString();
+        
+        if (filePath.isEmpty()) {
+            QMessageBox::information(this, "Run Configuration", 
+                "Please open a file first to configure run settings.");
+            return;
+        }
+        
+        if (findChildren<RunTemplateSelector*>().isEmpty()) {
+            auto selector = new RunTemplateSelector(filePath, this);
+            selector->setAttribute(Qt::WA_DeleteOnClose);
+            selector->show();
         }
         break;
+    }
+    
+    case Dialog::formatConfiguration: {
+        // Use new format template selector
+        auto page = ui->tabWidget->getCurrentPage();
+        QString filePath = page ? page->getFilePath() : QString();
+        
+        if (filePath.isEmpty()) {
+            QMessageBox::information(this, "Format Configuration", 
+                "Please open a file first to configure format settings.");
+            return;
+        }
+        
+        if (findChildren<FormatTemplateSelector*>().isEmpty()) {
+            auto selector = new FormatTemplateSelector(filePath, this);
+            selector->setAttribute(Qt::WA_DeleteOnClose);
+            selector->show();
+        }
+        break;
+    }
 
     case Dialog::shortcuts:
         if (findChildren<ShortcutsDialog*>().isEmpty())
@@ -503,6 +535,11 @@ void MainWindow::openConfigurationDialog()
     openDialog(Dialog::runConfiguration);
 }
 
+void MainWindow::openFormatConfigurationDialog()
+{
+    openDialog(Dialog::formatConfiguration);
+}
+
 void MainWindow::openShortcutsDialog()
 {
     openDialog(Dialog::shortcuts);
@@ -510,10 +547,10 @@ void MainWindow::openShortcutsDialog()
 
 void MainWindow::showTerminal()
 {
-
     auto page = ui->tabWidget->getCurrentPage();
+    QString filePath = page ? page->getFilePath() : QString();
 
-    if (!page->scriptAssigned()) {
+    if (filePath.isEmpty()) {
         noScriptAssignedWarning();
         return;
     }
@@ -530,6 +567,9 @@ void MainWindow::showTerminal()
         if (layout != 0)
             layout->insertWidget(layout->count() - 1, terminal, 0);
     }
+    
+    // Run the file using the template system
+    terminal->runFile(filePath);
 }
 
 void MainWindow::setMainWindowTitle(QString title)
@@ -568,6 +608,97 @@ void MainWindow::runCurrentScript()
 
     if (textArea && !textArea->changesUnsaved())
         showTerminal();
+}
+
+void MainWindow::formatCurrentDocument()
+{
+    auto page = ui->tabWidget->getCurrentPage();
+    QString filePath = page ? page->getFilePath() : QString();
+    
+    if (filePath.isEmpty()) {
+        QMessageBox::information(this, "Format Document", 
+            "Please save the file first before formatting.");
+        return;
+    }
+    
+    // Check for unsaved changes before formatting
+    auto textArea = getCurrentTextArea();
+    bool hadUnsavedChanges = textArea && textArea->changesUnsaved();
+    
+    // Save the file first
+    on_actionSave_triggered();
+    
+    // Verify the file was saved (check if still has unsaved changes)
+    if (textArea && textArea->changesUnsaved()) {
+        QMessageBox::warning(this, "Format Document", 
+            "Could not save the file. Formatting cancelled.");
+        return;
+    }
+    
+    FormatTemplateManager& manager = FormatTemplateManager::instance();
+    
+    // Ensure templates are loaded
+    if (manager.getAllTemplates().isEmpty()) {
+        manager.loadTemplates();
+    }
+    
+    QPair<QString, QStringList> command = manager.buildCommand(filePath);
+    
+    if (command.first.isEmpty()) {
+        QMessageBox::information(this, "Format Document", 
+            "No formatter found for this file type.\nUse Format > Edit Format Configurations to assign one.");
+        return;
+    }
+    
+    // Execute the formatter
+    QProcess process;
+    process.setWorkingDirectory(QFileInfo(filePath).absoluteDir().path());
+    process.start(command.first, command.second);
+    
+    if (!process.waitForFinished(60000)) {
+        QMessageBox::warning(this, "Format Document", 
+            "Formatting timed out or failed to start.\nMake sure the formatter is installed and in PATH.");
+        return;
+    }
+    
+    if (process.exitCode() != 0) {
+        QString errorOutput = QString::fromUtf8(process.readAllStandardError());
+        QString stdOut = QString::fromUtf8(process.readAllStandardOutput());
+        LOG_WARNING(QString("Formatter exited with code %1: %2").arg(process.exitCode()).arg(errorOutput));
+        
+        // Show error to user
+        QString errorMsg = QString("Formatter exited with error code %1.").arg(process.exitCode());
+        if (!errorOutput.isEmpty()) {
+            errorMsg += QString("\n\nError output:\n%1").arg(errorOutput.left(500));
+        }
+        QMessageBox::warning(this, "Format Document", errorMsg);
+    }
+    
+    // Reload the file if it was modified in place
+    if (textArea) {
+        QFile file(filePath);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QString newContent = QString::fromUtf8(file.readAll());
+            file.close();
+            
+            // Only update if content changed
+            if (textArea->toPlainText() != newContent) {
+                // Save cursor position
+                int cursorPos = textArea->textCursor().position();
+                
+                textArea->setPlainText(newContent);
+                // Mark as unmodified since we just formatted and the file matches the disk
+                textArea->document()->setModified(false);
+                
+                // Restore cursor position as close as possible
+                QTextCursor cursor = textArea->textCursor();
+                cursor.setPosition(qMin(cursorPos, textArea->toPlainText().length()));
+                textArea->setTextCursor(cursor);
+            }
+        } else {
+            LOG_WARNING(QString("Failed to reload file after formatting: %1").arg(filePath));
+        }
+    }
 }
 
 void MainWindow::setFilePathAsTabText(QString filePath)
@@ -622,17 +753,14 @@ void MainWindow::setupTextArea()
 void MainWindow::noScriptAssignedWarning()
 {
     QMessageBox msgBox(this);
-    msgBox.setText("No build script asociated with this file.");
-    auto connectButton = msgBox.addButton(tr("Connect"), QMessageBox::ActionRole);
-
-    msgBox.addButton(QMessageBox::Abort);
+    msgBox.setText("No file is currently open.");
+    msgBox.setInformativeText("Open a file first, then you can run it or configure a run template.");
+    auto openButton = msgBox.addButton(tr("Open File"), QMessageBox::ActionRole);
+    msgBox.addButton(QMessageBox::Cancel);
     msgBox.exec();
 
-    if (msgBox.clickedButton() == connectButton)
-        openConfigurationDialog();
-
-    else
-        msgBox.close();
+    if (msgBox.clickedButton() == openButton)
+        on_actionOpen_File_triggered();
 }
 
 void MainWindow::on_actionToggle_Menu_Bar_triggered()
@@ -721,6 +849,21 @@ void MainWindow::on_actionRun_file_name_triggered()
 void MainWindow::on_actionEdit_Configurations_triggered()
 {
     openConfigurationDialog();
+}
+
+void MainWindow::on_magicButton_clicked()
+{
+    formatCurrentDocument();
+}
+
+void MainWindow::on_actionFormat_Document_triggered()
+{
+    formatCurrentDocument();
+}
+
+void MainWindow::on_actionEdit_Format_Configurations_triggered()
+{
+    openFormatConfigurationDialog();
 }
 
 void MainWindow::setTheme(Theme theme)

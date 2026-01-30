@@ -1,13 +1,16 @@
 #ifndef TERMINAL_H
 #define TERMINAL_H
 
-#include <QWidget>
+#include <QMap>
 #include <QProcess>
-#include <QKeyEvent>
+#include <QStringList>
+#include <QWidget>
 
 namespace Ui {
 class Terminal;
 }
+
+class QEvent;
 
 /**
  * @brief Terminal widget providing full shell interaction using QProcess
@@ -21,6 +24,30 @@ class Terminal : public QWidget {
 public:
     explicit Terminal(QWidget* parent = nullptr);
     ~Terminal();
+
+    /**
+     * @brief Execute a command with the given arguments
+     * @param command The command to execute
+     * @param args Arguments for the command
+     * @param workingDirectory Working directory for execution
+     * @param env Environment variables (optional)
+     */
+    void executeCommand(const QString& command,
+                        const QStringList& args,
+                        const QString& workingDirectory,
+                        const QMap<QString, QString>& env = QMap<QString, QString>());
+
+    /**
+     * @brief Execute the run template for a file
+     * @param filePath Path to the file to run
+     * @return true if a command was started
+     */
+    bool runFile(const QString& filePath);
+
+    /**
+     * @brief Stop the currently running process
+     */
+    void stopProcess();
 
     /**
      * @brief Start the terminal shell process
@@ -58,6 +85,10 @@ public:
     void clear();
 
 signals:
+    void processStarted();
+    void processFinished(int exitCode);
+    void processError(const QString& errorMessage);
+
     /**
      * @brief Emitted when the shell process starts
      */
@@ -83,6 +114,12 @@ signals:
 
 private slots:
     void on_closeButton_clicked();
+
+    void onRunProcessReadyReadStdout();
+    void onRunProcessReadyReadStderr();
+    void onRunProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void onRunProcessError(QProcess::ProcessError error);
+
     void onReadyReadStandardOutput();
     void onReadyReadStandardError();
     void onProcessError(QProcess::ProcessError error);
@@ -100,14 +137,17 @@ private:
     QStringList getShellArguments() const;
     void scrollToBottom();
     void handleHistoryNavigation(bool up);
+    void cleanupRunProcess(bool restartShell);
 
     Ui::Terminal* ui;
     QProcess* m_process;
+    QProcess* m_runProcess;
     QString m_workingDirectory;
     QString m_currentInput;
     QStringList m_commandHistory;
     int m_historyIndex;
     bool m_processRunning;
+    bool m_restartShellAfterRun;
 };
 
 #endif // TERMINAL_H

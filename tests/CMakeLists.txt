@@ -202,6 +202,51 @@ target_link_libraries(test_accessibility
 
 target_compile_definitions(test_accessibility PRIVATE QT_DEPRECATED_WARNINGS)
 
+# RunTemplateManager test executable
+# Note: We need to include the qrc resource file so templates are available in tests
+qt5_add_resources(RUN_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/run_templates/run_templates.qrc)
+
+add_executable(test_runtemplatemanager
+    unit/test_runtemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${RUN_TEMPLATE_RESOURCES}
+)
+
+target_include_directories(test_runtemplatemanager PRIVATE ${CMAKE_SOURCE_DIR}/App)
+
+target_link_libraries(test_runtemplatemanager
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_runtemplatemanager PRIVATE QT_DEPRECATED_WARNINGS)
+
+# FormatTemplateManager test executable
+qt5_add_resources(FORMAT_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/format_templates/format_templates.qrc)
+
+add_executable(test_formattemplatemanager
+    unit/test_formattemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/format_templates/formattemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${FORMAT_TEMPLATE_RESOURCES}
+)
+
+target_include_directories(test_formattemplatemanager PRIVATE ${CMAKE_SOURCE_DIR}/App)
+
+target_link_libraries(test_formattemplatemanager
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_formattemplatemanager PRIVATE QT_DEPRECATED_WARNINGS)
+
 # Terminal test executable
 add_executable(test_terminal
     unit/test_terminal.cpp
@@ -234,11 +279,14 @@ add_test(NAME PluginManagerTests COMMAND test_pluginmanager)
 add_test(NAME VimModeTests COMMAND test_vimmode)
 add_test(NAME I18nTests COMMAND test_i18n)
 add_test(NAME AccessibilityTests COMMAND test_accessibility)
+add_test(NAME RunTemplateManagerTests COMMAND test_runtemplatemanager)
+add_test(NAME FormatTemplateManagerTests COMMAND test_formattemplatemanager)
 add_test(NAME TerminalTests COMMAND test_terminal)
 
 # Set environment variable for headless testing
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
-    AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests TerminalTests PROPERTIES
+    AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
+    RunTemplateManagerTests FormatTemplateManagerTests TerminalTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
@@ -246,6 +294,7 @@ set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests Setti
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
-            test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility test_terminal
+            test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
+            test_runtemplatemanager test_formattemplatemanager test_terminal
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

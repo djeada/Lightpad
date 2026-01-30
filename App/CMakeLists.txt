@@ -49,12 +49,16 @@ set(project_headers
     settings/settingsmanager.h
     ui/panels/preferencesview.h
     ui/dialogs/runconfigurations.h
+    ui/dialogs/runtemplateselector.h
+    ui/dialogs/formattemplateselector.h
     ui/dialogs/shortcuts.h
     ui/panels/terminal.h
     core/textarea.h
     settings/textareasettings.h
     filetree/filedirtreemodel.h
     filetree/filedirtreecontroller.h
+    run_templates/runtemplatemanager.h
+    format_templates/formattemplatemanager.h
     settings/theme.h)
 
 set(project_sources 
@@ -81,18 +85,24 @@ set(project_sources
     settings/settingsmanager.cpp
     ui/panels/preferencesview.cpp
     ui/dialogs/runconfigurations.cpp
+    ui/dialogs/runtemplateselector.cpp
+    ui/dialogs/formattemplateselector.cpp
     ui/dialogs/shortcuts.cpp
     ui/panels/terminal.cpp
     core/textarea.cpp
     settings/textareasettings.cpp
     filetree/filedirtreemodel.cpp
     filetree/filedirtreecontroller.cpp
+    run_templates/runtemplatemanager.cpp
+    format_templates/formattemplatemanager.cpp
     settings/theme.cpp)
 
 set(project_resources
     highlight.qrc
     icons.qrc
-    messages.qrc)
+    messages.qrc
+    run_templates/run_templates.qrc
+    format_templates/format_templates.qrc)
 
 add_executable(Lightpad 
     ${project_headers} 

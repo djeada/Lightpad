@@ -294,11 +294,19 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionRun_file_name"/>
     <addaction name="actionEdit_Configurations"/>
    </widget>
+   <widget class="QMenu" name="menuFormat">
+    <property name="title">
+     <string>Format</string>
+    </property>
+    <addaction name="actionFormat_Document"/>
+    <addaction name="actionEdit_Format_Configurations"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
    <addaction name="menuView"/>
    <addaction name="menuSearch"/>
    <addaction name="menuRun"/>
+   <addaction name="menuFormat"/>
    <addaction name="menuHelp"/>
   </widget>
   <action name="actionToggle_Undo">
@@ -448,6 +456,19 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   <action name="actionEdit_Configurations">
    <property name="text">
     <string>Edit Configurations</string>
+   </property>
+  </action>
+  <action name="actionFormat_Document">
+   <property name="text">
+    <string>Format Document</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+F</string>
+   </property>
+  </action>
+  <action name="actionEdit_Format_Configurations">
+   <property name="text">
+    <string>Edit Format Configurations</string>
    </property>
   </action>
  </widget>
