@@ -26,6 +26,10 @@ private slots:
 
     // Test signals
     void testShellStartedSignal();
+    
+    // Test error handling
+    void testMultipleStopCalls();
+    void testRestartAfterStop();
 };
 
 void TestTerminal::initTestCase()
@@ -137,6 +141,46 @@ void TestTerminal::testShellStartedSignal()
     
     terminal.stopShell();
     QTest::qWait(200);
+}
+
+void TestTerminal::testMultipleStopCalls()
+{
+    Terminal terminal;
+    // Terminal auto-starts shell
+    QVERIFY(terminal.isRunning());
+    
+    // Multiple stop calls should not crash
+    terminal.stopShell();
+    terminal.stopShell();
+    terminal.stopShell();
+    
+    QVERIFY(!terminal.isRunning());
+}
+
+void TestTerminal::testRestartAfterStop()
+{
+    Terminal terminal;
+    // Terminal auto-starts shell
+    QVERIFY(terminal.isRunning());
+    
+    // Stop the shell
+    terminal.stopShell();
+    QVERIFY(!terminal.isRunning());
+    
+    // Restart should work cleanly
+    bool started = terminal.startShell();
+    QVERIFY(started);
+    QVERIFY(terminal.isRunning());
+    
+    // Stop and restart again to ensure no resource leaks
+    terminal.stopShell();
+    QVERIFY(!terminal.isRunning());
+    
+    started = terminal.startShell();
+    QVERIFY(started);
+    QVERIFY(terminal.isRunning());
+    
+    terminal.stopShell();
 }
 
 QTEST_MAIN(TestTerminal)
