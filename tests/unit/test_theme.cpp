@@ -16,10 +16,10 @@ void TestTheme::testDefaultConstructor()
     Theme theme;
     
     // Verify default colors are set (modern dark theme)
-    QCOMPARE(theme.backgroundColor, QColor("#1e1e2e"));
-    QCOMPARE(theme.foregroundColor, QColor("#cdd6f4"));
+    QCOMPARE(theme.backgroundColor, QColor("#0e1116"));
+    QCOMPARE(theme.foregroundColor, QColor("#e6edf3"));
     QVERIFY(theme.highlightColor.isValid());
-    QCOMPARE(theme.lineNumberAreaColor, QColor("#1e1e2e"));
+    QCOMPARE(theme.lineNumberAreaColor, QColor("#0c1016"));
 }
 
 void TestTheme::testWriteToJson()
@@ -33,6 +33,8 @@ void TestTheme::testWriteToJson()
     QVERIFY(json.contains("backgroundColor"));
     QVERIFY(json.contains("foregroundColor"));
     QVERIFY(json.contains("highlightColor"));
+    QVERIFY(json.contains("lineNumberAreaColor"));
+    QVERIFY(json.contains("keywordFormat_0"));
     QVERIFY(json.contains("keywordFormat_1"));
     QVERIFY(json.contains("keywordFormat_2"));
     QVERIFY(json.contains("searchFormat"));
@@ -54,14 +56,18 @@ void TestTheme::testReadFromJson()
     
     // Set custom values
     json["backgroundColor"] = "#ff0000";
+    json["foregroundColor"] = "#00ff00";
+    json["highlightColor"] = "#111111";
+    json["keywordFormat_0"] = "#123456";
+    json["numberFormat"] = "#654321";
     
     theme.read(json);
     
-    // TODO: The Theme::read() method has a bug where all JSON values are assigned
-    // to backgroundColor instead of their respective member variables.
-    // This test only verifies basic functionality until the bug is fixed.
-    // See ARCHITECTURE_TODO.md for planned improvements to settings management.
-    QVERIFY(theme.backgroundColor.isValid());
+    QCOMPARE(theme.backgroundColor, QColor("#ff0000"));
+    QCOMPARE(theme.foregroundColor, QColor("#00ff00"));
+    QCOMPARE(theme.highlightColor, QColor("#111111"));
+    QCOMPARE(theme.keywordFormat_0, QColor("#123456"));
+    QCOMPARE(theme.numberFormat, QColor("#654321"));
 }
 
 QTEST_MAIN(TestTheme)

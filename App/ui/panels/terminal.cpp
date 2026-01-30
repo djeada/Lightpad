@@ -52,9 +52,9 @@ void Terminal::setupTerminal()
     // Set terminal styling
     ui->textEdit->setStyleSheet(
         "QPlainTextEdit {"
-        "  background-color: #1e1e1e;"
-        "  color: #d4d4d4;"
-        "  selection-background-color: #264f78;"
+        "  background-color: #0e1116;"
+        "  color: #e6edf3;"
+        "  selection-background-color: #1b2a43;"
         "  border: none;"
         "}"
     );

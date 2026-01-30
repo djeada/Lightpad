@@ -1,3 +1,4 @@
+#include <QApplication>
 #include <QBoxLayout>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -6,9 +7,11 @@
 #include <QStringListModel>
 #include <QCompleter>
 #include <QProcess>
+#include <QMenuBar>
 #include <cstdio>
 
 #include "panels/findreplacepanel.h"
+#include "panels/problemspanel.h"
 #include "../core/lightpadpage.h"
 #include "../core/logging/logger.h"
 #include "mainwindow.h"
@@ -18,6 +21,7 @@
 #include "dialogs/runtemplateselector.h"
 #include "dialogs/formattemplateselector.h"
 #include "dialogs/shortcuts.h"
+#include "dialogs/commandpalette.h"
 #include "panels/terminal.h"
 #include "../core/textarea.h"
 #include "../run_templates/runtemplatemanager.h"
@@ -35,6 +39,8 @@ MainWindow::MainWindow(QWidget* parent)
     , completer(nullptr)
     , highlightLanguage("")
     , font(QApplication::font())
+    , commandPalette(nullptr)
+    , problemsPanel(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
@@ -94,6 +100,7 @@ MainWindow::MainWindow(QWidget* parent)
     
     setupTextArea();
     setupTabWidget();
+    setupCommandPalette();
     loadSettings();
     setWindowTitle("LightPad");
 }
@@ -192,6 +199,18 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
 
     else if (keyEvent->matches(QKeySequence::AddTab))
         ui->tabWidget->addNewTab();
+    
+    // Command Palette: Ctrl+Shift+P
+    else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
+             keyEvent->key() == Qt::Key_P) {
+        showCommandPalette();
+    }
+    
+    // Problems Panel: Ctrl+Shift+M
+    else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
+             keyEvent->key() == Qt::Key_M) {
+        showProblemsPanel();
+    }
 }
 
 int MainWindow::getTabWidth()
@@ -572,6 +591,52 @@ void MainWindow::showTerminal()
     terminal->runFile(filePath);
 }
 
+void MainWindow::showProblemsPanel()
+{
+    if (!problemsPanel) {
+        problemsPanel = new ProblemsPanel(this);
+        
+        connect(problemsPanel, &ProblemsPanel::problemClicked, this, [this](const QString& filePath, int line, int column) {
+            openFileAndAddToNewTab(filePath);
+            TextArea* textArea = getCurrentTextArea();
+            if (textArea) {
+                QTextCursor cursor = textArea->textCursor();
+                cursor.movePosition(QTextCursor::Start);
+                cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, line);
+                cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, column);
+                textArea->setTextCursor(cursor);
+                textArea->setFocus();
+            }
+        });
+        
+        auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
+        if (layout != 0)
+            layout->insertWidget(layout->count() - 1, problemsPanel, 0);
+    }
+    
+    problemsPanel->setVisible(!problemsPanel->isVisible());
+}
+
+void MainWindow::showCommandPalette()
+{
+    if (commandPalette) {
+        commandPalette->showPalette();
+    }
+}
+
+void MainWindow::setupCommandPalette()
+{
+    commandPalette = new CommandPalette(this);
+    
+    // Register all menus
+    QMenuBar* menuBar = this->menuBar();
+    for (QAction* action : menuBar->actions()) {
+        if (action->menu()) {
+            commandPalette->registerMenu(action->menu());
+        }
+    }
+}
+
 void MainWindow::setMainWindowTitle(QString title)
 {
     setWindowTitle(title + " - Lightpad");
@@ -872,27 +937,32 @@ void MainWindow::setTheme(Theme theme)
 
     QString bgColor = settings.theme.backgroundColor.name();
     QString fgColor = settings.theme.foregroundColor.name();
-    QString surfaceColor = "#313244";  // Slightly lighter surface
-    QString accentColor = "#89b4fa";   // Soft blue accent
-    QString hoverColor = "#45475a";    // Subtle hover
-    QString pressedColor = "#585b70";  // Pressed state
+    QString surfaceColor = "#171c24";
+    QString surfaceAltColor = "#1f2632";
+    QString hoverColor = "#222a36";
+    QString pressedColor = "#2c3546";
+    QString borderColor = "#2a3241";
+    QString accentColor = settings.theme.functionFormat.name();
+    QString accentSoftColor = "#1b2a43";
+    QString mutedTextColor = settings.theme.singleLineCommentFormat.name();
 
-    setStyleSheet(
+    QString styleSheet =
         // Base widget styling
-        "QWidget { background-color: " + bgColor + "; }"
+        "QWidget { background-color: " + bgColor + "; color: " + fgColor + "; }"
+        "QDialog { background-color: " + bgColor + "; }"
 
         // Modern menu styling
         "QMenu { "
             "color: " + fgColor + "; "
             "background-color: " + surfaceColor + "; "
             "selection-background-color: " + hoverColor + "; "
-            "border: 1px solid " + hoverColor + "; "
-            "border-radius: 8px; "
-            "padding: 4px; "
+            "border: 1px solid " + borderColor + "; "
+            "border-radius: 10px; "
+            "padding: 6px; "
         "}"
         "QMenu::item { "
-            "padding: 6px 24px 6px 12px; "
-            "border-radius: 4px; "
+            "padding: 6px 28px 6px 12px; "
+            "border-radius: 6px; "
             "margin: 2px 4px; "
         "}"
         "QMenu::item:selected { "
@@ -900,19 +970,19 @@ void MainWindow::setTheme(Theme theme)
         "}"
         "QMenu::separator { "
             "height: 1px; "
-            "background: " + hoverColor + "; "
-            "margin: 4px 8px; "
+            "background: " + borderColor + "; "
+            "margin: 6px 8px; "
         "}"
 
         // Menu bar styling
         "QMenuBar { "
             "background-color: " + bgColor + "; "
-            "spacing: 4px; "
+            "spacing: 6px; "
         "}"
         "QMenuBar::item { "
             "color: " + fgColor + "; "
-            "padding: 6px 12px; "
-            "border-radius: 6px; "
+            "padding: 8px 12px; "
+            "border-radius: 8px; "
         "}"
         "QMenuBar::item:selected { "
             "background-color: " + hoverColor + "; "
@@ -922,64 +992,133 @@ void MainWindow::setTheme(Theme theme)
         "QMessageBox { background-color: " + surfaceColor + "; }"
         "QMessageBox QLabel { color: " + fgColor + "; }"
 
-        // Modern button styling
-        "QAbstractButton { "
+        // Buttons
+        "QPushButton { "
             "color: " + fgColor + "; "
-            "border: none; "
-            "padding: 6px 12px; "
+            "border: 1px solid " + borderColor + "; "
+            "padding: 6px 14px; "
             "background-color: " + surfaceColor + "; "
-            "border-radius: 6px; "
+            "border-radius: 8px; "
         "}"
-        "QAbstractButton:hover { "
-            "background-color: " + hoverColor + "; "
+        "QPushButton:hover { "
+            "background-color: " + surfaceAltColor + "; "
         "}"
-        "QAbstractButton:pressed { "
+        "QPushButton:pressed { "
             "background-color: " + pressedColor + "; "
         "}"
+        "QPushButton:default { "
+            "background-color: " + accentColor + "; "
+            "border: 1px solid " + accentColor + "; "
+            "color: " + bgColor + "; "
+        "}"
+        "QToolButton { "
+            "color: " + fgColor + "; "
+            "border: 1px solid transparent; "
+            "padding: 4px 8px; "
+            "background-color: transparent; "
+            "border-radius: 8px; "
+        "}"
+        "QToolButton:hover { "
+            "background-color: " + hoverColor + "; "
+            "border-color: " + borderColor + "; "
+        "}"
+        "QToolButton:pressed { "
+            "background-color: " + pressedColor + "; "
+        "}"
+        "QToolButton#runButton, QToolButton#magicButton { "
+            "background-color: " + surfaceAltColor + "; "
+            "border: 1px solid " + borderColor + "; "
+            "padding: 6px; "
+            "border-radius: 10px; "
+        "}"
+        "QToolButton#runButton:hover, QToolButton#magicButton:hover { "
+            "background-color: " + hoverColor + "; "
+        "}"
+        "QToolButton#languageHighlight, QToolButton#tabWidth { "
+            "background-color: " + surfaceAltColor + "; "
+            "border: 1px solid " + borderColor + "; "
+            "padding: 6px 10px; "
+        "}"
+        "QLabel#rowCol { color: " + mutedTextColor + "; }"
 
         // Tree view and list styling
         "QAbstractItemView { "
             "color: " + fgColor + "; "
             "background-color: " + bgColor + "; "
             "outline: 0; "
-            "border: none; "
+            "border: 1px solid " + borderColor + "; "
+            "border-radius: 8px; "
         "}"
         "QAbstractItemView::item { "
-            "color: " + fgColor + "; "
-            "padding: 4px 8px; "
-            "border-radius: 4px; "
+            "padding: 6px 8px; "
+            "border-radius: 6px; "
         "}"
         "QAbstractItemView::item:hover { "
             "background-color: " + hoverColor + "; "
-            "color: " + fgColor + "; "
         "}"
         "QAbstractItemView::item:selected { "
-            "background-color: " + accentColor + "; "
-            "color: " + bgColor + "; "
+            "background-color: " + accentSoftColor + "; "
+            "color: " + fgColor + "; "
+        "}"
+        "QHeaderView::section { "
+            "background-color: " + surfaceColor + "; "
+            "color: " + mutedTextColor + "; "
+            "padding: 6px 8px; "
+            "border: none; "
         "}"
 
-        // Modern text input styling
+        // Text input styling
         "QLineEdit { "
-            "background-color: " + surfaceColor + "; "
+            "background-color: " + surfaceAltColor + "; "
             "color: " + fgColor + "; "
-            "border: 1px solid " + hoverColor + "; "
-            "border-radius: 6px; "
+            "border: 1px solid " + borderColor + "; "
+            "border-radius: 8px; "
             "padding: 6px 10px; "
-            "selection-background-color: " + accentColor + "; "
+            "selection-background-color: " + accentSoftColor + "; "
         "}"
         "QLineEdit:focus { "
             "border: 1px solid " + accentColor + "; "
         "}"
 
-        // Label styling
-        "QLabel { color: " + fgColor + "; }"
+        // Combo box styling
+        "QComboBox { "
+            "background-color: " + surfaceAltColor + "; "
+            "color: " + fgColor + "; "
+            "border: 1px solid " + borderColor + "; "
+            "border-radius: 8px; "
+            "padding: 6px 10px; "
+        "}"
+        "QComboBox::drop-down { "
+            "border: none; "
+            "width: 18px; "
+        "}"
+        "QComboBox::down-arrow { "
+            "image: none; "
+            "border: 4px solid transparent; "
+            "border-top-color: " + mutedTextColor + "; "
+            "margin-top: 2px; "
+        "}"
 
         // Text editor styling
         "QPlainTextEdit { "
             "color: " + fgColor + "; "
             "background-color: " + bgColor + "; "
-            "selection-background-color: " + hoverColor + "; "
+            "selection-background-color: " + accentSoftColor + "; "
             "border: none; "
+        "}"
+
+        // Group boxes
+        "QGroupBox { "
+            "border: 1px solid " + borderColor + "; "
+            "border-radius: 10px; "
+            "margin-top: 14px; "
+            "padding: 10px; "
+        "}"
+        "QGroupBox::title { "
+            "subcontrol-origin: margin; "
+            "subcontrol-position: top left; "
+            "padding: 0 6px; "
+            "color: " + mutedTextColor + "; "
         "}"
 
         // Modern radio button styling
@@ -995,7 +1134,7 @@ void MainWindow::setTheme(Theme theme)
         "}"
         "QRadioButton::indicator:unchecked { "
             "background-color: " + bgColor + "; "
-            "border: 2px solid " + fgColor + "; "
+            "border: 2px solid " + mutedTextColor + "; "
         "}"
 
         // Checkbox styling
@@ -1004,7 +1143,7 @@ void MainWindow::setTheme(Theme theme)
             "width: 16px; "
             "height: 16px; "
             "border-radius: 4px; "
-            "border: 2px solid " + fgColor + "; "
+            "border: 2px solid " + mutedTextColor + "; "
             "background-color: " + bgColor + "; "
         "}"
         "QCheckBox::indicator:checked { "
@@ -1012,10 +1151,10 @@ void MainWindow::setTheme(Theme theme)
             "border: 2px solid " + accentColor + "; "
         "}"
 
-        // Modern scrollbar styling
+        // Scrollbars
         "QScrollBar:vertical { "
             "background-color: " + bgColor + "; "
-            "width: 12px; "
+            "width: 10px; "
             "margin: 0; "
             "border-radius: 6px; "
         "}"
@@ -1036,7 +1175,7 @@ void MainWindow::setTheme(Theme theme)
         "}"
         "QScrollBar:horizontal { "
             "background-color: " + bgColor + "; "
-            "height: 12px; "
+            "height: 10px; "
             "margin: 0; "
             "border-radius: 6px; "
         "}"
@@ -1060,14 +1199,14 @@ void MainWindow::setTheme(Theme theme)
         "QToolTip { "
             "background-color: " + surfaceColor + "; "
             "color: " + fgColor + "; "
-            "border: 1px solid " + hoverColor + "; "
-            "border-radius: 6px; "
+            "border: 1px solid " + borderColor + "; "
+            "border-radius: 8px; "
             "padding: 4px 8px; "
         "}"
 
         // Splitter styling
         "QSplitter::handle { "
-            "background-color: " + hoverColor + "; "
+            "background-color: " + borderColor + "; "
         "}"
         "QSplitter::handle:horizontal { width: 2px; }"
         "QSplitter::handle:vertical { height: 2px; }"
@@ -1078,11 +1217,44 @@ void MainWindow::setTheme(Theme theme)
             "color: " + fgColor + "; "
         "}"
 
-        // Bottom toolbar styling
+        // Panel styling
         "QWidget#backgroundBottom { "
             "background-color: " + surfaceColor + "; "
+            "border-top: 1px solid " + borderColor + "; "
         "}"
-    );
+        "QWidget#FindReplacePanel { "
+            "background-color: " + surfaceColor + "; "
+            "border-top: 1px solid " + borderColor + "; "
+        "}"
+        "QWidget#Terminal { "
+            "background-color: " + surfaceColor + "; "
+            "border-top: 1px solid " + borderColor + "; "
+        "}"
+        "QDialogButtonBox QPushButton { "
+            "min-width: 88px; "
+        "}"
+        "LineEditIcon { "
+            "background-color: " + surfaceAltColor + "; "
+            "border: 1px solid " + borderColor + "; "
+            "border-radius: 8px; "
+            "padding: 2px; "
+        "}"
+        "LineEditIcon:hover { "
+            "border: 1px solid " + accentColor + "; "
+        "}"
+        "LineEditIcon QLineEdit { "
+            "background: transparent; "
+            "border: none; "
+            "padding: 4px 6px; "
+            "color: " + fgColor + "; "
+        "}"
+        "LineEditIcon QToolButton { "
+            "background: transparent; "
+            "border: none; "
+            "padding: 4px; "
+        "}";
 
-    ui->tabWidget->setTheme(bgColor, fgColor);
+    qApp->setStyleSheet(styleSheet);
+
+    ui->tabWidget->setTheme(bgColor, fgColor, surfaceColor, hoverColor, accentColor, borderColor);
 }

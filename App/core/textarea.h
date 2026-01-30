@@ -2,6 +2,10 @@
 #define CODEEDITOR_H
 
 #include <QPlainTextEdit>
+#include <QList>
+#include <QTextCursor>
+#include <QSet>
+#include <functional>
 
 class MainWindow;
 class LightpadSyntaxHighlighter;
@@ -36,10 +40,28 @@ public:
     QString getSearchWord();
     bool changesUnsaved();
 
+    // Multi-cursor support
+    void addCursorAbove();
+    void addCursorBelow();
+    void addCursorAtNextOccurrence();
+    void addCursorsToAllOccurrences();
+    void clearExtraCursors();
+    bool hasMultipleCursors() const;
+    int cursorCount() const;
+
+    // Code folding
+    void foldCurrentBlock();
+    void unfoldCurrentBlock();
+    void foldAll();
+    void unfoldAll();
+    void toggleFoldAtLine(int line);
+
 protected:
     void resizeEvent(QResizeEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
 
 private:
     MainWindow* mainWindow;
@@ -60,6 +82,14 @@ private:
     bool lineHighlighted;
     bool matchingBracketsHighlighted;
     int prevWordCount;
+
+    // Multi-cursor state
+    QList<QTextCursor> m_extraCursors;
+    QString m_lastSelectedWord;
+
+    // Folding state
+    QSet<int> m_foldedBlocks;
+
     void setupTextArea();
     void setTabWidgetIcon(QIcon icon);
     void closeParentheses(QString startSr, QString closeStr);
@@ -71,6 +101,15 @@ private:
     void updateCursorPositionChangedCallbacks();
     void insertCompletion(const QString& completion);
     QString textUnderCursor() const;
+
+    // Multi-cursor helpers
+    void drawExtraCursors();
+    void applyToAllCursors(const std::function<void(QTextCursor&)>& operation);
+    void mergeOverlappingCursors();
+
+    // Folding helpers
+    int findFoldEndBlock(int startBlock) const;
+    bool isFoldable(int blockNumber) const;
 };
 
 #endif

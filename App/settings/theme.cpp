@@ -3,56 +3,66 @@
 #include <QJsonObject>
 
 Theme::Theme()
-    : backgroundColor(QColor("#1e1e2e"))          // Softer dark background (catppuccin-inspired)
-    , foregroundColor(QColor("#cdd6f4"))          // Softer light foreground
-    , highlightColor(QColor("#313244"))           // Subtle line highlight
-    , lineNumberAreaColor(QColor("#1e1e2e"))      // Match main background
-    , keywordFormat_0(QColor("#a6e3a1"))          // Soft green for keywords
-    , keywordFormat_1(QColor("#f9e2af"))          // Soft yellow for types
-    , keywordFormat_2(QColor("#cba6f7"))          // Soft purple for special
-    , searchFormat(QColor("#f9e2af"))             // Soft yellow for search
-    , singleLineCommentFormat(QColor("#6c7086"))  // Muted gray for comments
-    , functionFormat(QColor("#89b4fa"))           // Soft blue for functions
-    , quotationFormat(QColor("#fab387"))          // Soft peach for strings
-    , classFormat(QColor("#89dceb"))              // Soft cyan for classes
-    , numberFormat(QColor("#f38ba8"))             // Soft pink for numbers
+    : backgroundColor(QColor("#0e1116"))
+    , foregroundColor(QColor("#e6edf3"))
+    , highlightColor(QColor("#1a2230"))
+    , lineNumberAreaColor(QColor("#0c1016"))
+    , keywordFormat_0(QColor("#7ee787"))
+    , keywordFormat_1(QColor("#f2cc60"))
+    , keywordFormat_2(QColor("#58a6ff"))
+    , searchFormat(QColor("#f2cc60"))
+    , singleLineCommentFormat(QColor("#8b949e"))
+    , functionFormat(QColor("#79c0ff"))
+    , quotationFormat(QColor("#a5d6ff"))
+    , classFormat(QColor("#56d4dd"))
+    , numberFormat(QColor("#ff7b72"))
 {
 }
 
 void Theme::read(const QJsonObject& json)
 {
-    if (json.contains("backgroundColor") && json["backgroundColor"].isString())
-        backgroundColor = QColor(json["backgroundColor"].toString());
+    const QJsonObject themeObject = (json.contains("theme") && json["theme"].isObject())
+        ? json["theme"].toObject()
+        : json;
 
-    if (json.contains("foregroundColor") && json["foregroundColor"].isString())
-        backgroundColor = QColor(json["foregroundColor"].toString());
+    if (themeObject.contains("backgroundColor") && themeObject["backgroundColor"].isString())
+        backgroundColor = QColor(themeObject["backgroundColor"].toString());
 
-    if (json.contains("highlightColor") && json["highlightColor"].isString())
-        backgroundColor = QColor(json["highlightColor"].toString());
+    if (themeObject.contains("foregroundColor") && themeObject["foregroundColor"].isString())
+        foregroundColor = QColor(themeObject["foregroundColor"].toString());
 
-    if (json.contains("keywordFormat_1") && json["keywordFormat_1"].isString())
-        backgroundColor = QColor(json["keywordFormat_1"].toString());
+    if (themeObject.contains("highlightColor") && themeObject["highlightColor"].isString())
+        highlightColor = QColor(themeObject["highlightColor"].toString());
 
-    if (json.contains("keywordFormat_2") && json["keywordFormat_2"].isString())
-        backgroundColor = QColor(json["keywordFormat_2"].toString());
+    if (themeObject.contains("lineNumberAreaColor") && themeObject["lineNumberAreaColor"].isString())
+        lineNumberAreaColor = QColor(themeObject["lineNumberAreaColor"].toString());
 
-    if (json.contains("searchFormat") && json["searchFormat"].isString())
-        backgroundColor = QColor(json["searchFormat"].toString());
+    if (themeObject.contains("keywordFormat_0") && themeObject["keywordFormat_0"].isString())
+        keywordFormat_0 = QColor(themeObject["keywordFormat_0"].toString());
 
-    if (json.contains("singleLineCommentFormat") && json["singleLineCommentFormat"].isString())
-        backgroundColor = QColor(json["singleLineCommentFormat"].toString());
+    if (themeObject.contains("keywordFormat_1") && themeObject["keywordFormat_1"].isString())
+        keywordFormat_1 = QColor(themeObject["keywordFormat_1"].toString());
 
-    if (json.contains("functionFormat") && json["functionFormat"].isString())
-        backgroundColor = QColor(json["functionFormat"].toString());
+    if (themeObject.contains("keywordFormat_2") && themeObject["keywordFormat_2"].isString())
+        keywordFormat_2 = QColor(themeObject["keywordFormat_2"].toString());
 
-    if (json.contains("quotationFormat") && json["quotationFormat"].isString())
-        backgroundColor = QColor(json["quotationFormat"].toString());
+    if (themeObject.contains("searchFormat") && themeObject["searchFormat"].isString())
+        searchFormat = QColor(themeObject["searchFormat"].toString());
 
-    if (json.contains("classFormat") && json["classFormat"].isString())
-        backgroundColor = QColor(json["classFormat"].toString());
+    if (themeObject.contains("singleLineCommentFormat") && themeObject["singleLineCommentFormat"].isString())
+        singleLineCommentFormat = QColor(themeObject["singleLineCommentFormat"].toString());
 
-    if (json.contains("numberFormat") && json["numberFormat"].isString())
-        backgroundColor = QColor(json["numberFormat"].toString());
+    if (themeObject.contains("functionFormat") && themeObject["functionFormat"].isString())
+        functionFormat = QColor(themeObject["functionFormat"].toString());
+
+    if (themeObject.contains("quotationFormat") && themeObject["quotationFormat"].isString())
+        quotationFormat = QColor(themeObject["quotationFormat"].toString());
+
+    if (themeObject.contains("classFormat") && themeObject["classFormat"].isString())
+        classFormat = QColor(themeObject["classFormat"].toString());
+
+    if (themeObject.contains("numberFormat") && themeObject["numberFormat"].isString())
+        numberFormat = QColor(themeObject["numberFormat"].toString());
 }
 
 void Theme::write(QJsonObject& json)
@@ -60,6 +70,8 @@ void Theme::write(QJsonObject& json)
     json["backgroundColor"] = backgroundColor.name();
     json["foregroundColor"] = foregroundColor.name();
     json["highlightColor"] = highlightColor.name();
+    json["lineNumberAreaColor"] = lineNumberAreaColor.name();
+    json["keywordFormat_0"] = keywordFormat_0.name();
     json["keywordFormat_1"] = keywordFormat_1.name();
     json["keywordFormat_2"] = keywordFormat_2.name();
     json["searchFormat"] = searchFormat.name();

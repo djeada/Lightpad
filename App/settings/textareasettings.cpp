@@ -79,8 +79,8 @@ void TextAreaSettings::read(const QJsonObject& json)
 
     mainFont = QFont(fontFamily, fontPontSize, fontWeight, fontItalic);
 
-    if (json.contains("theme"))
-        theme.read(json);
+    if (json.contains("theme") && json["theme"].isObject())
+        theme.read(json["theme"].toObject());
 
     if (json.contains("autoIndent") && json["autoIndent"].isBool())
         autoIndent = json["autoIndent"].toBool();
@@ -113,6 +113,6 @@ void TextAreaSettings::write(QJsonObject& json)
     json["autoIndent"] = autoIndent;
     json["showLineNumberArea"] = showLineNumberArea;
     json["lineHighlighted"] = lineHighlighted;
-    json["matchingBracketsHighlighted"] = showLineNumberArea;
+    json["matchingBracketsHighlighted"] = matchingBracketsHighlighted;
     json["tabWidth"] = tabWidth;
 }
