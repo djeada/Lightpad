@@ -76,7 +76,7 @@
     <item>
      <widget class="QWidget" name="backgroundBottom" native="true">
       <property name="styleSheet">
-       <string notr="true">background-color: #313244; border-radius: 0;</string>
+       <string notr="true"/>
       </property>
       <layout class="QHBoxLayout" name="horizontalLayout">
        <property name="spacing">
@@ -112,17 +112,6 @@
          <property name="styleSheet">
           <string notr="true">QToolButton {
 qproperty-icon: url(":/resources/icons/run.png");
-border: none;
-border-radius: 6px;
-padding: 6px;
-}
-
-QToolButton:hover {
-background: #45475a;
-}
-
-QToolButton:pressed {
-background: #585b70;
 }</string>
          </property>
          <property name="text">
@@ -141,17 +130,6 @@ background: #585b70;
          <property name="styleSheet">
           <string notr="true">QToolButton {
 qproperty-icon: url(":/resources/icons/wand_dark.png");
-border: none;
-border-radius: 6px;
-padding: 6px;
-}
-
-QToolButton:hover {
-background: #45475a;
-}
-
-QToolButton:pressed {
-background: #585b70;
 }</string>
          </property>
          <property name="text">
@@ -230,7 +208,7 @@ background: #585b70;
        <item>
         <widget class="QLabel" name="rowCol">
          <property name="styleSheet">
-          <string notr="true">color: #cdd6f4; font-size: 12px;</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>Ln 0, Col 0</string>

@@ -812,7 +812,7 @@ void MainWindow::setTheme(Theme theme)
         "}"
         "QAbstractItemView::item:selected { "
             "background-color: " + accentColor + "; "
-            "color: #1e1e2e; "
+            "color: " + bgColor + "; "
         "}"
 
         // Modern text input styling
@@ -933,6 +933,11 @@ void MainWindow::setTheme(Theme theme)
         "QStatusBar { "
             "background-color: " + surfaceColor + "; "
             "color: " + fgColor + "; "
+        "}"
+
+        // Bottom toolbar styling
+        "QWidget#backgroundBottom { "
+            "background-color: " + surfaceColor + "; "
         "}"
     );
 
