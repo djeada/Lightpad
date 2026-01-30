@@ -382,8 +382,8 @@ void Terminal::scheduleAutoRestart()
         return;
     }
     
-    appendOutput(QString("Will attempt restart in %1 seconds (attempt %2/%3)...\n")
-                .arg(kRestartDelayMs / 1000.0, 0, 'f', 1)
+    appendOutput(QString("Will attempt restart in %1 second(s) (attempt %2/%3)...\n")
+                .arg(kRestartDelayMs / 1000)
                 .arg(m_restartAttempts)
                 .arg(kMaxRestartAttempts));
     
