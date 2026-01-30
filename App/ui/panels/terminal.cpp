@@ -5,15 +5,11 @@
 #include <QScrollBar>
 #include <QTextBlock>
 
-#ifdef Q_OS_WIN
-#include <windows.h>
-#endif
-
 Terminal::Terminal(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::Terminal)
     , m_process(nullptr)
-    , m_historyIndex(-1)
+    , m_historyIndex(0)
     , m_processRunning(false)
 {
     ui->setupUi(this);
@@ -88,11 +84,18 @@ bool Terminal::startShell(const QString& workingDirectory)
         m_workingDirectory = QDir::homePath();
     }
     
+    // Validate working directory
+    if (!m_workingDirectory.isEmpty() && !QDir(m_workingDirectory).exists()) {
+        appendOutput(QString("Warning: Directory '%1' does not exist, using home directory.\n")
+                    .arg(m_workingDirectory), true);
+        m_workingDirectory = QDir::homePath();
+    }
+    
     m_process->setWorkingDirectory(m_workingDirectory);
     
-    // Set environment for interactive shell
+    // Set environment for shell compatibility
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    env.insert("TERM", "dumb");  // Simple terminal type for compatibility
+    env.insert("TERM", "xterm");  // More compatible terminal type
     m_process->setProcessEnvironment(env);
     
     // Get shell command based on platform
@@ -158,9 +161,9 @@ void Terminal::executeCommand(const QString& command)
         m_historyIndex = m_commandHistory.size();
     }
     
-    // Write command to process
+    // Write command to process (use UTF-8 for better Unicode support)
     QString cmdWithNewline = command + "\n";
-    m_process->write(cmdWithNewline.toLocal8Bit());
+    m_process->write(cmdWithNewline.toUtf8());
 }
 
 void Terminal::setWorkingDirectory(const QString& directory)
@@ -290,15 +293,9 @@ bool Terminal::eventFilter(QObject* obj, QEvent* event)
             
         case Qt::Key_C:
             if (keyEvent->modifiers() & Qt::ControlModifier) {
-                // Ctrl+C - send interrupt signal
+                // Ctrl+C - send interrupt signal (consistent approach using stdin)
                 if (isRunning()) {
-#ifdef Q_OS_WIN
-                    // Windows: Send Ctrl+C event
-                    GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
-#else
-                    // Unix: Send SIGINT
                     m_process->write("\x03");  // Ctrl+C character
-#endif
                 }
                 appendOutput("^C\n");
                 return true;
@@ -399,22 +396,25 @@ void Terminal::handleHistoryNavigation(bool up)
     }
     
     if (up) {
-        // Navigate up in history
+        // Navigate up in history (towards older commands)
         if (m_historyIndex > 0) {
             m_historyIndex--;
+        } else if (m_historyIndex == m_commandHistory.size()) {
+            // First up press from "past end" position - go to last command
+            m_historyIndex = m_commandHistory.size() - 1;
         }
     } else {
-        // Navigate down in history
-        if (m_historyIndex < m_commandHistory.size() - 1) {
+        // Navigate down in history (towards newer commands)
+        if (m_historyIndex < m_commandHistory.size()) {
             m_historyIndex++;
-        } else {
-            // Past end of history, clear input
-            m_historyIndex = m_commandHistory.size();
-            QTextCursor cursor = ui->textEdit->textCursor();
-            cursor.movePosition(QTextCursor::End);
-            cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
-            cursor.removeSelectedText();
-            return;
+            if (m_historyIndex >= m_commandHistory.size()) {
+                // Past end of history, clear input
+                QTextCursor cursor = ui->textEdit->textCursor();
+                cursor.movePosition(QTextCursor::End);
+                cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
+                cursor.removeSelectedText();
+                return;
+            }
         }
     }
     
