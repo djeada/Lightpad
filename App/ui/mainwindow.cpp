@@ -621,8 +621,19 @@ void MainWindow::formatCurrentDocument()
         return;
     }
     
+    // Check for unsaved changes before formatting
+    auto textArea = getCurrentTextArea();
+    bool hadUnsavedChanges = textArea && textArea->changesUnsaved();
+    
     // Save the file first
     on_actionSave_triggered();
+    
+    // Verify the file was saved (check if still has unsaved changes)
+    if (textArea && textArea->changesUnsaved()) {
+        QMessageBox::warning(this, "Format Document", 
+            "Could not save the file. Formatting cancelled.");
+        return;
+    }
     
     FormatTemplateManager& manager = FormatTemplateManager::instance();
     
@@ -644,7 +655,7 @@ void MainWindow::formatCurrentDocument()
     process.setWorkingDirectory(QFileInfo(filePath).absoluteDir().path());
     process.start(command.first, command.second);
     
-    if (!process.waitForFinished(30000)) {
+    if (!process.waitForFinished(60000)) {
         QMessageBox::warning(this, "Format Document", 
             "Formatting timed out or failed to start.\nMake sure the formatter is installed and in PATH.");
         return;
@@ -652,11 +663,18 @@ void MainWindow::formatCurrentDocument()
     
     if (process.exitCode() != 0) {
         QString errorOutput = QString::fromUtf8(process.readAllStandardError());
+        QString stdOut = QString::fromUtf8(process.readAllStandardOutput());
         LOG_WARNING(QString("Formatter exited with code %1: %2").arg(process.exitCode()).arg(errorOutput));
+        
+        // Show error to user
+        QString errorMsg = QString("Formatter exited with error code %1.").arg(process.exitCode());
+        if (!errorOutput.isEmpty()) {
+            errorMsg += QString("\n\nError output:\n%1").arg(errorOutput.left(500));
+        }
+        QMessageBox::warning(this, "Format Document", errorMsg);
     }
     
     // Reload the file if it was modified in place
-    auto textArea = getCurrentTextArea();
     if (textArea) {
         QFile file(filePath);
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -669,6 +687,7 @@ void MainWindow::formatCurrentDocument()
                 int cursorPos = textArea->textCursor().position();
                 
                 textArea->setPlainText(newContent);
+                // Mark as unmodified since we just formatted and the file matches the disk
                 textArea->document()->setModified(false);
                 
                 // Restore cursor position as close as possible
@@ -676,6 +695,8 @@ void MainWindow::formatCurrentDocument()
                 cursor.setPosition(qMin(cursorPos, textArea->toPlainText().length()));
                 textArea->setTextCursor(cursor);
             }
+        } else {
+            LOG_WARNING(QString("Failed to reload file after formatting: %1").arg(filePath));
         }
     }
 }

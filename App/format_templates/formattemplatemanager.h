@@ -39,9 +39,11 @@ struct FileFormatAssignment {
  * 
  * Provides:
  * - Loading of built-in format templates from JSON
- * - Loading of user-defined templates
+ * - Loading of user-defined templates from config file
  * - Per-directory template assignments stored in .lightpad/format_config.json
  * - Variable substitution for file paths and names
+ * 
+ * @note This class is NOT thread-safe. All access should be from the main UI thread.
  */
 class FormatTemplateManager : public QObject {
     Q_OBJECT
@@ -50,7 +52,7 @@ public:
     static FormatTemplateManager& instance();
     
     /**
-     * @brief Load all templates from built-in and user directories
+     * @brief Load all templates from built-in resources and user config file
      * @return true if at least the built-in templates were loaded
      */
     bool loadTemplates();

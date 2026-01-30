@@ -479,7 +479,7 @@
       "language": "R",
       "extensions": ["r", "R"],
       "command": "Rscript",
-      "args": ["-e", "styler::style_file('${file}')"],
+      "args": ["--vanilla", "-e", "styler::style_file(commandArgs(TRUE)[1])", "--args", "${file}"],
       "inPlace": true
     },
     {
@@ -555,12 +555,12 @@
     {
       "id": "jq_format",
       "name": "jq (JSON)",
-      "description": "Format JSON with jq",
+      "description": "Format JSON with jq (requires jq 1.6+ with --in-place)",
       "language": "JSON",
       "extensions": ["json"],
-      "command": "bash",
-      "args": ["-c", "jq '.' \"${file}\" > \"${file}.tmp\" && mv \"${file}.tmp\" \"${file}\""],
-      "inPlace": true
+      "command": "jq",
+      "args": ["--indent", "2", ".", "${file}"],
+      "inPlace": false
     },
     {
       "id": "yamlfmt",
@@ -635,11 +635,11 @@
     {
       "id": "uncrustify",
       "name": "Uncrustify",
-      "description": "Format C/C++/C#/Java/Objective-C with Uncrustify",
+      "description": "Format C/C++/C#/Java/Objective-C with Uncrustify (requires config file)",
       "language": "C++",
       "extensions": ["c", "cpp", "cxx", "h", "hpp", "cs", "java", "m", "mm"],
       "command": "uncrustify",
-      "args": ["-c", "~/.uncrustify.cfg", "--no-backup", "${file}"],
+      "args": ["--no-backup", "${file}"],
       "inPlace": true
     }
   ],
