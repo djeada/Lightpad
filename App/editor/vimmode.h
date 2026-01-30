@@ -5,6 +5,7 @@
 #include <QString>
 #include <QKeyEvent>
 #include <QPlainTextEdit>
+#include <QMap>
 
 /**
  * @brief VIM editing modes
@@ -15,7 +16,8 @@ enum class VimEditMode {
     Visual,    // Selection mode (character)
     VisualLine,// Selection mode (line)
     VisualBlock,// Selection mode (block)
-    Command    // Command-line mode (:)
+    Command,   // Command-line mode (:)
+    Replace    // Replace mode (R)
 };
 
 /**
@@ -37,11 +39,23 @@ enum class VimMotion {
     FileEnd,        // G
     PageUp,         // Ctrl+u
     PageDown,       // Ctrl+d
+    HalfPageUp,     // Ctrl+u (half page)
+    HalfPageDown,   // Ctrl+d (half page)
+    FullPageUp,     // Ctrl+b
+    FullPageDown,   // Ctrl+f
     MatchingBrace,  // %
     FindChar,       // f{char}
     FindCharBack,   // F{char}
     ToChar,         // t{char}
-    ToCharBack      // T{char}
+    ToCharBack,     // T{char}
+    NextParagraph,  // }
+    PrevParagraph,  // {
+    NextSentence,   // )
+    PrevSentence,   // (
+    SearchNext,     // n
+    SearchPrev,     // N
+    WordUnderCursor,// *
+    WordUnderCursorBack // #
 };
 
 /**
@@ -54,17 +68,47 @@ enum class VimOperator {
     Yank,       // y
     Indent,     // >
     Unindent,   // <
-    Format      // =
+    Format,     // =
+    ToggleCase  // ~ (or g~)
+};
+
+/**
+ * @brief VIM text object types
+ */
+enum class VimTextObject {
+    None,
+    InnerWord,      // iw
+    AroundWord,     // aw
+    InnerWORD,      // iW
+    AroundWORD,     // aW
+    InnerParen,     // i(, i)
+    AroundParen,    // a(, a)
+    InnerBracket,   // i[, i]
+    AroundBracket,  // a[, a]
+    InnerBrace,     // i{, i}
+    AroundBrace,    // a{, a}
+    InnerAngle,     // i<, i>
+    AroundAngle,    // a<, a>
+    InnerQuote,     // i"
+    AroundQuote,    // a"
+    InnerSingleQuote,// i'
+    AroundSingleQuote,// a'
+    InnerBacktick,  // i`
+    AroundBacktick  // a`
 };
 
 /**
  * @brief VIM mode handler for text editors
  * 
  * Provides VIM-style modal editing with support for:
- * - Normal, Insert, Visual modes
+ * - Normal, Insert, Visual, Replace modes
  * - Basic motions (h, j, k, l, w, b, e, etc.)
- * - Basic operators (d, c, y)
- * - Basic commands (:w, :q, :wq)
+ * - Advanced motions (f, t, %, *, #, n, N, {, }, etc.)
+ * - Basic operators (d, c, y, >, <, ~)
+ * - Text objects (iw, aw, i", a", i(, a(, etc.)
+ * - Repeat command (.)
+ * - Marks (m{a-z}, '{a-z})
+ * - Basic commands (:w, :q, :wq, /search)
  */
 class VimMode : public QObject {
     Q_OBJECT
@@ -134,23 +178,42 @@ private:
     bool handleInsertMode(QKeyEvent* event);
     bool handleVisualMode(QKeyEvent* event);
     bool handleCommandMode(QKeyEvent* event);
+    bool handleReplaceMode(QKeyEvent* event);
 
     void setMode(VimEditMode mode);
     void executeMotion(VimMotion motion, int count = 1);
     void executeOperator(VimOperator op, VimMotion motion, int count = 1);
+    void executeOperatorOnTextObject(VimOperator op, VimTextObject textObj);
     void executeCommand(const QString& command);
     
     void moveCursor(QTextCursor::MoveOperation op, int count = 1);
     void moveCursorWord(bool forward);
     void moveCursorToChar(QChar ch, bool before, bool backward = false);
+    bool moveCursorToMatchingBrace();
+    void moveCursorToParagraph(bool forward);
+    void moveCursorToSentence(bool forward);
     
     void deleteText(VimMotion motion, int count = 1);
     void yankText(VimMotion motion, int count = 1);
     void changeText(VimMotion motion, int count = 1);
+    void indentText(VimMotion motion, int count = 1, bool indent = true);
+    void toggleCase(VimMotion motion, int count = 1);
+    
+    bool selectTextObject(VimTextObject textObj);
     
     void insertNewLine(bool above);
     void joinLines();
     void replaceChar(QChar ch);
+    
+    void setMark(QChar mark);
+    bool jumpToMark(QChar mark);
+    
+    void repeatLastChange();
+    void recordChange(const QString& change);
+    
+    void searchWord(bool forward);
+    void searchNext(bool forward);
+    void scrollLines(int lines);
 
     QPlainTextEdit* m_editor;
     bool m_enabled;
@@ -162,6 +225,18 @@ private:
     QChar m_findChar;
     bool m_findCharBefore;
     bool m_findCharBackward;
+    
+    // Search state
+    QString m_searchPattern;
+    bool m_searchForward;
+    
+    // Marks storage (a-z, A-Z)
+    QMap<QChar, int> m_marks;
+    
+    // Repeat command state
+    QString m_lastChange;
+    int m_lastChangeCount;
+    bool m_recordingChange;
 };
 
 #endif // VIMMODE_H

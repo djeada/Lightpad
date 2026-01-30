@@ -97,8 +97,27 @@ When VIM mode is enabled, the editor uses modal editing with different shortcuts
 | `^` | First non-space character |
 | `gg` | Go to start of file |
 | `G` | Go to end of file |
-| `Ctrl+U` | Page up |
-| `Ctrl+D` | Page down |
+| `Ctrl+U` | Half page up |
+| `Ctrl+D` | Half page down |
+| `Ctrl+B` | Full page up |
+| `Ctrl+F` | Full page down |
+| `Ctrl+E` | Scroll down one line |
+| `Ctrl+Y` | Scroll up one line |
+| `%` | Jump to matching bracket |
+| `{` | Previous paragraph |
+| `}` | Next paragraph |
+| `(` | Previous sentence |
+| `)` | Next sentence |
+| `f{char}` | Find character forward |
+| `F{char}` | Find character backward |
+| `t{char}` | Move to before character forward |
+| `T{char}` | Move to before character backward |
+| `;` | Repeat last f/F/t/T |
+| `,` | Repeat last f/F/t/T (opposite direction) |
+| `*` | Search word under cursor forward |
+| `#` | Search word under cursor backward |
+| `n` | Next search result |
+| `N` | Previous search result |
 
 ### Mode Switching
 
@@ -112,7 +131,11 @@ When VIM mode is enabled, the editor uses modal editing with different shortcuts
 | `O` | Open line above |
 | `v` | Enter Visual mode |
 | `V` | Enter Visual Line mode |
+| `Ctrl+V` | Enter Visual Block mode |
+| `R` | Enter Replace mode |
 | `:` | Enter Command mode |
+| `/` | Start forward search |
+| `?` | Start backward search |
 | `Esc` | Return to Normal mode |
 
 ### Operators (combine with motions)
@@ -122,25 +145,64 @@ When VIM mode is enabled, the editor uses modal editing with different shortcuts
 | `d` | Delete |
 | `c` | Change |
 | `y` | Yank (copy) |
+| `>` | Indent |
+| `<` | Unindent |
 | `dd` | Delete line |
 | `yy` | Yank line |
 | `cc` | Change line |
+| `>>` | Indent line |
+| `<<` | Unindent line |
 | `dw` | Delete word |
 | `cw` | Change word |
 | `D` | Delete to end of line |
 | `C` | Change to end of line |
+
+### Text Objects (use with operators: d, c, y)
+
+| Key | Action |
+|-----|--------|
+| `iw` | Inner word |
+| `aw` | Around word (includes space) |
+| `i(` or `i)` | Inner parentheses |
+| `a(` or `a)` | Around parentheses |
+| `i[` or `i]` | Inner brackets |
+| `a[` or `a]` | Around brackets |
+| `i{` or `i}` | Inner braces |
+| `a{` or `a}` | Around braces |
+| `i<` or `i>` | Inner angle brackets |
+| `a<` or `a>` | Around angle brackets |
+| `i"` | Inner double quotes |
+| `a"` | Around double quotes |
+| `i'` | Inner single quotes |
+| `a'` | Around single quotes |
+| `` i` `` | Inner backticks |
+| `` a` `` | Around backticks |
+
+### Marks
+
+| Key | Action |
+|-----|--------|
+| `m{a-z}` | Set mark at cursor position |
+| `'{a-z}` | Jump to mark |
 
 ### Other Commands
 
 | Key | Action |
 |-----|--------|
 | `x` | Delete character |
-| `r` | Replace character |
+| `r{char}` | Replace character |
+| `s` | Delete character and enter insert mode |
+| `S` | Delete line and enter insert mode |
+| `~` | Toggle case of character |
 | `u` | Undo |
 | `Ctrl+R` | Redo |
 | `p` | Paste after |
 | `P` | Paste before |
 | `J` | Join lines |
+| `.` | Repeat last change (partial implementation) |
+| `zz` | Center cursor on screen |
+| `zt` | Scroll cursor to top |
+| `zb` | Scroll cursor to bottom |
 
 ### Command Mode
 
@@ -150,6 +212,12 @@ When VIM mode is enabled, the editor uses modal editing with different shortcuts
 | `:q` | Quit |
 | `:wq` or `:x` | Save and quit |
 | `:q!` | Force quit |
+| `:{number}` | Go to line number |
+| `/pattern` | Search forward for pattern |
+| `?pattern` | Search backward for pattern |
+| `:s/old/new` | Substitute on current line |
+| `:%s/old/new/g` | Substitute in entire file |
+| `:e filename` | Edit file |
 
 ## LSP Features
 
