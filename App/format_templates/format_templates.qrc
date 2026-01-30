@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/format_templates">
+        <file>format_templates.json</file>
+    </qresource>
+</RCC>

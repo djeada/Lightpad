@@ -1,0 +1,653 @@
+{
+  "version": "1.0",
+  "description": "Lightpad Format Templates - Extensive library of auto-formatting configurations for various programming languages",
+  "templates": [
+    {
+      "id": "clang_format",
+      "name": "clang-format",
+      "description": "Format C/C++/Objective-C code with clang-format",
+      "language": "C++",
+      "extensions": ["c", "cpp", "cxx", "cc", "h", "hpp", "hxx", "m", "mm"],
+      "command": "clang-format",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "clang_format_google",
+      "name": "clang-format (Google Style)",
+      "description": "Format C/C++ with Google style",
+      "language": "C++",
+      "extensions": ["c", "cpp", "cxx", "cc", "h", "hpp", "hxx"],
+      "command": "clang-format",
+      "args": ["-i", "--style=Google", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "clang_format_llvm",
+      "name": "clang-format (LLVM Style)",
+      "description": "Format C/C++ with LLVM style",
+      "language": "C++",
+      "extensions": ["c", "cpp", "cxx", "cc", "h", "hpp", "hxx"],
+      "command": "clang-format",
+      "args": ["-i", "--style=LLVM", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "clang_format_webkit",
+      "name": "clang-format (WebKit Style)",
+      "description": "Format C/C++ with WebKit style",
+      "language": "C++",
+      "extensions": ["c", "cpp", "cxx", "cc", "h", "hpp", "hxx"],
+      "command": "clang-format",
+      "args": ["-i", "--style=WebKit", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "black",
+      "name": "Black",
+      "description": "Format Python code with Black",
+      "language": "Python",
+      "extensions": ["py", "pyw"],
+      "command": "black",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "black_line_88",
+      "name": "Black (88 columns)",
+      "description": "Format Python with Black using 88 column limit",
+      "language": "Python",
+      "extensions": ["py", "pyw"],
+      "command": "black",
+      "args": ["--line-length", "88", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "black_line_120",
+      "name": "Black (120 columns)",
+      "description": "Format Python with Black using 120 column limit",
+      "language": "Python",
+      "extensions": ["py", "pyw"],
+      "command": "black",
+      "args": ["--line-length", "120", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "autopep8",
+      "name": "autopep8",
+      "description": "Format Python code with autopep8 (PEP 8)",
+      "language": "Python",
+      "extensions": ["py", "pyw"],
+      "command": "autopep8",
+      "args": ["--in-place", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "yapf",
+      "name": "YAPF",
+      "description": "Format Python code with YAPF",
+      "language": "Python",
+      "extensions": ["py", "pyw"],
+      "command": "yapf",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "isort",
+      "name": "isort",
+      "description": "Sort Python imports with isort",
+      "language": "Python",
+      "extensions": ["py", "pyw"],
+      "command": "isort",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "prettier",
+      "name": "Prettier",
+      "description": "Format JavaScript/TypeScript/HTML/CSS with Prettier",
+      "language": "JavaScript",
+      "extensions": ["js", "jsx", "ts", "tsx", "json", "html", "css", "scss", "less", "md", "yaml", "yml"],
+      "command": "prettier",
+      "args": ["--write", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "prettier_single_quote",
+      "name": "Prettier (Single Quotes)",
+      "description": "Format with Prettier using single quotes",
+      "language": "JavaScript",
+      "extensions": ["js", "jsx", "ts", "tsx"],
+      "command": "prettier",
+      "args": ["--write", "--single-quote", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "prettier_tabs",
+      "name": "Prettier (Tabs)",
+      "description": "Format with Prettier using tabs",
+      "language": "JavaScript",
+      "extensions": ["js", "jsx", "ts", "tsx", "json", "html", "css"],
+      "command": "prettier",
+      "args": ["--write", "--use-tabs", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "eslint_fix",
+      "name": "ESLint --fix",
+      "description": "Fix JavaScript/TypeScript issues with ESLint",
+      "language": "JavaScript",
+      "extensions": ["js", "jsx", "ts", "tsx"],
+      "command": "eslint",
+      "args": ["--fix", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "gofmt",
+      "name": "gofmt",
+      "description": "Format Go code with gofmt",
+      "language": "Go",
+      "extensions": ["go"],
+      "command": "gofmt",
+      "args": ["-w", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "goimports",
+      "name": "goimports",
+      "description": "Format Go code and manage imports",
+      "language": "Go",
+      "extensions": ["go"],
+      "command": "goimports",
+      "args": ["-w", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "go_fmt",
+      "name": "go fmt",
+      "description": "Format Go code with go fmt",
+      "language": "Go",
+      "extensions": ["go"],
+      "command": "go",
+      "args": ["fmt", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "rustfmt",
+      "name": "rustfmt",
+      "description": "Format Rust code with rustfmt",
+      "language": "Rust",
+      "extensions": ["rs"],
+      "command": "rustfmt",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "cargo_fmt",
+      "name": "cargo fmt",
+      "description": "Format Rust project with cargo fmt",
+      "language": "Rust",
+      "extensions": ["rs"],
+      "command": "cargo",
+      "args": ["fmt", "--", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "google_java_format",
+      "name": "google-java-format",
+      "description": "Format Java code with Google Java Format",
+      "language": "Java",
+      "extensions": ["java"],
+      "command": "google-java-format",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "ktlint",
+      "name": "ktlint",
+      "description": "Format Kotlin code with ktlint",
+      "language": "Kotlin",
+      "extensions": ["kt", "kts"],
+      "command": "ktlint",
+      "args": ["-F", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "ktfmt",
+      "name": "ktfmt",
+      "description": "Format Kotlin code with ktfmt",
+      "language": "Kotlin",
+      "extensions": ["kt", "kts"],
+      "command": "ktfmt",
+      "args": ["--kotlinlang-style", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "rubocop",
+      "name": "RuboCop",
+      "description": "Format Ruby code with RuboCop",
+      "language": "Ruby",
+      "extensions": ["rb", "rake"],
+      "command": "rubocop",
+      "args": ["-a", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "rufo",
+      "name": "Rufo",
+      "description": "Format Ruby code with Rufo",
+      "language": "Ruby",
+      "extensions": ["rb", "rake"],
+      "command": "rufo",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "php_cs_fixer",
+      "name": "PHP CS Fixer",
+      "description": "Format PHP code with PHP CS Fixer",
+      "language": "PHP",
+      "extensions": ["php"],
+      "command": "php-cs-fixer",
+      "args": ["fix", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "phpcbf",
+      "name": "PHPCBF",
+      "description": "Format PHP code with PHPCBF",
+      "language": "PHP",
+      "extensions": ["php"],
+      "command": "phpcbf",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "shfmt",
+      "name": "shfmt",
+      "description": "Format Shell scripts with shfmt",
+      "language": "Shell",
+      "extensions": ["sh", "bash", "zsh"],
+      "command": "shfmt",
+      "args": ["-w", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "shfmt_indent_4",
+      "name": "shfmt (4 space indent)",
+      "description": "Format Shell scripts with 4 space indent",
+      "language": "Shell",
+      "extensions": ["sh", "bash", "zsh"],
+      "command": "shfmt",
+      "args": ["-w", "-i", "4", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "dart_format",
+      "name": "dart format",
+      "description": "Format Dart code with dart format",
+      "language": "Dart",
+      "extensions": ["dart"],
+      "command": "dart",
+      "args": ["format", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "swift_format",
+      "name": "swift-format",
+      "description": "Format Swift code with swift-format",
+      "language": "Swift",
+      "extensions": ["swift"],
+      "command": "swift-format",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "swiftformat",
+      "name": "SwiftFormat",
+      "description": "Format Swift code with SwiftFormat",
+      "language": "Swift",
+      "extensions": ["swift"],
+      "command": "swiftformat",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "scalafmt",
+      "name": "scalafmt",
+      "description": "Format Scala code with scalafmt",
+      "language": "Scala",
+      "extensions": ["scala", "sc"],
+      "command": "scalafmt",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "mix_format",
+      "name": "mix format",
+      "description": "Format Elixir code with mix format",
+      "language": "Elixir",
+      "extensions": ["ex", "exs"],
+      "command": "mix",
+      "args": ["format", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "elm_format",
+      "name": "elm-format",
+      "description": "Format Elm code with elm-format",
+      "language": "Elm",
+      "extensions": ["elm"],
+      "command": "elm-format",
+      "args": ["--yes", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "ormolu",
+      "name": "Ormolu",
+      "description": "Format Haskell code with Ormolu",
+      "language": "Haskell",
+      "extensions": ["hs", "lhs"],
+      "command": "ormolu",
+      "args": ["--mode", "inplace", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "fourmolu",
+      "name": "Fourmolu",
+      "description": "Format Haskell code with Fourmolu",
+      "language": "Haskell",
+      "extensions": ["hs", "lhs"],
+      "command": "fourmolu",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "stylish_haskell",
+      "name": "stylish-haskell",
+      "description": "Format Haskell code with stylish-haskell",
+      "language": "Haskell",
+      "extensions": ["hs", "lhs"],
+      "command": "stylish-haskell",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "ocamlformat",
+      "name": "ocamlformat",
+      "description": "Format OCaml code with ocamlformat",
+      "language": "OCaml",
+      "extensions": ["ml", "mli"],
+      "command": "ocamlformat",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "cljfmt",
+      "name": "cljfmt",
+      "description": "Format Clojure code with cljfmt",
+      "language": "Clojure",
+      "extensions": ["clj", "cljs", "cljc", "edn"],
+      "command": "lein",
+      "args": ["cljfmt", "fix", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "zprint",
+      "name": "zprint",
+      "description": "Format Clojure code with zprint",
+      "language": "Clojure",
+      "extensions": ["clj", "cljs", "cljc", "edn"],
+      "command": "zprint",
+      "args": ["-w", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "lua_format",
+      "name": "lua-format",
+      "description": "Format Lua code with lua-format",
+      "language": "Lua",
+      "extensions": ["lua"],
+      "command": "lua-format",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "stylua",
+      "name": "StyLua",
+      "description": "Format Lua code with StyLua",
+      "language": "Lua",
+      "extensions": ["lua"],
+      "command": "stylua",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "crystal_format",
+      "name": "crystal tool format",
+      "description": "Format Crystal code",
+      "language": "Crystal",
+      "extensions": ["cr"],
+      "command": "crystal",
+      "args": ["tool", "format", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "nimfmt",
+      "name": "nimpretty",
+      "description": "Format Nim code with nimpretty",
+      "language": "Nim",
+      "extensions": ["nim"],
+      "command": "nimpretty",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "zigfmt",
+      "name": "zig fmt",
+      "description": "Format Zig code with zig fmt",
+      "language": "Zig",
+      "extensions": ["zig"],
+      "command": "zig",
+      "args": ["fmt", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "dfmt",
+      "name": "dfmt",
+      "description": "Format D code with dfmt",
+      "language": "D",
+      "extensions": ["d"],
+      "command": "dfmt",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "perltidy",
+      "name": "perltidy",
+      "description": "Format Perl code with perltidy",
+      "language": "Perl",
+      "extensions": ["pl", "pm"],
+      "command": "perltidy",
+      "args": ["-b", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "rscript_styler",
+      "name": "styler (R)",
+      "description": "Format R code with styler",
+      "language": "R",
+      "extensions": ["r", "R"],
+      "command": "Rscript",
+      "args": ["-e", "styler::style_file('${file}')"],
+      "inPlace": true
+    },
+    {
+      "id": "sql_formatter",
+      "name": "sql-formatter",
+      "description": "Format SQL with sql-formatter",
+      "language": "SQL",
+      "extensions": ["sql"],
+      "command": "sql-formatter",
+      "args": ["--fix", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "sqlfluff_fix",
+      "name": "SQLFluff fix",
+      "description": "Format SQL with SQLFluff",
+      "language": "SQL",
+      "extensions": ["sql"],
+      "command": "sqlfluff",
+      "args": ["fix", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "xmllint",
+      "name": "xmllint",
+      "description": "Format XML with xmllint",
+      "language": "XML",
+      "extensions": ["xml", "xsl", "xslt", "svg"],
+      "command": "xmllint",
+      "args": ["--format", "--output", "${file}", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "tidy_html",
+      "name": "HTML Tidy",
+      "description": "Format HTML with HTML Tidy",
+      "language": "HTML",
+      "extensions": ["html", "htm"],
+      "command": "tidy",
+      "args": ["-m", "-i", "-w", "120", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "cmake_format",
+      "name": "cmake-format",
+      "description": "Format CMake files with cmake-format",
+      "language": "CMake",
+      "extensions": ["cmake"],
+      "command": "cmake-format",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "terraform_fmt",
+      "name": "terraform fmt",
+      "description": "Format Terraform files",
+      "language": "Terraform",
+      "extensions": ["tf", "tfvars"],
+      "command": "terraform",
+      "args": ["fmt", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "jsonlint",
+      "name": "jsonlint",
+      "description": "Format JSON with jsonlint",
+      "language": "JSON",
+      "extensions": ["json"],
+      "command": "jsonlint",
+      "args": ["-i", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "jq_format",
+      "name": "jq (JSON)",
+      "description": "Format JSON with jq",
+      "language": "JSON",
+      "extensions": ["json"],
+      "command": "bash",
+      "args": ["-c", "jq '.' \"${file}\" > \"${file}.tmp\" && mv \"${file}.tmp\" \"${file}\""],
+      "inPlace": true
+    },
+    {
+      "id": "yamlfmt",
+      "name": "yamlfmt",
+      "description": "Format YAML with yamlfmt",
+      "language": "YAML",
+      "extensions": ["yaml", "yml"],
+      "command": "yamlfmt",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "dotnet_format",
+      "name": "dotnet format",
+      "description": "Format C#/F# code with dotnet format",
+      "language": "C#",
+      "extensions": ["cs", "fs", "fsx"],
+      "command": "dotnet",
+      "args": ["format", "--include", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "fantomas",
+      "name": "Fantomas",
+      "description": "Format F# code with Fantomas",
+      "language": "F#",
+      "extensions": ["fs", "fsx"],
+      "command": "fantomas",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "vfmt",
+      "name": "v fmt",
+      "description": "Format V code with v fmt",
+      "language": "V",
+      "extensions": ["v"],
+      "command": "v",
+      "args": ["fmt", "-w", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "astyle",
+      "name": "Artistic Style",
+      "description": "Format C/C++/Java with Artistic Style",
+      "language": "C++",
+      "extensions": ["c", "cpp", "cxx", "h", "hpp", "java"],
+      "command": "astyle",
+      "args": ["${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "astyle_allman",
+      "name": "Artistic Style (Allman)",
+      "description": "Format with Allman/BSD brace style",
+      "language": "C++",
+      "extensions": ["c", "cpp", "cxx", "h", "hpp"],
+      "command": "astyle",
+      "args": ["--style=allman", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "astyle_kr",
+      "name": "Artistic Style (K&R)",
+      "description": "Format with Kernighan & Ritchie brace style",
+      "language": "C++",
+      "extensions": ["c", "cpp", "cxx", "h", "hpp"],
+      "command": "astyle",
+      "args": ["--style=kr", "${file}"],
+      "inPlace": true
+    },
+    {
+      "id": "uncrustify",
+      "name": "Uncrustify",
+      "description": "Format C/C++/C#/Java/Objective-C with Uncrustify",
+      "language": "C++",
+      "extensions": ["c", "cpp", "cxx", "h", "hpp", "cs", "java", "m", "mm"],
+      "command": "uncrustify",
+      "args": ["-c", "~/.uncrustify.cfg", "--no-backup", "${file}"],
+      "inPlace": true
+    }
+  ],
+  "variables": {
+    "${file}": "Full path to the current file",
+    "${fileDir}": "Directory containing the current file",
+    "${fileBasename}": "Filename with extension",
+    "${fileBasenameNoExt}": "Filename without extension",
+    "${fileExt}": "File extension"
+  }
+}

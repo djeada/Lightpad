@@ -224,6 +224,28 @@ target_link_libraries(test_runtemplatemanager
 
 target_compile_definitions(test_runtemplatemanager PRIVATE QT_DEPRECATED_WARNINGS)
 
+# FormatTemplateManager test executable
+qt5_add_resources(FORMAT_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/format_templates/format_templates.qrc)
+
+add_executable(test_formattemplatemanager
+    unit/test_formattemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/format_templates/formattemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${FORMAT_TEMPLATE_RESOURCES}
+)
+
+target_include_directories(test_formattemplatemanager PRIVATE ${CMAKE_SOURCE_DIR}/App)
+
+target_link_libraries(test_formattemplatemanager
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_formattemplatemanager PRIVATE QT_DEPRECATED_WARNINGS)
+
 # Register tests with CTest
 add_test(NAME LoggerTests COMMAND test_logger)
 add_test(NAME ThemeTests COMMAND test_theme)
@@ -236,10 +258,12 @@ add_test(NAME VimModeTests COMMAND test_vimmode)
 add_test(NAME I18nTests COMMAND test_i18n)
 add_test(NAME AccessibilityTests COMMAND test_accessibility)
 add_test(NAME RunTemplateManagerTests COMMAND test_runtemplatemanager)
+add_test(NAME FormatTemplateManagerTests COMMAND test_formattemplatemanager)
 
 # Set environment variable for headless testing
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
-    AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests RunTemplateManagerTests PROPERTIES
+    AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
+    RunTemplateManagerTests FormatTemplateManagerTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
@@ -247,6 +271,7 @@ set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests Setti
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
-            test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility test_runtemplatemanager
+            test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
+            test_runtemplatemanager test_formattemplatemanager
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

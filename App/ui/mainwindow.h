@@ -20,7 +20,8 @@ enum class Lang { cpp,
     js,
     py };
 enum class Dialog { shortcuts,
-    runConfiguration };
+    runConfiguration,
+    formatConfiguration };
 
 namespace Ui {
 class MainWindow;
@@ -45,6 +46,7 @@ public:
     void highlihtCurrentLine(bool flag);
     void highlihtMatchingBracket(bool flag);
     void runCurrentScript();
+    void formatCurrentDocument();
     int getTabWidth();
     int getFontSize();
     TextArea* getCurrentTextArea();
@@ -81,6 +83,9 @@ private slots:
     void on_runButton_clicked();
     void on_actionRun_file_name_triggered();
     void on_actionEdit_Configurations_triggered();
+    void on_magicButton_clicked();
+    void on_actionFormat_Document_triggered();
+    void on_actionEdit_Format_Configurations_triggered();
 
 private:
     Ui::MainWindow* ui;
@@ -100,6 +105,7 @@ private:
     void showFindReplace(bool onlyFind = true);
     void openDialog(Dialog dialog);
     void openConfigurationDialog();
+    void openFormatConfigurationDialog();
     void openShortcutsDialog();
     void showTerminal();
     void setMainWindowTitle(QString title);

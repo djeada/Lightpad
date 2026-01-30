@@ -5,6 +5,7 @@
 #include <QStackedWidget>
 #include <QStringListModel>
 #include <QCompleter>
+#include <QProcess>
 #include <cstdio>
 
 #include "panels/findreplacepanel.h"
@@ -15,10 +16,12 @@
 #include "dialogs/preferences.h"
 #include "dialogs/runconfigurations.h"
 #include "dialogs/runtemplateselector.h"
+#include "dialogs/formattemplateselector.h"
 #include "dialogs/shortcuts.h"
 #include "panels/terminal.h"
 #include "../core/textarea.h"
 #include "../run_templates/runtemplatemanager.h"
+#include "../format_templates/formattemplatemanager.h"
 #include "ui_mainwindow.h"
 
 MainWindow::MainWindow(QWidget* parent)
@@ -497,6 +500,25 @@ void MainWindow::openDialog(Dialog dialog)
         }
         break;
     }
+    
+    case Dialog::formatConfiguration: {
+        // Use new format template selector
+        auto page = ui->tabWidget->getCurrentPage();
+        QString filePath = page ? page->getFilePath() : QString();
+        
+        if (filePath.isEmpty()) {
+            QMessageBox::information(this, "Format Configuration", 
+                "Please open a file first to configure format settings.");
+            return;
+        }
+        
+        if (findChildren<FormatTemplateSelector*>().isEmpty()) {
+            auto selector = new FormatTemplateSelector(filePath, this);
+            selector->setAttribute(Qt::WA_DeleteOnClose);
+            selector->show();
+        }
+        break;
+    }
 
     case Dialog::shortcuts:
         if (findChildren<ShortcutsDialog*>().isEmpty())
@@ -511,6 +533,11 @@ void MainWindow::openDialog(Dialog dialog)
 void MainWindow::openConfigurationDialog()
 {
     openDialog(Dialog::runConfiguration);
+}
+
+void MainWindow::openFormatConfigurationDialog()
+{
+    openDialog(Dialog::formatConfiguration);
 }
 
 void MainWindow::openShortcutsDialog()
@@ -581,6 +608,76 @@ void MainWindow::runCurrentScript()
 
     if (textArea && !textArea->changesUnsaved())
         showTerminal();
+}
+
+void MainWindow::formatCurrentDocument()
+{
+    auto page = ui->tabWidget->getCurrentPage();
+    QString filePath = page ? page->getFilePath() : QString();
+    
+    if (filePath.isEmpty()) {
+        QMessageBox::information(this, "Format Document", 
+            "Please save the file first before formatting.");
+        return;
+    }
+    
+    // Save the file first
+    on_actionSave_triggered();
+    
+    FormatTemplateManager& manager = FormatTemplateManager::instance();
+    
+    // Ensure templates are loaded
+    if (manager.getAllTemplates().isEmpty()) {
+        manager.loadTemplates();
+    }
+    
+    QPair<QString, QStringList> command = manager.buildCommand(filePath);
+    
+    if (command.first.isEmpty()) {
+        QMessageBox::information(this, "Format Document", 
+            "No formatter found for this file type.\nUse Format > Edit Format Configurations to assign one.");
+        return;
+    }
+    
+    // Execute the formatter
+    QProcess process;
+    process.setWorkingDirectory(QFileInfo(filePath).absoluteDir().path());
+    process.start(command.first, command.second);
+    
+    if (!process.waitForFinished(30000)) {
+        QMessageBox::warning(this, "Format Document", 
+            "Formatting timed out or failed to start.\nMake sure the formatter is installed and in PATH.");
+        return;
+    }
+    
+    if (process.exitCode() != 0) {
+        QString errorOutput = QString::fromUtf8(process.readAllStandardError());
+        LOG_WARNING(QString("Formatter exited with code %1: %2").arg(process.exitCode()).arg(errorOutput));
+    }
+    
+    // Reload the file if it was modified in place
+    auto textArea = getCurrentTextArea();
+    if (textArea) {
+        QFile file(filePath);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QString newContent = QString::fromUtf8(file.readAll());
+            file.close();
+            
+            // Only update if content changed
+            if (textArea->toPlainText() != newContent) {
+                // Save cursor position
+                int cursorPos = textArea->textCursor().position();
+                
+                textArea->setPlainText(newContent);
+                textArea->document()->setModified(false);
+                
+                // Restore cursor position as close as possible
+                QTextCursor cursor = textArea->textCursor();
+                cursor.setPosition(qMin(cursorPos, textArea->toPlainText().length()));
+                textArea->setTextCursor(cursor);
+            }
+        }
+    }
 }
 
 void MainWindow::setFilePathAsTabText(QString filePath)
@@ -731,6 +828,21 @@ void MainWindow::on_actionRun_file_name_triggered()
 void MainWindow::on_actionEdit_Configurations_triggered()
 {
     openConfigurationDialog();
+}
+
+void MainWindow::on_magicButton_clicked()
+{
+    formatCurrentDocument();
+}
+
+void MainWindow::on_actionFormat_Document_triggered()
+{
+    formatCurrentDocument();
+}
+
+void MainWindow::on_actionEdit_Format_Configurations_triggered()
+{
+    openFormatConfigurationDialog();
 }
 
 void MainWindow::setTheme(Theme theme)
