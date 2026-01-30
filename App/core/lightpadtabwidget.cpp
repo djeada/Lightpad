@@ -83,37 +83,74 @@ void LightpadTabWidget::setMainWindow(MainWindow* window)
 
 void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColor)
 {
+    QString surfaceColor = "#313244";
+    QString hoverColor = "#45475a";
+    QString accentColor = "#89b4fa";
 
     setStyleSheet(
-        "QScrollBar:vertical{background: " + backgroundColor + ";}"
+        // Modern scrollbar styling (inherits from main but ensure consistency)
+        "QScrollBar:vertical { background: " + backgroundColor + "; }"
+        "QScrollBar:horizontal { background: " + backgroundColor + "; }"
 
-                                                               "QScrollBar:horizontal{background: "
-        + backgroundColor + ";}"
+        // Tab bar container
+        "QTabBar { "
+            "background: " + backgroundColor + "; "
+            "qproperty-drawBase: 0; "
+        "}"
 
-                            "QTabBar::tab:selected{ "
-                            "color: "
-        + foregroundColor + ";"
-                            "border-bottom: 3px solid "
-        + foregroundColor + ";"
-                            "}"
+        // Individual tabs - modern rounded style
+        "QTabBar::tab { "
+            "color: #6c7086; "  // Muted text for inactive tabs
+            "background-color: " + backgroundColor + "; "
+            "padding: 8px 16px; "
+            "margin: 4px 2px 0px 2px; "
+            "border-top-left-radius: 8px; "
+            "border-top-right-radius: 8px; "
+            "border: none; "
+        "}"
 
-                            "QTabBar {background: "
-        + backgroundColor + ";}"
+        // Active/selected tab
+        "QTabBar::tab:selected { "
+            "color: " + foregroundColor + "; "
+            "background-color: " + surfaceColor + "; "
+            "border-bottom: 2px solid " + accentColor + "; "
+        "}"
 
-                            "QToolButton#AddTabButton {background: #262626;}"
+        // Hover state for tabs
+        "QTabBar::tab:hover:!selected { "
+            "color: " + foregroundColor + "; "
+            "background-color: " + hoverColor + "; "
+        "}"
 
-                            "QToolButton#AddTabButton:hover {background: #505050;}"
+        // Close button on tabs
+        "QTabBar::close-button { "
+            "image: url(:/resources/icons/close_dark.png); "
+            "subcontrol-position: right; "
+        "}"
+        "QTabBar::close-button:hover { "
+            "background-color: " + hoverColor + "; "
+            "border-radius: 4px; "
+        "}"
 
-                            "QTabBar::tab {"
-                            "color:"
-        + foregroundColor + ";"
-                            "margin: 0 -2px;"
-                            "padding: 1px 5px;"
-                            "background-color: #262626;"
-                            "}"
+        // Add tab button styling
+        "QToolButton#AddTabButton { "
+            "background: " + backgroundColor + "; "
+            "border-radius: 6px; "
+            "padding: 4px; "
+        "}"
+        "QToolButton#AddTabButton:hover { "
+            "background: " + hoverColor + "; "
+        "}"
 
-                            "QTabWidget#tabWidget {background-color:  "
-        + backgroundColor + "; }");
+        // Tab widget pane
+        "QTabWidget::pane { "
+            "border: none; "
+            "background-color: " + backgroundColor + "; "
+        "}"
+        "QTabWidget#tabWidget { "
+            "background-color: " + backgroundColor + "; "
+        "}"
+    );
 }
 
 void LightpadTabWidget::setFilePath(int index, QString filePath)
