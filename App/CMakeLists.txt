@@ -26,6 +26,10 @@ set(project_ui
 
 set(project_headers 
     accessibility/accessibilitymanager.h
+    completion/completionitem.h
+    completion/completioncontext.h
+    completion/icompletionprovider.h
+    completion/completionproviderregistry.h
     ui/dialogs/colorpicker.h
     ui/dialogs/commandpalette.h
     ui/panels/findreplacepanel.h
@@ -73,6 +77,7 @@ set(project_headers
 set(project_sources 
     main.cpp
     accessibility/accessibilitymanager.cpp
+    completion/completionproviderregistry.cpp
     ui/dialogs/colorpicker.cpp
     ui/dialogs/commandpalette.cpp
     ui/panels/findreplacepanel.cpp
