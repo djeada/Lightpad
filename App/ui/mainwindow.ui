@@ -76,17 +76,23 @@
     <item>
      <widget class="QWidget" name="backgroundBottom" native="true">
       <property name="styleSheet">
-       <string notr="true"/>
+       <string notr="true">background-color: #313244; border-radius: 0;</string>
       </property>
       <layout class="QHBoxLayout" name="horizontalLayout">
        <property name="spacing">
-        <number>5</number>
+        <number>8</number>
+       </property>
+       <property name="leftMargin">
+        <number>12</number>
        </property>
        <property name="rightMargin">
-        <number>5</number>
+        <number>12</number>
+       </property>
+       <property name="topMargin">
+        <number>6</number>
        </property>
        <property name="bottomMargin">
-        <number>5</number>
+        <number>6</number>
        </property>
        <item>
         <spacer name="horizontalSpacer">
@@ -105,19 +111,18 @@
         <widget class="QToolButton" name="runButton">
          <property name="styleSheet">
           <string notr="true">QToolButton {
-qproperty-icon: url(&quot;:/resources/icons/run.png&quot;) ; border: none;
+qproperty-icon: url(":/resources/icons/run.png");
+border: none;
+border-radius: 6px;
+padding: 6px;
 }
 
 QToolButton:hover {
-	background: rgb(85, 87, 83);
-	border: 1;
-	border-radius: 3;
+background: #45475a;
 }
 
 QToolButton:pressed {
-	background: rgb(46, 52, 54);
-	border: 1;
-	border-radius: 3;
+background: #585b70;
 }</string>
          </property>
          <property name="text">
@@ -135,19 +140,18 @@ QToolButton:pressed {
          </property>
          <property name="styleSheet">
           <string notr="true">QToolButton {
-qproperty-icon: url(&quot;:/resources/icons/wand_dark.png&quot;) ; border: none;
+qproperty-icon: url(":/resources/icons/wand_dark.png");
+border: none;
+border-radius: 6px;
+padding: 6px;
 }
 
 QToolButton:hover {
-	background: rgb(85, 87, 83);
-	border: 1;
-	border-radius: 3;
+background: #45475a;
 }
 
 QToolButton:pressed {
-	background: rgb(46, 52, 54);
-	border: 1;
-	border-radius: 3;
+background: #585b70;
 }</string>
          </property>
          <property name="text">
@@ -226,7 +230,7 @@ QToolButton:pressed {
        <item>
         <widget class="QLabel" name="rowCol">
          <property name="styleSheet">
-          <string notr="true">color: &quot;white&quot;;</string>
+          <string notr="true">color: #cdd6f4; font-size: 12px;</string>
          </property>
          <property name="text">
           <string>Ln 0, Col 0</string>
