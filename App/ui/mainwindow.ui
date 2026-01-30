@@ -300,6 +300,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     </property>
     <addaction name="actionFormat_Document"/>
     <addaction name="actionEdit_Format_Configurations"/>
+    <addaction name="actionTodo"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -469,6 +470,14 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   <action name="actionEdit_Format_Configurations">
    <property name="text">
     <string>Edit Format Configurations</string>
+   </property>
+  </action>
+  <action name="actionTodo">
+   <property name="text">
+    <string>Todo</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+T</string>
    </property>
   </action>
  </widget>

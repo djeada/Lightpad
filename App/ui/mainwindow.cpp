@@ -22,6 +22,7 @@
 #include "dialogs/formattemplateselector.h"
 #include "dialogs/shortcuts.h"
 #include "dialogs/commandpalette.h"
+#include "dialogs/todo.h"
 #include "panels/terminaltabwidget.h"
 #include "../core/textarea.h"
 #include "../run_templates/runtemplatemanager.h"
@@ -559,6 +560,12 @@ void MainWindow::openFormatConfigurationDialog()
     openDialog(Dialog::formatConfiguration);
 }
 
+void MainWindow::openTodoDialog()
+{
+    TodoDialog dlg(this);
+    dlg.exec();
+}
+
 void MainWindow::openShortcutsDialog()
 {
     openDialog(Dialog::shortcuts);
@@ -933,6 +940,11 @@ void MainWindow::on_actionFormat_Document_triggered()
 void MainWindow::on_actionEdit_Format_Configurations_triggered()
 {
     openFormatConfigurationDialog();
+}
+
+void MainWindow::on_actionTodo_triggered()
+{
+    openTodoDialog();
 }
 
 void MainWindow::setTheme(Theme theme)

@@ -60,6 +60,7 @@ set(project_headers
     ui/dialogs/runtemplateselector.h
     ui/dialogs/formattemplateselector.h
     ui/dialogs/shortcuts.h
+    ui/dialogs/todo.h
     ui/panels/terminal.h
     ui/panels/terminaltabwidget.h
     core/textarea.h
@@ -104,6 +105,7 @@ set(project_sources
     ui/dialogs/runtemplateselector.cpp
     ui/dialogs/formattemplateselector.cpp
     ui/dialogs/shortcuts.cpp
+    ui/dialogs/todo.cpp
     ui/panels/terminal.cpp
     ui/panels/terminaltabwidget.cpp
     core/textarea.cpp

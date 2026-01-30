@@ -86,6 +86,7 @@ private slots:
     void on_magicButton_clicked();
     void on_actionFormat_Document_triggered();
     void on_actionEdit_Format_Configurations_triggered();
+    void on_actionTodo_triggered();
 
 private:
     Ui::MainWindow* ui;
@@ -111,6 +112,7 @@ private:
     void openDialog(Dialog dialog);
     void openConfigurationDialog();
     void openFormatConfigurationDialog();
+    void openTodoDialog();
     void openShortcutsDialog();
     void showTerminal();
     void showProblemsPanel();
