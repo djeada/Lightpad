@@ -1,13 +1,13 @@
 #ifndef CPPSYNTAXPLUGIN_H
 #define CPPSYNTAXPLUGIN_H
 
-#include "../plugins/isyntaxplugin.h"
+#include "basesyntaxplugin.h"
 #include <QVector>
 
 /**
  * @brief Built-in C++ syntax highlighting plugin
  */
-class CppSyntaxPlugin : public ISyntaxPlugin {
+class CppSyntaxPlugin : public BaseSyntaxPlugin {
 public:
     QString languageId() const override { return "cpp"; }
     QString languageName() const override { return "C++"; }

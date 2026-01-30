@@ -11,7 +11,7 @@ PluginBasedSyntaxHighlighter::PluginBasedSyntaxHighlighter(
     , m_searchKeyword(searchKeyword)
 {
     if (!plugin) {
-        Logger::instance().logWarning("PluginBasedSyntaxHighlighter created with null plugin");
+        Logger::instance().warning("PluginBasedSyntaxHighlighter created with null plugin");
         return;
     }
 
@@ -50,7 +50,7 @@ void PluginBasedSyntaxHighlighter::loadRulesFromPlugin(ISyntaxPlugin* plugin, co
         block.format.setForeground(theme.singleLineCommentFormat);
     }
 
-    Logger::instance().logInfo(QString("Loaded %1 rules and %2 multi-line blocks from plugin '%3'")
+    Logger::instance().info(QString("Loaded %1 rules and %2 multi-line blocks from plugin '%3'")
         .arg(m_rules.size())
         .arg(m_multiLineBlocks.size())
         .arg(plugin->languageName()));

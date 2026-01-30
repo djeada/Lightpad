@@ -5,6 +5,7 @@
 #include <QMap>
 #include <QString>
 #include <QStringList>
+#include <map>
 #include <memory>
 
 /**
@@ -71,8 +72,8 @@ private:
     SyntaxPluginRegistry(const SyntaxPluginRegistry&) = delete;
     SyntaxPluginRegistry& operator=(const SyntaxPluginRegistry&) = delete;
 
-    // Map from language ID to plugin
-    QMap<QString, std::unique_ptr<ISyntaxPlugin>> languagePlugins;
+    // Use std::map instead of QMap for unique_ptr compatibility
+    std::map<QString, std::unique_ptr<ISyntaxPlugin>> languagePlugins;
     
     // Map from file extension to language ID
     QMap<QString, QString> extensionToLanguage;

@@ -10,19 +10,19 @@ SyntaxPluginRegistry& SyntaxPluginRegistry::instance()
 void SyntaxPluginRegistry::registerPlugin(std::unique_ptr<ISyntaxPlugin> plugin)
 {
     if (!plugin) {
-        Logger::instance().logWarning("Attempted to register null syntax plugin");
+        Logger::instance().warning("Attempted to register null syntax plugin");
         return;
     }
 
     QString langId = plugin->languageId();
     if (langId.isEmpty()) {
-        Logger::instance().logWarning("Attempted to register syntax plugin with empty language ID");
+        Logger::instance().warning("Attempted to register syntax plugin with empty language ID");
         return;
     }
 
     // Check if already registered
-    if (languagePlugins.contains(langId)) {
-        Logger::instance().logWarning(QString("Syntax plugin for language '%1' already registered, replacing").arg(langId));
+    if (languagePlugins.find(langId) != languagePlugins.end()) {
+        Logger::instance().warning(QString("Syntax plugin for language '%1' already registered, replacing").arg(langId));
     }
 
     // Register extension mappings
@@ -36,7 +36,7 @@ void SyntaxPluginRegistry::registerPlugin(std::unique_ptr<ISyntaxPlugin> plugin)
     // Store the plugin
     languagePlugins[langId] = std::move(plugin);
     
-    Logger::instance().logInfo(QString("Registered syntax plugin for language '%1' with %2 extension(s)")
+    Logger::instance().info(QString("Registered syntax plugin for language '%1' with %2 extension(s)")
         .arg(langId).arg(extensions.size()));
 }
 
@@ -44,7 +44,7 @@ ISyntaxPlugin* SyntaxPluginRegistry::getPluginByLanguageId(const QString& langua
 {
     auto it = languagePlugins.find(languageId);
     if (it != languagePlugins.end()) {
-        return it.value().get();
+        return it->second.get();
     }
     return nullptr;
 }
@@ -67,7 +67,11 @@ ISyntaxPlugin* SyntaxPluginRegistry::getPluginByExtension(const QString& extensi
 
 QStringList SyntaxPluginRegistry::getAllLanguageIds() const
 {
-    return languagePlugins.keys();
+    QStringList ids;
+    for (const auto& pair : languagePlugins) {
+        ids.append(pair.first);
+    }
+    return ids;
 }
 
 QStringList SyntaxPluginRegistry::getAllExtensions() const
@@ -77,7 +81,7 @@ QStringList SyntaxPluginRegistry::getAllExtensions() const
 
 bool SyntaxPluginRegistry::isLanguageSupported(const QString& languageId) const
 {
-    return languagePlugins.contains(languageId);
+    return languagePlugins.find(languageId) != languagePlugins.end();
 }
 
 bool SyntaxPluginRegistry::isExtensionSupported(const QString& extension) const
@@ -93,5 +97,5 @@ void SyntaxPluginRegistry::clear()
 {
     languagePlugins.clear();
     extensionToLanguage.clear();
-    Logger::instance().logInfo("Cleared all syntax plugins from registry");
+    Logger::instance().info("Cleared all syntax plugins from registry");
 }

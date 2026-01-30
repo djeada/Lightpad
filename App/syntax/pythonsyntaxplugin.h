@@ -1,13 +1,13 @@
 #ifndef PYTHONSYNTAXPLUGIN_H
 #define PYTHONSYNTAXPLUGIN_H
 
-#include "../plugins/isyntaxplugin.h"
+#include "basesyntaxplugin.h"
 #include <QVector>
 
 /**
  * @brief Built-in Python syntax highlighting plugin
  */
-class PythonSyntaxPlugin : public ISyntaxPlugin {
+class PythonSyntaxPlugin : public BaseSyntaxPlugin {
 public:
     QString languageId() const override { return "py"; }
     QString languageName() const override { return "Python"; }

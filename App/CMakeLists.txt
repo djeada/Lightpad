@@ -45,6 +45,7 @@ set(project_headers
     syntax/lightpadsyntaxhighlighter.h
     syntax/pluginbasedsyntaxhighlighter.h
     syntax/syntaxpluginregistry.h
+    syntax/basesyntaxplugin.h
     syntax/cppsyntaxplugin.h
     syntax/javascriptsyntaxplugin.h
     syntax/pythonsyntaxplugin.h

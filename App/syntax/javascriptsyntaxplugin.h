@@ -1,13 +1,13 @@
 #ifndef JAVASCRIPTSYNTAXPLUGIN_H
 #define JAVASCRIPTSYNTAXPLUGIN_H
 
-#include "../plugins/isyntaxplugin.h"
+#include "basesyntaxplugin.h"
 #include <QVector>
 
 /**
  * @brief Built-in JavaScript syntax highlighting plugin
  */
-class JavaScriptSyntaxPlugin : public ISyntaxPlugin {
+class JavaScriptSyntaxPlugin : public BaseSyntaxPlugin {
 public:
     QString languageId() const override { return "js"; }
     QString languageName() const override { return "JavaScript"; }
