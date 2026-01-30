@@ -17,25 +17,37 @@ set(project_ui
     ui/dialogs/colorpicker.ui
     ui/panels/findreplacepanel.ui
     ui/mainwindow.ui
-    ui/dialogs/prefrences.ui
-    settings/prefrenceseditor.ui
-    ui/panels/prefrencesview.ui
+    ui/dialogs/preferences.ui
+    settings/preferenceseditor.ui
+    ui/panels/preferencesview.ui
     ui/dialogs/runconfigurations.ui
     ui/dialogs/shortcuts.ui
     ui/panels/terminal.ui)
 
 set(project_headers 
+    accessibility/accessibilitymanager.h
     ui/dialogs/colorpicker.h
     ui/panels/findreplacepanel.h
+    core/async/asyncworker.h
+    core/document.h
     core/formatter.h
+    core/io/filemanager.h
     core/lightpadpage.h
+    core/logging/logger.h
+    editor/vimmode.h
+    i18n/i18n.h
+    lsp/lspclient.h
+    plugins/iplugin.h
+    plugins/isyntaxplugin.h
+    plugins/pluginmanager.h
     syntax/lightpadsyntaxhighlighter.h
     core/lightpadtabwidget.h
     ui/mainwindow.h
     ui/popup.h
-    ui/dialogs/prefrences.h
-    settings/prefrenceseditor.h
-    ui/panels/prefrencesview.h
+    ui/dialogs/preferences.h
+    settings/preferenceseditor.h
+    settings/settingsmanager.h
+    ui/panels/preferencesview.h
     ui/dialogs/runconfigurations.h
     ui/dialogs/shortcuts.h
     ui/panels/terminal.h
@@ -47,17 +59,27 @@ set(project_headers
 
 set(project_sources 
     main.cpp
+    accessibility/accessibilitymanager.cpp
     ui/dialogs/colorpicker.cpp
     ui/panels/findreplacepanel.cpp
+    core/async/asyncworker.cpp
+    core/document.cpp
     core/formatter.cpp
+    core/io/filemanager.cpp
     core/lightpadpage.cpp
+    core/logging/logger.cpp
+    editor/vimmode.cpp
+    i18n/i18n.cpp
+    lsp/lspclient.cpp
+    plugins/pluginmanager.cpp
     syntax/lightpadsyntaxhighlighter.cpp
     core/lightpadtabwidget.cpp
     ui/mainwindow.cpp
     ui/popup.cpp
-    ui/dialogs/prefrences.cpp
-    settings/prefrenceseditor.cpp
-    ui/panels/prefrencesview.cpp
+    ui/dialogs/preferences.cpp
+    settings/preferenceseditor.cpp
+    settings/settingsmanager.cpp
+    ui/panels/preferencesview.cpp
     ui/dialogs/runconfigurations.cpp
     ui/dialogs/shortcuts.cpp
     ui/panels/terminal.cpp

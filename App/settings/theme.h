@@ -2,7 +2,8 @@
 #define THEME_H
 
 #include <QColor>
-#include <QDebug>
+
+class QJsonObject;
 
 struct Theme {
     QColor backgroundColor;

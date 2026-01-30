@@ -1,20 +1,20 @@
-#ifndef PREFRENCESVIEW_H
-#define PREFRENCESVIEW_H
+#ifndef PREFERENCESVIEW_H
+#define PREFERENCESVIEW_H
 
 #include <QWidget>
 
 class MainWindow;
 
 namespace Ui {
-class PrefrencesView;
+class PreferencesView;
 }
 
-class PrefrencesView : public QWidget {
+class PreferencesView : public QWidget {
     Q_OBJECT
 
 public:
-    PrefrencesView(MainWindow* parent);
-    ~PrefrencesView();
+    PreferencesView(MainWindow* parent);
+    ~PreferencesView();
 
 private slots:
     void on_checkBoxLineNumbers_clicked(bool checked);
@@ -22,8 +22,8 @@ private slots:
     void on_checkBoxBracket_clicked(bool checked);
 
 private:
-    Ui::PrefrencesView* ui;
+    Ui::PreferencesView* ui;
     MainWindow* parentWindow;
 };
 
-#endif // PREFRENCESVIEW_H
+#endif // PREFERENCESVIEW_H
