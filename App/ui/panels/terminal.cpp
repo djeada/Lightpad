@@ -17,20 +17,41 @@ Terminal::Terminal(QWidget* parent)
     , ui(new Ui::Terminal)
     , m_process(nullptr)
     , m_runProcess(nullptr)
+    , m_restartTimer(nullptr)
     , m_historyIndex(0)
     , m_processRunning(false)
     , m_restartShellAfterRun(false)
+    , m_autoRestartEnabled(true)
+    , m_restartAttempts(0)
     , m_backgroundColor("#0e1116")
     , m_textColor("#e6edf3")
     , m_errorColor("#f44336")
 {
     ui->setupUi(this);
     ui->closeButton->setIcon(qApp->style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+    
+    // Setup restart timer for auto-recovery
+    m_restartTimer = new QTimer(this);
+    m_restartTimer->setSingleShot(true);
+    connect(m_restartTimer, &QTimer::timeout, this, [this]() {
+        if (m_autoRestartEnabled && !m_processRunning) {
+            appendOutput("Attempting to restart shell...\n");
+            if (startShell()) {
+                m_restartAttempts = 0;
+            }
+        }
+    });
+    
     setupTerminal();
 }
 
 Terminal::~Terminal()
 {
+    // Disable auto-restart during destruction
+    m_autoRestartEnabled = false;
+    if (m_restartTimer) {
+        m_restartTimer->stop();
+    }
     cleanupRunProcess(false);
     stopShell();
     delete ui;
@@ -64,22 +85,36 @@ void Terminal::setupTerminal()
 
 bool Terminal::startShell(const QString& workingDirectory)
 {
+    // Stop any pending restart timer
+    if (m_restartTimer && m_restartTimer->isActive()) {
+        m_restartTimer->stop();
+    }
+    
     if (m_process && m_processRunning) {
         return true;  // Already running
     }
 
-    if (!m_process) {
-        m_process = new QProcess(this);
-
-        connect(m_process, &QProcess::readyReadStandardOutput,
-                this, &Terminal::onReadyReadStandardOutput);
-        connect(m_process, &QProcess::readyReadStandardError,
-                this, &Terminal::onReadyReadStandardError);
-        connect(m_process, &QProcess::errorOccurred,
-                this, &Terminal::onProcessError);
-        connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                this, &Terminal::onProcessFinished);
+    // Clean up any existing process first
+    if (m_process) {
+        disconnect(m_process, nullptr, this, nullptr);
+        if (m_process->state() != QProcess::NotRunning) {
+            m_process->terminate();
+            m_process->waitForFinished(1000);
+        }
+        delete m_process;
+        m_process = nullptr;
     }
+
+    m_process = new QProcess(this);
+
+    connect(m_process, &QProcess::readyReadStandardOutput,
+            this, &Terminal::onReadyReadStandardOutput);
+    connect(m_process, &QProcess::readyReadStandardError,
+            this, &Terminal::onReadyReadStandardError);
+    connect(m_process, &QProcess::errorOccurred,
+            this, &Terminal::onProcessError);
+    connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &Terminal::onProcessFinished);
 
     // Set working directory
     if (!workingDirectory.isEmpty()) {
@@ -115,10 +150,16 @@ bool Terminal::startShell(const QString& workingDirectory)
     if (!m_process->waitForStarted(5000)) {
         appendOutput("Error: Failed to start shell process.\n", true);
         emit errorOccurred("Failed to start shell");
+        
+        // Clean up failed process
+        delete m_process;
+        m_process = nullptr;
+        
         return false;
     }
 
     m_processRunning = true;
+    m_restartAttempts = 0;  // Reset restart counter on successful start
     ui->textEdit->setReadOnly(false);
     appendOutput(QString("Shell started: %1\n").arg(shell));
     emit shellStarted();
@@ -128,17 +169,27 @@ bool Terminal::startShell(const QString& workingDirectory)
 
 void Terminal::stopShell()
 {
+    // Stop any pending restart
+    if (m_restartTimer) {
+        m_restartTimer->stop();
+    }
+    
     if (!m_process) {
         return;
     }
 
     m_processRunning = false;
 
+    // Disconnect signals to prevent callbacks during shutdown
+    disconnect(m_process, nullptr, this, nullptr);
+
     // Try graceful termination
-    m_process->terminate();
-    if (!m_process->waitForFinished(2000)) {
-        m_process->kill();
-        m_process->waitForFinished(1000);
+    if (m_process->state() != QProcess::NotRunning) {
+        m_process->terminate();
+        if (!m_process->waitForFinished(2000)) {
+            m_process->kill();
+            m_process->waitForFinished(1000);
+        }
     }
 
     delete m_process;
@@ -301,6 +352,44 @@ void Terminal::cleanupRunProcess(bool restartShell)
     }
 }
 
+void Terminal::cleanupProcess()
+{
+    if (!m_process) {
+        return;
+    }
+    
+    // Disconnect signals to prevent further callbacks
+    disconnect(m_process, nullptr, this, nullptr);
+    
+    // Schedule the process for deletion to avoid deleting in signal handler
+    m_process->deleteLater();
+    m_process = nullptr;
+}
+
+void Terminal::scheduleAutoRestart()
+{
+    if (!m_autoRestartEnabled || !m_restartTimer) {
+        return;
+    }
+    
+    ++m_restartAttempts;
+    
+    if (m_restartAttempts > kMaxRestartAttempts) {
+        appendOutput(QString("Auto-restart disabled after %1 failed attempts.\n")
+                    .arg(kMaxRestartAttempts), true);
+        appendOutput("Use the terminal controls to manually restart the shell.\n");
+        m_restartAttempts = 0;
+        return;
+    }
+    
+    appendOutput(QString("Will attempt restart in %1 seconds (attempt %2/%3)...\n")
+                .arg(kRestartDelayMs / 1000.0, 0, 'f', 1)
+                .arg(m_restartAttempts)
+                .arg(kMaxRestartAttempts));
+    
+    m_restartTimer->start(kRestartDelayMs);
+}
+
 void Terminal::onRunProcessReadyReadStdout()
 {
     if (m_runProcess) {
@@ -319,9 +408,11 @@ void Terminal::onRunProcessReadyReadStderr()
 
 void Terminal::onRunProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
-    Q_UNUSED(exitStatus);
-
-    appendOutput(QString("\n\nProcess finished with exit code %1\n").arg(exitCode));
+    if (exitStatus == QProcess::CrashExit) {
+        appendOutput(QString("\n\nProcess crashed (exit code: %1)\n").arg(exitCode), true);
+    } else {
+        appendOutput(QString("\n\nProcess finished with exit code %1\n").arg(exitCode));
+    }
     emit processFinished(exitCode);
     cleanupRunProcess(true);
 }
@@ -353,7 +444,8 @@ void Terminal::onRunProcessError(QProcess::ProcessError error)
     appendOutput(QString("\nError: %1\n").arg(errorMessage), true);
     emit processError(errorMessage);
 
-    if (error == QProcess::FailedToStart) {
+    // Clean up on fatal errors
+    if (error == QProcess::FailedToStart || error == QProcess::Crashed) {
         cleanupRunProcess(true);
     }
 }
@@ -395,21 +487,28 @@ void Terminal::onReadyReadStandardError()
 void Terminal::onProcessError(QProcess::ProcessError error)
 {
     QString errorMsg;
+    bool shouldRestart = false;
+    
     switch (error) {
     case QProcess::FailedToStart:
         errorMsg = "Failed to start shell process";
+        shouldRestart = true;
         break;
     case QProcess::Crashed:
         errorMsg = "Shell process crashed";
+        shouldRestart = true;
         break;
     case QProcess::Timedout:
         errorMsg = "Shell process timed out";
+        shouldRestart = true;
         break;
     case QProcess::WriteError:
         errorMsg = "Error writing to shell process";
+        // Don't restart on write errors - may be temporary
         break;
     case QProcess::ReadError:
         errorMsg = "Error reading from shell process";
+        // Don't restart on read errors - may be temporary
         break;
     default:
         errorMsg = "Unknown shell error";
@@ -418,15 +517,35 @@ void Terminal::onProcessError(QProcess::ProcessError error)
 
     appendOutput(QString("Error: %1\n").arg(errorMsg), true);
     m_processRunning = false;
+    
+    // Clean up the process properly
+    cleanupProcess();
+    
     emit errorOccurred(errorMsg);
+    
+    // Schedule auto-restart for recoverable errors
+    if (shouldRestart && m_autoRestartEnabled) {
+        scheduleAutoRestart();
+    }
 }
 
 void Terminal::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
-    Q_UNUSED(exitStatus);
-
     m_processRunning = false;
-    appendOutput(QString("\nShell exited with code: %1\n").arg(exitCode));
+    
+    if (exitStatus == QProcess::CrashExit) {
+        appendOutput(QString("\nShell crashed (exit code: %1)\n").arg(exitCode), true);
+        cleanupProcess();
+        
+        // Schedule auto-restart for crashes
+        if (m_autoRestartEnabled) {
+            scheduleAutoRestart();
+        }
+    } else {
+        appendOutput(QString("\nShell exited with code: %1\n").arg(exitCode));
+        cleanupProcess();
+    }
+    
     emit shellFinished(exitCode);
 }
 

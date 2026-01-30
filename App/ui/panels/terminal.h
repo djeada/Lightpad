@@ -4,6 +4,7 @@
 #include <QMap>
 #include <QProcess>
 #include <QStringList>
+#include <QTimer>
 #include <QWidget>
 
 namespace Ui {
@@ -148,17 +149,24 @@ private:
     void scrollToBottom();
     void handleHistoryNavigation(bool up);
     void cleanupRunProcess(bool restartShell);
+    void cleanupProcess();
+    void scheduleAutoRestart();
     void updateStyleSheet();
 
     Ui::Terminal* ui;
     QProcess* m_process;
     QProcess* m_runProcess;
+    QTimer* m_restartTimer;
     QString m_workingDirectory;
     QString m_currentInput;
     QStringList m_commandHistory;
     int m_historyIndex;
     bool m_processRunning;
     bool m_restartShellAfterRun;
+    bool m_autoRestartEnabled;
+    int m_restartAttempts;
+    static const int kMaxRestartAttempts = 3;
+    static const int kRestartDelayMs = 1000;
     
     // Theme colors
     QString m_backgroundColor;

@@ -285,6 +285,13 @@ target_include_directories(test_terminaltabwidget PRIVATE
 )
 
 target_link_libraries(test_terminaltabwidget
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
 # SyntaxPluginRegistry test executable
 add_executable(test_syntaxpluginregistry
     unit/test_syntaxpluginregistry.cpp
@@ -331,8 +338,8 @@ add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
 # Set environment variable for headless testing
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
     AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
-    RunTemplateManagerTests FormatTemplateManagerTests TerminalTests TerminalTabWidgetTests PROPERTIES
-    RunTemplateManagerTests FormatTemplateManagerTests TerminalTests SyntaxPluginRegistryTests PROPERTIES
+    RunTemplateManagerTests FormatTemplateManagerTests TerminalTests TerminalTabWidgetTests
+    SyntaxPluginRegistryTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
@@ -345,6 +352,6 @@ add_custom_target(run_tests
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
             test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
             test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
-            test_runtemplatemanager test_formattemplatemanager test_terminal test_syntaxpluginregistry
+            test_syntaxpluginregistry
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
