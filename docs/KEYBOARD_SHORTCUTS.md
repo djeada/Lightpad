@@ -199,7 +199,7 @@ When VIM mode is enabled, the editor uses modal editing with different shortcuts
 | `p` | Paste after |
 | `P` | Paste before |
 | `J` | Join lines |
-| `.` | Repeat last change |
+| `.` | Repeat last change (partial implementation) |
 | `zz` | Center cursor on screen |
 | `zt` | Scroll cursor to top |
 | `zb` | Scroll cursor to bottom |

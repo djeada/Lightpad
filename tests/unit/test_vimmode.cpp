@@ -304,10 +304,11 @@ void TestVimMode::testToggleCase()
     cursor.movePosition(QTextCursor::Start);
     m_editor->setTextCursor(cursor);
     
-    // Toggle case with ~
+    // Toggle case with ~ (toggles 'H' to 'h' and moves right)
     QKeyEvent tildeKey(QEvent::KeyPress, Qt::Key_AsciiTilde, Qt::ShiftModifier, "~");
     m_vim->processKeyEvent(&tildeKey);
     
+    // Only first character should be toggled ('H' -> 'h')
     QCOMPARE(m_editor->toPlainText(), QString("hello"));
 }
 
