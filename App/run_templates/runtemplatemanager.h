@@ -157,12 +157,12 @@ private:
     
     QString getConfigDirForFile(const QString& filePath) const;
     QString getConfigFileForDir(const QString& dirPath) const;
-    bool loadAssignmentsFromDir(const QString& dirPath);
-    bool saveAssignmentsToDir(const QString& dirPath);
+    bool loadAssignmentsFromDir(const QString& dirPath) const;
+    bool saveAssignmentsToDir(const QString& dirPath) const;
     
     QList<RunTemplate> m_templates;
-    QMap<QString, FileTemplateAssignment> m_assignments; // filePath -> assignment
-    QSet<QString> m_loadedConfigDirs;
+    mutable QMap<QString, FileTemplateAssignment> m_assignments; // filePath -> assignment
+    mutable QSet<QString> m_loadedConfigDirs;
 };
 
 #endif // RUNTEMPLATEMANAGER_H

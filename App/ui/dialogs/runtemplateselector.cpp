@@ -3,6 +3,7 @@
 
 #include <QFileInfo>
 #include <QSet>
+#include <QRegularExpression>
 
 RunTemplateSelector::RunTemplateSelector(const QString& filePath, QWidget* parent)
     : QDialog(parent)
@@ -231,7 +232,7 @@ void RunTemplateSelector::onAccept()
         QStringList customArgs;
         QString argsText = m_customArgsEdit->text().trimmed();
         if (!argsText.isEmpty()) {
-            customArgs = argsText.split(QRegExp("\\s+"), Qt::SkipEmptyParts);
+            customArgs = argsText.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
         }
         
         RunTemplateManager::instance().assignTemplateToFile(
@@ -257,5 +258,5 @@ QStringList RunTemplateSelector::getCustomArgs() const
     if (argsText.isEmpty()) {
         return QStringList();
     }
-    return argsText.split(QRegExp("\\s+"), Qt::SkipEmptyParts);
+    return argsText.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
 }

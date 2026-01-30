@@ -128,13 +128,17 @@ bool Terminal::runFile(const QString& filePath)
 void Terminal::stopProcess()
 {
     if (m_process) {
+        // Disconnect all signals first to prevent any callbacks after deletion
+        disconnect(m_process, nullptr, this, nullptr);
+        
         if (m_process->state() != QProcess::NotRunning) {
             m_process->terminate();
             if (!m_process->waitForFinished(3000)) {
                 m_process->kill();
+                m_process->waitForFinished(1000);
             }
         }
-        m_process->deleteLater();
+        delete m_process;
         m_process = nullptr;
     }
 }

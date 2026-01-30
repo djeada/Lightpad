@@ -219,7 +219,7 @@ QString RunTemplateManager::getConfigFileForDir(const QString& dirPath) const
     return dirPath + "/run_config.json";
 }
 
-bool RunTemplateManager::loadAssignmentsFromDir(const QString& dirPath)
+bool RunTemplateManager::loadAssignmentsFromDir(const QString& dirPath) const
 {
     QString configDir = dirPath + "/.lightpad";
     QString configFile = configDir + "/run_config.json";
@@ -282,7 +282,7 @@ bool RunTemplateManager::loadAssignmentsFromDir(const QString& dirPath)
     return true;
 }
 
-bool RunTemplateManager::saveAssignmentsToDir(const QString& dirPath)
+bool RunTemplateManager::saveAssignmentsToDir(const QString& dirPath) const
 {
     QString configDir = dirPath + "/.lightpad";
     QString configFile = configDir + "/run_config.json";
@@ -351,8 +351,8 @@ FileTemplateAssignment RunTemplateManager::getAssignmentForFile(const QString& f
     QFileInfo fileInfo(filePath);
     QString dirPath = fileInfo.absoluteDir().path();
     
-    // Use const_cast to allow loading in const method (lazy loading pattern)
-    const_cast<RunTemplateManager*>(this)->loadAssignmentsFromDir(dirPath);
+    // Lazy loading - member variables are mutable to allow this in const methods
+    loadAssignmentsFromDir(dirPath);
     
     auto it = m_assignments.find(filePath);
     if (it != m_assignments.end()) {
