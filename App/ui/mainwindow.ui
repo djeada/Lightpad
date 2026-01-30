@@ -18,7 +18,59 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="styleSheet">
-    <string notr="true"/>
+    <string notr="true">QMainWindow {
+    background: #0b1021;
+}
+
+QWidget#centralwidget {
+    background: #0f1629;
+}
+
+QTabWidget::pane {
+    border: 0;
+    background: #0f1629;
+}
+
+QTabBar::tab {
+    background: transparent;
+    color: #e2e8f0;
+    padding: 8px 12px;
+    margin-right: 4px;
+    border-radius: 10px 10px 0 0;
+}
+
+QTabBar::tab:selected {
+    background: #1e293b;
+    color: #ffffff;
+}
+
+QWidget#backgroundBottom {
+    background: rgba(255, 255, 255, 0.03);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+QToolButton {
+    color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 6px 10px;
+}
+
+QToolButton:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+QToolButton:pressed {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+QLabel#rowCol {
+    color: #cbd5e1;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}</string>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
     <property name="spacing">
