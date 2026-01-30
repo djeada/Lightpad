@@ -30,6 +30,7 @@ include_directories(${CMAKE_SOURCE_DIR}/App/plugins)
 include_directories(${CMAKE_SOURCE_DIR}/App/settings)
 include_directories(${CMAKE_SOURCE_DIR}/App/syntax)
 include_directories(${CMAKE_SOURCE_DIR}/App/ui)
+include_directories(${CMAKE_SOURCE_DIR}/App/ui/panels)
 
 # Logger test executable
 add_executable(test_logger
@@ -201,6 +202,27 @@ target_link_libraries(test_accessibility
 
 target_compile_definitions(test_accessibility PRIVATE QT_DEPRECATED_WARNINGS)
 
+# Terminal test executable
+add_executable(test_terminal
+    unit/test_terminal.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/terminal.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_terminal PRIVATE
+    ${CMAKE_SOURCE_DIR}/App/ui/panels
+)
+
+target_link_libraries(test_terminal
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_terminal PRIVATE QT_DEPRECATED_WARNINGS)
+
 # Register tests with CTest
 add_test(NAME LoggerTests COMMAND test_logger)
 add_test(NAME ThemeTests COMMAND test_theme)
@@ -212,10 +234,11 @@ add_test(NAME PluginManagerTests COMMAND test_pluginmanager)
 add_test(NAME VimModeTests COMMAND test_vimmode)
 add_test(NAME I18nTests COMMAND test_i18n)
 add_test(NAME AccessibilityTests COMMAND test_accessibility)
+add_test(NAME TerminalTests COMMAND test_terminal)
 
 # Set environment variable for headless testing
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
-    AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests PROPERTIES
+    AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests TerminalTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
@@ -223,6 +246,6 @@ set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests Setti
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
-            test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility
+            test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility test_terminal
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
