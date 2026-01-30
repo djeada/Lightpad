@@ -43,6 +43,12 @@ set(project_headers
     plugins/isyntaxplugin.h
     plugins/pluginmanager.h
     syntax/lightpadsyntaxhighlighter.h
+    syntax/pluginbasedsyntaxhighlighter.h
+    syntax/syntaxpluginregistry.h
+    syntax/basesyntaxplugin.h
+    syntax/cppsyntaxplugin.h
+    syntax/javascriptsyntaxplugin.h
+    syntax/pythonsyntaxplugin.h
     core/lightpadtabwidget.h
     ui/mainwindow.h
     ui/popup.h
@@ -81,6 +87,11 @@ set(project_sources
     lsp/lspclient.cpp
     plugins/pluginmanager.cpp
     syntax/lightpadsyntaxhighlighter.cpp
+    syntax/pluginbasedsyntaxhighlighter.cpp
+    syntax/syntaxpluginregistry.cpp
+    syntax/cppsyntaxplugin.cpp
+    syntax/javascriptsyntaxplugin.cpp
+    syntax/pythonsyntaxplugin.cpp
     core/lightpadtabwidget.cpp
     ui/mainwindow.cpp
     ui/popup.cpp

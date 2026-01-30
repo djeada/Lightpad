@@ -16,6 +16,8 @@
 #include "lightpadpage.h"
 #include "logging/logger.h"
 #include "../syntax/lightpadsyntaxhighlighter.h"
+#include "../syntax/pluginbasedsyntaxhighlighter.h"
+#include "../syntax/syntaxpluginregistry.h"
 #include "lightpadtabwidget.h"
 #include "../ui/mainwindow.h"
 #include "textarea.h"
@@ -733,6 +735,19 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang)
         syntaxHighlighter = nullptr;
     }
 
+    // NEW PLUGIN-BASED SYSTEM
+    // Try to get plugin from registry first
+    auto& registry = SyntaxPluginRegistry::instance();
+    ISyntaxPlugin* plugin = registry.getPluginByLanguageId(highlightLang);
+    
+    if (plugin && document()) {
+        // Use new plugin-based highlighter
+        auto* pluginHighlighter = new PluginBasedSyntaxHighlighter(plugin, colors, searchKey, document());
+        syntaxHighlighter = pluginHighlighter;
+        return;
+    }
+
+    // FALLBACK TO OLD SYSTEM (for backward compatibility)
     if (document() && convertStrToEnum.contains(highlightLang)) {
 
         switch (convertStrToEnum[highlightLang]) {

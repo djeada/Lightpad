@@ -8,7 +8,7 @@
 #include <functional>
 
 class MainWindow;
-class LightpadSyntaxHighlighter;
+class QSyntaxHighlighter;
 class QCompleter;
 struct TextAreaSettings;
 
@@ -73,7 +73,7 @@ private:
     QString bufferText;
     QString highlightLang;
     QFont mainFont;
-    LightpadSyntaxHighlighter* syntaxHighlighter;
+    QSyntaxHighlighter* syntaxHighlighter;
     QCompleter* m_completer;
     QString searchWord;
     bool areChangesUnsaved;
