@@ -9,7 +9,7 @@
 #include "../settings/theme.h"
 
 class MainWindow;
-class Terminal;
+class TerminalTabWidget;
 class Popup;
 class FindReplacePanel;
 class TextArea;
@@ -93,7 +93,7 @@ private:
     Popup* popupTabWidth;
     Preferences* preferences;
     FindReplacePanel* findReplacePanel;
-    Terminal* terminal;
+    TerminalTabWidget* terminalWidget;
     QCompleter* completer;
     TextAreaSettings settings;
     QString highlightLanguage;

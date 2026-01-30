@@ -84,6 +84,16 @@ public:
      */
     void clear();
 
+    /**
+     * @brief Apply theme colors to the terminal
+     * @param backgroundColor Background color
+     * @param textColor Text color
+     * @param errorColor Error text color
+     */
+    void applyTheme(const QString& backgroundColor, 
+                    const QString& textColor,
+                    const QString& errorColor = QString());
+
 signals:
     void processStarted();
     void processFinished(int exitCode);
@@ -138,6 +148,7 @@ private:
     void scrollToBottom();
     void handleHistoryNavigation(bool up);
     void cleanupRunProcess(bool restartShell);
+    void updateStyleSheet();
 
     Ui::Terminal* ui;
     QProcess* m_process;
@@ -148,6 +159,11 @@ private:
     int m_historyIndex;
     bool m_processRunning;
     bool m_restartShellAfterRun;
+    
+    // Theme colors
+    QString m_backgroundColor;
+    QString m_textColor;
+    QString m_errorColor;
 };
 
 #endif // TERMINAL_H

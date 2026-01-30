@@ -20,6 +20,9 @@ Terminal::Terminal(QWidget* parent)
     , m_historyIndex(0)
     , m_processRunning(false)
     , m_restartShellAfterRun(false)
+    , m_backgroundColor("#0e1116")
+    , m_textColor("#e6edf3")
+    , m_errorColor("#f44336")
 {
     ui->setupUi(this);
     ui->closeButton->setIcon(qApp->style()->standardIcon(QStyle::SP_TitleBarCloseButton));
@@ -49,15 +52,8 @@ void Terminal::setupTerminal()
     // Install event filter for key handling
     ui->textEdit->installEventFilter(this);
 
-    // Set terminal styling
-    ui->textEdit->setStyleSheet(
-        "QPlainTextEdit {"
-        "  background-color: #0e1116;"
-        "  color: #e6edf3;"
-        "  selection-background-color: #1b2a43;"
-        "  border: none;"
-        "}"
-    );
+    // Apply terminal styling
+    updateStyleSheet();
 
     // Display initial prompt
     appendOutput("Terminal ready. Starting shell...\n");
@@ -482,12 +478,29 @@ bool Terminal::eventFilter(QObject* obj, QEvent* event)
             return true;
 
         case Qt::Key_C:
+            if ((keyEvent->modifiers() & Qt::ControlModifier) && 
+                (keyEvent->modifiers() & Qt::ShiftModifier)) {
+                // Ctrl+Shift+C - copy to clipboard (terminal convention)
+                if (ui->textEdit->textCursor().hasSelection()) {
+                    ui->textEdit->copy();
+                }
+                return true;
+            }
             if (keyEvent->modifiers() & Qt::ControlModifier) {
-                // Ctrl+C - send interrupt signal (consistent approach using stdin)
+                // Ctrl+C - send interrupt signal
                 if (isRunning()) {
                     m_process->write("\x03");  // Ctrl+C character
                 }
                 appendOutput("^C\n");
+                return true;
+            }
+            break;
+
+        case Qt::Key_V:
+            if ((keyEvent->modifiers() & Qt::ControlModifier) && 
+                (keyEvent->modifiers() & Qt::ShiftModifier)) {
+                // Ctrl+Shift+V - paste from clipboard (terminal convention)
+                ui->textEdit->paste();
                 return true;
             }
             break;
@@ -524,14 +537,14 @@ void Terminal::appendOutput(const QString& text, bool isError)
     cursor.movePosition(QTextCursor::End);
 
     if (isError) {
-        // Set error text format
+        // Set error text format using theme color
         QTextCharFormat errorFormat;
-        errorFormat.setForeground(QColor("#f44336"));  // Red for errors
+        errorFormat.setForeground(QColor(m_errorColor));
         cursor.insertText(text, errorFormat);
     } else {
-        // Reset to default format
+        // Reset to default format using theme color
         QTextCharFormat defaultFormat;
-        defaultFormat.setForeground(QColor("#d4d4d4"));  // Light gray
+        defaultFormat.setForeground(QColor(m_textColor));
         cursor.insertText(text, defaultFormat);
     }
 
@@ -616,4 +629,35 @@ void Terminal::handleHistoryNavigation(bool up)
         cursor.insertText(m_commandHistory[m_historyIndex]);
         ui->textEdit->setTextCursor(cursor);
     }
+}
+
+void Terminal::applyTheme(const QString& backgroundColor,
+                          const QString& textColor,
+                          const QString& errorColor)
+{
+    if (!backgroundColor.isEmpty()) {
+        m_backgroundColor = backgroundColor;
+    }
+    if (!textColor.isEmpty()) {
+        m_textColor = textColor;
+    }
+    if (!errorColor.isEmpty()) {
+        m_errorColor = errorColor;
+    }
+    
+    updateStyleSheet();
+}
+
+void Terminal::updateStyleSheet()
+{
+    QString styleSheet = QString(
+        "QPlainTextEdit {"
+        "  background-color: %1;"
+        "  color: %2;"
+        "  selection-background-color: #1b2a43;"
+        "  border: none;"
+        "}"
+    ).arg(m_backgroundColor, m_textColor);
+    
+    ui->textEdit->setStyleSheet(styleSheet);
 }
