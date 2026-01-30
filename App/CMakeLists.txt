@@ -27,7 +27,9 @@ set(project_ui
 set(project_headers 
     accessibility/accessibilitymanager.h
     ui/dialogs/colorpicker.h
+    ui/dialogs/commandpalette.h
     ui/panels/findreplacepanel.h
+    ui/panels/problemspanel.h
     core/async/asyncworker.h
     core/document.h
     core/formatter.h
@@ -65,7 +67,9 @@ set(project_sources
     main.cpp
     accessibility/accessibilitymanager.cpp
     ui/dialogs/colorpicker.cpp
+    ui/dialogs/commandpalette.cpp
     ui/panels/findreplacepanel.cpp
+    ui/panels/problemspanel.cpp
     core/async/asyncworker.cpp
     core/document.cpp
     core/formatter.cpp

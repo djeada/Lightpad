@@ -98,6 +98,11 @@ private:
     TextAreaSettings settings;
     QString highlightLanguage;
     QFont font;
+    
+    // Quick win features
+    class CommandPalette* commandPalette;
+    class ProblemsPanel* problemsPanel;
+    
     void undo();
     void redo();
     void open(const QString& filePath);
@@ -108,6 +113,9 @@ private:
     void openFormatConfigurationDialog();
     void openShortcutsDialog();
     void showTerminal();
+    void showProblemsPanel();
+    void showCommandPalette();
+    void setupCommandPalette();
     void setMainWindowTitle(QString title);
     void setFilePathAsTabText(QString filePath);
     void closeCurrentTab();

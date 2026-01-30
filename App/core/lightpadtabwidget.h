@@ -18,7 +18,12 @@ public:
     LightpadTabWidget(QWidget* parent = nullptr);
     void addNewTab();
     void setMainWindow(MainWindow* window);
-    void setTheme(QString backgroundColor, QString foregroundColor);
+    void setTheme(const QString& backgroundColor,
+        const QString& foregroundColor,
+        const QString& surfaceColor,
+        const QString& hoverColor,
+        const QString& accentColor,
+        const QString& borderColor);
     void setFilePath(int index, QString filePath);
     void closeAllTabs();
     void closeCurrentTab();

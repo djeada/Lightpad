@@ -9,6 +9,9 @@
 #include <QCompleter>
 #include <QAbstractItemView>
 #include <QScrollBar>
+#include <QMouseEvent>
+#include <functional>
+#include <algorithm>
 
 #include "lightpadpage.h"
 #include "logging/logger.h"
@@ -335,6 +338,46 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
         return;
     }
 
+    // Multi-cursor shortcuts
+    if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::AltModifier)) {
+        if (keyEvent->key() == Qt::Key_Up) {
+            addCursorAbove();
+            return;
+        } else if (keyEvent->key() == Qt::Key_Down) {
+            addCursorBelow();
+            return;
+        }
+    }
+    
+    // Ctrl+D - Add cursor at next occurrence
+    if (keyEvent->modifiers() == Qt::ControlModifier && keyEvent->key() == Qt::Key_D) {
+        addCursorAtNextOccurrence();
+        return;
+    }
+    
+    // Ctrl+Shift+L - Add cursors to all occurrences
+    if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && keyEvent->key() == Qt::Key_L) {
+        addCursorsToAllOccurrences();
+        return;
+    }
+    
+    // Escape clears extra cursors
+    if (keyEvent->key() == Qt::Key_Escape && hasMultipleCursors()) {
+        clearExtraCursors();
+        return;
+    }
+    
+    // Code folding shortcuts
+    if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier)) {
+        if (keyEvent->key() == Qt::Key_BracketLeft) {
+            foldCurrentBlock();
+            return;
+        } else if (keyEvent->key() == Qt::Key_BracketRight) {
+            unfoldCurrentBlock();
+            return;
+        }
+    }
+
     // Handle completer popup navigation
     if (m_completer && m_completer->popup()->isVisible()) {
         // The following keys are forwarded by the completer to the widget
@@ -349,6 +392,42 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
         default:
             break;
         }
+    }
+
+    // Handle multi-cursor typing
+    if (hasMultipleCursors() && !keyEvent->text().isEmpty() && 
+        keyEvent->modifiers() == Qt::NoModifier) {
+        
+        // Apply typed character to all cursors
+        QString text = keyEvent->text();
+        applyToAllCursors([&text](QTextCursor& cursor) {
+            cursor.insertText(text);
+        });
+        return;
+    }
+    
+    // Handle multi-cursor backspace
+    if (hasMultipleCursors() && keyEvent->key() == Qt::Key_Backspace) {
+        applyToAllCursors([](QTextCursor& cursor) {
+            if (!cursor.hasSelection()) {
+                cursor.deletePreviousChar();
+            } else {
+                cursor.removeSelectedText();
+            }
+        });
+        return;
+    }
+    
+    // Handle multi-cursor delete
+    if (hasMultipleCursors() && keyEvent->key() == Qt::Key_Delete) {
+        applyToAllCursors([](QTextCursor& cursor) {
+            if (!cursor.hasSelection()) {
+                cursor.deleteChar();
+            } else {
+                cursor.removeSelectedText();
+            }
+        });
+        return;
     }
 
     // Handle auto-parentheses before processing other keys
@@ -710,4 +789,490 @@ QString TextArea::textUnderCursor() const
     QTextCursor tc = textCursor();
     tc.select(QTextCursor::WordUnderCursor);
     return tc.selectedText();
+}
+
+// ============================================================================
+// Multi-Cursor Support
+// ============================================================================
+
+void TextArea::addCursorAbove()
+{
+    QTextCursor cursor = textCursor();
+    int col = cursor.positionInBlock();
+    
+    if (cursor.blockNumber() > 0) {
+        QTextCursor newCursor = cursor;
+        newCursor.movePosition(QTextCursor::PreviousBlock);
+        
+        // Try to maintain column position
+        int lineLength = newCursor.block().text().length();
+        int targetCol = qMin(col, lineLength);
+        newCursor.movePosition(QTextCursor::StartOfBlock);
+        newCursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, targetCol);
+        
+        m_extraCursors.append(cursor);
+        setTextCursor(newCursor);
+        drawExtraCursors();
+    }
+}
+
+void TextArea::addCursorBelow()
+{
+    QTextCursor cursor = textCursor();
+    int col = cursor.positionInBlock();
+    
+    if (cursor.blockNumber() < document()->blockCount() - 1) {
+        QTextCursor newCursor = cursor;
+        newCursor.movePosition(QTextCursor::NextBlock);
+        
+        // Try to maintain column position
+        int lineLength = newCursor.block().text().length();
+        int targetCol = qMin(col, lineLength);
+        newCursor.movePosition(QTextCursor::StartOfBlock);
+        newCursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, targetCol);
+        
+        m_extraCursors.append(cursor);
+        setTextCursor(newCursor);
+        drawExtraCursors();
+    }
+}
+
+void TextArea::addCursorAtNextOccurrence()
+{
+    QTextCursor cursor = textCursor();
+    QString word;
+    
+    if (cursor.hasSelection()) {
+        word = cursor.selectedText();
+    } else {
+        cursor.select(QTextCursor::WordUnderCursor);
+        word = cursor.selectedText();
+        setTextCursor(cursor);
+    }
+    
+    if (word.isEmpty())
+        return;
+    
+    m_lastSelectedWord = word;
+    
+    // Find next occurrence after current cursor
+    QTextCursor searchCursor = cursor;
+    searchCursor.movePosition(QTextCursor::End, QTextCursor::MoveAnchor);
+    int endPos = searchCursor.position();
+    
+    // Start search from after current selection
+    int startSearchPos = cursor.selectionEnd();
+    
+    // Search forward from cursor
+    QTextDocument* doc = document();
+    QTextCursor found = doc->find(word, startSearchPos);
+    
+    // Wrap around if not found
+    if (found.isNull()) {
+        found = doc->find(word, 0);
+    }
+    
+    if (!found.isNull() && found.selectionStart() != cursor.selectionStart()) {
+        m_extraCursors.append(cursor);
+        setTextCursor(found);
+        drawExtraCursors();
+    }
+}
+
+void TextArea::addCursorsToAllOccurrences()
+{
+    QTextCursor cursor = textCursor();
+    QString word;
+    
+    if (cursor.hasSelection()) {
+        word = cursor.selectedText();
+    } else {
+        cursor.select(QTextCursor::WordUnderCursor);
+        word = cursor.selectedText();
+    }
+    
+    if (word.isEmpty())
+        return;
+    
+    m_lastSelectedWord = word;
+    m_extraCursors.clear();
+    
+    // Find all occurrences
+    QTextDocument* doc = document();
+    QTextCursor searchCursor(doc);
+    QTextCursor firstCursor;
+    bool first = true;
+    
+    while (true) {
+        QTextCursor found = doc->find(word, searchCursor);
+        if (found.isNull())
+            break;
+        
+        if (first) {
+            firstCursor = found;
+            first = false;
+        } else {
+            m_extraCursors.append(found);
+        }
+        
+        searchCursor = found;
+        searchCursor.movePosition(QTextCursor::Right);
+    }
+    
+    if (!first) {
+        setTextCursor(firstCursor);
+        drawExtraCursors();
+    }
+}
+
+void TextArea::clearExtraCursors()
+{
+    m_extraCursors.clear();
+    m_lastSelectedWord.clear();
+    viewport()->update();
+}
+
+bool TextArea::hasMultipleCursors() const
+{
+    return !m_extraCursors.isEmpty();
+}
+
+int TextArea::cursorCount() const
+{
+    return m_extraCursors.size() + 1;
+}
+
+void TextArea::drawExtraCursors()
+{
+    QList<QTextEdit::ExtraSelection> selections = extraSelections();
+    
+    // Add extra cursor highlights
+    for (const QTextCursor& cursor : m_extraCursors) {
+        QTextEdit::ExtraSelection selection;
+        selection.cursor = cursor;
+        
+        if (cursor.hasSelection()) {
+            // Highlight selection
+            selection.format.setBackground(QColor(38, 79, 120));
+        } else {
+            // Show cursor line
+            selection.format.setBackground(highlightColor.lighter(110));
+            selection.format.setProperty(QTextFormat::FullWidthSelection, false);
+        }
+        
+        selections.append(selection);
+    }
+    
+    setExtraSelections(selections);
+    viewport()->update();
+}
+
+void TextArea::applyToAllCursors(const std::function<void(QTextCursor&)>& operation)
+{
+    // Apply to main cursor
+    QTextCursor mainCursor = textCursor();
+    operation(mainCursor);
+    setTextCursor(mainCursor);
+    
+    // Apply to extra cursors
+    for (QTextCursor& cursor : m_extraCursors) {
+        operation(cursor);
+    }
+    
+    mergeOverlappingCursors();
+    drawExtraCursors();
+}
+
+void TextArea::mergeOverlappingCursors()
+{
+    if (m_extraCursors.isEmpty())
+        return;
+    
+    QTextCursor mainCursor = textCursor();
+    QList<QTextCursor> allCursors;
+    allCursors.append(mainCursor);
+    allCursors.append(m_extraCursors);
+    
+    // Sort by position
+    std::sort(allCursors.begin(), allCursors.end(), [](const QTextCursor& a, const QTextCursor& b) {
+        return a.position() < b.position();
+    });
+    
+    // Remove duplicates
+    QList<QTextCursor> unique;
+    for (const QTextCursor& cursor : allCursors) {
+        bool duplicate = false;
+        for (const QTextCursor& existing : unique) {
+            if (cursor.position() == existing.position()) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (!duplicate) {
+            unique.append(cursor);
+        }
+    }
+    
+    if (unique.size() > 0) {
+        setTextCursor(unique.first());
+        m_extraCursors = unique.mid(1);
+    }
+}
+
+void TextArea::paintEvent(QPaintEvent* event)
+{
+    QPlainTextEdit::paintEvent(event);
+    
+    // Draw extra cursors as vertical lines
+    if (!m_extraCursors.isEmpty()) {
+        QPainter painter(viewport());
+        painter.setPen(QPen(defaultPenColor, 2));
+        
+        for (const QTextCursor& cursor : m_extraCursors) {
+            if (!cursor.hasSelection()) {
+                QRect cursorRect = this->cursorRect(cursor);
+                painter.drawLine(cursorRect.topLeft(), cursorRect.bottomLeft());
+            }
+        }
+    }
+}
+
+void TextArea::mousePressEvent(QMouseEvent* event)
+{
+    // Clear extra cursors on regular click
+    if (!m_extraCursors.isEmpty() && !(event->modifiers() & Qt::ControlModifier)) {
+        clearExtraCursors();
+    }
+    
+    // Ctrl+Click to add cursor
+    if (event->modifiers() & Qt::ControlModifier && event->modifiers() & Qt::AltModifier) {
+        QTextCursor cursor = cursorForPosition(event->pos());
+        m_extraCursors.append(textCursor());
+        setTextCursor(cursor);
+        drawExtraCursors();
+        return;
+    }
+    
+    QPlainTextEdit::mousePressEvent(event);
+}
+
+// ============================================================================
+// Code Folding Support
+// ============================================================================
+
+void TextArea::foldCurrentBlock()
+{
+    int blockNum = textCursor().blockNumber();
+    if (isFoldable(blockNum) && !m_foldedBlocks.contains(blockNum)) {
+        m_foldedBlocks.insert(blockNum);
+        
+        int endBlock = findFoldEndBlock(blockNum);
+        QTextBlock block = document()->findBlockByNumber(blockNum + 1);
+        
+        while (block.isValid() && block.blockNumber() <= endBlock) {
+            block.setVisible(false);
+            block = block.next();
+        }
+        
+        viewport()->update();
+        document()->markContentsDirty(0, document()->characterCount());
+    }
+}
+
+void TextArea::unfoldCurrentBlock()
+{
+    int blockNum = textCursor().blockNumber();
+    
+    // Also check if we're inside a folded region
+    for (int foldedBlock : m_foldedBlocks) {
+        int endBlock = findFoldEndBlock(foldedBlock);
+        if (blockNum >= foldedBlock && blockNum <= endBlock) {
+            blockNum = foldedBlock;
+            break;
+        }
+    }
+    
+    if (m_foldedBlocks.contains(blockNum)) {
+        m_foldedBlocks.remove(blockNum);
+        
+        int endBlock = findFoldEndBlock(blockNum);
+        QTextBlock block = document()->findBlockByNumber(blockNum + 1);
+        
+        while (block.isValid() && block.blockNumber() <= endBlock) {
+            block.setVisible(true);
+            block = block.next();
+        }
+        
+        viewport()->update();
+        document()->markContentsDirty(0, document()->characterCount());
+    }
+}
+
+void TextArea::foldAll()
+{
+    QTextBlock block = document()->begin();
+    while (block.isValid()) {
+        if (isFoldable(block.blockNumber())) {
+            int blockNum = block.blockNumber();
+            if (!m_foldedBlocks.contains(blockNum)) {
+                m_foldedBlocks.insert(blockNum);
+                
+                int endBlock = findFoldEndBlock(blockNum);
+                QTextBlock innerBlock = block.next();
+                
+                while (innerBlock.isValid() && innerBlock.blockNumber() <= endBlock) {
+                    innerBlock.setVisible(false);
+                    innerBlock = innerBlock.next();
+                }
+            }
+        }
+        block = block.next();
+    }
+    
+    viewport()->update();
+    document()->markContentsDirty(0, document()->characterCount());
+}
+
+void TextArea::unfoldAll()
+{
+    m_foldedBlocks.clear();
+    
+    QTextBlock block = document()->begin();
+    while (block.isValid()) {
+        block.setVisible(true);
+        block = block.next();
+    }
+    
+    viewport()->update();
+    document()->markContentsDirty(0, document()->characterCount());
+}
+
+void TextArea::toggleFoldAtLine(int line)
+{
+    if (m_foldedBlocks.contains(line)) {
+        m_foldedBlocks.remove(line);
+        
+        int endBlock = findFoldEndBlock(line);
+        QTextBlock block = document()->findBlockByNumber(line + 1);
+        
+        while (block.isValid() && block.blockNumber() <= endBlock) {
+            block.setVisible(true);
+            block = block.next();
+        }
+    } else if (isFoldable(line)) {
+        m_foldedBlocks.insert(line);
+        
+        int endBlock = findFoldEndBlock(line);
+        QTextBlock block = document()->findBlockByNumber(line + 1);
+        
+        while (block.isValid() && block.blockNumber() <= endBlock) {
+            block.setVisible(false);
+            block = block.next();
+        }
+    }
+    
+    viewport()->update();
+    document()->markContentsDirty(0, document()->characterCount());
+}
+
+int TextArea::findFoldEndBlock(int startBlock) const
+{
+    QTextBlock block = document()->findBlockByNumber(startBlock);
+    if (!block.isValid())
+        return startBlock;
+    
+    QString text = block.text();
+    int startIndent = 0;
+    for (QChar c : text) {
+        if (c == ' ') startIndent++;
+        else if (c == '\t') startIndent += 4;
+        else break;
+    }
+    
+    // Check for brace-based folding
+    bool braceStyle = text.contains('{');
+    int braceCount = 0;
+    
+    if (braceStyle) {
+        for (QChar c : text) {
+            if (c == '{') braceCount++;
+            else if (c == '}') braceCount--;
+        }
+    }
+    
+    block = block.next();
+    int lastNonEmpty = startBlock;
+    
+    while (block.isValid()) {
+        text = block.text().trimmed();
+        
+        if (braceStyle) {
+            for (QChar c : block.text()) {
+                if (c == '{') braceCount++;
+                else if (c == '}') braceCount--;
+            }
+            
+            if (braceCount <= 0) {
+                return block.blockNumber();
+            }
+        } else {
+            // Indent-based folding
+            if (!text.isEmpty()) {
+                int indent = 0;
+                for (QChar c : block.text()) {
+                    if (c == ' ') indent++;
+                    else if (c == '\t') indent += 4;
+                    else break;
+                }
+                
+                if (indent <= startIndent) {
+                    return lastNonEmpty;
+                }
+                lastNonEmpty = block.blockNumber();
+            }
+        }
+        
+        block = block.next();
+    }
+    
+    return lastNonEmpty;
+}
+
+bool TextArea::isFoldable(int blockNumber) const
+{
+    QTextBlock block = document()->findBlockByNumber(blockNumber);
+    if (!block.isValid())
+        return false;
+    
+    QString text = block.text();
+    
+    // Foldable if line ends with { or :
+    QString trimmed = text.trimmed();
+    if (trimmed.endsWith('{') || trimmed.endsWith(':'))
+        return true;
+    
+    // Or if next line has greater indent
+    QTextBlock nextBlock = block.next();
+    if (nextBlock.isValid()) {
+        QString nextText = nextBlock.text();
+        
+        int currentIndent = 0;
+        for (QChar c : text) {
+            if (c == ' ') currentIndent++;
+            else if (c == '\t') currentIndent += 4;
+            else break;
+        }
+        
+        int nextIndent = 0;
+        for (QChar c : nextText) {
+            if (c == ' ') nextIndent++;
+            else if (c == '\t') nextIndent += 4;
+            else break;
+        }
+        
+        if (nextIndent > currentIndent && !nextText.trimmed().isEmpty())
+            return true;
+    }
+    
+    return false;
 }

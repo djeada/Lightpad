@@ -16,7 +16,6 @@ LineEditIcon::LineEditIcon(QWidget* parent)
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
     setLayout(mainLayout);
-    setStyleSheet("QLineEdit { border: none; background: white } QToolButton { background: white }");
     setMouseTracking(true);
     setAttribute(Qt::WA_Hover);
     button.setCursor(Qt::ArrowCursor);
@@ -42,17 +41,12 @@ void LineEditIcon::paintEvent(QPaintEvent* event)
 
 void LineEditIcon::enterEvent(QEvent* event)
 {
-    setStyleSheet("QLineEdit {border-width: 1px; border-style: solid; border-color: #add8e6; }"
-                  "QLineEdit#edit { border: none; background: white } QToolButton { background: white }");
-
-    QWidget::enterEvent(event);
+    QLineEdit::enterEvent(event);
 }
 
 void LineEditIcon::leaveEvent(QEvent* event)
 {
-    setStyleSheet("QLineEdit { border: none; background: white } QToolButton { background: white }");
-
-    QWidget::leaveEvent(event);
+    QLineEdit::leaveEvent(event);
 }
 
 void LineEditIcon::connectFunctionWithIcon(void (RunConfigurations::*f)())

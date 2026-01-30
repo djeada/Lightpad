@@ -39,11 +39,13 @@ void SettingsManager::initializeDefaults()
 
     // Theme defaults
     QJsonObject themeDefaults;
-    themeDefaults["backgroundColor"] = "#000000";
-    themeDefaults["foregroundColor"] = "#d3d3d3";
-    themeDefaults["highlightColor"] = "#2a2a2a";
-    themeDefaults["keywordFormat_1"] = "#b8860b";
-    themeDefaults["keywordFormat_2"] = "#ee82ee";
+    themeDefaults["backgroundColor"] = "#0e1116";
+    themeDefaults["foregroundColor"] = "#e6edf3";
+    themeDefaults["highlightColor"] = "#1a2230";
+    themeDefaults["lineNumberAreaColor"] = "#0c1016";
+    themeDefaults["keywordFormat_0"] = "#7ee787";
+    themeDefaults["keywordFormat_1"] = "#f2cc60";
+    themeDefaults["keywordFormat_2"] = "#58a6ff";
     m_defaults["theme"] = themeDefaults;
 
     // Settings version for migration

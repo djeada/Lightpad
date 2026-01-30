@@ -79,7 +79,7 @@ void RunTemplateSelector::setupUi()
     
     m_commandLabel = new QLabel();
     m_commandLabel->setWordWrap(true);
-    m_commandLabel->setStyleSheet("font-family: monospace; background-color: #f0f0f0; padding: 5px;");
+    m_commandLabel->setStyleSheet("font-family: monospace; background-color: #1f2632; color: #e6edf3; padding: 6px; border-radius: 6px;");
     detailsLayout->addWidget(m_commandLabel);
     
     mainLayout->addWidget(detailsGroup);

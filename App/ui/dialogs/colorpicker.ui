@@ -14,11 +14,7 @@
    <string>Dialog</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QDialog#ColorPicker {
-border-width: 1;
-border-color: black;
-background: white;
-}</string>
+   <string notr="true"/>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,0,0,1">
    <property name="leftMargin">
@@ -74,17 +70,7 @@ font-weight: 600;
      <item>
       <widget class="QToolButton" name="buttonFontChooser">
        <property name="styleSheet">
-        <string notr="true">QToolButton { 
-background-color: white;
-border-style: outset;
-border-width: 1px;
-border-radius: 5px;
-border-color: black;
-font: bold 14px;
-}
-QToolButton:hover { 
-	background: lightGray;
-}</string>
+        <string notr="true"/>
        </property>
        <property name="text">
         <string>...</string>

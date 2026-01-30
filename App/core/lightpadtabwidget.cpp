@@ -81,12 +81,13 @@ void LightpadTabWidget::setMainWindow(MainWindow* window)
         addNewTab();
 }
 
-void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColor)
+void LightpadTabWidget::setTheme(const QString& backgroundColor,
+    const QString& foregroundColor,
+    const QString& surfaceColor,
+    const QString& hoverColor,
+    const QString& accentColor,
+    const QString& borderColor)
 {
-    QString surfaceColor = "#313244";
-    QString hoverColor = "#45475a";
-    QString accentColor = "#89b4fa";
-
     setStyleSheet(
         // Modern scrollbar styling (inherits from main but ensure consistency)
         "QScrollBar:vertical { background: " + backgroundColor + "; }"
@@ -100,19 +101,20 @@ void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColo
 
         // Individual tabs - modern rounded style
         "QTabBar::tab { "
-            "color: #6c7086; "  // Muted text for inactive tabs
+            "color: #9aa4b2; "
             "background-color: " + backgroundColor + "; "
             "padding: 8px 16px; "
-            "margin: 4px 2px 0px 2px; "
-            "border-top-left-radius: 8px; "
-            "border-top-right-radius: 8px; "
-            "border: none; "
+            "margin: 6px 4px 0px 4px; "
+            "border-top-left-radius: 10px; "
+            "border-top-right-radius: 10px; "
+            "border: 1px solid transparent; "
         "}"
 
         // Active/selected tab
         "QTabBar::tab:selected { "
             "color: " + foregroundColor + "; "
             "background-color: " + surfaceColor + "; "
+            "border: 1px solid " + borderColor + "; "
             "border-bottom: 2px solid " + accentColor + "; "
         "}"
 
@@ -120,6 +122,7 @@ void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColo
         "QTabBar::tab:hover:!selected { "
             "color: " + foregroundColor + "; "
             "background-color: " + hoverColor + "; "
+            "border: 1px solid " + borderColor + "; "
         "}"
 
         // Close button on tabs
@@ -135,11 +138,13 @@ void LightpadTabWidget::setTheme(QString backgroundColor, QString foregroundColo
         // Add tab button styling
         "QToolButton#AddTabButton { "
             "background: " + backgroundColor + "; "
-            "border-radius: 6px; "
+            "border-radius: 8px; "
             "padding: 4px; "
+            "border: 1px solid transparent; "
         "}"
         "QToolButton#AddTabButton:hover { "
             "background: " + hoverColor + "; "
+            "border: 1px solid " + borderColor + "; "
         "}"
 
         // Tab widget pane
