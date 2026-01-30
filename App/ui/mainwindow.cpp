@@ -22,7 +22,7 @@
 #include "dialogs/formattemplateselector.h"
 #include "dialogs/shortcuts.h"
 #include "dialogs/commandpalette.h"
-#include "panels/terminal.h"
+#include "panels/terminaltabwidget.h"
 #include "../core/textarea.h"
 #include "../run_templates/runtemplatemanager.h"
 #include "../format_templates/formattemplatemanager.h"
@@ -35,7 +35,7 @@ MainWindow::MainWindow(QWidget* parent)
     , popupTabWidth(nullptr)
     , preferences(nullptr)
     , findReplacePanel(nullptr)
-    , terminal(nullptr)
+    , terminalWidget(nullptr)
     , completer(nullptr)
     , highlightLanguage("")
     , font(QApplication::font())
@@ -574,21 +574,25 @@ void MainWindow::showTerminal()
         return;
     }
 
-    if (!terminal) {
-        terminal = new Terminal();
+    if (!terminalWidget) {
+        terminalWidget = new TerminalTabWidget();
 
-        connect(terminal, &QObject::destroyed, this, [&]() {
-            terminal = nullptr;
+        connect(terminalWidget, &TerminalTabWidget::closeRequested, this, [&]() {
+            if (terminalWidget) {
+                terminalWidget->hide();
+            }
         });
 
         auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
 
         if (layout != 0)
-            layout->insertWidget(layout->count() - 1, terminal, 0);
+            layout->insertWidget(layout->count() - 1, terminalWidget, 0);
     }
     
+    terminalWidget->show();
+    
     // Run the file using the template system
-    terminal->runFile(filePath);
+    terminalWidget->runFile(filePath);
 }
 
 void MainWindow::showProblemsPanel()
@@ -1227,6 +1231,10 @@ void MainWindow::setTheme(Theme theme)
             "border-top: 1px solid " + borderColor + "; "
         "}"
         "QWidget#Terminal { "
+            "background-color: " + surfaceColor + "; "
+            "border-top: 1px solid " + borderColor + "; "
+        "}"
+        "QWidget#TerminalTabWidget { "
             "background-color: " + surfaceColor + "; "
             "border-top: 1px solid " + borderColor + "; "
         "}"

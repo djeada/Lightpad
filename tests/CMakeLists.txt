@@ -269,6 +269,31 @@ target_link_libraries(test_terminal
 
 target_compile_definitions(test_terminal PRIVATE QT_DEPRECATED_WARNINGS)
 
+# TerminalTabWidget test executable
+add_executable(test_terminaltabwidget
+    unit/test_terminaltabwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/terminaltabwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/terminal.cpp
+    ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_terminaltabwidget PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/ui/panels
+)
+
+target_link_libraries(test_terminaltabwidget
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_terminaltabwidget PRIVATE QT_DEPRECATED_WARNINGS)
+
 # Register tests with CTest
 add_test(NAME LoggerTests COMMAND test_logger)
 add_test(NAME ThemeTests COMMAND test_theme)
@@ -283,19 +308,23 @@ add_test(NAME AccessibilityTests COMMAND test_accessibility)
 add_test(NAME RunTemplateManagerTests COMMAND test_runtemplatemanager)
 add_test(NAME FormatTemplateManagerTests COMMAND test_formattemplatemanager)
 add_test(NAME TerminalTests COMMAND test_terminal)
+add_test(NAME TerminalTabWidgetTests COMMAND test_terminaltabwidget)
 
 # Set environment variable for headless testing
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
     AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
-    RunTemplateManagerTests FormatTemplateManagerTests TerminalTests PROPERTIES
+    RunTemplateManagerTests FormatTemplateManagerTests TerminalTests TerminalTabWidgetTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# Set timeout for terminal tests that may take longer due to shell process management
+set_tests_properties(TerminalTests TerminalTabWidgetTests PROPERTIES TIMEOUT 30)
 
 # Custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
             test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
-            test_runtemplatemanager test_formattemplatemanager test_terminal
+            test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
