@@ -14,9 +14,11 @@
 #include "popup.h"
 #include "dialogs/preferences.h"
 #include "dialogs/runconfigurations.h"
+#include "dialogs/runtemplateselector.h"
 #include "dialogs/shortcuts.h"
 #include "panels/terminal.h"
 #include "../core/textarea.h"
+#include "../run_templates/runtemplatemanager.h"
 #include "ui_mainwindow.h"
 
 MainWindow::MainWindow(QWidget* parent)
@@ -477,16 +479,24 @@ void MainWindow::showFindReplace(bool onlyFind)
 void MainWindow::openDialog(Dialog dialog)
 {
     switch (dialog) {
-    case Dialog::runConfiguration:
-        if (findChildren<RunConfigurations*>().isEmpty()) {
-            auto configurationDialog = new RunConfigurations(this);
-
-            connect(configurationDialog, &RunConfigurations::accepted, this, [&, configurationDialog]() {
-                auto scriptPath = configurationDialog->getScriptPath();
-                auto parameters = configurationDialog->getParameters();
-            });
+    case Dialog::runConfiguration: {
+        // Use new template selector
+        auto page = ui->tabWidget->getCurrentPage();
+        QString filePath = page ? page->getFilePath() : QString();
+        
+        if (filePath.isEmpty()) {
+            QMessageBox::information(this, "Run Configuration", 
+                "Please open a file first to configure run settings.");
+            return;
+        }
+        
+        if (findChildren<RunTemplateSelector*>().isEmpty()) {
+            auto selector = new RunTemplateSelector(filePath, this);
+            selector->setAttribute(Qt::WA_DeleteOnClose);
+            selector->show();
         }
         break;
+    }
 
     case Dialog::shortcuts:
         if (findChildren<ShortcutsDialog*>().isEmpty())
@@ -510,10 +520,10 @@ void MainWindow::openShortcutsDialog()
 
 void MainWindow::showTerminal()
 {
-
     auto page = ui->tabWidget->getCurrentPage();
+    QString filePath = page ? page->getFilePath() : QString();
 
-    if (!page->scriptAssigned()) {
+    if (filePath.isEmpty()) {
         noScriptAssignedWarning();
         return;
     }
@@ -530,6 +540,9 @@ void MainWindow::showTerminal()
         if (layout != 0)
             layout->insertWidget(layout->count() - 1, terminal, 0);
     }
+    
+    // Run the file using the template system
+    terminal->runFile(filePath);
 }
 
 void MainWindow::setMainWindowTitle(QString title)
@@ -622,17 +635,14 @@ void MainWindow::setupTextArea()
 void MainWindow::noScriptAssignedWarning()
 {
     QMessageBox msgBox(this);
-    msgBox.setText("No build script asociated with this file.");
-    auto connectButton = msgBox.addButton(tr("Connect"), QMessageBox::ActionRole);
-
-    msgBox.addButton(QMessageBox::Abort);
+    msgBox.setText("No file is currently open.");
+    msgBox.setInformativeText("Open a file first, then you can run it or configure a run template.");
+    auto openButton = msgBox.addButton(tr("Open File"), QMessageBox::ActionRole);
+    msgBox.addButton(QMessageBox::Cancel);
     msgBox.exec();
 
-    if (msgBox.clickedButton() == connectButton)
-        openConfigurationDialog();
-
-    else
-        msgBox.close();
+    if (msgBox.clickedButton() == openButton)
+        on_actionOpen_File_triggered();
 }
 
 void MainWindow::on_actionToggle_Menu_Bar_triggered()

@@ -1,5 +1,6 @@
 #include "lightpadpage.h"
 #include "../ui/mainwindow.h"
+#include "../run_templates/runtemplatemanager.h"
 #include <QDebug>
 #include <QHBoxLayout>
 #include <QLineEdit>
@@ -358,7 +359,45 @@ QString LightpadPage::getFilePath(const QModelIndex& index)
     return model->filePath(index);
 }
 
-bool LightpadPage::scriptAssigned()
+bool LightpadPage::hasRunTemplate() const
 {
-    return !scriptPath.isEmpty();
-};
+    if (filePath.isEmpty()) {
+        return false;
+    }
+    
+    RunTemplateManager& manager = RunTemplateManager::instance();
+    
+    // Check if there's an explicit assignment
+    FileTemplateAssignment assignment = manager.getAssignmentForFile(filePath);
+    if (!assignment.templateId.isEmpty()) {
+        return true;
+    }
+    
+    // Check if there's a default template for the file extension
+    QFileInfo fileInfo(filePath);
+    QList<RunTemplate> templates = manager.getTemplatesForExtension(fileInfo.suffix());
+    return !templates.isEmpty();
+}
+
+QString LightpadPage::getAssignedTemplateId() const
+{
+    if (filePath.isEmpty()) {
+        return QString();
+    }
+    
+    RunTemplateManager& manager = RunTemplateManager::instance();
+    FileTemplateAssignment assignment = manager.getAssignmentForFile(filePath);
+    
+    if (!assignment.templateId.isEmpty()) {
+        return assignment.templateId;
+    }
+    
+    // Return default template ID based on extension
+    QFileInfo fileInfo(filePath);
+    QList<RunTemplate> templates = manager.getTemplatesForExtension(fileInfo.suffix());
+    if (!templates.isEmpty()) {
+        return templates.first().id;
+    }
+    
+    return QString();
+}
