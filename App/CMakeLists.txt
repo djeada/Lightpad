@@ -47,11 +47,13 @@ set(project_headers
     dap/watchmanager.h
     dap/debugsession.h
     dap/debugsettings.h
+    git/gitintegration.h
     ui/dialogs/colorpicker.h
     ui/dialogs/commandpalette.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
     ui/panels/debugpanel.h
+    ui/panels/sourcecontrolpanel.h
     core/async/asyncworker.h
     core/document.h
     core/formatter.h
@@ -112,11 +114,13 @@ set(project_sources
     dap/watchmanager.cpp
     dap/debugsession.cpp
     dap/debugsettings.cpp
+    git/gitintegration.cpp
     ui/dialogs/colorpicker.cpp
     ui/dialogs/commandpalette.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
     ui/panels/debugpanel.cpp
+    ui/panels/sourcecontrolpanel.cpp
     core/async/asyncworker.cpp
     core/document.cpp
     core/formatter.cpp

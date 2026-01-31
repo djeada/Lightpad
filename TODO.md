@@ -71,10 +71,10 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 ### 2. Git/Version Control Integration
 - [ ] Git status in file tree (modified, staged, untracked icons)
 - [ ] Git diff gutter in editor (inline +/- indicators)
-- [ ] Source control panel
-- [ ] Stage/unstage files
-- [ ] Commit with message
-- [ ] Branch management (create, checkout, delete, merge)
+- [x] Source control panel
+- [x] Stage/unstage files
+- [x] Commit with message
+- [x] Branch management (create, checkout, delete, merge)
 - [ ] Git blame annotations
 - [ ] Git history/log viewer
 - [ ] Conflict resolution UI
