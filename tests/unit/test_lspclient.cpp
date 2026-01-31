@@ -320,23 +320,58 @@ void TestLspClient::testLspWorkspaceEditMultipleFiles()
 {
     LspWorkspaceEdit wsEdit;
     
-    // Edits for first file
-    LspTextEdit edit1;
-    edit1.newText = "newName";
-    wsEdit.changes["file:///path/to/file1.cpp"].append(edit1);
-    wsEdit.changes["file:///path/to/file1.cpp"].append(edit1);
+    // Edits for first file - simulate renaming in two places
+    LspTextEdit edit1a;
+    edit1a.newText = "newName";
+    edit1a.range.start.line = 10;
+    edit1a.range.start.character = 5;
+    edit1a.range.end.line = 10;
+    edit1a.range.end.character = 12;
+    
+    LspTextEdit edit1b;
+    edit1b.newText = "newName";
+    edit1b.range.start.line = 25;
+    edit1b.range.start.character = 5;
+    edit1b.range.end.line = 25;
+    edit1b.range.end.character = 12;
+    
+    wsEdit.changes["file:///path/to/file1.cpp"].append(edit1a);
+    wsEdit.changes["file:///path/to/file1.cpp"].append(edit1b);
     
     // Edits for second file
     LspTextEdit edit2;
     edit2.newText = "newName";
+    edit2.range.start.line = 5;
+    edit2.range.start.character = 10;
+    edit2.range.end.line = 5;
+    edit2.range.end.character = 17;
     wsEdit.changes["file:///path/to/file2.cpp"].append(edit2);
     
-    // Edits for header file
-    LspTextEdit edit3;
-    edit3.newText = "newName";
-    wsEdit.changes["file:///path/to/file1.h"].append(edit3);
-    wsEdit.changes["file:///path/to/file1.h"].append(edit3);
-    wsEdit.changes["file:///path/to/file1.h"].append(edit3);
+    // Edits for header file - simulate renaming in three places
+    LspTextEdit edit3a;
+    edit3a.newText = "newName";
+    edit3a.range.start.line = 3;
+    edit3a.range.start.character = 0;
+    edit3a.range.end.line = 3;
+    edit3a.range.end.character = 7;
+    
+    LspTextEdit edit3b;
+    edit3b.newText = "newName";
+    edit3b.range.start.line = 15;
+    edit3b.range.start.character = 4;
+    edit3b.range.end.line = 15;
+    edit3b.range.end.character = 11;
+    
+    LspTextEdit edit3c;
+    edit3c.newText = "newName";
+    edit3c.range.start.line = 22;
+    edit3c.range.start.character = 8;
+    edit3c.range.end.line = 22;
+    edit3c.range.end.character = 15;
+    
+    wsEdit.changes["file:///path/to/file1.h"].append(edit3a);
+    wsEdit.changes["file:///path/to/file1.h"].append(edit3b);
+    wsEdit.changes["file:///path/to/file1.h"].append(edit3c);
     
     QCOMPARE(wsEdit.changes.count(), 3);
     QCOMPARE(wsEdit.changes["file:///path/to/file1.cpp"].count(), 2);
