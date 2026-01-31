@@ -51,7 +51,7 @@ GitFileSystemModel::GitFileSystemModel(QObject* parent)
 
     // Set up refresh timer for debouncing git status updates
     m_refreshTimer->setSingleShot(true);
-    m_refreshTimer->setInterval(500);  // 500ms debounce
+    m_refreshTimer->setInterval(GIT_STATUS_REFRESH_DEBOUNCE_MS);
     connect(m_refreshTimer, &QTimer::timeout, this, &GitFileSystemModel::updateStatusCache);
 }
 

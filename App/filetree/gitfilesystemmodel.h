@@ -7,6 +7,11 @@
 #include "../git/gitintegration.h"
 
 /**
+ * @brief Default debounce interval for git status refresh in milliseconds
+ */
+constexpr int GIT_STATUS_REFRESH_DEBOUNCE_MS = 500;
+
+/**
  * @brief A QFileSystemModel that displays git status icons
  * 
  * This model extends QFileSystemModel to show git status indicators
