@@ -72,13 +72,6 @@ If you had problems compiling from source, raise a new issue in the <a href = ht
 <h1>Contributing </h1>
 All contributions are welcomed.
 
-## TODO
-
-- [ ] User preferences should be saved in the home directory. 
-- [x] Full VIM compatibility.
-- [x] Autocompletion.
-- [ ] Switch to QProcess for multiprocessing.
-- [ ] Allow for custom highlighting rules.
 
 <h1>License</h1>
 This project is licensed under  GNU GENERAL PUBLIC LICENSE - see the <a href='https://github.com/djeada/Lightpad/blob/master/LICENSE'> LICENSE.txt </a> file for details.
