@@ -3,6 +3,7 @@
 
 #include "completionitem.h"
 #include "completionitemmodel.h"
+#include "../settings/theme.h"
 #include <QWidget>
 #include <QListView>
 #include <QLabel>
@@ -21,6 +22,7 @@ class CompletionWidget : public QWidget {
 
 public:
     explicit CompletionWidget(QWidget* parent = nullptr);
+    void applyTheme(const Theme& theme);
     
     /**
      * @brief Set the completion items to display

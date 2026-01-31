@@ -39,7 +39,7 @@ void LineEditIcon::paintEvent(QPaintEvent* event)
     style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
 };
 
-void LineEditIcon::enterEvent(QEvent* event)
+void LineEditIcon::enterEvent(QEnterEvent* event)
 {
     QLineEdit::enterEvent(event);
 }

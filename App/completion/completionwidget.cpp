@@ -5,7 +5,7 @@
 #include <QScreen>
 
 CompletionWidget::CompletionWidget(QWidget* parent)
-    : QWidget(parent, Qt::Popup | Qt::FramelessWindowHint)
+    : QWidget(parent, Qt::ToolTip | Qt::FramelessWindowHint)
     , m_model(new CompletionItemModel(this))
     , m_listView(new QListView(this))
     , m_docLabel(new QLabel(this))
@@ -47,8 +47,33 @@ CompletionWidget::CompletionWidget(QWidget* parent)
     connect(m_listView, &QListView::clicked, this, &CompletionWidget::onItemClicked);
     connect(m_listView, &QListView::doubleClicked, this, &CompletionWidget::onItemDoubleClicked);
     
+    setAttribute(Qt::WA_ShowWithoutActivating, true);
     setMinimumWidth(200);
     setMaximumWidth(500);
+}
+
+void CompletionWidget::applyTheme(const Theme& theme)
+{
+    QString bgColor = theme.surfaceColor.name();
+    QString fgColor = theme.foregroundColor.name();
+    QString borderColor = theme.borderColor.name();
+    QString hoverColor = theme.hoverColor.name();
+    QString selectionColor = theme.accentSoftColor.name();
+    QString focusColor = theme.accentColor.name();
+
+    setStyleSheet(
+        "CompletionWidget { background: " + bgColor + "; border: 1px solid " + borderColor + "; }"
+        "QListView { border: none; background: " + bgColor + "; color: " + fgColor + "; }"
+        "QListView::item { padding: 3px 5px; }"
+        "QListView::item:selected { background: " + selectionColor + "; color: " + fgColor + "; }"
+        "QListView::item:hover { background: " + hoverColor + "; }"
+        "QListView::item:focus { outline: none; border: 1px solid " + focusColor + "; }"
+    );
+
+    m_docLabel->setStyleSheet(
+        "QLabel { padding: 5px; background: " + bgColor + "; color: " + fgColor + "; "
+        "border-top: 1px solid " + borderColor + "; }"
+    );
 }
 
 void CompletionWidget::setItems(const QList<CompletionItem>& items)
@@ -90,7 +115,7 @@ void CompletionWidget::showAt(const QPoint& position)
     }
     
     move(adjustedPos);
-    QWidget::show();
+    show();
     raise();
 }
 

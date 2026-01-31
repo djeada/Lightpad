@@ -270,6 +270,9 @@ void TextArea::setFont(QFont font)
 void TextArea::setMainWindow(MainWindow* window)
 {
     mainWindow = window;
+    if (m_completionWidget && mainWindow) {
+        m_completionWidget->applyTheme(mainWindow->getTheme());
+    }
 }
 
 int TextArea::fontSize()
@@ -320,6 +323,9 @@ void TextArea::loadSettings(const TextAreaSettings settings)
     lineNumberAreaPenColor = settings.theme.lineNumberAreaColor;
     defaultPenColor = settings.theme.foregroundColor;
     backgroundColor = settings.theme.backgroundColor;
+    if (m_completionWidget) {
+        m_completionWidget->applyTheme(settings.theme);
+    }
     setAutoIdent(settings.autoIndent);
     showLineNumbers(settings.showLineNumberArea);
     highlihtCurrentLine(settings.lineHighlighted);
@@ -887,6 +893,9 @@ void TextArea::setCompletionEngine(CompletionEngine* engine)
     // Create completion widget if needed
     if (!m_completionWidget) {
         m_completionWidget = new CompletionWidget(this);
+        if (mainWindow) {
+            m_completionWidget->applyTheme(mainWindow->getTheme());
+        }
         connect(m_completionWidget, &CompletionWidget::itemAccepted,
                 this, &TextArea::onCompletionAccepted);
         connect(m_completionWidget, &CompletionWidget::cancelled,
