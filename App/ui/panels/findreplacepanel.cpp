@@ -34,7 +34,7 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget* parent)
     colorFormat.setBackground(Qt::red);
     colorFormat.setForeground(Qt::white);
 
-    // Create results tree for global search (initially hidden)
+    // Create results tree for search results (works for both local and global modes)
     resultsTree = new QTreeWidget(this);
     resultsTree->setHeaderLabels(QStringList() << "File" << "Line" << "Match");
     resultsTree->setColumnCount(3);
@@ -47,7 +47,14 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget* parent)
         layout()->addWidget(resultsTree);
     }
     
-    connect(resultsTree, &QTreeWidget::itemClicked, this, &FindReplacePanel::onGlobalResultClicked);
+    // Handle clicks on results - route to appropriate handler based on mode
+    connect(resultsTree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem* item, int column) {
+        if (isGlobalMode()) {
+            onGlobalResultClicked(item, column);
+        } else {
+            onLocalResultClicked(item, column);
+        }
+    });
     
     updateModeUI();
     updateCounterLabels();
@@ -125,9 +132,13 @@ void FindReplacePanel::updateModeUI()
 {
     bool isGlobal = ui->globalMode->isChecked();
     
-    // Show/hide results tree based on mode
+    // Show/hide results tree based on mode and whether we have results
     if (resultsTree) {
-        resultsTree->setVisible(isGlobal && !globalResults.isEmpty());
+        if (isGlobal) {
+            resultsTree->setVisible(!globalResults.isEmpty());
+        } else {
+            resultsTree->setVisible(!positions.isEmpty());
+        }
     }
     
     // In global mode, some options don't apply
@@ -141,9 +152,12 @@ void FindReplacePanel::updateModeUI()
     } else {
         globalResults.clear();
         globalResultIndex = -1;
-        if (resultsTree) {
-            resultsTree->clear();
-        }
+    }
+    
+    // Clear results tree when switching modes
+    if (resultsTree) {
+        resultsTree->clear();
+        resultsTree->setVisible(false);
     }
     
     updateCounterLabels();
@@ -517,6 +531,9 @@ void FindReplacePanel::findInitial(QTextCursor& cursor, const QString& searchWor
         
         selectSearchWord(cursor, matchLength);
     }
+    
+    // Display results in the tree for local mode
+    displayLocalResults(searchWord);
 }
 
 void FindReplacePanel::findNext(QTextCursor& cursor, const QString& searchWord, int offset)
@@ -877,8 +894,117 @@ void FindReplacePanel::onGlobalResultClicked(QTreeWidgetItem* item, int column)
         }
     }
     
-    // TODO: Integrate with MainWindow to open file at specific location
-    // For now, results are shown in tree and user can double-click to navigate
+    // Emit signal to navigate to the file and position
+    emit navigateToFile(filePath, lineNumber, columnNumber);
+    
+    updateCounterLabels();
+}
+
+QString FindReplacePanel::getCurrentFilePath() const
+{
+    if (!textArea || !mainWindow) {
+        return QString();
+    }
+    // Try to get file path from the current tab
+    // This is a workaround - ideally we'd have direct access to the file path
+    return QString();
+}
+
+void FindReplacePanel::displayLocalResults(const QString& searchWord)
+{
+    if (!resultsTree || !textArea) {
+        return;
+    }
+    
+    resultsTree->clear();
+    
+    if (positions.isEmpty()) {
+        resultsTree->setVisible(false);
+        return;
+    }
+    
+    QString text = textArea->toPlainText();
+    QStringList lines = text.split('\n');
+    QRegularExpression pattern = buildSearchPattern(searchWord);
+    
+    // Build line start positions for quick lookup
+    QVector<int> lineStarts;
+    int pos = 0;
+    for (const QString& line : lines) {
+        lineStarts.append(pos);
+        pos += line.length() + 1; // +1 for newline
+    }
+    
+    // Create result items for each match
+    for (int i = 0; i < positions.size(); ++i) {
+        int matchPos = positions[i];
+        
+        // Find line number for this position
+        int lineNum = 0;
+        for (int j = 0; j < lineStarts.size(); ++j) {
+            if (j + 1 < lineStarts.size() && matchPos >= lineStarts[j + 1]) {
+                continue;
+            }
+            lineNum = j;
+            break;
+        }
+        
+        int columnNum = matchPos - lineStarts[lineNum] + 1; // 1-based
+        QString lineContent = (lineNum < lines.size()) ? lines[lineNum].trimmed() : QString();
+        
+        QTreeWidgetItem* resultItem = new QTreeWidgetItem(resultsTree);
+        resultItem->setText(0, "Current File");
+        resultItem->setText(1, QString::number(lineNum + 1)); // 1-based line number
+        resultItem->setText(2, lineContent);
+        resultItem->setData(0, Qt::UserRole, QString()); // Empty path for current file
+        resultItem->setData(1, Qt::UserRole, lineNum + 1);
+        resultItem->setData(2, Qt::UserRole, columnNum);
+    }
+    
+    resultsTree->setVisible(true);
+}
+
+void FindReplacePanel::onLocalResultClicked(QTreeWidgetItem* item, int column)
+{
+    Q_UNUSED(column);
+    
+    if (!item || !textArea) {
+        return;
+    }
+    
+    int lineNumber = item->data(1, Qt::UserRole).toInt();
+    int columnNumber = item->data(2, Qt::UserRole).toInt();
+    
+    if (lineNumber <= 0) {
+        return;
+    }
+    
+    // Navigate to position in current file
+    QTextCursor cursor = textArea->textCursor();
+    cursor.movePosition(QTextCursor::Start);
+    cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, lineNumber - 1);
+    cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, columnNumber - 1);
+    
+    // Select the match
+    QString searchWord = ui->searchFind->text();
+    QRegularExpression pattern = buildSearchPattern(searchWord);
+    QString text = textArea->toPlainText();
+    QRegularExpressionMatch match = pattern.match(text, cursor.position());
+    if (match.hasMatch() && match.capturedStart() == cursor.position()) {
+        cursor.setPosition(match.capturedStart());
+        cursor.setPosition(match.capturedEnd(), QTextCursor::KeepAnchor);
+    }
+    
+    textArea->setTextCursor(cursor);
+    textArea->setFocus();
+    
+    // Update position index
+    for (int i = 0; i < positions.size(); ++i) {
+        if (positions[i] == match.capturedStart()) {
+            position = i;
+            break;
+        }
+    }
     
     updateCounterLabels();
 }
