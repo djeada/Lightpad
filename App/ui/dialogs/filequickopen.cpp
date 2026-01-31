@@ -90,6 +90,7 @@ void FileQuickOpen::scanDirectory()
     
     // Skip common non-relevant directories
     QStringList skipDirs = {".git", "node_modules", "build", "dist", ".cache", "__pycache__"};
+    QString sep = QDir::separator();
     
     while (it.hasNext()) {
         QString filePath = it.next();
@@ -97,7 +98,15 @@ void FileQuickOpen::scanDirectory()
         // Check if path contains any skip directories
         bool shouldSkip = false;
         for (const QString& skipDir : skipDirs) {
-            if (filePath.contains("/" + skipDir + "/") || filePath.contains("\\" + skipDir + "\\")) {
+            // Check for directory as path component using platform separator
+            if (filePath.contains(sep + skipDir + sep) || 
+                filePath.endsWith(sep + skipDir)) {
+                shouldSkip = true;
+                break;
+            }
+            // Also check with forward slash for Qt's normalized paths
+            if (filePath.contains("/" + skipDir + "/") || 
+                filePath.endsWith("/" + skipDir)) {
                 shouldSkip = true;
                 break;
             }
@@ -106,7 +115,8 @@ void FileQuickOpen::scanDirectory()
         if (!shouldSkip) {
             // Store relative path for display
             QString relativePath = filePath.mid(m_rootPath.length());
-            if (relativePath.startsWith('/') || relativePath.startsWith('\\')) {
+            if (relativePath.startsWith('/') || relativePath.startsWith('\\') || 
+                relativePath.startsWith(sep)) {
                 relativePath = relativePath.mid(1);
             }
             m_allFiles.append(relativePath);
@@ -309,7 +319,7 @@ void FileQuickOpen::selectFile(int row)
         return;
 
     QString relativePath = m_filteredFiles[row];
-    QString fullPath = m_rootPath + "/" + relativePath;
+    QString fullPath = QDir::cleanPath(m_rootPath + QDir::separator() + relativePath);
     
     hide();
     
