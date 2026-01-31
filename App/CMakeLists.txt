@@ -39,11 +39,20 @@ set(project_headers
     completion/providers/lspcompletionprovider.h
     completion/providers/plugincompletionprovider.h
     completion/providers/snippetcompletionprovider.h
+    dap/dapclient.h
+    dap/idebugadapter.h
+    dap/debugadapterregistry.h
+    dap/breakpointmanager.h
+    dap/debugconfiguration.h
+    dap/watchmanager.h
+    dap/debugsession.h
+    dap/debugsettings.h
     git/gitintegration.h
     ui/dialogs/colorpicker.h
     ui/dialogs/commandpalette.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
+    ui/panels/debugpanel.h
     ui/panels/sourcecontrolpanel.h
     core/async/asyncworker.h
     core/document.h
@@ -98,11 +107,19 @@ set(project_sources
     completion/providers/lspcompletionprovider.cpp
     completion/providers/plugincompletionprovider.cpp
     completion/providers/snippetcompletionprovider.cpp
+    dap/dapclient.cpp
+    dap/debugadapterregistry.cpp
+    dap/breakpointmanager.cpp
+    dap/debugconfiguration.cpp
+    dap/watchmanager.cpp
+    dap/debugsession.cpp
+    dap/debugsettings.cpp
     git/gitintegration.cpp
     ui/dialogs/colorpicker.cpp
     ui/dialogs/commandpalette.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
+    ui/panels/debugpanel.cpp
     ui/panels/sourcecontrolpanel.cpp
     core/async/asyncworker.cpp
     core/document.cpp

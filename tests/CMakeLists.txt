@@ -341,6 +341,34 @@ target_link_libraries(test_completionproviderregistry
 
 target_compile_definitions(test_completionproviderregistry PRIVATE QT_DEPRECATED_WARNINGS)
 
+# DAP (Debug Adapter Protocol) test executable
+add_executable(test_dap
+    unit/test_dap.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/dapclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugadapterregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/breakpointmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/watchmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugsession.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugsettings.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_dap PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/dap
+)
+
+target_link_libraries(test_dap
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_dap PRIVATE QT_DEPRECATED_WARNINGS)
+
 # Register tests with CTest
 add_test(NAME LoggerTests COMMAND test_logger)
 add_test(NAME ThemeTests COMMAND test_theme)
@@ -358,6 +386,7 @@ add_test(NAME TerminalTests COMMAND test_terminal)
 add_test(NAME TerminalTabWidgetTests COMMAND test_terminaltabwidget)
 add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
 add_test(NAME CompletionProviderRegistryTests COMMAND test_completionproviderregistry)
+add_test(NAME DapTests COMMAND test_dap)
 
 # GitIntegration test executable
 add_executable(test_gitintegration
@@ -387,6 +416,7 @@ add_test(NAME GitIntegrationTests COMMAND test_gitintegration)
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
     AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
     RunTemplateManagerTests FormatTemplateManagerTests TerminalTests TerminalTabWidgetTests
+    SyntaxPluginRegistryTests CompletionProviderRegistryTests DapTests PROPERTIES
     SyntaxPluginRegistryTests CompletionProviderRegistryTests GitIntegrationTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
@@ -403,6 +433,7 @@ add_custom_target(run_tests
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
             test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
             test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
+            test_syntaxpluginregistry test_completionproviderregistry test_dap
             test_syntaxpluginregistry test_completionproviderregistry test_gitintegration
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

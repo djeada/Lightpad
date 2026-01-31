@@ -52,19 +52,21 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 ## 🔴 CRITICAL MISSING FEATURES
 
 ### 1. Debugger Integration
-- [ ] Debug Adapter Protocol (DAP) client implementation
-- [ ] Breakpoint system (set, toggle, conditional, logpoints)
+- [x] Debug Adapter Protocol (DAP) client implementation
+- [x] Breakpoint system (set, toggle, conditional, logpoints)
 - [ ] Breakpoint gutter in editor
-- [ ] Debug toolbar (Step Over, Step Into, Step Out, Continue, Pause, Stop)
-- [ ] Variables panel (local, watch, registers)
-- [ ] Call stack panel
-- [ ] Debug console/REPL
+- [x] Debug toolbar (Step Over, Step Into, Step Out, Continue, Pause, Stop)
+- [x] Variables panel (local, watch, registers)
+- [x] Call stack panel
+- [x] Debug console/REPL
 - [ ] Inline variable values during debug
-- [ ] Exception breakpoints
-- [ ] Multi-target debugging
-- [ ] Debug configurations (launch.json equivalent)
-- [ ] Attach to process
-- [ ] Remote debugging support
+- [x] Exception breakpoints
+- [x] Multi-target debugging (DebugSessionManager)
+- [x] Debug configurations (launch.json equivalent via DebugConfigurationManager)
+- [x] Attach to process
+- [x] Remote debugging support
+- [x] Watch expressions (WatchManager)
+- [x] Data breakpoints
 
 ### 2. Git/Version Control Integration
 - [ ] Git status in file tree (modified, staged, untracked icons)
