@@ -89,6 +89,92 @@ struct LspCompletionItem {
 };
 
 /**
+ * @brief LSP parameter information for signature help
+ */
+struct LspParameterInfo {
+    QString label;
+    QString documentation;
+};
+
+/**
+ * @brief LSP signature information for signature help
+ */
+struct LspSignatureInfo {
+    QString label;
+    QString documentation;
+    QList<LspParameterInfo> parameters;
+    int activeParameter;
+};
+
+/**
+ * @brief LSP signature help response
+ */
+struct LspSignatureHelp {
+    QList<LspSignatureInfo> signatures;
+    int activeSignature;
+    int activeParameter;
+};
+
+/**
+ * @brief LSP symbol kind enumeration
+ */
+enum class LspSymbolKind {
+    File = 1,
+    Module = 2,
+    Namespace = 3,
+    Package = 4,
+    Class = 5,
+    Method = 6,
+    Property = 7,
+    Field = 8,
+    Constructor = 9,
+    Enum = 10,
+    Interface = 11,
+    Function = 12,
+    Variable = 13,
+    Constant = 14,
+    String = 15,
+    Number = 16,
+    Boolean = 17,
+    Array = 18,
+    Object = 19,
+    Key = 20,
+    Null = 21,
+    EnumMember = 22,
+    Struct = 23,
+    Event = 24,
+    Operator = 25,
+    TypeParameter = 26
+};
+
+/**
+ * @brief LSP document symbol
+ */
+struct LspDocumentSymbol {
+    QString name;
+    QString detail;
+    LspSymbolKind kind;
+    LspRange range;
+    LspRange selectionRange;
+    QList<LspDocumentSymbol> children;
+};
+
+/**
+ * @brief LSP text edit for rename operations
+ */
+struct LspTextEdit {
+    LspRange range;
+    QString newText;
+};
+
+/**
+ * @brief LSP workspace edit for rename operations
+ */
+struct LspWorkspaceEdit {
+    QMap<QString, QList<LspTextEdit>> changes;  // uri -> list of edits
+};
+
+/**
  * @brief Language Server Protocol client
  * 
  * Provides communication with language servers using JSON-RPC over stdio.
@@ -157,6 +243,9 @@ public:
     void requestHover(const QString& uri, LspPosition position);
     void requestDefinition(const QString& uri, LspPosition position);
     void requestReferences(const QString& uri, LspPosition position);
+    void requestSignatureHelp(const QString& uri, LspPosition position);
+    void requestDocumentSymbols(const QString& uri);
+    void requestRename(const QString& uri, LspPosition position, const QString& newName);
 
 signals:
     void stateChanged(State state);
@@ -171,6 +260,9 @@ signals:
     void hoverReceived(int requestId, const QString& contents);
     void definitionReceived(int requestId, const QList<LspLocation>& locations);
     void referencesReceived(int requestId, const QList<LspLocation>& locations);
+    void signatureHelpReceived(int requestId, const LspSignatureHelp& signatureHelp);
+    void documentSymbolsReceived(int requestId, const QList<LspDocumentSymbol>& symbols);
+    void renameReceived(int requestId, const LspWorkspaceEdit& workspaceEdit);
 
 private slots:
     void onReadyReadStandardOutput();

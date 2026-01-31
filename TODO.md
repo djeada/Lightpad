@@ -97,10 +97,10 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 ## 🟠 HIGH PRIORITY FEATURES
 
 ### 5. Enhanced LSP Features
-- [ ] Signature help (function parameter hints)
-- [ ] Document symbols (outline view)
+- [x] Signature help (function parameter hints)
+- [x] Document symbols (outline view)
 - [ ] Workspace symbols search
-- [ ] Rename symbol (project-wide)
+- [x] Rename symbol (project-wide)
 - [ ] Code actions (quick fixes, refactorings)
 - [ ] Inlay hints (type annotations, parameter names)
 - [ ] Document formatting request via LSP

@@ -436,6 +436,30 @@ target_compile_definitions(test_gotolinedialog PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GoToLineDialogTests COMMAND test_gotolinedialog)
 
+# LspClient test executable
+add_executable(test_lspclient
+    unit/test_lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_lspclient PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_lspclient
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_lspclient PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME LspClientTests COMMAND test_lspclient)
+
 # Set environment variable for headless testing
 set_tests_properties(
     LoggerTests 
@@ -456,7 +480,8 @@ set_tests_properties(
     CompletionProviderRegistryTests 
     DapTests 
     GitIntegrationTests
-    GoToLineDialogTests 
+    GoToLineDialogTests
+    LspClientTests
     PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
@@ -474,6 +499,6 @@ add_custom_target(run_tests
             test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
             test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
             test_syntaxpluginregistry test_completionproviderregistry test_dap
-            test_gitintegration test_gotolinedialog
+            test_gitintegration test_gotolinedialog test_lspclient
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
