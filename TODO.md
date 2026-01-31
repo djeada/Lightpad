@@ -70,7 +70,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 
 ### 2. Git/Version Control Integration
 - [x] Git status in file tree (modified, staged, untracked icons)
-- [ ] Git diff gutter in editor (inline +/- indicators)
+- [x] Git diff gutter in editor (inline +/- indicators)
 - [x] Source control panel
 - [x] Stage/unstage files
 - [x] Commit with message
@@ -151,7 +151,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Recent files list
 - [x] Breadcrumb navigation
 - [ ] Go to definition in peek window
-- [ ] Go back/forward navigation stack
+- [x] Go back/forward navigation stack
 
 ### 10. Problems/Diagnostics Panel
 - [ ] Dedicated problems panel
@@ -255,7 +255,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [ ] Soft wrap toggle
 - [ ] Word wrap at column
 - [x] Show whitespace characters
-- [ ] Show indent guides
+- [x] Show indent guides
 - [ ] Rainbow brackets
 - [ ] Bracket pair colorization
 - [ ] Sticky scroll (sticky headers)
@@ -285,7 +285,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [ ] Hot reload files
 
 ### 21. Productivity Features
-- [ ] Auto-save
+- [x] Auto-save
 - [ ] Format on save
 - [ ] Format on paste
 - [ ] Trim trailing whitespace

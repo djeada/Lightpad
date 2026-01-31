@@ -87,6 +87,8 @@ set(project_headers
     core/lightpadpage.h
     core/logging/logger.h
     core/recentfilesmanager.h
+    core/navigationhistory.h
+    core/autosavemanager.h
     editor/vimmode.h
     i18n/i18n.h
     lsp/lspclient.h
@@ -183,6 +185,8 @@ set(project_sources
     core/lightpadpage.cpp
     core/logging/logger.cpp
     core/recentfilesmanager.cpp
+    core/navigationhistory.cpp
+    core/autosavemanager.cpp
     editor/vimmode.cpp
     i18n/i18n.cpp
     lsp/lspclient.cpp

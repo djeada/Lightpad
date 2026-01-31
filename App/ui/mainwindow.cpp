@@ -35,6 +35,8 @@
 #include "panels/breadcrumbwidget.h"
 #include "../core/textarea.h"
 #include "../core/recentfilesmanager.h"
+#include "../core/navigationhistory.h"
+#include "../core/autosavemanager.h"
 #include "../run_templates/runtemplatemanager.h"
 #include "../format_templates/formattemplatemanager.h"
 #include "../syntax/syntaxpluginregistry.h"
@@ -72,6 +74,8 @@ MainWindow::MainWindow(QWidget* parent)
     , problemsStatusLabel(nullptr)
     , breadcrumbWidget(nullptr)
     , recentFilesManager(nullptr)
+    , navigationHistory(nullptr)
+    , autoSaveManager(nullptr)
     , m_splitEditorContainer(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
@@ -82,6 +86,12 @@ MainWindow::MainWindow(QWidget* parent)
     
     // Initialize recent files manager
     recentFilesManager = new RecentFilesManager(this);
+    
+    // Initialize navigation history
+    setupNavigationHistory();
+    
+    // Initialize auto-save
+    setupAutoSave();
     
     // Initialize new completion system
     setupCompletionSystem();
@@ -500,6 +510,24 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
     else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
              keyEvent->key() == Qt::Key_W) {
         toggleShowWhitespace();
+    }
+    
+    // Toggle Indent Guides: Ctrl+Shift+I
+    else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
+             keyEvent->key() == Qt::Key_I) {
+        toggleShowIndentGuides();
+    }
+    
+    // Navigate Back: Alt+Left
+    else if (keyEvent->modifiers() == Qt::AltModifier && 
+             keyEvent->key() == Qt::Key_Left) {
+        navigateBack();
+    }
+    
+    // Navigate Forward: Alt+Right
+    else if (keyEvent->modifiers() == Qt::AltModifier && 
+             keyEvent->key() == Qt::Key_Right) {
+        navigateForward();
     }
 }
 
@@ -1297,6 +1325,101 @@ void MainWindow::toggleShowWhitespace()
     if (textArea) {
         textArea->setShowWhitespace(!textArea->showWhitespace());
     }
+}
+
+void MainWindow::toggleShowIndentGuides()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->setShowIndentGuides(!textArea->showIndentGuides());
+    }
+}
+
+void MainWindow::navigateBack()
+{
+    if (!navigationHistory || !navigationHistory->canGoBack()) {
+        return;
+    }
+    
+    NavigationLocation loc = navigationHistory->goBack();
+    if (loc.isValid()) {
+        // Open file if different
+        openFileAndAddToNewTab(loc.filePath);
+        
+        // Move cursor to the saved position
+        TextArea* textArea = getCurrentTextArea();
+        if (textArea) {
+            QTextCursor cursor = textArea->textCursor();
+            cursor.movePosition(QTextCursor::Start);
+            cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, loc.line - 1);
+            cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, loc.column);
+            textArea->setTextCursor(cursor);
+            textArea->centerCursor();
+        }
+    }
+}
+
+void MainWindow::navigateForward()
+{
+    if (!navigationHistory || !navigationHistory->canGoForward()) {
+        return;
+    }
+    
+    NavigationLocation loc = navigationHistory->goForward();
+    if (loc.isValid()) {
+        // Open file if different
+        openFileAndAddToNewTab(loc.filePath);
+        
+        // Move cursor to the saved position
+        TextArea* textArea = getCurrentTextArea();
+        if (textArea) {
+            QTextCursor cursor = textArea->textCursor();
+            cursor.movePosition(QTextCursor::Start);
+            cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, loc.line - 1);
+            cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, loc.column);
+            textArea->setTextCursor(cursor);
+            textArea->centerCursor();
+        }
+    }
+}
+
+void MainWindow::recordNavigationLocation()
+{
+    if (!navigationHistory) {
+        return;
+    }
+    
+    TextArea* textArea = getCurrentTextArea();
+    if (!textArea) {
+        return;
+    }
+    
+    // Get current file path
+    auto tabIndex = ui->tabWidget->currentIndex();
+    QString filePath = ui->tabWidget->getFilePath(tabIndex);
+    if (filePath.isEmpty()) {
+        return;
+    }
+    
+    // Get cursor position
+    QTextCursor cursor = textArea->textCursor();
+    NavigationLocation loc;
+    loc.filePath = filePath;
+    loc.line = cursor.blockNumber() + 1;
+    loc.column = cursor.positionInBlock();
+    
+    navigationHistory->recordLocationIfSignificant(loc);
+}
+
+void MainWindow::setupNavigationHistory()
+{
+    navigationHistory = new NavigationHistory(this);
+}
+
+void MainWindow::setupAutoSave()
+{
+    autoSaveManager = new AutoSaveManager(this, this);
+    // Auto-save is disabled by default, can be enabled via settings
 }
 
 void MainWindow::updateProblemsStatusLabel(int errors, int warnings, int infos)

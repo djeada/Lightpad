@@ -81,6 +81,14 @@ public:
     void setShowWhitespace(bool show);
     bool showWhitespace() const;
 
+    // Indent guides
+    void setShowIndentGuides(bool show);
+    bool showIndentGuides() const;
+
+    // Git diff gutter
+    void setGitDiffLines(const QList<QPair<int, int>>& diffLines);  // line number, type (0=add, 1=modify, 2=delete)
+    void clearGitDiffLines();
+
 protected:
     void resizeEvent(QResizeEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
@@ -132,6 +140,12 @@ private:
 
     // Whitespace visualization
     bool m_showWhitespace;
+
+    // Indent guides
+    bool m_showIndentGuides;
+
+    // Git diff gutter
+    QList<QPair<int, int>> m_gitDiffLines;  // line number, type (0=add, 1=modify, 2=delete)
 
     void setupTextArea();
     void setTabWidgetIcon(QIcon icon);

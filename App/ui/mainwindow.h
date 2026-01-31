@@ -131,6 +131,12 @@ private:
     class BreadcrumbWidget* breadcrumbWidget;
     class RecentFilesManager* recentFilesManager;
     
+    // Navigation history
+    class NavigationHistory* navigationHistory;
+    
+    // Auto-save
+    class AutoSaveManager* autoSaveManager;
+    
     // Split editor views
     SplitEditorContainer* m_splitEditorContainer;
     
@@ -158,6 +164,12 @@ private:
     void setupBreadcrumb();
     void updateBreadcrumb(const QString& filePath);
     void toggleShowWhitespace();
+    void toggleShowIndentGuides();
+    void navigateBack();
+    void navigateForward();
+    void recordNavigationLocation();
+    void setupNavigationHistory();
+    void setupAutoSave();
     void updateProblemsStatusLabel(int errors, int warnings, int infos);
     void setMainWindowTitle(QString title);
     void setFilePathAsTabText(QString filePath);

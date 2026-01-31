@@ -204,6 +204,7 @@ TextArea::TextArea(QWidget* parent)
     , prevWordCount(1)
     , m_columnSelectionActive(false)
     , m_showWhitespace(false)
+    , m_showIndentGuides(false)
 {
     initializeIconCache();
     setupTextArea();
@@ -239,6 +240,7 @@ TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent)
     , prevWordCount(1)
     , m_columnSelectionActive(false)
     , m_showWhitespace(false)
+    , m_showIndentGuides(false)
 {
     initializeIconCache();
     setupTextArea();
@@ -922,12 +924,33 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event)
     const int fontHeight = QFontMetrics(mainFont).height();
     color = mainWindow ? mainWindow->getTheme().foregroundColor : lineNumberAreaPenColor;
 
+    // Prepare a map for quick lookup of git diff lines
+    QMap<int, int> diffLineMap;  // line -> type (0=add, 1=modify, 2=delete)
+    for (const auto& diffLine : m_gitDiffLines) {
+        diffLineMap[diffLine.first] = diffLine.second;
+    }
+
     while (block.isValid() && top <= event->rect().bottom()) {
 
         if (block.isVisible() && bottom >= event->rect().top()) {
             auto number = QString::number(blockNumber);
             painter.setPen(color);
             painter.drawText(0, top, lineNumberArea->width(), fontHeight, Qt::AlignCenter, number);
+            
+            // Draw git diff indicator on the left edge
+            int lineNum = blockNumber + 1;  // 1-based line numbers
+            if (diffLineMap.contains(lineNum)) {
+                int diffType = diffLineMap[lineNum];
+                QColor diffColor;
+                if (diffType == 0) {
+                    diffColor = QColor(76, 175, 80);  // Green for added lines
+                } else if (diffType == 1) {
+                    diffColor = QColor(33, 150, 243);  // Blue for modified lines
+                } else {
+                    diffColor = QColor(244, 67, 54);  // Red for deleted lines
+                }
+                painter.fillRect(0, top, 3, bottom - top, diffColor);
+            }
         }
 
         block = block.next();
@@ -1416,6 +1439,51 @@ void TextArea::paintEvent(QPaintEvent* event)
 {
     QPlainTextEdit::paintEvent(event);
     
+    // Draw indent guides if enabled
+    if (m_showIndentGuides) {
+        QPainter painter(viewport());
+        painter.setPen(QPen(QColor(128, 128, 128, 60), 1, Qt::DotLine));
+        
+        QFontMetrics fm(mainFont);
+        int spaceWidth = fm.horizontalAdvance(' ');
+        int indentWidth = spaceWidth * 4;  // 4-space indent guides
+        
+        QTextBlock block = firstVisibleBlock();
+        int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+        int bottom = top + qRound(blockBoundingRect(block).height());
+        
+        while (block.isValid() && top <= event->rect().bottom()) {
+            if (block.isVisible() && bottom >= event->rect().top()) {
+                QString text = block.text();
+                
+                // Count leading whitespace to determine indent level
+                int indent = 0;
+                for (QChar c : text) {
+                    if (c == ' ') indent++;
+                    else if (c == '\t') indent += 4;
+                    else break;
+                }
+                
+                // Get the x position of the start of this block
+                QTextCursor blockStart(block);
+                blockStart.setPosition(block.position());
+                QRect startRect = cursorRect(blockStart);
+                int xOffset = startRect.left();
+                
+                // Draw vertical lines at each indent level
+                int numGuides = indent / 4;
+                for (int i = 1; i <= numGuides; ++i) {
+                    int x = xOffset + (i * indentWidth) - indentWidth;
+                    painter.drawLine(x, top, x, bottom);
+                }
+            }
+            
+            block = block.next();
+            top = bottom;
+            bottom = top + qRound(blockBoundingRect(block).height());
+        }
+    }
+    
     // Draw whitespace characters if enabled
     if (m_showWhitespace) {
         QPainter painter(viewport());
@@ -1835,6 +1903,39 @@ void TextArea::setShowWhitespace(bool show)
 bool TextArea::showWhitespace() const
 {
     return m_showWhitespace;
+}
+
+// ============================================================================
+// Indent Guides Support
+// ============================================================================
+
+void TextArea::setShowIndentGuides(bool show)
+{
+    if (m_showIndentGuides != show) {
+        m_showIndentGuides = show;
+        viewport()->update();
+    }
+}
+
+bool TextArea::showIndentGuides() const
+{
+    return m_showIndentGuides;
+}
+
+// ============================================================================
+// Git Diff Gutter Support
+// ============================================================================
+
+void TextArea::setGitDiffLines(const QList<QPair<int, int>>& diffLines)
+{
+    m_gitDiffLines = diffLines;
+    lineNumberArea->update();
+}
+
+void TextArea::clearGitDiffLines()
+{
+    m_gitDiffLines.clear();
+    lineNumberArea->update();
 }
 
 // ============================================================================
