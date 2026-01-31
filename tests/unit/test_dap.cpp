@@ -43,6 +43,7 @@ private slots:
     void testBuiltinAdapters();
     void testAdapterLookupByFile();
     void testAdapterLookupByLanguage();
+    void testGdbAdapterIntegration();
     
     // DebugConfiguration tests
     void testDebugConfigurationToJson();
@@ -370,6 +371,66 @@ void TestDap::testAdapterLookupByLanguage()
     
     QList<std::shared_ptr<IDebugAdapter>> cppAdapters = reg.adaptersForLanguage("cpp");
     QVERIFY(!cppAdapters.isEmpty());
+}
+
+void TestDap::testGdbAdapterIntegration()
+{
+    DebugAdapterRegistry& reg = DebugAdapterRegistry::instance();
+    
+    // Get GDB adapter
+    auto gdbAdapter = reg.adapter("cppdbg-gdb");
+    QVERIFY(gdbAdapter != nullptr);
+    
+    // Verify configuration
+    DebugAdapterConfig cfg = gdbAdapter->config();
+    QCOMPARE(cfg.id, QString("cppdbg-gdb"));
+    QCOMPARE(cfg.name, QString("C/C++ (GDB)"));
+    QCOMPARE(cfg.type, QString("cppdbg"));
+    
+    // Should support C, C++ and other languages
+    QVERIFY(cfg.languages.contains("cpp"));
+    QVERIFY(cfg.languages.contains("c"));
+    
+    // Should support common file extensions
+    QVERIFY(cfg.extensions.contains(".cpp"));
+    QVERIFY(cfg.extensions.contains(".c"));
+    QVERIFY(cfg.extensions.contains(".h"));
+    
+    // Should have capabilities
+    QVERIFY(cfg.supportsFunctionBreakpoints);
+    QVERIFY(cfg.supportsConditionalBreakpoints);
+    QVERIFY(cfg.supportsHitConditionalBreakpoints);
+    
+    // Test launch config generation
+    QJsonObject launchConfig = gdbAdapter->createLaunchConfig("/path/to/program", "/path/to");
+    QCOMPARE(launchConfig["type"].toString(), QString("cppdbg"));
+    QCOMPARE(launchConfig["request"].toString(), QString("launch"));
+    QCOMPARE(launchConfig["program"].toString(), QString("/path/to/program"));
+    QCOMPARE(launchConfig["MIMode"].toString(), QString("gdb"));
+    QVERIFY(launchConfig.contains("miDebuggerPath"));
+    QVERIFY(launchConfig.contains("setupCommands"));
+    
+    // Test attach config generation
+    QJsonObject attachConfig = gdbAdapter->createAttachConfig(12345, "", 0);
+    QCOMPARE(attachConfig["type"].toString(), QString("cppdbg"));
+    QCOMPARE(attachConfig["request"].toString(), QString("attach"));
+    QCOMPARE(attachConfig["processId"].toString(), QString("12345"));
+    
+    // Test remote attach config
+    QJsonObject remoteConfig = gdbAdapter->createAttachConfig(0, "192.168.1.100", 1234);
+    QCOMPARE(remoteConfig["type"].toString(), QString("cppdbg"));
+    QVERIFY(remoteConfig.contains("miDebuggerServerAddress") || remoteConfig.contains("setupCommands"));
+    
+    // Status message should provide useful information
+    QString status = gdbAdapter->statusMessage();
+    QVERIFY(!status.isEmpty());
+    
+    // Documentation URL should be valid
+    QCOMPARE(gdbAdapter->documentationUrl(), QString("https://sourceware.org/gdb/current/onlinedocs/gdb/"));
+    
+    // Install command should be provided
+    QString installCmd = gdbAdapter->installCommand();
+    QVERIFY(!installCmd.isEmpty());
 }
 
 // =============================================================================
