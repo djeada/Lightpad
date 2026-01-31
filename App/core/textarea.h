@@ -77,6 +77,10 @@ public:
     void toggleFoldAtLine(int line);
     void foldToLevel(int level);
 
+    // Whitespace visualization
+    void setShowWhitespace(bool show);
+    bool showWhitespace() const;
+
 protected:
     void resizeEvent(QResizeEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
@@ -125,6 +129,9 @@ private:
 
     // Folding state
     QSet<int> m_foldedBlocks;
+
+    // Whitespace visualization
+    bool m_showWhitespace;
 
     void setupTextArea();
     void setTabWidgetIcon(QIcon icon);

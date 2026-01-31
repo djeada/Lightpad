@@ -30,8 +30,11 @@
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
 #include "dialogs/filequickopen.h"
+#include "dialogs/recentfilesdialog.h"
 #include "panels/terminaltabwidget.h"
+#include "panels/breadcrumbwidget.h"
 #include "../core/textarea.h"
+#include "../core/recentfilesmanager.h"
 #include "../run_templates/runtemplatemanager.h"
 #include "../format_templates/formattemplatemanager.h"
 #include "../syntax/syntaxpluginregistry.h"
@@ -65,7 +68,10 @@ MainWindow::MainWindow(QWidget* parent)
     , goToLineDialog(nullptr)
     , goToSymbolDialog(nullptr)
     , fileQuickOpen(nullptr)
+    , recentFilesDialog(nullptr)
     , problemsStatusLabel(nullptr)
+    , breadcrumbWidget(nullptr)
+    , recentFilesManager(nullptr)
     , m_splitEditorContainer(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
@@ -73,6 +79,9 @@ MainWindow::MainWindow(QWidget* parent)
     showMaximized();
     ui->tabWidget->setMainWindow(this);
     ui->magicButton->setIconSize(0.8 * ui->magicButton->size());
+    
+    // Initialize recent files manager
+    recentFilesManager = new RecentFilesManager(this);
     
     // Initialize new completion system
     setupCompletionSystem();
@@ -96,6 +105,8 @@ MainWindow::MainWindow(QWidget* parent)
     setupGoToLineDialog();
     setupGoToSymbolDialog();
     setupFileQuickOpen();
+    setupRecentFilesDialog();
+    setupBreadcrumb();
     loadSettings();
     setWindowTitle("LightPad");
 }
@@ -478,6 +489,18 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
              keyEvent->key() == Qt::Key_P) {
         showFileQuickOpen();
     }
+    
+    // Recent Files: Ctrl+E
+    else if (keyEvent->modifiers() == Qt::ControlModifier && 
+             keyEvent->key() == Qt::Key_E) {
+        showRecentFilesDialog();
+    }
+    
+    // Toggle Whitespace: Ctrl+Shift+W
+    else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
+             keyEvent->key() == Qt::Key_W) {
+        toggleShowWhitespace();
+    }
 }
 
 int MainWindow::getTabWidth()
@@ -557,6 +580,14 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
 
     if (getCurrentTextArea())
         applyHighlightForFile(filePath);
+    
+    // Track in recent files
+    if (recentFilesManager) {
+        recentFilesManager->addFile(filePath);
+    }
+    
+    // Update breadcrumb
+    updateBreadcrumb(filePath);
 
     ui->tabWidget->currentChanged(ui->tabWidget->currentIndex());
 }
@@ -1208,6 +1239,64 @@ void MainWindow::setupFileQuickOpen()
     connect(fileQuickOpen, &FileQuickOpen::fileSelected, this, [this](const QString& filePath) {
         openFileAndAddToNewTab(filePath);
     });
+}
+
+void MainWindow::showRecentFilesDialog()
+{
+    if (!recentFilesDialog) {
+        setupRecentFilesDialog();
+    }
+    
+    recentFilesDialog->showDialog();
+}
+
+void MainWindow::setupRecentFilesDialog()
+{
+    recentFilesDialog = new RecentFilesDialog(recentFilesManager, this);
+    
+    connect(recentFilesDialog, &RecentFilesDialog::fileSelected, this, [this](const QString& filePath) {
+        openFileAndAddToNewTab(filePath);
+    });
+}
+
+void MainWindow::setupBreadcrumb()
+{
+    breadcrumbWidget = new BreadcrumbWidget(this);
+    
+    // Insert breadcrumb above the tab widget in the layout
+    auto layout = qobject_cast<QVBoxLayout*>(ui->centralwidget->layout());
+    if (layout) {
+        // Insert at position 0 (top)
+        layout->insertWidget(0, breadcrumbWidget);
+    }
+    
+    connect(breadcrumbWidget, &BreadcrumbWidget::pathSegmentClicked, this, [this](const QString& path) {
+        // Open folder or file when breadcrumb segment is clicked
+        QFileInfo fileInfo(path);
+        if (fileInfo.isDir()) {
+            // Could open in file tree, for now just log
+        } else if (fileInfo.isFile()) {
+            openFileAndAddToNewTab(path);
+        }
+    });
+}
+
+void MainWindow::updateBreadcrumb(const QString& filePath)
+{
+    if (breadcrumbWidget) {
+        breadcrumbWidget->setFilePath(filePath);
+        if (!m_projectRootPath.isEmpty()) {
+            breadcrumbWidget->setProjectRoot(m_projectRootPath);
+        }
+    }
+}
+
+void MainWindow::toggleShowWhitespace()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->setShowWhitespace(!textArea->showWhitespace());
+    }
 }
 
 void MainWindow::updateProblemsStatusLabel(int errors, int warnings, int infos)

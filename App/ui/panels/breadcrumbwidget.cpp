@@ -1,0 +1,206 @@
+#include "breadcrumbwidget.h"
+#include <QDir>
+#include <QFileInfo>
+
+BreadcrumbWidget::BreadcrumbWidget(QWidget* parent)
+    : QWidget(parent)
+    , m_layout(nullptr)
+{
+    setupUI();
+}
+
+BreadcrumbWidget::~BreadcrumbWidget()
+{
+}
+
+void BreadcrumbWidget::setupUI()
+{
+    m_layout = new QHBoxLayout(this);
+    m_layout->setContentsMargins(8, 4, 8, 4);
+    m_layout->setSpacing(2);
+
+    setStyleSheet(
+        "BreadcrumbWidget {"
+        "  background: #171c24;"
+        "  border-bottom: 1px solid #2a3241;"
+        "}"
+    );
+
+    // Add stretch to push content to the left
+    m_layout->addStretch();
+}
+
+void BreadcrumbWidget::setFilePath(const QString& filePath)
+{
+    m_filePath = filePath;
+    rebuildBreadcrumbs();
+}
+
+void BreadcrumbWidget::setProjectRoot(const QString& rootPath)
+{
+    m_projectRoot = rootPath;
+    rebuildBreadcrumbs();
+}
+
+void BreadcrumbWidget::clear()
+{
+    m_filePath.clear();
+    
+    // Clear existing widgets
+    for (QPushButton* btn : m_segments) {
+        m_layout->removeWidget(btn);
+        delete btn;
+    }
+    m_segments.clear();
+    
+    for (QLabel* sep : m_separators) {
+        m_layout->removeWidget(sep);
+        delete sep;
+    }
+    m_separators.clear();
+}
+
+void BreadcrumbWidget::rebuildBreadcrumbs()
+{
+    clear();
+    
+    if (m_filePath.isEmpty()) {
+        return;
+    }
+    
+    // Get path relative to project root if available
+    QString displayPath = m_filePath;
+    if (!m_projectRoot.isEmpty() && m_filePath.startsWith(m_projectRoot)) {
+        displayPath = m_filePath.mid(m_projectRoot.length());
+        if (displayPath.startsWith('/') || displayPath.startsWith('\\')) {
+            displayPath = displayPath.mid(1);
+        }
+    }
+    
+    QStringList segments = getPathSegments(displayPath);
+    
+    const QString buttonStyle = 
+        "QPushButton {"
+        "  background: transparent;"
+        "  color: #9aa4b2;"
+        "  border: none;"
+        "  padding: 2px 6px;"
+        "  font-size: 12px;"
+        "}"
+        "QPushButton:hover {"
+        "  color: #e6edf3;"
+        "  background: #2a3241;"
+        "  border-radius: 3px;"
+        "}";
+    
+    const QString separatorStyle = 
+        "QLabel {"
+        "  color: #4a5568;"
+        "  font-size: 12px;"
+        "}";
+    
+    // Remove the stretch temporarily
+    m_layout->removeItem(m_layout->itemAt(m_layout->count() - 1));
+    
+    for (int i = 0; i < segments.size(); ++i) {
+        // Add segment button
+        QPushButton* btn = new QPushButton(segments[i], this);
+        btn->setStyleSheet(buttonStyle);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setProperty("segmentIndex", i);
+        
+        connect(btn, &QPushButton::clicked, this, &BreadcrumbWidget::onSegmentClicked);
+        
+        m_layout->addWidget(btn);
+        m_segments.append(btn);
+        
+        // Add separator (except after last segment)
+        if (i < segments.size() - 1) {
+            QLabel* sep = new QLabel("\u203A", this);  // › (single right-pointing angle quotation mark)
+            sep->setStyleSheet(separatorStyle);
+            m_layout->addWidget(sep);
+            m_separators.append(sep);
+        }
+    }
+    
+    // Highlight the file name (last segment)
+    if (!m_segments.isEmpty()) {
+        m_segments.last()->setStyleSheet(
+            "QPushButton {"
+            "  background: transparent;"
+            "  color: #e6edf3;"
+            "  border: none;"
+            "  padding: 2px 6px;"
+            "  font-size: 12px;"
+            "  font-weight: bold;"
+            "}"
+            "QPushButton:hover {"
+            "  color: #ffffff;"
+            "  background: #2a3241;"
+            "  border-radius: 3px;"
+            "}"
+        );
+    }
+    
+    // Re-add stretch
+    m_layout->addStretch();
+}
+
+QStringList BreadcrumbWidget::getPathSegments(const QString& path) const
+{
+    // Split by / or \ - normalize path separators first
+    QString normalizedPath = path;
+    normalizedPath.replace('\\', '/');
+    return normalizedPath.split('/', Qt::SkipEmptyParts);
+}
+
+QString BreadcrumbWidget::buildPathUpTo(int segmentIndex) const
+{
+    if (m_filePath.isEmpty() || segmentIndex < 0) {
+        return QString();
+    }
+    
+    QString basePath = m_projectRoot.isEmpty() ? QString() : m_projectRoot;
+    
+    // Get path relative to project root
+    QString displayPath = m_filePath;
+    if (!m_projectRoot.isEmpty() && m_filePath.startsWith(m_projectRoot)) {
+        displayPath = m_filePath.mid(m_projectRoot.length());
+        if (displayPath.startsWith('/') || displayPath.startsWith('\\')) {
+            displayPath = displayPath.mid(1);
+        }
+    }
+    
+    QStringList segments = getPathSegments(displayPath);
+    
+    // Build path up to and including the clicked segment
+    QString result = basePath;
+    for (int i = 0; i <= segmentIndex && i < segments.size(); ++i) {
+        if (!result.isEmpty() && !result.endsWith('/') && !result.endsWith('\\')) {
+            result += '/';
+        }
+        result += segments[i];
+    }
+    
+    return result;
+}
+
+void BreadcrumbWidget::onSegmentClicked()
+{
+    QPushButton* btn = qobject_cast<QPushButton*>(sender());
+    if (!btn) {
+        return;
+    }
+    
+    int segmentIndex = btn->property("segmentIndex").toInt();
+    QString path = buildPathUpTo(segmentIndex);
+    
+    if (!path.isEmpty()) {
+        emit pathSegmentClicked(path);
+    }
+}
+
+void BreadcrumbWidget::onDropdownClicked()
+{
+    // Future: Show dropdown menu with sibling files
+}

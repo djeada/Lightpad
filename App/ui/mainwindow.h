@@ -126,7 +126,10 @@ private:
     class GoToLineDialog* goToLineDialog;
     class GoToSymbolDialog* goToSymbolDialog;
     class FileQuickOpen* fileQuickOpen;
+    class RecentFilesDialog* recentFilesDialog;
     class QLabel* problemsStatusLabel;
+    class BreadcrumbWidget* breadcrumbWidget;
+    class RecentFilesManager* recentFilesManager;
     
     // Split editor views
     SplitEditorContainer* m_splitEditorContainer;
@@ -150,6 +153,11 @@ private:
     void setupGoToLineDialog();
     void setupGoToSymbolDialog();
     void setupFileQuickOpen();
+    void showRecentFilesDialog();
+    void setupRecentFilesDialog();
+    void setupBreadcrumb();
+    void updateBreadcrumb(const QString& filePath);
+    void toggleShowWhitespace();
     void updateProblemsStatusLabel(int errors, int warnings, int infos);
     void setMainWindowTitle(QString title);
     void setFilePathAsTabText(QString filePath);

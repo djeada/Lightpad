@@ -507,6 +507,30 @@ target_compile_definitions(test_lspclient PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME LspClientTests COMMAND test_lspclient)
 
+# RecentFilesManager test executable
+add_executable(test_recentfilesmanager
+    unit/test_recentfilesmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/recentfilesmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_recentfilesmanager PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/core
+)
+
+target_link_libraries(test_recentfilesmanager
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_recentfilesmanager PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME RecentFilesManagerTests COMMAND test_recentfilesmanager)
+
 # Minimap test executable
 add_executable(test_minimap
     unit/test_minimap.cpp
@@ -631,6 +655,7 @@ set(TEST_LIST
     GoToLineDialogTests
     GoToSymbolDialogTests
     LspClientTests
+    RecentFilesManagerTests
     MinimapTests
     FindReplacePanelTests
     ImageViewerTests
@@ -657,7 +682,7 @@ set(TEST_TARGETS
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     test_syntaxpluginregistry test_completionproviderregistry test_dap
-    test_gitintegration test_gotolinedialog test_gotosymboldialog test_lspclient test_minimap test_findreplacepanel
+    test_gitintegration test_gotolinedialog test_gotosymboldialog test_lspclient test_recentfilesmanager test_minimap test_findreplacepanel
     test_imageviewer
 )
 

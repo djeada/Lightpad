@@ -203,6 +203,7 @@ TextArea::TextArea(QWidget* parent)
     , matchingBracketsHighlighted(true)
     , prevWordCount(1)
     , m_columnSelectionActive(false)
+    , m_showWhitespace(false)
 {
     initializeIconCache();
     setupTextArea();
@@ -237,6 +238,7 @@ TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent)
     , matchingBracketsHighlighted(settings.matchingBracketsHighlighted)
     , prevWordCount(1)
     , m_columnSelectionActive(false)
+    , m_showWhitespace(false)
 {
     initializeIconCache();
     setupTextArea();
@@ -1414,6 +1416,47 @@ void TextArea::paintEvent(QPaintEvent* event)
 {
     QPlainTextEdit::paintEvent(event);
     
+    // Draw whitespace characters if enabled
+    if (m_showWhitespace) {
+        QPainter painter(viewport());
+        painter.setPen(QPen(QColor(128, 128, 128, 80), 1));
+        
+        QTextBlock block = firstVisibleBlock();
+        int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+        int bottom = top + qRound(blockBoundingRect(block).height());
+        
+        while (block.isValid() && top <= event->rect().bottom()) {
+            if (block.isVisible() && bottom >= event->rect().top()) {
+                QString text = block.text();
+                QTextCursor cursor(block);
+                
+                for (int i = 0; i < text.length(); ++i) {
+                    cursor.setPosition(block.position() + i);
+                    QRect charRect = cursorRect(cursor);
+                    
+                    if (text[i] == ' ') {
+                        // Draw a middle dot for spaces
+                        int centerX = charRect.left() + 3;
+                        int centerY = charRect.center().y();
+                        painter.drawPoint(centerX, centerY);
+                    } else if (text[i] == '\t') {
+                        // Draw an arrow for tabs
+                        int y = charRect.center().y();
+                        int x1 = charRect.left() + 2;
+                        int x2 = charRect.left() + 10;
+                        painter.drawLine(x1, y, x2, y);
+                        painter.drawLine(x2 - 3, y - 3, x2, y);
+                        painter.drawLine(x2 - 3, y + 3, x2, y);
+                    }
+                }
+            }
+            
+            block = block.next();
+            top = bottom;
+            bottom = top + qRound(blockBoundingRect(block).height());
+        }
+    }
+    
     // Draw extra cursors as vertical lines
     if (!m_extraCursors.isEmpty()) {
         QPainter painter(viewport());
@@ -1766,6 +1809,23 @@ void TextArea::foldToLevel(int level)
     
     viewport()->update();
     document()->markContentsDirty(0, document()->characterCount());
+}
+
+// ============================================================================
+// Whitespace Visualization
+// ============================================================================
+
+void TextArea::setShowWhitespace(bool show)
+{
+    if (m_showWhitespace != show) {
+        m_showWhitespace = show;
+        viewport()->update();
+    }
+}
+
+bool TextArea::showWhitespace() const
+{
+    return m_showWhitespace;
 }
 
 // ============================================================================

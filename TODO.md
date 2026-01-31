@@ -148,8 +148,8 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [ ] Search in files with filters (include/exclude)
 - [ ] Regex search with groups
 - [ ] Search and replace in files
-- [ ] Recent files list
-- [ ] Breadcrumb navigation
+- [x] Recent files list
+- [x] Breadcrumb navigation
 - [ ] Go to definition in peek window
 - [ ] Go back/forward navigation stack
 
@@ -254,7 +254,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 ### 18. Editor Enhancements
 - [ ] Soft wrap toggle
 - [ ] Word wrap at column
-- [ ] Show whitespace characters
+- [x] Show whitespace characters
 - [ ] Show indent guides
 - [ ] Rainbow brackets
 - [ ] Bracket pair colorization
