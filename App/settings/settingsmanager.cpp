@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonValue>
 #include <QStandardPaths>
@@ -50,6 +51,10 @@ void SettingsManager::initializeDefaults()
 
     // Settings version for migration
     m_defaults["settingsVersion"] = SETTINGS_VERSION;
+    
+    // Session state defaults
+    m_defaults["lastProjectPath"] = "";
+    m_defaults["openTabs"] = QJsonArray();
 
     // Initialize settings with defaults
     m_settings = m_defaults;

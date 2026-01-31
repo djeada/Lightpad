@@ -146,12 +146,41 @@ void MainWindow::loadSettings()
 
     updateAllTextAreas(&TextArea::loadSettings, settings);
     setTheme(settings.theme);
+    
+    // Restore last session: project path and open tabs
+    QString lastProject = globalSettings.getValue("lastProjectPath", "").toString();
+    if (!lastProject.isEmpty() && QDir(lastProject).exists()) {
+        setProjectRootPath(lastProject);
+        QDir::setCurrent(lastProject);
+    }
+    
+    QJsonArray openTabs = globalSettings.getValue("openTabs").toJsonArray();
+    for (const QJsonValue& val : openTabs) {
+        QString filePath = val.toString();
+        if (!filePath.isEmpty() && QFileInfo(filePath).exists()) {
+            openFileAndAddToNewTab(filePath);
+        }
+    }
 }
 
 void MainWindow::saveSettings()
 {
     LOG_DEBUG(QString("Saving settings, showLineNumberArea: %1").arg(settings.showLineNumberArea));
     settings.saveSettings(settingsPath);
+    
+    // Save session state: project path and open tabs
+    SettingsManager& globalSettings = SettingsManager::instance();
+    globalSettings.setValue("lastProjectPath", m_projectRootPath);
+    
+    QJsonArray openTabs;
+    for (int i = 0; i < ui->tabWidget->count(); i++) {
+        QString filePath = ui->tabWidget->getFilePath(i);
+        if (!filePath.isEmpty()) {
+            openTabs.append(filePath);
+        }
+    }
+    globalSettings.setValue("openTabs", openTabs);
+    globalSettings.saveSettings();
 }
 
 void MainWindow::applyLanguageOverride(const QString& extension, const QString& displayName)
