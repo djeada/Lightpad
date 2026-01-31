@@ -525,26 +525,6 @@ bool GitIntegration::deleteBranch(const QString& branchName, bool force)
     return success;
 }
 
-bool GitIntegration::mergeBranch(const QString& branchName)
-{
-    if (!m_isValid) {
-        emit errorOccurred("Not in a git repository");
-        return false;
-    }
-    
-    bool success;
-    executeGitCommand({"merge", branchName}, &success);
-    
-    if (success) {
-        emit operationCompleted("Merged branch: " + branchName);
-        emit statusChanged();
-    } else {
-        emit errorOccurred("Failed to merge branch: " + branchName);
-    }
-    
-    return success;
-}
-
 QString GitIntegration::getFileDiff(const QString& filePath) const
 {
     if (!m_isValid) {
