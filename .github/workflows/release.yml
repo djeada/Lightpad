@@ -1,0 +1,235 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            qt_arch: gcc_64
+          - os: macos-latest
+            qt_arch: clang_64
+          - os: windows-latest
+            qt_arch: win64_msvc2019_64
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_VERSION: 5.15.2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt (Linux/macOS)
+        if: runner.os != 'Windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          cache: true
+          version: ${{ env.QT_VERSION }}
+          arch: ${{ matrix.qt_arch }}
+
+      - name: Setup Python (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt (Windows fast path)
+        if: runner.os == 'Windows'
+        id: fastqt
+        continue-on-error: true
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          arch: ${{ matrix.qt_arch }}
+          cache: true
+          aqtversion: '==3.3.0'
+          tools-only: false
+
+      - name: Install Qt (Windows fallback via aqt)
+        if: runner.os == 'Windows' && steps.fastqt.outcome != 'success'
+        shell: pwsh
+        run: |
+          $qtRoot = Join-Path $env:GITHUB_WORKSPACE "Qt"
+          $qtDir = Join-Path $qtRoot "${{ env.QT_VERSION }}\${{ matrix.qt_arch }}"
+          python -m pip install --upgrade pip
+          python -m pip install "aqtinstall==3.3.0" "py7zr==1.0.*"
+          New-Item -ItemType Directory -Force -Path $qtDir | Out-Null
+          python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_arch }} --outputdir "$qtRoot"
+          if (!(Test-Path "$qtDir\lib\cmake\Qt5\Qt5Config.cmake")) {
+            Write-Error "Qt5Config.cmake not found in $qtDir after fallback install."
+            exit 1
+          }
+          echo "QT_PREFIX=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "$qtDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Normalize Qt env (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $candidates = @()
+          if ($env:QT_PREFIX) { $candidates += $env:QT_PREFIX }
+          if ($env:Qt5_DIR) { $candidates += $env:Qt5_DIR }
+          if ($env:QT_ROOT_DIR) { $candidates += $env:QT_ROOT_DIR }
+          $candidates += (Join-Path $env:GITHUB_WORKSPACE "Qt\${{ env.QT_VERSION }}\${{ matrix.qt_arch }}")
+          $qtRoot = $null
+          foreach ($c in $candidates | Select-Object -Unique) {
+            if (-not $c) { continue }
+            if (Test-Path (Join-Path $c 'lib\cmake\Qt5\Qt5Config.cmake')) {
+              $qtRoot = $c
+              break
+            }
+            if (Test-Path (Join-Path $c 'Qt5Config.cmake')) {
+              $qtRoot = Split-Path $c -Parent
+              break
+            }
+          }
+          if (-not $qtRoot) {
+            Write-Error "Could not locate Qt5. Checked: $($candidates -join ', ')"
+            exit 1
+          }
+          echo "QT_PREFIX=$qtRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "$qtRoot\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "QT_PREFIX=$qtRoot"
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$env:QT_PREFIX"
+
+      - name: Configure CMake (non-Windows)
+        if: runner.os != 'Windows'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+
+      - name: Build
+        run: cmake --build build --config Release
+        shell: bash
+
+      - name: Install Linux packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y patchelf desktop-file-utils
+        shell: bash
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          EXE_PATH="build/App/Release/Lightpad.exe"
+          if [[ ! -f "$EXE_PATH" ]]; then
+            EXE_PATH="build/Release/Lightpad.exe"
+          fi
+          if [[ ! -f "$EXE_PATH" ]]; then
+            EXE_PATH="build/App/Lightpad.exe"
+          fi
+          if [[ ! -f "$EXE_PATH" ]]; then
+            EXE_PATH="build/Lightpad.exe"
+          fi
+          if [[ ! -f "$EXE_PATH" ]]; then
+            echo "Lightpad.exe not found in build output"
+            exit 1
+          fi
+          cp "$EXE_PATH" dist/Lightpad.exe
+          windeployqt --release --compiler-runtime dist/Lightpad.exe
+          powershell -Command "Compress-Archive -Path dist\\* -DestinationPath Lightpad-${{ runner.os }}.zip"
+          echo "ASSET=Lightpad-${RUNNER_OS}.zip" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          APP_PATH="build/App/Lightpad.app"
+          if [[ ! -d "$APP_PATH" ]]; then
+            APP_PATH="build/Lightpad.app"
+          fi
+          if [[ ! -d "$APP_PATH" ]]; then
+            APP_PATH="build/Release/Lightpad.app"
+          fi
+          if [[ ! -d "$APP_PATH" ]]; then
+            APP_PATH="build/App/Release/Lightpad.app"
+          fi
+          if [[ ! -d "$APP_PATH" ]]; then
+            echo "Lightpad.app not found in build output"
+            exit 1
+          fi
+          macdeployqt "$APP_PATH" -verbose=1 -always-overwrite
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "Lightpad-${RUNNER_OS}.zip"
+          echo "ASSET=Lightpad-${RUNNER_OS}.zip" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          mkdir -p dist/AppDir/usr/bin
+          BIN_PATH="build/App/Lightpad"
+          if [[ ! -f "$BIN_PATH" ]]; then
+            BIN_PATH="build/Lightpad"
+          fi
+          if [[ ! -f "$BIN_PATH" ]]; then
+            echo "Lightpad binary not found in build output"
+            exit 1
+          fi
+          cp "$BIN_PATH" dist/AppDir/usr/bin/Lightpad
+          cp App/resources/icons/app.png dist/AppDir/Lightpad.png
+          cat > dist/AppDir/Lightpad.desktop <<'DESKTOP'
+          [Desktop Entry]
+          Type=Application
+          Name=Lightpad
+          Exec=Lightpad
+          Icon=Lightpad
+          Categories=Development;TextEditor;
+          DESKTOP
+          curl -L -o dist/linuxdeployqt.AppImage https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+          chmod +x dist/linuxdeployqt.AppImage
+          QMAKE_BIN="$(command -v qmake || command -v qmake-qt5 || command -v qmake6)"
+          if [[ -z "${QMAKE_BIN}" ]]; then
+            echo "qmake not found in PATH"
+            exit 1
+          fi
+          cd dist
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          ./linuxdeployqt.AppImage AppDir/Lightpad.desktop -qmake="$QMAKE_BIN" -appimage -verbose=2
+          APPIMAGE_NAME="$(ls -1 *.AppImage | grep -v '^linuxdeployqt' | head -n 1)"
+          mv "$APPIMAGE_NAME" "Lightpad-${RUNNER_OS}.AppImage"
+          echo "ASSET=dist/Lightpad-${RUNNER_OS}.AppImage" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lightpad-${{ runner.os }}
+          path: ${{ env.ASSET }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4.1.3
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

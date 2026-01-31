@@ -174,6 +174,10 @@ add_executable(Lightpad
     ${project_sources}
     ${project_resources})
 
+if(APPLE)
+  set_target_properties(Lightpad PROPERTIES MACOSX_BUNDLE TRUE)
+endif()
+
 target_link_libraries(Lightpad 
     PRIVATE 
     Qt5::Core
