@@ -62,6 +62,16 @@ struct GitBranchInfo {
 };
 
 /**
+ * @brief Git stash entry information
+ */
+struct GitStashEntry {
+    int index;           ///< The stash position (0 = most recent)
+    QString message;     ///< The stash description/commit message
+    QString branch;      ///< The branch the stash was created from
+    QString commitHash;  ///< The commit hash of the stash entry
+};
+
+/**
  * @brief Main Git integration class for Lightpad
  * 
  * Provides functionality to interact with Git repositories including
@@ -155,6 +165,13 @@ public:
     bool deleteBranch(const QString& branchName, bool force = false);
 
     /**
+     * @brief Merge a branch into the current branch
+     * @param branchName The branch to merge
+     * @return true if merge was successful
+     */
+    bool mergeBranch(const QString& branchName);
+
+    /**
      * @brief Get the diff output for a file
      */
     QString getFileDiff(const QString& filePath) const;
@@ -163,6 +180,81 @@ public:
      * @brief Discard changes in a file (restore to HEAD)
      */
     bool discardChanges(const QString& filePath);
+
+    // ==================== Remote Operations ====================
+
+    /**
+     * @brief Fetch from remote repository
+     * @param remote The remote name (defaults to "origin")
+     * @return true if fetch was successful
+     */
+    bool fetch(const QString& remote = "origin");
+
+    /**
+     * @brief Pull from remote repository
+     * @param remote The remote name (defaults to "origin")
+     * @param branch The branch to pull (defaults to current branch)
+     * @return true if pull was successful
+     */
+    bool pull(const QString& remote = "origin", const QString& branch = "");
+
+    /**
+     * @brief Push to remote repository
+     * @param remote The remote name (defaults to "origin")
+     * @param branch The branch to push (defaults to current branch)
+     * @param setUpstream Set upstream tracking reference
+     * @return true if push was successful
+     */
+    bool push(const QString& remote = "origin", const QString& branch = "", bool setUpstream = false);
+
+    /**
+     * @brief Get list of configured remotes
+     * @return List of remote names
+     */
+    QStringList getRemotes() const;
+
+    // ==================== Stash Operations ====================
+
+    /**
+     * @brief Stash current changes
+     * @param message Optional stash message
+     * @param includeUntracked Include untracked files in stash
+     * @return true if stash was successful
+     */
+    bool stash(const QString& message = "", bool includeUntracked = false);
+
+    /**
+     * @brief Pop the most recent stash
+     * @param index Stash index to pop (default 0 for most recent)
+     * @return true if pop was successful
+     */
+    bool stashPop(int index = 0);
+
+    /**
+     * @brief Apply a stash without removing it
+     * @param index Stash index to apply
+     * @return true if apply was successful
+     */
+    bool stashApply(int index = 0);
+
+    /**
+     * @brief Drop a stash entry
+     * @param index Stash index to drop
+     * @return true if drop was successful
+     */
+    bool stashDrop(int index = 0);
+
+    /**
+     * @brief List all stash entries
+     * @return List of stash entries
+     */
+    QList<GitStashEntry> stashList() const;
+
+    /**
+     * @brief Clear all stash entries
+     * @return true if clear was successful
+     */
+    bool stashClear();
 
     /**
      * @brief Refresh the repository status

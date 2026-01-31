@@ -4,6 +4,7 @@
 #include "textarea.h"
 #include "../filetree/filedirtreemodel.h"
 #include "../filetree/filedirtreecontroller.h"
+#include "../filetree/gitfilesystemmodel.h"
 
 #include <QFileSystemModel>
 #include <QTreeView>
@@ -11,6 +12,7 @@
 
 class LightpadPage;
 class Minimap;
+class GitIntegration;
 
 class LightpadTreeView : public QTreeView {
 
@@ -70,12 +72,28 @@ public:
      */
     QString getAssignedTemplateId() const;
 
+    /**
+     * @brief Set the git integration instance for displaying git status
+     */
+    void setGitIntegration(GitIntegration* git);
+
+    /**
+     * @brief Enable or disable git status display in file tree
+     */
+    void setGitStatusEnabled(bool enabled);
+
+    /**
+     * @brief Refresh git status display
+     */
+    void refreshGitStatus();
+
 private:
     MainWindow* mainWindow;
     QTreeView* treeView;
     TextArea* textArea;
     Minimap* minimap;
-    QFileSystemModel* model;
+    GitFileSystemModel* model;
+    GitIntegration* m_gitIntegration;
     QString filePath;
 };
 

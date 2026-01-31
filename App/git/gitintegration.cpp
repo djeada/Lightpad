@@ -523,6 +523,26 @@ bool GitIntegration::deleteBranch(const QString& branchName, bool force)
     return success;
 }
 
+bool GitIntegration::mergeBranch(const QString& branchName)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"merge", branchName}, &success);
+    
+    if (success) {
+        emit operationCompleted("Merged branch: " + branchName);
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to merge branch: " + branchName);
+    }
+    
+    return success;
+}
+
 QString GitIntegration::getFileDiff(const QString& filePath) const
 {
     if (!m_isValid) {
@@ -578,4 +598,257 @@ void GitIntegration::refresh()
     
     updateCurrentBranch();
     emit statusChanged();
+}
+
+// ==================== Remote Operations ====================
+
+bool GitIntegration::fetch(const QString& remote)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"fetch", remote}, &success);
+    
+    if (success) {
+        emit operationCompleted("Fetched from: " + remote);
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to fetch from: " + remote);
+    }
+    
+    return success;
+}
+
+bool GitIntegration::pull(const QString& remote, const QString& branch)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    QStringList args = {"pull", remote};
+    if (!branch.isEmpty()) {
+        args << branch;
+    }
+    
+    executeGitCommand(args, &success);
+    
+    if (success) {
+        emit operationCompleted("Pulled from: " + remote);
+        updateCurrentBranch();
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to pull from: " + remote);
+    }
+    
+    return success;
+}
+
+bool GitIntegration::push(const QString& remote, const QString& branch, bool setUpstream)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    QStringList args = {"push"};
+    
+    if (setUpstream) {
+        args << "-u";
+    }
+    
+    args << remote;
+    
+    if (!branch.isEmpty()) {
+        args << branch;
+    }
+    
+    executeGitCommand(args, &success);
+    
+    if (success) {
+        emit operationCompleted("Pushed to: " + remote);
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to push to: " + remote);
+    }
+    
+    return success;
+}
+
+QStringList GitIntegration::getRemotes() const
+{
+    if (!m_isValid) {
+        return QStringList();
+    }
+    
+    bool success;
+    QString output = executeGitCommand({"remote"}, &success);
+    
+    if (!success) {
+        return QStringList();
+    }
+    
+    return output.split('\n', Qt::SkipEmptyParts);
+}
+
+// ==================== Stash Operations ====================
+
+bool GitIntegration::stash(const QString& message, bool includeUntracked)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    QStringList args = {"stash", "push"};
+    
+    if (includeUntracked) {
+        args << "-u";
+    }
+    
+    if (!message.isEmpty()) {
+        args << "-m" << message;
+    }
+    
+    executeGitCommand(args, &success);
+    
+    if (success) {
+        emit operationCompleted("Changes stashed");
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to stash changes");
+    }
+    
+    return success;
+}
+
+bool GitIntegration::stashPop(int index)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    QString stashRef = QString("stash@{%1}").arg(index);
+    executeGitCommand({"stash", "pop", stashRef}, &success);
+    
+    if (success) {
+        emit operationCompleted("Stash popped");
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to pop stash");
+    }
+    
+    return success;
+}
+
+bool GitIntegration::stashApply(int index)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    QString stashRef = QString("stash@{%1}").arg(index);
+    executeGitCommand({"stash", "apply", stashRef}, &success);
+    
+    if (success) {
+        emit operationCompleted("Stash applied");
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to apply stash");
+    }
+    
+    return success;
+}
+
+bool GitIntegration::stashDrop(int index)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    QString stashRef = QString("stash@{%1}").arg(index);
+    executeGitCommand({"stash", "drop", stashRef}, &success);
+    
+    if (success) {
+        emit operationCompleted("Stash dropped");
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to drop stash");
+    }
+    
+    return success;
+}
+
+QList<GitStashEntry> GitIntegration::stashList() const
+{
+    QList<GitStashEntry> result;
+    
+    if (!m_isValid) {
+        return result;
+    }
+    
+    bool success;
+    QString output = executeGitCommand({"stash", "list", "--format=%gd|%s"}, &success);
+    
+    if (!success || output.isEmpty()) {
+        return result;
+    }
+    
+    QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+    
+    for (const QString& line : lines) {
+        GitStashEntry entry;
+        
+        // Parse format: "stash@{N}|message"
+        int pipePos = line.indexOf('|');
+        if (pipePos == -1) {
+            continue;
+        }
+        
+        QString stashRef = line.left(pipePos);
+        entry.message = line.mid(pipePos + 1);
+        
+        // Extract index from stash@{N}
+        QRegularExpression indexRegex(R"(stash@\{(\d+)\})");
+        QRegularExpressionMatch match = indexRegex.match(stashRef);
+        if (match.hasMatch()) {
+            entry.index = match.captured(1).toInt();
+        }
+        
+        result.append(entry);
+    }
+    
+    return result;
+}
+
+bool GitIntegration::stashClear()
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"stash", "clear"}, &success);
+    
+    if (success) {
+        emit operationCompleted("All stashes cleared");
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to clear stashes");
+    }
+    
+    return success;
 }
