@@ -1436,13 +1436,13 @@ void TextArea::mousePressEvent(QMouseEvent* event)
     }
     
     // Alt+Shift+Click to start column/box selection
-    if (event->modifiers() == (Qt::AltModifier | Qt::ShiftModifier) && event->button() == Qt::LeftButton) {
+    if ((event->modifiers() & (Qt::AltModifier | Qt::ShiftModifier)) == (Qt::AltModifier | Qt::ShiftModifier) && event->button() == Qt::LeftButton) {
         startColumnSelection(event->pos());
         return;
     }
     
-    // Ctrl+Click to add cursor
-    if (event->modifiers() & Qt::ControlModifier && event->modifiers() & Qt::AltModifier) {
+    // Ctrl+Alt+Click to add cursor
+    if ((event->modifiers() & (Qt::ControlModifier | Qt::AltModifier)) == (Qt::ControlModifier | Qt::AltModifier)) {
         QTextCursor cursor = cursorForPosition(event->pos());
         m_extraCursors.append(textCursor());
         setTextCursor(cursor);
