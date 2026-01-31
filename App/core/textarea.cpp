@@ -523,7 +523,7 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
         // Trigger completion
         QTextCursor cursor = textCursor();
         CompletionContext ctx;
-        ctx.documentUri = QString("file://%1").arg(objectName());
+        ctx.documentUri = getDocumentUri();
         ctx.languageId = m_languageId;
         ctx.prefix = completionPrefix;
         ctx.line = cursor.blockNumber();
@@ -918,6 +918,11 @@ QString TextArea::language() const
     return m_languageId;
 }
 
+QString TextArea::getDocumentUri() const
+{
+    return QString("file://%1").arg(objectName());
+}
+
 void TextArea::triggerCompletion()
 {
     if (!m_completionEngine)
@@ -927,7 +932,7 @@ void TextArea::triggerCompletion()
     QTextCursor cursor = textCursor();
     
     CompletionContext ctx;
-    ctx.documentUri = QString("file://%1").arg(objectName());
+    ctx.documentUri = getDocumentUri();
     ctx.languageId = m_languageId;
     ctx.prefix = prefix;
     ctx.line = cursor.blockNumber();
@@ -968,10 +973,13 @@ void TextArea::insertCompletionItem(const CompletionItem& item)
     QString insertText = item.effectiveInsertText();
     
     if (item.isSnippet) {
-        // Simple snippet expansion - remove placeholders for basic insertion
+        // Simple snippet expansion - replace placeholders with default text or empty
         // Full tabstop navigation would be more complex
-        static const QRegularExpression tabstopRe(R"(\$\{(\d+)(?::([^}]*))?\})");
-        insertText.replace(tabstopRe, "\\2");
+        // Handle ${1:default} -> default, ${1} -> ""
+        static const QRegularExpression tabstopWithDefaultRe(R"(\$\{(\d+):([^}]*)\})");
+        insertText.replace(tabstopWithDefaultRe, "\\2");
+        static const QRegularExpression tabstopNoDefaultRe(R"(\$\{(\d+)\})");
+        insertText.replace(tabstopNoDefaultRe, "");
         static const QRegularExpression simpleTabstopRe(R"(\$(\d+))");
         insertText.replace(simpleTabstopRe, "");
     }

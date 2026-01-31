@@ -794,8 +794,12 @@ void MainWindow::setupCompletionSystem()
     // Create the completion engine
     m_completionEngine = new CompletionEngine(this);
     
-    LOG_INFO("Completion system initialized with providers: " + 
-             registry.allProviderIds().join(", "));
+    QStringList providerIds = registry.allProviderIds();
+    if (providerIds.isEmpty()) {
+        LOG_WARNING("Completion system initialized but no providers registered");
+    } else {
+        LOG_INFO("Completion system initialized with providers: " + providerIds.join(", "));
+    }
 }
 
 void MainWindow::setupTextArea()

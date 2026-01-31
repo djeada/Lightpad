@@ -118,6 +118,7 @@ private:
     void insertCompletion(const QString& completion);
     void insertCompletionItem(const CompletionItem& item);
     QString textUnderCursor() const;
+    QString getDocumentUri() const;
     void showCompletionPopup();
     void hideCompletionPopup();
     
