@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QBoxLayout>
+#include <QDir>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QPushButton>
@@ -719,6 +720,24 @@ void MainWindow::showFindReplace(bool onlyFind)
 
         if (layout != 0)
             layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
+        
+        // Connect navigation signal to open file at location
+        connect(findReplacePanel, &FindReplacePanel::navigateToFile, 
+                this, [this](const QString& filePath, int lineNumber, int columnNumber) {
+            // For local search results, filePath is empty - use current text area
+            if (!filePath.isEmpty()) {
+                openFileAndAddToNewTab(filePath);
+            }
+            TextArea* textArea = getCurrentTextArea();
+            if (textArea) {
+                QTextCursor cursor = textArea->textCursor();
+                cursor.movePosition(QTextCursor::Start);
+                cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, lineNumber - 1);
+                cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, columnNumber - 1);
+                textArea->setTextCursor(cursor);
+                textArea->setFocus();
+            }
+        });
     }
 
     findReplacePanel->setVisible(!findReplacePanel->isVisible() || findReplacePanel->isOnlyFind() != onlyFind);
@@ -729,6 +748,8 @@ void MainWindow::showFindReplace(bool onlyFind)
 
     if (findReplacePanel->isVisible()) {
         findReplacePanel->setTextArea(getCurrentTextArea());
+        findReplacePanel->setProjectPath(QDir::currentPath());
+        findReplacePanel->setMainWindow(this);
         findReplacePanel->setFocusOnSearchBox();
     }
 }
