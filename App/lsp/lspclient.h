@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QMap>
+#include <QTimer>
 
 /**
  * @brief LSP position in a document
@@ -235,6 +236,7 @@ public:
     void didOpen(const QString& uri, const QString& languageId, 
                  int version, const QString& text);
     void didChange(const QString& uri, int version, const QString& text);
+    void didChangeDebounced(const QString& uri, int version, const QString& text);
     void didChangeIncremental(const QString& uri, int version, 
                               LspRange range, const QString& text);
     void didSave(const QString& uri);
@@ -290,6 +292,12 @@ private:
     QMap<int, QString> m_pendingRequests;  // id -> method
     QString m_rootUri;
     int m_pendingCompletionRequestId = -1;  // Track current completion request for cancellation
+    
+    // Debounced didChange state
+    QTimer* m_changeDebounceTimer = nullptr;
+    QString m_pendingChangeUri;
+    int m_pendingChangeVersion = 0;
+    QString m_pendingChangeText;
 };
 
 #endif // LSPCLIENT_H

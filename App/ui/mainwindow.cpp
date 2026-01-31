@@ -380,9 +380,6 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
     else if (keyEvent->matches(QKeySequence::SaveAs))
         on_actionSave_as_triggered();
 
-    else if (keyEvent->key() == Qt::Key_Alt)
-        on_actionToggle_Menu_Bar_triggered();
-
     else if (keyEvent->matches(QKeySequence::Find))
         showFindReplace();
 
@@ -1215,7 +1212,7 @@ void MainWindow::noScriptAssignedWarning()
 
 void MainWindow::on_actionToggle_Menu_Bar_triggered()
 {
-    ui->menubar->setVisible(!ui->menubar->isVisible());
+    ui->menubar->setVisible(true);
 }
 
 void MainWindow::on_languageHighlight_clicked()

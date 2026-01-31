@@ -114,6 +114,9 @@ private:
     qreal m_lineHeight;
     int m_maxVisibleLines;
     int m_scrollOffset;
+    
+    // Debounce flag
+    bool m_updatePending;
 };
 
 #endif // MINIMAP_H

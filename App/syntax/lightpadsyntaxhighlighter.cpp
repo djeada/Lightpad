@@ -68,6 +68,12 @@ bool LightpadSyntaxHighlighter::isBlockVisible(int blockNumber) const
 
 void LightpadSyntaxHighlighter::highlightBlock(const QString& text)
 {
+    // Fast path: skip empty lines
+    if (text.isEmpty()) {
+        setCurrentBlockState(previousBlockState());
+        return;
+    }
+    
     // Skip highlighting for blocks far outside the viewport
     // This dramatically improves performance for large files
     int blockNum = currentBlock().blockNumber();

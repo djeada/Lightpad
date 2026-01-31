@@ -31,6 +31,62 @@ QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp 
 QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };
 constexpr int defaultLineSpacingPercent = 200;
 
+class ExtraLineSpacingDocumentLayout : public QPlainTextDocumentLayout {
+public:
+    explicit ExtraLineSpacingDocumentLayout(QTextDocument* document)
+        : QPlainTextDocumentLayout(document)
+        , m_extraLineSpacingPx(0)
+    {
+    }
+
+    void setExtraLineSpacing(int pixels)
+    {
+        if (pixels == m_extraLineSpacingPx)
+            return;
+
+        m_extraLineSpacingPx = qMax(0, pixels);
+        requestUpdate();
+    }
+
+    int extraLineSpacing() const
+    {
+        return m_extraLineSpacingPx;
+    }
+
+    QRectF blockBoundingRect(const QTextBlock& block) const override
+    {
+        QRectF rect = QPlainTextDocumentLayout::blockBoundingRect(block);
+        if (m_extraLineSpacingPx <= 0)
+            return rect;
+
+        const qreal offset = qreal(m_extraLineSpacingPx) * block.blockNumber();
+        rect.moveTop(rect.top() + offset);
+        rect.setHeight(rect.height() + m_extraLineSpacingPx);
+        return rect;
+    }
+
+    QSizeF documentSize() const override
+    {
+        QSizeF size = QPlainTextDocumentLayout::documentSize();
+        if (m_extraLineSpacingPx <= 0)
+            return size;
+
+        const int blocks = document() ? document()->blockCount() : 0;
+        size.setHeight(size.height() + qreal(m_extraLineSpacingPx) * blocks);
+        return size;
+    }
+
+protected:
+    void documentChanged(int from, int charsRemoved, int charsAdded) override
+    {
+        QPlainTextDocumentLayout::documentChanged(from, charsRemoved, charsAdded);
+        requestUpdate();
+    }
+
+private:
+    int m_extraLineSpacingPx;
+};
+
 // Static icon cache - initialized once, reused everywhere
 QIcon TextArea::s_unsavedIcon;
 bool TextArea::s_iconsInitialized = false;
@@ -246,6 +302,10 @@ void TextArea::setupTextArea()
         updateHighlighterViewport();
     });
 
+    if (document() && !dynamic_cast<ExtraLineSpacingDocumentLayout*>(document()->documentLayout())) {
+        document()->setDocumentLayout(new ExtraLineSpacingDocumentLayout(document()));
+    }
+
     setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
     updateCursorPositionChangedCallbacks();
     clearLineHighlight();
@@ -260,29 +320,15 @@ void TextArea::applyLineSpacing(int percent)
     if (!doc)
         return;
 
-    QTextCursor previousCursor = textCursor();
-    const bool undoEnabled = doc->isUndoRedoEnabled();
-    doc->setUndoRedoEnabled(false);
+    auto* layout = dynamic_cast<ExtraLineSpacingDocumentLayout*>(doc->documentLayout());
+    if (!layout) {
+        layout = new ExtraLineSpacingDocumentLayout(doc);
+        doc->setDocumentLayout(layout);
+    }
 
     const int baseHeight = QFontMetrics(mainFont).lineSpacing();
     const int extraHeight = qMax(0, (baseHeight * (percent - 100)) / 100);
-
-    QTextCursor cursor(doc);
-    cursor.beginEditBlock();
-    for (QTextBlock block = doc->begin(); block.isValid(); block = block.next()) {
-        QTextCursor blockCursor(block);
-        QTextBlockFormat format = block.blockFormat();
-        if (extraHeight > 0) {
-            format.setLineHeight(extraHeight, QTextBlockFormat::LineDistanceHeight);
-        } else {
-            format.setLineHeight(100, QTextBlockFormat::ProportionalHeight);
-        }
-        blockCursor.setBlockFormat(format);
-    }
-    cursor.endEditBlock();
-
-    doc->setUndoRedoEnabled(undoEnabled);
-    setTextCursor(previousCursor);
+    layout->setExtraLineSpacing(extraHeight);
 }
 
 int TextArea::lineNumberAreaWidth()
@@ -795,8 +841,11 @@ void TextArea::updateCursorPositionChangedCallbacks()
 
     if (lineHighlighted && matchingBracketsHighlighted) {
         connect(this, &TextArea::cursorPositionChanged, this, [&]() {
-            drawCurrentLineHighlight();
-            drawMatchingBrackets();
+            // Defer visual updates to not block typing
+            QTimer::singleShot(0, this, [this]() {
+                drawCurrentLineHighlight();
+                drawMatchingBrackets();
+            });
             updateRowColDisplay();
         });
     }
@@ -804,7 +853,9 @@ void TextArea::updateCursorPositionChangedCallbacks()
     else if (lineHighlighted && !matchingBracketsHighlighted) {
         clearLineHighlight();
         connect(this, &TextArea::cursorPositionChanged, this, [&]() {
-            drawCurrentLineHighlight();
+            QTimer::singleShot(0, this, [this]() {
+                drawCurrentLineHighlight();
+            });
             updateRowColDisplay();
         });
     }
@@ -812,7 +863,9 @@ void TextArea::updateCursorPositionChangedCallbacks()
     else if (!lineHighlighted && matchingBracketsHighlighted) {
         clearLineHighlight();
         connect(this, &TextArea::cursorPositionChanged, this, [&]() {
-            drawMatchingBrackets();
+            QTimer::singleShot(0, this, [this]() {
+                drawMatchingBrackets();
+            });
             updateRowColDisplay();
         });
     }
@@ -838,14 +891,15 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event)
 
     auto block = firstVisibleBlock();
     auto blockNumber = block.blockNumber();
-    auto top = blockBoundingGeometry(block).translated(contentOffset()).top();
-    auto bottom = top + blockBoundingRect(block).height();
+    auto rect = blockBoundingRect(block).translated(contentOffset());
+    auto top = rect.top();
+    auto bottom = top + rect.height();
     color = mainWindow ? mainWindow->getTheme().foregroundColor : lineNumberAreaPenColor;
 
     while (block.isValid() && top <= event->rect().bottom()) {
 
         if (block.isVisible() && bottom >= event->rect().top()) {
-            const qreal height = blockBoundingRect(block).height();
+            const qreal height = rect.height();
             auto number = QString::number(blockNumber);
             painter.setPen(color);
             painter.drawText(0, top, lineNumberArea->width(), height, Qt::AlignCenter, number);
@@ -855,7 +909,8 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event)
         top = bottom;
         if (!block.isValid())
             break;
-        bottom = top + blockBoundingRect(block).height();
+        rect = blockBoundingRect(block).translated(contentOffset());
+        bottom = top + rect.height();
         ++blockNumber;
     }
 }

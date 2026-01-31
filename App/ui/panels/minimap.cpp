@@ -7,6 +7,7 @@
 #include <QScrollBar>
 #include <QTextDocument>
 #include <QAbstractTextDocumentLayout>
+#include <QTimer>
 
 Minimap::Minimap(QWidget* parent)
     : QWidget(parent)
@@ -21,6 +22,7 @@ Minimap::Minimap(QWidget* parent)
     , m_lineHeight(3.0)
     , m_maxVisibleLines(0)
     , m_scrollOffset(0)
+    , m_updatePending(false)
 {
     setMinimumWidth(80);
     setMaximumWidth(120);
@@ -190,7 +192,17 @@ void Minimap::resizeEvent(QResizeEvent* event)
 void Minimap::onSourceTextChanged()
 {
     m_documentDirty = true;
-    updateContent();
+    // Debounce minimap updates to avoid blocking typing
+    // Only schedule update if one isn't already pending
+    if (!m_updatePending) {
+        m_updatePending = true;
+        QTimer::singleShot(150, this, [this]() {
+            m_updatePending = false;
+            if (isVisible()) {
+                updateContent();
+            }
+        });
+    }
 }
 
 void Minimap::onSourceScrollChanged(int value)
@@ -202,7 +214,8 @@ void Minimap::onSourceScrollChanged(int value)
 
 void Minimap::onSourceCursorPositionChanged()
 {
-    update();
+    // Defer cursor position update to not block typing
+    QTimer::singleShot(0, this, QOverload<>::of(&QWidget::update));
 }
 
 void Minimap::updateViewportRect()

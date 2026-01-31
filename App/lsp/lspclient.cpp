@@ -134,6 +134,30 @@ void LspClient::didChange(const QString& uri, int version, const QString& text)
     sendNotification("textDocument/didChange", params);
 }
 
+void LspClient::didChangeDebounced(const QString& uri, int version, const QString& text)
+{
+    // Store the pending change - will be sent after debounce delay
+    m_pendingChangeUri = uri;
+    m_pendingChangeVersion = version;
+    m_pendingChangeText = text;
+    
+    // Start/restart debounce timer
+    if (!m_changeDebounceTimer) {
+        m_changeDebounceTimer = new QTimer(this);
+        m_changeDebounceTimer->setSingleShot(true);
+        connect(m_changeDebounceTimer, &QTimer::timeout, this, [this]() {
+            if (!m_pendingChangeUri.isEmpty()) {
+                didChange(m_pendingChangeUri, m_pendingChangeVersion, m_pendingChangeText);
+                m_pendingChangeUri.clear();
+                m_pendingChangeText.clear();
+            }
+        });
+    }
+    
+    // Debounce: wait 100ms before sending to batch rapid changes
+    m_changeDebounceTimer->start(100);
+}
+
 void LspClient::didChangeIncremental(const QString& uri, int version, 
                                       LspRange range, const QString& text)
 {
@@ -408,8 +432,8 @@ void LspClient::onReadyReadStandardOutput()
 
 void LspClient::onReadyReadStandardError()
 {
-    QString stderr = QString::fromUtf8(m_process->readAllStandardError());
-    LOG_DEBUG(QString("LSP stderr: %1").arg(stderr.trimmed()));
+    QString stderrText = QString::fromUtf8(m_process->readAllStandardError());
+    LOG_DEBUG(QString("LSP stderr: %1").arg(stderrText.trimmed()));
 }
 
 void LspClient::onProcessError(QProcess::ProcessError processError)
