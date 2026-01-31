@@ -7,6 +7,7 @@
 #include <QRegularExpression>
 #include <QTextCharFormat>
 #include <QVector>
+#include <QPlainTextEdit>
 
 /**
  * @brief Plugin-based syntax highlighter
@@ -41,11 +42,21 @@ public:
      * @brief Get the current search keyword
      */
     QString searchKeyword() const { return m_searchKeyword; }
+    
+    /**
+     * @brief Set the editor to enable viewport-aware highlighting
+     */
+    void setEditor(QPlainTextEdit* editor) { m_editor = editor; }
 
 protected:
     void highlightBlock(const QString& text) override;
 
 private:
+    /**
+     * @brief Check if a block is within or near the visible viewport
+     */
+    bool isBlockVisible(int blockNumber) const;
+    
     /**
      * @brief Convert plugin rules to internal format with theme colors
      */
@@ -67,6 +78,12 @@ private:
     
     // Search highlight format
     QTextCharFormat m_searchFormat;
+    
+    // Editor reference for viewport-aware highlighting
+    QPlainTextEdit* m_editor = nullptr;
+    
+    // Buffer around viewport for smooth scrolling
+    static constexpr int VIEWPORT_BUFFER = 50;
 };
 
 #endif // PLUGINBASEDSYNTAXHIGHLIGHTER_H

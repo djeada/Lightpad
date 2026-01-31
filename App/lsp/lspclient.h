@@ -235,6 +235,8 @@ public:
     void didOpen(const QString& uri, const QString& languageId, 
                  int version, const QString& text);
     void didChange(const QString& uri, int version, const QString& text);
+    void didChangeIncremental(const QString& uri, int version, 
+                              LspRange range, const QString& text);
     void didSave(const QString& uri);
     void didClose(const QString& uri);
 
@@ -279,6 +281,7 @@ private:
     
     void doInitialize();
     void setState(State state);
+    void cancelPendingCompletionRequest();
     
     QProcess* m_process;
     State m_state;
@@ -286,6 +289,7 @@ private:
     QString m_buffer;
     QMap<int, QString> m_pendingRequests;  // id -> method
     QString m_rootUri;
+    int m_pendingCompletionRequestId = -1;  // Track current completion request for cancellation
 };
 
 #endif // LSPCLIENT_H

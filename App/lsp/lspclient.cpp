@@ -38,21 +38,19 @@ bool LspClient::start(const QString& program, const QStringList& arguments)
     connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, &LspClient::onProcessFinished);
     
+    // Connect to started signal for async initialization
+    connect(m_process, &QProcess::started, this, [this]() {
+        LOG_INFO(QString("LSP server started"));
+        doInitialize();
+    });
+    
     setState(State::Connecting);
     m_process->start();
     
-    if (!m_process->waitForStarted(5000)) {
-        LOG_ERROR(QString("Failed to start LSP server: %1").arg(program));
-        setState(State::Error);
-        emit error("Failed to start language server");
-        delete m_process;
-        m_process = nullptr;
-        return false;
-    }
+    // Non-blocking: don't wait for started, let the signal handle it
+    // The started() signal will trigger doInitialize()
     
-    LOG_INFO(QString("Started LSP server: %1").arg(program));
-    doInitialize();
-    
+    LOG_INFO(QString("Starting LSP server: %1").arg(program));
     return true;
 }
 
@@ -68,25 +66,27 @@ void LspClient::stop()
     QJsonObject params;
     sendRequest("shutdown", params, m_nextRequestId++);
     
-    // Wait briefly for shutdown response
-    m_process->waitForReadyRead(1000);
-    
-    // Send exit notification
+    // Send exit notification (don't wait for shutdown response)
     sendNotification("exit", {});
     
-    // Give server time to exit gracefully
-    if (!m_process->waitForFinished(3000)) {
-        m_process->terminate();
-        if (!m_process->waitForFinished(2000)) {
-            m_process->kill();
+    // Non-blocking shutdown: let the process finish on its own
+    // Set up a timer to force kill if it doesn't exit gracefully
+    QTimer::singleShot(3000, this, [this]() {
+        if (m_process && m_process->state() != QProcess::NotRunning) {
+            LOG_WARNING("LSP server did not exit gracefully, terminating");
+            m_process->terminate();
+            
+            // Final kill after another delay if still running
+            QTimer::singleShot(2000, this, [this]() {
+                if (m_process && m_process->state() != QProcess::NotRunning) {
+                    LOG_WARNING("LSP server did not terminate, killing");
+                    m_process->kill();
+                }
+            });
         }
-    }
+    });
     
-    delete m_process;
-    m_process = nullptr;
-    setState(State::Disconnected);
-    
-    LOG_INFO("LSP server stopped");
+    LOG_INFO("LSP server shutdown initiated (async)");
 }
 
 LspClient::State LspClient::state() const
@@ -133,6 +133,27 @@ void LspClient::didChange(const QString& uri, int version, const QString& text)
     sendNotification("textDocument/didChange", params);
 }
 
+void LspClient::didChangeIncremental(const QString& uri, int version, 
+                                      LspRange range, const QString& text)
+{
+    QJsonObject textDocument;
+    textDocument["uri"] = uri;
+    textDocument["version"] = version;
+    
+    QJsonObject contentChange;
+    contentChange["range"] = range.toJson();
+    contentChange["text"] = text;
+    
+    QJsonArray contentChanges;
+    contentChanges.append(contentChange);
+    
+    QJsonObject params;
+    params["textDocument"] = textDocument;
+    params["contentChanges"] = contentChanges;
+    
+    sendNotification("textDocument/didChange", params);
+}
+
 void LspClient::didSave(const QString& uri)
 {
     QJsonObject textDocument;
@@ -157,6 +178,9 @@ void LspClient::didClose(const QString& uri)
 
 void LspClient::requestCompletion(const QString& uri, LspPosition position)
 {
+    // Cancel any pending completion request to avoid stale results
+    cancelPendingCompletionRequest();
+    
     QJsonObject textDocument;
     textDocument["uri"] = uri;
     
@@ -166,7 +190,22 @@ void LspClient::requestCompletion(const QString& uri, LspPosition position)
     
     int id = m_nextRequestId++;
     m_pendingRequests[id] = "textDocument/completion";
+    m_pendingCompletionRequestId = id;
     sendRequest("textDocument/completion", params, id);
+}
+
+void LspClient::cancelPendingCompletionRequest()
+{
+    if (m_pendingCompletionRequestId > 0) {
+        // Send cancellation notification per LSP spec
+        QJsonObject params;
+        params["id"] = m_pendingCompletionRequestId;
+        sendNotification("$/cancelRequest", params);
+        
+        // Remove from pending requests
+        m_pendingRequests.remove(m_pendingCompletionRequestId);
+        m_pendingCompletionRequestId = -1;
+    }
 }
 
 void LspClient::requestHover(const QString& uri, LspPosition position)
@@ -385,6 +424,13 @@ void LspClient::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     Q_UNUSED(exitStatus);
     LOG_INFO(QString("LSP server exited with code: %1").arg(exitCode));
+    
+    // Clean up process
+    if (m_process) {
+        m_process->deleteLater();
+        m_process = nullptr;
+    }
+    
     setState(State::Disconnected);
 }
 

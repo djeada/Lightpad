@@ -500,13 +500,13 @@ void DapClient::onReadyReadStandardOutput()
 
 void DapClient::onReadyReadStandardError()
 {
-    QString stderr = QString::fromUtf8(m_process->readAllStandardError());
-    LOG_DEBUG(QString("DAP stderr: %1").arg(stderr.trimmed()));
+    QString stderrText = QString::fromUtf8(m_process->readAllStandardError());
+    LOG_DEBUG(QString("DAP stderr: %1").arg(stderrText.trimmed()));
     
     // Emit as output event for debug console
     DapOutputEvent evt;
     evt.category = "stderr";
-    evt.output = stderr;
+    evt.output = stderrText;
     emit output(evt);
 }
 

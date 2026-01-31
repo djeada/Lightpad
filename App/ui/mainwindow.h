@@ -4,6 +4,8 @@
 #include <QDialog>
 #include <QListView>
 #include <QMainWindow>
+#include <QMap>
+#include <QSet>
 
 #include "../settings/textareasettings.h"
 #include "../settings/theme.h"
@@ -54,6 +56,7 @@ public:
     Theme getTheme();
     QFont getFont();
     TextAreaSettings getSettings();
+    void applyLanguageOverride(const QString& extension, const QString& displayName);
 
 private slots:
     void on_actionQuit_triggered();
@@ -139,9 +142,20 @@ private:
     void closeEvent(QCloseEvent* event);
     void loadSettings();
     void saveSettings();
+    void applyHighlightForFile(const QString& filePath);
+    QString detectLanguageIdForExtension(const QString& extension) const;
+    QString detectLanguageIdForFile(const QString& filePath) const;
+    QString displayNameForLanguage(const QString& languageId, const QString& extension) const;
+    void loadHighlightOverridesForDir(const QString& dirPath);
+    bool saveHighlightOverridesForDir(const QString& dirPath) const;
+    QString highlightOverrideForFile(const QString& filePath);
+    void setHighlightOverrideForFile(const QString& filePath, const QString& languageId);
 
     template <typename... Args>
     void updateAllTextAreas(void (TextArea::*f)(Args... args), Args... args);
+
+    QMap<QString, QString> m_highlightOverrides;
+    QSet<QString> m_loadedHighlightOverrideDirs;
 };
 
 const int defaultTabWidth = 4;

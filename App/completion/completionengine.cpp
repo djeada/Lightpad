@@ -22,20 +22,34 @@ void CompletionEngine::setLanguage(const QString& languageId)
 
 void CompletionEngine::requestCompletions(const CompletionContext& context)
 {
-    // Cancel any pending requests
-    cancelPendingRequests();
-    
+    // Store context for debounced execution
     m_currentContext = context;
-    m_pendingItems.clear();
     
     // Check minimum prefix length for auto-triggered completions
     if (context.isAutoComplete && context.prefix.length() < m_minPrefixLength) {
+        cancelPendingRequests();
         emit completionsReady({});
         return;
     }
     
+    // For auto-complete, use debounce to avoid spamming on rapid typing
+    // For explicit invocation (Ctrl+Space), execute immediately
+    if (context.isAutoComplete) {
+        // Debounce: restart timer on each keystroke
+        m_debounceTimer->start(m_autoTriggerDelay);
+    } else {
+        // Explicit invocation - execute immediately
+        cancelPendingRequests();
+        executeCompletionRequest();
+    }
+}
+
+void CompletionEngine::executeCompletionRequest()
+{
+    m_pendingItems.clear();
+    
     // Get providers for this language
-    QString langId = context.languageId.isEmpty() ? m_languageId : context.languageId;
+    QString langId = m_currentContext.languageId.isEmpty() ? m_languageId : m_currentContext.languageId;
     auto providers = CompletionProviderRegistry::instance().providersForLanguage(langId);
     
     if (providers.isEmpty()) {
@@ -50,7 +64,7 @@ void CompletionEngine::requestCompletions(const CompletionContext& context)
     
     // Request completions from all providers
     for (auto& provider : providers) {
-        provider->requestCompletions(context, 
+        provider->requestCompletions(m_currentContext, 
             [this](const QList<CompletionItem>& items) {
                 collectProviderResults(items);
             }
@@ -129,6 +143,7 @@ QList<CompletionItem> CompletionEngine::filterResults(const QString& prefix) con
 
 void CompletionEngine::onDebounceTimeout()
 {
-    // This is called after debounce delay for auto-triggered completions
-    requestCompletions(m_currentContext);
+    // This is called after debounce delay - now safe to request completions
+    cancelPendingRequests();
+    executeCompletionRequest();
 }

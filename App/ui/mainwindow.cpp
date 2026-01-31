@@ -8,6 +8,9 @@
 #include <QCompleter>
 #include <QProcess>
 #include <QMenuBar>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <cstdio>
 
 #include "panels/findreplacepanel.h"
@@ -135,6 +138,218 @@ void MainWindow::saveSettings()
     settings.saveSettings(settingsPath);
 }
 
+void MainWindow::applyLanguageOverride(const QString& extension, const QString& displayName)
+{
+    auto textArea = getCurrentTextArea();
+    if (!textArea) {
+        return;
+    }
+
+    QString filePath = ui->tabWidget->getFilePath(ui->tabWidget->currentIndex());
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    QString languageId = detectLanguageIdForExtension(extension);
+    if (languageId.isEmpty()) {
+        LOG_WARNING(QString("No language mapping for extension: %1").arg(extension));
+        return;
+    }
+
+    setHighlightOverrideForFile(filePath, languageId);
+    textArea->updateSyntaxHighlightTags("", languageId);
+    textArea->setLanguage(languageId);
+    highlightLanguage = languageId;
+    setLanguageHighlightLabel(displayName);
+}
+
+void MainWindow::applyHighlightForFile(const QString& filePath)
+{
+    auto textArea = getCurrentTextArea();
+    if (!textArea || filePath.isEmpty()) {
+        return;
+    }
+
+    QString overrideLang = highlightOverrideForFile(filePath);
+    QString languageId = overrideLang;
+    if (languageId.isEmpty()) {
+        languageId = detectLanguageIdForFile(filePath);
+    }
+
+    if (languageId.isEmpty()) {
+        setLanguageHighlightLabel("Choose lang.");
+        highlightLanguage.clear();
+        return;
+    }
+
+    QString extension = QFileInfo(filePath).completeSuffix().toLower();
+    QString displayName = displayNameForLanguage(languageId, extension);
+    if (!displayName.isEmpty()) {
+        setLanguageHighlightLabel(displayName);
+    }
+
+    highlightLanguage = languageId;
+    textArea->setLanguage(languageId);
+    textArea->updateSyntaxHighlightTags("", languageId);
+}
+
+QString MainWindow::detectLanguageIdForExtension(const QString& extension) const
+{
+    auto& registry = SyntaxPluginRegistry::instance();
+    ISyntaxPlugin* plugin = registry.getPluginByExtension(extension);
+    if (plugin) {
+        return plugin->languageId();
+    }
+    return QString();
+}
+
+QString MainWindow::detectLanguageIdForFile(const QString& filePath) const
+{
+    return detectLanguageIdForExtension(QFileInfo(filePath).completeSuffix().toLower());
+}
+
+QString MainWindow::displayNameForLanguage(const QString& languageId, const QString& extension) const
+{
+    auto& registry = SyntaxPluginRegistry::instance();
+    ISyntaxPlugin* plugin = registry.getPluginByLanguageId(languageId);
+    if (plugin) {
+        return plugin->languageName();
+    }
+
+    QMap<QString, QString> langToExt;
+    loadLanguageExtensions(langToExt);
+    if (!extension.isEmpty()) {
+        for (auto it = langToExt.begin(); it != langToExt.end(); ++it) {
+            if (it.value().toLower() == extension) {
+                return it.key();
+            }
+        }
+    }
+    return languageId;
+}
+
+void MainWindow::loadHighlightOverridesForDir(const QString& dirPath)
+{
+    if (dirPath.isEmpty()) {
+        return;
+    }
+
+    QString configDir = dirPath + "/.lightpad";
+    QString configFile = configDir + "/highlight_config.json";
+    if (m_loadedHighlightOverrideDirs.contains(configDir)) {
+        return;
+    }
+
+    if (!QFileInfo(configFile).exists()) {
+        m_loadedHighlightOverrideDirs.insert(configDir);
+        return;
+    }
+
+    QFile file(configFile);
+    if (!file.open(QIODevice::ReadOnly)) {
+        LOG_WARNING(QString("Failed to open highlight config: %1").arg(configFile));
+        return;
+    }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+    if (parseError.error != QJsonParseError::NoError) {
+        LOG_WARNING(QString("Failed to parse highlight config: %1").arg(parseError.errorString()));
+        return;
+    }
+
+    QJsonObject root = doc.object();
+    QJsonArray assignments = root.value("assignments").toArray();
+    for (const QJsonValue& value : assignments) {
+        QJsonObject obj = value.toObject();
+        QString fileName = obj.value("file").toString();
+        QString languageId = obj.value("language").toString();
+        if (fileName.isEmpty() || languageId.isEmpty()) {
+            continue;
+        }
+        QString absolutePath = dirPath + "/" + fileName;
+        m_highlightOverrides[absolutePath] = languageId;
+    }
+
+    m_loadedHighlightOverrideDirs.insert(configDir);
+    LOG_INFO(QString("Loaded %1 highlight overrides from %2").arg(assignments.size()).arg(configFile));
+}
+
+bool MainWindow::saveHighlightOverridesForDir(const QString& dirPath) const
+{
+    if (dirPath.isEmpty()) {
+        return false;
+    }
+
+    QString configDir = dirPath + "/.lightpad";
+    QString configFile = configDir + "/highlight_config.json";
+
+    QJsonArray assignments;
+    for (auto it = m_highlightOverrides.begin(); it != m_highlightOverrides.end(); ++it) {
+        QFileInfo fileInfo(it.key());
+        if (fileInfo.absoluteDir().path() == dirPath) {
+            QJsonObject obj;
+            obj["file"] = fileInfo.fileName();
+            obj["language"] = it.value();
+            assignments.append(obj);
+        }
+    }
+
+    QDir dir;
+    if (!dir.exists(configDir)) {
+        if (!dir.mkpath(configDir)) {
+            LOG_ERROR(QString("Failed to create config directory: %1").arg(configDir));
+            return false;
+        }
+    }
+
+    QJsonObject root;
+    root["version"] = "1.0";
+    root["assignments"] = assignments;
+
+    QFile file(configFile);
+    if (!file.open(QIODevice::WriteOnly)) {
+        LOG_ERROR(QString("Failed to write highlight config: %1").arg(configFile));
+        return false;
+    }
+
+    QJsonDocument doc(root);
+    file.write(doc.toJson(QJsonDocument::Indented));
+    file.close();
+
+    LOG_INFO(QString("Saved %1 highlight overrides to %2").arg(assignments.size()).arg(configFile));
+    return true;
+}
+
+QString MainWindow::highlightOverrideForFile(const QString& filePath)
+{
+    QFileInfo fileInfo(filePath);
+    if (!fileInfo.exists()) {
+        return QString();
+    }
+
+    loadHighlightOverridesForDir(fileInfo.absoluteDir().path());
+    auto it = m_highlightOverrides.find(filePath);
+    if (it != m_highlightOverrides.end()) {
+        return it.value();
+    }
+    return QString();
+}
+
+void MainWindow::setHighlightOverrideForFile(const QString& filePath, const QString& languageId)
+{
+    QFileInfo fileInfo(filePath);
+    if (!fileInfo.exists()) {
+        return;
+    }
+
+    m_highlightOverrides[filePath] = languageId;
+    saveHighlightOverridesForDir(fileInfo.absoluteDir().path());
+}
+
 template <typename... Args>
 void MainWindow::updateAllTextAreas(void (TextArea::*f)(Args... args), Args... args)
 {
@@ -249,7 +464,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     }
 
     if (getCurrentTextArea())
-        getCurrentTextArea()->updateSyntaxHighlightTags("", QFileInfo(filePath).completeSuffix());
+        applyHighlightForFile(filePath);
 
     ui->tabWidget->currentChanged(ui->tabWidget->currentIndex());
 }
@@ -930,6 +1145,9 @@ void MainWindow::setupTabWidget()
 
         if (!ui->menuRun->actions().empty())
             ui->menuRun->actions().front()->setText("Run " + text);
+
+        QString filePath = ui->tabWidget->getFilePath(index);
+        applyHighlightForFile(filePath);
     });
 
     ui->tabWidget->currentChanged(0);
@@ -971,10 +1189,8 @@ void MainWindow::setupTextArea()
         // Setup new completion system (preferred)
         if (m_completionEngine) {
             getCurrentTextArea()->setCompletionEngine(m_completionEngine);
-            // Set language based on current highlight language
-            if (!highlightLanguage.isEmpty()) {
-                getCurrentTextArea()->setLanguage(highlightLanguage);
-            }
+            QString filePath = ui->tabWidget->getFilePath(ui->tabWidget->currentIndex());
+            applyHighlightForFile(filePath);
         }
         
         // Legacy: Setup old completer as fallback

@@ -51,12 +51,43 @@ LightpadSyntaxHighlighter::LightpadSyntaxHighlighter(QVector<HighlightingRule> h
     , highlightingRules(highlightingRules)
     , commentStartExpression(commentStartExpression)
     , commentEndExpression(commentEndExpression)
+    , m_editor(nullptr)
 {
     multiLineCommentFormat.setForeground(Qt::gray);
 }
 
+bool LightpadSyntaxHighlighter::isBlockVisible(int blockNumber) const
+{
+    if (!m_editor) {
+        return true; // No editor set, highlight everything
+    }
+    
+    // Get visible block range
+    QTextBlock firstVisible = m_editor->firstVisibleBlock();
+    int firstVisibleBlock = firstVisible.blockNumber();
+    
+    // Estimate last visible block (approximate based on viewport height)
+    int visibleLines = m_editor->viewport()->height() / m_editor->fontMetrics().height();
+    int lastVisibleBlock = firstVisibleBlock + visibleLines;
+    
+    // Include buffer around viewport for smooth scrolling
+    int minBlock = firstVisibleBlock - VIEWPORT_BUFFER;
+    int maxBlock = lastVisibleBlock + VIEWPORT_BUFFER;
+    
+    return (blockNumber >= minBlock && blockNumber <= maxBlock);
+}
+
 void LightpadSyntaxHighlighter::highlightBlock(const QString& text)
 {
+    // Skip highlighting for blocks far outside the viewport
+    // This dramatically improves performance for large files
+    int blockNum = currentBlock().blockNumber();
+    if (!isBlockVisible(blockNum)) {
+        // Just set the block state for multi-line comment tracking
+        // but skip the expensive regex matching
+        setCurrentBlockState(previousBlockState());
+        return;
+    }
 
     for (const HighlightingRule& rule : qAsConst(highlightingRules)) {
         QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);

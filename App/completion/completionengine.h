@@ -106,6 +106,7 @@ private:
     void collectProviderResults(const QList<CompletionItem>& items);
     void mergeAndSortResults();
     void notifyResults();
+    void executeCompletionRequest();
     
     QString m_languageId;
     CompletionContext m_currentContext;

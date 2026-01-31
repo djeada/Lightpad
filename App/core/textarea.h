@@ -99,6 +99,10 @@ private:
     bool lineHighlighted;
     bool matchingBracketsHighlighted;
     int prevWordCount;
+    
+    // Cached icons to avoid repeated disk loads
+    static QIcon s_unsavedIcon;
+    static bool s_iconsInitialized;
 
     // Multi-cursor state
     QList<QTextCursor> m_extraCursors;

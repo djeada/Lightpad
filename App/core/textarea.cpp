@@ -31,6 +31,18 @@ QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp 
 QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };
 constexpr int defaultLineSpacingPercent = 200;
 
+// Static icon cache - initialized once, reused everywhere
+QIcon TextArea::s_unsavedIcon;
+bool TextArea::s_iconsInitialized = false;
+
+static void initializeIconCache()
+{
+    if (!TextArea::s_iconsInitialized) {
+        TextArea::s_unsavedIcon = QIcon(":/resources/icons/unsaved.png");
+        TextArea::s_iconsInitialized = true;
+    }
+}
+
 static int findClosingParentheses(const QString& text, int pos, QChar startStr, QChar endStr)
 {
 
@@ -165,6 +177,7 @@ TextArea::TextArea(QWidget* parent)
     , matchingBracketsHighlighted(true)
     , prevWordCount(1)
 {
+    initializeIconCache();
     setupTextArea();
     mainFont = QApplication::font();
     document()->setDefaultFont(mainFont);
@@ -194,6 +207,7 @@ TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent)
     , matchingBracketsHighlighted(settings.matchingBracketsHighlighted)
     , prevWordCount(1)
 {
+    initializeIconCache();
     setupTextArea();
     mainFont = settings.mainFont;
     document()->setDefaultFont(mainFont);
@@ -221,7 +235,8 @@ void TextArea::setupTextArea()
 
     connect(document(), &QTextDocument::undoCommandAdded, this, [&] {
         if (!areChangesUnsaved) {
-            setTabWidgetIcon(QIcon(":/resources/icons/unsaved.png"));
+            // Use cached icon to avoid disk I/O on every keystroke
+            setTabWidgetIcon(s_unsavedIcon);
             areChangesUnsaved = true;
         }
     });
@@ -248,14 +263,18 @@ void TextArea::applyLineSpacing(int percent)
     const int extraHeight = qMax(0, (baseHeight * (percent - 100)) / 100);
 
     QTextCursor cursor(doc);
-    cursor.select(QTextCursor::Document);
-    QTextBlockFormat format;
-    if (extraHeight > 0) {
-        format.setLineHeight(extraHeight, QTextBlockFormat::LineDistanceHeight);
-    } else {
-        format.setLineHeight(100, QTextBlockFormat::ProportionalHeight);
+    cursor.beginEditBlock();
+    for (QTextBlock block = doc->begin(); block.isValid(); block = block.next()) {
+        QTextCursor blockCursor(block);
+        QTextBlockFormat format = block.blockFormat();
+        if (extraHeight > 0) {
+            format.setLineHeight(extraHeight, QTextBlockFormat::LineDistanceHeight);
+        } else {
+            format.setLineHeight(100, QTextBlockFormat::ProportionalHeight);
+        }
+        blockCursor.setBlockFormat(format);
     }
-    cursor.mergeBlockFormat(format);
+    cursor.endEditBlock();
 
     doc->setUndoRedoEnabled(undoEnabled);
     setTextCursor(previousCursor);
@@ -814,14 +833,14 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event)
 
     auto block = firstVisibleBlock();
     auto blockNumber = block.blockNumber();
-    auto height = QFontMetrics(mainFont).height();
     auto top = blockBoundingGeometry(block).translated(contentOffset()).top();
-    auto bottom = height + top;
+    auto bottom = top + blockBoundingRect(block).height();
     color = mainWindow ? mainWindow->getTheme().foregroundColor : lineNumberAreaPenColor;
 
     while (block.isValid() && top <= event->rect().bottom()) {
 
         if (block.isVisible() && bottom >= event->rect().top()) {
+            const qreal height = blockBoundingRect(block).height();
             auto number = QString::number(blockNumber);
             painter.setPen(color);
             painter.drawText(0, top, lineNumberArea->width(), height, Qt::AlignCenter, number);
@@ -829,7 +848,9 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event)
 
         block = block.next();
         top = bottom;
-        bottom = top + height;
+        if (!block.isValid())
+            break;
+        bottom = top + blockBoundingRect(block).height();
         ++blockNumber;
     }
 }

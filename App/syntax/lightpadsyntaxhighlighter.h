@@ -4,6 +4,8 @@
 #include "../settings/theme.h"
 #include <QRegularExpression>
 #include <QSyntaxHighlighter>
+#include <QTimer>
+#include <QPlainTextEdit>
 
 class HighlightingRule {
 
@@ -18,9 +20,26 @@ class LightpadSyntaxHighlighter : public QSyntaxHighlighter {
 
 public:
     LightpadSyntaxHighlighter(QVector<HighlightingRule> highlightingRules, QRegularExpression commentStartExpression, QRegularExpression commentEndExpression, QTextDocument* parent = nullptr);
+    
+    // Set the editor to enable viewport-aware highlighting
+    void setEditor(QPlainTextEdit* editor) { m_editor = editor; }
 
 protected:
     void highlightBlock(const QString& text) override;
+
+private:
+    bool isBlockVisible(int blockNumber) const;
+    
+    Theme colors;
+    QVector<HighlightingRule> highlightingRules;
+    QRegularExpression commentStartExpression;
+    QRegularExpression commentEndExpression;
+    QTextCharFormat multiLineCommentFormat;
+    QPlainTextEdit* m_editor = nullptr;
+    
+    // For deferred highlighting of off-screen blocks
+    static constexpr int VIEWPORT_BUFFER = 50; // Extra lines around viewport
+};
 
 private:
     Theme colors;

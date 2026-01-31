@@ -9,6 +9,7 @@ PluginBasedSyntaxHighlighter::PluginBasedSyntaxHighlighter(
     : QSyntaxHighlighter(parent)
     , m_theme(theme)
     , m_searchKeyword(searchKeyword)
+    , m_editor(nullptr)
 {
     if (!plugin) {
         Logger::instance().warning("PluginBasedSyntaxHighlighter created with null plugin");
@@ -94,6 +95,16 @@ QTextCharFormat PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRul
 
 void PluginBasedSyntaxHighlighter::highlightBlock(const QString& text)
 {
+    // Skip highlighting for blocks far outside the viewport
+    // This dramatically improves performance for large files
+    int blockNum = currentBlock().blockNumber();
+    if (!isBlockVisible(blockNum)) {
+        // Just set the block state for multi-line tracking
+        // but skip the expensive regex matching
+        setCurrentBlockState(previousBlockState());
+        return;
+    }
+    
     // Apply single-line rules
     for (const SyntaxRule& rule : m_rules) {
         QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
@@ -140,4 +151,25 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString& text)
             setFormat(match.capturedStart(), match.capturedLength(), m_searchFormat);
         }
     }
+}
+
+bool PluginBasedSyntaxHighlighter::isBlockVisible(int blockNumber) const
+{
+    if (!m_editor) {
+        return true; // No editor set, highlight everything
+    }
+    
+    // Get visible block range
+    QTextBlock firstVisible = m_editor->firstVisibleBlock();
+    int firstVisibleBlock = firstVisible.blockNumber();
+    
+    // Estimate last visible block (approximate based on viewport height)
+    int visibleLines = m_editor->viewport()->height() / m_editor->fontMetrics().height();
+    int lastVisibleBlock = firstVisibleBlock + visibleLines;
+    
+    // Include buffer around viewport for smooth scrolling
+    int minBlock = firstVisibleBlock - VIEWPORT_BUFFER;
+    int maxBlock = lastVisibleBlock + VIEWPORT_BUFFER;
+    
+    return (blockNumber >= minBlock && blockNumber <= maxBlock);
 }

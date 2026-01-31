@@ -52,8 +52,8 @@ PopupLanguageHighlight ::PopupLanguageHighlight(QStringList list, QWidget* paren
         if (mainWindow != 0 && mainWindow->getCurrentTextArea()) {
             QMap<QString, QString> langToExt = {};
             loadLanguageExtensions(langToExt);
-            mainWindow->getCurrentTextArea()->updateSyntaxHighlightTags("", langToExt[lang]);
-            mainWindow->setLanguageHighlightLabel(lang);
+            QString extension = langToExt[lang];
+            mainWindow->applyLanguageOverride(extension, lang);
         }
 
         close();
