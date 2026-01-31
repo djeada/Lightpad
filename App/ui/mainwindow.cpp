@@ -31,6 +31,7 @@
 #include "../core/textarea.h"
 #include "../run_templates/runtemplatemanager.h"
 #include "../format_templates/formattemplatemanager.h"
+#include "../syntax/syntaxpluginregistry.h"
 #include "ui_mainwindow.h"
 #include "../completion/completionengine.h"
 #include "../completion/completionproviderregistry.h"

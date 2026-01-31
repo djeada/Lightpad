@@ -3,6 +3,7 @@
 
 #include <QJsonDocument>
 #include <QDir>
+#include <QTimer>
 #include <functional>
 
 LspClient::LspClient(QObject* parent)

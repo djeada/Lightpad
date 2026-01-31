@@ -103,6 +103,7 @@ private:
     // Cached icons to avoid repeated disk loads
     static QIcon s_unsavedIcon;
     static bool s_iconsInitialized;
+    static void initializeIconCache();
 
     // Multi-cursor state
     QList<QTextCursor> m_extraCursors;
@@ -127,6 +128,7 @@ private:
     void showCompletionPopup();
     void hideCompletionPopup();
     void applyLineSpacing(int percent);
+    void updateHighlighterViewport();
     
 private slots:
     void onCompletionsReady(const QList<CompletionItem>& items);

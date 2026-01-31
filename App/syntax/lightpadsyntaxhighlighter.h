@@ -21,8 +21,11 @@ class LightpadSyntaxHighlighter : public QSyntaxHighlighter {
 public:
     LightpadSyntaxHighlighter(QVector<HighlightingRule> highlightingRules, QRegularExpression commentStartExpression, QRegularExpression commentEndExpression, QTextDocument* parent = nullptr);
     
-    // Set the editor to enable viewport-aware highlighting
-    void setEditor(QPlainTextEdit* editor) { m_editor = editor; }
+    // Set the visible block range for viewport-aware highlighting
+    void setVisibleBlockRange(int first, int last) { 
+        m_firstVisibleBlock = first; 
+        m_lastVisibleBlock = last; 
+    }
 
 protected:
     void highlightBlock(const QString& text) override;
@@ -35,18 +38,13 @@ private:
     QRegularExpression commentStartExpression;
     QRegularExpression commentEndExpression;
     QTextCharFormat multiLineCommentFormat;
-    QPlainTextEdit* m_editor = nullptr;
     
-    // For deferred highlighting of off-screen blocks
-    static constexpr int VIEWPORT_BUFFER = 50; // Extra lines around viewport
-};
-
-private:
-    Theme colors;
-    QVector<HighlightingRule> highlightingRules;
-    QRegularExpression commentStartExpression;
-    QRegularExpression commentEndExpression;
-    QTextCharFormat multiLineCommentFormat;
+    // Viewport tracking for performance
+    int m_firstVisibleBlock = 0;
+    int m_lastVisibleBlock = 1000;
+    
+    // Buffer around viewport for smooth scrolling
+    static constexpr int VIEWPORT_BUFFER = 50;
 };
 
 QString cutEndOfLine(QString line);

@@ -35,14 +35,6 @@ constexpr int defaultLineSpacingPercent = 200;
 QIcon TextArea::s_unsavedIcon;
 bool TextArea::s_iconsInitialized = false;
 
-static void initializeIconCache()
-{
-    if (!TextArea::s_iconsInitialized) {
-        TextArea::s_unsavedIcon = QIcon(":/resources/icons/unsaved.png");
-        TextArea::s_iconsInitialized = true;
-    }
-}
-
 static int findClosingParentheses(const QString& text, int pos, QChar startStr, QChar endStr)
 {
 
@@ -155,6 +147,14 @@ private:
     TextArea* textArea;
 };
 
+void TextArea::initializeIconCache()
+{
+    if (!s_iconsInitialized) {
+        s_unsavedIcon = QIcon(":/resources/icons/unsaved.png");
+        s_iconsInitialized = true;
+    }
+}
+
 TextArea::TextArea(QWidget* parent)
     : QPlainTextEdit(parent)
     , mainWindow(nullptr)
@@ -239,6 +239,11 @@ void TextArea::setupTextArea()
             setTabWidgetIcon(s_unsavedIcon);
             areChangesUnsaved = true;
         }
+    });
+    
+    // Update highlighter viewport on scroll for performance optimization
+    connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) {
+        updateHighlighterViewport();
     });
 
     setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
@@ -898,6 +903,29 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey, QString chosenLang)
             syntaxHighlighter = new LightpadSyntaxHighlighter(highlightingRulesPy(colors, searchKey), QRegularExpression(QStringLiteral("/'''")), QRegularExpression(QStringLiteral("\\'''")), document());
             break;
         }
+    }
+    
+    // Update highlighter viewport after setting up
+    updateHighlighterViewport();
+}
+
+void TextArea::updateHighlighterViewport()
+{
+    if (!syntaxHighlighter) {
+        return;
+    }
+    
+    // Calculate visible block range
+    int firstVisible = firstVisibleBlock().blockNumber();
+    int visibleLines = viewport()->height() / fontMetrics().height();
+    int lastVisible = firstVisible + visibleLines + 1;
+    
+    // Update the highlighter's viewport knowledge
+    // This allows it to skip highlighting off-screen blocks
+    if (auto* legacyHighlighter = qobject_cast<LightpadSyntaxHighlighter*>(syntaxHighlighter)) {
+        legacyHighlighter->setVisibleBlockRange(firstVisible, lastVisible);
+    } else if (auto* pluginHighlighter = qobject_cast<PluginBasedSyntaxHighlighter*>(syntaxHighlighter)) {
+        pluginHighlighter->setVisibleBlockRange(firstVisible, lastVisible);
     }
 }
 
