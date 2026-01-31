@@ -284,6 +284,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
      <string>Help</string>
     </property>
     <addaction name="actionAbout"/>
+    <addaction name="actionAbout_Qt"/>
     <addaction name="actionKeyboard_shortcuts"/>
    </widget>
    <widget class="QMenu" name="menuSearch">
@@ -422,7 +423,12 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   </action>
   <action name="actionAbout">
    <property name="text">
-    <string>About</string>
+    <string>About Lightpad</string>
+   </property>
+  </action>
+  <action name="actionAbout_Qt">
+   <property name="text">
+    <string>About Qt</string>
    </property>
   </action>
   <action name="actionFind_in_file">

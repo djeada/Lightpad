@@ -75,3 +75,14 @@ All contributions are welcomed.
 
 <h1>License</h1>
 This project is licensed under  GNU GENERAL PUBLIC LICENSE - see the <a href='https://github.com/djeada/Lightpad/blob/master/LICENSE'> LICENSE.txt </a> file for details.
+
+<h2>Third-Party Licenses</h2>
+
+<h3>Qt Framework</h3>
+This application uses the <a href="https://www.qt.io/">Qt framework</a>, which is available under the <a href="https://www.gnu.org/licenses/lgpl-3.0.html">GNU Lesser General Public License (LGPL) version 3</a>.
+
+Qt is a registered trademark of The Qt Company Ltd. and its subsidiaries.
+
+For more information about Qt licensing, visit: <a href="https://www.qt.io/licensing/">https://www.qt.io/licensing/</a>
+
+The Qt source code can be obtained from: <a href="https://www.qt.io/download-open-source">https://www.qt.io/download-open-source</a>

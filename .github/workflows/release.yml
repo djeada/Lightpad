@@ -169,6 +169,16 @@ jobs:
             exit 1
           fi
           cp "$EXE_PATH" dist/Lightpad.exe
+          # Include Qt license information
+          cat > dist/QT_LICENSE.txt << 'EOF'
+          This application uses the Qt framework.
+
+          Qt is available under the GNU Lesser General Public License (LGPL) version 3.
+          Qt is a registered trademark of The Qt Company Ltd. and its subsidiaries.
+
+          For more information about Qt licensing: https://www.qt.io/licensing/
+          Qt source code: https://www.qt.io/download-open-source
+          EOF
           windeployqt --release --compiler-runtime dist/Lightpad.exe
           powershell -Command "Compress-Archive -Path dist\\* -DestinationPath Lightpad-${{ runner.os }}.zip"
           echo "ASSET=Lightpad-${RUNNER_OS}.zip" >> $GITHUB_ENV
@@ -192,6 +202,16 @@ jobs:
             echo "Lightpad.app not found in build output"
             exit 1
           fi
+          # Include Qt license information in the app bundle
+          cat > "$APP_PATH/Contents/Resources/QT_LICENSE.txt" << 'EOF'
+          This application uses the Qt framework.
+
+          Qt is available under the GNU Lesser General Public License (LGPL) version 3.
+          Qt is a registered trademark of The Qt Company Ltd. and its subsidiaries.
+
+          For more information about Qt licensing: https://www.qt.io/licensing/
+          Qt source code: https://www.qt.io/download-open-source
+          EOF
           macdeployqt "$APP_PATH" -verbose=1 -always-overwrite
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "Lightpad-${RUNNER_OS}.zip"
           echo "ASSET=Lightpad-${RUNNER_OS}.zip" >> $GITHUB_ENV
@@ -202,6 +222,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist/AppDir/usr/bin
+          mkdir -p dist/AppDir/usr/share/doc/lightpad
           BIN_PATH="build/App/Lightpad"
           if [[ ! -f "$BIN_PATH" ]]; then
             BIN_PATH="build/Lightpad"
@@ -212,6 +233,16 @@ jobs:
           fi
           cp "$BIN_PATH" dist/AppDir/usr/bin/Lightpad
           cp App/resources/icons/app.png dist/AppDir/Lightpad.png
+          # Include Qt license information
+          cat > dist/AppDir/usr/share/doc/lightpad/QT_LICENSE.txt << 'EOF'
+          This application uses the Qt framework.
+
+          Qt is available under the GNU Lesser General Public License (LGPL) version 3.
+          Qt is a registered trademark of The Qt Company Ltd. and its subsidiaries.
+
+          For more information about Qt licensing: https://www.qt.io/licensing/
+          Qt source code: https://www.qt.io/download-open-source
+          EOF
           cat > dist/AppDir/Lightpad.desktop <<'DESKTOP'
           [Desktop Entry]
           Type=Application

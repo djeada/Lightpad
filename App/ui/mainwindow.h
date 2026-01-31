@@ -87,6 +87,7 @@ private slots:
     void on_actionReplace_in_file_triggered();
     void on_languageHighlight_clicked();
     void on_actionAbout_triggered();
+    void on_actionAbout_Qt_triggered();
     void on_tabWidth_clicked();
     void on_actionKeyboard_shortcuts_triggered();
     void on_actionPreferences_triggered();
