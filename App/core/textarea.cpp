@@ -298,8 +298,17 @@ void TextArea::setupTextArea()
     });
     
     // Update highlighter viewport on scroll for performance optimization
+    // Throttle to avoid excessive updates during fast scrolling
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) {
-        updateHighlighterViewport();
+        // Throttle scroll updates - only update if not already pending
+        static bool updateScheduled = false;
+        if (!updateScheduled) {
+            updateScheduled = true;
+            QTimer::singleShot(16, this, [this]() { // ~60fps max
+                updateScheduled = false;
+                updateHighlighterViewport();
+            });
+        }
     });
 
     if (document() && !dynamic_cast<ExtraLineSpacingDocumentLayout*>(document()->documentLayout())) {

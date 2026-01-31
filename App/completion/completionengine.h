@@ -115,9 +115,9 @@ private:
     int m_pendingProviders = 0;
     
     // Configuration
-    int m_minPrefixLength = 1;
-    int m_autoTriggerDelay = 300;
-    int m_maxResults = 100;
+    int m_minPrefixLength = 2;  // Require at least 2 chars before auto-completion
+    int m_autoTriggerDelay = 150; // 150ms debounce for auto-completion
+    int m_maxResults = 50;  // Limit results to improve popup responsiveness
     
     QTimer* m_debounceTimer;
 };
