@@ -27,6 +27,11 @@
 #include "../run_templates/runtemplatemanager.h"
 #include "../format_templates/formattemplatemanager.h"
 #include "ui_mainwindow.h"
+#include "../completion/completionengine.h"
+#include "../completion/completionproviderregistry.h"
+#include "../completion/providers/keywordcompletionprovider.h"
+#include "../completion/providers/snippetcompletionprovider.h"
+#include "../completion/providers/plugincompletionprovider.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -37,6 +42,7 @@ MainWindow::MainWindow(QWidget* parent)
     , findReplacePanel(nullptr)
     , terminalWidget(nullptr)
     , completer(nullptr)
+    , m_completionEngine(nullptr)
     , highlightLanguage("")
     , font(QApplication::font())
     , commandPalette(nullptr)
@@ -48,52 +54,18 @@ MainWindow::MainWindow(QWidget* parent)
     ui->tabWidget->setMainWindow(this);
     ui->magicButton->setIconSize(0.8 * ui->magicButton->size());
     
-    // Initialize shared completer
-    QStringList wordList;
+    // Initialize new completion system
+    setupCompletionSystem();
     
-    // Common keywords across languages
+    // Legacy completer initialization kept for backward compatibility
+    // TODO: Remove after confirming new system works
+    QStringList wordList;
     wordList << "break" << "case" << "continue" << "default" << "do" << "else" 
              << "for" << "if" << "return" << "switch" << "while";
-    
-    // C/C++ specific keywords
-    wordList << "auto" << "char" << "const" << "double" << "enum" << "extern" << "float"
-             << "goto" << "int" << "long" << "register" << "short" << "signed" << "sizeof" 
-             << "static" << "struct" << "typedef" << "union" << "unsigned" << "void" << "volatile"
-             << "class" << "namespace" << "template" << "public" << "private" << "protected"
-             << "virtual" << "override" << "final" << "explicit" << "inline" << "constexpr"
-             << "nullptr" << "delete" << "new" << "this" << "try" << "catch" << "throw"
-             << "bool" << "true" << "false";
-    
-    // C++ STL types and functions
-    wordList << "std" << "string" << "vector" << "map" << "set" << "list" << "queue" 
-             << "stack" << "pair" << "cout" << "cin" << "endl" << "include" << "define" 
-             << "ifdef" << "ifndef" << "endif";
-    
-    // Python specific keywords
-    wordList << "and" << "as" << "assert" << "async" << "await" << "class" << "def" 
-             << "del" << "elif" << "except" << "finally" << "from" << "global" << "import" 
-             << "in" << "is" << "lambda" << "nonlocal" << "not" << "or" << "pass" << "raise"
-             << "with" << "yield" << "True" << "False" << "None" << "self";
-    
-    // Python built-ins
-    wordList << "print" << "range" << "len" << "str" << "int" << "float" << "list" << "dict"
-             << "tuple" << "set" << "open" << "file" << "read" << "write" << "append";
-    
-    // JavaScript specific keywords
-    wordList << "abstract" << "arguments" << "boolean" << "byte" << "debugger" 
-             << "eval" << "export" << "extends" << "final" << "function" << "implements"
-             << "instanceof" << "interface" << "let" << "native" << "package" 
-             << "super" << "synchronized" << "throws" << "transient" << "typeof" << "var"
-             << "const";
-    
-    // JavaScript DOM/Browser
-    wordList << "console" << "log" << "document" << "window" << "alert" << "prompt" 
-             << "confirm" << "getElementById" << "querySelector" << "addEventListener" 
-             << "setTimeout" << "setInterval";
-    
+    wordList << "auto" << "char" << "const" << "class" << "namespace" << "template"
+             << "public" << "private" << "protected" << "virtual" << "override";
     wordList.sort();
     wordList.removeDuplicates();
-    
     completer = new QCompleter(wordList, this);
     completer->setCaseSensitivity(Qt::CaseInsensitive);
     completer->setModelSorting(QCompleter::CaseInsensitivelySortedModel);
@@ -805,6 +777,27 @@ void MainWindow::setupTabWidget()
     ui->tabWidget->currentChanged(0);
 }
 
+void MainWindow::setupCompletionSystem()
+{
+    // Register completion providers
+    auto& registry = CompletionProviderRegistry::instance();
+    
+    // Register keyword provider
+    registry.registerProvider(std::make_shared<KeywordCompletionProvider>());
+    
+    // Register snippet provider
+    registry.registerProvider(std::make_shared<SnippetCompletionProvider>());
+    
+    // Register plugin provider for syntax plugin keywords
+    registry.registerProvider(std::make_shared<PluginCompletionProvider>());
+    
+    // Create the completion engine
+    m_completionEngine = new CompletionEngine(this);
+    
+    LOG_INFO("Completion system initialized with providers: " + 
+             registry.allProviderIds().join(", "));
+}
+
 void MainWindow::setupTextArea()
 {
 
@@ -813,8 +806,17 @@ void MainWindow::setupTextArea()
         getCurrentTextArea()->setFontSize(settings.mainFont.pointSize());
         getCurrentTextArea()->setTabWidth(settings.tabWidth);
         
-        // Setup autocompletion with shared completer
-        if (completer)
+        // Setup new completion system (preferred)
+        if (m_completionEngine) {
+            getCurrentTextArea()->setCompletionEngine(m_completionEngine);
+            // Set language based on current highlight language
+            if (!highlightLanguage.isEmpty()) {
+                getCurrentTextArea()->setLanguage(highlightLanguage);
+            }
+        }
+        
+        // Legacy: Setup old completer as fallback
+        if (completer && !m_completionEngine)
             getCurrentTextArea()->setCompleter(completer);
     }
 }
