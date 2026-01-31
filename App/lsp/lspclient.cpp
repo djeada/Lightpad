@@ -3,6 +3,7 @@
 
 #include <QJsonDocument>
 #include <QDir>
+#include <functional>
 
 LspClient::LspClient(QObject* parent)
     : QObject(parent)
@@ -212,6 +213,48 @@ void LspClient::requestReferences(const QString& uri, LspPosition position)
     int id = m_nextRequestId++;
     m_pendingRequests[id] = "textDocument/references";
     sendRequest("textDocument/references", params, id);
+}
+
+void LspClient::requestSignatureHelp(const QString& uri, LspPosition position)
+{
+    QJsonObject textDocument;
+    textDocument["uri"] = uri;
+    
+    QJsonObject params;
+    params["textDocument"] = textDocument;
+    params["position"] = position.toJson();
+    
+    int id = m_nextRequestId++;
+    m_pendingRequests[id] = "textDocument/signatureHelp";
+    sendRequest("textDocument/signatureHelp", params, id);
+}
+
+void LspClient::requestDocumentSymbols(const QString& uri)
+{
+    QJsonObject textDocument;
+    textDocument["uri"] = uri;
+    
+    QJsonObject params;
+    params["textDocument"] = textDocument;
+    
+    int id = m_nextRequestId++;
+    m_pendingRequests[id] = "textDocument/documentSymbol";
+    sendRequest("textDocument/documentSymbol", params, id);
+}
+
+void LspClient::requestRename(const QString& uri, LspPosition position, const QString& newName)
+{
+    QJsonObject textDocument;
+    textDocument["uri"] = uri;
+    
+    QJsonObject params;
+    params["textDocument"] = textDocument;
+    params["position"] = position.toJson();
+    params["newName"] = newName;
+    
+    int id = m_nextRequestId++;
+    m_pendingRequests[id] = "textDocument/rename";
+    sendRequest("textDocument/rename", params, id);
 }
 
 void LspClient::sendRequest(const QString& method, const QJsonObject& params, int id)
@@ -427,6 +470,139 @@ void LspClient::handleResponse(int id, const QJsonValue& result, const QJsonValu
             locations.append(loc);
         }
         emit referencesReceived(id, locations);
+    } else if (method == "textDocument/signatureHelp") {
+        LspSignatureHelp signatureHelp;
+        QJsonObject obj = result.toObject();
+        signatureHelp.activeSignature = obj["activeSignature"].toInt(0);
+        signatureHelp.activeParameter = obj["activeParameter"].toInt(0);
+        
+        QJsonArray signaturesArray = obj["signatures"].toArray();
+        for (const QJsonValue& sigVal : signaturesArray) {
+            QJsonObject sigObj = sigVal.toObject();
+            LspSignatureInfo sigInfo;
+            sigInfo.label = sigObj["label"].toString();
+            sigInfo.activeParameter = sigObj["activeParameter"].toInt(-1);
+            
+            // Parse documentation
+            QJsonValue docVal = sigObj["documentation"];
+            if (docVal.isString()) {
+                sigInfo.documentation = docVal.toString();
+            } else if (docVal.isObject()) {
+                sigInfo.documentation = docVal.toObject()["value"].toString();
+            }
+            
+            // Parse parameters
+            QJsonArray paramsArray = sigObj["parameters"].toArray();
+            for (const QJsonValue& paramVal : paramsArray) {
+                QJsonObject paramObj = paramVal.toObject();
+                LspParameterInfo paramInfo;
+                
+                // Parameter label can be string or [start, end] array
+                QJsonValue labelVal = paramObj["label"];
+                if (labelVal.isString()) {
+                    paramInfo.label = labelVal.toString();
+                } else if (labelVal.isArray()) {
+                    QJsonArray labelArray = labelVal.toArray();
+                    // For now, we'll use the signature label substring
+                    paramInfo.label = sigInfo.label.mid(labelArray[0].toInt(), 
+                                                        labelArray[1].toInt() - labelArray[0].toInt());
+                }
+                
+                // Parse parameter documentation
+                QJsonValue paramDocVal = paramObj["documentation"];
+                if (paramDocVal.isString()) {
+                    paramInfo.documentation = paramDocVal.toString();
+                } else if (paramDocVal.isObject()) {
+                    paramInfo.documentation = paramDocVal.toObject()["value"].toString();
+                }
+                
+                sigInfo.parameters.append(paramInfo);
+            }
+            signatureHelp.signatures.append(sigInfo);
+        }
+        emit signatureHelpReceived(id, signatureHelp);
+    } else if (method == "textDocument/documentSymbol") {
+        QList<LspDocumentSymbol> symbols;
+        QJsonArray symbolsArray = result.toArray();
+        
+        // Helper lambda to recursively parse document symbols
+        std::function<LspDocumentSymbol(const QJsonObject&)> parseSymbol;
+        parseSymbol = [&parseSymbol](const QJsonObject& obj) -> LspDocumentSymbol {
+            LspDocumentSymbol symbol;
+            symbol.name = obj["name"].toString();
+            symbol.detail = obj["detail"].toString();
+            symbol.kind = static_cast<LspSymbolKind>(obj["kind"].toInt());
+            symbol.range = LspRange::fromJson(obj["range"].toObject());
+            symbol.selectionRange = LspRange::fromJson(obj["selectionRange"].toObject());
+            
+            // Parse children recursively
+            QJsonArray childrenArray = obj["children"].toArray();
+            for (const QJsonValue& childVal : childrenArray) {
+                symbol.children.append(parseSymbol(childVal.toObject()));
+            }
+            return symbol;
+        };
+        
+        for (const QJsonValue& val : symbolsArray) {
+            QJsonObject obj = val.toObject();
+            // Check if it's a DocumentSymbol or SymbolInformation
+            if (obj.contains("range")) {
+                // DocumentSymbol format
+                symbols.append(parseSymbol(obj));
+            } else if (obj.contains("location")) {
+                // SymbolInformation format (legacy)
+                LspDocumentSymbol symbol;
+                symbol.name = obj["name"].toString();
+                symbol.kind = static_cast<LspSymbolKind>(obj["kind"].toInt());
+                QJsonObject location = obj["location"].toObject();
+                symbol.range = LspRange::fromJson(location["range"].toObject());
+                symbol.selectionRange = symbol.range;
+                symbols.append(symbol);
+            }
+        }
+        emit documentSymbolsReceived(id, symbols);
+    } else if (method == "textDocument/rename") {
+        LspWorkspaceEdit workspaceEdit;
+        QJsonObject obj = result.toObject();
+        
+        // Parse changes map
+        QJsonObject changesObj = obj["changes"].toObject();
+        for (const QString& uri : changesObj.keys()) {
+            QList<LspTextEdit> edits;
+            QJsonArray editsArray = changesObj[uri].toArray();
+            for (const QJsonValue& editVal : editsArray) {
+                QJsonObject editObj = editVal.toObject();
+                LspTextEdit edit;
+                edit.range = LspRange::fromJson(editObj["range"].toObject());
+                edit.newText = editObj["newText"].toString();
+                edits.append(edit);
+            }
+            workspaceEdit.changes[uri] = edits;
+        }
+        
+        // Also parse documentChanges if present (versioned edits)
+        QJsonArray docChangesArray = obj["documentChanges"].toArray();
+        for (const QJsonValue& docChangeVal : docChangesArray) {
+            QJsonObject docChangeObj = docChangeVal.toObject();
+            if (docChangeObj.contains("textDocument") && docChangeObj.contains("edits")) {
+                QString uri = docChangeObj["textDocument"].toObject()["uri"].toString();
+                QList<LspTextEdit> edits;
+                QJsonArray editsArray = docChangeObj["edits"].toArray();
+                for (const QJsonValue& editVal : editsArray) {
+                    QJsonObject editObj = editVal.toObject();
+                    LspTextEdit edit;
+                    edit.range = LspRange::fromJson(editObj["range"].toObject());
+                    edit.newText = editObj["newText"].toString();
+                    edits.append(edit);
+                }
+                if (workspaceEdit.changes.contains(uri)) {
+                    workspaceEdit.changes[uri].append(edits);
+                } else {
+                    workspaceEdit.changes[uri] = edits;
+                }
+            }
+        }
+        emit renameReceived(id, workspaceEdit);
     }
 }
 
@@ -470,6 +646,15 @@ void LspClient::doInitialize()
     textDocumentCaps["hover"] = QJsonObject{{"dynamicRegistration", false}};
     textDocumentCaps["definition"] = QJsonObject{{"dynamicRegistration", false}};
     textDocumentCaps["references"] = QJsonObject{{"dynamicRegistration", false}};
+    textDocumentCaps["signatureHelp"] = QJsonObject{{"dynamicRegistration", false}};
+    textDocumentCaps["documentSymbol"] = QJsonObject{
+        {"dynamicRegistration", false},
+        {"hierarchicalDocumentSymbolSupport", true}
+    };
+    textDocumentCaps["rename"] = QJsonObject{
+        {"dynamicRegistration", false},
+        {"prepareSupport", false}
+    };
     
     capabilities["textDocument"] = textDocumentCaps;
     
