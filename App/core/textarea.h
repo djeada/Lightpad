@@ -14,6 +14,7 @@ class CompletionEngine;
 class CompletionWidget;
 struct CompletionItem;
 struct TextAreaSettings;
+struct Theme;
 
 class TextArea : public QPlainTextEdit {
 
@@ -37,6 +38,7 @@ public:
     void highlihtCurrentLine(bool flag);
     void highlihtMatchingBracket(bool flag);
     void loadSettings(const TextAreaSettings settings);
+    void applySelectionPalette(const Theme& theme);
     
     // Legacy completer support (deprecated - use setCompletionEngine)
     void setCompleter(QCompleter* completer);

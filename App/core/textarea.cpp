@@ -6,10 +6,12 @@
 #include <QStackedWidget>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <QTextBlockFormat>
 #include <QCompleter>
 #include <QAbstractItemView>
 #include <QScrollBar>
 #include <QMouseEvent>
+#include <QtGlobal>
 #include <functional>
 #include <algorithm>
 
@@ -29,7 +31,7 @@
 
 QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp }, { "js", Lang::js }, { "py", Lang::py } };
 QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };
-constexpr int defaultLineSpacingPercent = 150;
+constexpr int defaultLineSpacingPercent = 160;
 
 class ExtraLineSpacingDocumentLayout : public QPlainTextDocumentLayout {
 public:
@@ -329,10 +331,6 @@ void TextArea::setupTextArea()
         }
     });
 
-    if (document() && !dynamic_cast<ExtraLineSpacingDocumentLayout*>(document()->documentLayout())) {
-        document()->setDocumentLayout(new ExtraLineSpacingDocumentLayout(document()));
-    }
-
     setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
     updateCursorPositionChangedCallbacks();
     clearLineHighlight();
@@ -340,22 +338,10 @@ void TextArea::setupTextArea()
 
 void TextArea::applyLineSpacing(int percent)
 {
-    if (percent <= 0)
-        return;
-
-    auto* doc = document();
-    if (!doc)
-        return;
-
-    auto* layout = dynamic_cast<ExtraLineSpacingDocumentLayout*>(doc->documentLayout());
-    if (!layout) {
-        layout = new ExtraLineSpacingDocumentLayout(doc);
-        doc->setDocumentLayout(layout);
-    }
-
-    const int baseHeight = QFontMetrics(mainFont).lineSpacing();
-    const int extraHeight = qMax(0, (baseHeight * (percent - 100)) / 100);
-    layout->setExtraLineSpacing(extraHeight);
+    Q_UNUSED(percent);
+    // Set line spacing via stylesheet - this is the most reliable method for QPlainTextEdit
+    // The line-height property in the stylesheet affects text rendering
+    setStyleSheet(styleSheet() + QString("QPlainTextEdit { line-height: %1%; }").arg(percent));
 }
 
 int TextArea::lineNumberAreaWidth()
@@ -411,6 +397,9 @@ void TextArea::setMainWindow(MainWindow* window)
     if (m_completionWidget && mainWindow) {
         m_completionWidget->applyTheme(mainWindow->getTheme());
     }
+    if (mainWindow) {
+        applySelectionPalette(mainWindow->getTheme());
+    }
 }
 
 int TextArea::fontSize()
@@ -464,10 +453,25 @@ void TextArea::loadSettings(const TextAreaSettings settings)
     if (m_completionWidget) {
         m_completionWidget->applyTheme(settings.theme);
     }
+    applySelectionPalette(settings.theme);
     setAutoIdent(settings.autoIndent);
     showLineNumbers(settings.showLineNumberArea);
     highlihtCurrentLine(settings.lineHighlighted);
     highlihtMatchingBracket(settings.matchingBracketsHighlighted);
+    setFont(settings.mainFont);
+}
+
+void TextArea::applySelectionPalette(const Theme& theme)
+{
+    QPalette pal = palette();
+    pal.setColor(QPalette::Base, theme.backgroundColor);
+    pal.setColor(QPalette::Text, theme.foregroundColor);
+    pal.setColor(QPalette::Highlight, theme.accentSoftColor);
+    pal.setColor(QPalette::HighlightedText, theme.foregroundColor);
+    setPalette(pal);
+    if (viewport()) {
+        viewport()->setPalette(pal);
+    }
 }
 
 QString TextArea::getSearchWord()

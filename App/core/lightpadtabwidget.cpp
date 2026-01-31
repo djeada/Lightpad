@@ -9,6 +9,7 @@
 #include <QSizePolicy>
 #include <QTabBar>
 #include <QTextEdit>
+#include <QStyle>
 
 LightpadTabWidget::LightpadTabWidget(QWidget* parent)
     : QTabWidget(parent)
@@ -44,6 +45,8 @@ LightpadTabWidget::LightpadTabWidget(QWidget* parent)
         if (index == count() - 1)
             setCurrentIndex(0);
     });
+
+    updateCloseButtons();
 }
 
 void LightpadTabWidget::resizeEvent(QResizeEvent* event)
@@ -58,6 +61,84 @@ void LightpadTabWidget::tabRemoved(int index)
 
     if (count() <= 1)
         addNewTab();
+
+    updateCloseButtons();
+}
+
+void LightpadTabWidget::tabInserted(int index)
+{
+    QTabWidget::tabInserted(index);
+    updateCloseButtons();
+}
+
+void LightpadTabWidget::updateCloseButtons()
+{
+    for (int i = 0; i < count(); ++i) {
+        if (i == count() - 1) {
+            tabBar()->setTabButton(i, QTabBar::RightSide, newTabButton);
+            continue;
+        }
+
+        // Check if close button already exists for this tab
+        QWidget* existingButton = tabBar()->tabButton(i, QTabBar::RightSide);
+        if (existingButton && existingButton != newTabButton) {
+            // Update existing button's stylesheet
+            existingButton->setStyleSheet(QString(
+                "QToolButton {"
+                "  color: rgba(255, 255, 255, 0.4);"
+                "  background: transparent;"
+                "  border: none;"
+                "  border-radius: 4px;"
+                "  padding: 2px;"
+                "}"
+                "QToolButton:hover {"
+                "  color: %1;"
+                "  background: rgba(255, 255, 255, 0.15);"
+                "}"
+                "QToolButton:pressed {"
+                "  color: #ffffff;"
+                "  background: #e81123;"
+                "}"
+            ).arg(m_foregroundColor));
+            continue;
+        }
+
+        QToolButton* closeButton = new QToolButton(tabBar());
+        closeButton->setObjectName("TabCloseButton");
+        closeButton->setText(QStringLiteral("\u00D7")); // Unicode multiplication sign (×)
+        closeButton->setFixedSize(QSize(18, 18));
+        closeButton->setAutoRaise(true);
+        closeButton->setCursor(Qt::ArrowCursor);
+        closeButton->setToolTip(tr("Close Tab"));
+        closeButton->setStyleSheet(QString(
+            "QToolButton {"
+            "  color: rgba(255, 255, 255, 0.4);"
+            "  background: transparent;"
+            "  border: none;"
+            "  border-radius: 4px;"
+            "  padding: 2px;"
+            "  font-size: 14px;"
+            "  font-weight: bold;"
+            "}"
+            "QToolButton:hover {"
+            "  color: %1;"
+            "  background: rgba(255, 255, 255, 0.15);"
+            "}"
+            "QToolButton:pressed {"
+            "  color: #ffffff;"
+            "  background: #e81123;"
+            "}"
+        ).arg(m_foregroundColor));
+        connect(closeButton, &QToolButton::clicked, this, [this, closeButton]() {
+            for (int index = 0; index < count(); ++index) {
+                if (tabBar()->tabButton(index, QTabBar::RightSide) == closeButton) {
+                    removeTab(index);
+                    break;
+                }
+            }
+        });
+        tabBar()->setTabButton(i, QTabBar::RightSide, closeButton);
+    }
 }
 
 void LightpadTabWidget::addNewTab()
@@ -98,6 +179,10 @@ void LightpadTabWidget::setTheme(const QString& backgroundColor,
     const QString& accentColor,
     const QString& borderColor)
 {
+    m_foregroundColor = foregroundColor;
+    m_hoverColor = hoverColor;
+    m_accentColor = accentColor;
+
     setStyleSheet(
         // Modern scrollbar styling
         "QScrollBar:vertical { background: transparent; }"
@@ -136,17 +221,6 @@ void LightpadTabWidget::setTheme(const QString& backgroundColor,
             "background-color: " + hoverColor + "; "
         "}"
 
-        // Close button on tabs - subtle and minimal
-        "QTabBar::close-button { "
-            "image: url(:/resources/icons/close_dark.png); "
-            "subcontrol-position: right; "
-            "padding: 2px; "
-            "border-radius: 4px; "
-        "}"
-        "QTabBar::close-button:hover { "
-            "background-color: " + hoverColor + "; "
-        "}"
-
         // Add tab button styling - clean and minimal
         "QToolButton#AddTabButton { "
             "background: " + backgroundColor + "; "
@@ -159,6 +233,25 @@ void LightpadTabWidget::setTheme(const QString& backgroundColor,
             "border: 1px solid " + borderColor + "; "
         "}"
 
+        // Tab close button styling - modern minimal design (subtle until hovered)
+        "QToolButton#TabCloseButton { "
+            "color: rgba(255, 255, 255, 0.4); "
+            "background: transparent; "
+            "border: none; "
+            "border-radius: 4px; "
+            "padding: 2px; "
+            "font-size: 14px; "
+            "font-weight: bold; "
+        "}"
+        "QToolButton#TabCloseButton:hover { "
+            "color: " + foregroundColor + "; "
+            "background: rgba(255, 255, 255, 0.15); "
+        "}"
+        "QToolButton#TabCloseButton:pressed { "
+            "color: #ffffff; "
+            "background: #e81123; "
+        "}"
+
         // Tab widget pane - seamless integration
         "QTabWidget::pane { "
             "border: none; "
@@ -168,6 +261,8 @@ void LightpadTabWidget::setTheme(const QString& backgroundColor,
             "background-color: " + backgroundColor + "; "
         "}"
     );
+
+    updateCloseButtons();
 }
 
 void LightpadTabWidget::setFilePath(int index, QString filePath)
@@ -237,14 +332,29 @@ QString LightpadTabWidget::getFilePath(int index)
 
 void LightpadTabWidget::addViewerTab(QWidget* viewer, const QString& filePath)
 {
+    addViewerTab(viewer, filePath, QString());
+}
+
+void LightpadTabWidget::addViewerTab(QWidget* viewer, const QString& filePath, const QString& projectRootPath)
+{
     if (!viewer)
         return;
-    
+
+    auto* page = new LightpadPage(this, false);
+    page->setMainWindow(mainWindow);
+    if (!projectRootPath.isEmpty()) {
+        page->setProjectRootPath(projectRootPath);
+        page->setTreeViewVisible(true);
+        page->setModelRootIndex(projectRootPath);
+    }
+    page->setCustomContentWidget(viewer);
+    page->setFilePath(filePath);
+
     QFileInfo fileInfo(filePath);
     QString tabTitle = fileInfo.fileName();
-    
-    m_viewerFilePaths[viewer] = filePath;
-    insertTab(count() - 1, viewer, tabTitle);
+
+    m_viewerFilePaths[page] = filePath;
+    insertTab(count() - 1, page, tabTitle);
     setCurrentIndex(count() - 2);
 }
 

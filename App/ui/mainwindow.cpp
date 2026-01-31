@@ -42,6 +42,7 @@
 #include "panels/spliteditorcontainer.h"
 #include "viewers/imageviewer.h"
 #include "viewers/pdfviewer.h"
+#include "../settings/settingsmanager.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -133,6 +134,15 @@ void MainWindow::loadSettings()
 
     else
         setTabWidth(defaultTabWidth);
+
+    // Load global font settings from user home config
+    SettingsManager& globalSettings = SettingsManager::instance();
+    globalSettings.loadSettings();
+    QString fontFamily = globalSettings.getValue("fontFamily", "Ubuntu Mono").toString();
+    int fontSize = globalSettings.getValue("fontSize", defaultFontSize).toInt();
+    int fontWeight = globalSettings.getValue("fontWeight", 50).toInt();
+    bool fontItalic = globalSettings.getValue("fontItalic", false).toBool();
+    settings.mainFont = QFont(fontFamily, fontSize, fontWeight, fontItalic);
 
     updateAllTextAreas(&TextArea::loadSettings, settings);
     setTheme(settings.theme);
@@ -364,6 +374,13 @@ void MainWindow::updateAllTextAreas(void (TextArea::*f)(Args... args), Args... a
         (textArea->*f)(args...);
 }
 
+void MainWindow::updateAllTextAreas(void (TextArea::*f)(const Theme&), const Theme& theme)
+{
+    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
+    for (auto& textArea : textAreas)
+        (textArea->*f)(theme);
+}
+
 void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
 {
 
@@ -456,7 +473,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     if (ImageViewer::isSupportedImageFormat(extension)) {
         ImageViewer* imageViewer = new ImageViewer(this);
         if (imageViewer->loadImage(filePath)) {
-            ui->tabWidget->addViewerTab(imageViewer, filePath);
+            ui->tabWidget->addViewerTab(imageViewer, filePath, m_projectRootPath);
         } else {
             delete imageViewer;
         }
@@ -467,7 +484,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     if (PdfViewer::isSupportedPdfFormat(extension)) {
         PdfViewer* pdfViewer = new PdfViewer(this);
         if (pdfViewer->loadPdf(filePath)) {
-            ui->tabWidget->addViewerTab(pdfViewer, filePath);
+            ui->tabWidget->addViewerTab(pdfViewer, filePath, m_projectRootPath);
         } else {
             delete pdfViewer;
         }
@@ -582,18 +599,24 @@ void MainWindow::on_actionIncrease_Font_Size_triggered()
 {
     updateAllTextAreas(&TextArea::increaseFontSize);
     settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
+    SettingsManager::instance().setValue("fontSize", settings.mainFont.pointSize());
+    SettingsManager::instance().saveSettings();
 }
 
 void MainWindow::on_actionDecrease_Font_Size_triggered()
 {
     updateAllTextAreas(&TextArea::decreaseFontSize);
     settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
+    SettingsManager::instance().setValue("fontSize", settings.mainFont.pointSize());
+    SettingsManager::instance().saveSettings();
 }
 
 void MainWindow::on_actionReset_Font_Size_triggered()
 {
     updateAllTextAreas(&TextArea::setFontSize, defaultFontSize);
     settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
+    SettingsManager::instance().setValue("fontSize", settings.mainFont.pointSize());
+    SettingsManager::instance().saveSettings();
 }
 
 void MainWindow::on_actionCut_triggered()
@@ -1676,13 +1699,11 @@ void MainWindow::setTheme(Theme theme)
         "QPlainTextEdit { "
             "color: " + fgColor + "; "
             "background-color: " + bgColor + "; "
-            "selection-background-color: " + accentSoftColor + "; "
             "border: none; "
         "}"
         "QTextEdit { "
             "color: " + fgColor + "; "
             "background-color: " + bgColor + "; "
-            "selection-background-color: " + accentSoftColor + "; "
             "border: none; "
         "}"
 
@@ -1893,6 +1914,7 @@ void MainWindow::setTheme(Theme theme)
     qApp->setStyleSheet(styleSheet);
 
     ui->tabWidget->setTheme(bgColor, fgColor, surfaceColor, hoverColor, accentColor, borderColor);
+    updateAllTextAreas(&TextArea::applySelectionPalette, settings.theme);
 }
 
 void MainWindow::setProjectRootPath(const QString& path)

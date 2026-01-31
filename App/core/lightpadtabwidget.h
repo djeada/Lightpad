@@ -19,6 +19,7 @@ public:
     LightpadTabWidget(QWidget* parent = nullptr);
     void addNewTab();
     void addViewerTab(QWidget* viewer, const QString& filePath);
+    void addViewerTab(QWidget* viewer, const QString& filePath, const QString& projectRootPath);
     void setMainWindow(MainWindow* window);
     void setTheme(const QString& backgroundColor,
         const QString& foregroundColor,
@@ -37,11 +38,16 @@ public:
 protected:
     void resizeEvent(QResizeEvent* event) override;
     void tabRemoved(int index) override;
+    void tabInserted(int index) override;
 
 private:
+    void updateCloseButtons();
     MainWindow* mainWindow;
     QToolButton* newTabButton;
     QMap<QWidget*, QString> m_viewerFilePaths;
+    QString m_foregroundColor;
+    QString m_hoverColor;
+    QString m_accentColor;
 };
 
 #endif // CODEEDITORTABS_H
