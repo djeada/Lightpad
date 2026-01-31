@@ -801,6 +801,7 @@ void Terminal::updateStyleSheet()
         "  background-color: %1;"
         "  color: %2;"
         "  selection-background-color: #1b2a43;"
+        "  selection-color: %2;"
         "  border: none;"
         "}"
     ).arg(m_backgroundColor, m_textColor);
