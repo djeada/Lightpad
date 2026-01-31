@@ -138,7 +138,6 @@ void LightpadTabWidget::setTheme(const QString& backgroundColor,
 
         // Close button on tabs - subtle and minimal
         "QTabBar::close-button { "
-            "image: url(:/resources/icons/close_dark.png); "
             "subcontrol-position: right; "
             "padding: 2px; "
             "border-radius: 4px; "

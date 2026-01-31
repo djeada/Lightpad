@@ -42,6 +42,7 @@
 #include "panels/spliteditorcontainer.h"
 #include "viewers/imageviewer.h"
 #include "viewers/pdfviewer.h"
+#include "../settings/settingsmanager.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -133,6 +134,12 @@ void MainWindow::loadSettings()
 
     else
         setTabWidth(defaultTabWidth);
+
+    // Load global font size from user home config
+    SettingsManager& globalSettings = SettingsManager::instance();
+    globalSettings.loadSettings();
+    int globalFontSize = globalSettings.getValue("fontSize", defaultFontSize).toInt();
+    settings.mainFont.setPointSize(globalFontSize);
 
     updateAllTextAreas(&TextArea::loadSettings, settings);
     setTheme(settings.theme);
@@ -589,18 +596,24 @@ void MainWindow::on_actionIncrease_Font_Size_triggered()
 {
     updateAllTextAreas(&TextArea::increaseFontSize);
     settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
+    SettingsManager::instance().setValue("fontSize", settings.mainFont.pointSize());
+    SettingsManager::instance().saveSettings();
 }
 
 void MainWindow::on_actionDecrease_Font_Size_triggered()
 {
     updateAllTextAreas(&TextArea::decreaseFontSize);
     settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
+    SettingsManager::instance().setValue("fontSize", settings.mainFont.pointSize());
+    SettingsManager::instance().saveSettings();
 }
 
 void MainWindow::on_actionReset_Font_Size_triggered()
 {
     updateAllTextAreas(&TextArea::setFontSize, defaultFontSize);
     settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
+    SettingsManager::instance().setValue("fontSize", settings.mainFont.pointSize());
+    SettingsManager::instance().saveSettings();
 }
 
 void MainWindow::on_actionCut_triggered()

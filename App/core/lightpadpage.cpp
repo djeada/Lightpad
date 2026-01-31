@@ -400,6 +400,8 @@ void LightpadPage::updateModel()
     if (!projectRootPath.isEmpty()) {
         treeView->setRootIndex(model->index(projectRootPath));
     }
+
+    treeView->setHeaderHidden(true);
 }
 
 QString LightpadPage::getFilePath()
