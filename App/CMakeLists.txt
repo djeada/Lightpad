@@ -88,6 +88,7 @@ set(project_headers
     ui/dialogs/shortcuts.h
     ui/panels/terminal.h
     ui/panels/terminaltabwidget.h
+    ui/panels/shellprofile.h
     core/textarea.h
     settings/textareasettings.h
     filetree/filedirtreemodel.h
@@ -154,6 +155,7 @@ set(project_sources
     ui/dialogs/shortcuts.cpp
     ui/panels/terminal.cpp
     ui/panels/terminaltabwidget.cpp
+    ui/panels/shellprofile.cpp
     core/textarea.cpp
     settings/textareasettings.cpp
     filetree/filedirtreemodel.cpp
