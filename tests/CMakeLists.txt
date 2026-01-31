@@ -359,16 +359,43 @@ add_test(NAME TerminalTabWidgetTests COMMAND test_terminaltabwidget)
 add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
 add_test(NAME CompletionProviderRegistryTests COMMAND test_completionproviderregistry)
 
+# GitIntegration test executable
+add_executable(test_gitintegration
+    unit/test_gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitintegration PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitintegration
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_gitintegration PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitIntegrationTests COMMAND test_gitintegration)
+
 # Set environment variable for headless testing
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
     AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
     RunTemplateManagerTests FormatTemplateManagerTests TerminalTests TerminalTabWidgetTests
-    SyntaxPluginRegistryTests CompletionProviderRegistryTests PROPERTIES
+    SyntaxPluginRegistryTests CompletionProviderRegistryTests GitIntegrationTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
 # Set timeout for terminal tests that may take longer due to shell process management
 set_tests_properties(TerminalTests TerminalTabWidgetTests PROPERTIES TIMEOUT 30)
+
+# Set timeout for git tests that may take longer due to git operations
+set_tests_properties(GitIntegrationTests PROPERTIES TIMEOUT 30)
 
 # Custom target to run all tests
 add_custom_target(run_tests
@@ -376,6 +403,6 @@ add_custom_target(run_tests
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
             test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
             test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
-            test_syntaxpluginregistry test_completionproviderregistry
+            test_syntaxpluginregistry test_completionproviderregistry test_gitintegration
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
