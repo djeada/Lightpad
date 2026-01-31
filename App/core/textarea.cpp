@@ -29,7 +29,7 @@
 
 QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp }, { "js", Lang::js }, { "py", Lang::py } };
 QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };
-constexpr int defaultLineSpacingPercent = 135;
+constexpr int defaultLineSpacingPercent = 200;
 
 static int findClosingParentheses(const QString& text, int pos, QChar startStr, QChar endStr)
 {
@@ -244,10 +244,17 @@ void TextArea::applyLineSpacing(int percent)
     const bool undoEnabled = doc->isUndoRedoEnabled();
     doc->setUndoRedoEnabled(false);
 
+    const int baseHeight = QFontMetrics(mainFont).lineSpacing();
+    const int extraHeight = qMax(0, (baseHeight * (percent - 100)) / 100);
+
     QTextCursor cursor(doc);
     cursor.select(QTextCursor::Document);
     QTextBlockFormat format;
-    format.setLineHeight(percent, QTextBlockFormat::ProportionalHeight);
+    if (extraHeight > 0) {
+        format.setLineHeight(extraHeight, QTextBlockFormat::LineDistanceHeight);
+    } else {
+        format.setLineHeight(100, QTextBlockFormat::ProportionalHeight);
+    }
     cursor.mergeBlockFormat(format);
 
     doc->setUndoRedoEnabled(undoEnabled);
@@ -281,6 +288,7 @@ void TextArea::setFontSize(int size)
     if (doc) {
         mainFont.setPointSize(size);
         doc->setDefaultFont(mainFont);
+        applyLineSpacing(defaultLineSpacingPercent);
     }
 }
 
@@ -291,6 +299,13 @@ void TextArea::setFont(QFont font)
 
     if (doc)
         doc->setDefaultFont(font);
+    applyLineSpacing(defaultLineSpacingPercent);
+}
+
+void TextArea::setPlainText(const QString& text)
+{
+    QPlainTextEdit::setPlainText(text);
+    applyLineSpacing(defaultLineSpacingPercent);
 }
 
 void TextArea::setMainWindow(MainWindow* window)

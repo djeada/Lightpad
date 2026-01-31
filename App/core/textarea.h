@@ -28,6 +28,7 @@ public:
     void decreaseFontSize();
     void setFontSize(int size);
     void setFont(QFont font);
+    void setPlainText(const QString& text);
     void setMainWindow(MainWindow* window);
     void setTabWidth(int width);
     void removeIconUnsaved();
