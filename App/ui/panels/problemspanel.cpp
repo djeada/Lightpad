@@ -154,59 +154,43 @@ int ProblemsPanel::infoCount() const
 
 int ProblemsPanel::problemCountForFile(const QString& filePath) const
 {
-    // Normalize the file path - convert from file:// URI if needed
-    QString normalizedPath = filePath;
-    if (normalizedPath.startsWith("file://")) {
-        normalizedPath = normalizedPath.mid(7);
-    }
-    
-    // Try to find matching diagnostics
-    for (auto it = m_diagnostics.constBegin(); it != m_diagnostics.constEnd(); ++it) {
-        QString uri = it.key();
-        QString uriPath = uri;
-        if (uriPath.startsWith("file://")) {
-            uriPath = uriPath.mid(7);
-        }
-        
-        if (uriPath == normalizedPath || uri == filePath) {
-            return it.value().size();
-        }
-    }
-    
-    return 0;
+    const QList<LspDiagnostic>* diagnostics = findDiagnosticsForFile(filePath);
+    return diagnostics ? diagnostics->size() : 0;
 }
 
 int ProblemsPanel::errorCountForFile(const QString& filePath) const
 {
-    // Normalize the file path - convert from file:// URI if needed
-    QString normalizedPath = filePath;
-    if (normalizedPath.startsWith("file://")) {
-        normalizedPath = normalizedPath.mid(7);
+    const QList<LspDiagnostic>* diagnostics = findDiagnosticsForFile(filePath);
+    if (!diagnostics) {
+        return 0;
     }
     
-    // Try to find matching diagnostics
-    for (auto it = m_diagnostics.constBegin(); it != m_diagnostics.constEnd(); ++it) {
-        QString uri = it.key();
-        QString uriPath = uri;
-        if (uriPath.startsWith("file://")) {
-            uriPath = uriPath.mid(7);
-        }
-        
-        if (uriPath == normalizedPath || uri == filePath) {
-            int count = 0;
-            for (const auto& diag : it.value()) {
-                if (diag.severity == LspDiagnosticSeverity::Error) {
-                    count++;
-                }
-            }
-            return count;
+    int count = 0;
+    for (const auto& diag : *diagnostics) {
+        if (diag.severity == LspDiagnosticSeverity::Error) {
+            count++;
         }
     }
-    
-    return 0;
+    return count;
 }
 
 int ProblemsPanel::warningCountForFile(const QString& filePath) const
+{
+    const QList<LspDiagnostic>* diagnostics = findDiagnosticsForFile(filePath);
+    if (!diagnostics) {
+        return 0;
+    }
+    
+    int count = 0;
+    for (const auto& diag : *diagnostics) {
+        if (diag.severity == LspDiagnosticSeverity::Warning) {
+            count++;
+        }
+    }
+    return count;
+}
+
+const QList<LspDiagnostic>* ProblemsPanel::findDiagnosticsForFile(const QString& filePath) const
 {
     // Normalize the file path - convert from file:// URI if needed
     QString normalizedPath = filePath;
@@ -223,17 +207,11 @@ int ProblemsPanel::warningCountForFile(const QString& filePath) const
         }
         
         if (uriPath == normalizedPath || uri == filePath) {
-            int count = 0;
-            for (const auto& diag : it.value()) {
-                if (diag.severity == LspDiagnosticSeverity::Warning) {
-                    count++;
-                }
-            }
-            return count;
+            return &it.value();
         }
     }
     
-    return 0;
+    return nullptr;
 }
 
 void ProblemsPanel::onItemDoubleClicked(QTreeWidgetItem* item, int column)

@@ -315,34 +315,35 @@ void GoToSymbolDialog::selectPrevious()
 
 QString GoToSymbolDialog::symbolKindIcon(LspSymbolKind kind) const
 {
+    // Using simple Unicode symbols for better cross-platform and accessibility compatibility
     switch (kind) {
-    case LspSymbolKind::File: return "📄";
-    case LspSymbolKind::Module: return "📦";
-    case LspSymbolKind::Namespace: return "🔷";
-    case LspSymbolKind::Package: return "📦";
-    case LspSymbolKind::Class: return "🔶";
-    case LspSymbolKind::Method: return "🔧";
-    case LspSymbolKind::Property: return "🔑";
-    case LspSymbolKind::Field: return "📋";
-    case LspSymbolKind::Constructor: return "🏗️";
-    case LspSymbolKind::Enum: return "📊";
-    case LspSymbolKind::Interface: return "🔷";
-    case LspSymbolKind::Function: return "🔹";
-    case LspSymbolKind::Variable: return "📌";
-    case LspSymbolKind::Constant: return "🔒";
-    case LspSymbolKind::String: return "📝";
-    case LspSymbolKind::Number: return "🔢";
-    case LspSymbolKind::Boolean: return "✅";
-    case LspSymbolKind::Array: return "📚";
-    case LspSymbolKind::Object: return "🔲";
-    case LspSymbolKind::Key: return "🔑";
-    case LspSymbolKind::Null: return "⬜";
-    case LspSymbolKind::EnumMember: return "📊";
-    case LspSymbolKind::Struct: return "🏛️";
-    case LspSymbolKind::Event: return "⚡";
-    case LspSymbolKind::Operator: return "➕";
-    case LspSymbolKind::TypeParameter: return "📐";
-    default: return "•";
+    case LspSymbolKind::File: return "\u2630";      // ☰ trigram for heaven
+    case LspSymbolKind::Module: return "\u25A6";    // ▦ square with orthogonal crosshatch
+    case LspSymbolKind::Namespace: return "\u25C7"; // ◇ white diamond
+    case LspSymbolKind::Package: return "\u25A6";   // ▦ square with orthogonal crosshatch
+    case LspSymbolKind::Class: return "\u25C6";     // ◆ black diamond
+    case LspSymbolKind::Method: return "\u25B8";    // ▸ black right-pointing small triangle
+    case LspSymbolKind::Property: return "\u25CB";  // ○ white circle
+    case LspSymbolKind::Field: return "\u25A1";     // □ white square
+    case LspSymbolKind::Constructor: return "\u25B2"; // ▲ black up-pointing triangle
+    case LspSymbolKind::Enum: return "\u2261";      // ≡ identical to
+    case LspSymbolKind::Interface: return "\u25C7"; // ◇ white diamond
+    case LspSymbolKind::Function: return "\u0192";  // ƒ latin small letter f with hook
+    case LspSymbolKind::Variable: return "\u03BD";  // ν greek small letter nu
+    case LspSymbolKind::Constant: return "\u03C0";  // π greek small letter pi
+    case LspSymbolKind::String: return "\u0022";    // " quotation mark
+    case LspSymbolKind::Number: return "\u0023";    // # number sign
+    case LspSymbolKind::Boolean: return "\u2713";   // ✓ check mark
+    case LspSymbolKind::Array: return "\u25A4";     // ▤ square with horizontal fill
+    case LspSymbolKind::Object: return "\u25A3";    // ▣ white square containing small black square
+    case LspSymbolKind::Key: return "\u25CB";       // ○ white circle
+    case LspSymbolKind::Null: return "\u2205";      // ∅ empty set
+    case LspSymbolKind::EnumMember: return "\u2261"; // ≡ identical to
+    case LspSymbolKind::Struct: return "\u25A0";    // ■ black square
+    case LspSymbolKind::Event: return "\u26A1";     // ⚡ high voltage sign
+    case LspSymbolKind::Operator: return "\u002B";  // + plus sign
+    case LspSymbolKind::TypeParameter: return "\u03C4"; // τ greek small letter tau
+    default: return "\u2022";                       // • bullet
     }
 }
 

@@ -123,6 +123,7 @@ private:
     void rebuildTree();
     QString severityIcon(LspDiagnosticSeverity severity) const;
     QString severityText(LspDiagnosticSeverity severity) const;
+    const QList<LspDiagnostic>* findDiagnosticsForFile(const QString& filePath) const;
 
     QTreeWidget* m_tree;
     QLabel* m_statusLabel;

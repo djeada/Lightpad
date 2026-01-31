@@ -1712,7 +1712,11 @@ int TextArea::getFoldingLevel(int blockNumber) const
         else break;
     }
     
-    // Also count brace nesting level by looking at preceding blocks
+    // Also count brace nesting level by looking at preceding blocks.
+    // Note: This has O(n) complexity per call. For foldToLevel() which calls this
+    // for each block, the total complexity is O(n²). This is acceptable for the
+    // infrequent fold-to-level operation, but could be optimized with caching
+    // if needed for real-time use cases.
     int braceLevel = 0;
     QTextBlock prevBlock = document()->begin();
     while (prevBlock.isValid() && prevBlock.blockNumber() < blockNumber) {
