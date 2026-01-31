@@ -35,9 +35,8 @@ void TestGoToLineDialog::testDialogCreation()
 
 void TestGoToLineDialog::testMaxLineDefault()
 {
-    // Create dialog with default max line
+    // Create dialog with specific max line
     GoToLineDialog dialog(nullptr, 50);
-    dialog.setMaxLine(50);
     
     // Line number should be invalid initially (empty input)
     QCOMPARE(dialog.lineNumber(), -1);
@@ -45,9 +44,12 @@ void TestGoToLineDialog::testMaxLineDefault()
 
 void TestGoToLineDialog::testSetMaxLine()
 {
-    m_dialog->setMaxLine(200);
-    // Just verify it doesn't crash - no direct way to get maxLine
-    QVERIFY(true);
+    // Create a dialog with initial max line, then change it
+    GoToLineDialog dialog(nullptr, 50);
+    dialog.setMaxLine(200);
+    
+    // Verify initial state - empty input should still be invalid
+    QCOMPARE(dialog.lineNumber(), -1);
 }
 
 void TestGoToLineDialog::testValidLineNumber()

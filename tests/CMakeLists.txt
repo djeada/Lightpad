@@ -437,11 +437,27 @@ target_compile_definitions(test_gotolinedialog PRIVATE QT_DEPRECATED_WARNINGS)
 add_test(NAME GoToLineDialogTests COMMAND test_gotolinedialog)
 
 # Set environment variable for headless testing
-set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
-    AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
-    RunTemplateManagerTests FormatTemplateManagerTests TerminalTests TerminalTabWidgetTests
-    SyntaxPluginRegistryTests CompletionProviderRegistryTests DapTests GitIntegrationTests
-    GoToLineDialogTests PROPERTIES
+set_tests_properties(
+    LoggerTests 
+    ThemeTests 
+    FileManagerTests 
+    DocumentTests 
+    SettingsManagerTests 
+    AsyncWorkerTests 
+    PluginManagerTests 
+    VimModeTests 
+    I18nTests 
+    AccessibilityTests 
+    RunTemplateManagerTests 
+    FormatTemplateManagerTests 
+    TerminalTests 
+    TerminalTabWidgetTests
+    SyntaxPluginRegistryTests 
+    CompletionProviderRegistryTests 
+    DapTests 
+    GitIntegrationTests
+    GoToLineDialogTests 
+    PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
