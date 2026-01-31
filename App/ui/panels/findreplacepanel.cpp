@@ -900,16 +900,6 @@ void FindReplacePanel::onGlobalResultClicked(QTreeWidgetItem* item, int column)
     updateCounterLabels();
 }
 
-QString FindReplacePanel::getCurrentFilePath() const
-{
-    if (!textArea || !mainWindow) {
-        return QString();
-    }
-    // Try to get file path from the current tab
-    // This is a workaround - ideally we'd have direct access to the file path
-    return QString();
-}
-
 void FindReplacePanel::displayLocalResults(const QString& searchWord)
 {
     if (!resultsTree || !textArea) {

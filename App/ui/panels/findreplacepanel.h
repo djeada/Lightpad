@@ -105,7 +105,6 @@ private:
     // Local search results display
     void displayLocalResults(const QString& searchWord);
     void onLocalResultClicked(QTreeWidgetItem* item, int column);
-    QString getCurrentFilePath() const;
 };
 
 #endif // FINDREPLACEPANEL_H

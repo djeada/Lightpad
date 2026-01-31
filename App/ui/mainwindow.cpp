@@ -728,7 +728,10 @@ void MainWindow::showFindReplace(bool onlyFind)
         // Connect navigation signal to open file at location
         connect(findReplacePanel, &FindReplacePanel::navigateToFile, 
                 this, [this](const QString& filePath, int lineNumber, int columnNumber) {
-            openFileAndAddToNewTab(filePath);
+            // For local search results, filePath is empty - use current text area
+            if (!filePath.isEmpty()) {
+                openFileAndAddToNewTab(filePath);
+            }
             TextArea* textArea = getCurrentTextArea();
             if (textArea) {
                 QTextCursor cursor = textArea->textCursor();
