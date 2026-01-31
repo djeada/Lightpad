@@ -21,10 +21,10 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Fuzzy command search (Ctrl+Shift+P)
 - [x] Auto-register commands from menus
 - [x] Keyboard shortcut display
-- [ ] Recent commands
-- [ ] File quick open (Ctrl+P)
+- [x] Recent commands
+- [x] File quick open (Ctrl+P)
 - [ ] Go to symbol (Ctrl+Shift+O)
-- [ ] Go to line (Ctrl+G)
+- [x] Go to line (Ctrl+G)
 
 ### Code Folding
 - [x] Fold/unfold current block (Ctrl+Shift+[/])
@@ -43,7 +43,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Click to navigate to problem
 - [x] File grouping
 - [x] Color-coded by severity
-- [ ] Problem count in status bar
+- [x] Problem count in status bar
 - [ ] Problem count per file in tree
 - [ ] Auto-refresh on save
 

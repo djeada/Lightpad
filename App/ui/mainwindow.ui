@@ -286,6 +286,8 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="separator"/>
     <addaction name="actionReplace_in_file"/>
     <addaction name="actionReplace_in_project"/>
+    <addaction name="separator"/>
+    <addaction name="actionGo_to_Line"/>
    </widget>
    <widget class="QMenu" name="menuRun">
     <property name="title">
@@ -469,6 +471,14 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   <action name="actionEdit_Format_Configurations">
    <property name="text">
     <string>Edit Format Configurations</string>
+   </property>
+  </action>
+  <action name="actionGo_to_Line">
+   <property name="text">
+    <string>Go to Line...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+G</string>
    </property>
   </action>
  </widget>

@@ -412,12 +412,52 @@ target_compile_definitions(test_gitintegration PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GitIntegrationTests COMMAND test_gitintegration)
 
+# GoToLineDialog test executable
+add_executable(test_gotolinedialog
+    unit/test_gotolinedialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gotolinedialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gotolinedialog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+)
+
+target_link_libraries(test_gotolinedialog
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_gotolinedialog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GoToLineDialogTests COMMAND test_gotolinedialog)
+
 # Set environment variable for headless testing
-set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
-    AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
-    RunTemplateManagerTests FormatTemplateManagerTests TerminalTests TerminalTabWidgetTests
-    SyntaxPluginRegistryTests CompletionProviderRegistryTests DapTests PROPERTIES
-    SyntaxPluginRegistryTests CompletionProviderRegistryTests GitIntegrationTests PROPERTIES
+set_tests_properties(
+    LoggerTests 
+    ThemeTests 
+    FileManagerTests 
+    DocumentTests 
+    SettingsManagerTests 
+    AsyncWorkerTests 
+    PluginManagerTests 
+    VimModeTests 
+    I18nTests 
+    AccessibilityTests 
+    RunTemplateManagerTests 
+    FormatTemplateManagerTests 
+    TerminalTests 
+    TerminalTabWidgetTests
+    SyntaxPluginRegistryTests 
+    CompletionProviderRegistryTests 
+    DapTests 
+    GitIntegrationTests
+    GoToLineDialogTests 
+    PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
@@ -434,6 +474,6 @@ add_custom_target(run_tests
             test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
             test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
             test_syntaxpluginregistry test_completionproviderregistry test_dap
-            test_syntaxpluginregistry test_completionproviderregistry test_gitintegration
+            test_gitintegration test_gotolinedialog
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

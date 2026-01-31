@@ -50,6 +50,8 @@ set(project_headers
     git/gitintegration.h
     ui/dialogs/colorpicker.h
     ui/dialogs/commandpalette.h
+    ui/dialogs/gotolinedialog.h
+    ui/dialogs/filequickopen.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
     ui/panels/debugpanel.h
@@ -117,6 +119,8 @@ set(project_sources
     git/gitintegration.cpp
     ui/dialogs/colorpicker.cpp
     ui/dialogs/commandpalette.cpp
+    ui/dialogs/gotolinedialog.cpp
+    ui/dialogs/filequickopen.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
     ui/panels/debugpanel.cpp

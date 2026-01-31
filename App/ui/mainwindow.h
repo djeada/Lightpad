@@ -87,6 +87,7 @@ private slots:
     void on_magicButton_clicked();
     void on_actionFormat_Document_triggered();
     void on_actionEdit_Format_Configurations_triggered();
+    void on_actionGo_to_Line_triggered();
 
 private:
     Ui::MainWindow* ui;
@@ -104,6 +105,9 @@ private:
     // Quick win features
     class CommandPalette* commandPalette;
     class ProblemsPanel* problemsPanel;
+    class GoToLineDialog* goToLineDialog;
+    class FileQuickOpen* fileQuickOpen;
+    class QLabel* problemsStatusLabel;
     
     void undo();
     void redo();
@@ -117,7 +121,12 @@ private:
     void showTerminal();
     void showProblemsPanel();
     void showCommandPalette();
+    void showGoToLineDialog();
+    void showFileQuickOpen();
     void setupCommandPalette();
+    void setupGoToLineDialog();
+    void setupFileQuickOpen();
+    void updateProblemsStatusLabel(int errors, int warnings, int infos);
     void setMainWindowTitle(QString title);
     void setFilePathAsTabText(QString filePath);
     void closeCurrentTab();

@@ -2,6 +2,7 @@
 #include <QMenu>
 #include <QApplication>
 #include <QScreen>
+#include <QSettings>
 #include <algorithm>
 
 CommandPalette::CommandPalette(QWidget* parent)
@@ -11,6 +12,7 @@ CommandPalette::CommandPalette(QWidget* parent)
     , m_layout(nullptr)
 {
     setupUI();
+    loadRecentCommands();
 }
 
 CommandPalette::~CommandPalette()
@@ -210,9 +212,15 @@ void CommandPalette::updateResults(const QString& query)
     for (int i = 0; i < m_commands.size(); ++i) {
         int score = 0;
         if (query.isEmpty()) {
-            score = 1000 - i;  // Default order
+            // When empty, prioritize recent commands
+            int recentBonus = getRecentBonus(m_commands[i].id);
+            score = 1000 - i + recentBonus;
         } else {
             score = fuzzyMatch(query.toLower(), m_commands[i].name.toLower());
+            // Add bonus for recent commands even when searching
+            if (score > 0) {
+                score += getRecentBonus(m_commands[i].id) / 2;
+            }
         }
 
         if (score > 0) {
@@ -237,6 +245,10 @@ void CommandPalette::updateResults(const QString& query)
         QString displayText = cmd.name;
         if (!cmd.shortcut.isEmpty()) {
             displayText += "  [" + cmd.shortcut + "]";
+        }
+        // Mark recent commands
+        if (m_recentCommands.contains(cmd.id) && query.isEmpty()) {
+            displayText = "⏱ " + displayText;
         }
         item->setText(displayText);
         item->setData(Qt::UserRole, idx);
@@ -299,6 +311,9 @@ void CommandPalette::executeCommand(int row)
     if (cmdIdx < 0 || cmdIdx >= m_commands.size())
         return;
 
+    // Track this command as recently used
+    addToRecentCommands(m_commands[cmdIdx].id);
+
     hide();
 
     QAction* action = m_commands[cmdIdx].action;
@@ -321,4 +336,42 @@ void CommandPalette::selectPrevious()
     if (current > 0) {
         m_resultsList->setCurrentRow(current - 1);
     }
+}
+
+void CommandPalette::addToRecentCommands(const QString& commandId)
+{
+    // Remove if already in list
+    m_recentCommands.removeAll(commandId);
+    
+    // Add to front
+    m_recentCommands.prepend(commandId);
+    
+    // Trim to max size
+    while (m_recentCommands.size() > MAX_RECENT_COMMANDS) {
+        m_recentCommands.removeLast();
+    }
+    
+    saveRecentCommands();
+}
+
+void CommandPalette::loadRecentCommands()
+{
+    QSettings settings("Lightpad", "Lightpad");
+    m_recentCommands = settings.value("commandPalette/recentCommands").toStringList();
+}
+
+void CommandPalette::saveRecentCommands()
+{
+    QSettings settings("Lightpad", "Lightpad");
+    settings.setValue("commandPalette/recentCommands", m_recentCommands);
+}
+
+int CommandPalette::getRecentBonus(const QString& commandId) const
+{
+    int index = m_recentCommands.indexOf(commandId);
+    if (index < 0) {
+        return 0;
+    }
+    // Most recent gets highest bonus, decreasing for older commands
+    return (MAX_RECENT_COMMANDS - index) * 100;
 }
