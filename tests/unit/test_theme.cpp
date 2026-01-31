@@ -16,10 +16,10 @@ void TestTheme::testDefaultConstructor()
     Theme theme;
     
     // Verify default colors are set (modern dark theme)
-    QCOMPARE(theme.backgroundColor, QColor("#0e1116"));
+    QCOMPARE(theme.backgroundColor, QColor("#0d1117"));
     QCOMPARE(theme.foregroundColor, QColor("#e6edf3"));
     QVERIFY(theme.highlightColor.isValid());
-    QCOMPARE(theme.lineNumberAreaColor, QColor("#0c1016"));
+    QCOMPARE(theme.lineNumberAreaColor, QColor("#0d1117"));
 }
 
 void TestTheme::testWriteToJson()
