@@ -1,6 +1,7 @@
 #include "debugpanel.h"
 #include "../../core/logging/logger.h"
 
+#include <QFontDatabase>
 #include <QHeaderView>
 #include <QLabel>
 #include <QMenu>
@@ -180,11 +181,13 @@ void DebugPanel::setupConsole()
 {
     m_consoleOutput = new QTextEdit(this);
     m_consoleOutput->setReadOnly(true);
-    m_consoleOutput->setFont(QFont("Monospace", 9));
+    QFont fixedFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    fixedFont.setPointSize(9);
+    m_consoleOutput->setFont(fixedFont);
     m_consoleOutput->setPlaceholderText(tr("Debug console output..."));
     
     m_consoleInput = new QLineEdit(this);
-    m_consoleInput->setFont(QFont("Monospace", 9));
+    m_consoleInput->setFont(fixedFont);
     m_consoleInput->setPlaceholderText(tr("Evaluate expression..."));
     m_consoleInput->setClearButtonEnabled(true);
     

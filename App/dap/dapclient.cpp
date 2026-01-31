@@ -4,6 +4,11 @@
 #include <QJsonDocument>
 #include <QDir>
 
+namespace {
+    // Maximum number of messages to parse in a single read to prevent infinite loops
+    constexpr int MAX_MESSAGE_PARSE_ITERATIONS = 100;
+}
+
 DapClient::DapClient(QObject* parent)
     : QObject(parent)
     , m_process(nullptr)
@@ -442,10 +447,9 @@ void DapClient::onReadyReadStandardOutput()
     m_buffer += QString::fromUtf8(m_process->readAllStandardOutput());
     
     // Parse DAP messages from buffer (limit iterations to prevent infinite loops)
-    const int maxIterations = 100;
     int iterations = 0;
     
-    while (iterations < maxIterations) {
+    while (iterations < MAX_MESSAGE_PARSE_ITERATIONS) {
         ++iterations;
         
         int headerEnd = m_buffer.indexOf("\r\n\r\n");
