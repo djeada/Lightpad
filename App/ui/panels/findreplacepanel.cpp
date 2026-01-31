@@ -109,7 +109,8 @@ QString FindReplacePanel::applyPreserveCase(const QString& replaceWord, const QS
     bool allLower = true;
     bool firstUpper = false;
     
-    for (int i = 0; i < matchedText.length(); ++i) {
+    const int textLength = matchedText.length();
+    for (int i = 0; i < textLength; ++i) {
         QChar c = matchedText.at(i);
         if (c.isLetter()) {
             if (c.isUpper()) {
@@ -127,7 +128,7 @@ QString FindReplacePanel::applyPreserveCase(const QString& replaceWord, const QS
     } else if (allLower && !allUpper) {
         // Matched text is all lowercase, make replacement all lowercase
         return result.toLower();
-    } else if (firstUpper && matchedText.length() > 1) {
+    } else if (firstUpper && textLength > 1) {
         // Title case: first letter uppercase, rest lowercase
         result = result.toLower();
         if (!result.isEmpty()) {
@@ -291,13 +292,13 @@ void FindReplacePanel::replaceNext(QTextCursor& cursor, const QString& replaceWo
                 positions[i] += lengthDiff;
             }
             
-            // Adjust position index
+            // Adjust position index for next search operation
             if (position > 0) {
                 position--;
             } else if (positions.isEmpty()) {
                 position = -1;
             } else {
-                position = -1;  // Will be incremented on next find
+                position = -1;  // Reset to start; next find operation will set to 0
             }
         }
     }
@@ -361,13 +362,20 @@ void FindReplacePanel::findInitial(QTextCursor& cursor, const QString& searchWor
         
         // For search from current position, find the nearest match
         if (!ui->searchStart->isChecked() && startPos > 0) {
-            for (int i = 0; i < positions.size(); ++i) {
-                if (ui->searchBackward->isChecked()) {
+            if (ui->searchBackward->isChecked()) {
+                // For backward search, find the last match before cursor
+                // positions are already reversed, so we want the first one that's before startPos
+                for (int i = 0; i < positions.size(); ++i) {
                     if (positions[i] < startPos) {
+                        // Found a match before cursor, start just before it
                         position = i - 1;
                         break;
                     }
-                } else {
+                }
+                // If no match found before cursor, position stays at -1 (start from first in reversed list)
+            } else {
+                // For forward search, find the first match at or after cursor
+                for (int i = 0; i < positions.size(); ++i) {
                     if (positions[i] >= startPos) {
                         position = i - 1;
                         break;

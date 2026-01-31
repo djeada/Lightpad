@@ -66,7 +66,8 @@ QString TestSearchPatterns::applyPreserveCase(const QString& replaceWord,
     bool allLower = true;
     bool firstUpper = false;
     
-    for (int i = 0; i < matchedText.length(); ++i) {
+    const int textLength = matchedText.length();
+    for (int i = 0; i < textLength; ++i) {
         QChar c = matchedText.at(i);
         if (c.isLetter()) {
             if (c.isUpper()) {
@@ -84,7 +85,7 @@ QString TestSearchPatterns::applyPreserveCase(const QString& replaceWord,
     } else if (allLower && !allUpper) {
         // Matched text is all lowercase, make replacement all lowercase
         return result.toLower();
-    } else if (firstUpper && matchedText.length() > 1) {
+    } else if (firstUpper && textLength > 1) {
         // Title case: first letter uppercase, rest lowercase
         result = result.toLower();
         if (!result.isEmpty()) {
