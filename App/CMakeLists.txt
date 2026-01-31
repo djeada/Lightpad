@@ -30,6 +30,15 @@ set(project_headers
     completion/completioncontext.h
     completion/icompletionprovider.h
     completion/completionproviderregistry.h
+    completion/languagekeywordsregistry.h
+    completion/completionengine.h
+    completion/completionitemmodel.h
+    completion/completionwidget.h
+    completion/snippetregistry.h
+    completion/providers/keywordcompletionprovider.h
+    completion/providers/lspcompletionprovider.h
+    completion/providers/plugincompletionprovider.h
+    completion/providers/snippetcompletionprovider.h
     ui/dialogs/colorpicker.h
     ui/dialogs/commandpalette.h
     ui/panels/findreplacepanel.h
@@ -78,6 +87,15 @@ set(project_sources
     main.cpp
     accessibility/accessibilitymanager.cpp
     completion/completionproviderregistry.cpp
+    completion/languagekeywordsregistry.cpp
+    completion/completionengine.cpp
+    completion/completionitemmodel.cpp
+    completion/completionwidget.cpp
+    completion/snippetregistry.cpp
+    completion/providers/keywordcompletionprovider.cpp
+    completion/providers/lspcompletionprovider.cpp
+    completion/providers/plugincompletionprovider.cpp
+    completion/providers/snippetcompletionprovider.cpp
     ui/dialogs/colorpicker.cpp
     ui/dialogs/commandpalette.cpp
     ui/panels/findreplacepanel.cpp
