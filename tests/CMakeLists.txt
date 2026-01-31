@@ -496,6 +496,8 @@ target_compile_definitions(test_minimap PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME MinimapTests COMMAND test_minimap)
 
+# SplitEditorContainer - not adding unit test due to complex MainWindow dependencies
+# The feature is tested via integration testing with the main application
 # FindReplacePanel test executable
 add_executable(test_findreplacepanel
     unit/test_findreplacepanel.cpp

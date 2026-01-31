@@ -267,6 +267,13 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionToggle_Menu_Bar"/>
     <addaction name="actionToggle_Minimap"/>
     <addaction name="separator"/>
+    <addaction name="actionSplit_Horizontally"/>
+    <addaction name="actionSplit_Vertically"/>
+    <addaction name="actionClose_Editor_Group"/>
+    <addaction name="actionFocus_Next_Group"/>
+    <addaction name="actionFocus_Previous_Group"/>
+    <addaction name="actionUnsplit_All"/>
+    <addaction name="separator"/>
     <addaction name="actionIncrease_Font_Size"/>
     <addaction name="actionDecrease_Font_Size"/>
     <addaction name="actionReset_Font_Size"/>
@@ -491,6 +498,48 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
    </property>
    <property name="checked">
     <bool>true</bool>
+   </property>
+  </action>
+  <action name="actionSplit_Horizontally">
+   <property name="text">
+    <string>Split Editor Right</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+\</string>
+   </property>
+  </action>
+  <action name="actionSplit_Vertically">
+   <property name="text">
+    <string>Split Editor Down</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+K, Ctrl+\</string>
+   </property>
+  </action>
+  <action name="actionClose_Editor_Group">
+   <property name="text">
+    <string>Close Editor Group</string>
+   </property>
+  </action>
+  <action name="actionFocus_Next_Group">
+   <property name="text">
+    <string>Focus Next Editor Group</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+K, Ctrl+Right</string>
+   </property>
+  </action>
+  <action name="actionFocus_Previous_Group">
+   <property name="text">
+    <string>Focus Previous Editor Group</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+K, Ctrl+Left</string>
+   </property>
+  </action>
+  <action name="actionUnsplit_All">
+   <property name="text">
+    <string>Reset Editor Groups</string>
    </property>
   </action>
  </widget>
