@@ -10,7 +10,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 enable_testing()
 
 # Find Qt6 Test module
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Test Pdf PdfWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Test)
+find_package(Qt6 QUIET COMPONENTS Pdf PdfWidgets)
+
+# Check if PDF support is available (inherit from parent build or detect)
+if(DEFINED HAVE_PDF_SUPPORT)
+    # Use parent's setting
+elseif(Qt6Pdf_FOUND AND Qt6PdfWidgets_FOUND)
+    set(HAVE_PDF_SUPPORT TRUE)
+else()
+    set(HAVE_PDF_SUPPORT FALSE)
+endif()
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -545,34 +555,36 @@ target_compile_definitions(test_imageviewer PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME ImageViewerTests COMMAND test_imageviewer)
 
-# PdfViewer test executable
-add_executable(test_pdfviewer
-    unit/test_pdfviewer.cpp
-    ${CMAKE_SOURCE_DIR}/App/ui/viewers/pdfviewer.cpp
-    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
-)
+# PdfViewer test executable (only if PDF support is available)
+if(HAVE_PDF_SUPPORT)
+    add_executable(test_pdfviewer
+        unit/test_pdfviewer.cpp
+        ${CMAKE_SOURCE_DIR}/App/ui/viewers/pdfviewer.cpp
+        ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    )
 
-target_include_directories(test_pdfviewer PRIVATE
-    ${CMAKE_SOURCE_DIR}/App
-    ${CMAKE_SOURCE_DIR}/App/ui/viewers
-)
+    target_include_directories(test_pdfviewer PRIVATE
+        ${CMAKE_SOURCE_DIR}/App
+        ${CMAKE_SOURCE_DIR}/App/ui/viewers
+    )
 
-target_link_libraries(test_pdfviewer
-    PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::Pdf
-    Qt6::PdfWidgets
-    Qt6::Test
-)
+    target_link_libraries(test_pdfviewer
+        PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Pdf
+        Qt6::PdfWidgets
+        Qt6::Test
+    )
 
-target_compile_definitions(test_pdfviewer PRIVATE QT_DEPRECATED_WARNINGS)
+    target_compile_definitions(test_pdfviewer PRIVATE QT_DEPRECATED_WARNINGS HAVE_PDF_SUPPORT)
 
-add_test(NAME PdfViewerTests COMMAND test_pdfviewer)
+    add_test(NAME PdfViewerTests COMMAND test_pdfviewer)
+endif()
 
 # Set environment variable for headless testing
-set_tests_properties(
+set(TEST_LIST
     LoggerTests 
     ThemeTests 
     FileManagerTests 
@@ -596,7 +608,13 @@ set_tests_properties(
     MinimapTests
     FindReplacePanelTests
     ImageViewerTests
-    PdfViewerTests
+)
+
+if(HAVE_PDF_SUPPORT)
+    list(APPEND TEST_LIST PdfViewerTests)
+endif()
+
+set_tests_properties(${TEST_LIST}
     PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
@@ -608,13 +626,21 @@ set_tests_properties(TerminalTests TerminalTabWidgetTests PROPERTIES TIMEOUT 30)
 set_tests_properties(GitIntegrationTests PROPERTIES TIMEOUT 30)
 
 # Custom target to run all tests
+set(TEST_TARGETS
+    test_logger test_theme test_filemanager test_document test_settingsmanager 
+    test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
+    test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
+    test_syntaxpluginregistry test_completionproviderregistry test_dap
+    test_gitintegration test_gotolinedialog test_lspclient test_minimap test_findreplacepanel
+    test_imageviewer
+)
+
+if(HAVE_PDF_SUPPORT)
+    list(APPEND TEST_TARGETS test_pdfviewer)
+endif()
+
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
-            test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
-            test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
-            test_syntaxpluginregistry test_completionproviderregistry test_dap
-            test_gitintegration test_gotolinedialog test_lspclient test_minimap test_findreplacepanel
-            test_imageviewer test_pdfviewer
+    DEPENDS ${TEST_TARGETS}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

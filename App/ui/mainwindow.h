@@ -20,7 +20,9 @@ class Preferences;
 class CompletionEngine;
 class SplitEditorContainer;
 class ImageViewer;
+#ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
+#endif
 
 enum class Lang { cpp,
     js,

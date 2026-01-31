@@ -41,7 +41,9 @@
 #include "../completion/providers/plugincompletionprovider.h"
 #include "panels/spliteditorcontainer.h"
 #include "viewers/imageviewer.h"
+#ifdef HAVE_PDF_SUPPORT
 #include "viewers/pdfviewer.h"
+#endif
 #include "../settings/settingsmanager.h"
 
 MainWindow::MainWindow(QWidget* parent)
@@ -509,6 +511,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
         return;
     }
     
+#ifdef HAVE_PDF_SUPPORT
     // Check if it's a PDF file
     if (PdfViewer::isSupportedPdfFormat(extension)) {
         PdfViewer* pdfViewer = new PdfViewer(this);
@@ -519,6 +522,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
         }
         return;
     }
+#endif
 
     // Default handling for text files
     if (ui->tabWidget->count() == 0 || !getCurrentTextArea()->toPlainText().isEmpty()) {

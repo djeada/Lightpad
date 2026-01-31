@@ -4,7 +4,22 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Pdf PdfWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
+find_package(Qt6 QUIET COMPONENTS Pdf PdfWidgets)
+
+option(ENABLE_PDF_SUPPORT "Enable PDF viewer support (requires Qt6Pdf)" ON)
+
+if(ENABLE_PDF_SUPPORT AND Qt6Pdf_FOUND AND Qt6PdfWidgets_FOUND)
+    set(HAVE_PDF_SUPPORT TRUE)
+    message(STATUS "PDF support: enabled")
+else()
+    set(HAVE_PDF_SUPPORT FALSE)
+    if(ENABLE_PDF_SUPPORT)
+        message(STATUS "PDF support: disabled (Qt6Pdf/Qt6PdfWidgets not found)")
+    else()
+        message(STATUS "PDF support: disabled (by option)")
+    endif()
+endif()
 
 if(WIN32)
   set(CMAKE_WIN32_EXECUTABLE ON)
@@ -113,8 +128,11 @@ set(project_headers
     run_templates/runtemplatemanager.h
     format_templates/formattemplatemanager.h
     settings/theme.h
-    ui/viewers/imageviewer.h
-    ui/viewers/pdfviewer.h)
+    ui/viewers/imageviewer.h)
+
+if(HAVE_PDF_SUPPORT)
+    list(APPEND project_headers ui/viewers/pdfviewer.h)
+endif()
 
 set(project_sources 
     main.cpp
@@ -199,8 +217,11 @@ set(project_sources
     run_templates/runtemplatemanager.cpp
     format_templates/formattemplatemanager.cpp
     settings/theme.cpp
-    ui/viewers/imageviewer.cpp
-    ui/viewers/pdfviewer.cpp)
+    ui/viewers/imageviewer.cpp)
+
+if(HAVE_PDF_SUPPORT)
+    list(APPEND project_sources ui/viewers/pdfviewer.cpp)
+endif()
 
 set(project_resources
     highlight.qrc
@@ -222,9 +243,12 @@ target_link_libraries(Lightpad
     PRIVATE 
     Qt6::Core
     Qt6::Gui
-    Qt6::Widgets
-    Qt6::Pdf
-    Qt6::PdfWidgets)
+    Qt6::Widgets)
+
+if(HAVE_PDF_SUPPORT)
+    target_link_libraries(Lightpad PRIVATE Qt6::Pdf Qt6::PdfWidgets)
+    target_compile_definitions(Lightpad PRIVATE HAVE_PDF_SUPPORT)
+endif()
 
 # Add QT_DEPRECATED_WARNINGS definition
 target_compile_definitions(Lightpad PRIVATE QT_DEPRECATED_WARNINGS)
