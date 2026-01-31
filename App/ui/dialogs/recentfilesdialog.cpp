@@ -3,6 +3,11 @@
 #include <QFileInfo>
 #include <algorithm>
 
+namespace {
+    // Em dash character for visual separator
+    const QString kEmDash = QStringLiteral("\u2014");
+}
+
 RecentFilesDialog::RecentFilesDialog(RecentFilesManager* manager, QWidget* parent)
     : QDialog(parent, Qt::Popup | Qt::FramelessWindowHint)
     , m_manager(manager)
@@ -209,7 +214,7 @@ void RecentFilesDialog::updateResults(const QString& query)
         
         QString displayText = fileInfo.fileName();
         QString directory = fileInfo.absolutePath();
-        displayText += QString("  \u2014 %1").arg(directory);  // — (em dash)
+        displayText += QString("  %1 %2").arg(kEmDash).arg(directory);
         
         item->setText(displayText);
         item->setData(Qt::UserRole, m_recentFiles[idx]);

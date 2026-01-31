@@ -99,8 +99,14 @@ void BreadcrumbWidget::rebuildBreadcrumbs()
         "  font-size: 12px;"
         "}";
     
-    // Remove the stretch temporarily
-    m_layout->removeItem(m_layout->itemAt(m_layout->count() - 1));
+    // Remove the stretch temporarily (if it exists)
+    if (m_layout->count() > 0) {
+        QLayoutItem* stretchItem = m_layout->itemAt(m_layout->count() - 1);
+        if (stretchItem) {
+            m_layout->removeItem(stretchItem);
+            delete stretchItem;
+        }
+    }
     
     for (int i = 0; i < segments.size(); ++i) {
         // Add segment button

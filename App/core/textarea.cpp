@@ -1421,6 +1421,10 @@ void TextArea::paintEvent(QPaintEvent* event)
         QPainter painter(viewport());
         painter.setPen(QPen(QColor(128, 128, 128, 80), 1));
         
+        QFontMetrics fm(mainFont);
+        int spaceWidth = fm.horizontalAdvance(' ');
+        int tabWidth = fm.horizontalAdvance(' ') * 4;  // Assume 4-space tabs
+        
         QTextBlock block = firstVisibleBlock();
         int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
         int bottom = top + qRound(blockBoundingRect(block).height());
@@ -1428,25 +1432,30 @@ void TextArea::paintEvent(QPaintEvent* event)
         while (block.isValid() && top <= event->rect().bottom()) {
             if (block.isVisible() && bottom >= event->rect().top()) {
                 QString text = block.text();
-                QTextCursor cursor(block);
                 
+                // Get the x position of the start of this block
+                QTextCursor blockStart(block);
+                blockStart.setPosition(block.position());
+                QRect startRect = cursorRect(blockStart);
+                int xOffset = startRect.left();
+                int yCenter = startRect.center().y();
+                
+                // Calculate x positions using font metrics (more efficient)
+                int x = xOffset;
                 for (int i = 0; i < text.length(); ++i) {
-                    cursor.setPosition(block.position() + i);
-                    QRect charRect = cursorRect(cursor);
-                    
                     if (text[i] == ' ') {
                         // Draw a middle dot for spaces
-                        int centerX = charRect.left() + 3;
-                        int centerY = charRect.center().y();
-                        painter.drawPoint(centerX, centerY);
+                        painter.drawPoint(x + spaceWidth / 2, yCenter);
+                        x += spaceWidth;
                     } else if (text[i] == '\t') {
                         // Draw an arrow for tabs
-                        int y = charRect.center().y();
-                        int x1 = charRect.left() + 2;
-                        int x2 = charRect.left() + 10;
-                        painter.drawLine(x1, y, x2, y);
-                        painter.drawLine(x2 - 3, y - 3, x2, y);
-                        painter.drawLine(x2 - 3, y + 3, x2, y);
+                        int arrowEnd = x + 10;
+                        painter.drawLine(x + 2, yCenter, arrowEnd, yCenter);
+                        painter.drawLine(arrowEnd - 3, yCenter - 3, arrowEnd, yCenter);
+                        painter.drawLine(arrowEnd - 3, yCenter + 3, arrowEnd, yCenter);
+                        x += tabWidth;
+                    } else {
+                        x += fm.horizontalAdvance(text[i]);
                     }
                 }
             }
