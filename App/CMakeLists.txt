@@ -56,6 +56,7 @@ set(project_headers
     ui/panels/problemspanel.h
     ui/panels/debugpanel.h
     ui/panels/sourcecontrolpanel.h
+    ui/panels/minimap.h
     core/async/asyncworker.h
     core/document.h
     core/formatter.h
@@ -126,6 +127,7 @@ set(project_sources
     ui/panels/problemspanel.cpp
     ui/panels/debugpanel.cpp
     ui/panels/sourcecontrolpanel.cpp
+    ui/panels/minimap.cpp
     core/async/asyncworker.cpp
     core/document.cpp
     core/formatter.cpp

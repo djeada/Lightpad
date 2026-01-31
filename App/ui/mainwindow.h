@@ -89,6 +89,7 @@ private slots:
     void on_actionFormat_Document_triggered();
     void on_actionEdit_Format_Configurations_triggered();
     void on_actionGo_to_Line_triggered();
+    void on_actionToggle_Minimap_triggered();
 
 private:
     Ui::MainWindow* ui;

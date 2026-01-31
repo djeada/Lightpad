@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QComboBox>
 #include <QHBoxLayout>
+#include <QCheckBox>
 #include "../../lsp/lspclient.h"
 
 /**
@@ -49,6 +50,22 @@ public:
     int warningCount() const;
     int infoCount() const;
 
+    /**
+     * @brief Check if auto-refresh on save is enabled
+     */
+    bool isAutoRefreshEnabled() const;
+
+    /**
+     * @brief Enable or disable auto-refresh on save
+     */
+    void setAutoRefreshEnabled(bool enabled);
+
+    /**
+     * @brief Notify the panel that a file was saved (for auto-refresh)
+     * @param filePath The path of the saved file
+     */
+    void onFileSaved(const QString& filePath);
+
 signals:
     /**
      * @brief Emitted when user clicks on a diagnostic
@@ -60,9 +77,15 @@ signals:
      */
     void countsChanged(int errors, int warnings, int infos);
 
+    /**
+     * @brief Emitted when a refresh is requested for a file
+     */
+    void refreshRequested(const QString& filePath);
+
 private slots:
     void onItemDoubleClicked(QTreeWidgetItem* item, int column);
     void onFilterChanged(int index);
+    void onAutoRefreshToggled(bool checked);
 
 private:
     void setupUI();
@@ -74,6 +97,7 @@ private:
     QTreeWidget* m_tree;
     QLabel* m_statusLabel;
     QComboBox* m_filterCombo;
+    QCheckBox* m_autoRefreshCheckBox;
     
     // File URI -> diagnostics
     QMap<QString, QList<LspDiagnostic>> m_diagnostics;
@@ -84,6 +108,7 @@ private:
     int m_hintCount;
     
     int m_currentFilter;  // 0=All, 1=Errors, 2=Warnings, 3=Info
+    bool m_autoRefreshEnabled;
 };
 
 #endif // PROBLEMSPANEL_H

@@ -265,6 +265,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     </property>
     <addaction name="actionToggle_Full_Screen"/>
     <addaction name="actionToggle_Menu_Bar"/>
+    <addaction name="actionToggle_Minimap"/>
     <addaction name="separator"/>
     <addaction name="actionIncrease_Font_Size"/>
     <addaction name="actionDecrease_Font_Size"/>
@@ -479,6 +480,17 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
    </property>
    <property name="shortcut">
     <string>Ctrl+G</string>
+   </property>
+  </action>
+  <action name="actionToggle_Minimap">
+   <property name="text">
+    <string>Toggle Minimap</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
    </property>
   </action>
  </widget>

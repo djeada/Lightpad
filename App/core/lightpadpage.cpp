@@ -1,5 +1,6 @@
 #include "lightpadpage.h"
 #include "../ui/mainwindow.h"
+#include "../ui/panels/minimap.h"
 #include "../run_templates/runtemplatemanager.h"
 #include <QDebug>
 #include <QHBoxLayout>
@@ -259,6 +260,7 @@ void LightpadTreeView::removeFile(QString filePath)
 LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
     : QWidget(parent)
     , mainWindow(nullptr)
+    , minimap(nullptr)
     , filePath("")
 {
 
@@ -266,9 +268,14 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
 
     treeView = new LightpadTreeView(this);
     textArea = new TextArea(this);
+    minimap = new Minimap(this);
+
+    // Connect minimap to text area
+    minimap->setSourceEditor(textArea);
 
     layoutHor->addWidget(treeView);
     layoutHor->addWidget(textArea);
+    layoutHor->addWidget(minimap);
 
     if (treeViewHidden)
         treeView->hide();
@@ -276,6 +283,7 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
     layoutHor->setContentsMargins(0, 0, 0, 0);
     layoutHor->setStretch(0, 0);
     layoutHor->setStretch(1, 1);
+    layoutHor->setStretch(2, 0);
 
     setLayout(layoutHor);
     updateModel();
@@ -300,9 +308,26 @@ TextArea* LightpadPage::getTextArea()
     return textArea;
 }
 
+Minimap* LightpadPage::getMinimap()
+{
+    return minimap;
+}
+
 void LightpadPage::setTreeViewVisible(bool flag)
 {
     treeView->setVisible(flag);
+}
+
+void LightpadPage::setMinimapVisible(bool flag)
+{
+    if (minimap) {
+        minimap->setMinimapVisible(flag);
+    }
+}
+
+bool LightpadPage::isMinimapVisible() const
+{
+    return minimap ? minimap->isMinimapVisible() : false;
 }
 
 void LightpadPage::setModelRootIndex(QString path)
