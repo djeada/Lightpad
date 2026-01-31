@@ -1,0 +1,25 @@
+#ifndef MARKDOWNSYNTAXPLUGIN_H
+#define MARKDOWNSYNTAXPLUGIN_H
+
+#include "basesyntaxplugin.h"
+#include <QVector>
+
+/**
+ * @brief Built-in Markdown syntax highlighting plugin
+ */
+class MarkdownSyntaxPlugin : public BaseSyntaxPlugin {
+public:
+    QString languageId() const override { return "md"; }
+    QString languageName() const override { return "Markdown"; }
+    QStringList fileExtensions() const override { return {"md", "markdown", "mdown", "mkd"}; }
+    
+    QVector<SyntaxRule> syntaxRules() const override;
+    QVector<MultiLineBlock> multiLineBlocks() const override;
+    QStringList keywords() const override;
+    
+    QPair<QString, QPair<QString, QString>> commentStyle() const override {
+        return {"", {"<!--", "-->"}};
+    }
+};
+
+#endif // MARKDOWNSYNTAXPLUGIN_H
