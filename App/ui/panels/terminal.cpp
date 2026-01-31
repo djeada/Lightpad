@@ -664,6 +664,12 @@ bool Terminal::eventFilter(QObject* obj, QEvent* event)
 
 void Terminal::appendOutput(const QString& text, bool isError)
 {
+    // Strip ANSI escape sequences before displaying
+    QString cleanText = stripAnsiEscapeCodes(text);
+    if (cleanText.isEmpty()) {
+        return;
+    }
+
     QTextCursor cursor = ui->textEdit->textCursor();
     cursor.movePosition(QTextCursor::End);
 
@@ -671,12 +677,12 @@ void Terminal::appendOutput(const QString& text, bool isError)
         // Set error text format using theme color
         QTextCharFormat errorFormat;
         errorFormat.setForeground(QColor(m_errorColor));
-        cursor.insertText(text, errorFormat);
+        cursor.insertText(cleanText, errorFormat);
     } else {
         // Reset to default format using theme color
         QTextCharFormat defaultFormat;
         defaultFormat.setForeground(QColor(m_textColor));
-        cursor.insertText(text, defaultFormat);
+        cursor.insertText(cleanText, defaultFormat);
     }
 
     ui->textEdit->setTextCursor(cursor);
@@ -992,4 +998,24 @@ void Terminal::enforceScrollbackLimit()
         }
         cursor.removeSelectedText();
     }
+}
+
+QString Terminal::stripAnsiEscapeCodes(const QString& text)
+{
+    // Remove ANSI escape sequences:
+    // - CSI sequences: ESC [ ... (parameters) final byte
+    // - OSC sequences: ESC ] ... BEL or ESC ] ... ESC \
+    // - Simple escape sequences: ESC followed by single char
+    static QRegularExpression ansiRegex(
+        R"(\x1b\[[0-9;?]*[A-Za-z])"       // CSI sequences (e.g., colors, cursor)
+        R"(|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?)"  // OSC sequences (e.g., window title)
+        R"(|\x1b[()][AB012])"              // Character set selection
+        R"(|\x1b[=>])"                     // Keypad modes
+        R"(|\x1b[DME78HcNO])"              // Simple escape sequences
+        R"(|\x07)"                         // Bell character
+    );
+    
+    QString result = text;
+    result.remove(ansiRegex);
+    return result;
 }

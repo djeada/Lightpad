@@ -228,6 +228,7 @@ private:
     QString processTextForLinks(const QString& text);
     void enforceScrollbackLimit();
     QString getLinkAtPosition(const QPoint& pos);
+    QString stripAnsiEscapeCodes(const QString& text);
 
     Ui::Terminal* ui;
     QProcess* m_process;
