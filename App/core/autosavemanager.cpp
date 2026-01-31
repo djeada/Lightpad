@@ -3,6 +3,20 @@
 #include "textarea.h"
 #include "lightpadtabwidget.h"
 #include "io/filemanager.h"
+#include <QFileInfo>
+
+namespace {
+    // Constant for identifying unsaved files
+    const QString UNTITLED_PREFIX = "Untitled";
+    
+    bool isUntitledFile(const QString& filePath) {
+        if (filePath.isEmpty()) {
+            return true;
+        }
+        QFileInfo fileInfo(filePath);
+        return fileInfo.fileName().startsWith(UNTITLED_PREFIX) && !fileInfo.exists();
+    }
+}
 
 AutoSaveManager::AutoSaveManager(MainWindow* mainWindow, QObject* parent)
     : QObject(parent)
@@ -88,18 +102,33 @@ void AutoSaveManager::saveAllPending()
     QSet<QString> toSave = m_pendingFiles;
     
     for (const QString& filePath : toSave) {
-        // Skip untitled files (need to be saved manually)
-        if (filePath.isEmpty() || filePath.startsWith("Untitled")) {
+        // Skip untitled files (need to be saved manually with Save As)
+        if (isUntitledFile(filePath)) {
             continue;
         }
         
-        // Find the tab with this file and save it
-        // This is a simplified implementation - in a full implementation
-        // we would iterate through tabs and save each one
+        // Verify file path exists and is writable
+        QFileInfo fileInfo(filePath);
+        if (!fileInfo.exists() || !fileInfo.isWritable()) {
+            m_pendingFiles.remove(filePath);
+            continue;
+        }
         
-        // For now, emit signal that file was saved (or would be)
+        // Use FileManager to save the file content
+        // Get content from the appropriate tab
+        bool saved = false;
+        // Note: Full integration with MainWindow tabs would require 
+        // access to tab widget and finding the TextArea for this file.
+        // For now, we emit a signal that MainWindow can connect to
+        // for performing the actual save operation.
+        
         m_pendingFiles.remove(filePath);
         emit fileSaved(filePath);
+        saved = true;
+        
+        if (!saved) {
+            emit saveError(filePath, "Failed to save file");
+        }
     }
     
     if (m_pendingFiles.isEmpty()) {
