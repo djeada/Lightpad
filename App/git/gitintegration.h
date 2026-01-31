@@ -8,12 +8,16 @@
 #include <QProcess>
 
 /**
+ * @brief Timeout for git command execution in milliseconds
+ */
+constexpr int GIT_COMMAND_TIMEOUT_MS = 5000;
+
+/**
  * @brief Git file status types
  */
 enum class GitFileStatus {
     Untracked,
     Modified,
-    Staged,
     Added,
     Deleted,
     Renamed,

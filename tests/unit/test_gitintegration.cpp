@@ -62,7 +62,7 @@ bool TestGitIntegration::runGitCommand(const QStringList& args)
     process.setWorkingDirectory(m_repoPath);
     process.start("git", args);
     
-    if (!process.waitForFinished(5000)) {
+    if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS)) {
         return false;
     }
     

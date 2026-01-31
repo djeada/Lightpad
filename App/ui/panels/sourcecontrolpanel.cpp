@@ -392,7 +392,7 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
             if (m_git) {
                 if (QMessageBox::question(this, tr("Discard Changes"),
                     tr("Are you sure you want to discard changes to this file?"),
-                    QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
+                    QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes) {
                     m_git->discardChanges(filePath);
                 }
             }

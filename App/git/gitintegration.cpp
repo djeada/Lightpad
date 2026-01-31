@@ -84,7 +84,7 @@ QString GitIntegration::executeGitCommand(const QStringList& args, bool* success
     process.setWorkingDirectory(m_repositoryPath.isEmpty() ? QDir::currentPath() : m_repositoryPath);
     process.start("git", args);
     
-    if (!process.waitForFinished(5000)) {
+    if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS)) {
         LOG_WARNING("Git command timed out: git " + args.join(" "));
         if (success) *success = false;
         return QString();
