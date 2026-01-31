@@ -2,6 +2,7 @@
 #include <QSignalSpy>
 #include <QPlainTextEdit>
 #include "ui/panels/terminal.h"
+#include "ui/panels/shellprofile.h"
 
 class TestTerminal : public QObject {
     Q_OBJECT
@@ -30,6 +31,12 @@ private slots:
     // Test error handling
     void testMultipleStopCalls();
     void testRestartAfterStop();
+    
+    // Test new features
+    void testShellProfiles();
+    void testScrollbackLines();
+    void testLinkDetection();
+    void testSendText();
 };
 
 void TestTerminal::initTestCase()
@@ -181,6 +188,92 @@ void TestTerminal::testRestartAfterStop()
     QVERIFY(terminal.isRunning());
     
     terminal.stopShell();
+}
+
+void TestTerminal::testShellProfiles()
+{
+    Terminal terminal;
+    terminal.stopShell();
+    QTest::qWait(200);
+    
+    // Test that available shell profiles returns something
+    QStringList profiles = terminal.availableShellProfiles();
+    QVERIFY(!profiles.isEmpty());
+    
+    // Test getting current shell profile
+    ShellProfile profile = terminal.shellProfile();
+    QVERIFY(profile.isValid());
+    QVERIFY(!profile.name.isEmpty());
+    QVERIFY(!profile.command.isEmpty());
+    
+    // Test setting shell profile by name
+    if (!profiles.isEmpty()) {
+        QString firstName = profiles.first();
+        bool result = terminal.setShellProfileByName(firstName);
+        QVERIFY(result);
+        QCOMPARE(terminal.shellProfile().name, firstName);
+    }
+    
+    // Test that an invalid profile name returns false
+    bool result = terminal.setShellProfileByName("NonExistentShell12345");
+    QVERIFY(!result);
+}
+
+void TestTerminal::testScrollbackLines()
+{
+    Terminal terminal;
+    terminal.stopShell();
+    QTest::qWait(200);
+    
+    // Test default scrollback lines
+    int defaultLines = terminal.scrollbackLines();
+    QVERIFY(defaultLines > 0);
+    
+    // Test setting scrollback lines
+    terminal.setScrollbackLines(5000);
+    QCOMPARE(terminal.scrollbackLines(), 5000);
+    
+    terminal.setScrollbackLines(0);  // Unlimited
+    QCOMPARE(terminal.scrollbackLines(), 0);
+    
+    terminal.setScrollbackLines(1000);
+    QCOMPARE(terminal.scrollbackLines(), 1000);
+}
+
+void TestTerminal::testLinkDetection()
+{
+    Terminal terminal;
+    terminal.stopShell();
+    QTest::qWait(200);
+    
+    // Test default link detection state
+    QVERIFY(terminal.isLinkDetectionEnabled());
+    
+    // Test toggling link detection
+    terminal.setLinkDetectionEnabled(false);
+    QVERIFY(!terminal.isLinkDetectionEnabled());
+    
+    terminal.setLinkDetectionEnabled(true);
+    QVERIFY(terminal.isLinkDetectionEnabled());
+}
+
+void TestTerminal::testSendText()
+{
+    Terminal terminal;
+    // Terminal auto-starts shell
+    QVERIFY(terminal.isRunning());
+    
+    // sendText should not crash when shell is running
+    terminal.sendText("echo test", false);
+    terminal.sendText("ls", true);
+    
+    terminal.stopShell();
+    QTest::qWait(200);
+    
+    // sendText on stopped shell should not crash
+    terminal.sendText("test", true);
+    
+    QVERIFY(true);  // If we get here without crash, test passed
 }
 
 QTEST_MAIN(TestTerminal)

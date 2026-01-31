@@ -3,9 +3,12 @@
 
 #include <QMap>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QStringList>
 #include <QTimer>
 #include <QWidget>
+
+#include "shellprofile.h"
 
 namespace Ui {
 class Terminal;
@@ -95,6 +98,62 @@ public:
                     const QString& textColor,
                     const QString& errorColor = QString());
 
+    /**
+     * @brief Set the shell profile to use
+     * @param profile Shell profile
+     */
+    void setShellProfile(const ShellProfile& profile);
+
+    /**
+     * @brief Get the current shell profile
+     * @return Current shell profile
+     */
+    ShellProfile shellProfile() const;
+
+    /**
+     * @brief Get available shell profiles
+     * @return List of shell profile names
+     */
+    QStringList availableShellProfiles() const;
+
+    /**
+     * @brief Set the shell profile by name
+     * @param profileName Name of the profile to use
+     * @return true if profile was found and set
+     */
+    bool setShellProfileByName(const QString& profileName);
+
+    /**
+     * @brief Send text directly to the terminal
+     * @param text Text to send (will be written to stdin)
+     * @param appendNewline Whether to append a newline
+     */
+    void sendText(const QString& text, bool appendNewline = false);
+
+    /**
+     * @brief Set the scrollback buffer size
+     * @param lines Number of lines to keep (0 for unlimited)
+     */
+    void setScrollbackLines(int lines);
+
+    /**
+     * @brief Get the scrollback buffer size
+     * @return Number of lines in scrollback buffer
+     */
+    int scrollbackLines() const;
+
+    /**
+     * @brief Enable or disable link detection in output
+     * @param enabled Whether to detect and highlight links
+     */
+    void setLinkDetectionEnabled(bool enabled);
+
+    /**
+     * @brief Check if link detection is enabled
+     * @return true if link detection is enabled
+     */
+    bool isLinkDetectionEnabled() const;
+
 signals:
     void processStarted();
     void processFinished(int exitCode);
@@ -123,6 +182,18 @@ signals:
      */
     void outputReceived(const QString& output);
 
+    /**
+     * @brief Emitted when a link is clicked in the terminal
+     * @param link The clicked link (URL or file path)
+     */
+    void linkClicked(const QString& link);
+
+    /**
+     * @brief Emitted when the shell profile changes
+     * @param profileName Name of the new profile
+     */
+    void shellProfileChanged(const QString& profileName);
+
 private slots:
     void on_closeButton_clicked();
 
@@ -136,9 +207,11 @@ private slots:
     void onProcessError(QProcess::ProcessError error);
     void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onInputSubmitted();
+    void onLinkActivated(const QString& link);
 
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
 
 private:
     void setupTerminal();
@@ -152,6 +225,9 @@ private:
     void cleanupProcess();
     void scheduleAutoRestart();
     void updateStyleSheet();
+    QString processTextForLinks(const QString& text);
+    void enforceScrollbackLimit();
+    QString getLinkAtPosition(const QPoint& pos);
 
     Ui::Terminal* ui;
     QProcess* m_process;
@@ -172,6 +248,19 @@ private:
     QString m_backgroundColor;
     QString m_textColor;
     QString m_errorColor;
+    QString m_linkColor;
+    
+    // Shell profile
+    ShellProfile m_shellProfile;
+    
+    // Scrollback configuration
+    int m_scrollbackLines;
+    static const int kDefaultScrollbackLines = 10000;
+    
+    // Link detection
+    bool m_linkDetectionEnabled;
+    QRegularExpression m_urlRegex;
+    QRegularExpression m_filePathRegex;
 };
 
 #endif // TERMINAL_H

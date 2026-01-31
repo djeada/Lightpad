@@ -252,6 +252,7 @@ target_compile_definitions(test_formattemplatemanager PRIVATE QT_DEPRECATED_WARN
 add_executable(test_terminal
     unit/test_terminal.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminal.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/shellprofile.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -275,6 +276,7 @@ add_executable(test_terminaltabwidget
     unit/test_terminaltabwidget.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminaltabwidget.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminal.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/shellprofile.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp

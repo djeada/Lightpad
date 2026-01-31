@@ -3,14 +3,18 @@
 #include "../../run_templates/runtemplatemanager.h"
 
 #include <QColor>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFont>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QProcessEnvironment>
 #include <QScrollBar>
 #include <QStyle>
+#include <QTextBlock>
 #include <QTextCharFormat>
 #include <QTextCursor>
+#include <QUrl>
 
 Terminal::Terminal(QWidget* parent)
     : QWidget(parent)
@@ -26,9 +30,17 @@ Terminal::Terminal(QWidget* parent)
     , m_backgroundColor("#0e1116")
     , m_textColor("#e6edf3")
     , m_errorColor("#f44336")
+    , m_linkColor("#58a6ff")
+    , m_scrollbackLines(kDefaultScrollbackLines)
+    , m_linkDetectionEnabled(true)
+    , m_urlRegex(R"((https?://|ftp://|file://)[^\s<>\"\'\]\)]+)")
+    , m_filePathRegex(R"((?:^|[\s:])(/[^\s:]+|[A-Za-z]:\\[^\s:]+))")
 {
     ui->setupUi(this);
     ui->closeButton->setIcon(qApp->style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+    
+    // Get default shell profile
+    m_shellProfile = ShellProfileManager::instance().defaultProfile();
     
     // Setup restart timer for auto-recovery
     m_restartTimer = new QTimer(this);
@@ -669,6 +681,9 @@ void Terminal::appendOutput(const QString& text, bool isError)
 
     ui->textEdit->setTextCursor(cursor);
     scrollToBottom();
+    
+    // Enforce scrollback limit
+    enforceScrollbackLimit();
 }
 
 void Terminal::appendPrompt()
@@ -679,6 +694,12 @@ void Terminal::appendPrompt()
 
 QString Terminal::getShellCommand() const
 {
+    // Use shell profile if set
+    if (m_shellProfile.isValid()) {
+        return m_shellProfile.command;
+    }
+    
+    // Fallback to default detection
 #ifdef Q_OS_WIN
     // Windows: use cmd.exe or PowerShell
     QString comspec = qEnvironmentVariable("COMSPEC", "cmd.exe");
@@ -692,6 +713,12 @@ QString Terminal::getShellCommand() const
 
 QStringList Terminal::getShellArguments() const
 {
+    // Use shell profile if set
+    if (m_shellProfile.isValid()) {
+        return m_shellProfile.arguments;
+    }
+    
+    // Fallback to default arguments
     QStringList args;
 
 #ifdef Q_OS_WIN
@@ -779,4 +806,189 @@ void Terminal::updateStyleSheet()
     ).arg(m_backgroundColor, m_textColor);
     
     ui->textEdit->setStyleSheet(styleSheet);
+}
+
+void Terminal::setShellProfile(const ShellProfile& profile)
+{
+    if (!profile.isValid()) {
+        return;
+    }
+    
+    bool wasRunning = isRunning();
+    QString oldName = m_shellProfile.name;
+    
+    m_shellProfile = profile;
+    
+    // Restart shell with new profile if it was running
+    if (wasRunning) {
+        stopShell();
+        startShell(m_workingDirectory);
+    }
+    
+    if (oldName != profile.name) {
+        emit shellProfileChanged(profile.name);
+    }
+}
+
+ShellProfile Terminal::shellProfile() const
+{
+    return m_shellProfile;
+}
+
+QStringList Terminal::availableShellProfiles() const
+{
+    QStringList names;
+    for (const ShellProfile& profile : ShellProfileManager::instance().availableProfiles()) {
+        names.append(profile.name);
+    }
+    return names;
+}
+
+bool Terminal::setShellProfileByName(const QString& profileName)
+{
+    ShellProfile profile = ShellProfileManager::instance().profileByName(profileName);
+    if (profile.isValid()) {
+        setShellProfile(profile);
+        return true;
+    }
+    return false;
+}
+
+void Terminal::sendText(const QString& text, bool appendNewline)
+{
+    if (!isRunning()) {
+        appendOutput("Error: Shell not running.\n", true);
+        return;
+    }
+    
+    QString textToSend = text;
+    if (appendNewline) {
+        textToSend += "\n";
+    }
+    
+    m_process->write(textToSend.toUtf8());
+}
+
+void Terminal::setScrollbackLines(int lines)
+{
+    m_scrollbackLines = lines;
+    enforceScrollbackLimit();
+}
+
+int Terminal::scrollbackLines() const
+{
+    return m_scrollbackLines;
+}
+
+void Terminal::setLinkDetectionEnabled(bool enabled)
+{
+    m_linkDetectionEnabled = enabled;
+}
+
+bool Terminal::isLinkDetectionEnabled() const
+{
+    return m_linkDetectionEnabled;
+}
+
+void Terminal::onLinkActivated(const QString& link)
+{
+    emit linkClicked(link);
+    
+    // Try to open the link
+    if (link.startsWith("http://") || link.startsWith("https://") || 
+        link.startsWith("ftp://") || link.startsWith("file://")) {
+        QDesktopServices::openUrl(QUrl(link));
+    } else if (QFile::exists(link)) {
+        // It's a file path - emit signal so the application can handle it
+        emit linkClicked(link);
+    }
+}
+
+void Terminal::mousePressEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && 
+        (event->modifiers() & Qt::ControlModifier)) {
+        QString link = getLinkAtPosition(event->pos());
+        if (!link.isEmpty()) {
+            onLinkActivated(link);
+            event->accept();
+            return;
+        }
+    }
+    QWidget::mousePressEvent(event);
+}
+
+QString Terminal::getLinkAtPosition(const QPoint& pos)
+{
+    if (!m_linkDetectionEnabled) {
+        return QString();
+    }
+    
+    QTextCursor cursor = ui->textEdit->cursorForPosition(pos);
+    if (cursor.isNull()) {
+        return QString();
+    }
+    
+    // Get the text of the line
+    cursor.movePosition(QTextCursor::StartOfBlock);
+    cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    QString lineText = cursor.selectedText();
+    
+    // Get position within the line
+    int posInLine = ui->textEdit->cursorForPosition(pos).positionInBlock();
+    
+    // Check for URLs
+    QRegularExpressionMatchIterator urlMatches = m_urlRegex.globalMatch(lineText);
+    while (urlMatches.hasNext()) {
+        QRegularExpressionMatch match = urlMatches.next();
+        if (posInLine >= match.capturedStart() && posInLine <= match.capturedEnd()) {
+            return match.captured();
+        }
+    }
+    
+    // Check for file paths
+    QRegularExpressionMatchIterator pathMatches = m_filePathRegex.globalMatch(lineText);
+    while (pathMatches.hasNext()) {
+        QRegularExpressionMatch match = pathMatches.next();
+        QString path = match.captured(1);
+        int start = match.capturedStart(1);
+        int end = match.capturedEnd(1);
+        if (posInLine >= start && posInLine <= end && QFile::exists(path)) {
+            return path;
+        }
+    }
+    
+    return QString();
+}
+
+QString Terminal::processTextForLinks(const QString& text)
+{
+    if (!m_linkDetectionEnabled) {
+        return text;
+    }
+    
+    // For now, just return the text as-is
+    // The link detection is handled via mouse clicks
+    return text;
+}
+
+void Terminal::enforceScrollbackLimit()
+{
+    if (m_scrollbackLines <= 0) {
+        return;  // Unlimited
+    }
+    
+    QTextDocument* doc = ui->textEdit->document();
+    int blockCount = doc->blockCount();
+    
+    if (blockCount > m_scrollbackLines) {
+        QTextCursor cursor(doc);
+        cursor.movePosition(QTextCursor::Start);
+        
+        int linesToRemove = blockCount - m_scrollbackLines;
+        for (int i = 0; i < linesToRemove; ++i) {
+            cursor.movePosition(QTextCursor::NextBlock, QTextCursor::KeepAnchor);
+        }
+        cursor.removeSelectedText();
+    }
 }

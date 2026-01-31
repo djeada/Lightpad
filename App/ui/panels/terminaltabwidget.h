@@ -8,6 +8,9 @@ class Terminal;
 class QTabWidget;
 class QToolButton;
 class QHBoxLayout;
+class QSplitter;
+class QMenu;
+class QComboBox;
 class Theme;
 
 /**
@@ -15,6 +18,7 @@ class Theme;
  * 
  * Provides a tabbed interface for managing multiple terminal sessions,
  * with toolbar actions for creating, closing, and managing terminals.
+ * Supports split view for side-by-side terminals.
  */
 class TerminalTabWidget : public QWidget {
     Q_OBJECT
@@ -29,6 +33,15 @@ public:
      * @return Pointer to the newly created Terminal
      */
     Terminal* addNewTerminal(const QString& workingDirectory = QString());
+
+    /**
+     * @brief Create and add a new terminal with specific shell profile
+     * @param profileName Name of the shell profile to use
+     * @param workingDirectory Optional working directory
+     * @return Pointer to the newly created Terminal
+     */
+    Terminal* addNewTerminalWithProfile(const QString& profileName,
+                                        const QString& workingDirectory = QString());
 
     /**
      * @brief Get the currently active terminal
@@ -89,6 +102,35 @@ public:
      */
     void applyTheme(const Theme& theme);
 
+    /**
+     * @brief Send text to the current terminal
+     * @param text Text to send
+     * @param appendNewline Whether to append newline
+     */
+    void sendTextToTerminal(const QString& text, bool appendNewline = false);
+
+    /**
+     * @brief Split the terminal view horizontally
+     */
+    void splitHorizontal();
+
+    /**
+     * @brief Check if the view is split
+     * @return true if split view is active
+     */
+    bool isSplit() const;
+
+    /**
+     * @brief Unsplit the terminal view (keep current terminal)
+     */
+    void unsplit();
+
+    /**
+     * @brief Get available shell profile names
+     * @return List of profile names
+     */
+    QStringList availableShellProfiles() const;
+
 signals:
     /**
      * @brief Emitted when the close button is clicked
@@ -112,6 +154,12 @@ signals:
      */
     void errorOccurred(const QString& errorMessage);
 
+    /**
+     * @brief Emitted when a link is clicked in a terminal
+     * @param link The clicked link
+     */
+    void linkClicked(const QString& link);
+
 private slots:
     void onNewTerminalClicked();
     void onCloseTerminalClicked();
@@ -119,19 +167,29 @@ private slots:
     void onCloseButtonClicked();
     void onTabCloseRequested(int index);
     void onCurrentTabChanged(int index);
+    void onSplitTerminalClicked();
+    void onShellProfileSelected(const QString& profileName);
+    void onTerminalLinkClicked(const QString& link);
 
 private:
     void setupUI();
     void setupToolbar();
+    void setupShellProfileMenu();
     QString generateTerminalName();
+    QString generateTerminalName(const QString& profileName);
 
+    QSplitter* m_splitter;
     QTabWidget* m_tabWidget;
+    QTabWidget* m_secondaryTabWidget;
     QToolButton* m_newTerminalButton;
     QToolButton* m_clearButton;
     QToolButton* m_closeTerminalButton;
+    QToolButton* m_splitButton;
     QToolButton* m_closeButton;
+    QMenu* m_shellProfileMenu;
     int m_terminalCounter;
     QString m_currentWorkingDirectory;
+    bool m_isSplit;
 };
 
 #endif // TERMINALTABWIDGET_H

@@ -7,15 +7,6 @@
 class TestTerminalTabWidget : public QObject {
     Q_OBJECT
 
-private:
-    void stopAllShells(TerminalTabWidget& widget) {
-        for (int i = 0; i < widget.terminalCount(); ++i) {
-            Terminal* t = widget.terminalAt(i);
-            if (t) t->stopShell();
-        }
-        QTest::qWait(100);
-    }
-
 private slots:
     void initTestCase();
     void cleanupTestCase();
@@ -26,6 +17,10 @@ private slots:
     // Test terminal management
     void testTerminalCount();
     void testCurrentTerminal();
+    
+    // Test new features (quick tests without shell interaction)
+    void testAvailableShellProfiles();
+    void testIsSplit();
 };
 
 void TestTerminalTabWidget::initTestCase()
@@ -46,8 +41,7 @@ void TestTerminalTabWidget::testConstruction()
     // Should have one terminal by default
     QVERIFY(widget->terminalCount() >= 1);
     
-    // Stop all shells before cleanup to prevent hanging
-    stopAllShells(*widget);
+    // closeAllTerminals handles stopping all shells
     widget->closeAllTerminals();
     delete widget;
 }
@@ -59,8 +53,7 @@ void TestTerminalTabWidget::testTerminalCount()
     int initialCount = widget.terminalCount();
     QVERIFY(initialCount >= 1);
     
-    // Stop shells before cleanup
-    stopAllShells(widget);
+    // closeAllTerminals handles cleanup
     widget.closeAllTerminals();
 }
 
@@ -71,8 +64,37 @@ void TestTerminalTabWidget::testCurrentTerminal()
     Terminal* current = widget.currentTerminal();
     QVERIFY(current != nullptr);
     
-    // Stop shells before cleanup
-    stopAllShells(widget);
+    // closeAllTerminals handles cleanup
+    widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testAvailableShellProfiles()
+{
+    TerminalTabWidget widget;
+    
+    QStringList profiles = widget.availableShellProfiles();
+    QVERIFY(!profiles.isEmpty());
+    
+    // Should have at least one shell profile
+    QVERIFY(profiles.size() >= 1);
+    
+    // Each profile name should be non-empty
+    for (const QString& profile : profiles) {
+        QVERIFY(!profile.isEmpty());
+    }
+    
+    // closeAllTerminals handles cleanup
+    widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testIsSplit()
+{
+    TerminalTabWidget widget;
+    
+    // Initially not split
+    QVERIFY(!widget.isSplit());
+    
+    // closeAllTerminals handles cleanup
     widget.closeAllTerminals();
 }
 
