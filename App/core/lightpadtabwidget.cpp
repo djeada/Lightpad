@@ -4,6 +4,7 @@
 
 #include <QApplication>
 #include <QDebug>
+#include <QFileInfo>
 #include <QFontMetrics>
 #include <QSizePolicy>
 #include <QTabBar>
@@ -64,6 +65,15 @@ void LightpadTabWidget::addNewTab()
     if (mainWindow) {
         LightpadPage* newPage = new LightpadPage(this);
         newPage->setMainWindow(mainWindow);
+        
+        // Propagate project root path to the new tab
+        QString projectRoot = mainWindow->getProjectRootPath();
+        if (!projectRoot.isEmpty()) {
+            newPage->setProjectRootPath(projectRoot);
+            newPage->setTreeViewVisible(true);
+            newPage->setModelRootIndex(projectRoot);
+        }
+        
         insertTab(count() - 1, newPage, unsavedDocumentLabel);
         setCurrentIndex(count() - 2);
     }
@@ -215,7 +225,34 @@ QString LightpadTabWidget::getFilePath(int index)
 
         if (page)
             return page->getFilePath();
+        
+        // Check if it's a viewer tab
+        QWidget* w = widget(index);
+        if (m_viewerFilePaths.contains(w))
+            return m_viewerFilePaths[w];
     }
 
     return "";
+}
+
+void LightpadTabWidget::addViewerTab(QWidget* viewer, const QString& filePath)
+{
+    if (!viewer)
+        return;
+    
+    QFileInfo fileInfo(filePath);
+    QString tabTitle = fileInfo.fileName();
+    
+    m_viewerFilePaths[viewer] = filePath;
+    insertTab(count() - 1, viewer, tabTitle);
+    setCurrentIndex(count() - 2);
+}
+
+bool LightpadTabWidget::isViewerTab(int index) const
+{
+    if (index < 0 || index >= count())
+        return false;
+    
+    QWidget* w = widget(index);
+    return m_viewerFilePaths.contains(w);
 }

@@ -41,6 +41,10 @@ public:
     // Search mode
     bool isGlobalMode() const;
 
+signals:
+    // Emitted when user clicks on a search result to navigate to it
+    void navigateToFile(const QString& filePath, int lineNumber, int columnNumber);
+
 private slots:
     void on_more_clicked();
     void on_find_clicked();
@@ -97,6 +101,10 @@ private:
     void navigateToGlobalResult(int index);
     void updateModeUI();
     QStringList getProjectFiles() const;
+    
+    // Local search results display
+    void displayLocalResults(const QString& searchWord);
+    void onLocalResultClicked(QTreeWidgetItem* item, int column);
 };
 
 #endif // FINDREPLACEPANEL_H

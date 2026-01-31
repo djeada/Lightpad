@@ -1127,7 +1127,7 @@ QList<GitStashEntry> GitIntegration::parseStashListOutput(const QString& output)
         if (match.hasMatch()) {
             GitStashEntry entry;
             entry.index = match.captured(1).toInt();
-            entry.branchName = match.captured(2).trimmed();
+            entry.branch = match.captured(2).trimmed();
             entry.message = match.captured(3).trimmed();
             
             // Extract hash if present (format: "hash message")
@@ -1139,7 +1139,7 @@ QList<GitStashEntry> GitIntegration::parseStashListOutput(const QString& output)
                 // Verify it looks like a hex hash
                 static QRegularExpression hexPattern("^[0-9a-f]+$");
                 if (hexPattern.match(potentialHash).hasMatch()) {
-                    entry.hash = potentialHash;
+                    entry.commitHash = potentialHash;
                     entry.message = msgPart.mid(spaceIndex + 1);
                 }
             }

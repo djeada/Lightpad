@@ -279,8 +279,8 @@ void GitStashDialog::updateStashList()
             .arg(stash.index)
             .arg(stash.message.isEmpty() ? tr("(no message)") : stash.message);
         
-        if (!stash.branchName.isEmpty()) {
-            text += QString("\n    On branch: %1").arg(stash.branchName);
+        if (!stash.branch.isEmpty()) {
+            text += QString("\n    On branch: %1").arg(stash.branch);
         }
         
         item->setText(text);
@@ -325,7 +325,7 @@ void GitStashDialog::onStashSelected(QListWidgetItem* item)
             if (stash.index == index) {
                 QString details = QString(tr("Index: stash@{%1}\nBranch: %2\nMessage: %3"))
                     .arg(stash.index)
-                    .arg(stash.branchName.isEmpty() ? tr("(unknown)") : stash.branchName)
+                    .arg(stash.branch.isEmpty() ? tr("(unknown)") : stash.branch)
                     .arg(stash.message.isEmpty() ? tr("(no message)") : stash.message);
                 m_detailsLabel->setText(details);
                 break;

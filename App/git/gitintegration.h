@@ -74,10 +74,10 @@ struct GitRemoteInfo {
  * @brief Git stash entry information
  */
 struct GitStashEntry {
-    int index;
-    QString message;
-    QString branchName;
-    QString hash;
+    int index;           ///< The stash position (0 = most recent)
+    QString message;     ///< The stash description/commit message
+    QString branch;      ///< The branch the stash was created from
+    QString commitHash;  ///< The commit hash of the stash entry
 };
 
 /**

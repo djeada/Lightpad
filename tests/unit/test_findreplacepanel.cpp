@@ -12,6 +12,7 @@ private slots:
     void testRegexPattern();
     void testEscapeSpecialCharacters();
     void testPreserveCase();
+    void testSearchResultsLineCalculation();
 
 private:
     // Helper functions that mirror the FindReplacePanel logic
@@ -22,6 +23,9 @@ private:
     QString applyPreserveCase(const QString& replaceWord, 
                               const QString& matchedText, 
                               bool preserveCase) const;
+    
+    // Helper to calculate line/column from position (mirrors local search results logic)
+    QPair<int, int> calculateLineColumn(const QString& text, int position) const;
 };
 
 QRegularExpression TestSearchPatterns::buildSearchPattern(const QString& searchWord, 
@@ -203,6 +207,59 @@ void TestSearchPatterns::testPreserveCase()
     
     // Preserve case disabled
     QCOMPARE(applyPreserveCase(replacement, "HELLO", false), "world");
+}
+
+QPair<int, int> TestSearchPatterns::calculateLineColumn(const QString& text, int position) const
+{
+    QStringList lines = text.split('\n');
+    
+    // Build line start positions
+    QVector<int> lineStarts;
+    int pos = 0;
+    for (const QString& line : lines) {
+        lineStarts.append(pos);
+        pos += line.length() + 1; // +1 for newline
+    }
+    
+    // Find line number for this position
+    int lineNum = 0;
+    for (int j = 0; j < lineStarts.size(); ++j) {
+        if (j + 1 < lineStarts.size() && position >= lineStarts[j + 1]) {
+            continue;
+        }
+        lineNum = j;
+        break;
+    }
+    
+    int columnNum = position - lineStarts[lineNum] + 1; // 1-based
+    return qMakePair(lineNum + 1, columnNum); // 1-based line number
+}
+
+void TestSearchPatterns::testSearchResultsLineCalculation()
+{
+    // Test that search results correctly calculate line and column numbers
+    QString text = "first line\nsecond line with test\nthird line\nfourth test line";
+    
+    // Search for "test"
+    QRegularExpression pattern = buildSearchPattern("test", false, false, false);
+    QRegularExpressionMatchIterator matches = pattern.globalMatch(text);
+    
+    QVector<QPair<int, int>> results;
+    while (matches.hasNext()) {
+        QRegularExpressionMatch match = matches.next();
+        results.append(calculateLineColumn(text, match.capturedStart()));
+    }
+    
+    // Should find 2 occurrences
+    QCOMPARE(results.size(), 2);
+    
+    // First "test" is on line 2 (1-based), column 18
+    QCOMPARE(results[0].first, 2);   // line 2
+    QCOMPARE(results[0].second, 18); // column 18 (after "second line with ")
+    
+    // Second "test" is on line 4 (1-based), column 8
+    QCOMPARE(results[1].first, 4);   // line 4
+    QCOMPARE(results[1].second, 8);  // column 8 (after "fourth ")
 }
 
 QTEST_MAIN(TestSearchPatterns)

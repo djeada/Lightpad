@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QBoxLayout>
+#include <QDir>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QPushButton>
@@ -39,6 +40,8 @@
 #include "../completion/providers/snippetcompletionprovider.h"
 #include "../completion/providers/plugincompletionprovider.h"
 #include "panels/spliteditorcontainer.h"
+#include "viewers/imageviewer.h"
+#include "viewers/pdfviewer.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -438,16 +441,40 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     if (filePath.isEmpty() || !fileInfo.exists() || fileInfo.isDir())
         return;
 
-    //check if file not already edited
+    //check if file not already open (including viewer tabs)
     for (int i = 0; i < ui->tabWidget->count(); i++) {
-        auto page = ui->tabWidget->getPage(i);
-
-        if (page && page->getFilePath() == filePath) {
+        QString tabFilePath = ui->tabWidget->getFilePath(i);
+        if (tabFilePath == filePath) {
             ui->tabWidget->setCurrentIndex(i);
             return;
         }
     }
+    
+    QString extension = fileInfo.suffix().toLower();
+    
+    // Check if it's an image file
+    if (ImageViewer::isSupportedImageFormat(extension)) {
+        ImageViewer* imageViewer = new ImageViewer(this);
+        if (imageViewer->loadImage(filePath)) {
+            ui->tabWidget->addViewerTab(imageViewer, filePath);
+        } else {
+            delete imageViewer;
+        }
+        return;
+    }
+    
+    // Check if it's a PDF file
+    if (PdfViewer::isSupportedPdfFormat(extension)) {
+        PdfViewer* pdfViewer = new PdfViewer(this);
+        if (pdfViewer->loadPdf(filePath)) {
+            ui->tabWidget->addViewerTab(pdfViewer, filePath);
+        } else {
+            delete pdfViewer;
+        }
+        return;
+    }
 
+    // Default handling for text files
     if (ui->tabWidget->count() == 0 || !getCurrentTextArea()->toPlainText().isEmpty()) {
         ui->tabWidget->addNewTab();
         ui->tabWidget->setCurrentIndex(ui->tabWidget->count() - 1);
@@ -459,7 +486,12 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     auto page = ui->tabWidget->getCurrentPage();
 
     if (page) {
-        page->setTreeViewVisible(true);
+        // Use project root path if set, otherwise show treeview based on file
+        if (!m_projectRootPath.isEmpty()) {
+            page->setProjectRootPath(m_projectRootPath);
+            page->setModelRootIndex(m_projectRootPath);
+        }
+        page->setTreeViewVisible(!m_projectRootPath.isEmpty());
         page->setFilePath(filePath);
     }
 
@@ -627,17 +659,8 @@ void MainWindow::on_actionOpen_Project_triggered()
         return;
     }
 
-    ui->tabWidget->addNewTab();
-    ui->tabWidget->setCurrentIndex(ui->tabWidget->count() - 2);
-
-    auto page = ui->tabWidget->getCurrentPage();
-    if (!page) {
-        QMessageBox::warning(this, tr("Open Project"), tr("Failed to open project."));
-        return;
-    }
-
-    page->setTreeViewVisible(true);
-    page->setModelRootIndex(folderPath);
+    // Store the project root path for persistence across all tabs
+    setProjectRootPath(folderPath);
 
     QDir::setCurrent(folderPath);
     setMainWindowTitle(QFileInfo(folderPath).fileName());
@@ -723,6 +746,24 @@ void MainWindow::showFindReplace(bool onlyFind)
 
         if (layout != 0)
             layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
+        
+        // Connect navigation signal to open file at location
+        connect(findReplacePanel, &FindReplacePanel::navigateToFile, 
+                this, [this](const QString& filePath, int lineNumber, int columnNumber) {
+            // For local search results, filePath is empty - use current text area
+            if (!filePath.isEmpty()) {
+                openFileAndAddToNewTab(filePath);
+            }
+            TextArea* textArea = getCurrentTextArea();
+            if (textArea) {
+                QTextCursor cursor = textArea->textCursor();
+                cursor.movePosition(QTextCursor::Start);
+                cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, lineNumber - 1);
+                cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, columnNumber - 1);
+                textArea->setTextCursor(cursor);
+                textArea->setFocus();
+            }
+        });
     }
 
     findReplacePanel->setVisible(!findReplacePanel->isVisible() || findReplacePanel->isOnlyFind() != onlyFind);
@@ -733,6 +774,8 @@ void MainWindow::showFindReplace(bool onlyFind)
 
     if (findReplacePanel->isVisible()) {
         findReplacePanel->setTextArea(getCurrentTextArea());
+        findReplacePanel->setProjectPath(QDir::currentPath());
+        findReplacePanel->setMainWindow(this);
         findReplacePanel->setFocusOnSearchBox();
     }
 }
@@ -1634,14 +1677,12 @@ void MainWindow::setTheme(Theme theme)
             "color: " + fgColor + "; "
             "background-color: " + bgColor + "; "
             "selection-background-color: " + accentSoftColor + "; "
-            "selection-color: " + fgColor + "; "
             "border: none; "
         "}"
         "QTextEdit { "
             "color: " + fgColor + "; "
             "background-color: " + bgColor + "; "
             "selection-background-color: " + accentSoftColor + "; "
-            "selection-color: " + fgColor + "; "
             "border: none; "
         "}"
 
@@ -1852,4 +1893,26 @@ void MainWindow::setTheme(Theme theme)
     qApp->setStyleSheet(styleSheet);
 
     ui->tabWidget->setTheme(bgColor, fgColor, surfaceColor, hoverColor, accentColor, borderColor);
+}
+
+void MainWindow::setProjectRootPath(const QString& path)
+{
+    m_projectRootPath = path;
+    
+    // Update all existing tabs with the new project root
+    for (int i = 0; i < ui->tabWidget->count(); i++) {
+        auto page = ui->tabWidget->getPage(i);
+        if (page) {
+            page->setProjectRootPath(path);
+            page->setTreeViewVisible(!path.isEmpty());
+            if (!path.isEmpty()) {
+                page->setModelRootIndex(path);
+            }
+        }
+    }
+}
+
+QString MainWindow::getProjectRootPath() const
+{
+    return m_projectRootPath;
 }
