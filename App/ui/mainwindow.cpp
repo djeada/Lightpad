@@ -960,7 +960,6 @@ void MainWindow::setTheme(Theme theme)
         // Base widget styling
         "QWidget { background-color: " + bgColor + "; color: " + fgColor + "; }"
         "QDialog { background-color: " + bgColor + "; }"
-        "QLabel { font-size: 12px; }"
 
         // Modern menu styling
         "QMenu { "
@@ -1040,7 +1039,7 @@ void MainWindow::setTheme(Theme theme)
             "background-color: " + pressedColor + "; "
         "}"
         "QToolButton:focus { "
-            "border-color: " + accentColor + "; "
+            "border: 1px solid " + accentColor + "; "
         "}"
         "QToolButton#runButton, QToolButton#magicButton { "
             "background-color: " + surfaceAltColor + "; "
@@ -1057,7 +1056,7 @@ void MainWindow::setTheme(Theme theme)
             "padding: 6px 10px; "
         "}"
         "QToolButton#languageHighlight:focus, QToolButton#tabWidth:focus { "
-            "border-color: " + accentColor + "; "
+            "border: 1px solid " + accentColor + "; "
         "}"
         "QLabel#rowCol { color: " + mutedTextColor + "; }"
 
@@ -1077,7 +1076,8 @@ void MainWindow::setTheme(Theme theme)
             "background-color: " + hoverColor + "; "
         "}"
         "QAbstractItemView::item:focus { "
-            "background-color: " + accentSoftColor + "; "
+            "outline: 1px solid " + accentColor + "; "
+            "color: " + fgColor + "; "
         "}"
         "QAbstractItemView::item:selected { "
             "background-color: " + accentSoftColor + "; "
@@ -1103,7 +1103,7 @@ void MainWindow::setTheme(Theme theme)
             "border: 1px solid " + accentColor + "; "
         "}"
         "QLineEdit:disabled { "
-            "background-color: " + borderColor + "; "
+            "background-color: " + surfaceColor + "; "
             "color: " + mutedTextColor + "; "
         "}"
 
