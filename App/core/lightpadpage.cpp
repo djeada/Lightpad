@@ -2,6 +2,7 @@
 #include "../ui/mainwindow.h"
 #include "../ui/panels/minimap.h"
 #include "../run_templates/runtemplatemanager.h"
+#include "../git/gitintegration.h"
 #include <QDebug>
 #include <QHBoxLayout>
 #include <QLineEdit>
@@ -260,6 +261,8 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
     : QWidget(parent)
     , mainWindow(nullptr)
     , minimap(nullptr)
+    , model(nullptr)
+    , m_gitIntegration(nullptr)
     , filePath("")
 {
 
@@ -371,8 +374,14 @@ void LightpadPage::closeTabPage(QString path)
 
 void LightpadPage::updateModel()
 {
-    model = new QFileSystemModel(this);
+    model = new GitFileSystemModel(this);
     model->setRootPath(QDir::home().path());
+    
+    // Set git integration if available
+    if (m_gitIntegration) {
+        model->setGitIntegration(m_gitIntegration);
+    }
+    
     treeView->setModel(model);
 
     treeView->setColumnHidden(1, true);
@@ -431,4 +440,26 @@ QString LightpadPage::getAssignedTemplateId() const
     }
     
     return QString();
+}
+
+void LightpadPage::setGitIntegration(GitIntegration* git)
+{
+    m_gitIntegration = git;
+    if (model) {
+        model->setGitIntegration(git);
+    }
+}
+
+void LightpadPage::setGitStatusEnabled(bool enabled)
+{
+    if (model) {
+        model->setGitStatusEnabled(enabled);
+    }
+}
+
+void LightpadPage::refreshGitStatus()
+{
+    if (model) {
+        model->refreshGitStatus();
+    }
 }

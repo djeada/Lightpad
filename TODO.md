@@ -69,7 +69,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Data breakpoints
 
 ### 2. Git/Version Control Integration
-- [ ] Git status in file tree (modified, staged, untracked icons)
+- [x] Git status in file tree (modified, staged, untracked icons)
 - [ ] Git diff gutter in editor (inline +/- indicators)
 - [x] Source control panel
 - [x] Stage/unstage files
@@ -78,8 +78,8 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [ ] Git blame annotations
 - [ ] Git history/log viewer
 - [ ] Conflict resolution UI
-- [ ] Stash management
-- [ ] Remote operations (push, pull, fetch)
+- [x] Stash management
+- [x] Remote operations (push, pull, fetch)
 - [ ] GitHub/GitLab integration
 - [ ] Pull request viewing
 

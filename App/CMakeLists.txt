@@ -105,6 +105,7 @@ set(project_headers
     settings/textareasettings.h
     filetree/filedirtreemodel.h
     filetree/filedirtreecontroller.h
+    filetree/gitfilesystemmodel.h
     run_templates/runtemplatemanager.h
     format_templates/formattemplatemanager.h
     settings/theme.h)
@@ -184,6 +185,7 @@ set(project_sources
     settings/textareasettings.cpp
     filetree/filedirtreemodel.cpp
     filetree/filedirtreecontroller.cpp
+    filetree/gitfilesystemmodel.cpp
     run_templates/runtemplatemanager.cpp
     format_templates/formattemplatemanager.cpp
     settings/theme.cpp)
