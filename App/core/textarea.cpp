@@ -29,7 +29,7 @@
 
 QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp }, { "js", Lang::js }, { "py", Lang::py } };
 QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };
-constexpr int defaultLineSpacingPercent = 200;
+constexpr int defaultLineSpacingPercent = 150;
 
 class ExtraLineSpacingDocumentLayout : public QPlainTextDocumentLayout {
 public:
@@ -74,6 +74,27 @@ public:
         const int blocks = document() ? document()->blockCount() : 0;
         size.setHeight(size.height() + qreal(m_extraLineSpacingPx) * blocks);
         return size;
+    }
+
+    int hitTest(const QPointF& point, Qt::HitTestAccuracy accuracy) const override
+    {
+        if (m_extraLineSpacingPx <= 0)
+            return QPlainTextDocumentLayout::hitTest(point, accuracy);
+
+        if (!document())
+            return QPlainTextDocumentLayout::hitTest(point, accuracy);
+
+        const qreal y = point.y();
+        for (QTextBlock block = document()->begin(); block.isValid(); block = block.next()) {
+            QRectF rect = blockBoundingRect(block);
+            if (y >= rect.top() && y < rect.bottom()) {
+                QPointF adjusted = point;
+                adjusted.setY(point.y() - qreal(m_extraLineSpacingPx) * block.blockNumber());
+                return QPlainTextDocumentLayout::hitTest(adjusted, accuracy);
+            }
+        }
+
+        return QPlainTextDocumentLayout::hitTest(point, accuracy);
     }
 
 protected:
@@ -279,11 +300,8 @@ void TextArea::setupTextArea()
         setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
     });
 
-    connect(this, &TextArea::updateRequest, this, [&](const QRect& rect, int dy) {
-        if (dy)
-            lineNumberArea->scroll(0, dy);
-        else
-            lineNumberArea->update(0, rect.y(), lineNumberArea->width(), rect.height());
+    connect(this, &TextArea::updateRequest, this, [&](const QRect& rect, int) {
+        lineNumberArea->update(0, rect.y(), lineNumberArea->width(), rect.height());
 
         if (rect.contains(viewport()->rect()))
             setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
@@ -843,50 +861,80 @@ void TextArea::drawMatchingBrackets()
         _drawMatchingBrackets(QTextCursor::PreviousCharacter, brackets.key(endStr), endStr, &findOpeningParentheses);
 }
 
+void TextArea::updateExtraSelections()
+{
+    QList<QTextEdit::ExtraSelection> extraSelections;
+    QTextCursor cursor = textCursor();
+
+    if (lineHighlighted && !cursor.hasSelection()) {
+        QTextEdit::ExtraSelection selection;
+        QColor color = mainWindow ? mainWindow->getTheme().highlightColor : highlightColor;
+        selection.format.setBackground(color);
+        selection.format.setProperty(QTextFormat::FullWidthSelection, true);
+        selection.cursor = cursor;
+        selection.cursor.clearSelection();
+        extraSelections.append(selection);
+    }
+
+    if (matchingBracketsHighlighted) {
+        auto addBracketSelection = [&](QTextCursor::MoveOperation op, const QChar& startStr,
+                                       const QChar& endStr,
+                                       std::function<int(const QString&, int, QChar, QChar)> function) {
+            QTextEdit::ExtraSelection selection;
+            selection.format.setForeground(QColor("yellow"));
+
+            QTextCursor current = textCursor();
+            current.clearSelection();
+            current.movePosition(op, QTextCursor::KeepAnchor);
+            if (current.selectedText().isEmpty())
+                return;
+
+            selection.cursor = current;
+            extraSelections.append(selection);
+
+            auto plainText = toPlainText();
+            auto pos = function(plainText, textCursor().position(), startStr, endStr);
+            if (pos != -1) {
+                QTextCursor match = textCursor();
+                match.setPosition(pos);
+                match.movePosition(op, QTextCursor::KeepAnchor);
+                selection.cursor = match;
+                extraSelections.append(selection);
+            }
+        };
+
+        auto nextCursor = textCursor();
+        auto nextResult = nextCursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
+        auto startStr = nextResult ? nextCursor.selectedText().front() : QChar(' ');
+
+        auto prevCursor = textCursor();
+        auto prevResult = prevCursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
+        auto endStr = prevResult ? prevCursor.selectedText().front() : QChar(' ');
+
+        if (brackets.contains(startStr))
+            addBracketSelection(QTextCursor::NextCharacter, startStr, brackets[startStr], &findClosingParentheses);
+        else if (brackets.values().contains(endStr))
+            addBracketSelection(QTextCursor::PreviousCharacter, brackets.key(endStr), endStr, &findOpeningParentheses);
+    }
+
+    setExtraSelections(extraSelections);
+}
+
 void TextArea::updateCursorPositionChangedCallbacks()
 {
 
     disconnect(this, &TextArea::cursorPositionChanged, 0, 0);
+    disconnect(this, &TextArea::selectionChanged, 0, 0);
 
-    if (lineHighlighted && matchingBracketsHighlighted) {
-        connect(this, &TextArea::cursorPositionChanged, this, [&]() {
-            // Defer visual updates to not block typing
-            QTimer::singleShot(0, this, [this]() {
-                drawCurrentLineHighlight();
-                drawMatchingBrackets();
-            });
-            updateRowColDisplay();
-        });
-    }
+    auto refresh = [this]() {
+        updateExtraSelections();
+        updateRowColDisplay();
+    };
 
-    else if (lineHighlighted && !matchingBracketsHighlighted) {
-        clearLineHighlight();
-        connect(this, &TextArea::cursorPositionChanged, this, [&]() {
-            QTimer::singleShot(0, this, [this]() {
-                drawCurrentLineHighlight();
-            });
-            updateRowColDisplay();
-        });
-    }
+    connect(this, &TextArea::cursorPositionChanged, this, refresh);
+    connect(this, &TextArea::selectionChanged, this, refresh);
 
-    else if (!lineHighlighted && matchingBracketsHighlighted) {
-        clearLineHighlight();
-        connect(this, &TextArea::cursorPositionChanged, this, [&]() {
-            QTimer::singleShot(0, this, [this]() {
-                drawMatchingBrackets();
-            });
-            updateRowColDisplay();
-        });
-    }
-
-    else {
-        clearLineHighlight();
-        connect(this, &TextArea::cursorPositionChanged, this, [&]() {
-            updateRowColDisplay();
-        });
-    }
-
-    emit cursorPositionChanged();
+    refresh();
 }
 
 void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event)
@@ -900,25 +948,25 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent* event)
 
     auto block = firstVisibleBlock();
     auto blockNumber = block.blockNumber();
-    auto rect = blockBoundingRect(block).translated(contentOffset());
+    auto rect = blockBoundingGeometry(block).translated(contentOffset());
     auto top = rect.top();
     auto bottom = top + rect.height();
+    const int fontHeight = QFontMetrics(mainFont).height();
     color = mainWindow ? mainWindow->getTheme().foregroundColor : lineNumberAreaPenColor;
 
     while (block.isValid() && top <= event->rect().bottom()) {
 
         if (block.isVisible() && bottom >= event->rect().top()) {
-            const qreal height = rect.height();
             auto number = QString::number(blockNumber);
             painter.setPen(color);
-            painter.drawText(0, top, lineNumberArea->width(), height, Qt::AlignCenter, number);
+            painter.drawText(0, top, lineNumberArea->width(), fontHeight, Qt::AlignCenter, number);
         }
 
         block = block.next();
         top = bottom;
         if (!block.isValid())
             break;
-        rect = blockBoundingRect(block).translated(contentOffset());
+        rect = blockBoundingGeometry(block).translated(contentOffset());
         bottom = top + rect.height();
         ++blockNumber;
     }

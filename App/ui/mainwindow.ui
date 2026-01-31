@@ -266,6 +266,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionToggle_Full_Screen"/>
     <addaction name="actionToggle_Menu_Bar"/>
     <addaction name="actionToggle_Minimap"/>
+    <addaction name="actionToggle_Terminal"/>
     <addaction name="separator"/>
     <addaction name="actionSplit_Horizontally"/>
     <addaction name="actionSplit_Vertically"/>
@@ -540,6 +541,20 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   <action name="actionUnsplit_All">
    <property name="text">
     <string>Reset Editor Groups</string>
+   </property>
+  </action>
+  <action name="actionToggle_Terminal">
+   <property name="text">
+    <string>Toggle Terminal</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+`</string>
    </property>
   </action>
  </widget>

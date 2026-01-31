@@ -243,7 +243,6 @@ void LightpadTreeView::renameFile(QString oldFilePath, QString newFilePath)
     if (QFileInfo(oldFilePath).isFile()) {
         QFile(oldFilePath).rename(newFilePath);
         parentPage->updateModel();
-        parentPage->setModelRootIndex(QFileInfo(newFilePath).absoluteDir().path());
     }
 }
 
@@ -289,12 +288,20 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
     updateModel();
 
     QObject::connect(treeView, &QAbstractItemView::clicked, this, [&](const QModelIndex& index) {
-        if (mainWindow) {
-            QString path = model->filePath(index);
-            mainWindow->openFileAndAddToNewTab(path);
-            treeView->clearSelection();
-            treeView->setCurrentIndex(index);
+        if (!index.isValid() || !mainWindow) {
+            return;
         }
+
+        if (model->isDir(index)) {
+            treeView->setExpanded(index, !treeView->isExpanded(index));
+            treeView->setCurrentIndex(index);
+            return;
+        }
+
+        QString path = model->filePath(index);
+        mainWindow->openFileAndAddToNewTab(path);
+        treeView->clearSelection();
+        treeView->setCurrentIndex(index);
     });
 }
 
@@ -353,7 +360,6 @@ void LightpadPage::setFilePath(QString path)
 
     if (!path.isEmpty()) {
         setTreeViewVisible(true);
-        setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
     }
 }
 

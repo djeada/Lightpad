@@ -434,7 +434,8 @@ int MainWindow::getFontSize()
 void MainWindow::openFileAndAddToNewTab(QString filePath)
 {
 
-    if (filePath.isEmpty() || !QFileInfo(filePath).exists())
+    QFileInfo fileInfo(filePath);
+    if (filePath.isEmpty() || !fileInfo.exists() || fileInfo.isDir())
         return;
 
     //check if file not already edited
@@ -459,7 +460,6 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
 
     if (page) {
         page->setTreeViewVisible(true);
-        page->setModelRootIndex(QFileInfo(filePath).absoluteDir().path());
         page->setFilePath(filePath);
     }
 
@@ -1375,6 +1375,29 @@ void MainWindow::on_actionUnsplit_All_triggered()
     if (m_splitEditorContainer) {
         m_splitEditorContainer->unsplitAll();
     }
+}
+
+void MainWindow::on_actionToggle_Terminal_triggered()
+{
+    if (!terminalWidget) {
+        terminalWidget = new TerminalTabWidget();
+
+        connect(terminalWidget, &TerminalTabWidget::closeRequested, this, [this]() {
+            if (terminalWidget) {
+                terminalWidget->hide();
+                ui->actionToggle_Terminal->setChecked(false);
+            }
+        });
+
+        auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
+
+        if (layout != 0)
+            layout->insertWidget(layout->count() - 1, terminalWidget, 0);
+    }
+    
+    bool visible = terminalWidget->isVisible();
+    terminalWidget->setVisible(!visible);
+    ui->actionToggle_Terminal->setChecked(!visible);
 }
 
 void MainWindow::setTheme(Theme theme)

@@ -100,6 +100,7 @@ private slots:
     void on_actionFocus_Next_Group_triggered();
     void on_actionFocus_Previous_Group_triggered();
     void on_actionUnsplit_All_triggered();
+    void on_actionToggle_Terminal_triggered();
 
 private:
     Ui::MainWindow* ui;

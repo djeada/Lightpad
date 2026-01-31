@@ -2,6 +2,7 @@
 #include <QKeyEvent>
 #include <QScrollBar>
 #include <QApplication>
+#include <QGuiApplication>
 #include <QScreen>
 
 CompletionWidget::CompletionWidget(QWidget* parent)
@@ -47,6 +48,12 @@ CompletionWidget::CompletionWidget(QWidget* parent)
     connect(m_listView, &QListView::clicked, this, &CompletionWidget::onItemClicked);
     connect(m_listView, &QListView::doubleClicked, this, &CompletionWidget::onItemDoubleClicked);
     
+    connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+        if (state != Qt::ApplicationActive) {
+            hide();
+        }
+    });
+
     setAttribute(Qt::WA_ShowWithoutActivating, true);
     setMinimumWidth(200);
     setMaximumWidth(500);

@@ -120,6 +120,7 @@ private:
     void clearLineHighlight();
     void updateRowColDisplay();
     void drawMatchingBrackets();
+    void updateExtraSelections();
     void updateCursorPositionChangedCallbacks();
     void insertCompletion(const QString& completion);
     void insertCompletionItem(const CompletionItem& item);
