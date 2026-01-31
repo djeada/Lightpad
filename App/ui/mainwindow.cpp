@@ -1171,8 +1171,7 @@ void MainWindow::setTheme(Theme theme)
             "color: " + bgColor + "; "
         "}"
         "QPushButton:default:hover { "
-            "background-color: " + accentColor + "; "
-            "opacity: 0.9; "
+            "background-color: #6eb5ff; "
         "}"
 
         // Tool button styling
@@ -1338,7 +1337,7 @@ void MainWindow::setTheme(Theme theme)
         "QRadioButton::indicator { "
             "width: 16px; "
             "height: 16px; "
-            "border-radius: 9px; "
+            "border-radius: 8px; "
         "}"
         "QRadioButton::indicator:checked { "
             "background-color: " + accentColor + "; "
