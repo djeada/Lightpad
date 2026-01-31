@@ -23,7 +23,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Keyboard shortcut display
 - [x] Recent commands
 - [x] File quick open (Ctrl+P)
-- [ ] Go to symbol (Ctrl+Shift+O)
+- [x] Go to symbol (Ctrl+Shift+O)
 - [x] Go to line (Ctrl+G)
 
 ### Code Folding
@@ -31,7 +31,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Fold all / Unfold all
 - [x] Brace-based folding ({})
 - [x] Indent-based folding (Python)
-- [ ] Fold level (fold to level 1, 2, 3...)
+- [x] Fold level (fold to level 1, 2, 3...)
 - [ ] Folding indicators in gutter (click to fold)
 - [ ] Custom fold regions (#region/#endregion)
 - [ ] Fold comments
@@ -44,7 +44,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] File grouping
 - [x] Color-coded by severity
 - [x] Problem count in status bar
-- [ ] Problem count per file in tree
+- [x] Problem count per file in tree
 - [x] Auto-refresh on save
 
 ---

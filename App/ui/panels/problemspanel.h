@@ -51,6 +51,27 @@ public:
     int infoCount() const;
 
     /**
+     * @brief Get problem count for a specific file
+     * @param filePath The file path to query
+     * @return Total number of problems (errors + warnings + infos) for the file
+     */
+    int problemCountForFile(const QString& filePath) const;
+
+    /**
+     * @brief Get error count for a specific file
+     * @param filePath The file path to query
+     * @return Number of errors for the file
+     */
+    int errorCountForFile(const QString& filePath) const;
+
+    /**
+     * @brief Get warning count for a specific file
+     * @param filePath The file path to query
+     * @return Number of warnings for the file
+     */
+    int warningCountForFile(const QString& filePath) const;
+
+    /**
      * @brief Check if auto-refresh on save is enabled
      */
     bool isAutoRefreshEnabled() const;
@@ -76,6 +97,15 @@ signals:
      * @brief Emitted when counts change
      */
     void countsChanged(int errors, int warnings, int infos);
+
+    /**
+     * @brief Emitted when file problem counts change
+     * @param filePath The file whose problem count changed
+     * @param errorCount Number of errors in the file
+     * @param warningCount Number of warnings in the file
+     * @param infoCount Number of info/hints in the file
+     */
+    void fileCountsChanged(const QString& filePath, int errorCount, int warningCount, int infoCount);
 
     /**
      * @brief Emitted when a refresh is requested for a file

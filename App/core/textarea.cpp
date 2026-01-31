@@ -1696,6 +1696,74 @@ bool TextArea::isFoldable(int blockNumber) const
     return false;
 }
 
+int TextArea::getFoldingLevel(int blockNumber) const
+{
+    QTextBlock block = document()->findBlockByNumber(blockNumber);
+    if (!block.isValid())
+        return 0;
+    
+    QString text = block.text();
+    int indent = 0;
+    
+    // Calculate indentation level
+    for (QChar c : text) {
+        if (c == ' ') indent++;
+        else if (c == '\t') indent += 4;
+        else break;
+    }
+    
+    // Also count brace nesting level by looking at preceding blocks
+    int braceLevel = 0;
+    QTextBlock prevBlock = document()->begin();
+    while (prevBlock.isValid() && prevBlock.blockNumber() < blockNumber) {
+        QString prevText = prevBlock.text();
+        for (QChar c : prevText) {
+            if (c == '{') braceLevel++;
+            else if (c == '}') braceLevel--;
+        }
+        prevBlock = prevBlock.next();
+    }
+    
+    // Use a combination of indent and brace level
+    // Divide indent by 4 (assuming 4-space tabs) to get rough level
+    int indentLevel = indent / 4;
+    
+    // Return the maximum of indent-based and brace-based level
+    return qMax(indentLevel, braceLevel);
+}
+
+void TextArea::foldToLevel(int level)
+{
+    // First, unfold everything
+    unfoldAll();
+    
+    // Then fold all blocks that are at a level greater than the specified level
+    QTextBlock block = document()->begin();
+    while (block.isValid()) {
+        int blockNum = block.blockNumber();
+        if (isFoldable(blockNum)) {
+            int blockLevel = getFoldingLevel(blockNum);
+            
+            // Fold this block if it's at or above the specified level
+            if (blockLevel >= level) {
+                m_foldedBlocks.insert(blockNum);
+                
+                int endBlock = findFoldEndBlock(blockNum);
+                QTextBlock innerBlock = block.next();
+                
+                while (innerBlock.isValid() && innerBlock.blockNumber() <= endBlock) {
+                    innerBlock.setVisible(false);
+                    innerBlock = innerBlock.next();
+                }
+            }
+        }
+        block = block.next();
+    }
+    
+    viewport()->update();
+    document()->markContentsDirty(0, document()->characterCount());
+}
+
 // ============================================================================
 // Column/Box Selection Support
 // ============================================================================

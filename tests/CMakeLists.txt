@@ -458,6 +458,31 @@ target_compile_definitions(test_gotolinedialog PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GoToLineDialogTests COMMAND test_gotolinedialog)
 
+# GoToSymbolDialog test executable
+add_executable(test_gotosymboldialog
+    unit/test_gotosymboldialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gotosymboldialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gotosymboldialog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_gotosymboldialog
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gotosymboldialog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GoToSymbolDialogTests COMMAND test_gotosymboldialog)
+
 # LspClient test executable
 add_executable(test_lspclient
     unit/test_lspclient.cpp
@@ -604,6 +629,7 @@ set(TEST_LIST
     DapTests 
     GitIntegrationTests
     GoToLineDialogTests
+    GoToSymbolDialogTests
     LspClientTests
     MinimapTests
     FindReplacePanelTests
@@ -631,7 +657,7 @@ set(TEST_TARGETS
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     test_syntaxpluginregistry test_completionproviderregistry test_dap
-    test_gitintegration test_gotolinedialog test_lspclient test_minimap test_findreplacepanel
+    test_gitintegration test_gotolinedialog test_gotosymboldialog test_lspclient test_minimap test_findreplacepanel
     test_imageviewer
 )
 

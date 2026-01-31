@@ -124,6 +124,7 @@ private:
     class CommandPalette* commandPalette;
     class ProblemsPanel* problemsPanel;
     class GoToLineDialog* goToLineDialog;
+    class GoToSymbolDialog* goToSymbolDialog;
     class FileQuickOpen* fileQuickOpen;
     class QLabel* problemsStatusLabel;
     
@@ -143,9 +144,11 @@ private:
     void showProblemsPanel();
     void showCommandPalette();
     void showGoToLineDialog();
+    void showGoToSymbolDialog();
     void showFileQuickOpen();
     void setupCommandPalette();
     void setupGoToLineDialog();
+    void setupGoToSymbolDialog();
     void setupFileQuickOpen();
     void updateProblemsStatusLabel(int errors, int warnings, int infos);
     void setMainWindowTitle(QString title);

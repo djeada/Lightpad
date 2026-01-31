@@ -4,6 +4,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QStackedWidget>
 #include <QStringListModel>
 #include <QCompleter>
@@ -27,6 +28,7 @@
 #include "dialogs/shortcuts.h"
 #include "dialogs/commandpalette.h"
 #include "dialogs/gotolinedialog.h"
+#include "dialogs/gotosymboldialog.h"
 #include "dialogs/filequickopen.h"
 #include "panels/terminaltabwidget.h"
 #include "../core/textarea.h"
@@ -61,6 +63,7 @@ MainWindow::MainWindow(QWidget* parent)
     , commandPalette(nullptr)
     , problemsPanel(nullptr)
     , goToLineDialog(nullptr)
+    , goToSymbolDialog(nullptr)
     , fileQuickOpen(nullptr)
     , problemsStatusLabel(nullptr)
     , m_splitEditorContainer(nullptr)
@@ -91,6 +94,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupTabWidget();
     setupCommandPalette();
     setupGoToLineDialog();
+    setupGoToSymbolDialog();
     setupFileQuickOpen();
     loadSettings();
     setWindowTitle("LightPad");
@@ -461,6 +465,12 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
     else if (keyEvent->modifiers() == Qt::ControlModifier && 
              keyEvent->key() == Qt::Key_G) {
         showGoToLineDialog();
+    }
+    
+    // Go to Symbol: Ctrl+Shift+O
+    else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
+             keyEvent->key() == Qt::Key_O) {
+        showGoToSymbolDialog();
     }
     
     // File Quick Open: Ctrl+P
@@ -1023,6 +1033,134 @@ void MainWindow::setupGoToLineDialog()
             QTextCursor cursor = textArea->textCursor();
             cursor.movePosition(QTextCursor::Start);
             cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, lineNumber - 1);
+            textArea->setTextCursor(cursor);
+            textArea->centerCursor();
+            textArea->setFocus();
+        }
+    });
+}
+
+void MainWindow::showGoToSymbolDialog()
+{
+    if (!goToSymbolDialog) {
+        setupGoToSymbolDialog();
+    }
+    
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        // For now, we'll create sample symbols based on simple parsing
+        // In a real implementation, this would use LSP document symbols
+        QList<LspDocumentSymbol> symbols;
+        
+        // Simple heuristic parsing for functions/classes
+        QTextBlock block = textArea->document()->begin();
+        while (block.isValid()) {
+            QString text = block.text().trimmed();
+            
+            // Look for function-like patterns
+            if (text.contains('(') && !text.startsWith("//") && !text.startsWith("/*")) {
+                // Try to extract function name
+                int parenPos = text.indexOf('(');
+                QString beforeParen = text.left(parenPos).trimmed();
+                
+                // Get the last word before the parenthesis as the function name
+                QStringList parts = beforeParen.split(QRegularExpression("\\s+"));
+                if (!parts.isEmpty()) {
+                    QString name = parts.last();
+                    // Clean up any leading characters like * or &
+                    while (!name.isEmpty() && (name[0] == '*' || name[0] == '&')) {
+                        name = name.mid(1);
+                    }
+                    
+                    if (!name.isEmpty() && name[0].isLetter()) {
+                        LspDocumentSymbol sym;
+                        sym.name = name;
+                        sym.kind = LspSymbolKind::Function;
+                        sym.selectionRange.start.line = block.blockNumber();
+                        sym.selectionRange.start.character = 0;
+                        sym.range = sym.selectionRange;
+                        
+                        // Check for class/struct definitions
+                        if (beforeParen.startsWith("class ") || beforeParen.startsWith("struct ")) {
+                            sym.kind = LspSymbolKind::Class;
+                        }
+                        
+                        symbols.append(sym);
+                    }
+                }
+            }
+            // Look for class/struct definitions without parentheses
+            else if (text.startsWith("class ") || text.startsWith("struct ")) {
+                QStringList parts = text.split(QRegularExpression("\\s+"));
+                if (parts.size() >= 2) {
+                    QString name = parts[1];
+                    // Remove trailing characters like : or {
+                    name = name.split(QRegularExpression("[:{]")).first();
+                    
+                    if (!name.isEmpty()) {
+                        LspDocumentSymbol sym;
+                        sym.name = name;
+                        sym.kind = LspSymbolKind::Class;
+                        sym.selectionRange.start.line = block.blockNumber();
+                        sym.selectionRange.start.character = 0;
+                        sym.range = sym.selectionRange;
+                        symbols.append(sym);
+                    }
+                }
+            }
+            // Look for Python def/class
+            else if (text.startsWith("def ") || text.startsWith("class ")) {
+                QString keyword = text.startsWith("def ") ? "def " : "class ";
+                QString rest = text.mid(keyword.length());
+                int endPos = rest.indexOf(QRegularExpression("[:(]"));
+                if (endPos > 0) {
+                    QString name = rest.left(endPos).trimmed();
+                    
+                    LspDocumentSymbol sym;
+                    sym.name = name;
+                    sym.kind = text.startsWith("def ") ? LspSymbolKind::Function : LspSymbolKind::Class;
+                    sym.selectionRange.start.line = block.blockNumber();
+                    sym.selectionRange.start.character = 0;
+                    sym.range = sym.selectionRange;
+                    symbols.append(sym);
+                }
+            }
+            // Look for JavaScript function declarations
+            else if (text.startsWith("function ")) {
+                QString rest = text.mid(9);  // Length of "function "
+                int endPos = rest.indexOf('(');
+                if (endPos > 0) {
+                    QString name = rest.left(endPos).trimmed();
+                    
+                    LspDocumentSymbol sym;
+                    sym.name = name;
+                    sym.kind = LspSymbolKind::Function;
+                    sym.selectionRange.start.line = block.blockNumber();
+                    sym.selectionRange.start.character = 0;
+                    sym.range = sym.selectionRange;
+                    symbols.append(sym);
+                }
+            }
+            
+            block = block.next();
+        }
+        
+        goToSymbolDialog->setSymbols(symbols);
+        goToSymbolDialog->showDialog();
+    }
+}
+
+void MainWindow::setupGoToSymbolDialog()
+{
+    goToSymbolDialog = new GoToSymbolDialog(this);
+    
+    connect(goToSymbolDialog, &GoToSymbolDialog::symbolSelected, this, [this](int line, int column) {
+        TextArea* textArea = getCurrentTextArea();
+        if (textArea) {
+            QTextCursor cursor = textArea->textCursor();
+            cursor.movePosition(QTextCursor::Start);
+            cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, line);
+            cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, column);
             textArea->setTextCursor(cursor);
             textArea->centerCursor();
             textArea->setFocus();

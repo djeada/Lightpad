@@ -75,6 +75,7 @@ public:
     void foldAll();
     void unfoldAll();
     void toggleFoldAtLine(int line);
+    void foldToLevel(int level);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -157,6 +158,7 @@ private:
     // Folding helpers
     int findFoldEndBlock(int startBlock) const;
     bool isFoldable(int blockNumber) const;
+    int getFoldingLevel(int blockNumber) const;
 };
 
 #endif
