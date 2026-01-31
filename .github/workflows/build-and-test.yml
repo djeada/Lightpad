@@ -36,7 +36,8 @@ jobs:
             build-essential \
             cmake \
             qt6-base-dev \
-            qt6-base-dev-tools
+            qt6-base-dev-tools \
+            qt6-pdf-dev
 
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON

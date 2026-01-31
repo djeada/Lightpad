@@ -35,6 +35,7 @@ jobs:
           cache: true
           version: ${{ matrix.qt_version }}
           arch: ${{ matrix.qt_arch }}
+          modules: qtpdf
 
       - name: Setup Python (Windows)
         if: runner.os == 'Windows'
@@ -58,6 +59,7 @@ jobs:
           cache: true
           aqtversion: '==3.3.0'
           tools-only: false
+          modules: qtpdf
 
       - name: Install Qt (Windows fallback via aqt)
         if: runner.os == 'Windows' && steps.fastqt.outcome != 'success'
@@ -71,7 +73,7 @@ jobs:
           try {
             python -m aqt install-qt windows desktop ${{ matrix.qt_version }} ${{ matrix.qt_arch }} `
               --outputdir "$qtRoot" `
-              -m qtmultimedia qt5compat qtdeclarative
+              -m qtmultimedia qt5compat qtdeclarative qtpdf
           } catch {
             Write-Warning "Explicit module install failed. Falling back to '-m all'. Error: $($_.Exception.Message)"
             python -m aqt install-qt windows desktop ${{ matrix.qt_version }} ${{ matrix.qt_arch }} `
