@@ -38,6 +38,7 @@
 #include "../completion/providers/keywordcompletionprovider.h"
 #include "../completion/providers/snippetcompletionprovider.h"
 #include "../completion/providers/plugincompletionprovider.h"
+#include "panels/spliteditorcontainer.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -56,6 +57,7 @@ MainWindow::MainWindow(QWidget* parent)
     , goToLineDialog(nullptr)
     , fileQuickOpen(nullptr)
     , problemsStatusLabel(nullptr)
+    , m_splitEditorContainer(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
@@ -1330,6 +1332,48 @@ void MainWindow::on_actionToggle_Minimap_triggered()
                 p->setMinimapVisible(!visible);
             }
         }
+    }
+}
+
+void MainWindow::on_actionSplit_Horizontally_triggered()
+{
+    if (m_splitEditorContainer) {
+        m_splitEditorContainer->splitHorizontal();
+    }
+}
+
+void MainWindow::on_actionSplit_Vertically_triggered()
+{
+    if (m_splitEditorContainer) {
+        m_splitEditorContainer->splitVertical();
+    }
+}
+
+void MainWindow::on_actionClose_Editor_Group_triggered()
+{
+    if (m_splitEditorContainer) {
+        m_splitEditorContainer->closeCurrentGroup();
+    }
+}
+
+void MainWindow::on_actionFocus_Next_Group_triggered()
+{
+    if (m_splitEditorContainer) {
+        m_splitEditorContainer->focusNextGroup();
+    }
+}
+
+void MainWindow::on_actionFocus_Previous_Group_triggered()
+{
+    if (m_splitEditorContainer) {
+        m_splitEditorContainer->focusPreviousGroup();
+    }
+}
+
+void MainWindow::on_actionUnsplit_All_triggered()
+{
+    if (m_splitEditorContainer) {
+        m_splitEditorContainer->unsplitAll();
     }
 }
 

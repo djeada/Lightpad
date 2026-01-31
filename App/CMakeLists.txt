@@ -57,6 +57,7 @@ set(project_headers
     ui/panels/debugpanel.h
     ui/panels/sourcecontrolpanel.h
     ui/panels/minimap.h
+    ui/panels/spliteditorcontainer.h
     core/async/asyncworker.h
     core/document.h
     core/formatter.h
@@ -138,6 +139,7 @@ set(project_sources
     ui/panels/debugpanel.cpp
     ui/panels/sourcecontrolpanel.cpp
     ui/panels/minimap.cpp
+    ui/panels/spliteditorcontainer.cpp
     core/async/asyncworker.cpp
     core/document.cpp
     core/formatter.cpp

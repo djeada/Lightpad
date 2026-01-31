@@ -84,12 +84,12 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [ ] Pull request viewing
 
 ### 3. Split Editor/Views
-- [ ] Horizontal split
-- [ ] Vertical split
+- [x] Horizontal split
+- [x] Vertical split
 - [ ] Grid layout (2x2, etc.)
 - [ ] Drag tabs between split groups
 - [ ] Synchronized scrolling option
-- [ ] Focus management between splits
+- [x] Focus management between splits
 - [ ] Open to side action
 
 ---

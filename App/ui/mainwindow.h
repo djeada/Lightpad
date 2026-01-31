@@ -18,6 +18,7 @@ class TextArea;
 class QCompleter;
 class Preferences;
 class CompletionEngine;
+class SplitEditorContainer;
 
 enum class Lang { cpp,
     js,
@@ -93,6 +94,12 @@ private slots:
     void on_actionEdit_Format_Configurations_triggered();
     void on_actionGo_to_Line_triggered();
     void on_actionToggle_Minimap_triggered();
+    void on_actionSplit_Horizontally_triggered();
+    void on_actionSplit_Vertically_triggered();
+    void on_actionClose_Editor_Group_triggered();
+    void on_actionFocus_Next_Group_triggered();
+    void on_actionFocus_Previous_Group_triggered();
+    void on_actionUnsplit_All_triggered();
 
 private:
     Ui::MainWindow* ui;
@@ -113,6 +120,9 @@ private:
     class GoToLineDialog* goToLineDialog;
     class FileQuickOpen* fileQuickOpen;
     class QLabel* problemsStatusLabel;
+    
+    // Split editor views
+    SplitEditorContainer* m_splitEditorContainer;
     
     void undo();
     void redo();

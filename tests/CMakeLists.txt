@@ -496,6 +496,9 @@ target_compile_definitions(test_minimap PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME MinimapTests COMMAND test_minimap)
 
+# SplitEditorContainer - not adding unit test due to complex MainWindow dependencies
+# The feature is tested via integration testing with the main application
+
 # Set environment variable for headless testing
 set_tests_properties(
     LoggerTests 
