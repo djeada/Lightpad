@@ -196,6 +196,13 @@ public:
     bool deleteBranch(const QString& branchName, bool force = false);
 
     /**
+     * @brief Merge a branch into the current branch
+     * @param branchName The branch to merge
+     * @return true if merge was successful
+     */
+    bool mergeBranch(const QString& branchName);
+
+    /**
      * @brief Get the diff output for a file
      */
     QString getFileDiff(const QString& filePath) const;
@@ -205,24 +212,35 @@ public:
      */
     bool discardChanges(const QString& filePath);
 
-    /**
-     * @brief Refresh the repository status
-     */
-    void refresh();
+    // ==================== Remote Operations ====================
 
-    // ========== Repository Initialization ==========
-    
     /**
-     * @brief Initialize a new git repository at the specified path
-     * @param path Directory path where to initialize the repository
-     * @return true if initialization was successful
+     * @brief Fetch from remote repository
+     * @param remoteName Name of the remote (defaults to "origin")
+     * @return true if fetch was successful
      */
-    bool initRepository(const QString& path);
+    bool fetch(const QString& remoteName = "origin");
 
-    // ========== Remote Operations ==========
-    
+    /**
+     * @brief Pull from remote repository
+     * @param remoteName Name of the remote (defaults to "origin")
+     * @param branchName Branch to pull (defaults to current branch)
+     * @return true if pull was successful
+     */
+    bool pull(const QString& remoteName = "origin", const QString& branchName = QString());
+
+    /**
+     * @brief Push to remote repository
+     * @param remoteName Name of the remote (defaults to "origin")
+     * @param branchName Branch to push (defaults to current branch)
+     * @param setUpstream Set upstream tracking for the branch
+     * @return true if push was successful
+     */
+    bool push(const QString& remoteName = "origin", const QString& branchName = QString(), bool setUpstream = false);
+
     /**
      * @brief Get list of configured remotes
+     * @return List of remote information
      */
     QList<GitRemoteInfo> getRemotes() const;
 
@@ -238,26 +256,67 @@ public:
      */
     bool removeRemote(const QString& name);
 
-    /**
-     * @brief Fetch from a remote
-     * @param remoteName Name of the remote (default: "origin")
-     */
-    bool fetch(const QString& remoteName = "origin");
+    // ==================== Stash Operations ====================
 
     /**
-     * @brief Pull from a remote
-     * @param remoteName Name of the remote (default: "origin")
-     * @param branchName Branch to pull (default: current branch)
+     * @brief Stash current changes
+     * @param message Optional stash message
+     * @param includeUntracked Include untracked files in stash
+     * @return true if stash was successful
      */
-    bool pull(const QString& remoteName = "origin", const QString& branchName = QString());
+    bool stash(const QString& message = QString(), bool includeUntracked = false);
 
     /**
-     * @brief Push to a remote
-     * @param remoteName Name of the remote (default: "origin")
-     * @param branchName Branch to push (default: current branch)
-     * @param setUpstream Set upstream tracking for the branch
+     * @brief Pop a stash entry
+     * @param index Stash index to pop (default 0 for most recent)
+     * @return true if pop was successful
      */
-    bool push(const QString& remoteName = "origin", const QString& branchName = QString(), bool setUpstream = false);
+    bool stashPop(int index = 0);
+
+    /**
+     * @brief Apply a stash without removing it
+     * @param index Stash index to apply
+     * @return true if apply was successful
+     */
+    bool stashApply(int index = 0);
+
+    /**
+     * @brief Drop a stash entry
+     * @param index Stash index to drop
+     * @return true if drop was successful
+     */
+    bool stashDrop(int index = 0);
+
+    /**
+     * @brief List all stash entries
+     * @return List of stash entries
+     */
+    QList<GitStashEntry> stashList() const;
+    
+    /**
+     * @brief Get list of stash entries (alias for stashList)
+     */
+    QList<GitStashEntry> getStashList() const;
+
+    /**
+     * @brief Clear all stash entries
+     * @return true if clear was successful
+     */
+    bool stashClear();
+
+    /**
+     * @brief Refresh the repository status
+     */
+    void refresh();
+
+    // ========== Repository Initialization ==========
+    
+    /**
+     * @brief Initialize a new git repository at the specified path
+     * @param path Directory path where to initialize the repository
+     * @return true if initialization was successful
+     */
+    bool initRepository(const QString& path);
 
     // ========== Merge Conflict Handling ==========
     
@@ -301,50 +360,6 @@ public:
      * @brief Continue merge after resolving conflicts
      */
     bool continueMerge();
-
-    // ========== Stash Operations ==========
-    
-    /**
-     * @brief Get list of stash entries
-     */
-    QList<GitStashEntry> getStashList() const;
-
-    /**
-     * @brief Stash current changes
-     * @param message Optional stash message
-     * @param includeUntracked Include untracked files in stash
-     */
-    bool stash(const QString& message = QString(), bool includeUntracked = false);
-
-    /**
-     * @brief Pop the latest stash entry
-     */
-    bool stashPop();
-
-    /**
-     * @brief Apply a specific stash entry without removing it
-     * @param index Stash entry index
-     */
-    bool stashApply(int index = 0);
-
-    /**
-     * @brief Drop a specific stash entry
-     * @param index Stash entry index
-     */
-    bool stashDrop(int index);
-
-    /**
-     * @brief Clear all stash entries
-     */
-    bool stashClear();
-
-    // ========== Merge Operations ==========
-    
-    /**
-     * @brief Merge a branch into the current branch
-     * @param branchName Branch to merge
-     */
-    bool mergeBranch(const QString& branchName);
 
     /**
      * @brief Check if a merge is in progress

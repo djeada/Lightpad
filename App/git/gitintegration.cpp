@@ -525,6 +525,26 @@ bool GitIntegration::deleteBranch(const QString& branchName, bool force)
     return success;
 }
 
+bool GitIntegration::mergeBranch(const QString& branchName)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"merge", branchName}, &success);
+    
+    if (success) {
+        emit operationCompleted("Merged branch: " + branchName);
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to merge branch: " + branchName);
+    }
+    
+    return success;
+}
+
 QString GitIntegration::getFileDiff(const QString& filePath) const
 {
     if (!m_isValid) {
@@ -788,6 +808,7 @@ bool GitIntegration::pull(const QString& remoteName, const QString& branchName)
     if (success) {
         emit pullCompleted(remoteName, branch);
         emit operationCompleted("Pulled from: " + remoteName + "/" + branch);
+        updateCurrentBranch();
         emit statusChanged();
         
         // Check for merge conflicts after pull
@@ -833,6 +854,7 @@ bool GitIntegration::push(const QString& remoteName, const QString& branchName, 
     if (success) {
         emit pushCompleted(remoteName, branch);
         emit operationCompleted("Pushed to: " + remoteName + "/" + branch);
+        emit statusChanged();
     } else {
         emit errorOccurred("Failed to push to: " + remoteName);
     }
@@ -1151,6 +1173,11 @@ QList<GitStashEntry> GitIntegration::parseStashListOutput(const QString& output)
     return result;
 }
 
+QList<GitStashEntry> GitIntegration::stashList() const
+{
+    return getStashList();
+}
+
 bool GitIntegration::stash(const QString& message, bool includeUntracked)
 {
     if (!m_isValid) {
@@ -1179,7 +1206,7 @@ bool GitIntegration::stash(const QString& message, bool includeUntracked)
     return success;
 }
 
-bool GitIntegration::stashPop()
+bool GitIntegration::stashPop(int index)
 {
     if (!m_isValid) {
         emit errorOccurred("Not in a git repository");
@@ -1187,7 +1214,8 @@ bool GitIntegration::stashPop()
     }
     
     bool success;
-    executeGitCommand({"stash", "pop"}, &success);
+    QString stashRef = QString("stash@{%1}").arg(index);
+    executeGitCommand({"stash", "pop", stashRef}, &success);
     
     if (success) {
         emit operationCompleted("Stash popped");
@@ -1219,7 +1247,8 @@ bool GitIntegration::stashApply(int index)
     }
     
     bool success;
-    executeGitCommand({"stash", "apply", QString("stash@{%1}").arg(index)}, &success);
+    QString stashRef = QString("stash@{%1}").arg(index);
+    executeGitCommand({"stash", "apply", stashRef}, &success);
     
     if (success) {
         emit operationCompleted(QString("Stash %1 applied").arg(index));
@@ -1251,10 +1280,12 @@ bool GitIntegration::stashDrop(int index)
     }
     
     bool success;
-    executeGitCommand({"stash", "drop", QString("stash@{%1}").arg(index)}, &success);
+    QString stashRef = QString("stash@{%1}").arg(index);
+    executeGitCommand({"stash", "drop", stashRef}, &success);
     
     if (success) {
         emit operationCompleted(QString("Stash %1 dropped").arg(index));
+        emit statusChanged();
     } else {
         emit errorOccurred(QString("Failed to drop stash %1").arg(index));
     }
@@ -1274,8 +1305,9 @@ bool GitIntegration::stashClear()
     
     if (success) {
         emit operationCompleted("All stashes cleared");
+        emit statusChanged();
     } else {
-        emit errorOccurred("Failed to clear stash");
+        emit errorOccurred("Failed to clear stashes");
     }
     
     return success;

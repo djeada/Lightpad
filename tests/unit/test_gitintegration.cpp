@@ -20,11 +20,17 @@ private slots:
     void testGetBranches();
     void testCreateBranch();
     void testGetDiffLines();
-    // New tests for extended functionality
+    // Tests from HEAD (extended functionality)
     void testInitRepository();
     void testRemoteOperations();
-    void testStashOperations();
+    void testStashOperationsExtended();
     void testMergeConflictDetection();
+    // Tests from master
+    void testMergeBranch();
+    void testStash();
+    void testStashList();
+    void testStashPopApply();
+    void testGetRemotes();
 
 private:
     QTemporaryDir m_tempDir;
@@ -382,7 +388,7 @@ void TestGitIntegration::testRemoteOperations()
     QVERIFY(!foundRemote);
 }
 
-void TestGitIntegration::testStashOperations()
+void TestGitIntegration::testStashOperationsExtended()
 {
     GitIntegration git;
     QVERIFY(git.setRepositoryPath(m_repoPath));
@@ -413,7 +419,7 @@ void TestGitIntegration::testStashOperations()
     QVERIFY(stashes.size() >= 1);
     
     // Pop the stash
-    QVERIFY(git.stashPop());
+    QVERIFY(git.stashPop(0));
     
     // File should be back in status
     status = git.getStatus();
@@ -499,6 +505,166 @@ void TestGitIntegration::testMergeConflictDetection()
         // If only one commit, just restore the file
         runGitCommand({"checkout", "HEAD", "--", "initial.txt"});
     }
+}
+
+void TestGitIntegration::testMergeBranch()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+    
+    QString originalBranch = git.currentBranch();
+    
+    // Create a feature branch with a commit
+    QVERIFY(git.createBranch("merge-test-branch", true));
+    createTestFile("merge_test.txt", "Merge test content\n");
+    QVERIFY(git.stageFile("merge_test.txt"));
+    QVERIFY(git.commit("Add merge test file"));
+    
+    // Switch back to original branch
+    QVERIFY(git.checkoutBranch(originalBranch));
+    
+    // Merge the feature branch
+    QVERIFY(git.mergeBranch("merge-test-branch"));
+    
+    // Verify the file exists after merge
+    QFileInfo mergedFile(m_repoPath + "/merge_test.txt");
+    QVERIFY(mergedFile.exists());
+    
+    // Clean up
+    QVERIFY(git.deleteBranch("merge-test-branch"));
+}
+
+void TestGitIntegration::testStash()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+    
+    // Modify a file
+    createTestFile("stash_test.txt", "Stash test content\n");
+    QVERIFY(git.stageFile("stash_test.txt"));
+    
+    // Stash changes
+    QVERIFY(git.stash("Test stash message", false));
+    
+    // File should not exist after stash (it was staged as new)
+    QList<GitFileInfo> status = git.getStatus();
+    bool foundStashFile = false;
+    for (const GitFileInfo& file : status) {
+        if (file.filePath == "stash_test.txt") {
+            foundStashFile = true;
+            break;
+        }
+    }
+    QVERIFY(!foundStashFile);
+    
+    // Stash should have at least one entry
+    QList<GitStashEntry> stashes = git.stashList();
+    QVERIFY(!stashes.isEmpty());
+    
+    // Pop the stash
+    QVERIFY(git.stashPop(0));
+    
+    // Clean up - unstage the file and remove it
+    runGitCommand({"reset", "HEAD", "stash_test.txt"});
+    QFile::remove(m_repoPath + "/stash_test.txt");
+}
+
+void TestGitIntegration::testStashList()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+    
+    // Create and stash some changes
+    createTestFile("stash_list_test.txt", "Stash list test\n");
+    QVERIFY(git.stageFile("stash_list_test.txt"));
+    QVERIFY(git.stash("First stash"));
+    
+    createTestFile("stash_list_test2.txt", "Stash list test 2\n");
+    QVERIFY(git.stageFile("stash_list_test2.txt"));
+    QVERIFY(git.stash("Second stash"));
+    
+    // List stashes
+    QList<GitStashEntry> stashes = git.stashList();
+    QVERIFY(stashes.size() >= 2);
+    
+    // Verify stash messages
+    bool foundFirst = false;
+    bool foundSecond = false;
+    for (const GitStashEntry& entry : stashes) {
+        if (entry.message.contains("First stash")) foundFirst = true;
+        if (entry.message.contains("Second stash")) foundSecond = true;
+    }
+    QVERIFY(foundFirst);
+    QVERIFY(foundSecond);
+    
+    // Clean up - clear all stashes
+    QVERIFY(git.stashClear());
+    stashes = git.stashList();
+    QVERIFY(stashes.isEmpty());
+}
+
+void TestGitIntegration::testStashPopApply()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+    
+    // Create and stash changes
+    createTestFile("stash_pop_test.txt", "Stash pop test\n");
+    QVERIFY(git.stageFile("stash_pop_test.txt"));
+    QVERIFY(git.stash("Pop test stash"));
+    
+    // Apply stash (keeps the stash entry)
+    QVERIFY(git.stashApply(0));
+    
+    // File should now be staged again
+    QList<GitFileInfo> status = git.getStatus();
+    bool foundFile = false;
+    for (const GitFileInfo& file : status) {
+        if (file.filePath == "stash_pop_test.txt") {
+            QCOMPARE(file.indexStatus, GitFileStatus::Added);
+            foundFile = true;
+            break;
+        }
+    }
+    QVERIFY(foundFile);
+    
+    // Stash should still exist
+    QList<GitStashEntry> stashes = git.stashList();
+    QVERIFY(!stashes.isEmpty());
+    
+    // Drop the stash
+    QVERIFY(git.stashDrop(0));
+    
+    // Clean up
+    runGitCommand({"reset", "HEAD", "stash_pop_test.txt"});
+    QFile::remove(m_repoPath + "/stash_pop_test.txt");
+}
+
+void TestGitIntegration::testGetRemotes()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+    
+    // By default, a local repo has no remotes
+    QList<GitRemoteInfo> remotes = git.getRemotes();
+    QVERIFY(remotes.isEmpty());
+    
+    // Add a remote
+    runGitCommand({"remote", "add", "origin", "https://example.com/repo.git"});
+    
+    remotes = git.getRemotes();
+    QVERIFY(!remotes.isEmpty());
+    bool foundOrigin = false;
+    for (const GitRemoteInfo& remote : remotes) {
+        if (remote.name == "origin") {
+            foundOrigin = true;
+            break;
+        }
+    }
+    QVERIFY(foundOrigin);
+    
+    // Clean up - remove the remote
+    runGitCommand({"remote", "remove", "origin"});
 }
 
 QTEST_MAIN(TestGitIntegration)
