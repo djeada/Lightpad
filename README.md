@@ -44,12 +44,12 @@ Clone the Lightpad repository:
 <h2>Install Build-Tools</h2>
 
 <ul>  
-<li> A C++ compiler supporting C++14 </li>
-<li> Cmake </li>
+<li> A C++ compiler supporting C++17 </li>
+<li> CMake (version 3.16 or higher) </li>
 </ul>
-<pre>sudo apt-get install build-essential</pre>
+<pre>sudo apt-get install build-essential cmake</pre>
 
-<h2>Install dependencies</h2>
+<h2>Install dependencies (Qt6)</h2>
 <pre>sudo apt-get install qt6-base-dev qt6-pdf-dev libqt6pdf6 libqt6pdfwidgets6</pre>
                      
 <h2>Building with CMake</h2>

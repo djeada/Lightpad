@@ -16,16 +16,11 @@ private slots:
     void cleanupTestCase();
 
 private:
-    QApplication* app;
     QString testImagePath;
 };
 
 void TestImageViewer::initTestCase()
 {
-    static int argc = 1;
-    static char* argv[] = { const_cast<char*>("test_imageviewer") };
-    app = new QApplication(argc, argv);
-    
     // Create a test image
     QTemporaryFile tempFile(QDir::tempPath() + "/test_image_XXXXXX.png");
     tempFile.setAutoRemove(false);
@@ -44,7 +39,6 @@ void TestImageViewer::cleanupTestCase()
     if (!testImagePath.isEmpty() && QFile::exists(testImagePath)) {
         QFile::remove(testImagePath);
     }
-    delete app;
 }
 
 void TestImageViewer::testSupportedFormats()
@@ -95,6 +89,6 @@ void TestImageViewer::testZoomFunctions()
     QVERIFY(true);
 }
 
-QTEST_APPLESS_MAIN(TestImageViewer)
+QTEST_MAIN(TestImageViewer)
 
 #include "test_imageviewer.moc"

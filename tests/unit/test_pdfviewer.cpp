@@ -7,27 +7,10 @@ class TestPdfViewer : public QObject
     Q_OBJECT
 
 private slots:
-    void initTestCase();
     void testSupportedFormats();
     void testZoomFunctions();
     void testNavigationFunctions();
-    void cleanupTestCase();
-
-private:
-    QApplication* app;
 };
-
-void TestPdfViewer::initTestCase()
-{
-    static int argc = 1;
-    static char* argv[] = { const_cast<char*>("test_pdfviewer") };
-    app = new QApplication(argc, argv);
-}
-
-void TestPdfViewer::cleanupTestCase()
-{
-    delete app;
-}
 
 void TestPdfViewer::testSupportedFormats()
 {
@@ -71,6 +54,6 @@ void TestPdfViewer::testNavigationFunctions()
     QVERIFY(true);
 }
 
-QTEST_APPLESS_MAIN(TestPdfViewer)
+QTEST_MAIN(TestPdfViewer)
 
 #include "test_pdfviewer.moc"
