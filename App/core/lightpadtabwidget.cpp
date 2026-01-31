@@ -89,28 +89,30 @@ void LightpadTabWidget::setTheme(const QString& backgroundColor,
     const QString& borderColor)
 {
     setStyleSheet(
-        // Modern scrollbar styling (inherits from main but ensure consistency)
-        "QScrollBar:vertical { background: " + backgroundColor + "; }"
-        "QScrollBar:horizontal { background: " + backgroundColor + "; }"
+        // Modern scrollbar styling
+        "QScrollBar:vertical { background: transparent; }"
+        "QScrollBar:horizontal { background: transparent; }"
 
-        // Tab bar container
+        // Tab bar container with clean background
         "QTabBar { "
             "background: " + backgroundColor + "; "
             "qproperty-drawBase: 0; "
         "}"
 
-        // Individual tabs - modern rounded style
+        // Individual tabs - modern flat design with subtle indicators
         "QTabBar::tab { "
-            "color: #9aa4b2; "
+            "color: #8b949e; "
             "background-color: " + backgroundColor + "; "
-            "padding: 8px 16px; "
-            "margin: 6px 4px 0px 4px; "
-            "border-top-left-radius: 10px; "
-            "border-top-right-radius: 10px; "
+            "padding: 10px 18px; "
+            "margin: 4px 2px 0px 2px; "
+            "border-top-left-radius: 8px; "
+            "border-top-right-radius: 8px; "
             "border: 1px solid transparent; "
+            "border-bottom: none; "
+            "font-size: 13px; "
         "}"
 
-        // Active/selected tab
+        // Active/selected tab with accent indicator
         "QTabBar::tab:selected { "
             "color: " + foregroundColor + "; "
             "background-color: " + surfaceColor + "; "
@@ -122,23 +124,23 @@ void LightpadTabWidget::setTheme(const QString& backgroundColor,
         "QTabBar::tab:hover:!selected { "
             "color: " + foregroundColor + "; "
             "background-color: " + hoverColor + "; "
-            "border: 1px solid " + borderColor + "; "
         "}"
 
-        // Close button on tabs
+        // Close button on tabs - subtle and minimal
         "QTabBar::close-button { "
             "image: url(:/resources/icons/close_dark.png); "
             "subcontrol-position: right; "
+            "padding: 2px; "
+            "border-radius: 4px; "
         "}"
         "QTabBar::close-button:hover { "
             "background-color: " + hoverColor + "; "
-            "border-radius: 4px; "
         "}"
 
-        // Add tab button styling
+        // Add tab button styling - clean and minimal
         "QToolButton#AddTabButton { "
             "background: " + backgroundColor + "; "
-            "border-radius: 8px; "
+            "border-radius: 6px; "
             "padding: 4px; "
             "border: 1px solid transparent; "
         "}"
@@ -147,7 +149,7 @@ void LightpadTabWidget::setTheme(const QString& backgroundColor,
             "border: 1px solid " + borderColor + "; "
         "}"
 
-        // Tab widget pane
+        // Tab widget pane - seamless integration
         "QTabWidget::pane { "
             "border: none; "
             "background-color: " + backgroundColor + "; "
