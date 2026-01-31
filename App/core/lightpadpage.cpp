@@ -382,10 +382,8 @@ void LightpadPage::updateModel()
     // Preserve the current root path if one is set
     QString currentRootPath = projectRootPath.isEmpty() ? QDir::home().path() : projectRootPath;
     
-    model = new QFileSystemModel(this);
-    model->setRootPath(currentRootPath);
     model = new GitFileSystemModel(this);
-    model->setRootPath(QDir::home().path());
+    model->setRootPath(currentRootPath);
     
     // Set git integration if available
     if (m_gitIntegration) {
@@ -465,6 +463,8 @@ void LightpadPage::setProjectRootPath(const QString& path)
 QString LightpadPage::getProjectRootPath() const
 {
     return projectRootPath;
+}
+
 void LightpadPage::setGitIntegration(GitIntegration* git)
 {
     m_gitIntegration = git;

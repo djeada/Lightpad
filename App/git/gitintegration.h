@@ -62,6 +62,15 @@ struct GitBranchInfo {
 };
 
 /**
+ * @brief Git remote information
+ */
+struct GitRemoteInfo {
+    QString name;
+    QString fetchUrl;
+    QString pushUrl;
+};
+
+/**
  * @brief Git stash entry information
  */
 struct GitStashEntry {
@@ -69,6 +78,17 @@ struct GitStashEntry {
     QString message;     ///< The stash description/commit message
     QString branch;      ///< The branch the stash was created from
     QString commitHash;  ///< The commit hash of the stash entry
+};
+
+/**
+ * @brief Information about a merge conflict in a file
+ */
+struct GitConflictMarker {
+    int startLine;
+    int separatorLine;
+    int endLine;
+    QString oursContent;
+    QString theirsContent;
 };
 
 /**
@@ -95,6 +115,17 @@ public:
      * @brief Get the current repository root path
      */
     QString repositoryPath() const;
+
+    /**
+     * @brief Get the working path (used when not yet a repository)
+     */
+    QString workingPath() const;
+
+    /**
+     * @brief Set the working path for a project not yet a git repository
+     * @param path Directory path to set as working path
+     */
+    void setWorkingPath(const QString& path);
 
     /**
      * @brief Check if currently in a valid git repository
@@ -185,33 +216,45 @@ public:
 
     /**
      * @brief Fetch from remote repository
-     * @param remote The remote name (defaults to "origin")
+     * @param remoteName Name of the remote (defaults to "origin")
      * @return true if fetch was successful
      */
-    bool fetch(const QString& remote = "origin");
+    bool fetch(const QString& remoteName = "origin");
 
     /**
      * @brief Pull from remote repository
-     * @param remote The remote name (defaults to "origin")
-     * @param branch The branch to pull (defaults to current branch)
+     * @param remoteName Name of the remote (defaults to "origin")
+     * @param branchName Branch to pull (defaults to current branch)
      * @return true if pull was successful
      */
-    bool pull(const QString& remote = "origin", const QString& branch = "");
+    bool pull(const QString& remoteName = "origin", const QString& branchName = QString());
 
     /**
      * @brief Push to remote repository
-     * @param remote The remote name (defaults to "origin")
-     * @param branch The branch to push (defaults to current branch)
-     * @param setUpstream Set upstream tracking reference
+     * @param remoteName Name of the remote (defaults to "origin")
+     * @param branchName Branch to push (defaults to current branch)
+     * @param setUpstream Set upstream tracking for the branch
      * @return true if push was successful
      */
-    bool push(const QString& remote = "origin", const QString& branch = "", bool setUpstream = false);
+    bool push(const QString& remoteName = "origin", const QString& branchName = QString(), bool setUpstream = false);
 
     /**
      * @brief Get list of configured remotes
-     * @return List of remote names
+     * @return List of remote information
      */
-    QStringList getRemotes() const;
+    QList<GitRemoteInfo> getRemotes() const;
+
+    /**
+     * @brief Add a remote
+     * @param name Remote name (e.g., "origin")
+     * @param url Remote URL
+     */
+    bool addRemote(const QString& name, const QString& url);
+
+    /**
+     * @brief Remove a remote
+     */
+    bool removeRemote(const QString& name);
 
     // ==================== Stash Operations ====================
 
@@ -221,10 +264,10 @@ public:
      * @param includeUntracked Include untracked files in stash
      * @return true if stash was successful
      */
-    bool stash(const QString& message = "", bool includeUntracked = false);
+    bool stash(const QString& message = QString(), bool includeUntracked = false);
 
     /**
-     * @brief Pop the most recent stash
+     * @brief Pop a stash entry
      * @param index Stash index to pop (default 0 for most recent)
      * @return true if pop was successful
      */
@@ -249,6 +292,11 @@ public:
      * @return List of stash entries
      */
     QList<GitStashEntry> stashList() const;
+    
+    /**
+     * @brief Get list of stash entries (alias for stashList)
+     */
+    QList<GitStashEntry> getStashList() const;
 
     /**
      * @brief Clear all stash entries
@@ -260,6 +308,63 @@ public:
      * @brief Refresh the repository status
      */
     void refresh();
+
+    // ========== Repository Initialization ==========
+    
+    /**
+     * @brief Initialize a new git repository at the specified path
+     * @param path Directory path where to initialize the repository
+     * @return true if initialization was successful
+     */
+    bool initRepository(const QString& path);
+
+    // ========== Merge Conflict Handling ==========
+    
+    /**
+     * @brief Check if there are merge conflicts
+     */
+    bool hasMergeConflicts() const;
+
+    /**
+     * @brief Get list of files with merge conflicts
+     */
+    QStringList getConflictedFiles() const;
+
+    /**
+     * @brief Get conflict markers in a file
+     * @param filePath Path to the file with conflicts
+     */
+    QList<GitConflictMarker> getConflictMarkers(const QString& filePath) const;
+
+    /**
+     * @brief Resolve a conflict by accepting ours version
+     */
+    bool resolveConflictOurs(const QString& filePath);
+
+    /**
+     * @brief Resolve a conflict by accepting theirs version
+     */
+    bool resolveConflictTheirs(const QString& filePath);
+
+    /**
+     * @brief Mark a file as resolved after manual editing
+     */
+    bool markConflictResolved(const QString& filePath);
+
+    /**
+     * @brief Abort the current merge operation
+     */
+    bool abortMerge();
+
+    /**
+     * @brief Continue merge after resolving conflicts
+     */
+    bool continueMerge();
+
+    /**
+     * @brief Check if a merge is in progress
+     */
+    bool isMergeInProgress() const;
 
 signals:
     /**
@@ -282,8 +387,29 @@ signals:
      */
     void operationCompleted(const QString& operation);
 
+    /**
+     * @brief Emitted when merge conflicts are detected
+     */
+    void mergeConflictsDetected(const QStringList& conflictedFiles);
+
+    /**
+     * @brief Emitted when repository is initialized
+     */
+    void repositoryInitialized(const QString& path);
+
+    /**
+     * @brief Emitted when a push operation completes
+     */
+    void pushCompleted(const QString& remoteName, const QString& branchName);
+
+    /**
+     * @brief Emitted when a pull operation completes
+     */
+    void pullCompleted(const QString& remoteName, const QString& branchName);
+
 private:
     QString m_repositoryPath;
+    QString m_workingPath;  // Path used when not yet a valid repository
     bool m_isValid;
     QString m_currentBranch;
     QList<GitFileInfo> m_statusCache;
@@ -292,6 +418,11 @@ private:
      * @brief Execute a git command and return the output
      */
     QString executeGitCommand(const QStringList& args, bool* success = nullptr) const;
+
+    /**
+     * @brief Execute a git command at a specific path
+     */
+    QString executeGitCommandAtPath(const QString& path, const QStringList& args, bool* success = nullptr) const;
 
     /**
      * @brief Parse git status --porcelain output
@@ -312,6 +443,11 @@ private:
      * @brief Update the current branch name
      */
     void updateCurrentBranch();
+
+    /**
+     * @brief Parse stash list output
+     */
+    QList<GitStashEntry> parseStashListOutput(const QString& output) const;
 };
 
 #endif // GITINTEGRATION_H
