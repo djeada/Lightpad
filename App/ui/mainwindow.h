@@ -15,6 +15,7 @@ class FindReplacePanel;
 class TextArea;
 class QCompleter;
 class Preferences;
+class CompletionEngine;
 
 enum class Lang { cpp,
     js,
@@ -94,7 +95,8 @@ private:
     Preferences* preferences;
     FindReplacePanel* findReplacePanel;
     TerminalTabWidget* terminalWidget;
-    QCompleter* completer;
+    QCompleter* completer;  // Legacy - deprecated
+    CompletionEngine* m_completionEngine;
     TextAreaSettings settings;
     QString highlightLanguage;
     QFont font;
@@ -121,6 +123,7 @@ private:
     void closeCurrentTab();
     void setupTabWidget();
     void setupTextArea();
+    void setupCompletionSystem();
     void noScriptAssignedWarning();
     void closeEvent(QCloseEvent* event);
     void loadSettings();

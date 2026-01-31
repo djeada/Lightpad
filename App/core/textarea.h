@@ -10,6 +10,9 @@
 class MainWindow;
 class QSyntaxHighlighter;
 class QCompleter;
+class CompletionEngine;
+class CompletionWidget;
+struct CompletionItem;
 struct TextAreaSettings;
 
 class TextArea : public QPlainTextEdit {
@@ -33,8 +36,18 @@ public:
     void highlihtCurrentLine(bool flag);
     void highlihtMatchingBracket(bool flag);
     void loadSettings(const TextAreaSettings settings);
+    
+    // Legacy completer support (deprecated - use setCompletionEngine)
     void setCompleter(QCompleter* completer);
     QCompleter* completer() const;
+    
+    // New completion system
+    void setCompletionEngine(CompletionEngine* engine);
+    CompletionEngine* completionEngine() const;
+    void setLanguage(const QString& languageId);
+    QString language() const;
+    void triggerCompletion();
+    
     int lineNumberAreaWidth();
     int fontSize();
     QString getSearchWord();
@@ -74,7 +87,10 @@ private:
     QString highlightLang;
     QFont mainFont;
     QSyntaxHighlighter* syntaxHighlighter;
-    QCompleter* m_completer;
+    QCompleter* m_completer;  // Legacy - deprecated
+    CompletionEngine* m_completionEngine;
+    CompletionWidget* m_completionWidget;
+    QString m_languageId;
     QString searchWord;
     bool areChangesUnsaved;
     bool autoIndent;
@@ -100,8 +116,17 @@ private:
     void drawMatchingBrackets();
     void updateCursorPositionChangedCallbacks();
     void insertCompletion(const QString& completion);
+    void insertCompletionItem(const CompletionItem& item);
     QString textUnderCursor() const;
+    QString getDocumentUri() const;
+    void showCompletionPopup();
+    void hideCompletionPopup();
+    
+private slots:
+    void onCompletionsReady(const QList<CompletionItem>& items);
+    void onCompletionAccepted(const CompletionItem& item);
 
+private:
     // Multi-cursor helpers
     void drawExtraCursors();
     void applyToAllCursors(const std::function<void(QTextCursor&)>& operation);

@@ -22,6 +22,10 @@
 #include "../ui/mainwindow.h"
 #include "textarea.h"
 #include "../settings/textareasettings.h"
+#include "../completion/completionengine.h"
+#include "../completion/completionwidget.h"
+#include "../completion/completionitem.h"
+#include "../completion/completioncontext.h"
 
 QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp }, { "js", Lang::js }, { "py", Lang::py } };
 QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };
@@ -149,6 +153,9 @@ TextArea::TextArea(QWidget* parent)
     , highlightLang("")
     , syntaxHighlighter(nullptr)
     , m_completer(nullptr)
+    , m_completionEngine(nullptr)
+    , m_completionWidget(nullptr)
+    , m_languageId("")
     , searchWord("")
     , areChangesUnsaved(false)
     , autoIndent(true)
@@ -174,6 +181,9 @@ TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent)
     , highlightLang("")
     , syntaxHighlighter(nullptr)
     , m_completer(nullptr)
+    , m_completionEngine(nullptr)
+    , m_completionWidget(nullptr)
+    , m_languageId("")
     , searchWord("")
     , areChangesUnsaved(false)
     , autoIndent(settings.autoIndent)
@@ -380,7 +390,35 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
         }
     }
 
-    // Handle completer popup navigation
+    // Handle new completion widget navigation
+    if (m_completionWidget && m_completionWidget->isVisible()) {
+        switch (keyEvent->key()) {
+        case Qt::Key_Up:
+            m_completionWidget->selectPrevious();
+            return;
+        case Qt::Key_Down:
+            m_completionWidget->selectNext();
+            return;
+        case Qt::Key_PageUp:
+            m_completionWidget->selectPageUp();
+            return;
+        case Qt::Key_PageDown:
+            m_completionWidget->selectPageDown();
+            return;
+        case Qt::Key_Enter:
+        case Qt::Key_Return:
+        case Qt::Key_Tab:
+            onCompletionAccepted(m_completionWidget->selectedItem());
+            return;
+        case Qt::Key_Escape:
+            hideCompletionPopup();
+            return;
+        default:
+            break;
+        }
+    }
+
+    // Handle legacy completer popup navigation (deprecated)
     if (m_completer && m_completer->popup()->isVisible()) {
         // The following keys are forwarded by the completer to the widget
         switch (keyEvent->key()) {
@@ -469,7 +507,36 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
             handleKeyEnterPressed();
     }
 
-    // Handle autocompletion (both manual trigger and auto-popup)
+    // Handle new completion engine (preferred)
+    if (m_completionEngine) {
+        static QString eow("~!@#$%^&*()_+{}|:\"<>?,./;'[]\\-="); // end of word
+        const bool ctrlOrShift = keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
+        bool hasModifier = (keyEvent->modifiers() != Qt::NoModifier) && !ctrlOrShift;
+        QString completionPrefix = textUnderCursor();
+
+        if (!isShortcut && (hasModifier || keyEvent->text().isEmpty() || completionPrefix.length() < 2
+                              || eow.contains(keyEvent->text().right(1)))) {
+            hideCompletionPopup();
+            return;
+        }
+
+        // Trigger completion
+        QTextCursor cursor = textCursor();
+        CompletionContext ctx;
+        ctx.documentUri = getDocumentUri();
+        ctx.languageId = m_languageId;
+        ctx.prefix = completionPrefix;
+        ctx.line = cursor.blockNumber();
+        ctx.column = cursor.positionInBlock();
+        ctx.lineText = cursor.block().text();
+        ctx.triggerKind = isShortcut ? CompletionTriggerKind::Invoked : CompletionTriggerKind::TriggerCharacter;
+        ctx.isAutoComplete = !isShortcut;
+        
+        m_completionEngine->requestCompletions(ctx);
+        return;
+    }
+
+    // Handle legacy autocompletion (deprecated - fallback)
     if (!m_completer)
         return;
 
@@ -804,6 +871,138 @@ QString TextArea::textUnderCursor() const
     QTextCursor tc = textCursor();
     tc.select(QTextCursor::WordUnderCursor);
     return tc.selectedText();
+}
+
+// ============================================================================
+// New Completion System
+// ============================================================================
+
+void TextArea::setCompletionEngine(CompletionEngine* engine)
+{
+    m_completionEngine = engine;
+    
+    if (!m_completionEngine)
+        return;
+    
+    // Create completion widget if needed
+    if (!m_completionWidget) {
+        m_completionWidget = new CompletionWidget(this);
+        connect(m_completionWidget, &CompletionWidget::itemAccepted,
+                this, &TextArea::onCompletionAccepted);
+        connect(m_completionWidget, &CompletionWidget::cancelled,
+                this, &TextArea::hideCompletionPopup);
+    }
+    
+    // Connect engine signals
+    connect(m_completionEngine, &CompletionEngine::completionsReady,
+            this, &TextArea::onCompletionsReady);
+    
+    m_completionEngine->setLanguage(m_languageId);
+}
+
+CompletionEngine* TextArea::completionEngine() const
+{
+    return m_completionEngine;
+}
+
+void TextArea::setLanguage(const QString& languageId)
+{
+    m_languageId = languageId;
+    if (m_completionEngine) {
+        m_completionEngine->setLanguage(languageId);
+    }
+}
+
+QString TextArea::language() const
+{
+    return m_languageId;
+}
+
+QString TextArea::getDocumentUri() const
+{
+    return QString("file://%1").arg(objectName());
+}
+
+void TextArea::triggerCompletion()
+{
+    if (!m_completionEngine)
+        return;
+    
+    QString prefix = textUnderCursor();
+    QTextCursor cursor = textCursor();
+    
+    CompletionContext ctx;
+    ctx.documentUri = getDocumentUri();
+    ctx.languageId = m_languageId;
+    ctx.prefix = prefix;
+    ctx.line = cursor.blockNumber();
+    ctx.column = cursor.positionInBlock();
+    ctx.lineText = cursor.block().text();
+    ctx.triggerKind = CompletionTriggerKind::Invoked;
+    ctx.isAutoComplete = false;
+    
+    m_completionEngine->requestCompletions(ctx);
+}
+
+void TextArea::onCompletionsReady(const QList<CompletionItem>& items)
+{
+    if (items.isEmpty()) {
+        hideCompletionPopup();
+        return;
+    }
+    
+    showCompletionPopup();
+    m_completionWidget->setItems(items);
+}
+
+void TextArea::onCompletionAccepted(const CompletionItem& item)
+{
+    insertCompletionItem(item);
+    hideCompletionPopup();
+}
+
+void TextArea::insertCompletionItem(const CompletionItem& item)
+{
+    QTextCursor tc = textCursor();
+    QString prefix = textUnderCursor();
+    
+    // Move to end of current word and delete the prefix
+    tc.movePosition(QTextCursor::EndOfWord);
+    tc.movePosition(QTextCursor::StartOfWord, QTextCursor::KeepAnchor);
+    
+    QString insertText = item.effectiveInsertText();
+    
+    if (item.isSnippet) {
+        // Simple snippet expansion - replace placeholders with default text or empty
+        // Full tabstop navigation would be more complex
+        // Handle ${1:default} -> default, ${1} -> ""
+        static const QRegularExpression tabstopWithDefaultRe(R"(\$\{(\d+):([^}]*)\})");
+        insertText.replace(tabstopWithDefaultRe, "\\2");
+        static const QRegularExpression tabstopNoDefaultRe(R"(\$\{(\d+)\})");
+        insertText.replace(tabstopNoDefaultRe, "");
+        static const QRegularExpression simpleTabstopRe(R"(\$(\d+))");
+        insertText.replace(simpleTabstopRe, "");
+    }
+    
+    tc.insertText(insertText);
+    setTextCursor(tc);
+}
+
+void TextArea::showCompletionPopup()
+{
+    if (!m_completionWidget)
+        return;
+    
+    QRect cr = cursorRect();
+    QPoint pos = mapToGlobal(cr.bottomLeft());
+    m_completionWidget->showAt(pos);
+}
+
+void TextArea::hideCompletionPopup()
+{
+    if (m_completionWidget) {
+        m_completionWidget->hide();
+    }
 }
 
 // ============================================================================

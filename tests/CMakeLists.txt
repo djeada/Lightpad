@@ -19,6 +19,7 @@ set(CMAKE_AUTORCC ON)
 # Include directories for application sources
 include_directories(${CMAKE_SOURCE_DIR}/App)
 include_directories(${CMAKE_SOURCE_DIR}/App/accessibility)
+include_directories(${CMAKE_SOURCE_DIR}/App/completion)
 include_directories(${CMAKE_SOURCE_DIR}/App/core)
 include_directories(${CMAKE_SOURCE_DIR}/App/core/async)
 include_directories(${CMAKE_SOURCE_DIR}/App/core/io)
@@ -318,6 +319,28 @@ target_link_libraries(test_syntaxpluginregistry
 target_compile_definitions(test_terminaltabwidget PRIVATE QT_DEPRECATED_WARNINGS)
 target_compile_definitions(test_syntaxpluginregistry PRIVATE QT_DEPRECATED_WARNINGS)
 
+# CompletionProviderRegistry test executable
+add_executable(test_completionproviderregistry
+    unit/test_completionproviderregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/completion/completionproviderregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_completionproviderregistry PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/completion
+)
+
+target_link_libraries(test_completionproviderregistry
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_completionproviderregistry PRIVATE QT_DEPRECATED_WARNINGS)
+
 # Register tests with CTest
 add_test(NAME LoggerTests COMMAND test_logger)
 add_test(NAME ThemeTests COMMAND test_theme)
@@ -334,12 +357,13 @@ add_test(NAME FormatTemplateManagerTests COMMAND test_formattemplatemanager)
 add_test(NAME TerminalTests COMMAND test_terminal)
 add_test(NAME TerminalTabWidgetTests COMMAND test_terminaltabwidget)
 add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
+add_test(NAME CompletionProviderRegistryTests COMMAND test_completionproviderregistry)
 
 # Set environment variable for headless testing
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
     AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
     RunTemplateManagerTests FormatTemplateManagerTests TerminalTests TerminalTabWidgetTests
-    SyntaxPluginRegistryTests PROPERTIES
+    SyntaxPluginRegistryTests CompletionProviderRegistryTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
@@ -352,6 +376,6 @@ add_custom_target(run_tests
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
             test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
             test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
-            test_syntaxpluginregistry
+            test_syntaxpluginregistry test_completionproviderregistry
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
