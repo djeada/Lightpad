@@ -39,10 +39,15 @@ set(project_headers
     completion/providers/lspcompletionprovider.h
     completion/providers/plugincompletionprovider.h
     completion/providers/snippetcompletionprovider.h
+    dap/dapclient.h
+    dap/idebugadapter.h
+    dap/debugadapterregistry.h
+    dap/breakpointmanager.h
     ui/dialogs/colorpicker.h
     ui/dialogs/commandpalette.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
+    ui/panels/debugpanel.h
     core/async/asyncworker.h
     core/document.h
     core/formatter.h
@@ -96,10 +101,14 @@ set(project_sources
     completion/providers/lspcompletionprovider.cpp
     completion/providers/plugincompletionprovider.cpp
     completion/providers/snippetcompletionprovider.cpp
+    dap/dapclient.cpp
+    dap/debugadapterregistry.cpp
+    dap/breakpointmanager.cpp
     ui/dialogs/colorpicker.cpp
     ui/dialogs/commandpalette.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
+    ui/panels/debugpanel.cpp
     core/async/asyncworker.cpp
     core/document.cpp
     core/formatter.cpp
