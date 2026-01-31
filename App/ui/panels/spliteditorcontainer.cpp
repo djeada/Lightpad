@@ -6,6 +6,7 @@
 #include <QVBoxLayout>
 #include <QFocusEvent>
 #include <QApplication>
+#include <algorithm>
 
 SplitEditorContainer::SplitEditorContainer(QWidget* parent)
     : QWidget(parent)
@@ -30,6 +31,9 @@ void SplitEditorContainer::setupUI()
     m_rootSplitter->setHandleWidth(2);
     m_rootSplitter->setChildrenCollapsible(false);
     layout->addWidget(m_rootSplitter);
+
+    // Install application-level event filter once for focus tracking
+    QApplication::instance()->installEventFilter(this);
 
     // Create initial tab widget
     LightpadTabWidget* initialTabWidget = createTabWidget();
@@ -254,8 +258,11 @@ void SplitEditorContainer::unsplitAll()
         }
     }
 
-    // Remove null pointers
-    m_tabWidgets.removeAll(QPointer<LightpadTabWidget>(nullptr));
+    // Remove null pointers using erase-remove idiom
+    m_tabWidgets.erase(
+        std::remove_if(m_tabWidgets.begin(), m_tabWidgets.end(), 
+            [](const QPointer<LightpadTabWidget>& ptr) { return ptr.isNull(); }),
+        m_tabWidgets.end());
 
     // Cleanup splitters and reset to single view
     cleanupEmptySplitters();
@@ -267,10 +274,14 @@ void SplitEditorContainer::unsplitAll()
         // Clear root splitter
         while (m_rootSplitter->count() > 0) {
             QWidget* w = m_rootSplitter->widget(0);
-            if (w != first) {
+            if (w && w != first) {
                 w->deleteLater();
             }
-            m_rootSplitter->widget(0)->setParent(nullptr);
+            if (w) {
+                w->setParent(nullptr);
+            } else {
+                break;  // Safety: exit if widget is null to prevent infinite loop
+            }
         }
         
         m_rootSplitter->addWidget(first);
@@ -313,11 +324,8 @@ LightpadTabWidget* SplitEditorContainer::createTabWidget()
         tabWidget->setMainWindow(m_mainWindow);
     }
 
-    // Install event filter to track focus
+    // Install event filter to track focus on this specific tab widget
     tabWidget->installEventFilter(this);
-    
-    // Also install on children that might receive focus
-    QApplication::instance()->installEventFilter(this);
 
     m_tabWidgets.append(tabWidget);
 
