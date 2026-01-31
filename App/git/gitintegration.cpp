@@ -1,8 +1,10 @@
 #include "gitintegration.h"
 #include "../core/logging/logger.h"
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QTextStream>
 
 GitIntegration::GitIntegration(QObject* parent)
     : QObject(parent)
@@ -578,4 +580,693 @@ void GitIntegration::refresh()
     
     updateCurrentBranch();
     emit statusChanged();
+}
+
+QString GitIntegration::workingPath() const
+{
+    return m_workingPath;
+}
+
+void GitIntegration::setWorkingPath(const QString& path)
+{
+    QFileInfo info(path);
+    if (info.isFile()) {
+        m_workingPath = info.dir().absolutePath();
+    } else {
+        m_workingPath = QDir(path).absolutePath();
+    }
+}
+
+QString GitIntegration::executeGitCommandAtPath(const QString& path, const QStringList& args, bool* success) const
+{
+    QProcess process;
+    process.setWorkingDirectory(path);
+    process.start("git", args);
+    
+    if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS)) {
+        LOG_WARNING("Git command timed out: git " + args.join(" "));
+        if (success) *success = false;
+        return QString();
+    }
+    
+    if (success) {
+        *success = (process.exitCode() == 0);
+    }
+    
+    if (process.exitCode() != 0) {
+        QString error = QString::fromUtf8(process.readAllStandardError());
+        LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " + error);
+        return error;
+    }
+    
+    return QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+}
+
+// ========== Repository Initialization ==========
+
+bool GitIntegration::initRepository(const QString& path)
+{
+    QDir dir(path);
+    if (!dir.exists()) {
+        emit errorOccurred("Directory does not exist: " + path);
+        return false;
+    }
+    
+    bool success;
+    executeGitCommandAtPath(path, {"init"}, &success);
+    
+    if (success) {
+        // Set the repository path to the initialized directory
+        m_repositoryPath = dir.absolutePath();
+        m_isValid = true;
+        m_workingPath = m_repositoryPath;
+        updateCurrentBranch();
+        
+        emit repositoryInitialized(m_repositoryPath);
+        emit operationCompleted("Repository initialized at: " + m_repositoryPath);
+        emit statusChanged();
+        
+        LOG_INFO("Git repository initialized at: " + m_repositoryPath);
+    } else {
+        emit errorOccurred("Failed to initialize repository at: " + path);
+    }
+    
+    return success;
+}
+
+// ========== Remote Operations ==========
+
+QList<GitRemoteInfo> GitIntegration::getRemotes() const
+{
+    QList<GitRemoteInfo> result;
+    
+    if (!m_isValid) {
+        return result;
+    }
+    
+    bool success;
+    QString output = executeGitCommand({"remote", "-v"}, &success);
+    
+    if (!success || output.isEmpty()) {
+        return result;
+    }
+    
+    QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+    QMap<QString, GitRemoteInfo> remoteMap;
+    
+    for (const QString& line : lines) {
+        QStringList parts = line.split(QRegularExpression("\\s+"));
+        if (parts.size() >= 2) {
+            QString name = parts[0];
+            QString url = parts[1];
+            QString type = parts.size() > 2 ? parts[2] : "";
+            
+            if (!remoteMap.contains(name)) {
+                GitRemoteInfo info;
+                info.name = name;
+                remoteMap[name] = info;
+            }
+            
+            if (type.contains("fetch")) {
+                remoteMap[name].fetchUrl = url;
+            } else if (type.contains("push")) {
+                remoteMap[name].pushUrl = url;
+            } else {
+                // Default to both if not specified
+                remoteMap[name].fetchUrl = url;
+                remoteMap[name].pushUrl = url;
+            }
+        }
+    }
+    
+    for (const auto& info : remoteMap) {
+        result.append(info);
+    }
+    
+    return result;
+}
+
+bool GitIntegration::addRemote(const QString& name, const QString& url)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    if (name.isEmpty() || url.isEmpty()) {
+        emit errorOccurred("Remote name and URL cannot be empty");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"remote", "add", name, url}, &success);
+    
+    if (success) {
+        emit operationCompleted("Remote added: " + name);
+    } else {
+        emit errorOccurred("Failed to add remote: " + name);
+    }
+    
+    return success;
+}
+
+bool GitIntegration::removeRemote(const QString& name)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"remote", "remove", name}, &success);
+    
+    if (success) {
+        emit operationCompleted("Remote removed: " + name);
+    } else {
+        emit errorOccurred("Failed to remove remote: " + name);
+    }
+    
+    return success;
+}
+
+bool GitIntegration::fetch(const QString& remoteName)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"fetch", remoteName}, &success);
+    
+    if (success) {
+        emit operationCompleted("Fetched from: " + remoteName);
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to fetch from: " + remoteName);
+    }
+    
+    return success;
+}
+
+bool GitIntegration::pull(const QString& remoteName, const QString& branchName)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    QStringList args = {"pull", remoteName};
+    QString branch = branchName.isEmpty() ? m_currentBranch : branchName;
+    if (!branch.isEmpty()) {
+        args << branch;
+    }
+    
+    bool success;
+    QString output = executeGitCommand(args, &success);
+    
+    if (success) {
+        emit pullCompleted(remoteName, branch);
+        emit operationCompleted("Pulled from: " + remoteName + "/" + branch);
+        emit statusChanged();
+        
+        // Check for merge conflicts after pull
+        if (hasMergeConflicts()) {
+            QStringList conflicts = getConflictedFiles();
+            emit mergeConflictsDetected(conflicts);
+        }
+    } else {
+        // Check if pull failed due to merge conflicts
+        if (hasMergeConflicts()) {
+            QStringList conflicts = getConflictedFiles();
+            emit mergeConflictsDetected(conflicts);
+            emit errorOccurred("Pull resulted in merge conflicts");
+        } else {
+            emit errorOccurred("Failed to pull from: " + remoteName);
+        }
+    }
+    
+    return success;
+}
+
+bool GitIntegration::push(const QString& remoteName, const QString& branchName, bool setUpstream)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    QStringList args = {"push"};
+    if (setUpstream) {
+        args << "-u";
+    }
+    args << remoteName;
+    
+    QString branch = branchName.isEmpty() ? m_currentBranch : branchName;
+    if (!branch.isEmpty()) {
+        args << branch;
+    }
+    
+    bool success;
+    executeGitCommand(args, &success);
+    
+    if (success) {
+        emit pushCompleted(remoteName, branch);
+        emit operationCompleted("Pushed to: " + remoteName + "/" + branch);
+    } else {
+        emit errorOccurred("Failed to push to: " + remoteName);
+    }
+    
+    return success;
+}
+
+// ========== Merge Conflict Handling ==========
+
+bool GitIntegration::hasMergeConflicts() const
+{
+    if (!m_isValid) {
+        return false;
+    }
+    
+    return !getConflictedFiles().isEmpty();
+}
+
+QStringList GitIntegration::getConflictedFiles() const
+{
+    QStringList result;
+    
+    if (!m_isValid) {
+        return result;
+    }
+    
+    bool success;
+    QString output = executeGitCommand({"diff", "--name-only", "--diff-filter=U"}, &success);
+    
+    if (success && !output.isEmpty()) {
+        result = output.split('\n', Qt::SkipEmptyParts);
+    }
+    
+    return result;
+}
+
+QList<GitConflictMarker> GitIntegration::getConflictMarkers(const QString& filePath) const
+{
+    QList<GitConflictMarker> result;
+    
+    QString fullPath = filePath;
+    if (!fullPath.startsWith('/') && !m_repositoryPath.isEmpty()) {
+        fullPath = m_repositoryPath + "/" + filePath;
+    }
+    
+    QFile file(fullPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return result;
+    }
+    
+    QTextStream in(&file);
+    QStringList lines;
+    while (!in.atEnd()) {
+        lines << in.readLine();
+    }
+    file.close();
+    
+    GitConflictMarker currentMarker;
+    bool inConflict = false;
+    bool inOurs = false;
+    
+    for (int i = 0; i < lines.size(); ++i) {
+        const QString& line = lines[i];
+        
+        if (line.startsWith("<<<<<<<")) {
+            currentMarker = GitConflictMarker();
+            currentMarker.startLine = i + 1;  // 1-indexed
+            inConflict = true;
+            inOurs = true;
+        } else if (line.startsWith("=======") && inConflict) {
+            currentMarker.separatorLine = i + 1;
+            inOurs = false;
+        } else if (line.startsWith(">>>>>>>") && inConflict) {
+            currentMarker.endLine = i + 1;
+            result.append(currentMarker);
+            inConflict = false;
+        } else if (inConflict) {
+            if (inOurs) {
+                currentMarker.oursContent += line + "\n";
+            } else {
+                currentMarker.theirsContent += line + "\n";
+            }
+        }
+    }
+    
+    return result;
+}
+
+bool GitIntegration::resolveConflictOurs(const QString& filePath)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    QString relativePath = filePath;
+    if (filePath.startsWith(m_repositoryPath)) {
+        relativePath = filePath.mid(m_repositoryPath.length() + 1);
+    }
+    
+    bool success;
+    executeGitCommand({"checkout", "--ours", "--", relativePath}, &success);
+    
+    if (success) {
+        // Stage the resolved file
+        executeGitCommand({"add", "--", relativePath}, &success);
+        if (success) {
+            emit operationCompleted("Conflict resolved (ours): " + relativePath);
+            emit statusChanged();
+        }
+    } else {
+        emit errorOccurred("Failed to resolve conflict: " + relativePath);
+    }
+    
+    return success;
+}
+
+bool GitIntegration::resolveConflictTheirs(const QString& filePath)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    QString relativePath = filePath;
+    if (filePath.startsWith(m_repositoryPath)) {
+        relativePath = filePath.mid(m_repositoryPath.length() + 1);
+    }
+    
+    bool success;
+    executeGitCommand({"checkout", "--theirs", "--", relativePath}, &success);
+    
+    if (success) {
+        // Stage the resolved file
+        executeGitCommand({"add", "--", relativePath}, &success);
+        if (success) {
+            emit operationCompleted("Conflict resolved (theirs): " + relativePath);
+            emit statusChanged();
+        }
+    } else {
+        emit errorOccurred("Failed to resolve conflict: " + relativePath);
+    }
+    
+    return success;
+}
+
+bool GitIntegration::markConflictResolved(const QString& filePath)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    QString relativePath = filePath;
+    if (filePath.startsWith(m_repositoryPath)) {
+        relativePath = filePath.mid(m_repositoryPath.length() + 1);
+    }
+    
+    bool success;
+    executeGitCommand({"add", "--", relativePath}, &success);
+    
+    if (success) {
+        emit operationCompleted("Marked as resolved: " + relativePath);
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to mark as resolved: " + relativePath);
+    }
+    
+    return success;
+}
+
+bool GitIntegration::abortMerge()
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"merge", "--abort"}, &success);
+    
+    if (success) {
+        emit operationCompleted("Merge aborted");
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to abort merge");
+    }
+    
+    return success;
+}
+
+bool GitIntegration::continueMerge()
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    // Check if there are still unresolved conflicts
+    if (hasMergeConflicts()) {
+        emit errorOccurred("Cannot continue merge: unresolved conflicts remain");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"commit", "--no-edit"}, &success);
+    
+    if (success) {
+        emit operationCompleted("Merge completed");
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to complete merge");
+    }
+    
+    return success;
+}
+
+bool GitIntegration::isMergeInProgress() const
+{
+    if (!m_isValid) {
+        return false;
+    }
+    
+    // Check for MERGE_HEAD file
+    QFile mergeHead(m_repositoryPath + "/.git/MERGE_HEAD");
+    return mergeHead.exists();
+}
+
+bool GitIntegration::mergeBranch(const QString& branchName)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"merge", branchName}, &success);
+    
+    if (success) {
+        emit operationCompleted("Merged branch: " + branchName);
+        emit statusChanged();
+    } else {
+        // Check if merge failed due to conflicts
+        if (hasMergeConflicts()) {
+            QStringList conflicts = getConflictedFiles();
+            emit mergeConflictsDetected(conflicts);
+            emit errorOccurred("Merge conflicts detected");
+        } else {
+            emit errorOccurred("Failed to merge branch: " + branchName);
+        }
+    }
+    
+    return success && !hasMergeConflicts();
+}
+
+// ========== Stash Operations ==========
+
+QList<GitStashEntry> GitIntegration::getStashList() const
+{
+    QList<GitStashEntry> result;
+    
+    if (!m_isValid) {
+        return result;
+    }
+    
+    bool success;
+    QString output = executeGitCommand({"stash", "list"}, &success);
+    
+    if (!success || output.isEmpty()) {
+        return result;
+    }
+    
+    return parseStashListOutput(output);
+}
+
+QList<GitStashEntry> GitIntegration::parseStashListOutput(const QString& output) const
+{
+    QList<GitStashEntry> result;
+    
+    QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+    
+    // Format: stash@{0}: On branch_name: message
+    // or: stash@{0}: WIP on branch_name: commit_hash commit_message
+    QRegularExpression stashPattern(R"(stash@\{(\d+)\}: (?:On|WIP on) ([^:]+): (.+))");
+    
+    for (const QString& line : lines) {
+        QRegularExpressionMatch match = stashPattern.match(line);
+        if (match.hasMatch()) {
+            GitStashEntry entry;
+            entry.index = match.captured(1).toInt();
+            entry.branchName = match.captured(2).trimmed();
+            entry.message = match.captured(3).trimmed();
+            
+            // Extract hash if present (format: "hash message")
+            QString msgPart = entry.message;
+            int spaceIndex = msgPart.indexOf(' ');
+            if (spaceIndex > 0 && spaceIndex < 10) {  // Hash is typically 7-8 chars
+                entry.hash = msgPart.left(spaceIndex);
+                entry.message = msgPart.mid(spaceIndex + 1);
+            }
+            
+            result.append(entry);
+        }
+    }
+    
+    return result;
+}
+
+bool GitIntegration::stash(const QString& message, bool includeUntracked)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    QStringList args = {"stash", "push"};
+    if (includeUntracked) {
+        args << "-u";
+    }
+    if (!message.isEmpty()) {
+        args << "-m" << message;
+    }
+    
+    bool success;
+    executeGitCommand(args, &success);
+    
+    if (success) {
+        emit operationCompleted("Changes stashed" + (message.isEmpty() ? "" : ": " + message));
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to stash changes");
+    }
+    
+    return success;
+}
+
+bool GitIntegration::stashPop()
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"stash", "pop"}, &success);
+    
+    if (success) {
+        emit operationCompleted("Stash popped");
+        emit statusChanged();
+        
+        // Check for conflicts after stash pop
+        if (hasMergeConflicts()) {
+            QStringList conflicts = getConflictedFiles();
+            emit mergeConflictsDetected(conflicts);
+        }
+    } else {
+        if (hasMergeConflicts()) {
+            QStringList conflicts = getConflictedFiles();
+            emit mergeConflictsDetected(conflicts);
+            emit errorOccurred("Stash pop resulted in conflicts");
+        } else {
+            emit errorOccurred("Failed to pop stash");
+        }
+    }
+    
+    return success;
+}
+
+bool GitIntegration::stashApply(int index)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"stash", "apply", QString("stash@{%1}").arg(index)}, &success);
+    
+    if (success) {
+        emit operationCompleted(QString("Stash %1 applied").arg(index));
+        emit statusChanged();
+        
+        // Check for conflicts after stash apply
+        if (hasMergeConflicts()) {
+            QStringList conflicts = getConflictedFiles();
+            emit mergeConflictsDetected(conflicts);
+        }
+    } else {
+        if (hasMergeConflicts()) {
+            QStringList conflicts = getConflictedFiles();
+            emit mergeConflictsDetected(conflicts);
+            emit errorOccurred("Stash apply resulted in conflicts");
+        } else {
+            emit errorOccurred(QString("Failed to apply stash %1").arg(index));
+        }
+    }
+    
+    return success;
+}
+
+bool GitIntegration::stashDrop(int index)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"stash", "drop", QString("stash@{%1}").arg(index)}, &success);
+    
+    if (success) {
+        emit operationCompleted(QString("Stash %1 dropped").arg(index));
+    } else {
+        emit errorOccurred(QString("Failed to drop stash %1").arg(index));
+    }
+    
+    return success;
+}
+
+bool GitIntegration::stashClear()
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+    
+    bool success;
+    executeGitCommand({"stash", "clear"}, &success);
+    
+    if (success) {
+        emit operationCompleted("All stashes cleared");
+    } else {
+        emit errorOccurred("Failed to clear stash");
+    }
+    
+    return success;
 }

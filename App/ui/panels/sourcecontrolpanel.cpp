@@ -1,14 +1,30 @@
 #include "sourcecontrolpanel.h"
+#include "../dialogs/gitinitdialog.h"
+#include "../dialogs/mergeconflictdialog.h"
+#include "../dialogs/gitremotedialog.h"
+#include "../dialogs/gitstashdialog.h"
+#include <QDir>
 #include <QHeaderView>
 #include <QFileInfo>
 #include <QMenu>
 #include <QMessageBox>
 #include <QTimer>
 #include <QInputDialog>
+#include <QListWidget>
 
 SourceControlPanel::SourceControlPanel(QWidget* parent)
     : QWidget(parent)
     , m_git(nullptr)
+    , m_stackedWidget(nullptr)
+    , m_noRepoWidget(nullptr)
+    , m_initRepoButton(nullptr)
+    , m_noRepoLabel(nullptr)
+    , m_conflictWidget(nullptr)
+    , m_conflictLabel(nullptr)
+    , m_conflictFilesList(nullptr)
+    , m_resolveConflictsButton(nullptr)
+    , m_abortMergeButton(nullptr)
+    , m_repoWidget(nullptr)
     , m_branchLabel(nullptr)
     , m_statusLabel(nullptr)
     , m_branchSelector(nullptr)
@@ -20,6 +36,10 @@ SourceControlPanel::SourceControlPanel(QWidget* parent)
     , m_stageAllButton(nullptr)
     , m_unstageAllButton(nullptr)
     , m_refreshButton(nullptr)
+    , m_pushButton(nullptr)
+    , m_pullButton(nullptr)
+    , m_fetchButton(nullptr)
+    , m_stashButton(nullptr)
     , m_stagedTree(nullptr)
     , m_changesTree(nullptr)
     , m_updatingBranchSelector(false)
@@ -61,8 +81,179 @@ void SourceControlPanel::setupUI()
 
     mainLayout->addWidget(header);
 
+    // Create stacked widget for different states
+    m_stackedWidget = new QStackedWidget(this);
+    
+    // Setup the three different UI states
+    setupNoRepoUI();
+    setupMergeConflictUI();
+    setupRepoUI();
+    
+    m_stackedWidget->addWidget(m_noRepoWidget);
+    m_stackedWidget->addWidget(m_conflictWidget);
+    m_stackedWidget->addWidget(m_repoWidget);
+    
+    mainLayout->addWidget(m_stackedWidget, 1);
+
+    // Status bar with improved styling
+    m_statusLabel = new QLabel(this);
+    m_statusLabel->setStyleSheet("background: #161b22; color: #8b949e; padding: 6px 10px; font-size: 11px; border-top: 1px solid #21262d;");
+    mainLayout->addWidget(m_statusLabel);
+}
+
+void SourceControlPanel::setupNoRepoUI()
+{
+    m_noRepoWidget = new QWidget(this);
+    QVBoxLayout* layout = new QVBoxLayout(m_noRepoWidget);
+    layout->setContentsMargins(20, 40, 20, 20);
+    layout->setSpacing(16);
+    
+    // Icon
+    QLabel* iconLabel = new QLabel("🗃️", m_noRepoWidget);
+    iconLabel->setStyleSheet("font-size: 48px;");
+    iconLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(iconLabel);
+    
+    // Title
+    m_noRepoLabel = new QLabel(tr("No Git Repository"), m_noRepoWidget);
+    m_noRepoLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #e6edf3;");
+    m_noRepoLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(m_noRepoLabel);
+    
+    // Description
+    QLabel* descLabel = new QLabel(tr("This project is not a Git repository.\nInitialize one to start tracking changes."), m_noRepoWidget);
+    descLabel->setStyleSheet("color: #8b949e; font-size: 12px;");
+    descLabel->setAlignment(Qt::AlignCenter);
+    descLabel->setWordWrap(true);
+    layout->addWidget(descLabel);
+    
+    // Initialize button
+    m_initRepoButton = new QPushButton(tr("Initialize Repository"), m_noRepoWidget);
+    m_initRepoButton->setStyleSheet(
+        "QPushButton {"
+        "  background: #238636;"
+        "  color: white;"
+        "  border: none;"
+        "  border-radius: 6px;"
+        "  padding: 12px 24px;"
+        "  font-weight: bold;"
+        "  font-size: 13px;"
+        "}"
+        "QPushButton:hover {"
+        "  background: #2ea043;"
+        "}"
+    );
+    connect(m_initRepoButton, &QPushButton::clicked, this, &SourceControlPanel::onInitRepositoryClicked);
+    
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(m_initRepoButton);
+    buttonLayout->addStretch();
+    layout->addLayout(buttonLayout);
+    
+    layout->addStretch();
+}
+
+void SourceControlPanel::setupMergeConflictUI()
+{
+    m_conflictWidget = new QWidget(this);
+    QVBoxLayout* layout = new QVBoxLayout(m_conflictWidget);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(8);
+    
+    // Warning header
+    QWidget* warningHeader = new QWidget(m_conflictWidget);
+    warningHeader->setStyleSheet("background: #f8514933; border: 1px solid #f85149; border-radius: 6px;");
+    QHBoxLayout* warningLayout = new QHBoxLayout(warningHeader);
+    warningLayout->setContentsMargins(12, 8, 12, 8);
+    
+    QLabel* warningIcon = new QLabel("⚠️", warningHeader);
+    warningIcon->setStyleSheet("font-size: 18px;");
+    warningLayout->addWidget(warningIcon);
+    
+    m_conflictLabel = new QLabel(tr("Merge Conflicts Detected"), warningHeader);
+    m_conflictLabel->setStyleSheet("color: #f85149; font-weight: bold; font-size: 13px;");
+    warningLayout->addWidget(m_conflictLabel, 1);
+    
+    layout->addWidget(warningHeader);
+    
+    // Conflict files list
+    QLabel* conflictFilesLabel = new QLabel(tr("Conflicted Files:"), m_conflictWidget);
+    conflictFilesLabel->setStyleSheet("color: #8b949e; font-size: 11px; text-transform: uppercase;");
+    layout->addWidget(conflictFilesLabel);
+    
+    m_conflictFilesList = new QListWidget(m_conflictWidget);
+    m_conflictFilesList->setStyleSheet(
+        "QListWidget {"
+        "  background: #161b22;"
+        "  color: #e6edf3;"
+        "  border: 1px solid #30363d;"
+        "  border-radius: 6px;"
+        "}"
+        "QListWidget::item {"
+        "  padding: 8px;"
+        "  border-bottom: 1px solid #21262d;"
+        "}"
+        "QListWidget::item:selected {"
+        "  background: #1f6feb;"
+        "}"
+    );
+    layout->addWidget(m_conflictFilesList, 1);
+    
+    // Action buttons
+    QHBoxLayout* actionLayout = new QHBoxLayout();
+    
+    m_resolveConflictsButton = new QPushButton(tr("Resolve Conflicts..."), m_conflictWidget);
+    m_resolveConflictsButton->setStyleSheet(
+        "QPushButton {"
+        "  background: #1f6feb;"
+        "  color: white;"
+        "  border: none;"
+        "  border-radius: 6px;"
+        "  padding: 8px 16px;"
+        "  font-weight: bold;"
+        "}"
+        "QPushButton:hover {"
+        "  background: #388bfd;"
+        "}"
+    );
+    connect(m_resolveConflictsButton, &QPushButton::clicked, this, &SourceControlPanel::onResolveConflictsClicked);
+    actionLayout->addWidget(m_resolveConflictsButton);
+    
+    m_abortMergeButton = new QPushButton(tr("Abort Merge"), m_conflictWidget);
+    m_abortMergeButton->setStyleSheet(
+        "QPushButton {"
+        "  background: #21262d;"
+        "  color: #f85149;"
+        "  border: 1px solid #30363d;"
+        "  border-radius: 6px;"
+        "  padding: 8px 16px;"
+        "}"
+        "QPushButton:hover {"
+        "  background: #da3633;"
+        "  color: white;"
+        "  border-color: #da3633;"
+        "}"
+    );
+    connect(m_abortMergeButton, &QPushButton::clicked, [this]() {
+        if (m_git && m_git->abortMerge()) {
+            refresh();
+        }
+    });
+    actionLayout->addWidget(m_abortMergeButton);
+    
+    layout->addLayout(actionLayout);
+}
+
+void SourceControlPanel::setupRepoUI()
+{
+    m_repoWidget = new QWidget(this);
+    QVBoxLayout* mainLayout = new QVBoxLayout(m_repoWidget);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
+
     // Branch management section
-    QWidget* branchSection = new QWidget(this);
+    QWidget* branchSection = new QWidget(m_repoWidget);
     branchSection->setStyleSheet("background: #161b22; border-bottom: 1px solid #2a3241;");
     QVBoxLayout* branchLayout = new QVBoxLayout(branchSection);
     branchLayout->setContentsMargins(8, 8, 8, 8);
@@ -162,10 +353,94 @@ void SourceControlPanel::setupUI()
     branchSelectorLayout->addWidget(m_deleteBranchButton);
 
     branchLayout->addLayout(branchSelectorLayout);
+    
+    // Remote operations row
+    QHBoxLayout* remoteOpsLayout = new QHBoxLayout();
+    remoteOpsLayout->setSpacing(4);
+    
+    m_pullButton = new QPushButton("⬇ Pull", branchSection);
+    m_pullButton->setToolTip(tr("Pull from Remote"));
+    m_pullButton->setStyleSheet(
+        "QPushButton {"
+        "  background: #21262d;"
+        "  color: #58a6ff;"
+        "  border: 1px solid #30363d;"
+        "  border-radius: 6px;"
+        "  padding: 4px 8px;"
+        "  font-size: 11px;"
+        "}"
+        "QPushButton:hover {"
+        "  background: #1f6feb;"
+        "  color: white;"
+        "  border-color: #1f6feb;"
+        "}"
+    );
+    connect(m_pullButton, &QPushButton::clicked, this, &SourceControlPanel::onPullClicked);
+    remoteOpsLayout->addWidget(m_pullButton);
+    
+    m_pushButton = new QPushButton("⬆ Push", branchSection);
+    m_pushButton->setToolTip(tr("Push to Remote"));
+    m_pushButton->setStyleSheet(
+        "QPushButton {"
+        "  background: #21262d;"
+        "  color: #3fb950;"
+        "  border: 1px solid #30363d;"
+        "  border-radius: 6px;"
+        "  padding: 4px 8px;"
+        "  font-size: 11px;"
+        "}"
+        "QPushButton:hover {"
+        "  background: #238636;"
+        "  color: white;"
+        "  border-color: #238636;"
+        "}"
+    );
+    connect(m_pushButton, &QPushButton::clicked, this, &SourceControlPanel::onPushClicked);
+    remoteOpsLayout->addWidget(m_pushButton);
+    
+    m_fetchButton = new QPushButton("🔄 Fetch", branchSection);
+    m_fetchButton->setToolTip(tr("Fetch from Remote"));
+    m_fetchButton->setStyleSheet(
+        "QPushButton {"
+        "  background: #21262d;"
+        "  color: #8b949e;"
+        "  border: 1px solid #30363d;"
+        "  border-radius: 6px;"
+        "  padding: 4px 8px;"
+        "  font-size: 11px;"
+        "}"
+        "QPushButton:hover {"
+        "  background: #30363d;"
+        "}"
+    );
+    connect(m_fetchButton, &QPushButton::clicked, this, &SourceControlPanel::onFetchClicked);
+    remoteOpsLayout->addWidget(m_fetchButton);
+    
+    m_stashButton = new QPushButton("📦 Stash", branchSection);
+    m_stashButton->setToolTip(tr("Stash Changes"));
+    m_stashButton->setStyleSheet(
+        "QPushButton {"
+        "  background: #21262d;"
+        "  color: #a371f7;"
+        "  border: 1px solid #30363d;"
+        "  border-radius: 6px;"
+        "  padding: 4px 8px;"
+        "  font-size: 11px;"
+        "}"
+        "QPushButton:hover {"
+        "  background: #8957e5;"
+        "  color: white;"
+        "  border-color: #8957e5;"
+        "}"
+    );
+    connect(m_stashButton, &QPushButton::clicked, this, &SourceControlPanel::onStashClicked);
+    remoteOpsLayout->addWidget(m_stashButton);
+    
+    branchLayout->addLayout(remoteOpsLayout);
     mainLayout->addWidget(branchSection);
 
     // Commit section with improved styling
-    QWidget* commitSection = new QWidget(this);
+    QWidget* commitSection = new QWidget(m_repoWidget);
     commitSection->setStyleSheet("background: #0d1117;");
     QVBoxLayout* commitLayout = new QVBoxLayout(commitSection);
     commitLayout->setContentsMargins(8, 10, 8, 10);
@@ -254,7 +529,7 @@ void SourceControlPanel::setupUI()
     mainLayout->addWidget(commitSection);
 
     // Staged changes section
-    QWidget* stagedHeader = new QWidget(this);
+    QWidget* stagedHeader = new QWidget(m_repoWidget);
     stagedHeader->setStyleSheet("background: #161b22; border-bottom: 1px solid #21262d;");
     QHBoxLayout* stagedHeaderLayout = new QHBoxLayout(stagedHeader);
     stagedHeaderLayout->setContentsMargins(8, 6, 8, 6);
@@ -281,7 +556,7 @@ void SourceControlPanel::setupUI()
     
     mainLayout->addWidget(stagedHeader);
 
-    m_stagedTree = new QTreeWidget(this);
+    m_stagedTree = new QTreeWidget(m_repoWidget);
     m_stagedTree->setHeaderHidden(true);
     m_stagedTree->setRootIsDecorated(false);
     m_stagedTree->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -310,7 +585,7 @@ void SourceControlPanel::setupUI()
     mainLayout->addWidget(m_stagedTree);
 
     // Changes section
-    QWidget* changesHeader = new QWidget(this);
+    QWidget* changesHeader = new QWidget(m_repoWidget);
     changesHeader->setStyleSheet("background: #161b22; border-bottom: 1px solid #21262d;");
     QHBoxLayout* changesHeaderLayout = new QHBoxLayout(changesHeader);
     changesHeaderLayout->setContentsMargins(8, 6, 8, 6);
@@ -337,7 +612,7 @@ void SourceControlPanel::setupUI()
     
     mainLayout->addWidget(changesHeader);
 
-    m_changesTree = new QTreeWidget(this);
+    m_changesTree = new QTreeWidget(m_repoWidget);
     m_changesTree->setHeaderHidden(true);
     m_changesTree->setRootIsDecorated(false);
     m_changesTree->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -362,11 +637,6 @@ void SourceControlPanel::setupUI()
     connect(m_changesTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_changesTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
     mainLayout->addWidget(m_changesTree, 1);
-
-    // Status bar with improved styling
-    m_statusLabel = new QLabel(this);
-    m_statusLabel->setStyleSheet("background: #161b22; color: #8b949e; padding: 6px 10px; font-size: 11px; border-top: 1px solid #21262d;");
-    mainLayout->addWidget(m_statusLabel);
 }
 
 void SourceControlPanel::setGitIntegration(GitIntegration* git)
@@ -378,23 +648,69 @@ void SourceControlPanel::setGitIntegration(GitIntegration* git)
         connect(m_git, &GitIntegration::branchChanged, this, &SourceControlPanel::onBranchChanged);
         connect(m_git, &GitIntegration::operationCompleted, this, &SourceControlPanel::onOperationCompleted);
         connect(m_git, &GitIntegration::errorOccurred, this, &SourceControlPanel::onErrorOccurred);
+        connect(m_git, &GitIntegration::mergeConflictsDetected, this, &SourceControlPanel::onMergeConflictsDetected);
         refresh();
     }
 }
 
+void SourceControlPanel::setWorkingPath(const QString& path)
+{
+    m_workingPath = path;
+    if (m_git) {
+        m_git->setWorkingPath(path);
+    }
+    updateUIState();
+}
+
 void SourceControlPanel::refresh()
 {
-    if (!m_git) {
-        m_branchLabel->setText(tr("Branch"));
-        m_branchSelector->clear();
-        m_statusLabel->setText("");
-        m_stagedTree->clear();
-        m_changesTree->clear();
+    updateUIState();
+    
+    if (!m_git || !m_git->isValidRepository()) {
+        if (m_branchLabel) m_branchLabel->setText(tr("Branch"));
+        if (m_branchSelector) m_branchSelector->clear();
+        if (m_statusLabel) m_statusLabel->setText("");
+        if (m_stagedTree) m_stagedTree->clear();
+        if (m_changesTree) m_changesTree->clear();
         return;
     }
     
     updateBranchSelector();
     updateTree();
+}
+
+void SourceControlPanel::updateUIState()
+{
+    if (!m_stackedWidget) return;
+    
+    if (!m_git || !m_git->isValidRepository()) {
+        // Show "no repository" state
+        m_stackedWidget->setCurrentWidget(m_noRepoWidget);
+        if (m_statusLabel) m_statusLabel->setText(tr("No Git repository"));
+    } else if (m_git->hasMergeConflicts()) {
+        // Show merge conflict state
+        m_stackedWidget->setCurrentWidget(m_conflictWidget);
+        
+        // Update conflict files list
+        if (m_conflictFilesList) {
+            m_conflictFilesList->clear();
+            QStringList conflicts = m_git->getConflictedFiles();
+            for (const QString& file : conflicts) {
+                QFileInfo fileInfo(file);
+                QListWidgetItem* item = new QListWidgetItem(m_conflictFilesList);
+                item->setText(QString("❗ %1").arg(fileInfo.fileName()));
+                item->setToolTip(file);
+                item->setData(Qt::UserRole, file);
+            }
+            if (m_conflictLabel) {
+                m_conflictLabel->setText(QString(tr("%1 Conflict(s) Detected")).arg(conflicts.size()));
+            }
+        }
+        if (m_statusLabel) m_statusLabel->setText(tr("⚠️ Merge conflicts - resolve before continuing"));
+    } else {
+        // Show normal repository state
+        m_stackedWidget->setCurrentWidget(m_repoWidget);
+    }
 }
 
 void SourceControlPanel::updateBranchSelector()
@@ -758,4 +1074,99 @@ QColor SourceControlPanel::statusColor(GitFileStatus status) const
         default:
             return QColor("#e6edf3");  // White for clean
     }
+}
+
+// New slot implementations for extended functionality
+
+void SourceControlPanel::onInitRepositoryClicked()
+{
+    QString path = m_workingPath;
+    if (path.isEmpty() && m_git) {
+        path = m_git->workingPath();
+    }
+    if (path.isEmpty()) {
+        path = QDir::currentPath();
+    }
+    
+    GitInitDialog dialog(path, this);
+    connect(&dialog, &GitInitDialog::initializeRequested, [this](const QString& repoPath) {
+        if (m_git) {
+            if (m_git->initRepository(repoPath)) {
+                // If user wants to add .gitignore, create a default one
+                // Note: The dialog's options would be used here in a full implementation
+                refresh();
+                emit repositoryInitialized(repoPath);
+            }
+        }
+    });
+    
+    dialog.exec();
+}
+
+void SourceControlPanel::onPushClicked()
+{
+    if (!m_git || !m_git->isValidRepository()) return;
+    
+    GitRemoteDialog dialog(m_git, GitRemoteDialog::Mode::Push, this);
+    connect(&dialog, &GitRemoteDialog::operationCompleted, [this](const QString& msg) {
+        m_statusLabel->setText(msg);
+        refresh();
+    });
+    dialog.exec();
+}
+
+void SourceControlPanel::onPullClicked()
+{
+    if (!m_git || !m_git->isValidRepository()) return;
+    
+    GitRemoteDialog dialog(m_git, GitRemoteDialog::Mode::Pull, this);
+    connect(&dialog, &GitRemoteDialog::operationCompleted, [this](const QString& msg) {
+        m_statusLabel->setText(msg);
+        refresh();
+    });
+    dialog.exec();
+}
+
+void SourceControlPanel::onFetchClicked()
+{
+    if (!m_git || !m_git->isValidRepository()) return;
+    
+    GitRemoteDialog dialog(m_git, GitRemoteDialog::Mode::Fetch, this);
+    connect(&dialog, &GitRemoteDialog::operationCompleted, [this](const QString& msg) {
+        m_statusLabel->setText(msg);
+        refresh();
+    });
+    dialog.exec();
+}
+
+void SourceControlPanel::onStashClicked()
+{
+    if (!m_git || !m_git->isValidRepository()) return;
+    
+    GitStashDialog dialog(m_git, this);
+    connect(&dialog, &GitStashDialog::stashOperationCompleted, [this](const QString& msg) {
+        m_statusLabel->setText(msg);
+        refresh();
+    });
+    dialog.exec();
+}
+
+void SourceControlPanel::onMergeConflictsDetected(const QStringList& files)
+{
+    Q_UNUSED(files);
+    updateUIState();
+}
+
+void SourceControlPanel::onResolveConflictsClicked()
+{
+    if (!m_git || !m_git->isValidRepository()) return;
+    
+    MergeConflictDialog dialog(m_git, this);
+    connect(&dialog, &MergeConflictDialog::openFileRequested, this, &SourceControlPanel::fileOpenRequested);
+    connect(&dialog, &MergeConflictDialog::allConflictsResolved, [this]() {
+        refresh();
+    });
+    
+    dialog.exec();
+    refresh();
 }

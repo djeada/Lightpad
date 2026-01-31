@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include <QTreeWidget>
+#include <QListWidget>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -11,13 +12,20 @@
 #include <QTextEdit>
 #include <QComboBox>
 #include <QCheckBox>
+#include <QStackedWidget>
 #include "../../git/gitintegration.h"
+
+class GitInitDialog;
+class MergeConflictDialog;
+class GitRemoteDialog;
+class GitStashDialog;
 
 /**
  * @brief Source Control Panel for Git integration
  * 
  * Provides UI for viewing and managing git repository status,
  * staging/unstaging files, committing changes, and branch management.
+ * Also handles edge cases like uninitialized repositories and merge conflicts.
  */
 class SourceControlPanel : public QWidget {
     Q_OBJECT
@@ -30,6 +38,11 @@ public:
      * @brief Set the git integration instance
      */
     void setGitIntegration(GitIntegration* git);
+
+    /**
+     * @brief Set the working path for the current project
+     */
+    void setWorkingPath(const QString& path);
 
     /**
      * @brief Refresh the panel with current status
@@ -47,6 +60,11 @@ signals:
      */
     void diffRequested(const QString& filePath);
 
+    /**
+     * @brief Emitted when repository is initialized
+     */
+    void repositoryInitialized(const QString& path);
+
 private slots:
     void onStageAllClicked();
     void onUnstageAllClicked();
@@ -61,19 +79,49 @@ private slots:
     void onBranchSelectorChanged(int index);
     void onCreateBranchClicked();
     void onDeleteBranchClicked();
+    
+    // New slots for extended functionality
+    void onInitRepositoryClicked();
+    void onPushClicked();
+    void onPullClicked();
+    void onFetchClicked();
+    void onStashClicked();
+    void onMergeConflictsDetected(const QStringList& files);
+    void onResolveConflictsClicked();
 
 private:
     void setupUI();
+    void setupNoRepoUI();
+    void setupRepoUI();
+    void setupMergeConflictUI();
     void updateTree();
     void updateBranchSelector();
     void updateBranchLabel();
+    void updateUIState();
     QString statusIcon(GitFileStatus status) const;
     QString statusText(GitFileStatus status) const;
     QColor statusColor(GitFileStatus status) const;
 
     GitIntegration* m_git;
+    QString m_workingPath;
     
-    // UI elements
+    // Main stacked widget for different states
+    QStackedWidget* m_stackedWidget;
+    
+    // No repository state UI
+    QWidget* m_noRepoWidget;
+    QPushButton* m_initRepoButton;
+    QLabel* m_noRepoLabel;
+    
+    // Merge conflict state UI
+    QWidget* m_conflictWidget;
+    QLabel* m_conflictLabel;
+    QListWidget* m_conflictFilesList;
+    QPushButton* m_resolveConflictsButton;
+    QPushButton* m_abortMergeButton;
+    
+    // Normal repository state UI elements
+    QWidget* m_repoWidget;
     QLabel* m_branchLabel;
     QLabel* m_statusLabel;
     QComboBox* m_branchSelector;
@@ -85,6 +133,10 @@ private:
     QPushButton* m_stageAllButton;
     QPushButton* m_unstageAllButton;
     QPushButton* m_refreshButton;
+    QPushButton* m_pushButton;
+    QPushButton* m_pullButton;
+    QPushButton* m_fetchButton;
+    QPushButton* m_stashButton;
     QTreeWidget* m_stagedTree;
     QTreeWidget* m_changesTree;
     

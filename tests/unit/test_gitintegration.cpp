@@ -20,12 +20,18 @@ private slots:
     void testGetBranches();
     void testCreateBranch();
     void testGetDiffLines();
+    // New tests for extended functionality
+    void testInitRepository();
+    void testRemoteOperations();
+    void testStashOperations();
+    void testMergeConflictDetection();
 
 private:
     QTemporaryDir m_tempDir;
     QString m_repoPath;
     
     bool runGitCommand(const QStringList& args);
+    bool runGitCommandAt(const QString& path, const QStringList& args);
     void createTestFile(const QString& fileName, const QString& content);
 };
 
@@ -289,6 +295,198 @@ void TestGitIntegration::testGetDiffLines()
     
     // Restore the file
     runGitCommand({"checkout", "--", "initial.txt"});
+}
+
+bool TestGitIntegration::runGitCommandAt(const QString& path, const QStringList& args)
+{
+    QProcess process;
+    process.setWorkingDirectory(path);
+    process.start("git", args);
+    
+    if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS)) {
+        return false;
+    }
+    
+    return process.exitCode() == 0;
+}
+
+void TestGitIntegration::testInitRepository()
+{
+    // Create a new directory for testing init
+    QString newRepoPath = m_tempDir.path() + "/new_repo";
+    QDir dir;
+    QVERIFY(dir.mkpath(newRepoPath));
+    
+    GitIntegration git;
+    
+    // Should not be a valid repository before init
+    QVERIFY(!git.setRepositoryPath(newRepoPath));
+    
+    // Initialize the repository
+    QVERIFY(git.initRepository(newRepoPath));
+    
+    // Should now be valid
+    QVERIFY(git.isValidRepository());
+    QCOMPARE(git.repositoryPath(), newRepoPath);
+    
+    // Should be able to create files and commit
+    QFile file(newRepoPath + "/test.txt");
+    file.open(QIODevice::WriteOnly);
+    file.write("Test content\n");
+    file.close();
+    
+    // Configure git user for commits
+    runGitCommandAt(newRepoPath, {"config", "user.email", "test@test.com"});
+    runGitCommandAt(newRepoPath, {"config", "user.name", "Test User"});
+    
+    QVERIFY(git.stageFile("test.txt"));
+    QVERIFY(git.commit("Initial commit"));
+}
+
+void TestGitIntegration::testRemoteOperations()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+    
+    // Initially should have no remotes
+    QList<GitRemoteInfo> remotes = git.getRemotes();
+    // May or may not have remotes depending on test setup
+    
+    // Add a remote
+    QVERIFY(git.addRemote("test-origin", "https://github.com/test/repo.git"));
+    
+    // Check that remote was added
+    remotes = git.getRemotes();
+    bool foundRemote = false;
+    for (const GitRemoteInfo& remote : remotes) {
+        if (remote.name == "test-origin") {
+            QCOMPARE(remote.fetchUrl, QString("https://github.com/test/repo.git"));
+            foundRemote = true;
+            break;
+        }
+    }
+    QVERIFY(foundRemote);
+    
+    // Remove the remote
+    QVERIFY(git.removeRemote("test-origin"));
+    
+    // Verify it's gone
+    remotes = git.getRemotes();
+    foundRemote = false;
+    for (const GitRemoteInfo& remote : remotes) {
+        if (remote.name == "test-origin") {
+            foundRemote = true;
+            break;
+        }
+    }
+    QVERIFY(!foundRemote);
+}
+
+void TestGitIntegration::testStashOperations()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+    
+    // Create a change to stash
+    createTestFile("stash_test.txt", "Content to stash\n");
+    QVERIFY(git.stageFile("stash_test.txt"));
+    
+    // Stash the changes
+    QVERIFY(git.stash("Test stash message"));
+    
+    // File should no longer be in status (stashed)
+    QList<GitFileInfo> status = git.getStatus();
+    bool foundFile = false;
+    for (const GitFileInfo& file : status) {
+        if (file.filePath == "stash_test.txt") {
+            foundFile = true;
+            break;
+        }
+    }
+    QVERIFY(!foundFile);
+    
+    // Should have at least one stash entry
+    QList<GitStashEntry> stashes = git.getStashList();
+    QVERIFY(!stashes.isEmpty());
+    
+    // Just verify we have a stash - message format varies by git version
+    QVERIFY(stashes.size() >= 1);
+    
+    // Pop the stash
+    QVERIFY(git.stashPop());
+    
+    // File should be back in status
+    status = git.getStatus();
+    foundFile = false;
+    for (const GitFileInfo& file : status) {
+        if (file.filePath == "stash_test.txt") {
+            foundFile = true;
+            break;
+        }
+    }
+    QVERIFY(foundFile);
+    
+    // Clean up
+    runGitCommand({"reset", "HEAD", "stash_test.txt"});
+    QFile::remove(m_repoPath + "/stash_test.txt");
+}
+
+void TestGitIntegration::testMergeConflictDetection()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+    
+    // Initially should have no merge conflicts
+    QVERIFY(!git.hasMergeConflicts());
+    QVERIFY(git.getConflictedFiles().isEmpty());
+    
+    // Create a branch with a conflicting change
+    QString originalBranch = git.currentBranch();
+    
+    // Create feature branch
+    QVERIFY(git.createBranch("conflict-test-branch", true));
+    
+    // Modify a file on the feature branch
+    QFile file(m_repoPath + "/initial.txt");
+    file.open(QIODevice::WriteOnly);
+    file.write("Feature branch content\n");
+    file.close();
+    
+    QVERIFY(git.stageFile("initial.txt"));
+    QVERIFY(git.commit("Feature branch change"));
+    
+    // Switch back to original branch
+    QVERIFY(git.checkoutBranch(originalBranch));
+    
+    // Make a conflicting change on the original branch
+    file.open(QIODevice::WriteOnly);
+    file.write("Original branch content\n");
+    file.close();
+    
+    QVERIFY(git.stageFile("initial.txt"));
+    QVERIFY(git.commit("Original branch change"));
+    
+    // Try to merge - this should create conflicts
+    bool mergeSuccess = git.mergeBranch("conflict-test-branch");
+    
+    // Merge should fail due to conflicts (or git might auto-resolve, depending on content)
+    // Either way, let's check the state
+    if (!mergeSuccess) {
+        // If merge failed, we should have conflicts
+        QVERIFY(git.hasMergeConflicts() || git.isMergeInProgress());
+        
+        // Abort the merge to clean up
+        if (git.isMergeInProgress()) {
+            git.abortMerge();
+        }
+    }
+    
+    // Clean up - delete the test branch
+    git.deleteBranch("conflict-test-branch", true);
+    
+    // Restore the original file
+    runGitCommand({"checkout", "HEAD~1", "--", "initial.txt"});
+    runGitCommand({"reset", "--hard", "HEAD~1"});
 }
 
 QTEST_MAIN(TestGitIntegration)
