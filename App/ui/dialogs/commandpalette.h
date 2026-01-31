@@ -7,6 +7,7 @@
 #include <QVBoxLayout>
 #include <QAction>
 #include <QKeyEvent>
+#include <QSettings>
 
 /**
  * @brief Command item for the palette
@@ -67,12 +68,18 @@ private:
     void executeCommand(int index);
     void selectNext();
     void selectPrevious();
+    void addToRecentCommands(const QString& commandId);
+    void loadRecentCommands();
+    void saveRecentCommands();
+    int getRecentBonus(const QString& commandId) const;
 
     QLineEdit* m_searchBox;
     QListWidget* m_resultsList;
     QVBoxLayout* m_layout;
     QList<CommandItem> m_commands;
     QList<int> m_filteredIndices;
+    QStringList m_recentCommands;
+    static const int MAX_RECENT_COMMANDS = 10;
 };
 
 #endif // COMMANDPALETTE_H

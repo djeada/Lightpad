@@ -21,8 +21,8 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Fuzzy command search (Ctrl+Shift+P)
 - [x] Auto-register commands from menus
 - [x] Keyboard shortcut display
-- [ ] Recent commands
-- [ ] File quick open (Ctrl+P)
+- [x] Recent commands
+- [x] File quick open (Ctrl+P)
 - [ ] Go to symbol (Ctrl+Shift+O)
 - [x] Go to line (Ctrl+G)
 

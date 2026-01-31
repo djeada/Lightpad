@@ -23,6 +23,7 @@
 #include "dialogs/shortcuts.h"
 #include "dialogs/commandpalette.h"
 #include "dialogs/gotolinedialog.h"
+#include "dialogs/filequickopen.h"
 #include "panels/terminaltabwidget.h"
 #include "../core/textarea.h"
 #include "../run_templates/runtemplatemanager.h"
@@ -49,6 +50,7 @@ MainWindow::MainWindow(QWidget* parent)
     , commandPalette(nullptr)
     , problemsPanel(nullptr)
     , goToLineDialog(nullptr)
+    , fileQuickOpen(nullptr)
     , problemsStatusLabel(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
@@ -77,6 +79,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupTabWidget();
     setupCommandPalette();
     setupGoToLineDialog();
+    setupFileQuickOpen();
     loadSettings();
     setWindowTitle("LightPad");
 }
@@ -192,6 +195,12 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
     else if (keyEvent->modifiers() == Qt::ControlModifier && 
              keyEvent->key() == Qt::Key_G) {
         showGoToLineDialog();
+    }
+    
+    // File Quick Open: Ctrl+P
+    else if (keyEvent->modifiers() == Qt::ControlModifier && 
+             keyEvent->key() == Qt::Key_P) {
+        showFileQuickOpen();
     }
 }
 
@@ -671,6 +680,48 @@ void MainWindow::setupGoToLineDialog()
             textArea->centerCursor();
             textArea->setFocus();
         }
+    });
+}
+
+void MainWindow::showFileQuickOpen()
+{
+    if (!fileQuickOpen) {
+        setupFileQuickOpen();
+    }
+    
+    // Set the current working directory as root
+    QString rootPath = QDir::currentPath();
+    
+    // If we have a file open, use its directory
+    auto tabIndex = ui->tabWidget->currentIndex();
+    auto filePath = ui->tabWidget->getFilePath(tabIndex);
+    if (!filePath.isEmpty()) {
+        QFileInfo fileInfo(filePath);
+        rootPath = fileInfo.absolutePath();
+        // Try to find project root (look for .git, CMakeLists.txt, etc.)
+        QDir dir(rootPath);
+        while (dir.exists()) {
+            if (dir.exists(".git") || dir.exists("CMakeLists.txt") || 
+                dir.exists("package.json") || dir.exists("Makefile")) {
+                rootPath = dir.absolutePath();
+                break;
+            }
+            if (!dir.cdUp()) {
+                break;
+            }
+        }
+    }
+    
+    fileQuickOpen->setRootDirectory(rootPath);
+    fileQuickOpen->showDialog();
+}
+
+void MainWindow::setupFileQuickOpen()
+{
+    fileQuickOpen = new FileQuickOpen(this);
+    
+    connect(fileQuickOpen, &FileQuickOpen::fileSelected, this, [this](const QString& filePath) {
+        openFileAndAddToNewTab(filePath);
     });
 }
 
