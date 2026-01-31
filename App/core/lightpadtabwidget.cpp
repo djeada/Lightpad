@@ -4,6 +4,7 @@
 
 #include <QApplication>
 #include <QDebug>
+#include <QFileInfo>
 #include <QFontMetrics>
 #include <QSizePolicy>
 #include <QTabBar>
@@ -215,7 +216,34 @@ QString LightpadTabWidget::getFilePath(int index)
 
         if (page)
             return page->getFilePath();
+        
+        // Check if it's a viewer tab
+        QWidget* w = widget(index);
+        if (m_viewerFilePaths.contains(w))
+            return m_viewerFilePaths[w];
     }
 
     return "";
+}
+
+void LightpadTabWidget::addViewerTab(QWidget* viewer, const QString& filePath)
+{
+    if (!viewer)
+        return;
+    
+    QFileInfo fileInfo(filePath);
+    QString tabTitle = fileInfo.fileName();
+    
+    m_viewerFilePaths[viewer] = filePath;
+    insertTab(count() - 1, viewer, tabTitle);
+    setCurrentIndex(count() - 2);
+}
+
+bool LightpadTabWidget::isViewerTab(int index) const
+{
+    if (index < 0 || index >= count())
+        return false;
+    
+    QWidget* w = widget(index);
+    return m_viewerFilePaths.contains(w);
 }

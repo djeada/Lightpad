@@ -4,7 +4,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Pdf PdfWidgets)
 
 if(WIN32)
   set(CMAKE_WIN32_EXECUTABLE ON)
@@ -107,7 +107,9 @@ set(project_headers
     filetree/filedirtreecontroller.h
     run_templates/runtemplatemanager.h
     format_templates/formattemplatemanager.h
-    settings/theme.h)
+    settings/theme.h
+    ui/viewers/imageviewer.h
+    ui/viewers/pdfviewer.h)
 
 set(project_sources 
     main.cpp
@@ -186,7 +188,9 @@ set(project_sources
     filetree/filedirtreecontroller.cpp
     run_templates/runtemplatemanager.cpp
     format_templates/formattemplatemanager.cpp
-    settings/theme.cpp)
+    settings/theme.cpp
+    ui/viewers/imageviewer.cpp
+    ui/viewers/pdfviewer.cpp)
 
 set(project_resources
     highlight.qrc
@@ -208,7 +212,9 @@ target_link_libraries(Lightpad
     PRIVATE 
     Qt6::Core
     Qt6::Gui
-    Qt6::Widgets)
+    Qt6::Widgets
+    Qt6::Pdf
+    Qt6::PdfWidgets)
 
 # Add QT_DEPRECATED_WARNINGS definition
 target_compile_definitions(Lightpad PRIVATE QT_DEPRECATED_WARNINGS)
