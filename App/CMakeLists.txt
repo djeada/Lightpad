@@ -4,7 +4,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
 
 if(WIN32)
   set(CMAKE_WIN32_EXECUTABLE ON)
@@ -182,9 +182,9 @@ endif()
 
 target_link_libraries(Lightpad 
     PRIVATE 
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets)
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets)
 
 # Add QT_DEPRECATED_WARNINGS definition
 target_compile_definitions(Lightpad PRIVATE QT_DEPRECATED_WARNINGS)

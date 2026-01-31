@@ -181,13 +181,13 @@ Create a JSON metadata file (e.g., `myplugin.json`):
 ### CMakeLists.txt
 
 ```cmake
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16)
 project(MyPlugin)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 
 # Include Lightpad headers
 include_directories(${LIGHTPAD_INCLUDE_DIR}/plugins)
@@ -197,7 +197,7 @@ add_library(myplugin SHARED
     myplugin.json
 )
 
-target_link_libraries(myplugin Qt5::Core Qt5::Widgets)
+target_link_libraries(myplugin Qt6::Core Qt6::Widgets)
 
 # Install to plugin directory
 install(TARGETS myplugin DESTINATION ${LIGHTPAD_PLUGIN_DIR})

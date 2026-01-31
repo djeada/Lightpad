@@ -55,7 +55,7 @@ MainWindow::MainWindow(QWidget* parent)
 {
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
-    show();
+    showMaximized();
     ui->tabWidget->setMainWindow(this);
     ui->magicButton->setIconSize(0.8 * ui->magicButton->size());
     
@@ -401,6 +401,34 @@ void MainWindow::on_actionOpen_File_triggered()
     auto filePath = QFileDialog::getOpenFileName(this, tr("Open Document"), QDir::homePath());
 
     openFileAndAddToNewTab(filePath);
+}
+
+void MainWindow::on_actionOpen_Project_triggered()
+{
+    QString folderPath = QFileDialog::getExistingDirectory(this, tr("Open Project"), QDir::homePath(),
+        QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+
+    if (folderPath.isEmpty()) {
+        return;
+    }
+
+    ui->tabWidget->addNewTab();
+    ui->tabWidget->setCurrentIndex(ui->tabWidget->count() - 2);
+
+    auto page = ui->tabWidget->getCurrentPage();
+    if (!page) {
+        QMessageBox::warning(this, tr("Open Project"), tr("Failed to open project."));
+        return;
+    }
+
+    page->setTreeViewVisible(true);
+    page->setModelRootIndex(folderPath);
+
+    QDir::setCurrent(folderPath);
+    setMainWindowTitle(QFileInfo(folderPath).fileName());
+    if (fileQuickOpen) {
+        fileQuickOpen->setRootDirectory(folderPath);
+    }
 }
 
 void MainWindow::on_actionSave_triggered()

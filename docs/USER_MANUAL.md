@@ -25,7 +25,7 @@ cmake --build .
 ```
 
 #### Windows
-1. Install Qt 5.x development tools
+1. Install Qt 6.x development tools
 2. Install CMake 3.10 or later
 3. Build using CMake GUI or command line
 

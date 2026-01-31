@@ -1,16 +1,16 @@
-cmake_minimum_required(VERSION 3.10.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
 
 project(LightpadTests LANGUAGES CXX)
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Enable testing
 enable_testing()
 
-# Find Qt5 Test module
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui Test)
+# Find Qt6 Test module
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Test)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -41,10 +41,10 @@ add_executable(test_logger
 
 target_link_libraries(test_logger
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_logger PRIVATE QT_DEPRECATED_WARNINGS)
@@ -57,10 +57,10 @@ add_executable(test_theme
 
 target_link_libraries(test_theme
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_theme PRIVATE QT_DEPRECATED_WARNINGS)
@@ -74,10 +74,10 @@ add_executable(test_filemanager
 
 target_link_libraries(test_filemanager
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_filemanager PRIVATE QT_DEPRECATED_WARNINGS)
@@ -92,10 +92,10 @@ add_executable(test_document
 
 target_link_libraries(test_document
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_document PRIVATE QT_DEPRECATED_WARNINGS)
@@ -109,10 +109,10 @@ add_executable(test_settingsmanager
 
 target_link_libraries(test_settingsmanager
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_settingsmanager PRIVATE QT_DEPRECATED_WARNINGS)
@@ -126,10 +126,10 @@ add_executable(test_asyncworker
 
 target_link_libraries(test_asyncworker
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_asyncworker PRIVATE QT_DEPRECATED_WARNINGS)
@@ -143,10 +143,10 @@ add_executable(test_pluginmanager
 
 target_link_libraries(test_pluginmanager
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_pluginmanager PRIVATE QT_DEPRECATED_WARNINGS)
@@ -160,10 +160,10 @@ add_executable(test_vimmode
 
 target_link_libraries(test_vimmode
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_vimmode PRIVATE QT_DEPRECATED_WARNINGS)
@@ -177,10 +177,10 @@ add_executable(test_i18n
 
 target_link_libraries(test_i18n
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_i18n PRIVATE QT_DEPRECATED_WARNINGS)
@@ -195,17 +195,17 @@ add_executable(test_accessibility
 
 target_link_libraries(test_accessibility
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_accessibility PRIVATE QT_DEPRECATED_WARNINGS)
 
 # RunTemplateManager test executable
 # Note: We need to include the qrc resource file so templates are available in tests
-qt5_add_resources(RUN_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/run_templates/run_templates.qrc)
+qt_add_resources(RUN_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/run_templates/run_templates.qrc)
 
 add_executable(test_runtemplatemanager
     unit/test_runtemplatemanager.cpp
@@ -218,16 +218,16 @@ target_include_directories(test_runtemplatemanager PRIVATE ${CMAKE_SOURCE_DIR}/A
 
 target_link_libraries(test_runtemplatemanager
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_runtemplatemanager PRIVATE QT_DEPRECATED_WARNINGS)
 
 # FormatTemplateManager test executable
-qt5_add_resources(FORMAT_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/format_templates/format_templates.qrc)
+qt_add_resources(FORMAT_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/format_templates/format_templates.qrc)
 
 add_executable(test_formattemplatemanager
     unit/test_formattemplatemanager.cpp
@@ -240,10 +240,10 @@ target_include_directories(test_formattemplatemanager PRIVATE ${CMAKE_SOURCE_DIR
 
 target_link_libraries(test_formattemplatemanager
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_formattemplatemanager PRIVATE QT_DEPRECATED_WARNINGS)
@@ -263,10 +263,10 @@ target_include_directories(test_terminal PRIVATE
 
 target_link_libraries(test_terminal
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_terminal PRIVATE QT_DEPRECATED_WARNINGS)
@@ -289,10 +289,10 @@ target_include_directories(test_terminaltabwidget PRIVATE
 
 target_link_libraries(test_terminaltabwidget
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 # SyntaxPluginRegistry test executable
@@ -312,10 +312,10 @@ target_include_directories(test_syntaxpluginregistry PRIVATE
 
 target_link_libraries(test_syntaxpluginregistry
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_terminaltabwidget PRIVATE QT_DEPRECATED_WARNINGS)
@@ -335,10 +335,10 @@ target_include_directories(test_completionproviderregistry PRIVATE
 
 target_link_libraries(test_completionproviderregistry
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_completionproviderregistry PRIVATE QT_DEPRECATED_WARNINGS)
@@ -363,10 +363,10 @@ target_include_directories(test_dap PRIVATE
 
 target_link_libraries(test_dap
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_dap PRIVATE QT_DEPRECATED_WARNINGS)
@@ -404,10 +404,10 @@ target_include_directories(test_gitintegration PRIVATE
 
 target_link_libraries(test_gitintegration
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_gitintegration PRIVATE QT_DEPRECATED_WARNINGS)
@@ -428,10 +428,10 @@ target_include_directories(test_gotolinedialog PRIVATE
 
 target_link_libraries(test_gotolinedialog
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_gotolinedialog PRIVATE QT_DEPRECATED_WARNINGS)
@@ -452,10 +452,10 @@ target_include_directories(test_lspclient PRIVATE
 
 target_link_libraries(test_lspclient
     PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
 )
 
 target_compile_definitions(test_lspclient PRIVATE QT_DEPRECATED_WARNINGS)

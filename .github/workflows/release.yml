@@ -19,10 +19,10 @@ jobs:
           - os: macos-latest
             qt_arch: clang_64
           - os: windows-latest
-            qt_arch: win64_msvc2019_64
+            qt_arch: win64_msvc2022_64
     runs-on: ${{ matrix.os }}
     env:
-      QT_VERSION: 5.15.2
+      QT_VERSION: 6.8.3
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -68,8 +68,8 @@ jobs:
           python -m pip install "aqtinstall==3.3.0" "py7zr==1.0.*"
           New-Item -ItemType Directory -Force -Path $qtDir | Out-Null
           python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_arch }} --outputdir "$qtRoot"
-          if (!(Test-Path "$qtDir\lib\cmake\Qt5\Qt5Config.cmake")) {
-            Write-Error "Qt5Config.cmake not found in $qtDir after fallback install."
+          if (!(Test-Path "$qtDir\lib\cmake\Qt6\Qt6Config.cmake")) {
+            Write-Error "Qt6Config.cmake not found in $qtDir after fallback install."
             exit 1
           }
           echo "QT_PREFIX=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -81,23 +81,23 @@ jobs:
         run: |
           $candidates = @()
           if ($env:QT_PREFIX) { $candidates += $env:QT_PREFIX }
-          if ($env:Qt5_DIR) { $candidates += $env:Qt5_DIR }
+          if ($env:Qt6_DIR) { $candidates += $env:Qt6_DIR }
           if ($env:QT_ROOT_DIR) { $candidates += $env:QT_ROOT_DIR }
           $candidates += (Join-Path $env:GITHUB_WORKSPACE "Qt\${{ env.QT_VERSION }}\${{ matrix.qt_arch }}")
           $qtRoot = $null
           foreach ($c in $candidates | Select-Object -Unique) {
             if (-not $c) { continue }
-            if (Test-Path (Join-Path $c 'lib\cmake\Qt5\Qt5Config.cmake')) {
+            if (Test-Path (Join-Path $c 'lib\cmake\Qt6\Qt6Config.cmake')) {
               $qtRoot = $c
               break
             }
-            if (Test-Path (Join-Path $c 'Qt5Config.cmake')) {
+            if (Test-Path (Join-Path $c 'Qt6Config.cmake')) {
               $qtRoot = Split-Path $c -Parent
               break
             }
           }
           if (-not $qtRoot) {
-            Write-Error "Could not locate Qt5. Checked: $($candidates -join ', ')"
+            Write-Error "Could not locate Qt6. Checked: $($candidates -join ', ')"
             exit 1
           }
           echo "QT_PREFIX=$qtRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
