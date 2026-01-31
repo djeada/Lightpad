@@ -266,6 +266,7 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
     , model(nullptr)
     , m_gitIntegration(nullptr)
     , filePath("")
+    , projectRootPath("")
 {
 
     auto* layoutHor = new QHBoxLayout(this);
@@ -362,8 +363,10 @@ void LightpadPage::setMainWindow(MainWindow* window)
 void LightpadPage::setFilePath(QString path)
 {
     filePath = path;
-
-    if (!path.isEmpty()) {
+    
+    // Visibility is controlled by project root path now
+    // Only show treeview if project root is set
+    if (!path.isEmpty() && !projectRootPath.isEmpty()) {
         setTreeViewVisible(true);
     }
 }
@@ -376,6 +379,11 @@ void LightpadPage::closeTabPage(QString path)
 
 void LightpadPage::updateModel()
 {
+    // Preserve the current root path if one is set
+    QString currentRootPath = projectRootPath.isEmpty() ? QDir::home().path() : projectRootPath;
+    
+    model = new QFileSystemModel(this);
+    model->setRootPath(currentRootPath);
     model = new GitFileSystemModel(this);
     model->setRootPath(QDir::home().path());
     
@@ -389,6 +397,11 @@ void LightpadPage::updateModel()
     treeView->setColumnHidden(1, true);
     treeView->setColumnHidden(2, true);
     treeView->setColumnHidden(3, true);
+    
+    // Restore the root index if project root is set
+    if (!projectRootPath.isEmpty()) {
+        treeView->setRootIndex(model->index(projectRootPath));
+    }
 }
 
 QString LightpadPage::getFilePath()
@@ -444,6 +457,14 @@ QString LightpadPage::getAssignedTemplateId() const
     return QString();
 }
 
+void LightpadPage::setProjectRootPath(const QString& path)
+{
+    projectRootPath = path;
+}
+
+QString LightpadPage::getProjectRootPath() const
+{
+    return projectRootPath;
 void LightpadPage::setGitIntegration(GitIntegration* git)
 {
     m_gitIntegration = git;

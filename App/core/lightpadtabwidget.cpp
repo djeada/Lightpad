@@ -64,6 +64,15 @@ void LightpadTabWidget::addNewTab()
     if (mainWindow) {
         LightpadPage* newPage = new LightpadPage(this);
         newPage->setMainWindow(mainWindow);
+        
+        // Propagate project root path to the new tab
+        QString projectRoot = mainWindow->getProjectRootPath();
+        if (!projectRoot.isEmpty()) {
+            newPage->setProjectRootPath(projectRoot);
+            newPage->setTreeViewVisible(true);
+            newPage->setModelRootIndex(projectRoot);
+        }
+        
         insertTab(count() - 1, newPage, unsavedDocumentLabel);
         setCurrentIndex(count() - 2);
     }

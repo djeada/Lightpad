@@ -71,6 +71,18 @@ public:
      * @return Template ID or empty string if none
      */
     QString getAssignedTemplateId() const;
+    
+    /**
+     * @brief Set the project root path for persistent treeview
+     * @param path The project root directory path
+     */
+    void setProjectRootPath(const QString& path);
+    
+    /**
+     * @brief Get the project root path
+     * @return The project root path or empty string if not set
+     */
+    QString getProjectRootPath() const;
 
     /**
      * @brief Set the git integration instance for displaying git status
@@ -95,6 +107,7 @@ private:
     GitFileSystemModel* model;
     GitIntegration* m_gitIntegration;
     QString filePath;
+    QString projectRootPath;
 };
 
 #endif // LIGHTPADPAGE_H

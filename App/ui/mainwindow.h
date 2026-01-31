@@ -167,6 +167,13 @@ private:
 
     QMap<QString, QString> m_highlightOverrides;
     QSet<QString> m_loadedHighlightOverrideDirs;
+    
+    // Project root path for persistent treeview across all tabs
+    QString m_projectRootPath;
+
+public:
+    void setProjectRootPath(const QString& path);
+    QString getProjectRootPath() const;
 };
 
 const int defaultTabWidth = 4;
