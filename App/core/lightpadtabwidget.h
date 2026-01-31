@@ -4,6 +4,7 @@
 #include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
+#include <QMap>
 
 const QString unsavedDocumentLabel = "Unsaved Document";
 const int buttonSize = 25;
@@ -17,6 +18,7 @@ class LightpadTabWidget : public QTabWidget {
 public:
     LightpadTabWidget(QWidget* parent = nullptr);
     void addNewTab();
+    void addViewerTab(QWidget* viewer, const QString& filePath);
     void setMainWindow(MainWindow* window);
     void setTheme(const QString& backgroundColor,
         const QString& foregroundColor,
@@ -30,6 +32,7 @@ public:
     LightpadPage* getPage(int index);
     LightpadPage* getCurrentPage();
     QString getFilePath(int index);
+    bool isViewerTab(int index) const;
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -38,6 +41,7 @@ protected:
 private:
     MainWindow* mainWindow;
     QToolButton* newTabButton;
+    QMap<QWidget*, QString> m_viewerFilePaths;
 };
 
 #endif // CODEEDITORTABS_H

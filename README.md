@@ -30,6 +30,8 @@ So why wait? Try Lightpad today and see how it can help you write better code, f
 * Auto parentheses
 * Auto indenting
 * **Autocompletion** (Press `Ctrl+Space` - see [AUTOCOMPLETION.md](App/AUTOCOMPLETION.md) for details)
+* **Image Viewer** - View images (PNG, JPG, GIF, BMP, WEBP, SVG, ICO, TIFF) with zoom controls
+* **PDF Reader** - Read PDF documents with page navigation and zoom controls
 
 <h1>Build</h1>
 To build Lightpad, you need some libraries and tools.  Follow those instructions for the platform you're compiling on.
@@ -42,13 +44,13 @@ Clone the Lightpad repository:
 <h2>Install Build-Tools</h2>
 
 <ul>  
-<li> A C++ compiler supporting C++14 </li>
-<li> Cmake </li>
+<li> A C++ compiler supporting C++17 </li>
+<li> CMake (version 3.16 or higher) </li>
 </ul>
-<pre>sudo apt-get install build-essential</pre>
+<pre>sudo apt-get install build-essential cmake</pre>
 
-<h2>Install dependencies</h2>
-<pre>sudo apt-get install qtbase5-dev qttools5-dev-tools</pre>
+<h2>Install dependencies (Qt6)</h2>
+<pre>sudo apt-get install qt6-base-dev qt6-pdf-dev libqt6pdf6 libqt6pdfwidgets6</pre>
                      
 <h2>Building with CMake</h2>
 Open the terminal in the root directory of the project and run: 

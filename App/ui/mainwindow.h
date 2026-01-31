@@ -19,6 +19,8 @@ class QCompleter;
 class Preferences;
 class CompletionEngine;
 class SplitEditorContainer;
+class ImageViewer;
+class PdfViewer;
 
 enum class Lang { cpp,
     js,

@@ -40,6 +40,8 @@
 #include "../completion/providers/snippetcompletionprovider.h"
 #include "../completion/providers/plugincompletionprovider.h"
 #include "panels/spliteditorcontainer.h"
+#include "viewers/imageviewer.h"
+#include "viewers/pdfviewer.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -439,16 +441,40 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     if (filePath.isEmpty() || !fileInfo.exists() || fileInfo.isDir())
         return;
 
-    //check if file not already edited
+    //check if file not already open (including viewer tabs)
     for (int i = 0; i < ui->tabWidget->count(); i++) {
-        auto page = ui->tabWidget->getPage(i);
-
-        if (page && page->getFilePath() == filePath) {
+        QString tabFilePath = ui->tabWidget->getFilePath(i);
+        if (tabFilePath == filePath) {
             ui->tabWidget->setCurrentIndex(i);
             return;
         }
     }
+    
+    QString extension = fileInfo.suffix().toLower();
+    
+    // Check if it's an image file
+    if (ImageViewer::isSupportedImageFormat(extension)) {
+        ImageViewer* imageViewer = new ImageViewer(this);
+        if (imageViewer->loadImage(filePath)) {
+            ui->tabWidget->addViewerTab(imageViewer, filePath);
+        } else {
+            delete imageViewer;
+        }
+        return;
+    }
+    
+    // Check if it's a PDF file
+    if (PdfViewer::isSupportedPdfFormat(extension)) {
+        PdfViewer* pdfViewer = new PdfViewer(this);
+        if (pdfViewer->loadPdf(filePath)) {
+            ui->tabWidget->addViewerTab(pdfViewer, filePath);
+        } else {
+            delete pdfViewer;
+        }
+        return;
+    }
 
+    // Default handling for text files
     if (ui->tabWidget->count() == 0 || !getCurrentTextArea()->toPlainText().isEmpty()) {
         ui->tabWidget->addNewTab();
         ui->tabWidget->setCurrentIndex(ui->tabWidget->count() - 1);

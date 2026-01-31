@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 enable_testing()
 
 # Find Qt6 Test module
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Test)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Test Pdf PdfWidgets)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -521,6 +521,56 @@ target_compile_definitions(test_findreplacepanel PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME FindReplacePanelTests COMMAND test_findreplacepanel)
 
+# ImageViewer test executable
+add_executable(test_imageviewer
+    unit/test_imageviewer.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/viewers/imageviewer.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_imageviewer PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/ui/viewers
+)
+
+target_link_libraries(test_imageviewer
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_imageviewer PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME ImageViewerTests COMMAND test_imageviewer)
+
+# PdfViewer test executable
+add_executable(test_pdfviewer
+    unit/test_pdfviewer.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/viewers/pdfviewer.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_pdfviewer PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/ui/viewers
+)
+
+target_link_libraries(test_pdfviewer
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Pdf
+    Qt6::PdfWidgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_pdfviewer PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME PdfViewerTests COMMAND test_pdfviewer)
+
 # Set environment variable for headless testing
 set_tests_properties(
     LoggerTests 
@@ -545,6 +595,8 @@ set_tests_properties(
     LspClientTests
     MinimapTests
     FindReplacePanelTests
+    ImageViewerTests
+    PdfViewerTests
     PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
@@ -563,5 +615,6 @@ add_custom_target(run_tests
             test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
             test_syntaxpluginregistry test_completionproviderregistry test_dap
             test_gitintegration test_gotolinedialog test_lspclient test_minimap test_findreplacepanel
+            test_imageviewer test_pdfviewer
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
