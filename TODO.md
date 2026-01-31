@@ -13,9 +13,9 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Add cursors to all occurrences (Ctrl+Shift+L)
 - [x] Multi-cursor typing and deletion
 - [x] Escape to clear extra cursors
-- [ ] Column/box selection (Alt+Shift+Drag)
+- [x] Column/box selection (Alt+Shift+Drag)
 - [ ] Multi-cursor undo/redo
-- [ ] Split selection into lines
+- [x] Split selection into lines (Ctrl+Shift+I)
 
 ### Command Palette
 - [x] Fuzzy command search (Ctrl+Shift+P)
