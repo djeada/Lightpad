@@ -22,6 +22,7 @@
 #include "dialogs/formattemplateselector.h"
 #include "dialogs/shortcuts.h"
 #include "dialogs/commandpalette.h"
+#include "dialogs/gotolinedialog.h"
 #include "panels/terminaltabwidget.h"
 #include "../core/textarea.h"
 #include "../run_templates/runtemplatemanager.h"
@@ -47,6 +48,8 @@ MainWindow::MainWindow(QWidget* parent)
     , font(QApplication::font())
     , commandPalette(nullptr)
     , problemsPanel(nullptr)
+    , goToLineDialog(nullptr)
+    , problemsStatusLabel(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
@@ -73,6 +76,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupTextArea();
     setupTabWidget();
     setupCommandPalette();
+    setupGoToLineDialog();
     loadSettings();
     setWindowTitle("LightPad");
 }
@@ -182,6 +186,12 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
     else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
              keyEvent->key() == Qt::Key_M) {
         showProblemsPanel();
+    }
+    
+    // Go to Line: Ctrl+G
+    else if (keyEvent->modifiers() == Qt::ControlModifier && 
+             keyEvent->key() == Qt::Key_G) {
+        showGoToLineDialog();
     }
 }
 
@@ -585,6 +595,26 @@ void MainWindow::showProblemsPanel()
             }
         });
         
+        // Connect countsChanged to update status bar
+        connect(problemsPanel, &ProblemsPanel::countsChanged, this, &MainWindow::updateProblemsStatusLabel);
+        
+        // Add problems status label to status bar if not already added
+        if (!problemsStatusLabel) {
+            problemsStatusLabel = new QLabel(this);
+            problemsStatusLabel->setStyleSheet("color: #9aa4b2; padding: 0 8px;");
+            problemsStatusLabel->setText("✓ No problems");
+            problemsStatusLabel->setCursor(Qt::PointingHandCursor);
+            
+            // Make it clickable to toggle problems panel
+            problemsStatusLabel->installEventFilter(this);
+            
+            auto layout = qobject_cast<QHBoxLayout*>(ui->backgroundBottom->layout());
+            if (layout) {
+                // Insert before the rowCol label (second to last widget)
+                layout->insertWidget(layout->count() - 1, problemsStatusLabel);
+            }
+        }
+        
         auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
         if (layout != 0)
             layout->insertWidget(layout->count() - 1, problemsPanel, 0);
@@ -610,6 +640,50 @@ void MainWindow::setupCommandPalette()
         if (action->menu()) {
             commandPalette->registerMenu(action->menu());
         }
+    }
+}
+
+void MainWindow::showGoToLineDialog()
+{
+    if (!goToLineDialog) {
+        setupGoToLineDialog();
+    }
+    
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        int maxLine = textArea->blockCount();
+        goToLineDialog->setMaxLine(maxLine);
+        goToLineDialog->showDialog();
+    }
+}
+
+void MainWindow::setupGoToLineDialog()
+{
+    goToLineDialog = new GoToLineDialog(this);
+    
+    connect(goToLineDialog, &GoToLineDialog::lineSelected, this, [this](int lineNumber) {
+        TextArea* textArea = getCurrentTextArea();
+        if (textArea) {
+            QTextCursor cursor = textArea->textCursor();
+            cursor.movePosition(QTextCursor::Start);
+            cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, lineNumber - 1);
+            textArea->setTextCursor(cursor);
+            textArea->centerCursor();
+            textArea->setFocus();
+        }
+    });
+}
+
+void MainWindow::updateProblemsStatusLabel(int errors, int warnings, int infos)
+{
+    if (problemsStatusLabel) {
+        QString text;
+        if (errors > 0 || warnings > 0) {
+            text = QString("⛔ %1  ⚠️ %2").arg(errors).arg(warnings);
+        } else {
+            text = "✓ No problems";
+        }
+        problemsStatusLabel->setText(text);
     }
 }
 
@@ -939,6 +1013,11 @@ void MainWindow::on_actionFormat_Document_triggered()
 void MainWindow::on_actionEdit_Format_Configurations_triggered()
 {
     openFormatConfigurationDialog();
+}
+
+void MainWindow::on_actionGo_to_Line_triggered()
+{
+    showGoToLineDialog();
 }
 
 void MainWindow::setTheme(Theme theme)
