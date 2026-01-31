@@ -64,6 +64,10 @@ public:
     void clearExtraCursors();
     bool hasMultipleCursors() const;
     int cursorCount() const;
+    void splitSelectionIntoLines();
+    void startColumnSelection(const QPoint& pos);
+    void updateColumnSelection(const QPoint& pos);
+    void endColumnSelection();
 
     // Code folding
     void foldCurrentBlock();
@@ -78,6 +82,8 @@ protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
     MainWindow* mainWindow;
@@ -110,6 +116,11 @@ private:
     // Multi-cursor state
     QList<QTextCursor> m_extraCursors;
     QString m_lastSelectedWord;
+
+    // Column selection state
+    bool m_columnSelectionActive;
+    QPoint m_columnSelectionStart;
+    QPoint m_columnSelectionEnd;
 
     // Folding state
     QSet<int> m_foldedBlocks;

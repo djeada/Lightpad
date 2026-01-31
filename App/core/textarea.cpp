@@ -202,6 +202,7 @@ TextArea::TextArea(QWidget* parent)
     , lineHighlighted(true)
     , matchingBracketsHighlighted(true)
     , prevWordCount(1)
+    , m_columnSelectionActive(false)
 {
     initializeIconCache();
     setupTextArea();
@@ -235,6 +236,7 @@ TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent)
     , lineHighlighted(settings.lineHighlighted)
     , matchingBracketsHighlighted(settings.matchingBracketsHighlighted)
     , prevWordCount(1)
+    , m_columnSelectionActive(false)
 {
     initializeIconCache();
     setupTextArea();
@@ -472,6 +474,12 @@ void TextArea::keyPressEvent(QKeyEvent* keyEvent)
     // Ctrl+Shift+L - Add cursors to all occurrences
     if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && keyEvent->key() == Qt::Key_L) {
         addCursorsToAllOccurrences();
+        return;
+    }
+    
+    // Ctrl+Shift+I - Split selection into lines
+    if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && keyEvent->key() == Qt::Key_I) {
+        splitSelectionIntoLines();
         return;
     }
     
@@ -1427,6 +1435,12 @@ void TextArea::mousePressEvent(QMouseEvent* event)
         clearExtraCursors();
     }
     
+    // Alt+Shift+Click to start column/box selection
+    if (event->modifiers() == (Qt::AltModifier | Qt::ShiftModifier) && event->button() == Qt::LeftButton) {
+        startColumnSelection(event->pos());
+        return;
+    }
+    
     // Ctrl+Click to add cursor
     if (event->modifiers() & Qt::ControlModifier && event->modifiers() & Qt::AltModifier) {
         QTextCursor cursor = cursorForPosition(event->pos());
@@ -1437,6 +1451,28 @@ void TextArea::mousePressEvent(QMouseEvent* event)
     }
     
     QPlainTextEdit::mousePressEvent(event);
+}
+
+void TextArea::mouseMoveEvent(QMouseEvent* event)
+{
+    // Update column selection while dragging
+    if (m_columnSelectionActive && (event->buttons() & Qt::LeftButton)) {
+        updateColumnSelection(event->pos());
+        return;
+    }
+    
+    QPlainTextEdit::mouseMoveEvent(event);
+}
+
+void TextArea::mouseReleaseEvent(QMouseEvent* event)
+{
+    // End column selection
+    if (m_columnSelectionActive) {
+        endColumnSelection();
+        return;
+    }
+    
+    QPlainTextEdit::mouseReleaseEvent(event);
 }
 
 // ============================================================================
@@ -1658,4 +1694,158 @@ bool TextArea::isFoldable(int blockNumber) const
     }
     
     return false;
+}
+
+// ============================================================================
+// Column/Box Selection Support
+// ============================================================================
+
+void TextArea::startColumnSelection(const QPoint& pos)
+{
+    m_columnSelectionActive = true;
+    m_columnSelectionStart = pos;
+    m_columnSelectionEnd = pos;
+    
+    // Clear existing extra cursors
+    m_extraCursors.clear();
+    
+    // Set initial cursor position
+    QTextCursor cursor = cursorForPosition(pos);
+    cursor.clearSelection();
+    setTextCursor(cursor);
+}
+
+void TextArea::updateColumnSelection(const QPoint& pos)
+{
+    if (!m_columnSelectionActive)
+        return;
+    
+    m_columnSelectionEnd = pos;
+    
+    // Get the line/column at start and end positions
+    QTextCursor startCursor = cursorForPosition(m_columnSelectionStart);
+    QTextCursor endCursor = cursorForPosition(m_columnSelectionEnd);
+    
+    int startLine = startCursor.blockNumber();
+    int endLine = endCursor.blockNumber();
+    
+    // Ensure startLine <= endLine
+    if (startLine > endLine) {
+        std::swap(startLine, endLine);
+    }
+    
+    // Get column positions in pixels for proper column selection
+    int startCol = startCursor.positionInBlock();
+    int endCol = endCursor.positionInBlock();
+    
+    // Ensure startCol <= endCol for selection
+    int leftCol = qMin(startCol, endCol);
+    int rightCol = qMax(startCol, endCol);
+    
+    // Clear extra cursors
+    m_extraCursors.clear();
+    
+    // Create a cursor for each line in the selection
+    bool first = true;
+    for (int line = startLine; line <= endLine; ++line) {
+        QTextBlock block = document()->findBlockByNumber(line);
+        if (!block.isValid())
+            continue;
+        
+        QTextCursor cursor(block);
+        int lineLength = block.text().length();
+        
+        // Move to the left column position (clamped to line length)
+        int actualLeftCol = qMin(leftCol, lineLength);
+        cursor.movePosition(QTextCursor::StartOfBlock);
+        cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, actualLeftCol);
+        
+        // Select to the right column (clamped to line length)
+        int actualRightCol = qMin(rightCol, lineLength);
+        int selectionLength = actualRightCol - actualLeftCol;
+        if (selectionLength > 0) {
+            cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, selectionLength);
+        }
+        
+        if (first) {
+            setTextCursor(cursor);
+            first = false;
+        } else {
+            m_extraCursors.append(cursor);
+        }
+    }
+    
+    drawExtraCursors();
+}
+
+void TextArea::endColumnSelection()
+{
+    m_columnSelectionActive = false;
+    // Keep the cursors in place, they're already set up
+}
+
+// ============================================================================
+// Split Selection Into Lines
+// ============================================================================
+
+void TextArea::splitSelectionIntoLines()
+{
+    QTextCursor cursor = textCursor();
+    
+    if (!cursor.hasSelection())
+        return;
+    
+    // Get the selected text and split by lines
+    int selStart = cursor.selectionStart();
+    int selEnd = cursor.selectionEnd();
+    
+    // Find the block/line of the selection start and end
+    QTextCursor startCursor(document());
+    startCursor.setPosition(selStart);
+    int startLine = startCursor.blockNumber();
+    int startCol = startCursor.positionInBlock();
+    
+    QTextCursor endCursor(document());
+    endCursor.setPosition(selEnd);
+    int endLine = endCursor.blockNumber();
+    int endCol = endCursor.positionInBlock();
+    
+    // If selection is on a single line, nothing to split
+    if (startLine == endLine)
+        return;
+    
+    // Clear extra cursors
+    m_extraCursors.clear();
+    
+    // Create a cursor at the end of selection on each line
+    bool first = true;
+    for (int line = startLine; line <= endLine; ++line) {
+        QTextBlock block = document()->findBlockByNumber(line);
+        if (!block.isValid())
+            continue;
+        
+        QTextCursor lineCursor(block);
+        lineCursor.movePosition(QTextCursor::StartOfBlock);
+        
+        if (line == startLine) {
+            // First line: from startCol to end of line
+            lineCursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, startCol);
+            lineCursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+        } else if (line == endLine) {
+            // Last line: from start of line to endCol
+            lineCursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, endCol);
+        } else {
+            // Middle lines: select entire line content (not the newline)
+            lineCursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+        }
+        
+        if (first) {
+            setTextCursor(lineCursor);
+            first = false;
+        } else {
+            m_extraCursors.append(lineCursor);
+        }
+    }
+    
+    drawExtraCursors();
 }
