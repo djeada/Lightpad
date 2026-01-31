@@ -73,26 +73,62 @@ void LightpadTabWidget::tabInserted(int index)
 
 void LightpadTabWidget::updateCloseButtons()
 {
-    QIcon closeIcon = qApp->style()->standardIcon(QStyle::SP_TitleBarCloseButton);
     for (int i = 0; i < count(); ++i) {
         if (i == count() - 1) {
             tabBar()->setTabButton(i, QTabBar::RightSide, newTabButton);
             continue;
         }
 
+        // Check if close button already exists for this tab
+        QWidget* existingButton = tabBar()->tabButton(i, QTabBar::RightSide);
+        if (existingButton && existingButton != newTabButton) {
+            // Update existing button's stylesheet
+            existingButton->setStyleSheet(QString(
+                "QToolButton {"
+                "  color: rgba(255, 255, 255, 0.4);"
+                "  background: transparent;"
+                "  border: none;"
+                "  border-radius: 4px;"
+                "  padding: 2px;"
+                "}"
+                "QToolButton:hover {"
+                "  color: %1;"
+                "  background: rgba(255, 255, 255, 0.15);"
+                "}"
+                "QToolButton:pressed {"
+                "  color: #ffffff;"
+                "  background: #e81123;"
+                "}"
+            ).arg(m_foregroundColor));
+            continue;
+        }
+
         QToolButton* closeButton = new QToolButton(tabBar());
-        closeButton->setText("x");
-        closeButton->setIcon(closeIcon);
-        closeButton->setIconSize(QSize(12, 12));
-        closeButton->setFixedSize(QSize(20, 20));
+        closeButton->setObjectName("TabCloseButton");
+        closeButton->setText(QStringLiteral("\u00D7")); // Unicode multiplication sign (×)
+        closeButton->setFixedSize(QSize(18, 18));
         closeButton->setAutoRaise(true);
         closeButton->setCursor(Qt::ArrowCursor);
         closeButton->setToolTip(tr("Close Tab"));
         closeButton->setStyleSheet(QString(
-            "QToolButton { color: %1; background: transparent; border: none; font-weight: bold; }"
-            "QToolButton:hover { background: %2; }"
-            "QToolButton:pressed { background: %3; }"
-        ).arg(m_foregroundColor, m_hoverColor, m_accentColor));
+            "QToolButton {"
+            "  color: rgba(255, 255, 255, 0.4);"
+            "  background: transparent;"
+            "  border: none;"
+            "  border-radius: 4px;"
+            "  padding: 2px;"
+            "  font-size: 14px;"
+            "  font-weight: bold;"
+            "}"
+            "QToolButton:hover {"
+            "  color: %1;"
+            "  background: rgba(255, 255, 255, 0.15);"
+            "}"
+            "QToolButton:pressed {"
+            "  color: #ffffff;"
+            "  background: #e81123;"
+            "}"
+        ).arg(m_foregroundColor));
         connect(closeButton, &QToolButton::clicked, this, [this, closeButton]() {
             for (int index = 0; index < count(); ++index) {
                 if (tabBar()->tabButton(index, QTabBar::RightSide) == closeButton) {
@@ -195,6 +231,25 @@ void LightpadTabWidget::setTheme(const QString& backgroundColor,
         "QToolButton#AddTabButton:hover { "
             "background: " + hoverColor + "; "
             "border: 1px solid " + borderColor + "; "
+        "}"
+
+        // Tab close button styling - modern minimal design (subtle until hovered)
+        "QToolButton#TabCloseButton { "
+            "color: rgba(255, 255, 255, 0.4); "
+            "background: transparent; "
+            "border: none; "
+            "border-radius: 4px; "
+            "padding: 2px; "
+            "font-size: 14px; "
+            "font-weight: bold; "
+        "}"
+        "QToolButton#TabCloseButton:hover { "
+            "color: " + foregroundColor + "; "
+            "background: rgba(255, 255, 255, 0.15); "
+        "}"
+        "QToolButton#TabCloseButton:pressed { "
+            "color: #ffffff; "
+            "background: #e81123; "
         "}"
 
         // Tab widget pane - seamless integration
