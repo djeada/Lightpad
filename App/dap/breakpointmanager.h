@@ -79,6 +79,43 @@ struct FunctionBreakpoint {
 };
 
 /**
+ * @brief Data breakpoint (triggers when data changes)
+ * 
+ * Data breakpoints watch memory locations or variable values
+ * and trigger when the value changes (write), is read (read),
+ * or accessed at all (readWrite).
+ */
+struct DataBreakpoint {
+    int id = 0;
+    QString dataId;              // Identifier for the data location
+    QString accessType;          // "read", "write", "readWrite"
+    QString condition;           // Optional condition
+    QString hitCondition;        // Hit count condition
+    bool enabled = true;
+    bool verified = false;
+    QString description;         // Human-readable description
+    
+    QJsonObject toJson() const {
+        QJsonObject obj;
+        obj["dataId"] = dataId;
+        obj["accessType"] = accessType;
+        if (!condition.isEmpty()) obj["condition"] = condition;
+        if (!hitCondition.isEmpty()) obj["hitCondition"] = hitCondition;
+        return obj;
+    }
+};
+
+/**
+ * @brief Exception breakpoint configuration
+ */
+struct ExceptionBreakpoint {
+    QString filterId;            // Filter ID from adapter capabilities
+    QString filterLabel;         // Display label
+    bool enabled = false;
+    QString condition;           // Optional condition (if supported)
+};
+
+/**
  * @brief Manages breakpoints across all files
  * 
  * The BreakpointManager is responsible for:
@@ -235,6 +272,44 @@ public:
      */
     void syncFunctionBreakpoints();
 
+    // Data breakpoints
+
+    /**
+     * @brief Add a data breakpoint
+     * @param dataId Data identifier (e.g., variable name, memory address)
+     * @param accessType "read", "write", or "readWrite"
+     * @return Breakpoint ID
+     */
+    int addDataBreakpoint(const QString& dataId, const QString& accessType = "write");
+
+    /**
+     * @brief Remove a data breakpoint
+     */
+    void removeDataBreakpoint(int id);
+
+    /**
+     * @brief Get all data breakpoints
+     */
+    QList<DataBreakpoint> allDataBreakpoints() const;
+
+    /**
+     * @brief Sync data breakpoints with debug adapter
+     */
+    void syncDataBreakpoints();
+
+    // Exception breakpoints
+
+    /**
+     * @brief Set exception breakpoint filters
+     * @param filterIds List of filter IDs to enable
+     */
+    void setExceptionBreakpoints(const QStringList& filterIds);
+
+    /**
+     * @brief Get enabled exception filter IDs
+     */
+    QStringList enabledExceptionFilters() const;
+
     // Persistence
 
     /**
@@ -283,6 +358,16 @@ signals:
      */
     void allBreakpointsCleared();
 
+    /**
+     * @brief Emitted when data breakpoints change
+     */
+    void dataBreakpointsChanged();
+
+    /**
+     * @brief Emitted when exception breakpoints change
+     */
+    void exceptionBreakpointsChanged();
+
 private:
     BreakpointManager();
     ~BreakpointManager() = default;
@@ -297,6 +382,11 @@ private:
     
     QMap<int, FunctionBreakpoint> m_functionBreakpoints;
     int m_nextFunctionBpId;
+    
+    QMap<int, DataBreakpoint> m_dataBreakpoints;
+    int m_nextDataBpId;
+    
+    QStringList m_enabledExceptionFilters;
     
     DapClient* m_dapClient;
 };

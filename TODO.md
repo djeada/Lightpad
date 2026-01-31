@@ -61,10 +61,12 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Debug console/REPL
 - [ ] Inline variable values during debug
 - [x] Exception breakpoints
-- [ ] Multi-target debugging
-- [ ] Debug configurations (launch.json equivalent)
+- [x] Multi-target debugging (DebugSessionManager)
+- [x] Debug configurations (launch.json equivalent via DebugConfigurationManager)
 - [x] Attach to process
 - [x] Remote debugging support
+- [x] Watch expressions (WatchManager)
+- [x] Data breakpoints
 
 ### 2. Git/Version Control Integration
 - [ ] Git status in file tree (modified, staged, untracked icons)

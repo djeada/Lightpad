@@ -43,6 +43,9 @@ set(project_headers
     dap/idebugadapter.h
     dap/debugadapterregistry.h
     dap/breakpointmanager.h
+    dap/debugconfiguration.h
+    dap/watchmanager.h
+    dap/debugsession.h
     ui/dialogs/colorpicker.h
     ui/dialogs/commandpalette.h
     ui/panels/findreplacepanel.h
@@ -104,6 +107,9 @@ set(project_sources
     dap/dapclient.cpp
     dap/debugadapterregistry.cpp
     dap/breakpointmanager.cpp
+    dap/debugconfiguration.cpp
+    dap/watchmanager.cpp
+    dap/debugsession.cpp
     ui/dialogs/colorpicker.cpp
     ui/dialogs/commandpalette.cpp
     ui/panels/findreplacepanel.cpp

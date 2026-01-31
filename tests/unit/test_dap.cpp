@@ -4,12 +4,16 @@
 #include "dap/dapclient.h"
 #include "dap/breakpointmanager.h"
 #include "dap/debugadapterregistry.h"
+#include "dap/debugconfiguration.h"
+#include "dap/watchmanager.h"
+#include "dap/debugsession.h"
 
 /**
  * @brief Unit tests for DAP (Debug Adapter Protocol) components
  * 
  * Tests the DAP client infrastructure, breakpoint manager,
- * and debug adapter registry.
+ * debug adapter registry, configuration manager, watch manager,
+ * and session manager.
  */
 class TestDap : public QObject {
     Q_OBJECT
@@ -31,12 +35,30 @@ private slots:
     void testBreakpointLogpoint();
     void testBreakpointPersistence();
     void testClearBreakpoints();
+    void testDataBreakpoints();
+    void testExceptionBreakpoints();
     
     // DebugAdapterRegistry tests
     void testRegistrySingleton();
     void testBuiltinAdapters();
     void testAdapterLookupByFile();
     void testAdapterLookupByLanguage();
+    
+    // DebugConfiguration tests
+    void testDebugConfigurationToJson();
+    void testDebugConfigurationFromJson();
+    void testConfigurationVariableSubstitution();
+    void testConfigurationManagerSingleton();
+    
+    // WatchManager tests
+    void testWatchManagerSingleton();
+    void testAddWatch();
+    void testRemoveWatch();
+    void testWatchPersistence();
+    
+    // DebugSession tests
+    void testDebugSessionState();
+    void testSessionManagerSingleton();
     
     // Data structures tests
     void testDapBreakpointFromJson();
@@ -46,6 +68,7 @@ private slots:
     
 private:
     void cleanupBreakpoints();
+    void cleanupWatches();
 };
 
 void TestDap::initTestCase()
@@ -437,6 +460,213 @@ void TestDap::testDapStoppedEventFromJson()
     QVERIFY(evt.allThreadsStopped);
     QCOMPARE(evt.hitBreakpointIds.count(), 2);
     QCOMPARE(evt.hitBreakpointIds.at(0), 5);
+}
+
+// =============================================================================
+// Data Breakpoint and Exception Breakpoint Tests
+// =============================================================================
+
+void TestDap::testDataBreakpoints()
+{
+    cleanupBreakpoints();
+    
+    BreakpointManager& bm = BreakpointManager::instance();
+    
+    // Add data breakpoint
+    int id = bm.addDataBreakpoint("myVariable", "write");
+    QVERIFY(id > 0);
+    
+    QList<DataBreakpoint> dataBps = bm.allDataBreakpoints();
+    QCOMPARE(dataBps.count(), 1);
+    QCOMPARE(dataBps.first().dataId, QString("myVariable"));
+    QCOMPARE(dataBps.first().accessType, QString("write"));
+    
+    // Remove data breakpoint
+    bm.removeDataBreakpoint(id);
+    QCOMPARE(bm.allDataBreakpoints().count(), 0);
+}
+
+void TestDap::testExceptionBreakpoints()
+{
+    cleanupBreakpoints();
+    
+    BreakpointManager& bm = BreakpointManager::instance();
+    
+    // Set exception breakpoints
+    QStringList filters;
+    filters << "uncaught" << "raised";
+    bm.setExceptionBreakpoints(filters);
+    
+    QStringList enabled = bm.enabledExceptionFilters();
+    QCOMPARE(enabled.count(), 2);
+    QVERIFY(enabled.contains("uncaught"));
+    QVERIFY(enabled.contains("raised"));
+}
+
+// =============================================================================
+// DebugConfiguration Tests
+// =============================================================================
+
+void TestDap::testDebugConfigurationToJson()
+{
+    DebugConfiguration config;
+    config.name = "Test Config";
+    config.type = "python";
+    config.request = "launch";
+    config.program = "/path/to/script.py";
+    config.args << "--verbose" << "--debug";
+    config.cwd = "/path/to";
+    config.stopOnEntry = true;
+    
+    QJsonObject json = config.toJson();
+    
+    QCOMPARE(json["name"].toString(), QString("Test Config"));
+    QCOMPARE(json["type"].toString(), QString("python"));
+    QCOMPARE(json["request"].toString(), QString("launch"));
+    QCOMPARE(json["program"].toString(), QString("/path/to/script.py"));
+    QCOMPARE(json["args"].toArray().count(), 2);
+    QCOMPARE(json["stopOnEntry"].toBool(), true);
+}
+
+void TestDap::testDebugConfigurationFromJson()
+{
+    QJsonObject json;
+    json["name"] = "Python Debug";
+    json["type"] = "debugpy";
+    json["request"] = "launch";
+    json["program"] = "${file}";
+    json["cwd"] = "${workspaceFolder}";
+    json["stopOnEntry"] = false;
+    
+    QJsonArray args;
+    args.append("--arg1");
+    args.append("--arg2");
+    json["args"] = args;
+    
+    DebugConfiguration config = DebugConfiguration::fromJson(json);
+    
+    QCOMPARE(config.name, QString("Python Debug"));
+    QCOMPARE(config.type, QString("debugpy"));
+    QCOMPARE(config.request, QString("launch"));
+    QCOMPARE(config.program, QString("${file}"));
+    QCOMPARE(config.args.count(), 2);
+    QVERIFY(!config.stopOnEntry);
+}
+
+void TestDap::testConfigurationVariableSubstitution()
+{
+    DebugConfigurationManager& mgr = DebugConfigurationManager::instance();
+    mgr.setWorkspaceFolder("/home/user/project");
+    
+    DebugConfiguration config;
+    config.name = "Test";
+    config.program = "${workspaceFolder}/main.py";
+    config.cwd = "${workspaceFolder}";
+    
+    DebugConfiguration resolved = mgr.resolveVariables(config, "/home/user/project/src/app.py");
+    
+    QCOMPARE(resolved.program, QString("/home/user/project/main.py"));
+    QCOMPARE(resolved.cwd, QString("/home/user/project"));
+}
+
+void TestDap::testConfigurationManagerSingleton()
+{
+    DebugConfigurationManager& mgr1 = DebugConfigurationManager::instance();
+    DebugConfigurationManager& mgr2 = DebugConfigurationManager::instance();
+    
+    QCOMPARE(&mgr1, &mgr2);
+}
+
+// =============================================================================
+// WatchManager Tests
+// =============================================================================
+
+void TestDap::cleanupWatches()
+{
+    WatchManager::instance().clearAll();
+}
+
+void TestDap::testWatchManagerSingleton()
+{
+    WatchManager& wm1 = WatchManager::instance();
+    WatchManager& wm2 = WatchManager::instance();
+    
+    QCOMPARE(&wm1, &wm2);
+}
+
+void TestDap::testAddWatch()
+{
+    cleanupWatches();
+    
+    WatchManager& wm = WatchManager::instance();
+    
+    int id = wm.addWatch("myVariable");
+    QVERIFY(id > 0);
+    
+    WatchExpression watch = wm.watch(id);
+    QCOMPARE(watch.expression, QString("myVariable"));
+    
+    // Adding empty expression should fail
+    int emptyId = wm.addWatch("");
+    QCOMPARE(emptyId, 0);
+}
+
+void TestDap::testRemoveWatch()
+{
+    cleanupWatches();
+    
+    WatchManager& wm = WatchManager::instance();
+    
+    int id = wm.addWatch("testExpr");
+    QCOMPARE(wm.allWatches().count(), 1);
+    
+    wm.removeWatch(id);
+    QCOMPARE(wm.allWatches().count(), 0);
+}
+
+void TestDap::testWatchPersistence()
+{
+    cleanupWatches();
+    
+    WatchManager& wm = WatchManager::instance();
+    
+    wm.addWatch("expr1");
+    wm.addWatch("expr2");
+    wm.addWatch("expr3");
+    
+    // Save to JSON
+    QJsonObject json = wm.saveToJson();
+    
+    // Clear and reload
+    wm.clearAll();
+    QCOMPARE(wm.allWatches().count(), 0);
+    
+    wm.loadFromJson(json);
+    QCOMPARE(wm.allWatches().count(), 3);
+}
+
+// =============================================================================
+// DebugSession Tests
+// =============================================================================
+
+void TestDap::testDebugSessionState()
+{
+    DebugSession session("test-session");
+    
+    QCOMPARE(session.id(), QString("test-session"));
+    QCOMPARE(session.state(), DebugSession::State::Idle);
+    QVERIFY(session.client() != nullptr);
+}
+
+void TestDap::testSessionManagerSingleton()
+{
+    DebugSessionManager& mgr1 = DebugSessionManager::instance();
+    DebugSessionManager& mgr2 = DebugSessionManager::instance();
+    
+    QCOMPARE(&mgr1, &mgr2);
+    
+    // Initially no sessions
+    QVERIFY(!mgr1.hasActiveSessions());
 }
 
 QTEST_MAIN(TestDap)

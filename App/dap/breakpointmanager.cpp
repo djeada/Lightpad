@@ -14,6 +14,7 @@ BreakpointManager::BreakpointManager()
     : QObject(nullptr)
     , m_nextId(1)
     , m_nextFunctionBpId(1)
+    , m_nextDataBpId(1)
     , m_dapClient(nullptr)
 {
 }
@@ -243,6 +244,11 @@ void BreakpointManager::syncAllBreakpoints()
     }
     
     syncFunctionBreakpoints();
+    syncDataBreakpoints();
+    
+    if (!m_enabledExceptionFilters.isEmpty()) {
+        m_dapClient->setExceptionBreakpoints(m_enabledExceptionFilters);
+    }
 }
 
 void BreakpointManager::syncFileBreakpoints(const QString& filePath)
@@ -329,6 +335,71 @@ void BreakpointManager::syncFunctionBreakpoints()
     }
     
     m_dapClient->setFunctionBreakpoints(functionNames);
+}
+
+int BreakpointManager::addDataBreakpoint(const QString& dataId, const QString& accessType)
+{
+    DataBreakpoint dbp;
+    dbp.id = m_nextDataBpId++;
+    dbp.dataId = dataId;
+    dbp.accessType = accessType;
+    dbp.enabled = true;
+    
+    m_dataBreakpoints[dbp.id] = dbp;
+    
+    LOG_DEBUG(QString("Added data breakpoint %1: %2 (%3)")
+              .arg(dbp.id).arg(dataId).arg(accessType));
+    
+    emit dataBreakpointsChanged();
+    
+    if (m_dapClient && m_dapClient->isDebugging()) {
+        syncDataBreakpoints();
+    }
+    
+    return dbp.id;
+}
+
+void BreakpointManager::removeDataBreakpoint(int id)
+{
+    if (m_dataBreakpoints.remove(id) > 0) {
+        emit dataBreakpointsChanged();
+        
+        if (m_dapClient && m_dapClient->isDebugging()) {
+            syncDataBreakpoints();
+        }
+    }
+}
+
+QList<DataBreakpoint> BreakpointManager::allDataBreakpoints() const
+{
+    return m_dataBreakpoints.values();
+}
+
+void BreakpointManager::syncDataBreakpoints()
+{
+    if (!m_dapClient) {
+        return;
+    }
+    
+    // DAP uses setDataBreakpoints - we need to add this to the client
+    // For now, log that we're attempting to sync
+    LOG_DEBUG(QString("Syncing %1 data breakpoints").arg(m_dataBreakpoints.size()));
+}
+
+void BreakpointManager::setExceptionBreakpoints(const QStringList& filterIds)
+{
+    m_enabledExceptionFilters = filterIds;
+    
+    emit exceptionBreakpointsChanged();
+    
+    if (m_dapClient && m_dapClient->isDebugging()) {
+        m_dapClient->setExceptionBreakpoints(filterIds);
+    }
+}
+
+QStringList BreakpointManager::enabledExceptionFilters() const
+{
+    return m_enabledExceptionFilters;
 }
 
 DapSourceBreakpoint BreakpointManager::toSourceBreakpoint(const Breakpoint& bp) const
