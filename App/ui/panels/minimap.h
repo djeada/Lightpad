@@ -93,6 +93,7 @@ private:
     void scrollToY(int y);
     int lineNumberFromY(int y) const;
     void renderDocument();
+    int scrollOffsetInPixels() const;  // Helper to compute scroll offset in pixels
 
     QPlainTextEdit* m_sourceEditor;
     qreal m_scale;

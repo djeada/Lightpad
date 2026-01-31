@@ -128,7 +128,7 @@ void Minimap::paintEvent(QPaintEvent* event)
 
     // Draw the cached document image
     if (!m_documentImage.isNull()) {
-        int sourceY = m_scrollOffset * m_lineHeight;
+        int sourceY = scrollOffsetInPixels();
         QRect sourceRect(0, sourceY, m_documentImage.width(), height());
         QRect destRect(0, 0, width(), height());
         painter.drawImage(destRect, m_documentImage, sourceRect);
@@ -232,13 +232,13 @@ void Minimap::updateViewportRect()
     int viewportTop = static_cast<int>(firstVisibleLine * lineHeightMinimap);
     int viewportHeight = static_cast<int>(visibleLineCount * lineHeightMinimap);
     
-    // Adjust scroll offset if needed
+    // Adjust scroll offset if needed to keep viewport centered
     if (totalMinimapHeight > height()) {
-        // Need to scroll the minimap
-        int maxOffset = totalMinimapHeight - height();
+        int maxScrollOffset = static_cast<int>((totalMinimapHeight - height()) / m_lineHeight);
         int desiredCenter = viewportTop + viewportHeight / 2;
-        m_scrollOffset = qBound(0, desiredCenter - height() / 2, maxOffset);
-        viewportTop -= m_scrollOffset;
+        int desiredOffset = static_cast<int>((desiredCenter - height() / 2) / m_lineHeight);
+        m_scrollOffset = qBound(0, desiredOffset, maxScrollOffset);
+        viewportTop -= scrollOffsetInPixels();
     } else {
         m_scrollOffset = 0;
     }
@@ -267,11 +267,16 @@ int Minimap::lineNumberFromY(int y) const
         return -1;
     }
 
-    int adjustedY = y + static_cast<int>(m_scrollOffset * m_lineHeight);
+    int adjustedY = y + scrollOffsetInPixels();
     int lineNumber = static_cast<int>(adjustedY / m_lineHeight);
     int totalLines = m_sourceEditor->document()->blockCount();
     
     return qBound(0, lineNumber, totalLines - 1);
+}
+
+int Minimap::scrollOffsetInPixels() const
+{
+    return static_cast<int>(m_scrollOffset * m_lineHeight);
 }
 
 void Minimap::renderDocument()
