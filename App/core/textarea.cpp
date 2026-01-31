@@ -6,10 +6,12 @@
 #include <QStackedWidget>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <QTextBlockFormat>
 #include <QCompleter>
 #include <QAbstractItemView>
 #include <QScrollBar>
 #include <QMouseEvent>
+#include <QtGlobal>
 #include <functional>
 #include <algorithm>
 
@@ -329,10 +331,6 @@ void TextArea::setupTextArea()
         }
     });
 
-    if (document() && !dynamic_cast<ExtraLineSpacingDocumentLayout*>(document()->documentLayout())) {
-        document()->setDocumentLayout(new ExtraLineSpacingDocumentLayout(document()));
-    }
-
     setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
     updateCursorPositionChangedCallbacks();
     clearLineHighlight();
@@ -347,15 +345,16 @@ void TextArea::applyLineSpacing(int percent)
     if (!doc)
         return;
 
-    auto* layout = dynamic_cast<ExtraLineSpacingDocumentLayout*>(doc->documentLayout());
-    if (!layout) {
-        layout = new ExtraLineSpacingDocumentLayout(doc);
-        doc->setDocumentLayout(layout);
-    }
-
-    const int baseHeight = QFontMetrics(mainFont).lineSpacing();
-    const int extraHeight = qMax(0, (baseHeight * (percent - 100)) / 100);
-    layout->setExtraLineSpacing(extraHeight);
+    QTextCursor cursor(doc);
+    const bool undoEnabled = doc->isUndoRedoEnabled();
+    doc->setUndoRedoEnabled(false);
+    cursor.beginEditBlock();
+    cursor.select(QTextCursor::Document);
+    QTextBlockFormat format = cursor.blockFormat();
+    format.setLineHeight(percent, QTextBlockFormat::ProportionalHeight);
+    cursor.setBlockFormat(format);
+    cursor.endEditBlock();
+    doc->setUndoRedoEnabled(undoEnabled);
 }
 
 int TextArea::lineNumberAreaWidth()
@@ -411,6 +410,9 @@ void TextArea::setMainWindow(MainWindow* window)
     if (m_completionWidget && mainWindow) {
         m_completionWidget->applyTheme(mainWindow->getTheme());
     }
+    if (mainWindow) {
+        applySelectionPalette(mainWindow->getTheme());
+    }
 }
 
 int TextArea::fontSize()
@@ -464,10 +466,24 @@ void TextArea::loadSettings(const TextAreaSettings settings)
     if (m_completionWidget) {
         m_completionWidget->applyTheme(settings.theme);
     }
+    applySelectionPalette(settings.theme);
     setAutoIdent(settings.autoIndent);
     showLineNumbers(settings.showLineNumberArea);
     highlihtCurrentLine(settings.lineHighlighted);
     highlihtMatchingBracket(settings.matchingBracketsHighlighted);
+}
+
+void TextArea::applySelectionPalette(const Theme& theme)
+{
+    QPalette pal = palette();
+    pal.setColor(QPalette::Base, theme.backgroundColor);
+    pal.setColor(QPalette::Text, theme.foregroundColor);
+    pal.setColor(QPalette::Highlight, theme.accentSoftColor);
+    pal.setColor(QPalette::HighlightedText, theme.foregroundColor);
+    setPalette(pal);
+    if (viewport()) {
+        viewport()->setPalette(pal);
+    }
 }
 
 QString TextArea::getSearchWord()

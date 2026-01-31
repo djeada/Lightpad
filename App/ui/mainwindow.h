@@ -166,6 +166,7 @@ private:
 
     template <typename... Args>
     void updateAllTextAreas(void (TextArea::*f)(Args... args), Args... args);
+    void updateAllTextAreas(void (TextArea::*f)(const Theme&), const Theme& theme);
 
     QMap<QString, QString> m_highlightOverrides;
     QSet<QString> m_loadedHighlightOverrideDirs;

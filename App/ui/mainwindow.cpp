@@ -364,6 +364,13 @@ void MainWindow::updateAllTextAreas(void (TextArea::*f)(Args... args), Args... a
         (textArea->*f)(args...);
 }
 
+void MainWindow::updateAllTextAreas(void (TextArea::*f)(const Theme&), const Theme& theme)
+{
+    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
+    for (auto& textArea : textAreas)
+        (textArea->*f)(theme);
+}
+
 void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
 {
 
@@ -1676,13 +1683,11 @@ void MainWindow::setTheme(Theme theme)
         "QPlainTextEdit { "
             "color: " + fgColor + "; "
             "background-color: " + bgColor + "; "
-            "selection-background-color: " + accentSoftColor + "; "
             "border: none; "
         "}"
         "QTextEdit { "
             "color: " + fgColor + "; "
             "background-color: " + bgColor + "; "
-            "selection-background-color: " + accentSoftColor + "; "
             "border: none; "
         "}"
 
@@ -1893,6 +1898,7 @@ void MainWindow::setTheme(Theme theme)
     qApp->setStyleSheet(styleSheet);
 
     ui->tabWidget->setTheme(bgColor, fgColor, surfaceColor, hoverColor, accentColor, borderColor);
+    updateAllTextAreas(&TextArea::applySelectionPalette, settings.theme);
 }
 
 void MainWindow::setProjectRootPath(const QString& path)
