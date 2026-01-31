@@ -496,6 +496,29 @@ target_compile_definitions(test_minimap PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME MinimapTests COMMAND test_minimap)
 
+# FindReplacePanel test executable
+add_executable(test_findreplacepanel
+    unit/test_findreplacepanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_findreplacepanel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/ui/panels
+)
+
+target_link_libraries(test_findreplacepanel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_findreplacepanel PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME FindReplacePanelTests COMMAND test_findreplacepanel)
+
 # Set environment variable for headless testing
 set_tests_properties(
     LoggerTests 
@@ -519,6 +542,7 @@ set_tests_properties(
     GoToLineDialogTests
     LspClientTests
     MinimapTests
+    FindReplacePanelTests
     PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
@@ -536,6 +560,6 @@ add_custom_target(run_tests
             test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
             test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
             test_syntaxpluginregistry test_completionproviderregistry test_dap
-            test_gitintegration test_gotolinedialog test_lspclient test_minimap
+            test_gitintegration test_gotolinedialog test_lspclient test_minimap test_findreplacepanel
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
