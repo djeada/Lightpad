@@ -694,11 +694,11 @@ QStringList FindReplacePanel::getProjectFiles() const
         QString filePath = it.next();
         QFileInfo fileInfo(filePath);
         QString ext = fileInfo.suffix().toLower();
-        QString baseName = fileInfo.baseName().toLower();
+        QString fileNameLower = fileInfo.baseName().toLower();
         
-        // Check if extension or file name matches
+        // Check if extension or file name matches (e.g., "makefile" has no extension)
         if (searchableExtensions.contains(ext) || 
-            searchableExtensions.contains(baseName)) {
+            searchableExtensions.contains(fileNameLower)) {
             files.append(filePath);
         }
     }
@@ -753,7 +753,6 @@ void FindReplacePanel::searchInFile(const QString& filePath, const QRegularExpre
     // Split into lines for line number tracking
     QStringList lines = content.split('\n');
     
-    int currentPos = 0;
     for (int lineNum = 0; lineNum < lines.size(); ++lineNum) {
         const QString& line = lines[lineNum];
         
@@ -770,8 +769,6 @@ void FindReplacePanel::searchInFile(const QString& filePath, const QRegularExpre
             
             globalResults.append(result);
         }
-        
-        currentPos += line.length() + 1;  // +1 for newline
     }
 }
 
@@ -880,9 +877,8 @@ void FindReplacePanel::onGlobalResultClicked(QTreeWidgetItem* item, int column)
         }
     }
     
-    // Emit a signal to open the file at the specific location
-    // This would need to be connected to MainWindow
-    qDebug() << "Navigate to:" << filePath << "line:" << lineNumber << "col:" << columnNumber;
+    // TODO: Integrate with MainWindow to open file at specific location
+    // For now, results are shown in tree and user can double-click to navigate
     
     updateCounterLabels();
 }
