@@ -45,7 +45,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Color-coded by severity
 - [x] Problem count in status bar
 - [ ] Problem count per file in tree
-- [ ] Auto-refresh on save
+- [x] Auto-refresh on save
 
 ---
 
@@ -124,10 +124,10 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [ ] Persistent fold state
 
 ### 7. Minimap
-- [ ] Scrollable minimap sidebar
-- [ ] Syntax highlighting in minimap
-- [ ] Current viewport indicator
-- [ ] Click to scroll
+- [x] Scrollable minimap sidebar
+- [x] Syntax highlighting in minimap
+- [x] Current viewport indicator
+- [x] Click to scroll
 - [ ] Search results highlighting in minimap
 - [ ] Git diff highlighting in minimap
 - [ ] Slider for minimap zoom

@@ -491,6 +491,11 @@ void MainWindow::save(const QString& filePath)
         getCurrentTextArea()->document()->setModified(false);
         getCurrentTextArea()->removeIconUnsaved();
         setFilePathAsTabText(filePath);
+        
+        // Notify problems panel for auto-refresh on save
+        if (problemsPanel) {
+            problemsPanel->onFileSaved(filePath);
+        }
     }
 }
 
@@ -1097,6 +1102,21 @@ void MainWindow::on_actionEdit_Format_Configurations_triggered()
 void MainWindow::on_actionGo_to_Line_triggered()
 {
     showGoToLineDialog();
+}
+
+void MainWindow::on_actionToggle_Minimap_triggered()
+{
+    LightpadPage* page = qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget());
+    if (page) {
+        bool visible = page->isMinimapVisible();
+        // Toggle minimap on all tabs for consistency
+        for (int i = 0; i < ui->tabWidget->count(); i++) {
+            LightpadPage* p = qobject_cast<LightpadPage*>(ui->tabWidget->widget(i));
+            if (p) {
+                p->setMinimapVisible(!visible);
+            }
+        }
+    }
 }
 
 void MainWindow::setTheme(Theme theme)

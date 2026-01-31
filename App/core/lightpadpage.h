@@ -10,6 +10,7 @@
 #include <QWidget>
 
 class LightpadPage;
+class Minimap;
 
 class LightpadTreeView : public QTreeView {
 
@@ -45,7 +46,10 @@ public:
     ~LightpadPage(){};
     QTreeView* getTreeView();
     TextArea* getTextArea();
+    Minimap* getMinimap();
     void setTreeViewVisible(bool flag);
+    void setMinimapVisible(bool flag);
+    bool isMinimapVisible() const;
     void setModelRootIndex(QString path);
     void setMainWindow(MainWindow* window);
     void setFilePath(QString path);
@@ -70,6 +74,7 @@ private:
     MainWindow* mainWindow;
     QTreeView* treeView;
     TextArea* textArea;
+    Minimap* minimap;
     QFileSystemModel* model;
     QString filePath;
 };

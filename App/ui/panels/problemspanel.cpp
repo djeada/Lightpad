@@ -7,11 +7,13 @@ ProblemsPanel::ProblemsPanel(QWidget* parent)
     , m_tree(nullptr)
     , m_statusLabel(nullptr)
     , m_filterCombo(nullptr)
+    , m_autoRefreshCheckBox(nullptr)
     , m_errorCount(0)
     , m_warningCount(0)
     , m_infoCount(0)
     , m_hintCount(0)
     , m_currentFilter(0)
+    , m_autoRefreshEnabled(true)
 {
     setupUI();
 }
@@ -50,6 +52,19 @@ void ProblemsPanel::setupUI()
     headerLayout->addWidget(m_filterCombo);
 
     headerLayout->addStretch();
+
+    // Auto-refresh checkbox
+    m_autoRefreshCheckBox = new QCheckBox(tr("Auto-refresh on save"), header);
+    m_autoRefreshCheckBox->setChecked(m_autoRefreshEnabled);
+    m_autoRefreshCheckBox->setStyleSheet(
+        "QCheckBox { color: #9aa4b2; }"
+        "QCheckBox::indicator { width: 14px; height: 14px; }"
+        "QCheckBox::indicator:unchecked { border: 1px solid #2a3241; background: #1f2632; }"
+        "QCheckBox::indicator:checked { border: 1px solid #3794ff; background: #3794ff; }"
+    );
+    connect(m_autoRefreshCheckBox, &QCheckBox::toggled,
+            this, &ProblemsPanel::onAutoRefreshToggled);
+    headerLayout->addWidget(m_autoRefreshCheckBox);
 
     m_statusLabel = new QLabel(header);
     m_statusLabel->setStyleSheet("color: #9aa4b2;");
@@ -304,4 +319,29 @@ QString ProblemsPanel::severityText(LspDiagnosticSeverity severity) const
         return tr("Hint");
     }
     return "";
+}
+
+bool ProblemsPanel::isAutoRefreshEnabled() const
+{
+    return m_autoRefreshEnabled;
+}
+
+void ProblemsPanel::setAutoRefreshEnabled(bool enabled)
+{
+    m_autoRefreshEnabled = enabled;
+    if (m_autoRefreshCheckBox) {
+        m_autoRefreshCheckBox->setChecked(enabled);
+    }
+}
+
+void ProblemsPanel::onFileSaved(const QString& filePath)
+{
+    if (m_autoRefreshEnabled) {
+        emit refreshRequested(filePath);
+    }
+}
+
+void ProblemsPanel::onAutoRefreshToggled(bool checked)
+{
+    m_autoRefreshEnabled = checked;
 }
