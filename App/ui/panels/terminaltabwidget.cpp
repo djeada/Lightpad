@@ -3,6 +3,7 @@
 #include "shellprofile.h"
 #include "../../settings/theme.h"
 
+#include <QDir>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QTabWidget>
@@ -20,13 +21,15 @@ TerminalTabWidget::TerminalTabWidget(QWidget* parent)
     , m_secondaryTabWidget(nullptr)
     , m_newTerminalButton(nullptr)
     , m_clearButton(nullptr)
-    , m_closeTerminalButton(nullptr)
     , m_splitButton(nullptr)
     , m_closeButton(nullptr)
     , m_shellProfileMenu(nullptr)
     , m_terminalCounter(0)
     , m_isSplit(false)
 {
+    // Set working directory to current project directory
+    m_currentWorkingDirectory = QDir::currentPath();
+    
     setupUI();
     
     // Add initial terminal
@@ -99,13 +102,6 @@ void TerminalTabWidget::setupToolbar()
     connect(m_splitButton, &QToolButton::clicked,
             this, &TerminalTabWidget::onSplitTerminalClicked);
 
-    // Close current terminal button
-    m_closeTerminalButton = new QToolButton(toolbar);
-    m_closeTerminalButton->setToolTip(tr("Close Terminal"));
-    m_closeTerminalButton->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogCloseButton));
-    connect(m_closeTerminalButton, &QToolButton::clicked,
-            this, &TerminalTabWidget::onCloseTerminalClicked);
-
     // Close terminal panel button
     m_closeButton = new QToolButton(toolbar);
     m_closeButton->setToolTip(tr("Close Terminal Panel"));
@@ -116,7 +112,6 @@ void TerminalTabWidget::setupToolbar()
     toolbarLayout->addWidget(m_newTerminalButton);
     toolbarLayout->addWidget(m_clearButton);
     toolbarLayout->addWidget(m_splitButton);
-    toolbarLayout->addWidget(m_closeTerminalButton);
     toolbarLayout->addStretch();
     toolbarLayout->addWidget(m_closeButton);
 
@@ -431,15 +426,6 @@ QStringList TerminalTabWidget::availableShellProfiles() const
 void TerminalTabWidget::onNewTerminalClicked()
 {
     addNewTerminal();
-}
-
-void TerminalTabWidget::onCloseTerminalClicked()
-{
-    // Close the current terminal
-    int currentIndex = m_tabWidget->currentIndex();
-    if (currentIndex >= 0) {
-        closeTerminal(currentIndex);
-    }
 }
 
 void TerminalTabWidget::onClearTerminalClicked()

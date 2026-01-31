@@ -16,6 +16,10 @@
 #include <QTextCursor>
 #include <QUrl>
 
+#ifndef Q_OS_WIN
+#include <unistd.h>
+#endif
+
 Terminal::Terminal(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::Terminal)
@@ -35,6 +39,7 @@ Terminal::Terminal(QWidget* parent)
     , m_linkDetectionEnabled(true)
     , m_urlRegex(R"((https?://|ftp://|file://)[^\s<>\"\'\]\)]+)")
     , m_filePathRegex(R"((?:^|[\s:])(/[^\s:]+|[A-Za-z]:\\[^\s:]+))")
+    , m_inputStartPosition(0)
 {
     ui->setupUi(this);
     ui->closeButton->setIcon(qApp->style()->standardIcon(QStyle::SP_TitleBarCloseButton));
@@ -148,8 +153,16 @@ bool Terminal::startShell(const QString& workingDirectory)
 
     // Set environment for shell compatibility
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    env.insert("TERM", "xterm");  // More compatible terminal type
+    env.insert("TERM", "dumb");  // Use dumb terminal to avoid control sequences
     m_process->setProcessEnvironment(env);
+
+#ifndef Q_OS_WIN
+    // Create new session to detach from controlling terminal
+    // This prevents SIGTTIN/SIGTTOU when the parent runs in background
+    m_process->setChildProcessModifier([]() {
+        setsid();
+    });
+#endif
 
     // Get shell command based on platform
     QString shell = getShellCommand();
@@ -248,6 +261,7 @@ void Terminal::setWorkingDirectory(const QString& directory)
 void Terminal::clear()
 {
     ui->textEdit->clear();
+    m_inputStartPosition = 0;
     if (isRunning() && !(m_runProcess && m_runProcess->state() != QProcess::NotRunning)) {
         appendPrompt();
     }
@@ -582,20 +596,28 @@ bool Terminal::eventFilter(QObject* obj, QEvent* event)
         case Qt::Key_Return:
         case Qt::Key_Enter:
             {
-                // Get the last line as command input
+                // Get only user input (text after m_inputStartPosition)
                 QTextCursor cursor = ui->textEdit->textCursor();
                 cursor.movePosition(QTextCursor::End);
-                cursor.movePosition(QTextCursor::StartOfBlock);
-                cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
-                QString line = cursor.selectedText();
+                int endPos = cursor.position();
+                
+                // Extract text from input start position to end
+                cursor.setPosition(m_inputStartPosition);
+                cursor.setPosition(endPos, QTextCursor::KeepAnchor);
+                QString userInput = cursor.selectedText();
 
                 // Move cursor to end and add newline
                 ui->textEdit->moveCursor(QTextCursor::End);
                 ui->textEdit->insertPlainText("\n");
 
-                // Execute the command
-                if (!line.trimmed().isEmpty()) {
-                    executeCommand(line);
+                // Execute the command (send user input only, not the prompt)
+                if (!userInput.trimmed().isEmpty()) {
+                    executeCommand(userInput);
+                } else {
+                    // Just send newline for empty input
+                    if (m_process && m_process->state() == QProcess::Running) {
+                        m_process->write("\n");
+                    }
                 }
                 return true;
             }
@@ -690,6 +712,10 @@ void Terminal::appendOutput(const QString& text, bool isError)
     
     // Enforce scrollback limit
     enforceScrollbackLimit();
+    
+    // Update input start position to current end of document
+    // User input will begin after this position
+    m_inputStartPosition = ui->textEdit->textCursor().position();
 }
 
 void Terminal::appendPrompt()
@@ -996,7 +1022,11 @@ void Terminal::enforceScrollbackLimit()
         for (int i = 0; i < linesToRemove; ++i) {
             cursor.movePosition(QTextCursor::NextBlock, QTextCursor::KeepAnchor);
         }
+        int removedLength = cursor.selectedText().length();
         cursor.removeSelectedText();
+        
+        // Adjust input start position since we removed text from the beginning
+        m_inputStartPosition = qMax(0, m_inputStartPosition - removedLength);
     }
 }
 

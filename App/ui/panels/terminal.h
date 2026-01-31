@@ -262,6 +262,9 @@ private:
     bool m_linkDetectionEnabled;
     QRegularExpression m_urlRegex;
     QRegularExpression m_filePathRegex;
+    
+    // Input tracking - position where user input begins (after shell output/prompt)
+    int m_inputStartPosition;
 };
 
 #endif // TERMINAL_H

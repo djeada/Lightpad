@@ -162,7 +162,6 @@ signals:
 
 private slots:
     void onNewTerminalClicked();
-    void onCloseTerminalClicked();
     void onClearTerminalClicked();
     void onCloseButtonClicked();
     void onTabCloseRequested(int index);
@@ -183,7 +182,6 @@ private:
     QTabWidget* m_secondaryTabWidget;
     QToolButton* m_newTerminalButton;
     QToolButton* m_clearButton;
-    QToolButton* m_closeTerminalButton;
     QToolButton* m_splitButton;
     QToolButton* m_closeButton;
     QMenu* m_shellProfileMenu;
