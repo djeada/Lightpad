@@ -459,7 +459,12 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     auto page = ui->tabWidget->getCurrentPage();
 
     if (page) {
-        page->setTreeViewVisible(true);
+        // Use project root path if set, otherwise show treeview based on file
+        if (!m_projectRootPath.isEmpty()) {
+            page->setProjectRootPath(m_projectRootPath);
+            page->setModelRootIndex(m_projectRootPath);
+        }
+        page->setTreeViewVisible(!m_projectRootPath.isEmpty());
         page->setFilePath(filePath);
     }
 
@@ -627,17 +632,8 @@ void MainWindow::on_actionOpen_Project_triggered()
         return;
     }
 
-    ui->tabWidget->addNewTab();
-    ui->tabWidget->setCurrentIndex(ui->tabWidget->count() - 2);
-
-    auto page = ui->tabWidget->getCurrentPage();
-    if (!page) {
-        QMessageBox::warning(this, tr("Open Project"), tr("Failed to open project."));
-        return;
-    }
-
-    page->setTreeViewVisible(true);
-    page->setModelRootIndex(folderPath);
+    // Store the project root path for persistence across all tabs
+    setProjectRootPath(folderPath);
 
     QDir::setCurrent(folderPath);
     setMainWindowTitle(QFileInfo(folderPath).fileName());
@@ -1850,4 +1846,26 @@ void MainWindow::setTheme(Theme theme)
     qApp->setStyleSheet(styleSheet);
 
     ui->tabWidget->setTheme(bgColor, fgColor, surfaceColor, hoverColor, accentColor, borderColor);
+}
+
+void MainWindow::setProjectRootPath(const QString& path)
+{
+    m_projectRootPath = path;
+    
+    // Update all existing tabs with the new project root
+    for (int i = 0; i < ui->tabWidget->count(); i++) {
+        auto page = ui->tabWidget->getPage(i);
+        if (page) {
+            page->setProjectRootPath(path);
+            page->setTreeViewVisible(!path.isEmpty());
+            if (!path.isEmpty()) {
+                page->setModelRootIndex(path);
+            }
+        }
+    }
+}
+
+QString MainWindow::getProjectRootPath() const
+{
+    return m_projectRootPath;
 }
