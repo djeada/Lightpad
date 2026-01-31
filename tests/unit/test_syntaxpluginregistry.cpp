@@ -1,8 +1,18 @@
 #include <QtTest/QtTest>
 #include "syntax/syntaxpluginregistry.h"
 #include "syntax/cppsyntaxplugin.h"
+#include "syntax/csssyntaxplugin.h"
+#include "syntax/gosyntaxplugin.h"
+#include "syntax/htmlsyntaxplugin.h"
 #include "syntax/javascriptsyntaxplugin.h"
+#include "syntax/javasyntaxplugin.h"
+#include "syntax/jsonsyntaxplugin.h"
+#include "syntax/markdownsyntaxplugin.h"
 #include "syntax/pythonsyntaxplugin.h"
+#include "syntax/rustsyntaxplugin.h"
+#include "syntax/shellsyntaxplugin.h"
+#include "syntax/typescriptsyntaxplugin.h"
+#include "syntax/yamlsyntaxplugin.h"
 #include <memory>
 
 class TestSyntaxPluginRegistry : public QObject {
@@ -20,6 +30,7 @@ private slots:
     void testIsLanguageSupported();
     void testIsExtensionSupported();
     void testPluginReplacement();
+    void testAllBuiltInPlugins();
 };
 
 void TestSyntaxPluginRegistry::init()
@@ -60,6 +71,7 @@ void TestSyntaxPluginRegistry::testGetPluginByLanguageId()
     // Register plugins
     registry.registerPlugin(std::make_unique<CppSyntaxPlugin>());
     registry.registerPlugin(std::make_unique<JavaScriptSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<RustSyntaxPlugin>());
     
     // Get by language ID
     ISyntaxPlugin* cppPlugin = registry.getPluginByLanguageId("cpp");
@@ -71,9 +83,14 @@ void TestSyntaxPluginRegistry::testGetPluginByLanguageId()
     QVERIFY(jsPlugin != nullptr);
     QCOMPARE(jsPlugin->languageId(), QString("js"));
     
-    // Non-existent language
     ISyntaxPlugin* rustPlugin = registry.getPluginByLanguageId("rust");
-    QVERIFY(rustPlugin == nullptr);
+    QVERIFY(rustPlugin != nullptr);
+    QCOMPARE(rustPlugin->languageId(), QString("rust"));
+    QCOMPARE(rustPlugin->languageName(), QString("Rust"));
+    
+    // Non-existent language
+    ISyntaxPlugin* luaPlugin = registry.getPluginByLanguageId("lua");
+    QVERIFY(luaPlugin == nullptr);
 }
 
 void TestSyntaxPluginRegistry::testGetPluginByExtension()
@@ -83,6 +100,7 @@ void TestSyntaxPluginRegistry::testGetPluginByExtension()
     // Register plugins
     registry.registerPlugin(std::make_unique<CppSyntaxPlugin>());
     registry.registerPlugin(std::make_unique<PythonSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<RustSyntaxPlugin>());
     
     // Get by extension
     ISyntaxPlugin* cppPlugin = registry.getPluginByExtension("cpp");
@@ -102,9 +120,14 @@ void TestSyntaxPluginRegistry::testGetPluginByExtension()
     QVERIFY(pyPlugin2 != nullptr);
     QCOMPARE(pyPlugin2->languageId(), QString("py"));
     
-    // Non-existent extension
+    // Test rust extension
     ISyntaxPlugin* rsPlugin = registry.getPluginByExtension("rs");
-    QVERIFY(rsPlugin == nullptr);
+    QVERIFY(rsPlugin != nullptr);
+    QCOMPARE(rsPlugin->languageId(), QString("rust"));
+    
+    // Non-existent extension
+    ISyntaxPlugin* luaPlugin = registry.getPluginByExtension("lua");
+    QVERIFY(luaPlugin == nullptr);
 }
 
 void TestSyntaxPluginRegistry::testGetAllLanguageIds()
@@ -154,7 +177,7 @@ void TestSyntaxPluginRegistry::testIsLanguageSupported()
     
     // Now supported
     QVERIFY(registry.isLanguageSupported("cpp"));
-    QVERIFY(!registry.isLanguageSupported("rust"));
+    QVERIFY(!registry.isLanguageSupported("lua"));
 }
 
 void TestSyntaxPluginRegistry::testIsExtensionSupported()
@@ -189,6 +212,69 @@ void TestSyntaxPluginRegistry::testPluginReplacement()
     
     // Should still have only one cpp plugin
     QCOMPARE(registry.getAllLanguageIds().size(), 1);
+}
+
+void TestSyntaxPluginRegistry::testAllBuiltInPlugins()
+{
+    auto& registry = SyntaxPluginRegistry::instance();
+    
+    // Register all built-in plugins
+    registry.registerPlugin(std::make_unique<CppSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<CssSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<GoSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<HtmlSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<JavaScriptSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<JavaSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<JsonSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<MarkdownSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<PythonSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<RustSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<ShellSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<TypeScriptSyntaxPlugin>());
+    registry.registerPlugin(std::make_unique<YamlSyntaxPlugin>());
+    
+    // Verify all 13 languages are registered
+    QCOMPARE(registry.getAllLanguageIds().size(), 13);
+    
+    // Test each plugin has valid language ID and name
+    QVERIFY(registry.isLanguageSupported("cpp"));
+    QVERIFY(registry.isLanguageSupported("css"));
+    QVERIFY(registry.isLanguageSupported("go"));
+    QVERIFY(registry.isLanguageSupported("html"));
+    QVERIFY(registry.isLanguageSupported("js"));
+    QVERIFY(registry.isLanguageSupported("java"));
+    QVERIFY(registry.isLanguageSupported("json"));
+    QVERIFY(registry.isLanguageSupported("md"));
+    QVERIFY(registry.isLanguageSupported("py"));
+    QVERIFY(registry.isLanguageSupported("rust"));
+    QVERIFY(registry.isLanguageSupported("sh"));
+    QVERIFY(registry.isLanguageSupported("ts"));
+    QVERIFY(registry.isLanguageSupported("yaml"));
+    
+    // Test file extension mappings
+    QVERIFY(registry.isExtensionSupported("cpp"));
+    QVERIFY(registry.isExtensionSupported("css"));
+    QVERIFY(registry.isExtensionSupported("go"));
+    QVERIFY(registry.isExtensionSupported("html"));
+    QVERIFY(registry.isExtensionSupported("js"));
+    QVERIFY(registry.isExtensionSupported("java"));
+    QVERIFY(registry.isExtensionSupported("json"));
+    QVERIFY(registry.isExtensionSupported("md"));
+    QVERIFY(registry.isExtensionSupported("py"));
+    QVERIFY(registry.isExtensionSupported("rs"));
+    QVERIFY(registry.isExtensionSupported("sh"));
+    QVERIFY(registry.isExtensionSupported("ts"));
+    QVERIFY(registry.isExtensionSupported("yaml"));
+    QVERIFY(registry.isExtensionSupported("yml"));
+    
+    // Verify each plugin returns valid syntax rules and keywords
+    for (const QString& langId : registry.getAllLanguageIds()) {
+        ISyntaxPlugin* plugin = registry.getPluginByLanguageId(langId);
+        QVERIFY(plugin != nullptr);
+        QVERIFY(!plugin->languageName().isEmpty());
+        QVERIFY(!plugin->fileExtensions().isEmpty());
+        QVERIFY(!plugin->syntaxRules().isEmpty());
+    }
 }
 
 QTEST_MAIN(TestSyntaxPluginRegistry)

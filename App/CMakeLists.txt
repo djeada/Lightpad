@@ -74,8 +74,18 @@ set(project_headers
     syntax/syntaxpluginregistry.h
     syntax/basesyntaxplugin.h
     syntax/cppsyntaxplugin.h
+    syntax/csssyntaxplugin.h
+    syntax/gosyntaxplugin.h
+    syntax/htmlsyntaxplugin.h
     syntax/javascriptsyntaxplugin.h
+    syntax/javasyntaxplugin.h
+    syntax/jsonsyntaxplugin.h
+    syntax/markdownsyntaxplugin.h
     syntax/pythonsyntaxplugin.h
+    syntax/rustsyntaxplugin.h
+    syntax/shellsyntaxplugin.h
+    syntax/typescriptsyntaxplugin.h
+    syntax/yamlsyntaxplugin.h
     core/lightpadtabwidget.h
     ui/mainwindow.h
     ui/popup.h
@@ -142,8 +152,18 @@ set(project_sources
     syntax/pluginbasedsyntaxhighlighter.cpp
     syntax/syntaxpluginregistry.cpp
     syntax/cppsyntaxplugin.cpp
+    syntax/csssyntaxplugin.cpp
+    syntax/gosyntaxplugin.cpp
+    syntax/htmlsyntaxplugin.cpp
     syntax/javascriptsyntaxplugin.cpp
+    syntax/javasyntaxplugin.cpp
+    syntax/jsonsyntaxplugin.cpp
+    syntax/markdownsyntaxplugin.cpp
     syntax/pythonsyntaxplugin.cpp
+    syntax/rustsyntaxplugin.cpp
+    syntax/shellsyntaxplugin.cpp
+    syntax/typescriptsyntaxplugin.cpp
+    syntax/yamlsyntaxplugin.cpp
     core/lightpadtabwidget.cpp
     ui/mainwindow.cpp
     ui/popup.cpp
