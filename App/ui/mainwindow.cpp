@@ -470,7 +470,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     if (ImageViewer::isSupportedImageFormat(extension)) {
         ImageViewer* imageViewer = new ImageViewer(this);
         if (imageViewer->loadImage(filePath)) {
-            ui->tabWidget->addViewerTab(imageViewer, filePath);
+            ui->tabWidget->addViewerTab(imageViewer, filePath, m_projectRootPath);
         } else {
             delete imageViewer;
         }
@@ -481,7 +481,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     if (PdfViewer::isSupportedPdfFormat(extension)) {
         PdfViewer* pdfViewer = new PdfViewer(this);
         if (pdfViewer->loadPdf(filePath)) {
-            ui->tabWidget->addViewerTab(pdfViewer, filePath);
+            ui->tabWidget->addViewerTab(pdfViewer, filePath, m_projectRootPath);
         } else {
             delete pdfViewer;
         }

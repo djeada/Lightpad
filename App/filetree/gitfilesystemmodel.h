@@ -23,6 +23,7 @@ class GitFileSystemModel : public QFileSystemModel {
 public:
     explicit GitFileSystemModel(QObject* parent = nullptr);
     ~GitFileSystemModel();
+    void setRootHeaderLabel(const QString& label);
 
     /**
      * @brief Set the git integration instance to use for status
@@ -54,6 +55,11 @@ public:
      */
     void refreshGitStatus();
 
+    /**
+     * @brief Override header data to display custom root label
+     */
+    QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
+
 private slots:
     void onGitStatusChanged();
 
@@ -62,6 +68,7 @@ private:
     bool m_gitStatusEnabled;
     QTimer* m_refreshTimer;
     mutable QMap<QString, GitFileInfo> m_statusCache;
+    QString m_rootHeaderLabel;
 
     /**
      * @brief Get the status icon for a file

@@ -59,6 +59,16 @@ GitFileSystemModel::~GitFileSystemModel()
 {
 }
 
+void GitFileSystemModel::setRootHeaderLabel(const QString& label)
+{
+    if (m_rootHeaderLabel == label) {
+        return;
+    }
+
+    m_rootHeaderLabel = label;
+    emit headerDataChanged(Qt::Horizontal, 0, 0);
+}
+
 void GitFileSystemModel::setGitIntegration(GitIntegration* git)
 {
     if (m_gitIntegration) {
@@ -143,6 +153,16 @@ QVariant GitFileSystemModel::data(const QModelIndex& index, int role) const
     }
 
     return QFileSystemModel::data(index, role);
+}
+
+QVariant GitFileSystemModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if (orientation == Qt::Horizontal && section == 0 && role == Qt::DisplayRole &&
+        !m_rootHeaderLabel.isEmpty()) {
+        return m_rootHeaderLabel;
+    }
+
+    return QFileSystemModel::headerData(section, orientation, role);
 }
 
 void GitFileSystemModel::refreshGitStatus()

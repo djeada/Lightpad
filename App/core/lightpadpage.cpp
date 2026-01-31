@@ -11,6 +11,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QHeaderView>
 
 class LineEdit : public QLineEdit {
 
@@ -348,6 +349,21 @@ void LightpadPage::setModelRootIndex(QString path)
     treeView->setRootIndex(model->index(path));
 }
 
+void LightpadPage::setCustomContentWidget(QWidget* widget)
+{
+    if (!widget || !textArea)
+        return;
+
+    auto* layout = qobject_cast<QHBoxLayout*>(this->layout());
+    if (!layout)
+        return;
+
+    layout->replaceWidget(textArea, widget);
+    textArea->setVisible(false);
+    widget->setParent(this);
+    widget->setVisible(true);
+}
+
 void LightpadPage::setMainWindow(MainWindow* window)
 {
 
@@ -398,10 +414,18 @@ void LightpadPage::updateModel()
     
     // Restore the root index if project root is set
     if (!projectRootPath.isEmpty()) {
+        model->setRootHeaderLabel(projectRootPath);
         treeView->setRootIndex(model->index(projectRootPath));
     }
 
-    treeView->setHeaderHidden(true);
+    if (!projectRootPath.isEmpty()) {
+        treeView->header()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        treeView->setHeaderHidden(false);
+        treeView->header()->setStretchLastSection(true);
+    } else {
+        model->setRootHeaderLabel(QString());
+        treeView->setHeaderHidden(true);
+    }
 }
 
 QString LightpadPage::getFilePath()
@@ -460,6 +484,10 @@ QString LightpadPage::getAssignedTemplateId() const
 void LightpadPage::setProjectRootPath(const QString& path)
 {
     projectRootPath = path;
+    if (model) {
+        model->setRootHeaderLabel(projectRootPath);
+        treeView->setHeaderHidden(projectRootPath.isEmpty());
+    }
 }
 
 QString LightpadPage::getProjectRootPath() const

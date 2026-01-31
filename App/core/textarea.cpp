@@ -31,7 +31,7 @@
 
 QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp }, { "js", Lang::js }, { "py", Lang::py } };
 QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };
-constexpr int defaultLineSpacingPercent = 150;
+constexpr int defaultLineSpacingPercent = 160;
 
 class ExtraLineSpacingDocumentLayout : public QPlainTextDocumentLayout {
 public:
@@ -345,15 +345,24 @@ void TextArea::applyLineSpacing(int percent)
     if (!doc)
         return;
 
+    // Set default block format for new blocks
     QTextCursor cursor(doc);
+    QTextBlockFormat defaultFormat;
+    defaultFormat.setLineHeight(percent, QTextBlockFormat::ProportionalHeight);
+    
     const bool undoEnabled = doc->isUndoRedoEnabled();
     doc->setUndoRedoEnabled(false);
+    
+    // Apply to all existing blocks
     cursor.beginEditBlock();
-    cursor.select(QTextCursor::Document);
-    QTextBlockFormat format = cursor.blockFormat();
-    format.setLineHeight(percent, QTextBlockFormat::ProportionalHeight);
-    cursor.setBlockFormat(format);
+    cursor.movePosition(QTextCursor::Start);
+    do {
+        QTextBlockFormat format = cursor.blockFormat();
+        format.setLineHeight(percent, QTextBlockFormat::ProportionalHeight);
+        cursor.setBlockFormat(format);
+    } while (cursor.movePosition(QTextCursor::NextBlock));
     cursor.endEditBlock();
+    
     doc->setUndoRedoEnabled(undoEnabled);
 }
 

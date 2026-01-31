@@ -136,14 +136,19 @@ void LightpadTabWidget::setTheme(const QString& backgroundColor,
             "background-color: " + hoverColor + "; "
         "}"
 
-        // Close button on tabs - subtle and minimal
+        // Close button on tabs - larger hit area
         "QTabBar::close-button { "
-            "subcontrol-position: right; "
-            "padding: 2px; "
-            "border-radius: 4px; "
+            "width: 16px; "
+            "height: 16px; "
+            "margin-left: 6px; "
+            "margin-right: 2px; "
+            "border-radius: 6px; "
         "}"
         "QTabBar::close-button:hover { "
             "background-color: " + hoverColor + "; "
+        "}"
+        "QTabBar::close-button:pressed { "
+            "background-color: " + accentColor + "; "
         "}"
 
         // Add tab button styling - clean and minimal
@@ -236,14 +241,29 @@ QString LightpadTabWidget::getFilePath(int index)
 
 void LightpadTabWidget::addViewerTab(QWidget* viewer, const QString& filePath)
 {
+    addViewerTab(viewer, filePath, QString());
+}
+
+void LightpadTabWidget::addViewerTab(QWidget* viewer, const QString& filePath, const QString& projectRootPath)
+{
     if (!viewer)
         return;
-    
+
+    auto* page = new LightpadPage(this, false);
+    page->setMainWindow(mainWindow);
+    if (!projectRootPath.isEmpty()) {
+        page->setProjectRootPath(projectRootPath);
+        page->setTreeViewVisible(true);
+        page->setModelRootIndex(projectRootPath);
+    }
+    page->setCustomContentWidget(viewer);
+    page->setFilePath(filePath);
+
     QFileInfo fileInfo(filePath);
     QString tabTitle = fileInfo.fileName();
-    
-    m_viewerFilePaths[viewer] = filePath;
-    insertTab(count() - 1, viewer, tabTitle);
+
+    m_viewerFilePaths[page] = filePath;
+    insertTab(count() - 1, page, tabTitle);
     setCurrentIndex(count() - 2);
 }
 

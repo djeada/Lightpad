@@ -19,6 +19,7 @@ public:
     LightpadTabWidget(QWidget* parent = nullptr);
     void addNewTab();
     void addViewerTab(QWidget* viewer, const QString& filePath);
+    void addViewerTab(QWidget* viewer, const QString& filePath, const QString& projectRootPath);
     void setMainWindow(MainWindow* window);
     void setTheme(const QString& backgroundColor,
         const QString& foregroundColor,
