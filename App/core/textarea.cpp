@@ -11,6 +11,7 @@
 #include <QAbstractItemView>
 #include <QScrollBar>
 #include <QMouseEvent>
+#include <QPlainTextDocumentLayout>
 #include <QtGlobal>
 #include <functional>
 #include <algorithm>
@@ -31,83 +32,29 @@
 
 QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp }, { "js", Lang::js }, { "py", Lang::py } };
 QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };
-constexpr int defaultLineSpacingPercent = 160;
+constexpr int defaultLineSpacingPercent = 130;
 
-class ExtraLineSpacingDocumentLayout : public QPlainTextDocumentLayout {
+class LineSpacingLayout : public QPlainTextDocumentLayout {
 public:
-    explicit ExtraLineSpacingDocumentLayout(QTextDocument* document)
-        : QPlainTextDocumentLayout(document)
-        , m_extraLineSpacingPx(0)
-    {
+    explicit LineSpacingLayout(QTextDocument* doc) : QPlainTextDocumentLayout(doc), m_spacing(0) {}
+    
+    void setLineSpacing(int pixels) {
+        if (m_spacing != pixels) {
+            m_spacing = qMax(0, pixels);
+            requestUpdate();
+        }
     }
 
-    void setExtraLineSpacing(int pixels)
-    {
-        if (pixels == m_extraLineSpacingPx)
-            return;
-
-        m_extraLineSpacingPx = qMax(0, pixels);
-        requestUpdate();
-    }
-
-    int extraLineSpacing() const
-    {
-        return m_extraLineSpacingPx;
-    }
-
-    QRectF blockBoundingRect(const QTextBlock& block) const override
-    {
+    QRectF blockBoundingRect(const QTextBlock& block) const override {
         QRectF rect = QPlainTextDocumentLayout::blockBoundingRect(block);
-        if (m_extraLineSpacingPx <= 0)
-            return rect;
-
-        const qreal offset = qreal(m_extraLineSpacingPx) * block.blockNumber();
-        rect.moveTop(rect.top() + offset);
-        rect.setHeight(rect.height() + m_extraLineSpacingPx);
+        if (m_spacing > 0) {
+            rect.setHeight(rect.height() + m_spacing);
+        }
         return rect;
     }
 
-    QSizeF documentSize() const override
-    {
-        QSizeF size = QPlainTextDocumentLayout::documentSize();
-        if (m_extraLineSpacingPx <= 0)
-            return size;
-
-        const int blocks = document() ? document()->blockCount() : 0;
-        size.setHeight(size.height() + qreal(m_extraLineSpacingPx) * blocks);
-        return size;
-    }
-
-    int hitTest(const QPointF& point, Qt::HitTestAccuracy accuracy) const override
-    {
-        if (m_extraLineSpacingPx <= 0)
-            return QPlainTextDocumentLayout::hitTest(point, accuracy);
-
-        if (!document())
-            return QPlainTextDocumentLayout::hitTest(point, accuracy);
-
-        const qreal y = point.y();
-        for (QTextBlock block = document()->begin(); block.isValid(); block = block.next()) {
-            QRectF rect = blockBoundingRect(block);
-            if (y >= rect.top() && y < rect.bottom()) {
-                QPointF adjusted = point;
-                adjusted.setY(point.y() - qreal(m_extraLineSpacingPx) * block.blockNumber());
-                return QPlainTextDocumentLayout::hitTest(adjusted, accuracy);
-            }
-        }
-
-        return QPlainTextDocumentLayout::hitTest(point, accuracy);
-    }
-
-protected:
-    void documentChanged(int from, int charsRemoved, int charsAdded) override
-    {
-        QPlainTextDocumentLayout::documentChanged(from, charsRemoved, charsAdded);
-        requestUpdate();
-    }
-
 private:
-    int m_extraLineSpacingPx;
+    int m_spacing;
 };
 
 // Static icon cache - initialized once, reused everywhere
@@ -260,6 +207,9 @@ TextArea::TextArea(QWidget* parent)
     setupTextArea();
     mainFont = QApplication::font();
     document()->setDefaultFont(mainFont);
+    
+    auto* layout = new LineSpacingLayout(document());
+    document()->setDocumentLayout(layout);
     applyLineSpacing(defaultLineSpacingPercent);
     show();
 }
@@ -290,6 +240,9 @@ TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent)
     setupTextArea();
     mainFont = settings.mainFont;
     document()->setDefaultFont(mainFont);
+    
+    auto* layout = new LineSpacingLayout(document());
+    document()->setDocumentLayout(layout);
     applyLineSpacing(defaultLineSpacingPercent);
     show();
 }
@@ -338,10 +291,11 @@ void TextArea::setupTextArea()
 
 void TextArea::applyLineSpacing(int percent)
 {
-    Q_UNUSED(percent);
-    // Set line spacing via stylesheet - this is the most reliable method for QPlainTextEdit
-    // The line-height property in the stylesheet affects text rendering
-    setStyleSheet(styleSheet() + QString("QPlainTextEdit { line-height: %1%; }").arg(percent));
+    if (auto* layout = dynamic_cast<LineSpacingLayout*>(document()->documentLayout())) {
+        QFontMetrics fm(mainFont);
+        int extraPixels = fm.height() * (percent - 100) / 100;
+        layout->setLineSpacing(extraPixels);
+    }
 }
 
 int TextArea::lineNumberAreaWidth()
