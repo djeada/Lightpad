@@ -1461,7 +1461,9 @@ void VimMode::searchNext(bool forward)
 void VimMode::scrollLines(int lines)
 {
     QScrollBar* vbar = m_editor->verticalScrollBar();
-    int lineHeight = m_editor->fontMetrics().height();
+    int lineHeight = m_editor->cursorRect().height();
+    if (lineHeight <= 0)
+        lineHeight = m_editor->fontMetrics().height();
     vbar->setValue(vbar->value() + lines * lineHeight);
 }
 

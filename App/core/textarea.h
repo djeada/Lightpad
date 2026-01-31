@@ -121,6 +121,7 @@ private:
     QString getDocumentUri() const;
     void showCompletionPopup();
     void hideCompletionPopup();
+    void applyLineSpacing(int percent);
     
 private slots:
     void onCompletionsReady(const QList<CompletionItem>& items);

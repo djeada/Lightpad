@@ -29,6 +29,7 @@
 
 QMap<QString, Lang> convertStrToEnum = { { "cpp", Lang::cpp }, { "h", Lang::cpp }, { "js", Lang::js }, { "py", Lang::py } };
 QMap<QChar, QChar> brackets = { { '{', '}' }, { '(', ')' }, { '[', ']' } };
+constexpr int defaultLineSpacingPercent = 135;
 
 static int findClosingParentheses(const QString& text, int pos, QChar startStr, QChar endStr)
 {
@@ -167,6 +168,7 @@ TextArea::TextArea(QWidget* parent)
     setupTextArea();
     mainFont = QApplication::font();
     document()->setDefaultFont(mainFont);
+    applyLineSpacing(defaultLineSpacingPercent);
     show();
 }
 
@@ -195,6 +197,7 @@ TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent)
     setupTextArea();
     mainFont = settings.mainFont;
     document()->setDefaultFont(mainFont);
+    applyLineSpacing(defaultLineSpacingPercent);
     show();
 }
 
@@ -226,6 +229,29 @@ void TextArea::setupTextArea()
     setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
     updateCursorPositionChangedCallbacks();
     clearLineHighlight();
+}
+
+void TextArea::applyLineSpacing(int percent)
+{
+    if (percent <= 0)
+        return;
+
+    auto* doc = document();
+    if (!doc)
+        return;
+
+    QTextCursor previousCursor = textCursor();
+    const bool undoEnabled = doc->isUndoRedoEnabled();
+    doc->setUndoRedoEnabled(false);
+
+    QTextCursor cursor(doc);
+    cursor.select(QTextCursor::Document);
+    QTextBlockFormat format;
+    format.setLineHeight(percent, QTextBlockFormat::ProportionalHeight);
+    cursor.mergeBlockFormat(format);
+
+    doc->setUndoRedoEnabled(undoEnabled);
+    setTextCursor(previousCursor);
 }
 
 int TextArea::lineNumberAreaWidth()

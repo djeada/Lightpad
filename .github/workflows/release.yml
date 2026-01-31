@@ -16,13 +16,14 @@ jobs:
         include:
           - os: ubuntu-22.04
             qt_arch: gcc_64
+            qt_version: 6.6.3
           - os: macos-latest
             qt_arch: clang_64
+            qt_version: 6.6.3
           - os: windows-latest
             qt_arch: win64_msvc2022_64
+            qt_version: 6.8.2
     runs-on: ${{ matrix.os }}
-    env:
-      QT_VERSION: 6.8.3
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,7 +33,7 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           cache: true
-          version: ${{ env.QT_VERSION }}
+          version: ${{ matrix.qt_version }}
           arch: ${{ matrix.qt_arch }}
 
       - name: Setup Python (Windows)
@@ -51,7 +52,7 @@ jobs:
         continue-on-error: true
         uses: jurplel/install-qt-action@v4
         with:
-          version: ${{ env.QT_VERSION }}
+          version: ${{ matrix.qt_version }}
           host: windows
           arch: ${{ matrix.qt_arch }}
           cache: true
@@ -63,16 +64,24 @@ jobs:
         shell: pwsh
         run: |
           $qtRoot = Join-Path $env:GITHUB_WORKSPACE "Qt"
-          $qtDir = Join-Path $qtRoot "${{ env.QT_VERSION }}\${{ matrix.qt_arch }}"
+          $qtDir = Join-Path $qtRoot "${{ matrix.qt_version }}\${{ matrix.qt_arch }}"
           python -m pip install --upgrade pip
           python -m pip install "aqtinstall==3.3.0" "py7zr==1.0.*"
           New-Item -ItemType Directory -Force -Path $qtDir | Out-Null
-          python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_arch }} --outputdir "$qtRoot"
+          try {
+            python -m aqt install-qt windows desktop ${{ matrix.qt_version }} ${{ matrix.qt_arch }} `
+              --outputdir "$qtRoot" `
+              -m qtmultimedia qt5compat qtdeclarative
+          } catch {
+            Write-Warning "Explicit module install failed. Falling back to '-m all'. Error: $($_.Exception.Message)"
+            python -m aqt install-qt windows desktop ${{ matrix.qt_version }} ${{ matrix.qt_arch }} `
+              --outputdir "$qtRoot" -m all
+          }
           if (!(Test-Path "$qtDir\lib\cmake\Qt6\Qt6Config.cmake")) {
             Write-Error "Qt6Config.cmake not found in $qtDir after fallback install."
             exit 1
           }
-          echo "QT_PREFIX=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "Qt6_DIR=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "$qtDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Normalize Qt env (Windows)
@@ -80,34 +89,46 @@ jobs:
         shell: pwsh
         run: |
           $candidates = @()
-          if ($env:QT_PREFIX) { $candidates += $env:QT_PREFIX }
           if ($env:Qt6_DIR) { $candidates += $env:Qt6_DIR }
           if ($env:QT_ROOT_DIR) { $candidates += $env:QT_ROOT_DIR }
-          $candidates += (Join-Path $env:GITHUB_WORKSPACE "Qt\${{ env.QT_VERSION }}\${{ matrix.qt_arch }}")
-          $qtRoot = $null
+          $candidates += (Join-Path $env:GITHUB_WORKSPACE "Qt\${{ matrix.qt_version }}\${{ matrix.qt_arch }}")
+          $qtDir = $null
           foreach ($c in $candidates | Select-Object -Unique) {
             if (-not $c) { continue }
             if (Test-Path (Join-Path $c 'lib\cmake\Qt6\Qt6Config.cmake')) {
-              $qtRoot = $c
-              break
-            }
-            if (Test-Path (Join-Path $c 'Qt6Config.cmake')) {
-              $qtRoot = Split-Path $c -Parent
+              $qtDir = $c
               break
             }
           }
-          if (-not $qtRoot) {
+          if (-not $qtDir) {
             Write-Error "Could not locate Qt6. Checked: $($candidates -join ', ')"
             exit 1
           }
-          echo "QT_PREFIX=$qtRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "$qtRoot\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          Write-Host "QT_PREFIX=$qtRoot"
+          echo "Qt6_DIR=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "$qtDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "Qt6_DIR=$qtDir"
+
+      - name: Verify Qt installation (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "Qt6_DIR=$env:Qt6_DIR"
+          if (!(Test-Path "$env:Qt6_DIR\lib\cmake\Qt6\Qt6Config.cmake")) {
+            Write-Error "Qt6Config.cmake not found in $env:Qt6_DIR"
+            exit 1
+          }
+          if (!(Get-Command windeployqt -ErrorAction SilentlyContinue)) {
+            Write-Error "windeployqt not found on PATH"
+            exit 1
+          }
 
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$env:QT_PREFIX"
+        run: |
+          $qtPrefix = $env:Qt6_DIR
+          if (-not $qtPrefix) { $qtPrefix = $env:QT_ROOT_DIR }
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$qtPrefix"
 
       - name: Configure CMake (non-Windows)
         if: runner.os != 'Windows'
