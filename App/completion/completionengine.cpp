@@ -83,7 +83,9 @@ void CompletionEngine::collectProviderResults(const QList<CompletionItem>& items
 
 void CompletionEngine::mergeAndSortResults()
 {
-    // Remove duplicates (same label from different providers, keep higher priority)
+    // Remove duplicates (same label from different providers)
+    // Keep the item with lower priority value (higher precedence)
+    // Lower priority number = higher precedence (e.g., LSP=10 > keywords=100)
     QMap<QString, CompletionItem> uniqueItems;
     
     for (const CompletionItem& item : m_pendingItems) {

@@ -77,18 +77,21 @@ void LspCompletionProvider::cancelPendingRequests()
 
 void LspCompletionProvider::onCompletionReceived(int requestId, const QList<LspCompletionItem>& items)
 {
-    Q_UNUSED(requestId);  // LSP client doesn't track request IDs well currently
+    // Note: The LspClient currently doesn't expose which requestId corresponds
+    // to which completion request. For now, we call the most recent callback
+    // and cancel older ones to avoid stale completions.
+    // TODO: Improve LspClient to properly track completion request IDs
+    Q_UNUSED(requestId);
     
-    // Find and call the most recent callback
     if (m_pendingCallbacks.isEmpty()) {
         return;
     }
     
-    // Get the last callback (most recent request)
+    // Get the last callback (most recent request) - this is the one
+    // most likely to match the current editor state
     auto it = m_pendingCallbacks.end();
     --it;
     auto callback = it.value();
-    int callbackId = it.key();
     
     // Convert items
     QList<CompletionItem> completionItems;
@@ -96,8 +99,8 @@ void LspCompletionProvider::onCompletionReceived(int requestId, const QList<LspC
         completionItems.append(convertItem(lspItem));
     }
     
-    // Remove callback and call it
-    m_pendingCallbacks.remove(callbackId);
+    // Clear all callbacks (cancel stale requests) and call the latest
+    m_pendingCallbacks.clear();
     callback(completionItems);
 }
 

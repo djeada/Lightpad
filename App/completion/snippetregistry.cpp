@@ -6,18 +6,20 @@
 #include <QJsonArray>
 #include <QRegularExpression>
 
+// Static regex patterns for snippet expansion (compiled once)
+static const QRegularExpression s_tabstopRe(R"(\$\{(\d+)(?::([^}]*))?\})");
+static const QRegularExpression s_simpleTabstopRe(R"(\$(\d+))");
+
 QString Snippet::expandedBody() const
 {
     QString result = body;
     
     // Remove tabstop markers for simple expansion
     // Full tabstop navigation would be handled by the editor
-    QRegularExpression tabstopRe(R"(\$\{(\d+)(?::([^}]*))?\})");
-    result.replace(tabstopRe, "\\2");
+    result.replace(s_tabstopRe, "\\2");
     
     // Remove simple $N markers
-    QRegularExpression simpleTabstopRe(R"(\$(\d+))");
-    result.replace(simpleTabstopRe, "");
+    result.replace(s_simpleTabstopRe, "");
     
     return result;
 }

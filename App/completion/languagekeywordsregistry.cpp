@@ -112,7 +112,7 @@ void LanguageKeywordsRegistry::initializeDefaults()
     common << "break" << "case" << "continue" << "default" << "do" << "else" 
            << "for" << "if" << "return" << "switch" << "while";
     
-    // C/C++ keywords
+    // C/C++ language keywords only (not library identifiers)
     QStringList cpp = common;
     cpp << "auto" << "char" << "const" << "double" << "enum" << "extern" << "float"
         << "goto" << "int" << "long" << "register" << "short" << "signed" << "sizeof" 
@@ -120,43 +120,34 @@ void LanguageKeywordsRegistry::initializeDefaults()
         << "class" << "namespace" << "template" << "public" << "private" << "protected"
         << "virtual" << "override" << "final" << "explicit" << "inline" << "constexpr"
         << "nullptr" << "delete" << "new" << "this" << "try" << "catch" << "throw"
-        << "bool" << "true" << "false"
-        << "std" << "string" << "vector" << "map" << "set" << "list" << "queue" 
-        << "stack" << "pair" << "cout" << "cin" << "endl" << "include" << "define" 
-        << "ifdef" << "ifndef" << "endif";
+        << "bool" << "true" << "false" << "using" << "typename" << "noexcept"
+        << "alignas" << "alignof" << "decltype" << "static_assert" << "thread_local"
+        << "mutable" << "friend" << "operator" << "export" << "import" << "module";
     cpp.sort();
     cpp.removeDuplicates();
     registerLanguage("cpp", cpp);
     
-    // Python keywords
+    // Python language keywords only (not built-in functions)
     QStringList python;
     python << "and" << "as" << "assert" << "async" << "await" << "break" << "class" << "continue"
            << "def" << "del" << "elif" << "else" << "except" << "finally" << "for" << "from" 
            << "global" << "if" << "import" << "in" << "is" << "lambda" << "nonlocal" << "not" 
            << "or" << "pass" << "raise" << "return" << "try" << "while" << "with" << "yield"
-           << "True" << "False" << "None" << "self"
-           << "print" << "range" << "len" << "str" << "int" << "float" << "list" << "dict"
-           << "tuple" << "set" << "open" << "file" << "read" << "write" << "append";
+           << "True" << "False" << "None";
     python.sort();
     python.removeDuplicates();
     registerLanguage("python", python);
     registerLanguage("py", python);  // Alias
     
     // JavaScript keywords
+    // JavaScript language keywords only (not browser/DOM APIs)
     QStringList javascript;
-    javascript << "abstract" << "arguments" << "await" << "boolean" << "break" << "byte"
-               << "case" << "catch" << "char" << "class" << "const" << "continue" << "debugger" 
-               << "default" << "delete" << "do" << "double" << "else" << "enum" << "eval" 
-               << "export" << "extends" << "false" << "final" << "finally" << "float" << "for" 
-               << "function" << "goto" << "if" << "implements" << "import" << "in" << "instanceof"
-               << "int" << "interface" << "let" << "long" << "native" << "new" << "null" 
-               << "package" << "private" << "protected" << "public" << "return" << "short" 
-               << "static" << "super" << "switch" << "synchronized" << "this" << "throw" 
-               << "throws" << "transient" << "true" << "try" << "typeof" << "var" << "void" 
-               << "volatile" << "while" << "with" << "yield"
-               << "console" << "log" << "document" << "window" << "alert" << "prompt" 
-               << "confirm" << "getElementById" << "querySelector" << "addEventListener" 
-               << "setTimeout" << "setInterval";
+    javascript << "await" << "break" << "case" << "catch" << "class" << "const" << "continue" 
+               << "debugger" << "default" << "delete" << "do" << "else" << "enum" << "export" 
+               << "extends" << "false" << "finally" << "for" << "function" << "if" << "import" 
+               << "in" << "instanceof" << "let" << "new" << "null" << "return" << "static" 
+               << "super" << "switch" << "this" << "throw" << "true" << "try" << "typeof" 
+               << "var" << "void" << "while" << "with" << "yield" << "async" << "of";
     javascript.sort();
     javascript.removeDuplicates();
     registerLanguage("js", javascript);
