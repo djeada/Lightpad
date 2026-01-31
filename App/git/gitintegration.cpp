@@ -1118,6 +1118,10 @@ QList<GitStashEntry> GitIntegration::parseStashListOutput(const QString& output)
     // or: stash@{0}: WIP on branch_name: commit_hash commit_message
     QRegularExpression stashPattern(R"(stash@\{(\d+)\}: (?:On|WIP on) ([^:]+): (.+))");
     
+    // Git abbreviated hash lengths: typically 7-8 chars but can be 4-40
+    constexpr int MIN_HASH_LENGTH = 4;
+    constexpr int MAX_ABBREV_HASH_LENGTH = 12;
+    
     for (const QString& line : lines) {
         QRegularExpressionMatch match = stashPattern.match(line);
         if (match.hasMatch()) {
@@ -1127,11 +1131,17 @@ QList<GitStashEntry> GitIntegration::parseStashListOutput(const QString& output)
             entry.message = match.captured(3).trimmed();
             
             // Extract hash if present (format: "hash message")
+            // Git hashes are hexadecimal, typically abbreviated to 7-8 chars
             QString msgPart = entry.message;
             int spaceIndex = msgPart.indexOf(' ');
-            if (spaceIndex > 0 && spaceIndex < 10) {  // Hash is typically 7-8 chars
-                entry.hash = msgPart.left(spaceIndex);
-                entry.message = msgPart.mid(spaceIndex + 1);
+            if (spaceIndex >= MIN_HASH_LENGTH && spaceIndex <= MAX_ABBREV_HASH_LENGTH) {
+                QString potentialHash = msgPart.left(spaceIndex);
+                // Verify it looks like a hex hash
+                static QRegularExpression hexPattern("^[0-9a-f]+$");
+                if (hexPattern.match(potentialHash).hasMatch()) {
+                    entry.hash = potentialHash;
+                    entry.message = msgPart.mid(spaceIndex + 1);
+                }
             }
             
             result.append(entry);

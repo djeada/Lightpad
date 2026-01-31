@@ -404,7 +404,7 @@ void GitRemoteDialog::updateRemoteList()
         m_remoteList->clear();
         for (const GitRemoteInfo& remote : remotes) {
             QListWidgetItem* item = new QListWidgetItem(m_remoteList);
-            item->setText(QString("%1\n  Fetch: %2\n  Push: %3")
+            item->setText(tr("%1\nFetch: %2\nPush: %3")
                 .arg(remote.name)
                 .arg(remote.fetchUrl)
                 .arg(remote.pushUrl));

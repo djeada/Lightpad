@@ -293,7 +293,7 @@ void GitStashDialog::updateStashList()
         m_statusLabel->setText(tr("No stashed changes"));
         m_detailsLabel->setText(tr("No stash entries available"));
     } else {
-        m_statusLabel->setText(QString::number(stashes.size()) + tr(" stash entries"));
+        m_statusLabel->setText(tr("%n stash entry(s)", "", stashes.size()));
     }
     
     // Disable buttons when nothing selected

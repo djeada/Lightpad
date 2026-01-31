@@ -267,7 +267,7 @@ void MergeConflictDialog::setConflictedFiles(const QStringList& files)
         item->setData(Qt::UserRole, file);
     }
     
-    m_conflictCountLabel->setText(QString::number(files.size()) + tr(" conflicts"));
+    m_conflictCountLabel->setText(tr("%n conflict(s)", "", files.size()));
     updateButtons();
 }
 

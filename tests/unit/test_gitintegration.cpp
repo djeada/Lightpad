@@ -484,9 +484,21 @@ void TestGitIntegration::testMergeConflictDetection()
     // Clean up - delete the test branch
     git.deleteBranch("conflict-test-branch", true);
     
-    // Restore the original file
-    runGitCommand({"checkout", "HEAD~1", "--", "initial.txt"});
-    runGitCommand({"reset", "--hard", "HEAD~1"});
+    // Restore the original file - use a more robust cleanup
+    // Check if we have commits to go back to
+    QProcess checkProcess;
+    checkProcess.setWorkingDirectory(m_repoPath);
+    checkProcess.start("git", {"rev-list", "--count", "HEAD"});
+    checkProcess.waitForFinished(GIT_COMMAND_TIMEOUT_MS);
+    int commitCount = QString::fromUtf8(checkProcess.readAllStandardOutput()).trimmed().toInt();
+    
+    if (commitCount > 1) {
+        runGitCommand({"checkout", "HEAD~1", "--", "initial.txt"});
+        runGitCommand({"reset", "--hard", "HEAD~1"});
+    } else {
+        // If only one commit, just restore the file
+        runGitCommand({"checkout", "HEAD", "--", "initial.txt"});
+    }
 }
 
 QTEST_MAIN(TestGitIntegration)
