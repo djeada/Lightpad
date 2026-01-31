@@ -25,7 +25,7 @@ SettingsManager::SettingsManager()
 void SettingsManager::initializeDefaults()
 {
     // Font defaults
-    m_defaults["fontFamily"] = "Monospace";
+    m_defaults["fontFamily"] = "Ubuntu Mono";
     m_defaults["fontSize"] = 12;
     m_defaults["fontWeight"] = 50;  // Normal weight
     m_defaults["fontItalic"] = false;

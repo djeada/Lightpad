@@ -338,32 +338,10 @@ void TextArea::setupTextArea()
 
 void TextArea::applyLineSpacing(int percent)
 {
-    if (percent <= 0)
-        return;
-
-    auto* doc = document();
-    if (!doc)
-        return;
-
-    // Set default block format for new blocks
-    QTextCursor cursor(doc);
-    QTextBlockFormat defaultFormat;
-    defaultFormat.setLineHeight(percent, QTextBlockFormat::ProportionalHeight);
-    
-    const bool undoEnabled = doc->isUndoRedoEnabled();
-    doc->setUndoRedoEnabled(false);
-    
-    // Apply to all existing blocks
-    cursor.beginEditBlock();
-    cursor.movePosition(QTextCursor::Start);
-    do {
-        QTextBlockFormat format = cursor.blockFormat();
-        format.setLineHeight(percent, QTextBlockFormat::ProportionalHeight);
-        cursor.setBlockFormat(format);
-    } while (cursor.movePosition(QTextCursor::NextBlock));
-    cursor.endEditBlock();
-    
-    doc->setUndoRedoEnabled(undoEnabled);
+    Q_UNUSED(percent);
+    // Set line spacing via stylesheet - this is the most reliable method for QPlainTextEdit
+    // The line-height property in the stylesheet affects text rendering
+    setStyleSheet(styleSheet() + QString("QPlainTextEdit { line-height: %1%; }").arg(percent));
 }
 
 int TextArea::lineNumberAreaWidth()
@@ -480,6 +458,7 @@ void TextArea::loadSettings(const TextAreaSettings settings)
     showLineNumbers(settings.showLineNumberArea);
     highlihtCurrentLine(settings.lineHighlighted);
     highlihtMatchingBracket(settings.matchingBracketsHighlighted);
+    setFont(settings.mainFont);
 }
 
 void TextArea::applySelectionPalette(const Theme& theme)

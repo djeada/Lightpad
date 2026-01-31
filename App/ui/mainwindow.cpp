@@ -135,11 +135,14 @@ void MainWindow::loadSettings()
     else
         setTabWidth(defaultTabWidth);
 
-    // Load global font size from user home config
+    // Load global font settings from user home config
     SettingsManager& globalSettings = SettingsManager::instance();
     globalSettings.loadSettings();
-    int globalFontSize = globalSettings.getValue("fontSize", defaultFontSize).toInt();
-    settings.mainFont.setPointSize(globalFontSize);
+    QString fontFamily = globalSettings.getValue("fontFamily", "Ubuntu Mono").toString();
+    int fontSize = globalSettings.getValue("fontSize", defaultFontSize).toInt();
+    int fontWeight = globalSettings.getValue("fontWeight", 50).toInt();
+    bool fontItalic = globalSettings.getValue("fontItalic", false).toBool();
+    settings.mainFont = QFont(fontFamily, fontSize, fontWeight, fontItalic);
 
     updateAllTextAreas(&TextArea::loadSettings, settings);
     setTheme(settings.theme);
