@@ -8,10 +8,12 @@
 #include <QCompleter>
 #include <QProcess>
 #include <QMenuBar>
+#include <QTextCursor>
 #include <cstdio>
 
 #include "panels/findreplacepanel.h"
 #include "panels/problemspanel.h"
+#include "panels/todopanel.h"
 #include "../core/lightpadpage.h"
 #include "../core/logging/logger.h"
 #include "mainwindow.h"
@@ -41,6 +43,7 @@ MainWindow::MainWindow(QWidget* parent)
     , font(QApplication::font())
     , commandPalette(nullptr)
     , problemsPanel(nullptr)
+    , todoPanel(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
@@ -210,6 +213,12 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
     else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
              keyEvent->key() == Qt::Key_M) {
         showProblemsPanel();
+    }
+
+    // Todo Panel: Ctrl+Shift+T
+    else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
+             keyEvent->key() == Qt::Key_T) {
+        showTodoPanel();
     }
 }
 
@@ -621,6 +630,39 @@ void MainWindow::showProblemsPanel()
     problemsPanel->setVisible(!problemsPanel->isVisible());
 }
 
+void MainWindow::showTodoPanel()
+{
+    if (!todoPanel) {
+        todoPanel = new TodoPanel(this);
+
+        connect(todoPanel, &TodoPanel::todoClicked, this, [this](const QString& filePath, int line) {
+            openFileAndAddToNewTab(filePath);
+            TextArea* textArea = getCurrentTextArea();
+            if (textArea) {
+                QTextCursor cursor = textArea->textCursor();
+                cursor.movePosition(QTextCursor::Start);
+                cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, line);
+                textArea->setTextCursor(cursor);
+                textArea->setFocus();
+            }
+        });
+
+        auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
+        if (layout != nullptr)
+            layout->insertWidget(layout->count() - 1, todoPanel, 0);
+    }
+
+    if (!todoPanel->isVisible()) {
+        auto page = ui->tabWidget->getCurrentPage();
+        QString filePath = page ? page->getFilePath() : QString();
+        if (!filePath.isEmpty() && getCurrentTextArea())
+            todoPanel->setTodos(filePath, getCurrentTextArea()->toPlainText());
+        todoPanel->show();
+    } else {
+        todoPanel->hide();
+    }
+}
+
 void MainWindow::showCommandPalette()
 {
     if (commandPalette) {
@@ -800,6 +842,15 @@ void MainWindow::setupTabWidget()
 
         if (!ui->menuRun->actions().empty())
             ui->menuRun->actions().front()->setText("Run " + text);
+
+        if (todoPanel && todoPanel->isVisible()) {
+            auto page = ui->tabWidget->getCurrentPage();
+            QString filePath = page ? page->getFilePath() : QString();
+            if (!filePath.isEmpty() && getCurrentTextArea())
+                todoPanel->setTodos(filePath, getCurrentTextArea()->toPlainText());
+            else
+                todoPanel->clearAll();
+        }
     });
 
     ui->tabWidget->currentChanged(0);

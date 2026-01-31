@@ -102,6 +102,7 @@ private:
     // Quick win features
     class CommandPalette* commandPalette;
     class ProblemsPanel* problemsPanel;
+    class TodoPanel* todoPanel;
     
     void undo();
     void redo();
@@ -114,6 +115,7 @@ private:
     void openShortcutsDialog();
     void showTerminal();
     void showProblemsPanel();
+    void showTodoPanel();
     void showCommandPalette();
     void setupCommandPalette();
     void setMainWindowTitle(QString title);

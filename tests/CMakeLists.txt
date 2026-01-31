@@ -292,6 +292,24 @@ target_link_libraries(test_terminaltabwidget
     Qt5::Test
 )
 
+target_compile_definitions(test_terminaltabwidget PRIVATE QT_DEPRECATED_WARNINGS)
+
+# TodoPanel test executable
+add_executable(test_todopanel
+    unit/test_todopanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/todopanel.cpp
+)
+
+target_link_libraries(test_todopanel
+    PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+)
+
+target_compile_definitions(test_todopanel PRIVATE QT_DEPRECATED_WARNINGS)
+
 # SyntaxPluginRegistry test executable
 add_executable(test_syntaxpluginregistry
     unit/test_syntaxpluginregistry.cpp
@@ -333,13 +351,14 @@ add_test(NAME RunTemplateManagerTests COMMAND test_runtemplatemanager)
 add_test(NAME FormatTemplateManagerTests COMMAND test_formattemplatemanager)
 add_test(NAME TerminalTests COMMAND test_terminal)
 add_test(NAME TerminalTabWidgetTests COMMAND test_terminaltabwidget)
+add_test(NAME TodoPanelTests COMMAND test_todopanel)
 add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
 
 # Set environment variable for headless testing
 set_tests_properties(LoggerTests ThemeTests FileManagerTests DocumentTests SettingsManagerTests 
     AsyncWorkerTests PluginManagerTests VimModeTests I18nTests AccessibilityTests 
     RunTemplateManagerTests FormatTemplateManagerTests TerminalTests TerminalTabWidgetTests
-    SyntaxPluginRegistryTests PROPERTIES
+    SyntaxPluginRegistryTests TodoPanelTests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
@@ -352,6 +371,6 @@ add_custom_target(run_tests
     DEPENDS test_logger test_theme test_filemanager test_document test_settingsmanager 
             test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
             test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
-            test_syntaxpluginregistry
+            test_syntaxpluginregistry test_todopanel
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

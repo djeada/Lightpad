@@ -30,6 +30,7 @@ set(project_headers
     ui/dialogs/commandpalette.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
+    ui/panels/todopanel.h
     core/async/asyncworker.h
     core/document.h
     core/formatter.h
@@ -77,6 +78,7 @@ set(project_sources
     ui/dialogs/commandpalette.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
+    ui/panels/todopanel.cpp
     core/async/asyncworker.cpp
     core/document.cpp
     core/formatter.cpp
