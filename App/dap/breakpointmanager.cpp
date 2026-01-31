@@ -2,6 +2,7 @@
 #include "../core/logging/logger.h"
 
 #include <QFile>
+#include <QDir>
 #include <QJsonDocument>
 
 BreakpointManager& BreakpointManager::instance()
@@ -493,5 +494,142 @@ bool BreakpointManager::loadFromFile(const QString& filePath)
     }
     
     loadFromJson(doc.object());
+    return true;
+}
+
+void BreakpointManager::setWorkspaceFolder(const QString& folder)
+{
+    m_workspaceFolder = folder;
+}
+
+QString BreakpointManager::lightpadBreakpointsPath() const
+{
+    if (m_workspaceFolder.isEmpty()) {
+        return QString();
+    }
+    return m_workspaceFolder + "/.lightpad/debug/breakpoints.json";
+}
+
+bool BreakpointManager::loadFromLightpadDir()
+{
+    QString path = lightpadBreakpointsPath();
+    if (path.isEmpty()) {
+        LOG_WARNING("Cannot load breakpoints: workspace folder not set");
+        return false;
+    }
+    
+    // Ensure directory exists
+    QDir dir(m_workspaceFolder + "/.lightpad/debug");
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    
+    // If file doesn't exist, create a default one
+    if (!QFile::exists(path)) {
+        LOG_INFO("Creating default breakpoints.json in .lightpad/debug/");
+        
+        QJsonObject root;
+        root["version"] = "1.0.0";
+        root["_comment"] = "Breakpoints configuration. This file is auto-saved but can be manually edited.";
+        root["breakpoints"] = QJsonArray();
+        root["functionBreakpoints"] = QJsonArray();
+        root["dataBreakpoints"] = QJsonArray();
+        
+        QJsonObject exceptionBreakpoints;
+        exceptionBreakpoints["uncaught"] = true;
+        exceptionBreakpoints["raised"] = false;
+        root["exceptionBreakpoints"] = exceptionBreakpoints;
+        
+        QFile file(path);
+        if (file.open(QIODevice::WriteOnly)) {
+            QJsonDocument doc(root);
+            file.write(doc.toJson(QJsonDocument::Indented));
+        }
+    }
+    
+    return loadFromFile(path);
+}
+
+bool BreakpointManager::saveToLightpadDir()
+{
+    QString path = lightpadBreakpointsPath();
+    if (path.isEmpty()) {
+        LOG_WARNING("Cannot save breakpoints: workspace folder not set");
+        return false;
+    }
+    
+    // Ensure directory exists
+    QDir dir(m_workspaceFolder + "/.lightpad/debug");
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    
+    // Create enhanced JSON with all breakpoint types
+    QJsonObject root;
+    root["version"] = "1.0.0";
+    root["_comment"] = "Breakpoints configuration. This file is auto-saved but can be manually edited.";
+    
+    // Source breakpoints organized by file
+    QJsonObject sourceBreakpoints;
+    for (const QString& filePath : m_fileBreakpoints.keys()) {
+        QJsonArray bpArray;
+        for (int bpId : m_fileBreakpoints[filePath]) {
+            if (m_breakpoints.contains(bpId)) {
+                const Breakpoint& bp = m_breakpoints[bpId];
+                QJsonObject bpObj;
+                bpObj["line"] = bp.line;
+                if (bp.column > 0) bpObj["column"] = bp.column;
+                bpObj["enabled"] = bp.enabled;
+                if (!bp.condition.isEmpty()) bpObj["condition"] = bp.condition;
+                if (!bp.hitCondition.isEmpty()) bpObj["hitCondition"] = bp.hitCondition;
+                if (bp.isLogpoint) {
+                    bpObj["logMessage"] = bp.logMessage;
+                }
+                bpArray.append(bpObj);
+            }
+        }
+        if (!bpArray.isEmpty()) {
+            sourceBreakpoints[filePath] = bpArray;
+        }
+    }
+    root["sourceBreakpoints"] = sourceBreakpoints;
+    
+    // Function breakpoints
+    QJsonArray functionBpArray;
+    for (const FunctionBreakpoint& fbp : m_functionBreakpoints) {
+        QJsonObject obj;
+        obj["functionName"] = fbp.functionName;
+        obj["enabled"] = fbp.enabled;
+        if (!fbp.condition.isEmpty()) obj["condition"] = fbp.condition;
+        if (!fbp.hitCondition.isEmpty()) obj["hitCondition"] = fbp.hitCondition;
+        functionBpArray.append(obj);
+    }
+    root["functionBreakpoints"] = functionBpArray;
+    
+    // Data breakpoints
+    QJsonArray dataBpArray;
+    for (const DataBreakpoint& dbp : m_dataBreakpoints) {
+        dataBpArray.append(dbp.toJson());
+    }
+    root["dataBreakpoints"] = dataBpArray;
+    
+    // Exception breakpoints
+    QJsonObject exceptionBreakpoints;
+    exceptionBreakpoints["_comment"] = "Exception breakpoint filters. Set to true to enable.";
+    for (const QString& filter : m_enabledExceptionFilters) {
+        exceptionBreakpoints[filter] = true;
+    }
+    root["exceptionBreakpoints"] = exceptionBreakpoints;
+    
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        LOG_ERROR(QString("Failed to save breakpoints to: %1").arg(path));
+        return false;
+    }
+    
+    QJsonDocument doc(root);
+    file.write(doc.toJson(QJsonDocument::Indented));
+    
+    LOG_INFO(QString("Saved breakpoints to %1").arg(path));
     return true;
 }

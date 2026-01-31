@@ -2,6 +2,7 @@
 #include "../core/logging/logger.h"
 
 #include <QFile>
+#include <QDir>
 #include <QJsonDocument>
 
 WatchManager& WatchManager::instance()
@@ -225,5 +226,96 @@ bool WatchManager::loadFromFile(const QString& filePath)
     }
     
     loadFromJson(doc.object());
+    return true;
+}
+
+void WatchManager::setWorkspaceFolder(const QString& folder)
+{
+    m_workspaceFolder = folder;
+}
+
+QString WatchManager::lightpadWatchesPath() const
+{
+    if (m_workspaceFolder.isEmpty()) {
+        return QString();
+    }
+    return m_workspaceFolder + "/.lightpad/debug/watches.json";
+}
+
+bool WatchManager::loadFromLightpadDir()
+{
+    QString path = lightpadWatchesPath();
+    if (path.isEmpty()) {
+        LOG_WARNING("Cannot load watches: workspace folder not set");
+        return false;
+    }
+    
+    // Ensure directory exists
+    QDir dir(m_workspaceFolder + "/.lightpad/debug");
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    
+    // If file doesn't exist, create a default one
+    if (!QFile::exists(path)) {
+        LOG_INFO("Creating default watches.json in .lightpad/debug/");
+        
+        QJsonObject root;
+        root["version"] = "1.0.0";
+        root["_comment"] = "Watch expressions. Add expressions to monitor during debugging.";
+        root["watches"] = QJsonArray();
+        
+        QJsonArray examples;
+        examples.append("myVariable");
+        examples.append("array.length");
+        examples.append("object.property");
+        root["_examples"] = examples;
+        
+        QFile file(path);
+        if (file.open(QIODevice::WriteOnly)) {
+            QJsonDocument doc(root);
+            file.write(doc.toJson(QJsonDocument::Indented));
+        }
+    }
+    
+    return loadFromFile(path);
+}
+
+bool WatchManager::saveToLightpadDir()
+{
+    QString path = lightpadWatchesPath();
+    if (path.isEmpty()) {
+        LOG_WARNING("Cannot save watches: workspace folder not set");
+        return false;
+    }
+    
+    // Ensure directory exists
+    QDir dir(m_workspaceFolder + "/.lightpad/debug");
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    
+    QJsonObject root;
+    root["version"] = "1.0.0";
+    root["_comment"] = "Watch expressions. Add expressions to monitor during debugging.";
+    
+    QJsonArray watchesArray;
+    for (const WatchExpression& watch : m_watches) {
+        QJsonObject watchObj;
+        watchObj["expression"] = watch.expression;
+        watchesArray.append(watchObj);
+    }
+    root["watches"] = watchesArray;
+    
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        LOG_ERROR(QString("Failed to save watches to: %1").arg(path));
+        return false;
+    }
+    
+    QJsonDocument doc(root);
+    file.write(doc.toJson(QJsonDocument::Indented));
+    
+    LOG_INFO(QString("Saved watches to %1").arg(path));
     return true;
 }

@@ -332,6 +332,26 @@ public:
      */
     bool loadFromFile(const QString& filePath);
 
+    /**
+     * @brief Set the workspace folder for .lightpad storage
+     */
+    void setWorkspaceFolder(const QString& folder);
+
+    /**
+     * @brief Load breakpoints from .lightpad/debug/breakpoints.json
+     */
+    bool loadFromLightpadDir();
+
+    /**
+     * @brief Save breakpoints to .lightpad/debug/breakpoints.json
+     */
+    bool saveToLightpadDir();
+
+    /**
+     * @brief Get path to .lightpad breakpoints file
+     */
+    QString lightpadBreakpointsPath() const;
+
 signals:
     /**
      * @brief Emitted when a breakpoint is added
@@ -389,6 +409,7 @@ private:
     QStringList m_enabledExceptionFilters;
     
     DapClient* m_dapClient;
+    QString m_workspaceFolder;
 };
 
 #endif // BREAKPOINTMANAGER_H

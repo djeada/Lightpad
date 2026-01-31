@@ -46,6 +46,7 @@ set(project_headers
     dap/debugconfiguration.h
     dap/watchmanager.h
     dap/debugsession.h
+    dap/debugsettings.h
     ui/dialogs/colorpicker.h
     ui/dialogs/commandpalette.h
     ui/panels/findreplacepanel.h
@@ -110,6 +111,7 @@ set(project_sources
     dap/debugconfiguration.cpp
     dap/watchmanager.cpp
     dap/debugsession.cpp
+    dap/debugsettings.cpp
     ui/dialogs/colorpicker.cpp
     ui/dialogs/commandpalette.cpp
     ui/panels/findreplacepanel.cpp

@@ -1,5 +1,6 @@
 #include <QtTest/QtTest>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 
 #include "dap/dapclient.h"
 #include "dap/breakpointmanager.h"
@@ -7,6 +8,7 @@
 #include "dap/debugconfiguration.h"
 #include "dap/watchmanager.h"
 #include "dap/debugsession.h"
+#include "dap/debugsettings.h"
 
 /**
  * @brief Unit tests for DAP (Debug Adapter Protocol) components
@@ -60,6 +62,10 @@ private slots:
     // DebugSession tests
     void testDebugSessionState();
     void testSessionManagerSingleton();
+    
+    // DebugSettings tests
+    void testDebugSettingsInitialization();
+    void testDebugSettingsFilePaths();
     
     // Data structures tests
     void testDapBreakpointFromJson();
@@ -728,6 +734,69 @@ void TestDap::testSessionManagerSingleton()
     
     // Initially no sessions
     QVERIFY(!mgr1.hasActiveSessions());
+}
+
+// =============================================================================
+// DebugSettings Tests
+// =============================================================================
+
+void TestDap::testDebugSettingsInitialization()
+{
+    DebugSettings& settings = DebugSettings::instance();
+    
+    // Create a temporary directory for testing
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    
+    QString workspaceFolder = tempDir.path();
+    settings.initialize(workspaceFolder);
+    
+    QCOMPARE(settings.workspaceFolder(), workspaceFolder);
+    QCOMPARE(settings.debugSettingsDir(), workspaceFolder + "/.lightpad/debug");
+    
+    // Check that the debug settings directory was created
+    QDir dir(settings.debugSettingsDir());
+    QVERIFY(dir.exists());
+    
+    // Check that default config files were created
+    QVERIFY(QFile::exists(settings.launchConfigPath()));
+    QVERIFY(QFile::exists(settings.breakpointsConfigPath()));
+    QVERIFY(QFile::exists(settings.watchesConfigPath()));
+    QVERIFY(QFile::exists(settings.adaptersConfigPath()));
+    QVERIFY(QFile::exists(settings.settingsConfigPath()));
+}
+
+void TestDap::testDebugSettingsFilePaths()
+{
+    DebugSettings& settings = DebugSettings::instance();
+    
+    // Create a temporary directory for testing
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    
+    QString workspaceFolder = tempDir.path();
+    settings.initialize(workspaceFolder);
+    
+    // Verify file paths
+    QCOMPARE(settings.launchConfigPath(), workspaceFolder + "/.lightpad/debug/launch.json");
+    QCOMPARE(settings.breakpointsConfigPath(), workspaceFolder + "/.lightpad/debug/breakpoints.json");
+    QCOMPARE(settings.watchesConfigPath(), workspaceFolder + "/.lightpad/debug/watches.json");
+    QCOMPARE(settings.adaptersConfigPath(), workspaceFolder + "/.lightpad/debug/adapters.json");
+    QCOMPARE(settings.settingsConfigPath(), workspaceFolder + "/.lightpad/debug/settings.json");
+    
+    // Verify that config files have valid JSON
+    QFile launchFile(settings.launchConfigPath());
+    QVERIFY(launchFile.open(QIODevice::ReadOnly));
+    QJsonDocument launchDoc = QJsonDocument::fromJson(launchFile.readAll());
+    QVERIFY(!launchDoc.isNull());
+    QVERIFY(launchDoc.object().contains("configurations"));
+    
+    QFile adaptersFile(settings.adaptersConfigPath());
+    QVERIFY(adaptersFile.open(QIODevice::ReadOnly));
+    QJsonDocument adaptersDoc = QJsonDocument::fromJson(adaptersFile.readAll());
+    QVERIFY(!adaptersDoc.isNull());
+    QVERIFY(adaptersDoc.object().contains("adapters"));
+    QVERIFY(adaptersDoc.object().contains("defaultAdapters"));
 }
 
 QTEST_MAIN(TestDap)

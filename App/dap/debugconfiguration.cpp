@@ -262,3 +262,62 @@ DebugConfiguration DebugConfigurationManager::createQuickConfig(const QString& f
     
     return config;
 }
+
+QString DebugConfigurationManager::lightpadLaunchConfigPath() const
+{
+    if (m_workspaceFolder.isEmpty()) {
+        return QString();
+    }
+    return m_workspaceFolder + "/.lightpad/debug/launch.json";
+}
+
+bool DebugConfigurationManager::loadFromLightpadDir()
+{
+    QString path = lightpadLaunchConfigPath();
+    if (path.isEmpty()) {
+        LOG_WARNING("Cannot load launch config: workspace folder not set");
+        return false;
+    }
+    
+    // Ensure directory exists
+    QDir dir(m_workspaceFolder + "/.lightpad/debug");
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    
+    // If file doesn't exist, create a default one
+    if (!QFile::exists(path)) {
+        LOG_INFO("Creating default launch.json in .lightpad/debug/");
+        
+        QJsonObject root;
+        root["version"] = "1.0.0";
+        root["_comment"] = "Debug launch configurations. Edit this file to add your own configurations.";
+        root["configurations"] = QJsonArray();
+        root["compounds"] = QJsonArray();
+        
+        QFile file(path);
+        if (file.open(QIODevice::WriteOnly)) {
+            QJsonDocument doc(root);
+            file.write(doc.toJson(QJsonDocument::Indented));
+        }
+    }
+    
+    return loadFromFile(path);
+}
+
+bool DebugConfigurationManager::saveToLightpadDir()
+{
+    QString path = lightpadLaunchConfigPath();
+    if (path.isEmpty()) {
+        LOG_WARNING("Cannot save launch config: workspace folder not set");
+        return false;
+    }
+    
+    // Ensure directory exists
+    QDir dir(m_workspaceFolder + "/.lightpad/debug");
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    
+    return saveToFile(path);
+}

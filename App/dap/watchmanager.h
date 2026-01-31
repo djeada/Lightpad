@@ -139,6 +139,26 @@ public:
      */
     bool loadFromFile(const QString& filePath);
 
+    /**
+     * @brief Set the workspace folder for .lightpad storage
+     */
+    void setWorkspaceFolder(const QString& folder);
+
+    /**
+     * @brief Load watches from .lightpad/debug/watches.json
+     */
+    bool loadFromLightpadDir();
+
+    /**
+     * @brief Save watches to .lightpad/debug/watches.json
+     */
+    bool saveToLightpadDir();
+
+    /**
+     * @brief Get path to .lightpad watches file
+     */
+    QString lightpadWatchesPath() const;
+
 signals:
     /**
      * @brief Emitted when a watch is added
@@ -182,6 +202,7 @@ private:
     QMap<int, int> m_pendingVariables;        // variablesReference -> watch ID
     
     DapClient* m_dapClient;
+    QString m_workspaceFolder;
 };
 
 #endif // WATCHMANAGER_H

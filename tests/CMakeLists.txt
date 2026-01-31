@@ -350,6 +350,7 @@ add_executable(test_dap
     ${CMAKE_SOURCE_DIR}/App/dap/debugconfiguration.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/watchmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugsession.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugsettings.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 

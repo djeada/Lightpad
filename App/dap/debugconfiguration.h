@@ -280,6 +280,23 @@ public:
      */
     DebugConfiguration createQuickConfig(const QString& filePath) const;
 
+    /**
+     * @brief Load configurations from .lightpad/debug/launch.json
+     * @return true if loaded successfully
+     */
+    bool loadFromLightpadDir();
+
+    /**
+     * @brief Save configurations to .lightpad/debug/launch.json
+     * @return true if saved successfully
+     */
+    bool saveToLightpadDir();
+
+    /**
+     * @brief Get the path to the .lightpad launch configuration file
+     */
+    QString lightpadLaunchConfigPath() const;
+
 signals:
     void configurationAdded(const QString& name);
     void configurationRemoved(const QString& name);
