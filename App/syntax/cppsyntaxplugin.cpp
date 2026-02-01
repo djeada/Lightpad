@@ -62,6 +62,28 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const
         rules.append(rule);
     }
 
+    // Preprocessor directives
+    const QString preprocessorDirectives = QStringLiteral("include|define|undef|if|ifdef|ifndef|elif|else|endif|pragma|error|warning|line");
+    SyntaxRule preprocessorRule;
+    preprocessorRule.pattern = QRegularExpression(
+        QStringLiteral("^\\s*#\\s*(%1)\\b").arg(preprocessorDirectives));
+    preprocessorRule.name = "preprocessor_directive";
+    rules.append(preprocessorRule);
+
+    // Namespace and scope resolution identifiers
+    const QString identifierPattern = QStringLiteral("[A-Za-z_][A-Za-z0-9_]*");
+    SyntaxRule scopeQualifierRule;
+    scopeQualifierRule.pattern = QRegularExpression(
+        QStringLiteral("%1(?=::)").arg(identifierPattern));
+    scopeQualifierRule.name = "scope_qualifier";
+    rules.append(scopeQualifierRule);
+
+    SyntaxRule scopedIdentifierRule;
+    scopedIdentifierRule.pattern = QRegularExpression(
+        QStringLiteral("(?<=::)%1").arg(identifierPattern));
+    scopedIdentifierRule.name = "scoped_identifier";
+    rules.append(scopedIdentifierRule);
+
     // Numbers
     SyntaxRule numberRule;
     numberRule.pattern = QRegularExpression("\\b[-+.,]*\\d{1,}f*\\b");

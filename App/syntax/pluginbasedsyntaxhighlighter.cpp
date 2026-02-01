@@ -64,7 +64,7 @@ QTextCharFormat PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRul
     QString ruleName = rule.name.toLower();
 
     // Apply colors based on rule name/type
-    if (ruleName.contains("keyword")) {
+    if (ruleName.contains("keyword") || ruleName.contains("preprocessor") || ruleName.contains("directive")) {
         if (ruleName.contains("0") || ruleName.contains("primary")) {
             format.setForeground(theme.keywordFormat_0);
             format.setFontWeight(QFont::Bold);
@@ -86,7 +86,8 @@ QTextCharFormat PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRul
     } else if (ruleName.contains("function")) {
         format.setForeground(theme.functionFormat);
         format.setFontItalic(true);
-    } else if (ruleName.contains("class") || ruleName.contains("type")) {
+    } else if (ruleName.contains("class") || ruleName.contains("type")
+               || ruleName.contains("scope") || ruleName.contains("scoped")) {
         format.setForeground(theme.classFormat);
         format.setFontWeight(QFont::Bold);
     }

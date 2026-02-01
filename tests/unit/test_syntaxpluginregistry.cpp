@@ -13,6 +13,7 @@
 #include "syntax/shellsyntaxplugin.h"
 #include "syntax/typescriptsyntaxplugin.h"
 #include "syntax/yamlsyntaxplugin.h"
+#include <QRegularExpression>
 #include <memory>
 
 class TestSyntaxPluginRegistry : public QObject {
@@ -31,6 +32,7 @@ private slots:
     void testIsExtensionSupported();
     void testPluginReplacement();
     void testAllBuiltInPlugins();
+    void testCppPreprocessorAndScopePatterns();
 };
 
 void TestSyntaxPluginRegistry::init()
@@ -275,6 +277,46 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins()
         QVERIFY(!plugin->fileExtensions().isEmpty());
         QVERIFY(!plugin->syntaxRules().isEmpty());
     }
+}
+
+void TestSyntaxPluginRegistry::testCppPreprocessorAndScopePatterns()
+{
+    CppSyntaxPlugin plugin;
+    auto rules = plugin.syntaxRules();
+    QRegularExpression preprocessorPattern;
+    QRegularExpression scopeQualifierPattern;
+    QRegularExpression scopedIdentifierPattern;
+    bool foundPreprocessor = false;
+    bool foundScopeQualifier = false;
+    bool foundScopedIdentifier = false;
+
+    for (const auto& rule : rules) {
+        const QString pattern = rule.pattern.pattern();
+        if (rule.name == "preprocessor_directive") {
+            preprocessorPattern = rule.pattern;
+            foundPreprocessor = true;
+        }
+        if (rule.name == "scope_qualifier" && pattern.contains("(?=::)")) {
+            scopeQualifierPattern = rule.pattern;
+            foundScopeQualifier = true;
+        }
+        if (rule.name == "scoped_identifier" && pattern.contains("(?<=::)")) {
+            scopedIdentifierPattern = rule.pattern;
+            foundScopedIdentifier = true;
+        }
+    }
+
+    QVERIFY2(foundPreprocessor, "Missing preprocessor rule in C++ syntax rules.");
+    QVERIFY2(foundScopeQualifier, "Missing scope qualifier rule in C++ syntax rules.");
+    QVERIFY2(foundScopedIdentifier, "Missing scoped identifier rule in C++ syntax rules.");
+
+    QVERIFY(preprocessorPattern.isValid());
+    QVERIFY(scopeQualifierPattern.isValid());
+    QVERIFY(scopedIdentifierPattern.isValid());
+
+    QVERIFY(preprocessorPattern.globalMatch("#include <iostream>").hasNext());
+    QVERIFY(scopeQualifierPattern.globalMatch("std::vector").hasNext());
+    QVERIFY(scopedIdentifierPattern.globalMatch("std::vector").hasNext());
 }
 
 QTEST_MAIN(TestSyntaxPluginRegistry)
