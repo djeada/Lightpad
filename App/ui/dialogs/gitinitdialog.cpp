@@ -1,4 +1,5 @@
 #include "gitinitdialog.h"
+#include "../uistylehelper.h"
 #include <QFileDialog>
 #include <QMessageBox>
 
@@ -242,5 +243,52 @@ void GitInitDialog::onBrowseClicked()
     
     if (!dir.isEmpty()) {
         m_pathEdit->setText(dir);
+    }
+}
+
+void GitInitDialog::applyTheme(const Theme& theme)
+{
+    setStyleSheet(UIStyleHelper::formDialogStyle(theme));
+    
+    // Apply group box style to all group boxes
+    for (QGroupBox* groupBox : findChildren<QGroupBox*>()) {
+        groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
+    }
+    
+    // Apply line edit style
+    if (m_pathEdit) {
+        m_pathEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
+    }
+    if (m_remoteEdit) {
+        m_remoteEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
+    }
+    
+    // Apply checkbox style
+    if (m_initialCommitCheckbox) {
+        m_initialCommitCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
+    }
+    if (m_gitIgnoreCheckbox) {
+        m_gitIgnoreCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
+    }
+    
+    // Apply button styles
+    if (m_cancelButton) {
+        m_cancelButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
+    if (m_browseButton) {
+        m_browseButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
+    if (m_initButton) {
+        m_initButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    
+    // Apply title/subtitle labels
+    for (QLabel* label : findChildren<QLabel*>()) {
+        QString text = label->text();
+        if (text.contains("Initialize Git") || text.contains("🗃️")) {
+            // Skip icon and title
+        } else if (label->styleSheet().contains("color: #8b949e")) {
+            label->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+        }
     }
 }

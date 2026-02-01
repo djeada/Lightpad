@@ -438,6 +438,8 @@ add_test(NAME GitIntegrationTests COMMAND test_gitintegration)
 add_executable(test_gotolinedialog
     unit/test_gotolinedialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gotolinedialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -462,6 +464,8 @@ add_test(NAME GoToLineDialogTests COMMAND test_gotolinedialog)
 add_executable(test_gotosymboldialog
     unit/test_gotosymboldialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gotosymboldialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 

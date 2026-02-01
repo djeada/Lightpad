@@ -1,4 +1,5 @@
 #include "problemspanel.h"
+#include "../uistylehelper.h"
 #include <QHeaderView>
 #include <QFileInfo>
 
@@ -351,20 +352,20 @@ void ProblemsPanel::rebuildTree()
             diagItem->setData(0, Qt::UserRole + 1, diag.range.start.line);
             diagItem->setData(0, Qt::UserRole + 2, diag.range.start.character);
 
-            // Color based on severity
+            // Color based on severity (using theme colors)
             QColor color;
             switch (diag.severity) {
             case LspDiagnosticSeverity::Error:
-                color = QColor("#f14c4c");
+                color = m_theme.errorColor;
                 break;
             case LspDiagnosticSeverity::Warning:
-                color = QColor("#cca700");
+                color = m_theme.warningColor;
                 break;
             case LspDiagnosticSeverity::Information:
-                color = QColor("#3794ff");
+                color = m_theme.accentColor;
                 break;
             case LspDiagnosticSeverity::Hint:
-                color = QColor("#888888");
+                color = m_theme.singleLineCommentFormat;
                 break;
             }
             diagItem->setForeground(0, color);
@@ -425,4 +426,47 @@ void ProblemsPanel::onFileSaved(const QString& filePath)
 void ProblemsPanel::onAutoRefreshToggled(bool checked)
 {
     m_autoRefreshEnabled = checked;
+}
+
+void ProblemsPanel::applyTheme(const Theme& theme)
+{
+    m_theme = theme;
+    
+    // Header
+    if (QWidget* header = findChild<QWidget*>()) {
+        // Find the first child widget (header)
+        for (QObject* child : children()) {
+            if (QWidget* w = qobject_cast<QWidget*>(child)) {
+                if (w != m_tree) {
+                    w->setStyleSheet(UIStyleHelper::panelHeaderStyle(theme));
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Title label
+    if (QLabel* titleLabel = findChild<QLabel*>()) {
+        titleLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
+    }
+    
+    // Filter combo
+    if (m_filterCombo) {
+        m_filterCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+    }
+    
+    // Checkbox
+    if (m_autoRefreshCheckBox) {
+        m_autoRefreshCheckBox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
+    }
+    
+    // Status label
+    if (m_statusLabel) {
+        m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+    }
+    
+    // Tree widget
+    if (m_tree) {
+        m_tree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+    }
 }

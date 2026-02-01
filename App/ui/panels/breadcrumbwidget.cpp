@@ -1,4 +1,5 @@
 #include "breadcrumbwidget.h"
+#include "../uistylehelper.h"
 #include <QDir>
 #include <QFileInfo>
 
@@ -79,25 +80,8 @@ void BreadcrumbWidget::rebuildBreadcrumbs()
     
     QStringList segments = getPathSegments(displayPath);
     
-    const QString buttonStyle = 
-        "QPushButton {"
-        "  background: transparent;"
-        "  color: #9aa4b2;"
-        "  border: none;"
-        "  padding: 2px 6px;"
-        "  font-size: 12px;"
-        "}"
-        "QPushButton:hover {"
-        "  color: #e6edf3;"
-        "  background: #2a3241;"
-        "  border-radius: 3px;"
-        "}";
-    
-    const QString separatorStyle = 
-        "QLabel {"
-        "  color: #4a5568;"
-        "  font-size: 12px;"
-        "}";
+    const QString buttonStyle = UIStyleHelper::breadcrumbButtonStyle(m_theme);
+    const QString separatorStyle = UIStyleHelper::breadcrumbSeparatorStyle(m_theme);
     
     // Remove the stretch temporarily (if it exists)
     if (m_layout->count() > 0) {
@@ -131,21 +115,7 @@ void BreadcrumbWidget::rebuildBreadcrumbs()
     
     // Highlight the file name (last segment)
     if (!m_segments.isEmpty()) {
-        m_segments.last()->setStyleSheet(
-            "QPushButton {"
-            "  background: transparent;"
-            "  color: #e6edf3;"
-            "  border: none;"
-            "  padding: 2px 6px;"
-            "  font-size: 12px;"
-            "  font-weight: bold;"
-            "}"
-            "QPushButton:hover {"
-            "  color: #ffffff;"
-            "  background: #2a3241;"
-            "  border-radius: 3px;"
-            "}"
-        );
+        m_segments.last()->setStyleSheet(UIStyleHelper::breadcrumbActiveButtonStyle(m_theme));
     }
     
     // Re-add stretch
@@ -209,4 +179,15 @@ void BreadcrumbWidget::onSegmentClicked()
 void BreadcrumbWidget::onDropdownClicked()
 {
     // Future: Show dropdown menu with sibling files
+}
+
+void BreadcrumbWidget::applyTheme(const Theme& theme)
+{
+    m_theme = theme;
+    setStyleSheet(
+        "BreadcrumbWidget {"
+        "  " + UIStyleHelper::panelHeaderStyle(theme) +
+        "}"
+    );
+    rebuildBreadcrumbs();
 }

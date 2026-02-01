@@ -7,6 +7,7 @@
 #include <QVBoxLayout>
 #include <QKeyEvent>
 #include "../../lsp/lspclient.h"
+#include "../../settings/theme.h"
 
 /**
  * @brief Symbol item for the dialog
@@ -46,6 +47,11 @@ public:
      * @brief Show and focus the dialog
      */
     void showDialog();
+
+    /**
+     * @brief Apply theme to the dialog
+     */
+    void applyTheme(const Theme& theme);
 
 signals:
     /**

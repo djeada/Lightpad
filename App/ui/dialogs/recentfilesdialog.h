@@ -6,6 +6,7 @@
 #include <QListWidget>
 #include <QVBoxLayout>
 #include <QKeyEvent>
+#include "../../settings/theme.h"
 
 class RecentFilesManager;
 
@@ -30,6 +31,11 @@ public:
      * @brief Refresh the list of recent files
      */
     void refresh();
+
+    /**
+     * @brief Apply theme to the dialog
+     */
+    void applyTheme(const Theme& theme);
 
 signals:
     /**

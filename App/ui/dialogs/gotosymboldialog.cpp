@@ -1,4 +1,5 @@
 #include "gotosymboldialog.h"
+#include "../uistylehelper.h"
 #include <QApplication>
 #include <algorithm>
 
@@ -378,4 +379,11 @@ QString GoToSymbolDialog::symbolKindName(LspSymbolKind kind) const
     case LspSymbolKind::TypeParameter: return tr("Type Parameter");
     default: return tr("Symbol");
     }
+}
+
+void GoToSymbolDialog::applyTheme(const Theme& theme)
+{
+    setStyleSheet("GoToSymbolDialog { " + UIStyleHelper::popupDialogStyle(theme) + " }");
+    m_searchBox->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
+    m_resultsList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
 }
