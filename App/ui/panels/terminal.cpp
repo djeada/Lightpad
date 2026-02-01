@@ -49,6 +49,8 @@ Terminal::Terminal(QWidget* parent)
     ui->closeButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     ui->closeButton->setCheckable(false);
     ui->closeButton->setAutoExclusive(false);
+
+    ui->closeButton->setStyleSheet(closeButtonStyle(m_textColor, m_errorColor));
     
     // Get default shell profile
     m_shellProfile = ShellProfileManager::instance().defaultProfile();
@@ -846,7 +848,12 @@ void Terminal::updateStyleSheet()
     
     ui->textEdit->setStyleSheet(styleSheet);
 
-    QString closeButtonStyle = QString(
+    ui->closeButton->setStyleSheet(closeButtonStyle(m_textColor, m_errorColor));
+}
+
+QString Terminal::closeButtonStyle(const QString& textColor, const QString& pressedColor)
+{
+    return QString(
         "QToolButton {"
         "  color: rgba(255, 255, 255, 0.4);"
         "  background: transparent;"
@@ -862,10 +869,9 @@ void Terminal::updateStyleSheet()
         "}"
         "QToolButton:pressed {"
         "  color: #ffffff;"
-        "  background: #e81123;"
+        "  background: %2;"
         "}"
-    ).arg(m_textColor);
-    ui->closeButton->setStyleSheet(closeButtonStyle);
+    ).arg(textColor, pressedColor);
 }
 
 void Terminal::setShellProfile(const ShellProfile& profile)

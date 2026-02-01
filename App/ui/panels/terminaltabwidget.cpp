@@ -316,25 +316,7 @@ void TerminalTabWidget::applyTheme(const Theme& theme)
         m_secondaryTabWidget->setStyleSheet(tabWidgetStyle);
     }
 
-    const QString closeButtonStyle = QString(
-        "QToolButton {"
-        "  color: rgba(255, 255, 255, 0.4);"
-        "  background: transparent;"
-        "  border: none;"
-        "  border-radius: 4px;"
-        "  padding: 2px;"
-        "  font-size: 14px;"
-        "  font-weight: bold;"
-        "}"
-        "QToolButton:hover {"
-        "  color: %1;"
-        "  background: rgba(255, 255, 255, 0.15);"
-        "}"
-        "QToolButton:pressed {"
-        "  color: #ffffff;"
-        "  background: %2;"
-        "}"
-    ).arg(textColor, pressedColor);
+    const QString closeButtonStyle = Terminal::closeButtonStyle(textColor, pressedColor);
     m_closeButton->setStyleSheet(closeButtonStyle);
 
     // Apply to all terminals in primary tab widget

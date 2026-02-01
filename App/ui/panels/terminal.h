@@ -98,6 +98,8 @@ public:
                     const QString& textColor,
                     const QString& errorColor = QString());
 
+    static QString closeButtonStyle(const QString& textColor, const QString& pressedColor);
+
     /**
      * @brief Set the shell profile to use
      * @param profile Shell profile
