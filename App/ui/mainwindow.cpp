@@ -694,9 +694,8 @@ void MainWindow::ensureProjectSettings(const QString& path)
     }
 
     QString configDir = rootDir.filePath(".lightpad");
-    QString runConfigPath = configDir + "/run_config.json";
-    // Note: saveAssignmentsToDir is called automatically by the managers when needed
-    // The explicit call here was causing build issues due to private method access
+    // Template assignments are saved automatically when setAssignment is called
+    // in RunTemplateManager and FormatTemplateManager
 
     QString highlightConfigPath = configDir + "/highlight_config.json";
     if (!QFileInfo(highlightConfigPath).exists()) {

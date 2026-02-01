@@ -184,10 +184,6 @@ void BreadcrumbWidget::onDropdownClicked()
 void BreadcrumbWidget::applyTheme(const Theme& theme)
 {
     m_theme = theme;
-    setStyleSheet(
-        "BreadcrumbWidget {"
-        "  " + UIStyleHelper::panelHeaderStyle(theme) +
-        "}"
-    );
+    setStyleSheet(QString("BreadcrumbWidget { %1 }").arg(UIStyleHelper::panelHeaderStyle(theme)));
     rebuildBreadcrumbs();
 }

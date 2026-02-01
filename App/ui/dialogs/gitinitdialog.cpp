@@ -281,14 +281,4 @@ void GitInitDialog::applyTheme(const Theme& theme)
     if (m_initButton) {
         m_initButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
     }
-    
-    // Apply title/subtitle labels
-    for (QLabel* label : findChildren<QLabel*>()) {
-        QString text = label->text();
-        if (text.contains("Initialize Git") || text.contains("🗃️")) {
-            // Skip icon and title
-        } else if (label->styleSheet().contains("color: #8b949e")) {
-            label->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
-        }
-    }
 }

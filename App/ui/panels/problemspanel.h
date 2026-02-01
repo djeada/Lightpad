@@ -132,6 +132,8 @@ private:
     const QList<LspDiagnostic>* findDiagnosticsForFile(const QString& filePath) const;
 
     QTreeWidget* m_tree;
+    QWidget* m_header;
+    QLabel* m_titleLabel;
     QLabel* m_statusLabel;
     QComboBox* m_filterCombo;
     QCheckBox* m_autoRefreshCheckBox;
