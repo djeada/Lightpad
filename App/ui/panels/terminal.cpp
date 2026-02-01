@@ -853,9 +853,16 @@ void Terminal::updateStyleSheet()
 
 QString Terminal::closeButtonStyle(const QString& textColor, const QString& pressedColor)
 {
+    const QColor baseColor(textColor);
+    const QString subduedColor = QString("rgba(%1, %2, %3, 0.4)")
+                                     .arg(baseColor.red())
+                                     .arg(baseColor.green())
+                                     .arg(baseColor.blue());
+    const QString fullTextColor = baseColor.isValid() ? baseColor.name() : textColor;
+
     return QString(
         "QToolButton {"
-        "  color: rgba(255, 255, 255, 0.4);"
+        "  color: %1;"
         "  background: transparent;"
         "  border: none;"
         "  border-radius: 4px;"
@@ -864,14 +871,14 @@ QString Terminal::closeButtonStyle(const QString& textColor, const QString& pres
         "  font-weight: bold;"
         "}"
         "QToolButton:hover {"
-        "  color: %1;"
+        "  color: %2;"
         "  background: rgba(255, 255, 255, 0.15);"
         "}"
         "QToolButton:pressed {"
-        "  color: #ffffff;"
-        "  background: %2;"
+        "  color: %2;"
+        "  background: %3;"
         "}"
-    ).arg(textColor, pressedColor);
+    ).arg(subduedColor, fullTextColor, pressedColor);
 }
 
 void Terminal::setShellProfile(const ShellProfile& profile)
