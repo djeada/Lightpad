@@ -53,6 +53,7 @@ public slots:
 
 protected:
     void wheelEvent(QWheelEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
     void setupUi();
@@ -73,6 +74,8 @@ private:
     static constexpr double ZOOM_STEP = 1.25;
     static constexpr double MIN_ZOOM = 0.1;
     static constexpr double MAX_ZOOM = 10.0;
+    
+    bool m_initialFitPending;
 };
 
 #endif // IMAGEVIEWER_H

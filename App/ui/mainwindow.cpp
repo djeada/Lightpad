@@ -588,7 +588,8 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     // Default handling for text files
     if (ui->tabWidget->count() == 0 || !getCurrentTextArea()->toPlainText().isEmpty()) {
         ui->tabWidget->addNewTab();
-        ui->tabWidget->setCurrentIndex(ui->tabWidget->count() - 1);
+        // Note: addNewTab() already sets the correct current index (count() - 2)
+        // since the last tab is the add-button placeholder
     }
 
     open(filePath);

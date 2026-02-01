@@ -362,6 +362,11 @@ void LightpadPage::setCustomContentWidget(QWidget* widget)
     textArea->setVisible(false);
     widget->setParent(this);
     widget->setVisible(true);
+
+    // Hide minimap for custom content widgets (e.g., image viewer)
+    if (minimap) {
+        minimap->setVisible(false);
+    }
 }
 
 void LightpadPage::setMainWindow(MainWindow* window)
