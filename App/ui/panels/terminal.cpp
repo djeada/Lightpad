@@ -858,7 +858,7 @@ QString Terminal::closeButtonStyle(const QString& textColor, const QString& pres
                                      .arg(baseColor.red())
                                      .arg(baseColor.green())
                                      .arg(baseColor.blue());
-    const QString fullTextColor = baseColor.isValid() ? baseColor.name() : textColor;
+    const QString fullTextColor = baseColor.name();
 
     return QString(
         "QToolButton {"
