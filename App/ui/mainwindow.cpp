@@ -1394,18 +1394,18 @@ void MainWindow::ensureSourceControlPanel()
     connect(sourceControlPanel, &SourceControlPanel::fileOpenRequested, this,
             [this](const QString& filePath) { openFileAndAddToNewTab(filePath); });
     connect(sourceControlPanel, &SourceControlPanel::diffRequested, this,
-            [this](const QString& filePath) {
+            [this](const QString& filePath, bool staged) {
                 if (!m_gitIntegration) {
                     return;
                 }
-                QString diff = m_gitIntegration->getFileDiff(filePath);
+                QString diff = m_gitIntegration->getFileDiff(filePath, staged);
                 if (diff.trimmed().isEmpty()) {
                     QMessageBox::information(this, tr("Diff"), tr("No changes to show for this file."));
                     return;
                 }
 
                 QDialog dialog(this);
-                dialog.setWindowTitle(tr("Diff"));
+                dialog.setWindowTitle(staged ? tr("Staged Diff") : tr("Unstaged Diff"));
                 dialog.resize(760, 520);
                 QVBoxLayout layout(&dialog);
 

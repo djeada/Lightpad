@@ -58,7 +58,7 @@ signals:
     /**
      * @brief Emitted when user wants to view diff
      */
-    void diffRequested(const QString& filePath);
+    void diffRequested(const QString& filePath, bool staged);
 
     /**
      * @brief Emitted when repository is initialized

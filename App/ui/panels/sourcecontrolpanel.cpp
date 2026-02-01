@@ -580,6 +580,7 @@ void SourceControlPanel::setupRepoUI()
     m_stagedTree = new QTreeWidget(m_repoWidget);
     m_stagedTree->setHeaderHidden(true);
     m_stagedTree->setRootIsDecorated(false);
+    m_stagedTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_stagedTree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_stagedTree->setStyleSheet(
         "QTreeWidget {"
@@ -637,6 +638,7 @@ void SourceControlPanel::setupRepoUI()
     m_changesTree = new QTreeWidget(m_repoWidget);
     m_changesTree->setHeaderHidden(true);
     m_changesTree->setRootIsDecorated(false);
+    m_changesTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_changesTree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_changesTree->setStyleSheet(
         "QTreeWidget {"
@@ -985,6 +987,11 @@ void SourceControlPanel::updateTree()
     if (m_changesTree) {
         m_changesTree->setToolTip(m_changesCount == 0 ? tr("Working tree clean") : QString());
     }
+
+    if (m_stagedCount == 0 && m_changesCount == 0) {
+        m_statusLabel->setText(tr("Working tree clean"));
+        m_statusLabel->setToolTip(QString());
+    }
 }
 
 void SourceControlPanel::resetChangeCounts()
@@ -1136,12 +1143,46 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
         connect(unstageAction, &QAction::triggered, [this, filePath]() {
             if (m_git) m_git->unstageFile(filePath);
         });
+
+        QAction* unstageSelectedAction = menu.addAction(tr("Unstage Selected"));
+        connect(unstageSelectedAction, &QAction::triggered, [this, tree]() {
+            if (!m_git || !tree) return;
+            QList<QTreeWidgetItem*> items = tree->selectedItems();
+            for (QTreeWidgetItem* selected : items) {
+                if (!selected) continue;
+                bool selectedStaged = selected->data(0, Qt::UserRole + 1).toBool();
+                if (!selectedStaged) {
+                    continue;
+                }
+                QString selectedPath = selected->data(0, Qt::UserRole).toString();
+                if (!selectedPath.isEmpty()) {
+                    m_git->unstageFile(selectedPath);
+                }
+            }
+        });
     } else {
         QAction* stageAction = menu.addAction(tr("Stage"));
         connect(stageAction, &QAction::triggered, [this, filePath]() {
             if (m_git) m_git->stageFile(filePath);
         });
         
+        QAction* stageSelectedAction = menu.addAction(tr("Stage Selected"));
+        connect(stageSelectedAction, &QAction::triggered, [this, tree]() {
+            if (!m_git || !tree) return;
+            QList<QTreeWidgetItem*> items = tree->selectedItems();
+            for (QTreeWidgetItem* selected : items) {
+                if (!selected) continue;
+                bool selectedStaged = selected->data(0, Qt::UserRole + 1).toBool();
+                if (selectedStaged) {
+                    continue;
+                }
+                QString selectedPath = selected->data(0, Qt::UserRole).toString();
+                if (!selectedPath.isEmpty()) {
+                    m_git->stageFile(selectedPath);
+                }
+            }
+        });
+
         menu.addSeparator();
         
         QAction* discardAction = menu.addAction(tr("Discard Changes"));
@@ -1163,10 +1204,12 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
         emit fileOpenRequested(filePath);
     });
     
-    QAction* diffAction = menu.addAction(tr("View Diff"));
-    connect(diffAction, &QAction::triggered, [this, filePath]() {
-        emit diffRequested(filePath);
+    QAction* diffAction = menu.addAction(isStaged ? tr("View Staged Diff") : tr("View Unstaged Diff"));
+    connect(diffAction, &QAction::triggered, [this, filePath, isStaged]() {
+        emit diffRequested(filePath, isStaged);
     });
+
+    
 
     QAction* copyPathAction = menu.addAction(tr("Copy Path"));
     connect(copyPathAction, &QAction::triggered, [this, filePath, relativePath]() {

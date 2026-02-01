@@ -525,7 +525,7 @@ bool GitIntegration::deleteBranch(const QString& branchName, bool force)
     return success;
 }
 
-QString GitIntegration::getFileDiff(const QString& filePath) const
+QString GitIntegration::getFileDiff(const QString& filePath, bool staged) const
 {
     if (!m_isValid) {
         return QString();
@@ -537,12 +537,12 @@ QString GitIntegration::getFileDiff(const QString& filePath) const
     }
     
     bool success;
-    QString diff = executeGitCommand({"diff", "--", relativePath}, &success);
-    
-    if (!success || diff.isEmpty()) {
-        // Try staged diff
-        diff = executeGitCommand({"diff", "--cached", "--", relativePath}, &success);
+    QStringList args = {"diff"};
+    if (staged) {
+        args << "--cached";
     }
+    args << "--" << relativePath;
+    QString diff = executeGitCommand(args, &success);
     
     return diff;
 }

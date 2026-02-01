@@ -20,6 +20,7 @@ private slots:
     void testGetBranches();
     void testCreateBranch();
     void testGetDiffLines();
+    void testGetFileDiffStagedAndUnstaged();
     // Tests from HEAD (extended functionality)
     void testInitRepository();
     void testRemoteOperations();
@@ -301,6 +302,30 @@ void TestGitIntegration::testGetDiffLines()
     
     // Restore the file
     runGitCommand({"checkout", "--", "initial.txt"});
+}
+
+void TestGitIntegration::testGetFileDiffStagedAndUnstaged()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+
+    QString stagedFile = "staged_diff.txt";
+    QString unstagedFile = "initial.txt";
+
+    createTestFile(stagedFile, "Staged content\n");
+    QVERIFY(git.stageFile(stagedFile));
+
+    createTestFile(unstagedFile, "Modified content\n");
+
+    QString stagedDiff = git.getFileDiff(stagedFile, true);
+    QVERIFY(!stagedDiff.trimmed().isEmpty());
+
+    QString unstagedDiff = git.getFileDiff(unstagedFile, false);
+    QVERIFY(!unstagedDiff.trimmed().isEmpty());
+
+    runGitCommand({"reset", "HEAD", stagedFile});
+    QFile::remove(m_repoPath + "/" + stagedFile);
+    runGitCommand({"checkout", "--", unstagedFile});
 }
 
 bool TestGitIntegration::runGitCommandAt(const QString& path, const QStringList& args)
