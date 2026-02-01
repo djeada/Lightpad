@@ -29,6 +29,7 @@ class SplitEditorContainer : public QWidget {
 public:
     explicit SplitEditorContainer(QWidget* parent = nullptr);
     ~SplitEditorContainer();
+    void adoptTabWidget(LightpadTabWidget* tabWidget);
 
     /**
      * @brief Set the main window reference

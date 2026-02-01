@@ -21,6 +21,38 @@ SplitEditorContainer::~SplitEditorContainer()
 {
 }
 
+void SplitEditorContainer::adoptTabWidget(LightpadTabWidget* tabWidget)
+{
+    if (!tabWidget || !m_rootSplitter) {
+        return;
+    }
+
+    QWidget* parentWidget = tabWidget->parentWidget();
+    if (parentWidget && parentWidget != this) {
+        tabWidget->setParent(this);
+    }
+
+    // Remove any existing widgets from the root splitter.
+    while (m_rootSplitter->count() > 0) {
+        QWidget* w = m_rootSplitter->widget(0);
+        if (w) {
+            w->setParent(nullptr);
+        } else {
+            break;
+        }
+    }
+
+    m_rootSplitter->addWidget(tabWidget);
+    m_tabWidgets.clear();
+    m_tabWidgets.append(tabWidget);
+
+    if (m_mainWindow) {
+        tabWidget->setMainWindow(m_mainWindow);
+    }
+    tabWidget->installEventFilter(this);
+    updateFocus(tabWidget);
+}
+
 void SplitEditorContainer::setupUI()
 {
     QVBoxLayout* layout = new QVBoxLayout(this);

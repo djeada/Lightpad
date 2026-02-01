@@ -13,6 +13,7 @@ TextAreaSettings::TextAreaSettings()
     , showLineNumberArea(true)
     , lineHighlighted(true)
     , matchingBracketsHighlighted(true)
+    , vimModeEnabled(false)
     , tabWidth(defaultTabWidth){
 
     };
@@ -94,6 +95,9 @@ void TextAreaSettings::read(const QJsonObject& json)
     if (json.contains("matchingBracketsHighlighted") && json["matchingBracketsHighlighted"].isBool())
         matchingBracketsHighlighted = json["matchingBracketsHighlighted"].toBool();
 
+    if (json.contains("vimModeEnabled") && json["vimModeEnabled"].isBool())
+        vimModeEnabled = json["vimModeEnabled"].toBool();
+
     if (json.contains("tabWidth") && json["tabWidth"].isDouble())
         tabWidth = json["tabWidth"].toInt();
 }
@@ -114,5 +118,6 @@ void TextAreaSettings::write(QJsonObject& json)
     json["showLineNumberArea"] = showLineNumberArea;
     json["lineHighlighted"] = lineHighlighted;
     json["matchingBracketsHighlighted"] = matchingBracketsHighlighted;
+    json["vimModeEnabled"] = vimModeEnabled;
     json["tabWidth"] = tabWidth;
 }

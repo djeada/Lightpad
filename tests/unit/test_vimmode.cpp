@@ -25,6 +25,9 @@ private slots:
     void testToggleCase();
     void testGoToLine();
     void testParagraphMotion();
+    void testSetNoVim();
+    void testSetVim();
+    void testCommandHistory();
 
 private:
     QPlainTextEdit* m_editor;
@@ -350,6 +353,89 @@ void TestVimMode::testParagraphMotion()
     
     cursor = m_editor->textCursor();
     QVERIFY(cursor.blockNumber() > 0); // Should have moved to next paragraph
+}
+
+void TestVimMode::testSetNoVim()
+{
+    m_vim->setEnabled(true);
+    QSignalSpy spy(m_vim, &VimMode::commandExecuted);
+    
+    QKeyEvent colonKey(QEvent::KeyPress, Qt::Key_Colon, Qt::NoModifier, ":");
+    m_vim->processKeyEvent(&colonKey);
+    QKeyEvent sKey(QEvent::KeyPress, Qt::Key_S, Qt::NoModifier, "s");
+    m_vim->processKeyEvent(&sKey);
+    QKeyEvent eKey(QEvent::KeyPress, Qt::Key_E, Qt::NoModifier, "e");
+    m_vim->processKeyEvent(&eKey);
+    QKeyEvent tKey(QEvent::KeyPress, Qt::Key_T, Qt::NoModifier, "t");
+    m_vim->processKeyEvent(&tKey);
+    QKeyEvent spaceKey(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier, " ");
+    m_vim->processKeyEvent(&spaceKey);
+    QKeyEvent nKey(QEvent::KeyPress, Qt::Key_N, Qt::NoModifier, "n");
+    m_vim->processKeyEvent(&nKey);
+    QKeyEvent oKey(QEvent::KeyPress, Qt::Key_O, Qt::NoModifier, "o");
+    m_vim->processKeyEvent(&oKey);
+    QKeyEvent vKey(QEvent::KeyPress, Qt::Key_V, Qt::NoModifier, "v");
+    m_vim->processKeyEvent(&vKey);
+    QKeyEvent iKey(QEvent::KeyPress, Qt::Key_I, Qt::NoModifier, "i");
+    m_vim->processKeyEvent(&iKey);
+    QKeyEvent mKey(QEvent::KeyPress, Qt::Key_M, Qt::NoModifier, "m");
+    m_vim->processKeyEvent(&mKey);
+    QKeyEvent enterKey(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    m_vim->processKeyEvent(&enterKey);
+    
+    QVERIFY(spy.count() > 0);
+    QCOMPARE(spy.takeFirst().at(0).toString(), QString("vim:off"));
+}
+
+void TestVimMode::testSetVim()
+{
+    m_vim->setEnabled(true);
+    QSignalSpy spy(m_vim, &VimMode::commandExecuted);
+    
+    QKeyEvent colonKey(QEvent::KeyPress, Qt::Key_Colon, Qt::NoModifier, ":");
+    m_vim->processKeyEvent(&colonKey);
+    QKeyEvent sKey(QEvent::KeyPress, Qt::Key_S, Qt::NoModifier, "s");
+    m_vim->processKeyEvent(&sKey);
+    QKeyEvent eKey(QEvent::KeyPress, Qt::Key_E, Qt::NoModifier, "e");
+    m_vim->processKeyEvent(&eKey);
+    QKeyEvent tKey(QEvent::KeyPress, Qt::Key_T, Qt::NoModifier, "t");
+    m_vim->processKeyEvent(&tKey);
+    QKeyEvent spaceKey(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier, " ");
+    m_vim->processKeyEvent(&spaceKey);
+    QKeyEvent vKey(QEvent::KeyPress, Qt::Key_V, Qt::NoModifier, "v");
+    m_vim->processKeyEvent(&vKey);
+    QKeyEvent iKey(QEvent::KeyPress, Qt::Key_I, Qt::NoModifier, "i");
+    m_vim->processKeyEvent(&iKey);
+    QKeyEvent mKey(QEvent::KeyPress, Qt::Key_M, Qt::NoModifier, "m");
+    m_vim->processKeyEvent(&mKey);
+    QKeyEvent enterKey(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    m_vim->processKeyEvent(&enterKey);
+    
+    QVERIFY(spy.count() > 0);
+    QCOMPARE(spy.takeFirst().at(0).toString(), QString("vim:on"));
+}
+
+void TestVimMode::testCommandHistory()
+{
+    m_vim->setEnabled(true);
+
+    QKeyEvent colonKey(QEvent::KeyPress, Qt::Key_Colon, Qt::NoModifier, ":");
+    m_vim->processKeyEvent(&colonKey);
+    QKeyEvent wKey(QEvent::KeyPress, Qt::Key_W, Qt::NoModifier, "w");
+    m_vim->processKeyEvent(&wKey);
+    QKeyEvent enterKey(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    m_vim->processKeyEvent(&enterKey);
+
+    QKeyEvent colonKey2(QEvent::KeyPress, Qt::Key_Colon, Qt::NoModifier, ":");
+    m_vim->processKeyEvent(&colonKey2);
+    QKeyEvent upKey(QEvent::KeyPress, Qt::Key_Up, Qt::NoModifier);
+    m_vim->processKeyEvent(&upKey);
+
+    QCOMPARE(m_vim->commandBuffer(), QString("w"));
+
+    QKeyEvent downKey(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
+    m_vim->processKeyEvent(&downKey);
+    QCOMPARE(m_vim->commandBuffer(), QString(""));
 }
 
 QTEST_MAIN(TestVimMode)

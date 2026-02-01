@@ -39,7 +39,7 @@
     <item>
      <widget class="LightpadTabWidget" name="tabWidget">
       <property name="sizePolicy">
-       <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
         <horstretch>1</horstretch>
         <verstretch>1</verstretch>
        </sizepolicy>
@@ -75,6 +75,18 @@
     </item>
     <item>
      <widget class="QWidget" name="backgroundBottom" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>36</height>
+       </size>
+      </property>
       <property name="styleSheet">
        <string notr="true"/>
       </property>
@@ -298,7 +310,9 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionToggle_Menu_Bar"/>
     <addaction name="actionToggle_Minimap"/>
     <addaction name="actionToggle_Terminal"/>
+    <addaction name="actionToggle_Source_Control"/>
     <addaction name="actionToggle_Word_Wrap"/>
+    <addaction name="actionToggle_Vim_Mode"/>
     <addaction name="separator"/>
     <addaction name="menuFolding"/>
     <addaction name="separator"/>
@@ -597,6 +611,20 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <string>Ctrl+`</string>
    </property>
   </action>
+  <action name="actionToggle_Source_Control">
+   <property name="text">
+    <string>Toggle Source Control</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+G</string>
+   </property>
+  </action>
   <action name="actionTransform_Uppercase">
    <property name="text">
     <string>UPPERCASE</string>
@@ -637,6 +665,14 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
    </property>
    <property name="shortcut">
     <string>Alt+Z</string>
+   </property>
+  </action>
+  <action name="actionToggle_Vim_Mode">
+   <property name="text">
+    <string>Toggle Vim Mode</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
    </property>
   </action>
   <action name="actionFold_Current">

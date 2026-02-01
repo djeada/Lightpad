@@ -6,6 +6,7 @@
 #include <QMainWindow>
 #include <QMap>
 #include <QSet>
+#include <QTimer>
 
 #include "../settings/textareasettings.h"
 #include "../settings/theme.h"
@@ -18,8 +19,17 @@ class TextArea;
 class QCompleter;
 class Preferences;
 class CompletionEngine;
+class QTreeView;
+class QModelIndex;
 class SplitEditorContainer;
+class LightpadTabWidget;
 class ImageViewer;
+class GitIntegration;
+class GitFileSystemModel;
+class SourceControlPanel;
+class QDockWidget;
+class VimMode;
+class LightpadTreeView;
 #ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
 #endif
@@ -106,6 +116,7 @@ private slots:
     void on_actionFocus_Previous_Group_triggered();
     void on_actionUnsplit_All_triggered();
     void on_actionToggle_Terminal_triggered();
+    void on_actionToggle_Source_Control_triggered();
     
     // Text transformation actions
     void on_actionTransform_Uppercase_triggered();
@@ -116,6 +127,7 @@ private slots:
     
     // View actions
     void on_actionToggle_Word_Wrap_triggered();
+    void on_actionToggle_Vim_Mode_triggered();
     void on_actionFold_Current_triggered();
     void on_actionUnfold_Current_triggered();
     void on_actionFold_All_triggered();
@@ -144,6 +156,9 @@ private:
     class FileQuickOpen* fileQuickOpen;
     class RecentFilesDialog* recentFilesDialog;
     class QLabel* problemsStatusLabel;
+    class QLabel* vimStatusLabel;
+    bool m_vimCommandPanelActive;
+    VimMode* m_connectedVimMode;
     class BreadcrumbWidget* breadcrumbWidget;
     class RecentFilesManager* recentFilesManager;
     
@@ -152,6 +167,9 @@ private:
     
     // Auto-save
     class AutoSaveManager* autoSaveManager;
+    GitIntegration* m_gitIntegration;
+    SourceControlPanel* sourceControlPanel;
+    QDockWidget* sourceControlDock;
     
     // Split editor views
     SplitEditorContainer* m_splitEditorContainer;
@@ -186,14 +204,43 @@ private:
     void recordNavigationLocation();
     void setupNavigationHistory();
     void setupAutoSave();
+    void setupGitIntegration();
+    void updateGitIntegrationForPath(const QString& path);
+    void applyGitIntegrationToAllPages();
+    void ensureFileTreeModel();
+    void syncTreeExpandedState(const QModelIndex& index, bool expanded);
+    void syncTreeCurrentIndex(const QModelIndex& index);
+    void syncTreeScrollState(QTreeView* treeView);
+    void applyTreeStateToView(QTreeView* treeView);
+    void applyTreeExpandedStateToViews();
+    void applyTreeCollapseToViews(const QString& path);
+    void applyTreeSelectionToViews();
+    void applyTreeScrollToViews();
+    void loadTreeStateFromSettings(const QString& rootPath);
+    void persistTreeStateToSettings();
+    QList<LightpadTreeView*> allTreeViews() const;
+    void expandIndexInView(QTreeView* treeView, const QModelIndex& index);
+    void ensureSourceControlPanel();
+    void ensureStatusLabels();
     void updateProblemsStatusLabel(int errors, int warnings, int infos);
+    void updateVimStatusLabel(const QString& text);
+    void showVimStatusMessage(const QString& message);
     void setMainWindowTitle(QString title);
     void setFilePathAsTabText(QString filePath);
     void closeCurrentTab();
     void setupTabWidget();
+    void setupTabWidgetConnections(LightpadTabWidget* tabWidget);
+    void updateTabWidgetContext(LightpadTabWidget* tabWidget, int index);
+    void applyTabWidgetTheme(LightpadTabWidget* tabWidget);
     void setupTextArea();
+    void connectVimMode(TextArea* textArea);
+    void disconnectVimMode();
+    void showVimCommandPanel(const QString& prefix, const QString& buffer);
+    void hideVimCommandPanel();
     void setupCompletionSystem();
     void noScriptAssignedWarning();
+    LightpadTabWidget* currentTabWidget() const;
+    QList<LightpadTabWidget*> allTabWidgets() const;
     void closeEvent(QCloseEvent* event);
     void loadSettings();
     void saveSettings();
@@ -215,10 +262,18 @@ private:
     
     // Project root path for persistent treeview across all tabs
     QString m_projectRootPath;
+    GitFileSystemModel* m_fileTreeModel;
+    QSet<QString> m_treeExpandedPaths;
+    QString m_treeCurrentPath;
+    QString m_treeTopPath;
+    bool m_syncingTreeState;
 
 public:
     void setProjectRootPath(const QString& path);
     QString getProjectRootPath() const;
+    GitIntegration* getGitIntegration() const;
+    GitFileSystemModel* getFileTreeModel() const;
+    void registerTreeView(LightpadTreeView* treeView);
 };
 
 const int defaultTabWidth = 4;

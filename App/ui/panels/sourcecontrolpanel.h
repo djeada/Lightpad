@@ -79,6 +79,7 @@ private slots:
     void onBranchSelectorChanged(int index);
     void onCreateBranchClicked();
     void onDeleteBranchClicked();
+    void onCommitMessageChanged();
     
     // New slots for extended functionality
     void onInitRepositoryClicked();

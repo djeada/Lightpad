@@ -620,6 +620,38 @@ bool Terminal::eventFilter(QObject* obj, QEvent* event)
 
                 // Execute the command (send user input only, not the prompt)
                 if (!userInput.trimmed().isEmpty()) {
+                    QStringList segments = userInput.split(QRegularExpression("\\s*(?:&&|\\|\\||;)\\s*"),
+                                                          Qt::SkipEmptyParts);
+                    QString firstSegment = segments.isEmpty() ? QString() : segments.first().trimmed();
+                    QRegularExpression cdRegex(R"(^cd(?:\s+(.*))?$)");
+                    QRegularExpressionMatch cdMatch = cdRegex.match(firstSegment);
+                    if (cdMatch.hasMatch()) {
+                        QString target = cdMatch.captured(1).trimmed();
+                        if (target.isEmpty()) {
+                            target = QDir::homePath();
+                        } else {
+                            if ((target.startsWith('"') && target.endsWith('"')) ||
+                                (target.startsWith('\'') && target.endsWith('\''))) {
+                                target = target.mid(1, target.size() - 2);
+                            }
+                            if (target == "~") {
+                                target = QDir::homePath();
+                            } else if (target.startsWith("~/")) {
+                                target = QDir::homePath() + target.mid(1);
+                            }
+                        }
+
+                        if (!target.isEmpty() && target != "-") {
+                            QString resolved = target;
+                            if (QDir(resolved).isRelative()) {
+                                resolved = QDir(m_workingDirectory).filePath(resolved);
+                            }
+                            resolved = QDir::cleanPath(resolved);
+                            if (QDir(resolved).exists()) {
+                                m_workingDirectory = resolved;
+                            }
+                        }
+                    }
                     executeCommand(userInput);
                 } else {
                     // Just send newline for empty input
