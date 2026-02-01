@@ -602,7 +602,6 @@ void SourceControlPanel::setupRepoUI()
     m_stagedTree->setMinimumHeight(80);
     m_stagedTree->setMaximumHeight(150);
     m_stagedTree->setUniformRowHeights(true);
-    m_stagedTree->setPlaceholderText(tr("No staged changes yet."));
     connect(m_stagedTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_stagedTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
     mainLayout->addWidget(m_stagedTree);
@@ -658,7 +657,6 @@ void SourceControlPanel::setupRepoUI()
         "}"
     );
     m_changesTree->setUniformRowHeights(true);
-    m_changesTree->setPlaceholderText(tr("Working tree clean."));
     connect(m_changesTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_changesTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
     mainLayout->addWidget(m_changesTree, 1);
@@ -682,7 +680,7 @@ void SourceControlPanel::setupRepoUI()
     historyIcon->setStyleSheet("font-size: 12px;");
     historyHeaderLayout->addWidget(historyIcon);
     
-    m_historyLabel = new QLabel(tr("Commit History"), m_historyHeader);
+    m_historyLabel = new QLabel(tr("Recent Commits"), m_historyHeader);
     m_historyLabel->setStyleSheet("color: #a371f7; font-weight: bold; font-size: 12px;");
     historyHeaderLayout->addWidget(m_historyLabel);
     
@@ -796,11 +794,10 @@ void SourceControlPanel::refresh()
     updateUIState();
     
     if (!m_git || !m_git->isValidRepository()) {
-        m_stagedCount = 0;
-        m_changesCount = 0;
+        resetChangeCounts();
         if (m_stagedLabel) m_stagedLabel->setText(tr("Staged Changes"));
         if (m_changesLabel) m_changesLabel->setText(tr("Changes"));
-        if (m_historyLabel) m_historyLabel->setText(tr("Commit History"));
+        if (m_historyLabel) m_historyLabel->setText(tr("Recent Commits"));
         if (m_branchLabel) m_branchLabel->setText(tr("Branch"));
         if (m_branchSelector) m_branchSelector->clear();
         if (m_statusLabel) m_statusLabel->setText("");
@@ -812,7 +809,9 @@ void SourceControlPanel::refresh()
     
     updateBranchSelector();
     updateTree();
-    updateHistory();
+    if (m_historyExpanded) {
+        updateHistory();
+    }
     onCommitMessageChanged();
 }
 
@@ -921,8 +920,7 @@ void SourceControlPanel::updateTree()
 {
     m_stagedTree->clear();
     m_changesTree->clear();
-    m_stagedCount = 0;
-    m_changesCount = 0;
+    resetChangeCounts();
     
     if (!m_git || !m_git->isValidRepository()) {
         m_statusLabel->setText(tr("Not a git repository"));
@@ -975,16 +973,24 @@ void SourceControlPanel::updateTree()
     if (m_changesLabel) {
         m_changesLabel->setText(tr("Changes (%1)").arg(m_changesCount));
     }
-
     QString statusText = QString(tr("%1 staged, %2 changed")).arg(m_stagedCount).arg(m_changesCount);
     m_statusLabel->setText(statusText);
 
     m_commitButton->setEnabled(m_stagedCount > 0 && !m_commitMessage->toPlainText().trimmed().isEmpty());
     m_stageAllButton->setEnabled(m_changesCount > 0);
     m_unstageAllButton->setEnabled(m_stagedCount > 0);
-    if (m_changesTree) {
-        m_changesTree->setToolTip(m_changesCount == 0 ? tr("No local changes") : QString());
+    if (m_stagedTree) {
+        m_stagedTree->setToolTip(m_stagedCount == 0 ? tr("No staged changes.") : QString());
     }
+    if (m_changesTree) {
+        m_changesTree->setToolTip(m_changesCount == 0 ? tr("Working tree clean") : QString());
+    }
+}
+
+void SourceControlPanel::resetChangeCounts()
+{
+    m_stagedCount = 0;
+    m_changesCount = 0;
 }
 
 void SourceControlPanel::updateHistory()
@@ -999,7 +1005,7 @@ void SourceControlPanel::updateHistory()
     
     QList<GitCommitInfo> commits = m_git->getCommitLog(DEFAULT_HISTORY_COMMIT_COUNT);
     if (m_historyLabel) {
-        m_historyLabel->setText(tr("Commit History (%1)").arg(commits.size()));
+        m_historyLabel->setText(tr("Recent Commits (%1)").arg(commits.size()));
     }
     
     for (const GitCommitInfo& commit : commits) {

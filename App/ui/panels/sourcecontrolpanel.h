@@ -100,6 +100,7 @@ private:
     void updateBranchLabel();
     void updateUIState();
     void updateHistory();
+    void resetChangeCounts();
     QString statusIcon(GitFileStatus status) const;
     QString statusText(GitFileStatus status) const;
     QColor statusColor(GitFileStatus status) const;
