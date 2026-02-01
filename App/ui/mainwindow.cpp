@@ -1437,8 +1437,10 @@ void MainWindow::ensureDebugPanel()
                 if (textArea) {
                     QTextCursor cursor = textArea->textCursor();
                     cursor.movePosition(QTextCursor::Start);
-                    cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, qMax(0, line - 1));
-                    cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, qMax(0, column - 1));
+                    int targetLine = line > 0 ? line - 1 : 0;
+                    int targetColumn = column > 0 ? column - 1 : 0;
+                    cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, targetLine);
+                    cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, targetColumn);
                     textArea->setTextCursor(cursor);
                     textArea->centerCursor();
                     textArea->setFocus();
@@ -2002,7 +2004,11 @@ void MainWindow::runCurrentScript()
 void MainWindow::startDebuggingForCurrentFile()
 {
     on_actionSave_triggered();
-    auto page = currentTabWidget()->getCurrentPage();
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    if (!tabWidget) {
+        return;
+    }
+    auto page = tabWidget->getCurrentPage();
     QString filePath = page ? page->getFilePath() : QString();
 
     if (filePath.isEmpty()) {
@@ -2045,7 +2051,7 @@ void MainWindow::attachDebugSession(const QString& sessionId)
         return;
     }
 
-    if (sessionId == m_activeDebugSessionId && debugPanel->dapClient() == session->client()) {
+    if (sessionId == m_activeDebugSessionId && debugPanel && debugPanel->dapClient() == session->client()) {
         if (debugDock) {
             debugDock->show();
         }
