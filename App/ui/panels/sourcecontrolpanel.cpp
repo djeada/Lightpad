@@ -1150,21 +1150,22 @@ void SourceControlPanel::updateTree()
         m_changesLabel->setText(tr("Changes (%1)").arg(m_changesCount));
     }
     if (m_stagedCount == 0 && m_changesCount == 0) {
-        m_statusLabel->setText(tr("Working tree clean"));
-        m_statusLabel->setToolTip(QString());
+        m_statusLabel->setText(tr("✓ Working tree clean - No changes to commit"));
+        m_statusLabel->setToolTip(tr("All changes have been committed or there are no modifications."));
     } else {
-        QString statusText = QString(tr("%1 staged, %2 changed")).arg(m_stagedCount).arg(m_changesCount);
+        QString statusText = QString(tr("📊 %1 staged, %2 changed")).arg(m_stagedCount).arg(m_changesCount);
         m_statusLabel->setText(statusText);
+        m_statusLabel->setToolTip(tr("Files ready to commit: %1 | Files with modifications: %2").arg(m_stagedCount).arg(m_changesCount));
     }
 
     m_commitButton->setEnabled(m_stagedCount > 0 && !m_commitMessage->toPlainText().trimmed().isEmpty());
     m_stageAllButton->setEnabled(m_changesCount > 0);
     m_unstageAllButton->setEnabled(m_stagedCount > 0);
     if (m_stagedTree) {
-        m_stagedTree->setToolTip(m_stagedCount == 0 ? tr("No staged changes.") : QString());
+        m_stagedTree->setToolTip(m_stagedCount == 0 ? tr("💡 No staged changes. Stage files to prepare them for commit.") : tr("Double-click to open file, right-click for options"));
     }
     if (m_changesTree) {
-        m_changesTree->setToolTip(m_changesCount == 0 ? tr("Working tree clean") : QString());
+        m_changesTree->setToolTip(m_changesCount == 0 ? tr("✓ Working tree clean - No unstaged changes") : tr("Double-click to open file, right-click for options"));
     }
 }
 
@@ -1562,17 +1563,71 @@ void SourceControlPanel::onDeleteBranchClicked()
 
 void SourceControlPanel::onOperationCompleted(const QString& message)
 {
-    m_statusLabel->setText(message);
+    m_statusLabel->setText("✓ " + message);
+    m_statusLabel->setStyleSheet(
+        "QLabel {"
+        "  background: #161b22;"
+        "  color: #3fb950;"
+        "  padding: 6px 10px;"
+        "  font-size: 11px;"
+        "  border-top: 1px solid #21262d;"
+        "}"
+        "QLabel:hover {"
+        "  color: #56d364;"
+        "}"
+    );
+    m_statusLabel->setToolTip(tr("Success: %1").arg(message));
+    
+    // Reset color after 3 seconds
+    QTimer::singleShot(3000, [this]() {
+        m_statusLabel->setStyleSheet(
+            "QLabel {"
+            "  background: #161b22;"
+            "  color: #8b949e;"
+            "  padding: 6px 10px;"
+            "  font-size: 11px;"
+            "  border-top: 1px solid #21262d;"
+            "}"
+            "QLabel:hover {"
+            "  color: #e6edf3;"
+            "}"
+        );
+        m_statusLabel->setToolTip(QString());
+    });
 }
 
 void SourceControlPanel::onErrorOccurred(const QString& error)
 {
     m_statusLabel->setText("⚠️ " + error);
-    m_statusLabel->setStyleSheet("background: #161b22; color: #f85149; padding: 6px 10px; font-size: 11px; border-top: 1px solid #21262d;");
+    m_statusLabel->setStyleSheet(
+        "QLabel {"
+        "  background: #161b22;"
+        "  color: #f85149;"
+        "  padding: 6px 10px;"
+        "  font-size: 11px;"
+        "  border-top: 1px solid #21262d;"
+        "}"
+        "QLabel:hover {"
+        "  color: #ff7b72;"
+        "}"
+    );
+    m_statusLabel->setToolTip(tr("Error: %1\n(This message will auto-clear in 5 seconds)").arg(error));
     
-    // Reset color after 3 seconds
-    QTimer::singleShot(3000, [this]() {
-        m_statusLabel->setStyleSheet("background: #161b22; color: #8b949e; padding: 6px 10px; font-size: 11px; border-top: 1px solid #21262d;");
+    // Reset color after 5 seconds
+    QTimer::singleShot(5000, [this]() {
+        m_statusLabel->setStyleSheet(
+            "QLabel {"
+            "  background: #161b22;"
+            "  color: #8b949e;"
+            "  padding: 6px 10px;"
+            "  font-size: 11px;"
+            "  border-top: 1px solid #21262d;"
+            "}"
+            "QLabel:hover {"
+            "  color: #e6edf3;"
+            "}"
+        );
+        m_statusLabel->setToolTip(QString());
     });
 }
 
