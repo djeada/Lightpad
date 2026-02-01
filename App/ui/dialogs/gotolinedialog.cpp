@@ -1,4 +1,5 @@
 #include "gotolinedialog.h"
+#include "../uistylehelper.h"
 
 GoToLineDialog::GoToLineDialog(QWidget* parent, int maxLine)
     : QDialog(parent, Qt::Popup | Qt::FramelessWindowHint)
@@ -98,13 +99,13 @@ void GoToLineDialog::onTextChanged(const QString& text)
     
     if (text.isEmpty()) {
         m_infoLabel->setText(QString(tr("Enter line number (1-%1)")).arg(m_maxLine));
-        m_infoLabel->setStyleSheet("color: #9aa4b2; font-size: 11px;");
+        m_infoLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(m_theme));
     } else if (!ok || line < 1 || line > m_maxLine) {
         m_infoLabel->setText(tr("Invalid line number"));
-        m_infoLabel->setStyleSheet("color: #f14c4c; font-size: 11px;");
+        m_infoLabel->setStyleSheet(UIStyleHelper::errorInfoLabelStyle(m_theme));
     } else {
         m_infoLabel->setText(QString(tr("Go to line %1")).arg(line));
-        m_infoLabel->setStyleSheet("color: #4ec9b0; font-size: 11px;");
+        m_infoLabel->setStyleSheet(UIStyleHelper::successInfoLabelStyle(m_theme));
     }
 }
 
@@ -115,4 +116,12 @@ void GoToLineDialog::onReturnPressed()
         emit lineSelected(line);
         hide();
     }
+}
+
+void GoToLineDialog::applyTheme(const Theme& theme)
+{
+    m_theme = theme;
+    setStyleSheet("GoToLineDialog { " + UIStyleHelper::popupDialogStyle(theme) + " }");
+    m_lineEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
+    m_infoLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
 }

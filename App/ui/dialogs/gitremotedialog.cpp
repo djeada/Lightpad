@@ -1,4 +1,5 @@
 #include "gitremotedialog.h"
+#include "../uistylehelper.h"
 #include <QMessageBox>
 #include <QCheckBox>
 
@@ -589,4 +590,68 @@ void GitRemoteDialog::onRemoveRemoteClicked()
 void GitRemoteDialog::onCloseClicked()
 {
     accept();
+}
+
+void GitRemoteDialog::applyTheme(const Theme& theme)
+{
+    setStyleSheet(UIStyleHelper::formDialogStyle(theme));
+    
+    // Apply styles to group boxes
+    for (QGroupBox* groupBox : findChildren<QGroupBox*>()) {
+        groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
+    }
+    
+    // Apply combobox style
+    if (m_remoteSelector) {
+        m_remoteSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+    }
+    if (m_branchSelector) {
+        m_branchSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+    }
+    
+    // Apply line edit style
+    if (m_remoteNameEdit) {
+        m_remoteNameEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
+    }
+    if (m_remoteUrlEdit) {
+        m_remoteUrlEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
+    }
+    
+    // Apply checkbox style
+    if (m_setUpstreamCheckbox) {
+        m_setUpstreamCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
+    }
+    if (m_forceCheckbox) {
+        m_forceCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
+    }
+    
+    // Apply list widget style
+    if (m_remoteList) {
+        m_remoteList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
+    }
+    
+    // Apply button styles
+    if (m_pushButton) {
+        m_pushButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    if (m_pullButton) {
+        m_pullButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    if (m_fetchButton) {
+        m_fetchButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    if (m_addRemoteButton) {
+        m_addRemoteButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    if (m_removeRemoteButton) {
+        m_removeRemoteButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
+    if (m_closeButton) {
+        m_closeButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
+    
+    // Apply status label style
+    if (m_statusLabel) {
+        m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+    }
 }

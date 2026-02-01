@@ -1,4 +1,5 @@
 #include "sourcecontrolpanel.h"
+#include "../uistylehelper.h"
 #include "../dialogs/gitinitdialog.h"
 #include "../dialogs/mergeconflictdialog.h"
 #include "../dialogs/gitremotedialog.h"
@@ -1782,4 +1783,54 @@ void SourceControlPanel::onResolveConflictsClicked()
     
     dialog.exec();
     refresh();
+}
+
+
+void SourceControlPanel::applyTheme(const Theme& theme)
+{
+    // Apply main widget style
+    setStyleSheet(QString("background: %1;").arg(theme.backgroundColor.name()));
+    
+    // Apply tree widget style
+    if (m_changesTree) {
+        m_changesTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+    }
+    
+    // Apply commit message text edit style
+    if (m_commitMessage) {
+        QString textEditStyle = QString(
+            "QTextEdit {"
+            "  background: %1;"
+            "  color: %2;"
+            "  border: 1px solid %3;"
+            "  border-radius: 4px;"
+            "}")
+            .arg(theme.surfaceAltColor.name())
+            .arg(theme.foregroundColor.name())
+            .arg(theme.borderColor.name());
+        m_commitMessage->setStyleSheet(textEditStyle);
+    }
+    
+    // Apply combobox style
+    if (m_branchSelector) {
+        m_branchSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+    }
+    
+    // Apply button styles
+    if (m_commitButton) {
+        m_commitButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    for (QPushButton* btn : {m_stageAllButton, m_unstageAllButton, m_refreshButton}) {
+        if (btn) {
+            btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+        }
+    }
+    
+    // Apply label styles
+    if (m_statusLabel) {
+        m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+    }
+    if (m_branchLabel) {
+        m_branchLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
+    }
 }

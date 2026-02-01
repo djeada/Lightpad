@@ -10,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QGroupBox>
 #include <QComboBox>
+#include "../../settings/theme.h"
 
 class RunTemplateSelector : public QDialog {
     Q_OBJECT
@@ -20,6 +21,11 @@ public:
     
     QString getSelectedTemplateId() const;
     QStringList getCustomArgs() const;
+    
+    /**
+     * @brief Apply theme to the dialog
+     */
+    void applyTheme(const Theme& theme);
 
 private slots:
     void onTemplateSelected(QListWidgetItem* item);

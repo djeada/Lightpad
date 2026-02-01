@@ -11,6 +11,7 @@
 #include <QHBoxLayout>
 #include <QGroupBox>
 #include "../../git/gitintegration.h"
+#include "../../settings/theme.h"
 
 /**
  * @brief Dialog for resolving Git merge conflicts
@@ -61,6 +62,13 @@ private:
     void updateConflictPreview(const QString& filePath);
     void updateButtons();
 
+public:
+    /**
+     * @brief Apply theme to the dialog
+     */
+    void applyTheme(const Theme& theme);
+
+private:
     GitIntegration* m_git;
     QListWidget* m_fileList;
     QTextEdit* m_oursPreview;

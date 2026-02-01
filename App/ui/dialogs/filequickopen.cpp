@@ -1,4 +1,5 @@
 #include "filequickopen.h"
+#include "../uistylehelper.h"
 #include <QDirIterator>
 #include <algorithm>
 
@@ -340,4 +341,11 @@ void FileQuickOpen::selectPrevious()
     if (current > 0) {
         m_resultsList->setCurrentRow(current - 1);
     }
+}
+
+void FileQuickOpen::applyTheme(const Theme& theme)
+{
+    setStyleSheet("FileQuickOpen { " + UIStyleHelper::popupDialogStyle(theme) + " }");
+    m_searchBox->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
+    m_resultsList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
 }

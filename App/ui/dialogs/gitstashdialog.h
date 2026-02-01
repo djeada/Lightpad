@@ -11,6 +11,7 @@
 #include <QHBoxLayout>
 #include <QGroupBox>
 #include "../../git/gitintegration.h"
+#include "../../settings/theme.h"
 
 /**
  * @brief Dialog for managing Git stash entries
@@ -47,6 +48,13 @@ private:
     void applyStyles();
     void updateStashList();
 
+public:
+    /**
+     * @brief Apply theme to the dialog
+     */
+    void applyTheme(const Theme& theme);
+
+private:
     GitIntegration* m_git;
     
     QListWidget* m_stashList;

@@ -9,6 +9,7 @@
 #include <QHBoxLayout>
 #include <QCheckBox>
 #include "../../lsp/lspclient.h"
+#include "../../settings/theme.h"
 
 /**
  * @brief Problems Panel for displaying LSP diagnostics
@@ -82,6 +83,11 @@ public:
     void setAutoRefreshEnabled(bool enabled);
 
     /**
+     * @brief Apply theme to the panel
+     */
+    void applyTheme(const Theme& theme);
+
+    /**
      * @brief Notify the panel that a file was saved (for auto-refresh)
      * @param filePath The path of the saved file
      */
@@ -126,6 +132,8 @@ private:
     const QList<LspDiagnostic>* findDiagnosticsForFile(const QString& filePath) const;
 
     QTreeWidget* m_tree;
+    QWidget* m_header;
+    QLabel* m_titleLabel;
     QLabel* m_statusLabel;
     QComboBox* m_filterCombo;
     QCheckBox* m_autoRefreshCheckBox;
@@ -140,6 +148,7 @@ private:
     
     int m_currentFilter;  // 0=All, 1=Errors, 2=Warnings, 3=Info
     bool m_autoRefreshEnabled;
+    Theme m_theme;
 };
 
 #endif // PROBLEMSPANEL_H

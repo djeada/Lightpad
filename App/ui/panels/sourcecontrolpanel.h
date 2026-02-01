@@ -14,6 +14,7 @@
 #include <QCheckBox>
 #include <QStackedWidget>
 #include "../../git/gitintegration.h"
+#include "../../settings/theme.h"
 
 class GitInitDialog;
 class MergeConflictDialog;
@@ -48,6 +49,11 @@ public:
      * @brief Refresh the panel with current status
      */
     void refresh();
+
+    /**
+     * @brief Apply theme to the panel
+     */
+    void applyTheme(const Theme& theme);
 
 signals:
     /**

@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QKeyEvent>
+#include "../../settings/theme.h"
 
 /**
  * @brief Go to Line dialog (Ctrl+G)
@@ -34,6 +35,11 @@ public:
      */
     void showDialog();
 
+    /**
+     * @brief Apply theme to the dialog
+     */
+    void applyTheme(const Theme& theme);
+
 signals:
     /**
      * @brief Emitted when user confirms the line number
@@ -53,6 +59,7 @@ private:
     QLineEdit* m_lineEdit;
     QLabel* m_infoLabel;
     int m_maxLine;
+    Theme m_theme;
 };
 
 #endif // GOTOLINEDIALOG_H

@@ -138,6 +138,7 @@ set(project_headers
     run_templates/runtemplatemanager.h
     format_templates/formattemplatemanager.h
     settings/theme.h
+    ui/uistylehelper.h
     ui/viewers/imageviewer.h)
 
 if(HAVE_PDF_SUPPORT)
@@ -237,6 +238,7 @@ set(project_sources
     run_templates/runtemplatemanager.cpp
     format_templates/formattemplatemanager.cpp
     settings/theme.cpp
+    ui/uistylehelper.cpp
     ui/viewers/imageviewer.cpp)
 
 if(HAVE_PDF_SUPPORT)
