@@ -10,7 +10,6 @@
 #include <QMouseEvent>
 #include <QProcessEnvironment>
 #include <QScrollBar>
-#include <QStyle>
 #include <QTextBlock>
 #include <QTextCharFormat>
 #include <QTextCursor>
@@ -42,7 +41,14 @@ Terminal::Terminal(QWidget* parent)
     , m_inputStartPosition(0)
 {
     ui->setupUi(this);
-    ui->closeButton->setIcon(qApp->style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+    ui->closeButton->setText(QStringLiteral("\u00D7"));
+    ui->closeButton->setToolTip(tr("Close Terminal"));
+    ui->closeButton->setAutoRaise(true);
+    ui->closeButton->setCursor(Qt::ArrowCursor);
+    ui->closeButton->setFixedSize(QSize(18, 18));
+    ui->closeButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    ui->closeButton->setCheckable(false);
+    ui->closeButton->setAutoExclusive(false);
     
     // Get default shell profile
     m_shellProfile = ShellProfileManager::instance().defaultProfile();
@@ -839,6 +845,27 @@ void Terminal::updateStyleSheet()
     ).arg(m_backgroundColor, m_textColor);
     
     ui->textEdit->setStyleSheet(styleSheet);
+
+    QString closeButtonStyle = QString(
+        "QToolButton {"
+        "  color: rgba(255, 255, 255, 0.4);"
+        "  background: transparent;"
+        "  border: none;"
+        "  border-radius: 4px;"
+        "  padding: 2px;"
+        "  font-size: 14px;"
+        "  font-weight: bold;"
+        "}"
+        "QToolButton:hover {"
+        "  color: %1;"
+        "  background: rgba(255, 255, 255, 0.15);"
+        "}"
+        "QToolButton:pressed {"
+        "  color: #ffffff;"
+        "  background: #e81123;"
+        "}"
+    ).arg(m_textColor);
+    ui->closeButton->setStyleSheet(closeButtonStyle);
 }
 
 void Terminal::setShellProfile(const ShellProfile& profile)

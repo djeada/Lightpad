@@ -1,6 +1,7 @@
 #include <QtTest/QtTest>
 #include <QSignalSpy>
 #include <QTabWidget>
+#include <QToolButton>
 #include "ui/panels/terminaltabwidget.h"
 #include "ui/panels/terminal.h"
 
@@ -21,6 +22,7 @@ private slots:
     // Test new features (quick tests without shell interaction)
     void testAvailableShellProfiles();
     void testIsSplit();
+    void testCloseButtonConfiguration();
 };
 
 void TestTerminalTabWidget::initTestCase()
@@ -95,6 +97,25 @@ void TestTerminalTabWidget::testIsSplit()
     QVERIFY(!widget.isSplit());
     
     // closeAllTerminals handles cleanup
+    widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testCloseButtonConfiguration()
+{
+    TerminalTabWidget widget;
+
+    QToolButton* closeButton = nullptr;
+    const QList<QToolButton*> buttons = widget.findChildren<QToolButton*>();
+    for (QToolButton* button : buttons) {
+        if (button && button->text() == QStringLiteral("\u00D7")) {
+            closeButton = button;
+            break;
+        }
+    }
+
+    QVERIFY(closeButton != nullptr);
+    QVERIFY(closeButton->autoRaise());
+
     widget.closeAllTerminals();
 }
 

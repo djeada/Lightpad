@@ -27,6 +27,8 @@ TerminalTabWidget::TerminalTabWidget(QWidget* parent)
     , m_terminalCounter(0)
     , m_isSplit(false)
 {
+    setObjectName("TerminalTabWidget");
+
     // Set working directory to current project directory
     m_currentWorkingDirectory = QDir::currentPath();
     
@@ -105,7 +107,11 @@ void TerminalTabWidget::setupToolbar()
     // Close terminal panel button
     m_closeButton = new QToolButton(toolbar);
     m_closeButton->setToolTip(tr("Close Terminal Panel"));
-    m_closeButton->setIcon(qApp->style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+    m_closeButton->setText(QStringLiteral("\u00D7"));
+    m_closeButton->setAutoRaise(true);
+    m_closeButton->setCursor(Qt::ArrowCursor);
+    m_closeButton->setFixedSize(QSize(18, 18));
+    m_closeButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     connect(m_closeButton, &QToolButton::clicked, 
             this, &TerminalTabWidget::onCloseButtonClicked);
 
@@ -286,6 +292,7 @@ void TerminalTabWidget::applyTheme(const Theme& theme)
     QString bgColor = theme.backgroundColor.isValid() ? theme.backgroundColor.name() : "#0e1116";
     QString textColor = theme.foregroundColor.isValid() ? theme.foregroundColor.name() : "#e6edf3";
     QString borderColor = theme.lineNumberAreaColor.isValid() ? theme.lineNumberAreaColor.name() : "#30363d";
+    QString pressedColor = theme.errorColor.isValid() ? theme.errorColor.name() : "#e81123";
 
     QString tabWidgetStyle = QString(
         "QTabWidget::pane {"
@@ -308,6 +315,27 @@ void TerminalTabWidget::applyTheme(const Theme& theme)
     if (m_secondaryTabWidget) {
         m_secondaryTabWidget->setStyleSheet(tabWidgetStyle);
     }
+
+    const QString closeButtonStyle = QString(
+        "QToolButton {"
+        "  color: rgba(255, 255, 255, 0.4);"
+        "  background: transparent;"
+        "  border: none;"
+        "  border-radius: 4px;"
+        "  padding: 2px;"
+        "  font-size: 14px;"
+        "  font-weight: bold;"
+        "}"
+        "QToolButton:hover {"
+        "  color: %1;"
+        "  background: rgba(255, 255, 255, 0.15);"
+        "}"
+        "QToolButton:pressed {"
+        "  color: #ffffff;"
+        "  background: %2;"
+        "}"
+    ).arg(textColor, pressedColor);
+    m_closeButton->setStyleSheet(closeButtonStyle);
 
     // Apply to all terminals in primary tab widget
     for (int i = 0; i < m_tabWidget->count(); ++i) {
