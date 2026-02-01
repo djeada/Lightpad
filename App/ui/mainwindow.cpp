@@ -1163,19 +1163,77 @@ void MainWindow::save(const QString& filePath)
         return;
 
     if (getCurrentTextArea()) {
+        TextArea* textArea = getCurrentTextArea();
+        
+        // Apply pre-save operations based on settings
+        SettingsManager& sm = SettingsManager::instance();
+        if (sm.getValue("trimTrailingWhitespace", false).toBool()) {
+            trimTrailingWhitespace(textArea);
+        }
+        if (sm.getValue("insertFinalNewline", false).toBool()) {
+            ensureFinalNewline(textArea);
+        }
+        
         LightpadTabWidget* tabWidget = currentTabWidget();
         auto tabIndex = tabWidget->currentIndex();
         tabWidget->setFilePath(tabIndex, filePath);
 
-        file.write(getCurrentTextArea()->toPlainText().toUtf8());
-        getCurrentTextArea()->document()->setModified(false);
-        getCurrentTextArea()->removeIconUnsaved();
+        file.write(textArea->toPlainText().toUtf8());
+        textArea->document()->setModified(false);
+        textArea->removeIconUnsaved();
         setFilePathAsTabText(filePath);
         
         // Notify problems panel for auto-refresh on save
         if (problemsPanel) {
             problemsPanel->onFileSaved(filePath);
         }
+    }
+}
+
+void MainWindow::trimTrailingWhitespace(TextArea* textArea)
+{
+    if (!textArea) {
+        return;
+    }
+    
+    QTextCursor cursor(textArea->document());
+    cursor.beginEditBlock();
+    
+    QTextBlock block = textArea->document()->firstBlock();
+    while (block.isValid()) {
+        QString text = block.text();
+        int originalLength = text.length();
+        
+        // Remove trailing whitespace
+        int i = originalLength - 1;
+        while (i >= 0 && (text[i] == ' ' || text[i] == '\t')) {
+            --i;
+        }
+        
+        int newLength = i + 1;
+        if (newLength < originalLength) {
+            cursor.setPosition(block.position() + newLength);
+            cursor.setPosition(block.position() + originalLength, QTextCursor::KeepAnchor);
+            cursor.removeSelectedText();
+        }
+        
+        block = block.next();
+    }
+    
+    cursor.endEditBlock();
+}
+
+void MainWindow::ensureFinalNewline(TextArea* textArea)
+{
+    if (!textArea) {
+        return;
+    }
+    
+    QString text = textArea->toPlainText();
+    if (!text.isEmpty() && !text.endsWith('\n')) {
+        QTextCursor cursor(textArea->document());
+        cursor.movePosition(QTextCursor::End);
+        cursor.insertText("\n");
     }
 }
 

@@ -185,6 +185,8 @@ private:
     void redo();
     void open(const QString& filePath);
     void save(const QString& filePath);
+    void trimTrailingWhitespace(TextArea* textArea);
+    void ensureFinalNewline(TextArea* textArea);
     void showFindReplace(bool onlyFind = true);
     void openDialog(Dialog dialog);
     void openConfigurationDialog();

@@ -38,6 +38,8 @@ void SettingsManager::initializeDefaults()
     m_defaults["lineHighlighted"] = true;
     m_defaults["matchingBracketsHighlighted"] = true;
     m_defaults["tabWidth"] = 4;
+    m_defaults["trimTrailingWhitespace"] = false;
+    m_defaults["insertFinalNewline"] = false;
 
     // Theme defaults
     QJsonObject themeDefaults;
