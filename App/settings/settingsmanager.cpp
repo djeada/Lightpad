@@ -212,6 +212,7 @@ void SettingsManager::setValue(const QString& key, const QVariant& value)
     QStringList keys = key.split('.');
     
     if (keys.isEmpty()) {
+        LOG_WARNING(QString("Attempted to set value with empty key"));
         return;
     }
     
@@ -224,20 +225,20 @@ void SettingsManager::setValue(const QString& key, const QVariant& value)
     }
     
     // For nested keys, recursively build the object hierarchy
-    std::function<void(QJsonObject&, int)> setNested = [&](QJsonObject& obj, int depth) {
-        if (depth >= keys.size() - 1) {
-            obj[keys[depth]] = QJsonValue::fromVariant(value);
+    std::function<void(QJsonObject&, int)> setNested = [&](QJsonObject& obj, int keyIndex) {
+        if (keyIndex >= keys.size() - 1) {
+            obj[keys[keyIndex]] = QJsonValue::fromVariant(value);
             return;
         }
         
-        QString currentKey = keys[depth];
+        QString currentKey = keys[keyIndex];
         QJsonObject nested;
         
         if (obj.contains(currentKey) && obj.value(currentKey).isObject()) {
             nested = obj.value(currentKey).toObject();
         }
         
-        setNested(nested, depth + 1);
+        setNested(nested, keyIndex + 1);
         obj[currentKey] = nested;
     };
     

@@ -74,8 +74,13 @@ void TestSettingsManager::testNestedKeys()
     sm.setValue("nested.level1.level2", "value2");
     QCOMPARE(sm.getValue("nested.level1.level2").toString(), QString("value2"));
     
-    // Test that the parent key still exists
+    // Test that the parent key still exists and returns an object
     QVERIFY(sm.hasKey("nested.level1"));
+    QVariant parentValue = sm.getValue("nested.level1");
+    QVERIFY(parentValue.canConvert<QVariantMap>());
+    QVariantMap parentMap = parentValue.toMap();
+    QVERIFY(parentMap.contains("level2"));
+    QCOMPARE(parentMap.value("level2").toString(), QString("value2"));
     
     // Test setting multiple keys in the same parent
     sm.setValue("config.option1", 123);
