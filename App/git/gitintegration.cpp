@@ -572,6 +572,113 @@ bool GitIntegration::discardChanges(const QString& filePath)
     return success;
 }
 
+QList<GitCommitInfo> GitIntegration::getCommitLog(int maxCount, const QString& branch) const
+{
+    QList<GitCommitInfo> result;
+    
+    if (!m_isValid) {
+        return result;
+    }
+    
+    // Use a custom format for parsing: hash|short_hash|author|email|date|rel_date|subject|parents
+    // Using %x00 as delimiter to avoid issues with special characters
+    QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
+    
+    QStringList args = {"log", QString("--max-count=%1").arg(maxCount), 
+                        QString("--pretty=format:%1").arg(format)};
+    
+    if (!branch.isEmpty()) {
+        args.append(branch);
+    }
+    
+    bool success;
+    QString output = executeGitCommand(args, &success);
+    
+    if (!success || output.isEmpty()) {
+        return result;
+    }
+    
+    QStringList commits = output.split('\n', Qt::SkipEmptyParts);
+    
+    for (const QString& line : commits) {
+        QStringList parts = line.split(QChar('\0'));
+        if (parts.size() < 7) {
+            continue;
+        }
+        
+        GitCommitInfo info;
+        info.hash = parts[0];
+        info.shortHash = parts[1];
+        info.author = parts[2];
+        info.authorEmail = parts[3];
+        info.date = parts[4];
+        info.relativeDate = parts[5];
+        info.subject = parts[6];
+        
+        if (parts.size() > 7) {
+            info.parents = parts[7].split(' ', Qt::SkipEmptyParts);
+        }
+        
+        result.append(info);
+    }
+    
+    return result;
+}
+
+GitCommitInfo GitIntegration::getCommitDetails(const QString& commitHash) const
+{
+    GitCommitInfo info;
+    
+    if (!m_isValid || commitHash.isEmpty()) {
+        return info;
+    }
+    
+    // Get commit info with body
+    QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P%x00%b";
+    
+    bool success;
+    QString output = executeGitCommand({"show", "-s", QString("--pretty=format:%1").arg(format), commitHash}, &success);
+    
+    if (!success || output.isEmpty()) {
+        return info;
+    }
+    
+    QStringList parts = output.split(QChar('\0'));
+    if (parts.size() < 7) {
+        return info;
+    }
+    
+    info.hash = parts[0];
+    info.shortHash = parts[1];
+    info.author = parts[2];
+    info.authorEmail = parts[3];
+    info.date = parts[4];
+    info.relativeDate = parts[5];
+    info.subject = parts[6];
+    
+    if (parts.size() > 7) {
+        info.parents = parts[7].split(' ', Qt::SkipEmptyParts);
+    }
+    
+    if (parts.size() > 8) {
+        info.body = parts[8].trimmed();
+    }
+    
+    return info;
+}
+
+QString GitIntegration::getCommitDiff(const QString& commitHash) const
+{
+    if (!m_isValid || commitHash.isEmpty()) {
+        return QString();
+    }
+    
+    bool success;
+    QString diff = executeGitCommand({"show", "--pretty=format:", commitHash}, &success);
+    
+    return success ? diff : QString();
+}
+
 void GitIntegration::refresh()
 {
     if (!m_isValid) {

@@ -99,6 +99,7 @@ private:
     void updateBranchSelector();
     void updateBranchLabel();
     void updateUIState();
+    void updateHistory();
     QString statusIcon(GitFileStatus status) const;
     QString statusText(GitFileStatus status) const;
     QColor statusColor(GitFileStatus status) const;
@@ -140,6 +141,12 @@ private:
     QPushButton* m_stashButton;
     QTreeWidget* m_stagedTree;
     QTreeWidget* m_changesTree;
+    
+    // Commit history section
+    QWidget* m_historyHeader;
+    QTreeWidget* m_historyTree;
+    QPushButton* m_historyToggleButton;
+    bool m_historyExpanded;
     
     bool m_updatingBranchSelector;
 };

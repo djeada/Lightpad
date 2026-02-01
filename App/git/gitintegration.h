@@ -92,6 +92,21 @@ struct GitConflictMarker {
 };
 
 /**
+ * @brief Information about a git commit
+ */
+struct GitCommitInfo {
+    QString hash;          ///< Full commit hash
+    QString shortHash;     ///< Abbreviated hash (7 chars)
+    QString author;        ///< Author name
+    QString authorEmail;   ///< Author email
+    QString date;          ///< Commit date (ISO format)
+    QString relativeDate;  ///< Relative date (e.g., "2 days ago")
+    QString subject;       ///< Commit subject (first line)
+    QString body;          ///< Commit body (remaining lines)
+    QStringList parents;   ///< Parent commit hashes
+};
+
+/**
  * @brief Main Git integration class for Lightpad
  * 
  * Provides functionality to interact with Git repositories including
@@ -211,6 +226,30 @@ public:
      * @brief Discard changes in a file (restore to HEAD)
      */
     bool discardChanges(const QString& filePath);
+
+    // ==================== Commit History ====================
+
+    /**
+     * @brief Get commit history/log
+     * @param maxCount Maximum number of commits to retrieve (default 50)
+     * @param branch Branch name to get commits from (defaults to current branch)
+     * @return List of commit information
+     */
+    QList<GitCommitInfo> getCommitLog(int maxCount = 50, const QString& branch = QString()) const;
+
+    /**
+     * @brief Get details of a specific commit
+     * @param commitHash The commit hash to get details for
+     * @return Commit information
+     */
+    GitCommitInfo getCommitDetails(const QString& commitHash) const;
+
+    /**
+     * @brief Get the diff for a specific commit
+     * @param commitHash The commit hash to get the diff for
+     * @return Diff output as a string
+     */
+    QString getCommitDiff(const QString& commitHash) const;
 
     // ==================== Remote Operations ====================
 
