@@ -16,6 +16,13 @@
 #include <QCursor>
 #include <QToolTip>
 
+// Constants for the commit history display
+namespace {
+    constexpr int DEFAULT_HISTORY_COMMIT_COUNT = 20;
+    constexpr int MAX_COMMIT_DISPLAY_LENGTH = 60;
+    constexpr int MAX_DIFF_PREVIEW_LENGTH = 2000;
+}
+
 SourceControlPanel::SourceControlPanel(QWidget* parent)
     : QWidget(parent)
     , m_git(nullptr)
@@ -729,8 +736,8 @@ void SourceControlPanel::setupRepoUI()
                 .arg(info.body.isEmpty() ? "(No additional message)" : info.body);
             
             if (!diff.isEmpty()) {
-                message += QString("\n\n--- Diff ---\n%1").arg(diff.left(2000));
-                if (diff.length() > 2000) {
+                message += QString("\n\n--- Diff ---\n%1").arg(diff.left(MAX_DIFF_PREVIEW_LENGTH));
+                if (diff.length() > MAX_DIFF_PREVIEW_LENGTH) {
                     message += "\n... (truncated)";
                 }
             }
@@ -971,15 +978,15 @@ void SourceControlPanel::updateHistory()
         return;
     }
     
-    QList<GitCommitInfo> commits = m_git->getCommitLog(20);
+    QList<GitCommitInfo> commits = m_git->getCommitLog(DEFAULT_HISTORY_COMMIT_COUNT);
     
     for (const GitCommitInfo& commit : commits) {
         QTreeWidgetItem* item = new QTreeWidgetItem(m_historyTree);
         
         // Format: short_hash subject (relative_date)
         QString displayText = QString("%1  %2").arg(commit.shortHash).arg(commit.subject);
-        if (displayText.length() > 60) {
-            displayText = displayText.left(57) + "...";
+        if (displayText.length() > MAX_COMMIT_DISPLAY_LENGTH) {
+            displayText = displayText.left(MAX_COMMIT_DISPLAY_LENGTH - 3) + "...";
         }
         
         item->setText(0, displayText);
