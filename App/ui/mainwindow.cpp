@@ -106,6 +106,10 @@ MainWindow::MainWindow(QWidget* parent)
     , sourceControlDock(nullptr)
     , debugPanel(nullptr)
     , debugDock(nullptr)
+    , m_breakpointsSetConnection()
+    , m_breakpointChangedConnection()
+    , m_sessionTerminatedConnection()
+    , m_sessionErrorConnection()
     , m_fileTreeModel(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
@@ -2055,25 +2059,37 @@ void MainWindow::attachDebugSession(const QString& sessionId)
     if (debugDock) {
         debugDock->show();
     }
-    connect(session->client(), &DapClient::breakpointsSet, this,
-            [](const QString& sourcePath, const QList<DapBreakpoint>& breakpoints) {
-                if (!sourcePath.isEmpty()) {
-                    BreakpointManager::instance().updateVerification(sourcePath, breakpoints);
-                }
-            });
-    connect(session->client(), &DapClient::breakpointChanged, this,
-            [](const DapBreakpoint& breakpoint, const QString&) {
-                if (!breakpoint.source.path.isEmpty()) {
-                    BreakpointManager::instance().updateVerification(breakpoint.source.path, { breakpoint });
-                }
-            });
+    if (m_breakpointsSetConnection) {
+        disconnect(m_breakpointsSetConnection);
+    }
+    if (m_breakpointChangedConnection) {
+        disconnect(m_breakpointChangedConnection);
+    }
+    if (m_sessionTerminatedConnection) {
+        disconnect(m_sessionTerminatedConnection);
+    }
+    if (m_sessionErrorConnection) {
+        disconnect(m_sessionErrorConnection);
+    }
+    m_breakpointsSetConnection = connect(session->client(), &DapClient::breakpointsSet, this,
+                                         [](const QString& sourcePath, const QList<DapBreakpoint>& breakpoints) {
+                                             if (!sourcePath.isEmpty()) {
+                                                 BreakpointManager::instance().updateVerification(sourcePath, breakpoints);
+                                             }
+                                         });
+    m_breakpointChangedConnection = connect(session->client(), &DapClient::breakpointChanged, this,
+                                            [](const DapBreakpoint& breakpoint, const QString&) {
+                                                if (!breakpoint.source.path.isEmpty()) {
+                                                    BreakpointManager::instance().updateVerification(breakpoint.source.path, { breakpoint });
+                                                }
+                                            });
 
-    connect(session, &DebugSession::terminated, this, [this, sessionId]() {
+    m_sessionTerminatedConnection = connect(session, &DebugSession::terminated, this, [this, sessionId]() {
         if (sessionId == m_activeDebugSessionId) {
             clearDebugSession();
         }
     });
-    connect(session, &DebugSession::error, this, [this](const QString& message) {
+    m_sessionErrorConnection = connect(session, &DebugSession::error, this, [this](const QString& message) {
         QMessageBox::warning(this, tr("Debug Session Error"), message);
     });
 }
@@ -2086,6 +2102,22 @@ void MainWindow::clearDebugSession()
         debugPanel->clearAll();
     }
     WatchManager::instance().setDapClient(nullptr);
+    if (m_breakpointsSetConnection) {
+        disconnect(m_breakpointsSetConnection);
+        m_breakpointsSetConnection = {};
+    }
+    if (m_breakpointChangedConnection) {
+        disconnect(m_breakpointChangedConnection);
+        m_breakpointChangedConnection = {};
+    }
+    if (m_sessionTerminatedConnection) {
+        disconnect(m_sessionTerminatedConnection);
+        m_sessionTerminatedConnection = {};
+    }
+    if (m_sessionErrorConnection) {
+        disconnect(m_sessionErrorConnection);
+        m_sessionErrorConnection = {};
+    }
 }
 
 void MainWindow::formatCurrentDocument()

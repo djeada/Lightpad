@@ -174,6 +174,10 @@ private:
     DebugPanel* debugPanel;
     QDockWidget* debugDock;
     QString m_activeDebugSessionId;
+    QMetaObject::Connection m_breakpointsSetConnection;
+    QMetaObject::Connection m_breakpointChangedConnection;
+    QMetaObject::Connection m_sessionTerminatedConnection;
+    QMetaObject::Connection m_sessionErrorConnection;
     
     // Split editor views
     SplitEditorContainer* m_splitEditorContainer;
