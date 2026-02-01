@@ -51,13 +51,18 @@ SourceControlPanel::SourceControlPanel(QWidget* parent)
     , m_pullButton(nullptr)
     , m_fetchButton(nullptr)
     , m_stashButton(nullptr)
+    , m_stagedLabel(nullptr)
     , m_stagedTree(nullptr)
+    , m_changesLabel(nullptr)
     , m_changesTree(nullptr)
     , m_historyHeader(nullptr)
+    , m_historyLabel(nullptr)
     , m_historyTree(nullptr)
     , m_historyToggleButton(nullptr)
     , m_historyExpanded(false)
     , m_updatingBranchSelector(false)
+    , m_stagedCount(0)
+    , m_changesCount(0)
 {
     setupUI();
 }
@@ -554,9 +559,9 @@ void SourceControlPanel::setupRepoUI()
     stagedIcon->setStyleSheet("font-size: 12px;");
     stagedHeaderLayout->addWidget(stagedIcon);
     
-    QLabel* stagedLabel = new QLabel(tr("Staged Changes"), stagedHeader);
-    stagedLabel->setStyleSheet("color: #3fb950; font-weight: bold; font-size: 12px;");
-    stagedHeaderLayout->addWidget(stagedLabel);
+    m_stagedLabel = new QLabel(tr("Staged Changes"), stagedHeader);
+    m_stagedLabel->setStyleSheet("color: #3fb950; font-weight: bold; font-size: 12px;");
+    stagedHeaderLayout->addWidget(m_stagedLabel);
     
     stagedHeaderLayout->addStretch();
     
@@ -597,6 +602,7 @@ void SourceControlPanel::setupRepoUI()
     m_stagedTree->setMinimumHeight(80);
     m_stagedTree->setMaximumHeight(150);
     m_stagedTree->setUniformRowHeights(true);
+    m_stagedTree->setPlaceholderText(tr("No staged changes yet."));
     connect(m_stagedTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_stagedTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
     mainLayout->addWidget(m_stagedTree);
@@ -611,9 +617,9 @@ void SourceControlPanel::setupRepoUI()
     changesIcon->setStyleSheet("font-size: 12px;");
     changesHeaderLayout->addWidget(changesIcon);
     
-    QLabel* changesLabel = new QLabel(tr("Changes"), changesHeader);
-    changesLabel->setStyleSheet("color: #e2c08d; font-weight: bold; font-size: 12px;");
-    changesHeaderLayout->addWidget(changesLabel);
+    m_changesLabel = new QLabel(tr("Changes"), changesHeader);
+    m_changesLabel->setStyleSheet("color: #e2c08d; font-weight: bold; font-size: 12px;");
+    changesHeaderLayout->addWidget(m_changesLabel);
     
     changesHeaderLayout->addStretch();
     
@@ -652,6 +658,7 @@ void SourceControlPanel::setupRepoUI()
         "}"
     );
     m_changesTree->setUniformRowHeights(true);
+    m_changesTree->setPlaceholderText(tr("Working tree clean."));
     connect(m_changesTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_changesTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
     mainLayout->addWidget(m_changesTree, 1);
@@ -675,9 +682,9 @@ void SourceControlPanel::setupRepoUI()
     historyIcon->setStyleSheet("font-size: 12px;");
     historyHeaderLayout->addWidget(historyIcon);
     
-    QLabel* historyLabel = new QLabel(tr("Commit History"), m_historyHeader);
-    historyLabel->setStyleSheet("color: #a371f7; font-weight: bold; font-size: 12px;");
-    historyHeaderLayout->addWidget(historyLabel);
+    m_historyLabel = new QLabel(tr("Commit History"), m_historyHeader);
+    m_historyLabel->setStyleSheet("color: #a371f7; font-weight: bold; font-size: 12px;");
+    historyHeaderLayout->addWidget(m_historyLabel);
     
     historyHeaderLayout->addStretch();
     
@@ -789,6 +796,11 @@ void SourceControlPanel::refresh()
     updateUIState();
     
     if (!m_git || !m_git->isValidRepository()) {
+        m_stagedCount = 0;
+        m_changesCount = 0;
+        if (m_stagedLabel) m_stagedLabel->setText(tr("Staged Changes"));
+        if (m_changesLabel) m_changesLabel->setText(tr("Changes"));
+        if (m_historyLabel) m_historyLabel->setText(tr("Commit History"));
         if (m_branchLabel) m_branchLabel->setText(tr("Branch"));
         if (m_branchSelector) m_branchSelector->clear();
         if (m_statusLabel) m_statusLabel->setText("");
@@ -800,6 +812,7 @@ void SourceControlPanel::refresh()
     
     updateBranchSelector();
     updateTree();
+    updateHistory();
     onCommitMessageChanged();
 }
 
@@ -908,6 +921,8 @@ void SourceControlPanel::updateTree()
 {
     m_stagedTree->clear();
     m_changesTree->clear();
+    m_stagedCount = 0;
+    m_changesCount = 0;
     
     if (!m_git || !m_git->isValidRepository()) {
         m_statusLabel->setText(tr("Not a git repository"));
@@ -915,9 +930,6 @@ void SourceControlPanel::updateTree()
     }
     
     QList<GitFileInfo> status = m_git->getStatus();
-    
-    int stagedCount = 0;
-    int changesCount = 0;
     
     for (const GitFileInfo& file : status) {
         QString fullPath = file.filePath;
@@ -938,7 +950,7 @@ void SourceControlPanel::updateTree()
             item->setData(0, Qt::UserRole + 1, true);  // Is staged
             item->setForeground(0, statusColor(file.indexStatus));
             
-            stagedCount++;
+            m_stagedCount++;
         }
         
         // Check if file has working tree changes
@@ -953,18 +965,25 @@ void SourceControlPanel::updateTree()
             item->setData(0, Qt::UserRole + 1, false);  // Not staged
             item->setForeground(0, statusColor(file.workTreeStatus));
             
-            changesCount++;
+            m_changesCount++;
         }
     }
-    
-    QString statusText = QString(tr("%1 staged, %2 changed")).arg(stagedCount).arg(changesCount);
+
+    if (m_stagedLabel) {
+        m_stagedLabel->setText(tr("Staged Changes (%1)").arg(m_stagedCount));
+    }
+    if (m_changesLabel) {
+        m_changesLabel->setText(tr("Changes (%1)").arg(m_changesCount));
+    }
+
+    QString statusText = QString(tr("%1 staged, %2 changed")).arg(m_stagedCount).arg(m_changesCount);
     m_statusLabel->setText(statusText);
-    
-    m_commitButton->setEnabled(stagedCount > 0 && !m_commitMessage->toPlainText().trimmed().isEmpty());
-    m_stageAllButton->setEnabled(changesCount > 0);
-    m_unstageAllButton->setEnabled(stagedCount > 0);
+
+    m_commitButton->setEnabled(m_stagedCount > 0 && !m_commitMessage->toPlainText().trimmed().isEmpty());
+    m_stageAllButton->setEnabled(m_changesCount > 0);
+    m_unstageAllButton->setEnabled(m_stagedCount > 0);
     if (m_changesTree) {
-        m_changesTree->setToolTip(changesCount == 0 ? tr("No local changes") : QString());
+        m_changesTree->setToolTip(m_changesCount == 0 ? tr("No local changes") : QString());
     }
 }
 
@@ -979,6 +998,9 @@ void SourceControlPanel::updateHistory()
     }
     
     QList<GitCommitInfo> commits = m_git->getCommitLog(DEFAULT_HISTORY_COMMIT_COUNT);
+    if (m_historyLabel) {
+        m_historyLabel->setText(tr("Commit History (%1)").arg(commits.size()));
+    }
     
     for (const GitCommitInfo& commit : commits) {
         QTreeWidgetItem* item = new QTreeWidgetItem(m_historyTree);
@@ -1019,10 +1041,9 @@ void SourceControlPanel::onCommitMessageChanged()
         return;
     }
 
-    int stagedCount = m_stagedTree ? m_stagedTree->topLevelItemCount() : 0;
     bool hasMessage = m_commitMessage && !m_commitMessage->toPlainText().trimmed().isEmpty();
     if (m_commitButton) {
-        m_commitButton->setEnabled(stagedCount > 0 && hasMessage);
+        m_commitButton->setEnabled(m_stagedCount > 0 && hasMessage);
     }
 }
 

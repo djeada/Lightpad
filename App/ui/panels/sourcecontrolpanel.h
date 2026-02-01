@@ -139,14 +139,20 @@ private:
     QPushButton* m_pullButton;
     QPushButton* m_fetchButton;
     QPushButton* m_stashButton;
+    QLabel* m_stagedLabel;
     QTreeWidget* m_stagedTree;
+    QLabel* m_changesLabel;
     QTreeWidget* m_changesTree;
     
     // Commit history section
     QWidget* m_historyHeader;
+    QLabel* m_historyLabel;
     QTreeWidget* m_historyTree;
     QPushButton* m_historyToggleButton;
     bool m_historyExpanded;
+
+    int m_stagedCount;
+    int m_changesCount;
     
     bool m_updatingBranchSelector;
 };
