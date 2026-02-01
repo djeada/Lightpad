@@ -303,10 +303,11 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
     layoutHor->setStretch(2, 0);
 
     setLayout(layoutHor);
-    updateModel();
+    // Note: Do NOT call updateModel() here - the shared model will be set
+    // when setMainWindow() is called to avoid creating duplicate models
 
-    QObject::connect(treeView, &QAbstractItemView::clicked, this, [&](const QModelIndex& index) {
-        if (!index.isValid() || !mainWindow) {
+    QObject::connect(treeView, &QAbstractItemView::clicked, this, [this](const QModelIndex& index) {
+        if (!index.isValid() || !mainWindow || !model) {
             return;
         }
 
@@ -321,7 +322,7 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
         treeView->setCurrentIndex(index);
     });
 
-    QObject::connect(treeView, &QAbstractItemView::doubleClicked, this, [&](const QModelIndex& index) {
+    QObject::connect(treeView, &QAbstractItemView::doubleClicked, this, [this](const QModelIndex& index) {
         if (!index.isValid() || !model) {
             return;
         }
@@ -416,6 +417,9 @@ void LightpadPage::setMainWindow(MainWindow* window)
         auto* sharedModel = mainWindow->getFileTreeModel();
         if (sharedModel) {
             setSharedFileSystemModel(sharedModel);
+        } else {
+            // Fallback: initialize model if shared model is not available
+            updateModel();
         }
         auto* view = qobject_cast<LightpadTreeView*>(treeView);
         if (view) {
@@ -453,6 +457,18 @@ void LightpadPage::closeTabPage(QString path)
 
 void LightpadPage::updateModel()
 {
+    // First, try to use the shared model from MainWindow if available
+    if (!model && mainWindow) {
+        auto* sharedModel = mainWindow->getFileTreeModel();
+        if (sharedModel) {
+            model = sharedModel;
+            m_ownsModel = false;
+        }
+    }
+    
+    // Only create a new model as a last resort if we don't have one yet
+    // This can happen when the page is created before mainWindow is set
+    // or if mainWindow's shared model is not yet available
     if (!model) {
         model = new GitFileSystemModel(this);
         m_ownsModel = true;
