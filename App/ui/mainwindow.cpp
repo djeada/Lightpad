@@ -45,6 +45,7 @@
 #include "panels/terminaltabwidget.h"
 #include "panels/breadcrumbwidget.h"
 #include "panels/sourcecontrolpanel.h"
+#include "panels/debugpanel.h"
 #include "../core/textarea.h"
 #include "../core/recentfilesmanager.h"
 #include "../core/navigationhistory.h"
@@ -68,6 +69,11 @@
 #include "../settings/settingsmanager.h"
 #include "../git/gitintegration.h"
 #include "panels/spliteditorcontainer.h"
+#include "../dap/debugsession.h"
+#include "../dap/debugconfiguration.h"
+#include "../dap/debugsettings.h"
+#include "../dap/breakpointmanager.h"
+#include "../dap/watchmanager.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -99,6 +105,12 @@ MainWindow::MainWindow(QWidget* parent)
     , m_gitIntegration(nullptr)
     , sourceControlPanel(nullptr)
     , sourceControlDock(nullptr)
+    , debugPanel(nullptr)
+    , debugDock(nullptr)
+    , m_breakpointsSetConnection()
+    , m_breakpointChangedConnection()
+    , m_sessionTerminatedConnection()
+    , m_sessionErrorConnection()
     , m_fileTreeModel(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
@@ -173,6 +185,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupRecentFilesDialog();
     setupBreadcrumb();
     setupGitIntegration();
+    ensureDebugPanel();
     loadSettings();
     if (SettingsManager::instance().getValue("showSourceControlDock", true).toBool()) {
         ensureSourceControlPanel();
@@ -181,6 +194,11 @@ MainWindow::MainWindow(QWidget* parent)
         }
         if (ui->actionToggle_Source_Control) {
             ui->actionToggle_Source_Control->setChecked(true);
+        }
+    }
+    if (SettingsManager::instance().getValue("showDebugDock", false).toBool()) {
+        if (debugDock) {
+            debugDock->show();
         }
     }
     setWindowTitle("LightPad");
@@ -399,6 +417,9 @@ void MainWindow::saveSettings()
     globalSettings.setValue("lastProjectPath", m_projectRootPath);
     if (sourceControlDock) {
         globalSettings.setValue("showSourceControlDock", sourceControlDock->isVisible());
+    }
+    if (debugDock) {
+        globalSettings.setValue("showDebugDock", debugDock->isVisible());
     }
     
     QJsonArray openTabs;
@@ -1443,6 +1464,70 @@ void MainWindow::ensureSourceControlPanel()
     });
 }
 
+void MainWindow::ensureDebugPanel()
+{
+    if (debugDock) {
+        return;
+    }
+
+    debugPanel = new DebugPanel(this);
+    debugPanel->setObjectName("debugPanel");
+    debugPanel->hide();
+
+    connect(debugPanel, &DebugPanel::locationClicked, this,
+            [this](const QString& filePath, int line, int column) {
+                if (!filePath.isEmpty()) {
+                    openFileAndAddToNewTab(filePath);
+                }
+                TextArea* textArea = getCurrentTextArea();
+                if (textArea) {
+                    QTextCursor cursor = textArea->textCursor();
+                    cursor.movePosition(QTextCursor::Start);
+                    int targetLine = line > 0 ? line - 1 : 0;
+                    int targetColumn = column > 0 ? column - 1 : 0;
+                    cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, targetLine);
+                    cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, targetColumn);
+                    textArea->setTextCursor(cursor);
+                    textArea->centerCursor();
+                    textArea->setFocus();
+                }
+            });
+    connect(debugPanel, &DebugPanel::startDebugRequested, this, &MainWindow::startDebuggingForCurrentFile);
+    connect(debugPanel, &DebugPanel::restartDebugRequested, this, [this]() {
+        if (!m_activeDebugSessionId.isEmpty()) {
+            if (DebugSession* session = DebugSessionManager::instance().session(m_activeDebugSessionId)) {
+                session->restart();
+                return;
+            }
+        }
+        startDebuggingForCurrentFile();
+    });
+    connect(debugPanel, &DebugPanel::stopDebugRequested, this, [this]() {
+        if (!m_activeDebugSessionId.isEmpty()) {
+            DebugSessionManager::instance().stopSession(m_activeDebugSessionId, true);
+        }
+    });
+
+    debugDock = new QDockWidget(tr("Debug"), this);
+    debugDock->setObjectName("debugDock");
+    debugDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    debugDock->setWidget(debugPanel);
+    addDockWidget(Qt::BottomDockWidgetArea, debugDock);
+    debugDock->hide();
+
+    connect(debugDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        SettingsManager::instance().setValue("showDebugDock", visible);
+        SettingsManager::instance().saveSettings();
+    });
+
+    connect(&DebugSessionManager::instance(), &DebugSessionManager::focusedSessionChanged,
+            this, [this](const QString& sessionId) { attachDebugSession(sessionId); });
+    connect(&DebugSessionManager::instance(), &DebugSessionManager::sessionStarted,
+            this, [this](const QString& sessionId) { attachDebugSession(sessionId); });
+    connect(&DebugSessionManager::instance(), &DebugSessionManager::allSessionsEnded,
+            this, [this]() { clearDebugSession(); });
+}
+
 void MainWindow::showCommandPalette()
 {
     if (commandPalette) {
@@ -1960,6 +2045,131 @@ void MainWindow::runCurrentScript()
 
     if (textArea && !textArea->changesUnsaved())
         showTerminal();
+}
+
+void MainWindow::startDebuggingForCurrentFile()
+{
+    on_actionSave_triggered();
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    if (!tabWidget) {
+        return;
+    }
+    auto page = tabWidget->getCurrentPage();
+    QString filePath = page ? page->getFilePath() : QString();
+
+    if (filePath.isEmpty()) {
+        noScriptAssignedWarning();
+        return;
+    }
+
+    if (m_projectRootPath.isEmpty()) {
+        setProjectRootPath(QFileInfo(filePath).absolutePath());
+    }
+
+    DebugSettings::instance().initialize(m_projectRootPath);
+    DebugConfigurationManager::instance().setWorkspaceFolder(m_projectRootPath);
+    DebugConfigurationManager::instance().loadFromLightpadDir();
+    BreakpointManager::instance().setWorkspaceFolder(m_projectRootPath);
+    BreakpointManager::instance().loadFromLightpadDir();
+    WatchManager::instance().setWorkspaceFolder(m_projectRootPath);
+    WatchManager::instance().loadFromLightpadDir();
+
+    QString sessionId = DebugSessionManager::instance().quickStart(filePath);
+    if (sessionId.isEmpty()) {
+        QMessageBox::warning(this, tr("Debug"), tr("Unable to start debug session for this file."));
+        return;
+    }
+
+    attachDebugSession(sessionId);
+    if (debugDock) {
+        debugDock->show();
+    }
+}
+
+void MainWindow::attachDebugSession(const QString& sessionId)
+{
+    if (sessionId.isEmpty()) {
+        return;
+    }
+
+    DebugSession* session = DebugSessionManager::instance().session(sessionId);
+    if (!session || !session->client()) {
+        return;
+    }
+
+    if (sessionId == m_activeDebugSessionId && debugPanel && debugPanel->dapClient() == session->client()) {
+        if (debugDock) {
+            debugDock->show();
+        }
+        return;
+    }
+
+    m_activeDebugSessionId = sessionId;
+    DebugSessionManager::instance().setFocusedSession(sessionId);
+    debugPanel->setDapClient(session->client());
+    WatchManager::instance().setDapClient(session->client());
+    if (debugDock) {
+        debugDock->show();
+    }
+    if (m_breakpointsSetConnection) {
+        disconnect(m_breakpointsSetConnection);
+    }
+    if (m_breakpointChangedConnection) {
+        disconnect(m_breakpointChangedConnection);
+    }
+    if (m_sessionTerminatedConnection) {
+        disconnect(m_sessionTerminatedConnection);
+    }
+    if (m_sessionErrorConnection) {
+        disconnect(m_sessionErrorConnection);
+    }
+    m_breakpointsSetConnection = connect(session->client(), &DapClient::breakpointsSet, this,
+                                         [](const QString& sourcePath, const QList<DapBreakpoint>& breakpoints) {
+                                             if (!sourcePath.isEmpty()) {
+                                                 BreakpointManager::instance().updateVerification(sourcePath, breakpoints);
+                                             }
+                                         });
+    m_breakpointChangedConnection = connect(session->client(), &DapClient::breakpointChanged, this,
+                                            [](const DapBreakpoint& breakpoint, const QString&) {
+                                                if (!breakpoint.source.path.isEmpty()) {
+                                                    BreakpointManager::instance().updateVerification(breakpoint.source.path, { breakpoint });
+                                                }
+                                            });
+
+    m_sessionTerminatedConnection = connect(session, &DebugSession::terminated, this, [this, sessionId]() {
+        if (sessionId == m_activeDebugSessionId) {
+            clearDebugSession();
+        }
+    });
+    m_sessionErrorConnection = connect(session, &DebugSession::error, this, [this](const QString& message) {
+        QMessageBox::warning(this, tr("Debug Session Error"), message);
+    });
+}
+
+void MainWindow::clearDebugSession()
+{
+    m_activeDebugSessionId.clear();
+    if (debugPanel) {
+        debugPanel->setDapClient(nullptr);
+        debugPanel->clearAll();
+    }
+    WatchManager::instance().setDapClient(nullptr);
+    if (m_breakpointsSetConnection) {
+        disconnect(m_breakpointsSetConnection);
+        m_breakpointsSetConnection = {};
+    }
+    if (m_breakpointChangedConnection) {
+        disconnect(m_breakpointChangedConnection);
+        m_breakpointChangedConnection = {};
+    }
+    if (m_sessionTerminatedConnection) {
+        disconnect(m_sessionTerminatedConnection);
+        m_sessionTerminatedConnection = {};
+    }
+    if (m_sessionErrorConnection) {
+        disconnect(m_sessionErrorConnection);
+        m_sessionErrorConnection = {};
+    }
 }
 
 void MainWindow::formatCurrentDocument()
@@ -3018,6 +3228,16 @@ void MainWindow::setProjectRootPath(const QString& path)
 
     if (!path.isEmpty()) {
         updateGitIntegrationForPath(path);
+    }
+
+    if (!path.isEmpty()) {
+        DebugSettings::instance().initialize(path);
+        DebugConfigurationManager::instance().setWorkspaceFolder(path);
+        DebugConfigurationManager::instance().loadFromLightpadDir();
+        BreakpointManager::instance().setWorkspaceFolder(path);
+        BreakpointManager::instance().loadFromLightpadDir();
+        WatchManager::instance().setWorkspaceFolder(path);
+        WatchManager::instance().loadFromLightpadDir();
     }
 
     // Apply saved expanded state to all views for the new project

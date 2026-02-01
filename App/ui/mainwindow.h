@@ -30,6 +30,7 @@ class SourceControlPanel;
 class QDockWidget;
 class VimMode;
 class LightpadTreeView;
+class DebugPanel;
 #ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
 #endif
@@ -169,6 +170,13 @@ private:
     GitIntegration* m_gitIntegration;
     SourceControlPanel* sourceControlPanel;
     QDockWidget* sourceControlDock;
+    DebugPanel* debugPanel;
+    QDockWidget* debugDock;
+    QString m_activeDebugSessionId;
+    QMetaObject::Connection m_breakpointsSetConnection;
+    QMetaObject::Connection m_breakpointChangedConnection;
+    QMetaObject::Connection m_sessionTerminatedConnection;
+    QMetaObject::Connection m_sessionErrorConnection;
     
     // Split editor views
     SplitEditorContainer* m_splitEditorContainer;
@@ -215,6 +223,7 @@ private:
     QList<LightpadTreeView*> allTreeViews() const;
     void expandIndexInView(QTreeView* treeView, const QModelIndex& index);
     void ensureSourceControlPanel();
+    void ensureDebugPanel();
     void ensureStatusLabels();
     void updateProblemsStatusLabel(int errors, int warnings, int infos);
     void updateVimStatusLabel(const QString& text);
@@ -233,6 +242,9 @@ private:
     void hideVimCommandPanel();
     void setupCompletionSystem();
     void noScriptAssignedWarning();
+    void startDebuggingForCurrentFile();
+    void attachDebugSession(const QString& sessionId);
+    void clearDebugSession();
     LightpadTabWidget* currentTabWidget() const;
     QList<LightpadTabWidget*> allTabWidgets() const;
     void closeEvent(QCloseEvent* event);
