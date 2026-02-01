@@ -3,17 +3,88 @@
 #include "../ui/mainwindow.h"
 
 #include <QApplication>
+#include <QClipboard>
+#include <QContextMenuEvent>
 #include <QDebug>
+#include <QDesktopServices>
+#include <QDir>
 #include <QFileInfo>
 #include <QFontMetrics>
+#include <QMenu>
+#include <QProcess>
 #include <QSizePolicy>
 #include <QTabBar>
 #include <QTextEdit>
 #include <QStyle>
+#include <QUrl>
 
+// LightpadTabBar implementation
+LightpadTabBar::LightpadTabBar(QWidget* parent)
+    : QTabBar(parent)
+{
+}
+
+void LightpadTabBar::contextMenuEvent(QContextMenuEvent* event)
+{
+    int index = tabAt(event->pos());
+    
+    // Don't show context menu for the "add new tab" button tab
+    if (index < 0 || index == count() - 1) {
+        return;
+    }
+
+    QMenu menu(this);
+    
+    QAction* closeAction = menu.addAction(tr("Close Tab"));
+    QAction* closeOthersAction = menu.addAction(tr("Close Other Tabs"));
+    QAction* closeToRightAction = menu.addAction(tr("Close Tabs to the Right"));
+    menu.addSeparator();
+    QAction* closeAllAction = menu.addAction(tr("Close All Tabs"));
+    
+    // Add file path operations
+    menu.addSeparator();
+    QAction* copyAbsolutePathAction = menu.addAction(tr("Copy Absolute Path"));
+    QAction* copyRelativePathAction = menu.addAction(tr("Copy Relative Path"));
+    QAction* copyFileNameAction = menu.addAction(tr("Copy File Name"));
+    menu.addSeparator();
+    QAction* revealInExplorerAction = menu.addAction(tr("Reveal in File Explorer"));
+
+    // Disable "Close Tabs to the Right" if this is the last tab (excluding the add button tab)
+    if (index >= count() - 2) {
+        closeToRightAction->setEnabled(false);
+    }
+
+    // Disable "Close Other Tabs" if there's only one tab (excluding the add button tab)
+    if (count() <= 2) {
+        closeOthersAction->setEnabled(false);
+    }
+
+    QAction* selectedAction = menu.exec(event->globalPos());
+    
+    if (selectedAction == closeAction) {
+        emit closeTab(index);
+    } else if (selectedAction == closeOthersAction) {
+        emit closeOtherTabs(index);
+    } else if (selectedAction == closeToRightAction) {
+        emit closeTabsToTheRight(index);
+    } else if (selectedAction == closeAllAction) {
+        emit closeAllTabs();
+    } else if (selectedAction == copyAbsolutePathAction) {
+        emit copyAbsolutePath(index);
+    } else if (selectedAction == copyRelativePathAction) {
+        emit copyRelativePath(index);
+    } else if (selectedAction == copyFileNameAction) {
+        emit copyFileName(index);
+    } else if (selectedAction == revealInExplorerAction) {
+        emit revealInFileExplorer(index);
+    }
+}
+
+// LightpadTabWidget implementation
 LightpadTabWidget::LightpadTabWidget(QWidget* parent)
     : QTabWidget(parent)
 {
+    setupTabBar();
 
     QWidget::connect(tabBar(), &QTabBar::tabCloseRequested, this, [this](int index) {
         removeTab(index);
@@ -374,4 +445,129 @@ bool LightpadTabWidget::isViewerTab(int index) const
     
     QWidget* w = widget(index);
     return m_viewerFilePaths.contains(w);
+}
+
+void LightpadTabWidget::setupTabBar()
+{
+    // Create and set custom tab bar
+    LightpadTabBar* customTabBar = new LightpadTabBar(this);
+    setTabBar(customTabBar);
+
+    // Connect context menu signals to slots
+    connect(customTabBar, &LightpadTabBar::closeTab, this, &LightpadTabWidget::onCloseTab);
+    connect(customTabBar, &LightpadTabBar::closeOtherTabs, this, &LightpadTabWidget::onCloseOtherTabs);
+    connect(customTabBar, &LightpadTabBar::closeTabsToTheRight, this, &LightpadTabWidget::onCloseTabsToTheRight);
+    connect(customTabBar, &LightpadTabBar::closeAllTabs, this, &LightpadTabWidget::onCloseAllTabs);
+    connect(customTabBar, &LightpadTabBar::copyAbsolutePath, this, &LightpadTabWidget::onCopyAbsolutePath);
+    connect(customTabBar, &LightpadTabBar::copyRelativePath, this, &LightpadTabWidget::onCopyRelativePath);
+    connect(customTabBar, &LightpadTabBar::copyFileName, this, &LightpadTabWidget::onCopyFileName);
+    connect(customTabBar, &LightpadTabBar::revealInFileExplorer, this, &LightpadTabWidget::onRevealInFileExplorer);
+}
+
+void LightpadTabWidget::onCloseTab(int index)
+{
+    if (index >= 0 && index < count() - 1) {
+        removeTab(index);
+    }
+}
+
+void LightpadTabWidget::onCloseOtherTabs(int index)
+{
+    if (index < 0 || index >= count() - 1) {
+        return;
+    }
+
+    // Close all tabs after the specified index (excluding the add button tab)
+    for (int i = count() - 2; i > index; --i) {
+        removeTab(i);
+    }
+
+    // Close all tabs before the specified index
+    for (int i = index - 1; i >= 0; --i) {
+        removeTab(i);
+    }
+}
+
+void LightpadTabWidget::onCloseTabsToTheRight(int index)
+{
+    if (index < 0 || index >= count() - 1) {
+        return;
+    }
+
+    // Close all tabs to the right of the specified index (excluding the add button tab)
+    for (int i = count() - 2; i > index; --i) {
+        removeTab(i);
+    }
+}
+
+void LightpadTabWidget::onCloseAllTabs()
+{
+    closeAllTabs();
+}
+
+void LightpadTabWidget::onCopyAbsolutePath(int index)
+{
+    QString filePath = getFilePath(index);
+    if (!filePath.isEmpty()) {
+        QClipboard* clipboard = QApplication::clipboard();
+        clipboard->setText(filePath);
+    }
+}
+
+void LightpadTabWidget::onCopyRelativePath(int index)
+{
+    if (!mainWindow) {
+        return;
+    }
+    
+    QString filePath = getFilePath(index);
+    if (filePath.isEmpty()) {
+        return;
+    }
+    
+    QString projectRoot = mainWindow->getProjectRootPath();
+    QClipboard* clipboard = QApplication::clipboard();
+    
+    if (!projectRoot.isEmpty()) {
+        QDir projectDir(projectRoot);
+        QString relativePath = projectDir.relativeFilePath(filePath);
+        clipboard->setText(relativePath);
+    } else {
+        // If no project root, fall back to absolute path
+        clipboard->setText(filePath);
+    }
+}
+
+void LightpadTabWidget::onCopyFileName(int index)
+{
+    QString filePath = getFilePath(index);
+    if (!filePath.isEmpty()) {
+        QFileInfo fileInfo(filePath);
+        QString fileName = fileInfo.fileName();
+        QClipboard* clipboard = QApplication::clipboard();
+        clipboard->setText(fileName);
+    }
+}
+
+void LightpadTabWidget::onRevealInFileExplorer(int index)
+{
+    QString filePath = getFilePath(index);
+    if (!filePath.isEmpty()) {
+        QFileInfo fileInfo(filePath);
+        if (fileInfo.exists()) {
+            // Open the containing directory and select the file
+            QString dirPath = fileInfo.absolutePath();
+            
+#ifdef Q_OS_WIN
+            // On Windows, use explorer with /select parameter
+            QProcess::startDetached("explorer", QStringList() << "/select," + QDir::toNativeSeparators(filePath));
+#elif defined(Q_OS_MAC)
+            // On macOS, use 'open -R' to reveal in Finder
+            QProcess::startDetached("open", QStringList() << "-R" << filePath);
+#else
+            // On Linux and other systems, just open the directory
+            QDesktopServices::openUrl(QUrl::fromLocalFile(dirPath));
+#endif
+        }
+    }
 }

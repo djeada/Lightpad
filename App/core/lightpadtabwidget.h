@@ -12,6 +12,29 @@ const int buttonSize = 25;
 class MainWindow;
 class LightpadPage;
 
+/**
+ * @brief Custom tab bar with context menu support
+ */
+class LightpadTabBar : public QTabBar {
+    Q_OBJECT
+
+public:
+    explicit LightpadTabBar(QWidget* parent = nullptr);
+
+protected:
+    void contextMenuEvent(QContextMenuEvent* event) override;
+
+signals:
+    void closeTab(int index);
+    void closeOtherTabs(int index);
+    void closeTabsToTheRight(int index);
+    void closeAllTabs();
+    void copyAbsolutePath(int index);
+    void copyRelativePath(int index);
+    void copyFileName(int index);
+    void revealInFileExplorer(int index);
+};
+
 class LightpadTabWidget : public QTabWidget {
     Q_OBJECT
 
@@ -40,8 +63,19 @@ protected:
     void tabRemoved(int index) override;
     void tabInserted(int index) override;
 
+private slots:
+    void onCloseTab(int index);
+    void onCloseOtherTabs(int index);
+    void onCloseTabsToTheRight(int index);
+    void onCloseAllTabs();
+    void onCopyAbsolutePath(int index);
+    void onCopyRelativePath(int index);
+    void onCopyFileName(int index);
+    void onRevealInFileExplorer(int index);
+
 private:
     void updateCloseButtons();
+    void setupTabBar();
     MainWindow* mainWindow;
     QToolButton* newTabButton;
     QMap<QWidget*, QString> m_viewerFilePaths;
