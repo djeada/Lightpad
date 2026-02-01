@@ -16,6 +16,13 @@
 #include <QCursor>
 #include <QToolTip>
 
+// Constants for the commit history display
+namespace {
+    constexpr int DEFAULT_HISTORY_COMMIT_COUNT = 20;
+    constexpr int MAX_COMMIT_DISPLAY_LENGTH = 60;
+    constexpr int MAX_DIFF_PREVIEW_LENGTH = 2000;
+}
+
 SourceControlPanel::SourceControlPanel(QWidget* parent)
     : QWidget(parent)
     , m_git(nullptr)
@@ -46,6 +53,10 @@ SourceControlPanel::SourceControlPanel(QWidget* parent)
     , m_stashButton(nullptr)
     , m_stagedTree(nullptr)
     , m_changesTree(nullptr)
+    , m_historyHeader(nullptr)
+    , m_historyTree(nullptr)
+    , m_historyToggleButton(nullptr)
+    , m_historyExpanded(false)
     , m_updatingBranchSelector(false)
 {
     setupUI();
@@ -644,6 +655,109 @@ void SourceControlPanel::setupRepoUI()
     connect(m_changesTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_changesTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
     mainLayout->addWidget(m_changesTree, 1);
+
+    // Commit history section (collapsible)
+    m_historyHeader = new QWidget(m_repoWidget);
+    m_historyHeader->setStyleSheet("background: #161b22; border-bottom: 1px solid #21262d;");
+    m_historyHeader->setCursor(Qt::PointingHandCursor);
+    QHBoxLayout* historyHeaderLayout = new QHBoxLayout(m_historyHeader);
+    historyHeaderLayout->setContentsMargins(8, 6, 8, 6);
+    
+    m_historyToggleButton = new QPushButton("▶", m_historyHeader);
+    m_historyToggleButton->setFixedSize(16, 16);
+    m_historyToggleButton->setStyleSheet(
+        "QPushButton { background: transparent; color: #8b949e; border: none; font-size: 10px; padding: 0; }"
+        "QPushButton:hover { color: #e6edf3; }"
+    );
+    historyHeaderLayout->addWidget(m_historyToggleButton);
+    
+    QLabel* historyIcon = new QLabel("📜", m_historyHeader);
+    historyIcon->setStyleSheet("font-size: 12px;");
+    historyHeaderLayout->addWidget(historyIcon);
+    
+    QLabel* historyLabel = new QLabel(tr("Commit History"), m_historyHeader);
+    historyLabel->setStyleSheet("color: #a371f7; font-weight: bold; font-size: 12px;");
+    historyHeaderLayout->addWidget(historyLabel);
+    
+    historyHeaderLayout->addStretch();
+    
+    mainLayout->addWidget(m_historyHeader);
+    
+    // Connect click on header to toggle
+    connect(m_historyToggleButton, &QPushButton::clicked, [this]() {
+        m_historyExpanded = !m_historyExpanded;
+        m_historyToggleButton->setText(m_historyExpanded ? "▼" : "▶");
+        m_historyTree->setVisible(m_historyExpanded);
+        if (m_historyExpanded) {
+            updateHistory();
+        }
+    });
+
+    m_historyTree = new QTreeWidget(m_repoWidget);
+    m_historyTree->setHeaderHidden(true);
+    m_historyTree->setRootIsDecorated(false);
+    m_historyTree->setVisible(false);  // Initially collapsed
+    m_historyTree->setStyleSheet(
+        "QTreeWidget {"
+        "  background: #0d1117;"
+        "  color: #e6edf3;"
+        "  border: none;"
+        "  font-size: 11px;"
+        "}"
+        "QTreeWidget::item {"
+        "  padding: 4px 8px;"
+        "  border-bottom: 1px solid #21262d;"
+        "}"
+        "QTreeWidget::item:selected {"
+        "  background: #1f6feb;"
+        "}"
+        "QTreeWidget::item:hover {"
+        "  background: #161b22;"
+        "}"
+    );
+    m_historyTree->setMinimumHeight(100);
+    m_historyTree->setMaximumHeight(200);
+    m_historyTree->setUniformRowHeights(true);
+    
+    // Connect double-click to view commit diff
+    connect(m_historyTree, &QTreeWidget::itemDoubleClicked, [this](QTreeWidgetItem* item, int) {
+        if (!item || !m_git) return;
+        QString commitHash = item->data(0, Qt::UserRole).toString();
+        if (!commitHash.isEmpty()) {
+            // Show commit diff in a message box for now (could be improved later)
+            QString diff = m_git->getCommitDiff(commitHash);
+            GitCommitInfo info = m_git->getCommitDetails(commitHash);
+            
+            QString message = QString("%1\n\nAuthor: %2 <%3>\nDate: %4\n\n%5")
+                .arg(info.subject)
+                .arg(info.author)
+                .arg(info.authorEmail)
+                .arg(info.relativeDate)
+                .arg(info.body.isEmpty() ? "(No additional message)" : info.body);
+            
+            if (!diff.isEmpty()) {
+                message += QString("\n\n--- Diff ---\n%1").arg(diff.left(MAX_DIFF_PREVIEW_LENGTH));
+                if (diff.length() > MAX_DIFF_PREVIEW_LENGTH) {
+                    message += "\n... (truncated)";
+                }
+            }
+            
+            QMessageBox msgBox(this);
+            msgBox.setWindowTitle(tr("Commit: %1").arg(info.shortHash));
+            msgBox.setText(info.subject);
+            msgBox.setDetailedText(message);
+            msgBox.setStyleSheet(
+                "QMessageBox { background: #0d1117; }"
+                "QMessageBox QLabel { color: #e6edf3; }"
+                "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; }"
+                "QPushButton:hover { background: #30363d; }"
+                "QTextEdit { background: #161b22; color: #e6edf3; font-family: monospace; }"
+            );
+            msgBox.exec();
+        }
+    });
+    
+    mainLayout->addWidget(m_historyTree);
 }
 
 void SourceControlPanel::setGitIntegration(GitIntegration* git)
@@ -851,6 +965,50 @@ void SourceControlPanel::updateTree()
     m_unstageAllButton->setEnabled(stagedCount > 0);
     if (m_changesTree) {
         m_changesTree->setToolTip(changesCount == 0 ? tr("No local changes") : QString());
+    }
+}
+
+void SourceControlPanel::updateHistory()
+{
+    if (!m_historyTree) return;
+    
+    m_historyTree->clear();
+    
+    if (!m_git || !m_git->isValidRepository()) {
+        return;
+    }
+    
+    QList<GitCommitInfo> commits = m_git->getCommitLog(DEFAULT_HISTORY_COMMIT_COUNT);
+    
+    for (const GitCommitInfo& commit : commits) {
+        QTreeWidgetItem* item = new QTreeWidgetItem(m_historyTree);
+        
+        // Format: short_hash subject (relative_date)
+        QString displayText = QString("%1  %2").arg(commit.shortHash).arg(commit.subject);
+        if (displayText.length() > MAX_COMMIT_DISPLAY_LENGTH) {
+            displayText = displayText.left(MAX_COMMIT_DISPLAY_LENGTH - 3) + "...";
+        }
+        
+        item->setText(0, displayText);
+        item->setToolTip(0, QString("%1\n\nAuthor: %2\nDate: %3\n\n%4")
+            .arg(commit.hash)
+            .arg(commit.author)
+            .arg(commit.relativeDate)
+            .arg(commit.subject));
+        item->setData(0, Qt::UserRole, commit.hash);
+        
+        // Color the hash part differently
+        QFont font = item->font(0);
+        font.setFamily("monospace");
+        item->setFont(0, font);
+        
+        // Set foreground color based on commit type
+        if (commit.parents.size() > 1) {
+            // Merge commit - show in purple
+            item->setForeground(0, QColor("#a371f7"));
+        } else {
+            item->setForeground(0, QColor("#8b949e"));
+        }
     }
 }
 
