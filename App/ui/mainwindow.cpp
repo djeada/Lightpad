@@ -984,6 +984,7 @@ void MainWindow::showTerminal()
 
     if (!terminalWidget) {
         terminalWidget = new TerminalTabWidget();
+        terminalWidget->applyTheme(settings.theme);
 
         connect(terminalWidget, &TerminalTabWidget::closeRequested, this, [&]() {
             if (terminalWidget) {
@@ -1836,6 +1837,7 @@ void MainWindow::on_actionToggle_Terminal_triggered()
 {
     if (!terminalWidget) {
         terminalWidget = new TerminalTabWidget();
+        terminalWidget->applyTheme(settings.theme);
 
         connect(terminalWidget, &TerminalTabWidget::closeRequested, this, [this]() {
             if (terminalWidget) {
@@ -2409,6 +2411,9 @@ void MainWindow::setTheme(Theme theme)
     qApp->setStyleSheet(styleSheet);
 
     ui->tabWidget->setTheme(bgColor, fgColor, surfaceColor, hoverColor, accentColor, borderColor);
+    if (terminalWidget) {
+        terminalWidget->applyTheme(theme);
+    }
     updateAllTextAreas(&TextArea::applySelectionPalette, settings.theme);
 }
 

@@ -1,6 +1,7 @@
 #include <QtTest/QtTest>
 #include <QSignalSpy>
 #include <QPlainTextEdit>
+#include <QToolButton>
 #include "ui/panels/terminal.h"
 #include "ui/panels/shellprofile.h"
 
@@ -37,6 +38,7 @@ private slots:
     void testScrollbackLines();
     void testLinkDetection();
     void testSendText();
+    void testCloseButtonConfiguration();
 };
 
 void TestTerminal::initTestCase()
@@ -274,6 +276,19 @@ void TestTerminal::testSendText()
     terminal.sendText("test", true);
     
     QVERIFY(true);  // If we get here without crash, test passed
+}
+
+void TestTerminal::testCloseButtonConfiguration()
+{
+    Terminal terminal;
+    terminal.stopShell();
+    QTest::qWait(200);
+
+    QToolButton* closeButton = terminal.findChild<QToolButton*>("closeButton");
+    QVERIFY(closeButton != nullptr);
+    QCOMPARE(closeButton->text(), QStringLiteral("\u00D7"));
+    QVERIFY(!closeButton->isCheckable());
+    QVERIFY(closeButton->autoRaise());
 }
 
 QTEST_MAIN(TestTerminal)

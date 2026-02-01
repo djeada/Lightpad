@@ -90,6 +90,8 @@ void LightpadTabWidget::updateCloseButtons()
                 "  border: none;"
                 "  border-radius: 4px;"
                 "  padding: 2px;"
+                "  font-size: 14px;"
+                "  font-weight: bold;"
                 "}"
                 "QToolButton:hover {"
                 "  color: %1;"
