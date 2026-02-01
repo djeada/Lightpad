@@ -29,6 +29,10 @@ signals:
     void closeOtherTabs(int index);
     void closeTabsToTheRight(int index);
     void closeAllTabs();
+    void copyAbsolutePath(int index);
+    void copyRelativePath(int index);
+    void copyFileName(int index);
+    void revealInFileExplorer(int index);
 };
 
 class LightpadTabWidget : public QTabWidget {
@@ -64,6 +68,10 @@ private slots:
     void onCloseOtherTabs(int index);
     void onCloseTabsToTheRight(int index);
     void onCloseAllTabs();
+    void onCopyAbsolutePath(int index);
+    void onCopyRelativePath(int index);
+    void onCopyFileName(int index);
+    void onRevealInFileExplorer(int index);
 
 private:
     void updateCloseButtons();
