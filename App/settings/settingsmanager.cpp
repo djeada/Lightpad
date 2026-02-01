@@ -9,6 +9,7 @@
 #include <QJsonValue>
 #include <QStandardPaths>
 #include <QCoreApplication>
+#include <functional>
 
 SettingsManager& SettingsManager::instance()
 {
@@ -37,6 +38,8 @@ void SettingsManager::initializeDefaults()
     m_defaults["lineHighlighted"] = true;
     m_defaults["matchingBracketsHighlighted"] = true;
     m_defaults["tabWidth"] = 4;
+    m_defaults["trimTrailingWhitespace"] = false;
+    m_defaults["insertFinalNewline"] = false;
 
     // Theme defaults
     QJsonObject themeDefaults;
@@ -207,9 +210,42 @@ QVariant SettingsManager::getValue(const QString& key, const QVariant& defaultVa
 
 void SettingsManager::setValue(const QString& key, const QVariant& value)
 {
-    // For now, only support top-level keys
-    // TODO: Add support for nested keys
-    m_settings[key] = QJsonValue::fromVariant(value);
+    // Support dot notation for nested keys
+    QStringList keys = key.split('.');
+    
+    if (keys.isEmpty()) {
+        LOG_WARNING(QString("Attempted to set value with empty key"));
+        return;
+    }
+    
+    // For single-level keys, use direct assignment
+    if (keys.size() == 1) {
+        m_settings[key] = QJsonValue::fromVariant(value);
+        m_dirty = true;
+        emit settingChanged(key, value);
+        return;
+    }
+    
+    // For nested keys, recursively build the object hierarchy
+    std::function<void(QJsonObject&, int)> setNested = [&](QJsonObject& obj, int keyIndex) {
+        if (keyIndex >= keys.size() - 1) {
+            obj[keys[keyIndex]] = QJsonValue::fromVariant(value);
+            return;
+        }
+        
+        QString currentKey = keys[keyIndex];
+        QJsonObject nested;
+        
+        if (obj.contains(currentKey) && obj.value(currentKey).isObject()) {
+            nested = obj.value(currentKey).toObject();
+        }
+        
+        setNested(nested, keyIndex + 1);
+        obj[currentKey] = nested;
+    };
+    
+    setNested(m_settings, 0);
+    
     m_dirty = true;
     emit settingChanged(key, value);
 }
