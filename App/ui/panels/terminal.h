@@ -223,6 +223,7 @@ private:
     QStringList getShellArguments() const;
     void scrollToBottom();
     void handleHistoryNavigation(bool up);
+    void handleTabCompletion();
     void cleanupRunProcess(bool restartShell);
     void cleanupProcess();
     void scheduleAutoRestart();

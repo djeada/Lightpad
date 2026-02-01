@@ -638,6 +638,10 @@ bool Terminal::eventFilter(QObject* obj, QEvent* event)
             handleHistoryNavigation(false);
             return true;
 
+        case Qt::Key_Tab:
+            handleTabCompletion();
+            return true;
+
         case Qt::Key_C:
             if ((keyEvent->modifiers() & Qt::ControlModifier) && 
                 (keyEvent->modifiers() & Qt::ShiftModifier)) {
@@ -797,24 +801,152 @@ void Terminal::handleHistoryNavigation(bool up)
         if (m_historyIndex < m_commandHistory.size()) {
             m_historyIndex++;
             if (m_historyIndex >= m_commandHistory.size()) {
-                // Past end of history, clear input
+                // Past end of history, clear input (keep prompt intact)
                 QTextCursor cursor = ui->textEdit->textCursor();
                 cursor.movePosition(QTextCursor::End);
-                cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
+                cursor.setPosition(m_inputStartPosition, QTextCursor::KeepAnchor);
                 cursor.removeSelectedText();
                 return;
             }
         }
     }
 
-    // Replace current line with history entry
+    // Replace current input with history entry (keep prompt intact)
     if (m_historyIndex >= 0 && m_historyIndex < m_commandHistory.size()) {
         QTextCursor cursor = ui->textEdit->textCursor();
         cursor.movePosition(QTextCursor::End);
-        cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
+        cursor.setPosition(m_inputStartPosition, QTextCursor::KeepAnchor);
         cursor.insertText(m_commandHistory[m_historyIndex]);
         ui->textEdit->setTextCursor(cursor);
     }
+}
+
+void Terminal::handleTabCompletion()
+{
+    // Get current user input
+    QTextCursor cursor = ui->textEdit->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    int endPos = cursor.position();
+    
+    cursor.setPosition(m_inputStartPosition);
+    cursor.setPosition(endPos, QTextCursor::KeepAnchor);
+    QString userInput = cursor.selectedText();
+    
+    if (userInput.isEmpty()) {
+        return;
+    }
+    
+    // Find the word to complete (last space-separated token)
+    int lastSpace = userInput.lastIndexOf(' ');
+    QString prefix = (lastSpace >= 0) ? userInput.left(lastSpace + 1) : QString();
+    QString toComplete = (lastSpace >= 0) ? userInput.mid(lastSpace + 1) : userInput;
+    
+    if (toComplete.isEmpty()) {
+        return;
+    }
+    
+    // Expand ~ to home directory
+    QString searchPath = toComplete;
+    QString pathPrefix;
+    if (searchPath.startsWith("~/")) {
+        pathPrefix = "~/";
+        searchPath = QDir::homePath() + searchPath.mid(1);
+    } else if (searchPath == "~") {
+        pathPrefix = "~";
+        searchPath = QDir::homePath();
+    }
+    
+    // Determine the directory to search and the partial filename
+    QFileInfo fileInfo(searchPath);
+    QString dirPath;
+    QString filePrefix;
+    
+    if (searchPath.endsWith('/') || QFileInfo(searchPath).isDir()) {
+        dirPath = searchPath;
+        filePrefix = QString();
+    } else {
+        dirPath = fileInfo.absolutePath();
+        filePrefix = fileInfo.fileName();
+    }
+    
+    // Handle relative paths
+    if (!QDir(dirPath).isAbsolute() && pathPrefix.isEmpty()) {
+        dirPath = m_workingDirectory + "/" + dirPath;
+    }
+    
+    QDir dir(dirPath);
+    if (!dir.exists()) {
+        return;
+    }
+    
+    // Get matching entries
+    QStringList entries = dir.entryList(QDir::AllEntries | QDir::NoDotAndDotDot);
+    QStringList matches;
+    
+    for (const QString& entry : entries) {
+        if (filePrefix.isEmpty() || entry.startsWith(filePrefix, Qt::CaseSensitive)) {
+            QString match = entry;
+            // Add trailing slash for directories
+            if (QFileInfo(dir.absoluteFilePath(entry)).isDir()) {
+                match += '/';
+            }
+            matches.append(match);
+        }
+    }
+    
+    if (matches.isEmpty()) {
+        return;
+    }
+    
+    QString completion;
+    if (matches.size() == 1) {
+        // Single match - complete it
+        completion = matches.first();
+    } else {
+        // Multiple matches - find common prefix
+        completion = matches.first();
+        for (int i = 1; i < matches.size(); ++i) {
+            int j = 0;
+            while (j < completion.length() && j < matches[i].length() 
+                   && completion[j] == matches[i][j]) {
+                ++j;
+            }
+            completion = completion.left(j);
+        }
+        
+        // Show available options if no further completion possible
+        if (completion.length() <= filePrefix.length()) {
+            appendOutput("\n");
+            for (const QString& match : matches) {
+                appendOutput(match + "  ");
+            }
+            appendOutput("\n");
+            appendPrompt();
+            
+            // Re-insert the original input
+            ui->textEdit->moveCursor(QTextCursor::End);
+            ui->textEdit->insertPlainText(userInput);
+            return;
+        }
+    }
+    
+    // Build the completed path
+    QString completedPart;
+    if (toComplete.contains('/')) {
+        // Keep the directory part of what user typed
+        int lastSlash = toComplete.lastIndexOf('/');
+        completedPart = toComplete.left(lastSlash + 1) + completion;
+    } else {
+        completedPart = completion;
+    }
+    
+    // Replace user input with completed version
+    QString newInput = prefix + pathPrefix + completedPart;
+    
+    cursor.movePosition(QTextCursor::End);
+    cursor.setPosition(m_inputStartPosition, QTextCursor::KeepAnchor);
+    cursor.insertText(newInput);
+    ui->textEdit->setTextCursor(cursor);
 }
 
 void Terminal::applyTheme(const QString& backgroundColor,
@@ -1131,5 +1263,19 @@ QString Terminal::stripAnsiEscapeCodes(const QString& text)
     
     QString result = text;
     result.remove(ansiRegex);
-    return result;
+    
+    // Process backspace characters (0x08): each backspace deletes the previous character
+    QString processed;
+    processed.reserve(result.size());
+    for (const QChar& ch : result) {
+        if (ch == '\x08') {
+            if (!processed.isEmpty()) {
+                processed.chop(1);
+            }
+        } else {
+            processed.append(ch);
+        }
+    }
+    
+    return processed;
 }
