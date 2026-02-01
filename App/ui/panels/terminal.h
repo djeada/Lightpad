@@ -225,6 +225,8 @@ private:
     void cleanupProcess();
     void scheduleAutoRestart();
     void updateStyleSheet();
+    QString filterShellStartupNoise(const QString& text) const;
+    bool isShellStartupNoiseLine(const QString& line) const;
     QString processTextForLinks(const QString& text);
     void enforceScrollbackLimit();
     QString getLinkAtPosition(const QPoint& pos);

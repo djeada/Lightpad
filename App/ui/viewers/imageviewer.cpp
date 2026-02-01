@@ -1,5 +1,6 @@
 #include "imageviewer.h"
 #include <QWheelEvent>
+#include <QShowEvent>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QMessageBox>
@@ -13,6 +14,7 @@ ImageViewer::ImageViewer(QWidget* parent)
     , m_zoomLabel(nullptr)
     , m_infoLabel(nullptr)
     , m_zoomFactor(1.0)
+    , m_initialFitPending(false)
 {
     setupUi();
 }
@@ -103,8 +105,8 @@ bool ImageViewer::loadImage(const QString& filePath)
         .arg(m_originalPixmap.height())
         .arg(QLocale().formattedDataSize(fileInfo.size())));
     
-    // Fit image to window initially
-    fitToWindow();
+    // Defer fit-to-window until widget is shown and has proper size
+    m_initialFitPending = true;
     
     return true;
 }
@@ -187,5 +189,15 @@ void ImageViewer::wheelEvent(QWheelEvent* event)
         event->accept();
     } else {
         QWidget::wheelEvent(event);
+    }
+}
+
+void ImageViewer::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    
+    if (m_initialFitPending && !m_originalPixmap.isNull()) {
+        m_initialFitPending = false;
+        fitToWindow();
     }
 }

@@ -93,9 +93,6 @@ void Terminal::setupTerminal()
     // Apply terminal styling
     updateStyleSheet();
 
-    // Display initial prompt
-    appendOutput("Terminal ready. Starting shell...\n");
-
     // Start shell automatically
     startShell();
 }
@@ -186,7 +183,6 @@ bool Terminal::startShell(const QString& workingDirectory)
     m_processRunning = true;
     m_restartAttempts = 0;  // Reset restart counter on successful start
     ui->textEdit->setReadOnly(false);
-    appendOutput(QString("Shell started: %1\n").arg(shell));
     emit shellStarted();
 
     return true;
@@ -505,6 +501,10 @@ void Terminal::onReadyReadStandardError()
 
     QByteArray data = m_process->readAllStandardError();
     QString output = QString::fromLocal8Bit(data);
+    output = filterShellStartupNoise(output);
+    if (output.isEmpty()) {
+        return;
+    }
 
     appendOutput(output, true);
     emit outputReceived(output);
@@ -839,6 +839,50 @@ void Terminal::updateStyleSheet()
     ).arg(m_backgroundColor, m_textColor);
     
     ui->textEdit->setStyleSheet(styleSheet);
+}
+
+QString Terminal::filterShellStartupNoise(const QString& text) const
+{
+    if (text.isEmpty()) {
+        return text;
+    }
+
+    const QStringList lines = text.split('\n');
+    QStringList kept;
+    kept.reserve(lines.size());
+    bool hasNonEmpty = false;
+
+    for (const QString& line : lines) {
+        if (isShellStartupNoiseLine(line)) {
+            continue;
+        }
+        kept.append(line);
+        if (!line.isEmpty()) {
+            hasNonEmpty = true;
+        }
+    }
+
+    if (!hasNonEmpty) {
+        return QString();
+    }
+
+    QString result = kept.join("\n");
+    if (text.endsWith('\n') && !result.endsWith('\n')) {
+        result.append('\n');
+    }
+
+    return result;
+}
+
+bool Terminal::isShellStartupNoiseLine(const QString& line) const
+{
+    if (line.startsWith("bash: cannot set terminal process group")) {
+        return true;
+    }
+    if (line.startsWith("bash: no job control in this shell")) {
+        return true;
+    }
+    return false;
 }
 
 void Terminal::setShellProfile(const ShellProfile& profile)
