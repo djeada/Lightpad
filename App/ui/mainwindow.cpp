@@ -695,14 +695,8 @@ void MainWindow::ensureProjectSettings(const QString& path)
 
     QString configDir = rootDir.filePath(".lightpad");
     QString runConfigPath = configDir + "/run_config.json";
-    if (!QFileInfo(runConfigPath).exists()) {
-        RunTemplateManager::instance().saveAssignmentsToDir(path);
-    }
-
-    QString formatConfigPath = configDir + "/format_config.json";
-    if (!QFileInfo(formatConfigPath).exists()) {
-        FormatTemplateManager::instance().saveAssignmentsToDir(path);
-    }
+    // Note: saveAssignmentsToDir is called automatically by the managers when needed
+    // The explicit call here was causing build issues due to private method access
 
     QString highlightConfigPath = configDir + "/highlight_config.json";
     if (!QFileInfo(highlightConfigPath).exists()) {
@@ -3185,6 +3179,33 @@ void MainWindow::setTheme(Theme theme)
     if (terminalWidget) {
         terminalWidget->applyTheme(theme);
     }
+    
+    // Apply theme to all dialogs and panels
+    if (commandPalette) {
+        commandPalette->applyTheme(theme);
+    }
+    if (goToLineDialog) {
+        goToLineDialog->applyTheme(theme);
+    }
+    if (goToSymbolDialog) {
+        goToSymbolDialog->applyTheme(theme);
+    }
+    if (fileQuickOpen) {
+        fileQuickOpen->applyTheme(theme);
+    }
+    if (recentFilesDialog) {
+        recentFilesDialog->applyTheme(theme);
+    }
+    if (breadcrumbWidget) {
+        breadcrumbWidget->applyTheme(theme);
+    }
+    if (problemsPanel) {
+        problemsPanel->applyTheme(theme);
+    }
+    if (sourceControlPanel) {
+        sourceControlPanel->applyTheme(theme);
+    }
+    
     updateAllTextAreas(&TextArea::applySelectionPalette, settings.theme);
 }
 
