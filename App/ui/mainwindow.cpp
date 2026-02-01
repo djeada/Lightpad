@@ -1854,6 +1854,112 @@ void MainWindow::on_actionToggle_Terminal_triggered()
     ui->actionToggle_Terminal->setChecked(!visible);
 }
 
+// ============================================================================
+// Text Transformation Actions
+// ============================================================================
+
+void MainWindow::on_actionTransform_Uppercase_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->transformToUppercase();
+    }
+}
+
+void MainWindow::on_actionTransform_Lowercase_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->transformToLowercase();
+    }
+}
+
+void MainWindow::on_actionTransform_Title_Case_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->transformToTitleCase();
+    }
+}
+
+void MainWindow::on_actionSort_Lines_Ascending_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->sortLinesAscending();
+    }
+}
+
+void MainWindow::on_actionSort_Lines_Descending_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->sortLinesDescending();
+    }
+}
+
+// ============================================================================
+// View Actions
+// ============================================================================
+
+void MainWindow::on_actionToggle_Word_Wrap_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        bool enabled = textArea->wordWrapEnabled();
+        textArea->setWordWrapEnabled(!enabled);
+        ui->actionToggle_Word_Wrap->setChecked(!enabled);
+    }
+}
+
+void MainWindow::on_actionFold_Current_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->foldCurrentBlock();
+    }
+}
+
+void MainWindow::on_actionUnfold_Current_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->unfoldCurrentBlock();
+    }
+}
+
+void MainWindow::on_actionFold_All_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->foldAll();
+    }
+}
+
+void MainWindow::on_actionUnfold_All_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->unfoldAll();
+    }
+}
+
+void MainWindow::on_actionFold_Comments_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->foldComments();
+    }
+}
+
+void MainWindow::on_actionUnfold_Comments_triggered()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->unfoldComments();
+    }
+}
+
 void MainWindow::setTheme(Theme theme)
 {
     settings.theme = theme;

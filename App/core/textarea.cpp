@@ -58,6 +58,26 @@ private:
 };
 
 // Static icon cache - initialized once, reused everywhere
+
+// Helper function to check if a line is a single-line comment (not a preprocessor directive)
+static bool isSingleLineComment(const QString& trimmedText)
+{
+    if (trimmedText.startsWith("//")) {
+        return true;
+    }
+    if (trimmedText.startsWith("#") && 
+        !trimmedText.startsWith("#include") && 
+        !trimmedText.startsWith("#define") && 
+        !trimmedText.startsWith("#pragma") &&
+        !trimmedText.startsWith("#if") && 
+        !trimmedText.startsWith("#else") &&
+        !trimmedText.startsWith("#endif") && 
+        !trimmedText.startsWith("#region") &&
+        !trimmedText.startsWith("#endregion")) {
+        return true;
+    }
+    return false;
+}
 QIcon TextArea::s_unsavedIcon;
 bool TextArea::s_iconsInitialized = false;
 
@@ -1721,6 +1741,17 @@ int TextArea::findFoldEndBlock(int startBlock) const
         return startBlock;
     
     QString text = block.text();
+    
+    // Check for #region marker - find matching #endregion
+    if (isRegionStart(startBlock)) {
+        return findRegionEndBlock(startBlock);
+    }
+    
+    // Check for comment block start - find end of comment block
+    if (isCommentBlockStart(startBlock)) {
+        return findCommentBlockEnd(startBlock);
+    }
+    
     int startIndent = 0;
     for (QChar c : text) {
         if (c == ' ') startIndent++;
@@ -1784,9 +1815,17 @@ bool TextArea::isFoldable(int blockNumber) const
         return false;
     
     QString text = block.text();
+    QString trimmed = text.trimmed();
+    
+    // Check for #region marker (supports #region, //region, //#region, // #region)
+    if (isRegionStart(blockNumber))
+        return true;
+    
+    // Check for multi-line comment block start
+    if (isCommentBlockStart(blockNumber))
+        return true;
     
     // Foldable if line ends with { or :
-    QString trimmed = text.trimmed();
     if (trimmed.endsWith('{') || trimmed.endsWith(':'))
         return true;
     
@@ -2090,4 +2129,342 @@ void TextArea::splitSelectionIntoLines()
     }
     
     drawExtraCursors();
+}
+
+// ============================================================================
+// Custom Fold Regions (#region/#endregion)
+// ============================================================================
+
+bool TextArea::isRegionStart(int blockNumber) const
+{
+    QTextBlock block = document()->findBlockByNumber(blockNumber);
+    if (!block.isValid())
+        return false;
+    
+    QString text = block.text().trimmed();
+    
+    // Support various region marker styles:
+    // #region, //region, //#region, // #region, /* #region
+    // Also support Python/Shell: # region
+    static const QStringList regionPatterns = {
+        "#region", "// region", "//region", "//#region", "// #region",
+        "/* region", "/*region", "/* #region", "/*#region",
+        "# region", "#pragma region"
+    };
+    
+    QString lowerText = text.toLower();
+    for (const QString& pattern : regionPatterns) {
+        if (lowerText.startsWith(pattern.toLower())) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+bool TextArea::isRegionEnd(int blockNumber) const
+{
+    QTextBlock block = document()->findBlockByNumber(blockNumber);
+    if (!block.isValid())
+        return false;
+    
+    QString text = block.text().trimmed();
+    
+    // Support various endregion marker styles
+    static const QStringList endregionPatterns = {
+        "#endregion", "// endregion", "//endregion", "//#endregion", "// #endregion",
+        "/* endregion", "/*endregion", "/* #endregion", "/*#endregion",
+        "# endregion", "#pragma endregion"
+    };
+    
+    QString lowerText = text.toLower();
+    for (const QString& pattern : endregionPatterns) {
+        if (lowerText.startsWith(pattern.toLower())) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+int TextArea::findRegionEndBlock(int startBlock) const
+{
+    // Find matching #endregion, handling nested regions
+    int depth = 1;
+    QTextBlock block = document()->findBlockByNumber(startBlock + 1);
+    
+    while (block.isValid()) {
+        int blockNum = block.blockNumber();
+        
+        if (isRegionStart(blockNum)) {
+            depth++;
+        } else if (isRegionEnd(blockNum)) {
+            depth--;
+            if (depth == 0) {
+                return blockNum;
+            }
+        }
+        
+        block = block.next();
+    }
+    
+    // No matching endregion found, fold to end of document
+    return document()->blockCount() - 1;
+}
+
+// ============================================================================
+// Comment Block Folding
+// ============================================================================
+
+bool TextArea::isCommentBlockStart(int blockNumber) const
+{
+    QTextBlock block = document()->findBlockByNumber(blockNumber);
+    if (!block.isValid())
+        return false;
+    
+    QString text = block.text().trimmed();
+    
+    // Check for C-style block comment start: /*
+    if (text.startsWith("/*") && !text.contains("*/")) {
+        return true;
+    }
+    
+    // Check for consecutive single-line comments (3 or more lines)
+    // Only mark the first line as foldable
+    if (isSingleLineComment(text)) {
+        // Check if previous line is NOT a comment (this is the start)
+        QTextBlock prevBlock = block.previous();
+        if (prevBlock.isValid()) {
+            QString prevText = prevBlock.text().trimmed();
+            if (isSingleLineComment(prevText)) {
+                return false;  // Not the start of a comment block
+            }
+        }
+        
+        // Check if there are at least 2 more consecutive comment lines
+        int consecutiveComments = 1;
+        QTextBlock nextBlock = block.next();
+        while (nextBlock.isValid() && consecutiveComments < 3) {
+            QString nextText = nextBlock.text().trimmed();
+            if (isSingleLineComment(nextText)) {
+                consecutiveComments++;
+                nextBlock = nextBlock.next();
+            } else {
+                break;
+            }
+        }
+        
+        return consecutiveComments >= 3;
+    }
+    
+    return false;
+}
+
+int TextArea::findCommentBlockEnd(int startBlock) const
+{
+    QTextBlock block = document()->findBlockByNumber(startBlock);
+    if (!block.isValid())
+        return startBlock;
+    
+    QString text = block.text().trimmed();
+    
+    // Handle C-style block comments
+    if (text.startsWith("/*")) {
+        QTextBlock searchBlock = block;
+        while (searchBlock.isValid()) {
+            if (searchBlock.text().contains("*/")) {
+                return searchBlock.blockNumber();
+            }
+            searchBlock = searchBlock.next();
+        }
+        return document()->blockCount() - 1;
+    }
+    
+    // Handle consecutive single-line comments
+    int lastCommentBlock = startBlock;
+    QTextBlock nextBlock = block.next();
+    
+    while (nextBlock.isValid()) {
+        QString nextText = nextBlock.text().trimmed();
+        
+        if (isSingleLineComment(nextText)) {
+            lastCommentBlock = nextBlock.blockNumber();
+            nextBlock = nextBlock.next();
+        } else {
+            break;
+        }
+    }
+    
+    return lastCommentBlock;
+}
+
+void TextArea::foldComments()
+{
+    QTextBlock block = document()->begin();
+    while (block.isValid()) {
+        int blockNum = block.blockNumber();
+        if (isCommentBlockStart(blockNum) && !m_foldedBlocks.contains(blockNum)) {
+            m_foldedBlocks.insert(blockNum);
+            
+            int endBlock = findCommentBlockEnd(blockNum);
+            QTextBlock innerBlock = block.next();
+            
+            while (innerBlock.isValid() && innerBlock.blockNumber() <= endBlock) {
+                innerBlock.setVisible(false);
+                innerBlock = innerBlock.next();
+            }
+        }
+        block = block.next();
+    }
+    
+    viewport()->update();
+    document()->markContentsDirty(0, document()->characterCount());
+}
+
+void TextArea::unfoldComments()
+{
+    QList<int> commentBlocks;
+    for (int blockNum : m_foldedBlocks) {
+        if (isCommentBlockStart(blockNum)) {
+            commentBlocks.append(blockNum);
+        }
+    }
+    
+    for (int blockNum : commentBlocks) {
+        m_foldedBlocks.remove(blockNum);
+        
+        int endBlock = findCommentBlockEnd(blockNum);
+        QTextBlock block = document()->findBlockByNumber(blockNum + 1);
+        
+        while (block.isValid() && block.blockNumber() <= endBlock) {
+            block.setVisible(true);
+            block = block.next();
+        }
+    }
+    
+    viewport()->update();
+    document()->markContentsDirty(0, document()->characterCount());
+}
+
+// ============================================================================
+// Text Transformations
+// ============================================================================
+
+void TextArea::sortLinesAscending()
+{
+    QTextCursor cursor = textCursor();
+    if (!cursor.hasSelection()) {
+        // Select all text if nothing is selected
+        cursor.select(QTextCursor::Document);
+    }
+    
+    QString selectedText = cursor.selectedText();
+    // QTextCursor uses Unicode paragraph separator, convert to newlines
+    selectedText.replace(QChar::ParagraphSeparator, '\n');
+    
+    QStringList lines = selectedText.split('\n');
+    std::sort(lines.begin(), lines.end(), [](const QString& a, const QString& b) {
+        return a.compare(b, Qt::CaseInsensitive) < 0;
+    });
+    
+    cursor.insertText(lines.join('\n'));
+}
+
+void TextArea::sortLinesDescending()
+{
+    QTextCursor cursor = textCursor();
+    if (!cursor.hasSelection()) {
+        cursor.select(QTextCursor::Document);
+    }
+    
+    QString selectedText = cursor.selectedText();
+    selectedText.replace(QChar::ParagraphSeparator, '\n');
+    
+    QStringList lines = selectedText.split('\n');
+    std::sort(lines.begin(), lines.end(), [](const QString& a, const QString& b) {
+        return a.compare(b, Qt::CaseInsensitive) > 0;
+    });
+    
+    cursor.insertText(lines.join('\n'));
+}
+
+void TextArea::transformToUppercase()
+{
+    QTextCursor cursor = textCursor();
+    if (!cursor.hasSelection()) {
+        cursor.select(QTextCursor::WordUnderCursor);
+    }
+    
+    if (cursor.hasSelection()) {
+        QString selectedText = cursor.selectedText();
+        cursor.insertText(selectedText.toUpper());
+    }
+}
+
+void TextArea::transformToLowercase()
+{
+    QTextCursor cursor = textCursor();
+    if (!cursor.hasSelection()) {
+        cursor.select(QTextCursor::WordUnderCursor);
+    }
+    
+    if (cursor.hasSelection()) {
+        QString selectedText = cursor.selectedText();
+        cursor.insertText(selectedText.toLower());
+    }
+}
+
+void TextArea::transformToTitleCase()
+{
+    QTextCursor cursor = textCursor();
+    if (!cursor.hasSelection()) {
+        cursor.select(QTextCursor::WordUnderCursor);
+    }
+    
+    if (cursor.hasSelection()) {
+        QString selectedText = cursor.selectedText();
+        QString result;
+        bool capitalizeNext = true;
+        
+        for (int i = 0; i < selectedText.length(); ++i) {
+            QChar c = selectedText.at(i);
+            if (c.isLetter()) {
+                if (capitalizeNext) {
+                    result.append(c.toUpper());
+                    capitalizeNext = false;
+                } else {
+                    result.append(c.toLower());
+                }
+            } else {
+                result.append(c);
+                // Capitalize after various word boundary characters
+                if (c.isSpace() || c == '-' || c == '_' || 
+                    c == '.' || c == ':' || c == '/' || c == '\\' ||
+                    c == '(' || c == '[' || c == '{' || c == '<' ||
+                    c == '"' || c == '\'' || c == '`') {
+                    capitalizeNext = true;
+                }
+            }
+        }
+        
+        cursor.insertText(result);
+    }
+}
+
+// ============================================================================
+// Word Wrap
+// ============================================================================
+
+void TextArea::setWordWrapEnabled(bool enabled)
+{
+    if (enabled) {
+        setLineWrapMode(QPlainTextEdit::WidgetWidth);
+    } else {
+        setLineWrapMode(QPlainTextEdit::NoWrap);
+    }
+}
+
+bool TextArea::wordWrapEnabled() const
+{
+    return lineWrapMode() == QPlainTextEdit::WidgetWidth;
 }

@@ -76,6 +76,19 @@ public:
     void unfoldAll();
     void toggleFoldAtLine(int line);
     void foldToLevel(int level);
+    void foldComments();
+    void unfoldComments();
+
+    // Text transformations
+    void sortLinesAscending();
+    void sortLinesDescending();
+    void transformToUppercase();
+    void transformToLowercase();
+    void transformToTitleCase();
+
+    // Word wrap
+    void setWordWrapEnabled(bool enabled);
+    bool wordWrapEnabled() const;
 
     // Whitespace visualization
     void setShowWhitespace(bool show);
@@ -180,6 +193,11 @@ private:
     int findFoldEndBlock(int startBlock) const;
     bool isFoldable(int blockNumber) const;
     int getFoldingLevel(int blockNumber) const;
+    bool isRegionStart(int blockNumber) const;
+    bool isRegionEnd(int blockNumber) const;
+    int findRegionEndBlock(int startBlock) const;
+    bool isCommentBlockStart(int blockNumber) const;
+    int findCommentBlockEnd(int startBlock) const;
 };
 
 #endif
