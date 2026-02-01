@@ -66,6 +66,8 @@ set(project_headers
     ui/dialogs/colorpicker.h
     ui/dialogs/commandpalette.h
     ui/dialogs/gotolinedialog.h
+    ui/dialogs/gotosymboldialog.h
+    ui/dialogs/recentfilesdialog.h
     ui/dialogs/filequickopen.h
     ui/dialogs/gitinitdialog.h
     ui/dialogs/mergeconflictdialog.h
@@ -73,6 +75,7 @@ set(project_headers
     ui/dialogs/gitstashdialog.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
+    ui/panels/breadcrumbwidget.h
     ui/panels/debugpanel.h
     ui/panels/sourcecontrolpanel.h
     ui/panels/minimap.h
@@ -83,6 +86,9 @@ set(project_headers
     core/io/filemanager.h
     core/lightpadpage.h
     core/logging/logger.h
+    core/recentfilesmanager.h
+    core/navigationhistory.h
+    core/autosavemanager.h
     editor/vimmode.h
     i18n/i18n.h
     lsp/lspclient.h
@@ -158,6 +164,8 @@ set(project_sources
     ui/dialogs/colorpicker.cpp
     ui/dialogs/commandpalette.cpp
     ui/dialogs/gotolinedialog.cpp
+    ui/dialogs/gotosymboldialog.cpp
+    ui/dialogs/recentfilesdialog.cpp
     ui/dialogs/filequickopen.cpp
     ui/dialogs/gitinitdialog.cpp
     ui/dialogs/mergeconflictdialog.cpp
@@ -165,6 +173,7 @@ set(project_sources
     ui/dialogs/gitstashdialog.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
+    ui/panels/breadcrumbwidget.cpp
     ui/panels/debugpanel.cpp
     ui/panels/sourcecontrolpanel.cpp
     ui/panels/minimap.cpp
@@ -175,6 +184,9 @@ set(project_sources
     core/io/filemanager.cpp
     core/lightpadpage.cpp
     core/logging/logger.cpp
+    core/recentfilesmanager.cpp
+    core/navigationhistory.cpp
+    core/autosavemanager.cpp
     editor/vimmode.cpp
     i18n/i18n.cpp
     lsp/lspclient.cpp

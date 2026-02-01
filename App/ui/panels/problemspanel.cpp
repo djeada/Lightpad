@@ -152,6 +152,68 @@ int ProblemsPanel::infoCount() const
     return m_infoCount;
 }
 
+int ProblemsPanel::problemCountForFile(const QString& filePath) const
+{
+    const QList<LspDiagnostic>* diagnostics = findDiagnosticsForFile(filePath);
+    return diagnostics ? diagnostics->size() : 0;
+}
+
+int ProblemsPanel::errorCountForFile(const QString& filePath) const
+{
+    const QList<LspDiagnostic>* diagnostics = findDiagnosticsForFile(filePath);
+    if (!diagnostics) {
+        return 0;
+    }
+    
+    int count = 0;
+    for (const auto& diag : *diagnostics) {
+        if (diag.severity == LspDiagnosticSeverity::Error) {
+            count++;
+        }
+    }
+    return count;
+}
+
+int ProblemsPanel::warningCountForFile(const QString& filePath) const
+{
+    const QList<LspDiagnostic>* diagnostics = findDiagnosticsForFile(filePath);
+    if (!diagnostics) {
+        return 0;
+    }
+    
+    int count = 0;
+    for (const auto& diag : *diagnostics) {
+        if (diag.severity == LspDiagnosticSeverity::Warning) {
+            count++;
+        }
+    }
+    return count;
+}
+
+const QList<LspDiagnostic>* ProblemsPanel::findDiagnosticsForFile(const QString& filePath) const
+{
+    // Normalize the file path - convert from file:// URI if needed
+    QString normalizedPath = filePath;
+    if (normalizedPath.startsWith("file://")) {
+        normalizedPath = normalizedPath.mid(7);
+    }
+    
+    // Try to find matching diagnostics
+    for (auto it = m_diagnostics.constBegin(); it != m_diagnostics.constEnd(); ++it) {
+        QString uri = it.key();
+        QString uriPath = uri;
+        if (uriPath.startsWith("file://")) {
+            uriPath = uriPath.mid(7);
+        }
+        
+        if (uriPath == normalizedPath || uri == filePath) {
+            return &it.value();
+        }
+    }
+    
+    return nullptr;
+}
+
 void ProblemsPanel::onItemDoubleClicked(QTreeWidgetItem* item, int column)
 {
     Q_UNUSED(column);
@@ -225,9 +287,25 @@ void ProblemsPanel::rebuildTree()
         QFileInfo fileInfo(filePath);
         QString fileName = fileInfo.fileName();
 
-        // Count visible diagnostics for this file
+        // Count diagnostics by severity for this file
+        int fileErrors = 0;
+        int fileWarnings = 0;
+        int fileInfos = 0;
         int visibleCount = 0;
         for (const auto& diag : diagList) {
+            switch (diag.severity) {
+            case LspDiagnosticSeverity::Error:
+                fileErrors++;
+                break;
+            case LspDiagnosticSeverity::Warning:
+                fileWarnings++;
+                break;
+            case LspDiagnosticSeverity::Information:
+            case LspDiagnosticSeverity::Hint:
+                fileInfos++;
+                break;
+            }
+            
             bool show = (m_currentFilter == 0) ||
                         (m_currentFilter == 1 && diag.severity == LspDiagnosticSeverity::Error) ||
                         (m_currentFilter == 2 && diag.severity == LspDiagnosticSeverity::Warning) ||
@@ -236,6 +314,9 @@ void ProblemsPanel::rebuildTree()
             if (show)
                 visibleCount++;
         }
+
+        // Emit signal for per-file counts
+        emit fileCountsChanged(filePath, fileErrors, fileWarnings, fileInfos);
 
         if (visibleCount == 0)
             continue;

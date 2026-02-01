@@ -124,8 +124,18 @@ private:
     class CommandPalette* commandPalette;
     class ProblemsPanel* problemsPanel;
     class GoToLineDialog* goToLineDialog;
+    class GoToSymbolDialog* goToSymbolDialog;
     class FileQuickOpen* fileQuickOpen;
+    class RecentFilesDialog* recentFilesDialog;
     class QLabel* problemsStatusLabel;
+    class BreadcrumbWidget* breadcrumbWidget;
+    class RecentFilesManager* recentFilesManager;
+    
+    // Navigation history
+    class NavigationHistory* navigationHistory;
+    
+    // Auto-save
+    class AutoSaveManager* autoSaveManager;
     
     // Split editor views
     SplitEditorContainer* m_splitEditorContainer;
@@ -143,10 +153,23 @@ private:
     void showProblemsPanel();
     void showCommandPalette();
     void showGoToLineDialog();
+    void showGoToSymbolDialog();
     void showFileQuickOpen();
     void setupCommandPalette();
     void setupGoToLineDialog();
+    void setupGoToSymbolDialog();
     void setupFileQuickOpen();
+    void showRecentFilesDialog();
+    void setupRecentFilesDialog();
+    void setupBreadcrumb();
+    void updateBreadcrumb(const QString& filePath);
+    void toggleShowWhitespace();
+    void toggleShowIndentGuides();
+    void navigateBack();
+    void navigateForward();
+    void recordNavigationLocation();
+    void setupNavigationHistory();
+    void setupAutoSave();
     void updateProblemsStatusLabel(int errors, int warnings, int infos);
     void setMainWindowTitle(QString title);
     void setFilePathAsTabText(QString filePath);

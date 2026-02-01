@@ -23,7 +23,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Keyboard shortcut display
 - [x] Recent commands
 - [x] File quick open (Ctrl+P)
-- [ ] Go to symbol (Ctrl+Shift+O)
+- [x] Go to symbol (Ctrl+Shift+O)
 - [x] Go to line (Ctrl+G)
 
 ### Code Folding
@@ -31,7 +31,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Fold all / Unfold all
 - [x] Brace-based folding ({})
 - [x] Indent-based folding (Python)
-- [ ] Fold level (fold to level 1, 2, 3...)
+- [x] Fold level (fold to level 1, 2, 3...)
 - [ ] Folding indicators in gutter (click to fold)
 - [ ] Custom fold regions (#region/#endregion)
 - [ ] Fold comments
@@ -44,7 +44,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] File grouping
 - [x] Color-coded by severity
 - [x] Problem count in status bar
-- [ ] Problem count per file in tree
+- [x] Problem count per file in tree
 - [x] Auto-refresh on save
 
 ---
@@ -70,7 +70,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 
 ### 2. Git/Version Control Integration
 - [x] Git status in file tree (modified, staged, untracked icons)
-- [ ] Git diff gutter in editor (inline +/- indicators)
+- [x] Git diff gutter in editor (inline +/- indicators)
 - [x] Source control panel
 - [x] Stage/unstage files
 - [x] Commit with message
@@ -148,10 +148,10 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [ ] Search in files with filters (include/exclude)
 - [ ] Regex search with groups
 - [ ] Search and replace in files
-- [ ] Recent files list
-- [ ] Breadcrumb navigation
+- [x] Recent files list
+- [x] Breadcrumb navigation
 - [ ] Go to definition in peek window
-- [ ] Go back/forward navigation stack
+- [x] Go back/forward navigation stack
 
 ### 10. Problems/Diagnostics Panel
 - [ ] Dedicated problems panel
@@ -254,8 +254,8 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 ### 18. Editor Enhancements
 - [ ] Soft wrap toggle
 - [ ] Word wrap at column
-- [ ] Show whitespace characters
-- [ ] Show indent guides
+- [x] Show whitespace characters
+- [x] Show indent guides
 - [ ] Rainbow brackets
 - [ ] Bracket pair colorization
 - [ ] Sticky scroll (sticky headers)
@@ -285,7 +285,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [ ] Hot reload files
 
 ### 21. Productivity Features
-- [ ] Auto-save
+- [x] Auto-save
 - [ ] Format on save
 - [ ] Format on paste
 - [ ] Trim trailing whitespace

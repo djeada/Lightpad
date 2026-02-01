@@ -458,6 +458,31 @@ target_compile_definitions(test_gotolinedialog PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GoToLineDialogTests COMMAND test_gotolinedialog)
 
+# GoToSymbolDialog test executable
+add_executable(test_gotosymboldialog
+    unit/test_gotosymboldialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gotosymboldialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gotosymboldialog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_gotosymboldialog
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gotosymboldialog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GoToSymbolDialogTests COMMAND test_gotosymboldialog)
+
 # LspClient test executable
 add_executable(test_lspclient
     unit/test_lspclient.cpp
@@ -481,6 +506,54 @@ target_link_libraries(test_lspclient
 target_compile_definitions(test_lspclient PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME LspClientTests COMMAND test_lspclient)
+
+# RecentFilesManager test executable
+add_executable(test_recentfilesmanager
+    unit/test_recentfilesmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/recentfilesmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_recentfilesmanager PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/core
+)
+
+target_link_libraries(test_recentfilesmanager
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_recentfilesmanager PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME RecentFilesManagerTests COMMAND test_recentfilesmanager)
+
+# NavigationHistory test executable
+add_executable(test_navigationhistory
+    unit/test_navigationhistory.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/navigationhistory.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_navigationhistory PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/core
+)
+
+target_link_libraries(test_navigationhistory
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_navigationhistory PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME NavigationHistoryTests COMMAND test_navigationhistory)
 
 # Minimap test executable
 add_executable(test_minimap
@@ -604,7 +677,10 @@ set(TEST_LIST
     DapTests 
     GitIntegrationTests
     GoToLineDialogTests
+    GoToSymbolDialogTests
     LspClientTests
+    RecentFilesManagerTests
+    NavigationHistoryTests
     MinimapTests
     FindReplacePanelTests
     ImageViewerTests
@@ -631,7 +707,7 @@ set(TEST_TARGETS
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     test_syntaxpluginregistry test_completionproviderregistry test_dap
-    test_gitintegration test_gotolinedialog test_lspclient test_minimap test_findreplacepanel
+    test_gitintegration test_gotolinedialog test_gotosymboldialog test_lspclient test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_imageviewer
 )
 

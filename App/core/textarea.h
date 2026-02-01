@@ -75,6 +75,19 @@ public:
     void foldAll();
     void unfoldAll();
     void toggleFoldAtLine(int line);
+    void foldToLevel(int level);
+
+    // Whitespace visualization
+    void setShowWhitespace(bool show);
+    bool showWhitespace() const;
+
+    // Indent guides
+    void setShowIndentGuides(bool show);
+    bool showIndentGuides() const;
+
+    // Git diff gutter
+    void setGitDiffLines(const QList<QPair<int, int>>& diffLines);  // line number, type (0=add, 1=modify, 2=delete)
+    void clearGitDiffLines();
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -125,6 +138,15 @@ private:
     // Folding state
     QSet<int> m_foldedBlocks;
 
+    // Whitespace visualization
+    bool m_showWhitespace;
+
+    // Indent guides
+    bool m_showIndentGuides;
+
+    // Git diff gutter
+    QList<QPair<int, int>> m_gitDiffLines;  // line number, type (0=add, 1=modify, 2=delete)
+
     void setupTextArea();
     void setTabWidgetIcon(QIcon icon);
     void closeParentheses(QString startSr, QString closeStr);
@@ -157,6 +179,7 @@ private:
     // Folding helpers
     int findFoldEndBlock(int startBlock) const;
     bool isFoldable(int blockNumber) const;
+    int getFoldingLevel(int blockNumber) const;
 };
 
 #endif

@@ -4,6 +4,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QStackedWidget>
 #include <QStringListModel>
 #include <QCompleter>
@@ -27,9 +28,15 @@
 #include "dialogs/shortcuts.h"
 #include "dialogs/commandpalette.h"
 #include "dialogs/gotolinedialog.h"
+#include "dialogs/gotosymboldialog.h"
 #include "dialogs/filequickopen.h"
+#include "dialogs/recentfilesdialog.h"
 #include "panels/terminaltabwidget.h"
+#include "panels/breadcrumbwidget.h"
 #include "../core/textarea.h"
+#include "../core/recentfilesmanager.h"
+#include "../core/navigationhistory.h"
+#include "../core/autosavemanager.h"
 #include "../run_templates/runtemplatemanager.h"
 #include "../format_templates/formattemplatemanager.h"
 #include "../syntax/syntaxpluginregistry.h"
@@ -61,8 +68,14 @@ MainWindow::MainWindow(QWidget* parent)
     , commandPalette(nullptr)
     , problemsPanel(nullptr)
     , goToLineDialog(nullptr)
+    , goToSymbolDialog(nullptr)
     , fileQuickOpen(nullptr)
+    , recentFilesDialog(nullptr)
     , problemsStatusLabel(nullptr)
+    , breadcrumbWidget(nullptr)
+    , recentFilesManager(nullptr)
+    , navigationHistory(nullptr)
+    , autoSaveManager(nullptr)
     , m_splitEditorContainer(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
@@ -70,6 +83,15 @@ MainWindow::MainWindow(QWidget* parent)
     showMaximized();
     ui->tabWidget->setMainWindow(this);
     ui->magicButton->setIconSize(0.8 * ui->magicButton->size());
+    
+    // Initialize recent files manager
+    recentFilesManager = new RecentFilesManager(this);
+    
+    // Initialize navigation history
+    setupNavigationHistory();
+    
+    // Initialize auto-save
+    setupAutoSave();
     
     // Initialize new completion system
     setupCompletionSystem();
@@ -91,7 +113,10 @@ MainWindow::MainWindow(QWidget* parent)
     setupTabWidget();
     setupCommandPalette();
     setupGoToLineDialog();
+    setupGoToSymbolDialog();
     setupFileQuickOpen();
+    setupRecentFilesDialog();
+    setupBreadcrumb();
     loadSettings();
     setWindowTitle("LightPad");
 }
@@ -463,10 +488,46 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
         showGoToLineDialog();
     }
     
+    // Go to Symbol: Ctrl+Shift+O
+    else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
+             keyEvent->key() == Qt::Key_O) {
+        showGoToSymbolDialog();
+    }
+    
     // File Quick Open: Ctrl+P
     else if (keyEvent->modifiers() == Qt::ControlModifier && 
              keyEvent->key() == Qt::Key_P) {
         showFileQuickOpen();
+    }
+    
+    // Recent Files: Ctrl+E
+    else if (keyEvent->modifiers() == Qt::ControlModifier && 
+             keyEvent->key() == Qt::Key_E) {
+        showRecentFilesDialog();
+    }
+    
+    // Toggle Whitespace: Ctrl+Shift+W
+    else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
+             keyEvent->key() == Qt::Key_W) {
+        toggleShowWhitespace();
+    }
+    
+    // Toggle Indent Guides: Ctrl+Shift+I
+    else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
+             keyEvent->key() == Qt::Key_I) {
+        toggleShowIndentGuides();
+    }
+    
+    // Navigate Back: Alt+Left
+    else if (keyEvent->modifiers() == Qt::AltModifier && 
+             keyEvent->key() == Qt::Key_Left) {
+        navigateBack();
+    }
+    
+    // Navigate Forward: Alt+Right
+    else if (keyEvent->modifiers() == Qt::AltModifier && 
+             keyEvent->key() == Qt::Key_Right) {
+        navigateForward();
     }
 }
 
@@ -547,6 +608,14 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
 
     if (getCurrentTextArea())
         applyHighlightForFile(filePath);
+    
+    // Track in recent files
+    if (recentFilesManager) {
+        recentFilesManager->addFile(filePath);
+    }
+    
+    // Update breadcrumb
+    updateBreadcrumb(filePath);
 
     ui->tabWidget->currentChanged(ui->tabWidget->currentIndex());
 }
@@ -1030,6 +1099,134 @@ void MainWindow::setupGoToLineDialog()
     });
 }
 
+void MainWindow::showGoToSymbolDialog()
+{
+    if (!goToSymbolDialog) {
+        setupGoToSymbolDialog();
+    }
+    
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        // For now, we'll create sample symbols based on simple parsing
+        // In a real implementation, this would use LSP document symbols
+        QList<LspDocumentSymbol> symbols;
+        
+        // Simple heuristic parsing for functions/classes
+        QTextBlock block = textArea->document()->begin();
+        while (block.isValid()) {
+            QString text = block.text().trimmed();
+            
+            // Look for function-like patterns
+            if (text.contains('(') && !text.startsWith("//") && !text.startsWith("/*")) {
+                // Try to extract function name
+                int parenPos = text.indexOf('(');
+                QString beforeParen = text.left(parenPos).trimmed();
+                
+                // Get the last word before the parenthesis as the function name
+                QStringList parts = beforeParen.split(QRegularExpression("\\s+"));
+                if (!parts.isEmpty()) {
+                    QString name = parts.last();
+                    // Clean up any leading characters like * or &
+                    while (!name.isEmpty() && (name[0] == '*' || name[0] == '&')) {
+                        name = name.mid(1);
+                    }
+                    
+                    if (!name.isEmpty() && name[0].isLetter()) {
+                        LspDocumentSymbol sym;
+                        sym.name = name;
+                        sym.kind = LspSymbolKind::Function;
+                        sym.selectionRange.start.line = block.blockNumber();
+                        sym.selectionRange.start.character = 0;
+                        sym.range = sym.selectionRange;
+                        
+                        // Check for class/struct definitions
+                        if (beforeParen.startsWith("class ") || beforeParen.startsWith("struct ")) {
+                            sym.kind = LspSymbolKind::Class;
+                        }
+                        
+                        symbols.append(sym);
+                    }
+                }
+            }
+            // Look for class/struct definitions without parentheses
+            else if (text.startsWith("class ") || text.startsWith("struct ")) {
+                QStringList parts = text.split(QRegularExpression("\\s+"));
+                if (parts.size() >= 2) {
+                    QString name = parts[1];
+                    // Remove trailing characters like : or {
+                    name = name.split(QRegularExpression("[:{]")).first();
+                    
+                    if (!name.isEmpty()) {
+                        LspDocumentSymbol sym;
+                        sym.name = name;
+                        sym.kind = LspSymbolKind::Class;
+                        sym.selectionRange.start.line = block.blockNumber();
+                        sym.selectionRange.start.character = 0;
+                        sym.range = sym.selectionRange;
+                        symbols.append(sym);
+                    }
+                }
+            }
+            // Look for Python def/class
+            else if (text.startsWith("def ") || text.startsWith("class ")) {
+                QString keyword = text.startsWith("def ") ? "def " : "class ";
+                QString rest = text.mid(keyword.length());
+                int endPos = rest.indexOf(QRegularExpression("[:(]"));
+                if (endPos > 0) {
+                    QString name = rest.left(endPos).trimmed();
+                    
+                    LspDocumentSymbol sym;
+                    sym.name = name;
+                    sym.kind = text.startsWith("def ") ? LspSymbolKind::Function : LspSymbolKind::Class;
+                    sym.selectionRange.start.line = block.blockNumber();
+                    sym.selectionRange.start.character = 0;
+                    sym.range = sym.selectionRange;
+                    symbols.append(sym);
+                }
+            }
+            // Look for JavaScript function declarations
+            else if (text.startsWith("function ")) {
+                QString rest = text.mid(9);  // Length of "function "
+                int endPos = rest.indexOf('(');
+                if (endPos > 0) {
+                    QString name = rest.left(endPos).trimmed();
+                    
+                    LspDocumentSymbol sym;
+                    sym.name = name;
+                    sym.kind = LspSymbolKind::Function;
+                    sym.selectionRange.start.line = block.blockNumber();
+                    sym.selectionRange.start.character = 0;
+                    sym.range = sym.selectionRange;
+                    symbols.append(sym);
+                }
+            }
+            
+            block = block.next();
+        }
+        
+        goToSymbolDialog->setSymbols(symbols);
+        goToSymbolDialog->showDialog();
+    }
+}
+
+void MainWindow::setupGoToSymbolDialog()
+{
+    goToSymbolDialog = new GoToSymbolDialog(this);
+    
+    connect(goToSymbolDialog, &GoToSymbolDialog::symbolSelected, this, [this](int line, int column) {
+        TextArea* textArea = getCurrentTextArea();
+        if (textArea) {
+            QTextCursor cursor = textArea->textCursor();
+            cursor.movePosition(QTextCursor::Start);
+            cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, line);
+            cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, column);
+            textArea->setTextCursor(cursor);
+            textArea->centerCursor();
+            textArea->setFocus();
+        }
+    });
+}
+
 void MainWindow::showFileQuickOpen()
 {
     if (!fileQuickOpen) {
@@ -1070,6 +1267,159 @@ void MainWindow::setupFileQuickOpen()
     connect(fileQuickOpen, &FileQuickOpen::fileSelected, this, [this](const QString& filePath) {
         openFileAndAddToNewTab(filePath);
     });
+}
+
+void MainWindow::showRecentFilesDialog()
+{
+    if (!recentFilesDialog) {
+        setupRecentFilesDialog();
+    }
+    
+    recentFilesDialog->showDialog();
+}
+
+void MainWindow::setupRecentFilesDialog()
+{
+    recentFilesDialog = new RecentFilesDialog(recentFilesManager, this);
+    
+    connect(recentFilesDialog, &RecentFilesDialog::fileSelected, this, [this](const QString& filePath) {
+        openFileAndAddToNewTab(filePath);
+    });
+}
+
+void MainWindow::setupBreadcrumb()
+{
+    breadcrumbWidget = new BreadcrumbWidget(this);
+    
+    // Insert breadcrumb above the tab widget in the layout
+    auto layout = qobject_cast<QVBoxLayout*>(ui->centralwidget->layout());
+    if (layout) {
+        // Insert at position 0 (top)
+        layout->insertWidget(0, breadcrumbWidget);
+    }
+    
+    connect(breadcrumbWidget, &BreadcrumbWidget::pathSegmentClicked, this, [this](const QString& path) {
+        // Open folder or file when breadcrumb segment is clicked
+        QFileInfo fileInfo(path);
+        if (fileInfo.isDir()) {
+            // Could open in file tree, for now just log
+        } else if (fileInfo.isFile()) {
+            openFileAndAddToNewTab(path);
+        }
+    });
+}
+
+void MainWindow::updateBreadcrumb(const QString& filePath)
+{
+    if (breadcrumbWidget) {
+        breadcrumbWidget->setFilePath(filePath);
+        if (!m_projectRootPath.isEmpty()) {
+            breadcrumbWidget->setProjectRoot(m_projectRootPath);
+        }
+    }
+}
+
+void MainWindow::toggleShowWhitespace()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->setShowWhitespace(!textArea->showWhitespace());
+    }
+}
+
+void MainWindow::toggleShowIndentGuides()
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (textArea) {
+        textArea->setShowIndentGuides(!textArea->showIndentGuides());
+    }
+}
+
+void MainWindow::navigateBack()
+{
+    if (!navigationHistory || !navigationHistory->canGoBack()) {
+        return;
+    }
+    
+    NavigationLocation loc = navigationHistory->goBack();
+    if (loc.isValid()) {
+        // Open file if different
+        openFileAndAddToNewTab(loc.filePath);
+        
+        // Move cursor to the saved position
+        TextArea* textArea = getCurrentTextArea();
+        if (textArea) {
+            QTextCursor cursor = textArea->textCursor();
+            cursor.movePosition(QTextCursor::Start);
+            cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, loc.line - 1);
+            cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, loc.column);
+            textArea->setTextCursor(cursor);
+            textArea->centerCursor();
+        }
+    }
+}
+
+void MainWindow::navigateForward()
+{
+    if (!navigationHistory || !navigationHistory->canGoForward()) {
+        return;
+    }
+    
+    NavigationLocation loc = navigationHistory->goForward();
+    if (loc.isValid()) {
+        // Open file if different
+        openFileAndAddToNewTab(loc.filePath);
+        
+        // Move cursor to the saved position
+        TextArea* textArea = getCurrentTextArea();
+        if (textArea) {
+            QTextCursor cursor = textArea->textCursor();
+            cursor.movePosition(QTextCursor::Start);
+            cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, loc.line - 1);
+            cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, loc.column);
+            textArea->setTextCursor(cursor);
+            textArea->centerCursor();
+        }
+    }
+}
+
+void MainWindow::recordNavigationLocation()
+{
+    if (!navigationHistory) {
+        return;
+    }
+    
+    TextArea* textArea = getCurrentTextArea();
+    if (!textArea) {
+        return;
+    }
+    
+    // Get current file path
+    auto tabIndex = ui->tabWidget->currentIndex();
+    QString filePath = ui->tabWidget->getFilePath(tabIndex);
+    if (filePath.isEmpty()) {
+        return;
+    }
+    
+    // Get cursor position
+    QTextCursor cursor = textArea->textCursor();
+    NavigationLocation loc;
+    loc.filePath = filePath;
+    loc.line = cursor.blockNumber() + 1;
+    loc.column = cursor.positionInBlock();
+    
+    navigationHistory->recordLocationIfSignificant(loc);
+}
+
+void MainWindow::setupNavigationHistory()
+{
+    navigationHistory = new NavigationHistory(this);
+}
+
+void MainWindow::setupAutoSave()
+{
+    autoSaveManager = new AutoSaveManager(this, this);
+    // Auto-save is disabled by default, can be enabled via settings
 }
 
 void MainWindow::updateProblemsStatusLabel(int errors, int warnings, int infos)
