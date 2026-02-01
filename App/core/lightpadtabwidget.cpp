@@ -60,8 +60,6 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent* event)
 }
 
 // LightpadTabWidget implementation
-
-// LightpadTabWidget implementation
 LightpadTabWidget::LightpadTabWidget(QWidget* parent)
     : QTabWidget(parent)
 {
