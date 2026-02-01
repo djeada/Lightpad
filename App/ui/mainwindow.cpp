@@ -2195,11 +2195,6 @@ void MainWindow::noScriptAssignedWarning()
         on_actionOpen_File_triggered();
 }
 
-void MainWindow::on_actionToggle_Menu_Bar_triggered()
-{
-    ui->menubar->setVisible(true);
-}
-
 void MainWindow::on_languageHighlight_clicked()
 {
 
