@@ -106,6 +106,22 @@ private slots:
     void on_actionFocus_Previous_Group_triggered();
     void on_actionUnsplit_All_triggered();
     void on_actionToggle_Terminal_triggered();
+    
+    // Text transformation actions
+    void on_actionTransform_Uppercase_triggered();
+    void on_actionTransform_Lowercase_triggered();
+    void on_actionTransform_Title_Case_triggered();
+    void on_actionSort_Lines_Ascending_triggered();
+    void on_actionSort_Lines_Descending_triggered();
+    
+    // View actions
+    void on_actionToggle_Word_Wrap_triggered();
+    void on_actionFold_Current_triggered();
+    void on_actionUnfold_Current_triggered();
+    void on_actionFold_All_triggered();
+    void on_actionUnfold_All_triggered();
+    void on_actionFold_Comments_triggered();
+    void on_actionUnfold_Comments_triggered();
 
 private:
     Ui::MainWindow* ui;

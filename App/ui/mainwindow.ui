@@ -250,6 +250,21 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <property name="title">
      <string>Edit</string>
     </property>
+    <widget class="QMenu" name="menuTransform_Text">
+     <property name="title">
+      <string>Transform Text</string>
+     </property>
+     <addaction name="actionTransform_Uppercase"/>
+     <addaction name="actionTransform_Lowercase"/>
+     <addaction name="actionTransform_Title_Case"/>
+    </widget>
+    <widget class="QMenu" name="menuSort_Lines">
+     <property name="title">
+      <string>Sort Lines</string>
+     </property>
+     <addaction name="actionSort_Lines_Ascending"/>
+     <addaction name="actionSort_Lines_Descending"/>
+    </widget>
     <addaction name="actionToggle_Undo"/>
     <addaction name="actionToggle_Redo"/>
     <addaction name="separator"/>
@@ -257,16 +272,35 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionCopy"/>
     <addaction name="actionPaste"/>
     <addaction name="separator"/>
+    <addaction name="menuTransform_Text"/>
+    <addaction name="menuSort_Lines"/>
+    <addaction name="separator"/>
     <addaction name="actionPreferences"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
      <string>View</string>
     </property>
+    <widget class="QMenu" name="menuFolding">
+     <property name="title">
+      <string>Folding</string>
+     </property>
+     <addaction name="actionFold_Current"/>
+     <addaction name="actionUnfold_Current"/>
+     <addaction name="separator"/>
+     <addaction name="actionFold_All"/>
+     <addaction name="actionUnfold_All"/>
+     <addaction name="separator"/>
+     <addaction name="actionFold_Comments"/>
+     <addaction name="actionUnfold_Comments"/>
+    </widget>
     <addaction name="actionToggle_Full_Screen"/>
     <addaction name="actionToggle_Menu_Bar"/>
     <addaction name="actionToggle_Minimap"/>
     <addaction name="actionToggle_Terminal"/>
+    <addaction name="actionToggle_Word_Wrap"/>
+    <addaction name="separator"/>
+    <addaction name="menuFolding"/>
     <addaction name="separator"/>
     <addaction name="actionSplit_Horizontally"/>
     <addaction name="actionSplit_Vertically"/>
@@ -561,6 +595,90 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
    </property>
    <property name="shortcut">
     <string>Ctrl+`</string>
+   </property>
+  </action>
+  <action name="actionTransform_Uppercase">
+   <property name="text">
+    <string>UPPERCASE</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+U</string>
+   </property>
+  </action>
+  <action name="actionTransform_Lowercase">
+   <property name="text">
+    <string>lowercase</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+U</string>
+   </property>
+  </action>
+  <action name="actionTransform_Title_Case">
+   <property name="text">
+    <string>Title Case</string>
+   </property>
+  </action>
+  <action name="actionSort_Lines_Ascending">
+   <property name="text">
+    <string>Sort Ascending</string>
+   </property>
+  </action>
+  <action name="actionSort_Lines_Descending">
+   <property name="text">
+    <string>Sort Descending</string>
+   </property>
+  </action>
+  <action name="actionToggle_Word_Wrap">
+   <property name="text">
+    <string>Toggle Word Wrap</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="shortcut">
+    <string>Alt+Z</string>
+   </property>
+  </action>
+  <action name="actionFold_Current">
+   <property name="text">
+    <string>Fold Current Block</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+[</string>
+   </property>
+  </action>
+  <action name="actionUnfold_Current">
+   <property name="text">
+    <string>Unfold Current Block</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+]</string>
+   </property>
+  </action>
+  <action name="actionFold_All">
+   <property name="text">
+    <string>Fold All</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+K, Ctrl+0</string>
+   </property>
+  </action>
+  <action name="actionUnfold_All">
+   <property name="text">
+    <string>Unfold All</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+K, Ctrl+J</string>
+   </property>
+  </action>
+  <action name="actionFold_Comments">
+   <property name="text">
+    <string>Fold All Comments</string>
+   </property>
+  </action>
+  <action name="actionUnfold_Comments">
+   <property name="text">
+    <string>Unfold All Comments</string>
    </property>
   </action>
  </widget>

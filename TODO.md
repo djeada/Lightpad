@@ -33,8 +33,8 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Indent-based folding (Python)
 - [x] Fold level (fold to level 1, 2, 3...)
 - [ ] Folding indicators in gutter (click to fold)
-- [ ] Custom fold regions (#region/#endregion)
-- [ ] Fold comments
+- [x] Custom fold regions (#region/#endregion)
+- [x] Fold comments
 - [ ] Persistent fold state
 
 ### Problems Panel
@@ -252,7 +252,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 ## 🟢 NICE-TO-HAVE FEATURES
 
 ### 18. Editor Enhancements
-- [ ] Soft wrap toggle
+- [x] Soft wrap toggle
 - [ ] Word wrap at column
 - [x] Show whitespace characters
 - [x] Show indent guides
@@ -294,8 +294,8 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [ ] Lorem ipsum generator
 - [ ] Multiple clipboards/clipboard history
 - [ ] Compare with clipboard
-- [ ] Sort lines
-- [ ] Transform text (uppercase, lowercase, title case)
+- [x] Sort lines
+- [x] Transform text (uppercase, lowercase, title case)
 - [ ] Join lines
 - [ ] Comment toggling improvements
 
