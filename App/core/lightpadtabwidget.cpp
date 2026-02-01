@@ -3,17 +3,69 @@
 #include "../ui/mainwindow.h"
 
 #include <QApplication>
+#include <QContextMenuEvent>
 #include <QDebug>
 #include <QFileInfo>
 #include <QFontMetrics>
+#include <QMenu>
 #include <QSizePolicy>
 #include <QTabBar>
 #include <QTextEdit>
 #include <QStyle>
 
+// LightpadTabBar implementation
+LightpadTabBar::LightpadTabBar(QWidget* parent)
+    : QTabBar(parent)
+{
+}
+
+void LightpadTabBar::contextMenuEvent(QContextMenuEvent* event)
+{
+    int index = tabAt(event->pos());
+    
+    // Don't show context menu for the "add new tab" button tab
+    if (index < 0 || index == count() - 1) {
+        return;
+    }
+
+    QMenu menu(this);
+    
+    QAction* closeAction = menu.addAction(tr("Close Tab"));
+    QAction* closeOthersAction = menu.addAction(tr("Close Other Tabs"));
+    QAction* closeToRightAction = menu.addAction(tr("Close Tabs to the Right"));
+    menu.addSeparator();
+    QAction* closeAllAction = menu.addAction(tr("Close All Tabs"));
+
+    // Disable "Close Tabs to the Right" if this is the last tab (excluding the add button tab)
+    if (index >= count() - 2) {
+        closeToRightAction->setEnabled(false);
+    }
+
+    // Disable "Close Other Tabs" if there's only one tab (excluding the add button tab)
+    if (count() <= 2) {
+        closeOthersAction->setEnabled(false);
+    }
+
+    QAction* selectedAction = menu.exec(event->globalPos());
+    
+    if (selectedAction == closeAction) {
+        emit closeTab(index);
+    } else if (selectedAction == closeOthersAction) {
+        emit closeOtherTabs(index);
+    } else if (selectedAction == closeToRightAction) {
+        emit closeTabsToTheRight(index);
+    } else if (selectedAction == closeAllAction) {
+        emit closeAllTabs();
+    }
+}
+
+// LightpadTabWidget implementation
+
+// LightpadTabWidget implementation
 LightpadTabWidget::LightpadTabWidget(QWidget* parent)
     : QTabWidget(parent)
 {
+    setupTabBar();
 
     QWidget::connect(tabBar(), &QTabBar::tabCloseRequested, this, [this](int index) {
         removeTab(index);
@@ -374,4 +426,58 @@ bool LightpadTabWidget::isViewerTab(int index) const
     
     QWidget* w = widget(index);
     return m_viewerFilePaths.contains(w);
+}
+
+void LightpadTabWidget::setupTabBar()
+{
+    // Create and set custom tab bar
+    LightpadTabBar* customTabBar = new LightpadTabBar(this);
+    setTabBar(customTabBar);
+
+    // Connect context menu signals to slots
+    connect(customTabBar, &LightpadTabBar::closeTab, this, &LightpadTabWidget::onCloseTab);
+    connect(customTabBar, &LightpadTabBar::closeOtherTabs, this, &LightpadTabWidget::onCloseOtherTabs);
+    connect(customTabBar, &LightpadTabBar::closeTabsToTheRight, this, &LightpadTabWidget::onCloseTabsToTheRight);
+    connect(customTabBar, &LightpadTabBar::closeAllTabs, this, &LightpadTabWidget::onCloseAllTabs);
+}
+
+void LightpadTabWidget::onCloseTab(int index)
+{
+    if (index >= 0 && index < count() - 1) {
+        removeTab(index);
+    }
+}
+
+void LightpadTabWidget::onCloseOtherTabs(int index)
+{
+    if (index < 0 || index >= count() - 1) {
+        return;
+    }
+
+    // Close all tabs after the specified index (excluding the add button tab)
+    for (int i = count() - 2; i > index; --i) {
+        removeTab(i);
+    }
+
+    // Close all tabs before the specified index
+    for (int i = index - 1; i >= 0; --i) {
+        removeTab(i);
+    }
+}
+
+void LightpadTabWidget::onCloseTabsToTheRight(int index)
+{
+    if (index < 0 || index >= count() - 1) {
+        return;
+    }
+
+    // Close all tabs to the right of the specified index (excluding the add button tab)
+    for (int i = count() - 2; i > index; --i) {
+        removeTab(i);
+    }
+}
+
+void LightpadTabWidget::onCloseAllTabs()
+{
+    closeAllTabs();
 }
