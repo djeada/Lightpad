@@ -21,6 +21,7 @@ namespace {
     constexpr int DEFAULT_HISTORY_COMMIT_COUNT = 20;
     constexpr int MAX_COMMIT_DISPLAY_LENGTH = 60;
     constexpr int MAX_DIFF_PREVIEW_LENGTH = 2000;
+    constexpr int STAGED_STATUS_ROLE = Qt::UserRole + 1;
 }
 
 SourceControlPanel::SourceControlPanel(QWidget* parent)
@@ -947,7 +948,7 @@ void SourceControlPanel::updateTree()
             item->setText(0, QString("%1 %2").arg(icon).arg(fileInfo.fileName()));
             item->setToolTip(0, fullPath);
             item->setData(0, Qt::UserRole, fullPath);
-            item->setData(0, Qt::UserRole + 1, true);  // Is staged
+            item->setData(0, STAGED_STATUS_ROLE, true);  // Is staged
             item->setForeground(0, statusColor(file.indexStatus));
             
             m_stagedCount++;
@@ -962,7 +963,7 @@ void SourceControlPanel::updateTree()
             item->setText(0, QString("%1 %2").arg(icon).arg(fileInfo.fileName()));
             item->setToolTip(0, fullPath);
             item->setData(0, Qt::UserRole, fullPath);
-            item->setData(0, Qt::UserRole + 1, false);  // Not staged
+            item->setData(0, STAGED_STATUS_ROLE, false);  // Not staged
             item->setForeground(0, statusColor(file.workTreeStatus));
             
             m_changesCount++;
@@ -975,8 +976,13 @@ void SourceControlPanel::updateTree()
     if (m_changesLabel) {
         m_changesLabel->setText(tr("Changes (%1)").arg(m_changesCount));
     }
-    QString statusText = QString(tr("%1 staged, %2 changed")).arg(m_stagedCount).arg(m_changesCount);
-    m_statusLabel->setText(statusText);
+    if (m_stagedCount == 0 && m_changesCount == 0) {
+        m_statusLabel->setText(tr("Working tree clean"));
+        m_statusLabel->setToolTip(QString());
+    } else {
+        QString statusText = QString(tr("%1 staged, %2 changed")).arg(m_stagedCount).arg(m_changesCount);
+        m_statusLabel->setText(statusText);
+    }
 
     m_commitButton->setEnabled(m_stagedCount > 0 && !m_commitMessage->toPlainText().trimmed().isEmpty());
     m_stageAllButton->setEnabled(m_changesCount > 0);
@@ -987,17 +993,40 @@ void SourceControlPanel::updateTree()
     if (m_changesTree) {
         m_changesTree->setToolTip(m_changesCount == 0 ? tr("Working tree clean") : QString());
     }
-
-    if (m_stagedCount == 0 && m_changesCount == 0) {
-        m_statusLabel->setText(tr("Working tree clean"));
-        m_statusLabel->setToolTip(QString());
-    }
 }
 
 void SourceControlPanel::resetChangeCounts()
 {
     m_stagedCount = 0;
     m_changesCount = 0;
+}
+
+void SourceControlPanel::stageOrUnstageSelectedFiles(QTreeWidget* tree, bool stage)
+{
+    if (!m_git || !tree) return;
+
+    QList<QTreeWidgetItem*> selectedItems = tree->selectedItems();
+    bool didChange = false;
+    for (QTreeWidgetItem* selected : selectedItems) {
+        if (!selected) continue;
+        QString selectedPath = selected->data(0, Qt::UserRole).toString();
+        if (selectedPath.isEmpty()) {
+            continue;
+        }
+        if (stage) {
+            if (m_git->stageFile(selectedPath)) {
+                didChange = true;
+            }
+        } else {
+            if (m_git->unstageFile(selectedPath)) {
+                didChange = true;
+            }
+        }
+    }
+
+    if (didChange) {
+        refresh();
+    }
 }
 
 void SourceControlPanel::updateHistory()
@@ -1129,7 +1158,7 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     if (!item) return;
     
     QString filePath = item->data(0, Qt::UserRole).toString();
-    bool isStaged = item->data(0, Qt::UserRole + 1).toBool();
+    bool isStaged = item->data(0, STAGED_STATUS_ROLE).toBool();
     QString repoPath = m_git ? m_git->repositoryPath() : QString();
     QString relativePath = filePath;
     if (!repoPath.isEmpty() && filePath.startsWith(repoPath)) {
@@ -1141,46 +1170,28 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     if (isStaged) {
         QAction* unstageAction = menu.addAction(tr("Unstage"));
         connect(unstageAction, &QAction::triggered, [this, filePath]() {
-            if (m_git) m_git->unstageFile(filePath);
+            if (m_git) {
+                m_git->unstageFile(filePath);
+                refresh();
+            }
         });
 
         QAction* unstageSelectedAction = menu.addAction(tr("Unstage Selected"));
         connect(unstageSelectedAction, &QAction::triggered, [this, tree]() {
-            if (!m_git || !tree) return;
-            QList<QTreeWidgetItem*> items = tree->selectedItems();
-            for (QTreeWidgetItem* selected : items) {
-                if (!selected) continue;
-                bool selectedStaged = selected->data(0, Qt::UserRole + 1).toBool();
-                if (!selectedStaged) {
-                    continue;
-                }
-                QString selectedPath = selected->data(0, Qt::UserRole).toString();
-                if (!selectedPath.isEmpty()) {
-                    m_git->unstageFile(selectedPath);
-                }
-            }
+            stageOrUnstageSelectedFiles(tree, false);
         });
     } else {
         QAction* stageAction = menu.addAction(tr("Stage"));
         connect(stageAction, &QAction::triggered, [this, filePath]() {
-            if (m_git) m_git->stageFile(filePath);
+            if (m_git) {
+                m_git->stageFile(filePath);
+                refresh();
+            }
         });
         
         QAction* stageSelectedAction = menu.addAction(tr("Stage Selected"));
         connect(stageSelectedAction, &QAction::triggered, [this, tree]() {
-            if (!m_git || !tree) return;
-            QList<QTreeWidgetItem*> items = tree->selectedItems();
-            for (QTreeWidgetItem* selected : items) {
-                if (!selected) continue;
-                bool selectedStaged = selected->data(0, Qt::UserRole + 1).toBool();
-                if (selectedStaged) {
-                    continue;
-                }
-                QString selectedPath = selected->data(0, Qt::UserRole).toString();
-                if (!selectedPath.isEmpty()) {
-                    m_git->stageFile(selectedPath);
-                }
-            }
+            stageOrUnstageSelectedFiles(tree, true);
         });
 
         menu.addSeparator();
@@ -1208,8 +1219,6 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     connect(diffAction, &QAction::triggered, [this, filePath, isStaged]() {
         emit diffRequested(filePath, isStaged);
     });
-
-    
 
     QAction* copyPathAction = menu.addAction(tr("Copy Path"));
     connect(copyPathAction, &QAction::triggered, [this, filePath, relativePath]() {

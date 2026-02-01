@@ -315,15 +315,20 @@ void TestGitIntegration::testGetFileDiffStagedAndUnstaged()
     createTestFile(stagedFile, "Staged content\n");
     QVERIFY(git.stageFile(stagedFile));
 
+    runGitCommand({"add", unstagedFile});
+    runGitCommand({"commit", "-m", "Add initial.txt for unstaged diff test"});
+
     createTestFile(unstagedFile, "Modified content\n");
 
     QString stagedDiff = git.getFileDiff(stagedFile, true);
     QVERIFY(!stagedDiff.trimmed().isEmpty());
+    QVERIFY(stagedDiff.contains("Staged content"));
 
     QString unstagedDiff = git.getFileDiff(unstagedFile, false);
     QVERIFY(!unstagedDiff.trimmed().isEmpty());
+    QVERIFY(unstagedDiff.contains("Modified content"));
 
-    runGitCommand({"reset", "HEAD", stagedFile});
+    runGitCommand({"rm", "--cached", stagedFile});
     QFile::remove(m_repoPath + "/" + stagedFile);
     runGitCommand({"checkout", "--", unstagedFile});
 }

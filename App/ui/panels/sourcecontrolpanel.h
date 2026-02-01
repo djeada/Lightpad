@@ -101,6 +101,7 @@ private:
     void updateUIState();
     void updateHistory();
     void resetChangeCounts();
+    void stageOrUnstageSelectedFiles(QTreeWidget* tree, bool stage);
     QString statusIcon(GitFileStatus status) const;
     QString statusText(GitFileStatus status) const;
     QColor statusColor(GitFileStatus status) const;
