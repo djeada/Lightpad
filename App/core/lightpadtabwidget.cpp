@@ -516,19 +516,25 @@ void LightpadTabWidget::onCopyAbsolutePath(int index)
 
 void LightpadTabWidget::onCopyRelativePath(int index)
 {
+    if (!mainWindow) {
+        return;
+    }
+    
     QString filePath = getFilePath(index);
-    if (!filePath.isEmpty() && mainWindow) {
-        QString projectRoot = mainWindow->getProjectRootPath();
-        if (!projectRoot.isEmpty()) {
-            QDir projectDir(projectRoot);
-            QString relativePath = projectDir.relativeFilePath(filePath);
-            QClipboard* clipboard = QApplication::clipboard();
-            clipboard->setText(relativePath);
-        } else {
-            // If no project root, fall back to absolute path
-            QClipboard* clipboard = QApplication::clipboard();
-            clipboard->setText(filePath);
-        }
+    if (filePath.isEmpty()) {
+        return;
+    }
+    
+    QString projectRoot = mainWindow->getProjectRootPath();
+    QClipboard* clipboard = QApplication::clipboard();
+    
+    if (!projectRoot.isEmpty()) {
+        QDir projectDir(projectRoot);
+        QString relativePath = projectDir.relativeFilePath(filePath);
+        clipboard->setText(relativePath);
+    } else {
+        // If no project root, fall back to absolute path
+        clipboard->setText(filePath);
     }
 }
 
@@ -554,7 +560,7 @@ void LightpadTabWidget::onRevealInFileExplorer(int index)
             
 #ifdef Q_OS_WIN
             // On Windows, use explorer with /select parameter
-            QProcess::startDetached("explorer", QStringList() << "/select," << QDir::toNativeSeparators(filePath));
+            QProcess::startDetached("explorer", QStringList() << "/select," + QDir::toNativeSeparators(filePath));
 #elif defined(Q_OS_MAC)
             // On macOS, use 'open -R' to reveal in Finder
             QProcess::startDetached("open", QStringList() << "-R" << filePath);
