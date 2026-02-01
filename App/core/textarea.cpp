@@ -58,6 +58,26 @@ private:
 };
 
 // Static icon cache - initialized once, reused everywhere
+
+// Helper function to check if a line is a single-line comment (not a preprocessor directive)
+static bool isSingleLineComment(const QString& trimmedText)
+{
+    if (trimmedText.startsWith("//")) {
+        return true;
+    }
+    if (trimmedText.startsWith("#") && 
+        !trimmedText.startsWith("#include") && 
+        !trimmedText.startsWith("#define") && 
+        !trimmedText.startsWith("#pragma") &&
+        !trimmedText.startsWith("#if") && 
+        !trimmedText.startsWith("#else") &&
+        !trimmedText.startsWith("#endif") && 
+        !trimmedText.startsWith("#region") &&
+        !trimmedText.startsWith("#endregion")) {
+        return true;
+    }
+    return false;
+}
 QIcon TextArea::s_unsavedIcon;
 bool TextArea::s_iconsInitialized = false;
 
@@ -2211,18 +2231,12 @@ bool TextArea::isCommentBlockStart(int blockNumber) const
     
     // Check for consecutive single-line comments (3 or more lines)
     // Only mark the first line as foldable
-    if (text.startsWith("//") || text.startsWith("#")) {
+    if (isSingleLineComment(text)) {
         // Check if previous line is NOT a comment (this is the start)
         QTextBlock prevBlock = block.previous();
         if (prevBlock.isValid()) {
             QString prevText = prevBlock.text().trimmed();
-            bool prevIsComment = prevText.startsWith("//") || 
-                                (prevText.startsWith("#") && !prevText.startsWith("#include") && 
-                                 !prevText.startsWith("#define") && !prevText.startsWith("#pragma") &&
-                                 !prevText.startsWith("#if") && !prevText.startsWith("#else") &&
-                                 !prevText.startsWith("#endif") && !prevText.startsWith("#region") &&
-                                 !prevText.startsWith("#endregion"));
-            if (prevIsComment) {
+            if (isSingleLineComment(prevText)) {
                 return false;  // Not the start of a comment block
             }
         }
@@ -2232,13 +2246,7 @@ bool TextArea::isCommentBlockStart(int blockNumber) const
         QTextBlock nextBlock = block.next();
         while (nextBlock.isValid() && consecutiveComments < 3) {
             QString nextText = nextBlock.text().trimmed();
-            bool isComment = nextText.startsWith("//") || 
-                            (nextText.startsWith("#") && !nextText.startsWith("#include") && 
-                             !nextText.startsWith("#define") && !nextText.startsWith("#pragma") &&
-                             !nextText.startsWith("#if") && !nextText.startsWith("#else") &&
-                             !nextText.startsWith("#endif") && !nextText.startsWith("#region") &&
-                             !nextText.startsWith("#endregion"));
-            if (isComment) {
+            if (isSingleLineComment(nextText)) {
                 consecutiveComments++;
                 nextBlock = nextBlock.next();
             } else {
@@ -2278,14 +2286,8 @@ int TextArea::findCommentBlockEnd(int startBlock) const
     
     while (nextBlock.isValid()) {
         QString nextText = nextBlock.text().trimmed();
-        bool isComment = nextText.startsWith("//") || 
-                        (nextText.startsWith("#") && !nextText.startsWith("#include") && 
-                         !nextText.startsWith("#define") && !nextText.startsWith("#pragma") &&
-                         !nextText.startsWith("#if") && !nextText.startsWith("#else") &&
-                         !nextText.startsWith("#endif") && !nextText.startsWith("#region") &&
-                         !nextText.startsWith("#endregion"));
         
-        if (isComment) {
+        if (isSingleLineComment(nextText)) {
             lastCommentBlock = nextBlock.blockNumber();
             nextBlock = nextBlock.next();
         } else {
@@ -2435,7 +2437,11 @@ void TextArea::transformToTitleCase()
                 }
             } else {
                 result.append(c);
-                if (c.isSpace() || c == '-' || c == '_') {
+                // Capitalize after various word boundary characters
+                if (c.isSpace() || c == '-' || c == '_' || 
+                    c == '.' || c == ':' || c == '/' || c == '\\' ||
+                    c == '(' || c == '[' || c == '{' || c == '<' ||
+                    c == '"' || c == '\'' || c == '`') {
                     capitalizeNext = true;
                 }
             }
