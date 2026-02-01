@@ -1288,12 +1288,32 @@ void SourceControlPanel::onCommitClicked()
     
     QString message = m_commitMessage->toPlainText().trimmed();
     if (message.isEmpty()) {
-        QMessageBox::warning(this, tr("Commit"), tr("Please enter a commit message."));
+        QMessageBox msgBox(this);
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setWindowTitle(tr("Commit"));
+        msgBox.setText(tr("Please enter a commit message."));
+        msgBox.setStyleSheet(
+            "QMessageBox { background: #0d1117; }"
+            "QMessageBox QLabel { color: #e6edf3; }"
+            "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #30363d; }"
+        );
+        msgBox.exec();
         return;
     }
 
     if (m_amendCheckbox && m_amendCheckbox->isChecked()) {
-        QMessageBox::warning(this, tr("Commit"), tr("Amend is not supported yet."));
+        QMessageBox msgBox(this);
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setWindowTitle(tr("Commit"));
+        msgBox.setText(tr("Amend is not supported yet."));
+        msgBox.setStyleSheet(
+            "QMessageBox { background: #0d1117; }"
+            "QMessageBox QLabel { color: #e6edf3; }"
+            "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #30363d; }"
+        );
+        msgBox.exec();
         return;
     }
     
@@ -1339,9 +1359,35 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     }
     
     QMenu menu(this);
+    menu.setStyleSheet(
+        "QMenu {"
+        "  background: #161b22;"
+        "  color: #e6edf3;"
+        "  border: 1px solid #30363d;"
+        "  border-radius: 6px;"
+        "  padding: 4px;"
+        "}"
+        "QMenu::item {"
+        "  padding: 6px 24px 6px 12px;"
+        "  border-radius: 4px;"
+        "}"
+        "QMenu::item:selected {"
+        "  background: #1f6feb;"
+        "  color: white;"
+        "}"
+        "QMenu::item:disabled {"
+        "  color: #484f58;"
+        "}"
+        "QMenu::separator {"
+        "  height: 1px;"
+        "  background: #21262d;"
+        "  margin: 4px 8px;"
+        "}"
+    );
     
     if (isStaged) {
         QAction* unstageAction = menu.addAction(tr("Unstage"));
+        unstageAction->setShortcut(QKeySequence(Qt::Key_U));
         connect(unstageAction, &QAction::triggered, [this, filePath]() {
             if (m_git) {
                 m_git->unstageFile(filePath);
@@ -1350,11 +1396,13 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
         });
 
         QAction* unstageSelectedAction = menu.addAction(tr("Unstage Selected"));
+        unstageSelectedAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_U));
         connect(unstageSelectedAction, &QAction::triggered, [this, tree]() {
             stageOrUnstageSelectedFiles(tree, false);
         });
     } else {
         QAction* stageAction = menu.addAction(tr("Stage"));
+        stageAction->setShortcut(QKeySequence(Qt::Key_S));
         connect(stageAction, &QAction::triggered, [this, filePath]() {
             if (m_git) {
                 m_git->stageFile(filePath);
@@ -1363,6 +1411,7 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
         });
         
         QAction* stageSelectedAction = menu.addAction(tr("Stage Selected"));
+        stageSelectedAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
         connect(stageSelectedAction, &QAction::triggered, [this, tree]() {
             stageOrUnstageSelectedFiles(tree, true);
         });
@@ -1370,11 +1419,26 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
         menu.addSeparator();
         
         QAction* discardAction = menu.addAction(tr("Discard Changes"));
+        discardAction->setShortcut(QKeySequence(Qt::Key_D));
         connect(discardAction, &QAction::triggered, [this, filePath]() {
             if (m_git) {
-                if (QMessageBox::question(this, tr("Discard Changes"),
-                    tr("Are you sure you want to discard changes to this file?"),
-                    QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes) {
+                QMessageBox msgBox(this);
+                msgBox.setIcon(QMessageBox::Warning);
+                msgBox.setWindowTitle(tr("Discard Changes"));
+                msgBox.setText(tr("Are you sure you want to discard changes to this file?"));
+                msgBox.setInformativeText(tr("This action cannot be undone."));
+                msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+                msgBox.setDefaultButton(QMessageBox::No);
+                msgBox.setStyleSheet(
+                    "QMessageBox { background: #0d1117; }"
+                    "QMessageBox QLabel { color: #e6edf3; }"
+                    "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; margin: 2px; }"
+                    "QPushButton:hover { background: #30363d; }"
+                    "QPushButton[text='&Yes'] { background: #da3633; color: white; border-color: #da3633; }"
+                    "QPushButton[text='&Yes']:hover { background: #b62324; }"
+                );
+                
+                if (msgBox.exec() == QMessageBox::Yes) {
                     m_git->discardChanges(filePath);
                 }
             }
@@ -1384,21 +1448,24 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     menu.addSeparator();
     
     QAction* openAction = menu.addAction(tr("Open File"));
+    openAction->setShortcut(QKeySequence(Qt::Key_O));
     connect(openAction, &QAction::triggered, [this, filePath]() {
         emit fileOpenRequested(filePath);
     });
     
     QAction* diffAction = menu.addAction(isStaged ? tr("View Staged Diff") : tr("View Unstaged Diff"));
+    diffAction->setShortcut(QKeySequence(Qt::Key_V));
     connect(diffAction, &QAction::triggered, [this, filePath, isStaged]() {
         emit diffRequested(filePath, isStaged);
     });
 
     QAction* copyPathAction = menu.addAction(tr("Copy Path"));
+    copyPathAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_C));
     connect(copyPathAction, &QAction::triggered, [this, filePath, relativePath]() {
         QString value = relativePath;
         if (!value.isEmpty()) {
             QApplication::clipboard()->setText(value);
-            QToolTip::showText(QCursor::pos(), tr("Copied path: %1").arg(value), this);
+            QToolTip::showText(QCursor::pos(), tr("✓ Copied: %1").arg(value), this, QRect(), 2000);
         }
     });
     
@@ -1457,14 +1524,36 @@ void SourceControlPanel::onDeleteBranchClicked()
     QString selectedBranch = m_branchSelector->currentData().toString();
     
     if (selectedBranch == currentBranch) {
-        QMessageBox::warning(this, tr("Delete Branch"), 
-            tr("Cannot delete the current branch. Please switch to another branch first."));
+        QMessageBox msgBox(this);
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setWindowTitle(tr("Delete Branch"));
+        msgBox.setText(tr("Cannot delete the current branch. Please switch to another branch first."));
+        msgBox.setStyleSheet(
+            "QMessageBox { background: #0d1117; }"
+            "QMessageBox QLabel { color: #e6edf3; }"
+            "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #30363d; }"
+        );
+        msgBox.exec();
         return;
     }
     
-    if (QMessageBox::question(this, tr("Delete Branch"),
-        tr("Are you sure you want to delete branch '%1'?").arg(selectedBranch),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes) {
+    QMessageBox msgBox(this);
+    msgBox.setIcon(QMessageBox::Question);
+    msgBox.setWindowTitle(tr("Delete Branch"));
+    msgBox.setText(tr("Are you sure you want to delete branch '%1'?").arg(selectedBranch));
+    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBox.setDefaultButton(QMessageBox::No);
+    msgBox.setStyleSheet(
+        "QMessageBox { background: #0d1117; }"
+        "QMessageBox QLabel { color: #e6edf3; }"
+        "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; margin: 2px; }"
+        "QPushButton:hover { background: #30363d; }"
+        "QPushButton[text='&Yes'] { background: #da3633; color: white; border-color: #da3633; }"
+        "QPushButton[text='&Yes']:hover { background: #b62324; }"
+    );
+    
+    if (msgBox.exec() == QMessageBox::Yes) {
         if (m_git->deleteBranch(selectedBranch, false)) {
             updateBranchSelector();
         }
@@ -1491,21 +1580,21 @@ QString SourceControlPanel::statusIcon(GitFileStatus status) const
 {
     switch (status) {
         case GitFileStatus::Modified:
-            return "M";
+            return "●";  // Filled circle for modified
         case GitFileStatus::Added:
-            return "A";
+            return "✚";  // Plus sign for added
         case GitFileStatus::Deleted:
-            return "D";
+            return "✖";  // X for deleted
         case GitFileStatus::Renamed:
-            return "R";
+            return "➜";  // Arrow for renamed
         case GitFileStatus::Copied:
-            return "C";
+            return "⎘";  // Copy symbol
         case GitFileStatus::Untracked:
-            return "U";
+            return "?";  // Question mark for untracked
         case GitFileStatus::Unmerged:
-            return "!";
+            return "⚠";  // Warning for unmerged
         case GitFileStatus::Ignored:
-            return "I";
+            return "⊝";  // Circled minus for ignored
         default:
             return " ";
     }
