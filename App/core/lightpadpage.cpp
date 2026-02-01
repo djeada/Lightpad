@@ -306,7 +306,7 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
     // Note: Do NOT call updateModel() here - the shared model will be set
     // when setMainWindow() is called to avoid creating duplicate models
 
-    QObject::connect(treeView, &QAbstractItemView::clicked, this, [&](const QModelIndex& index) {
+    QObject::connect(treeView, &QAbstractItemView::clicked, this, [this](const QModelIndex& index) {
         if (!index.isValid() || !mainWindow || !model) {
             return;
         }
@@ -322,7 +322,7 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
         treeView->setCurrentIndex(index);
     });
 
-    QObject::connect(treeView, &QAbstractItemView::doubleClicked, this, [&](const QModelIndex& index) {
+    QObject::connect(treeView, &QAbstractItemView::doubleClicked, this, [this](const QModelIndex& index) {
         if (!index.isValid() || !model) {
             return;
         }
@@ -466,8 +466,9 @@ void LightpadPage::updateModel()
         }
     }
     
-    // Only create a new model if we don't have one and mainWindow is not set
-    // (This handles the edge case where page is created before mainWindow is set)
+    // Only create a new model as a last resort if we don't have one yet
+    // This can happen when the page is created before mainWindow is set
+    // or if mainWindow's shared model is not yet available
     if (!model) {
         model = new GitFileSystemModel(this);
         m_ownsModel = true;
