@@ -92,7 +92,7 @@ void SourceControlPanel::setupUI()
 
     m_refreshButton = new QPushButton("↻", header);
     m_refreshButton->setFixedSize(24, 24);
-    m_refreshButton->setToolTip(tr("Refresh (F5)"));
+    m_refreshButton->setToolTip(tr("Refresh"));
     m_refreshButton->setStyleSheet(
         "QPushButton { background: transparent; color: #e6edf3; border: none; font-size: 14px; border-radius: 4px; }"
         "QPushButton:hover { background: #2a3241; }"
@@ -175,12 +175,9 @@ void SourceControlPanel::setupNoRepoUI()
         "}"
         "QPushButton:hover {"
         "  background: #2ea043;"
-        "  transform: translateY(-2px);"
-        "  box-shadow: 0 4px 12px rgba(46, 160, 67, 0.4);"
         "}"
         "QPushButton:pressed {"
         "  background: #1a6f2a;"
-        "  transform: translateY(0px);"
         "}"
     );
     connect(m_initRepoButton, &QPushButton::clicked, this, &SourceControlPanel::onInitRepositoryClicked);
@@ -266,12 +263,9 @@ void SourceControlPanel::setupMergeConflictUI()
         "}"
         "QPushButton:hover {"
         "  background: #388bfd;"
-        "  transform: translateY(-1px);"
-        "  box-shadow: 0 2px 8px rgba(31, 111, 235, 0.4);"
         "}"
         "QPushButton:pressed {"
         "  background: #0d419d;"
-        "  transform: translateY(0px);"
         "}"
     );
     connect(m_resolveConflictsButton, &QPushButton::clicked, this, &SourceControlPanel::onResolveConflictsClicked);
@@ -290,12 +284,9 @@ void SourceControlPanel::setupMergeConflictUI()
         "  background: #da3633;"
         "  color: white;"
         "  border-color: #da3633;"
-        "  transform: translateY(-1px);"
-        "  box-shadow: 0 2px 8px rgba(218, 54, 51, 0.4);"
         "}"
         "QPushButton:pressed {"
         "  background: #b62324;"
-        "  transform: translateY(0px);"
         "}"
     );
     connect(m_abortMergeButton, &QPushButton::clicked, [this]() {
@@ -394,7 +385,7 @@ void SourceControlPanel::setupRepoUI()
 
     m_newBranchButton = new QPushButton("+", branchSection);
     m_newBranchButton->setFixedSize(28, 28);
-    m_newBranchButton->setToolTip(tr("Create New Branch (Ctrl+Shift+B)"));
+    m_newBranchButton->setToolTip(tr("Create New Branch"));
     m_newBranchButton->setStyleSheet(
         "QPushButton {"
         "  background: #238636;"
@@ -406,7 +397,6 @@ void SourceControlPanel::setupRepoUI()
         "}"
         "QPushButton:hover {"
         "  background: #2ea043;"
-        "  transform: scale(1.05);"
         "}"
         "QPushButton:pressed {"
         "  background: #1a6f2a;"
@@ -417,7 +407,7 @@ void SourceControlPanel::setupRepoUI()
 
     m_deleteBranchButton = new QPushButton("🗑", branchSection);
     m_deleteBranchButton->setFixedSize(28, 28);
-    m_deleteBranchButton->setToolTip(tr("Delete Branch (Ctrl+Shift+D)"));
+    m_deleteBranchButton->setToolTip(tr("Delete Branch"));
     m_deleteBranchButton->setStyleSheet(
         "QPushButton {"
         "  background: #21262d;"
@@ -430,7 +420,6 @@ void SourceControlPanel::setupRepoUI()
         "  background: #da3633;"
         "  color: white;"
         "  border-color: #da3633;"
-        "  transform: scale(1.05);"
         "}"
         "QPushButton:pressed {"
         "  background: #b62324;"
@@ -451,7 +440,7 @@ void SourceControlPanel::setupRepoUI()
     remoteOpsLayout->setSpacing(4);
     
     m_pullButton = new QPushButton("⬇ Pull", branchSection);
-    m_pullButton->setToolTip(tr("Pull from Remote (Ctrl+Shift+Pull)"));
+    m_pullButton->setToolTip(tr("Pull from Remote"));
     m_pullButton->setStyleSheet(
         "QPushButton {"
         "  background: #21262d;"
@@ -479,7 +468,7 @@ void SourceControlPanel::setupRepoUI()
     remoteOpsLayout->addWidget(m_pullButton);
     
     m_pushButton = new QPushButton("⬆ Push", branchSection);
-    m_pushButton->setToolTip(tr("Push to Remote (Ctrl+Shift+Push)"));
+    m_pushButton->setToolTip(tr("Push to Remote"));
     m_pushButton->setStyleSheet(
         "QPushButton {"
         "  background: #21262d;"
@@ -646,7 +635,7 @@ void SourceControlPanel::setupRepoUI()
     
     m_commitButton = new QPushButton(tr("✓ Commit"), commitSection);
     m_commitButton->setMinimumHeight(32);
-    m_commitButton->setToolTip(tr("Commit Staged Changes (Ctrl+Enter)"));
+    m_commitButton->setToolTip(tr("Commit Staged Changes"));
     m_commitButton->setStyleSheet(
         "QPushButton {"
         "  background: #238636;"
@@ -659,12 +648,9 @@ void SourceControlPanel::setupRepoUI()
         "}"
         "QPushButton:hover {"
         "  background: #2ea043;"
-        "  transform: translateY(-1px);"
-        "  box-shadow: 0 2px 8px rgba(46, 160, 67, 0.4);"
         "}"
         "QPushButton:pressed {"
         "  background: #1a6f2a;"
-        "  transform: translateY(0px);"
         "}"
         "QPushButton:disabled {"
         "  background: #21262d;"
@@ -695,7 +681,7 @@ void SourceControlPanel::setupRepoUI()
     
     m_unstageAllButton = new QPushButton("−", stagedHeader);
     m_unstageAllButton->setFixedSize(22, 22);
-    m_unstageAllButton->setToolTip(tr("Unstage All (Ctrl+U)"));
+    m_unstageAllButton->setToolTip(tr("Unstage All"));
     m_unstageAllButton->setStyleSheet(
         "QPushButton { background: transparent; color: #8b949e; border: 1px solid #30363d; border-radius: 4px; font-size: 14px; font-weight: bold; }"
         "QPushButton:hover { background: #21262d; color: #f85149; border-color: #f85149; }"
@@ -772,7 +758,7 @@ void SourceControlPanel::setupRepoUI()
     
     m_stageAllButton = new QPushButton("+", changesHeader);
     m_stageAllButton->setFixedSize(22, 22);
-    m_stageAllButton->setToolTip(tr("Stage All (Ctrl+A)"));
+    m_stageAllButton->setToolTip(tr("Stage All"));
     m_stageAllButton->setStyleSheet(
         "QPushButton { background: transparent; color: #8b949e; border: 1px solid #30363d; border-radius: 4px; font-size: 14px; font-weight: bold; }"
         "QPushButton:hover { background: #21262d; color: #3fb950; border-color: #3fb950; }"
