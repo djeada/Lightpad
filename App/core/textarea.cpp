@@ -396,7 +396,12 @@ void TextArea::showLineNumbers(bool flag)
 {
     showLineNumberArea = flag;
     LOG_DEBUG(QString("Show line numbers: %1").arg(flag ? "true" : "false"));
-    resizeEvent(new QResizeEvent(size(), size()));
+    if (lineNumberArea) {
+        int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
+        lineNumberArea->setVisible(showLineNumberArea);
+        lineNumberArea->setFixedWidth(width);
+        lineNumberArea->setGeometry(0, 0, width, height());
+    }
     setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
 }
 

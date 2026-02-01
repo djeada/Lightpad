@@ -307,7 +307,6 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
      <addaction name="actionUnfold_Comments"/>
     </widget>
     <addaction name="actionToggle_Full_Screen"/>
-    <addaction name="actionToggle_Menu_Bar"/>
     <addaction name="actionToggle_Minimap"/>
     <addaction name="actionToggle_Terminal"/>
     <addaction name="actionToggle_Source_Control"/>
