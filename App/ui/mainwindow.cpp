@@ -55,6 +55,7 @@
 #endif
 #include "../settings/settingsmanager.h"
 #include "../git/gitintegration.h"
+#include "panels/spliteditorcontainer.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -75,6 +76,9 @@ MainWindow::MainWindow(QWidget* parent)
     , fileQuickOpen(nullptr)
     , recentFilesDialog(nullptr)
     , problemsStatusLabel(nullptr)
+    , vimStatusLabel(nullptr)
+    , m_vimCommandPanelActive(false)
+    , m_connectedVimMode(nullptr)
     , breadcrumbWidget(nullptr)
     , recentFilesManager(nullptr)
     , navigationHistory(nullptr)
@@ -87,7 +91,33 @@ MainWindow::MainWindow(QWidget* parent)
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
     showMaximized();
-    ui->tabWidget->setMainWindow(this);
+
+    auto layout = qobject_cast<QVBoxLayout*>(ui->centralwidget->layout());
+    if (layout) {
+        int tabIndex = layout->indexOf(ui->tabWidget);
+        layout->removeWidget(ui->tabWidget);
+        m_splitEditorContainer = new SplitEditorContainer(ui->centralwidget);
+        m_splitEditorContainer->adoptTabWidget(ui->tabWidget);
+        layout->insertWidget(tabIndex >= 0 ? tabIndex : 0, m_splitEditorContainer);
+        connect(m_splitEditorContainer, &SplitEditorContainer::currentGroupChanged, this,
+            [this](LightpadTabWidget* tabWidget) {
+                updateTabWidgetContext(tabWidget, tabWidget ? tabWidget->currentIndex() : -1);
+            });
+        connect(m_splitEditorContainer, &SplitEditorContainer::splitCountChanged, this,
+            [this](int) {
+                for (LightpadTabWidget* tabWidget : allTabWidgets()) {
+                    setupTabWidgetConnections(tabWidget);
+                    applyTabWidgetTheme(tabWidget);
+                    updateTabWidgetContext(tabWidget, tabWidget->currentIndex());
+                }
+            });
+    }
+
+    if (m_splitEditorContainer) {
+        m_splitEditorContainer->setMainWindow(this);
+    } else {
+    }
+    setupTabWidgetConnections(ui->tabWidget);
     ui->magicButton->setIconSize(0.8 * ui->magicButton->size());
     
     // Initialize recent files manager
@@ -128,9 +158,135 @@ MainWindow::MainWindow(QWidget* parent)
     setWindowTitle("LightPad");
 }
 
+LightpadTabWidget* MainWindow::currentTabWidget() const
+{
+    if (m_splitEditorContainer) {
+        LightpadTabWidget* tabWidget = m_splitEditorContainer->currentTabWidget();
+        if (tabWidget) {
+            return tabWidget;
+        }
+    }
+    return ui->tabWidget;
+}
+
+QList<LightpadTabWidget*> MainWindow::allTabWidgets() const
+{
+    if (m_splitEditorContainer) {
+        return m_splitEditorContainer->allTabWidgets();
+    }
+    return { ui->tabWidget };
+}
+
 void MainWindow::setRowCol(int row, int col)
 {
     ui->rowCol->setText("Ln " + QString::number(row) + ", Col " + QString::number(col));
+    ensureStatusLabels();
+}
+
+void MainWindow::connectVimMode(TextArea* textArea)
+{
+    if (!textArea) {
+        return;
+    }
+    VimMode* vimMode = textArea->vimMode();
+    if (!vimMode) {
+        return;
+    }
+
+    disconnectVimMode();
+    ensureStatusLabels();
+    m_connectedVimMode = vimMode;
+
+    connect(vimMode, &VimMode::modeChanged, this, [this, textArea](VimEditMode mode) {
+        if (!textArea || !textArea->isVimModeEnabled()) {
+            updateVimStatusLabel("");
+            hideVimCommandPanel();
+            return;
+        }
+        if (mode == VimEditMode::Command) {
+            showVimCommandPanel(":", textArea->vimMode()->commandBuffer());
+        } else {
+            hideVimCommandPanel();
+        }
+        updateVimStatusLabel(textArea->vimMode()->modeName());
+    });
+
+    connect(vimMode, &VimMode::statusMessage, this, [this](const QString& message) {
+        showVimStatusMessage(message);
+    });
+
+    connect(vimMode, &VimMode::commandBufferChanged, this, [this, textArea](const QString& buffer) {
+        if (!textArea || !textArea->isVimModeEnabled()) {
+            return;
+        }
+        VimMode* currentVim = textArea->vimMode();
+        if (!currentVim || currentVim->mode() != VimEditMode::Command) {
+            return;
+        }
+        if (buffer.startsWith("/") || buffer.startsWith("?")) {
+            showVimCommandPanel(buffer.left(1), buffer.mid(1));
+        } else {
+            showVimCommandPanel(":", buffer);
+        }
+    });
+
+    connect(vimMode, &VimMode::commandExecuted, this, [this](const QString& command) {
+        if (command == "save") {
+            on_actionSave_triggered();
+        } else if (command == "quit") {
+            closeCurrentTab();
+        } else if (command == "forceQuit") {
+            on_actionQuit_triggered();
+        } else if (command == "vim:on") {
+            if (!settings.vimModeEnabled) {
+                on_actionToggle_Vim_Mode_triggered();
+            }
+        } else if (command == "vim:off") {
+            if (settings.vimModeEnabled) {
+                on_actionToggle_Vim_Mode_triggered();
+            }
+        } else if (command.startsWith("edit:")) {
+            openFileAndAddToNewTab(command.mid(QString("edit:").size()));
+        }
+    });
+
+    updateVimStatusLabel(textArea->isVimModeEnabled() ? vimMode->modeName() : "");
+    if (!textArea->isVimModeEnabled()) {
+        hideVimCommandPanel();
+    }
+}
+
+void MainWindow::disconnectVimMode()
+{
+    if (!m_connectedVimMode) {
+        return;
+    }
+    m_connectedVimMode->disconnect(this);
+    m_connectedVimMode = nullptr;
+}
+
+void MainWindow::showVimCommandPanel(const QString& prefix, const QString& buffer)
+{
+    m_vimCommandPanelActive = true;
+    showFindReplace(true);
+    if (!findReplacePanel) {
+        return;
+    }
+    ensureStatusLabels();
+    findReplacePanel->setReplaceVisibility(false);
+    findReplacePanel->setVimCommandMode(true);
+    findReplacePanel->setSearchPrefix(prefix);
+    findReplacePanel->setSearchText(buffer);
+    findReplacePanel->setFocusOnSearchBox();
+}
+
+void MainWindow::hideVimCommandPanel()
+{
+    if (findReplacePanel && findReplacePanel->isVimCommandMode()) {
+        findReplacePanel->setVimCommandMode(false);
+        findReplacePanel->close();
+    }
+    m_vimCommandPanelActive = false;
 }
 
 void MainWindow::setTabWidthLabel(QString text)
@@ -210,10 +366,12 @@ void MainWindow::saveSettings()
     globalSettings.setValue("lastProjectPath", m_projectRootPath);
     
     QJsonArray openTabs;
-    for (int i = 0; i < ui->tabWidget->count(); i++) {
-        QString filePath = ui->tabWidget->getFilePath(i);
-        if (!filePath.isEmpty()) {
-            openTabs.append(filePath);
+    for (LightpadTabWidget* tabWidget : allTabWidgets()) {
+        for (int i = 0; i < tabWidget->count(); i++) {
+            QString filePath = tabWidget->getFilePath(i);
+            if (!filePath.isEmpty()) {
+                openTabs.append(filePath);
+            }
         }
     }
     globalSettings.setValue("openTabs", openTabs);
@@ -227,7 +385,8 @@ void MainWindow::applyLanguageOverride(const QString& extension, const QString& 
         return;
     }
 
-    QString filePath = ui->tabWidget->getFilePath(ui->tabWidget->currentIndex());
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
     if (filePath.isEmpty()) {
         return;
     }
@@ -273,6 +432,24 @@ void MainWindow::applyHighlightForFile(const QString& filePath)
     highlightLanguage = languageId;
     textArea->setLanguage(languageId);
     textArea->updateSyntaxHighlightTags("", languageId);
+
+    if (m_gitIntegration) {
+        QList<GitDiffLineInfo> diffLines = m_gitIntegration->getDiffLines(filePath);
+        QList<QPair<int, int>> gutterLines;
+        gutterLines.reserve(diffLines.size());
+        for (const auto& info : diffLines) {
+            int type = 1;
+            if (info.type == GitDiffLineInfo::Type::Added) {
+                type = 0;
+            } else if (info.type == GitDiffLineInfo::Type::Deleted) {
+                type = 2;
+            }
+            gutterLines.append(qMakePair(info.lineNumber, type));
+        }
+        textArea->setGitDiffLines(gutterLines);
+    } else {
+        textArea->clearGitDiffLines();
+    }
 }
 
 QString MainWindow::detectLanguageIdForExtension(const QString& extension) const
@@ -435,9 +612,11 @@ void MainWindow::setHighlightOverrideForFile(const QString& filePath, const QStr
 template <typename... Args>
 void MainWindow::updateAllTextAreas(void (TextArea::*f)(Args... args), Args... args)
 {
-    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
-    for (auto& textArea : textAreas)
-        (textArea->*f)(args...);
+    for (LightpadTabWidget* tabWidget : allTabWidgets()) {
+        auto textAreas = tabWidget->findChildren<TextArea*>();
+        for (auto& textArea : textAreas)
+            (textArea->*f)(args...);
+    }
 
     if (ui->actionToggle_Vim_Mode) {
         ui->actionToggle_Vim_Mode->setChecked(settings.vimModeEnabled);
@@ -446,9 +625,11 @@ void MainWindow::updateAllTextAreas(void (TextArea::*f)(Args... args), Args... a
 
 void MainWindow::updateAllTextAreas(void (TextArea::*f)(const Theme&), const Theme& theme)
 {
-    auto textAreas = ui->tabWidget->findChildren<TextArea*>();
-    for (auto& textArea : textAreas)
-        (textArea->*f)(theme);
+    for (LightpadTabWidget* tabWidget : allTabWidgets()) {
+        auto textAreas = tabWidget->findChildren<TextArea*>();
+        for (auto& textArea : textAreas)
+            (textArea->*f)(theme);
+    }
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
@@ -478,11 +659,15 @@ void MainWindow::keyPressEvent(QKeyEvent* keyEvent)
     else if (keyEvent->matches(QKeySequence::Replace))
         showFindReplace(false);
 
+    else if (keyEvent->key() == Qt::Key_Escape && m_vimCommandPanelActive) {
+        hideVimCommandPanel();
+    }
+
     else if (keyEvent->matches(QKeySequence::Close))
         closeCurrentTab();
 
     else if (keyEvent->matches(QKeySequence::AddTab))
-        ui->tabWidget->addNewTab();
+        currentTabWidget()->addNewTab();
     
     // Command Palette: Ctrl+Shift+P
     else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
@@ -559,6 +744,7 @@ int MainWindow::getFontSize()
 //else add new tab
 void MainWindow::openFileAndAddToNewTab(QString filePath)
 {
+    LightpadTabWidget* tabWidget = currentTabWidget();
 
     QFileInfo fileInfo(filePath);
     if (filePath.isEmpty() || !fileInfo.exists() || fileInfo.isDir())
@@ -569,10 +755,10 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     }
 
     //check if file not already open (including viewer tabs)
-    for (int i = 0; i < ui->tabWidget->count(); i++) {
-        QString tabFilePath = ui->tabWidget->getFilePath(i);
+    for (int i = 0; i < tabWidget->count(); i++) {
+        QString tabFilePath = tabWidget->getFilePath(i);
         if (tabFilePath == filePath) {
-            ui->tabWidget->setCurrentIndex(i);
+            tabWidget->setCurrentIndex(i);
             return;
         }
     }
@@ -583,7 +769,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     if (ImageViewer::isSupportedImageFormat(extension)) {
         ImageViewer* imageViewer = new ImageViewer(this);
         if (imageViewer->loadImage(filePath)) {
-            ui->tabWidget->addViewerTab(imageViewer, filePath, m_projectRootPath);
+            tabWidget->addViewerTab(imageViewer, filePath, m_projectRootPath);
         } else {
             delete imageViewer;
         }
@@ -595,7 +781,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     if (PdfViewer::isSupportedPdfFormat(extension)) {
         PdfViewer* pdfViewer = new PdfViewer(this);
         if (pdfViewer->loadPdf(filePath)) {
-            ui->tabWidget->addViewerTab(pdfViewer, filePath, m_projectRootPath);
+            tabWidget->addViewerTab(pdfViewer, filePath, m_projectRootPath);
         } else {
             delete pdfViewer;
         }
@@ -604,8 +790,10 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
 #endif
 
     // Default handling for text files
-    if (ui->tabWidget->count() == 0 || !getCurrentTextArea()->toPlainText().isEmpty()) {
-        ui->tabWidget->addNewTab();
+    TextArea* currentTextArea = getCurrentTextArea();
+    bool currentIsViewer = tabWidget->isViewerTab(tabWidget->currentIndex());
+    if (tabWidget->count() == 0 || currentIsViewer || !currentTextArea || !currentTextArea->toPlainText().isEmpty()) {
+        tabWidget->addNewTab();
         // Note: addNewTab() already sets the correct current index (count() - 2)
         // since the last tab is the add-button placeholder
     }
@@ -613,7 +801,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     open(filePath);
     setFilePathAsTabText(filePath);
 
-    auto page = ui->tabWidget->getCurrentPage();
+    auto page = tabWidget->getCurrentPage();
 
     if (page) {
         // Use project root path if set, otherwise show treeview based on file
@@ -636,15 +824,17 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     // Update breadcrumb
     updateBreadcrumb(filePath);
 
-    ui->tabWidget->currentChanged(ui->tabWidget->currentIndex());
+    tabWidget->currentChanged(tabWidget->currentIndex());
 }
 
 void MainWindow::closeTabPage(QString filePath)
 {
-
-    for (int i = 0; i < ui->tabWidget->count(); i++) {
-        if (ui->tabWidget->getFilePath(i) == filePath)
-            ui->tabWidget->removeTab(i);
+    for (LightpadTabWidget* tabWidget : allTabWidgets()) {
+        for (int i = 0; i < tabWidget->count(); i++) {
+            if (tabWidget->getFilePath(i) == filePath) {
+                tabWidget->removeTab(i);
+            }
+        }
     }
 }
 
@@ -676,11 +866,12 @@ void MainWindow::redo()
 
 TextArea* MainWindow::getCurrentTextArea()
 {
-    if (ui->tabWidget->currentWidget()->findChild<LightpadPage*>("widget"))
-        return ui->tabWidget->currentWidget()->findChild<LightpadPage*>("widget")->getTextArea();
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    if (tabWidget->currentWidget()->findChild<LightpadPage*>("widget"))
+        return tabWidget->currentWidget()->findChild<LightpadPage*>("widget")->getTextArea();
 
-    else if (ui->tabWidget->currentWidget()->findChild<TextArea*>(""))
-        return ui->tabWidget->currentWidget()->findChild<TextArea*>("");
+    else if (tabWidget->currentWidget()->findChild<TextArea*>(""))
+        return tabWidget->currentWidget()->findChild<TextArea*>("");
 
     return nullptr;
 }
@@ -768,13 +959,14 @@ void MainWindow::on_actionNew_Window_triggered()
 
 void MainWindow::on_actionClose_Tab_triggered()
 {
-    if (ui->tabWidget->currentIndex() > -1)
-        ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    if (tabWidget->currentIndex() > -1)
+        tabWidget->removeTab(tabWidget->currentIndex());
 }
 
 void MainWindow::on_actionClose_All_Tabs_triggered()
 {
-    ui->tabWidget->closeAllTabs();
+    currentTabWidget()->closeAllTabs();
 }
 
 void MainWindow::on_actionFind_in_file_triggered()
@@ -784,7 +976,7 @@ void MainWindow::on_actionFind_in_file_triggered()
 
 void MainWindow::on_actionNew_File_triggered()
 {
-    ui->tabWidget->addNewTab();
+    currentTabWidget()->addNewTab();
 }
 
 void MainWindow::on_actionOpen_File_triggered()
@@ -815,9 +1007,9 @@ void MainWindow::on_actionOpen_Project_triggered()
 
 void MainWindow::on_actionSave_triggered()
 {
-
-    auto tabIndex = ui->tabWidget->currentIndex();
-    auto filePath = ui->tabWidget->getFilePath(tabIndex);
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    auto tabIndex = tabWidget->currentIndex();
+    auto filePath = tabWidget->getFilePath(tabIndex);
 
     if (filePath.isEmpty()) {
         on_actionSave_as_triggered();
@@ -835,8 +1027,9 @@ void MainWindow::on_actionSave_as_triggered()
     if (filePath.isEmpty())
         return;
 
-    int tabIndex = ui->tabWidget->currentIndex();
-    ui->tabWidget->setFilePath(tabIndex, filePath);
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    int tabIndex = tabWidget->currentIndex();
+    tabWidget->setFilePath(tabIndex, filePath);
 
     save(filePath);
 }
@@ -851,8 +1044,9 @@ void MainWindow::open(const QString& filePath)
         return;
     }
 
-    int tabIndex = ui->tabWidget->currentIndex();
-    ui->tabWidget->setFilePath(tabIndex, filePath);
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    int tabIndex = tabWidget->currentIndex();
+    tabWidget->setFilePath(tabIndex, filePath);
 
     if (getCurrentTextArea())
         getCurrentTextArea()->setPlainText(QString::fromUtf8(file.readAll()));
@@ -866,8 +1060,9 @@ void MainWindow::save(const QString& filePath)
         return;
 
     if (getCurrentTextArea()) {
-        auto tabIndex = ui->tabWidget->currentIndex();
-        ui->tabWidget->setFilePath(tabIndex, filePath);
+        LightpadTabWidget* tabWidget = currentTabWidget();
+        auto tabIndex = tabWidget->currentIndex();
+        tabWidget->setFilePath(tabIndex, filePath);
 
         file.write(getCurrentTextArea()->toPlainText().toUtf8());
         getCurrentTextArea()->document()->setModified(false);
@@ -908,10 +1103,20 @@ void MainWindow::showFindReplace(bool onlyFind)
                 textArea->setFocus();
             }
         });
+
+        connect(findReplacePanel, &QObject::destroyed, this, [this]() {
+            findReplacePanel = nullptr;
+            m_vimCommandPanelActive = false;
+        });
     }
 
-    findReplacePanel->setVisible(!findReplacePanel->isVisible() || findReplacePanel->isOnlyFind() != onlyFind);
-    findReplacePanel->setOnlyFind(onlyFind);
+    if (!m_vimCommandPanelActive) {
+        findReplacePanel->setVisible(!findReplacePanel->isVisible() || findReplacePanel->isOnlyFind() != onlyFind);
+        findReplacePanel->setOnlyFind(onlyFind);
+    } else {
+        findReplacePanel->setVisible(true);
+        findReplacePanel->setOnlyFind(true);
+    }
 
     if (findReplacePanel->isVisible() && getCurrentTextArea())
         findReplacePanel->setReplaceVisibility(!onlyFind);
@@ -929,7 +1134,7 @@ void MainWindow::openDialog(Dialog dialog)
     switch (dialog) {
     case Dialog::runConfiguration: {
         // Use new template selector
-        auto page = ui->tabWidget->getCurrentPage();
+        auto page = currentTabWidget()->getCurrentPage();
         QString filePath = page ? page->getFilePath() : QString();
         
         if (filePath.isEmpty()) {
@@ -948,7 +1153,7 @@ void MainWindow::openDialog(Dialog dialog)
     
     case Dialog::formatConfiguration: {
         // Use new format template selector
-        auto page = ui->tabWidget->getCurrentPage();
+        auto page = currentTabWidget()->getCurrentPage();
         QString filePath = page ? page->getFilePath() : QString();
         
         if (filePath.isEmpty()) {
@@ -992,7 +1197,7 @@ void MainWindow::openShortcutsDialog()
 
 void MainWindow::showTerminal()
 {
-    auto page = ui->tabWidget->getCurrentPage();
+    auto page = currentTabWidget()->getCurrentPage();
     QString filePath = page ? page->getFilePath() : QString();
 
     if (filePath.isEmpty()) {
@@ -1024,6 +1229,10 @@ void MainWindow::showTerminal()
 
 void MainWindow::showProblemsPanel()
 {
+    if (m_vimCommandPanelActive) {
+        ensureStatusLabels();
+        return;
+    }
     if (!problemsPanel) {
         problemsPanel = new ProblemsPanel(this);
         
@@ -1043,29 +1252,51 @@ void MainWindow::showProblemsPanel()
         // Connect countsChanged to update status bar
         connect(problemsPanel, &ProblemsPanel::countsChanged, this, &MainWindow::updateProblemsStatusLabel);
         
-        // Add problems status label to status bar if not already added
-        if (!problemsStatusLabel) {
-            problemsStatusLabel = new QLabel(this);
-            problemsStatusLabel->setStyleSheet("color: #9aa4b2; padding: 0 8px;");
-            problemsStatusLabel->setText("✓ No problems");
-            problemsStatusLabel->setCursor(Qt::PointingHandCursor);
-            
-            // Make it clickable to toggle problems panel
-            problemsStatusLabel->installEventFilter(this);
-            
-            auto layout = qobject_cast<QHBoxLayout*>(ui->backgroundBottom->layout());
-            if (layout) {
-                // Insert before the rowCol label (second to last widget)
-                layout->insertWidget(layout->count() - 1, problemsStatusLabel);
-            }
-        }
+        ensureStatusLabels();
         
         auto layout = qobject_cast<QBoxLayout*>(ui->centralwidget->layout());
         if (layout != 0)
             layout->insertWidget(layout->count() - 1, problemsPanel, 0);
     }
     
-    problemsPanel->setVisible(!problemsPanel->isVisible());
+    if (!m_vimCommandPanelActive) {
+        problemsPanel->setVisible(!problemsPanel->isVisible());
+    }
+}
+
+void MainWindow::ensureStatusLabels()
+{
+    if (!problemsStatusLabel) {
+        problemsStatusLabel = new QLabel(this);
+        problemsStatusLabel->setStyleSheet("color: #9aa4b2; padding: 0 8px;");
+        problemsStatusLabel->setText("✓ No problems");
+        problemsStatusLabel->setCursor(Qt::PointingHandCursor);
+        
+        // Make it clickable to toggle problems panel
+        problemsStatusLabel->installEventFilter(this);
+        
+        auto layout = qobject_cast<QHBoxLayout*>(ui->backgroundBottom->layout());
+        if (layout) {
+            // Insert before the rowCol label (second to last widget)
+            layout->insertWidget(layout->count() - 1, problemsStatusLabel);
+        }
+    }
+
+    if (!vimStatusLabel) {
+        vimStatusLabel = new QLabel(this);
+        vimStatusLabel->setStyleSheet("color: #9aa4b2; padding: 0 8px;");
+        vimStatusLabel->setText("");
+        vimStatusLabel->setVisible(false);
+        
+        auto layout = qobject_cast<QHBoxLayout*>(ui->backgroundBottom->layout());
+        if (layout) {
+            int insertIndex = layout->count() - 1;
+            if (problemsStatusLabel) {
+                insertIndex = qMax(0, layout->indexOf(problemsStatusLabel) + 1);
+            }
+            layout->insertWidget(insertIndex, vimStatusLabel);
+        }
+    }
 }
 
 void MainWindow::ensureSourceControlPanel()
@@ -1289,8 +1520,9 @@ void MainWindow::showFileQuickOpen()
     QString rootPath = QDir::currentPath();
     
     // If we have a file open, use its directory
-    auto tabIndex = ui->tabWidget->currentIndex();
-    auto filePath = ui->tabWidget->getFilePath(tabIndex);
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    auto tabIndex = tabWidget->currentIndex();
+    auto filePath = tabWidget->getFilePath(tabIndex);
     if (!filePath.isEmpty()) {
         QFileInfo fileInfo(filePath);
         rootPath = fileInfo.absolutePath();
@@ -1447,8 +1679,9 @@ void MainWindow::recordNavigationLocation()
     }
     
     // Get current file path
-    auto tabIndex = ui->tabWidget->currentIndex();
-    QString filePath = ui->tabWidget->getFilePath(tabIndex);
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    auto tabIndex = tabWidget->currentIndex();
+    QString filePath = tabWidget->getFilePath(tabIndex);
     if (filePath.isEmpty()) {
         return;
     }
@@ -1504,6 +1737,25 @@ void MainWindow::updateGitIntegrationForPath(const QString& path)
         sourceControlPanel->setWorkingPath(isRepo ? m_gitIntegration->repositoryPath() : path);
         sourceControlPanel->refresh();
     }
+
+    auto textArea = getCurrentTextArea();
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    QString currentFilePath = tabWidget->getFilePath(tabWidget->currentIndex());
+    if (textArea && !currentFilePath.isEmpty()) {
+        QList<GitDiffLineInfo> diffLines = m_gitIntegration->getDiffLines(currentFilePath);
+        QList<QPair<int, int>> gutterLines;
+        gutterLines.reserve(diffLines.size());
+        for (const auto& info : diffLines) {
+            int type = 1;
+            if (info.type == GitDiffLineInfo::Type::Added) {
+                type = 0;
+            } else if (info.type == GitDiffLineInfo::Type::Deleted) {
+                type = 2;
+            }
+            gutterLines.append(qMakePair(info.lineNumber, type));
+        }
+        textArea->setGitDiffLines(gutterLines);
+    }
 }
 
 void MainWindow::applyGitIntegrationToAllPages()
@@ -1512,10 +1764,12 @@ void MainWindow::applyGitIntegrationToAllPages()
         return;
     }
 
-    for (int i = 0; i < ui->tabWidget->count(); i++) {
-        auto page = ui->tabWidget->getPage(i);
-        if (page) {
-            page->setGitIntegration(m_gitIntegration);
+    for (LightpadTabWidget* tabWidget : allTabWidgets()) {
+        for (int i = 0; i < tabWidget->count(); i++) {
+            auto page = tabWidget->getPage(i);
+            if (page) {
+                page->setGitIntegration(m_gitIntegration);
+            }
         }
     }
 }
@@ -1531,6 +1785,27 @@ void MainWindow::updateProblemsStatusLabel(int errors, int warnings, int infos)
         }
         problemsStatusLabel->setText(text);
     }
+}
+
+void MainWindow::updateVimStatusLabel(const QString& text)
+{
+    if (vimStatusLabel) {
+        vimStatusLabel->setText(text);
+        vimStatusLabel->setVisible(!text.isEmpty());
+    }
+}
+
+void MainWindow::showVimStatusMessage(const QString& message)
+{
+    if (!vimStatusLabel) {
+        return;
+    }
+    updateVimStatusLabel(message);
+    QTimer::singleShot(2500, this, [this, message]() {
+        if (vimStatusLabel && vimStatusLabel->text() == message) {
+            updateVimStatusLabel("");
+        }
+    });
 }
 
 void MainWindow::setMainWindowTitle(QString title)
@@ -1573,7 +1848,7 @@ void MainWindow::runCurrentScript()
 
 void MainWindow::formatCurrentDocument()
 {
-    auto page = ui->tabWidget->getCurrentPage();
+    auto page = currentTabWidget()->getCurrentPage();
     QString filePath = page ? page->getFilePath() : QString();
     
     if (filePath.isEmpty()) {
@@ -1667,11 +1942,12 @@ void MainWindow::setFilePathAsTabText(QString filePath)
 
     auto fileName = QFileInfo(filePath).fileName();
 
-    auto tabIndex = ui->tabWidget->currentIndex();
-    auto tabText = ui->tabWidget->tabText(tabIndex);
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    auto tabIndex = tabWidget->currentIndex();
+    auto tabText = tabWidget->tabText(tabIndex);
 
     setMainWindowTitle(fileName);
-    ui->tabWidget->setTabText(tabIndex, fileName);
+    tabWidget->setTabText(tabIndex, fileName);
 }
 
 void MainWindow::closeCurrentTab()
@@ -1681,23 +1957,53 @@ void MainWindow::closeCurrentTab()
     if (textArea && textArea->changesUnsaved())
         on_actionSave_triggered();
 
-    ui->tabWidget->closeCurrentTab();
+    currentTabWidget()->closeCurrentTab();
+}
+
+void MainWindow::setupTabWidgetConnections(LightpadTabWidget* tabWidget)
+{
+    QObject::connect(tabWidget, &QTabWidget::currentChanged, this, [this, tabWidget](int index) {
+        updateTabWidgetContext(tabWidget, index);
+    });
+}
+
+void MainWindow::updateTabWidgetContext(LightpadTabWidget* tabWidget, int index)
+{
+    if (!tabWidget) {
+        return;
+    }
+
+    auto text = tabWidget->tabText(index);
+    setMainWindowTitle(text);
+
+    if (!ui->menuRun->actions().empty()) {
+        ui->menuRun->actions().front()->setText("Run " + text);
+    }
+
+    QString filePath = tabWidget->getFilePath(index);
+    applyHighlightForFile(filePath);
+
+    setupTextArea();
+}
+
+void MainWindow::applyTabWidgetTheme(LightpadTabWidget* tabWidget)
+{
+    if (!tabWidget) {
+        return;
+    }
+    tabWidget->setTheme(settings.theme.backgroundColor.name(),
+        settings.theme.foregroundColor.name(),
+        settings.theme.surfaceColor.name(),
+        settings.theme.hoverColor.name(),
+        settings.theme.accentColor.name(),
+        settings.theme.borderColor.name());
 }
 
 void MainWindow::setupTabWidget()
 {
-    QObject::connect(ui->tabWidget, &QTabWidget::currentChanged, this, [&](int index) {
-        auto text = ui->tabWidget->tabText(index);
-        setMainWindowTitle(text);
-
-        if (!ui->menuRun->actions().empty())
-            ui->menuRun->actions().front()->setText("Run " + text);
-
-        QString filePath = ui->tabWidget->getFilePath(index);
-        applyHighlightForFile(filePath);
-    });
-
-    ui->tabWidget->currentChanged(0);
+    applyTabWidgetTheme(ui->tabWidget);
+    setupTabWidgetConnections(ui->tabWidget);
+    updateTabWidgetContext(ui->tabWidget, 0);
 }
 
 void MainWindow::setupCompletionSystem()
@@ -1729,21 +2035,25 @@ void MainWindow::setupTextArea()
 {
 
     if (getCurrentTextArea()) {
-        getCurrentTextArea()->setMainWindow(this);
-        getCurrentTextArea()->setFontSize(settings.mainFont.pointSize());
-        getCurrentTextArea()->setTabWidth(settings.tabWidth);
-        getCurrentTextArea()->setVimModeEnabled(settings.vimModeEnabled);
+        auto* textArea = getCurrentTextArea();
+        textArea->setMainWindow(this);
+        textArea->setFontSize(settings.mainFont.pointSize());
+        textArea->setTabWidth(settings.tabWidth);
+        textArea->setVimModeEnabled(settings.vimModeEnabled);
+        ensureStatusLabels();
+        connectVimMode(textArea);
         
         // Setup new completion system (preferred)
         if (m_completionEngine) {
-            getCurrentTextArea()->setCompletionEngine(m_completionEngine);
-            QString filePath = ui->tabWidget->getFilePath(ui->tabWidget->currentIndex());
+            textArea->setCompletionEngine(m_completionEngine);
+            LightpadTabWidget* tabWidget = currentTabWidget();
+            QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
             applyHighlightForFile(filePath);
         }
         
         // Legacy: Setup old completer as fallback
         if (completer && !m_completionEngine)
-            getCurrentTextArea()->setCompleter(completer);
+            textArea->setCompleter(completer);
     }
 }
 
@@ -1875,14 +2185,17 @@ void MainWindow::on_actionGo_to_Line_triggered()
 
 void MainWindow::on_actionToggle_Minimap_triggered()
 {
-    LightpadPage* page = qobject_cast<LightpadPage*>(ui->tabWidget->currentWidget());
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    LightpadPage* page = qobject_cast<LightpadPage*>(tabWidget->currentWidget());
     if (page) {
         bool visible = page->isMinimapVisible();
         // Toggle minimap on all tabs for consistency
-        for (int i = 0; i < ui->tabWidget->count(); i++) {
-            LightpadPage* p = qobject_cast<LightpadPage*>(ui->tabWidget->widget(i));
-            if (p) {
-                p->setMinimapVisible(!visible);
+        for (LightpadTabWidget* targetWidget : allTabWidgets()) {
+            for (int i = 0; i < targetWidget->count(); i++) {
+                LightpadPage* p = qobject_cast<LightpadPage*>(targetWidget->widget(i));
+                if (p) {
+                    p->setMinimapVisible(!visible);
+                }
             }
         }
     }
@@ -2029,6 +2342,12 @@ void MainWindow::on_actionToggle_Vim_Mode_triggered()
     updateAllTextAreas(&TextArea::setVimModeEnabled, enabled);
     settings.vimModeEnabled = enabled;
     ui->actionToggle_Vim_Mode->setChecked(enabled);
+    if (enabled) {
+        connectVimMode(getCurrentTextArea());
+    } else {
+        updateVimStatusLabel("");
+        hideVimCommandPanel();
+    }
     saveSettings();
 }
 
@@ -2527,7 +2846,9 @@ void MainWindow::setTheme(Theme theme)
 
     qApp->setStyleSheet(styleSheet);
 
-    ui->tabWidget->setTheme(bgColor, fgColor, surfaceColor, hoverColor, accentColor, borderColor);
+    for (LightpadTabWidget* tabWidget : allTabWidgets()) {
+        applyTabWidgetTheme(tabWidget);
+    }
     if (terminalWidget) {
         terminalWidget->applyTheme(theme);
     }
@@ -2539,13 +2860,15 @@ void MainWindow::setProjectRootPath(const QString& path)
     m_projectRootPath = path;
     
     // Update all existing tabs with the new project root
-    for (int i = 0; i < ui->tabWidget->count(); i++) {
-        auto page = ui->tabWidget->getPage(i);
-        if (page) {
-            page->setProjectRootPath(path);
-            page->setTreeViewVisible(!path.isEmpty());
-            if (!path.isEmpty()) {
-                page->setModelRootIndex(path);
+    for (LightpadTabWidget* tabWidget : allTabWidgets()) {
+        for (int i = 0; i < tabWidget->count(); i++) {
+            auto page = tabWidget->getPage(i);
+            if (page) {
+                page->setProjectRootPath(path);
+                page->setTreeViewVisible(!path.isEmpty());
+                if (!path.isEmpty()) {
+                    page->setModelRootIndex(path);
+                }
             }
         }
     }

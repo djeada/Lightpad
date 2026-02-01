@@ -6,6 +6,7 @@
 #include <QMainWindow>
 #include <QMap>
 #include <QSet>
+#include <QTimer>
 
 #include "../settings/textareasettings.h"
 #include "../settings/theme.h"
@@ -19,10 +20,12 @@ class QCompleter;
 class Preferences;
 class CompletionEngine;
 class SplitEditorContainer;
+class LightpadTabWidget;
 class ImageViewer;
 class GitIntegration;
 class SourceControlPanel;
 class QDockWidget;
+class VimMode;
 #ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
 #endif
@@ -149,6 +152,9 @@ private:
     class FileQuickOpen* fileQuickOpen;
     class RecentFilesDialog* recentFilesDialog;
     class QLabel* problemsStatusLabel;
+    class QLabel* vimStatusLabel;
+    bool m_vimCommandPanelActive;
+    VimMode* m_connectedVimMode;
     class BreadcrumbWidget* breadcrumbWidget;
     class RecentFilesManager* recentFilesManager;
     
@@ -198,14 +204,26 @@ private:
     void updateGitIntegrationForPath(const QString& path);
     void applyGitIntegrationToAllPages();
     void ensureSourceControlPanel();
+    void ensureStatusLabels();
     void updateProblemsStatusLabel(int errors, int warnings, int infos);
+    void updateVimStatusLabel(const QString& text);
+    void showVimStatusMessage(const QString& message);
     void setMainWindowTitle(QString title);
     void setFilePathAsTabText(QString filePath);
     void closeCurrentTab();
     void setupTabWidget();
+    void setupTabWidgetConnections(LightpadTabWidget* tabWidget);
+    void updateTabWidgetContext(LightpadTabWidget* tabWidget, int index);
+    void applyTabWidgetTheme(LightpadTabWidget* tabWidget);
     void setupTextArea();
+    void connectVimMode(TextArea* textArea);
+    void disconnectVimMode();
+    void showVimCommandPanel(const QString& prefix, const QString& buffer);
+    void hideVimCommandPanel();
     void setupCompletionSystem();
     void noScriptAssignedWarning();
+    LightpadTabWidget* currentTabWidget() const;
+    QList<LightpadTabWidget*> allTabWidgets() const;
     void closeEvent(QCloseEvent* event);
     void loadSettings();
     void saveSettings();

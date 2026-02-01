@@ -109,6 +109,7 @@ public:
     // Vim mode
     void setVimModeEnabled(bool enabled);
     bool isVimModeEnabled() const;
+    VimMode* vimMode() const;
 
     // Git diff gutter
     void setGitDiffLines(const QList<QPair<int, int>>& diffLines);  // line number, type (0=add, 1=modify, 2=delete)

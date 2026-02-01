@@ -11,6 +11,30 @@
 #include <QTextStream>
 #include <QTreeWidget>
 #include <QHeaderView>
+#include <QSpacerItem>
+#include <QSizePolicy>
+
+namespace {
+void setModeLayoutVisible(Ui::FindReplacePanel* ui, bool visible)
+{
+    if (!ui) {
+        return;
+    }
+    ui->modeLabel->setVisible(visible);
+    ui->localMode->setVisible(visible);
+    ui->globalMode->setVisible(visible);
+    if (ui->modeSpacer) {
+        if (visible) {
+            ui->modeSpacer->changeSize(40, 20, QSizePolicy::Expanding, QSizePolicy::Minimum);
+        } else {
+            ui->modeSpacer->changeSize(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
+        }
+    }
+    if (ui->modeLayout) {
+        ui->modeLayout->invalidate();
+    }
+}
+} // namespace
 
 FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget* parent)
     : QWidget(parent)
@@ -23,6 +47,7 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget* parent)
     , globalResultIndex(-1)
     , resultsTree(nullptr)
     , searchHistoryIndex(-1)
+    , m_vimCommandMode(false)
 {
     ui->setupUi(this);
 
@@ -79,6 +104,11 @@ bool FindReplacePanel::isOnlyFind()
     return onlyFind;
 }
 
+bool FindReplacePanel::isOnlyFind() const
+{
+    return onlyFind;
+}
+
 void FindReplacePanel::setOnlyFind(bool flag)
 {
     onlyFind = flag;
@@ -107,6 +137,56 @@ void FindReplacePanel::setProjectPath(const QString& path)
 void FindReplacePanel::setFocusOnSearchBox()
 {
     ui->searchFind->setFocus();
+}
+
+void FindReplacePanel::setVimCommandMode(bool enabled)
+{
+    if (m_vimCommandMode == enabled) {
+        return;
+    }
+    m_vimCommandMode = enabled;
+    if (enabled) {
+        setOnlyFind(true);
+        setReplaceVisibility(false);
+        setModeLayoutVisible(ui, false);
+        ui->options->setVisible(false);
+        ui->more->setVisible(false);
+        ui->findPrevious->setVisible(false);
+        ui->find->setVisible(false);
+        ui->replaceSingle->setVisible(false);
+        ui->replaceAll->setVisible(false);
+        ui->currentIndex->setVisible(false);
+        ui->totalFound->setVisible(false);
+        ui->label->setVisible(false);
+        ui->searchBackward->setChecked(false);
+        ui->searchStart->setChecked(true);
+    } else {
+        setModeLayoutVisible(ui, true);
+        ui->more->setVisible(true);
+        ui->findPrevious->setVisible(true);
+        ui->find->setVisible(true);
+        ui->currentIndex->setVisible(true);
+        ui->totalFound->setVisible(true);
+        ui->label->setVisible(true);
+        ui->findWhat->setText("Find what :");
+    }
+}
+
+bool FindReplacePanel::isVimCommandMode() const
+{
+    return m_vimCommandMode;
+}
+
+void FindReplacePanel::setSearchPrefix(const QString& prefix)
+{
+    m_searchPrefix = prefix;
+    ui->findWhat->setText(QString("Command (%1):").arg(prefix));
+}
+
+void FindReplacePanel::setSearchText(const QString& text)
+{
+    ui->searchFind->setText(text);
+    ui->searchFind->setCursorPosition(text.length());
 }
 
 bool FindReplacePanel::isGlobalMode() const
@@ -258,6 +338,9 @@ void FindReplacePanel::addToSearchHistory(const QString& searchTerm)
 
 void FindReplacePanel::on_find_clicked()
 {
+    if (m_vimCommandMode) {
+        return;
+    }
     QString searchWord = ui->searchFind->text();
     
     if (searchWord.isEmpty()) {
@@ -289,6 +372,9 @@ void FindReplacePanel::on_find_clicked()
 
 void FindReplacePanel::on_findPrevious_clicked()
 {
+    if (m_vimCommandMode) {
+        return;
+    }
     QString searchWord = ui->searchFind->text();
     
     if (searchWord.isEmpty()) {
@@ -327,6 +413,9 @@ void FindReplacePanel::on_findPrevious_clicked()
 
 void FindReplacePanel::on_replaceSingle_clicked()
 {
+    if (m_vimCommandMode) {
+        return;
+    }
     if (textArea) {
         textArea->setFocus();
         QString searchWord = ui->searchFind->text();
@@ -356,6 +445,12 @@ void FindReplacePanel::on_replaceSingle_clicked()
 
 void FindReplacePanel::on_close_clicked()
 {
+    if (m_vimCommandMode) {
+        setVimCommandMode(false);
+        if (textArea) {
+            textArea->setFocus();
+        }
+    }
     if (textArea)
         textArea->updateSyntaxHighlightTags();
 
@@ -615,6 +710,9 @@ void FindReplacePanel::findPrevious(QTextCursor& cursor, const QString& searchWo
 
 void FindReplacePanel::on_replaceAll_clicked()
 {
+    if (m_vimCommandMode) {
+        return;
+    }
     if (textArea) {
         textArea->setFocus();
         QString searchWord = ui->searchFind->text();

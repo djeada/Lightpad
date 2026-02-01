@@ -31,12 +31,17 @@ public:
     void toggleExtensionVisibility();
     void setReplaceVisibility(bool flag);
     bool isOnlyFind();
+    bool isOnlyFind() const;
     void setOnlyFind(bool flag);
     void setDocument(QTextDocument* doc);
     void setTextArea(TextArea* area);
     void setMainWindow(MainWindow* window);
     void setProjectPath(const QString& path);
     void setFocusOnSearchBox();
+    void setVimCommandMode(bool enabled);
+    bool isVimCommandMode() const;
+    void setSearchPrefix(const QString& prefix);
+    void setSearchText(const QString& text);
     
     // Search mode
     bool isGlobalMode() const;
@@ -66,6 +71,8 @@ private:
     QTextCharFormat prevFormat;
     QTextCharFormat colorFormat;
     bool onlyFind;
+    bool m_vimCommandMode;
+    QString m_searchPrefix;
     int position;
     
     // Project path for global search

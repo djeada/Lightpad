@@ -1508,6 +1508,11 @@ bool TextArea::isVimModeEnabled() const
     return m_vimMode && m_vimMode->isEnabled();
 }
 
+VimMode* TextArea::vimMode() const
+{
+    return m_vimMode;
+}
+
 // ============================================================================
 // Git Diff Gutter Support
 // ============================================================================

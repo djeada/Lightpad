@@ -29,9 +29,13 @@ void VimMode::setEnabled(bool enabled)
     if (m_enabled != enabled) {
         m_enabled = enabled;
         if (enabled) {
+            m_commandBuffer.clear();
+            emit commandBufferChanged(m_commandBuffer);
             setMode(VimEditMode::Normal);
             m_editor->setCursorWidth(m_editor->fontMetrics().horizontalAdvance('M'));
         } else {
+            m_commandBuffer.clear();
+            emit commandBufferChanged(m_commandBuffer);
             setMode(VimEditMode::Insert);
             m_editor->setCursorWidth(1);
         }
@@ -352,12 +356,14 @@ bool VimMode::handleNormalMode(QKeyEvent* event)
     case Qt::Key_Colon:
         setMode(VimEditMode::Command);
         m_commandBuffer = "";
+        emit commandBufferChanged(m_commandBuffer);
         return true;
 
     case Qt::Key_Slash:
         // / - Start forward search
         setMode(VimEditMode::Command);
         m_commandBuffer = "/";
+        emit commandBufferChanged(m_commandBuffer);
         m_searchForward = true;
         return true;
 
@@ -365,6 +371,7 @@ bool VimMode::handleNormalMode(QKeyEvent* event)
         // ? - Start backward search
         setMode(VimEditMode::Command);
         m_commandBuffer = "?";
+        emit commandBufferChanged(m_commandBuffer);
         m_searchForward = false;
         return true;
 
@@ -824,6 +831,7 @@ bool VimMode::handleCommandMode(QKeyEvent* event)
     
     if (key == Qt::Key_Escape) {
         m_commandBuffer.clear();
+        emit commandBufferChanged(m_commandBuffer);
         setMode(VimEditMode::Normal);
         return true;
     }
@@ -831,6 +839,7 @@ bool VimMode::handleCommandMode(QKeyEvent* event)
     if (key == Qt::Key_Return || key == Qt::Key_Enter) {
         executeCommand(m_commandBuffer);
         m_commandBuffer.clear();
+        emit commandBufferChanged(m_commandBuffer);
         setMode(VimEditMode::Normal);
         return true;
     }
@@ -838,6 +847,7 @@ bool VimMode::handleCommandMode(QKeyEvent* event)
     if (key == Qt::Key_Backspace) {
         if (!m_commandBuffer.isEmpty()) {
             m_commandBuffer.chop(1);
+            emit commandBufferChanged(m_commandBuffer);
         } else {
             setMode(VimEditMode::Normal);
         }
@@ -846,6 +856,7 @@ bool VimMode::handleCommandMode(QKeyEvent* event)
     
     if (!text.isEmpty()) {
         m_commandBuffer += text;
+        emit commandBufferChanged(m_commandBuffer);
     }
     
     return true;
@@ -855,6 +866,10 @@ void VimMode::setMode(VimEditMode mode)
 {
     if (m_mode != mode) {
         m_mode = mode;
+        if (m_mode != VimEditMode::Command && !m_commandBuffer.isEmpty()) {
+            m_commandBuffer.clear();
+            emit commandBufferChanged(m_commandBuffer);
+        }
         
         // Adjust cursor style
         if (mode == VimEditMode::Insert || mode == VimEditMode::Replace) {
@@ -1027,8 +1042,16 @@ void VimMode::executeCommand(const QString& command)
     } else if (command == "q!") {
         emit commandExecuted("forceQuit");
     } else if (command.startsWith("set ")) {
-        QString option = command.mid(4);
-        emit statusMessage(QString("Set: %1").arg(option));
+        QString option = command.mid(4).trimmed();
+        if (option == "novim" || option == "no-vim") {
+            emit commandExecuted("vim:off");
+            emit statusMessage("Vim mode disabled");
+        } else if (option == "vim") {
+            emit commandExecuted("vim:on");
+            emit statusMessage("Vim mode enabled");
+        } else {
+            emit statusMessage(QString("Set: %1").arg(option));
+        }
     } else if (command.startsWith("/") || command.startsWith("?")) {
         // Search command
         bool forward = command.startsWith("/");

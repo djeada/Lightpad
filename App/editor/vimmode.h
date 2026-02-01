@@ -173,6 +173,12 @@ signals:
      */
     void commandExecuted(const QString& command);
 
+    /**
+     * @brief Emitted when command buffer changes in command mode
+     * @param buffer The current command buffer
+     */
+    void commandBufferChanged(const QString& buffer);
+
 private:
     bool handleNormalMode(QKeyEvent* event);
     bool handleInsertMode(QKeyEvent* event);

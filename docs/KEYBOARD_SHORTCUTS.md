@@ -79,7 +79,7 @@ This document lists all keyboard shortcuts available in Lightpad.
 When VIM mode is enabled, the editor uses modal editing with different shortcuts:
 
 > **Note:** In VIM Normal mode, `Ctrl+D` means "Page down" instead of "Duplicate line".
-> Use `:set novim` or disable VIM mode in preferences to use standard shortcuts.
+> Use `:set novim` to disable VIM mode, `:set vim` to re-enable it, or disable VIM mode in preferences.
 
 ### Normal Mode
 
@@ -118,6 +118,24 @@ When VIM mode is enabled, the editor uses modal editing with different shortcuts
 | `#` | Search word under cursor backward |
 | `n` | Next search result |
 | `N` | Previous search result |
+| `:` | Enter command mode |
+| `/` | Search forward |
+| `?` | Search backward |
+
+### Command Mode
+
+| Command | Action |
+|---------|--------|
+| `:w` | Save file |
+| `:q` | Close tab |
+| `:wq` / `:x` | Save and close |
+| `:q!` | Quit app |
+| `:e {file}` | Open file |
+| `:{line}` | Go to line |
+| `/pattern` | Search forward |
+| `?pattern` | Search backward |
+| `:s/old/new/` | Replace in line |
+| `:%s/old/new/g` | Replace in file |
 
 ### Mode Switching
 
