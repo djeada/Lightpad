@@ -247,6 +247,7 @@ private:
     bool saveHighlightOverridesForDir(const QString& dirPath) const;
     QString highlightOverrideForFile(const QString& filePath);
     void setHighlightOverrideForFile(const QString& filePath, const QString& languageId);
+    void ensureProjectSettings(const QString& path);
 
     template <typename... Args>
     void updateAllTextAreas(void (TextArea::*f)(Args... args), Args... args);

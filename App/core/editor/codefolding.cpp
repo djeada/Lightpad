@@ -202,6 +202,7 @@ bool CodeFoldingManager::foldBlock(int blockNumber)
         
         while (block.isValid() && block.blockNumber() <= endBlock) {
             block.setVisible(false);
+            block.setLineCount(0);
             block = block.next();
         }
         
@@ -231,6 +232,7 @@ bool CodeFoldingManager::unfoldBlock(int blockNumber)
         
         while (block.isValid() && block.blockNumber() <= endBlock) {
             block.setVisible(true);
+            block.setLineCount(1);
             block = block.next();
         }
         
@@ -251,6 +253,7 @@ void CodeFoldingManager::toggleFoldAtLine(int line)
         
         while (block.isValid() && block.blockNumber() <= endBlock) {
             block.setVisible(true);
+            block.setLineCount(1);
             block = block.next();
         }
     } else if (isFoldable(line)) {
@@ -261,6 +264,7 @@ void CodeFoldingManager::toggleFoldAtLine(int line)
         
         while (block.isValid() && block.blockNumber() <= endBlock) {
             block.setVisible(false);
+            block.setLineCount(0);
             block = block.next();
         }
     }
@@ -282,6 +286,7 @@ void CodeFoldingManager::foldAll()
                 
                 while (innerBlock.isValid() && innerBlock.blockNumber() <= endBlock) {
                     innerBlock.setVisible(false);
+                    innerBlock.setLineCount(0);
                     innerBlock = innerBlock.next();
                 }
             }
@@ -299,6 +304,7 @@ void CodeFoldingManager::unfoldAll()
     QTextBlock block = m_document->begin();
     while (block.isValid()) {
         block.setVisible(true);
+        block.setLineCount(1);
         block = block.next();
     }
 }
@@ -323,6 +329,7 @@ void CodeFoldingManager::foldToLevel(int level)
                 
                 while (innerBlock.isValid() && innerBlock.blockNumber() <= endBlock) {
                     innerBlock.setVisible(false);
+                    innerBlock.setLineCount(0);
                     innerBlock = innerBlock.next();
                 }
             }
@@ -506,6 +513,7 @@ void CodeFoldingManager::foldComments()
             
             while (innerBlock.isValid() && innerBlock.blockNumber() <= endBlock) {
                 innerBlock.setVisible(false);
+                innerBlock.setLineCount(0);
                 innerBlock = innerBlock.next();
             }
         }
@@ -532,6 +540,7 @@ void CodeFoldingManager::unfoldComments()
         
         while (block.isValid() && block.blockNumber() <= endBlock) {
             block.setVisible(true);
+            block.setLineCount(1);
             block = block.next();
         }
     }

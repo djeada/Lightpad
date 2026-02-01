@@ -52,6 +52,7 @@
 #include "../run_templates/runtemplatemanager.h"
 #include "../format_templates/formattemplatemanager.h"
 #include "../syntax/syntaxpluginregistry.h"
+#include "../dap/debugsettings.h"
 #include "ui_mainwindow.h"
 #include "../completion/completionengine.h"
 #include "../completion/completionproviderregistry.h"
@@ -645,6 +646,51 @@ void MainWindow::setHighlightOverrideForFile(const QString& filePath, const QStr
     saveHighlightOverridesForDir(fileInfo.absoluteDir().path());
 }
 
+void MainWindow::ensureProjectSettings(const QString& path)
+{
+    if (path.isEmpty()) {
+        return;
+    }
+
+    QFileInfo rootInfo(path);
+    if (!rootInfo.exists() || !rootInfo.isDir()) {
+        LOG_WARNING(QString("Skipping project settings initialization for invalid path: %1").arg(path));
+        return;
+    }
+
+    QDir rootDir(path);
+    QFileInfo configInfo(rootDir.filePath(".lightpad"));
+    if (configInfo.exists() && !configInfo.isDir()) {
+        LOG_ERROR(QString(".lightpad exists but is not a directory: %1").arg(configInfo.absoluteFilePath()));
+        return;
+    }
+
+    if (!rootDir.exists(".lightpad")) {
+        if (!rootDir.mkpath(".lightpad")) {
+            LOG_ERROR(QString("Failed to create project config directory: %1").arg(path + "/.lightpad"));
+            return;
+        }
+    }
+
+    QString configDir = rootDir.filePath(".lightpad");
+    QString runConfigPath = configDir + "/run_config.json";
+    if (!QFileInfo(runConfigPath).exists()) {
+        RunTemplateManager::instance().saveAssignmentsToDir(path);
+    }
+
+    QString formatConfigPath = configDir + "/format_config.json";
+    if (!QFileInfo(formatConfigPath).exists()) {
+        FormatTemplateManager::instance().saveAssignmentsToDir(path);
+    }
+
+    QString highlightConfigPath = configDir + "/highlight_config.json";
+    if (!QFileInfo(highlightConfigPath).exists()) {
+        saveHighlightOverridesForDir(path);
+    }
+
+    DebugSettings::instance().initialize(path);
+}
+
 template <typename... Args>
 void MainWindow::updateAllTextAreas(void (TextArea::*f)(Args... args), Args... args)
 {
@@ -876,11 +922,11 @@ void MainWindow::closeTabPage(QString filePath)
 
 void MainWindow::on_actionToggle_Full_Screen_triggered()
 {
-    if (isMaximized())
-        showNormal();
-
+    const auto state = windowState();
+    if (state & Qt::WindowFullScreen)
+        setWindowState(state & ~Qt::WindowFullScreen);
     else
-        showMaximized();
+        setWindowState(state | Qt::WindowFullScreen);
 }
 
 void MainWindow::on_actionQuit_triggered()
@@ -2947,6 +2993,10 @@ void MainWindow::setProjectRootPath(const QString& path)
         loadTreeStateFromSettings(path);
     }
 
+    if (!path.isEmpty()) {
+        ensureProjectSettings(path);
+    }
+
     ensureFileTreeModel();
     if (m_fileTreeModel) {
         QString rootPath = path.isEmpty() ? QDir::home().path() : path;
@@ -3047,12 +3097,14 @@ void MainWindow::registerTreeView(LightpadTreeView* treeView)
 
     // Track expanded/collapsed state for persistence only
     // With a single shared model, we don't need to sync between views
+    QObject::disconnect(treeView, &QTreeView::expanded, this, nullptr);
+    QObject::disconnect(treeView, &QTreeView::collapsed, this, nullptr);
     connect(treeView, &QTreeView::expanded, this, [this](const QModelIndex& index) {
         trackTreeExpandedState(index, true);
-    }, Qt::UniqueConnection);
+    });
     connect(treeView, &QTreeView::collapsed, this, [this](const QModelIndex& index) {
         trackTreeExpandedState(index, false);
-    }, Qt::UniqueConnection);
+    });
 
     // Apply initial state to this view
     applyTreeStateToView(treeView);
