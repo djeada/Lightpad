@@ -124,6 +124,13 @@ public:
      */
     static QString substituteVariables(const QString& input, const QString& filePath);
 
+    /**
+     * @brief Save format assignments for a directory
+     * @param dirPath Path to the directory
+     * @return true if the assignments were saved successfully
+     */
+    bool saveAssignmentsToDir(const QString& dirPath) const;
+
 signals:
     /**
      * @brief Emitted when templates are loaded or reloaded
@@ -149,7 +156,6 @@ private:
     QString getConfigDirForFile(const QString& filePath) const;
     QString getConfigFileForDir(const QString& dirPath) const;
     bool loadAssignmentsFromDir(const QString& dirPath) const;
-    bool saveAssignmentsToDir(const QString& dirPath) const;
     
     QList<FormatTemplate> m_templates;
     mutable QMap<QString, FileFormatAssignment> m_assignments; // filePath -> assignment

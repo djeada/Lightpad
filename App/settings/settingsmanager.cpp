@@ -9,6 +9,7 @@
 #include <QJsonValue>
 #include <QStandardPaths>
 #include <QCoreApplication>
+#include <functional>
 
 SettingsManager& SettingsManager::instance()
 {
@@ -207,9 +208,41 @@ QVariant SettingsManager::getValue(const QString& key, const QVariant& defaultVa
 
 void SettingsManager::setValue(const QString& key, const QVariant& value)
 {
-    // For now, only support top-level keys
-    // TODO: Add support for nested keys
-    m_settings[key] = QJsonValue::fromVariant(value);
+    // Support dot notation for nested keys
+    QStringList keys = key.split('.');
+    
+    if (keys.isEmpty()) {
+        return;
+    }
+    
+    // For single-level keys, use direct assignment
+    if (keys.size() == 1) {
+        m_settings[key] = QJsonValue::fromVariant(value);
+        m_dirty = true;
+        emit settingChanged(key, value);
+        return;
+    }
+    
+    // For nested keys, recursively build the object hierarchy
+    std::function<void(QJsonObject&, int)> setNested = [&](QJsonObject& obj, int depth) {
+        if (depth >= keys.size() - 1) {
+            obj[keys[depth]] = QJsonValue::fromVariant(value);
+            return;
+        }
+        
+        QString currentKey = keys[depth];
+        QJsonObject nested;
+        
+        if (obj.contains(currentKey) && obj.value(currentKey).isObject()) {
+            nested = obj.value(currentKey).toObject();
+        }
+        
+        setNested(nested, depth + 1);
+        obj[currentKey] = nested;
+    };
+    
+    setNested(m_settings, 0);
+    
     m_dirty = true;
     emit settingChanged(key, value);
 }
