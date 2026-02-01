@@ -14,6 +14,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDockWidget>
+#include <QSizePolicy>
 #include <cstdio>
 
 #include "panels/findreplacepanel.h"
@@ -90,6 +91,8 @@ MainWindow::MainWindow(QWidget* parent)
 {
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
+    ui->menubar->setNativeMenuBar(false);
+
     showMaximized();
 
     auto layout = qobject_cast<QVBoxLayout*>(ui->centralwidget->layout());
@@ -97,8 +100,11 @@ MainWindow::MainWindow(QWidget* parent)
         int tabIndex = layout->indexOf(ui->tabWidget);
         layout->removeWidget(ui->tabWidget);
         m_splitEditorContainer = new SplitEditorContainer(ui->centralwidget);
+        m_splitEditorContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         m_splitEditorContainer->adoptTabWidget(ui->tabWidget);
         layout->insertWidget(tabIndex >= 0 ? tabIndex : 0, m_splitEditorContainer);
+        layout->setStretch(layout->indexOf(m_splitEditorContainer), 1);
+        layout->setStretch(layout->indexOf(ui->backgroundBottom), 0);
         connect(m_splitEditorContainer, &SplitEditorContainer::currentGroupChanged, this,
             [this](LightpadTabWidget* tabWidget) {
                 updateTabWidgetContext(tabWidget, tabWidget ? tabWidget->currentIndex() : -1);
@@ -2453,13 +2459,16 @@ void MainWindow::setTheme(Theme theme)
 
         // Menu bar styling with better spacing
         "QMenuBar { "
-            "background-color: " + bgColor + "; "
+            "background-color: " + surfaceColor + "; "
+            "border-bottom: 1px solid " + borderColor + "; "
             "spacing: 4px; "
-            "padding: 2px 4px; "
+            "padding: 4px 6px; "
+            "min-height: 28px; "
         "}"
         "QMenuBar::item { "
             "color: " + fgColor + "; "
             "padding: 6px 10px; "
+            "margin: 0 2px; "
             "border-radius: 6px; "
         "}"
         "QMenuBar::item:selected { "
