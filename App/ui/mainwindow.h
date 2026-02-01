@@ -93,7 +93,6 @@ private slots:
     void on_actionOpen_Project_triggered();
     void on_actionSave_triggered();
     void on_actionSave_as_triggered();
-    void on_actionToggle_Menu_Bar_triggered();
     void on_actionReplace_in_file_triggered();
     void on_languageHighlight_clicked();
     void on_actionAbout_triggered();

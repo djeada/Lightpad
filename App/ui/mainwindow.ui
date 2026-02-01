@@ -383,11 +383,6 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <string>Toggle Full Screen</string>
    </property>
   </action>
-  <action name="actionToggle_Menu_Bar">
-   <property name="text">
-    <string>Toggle Menu Bar</string>
-   </property>
-  </action>
   <action name="actionIncrease_Font_Size">
    <property name="text">
     <string>Increase Font Size</string>
