@@ -20,6 +20,9 @@ class Preferences;
 class CompletionEngine;
 class SplitEditorContainer;
 class ImageViewer;
+class GitIntegration;
+class SourceControlPanel;
+class QDockWidget;
 #ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
 #endif
@@ -106,6 +109,7 @@ private slots:
     void on_actionFocus_Previous_Group_triggered();
     void on_actionUnsplit_All_triggered();
     void on_actionToggle_Terminal_triggered();
+    void on_actionToggle_Source_Control_triggered();
     
     // Text transformation actions
     void on_actionTransform_Uppercase_triggered();
@@ -116,6 +120,7 @@ private slots:
     
     // View actions
     void on_actionToggle_Word_Wrap_triggered();
+    void on_actionToggle_Vim_Mode_triggered();
     void on_actionFold_Current_triggered();
     void on_actionUnfold_Current_triggered();
     void on_actionFold_All_triggered();
@@ -152,6 +157,9 @@ private:
     
     // Auto-save
     class AutoSaveManager* autoSaveManager;
+    GitIntegration* m_gitIntegration;
+    SourceControlPanel* sourceControlPanel;
+    QDockWidget* sourceControlDock;
     
     // Split editor views
     SplitEditorContainer* m_splitEditorContainer;
@@ -186,6 +194,10 @@ private:
     void recordNavigationLocation();
     void setupNavigationHistory();
     void setupAutoSave();
+    void setupGitIntegration();
+    void updateGitIntegrationForPath(const QString& path);
+    void applyGitIntegrationToAllPages();
+    void ensureSourceControlPanel();
     void updateProblemsStatusLabel(int errors, int warnings, int infos);
     void setMainWindowTitle(QString title);
     void setFilePathAsTabText(QString filePath);
@@ -219,6 +231,7 @@ private:
 public:
     void setProjectRootPath(const QString& path);
     QString getProjectRootPath() const;
+    GitIntegration* getGitIntegration() const;
 };
 
 const int defaultTabWidth = 4;

@@ -148,6 +148,9 @@ void LightpadTabWidget::addNewTab()
     if (mainWindow) {
         LightpadPage* newPage = new LightpadPage(this);
         newPage->setMainWindow(mainWindow);
+        if (mainWindow->getGitIntegration()) {
+            newPage->setGitIntegration(mainWindow->getGitIntegration());
+        }
         
         // Propagate project root path to the new tab
         QString projectRoot = mainWindow->getProjectRootPath();
@@ -167,8 +170,12 @@ void LightpadTabWidget::setMainWindow(MainWindow* window)
     mainWindow = window;
     QList<LightpadPage*> pages = findChildren<LightpadPage*>();
 
-    for (auto& page : pages)
+    for (auto& page : pages) {
         page->setMainWindow(window);
+        if (window && window->getGitIntegration()) {
+            page->setGitIntegration(window->getGitIntegration());
+        }
+    }
 
     if (count() <= 1)
         addNewTab();

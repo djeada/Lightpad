@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QDockWidget>
 #include <cstdio>
 
 #include "panels/findreplacepanel.h"
@@ -33,6 +34,7 @@
 #include "dialogs/recentfilesdialog.h"
 #include "panels/terminaltabwidget.h"
 #include "panels/breadcrumbwidget.h"
+#include "panels/sourcecontrolpanel.h"
 #include "../core/textarea.h"
 #include "../core/recentfilesmanager.h"
 #include "../core/navigationhistory.h"
@@ -52,6 +54,7 @@
 #include "viewers/pdfviewer.h"
 #endif
 #include "../settings/settingsmanager.h"
+#include "../git/gitintegration.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -77,6 +80,9 @@ MainWindow::MainWindow(QWidget* parent)
     , navigationHistory(nullptr)
     , autoSaveManager(nullptr)
     , m_splitEditorContainer(nullptr)
+    , m_gitIntegration(nullptr)
+    , sourceControlPanel(nullptr)
+    , sourceControlDock(nullptr)
 {
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
@@ -117,6 +123,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupFileQuickOpen();
     setupRecentFilesDialog();
     setupBreadcrumb();
+    setupGitIntegration();
     loadSettings();
     setWindowTitle("LightPad");
 }
@@ -173,6 +180,9 @@ void MainWindow::loadSettings()
 
     updateAllTextAreas(&TextArea::loadSettings, settings);
     setTheme(settings.theme);
+    if (ui->actionToggle_Vim_Mode) {
+        ui->actionToggle_Vim_Mode->setChecked(settings.vimModeEnabled);
+    }
     
     // Restore last session: project path and open tabs
     QString lastProject = globalSettings.getValue("lastProjectPath", "").toString();
@@ -428,6 +438,10 @@ void MainWindow::updateAllTextAreas(void (TextArea::*f)(Args... args), Args... a
     auto textAreas = ui->tabWidget->findChildren<TextArea*>();
     for (auto& textArea : textAreas)
         (textArea->*f)(args...);
+
+    if (ui->actionToggle_Vim_Mode) {
+        ui->actionToggle_Vim_Mode->setChecked(settings.vimModeEnabled);
+    }
 }
 
 void MainWindow::updateAllTextAreas(void (TextArea::*f)(const Theme&), const Theme& theme)
@@ -549,6 +563,10 @@ void MainWindow::openFileAndAddToNewTab(QString filePath)
     QFileInfo fileInfo(filePath);
     if (filePath.isEmpty() || !fileInfo.exists() || fileInfo.isDir())
         return;
+
+    if (m_projectRootPath.isEmpty()) {
+        updateGitIntegrationForPath(filePath);
+    }
 
     //check if file not already open (including viewer tabs)
     for (int i = 0; i < ui->tabWidget->count(); i++) {
@@ -1050,6 +1068,38 @@ void MainWindow::showProblemsPanel()
     problemsPanel->setVisible(!problemsPanel->isVisible());
 }
 
+void MainWindow::ensureSourceControlPanel()
+{
+    if (sourceControlDock) {
+        return;
+    }
+
+    sourceControlPanel = new SourceControlPanel(this);
+    sourceControlPanel->setGitIntegration(m_gitIntegration);
+    sourceControlPanel->setWorkingPath(m_projectRootPath.isEmpty() ? QDir::currentPath() : m_projectRootPath);
+
+    connect(sourceControlPanel, &SourceControlPanel::fileOpenRequested, this,
+            [this](const QString& filePath) { openFileAndAddToNewTab(filePath); });
+    connect(sourceControlPanel, &SourceControlPanel::repositoryInitialized, this,
+            [this](const QString& path) {
+                setProjectRootPath(path);
+                updateGitIntegrationForPath(path);
+            });
+
+    sourceControlDock = new QDockWidget(tr("Source Control"), this);
+    sourceControlDock->setObjectName("sourceControlDock");
+    sourceControlDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    sourceControlDock->setWidget(sourceControlPanel);
+    addDockWidget(Qt::RightDockWidgetArea, sourceControlDock);
+    sourceControlDock->hide();
+
+    connect(sourceControlDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (ui->actionToggle_Source_Control) {
+            ui->actionToggle_Source_Control->setChecked(visible);
+        }
+    });
+}
+
 void MainWindow::showCommandPalette()
 {
     if (commandPalette) {
@@ -1424,6 +1474,52 @@ void MainWindow::setupAutoSave()
     // Auto-save is disabled by default, can be enabled via settings
 }
 
+void MainWindow::setupGitIntegration()
+{
+    if (m_gitIntegration) {
+        return;
+    }
+
+    m_gitIntegration = new GitIntegration(this);
+    updateGitIntegrationForPath(QDir::currentPath());
+}
+
+void MainWindow::updateGitIntegrationForPath(const QString& path)
+{
+    if (!m_gitIntegration || path.isEmpty()) {
+        return;
+    }
+
+    bool isRepo = m_gitIntegration->setRepositoryPath(path);
+    if (!isRepo) {
+        m_gitIntegration->setWorkingPath(path);
+    } else {
+        m_gitIntegration->setWorkingPath(m_gitIntegration->repositoryPath());
+    }
+
+    applyGitIntegrationToAllPages();
+    m_gitIntegration->refresh();
+
+    if (sourceControlPanel) {
+        sourceControlPanel->setWorkingPath(isRepo ? m_gitIntegration->repositoryPath() : path);
+        sourceControlPanel->refresh();
+    }
+}
+
+void MainWindow::applyGitIntegrationToAllPages()
+{
+    if (!m_gitIntegration) {
+        return;
+    }
+
+    for (int i = 0; i < ui->tabWidget->count(); i++) {
+        auto page = ui->tabWidget->getPage(i);
+        if (page) {
+            page->setGitIntegration(m_gitIntegration);
+        }
+    }
+}
+
 void MainWindow::updateProblemsStatusLabel(int errors, int warnings, int infos)
 {
     if (problemsStatusLabel) {
@@ -1636,6 +1732,7 @@ void MainWindow::setupTextArea()
         getCurrentTextArea()->setMainWindow(this);
         getCurrentTextArea()->setFontSize(settings.mainFont.pointSize());
         getCurrentTextArea()->setTabWidth(settings.tabWidth);
+        getCurrentTextArea()->setVimModeEnabled(settings.vimModeEnabled);
         
         // Setup new completion system (preferred)
         if (m_completionEngine) {
@@ -1857,6 +1954,17 @@ void MainWindow::on_actionToggle_Terminal_triggered()
     ui->actionToggle_Terminal->setChecked(!visible);
 }
 
+void MainWindow::on_actionToggle_Source_Control_triggered()
+{
+    ensureSourceControlPanel();
+
+    bool visible = sourceControlDock->isVisible();
+    sourceControlDock->setVisible(!visible);
+    if (ui->actionToggle_Source_Control) {
+        ui->actionToggle_Source_Control->setChecked(!visible);
+    }
+}
+
 // ============================================================================
 // Text Transformation Actions
 // ============================================================================
@@ -1913,6 +2021,15 @@ void MainWindow::on_actionToggle_Word_Wrap_triggered()
         textArea->setWordWrapEnabled(!enabled);
         ui->actionToggle_Word_Wrap->setChecked(!enabled);
     }
+}
+
+void MainWindow::on_actionToggle_Vim_Mode_triggered()
+{
+    bool enabled = !settings.vimModeEnabled;
+    updateAllTextAreas(&TextArea::setVimModeEnabled, enabled);
+    settings.vimModeEnabled = enabled;
+    ui->actionToggle_Vim_Mode->setChecked(enabled);
+    saveSettings();
 }
 
 void MainWindow::on_actionFold_Current_triggered()
@@ -2432,9 +2549,18 @@ void MainWindow::setProjectRootPath(const QString& path)
             }
         }
     }
+
+    if (!path.isEmpty()) {
+        updateGitIntegrationForPath(path);
+    }
 }
 
 QString MainWindow::getProjectRootPath() const
 {
     return m_projectRootPath;
+}
+
+GitIntegration* MainWindow::getGitIntegration() const
+{
+    return m_gitIntegration;
 }
