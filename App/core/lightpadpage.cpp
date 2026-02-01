@@ -4,6 +4,9 @@
 #include "../run_templates/runtemplatemanager.h"
 #include "../git/gitintegration.h"
 #include <QDebug>
+#include <QDir>
+#include <QFileInfo>
+#include <QtGlobal>
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QMenu>
@@ -174,7 +177,13 @@ void LightpadTreeView::dragMoveEvent(QDragMoveEvent* event)
 
 void LightpadTreeView::dropEvent(QDropEvent* event)
 {
-    QModelIndex dropIndex = indexAt(event->pos());
+    QPoint dropPos =
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        event->position().toPoint();
+#else
+        event->pos();
+#endif
+    QModelIndex dropIndex = indexAt(dropPos);
     
     if (!dropIndex.isValid()) {
         event->ignore();
@@ -265,6 +274,7 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
     , textArea(nullptr)
     , minimap(nullptr)
     , model(nullptr)
+    , m_ownsModel(true)
     , m_gitIntegration(nullptr)
     , filePath("")
     , projectRootPath("")
@@ -317,7 +327,11 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
         }
 
         if (model->isDir(index)) {
-            treeView->setExpanded(index, !treeView->isExpanded(index));
+            if (treeView->isExpanded(index)) {
+                treeView->collapse(index);
+            } else {
+                treeView->expand(index);
+            }
             treeView->setCurrentIndex(index);
         }
     });
@@ -358,6 +372,12 @@ bool LightpadPage::isMinimapVisible() const
 void LightpadPage::setModelRootIndex(QString path)
 {
     treeView->setRootIndex(model->index(path));
+    if (mainWindow) {
+        auto* view = qobject_cast<LightpadTreeView*>(treeView);
+        if (view) {
+            mainWindow->registerTreeView(view);
+        }
+    }
 }
 
 void LightpadPage::setCustomContentWidget(QWidget* widget)
@@ -387,10 +407,31 @@ void LightpadPage::setMainWindow(MainWindow* window)
 
     if (textArea) {
         textArea->setMainWindow(mainWindow);
-        textArea->setFontSize(mainWindow->getFontSize());
+        textArea->setFont(mainWindow->getFont());
         textArea->setTabWidth(mainWindow->getTabWidth());
         textArea->setVimModeEnabled(mainWindow->getSettings().vimModeEnabled);
     }
+
+    if (mainWindow) {
+        auto* sharedModel = mainWindow->getFileTreeModel();
+        if (sharedModel) {
+            setSharedFileSystemModel(sharedModel);
+        }
+        auto* view = qobject_cast<LightpadTreeView*>(treeView);
+        if (view) {
+            mainWindow->registerTreeView(view);
+        }
+    }
+}
+
+void LightpadPage::setSharedFileSystemModel(GitFileSystemModel* sharedModel)
+{
+    if (!sharedModel || model == sharedModel) {
+        return;
+    }
+    model = sharedModel;
+    m_ownsModel = false;
+    updateModel();
 }
 
 void LightpadPage::setFilePath(QString path)
@@ -412,11 +453,17 @@ void LightpadPage::closeTabPage(QString path)
 
 void LightpadPage::updateModel()
 {
-    // Preserve the current root path if one is set
-    QString currentRootPath = projectRootPath.isEmpty() ? QDir::home().path() : projectRootPath;
+    if (!model) {
+        model = new GitFileSystemModel(this);
+        m_ownsModel = true;
+    }
     
-    model = new GitFileSystemModel(this);
-    model->setRootPath(currentRootPath);
+    if (m_ownsModel) {
+        // Preserve the current root path if one is set
+        QString currentRootPath = projectRootPath.isEmpty() ? QDir::home().path() : projectRootPath;
+        model->setRootPath(currentRootPath);
+        model->setRootHeaderLabel(projectRootPath);
+    }
     
     // Set git integration if available
     if (m_gitIntegration) {
@@ -431,8 +478,9 @@ void LightpadPage::updateModel()
     
     // Restore the root index if project root is set
     if (!projectRootPath.isEmpty()) {
-        model->setRootHeaderLabel(projectRootPath);
         treeView->setRootIndex(model->index(projectRootPath));
+    } else {
+        treeView->setRootIndex(QModelIndex());
     }
 
     if (!projectRootPath.isEmpty()) {
@@ -440,7 +488,6 @@ void LightpadPage::updateModel()
         treeView->setHeaderHidden(false);
         treeView->header()->setStretchLastSection(true);
     } else {
-        model->setRootHeaderLabel(QString());
         treeView->setHeaderHidden(true);
     }
 }
@@ -504,6 +551,11 @@ void LightpadPage::setProjectRootPath(const QString& path)
     if (model) {
         model->setRootHeaderLabel(projectRootPath);
         treeView->setHeaderHidden(projectRootPath.isEmpty());
+        if (projectRootPath.isEmpty()) {
+            treeView->setRootIndex(QModelIndex());
+        } else {
+            treeView->setRootIndex(model->index(projectRootPath));
+        }
     }
 }
 

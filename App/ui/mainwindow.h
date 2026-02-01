@@ -19,13 +19,17 @@ class TextArea;
 class QCompleter;
 class Preferences;
 class CompletionEngine;
+class QTreeView;
+class QModelIndex;
 class SplitEditorContainer;
 class LightpadTabWidget;
 class ImageViewer;
 class GitIntegration;
+class GitFileSystemModel;
 class SourceControlPanel;
 class QDockWidget;
 class VimMode;
+class LightpadTreeView;
 #ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
 #endif
@@ -203,6 +207,19 @@ private:
     void setupGitIntegration();
     void updateGitIntegrationForPath(const QString& path);
     void applyGitIntegrationToAllPages();
+    void ensureFileTreeModel();
+    void syncTreeExpandedState(const QModelIndex& index, bool expanded);
+    void syncTreeCurrentIndex(const QModelIndex& index);
+    void syncTreeScrollState(QTreeView* treeView);
+    void applyTreeStateToView(QTreeView* treeView);
+    void applyTreeExpandedStateToViews();
+    void applyTreeCollapseToViews(const QString& path);
+    void applyTreeSelectionToViews();
+    void applyTreeScrollToViews();
+    void loadTreeStateFromSettings(const QString& rootPath);
+    void persistTreeStateToSettings();
+    QList<LightpadTreeView*> allTreeViews() const;
+    void expandIndexInView(QTreeView* treeView, const QModelIndex& index);
     void ensureSourceControlPanel();
     void ensureStatusLabels();
     void updateProblemsStatusLabel(int errors, int warnings, int infos);
@@ -245,11 +262,18 @@ private:
     
     // Project root path for persistent treeview across all tabs
     QString m_projectRootPath;
+    GitFileSystemModel* m_fileTreeModel;
+    QSet<QString> m_treeExpandedPaths;
+    QString m_treeCurrentPath;
+    QString m_treeTopPath;
+    bool m_syncingTreeState;
 
 public:
     void setProjectRootPath(const QString& path);
     QString getProjectRootPath() const;
     GitIntegration* getGitIntegration() const;
+    GitFileSystemModel* getFileTreeModel() const;
+    void registerTreeView(LightpadTreeView* treeView);
 };
 
 const int defaultTabWidth = 4;

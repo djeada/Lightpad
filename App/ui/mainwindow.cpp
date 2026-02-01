@@ -1,8 +1,12 @@
 #include <QApplication>
 #include <QBoxLayout>
 #include <QDir>
+#include <QFileInfo>
 #include <QFileDialog>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QMessageBox>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QStackedWidget>
@@ -14,7 +18,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDockWidget>
+#include <QItemSelectionModel>
+#include <QScrollBar>
 #include <QSizePolicy>
+#include <QVBoxLayout>
+#include <QAbstractItemView>
+#include <QPointer>
 #include <cstdio>
 
 #include "panels/findreplacepanel.h"
@@ -51,6 +60,7 @@
 #include "../completion/providers/plugincompletionprovider.h"
 #include "panels/spliteditorcontainer.h"
 #include "viewers/imageviewer.h"
+#include "../filetree/gitfilesystemmodel.h"
 #ifdef HAVE_PDF_SUPPORT
 #include "viewers/pdfviewer.h"
 #endif
@@ -88,10 +98,13 @@ MainWindow::MainWindow(QWidget* parent)
     , m_gitIntegration(nullptr)
     , sourceControlPanel(nullptr)
     , sourceControlDock(nullptr)
+    , m_fileTreeModel(nullptr)
+    , m_syncingTreeState(false)
 {
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
     ui->menubar->setNativeMenuBar(false);
+    ensureFileTreeModel();
 
     showMaximized();
 
@@ -161,6 +174,15 @@ MainWindow::MainWindow(QWidget* parent)
     setupBreadcrumb();
     setupGitIntegration();
     loadSettings();
+    if (SettingsManager::instance().getValue("showSourceControlDock", true).toBool()) {
+        ensureSourceControlPanel();
+        if (sourceControlDock) {
+            sourceControlDock->show();
+        }
+        if (ui->actionToggle_Source_Control) {
+            ui->actionToggle_Source_Control->setChecked(true);
+        }
+    }
     setWindowTitle("LightPad");
 }
 
@@ -352,6 +374,8 @@ void MainWindow::loadSettings()
         setProjectRootPath(lastProject);
         QDir::setCurrent(lastProject);
     }
+
+    loadTreeStateFromSettings(m_projectRootPath);
     
     QJsonArray openTabs = globalSettings.getValue("openTabs").toJsonArray();
     for (const QJsonValue& val : openTabs) {
@@ -360,6 +384,10 @@ void MainWindow::loadSettings()
             openFileAndAddToNewTab(filePath);
         }
     }
+
+    applyTreeExpandedStateToViews();
+    applyTreeSelectionToViews();
+    applyTreeScrollToViews();
 }
 
 void MainWindow::saveSettings()
@@ -370,6 +398,9 @@ void MainWindow::saveSettings()
     // Save session state: project path and open tabs
     SettingsManager& globalSettings = SettingsManager::instance();
     globalSettings.setValue("lastProjectPath", m_projectRootPath);
+    if (sourceControlDock) {
+        globalSettings.setValue("showSourceControlDock", sourceControlDock->isVisible());
+    }
     
     QJsonArray openTabs;
     for (LightpadTabWidget* tabWidget : allTabWidgets()) {
@@ -381,6 +412,7 @@ void MainWindow::saveSettings()
         }
     }
     globalSettings.setValue("openTabs", openTabs);
+    persistTreeStateToSettings();
     globalSettings.saveSettings();
 }
 
@@ -1317,6 +1349,34 @@ void MainWindow::ensureSourceControlPanel()
 
     connect(sourceControlPanel, &SourceControlPanel::fileOpenRequested, this,
             [this](const QString& filePath) { openFileAndAddToNewTab(filePath); });
+    connect(sourceControlPanel, &SourceControlPanel::diffRequested, this,
+            [this](const QString& filePath) {
+                if (!m_gitIntegration) {
+                    return;
+                }
+                QString diff = m_gitIntegration->getFileDiff(filePath);
+                if (diff.trimmed().isEmpty()) {
+                    QMessageBox::information(this, tr("Diff"), tr("No changes to show for this file."));
+                    return;
+                }
+
+                QDialog dialog(this);
+                dialog.setWindowTitle(tr("Diff"));
+                dialog.resize(760, 520);
+                QVBoxLayout layout(&dialog);
+
+                QPlainTextEdit diffView(&dialog);
+                diffView.setReadOnly(true);
+                diffView.setPlainText(diff);
+                diffView.setStyleSheet("QPlainTextEdit { background: #0d1117; color: #e6edf3; border: 1px solid #30363d; }");
+                layout.addWidget(&diffView, 1);
+
+                QDialogButtonBox buttons(QDialogButtonBox::Close, &dialog);
+                connect(&buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+                layout.addWidget(&buttons);
+
+                dialog.exec();
+            });
     connect(sourceControlPanel, &SourceControlPanel::repositoryInitialized, this,
             [this](const QString& path) {
                 setProjectRootPath(path);
@@ -1334,6 +1394,8 @@ void MainWindow::ensureSourceControlPanel()
         if (ui->actionToggle_Source_Control) {
             ui->actionToggle_Source_Control->setChecked(visible);
         }
+        SettingsManager::instance().setValue("showSourceControlDock", visible);
+        SettingsManager::instance().saveSettings();
     });
 }
 
@@ -1770,6 +1832,10 @@ void MainWindow::applyGitIntegrationToAllPages()
         return;
     }
 
+    if (m_fileTreeModel) {
+        m_fileTreeModel->setGitIntegration(m_gitIntegration);
+    }
+
     for (LightpadTabWidget* tabWidget : allTabWidgets()) {
         for (int i = 0; i < tabWidget->count(); i++) {
             auto page = tabWidget->getPage(i);
@@ -1990,6 +2056,17 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget* tabWidget, int index)
     applyHighlightForFile(filePath);
 
     setupTextArea();
+
+    auto* page = tabWidget->getPage(index);
+    if (page) {
+        auto* view = qobject_cast<LightpadTreeView*>(page->getTreeView());
+        if (view) {
+            registerTreeView(view);
+            applyTreeStateToView(view);
+            applyTreeSelectionToViews();
+            applyTreeScrollToViews();
+        }
+    }
 }
 
 void MainWindow::applyTabWidgetTheme(LightpadTabWidget* tabWidget)
@@ -2043,7 +2120,7 @@ void MainWindow::setupTextArea()
     if (getCurrentTextArea()) {
         auto* textArea = getCurrentTextArea();
         textArea->setMainWindow(this);
-        textArea->setFontSize(settings.mainFont.pointSize());
+        textArea->setFont(settings.mainFont);
         textArea->setTabWidth(settings.tabWidth);
         textArea->setVimModeEnabled(settings.vimModeEnabled);
         ensureStatusLabels();
@@ -2866,7 +2943,25 @@ void MainWindow::setTheme(Theme theme)
 
 void MainWindow::setProjectRootPath(const QString& path)
 {
+    QString previousRoot = m_projectRootPath;
     m_projectRootPath = path;
+
+    if (previousRoot != path) {
+        m_treeExpandedPaths.clear();
+        m_treeCurrentPath.clear();
+        m_treeTopPath.clear();
+        loadTreeStateFromSettings(path);
+    }
+
+    ensureFileTreeModel();
+    if (m_fileTreeModel) {
+        QString rootPath = path.isEmpty() ? QDir::home().path() : path;
+        m_fileTreeModel->setRootPath(rootPath);
+        m_fileTreeModel->setRootHeaderLabel(path);
+        if (m_gitIntegration) {
+            m_fileTreeModel->setGitIntegration(m_gitIntegration);
+        }
+    }
     
     // Update all existing tabs with the new project root
     for (LightpadTabWidget* tabWidget : allTabWidgets()) {
@@ -2885,6 +2980,10 @@ void MainWindow::setProjectRootPath(const QString& path)
     if (!path.isEmpty()) {
         updateGitIntegrationForPath(path);
     }
+
+    applyTreeExpandedStateToViews();
+    applyTreeSelectionToViews();
+    applyTreeScrollToViews();
 }
 
 QString MainWindow::getProjectRootPath() const
@@ -2895,4 +2994,382 @@ QString MainWindow::getProjectRootPath() const
 GitIntegration* MainWindow::getGitIntegration() const
 {
     return m_gitIntegration;
+}
+
+GitFileSystemModel* MainWindow::getFileTreeModel() const
+{
+    return m_fileTreeModel;
+}
+
+void MainWindow::ensureFileTreeModel()
+{
+    if (m_fileTreeModel) {
+        return;
+    }
+
+    m_fileTreeModel = new GitFileSystemModel(this);
+    connect(m_fileTreeModel, &QFileSystemModel::directoryLoaded, this, [this](const QString&) {
+        applyTreeExpandedStateToViews();
+        applyTreeSelectionToViews();
+        applyTreeScrollToViews();
+    });
+    QString rootPath = m_projectRootPath.isEmpty() ? QDir::home().path() : m_projectRootPath;
+    m_fileTreeModel->setRootPath(rootPath);
+    m_fileTreeModel->setRootHeaderLabel(m_projectRootPath);
+    if (m_gitIntegration) {
+        m_fileTreeModel->setGitIntegration(m_gitIntegration);
+    }
+}
+
+QList<LightpadTreeView*> MainWindow::allTreeViews() const
+{
+    QList<LightpadTreeView*> views;
+    for (LightpadTabWidget* tabWidget : allTabWidgets()) {
+        for (int i = 0; i < tabWidget->count(); i++) {
+            auto page = tabWidget->getPage(i);
+            if (!page) {
+                continue;
+            }
+            auto* view = qobject_cast<LightpadTreeView*>(page->getTreeView());
+            if (view) {
+                views.append(view);
+            }
+        }
+    }
+    return views;
+}
+
+void MainWindow::registerTreeView(LightpadTreeView* treeView)
+{
+    if (!treeView) {
+        return;
+    }
+    ensureFileTreeModel();
+    if (!m_fileTreeModel) {
+        return;
+    }
+
+    if (treeView->model() != m_fileTreeModel) {
+        treeView->setModel(m_fileTreeModel);
+    }
+
+    connect(treeView, &QTreeView::expanded, this, [this](const QModelIndex& index) {
+        syncTreeExpandedState(index, true);
+    }, Qt::UniqueConnection);
+    connect(treeView, &QTreeView::collapsed, this, [this](const QModelIndex& index) {
+        syncTreeExpandedState(index, false);
+    }, Qt::UniqueConnection);
+
+    if (treeView->selectionModel()) {
+        connect(treeView->selectionModel(), &QItemSelectionModel::currentChanged, this,
+            [this](const QModelIndex& current, const QModelIndex&) {
+                syncTreeCurrentIndex(current);
+            }, Qt::UniqueConnection);
+    }
+
+    if (treeView->verticalScrollBar()) {
+        connect(treeView->verticalScrollBar(), &QScrollBar::valueChanged, this,
+            [this, treeView](int) {
+                syncTreeScrollState(treeView);
+            }, Qt::UniqueConnection);
+    }
+
+    applyTreeStateToView(treeView);
+    QPointer<QTreeView> viewPtr(treeView);
+    QTimer::singleShot(0, this, [this, viewPtr]() {
+        if (viewPtr) {
+            applyTreeStateToView(viewPtr);
+            applyTreeSelectionToViews();
+            applyTreeScrollToViews();
+        }
+    });
+}
+
+void MainWindow::syncTreeExpandedState(const QModelIndex& index, bool expanded)
+{
+    if (m_syncingTreeState || !m_fileTreeModel || !index.isValid()) {
+        return;
+    }
+
+    QString path = QDir::cleanPath(m_fileTreeModel->filePath(index));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    if (expanded) {
+        QString rootPath = QDir::cleanPath(m_projectRootPath);
+        QString currentPath = path;
+        while (!currentPath.isEmpty()) {
+            m_treeExpandedPaths.insert(currentPath);
+            if (!rootPath.isEmpty() && currentPath == rootPath) {
+                break;
+            }
+            QString parentPath = QFileInfo(currentPath).absolutePath();
+            if (parentPath == currentPath) {
+                break;
+            }
+            currentPath = parentPath;
+        }
+    } else {
+        QString prefix = path + "/";
+        for (auto it = m_treeExpandedPaths.begin(); it != m_treeExpandedPaths.end(); ) {
+            const QString& existing = *it;
+            if (existing == path || existing.startsWith(prefix)) {
+                it = m_treeExpandedPaths.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    applyTreeExpandedStateToViews();
+    if (!expanded) {
+        applyTreeCollapseToViews(path);
+    }
+}
+
+void MainWindow::syncTreeCurrentIndex(const QModelIndex& index)
+{
+    if (m_syncingTreeState || !m_fileTreeModel || !index.isValid()) {
+        return;
+    }
+
+    QString path = QDir::cleanPath(m_fileTreeModel->filePath(index));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    m_treeCurrentPath = path;
+    applyTreeSelectionToViews();
+}
+
+void MainWindow::syncTreeScrollState(QTreeView* treeView)
+{
+    if (m_syncingTreeState || !m_fileTreeModel || !treeView) {
+        return;
+    }
+
+    QModelIndex topIndex = treeView->indexAt(QPoint(0, 0));
+    if (!topIndex.isValid()) {
+        return;
+    }
+
+    QString path = QDir::cleanPath(m_fileTreeModel->filePath(topIndex));
+    if (path.isEmpty() || path == m_treeTopPath) {
+        return;
+    }
+
+    m_treeTopPath = path;
+    applyTreeScrollToViews();
+}
+
+void MainWindow::applyTreeStateToView(QTreeView* treeView)
+{
+    if (!treeView || !m_fileTreeModel) {
+        return;
+    }
+
+    QString normalizedRoot = QDir::cleanPath(m_projectRootPath);
+    m_syncingTreeState = true;
+    for (const QString& path : m_treeExpandedPaths) {
+        if (!normalizedRoot.isEmpty() && !path.startsWith(normalizedRoot)) {
+            continue;
+        }
+        QModelIndex idx = m_fileTreeModel->index(path);
+        if (idx.isValid()) {
+            expandIndexInView(treeView, idx);
+        }
+    }
+
+    if (!m_treeCurrentPath.isEmpty()) {
+        QModelIndex currentIdx = m_fileTreeModel->index(m_treeCurrentPath);
+        if (currentIdx.isValid()) {
+            treeView->setCurrentIndex(currentIdx);
+        }
+    }
+
+    if (!m_treeTopPath.isEmpty()) {
+        QModelIndex topIdx = m_fileTreeModel->index(m_treeTopPath);
+        if (topIdx.isValid()) {
+            treeView->scrollTo(topIdx, QAbstractItemView::PositionAtTop);
+        }
+    }
+    m_syncingTreeState = false;
+}
+
+void MainWindow::applyTreeExpandedStateToViews()
+{
+    if (m_syncingTreeState || !m_fileTreeModel) {
+        return;
+    }
+
+    m_syncingTreeState = true;
+    QString rootPath = m_projectRootPath.isEmpty() ? m_fileTreeModel->rootPath() : m_projectRootPath;
+    QString normalizedRoot = QDir::cleanPath(rootPath);
+
+    for (LightpadTreeView* view : allTreeViews()) {
+        if (!view) {
+            continue;
+        }
+        for (const QString& path : m_treeExpandedPaths) {
+            QString normalizedPath = QDir::cleanPath(path);
+            if (!normalizedRoot.isEmpty() && !normalizedPath.startsWith(normalizedRoot)) {
+                continue;
+            }
+
+            QModelIndex idx = m_fileTreeModel->index(normalizedPath);
+            if (idx.isValid()) {
+                expandIndexInView(view, idx);
+            }
+        }
+    }
+    m_syncingTreeState = false;
+}
+
+void MainWindow::applyTreeCollapseToViews(const QString& path)
+{
+    if (m_syncingTreeState || !m_fileTreeModel || path.isEmpty()) {
+        return;
+    }
+
+    QModelIndex idx = m_fileTreeModel->index(path);
+    if (!idx.isValid()) {
+        return;
+    }
+
+    m_syncingTreeState = true;
+    for (LightpadTreeView* view : allTreeViews()) {
+        if (!view) {
+            continue;
+        }
+        view->collapse(idx);
+    }
+    m_syncingTreeState = false;
+}
+
+void MainWindow::applyTreeSelectionToViews()
+{
+    if (m_syncingTreeState || !m_fileTreeModel || m_treeCurrentPath.isEmpty()) {
+        return;
+    }
+
+    QModelIndex idx = m_fileTreeModel->index(m_treeCurrentPath);
+    if (!idx.isValid()) {
+        return;
+    }
+
+    m_syncingTreeState = true;
+    for (LightpadTreeView* view : allTreeViews()) {
+        if (!view) {
+            continue;
+        }
+        view->setCurrentIndex(idx);
+        view->scrollTo(idx);
+    }
+    m_syncingTreeState = false;
+}
+
+void MainWindow::applyTreeScrollToViews()
+{
+    if (m_syncingTreeState || !m_fileTreeModel || m_treeTopPath.isEmpty()) {
+        return;
+    }
+
+    QModelIndex idx = m_fileTreeModel->index(m_treeTopPath);
+    if (!idx.isValid()) {
+        return;
+    }
+
+    m_syncingTreeState = true;
+    for (LightpadTreeView* view : allTreeViews()) {
+        if (!view) {
+            continue;
+        }
+        view->scrollTo(idx, QAbstractItemView::PositionAtTop);
+    }
+    m_syncingTreeState = false;
+}
+
+void MainWindow::expandIndexInView(QTreeView* treeView, const QModelIndex& index)
+{
+    if (!treeView || !index.isValid()) {
+        return;
+    }
+
+    QList<QModelIndex> chain;
+    QModelIndex current = index;
+    while (current.isValid()) {
+        chain.prepend(current);
+        if (current == treeView->rootIndex()) {
+            break;
+        }
+        current = current.parent();
+    }
+
+    for (const QModelIndex& item : chain) {
+        if (m_fileTreeModel && m_fileTreeModel->canFetchMore(item)) {
+            m_fileTreeModel->fetchMore(item);
+        }
+        treeView->expand(item);
+    }
+}
+
+void MainWindow::loadTreeStateFromSettings(const QString& rootPath)
+{
+    m_treeExpandedPaths.clear();
+    m_treeCurrentPath.clear();
+    m_treeTopPath.clear();
+
+    if (rootPath.isEmpty()) {
+        return;
+    }
+
+    SettingsManager& globalSettings = SettingsManager::instance();
+    QJsonObject treeStates = globalSettings.getSettingsObject().value("treeStateByRoot").toObject();
+    QString normalizedRoot = QDir::cleanPath(rootPath);
+    QJsonObject state = treeStates.value(normalizedRoot).toObject();
+    if (state.isEmpty() && normalizedRoot != rootPath) {
+        state = treeStates.value(rootPath).toObject();
+    }
+    QJsonArray expanded = state.value("expanded").toArray();
+
+    for (const QJsonValue& value : expanded) {
+        QString path = QDir::cleanPath(value.toString());
+        if (!path.isEmpty() && (normalizedRoot.isEmpty() || path.startsWith(normalizedRoot))) {
+            m_treeExpandedPaths.insert(path);
+        }
+    }
+
+    QString current = QDir::cleanPath(state.value("current").toString());
+    if (!current.isEmpty() && (normalizedRoot.isEmpty() || current.startsWith(normalizedRoot))) {
+        m_treeCurrentPath = current;
+    }
+
+    QString top = QDir::cleanPath(state.value("top").toString());
+    if (!top.isEmpty() && (normalizedRoot.isEmpty() || top.startsWith(normalizedRoot))) {
+        m_treeTopPath = top;
+    }
+}
+
+void MainWindow::persistTreeStateToSettings()
+{
+    if (m_projectRootPath.isEmpty()) {
+        return;
+    }
+
+    SettingsManager& globalSettings = SettingsManager::instance();
+    QJsonObject treeStates = globalSettings.getSettingsObject().value("treeStateByRoot").toObject();
+    QJsonObject state;
+
+    QJsonArray expanded;
+    for (const QString& path : m_treeExpandedPaths) {
+        expanded.append(QDir::cleanPath(path));
+    }
+    state["expanded"] = expanded;
+    state["current"] = QDir::cleanPath(m_treeCurrentPath);
+    state["top"] = QDir::cleanPath(m_treeTopPath);
+
+    QString normalizedRoot = QDir::cleanPath(m_projectRootPath);
+    treeStates[normalizedRoot.isEmpty() ? m_projectRootPath : normalizedRoot] = state;
+    globalSettings.setValue("treeStateByRoot", treeStates);
 }

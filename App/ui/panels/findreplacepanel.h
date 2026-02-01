@@ -42,6 +42,8 @@ public:
     bool isVimCommandMode() const;
     void setSearchPrefix(const QString& prefix);
     void setSearchText(const QString& text);
+
+    bool eventFilter(QObject* obj, QEvent* event) override;
     
     // Search mode
     bool isGlobalMode() const;
@@ -62,6 +64,7 @@ private slots:
     void onGlobalResultClicked(QTreeWidgetItem* item, int column);
 
 private:
+    void handleVimCommandKey(QKeyEvent* event);
     QWidget* extension;
     QTextDocument* document;
     TextArea* textArea;

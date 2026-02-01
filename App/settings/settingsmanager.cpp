@@ -55,6 +55,8 @@ void SettingsManager::initializeDefaults()
     // Session state defaults
     m_defaults["lastProjectPath"] = "";
     m_defaults["openTabs"] = QJsonArray();
+    m_defaults["treeStateByRoot"] = QJsonObject();
+    m_defaults["showSourceControlDock"] = true;
 
     // Initialize settings with defaults
     m_settings = m_defaults;

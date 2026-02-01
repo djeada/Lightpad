@@ -6,6 +6,7 @@
 #include <QKeyEvent>
 #include <QPlainTextEdit>
 #include <QMap>
+#include <QStringList>
 
 /**
  * @brief VIM editing modes
@@ -243,6 +244,12 @@ private:
     QString m_lastChange;
     int m_lastChangeCount;
     bool m_recordingChange;
+
+    // Command history (:) only
+    QStringList m_commandHistory;
+    int m_commandHistoryIndex;
+    QString m_commandDraft;
+    static const int kMaxCommandHistory = 50;
 };
 
 #endif // VIMMODE_H

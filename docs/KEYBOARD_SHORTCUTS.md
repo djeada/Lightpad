@@ -73,6 +73,7 @@ This document lists all keyboard shortcuts available in Lightpad.
 | `F11` | Toggle fullscreen |
 | `Ctrl+B` | Toggle sidebar |
 | `Ctrl+\`` | Toggle terminal |
+| `Ctrl+Shift+G` | Toggle Source Control |
 
 ## VIM Mode
 
@@ -136,6 +137,7 @@ When VIM mode is enabled, the editor uses modal editing with different shortcuts
 | `?pattern` | Search backward |
 | `:s/old/new/` | Replace in line |
 | `:%s/old/new/g` | Replace in file |
+| `↑` / `↓` | Recall previous `:` commands |
 
 ### Mode Switching
 

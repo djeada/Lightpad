@@ -21,6 +21,7 @@ VimMode::VimMode(QPlainTextEdit* editor, QObject* parent)
     , m_searchForward(true)
     , m_lastChangeCount(1)
     , m_recordingChange(false)
+    , m_commandHistoryIndex(-1)
 {
 }
 
@@ -832,23 +833,65 @@ bool VimMode::handleCommandMode(QKeyEvent* event)
     if (key == Qt::Key_Escape) {
         m_commandBuffer.clear();
         emit commandBufferChanged(m_commandBuffer);
+        m_commandHistoryIndex = -1;
+        m_commandDraft.clear();
         setMode(VimEditMode::Normal);
+        return true;
+    }
+
+    if (key == Qt::Key_Up || key == Qt::Key_Down) {
+        if (!m_commandBuffer.startsWith("/") && !m_commandBuffer.startsWith("?") &&
+            !m_commandHistory.isEmpty()) {
+            if (m_commandHistoryIndex < 0) {
+                m_commandDraft = m_commandBuffer;
+            }
+            if (key == Qt::Key_Up) {
+                if (m_commandHistoryIndex < m_commandHistory.size() - 1) {
+                    m_commandHistoryIndex++;
+                }
+            } else {
+                if (m_commandHistoryIndex >= 0) {
+                    m_commandHistoryIndex--;
+                }
+            }
+
+            if (m_commandHistoryIndex >= 0) {
+                m_commandBuffer = m_commandHistory[m_commandHistoryIndex];
+            } else {
+                m_commandBuffer = m_commandDraft;
+            }
+            emit commandBufferChanged(m_commandBuffer);
+        }
         return true;
     }
     
     if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+        if (!m_commandBuffer.isEmpty() && !m_commandBuffer.startsWith("/") && !m_commandBuffer.startsWith("?")) {
+            m_commandHistory.removeAll(m_commandBuffer);
+            m_commandHistory.prepend(m_commandBuffer);
+            while (m_commandHistory.size() > kMaxCommandHistory) {
+                m_commandHistory.removeLast();
+            }
+        }
         executeCommand(m_commandBuffer);
         m_commandBuffer.clear();
+        m_commandHistoryIndex = -1;
+        m_commandDraft.clear();
         emit commandBufferChanged(m_commandBuffer);
         setMode(VimEditMode::Normal);
         return true;
     }
-    
+
     if (key == Qt::Key_Backspace) {
         if (!m_commandBuffer.isEmpty()) {
             m_commandBuffer.chop(1);
             emit commandBufferChanged(m_commandBuffer);
+            if (m_commandHistoryIndex < 0) {
+                m_commandDraft = m_commandBuffer;
+            }
         } else {
+            m_commandHistoryIndex = -1;
+            m_commandDraft.clear();
             setMode(VimEditMode::Normal);
         }
         return true;
@@ -857,6 +900,9 @@ bool VimMode::handleCommandMode(QKeyEvent* event)
     if (!text.isEmpty()) {
         m_commandBuffer += text;
         emit commandBufferChanged(m_commandBuffer);
+        if (m_commandHistoryIndex < 0) {
+            m_commandDraft = m_commandBuffer;
+        }
     }
     
     return true;

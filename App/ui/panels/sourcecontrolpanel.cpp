@@ -11,6 +11,10 @@
 #include <QTimer>
 #include <QInputDialog>
 #include <QListWidget>
+#include <QApplication>
+#include <QClipboard>
+#include <QCursor>
+#include <QToolTip>
 
 SourceControlPanel::SourceControlPanel(QWidget* parent)
     : QWidget(parent)
@@ -121,7 +125,7 @@ void SourceControlPanel::setupNoRepoUI()
     layout->addWidget(m_noRepoLabel);
     
     // Description
-    QLabel* descLabel = new QLabel(tr("This project is not a Git repository.\nInitialize one to start tracking changes."), m_noRepoWidget);
+    QLabel* descLabel = new QLabel(tr("This project is not a Git repository.\nInitialize one or open a Git project to start tracking changes."), m_noRepoWidget);
     descLabel->setStyleSheet("color: #8b949e; font-size: 12px;");
     descLabel->setAlignment(Qt::AlignCenter);
     descLabel->setWordWrap(true);
@@ -470,6 +474,7 @@ void SourceControlPanel::setupRepoUI()
         "  border-width: 2px;"
         "}"
     );
+    connect(m_commitMessage, &QTextEdit::textChanged, this, &SourceControlPanel::onCommitMessageChanged);
     commitLayout->addWidget(m_commitMessage);
 
     // Commit options row
@@ -580,6 +585,7 @@ void SourceControlPanel::setupRepoUI()
     );
     m_stagedTree->setMinimumHeight(80);
     m_stagedTree->setMaximumHeight(150);
+    m_stagedTree->setUniformRowHeights(true);
     connect(m_stagedTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_stagedTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
     mainLayout->addWidget(m_stagedTree);
@@ -634,6 +640,7 @@ void SourceControlPanel::setupRepoUI()
         "  background: #161b22;"
         "}"
     );
+    m_changesTree->setUniformRowHeights(true);
     connect(m_changesTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_changesTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
     mainLayout->addWidget(m_changesTree, 1);
@@ -649,6 +656,7 @@ void SourceControlPanel::setGitIntegration(GitIntegration* git)
         connect(m_git, &GitIntegration::operationCompleted, this, &SourceControlPanel::onOperationCompleted);
         connect(m_git, &GitIntegration::errorOccurred, this, &SourceControlPanel::onErrorOccurred);
         connect(m_git, &GitIntegration::mergeConflictsDetected, this, &SourceControlPanel::onMergeConflictsDetected);
+        connect(m_git, &GitIntegration::statusChanged, this, &SourceControlPanel::onCommitMessageChanged);
         refresh();
     }
 }
@@ -672,11 +680,13 @@ void SourceControlPanel::refresh()
         if (m_statusLabel) m_statusLabel->setText("");
         if (m_stagedTree) m_stagedTree->clear();
         if (m_changesTree) m_changesTree->clear();
+        if (m_commitButton) m_commitButton->setEnabled(false);
         return;
     }
     
     updateBranchSelector();
     updateTree();
+    onCommitMessageChanged();
 }
 
 void SourceControlPanel::updateUIState()
@@ -687,6 +697,13 @@ void SourceControlPanel::updateUIState()
         // Show "no repository" state
         m_stackedWidget->setCurrentWidget(m_noRepoWidget);
         if (m_statusLabel) m_statusLabel->setText(tr("No Git repository"));
+        if (m_pullButton) m_pullButton->setEnabled(false);
+        if (m_pushButton) m_pushButton->setEnabled(false);
+        if (m_fetchButton) m_fetchButton->setEnabled(false);
+        if (m_stashButton) m_stashButton->setEnabled(false);
+        if (m_stageAllButton) m_stageAllButton->setEnabled(false);
+        if (m_unstageAllButton) m_unstageAllButton->setEnabled(false);
+        if (m_commitButton) m_commitButton->setEnabled(false);
     } else if (m_git->hasMergeConflicts()) {
         // Show merge conflict state
         m_stackedWidget->setCurrentWidget(m_conflictWidget);
@@ -707,9 +724,22 @@ void SourceControlPanel::updateUIState()
             }
         }
         if (m_statusLabel) m_statusLabel->setText(tr("⚠️ Merge conflicts - resolve before continuing"));
+        if (m_pullButton) m_pullButton->setEnabled(false);
+        if (m_pushButton) m_pushButton->setEnabled(false);
+        if (m_fetchButton) m_fetchButton->setEnabled(false);
+        if (m_stashButton) m_stashButton->setEnabled(false);
+        if (m_stageAllButton) m_stageAllButton->setEnabled(false);
+        if (m_unstageAllButton) m_unstageAllButton->setEnabled(false);
+        if (m_commitButton) m_commitButton->setEnabled(false);
     } else {
         // Show normal repository state
         m_stackedWidget->setCurrentWidget(m_repoWidget);
+        if (m_pullButton) m_pullButton->setEnabled(true);
+        if (m_pushButton) m_pushButton->setEnabled(true);
+        if (m_fetchButton) m_fetchButton->setEnabled(true);
+        if (m_stashButton) m_stashButton->setEnabled(true);
+        if (m_stageAllButton) m_stageAllButton->setEnabled(true);
+        if (m_unstageAllButton) m_unstageAllButton->setEnabled(true);
     }
 }
 
@@ -776,16 +806,21 @@ void SourceControlPanel::updateTree()
     int changesCount = 0;
     
     for (const GitFileInfo& file : status) {
+        QString fullPath = file.filePath;
+        if (!m_git->repositoryPath().isEmpty() && !fullPath.startsWith('/')) {
+            fullPath = m_git->repositoryPath() + "/" + file.filePath;
+        }
+
         // Check if file is staged (has index status)
         if (file.indexStatus != GitFileStatus::Clean && 
             file.indexStatus != GitFileStatus::Untracked) {
             QTreeWidgetItem* item = new QTreeWidgetItem(m_stagedTree);
             
             QString icon = statusIcon(file.indexStatus);
-            QFileInfo fileInfo(file.filePath);
+            QFileInfo fileInfo(fullPath);
             item->setText(0, QString("%1 %2").arg(icon).arg(fileInfo.fileName()));
-            item->setToolTip(0, file.filePath);
-            item->setData(0, Qt::UserRole, file.filePath);
+            item->setToolTip(0, fullPath);
+            item->setData(0, Qt::UserRole, fullPath);
             item->setData(0, Qt::UserRole + 1, true);  // Is staged
             item->setForeground(0, statusColor(file.indexStatus));
             
@@ -797,10 +832,10 @@ void SourceControlPanel::updateTree()
             QTreeWidgetItem* item = new QTreeWidgetItem(m_changesTree);
             
             QString icon = statusIcon(file.workTreeStatus);
-            QFileInfo fileInfo(file.filePath);
+            QFileInfo fileInfo(fullPath);
             item->setText(0, QString("%1 %2").arg(icon).arg(fileInfo.fileName()));
-            item->setToolTip(0, file.filePath);
-            item->setData(0, Qt::UserRole, file.filePath);
+            item->setToolTip(0, fullPath);
+            item->setData(0, Qt::UserRole, fullPath);
             item->setData(0, Qt::UserRole + 1, false);  // Not staged
             item->setForeground(0, statusColor(file.workTreeStatus));
             
@@ -811,7 +846,26 @@ void SourceControlPanel::updateTree()
     QString statusText = QString(tr("%1 staged, %2 changed")).arg(stagedCount).arg(changesCount);
     m_statusLabel->setText(statusText);
     
-    m_commitButton->setEnabled(stagedCount > 0);
+    m_commitButton->setEnabled(stagedCount > 0 && !m_commitMessage->toPlainText().trimmed().isEmpty());
+    m_stageAllButton->setEnabled(changesCount > 0);
+    m_unstageAllButton->setEnabled(stagedCount > 0);
+    if (m_changesTree) {
+        m_changesTree->setToolTip(changesCount == 0 ? tr("No local changes") : QString());
+    }
+}
+
+void SourceControlPanel::onCommitMessageChanged()
+{
+    if (!m_git || !m_git->isValidRepository()) {
+        if (m_commitButton) m_commitButton->setEnabled(false);
+        return;
+    }
+
+    int stagedCount = m_stagedTree ? m_stagedTree->topLevelItemCount() : 0;
+    bool hasMessage = m_commitMessage && !m_commitMessage->toPlainText().trimmed().isEmpty();
+    if (m_commitButton) {
+        m_commitButton->setEnabled(stagedCount > 0 && hasMessage);
+    }
 }
 
 void SourceControlPanel::onStageAllClicked()
@@ -841,6 +895,11 @@ void SourceControlPanel::onCommitClicked()
     QString message = m_commitMessage->toPlainText().trimmed();
     if (message.isEmpty()) {
         QMessageBox::warning(this, tr("Commit"), tr("Please enter a commit message."));
+        return;
+    }
+
+    if (m_amendCheckbox && m_amendCheckbox->isChecked()) {
+        QMessageBox::warning(this, tr("Commit"), tr("Amend is not supported yet."));
         return;
     }
     
@@ -879,6 +938,11 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     
     QString filePath = item->data(0, Qt::UserRole).toString();
     bool isStaged = item->data(0, Qt::UserRole + 1).toBool();
+    QString repoPath = m_git ? m_git->repositoryPath() : QString();
+    QString relativePath = filePath;
+    if (!repoPath.isEmpty() && filePath.startsWith(repoPath)) {
+        relativePath = filePath.mid(repoPath.length() + 1);
+    }
     
     QMenu menu(this);
     
@@ -917,6 +981,15 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     QAction* diffAction = menu.addAction(tr("View Diff"));
     connect(diffAction, &QAction::triggered, [this, filePath]() {
         emit diffRequested(filePath);
+    });
+
+    QAction* copyPathAction = menu.addAction(tr("Copy Path"));
+    connect(copyPathAction, &QAction::triggered, [this, filePath, relativePath]() {
+        QString value = relativePath;
+        if (!value.isEmpty()) {
+            QApplication::clipboard()->setText(value);
+            QToolTip::showText(QCursor::pos(), tr("Copied path: %1").arg(value), this);
+        }
     });
     
     menu.exec(tree->mapToGlobal(pos));

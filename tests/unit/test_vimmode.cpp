@@ -27,6 +27,7 @@ private slots:
     void testParagraphMotion();
     void testSetNoVim();
     void testSetVim();
+    void testCommandHistory();
 
 private:
     QPlainTextEdit* m_editor;
@@ -412,6 +413,29 @@ void TestVimMode::testSetVim()
     
     QVERIFY(spy.count() > 0);
     QCOMPARE(spy.takeFirst().at(0).toString(), QString("vim:on"));
+}
+
+void TestVimMode::testCommandHistory()
+{
+    m_vim->setEnabled(true);
+
+    QKeyEvent colonKey(QEvent::KeyPress, Qt::Key_Colon, Qt::NoModifier, ":");
+    m_vim->processKeyEvent(&colonKey);
+    QKeyEvent wKey(QEvent::KeyPress, Qt::Key_W, Qt::NoModifier, "w");
+    m_vim->processKeyEvent(&wKey);
+    QKeyEvent enterKey(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    m_vim->processKeyEvent(&enterKey);
+
+    QKeyEvent colonKey2(QEvent::KeyPress, Qt::Key_Colon, Qt::NoModifier, ":");
+    m_vim->processKeyEvent(&colonKey2);
+    QKeyEvent upKey(QEvent::KeyPress, Qt::Key_Up, Qt::NoModifier);
+    m_vim->processKeyEvent(&upKey);
+
+    QCOMPARE(m_vim->commandBuffer(), QString("w"));
+
+    QKeyEvent downKey(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
+    m_vim->processKeyEvent(&downKey);
+    QCOMPARE(m_vim->commandBuffer(), QString(""));
 }
 
 QTEST_MAIN(TestVimMode)

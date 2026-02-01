@@ -11,6 +11,7 @@ QList<QList<QString>> shortcuts{
     { "Close Tab", "Ctrl + W" },
     { "Save", "Ctrl + S" },
     { "SaveAs", "Ctrl + Shift + S" },
+    { "Toggle Source Control", "Ctrl + Shift + G" },
     { "Delete", "Del" },
     { "Cut", "Ctrl + X" },
     { "Copy", "Ctrl + C" },

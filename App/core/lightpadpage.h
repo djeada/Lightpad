@@ -55,6 +55,7 @@ public:
     void setModelRootIndex(QString path);
     void setCustomContentWidget(QWidget* widget);
     void setMainWindow(MainWindow* window);
+    void setSharedFileSystemModel(GitFileSystemModel* sharedModel);
     void setFilePath(QString path);
     void closeTabPage(QString path);
     void updateModel();
@@ -106,6 +107,7 @@ private:
     TextArea* textArea;
     Minimap* minimap;
     GitFileSystemModel* model;
+    bool m_ownsModel;
     GitIntegration* m_gitIntegration;
     QString filePath;
     QString projectRootPath;

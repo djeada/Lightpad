@@ -194,8 +194,8 @@ TextArea::TextArea(QWidget* parent)
     m_multiCursor = new MultiCursorHandler(this);
     m_codeFolding = new CodeFoldingManager(document());
     m_vimMode = new VimMode(this, this);
-    setupTextArea();
     mainFont = QApplication::font();
+    setupTextArea();
     document()->setDefaultFont(mainFont);
     
     auto* layout = new LineSpacingLayout(document());
@@ -235,8 +235,8 @@ TextArea::TextArea(const TextAreaSettings& settings, QWidget* parent)
     m_multiCursor = new MultiCursorHandler(this);
     m_codeFolding = new CodeFoldingManager(document());
     m_vimMode = new VimMode(this, this);
-    setupTextArea();
     mainFont = settings.mainFont;
+    setupTextArea();
     document()->setDefaultFont(mainFont);
     
     auto* layout = new LineSpacingLayout(document());
@@ -329,6 +329,12 @@ void TextArea::setFontSize(int size)
         doc->setDefaultFont(mainFont);
         applyLineSpacing(defaultLineSpacingPercent);
     }
+    if (lineNumberArea) {
+        lineNumberArea->setFont(mainFont);
+        int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
+        setViewportMargins(width, 0, 0, 0);
+        lineNumberArea->setFixedWidth(width);
+    }
 }
 
 void TextArea::setFont(QFont font)
@@ -340,6 +346,9 @@ void TextArea::setFont(QFont font)
         doc->setDefaultFont(font);
     if (lineNumberArea) {
         lineNumberArea->setFont(font);
+        int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
+        setViewportMargins(width, 0, 0, 0);
+        lineNumberArea->setFixedWidth(width);
     }
     applyLineSpacing(defaultLineSpacingPercent);
 }
