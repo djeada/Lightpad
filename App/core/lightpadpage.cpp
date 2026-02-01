@@ -273,6 +273,7 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
     auto* layoutHor = new QHBoxLayout(this);
 
     treeView = new LightpadTreeView(this);
+    treeView->setExpandsOnDoubleClick(false);
     textArea = new TextArea(this);
     minimap = new Minimap(this);
 
@@ -300,7 +301,6 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
         }
 
         if (model->isDir(index)) {
-            treeView->setExpanded(index, !treeView->isExpanded(index));
             treeView->setCurrentIndex(index);
             return;
         }
@@ -309,6 +309,17 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
         mainWindow->openFileAndAddToNewTab(path);
         treeView->clearSelection();
         treeView->setCurrentIndex(index);
+    });
+
+    QObject::connect(treeView, &QAbstractItemView::doubleClicked, this, [&](const QModelIndex& index) {
+        if (!index.isValid() || !model) {
+            return;
+        }
+
+        if (model->isDir(index)) {
+            treeView->setExpanded(index, !treeView->isExpanded(index));
+            treeView->setCurrentIndex(index);
+        }
     });
 }
 
@@ -378,6 +389,7 @@ void LightpadPage::setMainWindow(MainWindow* window)
         textArea->setMainWindow(mainWindow);
         textArea->setFontSize(mainWindow->getFontSize());
         textArea->setTabWidth(mainWindow->getTabWidth());
+        textArea->setVimModeEnabled(mainWindow->getSettings().vimModeEnabled);
     }
 }
 

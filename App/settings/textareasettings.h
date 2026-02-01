@@ -15,6 +15,7 @@ struct TextAreaSettings {
     bool showLineNumberArea;
     bool lineHighlighted;
     bool matchingBracketsHighlighted;
+    bool vimModeEnabled;
     int tabWidth;
 
     TextAreaSettings();

@@ -54,6 +54,10 @@ set(project_headers
     completion/providers/lspcompletionprovider.h
     completion/providers/plugincompletionprovider.h
     completion/providers/snippetcompletionprovider.h
+    core/editor/texttransforms.h
+    core/editor/linenumberarea.h
+    core/editor/multicursor.h
+    core/editor/codefolding.h
     dap/dapclient.h
     dap/idebugadapter.h
     dap/debugadapterregistry.h
@@ -153,6 +157,10 @@ set(project_sources
     completion/providers/lspcompletionprovider.cpp
     completion/providers/plugincompletionprovider.cpp
     completion/providers/snippetcompletionprovider.cpp
+    core/editor/texttransforms.cpp
+    core/editor/linenumberarea.cpp
+    core/editor/multicursor.cpp
+    core/editor/codefolding.cpp
     dap/dapclient.cpp
     dap/debugadapterregistry.cpp
     dap/breakpointmanager.cpp

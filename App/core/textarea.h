@@ -7,11 +7,16 @@
 #include <QSet>
 #include <functional>
 
+#include "../editor/vimmode.h"
+
 class MainWindow;
 class QSyntaxHighlighter;
 class QCompleter;
 class CompletionEngine;
 class CompletionWidget;
+class LineNumberArea;
+class MultiCursorHandler;
+class CodeFoldingManager;
 struct CompletionItem;
 struct TextAreaSettings;
 struct Theme;
@@ -19,6 +24,8 @@ struct Theme;
 class TextArea : public QPlainTextEdit {
 
     Q_OBJECT
+    
+    friend class LineNumberArea;
 
 public:
     TextArea(QWidget* parent = nullptr);
@@ -64,6 +71,7 @@ public:
     void clearExtraCursors();
     bool hasMultipleCursors() const;
     int cursorCount() const;
+    void applyToAllCursors(const std::function<void(QTextCursor&)>& operation);
     void splitSelectionIntoLines();
     void startColumnSelection(const QPoint& pos);
     void updateColumnSelection(const QPoint& pos);
@@ -98,6 +106,10 @@ public:
     void setShowIndentGuides(bool show);
     bool showIndentGuides() const;
 
+    // Vim mode
+    void setVimModeEnabled(bool enabled);
+    bool isVimModeEnabled() const;
+
     // Git diff gutter
     void setGitDiffLines(const QList<QPair<int, int>>& diffLines);  // line number, type (0=add, 1=modify, 2=delete)
     void clearGitDiffLines();
@@ -113,7 +125,7 @@ protected:
 
 private:
     MainWindow* mainWindow;
-    QWidget* lineNumberArea;
+    LineNumberArea* lineNumberArea;
     QColor highlightColor;
     QColor lineNumberAreaPenColor;
     QColor defaultPenColor;
@@ -139,23 +151,25 @@ private:
     static bool s_iconsInitialized;
     static void initializeIconCache();
 
-    // Multi-cursor state
-    QList<QTextCursor> m_extraCursors;
-    QString m_lastSelectedWord;
+    // Multi-cursor handler
+    MultiCursorHandler* m_multiCursor;
+    
+    // Code folding handler
+    CodeFoldingManager* m_codeFolding;
 
     // Column selection state
     bool m_columnSelectionActive;
     QPoint m_columnSelectionStart;
     QPoint m_columnSelectionEnd;
 
-    // Folding state
-    QSet<int> m_foldedBlocks;
-
     // Whitespace visualization
     bool m_showWhitespace;
 
     // Indent guides
     bool m_showIndentGuides;
+
+    // Vim mode
+    VimMode* m_vimMode;
 
     // Git diff gutter
     QList<QPair<int, int>> m_gitDiffLines;  // line number, type (0=add, 1=modify, 2=delete)
@@ -184,20 +198,8 @@ private slots:
     void onCompletionAccepted(const CompletionItem& item);
 
 private:
-    // Multi-cursor helpers
+    // Multi-cursor helper
     void drawExtraCursors();
-    void applyToAllCursors(const std::function<void(QTextCursor&)>& operation);
-    void mergeOverlappingCursors();
-
-    // Folding helpers
-    int findFoldEndBlock(int startBlock) const;
-    bool isFoldable(int blockNumber) const;
-    int getFoldingLevel(int blockNumber) const;
-    bool isRegionStart(int blockNumber) const;
-    bool isRegionEnd(int blockNumber) const;
-    int findRegionEndBlock(int startBlock) const;
-    bool isCommentBlockStart(int blockNumber) const;
-    int findCommentBlockEnd(int startBlock) const;
 };
 
 #endif
