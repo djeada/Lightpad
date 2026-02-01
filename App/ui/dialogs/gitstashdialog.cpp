@@ -1,4 +1,5 @@
 #include "gitstashdialog.h"
+#include "../uistylehelper.h"
 #include <QMessageBox>
 
 GitStashDialog::GitStashDialog(GitIntegration* git, QWidget* parent)
@@ -447,4 +448,48 @@ void GitStashDialog::onClearClicked()
 void GitStashDialog::onCloseClicked()
 {
     accept();
+}
+
+
+void GitStashDialog::applyTheme(const Theme& theme)
+{
+    setStyleSheet(UIStyleHelper::formDialogStyle(theme));
+    
+    // Apply group box style
+    for (QGroupBox* groupBox : findChildren<QGroupBox*>()) {
+        groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
+    }
+    
+    // Apply list widget style
+    if (m_stashList) {
+        m_stashList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
+    }
+    
+    // Apply line edit style
+    if (m_messageEdit) {
+        m_messageEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
+    }
+    
+    // Apply checkbox style
+    if (m_includeUntrackedCheckbox) {
+        m_includeUntrackedCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
+    }
+    
+    // Apply button styles
+    if (m_stashButton) {
+        m_stashButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    for (QPushButton* btn : {m_popButton, m_applyButton, m_dropButton, m_clearButton, m_closeButton}) {
+        if (btn) {
+            btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+        }
+    }
+    
+    // Apply label styles
+    if (m_statusLabel) {
+        m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+    }
+    if (m_detailsLabel) {
+        m_detailsLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+    }
 }

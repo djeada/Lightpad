@@ -1,4 +1,5 @@
 #include "formattemplateselector.h"
+#include "../uistylehelper.h"
 #include "../../format_templates/formattemplatemanager.h"
 
 #include <QFileInfo>
@@ -259,4 +260,54 @@ QStringList FormatTemplateSelector::getCustomArgs() const
         return QStringList();
     }
     return argsText.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+}
+
+
+void FormatTemplateSelector::applyTheme(const Theme& theme)
+{
+    setStyleSheet(UIStyleHelper::formDialogStyle(theme));
+    
+    // Apply group box styles
+    for (QGroupBox* groupBox : findChildren<QGroupBox*>()) {
+        groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
+    }
+    
+    // Apply search edit style
+    if (m_searchEdit) {
+        m_searchEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
+    }
+    
+    // Apply combobox style
+    if (m_languageCombo) {
+        m_languageCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+    }
+    
+    // Apply list widget style
+    if (m_templateList) {
+        m_templateList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
+    }
+    
+    // Apply line edit style
+    if (m_customArgsEdit) {
+        m_customArgsEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
+    }
+    
+    // Apply label styles
+    if (m_descriptionLabel) {
+        m_descriptionLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+    }
+    if (m_commandLabel) {
+        m_commandLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+    }
+    
+    // Apply button styles
+    if (m_okButton) {
+        m_okButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    if (m_cancelButton) {
+        m_cancelButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
+    if (m_removeButton) {
+        m_removeButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
 }
