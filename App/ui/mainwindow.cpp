@@ -99,7 +99,6 @@ MainWindow::MainWindow(QWidget* parent)
     , sourceControlPanel(nullptr)
     , sourceControlDock(nullptr)
     , m_fileTreeModel(nullptr)
-    , m_syncingTreeState(false)
 {
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
@@ -385,9 +384,8 @@ void MainWindow::loadSettings()
         }
     }
 
+    // Apply saved expanded state to all views
     applyTreeExpandedStateToViews();
-    applyTreeSelectionToViews();
-    applyTreeScrollToViews();
 }
 
 void MainWindow::saveSettings()
@@ -2062,9 +2060,7 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget* tabWidget, int index)
         auto* view = qobject_cast<LightpadTreeView*>(page->getTreeView());
         if (view) {
             registerTreeView(view);
-            applyTreeStateToView(view);
-            applyTreeSelectionToViews();
-            applyTreeScrollToViews();
+            // registerTreeView already applies initial state
         }
     }
 }
@@ -2948,8 +2944,6 @@ void MainWindow::setProjectRootPath(const QString& path)
 
     if (previousRoot != path) {
         m_treeExpandedPaths.clear();
-        m_treeCurrentPath.clear();
-        m_treeTopPath.clear();
         loadTreeStateFromSettings(path);
     }
 
@@ -2981,9 +2975,8 @@ void MainWindow::setProjectRootPath(const QString& path)
         updateGitIntegrationForPath(path);
     }
 
+    // Apply saved expanded state to all views for the new project
     applyTreeExpandedStateToViews();
-    applyTreeSelectionToViews();
-    applyTreeScrollToViews();
 }
 
 QString MainWindow::getProjectRootPath() const
@@ -3009,9 +3002,8 @@ void MainWindow::ensureFileTreeModel()
 
     m_fileTreeModel = new GitFileSystemModel(this);
     connect(m_fileTreeModel, &QFileSystemModel::directoryLoaded, this, [this](const QString&) {
+        // Apply saved expanded state when directory is loaded
         applyTreeExpandedStateToViews();
-        applyTreeSelectionToViews();
-        applyTreeScrollToViews();
     });
     QString rootPath = m_projectRootPath.isEmpty() ? QDir::home().path() : m_projectRootPath;
     m_fileTreeModel->setRootPath(rootPath);
@@ -3053,41 +3045,22 @@ void MainWindow::registerTreeView(LightpadTreeView* treeView)
         treeView->setModel(m_fileTreeModel);
     }
 
+    // Track expanded/collapsed state for persistence only
+    // With a single shared model, we don't need to sync between views
     connect(treeView, &QTreeView::expanded, this, [this](const QModelIndex& index) {
-        syncTreeExpandedState(index, true);
+        trackTreeExpandedState(index, true);
     }, Qt::UniqueConnection);
     connect(treeView, &QTreeView::collapsed, this, [this](const QModelIndex& index) {
-        syncTreeExpandedState(index, false);
+        trackTreeExpandedState(index, false);
     }, Qt::UniqueConnection);
 
-    if (treeView->selectionModel()) {
-        connect(treeView->selectionModel(), &QItemSelectionModel::currentChanged, this,
-            [this](const QModelIndex& current, const QModelIndex&) {
-                syncTreeCurrentIndex(current);
-            }, Qt::UniqueConnection);
-    }
-
-    if (treeView->verticalScrollBar()) {
-        connect(treeView->verticalScrollBar(), &QScrollBar::valueChanged, this,
-            [this, treeView](int) {
-                syncTreeScrollState(treeView);
-            }, Qt::UniqueConnection);
-    }
-
+    // Apply initial state to this view
     applyTreeStateToView(treeView);
-    QPointer<QTreeView> viewPtr(treeView);
-    QTimer::singleShot(0, this, [this, viewPtr]() {
-        if (viewPtr) {
-            applyTreeStateToView(viewPtr);
-            applyTreeSelectionToViews();
-            applyTreeScrollToViews();
-        }
-    });
 }
 
-void MainWindow::syncTreeExpandedState(const QModelIndex& index, bool expanded)
+void MainWindow::trackTreeExpandedState(const QModelIndex& index, bool expanded)
 {
-    if (m_syncingTreeState || !m_fileTreeModel || !index.isValid()) {
+    if (!m_fileTreeModel || !index.isValid()) {
         return;
     }
 
@@ -3121,46 +3094,7 @@ void MainWindow::syncTreeExpandedState(const QModelIndex& index, bool expanded)
             }
         }
     }
-
-    applyTreeExpandedStateToViews();
-    if (!expanded) {
-        applyTreeCollapseToViews(path);
-    }
-}
-
-void MainWindow::syncTreeCurrentIndex(const QModelIndex& index)
-{
-    if (m_syncingTreeState || !m_fileTreeModel || !index.isValid()) {
-        return;
-    }
-
-    QString path = QDir::cleanPath(m_fileTreeModel->filePath(index));
-    if (path.isEmpty()) {
-        return;
-    }
-
-    m_treeCurrentPath = path;
-    applyTreeSelectionToViews();
-}
-
-void MainWindow::syncTreeScrollState(QTreeView* treeView)
-{
-    if (m_syncingTreeState || !m_fileTreeModel || !treeView) {
-        return;
-    }
-
-    QModelIndex topIndex = treeView->indexAt(QPoint(0, 0));
-    if (!topIndex.isValid()) {
-        return;
-    }
-
-    QString path = QDir::cleanPath(m_fileTreeModel->filePath(topIndex));
-    if (path.isEmpty() || path == m_treeTopPath) {
-        return;
-    }
-
-    m_treeTopPath = path;
-    applyTreeScrollToViews();
+    // Note: No need to propagate to other views - they share the same model
 }
 
 void MainWindow::applyTreeStateToView(QTreeView* treeView)
@@ -3170,7 +3104,6 @@ void MainWindow::applyTreeStateToView(QTreeView* treeView)
     }
 
     QString normalizedRoot = QDir::cleanPath(m_projectRootPath);
-    m_syncingTreeState = true;
     for (const QString& path : m_treeExpandedPaths) {
         if (!normalizedRoot.isEmpty() && !path.startsWith(normalizedRoot)) {
             continue;
@@ -3180,30 +3113,14 @@ void MainWindow::applyTreeStateToView(QTreeView* treeView)
             expandIndexInView(treeView, idx);
         }
     }
-
-    if (!m_treeCurrentPath.isEmpty()) {
-        QModelIndex currentIdx = m_fileTreeModel->index(m_treeCurrentPath);
-        if (currentIdx.isValid()) {
-            treeView->setCurrentIndex(currentIdx);
-        }
-    }
-
-    if (!m_treeTopPath.isEmpty()) {
-        QModelIndex topIdx = m_fileTreeModel->index(m_treeTopPath);
-        if (topIdx.isValid()) {
-            treeView->scrollTo(topIdx, QAbstractItemView::PositionAtTop);
-        }
-    }
-    m_syncingTreeState = false;
 }
 
 void MainWindow::applyTreeExpandedStateToViews()
 {
-    if (m_syncingTreeState || !m_fileTreeModel) {
+    if (!m_fileTreeModel) {
         return;
     }
 
-    m_syncingTreeState = true;
     QString rootPath = m_projectRootPath.isEmpty() ? m_fileTreeModel->rootPath() : m_projectRootPath;
     QString normalizedRoot = QDir::cleanPath(rootPath);
 
@@ -3223,71 +3140,6 @@ void MainWindow::applyTreeExpandedStateToViews()
             }
         }
     }
-    m_syncingTreeState = false;
-}
-
-void MainWindow::applyTreeCollapseToViews(const QString& path)
-{
-    if (m_syncingTreeState || !m_fileTreeModel || path.isEmpty()) {
-        return;
-    }
-
-    QModelIndex idx = m_fileTreeModel->index(path);
-    if (!idx.isValid()) {
-        return;
-    }
-
-    m_syncingTreeState = true;
-    for (LightpadTreeView* view : allTreeViews()) {
-        if (!view) {
-            continue;
-        }
-        view->collapse(idx);
-    }
-    m_syncingTreeState = false;
-}
-
-void MainWindow::applyTreeSelectionToViews()
-{
-    if (m_syncingTreeState || !m_fileTreeModel || m_treeCurrentPath.isEmpty()) {
-        return;
-    }
-
-    QModelIndex idx = m_fileTreeModel->index(m_treeCurrentPath);
-    if (!idx.isValid()) {
-        return;
-    }
-
-    m_syncingTreeState = true;
-    for (LightpadTreeView* view : allTreeViews()) {
-        if (!view) {
-            continue;
-        }
-        view->setCurrentIndex(idx);
-        view->scrollTo(idx);
-    }
-    m_syncingTreeState = false;
-}
-
-void MainWindow::applyTreeScrollToViews()
-{
-    if (m_syncingTreeState || !m_fileTreeModel || m_treeTopPath.isEmpty()) {
-        return;
-    }
-
-    QModelIndex idx = m_fileTreeModel->index(m_treeTopPath);
-    if (!idx.isValid()) {
-        return;
-    }
-
-    m_syncingTreeState = true;
-    for (LightpadTreeView* view : allTreeViews()) {
-        if (!view) {
-            continue;
-        }
-        view->scrollTo(idx, QAbstractItemView::PositionAtTop);
-    }
-    m_syncingTreeState = false;
 }
 
 void MainWindow::expandIndexInView(QTreeView* treeView, const QModelIndex& index)
@@ -3317,8 +3169,6 @@ void MainWindow::expandIndexInView(QTreeView* treeView, const QModelIndex& index
 void MainWindow::loadTreeStateFromSettings(const QString& rootPath)
 {
     m_treeExpandedPaths.clear();
-    m_treeCurrentPath.clear();
-    m_treeTopPath.clear();
 
     if (rootPath.isEmpty()) {
         return;
@@ -3339,16 +3189,6 @@ void MainWindow::loadTreeStateFromSettings(const QString& rootPath)
             m_treeExpandedPaths.insert(path);
         }
     }
-
-    QString current = QDir::cleanPath(state.value("current").toString());
-    if (!current.isEmpty() && (normalizedRoot.isEmpty() || current.startsWith(normalizedRoot))) {
-        m_treeCurrentPath = current;
-    }
-
-    QString top = QDir::cleanPath(state.value("top").toString());
-    if (!top.isEmpty() && (normalizedRoot.isEmpty() || top.startsWith(normalizedRoot))) {
-        m_treeTopPath = top;
-    }
 }
 
 void MainWindow::persistTreeStateToSettings()
@@ -3366,8 +3206,6 @@ void MainWindow::persistTreeStateToSettings()
         expanded.append(QDir::cleanPath(path));
     }
     state["expanded"] = expanded;
-    state["current"] = QDir::cleanPath(m_treeCurrentPath);
-    state["top"] = QDir::cleanPath(m_treeTopPath);
 
     QString normalizedRoot = QDir::cleanPath(m_projectRootPath);
     treeStates[normalizedRoot.isEmpty() ? m_projectRootPath : normalizedRoot] = state;

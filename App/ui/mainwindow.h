@@ -208,14 +208,9 @@ private:
     void updateGitIntegrationForPath(const QString& path);
     void applyGitIntegrationToAllPages();
     void ensureFileTreeModel();
-    void syncTreeExpandedState(const QModelIndex& index, bool expanded);
-    void syncTreeCurrentIndex(const QModelIndex& index);
-    void syncTreeScrollState(QTreeView* treeView);
+    void trackTreeExpandedState(const QModelIndex& index, bool expanded);
     void applyTreeStateToView(QTreeView* treeView);
     void applyTreeExpandedStateToViews();
-    void applyTreeCollapseToViews(const QString& path);
-    void applyTreeSelectionToViews();
-    void applyTreeScrollToViews();
     void loadTreeStateFromSettings(const QString& rootPath);
     void persistTreeStateToSettings();
     QList<LightpadTreeView*> allTreeViews() const;
@@ -264,9 +259,6 @@ private:
     QString m_projectRootPath;
     GitFileSystemModel* m_fileTreeModel;
     QSet<QString> m_treeExpandedPaths;
-    QString m_treeCurrentPath;
-    QString m_treeTopPath;
-    bool m_syncingTreeState;
 
 public:
     void setProjectRootPath(const QString& path);
