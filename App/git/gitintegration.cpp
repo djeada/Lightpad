@@ -106,6 +106,20 @@ QString GitIntegration::executeGitCommand(const QStringList& args, bool* success
     return output;
 }
 
+QString GitIntegration::executeWordDiff(const QStringList& args) const
+{
+    if (!m_isValid) {
+        return QString();
+    }
+
+    bool success = false;
+    QString output = executeGitCommand(args, &success);
+    if (success) {
+        return output;
+    }
+    return QString();
+}
+
 void GitIntegration::updateCurrentBranch()
 {
     bool success;

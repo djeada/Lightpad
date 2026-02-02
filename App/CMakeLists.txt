@@ -74,6 +74,7 @@ set(project_headers
     ui/dialogs/recentfilesdialog.h
     ui/dialogs/filequickopen.h
     ui/dialogs/gitinitdialog.h
+    ui/dialogs/gitdiffdialog.h
     ui/dialogs/mergeconflictdialog.h
     ui/dialogs/gitremotedialog.h
     ui/dialogs/gitstashdialog.h
@@ -177,6 +178,7 @@ set(project_sources
     ui/dialogs/recentfilesdialog.cpp
     ui/dialogs/filequickopen.cpp
     ui/dialogs/gitinitdialog.cpp
+    ui/dialogs/gitdiffdialog.cpp
     ui/dialogs/mergeconflictdialog.cpp
     ui/dialogs/gitremotedialog.cpp
     ui/dialogs/gitstashdialog.cpp

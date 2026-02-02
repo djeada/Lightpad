@@ -21,6 +21,7 @@ private slots:
     void testCreateBranch();
     void testGetDiffLines();
     void testGetFileDiffStagedAndUnstaged();
+    void testWordDiffCommand();
     // Tests from HEAD (extended functionality)
     void testInitRepository();
     void testRemoteOperations();
@@ -331,6 +332,30 @@ void TestGitIntegration::testGetFileDiffStagedAndUnstaged()
     runGitCommand({"rm", "--cached", stagedFile});
     QFile::remove(m_repoPath + "/" + stagedFile);
     runGitCommand({"checkout", "--", unstagedFile});
+}
+
+void TestGitIntegration::testWordDiffCommand()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+
+    QString filePath = m_repoPath + "/initial.txt";
+    QFile file(filePath);
+    file.open(QIODevice::WriteOnly);
+    file.write("Word diff base\n");
+    file.close();
+    QVERIFY(runGitCommand({"add", "initial.txt"}));
+    QVERIFY(runGitCommand({"commit", "-m", "Base for word diff"}));
+
+    file.open(QIODevice::WriteOnly);
+    file.write("Word diff updated\n");
+    file.close();
+
+    QString diff = git.executeWordDiff({"diff", "--word-diff", "--color=never", "--", "initial.txt"});
+    QVERIFY(!diff.trimmed().isEmpty());
+    QVERIFY(diff.contains("{+updated+}"));
+
+    runGitCommand({"checkout", "--", "initial.txt"});
 }
 
 bool TestGitIntegration::runGitCommandAt(const QString& path, const QStringList& args)

@@ -1,6 +1,7 @@
 #include "sourcecontrolpanel.h"
 #include "../uistylehelper.h"
 #include "../dialogs/gitinitdialog.h"
+#include "../dialogs/gitdiffdialog.h"
 #include "../dialogs/mergeconflictdialog.h"
 #include "../dialogs/gitremotedialog.h"
 #include "../dialogs/gitstashdialog.h"
@@ -23,7 +24,6 @@
 namespace {
     constexpr int DEFAULT_HISTORY_COMMIT_COUNT = 20;
     constexpr int MAX_COMMIT_DISPLAY_LENGTH = 60;
-    constexpr int MAX_DIFF_PREVIEW_LENGTH = 2000;
     constexpr int STAGED_STATUS_ROLE = Qt::UserRole + 1;
 }
 
@@ -70,6 +70,7 @@ SourceControlPanel::SourceControlPanel(QWidget* parent)
     , m_stagedCount(0)
     , m_changesCount(0)
     , m_refreshTimer(new QTimer(this))
+    , m_theme()
 {
     m_refreshTimer->setSingleShot(true);
     m_refreshTimer->setInterval(0);
@@ -946,7 +947,6 @@ void SourceControlPanel::setupRepoUI()
         if (!item || !m_git) return;
         QString commitHash = item->data(0, Qt::UserRole).toString();
         if (!commitHash.isEmpty()) {
-            // Show commit diff in a message box for now (could be improved later)
             QString diff = m_git->getCommitDiff(commitHash);
             GitCommitInfo info = m_git->getCommitDetails(commitHash);
             
@@ -958,10 +958,11 @@ void SourceControlPanel::setupRepoUI()
                 .arg(info.body.isEmpty() ? "(No additional message)" : info.body);
             
             if (!diff.isEmpty()) {
-                message += QString("\n\n--- Diff ---\n%1").arg(diff.left(MAX_DIFF_PREVIEW_LENGTH));
-                if (diff.length() > MAX_DIFF_PREVIEW_LENGTH) {
-                    message += "\n... (truncated)";
-                }
+                GitDiffDialog dialog(m_git, commitHash, GitDiffDialog::DiffTarget::Commit, false, m_theme, this);
+                dialog.setWindowTitle(tr("Commit: %1").arg(info.shortHash));
+                dialog.setDiffText(diff);
+                dialog.exec();
+                return;
             }
             
             QMessageBox msgBox(this);
@@ -1929,6 +1930,7 @@ void SourceControlPanel::onResolveConflictsClicked()
 
 void SourceControlPanel::applyTheme(const Theme& theme)
 {
+    m_theme = theme;
     // Apply main widget style
     setStyleSheet(QString("background: %1;").arg(theme.backgroundColor.name()));
     
