@@ -15,6 +15,7 @@
 #include <QStackedWidget>
 #include <QTimer>
 #include "../../git/gitintegration.h"
+#include "../../settings/theme.h"
 
 class GitInitDialog;
 class MergeConflictDialog;
@@ -50,6 +51,11 @@ public:
      */
     void refresh();
 
+    /**
+     * @brief Apply theme to the panel
+     */
+    void applyTheme(const Theme& theme);
+
 signals:
     /**
      * @brief Emitted when user wants to open a file
@@ -59,7 +65,7 @@ signals:
     /**
      * @brief Emitted when user wants to view diff
      */
-    void diffRequested(const QString& filePath);
+    void diffRequested(const QString& filePath, bool staged);
 
     /**
      * @brief Emitted when repository is initialized
@@ -102,6 +108,8 @@ private:
     void updateBranchLabel();
     void updateUIState();
     void updateHistory();
+    void resetChangeCounts();
+    void stageOrUnstageSelectedFiles(QTreeWidget* tree, bool stage);
     QString statusIcon(GitFileStatus status) const;
     QString statusText(GitFileStatus status) const;
     QColor statusColor(GitFileStatus status) const;
@@ -146,14 +154,20 @@ private:
     QPushButton* m_pullButton;
     QPushButton* m_fetchButton;
     QPushButton* m_stashButton;
+    QLabel* m_stagedLabel;
     QTreeWidget* m_stagedTree;
+    QLabel* m_changesLabel;
     QTreeWidget* m_changesTree;
     
     // Commit history section
     QWidget* m_historyHeader;
+    QLabel* m_historyLabel;
     QTreeWidget* m_historyTree;
     QPushButton* m_historyToggleButton;
     bool m_historyExpanded;
+
+    int m_stagedCount;
+    int m_changesCount;
     
     bool m_updatingBranchSelector;
     bool m_updatingTree;

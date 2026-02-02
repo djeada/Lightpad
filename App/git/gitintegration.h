@@ -230,10 +230,10 @@ public:
 
     /**
      * @brief Get the diff output for a file
-     * @param stagedOnly When true, only show staged diff
-     * @return Diff output as a string
+     * @param filePath Path to the file
+     * @param staged When true, returns the staged diff; otherwise returns the unstaged diff
      */
-    QString getFileDiff(const QString& filePath, bool stagedOnly = false) const;
+    QString getFileDiff(const QString& filePath, bool staged = false) const;
 
     /**
      * @brief Discard changes in a file (restore to HEAD)

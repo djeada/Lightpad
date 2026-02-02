@@ -1,4 +1,5 @@
 #include "commandpalette.h"
+#include "../uistylehelper.h"
 #include <QMenu>
 #include <QApplication>
 #include <QScreen>
@@ -374,4 +375,11 @@ int CommandPalette::getRecentBonus(const QString& commandId) const
     }
     // Most recent gets highest bonus, decreasing for older commands
     return (MAX_RECENT_COMMANDS - index) * 100;
+}
+
+void CommandPalette::applyTheme(const Theme& theme)
+{
+    setStyleSheet("CommandPalette { " + UIStyleHelper::popupDialogStyle(theme) + " }");
+    m_searchBox->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
+    m_resultsList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
 }

@@ -538,7 +538,7 @@ bool GitIntegration::deleteBranch(const QString& branchName, bool force)
     return success;
 }
 
-QString GitIntegration::getFileDiff(const QString& filePath, bool stagedOnly) const
+QString GitIntegration::getFileDiff(const QString& filePath, bool staged) const
 {
     if (!m_isValid) {
         return QString();
@@ -550,7 +550,7 @@ QString GitIntegration::getFileDiff(const QString& filePath, bool stagedOnly) co
     }
     
     bool success;
-    if (stagedOnly) {
+    if (staged) {
         return executeGitCommand({"diff", "--cached", "--", relativePath}, &success);
     }
 
@@ -559,18 +559,19 @@ QString GitIntegration::getFileDiff(const QString& filePath, bool stagedOnly) co
         return diff;
     }
 
-    diff = executeGitCommand({"diff", "--cached", "--", relativePath}, &success);
-    if (!diff.isEmpty()) {
-        return diff;
+    GitFileInfo status = getFileStatus(filePath);
+    if (status.workTreeStatus == GitFileStatus::Untracked ||
+        status.indexStatus == GitFileStatus::Untracked) {
+        const QString nullDevice =
+#ifdef Q_OS_WIN
+            "NUL";
+#else
+            "/dev/null";
+#endif
+        return executeGitCommand({"diff", "--no-index", "--", nullDevice, relativePath}, &success);
     }
 
-    const QString nullDevice =
-#ifdef Q_OS_WIN
-        "NUL";
-#else
-        "/dev/null";
-#endif
-    return executeGitCommand({"diff", "--no-index", "--", nullDevice, relativePath}, &success);
+    return diff;
 }
 
 bool GitIntegration::discardChanges(const QString& filePath)

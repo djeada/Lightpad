@@ -9,6 +9,7 @@
 #include <QHBoxLayout>
 #include <QCheckBox>
 #include <QGroupBox>
+#include "../../settings/theme.h"
 
 /**
  * @brief Dialog for initializing a new Git repository
@@ -58,6 +59,13 @@ private:
     void setupUI();
     void applyStyles();
 
+public:
+    /**
+     * @brief Apply theme to the dialog
+     */
+    void applyTheme(const Theme& theme);
+
+private:
     QString m_projectPath;
     QLineEdit* m_pathEdit;
     QPushButton* m_browseButton;

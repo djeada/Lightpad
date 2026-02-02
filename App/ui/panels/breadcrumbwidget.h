@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QMenu>
+#include "../../settings/theme.h"
 
 /**
  * @brief Breadcrumb navigation widget showing file path segments
@@ -34,6 +35,11 @@ public:
      */
     void clear();
 
+    /**
+     * @brief Apply theme to the widget
+     */
+    void applyTheme(const Theme& theme);
+
 signals:
     /**
      * @brief Emitted when user clicks on a path segment
@@ -60,6 +66,7 @@ private:
     QString m_projectRoot;
     QList<QPushButton*> m_segments;
     QList<QLabel*> m_separators;
+    Theme m_theme;
 };
 
 #endif // BREADCRUMBWIDGET_H

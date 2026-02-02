@@ -442,6 +442,11 @@ void TextArea::applySelectionPalette(const Theme& theme)
         lineNumberArea->setBackgroundColor(theme.lineNumberAreaColor);
         lineNumberArea->setTextColor(theme.foregroundColor);
     }
+    
+    // Update completion widget theme
+    if (m_completionWidget) {
+        m_completionWidget->applyTheme(theme);
+    }
 }
 
 QString TextArea::getSearchWord()

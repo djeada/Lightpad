@@ -1,4 +1,5 @@
 #include "mergeconflictdialog.h"
+#include "../uistylehelper.h"
 #include <QMessageBox>
 #include <QFileInfo>
 
@@ -406,5 +407,56 @@ void MergeConflictDialog::onContinueMergeClicked()
     
     if (m_git->continueMerge()) {
         accept();
+    }
+}
+
+
+void MergeConflictDialog::applyTheme(const Theme& theme)
+{
+    setStyleSheet(UIStyleHelper::formDialogStyle(theme));
+    
+    // Apply list widget style
+    if (m_fileList) {
+        m_fileList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
+    }
+    
+    // Apply text edit styles for preview
+    QString textEditStyle = QString(
+        "QTextEdit {"
+        "  background: %1;"
+        "  color: %2;"
+        "  border: 1px solid %3;"
+        "  border-radius: 4px;"
+        "}")
+        .arg(theme.surfaceAltColor.name())
+        .arg(theme.foregroundColor.name())
+        .arg(theme.borderColor.name());
+    
+    if (m_oursPreview) {
+        m_oursPreview->setStyleSheet(textEditStyle);
+    }
+    if (m_theirsPreview) {
+        m_theirsPreview->setStyleSheet(textEditStyle);
+    }
+    
+    // Apply button styles
+    if (m_acceptOursButton) {
+        m_acceptOursButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    if (m_acceptTheirsButton) {
+        m_acceptTheirsButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    for (QPushButton* btn : {m_openEditorButton, m_markResolvedButton, m_abortButton, m_continueButton}) {
+        if (btn) {
+            btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+        }
+    }
+    
+    // Apply label styles
+    if (m_statusLabel) {
+        m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+    }
+    if (m_conflictCountLabel) {
+        m_conflictCountLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
     }
 }

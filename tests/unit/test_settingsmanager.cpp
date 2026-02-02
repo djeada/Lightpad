@@ -15,6 +15,7 @@ private slots:
     void testGetSettingsDirectory();
     void testDefaultValues();
     void testSetGetValue();
+    void testNestedKeys();
     void testHasKey();
     void testResetToDefaults();
     void testLoadSaveSettings();
@@ -94,6 +95,37 @@ void TestSettingsManager::testSetGetValue()
     
     sm.setValue("testBool", true);
     QCOMPARE(sm.getValue("testBool").toBool(), true);
+}
+
+void TestSettingsManager::testNestedKeys()
+{
+    SettingsManager& sm = SettingsManager::instance();
+    
+    // Test setting nested keys with dot notation
+    sm.setValue("nested.level1", "value1");
+    QCOMPARE(sm.getValue("nested.level1").toString(), QString("value1"));
+    
+    // Test deeper nesting
+    sm.setValue("nested.level1.level2", "value2");
+    QCOMPARE(sm.getValue("nested.level1.level2").toString(), QString("value2"));
+    
+    // Test that the parent key still exists and returns an object
+    QVERIFY(sm.hasKey("nested.level1"));
+    QVariant parentValue = sm.getValue("nested.level1");
+    QVERIFY(parentValue.canConvert<QVariantMap>());
+    QVariantMap parentMap = parentValue.toMap();
+    QVERIFY(parentMap.contains("level2"));
+    QCOMPARE(parentMap.value("level2").toString(), QString("value2"));
+    
+    // Test setting multiple keys in the same parent
+    sm.setValue("config.option1", 123);
+    sm.setValue("config.option2", "text");
+    QCOMPARE(sm.getValue("config.option1").toInt(), 123);
+    QCOMPARE(sm.getValue("config.option2").toString(), QString("text"));
+    
+    // Test deeply nested structure
+    sm.setValue("deep.nested.structure.value", true);
+    QCOMPARE(sm.getValue("deep.nested.structure.value").toBool(), true);
 }
 
 void TestSettingsManager::testHasKey()

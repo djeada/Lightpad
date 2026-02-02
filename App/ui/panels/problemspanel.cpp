@@ -1,4 +1,5 @@
 #include "problemspanel.h"
+#include "../uistylehelper.h"
 #include <QHeaderView>
 #include <QFileInfo>
 
@@ -29,16 +30,16 @@ void ProblemsPanel::setupUI()
     mainLayout->setSpacing(0);
 
     // Header bar
-    QWidget* header = new QWidget(this);
-    header->setStyleSheet("background: #171c24; border-bottom: 1px solid #2a3241;");
-    QHBoxLayout* headerLayout = new QHBoxLayout(header);
+    m_header = new QWidget(this);
+    m_header->setStyleSheet("background: #171c24; border-bottom: 1px solid #2a3241;");
+    QHBoxLayout* headerLayout = new QHBoxLayout(m_header);
     headerLayout->setContentsMargins(8, 4, 8, 4);
 
-    QLabel* titleLabel = new QLabel(tr("Problems"), header);
-    titleLabel->setStyleSheet("font-weight: bold; color: #e6edf3;");
-    headerLayout->addWidget(titleLabel);
+    m_titleLabel = new QLabel(tr("Problems"), m_header);
+    m_titleLabel->setStyleSheet("font-weight: bold; color: #e6edf3;");
+    headerLayout->addWidget(m_titleLabel);
 
-    m_filterCombo = new QComboBox(header);
+    m_filterCombo = new QComboBox(m_header);
     m_filterCombo->addItem(tr("All"));
     m_filterCombo->addItem(tr("Errors"));
     m_filterCombo->addItem(tr("Warnings"));
@@ -54,7 +55,7 @@ void ProblemsPanel::setupUI()
     headerLayout->addStretch();
 
     // Auto-refresh checkbox
-    m_autoRefreshCheckBox = new QCheckBox(tr("Auto-refresh on save"), header);
+    m_autoRefreshCheckBox = new QCheckBox(tr("Auto-refresh on save"), m_header);
     m_autoRefreshCheckBox->setChecked(m_autoRefreshEnabled);
     m_autoRefreshCheckBox->setStyleSheet(
         "QCheckBox { color: #9aa4b2; }"
@@ -66,11 +67,11 @@ void ProblemsPanel::setupUI()
             this, &ProblemsPanel::onAutoRefreshToggled);
     headerLayout->addWidget(m_autoRefreshCheckBox);
 
-    m_statusLabel = new QLabel(header);
+    m_statusLabel = new QLabel(m_header);
     m_statusLabel->setStyleSheet("color: #9aa4b2;");
     headerLayout->addWidget(m_statusLabel);
 
-    mainLayout->addWidget(header);
+    mainLayout->addWidget(m_header);
 
     // Tree widget
     m_tree = new QTreeWidget(this);
@@ -351,20 +352,20 @@ void ProblemsPanel::rebuildTree()
             diagItem->setData(0, Qt::UserRole + 1, diag.range.start.line);
             diagItem->setData(0, Qt::UserRole + 2, diag.range.start.character);
 
-            // Color based on severity
+            // Color based on severity (using theme colors)
             QColor color;
             switch (diag.severity) {
             case LspDiagnosticSeverity::Error:
-                color = QColor("#f14c4c");
+                color = m_theme.errorColor;
                 break;
             case LspDiagnosticSeverity::Warning:
-                color = QColor("#cca700");
+                color = m_theme.warningColor;
                 break;
             case LspDiagnosticSeverity::Information:
-                color = QColor("#3794ff");
+                color = m_theme.accentColor;
                 break;
             case LspDiagnosticSeverity::Hint:
-                color = QColor("#888888");
+                color = m_theme.singleLineCommentFormat;
                 break;
             }
             diagItem->setForeground(0, color);
@@ -425,4 +426,39 @@ void ProblemsPanel::onFileSaved(const QString& filePath)
 void ProblemsPanel::onAutoRefreshToggled(bool checked)
 {
     m_autoRefreshEnabled = checked;
+}
+
+void ProblemsPanel::applyTheme(const Theme& theme)
+{
+    m_theme = theme;
+    
+    // Header
+    if (m_header) {
+        m_header->setStyleSheet(UIStyleHelper::panelHeaderStyle(theme));
+    }
+    
+    // Title label
+    if (m_titleLabel) {
+        m_titleLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
+    }
+    
+    // Filter combo
+    if (m_filterCombo) {
+        m_filterCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+    }
+    
+    // Checkbox
+    if (m_autoRefreshCheckBox) {
+        m_autoRefreshCheckBox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
+    }
+    
+    // Status label
+    if (m_statusLabel) {
+        m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+    }
+    
+    // Tree widget
+    if (m_tree) {
+        m_tree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+    }
 }

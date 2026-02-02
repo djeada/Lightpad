@@ -126,7 +126,7 @@ public:
 
     /**
      * @brief Save assignments for a directory to its config file
-     * @param dirPath Project directory path
+     * @param dirPath Path to the directory
      * @return true if the assignments were saved successfully
      */
     bool saveAssignmentsToDir(const QString& dirPath) const;

@@ -1,4 +1,5 @@
 #include "sourcecontrolpanel.h"
+#include "../uistylehelper.h"
 #include "../dialogs/gitinitdialog.h"
 #include "../dialogs/mergeconflictdialog.h"
 #include "../dialogs/gitremotedialog.h"
@@ -22,6 +23,7 @@ namespace {
     constexpr int DEFAULT_HISTORY_COMMIT_COUNT = 20;
     constexpr int MAX_COMMIT_DISPLAY_LENGTH = 60;
     constexpr int MAX_DIFF_PREVIEW_LENGTH = 2000;
+    constexpr int STAGED_STATUS_ROLE = Qt::UserRole + 1;
 }
 
 SourceControlPanel::SourceControlPanel(QWidget* parent)
@@ -53,9 +55,12 @@ SourceControlPanel::SourceControlPanel(QWidget* parent)
     , m_pullButton(nullptr)
     , m_fetchButton(nullptr)
     , m_stashButton(nullptr)
+    , m_stagedLabel(nullptr)
     , m_stagedTree(nullptr)
+    , m_changesLabel(nullptr)
     , m_changesTree(nullptr)
     , m_historyHeader(nullptr)
+    , m_historyLabel(nullptr)
     , m_historyTree(nullptr)
     , m_historyToggleButton(nullptr)
     , m_historyExpanded(false)
@@ -99,6 +104,7 @@ void SourceControlPanel::setupUI()
     m_refreshButton->setStyleSheet(
         "QPushButton { background: transparent; color: #e6edf3; border: none; font-size: 14px; border-radius: 4px; }"
         "QPushButton:hover { background: #2a3241; }"
+        "QPushButton:pressed { background: #1f6feb; }"
     );
     connect(m_refreshButton, &QPushButton::clicked, this, &SourceControlPanel::onRefreshClicked);
     headerLayout->addWidget(m_refreshButton);
@@ -121,7 +127,19 @@ void SourceControlPanel::setupUI()
 
     // Status bar with improved styling
     m_statusLabel = new QLabel(this);
-    m_statusLabel->setStyleSheet("background: #161b22; color: #8b949e; padding: 6px 10px; font-size: 11px; border-top: 1px solid #21262d;");
+    m_statusLabel->setStyleSheet(
+        "QLabel {"
+        "  background: #161b22;"
+        "  color: #8b949e;"
+        "  padding: 6px 10px;"
+        "  font-size: 11px;"
+        "  border-top: 1px solid #21262d;"
+        "}"
+        "QLabel:hover {"
+        "  color: #e6edf3;"
+        "}"
+    );
+    m_statusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     mainLayout->addWidget(m_statusLabel);
 }
 
@@ -165,6 +183,9 @@ void SourceControlPanel::setupNoRepoUI()
         "}"
         "QPushButton:hover {"
         "  background: #2ea043;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: #1a6f2a;"
         "}"
     );
     connect(m_initRepoButton, &QPushButton::clicked, this, &SourceControlPanel::onInitRepositoryClicked);
@@ -213,13 +234,24 @@ void SourceControlPanel::setupMergeConflictUI()
         "  color: #e6edf3;"
         "  border: 1px solid #30363d;"
         "  border-radius: 6px;"
+        "  outline: none;"
         "}"
         "QListWidget::item {"
         "  padding: 8px;"
         "  border-bottom: 1px solid #21262d;"
         "}"
+        "QListWidget::item:hover {"
+        "  background: #21262d;"
+        "}"
         "QListWidget::item:selected {"
         "  background: #1f6feb;"
+        "  color: white;"
+        "}"
+        "QListWidget::item:selected:hover {"
+        "  background: #388bfd;"
+        "}"
+        "QListWidget:focus {"
+        "  border-color: #58a6ff;"
         "}"
     );
     layout->addWidget(m_conflictFilesList, 1);
@@ -240,6 +272,9 @@ void SourceControlPanel::setupMergeConflictUI()
         "QPushButton:hover {"
         "  background: #388bfd;"
         "}"
+        "QPushButton:pressed {"
+        "  background: #0d419d;"
+        "}"
     );
     connect(m_resolveConflictsButton, &QPushButton::clicked, this, &SourceControlPanel::onResolveConflictsClicked);
     actionLayout->addWidget(m_resolveConflictsButton);
@@ -257,6 +292,9 @@ void SourceControlPanel::setupMergeConflictUI()
         "  background: #da3633;"
         "  color: white;"
         "  border-color: #da3633;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: #b62324;"
         "}"
     );
     connect(m_abortMergeButton, &QPushButton::clicked, [this]() {
@@ -311,9 +349,15 @@ void SourceControlPanel::setupRepoUI()
         "  border-radius: 6px;"
         "  padding: 6px 10px;"
         "  font-size: 12px;"
+        "  selection-background-color: #1f6feb;"
         "}"
         "QComboBox:hover {"
         "  border-color: #58a6ff;"
+        "  background: #161b22;"
+        "}"
+        "QComboBox:focus {"
+        "  border-color: #58a6ff;"
+        "  border-width: 2px;"
         "}"
         "QComboBox::drop-down {"
         "  border: none;"
@@ -326,11 +370,21 @@ void SourceControlPanel::setupRepoUI()
         "  border-top: 5px solid #8b949e;"
         "  margin-right: 8px;"
         "}"
+        "QComboBox::down-arrow:hover {"
+        "  border-top-color: #e6edf3;"
+        "}"
         "QComboBox QAbstractItemView {"
         "  background: #21262d;"
         "  color: #e6edf3;"
         "  border: 1px solid #30363d;"
         "  selection-background-color: #1f6feb;"
+        "  outline: none;"
+        "}"
+        "QComboBox QAbstractItemView::item {"
+        "  padding: 6px 10px;"
+        "}"
+        "QComboBox QAbstractItemView::item:hover {"
+        "  background: #161b22;"
         "}"
     );
     if (auto* branchView = m_branchSelector->view()) {
@@ -391,6 +445,9 @@ void SourceControlPanel::setupRepoUI()
         "QPushButton:hover {"
         "  background: #2ea043;"
         "}"
+        "QPushButton:pressed {"
+        "  background: #1a6f2a;"
+        "}"
     );
     connect(m_newBranchButton, &QPushButton::clicked, this, &SourceControlPanel::onCreateBranchClicked);
     branchSelectorLayout->addWidget(m_newBranchButton);
@@ -410,6 +467,14 @@ void SourceControlPanel::setupRepoUI()
         "  background: #da3633;"
         "  color: white;"
         "  border-color: #da3633;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: #b62324;"
+        "}"
+        "QPushButton:disabled {"
+        "  background: #161b22;"
+        "  color: #484f58;"
+        "  border-color: #30363d;"
         "}"
     );
     connect(m_deleteBranchButton, &QPushButton::clicked, this, &SourceControlPanel::onDeleteBranchClicked);
@@ -437,6 +502,14 @@ void SourceControlPanel::setupRepoUI()
         "  color: white;"
         "  border-color: #1f6feb;"
         "}"
+        "QPushButton:pressed {"
+        "  background: #0d419d;"
+        "}"
+        "QPushButton:disabled {"
+        "  background: #161b22;"
+        "  color: #484f58;"
+        "  border-color: #30363d;"
+        "}"
     );
     connect(m_pullButton, &QPushButton::clicked, this, &SourceControlPanel::onPullClicked);
     remoteOpsLayout->addWidget(m_pullButton);
@@ -457,6 +530,14 @@ void SourceControlPanel::setupRepoUI()
         "  color: white;"
         "  border-color: #238636;"
         "}"
+        "QPushButton:pressed {"
+        "  background: #1a6f2a;"
+        "}"
+        "QPushButton:disabled {"
+        "  background: #161b22;"
+        "  color: #484f58;"
+        "  border-color: #30363d;"
+        "}"
     );
     connect(m_pushButton, &QPushButton::clicked, this, &SourceControlPanel::onPushClicked);
     remoteOpsLayout->addWidget(m_pushButton);
@@ -474,6 +555,15 @@ void SourceControlPanel::setupRepoUI()
         "}"
         "QPushButton:hover {"
         "  background: #30363d;"
+        "  color: #e6edf3;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: #21262d;"
+        "}"
+        "QPushButton:disabled {"
+        "  background: #161b22;"
+        "  color: #484f58;"
+        "  border-color: #30363d;"
         "}"
     );
     connect(m_fetchButton, &QPushButton::clicked, this, &SourceControlPanel::onFetchClicked);
@@ -494,6 +584,14 @@ void SourceControlPanel::setupRepoUI()
         "  background: #8957e5;"
         "  color: white;"
         "  border-color: #8957e5;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: #6e40c9;"
+        "}"
+        "QPushButton:disabled {"
+        "  background: #161b22;"
+        "  color: #484f58;"
+        "  border-color: #30363d;"
         "}"
     );
     connect(m_stashButton, &QPushButton::clicked, this, &SourceControlPanel::onStashClicked);
@@ -527,10 +625,15 @@ void SourceControlPanel::setupRepoUI()
         "  padding: 8px;"
         "  font-size: 12px;"
         "  line-height: 1.4;"
+        "  selection-background-color: #1f6feb;"
         "}"
         "QTextEdit:focus {"
         "  border-color: #58a6ff;"
         "  border-width: 2px;"
+        "  background: #161b22;"
+        "}"
+        "QTextEdit:hover {"
+        "  border-color: #8b949e;"
         "}"
     );
     connect(m_commitMessage, &QTextEdit::textChanged, this, &SourceControlPanel::onCommitMessageChanged);
@@ -546,6 +649,9 @@ void SourceControlPanel::setupRepoUI()
         "  color: #8b949e;"
         "  font-size: 11px;"
         "}"
+        "QCheckBox:hover {"
+        "  color: #e6edf3;"
+        "}"
         "QCheckBox::indicator {"
         "  width: 14px;"
         "  height: 14px;"
@@ -553,9 +659,17 @@ void SourceControlPanel::setupRepoUI()
         "  border: 1px solid #30363d;"
         "  background: #21262d;"
         "}"
+        "QCheckBox::indicator:hover {"
+        "  border-color: #58a6ff;"
+        "  background: #161b22;"
+        "}"
         "QCheckBox::indicator:checked {"
         "  background: #238636;"
         "  border-color: #238636;"
+        "}"
+        "QCheckBox::indicator:checked:hover {"
+        "  background: #2ea043;"
+        "  border-color: #2ea043;"
         "}"
     );
     commitOptionsLayout->addWidget(m_amendCheckbox);
@@ -568,6 +682,7 @@ void SourceControlPanel::setupRepoUI()
     
     m_commitButton = new QPushButton(tr("✓ Commit"), commitSection);
     m_commitButton->setMinimumHeight(32);
+    m_commitButton->setToolTip(tr("Commit Staged Changes"));
     m_commitButton->setStyleSheet(
         "QPushButton {"
         "  background: #238636;"
@@ -580,6 +695,9 @@ void SourceControlPanel::setupRepoUI()
         "}"
         "QPushButton:hover {"
         "  background: #2ea043;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: #1a6f2a;"
         "}"
         "QPushButton:disabled {"
         "  background: #21262d;"
@@ -602,9 +720,9 @@ void SourceControlPanel::setupRepoUI()
     stagedIcon->setStyleSheet("font-size: 12px;");
     stagedHeaderLayout->addWidget(stagedIcon);
     
-    QLabel* stagedLabel = new QLabel(tr("Staged Changes"), stagedHeader);
-    stagedLabel->setStyleSheet("color: #3fb950; font-weight: bold; font-size: 12px;");
-    stagedHeaderLayout->addWidget(stagedLabel);
+    m_stagedLabel = new QLabel(tr("Staged Changes"), stagedHeader);
+    m_stagedLabel->setStyleSheet("color: #3fb950; font-weight: bold; font-size: 12px;");
+    stagedHeaderLayout->addWidget(m_stagedLabel);
     
     stagedHeaderLayout->addStretch();
     
@@ -614,6 +732,8 @@ void SourceControlPanel::setupRepoUI()
     m_unstageAllButton->setStyleSheet(
         "QPushButton { background: transparent; color: #8b949e; border: 1px solid #30363d; border-radius: 4px; font-size: 14px; font-weight: bold; }"
         "QPushButton:hover { background: #21262d; color: #f85149; border-color: #f85149; }"
+        "QPushButton:pressed { background: #da3633; color: white; }"
+        "QPushButton:disabled { color: #484f58; border-color: #30363d; }"
     );
     connect(m_unstageAllButton, &QPushButton::clicked, this, &SourceControlPanel::onUnstageAllClicked);
     stagedHeaderLayout->addWidget(m_unstageAllButton);
@@ -623,6 +743,7 @@ void SourceControlPanel::setupRepoUI()
     m_stagedTree = new QTreeWidget(m_repoWidget);
     m_stagedTree->setHeaderHidden(true);
     m_stagedTree->setRootIsDecorated(false);
+    m_stagedTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_stagedTree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_stagedTree->setStyleSheet(
         "QTreeWidget {"
@@ -630,6 +751,7 @@ void SourceControlPanel::setupRepoUI()
         "  color: #e6edf3;"
         "  border: none;"
         "  font-size: 12px;"
+        "  outline: none;"
         "}"
         "QTreeWidget::item {"
         "  padding: 6px 8px;"
@@ -637,17 +759,33 @@ void SourceControlPanel::setupRepoUI()
         "}"
         "QTreeWidget::item:selected {"
         "  background: #1f6feb;"
+        "  color: white;"
         "}"
         "QTreeWidget::item:hover {"
         "  background: #161b22;"
+        "}"
+        "QTreeWidget::item:selected:hover {"
+        "  background: #388bfd;"
+        "}"
+        "QTreeWidget:focus {"
+        "  border: 1px solid #58a6ff;"
         "}"
     );
     m_stagedTree->setMinimumHeight(80);
     m_stagedTree->setMaximumHeight(150);
     m_stagedTree->setUniformRowHeights(true);
+    m_stagedTree->setMouseTracking(true);
     connect(m_stagedTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_stagedTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
     connect(m_stagedTree, &QTreeWidget::itemChanged, this, &SourceControlPanel::onItemCheckChanged);
+    connect(m_stagedTree, &QTreeWidget::itemEntered, [this](QTreeWidgetItem* item, int) {
+        if (item && m_statusLabel) {
+            QString path = item->data(0, Qt::UserRole).toString();
+            if (!path.isEmpty()) {
+                m_statusLabel->setText(QString("📁 %1").arg(path));
+            }
+        }
+    });
     mainLayout->addWidget(m_stagedTree);
 
     // Changes section
@@ -660,9 +798,9 @@ void SourceControlPanel::setupRepoUI()
     changesIcon->setStyleSheet("font-size: 12px;");
     changesHeaderLayout->addWidget(changesIcon);
     
-    QLabel* changesLabel = new QLabel(tr("Changes"), changesHeader);
-    changesLabel->setStyleSheet("color: #e2c08d; font-weight: bold; font-size: 12px;");
-    changesHeaderLayout->addWidget(changesLabel);
+    m_changesLabel = new QLabel(tr("Changes"), changesHeader);
+    m_changesLabel->setStyleSheet("color: #e2c08d; font-weight: bold; font-size: 12px;");
+    changesHeaderLayout->addWidget(m_changesLabel);
     
     changesHeaderLayout->addStretch();
     
@@ -672,6 +810,8 @@ void SourceControlPanel::setupRepoUI()
     m_stageAllButton->setStyleSheet(
         "QPushButton { background: transparent; color: #8b949e; border: 1px solid #30363d; border-radius: 4px; font-size: 14px; font-weight: bold; }"
         "QPushButton:hover { background: #21262d; color: #3fb950; border-color: #3fb950; }"
+        "QPushButton:pressed { background: #238636; color: white; }"
+        "QPushButton:disabled { color: #484f58; border-color: #30363d; }"
     );
     connect(m_stageAllButton, &QPushButton::clicked, this, &SourceControlPanel::onStageAllClicked);
     changesHeaderLayout->addWidget(m_stageAllButton);
@@ -681,6 +821,7 @@ void SourceControlPanel::setupRepoUI()
     m_changesTree = new QTreeWidget(m_repoWidget);
     m_changesTree->setHeaderHidden(true);
     m_changesTree->setRootIsDecorated(false);
+    m_changesTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_changesTree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_changesTree->setStyleSheet(
         "QTreeWidget {"
@@ -688,6 +829,7 @@ void SourceControlPanel::setupRepoUI()
         "  color: #e6edf3;"
         "  border: none;"
         "  font-size: 12px;"
+        "  outline: none;"
         "}"
         "QTreeWidget::item {"
         "  padding: 6px 8px;"
@@ -695,15 +837,31 @@ void SourceControlPanel::setupRepoUI()
         "}"
         "QTreeWidget::item:selected {"
         "  background: #1f6feb;"
+        "  color: white;"
         "}"
         "QTreeWidget::item:hover {"
         "  background: #161b22;"
         "}"
+        "QTreeWidget::item:selected:hover {"
+        "  background: #388bfd;"
+        "}"
+        "QTreeWidget:focus {"
+        "  border: 1px solid #58a6ff;"
+        "}"
     );
     m_changesTree->setUniformRowHeights(true);
+    m_changesTree->setMouseTracking(true);
     connect(m_changesTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_changesTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
     connect(m_changesTree, &QTreeWidget::itemChanged, this, &SourceControlPanel::onItemCheckChanged);
+    connect(m_changesTree, &QTreeWidget::itemEntered, [this](QTreeWidgetItem* item, int) {
+        if (item && m_statusLabel) {
+            QString path = item->data(0, Qt::UserRole).toString();
+            if (!path.isEmpty()) {
+                m_statusLabel->setText(QString("📁 %1").arg(path));
+            }
+        }
+    });
     mainLayout->addWidget(m_changesTree, 1);
 
     // Commit history section (collapsible)
@@ -725,9 +883,9 @@ void SourceControlPanel::setupRepoUI()
     historyIcon->setStyleSheet("font-size: 12px;");
     historyHeaderLayout->addWidget(historyIcon);
     
-    QLabel* historyLabel = new QLabel(tr("Commit History"), m_historyHeader);
-    historyLabel->setStyleSheet("color: #a371f7; font-weight: bold; font-size: 12px;");
-    historyHeaderLayout->addWidget(historyLabel);
+    m_historyLabel = new QLabel(tr("Recent Commits"), m_historyHeader);
+    m_historyLabel->setStyleSheet("color: #a371f7; font-weight: bold; font-size: 12px;");
+    historyHeaderLayout->addWidget(m_historyLabel);
     
     historyHeaderLayout->addStretch();
     
@@ -753,6 +911,7 @@ void SourceControlPanel::setupRepoUI()
         "  color: #e6edf3;"
         "  border: none;"
         "  font-size: 11px;"
+        "  outline: none;"
         "}"
         "QTreeWidget::item {"
         "  padding: 4px 8px;"
@@ -760,9 +919,16 @@ void SourceControlPanel::setupRepoUI()
         "}"
         "QTreeWidget::item:selected {"
         "  background: #1f6feb;"
+        "  color: white;"
         "}"
         "QTreeWidget::item:hover {"
         "  background: #161b22;"
+        "}"
+        "QTreeWidget::item:selected:hover {"
+        "  background: #388bfd;"
+        "}"
+        "QTreeWidget:focus {"
+        "  border: 1px solid #58a6ff;"
         "}"
     );
     m_historyTree->setMinimumHeight(100);
@@ -841,6 +1007,10 @@ void SourceControlPanel::refresh()
     updateHeaderTitle();
     
     if (!m_git || !m_git->isValidRepository()) {
+        resetChangeCounts();
+        if (m_stagedLabel) m_stagedLabel->setText(tr("Staged Changes"));
+        if (m_changesLabel) m_changesLabel->setText(tr("Changes"));
+        if (m_historyLabel) m_historyLabel->setText(tr("Recent Commits"));
         if (m_branchLabel) m_branchLabel->setText(tr("Branch"));
         if (m_branchSelector) m_branchSelector->clear();
         if (m_statusLabel) m_statusLabel->setText("");
@@ -852,6 +1022,9 @@ void SourceControlPanel::refresh()
     
     updateBranchSelector();
     updateTree();
+    if (m_historyExpanded) {
+        updateHistory();
+    }
     onCommitMessageChanged();
 }
 
@@ -960,8 +1133,7 @@ void SourceControlPanel::updateTree()
 {
     m_stagedTree->clear();
     m_changesTree->clear();
-    m_stagedCount = 0;
-    m_changesCount = 0;
+    resetChangeCounts();
     
     if (!m_git || !m_git->isValidRepository()) {
         m_statusLabel->setText(tr("Not a git repository"));
@@ -987,7 +1159,7 @@ void SourceControlPanel::updateTree()
             item->setText(0, QString("%1 %2").arg(icon).arg(fileInfo.fileName()));
             item->setToolTip(0, fullPath);
             item->setData(0, Qt::UserRole, fullPath);
-            item->setData(0, Qt::UserRole + 1, true);  // Is staged
+            item->setData(0, STAGED_STATUS_ROLE, true);  // Is staged
             item->setForeground(0, statusColor(file.indexStatus));
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
             item->setCheckState(0, Qt::Checked);
@@ -1004,7 +1176,7 @@ void SourceControlPanel::updateTree()
             item->setText(0, QString("%1 %2").arg(icon).arg(fileInfo.fileName()));
             item->setToolTip(0, fullPath);
             item->setData(0, Qt::UserRole, fullPath);
-            item->setData(0, Qt::UserRole + 1, false);  // Not staged
+            item->setData(0, STAGED_STATUS_ROLE, false);  // Not staged
             item->setForeground(0, statusColor(file.workTreeStatus));
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
             item->setCheckState(0, Qt::Unchecked);
@@ -1022,8 +1194,39 @@ void SourceControlPanel::updateTree()
     }
     
     updateCounts();
-    if (m_changesTree) {
-        m_changesTree->setToolTip(m_changesCount == 0 ? tr("No local changes") : QString());
+}
+
+void SourceControlPanel::resetChangeCounts()
+{
+    m_stagedCount = 0;
+    m_changesCount = 0;
+}
+
+void SourceControlPanel::stageOrUnstageSelectedFiles(QTreeWidget* tree, bool stage)
+{
+    if (!m_git || !tree) return;
+
+    QList<QTreeWidgetItem*> selectedItems = tree->selectedItems();
+    bool didChange = false;
+    for (QTreeWidgetItem* selected : selectedItems) {
+        if (!selected) continue;
+        QString selectedPath = selected->data(0, Qt::UserRole).toString();
+        if (selectedPath.isEmpty()) {
+            continue;
+        }
+        if (stage) {
+            if (m_git->stageFile(selectedPath)) {
+                didChange = true;
+            }
+        } else {
+            if (m_git->unstageFile(selectedPath)) {
+                didChange = true;
+            }
+        }
+    }
+
+    if (didChange) {
+        refresh();
     }
 }
 
@@ -1038,6 +1241,9 @@ void SourceControlPanel::updateHistory()
     }
     
     QList<GitCommitInfo> commits = m_git->getCommitLog(DEFAULT_HISTORY_COMMIT_COUNT);
+    if (m_historyLabel) {
+        m_historyLabel->setText(tr("Recent Commits (%1)").arg(commits.size()));
+    }
     
     for (const GitCommitInfo& commit : commits) {
         QTreeWidgetItem* item = new QTreeWidgetItem(m_historyTree);
@@ -1110,12 +1316,32 @@ void SourceControlPanel::onCommitClicked()
     
     QString message = m_commitMessage->toPlainText().trimmed();
     if (message.isEmpty()) {
-        QMessageBox::warning(this, tr("Commit"), tr("Please enter a commit message."));
+        QMessageBox msgBox(this);
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setWindowTitle(tr("Commit"));
+        msgBox.setText(tr("Please enter a commit message."));
+        msgBox.setStyleSheet(
+            "QMessageBox { background: #0d1117; }"
+            "QMessageBox QLabel { color: #e6edf3; }"
+            "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #30363d; }"
+        );
+        msgBox.exec();
         return;
     }
 
     if (m_amendCheckbox && m_amendCheckbox->isChecked()) {
-        QMessageBox::warning(this, tr("Commit"), tr("Amend is not supported yet."));
+        QMessageBox msgBox(this);
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setWindowTitle(tr("Commit"));
+        msgBox.setText(tr("Amend is not supported yet."));
+        msgBox.setStyleSheet(
+            "QMessageBox { background: #0d1117; }"
+            "QMessageBox QLabel { color: #e6edf3; }"
+            "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #30363d; }"
+        );
+        msgBox.exec();
         return;
     }
     
@@ -1154,7 +1380,7 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     if (item->data(0, Qt::UserRole + 2).toBool()) return;
     
     QString filePath = item->data(0, Qt::UserRole).toString();
-    bool isStaged = item->data(0, Qt::UserRole + 1).toBool();
+    bool isStaged = item->data(0, STAGED_STATUS_ROLE).toBool();
     QString repoPath = m_git ? m_git->repositoryPath() : QString();
     QString relativePath = filePath;
     if (!repoPath.isEmpty() && filePath.startsWith(repoPath)) {
@@ -1162,26 +1388,86 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     }
     
     QMenu menu(this);
+    menu.setStyleSheet(
+        "QMenu {"
+        "  background: #161b22;"
+        "  color: #e6edf3;"
+        "  border: 1px solid #30363d;"
+        "  border-radius: 6px;"
+        "  padding: 4px;"
+        "}"
+        "QMenu::item {"
+        "  padding: 6px 24px 6px 12px;"
+        "  border-radius: 4px;"
+        "}"
+        "QMenu::item:selected {"
+        "  background: #1f6feb;"
+        "  color: white;"
+        "}"
+        "QMenu::item:disabled {"
+        "  color: #484f58;"
+        "}"
+        "QMenu::separator {"
+        "  height: 1px;"
+        "  background: #21262d;"
+        "  margin: 4px 8px;"
+        "}"
+    );
     
     if (isStaged) {
         QAction* unstageAction = menu.addAction(tr("Unstage"));
+        unstageAction->setShortcut(QKeySequence(Qt::Key_U));
         connect(unstageAction, &QAction::triggered, [this, filePath]() {
-            if (m_git) m_git->unstageFile(filePath);
+            if (m_git) {
+                m_git->unstageFile(filePath);
+                refresh();
+            }
+        });
+
+        QAction* unstageSelectedAction = menu.addAction(tr("Unstage Selected"));
+        unstageSelectedAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_U));
+        connect(unstageSelectedAction, &QAction::triggered, [this, tree]() {
+            stageOrUnstageSelectedFiles(tree, false);
         });
     } else {
         QAction* stageAction = menu.addAction(tr("Stage"));
+        stageAction->setShortcut(QKeySequence(Qt::Key_S));
         connect(stageAction, &QAction::triggered, [this, filePath]() {
-            if (m_git) m_git->stageFile(filePath);
+            if (m_git) {
+                m_git->stageFile(filePath);
+                refresh();
+            }
         });
         
+        QAction* stageSelectedAction = menu.addAction(tr("Stage Selected"));
+        stageSelectedAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
+        connect(stageSelectedAction, &QAction::triggered, [this, tree]() {
+            stageOrUnstageSelectedFiles(tree, true);
+        });
+
         menu.addSeparator();
         
         QAction* discardAction = menu.addAction(tr("Discard Changes"));
+        discardAction->setShortcut(QKeySequence(Qt::Key_D));
         connect(discardAction, &QAction::triggered, [this, filePath]() {
             if (m_git) {
-                if (QMessageBox::question(this, tr("Discard Changes"),
-                    tr("Are you sure you want to discard changes to this file?"),
-                    QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes) {
+                QMessageBox msgBox(this);
+                msgBox.setIcon(QMessageBox::Warning);
+                msgBox.setWindowTitle(tr("Discard Changes"));
+                msgBox.setText(tr("Are you sure you want to discard changes to this file?"));
+                msgBox.setInformativeText(tr("This action cannot be undone."));
+                msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+                msgBox.setDefaultButton(QMessageBox::No);
+                msgBox.setStyleSheet(
+                    "QMessageBox { background: #0d1117; }"
+                    "QMessageBox QLabel { color: #e6edf3; }"
+                    "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; margin: 2px; }"
+                    "QPushButton:hover { background: #30363d; }"
+                    "QPushButton[text='&Yes'] { background: #da3633; color: white; border-color: #da3633; }"
+                    "QPushButton[text='&Yes']:hover { background: #b62324; }"
+                );
+                
+                if (msgBox.exec() == QMessageBox::Yes) {
                     m_git->discardChanges(filePath);
                 }
             }
@@ -1191,21 +1477,24 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     menu.addSeparator();
     
     QAction* openAction = menu.addAction(tr("Open File"));
+    openAction->setShortcut(QKeySequence(Qt::Key_O));
     connect(openAction, &QAction::triggered, [this, filePath]() {
         emit fileOpenRequested(filePath);
     });
     
-    QAction* diffAction = menu.addAction(tr("View Diff"));
-    connect(diffAction, &QAction::triggered, [this, filePath]() {
-        emit diffRequested(filePath);
+    QAction* diffAction = menu.addAction(isStaged ? tr("View Staged Diff") : tr("View Unstaged Diff"));
+    diffAction->setShortcut(QKeySequence(Qt::Key_V));
+    connect(diffAction, &QAction::triggered, [this, filePath, isStaged]() {
+        emit diffRequested(filePath, isStaged);
     });
 
     QAction* copyPathAction = menu.addAction(tr("Copy Path"));
+    copyPathAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_C));
     connect(copyPathAction, &QAction::triggered, [this, filePath, relativePath]() {
         QString value = relativePath;
         if (!value.isEmpty()) {
             QApplication::clipboard()->setText(value);
-            QToolTip::showText(QCursor::pos(), tr("Copied path: %1").arg(value), this);
+            QToolTip::showText(QCursor::pos(), tr("✓ Copied: %1").arg(value), this, QRect(), 2000);
         }
     });
     
@@ -1241,13 +1530,39 @@ void SourceControlPanel::addEmptyStateItem(QTreeWidget* tree, const QString& tex
 
 void SourceControlPanel::updateCounts()
 {
-    QString statusText = QString(tr("%1 staged, %2 changed")).arg(m_stagedCount).arg(m_changesCount);
-    m_statusLabel->setText(statusText);
+    if (m_stagedLabel) {
+        m_stagedLabel->setText(tr("Staged Changes (%1)").arg(m_stagedCount));
+    }
+    if (m_changesLabel) {
+        m_changesLabel->setText(tr("Changes (%1)").arg(m_changesCount));
+    }
+    if (m_statusLabel) {
+        if (m_stagedCount == 0 && m_changesCount == 0) {
+            m_statusLabel->setText(tr("✓ Working tree clean - No changes to commit"));
+            m_statusLabel->setToolTip(tr("All changes have been committed or there are no modifications."));
+        } else {
+            QString statusText = QString(tr("📊 %1 staged, %2 changed")).arg(m_stagedCount).arg(m_changesCount);
+            m_statusLabel->setText(statusText);
+            m_statusLabel->setToolTip(tr("Files ready to commit: %1 | Files with modifications: %2")
+                                          .arg(m_stagedCount)
+                                          .arg(m_changesCount));
+        }
+    }
 
     bool hasMessage = m_commitMessage && !m_commitMessage->toPlainText().trimmed().isEmpty();
     m_commitButton->setEnabled(m_stagedCount > 0 && hasMessage);
     m_stageAllButton->setEnabled(m_changesCount > 0);
     m_unstageAllButton->setEnabled(m_stagedCount > 0);
+    if (m_stagedTree) {
+        m_stagedTree->setToolTip(m_stagedCount == 0
+                                     ? tr("💡 No staged changes. Stage files to prepare them for commit.")
+                                     : tr("Double-click to open file, right-click for options"));
+    }
+    if (m_changesTree) {
+        m_changesTree->setToolTip(m_changesCount == 0
+                                      ? tr("✓ Working tree clean - No unstaged changes")
+                                      : tr("Double-click to open file, right-click for options"));
+    }
 }
 
 void SourceControlPanel::updateHeaderTitle()
@@ -1332,14 +1647,36 @@ void SourceControlPanel::onDeleteBranchClicked()
     QString selectedBranch = m_branchSelector->currentData().toString();
     
     if (selectedBranch == currentBranch) {
-        QMessageBox::warning(this, tr("Delete Branch"), 
-            tr("Cannot delete the current branch. Please switch to another branch first."));
+        QMessageBox msgBox(this);
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setWindowTitle(tr("Delete Branch"));
+        msgBox.setText(tr("Cannot delete the current branch. Please switch to another branch first."));
+        msgBox.setStyleSheet(
+            "QMessageBox { background: #0d1117; }"
+            "QMessageBox QLabel { color: #e6edf3; }"
+            "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #30363d; }"
+        );
+        msgBox.exec();
         return;
     }
     
-    if (QMessageBox::question(this, tr("Delete Branch"),
-        tr("Are you sure you want to delete branch '%1'?").arg(selectedBranch),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes) {
+    QMessageBox msgBox(this);
+    msgBox.setIcon(QMessageBox::Question);
+    msgBox.setWindowTitle(tr("Delete Branch"));
+    msgBox.setText(tr("Are you sure you want to delete branch '%1'?").arg(selectedBranch));
+    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBox.setDefaultButton(QMessageBox::No);
+    msgBox.setStyleSheet(
+        "QMessageBox { background: #0d1117; }"
+        "QMessageBox QLabel { color: #e6edf3; }"
+        "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 16px; margin: 2px; }"
+        "QPushButton:hover { background: #30363d; }"
+        "QPushButton[text='&Yes'] { background: #da3633; color: white; border-color: #da3633; }"
+        "QPushButton[text='&Yes']:hover { background: #b62324; }"
+    );
+    
+    if (msgBox.exec() == QMessageBox::Yes) {
         if (m_git->deleteBranch(selectedBranch, false)) {
             updateBranchSelector();
         }
@@ -1348,17 +1685,71 @@ void SourceControlPanel::onDeleteBranchClicked()
 
 void SourceControlPanel::onOperationCompleted(const QString& message)
 {
-    m_statusLabel->setText(message);
+    m_statusLabel->setText("✓ " + message);
+    m_statusLabel->setStyleSheet(
+        "QLabel {"
+        "  background: #161b22;"
+        "  color: #3fb950;"
+        "  padding: 6px 10px;"
+        "  font-size: 11px;"
+        "  border-top: 1px solid #21262d;"
+        "}"
+        "QLabel:hover {"
+        "  color: #56d364;"
+        "}"
+    );
+    m_statusLabel->setToolTip(tr("Success: %1").arg(message));
+    
+    // Reset color after 3 seconds
+    QTimer::singleShot(3000, [this]() {
+        m_statusLabel->setStyleSheet(
+            "QLabel {"
+            "  background: #161b22;"
+            "  color: #8b949e;"
+            "  padding: 6px 10px;"
+            "  font-size: 11px;"
+            "  border-top: 1px solid #21262d;"
+            "}"
+            "QLabel:hover {"
+            "  color: #e6edf3;"
+            "}"
+        );
+        m_statusLabel->setToolTip(QString());
+    });
 }
 
 void SourceControlPanel::onErrorOccurred(const QString& error)
 {
     m_statusLabel->setText("⚠️ " + error);
-    m_statusLabel->setStyleSheet("background: #161b22; color: #f85149; padding: 6px 10px; font-size: 11px; border-top: 1px solid #21262d;");
+    m_statusLabel->setStyleSheet(
+        "QLabel {"
+        "  background: #161b22;"
+        "  color: #f85149;"
+        "  padding: 6px 10px;"
+        "  font-size: 11px;"
+        "  border-top: 1px solid #21262d;"
+        "}"
+        "QLabel:hover {"
+        "  color: #ff7b72;"
+        "}"
+    );
+    m_statusLabel->setToolTip(tr("Error: %1\n(This message will auto-clear in 5 seconds)").arg(error));
     
-    // Reset color after 3 seconds
-    QTimer::singleShot(3000, [this]() {
-        m_statusLabel->setStyleSheet("background: #161b22; color: #8b949e; padding: 6px 10px; font-size: 11px; border-top: 1px solid #21262d;");
+    // Reset color after 5 seconds
+    QTimer::singleShot(5000, [this]() {
+        m_statusLabel->setStyleSheet(
+            "QLabel {"
+            "  background: #161b22;"
+            "  color: #8b949e;"
+            "  padding: 6px 10px;"
+            "  font-size: 11px;"
+            "  border-top: 1px solid #21262d;"
+            "}"
+            "QLabel:hover {"
+            "  color: #e6edf3;"
+            "}"
+        );
+        m_statusLabel->setToolTip(QString());
     });
 }
 
@@ -1366,21 +1757,21 @@ QString SourceControlPanel::statusIcon(GitFileStatus status) const
 {
     switch (status) {
         case GitFileStatus::Modified:
-            return "M";
+            return "●";  // Filled circle for modified
         case GitFileStatus::Added:
-            return "A";
+            return "✚";  // Plus sign for added
         case GitFileStatus::Deleted:
-            return "D";
+            return "✖";  // X for deleted
         case GitFileStatus::Renamed:
-            return "R";
+            return "➜";  // Arrow for renamed
         case GitFileStatus::Copied:
-            return "C";
+            return "⎘";  // Copy symbol
         case GitFileStatus::Untracked:
-            return "U";
+            return "?";  // Question mark for untracked
         case GitFileStatus::Unmerged:
-            return "!";
+            return "⚠";  // Warning for unmerged
         case GitFileStatus::Ignored:
-            return "I";
+            return "⊝";  // Circled minus for ignored
         default:
             return " ";
     }
@@ -1527,4 +1918,54 @@ void SourceControlPanel::onResolveConflictsClicked()
     
     dialog.exec();
     refresh();
+}
+
+
+void SourceControlPanel::applyTheme(const Theme& theme)
+{
+    // Apply main widget style
+    setStyleSheet(QString("background: %1;").arg(theme.backgroundColor.name()));
+    
+    // Apply tree widget style
+    if (m_changesTree) {
+        m_changesTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+    }
+    
+    // Apply commit message text edit style
+    if (m_commitMessage) {
+        QString textEditStyle = QString(
+            "QTextEdit {"
+            "  background: %1;"
+            "  color: %2;"
+            "  border: 1px solid %3;"
+            "  border-radius: 4px;"
+            "}")
+            .arg(theme.surfaceAltColor.name())
+            .arg(theme.foregroundColor.name())
+            .arg(theme.borderColor.name());
+        m_commitMessage->setStyleSheet(textEditStyle);
+    }
+    
+    // Apply combobox style
+    if (m_branchSelector) {
+        m_branchSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+    }
+    
+    // Apply button styles
+    if (m_commitButton) {
+        m_commitButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    }
+    for (QPushButton* btn : {m_stageAllButton, m_unstageAllButton, m_refreshButton}) {
+        if (btn) {
+            btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+        }
+    }
+    
+    // Apply label styles
+    if (m_statusLabel) {
+        m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+    }
+    if (m_branchLabel) {
+        m_branchLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
+    }
 }

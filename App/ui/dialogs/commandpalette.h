@@ -8,6 +8,7 @@
 #include <QAction>
 #include <QKeyEvent>
 #include <QSettings>
+#include "../../settings/theme.h"
 
 /**
  * @brief Command item for the palette
@@ -51,6 +52,11 @@ public:
      * @brief Show and focus the palette
      */
     void showPalette();
+
+    /**
+     * @brief Apply theme to the dialog
+     */
+    void applyTheme(const Theme& theme);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;

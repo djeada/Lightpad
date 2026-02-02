@@ -14,6 +14,7 @@
 #include <QProgressBar>
 #include <QTabWidget>
 #include "../../git/gitintegration.h"
+#include "../../settings/theme.h"
 
 /**
  * @brief Dialog for managing Git remotes and performing push/pull operations
@@ -55,6 +56,14 @@ private slots:
 private:
     void setupUI();
     void applyStyles();
+
+public:
+    /**
+     * @brief Apply theme to the dialog
+     */
+    void applyTheme(const Theme& theme);
+
+private:
     void updateBranchList();
     void updateRemoteList();
 

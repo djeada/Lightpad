@@ -1,4 +1,5 @@
 #include "recentfilesdialog.h"
+#include "../uistylehelper.h"
 #include "../../core/recentfilesmanager.h"
 #include <QFileInfo>
 #include <algorithm>
@@ -297,4 +298,11 @@ void RecentFilesDialog::selectPrevious()
     if (current > 0) {
         m_resultsList->setCurrentRow(current - 1);
     }
+}
+
+void RecentFilesDialog::applyTheme(const Theme& theme)
+{
+    setStyleSheet("RecentFilesDialog { " + UIStyleHelper::popupDialogStyle(theme) + " }");
+    m_searchBox->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
+    m_resultsList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
 }

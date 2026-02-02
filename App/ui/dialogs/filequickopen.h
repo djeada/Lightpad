@@ -8,6 +8,7 @@
 #include <QKeyEvent>
 #include <QDir>
 #include <QFileInfo>
+#include "../../settings/theme.h"
 
 /**
  * @brief File Quick Open dialog (Ctrl+P)
@@ -30,6 +31,11 @@ public:
      * @brief Show and focus the dialog
      */
     void showDialog();
+
+    /**
+     * @brief Apply theme to the dialog
+     */
+    void applyTheme(const Theme& theme);
 
 signals:
     /**
