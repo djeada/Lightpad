@@ -40,7 +40,8 @@ enum class Lang { cpp,
     py };
 enum class Dialog { shortcuts,
     runConfiguration,
-    formatConfiguration };
+    formatConfiguration,
+    debugConfiguration };
 
 namespace Ui {
 class MainWindow;
@@ -106,8 +107,11 @@ private slots:
     void on_actionKeyboard_shortcuts_triggered();
     void on_actionPreferences_triggered();
     void on_runButton_clicked();
+    void on_debugButton_clicked();
     void on_actionRun_file_name_triggered();
+    void on_actionDebug_file_name_triggered();
     void on_actionEdit_Configurations_triggered();
+    void on_actionEdit_Debug_Configurations_triggered();
     void on_magicButton_clicked();
     void on_actionFormat_Document_triggered();
     void on_actionEdit_Format_Configurations_triggered();
@@ -196,6 +200,7 @@ private:
     void openDialog(Dialog dialog);
     void openConfigurationDialog();
     void openFormatConfigurationDialog();
+    void openDebugConfigurationDialog();
     void openShortcutsDialog();
     void showTerminal();
     void showProblemsPanel();

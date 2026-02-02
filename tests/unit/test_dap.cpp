@@ -66,6 +66,7 @@ private slots:
     // DebugSettings tests
     void testDebugSettingsInitialization();
     void testDebugSettingsFilePaths();
+    void testDebugConfigurationFileOpenPath();
     
     // Data structures tests
     void testDapBreakpointFromJson();
@@ -797,6 +798,24 @@ void TestDap::testDebugSettingsFilePaths()
     QVERIFY(!adaptersDoc.isNull());
     QVERIFY(adaptersDoc.object().contains("adapters"));
     QVERIFY(adaptersDoc.object().contains("defaultAdapters"));
+}
+
+void TestDap::testDebugConfigurationFileOpenPath()
+{
+    DebugSettings& settings = DebugSettings::instance();
+    DebugConfigurationManager& manager = DebugConfigurationManager::instance();
+
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    QString workspaceFolder = tempDir.path();
+    settings.initialize(workspaceFolder);
+    manager.setWorkspaceFolder(workspaceFolder);
+    manager.loadFromLightpadDir();
+
+    QString launchPath = manager.lightpadLaunchConfigPath();
+    QCOMPARE(launchPath, settings.launchConfigPath());
+    QVERIFY(QFile::exists(launchPath));
 }
 
 QTEST_MAIN(TestDap)
