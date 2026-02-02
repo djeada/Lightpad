@@ -703,8 +703,19 @@ void TextArea::contextMenuEvent(QContextMenuEvent* event)
     menu->addSeparator();
     QAction* blameAction = menu->addAction(tr("Git Blame"));
     if (mainWindow) {
-        LightpadTabWidget* tabWidget = mainWindow->currentTabWidget();
-        QString filePath = tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+        QString filePath;
+        QObject* parent = this;
+        while (parent && filePath.isEmpty()) {
+            if (auto* page = qobject_cast<LightpadPage*>(parent)) {
+                filePath = page->getFilePath();
+                break;
+            }
+            parent = parent->parent();
+        }
+        if (filePath.isEmpty()) {
+            LightpadTabWidget* tabWidget = mainWindow->currentTabWidget();
+            filePath = tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+        }
         bool enabled = mainWindow->isGitBlameEnabledForFile(filePath);
         blameAction->setCheckable(true);
         blameAction->setChecked(enabled);

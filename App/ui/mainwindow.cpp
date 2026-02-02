@@ -522,8 +522,19 @@ void MainWindow::showGitBlameForCurrentFile(bool enable)
         return;
     }
     
-    LightpadTabWidget* tabWidget = currentTabWidget();
-    QString filePath = tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+    QString filePath;
+    QObject* parent = textArea;
+    while (parent && filePath.isEmpty()) {
+        if (auto* page = qobject_cast<LightpadPage*>(parent)) {
+            filePath = page->getFilePath();
+            break;
+        }
+        parent = parent->parent();
+    }
+    if (filePath.isEmpty()) {
+        LightpadTabWidget* tabWidget = currentTabWidget();
+        filePath = tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+    }
     if (!enable || !m_gitIntegration || filePath.isEmpty()) {
         textArea->clearGitBlameLines();
         return;

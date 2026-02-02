@@ -253,7 +253,6 @@ private:
     void startDebuggingForCurrentFile();
     void attachDebugSession(const QString& sessionId);
     void clearDebugSession();
-    LightpadTabWidget* currentTabWidget() const;
     QList<LightpadTabWidget*> allTabWidgets() const;
     void closeEvent(QCloseEvent* event);
     void loadSettings();

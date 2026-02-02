@@ -165,10 +165,6 @@ private:
     QTreeWidget* m_historyTree;
     QPushButton* m_historyToggleButton;
     bool m_historyExpanded;
-
-    int m_stagedCount;
-    int m_changesCount;
-    
     bool m_updatingBranchSelector;
     bool m_updatingTree;
     int m_stagedCount;

@@ -17,6 +17,7 @@
 #include <QCursor>
 #include <QToolTip>
 #include <QPalette>
+#include <QSizePolicy>
 
 // Constants for the commit history display
 namespace {
@@ -94,6 +95,8 @@ void SourceControlPanel::setupUI()
 
     m_headerTitleLabel = new QLabel(tr("Source Control"), header);
     m_headerTitleLabel->setStyleSheet("font-weight: bold; color: #e6edf3; font-size: 13px;");
+    m_headerTitleLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_headerTitleLabel->setMinimumWidth(0);
     headerLayout->addWidget(m_headerTitleLabel);
 
     headerLayout->addStretch();
@@ -139,6 +142,9 @@ void SourceControlPanel::setupUI()
         "  color: #e6edf3;"
         "}"
     );
+    m_statusLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    m_statusLabel->setMinimumWidth(0);
+    m_statusLabel->setWordWrap(false);
     m_statusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     mainLayout->addWidget(m_statusLabel);
 }
