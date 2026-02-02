@@ -72,6 +72,11 @@ signals:
      */
     void repositoryInitialized(const QString& path);
 
+    /**
+     * @brief Emitted when user wants to view commit diff
+     */
+    void commitDiffRequested(const QString& commitHash, const QString& shortHash);
+
 private slots:
     void onStageAllClicked();
     void onUnstageAllClicked();

@@ -24,6 +24,9 @@
 namespace {
     constexpr int kToolbarSpacing = 8;
     constexpr int kDiffPreviewLimit = 80000;
+    constexpr int kDiffToneUnified = 150;
+    constexpr int kDiffToneSplit = 150;
+    constexpr int kDiffToneWord = 170;
 }
 
 GitDiffDialog::GitDiffDialog(GitIntegration* git,
@@ -236,8 +239,8 @@ void GitDiffDialog::buildUi()
     connect(m_prevButton, &QPushButton::clicked, this, &GitDiffDialog::onPrevChange);
     connect(m_nextButton, &QPushButton::clicked, this, &GitDiffDialog::onNextChange);
     connect(m_searchField, &QLineEdit::returnPressed, [this]() { performSearch(false); });
-    connect(m_searchField, &QLineEdit::textChanged, [this](const QString& text) {
-        if (text.size() < 2) {
+    connect(m_searchField, &QLineEdit::textChanged, [this](const QString& queryText) {
+        if (queryText.size() < 2) {
             return;
         }
         performSearch(false);
@@ -337,8 +340,8 @@ void GitDiffDialog::rebuildUnified()
     html += "<html><head><style>";
     html += "body { background:" + m_theme.backgroundColor.name() + "; color:" + m_theme.foregroundColor.name() + "; }";
     html += ".meta { color:" + m_theme.foregroundColor.lighter(140).name() + "; }";
-    html += ".add { background:" + m_theme.successColor.lighter(150).name() + "; color:" + m_theme.foregroundColor.name() + "; }";
-    html += ".del { background:" + m_theme.errorColor.lighter(150).name() + "; color:" + m_theme.foregroundColor.name() + "; }";
+    html += ".add { background:" + m_theme.successColor.lighter(kDiffToneUnified).name() + "; color:" + m_theme.foregroundColor.name() + "; }";
+    html += ".del { background:" + m_theme.errorColor.lighter(kDiffToneUnified).name() + "; color:" + m_theme.foregroundColor.name() + "; }";
     html += ".ctx { color:" + m_theme.foregroundColor.name() + "; }";
     html += "pre { font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }";
     html += "</style></head><body><pre>";
@@ -371,8 +374,8 @@ void GitDiffDialog::rebuildSplit()
     html += "table { width: 100%; border-collapse: collapse; font-family: monospace; font-size: 12px; }";
     html += "td { vertical-align: top; padding: 2px 6px; white-space: pre-wrap; }";
     html += ".meta { color:" + m_theme.foregroundColor.lighter(140).name() + "; }";
-    html += ".add { background:" + m_theme.successColor.lighter(150).name() + "; }";
-    html += ".del { background:" + m_theme.errorColor.lighter(150).name() + "; }";
+    html += ".add { background:" + m_theme.successColor.lighter(kDiffToneSplit).name() + "; }";
+    html += ".del { background:" + m_theme.errorColor.lighter(kDiffToneSplit).name() + "; }";
     html += ".ctx { color:" + m_theme.foregroundColor.name() + "; }";
     html += ".gutter { width: 50%; }";
     html += "</style></head><body><table>";
@@ -403,8 +406,8 @@ void GitDiffDialog::rebuildWord()
     html += "<html><head><style>";
     html += "body { background:" + m_theme.backgroundColor.name() + "; color:" + m_theme.foregroundColor.name() + "; }";
     html += ".meta { color:" + m_theme.foregroundColor.lighter(140).name() + "; }";
-    html += ".add { background:" + m_theme.successColor.lighter(170).name() + "; color:" + m_theme.foregroundColor.name() + "; }";
-    html += ".del { background:" + m_theme.errorColor.lighter(170).name() + "; color:" + m_theme.foregroundColor.name() + "; }";
+    html += ".add { background:" + m_theme.successColor.lighter(kDiffToneWord).name() + "; color:" + m_theme.foregroundColor.name() + "; }";
+    html += ".del { background:" + m_theme.errorColor.lighter(kDiffToneWord).name() + "; color:" + m_theme.foregroundColor.name() + "; }";
     html += ".ctx { color:" + m_theme.foregroundColor.name() + "; }";
     html += "pre { font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }";
     html += "</style></head><body><pre>";
