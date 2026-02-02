@@ -88,6 +88,7 @@ private slots:
     void onDeleteBranchClicked();
     void onCommitMessageChanged();
     void onItemCheckChanged(QTreeWidgetItem* item, int column);
+    void onHistoryContextMenu(const QPoint& pos);
     
     // New slots for extended functionality
     void onInitRepositoryClicked();

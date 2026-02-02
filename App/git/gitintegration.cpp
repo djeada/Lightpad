@@ -489,6 +489,32 @@ bool GitIntegration::checkoutBranch(const QString& branchName)
     return success;
 }
 
+bool GitIntegration::checkoutCommit(const QString& commitHash)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+
+    if (commitHash.isEmpty()) {
+        emit errorOccurred("Commit hash cannot be empty");
+        return false;
+    }
+
+    bool success;
+    executeGitCommand({"checkout", commitHash}, &success);
+
+    if (success) {
+        updateCurrentBranch();
+        emit operationCompleted("Checked out commit: " + commitHash.left(7));
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to checkout commit: " + commitHash.left(7));
+    }
+
+    return success;
+}
+
 bool GitIntegration::createBranch(const QString& branchName, bool checkout)
 {
     if (!m_isValid) {
@@ -514,6 +540,37 @@ bool GitIntegration::createBranch(const QString& branchName, bool checkout)
         emit errorOccurred("Failed to create branch: " + branchName);
     }
     
+    return success;
+}
+
+bool GitIntegration::createBranchFromCommit(const QString& branchName, const QString& commitHash, bool checkout)
+{
+    if (!m_isValid) {
+        emit errorOccurred("Not in a git repository");
+        return false;
+    }
+
+    if (branchName.isEmpty() || commitHash.isEmpty()) {
+        emit errorOccurred("Branch name or commit hash cannot be empty");
+        return false;
+    }
+
+    bool success;
+    QStringList args = checkout
+        ? QStringList({"checkout", "-b", branchName, commitHash})
+        : QStringList({"branch", branchName, commitHash});
+    executeGitCommand(args, &success);
+
+    if (success) {
+        if (checkout) {
+            updateCurrentBranch();
+        }
+        emit operationCompleted("Branch created: " + branchName);
+        emit statusChanged();
+    } else {
+        emit errorOccurred("Failed to create branch: " + branchName);
+    }
+
     return success;
 }
 

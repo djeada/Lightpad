@@ -911,6 +911,7 @@ void SourceControlPanel::setupRepoUI()
     m_historyTree->setHeaderHidden(true);
     m_historyTree->setRootIsDecorated(false);
     m_historyTree->setVisible(false);  // Initially collapsed
+    m_historyTree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_historyTree->setStyleSheet(
         "QTreeWidget {"
         "  background: #0d1117;"
@@ -978,6 +979,7 @@ void SourceControlPanel::setupRepoUI()
             msgBox.exec();
         }
     });
+    connect(m_historyTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onHistoryContextMenu);
     
     mainLayout->addWidget(m_historyTree);
 }
@@ -1521,6 +1523,64 @@ void SourceControlPanel::onItemCheckChanged(QTreeWidgetItem* item, int column)
         m_git->unstageFile(filePath);
     } else if (!isStaged && item->checkState(0) == Qt::Checked) {
         m_git->stageFile(filePath);
+    }
+}
+
+void SourceControlPanel::onHistoryContextMenu(const QPoint& pos)
+{
+    if (!m_git || !m_historyTree) return;
+
+    QTreeWidgetItem* item = m_historyTree->itemAt(pos);
+    if (!item) return;
+
+    QString commitHash = item->data(0, Qt::UserRole).toString();
+    if (commitHash.isEmpty()) return;
+
+    QMenu menu(this);
+    menu.setStyleSheet(
+        "QMenu {"
+        "  background: #161b22;"
+        "  color: #e6edf3;"
+        "  border: 1px solid #30363d;"
+        "  padding: 4px;"
+        "}"
+        "QMenu::item {"
+        "  padding: 6px 24px 6px 8px;"
+        "  border-radius: 4px;"
+        "}"
+        "QMenu::item:selected {"
+        "  background: #1f6feb;"
+        "}"
+        "QMenu::separator {"
+        "  height: 1px;"
+        "  background: #30363d;"
+        "  margin: 4px 0;"
+        "}"
+    );
+
+    QAction* checkoutAction = menu.addAction(tr("Checkout Commit"));
+    QAction* createBranchAction = menu.addAction(tr("Create Branch..."));
+
+    QAction* selected = menu.exec(m_historyTree->mapToGlobal(pos));
+    if (!selected) return;
+
+    if (selected == checkoutAction) {
+        m_git->checkoutCommit(commitHash);
+    } else if (selected == createBranchAction) {
+        bool ok = false;
+        QString branchName = QInputDialog::getText(this,
+            tr("Create Branch"),
+            tr("Enter new branch name:"),
+            QLineEdit::Normal,
+            "",
+            &ok);
+
+        if (ok && !branchName.isEmpty()) {
+            branchName = branchName.trimmed().replace(" ", "-");
+            if (m_git->createBranchFromCommit(branchName, commitHash, true)) {
+                updateBranchSelector();
+            }
+        }
     }
 }
 
