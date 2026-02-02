@@ -153,6 +153,7 @@ MainWindow::MainWindow(QWidget* parent)
     }
     setupTabWidgetConnections(ui->tabWidget);
     ui->magicButton->setIconSize(0.8 * ui->magicButton->size());
+    ui->debugButton->setIconSize(0.8 * ui->debugButton->size());
     
     // Initialize recent files manager
     recentFilesManager = new RecentFilesManager(this);
@@ -1387,6 +1388,35 @@ void MainWindow::openDialog(Dialog dialog)
         break;
     }
 
+    case Dialog::debugConfiguration: {
+        auto page = currentTabWidget()->getCurrentPage();
+        QString filePath = page ? page->getFilePath() : QString();
+
+        if (filePath.isEmpty()) {
+            QMessageBox::information(this, "Debug Configurations",
+                "Please open a file first to configure debug settings.");
+            return;
+        }
+
+        if (m_projectRootPath.isEmpty()) {
+            setProjectRootPath(QFileInfo(filePath).absolutePath());
+        }
+
+        DebugSettings::instance().initialize(m_projectRootPath);
+        DebugConfigurationManager::instance().setWorkspaceFolder(m_projectRootPath);
+        DebugConfigurationManager::instance().loadFromLightpadDir();
+
+        QString configPath = DebugConfigurationManager::instance().lightpadLaunchConfigPath();
+        if (configPath.isEmpty()) {
+            QMessageBox::warning(this, "Debug Configurations",
+                "Unable to locate the debug configuration file.");
+            return;
+        }
+
+        openFileAndAddToNewTab(configPath);
+        break;
+    }
+
     case Dialog::shortcuts:
         if (findChildren<ShortcutsDialog*>().isEmpty())
             new ShortcutsDialog(this);
@@ -1405,6 +1435,11 @@ void MainWindow::openConfigurationDialog()
 void MainWindow::openFormatConfigurationDialog()
 {
     openDialog(Dialog::formatConfiguration);
+}
+
+void MainWindow::openDebugConfigurationDialog()
+{
+    openDialog(Dialog::debugConfiguration);
 }
 
 void MainWindow::openShortcutsDialog()
@@ -2616,14 +2651,29 @@ void MainWindow::on_runButton_clicked()
     runCurrentScript();
 }
 
+void MainWindow::on_debugButton_clicked()
+{
+    startDebuggingForCurrentFile();
+}
+
 void MainWindow::on_actionRun_file_name_triggered()
 {
     runCurrentScript();
 }
 
+void MainWindow::on_actionDebug_file_name_triggered()
+{
+    startDebuggingForCurrentFile();
+}
+
 void MainWindow::on_actionEdit_Configurations_triggered()
 {
     openConfigurationDialog();
+}
+
+void MainWindow::on_actionEdit_Debug_Configurations_triggered()
+{
+    openDebugConfigurationDialog();
 }
 
 void MainWindow::on_magicButton_clicked()
@@ -2986,13 +3036,13 @@ void MainWindow::setTheme(Theme theme)
         "QToolButton:focus { "
             "border: 1px solid " + accentColor + "; "
         "}"
-        "QToolButton#runButton, QToolButton#magicButton { "
+        "QToolButton#runButton, QToolButton#debugButton, QToolButton#magicButton { "
             "background-color: " + surfaceAltColor + "; "
             "border: 1px solid " + borderColor + "; "
             "padding: 6px; "
             "border-radius: 6px; "
         "}"
-        "QToolButton#runButton:hover, QToolButton#magicButton:hover { "
+        "QToolButton#runButton:hover, QToolButton#debugButton:hover, QToolButton#magicButton:hover { "
             "background-color: " + hoverColor + "; "
             "border-color: " + accentColor + "; "
         "}"

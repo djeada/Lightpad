@@ -7,6 +7,7 @@
         <file>resources/icons/app.png</file>
         <file>resources/icons/unsaved.png</file>
         <file>resources/icons/run.png</file>
+        <file>resources/icons/debug.png</file>
         <file>resources/icons/folder.png</file>
     </qresource>
 </RCC>
