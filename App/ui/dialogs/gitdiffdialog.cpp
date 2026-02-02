@@ -352,7 +352,7 @@ void GitDiffDialog::rebuildUnified()
         } else if (line.prefix == '@' || line.prefix == 'd' || line.prefix == 'i' || line.prefix == 'h') {
             html += "<span class=\"meta\">" + escaped + "</span>\n";
         } else {
-            html += "<span class=\"ctx\"> " + escaped + "</span>\n";
+            html += "<span class=\"ctx\">" + escaped + "</span>\n";
         }
     }
 

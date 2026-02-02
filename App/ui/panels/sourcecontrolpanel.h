@@ -121,6 +121,7 @@ private:
     GitIntegration* m_git;
     QString m_workingPath;
     Theme m_theme;
+    bool m_themeInitialized;
     
     // Main stacked widget for different states
     QStackedWidget* m_stackedWidget;

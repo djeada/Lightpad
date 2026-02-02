@@ -71,6 +71,7 @@ SourceControlPanel::SourceControlPanel(QWidget* parent)
     , m_changesCount(0)
     , m_refreshTimer(new QTimer(this))
     , m_theme()
+    , m_themeInitialized(false)
 {
     m_refreshTimer->setSingleShot(true);
     m_refreshTimer->setInterval(0);
@@ -958,7 +959,8 @@ void SourceControlPanel::setupRepoUI()
                 .arg(info.body.isEmpty() ? "(No additional message)" : info.body);
             
             if (!diff.isEmpty()) {
-                GitDiffDialog dialog(m_git, commitHash, GitDiffDialog::DiffTarget::Commit, false, m_theme, this);
+                GitDiffDialog dialog(m_git, commitHash, GitDiffDialog::DiffTarget::Commit, false,
+                                     m_themeInitialized ? m_theme : Theme(), this);
                 dialog.setWindowTitle(tr("Commit: %1").arg(info.shortHash));
                 dialog.setDiffText(diff);
                 dialog.exec();
@@ -1931,6 +1933,7 @@ void SourceControlPanel::onResolveConflictsClicked()
 void SourceControlPanel::applyTheme(const Theme& theme)
 {
     m_theme = theme;
+    m_themeInitialized = true;
     // Apply main widget style
     setStyleSheet(QString("background: %1;").arg(theme.backgroundColor.name()));
     
