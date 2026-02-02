@@ -38,6 +38,7 @@
 #include "dialogs/formattemplateselector.h"
 #include "dialogs/shortcuts.h"
 #include "dialogs/commandpalette.h"
+#include "dialogs/gitdiffdialog.h"
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
 #include "dialogs/filequickopen.h"
@@ -1574,21 +1575,9 @@ void MainWindow::ensureSourceControlPanel()
                     return;
                 }
 
-                QDialog dialog(this);
+                GitDiffDialog dialog(m_gitIntegration, filePath, GitDiffDialog::DiffTarget::File, staged, getTheme(), this);
                 dialog.setWindowTitle(staged ? tr("Staged Diff") : tr("Unstaged Diff"));
-                dialog.resize(760, 520);
-                QVBoxLayout layout(&dialog);
-
-                QPlainTextEdit diffView(&dialog);
-                diffView.setReadOnly(true);
-                diffView.setPlainText(diff);
-                diffView.setStyleSheet("QPlainTextEdit { background: #0d1117; color: #e6edf3; border: 1px solid #30363d; }");
-                layout.addWidget(&diffView, 1);
-
-                QDialogButtonBox buttons(QDialogButtonBox::Close, &dialog);
-                connect(&buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-                layout.addWidget(&buttons);
-
+                dialog.setDiffText(diff);
                 dialog.exec();
             });
     connect(sourceControlPanel, &SourceControlPanel::repositoryInitialized, this,

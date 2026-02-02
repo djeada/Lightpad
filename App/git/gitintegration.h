@@ -275,6 +275,13 @@ public:
     QString getCommitDiff(const QString& commitHash) const;
 
     /**
+     * @brief Execute git command for word diff rendering
+     * @param args Git command arguments
+     * @return Command output (empty if failed)
+     */
+    QString executeWordDiff(const QStringList& args) const;
+
+    /**
      * @brief Get blame annotations for a file
      * @param filePath Path to the file
      * @return List of blame info for each line

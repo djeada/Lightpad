@@ -72,6 +72,11 @@ signals:
      */
     void repositoryInitialized(const QString& path);
 
+    /**
+     * @brief Emitted when user wants to view commit diff
+     */
+    void commitDiffRequested(const QString& commitHash, const QString& shortHash);
+
 private slots:
     void onStageAllClicked();
     void onUnstageAllClicked();
@@ -121,6 +126,8 @@ private:
 
     GitIntegration* m_git;
     QString m_workingPath;
+    Theme m_theme;
+    bool m_themeInitialized;
     
     // Main stacked widget for different states
     QStackedWidget* m_stackedWidget;

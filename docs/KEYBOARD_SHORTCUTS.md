@@ -74,6 +74,8 @@ This document lists all keyboard shortcuts available in Lightpad.
 | `Ctrl+B` | Toggle sidebar |
 | `Ctrl+\`` | Toggle terminal |
 | `Ctrl+Shift+G` | Toggle Source Control |
+| `F3` | Next diff change when diff viewer is focused |
+| `Shift+F3` | Previous diff change when diff viewer is focused |
 
 ## VIM Mode
 
