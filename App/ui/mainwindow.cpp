@@ -1393,7 +1393,7 @@ void MainWindow::openDialog(Dialog dialog)
         QString filePath = page ? page->getFilePath() : QString();
 
         if (filePath.isEmpty()) {
-            QMessageBox::information(this, "Debug Configuration",
+            QMessageBox::information(this, "Debug Configurations",
                 "Please open a file first to configure debug settings.");
             return;
         }
@@ -1408,7 +1408,7 @@ void MainWindow::openDialog(Dialog dialog)
 
         QString configPath = DebugConfigurationManager::instance().lightpadLaunchConfigPath();
         if (configPath.isEmpty()) {
-            QMessageBox::warning(this, "Debug Configuration",
+            QMessageBox::warning(this, "Debug Configurations",
                 "Unable to locate the debug configuration file.");
             return;
         }
