@@ -6,6 +6,13 @@
 #include <QScrollBar>
 #include <QToolTip>
 #include <QHelpEvent>
+#include <QMenu>
+#include <QContextMenuEvent>
+
+#include "../../dap/breakpointmanager.h"
+#include "../../core/lightpadpage.h"
+#include "../../core/lightpadtabwidget.h"
+#include "../../ui/mainwindow.h"
 
 LineNumberArea::LineNumberArea(TextArea* editor, QWidget* parent)
     : QWidget(parent ? parent : editor)
@@ -148,6 +155,94 @@ bool LineNumberArea::event(QEvent* event)
     }
     
     return QWidget::event(event);
+}
+
+void LineNumberArea::contextMenuEvent(QContextMenuEvent* event)
+{
+    if (!m_editor) {
+        return;
+    }
+
+    QTextBlock block = m_editor->firstVisibleBlock();
+    QRectF blockRect = m_editor->blockBoundingGeometry(block);
+    blockRect.translate(m_editor->contentOffset());
+    qreal top = blockRect.top();
+    qreal bottom = top + blockRect.height();
+    int blockNumber = block.blockNumber();
+    int clickedLine = -1;
+
+    while (block.isValid() && top <= height()) {
+        if (block.isVisible() && event->pos().y() >= top && event->pos().y() <= bottom) {
+            clickedLine = blockNumber + 1;
+            break;
+        }
+        block = block.next();
+        top = bottom;
+        if (!block.isValid()) {
+            break;
+        }
+        blockRect = m_editor->blockBoundingGeometry(block);
+        blockRect.translate(m_editor->contentOffset());
+        bottom = top + blockRect.height();
+        ++blockNumber;
+    }
+
+    if (clickedLine <= 0) {
+        return;
+    }
+
+    QString filePath;
+    QObject* parent = m_editor;
+    while (parent && filePath.isEmpty()) {
+        if (auto* page = qobject_cast<LightpadPage*>(parent)) {
+            filePath = page->getFilePath();
+            break;
+        }
+        parent = parent->parent();
+    }
+
+    MainWindow* mainWindow = m_editor->mainWindow;
+    if (filePath.isEmpty() && mainWindow) {
+        LightpadTabWidget* tabWidget = mainWindow->currentTabWidget();
+        filePath = tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+    }
+
+    QMenu menu(this);
+    QAction* breakpointAction = menu.addAction(tr("Toggle Breakpoint"));
+    menu.addSeparator();
+    QAction* blameAction = menu.addAction(tr("Git Blame"));
+
+    if (!filePath.isEmpty()) {
+        bool hasBreakpoint = BreakpointManager::instance().hasBreakpoint(filePath, clickedLine);
+        breakpointAction->setCheckable(true);
+        breakpointAction->setChecked(hasBreakpoint);
+    } else {
+        breakpointAction->setEnabled(false);
+    }
+
+    if (mainWindow && !filePath.isEmpty()) {
+        bool enabled = mainWindow->isGitBlameEnabledForFile(filePath);
+        blameAction->setCheckable(true);
+        blameAction->setChecked(enabled);
+    } else {
+        blameAction->setEnabled(false);
+    }
+
+    QAction* selected = menu.exec(event->globalPos());
+    if (!selected) {
+        return;
+    }
+
+    if (selected == breakpointAction) {
+        if (filePath.isEmpty()) {
+            return;
+        }
+        BreakpointManager::instance().toggleBreakpoint(filePath, clickedLine);
+    } else if (selected == blameAction && mainWindow) {
+        bool enabled = mainWindow->isGitBlameEnabledForFile(filePath);
+        mainWindow->showGitBlameForCurrentFile(!enabled);
+        mainWindow->setGitBlameEnabledForFile(filePath, !enabled);
+    }
 }
 
 void LineNumberArea::paintEvent(QPaintEvent* event)
