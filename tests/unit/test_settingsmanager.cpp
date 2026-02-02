@@ -1,4 +1,6 @@
 #include <QtTest/QtTest>
+#include <QCoreApplication>
+#include <QDir>
 #include <QTemporaryDir>
 #include <QStandardPaths>
 #include "settings/settingsmanager.h"
@@ -7,6 +9,8 @@ class TestSettingsManager : public QObject {
     Q_OBJECT
 
 private slots:
+    void initTestCase();
+    void cleanupTestCase();
     void testSingletonInstance();
     void testGetSettingsDirectory();
     void testDefaultValues();
@@ -15,7 +19,38 @@ private slots:
     void testHasKey();
     void testResetToDefaults();
     void testLoadSaveSettings();
+private:
+    QTemporaryDir m_tempDir;
+    QByteArray m_previousXdgConfigHome;
+    bool m_hadXdgConfigHome = false;
 };
+
+void TestSettingsManager::initTestCase()
+{
+    QVERIFY(m_tempDir.isValid());
+
+    m_hadXdgConfigHome = qEnvironmentVariableIsSet("XDG_CONFIG_HOME");
+    if (m_hadXdgConfigHome) {
+        m_previousXdgConfigHome = qgetenv("XDG_CONFIG_HOME");
+    }
+
+    const QString configRoot = m_tempDir.path() + "/config";
+    QDir dir;
+    QVERIFY(dir.mkpath(configRoot));
+    qputenv("XDG_CONFIG_HOME", configRoot.toUtf8());
+
+    QCoreApplication::setOrganizationName("lightpad");
+    QCoreApplication::setApplicationName("lightpad");
+}
+
+void TestSettingsManager::cleanupTestCase()
+{
+    if (m_hadXdgConfigHome) {
+        qputenv("XDG_CONFIG_HOME", m_previousXdgConfigHome);
+    } else {
+        qunsetenv("XDG_CONFIG_HOME");
+    }
+}
 
 void TestSettingsManager::testSingletonInstance()
 {

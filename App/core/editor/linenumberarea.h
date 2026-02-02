@@ -6,6 +6,7 @@
 #include <QPair>
 #include <QColor>
 #include <QFont>
+#include <QMap>
 
 class TextArea;
 class QPaintEvent;
@@ -56,19 +57,28 @@ public:
      * @brief Clear git diff indicators
      */
     void clearGitDiffLines();
+    void setGitBlameLines(const QMap<int, QString>& blameLines);
+    void clearGitBlameLines();
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    bool event(QEvent* event) override;
 
 private:
+    void updateBlameTextWidth();
+
     TextArea* m_editor;
     QFont m_font;
     QColor m_backgroundColor;
     QColor m_textColor;
     QList<QPair<int, int>> m_gitDiffLines;
+    QMap<int, QString> m_gitBlameLines;
+    int m_blameTextWidth;
     
     static constexpr int DIFF_INDICATOR_WIDTH = 3;
     static constexpr int PADDING = 10;
+    static constexpr int BLAME_PADDING = 12;
+    static constexpr int MAX_BLAME_WIDTH = 280;
 };
 
 #endif // LINENUMBERAREA_H

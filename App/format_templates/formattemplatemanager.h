@@ -125,7 +125,7 @@ public:
     static QString substituteVariables(const QString& input, const QString& filePath);
 
     /**
-     * @brief Save format assignments for a directory
+     * @brief Save assignments for a directory to its config file
      * @param dirPath Path to the directory
      * @return true if the assignments were saved successfully
      */

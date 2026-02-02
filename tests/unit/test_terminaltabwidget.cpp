@@ -1,3 +1,4 @@
+#include <QObject>
 #include <QtTest/QtTest>
 #include <QSignalSpy>
 #include <QTabWidget>

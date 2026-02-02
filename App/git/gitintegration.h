@@ -107,6 +107,17 @@ struct GitCommitInfo {
 };
 
 /**
+ * @brief Per-line git blame annotation
+ */
+struct GitBlameLineInfo {
+    int lineNumber;     ///< 1-based line number
+    QString author;
+    QString summary;
+    QString shortHash;
+    QString relativeDate;
+};
+
+/**
  * @brief Main Git integration class for Lightpad
  * 
  * Provides functionality to interact with Git repositories including
@@ -252,6 +263,13 @@ public:
      * @return Diff output as a string
      */
     QString getCommitDiff(const QString& commitHash) const;
+
+    /**
+     * @brief Get blame annotations for a file
+     * @param filePath Path to the file
+     * @return List of blame info for each line
+     */
+    QList<GitBlameLineInfo> getBlameInfo(const QString& filePath) const;
 
     // ==================== Remote Operations ====================
 

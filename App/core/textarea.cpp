@@ -251,17 +251,14 @@ void TextArea::setupTextArea()
     lineNumberArea->setFont(mainFont);
 
     connect(this, &TextArea::blockCountChanged, this, [this] {
-        int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
-        setViewportMargins(width, 0, 0, 0);
-        lineNumberArea->setFixedWidth(width);
+        updateLineNumberAreaLayout();
     });
 
     connect(this, &TextArea::updateRequest, this, [this](const QRect& rect, int) {
         lineNumberArea->update(0, rect.y(), lineNumberArea->width(), rect.height());
 
         if (rect.contains(viewport()->rect())) {
-            int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
-            setViewportMargins(width, 0, 0, 0);
+            updateLineNumberAreaLayout();
         }
     });
 
@@ -287,7 +284,7 @@ void TextArea::setupTextArea()
         }
     });
 
-    setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+    updateLineNumberAreaLayout();
     updateCursorPositionChangedCallbacks();
     clearLineHighlight();
 }
@@ -331,9 +328,7 @@ void TextArea::setFontSize(int size)
     }
     if (lineNumberArea) {
         lineNumberArea->setFont(mainFont);
-        int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
-        setViewportMargins(width, 0, 0, 0);
-        lineNumberArea->setFixedWidth(width);
+        updateLineNumberAreaLayout();
     }
 }
 
@@ -346,9 +341,7 @@ void TextArea::setFont(QFont font)
         doc->setDefaultFont(font);
     if (lineNumberArea) {
         lineNumberArea->setFont(font);
-        int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
-        setViewportMargins(width, 0, 0, 0);
-        lineNumberArea->setFixedWidth(width);
+        updateLineNumberAreaLayout();
     }
     applyLineSpacing(defaultLineSpacingPercent);
 }
@@ -397,12 +390,9 @@ void TextArea::showLineNumbers(bool flag)
     showLineNumberArea = flag;
     LOG_DEBUG(QString("Show line numbers: %1").arg(flag ? "true" : "false"));
     if (lineNumberArea) {
-        int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
         lineNumberArea->setVisible(showLineNumberArea);
-        lineNumberArea->setFixedWidth(width);
-        lineNumberArea->setGeometry(0, 0, width, height());
     }
-    setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+    updateLineNumberAreaLayout();
 }
 
 void TextArea::highlihtCurrentLine(bool flag)
@@ -472,7 +462,7 @@ bool TextArea::changesUnsaved()
 void TextArea::resizeEvent(QResizeEvent* e)
 {
     QPlainTextEdit::resizeEvent(e);
-    lineNumberArea->setGeometry(0, 0, lineNumberAreaWidth(), height());
+    updateLineNumberAreaLayout();
 }
 
 void TextArea::keyPressEvent(QKeyEvent* keyEvent)
@@ -710,6 +700,39 @@ void TextArea::contextMenuEvent(QContextMenuEvent* event)
     auto menu = createStandardContextMenu();
     menu->addSeparator();
     menu->addAction(tr("Refactor"));
+    menu->addSeparator();
+    QAction* blameAction = menu->addAction(tr("Git Blame"));
+    if (mainWindow) {
+        QString filePath;
+        QObject* parent = this;
+        while (parent && filePath.isEmpty()) {
+            if (auto* page = qobject_cast<LightpadPage*>(parent)) {
+                filePath = page->getFilePath();
+                break;
+            }
+            parent = parent->parent();
+        }
+        if (filePath.isEmpty()) {
+            LightpadTabWidget* tabWidget = mainWindow->currentTabWidget();
+            filePath = tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+        }
+        bool enabled = mainWindow->isGitBlameEnabledForFile(filePath);
+        blameAction->setCheckable(true);
+        blameAction->setChecked(enabled);
+        connect(blameAction, &QAction::toggled, this, [this, filePath](bool checked) {
+            if (mainWindow) {
+                if (checked) {
+                    mainWindow->showGitBlameForCurrentFile(true);
+                    mainWindow->setGitBlameEnabledForFile(filePath, true);
+                } else {
+                    mainWindow->showGitBlameForCurrentFile(false);
+                    mainWindow->setGitBlameEnabledForFile(filePath, false);
+                }
+            }
+        });
+    } else {
+        blameAction->setEnabled(false);
+    }
     menu->exec(event->globalPos());
     delete menu;
 }
@@ -1550,6 +1573,37 @@ void TextArea::clearGitDiffLines()
     if (lineNumberArea) {
         lineNumberArea->clearGitDiffLines();
     }
+}
+
+void TextArea::setGitBlameLines(const QMap<int, QString>& blameLines)
+{
+    m_gitBlameLines = blameLines;
+    if (lineNumberArea) {
+        lineNumberArea->setGitBlameLines(blameLines);
+        updateLineNumberAreaLayout();
+    }
+}
+
+void TextArea::clearGitBlameLines()
+{
+    m_gitBlameLines.clear();
+    if (lineNumberArea) {
+        lineNumberArea->clearGitBlameLines();
+        updateLineNumberAreaLayout();
+    }
+}
+
+void TextArea::updateLineNumberAreaLayout()
+{
+    if (!lineNumberArea) {
+        return;
+    }
+    
+    int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
+    setViewportMargins(width, 0, 0, 0);
+    lineNumberArea->setFixedWidth(width);
+    lineNumberArea->setGeometry(0, 0, width, height());
+    viewport()->update();
 }
 
 // ============================================================================

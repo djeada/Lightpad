@@ -307,18 +307,10 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
     // when setMainWindow() is called to avoid creating duplicate models
 
     QObject::connect(treeView, &QAbstractItemView::clicked, this, [this](const QModelIndex& index) {
-        if (!index.isValid() || !mainWindow || !model) {
+        if (!index.isValid() || !model) {
             return;
         }
 
-        if (model->isDir(index)) {
-            treeView->setCurrentIndex(index);
-            return;
-        }
-
-        QString path = model->filePath(index);
-        mainWindow->openFileAndAddToNewTab(path);
-        treeView->clearSelection();
         treeView->setCurrentIndex(index);
     });
 
@@ -334,7 +326,16 @@ LightpadPage::LightpadPage(QWidget* parent, bool treeViewHidden)
                 treeView->expand(index);
             }
             treeView->setCurrentIndex(index);
+            return;
         }
+
+        if (!mainWindow) {
+            return;
+        }
+
+        QString path = model->filePath(index);
+        mainWindow->openFileAndAddToNewTab(path);
+        treeView->setCurrentIndex(index);
     });
 }
 

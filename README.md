@@ -1,88 +1,111 @@
-<div align="center">
-<a href="https://github.com/djeada/Lightpad/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/djeada/Lightpad"></a>
-<a href="https://github.com/djeada/Lightpad/network"><img alt="GitHub forks" src="https://img.shields.io/github/forks/djeada/Lightpad"></a>
-<a href="https://github.com/djeada/Lightpad/blob/master/LICENSE.txt"><img alt="GitHub license" src="https://img.shields.io/github/license/djeada/Lightpad"></a>
-<a href=""><img src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat"></a>
-<a href=""><img src="https://img.shields.io/badge/version-0.1--beta-brightgreen"></a>
-<a href=""><img src="https://img.shields.io/badge/-beta-orange"></a>
-</div>
-
-![Lightpad](https://github.com/djeada/Lightpad/blob/master/App/resources/icons/app.png)
-
 # Lightpad
-Welcome to Lightpad, a powerful and intuitive code editor developed with the Qt framework. Lightpad is designed to make it easy for you to write, edit, and debug code in a variety of languages. Whether you are a beginner just starting to learn how to code or an experienced developer looking for a reliable and efficient tool, Lightpad has something to offer.
 
-With a clean and modern interface, Lightpad is designed to be easy to use and customize. You can choose from a variety of color schemes and fonts, and use a wide range of features such as syntax highlighting, code completion, and code folding to streamline your workflow. Lightpad also supports a wide range of programming languages, so you can use it no matter what type of project you are working on.
+Lightpad is a Qt 6-based code editor with a modern UI, built-in language tooling, and an extensible plugin system. It targets fast editing, project-level workflows, and developer-friendly features like LSP, Git, and debugging.
 
-So why wait? Try Lightpad today and see how it can help you write better code, faster.
+![Lightpad](screenshot.png)
 
-<h1>Screenshot</h1>
+## Highlights
+- Multi-language syntax highlighting with a plugin-based registry
+- Autocompletion with keyword, snippet, and LSP providers
+- LSP features: completion, hover, go-to definition, references, rename, and diagnostics
+- Debug Adapter Protocol (DAP) client with breakpoints, sessions, watches, and debug console
+- Git integration: status, diff gutter, staging, commits, branches, remotes, and stash
+- Command palette, file quick open, go to symbol/line
+- Multi-cursor editing and split editors (horizontal/vertical)
+- Problems panel, breadcrumbs, minimap, and integrated terminal
+- Run and format templates with per-project assignments
+- Image viewer and optional PDF viewer (Qt6Pdf)
 
-![Alt text](https://github.com/djeada/Lightpad/blob/master/screenshot.png)
+## Supported languages (built-in syntax plugins)
+Cpp, Python, JavaScript, TypeScript, Java, Rust, Go, HTML, CSS, JSON, YAML, Markdown, Shell
 
-<h1>Features</h1>
+## Build requirements
+- C++17 compiler
+- CMake 3.16+
+- Qt 6 (Core, Widgets, Gui)
+- Optional: Qt6Pdf + Qt6PdfWidgets for the PDF viewer
+  - Disable with `-DENABLE_PDF_SUPPORT=OFF`
 
-* Search and replace
-* Syntax highlighting
-* Editing shortcuts
-* Color themes
-* Code templates
-* Auto parentheses
-* Auto indenting
-* **Autocompletion** (Press `Ctrl+Space` - see [AUTOCOMPLETION.md](App/AUTOCOMPLETION.md) for details)
-* **Image Viewer** - View images (PNG, JPG, GIF, BMP, WEBP, SVG, ICO, TIFF) with zoom controls
-* **PDF Reader** - Read PDF documents with page navigation and zoom controls
+## Build on Linux (Ubuntu/Debian)
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential cmake qt6-base-dev qt6-pdf-dev libqt6pdf6 libqt6pdfwidgets6
 
-<h1>Build</h1>
-To build Lightpad, you need some libraries and tools.  Follow those instructions for the platform you're compiling on.
+git clone https://github.com/djeada/Lightpad.git
+cd Lightpad
+cmake -S . -B build -DBUILD_TESTS=ON
+cmake --build build
+```
 
-<h2>Get the sources</h2>
-Clone the Lightpad repository:
-<br>
-<pre>git clone https://github.com/djeada/Lightpad.git</pre>
+Run it:
+```bash
+./build/App/Lightpad
+```
 
-<h2>Install Build-Tools</h2>
+Run tests (optional):
+```bash
+ctest --test-dir build --output-on-failure
+```
 
-<ul>  
-<li> A C++ compiler supporting C++17 </li>
-<li> CMake (version 3.16 or higher) </li>
-</ul>
-<pre>sudo apt-get install build-essential cmake</pre>
+## Build with Makefile shortcuts
+```bash
+make install
+make build
+make run
+```
 
-<h2>Install dependencies (Qt6)</h2>
-<pre>sudo apt-get install qt6-base-dev qt6-pdf-dev libqt6pdf6 libqt6pdfwidgets6</pre>
-                     
-<h2>Building with CMake</h2>
-Open the terminal in the root directory of the project and run: 
-<pre>mkdir build
-cd build
-cmake ..
-cmake --build .</pre>
+## Build on macOS
+```bash
+brew install qt cmake
+git clone https://github.com/djeada/Lightpad.git
+cd Lightpad
+cmake -S . -B build -DBUILD_TESTS=ON
+cmake --build build
+./build/App/Lightpad.app/Contents/MacOS/Lightpad
+```
 
-The executable will be located at <code>build/App/Lightpad</code>.
+## Build on Windows
+1. Install Qt 6 and CMake.
+2. Configure and build with CMake (CLI or GUI).
+3. The binary is produced in the build output directory.
 
-<h2>Run</h2>
-To run Lightpad from the build directory:
-<pre>./App/Lightpad</pre>
+## Diagnostics
+For plugin and startup diagnostics, run:
+```bash
+LIGHTPAD_LOG_LEVEL=debug ./build/App/Lightpad
+```
 
-Or navigate to the program directory and double-click the Lightpad executable.
+## Project configuration
+Lightpad stores project-specific settings in a `.lightpad/` directory at the project root:
+- `run_config.json` for run template assignments
+- `format_config.json` for formatter assignments
+- `highlight_config.json` for language overrides
+- `debug/launch.json`, `debug/breakpoints.json`, `debug/watches.json`
 
-If you had problems compiling from source, raise a new issue in the <a href = https://github.com/djeada/lightpad/issues> link</href>.
+User settings are stored in:
+- Linux: `~/.config/lightpad/settings.json` (fallback: `~/.config/lightpad/`)
+- Windows: `%LOCALAPPDATA%/Lightpad/settings.json`
+- macOS: `~/Library/Application Support/Lightpad/settings.json`
 
-<h1>Contributing </h1>
-All contributions are welcomed.
+Plugins are discovered from:
+- App dir: `<app>/plugins`
+- User: `AppDataLocation/plugins`
+- Linux system: `/usr/lib/lightpad/plugins`, `/usr/local/lib/lightpad/plugins`
 
+## Documentation
+- User manual: docs/USER_MANUAL.md
+- Keyboard shortcuts: docs/KEYBOARD_SHORTCUTS.md
+- Plugin development: docs/PLUGIN_DEVELOPMENT.md
+- Syntax plugins: docs/SYNTAX_PLUGINS.md
 
-<h1>License</h1>
-This project is licensed under  GNU GENERAL PUBLIC LICENSE - see the <a href='https://github.com/djeada/Lightpad/blob/master/LICENSE'> LICENSE.txt </a> file for details.
+## Contributing
+See CONTRIBUTING.md for the workflow and guidelines.
 
-<h2>Third-Party Licenses</h2>
+## License
+GPL-3.0. See LICENSE for details.
 
-<h3>Qt Framework</h3>
-This application uses the <a href="https://www.qt.io/">Qt framework</a>, which is available under the <a href="https://www.gnu.org/licenses/lgpl-3.0.html">GNU Lesser General Public License (LGPL) version 3</a>.
-
+## Third-Party Licenses
+This application uses the Qt framework, which is available under LGPLv3.
 Qt is a registered trademark of The Qt Company Ltd. and its subsidiaries.
-
-For more information about Qt licensing, visit: <a href="https://www.qt.io/licensing/">https://www.qt.io/licensing/</a>
-
-The Qt source code can be obtained from: <a href="https://www.qt.io/download-open-source">https://www.qt.io/download-open-source</a>
+Licensing details: https://www.qt.io/licensing/
+Qt source code: https://www.qt.io/download-open-source
