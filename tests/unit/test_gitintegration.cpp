@@ -19,6 +19,8 @@ private slots:
     void testCommit();
     void testGetBranches();
     void testCreateBranch();
+    void testCheckoutCommit();
+    void testCreateBranchFromCommit();
     void testGetDiffLines();
     void testGetFileDiffStagedAndUnstaged();
     // Tests from HEAD (extended functionality)
@@ -282,6 +284,61 @@ void TestGitIntegration::testCreateBranch()
     QVERIFY(git.deleteBranch("test-feature-branch"));
 }
 
+void TestGitIntegration::testCheckoutCommit()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+
+    QString originalBranch = git.currentBranch();
+
+    QProcess process;
+    process.setWorkingDirectory(m_repoPath);
+    process.start("git", {"rev-parse", "HEAD"});
+    QVERIFY(process.waitForFinished(GIT_COMMAND_TIMEOUT_MS));
+    QString commitHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+    QVERIFY(!commitHash.isEmpty());
+
+    QVERIFY(git.checkoutCommit(commitHash));
+
+    process.start("git", {"rev-parse", "HEAD"});
+    QVERIFY(process.waitForFinished(GIT_COMMAND_TIMEOUT_MS));
+    QString headHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+    QCOMPARE(headHash, commitHash);
+
+    QString branchName = git.currentBranch();
+    QVERIFY(branchName == "HEAD" || branchName == "detached HEAD" || branchName.contains("HEAD"));
+
+    if (!originalBranch.isEmpty()) {
+        QVERIFY(git.checkoutBranch(originalBranch));
+    }
+}
+
+void TestGitIntegration::testCreateBranchFromCommit()
+{
+    GitIntegration git;
+    QVERIFY(git.setRepositoryPath(m_repoPath));
+
+    QString originalBranch = git.currentBranch();
+
+    QProcess process;
+    process.setWorkingDirectory(m_repoPath);
+    process.start("git", {"rev-parse", "HEAD"});
+    QVERIFY(process.waitForFinished(GIT_COMMAND_TIMEOUT_MS));
+    QString commitHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+    QVERIFY(!commitHash.isEmpty());
+
+    const QString branchName = "commit-context-branch";
+    QVERIFY(git.createBranchFromCommit(branchName, commitHash, true));
+    QCOMPARE(git.currentBranch(), branchName);
+
+    if (!originalBranch.isEmpty()) {
+        QVERIFY(git.checkoutBranch(originalBranch));
+    } else {
+        QVERIFY(git.checkoutBranch("master") || git.checkoutBranch("main"));
+    }
+    QVERIFY(git.deleteBranch(branchName));
+}
+
 void TestGitIntegration::testGetDiffLines()
 {
     GitIntegration git;
@@ -316,7 +373,7 @@ void TestGitIntegration::testGetFileDiffStagedAndUnstaged()
     QVERIFY(git.stageFile(stagedFile));
 
     runGitCommand({"add", unstagedFile});
-    runGitCommand({"commit", "-m", "Add initial.txt for unstaged diff test"});
+    runGitCommand({"commit", "-m", "Add initial.txt for unstaged diff test", "--only", unstagedFile});
 
     createTestFile(unstagedFile, "Modified content\n");
 

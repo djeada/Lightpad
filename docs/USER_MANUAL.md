@@ -92,6 +92,12 @@ Lightpad automatically detects the programming language based on file extension:
 | `.rs` | Rust |
 | `.go` | Go |
 
+### Source Control: Commit History
+
+The Source Control panel shows recent commits for the current repository. Right-click a commit in the history list to:
+- **Checkout Commit** to view files at that revision (detached HEAD)
+- **Create Branch** to start a new branch from that commit
+
 ### Line Numbers
 
 Line numbers are displayed by default. Toggle them in:

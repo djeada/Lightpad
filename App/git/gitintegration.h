@@ -212,9 +212,19 @@ public:
     bool checkoutBranch(const QString& branchName);
 
     /**
+     * @brief Checkout a commit (detached HEAD)
+     */
+    bool checkoutCommit(const QString& commitHash);
+
+    /**
      * @brief Create a new branch
      */
     bool createBranch(const QString& branchName, bool checkout = true);
+
+    /**
+     * @brief Create a new branch at a specific commit
+     */
+    bool createBranchFromCommit(const QString& branchName, const QString& commitHash, bool checkout = true);
 
     /**
      * @brief Delete a branch
