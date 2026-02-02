@@ -100,6 +100,9 @@ MainWindow::MainWindow(QWidget* parent)
     , sourceControlPanel(nullptr)
     , sourceControlDock(nullptr)
     , m_fileTreeModel(nullptr)
+    , m_treeScrollValue(0)
+    , m_treeScrollValueInitialized(false)
+    , m_treeScrollSyncing(false)
 {
     QApplication::instance()->installEventFilter(this);
     ui->setupUi(this);
@@ -486,6 +489,51 @@ void MainWindow::applyHighlightForFile(const QString& filePath)
         textArea->setGitDiffLines(gutterLines);
     } else {
         textArea->clearGitDiffLines();
+    }
+
+    showGitBlameForCurrentFile(isGitBlameEnabledForFile(filePath));
+}
+
+void MainWindow::showGitBlameForCurrentFile(bool enable)
+{
+    TextArea* textArea = getCurrentTextArea();
+    if (!textArea) {
+        return;
+    }
+    
+    LightpadTabWidget* tabWidget = currentTabWidget();
+    QString filePath = tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+    if (!enable || !m_gitIntegration || filePath.isEmpty()) {
+        textArea->clearGitBlameLines();
+        return;
+    }
+    
+    QList<GitBlameLineInfo> blameLines = m_gitIntegration->getBlameInfo(filePath);
+    QMap<int, QString> blameMap;
+    for (const auto& info : blameLines) {
+        QString label = QString("%1 • %2")
+            .arg(info.shortHash)
+            .arg(info.author);
+        blameMap.insert(info.lineNumber, label);
+    }
+    textArea->setGitBlameLines(blameMap);
+}
+
+bool MainWindow::isGitBlameEnabledForFile(const QString& filePath) const
+{
+    return !filePath.isEmpty() && m_blameEnabledFiles.contains(filePath);
+}
+
+void MainWindow::setGitBlameEnabledForFile(const QString& filePath, bool enabled)
+{
+    if (filePath.isEmpty()) {
+        return;
+    }
+    
+    if (enabled) {
+        m_blameEnabledFiles.insert(filePath);
+    } else {
+        m_blameEnabledFiles.remove(filePath);
     }
 }
 
@@ -1130,8 +1178,12 @@ void MainWindow::open(const QString& filePath)
     int tabIndex = tabWidget->currentIndex();
     tabWidget->setFilePath(tabIndex, filePath);
 
-    if (getCurrentTextArea())
-        getCurrentTextArea()->setPlainText(QString::fromUtf8(file.readAll()));
+    if (getCurrentTextArea()) {
+        auto* textArea = getCurrentTextArea();
+        textArea->setPlainText(QString::fromUtf8(file.readAll()));
+        textArea->moveCursor(QTextCursor::Start);
+        textArea->centerCursor();
+    }
 }
 
 void MainWindow::save(const QString& filePath)
@@ -1398,7 +1450,11 @@ void MainWindow::ensureSourceControlPanel()
                 if (!m_gitIntegration) {
                     return;
                 }
-                QString diff = m_gitIntegration->getFileDiff(filePath);
+                GitFileInfo status = m_gitIntegration->getFileStatus(filePath);
+                bool stagedOnly = (status.indexStatus != GitFileStatus::Clean &&
+                                   status.indexStatus != GitFileStatus::Untracked &&
+                                   status.workTreeStatus == GitFileStatus::Clean);
+                QString diff = m_gitIntegration->getFileDiff(filePath, stagedOnly);
                 if (diff.trimmed().isEmpty()) {
                     QMessageBox::information(this, tr("Diff"), tr("No changes to show for this file."));
                     return;
@@ -1433,6 +1489,8 @@ void MainWindow::ensureSourceControlPanel()
     sourceControlDock->setWidget(sourceControlPanel);
     addDockWidget(Qt::RightDockWidgetArea, sourceControlDock);
     sourceControlDock->hide();
+    updateSourceControlDockTitle(m_gitIntegration ? m_gitIntegration->repositoryPath() : QString(),
+                                 m_gitIntegration ? m_gitIntegration->isValidRepository() : false);
 
     connect(sourceControlDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
         if (ui->actionToggle_Source_Control) {
@@ -1849,6 +1907,7 @@ void MainWindow::updateGitIntegrationForPath(const QString& path)
         sourceControlPanel->setWorkingPath(isRepo ? m_gitIntegration->repositoryPath() : path);
         sourceControlPanel->refresh();
     }
+    updateSourceControlDockTitle(m_gitIntegration->repositoryPath(), isRepo);
 
     auto textArea = getCurrentTextArea();
     LightpadTabWidget* tabWidget = currentTabWidget();
@@ -1868,6 +1927,22 @@ void MainWindow::updateGitIntegrationForPath(const QString& path)
         }
         textArea->setGitDiffLines(gutterLines);
     }
+
+    showGitBlameForCurrentFile(isGitBlameEnabledForFile(currentFilePath));
+}
+
+void MainWindow::updateSourceControlDockTitle(const QString& repoRoot, bool isRepo)
+{
+    if (!sourceControlDock) {
+        return;
+    }
+
+    if (isRepo && !repoRoot.isEmpty()) {
+        sourceControlDock->setWindowTitle(tr("Source Control — %1").arg(QDir(repoRoot).absolutePath()));
+        return;
+    }
+
+    sourceControlDock->setWindowTitle(tr("Source Control"));
 }
 
 void MainWindow::applyGitIntegrationToAllPages()
@@ -2986,6 +3061,8 @@ void MainWindow::setProjectRootPath(const QString& path)
     if (previousRoot != path) {
         m_treeExpandedPaths.clear();
         loadTreeStateFromSettings(path);
+        m_treeScrollValue = 0;
+        m_treeScrollValueInitialized = false;
     }
 
     if (!path.isEmpty()) {
@@ -3094,15 +3171,38 @@ void MainWindow::registerTreeView(LightpadTreeView* treeView)
     // With a single shared model, we don't need to sync between views
     QObject::disconnect(treeView, &QTreeView::expanded, this, nullptr);
     QObject::disconnect(treeView, &QTreeView::collapsed, this, nullptr);
+    QObject::disconnect(treeView->verticalScrollBar(), &QScrollBar::valueChanged, this, nullptr);
     connect(treeView, &QTreeView::expanded, this, [this](const QModelIndex& index) {
         trackTreeExpandedState(index, true);
     });
     connect(treeView, &QTreeView::collapsed, this, [this](const QModelIndex& index) {
         trackTreeExpandedState(index, false);
     });
+    connect(treeView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
+        if (m_treeScrollSyncing) {
+            return;
+        }
+        m_treeScrollValue = value;
+        m_treeScrollValueInitialized = true;
+        m_treeScrollSyncing = true;
+        for (LightpadTreeView* view : allTreeViews()) {
+            if (!view) {
+                continue;
+            }
+            QScrollBar* scrollBar = view->verticalScrollBar();
+            if (!scrollBar || scrollBar->value() == value) {
+                continue;
+            }
+            scrollBar->setValue(value);
+        }
+        m_treeScrollSyncing = false;
+    });
 
     // Apply initial state to this view
     applyTreeStateToView(treeView);
+    if (m_treeScrollValueInitialized) {
+        treeView->verticalScrollBar()->setValue(m_treeScrollValue);
+    }
 }
 
 void MainWindow::trackTreeExpandedState(const QModelIndex& index, bool expanded)

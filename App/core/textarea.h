@@ -5,6 +5,7 @@
 #include <QList>
 #include <QTextCursor>
 #include <QSet>
+#include <QMap>
 #include <functional>
 
 #include "../editor/vimmode.h"
@@ -114,6 +115,8 @@ public:
     // Git diff gutter
     void setGitDiffLines(const QList<QPair<int, int>>& diffLines);  // line number, type (0=add, 1=modify, 2=delete)
     void clearGitDiffLines();
+    void setGitBlameLines(const QMap<int, QString>& blameLines);
+    void clearGitBlameLines();
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -174,6 +177,7 @@ private:
 
     // Git diff gutter
     QList<QPair<int, int>> m_gitDiffLines;  // line number, type (0=add, 1=modify, 2=delete)
+    QMap<int, QString> m_gitBlameLines;
 
     void setupTextArea();
     void setTabWidgetIcon(QIcon icon);
@@ -193,6 +197,7 @@ private:
     void hideCompletionPopup();
     void applyLineSpacing(int percent);
     void updateHighlighterViewport();
+    void updateLineNumberAreaLayout();
     
 private slots:
     void onCompletionsReady(const QList<CompletionItem>& items);

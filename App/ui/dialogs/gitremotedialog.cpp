@@ -1,6 +1,7 @@
 #include "gitremotedialog.h"
 #include <QMessageBox>
 #include <QCheckBox>
+#include <QPalette>
 
 GitRemoteDialog::GitRemoteDialog(GitIntegration* git, Mode mode, QWidget* parent)
     : QDialog(parent)
@@ -369,6 +370,51 @@ void GitRemoteDialog::applyStyles()
             border-radius: 3px;
         }
     )");
+
+    auto applyComboPopupTheme = [](QComboBox* combo) {
+        if (!combo) {
+            return;
+        }
+        auto* view = combo->view();
+        if (!view) {
+            return;
+        }
+        view->setStyleSheet(
+            "QAbstractItemView {"
+            "  background: #21262d;"
+            "  color: #e6edf3;"
+            "  border: 1px solid #30363d;"
+            "  outline: none;"
+            "}"
+            "QAbstractItemView::item {"
+            "  background: #21262d;"
+            "  color: #e6edf3;"
+            "  padding: 4px 8px;"
+            "}"
+            "QAbstractItemView::item:selected {"
+            "  background: #1f6feb;"
+            "  color: #ffffff;"
+            "}"
+            "QAbstractItemView::item:hover {"
+            "  background: #2a3241;"
+            "}"
+        );
+        view->setAutoFillBackground(true);
+        QPalette palette = view->palette();
+        palette.setColor(QPalette::Base, QColor("#21262d"));
+        palette.setColor(QPalette::Text, QColor("#e6edf3"));
+        palette.setColor(QPalette::Highlight, QColor("#1f6feb"));
+        palette.setColor(QPalette::HighlightedText, QColor("#ffffff"));
+        view->setPalette(palette);
+        if (auto* viewport = view->viewport()) {
+            viewport->setAutoFillBackground(true);
+            viewport->setPalette(palette);
+            viewport->setStyleSheet("background: #21262d;");
+        }
+    };
+
+    applyComboPopupTheme(m_remoteSelector);
+    applyComboPopupTheme(m_branchSelector);
     
     if (m_pushButton) m_pushButton->setObjectName("pushButton");
     if (m_pullButton) m_pullButton->setObjectName("pullButton");

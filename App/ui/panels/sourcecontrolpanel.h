@@ -13,6 +13,7 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QStackedWidget>
+#include <QTimer>
 #include "../../git/gitintegration.h"
 
 class GitInitDialog;
@@ -80,6 +81,7 @@ private slots:
     void onCreateBranchClicked();
     void onDeleteBranchClicked();
     void onCommitMessageChanged();
+    void onItemCheckChanged(QTreeWidgetItem* item, int column);
     
     // New slots for extended functionality
     void onInitRepositoryClicked();
@@ -103,6 +105,10 @@ private:
     QString statusIcon(GitFileStatus status) const;
     QString statusText(GitFileStatus status) const;
     QColor statusColor(GitFileStatus status) const;
+    void addEmptyStateItem(QTreeWidget* tree, const QString& text);
+    void updateCounts();
+    void updateHeaderTitle();
+    void scheduleRefresh();
 
     GitIntegration* m_git;
     QString m_workingPath;
@@ -114,6 +120,7 @@ private:
     QWidget* m_noRepoWidget;
     QPushButton* m_initRepoButton;
     QLabel* m_noRepoLabel;
+    QLabel* m_headerTitleLabel;
     
     // Merge conflict state UI
     QWidget* m_conflictWidget;
@@ -149,6 +156,10 @@ private:
     bool m_historyExpanded;
     
     bool m_updatingBranchSelector;
+    bool m_updatingTree;
+    int m_stagedCount;
+    int m_changesCount;
+    QTimer* m_refreshTimer;
 };
 
 #endif // SOURCECONTROLPANEL_H

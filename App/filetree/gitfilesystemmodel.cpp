@@ -1,5 +1,6 @@
 #include "gitfilesystemmodel.h"
 #include "../core/logging/logger.h"
+#include <QDir>
 #include <QPainter>
 #include <QApplication>
 #include <QStyle>
@@ -48,6 +49,7 @@ GitFileSystemModel::GitFileSystemModel(QObject* parent)
     , m_refreshTimer(new QTimer(this))
 {
     initializeIcons();
+    setFilter(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
 
     // Set up refresh timer for debouncing git status updates
     m_refreshTimer->setSingleShot(true);

@@ -96,13 +96,14 @@ QString GitIntegration::executeGitCommand(const QStringList& args, bool* success
         *success = (process.exitCode() == 0);
     }
     
+    const QString output = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
     if (process.exitCode() != 0) {
         QString error = process.readAllStandardError();
         LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " + error);
-        return QString();
+        return output;
     }
     
-    return QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+    return output;
 }
 
 void GitIntegration::updateCurrentBranch()
@@ -244,10 +245,10 @@ QList<GitDiffLineInfo> GitIntegration::getDiffLines(const QString& filePath) con
     // Get unified diff with 0 context lines
     QString output = executeGitCommand({"diff", "-U0", "--", relativePath}, &success);
     
-    if (!success || output.isEmpty()) {
+    if (output.isEmpty()) {
         // Also check for staged changes
         output = executeGitCommand({"diff", "-U0", "--cached", "--", relativePath}, &success);
-        if (!success || output.isEmpty()) {
+        if (output.isEmpty()) {
             return result;
         }
     }
@@ -326,7 +327,7 @@ QList<GitBranchInfo> GitIntegration::getBranches() const
     }
     
     bool success;
-    QString output = executeGitCommand({"branch", "-a", "--format=%(refname:short)%(HEAD)%(upstream:short)"}, &success);
+    QString output = executeGitCommand({"branch", "-a", "--format=%(refname:short)%(HEAD)\t%(upstream:short)\t%(symref:short)"}, &success);
     
     if (!success) {
         return result;
@@ -338,19 +339,31 @@ QList<GitBranchInfo> GitIntegration::getBranches() const
         GitBranchInfo info;
         
         // Parse branch info
-        // Format with HEAD marker: "branch*upstream" or "branch upstream"
+        // Format with HEAD marker: "branch*\tupstream" or "branch\tupstream"
         QString trimmedLine = line.trimmed();
-        
-        if (trimmedLine.contains('*')) {
+        if (trimmedLine.isEmpty()) {
+            continue;
+        }
+
+        QStringList parts = trimmedLine.split('\t');
+        QString namePart = parts.value(0).trimmed();
+        QString symref = parts.value(2).trimmed();
+
+        // Skip symbolic refs (e.g. remotes/origin/HEAD which formats as "origin").
+        if (!symref.isEmpty()) {
+            continue;
+        }
+
+        if (namePart.endsWith('*')) {
             info.isCurrent = true;
-            trimmedLine = trimmedLine.remove('*');
+            namePart.chop(1);
         } else {
             info.isCurrent = false;
         }
-        
-        info.isRemote = trimmedLine.startsWith("remotes/") || trimmedLine.startsWith("origin/");
-        info.name = trimmedLine.section(' ', 0, 0);
-        info.trackingBranch = trimmedLine.section(' ', 1, 1);
+
+        info.isRemote = namePart.startsWith("remotes/") || namePart.startsWith("origin/");
+        info.name = namePart;
+        info.trackingBranch = parts.value(1).trimmed();
         info.aheadCount = 0;
         info.behindCount = 0;
         
@@ -525,7 +538,7 @@ bool GitIntegration::deleteBranch(const QString& branchName, bool force)
     return success;
 }
 
-QString GitIntegration::getFileDiff(const QString& filePath) const
+QString GitIntegration::getFileDiff(const QString& filePath, bool stagedOnly) const
 {
     if (!m_isValid) {
         return QString();
@@ -537,14 +550,27 @@ QString GitIntegration::getFileDiff(const QString& filePath) const
     }
     
     bool success;
-    QString diff = executeGitCommand({"diff", "--", relativePath}, &success);
-    
-    if (!success || diff.isEmpty()) {
-        // Try staged diff
-        diff = executeGitCommand({"diff", "--cached", "--", relativePath}, &success);
+    if (stagedOnly) {
+        return executeGitCommand({"diff", "--cached", "--", relativePath}, &success);
     }
-    
-    return diff;
+
+    QString diff = executeGitCommand({"diff", "--", relativePath}, &success);
+    if (!diff.isEmpty()) {
+        return diff;
+    }
+
+    diff = executeGitCommand({"diff", "--cached", "--", relativePath}, &success);
+    if (!diff.isEmpty()) {
+        return diff;
+    }
+
+    const QString nullDevice =
+#ifdef Q_OS_WIN
+        "NUL";
+#else
+        "/dev/null";
+#endif
+    return executeGitCommand({"diff", "--no-index", "--", nullDevice, relativePath}, &success);
 }
 
 bool GitIntegration::discardChanges(const QString& filePath)
@@ -677,6 +703,99 @@ QString GitIntegration::getCommitDiff(const QString& commitHash) const
     QString diff = executeGitCommand({"show", "--pretty=format:", commitHash}, &success);
     
     return success ? diff : QString();
+}
+
+QList<GitBlameLineInfo> GitIntegration::getBlameInfo(const QString& filePath) const
+{
+    QList<GitBlameLineInfo> result;
+    
+    if (!m_isValid) {
+        return result;
+    }
+    
+    QString relativePath = filePath;
+    if (filePath.startsWith(m_repositoryPath)) {
+        relativePath = filePath.mid(m_repositoryPath.length() + 1);
+    }
+    
+    bool success;
+    QString output = executeGitCommand({"blame", "--line-porcelain", "--", relativePath}, &success);
+    
+    if (success && !output.isEmpty()) {
+        QStringList lines = output.split('\n');
+        GitBlameLineInfo current;
+        bool hasCurrent = false;
+        QRegularExpression headerPattern(R"(^([0-9a-f]{7,40})\s+\d+\s+(\d+)(?:\s+\d+)?)");
+        
+        for (const QString& line : lines) {
+            if (line.startsWith('\t')) {
+                if (hasCurrent) {
+                    result.append(current);
+                    hasCurrent = false;
+                }
+                continue;
+            }
+            
+            QRegularExpressionMatch headerMatch = headerPattern.match(line);
+            if (headerMatch.hasMatch()) {
+                current = GitBlameLineInfo();
+                current.shortHash = headerMatch.captured(1).left(7);
+                current.lineNumber = headerMatch.captured(2).toInt();
+                hasCurrent = true;
+                continue;
+            }
+            
+            if (!hasCurrent) {
+                continue;
+            }
+            
+            if (line.startsWith("author ")) {
+                current.author = line.mid(QString("author ").size());
+                continue;
+            }
+            
+            if (line.startsWith("author-time ")) {
+                continue;
+            }
+            
+            if (line.startsWith("summary ")) {
+                current.summary = line.mid(QString("summary ").size());
+                continue;
+            }
+        }
+        
+        if (!result.isEmpty()) {
+            return result;
+        }
+    }
+    
+    // Fallback: parse standard blame output
+    output = executeGitCommand({"blame", "--", relativePath}, &success);
+    if (!success || output.isEmpty()) {
+        return result;
+    }
+    
+    QStringList blameLines = output.split('\n', Qt::SkipEmptyParts);
+    int lineIndex = 1;
+    QRegularExpression blamePattern(R"(^([0-9a-f]{7,40})\s+\((.+?)\s+(\d{4}-\d{2}-\d{2})\s+.+?\)\s(.*)$)");
+    
+    for (const QString& blameLine : blameLines) {
+        QRegularExpressionMatch match = blamePattern.match(blameLine);
+        if (!match.hasMatch()) {
+            lineIndex++;
+            continue;
+        }
+        
+        GitBlameLineInfo info;
+        info.lineNumber = lineIndex++;
+        info.shortHash = match.captured(1).left(7);
+        info.author = match.captured(2).trimmed();
+        info.relativeDate = match.captured(3);
+        info.summary = match.captured(4).trimmed();
+        result.append(info);
+    }
+    
+    return result;
 }
 
 void GitIntegration::refresh()

@@ -15,6 +15,7 @@
 #include <QClipboard>
 #include <QCursor>
 #include <QToolTip>
+#include <QPalette>
 
 // Constants for the commit history display
 namespace {
@@ -35,6 +36,7 @@ SourceControlPanel::SourceControlPanel(QWidget* parent)
     , m_conflictFilesList(nullptr)
     , m_resolveConflictsButton(nullptr)
     , m_abortMergeButton(nullptr)
+    , m_headerTitleLabel(nullptr)
     , m_repoWidget(nullptr)
     , m_branchLabel(nullptr)
     , m_statusLabel(nullptr)
@@ -58,7 +60,14 @@ SourceControlPanel::SourceControlPanel(QWidget* parent)
     , m_historyToggleButton(nullptr)
     , m_historyExpanded(false)
     , m_updatingBranchSelector(false)
+    , m_updatingTree(false)
+    , m_stagedCount(0)
+    , m_changesCount(0)
+    , m_refreshTimer(new QTimer(this))
 {
+    m_refreshTimer->setSingleShot(true);
+    m_refreshTimer->setInterval(0);
+    connect(m_refreshTimer, &QTimer::timeout, this, &SourceControlPanel::refresh);
     setupUI();
 }
 
@@ -78,9 +87,9 @@ void SourceControlPanel::setupUI()
     QHBoxLayout* headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(8, 4, 8, 4);
 
-    QLabel* titleLabel = new QLabel(tr("Source Control"), header);
-    titleLabel->setStyleSheet("font-weight: bold; color: #e6edf3; font-size: 13px;");
-    headerLayout->addWidget(titleLabel);
+    m_headerTitleLabel = new QLabel(tr("Source Control"), header);
+    m_headerTitleLabel->setStyleSheet("font-weight: bold; color: #e6edf3; font-size: 13px;");
+    headerLayout->addWidget(m_headerTitleLabel);
 
     headerLayout->addStretch();
 
@@ -324,6 +333,45 @@ void SourceControlPanel::setupRepoUI()
         "  selection-background-color: #1f6feb;"
         "}"
     );
+    if (auto* branchView = m_branchSelector->view()) {
+        branchView->setStyleSheet(
+            "QAbstractItemView {"
+            "  background: #21262d;"
+            "  color: #e6edf3;"
+            "  border: 1px solid #30363d;"
+            "  outline: none;"
+            "}"
+            "QAbstractItemView::item {"
+            "  background: #21262d;"
+            "  color: #e6edf3;"
+            "  padding: 4px 8px;"
+            "}"
+            "QAbstractItemView::item:selected {"
+            "  background: #1f6feb;"
+            "  color: #ffffff;"
+            "}"
+            "QAbstractItemView::item:hover {"
+            "  background: #2a3241;"
+            "}"
+        );
+        branchView->setAutoFillBackground(true);
+        QPalette palette = branchView->palette();
+        palette.setColor(QPalette::Base, QColor("#21262d"));
+        palette.setColor(QPalette::Text, QColor("#e6edf3"));
+        palette.setColor(QPalette::Highlight, QColor("#1f6feb"));
+        palette.setColor(QPalette::HighlightedText, QColor("#ffffff"));
+        branchView->setPalette(palette);
+        if (auto* branchViewport = branchView->viewport()) {
+            branchViewport->setAutoFillBackground(true);
+            branchViewport->setPalette(palette);
+            branchViewport->setStyleSheet("background: #21262d;");
+        }
+        if (auto* branchPopup = branchView->parentWidget()) {
+            branchPopup->setAutoFillBackground(true);
+            branchPopup->setPalette(palette);
+            branchPopup->setStyleSheet("QFrame { background: #21262d; border: 1px solid #30363d; }");
+        }
+    }
     connect(m_branchSelector, QOverload<int>::of(&QComboBox::currentIndexChanged), 
             this, &SourceControlPanel::onBranchSelectorChanged);
     branchSelectorLayout->addWidget(m_branchSelector, 1);
@@ -599,6 +647,7 @@ void SourceControlPanel::setupRepoUI()
     m_stagedTree->setUniformRowHeights(true);
     connect(m_stagedTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_stagedTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
+    connect(m_stagedTree, &QTreeWidget::itemChanged, this, &SourceControlPanel::onItemCheckChanged);
     mainLayout->addWidget(m_stagedTree);
 
     // Changes section
@@ -654,6 +703,7 @@ void SourceControlPanel::setupRepoUI()
     m_changesTree->setUniformRowHeights(true);
     connect(m_changesTree, &QTreeWidget::itemDoubleClicked, this, &SourceControlPanel::onItemDoubleClicked);
     connect(m_changesTree, &QTreeWidget::customContextMenuRequested, this, &SourceControlPanel::onItemContextMenu);
+    connect(m_changesTree, &QTreeWidget::itemChanged, this, &SourceControlPanel::onItemCheckChanged);
     mainLayout->addWidget(m_changesTree, 1);
 
     // Commit history section (collapsible)
@@ -782,11 +832,13 @@ void SourceControlPanel::setWorkingPath(const QString& path)
         m_git->setWorkingPath(path);
     }
     updateUIState();
+    updateHeaderTitle();
 }
 
 void SourceControlPanel::refresh()
 {
     updateUIState();
+    updateHeaderTitle();
     
     if (!m_git || !m_git->isValidRepository()) {
         if (m_branchLabel) m_branchLabel->setText(tr("Branch"));
@@ -908,6 +960,8 @@ void SourceControlPanel::updateTree()
 {
     m_stagedTree->clear();
     m_changesTree->clear();
+    m_stagedCount = 0;
+    m_changesCount = 0;
     
     if (!m_git || !m_git->isValidRepository()) {
         m_statusLabel->setText(tr("Not a git repository"));
@@ -915,9 +969,7 @@ void SourceControlPanel::updateTree()
     }
     
     QList<GitFileInfo> status = m_git->getStatus();
-    
-    int stagedCount = 0;
-    int changesCount = 0;
+    m_updatingTree = true;
     
     for (const GitFileInfo& file : status) {
         QString fullPath = file.filePath;
@@ -937,8 +989,10 @@ void SourceControlPanel::updateTree()
             item->setData(0, Qt::UserRole, fullPath);
             item->setData(0, Qt::UserRole + 1, true);  // Is staged
             item->setForeground(0, statusColor(file.indexStatus));
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(0, Qt::Checked);
             
-            stagedCount++;
+            m_stagedCount++;
         }
         
         // Check if file has working tree changes
@@ -952,19 +1006,24 @@ void SourceControlPanel::updateTree()
             item->setData(0, Qt::UserRole, fullPath);
             item->setData(0, Qt::UserRole + 1, false);  // Not staged
             item->setForeground(0, statusColor(file.workTreeStatus));
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(0, Qt::Unchecked);
             
-            changesCount++;
+            m_changesCount++;
         }
     }
+    m_updatingTree = false;
+
+    if (m_stagedCount == 0) {
+        addEmptyStateItem(m_stagedTree, tr("No staged changes"));
+    }
+    if (m_changesCount == 0) {
+        addEmptyStateItem(m_changesTree, tr("No changes"));
+    }
     
-    QString statusText = QString(tr("%1 staged, %2 changed")).arg(stagedCount).arg(changesCount);
-    m_statusLabel->setText(statusText);
-    
-    m_commitButton->setEnabled(stagedCount > 0 && !m_commitMessage->toPlainText().trimmed().isEmpty());
-    m_stageAllButton->setEnabled(changesCount > 0);
-    m_unstageAllButton->setEnabled(stagedCount > 0);
+    updateCounts();
     if (m_changesTree) {
-        m_changesTree->setToolTip(changesCount == 0 ? tr("No local changes") : QString());
+        m_changesTree->setToolTip(m_changesCount == 0 ? tr("No local changes") : QString());
     }
 }
 
@@ -1019,10 +1078,9 @@ void SourceControlPanel::onCommitMessageChanged()
         return;
     }
 
-    int stagedCount = m_stagedTree ? m_stagedTree->topLevelItemCount() : 0;
     bool hasMessage = m_commitMessage && !m_commitMessage->toPlainText().trimmed().isEmpty();
     if (m_commitButton) {
-        m_commitButton->setEnabled(stagedCount > 0 && hasMessage);
+        m_commitButton->setEnabled(m_stagedCount > 0 && hasMessage);
     }
 }
 
@@ -1093,6 +1151,7 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     
     QTreeWidgetItem* item = tree->itemAt(pos);
     if (!item) return;
+    if (item->data(0, Qt::UserRole + 2).toBool()) return;
     
     QString filePath = item->data(0, Qt::UserRole).toString();
     bool isStaged = item->data(0, Qt::UserRole + 1).toBool();
@@ -1153,15 +1212,83 @@ void SourceControlPanel::onItemContextMenu(const QPoint& pos)
     menu.exec(tree->mapToGlobal(pos));
 }
 
+void SourceControlPanel::onItemCheckChanged(QTreeWidgetItem* item, int column)
+{
+    if (!item || column != 0 || m_updatingTree) return;
+    if (item->data(0, Qt::UserRole + 2).toBool()) return;
+    if (!m_git) return;
+
+    QString filePath = item->data(0, Qt::UserRole).toString();
+    bool isStaged = item->data(0, Qt::UserRole + 1).toBool();
+    if (filePath.isEmpty()) return;
+
+    if (isStaged && item->checkState(0) == Qt::Unchecked) {
+        m_git->unstageFile(filePath);
+    } else if (!isStaged && item->checkState(0) == Qt::Checked) {
+        m_git->stageFile(filePath);
+    }
+}
+
+void SourceControlPanel::addEmptyStateItem(QTreeWidget* tree, const QString& text)
+{
+    if (!tree) return;
+    QTreeWidgetItem* item = new QTreeWidgetItem(tree);
+    item->setText(0, text);
+    item->setFlags(Qt::NoItemFlags);
+    item->setForeground(0, QColor("#6e7681"));
+    item->setData(0, Qt::UserRole + 2, true);
+}
+
+void SourceControlPanel::updateCounts()
+{
+    QString statusText = QString(tr("%1 staged, %2 changed")).arg(m_stagedCount).arg(m_changesCount);
+    m_statusLabel->setText(statusText);
+
+    bool hasMessage = m_commitMessage && !m_commitMessage->toPlainText().trimmed().isEmpty();
+    m_commitButton->setEnabled(m_stagedCount > 0 && hasMessage);
+    m_stageAllButton->setEnabled(m_changesCount > 0);
+    m_unstageAllButton->setEnabled(m_stagedCount > 0);
+}
+
+void SourceControlPanel::updateHeaderTitle()
+{
+    if (!m_headerTitleLabel) {
+        return;
+    }
+
+    if (!m_git || !m_git->isValidRepository()) {
+        m_headerTitleLabel->setText(tr("Source Control"));
+        m_headerTitleLabel->setToolTip(QString());
+        return;
+    }
+
+    QString repoRoot = m_git->repositoryPath();
+    if (repoRoot.isEmpty()) {
+        m_headerTitleLabel->setText(tr("Source Control"));
+        m_headerTitleLabel->setToolTip(QString());
+        return;
+    }
+
+    m_headerTitleLabel->setText(QDir(repoRoot).absolutePath());
+    m_headerTitleLabel->setToolTip(repoRoot);
+}
+
 void SourceControlPanel::onStatusChanged()
 {
-    refresh();
+    scheduleRefresh();
 }
 
 void SourceControlPanel::onBranchChanged(const QString& branchName)
 {
     Q_UNUSED(branchName);
     updateBranchLabel();
+}
+
+void SourceControlPanel::scheduleRefresh()
+{
+    if (!m_refreshTimer->isActive()) {
+        m_refreshTimer->start();
+    }
 }
 
 void SourceControlPanel::onBranchSelectorChanged(int index)

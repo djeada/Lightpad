@@ -72,6 +72,10 @@ public:
     QFont getFont();
     TextAreaSettings getSettings();
     void applyLanguageOverride(const QString& extension, const QString& displayName);
+    void showGitBlameForCurrentFile(bool enable);
+    bool isGitBlameEnabledForFile(const QString& filePath) const;
+    void setGitBlameEnabledForFile(const QString& filePath, bool enabled);
+    LightpadTabWidget* currentTabWidget() const;
 
 private slots:
     void on_actionQuit_triggered();
@@ -169,6 +173,7 @@ private:
     GitIntegration* m_gitIntegration;
     SourceControlPanel* sourceControlPanel;
     QDockWidget* sourceControlDock;
+    QSet<QString> m_blameEnabledFiles;
     
     // Split editor views
     SplitEditorContainer* m_splitEditorContainer;
@@ -216,6 +221,7 @@ private:
     void expandIndexInView(QTreeView* treeView, const QModelIndex& index);
     void ensureSourceControlPanel();
     void ensureStatusLabels();
+    void updateSourceControlDockTitle(const QString& repoRoot, bool isRepo);
     void updateProblemsStatusLabel(int errors, int warnings, int infos);
     void updateVimStatusLabel(const QString& text);
     void showVimStatusMessage(const QString& message);
@@ -233,7 +239,6 @@ private:
     void hideVimCommandPanel();
     void setupCompletionSystem();
     void noScriptAssignedWarning();
-    LightpadTabWidget* currentTabWidget() const;
     QList<LightpadTabWidget*> allTabWidgets() const;
     void closeEvent(QCloseEvent* event);
     void loadSettings();
@@ -259,6 +264,9 @@ private:
     QString m_projectRootPath;
     GitFileSystemModel* m_fileTreeModel;
     QSet<QString> m_treeExpandedPaths;
+    int m_treeScrollValue;
+    bool m_treeScrollValueInitialized;
+    bool m_treeScrollSyncing;
 
 public:
     void setProjectRootPath(const QString& path);
