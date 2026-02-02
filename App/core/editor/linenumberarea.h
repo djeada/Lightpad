@@ -10,6 +10,7 @@
 
 class TextArea;
 class QPaintEvent;
+class QContextMenuEvent;
 
 /**
  * @brief Line number gutter widget for code editors
@@ -63,6 +64,7 @@ public:
 protected:
     void paintEvent(QPaintEvent* event) override;
     bool event(QEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
     void updateBlameTextWidth();

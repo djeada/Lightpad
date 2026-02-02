@@ -700,39 +700,6 @@ void TextArea::contextMenuEvent(QContextMenuEvent* event)
     auto menu = createStandardContextMenu();
     menu->addSeparator();
     menu->addAction(tr("Refactor"));
-    menu->addSeparator();
-    QAction* blameAction = menu->addAction(tr("Git Blame"));
-    if (mainWindow) {
-        QString filePath;
-        QObject* parent = this;
-        while (parent && filePath.isEmpty()) {
-            if (auto* page = qobject_cast<LightpadPage*>(parent)) {
-                filePath = page->getFilePath();
-                break;
-            }
-            parent = parent->parent();
-        }
-        if (filePath.isEmpty()) {
-            LightpadTabWidget* tabWidget = mainWindow->currentTabWidget();
-            filePath = tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
-        }
-        bool enabled = mainWindow->isGitBlameEnabledForFile(filePath);
-        blameAction->setCheckable(true);
-        blameAction->setChecked(enabled);
-        connect(blameAction, &QAction::toggled, this, [this, filePath](bool checked) {
-            if (mainWindow) {
-                if (checked) {
-                    mainWindow->showGitBlameForCurrentFile(true);
-                    mainWindow->setGitBlameEnabledForFile(filePath, true);
-                } else {
-                    mainWindow->showGitBlameForCurrentFile(false);
-                    mainWindow->setGitBlameEnabledForFile(filePath, false);
-                }
-            }
-        });
-    } else {
-        blameAction->setEnabled(false);
-    }
     menu->exec(event->globalPos());
     delete menu;
 }
