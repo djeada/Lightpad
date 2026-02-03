@@ -1071,7 +1071,36 @@ void MainWindow::on_actionClose_All_Tabs_triggered() {
   currentTabWidget()->closeAllTabs();
 }
 
-void MainWindow::on_actionFind_in_file_triggered() { showFindReplace(true); }
+void MainWindow::on_actionFind_in_file_triggered() {
+  showFindReplace(true);
+  if (findReplacePanel) {
+    findReplacePanel->setGlobalMode(false);
+    findReplacePanel->setFocusOnSearchBox();
+  }
+}
+
+void MainWindow::on_actionFind_in_project_triggered() {
+  showFindReplace(true);
+  if (!findReplacePanel) {
+    return;
+  }
+
+  QString projectPath = m_projectRootPath;
+  if (projectPath.isEmpty()) {
+    LightpadTabWidget *tabWidget = currentTabWidget();
+    QString filePath =
+        tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+    if (!filePath.isEmpty()) {
+      projectPath = QFileInfo(filePath).absolutePath();
+    } else {
+      projectPath = QDir::currentPath();
+    }
+  }
+
+  findReplacePanel->setProjectPath(projectPath);
+  findReplacePanel->setGlobalMode(true);
+  findReplacePanel->setFocusOnSearchBox();
+}
 
 void MainWindow::on_actionNew_File_triggered() {
   currentTabWidget()->addNewTab();
@@ -1268,21 +1297,26 @@ void MainWindow::showFindReplace(bool onlyFind) {
     });
   }
 
-  if (!m_vimCommandPanelActive) {
-    findReplacePanel->setVisible(!findReplacePanel->isVisible() ||
-                                 findReplacePanel->isOnlyFind() != onlyFind);
-    findReplacePanel->setOnlyFind(onlyFind);
-  } else {
-    findReplacePanel->setVisible(true);
-    findReplacePanel->setOnlyFind(true);
-  }
+  bool targetOnlyFind = m_vimCommandPanelActive ? true : onlyFind;
+  findReplacePanel->setVisible(true);
+  findReplacePanel->setOnlyFind(targetOnlyFind);
 
-  if (findReplacePanel->isVisible() && getCurrentTextArea())
-    findReplacePanel->setReplaceVisibility(!onlyFind);
+  if (findReplacePanel->isVisible() && getCurrentTextArea()) {
+    findReplacePanel->setReplaceVisibility(!targetOnlyFind);
+  }
 
   if (findReplacePanel->isVisible()) {
     findReplacePanel->setTextArea(getCurrentTextArea());
-    findReplacePanel->setProjectPath(QDir::currentPath());
+    QString projectPath = m_projectRootPath;
+    if (projectPath.isEmpty()) {
+      LightpadTabWidget *tabWidget = currentTabWidget();
+      QString filePath =
+          tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex())
+                    : QString();
+      projectPath = filePath.isEmpty() ? QDir::currentPath()
+                                       : QFileInfo(filePath).absolutePath();
+    }
+    findReplacePanel->setProjectPath(projectPath);
     findReplacePanel->setMainWindow(this);
     findReplacePanel->setFocusOnSearchBox();
   }
@@ -1523,6 +1557,33 @@ void MainWindow::ensureSourceControlPanel() {
             dialog.setDiffText(diff);
             dialog.exec();
           });
+  connect(
+      sourceControlPanel, &SourceControlPanel::commitDiffRequested, this,
+      [this](const QString &commitHash, const QString &shortHash) {
+        if (!m_gitIntegration) {
+          return;
+        }
+        QString diff = m_gitIntegration->getCommitDiff(commitHash);
+        if (diff.trimmed().isEmpty()) {
+          QMessageBox::information(this, tr("Commit Diff"),
+                                   tr("No changes to show for this commit."));
+          return;
+        }
+
+        GitDiffDialog dialog(m_gitIntegration, commitHash,
+                             GitDiffDialog::DiffTarget::Commit, false,
+                             getTheme(), this);
+        dialog.setWindowTitle(tr("Commit %1").arg(shortHash));
+
+        // Get commit info for display
+        QString author = m_gitIntegration->getCommitAuthor(commitHash);
+        QString date = m_gitIntegration->getCommitDate(commitHash);
+        QString message = m_gitIntegration->getCommitMessage(commitHash);
+        dialog.setCommitInfo(author, date, message);
+
+        dialog.setDiffText(diff);
+        dialog.exec();
+      });
   connect(sourceControlPanel, &SourceControlPanel::repositoryInitialized, this,
           [this](const QString &path) {
             setProjectRootPath(path);
@@ -2562,6 +2623,33 @@ void MainWindow::on_tabWidth_clicked() {
 
 void MainWindow::on_actionReplace_in_file_triggered() {
   showFindReplace(false);
+  if (findReplacePanel) {
+    findReplacePanel->setGlobalMode(false);
+    findReplacePanel->setFocusOnSearchBox();
+  }
+}
+
+void MainWindow::on_actionReplace_in_project_triggered() {
+  showFindReplace(false);
+  if (!findReplacePanel) {
+    return;
+  }
+
+  QString projectPath = m_projectRootPath;
+  if (projectPath.isEmpty()) {
+    LightpadTabWidget *tabWidget = currentTabWidget();
+    QString filePath =
+        tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+    if (!filePath.isEmpty()) {
+      projectPath = QFileInfo(filePath).absolutePath();
+    } else {
+      projectPath = QDir::currentPath();
+    }
+  }
+
+  findReplacePanel->setProjectPath(projectPath);
+  findReplacePanel->setGlobalMode(true);
+  findReplacePanel->setFocusOnSearchBox();
 }
 
 void MainWindow::on_actionKeyboard_shortcuts_triggered() {
@@ -3013,7 +3101,7 @@ void MainWindow::setTheme(Theme theme) {
       "border: 1px solid " +
       borderColor +
       "; "
-      "padding: 4px 10px; "
+      "padding: 6px 10px; "
       "font-size: 12px; "
       "}"
       "QToolButton#languageHighlight:hover, QToolButton#tabWidth:hover { "
@@ -3371,6 +3459,10 @@ void MainWindow::setTheme(Theme theme) {
       borderColor +
       "; "
       "}"
+      "QWidget#backgroundBottom QToolButton { "
+      "min-height: 28px; "
+      "max-height: 28px; "
+      "}"
       "QWidget#FindReplacePanel { "
       "background-color: " +
       surfaceColor +
@@ -3396,9 +3488,13 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "}"
 
-      // Dialog button box
+      // Dialog button sizing
+      "QDialog QPushButton { "
+      "min-height: 32px; "
+      "}"
       "QDialogButtonBox QPushButton { "
       "min-width: 80px; "
+      "min-height: 32px; "
       "}"
 
       // Line edit with icon

@@ -768,6 +768,42 @@ QString GitIntegration::getCommitDiff(const QString &commitHash) const {
   return success ? diff : QString();
 }
 
+QString GitIntegration::getCommitAuthor(const QString &commitHash) const {
+  if (!m_isValid || commitHash.isEmpty()) {
+    return QString();
+  }
+
+  bool success;
+  QString author =
+      executeGitCommand({"show", "-s", "--format=%an <%ae>", commitHash}, &success);
+
+  return success ? author.trimmed() : QString();
+}
+
+QString GitIntegration::getCommitDate(const QString &commitHash) const {
+  if (!m_isValid || commitHash.isEmpty()) {
+    return QString();
+  }
+
+  bool success;
+  QString date =
+      executeGitCommand({"show", "-s", "--format=%ci", commitHash}, &success);
+
+  return success ? date.trimmed() : QString();
+}
+
+QString GitIntegration::getCommitMessage(const QString &commitHash) const {
+  if (!m_isValid || commitHash.isEmpty()) {
+    return QString();
+  }
+
+  bool success;
+  QString message =
+      executeGitCommand({"show", "-s", "--format=%B", commitHash}, &success);
+
+  return success ? message.trimmed() : QString();
+}
+
 QList<GitBlameLineInfo>
 GitIntegration::getBlameInfo(const QString &filePath) const {
   QList<GitBlameLineInfo> result;

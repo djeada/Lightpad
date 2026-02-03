@@ -274,6 +274,27 @@ public:
   QString getCommitDiff(const QString &commitHash) const;
 
   /**
+   * @brief Get the author of a specific commit
+   * @param commitHash The commit hash
+   * @return Author name and email
+   */
+  QString getCommitAuthor(const QString &commitHash) const;
+
+  /**
+   * @brief Get the date of a specific commit
+   * @param commitHash The commit hash
+   * @return Commit date as formatted string
+   */
+  QString getCommitDate(const QString &commitHash) const;
+
+  /**
+   * @brief Get the commit message
+   * @param commitHash The commit hash
+   * @return Full commit message
+   */
+  QString getCommitMessage(const QString &commitHash) const;
+
+  /**
    * @brief Execute git command for word diff rendering
    * @param args Git command arguments
    * @return Command output (empty if failed)

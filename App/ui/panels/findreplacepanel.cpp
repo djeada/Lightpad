@@ -110,6 +110,25 @@ void FindReplacePanel::setProjectPath(const QString &path) {
   projectPath = path;
 }
 
+void FindReplacePanel::setGlobalMode(bool enabled) {
+  if (!ui || !ui->globalMode || !ui->localMode) {
+    return;
+  }
+  if (enabled) {
+    if (!ui->globalMode->isChecked()) {
+      ui->globalMode->setChecked(true);
+    } else {
+      updateModeUI();
+    }
+  } else {
+    if (!ui->localMode->isChecked()) {
+      ui->localMode->setChecked(true);
+    } else {
+      updateModeUI();
+    }
+  }
+}
+
 void FindReplacePanel::setFocusOnSearchBox() { ui->searchFind->setFocus(); }
 
 void FindReplacePanel::setVimCommandMode(bool enabled) {

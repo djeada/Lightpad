@@ -95,12 +95,14 @@ private slots:
   void on_actionClose_Tab_triggered();
   void on_actionClose_All_Tabs_triggered();
   void on_actionFind_in_file_triggered();
+  void on_actionFind_in_project_triggered();
   void on_actionNew_File_triggered();
   void on_actionOpen_File_triggered();
   void on_actionOpen_Project_triggered();
   void on_actionSave_triggered();
   void on_actionSave_as_triggered();
   void on_actionReplace_in_file_triggered();
+  void on_actionReplace_in_project_triggered();
   void on_languageHighlight_clicked();
   void on_actionAbout_triggered();
   void on_actionAbout_Qt_triggered();

@@ -20,6 +20,7 @@
 #include "../completion/completionengine.h"
 #include "../completion/completionitem.h"
 #include "../completion/completionwidget.h"
+#include "../dap/breakpointmanager.h"
 #include "../settings/textareasettings.h"
 #include "../syntax/lightpadsyntaxhighlighter.h"
 #include "../syntax/pluginbasedsyntaxhighlighter.h"
@@ -253,6 +254,32 @@ void TextArea::setupTextArea() {
       });
     }
   });
+
+  auto &breakpointManager = BreakpointManager::instance();
+  auto refreshBreakpoints = [this](const QString &filePath) {
+    if (!filePath.isEmpty() && filePath == resolveFilePath()) {
+      updateExtraSelections();
+      if (lineNumberArea) {
+        lineNumberArea->update();
+      }
+    }
+  };
+
+  connect(&breakpointManager, &BreakpointManager::fileBreakpointsChanged, this,
+          refreshBreakpoints);
+  connect(&breakpointManager, &BreakpointManager::breakpointChanged, this,
+          [this, refreshBreakpoints](const Breakpoint &bp) {
+            refreshBreakpoints(bp.filePath);
+          });
+  connect(&breakpointManager, &BreakpointManager::allBreakpointsCleared, this,
+          [this]() {
+            if (!resolveFilePath().isEmpty()) {
+              updateExtraSelections();
+              if (lineNumberArea) {
+                lineNumberArea->update();
+              }
+            }
+          });
 
   updateLineNumberAreaLayout();
   updateCursorPositionChangedCallbacks();
@@ -806,11 +833,61 @@ void TextArea::drawMatchingBrackets() {
 void TextArea::updateExtraSelections() {
   QList<QTextEdit::ExtraSelection> extraSelections;
   QTextCursor cursor = textCursor();
+  QString filePath = resolveFilePath();
+
+  QMap<int, Breakpoint> breakpointsByLine;
+  if (!filePath.isEmpty()) {
+    const QList<Breakpoint> breakpoints =
+        BreakpointManager::instance().breakpointsForFile(filePath);
+    for (const Breakpoint &bp : breakpoints) {
+      int displayLine =
+          (bp.verified && bp.boundLine > 0) ? bp.boundLine : bp.line;
+      if (displayLine <= 0) {
+        continue;
+      }
+      if (!breakpointsByLine.contains(displayLine) || bp.enabled) {
+        breakpointsByLine[displayLine] = bp;
+      }
+    }
+  }
+
+  if (!breakpointsByLine.isEmpty()) {
+    QColor baseColor(231, 76, 60);
+    if (mainWindow) {
+      baseColor = mainWindow->getTheme().errorColor;
+    }
+
+    for (auto it = breakpointsByLine.cbegin();
+         it != breakpointsByLine.cend(); ++it) {
+      QTextBlock block = document()->findBlockByNumber(it.key() - 1);
+      if (!block.isValid()) {
+        continue;
+      }
+
+      QTextEdit::ExtraSelection selection;
+      QColor breakpointHighlight = baseColor;
+      if (!it.value().enabled) {
+        breakpointHighlight = QColor(140, 140, 140);
+      } else if (!it.value().verified) {
+        breakpointHighlight = baseColor.lighter(115);
+      }
+      breakpointHighlight.setAlpha(60);
+
+      selection.format.setBackground(breakpointHighlight);
+      selection.format.setProperty(QTextFormat::FullWidthSelection, true);
+      selection.cursor = QTextCursor(block);
+      selection.cursor.clearSelection();
+      extraSelections.append(selection);
+    }
+  }
 
   if (lineHighlighted && !cursor.hasSelection()) {
     QTextEdit::ExtraSelection selection;
     QColor color =
         mainWindow ? mainWindow->getTheme().highlightColor : highlightColor;
+    if (breakpointsByLine.contains(cursor.blockNumber() + 1)) {
+      color.setAlpha(qMin(color.alpha(), 160));
+    }
     selection.format.setBackground(color);
     selection.format.setProperty(QTextFormat::FullWidthSelection, true);
     selection.cursor = cursor;
@@ -1053,6 +1130,27 @@ QString TextArea::language() const { return m_languageId; }
 
 QString TextArea::getDocumentUri() const {
   return QString("file://%1").arg(objectName());
+}
+
+QString TextArea::resolveFilePath() const {
+  QString filePath;
+
+  QObject *parentObj = parent();
+  while (parentObj && filePath.isEmpty()) {
+    if (auto *page = qobject_cast<LightpadPage *>(parentObj)) {
+      filePath = page->getFilePath();
+      break;
+    }
+    parentObj = parentObj->parent();
+  }
+
+  if (filePath.isEmpty() && mainWindow) {
+    LightpadTabWidget *tabWidget = mainWindow->currentTabWidget();
+    filePath = tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex())
+                         : QString();
+  }
+
+  return filePath;
 }
 
 void TextArea::triggerCompletion() {
