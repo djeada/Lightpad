@@ -2629,6 +2629,29 @@ void MainWindow::on_actionReplace_in_file_triggered() {
   }
 }
 
+void MainWindow::on_actionReplace_in_project_triggered() {
+  showFindReplace(false);
+  if (!findReplacePanel) {
+    return;
+  }
+
+  QString projectPath = m_projectRootPath;
+  if (projectPath.isEmpty()) {
+    LightpadTabWidget *tabWidget = currentTabWidget();
+    QString filePath =
+        tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+    if (!filePath.isEmpty()) {
+      projectPath = QFileInfo(filePath).absolutePath();
+    } else {
+      projectPath = QDir::currentPath();
+    }
+  }
+
+  findReplacePanel->setProjectPath(projectPath);
+  findReplacePanel->setGlobalMode(true);
+  findReplacePanel->setFocusOnSearchBox();
+}
+
 void MainWindow::on_actionKeyboard_shortcuts_triggered() {
   openShortcutsDialog();
 }
