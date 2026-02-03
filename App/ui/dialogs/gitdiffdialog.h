@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include <QPointer>
+#include "../../settings/theme.h"
 
 class GitIntegration;
 class QTextEdit;
@@ -11,8 +12,6 @@ class QComboBox;
 class QCheckBox;
 class QPushButton;
 class QLineEdit;
-struct Theme;
-
 class GitDiffDialog : public QDialog {
     Q_OBJECT
 
