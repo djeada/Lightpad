@@ -37,6 +37,7 @@ public:
   void setTextArea(TextArea *area);
   void setMainWindow(MainWindow *window);
   void setProjectPath(const QString &path);
+  void setGlobalMode(bool enabled);
   void setFocusOnSearchBox();
   void setVimCommandMode(bool enabled);
   bool isVimCommandMode() const;

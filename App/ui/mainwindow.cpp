@@ -1071,7 +1071,36 @@ void MainWindow::on_actionClose_All_Tabs_triggered() {
   currentTabWidget()->closeAllTabs();
 }
 
-void MainWindow::on_actionFind_in_file_triggered() { showFindReplace(true); }
+void MainWindow::on_actionFind_in_file_triggered() {
+  showFindReplace(true);
+  if (findReplacePanel) {
+    findReplacePanel->setGlobalMode(false);
+    findReplacePanel->setFocusOnSearchBox();
+  }
+}
+
+void MainWindow::on_actionFind_in_project_triggered() {
+  showFindReplace(true);
+  if (!findReplacePanel) {
+    return;
+  }
+
+  QString projectPath = m_projectRootPath;
+  if (projectPath.isEmpty()) {
+    LightpadTabWidget *tabWidget = currentTabWidget();
+    QString filePath =
+        tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+    if (!filePath.isEmpty()) {
+      projectPath = QFileInfo(filePath).absolutePath();
+    } else {
+      projectPath = QDir::currentPath();
+    }
+  }
+
+  findReplacePanel->setProjectPath(projectPath);
+  findReplacePanel->setGlobalMode(true);
+  findReplacePanel->setFocusOnSearchBox();
+}
 
 void MainWindow::on_actionNew_File_triggered() {
   currentTabWidget()->addNewTab();
@@ -1268,21 +1297,26 @@ void MainWindow::showFindReplace(bool onlyFind) {
     });
   }
 
-  if (!m_vimCommandPanelActive) {
-    findReplacePanel->setVisible(!findReplacePanel->isVisible() ||
-                                 findReplacePanel->isOnlyFind() != onlyFind);
-    findReplacePanel->setOnlyFind(onlyFind);
-  } else {
-    findReplacePanel->setVisible(true);
-    findReplacePanel->setOnlyFind(true);
-  }
+  bool targetOnlyFind = m_vimCommandPanelActive ? true : onlyFind;
+  findReplacePanel->setVisible(true);
+  findReplacePanel->setOnlyFind(targetOnlyFind);
 
-  if (findReplacePanel->isVisible() && getCurrentTextArea())
-    findReplacePanel->setReplaceVisibility(!onlyFind);
+  if (findReplacePanel->isVisible() && getCurrentTextArea()) {
+    findReplacePanel->setReplaceVisibility(!targetOnlyFind);
+  }
 
   if (findReplacePanel->isVisible()) {
     findReplacePanel->setTextArea(getCurrentTextArea());
-    findReplacePanel->setProjectPath(QDir::currentPath());
+    QString projectPath = m_projectRootPath;
+    if (projectPath.isEmpty()) {
+      LightpadTabWidget *tabWidget = currentTabWidget();
+      QString filePath =
+          tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex())
+                    : QString();
+      projectPath = filePath.isEmpty() ? QDir::currentPath()
+                                       : QFileInfo(filePath).absolutePath();
+    }
+    findReplacePanel->setProjectPath(projectPath);
     findReplacePanel->setMainWindow(this);
     findReplacePanel->setFocusOnSearchBox();
   }
@@ -2589,6 +2623,10 @@ void MainWindow::on_tabWidth_clicked() {
 
 void MainWindow::on_actionReplace_in_file_triggered() {
   showFindReplace(false);
+  if (findReplacePanel) {
+    findReplacePanel->setGlobalMode(false);
+    findReplacePanel->setFocusOnSearchBox();
+  }
 }
 
 void MainWindow::on_actionKeyboard_shortcuts_triggered() {
