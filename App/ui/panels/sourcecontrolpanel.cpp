@@ -1569,6 +1569,8 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
   if (commitHash.isEmpty())
     return;
 
+  QString shortHash = commitHash.left(7);
+
   QMenu menu(this);
   menu.setStyleSheet("QMenu {"
                      "  background: #161b22;"
@@ -1589,6 +1591,8 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
                      "  margin: 4px 0;"
                      "}");
 
+  QAction *viewDiffAction = menu.addAction(tr("View Diff"));
+  menu.addSeparator();
   QAction *checkoutAction = menu.addAction(tr("Checkout Commit"));
   QAction *createBranchAction = menu.addAction(tr("Create Branch..."));
 
@@ -1596,7 +1600,9 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
   if (!selected)
     return;
 
-  if (selected == checkoutAction) {
+  if (selected == viewDiffAction) {
+    emit commitDiffRequested(commitHash, shortHash);
+  } else if (selected == checkoutAction) {
     m_git->checkoutCommit(commitHash);
   } else if (selected == createBranchAction) {
     bool ok = false;

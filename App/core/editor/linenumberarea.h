@@ -11,6 +11,7 @@
 class TextArea;
 class QPaintEvent;
 class QContextMenuEvent;
+class QMouseEvent;
 
 /**
  * @brief Line number gutter widget for code editors
@@ -65,9 +66,13 @@ protected:
   void paintEvent(QPaintEvent *event) override;
   bool event(QEvent *event) override;
   void contextMenuEvent(QContextMenuEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
 
 private:
   void updateBlameTextWidth();
+  int lineAtPosition(int y) const;
+  int numberAreaWidth() const;
+  QString resolveFilePath() const;
 
   TextArea *m_editor;
   QFont m_font;
@@ -78,6 +83,7 @@ private:
   int m_blameTextWidth;
 
   static constexpr int DIFF_INDICATOR_WIDTH = 3;
+  static constexpr int BREAKPOINT_AREA_WIDTH = 16;
   static constexpr int PADDING = 10;
   static constexpr int BLAME_PADDING = 12;
   static constexpr int MAX_BLAME_WIDTH = 280;

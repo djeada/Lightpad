@@ -52,7 +52,7 @@ static int strToKey(QString str) {
   if (seq.count() != 1)
     return -1;
 
-  return seq[0];
+  return seq[0].key();
 }
 
 static Qt::KeyboardModifiers strToModifiers(QString str) {

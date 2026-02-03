@@ -202,6 +202,7 @@ private:
   void applyLineSpacing(int percent);
   void updateHighlighterViewport();
   void updateLineNumberAreaLayout();
+  QString resolveFilePath() const;
 
 private slots:
   void onCompletionsReady(const QList<CompletionItem> &items);

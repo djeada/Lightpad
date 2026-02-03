@@ -181,7 +181,7 @@ bool I18n::loadTranslation(const QString &languageCode) {
   }
 
   // Load Qt's built-in translations
-  QString qtTransFile = QLibraryInfo::location(QLibraryInfo::TranslationsPath) +
+  QString qtTransFile = QLibraryInfo::path(QLibraryInfo::TranslationsPath) +
                         "/qt_" + languageCode + ".qm";
   if (m_qtTranslator->load(qtTransFile)) {
     m_app->installTranslator(m_qtTranslator);

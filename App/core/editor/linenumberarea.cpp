@@ -3,6 +3,7 @@
 #include <QContextMenuEvent>
 #include <QHelpEvent>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QScrollBar>
@@ -37,7 +38,7 @@ int LineNumberArea::calculateWidth() const {
     ++digits;
   }
 
-  int space = DIFF_INDICATOR_WIDTH + PADDING +
+  int space = DIFF_INDICATOR_WIDTH + BREAKPOINT_AREA_WIDTH + PADDING +
               QFontMetrics(m_font).horizontalAdvance(QLatin1Char('9')) * digits;
   if (m_blameTextWidth > 0) {
     space += BLAME_PADDING + m_blameTextWidth;
@@ -100,6 +101,49 @@ void LineNumberArea::updateBlameTextWidth() {
   m_blameTextWidth = qMin(maxWidth, MAX_BLAME_WIDTH);
 }
 
+int LineNumberArea::lineAtPosition(int y) const {
+  if (!m_editor) {
+    return -1;
+  }
+
+  QTextBlock block = m_editor->firstVisibleBlock();
+  QRectF blockRect = m_editor->blockBoundingGeometry(block);
+  blockRect.translate(m_editor->contentOffset());
+  qreal top = blockRect.top();
+  qreal bottom = top + blockRect.height();
+  int blockNumber = block.blockNumber();
+
+  while (block.isValid() && top <= height()) {
+    if (block.isVisible() && y >= top && y <= bottom) {
+      return blockNumber + 1;
+    }
+    block = block.next();
+    top = bottom;
+    if (!block.isValid()) {
+      break;
+    }
+    blockRect = m_editor->blockBoundingGeometry(block);
+    blockRect.translate(m_editor->contentOffset());
+    bottom = top + blockRect.height();
+    ++blockNumber;
+  }
+
+  return -1;
+}
+
+int LineNumberArea::numberAreaWidth() const {
+  const int areaWidth = width();
+  return areaWidth -
+         (m_blameTextWidth > 0 ? (m_blameTextWidth + BLAME_PADDING) : 0);
+}
+
+QString LineNumberArea::resolveFilePath() const {
+  if (!m_editor) {
+    return QString();
+  }
+  return m_editor->resolveFilePath();
+}
+
 bool LineNumberArea::event(QEvent *event) {
   if (event->type() == QEvent::ToolTip && m_editor) {
     auto *helpEvent = static_cast<QHelpEvent *>(event);
@@ -147,51 +191,13 @@ void LineNumberArea::contextMenuEvent(QContextMenuEvent *event) {
     return;
   }
 
-  QTextBlock block = m_editor->firstVisibleBlock();
-  QRectF blockRect = m_editor->blockBoundingGeometry(block);
-  blockRect.translate(m_editor->contentOffset());
-  qreal top = blockRect.top();
-  qreal bottom = top + blockRect.height();
-  int blockNumber = block.blockNumber();
-  int clickedLine = -1;
-
-  while (block.isValid() && top <= height()) {
-    if (block.isVisible() && event->pos().y() >= top &&
-        event->pos().y() <= bottom) {
-      clickedLine = blockNumber + 1;
-      break;
-    }
-    block = block.next();
-    top = bottom;
-    if (!block.isValid()) {
-      break;
-    }
-    blockRect = m_editor->blockBoundingGeometry(block);
-    blockRect.translate(m_editor->contentOffset());
-    bottom = top + blockRect.height();
-    ++blockNumber;
-  }
+  int clickedLine = lineAtPosition(event->pos().y());
 
   if (clickedLine <= 0) {
     return;
   }
 
-  QString filePath;
-  QObject *parent = m_editor;
-  while (parent && filePath.isEmpty()) {
-    if (auto *page = qobject_cast<LightpadPage *>(parent)) {
-      filePath = page->getFilePath();
-      break;
-    }
-    parent = parent->parent();
-  }
-
-  MainWindow *mainWindow = m_editor->mainWindow;
-  if (filePath.isEmpty() && mainWindow) {
-    LightpadTabWidget *tabWidget = mainWindow->currentTabWidget();
-    filePath = tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex())
-                         : QString();
-  }
+  QString filePath = resolveFilePath();
 
   QMenu menu(this);
   QAction *breakpointAction = menu.addAction(tr("Toggle Breakpoint"));
@@ -207,6 +213,7 @@ void LineNumberArea::contextMenuEvent(QContextMenuEvent *event) {
     breakpointAction->setEnabled(false);
   }
 
+  MainWindow *mainWindow = m_editor->mainWindow;
   if (mainWindow && !filePath.isEmpty()) {
     bool enabled = mainWindow->isGitBlameEnabledForFile(filePath);
     blameAction->setCheckable(true);
@@ -230,6 +237,33 @@ void LineNumberArea::contextMenuEvent(QContextMenuEvent *event) {
     mainWindow->showGitBlameForCurrentFile(!enabled);
     mainWindow->setGitBlameEnabledForFile(filePath, !enabled);
   }
+}
+
+void LineNumberArea::mousePressEvent(QMouseEvent *event) {
+  if (!m_editor || event->button() != Qt::LeftButton) {
+    QWidget::mousePressEvent(event);
+    return;
+  }
+
+  if (event->pos().x() > numberAreaWidth()) {
+    QWidget::mousePressEvent(event);
+    return;
+  }
+
+  int clickedLine = lineAtPosition(event->pos().y());
+  if (clickedLine <= 0) {
+    QWidget::mousePressEvent(event);
+    return;
+  }
+
+  QString filePath = resolveFilePath();
+  if (filePath.isEmpty()) {
+    QWidget::mousePressEvent(event);
+    return;
+  }
+
+  BreakpointManager::instance().toggleBreakpoint(filePath, clickedLine);
+  event->accept();
 }
 
 void LineNumberArea::paintEvent(QPaintEvent *event) {
@@ -258,16 +292,32 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
 
   const int fontHeight = QFontMetrics(m_font).height();
   const int areaWidth = width();
-  const int numberAreaWidth =
-      areaWidth -
-      (m_blameTextWidth > 0 ? (m_blameTextWidth + BLAME_PADDING) : 0);
+  const int numberArea = numberAreaWidth();
+  const int numberStartX = DIFF_INDICATOR_WIDTH + BREAKPOINT_AREA_WIDTH;
+  const int numberTextWidth = numberArea - numberStartX;
+
+  QString filePath = resolveFilePath();
+  QMap<int, Breakpoint> breakpointLines;
+  if (!filePath.isEmpty()) {
+    const QList<Breakpoint> breakpoints =
+        BreakpointManager::instance().breakpointsForFile(filePath);
+    for (const Breakpoint &bp : breakpoints) {
+      int displayLine =
+          (bp.verified && bp.boundLine > 0) ? bp.boundLine : bp.line;
+      if (displayLine <= 0) {
+        continue;
+      }
+      if (!breakpointLines.contains(displayLine) || bp.enabled) {
+        breakpointLines[displayLine] = bp;
+      }
+    }
+  }
 
   while (block.isValid() && top <= event->rect().bottom()) {
     if (block.isVisible() && bottom >= event->rect().top()) {
       QString number = QString::number(blockNumber + 1);
       painter.setPen(m_textColor);
-      painter.drawText(DIFF_INDICATOR_WIDTH, top,
-                       numberAreaWidth - DIFF_INDICATOR_WIDTH, fontHeight,
+      painter.drawText(numberStartX, top, numberTextWidth, fontHeight,
                        Qt::AlignCenter, number);
 
       // Draw git diff indicator
@@ -290,12 +340,41 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
                          static_cast<int>(bottom - top), diffColor);
       }
 
+      if (breakpointLines.contains(lineNum)) {
+        const Breakpoint &bp = breakpointLines[lineNum];
+        QColor baseColor(231, 76, 60);
+        if (m_editor && m_editor->mainWindow) {
+          baseColor = m_editor->mainWindow->getTheme().errorColor;
+        }
+
+        QColor markerColor = baseColor;
+        if (!bp.enabled) {
+          markerColor = QColor(140, 140, 140);
+        } else if (!bp.verified) {
+          markerColor = baseColor.lighter(115);
+        }
+
+        const int markerDiameter =
+            qMax(6, qMin(fontHeight - 2, BREAKPOINT_AREA_WIDTH - 4));
+        const int markerX = DIFF_INDICATOR_WIDTH +
+                            (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;
+        const int markerY = static_cast<int>(
+            top + (fontHeight - markerDiameter) / 2.0);
+
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(markerColor);
+        painter.drawEllipse(markerX, markerY, markerDiameter, markerDiameter);
+        painter.restore();
+      }
+
       if (m_blameTextWidth > 0) {
         auto it = m_gitBlameLines.find(lineNum);
         if (it != m_gitBlameLines.end()) {
           QRect blameRect(
-              numberAreaWidth + BLAME_PADDING, static_cast<int>(top),
-              areaWidth - numberAreaWidth - BLAME_PADDING, fontHeight);
+              numberArea + BLAME_PADDING, static_cast<int>(top),
+              areaWidth - numberArea - BLAME_PADDING, fontHeight);
           painter.setPen(QColor(Qt::gray).lighter(120));
           painter.drawText(blameRect, Qt::AlignVCenter | Qt::AlignLeft,
                            QFontMetrics(m_font).elidedText(
