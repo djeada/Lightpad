@@ -2,7 +2,7 @@
 
 Lightpad is a Qt 6-based code editor with a modern UI, built-in language tooling, and an extensible plugin system. It targets fast editing, project-level workflows, and developer-friendly features like LSP, Git, and debugging.
 
-![Lightpad](screenshot.png)
+![Lightpad](https://github.com/user-attachments/assets/5beddbc9-4d6e-4345-85c9-358e0e15db41)
 
 ## Highlights
 - Multi-language syntax highlighting with a plugin-based registry
