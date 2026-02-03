@@ -10,25 +10,24 @@
 class RunConfigurations;
 
 class LineEditIcon : public QLineEdit {
-    Q_OBJECT
+  Q_OBJECT
 
 public:
-    LineEditIcon(QWidget* parent = nullptr);
-    ~LineEditIcon();
-    void setIcon(QIcon icon);
-    void connectFunctionWithIcon(void (RunConfigurations::*f)());
-    void setText(const QString& text);
-    QString text();
+  LineEditIcon(QWidget *parent = nullptr);
+  ~LineEditIcon();
+  void setIcon(QIcon icon);
+  void connectFunctionWithIcon(void (RunConfigurations::*f)());
+  void setText(const QString &text);
+  QString text();
 
 protected:
-    virtual void paintEvent(QPaintEvent* event) override;
-    virtual void enterEvent(QEnterEvent* event) override;
-    virtual void leaveEvent(QEvent* event) override;
+  virtual void paintEvent(QPaintEvent *event) override;
+  virtual void enterEvent(QEnterEvent *event) override;
+  virtual void leaveEvent(QEvent *event) override;
 
 private:
-    QLineEdit edit;
-    QToolButton button;
-
+  QLineEdit edit;
+  QToolButton button;
 };
 
 namespace Ui {
@@ -36,17 +35,17 @@ class runconfigurations;
 }
 
 class RunConfigurations : public QDialog {
-    Q_OBJECT
+  Q_OBJECT
 
 public:
-    RunConfigurations(QWidget* parent = nullptr);
-    ~RunConfigurations();
-    void choosePath();
-    QString getScriptPath();
-    QString getParameters();
+  RunConfigurations(QWidget *parent = nullptr);
+  ~RunConfigurations();
+  void choosePath();
+  QString getScriptPath();
+  QString getParameters();
 
 private:
-    Ui::runconfigurations* ui;
+  Ui::runconfigurations *ui;
 };
 
 #endif // RUNCOFIGURATIONS_H

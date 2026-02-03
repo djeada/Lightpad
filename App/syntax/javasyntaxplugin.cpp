@@ -1,121 +1,134 @@
 #include "javasyntaxplugin.h"
 #include <QRegularExpression>
 
-QStringList JavaSyntaxPlugin::getPrimaryKeywords()
-{
-    return {
-        "abstract", "assert", "boolean", "break", "byte", "case", "catch",
-        "char", "class", "const", "continue", "default", "do", "double",
-        "else", "enum", "extends", "final", "finally", "float", "for",
-        "goto", "if", "implements", "import", "instanceof", "int", "interface",
-        "long", "native", "new", "package", "private", "protected", "public",
-        "return", "short", "static", "strictfp", "super", "switch", "synchronized",
-        "this", "throw", "throws", "transient", "try", "void", "volatile", "while"
-    };
+QStringList JavaSyntaxPlugin::getPrimaryKeywords() {
+  return {"abstract",   "assert",       "boolean",   "break",      "byte",
+          "case",       "catch",        "char",      "class",      "const",
+          "continue",   "default",      "do",        "double",     "else",
+          "enum",       "extends",      "final",     "finally",    "float",
+          "for",        "goto",         "if",        "implements", "import",
+          "instanceof", "int",          "interface", "long",       "native",
+          "new",        "package",      "private",   "protected",  "public",
+          "return",     "short",        "static",    "strictfp",   "super",
+          "switch",     "synchronized", "this",      "throw",      "throws",
+          "transient",  "try",          "void",      "volatile",   "while"};
 }
 
-QStringList JavaSyntaxPlugin::getSecondaryKeywords()
-{
-    return {
-        "true", "false", "null", "var", "record", "sealed", "non-sealed",
-        "permits", "yield", "module", "requires", "exports", "opens", "uses",
-        "provides", "with", "to", "transitive"
-    };
+QStringList JavaSyntaxPlugin::getSecondaryKeywords() {
+  return {"true",     "false",      "null",      "var",   "record",
+          "sealed",   "non-sealed", "permits",   "yield", "module",
+          "requires", "exports",    "opens",     "uses",  "provides",
+          "with",     "to",         "transitive"};
 }
 
-QStringList JavaSyntaxPlugin::getTertiaryKeywords()
-{
-    return {
-        "String", "Integer", "Boolean", "Double", "Float", "Long", "Short",
-        "Byte", "Character", "Object", "Class", "System", "Math", "Thread",
-        "Runnable", "Exception", "RuntimeException", "Error", "Throwable",
-        "Override", "Deprecated", "SuppressWarnings", "FunctionalInterface"
-    };
+QStringList JavaSyntaxPlugin::getTertiaryKeywords() {
+  return {"String",
+          "Integer",
+          "Boolean",
+          "Double",
+          "Float",
+          "Long",
+          "Short",
+          "Byte",
+          "Character",
+          "Object",
+          "Class",
+          "System",
+          "Math",
+          "Thread",
+          "Runnable",
+          "Exception",
+          "RuntimeException",
+          "Error",
+          "Throwable",
+          "Override",
+          "Deprecated",
+          "SuppressWarnings",
+          "FunctionalInterface"};
 }
 
-QVector<SyntaxRule> JavaSyntaxPlugin::syntaxRules() const
-{
-    QVector<SyntaxRule> rules;
+QVector<SyntaxRule> JavaSyntaxPlugin::syntaxRules() const {
+  QVector<SyntaxRule> rules;
 
-    // Primary keywords
-    for (const QString& keyword : getPrimaryKeywords()) {
-        SyntaxRule rule;
-        rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
-        rule.name = "keyword_0";
-        rules.append(rule);
-    }
+  // Primary keywords
+  for (const QString &keyword : getPrimaryKeywords()) {
+    SyntaxRule rule;
+    rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
+    rule.name = "keyword_0";
+    rules.append(rule);
+  }
 
-    // Secondary keywords
-    for (const QString& keyword : getSecondaryKeywords()) {
-        SyntaxRule rule;
-        rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
-        rule.name = "keyword_1";
-        rules.append(rule);
-    }
+  // Secondary keywords
+  for (const QString &keyword : getSecondaryKeywords()) {
+    SyntaxRule rule;
+    rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
+    rule.name = "keyword_1";
+    rules.append(rule);
+  }
 
-    // Tertiary keywords (common classes and annotations)
-    for (const QString& keyword : getTertiaryKeywords()) {
-        SyntaxRule rule;
-        rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
-        rule.name = "keyword_2";
-        rules.append(rule);
-    }
+  // Tertiary keywords (common classes and annotations)
+  for (const QString &keyword : getTertiaryKeywords()) {
+    SyntaxRule rule;
+    rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
+    rule.name = "keyword_2";
+    rules.append(rule);
+  }
 
-    // Numbers
-    SyntaxRule numberRule;
-    numberRule.pattern = QRegularExpression("\\b[-+]?\\d[\\d_]*(\\.\\d+)?([eE][+-]?\\d+)?[lLfFdD]?\\b");
-    numberRule.name = "number";
-    rules.append(numberRule);
+  // Numbers
+  SyntaxRule numberRule;
+  numberRule.pattern = QRegularExpression(
+      "\\b[-+]?\\d[\\d_]*(\\.\\d+)?([eE][+-]?\\d+)?[lLfFdD]?\\b");
+  numberRule.name = "number";
+  rules.append(numberRule);
 
-    // String literals
-    SyntaxRule stringRule;
-    stringRule.pattern = QRegularExpression("\"[^\"]*\"");
-    stringRule.name = "string";
-    rules.append(stringRule);
+  // String literals
+  SyntaxRule stringRule;
+  stringRule.pattern = QRegularExpression("\"[^\"]*\"");
+  stringRule.name = "string";
+  rules.append(stringRule);
 
-    // Character literals
-    SyntaxRule charRule;
-    charRule.pattern = QRegularExpression("'[^']*'");
-    charRule.name = "string";
-    rules.append(charRule);
+  // Character literals
+  SyntaxRule charRule;
+  charRule.pattern = QRegularExpression("'[^']*'");
+  charRule.name = "string";
+  rules.append(charRule);
 
-    // Function calls
-    SyntaxRule functionRule;
-    functionRule.pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()");
-    functionRule.name = "function";
-    rules.append(functionRule);
+  // Function calls
+  SyntaxRule functionRule;
+  functionRule.pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()");
+  functionRule.name = "function";
+  rules.append(functionRule);
 
-    // Annotations
-    SyntaxRule annotationRule;
-    annotationRule.pattern = QRegularExpression("@[A-Za-z_][A-Za-z0-9_]*");
-    annotationRule.name = "keyword_1";
-    rules.append(annotationRule);
+  // Annotations
+  SyntaxRule annotationRule;
+  annotationRule.pattern = QRegularExpression("@[A-Za-z_][A-Za-z0-9_]*");
+  annotationRule.name = "keyword_1";
+  rules.append(annotationRule);
 
-    // Single-line comments
-    SyntaxRule commentRule;
-    commentRule.pattern = QRegularExpression("//[^\n]*");
-    commentRule.name = "comment";
-    rules.append(commentRule);
+  // Single-line comments
+  SyntaxRule commentRule;
+  commentRule.pattern = QRegularExpression("//[^\n]*");
+  commentRule.name = "comment";
+  rules.append(commentRule);
 
-    return rules;
+  return rules;
 }
 
-QVector<MultiLineBlock> JavaSyntaxPlugin::multiLineBlocks() const
-{
-    QVector<MultiLineBlock> blocks;
+QVector<MultiLineBlock> JavaSyntaxPlugin::multiLineBlocks() const {
+  QVector<MultiLineBlock> blocks;
 
-    // Multi-line comments
-    MultiLineBlock commentBlock;
-    commentBlock.startPattern = QRegularExpression("/\\*");
-    commentBlock.endPattern = QRegularExpression("\\*/");
-    blocks.append(commentBlock);
+  // Multi-line comments
+  MultiLineBlock commentBlock;
+  commentBlock.startPattern = QRegularExpression("/\\*");
+  commentBlock.endPattern = QRegularExpression("\\*/");
+  blocks.append(commentBlock);
 
-    return blocks;
+  return blocks;
 }
 
-QStringList JavaSyntaxPlugin::keywords() const
-{
-    QStringList all;
-    all << getPrimaryKeywords() << getSecondaryKeywords() << getTertiaryKeywords();
-    return all;
+QStringList JavaSyntaxPlugin::keywords() const {
+  QStringList all;
+  all << getPrimaryKeywords() << getSecondaryKeywords()
+      << getTertiaryKeywords();
+  return all;
 }

@@ -9,17 +9,19 @@
  */
 class JsonSyntaxPlugin : public BaseSyntaxPlugin {
 public:
-    QString languageId() const override { return "json"; }
-    QString languageName() const override { return "JSON"; }
-    QStringList fileExtensions() const override { return {"json", "jsonc", "geojson"}; }
-    
-    QVector<SyntaxRule> syntaxRules() const override;
-    QVector<MultiLineBlock> multiLineBlocks() const override;
-    QStringList keywords() const override;
-    
-    QPair<QString, QPair<QString, QString>> commentStyle() const override {
-        return {"//", {"/*", "*/"}};
-    }
+  QString languageId() const override { return "json"; }
+  QString languageName() const override { return "JSON"; }
+  QStringList fileExtensions() const override {
+    return {"json", "jsonc", "geojson"};
+  }
+
+  QVector<SyntaxRule> syntaxRules() const override;
+  QVector<MultiLineBlock> multiLineBlocks() const override;
+  QStringList keywords() const override;
+
+  QPair<QString, QPair<QString, QString>> commentStyle() const override {
+    return {"//", {"/*", "*/"}};
+  }
 };
 
 #endif // JSONSYNTAXPLUGIN_H

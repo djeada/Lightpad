@@ -6,98 +6,74 @@
 #include <QPainter>
 #include <QStyleOption>
 
-LineEditIcon::LineEditIcon(QWidget* parent)
-    : QLineEdit(parent)
-{
+LineEditIcon::LineEditIcon(QWidget *parent) : QLineEdit(parent) {
 
-    QHBoxLayout* mainLayout = new QHBoxLayout();
-    mainLayout->addWidget(&edit);
-    mainLayout->addWidget(&button);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
-    setLayout(mainLayout);
-    setMouseTracking(true);
-    setAttribute(Qt::WA_Hover);
-    button.setCursor(Qt::ArrowCursor);
+  QHBoxLayout *mainLayout = new QHBoxLayout();
+  mainLayout->addWidget(&edit);
+  mainLayout->addWidget(&button);
+  mainLayout->setContentsMargins(0, 0, 0, 0);
+  mainLayout->setSpacing(0);
+  setLayout(mainLayout);
+  setMouseTracking(true);
+  setAttribute(Qt::WA_Hover);
+  button.setCursor(Qt::ArrowCursor);
 }
 
-LineEditIcon::~LineEditIcon()
-{
-}
+LineEditIcon::~LineEditIcon() {}
 
-void LineEditIcon::setIcon(QIcon icon)
-{
-    button.setIcon(icon);
-}
+void LineEditIcon::setIcon(QIcon icon) { button.setIcon(icon); }
 
-void LineEditIcon::paintEvent(QPaintEvent* event)
-{
-    Q_UNUSED(event);
-    QStyleOption option;
-    option.initFrom(this);
-    QPainter painter(this);
-    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
+void LineEditIcon::paintEvent(QPaintEvent *event) {
+  Q_UNUSED(event);
+  QStyleOption option;
+  option.initFrom(this);
+  QPainter painter(this);
+  style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
 };
 
-void LineEditIcon::enterEvent(QEnterEvent* event)
-{
-    QLineEdit::enterEvent(event);
+void LineEditIcon::enterEvent(QEnterEvent *event) {
+  QLineEdit::enterEvent(event);
 }
 
-void LineEditIcon::leaveEvent(QEvent* event)
-{
-    QLineEdit::leaveEvent(event);
+void LineEditIcon::leaveEvent(QEvent *event) { QLineEdit::leaveEvent(event); }
+
+void LineEditIcon::connectFunctionWithIcon(void (RunConfigurations::*f)()) {
+  connect(&button, &QAbstractButton::clicked, this, [&, f]() {
+    auto parent = qobject_cast<RunConfigurations *>(parentWidget());
+    (parent->*f)();
+  });
 }
 
-void LineEditIcon::connectFunctionWithIcon(void (RunConfigurations::*f)())
-{
-    connect(&button, &QAbstractButton::clicked, this, [&, f]() {
-        auto parent = qobject_cast<RunConfigurations*>(parentWidget());
-        (parent->*f)();
-    });
+void LineEditIcon::setText(const QString &text) {
+  edit.setText(text);
+  edit.setCursorPosition(0);
 }
 
-void LineEditIcon::setText(const QString& text)
-{
-    edit.setText(text);
-    edit.setCursorPosition(0);
+QString LineEditIcon::text() { return edit.text(); }
+
+RunConfigurations::RunConfigurations(QWidget *parent)
+    : QDialog(parent), ui(new Ui::runconfigurations) {
+  ui->setupUi(this);
+  ui->editScriptPath->setIcon(QIcon(":/resources/icons/folder.png"));
+  ui->editParameters->setIcon(QIcon(":/resources/icons/add.png"));
+  ui->editScriptPath->connectFunctionWithIcon(&RunConfigurations::choosePath);
+  setWindowTitle("Run Configuration");
+  setAttribute(Qt::WA_DeleteOnClose);
+  show();
 }
 
-QString LineEditIcon::text()
-{
-    return edit.text();
+RunConfigurations::~RunConfigurations() { delete ui; }
+
+void RunConfigurations::choosePath() {
+  auto scriptPath = QFileDialog::getOpenFileName(this, tr("Select script path"),
+                                                 QDir::homePath());
+  ui->editScriptPath->setText(scriptPath);
 }
 
-RunConfigurations::RunConfigurations(QWidget* parent)
-    : QDialog(parent)
-    , ui(new Ui::runconfigurations)
-{
-    ui->setupUi(this);
-    ui->editScriptPath->setIcon(QIcon(":/resources/icons/folder.png"));
-    ui->editParameters->setIcon(QIcon(":/resources/icons/add.png"));
-    ui->editScriptPath->connectFunctionWithIcon(&RunConfigurations::choosePath);
-    setWindowTitle("Run Configuration");
-    setAttribute(Qt::WA_DeleteOnClose);
-    show();
+QString RunConfigurations::getScriptPath() {
+  return ui->editScriptPath->text();
 }
 
-RunConfigurations::~RunConfigurations()
-{
-    delete ui;
-}
-
-void RunConfigurations::choosePath()
-{
-    auto scriptPath = QFileDialog::getOpenFileName(this, tr("Select script path"), QDir::homePath());
-    ui->editScriptPath->setText(scriptPath);
-}
-
-QString RunConfigurations::getScriptPath()
-{
-    return ui->editScriptPath->text();
-}
-
-QString RunConfigurations::getParameters()
-{
-    return ui->editParameters->text();
+QString RunConfigurations::getParameters() {
+  return ui->editParameters->text();
 }

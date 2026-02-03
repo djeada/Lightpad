@@ -1,135 +1,167 @@
 #include "csssyntaxplugin.h"
 #include <QRegularExpression>
 
-QStringList CssSyntaxPlugin::getProperties()
-{
-    return {
-        "color", "background", "background-color", "background-image", "border",
-        "border-radius", "margin", "padding", "width", "height", "min-width",
-        "max-width", "min-height", "max-height", "display", "position", "top",
-        "right", "bottom", "left", "float", "clear", "overflow", "z-index",
-        "font", "font-family", "font-size", "font-weight", "font-style",
-        "text-align", "text-decoration", "line-height", "letter-spacing",
-        "flex", "flex-direction", "justify-content", "align-items", "flex-wrap",
-        "grid", "grid-template-columns", "grid-template-rows", "gap",
-        "transform", "transition", "animation", "opacity", "visibility",
-        "cursor", "box-shadow", "outline", "content"
-    };
+QStringList CssSyntaxPlugin::getProperties() {
+  return {"color",
+          "background",
+          "background-color",
+          "background-image",
+          "border",
+          "border-radius",
+          "margin",
+          "padding",
+          "width",
+          "height",
+          "min-width",
+          "max-width",
+          "min-height",
+          "max-height",
+          "display",
+          "position",
+          "top",
+          "right",
+          "bottom",
+          "left",
+          "float",
+          "clear",
+          "overflow",
+          "z-index",
+          "font",
+          "font-family",
+          "font-size",
+          "font-weight",
+          "font-style",
+          "text-align",
+          "text-decoration",
+          "line-height",
+          "letter-spacing",
+          "flex",
+          "flex-direction",
+          "justify-content",
+          "align-items",
+          "flex-wrap",
+          "grid",
+          "grid-template-columns",
+          "grid-template-rows",
+          "gap",
+          "transform",
+          "transition",
+          "animation",
+          "opacity",
+          "visibility",
+          "cursor",
+          "box-shadow",
+          "outline",
+          "content"};
 }
 
-QStringList CssSyntaxPlugin::getValues()
-{
-    return {
-        "none", "auto", "inherit", "initial", "unset", "block", "inline",
-        "inline-block", "flex", "grid", "hidden", "visible", "absolute",
-        "relative", "fixed", "sticky", "static", "center", "left", "right",
-        "top", "bottom", "transparent", "solid", "dashed", "dotted",
-        "bold", "normal", "italic", "underline", "uppercase", "lowercase",
-        "nowrap", "wrap", "pointer", "default", "row", "column"
-    };
+QStringList CssSyntaxPlugin::getValues() {
+  return {"none",      "auto",      "inherit",      "initial",  "unset",
+          "block",     "inline",    "inline-block", "flex",     "grid",
+          "hidden",    "visible",   "absolute",     "relative", "fixed",
+          "sticky",    "static",    "center",       "left",     "right",
+          "top",       "bottom",    "transparent",  "solid",    "dashed",
+          "dotted",    "bold",      "normal",       "italic",   "underline",
+          "uppercase", "lowercase", "nowrap",       "wrap",     "pointer",
+          "default",   "row",       "column"};
 }
 
-QStringList CssSyntaxPlugin::getAtRules()
-{
-    return {
-        "@import", "@media", "@keyframes", "@font-face", "@charset",
-        "@supports", "@namespace", "@page", "@viewport"
-    };
+QStringList CssSyntaxPlugin::getAtRules() {
+  return {"@import",   "@media",     "@keyframes", "@font-face", "@charset",
+          "@supports", "@namespace", "@page",      "@viewport"};
 }
 
-QVector<SyntaxRule> CssSyntaxPlugin::syntaxRules() const
-{
-    QVector<SyntaxRule> rules;
+QVector<SyntaxRule> CssSyntaxPlugin::syntaxRules() const {
+  QVector<SyntaxRule> rules;
 
-    // At-rules
-    for (const QString& rule : getAtRules()) {
-        SyntaxRule atRule;
-        atRule.pattern = QRegularExpression(rule + "\\b");
-        atRule.name = "keyword_0";
-        rules.append(atRule);
-    }
+  // At-rules
+  for (const QString &rule : getAtRules()) {
+    SyntaxRule atRule;
+    atRule.pattern = QRegularExpression(rule + "\\b");
+    atRule.name = "keyword_0";
+    rules.append(atRule);
+  }
 
-    // Property names
-    for (const QString& prop : getProperties()) {
-        SyntaxRule rule;
-        rule.pattern = QRegularExpression("\\b" + prop + "(?=\\s*:)");
-        rule.name = "keyword_1";
-        rules.append(rule);
-    }
+  // Property names
+  for (const QString &prop : getProperties()) {
+    SyntaxRule rule;
+    rule.pattern = QRegularExpression("\\b" + prop + "(?=\\s*:)");
+    rule.name = "keyword_1";
+    rules.append(rule);
+  }
 
-    // Property values (keywords)
-    for (const QString& val : getValues()) {
-        SyntaxRule rule;
-        rule.pattern = QRegularExpression("\\b" + val + "\\b");
-        rule.name = "keyword_2";
-        rules.append(rule);
-    }
+  // Property values (keywords)
+  for (const QString &val : getValues()) {
+    SyntaxRule rule;
+    rule.pattern = QRegularExpression("\\b" + val + "\\b");
+    rule.name = "keyword_2";
+    rules.append(rule);
+  }
 
-    // Selectors (class, id)
-    SyntaxRule classRule;
-    classRule.pattern = QRegularExpression("\\.[A-Za-z_][A-Za-z0-9_-]*");
-    classRule.name = "function";
-    rules.append(classRule);
+  // Selectors (class, id)
+  SyntaxRule classRule;
+  classRule.pattern = QRegularExpression("\\.[A-Za-z_][A-Za-z0-9_-]*");
+  classRule.name = "function";
+  rules.append(classRule);
 
-    SyntaxRule idRule;
-    idRule.pattern = QRegularExpression("#[A-Za-z_][A-Za-z0-9_-]*(?![;])");
-    idRule.name = "function";
-    rules.append(idRule);
+  SyntaxRule idRule;
+  idRule.pattern = QRegularExpression("#[A-Za-z_][A-Za-z0-9_-]*(?![;])");
+  idRule.name = "function";
+  rules.append(idRule);
 
-    // Pseudo-classes and pseudo-elements
-    SyntaxRule pseudoRule;
-    pseudoRule.pattern = QRegularExpression(":[A-Za-z-]+");
-    pseudoRule.name = "keyword_2";
-    rules.append(pseudoRule);
+  // Pseudo-classes and pseudo-elements
+  SyntaxRule pseudoRule;
+  pseudoRule.pattern = QRegularExpression(":[A-Za-z-]+");
+  pseudoRule.name = "keyword_2";
+  rules.append(pseudoRule);
 
-    // Numbers with units
-    SyntaxRule numberRule;
-    numberRule.pattern = QRegularExpression("[-+]?\\d*\\.?\\d+(%|px|em|rem|vh|vw|pt|cm|mm|in|s|ms)?");
-    numberRule.name = "number";
-    rules.append(numberRule);
+  // Numbers with units
+  SyntaxRule numberRule;
+  numberRule.pattern = QRegularExpression(
+      "[-+]?\\d*\\.?\\d+(%|px|em|rem|vh|vw|pt|cm|mm|in|s|ms)?");
+  numberRule.name = "number";
+  rules.append(numberRule);
 
-    // Color values (hex)
-    SyntaxRule hexColorRule;
-    hexColorRule.pattern = QRegularExpression("#[0-9A-Fa-f]{3,8}\\b");
-    hexColorRule.name = "number";
-    rules.append(hexColorRule);
+  // Color values (hex)
+  SyntaxRule hexColorRule;
+  hexColorRule.pattern = QRegularExpression("#[0-9A-Fa-f]{3,8}\\b");
+  hexColorRule.name = "number";
+  rules.append(hexColorRule);
 
-    // String literals
-    SyntaxRule stringRule;
-    stringRule.pattern = QRegularExpression("\"[^\"]*\"");
-    stringRule.name = "string";
-    rules.append(stringRule);
+  // String literals
+  SyntaxRule stringRule;
+  stringRule.pattern = QRegularExpression("\"[^\"]*\"");
+  stringRule.name = "string";
+  rules.append(stringRule);
 
-    SyntaxRule singleQuoteRule;
-    singleQuoteRule.pattern = QRegularExpression("'[^']*'");
-    singleQuoteRule.name = "string";
-    rules.append(singleQuoteRule);
+  SyntaxRule singleQuoteRule;
+  singleQuoteRule.pattern = QRegularExpression("'[^']*'");
+  singleQuoteRule.name = "string";
+  rules.append(singleQuoteRule);
 
-    // URL function
-    SyntaxRule urlRule;
-    urlRule.pattern = QRegularExpression("\\burl\\([^)]*\\)");
-    urlRule.name = "string";
-    rules.append(urlRule);
+  // URL function
+  SyntaxRule urlRule;
+  urlRule.pattern = QRegularExpression("\\burl\\([^)]*\\)");
+  urlRule.name = "string";
+  rules.append(urlRule);
 
-    return rules;
+  return rules;
 }
 
-QVector<MultiLineBlock> CssSyntaxPlugin::multiLineBlocks() const
-{
-    QVector<MultiLineBlock> blocks;
+QVector<MultiLineBlock> CssSyntaxPlugin::multiLineBlocks() const {
+  QVector<MultiLineBlock> blocks;
 
-    // CSS comments
-    MultiLineBlock commentBlock;
-    commentBlock.startPattern = QRegularExpression("/\\*");
-    commentBlock.endPattern = QRegularExpression("\\*/");
-    blocks.append(commentBlock);
+  // CSS comments
+  MultiLineBlock commentBlock;
+  commentBlock.startPattern = QRegularExpression("/\\*");
+  commentBlock.endPattern = QRegularExpression("\\*/");
+  blocks.append(commentBlock);
 
-    return blocks;
+  return blocks;
 }
 
-QStringList CssSyntaxPlugin::keywords() const
-{
-    QStringList all;
-    all << getProperties() << getValues() << getAtRules();
-    return all;
+QStringList CssSyntaxPlugin::keywords() const {
+  QStringList all;
+  all << getProperties() << getValues() << getAtRules();
+  return all;
 }

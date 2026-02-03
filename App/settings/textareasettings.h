@@ -9,22 +9,22 @@
 #include "theme.h"
 
 struct TextAreaSettings {
-    QFont mainFont;
-    Theme theme;
-    bool autoIndent;
-    bool showLineNumberArea;
-    bool lineHighlighted;
-    bool matchingBracketsHighlighted;
-    bool vimModeEnabled;
-    int tabWidth;
+  QFont mainFont;
+  Theme theme;
+  bool autoIndent;
+  bool showLineNumberArea;
+  bool lineHighlighted;
+  bool matchingBracketsHighlighted;
+  bool vimModeEnabled;
+  int tabWidth;
 
-    TextAreaSettings();
-    void loadSettings(const QString& path);
-    void saveSettings(const QString& path);
+  TextAreaSettings();
+  void loadSettings(const QString &path);
+  void saveSettings(const QString &path);
 
 private:
-    void read(const QJsonObject& json);
-    void write(QJsonObject& json);
+  void read(const QJsonObject &json);
+  void write(QJsonObject &json);
 };
 
 #endif // TEXTAREASETTINGS_H

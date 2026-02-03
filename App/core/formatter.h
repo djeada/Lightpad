@@ -7,10 +7,10 @@
 
 class Formatter {
 public:
-    Formatter(QString text, Lang lang);
+  Formatter(QString text, Lang lang);
 
 private:
-    QString text;
+  QString text;
 };
 
 #endif // FORMATTER_H

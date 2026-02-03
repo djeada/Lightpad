@@ -1,71 +1,72 @@
 #ifndef RECENTFILESDIALOG_H
 #define RECENTFILESDIALOG_H
 
+#include "../../settings/theme.h"
 #include <QDialog>
+#include <QKeyEvent>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QVBoxLayout>
-#include <QKeyEvent>
-#include "../../settings/theme.h"
 
 class RecentFilesManager;
 
 /**
  * @brief Recent Files dialog for quick access to recently opened files
- * 
+ *
  * Provides fuzzy search for recently opened files.
  */
 class RecentFilesDialog : public QDialog {
-    Q_OBJECT
+  Q_OBJECT
 
 public:
-    explicit RecentFilesDialog(RecentFilesManager* manager, QWidget* parent = nullptr);
-    ~RecentFilesDialog();
+  explicit RecentFilesDialog(RecentFilesManager *manager,
+                             QWidget *parent = nullptr);
+  ~RecentFilesDialog();
 
-    /**
-     * @brief Show and focus the dialog
-     */
-    void showDialog();
+  /**
+   * @brief Show and focus the dialog
+   */
+  void showDialog();
 
-    /**
-     * @brief Refresh the list of recent files
-     */
-    void refresh();
+  /**
+   * @brief Refresh the list of recent files
+   */
+  void refresh();
 
-    /**
-     * @brief Apply theme to the dialog
-     */
-    void applyTheme(const Theme& theme);
+  /**
+   * @brief Apply theme to the dialog
+   */
+  void applyTheme(const Theme &theme);
 
 signals:
-    /**
-     * @brief Emitted when user selects a file
-     */
-    void fileSelected(const QString& filePath);
+  /**
+   * @brief Emitted when user selects a file
+   */
+  void fileSelected(const QString &filePath);
 
 protected:
-    void keyPressEvent(QKeyEvent* event) override;
-    bool eventFilter(QObject* obj, QEvent* event) override;
+  void keyPressEvent(QKeyEvent *event) override;
+  bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
-    void onSearchTextChanged(const QString& text);
-    void onItemActivated(QListWidgetItem* item);
-    void onItemClicked(QListWidgetItem* item);
+  void onSearchTextChanged(const QString &text);
+  void onItemActivated(QListWidgetItem *item);
+  void onItemClicked(QListWidgetItem *item);
 
 private:
-    void setupUI();
-    void updateResults(const QString& query);
-    int fuzzyMatch(const QString& pattern, const QString& text);
-    void selectFile(int row);
-    void selectNext();
-    void selectPrevious();
+  void setupUI();
+  void updateResults(const QString &query);
+  int fuzzyMatch(const QString &pattern, const QString &text);
+  void selectFile(int row);
+  void selectNext();
+  void selectPrevious();
 
-    RecentFilesManager* m_manager;
-    QLineEdit* m_searchBox;
-    QListWidget* m_resultsList;
-    QVBoxLayout* m_layout;
-    QStringList m_recentFiles;
-    QList<int> m_filteredIndices;
+  RecentFilesManager *m_manager;
+  QLineEdit *m_searchBox;
+  QListWidget *m_resultsList;
+  QVBoxLayout *m_layout;
+  QStringList m_recentFiles;
+  QList<int> m_filteredIndices;
 };
 
 #endif // RECENTFILESDIALOG_H

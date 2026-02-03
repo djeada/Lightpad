@@ -8,31 +8,23 @@
 #include "basic_types.hpp"
 
 namespace subprocess {
-enum class PipeVarIndex {
-    option,
-    string,
-    handle,
-    istream,
-    ostream,
-    file
-};
+enum class PipeVarIndex { option, string, handle, istream, ostream, file };
 
-typedef std::variant<PipeOption, std::string, PipeHandle,
-    std::istream*, std::ostream*, FILE*>
+typedef std::variant<PipeOption, std::string, PipeHandle, std::istream *,
+                     std::ostream *, FILE *>
     PipeVar;
 
-inline PipeOption get_pipe_option(const PipeVar& option)
-{
-    PipeVarIndex index = static_cast<PipeVarIndex>(option.index());
+inline PipeOption get_pipe_option(const PipeVar &option) {
+  PipeVarIndex index = static_cast<PipeVarIndex>(option.index());
 
-    switch (index) {
-    case PipeVarIndex::option:
-        return std::get<PipeOption>(option);
-    case PipeVarIndex::handle:
-        return PipeOption::specific;
+  switch (index) {
+  case PipeVarIndex::option:
+    return std::get<PipeOption>(option);
+  case PipeVarIndex::handle:
+    return PipeOption::specific;
 
-    default:
-        return PipeOption::pipe;
-    }
+  default:
+    return PipeOption::pipe;
+  }
 }
-}
+} // namespace subprocess

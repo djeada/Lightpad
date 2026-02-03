@@ -14,26 +14,26 @@ class Preferences;
 }
 
 class Preferences : public QDialog {
-    Q_OBJECT
+  Q_OBJECT
 
 public:
-    Preferences(MainWindow* parent);
-    ~Preferences();
-    void setTabWidthLabel(const QString& text);
+  Preferences(MainWindow *parent);
+  ~Preferences();
+  void setTabWidthLabel(const QString &text);
 
 protected:
-    void closeEvent(QCloseEvent* event);
+  void closeEvent(QCloseEvent *event);
 
 private slots:
-    void on_toolButton_clicked();
+  void on_toolButton_clicked();
 
 private:
-    Ui::Preferences* ui;
-    MainWindow* parentWindow;
-    ColorPicker* colorPicker;
-    PreferencesView* preferencesView;
-    PreferencesEditor* preferencesEditor;
-    void setupParent();
+  Ui::Preferences *ui;
+  MainWindow *parentWindow;
+  ColorPicker *colorPicker;
+  PreferencesView *preferencesView;
+  PreferencesEditor *preferencesEditor;
+  void setupParent();
 };
 
 #endif // PREFERENCES_H

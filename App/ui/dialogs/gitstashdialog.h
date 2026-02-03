@@ -1,73 +1,73 @@
 #ifndef GITSTASHDIALOG_H
 #define GITSTASHDIALOG_H
 
-#include <QDialog>
-#include <QListWidget>
-#include <QPushButton>
-#include <QLabel>
-#include <QLineEdit>
-#include <QCheckBox>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QGroupBox>
 #include "../../git/gitintegration.h"
 #include "../../settings/theme.h"
+#include <QCheckBox>
+#include <QDialog>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QPushButton>
+#include <QVBoxLayout>
 
 /**
  * @brief Dialog for managing Git stash entries
  */
 class GitStashDialog : public QDialog {
-    Q_OBJECT
+  Q_OBJECT
 
 public:
-    explicit GitStashDialog(GitIntegration* git, QWidget* parent = nullptr);
-    ~GitStashDialog();
+  explicit GitStashDialog(GitIntegration *git, QWidget *parent = nullptr);
+  ~GitStashDialog();
 
-    /**
-     * @brief Refresh the stash list
-     */
-    void refresh();
+  /**
+   * @brief Refresh the stash list
+   */
+  void refresh();
 
 signals:
-    /**
-     * @brief Emitted when stash operation completes
-     */
-    void stashOperationCompleted(const QString& message);
+  /**
+   * @brief Emitted when stash operation completes
+   */
+  void stashOperationCompleted(const QString &message);
 
 private slots:
-    void onStashClicked();
-    void onPopClicked();
-    void onApplyClicked();
-    void onDropClicked();
-    void onClearClicked();
-    void onStashSelected(QListWidgetItem* item);
-    void onCloseClicked();
+  void onStashClicked();
+  void onPopClicked();
+  void onApplyClicked();
+  void onDropClicked();
+  void onClearClicked();
+  void onStashSelected(QListWidgetItem *item);
+  void onCloseClicked();
 
 private:
-    void setupUI();
-    void applyStyles();
-    void updateStashList();
+  void setupUI();
+  void applyStyles();
+  void updateStashList();
 
 public:
-    /**
-     * @brief Apply theme to the dialog
-     */
-    void applyTheme(const Theme& theme);
+  /**
+   * @brief Apply theme to the dialog
+   */
+  void applyTheme(const Theme &theme);
 
 private:
-    GitIntegration* m_git;
-    
-    QListWidget* m_stashList;
-    QLineEdit* m_messageEdit;
-    QCheckBox* m_includeUntrackedCheckbox;
-    QPushButton* m_stashButton;
-    QPushButton* m_popButton;
-    QPushButton* m_applyButton;
-    QPushButton* m_dropButton;
-    QPushButton* m_clearButton;
-    QPushButton* m_closeButton;
-    QLabel* m_statusLabel;
-    QLabel* m_detailsLabel;
+  GitIntegration *m_git;
+
+  QListWidget *m_stashList;
+  QLineEdit *m_messageEdit;
+  QCheckBox *m_includeUntrackedCheckbox;
+  QPushButton *m_stashButton;
+  QPushButton *m_popButton;
+  QPushButton *m_applyButton;
+  QPushButton *m_dropButton;
+  QPushButton *m_clearButton;
+  QPushButton *m_closeButton;
+  QLabel *m_statusLabel;
+  QLabel *m_detailsLabel;
 };
 
 #endif // GITSTASHDIALOG_H

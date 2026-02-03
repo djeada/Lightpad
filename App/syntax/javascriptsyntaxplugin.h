@@ -9,22 +9,24 @@
  */
 class JavaScriptSyntaxPlugin : public BaseSyntaxPlugin {
 public:
-    QString languageId() const override { return "js"; }
-    QString languageName() const override { return "JavaScript"; }
-    QStringList fileExtensions() const override { return {"js", "jsx", "mjs", "cjs"}; }
-    
-    QVector<SyntaxRule> syntaxRules() const override;
-    QVector<MultiLineBlock> multiLineBlocks() const override;
-    QStringList keywords() const override;
-    
-    QPair<QString, QPair<QString, QString>> commentStyle() const override {
-        return {"//", {"/*", "*/"}};
-    }
+  QString languageId() const override { return "js"; }
+  QString languageName() const override { return "JavaScript"; }
+  QStringList fileExtensions() const override {
+    return {"js", "jsx", "mjs", "cjs"};
+  }
+
+  QVector<SyntaxRule> syntaxRules() const override;
+  QVector<MultiLineBlock> multiLineBlocks() const override;
+  QStringList keywords() const override;
+
+  QPair<QString, QPair<QString, QString>> commentStyle() const override {
+    return {"//", {"/*", "*/"}};
+  }
 
 private:
-    static QStringList getPrimaryKeywords();
-    static QStringList getSecondaryKeywords();
-    static QStringList getTertiaryKeywords();
+  static QStringList getPrimaryKeywords();
+  static QStringList getSecondaryKeywords();
+  static QStringList getTertiaryKeywords();
 };
 
 #endif // JAVASCRIPTSYNTAXPLUGIN_H

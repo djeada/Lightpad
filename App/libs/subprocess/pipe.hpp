@@ -10,37 +10,31 @@ namespace subprocess {
         classes is too complex.
     */
 struct PipePair {
-    PipePair(){};
-    PipePair(PipeHandle input, PipeHandle output)
-        : input(input)
-        , output(output)
-    {
-    }
-    ~PipePair() { close(); }
-    // No copy, move only
-    PipePair(const PipePair&) = delete;
-    PipePair& operator=(const PipePair&) = delete;
-    PipePair(PipePair&& other) { *this = std::move(other); }
-    PipePair& operator=(PipePair&& other);
-    /*  we make it const as outside of code shouldn't modify these.
-            this might not be a good design as users may assume it's truly const.
-            disown, close*, and move semantics overwrite these values.
-        */
-    const PipeHandle input = kBadPipeValue;
-    const PipeHandle output = kBadPipeValue;
+  PipePair(){};
+  PipePair(PipeHandle input, PipeHandle output)
+      : input(input), output(output) {}
+  ~PipePair() { close(); }
+  // No copy, move only
+  PipePair(const PipePair &) = delete;
+  PipePair &operator=(const PipePair &) = delete;
+  PipePair(PipePair &&other) { *this = std::move(other); }
+  PipePair &operator=(PipePair &&other);
+  /*  we make it const as outside of code shouldn't modify these.
+          this might not be a good design as users may assume it's truly const.
+          disown, close*, and move semantics overwrite these values.
+      */
+  const PipeHandle input = kBadPipeValue;
+  const PipeHandle output = kBadPipeValue;
 
-    /** Stop owning the pipes */
-    void disown()
-    {
-        const_cast<PipeHandle&>(input) = const_cast<PipeHandle&>(output) = kBadPipeValue;
-    }
-    void close();
-    void close_input();
-    void close_output();
-    explicit operator bool() const noexcept
-    {
-        return input != output;
-    }
+  /** Stop owning the pipes */
+  void disown() {
+    const_cast<PipeHandle &>(input) = const_cast<PipeHandle &>(output) =
+        kBadPipeValue;
+  }
+  void close();
+  void close_input();
+  void close_output();
+  explicit operator bool() const noexcept { return input != output; }
 };
 
 /** Closes a pipe handle.
@@ -54,7 +48,8 @@ bool pipe_close(PipeHandle handle);
 
         @throw OSError if system call fails.
 
-        @return pipe pair. If failure returned pipes will have values of kBadPipeValue
+        @return pipe pair. If failure returned pipes will have values of
+   kBadPipeValue
     */
 PipePair pipe_create(bool inheritable = true);
 /** Set the pipe to be inheritable or not for subprocess.
@@ -69,12 +64,12 @@ void pipe_set_inheritable(PipeHandle handle, bool inheritable);
         @returns    -1 on error. if 0 it could be the end, or perhaps wait for
                     more data.
     */
-ssize_t pipe_read(PipeHandle, void* buffer, size_t size);
+ssize_t pipe_read(PipeHandle, void *buffer, size_t size);
 /**
         @returns    -1 on error. if 0 it could be full, or perhaps wait for
                     more data.
     */
-ssize_t pipe_write(PipeHandle, const void* buffer, size_t size);
+ssize_t pipe_write(PipeHandle, const void *buffer, size_t size);
 /** Spawns a thread to read from the pipe. When no more data available
         pipe will be closed.
     */
@@ -87,4 +82,4 @@ void pipe_ignore_and_close(PipeHandle handle);
                 with binary data.
     */
 std::string pipe_read_all(PipeHandle handle);
-}
+} // namespace subprocess
