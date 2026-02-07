@@ -40,6 +40,7 @@ void CompletionEngine::requestCompletions(const CompletionContext &context) {
 
 void CompletionEngine::executeCompletionRequest() {
   m_pendingItems.clear();
+  m_currentRequestId++;
 
   // Get providers for this language
   QString langId = m_currentContext.languageId.isEmpty()
@@ -57,18 +58,23 @@ void CompletionEngine::executeCompletionRequest() {
 
   m_pendingProviders = providers.size();
 
+  // Capture requestId so stale callbacks are ignored
+  int requestId = m_currentRequestId;
+
   // Request completions from all providers
   for (auto &provider : providers) {
-    provider->requestCompletions(m_currentContext,
-                                 [this](const QList<CompletionItem> &items) {
-                                   collectProviderResults(items);
-                                 });
+    provider->requestCompletions(
+        m_currentContext,
+        [this, requestId](const QList<CompletionItem> &items) {
+          collectProviderResults(requestId, items);
+        });
   }
 }
 
 void CompletionEngine::cancelPendingRequests() {
   m_debounceTimer->stop();
   m_pendingProviders = 0;
+  m_currentRequestId++;
 
   // Notify providers to cancel
   auto providers =
@@ -79,7 +85,12 @@ void CompletionEngine::cancelPendingRequests() {
 }
 
 void CompletionEngine::collectProviderResults(
-    const QList<CompletionItem> &items) {
+    int requestId, const QList<CompletionItem> &items) {
+  // Ignore callbacks from stale requests
+  if (requestId != m_currentRequestId) {
+    return;
+  }
+
   m_pendingItems.append(items);
   m_pendingProviders--;
 

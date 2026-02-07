@@ -1188,8 +1188,8 @@ void TextArea::onCompletionsReady(const QList<CompletionItem> &items) {
     return;
   }
 
-  showCompletionPopup();
   m_completionWidget->setItems(items);
+  showCompletionPopup();
 }
 
 void TextArea::onCompletionAccepted(const CompletionItem &item) {
