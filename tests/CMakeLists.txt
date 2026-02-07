@@ -363,6 +363,29 @@ target_link_libraries(test_completionproviderregistry
 
 target_compile_definitions(test_completionproviderregistry PRIVATE QT_DEPRECATED_WARNINGS)
 
+# CompletionEngine test executable
+add_executable(test_completionengine
+    unit/test_completionengine.cpp
+    ${CMAKE_SOURCE_DIR}/App/completion/completionengine.cpp
+    ${CMAKE_SOURCE_DIR}/App/completion/completionproviderregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_completionengine PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/completion
+)
+
+target_link_libraries(test_completionengine
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_completionengine PRIVATE QT_DEPRECATED_WARNINGS)
+
 # DAP (Debug Adapter Protocol) test executable
 add_executable(test_dap
     unit/test_dap.cpp
@@ -408,6 +431,7 @@ add_test(NAME TerminalTests COMMAND test_terminal)
 add_test(NAME TerminalTabWidgetTests COMMAND test_terminaltabwidget)
 add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
 add_test(NAME CompletionProviderRegistryTests COMMAND test_completionproviderregistry)
+add_test(NAME CompletionEngineTests COMMAND test_completionengine)
 add_test(NAME DapTests COMMAND test_dap)
 
 # GitIntegration test executable
@@ -678,6 +702,7 @@ set(TEST_LIST
     TerminalTabWidgetTests
     SyntaxPluginRegistryTests 
     CompletionProviderRegistryTests 
+    CompletionEngineTests
     DapTests 
     GitIntegrationTests
     GoToLineDialogTests
@@ -710,7 +735,7 @@ set(TEST_TARGETS
     test_logger test_theme test_filemanager test_document test_settingsmanager 
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
-    test_syntaxpluginregistry test_completionproviderregistry test_dap
+    test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap
     test_gitintegration test_gotolinedialog test_gotosymboldialog test_lspclient test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_imageviewer
 )

@@ -1091,6 +1091,15 @@ QString TextArea::textUnderCursor() const {
 // ============================================================================
 
 void TextArea::setCompletionEngine(CompletionEngine *engine) {
+  if (m_completionEngine == engine)
+    return;
+
+  // Disconnect previous engine signals
+  if (m_completionEngine) {
+    disconnect(m_completionEngine, &CompletionEngine::completionsReady, this,
+               &TextArea::onCompletionsReady);
+  }
+
   m_completionEngine = engine;
 
   if (!m_completionEngine)
