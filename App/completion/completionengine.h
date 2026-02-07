@@ -103,7 +103,8 @@ private slots:
   void onDebounceTimeout();
 
 private:
-  void collectProviderResults(const QList<CompletionItem> &items);
+  void collectProviderResults(int requestId,
+                              const QList<CompletionItem> &items);
   void mergeAndSortResults();
   void notifyResults();
   void executeCompletionRequest();
@@ -113,6 +114,7 @@ private:
   QList<CompletionItem> m_pendingItems;
   QList<CompletionItem> m_lastResults;
   int m_pendingProviders = 0;
+  int m_currentRequestId = 0;
 
   // Configuration
   int m_minPrefixLength = 2; // Require at least 2 chars before auto-completion
