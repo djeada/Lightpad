@@ -220,6 +220,21 @@ void DapClient::setFunctionBreakpoints(const QStringList &functionNames) {
   sendRequest("setFunctionBreakpoints", args, seq);
 }
 
+void DapClient::setDataBreakpoints(
+    const QList<QJsonObject> &dataBreakpoints) {
+  QJsonArray bpArray;
+  for (const auto &bp : dataBreakpoints) {
+    bpArray.append(bp);
+  }
+
+  QJsonObject args;
+  args["breakpoints"] = bpArray;
+
+  int seq = m_nextSeq++;
+  m_pendingRequests[seq] = "setDataBreakpoints";
+  sendRequest("setDataBreakpoints", args, seq);
+}
+
 void DapClient::setExceptionBreakpoints(const QStringList &filterIds) {
   QJsonArray filters;
   for (const auto &id : filterIds) {
@@ -523,7 +538,16 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
 
   if (!success) {
     LOG_ERROR(QString("DAP error for %1: %2").arg(command).arg(message));
-    emit error(QString("%1 failed: %2").arg(command).arg(message));
+
+    // Emit specific error signals for certain commands
+    if (command == "evaluate") {
+      QString expression = pendingCommand.startsWith("evaluate:")
+                               ? pendingCommand.mid(9)
+                               : command;
+      emit evaluateError(expression, message);
+    } else {
+      emit error(QString("%1 failed: %2").arg(command).arg(message));
+    }
     return;
   }
 
@@ -622,6 +646,12 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     setState(State::Running);
     emit continued(bodyObj["threadId"].toInt(),
                    bodyObj["allThreadsContinued"].toBool(true));
+  } else if (command == "setVariable") {
+    emit variableSet(bodyObj["name"].toString(), bodyObj["value"].toString(),
+                     bodyObj["type"].toString());
+  } else if (command == "setDataBreakpoints") {
+    LOG_DEBUG(QString("Data breakpoints set: %1")
+                  .arg(bodyObj["breakpoints"].toArray().count()));
   }
 }
 

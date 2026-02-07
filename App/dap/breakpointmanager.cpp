@@ -359,10 +359,17 @@ void BreakpointManager::syncDataBreakpoints() {
     return;
   }
 
-  // DAP uses setDataBreakpoints - we need to add this to the client
-  // For now, log that we're attempting to sync
+  QList<QJsonObject> dataBreakpointList;
+  for (const DataBreakpoint &dbp : m_dataBreakpoints) {
+    if (dbp.enabled) {
+      dataBreakpointList.append(dbp.toJson());
+    }
+  }
+
+  m_dapClient->setDataBreakpoints(dataBreakpointList);
+
   LOG_DEBUG(
-      QString("Syncing %1 data breakpoints").arg(m_dataBreakpoints.size()));
+      QString("Syncing %1 data breakpoints").arg(dataBreakpointList.size()));
 }
 
 void BreakpointManager::setExceptionBreakpoints(const QStringList &filterIds) {

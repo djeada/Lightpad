@@ -4,6 +4,7 @@
 #include <QAction>
 #include <QFontDatabase>
 #include <QHeaderView>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
 #include <QStyle>
@@ -26,6 +27,21 @@ DebugPanel::DebugPanel(QWidget *parent)
           &DebugPanel::refreshBreakpointList);
 
   refreshBreakpointList();
+
+  // Connect to watch manager
+  connect(&WatchManager::instance(), &WatchManager::watchAdded, this,
+          &DebugPanel::onWatchAdded);
+  connect(&WatchManager::instance(), &WatchManager::watchRemoved, this,
+          &DebugPanel::onWatchRemoved);
+  connect(&WatchManager::instance(), &WatchManager::watchUpdated, this,
+          &DebugPanel::onWatchUpdated);
+  connect(&WatchManager::instance(), &WatchManager::watchChildrenReceived, this,
+          &DebugPanel::onWatchChildrenReceived);
+
+  // Populate existing watches
+  for (const WatchExpression &w : WatchManager::instance().allWatches()) {
+    onWatchAdded(w);
+  }
 }
 
 DebugPanel::~DebugPanel() {}
@@ -46,10 +62,12 @@ void DebugPanel::setupUI() {
 
   // Setup individual panels
   setupVariables();
+  setupWatches();
   setupCallStack();
   setupBreakpoints();
 
   m_tabWidget->addTab(m_variablesTree, tr("Variables"));
+  m_tabWidget->addTab(m_watchTree->parentWidget(), tr("Watch"));
   m_tabWidget->addTab(m_callStackTree, tr("Call Stack"));
   m_tabWidget->addTab(m_breakpointsTree, tr("Breakpoints"));
 
@@ -120,6 +138,17 @@ void DebugPanel::setupToolbar() {
   m_stopAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F5));
   m_stopAction->setToolTip(tr("Stop (Shift+F5)"));
   connect(m_stopAction, &QAction::triggered, this, &DebugPanel::onStop);
+
+  m_toolbar->addSeparator();
+
+  // Thread selector
+  m_threadSelector = new QComboBox(this);
+  m_threadSelector->setToolTip(tr("Select Thread"));
+  m_threadSelector->setMinimumWidth(120);
+  m_threadSelector->setEnabled(false);
+  connect(m_threadSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, &DebugPanel::onThreadSelected);
+  m_toolbar->addWidget(m_threadSelector);
 }
 
 void DebugPanel::setupCallStack() {
@@ -154,6 +183,60 @@ void DebugPanel::setupVariables() {
 
   connect(m_variablesTree, &QTreeWidget::itemExpanded, this,
           &DebugPanel::onVariableItemExpanded);
+}
+
+void DebugPanel::setupWatches() {
+  // Container widget with tree + input
+  QWidget *watchContainer = new QWidget(this);
+  QVBoxLayout *watchLayout = new QVBoxLayout(watchContainer);
+  watchLayout->setContentsMargins(0, 0, 0, 0);
+  watchLayout->setSpacing(2);
+
+  m_watchTree = new QTreeWidget(watchContainer);
+  m_watchTree->setHeaderLabels({tr("Expression"), tr("Value"), tr("Type")});
+  m_watchTree->setSelectionMode(QAbstractItemView::SingleSelection);
+  m_watchTree->setAlternatingRowColors(true);
+  m_watchTree->setRootIsDecorated(true);
+
+  m_watchTree->header()->setStretchLastSection(false);
+  m_watchTree->header()->setSectionResizeMode(0, QHeaderView::Interactive);
+  m_watchTree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
+  m_watchTree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+
+  connect(m_watchTree, &QTreeWidget::itemExpanded, this,
+          &DebugPanel::onWatchItemExpanded);
+
+  // Context menu for removing watches
+  m_watchTree->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_watchTree, &QTreeWidget::customContextMenuRequested, this,
+          [this](const QPoint &pos) {
+            QTreeWidgetItem *item = m_watchTree->itemAt(pos);
+            if (!item || item->parent())
+              return; // Only top-level items
+
+            QMenu menu;
+            QAction *removeAction = menu.addAction(tr("Remove Watch"));
+            QAction *chosen = menu.exec(m_watchTree->mapToGlobal(pos));
+            if (chosen == removeAction) {
+              int watchId = item->data(0, Qt::UserRole).toInt();
+              WatchManager::instance().removeWatch(watchId);
+            }
+          });
+
+  watchLayout->addWidget(m_watchTree);
+
+  // Watch input
+  QHBoxLayout *inputLayout = new QHBoxLayout();
+  inputLayout->setContentsMargins(2, 0, 2, 2);
+
+  m_watchInput = new QLineEdit(watchContainer);
+  m_watchInput->setPlaceholderText(tr("Add watch expression..."));
+  m_watchInput->setClearButtonEnabled(true);
+  connect(m_watchInput, &QLineEdit::returnPressed, this,
+          &DebugPanel::onAddWatch);
+
+  inputLayout->addWidget(m_watchInput);
+  watchLayout->addLayout(inputLayout);
 }
 
 void DebugPanel::setupBreakpoints() {
@@ -222,6 +305,11 @@ void DebugPanel::setDapClient(DapClient *client) {
                                           .arg(result.toHtmlEscaped())
                                           .arg(type.toHtmlEscaped()));
             });
+    connect(m_dapClient, &DapClient::evaluateError, this,
+            &DebugPanel::onEvaluateError);
+
+    // Connect WatchManager to the DAP client
+    WatchManager::instance().setDapClient(m_dapClient);
   }
 
   updateToolbarState();
@@ -236,6 +324,8 @@ void DebugPanel::clearAll() {
   m_stackFrames.clear();
   m_currentThreadId = 0;
   m_currentFrameId = 0;
+  m_threadSelector->clear();
+  m_threadSelector->setEnabled(false);
 }
 
 void DebugPanel::setCurrentFrame(int frameId) {
@@ -343,6 +433,19 @@ void DebugPanel::onStop() {
 
 void DebugPanel::onThreadsReceived(const QList<DapThread> &threads) {
   m_threads = threads;
+
+  // Update thread selector
+  m_threadSelector->blockSignals(true);
+  m_threadSelector->clear();
+  for (const DapThread &thread : threads) {
+    m_threadSelector->addItem(
+        QString("Thread %1: %2").arg(thread.id).arg(thread.name), thread.id);
+    if (thread.id == m_currentThreadId) {
+      m_threadSelector->setCurrentIndex(m_threadSelector->count() - 1);
+    }
+  }
+  m_threadSelector->setEnabled(!threads.isEmpty());
+  m_threadSelector->blockSignals(false);
 }
 
 void DebugPanel::onStackTraceReceived(int threadId,
@@ -378,6 +481,9 @@ void DebugPanel::onStackTraceReceived(int threadId,
   if (!frames.isEmpty()) {
     m_callStackTree->setCurrentItem(m_callStackTree->topLevelItem(0));
     setCurrentFrame(frames.first().id);
+
+    // Evaluate all watch expressions in the current frame context
+    WatchManager::instance().evaluateAll(frames.first().id);
   }
 }
 
@@ -571,6 +677,140 @@ void DebugPanel::refreshBreakpointList() {
 
     m_breakpointsTree->addTopLevelItem(item);
   }
+}
+
+void DebugPanel::onThreadSelected(int index) {
+  if (index < 0 || !m_dapClient)
+    return;
+
+  int threadId = m_threadSelector->itemData(index).toInt();
+  if (threadId > 0 && threadId != m_currentThreadId) {
+    m_currentThreadId = threadId;
+    m_dapClient->getStackTrace(m_currentThreadId);
+  }
+}
+
+void DebugPanel::onAddWatch() {
+  QString expr = m_watchInput->text().trimmed();
+  if (expr.isEmpty())
+    return;
+
+  m_watchInput->clear();
+  int id = WatchManager::instance().addWatch(expr);
+
+  // If currently stopped, evaluate immediately
+  if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped &&
+      m_currentFrameId > 0) {
+    WatchManager::instance().evaluateWatch(id, m_currentFrameId);
+  }
+}
+
+void DebugPanel::onRemoveWatch() {
+  QTreeWidgetItem *item = m_watchTree->currentItem();
+  if (!item || item->parent())
+    return;
+
+  int watchId = item->data(0, Qt::UserRole).toInt();
+  WatchManager::instance().removeWatch(watchId);
+}
+
+void DebugPanel::onWatchAdded(const WatchExpression &watch) {
+  QTreeWidgetItem *item = new QTreeWidgetItem();
+  item->setText(0, watch.expression);
+  item->setText(1, watch.value.isEmpty() ? tr("<not evaluated>") : watch.value);
+  item->setText(2, watch.type);
+  item->setData(0, Qt::UserRole, watch.id);
+  item->setData(0, Qt::UserRole + 1, watch.variablesReference);
+
+  if (watch.variablesReference > 0) {
+    item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+  }
+
+  m_watchTree->addTopLevelItem(item);
+  m_watchIdToItem[watch.id] = item;
+}
+
+void DebugPanel::onWatchRemoved(int id) {
+  QTreeWidgetItem *item = m_watchIdToItem.take(id);
+  if (item) {
+    delete item;
+  }
+}
+
+void DebugPanel::onWatchUpdated(const WatchExpression &watch) {
+  QTreeWidgetItem *item = m_watchIdToItem.value(watch.id);
+  if (!item)
+    return;
+
+  if (watch.isError) {
+    item->setText(1, watch.errorMessage.isEmpty() ? tr("Evaluation failed")
+                                                  : watch.errorMessage);
+    item->setForeground(1, Qt::red);
+  } else {
+    item->setText(1, watch.value);
+    item->setForeground(1, palette().color(QPalette::Text));
+  }
+  item->setText(2, watch.type);
+  item->setData(0, Qt::UserRole + 1, watch.variablesReference);
+
+  // Update expansion capability
+  if (watch.variablesReference > 0) {
+    item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+  } else {
+    item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+    // Remove any existing children
+    while (item->childCount() > 0) {
+      delete item->takeChild(0);
+    }
+  }
+}
+
+void DebugPanel::onWatchItemExpanded(QTreeWidgetItem *item) {
+  // Only handle top-level watch items
+  if (!item)
+    return;
+
+  int watchId = item->data(0, Qt::UserRole).toInt();
+  int varRef = item->data(0, Qt::UserRole + 1).toInt();
+
+  if (varRef > 0 && item->childCount() == 0) {
+    WatchManager::instance().getWatchChildren(watchId, varRef);
+  }
+}
+
+void DebugPanel::onWatchChildrenReceived(int watchId,
+                                         const QList<DapVariable> &children) {
+  QTreeWidgetItem *parentItem = m_watchIdToItem.value(watchId);
+  if (!parentItem)
+    return;
+
+  // Clear existing children
+  while (parentItem->childCount() > 0) {
+    delete parentItem->takeChild(0);
+  }
+
+  for (const DapVariable &var : children) {
+    QTreeWidgetItem *childItem = new QTreeWidgetItem();
+    childItem->setText(0, var.name);
+    childItem->setText(1, var.value);
+    childItem->setText(2, var.type);
+    childItem->setData(0, Qt::UserRole + 1, var.variablesReference);
+    childItem->setIcon(0, variableIcon(var));
+
+    if (var.variablesReference > 0) {
+      childItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+    }
+
+    parentItem->addChild(childItem);
+  }
+}
+
+void DebugPanel::onEvaluateError(const QString &expression,
+                                 const QString &errorMessage) {
+  m_consoleOutput->append(
+      QString("<font color='red'><b>%1</b>: %2</font>")
+          .arg(expression.toHtmlEscaped())
+          .arg(errorMessage.toHtmlEscaped()));
 }
 
 QString DebugPanel::formatVariable(const DapVariable &var) const {

@@ -1,6 +1,7 @@
 #ifndef DEBUGPANEL_H
 #define DEBUGPANEL_H
 
+#include <QComboBox>
 #include <QLineEdit>
 #include <QSplitter>
 #include <QTabWidget>
@@ -12,6 +13,7 @@
 
 #include "../../dap/breakpointmanager.h"
 #include "../../dap/dapclient.h"
+#include "../../dap/watchmanager.h"
 
 class DapClient;
 
@@ -116,12 +118,24 @@ private slots:
   void onVariableItemExpanded(QTreeWidgetItem *item);
   void onBreakpointItemDoubleClicked(QTreeWidgetItem *item, int column);
   void onConsoleInput();
+  void onThreadSelected(int index);
+
+  // Watch interactions
+  void onAddWatch();
+  void onRemoveWatch();
+  void onWatchAdded(const WatchExpression &watch);
+  void onWatchRemoved(int id);
+  void onWatchUpdated(const WatchExpression &watch);
+  void onWatchItemExpanded(QTreeWidgetItem *item);
+  void onWatchChildrenReceived(int watchId, const QList<DapVariable> &children);
+  void onEvaluateError(const QString &expression, const QString &errorMessage);
 
 private:
   void setupUI();
   void setupToolbar();
   void setupCallStack();
   void setupVariables();
+  void setupWatches();
   void setupBreakpoints();
   void setupConsole();
 
@@ -159,6 +173,14 @@ private:
 
   // Breakpoints list
   QTreeWidget *m_breakpointsTree;
+
+  // Watch expressions
+  QTreeWidget *m_watchTree;
+  QLineEdit *m_watchInput;
+  QMap<int, QTreeWidgetItem *> m_watchIdToItem; // watchId -> tree item
+
+  // Thread selector
+  QComboBox *m_threadSelector;
 
   // Debug console
   QTextEdit *m_consoleOutput;

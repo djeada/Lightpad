@@ -188,6 +188,7 @@ signals:
 private slots:
   void onEvaluateResult(const QString &expression, const QString &result,
                         const QString &type, int variablesReference);
+  void onEvaluateError(const QString &expression, const QString &errorMessage);
   void onVariablesReceived(int variablesReference,
                            const QList<DapVariable> &variables);
 
