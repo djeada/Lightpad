@@ -181,14 +181,7 @@ void TestCompletionEngine::testStaleCallbackIgnored() {
   // The deferred provider has a pending callback from request 1
   QVERIFY(deferred->hasPendingCallback());
 
-  // Grab a reference to the stale callback before the second request
-  // overwrites it inside the provider
-  std::function<void(const QList<CompletionItem> &)> staleCallback;
-  // We need to directly capture it; deliver via the provider object
-  // Actually we can just save the provider's pending callback
-  auto savedProvider = deferred;
-
-  // Issue a second request – this should invalidate the first one
+  // Issue a second request - this should invalidate the first one
   CompletionContext ctx2;
   ctx2.prefix = "tes";
   ctx2.languageId = "cpp";
