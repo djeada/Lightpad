@@ -83,8 +83,13 @@ QString GitIntegration::executeGitCommand(const QStringList &args,
     *success = (process.exitCode() == 0);
   }
 
-  const QString output =
-      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  // Use right-trimming only to preserve leading whitespace
+  // (significant in git status --porcelain output)
+  QString output = QString::fromUtf8(process.readAllStandardOutput());
+  while (output.endsWith('\n') || output.endsWith('\r') ||
+         output.endsWith(' ')) {
+    output.chop(1);
+  }
   if (process.exitCode() != 0) {
     QString error = process.readAllStandardError();
     LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " + error);
@@ -472,6 +477,29 @@ bool GitIntegration::commit(const QString &message) {
   return success;
 }
 
+bool GitIntegration::commitAmend(const QString &message) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  bool success;
+  if (message.isEmpty()) {
+    executeGitCommand({"commit", "--amend", "--no-edit"}, &success);
+  } else {
+    executeGitCommand({"commit", "--amend", "-m", message}, &success);
+  }
+
+  if (success) {
+    emit operationCompleted("Last commit amended");
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Failed to amend commit");
+  }
+
+  return success;
+}
+
 bool GitIntegration::checkoutBranch(const QString &branchName) {
   if (!m_isValid) {
     emit errorOccurred("Not in a git repository");
@@ -653,6 +681,27 @@ bool GitIntegration::discardChanges(const QString &filePath) {
     emit statusChanged();
   } else {
     emit errorOccurred("Failed to discard changes: " + relativePath);
+  }
+
+  return success;
+}
+
+bool GitIntegration::discardAllChanges() {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  bool success;
+  executeGitCommand({"checkout", "--", "."}, &success);
+
+  if (success) {
+    // Also clean untracked files
+    executeGitCommand({"clean", "-fd"}, &success);
+    emit operationCompleted("All changes discarded");
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Failed to discard all changes");
   }
 
   return success;

@@ -203,6 +203,13 @@ public:
   bool commit(const QString &message);
 
   /**
+   * @brief Amend the last commit with staged changes
+   * @param message New commit message (if empty, reuses the previous message)
+   * @return true if amend was successful
+   */
+  bool commitAmend(const QString &message = QString());
+
+  /**
    * @brief Checkout a branch
    */
   bool checkoutBranch(const QString &branchName);
@@ -247,6 +254,12 @@ public:
    * @brief Discard changes in a file (restore to HEAD)
    */
   bool discardChanges(const QString &filePath);
+
+  /**
+   * @brief Discard all unstaged changes (restore all files to HEAD)
+   * @return true if discard was successful
+   */
+  bool discardAllChanges();
 
   // ==================== Commit History ====================
 

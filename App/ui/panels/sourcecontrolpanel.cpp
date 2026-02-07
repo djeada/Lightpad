@@ -649,6 +649,8 @@ void SourceControlPanel::setupRepoUI() {
                                  "  border-color: #2ea043;"
                                  "}");
   commitOptionsLayout->addWidget(m_amendCheckbox);
+  connect(m_amendCheckbox, &QCheckBox::toggled, this,
+          &SourceControlPanel::onCommitMessageChanged);
   commitOptionsLayout->addStretch();
   commitLayout->addLayout(commitOptionsLayout);
 
@@ -800,6 +802,44 @@ void SourceControlPanel::setupRepoUI() {
   connect(m_stageAllButton, &QPushButton::clicked, this,
           &SourceControlPanel::onStageAllClicked);
   changesHeaderLayout->addWidget(m_stageAllButton);
+
+  // Discard all changes button
+  QPushButton *discardAllButton = new QPushButton("✖", changesHeader);
+  discardAllButton->setFixedSize(22, 22);
+  discardAllButton->setToolTip(tr("Discard All Changes"));
+  discardAllButton->setStyleSheet(
+      "QPushButton { background: transparent; color: #8b949e; border: 1px "
+      "solid #30363d; border-radius: 4px; font-size: 12px; }"
+      "QPushButton:hover { background: #21262d; color: #f85149; border-color: "
+      "#f85149; }"
+      "QPushButton:pressed { background: #da3633; color: white; }"
+      "QPushButton:disabled { color: #484f58; border-color: #30363d; }");
+  connect(discardAllButton, &QPushButton::clicked, [this]() {
+    if (!m_git)
+      return;
+    QMessageBox msgBox(this);
+    msgBox.setIcon(QMessageBox::Warning);
+    msgBox.setWindowTitle(tr("Discard All Changes"));
+    msgBox.setText(
+        tr("Are you sure you want to discard all changes?"));
+    msgBox.setInformativeText(tr("This action cannot be undone."));
+    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBox.setDefaultButton(QMessageBox::No);
+    msgBox.setStyleSheet(
+        "QMessageBox { background: #0d1117; }"
+        "QMessageBox QLabel { color: #e6edf3; }"
+        "QPushButton { background: #21262d; color: #e6edf3; border: 1px "
+        "solid #30363d; border-radius: 6px; padding: 6px 16px; margin: "
+        "2px; }"
+        "QPushButton:hover { background: #30363d; }"
+        "QPushButton[text='&Yes'] { background: #da3633; color: white; "
+        "border-color: #da3633; }"
+        "QPushButton[text='&Yes']:hover { background: #b62324; }");
+    if (msgBox.exec() == QMessageBox::Yes) {
+      m_git->discardAllChanges();
+    }
+  });
+  changesHeaderLayout->addWidget(discardAllButton);
 
   mainLayout->addWidget(changesHeader);
 
@@ -1136,6 +1176,20 @@ void SourceControlPanel::updateBranchSelector() {
       QString displayName = branch.name;
       if (branch.isCurrent) {
         currentIndex = m_branchSelector->count();
+        // Show tracking info for the current branch
+        if (branch.aheadCount > 0 || branch.behindCount > 0) {
+          QString trackingInfo;
+          if (branch.aheadCount > 0 && branch.behindCount > 0) {
+            trackingInfo = QString(" ↑%1 ↓%2")
+                               .arg(branch.aheadCount)
+                               .arg(branch.behindCount);
+          } else if (branch.aheadCount > 0) {
+            trackingInfo = QString(" ↑%1").arg(branch.aheadCount);
+          } else {
+            trackingInfo = QString(" ↓%1").arg(branch.behindCount);
+          }
+          displayName += trackingInfo;
+        }
       }
       m_branchSelector->addItem(displayName, branch.name);
     }
@@ -1280,11 +1334,22 @@ void SourceControlPanel::updateHistory() {
   for (const GitCommitInfo &commit : commits) {
     QTreeWidgetItem *item = new QTreeWidgetItem(m_historyTree);
 
-    // Format: short_hash subject (relative_date)
+    // Format: short_hash subject — author, relative_date
     QString displayText =
         QString("%1  %2").arg(commit.shortHash).arg(commit.subject);
     if (displayText.length() > MAX_COMMIT_DISPLAY_LENGTH) {
       displayText = displayText.left(MAX_COMMIT_DISPLAY_LENGTH - 3) + "...";
+    }
+    if (!commit.author.isEmpty() || !commit.relativeDate.isEmpty()) {
+      QString meta;
+      if (!commit.author.isEmpty() && !commit.relativeDate.isEmpty()) {
+        meta = QString(" — %1, %2").arg(commit.author).arg(commit.relativeDate);
+      } else if (!commit.author.isEmpty()) {
+        meta = QString(" — %1").arg(commit.author);
+      } else {
+        meta = QString(" — %1").arg(commit.relativeDate);
+      }
+      displayText += meta;
     }
 
     item->setText(0, displayText);
@@ -1319,8 +1384,11 @@ void SourceControlPanel::onCommitMessageChanged() {
 
   bool hasMessage =
       m_commitMessage && !m_commitMessage->toPlainText().trimmed().isEmpty();
+  bool isAmend = m_amendCheckbox && m_amendCheckbox->isChecked();
   if (m_commitButton) {
-    m_commitButton->setEnabled(m_stagedCount > 0 && hasMessage);
+    // Amend can work with just a message (to update the commit message)
+    m_commitButton->setEnabled(
+        hasMessage && (m_stagedCount > 0 || isAmend));
   }
 }
 
@@ -1364,17 +1432,10 @@ void SourceControlPanel::onCommitClicked() {
   }
 
   if (m_amendCheckbox && m_amendCheckbox->isChecked()) {
-    QMessageBox msgBox(this);
-    msgBox.setIcon(QMessageBox::Warning);
-    msgBox.setWindowTitle(tr("Commit"));
-    msgBox.setText(tr("Amend is not supported yet."));
-    msgBox.setStyleSheet(
-        "QMessageBox { background: #0d1117; }"
-        "QMessageBox QLabel { color: #e6edf3; }"
-        "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
-        "#30363d; border-radius: 6px; padding: 6px 16px; }"
-        "QPushButton:hover { background: #30363d; }");
-    msgBox.exec();
+    if (m_git->commitAmend(message)) {
+      m_commitMessage->clear();
+      m_amendCheckbox->setChecked(false);
+    }
     return;
   }
 
@@ -1592,6 +1653,7 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
                      "}");
 
   QAction *viewDiffAction = menu.addAction(tr("View Diff"));
+  QAction *copyHashAction = menu.addAction(tr("Copy Commit Hash"));
   menu.addSeparator();
   QAction *checkoutAction = menu.addAction(tr("Checkout Commit"));
   QAction *createBranchAction = menu.addAction(tr("Create Branch..."));
@@ -1602,6 +1664,10 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
 
   if (selected == viewDiffAction) {
     emit commitDiffRequested(commitHash, shortHash);
+  } else if (selected == copyHashAction) {
+    QApplication::clipboard()->setText(commitHash);
+    QToolTip::showText(QCursor::pos(), tr("✓ Copied: %1").arg(shortHash), this,
+                       QRect(), 2000);
   } else if (selected == checkoutAction) {
     m_git->checkoutCommit(commitHash);
   } else if (selected == createBranchAction) {
@@ -1656,7 +1722,8 @@ void SourceControlPanel::updateCounts() {
 
   bool hasMessage =
       m_commitMessage && !m_commitMessage->toPlainText().trimmed().isEmpty();
-  m_commitButton->setEnabled(m_stagedCount > 0 && hasMessage);
+  bool isAmend = m_amendCheckbox && m_amendCheckbox->isChecked();
+  m_commitButton->setEnabled(hasMessage && (m_stagedCount > 0 || isAmend));
   m_stageAllButton->setEnabled(m_changesCount > 0);
   m_unstageAllButton->setEnabled(m_stagedCount > 0);
   if (m_stagedTree) {
