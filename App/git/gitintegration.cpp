@@ -86,10 +86,15 @@ QString GitIntegration::executeGitCommand(const QStringList &args,
   // Use right-trimming only to preserve leading whitespace
   // (significant in git status --porcelain output)
   QString output = QString::fromUtf8(process.readAllStandardOutput());
-  while (output.endsWith('\n') || output.endsWith('\r') ||
-         output.endsWith(' ')) {
-    output.chop(1);
+  int end = output.size();
+  while (end > 0) {
+    QChar ch = output[end - 1];
+    if (ch == '\n' || ch == '\r' || ch == ' ')
+      --end;
+    else
+      break;
   }
+  output.truncate(end);
   if (process.exitCode() != 0) {
     QString error = process.readAllStandardError();
     LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " + error);
