@@ -415,6 +415,14 @@ public:
   void setFunctionBreakpoints(const QStringList &functionNames);
 
   /**
+   * @brief Set data breakpoints (watchpoints)
+   * @param dataBreakpoints List of data breakpoints to set
+   *
+   * Note: This replaces all data breakpoints
+   */
+  void setDataBreakpoints(const QList<QJsonObject> &dataBreakpoints);
+
+  /**
    * @brief Set exception breakpoints
    * @param filterIds List of exception filter IDs (e.g., "uncaught", "raised")
    */
@@ -545,6 +553,9 @@ signals:
                          const QList<DapVariable> &variables);
   void evaluateResult(const QString &expression, const QString &result,
                       const QString &type, int variablesReference);
+  void evaluateError(const QString &expression, const QString &errorMessage);
+  void variableSet(const QString &name, const QString &newValue,
+                   const QString &type);
 
 private slots:
   void onReadyReadStandardOutput();

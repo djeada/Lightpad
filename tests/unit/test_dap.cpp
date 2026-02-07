@@ -58,6 +58,13 @@ private slots:
   void testAddWatch();
   void testRemoveWatch();
   void testWatchPersistence();
+  void testWatchUpdate();
+  void testWatchEvaluationWithoutClient();
+
+  // DapClient new signals tests
+  void testDapClientEvaluateErrorSignal();
+  void testDapClientVariableSetSignal();
+  void testDapClientSetDataBreakpoints();
 
   // DebugSession tests
   void testDebugSessionState();
@@ -788,6 +795,81 @@ void TestDap::testDebugConfigurationFileOpenPath() {
   QString launchPath = manager.lightpadLaunchConfigPath();
   QCOMPARE(launchPath, settings.launchConfigPath());
   QVERIFY(QFile::exists(launchPath));
+}
+
+// =============================================================================
+// Watch Manager Extended Tests
+// =============================================================================
+
+void TestDap::testWatchUpdate() {
+  cleanupWatches();
+
+  WatchManager &wm = WatchManager::instance();
+
+  int id = wm.addWatch("oldExpr");
+  QCOMPARE(wm.watch(id).expression, QString("oldExpr"));
+
+  QSignalSpy updatedSpy(&wm, &WatchManager::watchUpdated);
+  wm.updateWatch(id, "newExpr");
+
+  QCOMPARE(updatedSpy.count(), 1);
+  QCOMPARE(wm.watch(id).expression, QString("newExpr"));
+  QVERIFY(wm.watch(id).value.isEmpty());
+  QVERIFY(wm.watch(id).type.isEmpty());
+}
+
+void TestDap::testWatchEvaluationWithoutClient() {
+  cleanupWatches();
+
+  WatchManager &wm = WatchManager::instance();
+
+  // Ensure no DAP client is connected
+  wm.setDapClient(nullptr);
+
+  int id = wm.addWatch("testExpr");
+
+  // Evaluating without a client should be a no-op
+  wm.evaluateWatch(id, 1);
+
+  // Watch should retain its default state
+  WatchExpression w = wm.watch(id);
+  QVERIFY(w.value.isEmpty());
+  QVERIFY(!w.isError);
+}
+
+// =============================================================================
+// DapClient Extended Tests
+// =============================================================================
+
+void TestDap::testDapClientEvaluateErrorSignal() {
+  DapClient client;
+
+  // Verify the evaluateError signal is declared and connectable
+  QSignalSpy errorSpy(&client, &DapClient::evaluateError);
+  QVERIFY(errorSpy.isValid());
+}
+
+void TestDap::testDapClientVariableSetSignal() {
+  DapClient client;
+
+  // Verify the variableSet signal is declared and connectable
+  QSignalSpy setSpy(&client, &DapClient::variableSet);
+  QVERIFY(setSpy.isValid());
+}
+
+void TestDap::testDapClientSetDataBreakpoints() {
+  DapClient client;
+
+  // Verify the method exists and doesn't crash when called without a process
+  // (it should log a warning and return gracefully)
+  QList<QJsonObject> dataBreakpoints;
+  QJsonObject bp1;
+  bp1["dataId"] = "myVar";
+  bp1["accessType"] = "write";
+  dataBreakpoints.append(bp1);
+
+  // This should not crash even without a running process
+  client.setDataBreakpoints(dataBreakpoints);
 }
 
 QTEST_MAIN(TestDap)

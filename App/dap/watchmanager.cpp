@@ -77,6 +77,8 @@ void WatchManager::setDapClient(DapClient *client) {
   if (m_dapClient) {
     connect(m_dapClient, &DapClient::evaluateResult, this,
             &WatchManager::onEvaluateResult);
+    connect(m_dapClient, &DapClient::evaluateError, this,
+            &WatchManager::onEvaluateError);
     connect(m_dapClient, &DapClient::variablesReceived, this,
             &WatchManager::onVariablesReceived);
   }
@@ -141,6 +143,28 @@ void WatchManager::onEvaluateResult(const QString &expression,
   watch.variablesReference = variablesReference;
   watch.isError = false;
   watch.errorMessage.clear();
+
+  emit watchUpdated(watch);
+}
+
+void WatchManager::onEvaluateError(const QString &expression,
+                                   const QString &errorMessage) {
+  if (!m_pendingEvaluations.contains(expression)) {
+    return;
+  }
+
+  int watchId = m_pendingEvaluations.take(expression);
+
+  if (!m_watches.contains(watchId)) {
+    return;
+  }
+
+  WatchExpression &watch = m_watches[watchId];
+  watch.value.clear();
+  watch.type.clear();
+  watch.variablesReference = 0;
+  watch.isError = true;
+  watch.errorMessage = errorMessage;
 
   emit watchUpdated(watch);
 }
