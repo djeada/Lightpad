@@ -35,6 +35,9 @@ private slots:
   void testStashList();
   void testStashPopApply();
   void testGetRemotes();
+  // New feature tests
+  void testCommitAmend();
+  void testDiscardAllChanges();
 
 private:
   QTemporaryDir m_tempDir;
@@ -764,6 +767,92 @@ void TestGitIntegration::testGetRemotes() {
 
   // Clean up - remove the remote
   runGitCommand({"remote", "remove", "origin"});
+}
+
+void TestGitIntegration::testCommitAmend() {
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(m_repoPath));
+
+  // Create and commit a file
+  createTestFile("amend_test.txt", "Original content\n");
+  QVERIFY(git.stageFile("amend_test.txt"));
+  QVERIFY(git.commit("Original commit message"));
+
+  // Verify original commit message
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"log", "-1", "--pretty=%s"});
+  process.waitForFinished();
+  QString lastMsg =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QCOMPARE(lastMsg, "Original commit message");
+
+  // Amend with a new message (no staged changes needed)
+  QVERIFY(git.commitAmend("Amended commit message"));
+
+  // Verify the commit message was updated
+  process.start("git", {"log", "-1", "--pretty=%s"});
+  process.waitForFinished();
+  lastMsg = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QCOMPARE(lastMsg, "Amended commit message");
+
+  // Amend with staged changes and reuse message
+  createTestFile("amend_test.txt", "Updated content\n");
+  QVERIFY(git.stageFile("amend_test.txt"));
+  QVERIFY(git.commitAmend());
+
+  // Verify message was preserved
+  process.start("git", {"log", "-1", "--pretty=%s"});
+  process.waitForFinished();
+  lastMsg = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QCOMPARE(lastMsg, "Amended commit message");
+
+  // Verify the file content is in the amended commit
+  process.start("git", {"show", "HEAD:amend_test.txt"});
+  process.waitForFinished();
+  QString fileContent =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QCOMPARE(fileContent, "Updated content");
+}
+
+void TestGitIntegration::testDiscardAllChanges() {
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(m_repoPath));
+
+  // Create and commit a file dedicated to this test
+  createTestFile("discard_all_test.txt", "Original content\n");
+  QVERIFY(git.stageFile("discard_all_test.txt"));
+  QVERIFY(git.commit("Add discard all test file"));
+
+  // Modify the tracked file
+  createTestFile("discard_all_test.txt", "Modified content for discard test\n");
+
+  // Verify the file is modified
+  QList<GitFileInfo> status = git.getStatus();
+  bool foundModified = false;
+  for (const GitFileInfo &file : status) {
+    if (file.filePath == "discard_all_test.txt") {
+      QCOMPARE(file.workTreeStatus, GitFileStatus::Modified);
+      foundModified = true;
+      break;
+    }
+  }
+  QVERIFY(foundModified);
+
+  // Discard all changes
+  QVERIFY(git.discardAllChanges());
+
+  // Verify the file is no longer modified
+  status = git.getStatus();
+  foundModified = false;
+  for (const GitFileInfo &file : status) {
+    if (file.filePath == "discard_all_test.txt" &&
+        file.workTreeStatus == GitFileStatus::Modified) {
+      foundModified = true;
+      break;
+    }
+  }
+  QVERIFY(!foundModified);
 }
 
 QTEST_MAIN(TestGitIntegration)
