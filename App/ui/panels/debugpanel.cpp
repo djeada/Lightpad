@@ -743,7 +743,7 @@ void DebugPanel::onWatchUpdated(const WatchExpression &watch) {
     return;
 
   if (watch.isError) {
-    item->setText(1, watch.errorMessage.isEmpty() ? tr("<error>")
+    item->setText(1, watch.errorMessage.isEmpty() ? tr("Evaluation failed")
                                                   : watch.errorMessage);
     item->setForeground(1, Qt::red);
   } else {

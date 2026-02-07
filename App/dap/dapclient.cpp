@@ -541,10 +541,9 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
 
     // Emit specific error signals for certain commands
     if (command == "evaluate") {
-      QString expression;
-      if (pendingCommand.startsWith("evaluate:")) {
-        expression = pendingCommand.mid(9);
-      }
+      QString expression = pendingCommand.startsWith("evaluate:")
+                               ? pendingCommand.mid(9)
+                               : command;
       emit evaluateError(expression, message);
     } else {
       emit error(QString("%1 failed: %2").arg(command).arg(message));
