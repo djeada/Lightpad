@@ -1,5 +1,6 @@
 #include "completionengine.h"
 #include "../core/logging/logger.h"
+#include "../language/languagecatalog.h"
 #include <algorithm>
 
 CompletionEngine::CompletionEngine(QObject *parent)
@@ -12,7 +13,7 @@ CompletionEngine::CompletionEngine(QObject *parent)
 CompletionEngine::~CompletionEngine() { cancelPendingRequests(); }
 
 void CompletionEngine::setLanguage(const QString &languageId) {
-  m_languageId = languageId;
+  m_languageId = LanguageCatalog::normalize(languageId);
 }
 
 void CompletionEngine::requestCompletions(const CompletionContext &context) {
@@ -45,7 +46,10 @@ void CompletionEngine::executeCompletionRequest() {
   // Get providers for this language
   QString langId = m_currentContext.languageId.isEmpty()
                        ? m_languageId
-                       : m_currentContext.languageId;
+                       : LanguageCatalog::normalize(m_currentContext.languageId);
+  if (langId.isEmpty()) {
+    langId = m_currentContext.languageId.trimmed().toLower();
+  }
   auto providers =
       CompletionProviderRegistry::instance().providersForLanguage(langId);
 

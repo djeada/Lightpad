@@ -3,14 +3,13 @@
 
 #include <QString>
 
-#include "../ui/mainwindow.h"
-
 class Formatter {
 public:
-  Formatter(QString text, Lang lang);
+  Formatter(QString text, const QString &languageId);
 
 private:
   QString text;
+  QString languageId;
 };
 
 #endif // FORMATTER_H

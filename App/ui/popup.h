@@ -26,19 +26,9 @@ private:
   QStringList list;
 };
 
-class PopupLanguageHighlight : public Popup {
-public:
-  PopupLanguageHighlight(QStringList list, QWidget *parent = nullptr);
-};
-
 class PopupTabWidth : public Popup {
 public:
   PopupTabWidth(QStringList list, QWidget *parent = nullptr);
 };
-
-void loadLanguageExtensions(QMap<QString, QString> &map);
-
-const QString languageToExtensionPath =
-    ":/resources/highlight/LanguageToExtension.txt";
 
 #endif // POPUP_H

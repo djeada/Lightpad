@@ -1,5 +1,6 @@
 #include "plugincompletionprovider.h"
 #include "../../core/logging/logger.h"
+#include "../../language/languagecatalog.h"
 #include "../../syntax/syntaxpluginregistry.h"
 
 PluginCompletionProvider::PluginCompletionProvider() {}
@@ -22,7 +23,10 @@ void PluginCompletionProvider::requestCompletions(
 
   ensureCachePopulated();
 
-  QString langId = context.languageId.toLower();
+  QString langId = LanguageCatalog::normalize(context.languageId);
+  if (langId.isEmpty()) {
+    langId = context.languageId.trimmed().toLower();
+  }
   QStringList keywords = m_cachedKeywords.value(langId);
 
   // Filter by prefix

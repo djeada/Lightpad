@@ -21,7 +21,7 @@ public:
     cfg.type = "debugpy";
     cfg.program = "python";
     cfg.arguments = QStringList() << "-m" << "debugpy.adapter";
-    cfg.languages = QStringList() << "python";
+    cfg.languages = QStringList() << "py";
     cfg.extensions = QStringList() << ".py" << ".pyw";
     cfg.supportsRestart = true;
     cfg.supportsFunctionBreakpoints = true;
@@ -120,7 +120,7 @@ public:
     cfg.type = "node";
     cfg.program = "node";
     cfg.arguments = QStringList() << "--inspect-brk";
-    cfg.languages = QStringList() << "javascript" << "typescript";
+    cfg.languages = QStringList() << "js" << "ts";
     cfg.extensions = QStringList()
                      << ".js" << ".mjs" << ".cjs" << ".ts" << ".mts";
     cfg.supportsRestart = true;
@@ -749,10 +749,33 @@ DebugAdapterRegistry::adaptersForLanguage(const QString &languageId) const {
   return result;
 }
 
+QList<std::shared_ptr<IDebugAdapter>>
+DebugAdapterRegistry::adaptersForType(const QString &type) const {
+  QList<std::shared_ptr<IDebugAdapter>> result;
+  for (const auto &adapter : m_adapters) {
+    if (adapter && adapter->config().type.compare(type, Qt::CaseInsensitive) ==
+                       0) {
+      result.append(adapter);
+    }
+  }
+  return result;
+}
+
 std::shared_ptr<IDebugAdapter>
 DebugAdapterRegistry::preferredAdapterForFile(const QString &filePath) const {
   for (const auto &adapter : m_adapters) {
     if (adapter->canDebug(filePath) && adapter->isAvailable()) {
+      return adapter;
+    }
+  }
+  return nullptr;
+}
+
+std::shared_ptr<IDebugAdapter>
+DebugAdapterRegistry::preferredAdapterForLanguage(
+    const QString &languageId) const {
+  for (const auto &adapter : m_adapters) {
+    if (adapter->supportsLanguage(languageId) && adapter->isAvailable()) {
       return adapter;
     }
   }

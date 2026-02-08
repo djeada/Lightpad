@@ -44,9 +44,11 @@ public:
   /**
    * @brief Execute the run template for a file
    * @param filePath Path to the file to run
+   * @param languageId Effective language for default template resolution
    * @return true if a command was started
    */
-  bool runFile(const QString &filePath);
+  bool runFile(const QString &filePath,
+               const QString &languageId = QString());
 
   /**
    * @brief Stop the currently running process

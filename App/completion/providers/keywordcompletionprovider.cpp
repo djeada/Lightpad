@@ -1,5 +1,6 @@
 #include "keywordcompletionprovider.h"
 #include "../../core/logging/logger.h"
+#include "../../language/languagecatalog.h"
 #include "../languagekeywordsregistry.h"
 
 KeywordCompletionProvider::KeywordCompletionProvider() {
@@ -23,20 +24,16 @@ void KeywordCompletionProvider::requestCompletions(
   // Get keywords for the language
   LanguageKeywordsRegistry &registry = LanguageKeywordsRegistry::instance();
 
-  QString langId = context.languageId;
+  QString langId = LanguageCatalog::normalize(context.languageId);
+  if (langId.isEmpty()) {
+    langId = context.languageId.trimmed().toLower();
+  }
   QStringList matchingKeywords;
 
-  // Try exact language match first
+  // Try exact language match only.
+  // Generic fallback across all languages creates noisy, incorrect suggestions.
   if (registry.hasLanguage(langId)) {
     matchingKeywords = registry.keywordsWithPrefix(langId, context.prefix);
-  } else {
-    // Fall back to getting all registered languages
-    // This provides basic completion even for unknown languages
-    for (const QString &lang : registry.registeredLanguages()) {
-      matchingKeywords.append(
-          registry.keywordsWithPrefix(lang, context.prefix));
-    }
-    matchingKeywords.removeDuplicates();
   }
 
   // Convert to CompletionItems

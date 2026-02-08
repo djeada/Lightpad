@@ -19,8 +19,8 @@ struct DebugAdapterConfig {
   QString type;    // Adapter type matching DAP type field
   QString program; // Path to debug adapter executable
   QStringList arguments; // Command line arguments
-  QStringList languages; // Supported language IDs (e.g., ["python"],
-                         // ["javascript", "typescript"])
+  QStringList languages; // Supported language IDs (e.g., ["py"],
+                         // ["js", "ts"])
   QStringList
       extensions; // Supported file extensions (e.g., [".py"], [".js", ".ts"])
 
@@ -121,7 +121,7 @@ public:
   /**
    * @brief Check if this adapter supports a specific language
    *
-   * @param languageId Language identifier (e.g., "python", "javascript")
+   * @param languageId Language identifier (e.g., "py", "js")
    * @return true if supported
    */
   virtual bool supportsLanguage(const QString &languageId) const {

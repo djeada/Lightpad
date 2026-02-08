@@ -17,6 +17,7 @@ struct RunTemplate {
   QString name;
   QString description;
   QString language;
+  QString languageId;
   QStringList extensions;
   QString command;
   QStringList args;
@@ -71,6 +72,13 @@ public:
   QList<RunTemplate> getTemplatesForExtension(const QString &extension) const;
 
   /**
+   * @brief Get templates suitable for a language ID
+   * @param languageId Canonical language ID (e.g. "cpp", "py", "js")
+   * @return List of matching templates
+   */
+  QList<RunTemplate> getTemplatesForLanguageId(const QString &languageId) const;
+
+  /**
    * @brief Get a template by its ID
    * @param id Template identifier
    * @return The template, or invalid template if not found
@@ -109,21 +117,25 @@ public:
    * @param filePath Full path to the file
    * @return A pair of (command, arguments) with variables substituted
    */
-  QPair<QString, QStringList> buildCommand(const QString &filePath) const;
+  QPair<QString, QStringList>
+  buildCommand(const QString &filePath,
+               const QString &languageId = QString()) const;
 
   /**
    * @brief Get the working directory for execution
    * @param filePath Full path to the file
    * @return Working directory path with variables substituted
    */
-  QString getWorkingDirectory(const QString &filePath) const;
+  QString getWorkingDirectory(const QString &filePath,
+                              const QString &languageId = QString()) const;
 
   /**
    * @brief Get environment variables for execution
    * @param filePath Full path to the file
    * @return Map of environment variable name to value
    */
-  QMap<QString, QString> getEnvironment(const QString &filePath) const;
+  QMap<QString, QString> getEnvironment(
+      const QString &filePath, const QString &languageId = QString()) const;
 
   /**
    * @brief Substitute variables in a string
@@ -162,6 +174,8 @@ private:
   bool loadBuiltInTemplates();
   bool loadUserTemplates();
   RunTemplate parseTemplate(const QJsonObject &obj) const;
+  QString resolveTemplateIdForFile(const QString &filePath,
+                                   const QString &languageId) const;
 
   QString getConfigDirForFile(const QString &filePath) const;
   QString getConfigFileForDir(const QString &dirPath) const;

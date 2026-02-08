@@ -1,4 +1,5 @@
 #include <QAbstractItemView>
+#include <QActionGroup>
 #include <QApplication>
 #include <QBoxLayout>
 #include <QCompleter>
@@ -12,6 +13,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPlainTextEdit>
@@ -73,13 +75,14 @@
 #include "../dap/debugsettings.h"
 #include "../dap/watchmanager.h"
 #include "../git/gitintegration.h"
+#include "../language/languagecatalog.h"
 #include "../settings/settingsmanager.h"
 #include "panels/spliteditorcontainer.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow),
-      popupHighlightLanguage(nullptr), popupTabWidth(nullptr),
-      preferences(nullptr), findReplacePanel(nullptr), terminalWidget(nullptr),
+      popupTabWidth(nullptr), preferences(nullptr), findReplacePanel(nullptr),
+      terminalWidget(nullptr),
       completer(nullptr), m_completionEngine(nullptr), highlightLanguage(""),
       font(QApplication::font()), commandPalette(nullptr),
       problemsPanel(nullptr), goToLineDialog(nullptr),
@@ -344,12 +347,34 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   }
 }
 
-void MainWindow::loadSettings() {
-  if (QFileInfo(settingsPath).exists())
-    settings.loadSettings(settingsPath);
+QString MainWindow::textAreaSettingsPath() const {
+  QString settingsDir = SettingsManager::instance().getSettingsDirectory();
+  if (!settingsDir.isEmpty()) {
+    QDir dir;
+    dir.mkpath(settingsDir);
+    return QDir(settingsDir).filePath("editor_settings.json");
+  }
 
-  else
+  // Conservative fallback if OS config path resolution fails.
+  QString fallbackDir = QDir::home().filePath(".lightpad");
+  QDir dir;
+  dir.mkpath(fallbackDir);
+  return QDir(fallbackDir).filePath("editor_settings.json");
+}
+
+void MainWindow::loadSettings() {
+  QString editorSettingsPath = textAreaSettingsPath();
+  if (QFileInfo(editorSettingsPath).exists()) {
+    settings.loadSettings(editorSettingsPath);
+  } else if (QFileInfo("settings.json").exists()) {
+    // One-time migration from legacy per-project settings file.
+    settings.loadSettings("settings.json");
+    settings.saveSettings(editorSettingsPath);
+    LOG_INFO(QString("Migrated editor settings to global path: %1")
+                 .arg(editorSettingsPath));
+  } else {
     setTabWidth(defaultTabWidth);
+  }
 
   // Load global font settings from user home config
   SettingsManager &globalSettings = SettingsManager::instance();
@@ -392,7 +417,7 @@ void MainWindow::loadSettings() {
 void MainWindow::saveSettings() {
   LOG_DEBUG(QString("Saving settings, showLineNumberArea: %1")
                 .arg(settings.showLineNumberArea));
-  settings.saveSettings(settingsPath);
+  settings.saveSettings(textAreaSettingsPath());
 
   // Save session state: project path and open tabs
   SettingsManager &globalSettings = SettingsManager::instance();
@@ -419,8 +444,7 @@ void MainWindow::saveSettings() {
   globalSettings.saveSettings();
 }
 
-void MainWindow::applyLanguageOverride(const QString &extension,
-                                       const QString &displayName) {
+void MainWindow::applyLanguageOverride(const QString &languageId) {
   auto textArea = getCurrentTextArea();
   if (!textArea) {
     return;
@@ -432,18 +456,19 @@ void MainWindow::applyLanguageOverride(const QString &extension,
     return;
   }
 
-  QString languageId = detectLanguageIdForExtension(extension);
-  if (languageId.isEmpty()) {
-    LOG_WARNING(
-        QString("No language mapping for extension: %1").arg(extension));
+  QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
+  if (canonicalLanguageId.isEmpty()) {
+    LOG_WARNING(QString("No canonical language ID found for: %1").arg(languageId));
     return;
   }
 
-  setHighlightOverrideForFile(filePath, languageId);
-  textArea->updateSyntaxHighlightTags("", languageId);
-  textArea->setLanguage(languageId);
-  highlightLanguage = languageId;
-  setLanguageHighlightLabel(displayName);
+  setHighlightOverrideForFile(filePath, canonicalLanguageId);
+  textArea->updateSyntaxHighlightTags("", canonicalLanguageId);
+  textArea->setLanguage(canonicalLanguageId);
+  highlightLanguage = canonicalLanguageId;
+  QString displayName = LanguageCatalog::displayName(canonicalLanguageId);
+  setLanguageHighlightLabel(displayName.isEmpty() ? canonicalLanguageId
+                                                  : displayName);
 }
 
 void MainWindow::applyHighlightForFile(const QString &filePath) {
@@ -452,16 +477,9 @@ void MainWindow::applyHighlightForFile(const QString &filePath) {
     return;
   }
 
-  QString overrideLang = highlightOverrideForFile(filePath);
-  QString languageId = overrideLang;
+  QString languageId = effectiveLanguageIdForFile(filePath);
   if (languageId.isEmpty()) {
-    languageId = detectLanguageIdForFile(filePath);
-  }
-
-  if (languageId.isEmpty()) {
-    setLanguageHighlightLabel("Choose lang.");
-    highlightLanguage.clear();
-    return;
+    languageId = "plaintext";
   }
 
   QString extension = QFileInfo(filePath).completeSuffix().toLower();
@@ -493,6 +511,24 @@ void MainWindow::applyHighlightForFile(const QString &filePath) {
   }
 
   showGitBlameForCurrentFile(isGitBlameEnabledForFile(filePath));
+}
+
+QString MainWindow::effectiveLanguageIdForFile(const QString &filePath) {
+  QString overrideLanguageId = highlightOverrideForFile(filePath);
+  if (!overrideLanguageId.isEmpty()) {
+    QString canonicalOverride = LanguageCatalog::normalize(overrideLanguageId);
+    if (!canonicalOverride.isEmpty()) {
+      return canonicalOverride;
+    }
+  }
+
+  QString detectedLanguageId =
+      LanguageCatalog::normalize(detectLanguageIdForFile(filePath));
+  if (!detectedLanguageId.isEmpty()) {
+    return detectedLanguageId;
+  }
+
+  return "plaintext";
 }
 
 void MainWindow::showGitBlameForCurrentFile(bool enable) {
@@ -548,12 +584,7 @@ void MainWindow::setGitBlameEnabledForFile(const QString &filePath,
 
 QString
 MainWindow::detectLanguageIdForExtension(const QString &extension) const {
-  auto &registry = SyntaxPluginRegistry::instance();
-  ISyntaxPlugin *plugin = registry.getPluginByExtension(extension);
-  if (plugin) {
-    return plugin->languageId();
-  }
-  return QString();
+  return LanguageCatalog::languageForExtension(extension);
 }
 
 QString MainWindow::detectLanguageIdForFile(const QString &filePath) const {
@@ -563,20 +594,10 @@ QString MainWindow::detectLanguageIdForFile(const QString &filePath) const {
 
 QString MainWindow::displayNameForLanguage(const QString &languageId,
                                            const QString &extension) const {
-  auto &registry = SyntaxPluginRegistry::instance();
-  ISyntaxPlugin *plugin = registry.getPluginByLanguageId(languageId);
-  if (plugin) {
-    return plugin->languageName();
-  }
-
-  QMap<QString, QString> langToExt;
-  loadLanguageExtensions(langToExt);
-  if (!extension.isEmpty()) {
-    for (auto it = langToExt.begin(); it != langToExt.end(); ++it) {
-      if (it.value().toLower() == extension) {
-        return it.key();
-      }
-    }
+  Q_UNUSED(extension);
+  QString displayName = LanguageCatalog::displayName(languageId);
+  if (!displayName.isEmpty()) {
+    return displayName;
   }
   return languageId;
 }
@@ -619,7 +640,7 @@ void MainWindow::loadHighlightOverridesForDir(const QString &dirPath) {
   for (const QJsonValue &value : assignments) {
     QJsonObject obj = value.toObject();
     QString fileName = obj.value("file").toString();
-    QString languageId = obj.value("language").toString();
+    QString languageId = LanguageCatalog::normalize(obj.value("language").toString());
     if (fileName.isEmpty() || languageId.isEmpty()) {
       continue;
     }
@@ -703,7 +724,12 @@ void MainWindow::setHighlightOverrideForFile(const QString &filePath,
     return;
   }
 
-  m_highlightOverrides[filePath] = languageId;
+  QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
+  if (canonicalLanguageId.isEmpty()) {
+    m_highlightOverrides.remove(filePath);
+  } else {
+    m_highlightOverrides[filePath] = canonicalLanguageId;
+  }
   saveHighlightOverridesForDir(fileInfo.absoluteDir().path());
 }
 
@@ -1447,7 +1473,7 @@ void MainWindow::showTerminal() {
   terminalWidget->show();
 
   // Run the file using the template system
-  terminalWidget->runFile(filePath);
+  terminalWidget->runFile(filePath, effectiveLanguageIdForFile(filePath));
 }
 
 void MainWindow::showProblemsPanel() {
@@ -2232,7 +2258,8 @@ void MainWindow::startDebuggingForCurrentFile() {
   WatchManager::instance().setWorkspaceFolder(m_projectRootPath);
   WatchManager::instance().loadFromLightpadDir();
 
-  QString sessionId = DebugSessionManager::instance().quickStart(filePath);
+  QString sessionId = DebugSessionManager::instance().quickStart(
+      filePath, effectiveLanguageIdForFile(filePath));
   if (sessionId.isEmpty()) {
     QMessageBox::warning(this, tr("Debug"),
                          tr("Unable to start debug session for this file."));
@@ -2548,7 +2575,15 @@ void MainWindow::setupTextArea() {
       textArea->setCompletionEngine(m_completionEngine);
       LightpadTabWidget *tabWidget = currentTabWidget();
       QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
-      applyHighlightForFile(filePath);
+      if (filePath.isEmpty()) {
+        textArea->setLanguage("plaintext");
+        textArea->updateSyntaxHighlightTags("", "plaintext");
+        QString displayName = LanguageCatalog::displayName("plaintext");
+        setLanguageHighlightLabel(displayName.isEmpty() ? "Normal Text"
+                                                        : displayName);
+      } else {
+        applyHighlightForFile(filePath);
+      }
     }
 
     // Legacy: Setup old completer as fallback
@@ -2571,22 +2606,52 @@ void MainWindow::noScriptAssignedWarning() {
 }
 
 void MainWindow::on_languageHighlight_clicked() {
-
-  if (!popupHighlightLanguage) {
-    auto dir =
-        QDir(":/resources/highlight").entryList(QStringList(), QDir::Dirs);
-    auto popupHighlightLanguage = new PopupLanguageHighlight(dir, this);
-    auto point = mapToGlobal(ui->languageHighlight->pos());
-    popupHighlightLanguage->setGeometry(
-        point.x(), point.y() - 2 * popupHighlightLanguage->height() + height(),
-        popupHighlightLanguage->width(), popupHighlightLanguage->height());
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!tabWidget) {
+    return;
+  }
+  QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
+  if (filePath.isEmpty()) {
+    return;
   }
 
-  else if (popupHighlightLanguage->isHidden())
-    popupHighlightLanguage->show();
+  QMenu menu(this);
+  QActionGroup actionGroup(&menu);
+  actionGroup.setExclusive(true);
 
-  else
-    popupHighlightLanguage->hide();
+  QAction *autoDetectAction = menu.addAction("Auto Detect");
+  autoDetectAction->setCheckable(true);
+  autoDetectAction->setChecked(highlightOverrideForFile(filePath).isEmpty());
+  actionGroup.addAction(autoDetectAction);
+
+  menu.addSeparator();
+
+  QVector<LanguageInfo> languages = LanguageCatalog::allLanguages();
+  if (languages.isEmpty()) {
+    return;
+  }
+  for (const LanguageInfo &language : languages) {
+    QAction *action = menu.addAction(language.displayName);
+    action->setCheckable(true);
+    action->setData(language.id);
+    action->setChecked(effectiveLanguageIdForFile(filePath) == language.id);
+    actionGroup.addAction(action);
+  }
+
+  QAction *selectedAction = menu.exec(ui->languageHighlight->mapToGlobal(
+      QPoint(0, ui->languageHighlight->height())));
+  if (!selectedAction) {
+    return;
+  }
+
+  QVariant selectedData = selectedAction->data();
+  if (!selectedData.isValid()) {
+    setHighlightOverrideForFile(filePath, "");
+    applyHighlightForFile(filePath);
+    return;
+  }
+
+  applyLanguageOverride(selectedData.toString());
 }
 
 void MainWindow::on_actionAbout_triggered() {
@@ -2607,7 +2672,7 @@ void MainWindow::on_actionAbout_Qt_triggered() { QApplication::aboutQt(); }
 void MainWindow::on_tabWidth_clicked() {
 
   if (!popupTabWidth) {
-    auto popupTabWidth = new PopupTabWidth(QStringList({"2", "4", "8"}), this);
+    popupTabWidth = new PopupTabWidth(QStringList({"2", "4", "8"}), this);
     auto point = mapToGlobal(ui->tabWidth->pos());
     QRect rect(point.x(), point.y() - 2 * popupTabWidth->height() + height(),
                popupTabWidth->width(), popupTabWidth->height());

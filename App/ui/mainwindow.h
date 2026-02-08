@@ -35,7 +35,6 @@ class DebugPanel;
 class PdfViewer;
 #endif
 
-enum class Lang { cpp, js, py };
 enum class Dialog {
   shortcuts,
   runConfiguration,
@@ -73,8 +72,7 @@ public:
   Theme getTheme();
   QFont getFont();
   TextAreaSettings getSettings();
-  void applyLanguageOverride(const QString &extension,
-                             const QString &displayName);
+  void applyLanguageOverride(const QString &languageId);
   void showGitBlameForCurrentFile(bool enable);
   bool isGitBlameEnabledForFile(const QString &filePath) const;
   void setGitBlameEnabledForFile(const QString &filePath, bool enabled);
@@ -148,7 +146,6 @@ private slots:
 
 private:
   Ui::MainWindow *ui;
-  Popup *popupHighlightLanguage;
   Popup *popupTabWidth;
   Preferences *preferences;
   FindReplacePanel *findReplacePanel;
@@ -265,7 +262,9 @@ private:
   void closeEvent(QCloseEvent *event);
   void loadSettings();
   void saveSettings();
+  QString textAreaSettingsPath() const;
   void applyHighlightForFile(const QString &filePath);
+  QString effectiveLanguageIdForFile(const QString &filePath);
   QString detectLanguageIdForExtension(const QString &extension) const;
   QString detectLanguageIdForFile(const QString &filePath) const;
   QString displayNameForLanguage(const QString &languageId,
@@ -303,6 +302,5 @@ public:
 
 const int defaultTabWidth = 4;
 const int defaultFontSize = 12;
-const QString settingsPath = "settings.json";
 
 #endif // MAINWINDOW_H

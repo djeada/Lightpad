@@ -100,7 +100,7 @@ void DebugSettings::createDefaultLaunchConfig() {
   // Example Python configuration
   QJsonObject pythonConfig;
   pythonConfig["name"] = "Python: Current File";
-  pythonConfig["type"] = "python";
+  pythonConfig["type"] = "debugpy";
   pythonConfig["request"] = "launch";
   pythonConfig["program"] = "${file}";
   pythonConfig["console"] = "integratedTerminal";

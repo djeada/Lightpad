@@ -1,8 +1,5 @@
 #include "popup.h"
-#include "../core/textarea.h"
-#include "../syntax/lightpadsyntaxhighlighter.h"
 #include "mainwindow.h"
-#include <QFile>
 #include <QStringListModel>
 #include <QVBoxLayout>
 
@@ -35,26 +32,6 @@ Popup::Popup(QStringList list, QWidget *parent) : QDialog(parent), list(list) {
   show();
 }
 
-PopupLanguageHighlight ::PopupLanguageHighlight(QStringList list,
-                                                QWidget *parent)
-    : Popup(list, parent) {
-
-  QObject::connect(
-      listView, &QListView::clicked, this, [&](const QModelIndex &index) {
-        auto lang = index.data().toString();
-        auto mainWindow = qobject_cast<MainWindow *>(parentWidget());
-
-        if (mainWindow != 0 && mainWindow->getCurrentTextArea()) {
-          QMap<QString, QString> langToExt = {};
-          loadLanguageExtensions(langToExt);
-          QString extension = langToExt[lang];
-          mainWindow->applyLanguageOverride(extension, lang);
-        }
-
-        close();
-      });
-}
-
 PopupTabWidth::PopupTabWidth(QStringList list, QWidget *parent)
     : Popup(list, parent) {
 
@@ -70,21 +47,4 @@ PopupTabWidth::PopupTabWidth(QStringList list, QWidget *parent)
 
         close();
       });
-}
-
-void loadLanguageExtensions(QMap<QString, QString> &map) {
-  QFile TextFile(languageToExtensionPath);
-
-  if (TextFile.open(QIODevice::ReadOnly)) {
-    while (!TextFile.atEnd()) {
-
-      QString line = TextFile.readLine();
-      auto words = line.split(" ");
-
-      if (words.size() == 2)
-        map.insert(words[0], cutEndOfLine(words[1]));
-    }
-  }
-
-  TextFile.close();
 }

@@ -84,6 +84,15 @@ public:
   adaptersForLanguage(const QString &languageId) const;
 
   /**
+   * @brief Find adapters for a specific debug adapter type
+   *
+   * @param type Adapter type (e.g. "debugpy", "node", "cppdbg")
+   * @return List of compatible adapters
+   */
+  QList<std::shared_ptr<IDebugAdapter>>
+  adaptersForType(const QString &type) const;
+
+  /**
    * @brief Get the preferred adapter for a file
    *
    * Returns the first available adapter that can handle the file.
@@ -93,6 +102,17 @@ public:
    */
   std::shared_ptr<IDebugAdapter>
   preferredAdapterForFile(const QString &filePath) const;
+
+  /**
+   * @brief Get the preferred adapter for a language
+   *
+   * Returns the first available adapter that supports the language.
+   *
+   * @param languageId Canonical language ID (e.g. "py", "js")
+   * @return Best adapter or nullptr if none available
+   */
+  std::shared_ptr<IDebugAdapter>
+  preferredAdapterForLanguage(const QString &languageId) const;
 
   /**
    * @brief Refresh availability status of all adapters

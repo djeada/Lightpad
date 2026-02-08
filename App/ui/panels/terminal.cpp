@@ -307,7 +307,7 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
   emit processStarted();
 }
 
-bool Terminal::runFile(const QString &filePath) {
+bool Terminal::runFile(const QString &filePath, const QString &languageId) {
   RunTemplateManager &manager = RunTemplateManager::instance();
 
   // Ensure templates are loaded
@@ -315,7 +315,8 @@ bool Terminal::runFile(const QString &filePath) {
     manager.loadTemplates();
   }
 
-  QPair<QString, QStringList> command = manager.buildCommand(filePath);
+  QPair<QString, QStringList> command =
+      manager.buildCommand(filePath, languageId);
 
   if (command.first.isEmpty()) {
     clear();
@@ -324,8 +325,8 @@ bool Terminal::runFile(const QString &filePath) {
     return false;
   }
 
-  QString workingDir = manager.getWorkingDirectory(filePath);
-  QMap<QString, QString> env = manager.getEnvironment(filePath);
+  QString workingDir = manager.getWorkingDirectory(filePath, languageId);
+  QMap<QString, QString> env = manager.getEnvironment(filePath, languageId);
 
   executeCommand(command.first, command.second, workingDir, env);
   return true;

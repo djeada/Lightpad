@@ -1,5 +1,6 @@
 #include "debugconfiguration.h"
 #include "../core/logging/logger.h"
+#include "../language/languagecatalog.h"
 #include "debugadapterregistry.h"
 
 #include <QDir>
@@ -241,12 +242,21 @@ QString DebugConfigurationManager::substituteVariable(
 }
 
 DebugConfiguration
-DebugConfigurationManager::createQuickConfig(const QString &filePath) const {
+DebugConfigurationManager::createQuickConfig(const QString &filePath,
+                                             const QString &languageId) const {
   DebugConfiguration config;
 
-  // Find a suitable adapter
-  auto adapter =
-      DebugAdapterRegistry::instance().preferredAdapterForFile(filePath);
+  QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
+
+  // Prefer adapter by selected language, fall back to file extension.
+  auto adapter = canonicalLanguageId.isEmpty()
+                     ? DebugAdapterRegistry::instance().preferredAdapterForFile(
+                           filePath)
+                     : DebugAdapterRegistry::instance()
+                           .preferredAdapterForLanguage(canonicalLanguageId);
+  if (!adapter) {
+    adapter = DebugAdapterRegistry::instance().preferredAdapterForFile(filePath);
+  }
   if (!adapter) {
     return config;
   }

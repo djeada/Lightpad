@@ -1,5 +1,6 @@
 #include "snippetcompletionprovider.h"
 #include "../../core/logging/logger.h"
+#include "../../language/languagecatalog.h"
 #include "../snippetregistry.h"
 
 SnippetCompletionProvider::SnippetCompletionProvider() {
@@ -21,10 +22,14 @@ void SnippetCompletionProvider::requestCompletions(
   }
 
   SnippetRegistry &registry = SnippetRegistry::instance();
+  QString languageId = LanguageCatalog::normalize(context.languageId);
+  if (languageId.isEmpty()) {
+    languageId = context.languageId.trimmed().toLower();
+  }
 
   // Get snippets matching the prefix
   QList<Snippet> matchingSnippets =
-      registry.snippetsWithPrefix(context.languageId, context.prefix);
+      registry.snippetsWithPrefix(languageId, context.prefix);
 
   // Convert to CompletionItems
   for (const Snippet &snippet : matchingSnippets) {

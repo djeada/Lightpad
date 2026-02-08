@@ -82,9 +82,11 @@ public:
   /**
    * @brief Run a file using the run template system
    * @param filePath Path to the file to run
+   * @param languageId Effective language for default template resolution
    * @return true if a command was started
    */
-  bool runFile(const QString &filePath);
+  bool runFile(const QString &filePath,
+               const QString &languageId = QString());
 
   /**
    * @brief Stop any running process in the current terminal

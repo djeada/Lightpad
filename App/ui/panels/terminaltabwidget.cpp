@@ -251,13 +251,14 @@ void TerminalTabWidget::clearCurrentTerminal() {
   }
 }
 
-bool TerminalTabWidget::runFile(const QString &filePath) {
+bool TerminalTabWidget::runFile(const QString &filePath,
+                                const QString &languageId) {
   Terminal *terminal = currentTerminal();
   if (!terminal) {
     terminal = addNewTerminal();
   }
 
-  return terminal->runFile(filePath);
+  return terminal->runFile(filePath, languageId);
 }
 
 void TerminalTabWidget::stopCurrentProcess() {

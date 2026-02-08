@@ -96,6 +96,7 @@ set(project_headers
     core/autosavemanager.h
     editor/vimmode.h
     i18n/i18n.h
+    language/languagecatalog.h
     lsp/lspclient.h
     plugins/iplugin.h
     plugins/isyntaxplugin.h
