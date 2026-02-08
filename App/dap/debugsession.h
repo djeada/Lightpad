@@ -176,7 +176,8 @@ public:
    * @param filePath Path to file to debug
    * @return Session ID, or empty string on failure
    */
-  QString quickStart(const QString &filePath);
+  QString quickStart(const QString &filePath,
+                     const QString &languageId = QString());
 
   /**
    * @brief Stop a debug session

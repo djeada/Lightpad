@@ -332,7 +332,7 @@ void TestDap::testBuiltinAdapters() {
   // Check for Node.js adapter
   auto nodeAdapter = reg.adapter("node-debug");
   QVERIFY(nodeAdapter != nullptr);
-  QVERIFY(nodeAdapter->supportsLanguage("javascript"));
+  QVERIFY(nodeAdapter->supportsLanguage("js"));
 }
 
 void TestDap::testAdapterLookupByFile() {
@@ -364,7 +364,7 @@ void TestDap::testAdapterLookupByLanguage() {
   DebugAdapterRegistry &reg = DebugAdapterRegistry::instance();
 
   QList<std::shared_ptr<IDebugAdapter>> pythonAdapters =
-      reg.adaptersForLanguage("python");
+      reg.adaptersForLanguage("py");
   QVERIFY(!pythonAdapters.isEmpty());
 
   QList<std::shared_ptr<IDebugAdapter>> cppAdapters =
@@ -567,7 +567,7 @@ void TestDap::testExceptionBreakpoints() {
 void TestDap::testDebugConfigurationToJson() {
   DebugConfiguration config;
   config.name = "Test Config";
-  config.type = "python";
+  config.type = "debugpy";
   config.request = "launch";
   config.program = "/path/to/script.py";
   config.args << "--verbose" << "--debug";
@@ -577,7 +577,7 @@ void TestDap::testDebugConfigurationToJson() {
   QJsonObject json = config.toJson();
 
   QCOMPARE(json["name"].toString(), QString("Test Config"));
-  QCOMPARE(json["type"].toString(), QString("python"));
+  QCOMPARE(json["type"].toString(), QString("debugpy"));
   QCOMPARE(json["request"].toString(), QString("launch"));
   QCOMPARE(json["program"].toString(), QString("/path/to/script.py"));
   QCOMPARE(json["args"].toArray().count(), 2);

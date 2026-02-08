@@ -177,9 +177,14 @@ DebugSessionManager::DebugSessionManager()
     : QObject(nullptr), m_nextSessionNumber(1) {}
 
 QString DebugSessionManager::startSession(const DebugConfiguration &config) {
-  // Find adapter for this configuration
-  auto adapters =
-      DebugAdapterRegistry::instance().adaptersForLanguage(config.type);
+  // Find adapter by DAP adapter type from the launch configuration.
+  auto adapters = DebugAdapterRegistry::instance().adaptersForType(config.type);
+  if (adapters.isEmpty()) {
+    auto explicitAdapter = DebugAdapterRegistry::instance().adapter(config.type);
+    if (explicitAdapter) {
+      adapters.append(explicitAdapter);
+    }
+  }
   if (adapters.isEmpty()) {
     LOG_ERROR(QString("No debug adapter found for type: %1").arg(config.type));
     return {};
@@ -240,9 +245,11 @@ DebugSessionManager::startSession(const DebugConfiguration &config,
   return sessionId;
 }
 
-QString DebugSessionManager::quickStart(const QString &filePath) {
+QString DebugSessionManager::quickStart(const QString &filePath,
+                                        const QString &languageId) {
   DebugConfiguration config =
-      DebugConfigurationManager::instance().createQuickConfig(filePath);
+      DebugConfigurationManager::instance().createQuickConfig(filePath,
+                                                              languageId);
   if (config.name.isEmpty()) {
     LOG_ERROR(
         QString("Could not create debug configuration for: %1").arg(filePath));

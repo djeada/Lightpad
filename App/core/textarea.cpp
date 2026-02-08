@@ -21,8 +21,8 @@
 #include "../completion/completionitem.h"
 #include "../completion/completionwidget.h"
 #include "../dap/breakpointmanager.h"
+#include "../language/languagecatalog.h"
 #include "../settings/textareasettings.h"
-#include "../syntax/lightpadsyntaxhighlighter.h"
 #include "../syntax/pluginbasedsyntaxhighlighter.h"
 #include "../syntax/syntaxpluginregistry.h"
 #include "../ui/mainwindow.h"
@@ -35,10 +35,15 @@
 #include "logging/logger.h"
 #include "textarea.h"
 
-QMap<QString, Lang> convertStrToEnum = {
-    {"cpp", Lang::cpp}, {"h", Lang::cpp}, {"js", Lang::js}, {"py", Lang::py}};
 QMap<QChar, QChar> brackets = {{'{', '}'}, {'(', ')'}, {'[', ']'}};
 constexpr int defaultLineSpacingPercent = 130;
+
+static bool isCompletionEnabledForLanguage(const QString &languageId) {
+  QString normalized = LanguageCatalog::normalize(languageId);
+  QString effectiveId =
+      normalized.isEmpty() ? languageId.trimmed().toLower() : normalized;
+  return !effectiveId.isEmpty() && effectiveId != "plaintext";
+}
 
 class LineSpacingLayout : public QPlainTextDocumentLayout {
 public:
@@ -170,7 +175,7 @@ TextArea::TextArea(QWidget *parent)
       backgroundColor(QColor(Qt::gray).darker(200)), bufferText(""),
       highlightLang(""), syntaxHighlighter(nullptr), m_completer(nullptr),
       m_completionEngine(nullptr), m_completionWidget(nullptr),
-      m_languageId(""), searchWord(""), areChangesUnsaved(false),
+      m_languageId("plaintext"), searchWord(""), areChangesUnsaved(false),
       autoIndent(true), showLineNumberArea(true), lineHighlighted(true),
       matchingBracketsHighlighted(true), prevWordCount(1),
       m_multiCursor(nullptr), m_columnSelectionActive(false),
@@ -197,7 +202,7 @@ TextArea::TextArea(const TextAreaSettings &settings, QWidget *parent)
       backgroundColor(settings.theme.backgroundColor), bufferText(""),
       highlightLang(""), syntaxHighlighter(nullptr), m_completer(nullptr),
       m_completionEngine(nullptr), m_completionWidget(nullptr),
-      m_languageId(""), searchWord(""), areChangesUnsaved(false),
+      m_languageId("plaintext"), searchWord(""), areChangesUnsaved(false),
       autoIndent(settings.autoIndent),
       showLineNumberArea(settings.showLineNumberArea),
       lineHighlighted(settings.lineHighlighted),
@@ -431,6 +436,11 @@ void TextArea::resizeEvent(QResizeEvent *e) {
   updateLineNumberAreaLayout();
 }
 
+void TextArea::focusOutEvent(QFocusEvent *event) {
+  hideCompletionPopup();
+  QPlainTextEdit::focusOutEvent(event);
+}
+
 void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
 
   if (keyEvent->matches(QKeySequence::ZoomOut) ||
@@ -612,6 +622,11 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
 
   // Handle new completion engine (preferred)
   if (m_completionEngine) {
+    if (!isCompletionEnabledForLanguage(m_languageId)) {
+      hideCompletionPopup();
+      return;
+    }
+
     static QString eow("~!@#$%^&*()_+{}|:\"<>?,./;'[]\\-="); // end of word
     const bool ctrlOrShift =
         keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
@@ -977,8 +992,9 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey,
 
   auto colors = mainWindow->getTheme();
 
-  if (!chosenLang.isEmpty())
-    highlightLang = chosenLang;
+  if (!chosenLang.isNull()) {
+    highlightLang = LanguageCatalog::normalize(chosenLang);
+  }
 
   if (syntaxHighlighter) {
     delete syntaxHighlighter;
@@ -998,34 +1014,7 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey,
     return;
   }
 
-  // FALLBACK TO OLD SYSTEM (for backward compatibility)
-  if (document() && convertStrToEnum.contains(highlightLang)) {
-
-    switch (convertStrToEnum[highlightLang]) {
-    case Lang::cpp:
-      syntaxHighlighter = new LightpadSyntaxHighlighter(
-          highlightingRulesCpp(colors, searchKey),
-          QRegularExpression(QStringLiteral("/\\*")),
-          QRegularExpression(QStringLiteral("\\*/")), document());
-      break;
-
-    case Lang::js:
-      syntaxHighlighter = new LightpadSyntaxHighlighter(
-          highlightingRulesJs(colors, searchKey),
-          QRegularExpression(QStringLiteral("/\\*")),
-          QRegularExpression(QStringLiteral("\\*/")), document());
-      break;
-
-    case Lang::py:
-      syntaxHighlighter = new LightpadSyntaxHighlighter(
-          highlightingRulesPy(colors, searchKey),
-          QRegularExpression(QStringLiteral("/'''")),
-          QRegularExpression(QStringLiteral("\\'''")), document());
-      break;
-    }
-  }
-
-  // Update highlighter viewport after setting up
+  // No matching language plugin means no syntax highlighter for this document.
   updateHighlighterViewport();
 }
 
@@ -1041,12 +1030,8 @@ void TextArea::updateHighlighterViewport() {
 
   // Update the highlighter's viewport knowledge
   // This allows it to skip highlighting off-screen blocks
-  if (auto *legacyHighlighter =
-          qobject_cast<LightpadSyntaxHighlighter *>(syntaxHighlighter)) {
-    legacyHighlighter->setVisibleBlockRange(firstVisible, lastVisible);
-  } else if (auto *pluginHighlighter =
-                 qobject_cast<PluginBasedSyntaxHighlighter *>(
-                     syntaxHighlighter)) {
+  if (auto *pluginHighlighter =
+          qobject_cast<PluginBasedSyntaxHighlighter *>(syntaxHighlighter)) {
     pluginHighlighter->setVisibleBlockRange(firstVisible, lastVisible);
   }
 }
@@ -1129,9 +1114,12 @@ CompletionEngine *TextArea::completionEngine() const {
 }
 
 void TextArea::setLanguage(const QString &languageId) {
-  m_languageId = languageId;
+  m_languageId = LanguageCatalog::normalize(languageId);
+  if (m_languageId.isEmpty()) {
+    m_languageId = languageId.trimmed().toLower();
+  }
   if (m_completionEngine) {
-    m_completionEngine->setLanguage(languageId);
+    m_completionEngine->setLanguage(m_languageId);
   }
 }
 
@@ -1163,7 +1151,7 @@ QString TextArea::resolveFilePath() const {
 }
 
 void TextArea::triggerCompletion() {
-  if (!m_completionEngine)
+  if (!m_completionEngine || !isCompletionEnabledForLanguage(m_languageId))
     return;
 
   QString prefix = textUnderCursor();
@@ -1183,6 +1171,22 @@ void TextArea::triggerCompletion() {
 }
 
 void TextArea::onCompletionsReady(const QList<CompletionItem> &items) {
+  if (!isCompletionEnabledForLanguage(m_languageId)) {
+    hideCompletionPopup();
+    return;
+  }
+
+  QWidget *focusWidget = QApplication::focusWidget();
+  bool isActiveEditor =
+      (focusWidget == this) || (focusWidget && isAncestorOf(focusWidget));
+
+  if (!isActiveEditor) {
+    // Multiple editors can be connected to the shared engine; only the active
+    // editor is allowed to show completion UI.
+    hideCompletionPopup();
+    return;
+  }
+
   if (items.isEmpty()) {
     hideCompletionPopup();
     return;

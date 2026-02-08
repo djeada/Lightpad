@@ -32,8 +32,8 @@ public:
   TextArea(QWidget *parent = nullptr);
   TextArea(const TextAreaSettings &settings, QWidget *parent = nullptr);
   void lineNumberAreaPaintEvent(QPaintEvent *event);
-  void updateSyntaxHighlightTags(QString searchKey = "",
-                                 QString chosenLang = "");
+  void updateSyntaxHighlightTags(QString searchKey = QString(),
+                                 QString chosenLang = QString());
   void increaseFontSize();
   void decreaseFontSize();
   void setFontSize(int size);
@@ -123,6 +123,7 @@ public:
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
+  void focusOutEvent(QFocusEvent *event) override;
   void keyPressEvent(QKeyEvent *event) override;
   void contextMenuEvent(QContextMenuEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
