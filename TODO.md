@@ -14,7 +14,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Multi-cursor typing and deletion
 - [x] Escape to clear extra cursors
 - [x] Column/box selection (Alt+Shift+Drag)
-- [ ] Multi-cursor undo/redo
+- [x] Multi-cursor undo/redo
 - [x] Split selection into lines (Ctrl+Shift+I)
 
 ### Command Palette
@@ -32,10 +32,10 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Brace-based folding ({})
 - [x] Indent-based folding (Python)
 - [x] Fold level (fold to level 1, 2, 3...)
-- [ ] Folding indicators in gutter (click to fold)
+- [x] Folding indicators in gutter (click to fold)
 - [x] Custom fold regions (#region/#endregion)
 - [x] Fold comments
-- [ ] Persistent fold state
+- [x] Persistent fold state
 
 ### Problems Panel
 - [x] Problems panel with tree view (Ctrl+Shift+M)
@@ -54,7 +54,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 ### 1. Debugger Integration
 - [x] Debug Adapter Protocol (DAP) client implementation
 - [x] Breakpoint system (set, toggle, conditional, logpoints)
-- [ ] Breakpoint gutter in editor
+- [x] Breakpoint gutter in editor
 - [x] Debug toolbar (Step Over, Step Into, Step Out, Continue, Pause, Stop)
 - [x] Variables panel (local, watch, registers)
 - [x] Call stack panel
@@ -76,7 +76,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Commit with message
 - [x] Branch management (create, checkout, delete, merge)
 - [ ] Git blame annotations
-- [ ] Git history/log viewer
+- [x] Git history/log viewer
 - [ ] Conflict resolution UI
 - [x] Stash management
 - [x] Remote operations (push, pull, fetch)
@@ -90,7 +90,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [ ] Drag tabs between split groups
 - [ ] Synchronized scrolling option
 - [x] Focus management between splits
-- [ ] Open to side action
+- [x] Open to side action
 
 ---
 
@@ -101,7 +101,7 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Document symbols (outline view)
 - [ ] Workspace symbols search
 - [x] Rename symbol (project-wide)
-- [ ] Code actions (quick fixes, refactorings)
+- [x] Code actions (quick fixes, refactorings)
 - [ ] Inlay hints (type annotations, parameter names)
 - [ ] Document formatting request via LSP
 - [ ] Range formatting

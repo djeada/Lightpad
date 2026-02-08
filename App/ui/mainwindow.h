@@ -127,6 +127,12 @@ private slots:
   void on_actionToggle_Terminal_triggered();
   void on_actionToggle_Source_Control_triggered();
 
+  // Open to side
+  void on_actionOpen_To_Side_triggered();
+
+  // Git log
+  void on_actionGit_Log_triggered();
+
   // Text transformation actions
   void on_actionTransform_Uppercase_triggered();
   void on_actionTransform_Lowercase_triggered();

@@ -1,4 +1,5 @@
 #include "codefolding.h"
+#include <QJsonArray>
 #include <QStringList>
 #include <QTextBlock>
 #include <QTextDocument>
@@ -554,6 +555,31 @@ void CodeFoldingManager::unfoldComments() {
       block.setVisible(true);
       block.setLineCount(1);
       block = block.next();
+    }
+  }
+}
+
+QJsonObject CodeFoldingManager::saveFoldState() const {
+  QJsonObject state;
+  QJsonArray foldedArray;
+  for (int blockNum : m_foldedBlocks) {
+    foldedArray.append(blockNum);
+  }
+  state["foldedBlocks"] = foldedArray;
+  return state;
+}
+
+void CodeFoldingManager::restoreFoldState(const QJsonObject &state) {
+  if (!m_document)
+    return;
+
+  unfoldAll();
+
+  QJsonArray foldedArray = state["foldedBlocks"].toArray();
+  for (const QJsonValue &val : foldedArray) {
+    int blockNum = val.toInt();
+    if (isFoldable(blockNum)) {
+      foldBlock(blockNum);
     }
   }
 }

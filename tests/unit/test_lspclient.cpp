@@ -42,6 +42,11 @@ private slots:
   void testLspTextEdit();
   void testLspWorkspaceEdit();
   void testLspWorkspaceEditMultipleFiles();
+
+  // Data structure tests - Code Actions
+  void testLspCodeAction();
+  void testLspCodeActionKindConstants();
+  void testLspCodeActionWithEdit();
 };
 
 void TestLspClient::initTestCase() {
@@ -360,6 +365,62 @@ void TestLspClient::testLspWorkspaceEditMultipleFiles() {
   QCOMPARE(wsEdit.changes["file:///path/to/file1.cpp"].count(), 2);
   QCOMPARE(wsEdit.changes["file:///path/to/file2.cpp"].count(), 1);
   QCOMPARE(wsEdit.changes["file:///path/to/file1.h"].count(), 3);
+}
+
+// =============================================================================
+// Code Action Data Structure Tests
+// =============================================================================
+
+void TestLspClient::testLspCodeAction() {
+  LspCodeAction action;
+  action.title = "Remove unused import";
+  action.kind = LspCodeActionKind::QuickFix;
+  action.isPreferred = true;
+
+  QCOMPARE(action.title, QString("Remove unused import"));
+  QCOMPARE(action.kind, QString("quickfix"));
+  QVERIFY(action.isPreferred);
+  QVERIFY(action.diagnostics.isEmpty());
+}
+
+void TestLspClient::testLspCodeActionKindConstants() {
+  QCOMPARE(LspCodeActionKind::QuickFix, QString("quickfix"));
+  QCOMPARE(LspCodeActionKind::Refactor, QString("refactor"));
+  QCOMPARE(LspCodeActionKind::Source, QString("source"));
+  QCOMPARE(LspCodeActionKind::SourceOrganizeImports,
+           QString("source.organizeImports"));
+}
+
+void TestLspClient::testLspCodeActionWithEdit() {
+  LspCodeAction action;
+  action.title = "Organize imports";
+  action.kind = LspCodeActionKind::SourceOrganizeImports;
+  action.isPreferred = false;
+
+  // Add a workspace edit
+  LspTextEdit edit;
+  edit.range.start.line = 0;
+  edit.range.start.character = 0;
+  edit.range.end.line = 3;
+  edit.range.end.character = 0;
+  edit.newText = "import a\nimport b\nimport c\n";
+
+  action.edit.changes["file:///path/to/file.py"].append(edit);
+
+  // Add a diagnostic
+  LspDiagnostic diag;
+  diag.range.start.line = 2;
+  diag.range.start.character = 0;
+  diag.range.end.line = 2;
+  diag.range.end.character = 10;
+  diag.severity = LspDiagnosticSeverity::Warning;
+  diag.message = "Unsorted imports";
+  action.diagnostics.append(diag);
+
+  QCOMPARE(action.edit.changes.count(), 1);
+  QVERIFY(action.edit.changes.contains("file:///path/to/file.py"));
+  QCOMPARE(action.diagnostics.count(), 1);
+  QCOMPARE(action.diagnostics.at(0).message, QString("Unsorted imports"));
 }
 
 QTEST_MAIN(TestLspClient)

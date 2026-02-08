@@ -174,6 +174,27 @@ struct LspWorkspaceEdit {
 };
 
 /**
+ * @brief LSP code action kind constants
+ */
+namespace LspCodeActionKind {
+inline const QString QuickFix = "quickfix";
+inline const QString Refactor = "refactor";
+inline const QString Source = "source";
+inline const QString SourceOrganizeImports = "source.organizeImports";
+} // namespace LspCodeActionKind
+
+/**
+ * @brief LSP code action
+ */
+struct LspCodeAction {
+  QString title;
+  QString kind;
+  QList<LspDiagnostic> diagnostics;
+  LspWorkspaceEdit edit;
+  bool isPreferred;
+};
+
+/**
  * @brief Language Server Protocol client
  *
  * Provides communication with language servers using JSON-RPC over stdio.
@@ -250,6 +271,15 @@ public:
   void requestRename(const QString &uri, LspPosition position,
                      const QString &newName);
 
+  /**
+   * @brief Request code actions (quick fixes, refactorings) at a position
+   * @param uri Document URI
+   * @param range Range to get code actions for
+   * @param diagnostics Diagnostics at that range (optional)
+   */
+  void requestCodeAction(const QString &uri, LspRange range,
+                         const QList<LspDiagnostic> &diagnostics = {});
+
 signals:
   void stateChanged(State state);
   void initialized();
@@ -269,6 +299,7 @@ signals:
   void documentSymbolsReceived(int requestId,
                                const QList<LspDocumentSymbol> &symbols);
   void renameReceived(int requestId, const LspWorkspaceEdit &workspaceEdit);
+  void codeActionReceived(int requestId, const QList<LspCodeAction> &actions);
 
 private slots:
   void onReadyReadStandardOutput();

@@ -328,6 +328,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionToggle_Minimap"/>
     <addaction name="actionToggle_Terminal"/>
     <addaction name="actionToggle_Source_Control"/>
+    <addaction name="actionGit_Log"/>
     <addaction name="actionToggle_Word_Wrap"/>
     <addaction name="actionToggle_Vim_Mode"/>
     <addaction name="separator"/>
@@ -335,6 +336,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="separator"/>
     <addaction name="actionSplit_Horizontally"/>
     <addaction name="actionSplit_Vertically"/>
+    <addaction name="actionOpen_To_Side"/>
     <addaction name="actionClose_Editor_Group"/>
     <addaction name="actionFocus_Next_Group"/>
     <addaction name="actionFocus_Previous_Group"/>
@@ -749,6 +751,19 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   <action name="actionUnfold_Comments">
    <property name="text">
     <string>Unfold All Comments</string>
+   </property>
+  </action>
+  <action name="actionOpen_To_Side">
+   <property name="text">
+    <string>Open to the Side</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Enter</string>
+   </property>
+  </action>
+  <action name="actionGit_Log">
+   <property name="text">
+    <string>Git Log</string>
    </property>
   </action>
  </widget>

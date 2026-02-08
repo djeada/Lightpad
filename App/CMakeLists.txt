@@ -78,6 +78,7 @@ set(project_headers
     ui/dialogs/mergeconflictdialog.h
     ui/dialogs/gitremotedialog.h
     ui/dialogs/gitstashdialog.h
+    ui/dialogs/gitlogdialog.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
     ui/panels/breadcrumbwidget.h
@@ -183,6 +184,7 @@ set(project_sources
     ui/dialogs/mergeconflictdialog.cpp
     ui/dialogs/gitremotedialog.cpp
     ui/dialogs/gitstashdialog.cpp
+    ui/dialogs/gitlogdialog.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
     ui/panels/breadcrumbwidget.cpp

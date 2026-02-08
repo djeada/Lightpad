@@ -297,6 +297,36 @@ void LspClient::requestRename(const QString &uri, LspPosition position,
   sendRequest("textDocument/rename", params, id);
 }
 
+void LspClient::requestCodeAction(const QString &uri, LspRange range,
+                                  const QList<LspDiagnostic> &diagnostics) {
+  QJsonObject textDocument;
+  textDocument["uri"] = uri;
+
+  QJsonObject context;
+  QJsonArray diagArray;
+  for (const LspDiagnostic &diag : diagnostics) {
+    QJsonObject diagObj;
+    diagObj["range"] = diag.range.toJson();
+    diagObj["severity"] = static_cast<int>(diag.severity);
+    diagObj["message"] = diag.message;
+    if (!diag.code.isEmpty())
+      diagObj["code"] = diag.code;
+    if (!diag.source.isEmpty())
+      diagObj["source"] = diag.source;
+    diagArray.append(diagObj);
+  }
+  context["diagnostics"] = diagArray;
+
+  QJsonObject params;
+  params["textDocument"] = textDocument;
+  params["range"] = range.toJson();
+  params["context"] = context;
+
+  int id = m_nextRequestId++;
+  m_pendingRequests[id] = "textDocument/codeAction";
+  sendRequest("textDocument/codeAction", params, id);
+}
+
 void LspClient::sendRequest(const QString &method, const QJsonObject &params,
                             int id) {
   QJsonObject message;
@@ -654,6 +684,51 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
       }
     }
     emit renameReceived(id, workspaceEdit);
+  } else if (method == "textDocument/codeAction") {
+    QList<LspCodeAction> actions;
+    QJsonArray actionsArray = result.toArray();
+    for (const QJsonValue &val : actionsArray) {
+      QJsonObject obj = val.toObject();
+      LspCodeAction action;
+      action.title = obj["title"].toString();
+      action.kind = obj["kind"].toString();
+      action.isPreferred = obj["isPreferred"].toBool(false);
+
+      // Parse diagnostics
+      QJsonArray diagArray = obj["diagnostics"].toArray();
+      for (const QJsonValue &diagVal : diagArray) {
+        QJsonObject diagObj = diagVal.toObject();
+        LspDiagnostic diag;
+        diag.range = LspRange::fromJson(diagObj["range"].toObject());
+        diag.severity =
+            static_cast<LspDiagnosticSeverity>(diagObj["severity"].toInt(1));
+        diag.code = diagObj["code"].toString();
+        diag.source = diagObj["source"].toString();
+        diag.message = diagObj["message"].toString();
+        action.diagnostics.append(diag);
+      }
+
+      // Parse workspace edit
+      QJsonObject editObj = obj["edit"].toObject();
+      if (!editObj.isEmpty()) {
+        QJsonObject changesObj = editObj["changes"].toObject();
+        for (const QString &uri : changesObj.keys()) {
+          QList<LspTextEdit> edits;
+          QJsonArray editsArray = changesObj[uri].toArray();
+          for (const QJsonValue &editVal : editsArray) {
+            QJsonObject editItem = editVal.toObject();
+            LspTextEdit edit;
+            edit.range = LspRange::fromJson(editItem["range"].toObject());
+            edit.newText = editItem["newText"].toString();
+            edits.append(edit);
+          }
+          action.edit.changes[uri] = edits;
+        }
+      }
+
+      actions.append(action);
+    }
+    emit codeActionReceived(id, actions);
   }
 }
 
