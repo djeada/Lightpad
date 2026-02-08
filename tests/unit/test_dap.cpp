@@ -333,6 +333,13 @@ void TestDap::testBuiltinAdapters() {
   auto nodeAdapter = reg.adapter("node-debug");
   QVERIFY(nodeAdapter != nullptr);
   QVERIFY(nodeAdapter->supportsLanguage("js"));
+
+  // LLDB adapter should produce launch config routable by adapter type lookup.
+  auto lldbAdapter = reg.adapter("cppdbg-lldb");
+  QVERIFY(lldbAdapter != nullptr);
+  QJsonObject lldbLaunchCfg =
+      lldbAdapter->createLaunchConfig("/tmp/a.out", "/tmp");
+  QCOMPARE(lldbLaunchCfg["type"].toString(), QString("cppdbg"));
 }
 
 void TestDap::testAdapterLookupByFile() {
@@ -384,6 +391,7 @@ void TestDap::testGdbAdapterIntegration() {
   QCOMPARE(cfg.id, QString("cppdbg-gdb"));
   QCOMPARE(cfg.name, QString("C/C++ (GDB)"));
   QCOMPARE(cfg.type, QString("cppdbg"));
+  QVERIFY(cfg.arguments.contains("--interpreter=dap"));
 
   // Should support C, C++ and other languages
   QVERIFY(cfg.languages.contains("cpp"));

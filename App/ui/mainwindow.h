@@ -188,10 +188,12 @@ private:
   DebugPanel *debugPanel;
   QDockWidget *debugDock;
   QString m_activeDebugSessionId;
+  bool m_debugStartInProgress;
   QMetaObject::Connection m_breakpointsSetConnection;
   QMetaObject::Connection m_breakpointChangedConnection;
   QMetaObject::Connection m_sessionTerminatedConnection;
   QMetaObject::Connection m_sessionErrorConnection;
+  QMetaObject::Connection m_sessionStateConnection;
 
   // Split editor views
   SplitEditorContainer *m_splitEditorContainer;
@@ -262,6 +264,13 @@ private:
   void setupCompletionSystem();
   void noScriptAssignedWarning();
   void startDebuggingForCurrentFile();
+  bool prepareDebugTargetForFile(const QString &filePath,
+                                 const QString &languageId,
+                                 QString *errorMessage) const;
+  bool compileSourceForDebug(const QString &filePath,
+                             const QString &languageId,
+                             const QString &outputPath,
+                             QString *errorMessage) const;
   void attachDebugSession(const QString &sessionId);
   void clearDebugSession();
   QList<LightpadTabWidget *> allTabWidgets() const;

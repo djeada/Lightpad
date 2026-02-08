@@ -59,14 +59,22 @@ QString UIStyleHelper::panelHeaderStyle(const Theme &theme) {
 QString UIStyleHelper::treeWidgetStyle(const Theme &theme) {
   return QString("QTreeWidget {"
                  "  background: %1;"
+                 "  alternate-background-color: %8;"
                  "  color: %2;"
                  "  border: none;"
+                 "  selection-background-color: %3;"
+                 "  selection-color: %2;"
                  "}"
                  "QTreeWidget::item {"
                  "  padding: 4px;"
                  "}"
                  "QTreeWidget::item:selected {"
                  "  background: %3;"
+                 "  color: %2;"
+                 "}"
+                 "QTreeWidget::item:!active:selected {"
+                 "  background: %3;"
+                 "  color: %2;"
                  "}"
                  "QTreeWidget::item:hover {"
                  "  background: %4;"
@@ -84,7 +92,8 @@ QString UIStyleHelper::treeWidgetStyle(const Theme &theme) {
       .arg(theme.hoverColor.name())
       .arg(theme.surfaceColor.name())
       .arg(theme.singleLineCommentFormat.name()) // Subdued text color
-      .arg(theme.borderColor.name());
+      .arg(theme.borderColor.name())
+      .arg(theme.surfaceAltColor.name());
 }
 
 QString UIStyleHelper::subduedLabelStyle(const Theme &theme) {

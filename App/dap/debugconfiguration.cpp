@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QSet>
 
 DebugConfigurationManager &DebugConfigurationManager::instance() {
   static DebugConfigurationManager instance;
@@ -269,6 +270,24 @@ DebugConfigurationManager::createQuickConfig(const QString &filePath,
   // Set a name based on the file
   QFileInfo fi(filePath);
   config.name = QString("Debug %1").arg(fi.fileName());
+
+  // For native debuggers, the debug target should be an executable, not the
+  // source file path. Quick debug on compiled languages uses a sibling binary
+  // with the same base name.
+  if (config.type == "cppdbg") {
+    config.stopOnEntry = false;
+    static const QSet<QString> sourceExtensions = {
+        ".c",  ".cc", ".cpp", ".cxx", ".h", ".hpp",
+        ".hxx", ".rs", ".go",  ".f",   ".f90", ".s"};
+    const QString extension = "." + fi.suffix().toLower();
+    if (sourceExtensions.contains(extension)) {
+      QString executablePath = fi.absolutePath() + "/" + fi.completeBaseName();
+#ifdef Q_OS_WIN
+      executablePath += ".exe";
+#endif
+      config.program = executablePath;
+    }
+  }
 
   return config;
 }

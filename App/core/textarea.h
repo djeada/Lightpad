@@ -120,6 +120,8 @@ public:
   void clearGitDiffLines();
   void setGitBlameLines(const QMap<int, QString> &blameLines);
   void clearGitBlameLines();
+  void setDebugExecutionLine(int line);
+  int debugExecutionLine() const { return m_debugExecutionLine; }
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
@@ -183,6 +185,7 @@ private:
   QList<QPair<int, int>>
       m_gitDiffLines; // line number, type (0=add, 1=modify, 2=delete)
   QMap<int, QString> m_gitBlameLines;
+  int m_debugExecutionLine;
 
   void setupTextArea();
   void setTabWidgetIcon(QIcon icon);

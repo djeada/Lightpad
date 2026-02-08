@@ -71,6 +71,7 @@
 #include "viewers/pdfviewer.h"
 #endif
 #include "../dap/breakpointmanager.h"
+#include "../dap/debugadapterregistry.h"
 #include "../dap/debugconfiguration.h"
 #include "../dap/debugsession.h"
 #include "../dap/debugsettings.h"
@@ -95,8 +96,10 @@ MainWindow::MainWindow(QWidget *parent)
       autoSaveManager(nullptr), m_splitEditorContainer(nullptr),
       m_gitIntegration(nullptr), sourceControlPanel(nullptr),
       sourceControlDock(nullptr), debugPanel(nullptr), debugDock(nullptr),
+      m_debugStartInProgress(false),
       m_breakpointsSetConnection(), m_breakpointChangedConnection(),
       m_sessionTerminatedConnection(), m_sessionErrorConnection(),
+      m_sessionStateConnection(),
       m_fileTreeModel(nullptr), m_treeScrollValue(0),
       m_treeScrollValueInitialized(false), m_treeScrollSyncing(false) {
   QApplication::instance()->installEventFilter(this);
@@ -188,10 +191,8 @@ MainWindow::MainWindow(QWidget *parent)
       ui->actionToggle_Source_Control->setChecked(true);
     }
   }
-  if (SettingsManager::instance().getValue("showDebugDock", false).toBool()) {
-    if (debugDock) {
-      debugDock->show();
-    }
+  if (debugDock) {
+    debugDock->hide();
   }
   setWindowTitle("LightPad");
 }
@@ -1646,13 +1647,34 @@ void MainWindow::ensureDebugPanel() {
 
   debugPanel = new DebugPanel(this);
   debugPanel->setObjectName("debugPanel");
+  debugPanel->applyTheme(settings.theme);
   debugPanel->hide();
 
   connect(debugPanel, &DebugPanel::locationClicked, this,
           [this](const QString &filePath, int line, int column) {
-            if (!filePath.isEmpty()) {
-              openFileAndAddToNewTab(filePath);
+            QString targetPath = filePath;
+            QFileInfo sourceInfo(targetPath);
+            if (!targetPath.isEmpty() && sourceInfo.isRelative()) {
+              if (!m_projectRootPath.isEmpty()) {
+                const QString projectResolved =
+                    QDir(m_projectRootPath).absoluteFilePath(targetPath);
+                if (QFileInfo::exists(projectResolved)) {
+                  targetPath = projectResolved;
+                }
+              }
+              if (QFileInfo(targetPath).isRelative()) {
+                const QString cwdResolved =
+                    QDir::current().absoluteFilePath(targetPath);
+                if (QFileInfo::exists(cwdResolved)) {
+                  targetPath = cwdResolved;
+                }
+              }
             }
+
+            if (!targetPath.isEmpty()) {
+              openFileAndAddToNewTab(targetPath);
+            }
+            updateAllTextAreas(&TextArea::setDebugExecutionLine, 0);
             TextArea *textArea = getCurrentTextArea();
             if (textArea) {
               QTextCursor cursor = textArea->textCursor();
@@ -1664,6 +1686,7 @@ void MainWindow::ensureDebugPanel() {
               cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
                                   targetColumn);
               textArea->setTextCursor(cursor);
+              textArea->setDebugExecutionLine(line);
               textArea->centerCursor();
               textArea->setFocus();
             }
@@ -2233,7 +2256,117 @@ void MainWindow::runCurrentScript() {
     showTerminal();
 }
 
+bool MainWindow::prepareDebugTargetForFile(const QString &filePath,
+                                           const QString &languageId,
+                                           QString *errorMessage) const {
+  const QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
+  if (canonicalLanguageId != "cpp" && canonicalLanguageId != "c") {
+    return true;
+  }
+
+  QFileInfo sourceInfo(filePath);
+  if (!sourceInfo.exists()) {
+    if (errorMessage) {
+      *errorMessage = tr("Source file does not exist: %1").arg(filePath);
+    }
+    return false;
+  }
+
+  QString outputPath = sourceInfo.absolutePath() + "/" + sourceInfo.completeBaseName();
+#ifdef Q_OS_WIN
+  outputPath += ".exe";
+#endif
+
+  QFileInfo outputInfo(outputPath);
+  const bool needsBuild =
+      !outputInfo.exists() ||
+      outputInfo.lastModified() < sourceInfo.lastModified();
+  if (!needsBuild) {
+    return true;
+  }
+
+  return compileSourceForDebug(filePath, canonicalLanguageId, outputPath,
+                               errorMessage);
+}
+
+bool MainWindow::compileSourceForDebug(const QString &filePath,
+                                       const QString &languageId,
+                                       const QString &outputPath,
+                                       QString *errorMessage) const {
+  const QString compiler = (languageId == "c") ? "gcc" : "g++";
+
+  QStringList args;
+  if (languageId == "c") {
+    args << "-g"
+         << "-O0"
+         << "-std=c11";
+  } else {
+    args << "-g"
+         << "-O0"
+         << "-std=c++17";
+  }
+  args << "-o" << outputPath << filePath;
+
+  QProcess process;
+  process.setProgram(compiler);
+  process.setArguments(args);
+  process.setWorkingDirectory(QFileInfo(filePath).absolutePath());
+  process.start();
+
+  if (!process.waitForStarted(5000)) {
+    if (errorMessage) {
+      *errorMessage = tr("Failed to start compiler '%1': %2")
+                          .arg(compiler, process.errorString());
+    }
+    return false;
+  }
+
+  if (!process.waitForFinished(120000)) {
+    process.kill();
+    if (errorMessage) {
+      *errorMessage = tr("Compilation timed out for %1").arg(filePath);
+    }
+    return false;
+  }
+
+  const QByteArray output =
+      process.readAllStandardOutput() + process.readAllStandardError();
+  if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+    if (errorMessage) {
+      const QString commandLine =
+          compiler + " " + args.join(" ");
+      QString details = QString::fromUtf8(output).trimmed();
+      if (details.isEmpty()) {
+        details = tr("Compiler exited with code %1").arg(process.exitCode());
+      }
+      *errorMessage = tr("Debug build command failed:\n%1\n\n%2")
+                          .arg(commandLine, details);
+    }
+    return false;
+  }
+
+  return true;
+}
+
 void MainWindow::startDebuggingForCurrentFile() {
+  if (m_debugStartInProgress) {
+    return;
+  }
+
+  if (!m_activeDebugSessionId.isEmpty()) {
+    if (DebugSession *activeSession =
+            DebugSessionManager::instance().session(m_activeDebugSessionId)) {
+      if (activeSession->state() != DebugSession::State::Idle &&
+          activeSession->state() != DebugSession::State::Terminated) {
+        attachDebugSession(m_activeDebugSessionId);
+        if (debugDock) {
+          debugDock->show();
+        }
+        return;
+      }
+    }
+  }
+
   on_actionSave_triggered();
   LightpadTabWidget *tabWidget = currentTabWidget();
   if (!tabWidget) {
@@ -2251,19 +2384,64 @@ void MainWindow::startDebuggingForCurrentFile() {
     setProjectRootPath(QFileInfo(filePath).absolutePath());
   }
 
+  m_debugStartInProgress = true;
+
   DebugSettings::instance().initialize(m_projectRootPath);
   DebugConfigurationManager::instance().setWorkspaceFolder(m_projectRootPath);
   DebugConfigurationManager::instance().loadFromLightpadDir();
   BreakpointManager::instance().setWorkspaceFolder(m_projectRootPath);
-  BreakpointManager::instance().loadFromLightpadDir();
+  if (BreakpointManager::instance().allBreakpoints().isEmpty()) {
+    BreakpointManager::instance().loadFromLightpadDir();
+  }
   WatchManager::instance().setWorkspaceFolder(m_projectRootPath);
-  WatchManager::instance().loadFromLightpadDir();
+  if (WatchManager::instance().allWatches().isEmpty()) {
+    WatchManager::instance().loadFromLightpadDir();
+  }
 
-  QString sessionId = DebugSessionManager::instance().quickStart(
-      filePath, effectiveLanguageIdForFile(filePath));
+  const QString languageId = effectiveLanguageIdForFile(filePath);
+  QString prepareError;
+  if (!prepareDebugTargetForFile(filePath, languageId, &prepareError)) {
+    QMessageBox msg(this);
+    msg.setIcon(QMessageBox::Warning);
+    msg.setWindowTitle(tr("Debug Build Failed"));
+    msg.setText(tr("Unable to prepare a debuggable target for this file."));
+    msg.setDetailedText(prepareError);
+    msg.exec();
+    m_debugStartInProgress = false;
+    return;
+  }
+
+  QString sessionId =
+      DebugSessionManager::instance().quickStart(filePath, languageId);
   if (sessionId.isEmpty()) {
-    QMessageBox::warning(this, tr("Debug"),
-                         tr("Unable to start debug session for this file."));
+    QString details;
+    DebugConfiguration quickConfig =
+        DebugConfigurationManager::instance().createQuickConfig(filePath,
+                                                                languageId);
+    if (!quickConfig.type.isEmpty()) {
+      const auto adapters =
+          DebugAdapterRegistry::instance().adaptersForType(quickConfig.type);
+      QStringList adapterStatuses;
+      for (const auto &adapter : adapters) {
+        if (!adapter) {
+          continue;
+        }
+        adapterStatuses << QString("%1: %2")
+                               .arg(adapter->config().name,
+                                    adapter->statusMessage());
+      }
+      details = adapterStatuses.join("\n");
+    }
+
+    QMessageBox msg(this);
+    msg.setIcon(QMessageBox::Warning);
+    msg.setWindowTitle(tr("Debug"));
+    msg.setText(tr("Unable to start debug session for this file."));
+    if (!details.isEmpty()) {
+      msg.setDetailedText(details);
+    }
+    msg.exec();
+    m_debugStartInProgress = false;
     return;
   }
 
@@ -2271,6 +2449,7 @@ void MainWindow::startDebuggingForCurrentFile() {
   if (debugDock) {
     debugDock->show();
   }
+  m_debugStartInProgress = false;
 }
 
 void MainWindow::attachDebugSession(const QString &sessionId) {
@@ -2310,6 +2489,9 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
   if (m_sessionErrorConnection) {
     disconnect(m_sessionErrorConnection);
   }
+  if (m_sessionStateConnection) {
+    disconnect(m_sessionStateConnection);
+  }
   m_breakpointsSetConnection = connect(
       session->client(), &DapClient::breakpointsSet, this,
       [](const QString &sourcePath, const QList<DapBreakpoint> &breakpoints) {
@@ -2337,6 +2519,15 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
       session, &DebugSession::error, this, [this](const QString &message) {
         QMessageBox::warning(this, tr("Debug Session Error"), message);
       });
+  m_sessionStateConnection =
+      connect(session, &DebugSession::stateChanged, this,
+              [this](DebugSession::State state) {
+                if (state == DebugSession::State::Running ||
+                    state == DebugSession::State::Terminated ||
+                    state == DebugSession::State::Idle) {
+                  updateAllTextAreas(&TextArea::setDebugExecutionLine, 0);
+                }
+              });
 }
 
 void MainWindow::clearDebugSession() {
@@ -2362,6 +2553,11 @@ void MainWindow::clearDebugSession() {
     disconnect(m_sessionErrorConnection);
     m_sessionErrorConnection = {};
   }
+  if (m_sessionStateConnection) {
+    disconnect(m_sessionStateConnection);
+    m_sessionStateConnection = {};
+  }
+  updateAllTextAreas(&TextArea::setDebugExecutionLine, 0);
 }
 
 void MainWindow::formatCurrentDocument() {
@@ -3113,10 +3309,24 @@ void MainWindow::setTheme(Theme theme) {
       // Message box styling
       "QMessageBox { background-color: " +
       surfaceColor +
+      "; color: " +
+      fgColor +
       "; }"
       "QMessageBox QLabel { color: " +
       fgColor +
       "; }"
+      "QMessageBox QCheckBox { color: " +
+      fgColor +
+      "; }"
+      "QMessageBox QTextEdit, QMessageBox QPlainTextEdit { "
+      "background-color: " +
+      surfaceAltColor +
+      "; color: " +
+      fgColor +
+      "; border: 1px solid " +
+      borderColor +
+      "; border-radius: 4px; "
+      "}"
 
       // Modern button styling with subtle transitions
       "QPushButton { "
@@ -3734,6 +3944,9 @@ void MainWindow::setTheme(Theme theme) {
   }
   if (sourceControlPanel) {
     sourceControlPanel->applyTheme(theme);
+  }
+  if (debugPanel) {
+    debugPanel->applyTheme(theme);
   }
 
   updateAllTextAreas(&TextArea::applySelectionPalette, settings.theme);

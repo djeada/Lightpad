@@ -212,6 +212,7 @@ public:
     cfg.name = "C/C++ (GDB)";
     cfg.type = "cppdbg";
     cfg.program = findSystemGdb();
+    cfg.arguments = QStringList() << "--interpreter=dap";
     cfg.languages = QStringList()
                     << "cpp" << "c" << "fortran" << "rust" << "go" << "asm";
     cfg.extensions = QStringList() << ".cpp" << ".cxx" << ".cc" << ".c" << ".h"
@@ -232,16 +233,10 @@ public:
 
   bool isAvailable() const override {
     QString gdbPath = findSystemGdb();
-    if (gdbPath.isEmpty()) {
+    if (gdbPath.isEmpty() || !canExecute(gdbPath)) {
       return false;
     }
-
-    QProcess proc;
-    proc.start(gdbPath, {"--version"});
-    if (!proc.waitForFinished(5000)) {
-      return false;
-    }
-    return proc.exitCode() == 0;
+    return supportsDapInterpreter(gdbPath) && canTraceInferior(gdbPath);
   }
 
   QString statusMessage() const override {
@@ -250,14 +245,24 @@ public:
       return "GDB not found on system";
     }
 
-    QProcess proc;
-    proc.start(gdbPath, {"--version"});
-    if (!proc.waitForFinished(5000)) {
-      return "GDB found but not responding";
+    if (!canExecute(gdbPath)) {
+      return "GDB not found on system";
     }
 
-    if (proc.exitCode() != 0) {
-      return "GDB found but returned an error";
+    if (!supportsDapInterpreter(gdbPath)) {
+      return "GDB found, but this build does not support DAP "
+             "(--interpreter=dap). Install GDB 14+.";
+    }
+
+    if (!canTraceInferior(gdbPath)) {
+      return "GDB DAP is available, but ptrace is restricted on this system. "
+             "Debugging cannot control the target process.";
+    }
+
+    QProcess proc;
+    proc.start(gdbPath, {"--interpreter=dap", "--version"});
+    if (!proc.waitForFinished(5000) || proc.exitCode() != 0) {
+      return "GDB DAP mode is unavailable";
     }
 
     QString output = QString::fromUtf8(proc.readAllStandardOutput());
@@ -483,6 +488,65 @@ public:
   }
 
 private:
+  bool canExecute(const QString &gdbPath) const {
+    if (gdbPath.isEmpty()) {
+      return false;
+    }
+
+    QProcess proc;
+    proc.start(gdbPath, {"--version"});
+    if (!proc.waitForFinished(5000)) {
+      return false;
+    }
+
+    return proc.exitCode() == 0;
+  }
+
+  bool supportsDapInterpreter(const QString &gdbPath) const {
+    if (gdbPath.isEmpty()) {
+      return false;
+    }
+
+    QProcess proc;
+    proc.start(gdbPath, {"--interpreter=dap", "--version"});
+    if (!proc.waitForFinished(5000)) {
+      return false;
+    }
+
+    return proc.exitCode() == 0;
+  }
+
+  bool canTraceInferior(const QString &gdbPath) const {
+    if (gdbPath.isEmpty()) {
+      return false;
+    }
+
+#ifdef Q_OS_WIN
+    Q_UNUSED(gdbPath);
+    return true;
+#else
+    QProcess proc;
+    proc.start(gdbPath,
+               {"-q", "-batch", "-ex", "file /bin/true", "-ex", "starti"});
+    if (!proc.waitForFinished(5000)) {
+      return false;
+    }
+
+    const QString output = QString::fromUtf8(proc.readAllStandardOutput() +
+                                             proc.readAllStandardError());
+    const bool ptraceBlocked =
+        output.contains("Could not trace the inferior process",
+                        Qt::CaseInsensitive) ||
+        output.contains("ptrace", Qt::CaseInsensitive) ||
+        output.contains("Operation not permitted", Qt::CaseInsensitive);
+    if (ptraceBlocked) {
+      return false;
+    }
+
+    return proc.exitCode() == 0;
+#endif
+  }
+
   /**
    * @brief Find the system's GDB executable
    */
@@ -632,7 +696,7 @@ public:
   QJsonObject createLaunchConfig(const QString &filePath,
                                  const QString &workingDir) const override {
     QJsonObject config;
-    config["type"] = "lldb";
+    config["type"] = "cppdbg";
     config["request"] = "launch";
     config["program"] = filePath;
     config["stopOnEntry"] = false;
@@ -653,7 +717,7 @@ public:
     Q_UNUSED(port);
 
     QJsonObject config;
-    config["type"] = "lldb";
+    config["type"] = "cppdbg";
     config["request"] = "attach";
     config["pid"] = processId;
 

@@ -179,7 +179,8 @@ TextArea::TextArea(QWidget *parent)
       autoIndent(true), showLineNumberArea(true), lineHighlighted(true),
       matchingBracketsHighlighted(true), prevWordCount(1),
       m_multiCursor(nullptr), m_columnSelectionActive(false),
-      m_showWhitespace(false), m_showIndentGuides(false), m_vimMode(nullptr) {
+      m_showWhitespace(false), m_showIndentGuides(false), m_vimMode(nullptr),
+      m_debugExecutionLine(0) {
   initializeIconCache();
   m_multiCursor = new MultiCursorHandler(this);
   m_codeFolding = new CodeFoldingManager(document());
@@ -208,7 +209,8 @@ TextArea::TextArea(const TextAreaSettings &settings, QWidget *parent)
       lineHighlighted(settings.lineHighlighted),
       matchingBracketsHighlighted(settings.matchingBracketsHighlighted),
       prevWordCount(1), m_multiCursor(nullptr), m_columnSelectionActive(false),
-      m_showWhitespace(false), m_showIndentGuides(false), m_vimMode(nullptr) {
+      m_showWhitespace(false), m_showIndentGuides(false), m_vimMode(nullptr),
+      m_debugExecutionLine(0) {
   initializeIconCache();
   m_multiCursor = new MultiCursorHandler(this);
   m_codeFolding = new CodeFoldingManager(document());
@@ -896,10 +898,32 @@ void TextArea::updateExtraSelections() {
     }
   }
 
+  if (m_debugExecutionLine > 0) {
+    QTextBlock debugBlock =
+        document()->findBlockByNumber(m_debugExecutionLine - 1);
+    if (debugBlock.isValid()) {
+      QTextEdit::ExtraSelection selection;
+      QColor debugColor =
+          mainWindow ? mainWindow->getTheme().accentColor : QColor(255, 193, 7);
+      debugColor.setAlpha(95);
+      selection.format.setBackground(debugColor);
+      selection.format.setProperty(QTextFormat::FullWidthSelection, true);
+      selection.cursor = QTextCursor(debugBlock);
+      selection.cursor.clearSelection();
+      extraSelections.append(selection);
+    }
+  }
+
   if (lineHighlighted && !cursor.hasSelection()) {
     QTextEdit::ExtraSelection selection;
     QColor color =
         mainWindow ? mainWindow->getTheme().highlightColor : highlightColor;
+    if (m_debugExecutionLine > 0 &&
+        m_debugExecutionLine == cursor.blockNumber() + 1) {
+      color = mainWindow ? mainWindow->getTheme().accentColor
+                         : QColor(255, 193, 7);
+      color.setAlpha(120);
+    }
     if (breakpointsByLine.contains(cursor.blockNumber() + 1)) {
       color.setAlpha(qMin(color.alpha(), 160));
     }
@@ -1595,6 +1619,15 @@ void TextArea::clearGitBlameLines() {
     lineNumberArea->clearGitBlameLines();
     updateLineNumberAreaLayout();
   }
+}
+
+void TextArea::setDebugExecutionLine(int line) {
+  const int normalizedLine = line > 0 ? line : 0;
+  if (m_debugExecutionLine == normalizedLine) {
+    return;
+  }
+  m_debugExecutionLine = normalizedLine;
+  updateExtraSelections();
 }
 
 void TextArea::updateLineNumberAreaLayout() {

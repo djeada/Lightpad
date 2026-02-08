@@ -2,7 +2,9 @@
 #define DEBUGPANEL_H
 
 #include <QComboBox>
+#include <QColor>
 #include <QLineEdit>
+#include <QSet>
 #include <QSplitter>
 #include <QTabWidget>
 #include <QTextEdit>
@@ -14,6 +16,7 @@
 #include "../../dap/breakpointmanager.h"
 #include "../../dap/dapclient.h"
 #include "../../dap/watchmanager.h"
+#include "../../settings/theme.h"
 
 class DapClient;
 
@@ -56,6 +59,7 @@ public:
    * @brief Set the current stack frame for variable inspection
    */
   void setCurrentFrame(int frameId);
+  void applyTheme(const Theme &theme);
 
 signals:
   /**
@@ -140,10 +144,17 @@ private:
   void setupConsole();
 
   void updateToolbarState();
+  int activeThreadId() const;
   void updateCallStack(int threadId);
   void populateScopeVariables(QTreeWidgetItem *scopeItem,
                               int variablesReference);
   void refreshBreakpointList();
+  void appendConsoleLine(const QString &text, const QColor &color,
+                         bool bold = false);
+  void resizeVariablesNameColumnOnce();
+  QColor consoleErrorColor() const;
+  QColor consoleMutedColor() const;
+  QColor consoleInfoColor() const;
 
   QString formatVariable(const DapVariable &var) const;
   QIcon variableIcon(const DapVariable &var) const;
@@ -191,6 +202,11 @@ private:
   int m_currentFrameId;
   QList<DapThread> m_threads;
   QList<DapStackFrame> m_stackFrames;
+  QSet<int> m_pendingScopeVariableLoads;
+  bool m_programmaticVariablesExpand;
+  bool m_variablesNameColumnAutofitPending;
+  Theme m_theme;
+  bool m_themeInitialized;
 };
 
 #endif // DEBUGPANEL_H

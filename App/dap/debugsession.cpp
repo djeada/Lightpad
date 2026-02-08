@@ -9,10 +9,13 @@
 
 DebugSession::DebugSession(const QString &id, QObject *parent)
     : QObject(parent), m_id(id), m_state(State::Idle),
-      m_client(std::make_unique<DapClient>(this)) {
+      m_client(std::make_unique<DapClient>(this)), m_launchRequestSent(false),
+      m_adapterInitializedReceived(false), m_configurationDoneSent(false) {
   // Connect client signals
   connect(m_client.get(), &DapClient::stateChanged, this,
           &DebugSession::onClientStateChanged);
+  connect(m_client.get(), &DapClient::adapterInitialized, this,
+          &DebugSession::onClientAdapterInitialized);
   connect(m_client.get(), &DapClient::stopped, this,
           &DebugSession::onClientStopped);
   connect(m_client.get(), &DapClient::terminated, this,
@@ -38,6 +41,9 @@ bool DebugSession::start(const DebugConfiguration &config,
 
   m_configuration = config;
   m_adapter = adapter;
+  m_launchRequestSent = false;
+  m_adapterInitializedReceived = false;
+  m_configurationDoneSent = false;
 
   if (!m_adapter) {
     emit error("No debug adapter specified");
@@ -93,8 +99,20 @@ void DebugSession::restart() {
 void DebugSession::onClientStateChanged(DapClient::State state) {
   switch (state) {
   case DapClient::State::Ready:
-    // Client initialized, launch the program
+    // Client initialized: if the adapter is already in configuration phase,
+    // sync breakpoints first. Otherwise launch/attach and finish setup when
+    // "initialized" arrives.
     if (m_state == State::Starting) {
+      BreakpointManager::instance().setDapClient(m_client.get());
+
+      // Some adapters (including GDB DAP) emit "initialized" before launch.
+      // In that case, send breakpoint setup before launch to avoid racing fast
+      // inferiors.
+      const bool adapterReadyForConfiguration = m_adapterInitializedReceived;
+      if (adapterReadyForConfiguration) {
+        BreakpointManager::instance().syncAllBreakpoints();
+      }
+
       if (m_configuration.request == "attach") {
         if (m_configuration.processId > 0) {
           m_client->attach(m_configuration.processId);
@@ -107,10 +125,14 @@ void DebugSession::onClientStateChanged(DapClient::State state) {
                          m_configuration.cwd, m_configuration.env,
                          m_configuration.stopOnEntry);
       }
+      m_launchRequestSent = true;
 
-      // Sync breakpoints
-      BreakpointManager::instance().setDapClient(m_client.get());
-      BreakpointManager::instance().syncAllBreakpoints();
+      if (adapterReadyForConfiguration && !m_configurationDoneSent) {
+        if (m_client->supportsConfigurationDoneRequest()) {
+          m_client->configurationDone();
+        }
+        m_configurationDoneSent = true;
+      }
     }
     break;
 
@@ -132,6 +154,18 @@ void DebugSession::onClientStateChanged(DapClient::State state) {
 
   default:
     break;
+  }
+}
+
+void DebugSession::onClientAdapterInitialized() {
+  m_adapterInitializedReceived = true;
+  if (m_launchRequestSent && !m_configurationDoneSent) {
+    BreakpointManager::instance().setDapClient(m_client.get());
+    BreakpointManager::instance().syncAllBreakpoints();
+    if (m_client->supportsConfigurationDoneRequest()) {
+      m_client->configurationDone();
+    }
+    m_configurationDoneSent = true;
   }
 }
 

@@ -396,6 +396,12 @@ public:
    */
   void terminate();
 
+  /**
+   * @brief Notify adapter that initial breakpoint/configuration setup is done
+   */
+  void configurationDone();
+  bool supportsConfigurationDoneRequest() const;
+
   // Breakpoint management
 
   /**
@@ -522,6 +528,7 @@ public:
 signals:
   void stateChanged(State state);
   void initialized();
+  void adapterInitialized();
   void error(const QString &message);
 
   // Lifecycle events
@@ -577,6 +584,7 @@ private:
 
   void doInitialize();
   void setState(State state);
+  static bool isLikelyUnsupportedRequestMessage(const QString &message);
 
   QProcess *m_process;
   State m_state;
@@ -587,6 +595,11 @@ private:
   int m_currentThreadId;
   QString m_adapterId;
   QJsonObject m_capabilities;
+  bool m_functionBreakpointsConfigured;
+  QStringList m_deferredFunctionBreakpoints;
+  bool m_hasDeferredFunctionBreakpoints;
+  bool m_dataBreakpointsSupported;
+  bool m_dataBreakpointsConfigured;
 
   // Stored launch/attach configuration for restart
   QJsonObject m_launchConfig;
