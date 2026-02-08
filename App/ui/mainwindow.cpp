@@ -2803,7 +2803,7 @@ void MainWindow::on_actionOpen_To_Side_triggered() {
   if (filePath.isEmpty())
     return;
 
-  // Split horizontally and open the same file in the new group
+  // Split horizontally (side by side) to match VS Code's "Open to the Side"
   LightpadTabWidget *newGroup = m_splitEditorContainer->splitHorizontal();
   if (newGroup) {
     openFileAndAddToNewTab(filePath);
