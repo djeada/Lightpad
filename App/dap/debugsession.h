@@ -119,6 +119,7 @@ signals:
 
 private slots:
   void onClientStateChanged(DapClient::State state);
+  void onClientAdapterInitialized();
   void onClientStopped(const DapStoppedEvent &event);
   void onClientTerminated();
   void onClientOutput(const DapOutputEvent &event);
@@ -132,6 +133,9 @@ private:
   DebugConfiguration m_configuration;
   std::shared_ptr<IDebugAdapter> m_adapter;
   std::unique_ptr<DapClient> m_client;
+  bool m_launchRequestSent;
+  bool m_adapterInitializedReceived;
+  bool m_configurationDoneSent;
 };
 
 /**

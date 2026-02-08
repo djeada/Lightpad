@@ -110,7 +110,11 @@ void WatchManager::evaluateWatch(int id, int frameId) {
   }
 
   const QString &expression = m_watches[id].expression;
-  m_pendingEvaluations[expression] = id;
+  PendingEvaluation pending;
+  pending.watchId = id;
+  pending.frameId = frameId;
+  pending.fallbackStage = 0;
+  m_pendingEvaluations[expression] = pending;
 
   m_dapClient->evaluate(expression, frameId, "watch");
 }
@@ -131,7 +135,8 @@ void WatchManager::onEvaluateResult(const QString &expression,
     return;
   }
 
-  int watchId = m_pendingEvaluations.take(expression);
+  const PendingEvaluation pending = m_pendingEvaluations.take(expression);
+  const int watchId = pending.watchId;
 
   if (!m_watches.contains(watchId)) {
     return;
@@ -153,7 +158,30 @@ void WatchManager::onEvaluateError(const QString &expression,
     return;
   }
 
-  int watchId = m_pendingEvaluations.take(expression);
+  PendingEvaluation pending = m_pendingEvaluations.value(expression);
+  const QString lowered = errorMessage.toLower();
+  const bool noSymbolContext =
+      lowered.contains("no symbol") && lowered.contains("current context");
+  if (noSymbolContext && m_dapClient &&
+      m_dapClient->state() == DapClient::State::Stopped) {
+    if (pending.fallbackStage == 0) {
+      pending.fallbackStage = 1;
+      m_pendingEvaluations[expression] = pending;
+      // Some adapters resolve locals better under hover context.
+      m_dapClient->evaluate(expression, pending.frameId, "hover");
+      return;
+    }
+    if (pending.fallbackStage == 1) {
+      pending.fallbackStage = 2;
+      m_pendingEvaluations[expression] = pending;
+      // Last fallback: omit context and let adapter use default expression mode.
+      m_dapClient->evaluate(expression, pending.frameId, QString());
+      return;
+    }
+  }
+
+  m_pendingEvaluations.remove(expression);
+  const int watchId = pending.watchId;
 
   if (!m_watches.contains(watchId)) {
     return;

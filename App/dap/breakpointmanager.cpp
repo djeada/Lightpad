@@ -3,7 +3,25 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
+
+namespace {
+QString normalizePath(const QString &path) {
+  if (path.isEmpty()) {
+    return path;
+  }
+  QFileInfo fi(path);
+  const QString canonical = fi.canonicalFilePath();
+  if (!canonical.isEmpty()) {
+    return QDir::cleanPath(canonical);
+  }
+  if (fi.isAbsolute()) {
+    return QDir::cleanPath(fi.absoluteFilePath());
+  }
+  return QDir::cleanPath(path);
+}
+} // namespace
 
 BreakpointManager &BreakpointManager::instance() {
   static BreakpointManager instance;
@@ -250,12 +268,22 @@ void BreakpointManager::syncFileBreakpoints(const QString &filePath) {
     }
   }
 
-  m_dapClient->setBreakpoints(filePath, dapBreakpoints);
+  m_dapClient->setBreakpoints(normalizePath(filePath), dapBreakpoints);
 }
 
 void BreakpointManager::updateVerification(
     const QString &filePath, const QList<DapBreakpoint> &verified) {
+  const QString requestedPath = normalizePath(filePath);
   QList<int> ids = m_fileBreakpoints.value(filePath);
+  if (ids.isEmpty()) {
+    for (auto it = m_fileBreakpoints.constBegin(); it != m_fileBreakpoints.constEnd();
+         ++it) {
+      if (normalizePath(it.key()) == requestedPath) {
+        ids = it.value();
+        break;
+      }
+    }
+  }
 
   // Match verified breakpoints to our breakpoints by line
   for (int id : ids) {

@@ -193,6 +193,12 @@ private slots:
                            const QList<DapVariable> &variables);
 
 private:
+  struct PendingEvaluation {
+    int watchId = 0;
+    int frameId = 0;
+    int fallbackStage = 0; // 0=watch, 1=hover, 2=default/no-context
+  };
+
   WatchManager();
   ~WatchManager() = default;
   WatchManager(const WatchManager &) = delete;
@@ -200,7 +206,7 @@ private:
 
   int m_nextId;
   QMap<int, WatchExpression> m_watches;
-  QMap<QString, int> m_pendingEvaluations; // expression -> watch ID
+  QMap<QString, PendingEvaluation> m_pendingEvaluations; // expression -> state
   QMap<int, int> m_pendingVariables;       // variablesReference -> watch ID
 
   DapClient *m_dapClient;

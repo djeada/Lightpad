@@ -8,11 +8,22 @@ namespace {
 // Maximum number of messages to parse in a single read to prevent infinite
 // loops
 constexpr int MAX_MESSAGE_PARSE_ITERATIONS = 100;
+// Safety limit for malformed/non-DAP stdout streams. If exceeded, we trim
+// aggressively to avoid unbounded growth.
+constexpr int MAX_DAP_BUFFER_CHARS = 4 * 1024 * 1024;
+// Bound retained pending requests if an adapter stops responding.
+constexpr int MAX_PENDING_REQUESTS = 2048;
+
+int lastHeaderStart(const QString &buffer) {
+  return buffer.lastIndexOf("Content-Length:");
+}
 } // namespace
 
 DapClient::DapClient(QObject *parent)
     : QObject(parent), m_process(nullptr), m_state(State::Disconnected),
-      m_nextSeq(1), m_currentThreadId(0), m_isAttach(false) {}
+      m_nextSeq(1), m_currentThreadId(0), m_functionBreakpointsConfigured(false),
+      m_hasDeferredFunctionBreakpoints(false), m_dataBreakpointsSupported(true),
+      m_dataBreakpointsConfigured(false), m_isAttach(false) {}
 
 DapClient::~DapClient() { stop(); }
 
@@ -77,6 +88,15 @@ void DapClient::stop() {
 
   delete m_process;
   m_process = nullptr;
+  m_buffer.clear();
+  m_pendingRequests.clear();
+  m_currentThreadId = 0;
+  m_capabilities = QJsonObject();
+  m_functionBreakpointsConfigured = false;
+  m_deferredFunctionBreakpoints.clear();
+  m_hasDeferredFunctionBreakpoints = false;
+  m_dataBreakpointsSupported = true;
+  m_dataBreakpointsConfigured = false;
   setState(State::Disconnected);
 
   LOG_INFO("Debug adapter stopped");
@@ -125,6 +145,8 @@ void DapClient::launch(const QString &program, const QStringList &args,
   }
 
   arguments["stopOnEntry"] = stopOnEntry;
+  // GDB DAP uses this name for start-at-main behavior.
+  arguments["stopAtBeginningOfMainSubprogram"] = stopOnEntry;
 
   // Store for restart
   m_launchConfig = arguments;
@@ -185,6 +207,20 @@ void DapClient::terminate() {
   sendRequest("terminate", {}, seq);
 }
 
+void DapClient::configurationDone() {
+  if (!supportsConfigurationDoneRequest()) {
+    LOG_DEBUG("DAP: Skipping configurationDone (adapter does not request it)");
+    return;
+  }
+  int seq = m_nextSeq++;
+  m_pendingRequests[seq] = "configurationDone";
+  sendRequest("configurationDone", {}, seq);
+}
+
+bool DapClient::supportsConfigurationDoneRequest() const {
+  return m_capabilities.value("supportsConfigurationDoneRequest").toBool(false);
+}
+
 void DapClient::setBreakpoints(const QString &sourcePath,
                                const QList<DapSourceBreakpoint> &breakpoints) {
   QJsonObject source;
@@ -205,6 +241,21 @@ void DapClient::setBreakpoints(const QString &sourcePath,
 }
 
 void DapClient::setFunctionBreakpoints(const QStringList &functionNames) {
+  // Avoid noisy requests during startup and while target is running.
+  // GDB may reject this request with "notStopped" in running state.
+  if (m_state == State::Running) {
+    m_deferredFunctionBreakpoints = functionNames;
+    m_hasDeferredFunctionBreakpoints = true;
+    LOG_DEBUG("DAP: Deferring function breakpoint sync until stopped");
+    return;
+  }
+
+  // If we have never configured function breakpoints and there are none to set,
+  // skip sending a pointless clearing request.
+  if (functionNames.isEmpty() && !m_functionBreakpointsConfigured) {
+    return;
+  }
+
   QJsonArray bpArray;
   for (const auto &name : functionNames) {
     QJsonObject bp;
@@ -218,10 +269,22 @@ void DapClient::setFunctionBreakpoints(const QStringList &functionNames) {
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "setFunctionBreakpoints";
   sendRequest("setFunctionBreakpoints", args, seq);
+  m_functionBreakpointsConfigured = !functionNames.isEmpty();
 }
 
 void DapClient::setDataBreakpoints(
     const QList<QJsonObject> &dataBreakpoints) {
+  // Avoid unsupported-noise during normal startup when no data breakpoints are
+  // configured. If we never configured any, there is nothing to clear.
+  if (dataBreakpoints.isEmpty() && !m_dataBreakpointsConfigured) {
+    return;
+  }
+
+  if (!m_dataBreakpointsSupported) {
+    LOG_DEBUG("DAP: Skipping data breakpoints request (not supported)");
+    return;
+  }
+
   QJsonArray bpArray;
   for (const auto &bp : dataBreakpoints) {
     bpArray.append(bp);
@@ -233,6 +296,7 @@ void DapClient::setDataBreakpoints(
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "setDataBreakpoints";
   sendRequest("setDataBreakpoints", args, seq);
+  m_dataBreakpointsConfigured = !dataBreakpoints.isEmpty();
 }
 
 void DapClient::setExceptionBreakpoints(const QStringList &filterIds) {
@@ -356,7 +420,9 @@ void DapClient::evaluate(const QString &expression, int frameId,
   args["expression"] = expression;
   if (frameId > 0)
     args["frameId"] = frameId;
-  args["context"] = context;
+  if (!context.isEmpty()) {
+    args["context"] = context;
+  }
 
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = QString("evaluate:%1").arg(expression);
@@ -377,6 +443,16 @@ void DapClient::setVariable(int variablesReference, const QString &name,
 
 void DapClient::sendRequest(const QString &command,
                             const QJsonObject &arguments, int seq) {
+  if (m_pendingRequests.size() > MAX_PENDING_REQUESTS) {
+    int toDrop = m_pendingRequests.size() - MAX_PENDING_REQUESTS;
+    auto it = m_pendingRequests.begin();
+    while (toDrop > 0 && it != m_pendingRequests.end()) {
+      it = m_pendingRequests.erase(it);
+      --toDrop;
+    }
+    LOG_WARNING("DAP: Pruned stale pending requests to prevent memory growth");
+  }
+
   QJsonObject message;
   message["seq"] = seq;
   message["type"] = "request";
@@ -431,6 +507,22 @@ void DapClient::onReadyReadStandardOutput() {
     return;
   }
   m_buffer += QString::fromUtf8(m_process->readAllStandardOutput());
+
+  if (m_buffer.size() > MAX_DAP_BUFFER_CHARS) {
+    const int headerPos = lastHeaderStart(m_buffer);
+    if (headerPos >= 0) {
+      m_buffer = m_buffer.mid(headerPos);
+    } else {
+      LOG_WARNING("DAP: Discarding oversized non-protocol stdout buffer");
+      m_buffer.clear();
+      return;
+    }
+
+    if (m_buffer.size() > MAX_DAP_BUFFER_CHARS) {
+      LOG_WARNING("DAP: Trimming oversized protocol buffer tail");
+      m_buffer = m_buffer.right(MAX_DAP_BUFFER_CHARS);
+    }
+  }
 
   // Parse DAP messages from buffer (limit iterations to prevent infinite loops)
   int iterations = 0;
@@ -537,6 +629,41 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
   QString pendingCommand = m_pendingRequests.take(requestSeq);
 
   if (!success) {
+    if (command == "configurationDone") {
+      LOG_WARNING(QString("DAP: configurationDone failed: %1")
+                      .arg(message.isEmpty() ? "Unknown error" : message));
+      return;
+    }
+
+    if (command == "setDataBreakpoints") {
+      if (isLikelyUnsupportedRequestMessage(message)) {
+        m_dataBreakpointsSupported = false;
+        m_dataBreakpointsConfigured = false;
+        LOG_WARNING("DAP: Adapter does not support setDataBreakpoints; "
+                    "disabling data breakpoint sync");
+      } else {
+        LOG_WARNING(QString("DAP: setDataBreakpoints failed: %1")
+                        .arg(message.isEmpty() ? "Unknown error" : message));
+      }
+      return;
+    }
+
+    if (command == "setFunctionBreakpoints") {
+      const QString lowered = message.toLower();
+      if (lowered.contains("notstopped")) {
+        LOG_WARNING(QString("DAP: setFunctionBreakpoints rejected while running: "
+                            "%1")
+                        .arg(message.isEmpty() ? "Unknown error" : message));
+        return;
+      }
+    }
+
+    if (command == "variables") {
+      LOG_WARNING(QString("DAP: variables request failed: %1")
+                      .arg(message.isEmpty() ? "Unknown error" : message));
+      return;
+    }
+
     LOG_ERROR(QString("DAP error for %1: %2").arg(command).arg(message));
 
     // Emit specific error signals for certain commands
@@ -555,6 +682,18 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
 
   if (command == "initialize") {
     m_capabilities = bodyObj;
+    m_functionBreakpointsConfigured = false;
+    m_deferredFunctionBreakpoints.clear();
+    m_hasDeferredFunctionBreakpoints = false;
+    if (m_capabilities.contains("supportsDataBreakpoints")) {
+      m_dataBreakpointsSupported =
+          m_capabilities["supportsDataBreakpoints"].toBool();
+    } else {
+      // Some adapters omit the flag; keep optimistic mode and fall back to
+      // request-level detection on first failure.
+      m_dataBreakpointsSupported = true;
+    }
+    m_dataBreakpointsConfigured = false;
     setState(State::Ready);
 
     // Send initialized event
@@ -663,6 +802,12 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
     m_currentThreadId = evt.threadId;
     setState(State::Stopped);
     emit stopped(evt);
+    if (m_hasDeferredFunctionBreakpoints) {
+      const QStringList deferred = m_deferredFunctionBreakpoints;
+      m_deferredFunctionBreakpoints.clear();
+      m_hasDeferredFunctionBreakpoints = false;
+      setFunctionBreakpoints(deferred);
+    }
   } else if (event == "continued") {
     setState(State::Running);
     emit continued(body["threadId"].toInt(),
@@ -684,6 +829,7 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
   } else if (event == "initialized") {
     // Debug adapter signaling it's ready for configuration
     LOG_DEBUG("DAP: Adapter initialized, ready for configuration");
+    emit adapterInitialized();
   }
 }
 
@@ -732,4 +878,11 @@ void DapClient::setState(State state) {
     m_state = state;
     emit stateChanged(state);
   }
+}
+
+bool DapClient::isLikelyUnsupportedRequestMessage(const QString &message) {
+  const QString lowered = message.toLower();
+  return lowered.contains("not supported") ||
+         lowered.contains("unsupported") || lowered.contains("unknown") ||
+         lowered.contains("unrecognized") || lowered.contains("not implemented");
 }
