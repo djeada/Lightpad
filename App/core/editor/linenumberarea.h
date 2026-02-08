@@ -62,6 +62,11 @@ public:
   void setGitBlameLines(const QMap<int, QString> &blameLines);
   void clearGitBlameLines();
 
+  /**
+   * @brief Enable or disable folding indicators in the gutter
+   */
+  void setFoldingEnabled(bool enabled);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   bool event(QEvent *event) override;
@@ -81,9 +86,11 @@ private:
   QList<QPair<int, int>> m_gitDiffLines;
   QMap<int, QString> m_gitBlameLines;
   int m_blameTextWidth;
+  bool m_foldingEnabled;
 
   static constexpr int DIFF_INDICATOR_WIDTH = 3;
   static constexpr int BREAKPOINT_AREA_WIDTH = 16;
+  static constexpr int FOLD_INDICATOR_WIDTH = 14;
   static constexpr int PADDING = 10;
   static constexpr int BLAME_PADDING = 12;
   static constexpr int MAX_BLAME_WIDTH = 280;

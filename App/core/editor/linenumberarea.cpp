@@ -14,11 +14,13 @@
 #include "../../core/lightpadtabwidget.h"
 #include "../../dap/breakpointmanager.h"
 #include "../../ui/mainwindow.h"
+#include "codefolding.h"
 
 LineNumberArea::LineNumberArea(TextArea *editor, QWidget *parent)
     : QWidget(parent ? parent : editor), m_editor(editor),
       m_backgroundColor(QColor(40, 40, 40)),
-      m_textColor(QColor(Qt::gray).lighter(150)), m_blameTextWidth(0) {
+      m_textColor(QColor(Qt::gray).lighter(150)), m_blameTextWidth(0),
+      m_foldingEnabled(true) {
   if (editor) {
     m_font = editor->font();
   }
@@ -40,6 +42,9 @@ int LineNumberArea::calculateWidth() const {
 
   int space = DIFF_INDICATOR_WIDTH + BREAKPOINT_AREA_WIDTH + PADDING +
               QFontMetrics(m_font).horizontalAdvance(QLatin1Char('9')) * digits;
+  if (m_foldingEnabled) {
+    space += FOLD_INDICATOR_WIDTH;
+  }
   if (m_blameTextWidth > 0) {
     space += BLAME_PADDING + m_blameTextWidth;
   }
@@ -85,6 +90,12 @@ void LineNumberArea::clearGitBlameLines() {
   updateGeometry();
   update();
   QToolTip::hideText();
+}
+
+void LineNumberArea::setFoldingEnabled(bool enabled) {
+  m_foldingEnabled = enabled;
+  updateGeometry();
+  update();
 }
 
 void LineNumberArea::updateBlameTextWidth() {
@@ -245,13 +256,27 @@ void LineNumberArea::mousePressEvent(QMouseEvent *event) {
     return;
   }
 
-  if (event->pos().x() > numberAreaWidth()) {
+  int clickedLine = lineAtPosition(event->pos().y());
+  if (clickedLine <= 0) {
     QWidget::mousePressEvent(event);
     return;
   }
 
-  int clickedLine = lineAtPosition(event->pos().y());
-  if (clickedLine <= 0) {
+  // Check if click is in folding indicator area
+  if (m_foldingEnabled && m_editor->m_codeFolding) {
+    int foldX = numberAreaWidth() - FOLD_INDICATOR_WIDTH;
+    if (event->pos().x() >= foldX && event->pos().x() < numberAreaWidth()) {
+      int blockNumber = clickedLine - 1; // Convert to 0-based
+      CodeFoldingManager *folding = m_editor->m_codeFolding;
+      if (folding->isFoldable(blockNumber) || folding->isFolded(blockNumber)) {
+        m_editor->toggleFoldAtLine(blockNumber);
+        event->accept();
+        return;
+      }
+    }
+  }
+
+  if (event->pos().x() > numberAreaWidth()) {
     QWidget::mousePressEvent(event);
     return;
   }
@@ -294,7 +319,8 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
   const int areaWidth = width();
   const int numberArea = numberAreaWidth();
   const int numberStartX = DIFF_INDICATOR_WIDTH + BREAKPOINT_AREA_WIDTH;
-  const int numberTextWidth = numberArea - numberStartX;
+  const int numberTextWidth =
+      numberArea - numberStartX - (m_foldingEnabled ? FOLD_INDICATOR_WIDTH : 0);
 
   QString filePath = resolveFilePath();
   QMap<int, Breakpoint> breakpointLines;
@@ -367,6 +393,36 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
         painter.setBrush(markerColor);
         painter.drawEllipse(markerX, markerY, markerDiameter, markerDiameter);
         painter.restore();
+      }
+
+      // Draw folding indicators
+      if (m_foldingEnabled && m_editor->m_codeFolding) {
+        CodeFoldingManager *folding = m_editor->m_codeFolding;
+        bool foldable = folding->isFoldable(blockNumber);
+        bool folded = folding->isFolded(blockNumber);
+
+        if (foldable || folded) {
+          const int foldX = numberArea - FOLD_INDICATOR_WIDTH;
+          const int indicatorSize = qMin(fontHeight - 4, FOLD_INDICATOR_WIDTH - 2);
+          const int ix = foldX + (FOLD_INDICATOR_WIDTH - indicatorSize) / 2;
+          const int iy = static_cast<int>(top + (fontHeight - indicatorSize) / 2.0);
+
+          painter.save();
+          painter.setRenderHint(QPainter::Antialiasing, true);
+          painter.setPen(QPen(m_textColor, 1));
+          painter.setBrush(Qt::NoBrush);
+          painter.drawRect(ix, iy, indicatorSize, indicatorSize);
+
+          // Draw minus (unfolded) or plus (folded)
+          int midY = iy + indicatorSize / 2;
+          int midX = ix + indicatorSize / 2;
+          int margin = 2;
+          painter.drawLine(ix + margin, midY, ix + indicatorSize - margin, midY);
+          if (folded) {
+            painter.drawLine(midX, iy + margin, midX, iy + indicatorSize - margin);
+          }
+          painter.restore();
+        }
       }
 
       if (m_blameTextWidth > 0) {

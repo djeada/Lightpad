@@ -46,6 +46,7 @@
 #include "dialogs/filequickopen.h"
 #include "dialogs/formattemplateselector.h"
 #include "dialogs/gitdiffdialog.h"
+#include "dialogs/gitlogdialog.h"
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
 #include "dialogs/preferences.h"
@@ -2779,6 +2780,61 @@ void MainWindow::on_actionToggle_Source_Control_triggered() {
   if (ui->actionToggle_Source_Control) {
     ui->actionToggle_Source_Control->setChecked(!visible);
   }
+}
+
+void MainWindow::on_actionOpen_To_Side_triggered() {
+  if (!m_splitEditorContainer)
+    return;
+
+  TextArea *textArea = getCurrentTextArea();
+  if (!textArea)
+    return;
+
+  QString filePath;
+  // Find the current file path
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (tabWidget) {
+    int index = tabWidget->currentIndex();
+    if (index >= 0) {
+      filePath = tabWidget->tabToolTip(index);
+    }
+  }
+
+  if (filePath.isEmpty())
+    return;
+
+  // Split horizontally and open the same file in the new group
+  LightpadTabWidget *newGroup = m_splitEditorContainer->splitHorizontal();
+  if (newGroup) {
+    openFileAndAddToNewTab(filePath);
+  }
+}
+
+void MainWindow::on_actionGit_Log_triggered() {
+  if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
+    QMessageBox::information(this, tr("Git Log"),
+                             tr("No valid Git repository found."));
+    return;
+  }
+
+  GitLogDialog dialog(m_gitIntegration, settings.theme, this);
+
+  // Optionally filter by current file
+  TextArea *textArea = getCurrentTextArea();
+  if (textArea) {
+    LightpadTabWidget *tabWidget = currentTabWidget();
+    if (tabWidget) {
+      int index = tabWidget->currentIndex();
+      if (index >= 0) {
+        QString filePath = tabWidget->tabToolTip(index);
+        if (!filePath.isEmpty()) {
+          dialog.setFilePath(filePath);
+        }
+      }
+    }
+  }
+
+  dialog.exec();
 }
 
 // ============================================================================

@@ -156,15 +156,19 @@ void MultiCursorHandler::applyToAllCursors(
   if (!m_editor)
     return;
 
-  // Apply to main cursor
+  // Begin an edit block on the main cursor so all multi-cursor edits
+  // are grouped into a single undo/redo operation.
   QTextCursor mainCursor = m_editor->textCursor();
+  mainCursor.beginEditBlock();
   operation(mainCursor);
-  m_editor->setTextCursor(mainCursor);
 
-  // Apply to extra cursors
+  // Apply to extra cursors within the same edit block
   for (QTextCursor &cursor : m_extraCursors) {
     operation(cursor);
   }
+
+  mainCursor.endEditBlock();
+  m_editor->setTextCursor(mainCursor);
 
   mergeOverlappingCursors();
 }

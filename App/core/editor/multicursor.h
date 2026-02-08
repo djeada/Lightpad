@@ -66,6 +66,9 @@ public:
 
   /**
    * @brief Apply an operation to all cursors (main and extra)
+   *
+   * Groups all cursor edits into a single undo operation so that
+   * undo/redo works correctly across all cursors.
    */
   void applyToAllCursors(const std::function<void(QTextCursor &)> &operation);
 

@@ -1,6 +1,8 @@
 #ifndef CODEFOLDING_H
 #define CODEFOLDING_H
 
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QSet>
 #include <QString>
 
@@ -92,6 +94,18 @@ public:
   // Comment block detection
   bool isCommentBlockStart(int blockNumber) const;
   int findCommentBlockEnd(int startBlock) const;
+
+  /**
+   * @brief Serialize fold state to JSON
+   * @return JSON object containing folded block numbers
+   */
+  QJsonObject saveFoldState() const;
+
+  /**
+   * @brief Restore fold state from JSON
+   * @param state JSON object previously returned by saveFoldState()
+   */
+  void restoreFoldState(const QJsonObject &state);
 
 private:
   static bool isSingleLineComment(const QString &trimmedText);
