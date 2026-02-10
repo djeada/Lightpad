@@ -44,9 +44,10 @@ void CompletionEngine::executeCompletionRequest() {
   m_currentRequestId++;
 
   // Get providers for this language
-  QString langId = m_currentContext.languageId.isEmpty()
-                       ? m_languageId
-                       : LanguageCatalog::normalize(m_currentContext.languageId);
+  QString langId =
+      m_currentContext.languageId.isEmpty()
+          ? m_languageId
+          : LanguageCatalog::normalize(m_currentContext.languageId);
   if (langId.isEmpty()) {
     langId = m_currentContext.languageId.trimmed().toLower();
   }

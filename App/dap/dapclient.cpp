@@ -21,7 +21,8 @@ int lastHeaderStart(const QString &buffer) {
 
 DapClient::DapClient(QObject *parent)
     : QObject(parent), m_process(nullptr), m_state(State::Disconnected),
-      m_nextSeq(1), m_currentThreadId(0), m_functionBreakpointsConfigured(false),
+      m_nextSeq(1), m_currentThreadId(0),
+      m_functionBreakpointsConfigured(false),
       m_hasDeferredFunctionBreakpoints(false), m_dataBreakpointsSupported(true),
       m_dataBreakpointsConfigured(false), m_isAttach(false) {}
 
@@ -272,8 +273,7 @@ void DapClient::setFunctionBreakpoints(const QStringList &functionNames) {
   m_functionBreakpointsConfigured = !functionNames.isEmpty();
 }
 
-void DapClient::setDataBreakpoints(
-    const QList<QJsonObject> &dataBreakpoints) {
+void DapClient::setDataBreakpoints(const QList<QJsonObject> &dataBreakpoints) {
   // Avoid unsupported-noise during normal startup when no data breakpoints are
   // configured. If we never configured any, there is nothing to clear.
   if (dataBreakpoints.isEmpty() && !m_dataBreakpointsConfigured) {
@@ -651,9 +651,10 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     if (command == "setFunctionBreakpoints") {
       const QString lowered = message.toLower();
       if (lowered.contains("notstopped")) {
-        LOG_WARNING(QString("DAP: setFunctionBreakpoints rejected while running: "
-                            "%1")
-                        .arg(message.isEmpty() ? "Unknown error" : message));
+        LOG_WARNING(
+            QString("DAP: setFunctionBreakpoints rejected while running: "
+                    "%1")
+                .arg(message.isEmpty() ? "Unknown error" : message));
         return;
       }
     }
@@ -882,7 +883,7 @@ void DapClient::setState(State state) {
 
 bool DapClient::isLikelyUnsupportedRequestMessage(const QString &message) {
   const QString lowered = message.toLower();
-  return lowered.contains("not supported") ||
-         lowered.contains("unsupported") || lowered.contains("unknown") ||
-         lowered.contains("unrecognized") || lowered.contains("not implemented");
+  return lowered.contains("not supported") || lowered.contains("unsupported") ||
+         lowered.contains("unknown") || lowered.contains("unrecognized") ||
+         lowered.contains("not implemented");
 }

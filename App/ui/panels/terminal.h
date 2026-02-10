@@ -47,8 +47,7 @@ public:
    * @param languageId Effective language for default template resolution
    * @return true if a command was started
    */
-  bool runFile(const QString &filePath,
-               const QString &languageId = QString());
+  bool runFile(const QString &filePath, const QString &languageId = QString());
 
   /**
    * @brief Stop the currently running process

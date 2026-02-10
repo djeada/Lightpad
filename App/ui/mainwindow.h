@@ -267,8 +267,7 @@ private:
   bool prepareDebugTargetForFile(const QString &filePath,
                                  const QString &languageId,
                                  QString *errorMessage) const;
-  bool compileSourceForDebug(const QString &filePath,
-                             const QString &languageId,
+  bool compileSourceForDebug(const QString &filePath, const QString &languageId,
                              const QString &outputPath,
                              QString *errorMessage) const;
   void attachDebugSession(const QString &sessionId);

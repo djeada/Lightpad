@@ -110,8 +110,7 @@ void TestCompletionEngine::cleanup() {
 
 void TestCompletionEngine::testCompletionsReadyEmittedOnce() {
   // Register a provider
-  auto provider =
-      std::make_shared<MockProvider>("mock", QStringList{"cpp"});
+  auto provider = std::make_shared<MockProvider>("mock", QStringList{"cpp"});
   CompletionProviderRegistry::instance().registerProvider(provider);
 
   m_engine->setLanguage("cpp");
@@ -138,10 +137,8 @@ void TestCompletionEngine::testCompletionsReadyEmittedOnce() {
 
 void TestCompletionEngine::testMultipleProvidersEmitOnce() {
   // Register two synchronous providers for the same language
-  auto provider1 =
-      std::make_shared<MockProvider>("mock1", QStringList{"cpp"});
-  auto provider2 =
-      std::make_shared<MockProvider>("mock2", QStringList{"cpp"});
+  auto provider1 = std::make_shared<MockProvider>("mock1", QStringList{"cpp"});
+  auto provider2 = std::make_shared<MockProvider>("mock2", QStringList{"cpp"});
   CompletionProviderRegistry::instance().registerProvider(provider1);
   CompletionProviderRegistry::instance().registerProvider(provider2);
 

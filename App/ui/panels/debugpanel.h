@@ -1,8 +1,8 @@
 #ifndef DEBUGPANEL_H
 #define DEBUGPANEL_H
 
-#include <QComboBox>
 #include <QColor>
+#include <QComboBox>
 #include <QLineEdit>
 #include <QSet>
 #include <QSplitter>

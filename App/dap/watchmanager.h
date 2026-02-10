@@ -207,7 +207,7 @@ private:
   int m_nextId;
   QMap<int, WatchExpression> m_watches;
   QMap<QString, PendingEvaluation> m_pendingEvaluations; // expression -> state
-  QMap<int, int> m_pendingVariables;       // variablesReference -> watch ID
+  QMap<int, int> m_pendingVariables; // variablesReference -> watch ID
 
   DapClient *m_dapClient;
   QString m_workspaceFolder;

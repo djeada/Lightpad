@@ -106,7 +106,8 @@ void GitDiffDialog::setDiffText(const QString &diffText) {
         item->setToolTip(file.filename);
         item->setData(Qt::UserRole, file.startLine);
         // Store stats for display
-        QString statsText = QString("+%1 -%2").arg(file.addedCount).arg(file.deletedCount);
+        QString statsText =
+            QString("+%1 -%2").arg(file.addedCount).arg(file.deletedCount);
         item->setData(Qt::UserRole + 1, statsText);
         m_fileList->addItem(item);
       }
@@ -128,16 +129,16 @@ void GitDiffDialog::setCommitInfo(const QString &author, const QString &date,
       shortMsg = shortMsg.left(77) + "...";
     }
 
-    QString html = QString(
-        "<div style='margin-bottom: 4px;'>"
-        "<span style='font-weight: 600;'>%1</span>"
-        "<span style='color: %4; margin-left: 12px;'>%2</span>"
-        "</div>"
-        "<div style='color: %4;'>%3</div>")
-        .arg(htmlEscape(author))
-        .arg(htmlEscape(date))
-        .arg(htmlEscape(shortMsg))
-        .arg(m_theme.singleLineCommentFormat.name());
+    QString html =
+        QString("<div style='margin-bottom: 4px;'>"
+                "<span style='font-weight: 600;'>%1</span>"
+                "<span style='color: %4; margin-left: 12px;'>%2</span>"
+                "</div>"
+                "<div style='color: %4;'>%3</div>")
+            .arg(htmlEscape(author))
+            .arg(htmlEscape(date))
+            .arg(htmlEscape(shortMsg))
+            .arg(m_theme.singleLineCommentFormat.name());
 
     m_commitInfoLabel->setText(html);
     m_commitInfoLabel->setTextFormat(Qt::RichText);
@@ -401,8 +402,8 @@ void GitDiffDialog::buildUi() {
   footerLayout->setContentsMargins(16, 6, 16, 6);
   footerLayout->setSpacing(16);
 
-  auto *shortcutsLabel = new QLabel(
-      tr("↑↓ Navigate changes  •  Ctrl+F Find  •  Esc Close"), this);
+  auto *shortcutsLabel =
+      new QLabel(tr("↑↓ Navigate changes  •  Ctrl+F Find  •  Esc Close"), this);
   shortcutsLabel->setObjectName("shortcutsLabel");
   footerLayout->addWidget(shortcutsLabel);
   footerLayout->addStretch();
@@ -444,75 +445,81 @@ void GitDiffDialog::buildUi() {
 
 void GitDiffDialog::applyTheme(const Theme &theme) {
   // Main dialog styles
-  QString styles = QString(
-      // Dialog background
-      "QDialog { background: %1; }"
+  QString styles =
+      QString(
+          // Dialog background
+          "QDialog { background: %1; }"
 
-      // Header bar
-      "#diffHeader { background: %2; border-bottom: 1px solid %3; }"
-      "#diffTitle { font-size: 14px; font-weight: 600; color: %4; }"
-      "#changeCounter { font-size: 11px; color: %5; background: %6; "
-      "  padding: 3px 10px; border-radius: 10px; }"
+          // Header bar
+          "#diffHeader { background: %2; border-bottom: 1px solid %3; }"
+          "#diffTitle { font-size: 14px; font-weight: 600; color: %4; }"
+          "#changeCounter { font-size: 11px; color: %5; background: %6; "
+          "  padding: 3px 10px; border-radius: 10px; }"
 
-      // Toolbar groups
-      "#toolbarGroup { background: %7; border: 1px solid %3; border-radius: 6px; }"
+          // Toolbar groups
+          "#toolbarGroup { background: %7; border: 1px solid %3; "
+          "border-radius: 6px; }"
 
-      // Search counter
-      "#searchCounter { font-size: 11px; color: %8; }"
+          // Search counter
+          "#searchCounter { font-size: 11px; color: %8; }"
 
-      // Commit info bar
-      "#commitInfo { font-size: 12px; color: %4; background: %9; "
-      "  border-bottom: 1px solid %3; padding: 10px 16px; }"
+          // Commit info bar
+          "#commitInfo { font-size: 12px; color: %4; background: %9; "
+          "  border-bottom: 1px solid %3; padding: 10px 16px; }"
 
-      // Footer
-      "#diffFooter { background: %2; border-top: 1px solid %3; }"
-      "#shortcutsLabel { font-size: 11px; color: %8; }"
+          // Footer
+          "#diffFooter { background: %2; border-top: 1px solid %3; }"
+          "#shortcutsLabel { font-size: 11px; color: %8; }"
 
-      // File list panel
-      "#fileListPanel { background: %2; border-right: 1px solid %3; }"
-      "#fileListHeader { font-size: 10px; font-weight: 600; color: %8; "
-      "  letter-spacing: 1px; background: %7; padding: 10px 12px; "
-      "  border-bottom: 1px solid %3; }"
-      "#fileList { background: %2; color: %4; border: none; outline: none; }"
-      "#fileList::item { padding: 8px 12px; border-left: 3px solid transparent; }"
-      "#fileList::item:selected { background: %10; border-left-color: %11; }"
-      "#fileList::item:hover { background: %6; }"
+          // File list panel
+          "#fileListPanel { background: %2; border-right: 1px solid %3; }"
+          "#fileListHeader { font-size: 10px; font-weight: 600; color: %8; "
+          "  letter-spacing: 1px; background: %7; padding: 10px 12px; "
+          "  border-bottom: 1px solid %3; }"
+          "#fileList { background: %2; color: %4; border: none; outline: none; "
+          "}"
+          "#fileList::item { padding: 8px 12px; border-left: 3px solid "
+          "transparent; }"
+          "#fileList::item:selected { background: %10; border-left-color: %11; "
+          "}"
+          "#fileList::item:hover { background: %6; }"
 
-      // Copy button (accent)
-      "#copyButton { background: %11; color: white; border: none; "
-      "  border-radius: 4px; padding: 6px 12px; font-weight: 500; }"
-      "#copyButton:hover { background: %12; }"
-      )
-      .arg(theme.backgroundColor.name())       // %1
-      .arg(theme.surfaceColor.name())          // %2
-      .arg(theme.borderColor.name())           // %3
-      .arg(theme.foregroundColor.name())       // %4
-      .arg(theme.foregroundColor.name())       // %5 - counter text
-      .arg(theme.hoverColor.name())            // %6
-      .arg(theme.surfaceAltColor.name())       // %7
-      .arg(theme.singleLineCommentFormat.name()) // %8 - subdued
-      .arg(theme.surfaceAltColor.name())       // %9 - commit info bg
-      .arg(theme.accentSoftColor.name())       // %10 - selection
-      .arg(theme.accentColor.name())           // %11 - accent
-      .arg(theme.accentColor.lighter(110).name()); // %12 - accent hover
+          // Copy button (accent)
+          "#copyButton { background: %11; color: white; border: none; "
+          "  border-radius: 4px; padding: 6px 12px; font-weight: 500; }"
+          "#copyButton:hover { background: %12; }")
+          .arg(theme.backgroundColor.name())           // %1
+          .arg(theme.surfaceColor.name())              // %2
+          .arg(theme.borderColor.name())               // %3
+          .arg(theme.foregroundColor.name())           // %4
+          .arg(theme.foregroundColor.name())           // %5 - counter text
+          .arg(theme.hoverColor.name())                // %6
+          .arg(theme.surfaceAltColor.name())           // %7
+          .arg(theme.singleLineCommentFormat.name())   // %8 - subdued
+          .arg(theme.surfaceAltColor.name())           // %9 - commit info bg
+          .arg(theme.accentSoftColor.name())           // %10 - selection
+          .arg(theme.accentColor.name())               // %11 - accent
+          .arg(theme.accentColor.lighter(110).name()); // %12 - accent hover
 
   setStyleSheet(styles);
 
   // Standard buttons
-  QString buttonStyle = QString(
-      "QPushButton { background: %1; color: %2; border: 1px solid %3; "
-      "  border-radius: 4px; padding: 5px 10px; font-size: 12px; }"
-      "QPushButton:hover { background: %4; border-color: %5; }"
-      "QPushButton:pressed { background: %6; }")
-      .arg(theme.surfaceAltColor.name())
-      .arg(theme.foregroundColor.name())
-      .arg(theme.borderColor.name())
-      .arg(theme.hoverColor.name())
-      .arg(theme.borderColor.darker(110).name())
-      .arg(theme.pressedColor.name());
+  QString buttonStyle =
+      QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
+              "  border-radius: 4px; padding: 5px 10px; font-size: 12px; }"
+              "QPushButton:hover { background: %4; border-color: %5; }"
+              "QPushButton:pressed { background: %6; }")
+          .arg(theme.surfaceAltColor.name())
+          .arg(theme.foregroundColor.name())
+          .arg(theme.borderColor.name())
+          .arg(theme.hoverColor.name())
+          .arg(theme.borderColor.darker(110).name())
+          .arg(theme.pressedColor.name());
 
-  for (QPushButton *btn : {m_prevButton, m_nextButton, m_findPrevButton, m_findNextButton}) {
-    if (btn) btn->setStyleSheet(buttonStyle);
+  for (QPushButton *btn :
+       {m_prevButton, m_nextButton, m_findPrevButton, m_findNextButton}) {
+    if (btn)
+      btn->setStyleSheet(buttonStyle);
   }
 
   // ComboBox
@@ -527,31 +534,34 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
 
   // Search field
   if (m_searchField) {
-    QString searchStyle = QString(
-        "QLineEdit { background: %1; color: %2; border: 1px solid %3; "
-        "  border-radius: 4px; padding: 4px 8px; font-size: 12px; }"
-        "QLineEdit:focus { border-color: %4; }"
-        "QLineEdit::clear-button { image: none; width: 0px; height: 0px; }")
-        .arg(theme.backgroundColor.name())
-        .arg(theme.foregroundColor.name())
-        .arg(theme.borderColor.name())
-        .arg(theme.accentColor.name());
+    QString searchStyle =
+        QString(
+            "QLineEdit { background: %1; color: %2; border: 1px solid %3; "
+            "  border-radius: 4px; padding: 4px 8px; font-size: 12px; }"
+            "QLineEdit:focus { border-color: %4; }"
+            "QLineEdit::clear-button { image: none; width: 0px; height: 0px; }")
+            .arg(theme.backgroundColor.name())
+            .arg(theme.foregroundColor.name())
+            .arg(theme.borderColor.name())
+            .arg(theme.accentColor.name());
     m_searchField->setStyleSheet(searchStyle);
   }
 
   // Diff view
   if (m_diffView) {
-    QString diffStyle = QString(
-        "QTextEdit { background: %1; color: %2; border: none; "
-        "  selection-background-color: %3; }"
-        "QScrollBar:vertical { background: %4; width: 10px; }"
-        "QScrollBar::handle:vertical { background: %5; border-radius: 5px; min-height: 30px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(theme.backgroundColor.name())
-        .arg(theme.foregroundColor.name())
-        .arg(theme.accentSoftColor.name())
-        .arg(theme.surfaceColor.name())
-        .arg(theme.borderColor.name());
+    QString diffStyle =
+        QString("QTextEdit { background: %1; color: %2; border: none; "
+                "  selection-background-color: %3; }"
+                "QScrollBar:vertical { background: %4; width: 10px; }"
+                "QScrollBar::handle:vertical { background: %5; border-radius: "
+                "5px; min-height: 30px; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical "
+                "{ height: 0; }")
+            .arg(theme.backgroundColor.name())
+            .arg(theme.foregroundColor.name())
+            .arg(theme.accentSoftColor.name())
+            .arg(theme.surfaceColor.name())
+            .arg(theme.borderColor.name());
     m_diffView->setStyleSheet(diffStyle);
   }
 }
@@ -566,15 +576,17 @@ void GitDiffDialog::updateDiffPresentation() {
     m_changeBlocks.clear();
     updateChangeCounter();
     // Show a nice empty state
-    QString emptyHtml = QString(
-        "<html><body style='background: %1; color: %2; padding: 40px; "
-        "text-align: center; font-family: sans-serif;'>"
-        "<div style='font-size: 16px; margin-bottom: 8px;'>No changes</div>"
-        "<div style='font-size: 12px; color: %3;'>There are no differences to display</div>"
-        "</body></html>")
-        .arg(m_theme.backgroundColor.name())
-        .arg(m_theme.foregroundColor.name())
-        .arg(m_theme.singleLineCommentFormat.name());
+    QString emptyHtml =
+        QString(
+            "<html><body style='background: %1; color: %2; padding: 40px; "
+            "text-align: center; font-family: sans-serif;'>"
+            "<div style='font-size: 16px; margin-bottom: 8px;'>No changes</div>"
+            "<div style='font-size: 12px; color: %3;'>There are no differences "
+            "to display</div>"
+            "</body></html>")
+            .arg(m_theme.backgroundColor.name())
+            .arg(m_theme.foregroundColor.name())
+            .arg(m_theme.singleLineCommentFormat.name());
     m_diffView->setHtml(emptyHtml);
     if (m_summaryLabel && !m_summaryText.isEmpty()) {
       m_summaryLabel->setText(m_summaryText);
@@ -614,41 +626,44 @@ void GitDiffDialog::updateDiffPresentation() {
 void GitDiffDialog::rebuildUnified() {
   // Use RGBA for semi-transparent backgrounds
   QString addBgStr = QString("rgba(%1,%2,%3,0.15)")
-      .arg(m_theme.successColor.red())
-      .arg(m_theme.successColor.green())
-      .arg(m_theme.successColor.blue());
+                         .arg(m_theme.successColor.red())
+                         .arg(m_theme.successColor.green())
+                         .arg(m_theme.successColor.blue());
   QString delBgStr = QString("rgba(%1,%2,%3,0.15)")
-      .arg(m_theme.errorColor.red())
-      .arg(m_theme.errorColor.green())
-      .arg(m_theme.errorColor.blue());
+                         .arg(m_theme.errorColor.red())
+                         .arg(m_theme.errorColor.green())
+                         .arg(m_theme.errorColor.blue());
 
   QString html;
   html += "<html><head><style>";
   html += QString("body { background: %1; color: %2; margin: 0; padding: 0; }")
-      .arg(m_theme.backgroundColor.name())
-      .arg(m_theme.foregroundColor.name());
+              .arg(m_theme.backgroundColor.name())
+              .arg(m_theme.foregroundColor.name());
   html += "table { border-collapse: collapse; width: 100%; }";
-  html += QString("td { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; "
-                  "padding: 0 8px; line-height: 20px; vertical-align: top; }");
+  html += QString(
+      "td { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; "
+      "padding: 0 8px; line-height: 20px; vertical-align: top; }");
   html += QString(".ln { color: %1; text-align: right; width: 50px; "
                   "padding-right: 12px; border-right: 1px solid %2; "
                   "user-select: none; background: %3; }")
-      .arg(m_theme.singleLineCommentFormat.name())
-      .arg(m_theme.borderColor.name())
-      .arg(m_theme.surfaceColor.name());
+              .arg(m_theme.singleLineCommentFormat.name())
+              .arg(m_theme.borderColor.name())
+              .arg(m_theme.surfaceColor.name());
   html += QString(".gutter { width: 4px; padding: 0; }");
-  html += QString(".gutter-add { background: %1; }").arg(m_theme.successColor.name());
-  html += QString(".gutter-del { background: %1; }").arg(m_theme.errorColor.name());
+  html += QString(".gutter-add { background: %1; }")
+              .arg(m_theme.successColor.name());
+  html +=
+      QString(".gutter-del { background: %1; }").arg(m_theme.errorColor.name());
   html += QString(".hunk { color: %1; background: %2; font-weight: 500; "
                   "padding: 8px 12px; border-top: 1px solid %3; "
                   "border-bottom: 1px solid %3; }")
-      .arg(m_theme.accentColor.name())
-      .arg(m_theme.surfaceAltColor.name())
-      .arg(m_theme.borderColor.name());
+              .arg(m_theme.accentColor.name())
+              .arg(m_theme.surfaceAltColor.name())
+              .arg(m_theme.borderColor.name());
   html += QString(".file { color: %1; background: %2; font-weight: 600; "
                   "padding: 10px 12px; font-size: 13px; }")
-      .arg(m_theme.foregroundColor.name())
-      .arg(m_theme.surfaceColor.name());
+              .arg(m_theme.foregroundColor.name())
+              .arg(m_theme.surfaceColor.name());
   html += QString(".add { background: %1; }").arg(addBgStr);
   html += QString(".del { background: %1; }").arg(delBgStr);
   html += ".code { white-space: pre-wrap; word-break: break-all; }";
@@ -663,7 +678,8 @@ void GitDiffDialog::rebuildUnified() {
       // File header - extract filename
       QString filename = line.content;
       int bIdx = filename.lastIndexOf(" b/");
-      if (bIdx > 0) filename = filename.mid(bIdx + 3);
+      if (bIdx > 0)
+        filename = filename.mid(bIdx + 3);
       html += QString("<tr><td colspan=\"3\" class=\"file\">📄 %1</td></tr>")
                   .arg(htmlEscape(filename));
     } else if (line.prefix == '@') {
@@ -693,49 +709,55 @@ void GitDiffDialog::rebuildUnified() {
   html += "</table></body></html>";
   m_diffView->setHtml(html);
   if (m_summaryLabel) {
-    m_summaryLabel->setText(m_summaryText.isEmpty() ? tr("Diff") : m_summaryText);
+    m_summaryLabel->setText(m_summaryText.isEmpty() ? tr("Diff")
+                                                    : m_summaryText);
   }
 }
 
 void GitDiffDialog::rebuildSplit() {
   QString addBgStr = QString("rgba(%1,%2,%3,0.15)")
-      .arg(m_theme.successColor.red())
-      .arg(m_theme.successColor.green())
-      .arg(m_theme.successColor.blue());
+                         .arg(m_theme.successColor.red())
+                         .arg(m_theme.successColor.green())
+                         .arg(m_theme.successColor.blue());
   QString delBgStr = QString("rgba(%1,%2,%3,0.15)")
-      .arg(m_theme.errorColor.red())
-      .arg(m_theme.errorColor.green())
-      .arg(m_theme.errorColor.blue());
+                         .arg(m_theme.errorColor.red())
+                         .arg(m_theme.errorColor.green())
+                         .arg(m_theme.errorColor.blue());
 
   QString html;
   html += "<html><head><style>";
   html += QString("body { background: %1; color: %2; margin: 0; padding: 0; }")
-      .arg(m_theme.backgroundColor.name())
-      .arg(m_theme.foregroundColor.name());
+              .arg(m_theme.backgroundColor.name())
+              .arg(m_theme.foregroundColor.name());
   html += "table { width: 100%; border-collapse: collapse; }";
-  html += QString("td { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; "
-                  "padding: 0 8px; line-height: 20px; vertical-align: top; }");
+  html += QString(
+      "td { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; "
+      "padding: 0 8px; line-height: 20px; vertical-align: top; }");
   html += QString(".ln { color: %1; text-align: right; width: 40px; "
                   "user-select: none; background: %2; }")
-      .arg(m_theme.singleLineCommentFormat.name())
-      .arg(m_theme.surfaceColor.name());
+              .arg(m_theme.singleLineCommentFormat.name())
+              .arg(m_theme.surfaceColor.name());
   html += QString(".sep { width: 2px; background: %1; padding: 0; }")
-      .arg(m_theme.borderColor.name());
+              .arg(m_theme.borderColor.name());
   html += QString(".gutter { width: 4px; padding: 0; }");
-  html += QString(".gutter-add { background: %1; }").arg(m_theme.successColor.name());
-  html += QString(".gutter-del { background: %1; }").arg(m_theme.errorColor.name());
+  html += QString(".gutter-add { background: %1; }")
+              .arg(m_theme.successColor.name());
+  html +=
+      QString(".gutter-del { background: %1; }").arg(m_theme.errorColor.name());
   html += QString(".hunk { color: %1; background: %2; font-weight: 500; "
                   "padding: 8px 12px; }")
-      .arg(m_theme.accentColor.name())
-      .arg(m_theme.surfaceAltColor.name());
+              .arg(m_theme.accentColor.name())
+              .arg(m_theme.surfaceAltColor.name());
   html += QString(".file { color: %1; background: %2; font-weight: 600; "
                   "padding: 10px 12px; font-size: 13px; }")
-      .arg(m_theme.foregroundColor.name())
-      .arg(m_theme.surfaceColor.name());
+              .arg(m_theme.foregroundColor.name())
+              .arg(m_theme.surfaceColor.name());
   html += QString(".add { background: %1; }").arg(addBgStr);
   html += QString(".del { background: %1; }").arg(delBgStr);
-  html += QString(".empty { background: %1; }").arg(m_theme.surfaceAltColor.name());
-  html += ".left, .right { width: 45%; white-space: pre-wrap; word-break: break-all; }";
+  html +=
+      QString(".empty { background: %1; }").arg(m_theme.surfaceAltColor.name());
+  html += ".left, .right { width: 45%; white-space: pre-wrap; word-break: "
+          "break-all; }";
   html += "</style></head><body><table>";
 
   int i = 0;
@@ -746,7 +768,8 @@ void GitDiffDialog::rebuildSplit() {
     if (line.prefix == 'd') {
       QString filename = line.content;
       int bIdx = filename.lastIndexOf(" b/");
-      if (bIdx > 0) filename = filename.mid(bIdx + 3);
+      if (bIdx > 0)
+        filename = filename.mid(bIdx + 3);
       html += QString("<tr><td colspan=\"7\" class=\"file\">📄 %1</td></tr>")
                   .arg(htmlEscape(filename));
       i++;
@@ -758,7 +781,8 @@ void GitDiffDialog::rebuildSplit() {
       i++;
       continue;
     } else if (line.prefix == '-') {
-      QString leftLn = line.oldLineNum > 0 ? QString::number(line.oldLineNum) : "";
+      QString leftLn =
+          line.oldLineNum > 0 ? QString::number(line.oldLineNum) : "";
       QString rightContent, rightLn;
       bool hasPair = false;
 
@@ -766,32 +790,37 @@ void GitDiffDialog::rebuildSplit() {
         hasPair = true;
         rightContent = htmlEscape(m_lines[i + 1].content);
         rightLn = m_lines[i + 1].newLineNum > 0
-                      ? QString::number(m_lines[i + 1].newLineNum) : "";
+                      ? QString::number(m_lines[i + 1].newLineNum)
+                      : "";
         i++;
       }
 
-      html += QString("<tr>"
-                      "<td class=\"ln\">%1</td><td class=\"gutter gutter-del\"></td>"
-                      "<td class=\"del left\">-%2</td>"
-                      "<td class=\"sep\"></td>"
-                      "<td class=\"ln\">%3</td><td class=\"gutter%4\"></td>"
-                      "<td class=\"%5 right\">%6</td>"
-                      "</tr>")
-                  .arg(leftLn, escaped, rightLn,
-                       hasPair ? " gutter-add" : "",
-                       hasPair ? "add" : "empty",
-                       hasPair ? "+" + rightContent : "");
+      html +=
+          QString(
+              "<tr>"
+              "<td class=\"ln\">%1</td><td class=\"gutter gutter-del\"></td>"
+              "<td class=\"del left\">-%2</td>"
+              "<td class=\"sep\"></td>"
+              "<td class=\"ln\">%3</td><td class=\"gutter%4\"></td>"
+              "<td class=\"%5 right\">%6</td>"
+              "</tr>")
+              .arg(leftLn, escaped, rightLn, hasPair ? " gutter-add" : "",
+                   hasPair ? "add" : "empty",
+                   hasPair ? "+" + rightContent : "");
       i++;
     } else if (line.prefix == '+') {
-      QString newLn = line.newLineNum > 0 ? QString::number(line.newLineNum) : "";
-      html += QString("<tr>"
-                      "<td class=\"ln\"></td><td class=\"gutter\"></td>"
-                      "<td class=\"empty left\"></td>"
-                      "<td class=\"sep\"></td>"
-                      "<td class=\"ln\">%1</td><td class=\"gutter gutter-add\"></td>"
-                      "<td class=\"add right\">+%2</td>"
-                      "</tr>")
-                  .arg(newLn, escaped);
+      QString newLn =
+          line.newLineNum > 0 ? QString::number(line.newLineNum) : "";
+      html +=
+          QString(
+              "<tr>"
+              "<td class=\"ln\"></td><td class=\"gutter\"></td>"
+              "<td class=\"empty left\"></td>"
+              "<td class=\"sep\"></td>"
+              "<td class=\"ln\">%1</td><td class=\"gutter gutter-add\"></td>"
+              "<td class=\"add right\">+%2</td>"
+              "</tr>")
+              .arg(newLn, escaped);
       i++;
     } else {
       QString ln = line.oldLineNum > 0 ? QString::number(line.oldLineNum) : "";
@@ -810,47 +839,51 @@ void GitDiffDialog::rebuildSplit() {
   html += "</table></body></html>";
   m_diffView->setHtml(html);
   if (m_summaryLabel) {
-    m_summaryLabel->setText(m_summaryText.isEmpty() ? tr("Diff") : m_summaryText);
+    m_summaryLabel->setText(m_summaryText.isEmpty() ? tr("Diff")
+                                                    : m_summaryText);
   }
 }
 
 void GitDiffDialog::rebuildWord() {
   QString addBgStr = QString("rgba(%1,%2,%3,0.3)")
-      .arg(m_theme.successColor.red())
-      .arg(m_theme.successColor.green())
-      .arg(m_theme.successColor.blue());
+                         .arg(m_theme.successColor.red())
+                         .arg(m_theme.successColor.green())
+                         .arg(m_theme.successColor.blue());
   QString delBgStr = QString("rgba(%1,%2,%3,0.3)")
-      .arg(m_theme.errorColor.red())
-      .arg(m_theme.errorColor.green())
-      .arg(m_theme.errorColor.blue());
+                         .arg(m_theme.errorColor.red())
+                         .arg(m_theme.errorColor.green())
+                         .arg(m_theme.errorColor.blue());
 
   QString html;
   html += "<html><head><style>";
   html += QString("body { background: %1; color: %2; margin: 0; padding: 0; }")
-      .arg(m_theme.backgroundColor.name())
-      .arg(m_theme.foregroundColor.name());
+              .arg(m_theme.backgroundColor.name())
+              .arg(m_theme.foregroundColor.name());
   html += "table { border-collapse: collapse; width: 100%; }";
-  html += QString("td { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; "
-                  "padding: 0 8px; line-height: 20px; vertical-align: top; }");
+  html += QString(
+      "td { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; "
+      "padding: 0 8px; line-height: 20px; vertical-align: top; }");
   html += QString(".ln { color: %1; text-align: right; width: 50px; "
                   "padding-right: 12px; border-right: 1px solid %2; "
                   "user-select: none; background: %3; }")
-      .arg(m_theme.singleLineCommentFormat.name())
-      .arg(m_theme.borderColor.name())
-      .arg(m_theme.surfaceColor.name());
+              .arg(m_theme.singleLineCommentFormat.name())
+              .arg(m_theme.borderColor.name())
+              .arg(m_theme.surfaceColor.name());
   html += QString(".hunk { color: %1; background: %2; font-weight: 500; "
                   "padding: 8px 12px; }")
-      .arg(m_theme.accentColor.name())
-      .arg(m_theme.surfaceAltColor.name());
+              .arg(m_theme.accentColor.name())
+              .arg(m_theme.surfaceAltColor.name());
   html += QString(".file { color: %1; background: %2; font-weight: 600; "
                   "padding: 10px 12px; font-size: 13px; }")
-      .arg(m_theme.foregroundColor.name())
-      .arg(m_theme.surfaceColor.name());
-  html += QString(".add { background: %1; border-radius: 3px; padding: 1px 3px; }")
-      .arg(addBgStr);
-  html += QString(".del { background: %1; border-radius: 3px; padding: 1px 3px; "
-                  "text-decoration: line-through; opacity: 0.8; }")
-      .arg(delBgStr);
+              .arg(m_theme.foregroundColor.name())
+              .arg(m_theme.surfaceColor.name());
+  html +=
+      QString(".add { background: %1; border-radius: 3px; padding: 1px 3px; }")
+          .arg(addBgStr);
+  html +=
+      QString(".del { background: %1; border-radius: 3px; padding: 1px 3px; "
+              "text-decoration: line-through; opacity: 0.8; }")
+          .arg(delBgStr);
   html += ".code { white-space: pre-wrap; word-break: break-all; }";
   html += "</style></head><body><table>";
 
@@ -864,7 +897,8 @@ void GitDiffDialog::rebuildWord() {
     if (line.prefix == 'd') {
       QString filename = line.content;
       int bIdx = filename.lastIndexOf(" b/");
-      if (bIdx > 0) filename = filename.mid(bIdx + 3);
+      if (bIdx > 0)
+        filename = filename.mid(bIdx + 3);
       html += QString("<tr><td colspan=\"2\" class=\"file\">📄 %1</td></tr>")
                   .arg(htmlEscape(filename));
     } else if (line.prefix == '@') {
@@ -874,26 +908,34 @@ void GitDiffDialog::rebuildWord() {
       continue;
     } else if (line.prefix == '+' || line.prefix == '-') {
       if (hasWordMarkers) {
-        html += QString("<tr><td class=\"ln\">%1</td><td class=\"code\">%2</td></tr>")
-                    .arg(lineNumStr, buildWordDiffLine(line.content));
+        html +=
+            QString(
+                "<tr><td class=\"ln\">%1</td><td class=\"code\">%2</td></tr>")
+                .arg(lineNumStr, buildWordDiffLine(line.content));
       } else {
-        html += QString("<tr><td class=\"ln\">%1</td><td class=\"code\">%2</td></tr>")
-                    .arg(lineNumStr, styleToken(line.content,
-                                                line.prefix == '+' ? "add" : "del"));
+        html +=
+            QString(
+                "<tr><td class=\"ln\">%1</td><td class=\"code\">%2</td></tr>")
+                .arg(lineNumStr,
+                     styleToken(line.content,
+                                line.prefix == '+' ? "add" : "del"));
       }
     } else if (hasWordMarkers) {
-      html += QString("<tr><td class=\"ln\">%1</td><td class=\"code\">%2</td></tr>")
-                  .arg(lineNumStr, buildWordDiffLine(line.content));
+      html +=
+          QString("<tr><td class=\"ln\">%1</td><td class=\"code\">%2</td></tr>")
+              .arg(lineNumStr, buildWordDiffLine(line.content));
     } else {
-      html += QString("<tr><td class=\"ln\">%1</td><td class=\"code\">%2</td></tr>")
-                  .arg(lineNumStr, htmlEscape(line.content));
+      html +=
+          QString("<tr><td class=\"ln\">%1</td><td class=\"code\">%2</td></tr>")
+              .arg(lineNumStr, htmlEscape(line.content));
     }
   }
 
   html += "</table></body></html>";
   m_diffView->setHtml(html);
   if (m_summaryLabel) {
-    m_summaryLabel->setText(m_summaryText.isEmpty() ? tr("Diff") : m_summaryText);
+    m_summaryLabel->setText(m_summaryText.isEmpty() ? tr("Diff")
+                                                    : m_summaryText);
   }
 }
 
@@ -1044,20 +1086,19 @@ void GitDiffDialog::updateChangeCounter() {
     return;
   }
   QString addStyle = QString("<span style='color: %1'>+%2</span>")
-      .arg(m_theme.successColor.name())
-      .arg(m_addedCount);
+                         .arg(m_theme.successColor.name())
+                         .arg(m_addedCount);
   QString delStyle = QString("<span style='color: %1'>-%2</span>")
-      .arg(m_theme.errorColor.name())
-      .arg(m_deletedCount);
+                         .arg(m_theme.errorColor.name())
+                         .arg(m_deletedCount);
 
   if (m_changeBlocks.isEmpty()) {
     m_changeCounterLabel->setText(QString("%1  %2").arg(addStyle, delStyle));
   } else {
-    m_changeCounterLabel->setText(
-        QString("%1/%2  %3  %4")
-            .arg(m_currentChange + 1)
-            .arg(m_changeBlocks.size())
-            .arg(addStyle, delStyle));
+    m_changeCounterLabel->setText(QString("%1/%2  %3  %4")
+                                      .arg(m_currentChange + 1)
+                                      .arg(m_changeBlocks.size())
+                                      .arg(addStyle, delStyle));
   }
   m_changeCounterLabel->setTextFormat(Qt::RichText);
 }
@@ -1077,8 +1118,7 @@ void GitDiffDialog::updateSearchCounter() {
   if (m_totalSearchMatches == 0) {
     m_searchCounterLabel->setText(tr("No results"));
   } else {
-    m_searchCounterLabel->setText(
-        tr("%1 found").arg(m_totalSearchMatches));
+    m_searchCounterLabel->setText(tr("%1 found").arg(m_totalSearchMatches));
   }
   m_searchCounterLabel->setVisible(true);
 }

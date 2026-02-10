@@ -122,28 +122,46 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
   }
 
   // Apply multi-line blocks (comments, strings, etc.)
-  for (const MultiLineBlock &block : m_multiLineBlocks) {
-    setCurrentBlockState(0);
+  // Each block type gets a unique state ID (i + 1) to avoid conflicts
+  setCurrentBlockState(0);
+  for (int i = 0; i < m_multiLineBlocks.size(); ++i) {
+    const MultiLineBlock &block = m_multiLineBlocks[i];
+    int stateId = i + 1;
 
     int startIndex = 0;
-    if (previousBlockState() != 1) {
-      startIndex = text.indexOf(block.startPattern);
+    if (previousBlockState() != stateId) {
+      QRegularExpressionMatch startMatch = block.startPattern.match(text);
+      startIndex = startMatch.hasMatch() ? startMatch.capturedStart() : -1;
     }
 
     while (startIndex >= 0) {
-      QRegularExpressionMatch match = block.endPattern.match(text, startIndex);
-      int endIndex = match.capturedStart();
+      // Search for end pattern after the start match to avoid
+      // same-delimiter blocks (e.g. ```) closing on the opening line
+      QRegularExpressionMatch startMatch =
+          block.startPattern.match(text, startIndex);
+      int searchFrom =
+          (previousBlockState() == stateId)
+              ? startIndex
+              : startIndex +
+                    (startMatch.hasMatch() ? startMatch.capturedLength() : 1);
+
+      QRegularExpressionMatch endMatch =
+          block.endPattern.match(text, searchFrom);
+      int endIndex = endMatch.capturedStart();
       int blockLength = 0;
 
       if (endIndex == -1) {
-        setCurrentBlockState(1);
+        setCurrentBlockState(stateId);
         blockLength = text.length() - startIndex;
       } else {
-        blockLength = endIndex - startIndex + match.capturedLength();
+        blockLength = endIndex - startIndex + endMatch.capturedLength();
       }
 
       setFormat(startIndex, blockLength, block.format);
-      startIndex = text.indexOf(block.startPattern, startIndex + blockLength);
+
+      QRegularExpressionMatch nextStart =
+          block.startPattern.match(text, startIndex + blockLength);
+      startIndex = nextStart.hasMatch() ? nextStart.capturedStart() : -1;
     }
   }
 

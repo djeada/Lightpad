@@ -151,7 +151,8 @@ RunTemplate RunTemplateManager::parseTemplate(const QJsonObject &obj) const {
   tmpl.name = obj.value("name").toString();
   tmpl.description = obj.value("description").toString();
   tmpl.language = obj.value("language").toString();
-  tmpl.languageId = LanguageCatalog::normalize(obj.value("languageId").toString());
+  tmpl.languageId =
+      LanguageCatalog::normalize(obj.value("languageId").toString());
   if (tmpl.languageId.isEmpty()) {
     tmpl.languageId = LanguageCatalog::normalize(tmpl.language);
   }
@@ -483,8 +484,9 @@ RunTemplateManager::buildCommand(const QString &filePath,
   return qMakePair(command, args);
 }
 
-QString RunTemplateManager::getWorkingDirectory(const QString &filePath,
-                                                const QString &languageId) const {
+QString
+RunTemplateManager::getWorkingDirectory(const QString &filePath,
+                                        const QString &languageId) const {
   FileTemplateAssignment assignment = getAssignmentForFile(filePath);
 
   QString templateId = assignment.templateId;
@@ -534,8 +536,9 @@ RunTemplateManager::getEnvironment(const QString &filePath,
   return env;
 }
 
-QString RunTemplateManager::resolveTemplateIdForFile(
-    const QString &filePath, const QString &languageId) const {
+QString
+RunTemplateManager::resolveTemplateIdForFile(const QString &filePath,
+                                             const QString &languageId) const {
   QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
   if (!canonicalLanguageId.isEmpty()) {
     QList<RunTemplate> languageTemplates =
@@ -546,7 +549,8 @@ QString RunTemplateManager::resolveTemplateIdForFile(
   }
 
   QFileInfo fileInfo(filePath);
-  QList<RunTemplate> extensionTemplates = getTemplatesForExtension(fileInfo.suffix());
+  QList<RunTemplate> extensionTemplates =
+      getTemplatesForExtension(fileInfo.suffix());
   if (!extensionTemplates.isEmpty()) {
     return extensionTemplates.first().id;
   }

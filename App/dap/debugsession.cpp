@@ -214,7 +214,8 @@ QString DebugSessionManager::startSession(const DebugConfiguration &config) {
   // Find adapter by DAP adapter type from the launch configuration.
   auto adapters = DebugAdapterRegistry::instance().adaptersForType(config.type);
   if (adapters.isEmpty()) {
-    auto explicitAdapter = DebugAdapterRegistry::instance().adapter(config.type);
+    auto explicitAdapter =
+        DebugAdapterRegistry::instance().adapter(config.type);
     if (explicitAdapter) {
       adapters.append(explicitAdapter);
     }

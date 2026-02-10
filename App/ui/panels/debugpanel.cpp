@@ -4,8 +4,8 @@
 
 #include <QAction>
 #include <QFontDatabase>
-#include <QHeaderView>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QLabel>
 #include <QMenu>
 #include <QPalette>
@@ -38,8 +38,7 @@ void applyTreePalette(QTreeWidget *tree, const Theme &theme) {
 DebugPanel::DebugPanel(QWidget *parent)
     : QWidget(parent), m_dapClient(nullptr), m_currentThreadId(0),
       m_currentFrameId(0), m_programmaticVariablesExpand(false),
-      m_variablesNameColumnAutofitPending(false),
-      m_themeInitialized(false) {
+      m_variablesNameColumnAutofitPending(false), m_themeInitialized(false) {
   setupUI();
   updateToolbarState();
 
@@ -96,34 +95,33 @@ void DebugPanel::applyTheme(const Theme &theme) {
   }
 
   if (m_toolbar) {
-    m_toolbar->setStyleSheet(
-        QString("QToolBar {"
-                "  background: %1;"
-                "  border-bottom: 1px solid %2;"
-                "  spacing: 2px;"
-                "}"
-                "QToolButton {"
-                "  color: %3;"
-                "  border: 1px solid transparent;"
-                "  border-radius: 4px;"
-                "  padding: 4px 6px;"
-                "}"
-                "QToolButton:hover {"
-                "  background: %4;"
-                "  border-color: %2;"
-                "}"
-                "QToolButton:pressed {"
-                "  background: %5;"
-                "}"
-                "QToolButton:disabled {"
-                "  color: %6;"
-                "}")
-            .arg(theme.surfaceColor.name())
-            .arg(theme.borderColor.name())
-            .arg(theme.foregroundColor.name())
-            .arg(theme.hoverColor.name())
-            .arg(theme.pressedColor.name())
-            .arg(theme.singleLineCommentFormat.name()));
+    m_toolbar->setStyleSheet(QString("QToolBar {"
+                                     "  background: %1;"
+                                     "  border-bottom: 1px solid %2;"
+                                     "  spacing: 2px;"
+                                     "}"
+                                     "QToolButton {"
+                                     "  color: %3;"
+                                     "  border: 1px solid transparent;"
+                                     "  border-radius: 4px;"
+                                     "  padding: 4px 6px;"
+                                     "}"
+                                     "QToolButton:hover {"
+                                     "  background: %4;"
+                                     "  border-color: %2;"
+                                     "}"
+                                     "QToolButton:pressed {"
+                                     "  background: %5;"
+                                     "}"
+                                     "QToolButton:disabled {"
+                                     "  color: %6;"
+                                     "}")
+                                 .arg(theme.surfaceColor.name())
+                                 .arg(theme.borderColor.name())
+                                 .arg(theme.foregroundColor.name())
+                                 .arg(theme.hoverColor.name())
+                                 .arg(theme.pressedColor.name())
+                                 .arg(theme.singleLineCommentFormat.name()));
   }
 
   if (m_tabWidget) {
@@ -133,37 +131,36 @@ void DebugPanel::applyTheme(const Theme &theme) {
       m_tabWidget->tabBar()->setExpanding(false);
       m_tabWidget->tabBar()->setElideMode(Qt::ElideRight);
     }
-    m_tabWidget->setStyleSheet(
-        QString("QTabWidget::pane {"
-                "  border: 1px solid %1;"
-                "  background: %2;"
-                "  border-radius: 6px;"
-                "  top: -1px;"
-                "}"
-                "QTabBar::tab {"
-                "  background: %3;"
-                "  color: %4;"
-                "  border: 1px solid %1;"
-                "  border-bottom: none;"
-                "  border-top-left-radius: 5px;"
-                "  border-top-right-radius: 5px;"
-                "  padding: 7px 11px;"
-                "  margin-right: 2px;"
-                "}"
-                "QTabBar::tab:selected {"
-                "  background: %2;"
-                "  color: %5;"
-                "  border-color: %6;"
-                "}"
-                "QTabBar::tab:hover {"
-                "  background: %6;"
-                "}")
-            .arg(theme.borderColor.name())
-            .arg(theme.backgroundColor.name())
-            .arg(theme.surfaceColor.name())
-            .arg(theme.singleLineCommentFormat.name())
-            .arg(theme.foregroundColor.name())
-            .arg(theme.hoverColor.name()));
+    m_tabWidget->setStyleSheet(QString("QTabWidget::pane {"
+                                       "  border: 1px solid %1;"
+                                       "  background: %2;"
+                                       "  border-radius: 6px;"
+                                       "  top: -1px;"
+                                       "}"
+                                       "QTabBar::tab {"
+                                       "  background: %3;"
+                                       "  color: %4;"
+                                       "  border: 1px solid %1;"
+                                       "  border-bottom: none;"
+                                       "  border-top-left-radius: 5px;"
+                                       "  border-top-right-radius: 5px;"
+                                       "  padding: 7px 11px;"
+                                       "  margin-right: 2px;"
+                                       "}"
+                                       "QTabBar::tab:selected {"
+                                       "  background: %2;"
+                                       "  color: %5;"
+                                       "  border-color: %6;"
+                                       "}"
+                                       "QTabBar::tab:hover {"
+                                       "  background: %6;"
+                                       "}")
+                                   .arg(theme.borderColor.name())
+                                   .arg(theme.backgroundColor.name())
+                                   .arg(theme.surfaceColor.name())
+                                   .arg(theme.singleLineCommentFormat.name())
+                                   .arg(theme.foregroundColor.name())
+                                   .arg(theme.hoverColor.name()));
   }
 
   if (m_mainSplitter) {
@@ -867,8 +864,8 @@ void DebugPanel::onConsoleInput() {
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
     m_dapClient->evaluate(expr, m_currentFrameId, "repl");
   } else {
-    appendConsoleLine(
-        tr("Cannot evaluate: not stopped at breakpoint"), consoleErrorColor());
+    appendConsoleLine(tr("Cannot evaluate: not stopped at breakpoint"),
+                      consoleErrorColor());
   }
 }
 
@@ -1012,8 +1009,8 @@ void DebugPanel::onWatchUpdated(const WatchExpression &watch) {
   if (watch.isError) {
     item->setText(1, watch.errorMessage.isEmpty() ? tr("Evaluation failed")
                                                   : watch.errorMessage);
-    item->setForeground(1,
-                        m_themeInitialized ? m_theme.errorColor : QColor(Qt::red));
+    item->setForeground(1, m_themeInitialized ? m_theme.errorColor
+                                              : QColor(Qt::red));
   } else {
     item->setText(1, watch.value);
     item->setForeground(1, palette().color(QPalette::Text));

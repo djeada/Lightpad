@@ -12,7 +12,7 @@ public:
   QString languageId() const override { return "md"; }
   QString languageName() const override { return "Markdown"; }
   QStringList fileExtensions() const override {
-    return {"md", "markdown", "mdown", "mkd"};
+    return {"md", "markdown", "mdown", "mkd", "mkdn", "mdx"};
   }
 
   QVector<SyntaxRule> syntaxRules() const override;

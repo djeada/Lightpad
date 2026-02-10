@@ -134,8 +134,9 @@ public:
    * @param filePath Full path to the file
    * @return Map of environment variable name to value
    */
-  QMap<QString, QString> getEnvironment(
-      const QString &filePath, const QString &languageId = QString()) const;
+  QMap<QString, QString>
+  getEnvironment(const QString &filePath,
+                 const QString &languageId = QString()) const;
 
   /**
    * @brief Substitute variables in a string

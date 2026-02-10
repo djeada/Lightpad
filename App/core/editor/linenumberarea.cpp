@@ -382,10 +382,10 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
 
         const int markerDiameter =
             qMax(6, qMin(fontHeight - 2, BREAKPOINT_AREA_WIDTH - 4));
-        const int markerX = DIFF_INDICATOR_WIDTH +
-                            (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;
-        const int markerY = static_cast<int>(
-            top + (fontHeight - markerDiameter) / 2.0);
+        const int markerX =
+            DIFF_INDICATOR_WIDTH + (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;
+        const int markerY =
+            static_cast<int>(top + (fontHeight - markerDiameter) / 2.0);
 
         painter.save();
         painter.setRenderHint(QPainter::Antialiasing, true);
@@ -403,9 +403,11 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
 
         if (foldable || folded) {
           const int foldX = numberArea - FOLD_INDICATOR_WIDTH;
-          const int indicatorSize = qMin(fontHeight - 4, FOLD_INDICATOR_WIDTH - 2);
+          const int indicatorSize =
+              qMin(fontHeight - 4, FOLD_INDICATOR_WIDTH - 2);
           const int ix = foldX + (FOLD_INDICATOR_WIDTH - indicatorSize) / 2;
-          const int iy = static_cast<int>(top + (fontHeight - indicatorSize) / 2.0);
+          const int iy =
+              static_cast<int>(top + (fontHeight - indicatorSize) / 2.0);
 
           painter.save();
           painter.setRenderHint(QPainter::Antialiasing, true);
@@ -417,9 +419,11 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
           int midY = iy + indicatorSize / 2;
           int midX = ix + indicatorSize / 2;
           int margin = 2;
-          painter.drawLine(ix + margin, midY, ix + indicatorSize - margin, midY);
+          painter.drawLine(ix + margin, midY, ix + indicatorSize - margin,
+                           midY);
           if (folded) {
-            painter.drawLine(midX, iy + margin, midX, iy + indicatorSize - margin);
+            painter.drawLine(midX, iy + margin, midX,
+                             iy + indicatorSize - margin);
           }
           painter.restore();
         }
@@ -428,9 +432,8 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
       if (m_blameTextWidth > 0) {
         auto it = m_gitBlameLines.find(lineNum);
         if (it != m_gitBlameLines.end()) {
-          QRect blameRect(
-              numberArea + BLAME_PADDING, static_cast<int>(top),
-              areaWidth - numberArea - BLAME_PADDING, fontHeight);
+          QRect blameRect(numberArea + BLAME_PADDING, static_cast<int>(top),
+                          areaWidth - numberArea - BLAME_PADDING, fontHeight);
           painter.setPen(QColor(Qt::gray).lighter(120));
           painter.drawText(blameRect, Qt::AlignVCenter | Qt::AlignLeft,
                            QFontMetrics(m_font).elidedText(

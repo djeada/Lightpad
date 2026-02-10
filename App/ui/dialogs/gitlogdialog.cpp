@@ -62,10 +62,13 @@ void GitLogDialog::buildUi() {
   m_commitTree->setSelectionMode(QAbstractItemView::SingleSelection);
   m_commitTree->setAlternatingRowColors(true);
   m_commitTree->header()->setStretchLastSection(false);
-  m_commitTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+  m_commitTree->header()->setSectionResizeMode(0,
+                                               QHeaderView::ResizeToContents);
   m_commitTree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
-  m_commitTree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-  m_commitTree->header()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+  m_commitTree->header()->setSectionResizeMode(2,
+                                               QHeaderView::ResizeToContents);
+  m_commitTree->header()->setSectionResizeMode(3,
+                                               QHeaderView::ResizeToContents);
   connect(m_commitTree, &QTreeWidget::currentItemChanged, this,
           &GitLogDialog::onCommitSelected);
 
@@ -126,8 +129,7 @@ void GitLogDialog::loadCommits() {
     item->setToolTip(1, commit.subject);
   }
 
-  m_statusLabel->setText(
-      tr("%1 commits").arg(commits.size()));
+  m_statusLabel->setText(tr("%1 commits").arg(commits.size()));
 }
 
 void GitLogDialog::onCommitSelected(QTreeWidgetItem *current,
@@ -138,13 +140,13 @@ void GitLogDialog::onCommitSelected(QTreeWidgetItem *current,
   QString hash = current->data(0, Qt::UserRole).toString();
   GitCommitInfo details = m_git->getCommitDetails(hash);
 
-  QString html = QString(
-      "<b>Commit:</b> %1<br>"
-      "<b>Author:</b> %2 &lt;%3&gt;<br>"
-      "<b>Date:</b> %4<br><br>"
-      "<b>%5</b>")
-      .arg(details.hash.left(12), details.author, details.authorEmail,
-           details.date, details.subject.toHtmlEscaped());
+  QString html =
+      QString("<b>Commit:</b> %1<br>"
+              "<b>Author:</b> %2 &lt;%3&gt;<br>"
+              "<b>Date:</b> %4<br><br>"
+              "<b>%5</b>")
+          .arg(details.hash.left(12), details.author, details.authorEmail,
+               details.date, details.subject.toHtmlEscaped());
 
   if (!details.body.isEmpty()) {
     html += "<br><pre>" + details.body.toHtmlEscaped() + "</pre>";
