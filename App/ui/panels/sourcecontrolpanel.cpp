@@ -820,8 +820,7 @@ void SourceControlPanel::setupRepoUI() {
     QMessageBox msgBox(this);
     msgBox.setIcon(QMessageBox::Warning);
     msgBox.setWindowTitle(tr("Discard All Changes"));
-    msgBox.setText(
-        tr("Are you sure you want to discard all changes?"));
+    msgBox.setText(tr("Are you sure you want to discard all changes?"));
     msgBox.setInformativeText(tr("This action cannot be undone."));
     msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
     msgBox.setDefaultButton(QMessageBox::No);
@@ -1387,8 +1386,7 @@ void SourceControlPanel::onCommitMessageChanged() {
   bool isAmend = m_amendCheckbox && m_amendCheckbox->isChecked();
   if (m_commitButton) {
     // Amend can work with just a message (to update the commit message)
-    m_commitButton->setEnabled(
-        hasMessage && (m_stagedCount > 0 || isAmend));
+    m_commitButton->setEnabled(hasMessage && (m_stagedCount > 0 || isAmend));
   }
 }
 

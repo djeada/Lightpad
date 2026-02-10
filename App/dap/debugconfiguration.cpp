@@ -250,13 +250,14 @@ DebugConfigurationManager::createQuickConfig(const QString &filePath,
   QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
 
   // Prefer adapter by selected language, fall back to file extension.
-  auto adapter = canonicalLanguageId.isEmpty()
-                     ? DebugAdapterRegistry::instance().preferredAdapterForFile(
-                           filePath)
-                     : DebugAdapterRegistry::instance()
-                           .preferredAdapterForLanguage(canonicalLanguageId);
+  auto adapter =
+      canonicalLanguageId.isEmpty()
+          ? DebugAdapterRegistry::instance().preferredAdapterForFile(filePath)
+          : DebugAdapterRegistry::instance().preferredAdapterForLanguage(
+                canonicalLanguageId);
   if (!adapter) {
-    adapter = DebugAdapterRegistry::instance().preferredAdapterForFile(filePath);
+    adapter =
+        DebugAdapterRegistry::instance().preferredAdapterForFile(filePath);
   }
   if (!adapter) {
     return config;
@@ -277,7 +278,7 @@ DebugConfigurationManager::createQuickConfig(const QString &filePath,
   if (config.type == "cppdbg") {
     config.stopOnEntry = false;
     static const QSet<QString> sourceExtensions = {
-        ".c",  ".cc", ".cpp", ".cxx", ".h", ".hpp",
+        ".c",   ".cc", ".cpp", ".cxx", ".h",   ".hpp",
         ".hxx", ".rs", ".go",  ".f",   ".f90", ".s"};
     const QString extension = "." + fi.suffix().toLower();
     if (sourceExtensions.contains(extension)) {

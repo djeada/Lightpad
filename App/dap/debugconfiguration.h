@@ -288,9 +288,9 @@ public:
    * @param filePath Path to the file to debug
    * @return Generated configuration, or empty if no adapter available
    */
-  DebugConfiguration createQuickConfig(
-      const QString &filePath,
-      const QString &languageId = QString()) const;
+  DebugConfiguration
+  createQuickConfig(const QString &filePath,
+                    const QString &languageId = QString()) const;
 
   /**
    * @brief Load configurations from .lightpad/debug/launch.json

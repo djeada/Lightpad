@@ -828,8 +828,8 @@ QString GitIntegration::getCommitAuthor(const QString &commitHash) const {
   }
 
   bool success;
-  QString author =
-      executeGitCommand({"show", "-s", "--format=%an <%ae>", commitHash}, &success);
+  QString author = executeGitCommand(
+      {"show", "-s", "--format=%an <%ae>", commitHash}, &success);
 
   return success ? author.trimmed() : QString();
 }

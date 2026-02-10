@@ -174,7 +174,8 @@ void WatchManager::onEvaluateError(const QString &expression,
     if (pending.fallbackStage == 1) {
       pending.fallbackStage = 2;
       m_pendingEvaluations[expression] = pending;
-      // Last fallback: omit context and let adapter use default expression mode.
+      // Last fallback: omit context and let adapter use default expression
+      // mode.
       m_dapClient->evaluate(expression, pending.frameId, QString());
       return;
     }

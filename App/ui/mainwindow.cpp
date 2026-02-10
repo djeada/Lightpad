@@ -82,9 +82,8 @@
 #include "panels/spliteditorcontainer.h"
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow),
-      popupTabWidth(nullptr), preferences(nullptr), findReplacePanel(nullptr),
-      terminalWidget(nullptr),
+    : QMainWindow(parent), ui(new Ui::MainWindow), popupTabWidth(nullptr),
+      preferences(nullptr), findReplacePanel(nullptr), terminalWidget(nullptr),
       completer(nullptr), m_completionEngine(nullptr), highlightLanguage(""),
       font(QApplication::font()), commandPalette(nullptr),
       problemsPanel(nullptr), goToLineDialog(nullptr),
@@ -96,10 +95,9 @@ MainWindow::MainWindow(QWidget *parent)
       autoSaveManager(nullptr), m_splitEditorContainer(nullptr),
       m_gitIntegration(nullptr), sourceControlPanel(nullptr),
       sourceControlDock(nullptr), debugPanel(nullptr), debugDock(nullptr),
-      m_debugStartInProgress(false),
-      m_breakpointsSetConnection(), m_breakpointChangedConnection(),
-      m_sessionTerminatedConnection(), m_sessionErrorConnection(),
-      m_sessionStateConnection(),
+      m_debugStartInProgress(false), m_breakpointsSetConnection(),
+      m_breakpointChangedConnection(), m_sessionTerminatedConnection(),
+      m_sessionErrorConnection(), m_sessionStateConnection(),
       m_fileTreeModel(nullptr), m_treeScrollValue(0),
       m_treeScrollValueInitialized(false), m_treeScrollSyncing(false) {
   QApplication::instance()->installEventFilter(this);
@@ -460,7 +458,8 @@ void MainWindow::applyLanguageOverride(const QString &languageId) {
 
   QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
   if (canonicalLanguageId.isEmpty()) {
-    LOG_WARNING(QString("No canonical language ID found for: %1").arg(languageId));
+    LOG_WARNING(
+        QString("No canonical language ID found for: %1").arg(languageId));
     return;
   }
 
@@ -642,7 +641,8 @@ void MainWindow::loadHighlightOverridesForDir(const QString &dirPath) {
   for (const QJsonValue &value : assignments) {
     QJsonObject obj = value.toObject();
     QString fileName = obj.value("file").toString();
-    QString languageId = LanguageCatalog::normalize(obj.value("language").toString());
+    QString languageId =
+        LanguageCatalog::normalize(obj.value("language").toString());
     if (fileName.isEmpty() || languageId.isEmpty()) {
       continue;
     }
@@ -1116,8 +1116,9 @@ void MainWindow::on_actionFind_in_project_triggered() {
   QString projectPath = m_projectRootPath;
   if (projectPath.isEmpty()) {
     LightpadTabWidget *tabWidget = currentTabWidget();
-    QString filePath =
-        tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+    QString filePath = tabWidget
+                           ? tabWidget->getFilePath(tabWidget->currentIndex())
+                           : QString();
     if (!filePath.isEmpty()) {
       projectPath = QFileInfo(filePath).absolutePath();
     } else {
@@ -1338,9 +1339,9 @@ void MainWindow::showFindReplace(bool onlyFind) {
     QString projectPath = m_projectRootPath;
     if (projectPath.isEmpty()) {
       LightpadTabWidget *tabWidget = currentTabWidget();
-      QString filePath =
-          tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex())
-                    : QString();
+      QString filePath = tabWidget
+                             ? tabWidget->getFilePath(tabWidget->currentIndex())
+                             : QString();
       projectPath = filePath.isEmpty() ? QDir::currentPath()
                                        : QFileInfo(filePath).absolutePath();
     }
@@ -1585,33 +1586,33 @@ void MainWindow::ensureSourceControlPanel() {
             dialog.setDiffText(diff);
             dialog.exec();
           });
-  connect(
-      sourceControlPanel, &SourceControlPanel::commitDiffRequested, this,
-      [this](const QString &commitHash, const QString &shortHash) {
-        if (!m_gitIntegration) {
-          return;
-        }
-        QString diff = m_gitIntegration->getCommitDiff(commitHash);
-        if (diff.trimmed().isEmpty()) {
-          QMessageBox::information(this, tr("Commit Diff"),
-                                   tr("No changes to show for this commit."));
-          return;
-        }
+  connect(sourceControlPanel, &SourceControlPanel::commitDiffRequested, this,
+          [this](const QString &commitHash, const QString &shortHash) {
+            if (!m_gitIntegration) {
+              return;
+            }
+            QString diff = m_gitIntegration->getCommitDiff(commitHash);
+            if (diff.trimmed().isEmpty()) {
+              QMessageBox::information(
+                  this, tr("Commit Diff"),
+                  tr("No changes to show for this commit."));
+              return;
+            }
 
-        GitDiffDialog dialog(m_gitIntegration, commitHash,
-                             GitDiffDialog::DiffTarget::Commit, false,
-                             getTheme(), this);
-        dialog.setWindowTitle(tr("Commit %1").arg(shortHash));
+            GitDiffDialog dialog(m_gitIntegration, commitHash,
+                                 GitDiffDialog::DiffTarget::Commit, false,
+                                 getTheme(), this);
+            dialog.setWindowTitle(tr("Commit %1").arg(shortHash));
 
-        // Get commit info for display
-        QString author = m_gitIntegration->getCommitAuthor(commitHash);
-        QString date = m_gitIntegration->getCommitDate(commitHash);
-        QString message = m_gitIntegration->getCommitMessage(commitHash);
-        dialog.setCommitInfo(author, date, message);
+            // Get commit info for display
+            QString author = m_gitIntegration->getCommitAuthor(commitHash);
+            QString date = m_gitIntegration->getCommitDate(commitHash);
+            QString message = m_gitIntegration->getCommitMessage(commitHash);
+            dialog.setCommitInfo(author, date, message);
 
-        dialog.setDiffText(diff);
-        dialog.exec();
-      });
+            dialog.setDiffText(diff);
+            dialog.exec();
+          });
   connect(sourceControlPanel, &SourceControlPanel::repositoryInitialized, this,
           [this](const QString &path) {
             setProjectRootPath(path);
@@ -2272,15 +2273,15 @@ bool MainWindow::prepareDebugTargetForFile(const QString &filePath,
     return false;
   }
 
-  QString outputPath = sourceInfo.absolutePath() + "/" + sourceInfo.completeBaseName();
+  QString outputPath =
+      sourceInfo.absolutePath() + "/" + sourceInfo.completeBaseName();
 #ifdef Q_OS_WIN
   outputPath += ".exe";
 #endif
 
   QFileInfo outputInfo(outputPath);
-  const bool needsBuild =
-      !outputInfo.exists() ||
-      outputInfo.lastModified() < sourceInfo.lastModified();
+  const bool needsBuild = !outputInfo.exists() ||
+                          outputInfo.lastModified() < sourceInfo.lastModified();
   if (!needsBuild) {
     return true;
   }
@@ -2297,13 +2298,9 @@ bool MainWindow::compileSourceForDebug(const QString &filePath,
 
   QStringList args;
   if (languageId == "c") {
-    args << "-g"
-         << "-O0"
-         << "-std=c11";
+    args << "-g" << "-O0" << "-std=c11";
   } else {
-    args << "-g"
-         << "-O0"
-         << "-std=c++17";
+    args << "-g" << "-O0" << "-std=c++17";
   }
   args << "-o" << outputPath << filePath;
 
@@ -2333,14 +2330,13 @@ bool MainWindow::compileSourceForDebug(const QString &filePath,
       process.readAllStandardOutput() + process.readAllStandardError();
   if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
     if (errorMessage) {
-      const QString commandLine =
-          compiler + " " + args.join(" ");
+      const QString commandLine = compiler + " " + args.join(" ");
       QString details = QString::fromUtf8(output).trimmed();
       if (details.isEmpty()) {
         details = tr("Compiler exited with code %1").arg(process.exitCode());
       }
-      *errorMessage = tr("Debug build command failed:\n%1\n\n%2")
-                          .arg(commandLine, details);
+      *errorMessage =
+          tr("Debug build command failed:\n%1\n\n%2").arg(commandLine, details);
     }
     return false;
   }
@@ -2426,9 +2422,8 @@ void MainWindow::startDebuggingForCurrentFile() {
         if (!adapter) {
           continue;
         }
-        adapterStatuses << QString("%1: %2")
-                               .arg(adapter->config().name,
-                                    adapter->statusMessage());
+        adapterStatuses << QString("%1: %2").arg(adapter->config().name,
+                                                 adapter->statusMessage());
       }
       details = adapterStatuses.join("\n");
     }
@@ -2900,8 +2895,9 @@ void MainWindow::on_actionReplace_in_project_triggered() {
   QString projectPath = m_projectRootPath;
   if (projectPath.isEmpty()) {
     LightpadTabWidget *tabWidget = currentTabWidget();
-    QString filePath =
-        tabWidget ? tabWidget->getFilePath(tabWidget->currentIndex()) : QString();
+    QString filePath = tabWidget
+                           ? tabWidget->getFilePath(tabWidget->currentIndex())
+                           : QString();
     if (!filePath.isEmpty()) {
       projectPath = QFileInfo(filePath).absolutePath();
     } else {
@@ -3308,9 +3304,7 @@ void MainWindow::setTheme(Theme theme) {
 
       // Message box styling
       "QMessageBox { background-color: " +
-      surfaceColor +
-      "; color: " +
-      fgColor +
+      surfaceColor + "; color: " + fgColor +
       "; }"
       "QMessageBox QLabel { color: " +
       fgColor +
@@ -3320,10 +3314,7 @@ void MainWindow::setTheme(Theme theme) {
       "; }"
       "QMessageBox QTextEdit, QMessageBox QPlainTextEdit { "
       "background-color: " +
-      surfaceAltColor +
-      "; color: " +
-      fgColor +
-      "; border: 1px solid " +
+      surfaceAltColor + "; color: " + fgColor + "; border: 1px solid " +
       borderColor +
       "; border-radius: 4px; "
       "}"

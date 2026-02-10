@@ -874,8 +874,8 @@ void TextArea::updateExtraSelections() {
       baseColor = mainWindow->getTheme().errorColor;
     }
 
-    for (auto it = breakpointsByLine.cbegin();
-         it != breakpointsByLine.cend(); ++it) {
+    for (auto it = breakpointsByLine.cbegin(); it != breakpointsByLine.cend();
+         ++it) {
       QTextBlock block = document()->findBlockByNumber(it.key() - 1);
       if (!block.isValid()) {
         continue;
@@ -920,8 +920,8 @@ void TextArea::updateExtraSelections() {
         mainWindow ? mainWindow->getTheme().highlightColor : highlightColor;
     if (m_debugExecutionLine > 0 &&
         m_debugExecutionLine == cursor.blockNumber() + 1) {
-      color = mainWindow ? mainWindow->getTheme().accentColor
-                         : QColor(255, 193, 7);
+      color =
+          mainWindow ? mainWindow->getTheme().accentColor : QColor(255, 193, 7);
       color.setAlpha(120);
     }
     if (breakpointsByLine.contains(cursor.blockNumber() + 1)) {

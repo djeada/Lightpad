@@ -276,8 +276,8 @@ void BreakpointManager::updateVerification(
   const QString requestedPath = normalizePath(filePath);
   QList<int> ids = m_fileBreakpoints.value(filePath);
   if (ids.isEmpty()) {
-    for (auto it = m_fileBreakpoints.constBegin(); it != m_fileBreakpoints.constEnd();
-         ++it) {
+    for (auto it = m_fileBreakpoints.constBegin();
+         it != m_fileBreakpoints.constEnd(); ++it) {
       if (normalizePath(it.key()) == requestedPath) {
         ids = it.value();
         break;
