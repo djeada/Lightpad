@@ -3,6 +3,7 @@
 
 #include <QDir>
 #include <QJsonDocument>
+#include <QTimer>
 
 namespace {
 // Maximum number of messages to parse in a single read to prevent infinite
@@ -10,11 +11,14 @@ namespace {
 constexpr int MAX_MESSAGE_PARSE_ITERATIONS = 100;
 // Safety limit for malformed/non-DAP stdout streams. If exceeded, we trim
 // aggressively to avoid unbounded growth.
-constexpr int MAX_DAP_BUFFER_CHARS = 4 * 1024 * 1024;
+constexpr int MAX_DAP_BUFFER_BYTES = 4 * 1024 * 1024;
+// Hard cap for a single DAP JSON payload. Oversized messages are discarded to
+// prevent one response (e.g. giant variables list) from exhausting memory.
+constexpr int MAX_DAP_MESSAGE_BYTES = 2 * 1024 * 1024;
 // Bound retained pending requests if an adapter stops responding.
 constexpr int MAX_PENDING_REQUESTS = 2048;
 
-int lastHeaderStart(const QString &buffer) {
+int lastHeaderStart(const QByteArray &buffer) {
   return buffer.lastIndexOf("Content-Length:");
 }
 } // namespace
@@ -71,24 +75,33 @@ void DapClient::stop() {
     return;
   }
 
+  // Disconnect signals immediately so we don't process stale events
+  m_process->disconnect(this);
+
   if (isDebugging()) {
-    // Send disconnect request
+    // Send disconnect request (best-effort, don't block waiting for response)
     QJsonObject args;
     args["terminateDebuggee"] = true;
     sendRequest("disconnect", args, m_nextSeq++);
-    m_process->waitForReadyRead(1000);
   }
 
-  // Give adapter time to exit gracefully
-  if (!m_process->waitForFinished(3000)) {
-    m_process->terminate();
-    if (!m_process->waitForFinished(2000)) {
-      m_process->kill();
-    }
-  }
-
-  delete m_process;
+  // Non-blocking graceful shutdown: try terminate, then kill via timer
+  QProcess *proc = m_process;
   m_process = nullptr;
+
+  if (proc->state() != QProcess::NotRunning) {
+    proc->terminate();
+    // Use a single-shot timer to force-kill if still running after 2s
+    QTimer::singleShot(2000, proc, [proc]() {
+      if (proc->state() != QProcess::NotRunning) {
+        proc->kill();
+      }
+      proc->deleteLater();
+    });
+  } else {
+    proc->deleteLater();
+  }
+
   m_buffer.clear();
   m_pendingRequests.clear();
   m_currentThreadId = 0;
@@ -314,6 +327,8 @@ void DapClient::setExceptionBreakpoints(const QStringList &filterIds) {
 }
 
 void DapClient::continueExecution(int threadId) {
+  clearPendingInspectionRequests();
+
   QJsonObject args;
   args["threadId"] = threadId > 0 ? threadId : m_currentThreadId;
 
@@ -332,6 +347,8 @@ void DapClient::pause(int threadId) {
 }
 
 void DapClient::stepOver(int threadId) {
+  clearPendingInspectionRequests();
+
   QJsonObject args;
   args["threadId"] = threadId > 0 ? threadId : m_currentThreadId;
 
@@ -341,6 +358,8 @@ void DapClient::stepOver(int threadId) {
 }
 
 void DapClient::stepInto(int threadId) {
+  clearPendingInspectionRequests();
+
   QJsonObject args;
   args["threadId"] = threadId > 0 ? threadId : m_currentThreadId;
 
@@ -350,6 +369,8 @@ void DapClient::stepInto(int threadId) {
 }
 
 void DapClient::stepOut(int threadId) {
+  clearPendingInspectionRequests();
+
   QJsonObject args;
   args["threadId"] = threadId > 0 ? threadId : m_currentThreadId;
 
@@ -371,12 +392,20 @@ void DapClient::restart() {
 }
 
 void DapClient::getThreads() {
+  if (hasPendingRequestTag("threads")) {
+    return;
+  }
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "threads";
   sendRequest("threads", {}, seq);
 }
 
 void DapClient::getStackTrace(int threadId, int startFrame, int levels) {
+  const QString pendingTag = QString("stackTrace:%1").arg(threadId);
+  if (hasPendingRequestTag(pendingTag)) {
+    return;
+  }
+
   QJsonObject args;
   args["threadId"] = threadId;
   if (startFrame > 0)
@@ -385,21 +414,31 @@ void DapClient::getStackTrace(int threadId, int startFrame, int levels) {
     args["levels"] = levels;
 
   int seq = m_nextSeq++;
-  m_pendingRequests[seq] = QString("stackTrace:%1").arg(threadId);
+  m_pendingRequests[seq] = pendingTag;
   sendRequest("stackTrace", args, seq);
 }
 
 void DapClient::getScopes(int frameId) {
+  const QString pendingTag = QString("scopes:%1").arg(frameId);
+  if (hasPendingRequestTag(pendingTag)) {
+    return;
+  }
+
   QJsonObject args;
   args["frameId"] = frameId;
 
   int seq = m_nextSeq++;
-  m_pendingRequests[seq] = QString("scopes:%1").arg(frameId);
+  m_pendingRequests[seq] = pendingTag;
   sendRequest("scopes", args, seq);
 }
 
 void DapClient::getVariables(int variablesReference, const QString &filter,
                              int start, int count) {
+  const QString pendingTag = QString("variables:%1").arg(variablesReference);
+  if (hasPendingRequestTag(pendingTag)) {
+    return;
+  }
+
   QJsonObject args;
   args["variablesReference"] = variablesReference;
   if (!filter.isEmpty())
@@ -410,7 +449,7 @@ void DapClient::getVariables(int variablesReference, const QString &filter,
     args["count"] = count;
 
   int seq = m_nextSeq++;
-  m_pendingRequests[seq] = QString("variables:%1").arg(variablesReference);
+  m_pendingRequests[seq] = pendingTag;
   sendRequest("variables", args, seq);
 }
 
@@ -418,7 +457,7 @@ void DapClient::evaluate(const QString &expression, int frameId,
                          const QString &context) {
   QJsonObject args;
   args["expression"] = expression;
-  if (frameId > 0)
+  if (frameId >= 0)
     args["frameId"] = frameId;
   if (!context.isEmpty()) {
     args["context"] = context;
@@ -506,9 +545,9 @@ void DapClient::onReadyReadStandardOutput() {
   if (!m_process) {
     return;
   }
-  m_buffer += QString::fromUtf8(m_process->readAllStandardOutput());
+  m_buffer += m_process->readAllStandardOutput();
 
-  if (m_buffer.size() > MAX_DAP_BUFFER_CHARS) {
+  if (m_buffer.size() > MAX_DAP_BUFFER_BYTES) {
     const int headerPos = lastHeaderStart(m_buffer);
     if (headerPos >= 0) {
       m_buffer = m_buffer.mid(headerPos);
@@ -518,9 +557,9 @@ void DapClient::onReadyReadStandardOutput() {
       return;
     }
 
-    if (m_buffer.size() > MAX_DAP_BUFFER_CHARS) {
+    if (m_buffer.size() > MAX_DAP_BUFFER_BYTES) {
       LOG_WARNING("DAP: Trimming oversized protocol buffer tail");
-      m_buffer = m_buffer.right(MAX_DAP_BUFFER_CHARS);
+      m_buffer = m_buffer.right(MAX_DAP_BUFFER_BYTES);
     }
   }
 
@@ -530,42 +569,58 @@ void DapClient::onReadyReadStandardOutput() {
   while (iterations < MAX_MESSAGE_PARSE_ITERATIONS) {
     ++iterations;
 
-    int headerEnd = m_buffer.indexOf("\r\n\r\n");
+    const int headerEnd = m_buffer.indexOf("\r\n\r\n");
     if (headerEnd == -1) {
       break;
     }
 
-    QString header = m_buffer.left(headerEnd);
+    const QByteArray header = m_buffer.left(headerEnd);
     int contentLength = 0;
+    bool lengthOk = false;
 
     // Parse Content-Length header
-    QStringList lines = header.split("\r\n");
-    for (const QString &line : lines) {
-      if (line.startsWith("Content-Length:", Qt::CaseInsensitive)) {
-        contentLength = line.mid(15).trimmed().toInt();
+    const QList<QByteArray> lines = header.split('\n');
+    for (QByteArray line : lines) {
+      line = line.trimmed();
+      if (line.toLower().startsWith("content-length:")) {
+        contentLength = line.mid(15).trimmed().toInt(&lengthOk);
         break;
       }
     }
 
-    if (contentLength == 0) {
+    if (!lengthOk || contentLength <= 0) {
       LOG_WARNING("DAP message without Content-Length, skipping header");
       m_buffer = m_buffer.mid(headerEnd + 4);
       continue;
     }
+    if (contentLength > MAX_DAP_MESSAGE_BYTES) {
+      LOG_WARNING(QString("DAP message too large (%1 bytes), discarding frame")
+                      .arg(contentLength));
 
-    int messageStart = headerEnd + 4;
-    int messageEnd = messageStart + contentLength;
+      const int messageStart = headerEnd + 4;
+      const int messageEnd = messageStart + contentLength;
+      if (m_buffer.size() >= messageEnd) {
+        m_buffer = m_buffer.mid(messageEnd);
+      } else {
+        // Avoid accumulating a partial oversized payload.
+        m_buffer.clear();
+      }
+      continue;
+    }
+
+    const int messageStart = headerEnd + 4;
+    const int messageEnd = messageStart + contentLength;
 
     if (m_buffer.size() < messageEnd) {
       // Not enough data yet
       break;
     }
 
-    QString content = m_buffer.mid(messageStart, contentLength);
+    const QByteArray content = m_buffer.mid(messageStart, contentLength);
     m_buffer = m_buffer.mid(messageEnd);
 
     QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(content.toUtf8(), &parseError);
+    QJsonDocument doc = QJsonDocument::fromJson(content, &parseError);
 
     if (parseError.error != QJsonParseError::NoError) {
       LOG_ERROR(QString("Failed to parse DAP message: %1")
@@ -783,6 +838,7 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
                         bodyObj["type"].toString(),
                         bodyObj["variablesReference"].toInt());
   } else if (command == "continue") {
+    clearPendingInspectionRequests();
     setState(State::Running);
     emit continued(bodyObj["threadId"].toInt(),
                    bodyObj["allThreadsContinued"].toBool(true));
@@ -810,6 +866,7 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
       setFunctionBreakpoints(deferred);
     }
   } else if (event == "continued") {
+    clearPendingInspectionRequests();
     setState(State::Running);
     emit continued(body["threadId"].toInt(),
                    body["allThreadsContinued"].toBool(true));
@@ -886,4 +943,24 @@ bool DapClient::isLikelyUnsupportedRequestMessage(const QString &message) {
   return lowered.contains("not supported") || lowered.contains("unsupported") ||
          lowered.contains("unknown") || lowered.contains("unrecognized") ||
          lowered.contains("not implemented");
+}
+
+bool DapClient::hasPendingRequestTag(const QString &tag) const {
+  return m_pendingRequests.values().contains(tag);
+}
+
+void DapClient::clearPendingInspectionRequests() {
+  auto it = m_pendingRequests.begin();
+  while (it != m_pendingRequests.end()) {
+    const QString &tag = it.value();
+    const bool isInspectionRequest =
+        tag == "threads" || tag.startsWith("stackTrace:") ||
+        tag.startsWith("scopes:") || tag.startsWith("variables:") ||
+        tag.startsWith("evaluate:");
+    if (isInspectionRequest) {
+      it = m_pendingRequests.erase(it);
+      continue;
+    }
+    ++it;
+  }
 }

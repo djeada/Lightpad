@@ -108,9 +108,30 @@ struct GitCommitInfo {
 struct GitBlameLineInfo {
   int lineNumber; ///< 1-based line number
   QString author;
+  QString authorEmail;
   QString summary;
   QString shortHash;
   QString relativeDate;
+  QString date; ///< Absolute date (ISO format)
+};
+
+/**
+ * @brief Diff hunk content at a specific line
+ */
+struct GitDiffHunk {
+  int startLine;     ///< First line number of the hunk in the new file
+  int lineCount;     ///< Number of lines in the hunk
+  QString header;    ///< Hunk header (@@ ... @@)
+  QStringList lines; ///< Raw diff lines (prefixed with +/-/space)
+};
+
+/**
+ * @brief Stats for files changed in a commit
+ */
+struct GitCommitFileStat {
+  QString filePath;
+  int additions;
+  int deletions;
 };
 
 /**
@@ -321,6 +342,88 @@ public:
    */
   QList<GitBlameLineInfo> getBlameInfo(const QString &filePath) const;
 
+  /**
+   * @brief Get the diff hunk that contains a specific line
+   * @param filePath Path to the file
+   * @param lineNumber 1-based line number
+   * @return Diff hunk at that line, or empty hunk if none
+   */
+  GitDiffHunk getDiffHunkAtLine(const QString &filePath, int lineNumber) const;
+
+  /**
+   * @brief Get file-level change stats for a commit
+   * @param commitHash The commit hash
+   * @return List of files changed with addition/deletion counts
+   */
+  QList<GitCommitFileStat>
+  getCommitFileStats(const QString &commitHash) const;
+
+  /**
+   * @brief Get commit history for a specific file
+   * @param filePath Path to the file
+   * @param maxCount Maximum commits to return
+   * @return List of commits that touched this file
+   */
+  QList<GitCommitInfo> getFileLog(const QString &filePath,
+                                  int maxCount = 50) const;
+
+  /**
+   * @brief Get history for a specific line range using git log -L
+   * @param filePath Path to the file
+   * @param startLine 1-based start line
+   * @param endLine 1-based end line
+   * @return List of commits that modified this line range
+   */
+  QList<GitCommitInfo> getLineHistory(const QString &filePath, int startLine,
+                                      int endLine) const;
+
+  /**
+   * @brief Get file content at a specific revision
+   * @param filePath Path to the file
+   * @param revision Git revision (commit hash, branch, tag, HEAD~N)
+   * @return File content at that revision, or empty string on failure
+   */
+  QString getFileAtRevision(const QString &filePath,
+                            const QString &revision) const;
+
+  /**
+   * @brief Get diff between two branches
+   * @param branch1 First branch name
+   * @param branch2 Second branch name
+   * @return Diff output as string
+   */
+  QString getBranchDiff(const QString &branch1,
+                        const QString &branch2) const;
+
+  /**
+   * @brief Get ahead/behind counts for current branch vs upstream
+   * @param ahead Output: commits ahead of upstream
+   * @param behind Output: commits behind upstream
+   * @return true if upstream tracking info is available
+   */
+  bool getAheadBehind(int &ahead, int &behind) const;
+
+  /**
+   * @brief Check if the working tree has uncommitted changes
+   */
+  bool isDirty() const;
+
+  /**
+   * @brief Stage a single hunk at a line (for gutter stage action)
+   * @param filePath Path to the file
+   * @param lineNumber 1-based line number within the hunk
+   * @return true if staging succeeded
+   */
+  bool stageHunkAtLine(const QString &filePath, int lineNumber);
+
+  /**
+   * @brief Revert a single hunk at a line (discard that change)
+   * @param filePath Path to the file
+   * @param lineNumber 1-based line number within the hunk
+   * @return true if revert succeeded
+   */
+  bool revertHunkAtLine(const QString &filePath, int lineNumber);
+
   // ==================== Remote Operations ====================
 
   /**
@@ -476,6 +579,47 @@ public:
    * @brief Check if a merge is in progress
    */
   bool isMergeInProgress() const;
+
+  // ==================== Cherry-pick ====================
+
+  /**
+   * @brief Cherry-pick a commit into the current branch
+   * @param commitHash Hash of the commit to cherry-pick
+   * @return true if cherry-pick succeeded
+   */
+  bool cherryPick(const QString &commitHash);
+
+  // ==================== Worktree Operations ====================
+
+  /**
+   * @brief List all git worktrees
+   * @return List of (path, branch) pairs
+   */
+  QList<QPair<QString, QString>> listWorktrees() const;
+
+  /**
+   * @brief Add a new worktree
+   * @param path Filesystem path for the new worktree
+   * @param branch Branch to check out (created if -b flag needed)
+   * @param createBranch If true, create a new branch
+   * @return true if worktree was added successfully
+   */
+  bool addWorktree(const QString &path, const QString &branch,
+                   bool createBranch = false);
+
+  /**
+   * @brief Remove a worktree
+   * @param path Filesystem path of the worktree to remove
+   * @return true if removal succeeded
+   */
+  bool removeWorktree(const QString &path);
+
+  /**
+   * @brief Get blame timestamps for heatmap coloring
+   * @param filePath Path to the file
+   * @return Map of line number -> epoch timestamp
+   */
+  QMap<int, qint64> getBlameTimestamps(const QString &filePath) const;
 
 signals:
   /**

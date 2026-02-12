@@ -8,6 +8,8 @@
 #include <QPair>
 #include <QWidget>
 
+#include "../../git/gitintegration.h"
+
 class TextArea;
 class QPaintEvent;
 class QContextMenuEvent;
@@ -63,6 +65,27 @@ public:
   void clearGitBlameLines();
 
   /**
+   * @brief Set rich blame data for hover tooltips
+   */
+  void setRichBlameData(const QMap<int, GitBlameLineInfo> &blameData);
+
+  /**
+   * @brief Set git integration for diff hunk hover support
+   */
+  void setGitIntegration(GitIntegration *git);
+
+  /**
+   * @brief Set heatmap timestamps for age-based gutter coloring
+   */
+  void setHeatmapData(const QMap<int, qint64> &timestamps);
+
+  /**
+   * @brief Enable or disable heatmap gutter coloring
+   */
+  void setHeatmapEnabled(bool enabled);
+  bool isHeatmapEnabled() const;
+
+  /**
    * @brief Enable or disable folding indicators in the gutter
    */
   void setFoldingEnabled(bool enabled);
@@ -78,13 +101,20 @@ private:
   int lineAtPosition(int y) const;
   int numberAreaWidth() const;
   QString resolveFilePath() const;
+  QString buildRichBlameTooltip(const GitBlameLineInfo &info) const;
+  QString buildDiffHunkTooltip(const GitDiffHunk &hunk) const;
+  QColor heatmapColor(qint64 timestamp) const;
 
   TextArea *m_editor;
+  GitIntegration *m_gitIntegration;
   QFont m_font;
   QColor m_backgroundColor;
   QColor m_textColor;
   QList<QPair<int, int>> m_gitDiffLines;
   QMap<int, QString> m_gitBlameLines;
+  QMap<int, GitBlameLineInfo> m_richBlameData;
+  QMap<int, qint64> m_heatmapTimestamps;
+  bool m_heatmapEnabled;
   int m_blameTextWidth;
   bool m_foldingEnabled;
 

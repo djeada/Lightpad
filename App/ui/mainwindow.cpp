@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -24,6 +25,7 @@
 #include <QScrollBar>
 #include <QSizePolicy>
 #include <QStackedWidget>
+#include <QStatusBar>
 #include <QStringListModel>
 #include <QVBoxLayout>
 #include <cstdio>
@@ -48,6 +50,8 @@
 #include "dialogs/filequickopen.h"
 #include "dialogs/formattemplateselector.h"
 #include "dialogs/gitdiffdialog.h"
+#include "dialogs/gitfilehistorydialog.h"
+#include "dialogs/gitrebasedialog.h"
 #include "dialogs/gitlogdialog.h"
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
@@ -94,7 +98,11 @@ MainWindow::MainWindow(QWidget *parent)
       recentFilesManager(nullptr), navigationHistory(nullptr),
       autoSaveManager(nullptr), m_splitEditorContainer(nullptr),
       m_gitIntegration(nullptr), sourceControlPanel(nullptr),
-      sourceControlDock(nullptr), debugPanel(nullptr), debugDock(nullptr),
+      sourceControlDock(nullptr), m_inlineBlameEnabled(false),
+      m_heatmapEnabled(false), m_codeLensEnabled(false),
+      m_gitBranchLabel(nullptr), m_gitSyncLabel(nullptr),
+      m_gitDirtyLabel(nullptr),
+      debugPanel(nullptr), debugDock(nullptr),
       m_debugStartInProgress(false), m_breakpointsSetConnection(),
       m_breakpointChangedConnection(), m_sessionTerminatedConnection(),
       m_sessionErrorConnection(), m_sessionStateConnection(),
@@ -512,6 +520,8 @@ void MainWindow::applyHighlightForFile(const QString &filePath) {
   }
 
   showGitBlameForCurrentFile(isGitBlameEnabledForFile(filePath));
+  updateInlineBlameForCurrentFile();
+  updateGitStatusBar();
 }
 
 QString MainWindow::effectiveLanguageIdForFile(const QString &filePath) {
@@ -559,11 +569,15 @@ void MainWindow::showGitBlameForCurrentFile(bool enable) {
 
   QList<GitBlameLineInfo> blameLines = m_gitIntegration->getBlameInfo(filePath);
   QMap<int, QString> blameMap;
+  QMap<int, GitBlameLineInfo> richBlameMap;
   for (const auto &info : blameLines) {
-    QString label = QString("%1 • %2").arg(info.shortHash).arg(info.author);
+    QString label = QString("%1 \u2022 %2").arg(info.shortHash).arg(info.author);
     blameMap.insert(info.lineNumber, label);
+    richBlameMap.insert(info.lineNumber, info);
   }
   textArea->setGitBlameLines(blameMap);
+  textArea->setRichBlameData(richBlameMap);
+  textArea->setGutterGitIntegration(m_gitIntegration);
 }
 
 bool MainWindow::isGitBlameEnabledForFile(const QString &filePath) const {
@@ -581,6 +595,82 @@ void MainWindow::setGitBlameEnabledForFile(const QString &filePath,
   } else {
     m_blameEnabledFiles.remove(filePath);
   }
+}
+
+void MainWindow::updateInlineBlameForCurrentFile() {
+  TextArea *textArea = getCurrentTextArea();
+  if (!textArea || !m_gitIntegration || !m_inlineBlameEnabled) {
+    if (textArea)
+      textArea->clearInlineBlameData();
+    return;
+  }
+
+  QString filePath;
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (tabWidget) {
+    filePath = tabWidget->getFilePath(tabWidget->currentIndex());
+  }
+
+  if (filePath.isEmpty() || !m_gitIntegration->isValidRepository()) {
+    textArea->clearInlineBlameData();
+    return;
+  }
+
+  QList<GitBlameLineInfo> blameLines = m_gitIntegration->getBlameInfo(filePath);
+  QMap<int, QString> inlineData;
+  for (const auto &info : blameLines) {
+    QString text = QString("%1, %2 \u2022 %3")
+                       .arg(info.author)
+                       .arg(info.relativeDate)
+                       .arg(info.summary);
+    inlineData.insert(info.lineNumber, text);
+  }
+  textArea->setInlineBlameEnabled(true);
+  textArea->setInlineBlameData(inlineData);
+}
+
+void MainWindow::updateGitStatusBar() {
+  if (!m_gitIntegration) {
+    return;
+  }
+
+  if (!m_gitIntegration->isValidRepository()) {
+    m_gitBranchLabel->clear();
+    m_gitSyncLabel->clear();
+    m_gitDirtyLabel->clear();
+    return;
+  }
+
+  // Branch name
+  QString branch = m_gitIntegration->currentBranch();
+  m_gitBranchLabel->setText(
+      QString("\xF0\x9F\x94\x80 %1").arg(branch.isEmpty() ? "HEAD" : branch));
+
+  // Ahead/behind
+  int ahead = 0, behind = 0;
+  if (m_gitIntegration->getAheadBehind(ahead, behind)) {
+    QString syncText;
+    if (ahead > 0)
+      syncText += QString("\u2191%1").arg(ahead);
+    if (behind > 0) {
+      if (!syncText.isEmpty())
+        syncText += " ";
+      syncText += QString("\u2193%1").arg(behind);
+    }
+    if (syncText.isEmpty())
+      syncText = "\u2713";
+    m_gitSyncLabel->setText(syncText);
+    m_gitSyncLabel->setToolTip(
+        QString("Ahead: %1, Behind: %2").arg(ahead).arg(behind));
+  } else {
+    m_gitSyncLabel->clear();
+  }
+
+  // Dirty indicator
+  bool dirty = m_gitIntegration->isDirty();
+  m_gitDirtyLabel->setText(dirty ? "\u25CF" : "");
+  m_gitDirtyLabel->setToolTip(dirty ? tr("Uncommitted changes")
+                                    : tr("Working tree clean"));
 }
 
 QString
@@ -1619,6 +1709,20 @@ void MainWindow::ensureSourceControlPanel() {
             updateGitIntegrationForPath(path);
           });
 
+  connect(sourceControlPanel, &SourceControlPanel::compareBranchesRequested,
+          this, [this](const QString &branch1, const QString &branch2) {
+            if (!m_gitIntegration)
+              return;
+            QString targetId =
+                QString("%1...%2").arg(branch1).arg(branch2);
+            GitDiffDialog diffDialog(m_gitIntegration, targetId,
+                                     GitDiffDialog::DiffTarget::Commit, false,
+                                     settings.theme, this);
+            diffDialog.setWindowTitle(
+                tr("Compare: %1 ↔ %2").arg(branch1).arg(branch2));
+            diffDialog.exec();
+          });
+
   sourceControlDock = new QDockWidget(tr("Source Control"), this);
   sourceControlDock->setObjectName("sourceControlDock");
   sourceControlDock->setAllowedAreas(Qt::LeftDockWidgetArea |
@@ -1705,9 +1809,19 @@ void MainWindow::ensureDebugPanel() {
     startDebuggingForCurrentFile();
   });
   connect(debugPanel, &DebugPanel::stopDebugRequested, this, [this]() {
-    if (!m_activeDebugSessionId.isEmpty()) {
-      DebugSessionManager::instance().stopSession(m_activeDebugSessionId, true);
+    QString sessionIdToStop = m_activeDebugSessionId;
+    if (sessionIdToStop.isEmpty()) {
+      if (DebugSession *focused = DebugSessionManager::instance().focusedSession()) {
+        sessionIdToStop = focused->id();
+      }
     }
+
+    if (sessionIdToStop.isEmpty()) {
+      return;
+    }
+
+    clearDebugSession();
+    DebugSessionManager::instance().stopSession(sessionIdToStop, true);
   });
 
   debugDock = new QDockWidget(tr("Debug"), this);
@@ -2111,6 +2225,38 @@ void MainWindow::setupGitIntegration() {
   }
 
   m_gitIntegration = new GitIntegration(this);
+  m_inlineBlameEnabled = true;
+
+  // Setup git status bar widgets
+  m_gitBranchLabel = new QLabel(this);
+  m_gitBranchLabel->setToolTip(tr("Current branch (click to switch)"));
+  m_gitBranchLabel->setCursor(Qt::PointingHandCursor);
+  m_gitBranchLabel->setStyleSheet("QLabel { padding: 0 6px; }");
+
+  m_gitSyncLabel = new QLabel(this);
+  m_gitSyncLabel->setToolTip(tr("Ahead/behind upstream"));
+  m_gitSyncLabel->setStyleSheet("QLabel { padding: 0 4px; }");
+
+  m_gitDirtyLabel = new QLabel(this);
+  m_gitDirtyLabel->setToolTip(tr("Working tree status"));
+  m_gitDirtyLabel->setStyleSheet("QLabel { padding: 0 4px; }");
+
+  statusBar()->addPermanentWidget(m_gitDirtyLabel);
+  statusBar()->addPermanentWidget(m_gitSyncLabel);
+  statusBar()->addPermanentWidget(m_gitBranchLabel);
+
+  // Debounced git status bar refresh
+  m_gitStatusBarTimer.setSingleShot(true);
+  m_gitStatusBarTimer.setInterval(500);
+  connect(&m_gitStatusBarTimer, &QTimer::timeout, this,
+          &MainWindow::updateGitStatusBar);
+
+  connect(m_gitIntegration, &GitIntegration::statusChanged, this, [this]() {
+    m_gitStatusBarTimer.start();
+  });
+  connect(m_gitIntegration, &GitIntegration::branchChanged, this,
+          [this](const QString &) { m_gitStatusBarTimer.start(); });
+
   updateGitIntegrationForPath(QDir::currentPath());
 }
 
@@ -2140,6 +2286,7 @@ void MainWindow::updateGitIntegrationForPath(const QString &path) {
   LightpadTabWidget *tabWidget = currentTabWidget();
   QString currentFilePath = tabWidget->getFilePath(tabWidget->currentIndex());
   if (textArea && !currentFilePath.isEmpty()) {
+    textArea->setGutterGitIntegration(m_gitIntegration);
     QList<GitDiffLineInfo> diffLines =
         m_gitIntegration->getDiffLines(currentFilePath);
     QList<QPair<int, int>> gutterLines;
@@ -2157,6 +2304,8 @@ void MainWindow::updateGitIntegrationForPath(const QString &path) {
   }
 
   showGitBlameForCurrentFile(isGitBlameEnabledForFile(currentFilePath));
+  updateInlineBlameForCurrentFile();
+  updateGitStatusBar();
 }
 
 void MainWindow::updateSourceControlDockTitle(const QString &repoRoot,
@@ -3092,6 +3241,252 @@ void MainWindow::on_actionGit_Log_triggered() {
   }
 
   dialog.exec();
+}
+
+void MainWindow::on_actionGit_File_History_triggered() { showFileHistory(); }
+
+void MainWindow::showFileHistory() {
+  if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
+    QMessageBox::information(this, tr("File History"),
+                             tr("No valid Git repository found."));
+    return;
+  }
+
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!tabWidget) return;
+
+  QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
+  if (filePath.isEmpty()) {
+    QMessageBox::information(this, tr("File History"),
+                             tr("No file is currently open."));
+    return;
+  }
+
+  GitFileHistoryDialog dialog(m_gitIntegration, filePath, this);
+  connect(&dialog, &GitFileHistoryDialog::viewCommitDiff, this,
+          [this](const QString &hash) {
+            GitDiffDialog diffDialog(m_gitIntegration, hash,
+                                     GitDiffDialog::DiffTarget::Commit, false,
+                                     settings.theme, this);
+            diffDialog.exec();
+          });
+  dialog.exec();
+}
+
+void MainWindow::openReadOnlyTab(const QString &content, const QString &title,
+                                 const QString &originalFilePath) {
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!tabWidget)
+    return;
+
+  int newIndex = tabWidget->addTab(new LightpadPage(tabWidget), title);
+  tabWidget->setCurrentIndex(newIndex);
+
+  auto *page = tabWidget->getPage(newIndex);
+  if (page) {
+    auto *textArea = page->getTextArea();
+    if (textArea) {
+      textArea->setMainWindow(this);
+      textArea->setPlainText(content);
+      textArea->setReadOnly(true);
+
+      if (!originalFilePath.isEmpty()) {
+        applyHighlightForFile(originalFilePath);
+      }
+    }
+  }
+}
+
+void MainWindow::on_actionGit_Rebase_triggered() {
+  if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
+    QMessageBox::information(this, tr("Interactive Rebase"),
+                             tr("No valid Git repository found."));
+    return;
+  }
+
+  GitRebaseDialog dialog(m_gitIntegration, settings.theme, this);
+  dialog.loadCommits("HEAD~10");
+  dialog.exec();
+}
+
+void MainWindow::on_actionToggle_Heatmap_triggered(bool checked) {
+  m_heatmapEnabled = checked;
+  TextArea *textArea = getCurrentTextArea();
+  if (textArea) {
+    textArea->setHeatmapEnabled(checked);
+    if (checked) {
+      updateHeatmapForCurrentFile();
+    }
+  }
+}
+
+void MainWindow::on_actionToggle_CodeLens_triggered(bool checked) {
+  m_codeLensEnabled = checked;
+  TextArea *textArea = getCurrentTextArea();
+  if (textArea) {
+    textArea->setCodeLensEnabled(checked);
+    if (checked) {
+      updateCodeLensForCurrentFile();
+    } else {
+      textArea->clearCodeLensEntries();
+    }
+  }
+}
+
+void MainWindow::updateHeatmapForCurrentFile() {
+  if (!m_heatmapEnabled || !m_gitIntegration ||
+      !m_gitIntegration->isValidRepository())
+    return;
+
+  TextArea *textArea = getCurrentTextArea();
+  if (!textArea)
+    return;
+
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!tabWidget)
+    return;
+
+  QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
+  if (filePath.isEmpty())
+    return;
+
+  QMap<int, qint64> timestamps =
+      m_gitIntegration->getBlameTimestamps(filePath);
+  textArea->setHeatmapData(timestamps);
+  textArea->setHeatmapEnabled(true);
+}
+
+void MainWindow::updateCodeLensForCurrentFile() {
+  if (!m_codeLensEnabled || !m_gitIntegration ||
+      !m_gitIntegration->isValidRepository())
+    return;
+
+  TextArea *textArea = getCurrentTextArea();
+  if (!textArea)
+    return;
+
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!tabWidget)
+    return;
+
+  QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
+  if (filePath.isEmpty())
+    return;
+
+  // Get blame data for the file
+  QList<GitBlameLineInfo> blameLines =
+      m_gitIntegration->getBlameInfo(filePath);
+  if (blameLines.isEmpty())
+    return;
+
+  // Build a map of line -> blame info
+  QMap<int, GitBlameLineInfo> blameMap;
+  for (const auto &info : blameLines) {
+    blameMap[info.lineNumber] = info;
+  }
+
+  // Detect function-like blocks using simple heuristics:
+  // Look for lines that start a block (end with '{' and have a name pattern)
+  QList<TextArea::CodeLensEntry> entries;
+  QTextDocument *doc = textArea->document();
+  if (!doc)
+    return;
+
+  for (int i = 0; i < doc->blockCount(); ++i) {
+    QTextBlock block = doc->findBlockByNumber(i);
+    QString line = block.text().trimmed();
+
+    // Simple heuristic: function/method/class definitions often contain '('
+    // and end with '{' or have '{' on the next line
+    bool looksLikeFunction = false;
+    if (line.contains('(') && !line.startsWith("//") &&
+        !line.startsWith("/*") && !line.startsWith("*") &&
+        !line.startsWith("#")) {
+      // Check if this line or next has '{'
+      if (line.endsWith('{') || line.endsWith(") {")) {
+        looksLikeFunction = true;
+      } else if (i + 1 < doc->blockCount()) {
+        QString nextLine = doc->findBlockByNumber(i + 1).text().trimmed();
+        if (nextLine == "{")
+          looksLikeFunction = true;
+      }
+    }
+    // Also check class/struct definitions
+    if (line.startsWith("class ") || line.startsWith("struct ")) {
+      looksLikeFunction = true;
+    }
+
+    if (!looksLikeFunction)
+      continue;
+
+    // Find the extent of this block (until matching '}')
+    int startLine = i + 1; // 1-based
+    int endLine = startLine;
+    int braceDepth = 0;
+    bool foundOpen = false;
+    for (int j = i; j < doc->blockCount(); ++j) {
+      QString bLine = doc->findBlockByNumber(j).text();
+      for (QChar c : bLine) {
+        if (c == '{') {
+          braceDepth++;
+          foundOpen = true;
+        } else if (c == '}') {
+          braceDepth--;
+        }
+      }
+      if (foundOpen && braceDepth <= 0) {
+        endLine = j + 1;
+        break;
+      }
+    }
+
+    // Aggregate blame data for this range
+    QSet<QString> authors;
+    int changeCount = 0;
+    QString latestAuthor;
+    QString latestDate;
+    qint64 latestEpoch = 0;
+
+    for (int ln = startLine; ln <= endLine; ++ln) {
+      auto it = blameMap.find(ln);
+      if (it != blameMap.end()) {
+        authors.insert(it->author);
+        changeCount++;
+        // Track most recent change (use the date string for display)
+        // Since we don't have epoch here, compare date strings
+        if (latestAuthor.isEmpty() || it->relativeDate < latestDate) {
+          latestAuthor = it->author;
+          latestDate = it->relativeDate;
+        }
+      }
+    }
+
+    if (authors.isEmpty())
+      continue;
+
+    // Build CodeLens text
+    QString authorsText;
+    if (authors.size() <= 3) {
+      authorsText =
+          QString("%1 author%2 (%3)")
+              .arg(authors.size())
+              .arg(authors.size() > 1 ? "s" : "")
+              .arg(QStringList(authors.values()).join(", "));
+    } else {
+      QStringList authorsList = authors.values();
+      authorsText = QString("%1 authors (%2, %3, ...)")
+                        .arg(authors.size())
+                        .arg(authorsList[0], authorsList[1]);
+    }
+
+    TextArea::CodeLensEntry entry;
+    entry.line = i; // 0-based
+    entry.text = QString("%1 | %2").arg(authorsText, latestDate);
+    entry.symbolName = line.left(60);
+    entries.append(entry);
+  }
+
+  textArea->setCodeLensEntries(entries);
 }
 
 // ============================================================================

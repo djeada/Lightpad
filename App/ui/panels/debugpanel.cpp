@@ -19,6 +19,10 @@
 namespace {
 constexpr int MAX_DEBUG_CONSOLE_BLOCKS = 2000;
 constexpr int MAX_DEBUG_CONSOLE_ENTRY_CHARS = 8192;
+constexpr int MAX_EAGER_SCOPE_LOADS = 1;
+constexpr int MAX_STACK_FRAMES_PER_REFRESH = 64;
+constexpr auto GDB_INFO_LOCALS_EVAL_EXPRESSION =
+    "interpreter-exec console \"info locals\"";
 
 void applyTreePalette(QTreeWidget *tree, const Theme &theme) {
   if (!tree) {
@@ -33,12 +37,62 @@ void applyTreePalette(QTreeWidget *tree, const Theme &theme) {
   palette.setColor(QPalette::HighlightedText, theme.foregroundColor);
   tree->setPalette(palette);
 }
+
+QList<QPair<QString, QString>> parseInfoLocalsOutput(const QString &raw) {
+  QList<QPair<QString, QString>> entries;
+  QString currentName;
+  QString currentValue;
+
+  const auto flush = [&]() {
+    if (!currentName.isEmpty()) {
+      entries.append({currentName, currentValue.trimmed()});
+      currentName.clear();
+      currentValue.clear();
+    }
+  };
+
+  const QStringList lines = raw.split('\n');
+  for (const QString &line : lines) {
+    const QString trimmed = line.trimmed();
+    if (trimmed.isEmpty()) {
+      continue;
+    }
+
+    const int eqPos = line.indexOf('=');
+    if (eqPos > 0) {
+      const QString candidateName = line.left(eqPos).trimmed();
+      if (!candidateName.isEmpty() && !candidateName.contains(' ')) {
+        flush();
+        currentName = candidateName;
+        currentValue = line.mid(eqPos + 1).trimmed();
+        continue;
+      }
+    }
+
+    if (!currentName.isEmpty()) {
+      if (!currentValue.isEmpty()) {
+        currentValue += " ";
+      }
+      currentValue += trimmed;
+    }
+  }
+
+  flush();
+  return entries;
+}
 } // namespace
 
 DebugPanel::DebugPanel(QWidget *parent)
-    : QWidget(parent), m_dapClient(nullptr), m_currentThreadId(0),
-      m_currentFrameId(0), m_programmaticVariablesExpand(false),
-      m_variablesNameColumnAutofitPending(false), m_themeInitialized(false) {
+    : QWidget(parent), m_dapClient(nullptr), m_debugStatusLabel(nullptr),
+      m_currentThreadId(0), m_currentFrameId(0),
+      m_programmaticVariablesExpand(false),
+      m_variablesNameColumnAutofitPending(false), m_stepInProgress(false),
+      m_expectStopEvent(true), m_hasLastStopEvent(false),
+      m_lastStoppedThreadId(0),
+      m_lastStoppedReason(DapStoppedReason::Unknown),
+      m_localsFallbackPending(false), m_localsFallbackFrameId(-1),
+      m_localsFallbackScopeRef(0), m_localsFallbackRequestNonce(0),
+      m_themeInitialized(false) {
   setupUI();
   updateToolbarState();
 
@@ -98,30 +152,50 @@ void DebugPanel::applyTheme(const Theme &theme) {
     m_toolbar->setStyleSheet(QString("QToolBar {"
                                      "  background: %1;"
                                      "  border-bottom: 1px solid %2;"
-                                     "  spacing: 2px;"
+                                     "  spacing: 4px;"
+                                     "  padding: 2px 4px;"
                                      "}"
                                      "QToolButton {"
                                      "  color: %3;"
-                                     "  border: 1px solid transparent;"
-                                     "  border-radius: 4px;"
-                                     "  padding: 4px 6px;"
+                                     "  background: %7;"
+                                     "  border: 1px solid %2;"
+                                     "  border-radius: 5px;"
+                                     "  padding: 5px 9px;"
+                                     "  margin: 0 1px;"
+                                     "  font-weight: 600;"
+                                     "  qproperty-cursor: PointingHandCursor;"
                                      "}"
                                      "QToolButton:hover {"
                                      "  background: %4;"
-                                     "  border-color: %2;"
+                                     "  border-color: %8;"
                                      "}"
                                      "QToolButton:pressed {"
                                      "  background: %5;"
                                      "}"
                                      "QToolButton:disabled {"
                                      "  color: %6;"
+                                     "  background: %1;"
+                                     "  border-color: %2;"
+                                     "}"
+                                     "QComboBox {"
+                                     "  min-height: 24px;"
+                                     "  padding: 2px 8px;"
+                                     "  border: 1px solid %2;"
+                                     "  border-radius: 4px;"
+                                     "}"
+                                     "QLabel#debugStatusLabel {"
+                                     "  color: %3;"
+                                     "  padding-left: 8px;"
+                                     "  font-weight: 600;"
                                      "}")
                                  .arg(theme.surfaceColor.name())
                                  .arg(theme.borderColor.name())
                                  .arg(theme.foregroundColor.name())
                                  .arg(theme.hoverColor.name())
                                  .arg(theme.pressedColor.name())
-                                 .arg(theme.singleLineCommentFormat.name()));
+                                 .arg(theme.singleLineCommentFormat.name())
+                                 .arg(theme.surfaceAltColor.name())
+                                 .arg(theme.accentColor.name()));
   }
 
   if (m_tabWidget) {
@@ -257,38 +331,58 @@ void DebugPanel::setupToolbar() {
   m_toolbar->setIconSize(QSize(16, 16));
   m_toolbar->setMovable(false);
   m_toolbar->setFloatable(false);
-  m_toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+  m_toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
+  m_toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+
+  const auto configureAction = [this](QAction *action, const QString &toolTip,
+                                      const QString &helpText) {
+    if (!action) {
+      return;
+    }
+    action->setToolTip(toolTip);
+    action->setStatusTip(toolTip);
+    action->setWhatsThis(helpText);
+    if (QWidget *button = m_toolbar->widgetForAction(action)) {
+      button->setCursor(Qt::PointingHandCursor);
+    }
+  };
 
   m_continueAction = m_toolbar->addAction(
-      style()->standardIcon(QStyle::SP_MediaPlay), tr("Continue"));
+      style()->standardIcon(QStyle::SP_MediaPlay), tr("Start"));
   m_continueAction->setShortcut(QKeySequence(Qt::Key_F5));
-  m_continueAction->setToolTip(tr("Continue (F5)"));
+  configureAction(
+      m_continueAction, tr("Start or continue debugging (F5)"),
+      tr("Starts a debug session when idle, or continues execution when paused."));
   connect(m_continueAction, &QAction::triggered, this, &DebugPanel::onContinue);
 
   m_pauseAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_MediaPause), tr("Pause"));
   m_pauseAction->setShortcut(QKeySequence(Qt::Key_F6));
-  m_pauseAction->setToolTip(tr("Pause (F6)"));
+  configureAction(m_pauseAction, tr("Pause execution (F6)"),
+                  tr("Interrupts a running debug session at the next safe point."));
   connect(m_pauseAction, &QAction::triggered, this, &DebugPanel::onPause);
 
   m_toolbar->addSeparator();
 
   m_stepOverAction = m_toolbar->addAction(
-      style()->standardIcon(QStyle::SP_ArrowRight), tr("Step Over"));
+      style()->standardIcon(QStyle::SP_ArrowRight), tr("Over"));
   m_stepOverAction->setShortcut(QKeySequence(Qt::Key_F10));
-  m_stepOverAction->setToolTip(tr("Step Over (F10)"));
+  configureAction(m_stepOverAction, tr("Step over current line (F10)"),
+                  tr("Executes the current line without entering called functions."));
   connect(m_stepOverAction, &QAction::triggered, this, &DebugPanel::onStepOver);
 
   m_stepIntoAction = m_toolbar->addAction(
-      style()->standardIcon(QStyle::SP_ArrowDown), tr("Step Into"));
+      style()->standardIcon(QStyle::SP_ArrowDown), tr("Into"));
   m_stepIntoAction->setShortcut(QKeySequence(Qt::Key_F11));
-  m_stepIntoAction->setToolTip(tr("Step Into (F11)"));
+  configureAction(m_stepIntoAction, tr("Step into function call (F11)"),
+                  tr("Advances into the function being called on the current line."));
   connect(m_stepIntoAction, &QAction::triggered, this, &DebugPanel::onStepInto);
 
   m_stepOutAction = m_toolbar->addAction(
-      style()->standardIcon(QStyle::SP_ArrowUp), tr("Step Out"));
+      style()->standardIcon(QStyle::SP_ArrowUp), tr("Out"));
   m_stepOutAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F11));
-  m_stepOutAction->setToolTip(tr("Step Out (Shift+F11)"));
+  configureAction(m_stepOutAction, tr("Step out of current function (Shift+F11)"),
+                  tr("Runs until the current function returns to its caller."));
   connect(m_stepOutAction, &QAction::triggered, this, &DebugPanel::onStepOut);
 
   m_toolbar->addSeparator();
@@ -296,25 +390,37 @@ void DebugPanel::setupToolbar() {
   m_restartAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_BrowserReload), tr("Restart"));
   m_restartAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F5));
-  m_restartAction->setToolTip(tr("Restart (Ctrl+Shift+F5)"));
+  configureAction(m_restartAction, tr("Restart debugging (Ctrl+Shift+F5)"),
+                  tr("Stops and relaunches the current debug session."));
   connect(m_restartAction, &QAction::triggered, this, &DebugPanel::onRestart);
 
   m_stopAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_MediaStop), tr("Stop"));
   m_stopAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F5));
-  m_stopAction->setToolTip(tr("Stop (Shift+F5)"));
+  configureAction(m_stopAction, tr("Stop debugging (Shift+F5)"),
+                  tr("Terminates debugging and clears the current debug context."));
   connect(m_stopAction, &QAction::triggered, this, &DebugPanel::onStop);
 
   m_toolbar->addSeparator();
 
   // Thread selector
   m_threadSelector = new QComboBox(this);
-  m_threadSelector->setToolTip(tr("Select Thread"));
-  m_threadSelector->setMinimumWidth(120);
+  m_threadSelector->setToolTip(tr("Select active thread"));
+  m_threadSelector->setStatusTip(tr("Select active thread"));
+  m_threadSelector->setMinimumWidth(150);
   m_threadSelector->setEnabled(false);
+  m_threadSelector->setCursor(Qt::PointingHandCursor);
   connect(m_threadSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &DebugPanel::onThreadSelected);
   m_toolbar->addWidget(m_threadSelector);
+
+  m_toolbar->addSeparator();
+
+  m_debugStatusLabel = new QLabel(tr("Ready: press Start (F5)"), this);
+  m_debugStatusLabel->setObjectName("debugStatusLabel");
+  m_debugStatusLabel->setMinimumWidth(260);
+  m_debugStatusLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+  m_toolbar->addWidget(m_debugStatusLabel);
 }
 
 void DebugPanel::setupCallStack() {
@@ -466,6 +572,10 @@ void DebugPanel::setDapClient(DapClient *client) {
   }
 
   m_dapClient = client;
+  m_expectStopEvent = true;
+  m_hasLastStopEvent = false;
+  m_lastStoppedThreadId = 0;
+  m_lastStoppedReason = DapStoppedReason::Unknown;
 
   if (m_dapClient) {
     connect(m_dapClient, &DapClient::stateChanged, this,
@@ -486,14 +596,7 @@ void DebugPanel::setDapClient(DapClient *client) {
     connect(m_dapClient, &DapClient::output, this,
             &DebugPanel::onOutputReceived);
     connect(m_dapClient, &DapClient::evaluateResult, this,
-            [this](const QString &expr, const QString &result,
-                   const QString &type, int) {
-              QString line = QString("%1 = %2").arg(expr, result);
-              if (!type.isEmpty()) {
-                line += QString(" (%1)").arg(type);
-              }
-              appendConsoleLine(line, palette().color(QPalette::Text), true);
-            });
+            &DebugPanel::onEvaluateResult);
     connect(m_dapClient, &DapClient::evaluateError, this,
             &DebugPanel::onEvaluateError);
 
@@ -509,8 +612,15 @@ void DebugPanel::clearAll() {
   m_variablesTree->clear();
   m_variableRefToItem.clear();
   m_pendingScopeVariableLoads.clear();
+  m_pendingVariableRequests.clear();
+  clearLocalsFallbackState();
   m_programmaticVariablesExpand = false;
   m_variablesNameColumnAutofitPending = false;
+  m_stepInProgress = false;
+  m_expectStopEvent = true;
+  m_hasLastStopEvent = false;
+  m_lastStoppedThreadId = 0;
+  m_lastStoppedReason = DapStoppedReason::Unknown;
   m_consoleOutput->clear();
   m_threads.clear();
   m_stackFrames.clear();
@@ -530,6 +640,26 @@ void DebugPanel::setCurrentFrame(int frameId) {
 }
 
 void DebugPanel::onStopped(const DapStoppedEvent &event) {
+  if (!m_expectStopEvent && event.allThreadsStopped) {
+    LOG_DEBUG("DebugPanel: Ignoring redundant allThreadsStopped event");
+    return;
+  }
+
+  const int eventThreadId = event.threadId > 0 ? event.threadId : m_currentThreadId;
+  const bool duplicateStop = !m_expectStopEvent && m_hasLastStopEvent &&
+                             eventThreadId == m_lastStoppedThreadId &&
+                             event.reason == m_lastStoppedReason;
+  if (duplicateStop) {
+    LOG_DEBUG("DebugPanel: Ignoring duplicate stopped event");
+    return;
+  }
+
+  m_expectStopEvent = false;
+  m_hasLastStopEvent = true;
+  m_lastStoppedThreadId = eventThreadId;
+  m_lastStoppedReason = event.reason;
+  m_stepInProgress = false;
+
   if (event.threadId > 0) {
     m_currentThreadId = event.threadId;
   }
@@ -557,11 +687,25 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
 
   appendConsoleLine(reasonText, consoleInfoColor());
 
-  // Request threads and stack trace
+  // Clear stale variable data from previous stop — some adapters (e.g. GDB
+  // DAP) don't send a "continued" event on step, so onContinued() never runs.
+  m_variablesTree->clear();
+  m_variableRefToItem.clear();
+  m_pendingScopeVariableLoads.clear();
+  m_pendingVariableRequests.clear();
+  clearLocalsFallbackState();
+
+  // Request threads; the callback will request the stack trace.
+  // Don't request stack trace here too — that causes duplicate requests
+  // that cascade into doubled scopes/variables fetches and memory growth.
   if (m_dapClient) {
-    m_dapClient->getThreads();
-    if (m_currentThreadId > 0) {
-      m_dapClient->getStackTrace(m_currentThreadId);
+    const bool canFastRefreshOnStep =
+        event.reason == DapStoppedReason::Step && m_currentThreadId > 0;
+    if (canFastRefreshOnStep) {
+      m_dapClient->getStackTrace(m_currentThreadId, 0,
+                                 MAX_STACK_FRAMES_PER_REFRESH);
+    } else {
+      m_dapClient->getThreads();
     }
   }
 
@@ -569,8 +713,12 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
 }
 
 void DebugPanel::onContinued() {
+  m_stepInProgress = false;
   m_variablesTree->clear();
   m_variableRefToItem.clear();
+  m_pendingScopeVariableLoads.clear();
+  m_pendingVariableRequests.clear();
+  clearLocalsFallbackState();
   updateToolbarState();
 }
 
@@ -581,7 +729,12 @@ void DebugPanel::onTerminated() {
 }
 
 void DebugPanel::onContinue() {
+  if (m_stepInProgress)
+    return;
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
+    m_expectStopEvent = true;
+    m_stepInProgress = true;
+    updateToolbarState();
     m_dapClient->continueExecution(activeThreadId());
   } else {
     emit startDebugRequested();
@@ -590,32 +743,48 @@ void DebugPanel::onContinue() {
 
 void DebugPanel::onPause() {
   if (m_dapClient && m_dapClient->state() == DapClient::State::Running) {
+    m_expectStopEvent = true;
     m_dapClient->pause(activeThreadId());
   }
 }
 
 void DebugPanel::onStepOver() {
+  if (m_stepInProgress)
+    return;
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
     const int threadId = activeThreadId();
     if (threadId > 0) {
+      m_expectStopEvent = true;
+      m_stepInProgress = true;
+      updateToolbarState();
       m_dapClient->stepOver(threadId);
     }
   }
 }
 
 void DebugPanel::onStepInto() {
+  if (m_stepInProgress)
+    return;
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
     const int threadId = activeThreadId();
     if (threadId > 0) {
+      m_expectStopEvent = true;
+      m_stepInProgress = true;
+      updateToolbarState();
       m_dapClient->stepInto(threadId);
     }
   }
 }
 
 void DebugPanel::onStepOut() {
+  if (m_stepInProgress)
+    return;
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
     const int threadId = activeThreadId();
     if (threadId > 0) {
+      m_expectStopEvent = true;
+      m_stepInProgress = true;
+      updateToolbarState();
       m_dapClient->stepOut(threadId);
     }
   }
@@ -631,10 +800,9 @@ void DebugPanel::onRestart() {
 
 void DebugPanel::onStop() {
   if (m_dapClient && m_dapClient->isDebugging()) {
-    m_dapClient->terminate();
-  } else {
-    emit stopDebugRequested();
+    appendConsoleLine(tr("Stopping debug session..."), consoleMutedColor());
   }
+  emit stopDebugRequested();
 }
 
 void DebugPanel::onThreadsReceived(const QList<DapThread> &threads) {
@@ -664,7 +832,8 @@ void DebugPanel::onThreadsReceived(const QList<DapThread> &threads) {
   m_threadSelector->blockSignals(false);
 
   if (m_dapClient && hasCurrentThread) {
-    m_dapClient->getStackTrace(m_currentThreadId);
+    m_dapClient->getStackTrace(m_currentThreadId, 0,
+                               MAX_STACK_FRAMES_PER_REFRESH);
   }
   updateToolbarState();
 }
@@ -710,38 +879,110 @@ void DebugPanel::onStackTraceReceived(int threadId,
     }
 
     const DapStackFrame &activeFrame = frames.at(activeIndex);
+    // Block signals to avoid duplicate setCurrentFrame/getScopes via
+    // currentItemChanged handler
+    m_callStackTree->blockSignals(true);
     m_callStackTree->setCurrentItem(m_callStackTree->topLevelItem(activeIndex));
+    m_callStackTree->blockSignals(false);
     setCurrentFrame(activeFrame.id);
+
+    // Navigate editor to active frame location
+    if (!activeFrame.source.path.isEmpty()) {
+      emit locationClicked(activeFrame.source.path, activeFrame.line,
+                           activeFrame.column);
+    }
+
+    // Evaluate watches in the new frame context
+    WatchManager::instance().evaluateAll(activeFrame.id);
   }
 }
 
 void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
-  Q_UNUSED(frameId);
+  // Ignore stale responses for a frame we're no longer inspecting
+  if (frameId != m_currentFrameId) {
+    return;
+  }
 
   m_variablesTree->clear();
   m_variableRefToItem.clear();
   m_pendingScopeVariableLoads.clear();
+  m_pendingVariableRequests.clear();
+  clearLocalsFallbackState();
   m_variablesNameColumnAutofitPending = true;
 
+  QList<int> eagerScopeRefs;
   for (const DapScope &scope : scopes) {
+    if (scope.variablesReference <= 0 || scope.expensive) {
+      continue;
+    }
+    const QString lowered = scope.name.trimmed().toLower();
+    if (lowered.contains("register") || lowered.contains("local")) {
+      continue;
+    }
+    // GDB DAP can hang indefinitely on "Locals" scope queries in some frames.
+    // Prefer loading Arguments automatically and defer others.
+    if (lowered.contains("argument") || lowered == QLatin1String("args")) {
+      eagerScopeRefs.append(scope.variablesReference);
+      break;
+    }
+  }
+  if (eagerScopeRefs.isEmpty()) {
+    for (const DapScope &scope : scopes) {
+      if (scope.variablesReference <= 0 || scope.expensive) {
+        continue;
+      }
+      const QString lowered = scope.name.trimmed().toLower();
+      if (lowered.contains("register") || lowered.contains("local")) {
+        continue;
+      }
+      eagerScopeRefs.append(scope.variablesReference);
+      break;
+    }
+  }
+  int eagerLoadsRemaining = MAX_EAGER_SCOPE_LOADS;
+
+  for (const DapScope &scope : scopes) {
+    const QString lowered = scope.name.trimmed().toLower();
+    const bool registerScope = lowered.contains("register");
+    const bool localScope = lowered.contains("local");
+    const bool autoLoadScope = eagerScopeRefs.contains(scope.variablesReference) &&
+                               eagerLoadsRemaining > 0;
+    const bool deferScope = scope.expensive || registerScope || localScope ||
+                            !autoLoadScope;
+
     QTreeWidgetItem *scopeItem = new QTreeWidgetItem();
     scopeItem->setText(0, scope.name);
     scopeItem->setData(0, Qt::UserRole, scope.variablesReference);
     scopeItem->setFirstColumnSpanned(true);
-    scopeItem->setExpanded(true);
 
     // Make scope names bold
     QFont font = scopeItem->font(0);
     font.setBold(true);
     scopeItem->setFont(0, font);
 
+    // Set expand state BEFORE adding to tree so itemExpanded signal is not
+    // emitted (the item has no parent tree widget yet).
+    if (scope.variablesReference > 0 && (localScope || !deferScope)) {
+      scopeItem->setExpanded(true);
+    }
+
     m_variablesTree->addTopLevelItem(scopeItem);
 
     // Request variables for this scope
     if (scope.variablesReference > 0) {
-      m_variableRefToItem[scope.variablesReference] = scopeItem;
-      m_pendingScopeVariableLoads.insert(scope.variablesReference);
-      m_dapClient->getVariables(scope.variablesReference);
+      if (localScope) {
+        m_variableRefToItem[scope.variablesReference] = scopeItem;
+        scopeItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+        requestLocalsFallback(scope.variablesReference);
+      } else if (deferScope) {
+        scopeItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+      } else {
+        m_variableRefToItem[scope.variablesReference] = scopeItem;
+        m_pendingScopeVariableLoads.insert(scope.variablesReference);
+        m_pendingVariableRequests.insert(scope.variablesReference);
+        m_dapClient->getVariables(scope.variablesReference);
+        --eagerLoadsRemaining;
+      }
     }
   }
 
@@ -749,14 +990,11 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     resizeVariablesNameColumnOnce();
     m_variablesNameColumnAutofitPending = false;
   }
-
-  m_programmaticVariablesExpand = true;
-  m_variablesTree->expandAll();
-  m_programmaticVariablesExpand = false;
 }
 
 void DebugPanel::onVariablesReceived(int variablesReference,
                                      const QList<DapVariable> &variables) {
+  m_pendingVariableRequests.remove(variablesReference);
   QTreeWidgetItem *parentItem = m_variableRefToItem.value(variablesReference);
   if (!parentItem) {
     return;
@@ -783,9 +1021,6 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     parentItem->addChild(item);
   }
   parentItem->setExpanded(true);
-  m_programmaticVariablesExpand = true;
-  m_variablesTree->expandAll();
-  m_programmaticVariablesExpand = false;
 
   if (m_variablesNameColumnAutofitPending &&
       m_pendingScopeVariableLoads.remove(variablesReference) &&
@@ -793,6 +1028,106 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     m_variablesNameColumnAutofitPending = false;
     QTimer::singleShot(0, this, [this]() { resizeVariablesNameColumnOnce(); });
   }
+}
+
+void DebugPanel::requestLocalsFallback(int scopeVariablesReference) {
+  if (scopeVariablesReference <= 0) {
+    return;
+  }
+
+  QTreeWidgetItem *scopeItem = m_variableRefToItem.value(scopeVariablesReference);
+  if (!scopeItem) {
+    return;
+  }
+
+  if (!m_dapClient || m_dapClient->state() != DapClient::State::Stopped ||
+      m_currentFrameId < 0) {
+    showLocalsFallbackMessage(scopeVariablesReference,
+                              tr("<locals unavailable in current state>"));
+    return;
+  }
+
+  if (m_localsFallbackPending) {
+    return;
+  }
+
+  while (scopeItem->childCount() > 0) {
+    delete scopeItem->takeChild(0);
+  }
+
+  QTreeWidgetItem *loadingItem = new QTreeWidgetItem();
+  loadingItem->setText(0, tr("<loading locals...>"));
+  loadingItem->setFirstColumnSpanned(true);
+  loadingItem->setForeground(0, consoleMutedColor());
+  scopeItem->addChild(loadingItem);
+  scopeItem->setExpanded(true);
+
+  const QString baseExpr = QString::fromLatin1(GDB_INFO_LOCALS_EVAL_EXPRESSION);
+  const int padSpaces = (m_localsFallbackRequestNonce++ % 7) + 1;
+  const QString requestExpr = baseExpr + QString(padSpaces, QLatin1Char(' '));
+
+  m_localsFallbackPending = true;
+  m_localsFallbackFrameId = m_currentFrameId;
+  m_localsFallbackScopeRef = scopeVariablesReference;
+  m_localsFallbackPendingExpression = requestExpr;
+  m_dapClient->evaluate(requestExpr, m_currentFrameId, "repl");
+}
+
+void DebugPanel::populateLocalsFromGdbEvaluate(int scopeVariablesReference,
+                                               const QString &rawResult) {
+  QTreeWidgetItem *scopeItem = m_variableRefToItem.value(scopeVariablesReference);
+  if (!scopeItem) {
+    return;
+  }
+
+  while (scopeItem->childCount() > 0) {
+    delete scopeItem->takeChild(0);
+  }
+
+  const QList<QPair<QString, QString>> entries = parseInfoLocalsOutput(rawResult);
+  if (entries.isEmpty()) {
+    showLocalsFallbackMessage(scopeVariablesReference,
+                              tr("<no locals available at this location>"));
+    return;
+  }
+
+  for (const auto &entry : entries) {
+    QTreeWidgetItem *item = new QTreeWidgetItem();
+    item->setText(0, entry.first);
+    item->setText(1, entry.second);
+    item->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
+    scopeItem->addChild(item);
+  }
+
+  scopeItem->setExpanded(true);
+  QTimer::singleShot(0, this, [this]() { resizeVariablesNameColumnOnce(); });
+}
+
+void DebugPanel::showLocalsFallbackMessage(int scopeVariablesReference,
+                                           const QString &message,
+                                           bool isError) {
+  QTreeWidgetItem *scopeItem = m_variableRefToItem.value(scopeVariablesReference);
+  if (!scopeItem) {
+    return;
+  }
+
+  while (scopeItem->childCount() > 0) {
+    delete scopeItem->takeChild(0);
+  }
+
+  QTreeWidgetItem *hintItem = new QTreeWidgetItem();
+  hintItem->setText(0, message);
+  hintItem->setFirstColumnSpanned(true);
+  hintItem->setForeground(0, isError ? consoleErrorColor() : consoleMutedColor());
+  scopeItem->addChild(hintItem);
+  scopeItem->setExpanded(true);
+}
+
+void DebugPanel::clearLocalsFallbackState() {
+  m_localsFallbackPending = false;
+  m_localsFallbackFrameId = -1;
+  m_localsFallbackScopeRef = 0;
+  m_localsFallbackPendingExpression.clear();
 }
 
 void DebugPanel::onOutputReceived(const DapOutputEvent &event) {
@@ -816,10 +1151,9 @@ void DebugPanel::onCallStackItemClicked(QTreeWidgetItem *item, int column) {
   int line = item->data(0, Qt::UserRole + 2).toInt();
   int col = item->data(0, Qt::UserRole + 3).toInt();
 
-  if (frameId > 0) {
-    setCurrentFrame(frameId);
-    WatchManager::instance().evaluateAll(frameId);
-  }
+  // frameId can be 0 (GDB uses 0 for the first frame), so always update
+  setCurrentFrame(frameId);
+  WatchManager::instance().evaluateAll(frameId);
 
   if (!filePath.isEmpty()) {
     emit locationClicked(filePath, line, col);
@@ -831,11 +1165,24 @@ void DebugPanel::onVariableItemExpanded(QTreeWidgetItem *item) {
     return;
   }
 
+  if (!item->parent()) {
+    const QString scopeName = item->text(0).trimmed().toLower();
+    if (scopeName.contains(QLatin1String("local"))) {
+      const int localScopeRef = item->data(0, Qt::UserRole).toInt();
+      if (localScopeRef > 0 && item->childCount() == 0) {
+        requestLocalsFallback(localScopeRef);
+      }
+      return;
+    }
+  }
+
   int varRef = item->data(0, Qt::UserRole).toInt();
 
   // Only request if we haven't already loaded children
-  if (varRef > 0 && item->childCount() == 0 && m_dapClient) {
+  if (varRef > 0 && item->childCount() == 0 && m_dapClient &&
+      !m_pendingVariableRequests.contains(varRef)) {
     m_variableRefToItem[varRef] = item;
+    m_pendingVariableRequests.insert(varRef);
     m_dapClient->getVariables(varRef);
   }
 }
@@ -873,18 +1220,61 @@ void DebugPanel::updateToolbarState() {
   DapClient::State state =
       m_dapClient ? m_dapClient->state() : DapClient::State::Disconnected;
 
-  bool isDebugging = (state == DapClient::State::Running ||
-                      state == DapClient::State::Stopped);
-  bool isStopped = (state == DapClient::State::Stopped && activeThreadId() > 0);
-  bool isRunning = (state == DapClient::State::Running);
+  const bool isDebugging = (state == DapClient::State::Running ||
+                            state == DapClient::State::Stopped);
+  const bool isStopped = (state == DapClient::State::Stopped &&
+                          activeThreadId() > 0 && !m_stepInProgress);
+  const bool isRunning = (state == DapClient::State::Running || m_stepInProgress);
+  const bool isStarting =
+      state == DapClient::State::Connecting || state == DapClient::State::Initializing;
+  const bool canStart = !isRunning && !isStarting;
+  const bool canStop = isDebugging || isStarting;
 
-  m_continueAction->setEnabled(!isRunning);
-  m_pauseAction->setEnabled(isRunning);
+  m_continueAction->setEnabled(canStart);
+  m_pauseAction->setEnabled(isRunning && isDebugging);
   m_stepOverAction->setEnabled(isStopped);
   m_stepIntoAction->setEnabled(isStopped);
   m_stepOutAction->setEnabled(isStopped);
   m_restartAction->setEnabled(isDebugging);
-  m_stopAction->setEnabled(isDebugging);
+  m_stopAction->setEnabled(canStop);
+
+  if (isDebugging) {
+    m_continueAction->setText(tr("Continue"));
+    m_continueAction->setToolTip(tr("Continue execution (F5)"));
+    m_continueAction->setStatusTip(tr("Continue execution (F5)"));
+  } else {
+    m_continueAction->setText(tr("Start"));
+    m_continueAction->setToolTip(tr("Start debugging current file (F5)"));
+    m_continueAction->setStatusTip(tr("Start debugging current file (F5)"));
+  }
+
+  if (m_debugStatusLabel) {
+    QString statusText;
+    switch (state) {
+    case DapClient::State::Disconnected:
+    case DapClient::State::Ready:
+    case DapClient::State::Terminated:
+      statusText = tr("Ready: press Start (F5)");
+      break;
+    case DapClient::State::Connecting:
+    case DapClient::State::Initializing:
+      statusText = tr("Starting debugger...");
+      break;
+    case DapClient::State::Running:
+      statusText = m_stepInProgress
+                       ? tr("Stepping... waiting for next stop")
+                       : tr("Running: Pause (F6) or Stop (Shift+F5)");
+      break;
+    case DapClient::State::Stopped:
+      statusText = tr("Paused: Step (F10/F11) or Continue (F5)");
+      break;
+    case DapClient::State::Error:
+      statusText = tr("Debugger error: Stop and restart");
+      break;
+    }
+    m_debugStatusLabel->setText(statusText);
+    m_debugStatusLabel->setToolTip(statusText);
+  }
 
   m_consoleInput->setEnabled(isStopped);
 }
@@ -948,7 +1338,8 @@ void DebugPanel::onThreadSelected(int index) {
   int threadId = m_threadSelector->itemData(index).toInt();
   if (threadId > 0 && threadId != m_currentThreadId) {
     m_currentThreadId = threadId;
-    m_dapClient->getStackTrace(m_currentThreadId);
+    m_dapClient->getStackTrace(m_currentThreadId, 0,
+                               MAX_STACK_FRAMES_PER_REFRESH);
   }
 }
 
@@ -1075,8 +1466,43 @@ void DebugPanel::onWatchChildrenReceived(int watchId,
   m_watchTree->expandAll();
 }
 
+void DebugPanel::onEvaluateResult(const QString &expression,
+                                  const QString &result, const QString &type,
+                                  int variablesReference) {
+  Q_UNUSED(variablesReference);
+
+  if (m_localsFallbackPending && expression == m_localsFallbackPendingExpression) {
+    const int scopeRef = m_localsFallbackScopeRef;
+    const bool staleFrame = m_localsFallbackFrameId != m_currentFrameId;
+    clearLocalsFallbackState();
+    if (!staleFrame) {
+      populateLocalsFromGdbEvaluate(scopeRef, result);
+    }
+    return;
+  }
+
+  QString line = QString("%1 = %2").arg(expression, result);
+  if (!type.isEmpty()) {
+    line += QString(" (%1)").arg(type);
+  }
+  appendConsoleLine(line, palette().color(QPalette::Text), true);
+}
+
 void DebugPanel::onEvaluateError(const QString &expression,
                                  const QString &errorMessage) {
+  if (m_localsFallbackPending && expression == m_localsFallbackPendingExpression) {
+    const int scopeRef = m_localsFallbackScopeRef;
+    const bool staleFrame = m_localsFallbackFrameId != m_currentFrameId;
+    clearLocalsFallbackState();
+    if (!staleFrame) {
+      showLocalsFallbackMessage(
+          scopeRef,
+          tr("<locals unavailable with current GDB DAP; use Watches/REPL>"),
+          true);
+    }
+    return;
+  }
+
   appendConsoleLine(QString("%1: %2").arg(expression, errorMessage),
                     consoleErrorColor(), true);
 }

@@ -6,16 +6,21 @@
 #include "../dialogs/mergeconflictdialog.h"
 #include "../uistylehelper.h"
 #include <QApplication>
+#include <QBoxLayout>
 #include <QClipboard>
+#include <QComboBox>
 #include <QCursor>
+#include <QDialog>
 #include <QDir>
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QInputDialog>
+#include <QLabel>
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPalette>
+#include <QPushButton>
 #include <QSizePolicy>
 #include <QTimer>
 #include <QToolTip>
@@ -571,6 +576,157 @@ void SourceControlPanel::setupRepoUI() {
   connect(m_stashButton, &QPushButton::clicked, this,
           &SourceControlPanel::onStashClicked);
   remoteOpsLayout->addWidget(m_stashButton);
+
+  auto *compareBranchesButton =
+      new QPushButton("\u2194 Compare Branches", branchSection);
+  compareBranchesButton->setToolTip(tr("Compare two branches"));
+  compareBranchesButton->setStyleSheet(
+      "QPushButton {"
+      "  background: #21262d;"
+      "  color: #79c0ff;"
+      "  border: 1px solid #30363d;"
+      "  border-radius: 6px;"
+      "  padding: 4px 8px;"
+      "  font-size: 11px;"
+      "}"
+      "QPushButton:hover {"
+      "  background: #1f6feb;"
+      "  color: white;"
+      "  border-color: #1f6feb;"
+      "}"
+      "QPushButton:pressed {"
+      "  background: #1a5cd6;"
+      "}");
+  connect(compareBranchesButton, &QPushButton::clicked, this, [this]() {
+    if (!m_git || !m_git->isValidRepository())
+      return;
+
+    QList<GitBranchInfo> branches = m_git->getBranches();
+    if (branches.size() < 2)
+      return;
+
+    QStringList branchNames;
+    QString current;
+    for (const auto &b : branches) {
+      branchNames << b.name;
+      if (b.isCurrent)
+        current = b.name;
+    }
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Compare Branches"));
+    dlg.resize(350, 150);
+    auto *layout = new QVBoxLayout(&dlg);
+
+    layout->addWidget(new QLabel(tr("Base branch:"), &dlg));
+    auto *base = new QComboBox(&dlg);
+    base->addItems(branchNames);
+    if (!current.isEmpty())
+      base->setCurrentText(current);
+    layout->addWidget(base);
+
+    layout->addWidget(new QLabel(tr("Compare with:"), &dlg));
+    auto *compare = new QComboBox(&dlg);
+    compare->addItems(branchNames);
+    layout->addWidget(compare);
+
+    auto *btnLayout = new QHBoxLayout;
+    auto *okBtn = new QPushButton(tr("Compare"), &dlg);
+    auto *cancelBtn = new QPushButton(tr("Cancel"), &dlg);
+    btnLayout->addStretch();
+    btnLayout->addWidget(cancelBtn);
+    btnLayout->addWidget(okBtn);
+    layout->addLayout(btnLayout);
+
+    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
+
+    if (dlg.exec() == QDialog::Accepted) {
+      QString diff =
+          m_git->getBranchDiff(base->currentText(), compare->currentText());
+      if (!diff.isEmpty()) {
+        emit compareBranchesRequested(base->currentText(),
+                                      compare->currentText());
+      }
+    }
+  });
+  remoteOpsLayout->addWidget(compareBranchesButton);
+
+  auto *worktreeButton =
+      new QPushButton("📂 Worktrees", branchSection);
+  worktreeButton->setToolTip(tr("Manage Git worktrees"));
+  worktreeButton->setStyleSheet(
+      "QPushButton {"
+      "  background-color: #21262d;"
+      "  color: #c9d1d9;"
+      "  border: 1px solid #30363d;"
+      "  padding: 4px 10px;"
+      "  border-radius: 4px;"
+      "}"
+      "QPushButton:hover { background-color: #30363d; }");
+  connect(worktreeButton, &QPushButton::clicked, this, [this]() {
+    if (!m_git || !m_git->isValidRepository())
+      return;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Git Worktrees"));
+    dlg.setMinimumSize(500, 350);
+    auto *layout = new QVBoxLayout(&dlg);
+
+    auto *list = new QTreeWidget(&dlg);
+    list->setHeaderLabels({tr("Path"), tr("Branch")});
+    list->setRootIsDecorated(false);
+    list->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    list->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+
+    auto worktrees = m_git->listWorktrees();
+    for (const auto &wt : worktrees) {
+      auto *item = new QTreeWidgetItem(list);
+      item->setText(0, wt.first);
+      item->setText(1, wt.second);
+    }
+    layout->addWidget(list);
+
+    auto *btnLayout = new QHBoxLayout();
+    auto *addBtn = new QPushButton(tr("Add Worktree"), &dlg);
+    auto *removeBtn = new QPushButton(tr("Remove Selected"), &dlg);
+    auto *closeBtn = new QPushButton(tr("Close"), &dlg);
+    btnLayout->addWidget(addBtn);
+    btnLayout->addWidget(removeBtn);
+    btnLayout->addStretch();
+    btnLayout->addWidget(closeBtn);
+    layout->addLayout(btnLayout);
+
+    connect(addBtn, &QPushButton::clicked, [&]() {
+      QString path = QInputDialog::getText(&dlg, tr("Worktree Path"),
+                                           tr("Directory path:"));
+      if (path.isEmpty())
+        return;
+      QString branch = QInputDialog::getText(&dlg, tr("Branch"),
+                                             tr("Branch name:"));
+      if (branch.isEmpty())
+        return;
+      if (m_git->addWorktree(path, branch, true)) {
+        auto *item = new QTreeWidgetItem(list);
+        item->setText(0, path);
+        item->setText(1, branch);
+      }
+    });
+
+    connect(removeBtn, &QPushButton::clicked, [&]() {
+      auto *item = list->currentItem();
+      if (!item)
+        return;
+      QString path = item->text(0);
+      if (m_git->removeWorktree(path)) {
+        delete item;
+      }
+    });
+
+    connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    dlg.exec();
+  });
+  remoteOpsLayout->addWidget(worktreeButton);
 
   branchLayout->addLayout(remoteOpsLayout);
   mainLayout->addWidget(branchSection);

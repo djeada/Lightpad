@@ -11,12 +11,14 @@ class QTextEdit;
 class QSplitter;
 class QLabel;
 class QLineEdit;
+class QTabWidget;
+class GitGraphWidget;
 
 /**
  * @brief Git history/log viewer dialog
  *
  * Displays the commit history of the current repository with
- * commit details and optional file filtering.
+ * commit details, optional file filtering, and DAG graph view.
  */
 class GitLogDialog : public QDialog {
   Q_OBJECT
@@ -46,21 +48,25 @@ protected:
 
 private slots:
   void onCommitSelected(QTreeWidgetItem *current, QTreeWidgetItem *previous);
+  void onGraphCommitSelected(const QString &hash);
   void onSearchChanged(const QString &text);
 
 private:
   void buildUi();
   void applyTheme(const Theme &theme);
   void loadCommits();
+  void showContextMenuForCommit(const QString &hash, const QPoint &pos);
 
   GitIntegration *m_git;
   QString m_filePath;
   Theme m_theme;
 
   QLineEdit *m_searchField;
+  QTabWidget *m_tabWidget;
   QSplitter *m_splitter;
   QTreeWidget *m_commitTree;
   QTextEdit *m_detailView;
+  GitGraphWidget *m_graphWidget;
   QLabel *m_statusLabel;
 };
 

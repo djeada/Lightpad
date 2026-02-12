@@ -79,6 +79,9 @@ set(project_headers
     ui/dialogs/gitremotedialog.h
     ui/dialogs/gitstashdialog.h
     ui/dialogs/gitlogdialog.h
+    ui/dialogs/gitfilehistorydialog.h
+    ui/dialogs/gitrebasedialog.h
+    ui/widgets/gitgraphwidget.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
     ui/panels/breadcrumbwidget.h
@@ -185,6 +188,9 @@ set(project_sources
     ui/dialogs/gitremotedialog.cpp
     ui/dialogs/gitstashdialog.cpp
     ui/dialogs/gitlogdialog.cpp
+    ui/dialogs/gitfilehistorydialog.cpp
+    ui/dialogs/gitrebasedialog.cpp
+    ui/widgets/gitgraphwidget.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
     ui/panels/breadcrumbwidget.cpp

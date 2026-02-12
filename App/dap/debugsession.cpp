@@ -78,14 +78,10 @@ void DebugSession::stop(bool terminate) {
     return;
   }
 
-  if (terminate) {
-    m_client->terminate();
-  } else {
-    m_client->disconnect(false);
-  }
-
+  Q_UNUSED(terminate);
   m_client->stop();
   setState(State::Terminated);
+  emit terminated();
 }
 
 void DebugSession::restart() {
