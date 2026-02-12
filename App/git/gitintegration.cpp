@@ -1,5 +1,6 @@
 #include "gitintegration.h"
 #include "../core/logging/logger.h"
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -909,7 +910,34 @@ GitIntegration::getBlameInfo(const QString &filePath) const {
         continue;
       }
 
+      if (line.startsWith("author-mail ")) {
+        current.authorEmail =
+            line.mid(QString("author-mail ").size()).remove('<').remove('>');
+        continue;
+      }
+
       if (line.startsWith("author-time ")) {
+        qint64 timestamp = line.mid(QString("author-time ").size()).toLongLong();
+        QDateTime dt = QDateTime::fromSecsSinceEpoch(timestamp);
+        current.date = dt.toString(Qt::ISODate);
+        qint64 secsAgo = QDateTime::currentDateTime().toSecsSinceEpoch() - timestamp;
+        if (secsAgo < 60)
+          current.relativeDate = "just now";
+        else if (secsAgo < 3600)
+          current.relativeDate =
+              QString("%1 minutes ago").arg(secsAgo / 60);
+        else if (secsAgo < 86400)
+          current.relativeDate =
+              QString("%1 hours ago").arg(secsAgo / 3600);
+        else if (secsAgo < 2592000)
+          current.relativeDate =
+              QString("%1 days ago").arg(secsAgo / 86400);
+        else if (secsAgo < 31536000)
+          current.relativeDate =
+              QString("%1 months ago").arg(secsAgo / 2592000);
+        else
+          current.relativeDate =
+              QString("%1 years ago").arg(secsAgo / 31536000);
         continue;
       }
 
@@ -961,6 +989,364 @@ void GitIntegration::refresh() {
 
   updateCurrentBranch();
   emit statusChanged();
+}
+
+GitDiffHunk
+GitIntegration::getDiffHunkAtLine(const QString &filePath,
+                                  int lineNumber) const {
+  GitDiffHunk result;
+  if (!m_isValid) {
+    return result;
+  }
+
+  QString relativePath = filePath;
+  if (filePath.startsWith(m_repositoryPath)) {
+    relativePath = filePath.mid(m_repositoryPath.length() + 1);
+  }
+
+  bool success;
+  QString output =
+      executeGitCommand({"diff", "-U3", "--", relativePath}, &success);
+  if (output.isEmpty()) {
+    output = executeGitCommand({"diff", "-U3", "--cached", "--", relativePath},
+                               &success);
+  }
+  if (output.isEmpty()) {
+    return result;
+  }
+
+  QRegularExpression hunkHeader(
+      R"(@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@.*)");
+  QStringList lines = output.split('\n');
+
+  int i = 0;
+  while (i < lines.size()) {
+    QRegularExpressionMatch match = hunkHeader.match(lines[i]);
+    if (!match.hasMatch()) {
+      ++i;
+      continue;
+    }
+
+    int hunkStart = match.captured(1).toInt();
+    int hunkCount =
+        match.captured(2).isEmpty() ? 1 : match.captured(2).toInt();
+    QString header = lines[i];
+    QStringList hunkLines;
+    ++i;
+
+    int newLine = hunkStart;
+    while (i < lines.size() && !lines[i].startsWith("@@") &&
+           !lines[i].startsWith("diff ")) {
+      hunkLines.append(lines[i]);
+      if (!lines[i].isEmpty() && lines[i][0] != '-') {
+        ++newLine;
+      }
+      ++i;
+    }
+
+    if (lineNumber >= hunkStart &&
+        lineNumber < hunkStart + hunkCount) {
+      result.startLine = hunkStart;
+      result.lineCount = hunkCount;
+      result.header = header;
+      result.lines = hunkLines;
+      return result;
+    }
+  }
+
+  return result;
+}
+
+QList<GitCommitFileStat>
+GitIntegration::getCommitFileStats(const QString &commitHash) const {
+  QList<GitCommitFileStat> result;
+  if (!m_isValid || commitHash.isEmpty()) {
+    return result;
+  }
+
+  bool success;
+  QString output = executeGitCommand(
+      {"show", "--numstat", "--pretty=format:", commitHash}, &success);
+  if (!success || output.isEmpty()) {
+    return result;
+  }
+
+  for (const QString &line : output.split('\n', Qt::SkipEmptyParts)) {
+    QStringList parts = line.split('\t');
+    if (parts.size() >= 3) {
+      GitCommitFileStat stat;
+      stat.additions = parts[0] == "-" ? 0 : parts[0].toInt();
+      stat.deletions = parts[1] == "-" ? 0 : parts[1].toInt();
+      stat.filePath = parts[2];
+      result.append(stat);
+    }
+  }
+  return result;
+}
+
+QList<GitCommitInfo>
+GitIntegration::getFileLog(const QString &filePath, int maxCount) const {
+  QList<GitCommitInfo> result;
+  if (!m_isValid || filePath.isEmpty()) {
+    return result;
+  }
+
+  QString relativePath = filePath;
+  if (filePath.startsWith(m_repositoryPath)) {
+    relativePath = filePath.mid(m_repositoryPath.length() + 1);
+  }
+
+  QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P%x00%b";
+  bool success;
+  QString output = executeGitCommand(
+      {"log", QString("-n%1").arg(maxCount),
+       QString("--pretty=format:%1").arg(format), "--follow", "--",
+       relativePath},
+      &success);
+
+  if (!success || output.isEmpty()) {
+    return result;
+  }
+
+  // Each commit is separated by a newline between the body and next hash
+  // Split on the format boundary
+  QStringList entries = output.split('\n');
+  QString currentEntry;
+  for (const QString &line : entries) {
+    if (!currentEntry.isEmpty() && line.contains(QChar('\0'))) {
+      // Parse previous entry
+      QStringList parts = currentEntry.split(QChar('\0'));
+      if (parts.size() >= 7) {
+        GitCommitInfo info;
+        info.hash = parts[0];
+        info.shortHash = parts[1];
+        info.author = parts[2];
+        info.authorEmail = parts[3];
+        info.date = parts[4];
+        info.relativeDate = parts[5];
+        info.subject = parts[6];
+        if (parts.size() > 7)
+          info.parents = parts[7].split(' ', Qt::SkipEmptyParts);
+        if (parts.size() > 8)
+          info.body = parts[8].trimmed();
+        result.append(info);
+      }
+      currentEntry = line;
+    } else {
+      if (!currentEntry.isEmpty())
+        currentEntry += '\n';
+      currentEntry += line;
+    }
+  }
+  // Parse last entry
+  if (!currentEntry.isEmpty()) {
+    QStringList parts = currentEntry.split(QChar('\0'));
+    if (parts.size() >= 7) {
+      GitCommitInfo info;
+      info.hash = parts[0];
+      info.shortHash = parts[1];
+      info.author = parts[2];
+      info.authorEmail = parts[3];
+      info.date = parts[4];
+      info.relativeDate = parts[5];
+      info.subject = parts[6];
+      if (parts.size() > 7)
+        info.parents = parts[7].split(' ', Qt::SkipEmptyParts);
+      if (parts.size() > 8)
+        info.body = parts[8].trimmed();
+      result.append(info);
+    }
+  }
+
+  return result;
+}
+
+QList<GitCommitInfo>
+GitIntegration::getLineHistory(const QString &filePath, int startLine,
+                               int endLine) const {
+  QList<GitCommitInfo> result;
+  if (!m_isValid || filePath.isEmpty()) {
+    return result;
+  }
+
+  QString relativePath = filePath;
+  if (filePath.startsWith(m_repositoryPath)) {
+    relativePath = filePath.mid(m_repositoryPath.length() + 1);
+  }
+
+  // Use git log -L to get line-range history
+  QString range = QString("-L%1,%2:%3").arg(startLine).arg(endLine).arg(relativePath);
+  bool success;
+  QString output = executeGitCommand(
+      {"log", "--no-patch", "--pretty=format:%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s",
+       range},
+      &success);
+
+  if (!success || output.isEmpty()) {
+    return result;
+  }
+
+  for (const QString &line : output.split('\n', Qt::SkipEmptyParts)) {
+    QStringList parts = line.split(QChar('\0'));
+    if (parts.size() >= 7) {
+      GitCommitInfo info;
+      info.hash = parts[0];
+      info.shortHash = parts[1];
+      info.author = parts[2];
+      info.authorEmail = parts[3];
+      info.date = parts[4];
+      info.relativeDate = parts[5];
+      info.subject = parts[6];
+      result.append(info);
+    }
+  }
+
+  return result;
+}
+
+QString GitIntegration::getFileAtRevision(const QString &filePath,
+                                          const QString &revision) const {
+  if (!m_isValid || filePath.isEmpty() || revision.isEmpty()) {
+    return QString();
+  }
+
+  QString relativePath = filePath;
+  if (filePath.startsWith(m_repositoryPath)) {
+    relativePath = filePath.mid(m_repositoryPath.length() + 1);
+  }
+
+  bool success;
+  QString content = executeGitCommand(
+      {"show", QString("%1:%2").arg(revision).arg(relativePath)}, &success);
+
+  return success ? content : QString();
+}
+
+QString GitIntegration::getBranchDiff(const QString &branch1,
+                                      const QString &branch2) const {
+  if (!m_isValid || branch1.isEmpty() || branch2.isEmpty()) {
+    return QString();
+  }
+
+  bool success;
+  QString diff = executeGitCommand(
+      {"diff", QString("%1...%2").arg(branch1).arg(branch2)}, &success);
+
+  return success ? diff : QString();
+}
+
+bool GitIntegration::getAheadBehind(int &ahead, int &behind) const {
+  ahead = 0;
+  behind = 0;
+
+  if (!m_isValid) {
+    return false;
+  }
+
+  bool success;
+  QString output = executeGitCommand(
+      {"rev-list", "--left-right", "--count", "@{upstream}...HEAD"}, &success);
+
+  if (!success || output.trimmed().isEmpty()) {
+    return false;
+  }
+
+  QStringList parts = output.trimmed().split('\t');
+  if (parts.size() == 2) {
+    behind = parts[0].toInt();
+    ahead = parts[1].toInt();
+    return true;
+  }
+  return false;
+}
+
+bool GitIntegration::isDirty() const {
+  if (!m_isValid) {
+    return false;
+  }
+
+  bool success;
+  QString output = executeGitCommand({"status", "--porcelain"}, &success);
+  return success && !output.trimmed().isEmpty();
+}
+
+bool GitIntegration::stageHunkAtLine(const QString &filePath, int lineNumber) {
+  GitDiffHunk hunk = getDiffHunkAtLine(filePath, lineNumber);
+  if (hunk.lines.isEmpty()) {
+    return false;
+  }
+
+  // Build a patch from the hunk and apply it to the index
+  QString relativePath = filePath;
+  if (filePath.startsWith(m_repositoryPath)) {
+    relativePath = filePath.mid(m_repositoryPath.length() + 1);
+  }
+
+  // Construct minimal patch
+  QString patch = QString("diff --git a/%1 b/%1\n--- a/%1\n+++ b/%1\n%2\n")
+                      .arg(relativePath)
+                      .arg(hunk.header);
+  for (const QString &line : hunk.lines) {
+    patch += line + '\n';
+  }
+
+  // Write patch to temp file and apply
+  QString tempPath =
+      QDir::temp().filePath("lightpad_stage_hunk.patch");
+  QFile tempFile(tempPath);
+  if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    return false;
+  }
+  tempFile.write(patch.toUtf8());
+  tempFile.close();
+
+  bool success;
+  executeGitCommand({"apply", "--cached", tempPath}, &success);
+  QFile::remove(tempPath);
+
+  if (success) {
+    emit statusChanged();
+  }
+  return success;
+}
+
+bool GitIntegration::revertHunkAtLine(const QString &filePath,
+                                      int lineNumber) {
+  GitDiffHunk hunk = getDiffHunkAtLine(filePath, lineNumber);
+  if (hunk.lines.isEmpty()) {
+    return false;
+  }
+
+  QString relativePath = filePath;
+  if (filePath.startsWith(m_repositoryPath)) {
+    relativePath = filePath.mid(m_repositoryPath.length() + 1);
+  }
+
+  // Build reverse patch
+  QString patch = QString("diff --git a/%1 b/%1\n--- a/%1\n+++ b/%1\n%2\n")
+                      .arg(relativePath)
+                      .arg(hunk.header);
+  for (const QString &line : hunk.lines) {
+    patch += line + '\n';
+  }
+
+  QString tempPath =
+      QDir::temp().filePath("lightpad_revert_hunk.patch");
+  QFile tempFile(tempPath);
+  if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    return false;
+  }
+  tempFile.write(patch.toUtf8());
+  tempFile.close();
+
+  bool success;
+  executeGitCommand({"apply", "--reverse", tempPath}, &success);
+  QFile::remove(tempPath);
+
+  if (success) {
+    emit statusChanged();
+  }
+  return success;
 }
 
 QString GitIntegration::workingPath() const { return m_workingPath; }
@@ -1653,4 +2039,128 @@ bool GitIntegration::stashClear() {
   }
 
   return success;
+}
+
+bool GitIntegration::cherryPick(const QString &commitHash) {
+  if (!m_isValid)
+    return false;
+
+  bool success;
+  QString output =
+      executeGitCommand({"cherry-pick", commitHash}, &success);
+
+  if (success) {
+    emit operationCompleted(
+        QString("Cherry-picked %1").arg(commitHash.left(7)));
+    emit statusChanged();
+  } else {
+    emit errorOccurred(
+        QString("Cherry-pick failed: %1").arg(output.trimmed()));
+  }
+
+  return success;
+}
+
+QList<QPair<QString, QString>> GitIntegration::listWorktrees() const {
+  QList<QPair<QString, QString>> result;
+  if (!m_isValid)
+    return result;
+
+  bool success;
+  QString output =
+      executeGitCommand({"worktree", "list", "--porcelain"}, &success);
+  if (!success)
+    return result;
+
+  QString currentPath;
+  for (const QString &line : output.split('\n')) {
+    if (line.startsWith("worktree ")) {
+      currentPath = line.mid(9);
+    } else if (line.startsWith("branch ")) {
+      QString branch = line.mid(7);
+      if (branch.startsWith("refs/heads/"))
+        branch = branch.mid(11);
+      result.append({currentPath, branch});
+    } else if (line.trimmed().isEmpty()) {
+      if (!currentPath.isEmpty() &&
+          (result.isEmpty() || result.last().first != currentPath)) {
+        result.append({currentPath, "(detached)"});
+      }
+      currentPath.clear();
+    }
+  }
+
+  return result;
+}
+
+bool GitIntegration::addWorktree(const QString &path, const QString &branch,
+                                 bool createBranch) {
+  if (!m_isValid)
+    return false;
+
+  QStringList args = {"worktree", "add"};
+  if (createBranch)
+    args << "-b";
+  args << path << branch;
+
+  bool success;
+  QString output = executeGitCommand(args, &success);
+
+  if (success) {
+    emit operationCompleted(QString("Added worktree at %1").arg(path));
+  } else {
+    emit errorOccurred(
+        QString("Failed to add worktree: %1").arg(output.trimmed()));
+  }
+
+  return success;
+}
+
+bool GitIntegration::removeWorktree(const QString &path) {
+  if (!m_isValid)
+    return false;
+
+  bool success;
+  QString output =
+      executeGitCommand({"worktree", "remove", path}, &success);
+
+  if (success) {
+    emit operationCompleted(QString("Removed worktree at %1").arg(path));
+  } else {
+    emit errorOccurred(
+        QString("Failed to remove worktree: %1").arg(output.trimmed()));
+  }
+
+  return success;
+}
+
+QMap<int, qint64> GitIntegration::getBlameTimestamps(
+    const QString &filePath) const {
+  QMap<int, qint64> result;
+  if (!m_isValid)
+    return result;
+
+  bool success;
+  QString output =
+      executeGitCommand({"blame", "--line-porcelain", filePath}, &success);
+  if (!success)
+    return result;
+
+  int currentLine = 0;
+  qint64 currentTimestamp = 0;
+  static const QRegularExpression headerRe(
+      "^([0-9a-f]{7,40})\\s+\\d+\\s+(\\d+)");
+
+  for (const QString &line : output.split('\n')) {
+    QRegularExpressionMatch match = headerRe.match(line);
+    if (match.hasMatch()) {
+      currentLine = match.captured(2).toInt();
+    } else if (line.startsWith("author-time ")) {
+      currentTimestamp = line.mid(12).toLongLong();
+      if (currentLine > 0)
+        result[currentLine] = currentTimestamp;
+    }
+  }
+
+  return result;
 }

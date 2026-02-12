@@ -4,6 +4,7 @@
 #include <QColor>
 #include <QComboBox>
 #include <QLineEdit>
+#include <QLabel>
 #include <QSet>
 #include <QSplitter>
 #include <QTabWidget>
@@ -115,6 +116,8 @@ private slots:
   void onScopesReceived(int frameId, const QList<DapScope> &scopes);
   void onVariablesReceived(int variablesReference,
                            const QList<DapVariable> &variables);
+  void onEvaluateResult(const QString &expression, const QString &result,
+                        const QString &type, int variablesReference);
   void onOutputReceived(const DapOutputEvent &event);
 
   // UI interactions
@@ -152,6 +155,12 @@ private:
   void appendConsoleLine(const QString &text, const QColor &color,
                          bool bold = false);
   void resizeVariablesNameColumnOnce();
+  void requestLocalsFallback(int scopeVariablesReference);
+  void populateLocalsFromGdbEvaluate(int scopeVariablesReference,
+                                     const QString &rawResult);
+  void showLocalsFallbackMessage(int scopeVariablesReference,
+                                 const QString &message, bool isError = false);
+  void clearLocalsFallbackState();
   QColor consoleErrorColor() const;
   QColor consoleMutedColor() const;
   QColor consoleInfoColor() const;
@@ -170,6 +179,7 @@ private:
   QAction *m_stepOutAction;
   QAction *m_restartAction;
   QAction *m_stopAction;
+  QLabel *m_debugStatusLabel;
 
   // Main layout
   QTabWidget *m_tabWidget;
@@ -203,8 +213,19 @@ private:
   QList<DapThread> m_threads;
   QList<DapStackFrame> m_stackFrames;
   QSet<int> m_pendingScopeVariableLoads;
+  QSet<int> m_pendingVariableRequests;
   bool m_programmaticVariablesExpand;
   bool m_variablesNameColumnAutofitPending;
+  bool m_stepInProgress;
+  bool m_expectStopEvent;
+  bool m_hasLastStopEvent;
+  int m_lastStoppedThreadId;
+  DapStoppedReason m_lastStoppedReason;
+  bool m_localsFallbackPending;
+  int m_localsFallbackFrameId;
+  int m_localsFallbackScopeRef;
+  int m_localsFallbackRequestNonce;
+  QString m_localsFallbackPendingExpression;
   Theme m_theme;
   bool m_themeInitialized;
 };

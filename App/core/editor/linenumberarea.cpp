@@ -9,6 +9,7 @@
 #include <QScrollBar>
 #include <QTextBlock>
 #include <QToolTip>
+#include <limits>
 
 #include "../../core/lightpadpage.h"
 #include "../../core/lightpadtabwidget.h"
@@ -18,8 +19,10 @@
 
 LineNumberArea::LineNumberArea(TextArea *editor, QWidget *parent)
     : QWidget(parent ? parent : editor), m_editor(editor),
+      m_gitIntegration(nullptr),
       m_backgroundColor(QColor(40, 40, 40)),
-      m_textColor(QColor(Qt::gray).lighter(150)), m_blameTextWidth(0),
+      m_textColor(QColor(Qt::gray).lighter(150)), m_heatmapEnabled(false),
+      m_blameTextWidth(0),
       m_foldingEnabled(true) {
   if (editor) {
     m_font = editor->font();
@@ -98,6 +101,122 @@ void LineNumberArea::setFoldingEnabled(bool enabled) {
   update();
 }
 
+void LineNumberArea::setRichBlameData(
+    const QMap<int, GitBlameLineInfo> &blameData) {
+  m_richBlameData = blameData;
+}
+
+void LineNumberArea::setGitIntegration(GitIntegration *git) {
+  m_gitIntegration = git;
+}
+
+void LineNumberArea::setHeatmapData(const QMap<int, qint64> &timestamps) {
+  m_heatmapTimestamps = timestamps;
+  if (m_heatmapEnabled)
+    update();
+}
+
+void LineNumberArea::setHeatmapEnabled(bool enabled) {
+  m_heatmapEnabled = enabled;
+  update();
+}
+
+bool LineNumberArea::isHeatmapEnabled() const { return m_heatmapEnabled; }
+
+QColor LineNumberArea::heatmapColor(qint64 timestamp) const {
+  if (m_heatmapTimestamps.isEmpty())
+    return Qt::transparent;
+
+  // Find min/max timestamps for normalization
+  qint64 minTs = std::numeric_limits<qint64>::max();
+  qint64 maxTs = 0;
+  for (auto it = m_heatmapTimestamps.cbegin();
+       it != m_heatmapTimestamps.cend(); ++it) {
+    if (it.value() < minTs)
+      minTs = it.value();
+    if (it.value() > maxTs)
+      maxTs = it.value();
+  }
+
+  if (maxTs == minTs)
+    return QColor(80, 80, 120, 40);
+
+  // Normalize: 0.0 = oldest, 1.0 = newest
+  double t = double(timestamp - minTs) / double(maxTs - minTs);
+
+  // Warm (recent) to cool (old): orange → blue/gray
+  int r, g, b;
+  if (t > 0.5) {
+    // Recent: orange to yellow
+    double s = (t - 0.5) * 2.0;
+    r = 200 + int(55 * s);
+    g = 120 + int(80 * s);
+    b = 50;
+  } else {
+    // Old: blue/gray to orange
+    double s = t * 2.0;
+    r = 60 + int(140 * s);
+    g = 60 + int(60 * s);
+    b = 120 - int(70 * s);
+  }
+
+  return QColor(r, g, b, 45);
+}
+
+QString
+LineNumberArea::buildRichBlameTooltip(const GitBlameLineInfo &info) const {
+  QString html = QStringLiteral(
+      "<div style='font-family: sans-serif; padding: 4px;'>"
+      "<div style='font-size: 13px; font-weight: bold; "
+      "margin-bottom: 4px;'>%1</div>"
+      "<div style='color: #aaa; font-size: 11px; margin-bottom: 6px;'>"
+      "<b>%2</b> &lt;%3&gt;<br>"
+      "%4 (%5)</div>"
+      "<div style='font-size: 12px; padding: 4px; "
+      "background: rgba(255,255,255,0.05); border-radius: 3px;'>%6</div>"
+      "</div>");
+
+  return html.arg(info.shortHash.toHtmlEscaped())
+      .arg(info.author.toHtmlEscaped())
+      .arg(info.authorEmail.toHtmlEscaped())
+      .arg(info.date.toHtmlEscaped())
+      .arg(info.relativeDate.toHtmlEscaped())
+      .arg(info.summary.toHtmlEscaped());
+}
+
+QString
+LineNumberArea::buildDiffHunkTooltip(const GitDiffHunk &hunk) const {
+  if (hunk.lines.isEmpty()) {
+    return QString();
+  }
+
+  QString html = QStringLiteral(
+      "<div style='font-family: monospace; font-size: 11px; "
+      "white-space: pre; padding: 4px;'>");
+
+  html += QStringLiteral(
+      "<div style='color: #888; margin-bottom: 4px;'>%1</div>")
+              .arg(hunk.header.toHtmlEscaped());
+
+  for (const QString &line : hunk.lines) {
+    QString escaped = line.toHtmlEscaped();
+    if (!line.isEmpty() && line[0] == '+') {
+      html += QStringLiteral(
+          "<div style='background: rgba(76,175,80,0.2); color: #4caf50;'>%1</div>")
+                  .arg(escaped);
+    } else if (!line.isEmpty() && line[0] == '-') {
+      html += QStringLiteral(
+          "<div style='background: rgba(244,67,54,0.2); color: #f44336;'>%1</div>")
+                  .arg(escaped);
+    } else {
+      html += QStringLiteral("<div>%1</div>").arg(escaped);
+    }
+  }
+
+  html += QStringLiteral("</div>");
+  return html;
+}
+
 void LineNumberArea::updateBlameTextWidth() {
   if (m_gitBlameLines.isEmpty()) {
     m_blameTextWidth = 0;
@@ -165,14 +284,80 @@ bool LineNumberArea::event(QEvent *event) {
     qreal bottom = top + blockRect.height();
     int blockNumber = block.blockNumber();
     const int fontHeight = QFontMetrics(m_font).height();
+    const int numArea = numberAreaWidth();
 
     while (block.isValid() && top <= height()) {
       if (block.isVisible() && helpEvent->pos().y() >= top &&
           helpEvent->pos().y() <= bottom) {
         int lineNum = blockNumber + 1;
-        auto it = m_gitBlameLines.find(lineNum);
-        if (it != m_gitBlameLines.end()) {
-          QToolTip::showText(helpEvent->globalPos(), it.value(), this);
+        int hoverX = helpEvent->pos().x();
+
+        // Check if hovering over diff indicator area (leftmost strip)
+        if (hoverX < DIFF_INDICATOR_WIDTH + 2 && m_gitIntegration) {
+          // Check if this line has a diff indicator
+          for (const auto &diffLine : m_gitDiffLines) {
+            if (diffLine.first == lineNum) {
+              QString filePath = resolveFilePath();
+              if (!filePath.isEmpty()) {
+                GitDiffHunk hunk =
+                    m_gitIntegration->getDiffHunkAtLine(filePath, lineNum);
+                QString tooltip = buildDiffHunkTooltip(hunk);
+                if (!tooltip.isEmpty()) {
+                  QToolTip::showText(helpEvent->globalPos(), tooltip, this);
+                  return true;
+                }
+              }
+              break;
+            }
+          }
+        }
+
+        // Check if hovering over blame area (right side)
+        if (hoverX > numArea) {
+          auto richIt = m_richBlameData.find(lineNum);
+          if (richIt != m_richBlameData.end()) {
+            QString tooltip = buildRichBlameTooltip(richIt.value());
+
+            // Append commit file stats if available
+            if (m_gitIntegration) {
+              QList<GitCommitFileStat> stats =
+                  m_gitIntegration->getCommitFileStats(
+                      richIt.value().shortHash);
+              if (!stats.isEmpty()) {
+                tooltip += QStringLiteral(
+                    "<div style='margin-top: 6px; font-size: 11px; "
+                    "color: #aaa; border-top: 1px solid #555; "
+                    "padding-top: 4px;'>");
+                int shown = 0;
+                for (const auto &stat : stats) {
+                  if (shown >= 8) {
+                    tooltip += QStringLiteral(
+                        "<div>... and %1 more files</div>")
+                                   .arg(stats.size() - shown);
+                    break;
+                  }
+                  tooltip += QStringLiteral(
+                      "<div><span style='color:#4caf50;'>+%1</span> "
+                      "<span style='color:#f44336;'>-%2</span> %3</div>")
+                                 .arg(stat.additions)
+                                 .arg(stat.deletions)
+                                 .arg(stat.filePath.toHtmlEscaped());
+                  ++shown;
+                }
+                tooltip += QStringLiteral("</div>");
+              }
+            }
+
+            QToolTip::showText(helpEvent->globalPos(), tooltip, this);
+          } else {
+            // Fall back to simple blame text
+            auto it = m_gitBlameLines.find(lineNum);
+            if (it != m_gitBlameLines.end()) {
+              QToolTip::showText(helpEvent->globalPos(), it.value(), this);
+            } else {
+              QToolTip::hideText();
+            }
+          }
         } else {
           QToolTip::hideText();
         }
@@ -342,12 +527,21 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
   while (block.isValid() && top <= event->rect().bottom()) {
     if (block.isVisible() && bottom >= event->rect().top()) {
       QString number = QString::number(blockNumber + 1);
+
+      // Heatmap background tint (age-based gutter coloring)
+      int lineNum = blockNumber + 1; // 1-based
+      if (m_heatmapEnabled && m_heatmapTimestamps.contains(lineNum)) {
+        QColor heat = heatmapColor(m_heatmapTimestamps[lineNum]);
+        painter.fillRect(DIFF_INDICATOR_WIDTH, static_cast<int>(top),
+                         areaWidth - DIFF_INDICATOR_WIDTH,
+                         static_cast<int>(bottom - top), heat);
+      }
+
       painter.setPen(m_textColor);
       painter.drawText(numberStartX, top, numberTextWidth, fontHeight,
                        Qt::AlignCenter, number);
 
       // Draw git diff indicator
-      int lineNum = blockNumber + 1; // 1-based
       if (diffLineMap.contains(lineNum)) {
         int diffType = diffLineMap[lineNum];
         QColor diffColor;

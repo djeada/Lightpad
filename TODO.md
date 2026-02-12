@@ -75,11 +75,25 @@ Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagno
 - [x] Stage/unstage files
 - [x] Commit with message
 - [x] Branch management (create, checkout, delete, merge)
-- [ ] Git blame annotations
+- [x] Git blame annotations
+- [x] Inline current-line blame (ghost text at cursor line)
+- [x] Rich blame hover tooltip (commit details, file stats)
+- [x] Diff hunk hover on gutter indicators
+- [x] Git status bar (branch, ahead/behind, dirty indicator)
 - [x] Git history/log viewer
+- [x] File history view (per-file commit log)
+- [x] Line history (git log -L for selected lines)
+- [x] Branch comparison UI
 - [ ] Conflict resolution UI
 - [x] Stash management
 - [x] Remote operations (push, pull, fetch)
+- [x] Revision navigation (open file at specific commit)
+- [x] Git commit graph (DAG visualization)
+- [x] Git CodeLens (authors/recent changes above functions)
+- [x] Heatmap gutter (age-based coloring)
+- [x] Interactive rebase UI
+- [x] Cherry-pick UI (from commit log context menu)
+- [x] Git worktree management
 - [ ] GitHub/GitLab integration
 - [ ] Pull request viewing
 

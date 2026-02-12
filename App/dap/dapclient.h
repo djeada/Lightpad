@@ -1,6 +1,7 @@
 #ifndef DAPCLIENT_H
 #define DAPCLIENT_H
 
+#include <QByteArray>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMap>
@@ -508,7 +509,7 @@ public:
    * @param frameId Stack frame context (0 = global)
    * @param context Evaluation context ("watch", "repl", "hover", "clipboard")
    */
-  void evaluate(const QString &expression, int frameId = 0,
+  void evaluate(const QString &expression, int frameId = -1,
                 const QString &context = "repl");
 
   /**
@@ -585,11 +586,13 @@ private:
   void doInitialize();
   void setState(State state);
   static bool isLikelyUnsupportedRequestMessage(const QString &message);
+  bool hasPendingRequestTag(const QString &tag) const;
+  void clearPendingInspectionRequests();
 
   QProcess *m_process;
   State m_state;
   int m_nextSeq;
-  QString m_buffer;
+  QByteArray m_buffer;
   QMap<int, QString> m_pendingRequests; // seq -> command
 
   int m_currentThreadId;

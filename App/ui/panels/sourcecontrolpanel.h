@@ -77,6 +77,12 @@ signals:
    */
   void commitDiffRequested(const QString &commitHash, const QString &shortHash);
 
+  /**
+   * @brief Emitted when user wants to compare two branches
+   */
+  void compareBranchesRequested(const QString &branch1,
+                                const QString &branch2);
+
 private slots:
   void onStageAllClicked();
   void onUnstageAllClicked();

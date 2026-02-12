@@ -18,6 +18,8 @@ class CompletionWidget;
 class LineNumberArea;
 class MultiCursorHandler;
 class CodeFoldingManager;
+class GitIntegration;
+struct GitBlameLineInfo;
 struct CompletionItem;
 struct TextAreaSettings;
 struct Theme;
@@ -120,6 +122,34 @@ public:
   void clearGitDiffLines();
   void setGitBlameLines(const QMap<int, QString> &blameLines);
   void clearGitBlameLines();
+
+  // Rich blame data for hover tooltips
+  void setRichBlameData(const QMap<int, GitBlameLineInfo> &blameData);
+  void setGutterGitIntegration(GitIntegration *git);
+
+  // Heatmap (age-based gutter coloring)
+  void setHeatmapData(const QMap<int, qint64> &timestamps);
+  void setHeatmapEnabled(bool enabled);
+  bool isHeatmapEnabled() const;
+
+  // CodeLens (git info above functions/classes)
+  struct CodeLensEntry {
+    int line;               ///< 0-based line number
+    QString text;           ///< Display text (e.g., "2 authors | 5 changes")
+    QString symbolName;     ///< Name of the symbol
+  };
+  void setCodeLensEntries(const QList<CodeLensEntry> &entries);
+  void clearCodeLensEntries();
+  void setCodeLensEnabled(bool enabled);
+  bool isCodeLensEnabled() const;
+
+  // Inline blame (GitLens-style ghost text at end of current line)
+  void setInlineBlameData(
+      const QMap<int, QString> &blameData); // line -> "author, time • summary"
+  void clearInlineBlameData();
+  void setInlineBlameEnabled(bool enabled);
+  bool isInlineBlameEnabled() const;
+
   void setDebugExecutionLine(int line);
   int debugExecutionLine() const { return m_debugExecutionLine; }
 
@@ -185,6 +215,16 @@ private:
   QList<QPair<int, int>>
       m_gitDiffLines; // line number, type (0=add, 1=modify, 2=delete)
   QMap<int, QString> m_gitBlameLines;
+
+  // Inline blame (ghost text)
+  QMap<int, QString> m_inlineBlameData; // line -> blame text
+  bool m_inlineBlameEnabled;
+  int m_lastInlineBlameLine;
+
+  // CodeLens
+  QList<CodeLensEntry> m_codeLensEntries;
+  bool m_codeLensEnabled;
+
   int m_debugExecutionLine;
 
   void setupTextArea();

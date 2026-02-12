@@ -329,6 +329,11 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionToggle_Terminal"/>
     <addaction name="actionToggle_Source_Control"/>
     <addaction name="actionGit_Log"/>
+    <addaction name="actionGit_File_History"/>
+    <addaction name="actionGit_Rebase"/>
+    <addaction name="separator"/>
+    <addaction name="actionToggle_Heatmap"/>
+    <addaction name="actionToggle_CodeLens"/>
     <addaction name="actionToggle_Word_Wrap"/>
     <addaction name="actionToggle_Vim_Mode"/>
     <addaction name="separator"/>
@@ -764,6 +769,32 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   <action name="actionGit_Log">
    <property name="text">
     <string>Git Log</string>
+   </property>
+  </action>
+  <action name="actionGit_File_History">
+   <property name="text">
+    <string>File History</string>
+   </property>
+  </action>
+  <action name="actionGit_Rebase">
+   <property name="text">
+    <string>Interactive Rebase...</string>
+   </property>
+  </action>
+  <action name="actionToggle_Heatmap">
+   <property name="text">
+    <string>Toggle Git Heatmap</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+  </action>
+  <action name="actionToggle_CodeLens">
+   <property name="text">
+    <string>Toggle Git CodeLens</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
    </property>
   </action>
  </widget>

@@ -76,6 +76,13 @@ public:
   void showGitBlameForCurrentFile(bool enable);
   bool isGitBlameEnabledForFile(const QString &filePath) const;
   void setGitBlameEnabledForFile(const QString &filePath, bool enabled);
+  void updateInlineBlameForCurrentFile();
+  void updateGitStatusBar();
+  void updateHeatmapForCurrentFile();
+  void updateCodeLensForCurrentFile();
+  void showFileHistory();
+  void openReadOnlyTab(const QString &content, const QString &title,
+                       const QString &originalFilePath);
   LightpadTabWidget *currentTabWidget() const;
 
 private slots:
@@ -132,6 +139,10 @@ private slots:
 
   // Git log
   void on_actionGit_Log_triggered();
+  void on_actionGit_File_History_triggered();
+  void on_actionGit_Rebase_triggered();
+  void on_actionToggle_Heatmap_triggered(bool checked);
+  void on_actionToggle_CodeLens_triggered(bool checked);
 
   // Text transformation actions
   void on_actionTransform_Uppercase_triggered();
@@ -185,6 +196,15 @@ private:
   SourceControlPanel *sourceControlPanel;
   QDockWidget *sourceControlDock;
   QSet<QString> m_blameEnabledFiles;
+  bool m_inlineBlameEnabled;
+  bool m_heatmapEnabled;
+  bool m_codeLensEnabled;
+
+  // Git status bar widgets
+  class QLabel *m_gitBranchLabel;
+  class QLabel *m_gitSyncLabel;
+  class QLabel *m_gitDirtyLabel;
+  QTimer m_gitStatusBarTimer;
   DebugPanel *debugPanel;
   QDockWidget *debugDock;
   QString m_activeDebugSessionId;

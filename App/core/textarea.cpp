@@ -1,17 +1,22 @@
 #include <QAbstractItemView>
 #include <QApplication>
+#include <QBoxLayout>
 #include <QCompleter>
+#include <QDialog>
 #include <QFileInfo>
+#include <QInputDialog>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPlainTextDocumentLayout>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QStackedWidget>
 #include <QTextBlock>
 #include <QTextBlockFormat>
 #include <QTextCursor>
+#include <QTextEdit>
 #include <QtGlobal>
 #include <algorithm>
 #include <functional>
@@ -21,6 +26,7 @@
 #include "../completion/completionitem.h"
 #include "../completion/completionwidget.h"
 #include "../dap/breakpointmanager.h"
+#include "../git/gitintegration.h"
 #include "../language/languagecatalog.h"
 #include "../settings/textareasettings.h"
 #include "../syntax/pluginbasedsyntaxhighlighter.h"
@@ -180,7 +186,8 @@ TextArea::TextArea(QWidget *parent)
       matchingBracketsHighlighted(true), prevWordCount(1),
       m_multiCursor(nullptr), m_columnSelectionActive(false),
       m_showWhitespace(false), m_showIndentGuides(false), m_vimMode(nullptr),
-      m_debugExecutionLine(0) {
+      m_inlineBlameEnabled(false), m_lastInlineBlameLine(-1),
+      m_codeLensEnabled(false), m_debugExecutionLine(0) {
   initializeIconCache();
   m_multiCursor = new MultiCursorHandler(this);
   m_codeFolding = new CodeFoldingManager(document());
@@ -210,7 +217,8 @@ TextArea::TextArea(const TextAreaSettings &settings, QWidget *parent)
       matchingBracketsHighlighted(settings.matchingBracketsHighlighted),
       prevWordCount(1), m_multiCursor(nullptr), m_columnSelectionActive(false),
       m_showWhitespace(false), m_showIndentGuides(false), m_vimMode(nullptr),
-      m_debugExecutionLine(0) {
+      m_inlineBlameEnabled(false), m_lastInlineBlameLine(-1),
+      m_codeLensEnabled(false), m_debugExecutionLine(0) {
   initializeIconCache();
   m_multiCursor = new MultiCursorHandler(this);
   m_codeFolding = new CodeFoldingManager(document());
@@ -693,6 +701,128 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
   auto menu = createStandardContextMenu();
   menu->addSeparator();
   menu->addAction(tr("Refactor"));
+
+  // Git context menu items
+  if (mainWindow) {
+    auto *gitIntegration = mainWindow->getGitIntegration();
+    QString filePath = resolveFilePath();
+    if (gitIntegration && gitIntegration->isValidRepository() &&
+        !filePath.isEmpty()) {
+      menu->addSeparator();
+
+      // Line/selection history
+      QTextCursor cursor = textCursor();
+      int startLine = cursor.blockNumber() + 1;
+      int endLine = startLine;
+      if (cursor.hasSelection()) {
+        QTextCursor startCursor(document());
+        startCursor.setPosition(cursor.selectionStart());
+        startLine = startCursor.blockNumber() + 1;
+        QTextCursor endCursor(document());
+        endCursor.setPosition(cursor.selectionEnd());
+        endLine = endCursor.blockNumber() + 1;
+      }
+
+      QAction *lineHistoryAction = menu->addAction(
+          startLine == endLine
+              ? tr("Line History (line %1)").arg(startLine)
+              : tr("Line History (lines %1-%2)").arg(startLine).arg(endLine));
+
+      connect(lineHistoryAction, &QAction::triggered, this,
+              [this, gitIntegration, filePath, startLine, endLine]() {
+                QList<GitCommitInfo> commits =
+                    gitIntegration->getLineHistory(filePath, startLine,
+                                                   endLine);
+                if (commits.isEmpty()) {
+                  return;
+                }
+                // Show in a simple dialog
+                QString html = QStringLiteral(
+                    "<html><body style='font-family: monospace;'>"
+                    "<h3>Line History: lines %1-%2</h3>")
+                                   .arg(startLine)
+                                   .arg(endLine);
+                for (const auto &c : commits) {
+                  html += QStringLiteral(
+                      "<div style='margin: 6px 0; padding: 4px; "
+                      "border-left: 3px solid #4caf50;'>"
+                      "<b>%1</b> %2<br>"
+                      "<span style='color:#888;'>%3 — %4</span></div>")
+                              .arg(c.shortHash.toHtmlEscaped())
+                              .arg(c.subject.toHtmlEscaped())
+                              .arg(c.author.toHtmlEscaped())
+                              .arg(c.relativeDate.toHtmlEscaped());
+                }
+                html += "</body></html>";
+
+                QDialog dlg(this);
+                dlg.setWindowTitle(tr("Line History"));
+                dlg.resize(500, 400);
+                auto *layout = new QVBoxLayout(&dlg);
+                auto *view = new QTextEdit(&dlg);
+                view->setReadOnly(true);
+                view->setHtml(html);
+                layout->addWidget(view);
+                auto *closeBtn = new QPushButton(tr("Close"), &dlg);
+                connect(closeBtn, &QPushButton::clicked, &dlg,
+                        &QDialog::accept);
+                layout->addWidget(closeBtn);
+                dlg.exec();
+              });
+
+      QAction *fileHistoryAction = menu->addAction(tr("File History"));
+      connect(fileHistoryAction, &QAction::triggered, this, [this]() {
+        if (mainWindow) {
+          mainWindow->showFileHistory();
+        }
+      });
+
+      QAction *openAtRevisionAction =
+          menu->addAction(tr("Open File at Revision..."));
+      connect(openAtRevisionAction, &QAction::triggered, this,
+              [this, gitIntegration, filePath]() {
+                // Get recent commits for this file to pick from
+                QList<GitCommitInfo> commits =
+                    gitIntegration->getFileLog(filePath, 20);
+                if (commits.isEmpty())
+                  return;
+
+                QStringList items;
+                for (const auto &c : commits) {
+                  items << QString("%1 — %2 (%3)")
+                               .arg(c.shortHash)
+                               .arg(c.subject)
+                               .arg(c.relativeDate);
+                }
+
+                bool ok;
+                QString selected = QInputDialog::getItem(
+                    this, tr("Open File at Revision"),
+                    tr("Select a revision:"), items, 0, false, &ok);
+                if (!ok || selected.isEmpty())
+                  return;
+
+                int idx = items.indexOf(selected);
+                if (idx < 0 || idx >= commits.size())
+                  return;
+
+                QString content = gitIntegration->getFileAtRevision(
+                    filePath, commits[idx].hash);
+                if (content.isEmpty())
+                  return;
+
+                // Open in a new read-only tab
+                if (mainWindow) {
+                  mainWindow->openReadOnlyTab(
+                      content,
+                      QFileInfo(filePath).fileName() + " @ " +
+                          commits[idx].shortHash,
+                      filePath);
+                }
+              });
+    }
+  }
+
   menu->exec(event->globalPos());
   delete menu;
 }
@@ -1437,6 +1567,74 @@ void TextArea::paintEvent(QPaintEvent *event) {
     }
   }
 
+  // Draw CodeLens annotations above functions/classes
+  if (m_codeLensEnabled && !m_codeLensEntries.isEmpty()) {
+    QPainter painter(viewport());
+    QFont codeLensFont = mainFont;
+    codeLensFont.setPointSizeF(mainFont.pointSizeF() * 0.85);
+    codeLensFont.setItalic(true);
+    painter.setFont(codeLensFont);
+    QColor codeLensColor(160, 160, 160, 180);
+    painter.setPen(codeLensColor);
+
+    for (const CodeLensEntry &entry : m_codeLensEntries) {
+      QTextBlock block = document()->findBlockByNumber(entry.line);
+      if (!block.isValid() || !block.isVisible())
+        continue;
+
+      QRectF blockGeom =
+          blockBoundingGeometry(block).translated(contentOffset());
+      if (blockGeom.bottom() < 0 || blockGeom.top() > viewport()->height())
+        continue;
+
+      // Draw above the block's line
+      QFontMetrics cfm(codeLensFont);
+      int yPos = static_cast<int>(blockGeom.top()) - cfm.height() + 2;
+      if (yPos < 0)
+        continue;
+
+      // Indent to match the block's indentation
+      QTextCursor blockStart(block);
+      blockStart.setPosition(block.position());
+      int xPos = cursorRect(blockStart).left();
+
+      painter.drawText(xPos, yPos, viewport()->width() - xPos, cfm.height(),
+                       Qt::AlignVCenter | Qt::AlignLeft, entry.text);
+    }
+  }
+
+  // Draw inline blame ghost text at end of current line
+  if (m_inlineBlameEnabled && !m_inlineBlameData.isEmpty()) {
+    int currentLine = textCursor().blockNumber() + 1; // 1-based
+    auto it = m_inlineBlameData.find(currentLine);
+    if (it != m_inlineBlameData.end()) {
+      QPainter painter(viewport());
+      QTextBlock block = document()->findBlockByNumber(currentLine - 1);
+      if (block.isValid() && block.isVisible()) {
+        QRectF blockGeom =
+            blockBoundingGeometry(block).translated(contentOffset());
+        QString lineText = block.text();
+        QFontMetrics fm(mainFont);
+        int textWidth = fm.horizontalAdvance(lineText);
+
+        // Position ghost text after the line content with some padding
+        QTextCursor blockStart(block);
+        blockStart.setPosition(block.position());
+        QRect startRect = cursorRect(blockStart);
+        int xPos = startRect.left() + textWidth + fm.horizontalAdvance("    ");
+        int yPos = static_cast<int>(blockGeom.top());
+
+        QColor ghostColor(128, 128, 128, 140);
+        painter.setPen(ghostColor);
+        QFont ghostFont = mainFont;
+        ghostFont.setItalic(true);
+        painter.setFont(ghostFont);
+        painter.drawText(xPos, yPos, viewport()->width() - xPos, fm.height(),
+                         Qt::AlignVCenter | Qt::AlignLeft, it.value());
+      }
+    }
+  }
+
   // Draw extra cursors as vertical lines
   if (m_multiCursor && m_multiCursor->hasMultipleCursors()) {
     QPainter painter(viewport());
@@ -1620,6 +1818,70 @@ void TextArea::clearGitBlameLines() {
     updateLineNumberAreaLayout();
   }
 }
+
+void TextArea::setRichBlameData(
+    const QMap<int, GitBlameLineInfo> &blameData) {
+  if (lineNumberArea) {
+    lineNumberArea->setRichBlameData(blameData);
+  }
+}
+
+void TextArea::setGutterGitIntegration(GitIntegration *git) {
+  if (lineNumberArea) {
+    lineNumberArea->setGitIntegration(git);
+  }
+}
+
+void TextArea::setInlineBlameData(const QMap<int, QString> &blameData) {
+  m_inlineBlameData = blameData;
+  viewport()->update();
+}
+
+void TextArea::clearInlineBlameData() {
+  m_inlineBlameData.clear();
+  viewport()->update();
+}
+
+void TextArea::setInlineBlameEnabled(bool enabled) {
+  m_inlineBlameEnabled = enabled;
+  if (!enabled) {
+    m_lastInlineBlameLine = -1;
+  }
+  viewport()->update();
+}
+
+bool TextArea::isInlineBlameEnabled() const { return m_inlineBlameEnabled; }
+
+void TextArea::setHeatmapData(const QMap<int, qint64> &timestamps) {
+  if (lineNumberArea)
+    lineNumberArea->setHeatmapData(timestamps);
+}
+
+void TextArea::setHeatmapEnabled(bool enabled) {
+  if (lineNumberArea)
+    lineNumberArea->setHeatmapEnabled(enabled);
+}
+
+bool TextArea::isHeatmapEnabled() const {
+  return lineNumberArea ? lineNumberArea->isHeatmapEnabled() : false;
+}
+
+void TextArea::setCodeLensEntries(const QList<CodeLensEntry> &entries) {
+  m_codeLensEntries = entries;
+  viewport()->update();
+}
+
+void TextArea::clearCodeLensEntries() {
+  m_codeLensEntries.clear();
+  viewport()->update();
+}
+
+void TextArea::setCodeLensEnabled(bool enabled) {
+  m_codeLensEnabled = enabled;
+  viewport()->update();
+}
+
+bool TextArea::isCodeLensEnabled() const { return m_codeLensEnabled; }
 
 void TextArea::setDebugExecutionLine(int line) {
   const int normalizedLine = line > 0 ? line : 0;
