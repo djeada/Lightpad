@@ -1206,6 +1206,17 @@ void MainWindow::on_actionOpen_Project_triggered() {
     return;
   }
 
+  const QString normalizedCurrentRoot = QDir::cleanPath(m_projectRootPath);
+  const QString normalizedNextRoot = QDir::cleanPath(folderPath);
+  if (!normalizedCurrentRoot.isEmpty() &&
+      normalizedCurrentRoot != normalizedNextRoot) {
+    for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+      if (tabWidget) {
+        tabWidget->closeAllTabs();
+      }
+    }
+  }
+
   setProjectRootPath(folderPath);
 
   QDir::setCurrent(folderPath);
