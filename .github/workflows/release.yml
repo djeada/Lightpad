@@ -202,6 +202,7 @@ jobs:
             echo "Lightpad.app not found in build output"
             exit 1
           fi
+          mkdir -p "$APP_PATH/Contents/Resources"
           # Include Qt license information in the app bundle
           cat > "$APP_PATH/Contents/Resources/QT_LICENSE.txt" << 'EOF'
           This application uses the Qt framework.
