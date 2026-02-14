@@ -35,11 +35,9 @@ bool DebugConfigurationManager::loadFromFile(const QString &filePath) {
 
   QJsonObject root = doc.object();
 
-  // Clear existing configurations
   m_configurations.clear();
   m_compoundConfigurations.clear();
 
-  // Load configurations
   QJsonArray cfgArray = root["configurations"].toArray();
   for (const auto &val : cfgArray) {
     DebugConfiguration cfg = DebugConfiguration::fromJson(val.toObject());
@@ -48,7 +46,6 @@ bool DebugConfigurationManager::loadFromFile(const QString &filePath) {
     }
   }
 
-  // Load compound configurations
   QJsonArray compoundArray = root["compounds"].toArray();
   for (const auto &val : compoundArray) {
     CompoundDebugConfiguration cfg =
@@ -72,14 +69,12 @@ bool DebugConfigurationManager::saveToFile(const QString &filePath) {
   QJsonObject root;
   root["version"] = "0.2.0";
 
-  // Save configurations
   QJsonArray cfgArray;
   for (const auto &cfg : m_configurations) {
     cfgArray.append(cfg.toJson());
   }
   root["configurations"] = cfgArray;
 
-  // Save compound configurations
   if (!m_compoundConfigurations.isEmpty()) {
     QJsonArray compoundArray;
     for (const auto &cfg : m_compoundConfigurations) {
@@ -174,12 +169,10 @@ DebugConfigurationManager::resolveVariables(const DebugConfiguration &config,
     resolved.args.append(substituteVariable(arg, currentFile));
   }
 
-  // Substitute in environment variables
   for (auto it = config.env.begin(); it != config.env.end(); ++it) {
     resolved.env[it.key()] = substituteVariable(it.value(), currentFile);
   }
 
-  // Substitute in adapter config
   for (auto it = config.adapterConfig.begin(); it != config.adapterConfig.end();
        ++it) {
     if (it.value().isString()) {
@@ -197,31 +190,24 @@ QString DebugConfigurationManager::substituteVariable(
     const QString &value, const QString &currentFile) const {
   QString result = value;
 
-  // ${workspaceFolder}
   if (!m_workspaceFolder.isEmpty()) {
     result.replace("${workspaceFolder}", m_workspaceFolder);
   }
 
-  // ${file} - full path to current file
   if (!currentFile.isEmpty()) {
     result.replace("${file}", currentFile);
 
     QFileInfo fi(currentFile);
 
-    // ${fileBasename} - file name without path
     result.replace("${fileBasename}", fi.fileName());
 
-    // ${fileBasenameNoExtension} - file name without path or extension
     result.replace("${fileBasenameNoExtension}", fi.completeBaseName());
 
-    // ${fileDirname} - directory containing the file
     result.replace("${fileDirname}", fi.absolutePath());
 
-    // ${fileExtname} - file extension
     result.replace("${fileExtname}",
                    fi.suffix().isEmpty() ? "" : "." + fi.suffix());
 
-    // ${relativeFile} - file relative to workspace
     if (!m_workspaceFolder.isEmpty() &&
         currentFile.startsWith(m_workspaceFolder)) {
       QString relative = currentFile.mid(m_workspaceFolder.length());
@@ -232,7 +218,6 @@ QString DebugConfigurationManager::substituteVariable(
     }
   }
 
-  // ${pathSeparator}
 #ifdef Q_OS_WIN
   result.replace("${pathSeparator}", "\\");
 #else
@@ -249,7 +234,6 @@ DebugConfigurationManager::createQuickConfig(const QString &filePath,
 
   QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
 
-  // Prefer adapter by selected language, fall back to file extension.
   auto adapter =
       canonicalLanguageId.isEmpty()
           ? DebugAdapterRegistry::instance().preferredAdapterForFile(filePath)
@@ -263,18 +247,13 @@ DebugConfigurationManager::createQuickConfig(const QString &filePath,
     return config;
   }
 
-  // Use adapter's default launch config as base
   QJsonObject launchConfig =
       adapter->createLaunchConfig(filePath, QFileInfo(filePath).absolutePath());
   config = DebugConfiguration::fromJson(launchConfig);
 
-  // Set a name based on the file
   QFileInfo fi(filePath);
   config.name = QString("Debug %1").arg(fi.fileName());
 
-  // For native debuggers, the debug target should be an executable, not the
-  // source file path. Quick debug on compiled languages uses a sibling binary
-  // with the same base name.
   if (config.type == "cppdbg") {
     config.stopOnEntry = false;
     static const QSet<QString> sourceExtensions = {
@@ -307,13 +286,11 @@ bool DebugConfigurationManager::loadFromLightpadDir() {
     return false;
   }
 
-  // Ensure directory exists
   QDir dir(m_workspaceFolder + "/.lightpad/debug");
   if (!dir.exists()) {
     dir.mkpath(".");
   }
 
-  // If file doesn't exist, create a default one
   if (!QFile::exists(path)) {
     LOG_INFO("Creating default launch.json in .lightpad/debug/");
 
@@ -341,7 +318,6 @@ bool DebugConfigurationManager::saveToLightpadDir() {
     return false;
   }
 
-  // Ensure directory exists
   QDir dir(m_workspaceFolder + "/.lightpad/debug");
   if (!dir.exists()) {
     dir.mkpath(".");

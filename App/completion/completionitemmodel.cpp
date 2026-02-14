@@ -62,8 +62,7 @@ CompletionItem CompletionItemModel::itemAt(int index) const {
 }
 
 QIcon CompletionItemModel::iconForKind(CompletionItemKind kind) const {
-  // Return a simple colored icon based on kind
-  // In a real implementation, these would be loaded from resources
+
   QString iconName;
   switch (kind) {
   case CompletionItemKind::Text:
@@ -109,7 +108,6 @@ QIcon CompletionItemModel::iconForKind(CompletionItemKind kind) const {
     break;
   }
 
-  // Try to load from resources, return empty if not found
   QString path = QString(":/icons/completion/%1.png").arg(iconName);
   QIcon icon(path);
   return icon;

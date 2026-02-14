@@ -148,20 +148,14 @@ MainWindow::MainWindow(QWidget *parent)
   ui->magicButton->setIconSize(0.8 * ui->magicButton->size());
   ui->debugButton->setIconSize(0.8 * ui->debugButton->size());
 
-  // Initialize recent files manager
   recentFilesManager = new RecentFilesManager(this);
 
-  // Initialize navigation history
   setupNavigationHistory();
 
-  // Initialize auto-save
   setupAutoSave();
 
-  // Initialize new completion system
   setupCompletionSystem();
 
-  // Legacy completer initialization kept for backward compatibility
-  // TODO: Remove after confirming new system works
   QStringList wordList;
   wordList << "break" << "case" << "continue" << "default" << "do" << "else"
            << "for" << "if" << "return" << "switch" << "while";
@@ -362,7 +356,6 @@ QString MainWindow::textAreaSettingsPath() const {
     return QDir(settingsDir).filePath("editor_settings.json");
   }
 
-  // Conservative fallback if OS config path resolution fails.
   QString fallbackDir = QDir::home().filePath(".lightpad");
   QDir dir;
   dir.mkpath(fallbackDir);
@@ -374,7 +367,7 @@ void MainWindow::loadSettings() {
   if (QFileInfo(editorSettingsPath).exists()) {
     settings.loadSettings(editorSettingsPath);
   } else if (QFileInfo("settings.json").exists()) {
-    // One-time migration from legacy per-project settings file.
+
     settings.loadSettings("settings.json");
     settings.saveSettings(editorSettingsPath);
     LOG_INFO(QString("Migrated editor settings to global path: %1")
@@ -383,7 +376,6 @@ void MainWindow::loadSettings() {
     setTabWidth(defaultTabWidth);
   }
 
-  // Load global font settings from user home config
   SettingsManager &globalSettings = SettingsManager::instance();
   globalSettings.loadSettings();
   QString fontFamily =
@@ -399,7 +391,6 @@ void MainWindow::loadSettings() {
     ui->actionToggle_Vim_Mode->setChecked(settings.vimModeEnabled);
   }
 
-  // Restore last session: project path and open tabs
   QString lastProject =
       globalSettings.getValue("lastProjectPath", "").toString();
   if (!lastProject.isEmpty() && QDir(lastProject).exists()) {
@@ -417,7 +408,6 @@ void MainWindow::loadSettings() {
     }
   }
 
-  // Apply saved expanded state to all views
   applyTreeExpandedStateToViews();
 }
 
@@ -426,7 +416,6 @@ void MainWindow::saveSettings() {
                 .arg(settings.showLineNumberArea));
   settings.saveSettings(textAreaSettingsPath());
 
-  // Save session state: project path and open tabs
   SettingsManager &globalSettings = SettingsManager::instance();
   globalSettings.setValue("lastProjectPath", m_projectRootPath);
   if (sourceControlDock) {
@@ -641,12 +630,10 @@ void MainWindow::updateGitStatusBar() {
     return;
   }
 
-  // Branch name
   QString branch = m_gitIntegration->currentBranch();
   m_gitBranchLabel->setText(
       QString("\xF0\x9F\x94\x80 %1").arg(branch.isEmpty() ? "HEAD" : branch));
 
-  // Ahead/behind
   int ahead = 0, behind = 0;
   if (m_gitIntegration->getAheadBehind(ahead, behind)) {
     QString syncText;
@@ -666,7 +653,6 @@ void MainWindow::updateGitStatusBar() {
     m_gitSyncLabel->clear();
   }
 
-  // Dirty indicator
   bool dirty = m_gitIntegration->isDirty();
   m_gitDirtyLabel->setText(dirty ? "\u25CF" : "");
   m_gitDirtyLabel->setToolTip(dirty ? tr("Uncommitted changes")
@@ -855,8 +841,6 @@ void MainWindow::ensureProjectSettings(const QString &path) {
   }
 
   QString configDir = rootDir.filePath(".lightpad");
-  // Template assignments are saved automatically when setAssignment is called
-  // in RunTemplateManager and FormatTemplateManager
 
   QString highlightConfigPath = configDir + "/highlight_config.json";
   if (!QFileInfo(highlightConfigPath).exists()) {
@@ -925,61 +909,51 @@ void MainWindow::keyPressEvent(QKeyEvent *keyEvent) {
   else if (keyEvent->matches(QKeySequence::AddTab))
     currentTabWidget()->addNewTab();
 
-  // Command Palette: Ctrl+Shift+P
   else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
            keyEvent->key() == Qt::Key_P) {
     showCommandPalette();
   }
 
-  // Problems Panel: Ctrl+Shift+M
   else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
            keyEvent->key() == Qt::Key_M) {
     showProblemsPanel();
   }
 
-  // Go to Line: Ctrl+G
   else if (keyEvent->modifiers() == Qt::ControlModifier &&
            keyEvent->key() == Qt::Key_G) {
     showGoToLineDialog();
   }
 
-  // Go to Symbol: Ctrl+Shift+O
   else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
            keyEvent->key() == Qt::Key_O) {
     showGoToSymbolDialog();
   }
 
-  // File Quick Open: Ctrl+P
   else if (keyEvent->modifiers() == Qt::ControlModifier &&
            keyEvent->key() == Qt::Key_P) {
     showFileQuickOpen();
   }
 
-  // Recent Files: Ctrl+E
   else if (keyEvent->modifiers() == Qt::ControlModifier &&
            keyEvent->key() == Qt::Key_E) {
     showRecentFilesDialog();
   }
 
-  // Toggle Whitespace: Ctrl+Shift+W
   else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
            keyEvent->key() == Qt::Key_W) {
     toggleShowWhitespace();
   }
 
-  // Toggle Indent Guides: Ctrl+Shift+I
   else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
            keyEvent->key() == Qt::Key_I) {
     toggleShowIndentGuides();
   }
 
-  // Navigate Back: Alt+Left
   else if (keyEvent->modifiers() == Qt::AltModifier &&
            keyEvent->key() == Qt::Key_Left) {
     navigateBack();
   }
 
-  // Navigate Forward: Alt+Right
   else if (keyEvent->modifiers() == Qt::AltModifier &&
            keyEvent->key() == Qt::Key_Right) {
     navigateForward();
@@ -990,8 +964,6 @@ int MainWindow::getTabWidth() { return settings.tabWidth; }
 
 int MainWindow::getFontSize() { return settings.mainFont.pointSize(); }
 
-// use current page if empty
-// else add new tab
 void MainWindow::openFileAndAddToNewTab(QString filePath) {
   LightpadTabWidget *tabWidget = currentTabWidget();
 
@@ -1003,7 +975,6 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
     updateGitIntegrationForPath(filePath);
   }
 
-  // check if file not already open (including viewer tabs)
   for (int i = 0; i < tabWidget->count(); i++) {
     QString tabFilePath = tabWidget->getFilePath(i);
     if (tabFilePath == filePath) {
@@ -1014,7 +985,6 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
 
   QString extension = fileInfo.suffix().toLower();
 
-  // Check if it's an image file
   if (ImageViewer::isSupportedImageFormat(extension)) {
     ImageViewer *imageViewer = new ImageViewer(this);
     if (imageViewer->loadImage(filePath)) {
@@ -1026,7 +996,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
   }
 
 #ifdef HAVE_PDF_SUPPORT
-  // Check if it's a PDF file
+
   if (PdfViewer::isSupportedPdfFormat(extension)) {
     PdfViewer *pdfViewer = new PdfViewer(this);
     if (pdfViewer->loadPdf(filePath)) {
@@ -1038,14 +1008,11 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
   }
 #endif
 
-  // Default handling for text files
   TextArea *currentTextArea = getCurrentTextArea();
   bool currentIsViewer = tabWidget->isViewerTab(tabWidget->currentIndex());
   if (tabWidget->count() == 0 || currentIsViewer || !currentTextArea ||
       !currentTextArea->toPlainText().isEmpty()) {
     tabWidget->addNewTab();
-    // Note: addNewTab() already sets the correct current index (count() - 2)
-    // since the last tab is the add-button placeholder
   }
 
   open(filePath);
@@ -1054,7 +1021,7 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
   auto page = tabWidget->getCurrentPage();
 
   if (page) {
-    // Use project root path if set, otherwise show treeview based on file
+
     if (!m_projectRootPath.isEmpty()) {
       page->setProjectRootPath(m_projectRootPath);
       page->setModelRootIndex(m_projectRootPath);
@@ -1066,12 +1033,10 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
   if (getCurrentTextArea())
     applyHighlightForFile(filePath);
 
-  // Track in recent files
   if (recentFilesManager) {
     recentFilesManager->addFile(filePath);
   }
 
-  // Update breadcrumb
   updateBreadcrumb(filePath);
 
   tabWidget->currentChanged(tabWidget->currentIndex());
@@ -1241,7 +1206,6 @@ void MainWindow::on_actionOpen_Project_triggered() {
     return;
   }
 
-  // Store the project root path for persistence across all tabs
   setProjectRootPath(folderPath);
 
   QDir::setCurrent(folderPath);
@@ -1309,7 +1273,6 @@ void MainWindow::save(const QString &filePath) {
   if (getCurrentTextArea()) {
     TextArea *textArea = getCurrentTextArea();
 
-    // Apply pre-save operations based on settings
     SettingsManager &sm = SettingsManager::instance();
     if (sm.getValue("trimTrailingWhitespace", false).toBool()) {
       trimTrailingWhitespace(textArea);
@@ -1327,7 +1290,6 @@ void MainWindow::save(const QString &filePath) {
     textArea->removeIconUnsaved();
     setFilePathAsTabText(filePath);
 
-    // Notify problems panel for auto-refresh on save
     if (problemsPanel) {
       problemsPanel->onFileSaved(filePath);
     }
@@ -1347,7 +1309,6 @@ void MainWindow::trimTrailingWhitespace(TextArea *textArea) {
     QString text = block.text();
     int originalLength = text.length();
 
-    // Remove trailing whitespace
     int i = originalLength - 1;
     while (i >= 0 && (text[i] == ' ' || text[i] == '\t')) {
       --i;
@@ -1389,11 +1350,8 @@ void MainWindow::showFindReplace(bool onlyFind) {
     if (layout != 0)
       layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
 
-    // Connect navigation signal to open file at location
     connect(findReplacePanel, &FindReplacePanel::navigateToFile, this,
             [this](const QString &filePath, int lineNumber, int columnNumber) {
-              // For local search results, filePath is empty - use current text
-              // area
               if (!filePath.isEmpty()) {
                 openFileAndAddToNewTab(filePath);
               }
@@ -1444,7 +1402,7 @@ void MainWindow::showFindReplace(bool onlyFind) {
 void MainWindow::openDialog(Dialog dialog) {
   switch (dialog) {
   case Dialog::runConfiguration: {
-    // Use new template selector
+
     auto page = currentTabWidget()->getCurrentPage();
     QString filePath = page ? page->getFilePath() : QString();
 
@@ -1464,7 +1422,7 @@ void MainWindow::openDialog(Dialog dialog) {
   }
 
   case Dialog::formatConfiguration: {
-    // Use new format template selector
+
     auto page = currentTabWidget()->getCurrentPage();
     QString filePath = page ? page->getFilePath() : QString();
 
@@ -1565,7 +1523,6 @@ void MainWindow::showTerminal() {
 
   terminalWidget->show();
 
-  // Run the file using the template system
   terminalWidget->runFile(filePath, effectiveLanguageIdForFile(filePath));
 }
 
@@ -1593,7 +1550,6 @@ void MainWindow::showProblemsPanel() {
               }
             });
 
-    // Connect countsChanged to update status bar
     connect(problemsPanel, &ProblemsPanel::countsChanged, this,
             &MainWindow::updateProblemsStatusLabel);
 
@@ -1616,12 +1572,11 @@ void MainWindow::ensureStatusLabels() {
     problemsStatusLabel->setText("✓ No problems");
     problemsStatusLabel->setCursor(Qt::PointingHandCursor);
 
-    // Make it clickable to toggle problems panel
     problemsStatusLabel->installEventFilter(this);
 
     auto layout = qobject_cast<QHBoxLayout *>(ui->backgroundBottom->layout());
     if (layout) {
-      // Insert before the rowCol label (second to last widget)
+
       layout->insertWidget(layout->count() - 1, problemsStatusLabel);
     }
   }
@@ -1694,7 +1649,6 @@ void MainWindow::ensureSourceControlPanel() {
                                  getTheme(), this);
             dialog.setWindowTitle(tr("Commit %1").arg(shortHash));
 
-            // Get commit info for display
             QString author = m_gitIntegration->getCommitAuthor(commitHash);
             QString date = m_gitIntegration->getCommitDate(commitHash);
             QString message = m_gitIntegration->getCommitMessage(commitHash);
@@ -1858,7 +1812,6 @@ void MainWindow::showCommandPalette() {
 void MainWindow::setupCommandPalette() {
   commandPalette = new CommandPalette(this);
 
-  // Register all menus
   QMenuBar *menuBar = this->menuBar();
   for (QAction *action : menuBar->actions()) {
     if (action->menu()) {
@@ -1905,27 +1858,23 @@ void MainWindow::showGoToSymbolDialog() {
 
   TextArea *textArea = getCurrentTextArea();
   if (textArea) {
-    // For now, we'll create sample symbols based on simple parsing
-    // In a real implementation, this would use LSP document symbols
+
     QList<LspDocumentSymbol> symbols;
 
-    // Simple heuristic parsing for functions/classes
     QTextBlock block = textArea->document()->begin();
     while (block.isValid()) {
       QString text = block.text().trimmed();
 
-      // Look for function-like patterns
       if (text.contains('(') && !text.startsWith("//") &&
           !text.startsWith("/*")) {
-        // Try to extract function name
+
         int parenPos = text.indexOf('(');
         QString beforeParen = text.left(parenPos).trimmed();
 
-        // Get the last word before the parenthesis as the function name
         QStringList parts = beforeParen.split(QRegularExpression("\\s+"));
         if (!parts.isEmpty()) {
           QString name = parts.last();
-          // Clean up any leading characters like * or &
+
           while (!name.isEmpty() && (name[0] == '*' || name[0] == '&')) {
             name = name.mid(1);
           }
@@ -1938,7 +1887,6 @@ void MainWindow::showGoToSymbolDialog() {
             sym.selectionRange.start.character = 0;
             sym.range = sym.selectionRange;
 
-            // Check for class/struct definitions
             if (beforeParen.startsWith("class ") ||
                 beforeParen.startsWith("struct ")) {
               sym.kind = LspSymbolKind::Class;
@@ -1948,12 +1896,12 @@ void MainWindow::showGoToSymbolDialog() {
           }
         }
       }
-      // Look for class/struct definitions without parentheses
+
       else if (text.startsWith("class ") || text.startsWith("struct ")) {
         QStringList parts = text.split(QRegularExpression("\\s+"));
         if (parts.size() >= 2) {
           QString name = parts[1];
-          // Remove trailing characters like : or {
+
           name = name.split(QRegularExpression("[:{]")).first();
 
           if (!name.isEmpty()) {
@@ -1967,7 +1915,7 @@ void MainWindow::showGoToSymbolDialog() {
           }
         }
       }
-      // Look for Python def/class
+
       else if (text.startsWith("def ") || text.startsWith("class ")) {
         QString keyword = text.startsWith("def ") ? "def " : "class ";
         QString rest = text.mid(keyword.length());
@@ -1985,9 +1933,9 @@ void MainWindow::showGoToSymbolDialog() {
           symbols.append(sym);
         }
       }
-      // Look for JavaScript function declarations
+
       else if (text.startsWith("function ")) {
-        QString rest = text.mid(9); // Length of "function "
+        QString rest = text.mid(9);
         int endPos = rest.indexOf('(');
         if (endPos > 0) {
           QString name = rest.left(endPos).trimmed();
@@ -2035,17 +1983,15 @@ void MainWindow::showFileQuickOpen() {
     setupFileQuickOpen();
   }
 
-  // Set the current working directory as root
   QString rootPath = QDir::currentPath();
 
-  // If we have a file open, use its directory
   LightpadTabWidget *tabWidget = currentTabWidget();
   auto tabIndex = tabWidget->currentIndex();
   auto filePath = tabWidget->getFilePath(tabIndex);
   if (!filePath.isEmpty()) {
     QFileInfo fileInfo(filePath);
     rootPath = fileInfo.absolutePath();
-    // Try to find project root (look for .git, CMakeLists.txt, etc.)
+
     QDir dir(rootPath);
     while (dir.exists()) {
       if (dir.exists(".git") || dir.exists("CMakeLists.txt") ||
@@ -2090,19 +2036,17 @@ void MainWindow::setupRecentFilesDialog() {
 void MainWindow::setupBreadcrumb() {
   breadcrumbWidget = new BreadcrumbWidget(this);
 
-  // Insert breadcrumb above the tab widget in the layout
   auto layout = qobject_cast<QVBoxLayout *>(ui->centralwidget->layout());
   if (layout) {
-    // Insert at position 0 (top)
+
     layout->insertWidget(0, breadcrumbWidget);
   }
 
   connect(breadcrumbWidget, &BreadcrumbWidget::pathSegmentClicked, this,
           [this](const QString &path) {
-            // Open folder or file when breadcrumb segment is clicked
             QFileInfo fileInfo(path);
             if (fileInfo.isDir()) {
-              // Could open in file tree, for now just log
+
             } else if (fileInfo.isFile()) {
               openFileAndAddToNewTab(path);
             }
@@ -2139,10 +2083,9 @@ void MainWindow::navigateBack() {
 
   NavigationLocation loc = navigationHistory->goBack();
   if (loc.isValid()) {
-    // Open file if different
+
     openFileAndAddToNewTab(loc.filePath);
 
-    // Move cursor to the saved position
     TextArea *textArea = getCurrentTextArea();
     if (textArea) {
       QTextCursor cursor = textArea->textCursor();
@@ -2164,10 +2107,9 @@ void MainWindow::navigateForward() {
 
   NavigationLocation loc = navigationHistory->goForward();
   if (loc.isValid()) {
-    // Open file if different
+
     openFileAndAddToNewTab(loc.filePath);
 
-    // Move cursor to the saved position
     TextArea *textArea = getCurrentTextArea();
     if (textArea) {
       QTextCursor cursor = textArea->textCursor();
@@ -2192,7 +2134,6 @@ void MainWindow::recordNavigationLocation() {
     return;
   }
 
-  // Get current file path
   LightpadTabWidget *tabWidget = currentTabWidget();
   auto tabIndex = tabWidget->currentIndex();
   QString filePath = tabWidget->getFilePath(tabIndex);
@@ -2200,7 +2141,6 @@ void MainWindow::recordNavigationLocation() {
     return;
   }
 
-  // Get cursor position
   QTextCursor cursor = textArea->textCursor();
   NavigationLocation loc;
   loc.filePath = filePath;
@@ -2216,7 +2156,6 @@ void MainWindow::setupNavigationHistory() {
 
 void MainWindow::setupAutoSave() {
   autoSaveManager = new AutoSaveManager(this, this);
-  // Auto-save is disabled by default, can be enabled via settings
 }
 
 void MainWindow::setupGitIntegration() {
@@ -2227,7 +2166,6 @@ void MainWindow::setupGitIntegration() {
   m_gitIntegration = new GitIntegration(this);
   m_inlineBlameEnabled = true;
 
-  // Setup git status bar widgets
   m_gitBranchLabel = new QLabel(this);
   m_gitBranchLabel->setToolTip(tr("Current branch (click to switch)"));
   m_gitBranchLabel->setCursor(Qt::PointingHandCursor);
@@ -2245,7 +2183,6 @@ void MainWindow::setupGitIntegration() {
   statusBar()->addPermanentWidget(m_gitSyncLabel);
   statusBar()->addPermanentWidget(m_gitBranchLabel);
 
-  // Debounced git status bar refresh
   m_gitStatusBarTimer.setSingleShot(true);
   m_gitStatusBarTimer.setInterval(500);
   connect(&m_gitStatusBarTimer, &QTimer::timeout, this,
@@ -2713,14 +2650,11 @@ void MainWindow::formatCurrentDocument() {
     return;
   }
 
-  // Check for unsaved changes before formatting
   auto textArea = getCurrentTextArea();
   bool hadUnsavedChanges = textArea && textArea->changesUnsaved();
 
-  // Save the file first
   on_actionSave_triggered();
 
-  // Verify the file was saved (check if still has unsaved changes)
   if (textArea && textArea->changesUnsaved()) {
     QMessageBox::warning(this, "Format Document",
                          "Could not save the file. Formatting cancelled.");
@@ -2729,7 +2663,6 @@ void MainWindow::formatCurrentDocument() {
 
   FormatTemplateManager &manager = FormatTemplateManager::instance();
 
-  // Ensure templates are loaded
   if (manager.getAllTemplates().isEmpty()) {
     manager.loadTemplates();
   }
@@ -2744,7 +2677,6 @@ void MainWindow::formatCurrentDocument() {
     return;
   }
 
-  // Execute the formatter
   QProcess process;
   process.setWorkingDirectory(QFileInfo(filePath).absoluteDir().path());
   process.start(command.first, command.second);
@@ -2763,7 +2695,6 @@ void MainWindow::formatCurrentDocument() {
                     .arg(process.exitCode())
                     .arg(errorOutput));
 
-    // Show error to user
     QString errorMsg =
         QString("Formatter exited with error code %1.").arg(process.exitCode());
     if (!errorOutput.isEmpty()) {
@@ -2772,24 +2703,20 @@ void MainWindow::formatCurrentDocument() {
     QMessageBox::warning(this, "Format Document", errorMsg);
   }
 
-  // Reload the file if it was modified in place
   if (textArea) {
     QFile file(filePath);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
       QString newContent = QString::fromUtf8(file.readAll());
       file.close();
 
-      // Only update if content changed
       if (textArea->toPlainText() != newContent) {
-        // Save cursor position
+
         int cursorPos = textArea->textCursor().position();
 
         textArea->setPlainText(newContent);
-        // Mark as unmodified since we just formatted and the file matches the
-        // disk
+
         textArea->document()->setModified(false);
 
-        // Restore cursor position as close as possible
         QTextCursor cursor = textArea->textCursor();
         cursor.setPosition(qMin(cursorPos, textArea->toPlainText().length()));
         textArea->setTextCursor(cursor);
@@ -2852,7 +2779,6 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
     auto *view = qobject_cast<LightpadTreeView *>(page->getTreeView());
     if (view) {
       registerTreeView(view);
-      // registerTreeView already applies initial state
     }
   }
 }
@@ -2875,19 +2801,15 @@ void MainWindow::setupTabWidget() {
 }
 
 void MainWindow::setupCompletionSystem() {
-  // Register completion providers
+
   auto &registry = CompletionProviderRegistry::instance();
 
-  // Register keyword provider
   registry.registerProvider(std::make_shared<KeywordCompletionProvider>());
 
-  // Register snippet provider
   registry.registerProvider(std::make_shared<SnippetCompletionProvider>());
 
-  // Register plugin provider for syntax plugin keywords
   registry.registerProvider(std::make_shared<PluginCompletionProvider>());
 
-  // Create the completion engine
   m_completionEngine = new CompletionEngine(this);
 
   QStringList providerIds = registry.allProviderIds();
@@ -2910,7 +2832,6 @@ void MainWindow::setupTextArea() {
     ensureStatusLabels();
     connectVimMode(textArea);
 
-    // Setup new completion system (preferred)
     if (m_completionEngine) {
       textArea->setCompletionEngine(m_completionEngine);
       LightpadTabWidget *tabWidget = currentTabWidget();
@@ -2926,7 +2847,6 @@ void MainWindow::setupTextArea() {
       }
     }
 
-    // Legacy: Setup old completer as fallback
     if (completer && !m_completionEngine)
       textArea->setCompleter(completer);
   }
@@ -3106,7 +3026,7 @@ void MainWindow::on_actionToggle_Minimap_triggered() {
   LightpadPage *page = qobject_cast<LightpadPage *>(tabWidget->currentWidget());
   if (page) {
     bool visible = page->isMinimapVisible();
-    // Toggle minimap on all tabs for consistency
+
     for (LightpadTabWidget *targetWidget : allTabWidgets()) {
       for (int i = 0; i < targetWidget->count(); i++) {
         LightpadPage *p = qobject_cast<LightpadPage *>(targetWidget->widget(i));
@@ -3196,7 +3116,7 @@ void MainWindow::on_actionOpen_To_Side_triggered() {
     return;
 
   QString filePath;
-  // Find the current file path
+
   LightpadTabWidget *tabWidget = currentTabWidget();
   if (tabWidget) {
     int index = tabWidget->currentIndex();
@@ -3208,7 +3128,6 @@ void MainWindow::on_actionOpen_To_Side_triggered() {
   if (filePath.isEmpty())
     return;
 
-  // Split horizontally (side by side) to match VS Code's "Open to the Side"
   LightpadTabWidget *newGroup = m_splitEditorContainer->splitHorizontal();
   if (newGroup) {
     openFileAndAddToNewTab(filePath);
@@ -3224,7 +3143,6 @@ void MainWindow::on_actionGit_Log_triggered() {
 
   GitLogDialog dialog(m_gitIntegration, settings.theme, this);
 
-  // Optionally filter by current file
   TextArea *textArea = getCurrentTextArea();
   if (textArea) {
     LightpadTabWidget *tabWidget = currentTabWidget();
@@ -3372,19 +3290,15 @@ void MainWindow::updateCodeLensForCurrentFile() {
   if (filePath.isEmpty())
     return;
 
-  // Get blame data for the file
   QList<GitBlameLineInfo> blameLines = m_gitIntegration->getBlameInfo(filePath);
   if (blameLines.isEmpty())
     return;
 
-  // Build a map of line -> blame info
   QMap<int, GitBlameLineInfo> blameMap;
   for (const auto &info : blameLines) {
     blameMap[info.lineNumber] = info;
   }
 
-  // Detect function-like blocks using simple heuristics:
-  // Look for lines that start a block (end with '{' and have a name pattern)
   QList<TextArea::CodeLensEntry> entries;
   QTextDocument *doc = textArea->document();
   if (!doc)
@@ -3394,13 +3308,11 @@ void MainWindow::updateCodeLensForCurrentFile() {
     QTextBlock block = doc->findBlockByNumber(i);
     QString line = block.text().trimmed();
 
-    // Simple heuristic: function/method/class definitions often contain '('
-    // and end with '{' or have '{' on the next line
     bool looksLikeFunction = false;
     if (line.contains('(') && !line.startsWith("//") &&
         !line.startsWith("/*") && !line.startsWith("*") &&
         !line.startsWith("#")) {
-      // Check if this line or next has '{'
+
       if (line.endsWith('{') || line.endsWith(") {")) {
         looksLikeFunction = true;
       } else if (i + 1 < doc->blockCount()) {
@@ -3409,7 +3321,7 @@ void MainWindow::updateCodeLensForCurrentFile() {
           looksLikeFunction = true;
       }
     }
-    // Also check class/struct definitions
+
     if (line.startsWith("class ") || line.startsWith("struct ")) {
       looksLikeFunction = true;
     }
@@ -3417,8 +3329,7 @@ void MainWindow::updateCodeLensForCurrentFile() {
     if (!looksLikeFunction)
       continue;
 
-    // Find the extent of this block (until matching '}')
-    int startLine = i + 1; // 1-based
+    int startLine = i + 1;
     int endLine = startLine;
     int braceDepth = 0;
     bool foundOpen = false;
@@ -3438,7 +3349,6 @@ void MainWindow::updateCodeLensForCurrentFile() {
       }
     }
 
-    // Aggregate blame data for this range
     QSet<QString> authors;
     int changeCount = 0;
     QString latestAuthor;
@@ -3450,8 +3360,7 @@ void MainWindow::updateCodeLensForCurrentFile() {
       if (it != blameMap.end()) {
         authors.insert(it->author);
         changeCount++;
-        // Track most recent change (use the date string for display)
-        // Since we don't have epoch here, compare date strings
+
         if (latestAuthor.isEmpty() || it->relativeDate < latestDate) {
           latestAuthor = it->author;
           latestDate = it->relativeDate;
@@ -3462,7 +3371,6 @@ void MainWindow::updateCodeLensForCurrentFile() {
     if (authors.isEmpty())
       continue;
 
-    // Build CodeLens text
     QString authorsText;
     if (authors.size() <= 3) {
       authorsText = QString("%1 author%2 (%3)")
@@ -3477,7 +3385,7 @@ void MainWindow::updateCodeLensForCurrentFile() {
     }
 
     TextArea::CodeLensEntry entry;
-    entry.line = i; // 0-based
+    entry.line = i;
     entry.text = QString("%1 | %2").arg(authorsText, latestDate);
     entry.symbolName = line.left(60);
     entries.append(entry);
@@ -3485,10 +3393,6 @@ void MainWindow::updateCodeLensForCurrentFile() {
 
   textArea->setCodeLensEntries(entries);
 }
-
-// ============================================================================
-// Text Transformation Actions
-// ============================================================================
 
 void MainWindow::on_actionTransform_Uppercase_triggered() {
   TextArea *textArea = getCurrentTextArea();
@@ -3524,10 +3428,6 @@ void MainWindow::on_actionSort_Lines_Descending_triggered() {
     textArea->sortLinesDescending();
   }
 }
-
-// ============================================================================
-// View Actions
-// ============================================================================
 
 void MainWindow::on_actionToggle_Word_Wrap_triggered() {
   TextArea *textArea = getCurrentTextArea();
@@ -3612,7 +3512,7 @@ void MainWindow::setTheme(Theme theme) {
   QString errorColor = settings.theme.errorColor.name();
 
   QString styleSheet =
-      // Base widget styling with smooth font rendering
+
       "QWidget { "
       "background-color: " +
       bgColor +
@@ -3625,7 +3525,6 @@ void MainWindow::setTheme(Theme theme) {
       bgColor +
       "; }"
 
-      // Modern menu styling with refined shadows
       "QMenu { "
       "color: " +
       fgColor +
@@ -3663,7 +3562,6 @@ void MainWindow::setTheme(Theme theme) {
       "padding-left: 8px; "
       "}"
 
-      // Menu bar styling with better spacing
       "QMenuBar { "
       "background-color: " +
       surfaceColor +
@@ -3694,7 +3592,6 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "}"
 
-      // Message box styling
       "QMessageBox { background-color: " +
       surfaceColor + "; color: " + fgColor +
       "; }"
@@ -3711,7 +3608,6 @@ void MainWindow::setTheme(Theme theme) {
       "; border-radius: 4px; "
       "}"
 
-      // Modern button styling with subtle transitions
       "QPushButton { "
       "color: " +
       fgColor +
@@ -3760,7 +3656,6 @@ void MainWindow::setTheme(Theme theme) {
       "background-color: #6eb5ff; "
       "}"
 
-      // Tool button styling
       "QToolButton { "
       "color: " +
       fgColor +
@@ -3831,7 +3726,6 @@ void MainWindow::setTheme(Theme theme) {
       "padding: 0 4px; "
       "}"
 
-      // Tree view and list styling with improved spacing
       "QAbstractItemView { "
       "color: " +
       fgColor +
@@ -3886,7 +3780,6 @@ void MainWindow::setTheme(Theme theme) {
       "font-size: 11px; "
       "}"
 
-      // Text input styling with better focus states
       "QLineEdit { "
       "background-color: " +
       surfaceAltColor +
@@ -3920,7 +3813,6 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "}"
 
-      // Combo box styling
       "QComboBox { "
       "background-color: " +
       surfaceAltColor +
@@ -3966,7 +3858,6 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "}"
 
-      // Text editor styling
       "QPlainTextEdit { "
       "color: " +
       fgColor +
@@ -3986,7 +3877,6 @@ void MainWindow::setTheme(Theme theme) {
       "border: none; "
       "}"
 
-      // Group boxes with refined styling
       "QGroupBox { "
       "border: 1px solid " +
       borderColor +
@@ -4006,7 +3896,6 @@ void MainWindow::setTheme(Theme theme) {
       "font-size: 12px; "
       "}"
 
-      // Modern radio button styling
       "QRadioButton { "
       "color: " +
       fgColor +
@@ -4040,7 +3929,6 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "}"
 
-      // Checkbox styling with modern look
       "QCheckBox { "
       "color: " +
       fgColor +
@@ -4072,7 +3960,6 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "}"
 
-      // Minimal scrollbars with modern feel
       "QScrollBar:vertical { "
       "background-color: transparent; "
       "width: 12px; "
@@ -4122,7 +4009,6 @@ void MainWindow::setTheme(Theme theme) {
       "background: none; "
       "}"
 
-      // Tooltip styling
       "QToolTip { "
       "background-color: " +
       surfaceColor +
@@ -4137,7 +4023,6 @@ void MainWindow::setTheme(Theme theme) {
       "padding: 6px 10px; "
       "}"
 
-      // Splitter styling
       "QSplitter::handle { "
       "background-color: " +
       borderColor +
@@ -4151,7 +4036,6 @@ void MainWindow::setTheme(Theme theme) {
       "QSplitter::handle:horizontal { width: 1px; }"
       "QSplitter::handle:vertical { height: 1px; }"
 
-      // Status bar styling
       "QStatusBar { "
       "background-color: " +
       surfaceColor +
@@ -4164,7 +4048,6 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "}"
 
-      // Bottom panel styling with subtle elevation
       "QWidget#backgroundBottom { "
       "background-color: " +
       surfaceColor +
@@ -4202,7 +4085,6 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "}"
 
-      // Dialog button sizing
       "QDialog QPushButton { "
       "min-height: 32px; "
       "}"
@@ -4211,7 +4093,6 @@ void MainWindow::setTheme(Theme theme) {
       "min-height: 32px; "
       "}"
 
-      // Line edit with icon
       "LineEditIcon { "
       "background-color: " +
       surfaceAltColor +
@@ -4241,7 +4122,6 @@ void MainWindow::setTheme(Theme theme) {
       "padding: 4px; "
       "}"
 
-      // Spin box styling
       "QSpinBox { "
       "background-color: " +
       surfaceAltColor +
@@ -4273,7 +4153,6 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "}"
 
-      // Progress bar styling
       "QProgressBar { "
       "background-color: " +
       surfaceAltColor +
@@ -4303,7 +4182,6 @@ void MainWindow::setTheme(Theme theme) {
     terminalWidget->applyTheme(theme);
   }
 
-  // Apply theme to all dialogs and panels
   if (commandPalette) {
     commandPalette->applyTheme(theme);
   }
@@ -4360,7 +4238,6 @@ void MainWindow::setProjectRootPath(const QString &path) {
     }
   }
 
-  // Update all existing tabs with the new project root
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); i++) {
       auto page = tabWidget->getPage(i);
@@ -4388,7 +4265,6 @@ void MainWindow::setProjectRootPath(const QString &path) {
     WatchManager::instance().loadFromLightpadDir();
   }
 
-  // Apply saved expanded state to all views for the new project
   applyTreeExpandedStateToViews();
 }
 
@@ -4409,10 +4285,7 @@ void MainWindow::ensureFileTreeModel() {
 
   m_fileTreeModel = new GitFileSystemModel(this);
   connect(m_fileTreeModel, &QFileSystemModel::directoryLoaded, this,
-          [this](const QString &) {
-            // Apply saved expanded state when directory is loaded
-            applyTreeExpandedStateToViews();
-          });
+          [this](const QString &) { applyTreeExpandedStateToViews(); });
   QString rootPath =
       m_projectRootPath.isEmpty() ? QDir::home().path() : m_projectRootPath;
   m_fileTreeModel->setRootPath(rootPath);
@@ -4452,8 +4325,6 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
     treeView->setModel(m_fileTreeModel);
   }
 
-  // Track expanded/collapsed state for persistence only
-  // With a single shared model, we don't need to sync between views
   QObject::disconnect(treeView, &QTreeView::expanded, this, nullptr);
   QObject::disconnect(treeView, &QTreeView::collapsed, this, nullptr);
   QObject::disconnect(treeView->verticalScrollBar(), &QScrollBar::valueChanged,
@@ -4487,7 +4358,6 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
             m_treeScrollSyncing = false;
           });
 
-  // Apply initial state to this view
   applyTreeStateToView(treeView);
   if (m_treeScrollValueInitialized) {
     treeView->verticalScrollBar()->setValue(m_treeScrollValue);
@@ -4531,7 +4401,6 @@ void MainWindow::trackTreeExpandedState(const QModelIndex &index,
       }
     }
   }
-  // Note: No need to propagate to other views - they share the same model
 }
 
 void MainWindow::applyTreeStateToView(QTreeView *treeView) {

@@ -90,23 +90,19 @@ private:
   QString m_summaryText;
   DiffViewMode m_viewMode;
 
-  // Commit info
   QString m_commitAuthor;
   QString m_commitDate;
   QString m_commitMessage;
 
-  // Main layout widgets
   QSplitter *m_mainSplitter;
   QWidget *m_fileListPanel;
   QListWidget *m_fileList;
   QLabel *m_fileListHeader;
 
-  // Diff view area
   QTextEdit *m_diffView;
   QFrame *m_minimapFrame;
   QLabel *m_minimapLabel;
 
-  // Header widgets
   QLabel *m_summaryLabel;
   QLabel *m_commitInfoLabel;
   QLabel *m_changeCounterLabel;
@@ -122,7 +118,6 @@ private:
   QPushButton *m_nextButton;
   QPushButton *m_copyButton;
 
-  // Data
   QList<DiffLine> m_lines;
   QList<FileSection> m_files;
   QList<QPair<int, int>> m_changeBlocks;
@@ -136,4 +131,4 @@ private:
   Theme m_theme;
 };
 
-#endif // GITDIFFDIALOG_H
+#endif

@@ -39,4 +39,4 @@ private:
   bool removeRecursively(const QString &path);
 };
 
-#endif // FILEDIRTREEMODEL_H
+#endif

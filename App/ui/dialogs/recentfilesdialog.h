@@ -10,11 +10,6 @@
 
 class RecentFilesManager;
 
-/**
- * @brief Recent Files dialog for quick access to recently opened files
- *
- * Provides fuzzy search for recently opened files.
- */
 class RecentFilesDialog : public QDialog {
   Q_OBJECT
 
@@ -23,25 +18,14 @@ public:
                              QWidget *parent = nullptr);
   ~RecentFilesDialog();
 
-  /**
-   * @brief Show and focus the dialog
-   */
   void showDialog();
 
-  /**
-   * @brief Refresh the list of recent files
-   */
   void refresh();
 
-  /**
-   * @brief Apply theme to the dialog
-   */
   void applyTheme(const Theme &theme);
 
 signals:
-  /**
-   * @brief Emitted when user selects a file
-   */
+
   void fileSelected(const QString &filePath);
 
 protected:
@@ -69,4 +53,4 @@ private:
   QList<int> m_filteredIndices;
 };
 
-#endif // RECENTFILESDIALOG_H
+#endif

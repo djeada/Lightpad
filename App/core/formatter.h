@@ -12,4 +12,4 @@ private:
   QString languageId;
 };
 
-#endif // FORMATTER_H
+#endif

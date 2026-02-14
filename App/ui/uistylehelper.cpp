@@ -91,15 +91,13 @@ QString UIStyleHelper::treeWidgetStyle(const Theme &theme) {
       .arg(theme.accentSoftColor.name())
       .arg(theme.hoverColor.name())
       .arg(theme.surfaceColor.name())
-      .arg(theme.singleLineCommentFormat.name()) // Subdued text color
+      .arg(theme.singleLineCommentFormat.name())
       .arg(theme.borderColor.name())
       .arg(theme.surfaceAltColor.name());
 }
 
 QString UIStyleHelper::subduedLabelStyle(const Theme &theme) {
-  return QString("color: %1;")
-      .arg(theme.singleLineCommentFormat
-               .name()); // Using comment color as subdued text
+  return QString("color: %1;").arg(theme.singleLineCommentFormat.name());
 }
 
 QString UIStyleHelper::titleLabelStyle(const Theme &theme) {

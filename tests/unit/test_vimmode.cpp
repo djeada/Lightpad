@@ -45,15 +45,12 @@ void TestVimMode::cleanupTestCase() {
 }
 
 void TestVimMode::init() {
-  // Reset state before each test
+
   m_vim->setEnabled(false);
   m_editor->clear();
 }
 
-void TestVimMode::cleanup() {
-  // Cleanup after each test
-  m_vim->setEnabled(false);
-}
+void TestVimMode::cleanup() { m_vim->setEnabled(false); }
 
 void TestVimMode::testEnableDisable() {
   QVERIFY(!m_vim->isEnabled());
@@ -76,7 +73,6 @@ void TestVimMode::testNormalToInsertMode() {
   m_vim->setEnabled(true);
   QCOMPARE(m_vim->mode(), VimEditMode::Normal);
 
-  // Press 'i' to enter insert mode
   QKeyEvent keyEvent(QEvent::KeyPress, Qt::Key_I, Qt::NoModifier, "i");
   bool handled = m_vim->processKeyEvent(&keyEvent);
 
@@ -87,12 +83,10 @@ void TestVimMode::testNormalToInsertMode() {
 void TestVimMode::testInsertToNormalMode() {
   m_vim->setEnabled(true);
 
-  // First go to insert mode
   QKeyEvent iKey(QEvent::KeyPress, Qt::Key_I, Qt::NoModifier, "i");
   m_vim->processKeyEvent(&iKey);
   QCOMPARE(m_vim->mode(), VimEditMode::Insert);
 
-  // Press Escape to return to normal mode
   QKeyEvent escKey(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
   bool handled = m_vim->processKeyEvent(&escKey);
 
@@ -104,19 +98,16 @@ void TestVimMode::testBasicMotions() {
   m_vim->setEnabled(true);
   m_editor->setPlainText("Hello World\nSecond Line\nThird Line");
 
-  // Move cursor to start
   QTextCursor cursor = m_editor->textCursor();
   cursor.movePosition(QTextCursor::Start);
   m_editor->setTextCursor(cursor);
 
-  // Press 'l' to move right
   QKeyEvent lKey(QEvent::KeyPress, Qt::Key_L, Qt::NoModifier, "l");
   m_vim->processKeyEvent(&lKey);
 
   cursor = m_editor->textCursor();
   QCOMPARE(cursor.position(), 1);
 
-  // Press 'j' to move down
   QKeyEvent jKey(QEvent::KeyPress, Qt::Key_J, Qt::NoModifier, "j");
   m_vim->processKeyEvent(&jKey);
 
@@ -128,12 +119,10 @@ void TestVimMode::testDeleteOperator() {
   m_vim->setEnabled(true);
   m_editor->setPlainText("Hello World");
 
-  // Move cursor to start
   QTextCursor cursor = m_editor->textCursor();
   cursor.movePosition(QTextCursor::Start);
   m_editor->setTextCursor(cursor);
 
-  // Press 'x' to delete character
   QKeyEvent xKey(QEvent::KeyPress, Qt::Key_X, Qt::NoModifier, "x");
   m_vim->processKeyEvent(&xKey);
 
@@ -143,13 +132,11 @@ void TestVimMode::testDeleteOperator() {
 void TestVimMode::testVisualMode() {
   m_vim->setEnabled(true);
 
-  // Press 'v' to enter visual mode
   QKeyEvent vKey(QEvent::KeyPress, Qt::Key_V, Qt::NoModifier, "v");
   m_vim->processKeyEvent(&vKey);
 
   QCOMPARE(m_vim->mode(), VimEditMode::Visual);
 
-  // Press Escape to exit
   QKeyEvent escKey(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
   m_vim->processKeyEvent(&escKey);
 
@@ -164,20 +151,17 @@ void TestVimMode::testReplaceMode() {
   cursor.movePosition(QTextCursor::Start);
   m_editor->setTextCursor(cursor);
 
-  // Press Shift+R to enter Replace mode
   QKeyEvent rKey(QEvent::KeyPress, Qt::Key_R, Qt::ShiftModifier, "R");
   m_vim->processKeyEvent(&rKey);
 
   QCOMPARE(m_vim->mode(), VimEditMode::Replace);
   QCOMPARE(m_vim->modeName(), QString("REPLACE"));
 
-  // Type 'X' in replace mode
   QKeyEvent xKey(QEvent::KeyPress, Qt::Key_X, Qt::NoModifier, "X");
   m_vim->processKeyEvent(&xKey);
 
   QCOMPARE(m_editor->toPlainText(), QString("Xello"));
 
-  // Press Escape to return to normal mode
   QKeyEvent escKey(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
   m_vim->processKeyEvent(&escKey);
 
@@ -192,7 +176,6 @@ void TestVimMode::testFindCharMotion() {
   cursor.movePosition(QTextCursor::Start);
   m_editor->setTextCursor(cursor);
 
-  // Press 'f' then 'W' to find 'W'
   QKeyEvent fKey(QEvent::KeyPress, Qt::Key_F, Qt::NoModifier, "f");
   m_vim->processKeyEvent(&fKey);
 
@@ -200,14 +183,13 @@ void TestVimMode::testFindCharMotion() {
   m_vim->processKeyEvent(&wKey);
 
   cursor = m_editor->textCursor();
-  QCOMPARE(cursor.position(), 6); // Position of 'W' in "Hello World"
+  QCOMPARE(cursor.position(), 6);
 }
 
 void TestVimMode::testMarks() {
   m_vim->setEnabled(true);
   m_editor->setPlainText("Line 1\nLine 2\nLine 3");
 
-  // Move to second line
   QTextCursor cursor = m_editor->textCursor();
   cursor.movePosition(QTextCursor::Start);
   cursor.movePosition(QTextCursor::Down);
@@ -215,14 +197,12 @@ void TestVimMode::testMarks() {
 
   int markedPos = cursor.position();
 
-  // Set mark 'a' with ma
   QKeyEvent mKey(QEvent::KeyPress, Qt::Key_M, Qt::NoModifier, "m");
   m_vim->processKeyEvent(&mKey);
 
   QKeyEvent aKey(QEvent::KeyPress, Qt::Key_A, Qt::NoModifier, "a");
   m_vim->processKeyEvent(&aKey);
 
-  // Move to start using gg
   QKeyEvent gKey1(QEvent::KeyPress, Qt::Key_G, Qt::NoModifier, "g");
   m_vim->processKeyEvent(&gKey1);
   QKeyEvent gKey2(QEvent::KeyPress, Qt::Key_G, Qt::NoModifier, "g");
@@ -231,7 +211,6 @@ void TestVimMode::testMarks() {
   cursor = m_editor->textCursor();
   QCOMPARE(cursor.position(), 0);
 
-  // Jump to mark 'a' with 'a
   QKeyEvent quoteKey(QEvent::KeyPress, Qt::Key_Apostrophe, Qt::NoModifier, "'");
   m_vim->processKeyEvent(&quoteKey);
 
@@ -246,12 +225,10 @@ void TestVimMode::testTextObjects() {
   m_vim->setEnabled(true);
   m_editor->setPlainText("Hello (World) Test");
 
-  // Position cursor inside parens
   QTextCursor cursor = m_editor->textCursor();
-  cursor.setPosition(8); // On 'r' in World
+  cursor.setPosition(8);
   m_editor->setTextCursor(cursor);
 
-  // Delete inner parens with di(
   QKeyEvent dKey(QEvent::KeyPress, Qt::Key_D, Qt::NoModifier, "d");
   m_vim->processKeyEvent(&dKey);
 
@@ -272,7 +249,6 @@ void TestVimMode::testIndent() {
   cursor.movePosition(QTextCursor::Start);
   m_editor->setTextCursor(cursor);
 
-  // Indent line with >>
   QKeyEvent greaterKey1(QEvent::KeyPress, Qt::Key_Greater, Qt::ShiftModifier,
                         ">");
   m_vim->processKeyEvent(&greaterKey1);
@@ -292,12 +268,10 @@ void TestVimMode::testToggleCase() {
   cursor.movePosition(QTextCursor::Start);
   m_editor->setTextCursor(cursor);
 
-  // Toggle case with ~ (toggles 'H' to 'h' and moves right)
   QKeyEvent tildeKey(QEvent::KeyPress, Qt::Key_AsciiTilde, Qt::ShiftModifier,
                      "~");
   m_vim->processKeyEvent(&tildeKey);
 
-  // Only first character should be toggled ('H' -> 'h')
   QCOMPARE(m_editor->toPlainText(), QString("hello"));
 }
 
@@ -309,7 +283,6 @@ void TestVimMode::testGoToLine() {
   cursor.movePosition(QTextCursor::Start);
   m_editor->setTextCursor(cursor);
 
-  // Go to line 3 with :3
   QKeyEvent colonKey(QEvent::KeyPress, Qt::Key_Colon, Qt::NoModifier, ":");
   m_vim->processKeyEvent(&colonKey);
 
@@ -320,7 +293,7 @@ void TestVimMode::testGoToLine() {
   m_vim->processKeyEvent(&enterKey);
 
   cursor = m_editor->textCursor();
-  QCOMPARE(cursor.blockNumber(), 2); // 0-indexed, so line 3 is block 2
+  QCOMPARE(cursor.blockNumber(), 2);
 }
 
 void TestVimMode::testParagraphMotion() {
@@ -331,13 +304,12 @@ void TestVimMode::testParagraphMotion() {
   cursor.movePosition(QTextCursor::Start);
   m_editor->setTextCursor(cursor);
 
-  // Move to next paragraph with }
   QKeyEvent braceKey(QEvent::KeyPress, Qt::Key_BraceRight, Qt::ShiftModifier,
                      "}");
   m_vim->processKeyEvent(&braceKey);
 
   cursor = m_editor->textCursor();
-  QVERIFY(cursor.blockNumber() > 0); // Should have moved to next paragraph
+  QVERIFY(cursor.blockNumber() > 0);
 }
 
 void TestVimMode::testSetNoVim() {

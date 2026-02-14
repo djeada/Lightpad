@@ -17,7 +17,6 @@ void GoToLineDialog::setupUI() {
   layout->setContentsMargins(8, 8, 8, 8);
   layout->setSpacing(4);
 
-  // Line number input
   m_lineEdit = new QLineEdit(this);
   m_lineEdit->setPlaceholderText(tr("Go to line..."));
   m_lineEdit->setStyleSheet("QLineEdit {"
@@ -30,13 +29,11 @@ void GoToLineDialog::setupUI() {
                             "}");
   layout->addWidget(m_lineEdit);
 
-  // Info label
   m_infoLabel = new QLabel(this);
   m_infoLabel->setStyleSheet("color: #9aa4b2; font-size: 11px;");
   m_infoLabel->setText(QString(tr("Enter line number (1-%1)")).arg(m_maxLine));
   layout->addWidget(m_infoLabel);
 
-  // Connections
   connect(m_lineEdit, &QLineEdit::textChanged, this,
           &GoToLineDialog::onTextChanged);
   connect(m_lineEdit, &QLineEdit::returnPressed, this,
@@ -63,7 +60,6 @@ void GoToLineDialog::setMaxLine(int maxLine) {
 void GoToLineDialog::showDialog() {
   m_lineEdit->clear();
 
-  // Position at top center of parent
   if (parentWidget()) {
     QPoint parentCenter =
         parentWidget()->mapToGlobal(parentWidget()->rect().center());

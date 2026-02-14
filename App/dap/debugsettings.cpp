@@ -6,7 +6,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 
-// Static keys for settings
 const QString DebugSettings::KEY_STOP_ON_ENTRY = "stopOnEntry";
 const QString DebugSettings::KEY_EXTERNAL_CONSOLE = "externalConsole";
 const QString DebugSettings::KEY_SOURCE_MAP_PATH_OVERRIDES =
@@ -71,7 +70,6 @@ void DebugSettings::ensureDirectoryExists() {
                  .arg(debugSettingsDir()));
   }
 
-  // Create default config files if they don't exist
   if (!QFile::exists(launchConfigPath())) {
     createDefaultLaunchConfig();
   }
@@ -97,7 +95,6 @@ void DebugSettings::createDefaultLaunchConfig() {
 
   QJsonArray configurations;
 
-  // Example Python configuration
   QJsonObject pythonConfig;
   pythonConfig["name"] = "Python: Current File";
   pythonConfig["type"] = "debugpy";
@@ -108,7 +105,6 @@ void DebugSettings::createDefaultLaunchConfig() {
   pythonConfig["_comment"] = "Example Python debug configuration";
   configurations.append(pythonConfig);
 
-  // Example C++ GDB configuration
   QJsonObject cppConfig;
   cppConfig["name"] = "C++: GDB Launch";
   cppConfig["type"] = "cppdbg";
@@ -132,7 +128,6 @@ void DebugSettings::createDefaultLaunchConfig() {
   cppConfig["_comment"] = "Example C++ GDB debug configuration";
   configurations.append(cppConfig);
 
-  // Example Node.js configuration
   QJsonObject nodeConfig;
   nodeConfig["name"] = "Node.js: Current File";
   nodeConfig["type"] = "node";
@@ -145,7 +140,6 @@ void DebugSettings::createDefaultLaunchConfig() {
 
   config["configurations"] = configurations;
 
-  // Compound configurations
   QJsonArray compounds;
   QJsonObject exampleCompound;
   exampleCompound["name"] = "Server + Client";
@@ -166,16 +160,12 @@ void DebugSettings::createDefaultBreakpointsConfig() {
   config["_comment"] = "Breakpoints configuration. This file is auto-saved but "
                        "can be manually edited.";
 
-  // Source breakpoints by file
   config["sourceBreakpoints"] = QJsonObject();
 
-  // Function breakpoints
   config["functionBreakpoints"] = QJsonArray();
 
-  // Data breakpoints (watchpoints)
   config["dataBreakpoints"] = QJsonArray();
 
-  // Exception breakpoints
   QJsonObject exceptionBreakpoints;
   exceptionBreakpoints["_comment"] =
       "Exception breakpoint filters. Set to true to enable.";
@@ -194,7 +184,7 @@ void DebugSettings::createDefaultWatchesConfig() {
       "Watch expressions. Add expressions to monitor during debugging.";
 
   QJsonArray watches;
-  // Example watches (commented out in description)
+
   config["watches"] = watches;
 
   QJsonArray examples;
@@ -213,7 +203,6 @@ void DebugSettings::createDefaultAdaptersConfig() {
   config["_comment"] =
       "Debug adapter configuration. Customize adapter settings and paths here.";
 
-  // Default adapter mappings by extension
   QJsonObject defaultAdapters;
   defaultAdapters["_comment"] = "Map file extensions to debug adapter IDs";
   defaultAdapters[".py"] = "python-debugpy";
@@ -229,10 +218,8 @@ void DebugSettings::createDefaultAdaptersConfig() {
   defaultAdapters[".go"] = "cppdbg-gdb";
   config["defaultAdapters"] = defaultAdapters;
 
-  // Adapter-specific overrides
   QJsonObject adapters;
 
-  // GDB adapter settings
   QJsonObject gdbSettings;
   gdbSettings["_comment"] = "GDB debug adapter settings";
   gdbSettings["miDebuggerPath"] = "gdb";
@@ -254,13 +241,11 @@ void DebugSettings::createDefaultAdaptersConfig() {
 
   adapters["cppdbg-gdb"] = gdbSettings;
 
-  // LLDB adapter settings
   QJsonObject lldbSettings;
   lldbSettings["_comment"] = "LLDB debug adapter settings";
   lldbSettings["miDebuggerPath"] = "lldb-vscode";
   adapters["cppdbg-lldb"] = lldbSettings;
 
-  // Python adapter settings
   QJsonObject pythonSettings;
   pythonSettings["_comment"] = "Python debugpy settings";
   pythonSettings["justMyCode"] = true;
@@ -268,7 +253,6 @@ void DebugSettings::createDefaultAdaptersConfig() {
   pythonSettings["console"] = "integratedTerminal";
   adapters["python-debugpy"] = pythonSettings;
 
-  // Node.js adapter settings
   QJsonObject nodeSettings;
   nodeSettings["_comment"] = "Node.js debug adapter settings";
   nodeSettings["console"] = "integratedTerminal";
@@ -277,7 +261,6 @@ void DebugSettings::createDefaultAdaptersConfig() {
 
   config["adapters"] = adapters;
 
-  // Remote debugging settings
   QJsonObject remoteSettings;
   remoteSettings["_comment"] = "Remote debugging configuration";
   remoteSettings["defaultHost"] = "localhost";
@@ -294,7 +277,6 @@ void DebugSettings::createDefaultSettingsConfig() {
   config["_comment"] =
       "General debugger settings. All options are user-configurable.";
 
-  // General preferences
   QJsonObject general;
   general["stopOnEntry"] = false;
   general["externalConsole"] = false;
@@ -308,14 +290,12 @@ void DebugSettings::createDefaultSettingsConfig() {
   general["showHexValues"] = false;
   config["general"] = general;
 
-  // Logging settings
   QJsonObject logging;
   logging["enabled"] = false;
   logging["logFilePath"] = "${workspaceFolder}/.lightpad/debug/debug.log";
   logging["verbosity"] = "info";
   config["logging"] = logging;
 
-  // UI preferences
   QJsonObject ui;
   ui["showVariablesPanel"] = true;
   ui["showCallStackPanel"] = true;
@@ -327,7 +307,6 @@ void DebugSettings::createDefaultSettingsConfig() {
   ui["expandObjectDepth"] = 3;
   config["ui"] = ui;
 
-  // Timeout settings
   QJsonObject timeouts;
   timeouts["_comment"] = "Timeout values in milliseconds";
   timeouts["launchTimeout"] = 10000;
@@ -336,7 +315,6 @@ void DebugSettings::createDefaultSettingsConfig() {
   timeouts["disconnectTimeout"] = 3000;
   config["timeouts"] = timeouts;
 
-  // Exception handling
   QJsonObject exceptions;
   exceptions["_comment"] = "Exception breakpoint default settings";
   exceptions["breakOnUncaught"] = true;
@@ -344,7 +322,6 @@ void DebugSettings::createDefaultSettingsConfig() {
   exceptions["breakOnUserUnhandled"] = false;
   config["exceptions"] = exceptions;
 
-  // Source map settings
   QJsonObject sourceMaps;
   sourceMaps["enabled"] = true;
   sourceMaps["pathOverrides"] = QJsonObject();

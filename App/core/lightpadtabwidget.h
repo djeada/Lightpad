@@ -12,9 +12,6 @@ const int buttonSize = 25;
 class MainWindow;
 class LightpadPage;
 
-/**
- * @brief Custom tab bar with context menu support
- */
 class LightpadTabBar : public QTabBar {
   Q_OBJECT
 
@@ -82,4 +79,4 @@ private:
   QString m_accentColor;
 };
 
-#endif // CODEEDITORTABS_H
+#endif

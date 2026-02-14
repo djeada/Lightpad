@@ -4,9 +4,6 @@
 #include "basesyntaxplugin.h"
 #include <QVector>
 
-/**
- * @brief Built-in CSS syntax highlighting plugin
- */
 class CssSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "css"; }
@@ -29,4 +26,4 @@ private:
   static QStringList getAtRules();
 };
 
-#endif // CSSSYNTAXPLUGIN_H
+#endif

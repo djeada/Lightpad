@@ -63,7 +63,6 @@ int BreakpointManager::addBreakpoint(const Breakpoint &bp) {
   emit breakpointAdded(newBp);
   emit fileBreakpointsChanged(newBp.filePath);
 
-  // Sync with debug adapter if debugging
   if (m_dapClient && m_dapClient->isDebugging()) {
     syncFileBreakpoints(newBp.filePath);
   }
@@ -91,7 +90,6 @@ void BreakpointManager::removeBreakpoint(int id) {
   emit breakpointRemoved(id, bp.filePath, bp.line);
   emit fileBreakpointsChanged(bp.filePath);
 
-  // Sync with debug adapter if debugging
   if (m_dapClient && m_dapClient->isDebugging()) {
     syncFileBreakpoints(bp.filePath);
   }
@@ -112,7 +110,6 @@ void BreakpointManager::clearAll() {
 
   emit allBreakpointsCleared();
 
-  // Sync each affected file with debug adapter
   if (m_dapClient && m_dapClient->isDebugging()) {
     for (const QString &file : affectedFiles) {
       syncFileBreakpoints(file);
@@ -130,7 +127,6 @@ void BreakpointManager::clearFile(const QString &filePath) {
 
   emit fileBreakpointsChanged(filePath);
 
-  // Sync with debug adapter
   if (m_dapClient && m_dapClient->isDebugging()) {
     syncFileBreakpoints(filePath);
   }
@@ -174,7 +170,7 @@ Breakpoint BreakpointManager::breakpointAt(const QString &filePath,
       return bp;
     }
   }
-  return Breakpoint(); // Return empty breakpoint
+  return Breakpoint();
 }
 
 void BreakpointManager::setEnabled(int id, bool enabled) {
@@ -285,12 +281,11 @@ void BreakpointManager::updateVerification(
     }
   }
 
-  // Match verified breakpoints to our breakpoints by line
   for (int id : ids) {
     Breakpoint &bp = m_breakpoints[id];
 
     for (const DapBreakpoint &dapBp : verified) {
-      // Match by line (DAP breakpoint might have moved)
+
       if (dapBp.line == bp.line || dapBp.line == bp.boundLine) {
         bp.verified = dapBp.verified;
         bp.verificationMessage = dapBp.message;
@@ -523,13 +518,11 @@ bool BreakpointManager::loadFromLightpadDir() {
     return false;
   }
 
-  // Ensure directory exists
   QDir dir(m_workspaceFolder + "/.lightpad/debug");
   if (!dir.exists()) {
     dir.mkpath(".");
   }
 
-  // If file doesn't exist, create a default one
   if (!QFile::exists(path)) {
     LOG_INFO("Creating default breakpoints.json in .lightpad/debug/");
 
@@ -563,19 +556,16 @@ bool BreakpointManager::saveToLightpadDir() {
     return false;
   }
 
-  // Ensure directory exists
   QDir dir(m_workspaceFolder + "/.lightpad/debug");
   if (!dir.exists()) {
     dir.mkpath(".");
   }
 
-  // Create enhanced JSON with all breakpoint types
   QJsonObject root;
   root["version"] = "1.0.0";
   root["_comment"] = "Breakpoints configuration. This file is auto-saved but "
                      "can be manually edited.";
 
-  // Source breakpoints organized by file
   QJsonObject sourceBreakpoints;
   for (const QString &filePath : m_fileBreakpoints.keys()) {
     QJsonArray bpArray;
@@ -603,7 +593,6 @@ bool BreakpointManager::saveToLightpadDir() {
   }
   root["sourceBreakpoints"] = sourceBreakpoints;
 
-  // Function breakpoints
   QJsonArray functionBpArray;
   for (const FunctionBreakpoint &fbp : m_functionBreakpoints) {
     QJsonObject obj;
@@ -617,14 +606,12 @@ bool BreakpointManager::saveToLightpadDir() {
   }
   root["functionBreakpoints"] = functionBpArray;
 
-  // Data breakpoints
   QJsonArray dataBpArray;
   for (const DataBreakpoint &dbp : m_dataBreakpoints) {
     dataBpArray.append(dbp.toJson());
   }
   root["dataBreakpoints"] = dataBpArray;
 
-  // Exception breakpoints
   QJsonObject exceptionBreakpoints;
   exceptionBreakpoints["_comment"] =
       "Exception breakpoint filters. Set to true to enable.";

@@ -23,7 +23,6 @@ void MergeConflictDialog::setupUI() {
   mainLayout->setSpacing(12);
   mainLayout->setContentsMargins(16, 16, 16, 16);
 
-  // Header
   QHBoxLayout *headerLayout = new QHBoxLayout();
 
   QLabel *iconLabel = new QLabel("⚠️", this);
@@ -49,10 +48,8 @@ void MergeConflictDialog::setupUI() {
 
   mainLayout->addLayout(headerLayout);
 
-  // Main content splitter
   QSplitter *mainSplitter = new QSplitter(Qt::Horizontal, this);
 
-  // Left panel - File list
   QWidget *leftPanel = new QWidget(this);
   QVBoxLayout *leftLayout = new QVBoxLayout(leftPanel);
   leftLayout->setContentsMargins(0, 0, 0, 0);
@@ -69,15 +66,12 @@ void MergeConflictDialog::setupUI() {
 
   mainSplitter->addWidget(leftPanel);
 
-  // Right panel - Preview and actions
   QWidget *rightPanel = new QWidget(this);
   QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
   rightLayout->setContentsMargins(0, 0, 0, 0);
 
-  // Preview splitter (ours vs theirs)
   QSplitter *previewSplitter = new QSplitter(Qt::Horizontal, this);
 
-  // Ours panel
   QWidget *oursPanel = new QWidget(this);
   QVBoxLayout *oursLayout = new QVBoxLayout(oursPanel);
   oursLayout->setContentsMargins(0, 0, 4, 0);
@@ -95,7 +89,6 @@ void MergeConflictDialog::setupUI() {
 
   previewSplitter->addWidget(oursPanel);
 
-  // Theirs panel
   QWidget *theirsPanel = new QWidget(this);
   QVBoxLayout *theirsLayout = new QVBoxLayout(theirsPanel);
   theirsLayout->setContentsMargins(4, 0, 0, 0);
@@ -115,7 +108,6 @@ void MergeConflictDialog::setupUI() {
 
   rightLayout->addWidget(previewSplitter, 1);
 
-  // Action buttons for selected file
   QHBoxLayout *fileActionsLayout = new QHBoxLayout();
   fileActionsLayout->setSpacing(8);
 
@@ -154,7 +146,6 @@ void MergeConflictDialog::setupUI() {
 
   mainLayout->addWidget(mainSplitter, 1);
 
-  // Bottom action buttons
   QHBoxLayout *bottomLayout = new QHBoxLayout();
 
   m_abortButton = new QPushButton(tr("Abort Merge"), this);
@@ -433,12 +424,10 @@ void MergeConflictDialog::onContinueMergeClicked() {
 void MergeConflictDialog::applyTheme(const Theme &theme) {
   setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  // Apply list widget style
   if (m_fileList) {
     m_fileList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
   }
 
-  // Apply text edit styles for preview
   QString textEditStyle = QString("QTextEdit {"
                                   "  background: %1;"
                                   "  color: %2;"
@@ -456,7 +445,6 @@ void MergeConflictDialog::applyTheme(const Theme &theme) {
     m_theirsPreview->setStyleSheet(textEditStyle);
   }
 
-  // Apply button styles
   if (m_acceptOursButton) {
     m_acceptOursButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
   }
@@ -471,7 +459,6 @@ void MergeConflictDialog::applyTheme(const Theme &theme) {
     }
   }
 
-  // Apply label styles
   if (m_statusLabel) {
     m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
   }

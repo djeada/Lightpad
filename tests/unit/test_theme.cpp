@@ -14,7 +14,6 @@ private slots:
 void TestTheme::testDefaultConstructor() {
   Theme theme;
 
-  // Verify default colors are set (modern dark theme)
   QCOMPARE(theme.backgroundColor, QColor("#0d1117"));
   QCOMPARE(theme.foregroundColor, QColor("#e6edf3"));
   QVERIFY(theme.highlightColor.isValid());
@@ -27,7 +26,6 @@ void TestTheme::testWriteToJson() {
 
   theme.write(json);
 
-  // Verify all expected keys are present
   QVERIFY(json.contains("backgroundColor"));
   QVERIFY(json.contains("foregroundColor"));
   QVERIFY(json.contains("highlightColor"));
@@ -42,7 +40,6 @@ void TestTheme::testWriteToJson() {
   QVERIFY(json.contains("classFormat"));
   QVERIFY(json.contains("numberFormat"));
 
-  // Verify values are strings
   QVERIFY(json["backgroundColor"].isString());
   QVERIFY(json["foregroundColor"].isString());
 }
@@ -51,7 +48,6 @@ void TestTheme::testReadFromJson() {
   Theme theme;
   QJsonObject json;
 
-  // Set custom values
   json["backgroundColor"] = "#ff0000";
   json["foregroundColor"] = "#00ff00";
   json["highlightColor"] = "#111111";

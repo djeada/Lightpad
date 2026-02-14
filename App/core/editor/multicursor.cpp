@@ -18,7 +18,6 @@ void MultiCursorHandler::addCursorAbove() {
     QTextCursor newCursor = cursor;
     newCursor.movePosition(QTextCursor::PreviousBlock);
 
-    // Try to maintain column position
     int lineLength = newCursor.block().text().length();
     int targetCol = qMin(col, lineLength);
     newCursor.movePosition(QTextCursor::StartOfBlock);
@@ -41,7 +40,6 @@ void MultiCursorHandler::addCursorBelow() {
     QTextCursor newCursor = cursor;
     newCursor.movePosition(QTextCursor::NextBlock);
 
-    // Try to maintain column position
     int lineLength = newCursor.block().text().length();
     int targetCol = qMin(col, lineLength);
     newCursor.movePosition(QTextCursor::StartOfBlock);
@@ -73,14 +71,11 @@ void MultiCursorHandler::addCursorAtNextOccurrence() {
 
   m_lastSelectedWord = word;
 
-  // Find next occurrence after current cursor
   int startSearchPos = cursor.selectionEnd();
 
-  // Search forward from cursor
   QTextDocument *doc = m_editor->document();
   QTextCursor found = doc->find(word, startSearchPos);
 
-  // Wrap around if not found
   if (found.isNull()) {
     found = doc->find(word, 0);
   }
@@ -111,7 +106,6 @@ void MultiCursorHandler::addCursorsToAllOccurrences() {
   m_lastSelectedWord = word;
   m_extraCursors.clear();
 
-  // Find all occurrences
   QTextDocument *doc = m_editor->document();
   QTextCursor searchCursor(doc);
   QTextCursor firstCursor;
@@ -156,13 +150,10 @@ void MultiCursorHandler::applyToAllCursors(
   if (!m_editor)
     return;
 
-  // Begin an edit block on the main cursor so all multi-cursor edits
-  // are grouped into a single undo/redo operation.
   QTextCursor mainCursor = m_editor->textCursor();
   mainCursor.beginEditBlock();
   operation(mainCursor);
 
-  // Apply to extra cursors within the same edit block
   for (QTextCursor &cursor : m_extraCursors) {
     operation(cursor);
   }
@@ -179,16 +170,15 @@ void MultiCursorHandler::updateExtraSelections(const QColor &highlightColor) {
 
   QList<QTextEdit::ExtraSelection> selections = m_editor->extraSelections();
 
-  // Add extra cursor highlights
   for (const QTextCursor &cursor : m_extraCursors) {
     QTextEdit::ExtraSelection selection;
     selection.cursor = cursor;
 
     if (cursor.hasSelection()) {
-      // Highlight selection
+
       selection.format.setBackground(QColor(38, 79, 120));
     } else {
-      // Show cursor line
+
       selection.format.setBackground(highlightColor.lighter(110));
       selection.format.setProperty(QTextFormat::FullWidthSelection, false);
     }
@@ -208,13 +198,11 @@ void MultiCursorHandler::mergeOverlappingCursors() {
   allCursors.append(mainCursor);
   allCursors.append(m_extraCursors);
 
-  // Sort by position
   std::sort(allCursors.begin(), allCursors.end(),
             [](const QTextCursor &a, const QTextCursor &b) {
               return a.position() < b.position();
             });
 
-  // Remove duplicates
   QList<QTextCursor> unique;
   for (const QTextCursor &cursor : allCursors) {
     bool duplicate = false;

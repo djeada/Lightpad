@@ -19,7 +19,6 @@ void TestAsyncWorker::testAsyncTaskExecution() {
     executed = true;
   });
 
-  // Run in same thread for testing
   task.start();
 
   QVERIFY(executed);
@@ -27,16 +26,11 @@ void TestAsyncWorker::testAsyncTaskExecution() {
 }
 
 void TestAsyncWorker::testAsyncTaskCancellation() {
-  // Test the cancellation flag mechanism (simpler synchronous test)
-  AsyncTask task([](AsyncTask *task) {
-    // Just verify we can check isCancelled
-    Q_UNUSED(task);
-  });
 
-  // Initially not cancelled
+  AsyncTask task([](AsyncTask *task) { Q_UNUSED(task); });
+
   QVERIFY(!task.isCancelled());
 
-  // After cancel, should be cancelled
   task.cancel();
   QVERIFY(task.isCancelled());
 }
@@ -65,7 +59,6 @@ void TestAsyncWorker::testAsyncTaskProgress() {
 void TestAsyncWorker::testAsyncThreadPool() {
   AsyncThreadPool &pool = AsyncThreadPool::instance();
 
-  // Verify singleton
   AsyncThreadPool &pool2 = AsyncThreadPool::instance();
   QCOMPARE(&pool, &pool2);
 }

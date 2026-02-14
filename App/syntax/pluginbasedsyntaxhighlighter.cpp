@@ -15,7 +15,6 @@ PluginBasedSyntaxHighlighter::PluginBasedSyntaxHighlighter(
 
   loadRulesFromPlugin(plugin, theme);
 
-  // Setup search highlight format
   m_searchFormat.setBackground(QColor("#646464"));
 }
 
@@ -30,20 +29,16 @@ void PluginBasedSyntaxHighlighter::loadRulesFromPlugin(ISyntaxPlugin *plugin,
     return;
   }
 
-  // Load syntax rules from plugin
   m_rules = plugin->syntaxRules();
 
-  // Apply theme colors to each rule
   for (SyntaxRule &rule : m_rules) {
     rule.format = applyThemeToFormat(rule, theme);
   }
 
-  // Load multi-line blocks
   m_multiLineBlocks = plugin->multiLineBlocks();
 
-  // Apply theme colors to multi-line blocks
   for (MultiLineBlock &block : m_multiLineBlocks) {
-    // Use single-line comment color for multi-line comments by default
+
     block.format.setForeground(theme.singleLineCommentFormat);
   }
 
@@ -60,7 +55,6 @@ PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRule &rule,
   QTextCharFormat format = rule.format;
   QString ruleName = rule.name.toLower();
 
-  // Apply colors based on rule name/type
   if (ruleName.contains("keyword") || ruleName.contains("preprocessor") ||
       ruleName.contains("directive")) {
     if (ruleName.contains("0") || ruleName.contains("primary")) {
@@ -94,23 +88,19 @@ PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRule &rule,
 }
 
 void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
-  // Fast path: skip empty lines
+
   if (text.isEmpty()) {
     setCurrentBlockState(previousBlockState());
     return;
   }
 
-  // Skip highlighting for blocks far outside the viewport
-  // This dramatically improves performance for large files
   int blockNum = currentBlock().blockNumber();
   if (!isBlockVisible(blockNum)) {
-    // Just set the block state for multi-line tracking
-    // but skip the expensive regex matching
+
     setCurrentBlockState(previousBlockState());
     return;
   }
 
-  // Apply single-line rules
   for (const SyntaxRule &rule : m_rules) {
     QRegularExpressionMatchIterator matchIterator =
         rule.pattern.globalMatch(text);
@@ -121,8 +111,6 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     }
   }
 
-  // Apply multi-line blocks (comments, strings, etc.)
-  // Each block type gets a unique state ID (i + 1) to avoid conflicts
   setCurrentBlockState(0);
   for (int i = 0; i < m_multiLineBlocks.size(); ++i) {
     const MultiLineBlock &block = m_multiLineBlocks[i];
@@ -135,8 +123,7 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     }
 
     while (startIndex >= 0) {
-      // Search for end pattern after the start match to avoid
-      // same-delimiter blocks (e.g. ```) closing on the opening line
+
       QRegularExpressionMatch startMatch =
           block.startPattern.match(text, startIndex);
       int searchFrom =
@@ -165,7 +152,6 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     }
   }
 
-  // Apply search keyword highlighting (on top of everything else)
   if (!m_searchKeyword.isEmpty()) {
     QRegularExpression searchPattern(m_searchKeyword,
                                      QRegularExpression::CaseInsensitiveOption);
@@ -180,7 +166,7 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
 }
 
 bool PluginBasedSyntaxHighlighter::isBlockVisible(int blockNumber) const {
-  // Include buffer around viewport for smooth scrolling
+
   int minBlock = m_firstVisibleBlock - VIEWPORT_BUFFER;
   int maxBlock = m_lastVisibleBlock + VIEWPORT_BUFFER;
 

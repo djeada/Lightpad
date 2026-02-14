@@ -30,7 +30,6 @@ QStringList JavaScriptSyntaxPlugin::getTertiaryKeywords() {
 QVector<SyntaxRule> JavaScriptSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
-  // Primary keywords
   for (const QString &keyword : getPrimaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -38,7 +37,6 @@ QVector<SyntaxRule> JavaScriptSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Secondary keywords
   for (const QString &keyword : getSecondaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -46,7 +44,6 @@ QVector<SyntaxRule> JavaScriptSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Tertiary keywords (built-in objects)
   for (const QString &keyword : getTertiaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -54,37 +51,31 @@ QVector<SyntaxRule> JavaScriptSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Numbers
   SyntaxRule numberRule;
   numberRule.pattern = QRegularExpression("\\b[-+.,]*\\d{1,}f*\\b");
   numberRule.name = "number";
   rules.append(numberRule);
 
-  // String literals (double quotes)
   SyntaxRule stringRule;
   stringRule.pattern = QRegularExpression("\".*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
-  // String literals (single quotes)
   SyntaxRule singleQuoteRule;
   singleQuoteRule.pattern = QRegularExpression("'.*'");
   singleQuoteRule.name = "string";
   rules.append(singleQuoteRule);
 
-  // Template literals (backticks)
   SyntaxRule templateRule;
   templateRule.pattern = QRegularExpression("`.*`");
   templateRule.name = "string";
   rules.append(templateRule);
 
-  // Function calls
   SyntaxRule functionRule;
   functionRule.pattern = QRegularExpression("\\b[A-Za-z0-9_]+(?=\\()");
   functionRule.name = "function";
   rules.append(functionRule);
 
-  // Single-line comments
   SyntaxRule commentRule;
   commentRule.pattern = QRegularExpression("//[^\n]*");
   commentRule.name = "comment";
@@ -96,7 +87,6 @@ QVector<SyntaxRule> JavaScriptSyntaxPlugin::syntaxRules() const {
 QVector<MultiLineBlock> JavaScriptSyntaxPlugin::multiLineBlocks() const {
   QVector<MultiLineBlock> blocks;
 
-  // Multi-line comments
   MultiLineBlock commentBlock;
   commentBlock.startPattern = QRegularExpression("/\\*");
   commentBlock.endPattern = QRegularExpression("\\*/");

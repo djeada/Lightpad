@@ -40,13 +40,11 @@ QString GitIntegration::currentBranch() const { return m_currentBranch; }
 QString GitIntegration::findRepositoryRoot(const QString &path) const {
   QDir dir(path);
 
-  // If path is a file, start from its directory
   QFileInfo info(path);
   if (info.isFile()) {
     dir = info.dir();
   }
 
-  // Walk up the directory tree looking for .git
   while (true) {
     if (dir.exists(".git")) {
       return dir.absolutePath();
@@ -84,8 +82,6 @@ QString GitIntegration::executeGitCommand(const QStringList &args,
     *success = (process.exitCode() == 0);
   }
 
-  // Use right-trimming only to preserve leading whitespace
-  // (significant in git status --porcelain output)
   QString output = QString::fromUtf8(process.readAllStandardOutput());
   int end = output.size();
   while (end > 0) {
@@ -153,7 +149,6 @@ GitFileInfo GitIntegration::getFileStatus(const QString &filePath) const {
     return info;
   }
 
-  // Get relative path from repository root
   QString relativePath = filePath;
   if (filePath.startsWith(m_repositoryPath)) {
     relativePath = filePath.mid(m_repositoryPath.length() + 1);
@@ -196,7 +191,6 @@ GitIntegration::parseStatusOutput(const QString &output) const {
     QChar workTreeChar = line[1];
     QString path = line.mid(3);
 
-    // Handle renamed files (format: "R  old -> new")
     if (path.contains(" -> ")) {
       QStringList parts = path.split(" -> ");
       info.originalPath = parts[0];
@@ -246,19 +240,18 @@ GitIntegration::getDiffLines(const QString &filePath) const {
     return result;
   }
 
-  // Get relative path from repository root
   QString relativePath = filePath;
   if (filePath.startsWith(m_repositoryPath)) {
     relativePath = filePath.mid(m_repositoryPath.length() + 1);
   }
 
   bool success;
-  // Get unified diff with 0 context lines
+
   QString output =
       executeGitCommand({"diff", "-U0", "--", relativePath}, &success);
 
   if (output.isEmpty()) {
-    // Also check for staged changes
+
     output = executeGitCommand({"diff", "-U0", "--cached", "--", relativePath},
                                &success);
     if (output.isEmpty()) {
@@ -266,8 +259,6 @@ GitIntegration::getDiffLines(const QString &filePath) const {
     }
   }
 
-  // Parse the diff output to find added/deleted lines
-  // Format: @@ -oldStart,oldCount +newStart,newCount @@
   QRegularExpression hunkHeader(
       R"(@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@)");
   QStringList lines = output.split('\n');
@@ -284,8 +275,6 @@ GitIntegration::getDiffLines(const QString &filePath) const {
       int newCount =
           match.captured(4).isEmpty() ? 1 : match.captured(4).toInt();
 
-      // If old count is 0, it's a pure addition
-      // If new count is 0, it's a pure deletion
       if (oldCount == 0 && newCount > 0) {
         for (int i = 0; i < newCount; ++i) {
           GitDiffLineInfo info;
@@ -294,7 +283,7 @@ GitIntegration::getDiffLines(const QString &filePath) const {
           result.append(info);
         }
       } else if (newCount == 0 && oldCount > 0) {
-        // Deletion - mark the line before as having a deletion
+
         GitDiffLineInfo info;
         info.lineNumber = currentNewLine > 0 ? currentNewLine : 1;
         info.type = GitDiffLineInfo::Type::Deleted;
@@ -307,7 +296,7 @@ GitIntegration::getDiffLines(const QString &filePath) const {
 
     if (inHunk && !line.isEmpty()) {
       if (line[0] == '+') {
-        // Check if this line is already marked from hunk header
+
         bool alreadyMarked = false;
         for (const auto &existing : result) {
           if (existing.lineNumber == currentNewLine) {
@@ -323,9 +312,9 @@ GitIntegration::getDiffLines(const QString &filePath) const {
         }
         currentNewLine++;
       } else if (line[0] == '-') {
-        // Deletion, don't increment new line counter
+
       } else if (line[0] != '\\') {
-        // Context line
+
         currentNewLine++;
       }
     }
@@ -356,8 +345,6 @@ QList<GitBranchInfo> GitIntegration::getBranches() const {
   for (const QString &line : lines) {
     GitBranchInfo info;
 
-    // Parse branch info
-    // Format with HEAD marker: "branch*\tupstream" or "branch\tupstream"
     QString trimmedLine = line.trimmed();
     if (trimmedLine.isEmpty()) {
       continue;
@@ -367,7 +354,6 @@ QList<GitBranchInfo> GitIntegration::getBranches() const {
     QString namePart = parts.value(0).trimmed();
     QString symref = parts.value(2).trimmed();
 
-    // Skip symbolic refs (e.g. remotes/origin/HEAD which formats as "origin").
     if (!symref.isEmpty()) {
       continue;
     }
@@ -702,7 +688,7 @@ bool GitIntegration::discardAllChanges() {
   executeGitCommand({"checkout", "--", "."}, &success);
 
   if (success) {
-    // Also clean untracked files
+
     executeGitCommand({"clean", "-fd"}, &success);
     emit operationCompleted("All changes discarded");
     emit statusChanged();
@@ -721,9 +707,6 @@ QList<GitCommitInfo> GitIntegration::getCommitLog(int maxCount,
     return result;
   }
 
-  // Use a custom format for parsing:
-  // hash|short_hash|author|email|date|rel_date|subject|parents Using %x00 as
-  // delimiter to avoid issues with special characters
   QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
 
   QStringList args = {"log", QString("--max-count=%1").arg(maxCount),
@@ -775,7 +758,6 @@ GitIntegration::getCommitDetails(const QString &commitHash) const {
     return info;
   }
 
-  // Get commit info with body
   QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P%x00%b";
 
   bool success;
@@ -951,7 +933,6 @@ GitIntegration::getBlameInfo(const QString &filePath) const {
     }
   }
 
-  // Fallback: parse standard blame output
   output = executeGitCommand({"blame", "--", relativePath}, &success);
   if (!success || output.isEmpty()) {
     return result;
@@ -1102,13 +1083,11 @@ QList<GitCommitInfo> GitIntegration::getFileLog(const QString &filePath,
     return result;
   }
 
-  // Each commit is separated by a newline between the body and next hash
-  // Split on the format boundary
   QStringList entries = output.split('\n');
   QString currentEntry;
   for (const QString &line : entries) {
     if (!currentEntry.isEmpty() && line.contains(QChar('\0'))) {
-      // Parse previous entry
+
       QStringList parts = currentEntry.split(QChar('\0'));
       if (parts.size() >= 7) {
         GitCommitInfo info;
@@ -1132,7 +1111,7 @@ QList<GitCommitInfo> GitIntegration::getFileLog(const QString &filePath,
       currentEntry += line;
     }
   }
-  // Parse last entry
+
   if (!currentEntry.isEmpty()) {
     QStringList parts = currentEntry.split(QChar('\0'));
     if (parts.size() >= 7) {
@@ -1168,7 +1147,6 @@ QList<GitCommitInfo> GitIntegration::getLineHistory(const QString &filePath,
     relativePath = filePath.mid(m_repositoryPath.length() + 1);
   }
 
-  // Use git log -L to get line-range history
   QString range =
       QString("-L%1,%2:%3").arg(startLine).arg(endLine).arg(relativePath);
   bool success;
@@ -1271,13 +1249,11 @@ bool GitIntegration::stageHunkAtLine(const QString &filePath, int lineNumber) {
     return false;
   }
 
-  // Build a patch from the hunk and apply it to the index
   QString relativePath = filePath;
   if (filePath.startsWith(m_repositoryPath)) {
     relativePath = filePath.mid(m_repositoryPath.length() + 1);
   }
 
-  // Construct minimal patch
   QString patch = QString("diff --git a/%1 b/%1\n--- a/%1\n+++ b/%1\n%2\n")
                       .arg(relativePath)
                       .arg(hunk.header);
@@ -1285,7 +1261,6 @@ bool GitIntegration::stageHunkAtLine(const QString &filePath, int lineNumber) {
     patch += line + '\n';
   }
 
-  // Write patch to temp file and apply
   QString tempPath = QDir::temp().filePath("lightpad_stage_hunk.patch");
   QFile tempFile(tempPath);
   if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -1315,7 +1290,6 @@ bool GitIntegration::revertHunkAtLine(const QString &filePath, int lineNumber) {
     relativePath = filePath.mid(m_repositoryPath.length() + 1);
   }
 
-  // Build reverse patch
   QString patch = QString("diff --git a/%1 b/%1\n--- a/%1\n+++ b/%1\n%2\n")
                       .arg(relativePath)
                       .arg(hunk.header);
@@ -1379,8 +1353,6 @@ QString GitIntegration::executeGitCommandAtPath(const QString &path,
   return QString::fromUtf8(process.readAllStandardOutput()).trimmed();
 }
 
-// ========== Repository Initialization ==========
-
 bool GitIntegration::initRepository(const QString &path) {
   QDir dir(path);
   if (!dir.exists()) {
@@ -1392,7 +1364,7 @@ bool GitIntegration::initRepository(const QString &path) {
   executeGitCommandAtPath(path, {"init"}, &success);
 
   if (success) {
-    // Set the repository path to the initialized directory
+
     m_repositoryPath = dir.absolutePath();
     m_isValid = true;
     m_workingPath = m_repositoryPath;
@@ -1409,8 +1381,6 @@ bool GitIntegration::initRepository(const QString &path) {
 
   return success;
 }
-
-// ========== Remote Operations ==========
 
 QList<GitRemoteInfo> GitIntegration::getRemotes() const {
   QList<GitRemoteInfo> result;
@@ -1447,7 +1417,7 @@ QList<GitRemoteInfo> GitIntegration::getRemotes() const {
       } else if (type.contains("push")) {
         remoteMap[name].pushUrl = url;
       } else {
-        // Default to both if not specified
+
         remoteMap[name].fetchUrl = url;
         remoteMap[name].pushUrl = url;
       }
@@ -1543,13 +1513,12 @@ bool GitIntegration::pull(const QString &remoteName,
     updateCurrentBranch();
     emit statusChanged();
 
-    // Check for merge conflicts after pull
     if (hasMergeConflicts()) {
       QStringList conflicts = getConflictedFiles();
       emit mergeConflictsDetected(conflicts);
     }
   } else {
-    // Check if pull failed due to merge conflicts
+
     if (hasMergeConflicts()) {
       QStringList conflicts = getConflictedFiles();
       emit mergeConflictsDetected(conflicts);
@@ -1593,8 +1562,6 @@ bool GitIntegration::push(const QString &remoteName, const QString &branchName,
 
   return success;
 }
-
-// ========== Merge Conflict Handling ==========
 
 bool GitIntegration::hasMergeConflicts() const {
   if (!m_isValid) {
@@ -1652,7 +1619,7 @@ GitIntegration::getConflictMarkers(const QString &filePath) const {
 
     if (line.startsWith("<<<<<<<")) {
       currentMarker = GitConflictMarker();
-      currentMarker.startLine = i + 1; // 1-indexed
+      currentMarker.startLine = i + 1;
       inConflict = true;
       inOurs = true;
     } else if (line.startsWith("=======") && inConflict) {
@@ -1689,7 +1656,7 @@ bool GitIntegration::resolveConflictOurs(const QString &filePath) {
   executeGitCommand({"checkout", "--ours", "--", relativePath}, &success);
 
   if (success) {
-    // Stage the resolved file
+
     executeGitCommand({"add", "--", relativePath}, &success);
     if (success) {
       emit operationCompleted("Conflict resolved (ours): " + relativePath);
@@ -1717,7 +1684,7 @@ bool GitIntegration::resolveConflictTheirs(const QString &filePath) {
   executeGitCommand({"checkout", "--theirs", "--", relativePath}, &success);
 
   if (success) {
-    // Stage the resolved file
+
     executeGitCommand({"add", "--", relativePath}, &success);
     if (success) {
       emit operationCompleted("Conflict resolved (theirs): " + relativePath);
@@ -1779,7 +1746,6 @@ bool GitIntegration::continueMerge() {
     return false;
   }
 
-  // Check if there are still unresolved conflicts
   if (hasMergeConflicts()) {
     emit errorOccurred("Cannot continue merge: unresolved conflicts remain");
     return false;
@@ -1803,7 +1769,6 @@ bool GitIntegration::isMergeInProgress() const {
     return false;
   }
 
-  // Check for MERGE_HEAD file
   QFile mergeHead(m_repositoryPath + "/.git/MERGE_HEAD");
   return mergeHead.exists();
 }
@@ -1821,7 +1786,7 @@ bool GitIntegration::mergeBranch(const QString &branchName) {
     emit operationCompleted("Merged branch: " + branchName);
     emit statusChanged();
   } else {
-    // Check if merge failed due to conflicts
+
     if (hasMergeConflicts()) {
       QStringList conflicts = getConflictedFiles();
       emit mergeConflictsDetected(conflicts);
@@ -1833,8 +1798,6 @@ bool GitIntegration::mergeBranch(const QString &branchName) {
 
   return success && !hasMergeConflicts();
 }
-
-// ========== Stash Operations ==========
 
 QList<GitStashEntry> GitIntegration::getStashList() const {
   QList<GitStashEntry> result;
@@ -1859,12 +1822,9 @@ GitIntegration::parseStashListOutput(const QString &output) const {
 
   QStringList lines = output.split('\n', Qt::SkipEmptyParts);
 
-  // Format: stash@{0}: On branch_name: message
-  // or: stash@{0}: WIP on branch_name: commit_hash commit_message
   QRegularExpression stashPattern(
       R"(stash@\{(\d+)\}: (?:On|WIP on) ([^:]+): (.+))");
 
-  // Git abbreviated hash lengths: typically 7-8 chars but can be 4-40
   constexpr int MIN_HASH_LENGTH = 4;
   constexpr int MAX_ABBREV_HASH_LENGTH = 12;
 
@@ -1876,14 +1836,12 @@ GitIntegration::parseStashListOutput(const QString &output) const {
       entry.branch = match.captured(2).trimmed();
       entry.message = match.captured(3).trimmed();
 
-      // Extract hash if present (format: "hash message")
-      // Git hashes are hexadecimal, typically abbreviated to 7-8 chars
       QString msgPart = entry.message;
       int spaceIndex = msgPart.indexOf(' ');
       if (spaceIndex >= MIN_HASH_LENGTH &&
           spaceIndex <= MAX_ABBREV_HASH_LENGTH) {
         QString potentialHash = msgPart.left(spaceIndex);
-        // Verify it looks like a hex hash
+
         static QRegularExpression hexPattern("^[0-9a-f]+$");
         if (hexPattern.match(potentialHash).hasMatch()) {
           entry.commitHash = potentialHash;
@@ -1944,7 +1902,6 @@ bool GitIntegration::stashPop(int index) {
     emit operationCompleted("Stash popped");
     emit statusChanged();
 
-    // Check for conflicts after stash pop
     if (hasMergeConflicts()) {
       QStringList conflicts = getConflictedFiles();
       emit mergeConflictsDetected(conflicts);
@@ -1976,7 +1933,6 @@ bool GitIntegration::stashApply(int index) {
     emit operationCompleted(QString("Stash %1 applied").arg(index));
     emit statusChanged();
 
-    // Check for conflicts after stash apply
     if (hasMergeConflicts()) {
       QStringList conflicts = getConflictedFiles();
       emit mergeConflictsDetected(conflicts);

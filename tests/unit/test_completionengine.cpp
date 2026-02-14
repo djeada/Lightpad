@@ -5,9 +5,6 @@
 #include <QtTest/QtTest>
 #include <memory>
 
-/**
- * @brief Mock completion provider for testing
- */
 class MockProvider : public ICompletionProvider {
 public:
   MockProvider(const QString &id, const QStringList &languages)
@@ -40,10 +37,6 @@ private:
   bool m_enabled;
 };
 
-/**
- * @brief Mock provider that stores its callback for deferred (async)
- * invocation
- */
 class DeferredMockProvider : public ICompletionProvider {
 public:
   DeferredMockProvider(const QString &id, const QStringList &languages)
@@ -62,13 +55,12 @@ public:
       const CompletionContext &context,
       std::function<void(const QList<CompletionItem> &)> callback) override {
     Q_UNUSED(context);
-    // Store callback for later invocation
+
     m_pendingCallback = callback;
   }
 
   void cancelPendingRequests() override { m_pendingCallback = nullptr; }
 
-  /** Deliver results after the fact (simulates async) */
   void deliverResults(const QList<CompletionItem> &items) {
     if (m_pendingCallback)
       m_pendingCallback(items);
@@ -109,13 +101,12 @@ void TestCompletionEngine::cleanup() {
 }
 
 void TestCompletionEngine::testCompletionsReadyEmittedOnce() {
-  // Register a provider
+
   auto provider = std::make_shared<MockProvider>("mock", QStringList{"cpp"});
   CompletionProviderRegistry::instance().registerProvider(provider);
 
   m_engine->setLanguage("cpp");
 
-  // Use explicit (non-auto) completion to avoid debounce timer
   CompletionContext ctx;
   ctx.prefix = "te";
   ctx.languageId = "cpp";
@@ -126,17 +117,15 @@ void TestCompletionEngine::testCompletionsReadyEmittedOnce() {
 
   m_engine->requestCompletions(ctx);
 
-  // Signal should be emitted exactly once
   QCOMPARE(spy.count(), 1);
 
-  // And the results should contain exactly one item
   auto results = spy.takeFirst().at(0).value<QList<CompletionItem>>();
   QCOMPARE(results.size(), 1);
   QCOMPARE(results[0].label, QString("testItem"));
 }
 
 void TestCompletionEngine::testMultipleProvidersEmitOnce() {
-  // Register two synchronous providers for the same language
+
   auto provider1 = std::make_shared<MockProvider>("mock1", QStringList{"cpp"});
   auto provider2 = std::make_shared<MockProvider>("mock2", QStringList{"cpp"});
   CompletionProviderRegistry::instance().registerProvider(provider1);
@@ -154,19 +143,17 @@ void TestCompletionEngine::testMultipleProvidersEmitOnce() {
 
   m_engine->requestCompletions(ctx);
 
-  // Signal should still be emitted exactly once even with two providers
   QCOMPARE(spy.count(), 1);
 }
 
 void TestCompletionEngine::testStaleCallbackIgnored() {
-  // Register an async (deferred) provider
+
   auto deferred =
       std::make_shared<DeferredMockProvider>("deferred", QStringList{"cpp"});
   CompletionProviderRegistry::instance().registerProvider(deferred);
 
   m_engine->setLanguage("cpp");
 
-  // First request – callback is stored but not yet delivered
   CompletionContext ctx;
   ctx.prefix = "te";
   ctx.languageId = "cpp";
@@ -175,10 +162,8 @@ void TestCompletionEngine::testStaleCallbackIgnored() {
 
   m_engine->requestCompletions(ctx);
 
-  // The deferred provider has a pending callback from request 1
   QVERIFY(deferred->hasPendingCallback());
 
-  // Issue a second request - this should invalidate the first one
   CompletionContext ctx2;
   ctx2.prefix = "tes";
   ctx2.languageId = "cpp";
@@ -189,7 +174,6 @@ void TestCompletionEngine::testStaleCallbackIgnored() {
 
   QSignalSpy spy(m_engine, &CompletionEngine::completionsReady);
 
-  // Now deliver results from the second (current) request
   QList<CompletionItem> items;
   CompletionItem item;
   item.label = "test";
@@ -197,7 +181,6 @@ void TestCompletionEngine::testStaleCallbackIgnored() {
   items.append(item);
   deferred->deliverResults(items);
 
-  // Only one signal should have been emitted
   QCOMPARE(spy.count(), 1);
 }
 

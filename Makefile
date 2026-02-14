@@ -11,6 +11,7 @@ DEFAULT_BUILD_TYPE ?= Release
 # Formatting config
 CLANG_FORMAT ?= clang-format
 FMT_GLOBS := -name "*.cpp" -o -name "*.c" -o -name "*.h" -o -name "*.hpp"
+COMMENT_STRIP_ROOTS := App/ tests/
 
 # Colors for output
 BOLD := \033[1m
@@ -36,7 +37,7 @@ help:
 	@echo "  $(GREEN)test$(RESET)          - Run tests via CTest"
 	@echo "  $(GREEN)clean$(RESET)         - Clean build directory"
 	@echo "  $(GREEN)rebuild$(RESET)       - Clean and build"
-	@echo "  $(GREEN)format$(RESET)        - Format C/C++ code (clang-format)"
+	@echo "  $(GREEN)format$(RESET)        - Strip comments + format C/C++ code"
 	@echo "  $(GREEN)format-check$(RESET)  - Verify formatting (CI-friendly)"
 	@echo "  $(GREEN)dev$(RESET)           - Install + configure + build"
 	@echo "  $(GREEN)all$(RESET)           - Alias for build"
@@ -153,6 +154,15 @@ dev: install build
 .PHONY: format format-check
 
 format:
+	@echo "$(BOLD)$(BLUE)Stripping comments in $(COMMENT_STRIP_ROOTS)...$(RESET)"
+	@if [ -x scripts/remove-comments.sh ]; then \
+		./scripts/remove-comments.sh $(COMMENT_STRIP_ROOTS); \
+	elif [ -f scripts/remove-comments.sh ]; then \
+		bash scripts/remove-comments.sh $(COMMENT_STRIP_ROOTS); \
+	else \
+		echo "$(RED)scripts/remove-comments.sh not found$(RESET)"; exit 1; \
+	fi
+
 	@echo "$(BOLD)$(BLUE)Formatting C/C++ files with clang-format...$(RESET)"
 	@if command -v $(CLANG_FORMAT) >/dev/null 2>&1; then \
 		find . -type f \( $(FMT_GLOBS) \) -not -path "./$(BUILD_DIR)/*" -print0 \

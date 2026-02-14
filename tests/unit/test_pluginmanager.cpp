@@ -22,7 +22,6 @@ void TestPluginManager::testPluginDirectories() {
   PluginManager &pm = PluginManager::instance();
   QStringList dirs = pm.pluginDirectories();
 
-  // Should have default directories
   QVERIFY(!dirs.isEmpty());
 }
 
@@ -39,9 +38,8 @@ void TestPluginManager::testAddPluginDirectory() {
 void TestPluginManager::testDiscoverPlugins() {
   PluginManager &pm = PluginManager::instance();
 
-  // Should not crash, may return empty list
   QStringList plugins = pm.discoverPlugins();
-  // Just verify it returns something (even if empty)
+
   QVERIFY(plugins.size() >= 0);
 }
 

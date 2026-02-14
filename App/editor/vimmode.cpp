@@ -7,7 +7,6 @@
 #include <QScrollBar>
 #include <QTextBlock>
 
-// Constants
 static const int VIM_PAGE_SIZE = 20;
 static const int VIM_HALF_PAGE_SIZE = 10;
 
@@ -90,7 +89,6 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
   Qt::KeyboardModifiers mods = event->modifiers();
   QString text = event->text();
 
-  // Handle count prefix
   if (!text.isEmpty() && text[0].isDigit() && (m_count > 0 || text[0] != '0')) {
     m_count = m_count * 10 + text[0].digitValue();
     return true;
@@ -99,11 +97,9 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
   int count = qMax(1, m_count);
   m_count = 0;
 
-  // Handle pending operator
   if (m_pendingOperator != VimOperator::None) {
     VimMotion motion = VimMotion::None;
 
-    // Handle text objects (i/a prefix for inner/around)
     if (m_commandBuffer == "i" || m_commandBuffer == "a") {
       bool inner = (m_commandBuffer == "i");
       VimTextObject textObj = VimTextObject::None;
@@ -157,7 +153,6 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
       m_commandBuffer.clear();
     }
 
-    // Start text object with i or a
     if (key == Qt::Key_I && !(mods & Qt::ShiftModifier)) {
       m_commandBuffer = "i";
       return true;
@@ -167,20 +162,19 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
       return true;
     }
 
-    // Double operator (dd, yy, cc, >>, <<) operates on line
     if ((key == Qt::Key_D && m_pendingOperator == VimOperator::Delete) ||
         (key == Qt::Key_Y && m_pendingOperator == VimOperator::Yank) ||
         (key == Qt::Key_C && m_pendingOperator == VimOperator::Change) ||
         (key == Qt::Key_Greater && m_pendingOperator == VimOperator::Indent) ||
         (key == Qt::Key_Less && m_pendingOperator == VimOperator::Unindent)) {
-      // Operate on current line
+
       QTextCursor cursor = m_editor->textCursor();
       cursor.movePosition(QTextCursor::StartOfLine);
       cursor.movePosition(QTextCursor::EndOfLine, QTextCursor::KeepAnchor);
 
       if (m_pendingOperator == VimOperator::Indent ||
           m_pendingOperator == VimOperator::Unindent) {
-        // Indent/unindent the line
+
         QString line = cursor.selectedText();
         cursor.movePosition(QTextCursor::StartOfLine);
         cursor.movePosition(QTextCursor::EndOfLine, QTextCursor::KeepAnchor);
@@ -188,7 +182,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
         if (m_pendingOperator == VimOperator::Indent) {
           cursor.insertText("    " + line);
         } else {
-          // Remove leading spaces/tab
+
           if (line.startsWith("    ")) {
             cursor.insertText(line.mid(4));
           } else if (line.startsWith("\t")) {
@@ -202,8 +196,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
         }
         m_editor->setTextCursor(cursor);
       } else {
-        cursor.movePosition(QTextCursor::Right,
-                            QTextCursor::KeepAnchor); // Include newline
+        cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor);
         m_registerBuffer = cursor.selectedText();
 
         if (m_pendingOperator == VimOperator::Delete ||
@@ -221,7 +214,6 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
       return true;
     }
 
-    // Motion for operator
     switch (key) {
     case Qt::Key_W:
       motion = VimMotion::WordForward;
@@ -269,7 +261,6 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
     return true;
   }
 
-  // Handle pending commands first (g, r, f, F, t, T, m, ', z)
   if (!m_commandBuffer.isEmpty()) {
     if (m_commandBuffer == "g" && key == Qt::Key_G) {
       executeMotion(VimMotion::FileStart);
@@ -281,7 +272,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
       m_commandBuffer.clear();
       return true;
     }
-    // Handle f/F/t/T commands
+
     if ((m_commandBuffer == "f" || m_commandBuffer == "F" ||
          m_commandBuffer == "t" || m_commandBuffer == "T") &&
         !text.isEmpty()) {
@@ -294,7 +285,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
       m_commandBuffer.clear();
       return true;
     }
-    // Handle m{a-z} for setting marks
+
     if (m_commandBuffer == "m" && !text.isEmpty()) {
       QChar mark = text[0];
       if ((mark >= 'a' && mark <= 'z') || (mark >= 'A' && mark <= 'Z')) {
@@ -303,7 +294,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
       m_commandBuffer.clear();
       return true;
     }
-    // Handle '{a-z} for jumping to marks
+
     if (m_commandBuffer == "'" && !text.isEmpty()) {
       QChar mark = text[0];
       if ((mark >= 'a' && mark <= 'z') || (mark >= 'A' && mark <= 'Z')) {
@@ -312,14 +303,14 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
       m_commandBuffer.clear();
       return true;
     }
-    // Handle z commands
+
     if (m_commandBuffer == "z") {
       QTextCursor cursor = m_editor->textCursor();
       if (key == Qt::Key_Z || text == "z") {
-        // zz - Center cursor line in window
+
         m_editor->centerCursor();
       } else if (key == Qt::Key_T || text == "t") {
-        // zt - Scroll cursor line to top
+
         m_editor->centerCursor();
         for (int i = 0; i < VIM_HALF_PAGE_SIZE; ++i) {
           m_editor->verticalScrollBar()->setValue(
@@ -327,7 +318,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
               m_editor->fontMetrics().height());
         }
       } else if (key == Qt::Key_B || text == "b") {
-        // zb - Scroll cursor line to bottom
+
         m_editor->centerCursor();
         for (int i = 0; i < VIM_HALF_PAGE_SIZE; ++i) {
           m_editor->verticalScrollBar()->setValue(
@@ -338,18 +329,17 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
       m_commandBuffer.clear();
       return true;
     }
-    // Unknown pending command, clear it
+
     m_commandBuffer.clear();
   }
 
-  // Regular key handling
   switch (key) {
-  // Mode switching
+
   case Qt::Key_I:
     if (mods & Qt::ShiftModifier) {
-      // I - Insert at beginning of line
+
       moveCursor(QTextCursor::StartOfLine);
-      // Move to first non-space
+
       QTextCursor cursor = m_editor->textCursor();
       QString line = cursor.block().text();
       int pos = 0;
@@ -364,10 +354,10 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
 
   case Qt::Key_A:
     if (mods & Qt::ShiftModifier) {
-      // A - Append at end of line
+
       moveCursor(QTextCursor::EndOfLine);
     } else {
-      // a - Append after cursor
+
       moveCursor(QTextCursor::Right);
     }
     setMode(VimEditMode::Insert);
@@ -395,7 +385,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
     return true;
 
   case Qt::Key_Slash:
-    // / - Start forward search
+
     setMode(VimEditMode::Command);
     m_commandBuffer = "/";
     emit commandBufferChanged(m_commandBuffer);
@@ -403,14 +393,13 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
     return true;
 
   case Qt::Key_Question:
-    // ? - Start backward search
+
     setMode(VimEditMode::Command);
     m_commandBuffer = "?";
     emit commandBufferChanged(m_commandBuffer);
     m_searchForward = false;
     return true;
 
-  // Motions
   case Qt::Key_H:
   case Qt::Key_Left:
     executeMotion(VimMotion::Left, count);
@@ -423,10 +412,10 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
 
   case Qt::Key_J:
     if (mods & Qt::ShiftModifier) {
-      // Shift+J - Join lines
+
       joinLines();
     } else {
-      // j - Move down
+
       executeMotion(VimMotion::Down, count);
     }
     return true;
@@ -446,7 +435,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
 
   case Qt::Key_B:
     if (mods & Qt::ControlModifier) {
-      // Ctrl+B - Full page up
+
       executeMotion(VimMotion::FullPageUp, count);
     } else {
       executeMotion(VimMotion::WordBack, count);
@@ -455,7 +444,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
 
   case Qt::Key_E:
     if (mods & Qt::ControlModifier) {
-      // Ctrl+E - Scroll down one line
+
       scrollLines(count);
     } else {
       executeMotion(VimMotion::WordEnd, count);
@@ -478,100 +467,99 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
     if (mods & Qt::ShiftModifier) {
       executeMotion(VimMotion::FileEnd);
     } else {
-      // Wait for second g
+
       m_commandBuffer = "g";
     }
     return true;
 
   case Qt::Key_Percent:
-    // % - Jump to matching brace
+
     executeMotion(VimMotion::MatchingBrace);
     return true;
 
   case Qt::Key_BraceLeft:
-    // { - Previous paragraph
+
     executeMotion(VimMotion::PrevParagraph, count);
     return true;
 
   case Qt::Key_BraceRight:
-    // } - Next paragraph
+
     executeMotion(VimMotion::NextParagraph, count);
     return true;
 
   case Qt::Key_ParenLeft:
-    // ( - Previous sentence
+
     executeMotion(VimMotion::PrevSentence, count);
     return true;
 
   case Qt::Key_ParenRight:
-    // ) - Next sentence
+
     executeMotion(VimMotion::NextSentence, count);
     return true;
 
   case Qt::Key_Asterisk:
-    // * - Search word under cursor forward
+
     searchWord(true);
     return true;
 
   case Qt::Key_NumberSign:
-    // # - Search word under cursor backward
+
     searchWord(false);
     return true;
 
   case Qt::Key_N:
     if (mods & Qt::ShiftModifier) {
-      // N - Search previous
+
       searchNext(false);
     } else {
-      // n - Search next
+
       searchNext(true);
     }
     return true;
 
   case Qt::Key_F:
     if (mods & Qt::ControlModifier) {
-      // Ctrl+F - Full page down
+
       executeMotion(VimMotion::FullPageDown, count);
     } else if (mods & Qt::ShiftModifier) {
-      // F - Find char backward
+
       m_commandBuffer = "F";
     } else {
-      // f - Find char forward
+
       m_commandBuffer = "f";
     }
     return true;
 
   case Qt::Key_T:
     if (mods & Qt::ShiftModifier) {
-      // T - To char backward
+
       m_commandBuffer = "T";
     } else {
-      // t - To char forward
+
       m_commandBuffer = "t";
     }
     return true;
 
   case Qt::Key_Semicolon:
-    // ; - Repeat last f/F/t/T
+
     if (!m_findChar.isNull()) {
       moveCursorToChar(m_findChar, m_findCharBefore, m_findCharBackward);
     }
     return true;
 
   case Qt::Key_Comma:
-    // , - Repeat last f/F/t/T in opposite direction
+
     if (!m_findChar.isNull()) {
       moveCursorToChar(m_findChar, m_findCharBefore, !m_findCharBackward);
     }
     return true;
 
-  // Operators
   case Qt::Key_D:
     if (mods & Qt::ControlModifier) {
-      // Ctrl+D - Half page down
+
       executeMotion(VimMotion::PageDown, count);
     } else if (mods & Qt::ShiftModifier) {
-      // D - Delete to end of line
+
       deleteText(VimMotion::LineEnd);
     } else {
       m_pendingOperator = VimOperator::Delete;
@@ -580,7 +568,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
 
   case Qt::Key_C:
     if (mods & Qt::ShiftModifier) {
-      // C - Change to end of line
+
       changeText(VimMotion::LineEnd);
     } else {
       m_pendingOperator = VimOperator::Change;
@@ -589,10 +577,10 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
 
   case Qt::Key_Y:
     if (mods & Qt::ControlModifier) {
-      // Ctrl+Y - Scroll up one line
+
       scrollLines(-count);
     } else if (mods & Qt::ShiftModifier) {
-      // Y - Yank line
+
       yankText(VimMotion::LineEnd);
     } else {
       m_pendingOperator = VimOperator::Yank;
@@ -600,48 +588,47 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
     return true;
 
   case Qt::Key_Greater:
-    // > - Indent operator
+
     m_pendingOperator = VimOperator::Indent;
     return true;
 
   case Qt::Key_Less:
-    // < - Unindent operator
+
     m_pendingOperator = VimOperator::Unindent;
     return true;
 
   case Qt::Key_AsciiTilde:
-    // ~ - Toggle case of character under cursor and move right
-    {
-      QTextCursor cursor = m_editor->textCursor();
-      for (int i = 0; i < count; ++i) {
-        if (!cursor.atEnd()) {
-          cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor);
-          QString ch = cursor.selectedText();
-          if (!ch.isEmpty()) {
-            QChar c = ch[0];
-            if (c.isLower()) {
-              cursor.insertText(c.toUpper());
-            } else if (c.isUpper()) {
-              cursor.insertText(c.toLower());
-            } else {
-              cursor.clearSelection();
-              cursor.movePosition(QTextCursor::Right);
-            }
+
+  {
+    QTextCursor cursor = m_editor->textCursor();
+    for (int i = 0; i < count; ++i) {
+      if (!cursor.atEnd()) {
+        cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor);
+        QString ch = cursor.selectedText();
+        if (!ch.isEmpty()) {
+          QChar c = ch[0];
+          if (c.isLower()) {
+            cursor.insertText(c.toUpper());
+          } else if (c.isUpper()) {
+            cursor.insertText(c.toLower());
+          } else {
+            cursor.clearSelection();
+            cursor.movePosition(QTextCursor::Right);
           }
         }
       }
-      m_editor->setTextCursor(cursor);
     }
+    m_editor->setTextCursor(cursor);
+  }
     return true;
 
-  // Other commands
   case Qt::Key_X:
     deleteText(VimMotion::Right, count);
     return true;
 
   case Qt::Key_S:
     if (mods & Qt::ShiftModifier) {
-      // S - Delete line and enter insert mode
+
       QTextCursor cursor = m_editor->textCursor();
       cursor.movePosition(QTextCursor::StartOfLine);
       cursor.movePosition(QTextCursor::EndOfLine, QTextCursor::KeepAnchor);
@@ -650,7 +637,7 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
       m_editor->setTextCursor(cursor);
       setMode(VimEditMode::Insert);
     } else {
-      // s - Delete character and enter insert mode
+
       deleteText(VimMotion::Right);
       setMode(VimEditMode::Insert);
     }
@@ -660,10 +647,10 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
     if (!m_registerBuffer.isEmpty()) {
       QTextCursor cursor = m_editor->textCursor();
       if (mods & Qt::ShiftModifier) {
-        // P - Paste before
+
         cursor.insertText(m_registerBuffer);
       } else {
-        // p - Paste after
+
         cursor.movePosition(QTextCursor::Right);
         cursor.insertText(m_registerBuffer);
       }
@@ -673,45 +660,45 @@ bool VimMode::handleNormalMode(QKeyEvent *event) {
 
   case Qt::Key_U:
     if (mods & Qt::ControlModifier) {
-      // Ctrl+U - Half page up
+
       executeMotion(VimMotion::PageUp, count);
     } else {
-      // u - Undo
+
       m_editor->undo();
     }
     return true;
 
   case Qt::Key_R:
     if (mods & Qt::ControlModifier) {
-      // Ctrl+R - Redo
+
       m_editor->redo();
     } else if (mods & Qt::ShiftModifier) {
-      // R - Enter Replace mode
+
       setMode(VimEditMode::Replace);
     } else {
-      // r - Replace single char - wait for next char
+
       m_commandBuffer = "r";
     }
     return true;
 
   case Qt::Key_M:
-    // m - Set mark, wait for mark character
+
     m_commandBuffer = "m";
     return true;
 
   case Qt::Key_Apostrophe:
   case Qt::Key_QuoteLeft:
-    // ' or ` - Jump to mark, wait for mark character
+
     m_commandBuffer = "'";
     return true;
 
   case Qt::Key_Period:
-    // . - Repeat last change
+
     repeatLastChange();
     return true;
 
   case Qt::Key_Z:
-    // z commands for scrolling
+
     m_commandBuffer = "z";
     return true;
 
@@ -727,12 +714,11 @@ bool VimMode::handleInsertMode(QKeyEvent *event) {
       (event->key() == Qt::Key_BracketLeft &&
        event->modifiers() & Qt::ControlModifier)) {
     setMode(VimEditMode::Normal);
-    // Move cursor left (VIM behavior)
+
     moveCursor(QTextCursor::Left);
     return true;
   }
 
-  // Let the editor handle the key
   return false;
 }
 
@@ -748,12 +734,11 @@ bool VimMode::handleReplaceMode(QKeyEvent *event) {
   }
 
   if (key == Qt::Key_Backspace) {
-    // In replace mode, backspace moves left without deleting
+
     moveCursor(QTextCursor::Left);
     return true;
   }
 
-  // Replace character under cursor with typed character
   if (!text.isEmpty() && text[0].isPrint()) {
     QTextCursor cursor = m_editor->textCursor();
     if (!cursor.atEnd()) {
@@ -766,7 +751,6 @@ bool VimMode::handleReplaceMode(QKeyEvent *event) {
     return true;
   }
 
-  // Let the editor handle other keys (arrows, etc.)
   return false;
 }
 
@@ -785,7 +769,7 @@ bool VimMode::handleVisualMode(QKeyEvent *event) {
   QTextCursor cursor = m_editor->textCursor();
 
   switch (key) {
-  // Motions (extend selection)
+
   case Qt::Key_H:
   case Qt::Key_Left:
     cursor.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor, count);
@@ -821,7 +805,6 @@ bool VimMode::handleVisualMode(QKeyEvent *event) {
     m_editor->setTextCursor(cursor);
     return true;
 
-  // Operations on selection
   case Qt::Key_D:
   case Qt::Key_X:
     m_registerBuffer = cursor.selectedText();
@@ -949,10 +932,8 @@ void VimMode::setMode(VimEditMode mode) {
       emit commandBufferChanged(m_commandBuffer);
     }
 
-    // Adjust cursor style
     if (mode == VimEditMode::Insert || mode == VimEditMode::Replace) {
-      // Thin cursor for insert mode, block cursor for replace mode would be
-      // nice but Qt doesn't support underline cursor, so use thin for both
+
       m_editor->setCursorWidth(
           mode == VimEditMode::Replace
               ? m_editor->fontMetrics().horizontalAdvance('M') / 2
@@ -1135,7 +1116,7 @@ void VimMode::executeCommand(const QString &command) {
       emit statusMessage(QString("Set: %1").arg(option));
     }
   } else if (command.startsWith("/") || command.startsWith("?")) {
-    // Search command
+
     bool forward = command.startsWith("/");
     QString pattern = command.mid(1);
     if (!pattern.isEmpty()) {
@@ -1144,7 +1125,7 @@ void VimMode::executeCommand(const QString &command) {
       searchNext(true);
     }
   } else if (command.startsWith("s/") || command.startsWith("%s/")) {
-    // Substitute command
+
     QString cmd = command;
     bool global = cmd.startsWith("%");
     if (global)
@@ -1163,7 +1144,7 @@ void VimMode::executeCommand(const QString &command) {
       if (global) {
         text = m_editor->toPlainText();
       } else {
-        // Only current line
+
         text = cursor.block().text();
         startPos = cursor.block().position();
       }
@@ -1174,7 +1155,7 @@ void VimMode::executeCommand(const QString &command) {
         newText = text;
         newText.replace(regex, replacement);
       } else {
-        // Replace first occurrence only
+
         QRegularExpressionMatch match = regex.match(text);
         if (match.hasMatch()) {
           newText = text.left(match.capturedStart()) + replacement +
@@ -1196,15 +1177,15 @@ void VimMode::executeCommand(const QString &command) {
       emit statusMessage("Substitution complete");
     }
   } else if (command.startsWith("e ")) {
-    // Edit file command
+
     QString filename = command.mid(2).trimmed();
     emit commandExecuted(QString("edit:%1").arg(filename));
   } else {
-    // Try to parse as line number
+
     bool ok;
     int lineNum = command.toInt(&ok);
     if (ok && lineNum > 0) {
-      // Go to line
+
       QTextCursor cursor = m_editor->textCursor();
       QTextBlock block = m_editor->document()->findBlockByNumber(lineNum - 1);
       if (block.isValid()) {
@@ -1289,7 +1270,6 @@ void VimMode::joinLines() {
   cursor.movePosition(QTextCursor::EndOfLine);
   cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor);
 
-  // Remove leading whitespace from next line
   while (!cursor.atEnd()) {
     QChar ch = m_editor->document()->characterAt(cursor.position());
     if (ch.isSpace() && ch != '\n') {
@@ -1317,7 +1297,7 @@ void VimMode::moveCursorToChar(QChar ch, bool before, bool backward) {
   int col = cursor.positionInBlock();
 
   if (backward) {
-    // Search backward from current position
+
     for (int i = col - 1; i >= 0; --i) {
       if (line[i] == ch) {
         int newPos = before ? i + 1 : i;
@@ -1329,7 +1309,7 @@ void VimMode::moveCursorToChar(QChar ch, bool before, bool backward) {
       }
     }
   } else {
-    // Search forward from current position
+
     for (int i = col + 1; i < line.length(); ++i) {
       if (line[i] == ch) {
         int newPos = before ? i - 1 : i;
@@ -1409,7 +1389,7 @@ void VimMode::moveCursorToParagraph(bool forward) {
   QTextCursor cursor = m_editor->textCursor();
 
   if (forward) {
-    // Move to next empty line (paragraph boundary)
+
     while (!cursor.atEnd()) {
       cursor.movePosition(QTextCursor::NextBlock);
       if (cursor.block().text().trimmed().isEmpty()) {
@@ -1417,7 +1397,7 @@ void VimMode::moveCursorToParagraph(bool forward) {
       }
     }
   } else {
-    // Move to previous empty line (paragraph boundary)
+
     while (!cursor.atStart()) {
       cursor.movePosition(QTextCursor::PreviousBlock);
       if (cursor.block().text().trimmed().isEmpty()) {
@@ -1434,14 +1414,13 @@ void VimMode::moveCursorToSentence(bool forward) {
   QString text = m_editor->toPlainText();
   int pos = cursor.position();
 
-  // Simple sentence detection: look for . ! ? followed by space or newline
   QRegularExpression sentenceEnd("[.!?][\\s\\n]");
 
   if (forward) {
     QRegularExpressionMatch match = sentenceEnd.match(text, pos);
     if (match.hasMatch()) {
       cursor.setPosition(match.capturedEnd());
-      // Skip whitespace
+
       while (cursor.position() < text.length() &&
              text[cursor.position()].isSpace()) {
         cursor.movePosition(QTextCursor::Right);
@@ -1450,7 +1429,7 @@ void VimMode::moveCursorToSentence(bool forward) {
       cursor.movePosition(QTextCursor::End);
     }
   } else {
-    // Search backward
+
     int searchPos = qMax(0, pos - 2);
     int lastMatch = 0;
     QRegularExpressionMatchIterator it =
@@ -1460,7 +1439,7 @@ void VimMode::moveCursorToSentence(bool forward) {
       lastMatch = m.capturedEnd();
     }
     cursor.setPosition(lastMatch);
-    // Skip whitespace
+
     while (cursor.position() < text.length() &&
            text[cursor.position()].isSpace()) {
       cursor.movePosition(QTextCursor::Right);
@@ -1488,9 +1467,7 @@ bool VimMode::jumpToMark(QChar mark) {
 }
 
 void VimMode::repeatLastChange() {
-  // Simple implementation: re-execute last recorded change
-  // For now, emit a message - full implementation would require recording
-  // keystrokes
+
   emit statusMessage("Repeat not fully implemented");
 }
 
@@ -1500,7 +1477,7 @@ void VimMode::recordChange(const QString &change) {
 }
 
 void VimMode::searchWord(bool forward) {
-  // Get word under cursor
+
   QTextCursor cursor = m_editor->textCursor();
   cursor.select(QTextCursor::WordUnderCursor);
   QString word = cursor.selectedText();
@@ -1526,7 +1503,7 @@ void VimMode::searchNext(bool forward) {
   QString text = m_editor->toPlainText();
   QRegularExpression regex(m_searchPattern);
 
-  bool actualForward = (forward == m_searchForward); // Account for N vs n
+  bool actualForward = (forward == m_searchForward);
 
   if (actualForward) {
     QRegularExpressionMatch match = regex.match(text, cursor.position() + 1);
@@ -1534,7 +1511,7 @@ void VimMode::searchNext(bool forward) {
       cursor.setPosition(match.capturedStart());
       m_editor->setTextCursor(cursor);
     } else {
-      // Wrap around
+
       match = regex.match(text, 0);
       if (match.hasMatch()) {
         cursor.setPosition(match.capturedStart());
@@ -1545,7 +1522,7 @@ void VimMode::searchNext(bool forward) {
       }
     }
   } else {
-    // Search backward
+
     int lastMatch = -1;
     QRegularExpressionMatchIterator it =
         regex.globalMatch(text.left(cursor.position()));
@@ -1558,7 +1535,7 @@ void VimMode::searchNext(bool forward) {
       cursor.setPosition(lastMatch);
       m_editor->setTextCursor(cursor);
     } else {
-      // Wrap around
+
       it = regex.globalMatch(text);
       while (it.hasNext()) {
         QRegularExpressionMatch m = it.next();
@@ -1595,7 +1572,6 @@ void VimMode::indentText(VimMotion motion, int count, bool indent) {
   cursor.setPosition(qMin(startPos, endPos));
   cursor.setPosition(qMax(startPos, endPos), QTextCursor::KeepAnchor);
 
-  // Get selected lines and indent/unindent
   int startBlock =
       m_editor->document()->findBlock(qMin(startPos, endPos)).blockNumber();
   int endBlock =
@@ -1669,7 +1645,7 @@ bool VimMode::selectTextObject(VimTextObject textObj) {
   case VimTextObject::AroundWord:
     cursor.select(QTextCursor::WordUnderCursor);
     if (textObj == VimTextObject::AroundWord) {
-      // Include trailing space if any
+
       int end = cursor.selectionEnd();
       if (end < text.length() && text[end].isSpace()) {
         cursor.setPosition(cursor.selectionStart());
@@ -1726,7 +1702,7 @@ bool VimMode::selectTextObject(VimTextObject textObj) {
   }
 
   if (isQuote) {
-    // Find quotes on current line
+
     QString line = cursor.block().text();
     int col = cursor.positionInBlock();
     int lineStart = cursor.position() - col;
@@ -1745,7 +1721,7 @@ bool VimMode::selectTextObject(VimTextObject textObj) {
           closePos = i;
           if (i >= col)
             break;
-          // Reset and look for next pair
+
           openPos = -1;
           closePos = -1;
           foundOpen = false;
@@ -1762,11 +1738,10 @@ bool VimMode::selectTextObject(VimTextObject textObj) {
       return true;
     }
   } else {
-    // Find matching brackets
+
     int openPos = -1;
     int depth = 0;
 
-    // Search backward for opening bracket
     for (int i = pos; i >= 0; --i) {
       if (text[i] == closeChar)
         depth++;
@@ -1780,7 +1755,7 @@ bool VimMode::selectTextObject(VimTextObject textObj) {
     }
 
     if (openPos >= 0) {
-      // Search forward for closing bracket
+
       depth = 1;
       for (int i = openPos + 1; i < text.length(); ++i) {
         if (text[i] == openChar)

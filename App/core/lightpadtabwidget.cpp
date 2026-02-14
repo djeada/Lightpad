@@ -18,13 +18,11 @@
 #include <QTextEdit>
 #include <QUrl>
 
-// LightpadTabBar implementation
 LightpadTabBar::LightpadTabBar(QWidget *parent) : QTabBar(parent) {}
 
 void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
   int index = tabAt(event->pos());
 
-  // Don't show context menu for the "add new tab" button tab
   if (index < 0 || index == count() - 1) {
     return;
   }
@@ -37,7 +35,6 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
   menu.addSeparator();
   QAction *closeAllAction = menu.addAction(tr("Close All Tabs"));
 
-  // Add file path operations
   menu.addSeparator();
   QAction *copyAbsolutePathAction = menu.addAction(tr("Copy Absolute Path"));
   QAction *copyRelativePathAction = menu.addAction(tr("Copy Relative Path"));
@@ -46,14 +43,10 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
   QAction *revealInExplorerAction =
       menu.addAction(tr("Reveal in File Explorer"));
 
-  // Disable "Close Tabs to the Right" if this is the last tab (excluding the
-  // add button tab)
   if (index >= count() - 2) {
     closeToRightAction->setEnabled(false);
   }
 
-  // Disable "Close Other Tabs" if there's only one tab (excluding the add
-  // button tab)
   if (count() <= 2) {
     closeOthersAction->setEnabled(false);
   }
@@ -79,7 +72,6 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
   }
 }
 
-// LightpadTabWidget implementation
 LightpadTabWidget::LightpadTabWidget(QWidget *parent) : QTabWidget(parent) {
   setupTabBar();
 
@@ -142,10 +134,9 @@ void LightpadTabWidget::updateCloseButtons() {
       continue;
     }
 
-    // Check if close button already exists for this tab
     QWidget *existingButton = tabBar()->tabButton(i, QTabBar::RightSide);
     if (existingButton && existingButton != newTabButton) {
-      // Update existing button's stylesheet
+
       existingButton->setStyleSheet(
           QString("QToolButton {"
                   "  color: rgba(255, 255, 255, 0.4);"
@@ -170,8 +161,7 @@ void LightpadTabWidget::updateCloseButtons() {
 
     QToolButton *closeButton = new QToolButton(tabBar());
     closeButton->setObjectName("TabCloseButton");
-    closeButton->setText(
-        QStringLiteral("\u00D7")); // Unicode multiplication sign (×)
+    closeButton->setText(QStringLiteral("\u00D7"));
     closeButton->setFixedSize(QSize(18, 18));
     closeButton->setAutoRaise(true);
     closeButton->setCursor(Qt::ArrowCursor);
@@ -215,7 +205,6 @@ void LightpadTabWidget::addNewTab() {
       newPage->setGitIntegration(mainWindow->getGitIntegration());
     }
 
-    // Propagate project root path to the new tab
     QString projectRoot = mainWindow->getProjectRootPath();
     if (!projectRoot.isEmpty()) {
       newPage->setProjectRootPath(projectRoot);
@@ -254,11 +243,10 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
   m_accentColor = accentColor;
 
   setStyleSheet(
-      // Modern scrollbar styling
+
       "QScrollBar:vertical { background: transparent; }"
       "QScrollBar:horizontal { background: transparent; }"
 
-      // Tab bar container with clean background
       "QTabBar { "
       "background: " +
       backgroundColor +
@@ -266,7 +254,6 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "qproperty-drawBase: 0; "
       "}"
 
-      // Individual tabs - modern flat design with subtle indicators
       "QTabBar::tab { "
       "color: #8b949e; "
       "background-color: " +
@@ -281,7 +268,6 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "font-size: 13px; "
       "}"
 
-      // Active/selected tab with accent indicator
       "QTabBar::tab:selected { "
       "color: " +
       foregroundColor +
@@ -297,7 +283,6 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "; "
       "}"
 
-      // Hover state for tabs
       "QTabBar::tab:hover:!selected { "
       "color: " +
       foregroundColor +
@@ -307,7 +292,6 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "; "
       "}"
 
-      // Add tab button styling - clean and minimal
       "QToolButton#AddTabButton { "
       "background: " +
       backgroundColor +
@@ -325,7 +309,6 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "; "
       "}"
 
-      // Tab close button styling - modern minimal design (subtle until hovered)
       "QToolButton#TabCloseButton { "
       "color: rgba(255, 255, 255, 0.4); "
       "background: transparent; "
@@ -346,7 +329,6 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "background: #e81123; "
       "}"
 
-      // Tab widget pane - seamless integration
       "QTabWidget::pane { "
       "border: none; "
       "background-color: " +
@@ -412,7 +394,6 @@ QString LightpadTabWidget::getFilePath(int index) {
     if (page)
       return page->getFilePath();
 
-    // Check if it's a viewer tab
     QWidget *w = widget(index);
     if (m_viewerFilePaths.contains(w))
       return m_viewerFilePaths[w];
@@ -457,11 +438,10 @@ bool LightpadTabWidget::isViewerTab(int index) const {
 }
 
 void LightpadTabWidget::setupTabBar() {
-  // Create and set custom tab bar
+
   LightpadTabBar *customTabBar = new LightpadTabBar(this);
   setTabBar(customTabBar);
 
-  // Connect context menu signals to slots
   connect(customTabBar, &LightpadTabBar::closeTab, this,
           &LightpadTabWidget::onCloseTab);
   connect(customTabBar, &LightpadTabBar::closeOtherTabs, this,
@@ -491,12 +471,10 @@ void LightpadTabWidget::onCloseOtherTabs(int index) {
     return;
   }
 
-  // Close all tabs after the specified index (excluding the add button tab)
   for (int i = count() - 2; i > index; --i) {
     removeTab(i);
   }
 
-  // Close all tabs before the specified index
   for (int i = index - 1; i >= 0; --i) {
     removeTab(i);
   }
@@ -507,8 +485,6 @@ void LightpadTabWidget::onCloseTabsToTheRight(int index) {
     return;
   }
 
-  // Close all tabs to the right of the specified index (excluding the add
-  // button tab)
   for (int i = count() - 2; i > index; --i) {
     removeTab(i);
   }
@@ -542,7 +518,7 @@ void LightpadTabWidget::onCopyRelativePath(int index) {
     QString relativePath = projectDir.relativeFilePath(filePath);
     clipboard->setText(relativePath);
   } else {
-    // If no project root, fall back to absolute path
+
     clipboard->setText(filePath);
   }
 }
@@ -562,19 +538,19 @@ void LightpadTabWidget::onRevealInFileExplorer(int index) {
   if (!filePath.isEmpty()) {
     QFileInfo fileInfo(filePath);
     if (fileInfo.exists()) {
-      // Open the containing directory and select the file
+
       QString dirPath = fileInfo.absolutePath();
 
 #ifdef Q_OS_WIN
-      // On Windows, use explorer with /select parameter
+
       QProcess::startDetached(
           "explorer", QStringList()
                           << "/select," + QDir::toNativeSeparators(filePath));
 #elif defined(Q_OS_MAC)
-      // On macOS, use 'open -R' to reveal in Finder
+
       QProcess::startDetached("open", QStringList() << "-R" << filePath);
 #else
-      // On Linux and other systems, just open the directory
+
       QDesktopServices::openUrl(QUrl::fromLocalFile(dirPath));
 #endif
     }

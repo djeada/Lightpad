@@ -18,7 +18,6 @@ void ProblemsPanel::setupUI() {
   mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(0);
 
-  // Header bar
   m_header = new QWidget(this);
   m_header->setStyleSheet(
       "background: #171c24; border-bottom: 1px solid #2a3241;");
@@ -44,7 +43,6 @@ void ProblemsPanel::setupUI() {
 
   headerLayout->addStretch();
 
-  // Auto-refresh checkbox
   m_autoRefreshCheckBox = new QCheckBox(tr("Auto-refresh on save"), m_header);
   m_autoRefreshCheckBox->setChecked(m_autoRefreshEnabled);
   m_autoRefreshCheckBox->setStyleSheet(
@@ -64,7 +62,6 @@ void ProblemsPanel::setupUI() {
 
   mainLayout->addWidget(m_header);
 
-  // Tree widget
   m_tree = new QTreeWidget(this);
   m_tree->setHeaderLabels({tr("Problem"), tr("Location")});
   m_tree->setRootIsDecorated(true);
@@ -168,13 +165,12 @@ int ProblemsPanel::warningCountForFile(const QString &filePath) const {
 
 const QList<LspDiagnostic> *
 ProblemsPanel::findDiagnosticsForFile(const QString &filePath) const {
-  // Normalize the file path - convert from file:// URI if needed
+
   QString normalizedPath = filePath;
   if (normalizedPath.startsWith("file://")) {
     normalizedPath = normalizedPath.mid(7);
   }
 
-  // Try to find matching diagnostics
   for (auto it = m_diagnostics.constBegin(); it != m_diagnostics.constEnd();
        ++it) {
     QString uri = it.key();
@@ -194,7 +190,6 @@ ProblemsPanel::findDiagnosticsForFile(const QString &filePath) const {
 void ProblemsPanel::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column);
 
-  // Check if this is a diagnostic item (has parent = file item)
   if (!item->parent())
     return;
 
@@ -253,7 +248,6 @@ void ProblemsPanel::rebuildTree() {
     QString uri = it.key();
     const QList<LspDiagnostic> &diagList = it.value();
 
-    // Convert URI to file path
     QString filePath = uri;
     if (filePath.startsWith("file://")) {
       filePath = filePath.mid(7);
@@ -261,7 +255,6 @@ void ProblemsPanel::rebuildTree() {
     QFileInfo fileInfo(filePath);
     QString fileName = fileInfo.fileName();
 
-    // Count diagnostics by severity for this file
     int fileErrors = 0;
     int fileWarnings = 0;
     int fileInfos = 0;
@@ -292,19 +285,16 @@ void ProblemsPanel::rebuildTree() {
         visibleCount++;
     }
 
-    // Emit signal for per-file counts
     emit fileCountsChanged(filePath, fileErrors, fileWarnings, fileInfos);
 
     if (visibleCount == 0)
       continue;
 
-    // File item
     QTreeWidgetItem *fileItem = new QTreeWidgetItem(m_tree);
     fileItem->setText(0, QString("%1 (%2)").arg(fileName).arg(visibleCount));
     fileItem->setToolTip(0, filePath);
     fileItem->setExpanded(true);
 
-    // Diagnostic items
     for (const auto &diag : diagList) {
       bool show = (m_currentFilter == 0) ||
                   (m_currentFilter == 1 &&
@@ -328,12 +318,10 @@ void ProblemsPanel::rebuildTree() {
                              .arg(diag.range.start.character + 1);
       diagItem->setText(1, location);
 
-      // Store navigation data
       diagItem->setData(0, Qt::UserRole, filePath);
       diagItem->setData(0, Qt::UserRole + 1, diag.range.start.line);
       diagItem->setData(0, Qt::UserRole + 2, diag.range.start.character);
 
-      // Color based on severity (using theme colors)
       QColor color;
       switch (diag.severity) {
       case LspDiagnosticSeverity::Error:
@@ -406,32 +394,26 @@ void ProblemsPanel::onAutoRefreshToggled(bool checked) {
 void ProblemsPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
 
-  // Header
   if (m_header) {
     m_header->setStyleSheet(UIStyleHelper::panelHeaderStyle(theme));
   }
 
-  // Title label
   if (m_titleLabel) {
     m_titleLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
   }
 
-  // Filter combo
   if (m_filterCombo) {
     m_filterCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
   }
 
-  // Checkbox
   if (m_autoRefreshCheckBox) {
     m_autoRefreshCheckBox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
   }
 
-  // Status label
   if (m_statusLabel) {
     m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
   }
 
-  // Tree widget
   if (m_tree) {
     m_tree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }

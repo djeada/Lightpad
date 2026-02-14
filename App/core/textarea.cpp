@@ -75,8 +75,6 @@ private:
   int m_spacing;
 };
 
-// Static icon cache - initialized once, reused everywhere
-
 QIcon TextArea::s_unsavedIcon;
 bool TextArea::s_iconsInitialized = false;
 
@@ -127,7 +125,6 @@ static int leadingSpaces(const QString &str, int tabWidth) {
 
   for (int i = 0; i < str.size(); i++) {
 
-    // check if character tabulation
     if (str[i] == '\x9')
       n += (tabWidth - 1);
 
@@ -250,20 +247,17 @@ void TextArea::setupTextArea() {
 
   connect(document(), &QTextDocument::undoCommandAdded, this, [&] {
     if (!areChangesUnsaved) {
-      // Use cached icon to avoid disk I/O on every keystroke
+
       setTabWidgetIcon(s_unsavedIcon);
       areChangesUnsaved = true;
     }
   });
 
-  // Update highlighter viewport on scroll for performance optimization
-  // Throttle to avoid excessive updates during fast scrolling
   connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) {
-    // Throttle scroll updates - only update if not already pending
     static bool updateScheduled = false;
     if (!updateScheduled) {
       updateScheduled = true;
-      QTimer::singleShot(16, this, [this]() { // ~60fps max
+      QTimer::singleShot(16, this, [this]() {
         updateScheduled = false;
         updateHighlighterViewport();
       });
@@ -425,13 +419,11 @@ void TextArea::applySelectionPalette(const Theme &theme) {
     viewport()->setPalette(pal);
   }
 
-  // Update line number area colors
   if (lineNumberArea) {
     lineNumberArea->setBackgroundColor(theme.lineNumberAreaColor);
     lineNumberArea->setTextColor(theme.foregroundColor);
   }
 
-  // Update completion widget theme
   if (m_completionWidget) {
     m_completionWidget->applyTheme(theme);
   }
@@ -464,7 +456,6 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     return;
   }
 
-  // Multi-cursor shortcuts
   if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::AltModifier)) {
     if (keyEvent->key() == Qt::Key_Up) {
       addCursorAbove();
@@ -475,34 +466,29 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     }
   }
 
-  // Ctrl+D - Add cursor at next occurrence
   if (keyEvent->modifiers() == Qt::ControlModifier &&
       keyEvent->key() == Qt::Key_D) {
     addCursorAtNextOccurrence();
     return;
   }
 
-  // Ctrl+Shift+L - Add cursors to all occurrences
   if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
       keyEvent->key() == Qt::Key_L) {
     addCursorsToAllOccurrences();
     return;
   }
 
-  // Ctrl+Shift+I - Split selection into lines
   if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
       keyEvent->key() == Qt::Key_I) {
     splitSelectionIntoLines();
     return;
   }
 
-  // Escape clears extra cursors
   if (keyEvent->key() == Qt::Key_Escape && hasMultipleCursors()) {
     clearExtraCursors();
     return;
   }
 
-  // Code folding shortcuts
   if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier)) {
     if (keyEvent->key() == Qt::Key_BracketLeft) {
       foldCurrentBlock();
@@ -513,7 +499,6 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     }
   }
 
-  // Handle new completion widget navigation
   if (m_completionWidget && m_completionWidget->isVisible()) {
     switch (keyEvent->key()) {
     case Qt::Key_Up:
@@ -541,9 +526,8 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     }
   }
 
-  // Handle legacy completer popup navigation (deprecated)
   if (m_completer && m_completer->popup()->isVisible()) {
-    // The following keys are forwarded by the completer to the widget
+
     switch (keyEvent->key()) {
     case Qt::Key_Enter:
     case Qt::Key_Return:
@@ -551,24 +535,21 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     case Qt::Key_Tab:
     case Qt::Key_Backtab:
       keyEvent->ignore();
-      return; // let the completer do default behavior
+      return;
     default:
       break;
     }
   }
 
-  // Handle multi-cursor typing
   if (hasMultipleCursors() && !keyEvent->text().isEmpty() &&
       keyEvent->modifiers() == Qt::NoModifier) {
 
-    // Apply typed character to all cursors
     QString text = keyEvent->text();
     applyToAllCursors(
         [&text](QTextCursor &cursor) { cursor.insertText(text); });
     return;
   }
 
-  // Handle multi-cursor backspace
   if (hasMultipleCursors() && keyEvent->key() == Qt::Key_Backspace) {
     applyToAllCursors([](QTextCursor &cursor) {
       if (!cursor.hasSelection()) {
@@ -580,7 +561,6 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     return;
   }
 
-  // Handle multi-cursor delete
   if (hasMultipleCursors() && keyEvent->key() == Qt::Key_Delete) {
     applyToAllCursors([](QTextCursor &cursor) {
       if (!cursor.hasSelection()) {
@@ -592,7 +572,6 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     return;
   }
 
-  // Handle auto-parentheses before processing other keys
   if (keyEvent->key() == Qt::Key_BraceLeft) {
     closeParentheses("{", "}");
     return;
@@ -618,26 +597,24 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     return;
   }
 
-  // Check for completion shortcut (Ctrl+Space)
   bool isShortcut = ((keyEvent->modifiers() & Qt::ControlModifier) &&
                      keyEvent->key() == Qt::Key_Space);
 
   if (!isShortcut) {
-    // Normal key processing
+
     QPlainTextEdit::keyPressEvent(keyEvent);
 
     if (keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return)
       handleKeyEnterPressed();
   }
 
-  // Handle new completion engine (preferred)
   if (m_completionEngine) {
     if (!isCompletionEnabledForLanguage(m_languageId)) {
       hideCompletionPopup();
       return;
     }
 
-    static QString eow("~!@#$%^&*()_+{}|:\"<>?,./;'[]\\-="); // end of word
+    static QString eow("~!@#$%^&*()_+{}|:\"<>?,./;'[]\\-=");
     const bool ctrlOrShift =
         keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
     bool hasModifier =
@@ -651,7 +628,6 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
       return;
     }
 
-    // Trigger completion
     QTextCursor cursor = textCursor();
     CompletionContext ctx;
     ctx.documentUri = getDocumentUri();
@@ -668,14 +644,13 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     return;
   }
 
-  // Handle legacy autocompletion (deprecated - fallback)
   if (!m_completer)
     return;
 
   const bool ctrlOrShift =
       keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
 
-  static QString eow("~!@#$%^&*()_+{}|:\"<>?,./;'[]\\-="); // end of word
+  static QString eow("~!@#$%^&*()_+{}|:\"<>?,./;'[]\\-=");
   bool hasModifier = (keyEvent->modifiers() != Qt::NoModifier) && !ctrlOrShift;
   QString completionPrefix = textUnderCursor();
 
@@ -694,7 +669,7 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
   QRect cr = cursorRect();
   cr.setWidth(m_completer->popup()->sizeHintForColumn(0) +
               m_completer->popup()->verticalScrollBar()->sizeHint().width());
-  m_completer->complete(cr); // popup it up!
+  m_completer->complete(cr);
 }
 
 void TextArea::contextMenuEvent(QContextMenuEvent *event) {
@@ -702,7 +677,6 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
   menu->addSeparator();
   menu->addAction(tr("Refactor"));
 
-  // Git context menu items
   if (mainWindow) {
     auto *gitIntegration = mainWindow->getGitIntegration();
     QString filePath = resolveFilePath();
@@ -710,7 +684,6 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
         !filePath.isEmpty()) {
       menu->addSeparator();
 
-      // Line/selection history
       QTextCursor cursor = textCursor();
       int startLine = cursor.blockNumber() + 1;
       int endLine = startLine;
@@ -736,7 +709,7 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
             if (commits.isEmpty()) {
               return;
             }
-            // Show in a simple dialog
+
             QString html =
                 QStringLiteral("<html><body style='font-family: monospace;'>"
                                "<h3>Line History: lines %1-%2</h3>")
@@ -781,7 +754,6 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
       connect(
           openAtRevisionAction, &QAction::triggered, this,
           [this, gitIntegration, filePath]() {
-            // Get recent commits for this file to pick from
             QList<GitCommitInfo> commits =
                 gitIntegration->getFileLog(filePath, 20);
             if (commits.isEmpty())
@@ -811,7 +783,6 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
             if (content.isEmpty())
               return;
 
-            // Open in a new read-only tab
             if (mainWindow) {
               mainWindow->openReadOnlyTab(content,
                                           QFileInfo(filePath).fileName() +
@@ -1130,8 +1101,7 @@ void TextArea::updateCursorPositionChangedCallbacks() {
 }
 
 void TextArea::lineNumberAreaPaintEvent(QPaintEvent *event) {
-  // Deprecated: LineNumberArea now handles its own painting
-  // This method is kept for API compatibility
+
   Q_UNUSED(event);
   if (lineNumberArea) {
     lineNumberArea->update();
@@ -1154,20 +1124,17 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey,
     syntaxHighlighter = nullptr;
   }
 
-  // NEW PLUGIN-BASED SYSTEM
-  // Try to get plugin from registry first
   auto &registry = SyntaxPluginRegistry::instance();
   ISyntaxPlugin *plugin = registry.getPluginByLanguageId(highlightLang);
 
   if (plugin && document()) {
-    // Use new plugin-based highlighter
+
     auto *pluginHighlighter =
         new PluginBasedSyntaxHighlighter(plugin, colors, searchKey, document());
     syntaxHighlighter = pluginHighlighter;
     return;
   }
 
-  // No matching language plugin means no syntax highlighter for this document.
   updateHighlighterViewport();
 }
 
@@ -1176,13 +1143,10 @@ void TextArea::updateHighlighterViewport() {
     return;
   }
 
-  // Calculate visible block range
   int firstVisible = firstVisibleBlock().blockNumber();
   int visibleLines = viewport()->height() / fontMetrics().height();
   int lastVisible = firstVisible + visibleLines + 1;
 
-  // Update the highlighter's viewport knowledge
-  // This allows it to skip highlighting off-screen blocks
   if (auto *pluginHighlighter =
           qobject_cast<PluginBasedSyntaxHighlighter *>(syntaxHighlighter)) {
     pluginHighlighter->setVisibleBlockRange(firstVisible, lastVisible);
@@ -1224,15 +1188,10 @@ QString TextArea::textUnderCursor() const {
   return tc.selectedText();
 }
 
-// ============================================================================
-// New Completion System
-// ============================================================================
-
 void TextArea::setCompletionEngine(CompletionEngine *engine) {
   if (m_completionEngine == engine)
     return;
 
-  // Disconnect previous engine signals
   if (m_completionEngine) {
     disconnect(m_completionEngine, &CompletionEngine::completionsReady, this,
                &TextArea::onCompletionsReady);
@@ -1243,7 +1202,6 @@ void TextArea::setCompletionEngine(CompletionEngine *engine) {
   if (!m_completionEngine)
     return;
 
-  // Create completion widget if needed
   if (!m_completionWidget) {
     m_completionWidget = new CompletionWidget(this);
     if (mainWindow) {
@@ -1255,7 +1213,6 @@ void TextArea::setCompletionEngine(CompletionEngine *engine) {
             &TextArea::hideCompletionPopup);
   }
 
-  // Connect engine signals
   connect(m_completionEngine, &CompletionEngine::completionsReady, this,
           &TextArea::onCompletionsReady);
 
@@ -1334,8 +1291,7 @@ void TextArea::onCompletionsReady(const QList<CompletionItem> &items) {
       (focusWidget == this) || (focusWidget && isAncestorOf(focusWidget));
 
   if (!isActiveEditor) {
-    // Multiple editors can be connected to the shared engine; only the active
-    // editor is allowed to show completion UI.
+
     hideCompletionPopup();
     return;
   }
@@ -1358,16 +1314,13 @@ void TextArea::insertCompletionItem(const CompletionItem &item) {
   QTextCursor tc = textCursor();
   QString prefix = textUnderCursor();
 
-  // Move to end of current word and delete the prefix
   tc.movePosition(QTextCursor::EndOfWord);
   tc.movePosition(QTextCursor::StartOfWord, QTextCursor::KeepAnchor);
 
   QString insertText = item.effectiveInsertText();
 
   if (item.isSnippet) {
-    // Simple snippet expansion - replace placeholders with default text or
-    // empty Full tabstop navigation would be more complex Handle ${1:default}
-    // -> default, ${1} -> ""
+
     static const QRegularExpression tabstopWithDefaultRe(
         R"(\$\{(\d+):([^}]*)\})");
     insertText.replace(tabstopWithDefaultRe, "\\2");
@@ -1395,10 +1348,6 @@ void TextArea::hideCompletionPopup() {
     m_completionWidget->hide();
   }
 }
-
-// ============================================================================
-// Multi-Cursor Support
-// ============================================================================
 
 void TextArea::addCursorAbove() {
   if (m_multiCursor) {
@@ -1456,7 +1405,7 @@ void TextArea::applyToAllCursors(
     m_multiCursor->applyToAllCursors(operation);
     drawExtraCursors();
   } else {
-    // Fallback: apply to main cursor only
+
     QTextCursor cursor = textCursor();
     operation(cursor);
     setTextCursor(cursor);
@@ -1466,14 +1415,13 @@ void TextArea::applyToAllCursors(
 void TextArea::paintEvent(QPaintEvent *event) {
   QPlainTextEdit::paintEvent(event);
 
-  // Draw indent guides if enabled
   if (m_showIndentGuides) {
     QPainter painter(viewport());
     painter.setPen(QPen(QColor(128, 128, 128, 60), 1, Qt::DotLine));
 
     QFontMetrics fm(mainFont);
     int spaceWidth = fm.horizontalAdvance(' ');
-    int indentWidth = spaceWidth * 4; // 4-space indent guides
+    int indentWidth = spaceWidth * 4;
 
     QTextBlock block = firstVisibleBlock();
     int top =
@@ -1484,7 +1432,6 @@ void TextArea::paintEvent(QPaintEvent *event) {
       if (block.isVisible() && bottom >= event->rect().top()) {
         QString text = block.text();
 
-        // Count leading whitespace to determine indent level
         int indent = 0;
         for (QChar c : text) {
           if (c == ' ')
@@ -1495,13 +1442,11 @@ void TextArea::paintEvent(QPaintEvent *event) {
             break;
         }
 
-        // Get the x position of the start of this block
         QTextCursor blockStart(block);
         blockStart.setPosition(block.position());
         QRect startRect = cursorRect(blockStart);
         int xOffset = startRect.left();
 
-        // Draw vertical lines at each indent level
         int numGuides = indent / 4;
         for (int i = 1; i <= numGuides; ++i) {
           int x = xOffset + (i * indentWidth) - indentWidth;
@@ -1515,14 +1460,13 @@ void TextArea::paintEvent(QPaintEvent *event) {
     }
   }
 
-  // Draw whitespace characters if enabled
   if (m_showWhitespace) {
     QPainter painter(viewport());
     painter.setPen(QPen(QColor(128, 128, 128, 80), 1));
 
     QFontMetrics fm(mainFont);
     int spaceWidth = fm.horizontalAdvance(' ');
-    int tabWidth = fm.horizontalAdvance(' ') * 4; // Assume 4-space tabs
+    int tabWidth = fm.horizontalAdvance(' ') * 4;
 
     QTextBlock block = firstVisibleBlock();
     int top =
@@ -1533,22 +1477,20 @@ void TextArea::paintEvent(QPaintEvent *event) {
       if (block.isVisible() && bottom >= event->rect().top()) {
         QString text = block.text();
 
-        // Get the x position of the start of this block
         QTextCursor blockStart(block);
         blockStart.setPosition(block.position());
         QRect startRect = cursorRect(blockStart);
         int xOffset = startRect.left();
         int yCenter = startRect.center().y();
 
-        // Calculate x positions using font metrics (more efficient)
         int x = xOffset;
         for (int i = 0; i < text.length(); ++i) {
           if (text[i] == ' ') {
-            // Draw a middle dot for spaces
+
             painter.drawPoint(x + spaceWidth / 2, yCenter);
             x += spaceWidth;
           } else if (text[i] == '\t') {
-            // Draw an arrow for tabs
+
             int arrowEnd = x + 10;
             painter.drawLine(x + 2, yCenter, arrowEnd, yCenter);
             painter.drawLine(arrowEnd - 3, yCenter - 3, arrowEnd, yCenter);
@@ -1566,7 +1508,6 @@ void TextArea::paintEvent(QPaintEvent *event) {
     }
   }
 
-  // Draw CodeLens annotations above functions/classes
   if (m_codeLensEnabled && !m_codeLensEntries.isEmpty()) {
     QPainter painter(viewport());
     QFont codeLensFont = mainFont;
@@ -1586,13 +1527,11 @@ void TextArea::paintEvent(QPaintEvent *event) {
       if (blockGeom.bottom() < 0 || blockGeom.top() > viewport()->height())
         continue;
 
-      // Draw above the block's line
       QFontMetrics cfm(codeLensFont);
       int yPos = static_cast<int>(blockGeom.top()) - cfm.height() + 2;
       if (yPos < 0)
         continue;
 
-      // Indent to match the block's indentation
       QTextCursor blockStart(block);
       blockStart.setPosition(block.position());
       int xPos = cursorRect(blockStart).left();
@@ -1602,9 +1541,8 @@ void TextArea::paintEvent(QPaintEvent *event) {
     }
   }
 
-  // Draw inline blame ghost text at end of current line
   if (m_inlineBlameEnabled && !m_inlineBlameData.isEmpty()) {
-    int currentLine = textCursor().blockNumber() + 1; // 1-based
+    int currentLine = textCursor().blockNumber() + 1;
     auto it = m_inlineBlameData.find(currentLine);
     if (it != m_inlineBlameData.end()) {
       QPainter painter(viewport());
@@ -1616,7 +1554,6 @@ void TextArea::paintEvent(QPaintEvent *event) {
         QFontMetrics fm(mainFont);
         int textWidth = fm.horizontalAdvance(lineText);
 
-        // Position ghost text after the line content with some padding
         QTextCursor blockStart(block);
         blockStart.setPosition(block.position());
         QRect startRect = cursorRect(blockStart);
@@ -1634,7 +1571,6 @@ void TextArea::paintEvent(QPaintEvent *event) {
     }
   }
 
-  // Draw extra cursors as vertical lines
   if (m_multiCursor && m_multiCursor->hasMultipleCursors()) {
     QPainter painter(viewport());
     painter.setPen(QPen(defaultPenColor, 2));
@@ -1649,13 +1585,12 @@ void TextArea::paintEvent(QPaintEvent *event) {
 }
 
 void TextArea::mousePressEvent(QMouseEvent *event) {
-  // Clear extra cursors on regular click
+
   if (m_multiCursor && m_multiCursor->hasMultipleCursors() &&
       !(event->modifiers() & Qt::ControlModifier)) {
     clearExtraCursors();
   }
 
-  // Alt+Shift+Click to start column/box selection
   if ((event->modifiers() & (Qt::AltModifier | Qt::ShiftModifier)) ==
           (Qt::AltModifier | Qt::ShiftModifier) &&
       event->button() == Qt::LeftButton) {
@@ -1663,7 +1598,6 @@ void TextArea::mousePressEvent(QMouseEvent *event) {
     return;
   }
 
-  // Ctrl+Alt+Click to add cursor
   if ((event->modifiers() & (Qt::ControlModifier | Qt::AltModifier)) ==
       (Qt::ControlModifier | Qt::AltModifier)) {
     QTextCursor cursor = cursorForPosition(event->pos());
@@ -1679,7 +1613,7 @@ void TextArea::mousePressEvent(QMouseEvent *event) {
 }
 
 void TextArea::mouseMoveEvent(QMouseEvent *event) {
-  // Update column selection while dragging
+
   if (m_columnSelectionActive && (event->buttons() & Qt::LeftButton)) {
     updateColumnSelection(event->pos());
     return;
@@ -1689,7 +1623,7 @@ void TextArea::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void TextArea::mouseReleaseEvent(QMouseEvent *event) {
-  // End column selection
+
   if (m_columnSelectionActive) {
     endColumnSelection();
     return;
@@ -1697,10 +1631,6 @@ void TextArea::mouseReleaseEvent(QMouseEvent *event) {
 
   QPlainTextEdit::mouseReleaseEvent(event);
 }
-
-// ============================================================================
-// Code Folding Support
-// ============================================================================
 
 void TextArea::foldCurrentBlock() {
   int blockNum = textCursor().blockNumber();
@@ -1742,10 +1672,6 @@ void TextArea::foldToLevel(int level) {
   document()->markContentsDirty(0, document()->characterCount());
 }
 
-// ============================================================================
-// Whitespace Visualization
-// ============================================================================
-
 void TextArea::setShowWhitespace(bool show) {
   if (m_showWhitespace != show) {
     m_showWhitespace = show;
@@ -1755,10 +1681,6 @@ void TextArea::setShowWhitespace(bool show) {
 
 bool TextArea::showWhitespace() const { return m_showWhitespace; }
 
-// ============================================================================
-// Indent Guides Support
-// ============================================================================
-
 void TextArea::setShowIndentGuides(bool show) {
   if (m_showIndentGuides != show) {
     m_showIndentGuides = show;
@@ -1767,10 +1689,6 @@ void TextArea::setShowIndentGuides(bool show) {
 }
 
 bool TextArea::showIndentGuides() const { return m_showIndentGuides; }
-
-// ============================================================================
-// Vim Mode
-// ============================================================================
 
 void TextArea::setVimModeEnabled(bool enabled) {
   if (m_vimMode) {
@@ -1783,10 +1701,6 @@ bool TextArea::isVimModeEnabled() const {
 }
 
 VimMode *TextArea::vimMode() const { return m_vimMode; }
-
-// ============================================================================
-// Git Diff Gutter Support
-// ============================================================================
 
 void TextArea::setGitDiffLines(const QList<QPair<int, int>> &diffLines) {
   m_gitDiffLines = diffLines;
@@ -1902,21 +1816,15 @@ void TextArea::updateLineNumberAreaLayout() {
   viewport()->update();
 }
 
-// ============================================================================
-// Column/Box Selection Support
-// ============================================================================
-
 void TextArea::startColumnSelection(const QPoint &pos) {
   m_columnSelectionActive = true;
   m_columnSelectionStart = pos;
   m_columnSelectionEnd = pos;
 
-  // Clear existing extra cursors
   if (m_multiCursor) {
     m_multiCursor->clearExtraCursors();
   }
 
-  // Set initial cursor position
   QTextCursor cursor = cursorForPosition(pos);
   cursor.clearSelection();
   setTextCursor(cursor);
@@ -1928,32 +1836,26 @@ void TextArea::updateColumnSelection(const QPoint &pos) {
 
   m_columnSelectionEnd = pos;
 
-  // Get the line/column at start and end positions
   QTextCursor startCursor = cursorForPosition(m_columnSelectionStart);
   QTextCursor endCursor = cursorForPosition(m_columnSelectionEnd);
 
   int startLine = startCursor.blockNumber();
   int endLine = endCursor.blockNumber();
 
-  // Ensure startLine <= endLine
   if (startLine > endLine) {
     std::swap(startLine, endLine);
   }
 
-  // Get column positions in pixels for proper column selection
   int startCol = startCursor.positionInBlock();
   int endCol = endCursor.positionInBlock();
 
-  // Ensure startCol <= endCol for selection
   int leftCol = qMin(startCol, endCol);
   int rightCol = qMax(startCol, endCol);
 
-  // Clear extra cursors
   if (m_multiCursor) {
     m_multiCursor->clearExtraCursors();
   }
 
-  // Create a cursor for each line in the selection
   bool first = true;
   for (int line = startLine; line <= endLine; ++line) {
     QTextBlock block = document()->findBlockByNumber(line);
@@ -1963,13 +1865,11 @@ void TextArea::updateColumnSelection(const QPoint &pos) {
     QTextCursor cursor(block);
     int lineLength = block.text().length();
 
-    // Move to the left column position (clamped to line length)
     int actualLeftCol = qMin(leftCol, lineLength);
     cursor.movePosition(QTextCursor::StartOfBlock);
     cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
                         actualLeftCol);
 
-    // Select to the right column (clamped to line length)
     int actualRightCol = qMin(rightCol, lineLength);
     int selectionLength = actualRightCol - actualLeftCol;
     if (selectionLength > 0) {
@@ -1988,14 +1888,7 @@ void TextArea::updateColumnSelection(const QPoint &pos) {
   drawExtraCursors();
 }
 
-void TextArea::endColumnSelection() {
-  m_columnSelectionActive = false;
-  // Keep the cursors in place, they're already set up
-}
-
-// ============================================================================
-// Split Selection Into Lines
-// ============================================================================
+void TextArea::endColumnSelection() { m_columnSelectionActive = false; }
 
 void TextArea::splitSelectionIntoLines() {
   QTextCursor cursor = textCursor();
@@ -2003,11 +1896,9 @@ void TextArea::splitSelectionIntoLines() {
   if (!cursor.hasSelection())
     return;
 
-  // Get the selected text and split by lines
   int selStart = cursor.selectionStart();
   int selEnd = cursor.selectionEnd();
 
-  // Find the block/line of the selection start and end
   QTextCursor startCursor(document());
   startCursor.setPosition(selStart);
   int startLine = startCursor.blockNumber();
@@ -2018,16 +1909,13 @@ void TextArea::splitSelectionIntoLines() {
   int endLine = endCursor.blockNumber();
   int endCol = endCursor.positionInBlock();
 
-  // If selection is on a single line, nothing to split
   if (startLine == endLine)
     return;
 
-  // Clear extra cursors
   if (m_multiCursor) {
     m_multiCursor->clearExtraCursors();
   }
 
-  // Create a cursor at the end of selection on each line
   bool first = true;
   for (int line = startLine; line <= endLine; ++line) {
     QTextBlock block = document()->findBlockByNumber(line);
@@ -2038,16 +1926,16 @@ void TextArea::splitSelectionIntoLines() {
     lineCursor.movePosition(QTextCursor::StartOfBlock);
 
     if (line == startLine) {
-      // First line: from startCol to end of line
+
       lineCursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
                               startCol);
       lineCursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
     } else if (line == endLine) {
-      // Last line: from start of line to endCol
+
       lineCursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
                               endCol);
     } else {
-      // Middle lines: select entire line content (not the newline)
+
       lineCursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
     }
 
@@ -2073,10 +1961,6 @@ void TextArea::unfoldComments() {
   viewport()->update();
   document()->markContentsDirty(0, document()->characterCount());
 }
-
-// ============================================================================
-// Text Transformations
-// ============================================================================
 
 void TextArea::sortLinesAscending() {
   QTextCursor cursor = textCursor();
@@ -2132,10 +2016,6 @@ void TextArea::transformToTitleCase() {
     cursor.insertText(TextTransforms::toTitleCase(cursor.selectedText()));
   }
 }
-
-// ============================================================================
-// Word Wrap
-// ============================================================================
 
 void TextArea::setWordWrapEnabled(bool enabled) {
   if (enabled) {

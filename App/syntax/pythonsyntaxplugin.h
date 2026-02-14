@@ -4,9 +4,6 @@
 #include "basesyntaxplugin.h"
 #include <QVector>
 
-/**
- * @brief Built-in Python syntax highlighting plugin
- */
 class PythonSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "py"; }
@@ -27,4 +24,4 @@ private:
   static QStringList getTertiaryKeywords();
 };
 
-#endif // PYTHONSYNTAXPLUGIN_H
+#endif

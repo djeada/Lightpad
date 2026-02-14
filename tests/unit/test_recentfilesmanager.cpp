@@ -24,7 +24,6 @@ void TestRecentFilesManager::initTestCase() {
   m_manager = new RecentFilesManager(nullptr);
   m_manager->clearAll();
 
-  // Create some temporary test files
   for (int i = 0; i < 5; ++i) {
     QTemporaryFile *tempFile = new QTemporaryFile();
     tempFile->setAutoRemove(false);
@@ -39,7 +38,6 @@ void TestRecentFilesManager::cleanupTestCase() {
   m_manager->clearAll();
   delete m_manager;
 
-  // Clean up temp files
   for (const QString &file : m_tempFiles) {
     QFile::remove(file);
   }
@@ -82,12 +80,10 @@ void TestRecentFilesManager::testMaxFiles() {
   m_manager->setMaxFiles(3);
   QCOMPARE(m_manager->maxFiles(), 3);
 
-  // Add more files than max
   for (int i = 0; i < qMin(5, m_tempFiles.size()); ++i) {
     m_manager->addFile(m_tempFiles[i]);
   }
 
-  // Should only keep 3
   QVERIFY(m_manager->recentFiles().size() <= 3);
 }
 

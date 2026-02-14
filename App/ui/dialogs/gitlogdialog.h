@@ -14,12 +14,6 @@ class QLineEdit;
 class QTabWidget;
 class GitGraphWidget;
 
-/**
- * @brief Git history/log viewer dialog
- *
- * Displays the commit history of the current repository with
- * commit details, optional file filtering, and DAG graph view.
- */
 class GitLogDialog : public QDialog {
   Q_OBJECT
 
@@ -27,20 +21,12 @@ public:
   explicit GitLogDialog(GitIntegration *git, const Theme &theme,
                         QWidget *parent = nullptr);
 
-  /**
-   * @brief Set a file path to filter commits by
-   */
   void setFilePath(const QString &filePath);
 
-  /**
-   * @brief Refresh the commit list
-   */
   void refresh();
 
 signals:
-  /**
-   * @brief Emitted when user wants to view a commit diff
-   */
+
   void viewCommitDiff(const QString &commitHash);
 
 protected:
@@ -70,4 +56,4 @@ private:
   QLabel *m_statusLabel;
 };
 
-#endif // GITLOGDIALOG_H
+#endif

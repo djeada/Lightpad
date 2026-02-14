@@ -21,7 +21,6 @@ QStringList PythonSyntaxPlugin::getTertiaryKeywords() {
 QVector<SyntaxRule> PythonSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
-  // Primary keywords
   for (const QString &keyword : getPrimaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -29,7 +28,6 @@ QVector<SyntaxRule> PythonSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Secondary keywords (built-in types)
   for (const QString &keyword : getSecondaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -37,7 +35,6 @@ QVector<SyntaxRule> PythonSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Tertiary keywords (special identifiers)
   for (const QString &keyword : getTertiaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -45,37 +42,31 @@ QVector<SyntaxRule> PythonSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Numbers
   SyntaxRule numberRule;
   numberRule.pattern = QRegularExpression("\\b[-+.,]*\\d{1,}f*\\b");
   numberRule.name = "number";
   rules.append(numberRule);
 
-  // String literals (double quotes)
   SyntaxRule stringRule;
   stringRule.pattern = QRegularExpression("\".*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
-  // String literals (single quotes)
   SyntaxRule singleQuoteRule;
   singleQuoteRule.pattern = QRegularExpression("'.*'");
   singleQuoteRule.name = "string";
   rules.append(singleQuoteRule);
 
-  // Function calls and definitions
   SyntaxRule functionRule;
   functionRule.pattern = QRegularExpression("\\b[A-Za-z0-9_]+(?=\\()");
   functionRule.name = "function";
   rules.append(functionRule);
 
-  // Decorators
   SyntaxRule decoratorRule;
   decoratorRule.pattern = QRegularExpression("@[A-Za-z0-9_]+");
   decoratorRule.name = "keyword_1";
   rules.append(decoratorRule);
 
-  // Single-line comments
   SyntaxRule commentRule;
   commentRule.pattern = QRegularExpression("#[^\n]*");
   commentRule.name = "comment";
@@ -87,13 +78,11 @@ QVector<SyntaxRule> PythonSyntaxPlugin::syntaxRules() const {
 QVector<MultiLineBlock> PythonSyntaxPlugin::multiLineBlocks() const {
   QVector<MultiLineBlock> blocks;
 
-  // Multi-line strings/docstrings with triple single quotes
   MultiLineBlock singleQuoteBlock;
   singleQuoteBlock.startPattern = QRegularExpression("'''");
   singleQuoteBlock.endPattern = QRegularExpression("'''");
   blocks.append(singleQuoteBlock);
 
-  // Multi-line strings/docstrings with triple double quotes
   MultiLineBlock doubleQuoteBlock;
   doubleQuoteBlock.startPattern = QRegularExpression("\"\"\"");
   doubleQuoteBlock.endPattern = QRegularExpression("\"\"\"");

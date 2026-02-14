@@ -3,8 +3,6 @@
 
 #include <QThread>
 
-// AsyncWorker implementation
-
 AsyncWorker::AsyncWorker(QObject *parent)
     : QObject(parent), m_state(State::Idle), m_cancelled(false) {}
 
@@ -85,8 +83,6 @@ void AsyncWorker::reportProgress(int percent, const QString &message) {
   emit progress(qBound(0, percent, 100), message);
 }
 
-// AsyncTask implementation
-
 AsyncTask::AsyncTask(TaskFunction task, QObject *parent)
     : AsyncWorker(parent), m_task(task) {}
 
@@ -95,8 +91,6 @@ void AsyncTask::doWork() {
     m_task(this);
   }
 }
-
-// AsyncThreadPool implementation
 
 AsyncThreadPool &AsyncThreadPool::instance() {
   static AsyncThreadPool instance;

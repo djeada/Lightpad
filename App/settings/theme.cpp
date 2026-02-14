@@ -3,17 +3,17 @@
 #include <QJsonObject>
 
 Theme::Theme()
-    // Editor colors
+
     : backgroundColor(QColor("#0d1117")), foregroundColor(QColor("#e6edf3")),
       highlightColor(QColor("#1a2230")), lineNumberAreaColor(QColor("#0d1117"))
-      // Syntax highlighting colors
+
       ,
       keywordFormat_0(QColor("#7ee787")), keywordFormat_1(QColor("#f2cc60")),
       keywordFormat_2(QColor("#58a6ff")), searchFormat(QColor("#f2cc60")),
       singleLineCommentFormat(QColor("#8b949e")),
       functionFormat(QColor("#79c0ff")), quotationFormat(QColor("#a5d6ff")),
       classFormat(QColor("#56d4dd")), numberFormat(QColor("#ff7b72"))
-      // Modern UI design tokens
+
       ,
       surfaceColor(QColor("#161b22")), surfaceAltColor(QColor("#1c2128")),
       borderColor(QColor("#30363d")), hoverColor(QColor("#21262d")),
@@ -80,7 +80,6 @@ void Theme::read(const QJsonObject &json) {
       themeObject["numberFormat"].isString())
     numberFormat = QColor(themeObject["numberFormat"].toString());
 
-  // Modern UI tokens
   if (themeObject.contains("surfaceColor") &&
       themeObject["surfaceColor"].isString())
     surfaceColor = QColor(themeObject["surfaceColor"].toString());
@@ -137,7 +136,6 @@ void Theme::write(QJsonObject &json) {
   json["classFormat"] = classFormat.name();
   json["numberFormat"] = numberFormat.name();
 
-  // Modern UI tokens
   json["surfaceColor"] = surfaceColor.name();
   json["surfaceAltColor"] = surfaceAltColor.name();
   json["borderColor"] = borderColor.name();

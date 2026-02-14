@@ -42,7 +42,6 @@ void GitRemoteDialog::setupUI() {
   mainLayout->setSpacing(16);
   mainLayout->setContentsMargins(20, 20, 20, 20);
 
-  // Header
   QHBoxLayout *headerLayout = new QHBoxLayout();
 
   QString iconText;
@@ -90,7 +89,7 @@ void GitRemoteDialog::setupUI() {
   mainLayout->addLayout(headerLayout);
 
   if (m_mode != Mode::ManageRemotes) {
-    // Remote and branch selection
+
     QGroupBox *selectionGroup = new QGroupBox(tr("Remote & Branch"), this);
     QVBoxLayout *selectionLayout = new QVBoxLayout(selectionGroup);
 
@@ -117,7 +116,6 @@ void GitRemoteDialog::setupUI() {
 
     mainLayout->addWidget(selectionGroup);
 
-    // Options
     QGroupBox *optionsGroup = new QGroupBox(tr("Options"), this);
     QVBoxLayout *optionsLayout = new QVBoxLayout(optionsGroup);
 
@@ -137,7 +135,7 @@ void GitRemoteDialog::setupUI() {
 
     mainLayout->addWidget(optionsGroup);
   } else {
-    // Manage remotes UI
+
     QGroupBox *remotesGroup = new QGroupBox(tr("Configured Remotes"), this);
     QVBoxLayout *remotesLayout = new QVBoxLayout(remotesGroup);
 
@@ -185,9 +183,8 @@ void GitRemoteDialog::setupUI() {
     mainLayout->addWidget(remotesGroup);
   }
 
-  // Progress and status
   m_progressBar = new QProgressBar(this);
-  m_progressBar->setRange(0, 0); // Indeterminate
+  m_progressBar->setRange(0, 0);
   m_progressBar->hide();
   mainLayout->addWidget(m_progressBar);
 
@@ -197,7 +194,6 @@ void GitRemoteDialog::setupUI() {
 
   mainLayout->addStretch();
 
-  // Action buttons
   QHBoxLayout *buttonLayout = new QHBoxLayout();
 
   if (m_mode != Mode::ManageRemotes) {
@@ -445,7 +441,6 @@ void GitRemoteDialog::updateRemoteList() {
       m_remoteSelector->addItem(remote.name, remote.fetchUrl);
     }
 
-    // Default to "origin" if available
     int originIndex = m_remoteSelector->findText("origin");
     if (originIndex >= 0) {
       m_remoteSelector->setCurrentIndex(originIndex);
@@ -488,10 +483,7 @@ void GitRemoteDialog::updateBranchList() {
   m_branchSelector->setCurrentIndex(currentIndex);
 }
 
-void GitRemoteDialog::onRemoteSelected(int index) {
-  Q_UNUSED(index);
-  // Could update status with remote info
-}
+void GitRemoteDialog::onRemoteSelected(int index) { Q_UNUSED(index); }
 
 void GitRemoteDialog::onPushClicked() {
   if (!m_git)
@@ -651,12 +643,10 @@ void GitRemoteDialog::onCloseClicked() { accept(); }
 void GitRemoteDialog::applyTheme(const Theme &theme) {
   setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  // Apply styles to group boxes
   for (QGroupBox *groupBox : findChildren<QGroupBox *>()) {
     groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
   }
 
-  // Apply combobox style
   if (m_remoteSelector) {
     m_remoteSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
   }
@@ -664,7 +654,6 @@ void GitRemoteDialog::applyTheme(const Theme &theme) {
     m_branchSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
   }
 
-  // Apply line edit style
   if (m_remoteNameEdit) {
     m_remoteNameEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
   }
@@ -672,7 +661,6 @@ void GitRemoteDialog::applyTheme(const Theme &theme) {
     m_remoteUrlEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
   }
 
-  // Apply checkbox style
   if (m_setUpstreamCheckbox) {
     m_setUpstreamCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
   }
@@ -680,12 +668,10 @@ void GitRemoteDialog::applyTheme(const Theme &theme) {
     m_forceCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
   }
 
-  // Apply list widget style
   if (m_remoteList) {
     m_remoteList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
   }
 
-  // Apply button styles
   if (m_pushButton) {
     m_pushButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
   }
@@ -706,7 +692,6 @@ void GitRemoteDialog::applyTheme(const Theme &theme) {
     m_closeButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
   }
 
-  // Apply status label style
   if (m_statusLabel) {
     m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
   }

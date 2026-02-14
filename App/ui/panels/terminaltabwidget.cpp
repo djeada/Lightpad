@@ -21,12 +21,10 @@ TerminalTabWidget::TerminalTabWidget(QWidget *parent)
       m_shellProfileMenu(nullptr), m_terminalCounter(0), m_isSplit(false) {
   setObjectName("TerminalTabWidget");
 
-  // Set working directory to current project directory
   m_currentWorkingDirectory = QDir::currentPath();
 
   setupUI();
 
-  // Add initial terminal
   addNewTerminal();
 }
 
@@ -37,13 +35,10 @@ void TerminalTabWidget::setupUI() {
   mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(0);
 
-  // Toolbar
   setupToolbar();
 
-  // Splitter for split view
   m_splitter = new QSplitter(Qt::Horizontal, this);
 
-  // Tab widget for terminals
   m_tabWidget = new QTabWidget(this);
   m_tabWidget->setTabsClosable(true);
   m_tabWidget->setMovable(true);
@@ -64,7 +59,6 @@ void TerminalTabWidget::setupToolbar() {
   toolbarLayout->setContentsMargins(4, 4, 4, 4);
   toolbarLayout->setSpacing(4);
 
-  // New terminal button with shell profile menu
   m_newTerminalButton = new QToolButton(toolbar);
   m_newTerminalButton->setText("+");
   m_newTerminalButton->setToolTip(tr("New Terminal (Ctrl+Shift+`)"));
@@ -78,7 +72,6 @@ void TerminalTabWidget::setupToolbar() {
   connect(m_newTerminalButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onNewTerminalClicked);
 
-  // Clear terminal button
   m_clearButton = new QToolButton(toolbar);
   m_clearButton->setToolTip(tr("Clear Terminal"));
   m_clearButton->setIcon(
@@ -86,7 +79,6 @@ void TerminalTabWidget::setupToolbar() {
   connect(m_clearButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onClearTerminalClicked);
 
-  // Split terminal button
   m_splitButton = new QToolButton(toolbar);
   m_splitButton->setToolTip(tr("Split Terminal"));
   m_splitButton->setIcon(
@@ -94,7 +86,6 @@ void TerminalTabWidget::setupToolbar() {
   connect(m_splitButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onSplitTerminalClicked);
 
-  // Close terminal panel button
   m_closeButton = new QToolButton(toolbar);
   m_closeButton->setToolTip(tr("Close Terminal Panel"));
   m_closeButton->setText(QStringLiteral("\u00D7"));
@@ -135,7 +126,6 @@ Terminal *TerminalTabWidget::addNewTerminal(const QString &workingDirectory) {
     terminal->setWorkingDirectory(workDir);
   }
 
-  // Connect terminal signals
   connect(terminal, &Terminal::processStarted, this,
           &TerminalTabWidget::processStarted);
   connect(terminal, &Terminal::processFinished, this,
@@ -157,7 +147,6 @@ TerminalTabWidget::addNewTerminalWithProfile(const QString &profileName,
                                              const QString &workingDirectory) {
   Terminal *terminal = new Terminal(this);
 
-  // Set the shell profile
   terminal->setShellProfileByName(profileName);
 
   QString workDir =
@@ -166,7 +155,6 @@ TerminalTabWidget::addNewTerminalWithProfile(const QString &profileName,
     terminal->setWorkingDirectory(workDir);
   }
 
-  // Connect terminal signals
   connect(terminal, &Terminal::processStarted, this,
           &TerminalTabWidget::processStarted);
   connect(terminal, &Terminal::processFinished, this,
@@ -212,7 +200,6 @@ void TerminalTabWidget::closeTerminal(int index) {
     terminal->deleteLater();
   }
 
-  // If no terminals left, create a new one
   if (m_tabWidget->count() == 0) {
     addNewTerminal();
   }
@@ -229,7 +216,6 @@ void TerminalTabWidget::closeAllTerminals() {
     }
   }
 
-  // Also close secondary tab widget terminals
   if (m_secondaryTabWidget) {
     while (m_secondaryTabWidget->count() > 0) {
       Terminal *terminal =
@@ -278,7 +264,7 @@ void TerminalTabWidget::setWorkingDirectory(const QString &directory) {
 }
 
 void TerminalTabWidget::applyTheme(const Theme &theme) {
-  // Use theme colors for terminal
+
   QString bgColor = theme.backgroundColor.isValid()
                         ? theme.backgroundColor.name()
                         : "#0e1116";
@@ -316,7 +302,6 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
       Terminal::closeButtonStyle(textColor, pressedColor);
   m_closeButton->setStyleSheet(closeButtonStyle);
 
-  // Apply to all terminals in primary tab widget
   for (int i = 0; i < m_tabWidget->count(); ++i) {
     Terminal *terminal = terminalAt(i);
     if (terminal) {
@@ -324,7 +309,6 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
     }
   }
 
-  // Apply to all terminals in secondary tab widget
   if (m_secondaryTabWidget) {
     for (int i = 0; i < m_secondaryTabWidget->count(); ++i) {
       Terminal *terminal =
@@ -349,7 +333,6 @@ void TerminalTabWidget::splitHorizontal() {
     return;
   }
 
-  // Create secondary tab widget
   m_secondaryTabWidget = new QTabWidget(this);
   m_secondaryTabWidget->setTabsClosable(true);
   m_secondaryTabWidget->setMovable(true);
@@ -367,7 +350,6 @@ void TerminalTabWidget::splitHorizontal() {
                 terminal->deleteLater();
               }
 
-              // If no terminals left in secondary, unsplit
               if (m_secondaryTabWidget->count() == 0) {
                 unsplit();
               }
@@ -376,7 +358,6 @@ void TerminalTabWidget::splitHorizontal() {
 
   m_splitter->addWidget(m_secondaryTabWidget);
 
-  // Add a new terminal to the secondary widget
   Terminal *terminal = new Terminal(this);
 
   if (!m_currentWorkingDirectory.isEmpty()) {
@@ -406,7 +387,6 @@ void TerminalTabWidget::unsplit() {
     return;
   }
 
-  // Close all terminals in secondary widget
   while (m_secondaryTabWidget->count() > 0) {
     Terminal *terminal =
         qobject_cast<Terminal *>(m_secondaryTabWidget->widget(0));
@@ -441,10 +421,7 @@ void TerminalTabWidget::onCloseButtonClicked() { emit closeRequested(); }
 
 void TerminalTabWidget::onTabCloseRequested(int index) { closeTerminal(index); }
 
-void TerminalTabWidget::onCurrentTabChanged(int index) {
-  Q_UNUSED(index);
-  // Could update status bar or other UI elements here
-}
+void TerminalTabWidget::onCurrentTabChanged(int index) { Q_UNUSED(index); }
 
 void TerminalTabWidget::onSplitTerminalClicked() {
   if (m_isSplit) {

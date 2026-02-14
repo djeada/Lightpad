@@ -13,35 +13,26 @@ private slots:
   void initTestCase();
   void cleanupTestCase();
 
-  // Test construction and destruction
   void testConstruction();
 
-  // Test terminal management
   void testTerminalCount();
   void testCurrentTerminal();
 
-  // Test new features (quick tests without shell interaction)
   void testAvailableShellProfiles();
   void testIsSplit();
   void testCloseButtonConfiguration();
 };
 
-void TestTerminalTabWidget::initTestCase() {
-  // Any one-time setup needed
-}
+void TestTerminalTabWidget::initTestCase() {}
 
-void TestTerminalTabWidget::cleanupTestCase() {
-  // Any one-time cleanup needed
-}
+void TestTerminalTabWidget::cleanupTestCase() {}
 
 void TestTerminalTabWidget::testConstruction() {
   TerminalTabWidget *widget = new TerminalTabWidget();
   QVERIFY(widget != nullptr);
 
-  // Should have one terminal by default
   QVERIFY(widget->terminalCount() >= 1);
 
-  // closeAllTerminals handles stopping all shells
   widget->closeAllTerminals();
   delete widget;
 }
@@ -52,7 +43,6 @@ void TestTerminalTabWidget::testTerminalCount() {
   int initialCount = widget.terminalCount();
   QVERIFY(initialCount >= 1);
 
-  // closeAllTerminals handles cleanup
   widget.closeAllTerminals();
 }
 
@@ -62,7 +52,6 @@ void TestTerminalTabWidget::testCurrentTerminal() {
   Terminal *current = widget.currentTerminal();
   QVERIFY(current != nullptr);
 
-  // closeAllTerminals handles cleanup
   widget.closeAllTerminals();
 }
 
@@ -72,25 +61,20 @@ void TestTerminalTabWidget::testAvailableShellProfiles() {
   QStringList profiles = widget.availableShellProfiles();
   QVERIFY(!profiles.isEmpty());
 
-  // Should have at least one shell profile
   QVERIFY(profiles.size() >= 1);
 
-  // Each profile name should be non-empty
   for (const QString &profile : profiles) {
     QVERIFY(!profile.isEmpty());
   }
 
-  // closeAllTerminals handles cleanup
   widget.closeAllTerminals();
 }
 
 void TestTerminalTabWidget::testIsSplit() {
   TerminalTabWidget widget;
 
-  // Initially not split
   QVERIFY(!widget.isSplit());
 
-  // closeAllTerminals handles cleanup
   widget.closeAllTerminals();
 }
 

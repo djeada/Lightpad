@@ -3,15 +3,8 @@
 
 #include "../plugins/isyntaxplugin.h"
 
-/**
- * @brief Base class for built-in syntax plugins
- *
- * Provides default implementations of IPlugin methods for built-in syntax
- * plugins that don't need the full plugin loading/unloading lifecycle.
- */
 class BaseSyntaxPlugin : public ISyntaxPlugin {
 public:
-  // IPlugin interface implementation
   PluginMetadata metadata() const override {
     PluginMetadata meta;
     meta.id = languageId();
@@ -24,19 +17,11 @@ public:
     return meta;
   }
 
-  bool initialize() override {
-    // Built-in plugins are always initialized
-    return true;
-  }
+  bool initialize() override { return true; }
 
-  void shutdown() override {
-    // Built-in plugins don't need cleanup
-  }
+  void shutdown() override {}
 
-  bool isLoaded() const override {
-    // Built-in plugins are always loaded
-    return true;
-  }
+  bool isLoaded() const override { return true; }
 };
 
-#endif // BASESYNTAXPLUGIN_H
+#endif

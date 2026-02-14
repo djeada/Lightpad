@@ -10,22 +10,14 @@
 #include <QSettings>
 #include <QVBoxLayout>
 
-/**
- * @brief Command item for the palette
- */
 struct CommandItem {
   QString id;
   QString name;
   QString shortcut;
   QAction *action;
-  int score; // For fuzzy matching
+  int score;
 };
 
-/**
- * @brief Command Palette dialog (Ctrl+Shift+P)
- *
- * Provides fuzzy search for all available commands/actions.
- */
 class CommandPalette : public QDialog {
   Q_OBJECT
 
@@ -33,29 +25,14 @@ public:
   explicit CommandPalette(QWidget *parent = nullptr);
   ~CommandPalette();
 
-  /**
-   * @brief Register an action with the palette
-   */
   void registerAction(QAction *action, const QString &category = QString());
 
-  /**
-   * @brief Register multiple actions from a menu
-   */
   void registerMenu(QMenu *menu, const QString &category = QString());
 
-  /**
-   * @brief Clear all registered commands
-   */
   void clearCommands();
 
-  /**
-   * @brief Show and focus the palette
-   */
   void showPalette();
 
-  /**
-   * @brief Apply theme to the dialog
-   */
   void applyTheme(const Theme &theme);
 
 protected:
@@ -88,4 +65,4 @@ private:
   static const int MAX_RECENT_COMMANDS = 10;
 };
 
-#endif // COMMANDPALETTE_H
+#endif

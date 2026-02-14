@@ -100,12 +100,11 @@ void LanguageKeywordsRegistry::clear() {
 }
 
 void LanguageKeywordsRegistry::initializeDefaults() {
-  // Common keywords across languages
+
   QStringList common;
   common << "break" << "case" << "continue" << "default" << "do" << "else"
          << "for" << "if" << "return" << "switch" << "while";
 
-  // C/C++ language keywords only (not library identifiers)
   QStringList cpp = common;
   cpp << "auto" << "char" << "const" << "double" << "enum" << "extern"
       << "float" << "goto" << "int" << "long" << "register" << "short"
@@ -122,7 +121,6 @@ void LanguageKeywordsRegistry::initializeDefaults() {
   cpp.removeDuplicates();
   registerLanguage("cpp", cpp);
 
-  // Python language keywords only (not built-in functions)
   QStringList python;
   python << "and" << "as" << "assert" << "async" << "await" << "break"
          << "class" << "continue" << "def" << "del" << "elif" << "else"
@@ -133,10 +131,8 @@ void LanguageKeywordsRegistry::initializeDefaults() {
   python.sort();
   python.removeDuplicates();
   registerLanguage("python", python);
-  registerLanguage("py", python); // Alias
+  registerLanguage("py", python);
 
-  // JavaScript keywords
-  // JavaScript language keywords only (not browser/DOM APIs)
   QStringList javascript;
   javascript << "await" << "break" << "case" << "catch" << "class" << "const"
              << "continue" << "debugger" << "default" << "delete" << "do"
@@ -149,7 +145,7 @@ void LanguageKeywordsRegistry::initializeDefaults() {
   javascript.sort();
   javascript.removeDuplicates();
   registerLanguage("js", javascript);
-  registerLanguage("javascript", javascript); // Alias
+  registerLanguage("javascript", javascript);
 
   Logger::instance().info("Initialized default language keywords");
 }

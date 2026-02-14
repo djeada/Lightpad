@@ -15,11 +15,9 @@ void PdfViewer::setupUi() {
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(0);
 
-  // Create toolbar
   setupToolbar();
   layout->addWidget(m_toolbar);
 
-  // Create PDF document and view
   m_document = new QPdfDocument(this);
   m_pdfView = new QPdfView(this);
   m_pdfView->setDocument(m_document);
@@ -28,7 +26,6 @@ void PdfViewer::setupUi() {
 
   layout->addWidget(m_pdfView, 1);
 
-  // Info bar at bottom
   auto *infoBar = new QHBoxLayout();
   m_pageLabel = new QLabel(this);
   m_zoomLabel = new QLabel("100%", this);
@@ -40,7 +37,6 @@ void PdfViewer::setupUi() {
 
   setLayout(layout);
 
-  // Connect document status change
   connect(m_document, &QPdfDocument::statusChanged, this,
           [this](QPdfDocument::Status status) {
             if (status == QPdfDocument::Status::Ready) {
@@ -57,7 +53,6 @@ void PdfViewer::setupToolbar() {
   m_toolbar = new QToolBar(this);
   m_toolbar->setMovable(false);
 
-  // Navigation controls
   QAction *prevAction = m_toolbar->addAction("◀");
   prevAction->setToolTip("Previous Page");
   connect(prevAction, &QAction::triggered, this, &PdfViewer::previousPage);
@@ -76,7 +71,6 @@ void PdfViewer::setupToolbar() {
 
   m_toolbar->addSeparator();
 
-  // Zoom controls
   QAction *zoomOutAction = m_toolbar->addAction("-");
   zoomOutAction->setToolTip("Zoom Out");
   connect(zoomOutAction, &QAction::triggered, this, &PdfViewer::zoomOut);
@@ -87,7 +81,6 @@ void PdfViewer::setupToolbar() {
 
   m_toolbar->addSeparator();
 
-  // View mode controls
   QAction *fitWidthAction = m_toolbar->addAction("Fit Width");
   fitWidthAction->setToolTip("Fit to Width");
   connect(fitWidthAction, &QAction::triggered, this, &PdfViewer::fitWidth);
@@ -161,7 +154,6 @@ void PdfViewer::goToPage(int page) {
     return;
   }
 
-  // Page numbers are 0-indexed internally
   int pageIndex = page - 1;
   if (pageIndex >= 0 && pageIndex < m_document->pageCount()) {
     auto *navigator = m_pdfView->pageNavigator();

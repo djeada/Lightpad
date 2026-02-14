@@ -6,18 +6,14 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 
-// Static regex patterns for snippet expansion (compiled once)
 static const QRegularExpression s_tabstopRe(R"(\$\{(\d+)(?::([^}]*))?\})");
 static const QRegularExpression s_simpleTabstopRe(R"(\$(\d+))");
 
 QString Snippet::expandedBody() const {
   QString result = body;
 
-  // Remove tabstop markers for simple expansion
-  // Full tabstop navigation would be handled by the editor
   result.replace(s_tabstopRe, "\\2");
 
-  // Remove simple $N markers
   result.replace(s_simpleTabstopRe, "");
 
   return result;
@@ -120,7 +116,7 @@ void SnippetRegistry::clear() {
 }
 
 void SnippetRegistry::initializeDefaults() {
-  // C++ snippets
+
   {
     Snippet forLoop;
     forLoop.prefix = "for";
@@ -153,7 +149,6 @@ void SnippetRegistry::initializeDefaults() {
     registerSnippet("cpp", main);
   }
 
-  // Python snippets
   {
     Snippet forLoop;
     forLoop.prefix = "for";
@@ -190,7 +185,6 @@ void SnippetRegistry::initializeDefaults() {
     registerSnippet("py", classDecl);
   }
 
-  // JavaScript snippets
   {
     Snippet forLoop;
     forLoop.prefix = "for";

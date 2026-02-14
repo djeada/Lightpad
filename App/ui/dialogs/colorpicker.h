@@ -28,4 +28,4 @@ private:
   MainWindow *parentWindow;
 };
 
-#endif // COLORPICKER_H
+#endif

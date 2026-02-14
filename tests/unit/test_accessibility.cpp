@@ -24,7 +24,6 @@ void TestAccessibility::testSingletonInstance() {
 void TestAccessibility::testDefaultValues() {
   AccessibilityManager &am = AccessibilityManager::instance();
 
-  // Reset to defaults
   am.applyProfile(AccessibilityManager::Profile::Default);
 
   QCOMPARE(am.currentProfile(), AccessibilityManager::Profile::Default);
@@ -54,13 +53,11 @@ void TestAccessibility::testFontScale() {
 void TestAccessibility::testFontScaleBounds() {
   AccessibilityManager &am = AccessibilityManager::instance();
 
-  // Test minimum bound
   am.setFontScale(0.1);
-  QVERIFY(am.fontScale() >= 0.5); // Should be clamped to minimum
+  QVERIFY(am.fontScale() >= 0.5);
 
-  // Test maximum bound
   am.setFontScale(10.0);
-  QVERIFY(am.fontScale() <= 3.0); // Should be clamped to maximum
+  QVERIFY(am.fontScale() <= 3.0);
 
   am.resetFontScale();
 }
@@ -108,23 +105,19 @@ void TestAccessibility::testScreenReader() {
 void TestAccessibility::testProfiles() {
   AccessibilityManager &am = AccessibilityManager::instance();
 
-  // Test High Contrast profile
   am.applyProfile(AccessibilityManager::Profile::HighContrast);
   QCOMPARE(am.currentProfile(), AccessibilityManager::Profile::HighContrast);
   QVERIFY(am.isHighContrastEnabled());
 
-  // Test Large Text profile
   am.applyProfile(AccessibilityManager::Profile::LargeText);
   QCOMPARE(am.currentProfile(), AccessibilityManager::Profile::LargeText);
   QCOMPARE(am.fontScale(), 1.5);
 
-  // Test Screen Reader profile
   am.applyProfile(AccessibilityManager::Profile::ScreenReader);
   QCOMPARE(am.currentProfile(), AccessibilityManager::Profile::ScreenReader);
   QVERIFY(am.isScreenReaderEnabled());
   QVERIFY(am.isReducedMotionEnabled());
 
-  // Reset to default
   am.applyProfile(AccessibilityManager::Profile::Default);
   QCOMPARE(am.currentProfile(), AccessibilityManager::Profile::Default);
 }

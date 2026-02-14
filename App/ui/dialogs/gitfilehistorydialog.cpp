@@ -24,7 +24,6 @@ GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
 
   auto *splitter = new QSplitter(Qt::Vertical, this);
 
-  // Commit list
   m_commitTree = new QTreeWidget(this);
   m_commitTree->setHeaderLabels(
       {tr("Hash"), tr("Author"), tr("Date"), tr("Message")});
@@ -39,7 +38,6 @@ GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
                                                QHeaderView::ResizeToContents);
   splitter->addWidget(m_commitTree);
 
-  // Detail view
   m_detailView = new QTextEdit(this);
   m_detailView->setReadOnly(true);
   m_detailView->setPlaceholderText(tr("Select a commit to see details"));
@@ -49,7 +47,6 @@ GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
   splitter->setStretchFactor(1, 1);
   layout->addWidget(splitter);
 
-  // Buttons
   auto *buttonLayout = new QHBoxLayout;
   auto *closeBtn = new QPushButton(tr("Close"), this);
   buttonLayout->addStretch();
@@ -112,7 +109,6 @@ void GitFileHistoryDialog::showCommitDetails(const GitCommitInfo &info) {
             .arg(info.body.toHtmlEscaped().replace('\n', "<br>"));
   }
 
-  // Show file stats
   QList<GitCommitFileStat> stats = m_git->getCommitFileStats(info.hash);
   if (!stats.isEmpty()) {
     html += QStringLiteral(

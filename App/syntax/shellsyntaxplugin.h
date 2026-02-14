@@ -4,9 +4,6 @@
 #include "basesyntaxplugin.h"
 #include <QVector>
 
-/**
- * @brief Built-in Shell/Bash syntax highlighting plugin
- */
 class ShellSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "sh"; }
@@ -29,4 +26,4 @@ private:
   static QStringList getTertiaryKeywords();
 };
 
-#endif // SHELLSYNTAXPLUGIN_H
+#endif

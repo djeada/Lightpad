@@ -31,7 +31,7 @@ bool FormatTemplateManager::loadTemplates() {
 }
 
 bool FormatTemplateManager::loadBuiltInTemplates() {
-  // Try to load from application directory first
+
   QString appDir = QCoreApplication::applicationDirPath();
   QStringList searchPaths = {
       appDir + "/format_templates/format_templates.json",
@@ -89,13 +89,13 @@ bool FormatTemplateManager::loadBuiltInTemplates() {
 }
 
 bool FormatTemplateManager::loadUserTemplates() {
-  // User templates are stored in the config directory
+
   QString configDir =
       QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
   QString userTemplatesPath = configDir + "/format_templates.json";
 
   if (!QFileInfo(userTemplatesPath).exists()) {
-    return true; // No user templates is not an error
+    return true;
   }
 
   QFile file(userTemplatesPath);
@@ -124,7 +124,7 @@ bool FormatTemplateManager::loadUserTemplates() {
   for (const QJsonValue &value : templatesArray) {
     FormatTemplate tmpl = parseTemplate(value.toObject());
     if (tmpl.isValid()) {
-      // User templates override built-in templates with the same ID
+
       bool found = false;
       for (int i = 0; i < m_templates.size(); ++i) {
         if (m_templates[i].id == tmpl.id) {
@@ -253,7 +253,6 @@ bool FormatTemplateManager::loadAssignmentsFromDir(
     assignment.filePath = obj.value("file").toString();
     assignment.templateId = obj.value("template").toString();
 
-    // Make relative paths absolute
     if (!QFileInfo(assignment.filePath).isAbsolute()) {
       assignment.filePath = dirPath + "/" + assignment.filePath;
     }
@@ -277,7 +276,6 @@ bool FormatTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
   QString configDir = dirPath + "/.lightpad";
   QString configFile = configDir + "/format_config.json";
 
-  // Collect assignments for this directory
   QJsonArray assignments;
   for (auto it = m_assignments.begin(); it != m_assignments.end(); ++it) {
     QFileInfo fileInfo(it.key());
@@ -298,7 +296,6 @@ bool FormatTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
     }
   }
 
-  // Create config directory if needed
   QDir dir;
   if (!dir.exists(configDir)) {
     if (!dir.mkpath(configDir)) {
@@ -308,7 +305,6 @@ bool FormatTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
     }
   }
 
-  // Save to file
   QJsonObject root;
   root["version"] = "1.0";
   root["assignments"] = assignments;
@@ -331,11 +327,10 @@ bool FormatTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
 
 FileFormatAssignment
 FormatTemplateManager::getAssignmentForFile(const QString &filePath) const {
-  // Load assignments for the directory if not already loaded
+
   QFileInfo fileInfo(filePath);
   QString dirPath = fileInfo.absoluteDir().path();
 
-  // Lazy loading - member variables are mutable to allow this in const methods
   loadAssignmentsFromDir(dirPath);
 
   auto it = m_assignments.find(filePath);
@@ -371,7 +366,7 @@ bool FormatTemplateManager::assignTemplateToFile(
 bool FormatTemplateManager::removeAssignment(const QString &filePath) {
   auto it = m_assignments.find(filePath);
   if (it == m_assignments.end()) {
-    return true; // Nothing to remove
+    return true;
   }
 
   QFileInfo fileInfo(filePath);
@@ -408,7 +403,6 @@ FormatTemplateManager::buildCommand(const QString &filePath) const {
 
   QString templateId = assignment.templateId;
 
-  // If no assignment, try to find a default template based on extension
   if (templateId.isEmpty()) {
     QFileInfo fileInfo(filePath);
     QList<FormatTemplate> templates =
@@ -434,7 +428,6 @@ FormatTemplateManager::buildCommand(const QString &filePath) const {
     args.append(substituteVariables(arg, filePath));
   }
 
-  // Append custom args if any
   if (!assignment.customArgs.isEmpty()) {
     for (const QString &arg : assignment.customArgs) {
       args.append(substituteVariables(arg, filePath));
@@ -449,13 +442,11 @@ bool FormatTemplateManager::hasFormatTemplate(const QString &filePath) const {
     return false;
   }
 
-  // Check if there's an explicit assignment
   FileFormatAssignment assignment = getAssignmentForFile(filePath);
   if (!assignment.templateId.isEmpty()) {
     return true;
   }
 
-  // Check if there's a default template for the file extension
   QFileInfo fileInfo(filePath);
   QList<FormatTemplate> templates = getTemplatesForExtension(fileInfo.suffix());
   return !templates.isEmpty();

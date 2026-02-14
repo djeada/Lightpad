@@ -31,4 +31,4 @@ public:
   PopupTabWidth(QStringList list, QWidget *parent = nullptr);
 };
 
-#endif // POPUP_H
+#endif

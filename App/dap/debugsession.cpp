@@ -3,15 +3,11 @@
 #include "breakpointmanager.h"
 #include "debugadapterregistry.h"
 
-// ============================================================================
-// DebugSession Implementation
-// ============================================================================
-
 DebugSession::DebugSession(const QString &id, QObject *parent)
     : QObject(parent), m_id(id), m_state(State::Idle),
       m_client(std::make_unique<DapClient>(this)), m_launchRequestSent(false),
       m_adapterInitializedReceived(false), m_configurationDoneSent(false) {
-  // Connect client signals
+
   connect(m_client.get(), &DapClient::stateChanged, this,
           &DebugSession::onClientStateChanged);
   connect(m_client.get(), &DapClient::adapterInitialized, this,
@@ -58,7 +54,6 @@ bool DebugSession::start(const DebugConfiguration &config,
 
   setState(State::Starting);
 
-  // Start the debug adapter process
   DebugAdapterConfig adapterConfig = m_adapter->config();
   if (!m_client->start(adapterConfig.program, adapterConfig.arguments)) {
     setState(State::Idle);
@@ -95,15 +90,10 @@ void DebugSession::restart() {
 void DebugSession::onClientStateChanged(DapClient::State state) {
   switch (state) {
   case DapClient::State::Ready:
-    // Client initialized: if the adapter is already in configuration phase,
-    // sync breakpoints first. Otherwise launch/attach and finish setup when
-    // "initialized" arrives.
+
     if (m_state == State::Starting) {
       BreakpointManager::instance().setDapClient(m_client.get());
 
-      // Some adapters (including GDB DAP) emit "initialized" before launch.
-      // In that case, send breakpoint setup before launch to avoid racing fast
-      // inferiors.
       const bool adapterReadyForConfiguration = m_adapterInitializedReceived;
       if (adapterReadyForConfiguration) {
         BreakpointManager::instance().syncAllBreakpoints();
@@ -116,7 +106,7 @@ void DebugSession::onClientStateChanged(DapClient::State state) {
           m_client->attachRemote(m_configuration.host, m_configuration.port);
         }
       } else {
-        // Launch
+
         m_client->launch(m_configuration.program, m_configuration.args,
                          m_configuration.cwd, m_configuration.env,
                          m_configuration.stopOnEntry);
@@ -194,10 +184,6 @@ void DebugSession::setState(State state) {
   }
 }
 
-// ============================================================================
-// DebugSessionManager Implementation
-// ============================================================================
-
 DebugSessionManager &DebugSessionManager::instance() {
   static DebugSessionManager instance;
   return instance;
@@ -207,7 +193,7 @@ DebugSessionManager::DebugSessionManager()
     : QObject(nullptr), m_nextSessionNumber(1) {}
 
 QString DebugSessionManager::startSession(const DebugConfiguration &config) {
-  // Find adapter by DAP adapter type from the launch configuration.
+
   auto adapters = DebugAdapterRegistry::instance().adaptersForType(config.type);
   if (adapters.isEmpty()) {
     auto explicitAdapter =
@@ -221,7 +207,6 @@ QString DebugSessionManager::startSession(const DebugConfiguration &config) {
     return {};
   }
 
-  // Find first available adapter
   std::shared_ptr<IDebugAdapter> adapter;
   for (const auto &a : adapters) {
     if (a->isAvailable()) {
@@ -266,7 +251,6 @@ DebugSessionManager::startSession(const DebugConfiguration &config,
 
   m_sessions[sessionId] = session;
 
-  // Set as focused if it's the first session
   if (m_focusedSessionId.isEmpty()) {
     setFocusedSession(sessionId);
   }
@@ -342,7 +326,6 @@ bool DebugSessionManager::hasActiveSessions() const {
 
 void DebugSessionManager::onSessionStateChanged(DebugSession::State state) {
   Q_UNUSED(state);
-  // Could be used to update UI state
 }
 
 void DebugSessionManager::onSessionTerminated() {
@@ -353,7 +336,6 @@ void DebugSessionManager::onSessionTerminated() {
 
   QString sessionId = senderSession->id();
 
-  // Remove from sessions after a short delay to allow cleanup
   QMetaObject::invokeMethod(
       this,
       [this, sessionId, senderSession]() {
@@ -361,7 +343,6 @@ void DebugSessionManager::onSessionTerminated() {
         delete senderSession;
         emit sessionTerminated(sessionId);
 
-        // Update focus if needed
         if (m_focusedSessionId == sessionId) {
           if (m_sessions.isEmpty()) {
             m_focusedSessionId.clear();

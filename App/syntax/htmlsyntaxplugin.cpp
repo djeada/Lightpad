@@ -26,7 +26,6 @@ QStringList HtmlSyntaxPlugin::getAttributes() {
 QVector<SyntaxRule> HtmlSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
-  // Tag names (in angle brackets)
   for (const QString &tag : getTags()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression(
@@ -35,7 +34,6 @@ QVector<SyntaxRule> HtmlSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Attribute names
   for (const QString &attr : getAttributes()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression(
@@ -44,32 +42,27 @@ QVector<SyntaxRule> HtmlSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Closing angle brackets
   SyntaxRule closeTagRule;
   closeTagRule.pattern = QRegularExpression("/?>");
   closeTagRule.name = "keyword_0";
   rules.append(closeTagRule);
 
-  // Attribute values (double quotes)
   SyntaxRule stringRule;
   stringRule.pattern = QRegularExpression("\"[^\"]*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
-  // Attribute values (single quotes)
   SyntaxRule singleQuoteRule;
   singleQuoteRule.pattern = QRegularExpression("'[^']*'");
   singleQuoteRule.name = "string";
   rules.append(singleQuoteRule);
 
-  // DOCTYPE
   SyntaxRule doctypeRule;
   doctypeRule.pattern = QRegularExpression(
       "<!DOCTYPE[^>]*>", QRegularExpression::CaseInsensitiveOption);
   doctypeRule.name = "keyword_2";
   rules.append(doctypeRule);
 
-  // HTML entities
   SyntaxRule entityRule;
   entityRule.pattern = QRegularExpression("&[A-Za-z0-9#]+;");
   entityRule.name = "keyword_2";
@@ -81,7 +74,6 @@ QVector<SyntaxRule> HtmlSyntaxPlugin::syntaxRules() const {
 QVector<MultiLineBlock> HtmlSyntaxPlugin::multiLineBlocks() const {
   QVector<MultiLineBlock> blocks;
 
-  // HTML comments
   MultiLineBlock commentBlock;
   commentBlock.startPattern = QRegularExpression("<!--");
   commentBlock.endPattern = QRegularExpression("-->");

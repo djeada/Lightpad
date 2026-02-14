@@ -23,7 +23,6 @@ void CompletionProviderRegistry::registerProvider(
     return;
   }
 
-  // Check if already registered
   if (m_providers.contains(providerId)) {
     Logger::instance().warning(
         QString("Completion provider '%1' already registered, replacing")
@@ -31,7 +30,6 @@ void CompletionProviderRegistry::registerProvider(
     emit providerUnregistered(providerId);
   }
 
-  // Store the provider
   m_providers[providerId] = provider;
 
   Logger::instance().info(QString("Registered completion provider '%1' (%2)")
@@ -80,7 +78,6 @@ CompletionProviderRegistry::providersForLanguage(
     }
   }
 
-  // Sort by priority (lower = higher priority)
   std::sort(result.begin(), result.end(),
             [](const std::shared_ptr<ICompletionProvider> &a,
                const std::shared_ptr<ICompletionProvider> &b) {
@@ -135,7 +132,7 @@ int CompletionProviderRegistry::providerCount() const {
 }
 
 void CompletionProviderRegistry::clear() {
-  // Emit signals for each provider before clearing
+
   QStringList ids = m_providers.keys();
   for (const QString &id : ids) {
     emit providerUnregistered(id);

@@ -4,9 +4,6 @@
 #include "basesyntaxplugin.h"
 #include <QVector>
 
-/**
- * @brief Built-in Java syntax highlighting plugin
- */
 class JavaSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "java"; }
@@ -27,4 +24,4 @@ private:
   static QStringList getTertiaryKeywords();
 };
 
-#endif // JAVASYNTAXPLUGIN_H
+#endif

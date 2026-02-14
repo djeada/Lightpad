@@ -49,7 +49,6 @@ void GitLogDialog::buildUi() {
   mainLayout->setContentsMargins(8, 8, 8, 8);
   mainLayout->setSpacing(6);
 
-  // Search field
   m_searchField = new QLineEdit(this);
   m_searchField->setPlaceholderText(tr("Filter commits..."));
   m_searchField->setClearButtonEnabled(true);
@@ -57,18 +56,14 @@ void GitLogDialog::buildUi() {
           &GitLogDialog::onSearchChanged);
   mainLayout->addWidget(m_searchField);
 
-  // Tab widget: List view + Graph view
   m_tabWidget = new QTabWidget(this);
 
-  // --- List Tab ---
   auto *listTab = new QWidget(this);
   auto *listLayout = new QVBoxLayout(listTab);
   listLayout->setContentsMargins(0, 0, 0, 0);
 
-  // Splitter for commit list and detail view
   m_splitter = new QSplitter(Qt::Vertical, listTab);
 
-  // Commit tree
   m_commitTree = new QTreeWidget(listTab);
   m_commitTree->setHeaderLabels(
       {tr("Hash"), tr("Subject"), tr("Author"), tr("Date")});
@@ -98,7 +93,6 @@ void GitLogDialog::buildUi() {
 
   m_splitter->addWidget(m_commitTree);
 
-  // Detail view
   m_detailView = new QTextEdit(listTab);
   m_detailView->setReadOnly(true);
   m_splitter->addWidget(m_detailView);
@@ -109,7 +103,6 @@ void GitLogDialog::buildUi() {
 
   m_tabWidget->addTab(listTab, tr("List"));
 
-  // --- Graph Tab ---
   m_graphWidget = new GitGraphWidget(m_git, m_theme, this);
   connect(m_graphWidget, &GitGraphWidget::commitSelected, this,
           &GitLogDialog::onGraphCommitSelected);
@@ -119,7 +112,6 @@ void GitLogDialog::buildUi() {
 
   mainLayout->addWidget(m_tabWidget);
 
-  // Status label
   m_statusLabel = new QLabel(this);
   mainLayout->addWidget(m_statusLabel);
 }
@@ -168,14 +160,13 @@ void GitLogDialog::loadCommits() {
     item->setToolTip(1, commit.subject);
   }
 
-  // Load graph view
   m_graphWidget->loadGraph(200);
 
   m_statusLabel->setText(tr("%1 commits").arg(commits.size()));
 }
 
 void GitLogDialog::onCommitSelected(QTreeWidgetItem *current,
-                                    QTreeWidgetItem * /*previous*/) {
+                                    QTreeWidgetItem *) {
   if (!current || !m_git)
     return;
 

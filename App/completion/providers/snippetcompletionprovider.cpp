@@ -4,7 +4,7 @@
 #include "../snippetregistry.h"
 
 SnippetCompletionProvider::SnippetCompletionProvider() {
-  // Ensure default snippets are initialized
+
   SnippetRegistry &registry = SnippetRegistry::instance();
   if (registry.registeredLanguages().isEmpty()) {
     registry.initializeDefaults();
@@ -27,11 +27,9 @@ void SnippetCompletionProvider::requestCompletions(
     languageId = context.languageId.trimmed().toLower();
   }
 
-  // Get snippets matching the prefix
   QList<Snippet> matchingSnippets =
       registry.snippetsWithPrefix(languageId, context.prefix);
 
-  // Convert to CompletionItems
   for (const Snippet &snippet : matchingSnippets) {
     CompletionItem item;
     item.label = snippet.prefix;

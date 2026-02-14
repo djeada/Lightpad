@@ -76,23 +76,20 @@ LightpadTreeView::LightpadTreeView(LightpadPage *parent)
     : QTreeView(parent), parentPage(parent),
       fileModel(new FileDirTreeModel(this)),
       fileController(new FileDirTreeController(fileModel, this)) {
-  // Enable drag and drop
+
   setDragEnabled(true);
   setAcceptDrops(true);
   setDropIndicatorShown(true);
   setDragDropMode(QAbstractItemView::DragDrop);
   setDefaultDropAction(Qt::MoveAction);
 
-  // Connect signals
   connect(fileController, &FileDirTreeController::actionCompleted, parentPage,
           &LightpadPage::updateModel);
   connect(fileController, &FileDirTreeController::fileRemoved, parentPage,
           &LightpadPage::closeTabPage);
 }
 
-LightpadTreeView::~LightpadTreeView() {
-  // Qt parent-child relationship will handle cleanup automatically
-}
+LightpadTreeView::~LightpadTreeView() {}
 
 void LightpadTreeView::mouseReleaseEvent(QMouseEvent *e) {
   if (e->button() == Qt::RightButton) {
@@ -114,7 +111,6 @@ void LightpadTreeView::showContextMenu(const QPoint &pos) {
 
   QMenu menu;
 
-  // Add context menu actions
   QAction *newFileAction = menu.addAction("New File");
   QAction *newDirAction = menu.addAction("New Directory");
   menu.addSeparator();
@@ -187,7 +183,6 @@ void LightpadTreeView::dropEvent(QDropEvent *event) {
   QString destPath = parentPage->getFilePath(dropIndex);
   QFileInfo destInfo(destPath);
 
-  // If dropping on a file, use its parent directory
   if (destInfo.isFile()) {
     destPath = destInfo.absolutePath();
   }
@@ -200,15 +195,13 @@ void LightpadTreeView::dropEvent(QDropEvent *event) {
       QString srcPath = url.toLocalFile();
       QFileInfo srcInfo(srcPath);
 
-      // Check if source and destination are the same
       if (srcInfo.absolutePath() == destPath) {
-        continue; // Skip if dropping in same directory
+        continue;
       }
 
       QString fileName = srcInfo.fileName();
       QString targetPath = destPath + QDir::separator() + fileName;
 
-      // Use the model to handle the move with unique suffix
       targetPath = fileModel->addUniqueSuffix(targetPath);
 
       bool success = false;
@@ -221,7 +214,7 @@ void LightpadTreeView::dropEvent(QDropEvent *event) {
             emit fileModel->modelUpdated();
           }
         } else if (srcInfo.isDir()) {
-          // For directory copy, we need to temporarily use the clipboard
+
           fileModel->copyToClipboard(srcPath);
           success = fileModel->pasteFromClipboard(destPath);
         }
@@ -270,7 +263,6 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   textArea = new TextArea(this);
   minimap = new Minimap(this);
 
-  // Connect minimap to text area
   minimap->setSourceEditor(textArea);
 
   layoutHor->addWidget(treeView);
@@ -286,8 +278,6 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   layoutHor->setStretch(2, 0);
 
   setLayout(layoutHor);
-  // Note: Do NOT call updateModel() here - the shared model will be set
-  // when setMainWindow() is called to avoid creating duplicate models
 
   QObject::connect(treeView, &QAbstractItemView::clicked, this,
                    [this](const QModelIndex &index) {
@@ -365,7 +355,6 @@ void LightpadPage::setCustomContentWidget(QWidget *widget) {
   widget->setParent(this);
   widget->setVisible(true);
 
-  // Hide minimap for custom content widgets (e.g., image viewer)
   if (minimap) {
     minimap->setVisible(false);
   }
@@ -387,7 +376,7 @@ void LightpadPage::setMainWindow(MainWindow *window) {
     if (sharedModel) {
       setSharedFileSystemModel(sharedModel);
     } else {
-      // Fallback: initialize model if shared model is not available
+
       updateModel();
     }
     auto *view = qobject_cast<LightpadTreeView *>(treeView);
@@ -409,8 +398,6 @@ void LightpadPage::setSharedFileSystemModel(GitFileSystemModel *sharedModel) {
 void LightpadPage::setFilePath(QString path) {
   filePath = path;
 
-  // Visibility is controlled by project root path now
-  // Only show treeview if project root is set
   if (!path.isEmpty() && !projectRootPath.isEmpty()) {
     setTreeViewVisible(true);
   }
@@ -422,7 +409,7 @@ void LightpadPage::closeTabPage(QString path) {
 }
 
 void LightpadPage::updateModel() {
-  // First, try to use the shared model from MainWindow if available
+
   if (!model && mainWindow) {
     auto *sharedModel = mainWindow->getFileTreeModel();
     if (sharedModel) {
@@ -431,23 +418,19 @@ void LightpadPage::updateModel() {
     }
   }
 
-  // Only create a new model as a last resort if we don't have one yet
-  // This can happen when the page is created before mainWindow is set
-  // or if mainWindow's shared model is not yet available
   if (!model) {
     model = new GitFileSystemModel(this);
     m_ownsModel = true;
   }
 
   if (m_ownsModel) {
-    // Preserve the current root path if one is set
+
     QString currentRootPath =
         projectRootPath.isEmpty() ? QDir::home().path() : projectRootPath;
     model->setRootPath(currentRootPath);
     model->setRootHeaderLabel(projectRootPath);
   }
 
-  // Set git integration if available
   if (m_gitIntegration) {
     model->setGitIntegration(m_gitIntegration);
   }
@@ -458,7 +441,6 @@ void LightpadPage::updateModel() {
   treeView->setColumnHidden(2, true);
   treeView->setColumnHidden(3, true);
 
-  // Restore the root index if project root is set
   if (!projectRootPath.isEmpty()) {
     treeView->setRootIndex(model->index(projectRootPath));
   } else {
@@ -487,13 +469,11 @@ bool LightpadPage::hasRunTemplate() const {
 
   RunTemplateManager &manager = RunTemplateManager::instance();
 
-  // Check if there's an explicit assignment
   FileTemplateAssignment assignment = manager.getAssignmentForFile(filePath);
   if (!assignment.templateId.isEmpty()) {
     return true;
   }
 
-  // Check if there's a default template for the file extension
   QFileInfo fileInfo(filePath);
   QList<RunTemplate> templates =
       manager.getTemplatesForExtension(fileInfo.suffix());
@@ -512,7 +492,6 @@ QString LightpadPage::getAssignedTemplateId() const {
     return assignment.templateId;
   }
 
-  // Return default template ID based on extension
   QFileInfo fileInfo(filePath);
   QList<RunTemplate> templates =
       manager.getTemplatesForExtension(fileInfo.suffix());

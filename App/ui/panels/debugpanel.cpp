@@ -95,7 +95,6 @@ DebugPanel::DebugPanel(QWidget *parent)
   setupUI();
   updateToolbarState();
 
-  // Connect to breakpoint manager
   connect(&BreakpointManager::instance(), &BreakpointManager::breakpointAdded,
           this, &DebugPanel::refreshBreakpointList);
   connect(&BreakpointManager::instance(), &BreakpointManager::breakpointRemoved,
@@ -108,7 +107,6 @@ DebugPanel::DebugPanel(QWidget *parent)
 
   refreshBreakpointList();
 
-  // Connect to watch manager
   connect(&WatchManager::instance(), &WatchManager::watchAdded, this,
           &DebugPanel::onWatchAdded);
   connect(&WatchManager::instance(), &WatchManager::watchRemoved, this,
@@ -118,7 +116,6 @@ DebugPanel::DebugPanel(QWidget *parent)
   connect(&WatchManager::instance(), &WatchManager::watchChildrenReceived, this,
           &DebugPanel::onWatchChildrenReceived);
 
-  // Populate existing watches
   for (const WatchExpression &w : WatchManager::instance().allWatches()) {
     onWatchAdded(w);
   }
@@ -288,15 +285,12 @@ void DebugPanel::setupUI() {
   setupToolbar();
   mainLayout->addWidget(m_toolbar);
 
-  // Main splitter for panels
   m_mainSplitter = new QSplitter(Qt::Vertical, this);
   m_mainSplitter->setChildrenCollapsible(false);
   m_mainSplitter->setHandleWidth(5);
 
-  // Tab widget for different debug views
   m_tabWidget = new QTabWidget(this);
 
-  // Setup individual panels
   setupVariables();
   setupWatches();
   setupCallStack();
@@ -309,7 +303,6 @@ void DebugPanel::setupUI() {
 
   m_mainSplitter->addWidget(m_tabWidget);
 
-  // Debug console
   QWidget *consoleWidget = new QWidget(this);
   QVBoxLayout *consoleLayout = new QVBoxLayout(consoleWidget);
   consoleLayout->setContentsMargins(0, 0, 0, 0);
@@ -407,7 +400,6 @@ void DebugPanel::setupToolbar() {
 
   m_toolbar->addSeparator();
 
-  // Thread selector
   m_threadSelector = new QComboBox(this);
   m_threadSelector->setToolTip(tr("Select active thread"));
   m_threadSelector->setStatusTip(tr("Select active thread"));
@@ -475,7 +467,7 @@ void DebugPanel::setupVariables() {
 }
 
 void DebugPanel::setupWatches() {
-  // Container widget with tree + input
+
   QWidget *watchContainer = new QWidget(this);
   QVBoxLayout *watchLayout = new QVBoxLayout(watchContainer);
   watchLayout->setContentsMargins(0, 0, 0, 0);
@@ -499,13 +491,12 @@ void DebugPanel::setupWatches() {
   connect(m_watchTree, &QTreeWidget::itemExpanded, this,
           &DebugPanel::onWatchItemExpanded);
 
-  // Context menu for removing watches
   m_watchTree->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(m_watchTree, &QTreeWidget::customContextMenuRequested, this,
           [this](const QPoint &pos) {
             QTreeWidgetItem *item = m_watchTree->itemAt(pos);
             if (!item || item->parent())
-              return; // Only top-level items
+              return;
 
             QMenu menu;
             QAction *removeAction = menu.addAction(tr("Remove Watch"));
@@ -518,7 +509,6 @@ void DebugPanel::setupWatches() {
 
   watchLayout->addWidget(m_watchTree);
 
-  // Watch input
   QHBoxLayout *inputLayout = new QHBoxLayout();
   inputLayout->setContentsMargins(2, 0, 2, 2);
 
@@ -604,7 +594,6 @@ void DebugPanel::setDapClient(DapClient *client) {
     connect(m_dapClient, &DapClient::evaluateError, this,
             &DebugPanel::onEvaluateError);
 
-    // Connect WatchManager to the DAP client
     WatchManager::instance().setDapClient(m_dapClient);
   }
 
@@ -637,7 +626,6 @@ void DebugPanel::clearAll() {
 void DebugPanel::setCurrentFrame(int frameId) {
   m_currentFrameId = frameId;
 
-  // Request scopes for the selected frame
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
     m_dapClient->getScopes(frameId);
   }
@@ -692,17 +680,12 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
 
   appendConsoleLine(reasonText, consoleInfoColor());
 
-  // Clear stale variable data from previous stop — some adapters (e.g. GDB
-  // DAP) don't send a "continued" event on step, so onContinued() never runs.
   m_variablesTree->clear();
   m_variableRefToItem.clear();
   m_pendingScopeVariableLoads.clear();
   m_pendingVariableRequests.clear();
   clearLocalsFallbackState();
 
-  // Request threads; the callback will request the stack trace.
-  // Don't request stack trace here too — that causes duplicate requests
-  // that cascade into doubled scopes/variables fetches and memory growth.
   if (m_dapClient) {
     const bool canFastRefreshOnStep =
         event.reason == DapStoppedReason::Step && m_currentThreadId > 0;
@@ -815,7 +798,6 @@ void DebugPanel::onThreadsReceived(const QList<DapThread> &threads) {
 
   bool hasCurrentThread = false;
 
-  // Update thread selector
   m_threadSelector->blockSignals(true);
   m_threadSelector->clear();
   for (const DapThread &thread : threads) {
@@ -872,7 +854,6 @@ void DebugPanel::onStackTraceReceived(int threadId,
     m_callStackTree->addTopLevelItem(item);
   }
 
-  // Select first frame and get its variables
   if (!frames.isEmpty()) {
     int activeIndex = 0;
     for (int i = 0; i < frames.size(); ++i) {
@@ -884,26 +865,23 @@ void DebugPanel::onStackTraceReceived(int threadId,
     }
 
     const DapStackFrame &activeFrame = frames.at(activeIndex);
-    // Block signals to avoid duplicate setCurrentFrame/getScopes via
-    // currentItemChanged handler
+
     m_callStackTree->blockSignals(true);
     m_callStackTree->setCurrentItem(m_callStackTree->topLevelItem(activeIndex));
     m_callStackTree->blockSignals(false);
     setCurrentFrame(activeFrame.id);
 
-    // Navigate editor to active frame location
     if (!activeFrame.source.path.isEmpty()) {
       emit locationClicked(activeFrame.source.path, activeFrame.line,
                            activeFrame.column);
     }
 
-    // Evaluate watches in the new frame context
     WatchManager::instance().evaluateAll(activeFrame.id);
   }
 }
 
 void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
-  // Ignore stale responses for a frame we're no longer inspecting
+
   if (frameId != m_currentFrameId) {
     return;
   }
@@ -924,8 +902,7 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     if (lowered.contains("register") || lowered.contains("local")) {
       continue;
     }
-    // GDB DAP can hang indefinitely on "Locals" scope queries in some frames.
-    // Prefer loading Arguments automatically and defer others.
+
     if (lowered.contains("argument") || lowered == QLatin1String("args")) {
       eagerScopeRefs.append(scope.variablesReference);
       break;
@@ -961,20 +938,16 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     scopeItem->setData(0, Qt::UserRole, scope.variablesReference);
     scopeItem->setFirstColumnSpanned(true);
 
-    // Make scope names bold
     QFont font = scopeItem->font(0);
     font.setBold(true);
     scopeItem->setFont(0, font);
 
-    // Set expand state BEFORE adding to tree so itemExpanded signal is not
-    // emitted (the item has no parent tree widget yet).
     if (scope.variablesReference > 0 && (localScope || !deferScope)) {
       scopeItem->setExpanded(true);
     }
 
     m_variablesTree->addTopLevelItem(scopeItem);
 
-    // Request variables for this scope
     if (scope.variablesReference > 0) {
       if (localScope) {
         m_variableRefToItem[scope.variablesReference] = scopeItem;
@@ -1006,7 +979,6 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     return;
   }
 
-  // Clear any placeholder
   while (parentItem->childCount() > 0) {
     delete parentItem->takeChild(0);
   }
@@ -1019,7 +991,6 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     item->setData(0, Qt::UserRole, var.variablesReference);
     item->setIcon(0, variableIcon(var));
 
-    // If variable is structured, add placeholder for expansion
     if (var.variablesReference > 0) {
       item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
     }
@@ -1162,7 +1133,6 @@ void DebugPanel::onCallStackItemClicked(QTreeWidgetItem *item, int column) {
   int line = item->data(0, Qt::UserRole + 2).toInt();
   int col = item->data(0, Qt::UserRole + 3).toInt();
 
-  // frameId can be 0 (GDB uses 0 for the first frame), so always update
   setCurrentFrame(frameId);
   WatchManager::instance().evaluateAll(frameId);
 
@@ -1189,7 +1159,6 @@ void DebugPanel::onVariableItemExpanded(QTreeWidgetItem *item) {
 
   int varRef = item->data(0, Qt::UserRole).toInt();
 
-  // Only request if we haven't already loaded children
   if (varRef > 0 && item->childCount() == 0 && m_dapClient &&
       !m_pendingVariableRequests.contains(varRef)) {
     m_variableRefToItem[varRef] = item;
@@ -1310,28 +1279,23 @@ void DebugPanel::refreshBreakpointList() {
   for (const Breakpoint &bp : breakpoints) {
     QTreeWidgetItem *item = new QTreeWidgetItem();
 
-    // Checkbox for enabled state
     item->setCheckState(0, bp.enabled ? Qt::Checked : Qt::Unchecked);
 
-    // Location
     QFileInfo fi(bp.filePath);
     QString location = QString("%1:%2").arg(fi.fileName()).arg(bp.line);
     item->setText(1, location);
     item->setToolTip(1, bp.filePath);
 
-    // Condition or log message
     if (bp.isLogpoint) {
       item->setText(2, QString("log: %1").arg(bp.logMessage));
     } else if (!bp.condition.isEmpty()) {
       item->setText(2, bp.condition);
     }
 
-    // Store data for navigation
     item->setData(0, Qt::UserRole, bp.filePath);
     item->setData(0, Qt::UserRole + 1, bp.line);
     item->setData(0, Qt::UserRole + 2, bp.id);
 
-    // Visual feedback for verification
     if (bp.verified) {
       item->setIcon(0, style()->standardIcon(QStyle::SP_DialogApplyButton));
     } else if (!bp.verificationMessage.isEmpty()) {
@@ -1363,7 +1327,6 @@ void DebugPanel::onAddWatch() {
   m_watchInput->clear();
   int id = WatchManager::instance().addWatch(expr);
 
-  // If currently stopped, evaluate immediately
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped &&
       m_currentFrameId > 0) {
     WatchManager::instance().evaluateWatch(id, m_currentFrameId);
@@ -1421,13 +1384,12 @@ void DebugPanel::onWatchUpdated(const WatchExpression &watch) {
   item->setText(2, watch.type);
   item->setData(0, Qt::UserRole + 1, watch.variablesReference);
 
-  // Update expansion capability
   if (watch.variablesReference > 0) {
     item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
     item->setExpanded(true);
   } else {
     item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-    // Remove any existing children
+
     while (item->childCount() > 0) {
       delete item->takeChild(0);
     }
@@ -1436,7 +1398,7 @@ void DebugPanel::onWatchUpdated(const WatchExpression &watch) {
 }
 
 void DebugPanel::onWatchItemExpanded(QTreeWidgetItem *item) {
-  // Only handle top-level watch items
+
   if (!item || item->parent())
     return;
 
@@ -1454,7 +1416,6 @@ void DebugPanel::onWatchChildrenReceived(int watchId,
   if (!parentItem)
     return;
 
-  // Clear existing children
   while (parentItem->childCount() > 0) {
     delete parentItem->takeChild(0);
   }
@@ -1604,10 +1565,10 @@ QString DebugPanel::formatVariable(const DapVariable &var) const {
 
 QIcon DebugPanel::variableIcon(const DapVariable &var) const {
   if (var.variablesReference > 0) {
-    // Structured variable (object, array, etc.)
+
     return style()->standardIcon(QStyle::SP_DirIcon);
   } else {
-    // Primitive value
+
     return style()->standardIcon(QStyle::SP_FileIcon);
   }
 }

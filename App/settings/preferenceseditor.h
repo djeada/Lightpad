@@ -27,4 +27,4 @@ private:
   PopupTabWidth *popupTabWidth;
 };
 
-#endif // PREFERENCESEDITOR_H
+#endif

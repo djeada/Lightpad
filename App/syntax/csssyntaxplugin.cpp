@@ -74,7 +74,6 @@ QStringList CssSyntaxPlugin::getAtRules() {
 QVector<SyntaxRule> CssSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
-  // At-rules
   for (const QString &rule : getAtRules()) {
     SyntaxRule atRule;
     atRule.pattern = QRegularExpression(rule + "\\b");
@@ -82,7 +81,6 @@ QVector<SyntaxRule> CssSyntaxPlugin::syntaxRules() const {
     rules.append(atRule);
   }
 
-  // Property names
   for (const QString &prop : getProperties()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + prop + "(?=\\s*:)");
@@ -90,7 +88,6 @@ QVector<SyntaxRule> CssSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Property values (keywords)
   for (const QString &val : getValues()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + val + "\\b");
@@ -98,7 +95,6 @@ QVector<SyntaxRule> CssSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Selectors (class, id)
   SyntaxRule classRule;
   classRule.pattern = QRegularExpression("\\.[A-Za-z_][A-Za-z0-9_-]*");
   classRule.name = "function";
@@ -109,26 +105,22 @@ QVector<SyntaxRule> CssSyntaxPlugin::syntaxRules() const {
   idRule.name = "function";
   rules.append(idRule);
 
-  // Pseudo-classes and pseudo-elements
   SyntaxRule pseudoRule;
   pseudoRule.pattern = QRegularExpression(":[A-Za-z-]+");
   pseudoRule.name = "keyword_2";
   rules.append(pseudoRule);
 
-  // Numbers with units
   SyntaxRule numberRule;
   numberRule.pattern = QRegularExpression(
       "[-+]?\\d*\\.?\\d+(%|px|em|rem|vh|vw|pt|cm|mm|in|s|ms)?");
   numberRule.name = "number";
   rules.append(numberRule);
 
-  // Color values (hex)
   SyntaxRule hexColorRule;
   hexColorRule.pattern = QRegularExpression("#[0-9A-Fa-f]{3,8}\\b");
   hexColorRule.name = "number";
   rules.append(hexColorRule);
 
-  // String literals
   SyntaxRule stringRule;
   stringRule.pattern = QRegularExpression("\"[^\"]*\"");
   stringRule.name = "string";
@@ -139,7 +131,6 @@ QVector<SyntaxRule> CssSyntaxPlugin::syntaxRules() const {
   singleQuoteRule.name = "string";
   rules.append(singleQuoteRule);
 
-  // URL function
   SyntaxRule urlRule;
   urlRule.pattern = QRegularExpression("\\burl\\([^)]*\\)");
   urlRule.name = "string";
@@ -151,7 +142,6 @@ QVector<SyntaxRule> CssSyntaxPlugin::syntaxRules() const {
 QVector<MultiLineBlock> CssSyntaxPlugin::multiLineBlocks() const {
   QVector<MultiLineBlock> blocks;
 
-  // CSS comments
   MultiLineBlock commentBlock;
   commentBlock.startPattern = QRegularExpression("/\\*");
   commentBlock.endPattern = QRegularExpression("\\*/");

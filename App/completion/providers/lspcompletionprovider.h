@@ -6,12 +6,6 @@
 #include <QMap>
 #include <functional>
 
-/**
- * @brief Completion provider using Language Server Protocol
- *
- * Bridges the LspClient to the completion system, providing
- * context-aware completions from language servers.
- */
 class LspCompletionProvider : public QObject, public ICompletionProvider {
   Q_OBJECT
 
@@ -20,13 +14,11 @@ public:
 
   QString id() const override { return "lsp"; }
   QString displayName() const override { return "Language Server"; }
-  int basePriority() const override { return 10; } // Highest priority
+  int basePriority() const override { return 10; }
   QStringList supportedLanguages() const override;
 
   QStringList triggerCharacters() const override;
-  int minimumPrefixLength() const override {
-    return 0;
-  } // LSP handles its own triggering
+  int minimumPrefixLength() const override { return 0; }
 
   void requestCompletions(
       const CompletionContext &context,
@@ -43,14 +35,8 @@ public:
   }
   void setEnabled(bool enabled) override { m_enabled = enabled; }
 
-  /**
-   * @brief Set the LspClient to use
-   */
   void setClient(LspClient *client);
 
-  /**
-   * @brief Get the current LspClient
-   */
   LspClient *client() const { return m_client; }
 
 private slots:
@@ -64,10 +50,9 @@ private:
   LspClient *m_client;
   bool m_enabled = true;
 
-  // Map request ID to callback
   QMap<int, std::function<void(const QList<CompletionItem> &)>>
       m_pendingCallbacks;
   int m_lastRequestId = 0;
 };
 
-#endif // LSPCOMPLETIONPROVIDER_H
+#endif

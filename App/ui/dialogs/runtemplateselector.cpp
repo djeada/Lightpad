@@ -12,7 +12,6 @@ RunTemplateSelector::RunTemplateSelector(const QString &filePath,
   setupUi();
   loadTemplates();
 
-  // Pre-select current assignment if any
   FileTemplateAssignment assignment =
       RunTemplateManager::instance().getAssignmentForFile(filePath);
   if (!assignment.templateId.isEmpty()) {
@@ -35,13 +34,11 @@ void RunTemplateSelector::setupUi() {
 
   QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
-  // File info
   QFileInfo fileInfo(m_filePath);
   QLabel *fileLabel =
       new QLabel(QString("File: <b>%1</b>").arg(fileInfo.fileName()));
   mainLayout->addWidget(fileLabel);
 
-  // Search and filter
   QHBoxLayout *filterLayout = new QHBoxLayout();
 
   m_searchEdit = new QLineEdit();
@@ -58,7 +55,6 @@ void RunTemplateSelector::setupUi() {
 
   mainLayout->addLayout(filterLayout);
 
-  // Templates list
   QGroupBox *templatesGroup = new QGroupBox("Available Templates");
   QVBoxLayout *templatesLayout = new QVBoxLayout(templatesGroup);
 
@@ -71,7 +67,6 @@ void RunTemplateSelector::setupUi() {
 
   mainLayout->addWidget(templatesGroup);
 
-  // Template details
   QGroupBox *detailsGroup = new QGroupBox("Template Details");
   QVBoxLayout *detailsLayout = new QVBoxLayout(detailsGroup);
 
@@ -88,7 +83,6 @@ void RunTemplateSelector::setupUi() {
 
   mainLayout->addWidget(detailsGroup);
 
-  // Custom arguments
   QHBoxLayout *argsLayout = new QHBoxLayout();
   argsLayout->addWidget(new QLabel("Custom Arguments:"));
   m_customArgsEdit = new QLineEdit();
@@ -96,7 +90,6 @@ void RunTemplateSelector::setupUi() {
   argsLayout->addWidget(m_customArgsEdit);
   mainLayout->addLayout(argsLayout);
 
-  // Buttons
   QHBoxLayout *buttonLayout = new QHBoxLayout();
 
   m_removeButton = new QPushButton("Remove Assignment");
@@ -124,12 +117,10 @@ void RunTemplateSelector::setupUi() {
 void RunTemplateSelector::loadTemplates() {
   RunTemplateManager &manager = RunTemplateManager::instance();
 
-  // Ensure templates are loaded
   if (manager.getAllTemplates().isEmpty()) {
     manager.loadTemplates();
   }
 
-  // Collect unique languages
   QSet<QString> languages;
   for (const RunTemplate &tmpl : manager.getAllTemplates()) {
     if (!tmpl.language.isEmpty()) {
@@ -137,14 +128,12 @@ void RunTemplateSelector::loadTemplates() {
     }
   }
 
-  // Populate language combo
   QStringList sortedLanguages = languages.values();
   sortedLanguages.sort();
   for (const QString &lang : sortedLanguages) {
     m_languageCombo->addItem(lang);
   }
 
-  // Pre-select language based on file extension
   QFileInfo fileInfo(m_filePath);
   QString ext = fileInfo.suffix().toLower();
   QList<RunTemplate> matchingTemplates = manager.getTemplatesForExtension(ext);
@@ -166,13 +155,12 @@ void RunTemplateSelector::filterTemplates() {
   QList<RunTemplate> templates = manager.getAllTemplates();
 
   for (const RunTemplate &tmpl : templates) {
-    // Apply language filter
+
     if (!m_currentLanguage.isEmpty() && m_currentLanguage != "All Languages" &&
         tmpl.language != m_currentLanguage) {
       continue;
     }
 
-    // Apply text filter
     if (!m_currentFilter.isEmpty()) {
       bool matches =
           tmpl.name.contains(m_currentFilter, Qt::CaseInsensitive) ||
@@ -262,32 +250,26 @@ QStringList RunTemplateSelector::getCustomArgs() const {
 void RunTemplateSelector::applyTheme(const Theme &theme) {
   setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  // Apply group box styles
   for (QGroupBox *groupBox : findChildren<QGroupBox *>()) {
     groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
   }
 
-  // Apply search edit style
   if (m_searchEdit) {
     m_searchEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
   }
 
-  // Apply combobox style
   if (m_languageCombo) {
     m_languageCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
   }
 
-  // Apply list widget style
   if (m_templateList) {
     m_templateList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
   }
 
-  // Apply line edit style
   if (m_customArgsEdit) {
     m_customArgsEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
   }
 
-  // Apply label styles
   if (m_descriptionLabel) {
     m_descriptionLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
   }
@@ -295,7 +277,6 @@ void RunTemplateSelector::applyTheme(const Theme &theme) {
     m_commandLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
   }
 
-  // Apply button styles
   if (m_okButton) {
     m_okButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
   }

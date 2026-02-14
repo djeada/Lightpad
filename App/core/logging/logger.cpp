@@ -29,7 +29,6 @@ void Logger::setFileLoggingEnabled(bool enabled, const QString &filePath) {
   if (enabled && !m_fileLoggingEnabled) {
     QString path = filePath.isEmpty() ? getDefaultLogPath() : filePath;
 
-    // Ensure directory exists
     QFileInfo fileInfo(path);
     QDir dir = fileInfo.dir();
     if (!dir.exists()) {

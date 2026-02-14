@@ -150,7 +150,6 @@ private:
       }
     }
 
-    // Stable aliases for common names used by templates/config.
     addAlias(aliases, "py", "py");
     addAlias(aliases, "python", "py");
     addAlias(aliases, "js", "js");
@@ -183,4 +182,4 @@ private:
   }
 };
 
-#endif // LANGUAGECATALOG_H
+#endif

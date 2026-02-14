@@ -10,11 +10,6 @@
 #include <QListWidget>
 #include <QVBoxLayout>
 
-/**
- * @brief File Quick Open dialog (Ctrl+P)
- *
- * Provides fuzzy search for files in the current project/directory.
- */
 class FileQuickOpen : public QDialog {
   Q_OBJECT
 
@@ -22,25 +17,14 @@ public:
   explicit FileQuickOpen(QWidget *parent = nullptr);
   ~FileQuickOpen();
 
-  /**
-   * @brief Set the root directory to search in
-   */
   void setRootDirectory(const QString &path);
 
-  /**
-   * @brief Show and focus the dialog
-   */
   void showDialog();
 
-  /**
-   * @brief Apply theme to the dialog
-   */
   void applyTheme(const Theme &theme);
 
 signals:
-  /**
-   * @brief Emitted when user selects a file
-   */
+
   void fileSelected(const QString &filePath);
 
 protected:
@@ -69,4 +53,4 @@ private:
   QStringList m_filteredFiles;
 };
 
-#endif // FILEQUICKOPEN_H
+#endif

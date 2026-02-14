@@ -5,12 +5,6 @@
 #include <QAbstractListModel>
 #include <QList>
 
-/**
- * @brief Model for completion items in a list view
- *
- * Provides a Qt model interface for displaying CompletionItems
- * in a QListView or similar widget.
- */
 class CompletionItemModel : public QAbstractListModel {
   Q_OBJECT
 
@@ -32,27 +26,12 @@ public:
   QVariant data(const QModelIndex &index,
                 int role = Qt::DisplayRole) const override;
 
-  /**
-   * @brief Set the completion items
-   * @param items Items to display
-   */
   void setItems(const QList<CompletionItem> &items);
 
-  /**
-   * @brief Clear all items
-   */
   void clear();
 
-  /**
-   * @brief Get item at index
-   * @param index Row index
-   * @return Item at index, or invalid item if out of range
-   */
   CompletionItem itemAt(int index) const;
 
-  /**
-   * @brief Get number of items
-   */
   int count() const { return m_items.size(); }
 
 private:
@@ -61,4 +40,4 @@ private:
   QList<CompletionItem> m_items;
 };
 
-#endif // COMPLETIONITEMMODEL_H
+#endif

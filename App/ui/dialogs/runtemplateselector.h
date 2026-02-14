@@ -23,9 +23,6 @@ public:
   QString getSelectedTemplateId() const;
   QStringList getCustomArgs() const;
 
-  /**
-   * @brief Apply theme to the dialog
-   */
   void applyTheme(const Theme &theme);
 
 private slots:
@@ -57,4 +54,4 @@ private:
   QString m_currentLanguage;
 };
 
-#endif // RUNTEMPLATESELECTOR_H
+#endif

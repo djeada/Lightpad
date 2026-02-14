@@ -68,15 +68,13 @@ void TestFormatTemplateManager::testSubstituteVariablesWithComplexPath() {
 }
 
 void TestFormatTemplateManager::testParseTemplateFromJson() {
-  // Load templates
+
   FormatTemplateManager &manager = FormatTemplateManager::instance();
   manager.loadTemplates();
 
-  // Verify some templates exist
   QList<FormatTemplate> templates = manager.getAllTemplates();
   QVERIFY(!templates.isEmpty());
 
-  // Check for Black template (Python formatter)
   bool foundBlack = false;
   for (const FormatTemplate &tmpl : templates) {
     if (tmpl.id == "black") {
@@ -94,7 +92,6 @@ void TestFormatTemplateManager::testGetTemplatesForExtension() {
   FormatTemplateManager &manager = FormatTemplateManager::instance();
   manager.loadTemplates();
 
-  // Python files
   QList<FormatTemplate> pyTemplates = manager.getTemplatesForExtension("py");
   QVERIFY(!pyTemplates.isEmpty());
 
@@ -107,11 +104,9 @@ void TestFormatTemplateManager::testGetTemplatesForExtension() {
   }
   QVERIFY(foundPythonFormatter);
 
-  // C++ files
   QList<FormatTemplate> cppTemplates = manager.getTemplatesForExtension("cpp");
   QVERIFY(!cppTemplates.isEmpty());
 
-  // Unknown extension
   QList<FormatTemplate> unknownTemplates =
       manager.getTemplatesForExtension("xyz123");
   QVERIFY(unknownTemplates.isEmpty());
@@ -133,32 +128,26 @@ void TestFormatTemplateManager::testAssignmentPersistence() {
   FormatTemplateManager &manager = FormatTemplateManager::instance();
   manager.loadTemplates();
 
-  // Create a test file in temp directory
   QString testFile = m_tempDir.path() + "/test.py";
   QFile file(testFile);
   file.open(QIODevice::WriteOnly);
   file.write("print('hello')");
   file.close();
 
-  // Assign a template
   bool assigned = manager.assignTemplateToFile(
       testFile, "black", QStringList() << "--line-length" << "120");
   QVERIFY(assigned);
 
-  // Verify assignment exists
   FileFormatAssignment assignment = manager.getAssignmentForFile(testFile);
   QCOMPARE(assignment.templateId, QString("black"));
   QVERIFY(assignment.customArgs.contains("--line-length"));
 
-  // Check that config file was created
   QString configFile = m_tempDir.path() + "/.lightpad/format_config.json";
   QVERIFY(QFile::exists(configFile));
 
-  // Remove assignment
   bool removed = manager.removeAssignment(testFile);
   QVERIFY(removed);
 
-  // Verify assignment is gone
   FileFormatAssignment removedAssignment =
       manager.getAssignmentForFile(testFile);
   QVERIFY(removedAssignment.templateId.isEmpty());
@@ -174,10 +163,9 @@ void TestFormatTemplateManager::testBuildCommand() {
   file.write("print('hello')");
   file.close();
 
-  // Build command without explicit assignment (should use default for .py)
   QPair<QString, QStringList> cmd = manager.buildCommand(testFile);
   QVERIFY(!cmd.first.isEmpty());
-  // Command should be black or another Python formatter
+
   QVERIFY(cmd.first.contains("black") || cmd.first.contains("autopep8") ||
           cmd.first.contains("yapf"));
 }
@@ -185,11 +173,9 @@ void TestFormatTemplateManager::testBuildCommand() {
 void TestFormatTemplateManager::testEmptyFilePath() {
   FormatTemplateManager &manager = FormatTemplateManager::instance();
 
-  // Empty file path should return empty command
   QPair<QString, QStringList> cmd = manager.buildCommand("");
   QVERIFY(cmd.first.isEmpty());
 
-  // Empty file path assignment should return empty
   FileFormatAssignment assignment = manager.getAssignmentForFile("");
   QVERIFY(assignment.templateId.isEmpty());
 }
@@ -204,10 +190,8 @@ void TestFormatTemplateManager::testHasFormatTemplate() {
   file.write("int main() {}");
   file.close();
 
-  // Should have a template for .cpp files
   QVERIFY(manager.hasFormatTemplate(testFile));
 
-  // Should not have template for unknown extension
   QString unknownFile = m_tempDir.path() + "/test.xyz123";
   QFile unknownFileHandle(unknownFile);
   unknownFileHandle.open(QIODevice::WriteOnly);
@@ -216,7 +200,6 @@ void TestFormatTemplateManager::testHasFormatTemplate() {
 
   QVERIFY(!manager.hasFormatTemplate(unknownFile));
 
-  // Empty path should return false
   QVERIFY(!manager.hasFormatTemplate(""));
 }
 

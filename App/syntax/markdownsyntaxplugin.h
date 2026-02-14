@@ -4,9 +4,6 @@
 #include "basesyntaxplugin.h"
 #include <QVector>
 
-/**
- * @brief Built-in Markdown syntax highlighting plugin
- */
 class MarkdownSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "md"; }
@@ -24,4 +21,4 @@ public:
   }
 };
 
-#endif // MARKDOWNSYNTAXPLUGIN_H
+#endif

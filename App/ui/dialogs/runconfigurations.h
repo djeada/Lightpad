@@ -48,4 +48,4 @@ private:
   Ui::runconfigurations *ui;
 };
 
-#endif // RUNCOFIGURATIONS_H
+#endif

@@ -127,7 +127,6 @@ bool Document::saveAs(const QString &path) {
     return true;
   }
 
-  // Restore old path on failure
   m_filePath = oldPath;
   return false;
 }
@@ -145,7 +144,6 @@ void Document::updateState(State newState) {
 QString Document::detectLanguage() const {
   QString ext = fileExtension().toLower();
 
-  // Map extensions to language identifiers
   static const QHash<QString, QString> extensionMap = {{"cpp", "cpp"},
                                                        {"cc", "cpp"},
                                                        {"cxx", "cpp"},

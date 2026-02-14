@@ -4,9 +4,6 @@
 #include "basesyntaxplugin.h"
 #include <QVector>
 
-/**
- * @brief Built-in Go syntax highlighting plugin
- */
 class GoSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "go"; }
@@ -27,4 +24,4 @@ private:
   static QStringList getTertiaryKeywords();
 };
 
-#endif // GOSYNTAXPLUGIN_H
+#endif

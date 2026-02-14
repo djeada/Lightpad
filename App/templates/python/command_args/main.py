@@ -13,11 +13,11 @@ def main():
         print 'User input - type: %s, value: %s' % (type(userInput), userInput)
     except Exception as ex:
         print ex.message
-        return 1 # indicates error, but not necessary
+        return 1 
     else:
-        return 0 # return 0 # indicates errorlessly exit, but not necessary    
+        return 0 
     
-# this is the standard boilerplate that calls the main() function
+
 if __name__ == '__main__':
-    # sys.exit(main(sys.argv)) # used to give a better look to exists
+    
     main()

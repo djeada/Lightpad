@@ -107,7 +107,6 @@ bool FileDirTreeModel::pasteFromClipboard(const QString &destPath) {
     return false;
   }
 
-  // Check if source path still exists
   if (!QFile::exists(clipboardPath)) {
     emit errorOccurred("Source file no longer exists");
     clipboardPath.clear();
@@ -119,14 +118,12 @@ bool FileDirTreeModel::pasteFromClipboard(const QString &destPath) {
   QString fileName = sourceInfo.fileName();
   QString targetPath = destPath;
 
-  // If destPath is a file, use its parent directory
   if (QFileInfo(destPath).isFile()) {
     targetPath = QFileInfo(destPath).absolutePath();
   }
 
   QString fullTargetPath = targetPath + QDir::separator() + fileName;
 
-  // Prevent copying/moving directory into itself or subdirectory
   if (sourceInfo.isDir() && fullTargetPath.startsWith(clipboardPath)) {
     emit errorOccurred("Cannot move directory into itself or its subdirectory");
     return false;
@@ -142,12 +139,12 @@ bool FileDirTreeModel::pasteFromClipboard(const QString &destPath) {
     } else if (sourceInfo.isDir()) {
       success = copyRecursively(clipboardPath, fullTargetPath);
     }
-    // Don't clear clipboard for copy - allow multiple pastes
+
   } else if (clipboardOperation == ClipboardOperation::Cut) {
     if (sourceInfo.isFile()) {
       success = QFile::rename(clipboardPath, fullTargetPath);
     } else if (sourceInfo.isDir()) {
-      // For directories, use copy + remove to handle cross-filesystem moves
+
       if (copyRecursively(clipboardPath, fullTargetPath)) {
         success = removeRecursively(clipboardPath);
       }

@@ -31,8 +31,7 @@ std::string getcwd() { return std::filesystem::current_path().string(); }
 void setcwd(const std::string &path) { std::filesystem::current_path(path); }
 } // namespace subprocess
 namespace {
-// this repititon exists here as I want shell to be fully standalone to
-// use in other projects
+
 bool is_file(const std::string &path) {
   try {
     if (path.empty())
@@ -95,7 +94,6 @@ std::string join_path(std::string parent, std::string child) {
   if (child == ".")
     return parent;
   if (child.find(':') != std::string::npos) {
-    // if child has a ":" it is probably programmer error
   }
   parent = clean_path(parent);
   child = clean_path(child);
@@ -171,7 +169,7 @@ static std::mutex g_program_cache_mutex;
 static std::map<std::string, std::string> g_program_cache;
 
 static std::string find_program_in_path(const std::string &name) {
-  // because of the cache variable is static we do this to be thread safe
+
   std::unique_lock lock(g_program_cache_mutex);
 
   std::map<std::string, std::string> &cache = g_program_cache;
@@ -216,19 +214,7 @@ static bool is_python3(std::string path) {
   CompletedProcess process = subprocess::run(
       {path, "--version"},
       RunBuilder().cout(PipeOption::pipe).cerr(PipeOption::cout));
-  /*
-      CompletedProcess process = subprocess::RunBuilder({path, "--version"})
-          .cout(PipeOption::pipe)
-          .cerr(PipeOption::cout)
-          .run();
 
-
-      since c++20 we can do this
-      CompletedProcess process = subprocess::run({path, "--version"}, {
-          .cout = PipeOption::pipe,
-          .cerr = PipeOption::cout
-      });
-      */
   for (size_t i = 0; i < process.cout.size() - 1; ++i) {
     char ch = process.cout[i];
     if (ch >= '0' && ch <= '9') {
@@ -269,7 +255,7 @@ void find_program_clear_cache() {
 std::string escape_shell_arg(std::string arg) {
   bool needs_quote = false;
   for (std::size_t i = 0; i < arg.size(); ++i) {
-    // white list
+
     if (isalpha(arg[i]))
       continue;
     if (isdigit(arg[i]))

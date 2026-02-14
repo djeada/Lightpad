@@ -13,9 +13,6 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-/**
- * @brief Dialog for managing Git stash entries
- */
 class GitStashDialog : public QDialog {
   Q_OBJECT
 
@@ -23,15 +20,10 @@ public:
   explicit GitStashDialog(GitIntegration *git, QWidget *parent = nullptr);
   ~GitStashDialog();
 
-  /**
-   * @brief Refresh the stash list
-   */
   void refresh();
 
 signals:
-  /**
-   * @brief Emitted when stash operation completes
-   */
+
   void stashOperationCompleted(const QString &message);
 
 private slots:
@@ -49,9 +41,6 @@ private:
   void updateStashList();
 
 public:
-  /**
-   * @brief Apply theme to the dialog
-   */
   void applyTheme(const Theme &theme);
 
 private:
@@ -70,4 +59,4 @@ private:
   QLabel *m_detailsLabel;
 };
 
-#endif // GITSTASHDIALOG_H
+#endif

@@ -12,28 +12,21 @@ private slots:
   void initTestCase();
   void cleanupTestCase();
 
-  // Test construction and destruction
   void testConstruction();
   void testDestructor();
 
-  // Test shell management
   void testStartAndStopShell();
   void testIsRunning();
 
-  // Test working directory
   void testSetWorkingDirectory();
 
-  // Test clear
   void testClear();
 
-  // Test signals
   void testShellStartedSignal();
 
-  // Test error handling
   void testMultipleStopCalls();
   void testRestartAfterStop();
 
-  // Test new features
   void testShellProfiles();
   void testScrollbackLines();
   void testLinkDetection();
@@ -41,18 +34,14 @@ private slots:
   void testCloseButtonConfiguration();
 };
 
-void TestTerminal::initTestCase() {
-  // Any one-time setup needed
-}
+void TestTerminal::initTestCase() {}
 
-void TestTerminal::cleanupTestCase() {
-  // Any one-time cleanup needed
-}
+void TestTerminal::cleanupTestCase() {}
 
 void TestTerminal::testConstruction() {
   Terminal *t = new Terminal();
   QVERIFY(t != nullptr);
-  // Terminal auto-starts shell in setupTerminal()
+
   t->stopShell();
   QTest::qWait(200);
   delete t;
@@ -60,16 +49,16 @@ void TestTerminal::testConstruction() {
 
 void TestTerminal::testDestructor() {
   Terminal *t = new Terminal();
-  t->stopShell(); // Make sure shell is stopped before deleting
+  t->stopShell();
   QTest::qWait(200);
   delete t;
-  // If we get here without crash, destructor properly cleaned up
+
   QVERIFY(true);
 }
 
 void TestTerminal::testStartAndStopShell() {
   Terminal terminal;
-  // Terminal auto-starts, so stop it first
+
   terminal.stopShell();
   QTest::qWait(200);
   QVERIFY(!terminal.isRunning());
@@ -119,7 +108,6 @@ void TestTerminal::testClear() {
   terminal.startShell();
   QTest::qWait(200);
 
-  // Clear should not crash
   terminal.clear();
 
   terminal.stopShell();
@@ -136,7 +124,6 @@ void TestTerminal::testShellStartedSignal() {
 
   terminal.startShell();
 
-  // The signal should have been emitted
   QVERIFY(spy.count() >= 1);
 
   terminal.stopShell();
@@ -145,10 +132,9 @@ void TestTerminal::testShellStartedSignal() {
 
 void TestTerminal::testMultipleStopCalls() {
   Terminal terminal;
-  // Terminal auto-starts shell
+
   QVERIFY(terminal.isRunning());
 
-  // Multiple stop calls should not crash
   terminal.stopShell();
   terminal.stopShell();
   terminal.stopShell();
@@ -158,19 +144,16 @@ void TestTerminal::testMultipleStopCalls() {
 
 void TestTerminal::testRestartAfterStop() {
   Terminal terminal;
-  // Terminal auto-starts shell
+
   QVERIFY(terminal.isRunning());
 
-  // Stop the shell
   terminal.stopShell();
   QVERIFY(!terminal.isRunning());
 
-  // Restart should work cleanly
   bool started = terminal.startShell();
   QVERIFY(started);
   QVERIFY(terminal.isRunning());
 
-  // Stop and restart again to ensure no resource leaks
   terminal.stopShell();
   QVERIFY(!terminal.isRunning());
 
@@ -186,17 +169,14 @@ void TestTerminal::testShellProfiles() {
   terminal.stopShell();
   QTest::qWait(200);
 
-  // Test that available shell profiles returns something
   QStringList profiles = terminal.availableShellProfiles();
   QVERIFY(!profiles.isEmpty());
 
-  // Test getting current shell profile
   ShellProfile profile = terminal.shellProfile();
   QVERIFY(profile.isValid());
   QVERIFY(!profile.name.isEmpty());
   QVERIFY(!profile.command.isEmpty());
 
-  // Test setting shell profile by name
   if (!profiles.isEmpty()) {
     QString firstName = profiles.first();
     bool result = terminal.setShellProfileByName(firstName);
@@ -204,7 +184,6 @@ void TestTerminal::testShellProfiles() {
     QCOMPARE(terminal.shellProfile().name, firstName);
   }
 
-  // Test that an invalid profile name returns false
   bool result = terminal.setShellProfileByName("NonExistentShell12345");
   QVERIFY(!result);
 }
@@ -214,15 +193,13 @@ void TestTerminal::testScrollbackLines() {
   terminal.stopShell();
   QTest::qWait(200);
 
-  // Test default scrollback lines
   int defaultLines = terminal.scrollbackLines();
   QVERIFY(defaultLines > 0);
 
-  // Test setting scrollback lines
   terminal.setScrollbackLines(5000);
   QCOMPARE(terminal.scrollbackLines(), 5000);
 
-  terminal.setScrollbackLines(0); // Unlimited
+  terminal.setScrollbackLines(0);
   QCOMPARE(terminal.scrollbackLines(), 0);
 
   terminal.setScrollbackLines(1000);
@@ -234,10 +211,8 @@ void TestTerminal::testLinkDetection() {
   terminal.stopShell();
   QTest::qWait(200);
 
-  // Test default link detection state
   QVERIFY(terminal.isLinkDetectionEnabled());
 
-  // Test toggling link detection
   terminal.setLinkDetectionEnabled(false);
   QVERIFY(!terminal.isLinkDetectionEnabled());
 
@@ -247,20 +222,18 @@ void TestTerminal::testLinkDetection() {
 
 void TestTerminal::testSendText() {
   Terminal terminal;
-  // Terminal auto-starts shell
+
   QVERIFY(terminal.isRunning());
 
-  // sendText should not crash when shell is running
   terminal.sendText("echo test", false);
   terminal.sendText("ls", true);
 
   terminal.stopShell();
   QTest::qWait(200);
 
-  // sendText on stopped shell should not crash
   terminal.sendText("test", true);
 
-  QVERIFY(true); // If we get here without crash, test passed
+  QVERIFY(true);
 }
 
 void TestTerminal::testCloseButtonConfiguration() {

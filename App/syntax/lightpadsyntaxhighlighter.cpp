@@ -54,7 +54,7 @@ LightpadSyntaxHighlighter::LightpadSyntaxHighlighter(
 }
 
 bool LightpadSyntaxHighlighter::isBlockVisible(int blockNumber) const {
-  // Include buffer around viewport for smooth scrolling
+
   int minBlock = m_firstVisibleBlock - VIEWPORT_BUFFER;
   int maxBlock = m_lastVisibleBlock + VIEWPORT_BUFFER;
 
@@ -62,18 +62,15 @@ bool LightpadSyntaxHighlighter::isBlockVisible(int blockNumber) const {
 }
 
 void LightpadSyntaxHighlighter::highlightBlock(const QString &text) {
-  // Fast path: skip empty lines
+
   if (text.isEmpty()) {
     setCurrentBlockState(previousBlockState());
     return;
   }
 
-  // Skip highlighting for blocks far outside the viewport
-  // This dramatically improves performance for large files
   int blockNum = currentBlock().blockNumber();
   if (!isBlockVisible(blockNum)) {
-    // Just set the block state for multi-line comment tracking
-    // but skip the expensive regex matching
+
     setCurrentBlockState(previousBlockState());
     return;
   }

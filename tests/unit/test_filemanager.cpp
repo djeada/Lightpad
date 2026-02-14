@@ -27,7 +27,6 @@ private:
 void TestFileManager::initTestCase() {
   QVERIFY(m_tempDir.isValid());
 
-  // Create a test file
   m_testFilePath = m_tempDir.path() + "/test.txt";
   QFile file(m_testFilePath);
   QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
@@ -36,9 +35,7 @@ void TestFileManager::initTestCase() {
   file.close();
 }
 
-void TestFileManager::cleanupTestCase() {
-  // Cleanup is handled by QTemporaryDir
-}
+void TestFileManager::cleanupTestCase() {}
 
 void TestFileManager::testSingletonInstance() {
   FileManager &fm1 = FileManager::instance();
@@ -65,7 +62,6 @@ void TestFileManager::testWriteFile() {
   QVERIFY(result.success);
   QVERIFY(QFile::exists(newFilePath));
 
-  // Verify content
   auto readResult = fm.readFile(newFilePath);
   QCOMPARE(readResult.content, content);
 }

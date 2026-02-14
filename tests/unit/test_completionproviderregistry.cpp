@@ -3,9 +3,6 @@
 #include <QtTest/QtTest>
 #include <memory>
 
-/**
- * @brief Mock completion provider for testing
- */
 class MockCompletionProvider : public ICompletionProvider {
 public:
   MockCompletionProvider(const QString &id, const QString &name, int priority,
@@ -27,7 +24,7 @@ public:
       const CompletionContext &context,
       std::function<void(const QList<CompletionItem> &)> callback) override {
     Q_UNUSED(context);
-    // Return empty list for testing
+
     callback({});
   }
 
@@ -68,12 +65,12 @@ private slots:
 };
 
 void TestCompletionProviderRegistry::init() {
-  // Clear registry before each test
+
   CompletionProviderRegistry::instance().clear();
 }
 
 void TestCompletionProviderRegistry::cleanup() {
-  // Clear registry after each test
+
   CompletionProviderRegistry::instance().clear();
 }
 
@@ -164,12 +161,10 @@ void TestCompletionProviderRegistry::testGetProvider() {
       "my_provider", "My Provider", 100, QStringList{"cpp"});
   registry.registerProvider(provider);
 
-  // Existing provider
   auto retrieved = registry.getProvider("my_provider");
   QVERIFY(retrieved != nullptr);
   QCOMPARE(retrieved->id(), QString("my_provider"));
 
-  // Non-existent provider
   auto notFound = registry.getProvider("nonexistent");
   QVERIFY(notFound == nullptr);
 }
@@ -184,7 +179,6 @@ void TestCompletionProviderRegistry::testProvidersForLanguage() {
   registry.registerProvider(std::make_shared<MockCompletionProvider>(
       "multi_provider", "Multi Provider", 50, QStringList{"cpp", "python"}));
 
-  // Get C++ providers
   auto cppProviders = registry.providersForLanguage("cpp");
   QCOMPARE(cppProviders.size(), 2);
 
@@ -196,11 +190,9 @@ void TestCompletionProviderRegistry::testProvidersForLanguage() {
   QVERIFY(cppIds.contains("multi_provider"));
   QVERIFY(!cppIds.contains("python_provider"));
 
-  // Get Python providers
   auto pyProviders = registry.providersForLanguage("python");
   QCOMPARE(pyProviders.size(), 2);
 
-  // Get providers for unsupported language
   auto rustProviders = registry.providersForLanguage("rust");
   QCOMPARE(rustProviders.size(), 0);
 }
@@ -213,7 +205,6 @@ void TestCompletionProviderRegistry::testProvidersForLanguageWildcard() {
   registry.registerProvider(std::make_shared<MockCompletionProvider>(
       "cpp_only", "C++ Only", 50, QStringList{"cpp"}));
 
-  // Universal provider should appear for any language
   auto cppProviders = registry.providersForLanguage("cpp");
   QCOMPARE(cppProviders.size(), 2);
 
@@ -228,7 +219,6 @@ void TestCompletionProviderRegistry::testProvidersForLanguageWildcard() {
 void TestCompletionProviderRegistry::testProvidersForLanguagePrioritySorting() {
   auto &registry = CompletionProviderRegistry::instance();
 
-  // Register with different priorities (out of order)
   registry.registerProvider(std::make_shared<MockCompletionProvider>(
       "low_priority", "Low", 100, QStringList{"*"}));
   registry.registerProvider(std::make_shared<MockCompletionProvider>(
@@ -239,7 +229,6 @@ void TestCompletionProviderRegistry::testProvidersForLanguagePrioritySorting() {
   auto providers = registry.providersForLanguage("cpp");
   QCOMPARE(providers.size(), 3);
 
-  // Should be sorted by priority (ascending)
   QCOMPARE(providers[0]->id(), QString("high_priority"));
   QCOMPARE(providers[1]->id(), QString("medium_priority"));
   QCOMPARE(providers[2]->id(), QString("low_priority"));
@@ -302,18 +291,15 @@ void TestCompletionProviderRegistry::testAllTriggerCharacters() {
   registry.registerProvider(std::make_shared<MockCompletionProvider>(
       "keywords", "Keywords", 100, QStringList{"*"}, QStringList{}));
 
-  // C++ triggers
   QStringList cppTriggers = registry.allTriggerCharacters("cpp");
   QVERIFY(cppTriggers.contains("."));
   QVERIFY(cppTriggers.contains("::"));
   QVERIFY(cppTriggers.contains("->"));
 
-  // Python triggers
   QStringList pyTriggers = registry.allTriggerCharacters("python");
   QVERIFY(pyTriggers.contains("."));
   QCOMPARE(pyTriggers.size(), 1);
 
-  // Rust has no triggers (no providers)
   QStringList rustTriggers = registry.allTriggerCharacters("rust");
   QVERIFY(rustTriggers.isEmpty());
 }
@@ -329,7 +315,6 @@ void TestCompletionProviderRegistry::testHasProvidersForLanguage() {
   QVERIFY(registry.hasProvidersForLanguage("cpp"));
   QVERIFY(!registry.hasProvidersForLanguage("python"));
 
-  // Add universal provider
   registry.registerProvider(std::make_shared<MockCompletionProvider>(
       "universal", "Universal", 100, QStringList{"*"}));
 
@@ -379,21 +364,18 @@ void TestCompletionProviderRegistry::testSignals() {
   QSignalSpy unregisteredSpy(&registry,
                              &CompletionProviderRegistry::providerUnregistered);
 
-  // Register
   registry.registerProvider(std::make_shared<MockCompletionProvider>(
       "signal_test", "Signal Test", 100, QStringList{"*"}));
 
   QCOMPARE(registeredSpy.count(), 1);
   QCOMPARE(registeredSpy.takeFirst().at(0).toString(), QString("signal_test"));
 
-  // Unregister
   registry.unregisterProvider("signal_test");
 
   QCOMPARE(unregisteredSpy.count(), 1);
   QCOMPARE(unregisteredSpy.takeFirst().at(0).toString(),
            QString("signal_test"));
 
-  // Register duplicate (should emit both signals)
   registeredSpy.clear();
   unregisteredSpy.clear();
 
@@ -403,7 +385,7 @@ void TestCompletionProviderRegistry::testSignals() {
       "dup_test", "Dup 2", 100, QStringList{"*"}));
 
   QCOMPARE(registeredSpy.count(), 2);
-  QCOMPARE(unregisteredSpy.count(), 1); // Once for the replacement
+  QCOMPARE(unregisteredSpy.count(), 1);
 }
 
 QTEST_MAIN(TestCompletionProviderRegistry)

@@ -62,43 +62,18 @@ public:
   QString getFilePath();
   QString getFilePath(const QModelIndex &index);
 
-  /**
-   * @brief Check if a run template is assigned to the current file
-   * @return true if a template is assigned or can be auto-detected
-   */
   bool hasRunTemplate() const;
 
-  /**
-   * @brief Get the assigned template ID for the current file
-   * @return Template ID or empty string if none
-   */
   QString getAssignedTemplateId() const;
 
-  /**
-   * @brief Set the project root path for persistent treeview
-   * @param path The project root directory path
-   */
   void setProjectRootPath(const QString &path);
 
-  /**
-   * @brief Get the project root path
-   * @return The project root path or empty string if not set
-   */
   QString getProjectRootPath() const;
 
-  /**
-   * @brief Set the git integration instance for displaying git status
-   */
   void setGitIntegration(GitIntegration *git);
 
-  /**
-   * @brief Enable or disable git status display in file tree
-   */
   void setGitStatusEnabled(bool enabled);
 
-  /**
-   * @brief Refresh git status display
-   */
   void refreshGitStatus();
 
 private:
@@ -113,4 +88,4 @@ private:
   QString projectRootPath;
 };
 
-#endif // LIGHTPADPAGE_H
+#endif

@@ -25,7 +25,6 @@
 #include <QTimer>
 #include <QToolTip>
 
-// Constants for the commit history display
 namespace {
 constexpr int DEFAULT_HISTORY_COMMIT_COUNT = 20;
 constexpr int MAX_COMMIT_DISPLAY_LENGTH = 60;
@@ -65,7 +64,6 @@ void SourceControlPanel::setupUI() {
   mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(0);
 
-  // Header bar with title
   QWidget *header = new QWidget(this);
   header->setStyleSheet(
       "background: #171c24; border-bottom: 1px solid #2a3241;");
@@ -96,10 +94,8 @@ void SourceControlPanel::setupUI() {
 
   mainLayout->addWidget(header);
 
-  // Create stacked widget for different states
   m_stackedWidget = new QStackedWidget(this);
 
-  // Setup the three different UI states
   setupNoRepoUI();
   setupMergeConflictUI();
   setupRepoUI();
@@ -110,7 +106,6 @@ void SourceControlPanel::setupUI() {
 
   mainLayout->addWidget(m_stackedWidget, 1);
 
-  // Status bar with improved styling
   m_statusLabel = new QLabel(this);
   m_statusLabel->setStyleSheet("QLabel {"
                                "  background: #161b22;"
@@ -135,20 +130,17 @@ void SourceControlPanel::setupNoRepoUI() {
   layout->setContentsMargins(20, 40, 20, 20);
   layout->setSpacing(16);
 
-  // Icon
   QLabel *iconLabel = new QLabel("🗃️", m_noRepoWidget);
   iconLabel->setStyleSheet("font-size: 48px;");
   iconLabel->setAlignment(Qt::AlignCenter);
   layout->addWidget(iconLabel);
 
-  // Title
   m_noRepoLabel = new QLabel(tr("No Git Repository"), m_noRepoWidget);
   m_noRepoLabel->setStyleSheet(
       "font-size: 16px; font-weight: bold; color: #e6edf3;");
   m_noRepoLabel->setAlignment(Qt::AlignCenter);
   layout->addWidget(m_noRepoLabel);
 
-  // Description
   QLabel *descLabel =
       new QLabel(tr("This project is not a Git repository.\nInitialize one or "
                     "open a Git project to start tracking changes."),
@@ -158,7 +150,6 @@ void SourceControlPanel::setupNoRepoUI() {
   descLabel->setWordWrap(true);
   layout->addWidget(descLabel);
 
-  // Initialize button
   m_initRepoButton =
       new QPushButton(tr("Initialize Repository"), m_noRepoWidget);
   m_initRepoButton->setStyleSheet("QPushButton {"
@@ -194,7 +185,6 @@ void SourceControlPanel::setupMergeConflictUI() {
   layout->setContentsMargins(8, 8, 8, 8);
   layout->setSpacing(8);
 
-  // Warning header
   QWidget *warningHeader = new QWidget(m_conflictWidget);
   warningHeader->setStyleSheet(
       "background: #f8514933; border: 1px solid #f85149; border-radius: 6px;");
@@ -212,7 +202,6 @@ void SourceControlPanel::setupMergeConflictUI() {
 
   layout->addWidget(warningHeader);
 
-  // Conflict files list
   QLabel *conflictFilesLabel =
       new QLabel(tr("Conflicted Files:"), m_conflictWidget);
   conflictFilesLabel->setStyleSheet(
@@ -246,7 +235,6 @@ void SourceControlPanel::setupMergeConflictUI() {
                                      "}");
   layout->addWidget(m_conflictFilesList, 1);
 
-  // Action buttons
   QHBoxLayout *actionLayout = new QHBoxLayout();
 
   m_resolveConflictsButton =
@@ -301,7 +289,6 @@ void SourceControlPanel::setupRepoUI() {
   mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(0);
 
-  // Branch management section
   QWidget *branchSection = new QWidget(m_repoWidget);
   branchSection->setStyleSheet(
       "background: #161b22; border-bottom: 1px solid #2a3241;");
@@ -309,7 +296,6 @@ void SourceControlPanel::setupRepoUI() {
   branchLayout->setContentsMargins(8, 8, 8, 8);
   branchLayout->setSpacing(6);
 
-  // Branch header with icon
   QHBoxLayout *branchHeaderLayout = new QHBoxLayout();
   branchHeaderLayout->setSpacing(6);
 
@@ -324,7 +310,6 @@ void SourceControlPanel::setupRepoUI() {
   branchHeaderLayout->addStretch();
   branchLayout->addLayout(branchHeaderLayout);
 
-  // Branch selector row
   QHBoxLayout *branchSelectorLayout = new QHBoxLayout();
   branchSelectorLayout->setSpacing(4);
 
@@ -466,7 +451,6 @@ void SourceControlPanel::setupRepoUI() {
 
   branchLayout->addLayout(branchSelectorLayout);
 
-  // Remote operations row
   QHBoxLayout *remoteOpsLayout = new QHBoxLayout();
   remoteOpsLayout->setSpacing(4);
 
@@ -729,14 +713,12 @@ void SourceControlPanel::setupRepoUI() {
   branchLayout->addLayout(remoteOpsLayout);
   mainLayout->addWidget(branchSection);
 
-  // Commit section with improved styling
   QWidget *commitSection = new QWidget(m_repoWidget);
   commitSection->setStyleSheet("background: #0d1117;");
   QVBoxLayout *commitLayout = new QVBoxLayout(commitSection);
   commitLayout->setContentsMargins(8, 10, 8, 10);
   commitLayout->setSpacing(8);
 
-  // Commit header
   QLabel *commitHeader = new QLabel(tr("💬 Commit Message"), commitSection);
   commitHeader->setStyleSheet(
       "color: #8b949e; font-size: 11px; text-transform: uppercase; "
@@ -771,7 +753,6 @@ void SourceControlPanel::setupRepoUI() {
           &SourceControlPanel::onCommitMessageChanged);
   commitLayout->addWidget(m_commitMessage);
 
-  // Commit options row
   QHBoxLayout *commitOptionsLayout = new QHBoxLayout();
   commitOptionsLayout->setSpacing(8);
 
@@ -808,7 +789,6 @@ void SourceControlPanel::setupRepoUI() {
   commitOptionsLayout->addStretch();
   commitLayout->addLayout(commitOptionsLayout);
 
-  // Commit button row
   QHBoxLayout *commitButtonLayout = new QHBoxLayout();
   commitButtonLayout->setSpacing(8);
 
@@ -841,7 +821,6 @@ void SourceControlPanel::setupRepoUI() {
   commitLayout->addLayout(commitButtonLayout);
   mainLayout->addWidget(commitSection);
 
-  // Staged changes section
   QWidget *stagedHeader = new QWidget(m_repoWidget);
   stagedHeader->setStyleSheet(
       "background: #161b22; border-bottom: 1px solid #21262d;");
@@ -925,7 +904,6 @@ void SourceControlPanel::setupRepoUI() {
           });
   mainLayout->addWidget(m_stagedTree);
 
-  // Changes section
   QWidget *changesHeader = new QWidget(m_repoWidget);
   changesHeader->setStyleSheet(
       "background: #161b22; border-bottom: 1px solid #21262d;");
@@ -957,7 +935,6 @@ void SourceControlPanel::setupRepoUI() {
           &SourceControlPanel::onStageAllClicked);
   changesHeaderLayout->addWidget(m_stageAllButton);
 
-  // Discard all changes button
   QPushButton *discardAllButton = new QPushButton("✖", changesHeader);
   discardAllButton->setFixedSize(22, 22);
   discardAllButton->setToolTip(tr("Discard All Changes"));
@@ -1044,7 +1021,6 @@ void SourceControlPanel::setupRepoUI() {
           });
   mainLayout->addWidget(m_changesTree, 1);
 
-  // Commit history section (collapsible)
   m_historyHeader = new QWidget(m_repoWidget);
   m_historyHeader->setStyleSheet(
       "background: #161b22; border-bottom: 1px solid #21262d;");
@@ -1073,7 +1049,6 @@ void SourceControlPanel::setupRepoUI() {
 
   mainLayout->addWidget(m_historyHeader);
 
-  // Connect click on header to toggle
   connect(m_historyToggleButton, &QPushButton::clicked, [this]() {
     m_historyExpanded = !m_historyExpanded;
     m_historyToggleButton->setText(m_historyExpanded ? "▼" : "▶");
@@ -1086,7 +1061,7 @@ void SourceControlPanel::setupRepoUI() {
   m_historyTree = new QTreeWidget(m_repoWidget);
   m_historyTree->setHeaderHidden(true);
   m_historyTree->setRootIsDecorated(false);
-  m_historyTree->setVisible(false); // Initially collapsed
+  m_historyTree->setVisible(false);
   m_historyTree->setContextMenuPolicy(Qt::CustomContextMenu);
   m_historyTree->setStyleSheet("QTreeWidget {"
                                "  background: #0d1117;"
@@ -1116,7 +1091,6 @@ void SourceControlPanel::setupRepoUI() {
   m_historyTree->setMaximumHeight(200);
   m_historyTree->setUniformRowHeights(true);
 
-  // Connect double-click to view commit diff
   connect(m_historyTree, &QTreeWidget::itemDoubleClicked,
           [this](QTreeWidgetItem *item, int) {
             if (!item || !m_git)
@@ -1235,7 +1209,7 @@ void SourceControlPanel::updateUIState() {
     return;
 
   if (!m_git || !m_git->isValidRepository()) {
-    // Show "no repository" state
+
     m_stackedWidget->setCurrentWidget(m_noRepoWidget);
     if (m_statusLabel)
       m_statusLabel->setText(tr("No Git repository"));
@@ -1254,10 +1228,9 @@ void SourceControlPanel::updateUIState() {
     if (m_commitButton)
       m_commitButton->setEnabled(false);
   } else if (m_git->hasMergeConflicts()) {
-    // Show merge conflict state
+
     m_stackedWidget->setCurrentWidget(m_conflictWidget);
 
-    // Update conflict files list
     if (m_conflictFilesList) {
       m_conflictFilesList->clear();
       QStringList conflicts = m_git->getConflictedFiles();
@@ -1291,7 +1264,7 @@ void SourceControlPanel::updateUIState() {
     if (m_commitButton)
       m_commitButton->setEnabled(false);
   } else {
-    // Show normal repository state
+
     m_stackedWidget->setCurrentWidget(m_repoWidget);
     if (m_pullButton)
       m_pullButton->setEnabled(true);
@@ -1329,7 +1302,7 @@ void SourceControlPanel::updateBranchSelector() {
       QString displayName = branch.name;
       if (branch.isCurrent) {
         currentIndex = m_branchSelector->count();
-        // Show tracking info for the current branch
+
         if (branch.aheadCount > 0 || branch.behindCount > 0) {
           QString trackingInfo;
           if (branch.aheadCount > 0 && branch.behindCount > 0) {
@@ -1351,7 +1324,6 @@ void SourceControlPanel::updateBranchSelector() {
   m_branchSelector->setCurrentIndex(currentIndex);
   m_branchLabel->setText(tr("Branch"));
 
-  // Disable delete button for current branch
   m_deleteBranchButton->setEnabled(m_branchSelector->count() > 1);
 
   m_updatingBranchSelector = false;
@@ -1386,7 +1358,6 @@ void SourceControlPanel::updateTree() {
       fullPath = m_git->repositoryPath() + "/" + file.filePath;
     }
 
-    // Check if file is staged (has index status)
     if (file.indexStatus != GitFileStatus::Clean &&
         file.indexStatus != GitFileStatus::Untracked) {
       QTreeWidgetItem *item = new QTreeWidgetItem(m_stagedTree);
@@ -1396,7 +1367,7 @@ void SourceControlPanel::updateTree() {
       item->setText(0, QString("%1 %2").arg(icon).arg(fileInfo.fileName()));
       item->setToolTip(0, fullPath);
       item->setData(0, Qt::UserRole, fullPath);
-      item->setData(0, STAGED_STATUS_ROLE, true); // Is staged
+      item->setData(0, STAGED_STATUS_ROLE, true);
       item->setForeground(0, statusColor(file.indexStatus));
       item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
       item->setCheckState(0, Qt::Checked);
@@ -1404,7 +1375,6 @@ void SourceControlPanel::updateTree() {
       m_stagedCount++;
     }
 
-    // Check if file has working tree changes
     if (file.workTreeStatus != GitFileStatus::Clean) {
       QTreeWidgetItem *item = new QTreeWidgetItem(m_changesTree);
 
@@ -1413,7 +1383,7 @@ void SourceControlPanel::updateTree() {
       item->setText(0, QString("%1 %2").arg(icon).arg(fileInfo.fileName()));
       item->setToolTip(0, fullPath);
       item->setData(0, Qt::UserRole, fullPath);
-      item->setData(0, STAGED_STATUS_ROLE, false); // Not staged
+      item->setData(0, STAGED_STATUS_ROLE, false);
       item->setForeground(0, statusColor(file.workTreeStatus));
       item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
       item->setCheckState(0, Qt::Unchecked);
@@ -1487,7 +1457,6 @@ void SourceControlPanel::updateHistory() {
   for (const GitCommitInfo &commit : commits) {
     QTreeWidgetItem *item = new QTreeWidgetItem(m_historyTree);
 
-    // Format: short_hash subject — author, relative_date
     QString displayText =
         QString("%1  %2").arg(commit.shortHash).arg(commit.subject);
     if (displayText.length() > MAX_COMMIT_DISPLAY_LENGTH) {
@@ -1513,14 +1482,12 @@ void SourceControlPanel::updateHistory() {
                             .arg(commit.subject));
     item->setData(0, Qt::UserRole, commit.hash);
 
-    // Color the hash part differently
     QFont font = item->font(0);
     font.setFamily("monospace");
     item->setFont(0, font);
 
-    // Set foreground color based on commit type
     if (commit.parents.size() > 1) {
-      // Merge commit - show in purple
+
       item->setForeground(0, QColor("#a371f7"));
     } else {
       item->setForeground(0, QColor("#8b949e"));
@@ -1539,7 +1506,7 @@ void SourceControlPanel::onCommitMessageChanged() {
       m_commitMessage && !m_commitMessage->toPlainText().trimmed().isEmpty();
   bool isAmend = m_amendCheckbox && m_amendCheckbox->isChecked();
   if (m_commitButton) {
-    // Amend can work with just a message (to update the commit message)
+
     m_commitButton->setEnabled(hasMessage && (m_stagedCount > 0 || isAmend));
   }
 }
@@ -1950,7 +1917,7 @@ void SourceControlPanel::onCreateBranchClicked() {
                                              QLineEdit::Normal, "", &ok);
 
   if (ok && !branchName.isEmpty()) {
-    // Remove spaces and invalid characters
+
     branchName = branchName.trimmed().replace(" ", "-");
     if (m_git->createBranch(branchName, true)) {
       updateBranchSelector();
@@ -2019,7 +1986,6 @@ void SourceControlPanel::onOperationCompleted(const QString &message) {
                                "}");
   m_statusLabel->setToolTip(tr("Success: %1").arg(message));
 
-  // Reset color after 3 seconds
   QTimer::singleShot(3000, [this]() {
     m_statusLabel->setStyleSheet("QLabel {"
                                  "  background: #161b22;"
@@ -2050,7 +2016,6 @@ void SourceControlPanel::onErrorOccurred(const QString &error) {
   m_statusLabel->setToolTip(
       tr("Error: %1\n(This message will auto-clear in 5 seconds)").arg(error));
 
-  // Reset color after 5 seconds
   QTimer::singleShot(5000, [this]() {
     m_statusLabel->setStyleSheet("QLabel {"
                                  "  background: #161b22;"
@@ -2069,21 +2034,21 @@ void SourceControlPanel::onErrorOccurred(const QString &error) {
 QString SourceControlPanel::statusIcon(GitFileStatus status) const {
   switch (status) {
   case GitFileStatus::Modified:
-    return "●"; // Filled circle for modified
+    return "●";
   case GitFileStatus::Added:
-    return "✚"; // Plus sign for added
+    return "✚";
   case GitFileStatus::Deleted:
-    return "✖"; // X for deleted
+    return "✖";
   case GitFileStatus::Renamed:
-    return "➜"; // Arrow for renamed
+    return "➜";
   case GitFileStatus::Copied:
-    return "⎘"; // Copy symbol
+    return "⎘";
   case GitFileStatus::Untracked:
-    return "?"; // Question mark for untracked
+    return "?";
   case GitFileStatus::Unmerged:
-    return "⚠"; // Warning for unmerged
+    return "⚠";
   case GitFileStatus::Ignored:
-    return "⊝"; // Circled minus for ignored
+    return "⊝";
   default:
     return " ";
   }
@@ -2115,27 +2080,25 @@ QString SourceControlPanel::statusText(GitFileStatus status) const {
 QColor SourceControlPanel::statusColor(GitFileStatus status) const {
   switch (status) {
   case GitFileStatus::Modified:
-    return QColor("#e2c08d"); // Yellow/orange for modified
+    return QColor("#e2c08d");
   case GitFileStatus::Added:
-    return QColor("#3fb950"); // Green for added
+    return QColor("#3fb950");
   case GitFileStatus::Deleted:
-    return QColor("#f14c4c"); // Red for deleted
+    return QColor("#f14c4c");
   case GitFileStatus::Renamed:
-    return QColor("#a371f7"); // Purple for renamed
+    return QColor("#a371f7");
   case GitFileStatus::Copied:
-    return QColor("#a371f7"); // Purple for copied
+    return QColor("#a371f7");
   case GitFileStatus::Untracked:
-    return QColor("#3fb950"); // Green for untracked
+    return QColor("#3fb950");
   case GitFileStatus::Unmerged:
-    return QColor("#f14c4c"); // Red for unmerged
+    return QColor("#f14c4c");
   case GitFileStatus::Ignored:
-    return QColor("#8b949e"); // Gray for ignored
+    return QColor("#8b949e");
   default:
-    return QColor("#e6edf3"); // White for clean
+    return QColor("#e6edf3");
   }
 }
-
-// New slot implementations for extended functionality
 
 void SourceControlPanel::onInitRepositoryClicked() {
   QString path = m_workingPath;
@@ -2151,9 +2114,7 @@ void SourceControlPanel::onInitRepositoryClicked() {
           [this](const QString &repoPath) {
             if (m_git) {
               if (m_git->initRepository(repoPath)) {
-                // If user wants to add .gitignore, create a default one
-                // Note: The dialog's options would be used here in a full
-                // implementation
+
                 refresh();
                 emit repositoryInitialized(repoPath);
               }
@@ -2237,15 +2198,13 @@ void SourceControlPanel::onResolveConflictsClicked() {
 void SourceControlPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
   m_themeInitialized = true;
-  // Apply main widget style
+
   setStyleSheet(QString("background: %1;").arg(theme.backgroundColor.name()));
 
-  // Apply tree widget style
   if (m_changesTree) {
     m_changesTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }
 
-  // Apply commit message text edit style
   if (m_commitMessage) {
     QString textEditStyle = QString("QTextEdit {"
                                     "  background: %1;"
@@ -2259,12 +2218,10 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_commitMessage->setStyleSheet(textEditStyle);
   }
 
-  // Apply combobox style
   if (m_branchSelector) {
     m_branchSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
   }
 
-  // Apply button styles
   if (m_commitButton) {
     m_commitButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
   }
@@ -2275,7 +2232,6 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     }
   }
 
-  // Apply label styles
   if (m_statusLabel) {
     m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
   }

@@ -102,7 +102,7 @@ void WatchManager::evaluateWatch(int id, int frameId) {
   }
 
   if (m_dapClient->state() != DapClient::State::Stopped) {
-    // Can't evaluate while running
+
     m_watches[id].value = "<not available>";
     m_watches[id].isError = true;
     emit watchUpdated(m_watches[id]);
@@ -167,15 +167,14 @@ void WatchManager::onEvaluateError(const QString &expression,
     if (pending.fallbackStage == 0) {
       pending.fallbackStage = 1;
       m_pendingEvaluations[expression] = pending;
-      // Some adapters resolve locals better under hover context.
+
       m_dapClient->evaluate(expression, pending.frameId, "hover");
       return;
     }
     if (pending.fallbackStage == 1) {
       pending.fallbackStage = 2;
       m_pendingEvaluations[expression] = pending;
-      // Last fallback: omit context and let adapter use default expression
-      // mode.
+
       m_dapClient->evaluate(expression, pending.frameId, QString());
       return;
     }
@@ -226,7 +225,7 @@ void WatchManager::loadFromJson(const QJsonObject &json) {
   QJsonArray watchesArray = json["watches"].toArray();
   for (const auto &val : watchesArray) {
     WatchExpression watch = WatchExpression::fromJson(val.toObject());
-    // Assign a new ID - IDs are session-local and not persisted
+
     watch.id = m_nextId++;
     m_watches[watch.id] = watch;
   }
@@ -281,13 +280,11 @@ bool WatchManager::loadFromLightpadDir() {
     return false;
   }
 
-  // Ensure directory exists
   QDir dir(m_workspaceFolder + "/.lightpad/debug");
   if (!dir.exists()) {
     dir.mkpath(".");
   }
 
-  // If file doesn't exist, create a default one
   if (!QFile::exists(path)) {
     LOG_INFO("Creating default watches.json in .lightpad/debug/");
 
@@ -320,7 +317,6 @@ bool WatchManager::saveToLightpadDir() {
     return false;
   }
 
-  // Ensure directory exists
   QDir dir(m_workspaceFolder + "/.lightpad/debug");
   if (!dir.exists()) {
     dir.mkpath(".");

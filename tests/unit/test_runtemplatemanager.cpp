@@ -66,15 +66,13 @@ void TestRunTemplateManager::testSubstituteVariablesWithComplexPath() {
 }
 
 void TestRunTemplateManager::testParseTemplateFromJson() {
-  // Load templates
+
   RunTemplateManager &manager = RunTemplateManager::instance();
   manager.loadTemplates();
 
-  // Verify some templates exist
   QList<RunTemplate> templates = manager.getAllTemplates();
   QVERIFY(!templates.isEmpty());
 
-  // Check for Python template
   bool foundPython = false;
   for (const RunTemplate &tmpl : templates) {
     if (tmpl.id == "python3") {
@@ -92,7 +90,6 @@ void TestRunTemplateManager::testGetTemplatesForExtension() {
   RunTemplateManager &manager = RunTemplateManager::instance();
   manager.loadTemplates();
 
-  // Python files
   QList<RunTemplate> pyTemplates = manager.getTemplatesForExtension("py");
   QVERIFY(!pyTemplates.isEmpty());
 
@@ -105,11 +102,9 @@ void TestRunTemplateManager::testGetTemplatesForExtension() {
   }
   QVERIFY(foundPython);
 
-  // C++ files
   QList<RunTemplate> cppTemplates = manager.getTemplatesForExtension("cpp");
   QVERIFY(!cppTemplates.isEmpty());
 
-  // Unknown extension
   QList<RunTemplate> unknownTemplates =
       manager.getTemplatesForExtension("xyz123");
   QVERIFY(unknownTemplates.isEmpty());
@@ -131,32 +126,26 @@ void TestRunTemplateManager::testAssignmentPersistence() {
   RunTemplateManager &manager = RunTemplateManager::instance();
   manager.loadTemplates();
 
-  // Create a test file in temp directory
   QString testFile = m_tempDir.path() + "/test.py";
   QFile file(testFile);
   file.open(QIODevice::WriteOnly);
   file.write("print('hello')");
   file.close();
 
-  // Assign a template
   bool assigned =
       manager.assignTemplateToFile(testFile, "python3", QStringList() << "-v");
   QVERIFY(assigned);
 
-  // Verify assignment exists
   FileTemplateAssignment assignment = manager.getAssignmentForFile(testFile);
   QCOMPARE(assignment.templateId, QString("python3"));
   QVERIFY(assignment.customArgs.contains("-v"));
 
-  // Check that config file was created
   QString configFile = m_tempDir.path() + "/.lightpad/run_config.json";
   QVERIFY(QFile::exists(configFile));
 
-  // Remove assignment
   bool removed = manager.removeAssignment(testFile);
   QVERIFY(removed);
 
-  // Verify assignment is gone
   FileTemplateAssignment removedAssignment =
       manager.getAssignmentForFile(testFile);
   QVERIFY(removedAssignment.templateId.isEmpty());
@@ -172,21 +161,18 @@ void TestRunTemplateManager::testBuildCommand() {
   file.write("print('hello')");
   file.close();
 
-  // Build command without explicit assignment (should use default for .py)
   QPair<QString, QStringList> cmd = manager.buildCommand(testFile);
   QVERIFY(!cmd.first.isEmpty());
-  // Command should be python3 (or similar)
+
   QVERIFY(cmd.first.contains("python"));
 }
 
 void TestRunTemplateManager::testEmptyFilePath() {
   RunTemplateManager &manager = RunTemplateManager::instance();
 
-  // Empty file path should return empty command
   QPair<QString, QStringList> cmd = manager.buildCommand("");
   QVERIFY(cmd.first.isEmpty());
 
-  // Empty file path assignment should return empty
   FileTemplateAssignment assignment = manager.getAssignmentForFile("");
   QVERIFY(assignment.templateId.isEmpty());
 }

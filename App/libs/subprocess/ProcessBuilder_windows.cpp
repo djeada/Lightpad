@@ -1,5 +1,5 @@
 #ifdef _WIN32
-// because of how different it is, windows gets it's own file
+
 #include "ProcessBuilder.hpp"
 
 #include <stdio.h>
@@ -40,8 +40,6 @@ Popen ProcessBuilder::run_command(const CommandLine &command) {
 
   SECURITY_ATTRIBUTES saAttr = {0};
 
-  // Set the bInheritHandle flag so pipe handles are inherited.
-
   saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
   saAttr.bInheritHandle = TRUE;
   saAttr.lpSecurityDescriptor = NULL;
@@ -80,7 +78,7 @@ Popen ProcessBuilder::run_command(const CommandLine &command) {
     process.cout = cout_pair.input;
     disable_inherit(cout_pair.input);
   } else if (cout_option == PipeOption::cerr) {
-    // Do this when stderr is setup bellow
+
   } else if (cout_option == PipeOption::specific) {
     pipe_set_inheritable(cout_pipe, true);
     siStartInfo.hStdOutput = cout_pipe;
@@ -102,7 +100,6 @@ Popen ProcessBuilder::run_command(const CommandLine &command) {
     siStartInfo.hStdError = cerr_pipe;
   }
 
-  // I don't know why someone would want to do this. But for completeness
   if (cout_option == PipeOption::cerr) {
     siStartInfo.hStdOutput = siStartInfo.hStdError;
   }
@@ -112,14 +109,7 @@ Popen ProcessBuilder::run_command(const CommandLine &command) {
   void *env = nullptr;
   std::u16string envblock;
   if (!this->env.empty()) {
-    /*  if you use ansi there is a 37K size limit. So we use unicode
-            which is almost utf16.
 
-            TODO: fix by using unicode 16bit chars.
-
-            This won't work as expected if somewhere there is a multibyte
-            utf-16 char (4-bytes total).
-        */
     envblock = create_env_block(this->env);
     env = (void *)envblock.data();
   }
@@ -127,17 +117,10 @@ Popen ProcessBuilder::run_command(const CommandLine &command) {
   if (this->new_process_group) {
     process_flags |= CREATE_NEW_PROCESS_GROUP;
   }
-  // Create the child process.
-  bSuccess = CreateProcess(program.c_str(),
-                           (char *)args.c_str(), // command line
-                           NULL,                 // process security attributes
-                           NULL,          // primary thread security attributes
-                           TRUE,          // handles are inherited
-                           process_flags, // creation flags
-                           env,           // environment
-                           cwd,           // use parent's current directory
-                           &siStartInfo,  // STARTUPINFO pointer
-                           &piProcInfo);  // receives PROCESS_INFORMATION
+
+  bSuccess =
+      CreateProcess(program.c_str(), (char *)args.c_str(), NULL, NULL, TRUE,
+                    process_flags, env, cwd, &siStartInfo, &piProcInfo);
   process.process_info = piProcInfo;
   process.pid = piProcInfo.dwProcessId;
   if (cin_pair)
@@ -159,7 +142,7 @@ Popen ProcessBuilder::run_command(const CommandLine &command) {
   cerr_pair.disown();
 
   process.args = command;
-  // TODO: get error and add it to throw
+
   if (!bSuccess)
     throw SpawnError("CreateProcess failed");
   return process;

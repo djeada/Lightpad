@@ -4,9 +4,6 @@
 #include "basesyntaxplugin.h"
 #include <QVector>
 
-/**
- * @brief Built-in C++ syntax highlighting plugin
- */
 class CppSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "cpp"; }
@@ -29,4 +26,4 @@ private:
   static QStringList getTertiaryKeywords();
 };
 
-#endif // CPPSYNTAXPLUGIN_H
+#endif

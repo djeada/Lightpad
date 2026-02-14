@@ -27,4 +27,4 @@ private:
   void write(QJsonObject &json);
 };
 
-#endif // TEXTAREASETTINGS_H
+#endif

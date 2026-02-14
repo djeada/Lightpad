@@ -19,7 +19,6 @@ void FileQuickOpen::setupUI() {
   m_layout->setContentsMargins(8, 8, 8, 8);
   m_layout->setSpacing(4);
 
-  // Search box
   m_searchBox = new QLineEdit(this);
   m_searchBox->setPlaceholderText(tr("Search files by name..."));
   m_searchBox->setStyleSheet("QLineEdit {"
@@ -32,7 +31,6 @@ void FileQuickOpen::setupUI() {
                              "}");
   m_layout->addWidget(m_searchBox);
 
-  // Results list
   m_resultsList = new QListWidget(this);
   m_resultsList->setStyleSheet("QListWidget {"
                                "  border: none;"
@@ -52,7 +50,6 @@ void FileQuickOpen::setupUI() {
   m_resultsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   m_layout->addWidget(m_resultsList);
 
-  // Connections
   connect(m_searchBox, &QLineEdit::textChanged, this,
           &FileQuickOpen::onSearchTextChanged);
   connect(m_resultsList, &QListWidget::itemActivated, this,
@@ -60,7 +57,6 @@ void FileQuickOpen::setupUI() {
   connect(m_resultsList, &QListWidget::itemClicked, this,
           &FileQuickOpen::onItemClicked);
 
-  // Install event filter for keyboard navigation
   m_searchBox->installEventFilter(this);
 
   setStyleSheet("FileQuickOpen { background: #171c24; border: 1px solid "
@@ -81,7 +77,6 @@ void FileQuickOpen::scanDirectory() {
 
   QDirIterator it(m_rootPath, QDir::Files, QDirIterator::Subdirectories);
 
-  // Skip common non-relevant directories
   QStringList skipDirs = {".git", "node_modules", "build",
                           "dist", ".cache",       "__pycache__"};
   QString sep = QDir::separator();
@@ -89,16 +84,15 @@ void FileQuickOpen::scanDirectory() {
   while (it.hasNext()) {
     QString filePath = it.next();
 
-    // Check if path contains any skip directories
     bool shouldSkip = false;
     for (const QString &skipDir : skipDirs) {
-      // Check for directory as path component using platform separator
+
       if (filePath.contains(sep + skipDir + sep) ||
           filePath.endsWith(sep + skipDir)) {
         shouldSkip = true;
         break;
       }
-      // Also check with forward slash for Qt's normalized paths
+
       if (filePath.contains("/" + skipDir + "/") ||
           filePath.endsWith("/" + skipDir)) {
         shouldSkip = true;
@@ -107,7 +101,7 @@ void FileQuickOpen::scanDirectory() {
     }
 
     if (!shouldSkip) {
-      // Store relative path for display
+
       QString relativePath = filePath.mid(m_rootPath.length());
       if (relativePath.startsWith('/') || relativePath.startsWith('\\') ||
           relativePath.startsWith(sep)) {
@@ -117,7 +111,6 @@ void FileQuickOpen::scanDirectory() {
     }
   }
 
-  // Sort alphabetically
   m_allFiles.sort(Qt::CaseInsensitive);
 }
 
@@ -125,7 +118,6 @@ void FileQuickOpen::showDialog() {
   m_searchBox->clear();
   updateResults(QString());
 
-  // Position at top center of parent
   if (parentWidget()) {
     QPoint parentCenter =
         parentWidget()->mapToGlobal(parentWidget()->rect().center());
@@ -204,18 +196,17 @@ void FileQuickOpen::updateResults(const QString &query) {
   m_resultsList->clear();
   m_filteredFiles.clear();
 
-  QList<QPair<int, QString>> scored; // score, file path
+  QList<QPair<int, QString>> scored;
 
   for (const QString &file : m_allFiles) {
     int score = 0;
     if (query.isEmpty()) {
-      score = 1000; // Show all files initially
+      score = 1000;
     } else {
-      // Match against filename primarily
+
       QString fileName = QFileInfo(file).fileName();
       score = fuzzyMatch(query.toLower(), fileName.toLower());
 
-      // Also try matching full path with lower priority
       if (score == 0) {
         score = fuzzyMatch(query.toLower(), file.toLower()) / 2;
       }
@@ -226,13 +217,11 @@ void FileQuickOpen::updateResults(const QString &query) {
     }
   }
 
-  // Sort by score descending
   std::sort(scored.begin(), scored.end(),
             [](const QPair<int, QString> &a, const QPair<int, QString> &b) {
               return a.first > b.first;
             });
 
-  // Limit results
   int maxResults = 20;
   for (int i = 0; i < qMin(scored.size(), maxResults); ++i) {
     QString filePath = scored[i].second;
@@ -240,7 +229,6 @@ void FileQuickOpen::updateResults(const QString &query) {
 
     QListWidgetItem *item = new QListWidgetItem();
 
-    // Show filename prominently, with path in lighter color
     QString fileName = QFileInfo(filePath).fileName();
     QString dirPath = QFileInfo(filePath).path();
 
@@ -258,7 +246,6 @@ void FileQuickOpen::updateResults(const QString &query) {
     m_resultsList->setCurrentRow(0);
   }
 
-  // Adjust height
   int itemHeight = 35;
   int newHeight = qMin(m_resultsList->count() * itemHeight + 60, 450);
   setFixedHeight(newHeight);
@@ -268,22 +255,20 @@ int FileQuickOpen::fuzzyMatch(const QString &pattern, const QString &text) {
   if (pattern.isEmpty())
     return 1000;
 
-  // Exact match gets highest score
   if (text.contains(pattern))
     return 2000 + (1000 - text.indexOf(pattern));
 
-  // Fuzzy matching - all characters must appear in order
   int patternIdx = 0;
   int score = 0;
   int lastMatchIdx = -1;
 
   for (int i = 0; i < text.length() && patternIdx < pattern.length(); ++i) {
     if (text[i] == pattern[patternIdx]) {
-      // Bonus for consecutive matches
+
       if (lastMatchIdx == i - 1) {
         score += 15;
       }
-      // Bonus for word boundary matches (after / or . or _)
+
       if (i == 0 || text[i - 1] == '/' || text[i - 1] == '\\' ||
           text[i - 1] == '.' || text[i - 1] == '_' || text[i - 1] == '-') {
         score += 10;
@@ -294,7 +279,6 @@ int FileQuickOpen::fuzzyMatch(const QString &pattern, const QString &text) {
     }
   }
 
-  // All pattern characters must be matched
   if (patternIdx != pattern.length())
     return 0;
 

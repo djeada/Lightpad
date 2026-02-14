@@ -36,4 +36,4 @@ private:
   void setupParent();
 };
 
-#endif // PREFERENCES_H
+#endif

@@ -23,7 +23,6 @@ void CommandPalette::setupUI() {
   m_layout->setContentsMargins(8, 8, 8, 8);
   m_layout->setSpacing(4);
 
-  // Search box
   m_searchBox = new QLineEdit(this);
   m_searchBox->setPlaceholderText(tr("Type a command..."));
   m_searchBox->setStyleSheet("QLineEdit {"
@@ -36,7 +35,6 @@ void CommandPalette::setupUI() {
                              "}");
   m_layout->addWidget(m_searchBox);
 
-  // Results list
   m_resultsList = new QListWidget(this);
   m_resultsList->setStyleSheet("QListWidget {"
                                "  border: none;"
@@ -56,7 +54,6 @@ void CommandPalette::setupUI() {
   m_resultsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   m_layout->addWidget(m_resultsList);
 
-  // Connections
   connect(m_searchBox, &QLineEdit::textChanged, this,
           &CommandPalette::onSearchTextChanged);
   connect(m_resultsList, &QListWidget::itemActivated, this,
@@ -64,7 +61,6 @@ void CommandPalette::setupUI() {
   connect(m_resultsList, &QListWidget::itemClicked, this,
           &CommandPalette::onItemClicked);
 
-  // Install event filter for keyboard navigation
   m_searchBox->installEventFilter(this);
 
   setStyleSheet("CommandPalette { background: #171c24; border: 1px solid "
@@ -80,7 +76,7 @@ void CommandPalette::registerAction(QAction *action, const QString &category) {
       action->objectName().isEmpty() ? action->text() : action->objectName();
   item.name =
       category.isEmpty() ? action->text() : category + ": " + action->text();
-  item.name.remove('&'); // Remove mnemonics
+  item.name.remove('&');
   item.shortcut = action->shortcut().toString(QKeySequence::NativeText);
   item.action = action;
   item.score = 0;
@@ -116,7 +112,6 @@ void CommandPalette::showPalette() {
   m_searchBox->clear();
   updateResults(QString());
 
-  // Position at top center of parent
   if (parentWidget()) {
     QPoint parentCenter =
         parentWidget()->mapToGlobal(parentWidget()->rect().center());
@@ -195,17 +190,17 @@ void CommandPalette::updateResults(const QString &query) {
   m_resultsList->clear();
   m_filteredIndices.clear();
 
-  QList<QPair<int, int>> scored; // score, index
+  QList<QPair<int, int>> scored;
 
   for (int i = 0; i < m_commands.size(); ++i) {
     int score = 0;
     if (query.isEmpty()) {
-      // When empty, prioritize recent commands
+
       int recentBonus = getRecentBonus(m_commands[i].id);
       score = 1000 - i + recentBonus;
     } else {
       score = fuzzyMatch(query.toLower(), m_commands[i].name.toLower());
-      // Add bonus for recent commands even when searching
+
       if (score > 0) {
         score += getRecentBonus(m_commands[i].id) / 2;
       }
@@ -216,13 +211,11 @@ void CommandPalette::updateResults(const QString &query) {
     }
   }
 
-  // Sort by score descending
   std::sort(scored.begin(), scored.end(),
             [](const QPair<int, int> &a, const QPair<int, int> &b) {
               return a.first > b.first;
             });
 
-  // Limit results
   int maxResults = 15;
   for (int i = 0; i < qMin(scored.size(), maxResults); ++i) {
     int idx = scored[i].second;
@@ -235,7 +228,7 @@ void CommandPalette::updateResults(const QString &query) {
     if (!cmd.shortcut.isEmpty()) {
       displayText += "  [" + cmd.shortcut + "]";
     }
-    // Mark recent commands
+
     if (m_recentCommands.contains(cmd.id) && query.isEmpty()) {
       displayText = "⏱ " + displayText;
     }
@@ -248,7 +241,6 @@ void CommandPalette::updateResults(const QString &query) {
     m_resultsList->setCurrentRow(0);
   }
 
-  // Adjust height
   int itemHeight = 35;
   int newHeight = qMin(m_resultsList->count() * itemHeight + 60, 400);
   setFixedHeight(newHeight);
@@ -258,22 +250,20 @@ int CommandPalette::fuzzyMatch(const QString &pattern, const QString &text) {
   if (pattern.isEmpty())
     return 1000;
 
-  // Exact match gets highest score
   if (text.contains(pattern))
     return 2000 + (1000 - text.indexOf(pattern));
 
-  // Fuzzy matching - all characters must appear in order
   int patternIdx = 0;
   int score = 0;
   int lastMatchIdx = -1;
 
   for (int i = 0; i < text.length() && patternIdx < pattern.length(); ++i) {
     if (text[i] == pattern[patternIdx]) {
-      // Bonus for consecutive matches
+
       if (lastMatchIdx == i - 1) {
         score += 15;
       }
-      // Bonus for word boundary matches
+
       if (i == 0 || text[i - 1] == ' ' || text[i - 1] == ':') {
         score += 10;
       }
@@ -283,7 +273,6 @@ int CommandPalette::fuzzyMatch(const QString &pattern, const QString &text) {
     }
   }
 
-  // All pattern characters must be matched
   if (patternIdx != pattern.length())
     return 0;
 
@@ -298,7 +287,6 @@ void CommandPalette::executeCommand(int row) {
   if (cmdIdx < 0 || cmdIdx >= m_commands.size())
     return;
 
-  // Track this command as recently used
   addToRecentCommands(m_commands[cmdIdx].id);
 
   hide();
@@ -324,13 +312,11 @@ void CommandPalette::selectPrevious() {
 }
 
 void CommandPalette::addToRecentCommands(const QString &commandId) {
-  // Remove if already in list
+
   m_recentCommands.removeAll(commandId);
 
-  // Add to front
   m_recentCommands.prepend(commandId);
 
-  // Trim to max size
   while (m_recentCommands.size() > MAX_RECENT_COMMANDS) {
     m_recentCommands.removeLast();
   }
@@ -354,7 +340,7 @@ int CommandPalette::getRecentBonus(const QString &commandId) const {
   if (index < 0) {
     return 0;
   }
-  // Most recent gets highest bonus, decreasing for older commands
+
   return (MAX_RECENT_COMMANDS - index) * 100;
 }
 

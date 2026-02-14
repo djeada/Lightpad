@@ -3,11 +3,6 @@
 
 #include "../icompletionprovider.h"
 
-/**
- * @brief Completion provider for code snippets
- *
- * Provides snippet completions from the SnippetRegistry.
- */
 class SnippetCompletionProvider : public ICompletionProvider {
 public:
   SnippetCompletionProvider();
@@ -29,4 +24,4 @@ private:
   bool m_enabled = true;
 };
 
-#endif // SNIPPETCOMPLETIONPROVIDER_H
+#endif

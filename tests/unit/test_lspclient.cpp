@@ -3,12 +3,6 @@
 
 #include "lsp/lspclient.h"
 
-/**
- * @brief Unit tests for LSP (Language Server Protocol) client
- *
- * Tests the LSP client infrastructure including data structures
- * for signature help, document symbols, and rename operations.
- */
 class TestLspClient : public QObject {
   Q_OBJECT
 
@@ -16,50 +10,35 @@ private slots:
   void initTestCase();
   void cleanupTestCase();
 
-  // Basic client tests
   void testLspClientInitialState();
   void testLspClientStateEnum();
 
-  // Data structure tests - LspPosition
   void testLspPositionToJson();
   void testLspPositionFromJson();
 
-  // Data structure tests - LspRange
   void testLspRangeToJson();
   void testLspRangeFromJson();
 
-  // Data structure tests - Signature Help
   void testLspParameterInfo();
   void testLspSignatureInfo();
   void testLspSignatureHelp();
 
-  // Data structure tests - Document Symbols
   void testLspSymbolKindValues();
   void testLspDocumentSymbol();
   void testLspDocumentSymbolNested();
 
-  // Data structure tests - Rename/TextEdit
   void testLspTextEdit();
   void testLspWorkspaceEdit();
   void testLspWorkspaceEditMultipleFiles();
 
-  // Data structure tests - Code Actions
   void testLspCodeAction();
   void testLspCodeActionKindConstants();
   void testLspCodeActionWithEdit();
 };
 
-void TestLspClient::initTestCase() {
-  // No special initialization needed
-}
+void TestLspClient::initTestCase() {}
 
-void TestLspClient::cleanupTestCase() {
-  // No special cleanup needed
-}
-
-// =============================================================================
-// Basic Client Tests
-// =============================================================================
+void TestLspClient::cleanupTestCase() {}
 
 void TestLspClient::testLspClientInitialState() {
   LspClient client;
@@ -69,17 +48,13 @@ void TestLspClient::testLspClientInitialState() {
 }
 
 void TestLspClient::testLspClientStateEnum() {
-  // Test that all states are distinct
+
   QVERIFY(LspClient::State::Disconnected != LspClient::State::Connecting);
   QVERIFY(LspClient::State::Connecting != LspClient::State::Initializing);
   QVERIFY(LspClient::State::Initializing != LspClient::State::Ready);
   QVERIFY(LspClient::State::Ready != LspClient::State::ShuttingDown);
   QVERIFY(LspClient::State::ShuttingDown != LspClient::State::Error);
 }
-
-// =============================================================================
-// LspPosition Tests
-// =============================================================================
 
 void TestLspClient::testLspPositionToJson() {
   LspPosition pos;
@@ -102,10 +77,6 @@ void TestLspClient::testLspPositionFromJson() {
   QCOMPARE(pos.line, 42);
   QCOMPARE(pos.character, 15);
 }
-
-// =============================================================================
-// LspRange Tests
-// =============================================================================
 
 void TestLspClient::testLspRangeToJson() {
   LspRange range;
@@ -142,10 +113,6 @@ void TestLspClient::testLspRangeFromJson() {
   QCOMPARE(range.end.line, 15);
   QCOMPARE(range.end.character, 30);
 }
-
-// =============================================================================
-// Signature Help Data Structure Tests
-// =============================================================================
 
 void TestLspClient::testLspParameterInfo() {
   LspParameterInfo param;
@@ -197,12 +164,8 @@ void TestLspClient::testLspSignatureHelp() {
   QCOMPARE(help.activeParameter, 2);
 }
 
-// =============================================================================
-// Document Symbol Data Structure Tests
-// =============================================================================
-
 void TestLspClient::testLspSymbolKindValues() {
-  // Test that symbol kinds have expected values (from LSP spec)
+
   QCOMPARE(static_cast<int>(LspSymbolKind::File), 1);
   QCOMPARE(static_cast<int>(LspSymbolKind::Class), 5);
   QCOMPARE(static_cast<int>(LspSymbolKind::Method), 6);
@@ -232,7 +195,7 @@ void TestLspClient::testLspDocumentSymbol() {
 }
 
 void TestLspClient::testLspDocumentSymbolNested() {
-  // Create a class with nested methods
+
   LspDocumentSymbol classSymbol;
   classSymbol.name = "Calculator";
   classSymbol.kind = LspSymbolKind::Class;
@@ -260,10 +223,6 @@ void TestLspClient::testLspDocumentSymbolNested() {
   QCOMPARE(classSymbol.children.at(0).kind, LspSymbolKind::Method);
 }
 
-// =============================================================================
-// Rename/TextEdit Data Structure Tests
-// =============================================================================
-
 void TestLspClient::testLspTextEdit() {
   LspTextEdit edit;
   edit.range.start.line = 5;
@@ -280,7 +239,6 @@ void TestLspClient::testLspTextEdit() {
 void TestLspClient::testLspWorkspaceEdit() {
   LspWorkspaceEdit wsEdit;
 
-  // Add edits for one file
   LspTextEdit edit1;
   edit1.range.start.line = 10;
   edit1.range.start.character = 5;
@@ -308,7 +266,6 @@ void TestLspClient::testLspWorkspaceEdit() {
 void TestLspClient::testLspWorkspaceEditMultipleFiles() {
   LspWorkspaceEdit wsEdit;
 
-  // Edits for first file - simulate renaming in two places
   LspTextEdit edit1a;
   edit1a.newText = "newName";
   edit1a.range.start.line = 10;
@@ -326,7 +283,6 @@ void TestLspClient::testLspWorkspaceEditMultipleFiles() {
   wsEdit.changes["file:///path/to/file1.cpp"].append(edit1a);
   wsEdit.changes["file:///path/to/file1.cpp"].append(edit1b);
 
-  // Edits for second file
   LspTextEdit edit2;
   edit2.newText = "newName";
   edit2.range.start.line = 5;
@@ -335,7 +291,6 @@ void TestLspClient::testLspWorkspaceEditMultipleFiles() {
   edit2.range.end.character = 17;
   wsEdit.changes["file:///path/to/file2.cpp"].append(edit2);
 
-  // Edits for header file - simulate renaming in three places
   LspTextEdit edit3a;
   edit3a.newText = "newName";
   edit3a.range.start.line = 3;
@@ -367,10 +322,6 @@ void TestLspClient::testLspWorkspaceEditMultipleFiles() {
   QCOMPARE(wsEdit.changes["file:///path/to/file1.h"].count(), 3);
 }
 
-// =============================================================================
-// Code Action Data Structure Tests
-// =============================================================================
-
 void TestLspClient::testLspCodeAction() {
   LspCodeAction action;
   action.title = "Remove unused import";
@@ -397,7 +348,6 @@ void TestLspClient::testLspCodeActionWithEdit() {
   action.kind = LspCodeActionKind::SourceOrganizeImports;
   action.isPreferred = false;
 
-  // Add a workspace edit
   LspTextEdit edit;
   edit.range.start.line = 0;
   edit.range.start.character = 0;
@@ -407,7 +357,6 @@ void TestLspClient::testLspCodeActionWithEdit() {
 
   action.edit.changes["file:///path/to/file.py"].append(edit);
 
-  // Add a diagnostic
   LspDiagnostic diag;
   diag.range.start.line = 2;
   diag.range.start.character = 0;

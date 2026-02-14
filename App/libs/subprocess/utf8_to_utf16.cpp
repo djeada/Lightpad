@@ -37,33 +37,20 @@ std::string utf16_to_utf8(const std::wstring &str) {
 #endif
 
 #if 0
-    // saving here perhaps to finish another time.
+    
     std::u16string utf8_to_utf16(const std::string& str) {
         std::wstring result;
         for (int i = 0; i < str.size(); ++i) {
             if (str[i] <= 0x7F) {
-                // easy case it's just a copy
+                
                 char16_t ch = str[i];
                 result += ch;
                 continue;
             }
             uint32_t code = 0;
             uint_t nbytes = str[i];
-            /*
-                Unicode is only 21 bits.
+            
 
-                UTF8 multibyte is either 2, 3, or 4 bytes. The first part of the
-                byte tells you how much bytes there are. The remainder is the
-                bits. Following bytes start with 10xx xxxx
-
-                see https://en.wikipedia.org/wiki/UTF-8 for more details
-
-                bytes   code        mask    expected    payload     bits
-                1       1000 0000   0xC0    0x80        0x3F         6
-                2       1100 0000   0xD0    0xC0        0x1F        11
-                3       1110 0000   0xF0    0xD0        0x0F        16
-                4       1111 0000   0xF8    0xF0        0x07        21
-            */
             if ((nbytes & 0xF8) == 0xF0) {
                 nbytes = 4;
                 code = str[i] & 0x07;
@@ -93,7 +80,7 @@ std::string utf16_to_utf8(const std::wstring &str) {
                 return "";
             }
 
-            // we have decoded into code now we need to encode into UTF16
+            
             if (code <= 0xD7FF) {
 
             }
@@ -105,17 +92,13 @@ std::string utf16_to_utf8(const std::wstring &str) {
 #endif
 
 #ifdef _WIN32
-// these 3 functions are addapted from reproc
-// https://github.com/DaanDeMeyer/reproc/blob/master/reproc/src/utf.windows.c
 
-// we only need these on windows
 std::u16string utf8_to_utf16(const std::string &string) {
   static_assert(sizeof(wchar_t) == 2, "wchar_t must be of size 2");
   static_assert(sizeof(wchar_t) == sizeof(char16_t),
                 "wchar_t must be of size 2");
   int size = string.size() + 1;
-  // Determine wstring size (`MultiByteToWideChar` returns the required size if
-  // its last two arguments are `NULL` and 0).
+
   int r = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, string.c_str(),
                               size, NULL, 0);
   if (r == 0) {
@@ -123,17 +106,12 @@ std::u16string utf8_to_utf16(const std::string &string) {
   }
   assert(r > 0);
 
-  // `MultiByteToWideChar` does not return negative values so the cast to
-  // `size_t` is safe.
   wchar_t *wstring = new wchar_t[r];
   if (wstring == NULL) {
     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
     return NULL;
   }
 
-  // Now we pass our allocated string and its size as the last two arguments
-  // instead of `NULL` and 0 which makes `MultiByteToWideChar` actually perform
-  // the conversion.
   r = MultiByteToWideChar(CP_UTF8, 0, string.c_str(), size, wstring, r);
   if (r == 0) {
     delete[] wstring;
@@ -145,14 +123,13 @@ std::u16string utf8_to_utf16(const std::string &string) {
 }
 
 #ifdef __MINGW32__
-// mingw doesn't define this
+
 constexpr int WC_ERR_INVALID_CHARS = 0;
 #endif
 
 std::string utf16_to_utf8(const std::u16string &wstring) {
   int size = wstring.size() + 1;
-  // Determine wstring size (`MultiByteToWideChar` returns the required size if
-  // its last two arguments are `NULL` and 0).
+
   int r = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
                               (wchar_t *)wstring.c_str(), size, NULL, 0, NULL,
                               NULL);
@@ -162,17 +139,12 @@ std::string utf16_to_utf8(const std::u16string &wstring) {
   }
   assert(r > 0);
 
-  // `WideCharToMultiByte` does not return negative values so the cast to
-  // `size_t` is safe.
   char *string = new char[r];
   if (string == nullptr) {
     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
     return NULL;
   }
 
-  // Now we pass our allocated string and its size as the last two arguments
-  // instead of `NULL` and 0 which makes `MultiByteToWideChar` actually perform
-  // the conversion.
   r = WideCharToMultiByte(CP_UTF8, 0, (wchar_t *)wstring.c_str(), size, string,
                           r, NULL, NULL);
   if (r == 0) {
@@ -186,8 +158,7 @@ std::string utf16_to_utf8(const std::u16string &wstring) {
 
 std::string utf16_to_utf8(const std::wstring &wstring) {
   int size = wstring.size() + 1;
-  // Determine wstring size (`MultiByteToWideChar` returns the required size if
-  // its last two arguments are `NULL` and 0).
+
   int r = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
                               (wchar_t *)wstring.c_str(), size, NULL, 0, NULL,
                               NULL);
@@ -197,17 +168,12 @@ std::string utf16_to_utf8(const std::wstring &wstring) {
   }
   assert(r > 0);
 
-  // `WideCharToMultiByte` does not return negative values so the cast to
-  // `size_t` is safe.
   char *string = new char[r];
   if (string == nullptr) {
     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
     return NULL;
   }
 
-  // Now we pass our allocated string and its size as the last two arguments
-  // instead of `NULL` and 0 which makes `MultiByteToWideChar` actually perform
-  // the conversion.
   r = WideCharToMultiByte(CP_UTF8, 0, (wchar_t *)wstring.c_str(), size, string,
                           r, NULL, NULL);
   if (r == 0) {

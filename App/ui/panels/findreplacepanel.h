@@ -14,7 +14,6 @@ namespace Ui {
 class FindReplacePanel;
 }
 
-// Represents a search result in global mode
 struct GlobalSearchResult {
   QString filePath;
   int lineNumber;
@@ -46,11 +45,10 @@ public:
 
   bool eventFilter(QObject *obj, QEvent *event) override;
 
-  // Search mode
   bool isGlobalMode() const;
 
 signals:
-  // Emitted when user clicks on a search result to navigate to it
+
   void navigateToFile(const QString &filePath, int lineNumber,
                       int columnNumber);
 
@@ -80,15 +78,12 @@ private:
   QString m_searchPrefix;
   int position;
 
-  // Project path for global search
   QString projectPath;
 
-  // Global search results
   QVector<GlobalSearchResult> globalResults;
   int globalResultIndex;
   QTreeWidget *resultsTree;
 
-  // Search history
   QStringList searchHistory;
   int searchHistoryIndex;
   static const int MAX_SEARCH_HISTORY = 20;
@@ -101,13 +96,11 @@ private:
   void findPrevious(QTextCursor &cursor, const QString &searchWord);
   void replaceNext(QTextCursor &cursor, const QString &replaceWord);
 
-  // Search options
   QRegularExpression buildSearchPattern(const QString &searchWord) const;
   QString applyPreserveCase(const QString &replaceWord,
                             const QString &matchedText) const;
   void addToSearchHistory(const QString &searchTerm);
 
-  // Global search methods
   void performGlobalSearch(const QString &searchWord);
   void searchInFile(const QString &filePath, const QRegularExpression &pattern);
   void displayGlobalResults();
@@ -115,9 +108,8 @@ private:
   void updateModeUI();
   QStringList getProjectFiles() const;
 
-  // Local search results display
   void displayLocalResults(const QString &searchWord);
   void onLocalResultClicked(QTreeWidgetItem *item, int column);
 };
 
-#endif // FINDREPLACEPANEL_H
+#endif

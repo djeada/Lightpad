@@ -20,13 +20,10 @@ void ShellProfileManager::detectSystemShells() {
   m_profiles.clear();
 
 #ifdef Q_OS_WIN
-  // Windows shells
 
-  // PowerShell
   QString pwsh = "pwsh.exe";
   QString powershell = "powershell.exe";
 
-  // Try to find PowerShell Core (pwsh)
   QStringList pwshPaths = {"C:/Program Files/PowerShell/7/pwsh.exe",
                            "C:/Program Files (x86)/PowerShell/7/pwsh.exe"};
 
@@ -37,7 +34,6 @@ void ShellProfileManager::detectSystemShells() {
     }
   }
 
-  // Windows PowerShell (always available)
   QString system32 =
       qEnvironmentVariable("SystemRoot", "C:\\Windows") + "\\System32";
   QString psPath = system32 + "\\WindowsPowerShell\\v1.0\\powershell.exe";
@@ -45,13 +41,11 @@ void ShellProfileManager::detectSystemShells() {
     m_profiles.append(ShellProfile("Windows PowerShell", psPath, {"-NoLogo"}));
   }
 
-  // Command Prompt
   QString comspec = qEnvironmentVariable("COMSPEC", "cmd.exe");
   if (QFile::exists(comspec)) {
     m_profiles.append(ShellProfile("Command Prompt", comspec));
   }
 
-  // Git Bash (if installed)
   QStringList gitBashPaths = {"C:/Program Files/Git/bin/bash.exe",
                               "C:/Program Files (x86)/Git/bin/bash.exe"};
 
@@ -62,19 +56,17 @@ void ShellProfileManager::detectSystemShells() {
     }
   }
 
-  // WSL (if available)
   QString wslPath = system32 + "\\wsl.exe";
   if (QFile::exists(wslPath)) {
     m_profiles.append(ShellProfile("WSL", wslPath));
   }
 
-  // Set default
   if (!m_profiles.isEmpty()) {
     m_defaultProfileName = m_profiles.first().name;
   }
 
 #else
-  // Unix/Linux/macOS shells
+
   QStringList shellPaths = {"/bin/bash",     "/usr/bin/bash", "/bin/zsh",
                             "/usr/bin/zsh",  "/bin/fish",     "/usr/bin/fish",
                             "/bin/sh",       "/usr/bin/sh",   "/bin/tcsh",
@@ -87,7 +79,6 @@ void ShellProfileManager::detectSystemShells() {
       QFileInfo fi(path);
       QString shellName = fi.fileName();
 
-      // Skip if we already added this shell type
       if (addedShells.contains(shellName)) {
         continue;
       }
@@ -123,13 +114,11 @@ void ShellProfileManager::detectSystemShells() {
     }
   }
 
-  // Also check user's default shell
   QString userShell = qEnvironmentVariable("SHELL", "/bin/sh");
   if (QFile::exists(userShell)) {
     QFileInfo fi(userShell);
     QString shellName = fi.fileName();
 
-    // Set user's shell as default
     for (const ShellProfile &profile : m_profiles) {
       if (profile.command == userShell ||
           QFileInfo(profile.command).fileName() == shellName) {
@@ -139,7 +128,6 @@ void ShellProfileManager::detectSystemShells() {
     }
   }
 
-  // If no default found, use the first one
   if (m_defaultProfileName.isEmpty() && !m_profiles.isEmpty()) {
     m_defaultProfileName = m_profiles.first().name;
   }
@@ -157,12 +145,10 @@ ShellProfile ShellProfileManager::defaultProfile() const {
     }
   }
 
-  // Fallback
   if (!m_profiles.isEmpty()) {
     return m_profiles.first();
   }
 
-  // Last resort fallback
 #ifdef Q_OS_WIN
   return ShellProfile("Command Prompt",
                       qEnvironmentVariable("COMSPEC", "cmd.exe"));
@@ -186,7 +172,6 @@ void ShellProfileManager::addProfile(const ShellProfile &profile) {
     return;
   }
 
-  // Remove existing profile with same name
   removeProfile(profile.name);
   m_profiles.append(profile);
 }

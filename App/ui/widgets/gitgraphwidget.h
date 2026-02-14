@@ -9,22 +9,13 @@ class QScrollBar;
 class QPaintEvent;
 class QMouseEvent;
 
-/**
- * @brief Commit graph node with layout info for DAG rendering
- */
 struct GraphCommitNode {
   GitCommitInfo info;
-  int column;          ///< Lane column (0-based)
-  QStringList parents; ///< Parent hashes
-  QColor color;        ///< Branch color for this lane
+  int column;
+  QStringList parents;
+  QColor color;
 };
 
-/**
- * @brief DAG commit graph widget (GitLens-style)
- *
- * Renders a visual commit graph with branch lanes, merge lines,
- * and commit dots alongside commit metadata.
- */
 class GitGraphWidget : public QWidget {
   Q_OBJECT
 
@@ -54,7 +45,7 @@ private:
   GitIntegration *m_git;
   Theme m_theme;
   QList<GraphCommitNode> m_nodes;
-  QMap<QString, int> m_hashToIndex; ///< hash -> index in m_nodes
+  QMap<QString, int> m_hashToIndex;
   int m_maxLanes;
   int m_scrollOffset;
   int m_selectedIndex;
@@ -68,4 +59,4 @@ private:
   static const QList<QColor> s_laneColors;
 };
 
-#endif // GITGRAPHWIDGET_H
+#endif

@@ -134,24 +134,20 @@ private slots:
   void on_actionToggle_Terminal_triggered();
   void on_actionToggle_Source_Control_triggered();
 
-  // Open to side
   void on_actionOpen_To_Side_triggered();
 
-  // Git log
   void on_actionGit_Log_triggered();
   void on_actionGit_File_History_triggered();
   void on_actionGit_Rebase_triggered();
   void on_actionToggle_Heatmap_triggered(bool checked);
   void on_actionToggle_CodeLens_triggered(bool checked);
 
-  // Text transformation actions
   void on_actionTransform_Uppercase_triggered();
   void on_actionTransform_Lowercase_triggered();
   void on_actionTransform_Title_Case_triggered();
   void on_actionSort_Lines_Ascending_triggered();
   void on_actionSort_Lines_Descending_triggered();
 
-  // View actions
   void on_actionToggle_Word_Wrap_triggered();
   void on_actionToggle_Vim_Mode_triggered();
   void on_actionFold_Current_triggered();
@@ -167,13 +163,12 @@ private:
   Preferences *preferences;
   FindReplacePanel *findReplacePanel;
   TerminalTabWidget *terminalWidget;
-  QCompleter *completer; // Legacy - deprecated
+  QCompleter *completer;
   CompletionEngine *m_completionEngine;
   TextAreaSettings settings;
   QString highlightLanguage;
   QFont font;
 
-  // Quick win features
   class CommandPalette *commandPalette;
   class ProblemsPanel *problemsPanel;
   class GoToLineDialog *goToLineDialog;
@@ -187,10 +182,8 @@ private:
   class BreadcrumbWidget *breadcrumbWidget;
   class RecentFilesManager *recentFilesManager;
 
-  // Navigation history
   class NavigationHistory *navigationHistory;
 
-  // Auto-save
   class AutoSaveManager *autoSaveManager;
   GitIntegration *m_gitIntegration;
   SourceControlPanel *sourceControlPanel;
@@ -200,7 +193,6 @@ private:
   bool m_heatmapEnabled;
   bool m_codeLensEnabled;
 
-  // Git status bar widgets
   class QLabel *m_gitBranchLabel;
   class QLabel *m_gitSyncLabel;
   class QLabel *m_gitDirtyLabel;
@@ -215,7 +207,6 @@ private:
   QMetaObject::Connection m_sessionErrorConnection;
   QMetaObject::Connection m_sessionStateConnection;
 
-  // Split editor views
   SplitEditorContainer *m_splitEditorContainer;
 
   void undo();
@@ -318,7 +309,6 @@ private:
   QMap<QString, QString> m_highlightOverrides;
   QSet<QString> m_loadedHighlightOverrideDirs;
 
-  // Project root path for persistent treeview across all tabs
   QString m_projectRootPath;
   GitFileSystemModel *m_fileTreeModel;
   QSet<QString> m_treeExpandedPaths;
@@ -337,4 +327,4 @@ public:
 const int defaultTabWidth = 4;
 const int defaultFontSize = 12;
 
-#endif // MAINWINDOW_H
+#endif

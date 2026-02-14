@@ -21,13 +21,12 @@ SettingsManager::SettingsManager() : QObject(nullptr), m_dirty(false) {
 }
 
 void SettingsManager::initializeDefaults() {
-  // Font defaults
+
   m_defaults["fontFamily"] = "Ubuntu Mono";
   m_defaults["fontSize"] = 12;
-  m_defaults["fontWeight"] = 50; // Normal weight
+  m_defaults["fontWeight"] = 50;
   m_defaults["fontItalic"] = false;
 
-  // Editor defaults
   m_defaults["autoIndent"] = true;
   m_defaults["showLineNumberArea"] = true;
   m_defaults["lineHighlighted"] = true;
@@ -36,7 +35,6 @@ void SettingsManager::initializeDefaults() {
   m_defaults["trimTrailingWhitespace"] = false;
   m_defaults["insertFinalNewline"] = false;
 
-  // Theme defaults
   QJsonObject themeDefaults;
   themeDefaults["backgroundColor"] = "#0e1116";
   themeDefaults["foregroundColor"] = "#e6edf3";
@@ -47,16 +45,13 @@ void SettingsManager::initializeDefaults() {
   themeDefaults["keywordFormat_2"] = "#58a6ff";
   m_defaults["theme"] = themeDefaults;
 
-  // Settings version for migration
   m_defaults["settingsVersion"] = SETTINGS_VERSION;
 
-  // Session state defaults
   m_defaults["lastProjectPath"] = "";
   m_defaults["openTabs"] = QJsonArray();
   m_defaults["treeStateByRoot"] = QJsonObject();
   m_defaults["showSourceControlDock"] = true;
 
-  // Initialize settings with defaults
   m_settings = m_defaults;
 }
 
@@ -65,7 +60,7 @@ QString SettingsManager::getSettingsDirectory() const {
       QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
 
   if (configPath.isEmpty()) {
-    // Fallback to home directory with platform-appropriate path
+
 #ifdef Q_OS_WIN
     configPath = QDir::homePath() + "/AppData/Local/Lightpad";
 #else
@@ -99,7 +94,6 @@ bool SettingsManager::ensureSettingsDirectoryExists() {
 bool SettingsManager::loadSettings() {
   QString filePath = getSettingsFilePath();
 
-  // First, try to migrate from old location if new file doesn't exist
   if (!QFileInfo(filePath).exists()) {
     QString oldPath = "settings.json";
     if (QFileInfo(oldPath).exists()) {
@@ -138,13 +132,11 @@ bool SettingsManager::loadSettings() {
 
   m_settings = doc.object();
 
-  // Check for settings version and migrate if needed
   int version = m_settings.value("settingsVersion").toInt(0);
   if (version < SETTINGS_VERSION) {
     migrateSettings(version);
   }
 
-  // Merge with defaults to ensure all keys exist
   for (auto it = m_defaults.begin(); it != m_defaults.end(); ++it) {
     if (!m_settings.contains(it.key())) {
       m_settings[it.key()] = it.value();
@@ -170,7 +162,6 @@ bool SettingsManager::saveSettings() {
     return false;
   }
 
-  // Update version
   m_settings["settingsVersion"] = SETTINGS_VERSION;
 
   QJsonDocument doc(m_settings);
@@ -185,7 +176,7 @@ bool SettingsManager::saveSettings() {
 
 QVariant SettingsManager::getValue(const QString &key,
                                    const QVariant &defaultValue) const {
-  // Support dot notation for nested keys
+
   QStringList keys = key.split('.');
   QJsonValue value = m_settings;
 
@@ -203,7 +194,7 @@ QVariant SettingsManager::getValue(const QString &key,
 }
 
 void SettingsManager::setValue(const QString &key, const QVariant &value) {
-  // Support dot notation for nested keys
+
   QStringList keys = key.split('.');
 
   if (keys.isEmpty()) {
@@ -211,7 +202,6 @@ void SettingsManager::setValue(const QString &key, const QVariant &value) {
     return;
   }
 
-  // For single-level keys, use direct assignment
   if (keys.size() == 1) {
     m_settings[key] = QJsonValue::fromVariant(value);
     m_dirty = true;
@@ -219,7 +209,6 @@ void SettingsManager::setValue(const QString &key, const QVariant &value) {
     return;
   }
 
-  // For nested keys, recursively build the object hierarchy
   std::function<void(QJsonObject &, int)> setNested = [&](QJsonObject &obj,
                                                           int keyIndex) {
     if (keyIndex >= keys.size() - 1) {
@@ -296,7 +285,6 @@ bool SettingsManager::migrateFromOldPath(const QString &oldPath) {
 
   m_settings = doc.object();
 
-  // Save to new location
   if (saveSettings()) {
     LOG_INFO(QString("Successfully migrated settings from %1 to %2")
                  .arg(oldPath)
@@ -311,12 +299,6 @@ void SettingsManager::migrateSettings(int fromVersion) {
   LOG_INFO(QString("Migrating settings from version %1 to %2")
                .arg(fromVersion)
                .arg(SETTINGS_VERSION));
-
-  // Add migration logic here for future versions
-  // Example:
-  // if (fromVersion < 2) {
-  //     // Migration from v1 to v2
-  // }
 
   m_settings["settingsVersion"] = SETTINGS_VERSION;
   m_dirty = true;

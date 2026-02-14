@@ -24,12 +24,12 @@ void TestGoToSymbolDialog::initTestCase() {
 void TestGoToSymbolDialog::cleanupTestCase() { delete m_dialog; }
 
 void TestGoToSymbolDialog::testDialogCreation() {
-  // Dialog should be created successfully
+
   QVERIFY(m_dialog != nullptr);
 }
 
 void TestGoToSymbolDialog::testSetSymbols() {
-  // Create some test symbols
+
   QList<LspDocumentSymbol> symbols;
 
   LspDocumentSymbol sym1;
@@ -46,16 +46,13 @@ void TestGoToSymbolDialog::testSetSymbols() {
   sym2.selectionRange.start.character = 0;
   symbols.append(sym2);
 
-  // Set symbols
   m_dialog->setSymbols(symbols);
 
-  // Dialog should now have symbols (we can't directly verify since symbols are
-  // private) But we can verify the dialog is still valid
   QVERIFY(m_dialog != nullptr);
 }
 
 void TestGoToSymbolDialog::testClearSymbols() {
-  // Set some symbols first
+
   QList<LspDocumentSymbol> symbols;
   LspDocumentSymbol sym;
   sym.name = "tempSymbol";
@@ -63,15 +60,13 @@ void TestGoToSymbolDialog::testClearSymbols() {
   symbols.append(sym);
   m_dialog->setSymbols(symbols);
 
-  // Clear all symbols
   m_dialog->clearSymbols();
 
-  // Dialog should still be valid after clearing
   QVERIFY(m_dialog != nullptr);
 }
 
 void TestGoToSymbolDialog::testFlattenNestedSymbols() {
-  // Create nested symbols (class with methods)
+
   QList<LspDocumentSymbol> symbols;
 
   LspDocumentSymbol classSymbol;
@@ -80,7 +75,6 @@ void TestGoToSymbolDialog::testFlattenNestedSymbols() {
   classSymbol.selectionRange.start.line = 5;
   classSymbol.selectionRange.start.character = 0;
 
-  // Add child method
   LspDocumentSymbol methodSymbol;
   methodSymbol.name = "myMethod";
   methodSymbol.kind = LspSymbolKind::Method;
@@ -90,15 +84,13 @@ void TestGoToSymbolDialog::testFlattenNestedSymbols() {
 
   symbols.append(classSymbol);
 
-  // Set symbols - should flatten nested structure
   m_dialog->setSymbols(symbols);
 
-  // Dialog should handle nested symbols
   QVERIFY(m_dialog != nullptr);
 }
 
 void TestGoToSymbolDialog::testSymbolKindIcons() {
-  // Test that all symbol kinds have icons
+
   QList<LspSymbolKind> kinds = {
       LspSymbolKind::File,        LspSymbolKind::Module,
       LspSymbolKind::Namespace,   LspSymbolKind::Package,

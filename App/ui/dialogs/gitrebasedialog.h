@@ -11,21 +11,12 @@ class QComboBox;
 class QLabel;
 class QPushButton;
 
-/**
- * @brief A single entry in the interactive rebase todo list
- */
 struct RebaseEntry {
-  QString action; ///< pick, reword, edit, squash, fixup, drop
+  QString action;
   QString hash;
   QString subject;
 };
 
-/**
- * @brief Interactive rebase UI dialog
- *
- * Lets users reorder, squash, fixup, edit, and drop commits
- * in an interactive rebase workflow.
- */
 class GitRebaseDialog : public QDialog {
   Q_OBJECT
 
@@ -60,4 +51,4 @@ private:
   QList<RebaseEntry> m_entries;
 };
 
-#endif // GITREBASEDIALOG_H
+#endif

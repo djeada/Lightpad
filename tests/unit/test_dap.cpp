@@ -10,13 +10,6 @@
 #include "dap/debugsettings.h"
 #include "dap/watchmanager.h"
 
-/**
- * @brief Unit tests for DAP (Debug Adapter Protocol) components
- *
- * Tests the DAP client infrastructure, breakpoint manager,
- * debug adapter registry, configuration manager, watch manager,
- * and session manager.
- */
 class TestDap : public QObject {
   Q_OBJECT
 
@@ -24,11 +17,9 @@ private slots:
   void initTestCase();
   void cleanupTestCase();
 
-  // DapClient tests
   void testDapClientInitialState();
   void testDapClientStateEnum();
 
-  // BreakpointManager tests
   void testBreakpointManagerSingleton();
   void testAddBreakpoint();
   void testRemoveBreakpoint();
@@ -40,20 +31,17 @@ private slots:
   void testDataBreakpoints();
   void testExceptionBreakpoints();
 
-  // DebugAdapterRegistry tests
   void testRegistrySingleton();
   void testBuiltinAdapters();
   void testAdapterLookupByFile();
   void testAdapterLookupByLanguage();
   void testGdbAdapterIntegration();
 
-  // DebugConfiguration tests
   void testDebugConfigurationToJson();
   void testDebugConfigurationFromJson();
   void testConfigurationVariableSubstitution();
   void testConfigurationManagerSingleton();
 
-  // WatchManager tests
   void testWatchManagerSingleton();
   void testAddWatch();
   void testRemoveWatch();
@@ -61,21 +49,17 @@ private slots:
   void testWatchUpdate();
   void testWatchEvaluationWithoutClient();
 
-  // DapClient new signals tests
   void testDapClientEvaluateErrorSignal();
   void testDapClientVariableSetSignal();
   void testDapClientSetDataBreakpoints();
 
-  // DebugSession tests
   void testDebugSessionState();
   void testSessionManagerSingleton();
 
-  // DebugSettings tests
   void testDebugSettingsInitialization();
   void testDebugSettingsFilePaths();
   void testDebugConfigurationFileOpenPath();
 
-  // Data structures tests
   void testDapBreakpointFromJson();
   void testDapStackFrameFromJson();
   void testDapVariableFromJson();
@@ -86,18 +70,11 @@ private:
   void cleanupWatches();
 };
 
-void TestDap::initTestCase() {
-  // Clean up any existing breakpoints
-  cleanupBreakpoints();
-}
+void TestDap::initTestCase() { cleanupBreakpoints(); }
 
 void TestDap::cleanupTestCase() { cleanupBreakpoints(); }
 
 void TestDap::cleanupBreakpoints() { BreakpointManager::instance().clearAll(); }
-
-// =============================================================================
-// DapClient Tests
-// =============================================================================
 
 void TestDap::testDapClientInitialState() {
   DapClient client;
@@ -109,17 +86,13 @@ void TestDap::testDapClientInitialState() {
 }
 
 void TestDap::testDapClientStateEnum() {
-  // Test that all states are distinct
+
   QVERIFY(DapClient::State::Disconnected != DapClient::State::Connecting);
   QVERIFY(DapClient::State::Ready != DapClient::State::Running);
   QVERIFY(DapClient::State::Running != DapClient::State::Stopped);
   QVERIFY(DapClient::State::Stopped != DapClient::State::Terminated);
   QVERIFY(DapClient::State::Error != DapClient::State::Ready);
 }
-
-// =============================================================================
-// BreakpointManager Tests
-// =============================================================================
 
 void TestDap::testBreakpointManagerSingleton() {
   BreakpointManager &bm1 = BreakpointManager::instance();
@@ -171,8 +144,7 @@ void TestDap::testRemoveBreakpoint() {
   QCOMPARE(removedSpy.count(), 1);
   QVERIFY(!bm.hasBreakpoint("/test/remove.cpp", 10));
 
-  // Removing non-existent breakpoint should be safe
-  bm.removeBreakpoint(99999); // Should not crash
+  bm.removeBreakpoint(99999);
 }
 
 void TestDap::testToggleBreakpoint() {
@@ -180,12 +152,10 @@ void TestDap::testToggleBreakpoint() {
 
   BreakpointManager &bm = BreakpointManager::instance();
 
-  // First toggle - should add
   QVERIFY(!bm.hasBreakpoint("/test/toggle.cpp", 5));
   bm.toggleBreakpoint("/test/toggle.cpp", 5);
   QVERIFY(bm.hasBreakpoint("/test/toggle.cpp", 5));
 
-  // Second toggle - should remove
   bm.toggleBreakpoint("/test/toggle.cpp", 5);
   QVERIFY(!bm.hasBreakpoint("/test/toggle.cpp", 5));
 }
@@ -227,7 +197,6 @@ void TestDap::testBreakpointLogpoint() {
   QCOMPARE(updated.logMessage, QString("Value is {x}"));
   QVERIFY(updated.isLogpoint);
 
-  // Clear log message
   bm.setLogMessage(id, "");
   updated = bm.breakpoint(id);
   QVERIFY(!updated.isLogpoint);
@@ -238,7 +207,6 @@ void TestDap::testBreakpointPersistence() {
 
   BreakpointManager &bm = BreakpointManager::instance();
 
-  // Add some breakpoints
   Breakpoint bp1;
   bp1.filePath = "/test/persist1.cpp";
   bp1.line = 10;
@@ -252,16 +220,13 @@ void TestDap::testBreakpointPersistence() {
   bp2.isLogpoint = true;
   bm.addBreakpoint(bp2);
 
-  // Save to JSON
   QJsonObject json = bm.saveToJson();
 
-  // Clear and reload
   bm.clearAll();
   QCOMPARE(bm.allBreakpoints().count(), 0);
 
   bm.loadFromJson(json);
 
-  // Verify restored
   QCOMPARE(bm.allBreakpoints().count(), 2);
 
   QList<Breakpoint> restored = bm.breakpointsForFile("/test/persist1.cpp");
@@ -274,7 +239,6 @@ void TestDap::testClearBreakpoints() {
 
   BreakpointManager &bm = BreakpointManager::instance();
 
-  // Add breakpoints to multiple files
   Breakpoint bp1;
   bp1.filePath = "/test/clear1.cpp";
   bp1.line = 1;
@@ -292,22 +256,16 @@ void TestDap::testClearBreakpoints() {
 
   QCOMPARE(bm.allBreakpoints().count(), 3);
 
-  // Clear single file
   bm.clearFile("/test/clear1.cpp");
   QCOMPARE(bm.allBreakpoints().count(), 1);
   QCOMPARE(bm.breakpointsForFile("/test/clear1.cpp").count(), 0);
   QCOMPARE(bm.breakpointsForFile("/test/clear2.cpp").count(), 1);
 
-  // Clear all
   QSignalSpy clearedSpy(&bm, &BreakpointManager::allBreakpointsCleared);
   bm.clearAll();
   QCOMPARE(clearedSpy.count(), 1);
   QCOMPARE(bm.allBreakpoints().count(), 0);
 }
-
-// =============================================================================
-// DebugAdapterRegistry Tests
-// =============================================================================
 
 void TestDap::testRegistrySingleton() {
   DebugAdapterRegistry &reg1 = DebugAdapterRegistry::instance();
@@ -321,20 +279,16 @@ void TestDap::testBuiltinAdapters() {
 
   QList<std::shared_ptr<IDebugAdapter>> adapters = reg.allAdapters();
 
-  // Should have at least the built-in adapters
-  QVERIFY(adapters.count() >= 4); // Python, Node.js, GDB, LLDB
+  QVERIFY(adapters.count() >= 4);
 
-  // Check for Python adapter
   auto pythonAdapter = reg.adapter("python-debugpy");
   QVERIFY(pythonAdapter != nullptr);
   QCOMPARE(pythonAdapter->config().name, QString("Python (debugpy)"));
 
-  // Check for Node.js adapter
   auto nodeAdapter = reg.adapter("node-debug");
   QVERIFY(nodeAdapter != nullptr);
   QVERIFY(nodeAdapter->supportsLanguage("js"));
 
-  // LLDB adapter should produce launch config routable by adapter type lookup.
   auto lldbAdapter = reg.adapter("cppdbg-lldb");
   QVERIFY(lldbAdapter != nullptr);
   QJsonObject lldbLaunchCfg =
@@ -345,23 +299,19 @@ void TestDap::testBuiltinAdapters() {
 void TestDap::testAdapterLookupByFile() {
   DebugAdapterRegistry &reg = DebugAdapterRegistry::instance();
 
-  // Python files
   QList<std::shared_ptr<IDebugAdapter>> pyAdapters =
       reg.adaptersForFile("/test/script.py");
   QVERIFY(!pyAdapters.isEmpty());
   QVERIFY(pyAdapters.first()->config().id.contains("python"));
 
-  // JavaScript files
   QList<std::shared_ptr<IDebugAdapter>> jsAdapters =
       reg.adaptersForFile("/test/app.js");
   QVERIFY(!jsAdapters.isEmpty());
 
-  // C++ files
   QList<std::shared_ptr<IDebugAdapter>> cppAdapters =
       reg.adaptersForFile("/test/main.cpp");
   QVERIFY(!cppAdapters.isEmpty());
 
-  // Unknown extension
   QList<std::shared_ptr<IDebugAdapter>> unknownAdapters =
       reg.adaptersForFile("/test/file.xyz");
   QVERIFY(unknownAdapters.isEmpty());
@@ -382,32 +332,26 @@ void TestDap::testAdapterLookupByLanguage() {
 void TestDap::testGdbAdapterIntegration() {
   DebugAdapterRegistry &reg = DebugAdapterRegistry::instance();
 
-  // Get GDB adapter
   auto gdbAdapter = reg.adapter("cppdbg-gdb");
   QVERIFY(gdbAdapter != nullptr);
 
-  // Verify configuration
   DebugAdapterConfig cfg = gdbAdapter->config();
   QCOMPARE(cfg.id, QString("cppdbg-gdb"));
   QCOMPARE(cfg.name, QString("C/C++ (GDB)"));
   QCOMPARE(cfg.type, QString("cppdbg"));
   QVERIFY(cfg.arguments.contains("--interpreter=dap"));
 
-  // Should support C, C++ and other languages
   QVERIFY(cfg.languages.contains("cpp"));
   QVERIFY(cfg.languages.contains("c"));
 
-  // Should support common file extensions
   QVERIFY(cfg.extensions.contains(".cpp"));
   QVERIFY(cfg.extensions.contains(".c"));
   QVERIFY(cfg.extensions.contains(".h"));
 
-  // Should have capabilities
   QVERIFY(cfg.supportsFunctionBreakpoints);
   QVERIFY(cfg.supportsConditionalBreakpoints);
   QVERIFY(cfg.supportsHitConditionalBreakpoints);
 
-  // Test launch config generation
   QJsonObject launchConfig =
       gdbAdapter->createLaunchConfig("/path/to/program", "/path/to");
   QCOMPARE(launchConfig["type"].toString(), QString("cppdbg"));
@@ -417,35 +361,26 @@ void TestDap::testGdbAdapterIntegration() {
   QVERIFY(launchConfig.contains("miDebuggerPath"));
   QVERIFY(launchConfig.contains("setupCommands"));
 
-  // Test attach config generation
   QJsonObject attachConfig = gdbAdapter->createAttachConfig(12345, "", 0);
   QCOMPARE(attachConfig["type"].toString(), QString("cppdbg"));
   QCOMPARE(attachConfig["request"].toString(), QString("attach"));
   QCOMPARE(attachConfig["processId"].toString(), QString("12345"));
 
-  // Test remote attach config
   QJsonObject remoteConfig =
       gdbAdapter->createAttachConfig(0, "192.168.1.100", 1234);
   QCOMPARE(remoteConfig["type"].toString(), QString("cppdbg"));
   QVERIFY(remoteConfig.contains("miDebuggerServerAddress") ||
           remoteConfig.contains("setupCommands"));
 
-  // Status message should provide useful information
   QString status = gdbAdapter->statusMessage();
   QVERIFY(!status.isEmpty());
 
-  // Documentation URL should be valid
   QCOMPARE(gdbAdapter->documentationUrl(),
            QString("https://sourceware.org/gdb/current/onlinedocs/gdb/"));
 
-  // Install command should be provided
   QString installCmd = gdbAdapter->installCommand();
   QVERIFY(!installCmd.isEmpty());
 }
-
-// =============================================================================
-// Data Structure Tests
-// =============================================================================
 
 void TestDap::testDapBreakpointFromJson() {
   QJsonObject json;
@@ -529,16 +464,11 @@ void TestDap::testDapStoppedEventFromJson() {
   QCOMPARE(evt.hitBreakpointIds.at(0), 5);
 }
 
-// =============================================================================
-// Data Breakpoint and Exception Breakpoint Tests
-// =============================================================================
-
 void TestDap::testDataBreakpoints() {
   cleanupBreakpoints();
 
   BreakpointManager &bm = BreakpointManager::instance();
 
-  // Add data breakpoint
   int id = bm.addDataBreakpoint("myVariable", "write");
   QVERIFY(id > 0);
 
@@ -547,7 +477,6 @@ void TestDap::testDataBreakpoints() {
   QCOMPARE(dataBps.first().dataId, QString("myVariable"));
   QCOMPARE(dataBps.first().accessType, QString("write"));
 
-  // Remove data breakpoint
   bm.removeDataBreakpoint(id);
   QCOMPARE(bm.allDataBreakpoints().count(), 0);
 }
@@ -557,7 +486,6 @@ void TestDap::testExceptionBreakpoints() {
 
   BreakpointManager &bm = BreakpointManager::instance();
 
-  // Set exception breakpoints
   QStringList filters;
   filters << "uncaught" << "raised";
   bm.setExceptionBreakpoints(filters);
@@ -567,10 +495,6 @@ void TestDap::testExceptionBreakpoints() {
   QVERIFY(enabled.contains("uncaught"));
   QVERIFY(enabled.contains("raised"));
 }
-
-// =============================================================================
-// DebugConfiguration Tests
-// =============================================================================
 
 void TestDap::testDebugConfigurationToJson() {
   DebugConfiguration config;
@@ -639,10 +563,6 @@ void TestDap::testConfigurationManagerSingleton() {
   QCOMPARE(&mgr1, &mgr2);
 }
 
-// =============================================================================
-// WatchManager Tests
-// =============================================================================
-
 void TestDap::cleanupWatches() { WatchManager::instance().clearAll(); }
 
 void TestDap::testWatchManagerSingleton() {
@@ -663,7 +583,6 @@ void TestDap::testAddWatch() {
   WatchExpression watch = wm.watch(id);
   QCOMPARE(watch.expression, QString("myVariable"));
 
-  // Adding empty expression should fail
   int emptyId = wm.addWatch("");
   QCOMPARE(emptyId, 0);
 }
@@ -689,20 +608,14 @@ void TestDap::testWatchPersistence() {
   wm.addWatch("expr2");
   wm.addWatch("expr3");
 
-  // Save to JSON
   QJsonObject json = wm.saveToJson();
 
-  // Clear and reload
   wm.clearAll();
   QCOMPARE(wm.allWatches().count(), 0);
 
   wm.loadFromJson(json);
   QCOMPARE(wm.allWatches().count(), 3);
 }
-
-// =============================================================================
-// DebugSession Tests
-// =============================================================================
 
 void TestDap::testDebugSessionState() {
   DebugSession session("test-session");
@@ -718,18 +631,12 @@ void TestDap::testSessionManagerSingleton() {
 
   QCOMPARE(&mgr1, &mgr2);
 
-  // Initially no sessions
   QVERIFY(!mgr1.hasActiveSessions());
 }
-
-// =============================================================================
-// DebugSettings Tests
-// =============================================================================
 
 void TestDap::testDebugSettingsInitialization() {
   DebugSettings &settings = DebugSettings::instance();
 
-  // Create a temporary directory for testing
   QTemporaryDir tempDir;
   QVERIFY(tempDir.isValid());
 
@@ -739,11 +646,9 @@ void TestDap::testDebugSettingsInitialization() {
   QCOMPARE(settings.workspaceFolder(), workspaceFolder);
   QCOMPARE(settings.debugSettingsDir(), workspaceFolder + "/.lightpad/debug");
 
-  // Check that the debug settings directory was created
   QDir dir(settings.debugSettingsDir());
   QVERIFY(dir.exists());
 
-  // Check that default config files were created
   QVERIFY(QFile::exists(settings.launchConfigPath()));
   QVERIFY(QFile::exists(settings.breakpointsConfigPath()));
   QVERIFY(QFile::exists(settings.watchesConfigPath()));
@@ -754,14 +659,12 @@ void TestDap::testDebugSettingsInitialization() {
 void TestDap::testDebugSettingsFilePaths() {
   DebugSettings &settings = DebugSettings::instance();
 
-  // Create a temporary directory for testing
   QTemporaryDir tempDir;
   QVERIFY(tempDir.isValid());
 
   QString workspaceFolder = tempDir.path();
   settings.initialize(workspaceFolder);
 
-  // Verify file paths
   QCOMPARE(settings.launchConfigPath(),
            workspaceFolder + "/.lightpad/debug/launch.json");
   QCOMPARE(settings.breakpointsConfigPath(),
@@ -773,7 +676,6 @@ void TestDap::testDebugSettingsFilePaths() {
   QCOMPARE(settings.settingsConfigPath(),
            workspaceFolder + "/.lightpad/debug/settings.json");
 
-  // Verify that config files have valid JSON
   QFile launchFile(settings.launchConfigPath());
   QVERIFY(launchFile.open(QIODevice::ReadOnly));
   QJsonDocument launchDoc = QJsonDocument::fromJson(launchFile.readAll());
@@ -805,10 +707,6 @@ void TestDap::testDebugConfigurationFileOpenPath() {
   QVERIFY(QFile::exists(launchPath));
 }
 
-// =============================================================================
-// Watch Manager Extended Tests
-// =============================================================================
-
 void TestDap::testWatchUpdate() {
   cleanupWatches();
 
@@ -831,28 +729,20 @@ void TestDap::testWatchEvaluationWithoutClient() {
 
   WatchManager &wm = WatchManager::instance();
 
-  // Ensure no DAP client is connected
   wm.setDapClient(nullptr);
 
   int id = wm.addWatch("testExpr");
 
-  // Evaluating without a client should be a no-op
   wm.evaluateWatch(id, 1);
 
-  // Watch should retain its default state
   WatchExpression w = wm.watch(id);
   QVERIFY(w.value.isEmpty());
   QVERIFY(!w.isError);
 }
 
-// =============================================================================
-// DapClient Extended Tests
-// =============================================================================
-
 void TestDap::testDapClientEvaluateErrorSignal() {
   DapClient client;
 
-  // Verify the evaluateError signal is declared and connectable
   QSignalSpy errorSpy(&client, &DapClient::evaluateError);
   QVERIFY(errorSpy.isValid());
 }
@@ -860,7 +750,6 @@ void TestDap::testDapClientEvaluateErrorSignal() {
 void TestDap::testDapClientVariableSetSignal() {
   DapClient client;
 
-  // Verify the variableSet signal is declared and connectable
   QSignalSpy setSpy(&client, &DapClient::variableSet);
   QVERIFY(setSpy.isValid());
 }
@@ -868,15 +757,12 @@ void TestDap::testDapClientVariableSetSignal() {
 void TestDap::testDapClientSetDataBreakpoints() {
   DapClient client;
 
-  // Verify the method exists and doesn't crash when called without a process
-  // (it should log a warning and return gracefully)
   QList<QJsonObject> dataBreakpoints;
   QJsonObject bp1;
   bp1["dataId"] = "myVar";
   bp1["accessType"] = "write";
   dataBreakpoints.append(bp1);
 
-  // This should not crash even without a running process
   client.setDataBreakpoints(dataBreakpoints);
 }
 

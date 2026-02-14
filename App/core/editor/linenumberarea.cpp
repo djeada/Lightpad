@@ -125,7 +125,6 @@ QColor LineNumberArea::heatmapColor(qint64 timestamp) const {
   if (m_heatmapTimestamps.isEmpty())
     return Qt::transparent;
 
-  // Find min/max timestamps for normalization
   qint64 minTs = std::numeric_limits<qint64>::max();
   qint64 maxTs = 0;
   for (auto it = m_heatmapTimestamps.cbegin(); it != m_heatmapTimestamps.cend();
@@ -139,19 +138,17 @@ QColor LineNumberArea::heatmapColor(qint64 timestamp) const {
   if (maxTs == minTs)
     return QColor(80, 80, 120, 40);
 
-  // Normalize: 0.0 = oldest, 1.0 = newest
   double t = double(timestamp - minTs) / double(maxTs - minTs);
 
-  // Warm (recent) to cool (old): orange → blue/gray
   int r, g, b;
   if (t > 0.5) {
-    // Recent: orange to yellow
+
     double s = (t - 0.5) * 2.0;
     r = 200 + int(55 * s);
     g = 120 + int(80 * s);
     b = 50;
   } else {
-    // Old: blue/gray to orange
+
     double s = t * 2.0;
     r = 60 + int(140 * s);
     g = 60 + int(60 * s);
@@ -289,9 +286,8 @@ bool LineNumberArea::event(QEvent *event) {
         int lineNum = blockNumber + 1;
         int hoverX = helpEvent->pos().x();
 
-        // Check if hovering over diff indicator area (leftmost strip)
         if (hoverX < DIFF_INDICATOR_WIDTH + 2 && m_gitIntegration) {
-          // Check if this line has a diff indicator
+
           for (const auto &diffLine : m_gitDiffLines) {
             if (diffLine.first == lineNum) {
               QString filePath = resolveFilePath();
@@ -309,13 +305,11 @@ bool LineNumberArea::event(QEvent *event) {
           }
         }
 
-        // Check if hovering over blame area (right side)
         if (hoverX > numArea) {
           auto richIt = m_richBlameData.find(lineNum);
           if (richIt != m_richBlameData.end()) {
             QString tooltip = buildRichBlameTooltip(richIt.value());
 
-            // Append commit file stats if available
             if (m_gitIntegration) {
               QList<GitCommitFileStat> stats =
                   m_gitIntegration->getCommitFileStats(
@@ -348,7 +342,7 @@ bool LineNumberArea::event(QEvent *event) {
 
             QToolTip::showText(helpEvent->globalPos(), tooltip, this);
           } else {
-            // Fall back to simple blame text
+
             auto it = m_gitBlameLines.find(lineNum);
             if (it != m_gitBlameLines.end()) {
               QToolTip::showText(helpEvent->globalPos(), it.value(), this);
@@ -445,11 +439,10 @@ void LineNumberArea::mousePressEvent(QMouseEvent *event) {
     return;
   }
 
-  // Check if click is in folding indicator area
   if (m_foldingEnabled && m_editor->m_codeFolding) {
     int foldX = numberAreaWidth() - FOLD_INDICATOR_WIDTH;
     if (event->pos().x() >= foldX && event->pos().x() < numberAreaWidth()) {
-      int blockNumber = clickedLine - 1; // Convert to 0-based
+      int blockNumber = clickedLine - 1;
       CodeFoldingManager *folding = m_editor->m_codeFolding;
       if (folding->isFoldable(blockNumber) || folding->isFolded(blockNumber)) {
         m_editor->toggleFoldAtLine(blockNumber);
@@ -483,7 +476,6 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
   painter.setFont(m_font);
   painter.fillRect(event->rect(), m_backgroundColor);
 
-  // Build a map for quick git diff lookup
   QMap<int, int> diffLineMap;
   for (const auto &diffLine : m_gitDiffLines) {
     diffLineMap[diffLine.first] = diffLine.second;
@@ -492,7 +484,6 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
   QTextBlock block = m_editor->firstVisibleBlock();
   int blockNumber = block.blockNumber();
 
-  // Use TextArea's public/protected methods via friendship
   QRectF blockRect = m_editor->blockBoundingGeometry(block);
   blockRect.translate(m_editor->contentOffset());
   qreal top = blockRect.top();
@@ -526,8 +517,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
     if (block.isVisible() && bottom >= event->rect().top()) {
       QString number = QString::number(blockNumber + 1);
 
-      // Heatmap background tint (age-based gutter coloring)
-      int lineNum = blockNumber + 1; // 1-based
+      int lineNum = blockNumber + 1;
       if (m_heatmapEnabled && m_heatmapTimestamps.contains(lineNum)) {
         QColor heat = heatmapColor(m_heatmapTimestamps[lineNum]);
         painter.fillRect(DIFF_INDICATOR_WIDTH, static_cast<int>(top),
@@ -539,20 +529,19 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
       painter.drawText(numberStartX, top, numberTextWidth, fontHeight,
                        Qt::AlignCenter, number);
 
-      // Draw git diff indicator
       if (diffLineMap.contains(lineNum)) {
         int diffType = diffLineMap[lineNum];
         QColor diffColor;
         switch (diffType) {
         case 0:
           diffColor = QColor(76, 175, 80);
-          break; // Green - added
+          break;
         case 1:
           diffColor = QColor(33, 150, 243);
-          break; // Blue - modified
+          break;
         default:
           diffColor = QColor(244, 67, 54);
-          break; // Red - deleted
+          break;
         }
         painter.fillRect(0, static_cast<int>(top), DIFF_INDICATOR_WIDTH,
                          static_cast<int>(bottom - top), diffColor);
@@ -587,7 +576,6 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
         painter.restore();
       }
 
-      // Draw folding indicators
       if (m_foldingEnabled && m_editor->m_codeFolding) {
         CodeFoldingManager *folding = m_editor->m_codeFolding;
         bool foldable = folding->isFoldable(blockNumber);
@@ -607,7 +595,6 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
           painter.setBrush(Qt::NoBrush);
           painter.drawRect(ix, iy, indicatorSize, indicatorSize);
 
-          // Draw minus (unfolded) or plus (folded)
           int midY = iy + indicatorSize / 2;
           int midX = ix + indicatorSize / 2;
           int margin = 2;

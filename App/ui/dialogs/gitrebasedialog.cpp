@@ -36,11 +36,8 @@ void GitRebaseDialog::loadCommits(const QString &upstream) {
   if (!m_git || !m_git->isValidRepository())
     return;
 
-  // Get commits between upstream and HEAD
   QList<GitCommitInfo> commits = m_git->getCommitLog(50);
 
-  // For interactive rebase, we only show commits from HEAD back to upstream
-  // Limit to a reasonable number
   int count = qMin(commits.size(), 20);
   for (int i = 0; i < count; ++i) {
     RebaseEntry entry;
@@ -78,16 +75,14 @@ void GitRebaseDialog::onMoveUp() {
   m_commitList->insertTopLevelItem(row - 1, item);
   m_commitList->setCurrentItem(item);
 
-  // Swap entries
   m_entries.swapItemsAt(row, row - 1);
-  // Re-create combo for moved item
+
   auto *combo = new QComboBox(m_commitList);
   combo->addItems(REBASE_ACTIONS);
   combo->setCurrentText(m_entries[row - 1].action);
   m_commitList->setItemWidget(item, 0, combo);
   item->setData(0, Qt::UserRole, row - 1);
 
-  // Fix the swapped item's index too
   auto *otherItem = m_commitList->topLevelItem(row);
   otherItem->setData(0, Qt::UserRole, row);
   auto *otherCombo = new QComboBox(m_commitList);
@@ -119,23 +114,19 @@ void GitRebaseDialog::onMoveDown() {
   m_commitList->setItemWidget(otherItem, 0, otherCombo);
 }
 
-void GitRebaseDialog::onActionChanged(int /*index*/) {
-  // Handled per-item via lambda connections
-}
+void GitRebaseDialog::onActionChanged(int) {}
 
 void GitRebaseDialog::onStartRebase() {
   if (m_entries.isEmpty())
     return;
 
-  // Build the rebase todo script
   QString todoScript;
-  // Reverse order: git rebase -i lists oldest first
+
   for (int i = m_entries.size() - 1; i >= 0; --i) {
     todoScript += m_entries[i].action + " " + m_entries[i].hash + " " +
                   m_entries[i].subject + "\n";
   }
 
-  // Write to a temporary script file
   QTemporaryFile todoFile;
   todoFile.setAutoRemove(false);
   if (!todoFile.open()) {
@@ -146,10 +137,8 @@ void GitRebaseDialog::onStartRebase() {
   out << todoScript;
   todoFile.close();
 
-  // Use GIT_SEQUENCE_EDITOR to inject the todo script
   QString scriptPath = todoFile.fileName();
 
-  // Execute rebase with custom sequence editor
   QProcess proc;
   proc.setWorkingDirectory(m_git->repositoryPath());
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
@@ -183,7 +172,6 @@ void GitRebaseDialog::buildUi() {
       this);
   mainLayout->addWidget(headerLabel);
 
-  // Toolbar
   auto *toolbar = new QHBoxLayout();
   m_moveUpBtn = new QPushButton(tr("▲ Move Up"), this);
   m_moveDownBtn = new QPushButton(tr("▼ Move Down"), this);
@@ -196,7 +184,6 @@ void GitRebaseDialog::buildUi() {
   connect(m_moveDownBtn, &QPushButton::clicked, this,
           &GitRebaseDialog::onMoveDown);
 
-  // Commit list
   m_commitList = new QTreeWidget(this);
   m_commitList->setHeaderLabels(
       {tr("Action"), tr("Hash"), tr("Author"), tr("Subject")});
@@ -211,7 +198,6 @@ void GitRebaseDialog::buildUi() {
   m_commitList->header()->setSectionResizeMode(3, QHeaderView::Stretch);
   mainLayout->addWidget(m_commitList);
 
-  // Status + buttons
   m_statusLabel = new QLabel(this);
   mainLayout->addWidget(m_statusLabel);
 
@@ -244,7 +230,4 @@ void GitRebaseDialog::applyTheme(const Theme &theme) {
           .arg(bg, fg, theme.lineNumberAreaColor.name(), highlight));
 }
 
-void GitRebaseDialog::updateActionForItem(QTreeWidgetItem * /*item*/,
-                                          const QString & /*action*/) {
-  // Reserved for drag-drop implementation
-}
+void GitRebaseDialog::updateActionForItem(QTreeWidgetItem *, const QString &) {}

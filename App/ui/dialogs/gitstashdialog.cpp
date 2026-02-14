@@ -22,7 +22,6 @@ void GitStashDialog::setupUI() {
   mainLayout->setSpacing(16);
   mainLayout->setContentsMargins(20, 20, 20, 20);
 
-  // Header
   QHBoxLayout *headerLayout = new QHBoxLayout();
 
   QLabel *iconLabel = new QLabel("📦", this);
@@ -42,7 +41,6 @@ void GitStashDialog::setupUI() {
 
   mainLayout->addLayout(headerLayout);
 
-  // Stash new changes section
   QGroupBox *newStashGroup = new QGroupBox(tr("Stash Current Changes"), this);
   QVBoxLayout *newStashLayout = new QVBoxLayout(newStashGroup);
 
@@ -71,7 +69,6 @@ void GitStashDialog::setupUI() {
 
   mainLayout->addWidget(newStashGroup);
 
-  // Stash list section
   QGroupBox *listGroup = new QGroupBox(tr("Stash List"), this);
   QVBoxLayout *listLayout = new QVBoxLayout(listGroup);
 
@@ -80,7 +77,6 @@ void GitStashDialog::setupUI() {
           &GitStashDialog::onStashSelected);
   listLayout->addWidget(m_stashList);
 
-  // Stash action buttons
   QHBoxLayout *actionsLayout = new QHBoxLayout();
 
   m_popButton = new QPushButton(tr("Pop"), this);
@@ -115,7 +111,6 @@ void GitStashDialog::setupUI() {
   listLayout->addLayout(actionsLayout);
   mainLayout->addWidget(listGroup, 1);
 
-  // Details section
   QGroupBox *detailsGroup = new QGroupBox(tr("Stash Details"), this);
   QVBoxLayout *detailsLayout = new QVBoxLayout(detailsGroup);
 
@@ -126,7 +121,6 @@ void GitStashDialog::setupUI() {
 
   mainLayout->addWidget(detailsGroup);
 
-  // Status and close
   QHBoxLayout *bottomLayout = new QHBoxLayout();
 
   m_statusLabel = new QLabel(this);
@@ -293,7 +287,6 @@ void GitStashDialog::updateStashList() {
     m_statusLabel->setText(tr("%n stash entry(s)", "", stashes.size()));
   }
 
-  // Disable buttons when nothing selected
   m_popButton->setEnabled(false);
   m_applyButton->setEnabled(false);
   m_dropButton->setEnabled(false);
@@ -310,11 +303,10 @@ void GitStashDialog::onStashSelected(QListWidgetItem *item) {
 
   int index = item->data(Qt::UserRole).toInt();
 
-  m_popButton->setEnabled(index == 0); // Pop only works on latest stash
+  m_popButton->setEnabled(index == 0);
   m_applyButton->setEnabled(true);
   m_dropButton->setEnabled(true);
 
-  // Show details
   if (m_git) {
     QList<GitStashEntry> stashes = m_git->getStashList();
     for (const GitStashEntry &stash : stashes) {
@@ -454,28 +446,23 @@ void GitStashDialog::onCloseClicked() { accept(); }
 void GitStashDialog::applyTheme(const Theme &theme) {
   setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  // Apply group box style
   for (QGroupBox *groupBox : findChildren<QGroupBox *>()) {
     groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
   }
 
-  // Apply list widget style
   if (m_stashList) {
     m_stashList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
   }
 
-  // Apply line edit style
   if (m_messageEdit) {
     m_messageEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
   }
 
-  // Apply checkbox style
   if (m_includeUntrackedCheckbox) {
     m_includeUntrackedCheckbox->setStyleSheet(
         UIStyleHelper::checkBoxStyle(theme));
   }
 
-  // Apply button styles
   if (m_stashButton) {
     m_stashButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
   }
@@ -486,7 +473,6 @@ void GitStashDialog::applyTheme(const Theme &theme) {
     }
   }
 
-  // Apply label styles
   if (m_statusLabel) {
     m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
   }

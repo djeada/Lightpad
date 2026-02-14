@@ -15,12 +15,6 @@ class QPaintEvent;
 class QContextMenuEvent;
 class QMouseEvent;
 
-/**
- * @brief Line number gutter widget for code editors
- *
- * Displays line numbers alongside a TextArea and optionally
- * shows git diff indicators (added/modified/deleted lines).
- */
 class LineNumberArea : public QWidget {
   Q_OBJECT
 
@@ -29,65 +23,29 @@ public:
 
   QSize sizeHint() const override;
 
-  /**
-   * @brief Calculate the required width for line numbers
-   * @return Width in pixels
-   */
   int calculateWidth() const;
 
-  /**
-   * @brief Set the font used for line numbers
-   */
   void setFont(const QFont &font);
 
-  /**
-   * @brief Set the background color
-   */
   void setBackgroundColor(const QColor &color);
 
-  /**
-   * @brief Set the text color for line numbers
-   */
   void setTextColor(const QColor &color);
 
-  /**
-   * @brief Set git diff indicators
-   * @param diffLines List of (line number, type) pairs where type is:
-   *                  0 = added, 1 = modified, 2 = deleted
-   */
   void setGitDiffLines(const QList<QPair<int, int>> &diffLines);
 
-  /**
-   * @brief Clear git diff indicators
-   */
   void clearGitDiffLines();
   void setGitBlameLines(const QMap<int, QString> &blameLines);
   void clearGitBlameLines();
 
-  /**
-   * @brief Set rich blame data for hover tooltips
-   */
   void setRichBlameData(const QMap<int, GitBlameLineInfo> &blameData);
 
-  /**
-   * @brief Set git integration for diff hunk hover support
-   */
   void setGitIntegration(GitIntegration *git);
 
-  /**
-   * @brief Set heatmap timestamps for age-based gutter coloring
-   */
   void setHeatmapData(const QMap<int, qint64> &timestamps);
 
-  /**
-   * @brief Enable or disable heatmap gutter coloring
-   */
   void setHeatmapEnabled(bool enabled);
   bool isHeatmapEnabled() const;
 
-  /**
-   * @brief Enable or disable folding indicators in the gutter
-   */
   void setFoldingEnabled(bool enabled);
 
 protected:
@@ -126,4 +84,4 @@ private:
   static constexpr int MAX_BLAME_WIDTH = 280;
 };
 
-#endif // LINENUMBERAREA_H
+#endif

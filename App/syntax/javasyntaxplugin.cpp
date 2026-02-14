@@ -50,7 +50,6 @@ QStringList JavaSyntaxPlugin::getTertiaryKeywords() {
 QVector<SyntaxRule> JavaSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
-  // Primary keywords
   for (const QString &keyword : getPrimaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -58,7 +57,6 @@ QVector<SyntaxRule> JavaSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Secondary keywords
   for (const QString &keyword : getSecondaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -66,7 +64,6 @@ QVector<SyntaxRule> JavaSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Tertiary keywords (common classes and annotations)
   for (const QString &keyword : getTertiaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -74,38 +71,32 @@ QVector<SyntaxRule> JavaSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Numbers
   SyntaxRule numberRule;
   numberRule.pattern = QRegularExpression(
       "\\b[-+]?\\d[\\d_]*(\\.\\d+)?([eE][+-]?\\d+)?[lLfFdD]?\\b");
   numberRule.name = "number";
   rules.append(numberRule);
 
-  // String literals
   SyntaxRule stringRule;
   stringRule.pattern = QRegularExpression("\"[^\"]*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
-  // Character literals
   SyntaxRule charRule;
   charRule.pattern = QRegularExpression("'[^']*'");
   charRule.name = "string";
   rules.append(charRule);
 
-  // Function calls
   SyntaxRule functionRule;
   functionRule.pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()");
   functionRule.name = "function";
   rules.append(functionRule);
 
-  // Annotations
   SyntaxRule annotationRule;
   annotationRule.pattern = QRegularExpression("@[A-Za-z_][A-Za-z0-9_]*");
   annotationRule.name = "keyword_1";
   rules.append(annotationRule);
 
-  // Single-line comments
   SyntaxRule commentRule;
   commentRule.pattern = QRegularExpression("//[^\n]*");
   commentRule.name = "comment";
@@ -117,7 +108,6 @@ QVector<SyntaxRule> JavaSyntaxPlugin::syntaxRules() const {
 QVector<MultiLineBlock> JavaSyntaxPlugin::multiLineBlocks() const {
   QVector<MultiLineBlock> blocks;
 
-  // Multi-line comments
   MultiLineBlock commentBlock;
   commentBlock.startPattern = QRegularExpression("/\\*");
   commentBlock.endPattern = QRegularExpression("\\*/");

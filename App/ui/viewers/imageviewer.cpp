@@ -17,11 +17,9 @@ void ImageViewer::setupUi() {
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(0);
 
-  // Create toolbar
   setupToolbar();
   layout->addWidget(m_toolbar);
 
-  // Create graphics view for image display
   m_scene = new QGraphicsScene(this);
   m_graphicsView = new QGraphicsView(m_scene, this);
   m_graphicsView->setRenderHints(QPainter::Antialiasing |
@@ -31,7 +29,6 @@ void ImageViewer::setupUi() {
   m_graphicsView->setBackgroundBrush(QBrush(QColor(40, 40, 40)));
   layout->addWidget(m_graphicsView, 1);
 
-  // Info bar at bottom
   auto *infoBar = new QHBoxLayout();
   m_infoLabel = new QLabel(this);
   m_zoomLabel = new QLabel("100%", this);
@@ -82,14 +79,11 @@ bool ImageViewer::loadImage(const QString &filePath) {
   m_filePath = filePath;
   m_originalPixmap = QPixmap::fromImage(image);
 
-  // Clear existing items
   m_scene->clear();
 
-  // Add new image
   m_pixmapItem = m_scene->addPixmap(m_originalPixmap);
   m_scene->setSceneRect(m_originalPixmap.rect());
 
-  // Update info label
   QFileInfo fileInfo(filePath);
   m_infoLabel->setText(QString("%1  |  %2 x %3  |  %4")
                            .arg(fileInfo.fileName())
@@ -97,7 +91,6 @@ bool ImageViewer::loadImage(const QString &filePath) {
                            .arg(m_originalPixmap.height())
                            .arg(QLocale().formattedDataSize(fileInfo.size())));
 
-  // Defer fit-to-window until widget is shown and has proper size
   m_initialFitPending = true;
 
   return true;
@@ -130,7 +123,6 @@ void ImageViewer::fitToWindow() {
 
   m_graphicsView->fitInView(m_pixmapItem, Qt::KeepAspectRatio);
 
-  // Calculate the actual zoom factor after fit
   QRectF sceneRect = m_scene->sceneRect();
   QRectF viewRect = m_graphicsView->viewport()->rect();
 

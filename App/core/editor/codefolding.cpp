@@ -37,19 +37,15 @@ bool CodeFoldingManager::isFoldable(int blockNumber) const {
   QString text = block.text();
   QString trimmed = text.trimmed();
 
-  // Check for #region marker
   if (isRegionStart(blockNumber))
     return true;
 
-  // Check for multi-line comment block start
   if (isCommentBlockStart(blockNumber))
     return true;
 
-  // Foldable if line ends with { or :
   if (trimmed.endsWith('{') || trimmed.endsWith(':'))
     return true;
 
-  // Or if next line has greater indent
   QTextBlock nextBlock = block.next();
   if (nextBlock.isValid()) {
     QString nextText = nextBlock.text();
@@ -101,7 +97,6 @@ int CodeFoldingManager::getFoldingLevel(int blockNumber) const {
       break;
   }
 
-  // Count brace nesting level
   int braceLevel = 0;
   QTextBlock prevBlock = m_document->begin();
   while (prevBlock.isValid() && prevBlock.blockNumber() < blockNumber) {
@@ -129,12 +124,10 @@ int CodeFoldingManager::findFoldEndBlock(int startBlock) const {
 
   QString text = block.text();
 
-  // Check for #region marker
   if (isRegionStart(startBlock)) {
     return findRegionEndBlock(startBlock);
   }
 
-  // Check for comment block start
   if (isCommentBlockStart(startBlock)) {
     return findCommentBlockEnd(startBlock);
   }
@@ -149,7 +142,6 @@ int CodeFoldingManager::findFoldEndBlock(int startBlock) const {
       break;
   }
 
-  // Check for brace-based folding
   bool braceStyle = text.contains('{');
   int braceCount = 0;
 
@@ -180,7 +172,7 @@ int CodeFoldingManager::findFoldEndBlock(int startBlock) const {
         return block.blockNumber();
       }
     } else {
-      // Indent-based folding
+
       if (!text.isEmpty()) {
         int indent = 0;
         for (QChar c : block.text()) {
@@ -230,7 +222,6 @@ bool CodeFoldingManager::unfoldBlock(int blockNumber) {
   if (!m_document)
     return false;
 
-  // Check if we're inside a folded region
   for (int foldedBlock : m_foldedBlocks) {
     int endBlock = findFoldEndBlock(foldedBlock);
     if (blockNumber >= foldedBlock && blockNumber <= endBlock) {
@@ -438,12 +429,10 @@ bool CodeFoldingManager::isCommentBlockStart(int blockNumber) const {
 
   QString text = block.text().trimmed();
 
-  // Check for C-style block comment start
   if (text.startsWith("/*") && !text.contains("*/")) {
     return true;
   }
 
-  // Check for consecutive single-line comments (3 or more lines)
   if (isSingleLineComment(text)) {
     QTextBlock prevBlock = block.previous();
     if (prevBlock.isValid()) {
@@ -481,7 +470,6 @@ int CodeFoldingManager::findCommentBlockEnd(int startBlock) const {
 
   QString text = block.text().trimmed();
 
-  // Handle C-style block comments
   if (text.startsWith("/*")) {
     QTextBlock searchBlock = block;
     while (searchBlock.isValid()) {
@@ -493,7 +481,6 @@ int CodeFoldingManager::findCommentBlockEnd(int startBlock) const {
     return m_document->blockCount() - 1;
   }
 
-  // Handle consecutive single-line comments
   int lastCommentBlock = startBlock;
   QTextBlock nextBlock = block.next();
 

@@ -13,17 +13,15 @@ PluginManager &PluginManager::instance() {
 }
 
 PluginManager::PluginManager() : QObject(nullptr) {
-  // Add default plugin directories
+
   QString appDir = QCoreApplication::applicationDirPath();
   m_pluginDirs << appDir + "/plugins";
 
-  // Add user plugin directory
   QString userPlugins =
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
       "/plugins";
   m_pluginDirs << userPlugins;
 
-  // Add system plugin directory on Linux
 #ifndef Q_OS_WIN
   m_pluginDirs << "/usr/lib/lightpad/plugins";
   m_pluginDirs << "/usr/local/lib/lightpad/plugins";
@@ -50,7 +48,6 @@ QStringList PluginManager::discoverPlugins() {
       continue;
     }
 
-    // Look for shared library files
 #ifdef Q_OS_WIN
     QStringList filters = {"*.dll"};
 #elif defined(Q_OS_MAC)
@@ -109,7 +106,6 @@ bool PluginManager::loadPlugin(const QString &filePath) {
 
   PluginMetadata meta = plugin->metadata();
 
-  // Check if already loaded
   if (m_plugins.contains(meta.id)) {
     LOG_WARNING(QString("Plugin %1 is already loaded").arg(meta.id));
     loader->unload();
@@ -117,7 +113,6 @@ bool PluginManager::loadPlugin(const QString &filePath) {
     return false;
   }
 
-  // Initialize the plugin
   if (!plugin->initialize()) {
     QString error = "Plugin initialization failed";
     LOG_ERROR(QString("Failed to initialize plugin %1").arg(meta.id));
@@ -127,11 +122,9 @@ bool PluginManager::loadPlugin(const QString &filePath) {
     return false;
   }
 
-  // Store the plugin
   m_loaders[meta.id] = loader;
   m_plugins[meta.id] = plugin;
 
-  // Check if it's a syntax plugin
   ISyntaxPlugin *syntaxPlugin = qobject_cast<ISyntaxPlugin *>(pluginObject);
   if (syntaxPlugin) {
     m_syntaxPlugins[syntaxPlugin->languageId()] = syntaxPlugin;
@@ -154,13 +147,11 @@ bool PluginManager::unloadPlugin(const QString &pluginId) {
   IPlugin *plugin = m_plugins[pluginId];
   plugin->shutdown();
 
-  // Remove from syntax plugins if applicable
   ISyntaxPlugin *syntaxPlugin = dynamic_cast<ISyntaxPlugin *>(plugin);
   if (syntaxPlugin) {
     m_syntaxPlugins.remove(syntaxPlugin->languageId());
   }
 
-  // Unload and clean up
   QPluginLoader *loader = m_loaders[pluginId];
   loader->unload();
   delete loader;

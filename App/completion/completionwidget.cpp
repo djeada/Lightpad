@@ -9,7 +9,7 @@ CompletionWidget::CompletionWidget(QWidget *parent)
     : QWidget(parent, Qt::ToolTip | Qt::FramelessWindowHint),
       m_model(new CompletionItemModel(this)), m_listView(new QListView(this)),
       m_docLabel(new QLabel(this)), m_layout(new QVBoxLayout(this)) {
-  // Setup list view
+
   m_listView->setModel(m_model);
   m_listView->setSelectionMode(QAbstractItemView::SingleSelection);
   m_listView->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -18,7 +18,6 @@ CompletionWidget::CompletionWidget(QWidget *parent)
   m_listView->setFocusPolicy(Qt::NoFocus);
   m_listView->installEventFilter(this);
 
-  // Setup documentation label
   m_docLabel->setWordWrap(true);
   m_docLabel->setTextFormat(Qt::RichText);
   m_docLabel->setVisible(false);
@@ -26,20 +25,17 @@ CompletionWidget::CompletionWidget(QWidget *parent)
   m_docLabel->setStyleSheet("QLabel { padding: 5px; background: #f5f5f5; "
                             "border-top: 1px solid #ddd; }");
 
-  // Layout
   m_layout->setContentsMargins(0, 0, 0, 0);
   m_layout->setSpacing(0);
   m_layout->addWidget(m_listView);
   m_layout->addWidget(m_docLabel);
 
-  // Style
   setStyleSheet(
       "CompletionWidget { background: white; border: 1px solid #ccc; }"
       "QListView { border: none; }"
       "QListView::item { padding: 3px 5px; }"
       "QListView::item:selected { background: #0078d4; color: white; }");
 
-  // Connections
   connect(m_listView->selectionModel(), &QItemSelectionModel::currentChanged,
           this, &CompletionWidget::onSelectionChanged);
   connect(m_listView, &QListView::clicked, this,
@@ -106,7 +102,6 @@ void CompletionWidget::showAt(const QPoint &position) {
     return;
   }
 
-  // Ensure popup fits on screen
   QScreen *screen = QApplication::screenAt(position);
   if (!screen) {
     screen = QApplication::primaryScreen();
@@ -116,12 +111,10 @@ void CompletionWidget::showAt(const QPoint &position) {
   QPoint adjustedPos = position;
   QSize popupSize = sizeHint();
 
-  // Adjust horizontal position
   if (adjustedPos.x() + popupSize.width() > screenGeom.right()) {
     adjustedPos.setX(screenGeom.right() - popupSize.width());
   }
 
-  // Adjust vertical position (show above if no room below)
   if (adjustedPos.y() + popupSize.height() > screenGeom.bottom()) {
     adjustedPos.setY(position.y() - popupSize.height() - 20);
   }
@@ -191,10 +184,7 @@ void CompletionWidget::setShowDocumentation(bool show) {
   updateDocumentation();
 }
 
-void CompletionWidget::setShowIcons(bool show) {
-  m_showIcons = show;
-  // Would need to update the delegate to respect this
-}
+void CompletionWidget::setShowIcons(bool show) { m_showIcons = show; }
 
 void CompletionWidget::keyPressEvent(QKeyEvent *event) {
   switch (event->key()) {
@@ -289,10 +279,10 @@ void CompletionWidget::adjustSize() {
   int itemCount = qMin(m_model->count(), m_maxVisibleItems);
   int itemHeight = m_listView->sizeHintForRow(0);
   if (itemHeight <= 0) {
-    itemHeight = 20; // Default if no items
+    itemHeight = 20;
   }
 
-  int listHeight = itemCount * itemHeight + 4; // +4 for borders
+  int listHeight = itemCount * itemHeight + 4;
   m_listView->setFixedHeight(listHeight);
 
   QWidget::adjustSize();

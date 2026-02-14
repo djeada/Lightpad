@@ -20,14 +20,12 @@ void SyntaxPluginRegistry::registerPlugin(
     return;
   }
 
-  // Check if already registered
   if (languagePlugins.find(langId) != languagePlugins.end()) {
     Logger::instance().warning(
         QString("Syntax plugin for language '%1' already registered, replacing")
             .arg(langId));
   }
 
-  // Register extension mappings
   QStringList extensions = plugin->fileExtensions();
   for (const QString &ext : extensions) {
     if (!ext.isEmpty()) {
@@ -35,7 +33,6 @@ void SyntaxPluginRegistry::registerPlugin(
     }
   }
 
-  // Store the plugin
   languagePlugins[langId] = std::move(plugin);
 
   Logger::instance().info(
@@ -57,7 +54,6 @@ ISyntaxPlugin *
 SyntaxPluginRegistry::getPluginByExtension(const QString &extension) const {
   QString ext = extension.toLower();
 
-  // Remove leading dot if present
   if (ext.startsWith('.')) {
     ext = ext.mid(1);
   }

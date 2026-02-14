@@ -11,12 +11,6 @@ class QSplitter;
 class GitIntegration;
 struct GitCommitInfo;
 
-/**
- * @brief Dialog showing commit history for a specific file
- *
- * GitLens-style file history view showing all commits that modified
- * a given file, with commit details and ability to open diffs.
- */
 class GitFileHistoryDialog : public QDialog {
   Q_OBJECT
 
@@ -43,4 +37,4 @@ private:
   QLabel *m_titleLabel;
 };
 
-#endif // GITFILEHISTORYDIALOG_H
+#endif

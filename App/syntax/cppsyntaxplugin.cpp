@@ -40,7 +40,6 @@ QStringList CppSyntaxPlugin::getTertiaryKeywords() {
 QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
-  // Primary keywords (types, storage classes)
   for (const QString &keyword : getPrimaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -48,7 +47,6 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Secondary keywords (control flow, operators)
   for (const QString &keyword : getSecondaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -56,7 +54,6 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Tertiary keywords (literals, modifiers)
   for (const QString &keyword : getTertiaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -64,7 +61,6 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Preprocessor directives
   const QString preprocessorDirectives =
       QStringLiteral("include|define|undef|if|ifdef|ifndef|elif|else|endif|"
                      "pragma|error|warning|line");
@@ -74,7 +70,6 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
   preprocessorRule.name = "preprocessor_directive";
   rules.append(preprocessorRule);
 
-  // Namespace and scope resolution identifiers
   const QString identifierPattern = QStringLiteral("[A-Za-z_][A-Za-z0-9_]*");
   SyntaxRule scopeQualifierRule;
   scopeQualifierRule.pattern =
@@ -88,31 +83,26 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
   scopedIdentifierRule.name = "scoped_identifier";
   rules.append(scopedIdentifierRule);
 
-  // Numbers
   SyntaxRule numberRule;
   numberRule.pattern = QRegularExpression("\\b[-+.,]*\\d{1,}f*\\b");
   numberRule.name = "number";
   rules.append(numberRule);
 
-  // Qt classes (special case)
   SyntaxRule qtClassRule;
   qtClassRule.pattern = QRegularExpression("\\bQ[A-Za-z]+\\b");
   qtClassRule.name = "class";
   rules.append(qtClassRule);
 
-  // String literals
   SyntaxRule stringRule;
   stringRule.pattern = QRegularExpression("\".*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
-  // Function calls
   SyntaxRule functionRule;
   functionRule.pattern = QRegularExpression("\\b[A-Za-z0-9_]+(?=\\()");
   functionRule.name = "function";
   rules.append(functionRule);
 
-  // Single-line comments
   SyntaxRule commentRule;
   commentRule.pattern = QRegularExpression("//[^\n]*");
   commentRule.name = "comment";
@@ -124,7 +114,6 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
 QVector<MultiLineBlock> CppSyntaxPlugin::multiLineBlocks() const {
   QVector<MultiLineBlock> blocks;
 
-  // Multi-line comments
   MultiLineBlock commentBlock;
   commentBlock.startPattern = QRegularExpression("/\\*");
   commentBlock.endPattern = QRegularExpression("\\*/");

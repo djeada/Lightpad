@@ -13,12 +13,6 @@
 #include <QTextEdit>
 #include <QVBoxLayout>
 
-/**
- * @brief Dialog for resolving Git merge conflicts
- *
- * Displays conflicted files and provides options to resolve
- * them by accepting ours, theirs, or manual editing.
- */
 class MergeConflictDialog : public QDialog {
   Q_OBJECT
 
@@ -26,25 +20,14 @@ public:
   explicit MergeConflictDialog(GitIntegration *git, QWidget *parent = nullptr);
   ~MergeConflictDialog();
 
-  /**
-   * @brief Set the list of conflicted files
-   */
   void setConflictedFiles(const QStringList &files);
 
-  /**
-   * @brief Refresh the conflict status
-   */
   void refresh();
 
 signals:
-  /**
-   * @brief Emitted when user wants to open a file for manual editing
-   */
+
   void openFileRequested(const QString &filePath);
 
-  /**
-   * @brief Emitted when all conflicts are resolved
-   */
   void allConflictsResolved();
 
 private slots:
@@ -63,9 +46,6 @@ private:
   void updateButtons();
 
 public:
-  /**
-   * @brief Apply theme to the dialog
-   */
   void applyTheme(const Theme &theme);
 
 private:
@@ -84,4 +64,4 @@ private:
   QString m_currentFile;
 };
 
-#endif // MERGECONFLICTDIALOG_H
+#endif

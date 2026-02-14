@@ -30,7 +30,7 @@
 
 namespace {
 constexpr int kDiffPreviewLimit = 80000;
-} // namespace
+}
 
 GitDiffDialog::GitDiffDialog(GitIntegration *git, const QString &targetId,
                              DiffTarget target, bool staged, const Theme &theme,
@@ -86,7 +86,6 @@ void GitDiffDialog::setDiffText(const QString &diffText) {
         tr("0 changes • +%1 -%2").arg(m_totalAdded).arg(m_totalDeleted));
   }
 
-  // Show/hide file list based on file count
   if (m_fileListPanel && m_fileList) {
     bool showFileList = m_files.size() > 1;
     m_fileListPanel->setVisible(showFileList);
@@ -98,14 +97,14 @@ void GitDiffDialog::setDiffText(const QString &diffText) {
         if (displayName.isEmpty()) {
           displayName = file.filename;
         }
-        // Truncate long names
+
         if (displayName.length() > 25) {
           displayName = displayName.left(22) + "...";
         }
         auto *item = new QListWidgetItem(displayName);
         item->setToolTip(file.filename);
         item->setData(Qt::UserRole, file.startLine);
-        // Store stats for display
+
         QString statsText =
             QString("+%1 -%2").arg(file.addedCount).arg(file.deletedCount);
         item->setData(Qt::UserRole + 1, statsText);
@@ -156,7 +155,6 @@ void GitDiffDialog::keyPressEvent(QKeyEvent *event) {
     return;
   }
 
-  // F3 / Shift+F3 for search navigation
   if (event->key() == Qt::Key_F3 && !(event->modifiers() & Qt::ShiftModifier)) {
     performSearch(false);
     event->accept();
@@ -168,7 +166,6 @@ void GitDiffDialog::keyPressEvent(QKeyEvent *event) {
     return;
   }
 
-  // Up/Down arrows for change navigation (when not in search field)
   if (!m_searchField || !m_searchField->hasFocus()) {
     if (event->key() == Qt::Key_Up || event->key() == Qt::Key_K) {
       onPrevChange();
@@ -182,7 +179,6 @@ void GitDiffDialog::keyPressEvent(QKeyEvent *event) {
     }
   }
 
-  // Escape to close
   if (event->key() == Qt::Key_Escape) {
     close();
     event->accept();
@@ -253,26 +249,22 @@ void GitDiffDialog::buildUi() {
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(0);
 
-  // ===== Header Bar =====
   auto *headerWidget = new QWidget(this);
   headerWidget->setObjectName("diffHeader");
   auto *headerLayout = new QHBoxLayout(headerWidget);
   headerLayout->setContentsMargins(16, 12, 16, 12);
   headerLayout->setSpacing(12);
 
-  // Title
   m_summaryLabel = new QLabel(tr("Diff"), this);
   m_summaryLabel->setObjectName("diffTitle");
   headerLayout->addWidget(m_summaryLabel);
 
-  // Stats badge
   m_changeCounterLabel = new QLabel(this);
   m_changeCounterLabel->setObjectName("changeCounter");
   headerLayout->addWidget(m_changeCounterLabel);
 
   headerLayout->addStretch(1);
 
-  // View mode group
   auto *viewGroup = new QWidget(this);
   viewGroup->setObjectName("toolbarGroup");
   auto *viewLayout = new QHBoxLayout(viewGroup);
@@ -290,7 +282,6 @@ void GitDiffDialog::buildUi() {
 
   headerLayout->addWidget(viewGroup);
 
-  // Navigation group
   auto *navGroup = new QWidget(this);
   navGroup->setObjectName("toolbarGroup");
   auto *navLayout = new QHBoxLayout(navGroup);
@@ -307,7 +298,6 @@ void GitDiffDialog::buildUi() {
 
   headerLayout->addWidget(navGroup);
 
-  // Search group
   auto *searchGroup = new QWidget(this);
   searchGroup->setObjectName("toolbarGroup");
   auto *searchLayout = new QHBoxLayout(searchGroup);
@@ -346,19 +336,16 @@ void GitDiffDialog::buildUi() {
 
   layout->addWidget(headerWidget);
 
-  // ===== Commit Info Bar (hidden by default) =====
   m_commitInfoLabel = new QLabel(this);
   m_commitInfoLabel->setObjectName("commitInfo");
   m_commitInfoLabel->setVisible(false);
   m_commitInfoLabel->setWordWrap(true);
   layout->addWidget(m_commitInfoLabel);
 
-  // ===== Main Content =====
   m_mainSplitter = new QSplitter(Qt::Horizontal, this);
   m_mainSplitter->setHandleWidth(1);
   m_mainSplitter->setChildrenCollapsible(false);
 
-  // File list (hidden by default)
   m_fileListPanel = new QWidget(this);
   m_fileListPanel->setObjectName("fileListPanel");
   m_fileListPanel->setVisible(false);
@@ -378,7 +365,6 @@ void GitDiffDialog::buildUi() {
   m_fileListPanel->setFixedWidth(220);
   m_mainSplitter->addWidget(m_fileListPanel);
 
-  // Diff view
   m_diffView = new QTextEdit(this);
   m_diffView->setReadOnly(true);
   m_diffView->setLineWrapMode(QTextEdit::WidgetWidth);
@@ -395,7 +381,6 @@ void GitDiffDialog::buildUi() {
 
   layout->addWidget(m_mainSplitter, 1);
 
-  // ===== Footer/Status Bar =====
   auto *footerWidget = new QWidget(this);
   footerWidget->setObjectName("diffFooter");
   auto *footerLayout = new QHBoxLayout(footerWidget);
@@ -410,13 +395,11 @@ void GitDiffDialog::buildUi() {
 
   layout->addWidget(footerWidget);
 
-  // Hide unused widgets
   m_minimapFrame = nullptr;
   m_minimapLabel = nullptr;
   m_toolbarSeparator1 = nullptr;
   m_toolbarSeparator2 = nullptr;
 
-  // ===== Connections =====
   connect(m_modeSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &GitDiffDialog::onModeChanged);
   connect(m_wrapToggle, &QCheckBox::toggled, this,
@@ -444,34 +427,28 @@ void GitDiffDialog::buildUi() {
 }
 
 void GitDiffDialog::applyTheme(const Theme &theme) {
-  // Main dialog styles
+
   QString styles =
       QString(
-          // Dialog background
+
           "QDialog { background: %1; }"
 
-          // Header bar
           "#diffHeader { background: %2; border-bottom: 1px solid %3; }"
           "#diffTitle { font-size: 14px; font-weight: 600; color: %4; }"
           "#changeCounter { font-size: 11px; color: %5; background: %6; "
           "  padding: 3px 10px; border-radius: 10px; }"
 
-          // Toolbar groups
           "#toolbarGroup { background: %7; border: 1px solid %3; "
           "border-radius: 6px; }"
 
-          // Search counter
           "#searchCounter { font-size: 11px; color: %8; }"
 
-          // Commit info bar
           "#commitInfo { font-size: 12px; color: %4; background: %9; "
           "  border-bottom: 1px solid %3; padding: 10px 16px; }"
 
-          // Footer
           "#diffFooter { background: %2; border-top: 1px solid %3; }"
           "#shortcutsLabel { font-size: 11px; color: %8; }"
 
-          // File list panel
           "#fileListPanel { background: %2; border-right: 1px solid %3; }"
           "#fileListHeader { font-size: 10px; font-weight: 600; color: %8; "
           "  letter-spacing: 1px; background: %7; padding: 10px 12px; "
@@ -484,26 +461,24 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
           "}"
           "#fileList::item:hover { background: %6; }"
 
-          // Copy button (accent)
           "#copyButton { background: %11; color: white; border: none; "
           "  border-radius: 4px; padding: 6px 12px; font-weight: 500; }"
           "#copyButton:hover { background: %12; }")
-          .arg(theme.backgroundColor.name())           // %1
-          .arg(theme.surfaceColor.name())              // %2
-          .arg(theme.borderColor.name())               // %3
-          .arg(theme.foregroundColor.name())           // %4
-          .arg(theme.foregroundColor.name())           // %5 - counter text
-          .arg(theme.hoverColor.name())                // %6
-          .arg(theme.surfaceAltColor.name())           // %7
-          .arg(theme.singleLineCommentFormat.name())   // %8 - subdued
-          .arg(theme.surfaceAltColor.name())           // %9 - commit info bg
-          .arg(theme.accentSoftColor.name())           // %10 - selection
-          .arg(theme.accentColor.name())               // %11 - accent
-          .arg(theme.accentColor.lighter(110).name()); // %12 - accent hover
+          .arg(theme.backgroundColor.name())
+          .arg(theme.surfaceColor.name())
+          .arg(theme.borderColor.name())
+          .arg(theme.foregroundColor.name())
+          .arg(theme.foregroundColor.name())
+          .arg(theme.hoverColor.name())
+          .arg(theme.surfaceAltColor.name())
+          .arg(theme.singleLineCommentFormat.name())
+          .arg(theme.surfaceAltColor.name())
+          .arg(theme.accentSoftColor.name())
+          .arg(theme.accentColor.name())
+          .arg(theme.accentColor.lighter(110).name());
 
   setStyleSheet(styles);
 
-  // Standard buttons
   QString buttonStyle =
       QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
               "  border-radius: 4px; padding: 5px 10px; font-size: 12px; }"
@@ -522,17 +497,14 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
       btn->setStyleSheet(buttonStyle);
   }
 
-  // ComboBox
   if (m_modeSelector) {
     m_modeSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
   }
 
-  // CheckBox
   if (m_wrapToggle) {
     m_wrapToggle->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
   }
 
-  // Search field
   if (m_searchField) {
     QString searchStyle =
         QString(
@@ -547,7 +519,6 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
     m_searchField->setStyleSheet(searchStyle);
   }
 
-  // Diff view
   if (m_diffView) {
     QString diffStyle =
         QString("QTextEdit { background: %1; color: %2; border: none; "
@@ -575,7 +546,7 @@ void GitDiffDialog::updateDiffPresentation() {
     m_lines.clear();
     m_changeBlocks.clear();
     updateChangeCounter();
-    // Show a nice empty state
+
     QString emptyHtml =
         QString(
             "<html><body style='background: %1; color: %2; padding: 40px; "
@@ -624,7 +595,7 @@ void GitDiffDialog::updateDiffPresentation() {
 }
 
 void GitDiffDialog::rebuildUnified() {
-  // Use RGBA for semi-transparent backgrounds
+
   QString addBgStr = QString("rgba(%1,%2,%3,0.15)")
                          .arg(m_theme.successColor.red())
                          .arg(m_theme.successColor.green())
@@ -675,7 +646,7 @@ void GitDiffDialog::rebuildUnified() {
     QString newLn = line.newLineNum > 0 ? QString::number(line.newLineNum) : "";
 
     if (line.prefix == 'd') {
-      // File header - extract filename
+
       QString filename = line.content;
       int bIdx = filename.lastIndexOf(" b/");
       if (bIdx > 0)
@@ -686,7 +657,7 @@ void GitDiffDialog::rebuildUnified() {
       html += QString("<tr><td colspan=\"3\" class=\"hunk\">%1</td></tr>")
                   .arg(escaped);
     } else if (line.prefix == 'i' || line.prefix == 'h') {
-      // Skip index/other meta lines for cleaner view
+
       continue;
     } else if (line.prefix == '+') {
       html += QString("<tr class=\"add\"><td class=\"ln\">%1</td>"
@@ -971,7 +942,7 @@ void GitDiffDialog::parseDiff(const QString &diffText) {
     } else if (rawLine.startsWith("@@")) {
       line.prefix = '@';
       line.content = rawLine;
-      // Parse hunk header for line numbers: @@ -old,count +new,count @@
+
       QRegularExpression hunkRe("@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@");
       QRegularExpressionMatch match = hunkRe.match(rawLine);
       if (match.hasMatch()) {
@@ -1008,11 +979,11 @@ void GitDiffDialog::parseFiles() {
   for (int i = 0; i < m_lines.size(); ++i) {
     const auto &line = m_lines[i];
     if (line.prefix == 'd') {
-      // Save previous file if exists
+
       if (!currentFile.filename.isEmpty()) {
         m_files.append(currentFile);
       }
-      // Parse filename from "diff --git a/path b/path"
+
       QString content = line.content;
       int bIndex = content.lastIndexOf(" b/");
       if (bIndex > 0) {
@@ -1029,7 +1000,7 @@ void GitDiffDialog::parseFiles() {
       currentFile.deletedCount++;
     }
   }
-  // Save last file
+
   if (!currentFile.filename.isEmpty()) {
     m_files.append(currentFile);
   }
@@ -1142,9 +1113,7 @@ int GitDiffDialog::countSearchMatches(const QString &query) {
   return count;
 }
 
-void GitDiffDialog::updateMinimap() {
-  // Minimap disabled for cleaner UI
-}
+void GitDiffDialog::updateMinimap() {}
 
 void GitDiffDialog::performSearch(bool backwards) {
   if (!m_diffView || !m_searchField) {

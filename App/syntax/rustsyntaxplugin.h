@@ -4,9 +4,6 @@
 #include "basesyntaxplugin.h"
 #include <QVector>
 
-/**
- * @brief Built-in Rust syntax highlighting plugin
- */
 class RustSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "rust"; }
@@ -27,4 +24,4 @@ private:
   static QStringList getTertiaryKeywords();
 };
 
-#endif // RUSTSYNTAXPLUGIN_H
+#endif

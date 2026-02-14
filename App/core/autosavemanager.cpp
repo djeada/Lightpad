@@ -6,7 +6,7 @@
 #include <QFileInfo>
 
 namespace {
-// Constant for identifying unsaved files
+
 const QString UNTITLED_PREFIX = "Untitled";
 
 bool isUntitledFile(const QString &filePath) {
@@ -47,7 +47,7 @@ void AutoSaveManager::setEnabled(bool enabled) {
 bool AutoSaveManager::isEnabled() const { return m_enabled; }
 
 void AutoSaveManager::setDelay(int seconds) {
-  m_delaySeconds = qMax(5, seconds); // Minimum 5 seconds
+  m_delaySeconds = qMax(5, seconds);
 
   if (m_timer->isActive()) {
     m_timer->setInterval(m_delaySeconds * 1000);
@@ -63,7 +63,6 @@ void AutoSaveManager::markModified(const QString &filePath) {
 
   m_pendingFiles.insert(filePath);
 
-  // Start timer if enabled and not already running
   if (m_enabled && !m_timer->isActive()) {
     m_timer->start(m_delaySeconds * 1000);
   }
@@ -72,7 +71,6 @@ void AutoSaveManager::markModified(const QString &filePath) {
 void AutoSaveManager::markSaved(const QString &filePath) {
   m_pendingFiles.remove(filePath);
 
-  // Stop timer if no more pending files
   if (m_pendingFiles.isEmpty()) {
     m_timer->stop();
   }
@@ -86,25 +84,18 @@ void AutoSaveManager::saveAllPending() {
   QSet<QString> toSave = m_pendingFiles;
 
   for (const QString &filePath : toSave) {
-    // Skip untitled files (need to be saved manually with Save As)
+
     if (isUntitledFile(filePath)) {
       continue;
     }
 
-    // Verify file path exists and is writable
     QFileInfo fileInfo(filePath);
     if (!fileInfo.exists() || !fileInfo.isWritable()) {
       m_pendingFiles.remove(filePath);
       continue;
     }
 
-    // Use FileManager to save the file content
-    // Get content from the appropriate tab
     bool saved = false;
-    // Note: Full integration with MainWindow tabs would require
-    // access to tab widget and finding the TextArea for this file.
-    // For now, we emit a signal that MainWindow can connect to
-    // for performing the actual save operation.
 
     m_pendingFiles.remove(filePath);
     emit fileSaved(filePath);

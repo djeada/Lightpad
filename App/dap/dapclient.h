@@ -9,9 +9,6 @@
 #include <QProcess>
 #include <QVariant>
 
-/**
- * @brief Debug Adapter Protocol (DAP) source location
- */
 struct DapSource {
   QString name;
   QString path;
@@ -37,9 +34,6 @@ struct DapSource {
   }
 };
 
-/**
- * @brief Breakpoint representation
- */
 struct DapBreakpoint {
   int id = 0;
   bool verified = false;
@@ -66,9 +60,6 @@ struct DapBreakpoint {
   }
 };
 
-/**
- * @brief Source breakpoint (for setting breakpoints)
- */
 struct DapSourceBreakpoint {
   int line;
   int column = 0;
@@ -91,9 +82,6 @@ struct DapSourceBreakpoint {
   }
 };
 
-/**
- * @brief Stack frame representation
- */
 struct DapStackFrame {
   int id = 0;
   QString name;
@@ -103,7 +91,7 @@ struct DapStackFrame {
   int endLine = 0;
   int endColumn = 0;
   QString moduleId;
-  QString presentationHint; // "normal", "label", "subtle"
+  QString presentationHint;
 
   static DapStackFrame fromJson(const QJsonObject &obj) {
     DapStackFrame frame;
@@ -122,12 +110,9 @@ struct DapStackFrame {
   }
 };
 
-/**
- * @brief Scope representation (for variables grouping)
- */
 struct DapScope {
   QString name;
-  QString presentationHint; // "arguments", "locals", "registers"
+  QString presentationHint;
   int variablesReference = 0;
   int namedVariables = 0;
   int indexedVariables = 0;
@@ -157,14 +142,11 @@ struct DapScope {
   }
 };
 
-/**
- * @brief Variable representation
- */
 struct DapVariable {
   QString name;
   QString value;
   QString type;
-  int variablesReference = 0; // > 0 means structured/expandable
+  int variablesReference = 0;
   int namedVariables = 0;
   int indexedVariables = 0;
   QString evaluateName;
@@ -184,9 +166,6 @@ struct DapVariable {
   }
 };
 
-/**
- * @brief Thread representation
- */
 struct DapThread {
   int id = 0;
   QString name;
@@ -199,13 +178,10 @@ struct DapThread {
   }
 };
 
-/**
- * @brief Debug output event data
- */
 struct DapOutputEvent {
-  QString category; // "console", "stdout", "stderr", "telemetry", "important"
+  QString category;
   QString output;
-  QString group; // "start", "startCollapsed", "end"
+  QString group;
   int variablesReference = 0;
   DapSource source;
   int line = 0;
@@ -226,9 +202,6 @@ struct DapOutputEvent {
   }
 };
 
-/**
- * @brief Stopped event reasons
- */
 enum class DapStoppedReason {
   Step,
   Breakpoint,
@@ -242,9 +215,6 @@ enum class DapStoppedReason {
   Unknown
 };
 
-/**
- * @brief Stopped event data
- */
 struct DapStoppedEvent {
   DapStoppedReason reason = DapStoppedReason::Unknown;
   QString description;
@@ -290,37 +260,18 @@ struct DapStoppedEvent {
   }
 };
 
-/**
- * @brief Debug Adapter Protocol client
- *
- * Provides communication with debug adapters using the DAP protocol.
- * This is a language-agnostic client that can work with any DAP-compliant
- * debug adapter (Python debugpy, Node.js debug adapter, GDB via gdb-dap, etc.)
- *
- * Supports:
- * - Initialize/launch/attach/terminate lifecycle
- * - Breakpoint management (source, function, conditional, logpoints)
- * - Execution control (continue, step over/into/out, pause)
- * - Variable inspection and evaluation
- * - Stack trace navigation
- * - Multi-threaded debugging
- * - Debug console/REPL
- */
 class DapClient : public QObject {
   Q_OBJECT
 
 public:
-  /**
-   * @brief Client state
-   */
   enum class State {
     Disconnected,
     Connecting,
     Initializing,
-    Ready,      // Initialized, but not debugging
-    Running,    // Debugging, program is running
-    Stopped,    // Debugging, program is stopped at breakpoint/step
-    Terminated, // Debug session ended
+    Ready,
+    Running,
+    Stopped,
+    Terminated,
     Error
   };
   Q_ENUM(State)
@@ -328,202 +279,67 @@ public:
   explicit DapClient(QObject *parent = nullptr);
   ~DapClient();
 
-  /**
-   * @brief Start the debug adapter process
-   * @param program Path to the debug adapter executable
-   * @param arguments Command line arguments
-   * @return true if adapter started
-   */
   bool start(const QString &program, const QStringList &arguments = {});
 
-  /**
-   * @brief Stop the debug adapter and terminate debug session
-   */
   void stop();
 
-  /**
-   * @brief Get current state
-   * @return Client state
-   */
   State state() const;
 
-  /**
-   * @brief Check if client is ready for debugging
-   * @return true if initialized and ready
-   */
   bool isReady() const;
 
-  /**
-   * @brief Check if currently debugging
-   * @return true if in Running or Stopped state
-   */
   bool isDebugging() const;
 
-  // Lifecycle commands
-
-  /**
-   * @brief Launch a program for debugging
-   * @param program Path to the program to debug
-   * @param args Command line arguments for the program
-   * @param cwd Working directory
-   * @param env Environment variables (name -> value)
-   * @param stopOnEntry Whether to stop at entry point
-   */
   void launch(const QString &program, const QStringList &args = {},
               const QString &cwd = {}, const QMap<QString, QString> &env = {},
               bool stopOnEntry = false);
 
-  /**
-   * @brief Attach to a running process
-   * @param processId Process ID to attach to
-   */
   void attach(int processId);
 
-  /**
-   * @brief Attach to a remote debug target
-   * @param host Host name or IP
-   * @param port Port number
-   */
   void attachRemote(const QString &host, int port);
 
-  /**
-   * @brief Disconnect from debug target
-   * @param terminateDebuggee Whether to terminate the debuggee
-   */
   void disconnect(bool terminateDebuggee = true);
 
-  /**
-   * @brief Terminate the debuggee
-   */
   void terminate();
 
-  /**
-   * @brief Notify adapter that initial breakpoint/configuration setup is done
-   */
   void configurationDone();
   bool supportsConfigurationDoneRequest() const;
 
-  // Breakpoint management
-
-  /**
-   * @brief Set source breakpoints for a file
-   * @param sourcePath Path to the source file
-   * @param breakpoints List of breakpoints to set
-   *
-   * Note: This replaces all breakpoints for the file
-   */
   void setBreakpoints(const QString &sourcePath,
                       const QList<DapSourceBreakpoint> &breakpoints);
 
-  /**
-   * @brief Set function breakpoints
-   * @param functionNames List of function names to break on
-   */
   void setFunctionBreakpoints(const QStringList &functionNames);
 
-  /**
-   * @brief Set data breakpoints (watchpoints)
-   * @param dataBreakpoints List of data breakpoints to set
-   *
-   * Note: This replaces all data breakpoints
-   */
   void setDataBreakpoints(const QList<QJsonObject> &dataBreakpoints);
 
-  /**
-   * @brief Set exception breakpoints
-   * @param filterIds List of exception filter IDs (e.g., "uncaught", "raised")
-   */
   void setExceptionBreakpoints(const QStringList &filterIds);
 
-  // Execution control
-
-  /**
-   * @brief Continue execution
-   * @param threadId Thread to continue (0 = all threads)
-   */
   void continueExecution(int threadId = 0);
 
-  /**
-   * @brief Pause execution
-   * @param threadId Thread to pause (0 = all threads)
-   */
   void pause(int threadId = 0);
 
-  /**
-   * @brief Step over (next line)
-   * @param threadId Thread to step
-   */
   void stepOver(int threadId);
 
-  /**
-   * @brief Step into function call
-   * @param threadId Thread to step
-   */
   void stepInto(int threadId);
 
-  /**
-   * @brief Step out of current function
-   * @param threadId Thread to step
-   */
   void stepOut(int threadId);
 
-  /**
-   * @brief Restart the debug session
-   */
   void restart();
 
-  // Inspection
-
-  /**
-   * @brief Get list of threads
-   */
   void getThreads();
 
-  /**
-   * @brief Get stack trace for a thread
-   * @param threadId Thread ID
-   * @param startFrame Starting frame index
-   * @param levels Number of frames to retrieve (0 = all)
-   */
   void getStackTrace(int threadId, int startFrame = 0, int levels = 0);
 
-  /**
-   * @brief Get scopes for a stack frame
-   * @param frameId Stack frame ID
-   */
   void getScopes(int frameId);
 
-  /**
-   * @brief Get variables for a scope or structured variable
-   * @param variablesReference Reference from scope or parent variable
-   * @param filter Filter type ("indexed", "named", or empty for both)
-   * @param start Start index (for indexed variables)
-   * @param count Number of variables to fetch
-   */
   void getVariables(int variablesReference, const QString &filter = {},
                     int start = 0, int count = 0);
 
-  /**
-   * @brief Evaluate an expression
-   * @param expression Expression to evaluate
-   * @param frameId Stack frame context (0 = global)
-   * @param context Evaluation context ("watch", "repl", "hover", "clipboard")
-   */
   void evaluate(const QString &expression, int frameId = -1,
                 const QString &context = "repl");
 
-  /**
-   * @brief Set a variable's value
-   * @param variablesReference Parent variable reference
-   * @param name Variable name
-   * @param value New value
-   */
   void setVariable(int variablesReference, const QString &name,
                    const QString &value);
 
-  /**
-   * @brief Get the current thread ID (from last stopped event)
-   */
   int currentThreadId() const { return m_currentThreadId; }
 
 signals:
@@ -532,27 +348,22 @@ signals:
   void adapterInitialized();
   void error(const QString &message);
 
-  // Lifecycle events
   void launched();
   void attached();
   void terminated();
   void exited(int exitCode);
 
-  // Breakpoint events
   void breakpointsSet(const QString &sourcePath,
                       const QList<DapBreakpoint> &breakpoints);
   void breakpointChanged(const DapBreakpoint &breakpoint,
                          const QString &reason);
 
-  // Execution events
   void stopped(const DapStoppedEvent &event);
   void continued(int threadId, bool allThreadsContinued);
-  void threadEvent(int threadId, const QString &reason); // "started", "exited"
+  void threadEvent(int threadId, const QString &reason);
 
-  // Debug output
   void output(const DapOutputEvent &event);
 
-  // Inspection responses
   void threadsReceived(const QList<DapThread> &threads);
   void stackTraceReceived(int threadId, const QList<DapStackFrame> &frames,
                           int totalFrames);
@@ -593,7 +404,7 @@ private:
   State m_state;
   int m_nextSeq;
   QByteArray m_buffer;
-  QMap<int, QString> m_pendingRequests; // seq -> command
+  QMap<int, QString> m_pendingRequests;
 
   int m_currentThreadId;
   QString m_adapterId;
@@ -604,9 +415,8 @@ private:
   bool m_dataBreakpointsSupported;
   bool m_dataBreakpointsConfigured;
 
-  // Stored launch/attach configuration for restart
   QJsonObject m_launchConfig;
   bool m_isAttach;
 };
 
-#endif // DAPCLIENT_H
+#endif

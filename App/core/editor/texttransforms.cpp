@@ -39,7 +39,7 @@ QString toTitleCase(const QString &text) {
       }
     } else {
       result.append(c);
-      // Capitalize after word boundary characters
+
       if (c.isSpace() || c == '-' || c == '_' || c == '.' || c == ':' ||
           c == '/' || c == '\\' || c == '(' || c == '[' || c == '{' ||
           c == '<' || c == '"' || c == '\'' || c == '`') {

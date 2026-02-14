@@ -9,23 +9,15 @@
 #include <QListWidget>
 #include <QVBoxLayout>
 
-/**
- * @brief Symbol item for the dialog
- */
 struct SymbolItem {
   QString name;
   QString detail;
   LspSymbolKind kind;
   int line;
   int column;
-  int score; // For fuzzy matching
+  int score;
 };
 
-/**
- * @brief Go to Symbol dialog (Ctrl+Shift+O)
- *
- * Provides fuzzy search for document symbols from LSP.
- */
 class GoToSymbolDialog : public QDialog {
   Q_OBJECT
 
@@ -33,30 +25,16 @@ public:
   explicit GoToSymbolDialog(QWidget *parent = nullptr);
   ~GoToSymbolDialog();
 
-  /**
-   * @brief Set symbols to display
-   */
   void setSymbols(const QList<LspDocumentSymbol> &symbols);
 
-  /**
-   * @brief Clear all symbols
-   */
   void clearSymbols();
 
-  /**
-   * @brief Show and focus the dialog
-   */
   void showDialog();
 
-  /**
-   * @brief Apply theme to the dialog
-   */
   void applyTheme(const Theme &theme);
 
 signals:
-  /**
-   * @brief Emitted when user selects a symbol
-   */
+
   void symbolSelected(int line, int column);
 
 protected:
@@ -87,4 +65,4 @@ private:
   QList<int> m_filteredIndices;
 };
 
-#endif // GOTOSYMBOLDIALOG_H
+#endif

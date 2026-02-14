@@ -33,7 +33,7 @@ EnvironSetter &EnvironSetter::operator=(const char *str) {
     find_program_clear_cache();
   }
 #ifdef _WIN32
-  // if it's empty windows deletes it.
+
   _putenv_s(mName.c_str(), str ? str : "");
 #else
   if (str == nullptr || !*str) {

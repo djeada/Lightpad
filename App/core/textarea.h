@@ -51,11 +51,9 @@ public:
   void loadSettings(const TextAreaSettings settings);
   void applySelectionPalette(const Theme &theme);
 
-  // Legacy completer support (deprecated - use setCompletionEngine)
   void setCompleter(QCompleter *completer);
   QCompleter *completer() const;
 
-  // New completion system
   void setCompletionEngine(CompletionEngine *engine);
   CompletionEngine *completionEngine() const;
   void setLanguage(const QString &languageId);
@@ -67,7 +65,6 @@ public:
   QString getSearchWord();
   bool changesUnsaved();
 
-  // Multi-cursor support
   void addCursorAbove();
   void addCursorBelow();
   void addCursorAtNextOccurrence();
@@ -81,7 +78,6 @@ public:
   void updateColumnSelection(const QPoint &pos);
   void endColumnSelection();
 
-  // Code folding
   void foldCurrentBlock();
   void unfoldCurrentBlock();
   void foldAll();
@@ -91,61 +87,48 @@ public:
   void foldComments();
   void unfoldComments();
 
-  // Text transformations
   void sortLinesAscending();
   void sortLinesDescending();
   void transformToUppercase();
   void transformToLowercase();
   void transformToTitleCase();
 
-  // Word wrap
   void setWordWrapEnabled(bool enabled);
   bool wordWrapEnabled() const;
 
-  // Whitespace visualization
   void setShowWhitespace(bool show);
   bool showWhitespace() const;
 
-  // Indent guides
   void setShowIndentGuides(bool show);
   bool showIndentGuides() const;
 
-  // Vim mode
   void setVimModeEnabled(bool enabled);
   bool isVimModeEnabled() const;
   VimMode *vimMode() const;
 
-  // Git diff gutter
-  void setGitDiffLines(
-      const QList<QPair<int, int>>
-          &diffLines); // line number, type (0=add, 1=modify, 2=delete)
+  void setGitDiffLines(const QList<QPair<int, int>> &diffLines);
   void clearGitDiffLines();
   void setGitBlameLines(const QMap<int, QString> &blameLines);
   void clearGitBlameLines();
 
-  // Rich blame data for hover tooltips
   void setRichBlameData(const QMap<int, GitBlameLineInfo> &blameData);
   void setGutterGitIntegration(GitIntegration *git);
 
-  // Heatmap (age-based gutter coloring)
   void setHeatmapData(const QMap<int, qint64> &timestamps);
   void setHeatmapEnabled(bool enabled);
   bool isHeatmapEnabled() const;
 
-  // CodeLens (git info above functions/classes)
   struct CodeLensEntry {
-    int line;           ///< 0-based line number
-    QString text;       ///< Display text (e.g., "2 authors | 5 changes")
-    QString symbolName; ///< Name of the symbol
+    int line;
+    QString text;
+    QString symbolName;
   };
   void setCodeLensEntries(const QList<CodeLensEntry> &entries);
   void clearCodeLensEntries();
   void setCodeLensEnabled(bool enabled);
   bool isCodeLensEnabled() const;
 
-  // Inline blame (GitLens-style ghost text at end of current line)
-  void setInlineBlameData(
-      const QMap<int, QString> &blameData); // line -> "author, time • summary"
+  void setInlineBlameData(const QMap<int, QString> &blameData);
   void clearInlineBlameData();
   void setInlineBlameEnabled(bool enabled);
   bool isInlineBlameEnabled() const;
@@ -174,7 +157,7 @@ private:
   QString highlightLang;
   QFont mainFont;
   QSyntaxHighlighter *syntaxHighlighter;
-  QCompleter *m_completer; // Legacy - deprecated
+  QCompleter *m_completer;
   CompletionEngine *m_completionEngine;
   CompletionWidget *m_completionWidget;
   QString m_languageId;
@@ -186,42 +169,31 @@ private:
   bool matchingBracketsHighlighted;
   int prevWordCount;
 
-  // Cached icons to avoid repeated disk loads
   static QIcon s_unsavedIcon;
   static bool s_iconsInitialized;
   static void initializeIconCache();
 
-  // Multi-cursor handler
   MultiCursorHandler *m_multiCursor;
 
-  // Code folding handler
   CodeFoldingManager *m_codeFolding;
 
-  // Column selection state
   bool m_columnSelectionActive;
   QPoint m_columnSelectionStart;
   QPoint m_columnSelectionEnd;
 
-  // Whitespace visualization
   bool m_showWhitespace;
 
-  // Indent guides
   bool m_showIndentGuides;
 
-  // Vim mode
   VimMode *m_vimMode;
 
-  // Git diff gutter
-  QList<QPair<int, int>>
-      m_gitDiffLines; // line number, type (0=add, 1=modify, 2=delete)
+  QList<QPair<int, int>> m_gitDiffLines;
   QMap<int, QString> m_gitBlameLines;
 
-  // Inline blame (ghost text)
-  QMap<int, QString> m_inlineBlameData; // line -> blame text
+  QMap<int, QString> m_inlineBlameData;
   bool m_inlineBlameEnabled;
   int m_lastInlineBlameLine;
 
-  // CodeLens
   QList<CodeLensEntry> m_codeLensEntries;
   bool m_codeLensEnabled;
 
@@ -253,7 +225,6 @@ private slots:
   void onCompletionAccepted(const CompletionItem &item);
 
 private:
-  // Multi-cursor helper
   void drawExtraCursors();
 };
 

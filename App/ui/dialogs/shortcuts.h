@@ -42,4 +42,4 @@ private:
   QButtonGroup radioButtonsGroup;
 };
 
-#endif // SHORTCUTS_H
+#endif

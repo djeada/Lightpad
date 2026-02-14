@@ -13,17 +13,13 @@ void RecentFilesManager::addFile(const QString &filePath) {
     return;
   }
 
-  // Get absolute path for consistency
   QFileInfo fileInfo(filePath);
   QString absolutePath = fileInfo.absoluteFilePath();
 
-  // Remove if already exists to move to front
   m_recentFiles.removeAll(absolutePath);
 
-  // Add to front of list
   m_recentFiles.prepend(absolutePath);
 
-  // Trim to max size
   while (m_recentFiles.size() > m_maxFiles) {
     m_recentFiles.removeLast();
   }
@@ -43,7 +39,7 @@ void RecentFilesManager::removeFile(const QString &filePath) {
 }
 
 QStringList RecentFilesManager::recentFiles() const {
-  // Filter out files that no longer exist
+
   QStringList existingFiles;
   for (const QString &file : m_recentFiles) {
     if (QFileInfo::exists(file)) {
@@ -64,7 +60,6 @@ int RecentFilesManager::maxFiles() const { return m_maxFiles; }
 void RecentFilesManager::setMaxFiles(int max) {
   m_maxFiles = qMax(1, max);
 
-  // Trim if necessary
   while (m_recentFiles.size() > m_maxFiles) {
     m_recentFiles.removeLast();
   }

@@ -65,12 +65,10 @@ void FileDirTreeController::handleDuplicate(const QString &path) {
 
 void FileDirTreeController::handleCopy(const QString &path) {
   model->copyToClipboard(path);
-  // No modal dialog - just silently copy to clipboard
 }
 
 void FileDirTreeController::handleCut(const QString &path) {
   model->cutToClipboard(path);
-  // No modal dialog - just silently cut to clipboard
 }
 
 void FileDirTreeController::handlePaste(const QString &destPath) {

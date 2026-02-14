@@ -12,12 +12,6 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-/**
- * @brief Image viewer widget for displaying image files
- *
- * Supports common image formats: PNG, JPG, JPEG, GIF, BMP, WEBP, SVG
- * Provides zoom in/out, fit to window, and actual size viewing modes
- */
 class ImageViewer : public QWidget {
   Q_OBJECT
 
@@ -25,24 +19,10 @@ public:
   explicit ImageViewer(QWidget *parent = nullptr);
   ~ImageViewer() = default;
 
-  /**
-   * @brief Load and display an image from the given file path
-   * @param filePath Path to the image file
-   * @return true if image was loaded successfully, false otherwise
-   */
   bool loadImage(const QString &filePath);
 
-  /**
-   * @brief Get the currently loaded file path
-   * @return The file path of the loaded image
-   */
   QString getFilePath() const { return m_filePath; }
 
-  /**
-   * @brief Check if a file extension is a supported image format
-   * @param extension File extension (without dot)
-   * @return true if the extension is a supported image format
-   */
   static bool isSupportedImageFormat(const QString &extension);
 
 public slots:
@@ -78,4 +58,4 @@ private:
   bool m_initialFitPending;
 };
 
-#endif // IMAGEVIEWER_H
+#endif

@@ -40,4 +40,4 @@ private:
   bool confirmAction(const QString &message);
 };
 
-#endif // FILEDIRTREECONTROLLER_H
+#endif

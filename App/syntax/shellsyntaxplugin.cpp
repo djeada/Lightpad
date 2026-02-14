@@ -24,7 +24,6 @@ QStringList ShellSyntaxPlugin::getTertiaryKeywords() {
 QVector<SyntaxRule> ShellSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
-  // Primary keywords
   for (const QString &keyword : getPrimaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -32,7 +31,6 @@ QVector<SyntaxRule> ShellSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Secondary keywords
   for (const QString &keyword : getSecondaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -40,7 +38,6 @@ QVector<SyntaxRule> ShellSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Tertiary keywords (common commands)
   for (const QString &keyword : getTertiaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -48,51 +45,43 @@ QVector<SyntaxRule> ShellSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Variables ($VAR, ${VAR})
   SyntaxRule varRule;
   varRule.pattern =
       QRegularExpression("\\$[A-Za-z_][A-Za-z0-9_]*|\\$\\{[^}]+\\}");
   varRule.name = "keyword_1";
   rules.append(varRule);
 
-  // Special variables ($0, $1, $@, $#, $?, $$, $!)
   SyntaxRule specialVarRule;
   specialVarRule.pattern = QRegularExpression("\\$[0-9@#?$!*-]");
   specialVarRule.name = "keyword_1";
   rules.append(specialVarRule);
 
-  // Numbers
   SyntaxRule numberRule;
   numberRule.pattern = QRegularExpression("\\b\\d+\\b");
   numberRule.name = "number";
   rules.append(numberRule);
 
-  // String literals (double quotes)
   SyntaxRule stringRule;
   stringRule.pattern = QRegularExpression("\"[^\"]*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
-  // String literals (single quotes)
   SyntaxRule singleQuoteRule;
   singleQuoteRule.pattern = QRegularExpression("'[^']*'");
   singleQuoteRule.name = "string";
   rules.append(singleQuoteRule);
 
-  // Function definitions
   SyntaxRule functionRule;
   functionRule.pattern =
       QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\(\\))");
   functionRule.name = "function";
   rules.append(functionRule);
 
-  // Shebang
   SyntaxRule shebangRule;
   shebangRule.pattern = QRegularExpression("^#!.*$");
   shebangRule.name = "comment";
   rules.append(shebangRule);
 
-  // Comments
   SyntaxRule commentRule;
   commentRule.pattern = QRegularExpression("#[^\n]*");
   commentRule.name = "comment";
@@ -103,7 +92,7 @@ QVector<SyntaxRule> ShellSyntaxPlugin::syntaxRules() const {
 
 QVector<MultiLineBlock> ShellSyntaxPlugin::multiLineBlocks() const {
   QVector<MultiLineBlock> blocks;
-  // Shell doesn't have traditional multi-line comments
+
   return blocks;
 }
 

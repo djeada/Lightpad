@@ -21,7 +21,6 @@ void GitInitDialog::setupUI() {
   mainLayout->setSpacing(16);
   mainLayout->setContentsMargins(24, 24, 24, 24);
 
-  // Header with icon and title
   QHBoxLayout *headerLayout = new QHBoxLayout();
   QLabel *iconLabel = new QLabel("🗃️", this);
   iconLabel->setStyleSheet("font-size: 32px;");
@@ -42,7 +41,6 @@ void GitInitDialog::setupUI() {
   headerLayout->addLayout(titleLayout, 1);
   mainLayout->addLayout(headerLayout);
 
-  // Repository path section
   QGroupBox *pathGroup = new QGroupBox(tr("Repository Location"), this);
   QVBoxLayout *pathLayout = new QVBoxLayout(pathGroup);
 
@@ -58,7 +56,6 @@ void GitInitDialog::setupUI() {
   pathLayout->addLayout(pathInputLayout);
   mainLayout->addWidget(pathGroup);
 
-  // Options section
   QGroupBox *optionsGroup = new QGroupBox(tr("Options"), this);
   QVBoxLayout *optionsLayout = new QVBoxLayout(optionsGroup);
 
@@ -75,7 +72,6 @@ void GitInitDialog::setupUI() {
 
   mainLayout->addWidget(optionsGroup);
 
-  // Remote section
   QGroupBox *remoteGroup = new QGroupBox(tr("Remote (Optional)"), this);
   QVBoxLayout *remoteLayout = new QVBoxLayout(remoteGroup);
 
@@ -92,7 +88,6 @@ void GitInitDialog::setupUI() {
 
   mainLayout->addStretch();
 
-  // Button row
   QHBoxLayout *buttonLayout = new QHBoxLayout();
   buttonLayout->addStretch();
 
@@ -238,12 +233,10 @@ void GitInitDialog::onBrowseClicked() {
 void GitInitDialog::applyTheme(const Theme &theme) {
   setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  // Apply group box style to all group boxes
   for (QGroupBox *groupBox : findChildren<QGroupBox *>()) {
     groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
   }
 
-  // Apply line edit style
   if (m_pathEdit) {
     m_pathEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
   }
@@ -251,7 +244,6 @@ void GitInitDialog::applyTheme(const Theme &theme) {
     m_remoteEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
   }
 
-  // Apply checkbox style
   if (m_initialCommitCheckbox) {
     m_initialCommitCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
   }
@@ -259,7 +251,6 @@ void GitInitDialog::applyTheme(const Theme &theme) {
     m_gitIgnoreCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
   }
 
-  // Apply button styles
   if (m_cancelButton) {
     m_cancelButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
   }

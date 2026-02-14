@@ -5,9 +5,9 @@
 #include <algorithm>
 
 namespace {
-// Em dash character for visual separator
+
 const QString kEmDash = QStringLiteral("\u2014");
-} // namespace
+}
 
 RecentFilesDialog::RecentFilesDialog(RecentFilesManager *manager,
                                      QWidget *parent)
@@ -26,7 +26,6 @@ void RecentFilesDialog::setupUI() {
   m_layout->setContentsMargins(8, 8, 8, 8);
   m_layout->setSpacing(4);
 
-  // Search box
   m_searchBox = new QLineEdit(this);
   m_searchBox->setPlaceholderText(tr("Search recent files..."));
   m_searchBox->setStyleSheet("QLineEdit {"
@@ -39,7 +38,6 @@ void RecentFilesDialog::setupUI() {
                              "}");
   m_layout->addWidget(m_searchBox);
 
-  // Results list
   m_resultsList = new QListWidget(this);
   m_resultsList->setStyleSheet("QListWidget {"
                                "  border: none;"
@@ -59,7 +57,6 @@ void RecentFilesDialog::setupUI() {
   m_resultsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   m_layout->addWidget(m_resultsList);
 
-  // Connections
   connect(m_searchBox, &QLineEdit::textChanged, this,
           &RecentFilesDialog::onSearchTextChanged);
   connect(m_resultsList, &QListWidget::itemActivated, this,
@@ -67,7 +64,6 @@ void RecentFilesDialog::setupUI() {
   connect(m_resultsList, &QListWidget::itemClicked, this,
           &RecentFilesDialog::onItemClicked);
 
-  // Install event filter for keyboard navigation
   m_searchBox->installEventFilter(this);
 
   setStyleSheet("RecentFilesDialog { background: #171c24; border: 1px solid "
@@ -79,7 +75,6 @@ void RecentFilesDialog::showDialog() {
   m_searchBox->clear();
   updateResults(QString());
 
-  // Position at top center of parent
   if (parentWidget()) {
     QPoint parentCenter =
         parentWidget()->mapToGlobal(parentWidget()->rect().center());
@@ -164,7 +159,7 @@ void RecentFilesDialog::updateResults(const QString &query) {
   m_resultsList->clear();
   m_filteredIndices.clear();
 
-  QList<QPair<int, int>> scored; // score, index
+  QList<QPair<int, int>> scored;
 
   for (int i = 0; i < m_recentFiles.size(); ++i) {
     QFileInfo fileInfo(m_recentFiles[i]);
@@ -172,10 +167,10 @@ void RecentFilesDialog::updateResults(const QString &query) {
 
     int score = 0;
     if (query.isEmpty()) {
-      // When empty, order by recency (index)
+
       score = 1000 - i;
     } else {
-      // Match against file name and full path
+
       int nameScore = fuzzyMatch(query.toLower(), fileName.toLower());
       int pathScore =
           fuzzyMatch(query.toLower(), m_recentFiles[i].toLower()) / 2;
@@ -187,13 +182,11 @@ void RecentFilesDialog::updateResults(const QString &query) {
     }
   }
 
-  // Sort by score descending
   std::sort(scored.begin(), scored.end(),
             [](const QPair<int, int> &a, const QPair<int, int> &b) {
               return a.first > b.first;
             });
 
-  // Limit results
   int maxResults = 15;
   for (int i = 0; i < qMin(scored.size(), maxResults); ++i) {
     int idx = scored[i].second;
@@ -216,7 +209,6 @@ void RecentFilesDialog::updateResults(const QString &query) {
     m_resultsList->setCurrentRow(0);
   }
 
-  // Adjust height
   int itemHeight = 35;
   int newHeight = qMin(m_resultsList->count() * itemHeight + 60, 400);
   setFixedHeight(qMax(newHeight, 100));
@@ -226,22 +218,20 @@ int RecentFilesDialog::fuzzyMatch(const QString &pattern, const QString &text) {
   if (pattern.isEmpty())
     return 1000;
 
-  // Exact match gets highest score
   if (text.contains(pattern))
     return 2000 + (1000 - text.indexOf(pattern));
 
-  // Fuzzy matching - all characters must appear in order
   int patternIdx = 0;
   int score = 0;
   int lastMatchIdx = -1;
 
   for (int i = 0; i < text.length() && patternIdx < pattern.length(); ++i) {
     if (text[i] == pattern[patternIdx]) {
-      // Bonus for consecutive matches
+
       if (lastMatchIdx == i - 1) {
         score += 15;
       }
-      // Bonus for word boundary matches
+
       if (i == 0 || text[i - 1] == '/' || text[i - 1] == '\\' ||
           text[i - 1] == '_' || text[i - 1] == '.') {
         score += 10;
@@ -252,7 +242,6 @@ int RecentFilesDialog::fuzzyMatch(const QString &pattern, const QString &text) {
     }
   }
 
-  // All pattern characters must be matched
   if (patternIdx != pattern.length())
     return 0;
 

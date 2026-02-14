@@ -24,8 +24,6 @@
 
 using std::nullptr_t;
 
-// TODO: throw exceptions on various os errors.
-
 namespace subprocess {
 namespace details {
 void throw_os_error(const char *function, int errno_code) {
@@ -49,8 +47,6 @@ double monotonic_seconds() {
   std::chrono::duration<double> duration = now - begin;
   double result = duration.count();
 
-  // some OS's have bugs and not exactly monotonic. Or perhaps there is
-  // floating point errors or something. I don't know.
   if (result < last_value)
     return last_value;
   last_value = result;
@@ -158,8 +154,8 @@ void setup_redirect_stream(PipeHandle input, PipeVar &output) {
   case PipeVarIndex::handle:
   case PipeVarIndex::option:
     return;
-  case PipeVarIndex::string:  // doesn't make sense
-  case PipeVarIndex::istream: // dousn't make sense
+  case PipeVarIndex::string:
+  case PipeVarIndex::istream:
     throw std::domain_error("expected something to output to");
   case PipeVarIndex::ostream:
     pipe_thread(input, std::get<std::ostream *>(output));
@@ -191,7 +187,7 @@ void setup_redirect_stream(PipeVar &input, PipeHandle output) {
   }
 }
 Popen::Popen(CommandLine command, const RunOptions &optionsIn) {
-  // we have to make a copy because of const
+
   RunOptions options = optionsIn;
   init(command, options);
 }
@@ -269,7 +265,6 @@ void Popen::close() {
     pipe_close(cerr);
   cin = cout = cerr = kBadPipeValue;
 
-  // do this to not have zombie processes.
   if (pid) {
     wait();
 
@@ -358,11 +353,10 @@ bool Popen::send_signal(int signum) {
     return false;
   bool success = false;
   if (signum == PSIGKILL) {
-    // 137 just like when process is killed SIGKILL
+
     return TerminateProcess(process_info.hProcess, 137);
   } else if (signum == PSIGINT) {
-    // pid can be used as process group id. The signals are sent
-    // to the entire process group, including parents.
+
     success = GenerateConsoleCtrlEvent(CTRL_C_EVENT, pid);
   } else {
     success = GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, pid);
@@ -403,7 +397,6 @@ int Popen::wait(double timeout) {
         continue;
       }
       if (child == -1) {
-        // TODO: throw oserror(errno)
       }
       break;
     }

@@ -8,9 +8,6 @@
 #include <QProcess>
 #include <QTimer>
 
-/**
- * @brief LSP position in a document
- */
 struct LspPosition {
   int line;
   int character;
@@ -27,9 +24,6 @@ struct LspPosition {
   }
 };
 
-/**
- * @brief LSP range in a document
- */
 struct LspRange {
   LspPosition start;
   LspPosition end;
@@ -47,17 +41,11 @@ struct LspRange {
   }
 };
 
-/**
- * @brief LSP location (file + range)
- */
 struct LspLocation {
   QString uri;
   LspRange range;
 };
 
-/**
- * @brief LSP diagnostic severity
- */
 enum class LspDiagnosticSeverity {
   Error = 1,
   Warning = 2,
@@ -65,9 +53,6 @@ enum class LspDiagnosticSeverity {
   Hint = 4
 };
 
-/**
- * @brief LSP diagnostic message
- */
 struct LspDiagnostic {
   LspRange range;
   LspDiagnosticSeverity severity;
@@ -76,28 +61,19 @@ struct LspDiagnostic {
   QString message;
 };
 
-/**
- * @brief LSP completion item
- */
 struct LspCompletionItem {
   QString label;
-  int kind; // CompletionItemKind
+  int kind;
   QString detail;
   QString documentation;
   QString insertText;
 };
 
-/**
- * @brief LSP parameter information for signature help
- */
 struct LspParameterInfo {
   QString label;
   QString documentation;
 };
 
-/**
- * @brief LSP signature information for signature help
- */
 struct LspSignatureInfo {
   QString label;
   QString documentation;
@@ -105,18 +81,12 @@ struct LspSignatureInfo {
   int activeParameter;
 };
 
-/**
- * @brief LSP signature help response
- */
 struct LspSignatureHelp {
   QList<LspSignatureInfo> signatures;
   int activeSignature;
   int activeParameter;
 };
 
-/**
- * @brief LSP symbol kind enumeration
- */
 enum class LspSymbolKind {
   File = 1,
   Module = 2,
@@ -146,9 +116,6 @@ enum class LspSymbolKind {
   TypeParameter = 26
 };
 
-/**
- * @brief LSP document symbol
- */
 struct LspDocumentSymbol {
   QString name;
   QString detail;
@@ -158,24 +125,15 @@ struct LspDocumentSymbol {
   QList<LspDocumentSymbol> children;
 };
 
-/**
- * @brief LSP text edit for rename operations
- */
 struct LspTextEdit {
   LspRange range;
   QString newText;
 };
 
-/**
- * @brief LSP workspace edit for rename operations
- */
 struct LspWorkspaceEdit {
-  QMap<QString, QList<LspTextEdit>> changes; // uri -> list of edits
+  QMap<QString, QList<LspTextEdit>> changes;
 };
 
-/**
- * @brief LSP code action kind constants
- */
 namespace LspCodeActionKind {
 inline const QString QuickFix = "quickfix";
 inline const QString Refactor = "refactor";
@@ -183,9 +141,6 @@ inline const QString Source = "source";
 inline const QString SourceOrganizeImports = "source.organizeImports";
 } // namespace LspCodeActionKind
 
-/**
- * @brief LSP code action
- */
 struct LspCodeAction {
   QString title;
   QString kind;
@@ -194,25 +149,10 @@ struct LspCodeAction {
   bool isPreferred;
 };
 
-/**
- * @brief Language Server Protocol client
- *
- * Provides communication with language servers using JSON-RPC over stdio.
- * Supports:
- * - Initialize/shutdown lifecycle
- * - Text document synchronization
- * - Completion requests
- * - Hover information
- * - Go to definition
- * - Diagnostics
- */
 class LspClient : public QObject {
   Q_OBJECT
 
 public:
-  /**
-   * @brief Client state
-   */
   enum class State {
     Disconnected,
     Connecting,
@@ -226,32 +166,14 @@ public:
   explicit LspClient(QObject *parent = nullptr);
   ~LspClient();
 
-  /**
-   * @brief Start the language server
-   * @param program Path to the language server executable
-   * @param arguments Command line arguments
-   * @return true if server started
-   */
   bool start(const QString &program, const QStringList &arguments = {});
 
-  /**
-   * @brief Stop the language server
-   */
   void stop();
 
-  /**
-   * @brief Get current state
-   * @return Client state
-   */
   State state() const;
 
-  /**
-   * @brief Check if client is ready
-   * @return true if ready for requests
-   */
   bool isReady() const;
 
-  // Document lifecycle
   void didOpen(const QString &uri, const QString &languageId, int version,
                const QString &text);
   void didChange(const QString &uri, int version, const QString &text);
@@ -261,7 +183,6 @@ public:
   void didSave(const QString &uri);
   void didClose(const QString &uri);
 
-  // Requests
   void requestCompletion(const QString &uri, LspPosition position);
   void requestHover(const QString &uri, LspPosition position);
   void requestDefinition(const QString &uri, LspPosition position);
@@ -271,12 +192,6 @@ public:
   void requestRename(const QString &uri, LspPosition position,
                      const QString &newName);
 
-  /**
-   * @brief Request code actions (quick fixes, refactorings) at a position
-   * @param uri Document URI
-   * @param range Range to get code actions for
-   * @param diagnostics Diagnostics at that range (optional)
-   */
   void requestCodeAction(const QString &uri, LspRange range,
                          const QList<LspDiagnostic> &diagnostics = {});
 
@@ -285,11 +200,9 @@ signals:
   void initialized();
   void error(const QString &message);
 
-  // Document notifications
   void diagnosticsReceived(const QString &uri,
                            const QList<LspDiagnostic> &diagnostics);
 
-  // Request responses
   void completionReceived(int requestId, const QList<LspCompletionItem> &items);
   void hoverReceived(int requestId, const QString &contents);
   void definitionReceived(int requestId, const QList<LspLocation> &locations);
@@ -323,16 +236,14 @@ private:
   State m_state;
   int m_nextRequestId;
   QString m_buffer;
-  QMap<int, QString> m_pendingRequests; // id -> method
+  QMap<int, QString> m_pendingRequests;
   QString m_rootUri;
-  int m_pendingCompletionRequestId =
-      -1; // Track current completion request for cancellation
+  int m_pendingCompletionRequestId = -1;
 
-  // Debounced didChange state
   QTimer *m_changeDebounceTimer = nullptr;
   QString m_pendingChangeUri;
   int m_pendingChangeVersion = 0;
   QString m_pendingChangeText;
 };
 
-#endif // LSPCLIENT_H
+#endif

@@ -19,7 +19,7 @@ private:
 };
 
 void TestImageViewer::initTestCase() {
-  // Create a test image
+
   QTemporaryFile tempFile(QDir::tempPath() + "/test_image_XXXXXX.png");
   tempFile.setAutoRemove(false);
   if (tempFile.open()) {
@@ -32,14 +32,14 @@ void TestImageViewer::initTestCase() {
 }
 
 void TestImageViewer::cleanupTestCase() {
-  // Clean up test image
+
   if (!testImagePath.isEmpty() && QFile::exists(testImagePath)) {
     QFile::remove(testImagePath);
   }
 }
 
 void TestImageViewer::testSupportedFormats() {
-  // Test supported formats
+
   QVERIFY(ImageViewer::isSupportedImageFormat("png"));
   QVERIFY(ImageViewer::isSupportedImageFormat("PNG"));
   QVERIFY(ImageViewer::isSupportedImageFormat("jpg"));
@@ -51,7 +51,6 @@ void TestImageViewer::testSupportedFormats() {
   QVERIFY(ImageViewer::isSupportedImageFormat("ico"));
   QVERIFY(ImageViewer::isSupportedImageFormat("tiff"));
 
-  // Test unsupported formats
   QVERIFY(!ImageViewer::isSupportedImageFormat("txt"));
   QVERIFY(!ImageViewer::isSupportedImageFormat("cpp"));
   QVERIFY(!ImageViewer::isSupportedImageFormat("pdf"));
@@ -61,7 +60,6 @@ void TestImageViewer::testSupportedFormats() {
 void TestImageViewer::testLoadValidImage() {
   ImageViewer viewer;
 
-  // Load the test image
   bool result = viewer.loadImage(testImagePath);
   QVERIFY(result);
   QCOMPARE(viewer.getFilePath(), testImagePath);
@@ -70,16 +68,13 @@ void TestImageViewer::testLoadValidImage() {
 void TestImageViewer::testZoomFunctions() {
   ImageViewer viewer;
 
-  // Load a valid image first
   viewer.loadImage(testImagePath);
 
-  // Test that zoom functions don't crash
   viewer.zoomIn();
   viewer.zoomOut();
   viewer.fitToWindow();
   viewer.actualSize();
 
-  // All operations should complete without crashing
   QVERIFY(true);
 }
 

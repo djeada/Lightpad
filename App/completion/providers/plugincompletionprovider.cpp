@@ -6,7 +6,7 @@
 PluginCompletionProvider::PluginCompletionProvider() {}
 
 QStringList PluginCompletionProvider::supportedLanguages() const {
-  // Return languages we have plugins for
+
   const_cast<PluginCompletionProvider *>(this)->ensureCachePopulated();
   return m_cachedKeywords.keys();
 }
@@ -29,7 +29,6 @@ void PluginCompletionProvider::requestCompletions(
   }
   QStringList keywords = m_cachedKeywords.value(langId);
 
-  // Filter by prefix
   for (const QString &keyword : keywords) {
     if (keyword.startsWith(context.prefix, Qt::CaseInsensitive)) {
       CompletionItem item;

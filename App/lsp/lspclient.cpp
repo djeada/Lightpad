@@ -32,7 +32,6 @@ bool LspClient::start(const QString &program, const QStringList &arguments) {
           QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
           &LspClient::onProcessFinished);
 
-  // Connect to started signal for async initialization
   connect(m_process, &QProcess::started, this, [this]() {
     LOG_INFO(QString("LSP server started"));
     doInitialize();
@@ -40,9 +39,6 @@ bool LspClient::start(const QString &program, const QStringList &arguments) {
 
   setState(State::Connecting);
   m_process->start();
-
-  // Non-blocking: don't wait for started, let the signal handle it
-  // The started() signal will trigger doInitialize()
 
   LOG_INFO(QString("Starting LSP server: %1").arg(program));
   return true;
@@ -55,21 +51,16 @@ void LspClient::stop() {
 
   setState(State::ShuttingDown);
 
-  // Send shutdown request
   QJsonObject params;
   sendRequest("shutdown", params, m_nextRequestId++);
 
-  // Send exit notification (don't wait for shutdown response)
   sendNotification("exit", {});
 
-  // Non-blocking shutdown: let the process finish on its own
-  // Set up a timer to force kill if it doesn't exit gracefully
   QTimer::singleShot(3000, this, [this]() {
     if (m_process && m_process->state() != QProcess::NotRunning) {
       LOG_WARNING("LSP server did not exit gracefully, terminating");
       m_process->terminate();
 
-      // Final kill after another delay if still running
       QTimer::singleShot(2000, this, [this]() {
         if (m_process && m_process->state() != QProcess::NotRunning) {
           LOG_WARNING("LSP server did not terminate, killing");
@@ -121,12 +112,11 @@ void LspClient::didChange(const QString &uri, int version,
 
 void LspClient::didChangeDebounced(const QString &uri, int version,
                                    const QString &text) {
-  // Store the pending change - will be sent after debounce delay
+
   m_pendingChangeUri = uri;
   m_pendingChangeVersion = version;
   m_pendingChangeText = text;
 
-  // Start/restart debounce timer
   if (!m_changeDebounceTimer) {
     m_changeDebounceTimer = new QTimer(this);
     m_changeDebounceTimer->setSingleShot(true);
@@ -140,7 +130,6 @@ void LspClient::didChangeDebounced(const QString &uri, int version,
     });
   }
 
-  // Debounce: wait 100ms before sending to batch rapid changes
   m_changeDebounceTimer->start(100);
 }
 
@@ -185,7 +174,7 @@ void LspClient::didClose(const QString &uri) {
 }
 
 void LspClient::requestCompletion(const QString &uri, LspPosition position) {
-  // Cancel any pending completion request to avoid stale results
+
   cancelPendingCompletionRequest();
 
   QJsonObject textDocument;
@@ -203,12 +192,11 @@ void LspClient::requestCompletion(const QString &uri, LspPosition position) {
 
 void LspClient::cancelPendingCompletionRequest() {
   if (m_pendingCompletionRequestId > 0) {
-    // Send cancellation notification per LSP spec
+
     QJsonObject params;
     params["id"] = m_pendingCompletionRequestId;
     sendNotification("$/cancelRequest", params);
 
-    // Remove from pending requests
     m_pendingRequests.remove(m_pendingCompletionRequestId);
     m_pendingCompletionRequestId = -1;
   }
@@ -382,7 +370,6 @@ void LspClient::onReadyReadStandardOutput() {
   }
   m_buffer += QString::fromUtf8(m_process->readAllStandardOutput());
 
-  // Parse LSP messages from buffer (limit iterations to prevent infinite loops)
   const int maxIterations = 100;
   int iterations = 0;
 
@@ -397,7 +384,6 @@ void LspClient::onReadyReadStandardOutput() {
     QString header = m_buffer.left(headerEnd);
     int contentLength = 0;
 
-    // Parse Content-Length header
     QStringList lines = header.split("\r\n");
     for (const QString &line : lines) {
       if (line.startsWith("Content-Length:", Qt::CaseInsensitive)) {
@@ -416,7 +402,7 @@ void LspClient::onReadyReadStandardOutput() {
     int messageEnd = messageStart + contentLength;
 
     if (m_buffer.size() < messageEnd) {
-      // Not enough data yet
+
       break;
     }
 
@@ -454,7 +440,6 @@ void LspClient::onProcessFinished(int exitCode,
   Q_UNUSED(exitStatus);
   LOG_INFO(QString("LSP server exited with code: %1").arg(exitCode));
 
-  // Clean up process
   if (m_process) {
     m_process->deleteLater();
     m_process = nullptr;
@@ -465,19 +450,19 @@ void LspClient::onProcessFinished(int exitCode,
 
 void LspClient::handleMessage(const QJsonObject &message) {
   if (message.contains("id")) {
-    // Response or request
+
     int id = message["id"].toInt();
 
     if (message.contains("method")) {
-      // Server request (not common, but possible)
+
       LOG_DEBUG(
           QString("LSP server request: %1").arg(message["method"].toString()));
     } else {
-      // Response to our request
+
       handleResponse(id, message["result"], message["error"]);
     }
   } else if (message.contains("method")) {
-    // Notification
+
     handleNotification(message["method"].toString(),
                        message["params"].toObject());
   }
@@ -561,7 +546,6 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
       sigInfo.label = sigObj["label"].toString();
       sigInfo.activeParameter = sigObj["activeParameter"].toInt(-1);
 
-      // Parse documentation
       QJsonValue docVal = sigObj["documentation"];
       if (docVal.isString()) {
         sigInfo.documentation = docVal.toString();
@@ -569,25 +553,22 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
         sigInfo.documentation = docVal.toObject()["value"].toString();
       }
 
-      // Parse parameters
       QJsonArray paramsArray = sigObj["parameters"].toArray();
       for (const QJsonValue &paramVal : paramsArray) {
         QJsonObject paramObj = paramVal.toObject();
         LspParameterInfo paramInfo;
 
-        // Parameter label can be string or [start, end] array
         QJsonValue labelVal = paramObj["label"];
         if (labelVal.isString()) {
           paramInfo.label = labelVal.toString();
         } else if (labelVal.isArray()) {
           QJsonArray labelArray = labelVal.toArray();
-          // For now, we'll use the signature label substring
+
           paramInfo.label =
               sigInfo.label.mid(labelArray[0].toInt(),
                                 labelArray[1].toInt() - labelArray[0].toInt());
         }
 
-        // Parse parameter documentation
         QJsonValue paramDocVal = paramObj["documentation"];
         if (paramDocVal.isString()) {
           paramInfo.documentation = paramDocVal.toString();
@@ -604,7 +585,6 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
     QList<LspDocumentSymbol> symbols;
     QJsonArray symbolsArray = result.toArray();
 
-    // Helper lambda to recursively parse document symbols
     std::function<LspDocumentSymbol(const QJsonObject &)> parseSymbol;
     parseSymbol = [&parseSymbol](const QJsonObject &obj) -> LspDocumentSymbol {
       LspDocumentSymbol symbol;
@@ -615,7 +595,6 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
       symbol.selectionRange =
           LspRange::fromJson(obj["selectionRange"].toObject());
 
-      // Parse children recursively
       QJsonArray childrenArray = obj["children"].toArray();
       for (const QJsonValue &childVal : childrenArray) {
         symbol.children.append(parseSymbol(childVal.toObject()));
@@ -625,12 +604,12 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
 
     for (const QJsonValue &val : symbolsArray) {
       QJsonObject obj = val.toObject();
-      // Check if it's a DocumentSymbol or SymbolInformation
+
       if (obj.contains("range")) {
-        // DocumentSymbol format
+
         symbols.append(parseSymbol(obj));
       } else if (obj.contains("location")) {
-        // SymbolInformation format (legacy)
+
         LspDocumentSymbol symbol;
         symbol.name = obj["name"].toString();
         symbol.kind = static_cast<LspSymbolKind>(obj["kind"].toInt());
@@ -645,7 +624,6 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
     LspWorkspaceEdit workspaceEdit;
     QJsonObject obj = result.toObject();
 
-    // Parse changes map
     QJsonObject changesObj = obj["changes"].toObject();
     for (const QString &uri : changesObj.keys()) {
       QList<LspTextEdit> edits;
@@ -660,7 +638,6 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
       workspaceEdit.changes[uri] = edits;
     }
 
-    // Also parse documentChanges if present (versioned edits)
     QJsonArray docChangesArray = obj["documentChanges"].toArray();
     for (const QJsonValue &docChangeVal : docChangesArray) {
       QJsonObject docChangeObj = docChangeVal.toObject();
@@ -694,7 +671,6 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
       action.kind = obj["kind"].toString();
       action.isPreferred = obj["isPreferred"].toBool(false);
 
-      // Parse diagnostics
       QJsonArray diagArray = obj["diagnostics"].toArray();
       for (const QJsonValue &diagVal : diagArray) {
         QJsonObject diagObj = diagVal.toObject();
@@ -708,7 +684,6 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
         action.diagnostics.append(diag);
       }
 
-      // Parse workspace edit
       QJsonObject editObj = obj["edit"].toObject();
       if (!editObj.isEmpty()) {
         QJsonObject changesObj = editObj["changes"].toObject();
@@ -760,10 +735,9 @@ void LspClient::doInitialize() {
 
   QJsonObject capabilities;
 
-  // Text document capabilities
   QJsonObject textDocumentSync;
   textDocumentSync["openClose"] = true;
-  textDocumentSync["change"] = 1; // Full sync
+  textDocumentSync["change"] = 1;
   textDocumentSync["save"] = true;
 
   QJsonObject textDocumentCaps;

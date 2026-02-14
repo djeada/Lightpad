@@ -32,7 +32,7 @@ bool RunTemplateManager::loadTemplates() {
 }
 
 bool RunTemplateManager::loadBuiltInTemplates() {
-  // Try to load from application directory first
+
   QString appDir = QCoreApplication::applicationDirPath();
   QStringList searchPaths = {
       appDir + "/run_templates/run_templates.json",
@@ -89,13 +89,13 @@ bool RunTemplateManager::loadBuiltInTemplates() {
 }
 
 bool RunTemplateManager::loadUserTemplates() {
-  // User templates are stored in the config directory
+
   QString configDir =
       QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
   QString userTemplatesPath = configDir + "/run_templates.json";
 
   if (!QFileInfo(userTemplatesPath).exists()) {
-    return true; // No user templates is not an error
+    return true;
   }
 
   QFile file(userTemplatesPath);
@@ -124,7 +124,7 @@ bool RunTemplateManager::loadUserTemplates() {
   for (const QJsonValue &value : templatesArray) {
     RunTemplate tmpl = parseTemplate(value.toObject());
     if (tmpl.isValid()) {
-      // User templates override built-in templates with the same ID
+
       bool found = false;
       for (int i = 0; i < m_templates.size(); ++i) {
         if (m_templates[i].id == tmpl.id) {
@@ -281,7 +281,6 @@ bool RunTemplateManager::loadAssignmentsFromDir(const QString &dirPath) const {
     assignment.filePath = obj.value("file").toString();
     assignment.templateId = obj.value("template").toString();
 
-    // Make relative paths absolute
     if (!QFileInfo(assignment.filePath).isAbsolute()) {
       assignment.filePath = dirPath + "/" + assignment.filePath;
     }
@@ -310,7 +309,6 @@ bool RunTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
   QString configDir = dirPath + "/.lightpad";
   QString configFile = configDir + "/run_config.json";
 
-  // Collect assignments for this directory
   QJsonArray assignments;
   for (auto it = m_assignments.begin(); it != m_assignments.end(); ++it) {
     QFileInfo fileInfo(it.key());
@@ -340,7 +338,6 @@ bool RunTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
     }
   }
 
-  // Create config directory if needed
   QDir dir;
   if (!dir.exists(configDir)) {
     if (!dir.mkpath(configDir)) {
@@ -350,7 +347,6 @@ bool RunTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
     }
   }
 
-  // Save to file
   QJsonObject root;
   root["version"] = "1.0";
   root["assignments"] = assignments;
@@ -373,11 +369,10 @@ bool RunTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
 
 FileTemplateAssignment
 RunTemplateManager::getAssignmentForFile(const QString &filePath) const {
-  // Load assignments for the directory if not already loaded
+
   QFileInfo fileInfo(filePath);
   QString dirPath = fileInfo.absoluteDir().path();
 
-  // Lazy loading - member variables are mutable to allow this in const methods
   loadAssignmentsFromDir(dirPath);
 
   auto it = m_assignments.find(filePath);
@@ -414,7 +409,7 @@ bool RunTemplateManager::assignTemplateToFile(
 bool RunTemplateManager::removeAssignment(const QString &filePath) {
   auto it = m_assignments.find(filePath);
   if (it == m_assignments.end()) {
-    return true; // Nothing to remove
+    return true;
   }
 
   QFileInfo fileInfo(filePath);
@@ -442,7 +437,6 @@ QString RunTemplateManager::substituteVariables(const QString &input,
   result.replace("${fileBasenameNoExt}", fileInfo.completeBaseName());
   result.replace("${fileExt}", fileInfo.suffix());
 
-  // Handle workspace folder (use file's directory as fallback)
   result.replace("${workspaceFolder}", fileInfo.absoluteDir().path());
 
   return result;
@@ -474,7 +468,6 @@ RunTemplateManager::buildCommand(const QString &filePath,
     args.append(substituteVariables(arg, filePath));
   }
 
-  // Append custom args if any
   if (!assignment.customArgs.isEmpty()) {
     for (const QString &arg : assignment.customArgs) {
       args.append(substituteVariables(arg, filePath));
@@ -527,7 +520,6 @@ RunTemplateManager::getEnvironment(const QString &filePath,
     }
   }
 
-  // Custom env overrides template env
   for (auto it = assignment.customEnv.begin(); it != assignment.customEnv.end();
        ++it) {
     env[it.key()] = substituteVariables(it.value(), filePath);

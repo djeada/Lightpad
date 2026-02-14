@@ -26,7 +26,6 @@ void SplitEditorContainer::adoptTabWidget(LightpadTabWidget *tabWidget) {
     tabWidget->setParent(this);
   }
 
-  // Remove any existing widgets from the root splitter.
   while (m_rootSplitter->count() > 0) {
     QWidget *w = m_rootSplitter->widget(0);
     if (w) {
@@ -57,10 +56,8 @@ void SplitEditorContainer::setupUI() {
   m_rootSplitter->setChildrenCollapsible(false);
   layout->addWidget(m_rootSplitter);
 
-  // Install application-level event filter once for focus tracking
   QApplication::instance()->installEventFilter(this);
 
-  // Create initial tab widget
   LightpadTabWidget *initialTabWidget = createTabWidget();
   m_rootSplitter->addWidget(initialTabWidget);
   m_currentTabWidget = initialTabWidget;
@@ -69,7 +66,6 @@ void SplitEditorContainer::setupUI() {
 void SplitEditorContainer::setMainWindow(MainWindow *window) {
   m_mainWindow = window;
 
-  // Update existing tab widgets
   for (LightpadTabWidget *tabWidget : m_tabWidgets) {
     if (tabWidget) {
       tabWidget->setMainWindow(m_mainWindow);
@@ -111,47 +107,38 @@ LightpadTabWidget *SplitEditorContainer::split(SplitOrientation orientation) {
                                       ? Qt::Horizontal
                                       : Qt::Vertical;
 
-  // Find the parent splitter of the current tab widget
   QSplitter *parentSplitter = findParentSplitter(m_currentTabWidget);
   if (!parentSplitter) {
     LOG_ERROR("Cannot find parent splitter for current tab widget");
     return nullptr;
   }
 
-  // Get the index of the current tab widget in its parent splitter
   int index = parentSplitter->indexOf(m_currentTabWidget);
   if (index == -1) {
     LOG_ERROR("Current tab widget not found in parent splitter");
     return nullptr;
   }
 
-  // Create new tab widget
   LightpadTabWidget *newTabWidget = createTabWidget();
 
-  // If parent splitter has same orientation, just insert the new widget
   if (parentSplitter->orientation() == qtOrientation) {
     parentSplitter->insertWidget(index + 1, newTabWidget);
   } else {
-    // Need to create a new splitter to hold both widgets
+
     QSplitter *newSplitter = new QSplitter(qtOrientation, this);
     newSplitter->setHandleWidth(2);
     newSplitter->setChildrenCollapsible(false);
 
-    // Get the sizes before removing
     QList<int> parentSizes = parentSplitter->sizes();
 
-    // Remove current widget from parent and add to new splitter
     m_currentTabWidget->setParent(nullptr);
     newSplitter->addWidget(m_currentTabWidget);
     newSplitter->addWidget(newTabWidget);
 
-    // Insert new splitter at the same position
     parentSplitter->insertWidget(index, newSplitter);
 
-    // Restore parent sizes
     parentSplitter->setSizes(parentSizes);
 
-    // Set equal sizes for the new splitter
     int size = (qtOrientation == Qt::Horizontal) ? newSplitter->width() / 2
                                                  : newSplitter->height() / 2;
     newSplitter->setSizes({size, size});
@@ -163,7 +150,6 @@ LightpadTabWidget *SplitEditorContainer::split(SplitOrientation orientation) {
 
   emit splitCountChanged(groupCount());
 
-  // Focus the new tab widget
   updateFocus(newTabWidget);
 
   return newTabWidget;
@@ -187,7 +173,6 @@ bool SplitEditorContainer::closeCurrentGroup() {
     return false;
   }
 
-  // Find next group to focus before removing
   int currentIndex = findTabWidgetIndex(m_currentTabWidget);
   LightpadTabWidget *nextFocus = nullptr;
 
@@ -206,18 +191,14 @@ bool SplitEditorContainer::closeCurrentGroup() {
     }
   }
 
-  // Close all tabs in current group
   m_currentTabWidget->closeAllTabs();
 
-  // Remove from list and delete
   m_tabWidgets.removeAll(m_currentTabWidget);
   m_currentTabWidget->deleteLater();
   m_currentTabWidget = nullptr;
 
-  // Cleanup empty splitters
   cleanupEmptySplitters();
 
-  // Focus next group
   if (nextFocus) {
     updateFocus(nextFocus);
   }
@@ -257,7 +238,6 @@ void SplitEditorContainer::unsplitAll() {
     return;
   }
 
-  // Keep the first tab widget, close all others
   LightpadTabWidget *first = nullptr;
   for (QPointer<LightpadTabWidget> &ptr : m_tabWidgets) {
     if (ptr) {
@@ -271,21 +251,18 @@ void SplitEditorContainer::unsplitAll() {
     }
   }
 
-  // Remove null pointers using erase-remove idiom
   m_tabWidgets.erase(std::remove_if(m_tabWidgets.begin(), m_tabWidgets.end(),
                                     [](const QPointer<LightpadTabWidget> &ptr) {
                                       return ptr.isNull();
                                     }),
                      m_tabWidgets.end());
 
-  // Cleanup splitters and reset to single view
   cleanupEmptySplitters();
 
   if (first) {
-    // Reparent to root splitter
+
     first->setParent(nullptr);
 
-    // Clear root splitter
     while (m_rootSplitter->count() > 0) {
       QWidget *w = m_rootSplitter->widget(0);
       if (w && w != first) {
@@ -294,7 +271,7 @@ void SplitEditorContainer::unsplitAll() {
       if (w) {
         w->setParent(nullptr);
       } else {
-        break; // Safety: exit if widget is null to prevent infinite loop
+        break;
       }
     }
 
@@ -308,7 +285,7 @@ void SplitEditorContainer::unsplitAll() {
 
 bool SplitEditorContainer::eventFilter(QObject *watched, QEvent *event) {
   if (event->type() == QEvent::FocusIn) {
-    // Check if a tab widget or its child received focus
+
     for (LightpadTabWidget *tabWidget : allTabWidgets()) {
       if (tabWidget &&
           (watched == tabWidget ||
@@ -338,7 +315,6 @@ LightpadTabWidget *SplitEditorContainer::createTabWidget() {
     tabWidget->setMainWindow(m_mainWindow);
   }
 
-  // Install event filter to track focus on this specific tab widget
   tabWidget->installEventFilter(this);
 
   m_tabWidgets.append(tabWidget);
@@ -363,13 +339,12 @@ void SplitEditorContainer::updateFocus(LightpadTabWidget *tabWidget) {
 }
 
 void SplitEditorContainer::cleanupEmptySplitters() {
-  // Recursively find and remove empty splitters
+
   std::function<void(QSplitter *)> cleanup = [&](QSplitter *splitter) {
     if (!splitter || splitter == m_rootSplitter) {
       return;
     }
 
-    // First, process child splitters
     for (int i = splitter->count() - 1; i >= 0; i--) {
       QSplitter *childSplitter = qobject_cast<QSplitter *>(splitter->widget(i));
       if (childSplitter) {
@@ -377,11 +352,10 @@ void SplitEditorContainer::cleanupEmptySplitters() {
       }
     }
 
-    // If splitter is empty, remove it
     if (splitter->count() == 0) {
       splitter->deleteLater();
     }
-    // If splitter has only one child, unwrap it
+
     else if (splitter->count() == 1) {
       QWidget *child = splitter->widget(0);
       QSplitter *parent = qobject_cast<QSplitter *>(splitter->parentWidget());
@@ -394,7 +368,6 @@ void SplitEditorContainer::cleanupEmptySplitters() {
     }
   };
 
-  // Process all child splitters of root
   for (int i = m_rootSplitter->count() - 1; i >= 0; i--) {
     QSplitter *childSplitter =
         qobject_cast<QSplitter *>(m_rootSplitter->widget(i));
@@ -403,7 +376,6 @@ void SplitEditorContainer::cleanupEmptySplitters() {
     }
   }
 
-  // Unwrap root if it has only one child splitter
   if (m_rootSplitter->count() == 1) {
     QSplitter *childSplitter =
         qobject_cast<QSplitter *>(m_rootSplitter->widget(0));

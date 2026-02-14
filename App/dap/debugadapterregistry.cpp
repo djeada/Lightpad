@@ -5,13 +5,6 @@
 #include <QProcess>
 #include <QStandardPaths>
 
-// ============================================================================
-// Built-in Debug Adapters
-// ============================================================================
-
-/**
- * @brief Python debug adapter using debugpy
- */
 class PythonDebugAdapter : public IDebugAdapter {
 public:
   DebugAdapterConfig config() const override {
@@ -29,7 +22,6 @@ public:
     cfg.supportsHitConditionalBreakpoints = true;
     cfg.supportsLogPoints = true;
 
-    // Exception breakpoint filters
     QJsonArray filters;
     QJsonObject raised;
     raised["filter"] = "raised";
@@ -49,7 +41,7 @@ public:
   }
 
   bool isAvailable() const override {
-    // Check if debugpy is installed
+
     QProcess proc;
     proc.start("python", {"-c", "import debugpy; print('ok')"});
     if (!proc.waitForFinished(5000)) {
@@ -108,9 +100,6 @@ public:
   }
 };
 
-/**
- * @brief Node.js debug adapter (built into Node.js)
- */
 class NodeDebugAdapter : public IDebugAdapter {
 public:
   DebugAdapterConfig config() const override {
@@ -191,19 +180,6 @@ public:
   }
 };
 
-/**
- * @brief GDB debug adapter for C/C++
- *
- * Provides integration with the system's GDB installation. Does not ship GDB
- * but detects and connects to the GDB available on the system.
- *
- * Supports:
- * - Local debugging of executables
- * - Attaching to running processes
- * - Remote debugging via GDB server (gdbserver)
- * - Core dump analysis
- * - Multiple architectures (if GDB supports them)
- */
 class GdbDebugAdapter : public IDebugAdapter {
 public:
   DebugAdapterConfig config() const override {
@@ -222,9 +198,8 @@ public:
     cfg.supportsFunctionBreakpoints = true;
     cfg.supportsConditionalBreakpoints = true;
     cfg.supportsHitConditionalBreakpoints = true;
-    cfg.supportsLogPoints = false; // GDB doesn't natively support logpoints
+    cfg.supportsLogPoints = false;
 
-    // GDB-specific default configuration
     cfg.defaultLaunchConfig = createDefaultLaunchConfig();
     cfg.defaultAttachConfig = createDefaultAttachConfig();
 
@@ -268,7 +243,6 @@ public:
     QString output = QString::fromUtf8(proc.readAllStandardOutput());
     QString firstLine = output.split('\n').first().simplified();
 
-    // Get GDB capabilities
     QString capabilities = getGdbCapabilities(gdbPath);
 
     return QString("Ready - %1%2")
@@ -288,7 +262,6 @@ public:
     config["stopAtEntry"] = false;
     config["externalConsole"] = false;
 
-    // Working directory
     if (!workingDir.isEmpty()) {
       config["cwd"] = workingDir;
     } else {
@@ -296,23 +269,18 @@ public:
       config["cwd"] = fi.absolutePath();
     }
 
-    // Arguments placeholder
     config["args"] = QJsonArray();
 
-    // Environment
     config["environment"] = QJsonArray();
 
-    // Setup commands for GDB initialization
     QJsonArray setupCommands;
 
-    // Enable pretty printing for STL containers
     QJsonObject prettyPrint;
     prettyPrint["description"] = "Enable pretty-printing for gdb";
     prettyPrint["text"] = "-enable-pretty-printing";
     prettyPrint["ignoreFailures"] = true;
     setupCommands.append(prettyPrint);
 
-    // Disable pagination for smoother output
     QJsonObject disablePagination;
     disablePagination["description"] = "Disable pagination";
     disablePagination["text"] = "set pagination off";
@@ -333,17 +301,16 @@ public:
     config["miDebuggerPath"] = findSystemGdb();
 
     if (processId > 0) {
-      // Local attach to process
+
       config["name"] = QString("Attach to process %1").arg(processId);
       config["processId"] = QString::number(processId);
-      config["program"] = ""; // Will be resolved from /proc/{pid}/exe on Linux
+      config["program"] = "";
     } else if (!host.isEmpty() && port > 0) {
-      // Remote attach via gdbserver
+
       config["name"] = QString("Remote debug %1:%2").arg(host).arg(port);
       config["miDebuggerServerAddress"] = QString("%1:%2").arg(host).arg(port);
-      config["program"] = ""; // User needs to specify the program
+      config["program"] = "";
 
-      // For remote debugging, we may need additional setup
       QJsonArray setupCommands;
       QJsonObject targetRemote;
       targetRemote["description"] = "Connect to remote gdbserver";
@@ -352,7 +319,7 @@ public:
       setupCommands.append(targetRemote);
       config["setupCommands"] = setupCommands;
     } else {
-      // Interactive process selection
+
       config["name"] = "Attach to process";
       config["processId"] = "${command:pickProcess}";
       config["program"] = "";
@@ -361,17 +328,6 @@ public:
     return config;
   }
 
-  /**
-   * @brief Create configuration for remote debugging via gdbserver
-   *
-   * This is specific to GDB and allows debugging on remote systems.
-   *
-   * @param host Remote host
-   * @param port Port where gdbserver is listening
-   * @param program Path to the program (on local system for symbols)
-   * @param sysroot Optional sysroot for remote debugging
-   * @return Configuration for remote debugging
-   */
   QJsonObject createRemoteConfig(const QString &host, int port,
                                  const QString &program,
                                  const QString &sysroot = {}) const {
@@ -386,7 +342,6 @@ public:
 
     QJsonArray setupCommands;
 
-    // Set sysroot for symbol resolution if provided
     if (!sysroot.isEmpty()) {
       QJsonObject setSysroot;
       setSysroot["description"] = "Set sysroot for remote symbols";
@@ -395,7 +350,6 @@ public:
       setupCommands.append(setSysroot);
     }
 
-    // Connect to remote target
     QJsonObject connectRemote;
     connectRemote["description"] = "Connect to gdbserver";
     connectRemote["text"] = QString("target remote %1:%2").arg(host).arg(port);
@@ -407,13 +361,6 @@ public:
     return config;
   }
 
-  /**
-   * @brief Create configuration for core dump analysis
-   *
-   * @param coreDumpPath Path to the core dump file
-   * @param programPath Path to the program that created the core dump
-   * @return Configuration for core dump debugging
-   */
   QJsonObject createCoreDumpConfig(const QString &coreDumpPath,
                                    const QString &programPath) const {
     QJsonObject config;
@@ -431,7 +378,7 @@ public:
 
   QString installCommand() const override {
 #ifdef Q_OS_LINUX
-    // Check which package manager is available
+
     if (QFileInfo::exists("/usr/bin/apt") ||
         QFileInfo::exists("/usr/bin/apt-get")) {
       return "sudo apt install gdb";
@@ -454,14 +401,8 @@ public:
     return "https://sourceware.org/gdb/current/onlinedocs/gdb/";
   }
 
-  /**
-   * @brief Get the path to the system GDB
-   */
   QString gdbPath() const { return findSystemGdb(); }
 
-  /**
-   * @brief Get GDB version information
-   */
   QString gdbVersion() const {
     QString path = findSystemGdb();
     if (path.isEmpty()) {
@@ -475,13 +416,10 @@ public:
     }
 
     QString output = QString::fromUtf8(proc.readAllStandardOutput());
-    // First line contains version info
+
     return output.split('\n').first().simplified();
   }
 
-  /**
-   * @brief Check if GDB supports a specific feature
-   */
   bool supportsFeature(const QString &feature) const {
     QString caps = getGdbCapabilities(findSystemGdb());
     return caps.contains(feature, Qt::CaseInsensitive);
@@ -547,16 +485,10 @@ private:
 #endif
   }
 
-  /**
-   * @brief Find the system's GDB executable
-   */
   QString findSystemGdb() const {
-    // Check standard paths
-    QStringList candidates = {
-        "/usr/bin/gdb", "/usr/local/bin/gdb",
-        "/opt/homebrew/bin/gdb", // macOS ARM Homebrew
-        "/opt/local/bin/gdb"     // MacPorts
-    };
+
+    QStringList candidates = {"/usr/bin/gdb", "/usr/local/bin/gdb",
+                              "/opt/homebrew/bin/gdb", "/opt/local/bin/gdb"};
 
     for (const QString &path : candidates) {
       if (QFileInfo::exists(path) && QFileInfo(path).isExecutable()) {
@@ -564,7 +496,6 @@ private:
       }
     }
 
-    // Try to find via PATH using which/where
     QProcess proc;
 #ifdef Q_OS_WIN
     proc.start("where", {"gdb"});
@@ -578,13 +509,9 @@ private:
       }
     }
 
-    // Last resort: just use "gdb" and hope it's in PATH
     return "gdb";
   }
 
-  /**
-   * @brief Get GDB capabilities string
-   */
   QString getGdbCapabilities(const QString &gdbPath) const {
     if (gdbPath.isEmpty()) {
       return {};
@@ -592,14 +519,12 @@ private:
 
     QStringList capabilities;
 
-    // Check for Python support
     QProcess proc;
     proc.start(gdbPath, {"-batch", "-ex", "python print('ok')"});
     if (proc.waitForFinished(3000) && proc.exitCode() == 0) {
       capabilities << "Python";
     }
 
-    // Check target architectures
     proc.start(gdbPath, {"-batch", "-ex", "set architecture"});
     if (proc.waitForFinished(3000)) {
       QString output = QString::fromUtf8(proc.readAllStandardOutput() +
@@ -649,9 +574,6 @@ private:
   }
 };
 
-/**
- * @brief LLDB debug adapter for C/C++ (macOS/Linux)
- */
 class LldbDebugAdapter : public IDebugAdapter {
 public:
   DebugAdapterConfig config() const override {
@@ -673,7 +595,7 @@ public:
   }
 
   bool isAvailable() const override {
-    // Check for lldb-vscode (LLDB's DAP adapter)
+
     QStringList candidates;
     candidates << "lldb-vscode" << "lldb-dap";
     for (const QString &name : candidates) {
@@ -727,10 +649,6 @@ public:
   QString documentationUrl() const override { return "https://lldb.llvm.org/"; }
 };
 
-// ============================================================================
-// DebugAdapterRegistry Implementation
-// ============================================================================
-
 DebugAdapterRegistry &DebugAdapterRegistry::instance() {
   static DebugAdapterRegistry instance;
   return instance;
@@ -741,7 +659,7 @@ DebugAdapterRegistry::DebugAdapterRegistry() : QObject(nullptr) {
 }
 
 void DebugAdapterRegistry::registerBuiltinAdapters() {
-  // Register built-in debug adapters
+
   registerAdapter(std::make_shared<PythonDebugAdapter>());
   registerAdapter(std::make_shared<NodeDebugAdapter>());
   registerAdapter(std::make_shared<GdbDebugAdapter>());
@@ -846,7 +764,4 @@ DebugAdapterRegistry::preferredAdapterForLanguage(
   return nullptr;
 }
 
-void DebugAdapterRegistry::refreshAvailability() {
-  // Just emit the signal - adapters check availability on-demand
-  emit availabilityChanged();
-}
+void DebugAdapterRegistry::refreshAvailability() { emit availabilityChanged(); }

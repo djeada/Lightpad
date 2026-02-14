@@ -4,9 +4,6 @@
 #include "basesyntaxplugin.h"
 #include <QVector>
 
-/**
- * @brief Built-in TypeScript syntax highlighting plugin
- */
 class TypeScriptSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "ts"; }
@@ -27,4 +24,4 @@ private:
   static QStringList getTertiaryKeywords();
 };
 
-#endif // TYPESCRIPTSYNTAXPLUGIN_H
+#endif

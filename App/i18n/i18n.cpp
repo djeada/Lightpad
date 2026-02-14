@@ -14,7 +14,7 @@ I18n &I18n::instance() {
 I18n::I18n()
     : QObject(nullptr), m_app(nullptr), m_translator(new QTranslator(this)),
       m_qtTranslator(new QTranslator(this)), m_currentLanguage("en") {
-  // Initialize available languages with at least English
+
   m_availableLanguages["en"] = "English";
 }
 
@@ -23,10 +23,8 @@ I18n::~I18n() {}
 void I18n::initialize(QCoreApplication *app) {
   m_app = app;
 
-  // Load available languages
   loadAvailableLanguages();
 
-  // Try to load system language, fall back to English
   QString sysLang = systemLanguage();
   if (isLanguageAvailable(sysLang)) {
     setLanguage(sysLang);
@@ -47,7 +45,7 @@ bool I18n::setLanguage(const QString &languageCode) {
   }
 
   if (languageCode == m_currentLanguage) {
-    return true; // Already using this language
+    return true;
   }
 
   if (!isLanguageAvailable(languageCode) && languageCode != "en") {
@@ -55,14 +53,12 @@ bool I18n::setLanguage(const QString &languageCode) {
     return false;
   }
 
-  // Remove current translators
   m_app->removeTranslator(m_translator);
   m_app->removeTranslator(m_qtTranslator);
 
-  // Load new translation
   if (languageCode != "en") {
     if (!loadTranslation(languageCode)) {
-      // Fall back to English
+
       m_currentLanguage = "en";
       emit languageChanged(m_currentLanguage);
       return false;
@@ -82,8 +78,7 @@ QMap<QString, QString> I18n::availableLanguages() const {
 
 QString I18n::systemLanguage() const {
   QLocale locale;
-  QString lang = locale.name().left(
-      2); // Get first two characters (e.g., "en" from "en_US")
+  QString lang = locale.name().left(2);
   return lang;
 }
 
@@ -92,20 +87,16 @@ bool I18n::isLanguageAvailable(const QString &languageCode) const {
 }
 
 QString I18n::translationsDirectory() const {
-  // Check multiple possible locations
+
   QStringList paths;
 
-  // Application directory
   paths << QCoreApplication::applicationDirPath() + "/translations";
 
-  // Resource directory
   paths << ":/translations";
 
-  // User data directory
   paths << QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
                "/translations";
 
-  // System directories
 #ifndef Q_OS_WIN
   paths << "/usr/share/lightpad/translations";
   paths << "/usr/local/share/lightpad/translations";
@@ -121,10 +112,9 @@ QString I18n::translationsDirectory() const {
 }
 
 void I18n::loadAvailableLanguages() {
-  // Always have English
+
   m_availableLanguages["en"] = "English";
 
-  // Add other common languages that could be translated
   m_availableLanguages["de"] = "Deutsch";
   m_availableLanguages["es"] = "Español";
   m_availableLanguages["fr"] = "Français";
@@ -136,7 +126,6 @@ void I18n::loadAvailableLanguages() {
   m_availableLanguages["ru"] = "Русский";
   m_availableLanguages["zh"] = "中文";
 
-  // Check which translations actually exist
   QString transDir = translationsDirectory();
   QDir dir(transDir);
 
@@ -146,10 +135,10 @@ void I18n::loadAvailableLanguages() {
 
     for (const QFileInfo &file : files) {
       QString baseName = file.baseName();
-      QString langCode = baseName.mid(9); // Remove "lightpad_" prefix
+      QString langCode = baseName.mid(9);
 
       if (!m_availableLanguages.contains(langCode)) {
-        // Add language with code as name if not in our list
+
         m_availableLanguages[langCode] = langCode;
       }
     }
@@ -162,13 +151,12 @@ void I18n::loadAvailableLanguages() {
 bool I18n::loadTranslation(const QString &languageCode) {
   QString transDir = translationsDirectory();
 
-  // Load application translation
   QString appTransFile = transDir + "/lightpad_" + languageCode + ".qm";
   if (m_translator->load(appTransFile)) {
     m_app->installTranslator(m_translator);
     LOG_DEBUG(QString("Loaded translation: %1").arg(appTransFile));
   } else {
-    // Try loading from resources
+
     if (m_translator->load(":/translations/lightpad_" + languageCode + ".qm")) {
       m_app->installTranslator(m_translator);
       LOG_DEBUG(
@@ -180,7 +168,6 @@ bool I18n::loadTranslation(const QString &languageCode) {
     }
   }
 
-  // Load Qt's built-in translations
   QString qtTransFile = QLibraryInfo::path(QLibraryInfo::TranslationsPath) +
                         "/qt_" + languageCode + ".qm";
   if (m_qtTranslator->load(qtTransFile)) {

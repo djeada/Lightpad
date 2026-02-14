@@ -26,7 +26,6 @@ private:
 void TestDocument::initTestCase() {
   QVERIFY(m_tempDir.isValid());
 
-  // Create a test file
   m_testFilePath = m_tempDir.path() + "/test.cpp";
   QFile file(m_testFilePath);
   QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
@@ -73,7 +72,6 @@ void TestDocument::testSaveDocument() {
   QVERIFY(doc.save());
   QVERIFY(QFile::exists(newFilePath));
 
-  // Verify saved state
   QCOMPARE(doc.state(), Document::State::Saved);
   QVERIFY(!doc.isModified());
 }
@@ -92,14 +90,11 @@ void TestDocument::testSaveAsDocument() {
 void TestDocument::testModificationState() {
   Document doc;
 
-  // New document is not modified initially
   QVERIFY(!doc.isModified());
 
-  // Setting content marks as modified
   doc.setContent("Modified");
   QVERIFY(doc.isModified());
 
-  // Marking as saved clears modified state
   doc.markAsSaved();
   QVERIFY(!doc.isModified());
 }

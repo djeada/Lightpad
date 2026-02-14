@@ -108,7 +108,7 @@ Popen ProcessBuilder::run_command(const CommandLine &command) {
     actions.addclose(cout_pair.output);
     process.cout = cout_pair.input;
   } else if (cout_option == PipeOption::cerr) {
-    // we have to wait until stderr is setup first
+
   } else if (cout_option == PipeOption::specific) {
     if (this->cout_pipe == kBadPipeValue) {
       throw std::invalid_argument("ProcessBuilder: bad pipe value for cout");
@@ -176,7 +176,7 @@ Popen ProcessBuilder::run_command(const CommandLine &command) {
     posix_spawnattr_t *attributes;
   } attributes_raii(attributes);
 #if 0
-        // I can't think of a nice way to make this configurable.
+        
         posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETSIGMASK);
         sigset_t signal_mask;
         sigemptyset(&signal_mask);
@@ -188,11 +188,7 @@ Popen ProcessBuilder::run_command(const CommandLine &command) {
 #endif
   attributes_raii.setflags(flags);
   {
-    /*  I should have gone with vfork() :(
-            TODO: reimplement with vfork for thread safety.
 
-            this locking solution should work in practice just fine.
-        */
     static std::mutex mutex;
     std::unique_lock<std::mutex> lock(mutex);
     CwdGuard cwdGuard;

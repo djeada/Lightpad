@@ -20,7 +20,6 @@
 void registerBuiltInSyntaxPlugins() {
   auto &registry = SyntaxPluginRegistry::instance();
 
-  // Register built-in language plugins
   registry.registerPlugin(std::make_unique<CppSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CssSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<GoSyntaxPlugin>());
@@ -42,7 +41,6 @@ int main(int argv, char **args) {
   app.setOrganizationName("Lightpad");
   app.setWindowIcon(QIcon(":/resources/icons/app.png"));
 
-  // Initialize syntax highlighting plugins
   registerBuiltInSyntaxPlugins();
 
   MainWindow w;

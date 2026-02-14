@@ -17,15 +17,11 @@ AccessibilityManager::AccessibilityManager()
       m_highContrastEnabled(false), m_fontScale(1.0),
       m_reducedMotionEnabled(false), m_screenReaderEnabled(false) {}
 
-AccessibilityManager::~AccessibilityManager() {
-  // Don't save settings in destructor - static order of destruction issues
-  // Settings should be saved explicitly when needed
-}
+AccessibilityManager::~AccessibilityManager() {}
 
 void AccessibilityManager::initialize() {
   loadSettings();
 
-  // Apply saved settings
   if (m_highContrastEnabled) {
     applyHighContrast();
   }
@@ -107,15 +103,14 @@ bool AccessibilityManager::isHighContrastEnabled() const {
 }
 
 void AccessibilityManager::setFontScale(double scale) {
-  // Clamp to reasonable range
+
   scale = qBound(0.5, scale, 3.0);
 
   if (qAbs(m_fontScale - scale) > 0.01) {
     m_fontScale = scale;
 
-    // Apply to application font
     QFont font = QApplication::font();
-    int baseSize = 10; // Base font size
+    int baseSize = 10;
     font.setPointSize(static_cast<int>(baseSize * scale));
     QApplication::setFont(font);
 
@@ -130,7 +125,7 @@ double AccessibilityManager::fontScale() const { return m_fontScale; }
 QFont AccessibilityManager::scaledFont(const QFont &baseFont) const {
   QFont scaled = baseFont;
   int newSize = static_cast<int>(baseFont.pointSize() * m_fontScale);
-  scaled.setPointSize(qMax(6, newSize)); // Minimum 6pt
+  scaled.setPointSize(qMax(6, newSize));
   return scaled;
 }
 
@@ -148,9 +143,6 @@ void AccessibilityManager::setReducedMotionEnabled(bool enabled) {
   if (m_reducedMotionEnabled != enabled) {
     m_reducedMotionEnabled = enabled;
 
-    // This would typically affect animation durations throughout the app
-    // For now, we just store the preference
-
     saveSettings();
     emit reducedMotionChanged(enabled);
     LOG_DEBUG(
@@ -167,7 +159,7 @@ void AccessibilityManager::setScreenReaderEnabled(bool enabled) {
     m_screenReaderEnabled = enabled;
 
     if (enabled) {
-      // Enable accessibility features for screen readers
+
       QAccessible::setActive(true);
     }
 
@@ -186,7 +178,7 @@ void AccessibilityManager::announce(const QString &text, bool priority) {
   Q_UNUSED(priority);
 
   if (m_screenReaderEnabled && !text.isEmpty()) {
-    // Use Qt's accessibility system to announce
+
     QAccessibleEvent event(QApplication::focusWidget(), QAccessible::Alert);
     QAccessible::updateAccessibility(&event);
 
@@ -239,7 +231,6 @@ void AccessibilityManager::saveSettings() {
 void AccessibilityManager::applyHighContrast() {
   QPalette palette;
 
-  // High contrast color scheme
   palette.setColor(QPalette::Window, Qt::black);
   palette.setColor(QPalette::WindowText, Qt::white);
   palette.setColor(QPalette::Base, Qt::black);
@@ -254,7 +245,6 @@ void AccessibilityManager::applyHighContrast() {
   palette.setColor(QPalette::Highlight, QColor(0, 100, 200));
   palette.setColor(QPalette::HighlightedText, Qt::white);
 
-  // Disabled colors
   palette.setColor(QPalette::Disabled, QPalette::WindowText, Qt::gray);
   palette.setColor(QPalette::Disabled, QPalette::Text, Qt::gray);
   palette.setColor(QPalette::Disabled, QPalette::ButtonText, Qt::gray);
@@ -264,7 +254,7 @@ void AccessibilityManager::applyHighContrast() {
 }
 
 void AccessibilityManager::applyNormalContrast() {
-  // Reset to default palette
+
   QApplication::setPalette(QApplication::style()->standardPalette());
   LOG_DEBUG("Restored normal contrast palette");
 }

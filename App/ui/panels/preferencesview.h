@@ -26,4 +26,4 @@ private:
   MainWindow *parentWindow;
 };
 
-#endif // PREFERENCESVIEW_H
+#endif

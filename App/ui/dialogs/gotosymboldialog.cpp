@@ -19,7 +19,6 @@ void GoToSymbolDialog::setupUI() {
   m_layout->setContentsMargins(8, 8, 8, 8);
   m_layout->setSpacing(4);
 
-  // Search box
   m_searchBox = new QLineEdit(this);
   m_searchBox->setPlaceholderText(tr("Go to symbol..."));
   m_searchBox->setStyleSheet("QLineEdit {"
@@ -32,7 +31,6 @@ void GoToSymbolDialog::setupUI() {
                              "}");
   m_layout->addWidget(m_searchBox);
 
-  // Results list
   m_resultsList = new QListWidget(this);
   m_resultsList->setStyleSheet("QListWidget {"
                                "  border: none;"
@@ -52,7 +50,6 @@ void GoToSymbolDialog::setupUI() {
   m_resultsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   m_layout->addWidget(m_resultsList);
 
-  // Connections
   connect(m_searchBox, &QLineEdit::textChanged, this,
           &GoToSymbolDialog::onSearchTextChanged);
   connect(m_resultsList, &QListWidget::itemActivated, this,
@@ -60,7 +57,6 @@ void GoToSymbolDialog::setupUI() {
   connect(m_resultsList, &QListWidget::itemClicked, this,
           &GoToSymbolDialog::onItemClicked);
 
-  // Install event filter for keyboard navigation
   m_searchBox->installEventFilter(this);
 
   setStyleSheet("GoToSymbolDialog { background: #171c24; border: 1px solid "
@@ -85,7 +81,6 @@ void GoToSymbolDialog::flattenSymbols(const QList<LspDocumentSymbol> &symbols,
     item.score = 0;
     m_symbols.append(item);
 
-    // Recursively add children
     if (!symbol.children.isEmpty()) {
       flattenSymbols(symbol.children, item.name);
     }
@@ -102,7 +97,6 @@ void GoToSymbolDialog::showDialog() {
   m_searchBox->clear();
   updateResults(QString());
 
-  // Position at top center of parent
   if (parentWidget()) {
     QPoint parentCenter =
         parentWidget()->mapToGlobal(parentWidget()->rect().center());
@@ -181,12 +175,12 @@ void GoToSymbolDialog::updateResults(const QString &query) {
   m_resultsList->clear();
   m_filteredIndices.clear();
 
-  QList<QPair<int, int>> scored; // score, index
+  QList<QPair<int, int>> scored;
 
   for (int i = 0; i < m_symbols.size(); ++i) {
     int score = 0;
     if (query.isEmpty()) {
-      // When empty, order by position in document
+
       score = 1000 - i;
     } else {
       score = fuzzyMatch(query.toLower(), m_symbols[i].name.toLower());
@@ -197,13 +191,11 @@ void GoToSymbolDialog::updateResults(const QString &query) {
     }
   }
 
-  // Sort by score descending
   std::sort(scored.begin(), scored.end(),
             [](const QPair<int, int> &a, const QPair<int, int> &b) {
               return a.first > b.first;
             });
 
-  // Limit results
   int maxResults = 20;
   for (int i = 0; i < qMin(scored.size(), maxResults); ++i) {
     int idx = scored[i].second;
@@ -216,8 +208,7 @@ void GoToSymbolDialog::updateResults(const QString &query) {
     if (!sym.detail.isEmpty()) {
       displayText += "  - " + sym.detail;
     }
-    displayText +=
-        QString("  :%1").arg(sym.line + 1); // Line numbers are 0-based
+    displayText += QString("  :%1").arg(sym.line + 1);
 
     item->setText(displayText);
     item->setData(Qt::UserRole, idx);
@@ -228,7 +219,6 @@ void GoToSymbolDialog::updateResults(const QString &query) {
     m_resultsList->setCurrentRow(0);
   }
 
-  // Adjust height
   int itemHeight = 35;
   int newHeight = qMin(m_resultsList->count() * itemHeight + 60, 400);
   setFixedHeight(newHeight);
@@ -238,22 +228,20 @@ int GoToSymbolDialog::fuzzyMatch(const QString &pattern, const QString &text) {
   if (pattern.isEmpty())
     return 1000;
 
-  // Exact match gets highest score
   if (text.contains(pattern))
     return 2000 + (1000 - text.indexOf(pattern));
 
-  // Fuzzy matching - all characters must appear in order
   int patternIdx = 0;
   int score = 0;
   int lastMatchIdx = -1;
 
   for (int i = 0; i < text.length() && patternIdx < pattern.length(); ++i) {
     if (text[i] == pattern[patternIdx]) {
-      // Bonus for consecutive matches
+
       if (lastMatchIdx == i - 1) {
         score += 15;
       }
-      // Bonus for word boundary matches (after . or _)
+
       if (i == 0 || text[i - 1] == '.' || text[i - 1] == '_') {
         score += 10;
       }
@@ -263,7 +251,6 @@ int GoToSymbolDialog::fuzzyMatch(const QString &pattern, const QString &text) {
     }
   }
 
-  // All pattern characters must be matched
   if (patternIdx != pattern.length())
     return 0;
 
@@ -299,63 +286,62 @@ void GoToSymbolDialog::selectPrevious() {
 }
 
 QString GoToSymbolDialog::symbolKindIcon(LspSymbolKind kind) const {
-  // Using simple Unicode symbols for better cross-platform and accessibility
-  // compatibility
+
   switch (kind) {
   case LspSymbolKind::File:
-    return "\u2630"; // ☰ trigram for heaven
+    return "\u2630";
   case LspSymbolKind::Module:
-    return "\u25A6"; // ▦ square with orthogonal crosshatch
+    return "\u25A6";
   case LspSymbolKind::Namespace:
-    return "\u25C7"; // ◇ white diamond
+    return "\u25C7";
   case LspSymbolKind::Package:
-    return "\u25A6"; // ▦ square with orthogonal crosshatch
+    return "\u25A6";
   case LspSymbolKind::Class:
-    return "\u25C6"; // ◆ black diamond
+    return "\u25C6";
   case LspSymbolKind::Method:
-    return "\u25B8"; // ▸ black right-pointing small triangle
+    return "\u25B8";
   case LspSymbolKind::Property:
-    return "\u25CB"; // ○ white circle
+    return "\u25CB";
   case LspSymbolKind::Field:
-    return "\u25A1"; // □ white square
+    return "\u25A1";
   case LspSymbolKind::Constructor:
-    return "\u25B2"; // ▲ black up-pointing triangle
+    return "\u25B2";
   case LspSymbolKind::Enum:
-    return "\u2261"; // ≡ identical to
+    return "\u2261";
   case LspSymbolKind::Interface:
-    return "\u25C7"; // ◇ white diamond
+    return "\u25C7";
   case LspSymbolKind::Function:
-    return "\u0192"; // ƒ latin small letter f with hook
+    return "\u0192";
   case LspSymbolKind::Variable:
-    return "\u03BD"; // ν greek small letter nu
+    return "\u03BD";
   case LspSymbolKind::Constant:
-    return "\u03C0"; // π greek small letter pi
+    return "\u03C0";
   case LspSymbolKind::String:
-    return "\u0022"; // " quotation mark
+    return "\u0022";
   case LspSymbolKind::Number:
-    return "\u0023"; // # number sign
+    return "\u0023";
   case LspSymbolKind::Boolean:
-    return "\u2713"; // ✓ check mark
+    return "\u2713";
   case LspSymbolKind::Array:
-    return "\u25A4"; // ▤ square with horizontal fill
+    return "\u25A4";
   case LspSymbolKind::Object:
-    return "\u25A3"; // ▣ white square containing small black square
+    return "\u25A3";
   case LspSymbolKind::Key:
-    return "\u25CB"; // ○ white circle
+    return "\u25CB";
   case LspSymbolKind::Null:
-    return "\u2205"; // ∅ empty set
+    return "\u2205";
   case LspSymbolKind::EnumMember:
-    return "\u2261"; // ≡ identical to
+    return "\u2261";
   case LspSymbolKind::Struct:
-    return "\u25A0"; // ■ black square
+    return "\u25A0";
   case LspSymbolKind::Event:
-    return "\u26A1"; // ⚡ high voltage sign
+    return "\u26A1";
   case LspSymbolKind::Operator:
-    return "\u002B"; // + plus sign
+    return "\u002B";
   case LspSymbolKind::TypeParameter:
-    return "\u03C4"; // τ greek small letter tau
+    return "\u03C4";
   default:
-    return "\u2022"; // • bullet
+    return "\u2022";
   }
 }
 

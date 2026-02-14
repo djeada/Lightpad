@@ -12,9 +12,7 @@
 Minimap::Minimap(QWidget *parent)
     : QWidget(parent), m_sourceEditor(nullptr), m_scale(0.15), m_visible(true),
       m_isDragging(false), m_documentDirty(true),
-      m_viewportColor(
-          QColor(100, 149, 237, 60)) // Cornflower blue with transparency
-      ,
+      m_viewportColor(QColor(100, 149, 237, 60)),
       m_backgroundColor(QColor(30, 30, 30)), m_charWidth(1.5),
       m_lineHeight(3.0), m_maxVisibleLines(0), m_scrollOffset(0),
       m_updatePending(false) {
@@ -92,19 +90,16 @@ void Minimap::paintEvent(QPaintEvent *event) {
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
 
-  // Draw background
   painter.fillRect(rect(), m_backgroundColor);
 
   if (!m_sourceEditor) {
     return;
   }
 
-  // Render document if dirty
   if (m_documentDirty) {
     renderDocument();
   }
 
-  // Draw the cached document image
   if (!m_documentImage.isNull()) {
     int sourceY = scrollOffsetInPixels();
     QRect sourceRect(0, sourceY, m_documentImage.width(), height());
@@ -112,18 +107,15 @@ void Minimap::paintEvent(QPaintEvent *event) {
     painter.drawImage(destRect, m_documentImage, sourceRect);
   }
 
-  // Draw viewport indicator
   if (!m_viewportRect.isEmpty()) {
     painter.fillRect(m_viewportRect, m_viewportColor);
 
-    // Draw viewport border
     QPen borderPen(m_viewportColor.lighter(150));
     borderPen.setWidth(1);
     painter.setPen(borderPen);
     painter.drawRect(m_viewportRect);
   }
 
-  // Draw left border
   painter.setPen(QColor(60, 60, 60));
   painter.drawLine(0, 0, 0, height());
 }
@@ -148,7 +140,7 @@ void Minimap::mouseReleaseEvent(QMouseEvent *event) {
 
 void Minimap::wheelEvent(QWheelEvent *event) {
   if (m_sourceEditor) {
-    // Forward wheel event to source editor
+
     QApplication::sendEvent(m_sourceEditor->verticalScrollBar(), event);
   }
 }
@@ -162,8 +154,7 @@ void Minimap::resizeEvent(QResizeEvent *event) {
 
 void Minimap::onSourceTextChanged() {
   m_documentDirty = true;
-  // Debounce minimap updates to avoid blocking typing
-  // Only schedule update if one isn't already pending
+
   if (!m_updatePending) {
     m_updatePending = true;
     QTimer::singleShot(150, this, [this]() {
@@ -182,7 +173,7 @@ void Minimap::onSourceScrollChanged(int value) {
 }
 
 void Minimap::onSourceCursorPositionChanged() {
-  // Defer cursor position update to not block typing
+
   QTimer::singleShot(0, this, QOverload<>::of(&QWidget::update));
 }
 
@@ -200,20 +191,16 @@ void Minimap::updateViewportRect() {
     return;
   }
 
-  // Calculate visible lines in source editor
   int firstVisibleLine = vbar->value();
   int visibleLineCount =
       m_sourceEditor->height() / m_sourceEditor->fontMetrics().lineSpacing();
 
-  // Calculate minimap dimensions
   qreal lineHeightMinimap = m_lineHeight;
   int totalMinimapHeight = static_cast<int>(totalLines * lineHeightMinimap);
 
-  // Calculate scroll offset to keep viewport visible
   int viewportTop = static_cast<int>(firstVisibleLine * lineHeightMinimap);
   int viewportHeight = static_cast<int>(visibleLineCount * lineHeightMinimap);
 
-  // Adjust scroll offset if needed to keep viewport centered
   if (totalMinimapHeight > height()) {
     int maxScrollOffset =
         static_cast<int>((totalMinimapHeight - height()) / m_lineHeight);
@@ -279,7 +266,6 @@ void Minimap::renderDocument() {
   int imageWidth = width();
   int imageHeight = static_cast<int>(totalLines * m_lineHeight) + height();
 
-  // Limit image height to prevent memory issues
   imageHeight = qMin(imageHeight, 10000);
 
   m_documentImage = QImage(imageWidth, imageHeight, QImage::Format_RGB32);
@@ -288,21 +274,18 @@ void Minimap::renderDocument() {
   QPainter painter(&m_documentImage);
   painter.setRenderHint(QPainter::Antialiasing, false);
 
-  // Get syntax highlighter colors if available
   QTextBlock block = doc->begin();
   int lineIndex = 0;
 
   while (block.isValid() && lineIndex * m_lineHeight < imageHeight) {
     QString text = block.text();
     qreal y = lineIndex * m_lineHeight;
-    qreal x = 2; // Small left margin
+    qreal x = 2;
 
-    // Draw each character as a small rectangle
-    // Use character formats from the block if available
     QTextLayout *layout = block.layout();
 
     if (layout && layout->lineCount() > 0) {
-      // Use actual formatting from syntax highlighter
+
       QVector<QTextLayout::FormatRange> formats = layout->formats();
 
       int charIndex = 0;
@@ -319,8 +302,7 @@ void Minimap::renderDocument() {
           continue;
         }
 
-        // Find color for this character
-        QColor charColor(150, 150, 150); // Default gray
+        QColor charColor(150, 150, 150);
 
         for (const auto &format : formats) {
           if (charIndex >= format.start &&
@@ -332,14 +314,13 @@ void Minimap::renderDocument() {
           }
         }
 
-        // Draw character as small rectangle
         painter.fillRect(QRectF(x, y, m_charWidth * 0.8, m_lineHeight * 0.7),
                          charColor);
         x += m_charWidth;
         charIndex++;
       }
     } else {
-      // Fallback: simple gray rendering
+
       for (int i = 0; i < text.length() && x < imageWidth; ++i) {
         QChar ch = text[i];
 

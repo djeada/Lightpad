@@ -102,23 +102,21 @@ void TestNavigationHistory::testRecordLocationIfSignificant() {
 
   NavigationLocation loc2;
   loc2.filePath = "/test/file1.cpp";
-  loc2.line = 12; // Only 2 lines difference - not significant
+  loc2.line = 12;
   loc2.column = 5;
 
   NavigationLocation loc3;
   loc3.filePath = "/test/file1.cpp";
-  loc3.line = 50; // 40 lines difference - significant
+  loc3.line = 50;
   loc3.column = 5;
 
   m_history->recordLocation(loc1);
-  m_history->recordLocationIfSignificant(loc2, 5); // Threshold = 5
+  m_history->recordLocationIfSignificant(loc2, 5);
 
-  // loc2 should not have been recorded (only 2 lines diff)
   QVERIFY(!m_history->canGoBack());
 
-  m_history->recordLocationIfSignificant(loc3, 5); // Threshold = 5
+  m_history->recordLocationIfSignificant(loc3, 5);
 
-  // loc3 should have been recorded (40 lines diff)
   QVERIFY(m_history->canGoBack());
 }
 

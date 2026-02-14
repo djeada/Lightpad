@@ -1,4 +1,4 @@
-/** @cond private */
+
 #include <string>
 #ifdef _WIN32
 #include <windows.h>
@@ -16,5 +16,3 @@ size_t strlen16(wchar_t *str);
 std::string lptstr_to_string(LPTSTR str);
 #endif
 } // namespace subprocess
-
-/** @endcond */

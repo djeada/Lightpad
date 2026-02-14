@@ -4,9 +4,6 @@
 #include "basesyntaxplugin.h"
 #include <QVector>
 
-/**
- * @brief Built-in YAML syntax highlighting plugin
- */
 class YamlSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "yaml"; }
@@ -22,4 +19,4 @@ public:
   }
 };
 
-#endif // YAMLSYNTAXPLUGIN_H
+#endif

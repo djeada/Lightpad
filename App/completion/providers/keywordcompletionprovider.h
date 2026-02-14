@@ -3,12 +3,6 @@
 
 #include "../icompletionprovider.h"
 
-/**
- * @brief Completion provider for language keywords
- *
- * Provides keyword completions based on the LanguageKeywordsRegistry.
- * Supports all languages with registered keywords.
- */
 class KeywordCompletionProvider : public ICompletionProvider {
 public:
   KeywordCompletionProvider();
@@ -30,4 +24,4 @@ private:
   bool m_enabled = true;
 };
 
-#endif // KEYWORDCOMPLETIONPROVIDER_H
+#endif

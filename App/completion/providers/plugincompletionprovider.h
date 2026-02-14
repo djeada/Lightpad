@@ -4,12 +4,6 @@
 #include "../icompletionprovider.h"
 #include <QMap>
 
-/**
- * @brief Completion provider using ISyntaxPlugin::keywords()
- *
- * Queries registered syntax plugins for their keywords and
- * provides them as completions.
- */
 class PluginCompletionProvider : public ICompletionProvider {
 public:
   PluginCompletionProvider();
@@ -26,11 +20,6 @@ public:
   bool isEnabled() const override { return m_enabled; }
   void setEnabled(bool enabled) override { m_enabled = enabled; }
 
-  /**
-   * @brief Refresh the cached keywords from plugins
-   *
-   * Call this after plugins are registered/unregistered.
-   */
   void refreshCache();
 
 private:
@@ -38,7 +27,7 @@ private:
 
   bool m_enabled = true;
   bool m_cachePopulated = false;
-  QMap<QString, QStringList> m_cachedKeywords; // languageId -> keywords
+  QMap<QString, QStringList> m_cachedKeywords;
 };
 
-#endif // PLUGINCOMPLETIONPROVIDER_H
+#endif
