@@ -88,8 +88,7 @@ DebugPanel::DebugPanel(QWidget *parent)
       m_programmaticVariablesExpand(false),
       m_variablesNameColumnAutofitPending(false), m_stepInProgress(false),
       m_expectStopEvent(true), m_hasLastStopEvent(false),
-      m_lastStoppedThreadId(0),
-      m_lastStoppedReason(DapStoppedReason::Unknown),
+      m_lastStoppedThreadId(0), m_lastStoppedReason(DapStoppedReason::Unknown),
       m_localsFallbackPending(false), m_localsFallbackFrameId(-1),
       m_localsFallbackScopeRef(0), m_localsFallbackRequestNonce(0),
       m_themeInitialized(false) {
@@ -350,16 +349,17 @@ void DebugPanel::setupToolbar() {
   m_continueAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_MediaPlay), tr("Start"));
   m_continueAction->setShortcut(QKeySequence(Qt::Key_F5));
-  configureAction(
-      m_continueAction, tr("Start or continue debugging (F5)"),
-      tr("Starts a debug session when idle, or continues execution when paused."));
+  configureAction(m_continueAction, tr("Start or continue debugging (F5)"),
+                  tr("Starts a debug session when idle, or continues execution "
+                     "when paused."));
   connect(m_continueAction, &QAction::triggered, this, &DebugPanel::onContinue);
 
   m_pauseAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_MediaPause), tr("Pause"));
   m_pauseAction->setShortcut(QKeySequence(Qt::Key_F6));
-  configureAction(m_pauseAction, tr("Pause execution (F6)"),
-                  tr("Interrupts a running debug session at the next safe point."));
+  configureAction(
+      m_pauseAction, tr("Pause execution (F6)"),
+      tr("Interrupts a running debug session at the next safe point."));
   connect(m_pauseAction, &QAction::triggered, this, &DebugPanel::onPause);
 
   m_toolbar->addSeparator();
@@ -367,21 +367,24 @@ void DebugPanel::setupToolbar() {
   m_stepOverAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_ArrowRight), tr("Over"));
   m_stepOverAction->setShortcut(QKeySequence(Qt::Key_F10));
-  configureAction(m_stepOverAction, tr("Step over current line (F10)"),
-                  tr("Executes the current line without entering called functions."));
+  configureAction(
+      m_stepOverAction, tr("Step over current line (F10)"),
+      tr("Executes the current line without entering called functions."));
   connect(m_stepOverAction, &QAction::triggered, this, &DebugPanel::onStepOver);
 
   m_stepIntoAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_ArrowDown), tr("Into"));
   m_stepIntoAction->setShortcut(QKeySequence(Qt::Key_F11));
-  configureAction(m_stepIntoAction, tr("Step into function call (F11)"),
-                  tr("Advances into the function being called on the current line."));
+  configureAction(
+      m_stepIntoAction, tr("Step into function call (F11)"),
+      tr("Advances into the function being called on the current line."));
   connect(m_stepIntoAction, &QAction::triggered, this, &DebugPanel::onStepInto);
 
   m_stepOutAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_ArrowUp), tr("Out"));
   m_stepOutAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F11));
-  configureAction(m_stepOutAction, tr("Step out of current function (Shift+F11)"),
+  configureAction(m_stepOutAction,
+                  tr("Step out of current function (Shift+F11)"),
                   tr("Runs until the current function returns to its caller."));
   connect(m_stepOutAction, &QAction::triggered, this, &DebugPanel::onStepOut);
 
@@ -397,8 +400,9 @@ void DebugPanel::setupToolbar() {
   m_stopAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_MediaStop), tr("Stop"));
   m_stopAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F5));
-  configureAction(m_stopAction, tr("Stop debugging (Shift+F5)"),
-                  tr("Terminates debugging and clears the current debug context."));
+  configureAction(
+      m_stopAction, tr("Stop debugging (Shift+F5)"),
+      tr("Terminates debugging and clears the current debug context."));
   connect(m_stopAction, &QAction::triggered, this, &DebugPanel::onStop);
 
   m_toolbar->addSeparator();
@@ -645,7 +649,8 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
     return;
   }
 
-  const int eventThreadId = event.threadId > 0 ? event.threadId : m_currentThreadId;
+  const int eventThreadId =
+      event.threadId > 0 ? event.threadId : m_currentThreadId;
   const bool duplicateStop = !m_expectStopEvent && m_hasLastStopEvent &&
                              eventThreadId == m_lastStoppedThreadId &&
                              event.reason == m_lastStoppedReason;
@@ -945,10 +950,11 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     const QString lowered = scope.name.trimmed().toLower();
     const bool registerScope = lowered.contains("register");
     const bool localScope = lowered.contains("local");
-    const bool autoLoadScope = eagerScopeRefs.contains(scope.variablesReference) &&
-                               eagerLoadsRemaining > 0;
-    const bool deferScope = scope.expensive || registerScope || localScope ||
-                            !autoLoadScope;
+    const bool autoLoadScope =
+        eagerScopeRefs.contains(scope.variablesReference) &&
+        eagerLoadsRemaining > 0;
+    const bool deferScope =
+        scope.expensive || registerScope || localScope || !autoLoadScope;
 
     QTreeWidgetItem *scopeItem = new QTreeWidgetItem();
     scopeItem->setText(0, scope.name);
@@ -1035,7 +1041,8 @@ void DebugPanel::requestLocalsFallback(int scopeVariablesReference) {
     return;
   }
 
-  QTreeWidgetItem *scopeItem = m_variableRefToItem.value(scopeVariablesReference);
+  QTreeWidgetItem *scopeItem =
+      m_variableRefToItem.value(scopeVariablesReference);
   if (!scopeItem) {
     return;
   }
@@ -1075,7 +1082,8 @@ void DebugPanel::requestLocalsFallback(int scopeVariablesReference) {
 
 void DebugPanel::populateLocalsFromGdbEvaluate(int scopeVariablesReference,
                                                const QString &rawResult) {
-  QTreeWidgetItem *scopeItem = m_variableRefToItem.value(scopeVariablesReference);
+  QTreeWidgetItem *scopeItem =
+      m_variableRefToItem.value(scopeVariablesReference);
   if (!scopeItem) {
     return;
   }
@@ -1084,7 +1092,8 @@ void DebugPanel::populateLocalsFromGdbEvaluate(int scopeVariablesReference,
     delete scopeItem->takeChild(0);
   }
 
-  const QList<QPair<QString, QString>> entries = parseInfoLocalsOutput(rawResult);
+  const QList<QPair<QString, QString>> entries =
+      parseInfoLocalsOutput(rawResult);
   if (entries.isEmpty()) {
     showLocalsFallbackMessage(scopeVariablesReference,
                               tr("<no locals available at this location>"));
@@ -1106,7 +1115,8 @@ void DebugPanel::populateLocalsFromGdbEvaluate(int scopeVariablesReference,
 void DebugPanel::showLocalsFallbackMessage(int scopeVariablesReference,
                                            const QString &message,
                                            bool isError) {
-  QTreeWidgetItem *scopeItem = m_variableRefToItem.value(scopeVariablesReference);
+  QTreeWidgetItem *scopeItem =
+      m_variableRefToItem.value(scopeVariablesReference);
   if (!scopeItem) {
     return;
   }
@@ -1118,7 +1128,8 @@ void DebugPanel::showLocalsFallbackMessage(int scopeVariablesReference,
   QTreeWidgetItem *hintItem = new QTreeWidgetItem();
   hintItem->setText(0, message);
   hintItem->setFirstColumnSpanned(true);
-  hintItem->setForeground(0, isError ? consoleErrorColor() : consoleMutedColor());
+  hintItem->setForeground(0,
+                          isError ? consoleErrorColor() : consoleMutedColor());
   scopeItem->addChild(hintItem);
   scopeItem->setExpanded(true);
 }
@@ -1224,9 +1235,10 @@ void DebugPanel::updateToolbarState() {
                             state == DapClient::State::Stopped);
   const bool isStopped = (state == DapClient::State::Stopped &&
                           activeThreadId() > 0 && !m_stepInProgress);
-  const bool isRunning = (state == DapClient::State::Running || m_stepInProgress);
-  const bool isStarting =
-      state == DapClient::State::Connecting || state == DapClient::State::Initializing;
+  const bool isRunning =
+      (state == DapClient::State::Running || m_stepInProgress);
+  const bool isStarting = state == DapClient::State::Connecting ||
+                          state == DapClient::State::Initializing;
   const bool canStart = !isRunning && !isStarting;
   const bool canStop = isDebugging || isStarting;
 
@@ -1471,7 +1483,8 @@ void DebugPanel::onEvaluateResult(const QString &expression,
                                   int variablesReference) {
   Q_UNUSED(variablesReference);
 
-  if (m_localsFallbackPending && expression == m_localsFallbackPendingExpression) {
+  if (m_localsFallbackPending &&
+      expression == m_localsFallbackPendingExpression) {
     const int scopeRef = m_localsFallbackScopeRef;
     const bool staleFrame = m_localsFallbackFrameId != m_currentFrameId;
     clearLocalsFallbackState();
@@ -1490,7 +1503,8 @@ void DebugPanel::onEvaluateResult(const QString &expression,
 
 void DebugPanel::onEvaluateError(const QString &expression,
                                  const QString &errorMessage) {
-  if (m_localsFallbackPending && expression == m_localsFallbackPendingExpression) {
+  if (m_localsFallbackPending &&
+      expression == m_localsFallbackPendingExpression) {
     const int scopeRef = m_localsFallbackScopeRef;
     const bool staleFrame = m_localsFallbackFrameId != m_currentFrameId;
     clearLocalsFallbackState();

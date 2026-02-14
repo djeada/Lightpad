@@ -131,8 +131,8 @@ void GitRebaseDialog::onStartRebase() {
   QString todoScript;
   // Reverse order: git rebase -i lists oldest first
   for (int i = m_entries.size() - 1; i >= 0; --i) {
-    todoScript +=
-        m_entries[i].action + " " + m_entries[i].hash + " " + m_entries[i].subject + "\n";
+    todoScript += m_entries[i].action + " " + m_entries[i].hash + " " +
+                  m_entries[i].subject + "\n";
   }
 
   // Write to a temporary script file
@@ -163,7 +163,8 @@ void GitRebaseDialog::onStartRebase() {
   QString output = proc.readAllStandardOutput() + proc.readAllStandardError();
   if (proc.exitCode() == 0) {
     m_statusLabel->setText(tr("Rebase completed successfully"));
-    QMessageBox::information(this, tr("Rebase"), tr("Interactive rebase completed."));
+    QMessageBox::information(this, tr("Rebase"),
+                             tr("Interactive rebase completed."));
     accept();
   } else {
     m_statusLabel->setText(tr("Rebase failed or needs conflict resolution"));
@@ -191,8 +192,7 @@ void GitRebaseDialog::buildUi() {
   toolbar->addStretch();
   mainLayout->addLayout(toolbar);
 
-  connect(m_moveUpBtn, &QPushButton::clicked, this,
-          &GitRebaseDialog::onMoveUp);
+  connect(m_moveUpBtn, &QPushButton::clicked, this, &GitRebaseDialog::onMoveUp);
   connect(m_moveDownBtn, &QPushButton::clicked, this,
           &GitRebaseDialog::onMoveDown);
 
@@ -204,8 +204,10 @@ void GitRebaseDialog::buildUi() {
   m_commitList->setSelectionMode(QAbstractItemView::SingleSelection);
   m_commitList->header()->setSectionResizeMode(0, QHeaderView::Fixed);
   m_commitList->header()->resizeSection(0, 100);
-  m_commitList->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-  m_commitList->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+  m_commitList->header()->setSectionResizeMode(1,
+                                               QHeaderView::ResizeToContents);
+  m_commitList->header()->setSectionResizeMode(2,
+                                               QHeaderView::ResizeToContents);
   m_commitList->header()->setSectionResizeMode(3, QHeaderView::Stretch);
   mainLayout->addWidget(m_commitList);
 

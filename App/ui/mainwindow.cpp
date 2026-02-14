@@ -51,8 +51,8 @@
 #include "dialogs/formattemplateselector.h"
 #include "dialogs/gitdiffdialog.h"
 #include "dialogs/gitfilehistorydialog.h"
-#include "dialogs/gitrebasedialog.h"
 #include "dialogs/gitlogdialog.h"
+#include "dialogs/gitrebasedialog.h"
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
 #include "dialogs/preferences.h"
@@ -101,8 +101,7 @@ MainWindow::MainWindow(QWidget *parent)
       sourceControlDock(nullptr), m_inlineBlameEnabled(false),
       m_heatmapEnabled(false), m_codeLensEnabled(false),
       m_gitBranchLabel(nullptr), m_gitSyncLabel(nullptr),
-      m_gitDirtyLabel(nullptr),
-      debugPanel(nullptr), debugDock(nullptr),
+      m_gitDirtyLabel(nullptr), debugPanel(nullptr), debugDock(nullptr),
       m_debugStartInProgress(false), m_breakpointsSetConnection(),
       m_breakpointChangedConnection(), m_sessionTerminatedConnection(),
       m_sessionErrorConnection(), m_sessionStateConnection(),
@@ -571,7 +570,8 @@ void MainWindow::showGitBlameForCurrentFile(bool enable) {
   QMap<int, QString> blameMap;
   QMap<int, GitBlameLineInfo> richBlameMap;
   for (const auto &info : blameLines) {
-    QString label = QString("%1 \u2022 %2").arg(info.shortHash).arg(info.author);
+    QString label =
+        QString("%1 \u2022 %2").arg(info.shortHash).arg(info.author);
     blameMap.insert(info.lineNumber, label);
     richBlameMap.insert(info.lineNumber, info);
   }
@@ -1713,8 +1713,7 @@ void MainWindow::ensureSourceControlPanel() {
           this, [this](const QString &branch1, const QString &branch2) {
             if (!m_gitIntegration)
               return;
-            QString targetId =
-                QString("%1...%2").arg(branch1).arg(branch2);
+            QString targetId = QString("%1...%2").arg(branch1).arg(branch2);
             GitDiffDialog diffDialog(m_gitIntegration, targetId,
                                      GitDiffDialog::DiffTarget::Commit, false,
                                      settings.theme, this);
@@ -1811,7 +1810,8 @@ void MainWindow::ensureDebugPanel() {
   connect(debugPanel, &DebugPanel::stopDebugRequested, this, [this]() {
     QString sessionIdToStop = m_activeDebugSessionId;
     if (sessionIdToStop.isEmpty()) {
-      if (DebugSession *focused = DebugSessionManager::instance().focusedSession()) {
+      if (DebugSession *focused =
+              DebugSessionManager::instance().focusedSession()) {
         sessionIdToStop = focused->id();
       }
     }
@@ -2251,9 +2251,8 @@ void MainWindow::setupGitIntegration() {
   connect(&m_gitStatusBarTimer, &QTimer::timeout, this,
           &MainWindow::updateGitStatusBar);
 
-  connect(m_gitIntegration, &GitIntegration::statusChanged, this, [this]() {
-    m_gitStatusBarTimer.start();
-  });
+  connect(m_gitIntegration, &GitIntegration::statusChanged, this,
+          [this]() { m_gitStatusBarTimer.start(); });
   connect(m_gitIntegration, &GitIntegration::branchChanged, this,
           [this](const QString &) { m_gitStatusBarTimer.start(); });
 
@@ -3253,7 +3252,8 @@ void MainWindow::showFileHistory() {
   }
 
   LightpadTabWidget *tabWidget = currentTabWidget();
-  if (!tabWidget) return;
+  if (!tabWidget)
+    return;
 
   QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
   if (filePath.isEmpty()) {
@@ -3350,8 +3350,7 @@ void MainWindow::updateHeatmapForCurrentFile() {
   if (filePath.isEmpty())
     return;
 
-  QMap<int, qint64> timestamps =
-      m_gitIntegration->getBlameTimestamps(filePath);
+  QMap<int, qint64> timestamps = m_gitIntegration->getBlameTimestamps(filePath);
   textArea->setHeatmapData(timestamps);
   textArea->setHeatmapEnabled(true);
 }
@@ -3374,8 +3373,7 @@ void MainWindow::updateCodeLensForCurrentFile() {
     return;
 
   // Get blame data for the file
-  QList<GitBlameLineInfo> blameLines =
-      m_gitIntegration->getBlameInfo(filePath);
+  QList<GitBlameLineInfo> blameLines = m_gitIntegration->getBlameInfo(filePath);
   if (blameLines.isEmpty())
     return;
 
@@ -3467,11 +3465,10 @@ void MainWindow::updateCodeLensForCurrentFile() {
     // Build CodeLens text
     QString authorsText;
     if (authors.size() <= 3) {
-      authorsText =
-          QString("%1 author%2 (%3)")
-              .arg(authors.size())
-              .arg(authors.size() > 1 ? "s" : "")
-              .arg(QStringList(authors.values()).join(", "));
+      authorsText = QString("%1 author%2 (%3)")
+                        .arg(authors.size())
+                        .arg(authors.size() > 1 ? "s" : "")
+                        .arg(QStringList(authors.values()).join(", "));
     } else {
       QStringList authorsList = authors.values();
       authorsText = QString("%1 authors (%2, %3, ...)")

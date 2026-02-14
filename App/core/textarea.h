@@ -134,9 +134,9 @@ public:
 
   // CodeLens (git info above functions/classes)
   struct CodeLensEntry {
-    int line;               ///< 0-based line number
-    QString text;           ///< Display text (e.g., "2 authors | 5 changes")
-    QString symbolName;     ///< Name of the symbol
+    int line;           ///< 0-based line number
+    QString text;       ///< Display text (e.g., "2 authors | 5 changes")
+    QString symbolName; ///< Name of the symbol
   };
   void setCodeLensEntries(const QList<CodeLensEntry> &entries);
   void clearCodeLensEntries();

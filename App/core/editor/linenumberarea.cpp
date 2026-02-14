@@ -19,11 +19,9 @@
 
 LineNumberArea::LineNumberArea(TextArea *editor, QWidget *parent)
     : QWidget(parent ? parent : editor), m_editor(editor),
-      m_gitIntegration(nullptr),
-      m_backgroundColor(QColor(40, 40, 40)),
+      m_gitIntegration(nullptr), m_backgroundColor(QColor(40, 40, 40)),
       m_textColor(QColor(Qt::gray).lighter(150)), m_heatmapEnabled(false),
-      m_blameTextWidth(0),
-      m_foldingEnabled(true) {
+      m_blameTextWidth(0), m_foldingEnabled(true) {
   if (editor) {
     m_font = editor->font();
   }
@@ -130,8 +128,8 @@ QColor LineNumberArea::heatmapColor(qint64 timestamp) const {
   // Find min/max timestamps for normalization
   qint64 minTs = std::numeric_limits<qint64>::max();
   qint64 maxTs = 0;
-  for (auto it = m_heatmapTimestamps.cbegin();
-       it != m_heatmapTimestamps.cend(); ++it) {
+  for (auto it = m_heatmapTimestamps.cbegin(); it != m_heatmapTimestamps.cend();
+       ++it) {
     if (it.value() < minTs)
       minTs = it.value();
     if (it.value() > maxTs)
@@ -184,29 +182,28 @@ LineNumberArea::buildRichBlameTooltip(const GitBlameLineInfo &info) const {
       .arg(info.summary.toHtmlEscaped());
 }
 
-QString
-LineNumberArea::buildDiffHunkTooltip(const GitDiffHunk &hunk) const {
+QString LineNumberArea::buildDiffHunkTooltip(const GitDiffHunk &hunk) const {
   if (hunk.lines.isEmpty()) {
     return QString();
   }
 
-  QString html = QStringLiteral(
-      "<div style='font-family: monospace; font-size: 11px; "
-      "white-space: pre; padding: 4px;'>");
+  QString html =
+      QStringLiteral("<div style='font-family: monospace; font-size: 11px; "
+                     "white-space: pre; padding: 4px;'>");
 
-  html += QStringLiteral(
-      "<div style='color: #888; margin-bottom: 4px;'>%1</div>")
-              .arg(hunk.header.toHtmlEscaped());
+  html +=
+      QStringLiteral("<div style='color: #888; margin-bottom: 4px;'>%1</div>")
+          .arg(hunk.header.toHtmlEscaped());
 
   for (const QString &line : hunk.lines) {
     QString escaped = line.toHtmlEscaped();
     if (!line.isEmpty() && line[0] == '+') {
-      html += QStringLiteral(
-          "<div style='background: rgba(76,175,80,0.2); color: #4caf50;'>%1</div>")
+      html += QStringLiteral("<div style='background: rgba(76,175,80,0.2); "
+                             "color: #4caf50;'>%1</div>")
                   .arg(escaped);
     } else if (!line.isEmpty() && line[0] == '-') {
-      html += QStringLiteral(
-          "<div style='background: rgba(244,67,54,0.2); color: #f44336;'>%1</div>")
+      html += QStringLiteral("<div style='background: rgba(244,67,54,0.2); "
+                             "color: #f44336;'>%1</div>")
                   .arg(escaped);
     } else {
       html += QStringLiteral("<div>%1</div>").arg(escaped);
@@ -331,17 +328,18 @@ bool LineNumberArea::event(QEvent *event) {
                 int shown = 0;
                 for (const auto &stat : stats) {
                   if (shown >= 8) {
-                    tooltip += QStringLiteral(
-                        "<div>... and %1 more files</div>")
-                                   .arg(stats.size() - shown);
+                    tooltip +=
+                        QStringLiteral("<div>... and %1 more files</div>")
+                            .arg(stats.size() - shown);
                     break;
                   }
-                  tooltip += QStringLiteral(
-                      "<div><span style='color:#4caf50;'>+%1</span> "
-                      "<span style='color:#f44336;'>-%2</span> %3</div>")
-                                 .arg(stat.additions)
-                                 .arg(stat.deletions)
-                                 .arg(stat.filePath.toHtmlEscaped());
+                  tooltip +=
+                      QStringLiteral(
+                          "<div><span style='color:#4caf50;'>+%1</span> "
+                          "<span style='color:#f44336;'>-%2</span> %3</div>")
+                          .arg(stat.additions)
+                          .arg(stat.deletions)
+                          .arg(stat.filePath.toHtmlEscaped());
                   ++shown;
                 }
                 tooltip += QStringLiteral("</div>");

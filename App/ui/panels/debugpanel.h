@@ -3,8 +3,8 @@
 
 #include <QColor>
 #include <QComboBox>
-#include <QLineEdit>
 #include <QLabel>
+#include <QLineEdit>
 #include <QSet>
 #include <QSplitter>
 #include <QTabWidget>

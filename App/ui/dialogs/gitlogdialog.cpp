@@ -3,6 +3,8 @@
 #include "../../ui/uistylehelper.h"
 #include "../widgets/gitgraphwidget.h"
 
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QLabel>
@@ -15,8 +17,6 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
-#include <QClipboard>
-#include <QGuiApplication>
 
 GitLogDialog::GitLogDialog(GitIntegration *git, const Theme &theme,
                            QWidget *parent)
@@ -91,8 +91,8 @@ void GitLogDialog::buildUi() {
             auto *item = m_commitTree->itemAt(pos);
             if (item) {
               QString hash = item->data(0, Qt::UserRole).toString();
-              showContextMenuForCommit(hash,
-                                       m_commitTree->viewport()->mapToGlobal(pos));
+              showContextMenuForCommit(
+                  hash, m_commitTree->viewport()->mapToGlobal(pos));
             }
           });
 

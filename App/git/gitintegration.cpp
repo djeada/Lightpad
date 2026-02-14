@@ -917,21 +917,20 @@ GitIntegration::getBlameInfo(const QString &filePath) const {
       }
 
       if (line.startsWith("author-time ")) {
-        qint64 timestamp = line.mid(QString("author-time ").size()).toLongLong();
+        qint64 timestamp =
+            line.mid(QString("author-time ").size()).toLongLong();
         QDateTime dt = QDateTime::fromSecsSinceEpoch(timestamp);
         current.date = dt.toString(Qt::ISODate);
-        qint64 secsAgo = QDateTime::currentDateTime().toSecsSinceEpoch() - timestamp;
+        qint64 secsAgo =
+            QDateTime::currentDateTime().toSecsSinceEpoch() - timestamp;
         if (secsAgo < 60)
           current.relativeDate = "just now";
         else if (secsAgo < 3600)
-          current.relativeDate =
-              QString("%1 minutes ago").arg(secsAgo / 60);
+          current.relativeDate = QString("%1 minutes ago").arg(secsAgo / 60);
         else if (secsAgo < 86400)
-          current.relativeDate =
-              QString("%1 hours ago").arg(secsAgo / 3600);
+          current.relativeDate = QString("%1 hours ago").arg(secsAgo / 3600);
         else if (secsAgo < 2592000)
-          current.relativeDate =
-              QString("%1 days ago").arg(secsAgo / 86400);
+          current.relativeDate = QString("%1 days ago").arg(secsAgo / 86400);
         else if (secsAgo < 31536000)
           current.relativeDate =
               QString("%1 months ago").arg(secsAgo / 2592000);
@@ -991,9 +990,8 @@ void GitIntegration::refresh() {
   emit statusChanged();
 }
 
-GitDiffHunk
-GitIntegration::getDiffHunkAtLine(const QString &filePath,
-                                  int lineNumber) const {
+GitDiffHunk GitIntegration::getDiffHunkAtLine(const QString &filePath,
+                                              int lineNumber) const {
   GitDiffHunk result;
   if (!m_isValid) {
     return result;
@@ -1015,8 +1013,7 @@ GitIntegration::getDiffHunkAtLine(const QString &filePath,
     return result;
   }
 
-  QRegularExpression hunkHeader(
-      R"(@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@.*)");
+  QRegularExpression hunkHeader(R"(@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@.*)");
   QStringList lines = output.split('\n');
 
   int i = 0;
@@ -1028,8 +1025,7 @@ GitIntegration::getDiffHunkAtLine(const QString &filePath,
     }
 
     int hunkStart = match.captured(1).toInt();
-    int hunkCount =
-        match.captured(2).isEmpty() ? 1 : match.captured(2).toInt();
+    int hunkCount = match.captured(2).isEmpty() ? 1 : match.captured(2).toInt();
     QString header = lines[i];
     QStringList hunkLines;
     ++i;
@@ -1044,8 +1040,7 @@ GitIntegration::getDiffHunkAtLine(const QString &filePath,
       ++i;
     }
 
-    if (lineNumber >= hunkStart &&
-        lineNumber < hunkStart + hunkCount) {
+    if (lineNumber >= hunkStart && lineNumber < hunkStart + hunkCount) {
       result.startLine = hunkStart;
       result.lineCount = hunkCount;
       result.header = header;
@@ -1084,8 +1079,8 @@ GitIntegration::getCommitFileStats(const QString &commitHash) const {
   return result;
 }
 
-QList<GitCommitInfo>
-GitIntegration::getFileLog(const QString &filePath, int maxCount) const {
+QList<GitCommitInfo> GitIntegration::getFileLog(const QString &filePath,
+                                                int maxCount) const {
   QList<GitCommitInfo> result;
   if (!m_isValid || filePath.isEmpty()) {
     return result;
@@ -1098,11 +1093,10 @@ GitIntegration::getFileLog(const QString &filePath, int maxCount) const {
 
   QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P%x00%b";
   bool success;
-  QString output = executeGitCommand(
-      {"log", QString("-n%1").arg(maxCount),
-       QString("--pretty=format:%1").arg(format), "--follow", "--",
-       relativePath},
-      &success);
+  QString output = executeGitCommand({"log", QString("-n%1").arg(maxCount),
+                                      QString("--pretty=format:%1").arg(format),
+                                      "--follow", "--", relativePath},
+                                     &success);
 
   if (!success || output.isEmpty()) {
     return result;
@@ -1161,9 +1155,9 @@ GitIntegration::getFileLog(const QString &filePath, int maxCount) const {
   return result;
 }
 
-QList<GitCommitInfo>
-GitIntegration::getLineHistory(const QString &filePath, int startLine,
-                               int endLine) const {
+QList<GitCommitInfo> GitIntegration::getLineHistory(const QString &filePath,
+                                                    int startLine,
+                                                    int endLine) const {
   QList<GitCommitInfo> result;
   if (!m_isValid || filePath.isEmpty()) {
     return result;
@@ -1175,11 +1169,12 @@ GitIntegration::getLineHistory(const QString &filePath, int startLine,
   }
 
   // Use git log -L to get line-range history
-  QString range = QString("-L%1,%2:%3").arg(startLine).arg(endLine).arg(relativePath);
+  QString range =
+      QString("-L%1,%2:%3").arg(startLine).arg(endLine).arg(relativePath);
   bool success;
   QString output = executeGitCommand(
-      {"log", "--no-patch", "--pretty=format:%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s",
-       range},
+      {"log", "--no-patch",
+       "--pretty=format:%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s", range},
       &success);
 
   if (!success || output.isEmpty()) {
@@ -1291,8 +1286,7 @@ bool GitIntegration::stageHunkAtLine(const QString &filePath, int lineNumber) {
   }
 
   // Write patch to temp file and apply
-  QString tempPath =
-      QDir::temp().filePath("lightpad_stage_hunk.patch");
+  QString tempPath = QDir::temp().filePath("lightpad_stage_hunk.patch");
   QFile tempFile(tempPath);
   if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
     return false;
@@ -1310,8 +1304,7 @@ bool GitIntegration::stageHunkAtLine(const QString &filePath, int lineNumber) {
   return success;
 }
 
-bool GitIntegration::revertHunkAtLine(const QString &filePath,
-                                      int lineNumber) {
+bool GitIntegration::revertHunkAtLine(const QString &filePath, int lineNumber) {
   GitDiffHunk hunk = getDiffHunkAtLine(filePath, lineNumber);
   if (hunk.lines.isEmpty()) {
     return false;
@@ -1330,8 +1323,7 @@ bool GitIntegration::revertHunkAtLine(const QString &filePath,
     patch += line + '\n';
   }
 
-  QString tempPath =
-      QDir::temp().filePath("lightpad_revert_hunk.patch");
+  QString tempPath = QDir::temp().filePath("lightpad_revert_hunk.patch");
   QFile tempFile(tempPath);
   if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
     return false;
@@ -2046,16 +2038,14 @@ bool GitIntegration::cherryPick(const QString &commitHash) {
     return false;
 
   bool success;
-  QString output =
-      executeGitCommand({"cherry-pick", commitHash}, &success);
+  QString output = executeGitCommand({"cherry-pick", commitHash}, &success);
 
   if (success) {
     emit operationCompleted(
         QString("Cherry-picked %1").arg(commitHash.left(7)));
     emit statusChanged();
   } else {
-    emit errorOccurred(
-        QString("Cherry-pick failed: %1").arg(output.trimmed()));
+    emit errorOccurred(QString("Cherry-pick failed: %1").arg(output.trimmed()));
   }
 
   return success;
@@ -2121,8 +2111,7 @@ bool GitIntegration::removeWorktree(const QString &path) {
     return false;
 
   bool success;
-  QString output =
-      executeGitCommand({"worktree", "remove", path}, &success);
+  QString output = executeGitCommand({"worktree", "remove", path}, &success);
 
   if (success) {
     emit operationCompleted(QString("Removed worktree at %1").arg(path));
@@ -2134,8 +2123,8 @@ bool GitIntegration::removeWorktree(const QString &path) {
   return success;
 }
 
-QMap<int, qint64> GitIntegration::getBlameTimestamps(
-    const QString &filePath) const {
+QMap<int, qint64>
+GitIntegration::getBlameTimestamps(const QString &filePath) const {
   QMap<int, qint64> result;
   if (!m_isValid)
     return result;

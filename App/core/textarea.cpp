@@ -728,47 +728,46 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
               ? tr("Line History (line %1)").arg(startLine)
               : tr("Line History (lines %1-%2)").arg(startLine).arg(endLine));
 
-      connect(lineHistoryAction, &QAction::triggered, this,
-              [this, gitIntegration, filePath, startLine, endLine]() {
-                QList<GitCommitInfo> commits =
-                    gitIntegration->getLineHistory(filePath, startLine,
-                                                   endLine);
-                if (commits.isEmpty()) {
-                  return;
-                }
-                // Show in a simple dialog
-                QString html = QStringLiteral(
-                    "<html><body style='font-family: monospace;'>"
-                    "<h3>Line History: lines %1-%2</h3>")
-                                   .arg(startLine)
-                                   .arg(endLine);
-                for (const auto &c : commits) {
-                  html += QStringLiteral(
-                      "<div style='margin: 6px 0; padding: 4px; "
-                      "border-left: 3px solid #4caf50;'>"
-                      "<b>%1</b> %2<br>"
-                      "<span style='color:#888;'>%3 — %4</span></div>")
-                              .arg(c.shortHash.toHtmlEscaped())
-                              .arg(c.subject.toHtmlEscaped())
-                              .arg(c.author.toHtmlEscaped())
-                              .arg(c.relativeDate.toHtmlEscaped());
-                }
-                html += "</body></html>";
+      connect(
+          lineHistoryAction, &QAction::triggered, this,
+          [this, gitIntegration, filePath, startLine, endLine]() {
+            QList<GitCommitInfo> commits =
+                gitIntegration->getLineHistory(filePath, startLine, endLine);
+            if (commits.isEmpty()) {
+              return;
+            }
+            // Show in a simple dialog
+            QString html =
+                QStringLiteral("<html><body style='font-family: monospace;'>"
+                               "<h3>Line History: lines %1-%2</h3>")
+                    .arg(startLine)
+                    .arg(endLine);
+            for (const auto &c : commits) {
+              html += QStringLiteral(
+                          "<div style='margin: 6px 0; padding: 4px; "
+                          "border-left: 3px solid #4caf50;'>"
+                          "<b>%1</b> %2<br>"
+                          "<span style='color:#888;'>%3 — %4</span></div>")
+                          .arg(c.shortHash.toHtmlEscaped())
+                          .arg(c.subject.toHtmlEscaped())
+                          .arg(c.author.toHtmlEscaped())
+                          .arg(c.relativeDate.toHtmlEscaped());
+            }
+            html += "</body></html>";
 
-                QDialog dlg(this);
-                dlg.setWindowTitle(tr("Line History"));
-                dlg.resize(500, 400);
-                auto *layout = new QVBoxLayout(&dlg);
-                auto *view = new QTextEdit(&dlg);
-                view->setReadOnly(true);
-                view->setHtml(html);
-                layout->addWidget(view);
-                auto *closeBtn = new QPushButton(tr("Close"), &dlg);
-                connect(closeBtn, &QPushButton::clicked, &dlg,
-                        &QDialog::accept);
-                layout->addWidget(closeBtn);
-                dlg.exec();
-              });
+            QDialog dlg(this);
+            dlg.setWindowTitle(tr("Line History"));
+            dlg.resize(500, 400);
+            auto *layout = new QVBoxLayout(&dlg);
+            auto *view = new QTextEdit(&dlg);
+            view->setReadOnly(true);
+            view->setHtml(html);
+            layout->addWidget(view);
+            auto *closeBtn = new QPushButton(tr("Close"), &dlg);
+            connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+            layout->addWidget(closeBtn);
+            dlg.exec();
+          });
 
       QAction *fileHistoryAction = menu->addAction(tr("File History"));
       connect(fileHistoryAction, &QAction::triggered, this, [this]() {
@@ -779,47 +778,47 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
 
       QAction *openAtRevisionAction =
           menu->addAction(tr("Open File at Revision..."));
-      connect(openAtRevisionAction, &QAction::triggered, this,
-              [this, gitIntegration, filePath]() {
-                // Get recent commits for this file to pick from
-                QList<GitCommitInfo> commits =
-                    gitIntegration->getFileLog(filePath, 20);
-                if (commits.isEmpty())
-                  return;
+      connect(
+          openAtRevisionAction, &QAction::triggered, this,
+          [this, gitIntegration, filePath]() {
+            // Get recent commits for this file to pick from
+            QList<GitCommitInfo> commits =
+                gitIntegration->getFileLog(filePath, 20);
+            if (commits.isEmpty())
+              return;
 
-                QStringList items;
-                for (const auto &c : commits) {
-                  items << QString("%1 — %2 (%3)")
-                               .arg(c.shortHash)
-                               .arg(c.subject)
-                               .arg(c.relativeDate);
-                }
+            QStringList items;
+            for (const auto &c : commits) {
+              items << QString("%1 — %2 (%3)")
+                           .arg(c.shortHash)
+                           .arg(c.subject)
+                           .arg(c.relativeDate);
+            }
 
-                bool ok;
-                QString selected = QInputDialog::getItem(
-                    this, tr("Open File at Revision"),
-                    tr("Select a revision:"), items, 0, false, &ok);
-                if (!ok || selected.isEmpty())
-                  return;
+            bool ok;
+            QString selected = QInputDialog::getItem(
+                this, tr("Open File at Revision"), tr("Select a revision:"),
+                items, 0, false, &ok);
+            if (!ok || selected.isEmpty())
+              return;
 
-                int idx = items.indexOf(selected);
-                if (idx < 0 || idx >= commits.size())
-                  return;
+            int idx = items.indexOf(selected);
+            if (idx < 0 || idx >= commits.size())
+              return;
 
-                QString content = gitIntegration->getFileAtRevision(
-                    filePath, commits[idx].hash);
-                if (content.isEmpty())
-                  return;
+            QString content =
+                gitIntegration->getFileAtRevision(filePath, commits[idx].hash);
+            if (content.isEmpty())
+              return;
 
-                // Open in a new read-only tab
-                if (mainWindow) {
-                  mainWindow->openReadOnlyTab(
-                      content,
-                      QFileInfo(filePath).fileName() + " @ " +
-                          commits[idx].shortHash,
-                      filePath);
-                }
-              });
+            // Open in a new read-only tab
+            if (mainWindow) {
+              mainWindow->openReadOnlyTab(content,
+                                          QFileInfo(filePath).fileName() +
+                                              " @ " + commits[idx].shortHash,
+                                          filePath);
+            }
+          });
     }
   }
 
@@ -1819,8 +1818,7 @@ void TextArea::clearGitBlameLines() {
   }
 }
 
-void TextArea::setRichBlameData(
-    const QMap<int, GitBlameLineInfo> &blameData) {
+void TextArea::setRichBlameData(const QMap<int, GitBlameLineInfo> &blameData) {
   if (lineNumberArea) {
     lineNumberArea->setRichBlameData(blameData);
   }

@@ -580,23 +580,22 @@ void SourceControlPanel::setupRepoUI() {
   auto *compareBranchesButton =
       new QPushButton("\u2194 Compare Branches", branchSection);
   compareBranchesButton->setToolTip(tr("Compare two branches"));
-  compareBranchesButton->setStyleSheet(
-      "QPushButton {"
-      "  background: #21262d;"
-      "  color: #79c0ff;"
-      "  border: 1px solid #30363d;"
-      "  border-radius: 6px;"
-      "  padding: 4px 8px;"
-      "  font-size: 11px;"
-      "}"
-      "QPushButton:hover {"
-      "  background: #1f6feb;"
-      "  color: white;"
-      "  border-color: #1f6feb;"
-      "}"
-      "QPushButton:pressed {"
-      "  background: #1a5cd6;"
-      "}");
+  compareBranchesButton->setStyleSheet("QPushButton {"
+                                       "  background: #21262d;"
+                                       "  color: #79c0ff;"
+                                       "  border: 1px solid #30363d;"
+                                       "  border-radius: 6px;"
+                                       "  padding: 4px 8px;"
+                                       "  font-size: 11px;"
+                                       "}"
+                                       "QPushButton:hover {"
+                                       "  background: #1f6feb;"
+                                       "  color: white;"
+                                       "  border-color: #1f6feb;"
+                                       "}"
+                                       "QPushButton:pressed {"
+                                       "  background: #1a5cd6;"
+                                       "}");
   connect(compareBranchesButton, &QPushButton::clicked, this, [this]() {
     if (!m_git || !m_git->isValidRepository())
       return;
@@ -652,8 +651,7 @@ void SourceControlPanel::setupRepoUI() {
   });
   remoteOpsLayout->addWidget(compareBranchesButton);
 
-  auto *worktreeButton =
-      new QPushButton("📂 Worktrees", branchSection);
+  auto *worktreeButton = new QPushButton("📂 Worktrees", branchSection);
   worktreeButton->setToolTip(tr("Manage Git worktrees"));
   worktreeButton->setStyleSheet(
       "QPushButton {"
@@ -702,8 +700,8 @@ void SourceControlPanel::setupRepoUI() {
                                            tr("Directory path:"));
       if (path.isEmpty())
         return;
-      QString branch = QInputDialog::getText(&dlg, tr("Branch"),
-                                             tr("Branch name:"));
+      QString branch =
+          QInputDialog::getText(&dlg, tr("Branch"), tr("Branch name:"));
       if (branch.isEmpty())
         return;
       if (m_git->addWorktree(path, branch, true)) {

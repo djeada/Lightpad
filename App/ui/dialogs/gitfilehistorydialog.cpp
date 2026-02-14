@@ -2,13 +2,13 @@
 #include "../../git/gitintegration.h"
 
 #include <QBoxLayout>
+#include <QFileInfo>
 #include <QHeaderView>
 #include <QLabel>
 #include <QPushButton>
 #include <QSplitter>
 #include <QTextEdit>
 #include <QTreeWidget>
-#include <QFileInfo>
 
 GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
                                            const QString &filePath,
@@ -19,8 +19,7 @@ GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
 
   auto *layout = new QVBoxLayout(this);
 
-  m_titleLabel = new QLabel(
-      tr("History for: <b>%1</b>").arg(filePath), this);
+  m_titleLabel = new QLabel(tr("History for: <b>%1</b>").arg(filePath), this);
   layout->addWidget(m_titleLabel);
 
   auto *splitter = new QSplitter(Qt::Vertical, this);
@@ -32,9 +31,12 @@ GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
   m_commitTree->setRootIsDecorated(false);
   m_commitTree->setAlternatingRowColors(true);
   m_commitTree->header()->setStretchLastSection(true);
-  m_commitTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-  m_commitTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-  m_commitTree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+  m_commitTree->header()->setSectionResizeMode(0,
+                                               QHeaderView::ResizeToContents);
+  m_commitTree->header()->setSectionResizeMode(1,
+                                               QHeaderView::ResizeToContents);
+  m_commitTree->header()->setSectionResizeMode(2,
+                                               QHeaderView::ResizeToContents);
   splitter->addWidget(m_commitTree);
 
   // Detail view
@@ -64,7 +66,8 @@ GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
 }
 
 void GitFileHistoryDialog::loadHistory() {
-  if (!m_git) return;
+  if (!m_git)
+    return;
 
   QList<GitCommitInfo> commits = m_git->getFileLog(m_filePath, 100);
   for (const auto &commit : commits) {
@@ -79,16 +82,17 @@ void GitFileHistoryDialog::loadHistory() {
 
 void GitFileHistoryDialog::onCommitSelected(QTreeWidgetItem *current,
                                             QTreeWidgetItem *) {
-  if (!current || !m_git) return;
+  if (!current || !m_git)
+    return;
 
   QString hash = current->data(0, Qt::UserRole).toString();
   GitCommitInfo info = m_git->getCommitDetails(hash);
   showCommitDetails(info);
 }
 
-void GitFileHistoryDialog::onCommitDoubleClicked(QTreeWidgetItem *item,
-                                                 int) {
-  if (!item) return;
+void GitFileHistoryDialog::onCommitDoubleClicked(QTreeWidgetItem *item, int) {
+  if (!item)
+    return;
   QString hash = item->data(0, Qt::UserRole).toString();
   emit viewCommitDiff(hash);
 }
@@ -103,22 +107,21 @@ void GitFileHistoryDialog::showCommitDetails(const GitCommitInfo &info) {
       "<div style='margin-top: 8px;'>%6</div>");
 
   if (!info.body.isEmpty()) {
-    html += QStringLiteral(
-        "<div style='margin-top: 8px; color: #ccc;'>%1</div>")
-                .arg(info.body.toHtmlEscaped().replace('\n', "<br>"));
+    html +=
+        QStringLiteral("<div style='margin-top: 8px; color: #ccc;'>%1</div>")
+            .arg(info.body.toHtmlEscaped().replace('\n', "<br>"));
   }
 
   // Show file stats
   QList<GitCommitFileStat> stats = m_git->getCommitFileStats(info.hash);
   if (!stats.isEmpty()) {
     html += QStringLiteral(
-        "<div style='margin-top: 10px; border-top: 1px solid #555; "
-        "padding-top: 6px;'><b>Changed files (%1):</b></div>")
+                "<div style='margin-top: 10px; border-top: 1px solid #555; "
+                "padding-top: 6px;'><b>Changed files (%1):</b></div>")
                 .arg(stats.size());
     for (const auto &stat : stats) {
-      html += QStringLiteral(
-          "<div><span style='color:#4caf50;'>+%1</span> "
-          "<span style='color:#f44336;'>-%2</span> %3</div>")
+      html += QStringLiteral("<div><span style='color:#4caf50;'>+%1</span> "
+                             "<span style='color:#f44336;'>-%2</span> %3</div>")
                   .arg(stat.additions)
                   .arg(stat.deletions)
                   .arg(stat.filePath.toHtmlEscaped());
@@ -127,11 +130,10 @@ void GitFileHistoryDialog::showCommitDetails(const GitCommitInfo &info) {
 
   html += QStringLiteral("</div>");
 
-  m_detailView->setHtml(
-      html.arg(info.shortHash.toHtmlEscaped())
-          .arg(info.author.toHtmlEscaped())
-          .arg(info.authorEmail.toHtmlEscaped())
-          .arg(info.date.toHtmlEscaped())
-          .arg(info.relativeDate.toHtmlEscaped())
-          .arg(info.subject.toHtmlEscaped()));
+  m_detailView->setHtml(html.arg(info.shortHash.toHtmlEscaped())
+                            .arg(info.author.toHtmlEscaped())
+                            .arg(info.authorEmail.toHtmlEscaped())
+                            .arg(info.date.toHtmlEscaped())
+                            .arg(info.relativeDate.toHtmlEscaped())
+                            .arg(info.subject.toHtmlEscaped()));
 }

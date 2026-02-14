@@ -355,8 +355,7 @@ public:
    * @param commitHash The commit hash
    * @return List of files changed with addition/deletion counts
    */
-  QList<GitCommitFileStat>
-  getCommitFileStats(const QString &commitHash) const;
+  QList<GitCommitFileStat> getCommitFileStats(const QString &commitHash) const;
 
   /**
    * @brief Get commit history for a specific file
@@ -392,8 +391,7 @@ public:
    * @param branch2 Second branch name
    * @return Diff output as string
    */
-  QString getBranchDiff(const QString &branch1,
-                        const QString &branch2) const;
+  QString getBranchDiff(const QString &branch1, const QString &branch2) const;
 
   /**
    * @brief Get ahead/behind counts for current branch vs upstream

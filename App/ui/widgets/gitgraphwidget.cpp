@@ -234,8 +234,7 @@ void GitGraphWidget::paintEvent(QPaintEvent * /*event*/) {
     int subjectX = textX + 75;
     int authorX = width() - 250;
     int subjectW = authorX - subjectX - 10;
-    QString elided =
-        fm.elidedText(node.info.subject, Qt::ElideRight, subjectW);
+    QString elided = fm.elidedText(node.info.subject, Qt::ElideRight, subjectW);
     painter.drawText(subjectX, y, subjectW, ROW_HEIGHT, Qt::AlignVCenter,
                      elided);
 
@@ -266,13 +265,13 @@ void GitGraphWidget::mouseDoubleClickEvent(QMouseEvent *event) {
 void GitGraphWidget::wheelEvent(QWheelEvent *event) {
   int delta = event->angleDelta().y();
   m_scrollOffset -= delta;
-  m_scrollOffset =
-      qBound(0, m_scrollOffset, qMax(0, m_nodes.size() * ROW_HEIGHT - height()));
+  m_scrollOffset = qBound(0, m_scrollOffset,
+                          qMax(0, m_nodes.size() * ROW_HEIGHT - height()));
   update();
 }
 
 void GitGraphWidget::resizeEvent(QResizeEvent *event) {
   QWidget::resizeEvent(event);
-  m_scrollOffset =
-      qBound(0, m_scrollOffset, qMax(0, m_nodes.size() * ROW_HEIGHT - height()));
+  m_scrollOffset = qBound(0, m_scrollOffset,
+                          qMax(0, m_nodes.size() * ROW_HEIGHT - height()));
 }
