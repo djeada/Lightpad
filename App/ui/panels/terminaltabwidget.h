@@ -11,7 +11,7 @@ class QHBoxLayout;
 class QSplitter;
 class QMenu;
 class QComboBox;
-class Theme;
+struct Theme;
 
 class TerminalTabWidget : public QWidget {
   Q_OBJECT
