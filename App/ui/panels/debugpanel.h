@@ -111,6 +111,7 @@ private:
   int findPendingConsoleEvaluationIndex(const QString &requestExpression) const;
   void dispatchPendingConsoleEvaluation(int pendingIndex);
   void resizeVariablesNameColumnOnce();
+  bool hasLocalsFallbackCommand() const;
   void requestLocalsFallback(int scopeVariablesReference);
   void populateLocalsFromGdbEvaluate(int scopeVariablesReference,
                                      const QString &rawResult);

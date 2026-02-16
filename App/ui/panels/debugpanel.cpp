@@ -918,6 +918,7 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     }
   }
   int eagerLoadsRemaining = MAX_EAGER_SCOPE_LOADS;
+  const bool preferLocalsFallback = hasLocalsFallbackCommand();
 
   for (const DapScope &scope : scopes) {
     const QString lowered = scope.name.trimmed().toLower();
@@ -926,7 +927,9 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     const bool autoLoadScope =
         eagerScopeRefs.contains(scope.variablesReference) &&
         eagerLoadsRemaining > 0;
-    const bool shouldLoadLocals = localScope && !scope.expensive && !registerScope;
+    const bool shouldLoadLocals =
+        localScope && !scope.expensive && !registerScope &&
+        !preferLocalsFallback;
     const bool shouldLoadScopeVariables =
         shouldLoadLocals ||
         (!scope.expensive && !registerScope && !localScope && autoLoadScope);
@@ -948,7 +951,12 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     m_variablesTree->addTopLevelItem(scopeItem);
 
     if (scope.variablesReference > 0) {
-      if (shouldLoadScopeVariables) {
+      if (localScope && preferLocalsFallback && !scope.expensive &&
+          !registerScope) {
+        m_variableRefToItem[scope.variablesReference] = scopeItem;
+        scopeItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+        requestLocalsFallback(scope.variablesReference);
+      } else if (shouldLoadScopeVariables) {
         m_variableRefToItem[scope.variablesReference] = scopeItem;
         m_pendingScopeVariableLoads.insert(scope.variablesReference);
         m_pendingVariableRequests.insert(scope.variablesReference);
@@ -998,7 +1006,8 @@ void DebugPanel::onVariablesReceived(int variablesReference,
   bool requestedLocalFallback = false;
   if (variables.isEmpty() && !parentItem->parent()) {
     const QString scopeName = parentItem->text(0).trimmed().toLower();
-    if (scopeName.contains(QLatin1String("local"))) {
+    if (scopeName.contains(QLatin1String("local")) &&
+        hasLocalsFallbackCommand()) {
       requestLocalsFallback(variablesReference);
       requestedLocalFallback = true;
     }
@@ -1071,6 +1080,17 @@ void DebugPanel::requestLocalsFallback(int scopeVariablesReference) {
   m_localsFallbackScopeRef = scopeVariablesReference;
   m_localsFallbackPendingExpression = requestExpr;
   m_dapClient->evaluate(requestExpr, m_currentFrameId, evalContext);
+}
+
+bool DebugPanel::hasLocalsFallbackCommand() const {
+  if (!m_dapClient) {
+    return false;
+  }
+
+  const DebugEvaluateRequest localsRequest =
+      DebugExpressionTranslator::localsFallbackRequest(m_dapClient->adapterId(),
+                                                       m_dapClient->adapterType());
+  return !localsRequest.expression.trimmed().isEmpty();
 }
 
 void DebugPanel::populateLocalsFromGdbEvaluate(int scopeVariablesReference,
@@ -1173,12 +1193,13 @@ void DebugPanel::onVariableItemExpanded(QTreeWidgetItem *item) {
     if (scopeName.contains(QLatin1String("local"))) {
       const int localScopeRef = item->data(0, Qt::UserRole).toInt();
       if (localScopeRef > 0 && item->childCount() == 0) {
-        if (m_dapClient && !m_pendingVariableRequests.contains(localScopeRef)) {
+        if (hasLocalsFallbackCommand()) {
+          requestLocalsFallback(localScopeRef);
+        } else if (m_dapClient &&
+                   !m_pendingVariableRequests.contains(localScopeRef)) {
           m_variableRefToItem[localScopeRef] = item;
           m_pendingVariableRequests.insert(localScopeRef);
           m_dapClient->getVariables(localScopeRef);
-        } else if (!m_dapClient) {
-          requestLocalsFallback(localScopeRef);
         }
       }
       return;
