@@ -232,25 +232,27 @@ RunTemplate RunTemplateManager::getTemplateById(const QString &id) const {
   return RunTemplate();
 }
 
-QString RunTemplateManager::getConfigDirForFile(const QString &filePath) const {
-  QFileInfo fileInfo(filePath);
-  return fileInfo.absoluteDir().path() + "/.lightpad";
+void RunTemplateManager::setWorkspaceFolder(const QString &folder) {
+  if (m_workspaceFolder != folder) {
+    m_workspaceFolder = folder;
+    m_assignmentsLoaded = false;
+    m_assignments.clear();
+  }
 }
 
-QString RunTemplateManager::getConfigFileForDir(const QString &dirPath) const {
-  return dirPath + "/run_config.json";
-}
-
-bool RunTemplateManager::loadAssignmentsFromDir(const QString &dirPath) const {
-  QString configDir = dirPath + "/.lightpad";
-  QString configFile = configDir + "/run_config.json";
-
-  if (m_loadedConfigDirs.contains(configDir)) {
+bool RunTemplateManager::loadAssignments() const {
+  if (m_assignmentsLoaded) {
     return true;
   }
 
+  if (m_workspaceFolder.isEmpty()) {
+    return false;
+  }
+
+  QString configFile = m_workspaceFolder + "/.lightpad/run_config.json";
+
   if (!QFileInfo(configFile).exists()) {
-    m_loadedConfigDirs.insert(configDir);
+    m_assignmentsLoaded = true;
     return true;
   }
 
@@ -282,7 +284,7 @@ bool RunTemplateManager::loadAssignmentsFromDir(const QString &dirPath) const {
     assignment.templateId = obj.value("template").toString();
 
     if (!QFileInfo(assignment.filePath).isAbsolute()) {
-      assignment.filePath = dirPath + "/" + assignment.filePath;
+      assignment.filePath = m_workspaceFolder + "/" + assignment.filePath;
     }
 
     QJsonArray argsArray = obj.value("customArgs").toArray();
@@ -295,47 +297,97 @@ bool RunTemplateManager::loadAssignmentsFromDir(const QString &dirPath) const {
       assignment.customEnv[it.key()] = it.value().toString();
     }
 
+    QJsonArray srcArray = obj.value("sourceFiles").toArray();
+    for (const QJsonValue &src : srcArray) {
+      assignment.sourceFiles.append(src.toString());
+    }
+
+    assignment.workingDirectory = obj.value("workingDirectory").toString();
+
+    QJsonArray flagsArray = obj.value("compilerFlags").toArray();
+    for (const QJsonValue &flag : flagsArray) {
+      assignment.compilerFlags.append(flag.toString());
+    }
+
+    assignment.preRunCommand = obj.value("preRunCommand").toString();
+    assignment.postRunCommand = obj.value("postRunCommand").toString();
+
     m_assignments[assignment.filePath] = assignment;
   }
 
-  m_loadedConfigDirs.insert(configDir);
-  LOG_INFO(QString("Loaded %1 assignments from %2")
+  m_assignmentsLoaded = true;
+  LOG_INFO(QString("Loaded %1 run assignments from %2")
                .arg(assignments.size())
                .arg(configFile));
   return true;
 }
 
-bool RunTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
-  QString configDir = dirPath + "/.lightpad";
+bool RunTemplateManager::saveAssignments() const {
+  if (m_workspaceFolder.isEmpty()) {
+    LOG_WARNING("Cannot save run config: workspace folder not set");
+    return false;
+  }
+
+  QString configDir = m_workspaceFolder + "/.lightpad";
   QString configFile = configDir + "/run_config.json";
 
-  QJsonArray assignments;
+  QJsonArray assignmentsArray;
   for (auto it = m_assignments.begin(); it != m_assignments.end(); ++it) {
-    QFileInfo fileInfo(it.key());
-    if (fileInfo.absoluteDir().path() == dirPath) {
-      QJsonObject obj;
-      obj["file"] = fileInfo.fileName();
-      obj["template"] = it.value().templateId;
+    QJsonObject obj;
 
-      if (!it.value().customArgs.isEmpty()) {
-        QJsonArray argsArray;
-        for (const QString &arg : it.value().customArgs) {
-          argsArray.append(arg);
-        }
-        obj["customArgs"] = argsArray;
-      }
-
-      if (!it.value().customEnv.isEmpty()) {
-        QJsonObject envObj;
-        for (auto envIt = it.value().customEnv.begin();
-             envIt != it.value().customEnv.end(); ++envIt) {
-          envObj[envIt.key()] = envIt.value();
-        }
-        obj["customEnv"] = envObj;
-      }
-
-      assignments.append(obj);
+    QString storedPath = it.key();
+    if (storedPath.startsWith(m_workspaceFolder + "/")) {
+      storedPath = storedPath.mid(m_workspaceFolder.length() + 1);
     }
+    obj["file"] = storedPath;
+    obj["template"] = it.value().templateId;
+
+    if (!it.value().customArgs.isEmpty()) {
+      QJsonArray argsArray;
+      for (const QString &arg : it.value().customArgs) {
+        argsArray.append(arg);
+      }
+      obj["customArgs"] = argsArray;
+    }
+
+    if (!it.value().customEnv.isEmpty()) {
+      QJsonObject envObj;
+      for (auto envIt = it.value().customEnv.begin();
+           envIt != it.value().customEnv.end(); ++envIt) {
+        envObj[envIt.key()] = envIt.value();
+      }
+      obj["customEnv"] = envObj;
+    }
+
+    if (!it.value().sourceFiles.isEmpty()) {
+      QJsonArray srcArray;
+      for (const QString &src : it.value().sourceFiles) {
+        srcArray.append(src);
+      }
+      obj["sourceFiles"] = srcArray;
+    }
+
+    if (!it.value().workingDirectory.isEmpty()) {
+      obj["workingDirectory"] = it.value().workingDirectory;
+    }
+
+    if (!it.value().compilerFlags.isEmpty()) {
+      QJsonArray flagsArray;
+      for (const QString &flag : it.value().compilerFlags) {
+        flagsArray.append(flag);
+      }
+      obj["compilerFlags"] = flagsArray;
+    }
+
+    if (!it.value().preRunCommand.isEmpty()) {
+      obj["preRunCommand"] = it.value().preRunCommand;
+    }
+
+    if (!it.value().postRunCommand.isEmpty()) {
+      obj["postRunCommand"] = it.value().postRunCommand;
+    }
+
+    assignmentsArray.append(obj);
   }
 
   QDir dir;
@@ -349,7 +401,7 @@ bool RunTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
 
   QJsonObject root;
   root["version"] = "1.0";
-  root["assignments"] = assignments;
+  root["assignments"] = assignmentsArray;
 
   QFile file(configFile);
   if (!file.open(QIODevice::WriteOnly)) {
@@ -361,8 +413,8 @@ bool RunTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
   file.write(doc.toJson(QJsonDocument::Indented));
   file.close();
 
-  LOG_INFO(QString("Saved %1 assignments to %2")
-               .arg(assignments.size())
+  LOG_INFO(QString("Saved %1 run assignments to %2")
+               .arg(assignmentsArray.size())
                .arg(configFile));
   return true;
 }
@@ -370,10 +422,7 @@ bool RunTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
 FileTemplateAssignment
 RunTemplateManager::getAssignmentForFile(const QString &filePath) const {
 
-  QFileInfo fileInfo(filePath);
-  QString dirPath = fileInfo.absoluteDir().path();
-
-  loadAssignmentsFromDir(dirPath);
+  loadAssignments();
 
   auto it = m_assignments.find(filePath);
   if (it != m_assignments.end()) {
@@ -384,20 +433,13 @@ RunTemplateManager::getAssignmentForFile(const QString &filePath) const {
 }
 
 bool RunTemplateManager::assignTemplateToFile(
-    const QString &filePath, const QString &templateId,
-    const QStringList &customArgs, const QMap<QString, QString> &customEnv) {
-  FileTemplateAssignment assignment;
-  assignment.filePath = filePath;
-  assignment.templateId = templateId;
-  assignment.customArgs = customArgs;
-  assignment.customEnv = customEnv;
+    const QString &filePath, const FileTemplateAssignment &assignment) {
+  FileTemplateAssignment stored = assignment;
+  stored.filePath = filePath;
 
-  m_assignments[filePath] = assignment;
+  m_assignments[filePath] = stored;
 
-  QFileInfo fileInfo(filePath);
-  QString dirPath = fileInfo.absoluteDir().path();
-
-  bool saved = saveAssignmentsToDir(dirPath);
+  bool saved = saveAssignments();
 
   if (saved) {
     emit assignmentChanged(filePath);
@@ -412,12 +454,9 @@ bool RunTemplateManager::removeAssignment(const QString &filePath) {
     return true;
   }
 
-  QFileInfo fileInfo(filePath);
-  QString dirPath = fileInfo.absoluteDir().path();
-
   m_assignments.erase(it);
 
-  bool saved = saveAssignmentsToDir(dirPath);
+  bool saved = saveAssignments();
 
   if (saved) {
     emit assignmentChanged(filePath);
@@ -468,10 +507,60 @@ RunTemplateManager::buildCommand(const QString &filePath,
     args.append(substituteVariables(arg, filePath));
   }
 
-  if (!assignment.customArgs.isEmpty()) {
-    for (const QString &arg : assignment.customArgs) {
-      args.append(substituteVariables(arg, filePath));
+  QStringList extraFlags;
+  for (const QString &flag : assignment.compilerFlags) {
+    extraFlags.append(substituteVariables(flag, filePath));
+  }
+
+  QStringList extraArgs;
+  for (const QString &arg : assignment.customArgs) {
+    extraArgs.append(substituteVariables(arg, filePath));
+  }
+
+  QStringList extraSources;
+  for (const QString &src : assignment.sourceFiles) {
+    extraSources.append(substituteVariables(src, filePath));
+  }
+
+  bool hasExtras =
+      !extraFlags.isEmpty() || !extraArgs.isEmpty() || !extraSources.isEmpty();
+
+  bool isBashC = hasExtras && (command == "bash" || command == "sh") &&
+                 args.contains("-c");
+
+  if (isBashC) {
+    int cIdx = args.indexOf("-c");
+    if (cIdx >= 0 && cIdx + 1 < args.size()) {
+      QString shellCmd = args[cIdx + 1];
+
+      QStringList injection;
+      for (const QString &f : extraFlags) {
+        injection.append(f);
+      }
+      for (const QString &a : extraArgs) {
+        injection.append(a);
+      }
+      for (const QString &s : extraSources) {
+        injection.append("\"" + s + "\"");
+      }
+
+      if (!injection.isEmpty()) {
+        QString extra = " " + injection.join(" ");
+
+        int andIdx = shellCmd.indexOf("&&");
+        if (andIdx > 0) {
+          shellCmd.insert(andIdx, extra + " ");
+        } else {
+          shellCmd.append(extra);
+        }
+        args[cIdx + 1] = shellCmd;
+      }
     }
+  } else {
+
+    args.append(extraFlags);
+    args.append(extraArgs);
+    args.append(extraSources);
   }
 
   return qMakePair(command, args);
@@ -481,6 +570,10 @@ QString
 RunTemplateManager::getWorkingDirectory(const QString &filePath,
                                         const QString &languageId) const {
   FileTemplateAssignment assignment = getAssignmentForFile(filePath);
+
+  if (!assignment.workingDirectory.isEmpty()) {
+    return substituteVariables(assignment.workingDirectory, filePath);
+  }
 
   QString templateId = assignment.templateId;
   if (templateId.isEmpty()) {

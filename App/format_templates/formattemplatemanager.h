@@ -26,6 +26,10 @@ struct FileFormatAssignment {
   QString filePath;
   QString templateId;
   QStringList customArgs;
+  QMap<QString, QString> customEnv;
+  QString workingDirectory;
+  QString preFormatCommand;
+  QString postFormatCommand;
 };
 
 class FormatTemplateManager : public QObject {
@@ -44,6 +48,9 @@ public:
   FormatTemplate getTemplateById(const QString &id) const;
 
   FileFormatAssignment getAssignmentForFile(const QString &filePath) const;
+
+  bool assignTemplateToFile(const QString &filePath,
+                            const FileFormatAssignment &assignment);
 
   bool assignTemplateToFile(const QString &filePath, const QString &templateId,
                             const QStringList &customArgs = QStringList());

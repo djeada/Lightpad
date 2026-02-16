@@ -279,6 +279,10 @@ public:
   explicit DapClient(QObject *parent = nullptr);
   ~DapClient();
 
+  void setAdapterMetadata(const QString &adapterId, const QString &adapterType);
+  QString adapterId() const { return m_adapterId; }
+  QString adapterType() const { return m_adapterType; }
+
   bool start(const QString &program, const QStringList &arguments = {});
 
   void stop();
@@ -303,6 +307,7 @@ public:
 
   void configurationDone();
   bool supportsConfigurationDoneRequest() const;
+  bool supportsRestartRequest() const;
 
   void setBreakpoints(const QString &sourcePath,
                       const QList<DapSourceBreakpoint> &breakpoints);
@@ -417,6 +422,7 @@ private:
 
   QJsonObject m_launchConfig;
   bool m_isAttach;
+  QString m_adapterType;
 };
 
 #endif

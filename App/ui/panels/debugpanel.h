@@ -16,6 +16,7 @@
 
 #include "../../dap/breakpointmanager.h"
 #include "../../dap/dapclient.h"
+#include "../../dap/expressiontranslator.h"
 #include "../../dap/watchmanager.h"
 #include "../../settings/theme.h"
 
@@ -107,6 +108,8 @@ private:
   void refreshBreakpointList();
   void appendConsoleLine(const QString &text, const QColor &color,
                          bool bold = false);
+  int findPendingConsoleEvaluationIndex(const QString &requestExpression) const;
+  void dispatchPendingConsoleEvaluation(int pendingIndex);
   void resizeVariablesNameColumnOnce();
   void requestLocalsFallback(int scopeVariablesReference);
   void populateLocalsFromGdbEvaluate(int scopeVariablesReference,
@@ -165,6 +168,12 @@ private:
   bool m_hasLastStopEvent;
   int m_lastStoppedThreadId;
   DapStoppedReason m_lastStoppedReason;
+  struct PendingConsoleEvaluation {
+    QString userExpression;
+    QList<DebugEvaluateRequest> attempts;
+    int activeAttemptIndex = 0;
+  };
+  QList<PendingConsoleEvaluation> m_pendingConsoleEvaluations;
   bool m_localsFallbackPending;
   int m_localsFallbackFrameId;
   int m_localsFallbackScopeRef;

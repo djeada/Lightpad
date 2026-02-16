@@ -247,6 +247,17 @@ bool TerminalTabWidget::runFile(const QString &filePath,
   return terminal->runFile(filePath, languageId);
 }
 
+void TerminalTabWidget::executeCommand(
+    const QString &command, const QStringList &args,
+    const QString &workingDirectory, const QMap<QString, QString> &env) {
+  Terminal *terminal = currentTerminal();
+  if (!terminal) {
+    terminal = addNewTerminal();
+  }
+
+  terminal->executeCommand(command, args, workingDirectory, env);
+}
+
 void TerminalTabWidget::stopCurrentProcess() {
   Terminal *terminal = currentTerminal();
   if (terminal) {

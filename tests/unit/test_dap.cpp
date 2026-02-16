@@ -6,6 +6,7 @@
 #include "dap/dapclient.h"
 #include "dap/debugadapterregistry.h"
 #include "dap/debugconfiguration.h"
+#include "dap/expressiontranslator.h"
 #include "dap/debugsession.h"
 #include "dap/debugsettings.h"
 #include "dap/watchmanager.h"
@@ -52,6 +53,8 @@ private slots:
   void testDapClientEvaluateErrorSignal();
   void testDapClientVariableSetSignal();
   void testDapClientSetDataBreakpoints();
+  void testExpressionTranslatorGdbConsolePlan();
+  void testExpressionTranslatorLocalsFallbackRequest();
 
   void testDebugSessionState();
   void testSessionManagerSingleton();
@@ -764,6 +767,36 @@ void TestDap::testDapClientSetDataBreakpoints() {
   dataBreakpoints.append(bp1);
 
   client.setDataBreakpoints(dataBreakpoints);
+}
+
+void TestDap::testExpressionTranslatorGdbConsolePlan() {
+  const QList<DebugEvaluateRequest> expressionPlan =
+      DebugExpressionTranslator::buildConsoleEvaluationPlan(
+          "a + b", "cppdbg-gdb", "cppdbg");
+  QCOMPARE(expressionPlan.size(), 2);
+  QCOMPARE(expressionPlan.at(0).expression, QString("a + b"));
+  QCOMPARE(expressionPlan.at(0).context, QString("watch"));
+  QCOMPARE(expressionPlan.at(1).expression, QString("print a + b"));
+  QCOMPARE(expressionPlan.at(1).context, QString("repl"));
+
+  const QList<DebugEvaluateRequest> commandPlan =
+      DebugExpressionTranslator::buildConsoleEvaluationPlan(
+          "info locals", "cppdbg-gdb", "cppdbg");
+  QCOMPARE(commandPlan.size(), 1);
+  QCOMPARE(commandPlan.at(0).expression, QString("info locals"));
+  QCOMPARE(commandPlan.at(0).context, QString("repl"));
+}
+
+void TestDap::testExpressionTranslatorLocalsFallbackRequest() {
+  const DebugEvaluateRequest gdbRequest =
+      DebugExpressionTranslator::localsFallbackRequest("cppdbg-gdb", "cppdbg");
+  QCOMPARE(gdbRequest.expression,
+           QString("interpreter-exec console \"info locals\""));
+  QCOMPARE(gdbRequest.context, QString("repl"));
+
+  const DebugEvaluateRequest lldbRequest =
+      DebugExpressionTranslator::localsFallbackRequest("cppdbg-lldb", "cppdbg");
+  QVERIFY(lldbRequest.expression.isEmpty());
 }
 
 QTEST_MAIN(TestDap)

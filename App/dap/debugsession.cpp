@@ -55,6 +55,7 @@ bool DebugSession::start(const DebugConfiguration &config,
   setState(State::Starting);
 
   DebugAdapterConfig adapterConfig = m_adapter->config();
+  m_client->setAdapterMetadata(adapterConfig.id, adapterConfig.type);
   if (!m_client->start(adapterConfig.program, adapterConfig.arguments)) {
     setState(State::Idle);
     emit error("Failed to start debug adapter");
@@ -82,6 +83,14 @@ void DebugSession::stop(bool terminate) {
 void DebugSession::restart() {
   if (m_state == State::Idle) {
     return;
+  }
+
+  if (!m_client->supportsRestartRequest()) {
+    // Manual restart path: relaunch adapter process, then re-run launch/attach.
+    m_launchRequestSent = false;
+    m_adapterInitializedReceived = false;
+    m_configurationDoneSent = false;
+    setState(State::Starting);
   }
 
   m_client->restart();

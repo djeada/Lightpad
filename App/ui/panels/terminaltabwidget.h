@@ -2,6 +2,7 @@
 #define TERMINALTABWIDGET_H
 
 #include <QList>
+#include <QMap>
 #include <QWidget>
 
 class Terminal;
@@ -39,6 +40,11 @@ public:
   void clearCurrentTerminal();
 
   bool runFile(const QString &filePath, const QString &languageId = QString());
+
+  void
+  executeCommand(const QString &command, const QStringList &args,
+                 const QString &workingDirectory,
+                 const QMap<QString, QString> &env = QMap<QString, QString>());
 
   void stopCurrentProcess();
 

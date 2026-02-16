@@ -29,6 +29,7 @@
 #include <QStringListModel>
 #include <QVBoxLayout>
 #include <cstdio>
+#include <functional>
 
 #include "../completion/completionengine.h"
 #include "../completion/completionproviderregistry.h"
@@ -47,6 +48,7 @@
 #include "../run_templates/runtemplatemanager.h"
 #include "../syntax/syntaxpluginregistry.h"
 #include "dialogs/commandpalette.h"
+#include "dialogs/debugconfigurationdialog.h"
 #include "dialogs/filequickopen.h"
 #include "dialogs/formattemplateselector.h"
 #include "dialogs/gitdiffdialog.h"
@@ -105,6 +107,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_debugStartInProgress(false), m_breakpointsSetConnection(),
       m_breakpointChangedConnection(), m_sessionTerminatedConnection(),
       m_sessionErrorConnection(), m_sessionStateConnection(),
+      m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
       m_fileTreeModel(nullptr), m_treeScrollValue(0),
       m_treeScrollValueInitialized(false), m_treeScrollSyncing(false) {
   QApplication::instance()->installEventFilter(this);
@@ -394,8 +397,9 @@ void MainWindow::loadSettings() {
   QString lastProject =
       globalSettings.getValue("lastProjectPath", "").toString();
   if (!lastProject.isEmpty() && QDir(lastProject).exists()) {
-    setProjectRootPath(lastProject);
-    QDir::setCurrent(lastProject);
+    const QString resolvedRoot = resolveProjectRootForPath(lastProject);
+    setProjectRootPath(resolvedRoot.isEmpty() ? lastProject : resolvedRoot);
+    QDir::setCurrent(m_projectRootPath);
   }
 
   loadTreeStateFromSettings(m_projectRootPath);
@@ -848,6 +852,103 @@ void MainWindow::ensureProjectSettings(const QString &path) {
   }
 
   DebugSettings::instance().initialize(path);
+}
+
+QString MainWindow::resolveProjectRootForPath(const QString &path) const {
+  if (path.isEmpty()) {
+    return QString();
+  }
+
+  QFileInfo pathInfo(path);
+  QString startDirPath;
+  if (pathInfo.exists() && pathInfo.isDir()) {
+    startDirPath = pathInfo.absoluteFilePath();
+  } else if (pathInfo.exists()) {
+    startDirPath = pathInfo.absolutePath();
+  } else {
+    QFileInfo absoluteInfo(QDir::current().absoluteFilePath(path));
+    startDirPath = absoluteInfo.isDir() ? absoluteInfo.absoluteFilePath()
+                                        : absoluteInfo.absolutePath();
+  }
+
+  if (startDirPath.isEmpty()) {
+    return QString();
+  }
+
+  QDir dir(startDirPath);
+  QString outermostLightpadRoot;
+
+  while (dir.exists()) {
+    QFileInfo gitInfo(dir.filePath(".git"));
+    if (gitInfo.exists()) {
+      return QDir::cleanPath(dir.absolutePath());
+    }
+
+    QFileInfo lightpadInfo(dir.filePath(".lightpad"));
+    if (lightpadInfo.exists() && lightpadInfo.isDir()) {
+      outermostLightpadRoot = dir.absolutePath();
+    }
+
+    if (!dir.cdUp()) {
+      break;
+    }
+  }
+
+  if (!outermostLightpadRoot.isEmpty()) {
+    return QDir::cleanPath(outermostLightpadRoot);
+  }
+
+  return QDir::cleanPath(startDirPath);
+}
+
+bool MainWindow::isPathWithinRoot(const QString &path,
+                                  const QString &rootPath) const {
+  if (path.isEmpty() || rootPath.isEmpty()) {
+    return false;
+  }
+
+  QFileInfo pathInfo(path);
+  QString normalizedPath =
+      pathInfo.isDir() ? pathInfo.absoluteFilePath() : pathInfo.absolutePath();
+  normalizedPath = QDir::cleanPath(normalizedPath);
+  const QString normalizedRoot = QDir::cleanPath(rootPath);
+
+  if (normalizedPath == normalizedRoot) {
+    return true;
+  }
+
+#ifdef Q_OS_WIN
+  return normalizedPath.startsWith(normalizedRoot + "/") ||
+         normalizedPath.startsWith(normalizedRoot + "\\");
+#else
+  return normalizedPath.startsWith(normalizedRoot + "/");
+#endif
+}
+
+void MainWindow::ensureProjectRootForPath(const QString &path) {
+  const QString resolvedRoot = resolveProjectRootForPath(path);
+  if (resolvedRoot.isEmpty()) {
+    return;
+  }
+
+  const QString normalizedCurrent = QDir::cleanPath(m_projectRootPath);
+  const QString normalizedResolved = QDir::cleanPath(resolvedRoot);
+  if (normalizedCurrent == normalizedResolved) {
+    return;
+  }
+
+  QFileInfo gitInfo(normalizedResolved + "/.git");
+  const bool shouldPromoteToGitRoot =
+      gitInfo.exists() &&
+      (!normalizedCurrent.isEmpty() &&
+       isPathWithinRoot(normalizedCurrent, normalizedResolved));
+
+  if (!shouldPromoteToGitRoot && !normalizedCurrent.isEmpty() &&
+      isPathWithinRoot(path, normalizedCurrent)) {
+    return;
+  }
+
+  setProjectRootPath(normalizedResolved);
 }
 
 template <typename... Args>
@@ -1424,6 +1525,8 @@ void MainWindow::openDialog(Dialog dialog) {
       return;
     }
 
+    ensureProjectRootForPath(filePath);
+
     if (findChildren<RunTemplateSelector *>().isEmpty()) {
       auto selector = new RunTemplateSelector(filePath, this);
       selector->setAttribute(Qt::WA_DeleteOnClose);
@@ -1444,6 +1547,8 @@ void MainWindow::openDialog(Dialog dialog) {
       return;
     }
 
+    ensureProjectRootForPath(filePath);
+
     if (findChildren<FormatTemplateSelector *>().isEmpty()) {
       auto selector = new FormatTemplateSelector(filePath, this);
       selector->setAttribute(Qt::WA_DeleteOnClose);
@@ -1462,24 +1567,17 @@ void MainWindow::openDialog(Dialog dialog) {
           "Please open a file first to configure debug settings.");
       return;
     }
-
-    if (m_projectRootPath.isEmpty()) {
-      setProjectRootPath(QFileInfo(filePath).absolutePath());
-    }
+    ensureProjectRootForPath(filePath);
 
     DebugSettings::instance().initialize(m_projectRootPath);
     DebugConfigurationManager::instance().setWorkspaceFolder(m_projectRootPath);
     DebugConfigurationManager::instance().loadFromLightpadDir();
 
-    QString configPath =
-        DebugConfigurationManager::instance().lightpadLaunchConfigPath();
-    if (configPath.isEmpty()) {
-      QMessageBox::warning(this, "Debug Configurations",
-                           "Unable to locate the debug configuration file.");
-      return;
+    if (findChildren<DebugConfigurationDialog *>().isEmpty()) {
+      auto dialog = new DebugConfigurationDialog(this);
+      dialog->setAttribute(Qt::WA_DeleteOnClose);
+      dialog->show();
     }
-
-    openFileAndAddToNewTab(configPath);
     break;
   }
 
@@ -1507,6 +1605,41 @@ void MainWindow::openDebugConfigurationDialog() {
 
 void MainWindow::openShortcutsDialog() { openDialog(Dialog::shortcuts); }
 
+TerminalTabWidget *MainWindow::ensureTerminalWidget() {
+  if (!terminalWidget) {
+    terminalWidget = new TerminalTabWidget();
+    terminalWidget->applyTheme(settings.theme);
+
+    connect(terminalWidget, &TerminalTabWidget::closeRequested, this, [this]() {
+      if (terminalWidget) {
+        terminalWidget->hide();
+      }
+      if (ui->actionToggle_Terminal) {
+        ui->actionToggle_Terminal->setChecked(false);
+      }
+    });
+
+    auto layout = qobject_cast<QBoxLayout *>(ui->centralwidget->layout());
+    if (layout != nullptr) {
+      layout->insertWidget(layout->count() - 1, terminalWidget, 0);
+    }
+  }
+
+  return terminalWidget;
+}
+
+void MainWindow::showTerminalPanel() {
+  TerminalTabWidget *widget = ensureTerminalWidget();
+  if (!widget) {
+    return;
+  }
+
+  widget->show();
+  if (ui->actionToggle_Terminal) {
+    ui->actionToggle_Terminal->setChecked(true);
+  }
+}
+
 void MainWindow::showTerminal() {
   auto page = currentTabWidget()->getCurrentPage();
   QString filePath = page ? page->getFilePath() : QString();
@@ -1516,24 +1649,9 @@ void MainWindow::showTerminal() {
     return;
   }
 
-  if (!terminalWidget) {
-    terminalWidget = new TerminalTabWidget();
-    terminalWidget->applyTheme(settings.theme);
+  ensureProjectRootForPath(filePath);
 
-    connect(terminalWidget, &TerminalTabWidget::closeRequested, this, [&]() {
-      if (terminalWidget) {
-        terminalWidget->hide();
-      }
-    });
-
-    auto layout = qobject_cast<QBoxLayout *>(ui->centralwidget->layout());
-
-    if (layout != 0)
-      layout->insertWidget(layout->count() - 1, terminalWidget, 0);
-  }
-
-  terminalWidget->show();
-
+  showTerminalPanel();
   terminalWidget->runFile(filePath, effectiveLanguageIdForFile(filePath));
 }
 
@@ -2398,7 +2516,19 @@ bool MainWindow::compileSourceForDebug(const QString &filePath,
   } else {
     args << "-g" << "-O0" << "-std=c++17";
   }
+
+  FileTemplateAssignment assignment =
+      RunTemplateManager::instance().getAssignmentForFile(filePath);
+
+  for (const QString &flag : assignment.compilerFlags) {
+    args << RunTemplateManager::substituteVariables(flag, filePath);
+  }
+
   args << "-o" << outputPath << filePath;
+
+  for (const QString &src : assignment.sourceFiles) {
+    args << RunTemplateManager::substituteVariables(src, filePath);
+  }
 
   QProcess process;
   process.setProgram(compiler);
@@ -2472,9 +2602,7 @@ void MainWindow::startDebuggingForCurrentFile() {
     return;
   }
 
-  if (m_projectRootPath.isEmpty()) {
-    setProjectRootPath(QFileInfo(filePath).absolutePath());
-  }
+  ensureProjectRootForPath(filePath);
 
   m_debugStartInProgress = true;
 
@@ -2662,8 +2790,6 @@ void MainWindow::formatCurrentDocument() {
   }
 
   auto textArea = getCurrentTextArea();
-  bool hadUnsavedChanges = textArea && textArea->changesUnsaved();
-
   on_actionSave_triggered();
 
   if (textArea && textArea->changesUnsaved()) {
@@ -2688,55 +2814,215 @@ void MainWindow::formatCurrentDocument() {
     return;
   }
 
-  QProcess process;
-  process.setWorkingDirectory(QFileInfo(filePath).absoluteDir().path());
-  process.start(command.first, command.second);
+  ensureProjectRootForPath(filePath);
+  showTerminalPanel();
 
-  if (!process.waitForFinished(60000)) {
-    QMessageBox::warning(this, "Format Document",
-                         "Formatting timed out or failed to start.\nMake sure "
-                         "the formatter is installed and in PATH.");
-    return;
+  if (m_formatProcessFinishedConnection) {
+    disconnect(m_formatProcessFinishedConnection);
+    m_formatProcessFinishedConnection = {};
+  }
+  if (m_formatProcessErrorConnection) {
+    disconnect(m_formatProcessErrorConnection);
+    m_formatProcessErrorConnection = {};
   }
 
-  if (process.exitCode() != 0) {
-    QString errorOutput = QString::fromUtf8(process.readAllStandardError());
-    QString stdOut = QString::fromUtf8(process.readAllStandardOutput());
-    LOG_WARNING(QString("Formatter exited with code %1: %2")
-                    .arg(process.exitCode())
-                    .arg(errorOutput));
+  FileFormatAssignment assignment = manager.getAssignmentForFile(filePath);
 
-    QString errorMsg =
-        QString("Formatter exited with error code %1.").arg(process.exitCode());
-    if (!errorOutput.isEmpty()) {
-      errorMsg += QString("\n\nError output:\n%1").arg(errorOutput.left(500));
+  QString workingDirectory = assignment.workingDirectory.trimmed();
+  if (workingDirectory.isEmpty()) {
+    workingDirectory = QFileInfo(filePath).absoluteDir().path();
+  } else {
+    workingDirectory =
+        FormatTemplateManager::substituteVariables(workingDirectory, filePath);
+  }
+
+  QMap<QString, QString> customEnv;
+  for (auto it = assignment.customEnv.begin(); it != assignment.customEnv.end();
+       ++it) {
+    const QString key = it.key().trimmed();
+    if (key.isEmpty()) {
+      continue;
     }
-    QMessageBox::warning(this, "Format Document", errorMsg);
+    customEnv[key] =
+        FormatTemplateManager::substituteVariables(it.value(), filePath);
   }
 
-  if (textArea) {
+  QString preFormatCommand = assignment.preFormatCommand.trimmed();
+  if (!preFormatCommand.isEmpty()) {
+    preFormatCommand =
+        FormatTemplateManager::substituteVariables(preFormatCommand, filePath);
+  }
+  QString postFormatCommand = assignment.postFormatCommand.trimmed();
+  if (!postFormatCommand.isEmpty()) {
+    postFormatCommand =
+        FormatTemplateManager::substituteVariables(postFormatCommand, filePath);
+  }
+
+  auto shellProgramAndArgs = [](const QString &commandText)
+      -> QPair<QString, QStringList> {
+#ifdef Q_OS_WIN
+    return qMakePair(QString("cmd"), QStringList() << "/C" << commandText);
+#else
+    return qMakePair(QString("bash"), QStringList() << "-lc" << commandText);
+#endif
+  };
+
+  struct FormatExecutionState {
+    enum class Stage {
+      PreFormat,
+      Formatter,
+      PostFormat,
+    };
+
+    Stage stage = Stage::Formatter;
+    bool formatterRan = false;
+    int formatterExitCode = 0;
+    QString activeStageName;
+  };
+
+  QSharedPointer<FormatExecutionState> executionState =
+      QSharedPointer<FormatExecutionState>::create();
+  if (!preFormatCommand.isEmpty()) {
+    executionState->stage = FormatExecutionState::Stage::PreFormat;
+  }
+
+  QPointer<TextArea> targetTextArea = textArea;
+  QSharedPointer<std::function<void()>> finalizeExecution =
+      QSharedPointer<std::function<void()>>::create();
+  *finalizeExecution = [this, filePath, targetTextArea, executionState]() {
+    if (m_formatProcessFinishedConnection) {
+      disconnect(m_formatProcessFinishedConnection);
+      m_formatProcessFinishedConnection = {};
+    }
+    if (m_formatProcessErrorConnection) {
+      disconnect(m_formatProcessErrorConnection);
+      m_formatProcessErrorConnection = {};
+    }
+
+    if (executionState->formatterRan && executionState->formatterExitCode != 0) {
+      LOG_WARNING(QString("Formatter exited with code %1")
+                      .arg(executionState->formatterExitCode));
+      QMessageBox::warning(
+          this, "Format Document",
+          QString("Formatter exited with error code %1.\nCheck the "
+                  "Terminal panel for details.")
+              .arg(executionState->formatterExitCode));
+    }
+
+    if (!targetTextArea || !executionState->formatterRan) {
+      return;
+    }
+
     QFile file(filePath);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
       QString newContent = QString::fromUtf8(file.readAll());
       file.close();
 
-      if (textArea->toPlainText() != newContent) {
+      if (targetTextArea->toPlainText() != newContent) {
+        int cursorPos = targetTextArea->textCursor().position();
 
-        int cursorPos = textArea->textCursor().position();
+        targetTextArea->setPlainText(newContent);
+        targetTextArea->document()->setModified(false);
 
-        textArea->setPlainText(newContent);
-
-        textArea->document()->setModified(false);
-
-        QTextCursor cursor = textArea->textCursor();
-        cursor.setPosition(qMin(cursorPos, textArea->toPlainText().length()));
-        textArea->setTextCursor(cursor);
+        QTextCursor cursor = targetTextArea->textCursor();
+        cursor.setPosition(
+            qMin(cursorPos, targetTextArea->toPlainText().length()));
+        targetTextArea->setTextCursor(cursor);
       }
     } else {
       LOG_WARNING(
           QString("Failed to reload file after formatting: %1").arg(filePath));
     }
-  }
+  };
+
+  QSharedPointer<std::function<void()>> runCurrentStage =
+      QSharedPointer<std::function<void()>>::create();
+  *runCurrentStage = [this, runCurrentStage, executionState, preFormatCommand,
+                      command, postFormatCommand, workingDirectory,
+                      customEnv, shellProgramAndArgs]() {
+    switch (executionState->stage) {
+    case FormatExecutionState::Stage::PreFormat: {
+      executionState->activeStageName = "pre-format command";
+      QPair<QString, QStringList> shellCommand =
+          shellProgramAndArgs(preFormatCommand);
+      terminalWidget->executeCommand(shellCommand.first, shellCommand.second,
+                                     workingDirectory, customEnv);
+      return;
+    }
+    case FormatExecutionState::Stage::Formatter:
+      executionState->activeStageName = "formatter";
+      terminalWidget->executeCommand(command.first, command.second,
+                                     workingDirectory, customEnv);
+      return;
+    case FormatExecutionState::Stage::PostFormat: {
+      executionState->activeStageName = "post-format command";
+      QPair<QString, QStringList> shellCommand =
+          shellProgramAndArgs(postFormatCommand);
+      terminalWidget->executeCommand(shellCommand.first, shellCommand.second,
+                                     workingDirectory, customEnv);
+      return;
+    }
+    }
+  };
+
+  m_formatProcessFinishedConnection = connect(
+      terminalWidget, &TerminalTabWidget::processFinished, this,
+      [this, executionState, postFormatCommand, runCurrentStage,
+       finalizeExecution](int exitCode) {
+        if (executionState->stage == FormatExecutionState::Stage::PreFormat) {
+          if (exitCode != 0) {
+            QMessageBox::warning(
+                this, "Format Document",
+                QString("Pre-format command failed with exit code %1.\nCheck "
+                        "the Terminal panel for details.")
+                    .arg(exitCode));
+            (*finalizeExecution)();
+            return;
+          }
+
+          executionState->stage = FormatExecutionState::Stage::Formatter;
+          (*runCurrentStage)();
+          return;
+        }
+
+        if (executionState->stage == FormatExecutionState::Stage::Formatter) {
+          executionState->formatterRan = true;
+          executionState->formatterExitCode = exitCode;
+
+          if (!postFormatCommand.isEmpty()) {
+            executionState->stage = FormatExecutionState::Stage::PostFormat;
+            (*runCurrentStage)();
+            return;
+          }
+
+          (*finalizeExecution)();
+          return;
+        }
+
+        if (executionState->stage == FormatExecutionState::Stage::PostFormat) {
+          if (exitCode != 0) {
+            QMessageBox::warning(
+                this, "Format Document",
+                QString("Post-format command failed with exit code %1.\nCheck "
+                        "the Terminal panel for details.")
+                    .arg(exitCode));
+          }
+          (*finalizeExecution)();
+          return;
+        }
+      });
+
+  m_formatProcessErrorConnection = connect(
+      terminalWidget, &TerminalTabWidget::errorOccurred, this,
+      [this, executionState, finalizeExecution](const QString &errorMessage) {
+        QMessageBox::warning(
+            this, "Format Document",
+            QString("Failed to start %1.\n\n%2")
+                .arg(executionState->activeStageName, errorMessage));
+        (*finalizeExecution)();
+      });
+
+  (*runCurrentStage)();
 }
 
 void MainWindow::setFilePathAsTabText(QString filePath) {
@@ -3086,25 +3372,9 @@ void MainWindow::on_actionUnsplit_All_triggered() {
 }
 
 void MainWindow::on_actionToggle_Terminal_triggered() {
-  if (!terminalWidget) {
-    terminalWidget = new TerminalTabWidget();
-    terminalWidget->applyTheme(settings.theme);
-
-    connect(terminalWidget, &TerminalTabWidget::closeRequested, this, [this]() {
-      if (terminalWidget) {
-        terminalWidget->hide();
-        ui->actionToggle_Terminal->setChecked(false);
-      }
-    });
-
-    auto layout = qobject_cast<QBoxLayout *>(ui->centralwidget->layout());
-
-    if (layout != 0)
-      layout->insertWidget(layout->count() - 1, terminalWidget, 0);
-  }
-
-  bool visible = terminalWidget->isVisible();
-  terminalWidget->setVisible(!visible);
+  TerminalTabWidget *widget = ensureTerminalWidget();
+  bool visible = widget->isVisible();
+  widget->setVisible(!visible);
   ui->actionToggle_Terminal->setChecked(!visible);
 }
 
@@ -4225,25 +4495,31 @@ void MainWindow::setTheme(Theme theme) {
 }
 
 void MainWindow::setProjectRootPath(const QString &path) {
-  QString previousRoot = m_projectRootPath;
-  m_projectRootPath = path;
+  QString normalizedPath = QDir::cleanPath(path);
+  if (!normalizedPath.isEmpty()) {
+    normalizedPath = QFileInfo(normalizedPath).absoluteFilePath();
+  }
 
-  if (previousRoot != path) {
+  QString previousRoot = m_projectRootPath;
+  m_projectRootPath = normalizedPath;
+
+  if (previousRoot != normalizedPath) {
     m_treeExpandedPaths.clear();
-    loadTreeStateFromSettings(path);
+    loadTreeStateFromSettings(normalizedPath);
     m_treeScrollValue = 0;
     m_treeScrollValueInitialized = false;
   }
 
-  if (!path.isEmpty()) {
-    ensureProjectSettings(path);
+  if (!normalizedPath.isEmpty()) {
+    ensureProjectSettings(normalizedPath);
   }
 
   ensureFileTreeModel();
   if (m_fileTreeModel) {
-    QString rootPath = path.isEmpty() ? QDir::home().path() : path;
+    QString rootPath =
+        normalizedPath.isEmpty() ? QDir::home().path() : normalizedPath;
     m_fileTreeModel->setRootPath(rootPath);
-    m_fileTreeModel->setRootHeaderLabel(path);
+    m_fileTreeModel->setRootHeaderLabel(normalizedPath);
     if (m_gitIntegration) {
       m_fileTreeModel->setGitIntegration(m_gitIntegration);
     }
@@ -4253,27 +4529,28 @@ void MainWindow::setProjectRootPath(const QString &path) {
     for (int i = 0; i < tabWidget->count(); i++) {
       auto page = tabWidget->getPage(i);
       if (page) {
-        page->setProjectRootPath(path);
-        page->setTreeViewVisible(!path.isEmpty());
-        if (!path.isEmpty()) {
-          page->setModelRootIndex(path);
+        page->setProjectRootPath(normalizedPath);
+        page->setTreeViewVisible(!normalizedPath.isEmpty());
+        if (!normalizedPath.isEmpty()) {
+          page->setModelRootIndex(normalizedPath);
         }
       }
     }
   }
 
-  if (!path.isEmpty()) {
-    updateGitIntegrationForPath(path);
+  if (!normalizedPath.isEmpty()) {
+    updateGitIntegrationForPath(normalizedPath);
   }
 
-  if (!path.isEmpty()) {
-    DebugSettings::instance().initialize(path);
-    DebugConfigurationManager::instance().setWorkspaceFolder(path);
+  if (!normalizedPath.isEmpty()) {
+    DebugSettings::instance().initialize(normalizedPath);
+    DebugConfigurationManager::instance().setWorkspaceFolder(normalizedPath);
     DebugConfigurationManager::instance().loadFromLightpadDir();
-    BreakpointManager::instance().setWorkspaceFolder(path);
+    BreakpointManager::instance().setWorkspaceFolder(normalizedPath);
     BreakpointManager::instance().loadFromLightpadDir();
-    WatchManager::instance().setWorkspaceFolder(path);
+    WatchManager::instance().setWorkspaceFolder(normalizedPath);
     WatchManager::instance().loadFromLightpadDir();
+    RunTemplateManager::instance().setWorkspaceFolder(normalizedPath);
   }
 
   applyTreeExpandedStateToViews();

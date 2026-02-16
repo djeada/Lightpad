@@ -125,6 +125,7 @@ void TestRunTemplateManager::testGetTemplateById() {
 void TestRunTemplateManager::testAssignmentPersistence() {
   RunTemplateManager &manager = RunTemplateManager::instance();
   manager.loadTemplates();
+  manager.setWorkspaceFolder(m_tempDir.path());
 
   QString testFile = m_tempDir.path() + "/test.py";
   QFile file(testFile);
@@ -132,8 +133,10 @@ void TestRunTemplateManager::testAssignmentPersistence() {
   file.write("print('hello')");
   file.close();
 
-  bool assigned =
-      manager.assignTemplateToFile(testFile, "python3", QStringList() << "-v");
+  FileTemplateAssignment newAssignment;
+  newAssignment.templateId = "python3";
+  newAssignment.customArgs = QStringList() << "-v";
+  bool assigned = manager.assignTemplateToFile(testFile, newAssignment);
   QVERIFY(assigned);
 
   FileTemplateAssignment assignment = manager.getAssignmentForFile(testFile);

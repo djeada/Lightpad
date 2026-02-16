@@ -54,6 +54,10 @@ void TestFormatTemplateManager::testSubstituteVariables() {
   QString result5 =
       FormatTemplateManager::substituteVariables("${fileExt}", filePath);
   QCOMPARE(result5, QString("cpp"));
+
+  QString result6 = FormatTemplateManager::substituteVariables(
+      "${workspaceFolder}", filePath);
+  QCOMPARE(result6, QString("/home/user/project"));
 }
 
 void TestFormatTemplateManager::testSubstituteVariablesWithComplexPath() {
@@ -134,13 +138,25 @@ void TestFormatTemplateManager::testAssignmentPersistence() {
   file.write("print('hello')");
   file.close();
 
-  bool assigned = manager.assignTemplateToFile(
-      testFile, "black", QStringList() << "--line-length" << "120");
+  FileFormatAssignment newAssignment;
+  newAssignment.filePath = testFile;
+  newAssignment.templateId = "black";
+  newAssignment.customArgs = QStringList() << "--line-length" << "120";
+  newAssignment.workingDirectory = "${fileDir}";
+  newAssignment.customEnv["PYTHONPATH"] = "${fileDir}";
+  newAssignment.preFormatCommand = "echo pre-format";
+  newAssignment.postFormatCommand = "echo post-format";
+
+  bool assigned = manager.assignTemplateToFile(testFile, newAssignment);
   QVERIFY(assigned);
 
   FileFormatAssignment assignment = manager.getAssignmentForFile(testFile);
   QCOMPARE(assignment.templateId, QString("black"));
   QVERIFY(assignment.customArgs.contains("--line-length"));
+  QCOMPARE(assignment.workingDirectory, QString("${fileDir}"));
+  QCOMPARE(assignment.customEnv.value("PYTHONPATH"), QString("${fileDir}"));
+  QCOMPARE(assignment.preFormatCommand, QString("echo pre-format"));
+  QCOMPARE(assignment.postFormatCommand, QString("echo post-format"));
 
   QString configFile = m_tempDir.path() + "/.lightpad/format_config.json";
   QVERIFY(QFile::exists(configFile));

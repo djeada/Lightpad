@@ -390,6 +390,7 @@ target_compile_definitions(test_completionengine PRIVATE QT_DEPRECATED_WARNINGS)
 add_executable(test_dap
     unit/test_dap.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/dapclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/expressiontranslator.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugadapterregistry.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/breakpointmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugconfiguration.cpp

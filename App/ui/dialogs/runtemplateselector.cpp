@@ -2,8 +2,10 @@
 #include "../../run_templates/runtemplatemanager.h"
 #include "../uistylehelper.h"
 
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QScrollArea>
 #include <QSet>
 
 RunTemplateSelector::RunTemplateSelector(const QString &filePath,
@@ -23,14 +25,34 @@ RunTemplateSelector::RunTemplateSelector(const QString &filePath,
       }
     }
     m_customArgsEdit->setText(assignment.customArgs.join(" "));
+
+    for (const QString &src : assignment.sourceFiles) {
+      m_sourceFilesList->addItem(src);
+    }
+
+    m_workingDirEdit->setText(assignment.workingDirectory);
+    m_compilerFlagsEdit->setText(assignment.compilerFlags.join(" "));
+
+    int row = 0;
+    for (auto it = assignment.customEnv.begin();
+         it != assignment.customEnv.end(); ++it) {
+      m_envVarTable->insertRow(row);
+      m_envVarTable->setItem(row, 0, new QTableWidgetItem(it.key()));
+      m_envVarTable->setItem(row, 1, new QTableWidgetItem(it.value()));
+      ++row;
+    }
+
+    m_preRunCommandEdit->setText(assignment.preRunCommand);
+    m_postRunCommandEdit->setText(assignment.postRunCommand);
   }
 }
 
 RunTemplateSelector::~RunTemplateSelector() {}
 
 void RunTemplateSelector::setupUi() {
-  setWindowTitle("Select Run Template");
-  setMinimumSize(500, 400);
+  setWindowTitle("Run Configuration");
+  setMinimumSize(720, 620);
+  resize(780, 700);
 
   QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
@@ -39,8 +61,13 @@ void RunTemplateSelector::setupUi() {
       new QLabel(QString("File: <b>%1</b>").arg(fileInfo.fileName()));
   mainLayout->addWidget(fileLabel);
 
-  QHBoxLayout *filterLayout = new QHBoxLayout();
+  QSplitter *splitter = new QSplitter(Qt::Horizontal);
 
+  QWidget *leftPanel = new QWidget();
+  QVBoxLayout *leftLayout = new QVBoxLayout(leftPanel);
+  leftLayout->setContentsMargins(0, 0, 0, 0);
+
+  QHBoxLayout *filterLayout = new QHBoxLayout();
   m_searchEdit = new QLineEdit();
   m_searchEdit->setPlaceholderText("Search templates...");
   connect(m_searchEdit, &QLineEdit::textChanged, this,
@@ -52,12 +79,10 @@ void RunTemplateSelector::setupUi() {
   connect(m_languageCombo, &QComboBox::currentTextChanged, this,
           &RunTemplateSelector::onLanguageFilterChanged);
   filterLayout->addWidget(m_languageCombo);
-
-  mainLayout->addLayout(filterLayout);
+  leftLayout->addLayout(filterLayout);
 
   QGroupBox *templatesGroup = new QGroupBox("Available Templates");
   QVBoxLayout *templatesLayout = new QVBoxLayout(templatesGroup);
-
   m_templateList = new QListWidget();
   connect(m_templateList, &QListWidget::itemClicked, this,
           &RunTemplateSelector::onTemplateSelected);
@@ -65,30 +90,131 @@ void RunTemplateSelector::setupUi() {
           [this](QListWidgetItem *) { onAccept(); });
   templatesLayout->addWidget(m_templateList);
 
-  mainLayout->addWidget(templatesGroup);
-
-  QGroupBox *detailsGroup = new QGroupBox("Template Details");
-  QVBoxLayout *detailsLayout = new QVBoxLayout(detailsGroup);
-
   m_descriptionLabel = new QLabel();
   m_descriptionLabel->setWordWrap(true);
-  detailsLayout->addWidget(m_descriptionLabel);
+  templatesLayout->addWidget(m_descriptionLabel);
 
   m_commandLabel = new QLabel();
   m_commandLabel->setWordWrap(true);
   m_commandLabel->setStyleSheet(
       "font-family: monospace; background-color: #1f2632; color: #e6edf3; "
       "padding: 6px; border-radius: 6px;");
-  detailsLayout->addWidget(m_commandLabel);
+  templatesLayout->addWidget(m_commandLabel);
+  leftLayout->addWidget(templatesGroup);
 
-  mainLayout->addWidget(detailsGroup);
+  splitter->addWidget(leftPanel);
 
-  QHBoxLayout *argsLayout = new QHBoxLayout();
-  argsLayout->addWidget(new QLabel("Custom Arguments:"));
+  QScrollArea *scrollArea = new QScrollArea();
+  scrollArea->setWidgetResizable(true);
+  scrollArea->setFrameShape(QFrame::NoFrame);
+
+  QWidget *rightPanel = new QWidget();
+  QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
+
+  QGroupBox *argsGroup = new QGroupBox("Arguments");
+  QVBoxLayout *argsLayout = new QVBoxLayout(argsGroup);
   m_customArgsEdit = new QLineEdit();
-  m_customArgsEdit->setPlaceholderText("Additional arguments (optional)");
+  m_customArgsEdit->setPlaceholderText(
+      "Additional arguments (e.g., --verbose -n 10)");
   argsLayout->addWidget(m_customArgsEdit);
-  mainLayout->addLayout(argsLayout);
+  rightLayout->addWidget(argsGroup);
+
+  QGroupBox *sourceGroup = new QGroupBox("Source Files");
+  QVBoxLayout *sourceLayout = new QVBoxLayout(sourceGroup);
+  QLabel *sourceHint = new QLabel(
+      "Additional source files for compilation (e.g., multi-file C/C++).\n"
+      "Supports variables: ${fileDir}, ${workspaceFolder}");
+  sourceHint->setWordWrap(true);
+  sourceHint->setStyleSheet("font-size: 11px; color: #8b949e;");
+  sourceLayout->addWidget(sourceHint);
+
+  m_sourceFilesList = new QListWidget();
+  m_sourceFilesList->setMaximumHeight(120);
+  sourceLayout->addWidget(m_sourceFilesList);
+
+  QHBoxLayout *sourceButtonLayout = new QHBoxLayout();
+  m_addSourceFileBtn = new QPushButton("Add File...");
+  m_removeSourceFileBtn = new QPushButton("Remove");
+  connect(m_addSourceFileBtn, &QPushButton::clicked, this,
+          &RunTemplateSelector::onAddSourceFile);
+  connect(m_removeSourceFileBtn, &QPushButton::clicked, this,
+          &RunTemplateSelector::onRemoveSourceFile);
+  sourceButtonLayout->addWidget(m_addSourceFileBtn);
+  sourceButtonLayout->addWidget(m_removeSourceFileBtn);
+  sourceButtonLayout->addStretch();
+  sourceLayout->addLayout(sourceButtonLayout);
+  rightLayout->addWidget(sourceGroup);
+
+  QGroupBox *wdGroup = new QGroupBox("Working Directory");
+  QHBoxLayout *wdLayout = new QHBoxLayout(wdGroup);
+  m_workingDirEdit = new QLineEdit();
+  m_workingDirEdit->setPlaceholderText(
+      "Override working directory (default: ${fileDir})");
+  m_browseWorkingDirBtn = new QPushButton("Browse...");
+  connect(m_browseWorkingDirBtn, &QPushButton::clicked, this,
+          &RunTemplateSelector::onBrowseWorkingDir);
+  wdLayout->addWidget(m_workingDirEdit);
+  wdLayout->addWidget(m_browseWorkingDirBtn);
+  rightLayout->addWidget(wdGroup);
+
+  QGroupBox *flagsGroup = new QGroupBox("Compiler / Linker Flags");
+  QVBoxLayout *flagsLayout = new QVBoxLayout(flagsGroup);
+  m_compilerFlagsEdit = new QLineEdit();
+  m_compilerFlagsEdit->setPlaceholderText(
+      "e.g., -std=c++17 -Wall -O2 -lpthread");
+  flagsLayout->addWidget(m_compilerFlagsEdit);
+  rightLayout->addWidget(flagsGroup);
+
+  QGroupBox *envGroup = new QGroupBox("Environment Variables");
+  QVBoxLayout *envLayout = new QVBoxLayout(envGroup);
+
+  m_envVarTable = new QTableWidget(0, 2);
+  m_envVarTable->setHorizontalHeaderLabels({"Variable", "Value"});
+  m_envVarTable->horizontalHeader()->setStretchLastSection(true);
+  m_envVarTable->horizontalHeader()->setSectionResizeMode(0,
+                                                          QHeaderView::Stretch);
+  m_envVarTable->setMaximumHeight(120);
+  m_envVarTable->verticalHeader()->setVisible(false);
+  envLayout->addWidget(m_envVarTable);
+
+  QHBoxLayout *envButtonLayout = new QHBoxLayout();
+  m_addEnvVarBtn = new QPushButton("Add");
+  m_removeEnvVarBtn = new QPushButton("Remove");
+  connect(m_addEnvVarBtn, &QPushButton::clicked, this,
+          &RunTemplateSelector::onAddEnvVar);
+  connect(m_removeEnvVarBtn, &QPushButton::clicked, this,
+          &RunTemplateSelector::onRemoveEnvVar);
+  envButtonLayout->addWidget(m_addEnvVarBtn);
+  envButtonLayout->addWidget(m_removeEnvVarBtn);
+  envButtonLayout->addStretch();
+  envLayout->addLayout(envButtonLayout);
+  rightLayout->addWidget(envGroup);
+
+  QGroupBox *hooksGroup = new QGroupBox("Pre/Post Run Commands");
+  QVBoxLayout *hooksLayout = new QVBoxLayout(hooksGroup);
+
+  hooksLayout->addWidget(new QLabel("Pre-run command:"));
+  m_preRunCommandEdit = new QLineEdit();
+  m_preRunCommandEdit->setPlaceholderText(
+      "Command to run before execution (e.g., make, cmake --build build)");
+  hooksLayout->addWidget(m_preRunCommandEdit);
+
+  hooksLayout->addWidget(new QLabel("Post-run command:"));
+  m_postRunCommandEdit = new QLineEdit();
+  m_postRunCommandEdit->setPlaceholderText(
+      "Command to run after execution (e.g., cleanup script)");
+  hooksLayout->addWidget(m_postRunCommandEdit);
+  rightLayout->addWidget(hooksGroup);
+
+  rightLayout->addStretch();
+
+  scrollArea->setWidget(rightPanel);
+  splitter->addWidget(scrollArea);
+
+  splitter->setStretchFactor(0, 2);
+  splitter->setStretchFactor(1, 3);
+
+  mainLayout->addWidget(splitter, 1);
 
   QHBoxLayout *buttonLayout = new QHBoxLayout();
 
@@ -110,7 +236,6 @@ void RunTemplateSelector::setupUi() {
   buttonLayout->addWidget(m_cancelButton);
 
   mainLayout->addLayout(buttonLayout);
-
   setLayout(mainLayout);
 }
 
@@ -217,15 +342,41 @@ void RunTemplateSelector::onLanguageFilterChanged(const QString &language) {
 
 void RunTemplateSelector::onAccept() {
   if (!m_selectedTemplateId.isEmpty()) {
-    QStringList customArgs;
+    FileTemplateAssignment assignment;
+    assignment.filePath = m_filePath;
+    assignment.templateId = m_selectedTemplateId;
+
     QString argsText = m_customArgsEdit->text().trimmed();
     if (!argsText.isEmpty()) {
-      customArgs =
+      assignment.customArgs =
           argsText.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
     }
 
-    RunTemplateManager::instance().assignTemplateToFile(
-        m_filePath, m_selectedTemplateId, customArgs);
+    for (int i = 0; i < m_sourceFilesList->count(); ++i) {
+      assignment.sourceFiles.append(m_sourceFilesList->item(i)->text());
+    }
+
+    assignment.workingDirectory = m_workingDirEdit->text().trimmed();
+
+    QString flagsText = m_compilerFlagsEdit->text().trimmed();
+    if (!flagsText.isEmpty()) {
+      assignment.compilerFlags =
+          flagsText.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+    }
+
+    for (int row = 0; row < m_envVarTable->rowCount(); ++row) {
+      QTableWidgetItem *keyItem = m_envVarTable->item(row, 0);
+      QTableWidgetItem *valItem = m_envVarTable->item(row, 1);
+      if (keyItem && !keyItem->text().trimmed().isEmpty()) {
+        assignment.customEnv[keyItem->text().trimmed()] =
+            valItem ? valItem->text() : QString();
+      }
+    }
+
+    assignment.preRunCommand = m_preRunCommandEdit->text().trimmed();
+    assignment.postRunCommand = m_postRunCommandEdit->text().trimmed();
+
+    RunTemplateManager::instance().assignTemplateToFile(m_filePath, assignment);
   }
   accept();
 }
@@ -233,6 +384,54 @@ void RunTemplateSelector::onAccept() {
 void RunTemplateSelector::onRemoveAssignment() {
   RunTemplateManager::instance().removeAssignment(m_filePath);
   accept();
+}
+
+void RunTemplateSelector::onAddSourceFile() {
+  QFileInfo fi(m_filePath);
+  QStringList files = QFileDialog::getOpenFileNames(
+      this, "Add Source Files", fi.absolutePath(),
+      "Source Files (*.c *.cc *.cpp *.cxx *.h *.hpp *.hxx *.s *.S *.asm "
+      "*.f *.f90 *.rs *.go *.m *.mm);;All Files (*)");
+  for (const QString &file : files) {
+    m_sourceFilesList->addItem(file);
+  }
+}
+
+void RunTemplateSelector::onRemoveSourceFile() {
+  QList<QListWidgetItem *> selected = m_sourceFilesList->selectedItems();
+  for (QListWidgetItem *item : selected) {
+    delete item;
+  }
+}
+
+void RunTemplateSelector::onBrowseWorkingDir() {
+  QFileInfo fi(m_filePath);
+  QString dir = QFileDialog::getExistingDirectory(
+      this, "Select Working Directory", fi.absolutePath());
+  if (!dir.isEmpty()) {
+    m_workingDirEdit->setText(dir);
+  }
+}
+
+void RunTemplateSelector::onAddEnvVar() {
+  int row = m_envVarTable->rowCount();
+  m_envVarTable->insertRow(row);
+  m_envVarTable->setItem(row, 0, new QTableWidgetItem(""));
+  m_envVarTable->setItem(row, 1, new QTableWidgetItem(""));
+  m_envVarTable->editItem(m_envVarTable->item(row, 0));
+}
+
+void RunTemplateSelector::onRemoveEnvVar() {
+  QList<QTableWidgetItem *> selected = m_envVarTable->selectedItems();
+  QSet<int> rows;
+  for (QTableWidgetItem *item : selected) {
+    rows.insert(item->row());
+  }
+  QList<int> sortedRows = rows.values();
+  std::sort(sortedRows.begin(), sortedRows.end(), std::greater<int>());
+  for (int row : sortedRows) {
+    m_envVarTable->removeRow(row);
+  }
 }
 
 QString RunTemplateSelector::getSelectedTemplateId() const {
@@ -266,8 +465,38 @@ void RunTemplateSelector::applyTheme(const Theme &theme) {
     m_templateList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
   }
 
-  if (m_customArgsEdit) {
-    m_customArgsEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
+  for (QLineEdit *edit : findChildren<QLineEdit *>()) {
+    if (edit != m_searchEdit) {
+      edit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
+    }
+  }
+
+  if (m_sourceFilesList) {
+    m_sourceFilesList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
+  }
+
+  if (m_envVarTable) {
+    QString tableStyle = QString("QTableWidget {"
+                                 "  background: %1;"
+                                 "  color: %2;"
+                                 "  border: 1px solid %3;"
+                                 "  border-radius: 4px;"
+                                 "  gridline-color: %3;"
+                                 "}"
+                                 "QHeaderView::section {"
+                                 "  background: %4;"
+                                 "  color: %2;"
+                                 "  border: none;"
+                                 "  border-bottom: 1px solid %3;"
+                                 "  padding: 4px 8px;"
+                                 "  font-weight: bold;"
+                                 "  font-size: 11px;"
+                                 "}")
+                             .arg(theme.surfaceAltColor.name())
+                             .arg(theme.foregroundColor.name())
+                             .arg(theme.borderColor.name())
+                             .arg(theme.surfaceColor.name());
+    m_envVarTable->setStyleSheet(tableStyle);
   }
 
   if (m_descriptionLabel) {
@@ -285,5 +514,13 @@ void RunTemplateSelector::applyTheme(const Theme &theme) {
   }
   if (m_removeButton) {
     m_removeButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+  }
+
+  for (QPushButton *btn :
+       {m_addSourceFileBtn, m_removeSourceFileBtn, m_browseWorkingDirBtn,
+        m_addEnvVarBtn, m_removeEnvVarBtn}) {
+    if (btn) {
+      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
   }
 }

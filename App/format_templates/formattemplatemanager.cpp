@@ -262,6 +262,15 @@ bool FormatTemplateManager::loadAssignmentsFromDir(
       assignment.customArgs.append(arg.toString());
     }
 
+    QJsonObject envObj = obj.value("customEnv").toObject();
+    for (auto it = envObj.begin(); it != envObj.end(); ++it) {
+      assignment.customEnv[it.key()] = it.value().toString();
+    }
+
+    assignment.workingDirectory = obj.value("workingDirectory").toString();
+    assignment.preFormatCommand = obj.value("preFormatCommand").toString();
+    assignment.postFormatCommand = obj.value("postFormatCommand").toString();
+
     m_assignments[assignment.filePath] = assignment;
   }
 
@@ -290,6 +299,27 @@ bool FormatTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
           argsArray.append(arg);
         }
         obj["customArgs"] = argsArray;
+      }
+
+      if (!it.value().customEnv.isEmpty()) {
+        QJsonObject envObj;
+        for (auto envIt = it.value().customEnv.begin();
+             envIt != it.value().customEnv.end(); ++envIt) {
+          envObj[envIt.key()] = envIt.value();
+        }
+        obj["customEnv"] = envObj;
+      }
+
+      if (!it.value().workingDirectory.isEmpty()) {
+        obj["workingDirectory"] = it.value().workingDirectory;
+      }
+
+      if (!it.value().preFormatCommand.isEmpty()) {
+        obj["preFormatCommand"] = it.value().preFormatCommand;
+      }
+
+      if (!it.value().postFormatCommand.isEmpty()) {
+        obj["postFormatCommand"] = it.value().postFormatCommand;
       }
 
       assignments.append(obj);
@@ -342,14 +372,11 @@ FormatTemplateManager::getAssignmentForFile(const QString &filePath) const {
 }
 
 bool FormatTemplateManager::assignTemplateToFile(
-    const QString &filePath, const QString &templateId,
-    const QStringList &customArgs) {
-  FileFormatAssignment assignment;
-  assignment.filePath = filePath;
-  assignment.templateId = templateId;
-  assignment.customArgs = customArgs;
+    const QString &filePath, const FileFormatAssignment &assignment) {
+  FileFormatAssignment stored = assignment;
+  stored.filePath = filePath;
 
-  m_assignments[filePath] = assignment;
+  m_assignments[filePath] = stored;
 
   QFileInfo fileInfo(filePath);
   QString dirPath = fileInfo.absoluteDir().path();
@@ -361,6 +388,16 @@ bool FormatTemplateManager::assignTemplateToFile(
   }
 
   return saved;
+}
+
+bool FormatTemplateManager::assignTemplateToFile(
+    const QString &filePath, const QString &templateId,
+    const QStringList &customArgs) {
+  FileFormatAssignment assignment;
+  assignment.filePath = filePath;
+  assignment.templateId = templateId;
+  assignment.customArgs = customArgs;
+  return assignTemplateToFile(filePath, assignment);
 }
 
 bool FormatTemplateManager::removeAssignment(const QString &filePath) {
@@ -393,6 +430,7 @@ QString FormatTemplateManager::substituteVariables(const QString &input,
   result.replace("${fileBasename}", fileInfo.fileName());
   result.replace("${fileBasenameNoExt}", fileInfo.completeBaseName());
   result.replace("${fileExt}", fileInfo.suffix());
+  result.replace("${workspaceFolder}", fileInfo.absoluteDir().path());
 
   return result;
 }

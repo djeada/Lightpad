@@ -21,8 +21,6 @@ constexpr int MAX_DEBUG_CONSOLE_BLOCKS = 2000;
 constexpr int MAX_DEBUG_CONSOLE_ENTRY_CHARS = 8192;
 constexpr int MAX_EAGER_SCOPE_LOADS = 1;
 constexpr int MAX_STACK_FRAMES_PER_REFRESH = 64;
-constexpr auto GDB_INFO_LOCALS_EVAL_EXPRESSION =
-    "interpreter-exec console \"info locals\"";
 
 void applyTreePalette(QTreeWidget *tree, const Theme &theme) {
   if (!tree) {
@@ -570,6 +568,7 @@ void DebugPanel::setDapClient(DapClient *client) {
   m_hasLastStopEvent = false;
   m_lastStoppedThreadId = 0;
   m_lastStoppedReason = DapStoppedReason::Unknown;
+  m_pendingConsoleEvaluations.clear();
 
   if (m_dapClient) {
     connect(m_dapClient, &DapClient::stateChanged, this,
@@ -614,6 +613,7 @@ void DebugPanel::clearAll() {
   m_hasLastStopEvent = false;
   m_lastStoppedThreadId = 0;
   m_lastStoppedReason = DapStoppedReason::Unknown;
+  m_pendingConsoleEvaluations.clear();
   m_consoleOutput->clear();
   m_threads.clear();
   m_stackFrames.clear();
@@ -779,11 +779,7 @@ void DebugPanel::onStepOut() {
 }
 
 void DebugPanel::onRestart() {
-  if (m_dapClient && m_dapClient->isDebugging()) {
-    m_dapClient->restart();
-  } else {
-    emit restartDebugRequested();
-  }
+  emit restartDebugRequested();
 }
 
 void DebugPanel::onStop() {
@@ -930,8 +926,11 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     const bool autoLoadScope =
         eagerScopeRefs.contains(scope.variablesReference) &&
         eagerLoadsRemaining > 0;
-    const bool deferScope =
-        scope.expensive || registerScope || localScope || !autoLoadScope;
+    const bool shouldLoadLocals = localScope && !scope.expensive && !registerScope;
+    const bool shouldLoadScopeVariables =
+        shouldLoadLocals ||
+        (!scope.expensive && !registerScope && !localScope && autoLoadScope);
+    const bool deferScope = !shouldLoadScopeVariables;
 
     QTreeWidgetItem *scopeItem = new QTreeWidgetItem();
     scopeItem->setText(0, scope.name);
@@ -942,25 +941,23 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     font.setBold(true);
     scopeItem->setFont(0, font);
 
-    if (scope.variablesReference > 0 && (localScope || !deferScope)) {
+    if (scope.variablesReference > 0 && (localScope || shouldLoadScopeVariables)) {
       scopeItem->setExpanded(true);
     }
 
     m_variablesTree->addTopLevelItem(scopeItem);
 
     if (scope.variablesReference > 0) {
-      if (localScope) {
-        m_variableRefToItem[scope.variablesReference] = scopeItem;
-        scopeItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-        requestLocalsFallback(scope.variablesReference);
-      } else if (deferScope) {
-        scopeItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-      } else {
+      if (shouldLoadScopeVariables) {
         m_variableRefToItem[scope.variablesReference] = scopeItem;
         m_pendingScopeVariableLoads.insert(scope.variablesReference);
         m_pendingVariableRequests.insert(scope.variablesReference);
         m_dapClient->getVariables(scope.variablesReference);
-        --eagerLoadsRemaining;
+        if (!localScope) {
+          --eagerLoadsRemaining;
+        }
+      } else if (deferScope) {
+        scopeItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
       }
     }
   }
@@ -997,7 +994,19 @@ void DebugPanel::onVariablesReceived(int variablesReference,
 
     parentItem->addChild(item);
   }
-  parentItem->setExpanded(true);
+
+  bool requestedLocalFallback = false;
+  if (variables.isEmpty() && !parentItem->parent()) {
+    const QString scopeName = parentItem->text(0).trimmed().toLower();
+    if (scopeName.contains(QLatin1String("local"))) {
+      requestLocalsFallback(variablesReference);
+      requestedLocalFallback = true;
+    }
+  }
+
+  if (!requestedLocalFallback) {
+    parentItem->setExpanded(true);
+  }
 
   if (m_variablesNameColumnAutofitPending &&
       m_pendingScopeVariableLoads.remove(variablesReference) &&
@@ -1040,15 +1049,28 @@ void DebugPanel::requestLocalsFallback(int scopeVariablesReference) {
   scopeItem->addChild(loadingItem);
   scopeItem->setExpanded(true);
 
-  const QString baseExpr = QString::fromLatin1(GDB_INFO_LOCALS_EVAL_EXPRESSION);
+  const DebugEvaluateRequest localsRequest =
+      DebugExpressionTranslator::localsFallbackRequest(
+          m_dapClient ? m_dapClient->adapterId() : QString(),
+          m_dapClient ? m_dapClient->adapterType() : QString());
+  const QString baseExpr = localsRequest.expression.trimmed();
+  if (baseExpr.isEmpty()) {
+    showLocalsFallbackMessage(scopeVariablesReference,
+                              tr("<locals fallback unavailable for debugger>"));
+    return;
+  }
+
   const int padSpaces = (m_localsFallbackRequestNonce++ % 7) + 1;
   const QString requestExpr = baseExpr + QString(padSpaces, QLatin1Char(' '));
+  const QString evalContext =
+      localsRequest.context.isEmpty() ? QStringLiteral("repl")
+                                      : localsRequest.context;
 
   m_localsFallbackPending = true;
   m_localsFallbackFrameId = m_currentFrameId;
   m_localsFallbackScopeRef = scopeVariablesReference;
   m_localsFallbackPendingExpression = requestExpr;
-  m_dapClient->evaluate(requestExpr, m_currentFrameId, "repl");
+  m_dapClient->evaluate(requestExpr, m_currentFrameId, evalContext);
 }
 
 void DebugPanel::populateLocalsFromGdbEvaluate(int scopeVariablesReference,
@@ -1151,7 +1173,13 @@ void DebugPanel::onVariableItemExpanded(QTreeWidgetItem *item) {
     if (scopeName.contains(QLatin1String("local"))) {
       const int localScopeRef = item->data(0, Qt::UserRole).toInt();
       if (localScopeRef > 0 && item->childCount() == 0) {
-        requestLocalsFallback(localScopeRef);
+        if (m_dapClient && !m_pendingVariableRequests.contains(localScopeRef)) {
+          m_variableRefToItem[localScopeRef] = item;
+          m_pendingVariableRequests.insert(localScopeRef);
+          m_dapClient->getVariables(localScopeRef);
+        } else if (!m_dapClient) {
+          requestLocalsFallback(localScopeRef);
+        }
       }
       return;
     }
@@ -1186,11 +1214,26 @@ void DebugPanel::onConsoleInput() {
   }
 
   m_consoleInput->clear();
-  appendConsoleLine(QString("> %1").arg(expr), consoleMutedColor());
 
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
-    m_dapClient->evaluate(expr, m_currentFrameId, "repl");
+    const QList<DebugEvaluateRequest> attempts =
+        DebugExpressionTranslator::buildConsoleEvaluationPlan(
+            expr, m_dapClient->adapterId(), m_dapClient->adapterType());
+    if (attempts.isEmpty()) {
+      appendConsoleLine(tr("Cannot evaluate: expression is empty"),
+                        consoleErrorColor());
+      return;
+    }
+
+    appendConsoleLine(QString("> %1").arg(expr), consoleMutedColor());
+    PendingConsoleEvaluation pending;
+    pending.userExpression = expr;
+    pending.attempts = attempts;
+    pending.activeAttemptIndex = 0;
+    m_pendingConsoleEvaluations.append(pending);
+    dispatchPendingConsoleEvaluation(m_pendingConsoleEvaluations.size() - 1);
   } else {
+    appendConsoleLine(QString("> %1").arg(expr), consoleMutedColor());
     appendConsoleLine(tr("Cannot evaluate: not stopped at breakpoint"),
                       consoleErrorColor());
   }
@@ -1455,7 +1498,14 @@ void DebugPanel::onEvaluateResult(const QString &expression,
     return;
   }
 
-  QString line = QString("%1 = %2").arg(expression, result);
+  const int pendingIndex = findPendingConsoleEvaluationIndex(expression);
+  QString displayExpression = expression;
+  if (pendingIndex >= 0) {
+    displayExpression = m_pendingConsoleEvaluations.at(pendingIndex).userExpression;
+    m_pendingConsoleEvaluations.removeAt(pendingIndex);
+  }
+
+  QString line = QString("%1 = %2").arg(displayExpression, result);
   if (!type.isEmpty()) {
     line += QString(" (%1)").arg(type);
   }
@@ -1471,10 +1521,25 @@ void DebugPanel::onEvaluateError(const QString &expression,
     clearLocalsFallbackState();
     if (!staleFrame) {
       showLocalsFallbackMessage(
-          scopeRef,
-          tr("<locals unavailable with current GDB DAP; use Watches/REPL>"),
-          true);
+          scopeRef, tr("<locals unavailable; use Watches/REPL>"), true);
     }
+    return;
+  }
+
+  const int pendingIndex = findPendingConsoleEvaluationIndex(expression);
+  if (pendingIndex >= 0) {
+    PendingConsoleEvaluation &pending = m_pendingConsoleEvaluations[pendingIndex];
+    const int nextAttempt = pending.activeAttemptIndex + 1;
+    if (nextAttempt < pending.attempts.size()) {
+      pending.activeAttemptIndex = nextAttempt;
+      dispatchPendingConsoleEvaluation(pendingIndex);
+      return;
+    }
+
+    const QString displayExpression = pending.userExpression;
+    m_pendingConsoleEvaluations.removeAt(pendingIndex);
+    appendConsoleLine(QString("%1: %2").arg(displayExpression, errorMessage),
+                      consoleErrorColor(), true);
     return;
   }
 
@@ -1510,6 +1575,46 @@ void DebugPanel::appendConsoleLine(const QString &text, const QColor &color,
 
   m_consoleOutput->setTextCursor(cursor);
   m_consoleOutput->ensureCursorVisible();
+}
+
+int DebugPanel::findPendingConsoleEvaluationIndex(
+    const QString &requestExpression) const {
+  for (int i = 0; i < m_pendingConsoleEvaluations.size(); ++i) {
+    const PendingConsoleEvaluation &pending = m_pendingConsoleEvaluations.at(i);
+    if (pending.activeAttemptIndex < 0 ||
+        pending.activeAttemptIndex >= pending.attempts.size()) {
+      continue;
+    }
+    if (pending.attempts.at(pending.activeAttemptIndex).expression ==
+        requestExpression) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void DebugPanel::dispatchPendingConsoleEvaluation(int pendingIndex) {
+  if (!m_dapClient || pendingIndex < 0 ||
+      pendingIndex >= m_pendingConsoleEvaluations.size()) {
+    return;
+  }
+
+  const PendingConsoleEvaluation &pending =
+      m_pendingConsoleEvaluations.at(pendingIndex);
+  if (pending.activeAttemptIndex < 0 ||
+      pending.activeAttemptIndex >= pending.attempts.size()) {
+    return;
+  }
+
+  const DebugEvaluateRequest &attempt =
+      pending.attempts.at(pending.activeAttemptIndex);
+  if (attempt.expression.trimmed().isEmpty()) {
+    return;
+  }
+
+  const QString context =
+      attempt.context.isEmpty() ? QStringLiteral("repl") : attempt.context;
+  m_dapClient->evaluate(attempt.expression, m_currentFrameId, context);
 }
 
 void DebugPanel::resizeVariablesNameColumnOnce() {

@@ -29,6 +29,11 @@ struct FileTemplateAssignment {
   QString templateId;
   QStringList customArgs;
   QMap<QString, QString> customEnv;
+  QStringList sourceFiles;
+  QString workingDirectory;
+  QStringList compilerFlags;
+  QString preRunCommand;
+  QString postRunCommand;
 };
 
 class RunTemplateManager : public QObject {
@@ -49,12 +54,12 @@ public:
 
   FileTemplateAssignment getAssignmentForFile(const QString &filePath) const;
 
-  bool assignTemplateToFile(
-      const QString &filePath, const QString &templateId,
-      const QStringList &customArgs = QStringList(),
-      const QMap<QString, QString> &customEnv = QMap<QString, QString>());
+  bool assignTemplateToFile(const QString &filePath,
+                            const FileTemplateAssignment &assignment);
 
   bool removeAssignment(const QString &filePath);
+
+  void setWorkspaceFolder(const QString &folder);
 
   QPair<QString, QStringList>
   buildCommand(const QString &filePath,
@@ -69,8 +74,6 @@ public:
 
   static QString substituteVariables(const QString &input,
                                      const QString &filePath);
-
-  bool saveAssignmentsToDir(const QString &dirPath) const;
 
 signals:
 
@@ -90,13 +93,13 @@ private:
   QString resolveTemplateIdForFile(const QString &filePath,
                                    const QString &languageId) const;
 
-  QString getConfigDirForFile(const QString &filePath) const;
-  QString getConfigFileForDir(const QString &dirPath) const;
-  bool loadAssignmentsFromDir(const QString &dirPath) const;
+  bool loadAssignments() const;
+  bool saveAssignments() const;
 
   QList<RunTemplate> m_templates;
   mutable QMap<QString, FileTemplateAssignment> m_assignments;
-  mutable QSet<QString> m_loadedConfigDirs;
+  mutable bool m_assignmentsLoaded = false;
+  QString m_workspaceFolder;
 };
 
 #endif

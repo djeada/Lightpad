@@ -29,6 +29,12 @@ DapClient::DapClient(QObject *parent)
 
 DapClient::~DapClient() { stop(); }
 
+void DapClient::setAdapterMetadata(const QString &adapterId,
+                                   const QString &adapterType) {
+  m_adapterId = adapterId.trimmed();
+  m_adapterType = adapterType.trimmed();
+}
+
 bool DapClient::start(const QString &program, const QStringList &arguments) {
   if (m_process) {
     LOG_WARNING("DAP client already started");
@@ -229,6 +235,10 @@ bool DapClient::supportsConfigurationDoneRequest() const {
   return m_capabilities.value("supportsConfigurationDoneRequest").toBool(false);
 }
 
+bool DapClient::supportsRestartRequest() const {
+  return m_capabilities.value("supportsRestartRequest").toBool(false);
+}
+
 void DapClient::setBreakpoints(const QString &sourcePath,
                                const QList<DapSourceBreakpoint> &breakpoints) {
   QJsonObject source;
@@ -370,13 +380,24 @@ void DapClient::stepOut(int threadId) {
 }
 
 void DapClient::restart() {
-  if (m_capabilities["supportsRestartRequest"].toBool()) {
+  if (supportsRestartRequest()) {
     int seq = m_nextSeq++;
     m_pendingRequests[seq] = "restart";
     sendRequest("restart", m_launchConfig, seq);
   } else {
+    if (!m_process) {
+      LOG_WARNING("DAP: Cannot restart, adapter process is not running");
+      emit error("Restart failed: debug adapter is not running");
+      return;
+    }
 
-    disconnect(true);
+    const QString adapterProgram = m_process->program();
+    const QStringList adapterArguments = m_process->arguments();
+
+    stop();
+    if (!start(adapterProgram, adapterArguments)) {
+      emit error("Restart failed: could not relaunch debug adapter");
+    }
   }
 }
 
@@ -701,8 +722,13 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     }
 
     if (command == "variables") {
+      int varRef = 0;
+      if (pendingCommand.startsWith("variables:")) {
+        varRef = pendingCommand.mid(10).toInt();
+      }
       LOG_WARNING(QString("DAP: variables request failed: %1")
                       .arg(message.isEmpty() ? "Unknown error" : message));
+      emit variablesReceived(varRef, {});
       return;
     }
 

@@ -6,10 +6,14 @@
 #include <QDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QSplitter>
+#include <QTableWidget>
 #include <QVBoxLayout>
 
 class FormatTemplateSelector : public QDialog {
@@ -31,6 +35,9 @@ private slots:
   void onLanguageFilterChanged(const QString &language);
   void onAccept();
   void onRemoveAssignment();
+  void onBrowseWorkingDir();
+  void onAddEnvVar();
+  void onRemoveEnvVar();
 
 private:
   void setupUi();
@@ -46,6 +53,13 @@ private:
   QLabel *m_descriptionLabel;
   QLabel *m_commandLabel;
   QLineEdit *m_customArgsEdit;
+  QLineEdit *m_workingDirEdit;
+  QPushButton *m_browseWorkingDirBtn;
+  QTableWidget *m_envVarTable;
+  QPushButton *m_addEnvVarBtn;
+  QPushButton *m_removeEnvVarBtn;
+  QLineEdit *m_preFormatCommandEdit;
+  QLineEdit *m_postFormatCommandEdit;
   QPushButton *m_okButton;
   QPushButton *m_cancelButton;
   QPushButton *m_removeButton;

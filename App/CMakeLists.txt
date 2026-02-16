@@ -59,6 +59,7 @@ set(project_headers
     core/editor/multicursor.h
     core/editor/codefolding.h
     dap/dapclient.h
+    dap/expressiontranslator.h
     dap/idebugadapter.h
     dap/debugadapterregistry.h
     dap/breakpointmanager.h
@@ -131,6 +132,7 @@ set(project_headers
     ui/panels/preferencesview.h
     ui/dialogs/runconfigurations.h
     ui/dialogs/runtemplateselector.h
+    ui/dialogs/debugconfigurationdialog.h
     ui/dialogs/formattemplateselector.h
     ui/dialogs/shortcuts.h
     ui/panels/terminal.h
@@ -169,6 +171,7 @@ set(project_sources
     core/editor/multicursor.cpp
     core/editor/codefolding.cpp
     dap/dapclient.cpp
+    dap/expressiontranslator.cpp
     dap/debugadapterregistry.cpp
     dap/breakpointmanager.cpp
     dap/debugconfiguration.cpp
@@ -236,6 +239,7 @@ set(project_sources
     ui/panels/preferencesview.cpp
     ui/dialogs/runconfigurations.cpp
     ui/dialogs/runtemplateselector.cpp
+    ui/dialogs/debugconfigurationdialog.cpp
     ui/dialogs/formattemplateselector.cpp
     ui/dialogs/shortcuts.cpp
     ui/panels/terminal.cpp

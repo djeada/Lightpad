@@ -206,6 +206,8 @@ private:
   QMetaObject::Connection m_sessionTerminatedConnection;
   QMetaObject::Connection m_sessionErrorConnection;
   QMetaObject::Connection m_sessionStateConnection;
+  QMetaObject::Connection m_formatProcessFinishedConnection;
+  QMetaObject::Connection m_formatProcessErrorConnection;
 
   SplitEditorContainer *m_splitEditorContainer;
 
@@ -221,6 +223,8 @@ private:
   void openFormatConfigurationDialog();
   void openDebugConfigurationDialog();
   void openShortcutsDialog();
+  TerminalTabWidget *ensureTerminalWidget();
+  void showTerminalPanel();
   void showTerminal();
   void showProblemsPanel();
   void showCommandPalette();
@@ -300,6 +304,9 @@ private:
   void setHighlightOverrideForFile(const QString &filePath,
                                    const QString &languageId);
   void ensureProjectSettings(const QString &path);
+  QString resolveProjectRootForPath(const QString &path) const;
+  void ensureProjectRootForPath(const QString &path);
+  bool isPathWithinRoot(const QString &path, const QString &rootPath) const;
 
   template <typename... Args>
   void updateAllTextAreas(void (TextArea::*f)(Args... args), Args... args);
