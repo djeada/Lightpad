@@ -673,8 +673,15 @@ MainWindow::detectLanguageIdForExtension(const QString &extension) const {
 }
 
 QString MainWindow::detectLanguageIdForFile(const QString &filePath) const {
-  return detectLanguageIdForExtension(
-      QFileInfo(filePath).completeSuffix().toLower());
+  const QFileInfo info(filePath);
+  const QString fileName = info.fileName().toLower();
+  if (fileName == "makefile" || fileName == "gnumakefile") {
+    return "make";
+  }
+  if (fileName == "cmakelists.txt") {
+    return "cmake";
+  }
+  return detectLanguageIdForExtension(info.completeSuffix().toLower());
 }
 
 QString MainWindow::displayNameForLanguage(const QString &languageId,

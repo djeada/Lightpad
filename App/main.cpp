@@ -1,5 +1,6 @@
 #include <QApplication>
 
+#include "syntax/cmakesyntaxplugin.h"
 #include "syntax/cppsyntaxplugin.h"
 #include "syntax/csssyntaxplugin.h"
 #include "syntax/gosyntaxplugin.h"
@@ -7,11 +8,10 @@
 #include "syntax/javascriptsyntaxplugin.h"
 #include "syntax/javasyntaxplugin.h"
 #include "syntax/jsonsyntaxplugin.h"
-#include "syntax/makesyntaxplugin.h"
 #include "syntax/markdownsyntaxplugin.h"
+#include "syntax/makesyntaxplugin.h"
 #include "syntax/pythonsyntaxplugin.h"
 #include "syntax/rustsyntaxplugin.h"
-#include "syntax/cmakesyntaxplugin.h"
 #include "syntax/shellsyntaxplugin.h"
 #include "syntax/syntaxpluginregistry.h"
 #include "syntax/typescriptsyntaxplugin.h"

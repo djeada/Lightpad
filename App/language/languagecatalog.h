@@ -19,6 +19,7 @@ public:
   static QVector<LanguageInfo> builtInLanguages() {
     return {
         {"plaintext", "Normal Text", {"txt", "text", "log"}},
+        {"cmake", "CMake", {"cmake", "cmakelists.txt"}},
         {"cpp", "C++", {"cpp", "cc", "cxx", "c", "h", "hpp", "hxx"}},
         {"css", "CSS", {"css"}},
         {"go", "Go", {"go"}},
@@ -30,7 +31,6 @@ public:
         {"md", "Markdown", {"md", "markdown"}},
         {"py", "Python", {"py", "pyw", "pyi"}},
         {"rust", "Rust", {"rs"}},
-        {"cmake", "CMake", {"cmake", "cmakelists.txt"}},
         {"sh", "Shell", {"sh", "bash", "zsh"}},
         {"ts", "TypeScript", {"ts", "tsx"}},
         {"yaml", "YAML", {"yaml", "yml"}},
