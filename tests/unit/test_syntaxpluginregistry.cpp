@@ -1,3 +1,4 @@
+#include "syntax/bazelsyntaxplugin.h"
 #include "syntax/cmakesyntaxplugin.h"
 #include "syntax/cppsyntaxplugin.h"
 #include "syntax/csssyntaxplugin.h"
@@ -8,6 +9,8 @@
 #include "syntax/jsonsyntaxplugin.h"
 #include "syntax/markdownsyntaxplugin.h"
 #include "syntax/makesyntaxplugin.h"
+#include "syntax/mesonsyntaxplugin.h"
+#include "syntax/ninjasyntaxplugin.h"
 #include "syntax/pythonsyntaxplugin.h"
 #include "syntax/rustsyntaxplugin.h"
 #include "syntax/shellsyntaxplugin.h"
@@ -187,6 +190,7 @@ void TestSyntaxPluginRegistry::testPluginReplacement() {
 void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   auto &registry = SyntaxPluginRegistry::instance();
 
+  registry.registerPlugin(std::make_unique<BazelSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CppSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CssSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<GoSyntaxPlugin>());
@@ -196,6 +200,8 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   registry.registerPlugin(std::make_unique<JsonSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MarkdownSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<MesonSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<NinjaSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CMakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<PythonSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<RustSyntaxPlugin>());
@@ -203,8 +209,9 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   registry.registerPlugin(std::make_unique<TypeScriptSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<YamlSyntaxPlugin>());
 
-  QCOMPARE(registry.getAllLanguageIds().size(), 15);
+  QCOMPARE(registry.getAllLanguageIds().size(), 18);
 
+  QVERIFY(registry.isLanguageSupported("bazel"));
   QVERIFY(registry.isLanguageSupported("cpp"));
   QVERIFY(registry.isLanguageSupported("css"));
   QVERIFY(registry.isLanguageSupported("go"));
@@ -214,6 +221,8 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isLanguageSupported("json"));
   QVERIFY(registry.isLanguageSupported("make"));
   QVERIFY(registry.isLanguageSupported("md"));
+  QVERIFY(registry.isLanguageSupported("meson"));
+  QVERIFY(registry.isLanguageSupported("ninja"));
   QVERIFY(registry.isLanguageSupported("cmake"));
   QVERIFY(registry.isLanguageSupported("py"));
   QVERIFY(registry.isLanguageSupported("rust"));
@@ -221,6 +230,7 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isLanguageSupported("ts"));
   QVERIFY(registry.isLanguageSupported("yaml"));
 
+  QVERIFY(registry.isExtensionSupported("bzl"));
   QVERIFY(registry.isExtensionSupported("cpp"));
   QVERIFY(registry.isExtensionSupported("css"));
   QVERIFY(registry.isExtensionSupported("go"));
@@ -231,6 +241,8 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isExtensionSupported("mk"));
   QVERIFY(registry.isExtensionSupported("makefile"));
   QVERIFY(registry.isExtensionSupported("md"));
+  QVERIFY(registry.isExtensionSupported("meson"));
+  QVERIFY(registry.isExtensionSupported("ninja"));
   QVERIFY(registry.isExtensionSupported("cmake"));
   QVERIFY(registry.isExtensionSupported("cmakelists.txt"));
   QVERIFY(registry.isExtensionSupported("py"));

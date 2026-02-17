@@ -19,6 +19,7 @@ public:
   static QVector<LanguageInfo> builtInLanguages() {
     return {
         {"plaintext", "Normal Text", {"txt", "text", "log"}},
+        {"bazel", "Bazel", {"bzl", "bazel"}},
         {"cmake", "CMake", {"cmake", "cmakelists.txt"}},
         {"cpp", "C++", {"cpp", "cc", "cxx", "c", "h", "hpp", "hxx"}},
         {"css", "CSS", {"css"}},
@@ -29,6 +30,8 @@ public:
         {"json", "JSON", {"json"}},
         {"make", "Make", {"mk", "makefile"}},
         {"md", "Markdown", {"md", "markdown"}},
+        {"meson", "Meson", {"meson", "meson.build", "meson_options.txt"}},
+        {"ninja", "Ninja", {"ninja", "build.ninja"}},
         {"py", "Python", {"py", "pyw", "pyi"}},
         {"rust", "Rust", {"rs"}},
         {"sh", "Shell", {"sh", "bash", "zsh"}},
@@ -172,7 +175,10 @@ private:
     addAlias(aliases, "java", "java");
     addAlias(aliases, "rust", "rust");
     addAlias(aliases, "json", "json");
+    addAlias(aliases, "bazel", "bazel");
     addAlias(aliases, "make", "make");
+    addAlias(aliases, "meson", "meson");
+    addAlias(aliases, "ninja", "ninja");
     addAlias(aliases, "cmake", "cmake");
     addAlias(aliases, "html", "html");
     addAlias(aliases, "css", "css");

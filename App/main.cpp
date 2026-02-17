@@ -1,5 +1,6 @@
 #include <QApplication>
 
+#include "syntax/bazelsyntaxplugin.h"
 #include "syntax/cmakesyntaxplugin.h"
 #include "syntax/cppsyntaxplugin.h"
 #include "syntax/csssyntaxplugin.h"
@@ -10,6 +11,8 @@
 #include "syntax/jsonsyntaxplugin.h"
 #include "syntax/markdownsyntaxplugin.h"
 #include "syntax/makesyntaxplugin.h"
+#include "syntax/mesonsyntaxplugin.h"
+#include "syntax/ninjasyntaxplugin.h"
 #include "syntax/pythonsyntaxplugin.h"
 #include "syntax/rustsyntaxplugin.h"
 #include "syntax/shellsyntaxplugin.h"
@@ -22,6 +25,7 @@
 void registerBuiltInSyntaxPlugins() {
   auto &registry = SyntaxPluginRegistry::instance();
 
+  registry.registerPlugin(std::make_unique<BazelSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CppSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CssSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<GoSyntaxPlugin>());
@@ -31,6 +35,8 @@ void registerBuiltInSyntaxPlugins() {
   registry.registerPlugin(std::make_unique<JsonSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MarkdownSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<MesonSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<NinjaSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CMakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<PythonSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<RustSyntaxPlugin>());

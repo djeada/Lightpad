@@ -674,11 +674,23 @@ MainWindow::detectLanguageIdForExtension(const QString &extension) const {
 
 QString MainWindow::detectLanguageIdForFile(const QString &filePath) const {
   const QFileInfo info(filePath);
-  const QString fileName = info.fileName().toLower();
-  if (fileName == "makefile" || fileName == "gnumakefile") {
+  const QString fileName = info.fileName();
+  const QString fileNameLower = fileName.toLower();
+  if (fileNameLower == "makefile" || fileNameLower == "gnumakefile") {
     return "make";
   }
-  if (fileName == "cmakelists.txt") {
+  if (fileName == "BUILD" || fileName == "WORKSPACE" ||
+      fileNameLower == "build.bazel" || fileNameLower == "workspace.bazel" ||
+      fileNameLower == "module.bazel") {
+    return "bazel";
+  }
+  if (fileNameLower == "meson.build" || fileNameLower == "meson_options.txt") {
+    return "meson";
+  }
+  if (fileNameLower == "build.ninja") {
+    return "ninja";
+  }
+  if (fileNameLower == "cmakelists.txt") {
     return "cmake";
   }
   return detectLanguageIdForExtension(info.completeSuffix().toLower());
