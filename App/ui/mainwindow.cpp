@@ -46,6 +46,7 @@
 #include "../dap/debugsettings.h"
 #include "../definition/symbolnavigationservice.h"
 #include "../definition/idefinitionprovider.h"
+#include "../definition/languagelspdefinitionprovider.h"
 #include "../filetree/gitfilesystemmodel.h"
 #include "../format_templates/formattemplatemanager.h"
 #include "../run_templates/runtemplatemanager.h"
@@ -2305,6 +2306,12 @@ void MainWindow::setupNavigationHistory() {
 
 void MainWindow::setupSymbolNavigation() {
   m_symbolNavService = new SymbolNavigationService(this);
+
+  const auto configs = LanguageLspDefinitionProvider::defaultConfigs();
+  for (const LanguageServerConfig &config : configs) {
+    auto *provider = new LanguageLspDefinitionProvider(config, this);
+    m_symbolNavService->registerProvider(provider);
+  }
 
   connect(m_symbolNavService, &SymbolNavigationService::definitionFound, this,
           &MainWindow::handleDefinitionResults);

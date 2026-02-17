@@ -2,6 +2,7 @@
 #include <QtTest/QtTest>
 
 #include "definition/idefinitionprovider.h"
+#include "definition/languagelspdefinitionprovider.h"
 #include "definition/lspdefinitionprovider.h"
 #include "definition/symbolnavigationservice.h"
 
@@ -66,6 +67,16 @@ private slots:
   void testLspProviderUriConversion();
   void testLspProviderUriConversionRoundTrip();
   void testLspProviderWithoutClient();
+
+  void testDefaultConfigsExist();
+  void testDefaultConfigsCoverPopularLanguages();
+  void testDefaultConfigsHaveValidFields();
+  void testLanguageProviderSupportsConfiguredLanguages();
+  void testLanguageProviderRejectsUnconfiguredLanguages();
+  void testLanguageProviderIdMatchesConfig();
+  void testLanguageProviderServerAvailability();
+  void testLanguageProviderWithUnavailableServer();
+  void testLanguageProviderRegistrationInService();
 };
 
 void TestSymbolNavigation::testDefinitionRequestStruct() {
@@ -354,8 +365,165 @@ void TestSymbolNavigation::testLspProviderWithoutClient() {
   int reqId = provider.requestDefinition(req);
   QVERIFY(reqId > 0);
 
-  QTest::qWait(100);
+  QVERIFY(failedSpy.wait(1000));
   QCOMPARE(failedSpy.count(), 1);
+}
+
+void TestSymbolNavigation::testDefaultConfigsExist() {
+  QList<LanguageServerConfig> configs =
+      LanguageLspDefinitionProvider::defaultConfigs();
+  QVERIFY(configs.size() >= 6);
+}
+
+void TestSymbolNavigation::testDefaultConfigsCoverPopularLanguages() {
+  QList<LanguageServerConfig> configs =
+      LanguageLspDefinitionProvider::defaultConfigs();
+
+  QStringList allLanguages;
+  for (const LanguageServerConfig &config : configs) {
+    allLanguages.append(config.supportedLanguages);
+  }
+
+  QVERIFY(allLanguages.contains("cpp"));
+  QVERIFY(allLanguages.contains("c"));
+  QVERIFY(allLanguages.contains("py"));
+  QVERIFY(allLanguages.contains("rust"));
+  QVERIFY(allLanguages.contains("go"));
+  QVERIFY(allLanguages.contains("ts"));
+  QVERIFY(allLanguages.contains("js"));
+  QVERIFY(allLanguages.contains("java"));
+}
+
+void TestSymbolNavigation::testDefaultConfigsHaveValidFields() {
+  QList<LanguageServerConfig> configs =
+      LanguageLspDefinitionProvider::defaultConfigs();
+
+  for (const LanguageServerConfig &config : configs) {
+    QVERIFY2(!config.providerId.isEmpty(),
+             qPrintable(QString("Empty providerId")));
+    QVERIFY2(!config.displayName.isEmpty(),
+             qPrintable(QString("Empty displayName for %1")
+                            .arg(config.providerId)));
+    QVERIFY2(!config.supportedLanguages.isEmpty(),
+             qPrintable(QString("No supported languages for %1")
+                            .arg(config.providerId)));
+    QVERIFY2(!config.serverCommand.isEmpty(),
+             qPrintable(QString("Empty serverCommand for %1")
+                            .arg(config.providerId)));
+  }
+}
+
+void TestSymbolNavigation::testLanguageProviderSupportsConfiguredLanguages() {
+  LanguageServerConfig config;
+  config.providerId = "test-provider";
+  config.displayName = "Test Provider";
+  config.supportedLanguages = {"cpp", "c"};
+  config.serverCommand = "nonexistent-test-server";
+
+  LanguageLspDefinitionProvider provider(config);
+
+  QVERIFY(provider.supports("cpp"));
+  QVERIFY(provider.supports("c"));
+}
+
+void TestSymbolNavigation::testLanguageProviderRejectsUnconfiguredLanguages() {
+  LanguageServerConfig config;
+  config.providerId = "test-provider";
+  config.displayName = "Test Provider";
+  config.supportedLanguages = {"cpp", "c"};
+  config.serverCommand = "nonexistent-test-server";
+
+  LanguageLspDefinitionProvider provider(config);
+
+  QVERIFY(!provider.supports("py"));
+  QVERIFY(!provider.supports("java"));
+  QVERIFY(!provider.supports("rust"));
+}
+
+void TestSymbolNavigation::testLanguageProviderIdMatchesConfig() {
+  LanguageServerConfig config;
+  config.providerId = "my-custom-provider";
+  config.displayName = "Custom Provider";
+  config.supportedLanguages = {"py"};
+  config.serverCommand = "nonexistent-test-server";
+
+  LanguageLspDefinitionProvider provider(config);
+
+  QCOMPARE(provider.id(), QString("my-custom-provider"));
+}
+
+void TestSymbolNavigation::testLanguageProviderServerAvailability() {
+  LanguageServerConfig config;
+  config.providerId = "test";
+  config.displayName = "Test";
+  config.supportedLanguages = {"cpp"};
+  config.serverCommand = "nonexistent-binary-xyz-12345";
+
+  LanguageLspDefinitionProvider provider(config);
+
+  QVERIFY(!provider.isServerAvailable());
+}
+
+void TestSymbolNavigation::testLanguageProviderWithUnavailableServer() {
+  LanguageServerConfig config;
+  config.providerId = "test";
+  config.displayName = "Test LSP";
+  config.supportedLanguages = {"cpp"};
+  config.serverCommand = "nonexistent-binary-xyz-12345";
+
+  LanguageLspDefinitionProvider provider(config);
+
+  QSignalSpy failedSpy(&provider,
+                        &IDefinitionProvider::definitionFailed);
+
+  DefinitionRequest req;
+  req.filePath = "/test/file.cpp";
+  req.line = 10;
+  req.column = 5;
+  req.languageId = "cpp";
+
+  int reqId = provider.requestDefinition(req);
+  QVERIFY(reqId > 0);
+
+  QVERIFY(failedSpy.wait(1000));
+  QCOMPARE(failedSpy.count(), 1);
+
+  QString errorMsg = failedSpy.first().at(1).toString();
+  QVERIFY(errorMsg.contains("not available"));
+}
+
+void TestSymbolNavigation::testLanguageProviderRegistrationInService() {
+  SymbolNavigationService service;
+
+  LanguageServerConfig cppConfig;
+  cppConfig.providerId = "clangd";
+  cppConfig.displayName = "clangd";
+  cppConfig.supportedLanguages = {"cpp", "c"};
+  cppConfig.serverCommand = "nonexistent-clangd";
+
+  LanguageServerConfig pyConfig;
+  pyConfig.providerId = "pylsp";
+  pyConfig.displayName = "pylsp";
+  pyConfig.supportedLanguages = {"py"};
+  pyConfig.serverCommand = "nonexistent-pylsp";
+
+  auto *cppProvider = new LanguageLspDefinitionProvider(cppConfig, &service);
+  auto *pyProvider = new LanguageLspDefinitionProvider(pyConfig, &service);
+
+  service.registerProvider(cppProvider);
+  service.registerProvider(pyProvider);
+
+  QSignalSpy startSpy(&service,
+                       &SymbolNavigationService::definitionRequestStarted);
+
+  DefinitionRequest cppReq;
+  cppReq.filePath = "/test/file.cpp";
+  cppReq.line = 10;
+  cppReq.column = 5;
+  cppReq.languageId = "cpp";
+
+  service.goToDefinition(cppReq);
+  QCOMPARE(startSpy.count(), 1);
 }
 
 QTEST_MAIN(TestSymbolNavigation)

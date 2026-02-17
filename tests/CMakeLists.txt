@@ -692,6 +692,7 @@ add_executable(test_symbolnavigation
     ${CMAKE_SOURCE_DIR}/App/definition/idefinitionprovider.cpp
     ${CMAKE_SOURCE_DIR}/App/definition/symbolnavigationservice.cpp
     ${CMAKE_SOURCE_DIR}/App/definition/lspdefinitionprovider.cpp
+    ${CMAKE_SOURCE_DIR}/App/definition/languagelspdefinitionprovider.cpp
     ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )

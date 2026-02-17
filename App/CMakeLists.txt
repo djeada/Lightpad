@@ -125,6 +125,7 @@ set(project_headers
     syntax/yamlsyntaxplugin.h
     definition/idefinitionprovider.h
     definition/lspdefinitionprovider.h
+    definition/languagelspdefinitionprovider.h
     definition/symbolnavigationservice.h
     core/lightpadtabwidget.h
     ui/mainwindow.h
@@ -235,6 +236,7 @@ set(project_sources
     syntax/yamlsyntaxplugin.cpp
     definition/idefinitionprovider.cpp
     definition/lspdefinitionprovider.cpp
+    definition/languagelspdefinitionprovider.cpp
     definition/symbolnavigationservice.cpp
     core/lightpadtabwidget.cpp
     ui/mainwindow.cpp
