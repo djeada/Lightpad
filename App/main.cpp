@@ -7,9 +7,11 @@
 #include "syntax/javascriptsyntaxplugin.h"
 #include "syntax/javasyntaxplugin.h"
 #include "syntax/jsonsyntaxplugin.h"
+#include "syntax/makesyntaxplugin.h"
 #include "syntax/markdownsyntaxplugin.h"
 #include "syntax/pythonsyntaxplugin.h"
 #include "syntax/rustsyntaxplugin.h"
+#include "syntax/cmakesyntaxplugin.h"
 #include "syntax/shellsyntaxplugin.h"
 #include "syntax/syntaxpluginregistry.h"
 #include "syntax/typescriptsyntaxplugin.h"
@@ -27,7 +29,9 @@ void registerBuiltInSyntaxPlugins() {
   registry.registerPlugin(std::make_unique<JavaScriptSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JavaSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JsonSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<MakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MarkdownSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<CMakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<PythonSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<RustSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<ShellSyntaxPlugin>());

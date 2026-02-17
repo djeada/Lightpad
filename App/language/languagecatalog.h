@@ -26,9 +26,11 @@ public:
         {"java", "Java", {"java"}},
         {"js", "JavaScript", {"js", "jsx", "mjs", "cjs"}},
         {"json", "JSON", {"json"}},
+        {"make", "Make", {"mk", "makefile"}},
         {"md", "Markdown", {"md", "markdown"}},
         {"py", "Python", {"py", "pyw", "pyi"}},
         {"rust", "Rust", {"rs"}},
+        {"cmake", "CMake", {"cmake", "cmakelists.txt"}},
         {"sh", "Shell", {"sh", "bash", "zsh"}},
         {"ts", "TypeScript", {"ts", "tsx"}},
         {"yaml", "YAML", {"yaml", "yml"}},
@@ -170,6 +172,8 @@ private:
     addAlias(aliases, "java", "java");
     addAlias(aliases, "rust", "rust");
     addAlias(aliases, "json", "json");
+    addAlias(aliases, "make", "make");
+    addAlias(aliases, "cmake", "cmake");
     addAlias(aliases, "html", "html");
     addAlias(aliases, "css", "css");
     addAlias(aliases, "yaml", "yaml");

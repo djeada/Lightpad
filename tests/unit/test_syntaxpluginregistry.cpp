@@ -5,9 +5,11 @@
 #include "syntax/javascriptsyntaxplugin.h"
 #include "syntax/javasyntaxplugin.h"
 #include "syntax/jsonsyntaxplugin.h"
+#include "syntax/makesyntaxplugin.h"
 #include "syntax/markdownsyntaxplugin.h"
 #include "syntax/pythonsyntaxplugin.h"
 #include "syntax/rustsyntaxplugin.h"
+#include "syntax/cmakesyntaxplugin.h"
 #include "syntax/shellsyntaxplugin.h"
 #include "syntax/syntaxpluginregistry.h"
 #include "syntax/typescriptsyntaxplugin.h"
@@ -192,14 +194,16 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   registry.registerPlugin(std::make_unique<JavaScriptSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JavaSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JsonSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<MakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MarkdownSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<CMakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<PythonSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<RustSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<ShellSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<TypeScriptSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<YamlSyntaxPlugin>());
 
-  QCOMPARE(registry.getAllLanguageIds().size(), 13);
+  QCOMPARE(registry.getAllLanguageIds().size(), 15);
 
   QVERIFY(registry.isLanguageSupported("cpp"));
   QVERIFY(registry.isLanguageSupported("css"));
@@ -208,7 +212,9 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isLanguageSupported("js"));
   QVERIFY(registry.isLanguageSupported("java"));
   QVERIFY(registry.isLanguageSupported("json"));
+  QVERIFY(registry.isLanguageSupported("make"));
   QVERIFY(registry.isLanguageSupported("md"));
+  QVERIFY(registry.isLanguageSupported("cmake"));
   QVERIFY(registry.isLanguageSupported("py"));
   QVERIFY(registry.isLanguageSupported("rust"));
   QVERIFY(registry.isLanguageSupported("sh"));
@@ -222,7 +228,9 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isExtensionSupported("js"));
   QVERIFY(registry.isExtensionSupported("java"));
   QVERIFY(registry.isExtensionSupported("json"));
+  QVERIFY(registry.isExtensionSupported("mk"));
   QVERIFY(registry.isExtensionSupported("md"));
+  QVERIFY(registry.isExtensionSupported("cmake"));
   QVERIFY(registry.isExtensionSupported("py"));
   QVERIFY(registry.isExtensionSupported("rs"));
   QVERIFY(registry.isExtensionSupported("sh"));
