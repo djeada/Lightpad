@@ -17,7 +17,7 @@ Lightpad is a Qt 6-based code editor with a modern UI, built-in language tooling
 - Image viewer and optional PDF viewer (Qt6Pdf)
 
 ## Supported languages (built-in syntax plugins)
-Cpp, Python, JavaScript, TypeScript, Java, Rust, Go, HTML, CSS, JSON, YAML, Markdown, Shell
+Cpp, Python, JavaScript, TypeScript, Java, Rust, Go, HTML, CSS, JSON, YAML, Markdown, Shell, Make, CMake, Bazel, Meson, Ninja
 
 ## Build requirements
 - C++17 compiler
