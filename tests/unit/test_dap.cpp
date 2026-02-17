@@ -6,9 +6,9 @@
 #include "dap/dapclient.h"
 #include "dap/debugadapterregistry.h"
 #include "dap/debugconfiguration.h"
-#include "dap/expressiontranslator.h"
 #include "dap/debugsession.h"
 #include "dap/debugsettings.h"
+#include "dap/expressiontranslator.h"
 #include "dap/watchmanager.h"
 
 class TestDap : public QObject {

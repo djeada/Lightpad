@@ -2862,8 +2862,8 @@ void MainWindow::formatCurrentDocument() {
         FormatTemplateManager::substituteVariables(postFormatCommand, filePath);
   }
 
-  auto shellProgramAndArgs = [](const QString &commandText)
-      -> QPair<QString, QStringList> {
+  auto shellProgramAndArgs =
+      [](const QString &commandText) -> QPair<QString, QStringList> {
 #ifdef Q_OS_WIN
     return qMakePair(QString("cmd"), QStringList() << "/C" << commandText);
 #else
@@ -2903,7 +2903,8 @@ void MainWindow::formatCurrentDocument() {
       m_formatProcessErrorConnection = {};
     }
 
-    if (executionState->formatterRan && executionState->formatterExitCode != 0) {
+    if (executionState->formatterRan &&
+        executionState->formatterExitCode != 0) {
       LOG_WARNING(QString("Formatter exited with code %1")
                       .arg(executionState->formatterExitCode));
       QMessageBox::warning(
@@ -2942,8 +2943,8 @@ void MainWindow::formatCurrentDocument() {
   QSharedPointer<std::function<void()>> runCurrentStage =
       QSharedPointer<std::function<void()>>::create();
   *runCurrentStage = [this, runCurrentStage, executionState, preFormatCommand,
-                      command, postFormatCommand, workingDirectory,
-                      customEnv, shellProgramAndArgs]() {
+                      command, postFormatCommand, workingDirectory, customEnv,
+                      shellProgramAndArgs]() {
     switch (executionState->stage) {
     case FormatExecutionState::Stage::PreFormat: {
       executionState->activeStageName = "pre-format command";

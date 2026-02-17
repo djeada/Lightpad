@@ -27,19 +27,18 @@ bool looksLikeDebuggerCommand(const QString &input) {
       (firstSpace > 0 ? trimmed.left(firstSpace) : trimmed).toLower();
 
   static const QStringList commandTokens = {
-      "alias",   "apropos",  "backtrace", "break",   "bt",      "catch",
-      "clear",   "commands", "condition", "continue","delete",  "detach",
-      "disable", "disassemble",
-      "display", "down",     "enable",    "finish",  "frame",   "help",
-      "ignore",  "info",     "jump",      "list",    "next",    "print",
-      "ptype",   "quit",     "run",       "set",     "show",    "start",
-      "step",    "tbreak",   "thread",    "until",   "up",      "watch",
-      "whatis",  "where",    "x"};
+      "alias",   "apropos",     "backtrace", "break",    "bt",     "catch",
+      "clear",   "commands",    "condition", "continue", "delete", "detach",
+      "disable", "disassemble", "display",   "down",     "enable", "finish",
+      "frame",   "help",        "ignore",    "info",     "jump",   "list",
+      "next",    "print",       "ptype",     "quit",     "run",    "set",
+      "show",    "start",       "step",      "tbreak",   "thread", "until",
+      "up",      "watch",       "whatis",    "where",    "x"};
   return commandTokens.contains(firstToken);
 }
 
-QList<DebugEvaluateRequest>
-buildDefaultPlan(const QString &trimmedInput, bool preferRepl) {
+QList<DebugEvaluateRequest> buildDefaultPlan(const QString &trimmedInput,
+                                             bool preferRepl) {
   QList<DebugEvaluateRequest> plan;
   if (trimmedInput.isEmpty()) {
     return plan;
@@ -57,7 +56,8 @@ buildDefaultPlan(const QString &trimmedInput, bool preferRepl) {
 
 } // namespace
 
-QList<DebugEvaluateRequest> DebugExpressionTranslator::buildConsoleEvaluationPlan(
+QList<DebugEvaluateRequest>
+DebugExpressionTranslator::buildConsoleEvaluationPlan(
     const QString &userInput, const QString &adapterId,
     const QString &adapterType) {
   const QString trimmedInput = userInput.trimmed();

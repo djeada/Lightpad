@@ -1,25 +1,25 @@
 #include "findreplacepanel.h"
-#include "../../core/textarea.h"
 #include "../../core/lightpadtabwidget.h"
+#include "../../core/textarea.h"
 #include "../mainwindow.h"
 #include "ui_findreplacepanel.h"
 
+#include <QApplication>
 #include <QDebug>
 #include <QDir>
 #include <QDirIterator>
+#include <QEventLoop>
 #include <QFile>
 #include <QHeaderView>
-#include <QApplication>
-#include <QEventLoop>
-#include <QLabel>
 #include <QKeyEvent>
+#include <QLabel>
 #include <QLineEdit>
 #include <QShortcut>
 #include <QSizePolicy>
 #include <QSpacerItem>
-#include <QTimer>
 #include <QTextDocument>
 #include <QTextStream>
+#include <QTimer>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
@@ -163,9 +163,9 @@ void FindReplacePanel::setTextArea(TextArea *area) {
   lastObservedPlainText = textArea ? textArea->toPlainText() : QString();
 
   if (textArea && textArea->document()) {
-    textAreaContentsChangedConnection = connect(
-        textArea, &QPlainTextEdit::textChanged, this,
-        &FindReplacePanel::onTextAreaContentsChanged);
+    textAreaContentsChangedConnection =
+        connect(textArea, &QPlainTextEdit::textChanged, this,
+                &FindReplacePanel::onTextAreaContentsChanged);
   }
 
   if (!isVisible() || m_vimCommandMode || !ui) {
@@ -289,16 +289,14 @@ void FindReplacePanel::setSearchText(const QString &text) {
 bool FindReplacePanel::eventFilter(QObject *obj, QEvent *event) {
   if (obj == ui->searchFind && event->type() == QEvent::KeyPress) {
     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-    if (!m_vimCommandMode &&
-        (keyEvent->modifiers() & Qt::ControlModifier) &&
+    if (!m_vimCommandMode && (keyEvent->modifiers() & Qt::ControlModifier) &&
         keyEvent->key() == Qt::Key_R) {
       setGlobalMode(false);
       setOnlyFind(false);
       setReplaceVisibility(true);
       return true;
     }
-    if (!m_vimCommandMode &&
-        (keyEvent->modifiers() & Qt::ControlModifier) &&
+    if (!m_vimCommandMode && (keyEvent->modifiers() & Qt::ControlModifier) &&
         keyEvent->key() == Qt::Key_F) {
       setGlobalMode(false);
       setOnlyFind(true);
@@ -1034,8 +1032,9 @@ void FindReplacePanel::performGlobalSearch(const QString &searchWord,
   for (int i = 0; i < totalFiles; ++i) {
     const QString &filePath = files[i];
     if ((i % 100) == 0) {
-      updateSearchFeedback(
-          QString("Searching project... %1/%2 files").arg(i + 1).arg(totalFiles));
+      updateSearchFeedback(QString("Searching project... %1/%2 files")
+                               .arg(i + 1)
+                               .arg(totalFiles));
     }
     if (!currentPath.isEmpty() && filePath == currentPath && textArea) {
       globalResultsByFile[filePath] =
@@ -1336,13 +1335,15 @@ void FindReplacePanel::refreshGlobalResultsForCurrentFile(
   if (!selectedFilePath.isEmpty()) {
     for (int i = 0; i < globalResults.size(); ++i) {
       const GlobalSearchResult &result = globalResults[i];
-      if (result.filePath == selectedFilePath && result.lineNumber == selectedLine &&
+      if (result.filePath == selectedFilePath &&
+          result.lineNumber == selectedLine &&
           result.columnNumber == selectedColumn) {
         nextIndex = i;
         break;
       }
     }
-  } else if (globalResultIndex >= 0 && globalResultIndex < globalResults.size()) {
+  } else if (globalResultIndex >= 0 &&
+             globalResultIndex < globalResults.size()) {
     nextIndex = globalResultIndex;
   }
 
@@ -1427,7 +1428,8 @@ void FindReplacePanel::navigateToGlobalResult(int index, bool emitNavigation) {
   }
 
   if (emitNavigation) {
-    emit navigateToFile(result.filePath, result.lineNumber, result.columnNumber);
+    emit navigateToFile(result.filePath, result.lineNumber,
+                        result.columnNumber);
   }
 }
 
@@ -1505,10 +1507,9 @@ void FindReplacePanel::displayLocalResults(const QString &searchWord) {
     QString lineContent =
         (lineNum < lines.size()) ? lines[lineNum].trimmed() : QString();
     QRegularExpressionMatch match = pattern.match(text, matchPos);
-    int matchLength =
-        (match.hasMatch() && match.capturedStart() == matchPos)
-            ? match.capturedLength()
-            : searchWord.size();
+    int matchLength = (match.hasMatch() && match.capturedStart() == matchPos)
+                          ? match.capturedLength()
+                          : searchWord.size();
 
     QTreeWidgetItem *resultItem = new QTreeWidgetItem(resultsTree);
     resultItem->setText(0, "Current File");

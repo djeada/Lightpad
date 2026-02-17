@@ -12,8 +12,7 @@ struct DebugEvaluateRequest {
 class DebugExpressionTranslator {
 public:
   static QList<DebugEvaluateRequest>
-  buildConsoleEvaluationPlan(const QString &userInput,
-                             const QString &adapterId,
+  buildConsoleEvaluationPlan(const QString &userInput, const QString &adapterId,
                              const QString &adapterType);
 
   static DebugEvaluateRequest localsFallbackRequest(const QString &adapterId,

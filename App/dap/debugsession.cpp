@@ -86,7 +86,7 @@ void DebugSession::restart() {
   }
 
   if (!m_client->supportsRestartRequest()) {
-    // Manual restart path: relaunch adapter process, then re-run launch/attach.
+
     m_launchRequestSent = false;
     m_adapterInitializedReceived = false;
     m_configurationDoneSent = false;

@@ -778,9 +778,7 @@ void DebugPanel::onStepOut() {
   }
 }
 
-void DebugPanel::onRestart() {
-  emit restartDebugRequested();
-}
+void DebugPanel::onRestart() { emit restartDebugRequested(); }
 
 void DebugPanel::onStop() {
   if (m_dapClient && m_dapClient->isDebugging()) {
@@ -927,9 +925,8 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     const bool autoLoadScope =
         eagerScopeRefs.contains(scope.variablesReference) &&
         eagerLoadsRemaining > 0;
-    const bool shouldLoadLocals =
-        localScope && !scope.expensive && !registerScope &&
-        !preferLocalsFallback;
+    const bool shouldLoadLocals = localScope && !scope.expensive &&
+                                  !registerScope && !preferLocalsFallback;
     const bool shouldLoadScopeVariables =
         shouldLoadLocals ||
         (!scope.expensive && !registerScope && !localScope && autoLoadScope);
@@ -944,7 +941,8 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     font.setBold(true);
     scopeItem->setFont(0, font);
 
-    if (scope.variablesReference > 0 && (localScope || shouldLoadScopeVariables)) {
+    if (scope.variablesReference > 0 &&
+        (localScope || shouldLoadScopeVariables)) {
       scopeItem->setExpanded(true);
     }
 
@@ -1071,9 +1069,9 @@ void DebugPanel::requestLocalsFallback(int scopeVariablesReference) {
 
   const int padSpaces = (m_localsFallbackRequestNonce++ % 7) + 1;
   const QString requestExpr = baseExpr + QString(padSpaces, QLatin1Char(' '));
-  const QString evalContext =
-      localsRequest.context.isEmpty() ? QStringLiteral("repl")
-                                      : localsRequest.context;
+  const QString evalContext = localsRequest.context.isEmpty()
+                                  ? QStringLiteral("repl")
+                                  : localsRequest.context;
 
   m_localsFallbackPending = true;
   m_localsFallbackFrameId = m_currentFrameId;
@@ -1088,8 +1086,8 @@ bool DebugPanel::hasLocalsFallbackCommand() const {
   }
 
   const DebugEvaluateRequest localsRequest =
-      DebugExpressionTranslator::localsFallbackRequest(m_dapClient->adapterId(),
-                                                       m_dapClient->adapterType());
+      DebugExpressionTranslator::localsFallbackRequest(
+          m_dapClient->adapterId(), m_dapClient->adapterType());
   return !localsRequest.expression.trimmed().isEmpty();
 }
 
@@ -1522,7 +1520,8 @@ void DebugPanel::onEvaluateResult(const QString &expression,
   const int pendingIndex = findPendingConsoleEvaluationIndex(expression);
   QString displayExpression = expression;
   if (pendingIndex >= 0) {
-    displayExpression = m_pendingConsoleEvaluations.at(pendingIndex).userExpression;
+    displayExpression =
+        m_pendingConsoleEvaluations.at(pendingIndex).userExpression;
     m_pendingConsoleEvaluations.removeAt(pendingIndex);
   }
 
@@ -1549,7 +1548,8 @@ void DebugPanel::onEvaluateError(const QString &expression,
 
   const int pendingIndex = findPendingConsoleEvaluationIndex(expression);
   if (pendingIndex >= 0) {
-    PendingConsoleEvaluation &pending = m_pendingConsoleEvaluations[pendingIndex];
+    PendingConsoleEvaluation &pending =
+        m_pendingConsoleEvaluations[pendingIndex];
     const int nextAttempt = pending.activeAttemptIndex + 1;
     if (nextAttempt < pending.attempts.size()) {
       pending.activeAttemptIndex = nextAttempt;
