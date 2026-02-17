@@ -51,6 +51,8 @@ This document lists all keyboard shortcuts available in Lightpad.
 | `Ctrl+End` | Go to end of file |
 | `Ctrl+Left` | Previous word |
 | `Ctrl+Right` | Next word |
+| `Alt+Left` | Navigate back |
+| `Alt+Right` | Navigate forward |
 
 ## Code Editing
 
@@ -243,11 +245,13 @@ When VIM mode is enabled, the editor uses modal editing with different shortcuts
 
 ## LSP Features
 
-When connected to a language server:
+When connected to a language server (see [Go to Definition](GO_TO_DEFINITION.md) for setup):
 
 | Shortcut | Action |
 |----------|--------|
 | `F12` | Go to definition |
+| `Ctrl+B` | Go to definition |
+| `Ctrl+Click` | Go to definition for clicked symbol |
 | `Shift+F12` | Find references |
 | `Ctrl+Shift+O` | Go to symbol |
 | `F2` | Rename symbol |
