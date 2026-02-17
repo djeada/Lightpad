@@ -123,6 +123,9 @@ set(project_headers
     syntax/shellsyntaxplugin.h
     syntax/typescriptsyntaxplugin.h
     syntax/yamlsyntaxplugin.h
+    definition/idefinitionprovider.h
+    definition/lspdefinitionprovider.h
+    definition/symbolnavigationservice.h
     core/lightpadtabwidget.h
     ui/mainwindow.h
     ui/popup.h
@@ -230,6 +233,9 @@ set(project_sources
     syntax/shellsyntaxplugin.cpp
     syntax/typescriptsyntaxplugin.cpp
     syntax/yamlsyntaxplugin.cpp
+    definition/idefinitionprovider.cpp
+    definition/lspdefinitionprovider.cpp
+    definition/symbolnavigationservice.cpp
     core/lightpadtabwidget.cpp
     ui/mainwindow.cpp
     ui/popup.cpp
