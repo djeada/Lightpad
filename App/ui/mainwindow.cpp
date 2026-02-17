@@ -113,6 +113,10 @@ MainWindow::MainWindow(QWidget *parent)
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
   ui->menubar->setNativeMenuBar(false);
+  ui->actionFind_in_file->setShortcut(QKeySequence::Find);
+  ui->actionFind_in_file->setShortcutContext(Qt::ApplicationShortcut);
+  ui->actionReplace_in_file->setShortcut(QKeySequence::Replace);
+  ui->actionReplace_in_file->setShortcutContext(Qt::ApplicationShortcut);
   ensureFileTreeModel();
 
   showMaximized();
@@ -1472,9 +1476,9 @@ void MainWindow::showFindReplace(bool onlyFind) {
                 QTextCursor cursor = textArea->textCursor();
                 cursor.movePosition(QTextCursor::Start);
                 cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
-                                    lineNumber - 1);
+                                    qMax(0, lineNumber - 1));
                 cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
-                                    columnNumber - 1);
+                                    qMax(0, columnNumber - 1));
                 textArea->setTextCursor(cursor);
                 textArea->setFocus();
               }
@@ -3070,6 +3074,10 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
   applyHighlightForFile(filePath);
 
   setupTextArea();
+
+  if (findReplacePanel && tabWidget == currentTabWidget()) {
+    findReplacePanel->setTextArea(getCurrentTextArea());
+  }
 
   auto *page = tabWidget->getPage(index);
   if (page) {

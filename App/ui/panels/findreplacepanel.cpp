@@ -1,5 +1,7 @@
 #include "findreplacepanel.h"
 #include "../../core/textarea.h"
+#include "../../core/lightpadtabwidget.h"
+#include "../mainwindow.h"
 #include "ui_findreplacepanel.h"
 
 #include <QDebug>
@@ -7,15 +9,30 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QHeaderView>
+#include <QApplication>
+#include <QEventLoop>
+#include <QLabel>
 #include <QKeyEvent>
+#include <QLineEdit>
+#include <QShortcut>
 #include <QSizePolicy>
 #include <QSpacerItem>
+#include <QTimer>
 #include <QTextDocument>
 #include <QTextStream>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
 namespace {
+constexpr int kDataRoleFilePath = Qt::UserRole;
+constexpr int kDataRoleLineNumber = Qt::UserRole + 1;
+constexpr int kDataRoleColumnNumber = Qt::UserRole + 2;
+constexpr int kDataRoleMatchStart = Qt::UserRole + 3;
+constexpr int kDataRoleMatchLength = Qt::UserRole + 4;
+constexpr int kDataRoleResultScope = Qt::UserRole + 5;
+constexpr int kScopeLocal = 1;
+constexpr int kScopeGlobal = 2;
+
 void setModeLayoutVisible(Ui::FindReplacePanel *ui, bool visible) {
   if (!ui) {
     return;
@@ -40,19 +57,44 @@ void setModeLayoutVisible(Ui::FindReplacePanel *ui, bool visible) {
 FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
     : QWidget(parent), document(nullptr), textArea(nullptr),
       mainWindow(nullptr), ui(new Ui::FindReplacePanel), onlyFind(onlyFind),
-      position(-1), globalResultIndex(-1), resultsTree(nullptr),
-      searchHistoryIndex(-1), m_vimCommandMode(false) {
+      m_vimCommandMode(false), position(-1), globalResultIndex(-1),
+      resultsTree(nullptr), searchHistoryIndex(-1),
+      refreshTimer(new QTimer(this)), searchStatusLabel(nullptr),
+      searchInProgress(false), searchExecuted(false) {
   ui->setupUi(this);
 
   show();
 
   ui->searchFind->installEventFilter(this);
+  connect(ui->searchFind, &QLineEdit::textChanged, this,
+          &FindReplacePanel::onSearchTextChanged);
+
+  auto *replaceShortcut = new QShortcut(QKeySequence::Replace, this);
+  replaceShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+  connect(replaceShortcut, &QShortcut::activated, this, [this]() {
+    if (m_vimCommandMode) {
+      return;
+    }
+    setGlobalMode(false);
+    setOnlyFind(false);
+    setReplaceVisibility(true);
+    setFocusOnSearchBox();
+  });
+
+  auto *findShortcut = new QShortcut(QKeySequence::Find, this);
+  findShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+  connect(findShortcut, &QShortcut::activated, this, [this]() {
+    if (m_vimCommandMode) {
+      return;
+    }
+    setGlobalMode(false);
+    setOnlyFind(true);
+    setReplaceVisibility(false);
+    setFocusOnSearchBox();
+  });
 
   ui->options->setVisible(false);
   setReplaceVisibility(onlyFind);
-
-  colorFormat.setBackground(Qt::red);
-  colorFormat.setForeground(Qt::white);
 
   resultsTree = new QTreeWidget(this);
   resultsTree->setHeaderLabels(QStringList() << "File" << "Line" << "Match");
@@ -61,18 +103,34 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   resultsTree->setVisible(false);
   resultsTree->setMinimumHeight(150);
 
+  searchStatusLabel = new QLabel(this);
+  searchStatusLabel->setVisible(false);
+
   if (layout()) {
+    layout()->addWidget(searchStatusLabel);
     layout()->addWidget(resultsTree);
   }
 
   connect(resultsTree, &QTreeWidget::itemClicked, this,
           [this](QTreeWidgetItem *item, int column) {
-            if (isGlobalMode()) {
+            if (!item) {
+              return;
+            }
+            int scope = item->data(0, kDataRoleResultScope).toInt();
+            if (scope == kScopeGlobal) {
+              onGlobalResultClicked(item, column);
+            } else if (scope == kScopeLocal) {
+              onLocalResultClicked(item, column);
+            } else if (isGlobalMode()) {
               onGlobalResultClicked(item, column);
             } else {
               onLocalResultClicked(item, column);
             }
           });
+
+  refreshTimer->setSingleShot(true);
+  connect(refreshTimer, &QTimer::timeout, this,
+          &FindReplacePanel::refreshSearchResults);
 
   updateModeUI();
   updateCounterLabels();
@@ -96,7 +154,64 @@ void FindReplacePanel::setOnlyFind(bool flag) { onlyFind = flag; }
 
 void FindReplacePanel::setDocument(QTextDocument *doc) { document = doc; }
 
-void FindReplacePanel::setTextArea(TextArea *area) { textArea = area; }
+void FindReplacePanel::setTextArea(TextArea *area) {
+  if (textAreaContentsChangedConnection) {
+    disconnect(textAreaContentsChangedConnection);
+  }
+
+  textArea = area;
+  lastObservedPlainText = textArea ? textArea->toPlainText() : QString();
+
+  if (textArea && textArea->document()) {
+    textAreaContentsChangedConnection = connect(
+        textArea, &QPlainTextEdit::textChanged, this,
+        &FindReplacePanel::onTextAreaContentsChanged);
+  }
+
+  if (!isVisible() || m_vimCommandMode || !ui) {
+    return;
+  }
+
+  const QString currentSearch = ui->searchFind->text();
+  if (currentSearch.isEmpty()) {
+    if (!isGlobalMode()) {
+      positions.clear();
+      position = -1;
+      if (resultsTree) {
+        resultsTree->clear();
+        resultsTree->setVisible(false);
+      }
+      updateCounterLabels();
+    }
+    return;
+  }
+
+  if (!textArea && !isGlobalMode()) {
+    positions.clear();
+    position = -1;
+    if (resultsTree) {
+      resultsTree->clear();
+      resultsTree->setVisible(false);
+    }
+    updateCounterLabels();
+    return;
+  }
+
+  searchExecuted = true;
+  activeSearchWord = currentSearch;
+  if (!isGlobalMode() && textArea) {
+    beginSearchFeedback(QString("Searching current file..."));
+    QTextCursor cursor(textArea->document());
+    findInitial(cursor, currentSearch);
+    endSearchFeedback(positions.size());
+    updateCounterLabels();
+    return;
+  }
+
+  if (refreshTimer) {
+    refreshTimer->start(0);
+  }
+}
 
 void FindReplacePanel::setMainWindow(MainWindow *window) {
   mainWindow = window;
@@ -172,9 +287,26 @@ void FindReplacePanel::setSearchText(const QString &text) {
 }
 
 bool FindReplacePanel::eventFilter(QObject *obj, QEvent *event) {
-  if (m_vimCommandMode && obj == ui->searchFind) {
-    if (event->type() == QEvent::KeyPress) {
-      handleVimCommandKey(static_cast<QKeyEvent *>(event));
+  if (obj == ui->searchFind && event->type() == QEvent::KeyPress) {
+    QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+    if (!m_vimCommandMode &&
+        (keyEvent->modifiers() & Qt::ControlModifier) &&
+        keyEvent->key() == Qt::Key_R) {
+      setGlobalMode(false);
+      setOnlyFind(false);
+      setReplaceVisibility(true);
+      return true;
+    }
+    if (!m_vimCommandMode &&
+        (keyEvent->modifiers() & Qt::ControlModifier) &&
+        keyEvent->key() == Qt::Key_F) {
+      setGlobalMode(false);
+      setOnlyFind(true);
+      setReplaceVisibility(false);
+      return true;
+    }
+    if (m_vimCommandMode) {
+      handleVimCommandKey(keyEvent);
       return true;
     }
   }
@@ -270,6 +402,7 @@ void FindReplacePanel::updateModeUI() {
     position = -1;
   } else {
     globalResults.clear();
+    globalResultsByFile.clear();
     globalResultIndex = -1;
   }
 
@@ -278,6 +411,7 @@ void FindReplacePanel::updateModeUI() {
     resultsTree->setVisible(false);
   }
 
+  clearSearchFeedback();
   updateCounterLabels();
 }
 
@@ -378,6 +512,8 @@ void FindReplacePanel::on_find_clicked() {
   }
 
   addToSearchHistory(searchWord);
+  searchExecuted = true;
+  activeSearchWord = searchWord;
 
   if (isGlobalMode()) {
     performGlobalSearch(searchWord);
@@ -409,6 +545,8 @@ void FindReplacePanel::on_findPrevious_clicked() {
   }
 
   addToSearchHistory(searchWord);
+  searchExecuted = true;
+  activeSearchWord = searchWord;
 
   if (isGlobalMode()) {
     if (!globalResults.isEmpty()) {
@@ -450,6 +588,8 @@ void FindReplacePanel::on_replaceSingle_clicked() {
     }
 
     addToSearchHistory(searchWord);
+    searchExecuted = true;
+    activeSearchWord = searchWord;
     QTextCursor newCursor(textArea->document());
 
     if (textArea->getSearchWord() != searchWord) {
@@ -476,6 +616,7 @@ void FindReplacePanel::on_close_clicked() {
   if (textArea)
     textArea->updateSyntaxHighlightTags();
 
+  clearSearchFeedback();
   close();
 }
 
@@ -487,21 +628,14 @@ void FindReplacePanel::selectSearchWord(QTextCursor &cursor, int n,
     cursor.clearSelection();
     cursor.setPosition(positions[position] - offset + n,
                        QTextCursor::KeepAnchor);
-    prevFormat = cursor.charFormat();
-    cursor.setCharFormat(colorFormat);
     textArea->setTextCursor(cursor);
   }
 }
 
 void FindReplacePanel::clearSelectionFormat(QTextCursor &cursor, int n) {
   if (!positions.isEmpty() && position >= 0) {
-    cursor.setPosition(positions[position]);
-
-    if (!cursor.isNull()) {
-      cursor.setPosition(positions[position] + n, QTextCursor::KeepAnchor);
-      cursor.setCharFormat(prevFormat);
-      textArea->setTextCursor(cursor);
-    }
+    cursor.setPosition(positions[position] + n);
+    textArea->setTextCursor(cursor);
   }
 }
 
@@ -713,8 +847,6 @@ void FindReplacePanel::findPrevious(QTextCursor &cursor,
       cursor.clearSelection();
       cursor.setPosition(positions[position] + matchLength,
                          QTextCursor::KeepAnchor);
-      prevFormat = cursor.charFormat();
-      cursor.setCharFormat(colorFormat);
       textArea->setTextCursor(cursor);
     }
   }
@@ -734,6 +866,8 @@ void FindReplacePanel::on_replaceAll_clicked() {
     }
 
     addToSearchHistory(searchWord);
+    searchExecuted = true;
+    activeSearchWord = searchWord;
 
     QRegularExpression pattern = buildSearchPattern(searchWord);
     QString text = textArea->toPlainText();
@@ -781,6 +915,65 @@ void FindReplacePanel::on_replaceAll_clicked() {
   }
 }
 
+void FindReplacePanel::onSearchTextChanged(const QString &text) {
+  if (m_vimCommandMode) {
+    return;
+  }
+
+  activeSearchWord = text;
+  searchExecuted = !text.isEmpty();
+  if (textArea) {
+    lastObservedPlainText = textArea->toPlainText();
+  }
+  if (text.isEmpty()) {
+    clearSearchFeedback();
+  } else {
+    beginSearchFeedback();
+  }
+  if (refreshTimer) {
+    refreshTimer->start(120);
+  }
+}
+
+void FindReplacePanel::beginSearchFeedback(const QString &message) {
+  if (!searchStatusLabel) {
+    return;
+  }
+  searchInProgress = true;
+  searchStatusLabel->setText(message);
+  searchStatusLabel->setVisible(true);
+  qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
+}
+
+void FindReplacePanel::updateSearchFeedback(const QString &message) {
+  if (!searchStatusLabel) {
+    return;
+  }
+  searchStatusLabel->setText(message);
+  if (!searchStatusLabel->isVisible()) {
+    searchStatusLabel->setVisible(true);
+  }
+  qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
+}
+
+void FindReplacePanel::endSearchFeedback(int matchCount) {
+  if (!searchStatusLabel) {
+    return;
+  }
+  searchInProgress = false;
+  searchStatusLabel->setText(QString("%1 matches").arg(matchCount));
+  searchStatusLabel->setVisible(true);
+}
+
+void FindReplacePanel::clearSearchFeedback() {
+  if (!searchStatusLabel) {
+    return;
+  }
+  searchInProgress = false;
+  searchStatusLabel->clear();
+  searchStatusLabel->setVisible(false);
+}
+
 QStringList FindReplacePanel::getProjectFiles() const {
   QStringList files;
 
@@ -814,8 +1007,12 @@ QStringList FindReplacePanel::getProjectFiles() const {
   return files;
 }
 
-void FindReplacePanel::performGlobalSearch(const QString &searchWord) {
+void FindReplacePanel::performGlobalSearch(const QString &searchWord,
+                                           bool navigateToResult) {
+  beginSearchFeedback(QString("Searching project..."));
+
   globalResults.clear();
+  globalResultsByFile.clear();
   globalResultIndex = -1;
 
   if (resultsTree) {
@@ -825,23 +1022,205 @@ void FindReplacePanel::performGlobalSearch(const QString &searchWord) {
   QRegularExpression pattern = buildSearchPattern(searchWord);
 
   if (!pattern.isValid()) {
+    clearSearchFeedback();
     updateCounterLabels();
     return;
   }
 
   QStringList files = getProjectFiles();
+  const QString currentPath = currentFilePath();
+  const int totalFiles = files.size();
 
-  for (const QString &filePath : files) {
+  for (int i = 0; i < totalFiles; ++i) {
+    const QString &filePath = files[i];
+    if ((i % 100) == 0) {
+      updateSearchFeedback(
+          QString("Searching project... %1/%2 files").arg(i + 1).arg(totalFiles));
+    }
+    if (!currentPath.isEmpty() && filePath == currentPath && textArea) {
+      globalResultsByFile[filePath] =
+          collectMatchesInContent(filePath, textArea->toPlainText(), pattern);
+      continue;
+    }
     searchInFile(filePath, pattern);
+  }
+
+  for (auto it = globalResultsByFile.cbegin(); it != globalResultsByFile.cend();
+       ++it) {
+    globalResults += it.value();
   }
 
   displayGlobalResults();
 
-  if (!globalResults.isEmpty()) {
+  if (navigateToResult && !globalResults.isEmpty()) {
     globalResultIndex = 0;
     navigateToGlobalResult(0);
+  } else if (!globalResults.isEmpty()) {
+    globalResultIndex = 0;
+    navigateToGlobalResult(0, false);
   }
 
+  endSearchFeedback(globalResults.size());
+  updateCounterLabels();
+}
+
+void FindReplacePanel::onTextAreaContentsChanged() {
+  if (!isVisible() || m_vimCommandMode || !refreshTimer) {
+    return;
+  }
+  if (!searchExecuted) {
+    return;
+  }
+  if (!textArea) {
+    return;
+  }
+  QString currentPlainText = textArea->toPlainText();
+  if (currentPlainText == lastObservedPlainText) {
+    return;
+  }
+  lastObservedPlainText = currentPlainText;
+  refreshTimer->start(250);
+}
+
+void FindReplacePanel::refreshSearchResults() {
+  if (!isVisible() || m_vimCommandMode || !searchExecuted) {
+    return;
+  }
+
+  beginSearchFeedback();
+
+  QString searchWord = ui->searchFind->text();
+  if (searchWord.isEmpty()) {
+    positions.clear();
+    position = -1;
+    globalResults.clear();
+    globalResultsByFile.clear();
+    globalResultIndex = -1;
+    searchExecuted = false;
+    activeSearchWord.clear();
+    if (resultsTree) {
+      resultsTree->clear();
+      resultsTree->setVisible(false);
+    }
+    if (textArea) {
+      textArea->updateSyntaxHighlightTags();
+    }
+    clearSearchFeedback();
+    updateCounterLabels();
+    return;
+  }
+
+  if (searchWord != activeSearchWord) {
+    clearSearchFeedback();
+    return;
+  }
+
+  if (isGlobalMode()) {
+    refreshGlobalResultsForCurrentFile(searchWord);
+    return;
+  }
+
+  if (!textArea) {
+    if (!isGlobalMode()) {
+      positions.clear();
+      position = -1;
+      if (resultsTree) {
+        resultsTree->clear();
+        resultsTree->setVisible(false);
+      }
+      updateCounterLabels();
+    }
+    clearSearchFeedback();
+    return;
+  }
+
+  QRegularExpression pattern = buildSearchPattern(searchWord);
+  if (!pattern.isValid()) {
+    positions.clear();
+    position = -1;
+    if (resultsTree) {
+      resultsTree->clear();
+      resultsTree->setVisible(false);
+    }
+    clearSearchFeedback();
+    updateCounterLabels();
+    return;
+  }
+
+  QString text = textArea->toPlainText();
+  QVector<int> refreshedPositions;
+  QRegularExpressionMatchIterator matches = pattern.globalMatch(text);
+  while (matches.hasNext()) {
+    QRegularExpressionMatch match = matches.next();
+    refreshedPositions.push_back(match.capturedStart());
+  }
+
+  if (ui->searchBackward->isChecked()) {
+    std::reverse(refreshedPositions.begin(), refreshedPositions.end());
+  }
+
+  int previousPosition = -1;
+  if (position >= 0 && position < positions.size()) {
+    previousPosition = positions[position];
+  }
+
+  positions = refreshedPositions;
+  position = -1;
+
+  if (!positions.isEmpty()) {
+    if (previousPosition >= 0) {
+      for (int i = 0; i < positions.size(); ++i) {
+        if (positions[i] == previousPosition) {
+          position = i;
+          break;
+        }
+      }
+    }
+
+    if (position < 0) {
+      int cursorPos = textArea->textCursor().selectionStart();
+      if (ui->searchBackward->isChecked()) {
+        for (int i = 0; i < positions.size(); ++i) {
+          if (positions[i] <= cursorPos) {
+            position = i;
+            break;
+          }
+        }
+        if (position < 0) {
+          position = positions.size() - 1;
+        }
+      } else {
+        for (int i = 0; i < positions.size(); ++i) {
+          if (positions[i] >= cursorPos) {
+            position = i;
+            break;
+          }
+        }
+        if (position < 0) {
+          position = 0;
+        }
+      }
+    }
+  }
+
+  textArea->updateSyntaxHighlightTags(searchWord);
+  displayLocalResults(searchWord);
+
+  if (resultsTree && position >= 0 && position < positions.size()) {
+    for (int i = 0; i < resultsTree->topLevelItemCount(); ++i) {
+      QTreeWidgetItem *resultItem = resultsTree->topLevelItem(i);
+      if (!resultItem) {
+        continue;
+      }
+      int matchStart = resultItem->data(0, kDataRoleMatchStart).toInt();
+      if (matchStart == positions[position]) {
+        resultsTree->setCurrentItem(resultItem);
+        break;
+      }
+    }
+  }
+
+  endSearchFeedback(positions.size());
   updateCounterLabels();
 }
 
@@ -856,6 +1235,14 @@ void FindReplacePanel::searchInFile(const QString &filePath,
   QString content = stream.readAll();
   file.close();
 
+  globalResultsByFile[filePath] =
+      collectMatchesInContent(filePath, content, pattern);
+}
+
+QVector<GlobalSearchResult> FindReplacePanel::collectMatchesInContent(
+    const QString &filePath, const QString &content,
+    const QRegularExpression &pattern) const {
+  QVector<GlobalSearchResult> matchesForFile;
   QStringList lines = content.split('\n');
 
   for (int lineNum = 0; lineNum < lines.size(); ++lineNum) {
@@ -871,10 +1258,98 @@ void FindReplacePanel::searchInFile(const QString &filePath,
       result.columnNumber = match.capturedStart() + 1;
       result.matchLength = match.capturedLength();
       result.lineContent = line.trimmed();
-
-      globalResults.append(result);
+      matchesForFile.append(result);
     }
   }
+
+  return matchesForFile;
+}
+
+QString FindReplacePanel::currentFilePath() const {
+  if (!mainWindow) {
+    return QString();
+  }
+
+  LightpadTabWidget *tabWidget = mainWindow->currentTabWidget();
+  if (!tabWidget) {
+    return QString();
+  }
+
+  int tabIndex = tabWidget->currentIndex();
+  if (tabIndex < 0) {
+    return QString();
+  }
+  return tabWidget->getFilePath(tabIndex);
+}
+
+void FindReplacePanel::refreshGlobalResultsForCurrentFile(
+    const QString &searchWord) {
+  updateSearchFeedback(QString("Searching current file..."));
+  if (globalResultsByFile.isEmpty()) {
+    performGlobalSearch(searchWord, false);
+    return;
+  }
+
+  QString filePath = currentFilePath();
+  if (filePath.isEmpty() || !textArea) {
+    return;
+  }
+
+  if (!globalResultsByFile.contains(filePath)) {
+    return;
+  }
+
+  QRegularExpression pattern = buildSearchPattern(searchWord);
+  if (!pattern.isValid()) {
+    return;
+  }
+
+  QString selectedFilePath;
+  int selectedLine = -1;
+  int selectedColumn = -1;
+  if (globalResultIndex >= 0 && globalResultIndex < globalResults.size()) {
+    const GlobalSearchResult &selectedResult = globalResults[globalResultIndex];
+    selectedFilePath = selectedResult.filePath;
+    selectedLine = selectedResult.lineNumber;
+    selectedColumn = selectedResult.columnNumber;
+  }
+
+  globalResultsByFile[filePath] =
+      collectMatchesInContent(filePath, textArea->toPlainText(), pattern);
+
+  globalResults.clear();
+  for (auto it = globalResultsByFile.cbegin(); it != globalResultsByFile.cend();
+       ++it) {
+    globalResults += it.value();
+  }
+
+  displayGlobalResults();
+
+  if (globalResults.isEmpty()) {
+    globalResultIndex = -1;
+    endSearchFeedback(0);
+    updateCounterLabels();
+    return;
+  }
+
+  int nextIndex = 0;
+  if (!selectedFilePath.isEmpty()) {
+    for (int i = 0; i < globalResults.size(); ++i) {
+      const GlobalSearchResult &result = globalResults[i];
+      if (result.filePath == selectedFilePath && result.lineNumber == selectedLine &&
+          result.columnNumber == selectedColumn) {
+        nextIndex = i;
+        break;
+      }
+    }
+  } else if (globalResultIndex >= 0 && globalResultIndex < globalResults.size()) {
+    nextIndex = globalResultIndex;
+  }
+
+  globalResultIndex = qBound(0, nextIndex, globalResults.size() - 1);
+  navigateToGlobalResult(globalResultIndex, false);
+  endSearchFeedback(globalResults.size());
+  updateCounterLabels();
 }
 
 void FindReplacePanel::displayGlobalResults() {
@@ -902,8 +1377,9 @@ void FindReplacePanel::displayGlobalResults() {
     QTreeWidgetItem *fileItem = new QTreeWidgetItem(resultsTree);
     fileItem->setText(0, displayPath);
     fileItem->setText(1, QString::number(results.size()) + " matches");
-    fileItem->setData(0, Qt::UserRole, filePath);
-    fileItem->setData(1, Qt::UserRole, -1);
+    fileItem->setData(0, kDataRoleFilePath, filePath);
+    fileItem->setData(0, kDataRoleLineNumber, -1);
+    fileItem->setData(0, kDataRoleResultScope, kScopeGlobal);
 
     for (int i = 0; i < results.size(); ++i) {
       const GlobalSearchResult &result = results[i];
@@ -912,9 +1388,10 @@ void FindReplacePanel::displayGlobalResults() {
       resultItem->setText(0, "");
       resultItem->setText(1, QString::number(result.lineNumber));
       resultItem->setText(2, result.lineContent);
-      resultItem->setData(0, Qt::UserRole, filePath);
-      resultItem->setData(1, Qt::UserRole, result.lineNumber);
-      resultItem->setData(2, Qt::UserRole, result.columnNumber);
+      resultItem->setData(0, kDataRoleFilePath, filePath);
+      resultItem->setData(0, kDataRoleLineNumber, result.lineNumber);
+      resultItem->setData(0, kDataRoleColumnNumber, result.columnNumber);
+      resultItem->setData(0, kDataRoleResultScope, kScopeGlobal);
     }
 
     fileItem->setExpanded(true);
@@ -923,7 +1400,7 @@ void FindReplacePanel::displayGlobalResults() {
   resultsTree->setVisible(!globalResults.isEmpty());
 }
 
-void FindReplacePanel::navigateToGlobalResult(int index) {
+void FindReplacePanel::navigateToGlobalResult(int index, bool emitNavigation) {
   if (index < 0 || index >= globalResults.size()) {
     return;
   }
@@ -931,37 +1408,48 @@ void FindReplacePanel::navigateToGlobalResult(int index) {
   const GlobalSearchResult &result = globalResults[index];
 
   if (resultsTree) {
-
+    bool found = false;
     int currentIndex = 0;
     for (int i = 0; i < resultsTree->topLevelItemCount(); ++i) {
       QTreeWidgetItem *fileItem = resultsTree->topLevelItem(i);
       for (int j = 0; j < fileItem->childCount(); ++j) {
         if (currentIndex == index) {
           resultsTree->setCurrentItem(fileItem->child(j));
-          return;
+          found = true;
+          break;
         }
         currentIndex++;
       }
+      if (found) {
+        break;
+      }
     }
+  }
+
+  if (emitNavigation) {
+    emit navigateToFile(result.filePath, result.lineNumber, result.columnNumber);
   }
 }
 
 void FindReplacePanel::onGlobalResultClicked(QTreeWidgetItem *item,
                                              int column) {
-  Q_UNUSED(column);
-
   if (!item) {
     return;
   }
 
-  QString filePath = item->data(0, Qt::UserRole).toString();
-  int lineNumber = item->data(1, Qt::UserRole).toInt();
+  if (item->data(0, kDataRoleResultScope).toInt() == kScopeLocal) {
+    onLocalResultClicked(item, column);
+    return;
+  }
+
+  QString filePath = item->data(0, kDataRoleFilePath).toString();
+  int lineNumber = item->data(0, kDataRoleLineNumber).toInt();
 
   if (lineNumber < 0) {
     return;
   }
 
-  int columnNumber = item->data(2, Qt::UserRole).toInt();
+  int columnNumber = item->data(0, kDataRoleColumnNumber).toInt();
 
   for (int i = 0; i < globalResults.size(); ++i) {
     const GlobalSearchResult &result = globalResults[i];
@@ -990,6 +1478,7 @@ void FindReplacePanel::displayLocalResults(const QString &searchWord) {
   }
 
   QString text = textArea->toPlainText();
+  QString filePath = currentFilePath();
   QStringList lines = text.split('\n');
   QRegularExpression pattern = buildSearchPattern(searchWord);
 
@@ -1015,54 +1504,71 @@ void FindReplacePanel::displayLocalResults(const QString &searchWord) {
     int columnNum = matchPos - lineStarts[lineNum] + 1;
     QString lineContent =
         (lineNum < lines.size()) ? lines[lineNum].trimmed() : QString();
+    QRegularExpressionMatch match = pattern.match(text, matchPos);
+    int matchLength =
+        (match.hasMatch() && match.capturedStart() == matchPos)
+            ? match.capturedLength()
+            : searchWord.size();
 
     QTreeWidgetItem *resultItem = new QTreeWidgetItem(resultsTree);
     resultItem->setText(0, "Current File");
     resultItem->setText(1, QString::number(lineNum + 1));
     resultItem->setText(2, lineContent);
-    resultItem->setData(0, Qt::UserRole, QString());
-    resultItem->setData(1, Qt::UserRole, lineNum + 1);
-    resultItem->setData(2, Qt::UserRole, columnNum);
+    resultItem->setData(0, kDataRoleFilePath, filePath);
+    resultItem->setData(0, kDataRoleLineNumber, lineNum + 1);
+    resultItem->setData(0, kDataRoleColumnNumber, columnNum);
+    resultItem->setData(0, kDataRoleMatchStart, matchPos);
+    resultItem->setData(0, kDataRoleMatchLength, matchLength);
+    resultItem->setData(0, kDataRoleResultScope, kScopeLocal);
   }
 
   resultsTree->setVisible(true);
 }
 
 void FindReplacePanel::onLocalResultClicked(QTreeWidgetItem *item, int column) {
-  Q_UNUSED(column);
-
   if (!item || !textArea) {
     return;
   }
 
-  int lineNumber = item->data(1, Qt::UserRole).toInt();
-  int columnNumber = item->data(2, Qt::UserRole).toInt();
+  if (item->data(0, kDataRoleResultScope).toInt() == kScopeGlobal) {
+    onGlobalResultClicked(item, column);
+    return;
+  }
+
+  QString itemFilePath = item->data(0, kDataRoleFilePath).toString();
+  int lineNumber = item->data(0, kDataRoleLineNumber).toInt();
+  int columnNumber = item->data(0, kDataRoleColumnNumber).toInt();
+  int matchStart = item->data(0, kDataRoleMatchStart).toInt();
+  int matchLength = item->data(0, kDataRoleMatchLength).toInt();
 
   if (lineNumber <= 0) {
     return;
   }
 
-  QTextCursor cursor = textArea->textCursor();
-  cursor.movePosition(QTextCursor::Start);
-  cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
-                      lineNumber - 1);
-  cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
-                      columnNumber - 1);
+  if (!itemFilePath.isEmpty() && itemFilePath != currentFilePath()) {
+    emit navigateToFile(itemFilePath, lineNumber, columnNumber);
+    return;
+  }
 
-  QString searchWord = ui->searchFind->text();
-  QRegularExpression pattern = buildSearchPattern(searchWord);
-  QString text = textArea->toPlainText();
-  QRegularExpressionMatch match = pattern.match(text, cursor.position());
-  if (match.hasMatch() && match.capturedStart() == cursor.position()) {
-    cursor.setPosition(match.capturedStart());
-    cursor.setPosition(match.capturedEnd(), QTextCursor::KeepAnchor);
+  QTextCursor cursor(textArea->document());
+  if (matchStart >= 0) {
+    cursor.setPosition(matchStart);
+    int selectionLength = qMax(1, matchLength);
+    cursor.setPosition(matchStart + selectionLength, QTextCursor::KeepAnchor);
+  } else {
+    cursor.movePosition(QTextCursor::Start);
+    cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
+                        lineNumber - 1);
+    cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
+                        columnNumber - 1);
   }
 
   textArea->setTextCursor(cursor);
   textArea->setFocus();
 
+  int selectedPosition = matchStart >= 0 ? matchStart : cursor.selectionStart();
   for (int i = 0; i < positions.size(); ++i) {
-    if (positions[i] == match.capturedStart()) {
+    if (positions[i] == selectedPosition) {
       position = i;
       break;
     }

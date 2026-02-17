@@ -9,6 +9,8 @@
 
 class TextArea;
 class MainWindow;
+class QTimer;
+class QLabel;
 
 namespace Ui {
 class FindReplacePanel;
@@ -62,6 +64,9 @@ private slots:
   void on_localMode_toggled(bool checked);
   void on_globalMode_toggled(bool checked);
   void onGlobalResultClicked(QTreeWidgetItem *item, int column);
+  void onSearchTextChanged(const QString &text);
+  void onTextAreaContentsChanged();
+  void refreshSearchResults();
 
 private:
   void handleVimCommandKey(QKeyEvent *event);
@@ -71,8 +76,6 @@ private:
   MainWindow *mainWindow;
   Ui::FindReplacePanel *ui;
   QVector<int> positions;
-  QTextCharFormat prevFormat;
-  QTextCharFormat colorFormat;
   bool onlyFind;
   bool m_vimCommandMode;
   QString m_searchPrefix;
@@ -87,6 +90,13 @@ private:
   QStringList searchHistory;
   int searchHistoryIndex;
   static const int MAX_SEARCH_HISTORY = 20;
+  QMetaObject::Connection textAreaContentsChangedConnection;
+  QTimer *refreshTimer;
+  QLabel *searchStatusLabel;
+  bool searchInProgress;
+  bool searchExecuted;
+  QString activeSearchWord;
+  QString lastObservedPlainText;
 
   void updateCounterLabels();
   void selectSearchWord(QTextCursor &cursor, int n, int offset = 0);
@@ -101,15 +111,26 @@ private:
                             const QString &matchedText) const;
   void addToSearchHistory(const QString &searchTerm);
 
-  void performGlobalSearch(const QString &searchWord);
+  void performGlobalSearch(const QString &searchWord,
+                           bool navigateToResult = true);
+  void refreshGlobalResultsForCurrentFile(const QString &searchWord);
   void searchInFile(const QString &filePath, const QRegularExpression &pattern);
+  QVector<GlobalSearchResult>
+  collectMatchesInContent(const QString &filePath, const QString &content,
+                          const QRegularExpression &pattern) const;
+  QString currentFilePath() const;
   void displayGlobalResults();
-  void navigateToGlobalResult(int index);
+  void navigateToGlobalResult(int index, bool emitNavigation = true);
   void updateModeUI();
   QStringList getProjectFiles() const;
 
   void displayLocalResults(const QString &searchWord);
   void onLocalResultClicked(QTreeWidgetItem *item, int column);
+  void beginSearchFeedback(const QString &message = QString("Searching..."));
+  void updateSearchFeedback(const QString &message);
+  void endSearchFeedback(int matchCount);
+  void clearSearchFeedback();
+  QMap<QString, QVector<GlobalSearchResult>> globalResultsByFile;
 };
 
 #endif
