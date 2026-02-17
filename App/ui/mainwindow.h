@@ -31,6 +31,8 @@ class QDockWidget;
 class VimMode;
 class LightpadTreeView;
 class DebugPanel;
+class SymbolNavigationService;
+struct DefinitionTarget;
 #ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
 #endif
@@ -84,6 +86,7 @@ public:
   void openReadOnlyTab(const QString &content, const QString &title,
                        const QString &originalFilePath);
   LightpadTabWidget *currentTabWidget() const;
+  void goToDefinitionAtCursor();
 
 private slots:
   void on_actionQuit_triggered();
@@ -184,6 +187,8 @@ private:
 
   class NavigationHistory *navigationHistory;
 
+  SymbolNavigationService *m_symbolNavService;
+
   class AutoSaveManager *autoSaveManager;
   GitIntegration *m_gitIntegration;
   SourceControlPanel *sourceControlPanel;
@@ -245,6 +250,9 @@ private:
   void navigateForward();
   void recordNavigationLocation();
   void setupNavigationHistory();
+  void setupSymbolNavigation();
+  void handleDefinitionResults(const QList<DefinitionTarget> &targets);
+  void jumpToTarget(const DefinitionTarget &target);
   void setupAutoSave();
   void setupGitIntegration();
   void updateGitIntegrationForPath(const QString &path);

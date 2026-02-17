@@ -189,6 +189,12 @@ For enhanced code intelligence:
    - Find references
    - Inline diagnostics
 
+### Go to Definition
+
+Lightpad supports Go to Definition for C/C++, Python, Rust, Go, TypeScript/JavaScript, and Java via dedicated language servers. Each server is auto-detected and started on demand.
+
+See [Go to Definition](GO_TO_DEFINITION.md) for installation instructions for each language server.
+
 ## Plugins
 
 Lightpad supports plugins for extensibility:

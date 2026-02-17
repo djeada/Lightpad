@@ -9,6 +9,7 @@
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QInputDialog>
 #include <QItemSelectionModel>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -43,6 +44,9 @@
 #include "../core/recentfilesmanager.h"
 #include "../core/textarea.h"
 #include "../dap/debugsettings.h"
+#include "../definition/symbolnavigationservice.h"
+#include "../definition/idefinitionprovider.h"
+#include "../definition/languagelspdefinitionprovider.h"
 #include "../filetree/gitfilesystemmodel.h"
 #include "../format_templates/formattemplatemanager.h"
 #include "../run_templates/runtemplatemanager.h"
@@ -98,6 +102,7 @@ MainWindow::MainWindow(QWidget *parent)
       vimStatusLabel(nullptr), m_vimCommandPanelActive(false),
       m_connectedVimMode(nullptr), breadcrumbWidget(nullptr),
       recentFilesManager(nullptr), navigationHistory(nullptr),
+      m_symbolNavService(nullptr),
       autoSaveManager(nullptr), m_splitEditorContainer(nullptr),
       m_gitIntegration(nullptr), sourceControlPanel(nullptr),
       sourceControlDock(nullptr), m_inlineBlameEnabled(false),
@@ -158,6 +163,8 @@ MainWindow::MainWindow(QWidget *parent)
   recentFilesManager = new RecentFilesManager(this);
 
   setupNavigationHistory();
+
+  setupSymbolNavigation();
 
   setupAutoSave();
 
@@ -1052,6 +1059,16 @@ void MainWindow::keyPressEvent(QKeyEvent *keyEvent) {
   else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
            keyEvent->key() == Qt::Key_I) {
     toggleShowIndentGuides();
+  }
+
+  else if (keyEvent->key() == Qt::Key_F12 &&
+           keyEvent->modifiers() == Qt::NoModifier) {
+    goToDefinitionAtCursor();
+  }
+
+  else if (keyEvent->modifiers() == Qt::ControlModifier &&
+           keyEvent->key() == Qt::Key_B) {
+    goToDefinitionAtCursor();
   }
 
   else if (keyEvent->modifiers() == Qt::AltModifier &&
@@ -2285,6 +2302,139 @@ void MainWindow::recordNavigationLocation() {
 
 void MainWindow::setupNavigationHistory() {
   navigationHistory = new NavigationHistory(this);
+}
+
+void MainWindow::setupSymbolNavigation() {
+  m_symbolNavService = new SymbolNavigationService(this);
+
+  const auto configs = LanguageLspDefinitionProvider::defaultConfigs();
+  for (const LanguageServerConfig &config : configs) {
+    auto *provider = new LanguageLspDefinitionProvider(config, this);
+    m_symbolNavService->registerProvider(provider);
+  }
+
+  connect(m_symbolNavService, &SymbolNavigationService::definitionFound, this,
+          &MainWindow::handleDefinitionResults);
+
+  connect(m_symbolNavService, &SymbolNavigationService::noDefinitionFound, this,
+          [this](const QString &message) {
+            statusBar()->showMessage(message, 5000);
+          });
+
+  connect(m_symbolNavService,
+          &SymbolNavigationService::definitionRequestStarted, this, [this]() {
+            statusBar()->showMessage(
+                QCoreApplication::translate("MainWindow",
+                                            "Searching for definition..."));
+          });
+
+  connect(m_symbolNavService,
+          &SymbolNavigationService::definitionRequestFinished, this, [this]() {
+            QString expected = QCoreApplication::translate(
+                "MainWindow", "Searching for definition...");
+            if (statusBar()->currentMessage() == expected) {
+              statusBar()->clearMessage();
+            }
+          });
+}
+
+void MainWindow::goToDefinitionAtCursor() {
+  if (!m_symbolNavService) {
+    return;
+  }
+
+  if (m_symbolNavService->isRequestInFlight()) {
+    statusBar()->showMessage(tr("Definition lookup already in progress..."),
+                             3000);
+    return;
+  }
+
+  TextArea *textArea = getCurrentTextArea();
+  if (!textArea) {
+    return;
+  }
+
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!tabWidget) {
+    return;
+  }
+
+  int tabIndex = tabWidget->currentIndex();
+  QString filePath = tabWidget->getFilePath(tabIndex);
+  if (filePath.isEmpty()) {
+    statusBar()->showMessage(tr("No file open"), 3000);
+    return;
+  }
+
+  QString languageId = effectiveLanguageIdForFile(filePath);
+
+  QTextCursor cursor = textArea->textCursor();
+
+  recordNavigationLocation();
+
+  DefinitionRequest req;
+  req.filePath = filePath;
+  req.line = cursor.blockNumber() + 1;
+  req.column = cursor.positionInBlock();
+  req.languageId = languageId;
+
+  m_symbolNavService->goToDefinition(req);
+}
+
+void MainWindow::handleDefinitionResults(
+    const QList<DefinitionTarget> &targets) {
+  if (targets.size() == 1) {
+    jumpToTarget(targets.first());
+  } else if (targets.size() > 1) {
+    QStringList items;
+    for (const DefinitionTarget &t : targets) {
+      QString label = t.label.isEmpty()
+                          ? QStringLiteral("%1:%2")
+                                .arg(QFileInfo(t.filePath).fileName())
+                                .arg(t.line)
+                          : t.label;
+      items << label;
+    }
+
+    bool ok = false;
+    QString selected = QInputDialog::getItem(
+        this, tr("Go to Definition"), tr("Multiple definitions found:"), items,
+        0, false, &ok);
+    if (ok && !selected.isEmpty()) {
+      int idx = items.indexOf(selected);
+      if (idx >= 0 && idx < targets.size()) {
+        jumpToTarget(targets.at(idx));
+      }
+    }
+  }
+}
+
+void MainWindow::jumpToTarget(const DefinitionTarget &target) {
+  if (!target.isValid()) {
+    return;
+  }
+
+  openFileAndAddToNewTab(target.filePath);
+
+  TextArea *textArea = getCurrentTextArea();
+  if (textArea) {
+    QTextCursor cursor = textArea->textCursor();
+    cursor.movePosition(QTextCursor::Start);
+    cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
+                        target.line - 1);
+    cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
+                        target.column);
+    textArea->setTextCursor(cursor);
+    textArea->centerCursor();
+  }
+
+  if (navigationHistory) {
+    NavigationLocation loc;
+    loc.filePath = target.filePath;
+    loc.line = target.line;
+    loc.column = target.column;
+    navigationHistory->recordLocation(loc);
+  }
 }
 
 void MainWindow::setupAutoSave() {

@@ -95,6 +95,7 @@ Plugins are discovered from:
 ## Documentation
 - User manual: docs/USER_MANUAL.md
 - Keyboard shortcuts: docs/KEYBOARD_SHORTCUTS.md
+- Go to Definition: docs/GO_TO_DEFINITION.md
 - Plugin development: docs/PLUGIN_DEVELOPMENT.md
 - Syntax plugins: docs/SYNTAX_PLUGINS.md
 

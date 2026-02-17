@@ -675,6 +675,15 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
 void TextArea::contextMenuEvent(QContextMenuEvent *event) {
   auto menu = createStandardContextMenu();
   menu->addSeparator();
+
+  QAction *goToDefAction = menu->addAction(tr("Go to Definition"));
+  goToDefAction->setShortcut(QKeySequence(Qt::Key_F12));
+  connect(goToDefAction, &QAction::triggered, this, [this]() {
+    if (mainWindow) {
+      mainWindow->goToDefinitionAtCursor();
+    }
+  });
+
   menu->addAction(tr("Refactor"));
 
   if (mainWindow) {
@@ -1606,6 +1615,17 @@ void TextArea::mousePressEvent(QMouseEvent *event) {
     }
     setTextCursor(cursor);
     drawExtraCursors();
+    return;
+  }
+
+  if (event->button() == Qt::LeftButton &&
+      (event->modifiers() & Qt::ControlModifier) &&
+      !(event->modifiers() & Qt::AltModifier)) {
+    QTextCursor cursor = cursorForPosition(event->pos());
+    setTextCursor(cursor);
+    if (mainWindow) {
+      mainWindow->goToDefinitionAtCursor();
+    }
     return;
   }
 

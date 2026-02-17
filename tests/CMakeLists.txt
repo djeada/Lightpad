@@ -42,6 +42,7 @@ include_directories(${CMAKE_SOURCE_DIR}/App/settings)
 include_directories(${CMAKE_SOURCE_DIR}/App/syntax)
 include_directories(${CMAKE_SOURCE_DIR}/App/ui)
 include_directories(${CMAKE_SOURCE_DIR}/App/ui/panels)
+include_directories(${CMAKE_SOURCE_DIR}/App/definition)
 
 # Logger test executable
 add_executable(test_logger
@@ -685,6 +686,35 @@ if(HAVE_PDF_SUPPORT)
     add_test(NAME PdfViewerTests COMMAND test_pdfviewer)
 endif()
 
+# SymbolNavigation test executable
+add_executable(test_symbolnavigation
+    unit/test_symbolnavigation.cpp
+    ${CMAKE_SOURCE_DIR}/App/definition/idefinitionprovider.cpp
+    ${CMAKE_SOURCE_DIR}/App/definition/symbolnavigationservice.cpp
+    ${CMAKE_SOURCE_DIR}/App/definition/lspdefinitionprovider.cpp
+    ${CMAKE_SOURCE_DIR}/App/definition/languagelspdefinitionprovider.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_symbolnavigation PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/definition
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_symbolnavigation
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_symbolnavigation PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME SymbolNavigationTests COMMAND test_symbolnavigation)
+
 # Set environment variable for headless testing
 set(TEST_LIST
     LoggerTests 
@@ -714,6 +744,7 @@ set(TEST_LIST
     MinimapTests
     FindReplacePanelTests
     ImageViewerTests
+    SymbolNavigationTests
 )
 
 if(HAVE_PDF_SUPPORT)
@@ -739,6 +770,7 @@ set(TEST_TARGETS
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap
     test_gitintegration test_gotolinedialog test_gotosymboldialog test_lspclient test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_imageviewer
+    test_symbolnavigation
 )
 
 if(HAVE_PDF_SUPPORT)
