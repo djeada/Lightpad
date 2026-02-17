@@ -2316,13 +2316,16 @@ void MainWindow::setupSymbolNavigation() {
 
   connect(m_symbolNavService,
           &SymbolNavigationService::definitionRequestStarted, this, [this]() {
-            statusBar()->showMessage(tr("Searching for definition..."));
+            statusBar()->showMessage(
+                QCoreApplication::translate("MainWindow",
+                                            "Searching for definition..."));
           });
 
   connect(m_symbolNavService,
           &SymbolNavigationService::definitionRequestFinished, this, [this]() {
-            if (statusBar()->currentMessage() ==
-                tr("Searching for definition...")) {
+            QString expected = QCoreApplication::translate(
+                "MainWindow", "Searching for definition...");
+            if (statusBar()->currentMessage() == expected) {
               statusBar()->clearMessage();
             }
           });

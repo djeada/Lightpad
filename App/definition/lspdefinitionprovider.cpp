@@ -8,7 +8,8 @@ LspDefinitionProvider::LspDefinitionProvider(LspClient *client, QObject *parent)
       m_activeProviderRequestId(0) {
   if (m_client) {
     connect(m_client, &LspClient::definitionReceived, this,
-            [this](int /*lspRequestId*/, const QList<LspLocation> &locations) {
+            [this](int lspRequestId, const QList<LspLocation> &locations) {
+              Q_UNUSED(lspRequestId);
               if (m_activeProviderRequestId == 0) {
                 return;
               }
