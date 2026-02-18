@@ -7,6 +7,7 @@
 #include <QPlainTextEdit>
 #include <QString>
 #include <QStringList>
+#include <QVector>
 
 enum class VimEditMode {
   Normal,
@@ -27,6 +28,9 @@ enum class VimMotion {
   WordForward,
   WordBack,
   WordEnd,
+  WORDForward,
+  WORDBack,
+  WORDEnd,
   LineStart,
   LineEnd,
   FirstNonSpace,
@@ -50,7 +54,11 @@ enum class VimMotion {
   SearchNext,
   SearchPrev,
   WordUnderCursor,
-  WordUnderCursorBack
+  WordUnderCursorBack,
+  ScreenTop,
+  ScreenMiddle,
+  ScreenBottom,
+  ColumnZero
 };
 
 enum class VimOperator {
@@ -61,7 +69,9 @@ enum class VimOperator {
   Indent,
   Unindent,
   Format,
-  ToggleCase
+  ToggleCase,
+  Lowercase,
+  Uppercase
 };
 
 enum class VimTextObject {
@@ -83,7 +93,25 @@ enum class VimTextObject {
   InnerSingleQuote,
   AroundSingleQuote,
   InnerBacktick,
-  AroundBacktick
+  AroundBacktick,
+  InnerParagraph,
+  AroundParagraph,
+  InnerSentence,
+  AroundSentence,
+  InnerTag,
+  AroundTag
+};
+
+struct VimRegister {
+  QString content;
+  bool linewise = false;
+};
+
+struct VimChangeRecord {
+  QList<QKeyEvent *> keys;
+  QString insertedText;
+  VimEditMode entryMode = VimEditMode::Normal;
+  int count = 1;
 };
 
 class VimMode : public QObject {
@@ -91,7 +119,7 @@ class VimMode : public QObject {
 
 public:
   explicit VimMode(QPlainTextEdit *editor, QObject *parent = nullptr);
-  ~VimMode() = default;
+  ~VimMode();
 
   void setEnabled(bool enabled);
 
@@ -102,6 +130,16 @@ public:
   QString modeName() const;
 
   QString commandBuffer() const;
+
+  QString pendingKeys() const;
+
+  bool isRecordingMacro() const;
+  QChar macroRegister() const;
+
+  QString registerContent(QChar reg) const;
+
+  QString searchPattern() const;
+  void setSearchPattern(const QString &pattern);
 
   bool processKeyEvent(QKeyEvent *event);
 
@@ -115,6 +153,14 @@ signals:
 
   void commandBufferChanged(const QString &buffer);
 
+  void pendingKeysChanged(const QString &keys);
+
+  void macroRecordingChanged(bool recording, QChar reg);
+
+  void searchHighlightRequested(const QString &pattern, bool enabled);
+
+  void registerContentsChanged();
+
 private:
   bool handleNormalMode(QKeyEvent *event);
   bool handleInsertMode(QKeyEvent *event);
@@ -123,45 +169,86 @@ private:
   bool handleReplaceMode(QKeyEvent *event);
 
   void setMode(VimEditMode mode);
-  void executeMotion(VimMotion motion, int count = 1);
+  void executeMotion(VimMotion motion, int count = 1,
+                     QTextCursor::MoveMode moveMode = QTextCursor::MoveAnchor);
   void executeOperator(VimOperator op, VimMotion motion, int count = 1);
   void executeOperatorOnTextObject(VimOperator op, VimTextObject textObj);
   void executeCommand(const QString &command);
 
   void moveCursor(QTextCursor::MoveOperation op, int count = 1);
   void moveCursorWord(bool forward);
+  void moveCursorWORD(bool forward);
+  void moveCursorWORDEnd();
   void moveCursorToChar(QChar ch, bool before, bool backward = false);
   bool moveCursorToMatchingBrace();
   void moveCursorToParagraph(bool forward);
   void moveCursorToSentence(bool forward);
+  void moveCursorToScreenLine(int which);
 
   void deleteText(VimMotion motion, int count = 1);
   void yankText(VimMotion motion, int count = 1);
   void changeText(VimMotion motion, int count = 1);
   void indentText(VimMotion motion, int count = 1, bool indent = true);
   void toggleCase(VimMotion motion, int count = 1);
+  void lowercaseText(VimMotion motion, int count = 1);
+  void uppercaseText(VimMotion motion, int count = 1);
 
   bool selectTextObject(VimTextObject textObj);
 
   void insertNewLine(bool above);
-  void joinLines();
+  void joinLines(int count = 1);
   void replaceChar(QChar ch);
 
   void setMark(QChar mark);
   bool jumpToMark(QChar mark);
 
+  // Dot-repeat
   void repeatLastChange();
-  void recordChange(const QString &change);
+  void beginChangeRecording(int count);
+  void endChangeRecording();
 
+  // Registers
+  void setRegister(QChar reg, const QString &text, bool linewise = false);
+  VimRegister getRegister(QChar reg) const;
+  void pushDeleteHistory(const QString &text, bool linewise);
+  void yankToRegister(const QString &text, bool linewise = false);
+  void deleteToRegister(const QString &text, bool linewise = false);
+  void pasteFromRegister(QChar reg, bool after);
+
+  // Macros
+  void startMacroRecording(QChar reg);
+  void stopMacroRecording();
+  void playbackMacro(QChar reg, int count = 1);
+
+  // Increment/Decrement
+  void incrementNumber(int delta);
+
+  // Search
   void searchWord(bool forward);
   void searchNext(bool forward);
   void scrollLines(int lines);
+  void clearSearchHighlight();
+
+  // Visual mode helpers
+  void visualIndent(bool indent);
+  void visualToggleCase();
+  void visualLowercase();
+  void visualUppercase();
+  void visualJoinLines();
+
+  // Last insert tracking
+  void trackInsertPosition();
+
+  // g commands
+  bool handleGPrefix(QKeyEvent *event, int count);
+
+  // Pending key display
+  void updatePendingKeys();
 
   QPlainTextEdit *m_editor;
   bool m_enabled;
   VimEditMode m_mode;
   QString m_commandBuffer;
-  QString m_registerBuffer;
   VimOperator m_pendingOperator;
   int m_count;
   QChar m_findChar;
@@ -170,12 +257,50 @@ private:
 
   QString m_searchPattern;
   bool m_searchForward;
+  bool m_searchHighlightActive;
 
   QMap<QChar, int> m_marks;
 
-  QString m_lastChange;
-  int m_lastChangeCount;
-  bool m_recordingChange;
+  // Named registers: a-z, "+, "0, "1-"9, "_, "., ""
+  QMap<QChar, VimRegister> m_registers;
+  QChar m_pendingRegister;
+
+  // Delete history ring ("1-"9)
+  QVector<VimRegister> m_deleteHistory;
+
+  // Dot-repeat
+  struct ReplayableChange {
+    QVector<int> keyCodes;
+    QVector<Qt::KeyboardModifiers> keyMods;
+    QStringList keyTexts;
+    int count = 1;
+  };
+  ReplayableChange m_lastReplayable;
+  bool m_recording;
+  QVector<int> m_recordKeyCodes;
+  QVector<Qt::KeyboardModifiers> m_recordKeyMods;
+  QStringList m_recordKeyTexts;
+  int m_recordCount;
+  bool m_replaying;
+
+  // Macros
+  bool m_macroRecording;
+  QChar m_macroRegister;
+  QVector<int> m_macroKeyCodes;
+  QVector<Qt::KeyboardModifiers> m_macroKeyMods;
+  QStringList m_macroKeyTexts;
+  QChar m_lastMacroRegister;
+
+  // Last insert position for gi
+  int m_lastInsertPosition;
+
+  // Last visual selection for gv
+  int m_lastVisualStart;
+  int m_lastVisualEnd;
+  VimEditMode m_lastVisualMode;
+
+  // Insert/replace undo grouping — groups all edits into one undo step
+  bool m_insertUndoOpen = false;
 
   QStringList m_commandHistory;
   int m_commandHistoryIndex;

@@ -1,6 +1,7 @@
 #include "findreplacepanel.h"
 #include "../../core/lightpadtabwidget.h"
 #include "../../core/textarea.h"
+#include "../../editor/vimmode.h"
 #include "../mainwindow.h"
 #include "ui_findreplacepanel.h"
 
@@ -714,6 +715,12 @@ void FindReplacePanel::findInitial(QTextCursor &cursor,
   }
 
   textArea->updateSyntaxHighlightTags(searchWord);
+
+  // Sync search pattern to vim mode so n/N work after Ctrl+F search
+  if (textArea->isVimModeEnabled() && textArea->vimMode() && !m_vimCommandMode) {
+    textArea->vimMode()->setSearchPattern(
+        QRegularExpression::escape(searchWord));
+  }
 
   QRegularExpression pattern = buildSearchPattern(searchWord);
   QString text = textArea->toPlainText();

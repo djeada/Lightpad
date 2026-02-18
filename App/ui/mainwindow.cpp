@@ -296,8 +296,61 @@ void MainWindow::connectVimMode(TextArea *textArea) {
               if (settings.vimModeEnabled) {
                 on_actionToggle_Vim_Mode_triggered();
               }
+            } else if (command == "nextTab") {
+              LightpadTabWidget *tabWidget = currentTabWidget();
+              if (tabWidget && tabWidget->count() > 1) {
+                tabWidget->setCurrentIndex(
+                    (tabWidget->currentIndex() + 1) % tabWidget->count());
+              }
+            } else if (command == "prevTab") {
+              LightpadTabWidget *tabWidget = currentTabWidget();
+              if (tabWidget && tabWidget->count() > 1) {
+                int idx = tabWidget->currentIndex() - 1;
+                if (idx < 0) idx = tabWidget->count() - 1;
+                tabWidget->setCurrentIndex(idx);
+              }
+            } else if (command == "splitHorizontal") {
+              on_actionSplit_Horizontally_triggered();
+            } else if (command == "splitVertical") {
+              on_actionSplit_Vertically_triggered();
             } else if (command.startsWith("edit:")) {
               openFileAndAddToNewTab(command.mid(QString("edit:").size()));
+            }
+          });
+
+  connect(vimMode, &VimMode::pendingKeysChanged, this,
+          [this, textArea](const QString &keys) {
+            if (!textArea || !textArea->isVimModeEnabled())
+              return;
+            if (keys.isEmpty()) {
+              if (vimStatusLabel)
+                updateVimStatusLabel(textArea->vimMode()->modeName());
+            } else {
+              showVimStatusMessage(
+                  textArea->vimMode()->modeName() + "  " + keys);
+            }
+          });
+
+  connect(vimMode, &VimMode::macroRecordingChanged, this,
+          [this](bool recording, QChar reg) {
+            if (recording) {
+              showVimStatusMessage(QString("recording @%1").arg(reg));
+            }
+          });
+
+  connect(vimMode, &VimMode::searchHighlightRequested, this,
+          [this, textArea](const QString &pattern, bool enabled) {
+            if (!textArea)
+              return;
+            if (enabled && !pattern.isEmpty()) {
+              // Convert regex pattern to plain search term for the
+              // syntax highlighter (strip word boundary markers)
+              QString searchTerm = pattern;
+              searchTerm.remove("\\b");
+              textArea->updateSyntaxHighlightTags(searchTerm);
+            } else {
+              // Clear search highlights
+              textArea->updateSyntaxHighlightTags(QString());
             }
           });
 
@@ -1299,6 +1352,16 @@ void MainWindow::on_actionFind_in_file_triggered() {
   showFindReplace(true);
   if (findReplacePanel) {
     findReplacePanel->setGlobalMode(false);
+    // Pre-populate with vim's last search pattern if available
+    TextArea *textArea = getCurrentTextArea();
+    if (textArea && textArea->isVimModeEnabled() && textArea->vimMode()) {
+      QString vimPattern = textArea->vimMode()->searchPattern();
+      if (!vimPattern.isEmpty()) {
+        QString searchTerm = vimPattern;
+        searchTerm.remove("\\b");
+        findReplacePanel->setSearchText(searchTerm);
+      }
+    }
     findReplacePanel->setFocusOnSearchBox();
   }
 }
@@ -1752,9 +1815,20 @@ void MainWindow::ensureStatusLabels() {
 
   if (!vimStatusLabel) {
     vimStatusLabel = new QLabel(this);
-    vimStatusLabel->setStyleSheet("color: #9aa4b2; padding: 0 8px;");
+    vimStatusLabel->setStyleSheet(
+        "QLabel {"
+        "  color: #ffffff;"
+        "  background-color: #3fb950;"
+        "  padding: 1px 10px;"
+        "  border-radius: 3px;"
+        "  font-weight: bold;"
+        "  font-size: 11px;"
+        "  letter-spacing: 1px;"
+        "}");
     vimStatusLabel->setText("");
     vimStatusLabel->setVisible(false);
+    vimStatusLabel->setMinimumWidth(70);
+    vimStatusLabel->setAlignment(Qt::AlignCenter);
 
     auto layout = qobject_cast<QHBoxLayout *>(ui->backgroundBottom->layout());
     if (layout) {
@@ -2597,6 +2671,32 @@ void MainWindow::updateVimStatusLabel(const QString &text) {
   if (vimStatusLabel) {
     vimStatusLabel->setText(text);
     vimStatusLabel->setVisible(!text.isEmpty());
+    if (!text.isEmpty()) {
+      QString bgColor;
+      if (text == "NORMAL")
+        bgColor = "#3fb950";
+      else if (text == "INSERT")
+        bgColor = "#58a6ff";
+      else if (text == "VISUAL" || text == "V-LINE" || text == "V-BLOCK")
+        bgColor = "#d29922";
+      else if (text == "REPLACE")
+        bgColor = "#f85149";
+      else if (text == "COMMAND")
+        bgColor = "#bc8cff";
+      else
+        bgColor = "#8b949e";
+      vimStatusLabel->setStyleSheet(
+          QString("QLabel {"
+                  "  color: #ffffff;"
+                  "  background-color: %1;"
+                  "  padding: 1px 10px;"
+                  "  border-radius: 3px;"
+                  "  font-weight: bold;"
+                  "  font-size: 11px;"
+                  "  letter-spacing: 1px;"
+                  "}")
+              .arg(bgColor));
+    }
   }
 }
 
