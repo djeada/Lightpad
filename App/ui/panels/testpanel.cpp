@@ -627,7 +627,7 @@ void TestPanel::discoverTests() {
   m_discoverAction->setEnabled(false);
 
   // Try CTest discovery using the build directory
-  QString buildDir = m_workspaceFolder + "/build";
+  QString buildDir = QDir(m_workspaceFolder).filePath("build");
   if (!QDir(buildDir).exists())
     buildDir = m_workspaceFolder;
 

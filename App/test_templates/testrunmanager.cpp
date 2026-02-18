@@ -26,8 +26,10 @@ void TestRunManager::runFailed(const TestConfiguration &config,
     return;
 
   // For gtest-based configs, use --gtest_filter
-  if (config.outputFormat == "ctest" || config.outputFormat == "gtest" ||
-      config.outputFormat == "gtest_xml") {
+  bool isGTestFormat = (config.outputFormat == "ctest" ||
+                        config.outputFormat == "gtest" ||
+                        config.outputFormat == "gtest_xml");
+  if (isGTestFormat) {
     // Run each failed test via filter; join with ':'
     QString filter = failed.join(':');
     startProcess(config, workspaceFolder, QString(), filter);
@@ -48,9 +50,11 @@ void TestRunManager::runFailed(const TestConfiguration &config,
 void TestRunManager::runSuite(const TestConfiguration &config,
                               const QString &workspaceFolder,
                               const QString &suiteName) {
-  // For gtest, suite filter is "SuiteName.*"
-  if (config.outputFormat == "ctest" || config.outputFormat == "gtest" ||
-      config.outputFormat == "gtest_xml") {
+  // For gtest-based configs, suite filter is "SuiteName.*"
+  bool isGTestFormat = (config.outputFormat == "ctest" ||
+                        config.outputFormat == "gtest" ||
+                        config.outputFormat == "gtest_xml");
+  if (isGTestFormat) {
     startProcess(config, workspaceFolder, QString(), suiteName + ".*");
     return;
   }

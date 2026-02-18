@@ -108,6 +108,8 @@ CTestDiscoveryAdapter::parseJsonOutput(const QByteArray &data) {
     DiscoveredTest test;
     test.name = testObj["name"].toString();
     test.id = QString::number(testObj["index"].toInt());
+    // CTest JSON uses 1-based indices; if index is missing or 0,
+    // fall back to the test name as a unique identifier
     if (test.id == "0")
       test.id = test.name;
 
@@ -131,7 +133,7 @@ CTestDiscoveryAdapter::parseDashNOutput(const QString &output) {
   QList<DiscoveredTest> results;
 
   static QRegularExpression testLineRe(
-      R"(^\s*Test\s+#(\d+):\s+(\S+)\s*$)");
+      R"(^\s*Test\s+#(\d+):\s+(.+?)\s*$)");
 
   const QStringList lines = output.split('\n');
   for (const QString &line : lines) {
