@@ -90,6 +90,7 @@ set(project_headers
     ui/panels/sourcecontrolpanel.h
     ui/panels/minimap.h
     ui/panels/spliteditorcontainer.h
+    ui/panels/testpanel.h
     core/async/asyncworker.h
     core/document.h
     core/formatter.h
@@ -149,6 +150,9 @@ set(project_headers
     filetree/gitfilesystemmodel.h
     run_templates/runtemplatemanager.h
     format_templates/formattemplatemanager.h
+    test_templates/testconfiguration.h
+    test_templates/testoutputparser.h
+    test_templates/testrunmanager.h
     settings/theme.h
     ui/uistylehelper.h
     ui/viewers/imageviewer.h)
@@ -205,6 +209,7 @@ set(project_sources
     ui/panels/sourcecontrolpanel.cpp
     ui/panels/minimap.cpp
     ui/panels/spliteditorcontainer.cpp
+    ui/panels/testpanel.cpp
     core/async/asyncworker.cpp
     core/document.cpp
     core/formatter.cpp
@@ -260,6 +265,9 @@ set(project_sources
     filetree/gitfilesystemmodel.cpp
     run_templates/runtemplatemanager.cpp
     format_templates/formattemplatemanager.cpp
+    test_templates/testconfiguration.cpp
+    test_templates/testoutputparser.cpp
+    test_templates/testrunmanager.cpp
     settings/theme.cpp
     ui/uistylehelper.cpp
     ui/viewers/imageviewer.cpp)
@@ -273,7 +281,8 @@ set(project_resources
     icons.qrc
     messages.qrc
     run_templates/run_templates.qrc
-    format_templates/format_templates.qrc)
+    format_templates/format_templates.qrc
+    test_templates/test_templates.qrc)
 
 add_executable(Lightpad 
     ${project_headers} 

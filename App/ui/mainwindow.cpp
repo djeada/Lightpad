@@ -74,6 +74,7 @@
 #include "panels/sourcecontrolpanel.h"
 #include "panels/spliteditorcontainer.h"
 #include "panels/terminaltabwidget.h"
+#include "panels/testpanel.h"
 #include "popup.h"
 #include "ui_mainwindow.h"
 #include "viewers/imageviewer.h"
@@ -109,6 +110,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_heatmapEnabled(false), m_codeLensEnabled(false),
       m_gitBranchLabel(nullptr), m_gitSyncLabel(nullptr),
       m_gitDirtyLabel(nullptr), debugPanel(nullptr), debugDock(nullptr),
+      testPanel(nullptr), testDock(nullptr),
       m_debugStartInProgress(false), m_breakpointsSetConnection(),
       m_breakpointChangedConnection(), m_sessionTerminatedConnection(),
       m_sessionErrorConnection(), m_sessionStateConnection(),
@@ -2044,6 +2046,61 @@ void MainWindow::ensureDebugPanel() {
   connect(&DebugSessionManager::instance(),
           &DebugSessionManager::allSessionsEnded, this,
           [this]() { clearDebugSession(); });
+}
+
+void MainWindow::ensureTestPanel() {
+  if (testDock) {
+    return;
+  }
+
+  testPanel = new TestPanel(this);
+  testPanel->setObjectName("testPanel");
+  testPanel->applyTheme(settings.theme);
+
+  if (!m_projectRootPath.isEmpty()) {
+    testPanel->setWorkspaceFolder(m_projectRootPath);
+  }
+
+  TestConfigurationManager::instance().loadTemplates();
+
+  connect(testPanel, &TestPanel::locationClicked, this,
+          [this](const QString &filePath, int line, int column) {
+            Q_UNUSED(column)
+            if (!filePath.isEmpty()) {
+              QString targetPath = filePath;
+              QFileInfo fi(targetPath);
+              if (fi.isRelative() && !m_projectRootPath.isEmpty()) {
+                targetPath =
+                    QDir(m_projectRootPath).absoluteFilePath(targetPath);
+              }
+              openFileAndAddToNewTab(targetPath);
+              TextArea *textArea = getCurrentTextArea();
+              if (textArea && line > 0) {
+                QTextCursor cursor = textArea->textCursor();
+                cursor.movePosition(QTextCursor::Start);
+                cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
+                                    line - 1);
+                textArea->setTextCursor(cursor);
+                textArea->centerCursor();
+                textArea->setFocus();
+              }
+            }
+          });
+
+  testDock = new QDockWidget(tr("Tests"), this);
+  testDock->setObjectName("testDock");
+  testDock->setAllowedAreas(Qt::BottomDockWidgetArea |
+                            Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+  testDock->setWidget(testPanel);
+  addDockWidget(Qt::BottomDockWidgetArea, testDock);
+  testDock->hide();
+}
+
+void MainWindow::on_actionToggle_Test_Panel_triggered() {
+  ensureTestPanel();
+
+  bool visible = testDock->isVisible();
+  testDock->setVisible(!visible);
 }
 
 void MainWindow::showCommandPalette() {

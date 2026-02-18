@@ -31,6 +31,7 @@ class QDockWidget;
 class VimMode;
 class LightpadTreeView;
 class DebugPanel;
+class TestPanel;
 class SymbolNavigationService;
 struct DefinitionTarget;
 #ifdef HAVE_PDF_SUPPORT
@@ -136,6 +137,7 @@ private slots:
   void on_actionUnsplit_All_triggered();
   void on_actionToggle_Terminal_triggered();
   void on_actionToggle_Source_Control_triggered();
+  void on_actionToggle_Test_Panel_triggered();
 
   void on_actionOpen_To_Side_triggered();
 
@@ -204,6 +206,8 @@ private:
   QTimer m_gitStatusBarTimer;
   DebugPanel *debugPanel;
   QDockWidget *debugDock;
+  TestPanel *testPanel;
+  QDockWidget *testDock;
   QString m_activeDebugSessionId;
   bool m_debugStartInProgress;
   QMetaObject::Connection m_breakpointsSetConnection;
@@ -267,6 +271,7 @@ private:
   void expandIndexInView(QTreeView *treeView, const QModelIndex &index);
   void ensureSourceControlPanel();
   void ensureDebugPanel();
+  void ensureTestPanel();
   void ensureStatusLabels();
   void updateSourceControlDockTitle(const QString &repoRoot, bool isRepo);
   void updateProblemsStatusLabel(int errors, int warnings, int infos);

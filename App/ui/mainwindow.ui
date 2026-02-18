@@ -328,6 +328,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionToggle_Minimap"/>
     <addaction name="actionToggle_Terminal"/>
     <addaction name="actionToggle_Source_Control"/>
+    <addaction name="actionToggle_Test_Panel"/>
     <addaction name="actionGit_Log"/>
     <addaction name="actionGit_File_History"/>
     <addaction name="actionGit_Rebase"/>
@@ -795,6 +796,20 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
    </property>
    <property name="checkable">
     <bool>true</bool>
+   </property>
+  </action>
+  <action name="actionToggle_Test_Panel">
+   <property name="text">
+    <string>Toggle Test Panel</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+T</string>
    </property>
   </action>
  </widget>

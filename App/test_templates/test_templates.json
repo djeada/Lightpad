@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "description": "Lightpad Test Templates - Built-in test runner configurations",
+  "templates": [
+    {
+      "id": "pytest",
+      "name": "pytest",
+      "language": "Python",
+      "extensions": ["py"],
+      "command": "python3",
+      "args": ["-m", "pytest", "--tb=short", "-v", "${file}"],
+      "workingDirectory": "${workspaceFolder}",
+      "outputFormat": "pytest",
+      "testFilePattern": "test_*.py"
+    },
+    {
+      "id": "gtest_cmake",
+      "name": "Google Test (CTest)",
+      "language": "C++",
+      "extensions": ["cpp", "cc", "cxx"],
+      "command": "ctest",
+      "args": ["--test-dir", "build", "--output-on-failure", "-V"],
+      "workingDirectory": "${workspaceFolder}",
+      "outputFormat": "ctest",
+      "testFilePattern": "test_*.cpp"
+    },
+    {
+      "id": "go_test",
+      "name": "Go Test",
+      "language": "Go",
+      "extensions": ["go"],
+      "command": "go",
+      "args": ["test", "-v", "-json", "./..."],
+      "workingDirectory": "${workspaceFolder}",
+      "outputFormat": "go_json"
+    },
+    {
+      "id": "cargo_test",
+      "name": "Cargo Test",
+      "language": "Rust",
+      "extensions": ["rs"],
+      "command": "cargo",
+      "args": ["test", "--", "--format=json", "-Z", "unstable-options"],
+      "workingDirectory": "${workspaceFolder}",
+      "outputFormat": "cargo_json"
+    },
+    {
+      "id": "jest",
+      "name": "Jest",
+      "language": "JavaScript",
+      "extensions": ["js", "jsx", "ts", "tsx"],
+      "command": "npx",
+      "args": ["jest", "--verbose", "--json", "--outputFile=/dev/stderr"],
+      "workingDirectory": "${workspaceFolder}",
+      "outputFormat": "jest_json",
+      "testFilePattern": "*.test.{js,jsx,ts,tsx}"
+    }
+  ]
+}
