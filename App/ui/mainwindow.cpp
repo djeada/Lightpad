@@ -71,7 +71,6 @@
 #include "panels/debugpanel.h"
 #include "panels/findreplacepanel.h"
 #include "panels/problemspanel.h"
-#include "panels/testresultspanel.h"
 #include "panels/sourcecontrolpanel.h"
 #include "panels/spliteditorcontainer.h"
 #include "panels/terminaltabwidget.h"
@@ -98,7 +97,7 @@ MainWindow::MainWindow(QWidget *parent)
       preferences(nullptr), findReplacePanel(nullptr), terminalWidget(nullptr),
       completer(nullptr), m_completionEngine(nullptr), highlightLanguage(""),
       font(QApplication::font()), commandPalette(nullptr),
-      problemsPanel(nullptr), testResultsPanel(nullptr), goToLineDialog(nullptr),
+      problemsPanel(nullptr), goToLineDialog(nullptr),
       goToSymbolDialog(nullptr), fileQuickOpen(nullptr),
       recentFilesDialog(nullptr), problemsStatusLabel(nullptr),
       vimStatusLabel(nullptr), m_vimCommandPanelActive(false),
@@ -116,7 +115,6 @@ MainWindow::MainWindow(QWidget *parent)
       m_breakpointChangedConnection(), m_sessionTerminatedConnection(),
       m_sessionErrorConnection(), m_sessionStateConnection(),
       m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
-      m_runOutputConnection(),
       m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
       m_restoringSession(false), m_globalSettingsLoaded(false),
       m_fileTreeModel(nullptr), m_treeScrollValue(0),
@@ -1806,10 +1804,6 @@ void MainWindow::showTerminal() {
     disconnect(m_runProcessErrorConnection);
     m_runProcessErrorConnection = {};
   }
-  if (m_runOutputConnection) {
-    disconnect(m_runOutputConnection);
-    m_runOutputConnection = {};
-  }
 
   auto shellProgramAndArgs =
       [](const QString &commandText) -> QPair<QString, QStringList> {
@@ -1828,11 +1822,6 @@ void MainWindow::showTerminal() {
     };
 
     Stage stage = Stage::MainRun;
-    QString activeStageName;
-    bool mainRunIsCTest = false;
-    bool mainRunFinished = false;
-    int mainRunExitCode = 0;
-    QString mainRunOutput;
   };
 
   QSharedPointer<RunExecutionState> executionState =
@@ -1840,33 +1829,10 @@ void MainWindow::showTerminal() {
   if (!preRunCommand.isEmpty()) {
     executionState->stage = RunExecutionState::Stage::PreRun;
   }
-  {
-    QString commandPreview = command.first + " " + command.second.join(" ");
-    executionState->mainRunIsCTest =
-        command.first.toLower().contains("ctest") ||
-        commandPreview.toLower().contains(" ctest ") ||
-        commandPreview.toLower().startsWith("ctest ");
-  }
-
-  if (executionState->mainRunIsCTest) {
-    m_runOutputConnection = connect(
-        terminalWidget, &TerminalTabWidget::outputReceived, this,
-        [executionState](const QString &output) {
-          if (executionState->stage != RunExecutionState::Stage::MainRun) {
-            return;
-          }
-
-          const int kMaxStoredChars = 512 * 1024;
-          int remaining = kMaxStoredChars - executionState->mainRunOutput.size();
-          if (remaining > 0) {
-            executionState->mainRunOutput.append(output.left(remaining));
-          }
-        });
-  }
 
   QSharedPointer<std::function<void()>> finalizeExecution =
       QSharedPointer<std::function<void()>>::create();
-  *finalizeExecution = [this, executionState, command, workingDirectory]() {
+  *finalizeExecution = [this]() {
     if (m_runProcessFinishedConnection) {
       disconnect(m_runProcessFinishedConnection);
       m_runProcessFinishedConnection = {};
@@ -1874,95 +1840,6 @@ void MainWindow::showTerminal() {
     if (m_runProcessErrorConnection) {
       disconnect(m_runProcessErrorConnection);
       m_runProcessErrorConnection = {};
-    }
-    if (m_runOutputConnection) {
-      disconnect(m_runOutputConnection);
-      m_runOutputConnection = {};
-    }
-
-    if (!executionState->mainRunIsCTest || !executionState->mainRunFinished) {
-      return;
-    }
-
-    const QString capturedOutput = executionState->mainRunOutput;
-    const QStringList lines = capturedOutput.split('\n');
-
-    QList<TestCaseResult> testResults;
-    const QRegularExpression caseRegex(
-        R"(^\s*\d+/\d+\s+Test\s+#\d+:\s+(.+?)\s+\.{2,}\s+(\*\*\*Failed|Failed|Passed)\s+([0-9.]+)\s+sec)");
-    for (const QString &line : lines) {
-      const QRegularExpressionMatch caseMatch = caseRegex.match(line);
-      if (!caseMatch.hasMatch()) {
-        continue;
-      }
-
-      TestCaseResult result;
-      result.name = caseMatch.captured(1).trimmed();
-      const QString statusText = caseMatch.captured(2);
-      result.passed = statusText.contains("Passed", Qt::CaseInsensitive);
-      result.timeSec = caseMatch.captured(3).trimmed();
-      testResults.append(result);
-    }
-
-    const QRegularExpression summaryRegex(
-        R"((\d+)% tests passed,\s+(\d+)\s+tests failed out of\s+(\d+))");
-    const QRegularExpressionMatch summaryMatch =
-        summaryRegex.match(capturedOutput);
-
-    int failed = 0;
-    int total = testResults.size();
-    if (summaryMatch.hasMatch()) {
-      failed = summaryMatch.captured(2).toInt();
-      total = summaryMatch.captured(3).toInt();
-    } else {
-      for (const TestCaseResult &result : testResults) {
-        if (!result.passed) {
-          failed++;
-        }
-      }
-    }
-    const int passed = qMax(0, total - failed);
-
-    QString durationSec;
-    const QRegularExpression timeRegex(
-        R"(Total Test time \(real\)\s*=\s*([0-9.]+)\s*sec)");
-    const QRegularExpressionMatch timeMatch = timeRegex.match(capturedOutput);
-    if (timeMatch.hasMatch()) {
-      durationSec = timeMatch.captured(1).trimmed();
-    }
-
-    const bool noTestsFound =
-        capturedOutput.contains("No tests were found", Qt::CaseInsensitive);
-
-    QString testDir;
-    const QRegularExpression ctestDirRegex(
-        R"(Internal ctest changing into directory:\s*(.+))");
-    const QRegularExpressionMatch ctestDirMatch =
-        ctestDirRegex.match(capturedOutput);
-    if (ctestDirMatch.hasMatch()) {
-      testDir = ctestDirMatch.captured(1).trimmed();
-      if (testDir.startsWith('"') && testDir.endsWith('"') &&
-          testDir.size() >= 2) {
-        testDir = testDir.mid(1, testDir.size() - 2);
-      }
-    }
-    if (testDir.isEmpty()) {
-      int testDirIdx = command.second.indexOf("--test-dir");
-      if (testDirIdx >= 0 && testDirIdx + 1 < command.second.size()) {
-        testDir = command.second.at(testDirIdx + 1);
-      }
-    }
-    if (testDir.isEmpty()) {
-      testDir = workingDirectory;
-    }
-    m_lastCTestDir = QDir::cleanPath(testDir);
-
-    TestResultsPanel *panel = ensureTestResultsPanel();
-    if (panel) {
-      panel->setResults(testResults, passed, failed, total, durationSec,
-                        executionState->mainRunExitCode, noTestsFound);
-      panel->show();
-      panel->raise();
     }
   };
 
@@ -1973,7 +1850,6 @@ void MainWindow::showTerminal() {
                       shellProgramAndArgs]() {
     switch (executionState->stage) {
     case RunExecutionState::Stage::PreRun: {
-      executionState->activeStageName = "pre-run command";
       QPair<QString, QStringList> shellCommand =
           shellProgramAndArgs(preRunCommand);
       terminalWidget->executeCommand(shellCommand.first, shellCommand.second,
@@ -1981,12 +1857,10 @@ void MainWindow::showTerminal() {
       return;
     }
     case RunExecutionState::Stage::MainRun:
-      executionState->activeStageName = "run command";
       terminalWidget->executeCommand(command.first, command.second,
                                      workingDirectory, customEnv);
       return;
     case RunExecutionState::Stage::PostRun: {
-      executionState->activeStageName = "post-run command";
       QPair<QString, QStringList> shellCommand =
           shellProgramAndArgs(postRunCommand);
       terminalWidget->executeCommand(shellCommand.first, shellCommand.second,
@@ -2012,9 +1886,6 @@ void MainWindow::showTerminal() {
         }
 
         if (executionState->stage == RunExecutionState::Stage::MainRun) {
-          executionState->mainRunFinished = true;
-          executionState->mainRunExitCode = exitCode;
-
           if (!postRunCommand.isEmpty()) {
             executionState->stage = RunExecutionState::Stage::PostRun;
             (*runCurrentStage)();
@@ -2037,50 +1908,6 @@ void MainWindow::showTerminal() {
       [finalizeExecution](const QString &) { (*finalizeExecution)(); });
 
   (*runCurrentStage)();
-}
-
-TestResultsPanel *MainWindow::ensureTestResultsPanel() {
-  if (!testResultsPanel) {
-    testResultsPanel = new TestResultsPanel(this);
-    testResultsPanel->applyTheme(settings.theme);
-
-    connect(testResultsPanel, &TestResultsPanel::rerunFailedRequested, this,
-            [this](const QStringList &failedTests) {
-              if (failedTests.isEmpty()) {
-                return;
-              }
-
-              QStringList escapedNames;
-              escapedNames.reserve(failedTests.size());
-              for (const QString &name : failedTests) {
-                escapedNames.append(QRegularExpression::escape(name));
-              }
-              QString regex = "^(?:" + escapedNames.join("|") + ")$";
-
-              QStringList args;
-              if (!m_lastCTestDir.isEmpty()) {
-                args << "--test-dir" << m_lastCTestDir;
-              }
-              args << "--output-on-failure" << "-R" << regex;
-
-              QString workingDir = m_lastCTestDir;
-              if (workingDir.isEmpty()) {
-                workingDir =
-                    m_projectRootPath.isEmpty() ? QDir::currentPath()
-                                                : m_projectRootPath;
-              }
-
-              showTerminalPanel();
-              terminalWidget->executeCommand("ctest", args, workingDir,
-                                             QMap<QString, QString>());
-            });
-
-    auto layout = qobject_cast<QBoxLayout *>(ui->centralwidget->layout());
-    if (layout != nullptr) {
-      layout->insertWidget(layout->count() - 1, testResultsPanel, 0);
-    }
-  }
-  return testResultsPanel;
 }
 
 void MainWindow::showProblemsPanel() {
@@ -5141,9 +4968,6 @@ void MainWindow::setTheme(Theme theme) {
   }
   if (problemsPanel) {
     problemsPanel->applyTheme(theme);
-  }
-  if (testResultsPanel) {
-    testResultsPanel->applyTheme(theme);
   }
   if (sourceControlPanel) {
     sourceControlPanel->applyTheme(theme);

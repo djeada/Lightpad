@@ -9,6 +9,9 @@
       "extensions": ["py"],
       "command": "python3",
       "args": ["-m", "pytest", "--tb=short", "-v", "${file}"],
+      "runSingleTest": {
+        "args": ["-m", "pytest", "--tb=short", "-v", "${file}::${testName}"]
+      },
       "workingDirectory": "${workspaceFolder}",
       "outputFormat": "pytest",
       "testFilePattern": "test_*.py"
@@ -17,9 +20,12 @@
       "id": "gtest_cmake",
       "name": "Google Test (CTest)",
       "language": "C++",
-      "extensions": ["cpp", "cc", "cxx"],
-      "command": "ctest",
-      "args": ["--test-dir", "build", "--output-on-failure", "-V"],
+      "extensions": ["cpp", "cc", "cxx", "h", "hpp"],
+      "command": "bash",
+      "args": ["-lc", "cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\" && cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V"],
+      "runSingleTest": {
+        "args": ["-lc", "cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '^${testName}$'"]
+      },
       "workingDirectory": "${workspaceFolder}",
       "outputFormat": "ctest",
       "testFilePattern": "test_*.cpp"
@@ -31,6 +37,9 @@
       "extensions": ["go"],
       "command": "go",
       "args": ["test", "-v", "-json", "./..."],
+      "runSingleTest": {
+        "args": ["test", "-v", "-json", "-run", "^${testName}$", "./..."]
+      },
       "workingDirectory": "${workspaceFolder}",
       "outputFormat": "go_json"
     },
@@ -41,6 +50,9 @@
       "extensions": ["rs"],
       "command": "cargo",
       "args": ["test", "--", "--format=json", "-Z", "unstable-options"],
+      "runSingleTest": {
+        "args": ["test", "${testName}", "--", "--format=json", "-Z", "unstable-options"]
+      },
       "workingDirectory": "${workspaceFolder}",
       "outputFormat": "cargo_json"
     },
@@ -51,6 +63,9 @@
       "extensions": ["js", "jsx", "ts", "tsx"],
       "command": "npx",
       "args": ["jest", "--verbose", "--json", "--outputFile=/dev/stderr"],
+      "runSingleTest": {
+        "args": ["jest", "--verbose", "-t", "${testName}", "--json", "--outputFile=/dev/stderr"]
+      },
       "workingDirectory": "${workspaceFolder}",
       "outputFormat": "jest_json",
       "testFilePattern": "*.test.{js,jsx,ts,tsx}"

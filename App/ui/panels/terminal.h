@@ -79,8 +79,6 @@ signals:
 
   void errorOccurred(const QString &message);
 
-  void outputReceived(const QString &output);
-
   void linkClicked(const QString &link);
 
   void shellProfileChanged(const QString &profileName);

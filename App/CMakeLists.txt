@@ -85,7 +85,6 @@ set(project_headers
     ui/widgets/gitgraphwidget.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
-    ui/panels/testresultspanel.h
     ui/panels/breadcrumbwidget.h
     ui/panels/debugpanel.h
     ui/panels/sourcecontrolpanel.h
@@ -205,7 +204,6 @@ set(project_sources
     ui/widgets/gitgraphwidget.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
-    ui/panels/testresultspanel.cpp
     ui/panels/breadcrumbwidget.cpp
     ui/panels/debugpanel.cpp
     ui/panels/sourcecontrolpanel.cpp

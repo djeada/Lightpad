@@ -308,16 +308,18 @@ void TestPanel::onContextMenu(const QPoint &pos) {
 
   QString testId = item->data(0, Qt::UserRole).toString();
   QString testName = item->text(0);
+  QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
-  QAction *runAction = menu.addAction(tr("Run This Test"), [this, testName]() {
-    TestConfiguration config = currentConfiguration();
-    if (!config.isValid())
-      return;
-    m_runManager->runSingleTest(config, m_workspaceFolder, testName);
-  });
+  QAction *runAction =
+      menu.addAction(tr("Run This Test"), [this, testName, filePath]() {
+        TestConfiguration config = currentConfiguration();
+        if (!config.isValid())
+          return;
+        m_runManager->runSingleTest(config, m_workspaceFolder, testName,
+                                    filePath);
+      });
   Q_UNUSED(runAction)
 
-  QString filePath = item->data(0, Qt::UserRole + 1).toString();
   if (!filePath.isEmpty()) {
     int line = item->data(0, Qt::UserRole + 2).toInt();
     menu.addAction(tr("Go to Source"), [this, filePath, line]() {
