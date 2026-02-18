@@ -49,6 +49,7 @@ private slots:
   // TestConfiguration tests
   void testConfigurationFromJson();
   void testConfigurationToJson();
+  void testConfigurationRunOverridesFromJson();
   void testConfigurationManagerSubstituteVariables();
   void testConfigurationManagerLoadTemplates();
 
@@ -540,6 +541,8 @@ void TestOutputParsers::testConfigurationToJson() {
   cfg.extensions = {"go"};
   cfg.workingDirectory = "${workspaceFolder}";
   cfg.outputFormat = "go_json";
+  cfg.runFailed.args = {"test", "-v", "-json", "-run", "${testName}", "./..."};
+  cfg.runSuite.args = {"test", "-v", "-json", "-run", "^${testName}", "./..."};
 
   QJsonObject obj = cfg.toJson();
 
@@ -548,6 +551,49 @@ void TestOutputParsers::testConfigurationToJson() {
   QCOMPARE(obj["command"].toString(), QString("go"));
   QCOMPARE(obj["args"].toArray().size(), 3);
   QCOMPARE(obj["outputFormat"].toString(), QString("go_json"));
+  QVERIFY(obj.contains("runFailed"));
+  QCOMPARE(obj["runFailed"].toObject()["args"].toArray().size(), 6);
+  QVERIFY(obj.contains("runSuite"));
+  QCOMPARE(obj["runSuite"].toObject()["args"].toArray().size(), 6);
+}
+
+void TestOutputParsers::testConfigurationRunOverridesFromJson() {
+  QJsonObject obj;
+  obj["id"] = "gtest_cmake";
+  obj["name"] = "Google Test (CTest)";
+  obj["command"] = "bash";
+  QJsonArray args;
+  args.append("-lc");
+  args.append("ctest --test-dir build -V");
+  obj["args"] = args;
+
+  QJsonObject runFailed;
+  QJsonArray failedArgs;
+  failedArgs.append("-lc");
+  failedArgs.append("ctest --test-dir build -V -R '${testName}'");
+  runFailed["args"] = failedArgs;
+  obj["runFailed"] = runFailed;
+
+  QJsonObject runSuite;
+  QJsonArray suiteArgs;
+  suiteArgs.append("-lc");
+  suiteArgs.append("ctest --test-dir build -V -R '^${testName}'");
+  runSuite["args"] = suiteArgs;
+  obj["runSuite"] = runSuite;
+
+  TestConfiguration cfg = TestConfiguration::fromJson(obj);
+
+  QCOMPARE(cfg.runFailed.args.size(), 2);
+  QVERIFY(cfg.runFailed.args[1].contains("${testName}"));
+  QCOMPARE(cfg.runSuite.args.size(), 2);
+  QVERIFY(cfg.runSuite.args[1].contains("${testName}"));
+
+  // Verify round-trip
+  QJsonObject out = cfg.toJson();
+  QVERIFY(out.contains("runFailed"));
+  QVERIFY(out.contains("runSuite"));
+  QCOMPARE(out["runFailed"].toObject()["args"].toArray().size(), 2);
+  QCOMPARE(out["runSuite"].toObject()["args"].toArray().size(), 2);
 }
 
 void TestOutputParsers::testConfigurationManagerSubstituteVariables() {
@@ -588,6 +634,16 @@ void TestOutputParsers::testConfigurationManagerLoadTemplates() {
     if (pytest.isValid()) {
       QCOMPARE(pytest.language, QString("Python"));
       QCOMPARE(pytest.outputFormat, QString("pytest"));
+      // Verify runFailed args are loaded
+      QVERIFY(!pytest.runFailed.args.isEmpty());
+    }
+
+    // Verify C++ template has runFailed and runSuite overrides
+    TestConfiguration gtest = mgr.templateById("gtest_cmake");
+    if (gtest.isValid()) {
+      QCOMPARE(gtest.language, QString("C++"));
+      QVERIFY(!gtest.runFailed.args.isEmpty());
+      QVERIFY(!gtest.runSuite.args.isEmpty());
     }
   }
 }

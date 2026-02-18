@@ -25,6 +25,8 @@ public:
   void applyTheme(const Theme &theme);
   void setWorkspaceFolder(const QString &folder);
 
+  void setDiscoveryAdapter(ITestDiscoveryAdapter *adapter);
+
   int passedCount() const { return m_passedCount; }
   int failedCount() const { return m_failedCount; }
   int skippedCount() const { return m_skippedCount; }
@@ -69,6 +71,7 @@ private:
   void refreshConfigurations();
   TestConfiguration currentConfiguration() const;
   void populateTreeFromDiscovery(const QList<DiscoveredTest> &tests);
+  void connectDiscoveryAdapter();
 
   QToolBar *m_toolbar;
   QAction *m_runAllAction;
@@ -85,7 +88,8 @@ private:
   QLabel *m_statusLabel;
 
   TestRunManager *m_runManager;
-  CTestDiscoveryAdapter *m_ctestDiscovery;
+  ITestDiscoveryAdapter *m_discoveryAdapter = nullptr;
+  bool m_ownsDiscoveryAdapter = false;
   QString m_workspaceFolder;
   Theme m_theme;
 

@@ -25,7 +25,7 @@ struct TestResult {
   QString stderrOutput;
 };
 
-struct RunSingleTestOverride {
+struct TestArgsOverride {
   QStringList args;
 
   QJsonObject toJson() const {
@@ -37,13 +37,15 @@ struct RunSingleTestOverride {
     return obj;
   }
 
-  static RunSingleTestOverride fromJson(const QJsonObject &obj) {
-    RunSingleTestOverride o;
+  static TestArgsOverride fromJson(const QJsonObject &obj) {
+    TestArgsOverride o;
     for (const auto &v : obj["args"].toArray())
       o.args.append(v.toString());
     return o;
   }
 };
+
+using RunSingleTestOverride = TestArgsOverride;
 
 struct TestConfiguration {
   QString id;
@@ -60,6 +62,8 @@ struct TestConfiguration {
   QString postRunTask;
   QString templateId;
   RunSingleTestOverride runSingleTest;
+  TestArgsOverride runFailed;
+  TestArgsOverride runSuite;
 
   bool isValid() const { return !name.isEmpty() && !command.isEmpty(); }
 
@@ -103,6 +107,10 @@ struct TestConfiguration {
       obj["templateId"] = templateId;
     if (!runSingleTest.args.isEmpty())
       obj["runSingleTest"] = runSingleTest.toJson();
+    if (!runFailed.args.isEmpty())
+      obj["runFailed"] = runFailed.toJson();
+    if (!runSuite.args.isEmpty())
+      obj["runSuite"] = runSuite.toJson();
     return obj;
   }
 
@@ -130,6 +138,12 @@ struct TestConfiguration {
     if (obj.contains("runSingleTest"))
       cfg.runSingleTest =
           RunSingleTestOverride::fromJson(obj["runSingleTest"].toObject());
+    if (obj.contains("runFailed"))
+      cfg.runFailed =
+          TestArgsOverride::fromJson(obj["runFailed"].toObject());
+    if (obj.contains("runSuite"))
+      cfg.runSuite =
+          TestArgsOverride::fromJson(obj["runSuite"].toObject());
     return cfg;
   }
 };

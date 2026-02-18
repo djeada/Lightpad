@@ -2,7 +2,6 @@
 
 #include <QApplication>
 #include <QClipboard>
-#include <QDir>
 #include <QHeaderView>
 #include <QMenu>
 #include <QSettings>
@@ -11,7 +10,6 @@
 TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
   setObjectName("TestPanel");
   m_runManager = new TestRunManager(this);
-  m_ctestDiscovery = new CTestDiscoveryAdapter(this);
   setupUI();
 
   connect(m_runManager, &TestRunManager::testStarted, this,
@@ -22,15 +20,14 @@ TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
           &TestPanel::onRunStarted);
   connect(m_runManager, &TestRunManager::runFinished, this,
           &TestPanel::onRunFinished);
-  connect(m_ctestDiscovery, &CTestDiscoveryAdapter::discoveryFinished, this,
-          &TestPanel::onDiscoveryFinished);
-  connect(m_ctestDiscovery, &CTestDiscoveryAdapter::discoveryError, this,
-          &TestPanel::onDiscoveryError);
 
   refreshConfigurations();
 }
 
-TestPanel::~TestPanel() {}
+TestPanel::~TestPanel() {
+  if (m_ownsDiscoveryAdapter)
+    delete m_discoveryAdapter;
+}
 
 void TestPanel::setupUI() {
   auto *layout = new QVBoxLayout(this);
@@ -619,19 +616,42 @@ TestConfiguration TestPanel::currentConfiguration() const {
   return TestConfigurationManager::instance().configurationByName(name);
 }
 
+void TestPanel::setDiscoveryAdapter(ITestDiscoveryAdapter *adapter) {
+  if (m_discoveryAdapter) {
+    disconnect(m_discoveryAdapter, nullptr, this, nullptr);
+    if (m_ownsDiscoveryAdapter)
+      delete m_discoveryAdapter;
+  }
+  m_discoveryAdapter = adapter;
+  m_ownsDiscoveryAdapter = false;
+  if (m_discoveryAdapter)
+    connectDiscoveryAdapter();
+}
+
+void TestPanel::connectDiscoveryAdapter() {
+  if (!m_discoveryAdapter)
+    return;
+  connect(m_discoveryAdapter, &ITestDiscoveryAdapter::discoveryFinished, this,
+          &TestPanel::onDiscoveryFinished);
+  connect(m_discoveryAdapter, &ITestDiscoveryAdapter::discoveryError, this,
+          &TestPanel::onDiscoveryError);
+}
+
 void TestPanel::discoverTests() {
   if (m_workspaceFolder.isEmpty())
     return;
 
+  if (!m_discoveryAdapter) {
+    m_statusLabel->setText(
+        tr("No discovery adapter configured"));
+    return;
+  }
+
   m_statusLabel->setText(tr("Discovering tests..."));
   m_discoverAction->setEnabled(false);
 
-  // Try CTest discovery using the build directory
-  QString buildDir = QDir(m_workspaceFolder).filePath("build");
-  if (!QDir(buildDir).exists())
-    buildDir = m_workspaceFolder;
-
-  m_ctestDiscovery->discover(buildDir);
+  // Use workspace folder as default; the adapter decides how to discover
+  m_discoveryAdapter->discover(m_workspaceFolder);
 }
 
 void TestPanel::onDiscoveryFinished(const QList<DiscoveredTest> &tests) {

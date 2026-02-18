@@ -12,6 +12,9 @@
       "runSingleTest": {
         "args": ["-m", "pytest", "--tb=short", "-v", "${file}::${testName}"]
       },
+      "runFailed": {
+        "args": ["-m", "pytest", "--tb=short", "-v", "-k", "${testName}"]
+      },
       "workingDirectory": "${workspaceFolder}",
       "outputFormat": "pytest",
       "testFilePattern": "test_*.py"
@@ -25,6 +28,12 @@
       "args": ["-lc", "cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\" && cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V"],
       "runSingleTest": {
         "args": ["-lc", "cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '^${testName}$'"]
+      },
+      "runFailed": {
+        "args": ["-lc", "cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '${testName}'"]
+      },
+      "runSuite": {
+        "args": ["-lc", "cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '^${testName}'"]
       },
       "workingDirectory": "${workspaceFolder}",
       "outputFormat": "ctest",
@@ -51,6 +60,9 @@
       "runSingleTest": {
         "args": ["test", "-v", "-json", "-run", "^${testName}$", "./..."]
       },
+      "runFailed": {
+        "args": ["test", "-v", "-json", "-run", "${testName}", "./..."]
+      },
       "workingDirectory": "${workspaceFolder}",
       "outputFormat": "go_json"
     },
@@ -64,6 +76,9 @@
       "runSingleTest": {
         "args": ["test", "${testName}", "--", "--format=json", "-Z", "unstable-options"]
       },
+      "runFailed": {
+        "args": ["test", "${testName}", "--", "--format=json", "-Z", "unstable-options"]
+      },
       "workingDirectory": "${workspaceFolder}",
       "outputFormat": "cargo_json"
     },
@@ -75,6 +90,9 @@
       "command": "npx",
       "args": ["jest", "--verbose", "--json", "--outputFile=/dev/stderr"],
       "runSingleTest": {
+        "args": ["jest", "--verbose", "-t", "${testName}", "--json", "--outputFile=/dev/stderr"]
+      },
+      "runFailed": {
         "args": ["jest", "--verbose", "-t", "${testName}", "--json", "--outputFile=/dev/stderr"]
       },
       "workingDirectory": "${workspaceFolder}",

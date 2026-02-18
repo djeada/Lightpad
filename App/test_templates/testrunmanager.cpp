@@ -9,14 +9,15 @@ TestRunManager::~TestRunManager() { stop(); }
 void TestRunManager::runAll(const TestConfiguration &config,
                             const QString &workspaceFolder,
                             const QString &filePath) {
-  startProcess(config, workspaceFolder, filePath, QString());
+  startProcess(config, workspaceFolder, filePath, QString(), RunMode::All);
 }
 
 void TestRunManager::runSingleTest(const TestConfiguration &config,
                                    const QString &workspaceFolder,
                                    const QString &testName,
                                    const QString &filePath) {
-  startProcess(config, workspaceFolder, filePath, testName);
+  startProcess(config, workspaceFolder, filePath, testName,
+               RunMode::SingleTest);
 }
 
 void TestRunManager::runFailed(const TestConfiguration &config,
@@ -25,41 +26,16 @@ void TestRunManager::runFailed(const TestConfiguration &config,
   if (failed.isEmpty())
     return;
 
-  // For gtest-based configs, use --gtest_filter
-  bool isGTestFormat = (config.outputFormat == "ctest" ||
-                        config.outputFormat == "gtest" ||
-                        config.outputFormat == "gtest_xml");
-  if (isGTestFormat) {
-    // Run each failed test via filter; join with ':'
-    QString filter = failed.join(':');
-    startProcess(config, workspaceFolder, QString(), filter);
-    return;
-  }
-
-  // For pytest, use -k with 'or' join
-  if (config.outputFormat == "pytest") {
-    QString filter = failed.join(" or ");
-    startProcess(config, workspaceFolder, QString(), filter);
-    return;
-  }
-
-  // Default: run first failed as single test
-  startProcess(config, workspaceFolder, QString(), failed.first());
+  // Join failed test names as the filter string; the configuration's
+  // runFailed.args template uses ${testName} for substitution
+  QString filter = failed.join(':');
+  startProcess(config, workspaceFolder, QString(), filter, RunMode::Failed);
 }
 
 void TestRunManager::runSuite(const TestConfiguration &config,
                               const QString &workspaceFolder,
                               const QString &suiteName) {
-  // For gtest-based configs, suite filter is "SuiteName.*"
-  bool isGTestFormat = (config.outputFormat == "ctest" ||
-                        config.outputFormat == "gtest" ||
-                        config.outputFormat == "gtest_xml");
-  if (isGTestFormat) {
-    startProcess(config, workspaceFolder, QString(), suiteName + ".*");
-    return;
-  }
-
-  startProcess(config, workspaceFolder, QString(), suiteName);
+  startProcess(config, workspaceFolder, QString(), suiteName, RunMode::Suite);
 }
 
 void TestRunManager::stop() {
@@ -97,7 +73,8 @@ void TestRunManager::clearResults() {
 void TestRunManager::startProcess(const TestConfiguration &config,
                                   const QString &workspaceFolder,
                                   const QString &filePath,
-                                  const QString &testName) {
+                                  const QString &testName,
+                                  RunMode mode) {
   stop();
   clearResults();
 
@@ -139,18 +116,42 @@ void TestRunManager::startProcess(const TestConfiguration &config,
 
   m_process = new QProcess(this);
 
-  // Resolve command and args
+  // Select the appropriate args template based on run mode
+  QStringList templateArgs;
+  switch (mode) {
+  case RunMode::Failed:
+    if (!config.runFailed.args.isEmpty())
+      templateArgs = config.runFailed.args;
+    else if (!config.runSingleTest.args.isEmpty())
+      templateArgs = config.runSingleTest.args;
+    else
+      templateArgs = config.args;
+    break;
+  case RunMode::Suite:
+    if (!config.runSuite.args.isEmpty())
+      templateArgs = config.runSuite.args;
+    else if (!config.runSingleTest.args.isEmpty())
+      templateArgs = config.runSingleTest.args;
+    else
+      templateArgs = config.args;
+    break;
+  case RunMode::SingleTest:
+    if (!testName.isEmpty() && !config.runSingleTest.args.isEmpty())
+      templateArgs = config.runSingleTest.args;
+    else
+      templateArgs = config.args;
+    break;
+  case RunMode::All:
+  default:
+    templateArgs = config.args;
+    break;
+  }
+
+  // Resolve command and args via variable substitution
   QStringList args;
-  if (!testName.isEmpty() && !config.runSingleTest.args.isEmpty()) {
-    for (const QString &arg : config.runSingleTest.args) {
-      args.append(TestConfigurationManager::substituteVariables(
-          arg, filePath, workspaceFolder, testName));
-    }
-  } else {
-    for (const QString &arg : config.args) {
-      args.append(TestConfigurationManager::substituteVariables(
-          arg, filePath, workspaceFolder, testName));
-    }
+  for (const QString &arg : templateArgs) {
+    args.append(TestConfigurationManager::substituteVariables(
+        arg, filePath, workspaceFolder, testName));
   }
 
   QString command = TestConfigurationManager::substituteVariables(
