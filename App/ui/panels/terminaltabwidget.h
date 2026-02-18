@@ -72,6 +72,8 @@ signals:
 
   void errorOccurred(const QString &errorMessage);
 
+  void outputReceived(const QString &output);
+
   void linkClicked(const QString &link);
 
 private slots:

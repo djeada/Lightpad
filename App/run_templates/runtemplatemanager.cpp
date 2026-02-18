@@ -469,6 +469,11 @@ QString RunTemplateManager::substituteVariables(const QString &input,
                                                 const QString &filePath) {
   QString result = input;
   QFileInfo fileInfo(filePath);
+  const RunTemplateManager &manager = RunTemplateManager::instance();
+  QString workspaceFolder = manager.m_workspaceFolder;
+  if (workspaceFolder.isEmpty()) {
+    workspaceFolder = fileInfo.absoluteDir().path();
+  }
 
   result.replace("${file}", filePath);
   result.replace("${fileDir}", fileInfo.absoluteDir().path());
@@ -476,7 +481,7 @@ QString RunTemplateManager::substituteVariables(const QString &input,
   result.replace("${fileBasenameNoExt}", fileInfo.completeBaseName());
   result.replace("${fileExt}", fileInfo.suffix());
 
-  result.replace("${workspaceFolder}", fileInfo.absoluteDir().path());
+  result.replace("${workspaceFolder}", workspaceFolder);
 
   return result;
 }

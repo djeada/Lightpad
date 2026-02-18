@@ -379,6 +379,7 @@ void Terminal::onRunProcessReadyReadStdout() {
   if (m_runProcess) {
     QString output = QString::fromUtf8(m_runProcess->readAllStandardOutput());
     appendOutput(output);
+    emit outputReceived(output);
   }
 }
 
@@ -386,6 +387,7 @@ void Terminal::onRunProcessReadyReadStderr() {
   if (m_runProcess) {
     QString output = QString::fromUtf8(m_runProcess->readAllStandardError());
     appendOutput(output, true);
+    emit outputReceived(output);
   }
 }
 
