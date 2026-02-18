@@ -4,9 +4,38 @@
 
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSet>
+
+namespace {
+QString quoteArgumentForDisplay(const QString &arg) {
+  if (arg.isEmpty()) {
+    return "\"\"";
+  }
+
+  bool needsQuotes =
+      arg.contains(' ') || arg.contains('\t') || arg.contains('"');
+  if (!needsQuotes) {
+    return arg;
+  }
+
+  QString escaped = arg;
+  escaped.replace('\\', "\\\\");
+  escaped.replace('"', "\\\"");
+  return QString("\"%1\"").arg(escaped);
+}
+
+QString joinArgumentsForDisplay(const QStringList &args) {
+  QStringList rendered;
+  rendered.reserve(args.size());
+  for (const QString &arg : args) {
+    rendered.append(quoteArgumentForDisplay(arg));
+  }
+  return rendered.join(" ");
+}
+} // namespace
 
 RunTemplateSelector::RunTemplateSelector(const QString &filePath,
                                          QWidget *parent)
@@ -24,14 +53,15 @@ RunTemplateSelector::RunTemplateSelector(const QString &filePath,
         break;
       }
     }
-    m_customArgsEdit->setText(assignment.customArgs.join(" "));
+    m_customArgsEdit->setText(joinArgumentsForDisplay(assignment.customArgs));
 
     for (const QString &src : assignment.sourceFiles) {
       m_sourceFilesList->addItem(src);
     }
 
     m_workingDirEdit->setText(assignment.workingDirectory);
-    m_compilerFlagsEdit->setText(assignment.compilerFlags.join(" "));
+    m_compilerFlagsEdit->setText(
+        joinArgumentsForDisplay(assignment.compilerFlags));
 
     int row = 0;
     for (auto it = assignment.customEnv.begin();
@@ -348,8 +378,7 @@ void RunTemplateSelector::onAccept() {
 
     QString argsText = m_customArgsEdit->text().trimmed();
     if (!argsText.isEmpty()) {
-      assignment.customArgs =
-          argsText.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+      assignment.customArgs = QProcess::splitCommand(argsText);
     }
 
     for (int i = 0; i < m_sourceFilesList->count(); ++i) {
@@ -360,8 +389,7 @@ void RunTemplateSelector::onAccept() {
 
     QString flagsText = m_compilerFlagsEdit->text().trimmed();
     if (!flagsText.isEmpty()) {
-      assignment.compilerFlags =
-          flagsText.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+      assignment.compilerFlags = QProcess::splitCommand(flagsText);
     }
 
     for (int row = 0; row < m_envVarTable->rowCount(); ++row) {
@@ -443,7 +471,7 @@ QStringList RunTemplateSelector::getCustomArgs() const {
   if (argsText.isEmpty()) {
     return QStringList();
   }
-  return argsText.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+  return QProcess::splitCommand(argsText);
 }
 
 void RunTemplateSelector::applyTheme(const Theme &theme) {

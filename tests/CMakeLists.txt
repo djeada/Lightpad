@@ -222,6 +222,8 @@ qt_add_resources(RUN_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/run_templates/ru
 add_executable(test_runtemplatemanager
     unit/test_runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/runtemplateselector.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${RUN_TEMPLATE_RESOURCES}
 )

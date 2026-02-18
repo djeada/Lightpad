@@ -69,6 +69,28 @@
       "env": {}
     },
     {
+      "id": "cpp_cmake_ctest",
+      "name": "C++ CMake + CTest",
+      "description": "Configure/build with CMake and run CTest",
+      "language": "C++",
+      "extensions": ["cpp", "cxx", "cc", "C", "h", "hpp"],
+      "command": "bash",
+      "args": ["-c", "cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\" && cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure"],
+      "workingDirectory": "${workspaceFolder}",
+      "env": {}
+    },
+    {
+      "id": "cpp_make_test",
+      "name": "C++ Make Test",
+      "description": "Run Makefile test target in workspace",
+      "language": "C++",
+      "extensions": ["cpp", "cxx", "cc", "C", "h", "hpp"],
+      "command": "make",
+      "args": ["-C", "${workspaceFolder}", "test"],
+      "workingDirectory": "${workspaceFolder}",
+      "env": {}
+    },
+    {
       "id": "c_gcc",
       "name": "C (GCC)",
       "description": "Compile and run C with gcc",

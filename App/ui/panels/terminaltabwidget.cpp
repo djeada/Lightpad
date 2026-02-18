@@ -132,6 +132,8 @@ Terminal *TerminalTabWidget::addNewTerminal(const QString &workingDirectory) {
           &TerminalTabWidget::processFinished);
   connect(terminal, &Terminal::processError, this,
           &TerminalTabWidget::errorOccurred);
+  connect(terminal, &Terminal::outputReceived, this,
+          &TerminalTabWidget::outputReceived);
   connect(terminal, &Terminal::linkClicked, this,
           &TerminalTabWidget::onTerminalLinkClicked);
 
@@ -161,6 +163,8 @@ TerminalTabWidget::addNewTerminalWithProfile(const QString &profileName,
           &TerminalTabWidget::processFinished);
   connect(terminal, &Terminal::processError, this,
           &TerminalTabWidget::errorOccurred);
+  connect(terminal, &Terminal::outputReceived, this,
+          &TerminalTabWidget::outputReceived);
   connect(terminal, &Terminal::linkClicked, this,
           &TerminalTabWidget::onTerminalLinkClicked);
 
@@ -382,6 +386,8 @@ void TerminalTabWidget::splitHorizontal() {
           &TerminalTabWidget::processFinished);
   connect(terminal, &Terminal::processError, this,
           &TerminalTabWidget::errorOccurred);
+  connect(terminal, &Terminal::outputReceived, this,
+          &TerminalTabWidget::outputReceived);
   connect(terminal, &Terminal::linkClicked, this,
           &TerminalTabWidget::onTerminalLinkClicked);
 

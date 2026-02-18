@@ -33,6 +33,7 @@ class LightpadTreeView;
 class DebugPanel;
 class TestPanel;
 class SymbolNavigationService;
+class TestResultsPanel;
 struct DefinitionTarget;
 #ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
@@ -176,6 +177,7 @@ private:
 
   class CommandPalette *commandPalette;
   class ProblemsPanel *problemsPanel;
+  class TestResultsPanel *testResultsPanel;
   class GoToLineDialog *goToLineDialog;
   class GoToSymbolDialog *goToSymbolDialog;
   class FileQuickOpen *fileQuickOpen;
@@ -215,8 +217,12 @@ private:
   QMetaObject::Connection m_sessionTerminatedConnection;
   QMetaObject::Connection m_sessionErrorConnection;
   QMetaObject::Connection m_sessionStateConnection;
+  QMetaObject::Connection m_runProcessFinishedConnection;
+  QMetaObject::Connection m_runProcessErrorConnection;
+  QMetaObject::Connection m_runOutputConnection;
   QMetaObject::Connection m_formatProcessFinishedConnection;
   QMetaObject::Connection m_formatProcessErrorConnection;
+  QString m_lastCTestDir;
 
   SplitEditorContainer *m_splitEditorContainer;
 
@@ -235,6 +241,7 @@ private:
   TerminalTabWidget *ensureTerminalWidget();
   void showTerminalPanel();
   void showTerminal();
+  TestResultsPanel *ensureTestResultsPanel();
   void showProblemsPanel();
   void showCommandPalette();
   void showGoToLineDialog();
@@ -330,6 +337,8 @@ private:
   QSet<QString> m_loadedHighlightOverrideDirs;
 
   QString m_projectRootPath;
+  bool m_restoringSession;
+  bool m_globalSettingsLoaded;
   GitFileSystemModel *m_fileTreeModel;
   QSet<QString> m_treeExpandedPaths;
   int m_treeScrollValue;
