@@ -37,6 +37,8 @@ public slots:
   void runAll();
   void runFailed();
   void runCurrentFile(const QString &filePath);
+  bool runWithConfigurationId(const QString &configId,
+                              const QString &filePath = QString());
   void stopTests();
 
 private slots:

@@ -70,8 +70,8 @@
     },
     {
       "id": "cpp_cmake_ctest",
-      "name": "C++ CMake + CTest (Terminal)",
-      "description": "Configure/build with CMake and run CTest in terminal output",
+      "name": "C++ CMake + CTest",
+      "description": "Configure/build with CMake and run CTest",
       "language": "C++",
       "extensions": ["cpp", "cxx", "cc", "C", "h", "hpp"],
       "command": "bash",
@@ -81,8 +81,8 @@
     },
     {
       "id": "cpp_make_test",
-      "name": "C++ Make Test (Terminal)",
-      "description": "Run Makefile test target in terminal output",
+      "name": "C++ Make Test",
+      "description": "Run Makefile test target in workspace",
       "language": "C++",
       "extensions": ["cpp", "cxx", "cc", "C", "h", "hpp"],
       "command": "make",

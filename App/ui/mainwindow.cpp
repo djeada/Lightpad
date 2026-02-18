@@ -1773,7 +1773,44 @@ void MainWindow::showTerminal() {
   }
 
   const QString languageId = effectiveLanguageIdForFile(filePath);
-  QPair<QString, QStringList> command = manager.buildCommand(filePath, languageId);
+  QPair<QString, QStringList> command =
+      manager.buildCommand(filePath, languageId);
+  FileTemplateAssignment assignment = manager.getAssignmentForFile(filePath);
+
+  const QString assignedTemplateId = assignment.templateId.trimmed();
+  const QString runCommandPreview =
+      (command.first + " " + command.second.join(" ")).toLower();
+  const bool isStructuredCppTestRun =
+      (assignedTemplateId == "cpp_cmake_ctest" ||
+       assignedTemplateId == "cpp_make_test" ||
+       runCommandPreview.contains("ctest"));
+  if (isStructuredCppTestRun) {
+    ensureTestPanel();
+    if (testPanel && testDock) {
+      if (!m_projectRootPath.isEmpty()) {
+        testPanel->setWorkspaceFolder(m_projectRootPath);
+      }
+
+      QString configId =
+          assignedTemplateId == "cpp_make_test" ? "gtest_make" : "gtest_cmake";
+      bool launched = testPanel->runWithConfigurationId(configId, filePath);
+      if (!launched) {
+        launched = testPanel->runWithConfigurationId("gtest_cmake", filePath);
+      }
+      if (!launched) {
+        testPanel->runCurrentFile(filePath);
+      }
+
+      testDock->show();
+      testDock->raise();
+      if (ui->actionToggle_Test_Panel) {
+        ui->actionToggle_Test_Panel->setChecked(true);
+      }
+      return;
+    }
+  }
+
+  showTerminalPanel();
 
   if (command.first.isEmpty()) {
     terminalWidget->runFile(filePath, languageId);
@@ -1782,8 +1819,6 @@ void MainWindow::showTerminal() {
 
   QString workingDirectory = manager.getWorkingDirectory(filePath, languageId);
   QMap<QString, QString> customEnv = manager.getEnvironment(filePath, languageId);
-
-  FileTemplateAssignment assignment = manager.getAssignmentForFile(filePath);
 
   QString preRunCommand = assignment.preRunCommand.trimmed();
   if (!preRunCommand.isEmpty()) {
@@ -5044,6 +5079,10 @@ void MainWindow::setProjectRootPath(const QString &path) {
     WatchManager::instance().setWorkspaceFolder(normalizedPath);
     WatchManager::instance().loadFromLightpadDir();
     RunTemplateManager::instance().setWorkspaceFolder(normalizedPath);
+  }
+
+  if (testPanel) {
+    testPanel->setWorkspaceFolder(normalizedPath);
   }
 
   applyTreeExpandedStateToViews();

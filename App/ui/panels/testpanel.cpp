@@ -160,6 +160,25 @@ void TestPanel::runCurrentFile(const QString &filePath) {
   m_runManager->runAll(config, m_workspaceFolder, filePath);
 }
 
+bool TestPanel::runWithConfigurationId(const QString &configId,
+                                       const QString &filePath) {
+  const int configIndex = m_configCombo->findData(configId);
+  if (configIndex < 0) {
+    return false;
+  }
+
+  if (m_configCombo->currentIndex() != configIndex) {
+    m_configCombo->setCurrentIndex(configIndex);
+  }
+
+  if (filePath.isEmpty()) {
+    runAll();
+  } else {
+    runCurrentFile(filePath);
+  }
+  return true;
+}
+
 void TestPanel::stopTests() { m_runManager->stop(); }
 
 void TestPanel::onTestStarted(const TestResult &result) {

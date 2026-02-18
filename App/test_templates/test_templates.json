@@ -31,6 +31,17 @@
       "testFilePattern": "test_*.cpp"
     },
     {
+      "id": "gtest_make",
+      "name": "Google Test (Make test)",
+      "language": "C++",
+      "extensions": ["cpp", "cc", "cxx", "h", "hpp"],
+      "command": "make",
+      "args": ["-C", "${workspaceFolder}", "test"],
+      "workingDirectory": "${workspaceFolder}",
+      "outputFormat": "ctest",
+      "testFilePattern": "test_*.cpp"
+    },
+    {
       "id": "go_test",
       "name": "Go Test",
       "language": "Go",
