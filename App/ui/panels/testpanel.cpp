@@ -2,13 +2,16 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDir>
 #include <QHeaderView>
 #include <QMenu>
+#include <QSettings>
 #include <QStyle>
 
 TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
   setObjectName("TestPanel");
   m_runManager = new TestRunManager(this);
+  m_ctestDiscovery = new CTestDiscoveryAdapter(this);
   setupUI();
 
   connect(m_runManager, &TestRunManager::testStarted, this,
@@ -19,6 +22,10 @@ TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
           &TestPanel::onRunStarted);
   connect(m_runManager, &TestRunManager::runFinished, this,
           &TestPanel::onRunFinished);
+  connect(m_ctestDiscovery, &CTestDiscoveryAdapter::discoveryFinished, this,
+          &TestPanel::onDiscoveryFinished);
+  connect(m_ctestDiscovery, &CTestDiscoveryAdapter::discoveryError, this,
+          &TestPanel::onDiscoveryError);
 
   refreshConfigurations();
 }
@@ -51,6 +58,11 @@ void TestPanel::setupUI() {
       &TestPanel::stopTests);
   m_stopAction->setToolTip(tr("Stop"));
   m_stopAction->setEnabled(false);
+
+  m_discoverAction = m_toolbar->addAction(
+      style()->standardIcon(QStyle::SP_FileDialogContentsView), tr("Discover"),
+      this, &TestPanel::discoverTests);
+  m_discoverAction->setToolTip(tr("Discover Tests"));
 
   m_clearAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_DialogResetButton), tr("Clear"), this,
@@ -240,8 +252,10 @@ void TestPanel::runAll() {
 }
 
 void TestPanel::runFailed() {
-  // Re-run with same config — the user can filter to only failed
-  runAll();
+  TestConfiguration config = currentConfiguration();
+  if (!config.isValid())
+    return;
+  m_runManager->runFailed(config, m_workspaceFolder);
 }
 
 void TestPanel::runCurrentFile(const QString &filePath) {
@@ -420,15 +434,27 @@ void TestPanel::onContextMenu(const QPoint &pos) {
   QString testName = item->text(0);
   QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
-  QAction *runAction =
-      menu.addAction(tr("Run This Test"), [this, testName, filePath]() {
-        TestConfiguration config = currentConfiguration();
-        if (!config.isValid())
-          return;
-        m_runManager->runSingleTest(config, m_workspaceFolder, testName,
-                                    filePath);
-      });
-  Q_UNUSED(runAction)
+  // Check if this is a suite item (has children)
+  bool isSuite = (item->childCount() > 0);
+
+  if (isSuite) {
+    menu.addAction(tr("Run Suite"), [this, testName]() {
+      TestConfiguration config = currentConfiguration();
+      if (!config.isValid())
+        return;
+      m_runManager->runSuite(config, m_workspaceFolder, testName);
+    });
+  } else {
+    QAction *runAction =
+        menu.addAction(tr("Run This Test"), [this, testName, filePath]() {
+          TestConfiguration config = currentConfiguration();
+          if (!config.isValid())
+            return;
+          m_runManager->runSingleTest(config, m_workspaceFolder, testName,
+                                      filePath);
+        });
+    Q_UNUSED(runAction)
+  }
 
   if (!filePath.isEmpty()) {
     int line = item->data(0, Qt::UserRole + 2).toInt();
@@ -591,4 +617,82 @@ void TestPanel::refreshConfigurations() {
 TestConfiguration TestPanel::currentConfiguration() const {
   QString name = m_configCombo->currentText();
   return TestConfigurationManager::instance().configurationByName(name);
+}
+
+void TestPanel::discoverTests() {
+  if (m_workspaceFolder.isEmpty())
+    return;
+
+  m_statusLabel->setText(tr("Discovering tests..."));
+  m_discoverAction->setEnabled(false);
+
+  // Try CTest discovery using the build directory
+  QString buildDir = m_workspaceFolder + "/build";
+  if (!QDir(buildDir).exists())
+    buildDir = m_workspaceFolder;
+
+  m_ctestDiscovery->discover(buildDir);
+}
+
+void TestPanel::onDiscoveryFinished(const QList<DiscoveredTest> &tests) {
+  m_discoverAction->setEnabled(true);
+  populateTreeFromDiscovery(tests);
+  m_statusLabel->setText(
+      tr("Discovered %1 tests").arg(tests.size()));
+}
+
+void TestPanel::onDiscoveryError(const QString &message) {
+  m_discoverAction->setEnabled(true);
+  m_statusLabel->setText(tr("Discovery error: %1").arg(message));
+}
+
+void TestPanel::populateTreeFromDiscovery(
+    const QList<DiscoveredTest> &tests) {
+  m_tree->clear();
+  m_suiteItems.clear();
+  m_testItems.clear();
+
+  for (const DiscoveredTest &test : tests) {
+    QTreeWidgetItem *suiteItem = findOrCreateSuiteItem(test.suite);
+
+    auto *item = new QTreeWidgetItem();
+    item->setText(0, test.name);
+    item->setData(0, Qt::UserRole, test.id);
+    if (!test.filePath.isEmpty())
+      item->setData(0, Qt::UserRole + 1, test.filePath);
+    if (test.line >= 0)
+      item->setData(0, Qt::UserRole + 2, test.line);
+    updateTreeItemIcon(item, TestStatus::Queued);
+    item->setText(1, tr("Not Run"));
+
+    if (suiteItem)
+      suiteItem->addChild(item);
+    else
+      m_tree->addTopLevelItem(item);
+    m_testItems[test.id] = item;
+  }
+}
+
+void TestPanel::saveState() const {
+  QSettings settings;
+  settings.beginGroup("TestPanel");
+  settings.setValue("lastConfiguration", m_configCombo->currentText());
+  settings.setValue("lastFilter", m_filterCombo->currentIndex());
+  settings.endGroup();
+}
+
+void TestPanel::restoreState() {
+  QSettings settings;
+  settings.beginGroup("TestPanel");
+  QString lastConfig = settings.value("lastConfiguration").toString();
+  int lastFilter = settings.value("lastFilter", 0).toInt();
+  settings.endGroup();
+
+  if (!lastConfig.isEmpty()) {
+    int idx = m_configCombo->findText(lastConfig);
+    if (idx >= 0)
+      m_configCombo->setCurrentIndex(idx);
+  }
+  if (lastFilter >= 0 && lastFilter < m_filterCombo->count())
+    m_filterCombo->setCurrentIndex(lastFilter);
 }

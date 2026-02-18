@@ -2,9 +2,11 @@
 #include <QtTest>
 
 #include "test_templates/testconfiguration.h"
+#include "test_templates/testdiscovery.h"
 #include "test_templates/testoutputparser.h"
 
 Q_DECLARE_METATYPE(TestResult)
+Q_DECLARE_METATYPE(DiscoveredTest)
 
 class TestOutputParsers : public QObject {
   Q_OBJECT
@@ -49,10 +51,25 @@ private slots:
   void testConfigurationToJson();
   void testConfigurationManagerSubstituteVariables();
   void testConfigurationManagerLoadTemplates();
+
+  // CTest discovery adapter tests
+  void testCtestDiscoveryParseJsonOutput();
+  void testCtestDiscoveryParseJsonOutputEmpty();
+  void testCtestDiscoveryParseDashN();
+  void testCtestDiscoveryParseDashNEmpty();
+
+  // GTest discovery adapter tests
+  void testGTestParseListTestsOutput();
+  void testGTestParseListTestsOutputEmpty();
+  void testGTestBuildFilter();
+  void testGTestBuildFilterEmpty();
+  void testGTestBuildFilterSingle();
 };
 
 void TestOutputParsers::initTestCase() {
   qRegisterMetaType<TestResult>("TestResult");
+  qRegisterMetaType<DiscoveredTest>("DiscoveredTest");
+  qRegisterMetaType<QList<DiscoveredTest>>("QList<DiscoveredTest>");
 }
 
 // --- TAP Parser ---
@@ -573,6 +590,153 @@ void TestOutputParsers::testConfigurationManagerLoadTemplates() {
       QCOMPARE(pytest.outputFormat, QString("pytest"));
     }
   }
+}
+
+// --- CTest Discovery Adapter ---
+
+void TestOutputParsers::testCtestDiscoveryParseJsonOutput() {
+  QByteArray json = R"({
+    "kind": "ctestInfo",
+    "version": { "major": 1, "minor": 0 },
+    "tests": [
+      {
+        "name": "LoggerTests",
+        "index": 1,
+        "command": ["/path/to/test_logger"],
+        "properties": []
+      },
+      {
+        "name": "ThemeTests",
+        "index": 2,
+        "command": ["/path/to/test_theme"],
+        "properties": [
+          { "name": "WORKING_DIRECTORY", "value": "/home/user/project/build" }
+        ]
+      },
+      {
+        "name": "DocumentTests",
+        "index": 3,
+        "command": ["/path/to/test_document"],
+        "properties": []
+      }
+    ]
+  })";
+
+  QList<DiscoveredTest> tests =
+      CTestDiscoveryAdapter::parseJsonOutput(json);
+
+  QCOMPARE(tests.size(), 3);
+  QCOMPARE(tests[0].name, QString("LoggerTests"));
+  QCOMPARE(tests[0].id, QString("1"));
+  QCOMPARE(tests[1].name, QString("ThemeTests"));
+  QCOMPARE(tests[1].id, QString("2"));
+  QCOMPARE(tests[1].filePath,
+           QString("/home/user/project/build"));
+  QCOMPARE(tests[2].name, QString("DocumentTests"));
+  QCOMPARE(tests[2].id, QString("3"));
+}
+
+void TestOutputParsers::testCtestDiscoveryParseJsonOutputEmpty() {
+  QByteArray json = R"({"tests": []})";
+  QList<DiscoveredTest> tests =
+      CTestDiscoveryAdapter::parseJsonOutput(json);
+  QCOMPARE(tests.size(), 0);
+
+  // Invalid JSON should also return empty
+  QList<DiscoveredTest> bad =
+      CTestDiscoveryAdapter::parseJsonOutput("not json");
+  QCOMPARE(bad.size(), 0);
+}
+
+void TestOutputParsers::testCtestDiscoveryParseDashN() {
+  QString output =
+      "Test project /home/user/project/build\n"
+      "  Test  #1: LoggerTests\n"
+      "  Test  #2: ThemeTests\n"
+      "  Test  #3: DocumentTests\n"
+      "  Test  #4: SettingsTests\n"
+      "\n"
+      "Total Tests: 4\n";
+
+  QList<DiscoveredTest> tests =
+      CTestDiscoveryAdapter::parseDashNOutput(output);
+
+  QCOMPARE(tests.size(), 4);
+  QCOMPARE(tests[0].name, QString("LoggerTests"));
+  QCOMPARE(tests[0].id, QString("1"));
+  QCOMPARE(tests[1].name, QString("ThemeTests"));
+  QCOMPARE(tests[1].id, QString("2"));
+  QCOMPARE(tests[2].name, QString("DocumentTests"));
+  QCOMPARE(tests[2].id, QString("3"));
+  QCOMPARE(tests[3].name, QString("SettingsTests"));
+  QCOMPARE(tests[3].id, QString("4"));
+}
+
+void TestOutputParsers::testCtestDiscoveryParseDashNEmpty() {
+  QList<DiscoveredTest> tests =
+      CTestDiscoveryAdapter::parseDashNOutput("");
+  QCOMPARE(tests.size(), 0);
+
+  QList<DiscoveredTest> noTests =
+      CTestDiscoveryAdapter::parseDashNOutput(
+          "Test project /build\nTotal Tests: 0\n");
+  QCOMPARE(noTests.size(), 0);
+}
+
+// --- GTest Discovery Adapter ---
+
+void TestOutputParsers::testGTestParseListTestsOutput() {
+  QString output =
+      "Running main() from gtest_main.cc\n"
+      "MathTests.\n"
+      "  TestAdd\n"
+      "  TestSubtract\n"
+      "  TestMultiply\n"
+      "StringTests.\n"
+      "  TestConcat\n"
+      "  TestSplit # This is a comment\n";
+
+  QList<DiscoveredTest> tests =
+      GTestDiscoveryAdapter::parseListTestsOutput(output);
+
+  QCOMPARE(tests.size(), 5);
+  QCOMPARE(tests[0].suite, QString("MathTests"));
+  QCOMPARE(tests[0].name, QString("TestAdd"));
+  QCOMPARE(tests[0].id, QString("MathTests.TestAdd"));
+  QCOMPARE(tests[1].name, QString("TestSubtract"));
+  QCOMPARE(tests[1].id, QString("MathTests.TestSubtract"));
+  QCOMPARE(tests[2].name, QString("TestMultiply"));
+  QCOMPARE(tests[3].suite, QString("StringTests"));
+  QCOMPARE(tests[3].name, QString("TestConcat"));
+  QCOMPARE(tests[3].id, QString("StringTests.TestConcat"));
+  QCOMPARE(tests[4].name, QString("TestSplit"));
+  QCOMPARE(tests[4].id, QString("StringTests.TestSplit"));
+}
+
+void TestOutputParsers::testGTestParseListTestsOutputEmpty() {
+  QList<DiscoveredTest> tests =
+      GTestDiscoveryAdapter::parseListTestsOutput("");
+  QCOMPARE(tests.size(), 0);
+}
+
+void TestOutputParsers::testGTestBuildFilter() {
+  QStringList names = {"MathTests.TestAdd", "MathTests.TestSubtract",
+                       "StringTests.TestConcat"};
+  QString filter = GTestDiscoveryAdapter::buildGTestFilter(names);
+  QCOMPARE(filter,
+           QString("MathTests.TestAdd:MathTests.TestSubtract:StringTests."
+                   "TestConcat"));
+}
+
+void TestOutputParsers::testGTestBuildFilterEmpty() {
+  QString filter = GTestDiscoveryAdapter::buildGTestFilter({});
+  QVERIFY(filter.isEmpty());
+}
+
+void TestOutputParsers::testGTestBuildFilterSingle() {
+  QString filter =
+      GTestDiscoveryAdapter::buildGTestFilter({"MathTests.TestAdd"});
+  QCOMPARE(filter, QString("MathTests.TestAdd"));
 }
 
 QTEST_MAIN(TestOutputParsers)

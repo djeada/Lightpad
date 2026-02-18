@@ -19,10 +19,16 @@ public:
                      const QString &workspaceFolder,
                      const QString &testName,
                      const QString &filePath = QString());
+  void runFailed(const TestConfiguration &config,
+                 const QString &workspaceFolder);
+  void runSuite(const TestConfiguration &config,
+                const QString &workspaceFolder,
+                const QString &suiteName);
   void stop();
 
   bool isRunning() const;
   QList<TestResult> results() const;
+  QStringList failedTestNames() const;
   void clearResults();
 
 signals:

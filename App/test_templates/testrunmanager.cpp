@@ -19,6 +19,45 @@ void TestRunManager::runSingleTest(const TestConfiguration &config,
   startProcess(config, workspaceFolder, filePath, testName);
 }
 
+void TestRunManager::runFailed(const TestConfiguration &config,
+                               const QString &workspaceFolder) {
+  QStringList failed = failedTestNames();
+  if (failed.isEmpty())
+    return;
+
+  // For gtest-based configs, use --gtest_filter
+  if (config.outputFormat == "ctest" || config.outputFormat == "gtest" ||
+      config.outputFormat == "gtest_xml") {
+    // Run each failed test via filter; join with ':'
+    QString filter = failed.join(':');
+    startProcess(config, workspaceFolder, QString(), filter);
+    return;
+  }
+
+  // For pytest, use -k with 'or' join
+  if (config.outputFormat == "pytest") {
+    QString filter = failed.join(" or ");
+    startProcess(config, workspaceFolder, QString(), filter);
+    return;
+  }
+
+  // Default: run first failed as single test
+  startProcess(config, workspaceFolder, QString(), failed.first());
+}
+
+void TestRunManager::runSuite(const TestConfiguration &config,
+                              const QString &workspaceFolder,
+                              const QString &suiteName) {
+  // For gtest, suite filter is "SuiteName.*"
+  if (config.outputFormat == "ctest" || config.outputFormat == "gtest" ||
+      config.outputFormat == "gtest_xml") {
+    startProcess(config, workspaceFolder, QString(), suiteName + ".*");
+    return;
+  }
+
+  startProcess(config, workspaceFolder, QString(), suiteName);
+}
+
 void TestRunManager::stop() {
   if (m_process && m_process->state() != QProcess::NotRunning) {
     m_process->kill();
@@ -35,6 +74,16 @@ bool TestRunManager::isRunning() const {
 }
 
 QList<TestResult> TestRunManager::results() const { return m_results; }
+
+QStringList TestRunManager::failedTestNames() const {
+  QStringList names;
+  for (const TestResult &r : m_results) {
+    if (r.status == TestStatus::Failed || r.status == TestStatus::Errored) {
+      names.append(r.name);
+    }
+  }
+  return names;
+}
 
 void TestRunManager::clearResults() {
   m_results.clear();

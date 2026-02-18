@@ -3,6 +3,7 @@
 
 #include "../../settings/theme.h"
 #include "../../test_templates/testconfiguration.h"
+#include "../../test_templates/testdiscovery.h"
 #include "../../test_templates/testrunmanager.h"
 #include <QAction>
 #include <QComboBox>
@@ -29,6 +30,9 @@ public:
   int skippedCount() const { return m_skippedCount; }
   int erroredCount() const { return m_erroredCount; }
 
+  void saveState() const;
+  void restoreState();
+
 signals:
   void locationClicked(const QString &filePath, int line, int column);
   void countsChanged(int passed, int failed, int skipped, int errored);
@@ -40,6 +44,7 @@ public slots:
   bool runWithConfigurationId(const QString &configId,
                               const QString &filePath = QString());
   void stopTests();
+  void discoverTests();
 
 private slots:
   void onTestStarted(const TestResult &result);
@@ -51,6 +56,8 @@ private slots:
   void onFilterChanged(int index);
   void onConfigChanged(int index);
   void onContextMenu(const QPoint &pos);
+  void onDiscoveryFinished(const QList<DiscoveredTest> &tests);
+  void onDiscoveryError(const QString &message);
 
 private:
   void setupUI();
@@ -61,12 +68,14 @@ private:
   void applyFilter();
   void refreshConfigurations();
   TestConfiguration currentConfiguration() const;
+  void populateTreeFromDiscovery(const QList<DiscoveredTest> &tests);
 
   QToolBar *m_toolbar;
   QAction *m_runAllAction;
   QAction *m_runFailedAction;
   QAction *m_stopAction;
   QAction *m_clearAction;
+  QAction *m_discoverAction;
   QComboBox *m_filterCombo;
   QComboBox *m_configCombo;
 
@@ -76,6 +85,7 @@ private:
   QLabel *m_statusLabel;
 
   TestRunManager *m_runManager;
+  CTestDiscoveryAdapter *m_ctestDiscovery;
   QString m_workspaceFolder;
   Theme m_theme;
 
