@@ -4,8 +4,10 @@
 #include <QClipboard>
 #include <QHeaderView>
 #include <QMenu>
+#include <QStyle>
 
 TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
+  setObjectName("TestPanel");
   m_runManager = new TestRunManager(this);
   setupUI();
 
@@ -31,22 +33,28 @@ void TestPanel::setupUI() {
   // Toolbar
   m_toolbar = new QToolBar(this);
   m_toolbar->setIconSize(QSize(16, 16));
+  m_toolbar->setMovable(false);
+  m_toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
-  m_runAllAction = m_toolbar->addAction(QString::fromUtf8("\u25B6"), this,
-                                        &TestPanel::runAll);
+  m_runAllAction = m_toolbar->addAction(
+      style()->standardIcon(QStyle::SP_MediaPlay), tr("Run All"), this,
+      &TestPanel::runAll);
   m_runAllAction->setToolTip(tr("Run All Tests"));
 
   m_runFailedAction = m_toolbar->addAction(
-      QString::fromUtf8("\u21BB"), this, &TestPanel::runFailed);
+      style()->standardIcon(QStyle::SP_BrowserReload), tr("Run Failed"), this,
+      &TestPanel::runFailed);
   m_runFailedAction->setToolTip(tr("Re-run Failed Tests"));
 
-  m_stopAction = m_toolbar->addAction(QString::fromUtf8("\u25A0"), this,
-                                      &TestPanel::stopTests);
+  m_stopAction = m_toolbar->addAction(
+      style()->standardIcon(QStyle::SP_MediaStop), tr("Stop"), this,
+      &TestPanel::stopTests);
   m_stopAction->setToolTip(tr("Stop"));
   m_stopAction->setEnabled(false);
 
   m_clearAction = m_toolbar->addAction(
-      QString::fromUtf8("\u2715"), this, [this]() {
+      style()->standardIcon(QStyle::SP_DialogResetButton), tr("Clear"), this,
+      [this]() {
         m_tree->clear();
         m_detailPane->clear();
         m_suiteItems.clear();
@@ -66,12 +74,13 @@ void TestPanel::setupUI() {
   m_filterCombo->addItem(tr("Skipped"));
   connect(m_filterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &TestPanel::onFilterChanged);
+  m_filterCombo->setMinimumWidth(110);
   m_toolbar->addWidget(m_filterCombo);
 
   m_toolbar->addSeparator();
 
   m_configCombo = new QComboBox(this);
-  m_configCombo->setMinimumWidth(150);
+  m_configCombo->setMinimumWidth(210);
   connect(m_configCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &TestPanel::onConfigChanged);
   m_toolbar->addWidget(m_configCombo);
@@ -83,11 +92,16 @@ void TestPanel::setupUI() {
 
   m_tree = new QTreeWidget(this);
   m_tree->setHeaderLabels({tr("Test"), tr("Status"), tr("Duration")});
-  m_tree->setColumnWidth(0, 400);
-  m_tree->setColumnWidth(1, 80);
-  m_tree->setColumnWidth(2, 80);
   m_tree->setRootIsDecorated(true);
-  m_tree->setAlternatingRowColors(true);
+  m_tree->setAlternatingRowColors(false);
+  m_tree->setUniformRowHeights(true);
+  m_tree->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+  m_tree->setAllColumnsShowFocus(true);
+  m_tree->header()->setStretchLastSection(false);
+  m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+  m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+  m_tree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
   m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
           &TestPanel::onItemDoubleClicked);
@@ -98,6 +112,7 @@ void TestPanel::setupUI() {
 
   m_detailPane = new QTextEdit(this);
   m_detailPane->setReadOnly(true);
+  m_detailPane->setMinimumHeight(120);
   m_detailPane->setPlaceholderText(
       tr("Select a test to view its output and details"));
 
@@ -119,19 +134,95 @@ void TestPanel::setupUI() {
 void TestPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
 
-  QString bg = theme.surfaceColor.name();
-  QString fg = theme.foregroundColor.name();
-  QString border = theme.borderColor.name();
+  const QColor panelBg =
+      theme.surfaceColor.isValid() ? theme.surfaceColor : QColor("#111827");
+  const QColor textColor =
+      theme.foregroundColor.isValid() ? theme.foregroundColor : QColor("#e5e7eb");
+  const QColor borderColor =
+      theme.borderColor.isValid() ? theme.borderColor : QColor("#334155");
+  const QColor treeBg =
+      theme.backgroundColor.isValid() ? theme.backgroundColor : QColor("#0b1220");
+  const QColor hoverBg = panelBg.lighter(115);
+  const QColor selectedBg =
+      theme.accentSoftColor.isValid() ? theme.accentSoftColor
+      : (theme.highlightColor.isValid() ? theme.highlightColor
+                                        : QColor("#1f4b7a"));
+  const QColor selectedText = QColor("#ffffff");
+  const QColor mutedText = textColor.darker(130);
 
-  setStyleSheet(
-      QString("QWidget { background-color: %1; color: %2; }"
-              "QTreeWidget { border: 1px solid %3; }"
-              "QTextEdit { border: 1px solid %3; }")
-          .arg(bg, fg, border));
+  setStyleSheet(QString(
+                    "QWidget#TestPanel {"
+                    "  background-color: %1;"
+                    "  color: %2;"
+                    "}"
+                    "QToolBar {"
+                    "  background-color: %1;"
+                    "  border: 0;"
+                    "  border-bottom: 1px solid %3;"
+                    "  padding: 4px 6px;"
+                    "  spacing: 4px;"
+                    "}"
+                    "QToolButton {"
+                    "  color: %2;"
+                    "  border: 1px solid transparent;"
+                    "  border-radius: 4px;"
+                    "  padding: 3px 8px;"
+                    "}"
+                    "QToolButton:hover {"
+                    "  background-color: %4;"
+                    "  border-color: %3;"
+                    "}"
+                    "QToolButton:disabled {"
+                    "  color: %7;"
+                    "}"
+                    "QComboBox {"
+                    "  min-height: 24px;"
+                    "  border: 1px solid %3;"
+                    "  border-radius: 4px;"
+                    "  padding: 2px 8px;"
+                    "  background-color: %5;"
+                    "  color: %2;"
+                    "}"
+                    "QTreeWidget {"
+                    "  background-color: %5;"
+                    "  border: 1px solid %3;"
+                    "  outline: none;"
+                    "  padding: 2px;"
+                    "}"
+                    "QTreeWidget::item {"
+                    "  height: 26px;"
+                    "}"
+                    "QTreeWidget::item:hover {"
+                    "  background-color: %4;"
+                    "}"
+                    "QTreeWidget::item:selected {"
+                    "  background-color: %6;"
+                    "  color: %8;"
+                    "}"
+                    "QHeaderView::section {"
+                    "  background-color: %1;"
+                    "  color: %7;"
+                    "  border: 0;"
+                    "  border-bottom: 1px solid %3;"
+                    "  padding: 6px 8px;"
+                    "  font-weight: 600;"
+                    "}"
+                    "QTextEdit {"
+                    "  background-color: %5;"
+                    "  color: %2;"
+                    "  border: 1px solid %3;"
+                    "  padding: 6px;"
+                    "}"
+                    "QLabel {"
+                    "  color: %2;"
+                    "}")
+                    .arg(panelBg.name(), textColor.name(), borderColor.name(),
+                         hoverBg.name(), treeBg.name(), selectedBg.name(),
+                         mutedText.name(), selectedText.name()));
 
-  m_detailPane->setStyleSheet(
-      QString("QTextEdit { background-color: %1; color: %2; }")
-          .arg(theme.backgroundColor.name(), fg));
+  m_statusLabel->setStyleSheet(
+      QString("QLabel { border-top: 1px solid %1; padding: 4px 8px; }")
+          .arg(borderColor.name()));
 }
 
 void TestPanel::setWorkspaceFolder(const QString &folder) {
@@ -225,16 +316,16 @@ void TestPanel::onTestFinished(const TestResult &result) {
 
   switch (result.status) {
   case TestStatus::Passed:
-    item->setText(1, QString::fromUtf8("\u2705 Passed"));
+    item->setText(1, tr("Passed"));
     break;
   case TestStatus::Failed:
-    item->setText(1, QString::fromUtf8("\u274C Failed"));
+    item->setText(1, tr("Failed"));
     break;
   case TestStatus::Skipped:
-    item->setText(1, QString::fromUtf8("\u23ED Skipped"));
+    item->setText(1, tr("Skipped"));
     break;
   case TestStatus::Errored:
-    item->setText(1, QString::fromUtf8("\u26A0 Error"));
+    item->setText(1, tr("Error"));
     break;
   default:
     item->setText(1, "");
@@ -242,7 +333,7 @@ void TestPanel::onTestFinished(const TestResult &result) {
   }
 
   if (result.durationMs >= 0)
-    item->setText(2, QString::number(result.durationMs) + "ms");
+    item->setText(2, QString::number(result.durationMs) + " ms");
 
   m_testResults[result.id] = result;
   applyFilter();
@@ -371,40 +462,46 @@ void TestPanel::onContextMenu(const QPoint &pos) {
 
 void TestPanel::updateStatusLabel() {
   int total = m_passedCount + m_failedCount + m_skippedCount + m_erroredCount;
-  QString text =
-      QString::fromUtf8("\u2705 %1 passed  \u274C %2 failed  "
-                        "\u23ED %3 skipped  \u26A0 %4 errored  "
-                        "(%5 total)")
-          .arg(m_passedCount)
-          .arg(m_failedCount)
-          .arg(m_skippedCount)
-          .arg(m_erroredCount)
-          .arg(total);
+  QString text = tr("Passed: %1    Failed: %2    Skipped: %3    Errors: %4    "
+                    "Total: %5")
+                     .arg(m_passedCount)
+                     .arg(m_failedCount)
+                     .arg(m_skippedCount)
+                     .arg(m_erroredCount)
+                     .arg(total);
   m_statusLabel->setText(text);
 }
 
 void TestPanel::updateTreeItemIcon(QTreeWidgetItem *item, TestStatus status) {
   QColor color;
+  QStyle::StandardPixmap statusIcon = QStyle::SP_FileIcon;
   switch (status) {
   case TestStatus::Passed:
     color = QColor("#3fb950");
+    statusIcon = QStyle::SP_DialogApplyButton;
     break;
   case TestStatus::Failed:
     color = QColor("#f85149");
+    statusIcon = QStyle::SP_MessageBoxCritical;
     break;
   case TestStatus::Skipped:
     color = QColor("#d29922");
+    statusIcon = QStyle::SP_DialogCancelButton;
     break;
   case TestStatus::Errored:
     color = QColor("#f0883e");
+    statusIcon = QStyle::SP_MessageBoxWarning;
     break;
   case TestStatus::Running:
     color = QColor("#58a6ff");
+    statusIcon = QStyle::SP_BrowserReload;
     break;
   case TestStatus::Queued:
     color = QColor("#8b949e");
+    statusIcon = QStyle::SP_ArrowRight;
     break;
   }
+  item->setIcon(0, style()->standardIcon(statusIcon));
   item->setForeground(1, QBrush(color));
 }
 
