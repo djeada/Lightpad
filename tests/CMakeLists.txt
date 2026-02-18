@@ -43,6 +43,7 @@ include_directories(${CMAKE_SOURCE_DIR}/App/syntax)
 include_directories(${CMAKE_SOURCE_DIR}/App/ui)
 include_directories(${CMAKE_SOURCE_DIR}/App/ui/panels)
 include_directories(${CMAKE_SOURCE_DIR}/App/definition)
+include_directories(${CMAKE_SOURCE_DIR}/App/test_templates)
 
 # Logger test executable
 add_executable(test_logger
@@ -715,6 +716,34 @@ target_compile_definitions(test_symbolnavigation PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME SymbolNavigationTests COMMAND test_symbolnavigation)
 
+# TestOutputParsers test executable
+qt_add_resources(TEST_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/test_templates/test_templates.qrc)
+
+add_executable(test_testoutputparsers
+    unit/test_testoutputparsers.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${TEST_TEMPLATE_RESOURCES}
+)
+
+target_include_directories(test_testoutputparsers PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/test_templates
+)
+
+target_link_libraries(test_testoutputparsers
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_testoutputparsers PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME TestOutputParsersTests COMMAND test_testoutputparsers)
+
 # Set environment variable for headless testing
 set(TEST_LIST
     LoggerTests 
@@ -745,6 +774,7 @@ set(TEST_LIST
     FindReplacePanelTests
     ImageViewerTests
     SymbolNavigationTests
+    TestOutputParsersTests
 )
 
 if(HAVE_PDF_SUPPORT)
@@ -771,6 +801,7 @@ set(TEST_TARGETS
     test_gitintegration test_gotolinedialog test_gotosymboldialog test_lspclient test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_imageviewer
     test_symbolnavigation
+    test_testoutputparsers
 )
 
 if(HAVE_PDF_SUPPORT)

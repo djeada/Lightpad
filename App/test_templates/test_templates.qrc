@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/test_templates">
+        <file>test_templates.json</file>
+    </qresource>
+</RCC>
