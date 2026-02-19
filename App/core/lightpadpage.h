@@ -23,6 +23,9 @@ public:
   ~LightpadTreeView();
   void renameFile(QString oldFilePath, QString newFilePath);
 
+signals:
+  void runTestsRequested(const QString &path);
+
 protected:
   void mouseReleaseEvent(QMouseEvent *e) override;
   void dragEnterEvent(QDragEnterEvent *event) override;

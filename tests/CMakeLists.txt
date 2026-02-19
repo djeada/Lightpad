@@ -725,6 +725,7 @@ add_executable(test_testoutputparsers
     unit/test_testoutputparsers.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${TEST_TEMPLATE_RESOURCES}
 )

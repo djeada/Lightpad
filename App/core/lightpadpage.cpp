@@ -123,6 +123,9 @@ void LightpadTreeView::showContextMenu(const QPoint &pos) {
   menu.addSeparator();
   QAction *removeAction = menu.addAction("Remove");
   menu.addSeparator();
+  QAction *runTestAction = menu.addAction(
+      fileInfo.isDir() ? "Run Tests in Directory" : "Run as Test");
+  menu.addSeparator();
   QAction *copyPathAction = menu.addAction("Copy Absolute Path");
 
   QAction *selected = menu.exec(mapToGlobal(pos));
@@ -144,6 +147,8 @@ void LightpadTreeView::showContextMenu(const QPoint &pos) {
       fileController->handlePaste(parentPath);
     } else if (selected == removeAction) {
       fileController->handleRemove(filePath);
+    } else if (selected == runTestAction) {
+      emit runTestsRequested(filePath);
     } else if (selected == copyPathAction) {
       fileController->handleCopyAbsolutePath(filePath);
     }

@@ -2,9 +2,11 @@
 #include <QtTest>
 
 #include "test_templates/testconfiguration.h"
+#include "test_templates/testdiscovery.h"
 #include "test_templates/testoutputparser.h"
 
 Q_DECLARE_METATYPE(TestResult)
+Q_DECLARE_METATYPE(DiscoveredTest)
 
 class TestOutputParsers : public QObject {
   Q_OBJECT
@@ -47,12 +49,44 @@ private slots:
   // TestConfiguration tests
   void testConfigurationFromJson();
   void testConfigurationToJson();
+  void testConfigurationRunOverridesFromJson();
   void testConfigurationManagerSubstituteVariables();
   void testConfigurationManagerLoadTemplates();
+
+  // CTest discovery adapter tests
+  void testCtestDiscoveryParseJsonOutput();
+  void testCtestDiscoveryParseJsonOutputEmpty();
+  void testCtestDiscoveryParseDashN();
+  void testCtestDiscoveryParseDashNEmpty();
+
+  // GTest discovery adapter tests
+  void testGTestParseListTestsOutput();
+  void testGTestParseListTestsOutputEmpty();
+  void testGTestBuildFilter();
+  void testGTestBuildFilterEmpty();
+  void testGTestBuildFilterSingle();
+
+  // Pytest discovery adapter tests
+  void testPytestDiscoveryParse();
+  void testPytestDiscoveryParseEmpty();
+
+  // Go test discovery adapter tests
+  void testGoTestDiscoveryParse();
+  void testGoTestDiscoveryParseEmpty();
+
+  // Cargo test discovery adapter tests
+  void testCargoTestDiscoveryParse();
+  void testCargoTestDiscoveryParseEmpty();
+
+  // Jest discovery adapter tests
+  void testJestDiscoveryParse();
+  void testJestDiscoveryParseEmpty();
 };
 
 void TestOutputParsers::initTestCase() {
   qRegisterMetaType<TestResult>("TestResult");
+  qRegisterMetaType<DiscoveredTest>("DiscoveredTest");
+  qRegisterMetaType<QList<DiscoveredTest>>("QList<DiscoveredTest>");
 }
 
 // --- TAP Parser ---
@@ -523,6 +557,8 @@ void TestOutputParsers::testConfigurationToJson() {
   cfg.extensions = {"go"};
   cfg.workingDirectory = "${workspaceFolder}";
   cfg.outputFormat = "go_json";
+  cfg.runFailed.args = {"test", "-v", "-json", "-run", "${testName}", "./..."};
+  cfg.runSuite.args = {"test", "-v", "-json", "-run", "^${testName}", "./..."};
 
   QJsonObject obj = cfg.toJson();
 
@@ -531,6 +567,49 @@ void TestOutputParsers::testConfigurationToJson() {
   QCOMPARE(obj["command"].toString(), QString("go"));
   QCOMPARE(obj["args"].toArray().size(), 3);
   QCOMPARE(obj["outputFormat"].toString(), QString("go_json"));
+  QVERIFY(obj.contains("runFailed"));
+  QCOMPARE(obj["runFailed"].toObject()["args"].toArray().size(), 6);
+  QVERIFY(obj.contains("runSuite"));
+  QCOMPARE(obj["runSuite"].toObject()["args"].toArray().size(), 6);
+}
+
+void TestOutputParsers::testConfigurationRunOverridesFromJson() {
+  QJsonObject obj;
+  obj["id"] = "gtest_cmake";
+  obj["name"] = "Google Test (CTest)";
+  obj["command"] = "bash";
+  QJsonArray args;
+  args.append("-lc");
+  args.append("ctest --test-dir build -V");
+  obj["args"] = args;
+
+  QJsonObject runFailed;
+  QJsonArray failedArgs;
+  failedArgs.append("-lc");
+  failedArgs.append("ctest --test-dir build -V -R '${testName}'");
+  runFailed["args"] = failedArgs;
+  obj["runFailed"] = runFailed;
+
+  QJsonObject runSuite;
+  QJsonArray suiteArgs;
+  suiteArgs.append("-lc");
+  suiteArgs.append("ctest --test-dir build -V -R '^${testName}'");
+  runSuite["args"] = suiteArgs;
+  obj["runSuite"] = runSuite;
+
+  TestConfiguration cfg = TestConfiguration::fromJson(obj);
+
+  QCOMPARE(cfg.runFailed.args.size(), 2);
+  QVERIFY(cfg.runFailed.args[1].contains("${testName}"));
+  QCOMPARE(cfg.runSuite.args.size(), 2);
+  QVERIFY(cfg.runSuite.args[1].contains("${testName}"));
+
+  // Verify round-trip
+  QJsonObject out = cfg.toJson();
+  QVERIFY(out.contains("runFailed"));
+  QVERIFY(out.contains("runSuite"));
+  QCOMPARE(out["runFailed"].toObject()["args"].toArray().size(), 2);
+  QCOMPARE(out["runSuite"].toObject()["args"].toArray().size(), 2);
 }
 
 void TestOutputParsers::testConfigurationManagerSubstituteVariables() {
@@ -571,8 +650,300 @@ void TestOutputParsers::testConfigurationManagerLoadTemplates() {
     if (pytest.isValid()) {
       QCOMPARE(pytest.language, QString("Python"));
       QCOMPARE(pytest.outputFormat, QString("pytest"));
+      // Verify runFailed args are loaded
+      QVERIFY(!pytest.runFailed.args.isEmpty());
+    }
+
+    // Verify C++ template has runFailed and runSuite overrides
+    TestConfiguration gtest = mgr.templateById("gtest_cmake");
+    if (gtest.isValid()) {
+      QCOMPARE(gtest.language, QString("C++"));
+      QVERIFY(!gtest.runFailed.args.isEmpty());
+      QVERIFY(!gtest.runSuite.args.isEmpty());
     }
   }
+}
+
+// --- CTest Discovery Adapter ---
+
+void TestOutputParsers::testCtestDiscoveryParseJsonOutput() {
+  QByteArray json = R"({
+    "kind": "ctestInfo",
+    "version": { "major": 1, "minor": 0 },
+    "tests": [
+      {
+        "name": "LoggerTests",
+        "index": 1,
+        "command": ["/path/to/test_logger"],
+        "properties": []
+      },
+      {
+        "name": "ThemeTests",
+        "index": 2,
+        "command": ["/path/to/test_theme"],
+        "properties": [
+          { "name": "WORKING_DIRECTORY", "value": "/home/user/project/build" }
+        ]
+      },
+      {
+        "name": "DocumentTests",
+        "index": 3,
+        "command": ["/path/to/test_document"],
+        "properties": []
+      }
+    ]
+  })";
+
+  QList<DiscoveredTest> tests =
+      CTestDiscoveryAdapter::parseJsonOutput(json);
+
+  QCOMPARE(tests.size(), 3);
+  QCOMPARE(tests[0].name, QString("LoggerTests"));
+  QCOMPARE(tests[0].id, QString("1"));
+  QCOMPARE(tests[1].name, QString("ThemeTests"));
+  QCOMPARE(tests[1].id, QString("2"));
+  QCOMPARE(tests[1].filePath,
+           QString("/home/user/project/build"));
+  QCOMPARE(tests[2].name, QString("DocumentTests"));
+  QCOMPARE(tests[2].id, QString("3"));
+}
+
+void TestOutputParsers::testCtestDiscoveryParseJsonOutputEmpty() {
+  QByteArray json = R"({"tests": []})";
+  QList<DiscoveredTest> tests =
+      CTestDiscoveryAdapter::parseJsonOutput(json);
+  QCOMPARE(tests.size(), 0);
+
+  // Invalid JSON should also return empty
+  QList<DiscoveredTest> bad =
+      CTestDiscoveryAdapter::parseJsonOutput("not json");
+  QCOMPARE(bad.size(), 0);
+}
+
+void TestOutputParsers::testCtestDiscoveryParseDashN() {
+  QString output =
+      "Test project /home/user/project/build\n"
+      "  Test  #1: LoggerTests\n"
+      "  Test  #2: ThemeTests\n"
+      "  Test  #3: DocumentTests\n"
+      "  Test  #4: SettingsTests\n"
+      "\n"
+      "Total Tests: 4\n";
+
+  QList<DiscoveredTest> tests =
+      CTestDiscoveryAdapter::parseDashNOutput(output);
+
+  QCOMPARE(tests.size(), 4);
+  QCOMPARE(tests[0].name, QString("LoggerTests"));
+  QCOMPARE(tests[0].id, QString("1"));
+  QCOMPARE(tests[1].name, QString("ThemeTests"));
+  QCOMPARE(tests[1].id, QString("2"));
+  QCOMPARE(tests[2].name, QString("DocumentTests"));
+  QCOMPARE(tests[2].id, QString("3"));
+  QCOMPARE(tests[3].name, QString("SettingsTests"));
+  QCOMPARE(tests[3].id, QString("4"));
+}
+
+void TestOutputParsers::testCtestDiscoveryParseDashNEmpty() {
+  QList<DiscoveredTest> tests =
+      CTestDiscoveryAdapter::parseDashNOutput("");
+  QCOMPARE(tests.size(), 0);
+
+  QList<DiscoveredTest> noTests =
+      CTestDiscoveryAdapter::parseDashNOutput(
+          "Test project /build\nTotal Tests: 0\n");
+  QCOMPARE(noTests.size(), 0);
+}
+
+// --- GTest Discovery Adapter ---
+
+void TestOutputParsers::testGTestParseListTestsOutput() {
+  QString output =
+      "Running main() from gtest_main.cc\n"
+      "MathTests.\n"
+      "  TestAdd\n"
+      "  TestSubtract\n"
+      "  TestMultiply\n"
+      "StringTests.\n"
+      "  TestConcat\n"
+      "  TestSplit # This is a comment\n";
+
+  QList<DiscoveredTest> tests =
+      GTestDiscoveryAdapter::parseListTestsOutput(output);
+
+  QCOMPARE(tests.size(), 5);
+  QCOMPARE(tests[0].suite, QString("MathTests"));
+  QCOMPARE(tests[0].name, QString("TestAdd"));
+  QCOMPARE(tests[0].id, QString("MathTests.TestAdd"));
+  QCOMPARE(tests[1].name, QString("TestSubtract"));
+  QCOMPARE(tests[1].id, QString("MathTests.TestSubtract"));
+  QCOMPARE(tests[2].name, QString("TestMultiply"));
+  QCOMPARE(tests[3].suite, QString("StringTests"));
+  QCOMPARE(tests[3].name, QString("TestConcat"));
+  QCOMPARE(tests[3].id, QString("StringTests.TestConcat"));
+  QCOMPARE(tests[4].name, QString("TestSplit"));
+  QCOMPARE(tests[4].id, QString("StringTests.TestSplit"));
+}
+
+void TestOutputParsers::testGTestParseListTestsOutputEmpty() {
+  QList<DiscoveredTest> tests =
+      GTestDiscoveryAdapter::parseListTestsOutput("");
+  QCOMPARE(tests.size(), 0);
+}
+
+void TestOutputParsers::testGTestBuildFilter() {
+  QStringList names = {"MathTests.TestAdd", "MathTests.TestSubtract",
+                       "StringTests.TestConcat"};
+  QString filter = GTestDiscoveryAdapter::buildGTestFilter(names);
+  QCOMPARE(filter,
+           QString("MathTests.TestAdd:MathTests.TestSubtract:StringTests."
+                   "TestConcat"));
+}
+
+void TestOutputParsers::testGTestBuildFilterEmpty() {
+  QString filter = GTestDiscoveryAdapter::buildGTestFilter({});
+  QVERIFY(filter.isEmpty());
+}
+
+void TestOutputParsers::testGTestBuildFilterSingle() {
+  QString filter =
+      GTestDiscoveryAdapter::buildGTestFilter({"MathTests.TestAdd"});
+  QCOMPARE(filter, QString("MathTests.TestAdd"));
+}
+
+// --- Pytest Discovery Adapter ---
+
+void TestOutputParsers::testPytestDiscoveryParse() {
+  QString output =
+      "test_math.py::TestArithmetic::test_add\n"
+      "test_math.py::TestArithmetic::test_subtract\n"
+      "test_math.py::test_standalone\n"
+      "tests/test_util.py::test_helper\n"
+      "\n"
+      "4 tests collected\n";
+
+  QList<DiscoveredTest> tests =
+      PytestDiscoveryAdapter::parseCollectOutput(output);
+
+  QCOMPARE(tests.size(), 4);
+  QCOMPARE(tests[0].name, QString("test_add"));
+  QCOMPARE(tests[0].suite, QString("TestArithmetic"));
+  QCOMPARE(tests[0].filePath, QString("test_math.py"));
+  QCOMPARE(tests[0].id, QString("test_math.py::TestArithmetic::test_add"));
+  QCOMPARE(tests[1].name, QString("test_subtract"));
+  QCOMPARE(tests[1].suite, QString("TestArithmetic"));
+  QCOMPARE(tests[2].name, QString("test_standalone"));
+  QVERIFY(tests[2].suite.isEmpty());
+  QCOMPARE(tests[2].filePath, QString("test_math.py"));
+  QCOMPARE(tests[3].name, QString("test_helper"));
+  QCOMPARE(tests[3].filePath, QString("tests/test_util.py"));
+}
+
+void TestOutputParsers::testPytestDiscoveryParseEmpty() {
+  QList<DiscoveredTest> tests =
+      PytestDiscoveryAdapter::parseCollectOutput("");
+  QCOMPARE(tests.size(), 0);
+
+  QList<DiscoveredTest> noTests =
+      PytestDiscoveryAdapter::parseCollectOutput(
+          "no tests ran in 0.01s\n");
+  QCOMPARE(noTests.size(), 0);
+}
+
+// --- Go Test Discovery Adapter ---
+
+void TestOutputParsers::testGoTestDiscoveryParse() {
+  QString output =
+      "TestAdd\n"
+      "TestSubtract\n"
+      "TestSuite_MethodA\n"
+      "BenchmarkSort\n"
+      "ok  example.com/pkg 0.003s\n";
+
+  QList<DiscoveredTest> tests =
+      GoTestDiscoveryAdapter::parseListOutput(output);
+
+  QCOMPARE(tests.size(), 4);
+  QCOMPARE(tests[0].name, QString("TestAdd"));
+  QCOMPARE(tests[0].id, QString("TestAdd"));
+  QVERIFY(tests[0].suite.isEmpty());
+  QCOMPARE(tests[2].name, QString("TestSuite_MethodA"));
+  QCOMPARE(tests[2].suite, QString("TestSuite"));
+  QCOMPARE(tests[3].name, QString("BenchmarkSort"));
+}
+
+void TestOutputParsers::testGoTestDiscoveryParseEmpty() {
+  QList<DiscoveredTest> tests =
+      GoTestDiscoveryAdapter::parseListOutput("");
+  QCOMPARE(tests.size(), 0);
+
+  QList<DiscoveredTest> noTests =
+      GoTestDiscoveryAdapter::parseListOutput(
+          "ok  example.com/pkg 0.001s\n");
+  QCOMPARE(noTests.size(), 0);
+}
+
+// --- Cargo Test Discovery Adapter ---
+
+void TestOutputParsers::testCargoTestDiscoveryParse() {
+  QString output =
+      "tests::test_basic: test\n"
+      "tests::math::test_add: test\n"
+      "tests::math::test_sub: test\n"
+      "integration::test_full: test\n"
+      "\n"
+      "4 tests, 0 benchmarks\n";
+
+  QList<DiscoveredTest> tests =
+      CargoTestDiscoveryAdapter::parseListOutput(output);
+
+  QCOMPARE(tests.size(), 4);
+  QCOMPARE(tests[0].name, QString("test_basic"));
+  QCOMPARE(tests[0].suite, QString("tests"));
+  QCOMPARE(tests[0].id, QString("tests::test_basic"));
+  QCOMPARE(tests[1].name, QString("test_add"));
+  QCOMPARE(tests[1].suite, QString("tests::math"));
+  QCOMPARE(tests[1].id, QString("tests::math::test_add"));
+  QCOMPARE(tests[3].name, QString("test_full"));
+  QCOMPARE(tests[3].suite, QString("integration"));
+}
+
+void TestOutputParsers::testCargoTestDiscoveryParseEmpty() {
+  QList<DiscoveredTest> tests =
+      CargoTestDiscoveryAdapter::parseListOutput("");
+  QCOMPARE(tests.size(), 0);
+
+  QList<DiscoveredTest> noTests =
+      CargoTestDiscoveryAdapter::parseListOutput(
+          "\n0 tests, 0 benchmarks\n");
+  QCOMPARE(noTests.size(), 0);
+}
+
+// --- Jest Discovery Adapter ---
+
+void TestOutputParsers::testJestDiscoveryParse() {
+  QString output =
+      "/home/user/project/src/__tests__/math.test.js\n"
+      "/home/user/project/src/__tests__/util.test.ts\n"
+      "/home/user/project/tests/integration.test.js\n";
+
+  QList<DiscoveredTest> tests =
+      JestDiscoveryAdapter::parseListOutput(output);
+
+  QCOMPARE(tests.size(), 3);
+  QCOMPARE(tests[0].name, QString("math.test.js"));
+  QCOMPARE(tests[0].filePath,
+           QString("/home/user/project/src/__tests__/math.test.js"));
+  QCOMPARE(tests[0].suite, QString("__tests__"));
+  QCOMPARE(tests[1].name, QString("util.test.ts"));
+  QCOMPARE(tests[2].name, QString("integration.test.js"));
+  QCOMPARE(tests[2].suite, QString("tests"));
+}
+
+void TestOutputParsers::testJestDiscoveryParseEmpty() {
+  QList<DiscoveredTest> tests =
+      JestDiscoveryAdapter::parseListOutput("");
+  QCOMPARE(tests.size(), 0);
 }
 
 QTEST_MAIN(TestOutputParsers)

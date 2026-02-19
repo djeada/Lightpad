@@ -9,14 +9,33 @@ TestRunManager::~TestRunManager() { stop(); }
 void TestRunManager::runAll(const TestConfiguration &config,
                             const QString &workspaceFolder,
                             const QString &filePath) {
-  startProcess(config, workspaceFolder, filePath, QString());
+  startProcess(config, workspaceFolder, filePath, QString(), RunMode::All);
 }
 
 void TestRunManager::runSingleTest(const TestConfiguration &config,
                                    const QString &workspaceFolder,
                                    const QString &testName,
                                    const QString &filePath) {
-  startProcess(config, workspaceFolder, filePath, testName);
+  startProcess(config, workspaceFolder, filePath, testName,
+               RunMode::SingleTest);
+}
+
+void TestRunManager::runFailed(const TestConfiguration &config,
+                               const QString &workspaceFolder) {
+  QStringList failed = failedTestNames();
+  if (failed.isEmpty())
+    return;
+
+  // Join failed test names as the filter string; the configuration's
+  // runFailed.args template uses ${testName} for substitution
+  QString filter = failed.join(':');
+  startProcess(config, workspaceFolder, QString(), filter, RunMode::Failed);
+}
+
+void TestRunManager::runSuite(const TestConfiguration &config,
+                              const QString &workspaceFolder,
+                              const QString &suiteName) {
+  startProcess(config, workspaceFolder, QString(), suiteName, RunMode::Suite);
 }
 
 void TestRunManager::stop() {
@@ -36,6 +55,16 @@ bool TestRunManager::isRunning() const {
 
 QList<TestResult> TestRunManager::results() const { return m_results; }
 
+QStringList TestRunManager::failedTestNames() const {
+  QStringList names;
+  for (const TestResult &r : m_results) {
+    if (r.status == TestStatus::Failed || r.status == TestStatus::Errored) {
+      names.append(r.name);
+    }
+  }
+  return names;
+}
+
 void TestRunManager::clearResults() {
   m_results.clear();
   m_passed = m_failed = m_skipped = m_errored = 0;
@@ -44,7 +73,8 @@ void TestRunManager::clearResults() {
 void TestRunManager::startProcess(const TestConfiguration &config,
                                   const QString &workspaceFolder,
                                   const QString &filePath,
-                                  const QString &testName) {
+                                  const QString &testName,
+                                  RunMode mode) {
   stop();
   clearResults();
 
@@ -86,18 +116,42 @@ void TestRunManager::startProcess(const TestConfiguration &config,
 
   m_process = new QProcess(this);
 
-  // Resolve command and args
+  // Select the appropriate args template based on run mode
+  QStringList templateArgs;
+  switch (mode) {
+  case RunMode::Failed:
+    if (!config.runFailed.args.isEmpty())
+      templateArgs = config.runFailed.args;
+    else if (!config.runSingleTest.args.isEmpty())
+      templateArgs = config.runSingleTest.args;
+    else
+      templateArgs = config.args;
+    break;
+  case RunMode::Suite:
+    if (!config.runSuite.args.isEmpty())
+      templateArgs = config.runSuite.args;
+    else if (!config.runSingleTest.args.isEmpty())
+      templateArgs = config.runSingleTest.args;
+    else
+      templateArgs = config.args;
+    break;
+  case RunMode::SingleTest:
+    if (!testName.isEmpty() && !config.runSingleTest.args.isEmpty())
+      templateArgs = config.runSingleTest.args;
+    else
+      templateArgs = config.args;
+    break;
+  case RunMode::All:
+  default:
+    templateArgs = config.args;
+    break;
+  }
+
+  // Resolve command and args via variable substitution
   QStringList args;
-  if (!testName.isEmpty() && !config.runSingleTest.args.isEmpty()) {
-    for (const QString &arg : config.runSingleTest.args) {
-      args.append(TestConfigurationManager::substituteVariables(
-          arg, filePath, workspaceFolder, testName));
-    }
-  } else {
-    for (const QString &arg : config.args) {
-      args.append(TestConfigurationManager::substituteVariables(
-          arg, filePath, workspaceFolder, testName));
-    }
+  for (const QString &arg : templateArgs) {
+    args.append(TestConfigurationManager::substituteVariables(
+        arg, filePath, workspaceFolder, testName));
   }
 
   QString command = TestConfigurationManager::substituteVariables(

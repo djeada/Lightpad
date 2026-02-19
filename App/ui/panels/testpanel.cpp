@@ -2,9 +2,17 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QFileInfo>
 #include <QHeaderView>
 #include <QMenu>
+#include <QSettings>
 #include <QStyle>
+
+namespace {
+constexpr int TestIdRole = Qt::UserRole;
+constexpr int FilePathRole = Qt::UserRole + 1;
+constexpr int LineNumberRole = Qt::UserRole + 2;
+} // namespace
 
 TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
   setObjectName("TestPanel");
@@ -23,7 +31,10 @@ TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
   refreshConfigurations();
 }
 
-TestPanel::~TestPanel() {}
+TestPanel::~TestPanel() {
+  if (m_ownsDiscoveryAdapter)
+    delete m_discoveryAdapter;
+}
 
 void TestPanel::setupUI() {
   auto *layout = new QVBoxLayout(this);
@@ -51,6 +62,11 @@ void TestPanel::setupUI() {
       &TestPanel::stopTests);
   m_stopAction->setToolTip(tr("Stop"));
   m_stopAction->setEnabled(false);
+
+  m_discoverAction = m_toolbar->addAction(
+      style()->standardIcon(QStyle::SP_FileDialogContentsView), tr("Discover"),
+      this, &TestPanel::discoverTests);
+  m_discoverAction->setToolTip(tr("Discover Tests"));
 
   m_clearAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_DialogResetButton), tr("Clear"), this,
@@ -240,8 +256,10 @@ void TestPanel::runAll() {
 }
 
 void TestPanel::runFailed() {
-  // Re-run with same config — the user can filter to only failed
-  runAll();
+  TestConfiguration config = currentConfiguration();
+  if (!config.isValid())
+    return;
+  m_runManager->runFailed(config, m_workspaceFolder);
 }
 
 void TestPanel::runCurrentFile(const QString &filePath) {
@@ -249,6 +267,30 @@ void TestPanel::runCurrentFile(const QString &filePath) {
   if (!config.isValid())
     return;
   m_runManager->runAll(config, m_workspaceFolder, filePath);
+}
+
+void TestPanel::runTestsForPath(const QString &path) {
+  QFileInfo fi(path);
+
+  // Try to find a matching configuration based on file extension
+  if (fi.isFile()) {
+    QString ext = fi.suffix().toLower();
+    QList<TestConfiguration> matches =
+        TestConfigurationManager::instance().configurationsForExtension(ext);
+    if (!matches.isEmpty()) {
+      // Select the first matching config in the combo
+      int idx = m_configCombo->findData(matches.first().id);
+      if (idx >= 0)
+        m_configCombo->setCurrentIndex(idx);
+    }
+    runCurrentFile(path);
+  } else if (fi.isDir()) {
+    // For directories, run all tests with the directory as workspace
+    TestConfiguration config = currentConfiguration();
+    if (!config.isValid())
+      return;
+    m_runManager->runAll(config, path);
+  }
 }
 
 bool TestPanel::runWithConfigurationId(const QString &configId,
@@ -286,7 +328,7 @@ void TestPanel::onTestStarted(const TestResult &result) {
   }
 
   item->setText(0, result.name);
-  item->setData(0, Qt::UserRole, result.id);
+  item->setData(0, TestIdRole, result.id);
   updateTreeItemIcon(item, TestStatus::Running);
   item->setText(1, tr("Running"));
   item->setText(2, "");
@@ -308,9 +350,9 @@ void TestPanel::onTestFinished(const TestResult &result) {
   }
 
   item->setText(0, result.name);
-  item->setData(0, Qt::UserRole, result.id);
-  item->setData(0, Qt::UserRole + 1, result.filePath);
-  item->setData(0, Qt::UserRole + 2, result.line);
+  item->setData(0, TestIdRole, result.id);
+  item->setData(0, FilePathRole, result.filePath);
+  item->setData(0, LineNumberRole, result.line);
 
   updateTreeItemIcon(item, result.status);
 
@@ -373,8 +415,8 @@ void TestPanel::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
   if (!item)
     return;
 
-  QString filePath = item->data(0, Qt::UserRole + 1).toString();
-  int line = item->data(0, Qt::UserRole + 2).toInt();
+  QString filePath = item->data(0, FilePathRole).toString();
+  int line = item->data(0, LineNumberRole).toInt();
 
   if (!filePath.isEmpty())
     emit locationClicked(filePath, line, 0);
@@ -385,7 +427,14 @@ void TestPanel::onItemClicked(QTreeWidgetItem *item, int column) {
   if (!item)
     return;
 
-  QString testId = item->data(0, Qt::UserRole).toString();
+  // Navigate to source on click if file/line info is available
+  QString filePath = item->data(0, FilePathRole).toString();
+  int line = item->data(0, LineNumberRole).toInt();
+  if (!filePath.isEmpty())
+    emit locationClicked(filePath, line, 0);
+
+  // Show details in the detail pane
+  QString testId = item->data(0, TestIdRole).toString();
   if (m_testResults.contains(testId)) {
     const TestResult &result = m_testResults[testId];
     QString detail;
@@ -416,22 +465,34 @@ void TestPanel::onContextMenu(const QPoint &pos) {
 
   QMenu menu(this);
 
-  QString testId = item->data(0, Qt::UserRole).toString();
+  QString testId = item->data(0, TestIdRole).toString();
   QString testName = item->text(0);
-  QString filePath = item->data(0, Qt::UserRole + 1).toString();
+  QString filePath = item->data(0, FilePathRole).toString();
 
-  QAction *runAction =
-      menu.addAction(tr("Run This Test"), [this, testName, filePath]() {
-        TestConfiguration config = currentConfiguration();
-        if (!config.isValid())
-          return;
-        m_runManager->runSingleTest(config, m_workspaceFolder, testName,
-                                    filePath);
-      });
-  Q_UNUSED(runAction)
+  // Check if this is a suite item (has children)
+  bool isSuite = (item->childCount() > 0);
+
+  if (isSuite) {
+    menu.addAction(tr("Run Suite"), [this, testName]() {
+      TestConfiguration config = currentConfiguration();
+      if (!config.isValid())
+        return;
+      m_runManager->runSuite(config, m_workspaceFolder, testName);
+    });
+  } else {
+    QAction *runAction =
+        menu.addAction(tr("Run This Test"), [this, testName, filePath]() {
+          TestConfiguration config = currentConfiguration();
+          if (!config.isValid())
+            return;
+          m_runManager->runSingleTest(config, m_workspaceFolder, testName,
+                                      filePath);
+        });
+    Q_UNUSED(runAction)
+  }
 
   if (!filePath.isEmpty()) {
-    int line = item->data(0, Qt::UserRole + 2).toInt();
+    int line = item->data(0, LineNumberRole).toInt();
     menu.addAction(tr("Go to Source"), [this, filePath, line]() {
       emit locationClicked(filePath, line, 0);
     });
@@ -514,7 +575,7 @@ QTreeWidgetItem *TestPanel::findOrCreateSuiteItem(const QString &suite) {
 
   auto *item = new QTreeWidgetItem();
   item->setText(0, suite);
-  item->setData(0, Qt::UserRole, suite);
+  item->setData(0, TestIdRole, suite);
   item->setExpanded(true);
   m_tree->addTopLevelItem(item);
   m_suiteItems[suite] = item;
@@ -591,4 +652,105 @@ void TestPanel::refreshConfigurations() {
 TestConfiguration TestPanel::currentConfiguration() const {
   QString name = m_configCombo->currentText();
   return TestConfigurationManager::instance().configurationByName(name);
+}
+
+void TestPanel::setDiscoveryAdapter(ITestDiscoveryAdapter *adapter) {
+  if (m_discoveryAdapter) {
+    disconnect(m_discoveryAdapter, nullptr, this, nullptr);
+    if (m_ownsDiscoveryAdapter)
+      delete m_discoveryAdapter;
+  }
+  m_discoveryAdapter = adapter;
+  m_ownsDiscoveryAdapter = false;
+  if (m_discoveryAdapter)
+    connectDiscoveryAdapter();
+}
+
+void TestPanel::connectDiscoveryAdapter() {
+  if (!m_discoveryAdapter)
+    return;
+  connect(m_discoveryAdapter, &ITestDiscoveryAdapter::discoveryFinished, this,
+          &TestPanel::onDiscoveryFinished);
+  connect(m_discoveryAdapter, &ITestDiscoveryAdapter::discoveryError, this,
+          &TestPanel::onDiscoveryError);
+}
+
+void TestPanel::discoverTests() {
+  if (m_workspaceFolder.isEmpty())
+    return;
+
+  if (!m_discoveryAdapter) {
+    m_statusLabel->setText(
+        tr("No discovery adapter configured"));
+    return;
+  }
+
+  m_statusLabel->setText(tr("Discovering tests..."));
+  m_discoverAction->setEnabled(false);
+
+  // Use workspace folder as default; the adapter decides how to discover
+  m_discoveryAdapter->discover(m_workspaceFolder);
+}
+
+void TestPanel::onDiscoveryFinished(const QList<DiscoveredTest> &tests) {
+  m_discoverAction->setEnabled(true);
+  populateTreeFromDiscovery(tests);
+  m_statusLabel->setText(
+      tr("Discovered %1 tests").arg(tests.size()));
+}
+
+void TestPanel::onDiscoveryError(const QString &message) {
+  m_discoverAction->setEnabled(true);
+  m_statusLabel->setText(tr("Discovery error: %1").arg(message));
+}
+
+void TestPanel::populateTreeFromDiscovery(
+    const QList<DiscoveredTest> &tests) {
+  m_tree->clear();
+  m_suiteItems.clear();
+  m_testItems.clear();
+
+  for (const DiscoveredTest &test : tests) {
+    QTreeWidgetItem *suiteItem = findOrCreateSuiteItem(test.suite);
+
+    auto *item = new QTreeWidgetItem();
+    item->setText(0, test.name);
+    item->setData(0, TestIdRole, test.id);
+    if (!test.filePath.isEmpty())
+      item->setData(0, FilePathRole, test.filePath);
+    if (test.line >= 0)
+      item->setData(0, LineNumberRole, test.line);
+    updateTreeItemIcon(item, TestStatus::Queued);
+    item->setText(1, tr("Not Run"));
+
+    if (suiteItem)
+      suiteItem->addChild(item);
+    else
+      m_tree->addTopLevelItem(item);
+    m_testItems[test.id] = item;
+  }
+}
+
+void TestPanel::saveState() const {
+  QSettings settings;
+  settings.beginGroup("TestPanel");
+  settings.setValue("lastConfiguration", m_configCombo->currentText());
+  settings.setValue("lastFilter", m_filterCombo->currentIndex());
+  settings.endGroup();
+}
+
+void TestPanel::restoreState() {
+  QSettings settings;
+  settings.beginGroup("TestPanel");
+  QString lastConfig = settings.value("lastConfiguration").toString();
+  int lastFilter = settings.value("lastFilter", 0).toInt();
+  settings.endGroup();
+
+  if (!lastConfig.isEmpty()) {
+    int idx = m_configCombo->findText(lastConfig);
+    if (idx >= 0)
+      m_configCombo->setCurrentIndex(idx);
+  }
+  if (lastFilter >= 0 && lastFilter < m_filterCombo->count())
+    m_filterCombo->setCurrentIndex(lastFilter);
 }

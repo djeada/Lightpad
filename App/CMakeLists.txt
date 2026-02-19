@@ -151,6 +151,7 @@ set(project_headers
     run_templates/runtemplatemanager.h
     format_templates/formattemplatemanager.h
     test_templates/testconfiguration.h
+    test_templates/testdiscovery.h
     test_templates/testoutputparser.h
     test_templates/testrunmanager.h
     settings/theme.h
@@ -266,6 +267,7 @@ set(project_sources
     run_templates/runtemplatemanager.cpp
     format_templates/formattemplatemanager.cpp
     test_templates/testconfiguration.cpp
+    test_templates/testdiscovery.cpp
     test_templates/testoutputparser.cpp
     test_templates/testrunmanager.cpp
     settings/theme.cpp
