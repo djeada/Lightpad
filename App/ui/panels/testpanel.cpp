@@ -8,6 +8,12 @@
 #include <QSettings>
 #include <QStyle>
 
+namespace {
+constexpr int TestIdRole = Qt::UserRole;
+constexpr int FilePathRole = Qt::UserRole + 1;
+constexpr int LineNumberRole = Qt::UserRole + 2;
+} // namespace
+
 TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
   setObjectName("TestPanel");
   m_runManager = new TestRunManager(this);
@@ -113,7 +119,6 @@ void TestPanel::setupUI() {
   m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
   m_tree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
   m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
-  m_tree->setCursor(Qt::PointingHandCursor);
   connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
           &TestPanel::onItemDoubleClicked);
   connect(m_tree, &QTreeWidget::itemClicked, this,
@@ -323,7 +328,7 @@ void TestPanel::onTestStarted(const TestResult &result) {
   }
 
   item->setText(0, result.name);
-  item->setData(0, Qt::UserRole, result.id);
+  item->setData(0, TestIdRole, result.id);
   updateTreeItemIcon(item, TestStatus::Running);
   item->setText(1, tr("Running"));
   item->setText(2, "");
@@ -345,9 +350,9 @@ void TestPanel::onTestFinished(const TestResult &result) {
   }
 
   item->setText(0, result.name);
-  item->setData(0, Qt::UserRole, result.id);
-  item->setData(0, Qt::UserRole + 1, result.filePath);
-  item->setData(0, Qt::UserRole + 2, result.line);
+  item->setData(0, TestIdRole, result.id);
+  item->setData(0, FilePathRole, result.filePath);
+  item->setData(0, LineNumberRole, result.line);
 
   updateTreeItemIcon(item, result.status);
 
@@ -410,8 +415,8 @@ void TestPanel::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
   if (!item)
     return;
 
-  QString filePath = item->data(0, Qt::UserRole + 1).toString();
-  int line = item->data(0, Qt::UserRole + 2).toInt();
+  QString filePath = item->data(0, FilePathRole).toString();
+  int line = item->data(0, LineNumberRole).toInt();
 
   if (!filePath.isEmpty())
     emit locationClicked(filePath, line, 0);
@@ -423,13 +428,13 @@ void TestPanel::onItemClicked(QTreeWidgetItem *item, int column) {
     return;
 
   // Navigate to source on click if file/line info is available
-  QString filePath = item->data(0, Qt::UserRole + 1).toString();
-  int line = item->data(0, Qt::UserRole + 2).toInt();
+  QString filePath = item->data(0, FilePathRole).toString();
+  int line = item->data(0, LineNumberRole).toInt();
   if (!filePath.isEmpty())
     emit locationClicked(filePath, line, 0);
 
   // Show details in the detail pane
-  QString testId = item->data(0, Qt::UserRole).toString();
+  QString testId = item->data(0, TestIdRole).toString();
   if (m_testResults.contains(testId)) {
     const TestResult &result = m_testResults[testId];
     QString detail;
@@ -460,9 +465,9 @@ void TestPanel::onContextMenu(const QPoint &pos) {
 
   QMenu menu(this);
 
-  QString testId = item->data(0, Qt::UserRole).toString();
+  QString testId = item->data(0, TestIdRole).toString();
   QString testName = item->text(0);
-  QString filePath = item->data(0, Qt::UserRole + 1).toString();
+  QString filePath = item->data(0, FilePathRole).toString();
 
   // Check if this is a suite item (has children)
   bool isSuite = (item->childCount() > 0);
@@ -487,7 +492,7 @@ void TestPanel::onContextMenu(const QPoint &pos) {
   }
 
   if (!filePath.isEmpty()) {
-    int line = item->data(0, Qt::UserRole + 2).toInt();
+    int line = item->data(0, LineNumberRole).toInt();
     menu.addAction(tr("Go to Source"), [this, filePath, line]() {
       emit locationClicked(filePath, line, 0);
     });
@@ -570,7 +575,7 @@ QTreeWidgetItem *TestPanel::findOrCreateSuiteItem(const QString &suite) {
 
   auto *item = new QTreeWidgetItem();
   item->setText(0, suite);
-  item->setData(0, Qt::UserRole, suite);
+  item->setData(0, TestIdRole, suite);
   item->setExpanded(true);
   m_tree->addTopLevelItem(item);
   m_suiteItems[suite] = item;
@@ -710,11 +715,11 @@ void TestPanel::populateTreeFromDiscovery(
 
     auto *item = new QTreeWidgetItem();
     item->setText(0, test.name);
-    item->setData(0, Qt::UserRole, test.id);
+    item->setData(0, TestIdRole, test.id);
     if (!test.filePath.isEmpty())
-      item->setData(0, Qt::UserRole + 1, test.filePath);
+      item->setData(0, FilePathRole, test.filePath);
     if (test.line >= 0)
-      item->setData(0, Qt::UserRole + 2, test.line);
+      item->setData(0, LineNumberRole, test.line);
     updateTreeItemIcon(item, TestStatus::Queued);
     item->setText(1, tr("Not Run"));
 
