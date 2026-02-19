@@ -81,4 +81,88 @@ private:
   QString m_executablePath;
 };
 
+class PytestDiscoveryAdapter : public ITestDiscoveryAdapter {
+  Q_OBJECT
+
+public:
+  explicit PytestDiscoveryAdapter(QObject *parent = nullptr);
+  ~PytestDiscoveryAdapter() override;
+
+  QString adapterId() const override { return "pytest"; }
+  void discover(const QString &workDir) override;
+  void cancel() override;
+
+  static QList<DiscoveredTest>
+  parseCollectOutput(const QString &output);
+
+private slots:
+  void onProcessFinished(int exitCode, QProcess::ExitStatus status);
+
+private:
+  QProcess *m_process = nullptr;
+};
+
+class GoTestDiscoveryAdapter : public ITestDiscoveryAdapter {
+  Q_OBJECT
+
+public:
+  explicit GoTestDiscoveryAdapter(QObject *parent = nullptr);
+  ~GoTestDiscoveryAdapter() override;
+
+  QString adapterId() const override { return "go_test"; }
+  void discover(const QString &workDir) override;
+  void cancel() override;
+
+  static QList<DiscoveredTest>
+  parseListOutput(const QString &output);
+
+private slots:
+  void onProcessFinished(int exitCode, QProcess::ExitStatus status);
+
+private:
+  QProcess *m_process = nullptr;
+};
+
+class CargoTestDiscoveryAdapter : public ITestDiscoveryAdapter {
+  Q_OBJECT
+
+public:
+  explicit CargoTestDiscoveryAdapter(QObject *parent = nullptr);
+  ~CargoTestDiscoveryAdapter() override;
+
+  QString adapterId() const override { return "cargo_test"; }
+  void discover(const QString &workDir) override;
+  void cancel() override;
+
+  static QList<DiscoveredTest>
+  parseListOutput(const QString &output);
+
+private slots:
+  void onProcessFinished(int exitCode, QProcess::ExitStatus status);
+
+private:
+  QProcess *m_process = nullptr;
+};
+
+class JestDiscoveryAdapter : public ITestDiscoveryAdapter {
+  Q_OBJECT
+
+public:
+  explicit JestDiscoveryAdapter(QObject *parent = nullptr);
+  ~JestDiscoveryAdapter() override;
+
+  QString adapterId() const override { return "jest"; }
+  void discover(const QString &workDir) override;
+  void cancel() override;
+
+  static QList<DiscoveredTest>
+  parseListOutput(const QString &output);
+
+private slots:
+  void onProcessFinished(int exitCode, QProcess::ExitStatus status);
+
+private:
+  QProcess *m_process = nullptr;
+};
+
 #endif

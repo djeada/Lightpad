@@ -43,6 +43,7 @@ public slots:
   void runAll();
   void runFailed();
   void runCurrentFile(const QString &filePath);
+  void runTestsForPath(const QString &path);
   bool runWithConfigurationId(const QString &configId,
                               const QString &filePath = QString());
   void stopTests();

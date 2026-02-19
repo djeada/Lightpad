@@ -2,6 +2,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QFileInfo>
 #include <QHeaderView>
 #include <QMenu>
 #include <QSettings>
@@ -112,6 +113,7 @@ void TestPanel::setupUI() {
   m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
   m_tree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
   m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
+  m_tree->setCursor(Qt::PointingHandCursor);
   connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
           &TestPanel::onItemDoubleClicked);
   connect(m_tree, &QTreeWidget::itemClicked, this,
@@ -262,6 +264,30 @@ void TestPanel::runCurrentFile(const QString &filePath) {
   m_runManager->runAll(config, m_workspaceFolder, filePath);
 }
 
+void TestPanel::runTestsForPath(const QString &path) {
+  QFileInfo fi(path);
+
+  // Try to find a matching configuration based on file extension
+  if (fi.isFile()) {
+    QString ext = fi.suffix().toLower();
+    QList<TestConfiguration> matches =
+        TestConfigurationManager::instance().configurationsForExtension(ext);
+    if (!matches.isEmpty()) {
+      // Select the first matching config in the combo
+      int idx = m_configCombo->findData(matches.first().id);
+      if (idx >= 0)
+        m_configCombo->setCurrentIndex(idx);
+    }
+    runCurrentFile(path);
+  } else if (fi.isDir()) {
+    // For directories, run all tests with the directory as workspace
+    TestConfiguration config = currentConfiguration();
+    if (!config.isValid())
+      return;
+    m_runManager->runAll(config, path);
+  }
+}
+
 bool TestPanel::runWithConfigurationId(const QString &configId,
                                        const QString &filePath) {
   const int configIndex = m_configCombo->findData(configId);
@@ -396,6 +422,13 @@ void TestPanel::onItemClicked(QTreeWidgetItem *item, int column) {
   if (!item)
     return;
 
+  // Navigate to source on click if file/line info is available
+  QString filePath = item->data(0, Qt::UserRole + 1).toString();
+  int line = item->data(0, Qt::UserRole + 2).toInt();
+  if (!filePath.isEmpty())
+    emit locationClicked(filePath, line, 0);
+
+  // Show details in the detail pane
   QString testId = item->data(0, Qt::UserRole).toString();
   if (m_testResults.contains(testId)) {
     const TestResult &result = m_testResults[testId];

@@ -3,6 +3,7 @@
 #include "core/logging/logger.h"
 
 #include <QDir>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -264,4 +265,399 @@ QString GTestDiscoveryAdapter::buildGTestFilter(const QStringList &testNames) {
   if (testNames.isEmpty())
     return QString();
   return testNames.join(':');
+}
+
+// --- PytestDiscoveryAdapter ---
+
+PytestDiscoveryAdapter::PytestDiscoveryAdapter(QObject *parent)
+    : ITestDiscoveryAdapter(parent) {}
+
+PytestDiscoveryAdapter::~PytestDiscoveryAdapter() { cancel(); }
+
+void PytestDiscoveryAdapter::discover(const QString &workDir) {
+  cancel();
+
+  if (workDir.isEmpty() || !QDir(workDir).exists()) {
+    emit discoveryError(
+        tr("Directory does not exist: %1").arg(workDir));
+    return;
+  }
+
+  m_process = new QProcess(this);
+  m_process->setWorkingDirectory(workDir);
+
+  connect(m_process,
+          QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+          &PytestDiscoveryAdapter::onProcessFinished);
+
+  m_process->start("python3",
+                    {"-m", "pytest", "--collect-only", "-q", "--no-header"});
+}
+
+void PytestDiscoveryAdapter::cancel() {
+  if (m_process && m_process->state() != QProcess::NotRunning) {
+    m_process->kill();
+    m_process->waitForFinished(3000);
+  }
+  delete m_process;
+  m_process = nullptr;
+}
+
+void PytestDiscoveryAdapter::onProcessFinished(int exitCode,
+                                                QProcess::ExitStatus status) {
+  if (!m_process)
+    return;
+
+  QByteArray stdoutData = m_process->readAllStandardOutput();
+  QByteArray stderrData = m_process->readAllStandardError();
+
+  delete m_process;
+  m_process = nullptr;
+
+  // pytest --collect-only returns exit code 0 on success, but also code 5
+  // when no tests found (which is not an error for discovery)
+  if (status != QProcess::NormalExit ||
+      (exitCode != 0 && exitCode != 5)) {
+    QString err = QString::fromUtf8(stderrData).trimmed();
+    if (err.isEmpty())
+      err = tr("pytest exited with code %1").arg(exitCode);
+    emit discoveryError(err);
+    return;
+  }
+
+  QList<DiscoveredTest> tests =
+      parseCollectOutput(QString::fromUtf8(stdoutData));
+  LOG_INFO(
+      QString("pytest discovery found %1 tests").arg(tests.size()));
+  emit discoveryFinished(tests);
+}
+
+QList<DiscoveredTest>
+PytestDiscoveryAdapter::parseCollectOutput(const QString &output) {
+  QList<DiscoveredTest> results;
+
+  // pytest --collect-only -q outputs lines like:
+  //   test_math.py::TestArithmetic::test_add
+  //   test_math.py::test_standalone
+  //   tests/test_util.py::test_helper
+  const QStringList lines = output.split('\n');
+  for (const QString &rawLine : lines) {
+    QString line = rawLine.trimmed();
+    if (line.isEmpty() || line.startsWith("no tests") ||
+        line.startsWith("===") || line.startsWith("---"))
+      continue;
+
+    // Skip summary lines like "3 tests collected"
+    if (line.contains(" tests collected") ||
+        line.contains(" test collected") ||
+        line.contains("warnings summary"))
+      break;
+
+    // Parse "file.py::Class::method" or "file.py::function"
+    int firstSep = line.indexOf("::");
+    if (firstSep < 0)
+      continue;
+
+    DiscoveredTest test;
+    test.filePath = line.left(firstSep);
+    QString remainder = line.mid(firstSep + 2);
+
+    int secondSep = remainder.indexOf("::");
+    if (secondSep >= 0) {
+      // Has class/suite: file.py::Class::method
+      test.suite = remainder.left(secondSep);
+      test.name = remainder.mid(secondSep + 2);
+    } else {
+      test.name = remainder;
+    }
+
+    test.id = line;
+    if (!test.name.isEmpty())
+      results.append(test);
+  }
+
+  return results;
+}
+
+// --- GoTestDiscoveryAdapter ---
+
+GoTestDiscoveryAdapter::GoTestDiscoveryAdapter(QObject *parent)
+    : ITestDiscoveryAdapter(parent) {}
+
+GoTestDiscoveryAdapter::~GoTestDiscoveryAdapter() { cancel(); }
+
+void GoTestDiscoveryAdapter::discover(const QString &workDir) {
+  cancel();
+
+  if (workDir.isEmpty() || !QDir(workDir).exists()) {
+    emit discoveryError(
+        tr("Directory does not exist: %1").arg(workDir));
+    return;
+  }
+
+  m_process = new QProcess(this);
+  m_process->setWorkingDirectory(workDir);
+
+  connect(m_process,
+          QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+          &GoTestDiscoveryAdapter::onProcessFinished);
+
+  m_process->start("go", {"test", "-list", ".*", "./..."});
+}
+
+void GoTestDiscoveryAdapter::cancel() {
+  if (m_process && m_process->state() != QProcess::NotRunning) {
+    m_process->kill();
+    m_process->waitForFinished(3000);
+  }
+  delete m_process;
+  m_process = nullptr;
+}
+
+void GoTestDiscoveryAdapter::onProcessFinished(int exitCode,
+                                                QProcess::ExitStatus status) {
+  if (!m_process)
+    return;
+
+  QByteArray stdoutData = m_process->readAllStandardOutput();
+  QByteArray stderrData = m_process->readAllStandardError();
+
+  delete m_process;
+  m_process = nullptr;
+
+  if (exitCode != 0 || status != QProcess::NormalExit) {
+    QString err = QString::fromUtf8(stderrData).trimmed();
+    if (err.isEmpty())
+      err = tr("go test exited with code %1").arg(exitCode);
+    emit discoveryError(err);
+    return;
+  }
+
+  QList<DiscoveredTest> tests =
+      parseListOutput(QString::fromUtf8(stdoutData));
+  LOG_INFO(
+      QString("Go test discovery found %1 tests").arg(tests.size()));
+  emit discoveryFinished(tests);
+}
+
+QList<DiscoveredTest>
+GoTestDiscoveryAdapter::parseListOutput(const QString &output) {
+  QList<DiscoveredTest> results;
+
+  // go test -list outputs test function names, one per line
+  // Lines like "ok  package 0.001s" are summary lines
+  const QStringList lines = output.split('\n');
+  for (const QString &rawLine : lines) {
+    QString line = rawLine.trimmed();
+    if (line.isEmpty())
+      continue;
+
+    // Skip "ok" summary lines and "?" lines
+    if (line.startsWith("ok ") || line.startsWith("? "))
+      continue;
+
+    // Test names start with "Test", "Benchmark", "Example", or "Fuzz"
+    if (line.startsWith("Test") || line.startsWith("Benchmark") ||
+        line.startsWith("Example") || line.startsWith("Fuzz")) {
+      DiscoveredTest test;
+      test.name = line;
+      test.id = line;
+
+      // Extract suite from name pattern: TestSuite_Method -> suite=TestSuite
+      int underscoreIdx = line.indexOf('_');
+      if (underscoreIdx > 0 && line.startsWith("Test"))
+        test.suite = line.left(underscoreIdx);
+
+      results.append(test);
+    }
+  }
+
+  return results;
+}
+
+// --- CargoTestDiscoveryAdapter ---
+
+CargoTestDiscoveryAdapter::CargoTestDiscoveryAdapter(QObject *parent)
+    : ITestDiscoveryAdapter(parent) {}
+
+CargoTestDiscoveryAdapter::~CargoTestDiscoveryAdapter() { cancel(); }
+
+void CargoTestDiscoveryAdapter::discover(const QString &workDir) {
+  cancel();
+
+  if (workDir.isEmpty() || !QDir(workDir).exists()) {
+    emit discoveryError(
+        tr("Directory does not exist: %1").arg(workDir));
+    return;
+  }
+
+  m_process = new QProcess(this);
+  m_process->setWorkingDirectory(workDir);
+
+  connect(m_process,
+          QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+          &CargoTestDiscoveryAdapter::onProcessFinished);
+
+  m_process->start("cargo", {"test", "--", "--list"});
+}
+
+void CargoTestDiscoveryAdapter::cancel() {
+  if (m_process && m_process->state() != QProcess::NotRunning) {
+    m_process->kill();
+    m_process->waitForFinished(3000);
+  }
+  delete m_process;
+  m_process = nullptr;
+}
+
+void CargoTestDiscoveryAdapter::onProcessFinished(int exitCode,
+                                                   QProcess::ExitStatus status) {
+  if (!m_process)
+    return;
+
+  QByteArray stdoutData = m_process->readAllStandardOutput();
+  QByteArray stderrData = m_process->readAllStandardError();
+
+  delete m_process;
+  m_process = nullptr;
+
+  if (exitCode != 0 || status != QProcess::NormalExit) {
+    QString err = QString::fromUtf8(stderrData).trimmed();
+    if (err.isEmpty())
+      err = tr("cargo test exited with code %1").arg(exitCode);
+    emit discoveryError(err);
+    return;
+  }
+
+  QList<DiscoveredTest> tests =
+      parseListOutput(QString::fromUtf8(stdoutData));
+  LOG_INFO(
+      QString("Cargo test discovery found %1 tests").arg(tests.size()));
+  emit discoveryFinished(tests);
+}
+
+QList<DiscoveredTest>
+CargoTestDiscoveryAdapter::parseListOutput(const QString &output) {
+  QList<DiscoveredTest> results;
+
+  // cargo test -- --list outputs lines like:
+  //   module::submodule::test_name: test
+  //   module::test_other: test
+  const QStringList lines = output.split('\n');
+  for (const QString &rawLine : lines) {
+    QString line = rawLine.trimmed();
+    if (line.isEmpty())
+      continue;
+
+    // Each test line ends with ": test"
+    if (!line.endsWith(": test"))
+      continue;
+
+    QString fullName = line.left(line.length() - 6); // remove ": test"
+
+    DiscoveredTest test;
+    test.id = fullName;
+
+    // Split on "::" to find module (suite) and test name
+    int lastSep = fullName.lastIndexOf("::");
+    if (lastSep >= 0) {
+      test.suite = fullName.left(lastSep);
+      test.name = fullName.mid(lastSep + 2);
+    } else {
+      test.name = fullName;
+    }
+
+    if (!test.name.isEmpty())
+      results.append(test);
+  }
+
+  return results;
+}
+
+// --- JestDiscoveryAdapter ---
+
+JestDiscoveryAdapter::JestDiscoveryAdapter(QObject *parent)
+    : ITestDiscoveryAdapter(parent) {}
+
+JestDiscoveryAdapter::~JestDiscoveryAdapter() { cancel(); }
+
+void JestDiscoveryAdapter::discover(const QString &workDir) {
+  cancel();
+
+  if (workDir.isEmpty() || !QDir(workDir).exists()) {
+    emit discoveryError(
+        tr("Directory does not exist: %1").arg(workDir));
+    return;
+  }
+
+  m_process = new QProcess(this);
+  m_process->setWorkingDirectory(workDir);
+
+  connect(m_process,
+          QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+          &JestDiscoveryAdapter::onProcessFinished);
+
+  m_process->start("npx", {"jest", "--listTests"});
+}
+
+void JestDiscoveryAdapter::cancel() {
+  if (m_process && m_process->state() != QProcess::NotRunning) {
+    m_process->kill();
+    m_process->waitForFinished(3000);
+  }
+  delete m_process;
+  m_process = nullptr;
+}
+
+void JestDiscoveryAdapter::onProcessFinished(int exitCode,
+                                              QProcess::ExitStatus status) {
+  if (!m_process)
+    return;
+
+  QByteArray stdoutData = m_process->readAllStandardOutput();
+  QByteArray stderrData = m_process->readAllStandardError();
+
+  delete m_process;
+  m_process = nullptr;
+
+  if (exitCode != 0 || status != QProcess::NormalExit) {
+    QString err = QString::fromUtf8(stderrData).trimmed();
+    if (err.isEmpty())
+      err = tr("jest exited with code %1").arg(exitCode);
+    emit discoveryError(err);
+    return;
+  }
+
+  QList<DiscoveredTest> tests =
+      parseListOutput(QString::fromUtf8(stdoutData));
+  LOG_INFO(
+      QString("Jest discovery found %1 tests").arg(tests.size()));
+  emit discoveryFinished(tests);
+}
+
+QList<DiscoveredTest>
+JestDiscoveryAdapter::parseListOutput(const QString &output) {
+  QList<DiscoveredTest> results;
+
+  // jest --listTests outputs one test file path per line
+  const QStringList lines = output.split('\n');
+  for (const QString &rawLine : lines) {
+    QString line = rawLine.trimmed();
+    if (line.isEmpty())
+      continue;
+
+    QFileInfo fi(line);
+    DiscoveredTest test;
+    test.filePath = line;
+    test.name = fi.fileName();
+    test.id = line;
+
+    // Use the parent directory as suite
+    test.suite = fi.dir().dirName();
+
+    if (!test.name.isEmpty())
+      results.append(test);
+  }
+
+  return results;
 }

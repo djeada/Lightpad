@@ -5182,6 +5182,21 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
   if (m_treeScrollValueInitialized) {
     treeView->verticalScrollBar()->setValue(m_treeScrollValue);
   }
+
+  // Connect "Run as Test" from file tree context menu
+  connect(treeView, &LightpadTreeView::runTestsRequested, this,
+          [this](const QString &path) {
+            ensureTestPanel();
+            if (testPanel && testDock) {
+              if (!m_projectRootPath.isEmpty())
+                testPanel->setWorkspaceFolder(m_projectRootPath);
+              testPanel->runTestsForPath(path);
+              testDock->show();
+              testDock->raise();
+              if (ui->actionToggle_Test_Panel)
+                ui->actionToggle_Test_Panel->setChecked(true);
+            }
+          });
 }
 
 void MainWindow::trackTreeExpandedState(const QModelIndex &index,
