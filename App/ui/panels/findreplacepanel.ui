@@ -73,7 +73,7 @@
          <item>
           <widget class="QLabel" name="findWhat">
            <property name="text">
-            <string>Find what :</string>
+            <string>Find:</string>
            </property>
            <property name="textFormat">
             <enum>Qt::PlainText</enum>
@@ -97,7 +97,11 @@
           </spacer>
          </item>
          <item>
-          <widget class="QLineEdit" name="searchFind"/>
+          <widget class="QLineEdit" name="searchFind">
+           <property name="placeholderText">
+            <string>Search…</string>
+           </property>
+          </widget>
          </item>
          <item>
           <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -117,7 +121,7 @@
           <item>
            <widget class="QLabel" name="Replace">
             <property name="text">
-             <string>Replace: </string>
+             <string>Replace:</string>
             </property>
             <property name="textFormat">
              <enum>Qt::PlainText</enum>
@@ -141,7 +145,11 @@
            </spacer>
           </item>
           <item>
-           <widget class="QLineEdit" name="fieldReplace"/>
+           <widget class="QLineEdit" name="fieldReplace">
+            <property name="placeholderText">
+             <string>Replace…</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </widget>
@@ -232,7 +240,7 @@
      <item>
       <widget class="QToolButton" name="replaceSingle">
        <property name="text">
-        <string>&amp;Replace next</string>
+        <string>&amp;Replace Next</string>
        </property>
       </widget>
      </item>
@@ -246,7 +254,7 @@
      <item>
       <widget class="QToolButton" name="more">
        <property name="text">
-        <string>&amp;More</string>
+        <string>&amp;Options</string>
        </property>
       </widget>
      </item>

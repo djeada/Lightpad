@@ -67,6 +67,7 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   show();
 
   ui->searchFind->installEventFilter(this);
+  ui->fieldReplace->installEventFilter(this);
   connect(ui->searchFind, &QLineEdit::textChanged, this,
           &FindReplacePanel::onSearchTextChanged);
 
@@ -135,6 +136,19 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
 
   updateModeUI();
   updateCounterLabels();
+
+  ui->find->setToolTip(tr("Find Next (Enter)"));
+  ui->findPrevious->setToolTip(tr("Find Previous (Shift+Enter)"));
+  ui->replaceSingle->setToolTip(tr("Replace Next"));
+  ui->replaceAll->setToolTip(tr("Replace All"));
+  ui->more->setToolTip(tr("Toggle search options"));
+  ui->close->setToolTip(tr("Close (Escape)"));
+  ui->matchCase->setToolTip(tr("Only match results with the same case"));
+  ui->searchStart->setToolTip(tr("Start searching from the beginning of the file"));
+  ui->searchBackward->setToolTip(tr("Search from bottom to top"));
+  ui->wholeWords->setToolTip(tr("Only match whole words"));
+  ui->useRegex->setToolTip(tr("Interpret the search term as a regular expression"));
+  ui->preserveCase->setToolTip(tr("Preserve the case of the original text when replacing"));
 }
 
 FindReplacePanel::~FindReplacePanel() { delete ui; }
@@ -271,7 +285,7 @@ void FindReplacePanel::setVimCommandMode(bool enabled) {
     ui->currentIndex->setVisible(true);
     ui->totalFound->setVisible(true);
     ui->label->setVisible(true);
-    ui->findWhat->setText("Find what :");
+    ui->findWhat->setText("Find:");
   }
 }
 
@@ -288,24 +302,78 @@ void FindReplacePanel::setSearchText(const QString &text) {
 }
 
 bool FindReplacePanel::eventFilter(QObject *obj, QEvent *event) {
-  if (obj == ui->searchFind && event->type() == QEvent::KeyPress) {
+  if ((obj == ui->searchFind || obj == ui->fieldReplace) &&
+      event->type() == QEvent::KeyPress) {
     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-    if (!m_vimCommandMode && (keyEvent->modifiers() & Qt::ControlModifier) &&
-        keyEvent->key() == Qt::Key_R) {
-      setGlobalMode(false);
-      setOnlyFind(false);
-      setReplaceVisibility(true);
+
+    if (keyEvent->key() == Qt::Key_Escape) {
+      on_close_clicked();
       return true;
     }
-    if (!m_vimCommandMode && (keyEvent->modifiers() & Qt::ControlModifier) &&
-        keyEvent->key() == Qt::Key_F) {
-      setGlobalMode(false);
-      setOnlyFind(true);
-      setReplaceVisibility(false);
-      return true;
+
+    if (obj == ui->searchFind) {
+      if (!m_vimCommandMode && (keyEvent->modifiers() & Qt::ControlModifier) &&
+          keyEvent->key() == Qt::Key_R) {
+        setGlobalMode(false);
+        setOnlyFind(false);
+        setReplaceVisibility(true);
+        return true;
+      }
+      if (!m_vimCommandMode && (keyEvent->modifiers() & Qt::ControlModifier) &&
+          keyEvent->key() == Qt::Key_F) {
+        setGlobalMode(false);
+        setOnlyFind(true);
+        setReplaceVisibility(false);
+        return true;
+      }
+      if (!m_vimCommandMode &&
+          (keyEvent->key() == Qt::Key_Return ||
+           keyEvent->key() == Qt::Key_Enter)) {
+        if (keyEvent->modifiers() & Qt::ShiftModifier) {
+          on_findPrevious_clicked();
+        } else {
+          on_find_clicked();
+        }
+        return true;
+      }
+      if (!m_vimCommandMode && keyEvent->key() == Qt::Key_Up &&
+          !(keyEvent->modifiers() & Qt::ControlModifier)) {
+        if (!searchHistory.isEmpty()) {
+          searchHistoryIndex++;
+          if (searchHistoryIndex >= searchHistory.size()) {
+            searchHistoryIndex = searchHistory.size() - 1;
+          }
+          ui->searchFind->setText(searchHistory[searchHistoryIndex]);
+        }
+        return true;
+      }
+      if (!m_vimCommandMode && keyEvent->key() == Qt::Key_Down &&
+          !(keyEvent->modifiers() & Qt::ControlModifier)) {
+        if (!searchHistory.isEmpty() && searchHistoryIndex >= 0) {
+          searchHistoryIndex--;
+          if (searchHistoryIndex < 0) {
+            searchHistoryIndex = -1;
+            ui->searchFind->clear();
+          } else {
+            ui->searchFind->setText(searchHistory[searchHistoryIndex]);
+          }
+        }
+        return true;
+      }
+      if (m_vimCommandMode) {
+        handleVimCommandKey(keyEvent);
+        return true;
+      }
     }
-    if (m_vimCommandMode) {
-      handleVimCommandKey(keyEvent);
+
+    if (obj == ui->fieldReplace && !m_vimCommandMode &&
+        (keyEvent->key() == Qt::Key_Return ||
+         keyEvent->key() == Qt::Key_Enter)) {
+      if (keyEvent->modifiers() & Qt::ShiftModifier) {
+        on_replaceAll_clicked();
+      } else {
+        on_replaceSingle_clicked();
+      }
       return true;
     }
   }
@@ -675,9 +743,16 @@ void FindReplacePanel::updateCounterLabels() {
 
   if (isGlobalMode()) {
     if (globalResults.isEmpty()) {
-      ui->currentIndex->hide();
-      ui->totalFound->hide();
-      ui->label->hide();
+      if (searchExecuted && !activeSearchWord.isEmpty()) {
+        ui->currentIndex->setText(tr("No results"));
+        ui->currentIndex->show();
+        ui->totalFound->hide();
+        ui->label->hide();
+      } else {
+        ui->currentIndex->hide();
+        ui->totalFound->hide();
+        ui->label->hide();
+      }
     } else {
       if (ui->currentIndex->isHidden()) {
         ui->currentIndex->show();
@@ -692,9 +767,16 @@ void FindReplacePanel::updateCounterLabels() {
   }
 
   if (positions.isEmpty()) {
-    ui->currentIndex->hide();
-    ui->totalFound->hide();
-    ui->label->hide();
+    if (searchExecuted && !activeSearchWord.isEmpty()) {
+      ui->currentIndex->setText(tr("No results"));
+      ui->currentIndex->show();
+      ui->totalFound->hide();
+      ui->label->hide();
+    } else {
+      ui->currentIndex->hide();
+      ui->totalFound->hide();
+      ui->label->hide();
+    }
   } else {
     if (ui->currentIndex->isHidden()) {
       ui->currentIndex->show();
