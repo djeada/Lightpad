@@ -134,6 +134,31 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   connect(refreshTimer, &QTimer::timeout, this,
           &FindReplacePanel::refreshSearchResults);
 
+  // Sync inline toggle buttons with the Options-panel checkboxes
+  connect(ui->btnMatchCase, &QToolButton::toggled, ui->matchCase,
+          &QCheckBox::setChecked);
+  connect(ui->matchCase, &QCheckBox::toggled, ui->btnMatchCase,
+          &QToolButton::setChecked);
+  connect(ui->btnRegex, &QToolButton::toggled, ui->useRegex,
+          &QCheckBox::setChecked);
+  connect(ui->useRegex, &QCheckBox::toggled, ui->btnRegex,
+          &QToolButton::setChecked);
+
+  // Re-trigger search when inline toggles change
+  connect(ui->btnMatchCase, &QToolButton::toggled, this, [this]() {
+    if (!ui->searchFind->text().isEmpty()) {
+      onSearchTextChanged(ui->searchFind->text());
+    }
+  });
+  connect(ui->btnRegex, &QToolButton::toggled, this, [this]() {
+    if (!ui->searchFind->text().isEmpty()) {
+      onSearchTextChanged(ui->searchFind->text());
+    }
+  });
+
+  // File mask is only relevant in global mode; hide initially
+  ui->fileMaskWidget->setVisible(isGlobalMode());
+
   updateModeUI();
   updateCounterLabels();
 
@@ -275,6 +300,9 @@ void FindReplacePanel::setVimCommandMode(bool enabled) {
     ui->currentIndex->setVisible(false);
     ui->totalFound->setVisible(false);
     ui->label->setVisible(false);
+    ui->btnMatchCase->setVisible(false);
+    ui->btnRegex->setVisible(false);
+    ui->fileMaskWidget->setVisible(false);
     ui->searchBackward->setChecked(false);
     ui->searchStart->setChecked(true);
   } else {
@@ -285,6 +313,9 @@ void FindReplacePanel::setVimCommandMode(bool enabled) {
     ui->currentIndex->setVisible(true);
     ui->totalFound->setVisible(true);
     ui->label->setVisible(true);
+    ui->btnMatchCase->setVisible(true);
+    ui->btnRegex->setVisible(true);
+    ui->fileMaskWidget->setVisible(isGlobalMode());
     ui->findWhat->setText("Find:");
   }
 }
@@ -463,6 +494,7 @@ void FindReplacePanel::updateModeUI() {
 
   ui->searchStart->setEnabled(!isGlobal);
   ui->searchBackward->setEnabled(!isGlobal);
+  ui->fileMaskWidget->setVisible(isGlobal);
 
   if (isGlobal) {
     positions.clear();
@@ -1068,6 +1100,20 @@ QStringList FindReplacePanel::getProjectFiles() const {
     return files;
   }
 
+  // Parse file mask patterns from the UI field (comma-separated, e.g. "*.cpp, *.h")
+  QStringList maskPatterns;
+  if (ui->fileMaskEdit) {
+    QString maskText = ui->fileMaskEdit->text().trimmed();
+    if (!maskText.isEmpty()) {
+      for (const QString &token : maskText.split(',')) {
+        QString pattern = token.trimmed();
+        if (!pattern.isEmpty()) {
+          maskPatterns.append(pattern);
+        }
+      }
+    }
+  }
+
   QDirIterator it(projectPath, QDir::Files | QDir::NoDotAndDotDot,
                   QDirIterator::Subdirectories);
 
@@ -1079,9 +1125,33 @@ QStringList FindReplacePanel::getProjectFiles() const {
       "toml",  "md",   "txt",     "rst",  "sql",  "sh",   "bash", "zsh",
       "cmake", "make", "makefile"};
 
+  // Pre-compile glob patterns for file mask matching
+  QVector<QRegularExpression> maskRegexes;
+  for (const QString &pattern : maskPatterns) {
+    QString regexPattern = QRegularExpression::wildcardToRegularExpression(pattern);
+    maskRegexes.append(QRegularExpression(regexPattern, QRegularExpression::CaseInsensitiveOption));
+  }
+
   while (it.hasNext()) {
     QString filePath = it.next();
     QFileInfo fileInfo(filePath);
+    QString fileName = fileInfo.fileName();
+
+    // If a file mask is set, use it instead of the default extension list
+    if (!maskRegexes.isEmpty()) {
+      bool matched = false;
+      for (const QRegularExpression &re : maskRegexes) {
+        if (re.match(fileName).hasMatch()) {
+          matched = true;
+          break;
+        }
+      }
+      if (matched) {
+        files.append(filePath);
+      }
+      continue;
+    }
+
     QString ext = fileInfo.suffix().toLower();
     QString fileNameLower = fileInfo.baseName().toLower();
 
