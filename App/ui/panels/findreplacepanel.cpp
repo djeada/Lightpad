@@ -5,6 +5,8 @@
 #include "../mainwindow.h"
 #include "ui_findreplacepanel.h"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QDebug>
 #include <QDir>
@@ -145,16 +147,13 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
           &QToolButton::setChecked);
 
   // Re-trigger search when inline toggles change
-  connect(ui->btnMatchCase, &QToolButton::toggled, this, [this]() {
+  auto retriggerSearch = [this]() {
     if (!ui->searchFind->text().isEmpty()) {
       onSearchTextChanged(ui->searchFind->text());
     }
-  });
-  connect(ui->btnRegex, &QToolButton::toggled, this, [this]() {
-    if (!ui->searchFind->text().isEmpty()) {
-      onSearchTextChanged(ui->searchFind->text());
-    }
-  });
+  };
+  connect(ui->btnMatchCase, &QToolButton::toggled, this, retriggerSearch);
+  connect(ui->btnRegex, &QToolButton::toggled, this, retriggerSearch);
 
   // File mask is only relevant in global mode; hide initially
   ui->fileMaskWidget->setVisible(isGlobalMode());
@@ -1129,7 +1128,10 @@ QStringList FindReplacePanel::getProjectFiles() const {
   QVector<QRegularExpression> maskRegexes;
   for (const QString &pattern : maskPatterns) {
     QString regexPattern = QRegularExpression::wildcardToRegularExpression(pattern);
-    maskRegexes.append(QRegularExpression(regexPattern, QRegularExpression::CaseInsensitiveOption));
+    QRegularExpression re(regexPattern, QRegularExpression::CaseInsensitiveOption);
+    if (re.isValid()) {
+      maskRegexes.append(re);
+    }
   }
 
   while (it.hasNext()) {
@@ -1139,13 +1141,11 @@ QStringList FindReplacePanel::getProjectFiles() const {
 
     // If a file mask is set, use it instead of the default extension list
     if (!maskRegexes.isEmpty()) {
-      bool matched = false;
-      for (const QRegularExpression &re : maskRegexes) {
-        if (re.match(fileName).hasMatch()) {
-          matched = true;
-          break;
-        }
-      }
+      bool matched = std::any_of(
+          maskRegexes.cbegin(), maskRegexes.cend(),
+          [&fileName](const QRegularExpression &re) {
+            return re.match(fileName).hasMatch();
+          });
       if (matched) {
         files.append(filePath);
       }
