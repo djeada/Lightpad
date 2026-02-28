@@ -73,7 +73,7 @@
          <item>
           <widget class="QLabel" name="findWhat">
            <property name="text">
-            <string>Find what :</string>
+            <string>Find:</string>
            </property>
            <property name="textFormat">
             <enum>Qt::PlainText</enum>
@@ -97,14 +97,49 @@
           </spacer>
          </item>
          <item>
-          <widget class="QLineEdit" name="searchFind"/>
+          <widget class="QLineEdit" name="searchFind">
+           <property name="placeholderText">
+            <string>Search…</string>
+           </property>
+          </widget>
          </item>
          <item>
-          <layout class="QVBoxLayout" name="verticalLayout_2">
-           <property name="sizeConstraint">
-            <enum>QLayout::SetNoConstraint</enum>
+          <widget class="QToolButton" name="btnMatchCase">
+           <property name="text">
+            <string>Aa</string>
            </property>
-          </layout>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+           <property name="toolTip">
+            <string>Match Case</string>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>28</width>
+             <height>28</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="btnRegex">
+           <property name="text">
+            <string>.*</string>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+           <property name="toolTip">
+            <string>Use Regular Expression</string>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>28</width>
+             <height>28</height>
+            </size>
+           </property>
+          </widget>
          </item>
         </layout>
        </item>
@@ -117,7 +152,7 @@
           <item>
            <widget class="QLabel" name="Replace">
             <property name="text">
-             <string>Replace: </string>
+             <string>Replace:</string>
             </property>
             <property name="textFormat">
              <enum>Qt::PlainText</enum>
@@ -141,11 +176,60 @@
            </spacer>
           </item>
           <item>
-           <widget class="QLineEdit" name="fieldReplace"/>
+           <widget class="QLineEdit" name="fieldReplace">
+            <property name="placeholderText">
+             <string>Replace…</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </widget>
        </item>
+        <item>
+         <widget class="QWidget" name="fileMaskWidget" native="true">
+          <layout class="QHBoxLayout" name="fileMaskLayout">
+           <property name="sizeConstraint">
+            <enum>QLayout::SetNoConstraint</enum>
+           </property>
+           <item>
+            <widget class="QLabel" name="fileMaskLabel">
+             <property name="text">
+              <string>Files:</string>
+             </property>
+             <property name="textFormat">
+              <enum>Qt::PlainText</enum>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="horizontalSpacer_5">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeType">
+              <enum>QSizePolicy::Minimum</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>10</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="fileMaskEdit">
+             <property name="placeholderText">
+              <string>e.g. *.cpp, *.h</string>
+             </property>
+             <property name="toolTip">
+              <string>Comma-separated file patterns to include (e.g. *.cpp, *.h)</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
       </layout>
      </item>
      <item>
@@ -232,7 +316,7 @@
      <item>
       <widget class="QToolButton" name="replaceSingle">
        <property name="text">
-        <string>&amp;Replace next</string>
+        <string>&amp;Replace Next</string>
        </property>
       </widget>
      </item>
@@ -246,7 +330,7 @@
      <item>
       <widget class="QToolButton" name="more">
        <property name="text">
-        <string>&amp;More</string>
+        <string>&amp;Options</string>
        </property>
       </widget>
      </item>

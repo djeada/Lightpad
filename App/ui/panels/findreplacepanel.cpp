@@ -5,6 +5,8 @@
 #include "../mainwindow.h"
 #include "ui_findreplacepanel.h"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QDebug>
 #include <QDir>
@@ -67,6 +69,7 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   show();
 
   ui->searchFind->installEventFilter(this);
+  ui->fieldReplace->installEventFilter(this);
   connect(ui->searchFind, &QLineEdit::textChanged, this,
           &FindReplacePanel::onSearchTextChanged);
 
@@ -133,8 +136,43 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   connect(refreshTimer, &QTimer::timeout, this,
           &FindReplacePanel::refreshSearchResults);
 
+  // Sync inline toggle buttons with the Options-panel checkboxes
+  connect(ui->btnMatchCase, &QToolButton::toggled, ui->matchCase,
+          &QCheckBox::setChecked);
+  connect(ui->matchCase, &QCheckBox::toggled, ui->btnMatchCase,
+          &QToolButton::setChecked);
+  connect(ui->btnRegex, &QToolButton::toggled, ui->useRegex,
+          &QCheckBox::setChecked);
+  connect(ui->useRegex, &QCheckBox::toggled, ui->btnRegex,
+          &QToolButton::setChecked);
+
+  // Re-trigger search when inline toggles change
+  auto retriggerSearch = [this]() {
+    if (!ui->searchFind->text().isEmpty()) {
+      onSearchTextChanged(ui->searchFind->text());
+    }
+  };
+  connect(ui->btnMatchCase, &QToolButton::toggled, this, retriggerSearch);
+  connect(ui->btnRegex, &QToolButton::toggled, this, retriggerSearch);
+
+  // File mask is only relevant in global mode; hide initially
+  ui->fileMaskWidget->setVisible(isGlobalMode());
+
   updateModeUI();
   updateCounterLabels();
+
+  ui->find->setToolTip(tr("Find Next (Enter)"));
+  ui->findPrevious->setToolTip(tr("Find Previous (Shift+Enter)"));
+  ui->replaceSingle->setToolTip(tr("Replace Next"));
+  ui->replaceAll->setToolTip(tr("Replace All"));
+  ui->more->setToolTip(tr("Toggle search options"));
+  ui->close->setToolTip(tr("Close (Escape)"));
+  ui->matchCase->setToolTip(tr("Only match results with the same case"));
+  ui->searchStart->setToolTip(tr("Start searching from the beginning of the file"));
+  ui->searchBackward->setToolTip(tr("Search from bottom to top"));
+  ui->wholeWords->setToolTip(tr("Only match whole words"));
+  ui->useRegex->setToolTip(tr("Interpret the search term as a regular expression"));
+  ui->preserveCase->setToolTip(tr("Preserve the case of the original text when replacing"));
 }
 
 FindReplacePanel::~FindReplacePanel() { delete ui; }
@@ -261,6 +299,9 @@ void FindReplacePanel::setVimCommandMode(bool enabled) {
     ui->currentIndex->setVisible(false);
     ui->totalFound->setVisible(false);
     ui->label->setVisible(false);
+    ui->btnMatchCase->setVisible(false);
+    ui->btnRegex->setVisible(false);
+    ui->fileMaskWidget->setVisible(false);
     ui->searchBackward->setChecked(false);
     ui->searchStart->setChecked(true);
   } else {
@@ -271,7 +312,10 @@ void FindReplacePanel::setVimCommandMode(bool enabled) {
     ui->currentIndex->setVisible(true);
     ui->totalFound->setVisible(true);
     ui->label->setVisible(true);
-    ui->findWhat->setText("Find what :");
+    ui->btnMatchCase->setVisible(true);
+    ui->btnRegex->setVisible(true);
+    ui->fileMaskWidget->setVisible(isGlobalMode());
+    ui->findWhat->setText("Find:");
   }
 }
 
@@ -288,24 +332,78 @@ void FindReplacePanel::setSearchText(const QString &text) {
 }
 
 bool FindReplacePanel::eventFilter(QObject *obj, QEvent *event) {
-  if (obj == ui->searchFind && event->type() == QEvent::KeyPress) {
+  if ((obj == ui->searchFind || obj == ui->fieldReplace) &&
+      event->type() == QEvent::KeyPress) {
     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-    if (!m_vimCommandMode && (keyEvent->modifiers() & Qt::ControlModifier) &&
-        keyEvent->key() == Qt::Key_R) {
-      setGlobalMode(false);
-      setOnlyFind(false);
-      setReplaceVisibility(true);
+
+    if (keyEvent->key() == Qt::Key_Escape) {
+      on_close_clicked();
       return true;
     }
-    if (!m_vimCommandMode && (keyEvent->modifiers() & Qt::ControlModifier) &&
-        keyEvent->key() == Qt::Key_F) {
-      setGlobalMode(false);
-      setOnlyFind(true);
-      setReplaceVisibility(false);
-      return true;
+
+    if (obj == ui->searchFind) {
+      if (!m_vimCommandMode && (keyEvent->modifiers() & Qt::ControlModifier) &&
+          keyEvent->key() == Qt::Key_R) {
+        setGlobalMode(false);
+        setOnlyFind(false);
+        setReplaceVisibility(true);
+        return true;
+      }
+      if (!m_vimCommandMode && (keyEvent->modifiers() & Qt::ControlModifier) &&
+          keyEvent->key() == Qt::Key_F) {
+        setGlobalMode(false);
+        setOnlyFind(true);
+        setReplaceVisibility(false);
+        return true;
+      }
+      if (!m_vimCommandMode &&
+          (keyEvent->key() == Qt::Key_Return ||
+           keyEvent->key() == Qt::Key_Enter)) {
+        if (keyEvent->modifiers() & Qt::ShiftModifier) {
+          on_findPrevious_clicked();
+        } else {
+          on_find_clicked();
+        }
+        return true;
+      }
+      if (!m_vimCommandMode && keyEvent->key() == Qt::Key_Up &&
+          !(keyEvent->modifiers() & Qt::ControlModifier)) {
+        if (!searchHistory.isEmpty()) {
+          searchHistoryIndex++;
+          if (searchHistoryIndex >= searchHistory.size()) {
+            searchHistoryIndex = searchHistory.size() - 1;
+          }
+          ui->searchFind->setText(searchHistory[searchHistoryIndex]);
+        }
+        return true;
+      }
+      if (!m_vimCommandMode && keyEvent->key() == Qt::Key_Down &&
+          !(keyEvent->modifiers() & Qt::ControlModifier)) {
+        if (!searchHistory.isEmpty() && searchHistoryIndex >= 0) {
+          searchHistoryIndex--;
+          if (searchHistoryIndex < 0) {
+            searchHistoryIndex = -1;
+            ui->searchFind->clear();
+          } else {
+            ui->searchFind->setText(searchHistory[searchHistoryIndex]);
+          }
+        }
+        return true;
+      }
+      if (m_vimCommandMode) {
+        handleVimCommandKey(keyEvent);
+        return true;
+      }
     }
-    if (m_vimCommandMode) {
-      handleVimCommandKey(keyEvent);
+
+    if (obj == ui->fieldReplace && !m_vimCommandMode &&
+        (keyEvent->key() == Qt::Key_Return ||
+         keyEvent->key() == Qt::Key_Enter)) {
+      if (keyEvent->modifiers() & Qt::ShiftModifier) {
+        on_replaceAll_clicked();
+      } else {
+        on_replaceSingle_clicked();
+      }
       return true;
     }
   }
@@ -395,6 +493,7 @@ void FindReplacePanel::updateModeUI() {
 
   ui->searchStart->setEnabled(!isGlobal);
   ui->searchBackward->setEnabled(!isGlobal);
+  ui->fileMaskWidget->setVisible(isGlobal);
 
   if (isGlobal) {
     positions.clear();
@@ -675,9 +774,16 @@ void FindReplacePanel::updateCounterLabels() {
 
   if (isGlobalMode()) {
     if (globalResults.isEmpty()) {
-      ui->currentIndex->hide();
-      ui->totalFound->hide();
-      ui->label->hide();
+      if (searchExecuted && !activeSearchWord.isEmpty()) {
+        ui->currentIndex->setText(tr("No results"));
+        ui->currentIndex->show();
+        ui->totalFound->hide();
+        ui->label->hide();
+      } else {
+        ui->currentIndex->hide();
+        ui->totalFound->hide();
+        ui->label->hide();
+      }
     } else {
       if (ui->currentIndex->isHidden()) {
         ui->currentIndex->show();
@@ -692,9 +798,16 @@ void FindReplacePanel::updateCounterLabels() {
   }
 
   if (positions.isEmpty()) {
-    ui->currentIndex->hide();
-    ui->totalFound->hide();
-    ui->label->hide();
+    if (searchExecuted && !activeSearchWord.isEmpty()) {
+      ui->currentIndex->setText(tr("No results"));
+      ui->currentIndex->show();
+      ui->totalFound->hide();
+      ui->label->hide();
+    } else {
+      ui->currentIndex->hide();
+      ui->totalFound->hide();
+      ui->label->hide();
+    }
   } else {
     if (ui->currentIndex->isHidden()) {
       ui->currentIndex->show();
@@ -986,6 +1099,20 @@ QStringList FindReplacePanel::getProjectFiles() const {
     return files;
   }
 
+  // Parse file mask patterns from the UI field (comma-separated, e.g. "*.cpp, *.h")
+  QStringList maskPatterns;
+  if (ui->fileMaskEdit) {
+    QString maskText = ui->fileMaskEdit->text().trimmed();
+    if (!maskText.isEmpty()) {
+      for (const QString &token : maskText.split(',')) {
+        QString pattern = token.trimmed();
+        if (!pattern.isEmpty()) {
+          maskPatterns.append(pattern);
+        }
+      }
+    }
+  }
+
   QDirIterator it(projectPath, QDir::Files | QDir::NoDotAndDotDot,
                   QDirIterator::Subdirectories);
 
@@ -997,9 +1124,34 @@ QStringList FindReplacePanel::getProjectFiles() const {
       "toml",  "md",   "txt",     "rst",  "sql",  "sh",   "bash", "zsh",
       "cmake", "make", "makefile"};
 
+  // Pre-compile glob patterns for file mask matching
+  QVector<QRegularExpression> maskRegexes;
+  for (const QString &pattern : maskPatterns) {
+    QString regexPattern = QRegularExpression::wildcardToRegularExpression(pattern);
+    QRegularExpression re(regexPattern, QRegularExpression::CaseInsensitiveOption);
+    if (re.isValid()) {
+      maskRegexes.append(re);
+    }
+  }
+
   while (it.hasNext()) {
     QString filePath = it.next();
     QFileInfo fileInfo(filePath);
+    QString fileName = fileInfo.fileName();
+
+    // If a file mask is set, use it instead of the default extension list
+    if (!maskRegexes.isEmpty()) {
+      bool matched = std::any_of(
+          maskRegexes.cbegin(), maskRegexes.cend(),
+          [&fileName](const QRegularExpression &re) {
+            return re.match(fileName).hasMatch();
+          });
+      if (matched) {
+        files.append(filePath);
+      }
+      continue;
+    }
+
     QString ext = fileInfo.suffix().toLower();
     QString fileNameLower = fileInfo.baseName().toLower();
 
