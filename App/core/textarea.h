@@ -139,6 +139,7 @@ public:
 
   void setDiagnostics(const QList<LspDiagnostic> &diagnostics);
   void clearDiagnostics();
+  const QList<LspDiagnostic> &diagnostics() const { return m_diagnostics; }
 
 protected:
   void resizeEvent(QResizeEvent *event) override;

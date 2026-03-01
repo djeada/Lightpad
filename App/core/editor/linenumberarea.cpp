@@ -331,7 +331,7 @@ bool LineNumberArea::event(QEvent *event) {
             m_diagnosticLines.contains(lineNum)) {
           QStringList messages;
           if (m_editor) {
-            for (const LspDiagnostic &diag : m_editor->m_diagnostics) {
+            for (const LspDiagnostic &diag : m_editor->diagnostics()) {
               if (diag.range.start.line + 1 == lineNum) {
                 QString prefix;
                 switch (diag.severity) {
@@ -665,8 +665,11 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
           break;
         }
 
+        static constexpr int MIN_MARKER_DIAMETER = 4;
+        static constexpr int MARKER_PADDING = 4;
         const int markerDiameter =
-            qMax(4, qMin(DIAGNOSTIC_MARKER_SIZE, fontHeight - 4));
+            qMax(MIN_MARKER_DIAMETER,
+                 qMin(DIAGNOSTIC_MARKER_SIZE, fontHeight - MARKER_PADDING));
         const int markerX =
             DIFF_INDICATOR_WIDTH +
             (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;

@@ -1205,12 +1205,13 @@ void TextArea::updateExtraSelections() {
     selection.format = fmt;
 
     QTextCursor diagCursor(startBlock);
+    int maxStartCol = qMax(0, startBlock.length() - 1);
     diagCursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
-                            qMin(startCol, startBlock.length() - 1));
+                            qMin(startCol, maxStartCol));
     if (startLine == endLine && endCol > startCol) {
       diagCursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
                               qMin(endCol - startCol,
-                                   startBlock.length() - 1 - startCol));
+                                   qMax(0, startBlock.length() - 1 - startCol)));
     } else if (endLine > startLine) {
       diagCursor.movePosition(QTextCursor::EndOfBlock,
                               QTextCursor::KeepAnchor);

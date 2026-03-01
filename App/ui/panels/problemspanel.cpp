@@ -59,29 +59,25 @@ void ProblemsPanel::setupUI() {
           &ProblemsPanel::onAutoRefreshToggled);
   headerLayout->addWidget(m_autoRefreshCheckBox);
 
-  auto *clearFileButton = new QPushButton(tr("Clear File"), m_header);
-  clearFileButton->setStyleSheet(
+  const QString buttonStyle =
       "QPushButton { background: #1f2632; color: #e6edf3; border: 1px solid "
       "#2a3241; padding: 2px 8px; }"
-      "QPushButton:hover { background: #2a3241; }");
+      "QPushButton:hover { background: #2a3241; }";
+
+  auto *clearFileButton = new QPushButton(tr("Clear File"), m_header);
+  clearFileButton->setStyleSheet(buttonStyle);
   connect(clearFileButton, &QPushButton::clicked, this,
           &ProblemsPanel::clearCurrentFile);
   headerLayout->addWidget(clearFileButton);
 
   auto *clearAllButton = new QPushButton(tr("Clear All"), m_header);
-  clearAllButton->setStyleSheet(
-      "QPushButton { background: #1f2632; color: #e6edf3; border: 1px solid "
-      "#2a3241; padding: 2px 8px; }"
-      "QPushButton:hover { background: #2a3241; }");
+  clearAllButton->setStyleSheet(buttonStyle);
   connect(clearAllButton, &QPushButton::clicked, this,
           &ProblemsPanel::clearAll);
   headerLayout->addWidget(clearAllButton);
 
   auto *copyButton = new QPushButton(tr("Copy"), m_header);
-  copyButton->setStyleSheet(
-      "QPushButton { background: #1f2632; color: #e6edf3; border: 1px solid "
-      "#2a3241; padding: 2px 8px; }"
-      "QPushButton:hover { background: #2a3241; }");
+  copyButton->setStyleSheet(buttonStyle);
   connect(copyButton, &QPushButton::clicked, this,
           &ProblemsPanel::copySelectedMessage);
   headerLayout->addWidget(copyButton);
