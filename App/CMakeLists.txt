@@ -103,6 +103,9 @@ set(project_headers
     editor/vimmode.h
     i18n/i18n.h
     language/languagecatalog.h
+    language/languagefeaturemanager.h
+    diagnostics/diagnosticsmanager.h
+    diagnostics/diagnosticutils.h
     lsp/lspclient.h
     plugins/iplugin.h
     plugins/isyntaxplugin.h
@@ -223,6 +226,8 @@ set(project_sources
     editor/vimmode.cpp
     i18n/i18n.cpp
     lsp/lspclient.cpp
+    language/languagefeaturemanager.cpp
+    diagnostics/diagnosticsmanager.cpp
     plugins/pluginmanager.cpp
     syntax/lightpadsyntaxhighlighter.cpp
     syntax/pluginbasedsyntaxhighlighter.cpp

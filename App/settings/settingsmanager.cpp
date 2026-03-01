@@ -53,6 +53,13 @@ void SettingsManager::initializeDefaults() {
   m_defaults["treeStateByRoot"] = QJsonObject();
   m_defaults["showSourceControlDock"] = true;
 
+  QJsonObject diagnosticsDefaults;
+  diagnosticsDefaults["enabled"] = true;
+  diagnosticsDefaults["onType"] = true;
+  diagnosticsDefaults["onSave"] = true;
+  diagnosticsDefaults["debounceMs"] = 200;
+  m_defaults["diagnostics"] = diagnosticsDefaults;
+
   m_settings = m_defaults;
 }
 
