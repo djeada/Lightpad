@@ -32,7 +32,7 @@ Terminal::Terminal(QWidget *parent)
       m_urlRegex(R"((https?://|ftp://|file://)[^\s<>\"\'\]\)]+)"),
       m_filePathRegex(R"((?:^|[\s:])(/[^\s:]+|[A-Za-z]:\\[^\s:]+))"),
       m_inputStartPosition(0), m_baseFontSize(kDefaultFontSize),
-      m_contextMenu(nullptr) {
+      m_contextMenu(nullptr), m_copyAction(nullptr) {
   ui->setupUi(this);
   ui->closeButton->setText(QStringLiteral("\u00D7"));
   ui->closeButton->setToolTip(tr("Close Terminal"));
@@ -1369,9 +1369,9 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
 void Terminal::setupContextMenu() {
   m_contextMenu = new QMenu(this);
 
-  QAction *copyAction = m_contextMenu->addAction(tr("Copy"));
-  copyAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C));
-  connect(copyAction, &QAction::triggered, this,
+  m_copyAction = m_contextMenu->addAction(tr("Copy"));
+  m_copyAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C));
+  connect(m_copyAction, &QAction::triggered, this,
           [this]() { ui->textEdit->copy(); });
 
   QAction *pasteAction = m_contextMenu->addAction(tr("Paste"));
@@ -1394,12 +1394,8 @@ void Terminal::setupContextMenu() {
   ui->textEdit->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(ui->textEdit, &QPlainTextEdit::customContextMenuRequested, this,
           [this](const QPoint &pos) {
-            QList<QAction *> actions = m_contextMenu->actions();
-            for (QAction *action : actions) {
-              if (action->text() == tr("Copy")) {
-                action->setEnabled(ui->textEdit->textCursor().hasSelection());
-              }
-            }
+            m_copyAction->setEnabled(
+                ui->textEdit->textCursor().hasSelection());
             m_contextMenu->exec(ui->textEdit->mapToGlobal(pos));
           });
 }

@@ -175,6 +175,7 @@ private:
   static const int kDefaultFontSize = 11;
 
   QMenu *m_contextMenu;
+  QAction *m_copyAction;
 };
 
 #endif
