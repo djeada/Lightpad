@@ -1319,6 +1319,7 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey,
     auto *pluginHighlighter =
         new PluginBasedSyntaxHighlighter(plugin, colors, searchKey, document());
     syntaxHighlighter = pluginHighlighter;
+    updateHighlighterViewport();
     return;
   }
 

@@ -20,16 +20,14 @@ public:
 
   QString searchKeyword() const { return m_searchKeyword; }
 
-  void setVisibleBlockRange(int first, int last) {
-    m_firstVisibleBlock = first;
-    m_lastVisibleBlock = last;
-  }
+  void setVisibleBlockRange(int first, int last);
 
 protected:
   void highlightBlock(const QString &text) override;
 
 private:
   bool isBlockVisible(int blockNumber) const;
+  void rehighlightBlockRange(int firstBlock, int lastBlock);
 
   void loadRulesFromPlugin(ISyntaxPlugin *plugin, const Theme &theme);
 
@@ -45,8 +43,8 @@ private:
 
   QTextCharFormat m_searchFormat;
 
-  int m_firstVisibleBlock = 0;
-  int m_lastVisibleBlock = 1000;
+  int m_firstVisibleBlock = -1;
+  int m_lastVisibleBlock = -1;
 
   static constexpr int VIEWPORT_BUFFER = 50;
 };

@@ -5,8 +5,8 @@ PluginBasedSyntaxHighlighter::PluginBasedSyntaxHighlighter(
     ISyntaxPlugin *plugin, const Theme &theme, const QString &searchKeyword,
     QTextDocument *parent)
     : QSyntaxHighlighter(parent), m_theme(theme),
-      m_searchKeyword(searchKeyword), m_firstVisibleBlock(0),
-      m_lastVisibleBlock(1000) {
+      m_searchKeyword(searchKeyword), m_firstVisibleBlock(-1),
+      m_lastVisibleBlock(-1) {
   if (!plugin) {
     Logger::instance().warning(
         "PluginBasedSyntaxHighlighter created with null plugin");
@@ -21,6 +21,43 @@ PluginBasedSyntaxHighlighter::PluginBasedSyntaxHighlighter(
 void PluginBasedSyntaxHighlighter::setSearchKeyword(const QString &keyword) {
   m_searchKeyword = keyword;
   rehighlight();
+}
+
+void PluginBasedSyntaxHighlighter::setVisibleBlockRange(int first, int last) {
+  if (!document()) {
+    return;
+  }
+
+  int newFirst = qMax(0, first);
+  int newLast = qMax(newFirst, last);
+
+  if (newFirst == m_firstVisibleBlock && newLast == m_lastVisibleBlock) {
+    return;
+  }
+
+  bool wasInitialized = (m_firstVisibleBlock >= 0 && m_lastVisibleBlock >= 0);
+  int oldFirst = m_firstVisibleBlock;
+  int oldLast = m_lastVisibleBlock;
+  m_firstVisibleBlock = newFirst;
+  m_lastVisibleBlock = newLast;
+
+  if (!wasInitialized) {
+    rehighlightBlockRange(m_firstVisibleBlock - VIEWPORT_BUFFER,
+                          m_lastVisibleBlock + VIEWPORT_BUFFER);
+    return;
+  }
+
+  int oldMin = oldFirst - VIEWPORT_BUFFER;
+  int oldMax = oldLast + VIEWPORT_BUFFER;
+  int newMin = m_firstVisibleBlock - VIEWPORT_BUFFER;
+  int newMax = m_lastVisibleBlock + VIEWPORT_BUFFER;
+
+  if (newMin < oldMin) {
+    rehighlightBlockRange(newMin, qMin(oldMin - 1, newMax));
+  }
+  if (newMax > oldMax) {
+    rehighlightBlockRange(qMax(oldMax + 1, newMin), newMax);
+  }
 }
 
 void PluginBasedSyntaxHighlighter::loadRulesFromPlugin(ISyntaxPlugin *plugin,
@@ -166,9 +203,36 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
 }
 
 bool PluginBasedSyntaxHighlighter::isBlockVisible(int blockNumber) const {
+  if (m_firstVisibleBlock < 0 || m_lastVisibleBlock < 0) {
+    return true;
+  }
 
   int minBlock = m_firstVisibleBlock - VIEWPORT_BUFFER;
   int maxBlock = m_lastVisibleBlock + VIEWPORT_BUFFER;
 
   return (blockNumber >= minBlock && blockNumber <= maxBlock);
+}
+
+void PluginBasedSyntaxHighlighter::rehighlightBlockRange(int firstBlock,
+                                                         int lastBlock) {
+  if (!document()) {
+    return;
+  }
+
+  int blockCount = document()->blockCount();
+  if (blockCount <= 0) {
+    return;
+  }
+
+  int clampedFirst = qBound(0, firstBlock, blockCount - 1);
+  int clampedLast = qBound(0, lastBlock, blockCount - 1);
+  if (clampedFirst > clampedLast) {
+    return;
+  }
+
+  QTextBlock block = document()->findBlockByNumber(clampedFirst);
+  for (int current = clampedFirst; block.isValid() && current <= clampedLast;
+       ++current, block = block.next()) {
+    rehighlightBlock(block);
+  }
 }
