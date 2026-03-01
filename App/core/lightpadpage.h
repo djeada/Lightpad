@@ -82,6 +82,7 @@ public:
   void refreshGitStatus();
   void activateTreeIndex(const QModelIndex &index);
   void applyTheme(const Theme &theme);
+  MainWindow *getMainWindow() const;
 
 private:
   MainWindow *mainWindow;
