@@ -1,4 +1,5 @@
 #include "findreplacepanel.h"
+#include "../../core/async/asyncworker.h"
 #include "../../core/lightpadtabwidget.h"
 #include "../../core/textarea.h"
 #include "../../editor/vimmode.h"
@@ -11,7 +12,6 @@
 #include <QDebug>
 #include <QDir>
 #include <QDirIterator>
-#include <QEventLoop>
 #include <QFile>
 #include <QHeaderView>
 #include <QKeyEvent>
@@ -25,6 +25,7 @@
 #include <QTimer>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+#include <memory>
 
 namespace {
 constexpr int kDataRoleFilePath = Qt::UserRole;
@@ -63,7 +64,7 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
       m_vimCommandMode(false), position(-1), globalResultIndex(-1),
       resultsTree(nullptr), searchHistoryIndex(-1),
       refreshTimer(new QTimer(this)), searchStatusLabel(nullptr),
-      searchInProgress(false), searchExecuted(false) {
+      searchInProgress(false), searchExecuted(false), m_localSearchRequestId(0) {
   ui->setupUi(this);
 
   show();
@@ -175,7 +176,13 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   ui->preserveCase->setToolTip(tr("Preserve the case of the original text when replacing"));
 }
 
-FindReplacePanel::~FindReplacePanel() { delete ui; }
+FindReplacePanel::~FindReplacePanel() {
+  if (m_localSearchTask) {
+    m_localSearchTask->cancel();
+    m_localSearchTask.clear();
+  }
+  delete ui;
+}
 
 void FindReplacePanel::setReplaceVisibility(bool flag) {
   ui->widget->setVisible(flag);
@@ -199,7 +206,6 @@ void FindReplacePanel::setTextArea(TextArea *area) {
   }
 
   textArea = area;
-  lastObservedPlainText = textArea ? textArea->toPlainText() : QString();
 
   if (textArea && textArea->document()) {
     textAreaContentsChangedConnection =
@@ -1040,9 +1046,6 @@ void FindReplacePanel::onSearchTextChanged(const QString &text) {
 
   activeSearchWord = text;
   searchExecuted = !text.isEmpty();
-  if (textArea) {
-    lastObservedPlainText = textArea->toPlainText();
-  }
   if (text.isEmpty()) {
     clearSearchFeedback();
   } else {
@@ -1060,7 +1063,6 @@ void FindReplacePanel::beginSearchFeedback(const QString &message) {
   searchInProgress = true;
   searchStatusLabel->setText(message);
   searchStatusLabel->setVisible(true);
-  qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
 }
 
 void FindReplacePanel::updateSearchFeedback(const QString &message) {
@@ -1071,7 +1073,6 @@ void FindReplacePanel::updateSearchFeedback(const QString &message) {
   if (!searchStatusLabel->isVisible()) {
     searchStatusLabel->setVisible(true);
   }
-  qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
 }
 
 void FindReplacePanel::endSearchFeedback(int matchCount) {
@@ -1232,11 +1233,6 @@ void FindReplacePanel::onTextAreaContentsChanged() {
   if (!textArea) {
     return;
   }
-  QString currentPlainText = textArea->toPlainText();
-  if (currentPlainText == lastObservedPlainText) {
-    return;
-  }
-  lastObservedPlainText = currentPlainText;
   refreshTimer->start(250);
 }
 
@@ -1249,6 +1245,11 @@ void FindReplacePanel::refreshSearchResults() {
 
   QString searchWord = ui->searchFind->text();
   if (searchWord.isEmpty()) {
+    ++m_localSearchRequestId;
+    if (m_localSearchTask) {
+      m_localSearchTask->cancel();
+      m_localSearchTask.clear();
+    }
     positions.clear();
     position = -1;
     globalResults.clear();
@@ -1269,16 +1270,31 @@ void FindReplacePanel::refreshSearchResults() {
   }
 
   if (searchWord != activeSearchWord) {
+    ++m_localSearchRequestId;
+    if (m_localSearchTask) {
+      m_localSearchTask->cancel();
+      m_localSearchTask.clear();
+    }
     clearSearchFeedback();
     return;
   }
 
   if (isGlobalMode()) {
+    ++m_localSearchRequestId;
+    if (m_localSearchTask) {
+      m_localSearchTask->cancel();
+      m_localSearchTask.clear();
+    }
     refreshGlobalResultsForCurrentFile(searchWord);
     return;
   }
 
   if (!textArea) {
+    ++m_localSearchRequestId;
+    if (m_localSearchTask) {
+      m_localSearchTask->cancel();
+      m_localSearchTask.clear();
+    }
     if (!isGlobalMode()) {
       positions.clear();
       position = -1;
@@ -1294,6 +1310,11 @@ void FindReplacePanel::refreshSearchResults() {
 
   QRegularExpression pattern = buildSearchPattern(searchWord);
   if (!pattern.isValid()) {
+    ++m_localSearchRequestId;
+    if (m_localSearchTask) {
+      m_localSearchTask->cancel();
+      m_localSearchTask.clear();
+    }
     positions.clear();
     position = -1;
     if (resultsTree) {
@@ -1306,23 +1327,102 @@ void FindReplacePanel::refreshSearchResults() {
   }
 
   QString text = textArea->toPlainText();
-  QVector<int> refreshedPositions;
-  QRegularExpressionMatchIterator matches = pattern.globalMatch(text);
-  while (matches.hasNext()) {
-    QRegularExpressionMatch match = matches.next();
-    refreshedPositions.push_back(match.capturedStart());
+
+  if (text.size() < kAsyncLocalSearchThresholdChars) {
+    ++m_localSearchRequestId;
+    if (m_localSearchTask) {
+      m_localSearchTask->cancel();
+      m_localSearchTask.clear();
+    }
+
+    QVector<int> refreshedPositions;
+    QRegularExpressionMatchIterator matches = pattern.globalMatch(text);
+    while (matches.hasNext()) {
+      QRegularExpressionMatch match = matches.next();
+      refreshedPositions.push_back(match.capturedStart());
+    }
+
+    if (ui->searchBackward->isChecked()) {
+      std::reverse(refreshedPositions.begin(), refreshedPositions.end());
+    }
+
+    applyLocalSearchResults(searchWord, std::move(refreshedPositions));
+    return;
   }
 
-  if (ui->searchBackward->isChecked()) {
-    std::reverse(refreshedPositions.begin(), refreshedPositions.end());
+  const bool searchBackward = ui->searchBackward->isChecked();
+  const int requestId = ++m_localSearchRequestId;
+  if (m_localSearchTask) {
+    m_localSearchTask->cancel();
+    m_localSearchTask.clear();
   }
 
+  auto refreshedPositions = std::make_shared<QVector<int>>();
+  AsyncTask *task = AsyncThreadPool::instance().submitTask(
+      [text = std::move(text), pattern, searchBackward, refreshedPositions](
+          AsyncTask *worker) {
+        QRegularExpressionMatchIterator matches = pattern.globalMatch(text);
+        int scanCount = 0;
+        while (matches.hasNext()) {
+          if ((++scanCount & 0xFF) == 0 && worker->isCancelled()) {
+            return;
+          }
+          QRegularExpressionMatch match = matches.next();
+          refreshedPositions->push_back(match.capturedStart());
+        }
+
+        if (searchBackward) {
+          std::reverse(refreshedPositions->begin(), refreshedPositions->end());
+        }
+      });
+  m_localSearchTask = task;
+
+  connect(task, &AsyncTask::finished, task, &QObject::deleteLater);
+  connect(task, &AsyncTask::cancelled, task, &QObject::deleteLater);
+  connect(task, &AsyncTask::error, task, &QObject::deleteLater);
+
+  connect(task, &AsyncTask::finished, this,
+          [this, task, requestId, searchWord, searchBackward,
+           refreshedPositions]() {
+            if (m_localSearchTask == task) {
+              m_localSearchTask.clear();
+            }
+            if (requestId != m_localSearchRequestId) {
+              return;
+            }
+            if (!isVisible() || m_vimCommandMode || !searchExecuted ||
+                !textArea || isGlobalMode()) {
+              return;
+            }
+            if (searchWord != activeSearchWord || ui->searchFind->text() != searchWord) {
+              return;
+            }
+            if (ui->searchBackward->isChecked() != searchBackward) {
+              return;
+            }
+            applyLocalSearchResults(searchWord, *refreshedPositions);
+          });
+
+  connect(task, &AsyncTask::cancelled, this, [this, task]() {
+    if (m_localSearchTask == task) {
+      m_localSearchTask.clear();
+    }
+  });
+  connect(task, &AsyncTask::error, this, [this, task](const QString &) {
+    if (m_localSearchTask == task) {
+      m_localSearchTask.clear();
+    }
+  });
+}
+
+void FindReplacePanel::applyLocalSearchResults(
+    const QString &searchWord, QVector<int> refreshedPositions) {
   int previousPosition = -1;
   if (position >= 0 && position < positions.size()) {
     previousPosition = positions[position];
   }
 
-  positions = refreshedPositions;
+  positions = std::move(refreshedPositions);
   position = -1;
 
   if (!positions.isEmpty()) {

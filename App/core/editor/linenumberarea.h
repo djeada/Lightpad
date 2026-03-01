@@ -72,6 +72,9 @@ private:
   QMap<int, QString> m_gitBlameLines;
   QMap<int, GitBlameLineInfo> m_richBlameData;
   QMap<int, qint64> m_heatmapTimestamps;
+  qint64 m_heatmapMinTimestamp = 0;
+  qint64 m_heatmapMaxTimestamp = 0;
+  bool m_heatmapRangeValid = false;
   bool m_heatmapEnabled;
   int m_blameTextWidth;
   bool m_foldingEnabled;

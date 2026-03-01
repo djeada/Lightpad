@@ -209,6 +209,7 @@ private:
   void drawMatchingBrackets();
   void updateExtraSelections();
   void updateCursorPositionChangedCallbacks();
+  void scheduleExtraSelectionsRefresh();
   void insertCompletion(const QString &completion);
   void insertCompletionItem(const CompletionItem &item);
   QString textUnderCursor() const;
@@ -228,6 +229,7 @@ private slots:
 private:
   void drawExtraCursors();
   int m_lastCompletionRequestPosition = -1;
+  bool m_extraSelectionRefreshPending = false;
 };
 
 #endif

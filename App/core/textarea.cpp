@@ -17,6 +17,7 @@
 #include <QTextBlockFormat>
 #include <QTextCursor>
 #include <QTextEdit>
+#include <QTimer>
 #include <QtGlobal>
 #include <algorithm>
 #include <functional>
@@ -1180,7 +1181,13 @@ void TextArea::updateExtraSelections() {
     extraSelections.append(selection);
   }
 
-  if (matchingBracketsHighlighted) {
+  // Full-document bracket scans are expensive on large files and can make
+  // cursor movement feel laggy.
+  constexpr int kBracketScanCharacterLimit = 200000;
+  const bool canScanBrackets =
+      document() &&
+      document()->characterCount() <= kBracketScanCharacterLimit;
+  if (matchingBracketsHighlighted && canScanBrackets) {
     auto addBracketSelection =
         [&](QTextCursor::MoveOperation op, const QChar &startStr,
             const QChar &endStr,
@@ -1238,14 +1245,26 @@ void TextArea::updateCursorPositionChangedCallbacks() {
   auto refresh = [this]() {
     invalidateCompletionRequest();
     hideCompletionPopup();
-    updateExtraSelections();
     updateRowColDisplay();
+    scheduleExtraSelectionsRefresh();
   };
 
   connect(this, &TextArea::cursorPositionChanged, this, refresh);
   connect(this, &TextArea::selectionChanged, this, refresh);
 
   refresh();
+}
+
+void TextArea::scheduleExtraSelectionsRefresh() {
+  if (m_extraSelectionRefreshPending) {
+    return;
+  }
+
+  m_extraSelectionRefreshPending = true;
+  QTimer::singleShot(16, this, [this]() {
+    m_extraSelectionRefreshPending = false;
+    updateExtraSelections();
+  });
 }
 
 void TextArea::lineNumberAreaPaintEvent(QPaintEvent *event) {
@@ -1258,13 +1277,33 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent *event) {
 
 void TextArea::updateSyntaxHighlightTags(QString searchKey,
                                          QString chosenLang) {
+  bool languageChanged = false;
+  if (!chosenLang.isNull()) {
+    QString normalized = LanguageCatalog::normalize(chosenLang);
+    languageChanged = (normalized != highlightLang);
+    highlightLang = normalized;
+  }
 
+  const bool searchChanged = (searchWord != searchKey);
   searchWord = searchKey;
 
   auto colors = mainWindow->getTheme();
 
-  if (!chosenLang.isNull()) {
-    highlightLang = LanguageCatalog::normalize(chosenLang);
+  if (!languageChanged && syntaxHighlighter) {
+    if (auto *pluginHighlighter =
+            qobject_cast<PluginBasedSyntaxHighlighter *>(syntaxHighlighter)) {
+      if (searchChanged) {
+        pluginHighlighter->setSearchKeyword(searchKey);
+      }
+      updateHighlighterViewport();
+      return;
+    }
+
+    if (searchChanged) {
+      syntaxHighlighter->rehighlight();
+    }
+    updateHighlighterViewport();
+    return;
   }
 
   if (syntaxHighlighter) {
