@@ -11,6 +11,7 @@ Preferences::Preferences(MainWindow *parent)
       preferencesEditor(nullptr) {
 
   ui->setupUi(this);
+  setAttribute(Qt::WA_DeleteOnClose, true);
 
   setWindowTitle("Lightpad Preferences");
   setupParent();
@@ -25,7 +26,6 @@ void Preferences::setTabWidthLabel(const QString &text) {
 }
 
 void Preferences::closeEvent(QCloseEvent *event) {
-  emit destroyed();
   event->accept();
 }
 

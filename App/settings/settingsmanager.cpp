@@ -34,6 +34,7 @@ void SettingsManager::initializeDefaults() {
   m_defaults["tabWidth"] = 4;
   m_defaults["trimTrailingWhitespace"] = false;
   m_defaults["insertFinalNewline"] = false;
+  m_defaults["autoSaveFiles"] = true;
 
   QJsonObject themeDefaults;
   themeDefaults["backgroundColor"] = "#0e1116";

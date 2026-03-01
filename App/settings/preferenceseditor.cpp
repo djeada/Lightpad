@@ -2,12 +2,24 @@
 #include "../ui/mainwindow.h"
 #include "../ui/popup.h"
 #include "ui_preferenceseditor.h"
+#include <QSignalBlocker>
 
 PreferencesEditor::PreferencesEditor(MainWindow *parent)
     : QWidget(nullptr), ui(new Ui::PreferencesEditor), parentWindow(parent),
       popupTabWidth(nullptr) {
   ui->setupUi(this);
   ui->tabWidth->setText("Tab width: " + QString::number(parent->getTabWidth()));
+  {
+    QSignalBlocker blocker(ui->checkBoxAutoSave);
+    ui->checkBoxAutoSave->setChecked(parentWindow
+                                         ? parentWindow->isAutoSaveEnabled()
+                                         : true);
+  }
+  connect(ui->checkBoxAutoSave, &QCheckBox::toggled, this, [this](bool checked) {
+    if (parentWindow) {
+      parentWindow->setAutoSaveEnabled(checked);
+    }
+  });
 }
 
 PreferencesEditor::~PreferencesEditor() { delete ui; }

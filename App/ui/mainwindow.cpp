@@ -28,6 +28,7 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStringListModel>
+#include <QTextDocument>
 #include <QVBoxLayout>
 #include <cstdio>
 #include <functional>
@@ -452,6 +453,10 @@ void MainWindow::loadSettings() {
   SettingsManager &globalSettings = SettingsManager::instance();
   globalSettings.loadSettings();
   m_globalSettingsLoaded = true;
+  if (autoSaveManager) {
+    autoSaveManager->setEnabled(
+        globalSettings.getValue("autoSaveFiles", true).toBool());
+  }
   QString fontFamily =
       globalSettings.getValue("fontFamily", "Ubuntu Mono").toString();
   int fontSize = globalSettings.getValue("fontSize", defaultFontSize).toInt();
@@ -1492,36 +1497,96 @@ void MainWindow::open(const QString &filePath) {
   }
 }
 
-void MainWindow::save(const QString &filePath) {
-  QFile file(filePath);
+bool MainWindow::save(const QString &filePath) {
+  if (filePath.isEmpty()) {
+    return false;
+  }
 
-  if (!file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text))
-    return;
+  TextArea *textArea = nullptr;
+  LightpadTabWidget *targetTabWidget = nullptr;
+  int targetTabIndex = -1;
 
-  if (getCurrentTextArea()) {
-    TextArea *textArea = getCurrentTextArea();
-
-    SettingsManager &sm = SettingsManager::instance();
-    if (sm.getValue("trimTrailingWhitespace", false).toBool()) {
-      trimTrailingWhitespace(textArea);
-    }
-    if (sm.getValue("insertFinalNewline", false).toBool()) {
-      ensureFinalNewline(textArea);
-    }
-
-    LightpadTabWidget *tabWidget = currentTabWidget();
-    auto tabIndex = tabWidget->currentIndex();
-    tabWidget->setFilePath(tabIndex, filePath);
-
-    file.write(textArea->toPlainText().toUtf8());
-    textArea->document()->setModified(false);
-    textArea->removeIconUnsaved();
-    setFilePathAsTabText(filePath);
-
-    if (problemsPanel) {
-      problemsPanel->onFileSaved(filePath);
+  LightpadTabWidget *currentWidget = currentTabWidget();
+  if (currentWidget) {
+    int currentIndex = currentWidget->currentIndex();
+    if (currentIndex >= 0 && currentWidget->getFilePath(currentIndex) == filePath) {
+      LightpadPage *page = currentWidget->getPage(currentIndex);
+      if (page && page->getTextArea()) {
+        textArea = page->getTextArea();
+        targetTabWidget = currentWidget;
+        targetTabIndex = currentIndex;
+      }
     }
   }
+
+  if (!textArea) {
+    for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+      if (!tabWidget) {
+        continue;
+      }
+      for (int i = 0; i < tabWidget->count(); ++i) {
+        if (tabWidget->getFilePath(i) != filePath) {
+          continue;
+        }
+        LightpadPage *page = tabWidget->getPage(i);
+        if (!page || !page->getTextArea()) {
+          continue;
+        }
+        textArea = page->getTextArea();
+        targetTabWidget = tabWidget;
+        targetTabIndex = i;
+        break;
+      }
+      if (textArea) {
+        break;
+      }
+    }
+  }
+
+  if (!textArea || !targetTabWidget || targetTabIndex < 0) {
+    return false;
+  }
+
+  QFile file(filePath);
+
+  if (!file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
+    return false;
+  }
+
+  SettingsManager &sm = SettingsManager::instance();
+  if (sm.getValue("trimTrailingWhitespace", false).toBool()) {
+    trimTrailingWhitespace(textArea);
+  }
+  if (sm.getValue("insertFinalNewline", false).toBool()) {
+    ensureFinalNewline(textArea);
+  }
+
+  targetTabWidget->setFilePath(targetTabIndex, filePath);
+
+  if (file.write(textArea->toPlainText().toUtf8()) == -1) {
+    return false;
+  }
+  file.close();
+
+  textArea->document()->setModified(false);
+  textArea->removeIconUnsaved();
+
+  const QString fileName = QFileInfo(filePath).fileName();
+  targetTabWidget->setTabText(targetTabIndex, fileName);
+  if (targetTabWidget == currentTabWidget() &&
+      targetTabIndex == targetTabWidget->currentIndex()) {
+    setMainWindowTitle(fileName);
+  }
+
+  if (problemsPanel) {
+    problemsPanel->onFileSaved(filePath);
+  }
+
+  if (autoSaveManager) {
+    autoSaveManager->markSaved(filePath);
+  }
+
+  return true;
 }
 
 void MainWindow::trimTrailingWhitespace(TextArea *textArea) {
@@ -2776,6 +2841,8 @@ void MainWindow::jumpToTarget(const DefinitionTarget &target) {
 
 void MainWindow::setupAutoSave() {
   autoSaveManager = new AutoSaveManager(this, this);
+  autoSaveManager->setEnabled(
+      SettingsManager::instance().getValue("autoSaveFiles", true).toBool());
 }
 
 void MainWindow::setupGitIntegration() {
@@ -2978,6 +3045,25 @@ void MainWindow::highlihtCurrentLine(bool flag) {
 void MainWindow::highlihtMatchingBracket(bool flag) {
   updateAllTextAreas(&TextArea::highlihtMatchingBracket, flag);
   settings.matchingBracketsHighlighted = flag;
+}
+
+void MainWindow::setAutoSaveEnabled(bool enabled) {
+  if (autoSaveManager) {
+    autoSaveManager->setEnabled(enabled);
+  }
+
+  SettingsManager &globalSettings = SettingsManager::instance();
+  if (globalSettings.getValue("autoSaveFiles", true).toBool() != enabled) {
+    globalSettings.setValue("autoSaveFiles", enabled);
+    globalSettings.saveSettings();
+  }
+}
+
+bool MainWindow::isAutoSaveEnabled() const {
+  if (autoSaveManager) {
+    return autoSaveManager->isEnabled();
+  }
+  return SettingsManager::instance().getValue("autoSaveFiles", true).toBool();
 }
 
 void MainWindow::runCurrentScript() {
@@ -3648,6 +3734,36 @@ void MainWindow::setupTextArea() {
     textArea->setFont(settings.mainFont);
     textArea->setTabWidth(settings.tabWidth);
     textArea->setVimModeEnabled(settings.vimModeEnabled);
+
+    if (autoSaveManager && !textArea->property("autoSaveHooked").toBool()) {
+      connect(textArea->document(), &QTextDocument::modificationChanged, this,
+              [this, textArea](bool modified) {
+                if (!autoSaveManager || !textArea) {
+                  return;
+                }
+
+                QString filePath;
+                QObject *parentObject = textArea;
+                while (parentObject && filePath.isEmpty()) {
+                  if (auto *page = qobject_cast<LightpadPage *>(parentObject)) {
+                    filePath = page->getFilePath();
+                  }
+                  parentObject = parentObject->parent();
+                }
+
+                if (filePath.isEmpty()) {
+                  return;
+                }
+
+                if (modified) {
+                  autoSaveManager->markModified(filePath);
+                } else {
+                  autoSaveManager->markSaved(filePath);
+                }
+              });
+      textArea->setProperty("autoSaveHooked", true);
+    }
+
     ensureStatusLabels();
     connectVimMode(textArea);
 
