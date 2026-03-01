@@ -9,5 +9,7 @@
         <file>resources/icons/run.png</file>
         <file>resources/icons/debug.png</file>
         <file>resources/icons/folder.png</file>
+        <file>resources/icons/branch_closed.png</file>
+        <file>resources/icons/branch_open.png</file>
     </qresource>
 </RCC>

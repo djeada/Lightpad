@@ -66,9 +66,9 @@ QString UIStyleHelper::treeViewStyle(const Theme &theme) {
              "  font-size: 13px;"
              "}"
              "QTreeView::item {"
-             "  padding: 2px 4px;"
-             "  border-radius: 3px;"
-             "  margin: 0px 2px;"
+             "  padding: 4px 4px;"
+             "  border-radius: 4px;"
+             "  margin: 1px 2px;"
              "}"
              "QTreeView::item:selected {"
              "  background: %3;"
@@ -81,19 +81,17 @@ QString UIStyleHelper::treeViewStyle(const Theme &theme) {
              "  background: transparent;"
              "}"
              "QTreeView::branch:has-children:closed {"
-             "  image: none;"
-             "  border-image: none;"
+             "  image: url(:/resources/icons/branch_closed.png);"
              "}"
              "QTreeView::branch:has-children:open {"
-             "  image: none;"
-             "  border-image: none;"
+             "  image: url(:/resources/icons/branch_open.png);"
              "}"
              "QHeaderView::section {"
              "  background: %5;"
              "  color: %6;"
              "  border: none;"
              "  border-bottom: 1px solid %7;"
-             "  padding: 6px 8px;"
+             "  padding: 6px 12px;"
              "  font-size: 11px;"
              "  font-weight: bold;"
              "  text-transform: uppercase;"
@@ -139,6 +137,34 @@ QString UIStyleHelper::treeViewStyle(const Theme &theme) {
       .arg(theme.surfaceColor.name())
       .arg(theme.singleLineCommentFormat.name())
       .arg(theme.borderColor.name());
+}
+
+QString UIStyleHelper::contextMenuStyle(const Theme &theme) {
+  return QString(
+             "QMenu {"
+             "  background: %1;"
+             "  color: %2;"
+             "  border: 1px solid %3;"
+             "  border-radius: 6px;"
+             "  padding: 4px;"
+             "}"
+             "QMenu::item {"
+             "  padding: 6px 24px 6px 8px;"
+             "  border-radius: 4px;"
+             "  margin: 1px 4px;"
+             "}"
+             "QMenu::item:selected {"
+             "  background: %4;"
+             "}"
+             "QMenu::separator {"
+             "  height: 1px;"
+             "  background: %3;"
+             "  margin: 4px 8px;"
+             "}")
+      .arg(theme.surfaceColor.name())
+      .arg(theme.foregroundColor.name())
+      .arg(theme.borderColor.name())
+      .arg(theme.hoverColor.name());
 }
 
 QString UIStyleHelper::treeWidgetStyle(const Theme &theme) {

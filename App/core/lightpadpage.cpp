@@ -83,6 +83,10 @@ LightpadTreeView::LightpadTreeView(LightpadPage *parent)
   setDropIndicatorShown(true);
   setDragDropMode(QAbstractItemView::DragDrop);
   setDefaultDropAction(Qt::MoveAction);
+  setAnimated(true);
+  setIndentation(16);
+  setUniformRowHeights(true);
+  setIconSize(QSize(16, 16));
 
   connect(fileController, &FileDirTreeController::actionCompleted, parentPage,
           &LightpadPage::updateModel);
@@ -128,6 +132,10 @@ void LightpadTreeView::showContextMenu(const QPoint &pos) {
   QString parentPath = fileInfo.isDir() ? filePath : fileInfo.absolutePath();
 
   QMenu menu;
+  if (parentPage && parentPage->getMainWindow()) {
+    menu.setStyleSheet(
+        UIStyleHelper::contextMenuStyle(parentPage->getMainWindow()->getTheme()));
+  }
 
   QAction *newFileAction = menu.addAction("New File");
   QAction *newDirAction = menu.addAction("New Directory");
@@ -569,3 +577,5 @@ void LightpadPage::applyTheme(const Theme &theme) {
     treeView->setStyleSheet(UIStyleHelper::treeViewStyle(theme));
   }
 }
+
+MainWindow *LightpadPage::getMainWindow() const { return mainWindow; }
