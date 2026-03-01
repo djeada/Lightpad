@@ -67,6 +67,8 @@ public:
   void showLineNumbers(bool flag);
   void highlihtCurrentLine(bool flag);
   void highlihtMatchingBracket(bool flag);
+  void setAutoSaveEnabled(bool enabled);
+  bool isAutoSaveEnabled() const;
   void runCurrentScript();
   void formatCurrentDocument();
   int getTabWidth();
@@ -163,6 +165,7 @@ private slots:
   void on_actionUnfold_Comments_triggered();
 
 private:
+  friend class AutoSaveManager;
   Ui::MainWindow *ui;
   Popup *popupTabWidth;
   Preferences *preferences;
@@ -225,7 +228,7 @@ private:
   void undo();
   void redo();
   void open(const QString &filePath);
-  void save(const QString &filePath);
+  bool save(const QString &filePath);
   void trimTrailingWhitespace(TextArea *textArea);
   void ensureFinalNewline(TextArea *textArea);
   void showFindReplace(bool onlyFind = true);

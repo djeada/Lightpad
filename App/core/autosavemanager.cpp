@@ -95,13 +95,10 @@ void AutoSaveManager::saveAllPending() {
       continue;
     }
 
-    bool saved = false;
-
-    m_pendingFiles.remove(filePath);
-    emit fileSaved(filePath);
-    saved = true;
-
-    if (!saved) {
+    if (m_mainWindow->save(filePath)) {
+      m_pendingFiles.remove(filePath);
+      emit fileSaved(filePath);
+    } else {
       emit saveError(filePath, "Failed to save file");
     }
   }

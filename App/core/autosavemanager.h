@@ -48,7 +48,7 @@ private:
   QSet<QString> m_pendingFiles;
   bool m_enabled;
   int m_delaySeconds;
-  static const int DEFAULT_DELAY_SECONDS = 30;
+  static const int DEFAULT_DELAY_SECONDS = 5;
 };
 
 #endif
