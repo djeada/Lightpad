@@ -45,6 +45,9 @@ public:
 
   void onFileSaved(const QString &filePath);
 
+  void clearCurrentFile();
+  void copySelectedMessage();
+
 signals:
 
   void problemClicked(const QString &filePath, int line, int column);
@@ -87,6 +90,7 @@ private:
   int m_currentFilter;
   bool m_autoRefreshEnabled;
   Theme m_theme;
+  QString m_currentFilePath;
 };
 
 #endif

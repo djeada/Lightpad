@@ -48,6 +48,9 @@
 #include "../definition/symbolnavigationservice.h"
 #include "../definition/idefinitionprovider.h"
 #include "../definition/languagelspdefinitionprovider.h"
+#include "../diagnostics/diagnosticsmanager.h"
+#include "../diagnostics/diagnosticutils.h"
+#include "../language/languagefeaturemanager.h"
 #include "../filetree/gitfilesystemmodel.h"
 #include "../format_templates/formattemplatemanager.h"
 #include "../run_templates/runtemplatemanager.h"
@@ -117,6 +120,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionErrorConnection(), m_sessionStateConnection(),
       m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
       m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
+      m_diagnosticsManager(nullptr), m_languageFeatureManager(nullptr),
       m_restoringSession(false), m_globalSettingsLoaded(false),
       m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
       m_treeScrollValue(0),
@@ -174,6 +178,8 @@ MainWindow::MainWindow(QWidget *parent)
   setupSymbolNavigation();
 
   setupAutoSave();
+
+  setupDiagnostics();
 
   setupCompletionSystem();
 
@@ -548,6 +554,11 @@ void MainWindow::applyLanguageOverride(const QString &languageId) {
   QString displayName = LanguageCatalog::displayName(canonicalLanguageId);
   setLanguageHighlightLabel(displayName.isEmpty() ? canonicalLanguageId
                                                   : displayName);
+
+  if (m_languageFeatureManager) {
+    notifyDiagnosticsFileClosed(filePath);
+    notifyDiagnosticsFileOpened(filePath);
+  }
 }
 
 void MainWindow::applyHighlightForFile(const QString &filePath) {
@@ -1245,6 +1256,8 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
   if (getCurrentTextArea())
     applyHighlightForFile(filePath);
 
+  notifyDiagnosticsFileOpened(filePath);
+
   if (recentFilesManager) {
     recentFilesManager->addFile(filePath);
   }
@@ -1358,8 +1371,12 @@ void MainWindow::on_actionNew_Window_triggered() { new MainWindow(); }
 
 void MainWindow::on_actionClose_Tab_triggered() {
   LightpadTabWidget *tabWidget = currentTabWidget();
-  if (tabWidget->currentIndex() > -1)
-    tabWidget->removeTab(tabWidget->currentIndex());
+  int index = tabWidget->currentIndex();
+  if (index > -1) {
+    QString filePath = tabWidget->getFilePath(index);
+    notifyDiagnosticsFileClosed(filePath);
+    tabWidget->removeTab(index);
+  }
 }
 
 void MainWindow::on_actionClose_All_Tabs_triggered() {
@@ -1581,6 +1598,8 @@ bool MainWindow::save(const QString &filePath) {
   if (problemsPanel) {
     problemsPanel->onFileSaved(filePath);
   }
+
+  notifyDiagnosticsFileSaved(filePath);
 
   if (autoSaveManager) {
     autoSaveManager->markSaved(filePath);
@@ -2038,6 +2057,11 @@ void MainWindow::showProblemsPanel() {
 
     connect(problemsPanel, &ProblemsPanel::countsChanged, this,
             &MainWindow::updateProblemsStatusLabel);
+
+    connect(problemsPanel, &ProblemsPanel::refreshRequested, this,
+            [this](const QString &filePath) {
+              notifyDiagnosticsFileSaved(filePath);
+            });
 
     ensureStatusLabels();
 
@@ -2845,6 +2869,125 @@ void MainWindow::setupAutoSave() {
       SettingsManager::instance().getValue("autoSaveFiles", true).toBool());
 }
 
+void MainWindow::setupDiagnostics() {
+  SettingsManager &sm = SettingsManager::instance();
+  QJsonObject diagSettings = sm.getValue("diagnostics", QJsonObject()).toJsonObject();
+  bool enabled = diagSettings.value("enabled").toBool(true);
+  if (!enabled) {
+    return;
+  }
+
+  m_diagnosticsManager = new DiagnosticsManager(this);
+  m_languageFeatureManager =
+      new LanguageFeatureManager(m_diagnosticsManager, this);
+
+  connect(m_diagnosticsManager, &DiagnosticsManager::diagnosticsChanged, this,
+          &MainWindow::onDiagnosticsChanged);
+
+  connect(m_diagnosticsManager, &DiagnosticsManager::countsChanged, this,
+          &MainWindow::updateProblemsStatusLabel);
+
+  connect(m_languageFeatureManager, &LanguageFeatureManager::serverError, this,
+          [this](const QString &languageId, const QString &message) {
+            LOG_WARNING(
+                QString("LSP server error for '%1': %2")
+                    .arg(languageId, message));
+          });
+}
+
+void MainWindow::notifyDiagnosticsFileOpened(const QString &filePath) {
+  if (!m_languageFeatureManager || filePath.isEmpty()) {
+    return;
+  }
+
+  TextArea *textArea = getCurrentTextArea();
+  if (!textArea) {
+    return;
+  }
+
+  QString languageId = effectiveLanguageIdForFile(filePath);
+  m_documentVersions[filePath] = 1;
+  m_languageFeatureManager->openDocument(filePath, languageId,
+                                         textArea->toPlainText());
+}
+
+void MainWindow::notifyDiagnosticsFileChanged(const QString &filePath) {
+  if (!m_languageFeatureManager || filePath.isEmpty()) {
+    return;
+  }
+
+  SettingsManager &sm = SettingsManager::instance();
+  QJsonObject diagSettings = sm.getValue("diagnostics", QJsonObject()).toJsonObject();
+  bool onType = diagSettings.value("onType").toBool(true);
+  if (!onType) {
+    return;
+  }
+
+  TextArea *textArea = getCurrentTextArea();
+  if (!textArea) {
+    return;
+  }
+
+  int version = m_documentVersions.value(filePath, 0) + 1;
+  m_documentVersions[filePath] = version;
+  m_languageFeatureManager->changeDocument(filePath, version,
+                                           textArea->toPlainText());
+}
+
+void MainWindow::notifyDiagnosticsFileSaved(const QString &filePath) {
+  if (!m_languageFeatureManager || filePath.isEmpty()) {
+    return;
+  }
+
+  SettingsManager &sm = SettingsManager::instance();
+  QJsonObject diagSettings = sm.getValue("diagnostics", QJsonObject()).toJsonObject();
+  bool onSave = diagSettings.value("onSave").toBool(true);
+  if (!onSave) {
+    return;
+  }
+
+  m_languageFeatureManager->saveDocument(filePath);
+}
+
+void MainWindow::notifyDiagnosticsFileClosed(const QString &filePath) {
+  if (!m_languageFeatureManager || filePath.isEmpty()) {
+    return;
+  }
+
+  m_languageFeatureManager->closeDocument(filePath);
+  m_documentVersions.remove(filePath);
+}
+
+void MainWindow::onDiagnosticsChanged(const QString &uri) {
+  if (!m_diagnosticsManager) {
+    return;
+  }
+
+  QString filePath = DiagnosticUtils::uriToFilePath(uri);
+  QList<LspDiagnostic> diagnostics =
+      m_diagnosticsManager->diagnosticsForUri(uri);
+
+  if (problemsPanel) {
+    problemsPanel->setDiagnostics(uri, diagnostics);
+  }
+
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    if (!tabWidget) {
+      continue;
+    }
+    for (int i = 0; i < tabWidget->count(); ++i) {
+      if (tabWidget->getFilePath(i) != filePath) {
+        continue;
+      }
+      LightpadPage *page = tabWidget->getPage(i);
+      if (!page || !page->getTextArea()) {
+        continue;
+      }
+      page->getTextArea()->setDiagnostics(diagnostics);
+    }
+  }
+}
+
 void MainWindow::setupGitIntegration() {
   if (m_gitIntegration) {
     return;
@@ -3647,7 +3790,14 @@ void MainWindow::closeCurrentTab() {
   if (textArea && textArea->changesUnsaved())
     on_actionSave_triggered();
 
-  currentTabWidget()->closeCurrentTab();
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  int index = tabWidget->currentIndex();
+  if (index >= 0) {
+    QString filePath = tabWidget->getFilePath(index);
+    notifyDiagnosticsFileClosed(filePath);
+  }
+
+  tabWidget->closeCurrentTab();
 }
 
 void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
@@ -3762,6 +3912,29 @@ void MainWindow::setupTextArea() {
                 }
               });
       textArea->setProperty("autoSaveHooked", true);
+    }
+
+    if (m_languageFeatureManager &&
+        !textArea->property("diagnosticsHooked").toBool()) {
+      connect(textArea, &QPlainTextEdit::textChanged, this,
+              [this, textArea]() {
+                if (!m_languageFeatureManager || !textArea) {
+                  return;
+                }
+                QString filePath;
+                QObject *parentObject = textArea;
+                while (parentObject && filePath.isEmpty()) {
+                  if (auto *page =
+                          qobject_cast<LightpadPage *>(parentObject)) {
+                    filePath = page->getFilePath();
+                  }
+                  parentObject = parentObject->parent();
+                }
+                if (!filePath.isEmpty()) {
+                  notifyDiagnosticsFileChanged(filePath);
+                }
+              });
+      textArea->setProperty("diagnosticsHooked", true);
     }
 
     ensureStatusLabels();
