@@ -1,7 +1,10 @@
 #include "problemspanel.h"
 #include "../uistylehelper.h"
+#include <QApplication>
+#include <QClipboard>
 #include <QFileInfo>
 #include <QHeaderView>
+#include <QPushButton>
 
 ProblemsPanel::ProblemsPanel(QWidget *parent)
     : QWidget(parent), m_tree(nullptr), m_statusLabel(nullptr),
@@ -55,6 +58,29 @@ void ProblemsPanel::setupUI() {
   connect(m_autoRefreshCheckBox, &QCheckBox::toggled, this,
           &ProblemsPanel::onAutoRefreshToggled);
   headerLayout->addWidget(m_autoRefreshCheckBox);
+
+  const QString buttonStyle =
+      "QPushButton { background: #1f2632; color: #e6edf3; border: 1px solid "
+      "#2a3241; padding: 2px 8px; }"
+      "QPushButton:hover { background: #2a3241; }";
+
+  auto *clearFileButton = new QPushButton(tr("Clear File"), m_header);
+  clearFileButton->setStyleSheet(buttonStyle);
+  connect(clearFileButton, &QPushButton::clicked, this,
+          &ProblemsPanel::clearCurrentFile);
+  headerLayout->addWidget(clearFileButton);
+
+  auto *clearAllButton = new QPushButton(tr("Clear All"), m_header);
+  clearAllButton->setStyleSheet(buttonStyle);
+  connect(clearAllButton, &QPushButton::clicked, this,
+          &ProblemsPanel::clearAll);
+  headerLayout->addWidget(clearAllButton);
+
+  auto *copyButton = new QPushButton(tr("Copy"), m_header);
+  copyButton->setStyleSheet(buttonStyle);
+  connect(copyButton, &QPushButton::clicked, this,
+          &ProblemsPanel::copySelectedMessage);
+  headerLayout->addWidget(copyButton);
 
   m_statusLabel = new QLabel(m_header);
   m_statusLabel->setStyleSheet("color: #9aa4b2;");
@@ -417,4 +443,26 @@ void ProblemsPanel::applyTheme(const Theme &theme) {
   if (m_tree) {
     m_tree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }
+}
+
+void ProblemsPanel::clearCurrentFile() {
+  if (!m_currentFilePath.isEmpty()) {
+    QString uri = m_currentFilePath;
+    if (!uri.startsWith("file://")) {
+      uri = "file://" + uri;
+    }
+    clearFile(uri);
+  }
+}
+
+void ProblemsPanel::copySelectedMessage() {
+  if (!m_tree) {
+    return;
+  }
+  QTreeWidgetItem *item = m_tree->currentItem();
+  if (!item) {
+    return;
+  }
+  QString text = item->text(0);
+  QApplication::clipboard()->setText(text);
 }

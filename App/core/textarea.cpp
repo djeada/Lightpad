@@ -1161,6 +1161,69 @@ void TextArea::updateExtraSelections() {
     }
   }
 
+  for (const LspDiagnostic &diag : m_diagnostics) {
+    int startLine = diag.range.start.line;
+    int startCol = diag.range.start.character;
+    int endLine = diag.range.end.line;
+    int endCol = diag.range.end.character;
+
+    QTextBlock startBlock = document()->findBlockByNumber(startLine);
+    QTextBlock endBlock = document()->findBlockByNumber(endLine);
+    if (!startBlock.isValid())
+      continue;
+    if (!endBlock.isValid())
+      endBlock = startBlock;
+
+    QTextEdit::ExtraSelection selection;
+
+    QColor underlineColor;
+    switch (diag.severity) {
+    case LspDiagnosticSeverity::Error:
+      underlineColor =
+          mainWindow ? mainWindow->getTheme().errorColor : QColor(231, 76, 60);
+      break;
+    case LspDiagnosticSeverity::Warning:
+      underlineColor = mainWindow ? mainWindow->getTheme().warningColor
+                                  : QColor(241, 196, 15);
+      break;
+    case LspDiagnosticSeverity::Information:
+      underlineColor =
+          mainWindow ? mainWindow->getTheme().accentColor : QColor(52, 152, 219);
+      break;
+    case LspDiagnosticSeverity::Hint:
+      underlineColor = QColor(149, 165, 166);
+      break;
+    }
+
+    QTextCharFormat fmt;
+    if (diag.severity == LspDiagnosticSeverity::Hint) {
+      fmt.setUnderlineStyle(QTextCharFormat::DotLine);
+    } else {
+      fmt.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+    }
+    fmt.setUnderlineColor(underlineColor);
+    selection.format = fmt;
+
+    QTextCursor diagCursor(startBlock);
+    int maxStartCol = qMax(0, startBlock.length() - 1);
+    diagCursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
+                            qMin(startCol, maxStartCol));
+    if (startLine == endLine && endCol > startCol) {
+      diagCursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
+                              qMin(endCol - startCol,
+                                   qMax(0, startBlock.length() - 1 - startCol)));
+    } else if (endLine > startLine) {
+      diagCursor.movePosition(QTextCursor::EndOfBlock,
+                              QTextCursor::KeepAnchor);
+    } else {
+      diagCursor.movePosition(QTextCursor::EndOfBlock,
+                              QTextCursor::KeepAnchor);
+    }
+
+    selection.cursor = diagCursor;
+    extraSelections.append(selection);
+  }
+
   if (lineHighlighted && !cursor.hasSelection()) {
     QTextEdit::ExtraSelection selection;
     QColor color =
@@ -2238,4 +2301,31 @@ void TextArea::setWordWrapEnabled(bool enabled) {
 
 bool TextArea::wordWrapEnabled() const {
   return lineWrapMode() == QPlainTextEdit::WidgetWidth;
+}
+
+void TextArea::setDiagnostics(const QList<LspDiagnostic> &diagnostics) {
+  m_diagnostics = diagnostics;
+
+  QMap<int, LspDiagnosticSeverity> diagnosticLines;
+  for (const LspDiagnostic &diag : diagnostics) {
+    int line = diag.range.start.line + 1;
+    if (!diagnosticLines.contains(line) ||
+        static_cast<int>(diag.severity) <
+            static_cast<int>(diagnosticLines[line])) {
+      diagnosticLines[line] = diag.severity;
+    }
+  }
+  if (lineNumberArea) {
+    lineNumberArea->setDiagnosticLines(diagnosticLines);
+  }
+
+  scheduleExtraSelectionsRefresh();
+}
+
+void TextArea::clearDiagnostics() {
+  m_diagnostics.clear();
+  if (lineNumberArea) {
+    lineNumberArea->clearDiagnosticLines();
+  }
+  scheduleExtraSelectionsRefresh();
 }

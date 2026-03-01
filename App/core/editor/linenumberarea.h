@@ -9,6 +9,7 @@
 #include <QWidget>
 
 #include "../../git/gitintegration.h"
+#include "../../lsp/lspclient.h"
 
 class TextArea;
 class QPaintEvent;
@@ -48,6 +49,9 @@ public:
 
   void setFoldingEnabled(bool enabled);
 
+  void setDiagnosticLines(const QMap<int, LspDiagnosticSeverity> &diagnosticLines);
+  void clearDiagnosticLines();
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   bool event(QEvent *event) override;
@@ -79,9 +83,12 @@ private:
   int m_blameTextWidth;
   bool m_foldingEnabled;
 
+  QMap<int, LspDiagnosticSeverity> m_diagnosticLines;
+
   static constexpr int DIFF_INDICATOR_WIDTH = 3;
   static constexpr int BREAKPOINT_AREA_WIDTH = 16;
   static constexpr int FOLD_INDICATOR_WIDTH = 14;
+  static constexpr int DIAGNOSTIC_MARKER_SIZE = 10;
   static constexpr int PADDING = 10;
   static constexpr int BLAME_PADDING = 12;
   static constexpr int MAX_BLAME_WIDTH = 280;

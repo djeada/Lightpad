@@ -33,6 +33,8 @@ class LightpadTreeView;
 class DebugPanel;
 class TestPanel;
 class SymbolNavigationService;
+class DiagnosticsManager;
+class LanguageFeatureManager;
 struct DefinitionTarget;
 #ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
@@ -213,6 +215,10 @@ private:
   QDockWidget *testDock;
   QString m_activeDebugSessionId;
   bool m_debugStartInProgress;
+
+  DiagnosticsManager *m_diagnosticsManager;
+  LanguageFeatureManager *m_languageFeatureManager;
+  QMap<QString, int> m_documentVersions;
   QMetaObject::Connection m_breakpointsSetConnection;
   QMetaObject::Connection m_breakpointChangedConnection;
   QMetaObject::Connection m_sessionTerminatedConnection;
@@ -263,6 +269,12 @@ private:
   void handleDefinitionResults(const QList<DefinitionTarget> &targets);
   void jumpToTarget(const DefinitionTarget &target);
   void setupAutoSave();
+  void setupDiagnostics();
+  void notifyDiagnosticsFileOpened(const QString &filePath);
+  void notifyDiagnosticsFileChanged(const QString &filePath);
+  void notifyDiagnosticsFileSaved(const QString &filePath);
+  void notifyDiagnosticsFileClosed(const QString &filePath);
+  void onDiagnosticsChanged(const QString &uri);
   void setupGitIntegration();
   void updateGitIntegrationForPath(const QString &path);
   void applyGitIntegrationToAllPages();

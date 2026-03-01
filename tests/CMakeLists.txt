@@ -44,6 +44,8 @@ include_directories(${CMAKE_SOURCE_DIR}/App/ui)
 include_directories(${CMAKE_SOURCE_DIR}/App/ui/panels)
 include_directories(${CMAKE_SOURCE_DIR}/App/definition)
 include_directories(${CMAKE_SOURCE_DIR}/App/test_templates)
+include_directories(${CMAKE_SOURCE_DIR}/App/diagnostics)
+include_directories(${CMAKE_SOURCE_DIR}/App/language)
 
 # Logger test executable
 add_executable(test_logger
@@ -540,6 +542,75 @@ target_compile_definitions(test_lspclient PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME LspClientTests COMMAND test_lspclient)
 
+# DiagnosticsManager test executable
+add_executable(test_diagnosticsmanager
+    unit/test_diagnosticsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/diagnostics/diagnosticsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_diagnosticsmanager PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/diagnostics
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_diagnosticsmanager
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_diagnosticsmanager PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME DiagnosticsManagerTests COMMAND test_diagnosticsmanager)
+
+# LanguageFeatureManager test executable
+add_executable(test_languagefeaturemanager
+    unit/test_languagefeaturemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/language/languagefeaturemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/diagnostics/diagnosticsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/syntaxpluginregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/cppsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/csssyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/gosyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/htmlsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/javascriptsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/javasyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/jsonsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/markdownsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/pythonsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/rustsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/shellsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/typescriptsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/yamlsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_languagefeaturemanager PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/language
+    ${CMAKE_SOURCE_DIR}/App/diagnostics
+    ${CMAKE_SOURCE_DIR}/App/lsp
+    ${CMAKE_SOURCE_DIR}/App/syntax
+)
+
+target_link_libraries(test_languagefeaturemanager
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_languagefeaturemanager PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME LanguageFeatureManagerTests COMMAND test_languagefeaturemanager)
+
 # RecentFilesManager test executable
 add_executable(test_recentfilesmanager
     unit/test_recentfilesmanager.cpp
@@ -771,6 +842,8 @@ set(TEST_LIST
     GoToLineDialogTests
     GoToSymbolDialogTests
     LspClientTests
+    DiagnosticsManagerTests
+    LanguageFeatureManagerTests
     RecentFilesManagerTests
     NavigationHistoryTests
     MinimapTests
@@ -801,7 +874,7 @@ set(TEST_TARGETS
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap
-    test_gitintegration test_gotolinedialog test_gotosymboldialog test_lspclient test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
+    test_gitintegration test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_imageviewer
     test_symbolnavigation
     test_testoutputparsers

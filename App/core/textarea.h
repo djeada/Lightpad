@@ -9,6 +9,7 @@
 #include <functional>
 
 #include "../editor/vimmode.h"
+#include "../lsp/lspclient.h"
 
 class MainWindow;
 class QSyntaxHighlighter;
@@ -136,6 +137,10 @@ public:
   void setDebugExecutionLine(int line);
   int debugExecutionLine() const { return m_debugExecutionLine; }
 
+  void setDiagnostics(const QList<LspDiagnostic> &diagnostics);
+  void clearDiagnostics();
+  const QList<LspDiagnostic> &diagnostics() const { return m_diagnostics; }
+
 protected:
   void resizeEvent(QResizeEvent *event) override;
   void focusOutEvent(QFocusEvent *event) override;
@@ -198,6 +203,8 @@ private:
   bool m_codeLensEnabled;
 
   int m_debugExecutionLine;
+
+  QList<LspDiagnostic> m_diagnostics;
 
   void setupTextArea();
   void setTabWidgetIcon(QIcon icon);

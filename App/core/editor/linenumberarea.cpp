@@ -99,6 +99,17 @@ void LineNumberArea::setFoldingEnabled(bool enabled) {
   update();
 }
 
+void LineNumberArea::setDiagnosticLines(
+    const QMap<int, LspDiagnosticSeverity> &diagnosticLines) {
+  m_diagnosticLines = diagnosticLines;
+  update();
+}
+
+void LineNumberArea::clearDiagnosticLines() {
+  m_diagnosticLines.clear();
+  update();
+}
+
 void LineNumberArea::setRichBlameData(
     const QMap<int, GitBlameLineInfo> &blameData) {
   m_richBlameData = blameData;
@@ -312,6 +323,46 @@ bool LineNumberArea::event(QEvent *event) {
               }
               break;
             }
+          }
+        }
+
+        if (hoverX >= DIFF_INDICATOR_WIDTH &&
+            hoverX < DIFF_INDICATOR_WIDTH + BREAKPOINT_AREA_WIDTH &&
+            m_diagnosticLines.contains(lineNum)) {
+          QStringList messages;
+          if (m_editor) {
+            for (const LspDiagnostic &diag : m_editor->diagnostics()) {
+              if (diag.range.start.line + 1 == lineNum) {
+                QString prefix;
+                switch (diag.severity) {
+                case LspDiagnosticSeverity::Error:
+                  prefix = "⛔ ";
+                  break;
+                case LspDiagnosticSeverity::Warning:
+                  prefix = "⚠️ ";
+                  break;
+                case LspDiagnosticSeverity::Information:
+                  prefix = "ℹ️ ";
+                  break;
+                case LspDiagnosticSeverity::Hint:
+                  prefix = "💡 ";
+                  break;
+                }
+                QString msg = prefix + diag.message;
+                if (!diag.source.isEmpty()) {
+                  msg += QString(" [%1]").arg(diag.source);
+                }
+                if (!diag.code.isEmpty()) {
+                  msg += QString(" (%1)").arg(diag.code);
+                }
+                messages.append(msg);
+              }
+            }
+          }
+          if (!messages.isEmpty()) {
+            QToolTip::showText(helpEvent->globalPos(), messages.join("\n"),
+                               this);
+            return true;
           }
         }
 
@@ -583,6 +634,61 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
         painter.setPen(Qt::NoPen);
         painter.setBrush(markerColor);
         painter.drawEllipse(markerX, markerY, markerDiameter, markerDiameter);
+        painter.restore();
+      }
+
+      if (m_diagnosticLines.contains(lineNum) &&
+          !breakpointLines.contains(lineNum)) {
+        LspDiagnosticSeverity severity = m_diagnosticLines[lineNum];
+        QColor markerColor;
+        switch (severity) {
+        case LspDiagnosticSeverity::Error:
+          markerColor =
+              (m_editor && m_editor->mainWindow)
+                  ? m_editor->mainWindow->getTheme().errorColor
+                  : QColor(231, 76, 60);
+          break;
+        case LspDiagnosticSeverity::Warning:
+          markerColor =
+              (m_editor && m_editor->mainWindow)
+                  ? m_editor->mainWindow->getTheme().warningColor
+                  : QColor(241, 196, 15);
+          break;
+        case LspDiagnosticSeverity::Information:
+          markerColor =
+              (m_editor && m_editor->mainWindow)
+                  ? m_editor->mainWindow->getTheme().accentColor
+                  : QColor(52, 152, 219);
+          break;
+        case LspDiagnosticSeverity::Hint:
+          markerColor = QColor(149, 165, 166);
+          break;
+        }
+
+        static constexpr int MIN_MARKER_DIAMETER = 4;
+        static constexpr int MARKER_PADDING = 4;
+        const int markerDiameter =
+            qMax(MIN_MARKER_DIAMETER,
+                 qMin(DIAGNOSTIC_MARKER_SIZE, fontHeight - MARKER_PADDING));
+        const int markerX =
+            DIFF_INDICATOR_WIDTH +
+            (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;
+        const int markerY =
+            static_cast<int>(top + (fontHeight - markerDiameter) / 2.0);
+
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(markerColor);
+        if (severity == LspDiagnosticSeverity::Error) {
+          painter.drawEllipse(markerX, markerY, markerDiameter, markerDiameter);
+        } else {
+          QPolygon triangle;
+          triangle << QPoint(markerX + markerDiameter / 2, markerY)
+                   << QPoint(markerX, markerY + markerDiameter)
+                   << QPoint(markerX + markerDiameter, markerY + markerDiameter);
+          painter.drawPolygon(triangle);
+        }
         painter.restore();
       }
 
