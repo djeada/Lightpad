@@ -6,7 +6,9 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFont>
+#include <QFontDatabase>
 #include <QKeyEvent>
+#include <QLabel>
 #include <QMouseEvent>
 #include <QProcessEnvironment>
 #include <QScrollBar>
@@ -75,12 +77,20 @@ void Terminal::setupTerminal() {
   ui->textEdit->setTextInteractionFlags(Qt::TextEditorInteraction);
   ui->textEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
 
-  QFont monoFont("Monospace");
-  monoFont.setStyleHint(QFont::TypeWriter);
-  monoFont.setPointSize(10);
+  QFont monoFont;
+  QStringList fontFamilies = {"JetBrains Mono", "Cascadia Code", "Fira Code",
+                              "Source Code Pro", "Consolas",      "Menlo",
+                              "Monaco",          "Courier New",   "Monospace"};
+  monoFont.setFamilies(fontFamilies);
+  monoFont.setStyleHint(QFont::Monospace);
+  monoFont.setPointSize(11);
   ui->textEdit->setFont(monoFont);
+  ui->textEdit->setCursorWidth(2);
 
   ui->textEdit->installEventFilter(this);
+
+  ui->cwdLabel->setFont(monoFont);
+  updateCwdLabel();
 
   updateStyleSheet();
 
@@ -223,6 +233,7 @@ void Terminal::executeCommand(const QString &command) {
 
 void Terminal::setWorkingDirectory(const QString &directory) {
   m_workingDirectory = directory;
+  updateCwdLabel();
   if (isRunning()) {
 
     executeCommand(QString("cd \"%1\"").arg(directory));
@@ -671,8 +682,7 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
 
 void Terminal::appendOutput(const QString &text, bool isError) {
 
-  QString cleanText = stripAnsiEscapeCodes(text);
-  if (cleanText.isEmpty()) {
+  if (text.isEmpty()) {
     return;
   }
 
@@ -681,14 +691,16 @@ void Terminal::appendOutput(const QString &text, bool isError) {
 
   if (isError) {
 
+    QString cleanText = stripAnsiEscapeCodes(text);
+    if (cleanText.isEmpty()) {
+      return;
+    }
     QTextCharFormat errorFormat;
     errorFormat.setForeground(QColor(m_errorColor));
     cursor.insertText(cleanText, errorFormat);
   } else {
 
-    QTextCharFormat defaultFormat;
-    defaultFormat.setForeground(QColor(m_textColor));
-    cursor.insertText(cleanText, defaultFormat);
+    appendAnsiText(text, cursor);
   }
 
   ui->textEdit->setTextCursor(cursor);
@@ -700,8 +712,23 @@ void Terminal::appendOutput(const QString &text, bool isError) {
 }
 
 void Terminal::appendPrompt() {
-  QString prompt = QString("%1 $ ").arg(m_workingDirectory);
-  appendOutput(prompt);
+  QTextCursor cursor = ui->textEdit->textCursor();
+  cursor.movePosition(QTextCursor::End);
+
+  QTextCharFormat dirFormat;
+  dirFormat.setForeground(QColor(m_linkColor));
+  dirFormat.setFontWeight(QFont::Bold);
+  cursor.insertText(m_workingDirectory, dirFormat);
+
+  QTextCharFormat promptFormat;
+  promptFormat.setForeground(QColor(m_textColor));
+  cursor.insertText(" $ ", promptFormat);
+
+  ui->textEdit->setTextCursor(cursor);
+  scrollToBottom();
+
+  m_inputStartPosition = ui->textEdit->textCursor().position();
+  updateCwdLabel();
 }
 
 QString Terminal::getShellCommand() const {
@@ -917,18 +944,73 @@ void Terminal::applyTheme(const QString &backgroundColor,
 }
 
 void Terminal::updateStyleSheet() {
-  QString styleSheet = QString("QPlainTextEdit {"
-                               "  background-color: %1;"
-                               "  color: %2;"
-                               "  selection-background-color: #1b2a43;"
-                               "  selection-color: %2;"
-                               "  border: none;"
-                               "}")
-                           .arg(m_backgroundColor, m_textColor);
+  QColor bg(m_backgroundColor);
+  bool isDark = bg.lightnessF() < 0.5;
+  QString scrollbarColor =
+      isDark ? bg.lighter(200).name() : bg.darker(150).name();
+  QString scrollbarHoverColor =
+      isDark ? bg.lighter(250).name() : bg.darker(200).name();
+
+  QString styleSheet =
+      QString("QPlainTextEdit {"
+              "  background-color: %1;"
+              "  color: %2;"
+              "  selection-background-color: rgba(88, 166, 255, 0.25);"
+              "  selection-color: %2;"
+              "  border: none;"
+              "  padding: 4px 8px;"
+              "}"
+              "QPlainTextEdit QScrollBar:vertical {"
+              "  background: %1;"
+              "  width: 10px;"
+              "  margin: 0;"
+              "}"
+              "QPlainTextEdit QScrollBar::handle:vertical {"
+              "  background: %3;"
+              "  min-height: 20px;"
+              "  border-radius: 5px;"
+              "}"
+              "QPlainTextEdit QScrollBar::handle:vertical:hover {"
+              "  background: %4;"
+              "}"
+              "QPlainTextEdit QScrollBar::add-line:vertical,"
+              "QPlainTextEdit QScrollBar::sub-line:vertical {"
+              "  height: 0;"
+              "  background: none;"
+              "}"
+              "QPlainTextEdit QScrollBar:horizontal {"
+              "  background: %1;"
+              "  height: 10px;"
+              "  margin: 0;"
+              "}"
+              "QPlainTextEdit QScrollBar::handle:horizontal {"
+              "  background: %3;"
+              "  min-width: 20px;"
+              "  border-radius: 5px;"
+              "}"
+              "QPlainTextEdit QScrollBar::handle:horizontal:hover {"
+              "  background: %4;"
+              "}"
+              "QPlainTextEdit QScrollBar::add-line:horizontal,"
+              "QPlainTextEdit QScrollBar::sub-line:horizontal {"
+              "  width: 0;"
+              "  background: none;"
+              "}")
+          .arg(m_backgroundColor, m_textColor, scrollbarColor,
+               scrollbarHoverColor);
 
   ui->textEdit->setStyleSheet(styleSheet);
 
   ui->closeButton->setStyleSheet(closeButtonStyle(m_textColor, m_errorColor));
+
+  QString cwdLabelStyle = QString("QLabel {"
+                                  "  color: %1;"
+                                  "  font-size: 11px;"
+                                  "  padding: 2px 0;"
+                                  "  background: transparent;"
+                                  "}")
+                              .arg(m_textColor);
+  ui->cwdLabel->setStyleSheet(cwdLabelStyle);
 }
 
 QString Terminal::closeButtonStyle(const QString &textColor,
@@ -1141,6 +1223,122 @@ QString Terminal::processTextForLinks(const QString &text) {
   }
 
   return text;
+}
+
+void Terminal::updateCwdLabel() {
+  if (!ui->cwdLabel) {
+    return;
+  }
+
+  QString displayPath = m_workingDirectory;
+  QString home = QDir::homePath();
+  if (displayPath.startsWith(home)) {
+    displayPath = "~" + displayPath.mid(home.length());
+  }
+
+  QString shellName = m_shellProfile.name;
+  if (shellName.isEmpty()) {
+    shellName = QFileInfo(getShellCommand()).fileName();
+  }
+
+  ui->cwdLabel->setText(QString("%1: %2").arg(shellName, displayPath));
+}
+
+void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
+  static const QRegularExpression sgrRegex(R"(\x1b\[([0-9;]*)m)");
+  static const QRegularExpression nonSgrAnsiRegex(
+      R"(\x1b\[[0-9;?]*[A-Za-np-zA-NP-Z])"
+      R"(|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?)"
+      R"(|\x1b[()][AB012])"
+      R"(|\x1b[=>])"
+      R"(|\x1b[DME78HcNO])"
+      R"(|\x07)");
+
+  static const QColor ansiColors[8] = {
+      QColor("#282c34"), QColor("#e06c75"), QColor("#98c379"),
+      QColor("#e5c07b"), QColor("#61afef"), QColor("#c678dd"),
+      QColor("#56b6c2"), QColor("#abb2bf"),
+  };
+
+  static const QColor ansiBrightColors[8] = {
+      QColor("#5c6370"), QColor("#be5046"), QColor("#7ec16e"),
+      QColor("#d19a66"), QColor("#4d78cc"), QColor("#b070cf"),
+      QColor("#49a5b0"), QColor("#ffffff"),
+  };
+
+  QString cleaned = text;
+  cleaned.remove(nonSgrAnsiRegex);
+
+  QString processed;
+  processed.reserve(cleaned.size());
+  for (const QChar &ch : cleaned) {
+    if (ch == '\x08') {
+      if (!processed.isEmpty()) {
+        processed.chop(1);
+      }
+    } else {
+      processed.append(ch);
+    }
+  }
+
+  if (processed.isEmpty()) {
+    return;
+  }
+
+  QColor currentFg = QColor(m_textColor);
+  bool bold = false;
+  int lastEnd = 0;
+  QRegularExpressionMatchIterator it = sgrRegex.globalMatch(processed);
+
+  while (it.hasNext()) {
+    QRegularExpressionMatch match = it.next();
+
+    if (match.capturedStart() > lastEnd) {
+      QString segment = processed.mid(lastEnd, match.capturedStart() - lastEnd);
+      QTextCharFormat fmt;
+      fmt.setForeground(currentFg);
+      if (bold) {
+        fmt.setFontWeight(QFont::Bold);
+      }
+      cursor.insertText(segment, fmt);
+    }
+
+    QString params = match.captured(1);
+    QStringList codes = params.split(';', Qt::SkipEmptyParts);
+
+    if (codes.isEmpty() || params.isEmpty()) {
+      currentFg = QColor(m_textColor);
+      bold = false;
+    }
+
+    for (const QString &code : codes) {
+      int n = code.toInt();
+      if (n == 0) {
+        currentFg = QColor(m_textColor);
+        bold = false;
+      } else if (n == 1) {
+        bold = true;
+      } else if (n >= 30 && n <= 37) {
+        currentFg = ansiColors[n - 30];
+      } else if (n >= 90 && n <= 97) {
+        currentFg = ansiBrightColors[n - 90];
+      } else if (n == 39) {
+        currentFg = QColor(m_textColor);
+      }
+    }
+
+    lastEnd = match.capturedEnd();
+  }
+
+  if (lastEnd < processed.length()) {
+    QString segment = processed.mid(lastEnd);
+    QTextCharFormat fmt;
+    fmt.setForeground(currentFg);
+    if (bold) {
+      fmt.setFontWeight(QFont::Bold);
+    }
+    cursor.insertText(segment, fmt);
+  }
 }
 
 void Terminal::enforceScrollbackLimit() {

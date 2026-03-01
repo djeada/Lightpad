@@ -56,14 +56,15 @@ void TerminalTabWidget::setupUI() {
 void TerminalTabWidget::setupToolbar() {
   QWidget *toolbar = new QWidget(this);
   QHBoxLayout *toolbarLayout = new QHBoxLayout(toolbar);
-  toolbarLayout->setContentsMargins(4, 4, 4, 4);
-  toolbarLayout->setSpacing(4);
+  toolbarLayout->setContentsMargins(4, 2, 4, 2);
+  toolbarLayout->setSpacing(2);
 
   m_newTerminalButton = new QToolButton(toolbar);
   m_newTerminalButton->setText("+");
   m_newTerminalButton->setToolTip(tr("New Terminal (Ctrl+Shift+`)"));
   m_newTerminalButton->setIcon(
       qApp->style()->standardIcon(QStyle::SP_FileDialogNewFolder));
+  m_newTerminalButton->setAutoRaise(true);
   m_newTerminalButton->setPopupMode(QToolButton::MenuButtonPopup);
 
   setupShellProfileMenu();
@@ -73,9 +74,10 @@ void TerminalTabWidget::setupToolbar() {
           &TerminalTabWidget::onNewTerminalClicked);
 
   m_clearButton = new QToolButton(toolbar);
-  m_clearButton->setToolTip(tr("Clear Terminal"));
+  m_clearButton->setToolTip(tr("Clear Terminal (Ctrl+L)"));
   m_clearButton->setIcon(
       qApp->style()->standardIcon(QStyle::SP_DialogResetButton));
+  m_clearButton->setAutoRaise(true);
   connect(m_clearButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onClearTerminalClicked);
 
@@ -83,6 +85,7 @@ void TerminalTabWidget::setupToolbar() {
   m_splitButton->setToolTip(tr("Split Terminal"));
   m_splitButton->setIcon(
       qApp->style()->standardIcon(QStyle::SP_TitleBarNormalButton));
+  m_splitButton->setAutoRaise(true);
   connect(m_splitButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onSplitTerminalClicked);
 
