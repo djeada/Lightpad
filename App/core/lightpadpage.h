@@ -13,6 +13,7 @@
 class LightpadPage;
 class Minimap;
 class GitIntegration;
+struct Theme;
 
 class LightpadTreeView : public QTreeView {
 
@@ -80,6 +81,7 @@ public:
 
   void refreshGitStatus();
   void activateTreeIndex(const QModelIndex &index);
+  void applyTheme(const Theme &theme);
 
 private:
   MainWindow *mainWindow;
