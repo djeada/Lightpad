@@ -3,6 +3,7 @@
 #include "../run_templates/runtemplatemanager.h"
 #include "../ui/mainwindow.h"
 #include "../ui/panels/minimap.h"
+#include "../ui/uistylehelper.h"
 #include <QDebug>
 #include <QDir>
 #include <QDragEnterEvent>
@@ -409,6 +410,7 @@ void LightpadPage::setMainWindow(MainWindow *window) {
     if (view) {
       mainWindow->registerTreeView(view);
     }
+    applyTheme(mainWindow->getTheme());
   }
 }
 
@@ -559,5 +561,11 @@ void LightpadPage::setGitStatusEnabled(bool enabled) {
 void LightpadPage::refreshGitStatus() {
   if (model) {
     model->refreshGitStatus();
+  }
+}
+
+void LightpadPage::applyTheme(const Theme &theme) {
+  if (treeView) {
+    treeView->setStyleSheet(UIStyleHelper::treeViewStyle(theme));
   }
 }

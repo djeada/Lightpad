@@ -16,6 +16,8 @@ public:
 
   static QString treeWidgetStyle(const Theme &theme);
 
+  static QString treeViewStyle(const Theme &theme);
+
   static QString subduedLabelStyle(const Theme &theme);
 
   static QString titleLabelStyle(const Theme &theme);

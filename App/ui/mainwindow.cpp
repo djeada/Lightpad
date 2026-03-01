@@ -5013,6 +5013,15 @@ void MainWindow::setTheme(Theme theme) {
     debugPanel->applyTheme(theme);
   }
 
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    for (int i = 0; i < tabWidget->count(); i++) {
+      auto page = tabWidget->getPage(i);
+      if (page) {
+        page->applyTheme(theme);
+      }
+    }
+  }
+
   updateAllTextAreas(&TextArea::applySelectionPalette, settings.theme);
 }
 
