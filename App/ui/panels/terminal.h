@@ -2,6 +2,7 @@
 #define TERMINAL_H
 
 #include <QMap>
+#include <QMenu>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStringList>
@@ -71,7 +72,16 @@ public:
 
   bool isLinkDetectionEnabled() const;
 
+  void zoomIn();
+
+  void zoomOut();
+
+  void zoomReset();
+
+  int currentFontSize() const;
+
 signals:
+  void fontSizeChanged(int newSize);
   void processStarted();
   void processFinished(int exitCode);
   void processError(const QString &errorMessage);
@@ -107,6 +117,7 @@ protected:
 
 private:
   void setupTerminal();
+  void setupContextMenu();
   void appendOutput(const QString &text, bool isError = false);
   void appendPrompt();
   QString getShellCommand() const;
@@ -157,6 +168,13 @@ private:
   QRegularExpression m_filePathRegex;
 
   int m_inputStartPosition;
+
+  int m_baseFontSize;
+  static const int kMinFontSize = 6;
+  static const int kMaxFontSize = 48;
+  static const int kDefaultFontSize = 11;
+
+  QMenu *m_contextMenu;
 };
 
 #endif

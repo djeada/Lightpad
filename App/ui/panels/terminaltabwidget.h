@@ -81,8 +81,10 @@ private slots:
   void onTabCloseRequested(int index);
   void onCurrentTabChanged(int index);
   void onSplitTerminalClicked();
+  void onKillProcessClicked();
   void onShellProfileSelected(const QString &profileName);
   void onTerminalLinkClicked(const QString &link);
+  void updateRunningState();
 
 private:
   void setupUI();
@@ -96,6 +98,7 @@ private:
   QTabWidget *m_secondaryTabWidget;
   QToolButton *m_newTerminalButton;
   QToolButton *m_clearButton;
+  QToolButton *m_killButton;
   QToolButton *m_splitButton;
   QToolButton *m_closeButton;
   QMenu *m_shellProfileMenu;
