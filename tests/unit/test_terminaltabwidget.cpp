@@ -21,6 +21,8 @@ private slots:
   void testAvailableShellProfiles();
   void testIsSplit();
   void testCloseButtonConfiguration();
+  void testKillButtonExists();
+  void testKillButtonInitialState();
 };
 
 void TestTerminalTabWidget::initTestCase() {}
@@ -92,6 +94,44 @@ void TestTerminalTabWidget::testCloseButtonConfiguration() {
 
   QVERIFY(closeButton != nullptr);
   QVERIFY(closeButton->autoRaise());
+
+  widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testKillButtonExists() {
+  TerminalTabWidget widget;
+
+  QToolButton *killButton = nullptr;
+  const QList<QToolButton *> buttons = widget.findChildren<QToolButton *>();
+  for (QToolButton *button : buttons) {
+    if (button && button->toolTip().contains("Kill")) {
+      killButton = button;
+      break;
+    }
+  }
+
+  QVERIFY(killButton != nullptr);
+  QVERIFY(killButton->autoRaise());
+
+  widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testKillButtonInitialState() {
+  TerminalTabWidget widget;
+
+  QToolButton *killButton = nullptr;
+  const QList<QToolButton *> buttons = widget.findChildren<QToolButton *>();
+  for (QToolButton *button : buttons) {
+    if (button && button->toolTip().contains("Kill")) {
+      killButton = button;
+      break;
+    }
+  }
+
+  QVERIFY(killButton != nullptr);
+  QVERIFY(killButton->isEnabled());
+
+  widget.stopCurrentProcess();
 
   widget.closeAllTerminals();
 }

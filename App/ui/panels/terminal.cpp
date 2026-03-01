@@ -31,7 +31,8 @@ Terminal::Terminal(QWidget *parent)
       m_scrollbackLines(kDefaultScrollbackLines), m_linkDetectionEnabled(true),
       m_urlRegex(R"((https?://|ftp://|file://)[^\s<>\"\'\]\)]+)"),
       m_filePathRegex(R"((?:^|[\s:])(/[^\s:]+|[A-Za-z]:\\[^\s:]+))"),
-      m_inputStartPosition(0) {
+      m_inputStartPosition(0), m_baseFontSize(kDefaultFontSize),
+      m_contextMenu(nullptr), m_copyAction(nullptr) {
   ui->setupUi(this);
   ui->closeButton->setText(QStringLiteral("\u00D7"));
   ui->closeButton->setToolTip(tr("Close Terminal"));
@@ -88,6 +89,8 @@ void Terminal::setupTerminal() {
   ui->textEdit->setCursorWidth(2);
 
   ui->textEdit->installEventFilter(this);
+
+  setupContextMenu();
 
   ui->cwdLabel->setFont(monoFont);
   updateCwdLabel();
@@ -668,6 +671,28 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
       if (keyEvent->modifiers() & Qt::ControlModifier) {
 
         clear();
+        return true;
+      }
+      break;
+
+    case Qt::Key_Plus:
+    case Qt::Key_Equal:
+      if (keyEvent->modifiers() & Qt::ControlModifier) {
+        zoomIn();
+        return true;
+      }
+      break;
+
+    case Qt::Key_Minus:
+      if (keyEvent->modifiers() & Qt::ControlModifier) {
+        zoomOut();
+        return true;
+      }
+      break;
+
+    case Qt::Key_0:
+      if (keyEvent->modifiers() & Qt::ControlModifier) {
+        zoomReset();
         return true;
       }
       break;
@@ -1340,6 +1365,72 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
     cursor.insertText(segment, fmt);
   }
 }
+
+void Terminal::setupContextMenu() {
+  m_contextMenu = new QMenu(this);
+
+  m_copyAction = m_contextMenu->addAction(tr("Copy"));
+  m_copyAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C));
+  connect(m_copyAction, &QAction::triggered, this,
+          [this]() { ui->textEdit->copy(); });
+
+  QAction *pasteAction = m_contextMenu->addAction(tr("Paste"));
+  pasteAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
+  connect(pasteAction, &QAction::triggered, this,
+          [this]() { ui->textEdit->paste(); });
+
+  m_contextMenu->addSeparator();
+
+  QAction *selectAllAction = m_contextMenu->addAction(tr("Select All"));
+  selectAllAction->setShortcut(QKeySequence::SelectAll);
+  connect(selectAllAction, &QAction::triggered, this,
+          [this]() { ui->textEdit->selectAll(); });
+
+  m_contextMenu->addSeparator();
+
+  QAction *clearAction = m_contextMenu->addAction(tr("Clear"));
+  connect(clearAction, &QAction::triggered, this, &Terminal::clear);
+
+  ui->textEdit->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(ui->textEdit, &QPlainTextEdit::customContextMenuRequested, this,
+          [this](const QPoint &pos) {
+            m_copyAction->setEnabled(
+                ui->textEdit->textCursor().hasSelection());
+            m_contextMenu->exec(ui->textEdit->mapToGlobal(pos));
+          });
+}
+
+void Terminal::zoomIn() {
+  QFont font = ui->textEdit->font();
+  int newSize = font.pointSize() + 1;
+  if (newSize <= kMaxFontSize) {
+    font.setPointSize(newSize);
+    ui->textEdit->setFont(font);
+    m_baseFontSize = newSize;
+    emit fontSizeChanged(newSize);
+  }
+}
+
+void Terminal::zoomOut() {
+  QFont font = ui->textEdit->font();
+  int newSize = font.pointSize() - 1;
+  if (newSize >= kMinFontSize) {
+    font.setPointSize(newSize);
+    ui->textEdit->setFont(font);
+    m_baseFontSize = newSize;
+    emit fontSizeChanged(newSize);
+  }
+}
+
+void Terminal::zoomReset() {
+  QFont font = ui->textEdit->font();
+  font.setPointSize(kDefaultFontSize);
+  ui->textEdit->setFont(font);
+  m_baseFontSize = kDefaultFontSize;
+  emit fontSizeChanged(kDefaultFontSize);
+}
+
+int Terminal::currentFontSize() const { return m_baseFontSize; }
 
 void Terminal::enforceScrollbackLimit() {
   if (m_scrollbackLines <= 0) {

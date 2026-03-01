@@ -1,6 +1,7 @@
 #include "ui/panels/shellprofile.h"
 #include "ui/panels/terminal.h"
 #include <QLabel>
+#include <QMenu>
 #include <QPlainTextEdit>
 #include <QSignalSpy>
 #include <QToolButton>
@@ -35,6 +36,11 @@ private slots:
   void testCloseButtonConfiguration();
   void testCwdLabelExists();
   void testCwdLabelUpdatesOnDirectoryChange();
+  void testContextMenuExists();
+  void testFontZoomIn();
+  void testFontZoomOut();
+  void testFontZoomReset();
+  void testFontZoomLimits();
 };
 
 void TestTerminal::initTestCase() {}
@@ -271,6 +277,89 @@ void TestTerminal::testCwdLabelUpdatesOnDirectoryChange() {
   QLabel *cwdLabel = terminal.findChild<QLabel *>("cwdLabel");
   QVERIFY(cwdLabel != nullptr);
   QVERIFY(cwdLabel->text().contains("/tmp"));
+}
+
+void TestTerminal::testContextMenuExists() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+  QCOMPARE(textEdit->contextMenuPolicy(), Qt::CustomContextMenu);
+
+  QMenu *contextMenu = terminal.findChild<QMenu *>();
+  QVERIFY(contextMenu != nullptr);
+
+  QList<QAction *> actions = contextMenu->actions();
+  bool hasCopy = false;
+  bool hasPaste = false;
+  bool hasSelectAll = false;
+  bool hasClear = false;
+  for (QAction *action : actions) {
+    if (action->text().contains("Copy"))
+      hasCopy = true;
+    if (action->text().contains("Paste"))
+      hasPaste = true;
+    if (action->text().contains("Select All"))
+      hasSelectAll = true;
+    if (action->text().contains("Clear"))
+      hasClear = true;
+  }
+  QVERIFY(hasCopy);
+  QVERIFY(hasPaste);
+  QVERIFY(hasSelectAll);
+  QVERIFY(hasClear);
+}
+
+void TestTerminal::testFontZoomIn() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  int originalSize = terminal.currentFontSize();
+  terminal.zoomIn();
+  QCOMPARE(terminal.currentFontSize(), originalSize + 1);
+}
+
+void TestTerminal::testFontZoomOut() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  int originalSize = terminal.currentFontSize();
+  terminal.zoomOut();
+  QCOMPARE(terminal.currentFontSize(), originalSize - 1);
+}
+
+void TestTerminal::testFontZoomReset() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  terminal.zoomIn();
+  terminal.zoomIn();
+  terminal.zoomIn();
+  QVERIFY(terminal.currentFontSize() != 11);
+
+  terminal.zoomReset();
+  QCOMPARE(terminal.currentFontSize(), 11);
+}
+
+void TestTerminal::testFontZoomLimits() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  for (int i = 0; i < 100; ++i) {
+    terminal.zoomIn();
+  }
+  QVERIFY(terminal.currentFontSize() <= 48);
+
+  for (int i = 0; i < 100; ++i) {
+    terminal.zoomOut();
+  }
+  QVERIFY(terminal.currentFontSize() >= 6);
 }
 
 QTEST_MAIN(TestTerminal)

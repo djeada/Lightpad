@@ -17,7 +17,8 @@
 TerminalTabWidget::TerminalTabWidget(QWidget *parent)
     : QWidget(parent), m_splitter(nullptr), m_tabWidget(nullptr),
       m_secondaryTabWidget(nullptr), m_newTerminalButton(nullptr),
-      m_clearButton(nullptr), m_splitButton(nullptr), m_closeButton(nullptr),
+      m_clearButton(nullptr), m_killButton(nullptr), m_splitButton(nullptr),
+      m_closeButton(nullptr),
       m_shellProfileMenu(nullptr), m_terminalCounter(0), m_isSplit(false) {
   setObjectName("TerminalTabWidget");
 
@@ -81,6 +82,15 @@ void TerminalTabWidget::setupToolbar() {
   connect(m_clearButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onClearTerminalClicked);
 
+  m_killButton = new QToolButton(toolbar);
+  m_killButton->setToolTip(tr("Kill Terminal Process"));
+  m_killButton->setIcon(
+      qApp->style()->standardIcon(QStyle::SP_BrowserStop));
+  m_killButton->setAutoRaise(true);
+  m_killButton->setEnabled(false);
+  connect(m_killButton, &QToolButton::clicked, this,
+          &TerminalTabWidget::onKillProcessClicked);
+
   m_splitButton = new QToolButton(toolbar);
   m_splitButton->setToolTip(tr("Split Terminal"));
   m_splitButton->setIcon(
@@ -101,6 +111,7 @@ void TerminalTabWidget::setupToolbar() {
 
   toolbarLayout->addWidget(m_newTerminalButton);
   toolbarLayout->addWidget(m_clearButton);
+  toolbarLayout->addWidget(m_killButton);
   toolbarLayout->addWidget(m_splitButton);
   toolbarLayout->addStretch();
   toolbarLayout->addWidget(m_closeButton);
@@ -137,6 +148,10 @@ Terminal *TerminalTabWidget::addNewTerminal(const QString &workingDirectory) {
           &TerminalTabWidget::errorOccurred);
   connect(terminal, &Terminal::linkClicked, this,
           &TerminalTabWidget::onTerminalLinkClicked);
+  connect(terminal, &Terminal::processStarted, this,
+          &TerminalTabWidget::updateRunningState);
+  connect(terminal, &Terminal::processFinished, this,
+          [this](int) { updateRunningState(); });
 
   QString tabName = generateTerminalName();
   int index = m_tabWidget->addTab(terminal, tabName);
@@ -166,6 +181,10 @@ TerminalTabWidget::addNewTerminalWithProfile(const QString &profileName,
           &TerminalTabWidget::errorOccurred);
   connect(terminal, &Terminal::linkClicked, this,
           &TerminalTabWidget::onTerminalLinkClicked);
+  connect(terminal, &Terminal::processStarted, this,
+          &TerminalTabWidget::updateRunningState);
+  connect(terminal, &Terminal::processFinished, this,
+          [this](int) { updateRunningState(); });
 
   QString tabName = generateTerminalName(profileName);
   int index = m_tabWidget->addTab(terminal, tabName);
@@ -387,6 +406,10 @@ void TerminalTabWidget::splitHorizontal() {
           &TerminalTabWidget::errorOccurred);
   connect(terminal, &Terminal::linkClicked, this,
           &TerminalTabWidget::onTerminalLinkClicked);
+  connect(terminal, &Terminal::processStarted, this,
+          &TerminalTabWidget::updateRunningState);
+  connect(terminal, &Terminal::processFinished, this,
+          [this](int) { updateRunningState(); });
 
   QString tabName = generateTerminalName();
   m_secondaryTabWidget->addTab(terminal, tabName);
@@ -436,13 +459,40 @@ void TerminalTabWidget::onCloseButtonClicked() { emit closeRequested(); }
 
 void TerminalTabWidget::onTabCloseRequested(int index) { closeTerminal(index); }
 
-void TerminalTabWidget::onCurrentTabChanged(int index) { Q_UNUSED(index); }
+void TerminalTabWidget::onCurrentTabChanged(int index) {
+  Q_UNUSED(index);
+  updateRunningState();
+}
 
 void TerminalTabWidget::onSplitTerminalClicked() {
   if (m_isSplit) {
     unsplit();
   } else {
     splitHorizontal();
+  }
+}
+
+void TerminalTabWidget::onKillProcessClicked() {
+  Terminal *terminal = currentTerminal();
+  if (terminal) {
+    terminal->stopProcess();
+    updateRunningState();
+  }
+}
+
+void TerminalTabWidget::updateRunningState() {
+  Terminal *terminal = currentTerminal();
+  bool hasRunningProcess = terminal && terminal->isRunning();
+  m_killButton->setEnabled(hasRunningProcess);
+
+  for (int i = 0; i < m_tabWidget->count(); ++i) {
+    Terminal *t = terminalAt(i);
+    if (t && t->isRunning()) {
+      m_tabWidget->setTabIcon(
+          i, qApp->style()->standardIcon(QStyle::SP_MediaPlay));
+    } else {
+      m_tabWidget->setTabIcon(i, QIcon());
+    }
   }
 }
 
