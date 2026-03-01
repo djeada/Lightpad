@@ -163,6 +163,47 @@ static int numberOfDigits(int x) {
   return count;
 }
 
+static bool isBacktabKey(const QKeyEvent *event) {
+  return event->key() == Qt::Key_Backtab ||
+         (event->key() == Qt::Key_Tab &&
+          (event->modifiers() & Qt::ShiftModifier));
+}
+
+static bool hasCompletionDisallowedModifiers(const QKeyEvent *event) {
+  return event->modifiers() &
+         (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+}
+
+static bool isTextInsertionKeyEvent(const QKeyEvent *event) {
+  if (hasCompletionDisallowedModifiers(event)) {
+    return false;
+  }
+
+  const QString text = event->text();
+  if (text.isEmpty()) {
+    return false;
+  }
+
+  const QChar first = text.at(0);
+  return first.isLetterOrNumber() || first == '_';
+}
+
+static int selectionEndBlock(const QTextCursor &cursor) {
+  int selectionStart = cursor.selectionStart();
+  int selectionEnd = cursor.selectionEnd();
+
+  QTextCursor endCursor(cursor.document());
+  endCursor.setPosition(selectionEnd);
+
+  int endBlock = endCursor.blockNumber();
+
+  if (selectionEnd > selectionStart && endCursor.positionInBlock() == 0) {
+    endBlock--;
+  }
+
+  return endBlock;
+}
+
 void TextArea::initializeIconCache() {
   if (!s_iconsInitialized) {
     s_unsavedIcon = QIcon(":/resources/icons/unsaved.png");
@@ -541,6 +582,107 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     }
   }
 
+  const bool isBacktab = isBacktabKey(keyEvent);
+  const bool isPlainTab = keyEvent->key() == Qt::Key_Tab && !isBacktab;
+  const Qt::KeyboardModifiers disallowedTabModifiers =
+      Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier;
+
+  if ((isPlainTab || isBacktab) &&
+      !(keyEvent->modifiers() & disallowedTabModifiers)) {
+    QTextCursor cursor = textCursor();
+    const bool hasSelection = cursor.hasSelection();
+
+    if (hasSelection || isBacktab) {
+      int tabWidth = 4;
+      if (mainWindow) {
+        tabWidth = qMax(1, mainWindow->getTabWidth());
+      }
+
+      int startPosition = hasSelection ? cursor.selectionStart()
+                                       : cursor.block().position();
+      int startColumn = hasSelection ? 0 : cursor.positionInBlock();
+
+      QTextCursor startCursor(document());
+      startCursor.setPosition(startPosition);
+      int startBlock = startCursor.blockNumber();
+      int endBlock = hasSelection ? selectionEndBlock(cursor) : startBlock;
+
+      if (endBlock < startBlock) {
+        endBlock = startBlock;
+      }
+
+      int removedFromCurrentLine = 0;
+      cursor.beginEditBlock();
+      for (int blockIndex = startBlock; blockIndex <= endBlock; ++blockIndex) {
+        QTextBlock block = document()->findBlockByNumber(blockIndex);
+        if (!block.isValid()) {
+          continue;
+        }
+
+        QTextCursor lineCursor(block);
+        lineCursor.movePosition(QTextCursor::StartOfBlock);
+
+        if (isBacktab) {
+          const QString lineText = block.text();
+          int removeCount = 0;
+          if (lineText.startsWith('\t')) {
+            removeCount = 1;
+          } else {
+            while (removeCount < tabWidth && removeCount < lineText.size() &&
+                   lineText[removeCount] == ' ') {
+              ++removeCount;
+            }
+          }
+
+          if (removeCount > 0) {
+            lineCursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
+                                    removeCount);
+            lineCursor.removeSelectedText();
+
+            if (!hasSelection && blockIndex == startBlock) {
+              removedFromCurrentLine = removeCount;
+            }
+          }
+        } else {
+          lineCursor.insertText(QString(" ").repeated(tabWidth));
+        }
+      }
+      cursor.endEditBlock();
+
+      if (hasSelection) {
+        QTextBlock selectionStartBlock = document()->findBlockByNumber(startBlock);
+        QTextBlock selectionEndBlock = document()->findBlockByNumber(endBlock);
+
+        if (selectionStartBlock.isValid() && selectionEndBlock.isValid()) {
+          QTextCursor selectionCursor(document());
+          selectionCursor.setPosition(selectionStartBlock.position());
+
+          QTextCursor blockEndCursor(selectionEndBlock);
+          blockEndCursor.movePosition(QTextCursor::EndOfBlock);
+
+          selectionCursor.setPosition(blockEndCursor.position(),
+                                      QTextCursor::KeepAnchor);
+          setTextCursor(selectionCursor);
+        }
+      } else if (isBacktab) {
+        QTextBlock currentBlock = document()->findBlockByNumber(startBlock);
+        if (currentBlock.isValid()) {
+          int currentLineLength = qMax(0, currentBlock.length() - 1);
+          int nextColumn = qMin(currentLineLength,
+                                qMax(0, startColumn - removedFromCurrentLine));
+          QTextCursor updatedCursor(currentBlock);
+          updatedCursor.movePosition(QTextCursor::StartOfBlock);
+          updatedCursor.movePosition(QTextCursor::Right,
+                                     QTextCursor::MoveAnchor, nextColumn);
+          setTextCursor(updatedCursor);
+        }
+      }
+
+      keyEvent->accept();
+      return;
+    }
+  }
+
   if (hasMultipleCursors() && !keyEvent->text().isEmpty() &&
       keyEvent->modifiers() == Qt::NoModifier) {
 
@@ -610,25 +752,24 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
 
   if (m_completionEngine) {
     if (!isCompletionEnabledForLanguage(m_languageId)) {
+      invalidateCompletionRequest();
       hideCompletionPopup();
       return;
     }
 
     static QString eow("~!@#$%^&*()_+{}|:\"<>?,./;'[]\\-=");
-    const bool ctrlOrShift =
-        keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
-    bool hasModifier =
-        (keyEvent->modifiers() != Qt::NoModifier) && !ctrlOrShift;
+    const bool isTypingEvent = isTextInsertionKeyEvent(keyEvent);
     QString completionPrefix = textUnderCursor();
 
-    if (!isShortcut && (hasModifier || keyEvent->text().isEmpty() ||
-                        completionPrefix.length() < 2 ||
+    if (!isShortcut && (!isTypingEvent || completionPrefix.length() < 2 ||
                         eow.contains(keyEvent->text().right(1)))) {
+      invalidateCompletionRequest();
       hideCompletionPopup();
       return;
     }
 
     QTextCursor cursor = textCursor();
+    m_lastCompletionRequestPosition = cursor.position();
     CompletionContext ctx;
     ctx.documentUri = getDocumentUri();
     ctx.languageId = m_languageId;
@@ -647,15 +788,11 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
   if (!m_completer)
     return;
 
-  const bool ctrlOrShift =
-      keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
-
   static QString eow("~!@#$%^&*()_+{}|:\"<>?,./;'[]\\-=");
-  bool hasModifier = (keyEvent->modifiers() != Qt::NoModifier) && !ctrlOrShift;
+  const bool isTypingEvent = isTextInsertionKeyEvent(keyEvent);
   QString completionPrefix = textUnderCursor();
 
-  if (!isShortcut && (hasModifier || keyEvent->text().isEmpty() ||
-                      completionPrefix.length() < 3 ||
+  if (!isShortcut && (!isTypingEvent || completionPrefix.length() < 3 ||
                       eow.contains(keyEvent->text().right(1)))) {
     m_completer->popup()->hide();
     return;
@@ -1099,6 +1236,8 @@ void TextArea::updateCursorPositionChangedCallbacks() {
   disconnect(this, &TextArea::selectionChanged, 0, 0);
 
   auto refresh = [this]() {
+    invalidateCompletionRequest();
+    hideCompletionPopup();
     updateExtraSelections();
     updateRowColDisplay();
   };
@@ -1277,6 +1416,7 @@ void TextArea::triggerCompletion() {
   QTextCursor cursor = textCursor();
 
   CompletionContext ctx;
+  m_lastCompletionRequestPosition = cursor.position();
   ctx.documentUri = getDocumentUri();
   ctx.languageId = m_languageId;
   ctx.prefix = prefix;
@@ -1290,6 +1430,11 @@ void TextArea::triggerCompletion() {
 }
 
 void TextArea::onCompletionsReady(const QList<CompletionItem> &items) {
+  if (m_lastCompletionRequestPosition != textCursor().position()) {
+    hideCompletionPopup();
+    return;
+  }
+
   if (!isCompletionEnabledForLanguage(m_languageId)) {
     hideCompletionPopup();
     return;
@@ -1356,6 +1501,10 @@ void TextArea::hideCompletionPopup() {
   if (m_completionWidget) {
     m_completionWidget->hide();
   }
+}
+
+void TextArea::invalidateCompletionRequest() {
+  m_lastCompletionRequestPosition = -1;
 }
 
 void TextArea::addCursorAbove() {
@@ -1594,6 +1743,8 @@ void TextArea::paintEvent(QPaintEvent *event) {
 }
 
 void TextArea::mousePressEvent(QMouseEvent *event) {
+  invalidateCompletionRequest();
+  hideCompletionPopup();
 
   if (m_multiCursor && m_multiCursor->hasMultipleCursors() &&
       !(event->modifiers() & Qt::ControlModifier)) {

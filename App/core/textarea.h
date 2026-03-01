@@ -219,6 +219,7 @@ private:
   void updateHighlighterViewport();
   void updateLineNumberAreaLayout();
   QString resolveFilePath() const;
+  void invalidateCompletionRequest();
 
 private slots:
   void onCompletionsReady(const QList<CompletionItem> &items);
@@ -226,6 +227,7 @@ private slots:
 
 private:
   void drawExtraCursors();
+  int m_lastCompletionRequestPosition = -1;
 };
 
 #endif
