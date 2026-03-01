@@ -91,6 +91,23 @@ LightpadTreeView::LightpadTreeView(LightpadPage *parent)
 
 LightpadTreeView::~LightpadTreeView() {}
 
+void LightpadTreeView::keyPressEvent(QKeyEvent *event) {
+  if (!event) {
+    return;
+  }
+
+  if ((event->key() == Qt::Key_Enter) || (event->key() == Qt::Key_Return)) {
+    QModelIndex idx = currentIndex();
+    if (idx.isValid() && parentPage) {
+      parentPage->activateTreeIndex(idx);
+      event->accept();
+      return;
+    }
+  }
+
+  QTreeView::keyPressEvent(event);
+}
+
 void LightpadTreeView::mouseReleaseEvent(QMouseEvent *e) {
   if (e->button() == Qt::RightButton) {
     showContextMenu(e->pos());
@@ -295,27 +312,7 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
 
   QObject::connect(treeView, &QAbstractItemView::doubleClicked, this,
                    [this](const QModelIndex &index) {
-                     if (!index.isValid() || !model) {
-                       return;
-                     }
-
-                     if (model->isDir(index)) {
-                       if (treeView->isExpanded(index)) {
-                         treeView->collapse(index);
-                       } else {
-                         treeView->expand(index);
-                       }
-                       treeView->setCurrentIndex(index);
-                       return;
-                     }
-
-                     if (!mainWindow) {
-                       return;
-                     }
-
-                     QString path = model->filePath(index);
-                     mainWindow->openFileAndAddToNewTab(path);
-                     treeView->setCurrentIndex(index);
+                     activateTreeIndex(index);
                    });
 }
 
@@ -345,6 +342,30 @@ void LightpadPage::setModelRootIndex(QString path) {
       mainWindow->registerTreeView(view);
     }
   }
+}
+
+void LightpadPage::activateTreeIndex(const QModelIndex &index) {
+  if (!index.isValid() || !model || !treeView) {
+    return;
+  }
+
+  if (model->isDir(index)) {
+    if (treeView->isExpanded(index)) {
+      treeView->collapse(index);
+    } else {
+      treeView->expand(index);
+    }
+    treeView->setCurrentIndex(index);
+    return;
+  }
+
+  if (!mainWindow) {
+    return;
+  }
+
+  QString path = model->filePath(index);
+  mainWindow->openFileAndAddToNewTab(path);
+  treeView->setCurrentIndex(index);
 }
 
 void LightpadPage::setCustomContentWidget(QWidget *widget) {

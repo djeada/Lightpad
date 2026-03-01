@@ -117,8 +117,10 @@ MainWindow::MainWindow(QWidget *parent)
       m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
       m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
       m_restoringSession(false), m_globalSettingsLoaded(false),
-      m_fileTreeModel(nullptr), m_treeScrollValue(0),
-      m_treeScrollValueInitialized(false), m_treeScrollSyncing(false) {
+      m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
+      m_treeScrollValue(0),
+      m_treeScrollValueInitialized(false), m_treeScrollSyncing(false),
+      m_treeCurrentPath(""), m_treeSelectionSyncing(false) {
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
   ui->menubar->setNativeMenuBar(false);
@@ -5025,6 +5027,7 @@ void MainWindow::setProjectRootPath(const QString &path) {
 
   if (previousRoot != normalizedPath) {
     m_treeExpandedPaths.clear();
+    m_treeCurrentPath.clear();
     loadTreeStateFromSettings(normalizedPath);
     m_treeScrollValue = 0;
     m_treeScrollValueInitialized = false;
@@ -5099,19 +5102,31 @@ GitFileSystemModel *MainWindow::getFileTreeModel() const {
 }
 
 void MainWindow::ensureFileTreeModel() {
-  if (m_fileTreeModel) {
+  if (m_fileTreeModel && m_fileTreeSelectionModel &&
+      m_fileTreeSelectionModel->model() == m_fileTreeModel) {
     return;
   }
 
-  m_fileTreeModel = new GitFileSystemModel(this);
-  connect(m_fileTreeModel, &QFileSystemModel::directoryLoaded, this,
-          [this](const QString &) { applyTreeExpandedStateToViews(); });
-  QString rootPath =
-      m_projectRootPath.isEmpty() ? QDir::home().path() : m_projectRootPath;
-  m_fileTreeModel->setRootPath(rootPath);
-  m_fileTreeModel->setRootHeaderLabel(m_projectRootPath);
-  if (m_gitIntegration) {
-    m_fileTreeModel->setGitIntegration(m_gitIntegration);
+  if (!m_fileTreeModel) {
+    m_fileTreeModel = new GitFileSystemModel(this);
+    connect(m_fileTreeModel, &QFileSystemModel::directoryLoaded, this,
+            [this](const QString &) { applyTreeExpandedStateToViews(); });
+    QString rootPath =
+        m_projectRootPath.isEmpty() ? QDir::home().path() : m_projectRootPath;
+    m_fileTreeModel->setRootPath(rootPath);
+    m_fileTreeModel->setRootHeaderLabel(m_projectRootPath);
+    if (m_gitIntegration) {
+      m_fileTreeModel->setGitIntegration(m_gitIntegration);
+    }
+  }
+
+  if (!m_fileTreeSelectionModel ||
+      m_fileTreeSelectionModel->model() != m_fileTreeModel) {
+    m_fileTreeSelectionModel = new QItemSelectionModel(m_fileTreeModel, this);
+    connect(m_fileTreeSelectionModel, &QItemSelectionModel::currentChanged, this,
+            [this](const QModelIndex &current, const QModelIndex &) {
+              trackTreeCurrentIndex(current);
+            });
   }
 }
 
@@ -5144,18 +5159,39 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
   if (treeView->model() != m_fileTreeModel) {
     treeView->setModel(m_fileTreeModel);
   }
+  if (m_fileTreeSelectionModel &&
+      treeView->selectionModel() != m_fileTreeSelectionModel) {
+    QItemSelectionModel *oldSelectionModel = treeView->selectionModel();
+    treeView->setSelectionModel(m_fileTreeSelectionModel);
+    if (oldSelectionModel && oldSelectionModel != m_fileTreeSelectionModel &&
+        oldSelectionModel->parent() == treeView) {
+      oldSelectionModel->deleteLater();
+    }
+  }
 
   QObject::disconnect(treeView, &QTreeView::expanded, this, nullptr);
   QObject::disconnect(treeView, &QTreeView::collapsed, this, nullptr);
   QObject::disconnect(treeView->verticalScrollBar(), &QScrollBar::valueChanged,
                       this, nullptr);
   connect(treeView, &QTreeView::expanded, this,
-          [this](const QModelIndex &index) {
+          [this, treeView](const QModelIndex &index) {
             trackTreeExpandedState(index, true);
+            for (LightpadTreeView *view : allTreeViews()) {
+              if (!view || view == treeView || view->isExpanded(index)) {
+                continue;
+              }
+              expandIndexInView(view, index);
+            }
           });
   connect(treeView, &QTreeView::collapsed, this,
-          [this](const QModelIndex &index) {
+          [this, treeView](const QModelIndex &index) {
             trackTreeExpandedState(index, false);
+            for (LightpadTreeView *view : allTreeViews()) {
+              if (!view || view == treeView || !view->isExpanded(index)) {
+                continue;
+              }
+              view->collapse(index);
+            }
           });
   connect(treeView->verticalScrollBar(), &QScrollBar::valueChanged, this,
           [this](int value) {
@@ -5179,6 +5215,7 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
           });
 
   applyTreeStateToView(treeView);
+  applyTreeCurrentIndexToView(treeView);
   if (m_treeScrollValueInitialized) {
     treeView->verticalScrollBar()->setValue(m_treeScrollValue);
   }
@@ -5238,9 +5275,55 @@ void MainWindow::trackTreeExpandedState(const QModelIndex &index,
   }
 }
 
+void MainWindow::trackTreeCurrentIndex(const QModelIndex &index) {
+  if (!m_fileTreeModel || !index.isValid()) {
+    return;
+  }
+
+  QString path = QDir::cleanPath(m_fileTreeModel->filePath(index));
+  if (path.isEmpty()) {
+    return;
+  }
+
+  m_treeCurrentPath = path;
+}
+
 void MainWindow::applyTreeStateToView(QTreeView *treeView) {
   if (!treeView || !m_fileTreeModel) {
     return;
+  }
+
+  QList<QModelIndex> expandedIndexes;
+  std::function<void(const QModelIndex &)> collectExpanded =
+      [&](const QModelIndex &parent) {
+        int rowCount = m_fileTreeModel->rowCount(parent);
+        for (int row = 0; row < rowCount; ++row) {
+          QModelIndex child = m_fileTreeModel->index(row, 0, parent);
+          if (!child.isValid()) {
+            continue;
+          }
+          if (treeView->isExpanded(child)) {
+            expandedIndexes.append(child);
+            collectExpanded(child);
+          }
+        }
+      };
+
+  QModelIndex root = treeView->rootIndex();
+  collectExpanded(root);
+
+  std::sort(expandedIndexes.begin(), expandedIndexes.end(),
+            [this](const QModelIndex &a, const QModelIndex &b) {
+              QString pathA = QDir::cleanPath(m_fileTreeModel->filePath(a));
+              QString pathB = QDir::cleanPath(m_fileTreeModel->filePath(b));
+              return pathA.count('/') > pathB.count('/');
+            });
+
+  for (const QModelIndex &idx : expandedIndexes) {
+    QString path = QDir::cleanPath(m_fileTreeModel->filePath(idx));
+    if (!m_treeExpandedPaths.contains(path)) {
+      treeView->collapse(idx);
+    }
   }
 
   QString normalizedRoot = QDir::cleanPath(m_projectRootPath);
@@ -5253,6 +5336,41 @@ void MainWindow::applyTreeStateToView(QTreeView *treeView) {
       expandIndexInView(treeView, idx);
     }
   }
+}
+
+void MainWindow::applyTreeCurrentIndexToView(QTreeView *treeView) {
+  if (!treeView || !m_fileTreeModel || m_treeCurrentPath.isEmpty()) {
+    return;
+  }
+
+  QModelIndex idx = m_fileTreeModel->index(m_treeCurrentPath);
+  if (!idx.isValid()) {
+    return;
+  }
+
+  m_treeSelectionSyncing = true;
+  if (treeView->currentIndex() != idx) {
+    treeView->setCurrentIndex(idx);
+  }
+  m_treeSelectionSyncing = false;
+}
+
+void MainWindow::setTreeCurrentPath(const QString &path) {
+  if (!m_fileTreeModel) {
+    return;
+  }
+
+  QString normalizedPath = QDir::cleanPath(path);
+  if (normalizedPath.isEmpty()) {
+    return;
+  }
+
+  QModelIndex idx = m_fileTreeModel->index(normalizedPath);
+  if (!idx.isValid()) {
+    return;
+  }
+
+  trackTreeCurrentIndex(idx);
 }
 
 void MainWindow::applyTreeExpandedStateToViews() {
@@ -5280,6 +5398,7 @@ void MainWindow::applyTreeExpandedStateToViews() {
         expandIndexInView(view, idx);
       }
     }
+    applyTreeCurrentIndexToView(view);
   }
 }
 

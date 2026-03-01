@@ -27,6 +27,7 @@ signals:
   void runTestsRequested(const QString &path);
 
 protected:
+  void keyPressEvent(QKeyEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *e) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
@@ -78,6 +79,7 @@ public:
   void setGitStatusEnabled(bool enabled);
 
   void refreshGitStatus();
+  void activateTreeIndex(const QModelIndex &index);
 
 private:
   MainWindow *mainWindow;
