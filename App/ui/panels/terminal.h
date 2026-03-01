@@ -8,6 +8,9 @@
 #include <QTimer>
 #include <QWidget>
 
+class QLabel;
+class QTextCursor;
+
 #include "shellprofile.h"
 
 namespace Ui {
@@ -115,12 +118,14 @@ private:
   void cleanupProcess();
   void scheduleAutoRestart();
   void updateStyleSheet();
+  void updateCwdLabel();
   QString filterShellStartupNoise(const QString &text) const;
   bool isShellStartupNoiseLine(const QString &line) const;
   QString processTextForLinks(const QString &text);
   void enforceScrollbackLimit();
   QString getLinkAtPosition(const QPoint &pos);
   QString stripAnsiEscapeCodes(const QString &text);
+  void appendAnsiText(const QString &text, QTextCursor &cursor);
 
   Ui::Terminal *ui;
   QProcess *m_process;

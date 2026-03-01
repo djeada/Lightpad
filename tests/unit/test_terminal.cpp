@@ -1,5 +1,6 @@
 #include "ui/panels/shellprofile.h"
 #include "ui/panels/terminal.h"
+#include <QLabel>
 #include <QPlainTextEdit>
 #include <QSignalSpy>
 #include <QToolButton>
@@ -32,6 +33,8 @@ private slots:
   void testLinkDetection();
   void testSendText();
   void testCloseButtonConfiguration();
+  void testCwdLabelExists();
+  void testCwdLabelUpdatesOnDirectoryChange();
 };
 
 void TestTerminal::initTestCase() {}
@@ -246,6 +249,28 @@ void TestTerminal::testCloseButtonConfiguration() {
   QCOMPARE(closeButton->text(), QStringLiteral("\u00D7"));
   QVERIFY(!closeButton->isCheckable());
   QVERIFY(closeButton->autoRaise());
+}
+
+void TestTerminal::testCwdLabelExists() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QLabel *cwdLabel = terminal.findChild<QLabel *>("cwdLabel");
+  QVERIFY(cwdLabel != nullptr);
+  QVERIFY(!cwdLabel->text().isEmpty());
+}
+
+void TestTerminal::testCwdLabelUpdatesOnDirectoryChange() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  terminal.setWorkingDirectory("/tmp");
+
+  QLabel *cwdLabel = terminal.findChild<QLabel *>("cwdLabel");
+  QVERIFY(cwdLabel != nullptr);
+  QVERIFY(cwdLabel->text().contains("/tmp"));
 }
 
 QTEST_MAIN(TestTerminal)
