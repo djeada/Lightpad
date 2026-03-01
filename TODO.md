@@ -1,454 +1,327 @@
-# Lightpad IDE - Missing Features for Full-Fledged Modern IDE
+# Lightpad TODO: Diagnostics and On-the-Fly Static Analysis
 
-## Current State Summary
-Lightpad has: Vim mode, basic LSP (completion/hover/definition/references/diagnostics), syntax highlighting (C++/JS/Python), file tree, plugin system, themes, terminal, find/replace, run/format templates, accessibility support, **multi-cursor editing**, **command palette**, **code folding**, **problems panel**.
+## Objective
+Deliver robust, per-language diagnostics (errors, warnings, info, hints) that update on-the-fly while editing and are integrated into:
+- Problems panel
+- Status bar counts
+- Editor visuals (squiggles and gutter markers)
+- Per-file language assignment pipeline
 
----
+This document replaces broad backlog noise with a detailed execution plan for one high-impact feature area.
 
-## ✅ RECENTLY IMPLEMENTED (Quick Wins)
+## Scope
+In scope:
+- LSP-backed diagnostics lifecycle (open/change/save/close)
+- Central language feature assignment per file
+- Diagnostics aggregation and fan-out to UI
+- On-the-fly updates with debounce and stale-result protection
+- Per-language server management and settings
+- Tests and instrumentation
 
-### Multi-Cursor Editing
-- [x] Add cursor above/below (Ctrl+Alt+Up/Down)
-- [x] Add cursor at next occurrence (Ctrl+D)
-- [x] Add cursors to all occurrences (Ctrl+Shift+L)
-- [x] Multi-cursor typing and deletion
-- [x] Escape to clear extra cursors
-- [x] Column/box selection (Alt+Shift+Drag)
-- [x] Multi-cursor undo/redo
-- [x] Split selection into lines (Ctrl+Shift+I)
+Out of scope (separate epics):
+- Marketplace and plugin store
+- Remote development
+- AI features
+- Advanced refactorings beyond code actions
 
-### Command Palette
-- [x] Fuzzy command search (Ctrl+Shift+P)
-- [x] Auto-register commands from menus
-- [x] Keyboard shortcut display
-- [x] Recent commands
-- [x] File quick open (Ctrl+P)
-- [x] Go to symbol (Ctrl+Shift+O)
-- [x] Go to line (Ctrl+G)
+## Current Status (Audited)
+- [x] LSP client has protocol support for `didOpen`, `didChange`, `didSave`, `didClose`, and `publishDiagnostics`.
+- [x] Problems panel can store/display diagnostics and severity counts.
+- [x] Per-file language override exists and is persisted in `.lightpad/highlight_config.json`.
+- [x] Language-specific server configs exist for C/C++, Python, Rust, Go, TS/JS, Java.
+- [ ] Diagnostics are not wired from active LSP sessions into Problems panel.
+- [ ] No central diagnostics manager exists.
+- [ ] No editor inline diagnostics rendering (squiggles/gutter diagnostics).
+- [ ] Problems panel `refreshRequested` is emitted but not connected to a refresh pipeline.
+- [ ] On-the-fly diagnostics pipeline is not connected to editor text changes.
+- [ ] LSP completion provider is not registered in the completion setup path.
 
-### Code Folding
-- [x] Fold/unfold current block (Ctrl+Shift+[/])
-- [x] Fold all / Unfold all
-- [x] Brace-based folding ({})
-- [x] Indent-based folding (Python)
-- [x] Fold level (fold to level 1, 2, 3...)
-- [x] Folding indicators in gutter (click to fold)
-- [x] Custom fold regions (#region/#endregion)
-- [x] Fold comments
-- [x] Persistent fold state
+## Definition of Done
+Feature is done when all are true:
+- [ ] Opening a supported file starts the correct language service and sends `didOpen`.
+- [ ] Typing triggers debounced `didChange` and diagnostics refresh without manual save.
+- [ ] Save triggers `didSave` and diagnostics are refreshed if server requires it.
+- [ ] Closing a file sends `didClose` and clears stale diagnostics for that document.
+- [ ] Problems panel updates live with accurate counts by severity and file.
+- [ ] Status bar reflects current global counts from central diagnostics state.
+- [ ] Clicking a problem navigates to exact file/line/column.
+- [ ] Editor shows inline diagnostics (underline) and gutter markers.
+- [ ] Switching language override for a file rebinds diagnostics to the new provider.
+- [ ] Unit/integration tests pass for lifecycle, mapping, debounce, and stale result handling.
 
-### Problems Panel
-- [x] Problems panel with tree view (Ctrl+Shift+M)
-- [x] Filter by severity (Errors, Warnings, Info)
-- [x] Click to navigate to problem
-- [x] File grouping
-- [x] Color-coded by severity
-- [x] Problem count in status bar
-- [x] Problem count per file in tree
-- [x] Auto-refresh on save
+## Milestones
 
----
+### M0 - Foundation and Guardrails
+- [ ] Add `docs/DIAGNOSTICS_ARCHITECTURE.md` with data flow diagram.
+- [ ] Define canonical URI/path conversion utilities and use one implementation everywhere.
+- [ ] Add feature flags in settings:
+  - [ ] `diagnostics.enabled`
+  - [ ] `diagnostics.onType`
+  - [ ] `diagnostics.onSave`
+  - [ ] `diagnostics.debounceMs`
+- [ ] Add structured diagnostic logging categories and levels.
 
-## 🔴 CRITICAL MISSING FEATURES
+Acceptance criteria:
+- [ ] Architecture doc reviewed.
+- [ ] Settings loaded with defaults and can be toggled safely.
 
-### 1. Debugger Integration
-- [x] Debug Adapter Protocol (DAP) client implementation
-- [x] Breakpoint system (set, toggle, conditional, logpoints)
-- [x] Breakpoint gutter in editor
-- [x] Debug toolbar (Step Over, Step Into, Step Out, Continue, Pause, Stop)
-- [x] Variables panel (local, watch, registers)
-- [x] Call stack panel
-- [x] Debug console/REPL
-- [ ] Inline variable values during debug
-- [x] Exception breakpoints
-- [x] Multi-target debugging (DebugSessionManager)
-- [x] Debug configurations (launch.json equivalent via DebugConfigurationManager)
-- [x] Attach to process
-- [x] Remote debugging support
-- [x] Watch expressions (WatchManager)
-- [x] Data breakpoints
+### M1 - Central Diagnostics Core
+Create a central service (suggested: `DiagnosticsManager`) to own diagnostic state and routing.
 
-### 2. Git/Version Control Integration
-- [x] Git status in file tree (modified, staged, untracked icons)
-- [x] Git diff gutter in editor (inline +/- indicators)
-- [x] Source control panel
-- [x] Stage/unstage files
-- [x] Commit with message
-- [x] Branch management (create, checkout, delete, merge)
-- [x] Git blame annotations
-- [x] Inline current-line blame (ghost text at cursor line)
-- [x] Rich blame hover tooltip (commit details, file stats)
-- [x] Diff hunk hover on gutter indicators
-- [x] Git status bar (branch, ahead/behind, dirty indicator)
-- [x] Git history/log viewer
-- [x] File history view (per-file commit log)
-- [x] Line history (git log -L for selected lines)
-- [x] Branch comparison UI
-- [ ] Conflict resolution UI
-- [x] Stash management
-- [x] Remote operations (push, pull, fetch)
-- [x] Revision navigation (open file at specific commit)
-- [x] Git commit graph (DAG visualization)
-- [x] Git CodeLens (authors/recent changes above functions)
-- [x] Heatmap gutter (age-based coloring)
-- [x] Interactive rebase UI
-- [x] Cherry-pick UI (from commit log context menu)
-- [x] Git worktree management
-- [ ] GitHub/GitLab integration
-- [ ] Pull request viewing
+- [ ] Add `App/diagnostics/diagnosticsmanager.h/.cpp`.
+- [ ] Define model:
+  - [ ] `QMap<QString, QList<LspDiagnostic>> byUri`
+  - [ ] reverse index by file path
+  - [ ] aggregate counts (error/warning/info/hint)
+- [ ] Public API:
+  - [ ] `upsertDiagnostics(uri, diagnostics, sourceId)`
+  - [ ] `clearDiagnostics(uri)`
+  - [ ] `clearAllForSource(sourceId)`
+  - [ ] `diagnosticsForFile(filePath)`
+- [ ] Signals:
+  - [ ] `diagnosticsChanged(uri)`
+  - [ ] `countsChanged(errors, warnings, infos)`
+  - [ ] `fileCountsChanged(filePath, ...)`
+- [ ] Implement stale-result protection by version/epoch per document.
 
-### 3. Split Editor/Views
-- [x] Horizontal split
-- [x] Vertical split
-- [ ] Grid layout (2x2, etc.)
-- [ ] Drag tabs between split groups
-- [ ] Synchronized scrolling option
-- [x] Focus management between splits
-- [x] Open to side action
+Acceptance criteria:
+- [ ] Unit tests for merge/replace/clear semantics.
+- [ ] Unit tests for URI and file path matching.
 
----
+### M2 - Language Service Session Management
+Add a reusable session manager (suggested: `LanguageFeatureManager`) that manages per-language LSP clients for diagnostics and future features.
 
-## 🟠 HIGH PRIORITY FEATURES
+- [ ] Add `App/language/languagefeaturemanager.h/.cpp`.
+- [ ] Session responsibilities:
+  - [ ] resolve language id per file (override + detection)
+  - [ ] choose configured server command/args per language
+  - [ ] lazy-start and reuse client per language/workspace
+  - [ ] expose `clientForFile(filePath)`
+- [ ] Hook `LspClient::diagnosticsReceived` to `DiagnosticsManager`.
+- [ ] Implement document lifecycle methods:
+  - [ ] `openDocument(filePath, languageId, text)`
+  - [ ] `changeDocument(filePath, version, text)`
+  - [ ] `saveDocument(filePath)`
+  - [ ] `closeDocument(filePath)`
+- [ ] Handle server unavailable state and report actionable messages.
 
-### 5. Enhanced LSP Features
-- [x] Signature help (function parameter hints)
-- [x] Document symbols (outline view)
-- [ ] Workspace symbols search
-- [x] Rename symbol (project-wide)
-- [x] Code actions (quick fixes, refactorings)
-- [ ] Inlay hints (type annotations, parameter names)
-- [ ] Document formatting request via LSP
-- [ ] Range formatting
-- [ ] Code lens
-- [ ] Semantic tokens (semantic highlighting)
-- [ ] Folding ranges from LSP
-- [ ] Selection ranges
-- [ ] Call hierarchy (incoming/outgoing calls)
-- [ ] Type hierarchy
-- [ ] Linked editing ranges
+Acceptance criteria:
+- [ ] Switching between multiple files in same language reuses one session.
+- [ ] Unsupported language does not crash and logs clear reason.
 
-### 6. Code Folding
-- [ ] Fold/unfold regions
-- [ ] Fold all / Unfold all
-- [ ] Fold level (fold to level 1, 2, 3...)
-- [ ] Folding indicators in gutter
-- [ ] Custom fold regions (#region/#endregion)
-- [ ] Fold comments
-- [ ] Fold imports
-- [ ] Persistent fold state
+### M3 - MainWindow and Editor Wiring
+Connect editor and window events to service lifecycle.
 
-### 7. Minimap
-- [x] Scrollable minimap sidebar
-- [x] Syntax highlighting in minimap
-- [x] Current viewport indicator
-- [x] Click to scroll
-- [ ] Search results highlighting in minimap
-- [ ] Git diff highlighting in minimap
-- [ ] Slider for minimap zoom
+- [ ] On open file:
+  - [ ] send `didOpen` with current text and effective language id.
+- [ ] On text change:
+  - [ ] increment per-document version counter.
+  - [ ] send debounced `didChange` when `diagnostics.onType = true`.
+- [ ] On save:
+  - [ ] send `didSave` when `diagnostics.onSave = true`.
+- [ ] On tab close:
+  - [ ] send `didClose` and clear diagnostics for file.
+- [ ] On language override change:
+  - [ ] close old language session binding for that file.
+  - [ ] open document on new language session.
+  - [ ] clear stale diagnostics from previous source.
 
-### 8. Command Palette
-- [ ] Fuzzy command search (Ctrl+Shift+P)
-- [ ] Recent commands
-- [ ] Keyboard shortcut display
-- [ ] File quick open (Ctrl+P)
-- [ ] Go to symbol (Ctrl+Shift+O)
-- [ ] Go to line (Ctrl+G)
-- [ ] Extensible command registration
+Acceptance criteria:
+- [ ] End-to-end diagnostics update on typing for at least one language server.
+- [ ] No duplicate `didOpen` for same document/session pair.
 
-### 9. File Search & Navigation
-- [ ] Global file search (fuzzy)
-- [ ] Project-wide text search (ripgrep integration)
-- [ ] Search results panel
-- [ ] Search in files with filters (include/exclude)
-- [ ] Regex search with groups
-- [ ] Search and replace in files
-- [x] Recent files list
-- [x] Breadcrumb navigation
-- [ ] Go to definition in peek window
-- [x] Go back/forward navigation stack
+### M4 - Problems Panel Integration
+Wire central diagnostics state to Problems panel and status bar.
 
-### 10. Problems/Diagnostics Panel
-- [ ] Dedicated problems panel
-- [ ] Filter by severity (Error, Warning, Info, Hint)
-- [ ] Filter by file/source
-- [ ] Click to navigate to problem
-- [ ] Problem count in status bar
-- [ ] Problem count per file in tree
-- [ ] Auto-refresh on save
-- [ ] Clear problems action
+- [ ] Replace ad-hoc panel updates with manager-driven updates.
+- [ ] Connect `DiagnosticsManager::countsChanged` to status label update.
+- [ ] Connect per-file updates to file tree badges (if enabled).
+- [ ] Wire `ProblemsPanel::refreshRequested(filePath)` to on-demand reanalysis.
+- [ ] Add panel actions:
+  - [ ] clear current file
+  - [ ] clear all
+  - [ ] copy problem message
 
----
+Acceptance criteria:
+- [ ] Problems panel reflects manager state exactly.
+- [ ] Auto-refresh on save actually triggers reanalysis.
 
-## 🟡 MEDIUM PRIORITY FEATURES
+### M5 - Editor Rendering (Inline + Gutter)
+Introduce visual diagnostics directly in code editor.
 
-### 11. Workspace/Project Management
-- [ ] Workspace files (.lightpad-workspace)
-- [ ] Multi-root workspaces
-- [ ] Project-specific settings
-- [ ] Workspace trust
-- [ ] Recent workspaces
-- [ ] Workspace switching
+- [ ] Extend `TextArea` to render diagnostic underlines via `ExtraSelection`.
+- [ ] Severity styles:
+  - [ ] Error: red underline
+  - [ ] Warning: yellow underline
+  - [ ] Info: blue underline
+  - [ ] Hint: subtle dotted underline
+- [ ] Extend `LineNumberArea` for diagnostic markers and tooltips.
+- [ ] Add hover tooltip on marked lines with message/source/code.
+- [ ] Ensure coexistence with breakpoint and git-diff visuals.
 
-### 12. Extensions/Plugins Marketplace
-- [ ] Plugin repository/registry
-- [ ] Search & browse plugins
-- [ ] Install/uninstall from UI
-- [ ] Plugin updates
-- [ ] Plugin ratings/reviews
-- [ ] Plugin dependencies resolution
-- [ ] Plugin settings UI
+Acceptance criteria:
+- [ ] Marker layering is deterministic (breakpoint, diff, diagnostics).
+- [ ] Performance remains acceptable on large files (no full redraw loops).
 
-### 13. Integrated Terminal Improvements
-- [ ] Multiple terminal instances
-- [ ] Split terminals
-- [ ] Terminal tabs
-- [ ] Different shell profiles
-- [ ] Terminal links detection
-- [ ] Copy/paste improvements
-- [ ] Scrollback buffer configuration
-- [ ] Terminal theming
-- [ ] Send text to terminal
-- [ ] Task integration
+### M6 - Per-Language Analyzer Strategy
+Define language strategy as "LSP-first, CLI fallback optional".
 
-### 14. Snippets System
-- [ ] User-defined snippets
-- [ ] Language-specific snippets
-- [ ] Snippet placeholders with tabstops
-- [ ] Variable substitution ($1, $2, ${name})
-- [ ] Choice placeholders
-- [ ] Snippet transformation
-- [ ] Snippet importer (from VS Code)
+- [ ] Language support matrix in settings/docs:
+  - [ ] C/C++: clangd
+  - [ ] Python: pylsp (or basedpyright/pylance-compatible setup if added later)
+  - [ ] Rust: rust-analyzer
+  - [ ] Go: gopls
+  - [ ] TS/JS: typescript-language-server
+  - [ ] Java: jdtls
+- [ ] Add optional fallback analyzers (off by default):
+  - [ ] Python: ruff
+  - [ ] JS/TS: eslint
+  - [ ] C/C++: clang-tidy/cppcheck
+- [ ] Normalize fallback output into `LspDiagnostic` shape.
+- [ ] De-duplicate diagnostics when both LSP and fallback are enabled.
 
-### 15. Code Actions & Refactoring
-- [ ] Extract method/function
-- [ ] Extract variable
-- [ ] Extract constant
-- [ ] Inline variable
-- [ ] Move to new file
-- [ ] Generate getters/setters
-- [ ] Implement interface
-- [ ] Add missing imports
-- [ ] Organize imports
-- [ ] Remove unused imports
-- [ ] Quick fix suggestions
+Acceptance criteria:
+- [ ] Each configured language emits diagnostics in same UI pipeline.
+- [ ] Fallback analyzers cannot block UI thread.
 
-### 16. Code Intelligence
-- [ ] Type information on hover (richer)
-- [ ] Documentation preview
-- [ ] Parameter info popup
-- [ ] Quick documentation (F1)
-- [ ] Expression evaluation
-- [ ] Semantic highlighting beyond syntax
-- [ ] Find all usages
-- [ ] Peek definition
-- [ ] Peek references
+## Detailed Task Board
 
-### 17. Language Support Expansion
-- [ ] TypeScript
-- [ ] Rust
-- [ ] Go
-- [ ] Java
-- [ ] C#
-- [ ] Ruby
-- [ ] PHP
-- [ ] Swift
-- [ ] Kotlin
-- [ ] HTML/CSS
-- [ ] JSON/YAML/TOML
-- [ ] Markdown preview
-- [ ] SQL
-- [ ] Shell scripts
-- [ ] Dockerfile
-- [ ] Language auto-detection
+### A. Data Model and Utilities
+- [ ] Add `DiagnosticOrigin` enum (`Lsp`, `CliAnalyzer`, `Manual`).
+- [ ] Add `DocumentState` store: uri, filePath, languageId, version, isOpen.
+- [ ] Add utility for URI normalization and percent-decoding safety.
+- [ ] Add utility to clamp diagnostic ranges to valid document bounds.
 
----
+### B. Concurrency and Performance
+- [ ] Debounce on-type diagnostics (`150-300ms`, configurable).
+- [ ] Coalesce rapid updates per file.
+- [ ] Ignore responses older than active document version.
+- [ ] Avoid rebuilding full Problems tree for single-file changes.
+- [ ] Add metric counters:
+  - [ ] `diagnostics_updates_total`
+  - [ ] `diagnostics_latency_ms`
+  - [ ] `diagnostics_dropped_stale_total`
 
-## 🟢 NICE-TO-HAVE FEATURES
+### C. UX and Behavior
+- [ ] Add status text variants:
+  - [ ] `No problems`
+  - [ ] `<E> errors, <W> warnings`
+  - [ ] `Analyzing...`
+- [ ] Add command palette actions:
+  - [ ] Toggle diagnostics on type
+  - [ ] Re-run diagnostics for current file
+  - [ ] Clear diagnostics
+- [ ] Add preference UI for diagnostics settings.
 
-### 18. Editor Enhancements
-- [x] Soft wrap toggle
-- [ ] Word wrap at column
-- [x] Show whitespace characters
-- [x] Show indent guides
-- [ ] Rainbow brackets
-- [ ] Bracket pair colorization
-- [ ] Sticky scroll (sticky headers)
-- [ ] Smooth scrolling
-- [ ] Cursor smooth caret animation
-- [ ] Column ruler(s)
-- [ ] Zen mode (distraction-free)
-- [ ] Diff editor (side-by-side comparison)
-- [ ] Inline diff view
-- [ ] Read-only mode
-- [ ] Linked files (follow symlinks)
+### D. Error Handling
+- [ ] If server executable is missing, show one-time actionable message with install hint.
+- [ ] If server crashes, mark session degraded and auto-retry with backoff.
+- [ ] If invalid diagnostics payload is received, log and continue.
 
-### 19. Search Improvements
-- [ ] Search history
-- [ ] Search scopes (selection, file, folder, project)
-- [ ] Preserve case in replace
-- [ ] Regular expression builder helper
-- [ ] Multi-line search
-- [ ] Search exclusions (.gitignore aware)
+### E. Telemetry and Debugging
+- [ ] Add debug log line per lifecycle event (`open/change/save/close`).
+- [ ] Add debug log line per diagnostics publish with counts and file.
+- [ ] Add runtime command to dump diagnostics state to logs.
 
-### 20. Session Management
-- [ ] Restore open tabs on startup
-- [ ] Session save/load
-- [ ] Multiple sessions
-- [ ] Crash recovery (autosave)
-- [ ] File change watcher (external modifications)
-- [ ] Hot reload files
+## File-Level Implementation Plan
 
-### 21. Productivity Features
-- [x] Auto-save
-- [ ] Format on save
-- [ ] Format on paste
-- [ ] Trim trailing whitespace
-- [ ] Insert final newline
-- [ ] Emmet support (HTML/CSS)
-- [ ] Lorem ipsum generator
-- [ ] Multiple clipboards/clipboard history
-- [ ] Compare with clipboard
-- [x] Sort lines
-- [x] Transform text (uppercase, lowercase, title case)
-- [ ] Join lines
-- [ ] Comment toggling improvements
+### New files
+- [ ] `App/diagnostics/diagnosticsmanager.h`
+- [ ] `App/diagnostics/diagnosticsmanager.cpp`
+- [ ] `App/language/languagefeaturemanager.h`
+- [ ] `App/language/languagefeaturemanager.cpp`
+- [ ] `tests/unit/test_diagnosticsmanager.cpp`
+- [ ] `tests/unit/test_languagefeaturemanager.cpp`
+- [ ] `docs/DIAGNOSTICS_ARCHITECTURE.md`
 
-### 22. UI/UX Improvements
-- [ ] Customizable toolbar
-- [ ] Customizable keyboard shortcuts UI
-- [ ] Activity bar (vertical sidebar)
-- [ ] Sidebar toggle
-- [ ] Panel toggle
-- [ ] Status bar customization
-- [ ] Icon themes
-- [ ] File icons in tabs and tree
-- [ ] Tab reordering via drag
-- [ ] Tab pinning
-- [ ] Tab preview (single-click vs double-click)
-- [ ] Notifications system
-- [ ] Progress indicators
-- [ ] Command history
+### Existing files to modify
+- [ ] `App/ui/mainwindow.h`
+- [ ] `App/ui/mainwindow.cpp`
+- [ ] `App/core/textarea.h`
+- [ ] `App/core/textarea.cpp`
+- [ ] `App/core/editor/linenumberarea.h`
+- [ ] `App/core/editor/linenumberarea.cpp`
+- [ ] `App/ui/panels/problemspanel.h`
+- [ ] `App/ui/panels/problemspanel.cpp`
+- [ ] `App/lsp/lspclient.h`
+- [ ] `App/lsp/lspclient.cpp`
+- [ ] `App/CMakeLists.txt`
+- [ ] `tests/CMakeLists.txt`
 
-### 23. Remote Development
-- [ ] SSH remote editing
-- [ ] Docker container editing
-- [ ] WSL integration
-- [ ] Remote file browser
-- [ ] Remote terminal
+## Test Plan
 
-### 24. Collaboration
-- [ ] Live share / pair programming
-- [ ] Shared cursors
-- [ ] Chat integration
-- [ ] Code review tools
+### Unit tests
+- [ ] `DiagnosticsManager`: upsert/replace/clear/counts.
+- [ ] `DiagnosticsManager`: URI to file matching edge cases.
+- [ ] `LanguageFeatureManager`: language resolution with override precedence.
+- [ ] `LanguageFeatureManager`: server startup failure handling.
+- [ ] Versioning: stale diagnostics dropped.
 
-### 25. AI/ML Features
-- [ ] AI code completion (Copilot-style)
-- [ ] Code explanation
-- [ ] Generate code from comments
-- [ ] Chat with codebase
-- [ ] Intelligent refactoring suggestions
+### Integration tests
+- [ ] Open file -> `didOpen` sent once.
+- [ ] Type -> debounced `didChange` -> diagnostics update.
+- [ ] Save -> `didSave` path updates diagnostics.
+- [ ] Close tab -> `didClose` + cleanup.
+- [ ] Change language override -> rebind session and refresh diagnostics.
 
-### 26. Build System Integration
-- [ ] Task runner
-- [ ] Build tasks configuration
-- [ ] Problem matchers (parse build output)
-- [ ] Pre/post build hooks
-- [ ] CMake integration
-- [ ] Make integration
-- [ ] npm/yarn scripts integration
+### Manual QA checklist
+- [ ] C++ diagnostics appear while typing and clear when fixed.
+- [ ] Python diagnostics appear while typing and clear when fixed.
+- [ ] TS/JS diagnostics appear while typing and clear when fixed.
+- [ ] Problems panel filtering works under continuous updates.
+- [ ] Editor remains responsive in large files.
 
-### 27. Testing Integration
-- [ ] Test explorer panel
-- [ ] Run tests from editor
-- [ ] Test coverage visualization
-- [ ] Test debugging
-- [ ] Test result history
-- [ ] Re-run failed tests
+## Rollout Plan
 
-### 28. Documentation
-- [ ] In-editor documentation browser
-- [ ] Quick docs lookup
-- [ ] External docs linking
-- [ ] API reference integration
+### Stage 1 (safe baseline)
+- [ ] M0 + M1 + M2 with diagnostics visible in Problems panel only.
 
----
+### Stage 2 (interactive)
+- [ ] M3 + M4 with live status and refresh actions.
 
-## 📊 Priority Matrix
+### Stage 3 (full UX)
+- [ ] M5 inline/gutter rendering enabled by default.
 
-| Feature | Impact | Effort | Priority |
-|---------|--------|--------|----------|
-| Debugger | Very High | High | P0 |
-| Git Integration | Very High | High | P0 |
-| Multi-Cursor | High | Medium | P0 |
-| Split Views | High | Medium | P0 |
-| Enhanced LSP | High | Medium | P1 |
-| Command Palette | High | Low | P1 |
-| Code Folding | Medium | Low | P1 |
-| Minimap | Medium | Medium | P1 |
-| File Search | High | Medium | P1 |
-| Problems Panel | Medium | Low | P1 |
-| Snippets | Medium | Low | P2 |
-| Refactoring | High | High | P2 |
-| More Languages | Medium | Medium | P2 |
-| Session Restore | Medium | Low | P2 |
-| Auto-save | Low | Low | P3 |
-| Remote Dev | High | Very High | P3 |
-| AI Features | High | Very High | P3 |
-| Live Share | Medium | Very High | P4 |
+### Stage 4 (language depth)
+- [ ] M6 optional CLI fallback analyzers and deduplication.
 
----
+## Risks and Mitigations
+- Risk: high-frequency diagnostics flood UI.
+  - [ ] Mitigation: debounce + coalescing + partial tree updates.
+- Risk: conflicting diagnostics from multiple sources.
+  - [ ] Mitigation: source tagging + dedup rules.
+- Risk: server startup instability.
+  - [ ] Mitigation: retry with capped backoff and visible state.
+- Risk: URI/path mismatch across platforms.
+  - [ ] Mitigation: single normalization utility and unit tests.
 
-## Implementation Order Recommendation
+## Open Decisions
+- [ ] Decide default debounce (`150ms` vs `250ms`).
+- [ ] Decide whether `onType` should be enabled by default for all languages.
+- [ ] Decide whether fallback CLI analyzers ship enabled or experimental.
+- [ ] Decide whether diagnostics are workspace-scoped or global across windows.
 
-### Phase 1: Core IDE (P0) ⏱️
-1. Multi-cursor editing
-2. Split views
-3. Git integration (basic: status, diff gutter, commit)
-4. DAP debugger (basic: breakpoints, step, variables)
+## Immediate Next 10 Tasks
+1. [ ] Add `DiagnosticsManager` skeleton and tests.
+2. [ ] Add `LanguageFeatureManager` skeleton and server config plumbing.
+3. [ ] Wire `diagnosticsReceived` from `LspClient` into manager.
+4. [ ] Wire Problems panel to manager signals.
+5. [ ] Add per-document version tracking in `MainWindow`.
+6. [ ] Send `didOpen` on file open.
+7. [ ] Send debounced `didChange` on text edits.
+8. [ ] Send `didSave` on save and connect panel refresh action.
+9. [ ] Send `didClose` on tab close and cleanup diagnostics.
+10. [ ] Add inline underline rendering for error/warning first.
 
-### Phase 2: Enhanced Experience (P1)
-5. Command palette with fuzzy search
-6. Code folding
-7. Problems panel
-8. Enhanced LSP (rename, code actions, signature help)
-9. Project-wide search
-10. Minimap
+## Progress Tracking
+- [ ] M0 complete
+- [ ] M1 complete
+- [ ] M2 complete
+- [ ] M3 complete
+- [ ] M4 complete
+- [ ] M5 complete
+- [ ] M6 complete
 
-### Phase 3: Polish & Productivity (P2)
-11. Snippets system
-12. More language support
-13. Refactoring tools
-14. Session management
-15. Plugin marketplace
-
-### Phase 4: Advanced (P3+)
-16. Testing integration
-17. Build system integration
-18. Remote development
-19. AI features
-20. Collaboration tools
-
----
-
-## Notes
-
-**Already Well Implemented:**
-- ✅ VIM mode (comprehensive)
-- ✅ Basic LSP (completion, hover, go-to-def, references, diagnostics)
-- ✅ Syntax highlighting (extensible)
-- ✅ File tree (full CRUD operations)
-- ✅ Plugin architecture
-- ✅ Theme system
-- ✅ Terminal integration
-- ✅ Find/Replace
-- ✅ Run/Format templates
-- ✅ Accessibility features
-- ✅ Async worker infrastructure
-
-**Tech Debt to Address:**
-- [ ] Save preferences in home directory (from README TODO)
-- [ ] Switch to QProcess for multiprocessing (from README TODO)
-- [ ] Custom highlighting rules UI (from README TODO)
-- [ ] LSP not integrated into UI (just client exists)
-- [ ] Formatter is placeholder stub
+Owner: TBD
+Target branch: `feature/diagnostics-pipeline`
+Last updated: 2026-03-01

@@ -6,11 +6,13 @@
 #include <QSyntaxHighlighter>
 #include <QTreeWidget>
 #include <QWidget>
+#include <QPointer>
 
 class TextArea;
 class MainWindow;
 class QTimer;
 class QLabel;
+class AsyncTask;
 
 namespace Ui {
 class FindReplacePanel;
@@ -96,7 +98,6 @@ private:
   bool searchInProgress;
   bool searchExecuted;
   QString activeSearchWord;
-  QString lastObservedPlainText;
 
   void updateCounterLabels();
   void selectSearchWord(QTextCursor &cursor, int n, int offset = 0);
@@ -130,7 +131,12 @@ private:
   void updateSearchFeedback(const QString &message);
   void endSearchFeedback(int matchCount);
   void clearSearchFeedback();
+  void applyLocalSearchResults(const QString &searchWord,
+                               QVector<int> refreshedPositions);
   QMap<QString, QVector<GlobalSearchResult>> globalResultsByFile;
+  QPointer<AsyncTask> m_localSearchTask;
+  int m_localSearchRequestId;
+  static constexpr int kAsyncLocalSearchThresholdChars = 200000;
 };
 
 #endif

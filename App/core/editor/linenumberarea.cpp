@@ -110,6 +110,25 @@ void LineNumberArea::setGitIntegration(GitIntegration *git) {
 
 void LineNumberArea::setHeatmapData(const QMap<int, qint64> &timestamps) {
   m_heatmapTimestamps = timestamps;
+  m_heatmapRangeValid = false;
+
+  if (!m_heatmapTimestamps.isEmpty()) {
+    qint64 minTs = std::numeric_limits<qint64>::max();
+    qint64 maxTs = std::numeric_limits<qint64>::min();
+    for (auto it = m_heatmapTimestamps.cbegin();
+         it != m_heatmapTimestamps.cend(); ++it) {
+      if (it.value() < minTs) {
+        minTs = it.value();
+      }
+      if (it.value() > maxTs) {
+        maxTs = it.value();
+      }
+    }
+    m_heatmapMinTimestamp = minTs;
+    m_heatmapMaxTimestamp = maxTs;
+    m_heatmapRangeValid = true;
+  }
+
   if (m_heatmapEnabled)
     update();
 }
@@ -122,23 +141,14 @@ void LineNumberArea::setHeatmapEnabled(bool enabled) {
 bool LineNumberArea::isHeatmapEnabled() const { return m_heatmapEnabled; }
 
 QColor LineNumberArea::heatmapColor(qint64 timestamp) const {
-  if (m_heatmapTimestamps.isEmpty())
+  if (!m_heatmapRangeValid)
     return Qt::transparent;
 
-  qint64 minTs = std::numeric_limits<qint64>::max();
-  qint64 maxTs = 0;
-  for (auto it = m_heatmapTimestamps.cbegin(); it != m_heatmapTimestamps.cend();
-       ++it) {
-    if (it.value() < minTs)
-      minTs = it.value();
-    if (it.value() > maxTs)
-      maxTs = it.value();
-  }
-
-  if (maxTs == minTs)
+  if (m_heatmapMaxTimestamp == m_heatmapMinTimestamp)
     return QColor(80, 80, 120, 40);
 
-  double t = double(timestamp - minTs) / double(maxTs - minTs);
+  double t = double(timestamp - m_heatmapMinTimestamp) /
+             double(m_heatmapMaxTimestamp - m_heatmapMinTimestamp);
 
   int r, g, b;
   if (t > 0.5) {
