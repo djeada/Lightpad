@@ -113,11 +113,11 @@ void TestLanguageFeatureManager::testCloseDocumentWithoutOpen() {
 void TestLanguageFeatureManager::testServerErrorEmitted() {
   DiagnosticsManager diagMgr;
   LanguageFeatureManager mgr(&diagMgr);
-  QSignalSpy spy(&mgr, &LanguageFeatureManager::serverError);
 
-  mgr.openDocument("/project/main.cpp", "cpp", "int main() {}");
-
-  QVERIFY(spy.count() >= 0);
+  // Opening an unsupported language should not crash and should not create a
+  // client
+  mgr.openDocument("/project/file.xyz", "unknown_lang", "content");
+  QVERIFY(mgr.clientForFile("/project/file.xyz") == nullptr);
 }
 
 void TestLanguageFeatureManager::testDiagnosticsManagerIntegration() {

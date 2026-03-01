@@ -222,8 +222,8 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
   if (!started) {
     LOG_WARNING(
         QString("Failed to start language server '%1' (%2). "
-                "Make sure '%2' is installed and available on PATH.")
-            .arg(languageId, config.command));
+                "Make sure '%3' is installed and available on PATH.")
+            .arg(languageId, config.command, config.command));
     emit serverError(
         languageId,
         QString("Failed to start '%1'. Is it installed?").arg(config.command));
