@@ -4,18 +4,101 @@
 #include "../ui/mainwindow.h"
 #include "../ui/panels/minimap.h"
 #include "../ui/uistylehelper.h"
-#include <QDebug>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QFileInfo>
+#include <QFont>
+#include <QFrame>
 #include <QHBoxLayout>
-#include <QHeaderView>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMimeData>
+#include <QPainter>
+#include <QSizePolicy>
+#include <QStyledItemDelegate>
+#include <QStyle>
+#include <QStyleOptionViewItem>
+#include <QToolButton>
+#include <QVBoxLayout>
 #include <QtGlobal>
+
+namespace {
+class ExplorerTreeDelegate : public QStyledItemDelegate {
+public:
+  explicit ExplorerTreeDelegate(QObject *parent = nullptr)
+      : QStyledItemDelegate(parent) {}
+
+  void setTheme(const Theme &theme) {
+    m_textColor = theme.foregroundColor;
+    m_selectedTextColor = theme.foregroundColor;
+    m_hoverBackground = theme.hoverColor.lighter(112);
+    m_selectedBackground = theme.accentSoftColor.lighter(115);
+    m_selectedBorder = theme.accentColor;
+  }
+
+  void paint(QPainter *painter, const QStyleOptionViewItem &option,
+             const QModelIndex &index) const override {
+    if (!painter) {
+      return;
+    }
+
+    QStyleOptionViewItem opt(option);
+    initStyleOption(&opt, index);
+
+    const bool isSelected = opt.state.testFlag(QStyle::State_Selected);
+    const bool isHovered = opt.state.testFlag(QStyle::State_MouseOver);
+    const QRect rowRect = opt.rect.adjusted(4, 1, -4, -1);
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+
+    if (isSelected || isHovered) {
+      const QColor bg = isSelected ? m_selectedBackground : m_hoverBackground;
+      const QColor border = isSelected ? m_selectedBorder : bg.lighter(112);
+      painter->setPen(border);
+      painter->setBrush(bg);
+      painter->drawRoundedRect(rowRect, 7, 7);
+      if (isSelected) {
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(m_selectedBorder);
+        painter->drawRoundedRect(
+            QRect(rowRect.left() + 2, rowRect.top() + 4, 3, rowRect.height() - 8),
+            1, 1);
+      }
+    }
+
+    opt.rect = rowRect.adjusted(6, 0, -4, 0);
+    opt.showDecorationSelected = false;
+    opt.state &= ~QStyle::State_HasFocus;
+    if (index.model() && index.model()->hasChildren(index)) {
+      opt.font.setWeight(QFont::DemiBold);
+    }
+    opt.palette.setColor(QPalette::Highlight, Qt::transparent);
+    opt.palette.setColor(QPalette::HighlightedText, m_selectedTextColor);
+    opt.palette.setColor(QPalette::Text, m_textColor);
+
+    QStyledItemDelegate::paint(painter, opt, index);
+    painter->restore();
+  }
+
+  QSize sizeHint(const QStyleOptionViewItem &option,
+                 const QModelIndex &index) const override {
+    QSize size = QStyledItemDelegate::sizeHint(option, index);
+    size.setHeight(qMax(size.height(), 24));
+    return size + QSize(0, 2);
+  }
+
+private:
+  QColor m_textColor = QColor("#dce4ee");
+  QColor m_selectedTextColor = QColor("#eef4ff");
+  QColor m_hoverBackground = QColor("#232a33");
+  QColor m_selectedBackground = QColor("#1f3554");
+  QColor m_selectedBorder = QColor("#5fa8ff");
+};
+} // namespace
 
 class LineEdit : public QLineEdit {
 
@@ -84,9 +167,16 @@ LightpadTreeView::LightpadTreeView(LightpadPage *parent)
   setDragDropMode(QAbstractItemView::DragDrop);
   setDefaultDropAction(Qt::MoveAction);
   setAnimated(true);
-  setIndentation(16);
+  setMouseTracking(true);
+  setFrameShape(QFrame::NoFrame);
+  setIndentation(14);
   setUniformRowHeights(true);
-  setIconSize(QSize(16, 16));
+  setIconSize(QSize(18, 18));
+  setSelectionBehavior(QAbstractItemView::SelectRows);
+  setAllColumnsShowFocus(false);
+  setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+  setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+  setItemDelegate(new ExplorerTreeDelegate(this));
 
   connect(fileController, &FileDirTreeController::actionCompleted, parentPage,
           &LightpadPage::updateModel);
@@ -283,27 +373,83 @@ void LightpadTreeView::removeFile(QString filePath) {
 }
 
 LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
-    : QWidget(parent), mainWindow(nullptr), treeView(nullptr),
-      textArea(nullptr), minimap(nullptr), model(nullptr), m_ownsModel(true),
-      m_gitIntegration(nullptr), filePath(""), projectRootPath("") {
+    : QWidget(parent), mainWindow(nullptr), treeContainer(nullptr),
+      treeHeader(nullptr), treeTitleLabel(nullptr), treeFilterEdit(nullptr),
+      treeRefreshButton(nullptr), treeCollapseButton(nullptr),
+      treeExpandButton(nullptr), treeView(nullptr), textArea(nullptr),
+      minimap(nullptr), model(nullptr), m_ownsModel(true),
+      m_gitIntegration(nullptr), m_treeFilterText(""), filePath(""),
+      projectRootPath("") {
 
   auto *layoutHor = new QHBoxLayout(this);
+  layoutHor->setContentsMargins(0, 0, 0, 0);
+
+  treeContainer = new QWidget(this);
+  treeContainer->setObjectName("treeContainer");
+  treeContainer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+  treeContainer->setMinimumWidth(240);
+  treeContainer->setMaximumWidth(420);
+  auto *treeLayout = new QVBoxLayout(treeContainer);
+  treeLayout->setContentsMargins(8, 8, 8, 8);
+  treeLayout->setSpacing(8);
+
+  treeHeader = new QWidget(treeContainer);
+  treeHeader->setObjectName("treeHeader");
+  auto *treeHeaderLayout = new QHBoxLayout(treeHeader);
+  treeHeaderLayout->setContentsMargins(4, 2, 4, 2);
+  treeHeaderLayout->setSpacing(6);
+
+  treeTitleLabel = new QLabel("EXPLORER", treeHeader);
+  treeTitleLabel->setObjectName("treeTitleLabel");
+  treeHeaderLayout->addWidget(treeTitleLabel);
+  treeHeaderLayout->addStretch(1);
+
+  treeRefreshButton = new QToolButton(treeHeader);
+  treeRefreshButton->setObjectName("treeToolButton");
+  treeRefreshButton->setToolTip("Refresh file tree");
+  treeRefreshButton->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
+  treeRefreshButton->setIconSize(QSize(14, 14));
+  treeHeaderLayout->addWidget(treeRefreshButton);
+
+  treeCollapseButton = new QToolButton(treeHeader);
+  treeCollapseButton->setObjectName("treeToolButton");
+  treeCollapseButton->setToolTip("Collapse all");
+  treeCollapseButton->setIcon(style()->standardIcon(QStyle::SP_ArrowUp));
+  treeCollapseButton->setIconSize(QSize(14, 14));
+  treeHeaderLayout->addWidget(treeCollapseButton);
+
+  treeExpandButton = new QToolButton(treeHeader);
+  treeExpandButton->setObjectName("treeToolButton");
+  treeExpandButton->setToolTip("Expand one level");
+  treeExpandButton->setIcon(style()->standardIcon(QStyle::SP_ArrowDown));
+  treeExpandButton->setIconSize(QSize(14, 14));
+  treeHeaderLayout->addWidget(treeExpandButton);
+
+  treeFilterEdit = new QLineEdit(treeContainer);
+  treeFilterEdit->setObjectName("treeFilterEdit");
+  treeFilterEdit->setPlaceholderText("Filter files...");
+  treeFilterEdit->setClearButtonEnabled(true);
 
   treeView = new LightpadTreeView(this);
   treeView->setExpandsOnDoubleClick(false);
+  treeView->setObjectName("fileTreeView");
   textArea = new TextArea(this);
   minimap = new Minimap(this);
 
   minimap->setSourceEditor(textArea);
 
-  layoutHor->addWidget(treeView);
+  treeLayout->addWidget(treeHeader);
+  treeLayout->addWidget(treeFilterEdit);
+  treeLayout->addWidget(treeView, 1);
+
+  layoutHor->addWidget(treeContainer);
   layoutHor->addWidget(textArea);
   layoutHor->addWidget(minimap);
 
-  if (treeViewHidden)
-    treeView->hide();
+  if (treeViewHidden) {
+    treeContainer->hide();
+  }
 
-  layoutHor->setContentsMargins(0, 0, 0, 0);
   layoutHor->setStretch(0, 0);
   layoutHor->setStretch(1, 1);
   layoutHor->setStretch(2, 0);
@@ -323,6 +469,24 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
                    [this](const QModelIndex &index) {
                      activateTreeIndex(index);
                    });
+
+  connect(treeRefreshButton, &QToolButton::clicked, this, [this]() {
+    updateModel();
+    refreshGitStatus();
+  });
+  connect(treeCollapseButton, &QToolButton::clicked, treeView,
+          &QTreeView::collapseAll);
+  connect(treeExpandButton, &QToolButton::clicked, this, [this]() {
+    if (!treeView) {
+      return;
+    }
+    treeView->expandToDepth(1);
+  });
+  connect(treeFilterEdit, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            m_treeFilterText = text;
+            applyTreeFilter();
+          });
 }
 
 QTreeView *LightpadPage::getTreeView() { return treeView; }
@@ -331,7 +495,11 @@ TextArea *LightpadPage::getTextArea() { return textArea; }
 
 Minimap *LightpadPage::getMinimap() { return minimap; }
 
-void LightpadPage::setTreeViewVisible(bool flag) { treeView->setVisible(flag); }
+void LightpadPage::setTreeViewVisible(bool flag) {
+  if (treeContainer) {
+    treeContainer->setVisible(flag);
+  }
+}
 
 void LightpadPage::setMinimapVisible(bool flag) {
   if (minimap) {
@@ -343,8 +511,63 @@ bool LightpadPage::isMinimapVisible() const {
   return minimap ? minimap->isMinimapVisible() : false;
 }
 
+void LightpadPage::applyTreeFilter() {
+  if (!treeView || !model) {
+    return;
+  }
+
+  const QString needle = m_treeFilterText.trimmed();
+  treeView->setUpdatesEnabled(false);
+
+  const QModelIndex root = treeView->rootIndex();
+  updateTreeVisibilityRecursive(root, needle);
+
+  if (!needle.isEmpty()) {
+    treeView->expandToDepth(2);
+  }
+
+  treeView->setUpdatesEnabled(true);
+  treeView->viewport()->update();
+}
+
+bool LightpadPage::updateTreeVisibilityRecursive(const QModelIndex &parent,
+                                                 const QString &needle) {
+  if (!model || !treeView) {
+    return false;
+  }
+
+  bool anyVisible = false;
+  const int rowCount = model->rowCount(parent);
+  for (int row = 0; row < rowCount; ++row) {
+    const QModelIndex idx = model->index(row, 0, parent);
+    if (!idx.isValid()) {
+      continue;
+    }
+
+    if (!needle.isEmpty() && model->canFetchMore(idx)) {
+      model->fetchMore(idx);
+    }
+
+    bool hasVisibleChild = false;
+    if (model->hasChildren(idx)) {
+      hasVisibleChild = updateTreeVisibilityRecursive(idx, needle);
+    }
+
+    const QString label = model->data(idx, Qt::DisplayRole).toString();
+    const bool selfMatch =
+        needle.isEmpty() || label.contains(needle, Qt::CaseInsensitive);
+    const bool visible = selfMatch || hasVisibleChild;
+
+    treeView->setRowHidden(row, parent, !visible);
+    anyVisible = anyVisible || visible;
+  }
+
+  return anyVisible;
+}
+
 void LightpadPage::setModelRootIndex(QString path) {
   treeView->setRootIndex(model->index(path));
+  applyTreeFilter();
   if (mainWindow) {
     auto *view = qobject_cast<LightpadTreeView *>(treeView);
     if (view) {
@@ -472,6 +695,13 @@ void LightpadPage::updateModel() {
   }
 
   treeView->setModel(model);
+  connect(model, &QFileSystemModel::directoryLoaded, this,
+          [this](const QString &) {
+            if (!m_treeFilterText.trimmed().isEmpty()) {
+              applyTreeFilter();
+            }
+          },
+          Qt::UniqueConnection);
 
   treeView->setColumnHidden(1, true);
   treeView->setColumnHidden(2, true);
@@ -483,13 +713,8 @@ void LightpadPage::updateModel() {
     treeView->setRootIndex(QModelIndex());
   }
 
-  if (!projectRootPath.isEmpty()) {
-    treeView->header()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    treeView->setHeaderHidden(false);
-    treeView->header()->setStretchLastSection(true);
-  } else {
-    treeView->setHeaderHidden(true);
-  }
+  treeView->setHeaderHidden(true);
+  applyTreeFilter();
 }
 
 QString LightpadPage::getFilePath() { return filePath; }
@@ -542,12 +767,13 @@ void LightpadPage::setProjectRootPath(const QString &path) {
   projectRootPath = path;
   if (model) {
     model->setRootHeaderLabel(projectRootPath);
-    treeView->setHeaderHidden(projectRootPath.isEmpty());
+    treeView->setHeaderHidden(true);
     if (projectRootPath.isEmpty()) {
       treeView->setRootIndex(QModelIndex());
     } else {
       treeView->setRootIndex(model->index(projectRootPath));
     }
+    applyTreeFilter();
   }
 }
 
@@ -573,8 +799,70 @@ void LightpadPage::refreshGitStatus() {
 }
 
 void LightpadPage::applyTheme(const Theme &theme) {
+  if (treeContainer) {
+    const QString panelTop = theme.surfaceColor.lighter(108).name();
+    const QString panelBottom = theme.surfaceColor.darker(102).name();
+    const QString border = theme.borderColor.name();
+    const QString muted = theme.singleLineCommentFormat.name();
+    const QString fg = theme.foregroundColor.name();
+    const QString filterBg = theme.surfaceAltColor.lighter(105).name();
+    const QString filterFocusBg = theme.surfaceAltColor.lighter(112).name();
+    const QString accent = theme.accentColor.name();
+    const QString pressed = theme.pressedColor.name();
+    treeContainer->setStyleSheet(
+        QString(
+            "#treeContainer {"
+            "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, "
+            "stop: 0 %1, stop: 1 %2);"
+            "  border-right: 1px solid %3;"
+            "}"
+            "#treeHeader {"
+            "  background: transparent;"
+            "  border-bottom: 1px solid %3;"
+            "}"
+            "QLabel#treeTitleLabel {"
+            "  color: %4;"
+            "  font-size: 10px;"
+            "  font-weight: 700;"
+            "  letter-spacing: 1px;"
+            "  padding: 2px 0;"
+            "}"
+            "QLineEdit#treeFilterEdit {"
+            "  background: %6;"
+            "  color: %5;"
+            "  border: 1px solid %3;"
+            "  border-radius: 8px;"
+            "  padding: 7px 10px;"
+            "}"
+            "QLineEdit#treeFilterEdit:focus {"
+            "  background: %7;"
+            "  border: 1px solid %8;"
+            "}"
+            "QToolButton#treeToolButton {"
+            "  background: %6;"
+            "  border: 1px solid %3;"
+            "  border-radius: 7px;"
+            "  padding: 4px;"
+            "  color: %5;"
+            "}"
+            "QToolButton#treeToolButton:hover {"
+            "  background: %7;"
+            "  border-color: %8;"
+            "}"
+            "QToolButton#treeToolButton:pressed {"
+            "  background: %9;"
+            "}")
+            .arg(panelTop, panelBottom, border, muted, fg, filterBg,
+                 filterFocusBg, accent, pressed));
+  }
+
   if (treeView) {
     treeView->setStyleSheet(UIStyleHelper::treeViewStyle(theme));
+    if (auto *delegate =
+            dynamic_cast<ExplorerTreeDelegate *>(treeView->itemDelegate())) {
+      delegate->setTheme(theme);
+    }
+    treeView->viewport()->update();
   }
 }
 

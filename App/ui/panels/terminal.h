@@ -97,8 +97,6 @@ signals:
   void shellProfileChanged(const QString &profileName);
 
 private slots:
-  void on_closeButton_clicked();
-
   void onRunProcessReadyReadStdout();
   void onRunProcessReadyReadStderr();
   void onRunProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);

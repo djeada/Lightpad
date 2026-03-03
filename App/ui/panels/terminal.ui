@@ -50,22 +50,6 @@
        </property>
       </widget>
      </item>
-     <item>
-      <widget class="QToolButton" name="closeButton">
-       <property name="text">
-        <string>...</string>
-       </property>
-       <property name="checkable">
-        <bool>true</bool>
-       </property>
-       <property name="autoRepeat">
-        <bool>false</bool>
-       </property>
-       <property name="autoExclusive">
-        <bool>true</bool>
-       </property>
-      </widget>
-     </item>
     </layout>
    </item>
    <item>

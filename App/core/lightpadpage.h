@@ -13,6 +13,9 @@
 class LightpadPage;
 class Minimap;
 class GitIntegration;
+class QLabel;
+class QLineEdit;
+class QToolButton;
 struct Theme;
 
 class LightpadTreeView : public QTreeView {
@@ -85,13 +88,25 @@ public:
   MainWindow *getMainWindow() const;
 
 private:
+  void applyTreeFilter();
+  bool updateTreeVisibilityRecursive(const QModelIndex &parent,
+                                     const QString &needle);
+
   MainWindow *mainWindow;
+  QWidget *treeContainer;
+  QWidget *treeHeader;
+  QLabel *treeTitleLabel;
+  QLineEdit *treeFilterEdit;
+  QToolButton *treeRefreshButton;
+  QToolButton *treeCollapseButton;
+  QToolButton *treeExpandButton;
   QTreeView *treeView;
   TextArea *textArea;
   Minimap *minimap;
   GitFileSystemModel *model;
   bool m_ownsModel;
   GitIntegration *m_gitIntegration;
+  QString m_treeFilterText;
   QString filePath;
   QString projectRootPath;
 };

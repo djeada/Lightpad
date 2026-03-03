@@ -34,16 +34,6 @@ Terminal::Terminal(QWidget *parent)
       m_inputStartPosition(0), m_baseFontSize(kDefaultFontSize),
       m_contextMenu(nullptr), m_copyAction(nullptr) {
   ui->setupUi(this);
-  ui->closeButton->setText(QStringLiteral("\u00D7"));
-  ui->closeButton->setToolTip(tr("Close Terminal"));
-  ui->closeButton->setAutoRaise(true);
-  ui->closeButton->setCursor(Qt::ArrowCursor);
-  ui->closeButton->setFixedSize(QSize(18, 18));
-  ui->closeButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
-  ui->closeButton->setCheckable(false);
-  ui->closeButton->setAutoExclusive(false);
-
-  ui->closeButton->setStyleSheet(closeButtonStyle(m_textColor, m_errorColor));
 
   m_shellProfile = ShellProfileManager::instance().defaultProfile();
 
@@ -446,13 +436,6 @@ void Terminal::onRunProcessError(QProcess::ProcessError error) {
   if (error == QProcess::FailedToStart || error == QProcess::Crashed) {
     cleanupRunProcess(true);
   }
-}
-
-void Terminal::on_closeButton_clicked() {
-  stopProcess();
-  stopShell();
-  emit destroyed();
-  close();
 }
 
 void Terminal::onReadyReadStandardOutput() {
@@ -1025,8 +1008,6 @@ void Terminal::updateStyleSheet() {
                scrollbarHoverColor);
 
   ui->textEdit->setStyleSheet(styleSheet);
-
-  ui->closeButton->setStyleSheet(closeButtonStyle(m_textColor, m_errorColor));
 
   QString cwdLabelStyle = QString("QLabel {"
                                   "  color: %1;"
