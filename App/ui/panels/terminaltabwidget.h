@@ -80,7 +80,6 @@ private slots:
   void onCloseButtonClicked();
   void onTabCloseRequested(int index);
   void onCurrentTabChanged(int index);
-  void onSplitTerminalClicked();
   void onKillProcessClicked();
   void onShellProfileSelected(const QString &profileName);
   void onTerminalLinkClicked(const QString &link);
@@ -95,16 +94,13 @@ private:
 
   QSplitter *m_splitter;
   QTabWidget *m_tabWidget;
-  QTabWidget *m_secondaryTabWidget;
   QToolButton *m_newTerminalButton;
   QToolButton *m_clearButton;
   QToolButton *m_killButton;
-  QToolButton *m_splitButton;
   QToolButton *m_closeButton;
   QMenu *m_shellProfileMenu;
   int m_terminalCounter;
   QString m_currentWorkingDirectory;
-  bool m_isSplit;
 };
 
 #endif

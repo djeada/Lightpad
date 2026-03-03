@@ -7,7 +7,6 @@
 #include <QDir>
 #include <QHBoxLayout>
 #include <QMenu>
-#include <QPlainTextEdit>
 #include <QSplitter>
 #include <QStyle>
 #include <QTabWidget>
@@ -16,10 +15,9 @@
 
 TerminalTabWidget::TerminalTabWidget(QWidget *parent)
     : QWidget(parent), m_splitter(nullptr), m_tabWidget(nullptr),
-      m_secondaryTabWidget(nullptr), m_newTerminalButton(nullptr),
-      m_clearButton(nullptr), m_killButton(nullptr), m_splitButton(nullptr),
-      m_closeButton(nullptr),
-      m_shellProfileMenu(nullptr), m_terminalCounter(0), m_isSplit(false) {
+      m_newTerminalButton(nullptr), m_clearButton(nullptr),
+      m_killButton(nullptr), m_closeButton(nullptr), m_shellProfileMenu(nullptr),
+      m_terminalCounter(0) {
   setObjectName("TerminalTabWidget");
 
   m_currentWorkingDirectory = QDir::currentPath();
@@ -91,14 +89,6 @@ void TerminalTabWidget::setupToolbar() {
   connect(m_killButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onKillProcessClicked);
 
-  m_splitButton = new QToolButton(toolbar);
-  m_splitButton->setToolTip(tr("Split Terminal"));
-  m_splitButton->setIcon(
-      qApp->style()->standardIcon(QStyle::SP_TitleBarNormalButton));
-  m_splitButton->setAutoRaise(true);
-  connect(m_splitButton, &QToolButton::clicked, this,
-          &TerminalTabWidget::onSplitTerminalClicked);
-
   m_closeButton = new QToolButton(toolbar);
   m_closeButton->setToolTip(tr("Close Terminal Panel"));
   m_closeButton->setText(QStringLiteral("\u00D7"));
@@ -112,7 +102,6 @@ void TerminalTabWidget::setupToolbar() {
   toolbarLayout->addWidget(m_newTerminalButton);
   toolbarLayout->addWidget(m_clearButton);
   toolbarLayout->addWidget(m_killButton);
-  toolbarLayout->addWidget(m_splitButton);
   toolbarLayout->addStretch();
   toolbarLayout->addWidget(m_closeButton);
 
@@ -202,11 +191,7 @@ Terminal *TerminalTabWidget::terminalAt(int index) {
 }
 
 int TerminalTabWidget::terminalCount() const {
-  int count = m_tabWidget->count();
-  if (m_secondaryTabWidget) {
-    count += m_secondaryTabWidget->count();
-  }
-  return count;
+  return m_tabWidget->count();
 }
 
 void TerminalTabWidget::closeTerminal(int index) {
@@ -235,19 +220,6 @@ void TerminalTabWidget::closeAllTerminals() {
       terminal->stopShell();
       m_tabWidget->removeTab(0);
       terminal->deleteLater();
-    }
-  }
-
-  if (m_secondaryTabWidget) {
-    while (m_secondaryTabWidget->count() > 0) {
-      Terminal *terminal =
-          qobject_cast<Terminal *>(m_secondaryTabWidget->widget(0));
-      if (terminal) {
-        terminal->stopProcess();
-        terminal->stopShell();
-        m_secondaryTabWidget->removeTab(0);
-        terminal->deleteLater();
-      }
     }
   }
 }
@@ -328,9 +300,6 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
                                .arg(borderColor, bgColor, textColor, bgColor);
 
   m_tabWidget->setStyleSheet(tabWidgetStyle);
-  if (m_secondaryTabWidget) {
-    m_secondaryTabWidget->setStyleSheet(tabWidgetStyle);
-  }
 
   const QString closeButtonStyle =
       Terminal::closeButtonStyle(textColor, pressedColor);
@@ -340,16 +309,6 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
     Terminal *terminal = terminalAt(i);
     if (terminal) {
       terminal->applyTheme(bgColor, textColor);
-    }
-  }
-
-  if (m_secondaryTabWidget) {
-    for (int i = 0; i < m_secondaryTabWidget->count(); ++i) {
-      Terminal *terminal =
-          qobject_cast<Terminal *>(m_secondaryTabWidget->widget(i));
-      if (terminal) {
-        terminal->applyTheme(bgColor, textColor);
-      }
     }
   }
 }
@@ -362,85 +321,11 @@ void TerminalTabWidget::sendTextToTerminal(const QString &text,
   }
 }
 
-void TerminalTabWidget::splitHorizontal() {
-  if (m_isSplit) {
-    return;
-  }
+void TerminalTabWidget::splitHorizontal() {}
 
-  m_secondaryTabWidget = new QTabWidget(this);
-  m_secondaryTabWidget->setTabsClosable(true);
-  m_secondaryTabWidget->setMovable(true);
-  m_secondaryTabWidget->setDocumentMode(true);
+bool TerminalTabWidget::isSplit() const { return false; }
 
-  connect(m_secondaryTabWidget, &QTabWidget::tabCloseRequested, this,
-          [this](int index) {
-            if (m_secondaryTabWidget) {
-              Terminal *terminal =
-                  qobject_cast<Terminal *>(m_secondaryTabWidget->widget(index));
-              if (terminal) {
-                terminal->stopProcess();
-                terminal->stopShell();
-                m_secondaryTabWidget->removeTab(index);
-                terminal->deleteLater();
-              }
-
-              if (m_secondaryTabWidget->count() == 0) {
-                unsplit();
-              }
-            }
-          });
-
-  m_splitter->addWidget(m_secondaryTabWidget);
-
-  Terminal *terminal = new Terminal(this);
-
-  if (!m_currentWorkingDirectory.isEmpty()) {
-    terminal->setWorkingDirectory(m_currentWorkingDirectory);
-  }
-
-  connect(terminal, &Terminal::processStarted, this,
-          &TerminalTabWidget::processStarted);
-  connect(terminal, &Terminal::processFinished, this,
-          &TerminalTabWidget::processFinished);
-  connect(terminal, &Terminal::processError, this,
-          &TerminalTabWidget::errorOccurred);
-  connect(terminal, &Terminal::linkClicked, this,
-          &TerminalTabWidget::onTerminalLinkClicked);
-  connect(terminal, &Terminal::processStarted, this,
-          &TerminalTabWidget::updateRunningState);
-  connect(terminal, &Terminal::processFinished, this,
-          [this](int) { updateRunningState(); });
-
-  QString tabName = generateTerminalName();
-  m_secondaryTabWidget->addTab(terminal, tabName);
-
-  m_isSplit = true;
-  m_splitButton->setToolTip(tr("Unsplit Terminal"));
-}
-
-bool TerminalTabWidget::isSplit() const { return m_isSplit; }
-
-void TerminalTabWidget::unsplit() {
-  if (!m_isSplit || !m_secondaryTabWidget) {
-    return;
-  }
-
-  while (m_secondaryTabWidget->count() > 0) {
-    Terminal *terminal =
-        qobject_cast<Terminal *>(m_secondaryTabWidget->widget(0));
-    if (terminal) {
-      terminal->stopProcess();
-      terminal->stopShell();
-      m_secondaryTabWidget->removeTab(0);
-      terminal->deleteLater();
-    }
-  }
-
-  m_splitter->widget(1)->deleteLater();
-  m_secondaryTabWidget = nullptr;
-  m_isSplit = false;
-  m_splitButton->setToolTip(tr("Split Terminal"));
-}
+void TerminalTabWidget::unsplit() {}
 
 QStringList TerminalTabWidget::availableShellProfiles() const {
   QStringList names;
@@ -462,14 +347,6 @@ void TerminalTabWidget::onTabCloseRequested(int index) { closeTerminal(index); }
 void TerminalTabWidget::onCurrentTabChanged(int index) {
   Q_UNUSED(index);
   updateRunningState();
-}
-
-void TerminalTabWidget::onSplitTerminalClicked() {
-  if (m_isSplit) {
-    unsplit();
-  } else {
-    splitHorizontal();
-  }
 }
 
 void TerminalTabWidget::onKillProcessClicked() {

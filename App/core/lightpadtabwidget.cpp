@@ -74,6 +74,11 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
 
 LightpadTabWidget::LightpadTabWidget(QWidget *parent) : QTabWidget(parent) {
   setupTabBar();
+  setDocumentMode(false);
+  setContentsMargins(0, 0, 0, 0);
+  tabBar()->setExpanding(false);
+  tabBar()->setUsesScrollButtons(true);
+  tabBar()->setContentsMargins(0, 0, 0, 0);
 
   QWidget::connect(tabBar(), &QTabBar::tabCloseRequested, this,
                    [this](int index) { removeTab(index); });
@@ -142,7 +147,7 @@ void LightpadTabWidget::updateCloseButtons() {
                   "  color: rgba(255, 255, 255, 0.4);"
                   "  background: transparent;"
                   "  border: none;"
-                  "  border-radius: 4px;"
+                  "  border-radius: 0px;"
                   "  padding: 2px;"
                   "  font-size: 14px;"
                   "  font-weight: bold;"
@@ -171,7 +176,7 @@ void LightpadTabWidget::updateCloseButtons() {
                 "  color: rgba(255, 255, 255, 0.4);"
                 "  background: transparent;"
                 "  border: none;"
-                "  border-radius: 4px;"
+                "  border-radius: 0px;"
                 "  padding: 2px;"
                 "  font-size: 14px;"
                 "  font-weight: bold;"
@@ -246,26 +251,66 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
 
       "QScrollBar:vertical { background: transparent; }"
       "QScrollBar:horizontal { background: transparent; }"
+      "QTabWidget::tab-bar { "
+      "  alignment: left; "
+      "  top: -3px; "
+      "  left: 0px; "
+      "  right: 0px; "
+      "  margin: 0px; "
+      "  padding: 0px; "
+      "  subcontrol-origin: margin; "
+      "  subcontrol-position: top left; "
+      "}"
 
       "QTabBar { "
       "background: " +
       backgroundColor +
       "; "
       "qproperty-drawBase: 0; "
+      "margin: 0px; "
+      "padding: 0px; "
+      "border: none; "
       "}"
 
       "QTabBar::tab { "
-      "color: #8b949e; "
+      "color: #9aa4b2; "
       "background-color: " +
       backgroundColor +
       "; "
-      "padding: 10px 18px; "
-      "margin: 4px 2px 0px 2px; "
-      "border-top-left-radius: 8px; "
-      "border-top-right-radius: 8px; "
-      "border: 1px solid transparent; "
-      "border-bottom: none; "
+      "padding: 8px 16px; "
+      "margin: 0px; "
+      "border: none; "
+      "border-right: 1px solid " +
+      borderColor +
+      "; "
+      "border-bottom: 1px solid " +
+      borderColor +
+      "; "
       "font-size: 13px; "
+      "min-height: 30px; "
+      "margin-top: 0px; "
+      "}"
+      "QTabBar::tab:disabled { "
+      "min-width: 30px; "
+      "max-width: 30px; "
+      "padding: 0px; "
+      "margin: 0px; "
+      "color: transparent; "
+      "background: " +
+      backgroundColor +
+      "; "
+      "border-left: 1px solid " +
+      borderColor +
+      "; "
+      "border-right: none; "
+      "border-bottom: 1px solid " +
+      borderColor +
+      "; "
+      "}"
+      "QTabBar::tab:first { "
+      "border-left: 1px solid " +
+      borderColor +
+      "; "
       "}"
 
       "QTabBar::tab:selected { "
@@ -275,12 +320,19 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "background-color: " +
       surfaceColor +
       "; "
-      "border: 1px solid " +
+      "border-left: 1px solid " +
+      borderColor +
+      "; "
+      "border-right: 1px solid " +
+      borderColor +
+      "; "
+      "border-top: 1px solid " +
       borderColor +
       "; "
       "border-bottom: 2px solid " +
       accentColor +
       "; "
+      "margin-top: 0px; "
       "}"
 
       "QTabBar::tab:hover:!selected { "
@@ -296,16 +348,19 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "background: " +
       backgroundColor +
       "; "
-      "border-radius: 6px; "
+      "border-radius: 0px; "
       "padding: 4px; "
-      "border: 1px solid transparent; "
+      "border: none; "
+      "border-left: 1px solid " +
+      borderColor +
+      "; "
+      "border-bottom: 1px solid " +
+      borderColor +
+      "; "
       "}"
       "QToolButton#AddTabButton:hover { "
       "background: " +
       hoverColor +
-      "; "
-      "border: 1px solid " +
-      borderColor +
       "; "
       "}"
 
@@ -313,7 +368,7 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "color: rgba(255, 255, 255, 0.4); "
       "background: transparent; "
       "border: none; "
-      "border-radius: 4px; "
+      "border-radius: 0px; "
       "padding: 2px; "
       "font-size: 14px; "
       "font-weight: bold; "
@@ -331,6 +386,12 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
 
       "QTabWidget::pane { "
       "border: none; "
+      "border-top: 1px solid " +
+      borderColor +
+      "; "
+      "top: -1px; "
+      "margin: 0px; "
+      "padding: 0px; "
       "background-color: " +
       backgroundColor +
       "; "

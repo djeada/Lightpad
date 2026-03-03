@@ -33,7 +33,7 @@ private slots:
   void testScrollbackLines();
   void testLinkDetection();
   void testSendText();
-  void testCloseButtonConfiguration();
+  void testNoEmbeddedCloseButton();
   void testCwdLabelExists();
   void testCwdLabelUpdatesOnDirectoryChange();
   void testContextMenuExists();
@@ -245,16 +245,13 @@ void TestTerminal::testSendText() {
   QVERIFY(true);
 }
 
-void TestTerminal::testCloseButtonConfiguration() {
+void TestTerminal::testNoEmbeddedCloseButton() {
   Terminal terminal;
   terminal.stopShell();
   QTest::qWait(200);
 
   QToolButton *closeButton = terminal.findChild<QToolButton *>("closeButton");
-  QVERIFY(closeButton != nullptr);
-  QCOMPARE(closeButton->text(), QStringLiteral("\u00D7"));
-  QVERIFY(!closeButton->isCheckable());
-  QVERIFY(closeButton->autoRaise());
+  QVERIFY(closeButton == nullptr);
 }
 
 void TestTerminal::testCwdLabelExists() {

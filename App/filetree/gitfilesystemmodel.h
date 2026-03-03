@@ -2,6 +2,7 @@
 #define GITFILESYSTEMMODEL_H
 
 #include "../git/gitintegration.h"
+#include <QHash>
 #include <QFileSystemModel>
 #include <QIcon>
 #include <QTimer>
@@ -41,10 +42,16 @@ private:
   QTimer *m_refreshTimer;
   mutable QMap<QString, GitFileInfo> m_statusCache;
   QString m_rootHeaderLabel;
+  mutable QHash<QString, QIcon> m_fileIconCache;
+  mutable QIcon m_folderIcon;
+  mutable QIcon m_fallbackFileIcon;
 
   QIcon getStatusIcon(const QString &filePath) const;
+  QIcon getBaseIcon(const QModelIndex &index, const QString &filePath) const;
+  QIcon getFileTypeIcon(const QString &filePath) const;
 
   QColor getStatusColor(const QString &filePath) const;
+  static QColor colorForFileExtension(const QString &extension);
 
   void updateStatusCache();
 
