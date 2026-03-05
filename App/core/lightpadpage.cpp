@@ -70,7 +70,14 @@ public:
       }
     }
 
-    opt.rect = rowRect.adjusted(6, 0, -4, 0);
+    const QString badge =
+        index.data(GitStatusBadgeRole).toString();
+    const QColor badgeColor =
+        index.data(GitStatusBadgeColorRole).value<QColor>();
+    const int badgeSpace =
+        (!badge.isEmpty() && badgeColor.isValid()) ? 18 : 0;
+
+    opt.rect = rowRect.adjusted(6, 0, -4 - badgeSpace, 0);
     opt.showDecorationSelected = false;
     opt.state &= ~QStyle::State_HasFocus;
     if (index.model() && index.model()->hasChildren(index)) {
@@ -81,6 +88,18 @@ public:
     opt.palette.setColor(QPalette::Text, m_textColor);
 
     QStyledItemDelegate::paint(painter, opt, index);
+
+    if (!badge.isEmpty() && badgeColor.isValid()) {
+      QFont badgeFont = opt.font;
+      badgeFont.setPixelSize(10);
+      badgeFont.setWeight(QFont::Bold);
+      painter->setFont(badgeFont);
+      painter->setPen(badgeColor);
+      QRect badgeRect(rowRect.right() - 18, rowRect.top(),
+                      16, rowRect.height());
+      painter->drawText(badgeRect, Qt::AlignCenter, badge);
+    }
+
     painter->restore();
   }
 
