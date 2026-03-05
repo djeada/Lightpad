@@ -1,14 +1,16 @@
 #include "debugpanel.h"
 #include "../../core/logging/logger.h"
-#include "../uistylehelper.h"
 
 #include <QAction>
+#include <QFrame>
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QMenu>
+#include <QPainter>
 #include <QPalette>
+#include <QStyledItemDelegate>
 #include <QStyle>
 #include <QTabBar>
 #include <QTextCharFormat>
@@ -21,6 +23,75 @@ constexpr int MAX_DEBUG_CONSOLE_BLOCKS = 2000;
 constexpr int MAX_DEBUG_CONSOLE_ENTRY_CHARS = 8192;
 constexpr int MAX_EAGER_SCOPE_LOADS = 1;
 constexpr int MAX_STACK_FRAMES_PER_REFRESH = 64;
+
+class DebugTreeDelegate : public QStyledItemDelegate {
+public:
+  explicit DebugTreeDelegate(QObject *parent = nullptr)
+      : QStyledItemDelegate(parent) {}
+
+  void setTheme(const Theme &theme) {
+    m_textColor = theme.foregroundColor;
+    m_hoverBackground = theme.hoverColor.lighter(108);
+    m_selectedBackground = theme.accentSoftColor.lighter(112);
+    m_selectedBorder = theme.accentColor;
+  }
+
+  void paint(QPainter *painter, const QStyleOptionViewItem &option,
+             const QModelIndex &index) const override {
+    if (!painter) {
+      return;
+    }
+
+    QStyleOptionViewItem opt(option);
+    initStyleOption(&opt, index);
+
+    const bool isSelected = opt.state.testFlag(QStyle::State_Selected);
+    const bool isHovered = opt.state.testFlag(QStyle::State_MouseOver);
+
+    QRect rowRect = opt.rect.adjusted(4, 1, -4, -1);
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+
+    if (isSelected || isHovered) {
+      const QColor bg = isSelected ? m_selectedBackground : m_hoverBackground;
+      const QColor border = isSelected ? m_selectedBorder : bg.lighter(110);
+      painter->setPen(border);
+      painter->setBrush(bg);
+      painter->drawRoundedRect(rowRect, 7, 7);
+
+      if (isSelected) {
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(m_selectedBorder);
+        painter->drawRoundedRect(
+            QRect(rowRect.left() + 2, rowRect.top() + 4, 3, rowRect.height() - 8),
+            1, 1);
+      }
+    }
+
+    opt.rect = rowRect.adjusted(8, 0, -6, 0);
+    opt.state &= ~QStyle::State_HasFocus;
+    opt.showDecorationSelected = false;
+    opt.palette.setColor(QPalette::Highlight, Qt::transparent);
+    opt.palette.setColor(QPalette::HighlightedText, m_textColor);
+    opt.palette.setColor(QPalette::Text, m_textColor);
+
+    QStyledItemDelegate::paint(painter, opt, index);
+    painter->restore();
+  }
+
+  QSize sizeHint(const QStyleOptionViewItem &option,
+                 const QModelIndex &index) const override {
+    QSize size = QStyledItemDelegate::sizeHint(option, index);
+    size.setHeight(qMax(size.height(), 24));
+    return size + QSize(0, 2);
+  }
+
+private:
+  QColor m_textColor = QColor("#dce4ee");
+  QColor m_hoverBackground = QColor("#2a3340");
+  QColor m_selectedBackground = QColor("#234162");
+  QColor m_selectedBorder = QColor("#5da7ff");
+};
 
 void applyTreePalette(QTreeWidget *tree, const Theme &theme) {
   if (!tree) {
@@ -125,106 +196,316 @@ void DebugPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
   m_themeInitialized = true;
 
-  setStyleSheet(QString("QWidget#debugPanel {"
-                        "  background: %1;"
-                        "  color: %2;"
-                        "}")
-                    .arg(theme.backgroundColor.name())
-                    .arg(theme.foregroundColor.name()));
+  QColor panelTop = theme.surfaceColor.lighter(106);
+  QColor panelBottom = theme.surfaceColor.darker(102);
+  QColor cardSurface = theme.surfaceAltColor.lighter(104);
+  QColor inputSurface = theme.surfaceAltColor.lighter(112);
+  QColor focusSurface = theme.surfaceAltColor.lighter(124);
+  QColor readyBg = theme.accentSoftColor;
+  readyBg.setAlpha(70);
+  QColor startingBg = theme.warningColor;
+  startingBg.setAlpha(50);
+  QColor runningBg = theme.warningColor;
+  runningBg.setAlpha(45);
+  QColor pausedBg = theme.successColor;
+  pausedBg.setAlpha(50);
+  QColor errorBg = theme.errorColor;
+  errorBg.setAlpha(60);
 
-  const QString treeStyle = UIStyleHelper::treeWidgetStyle(theme);
+  setStyleSheet(
+      QString("QWidget#debugPanel {"
+              "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+              "stop:0 %1, stop:1 %2);"
+              "  color: %3;"
+              "}"
+              "QWidget#debugTabsCard, QWidget#debugConsoleCard {"
+              "  background: %4;"
+              "  border: 1px solid %5;"
+              "  border-radius: 10px;"
+              "}"
+              "QWidget#debugWatchContainer {"
+              "  background: transparent;"
+              "  border: none;"
+              "}"
+              "QLabel#debugConsoleTitle {"
+              "  color: %6;"
+              "  font-size: 10px;"
+              "  font-weight: 700;"
+              "  letter-spacing: 1px;"
+              "  padding: 2px 2px 0px 2px;"
+              "}"
+              "QLineEdit#debugWatchInput, QLineEdit#debugConsoleInput {"
+              "  background: %7;"
+              "  color: %3;"
+              "  border: 1px solid %5;"
+              "  border-radius: 8px;"
+              "  padding: 6px 10px;"
+              "}"
+              "QLineEdit#debugWatchInput:focus, QLineEdit#debugConsoleInput:focus {"
+              "  background: %8;"
+              "  border-color: %9;"
+              "}"
+              "QTextEdit#debugConsoleOutput {"
+              "  background: %10;"
+              "  color: %3;"
+              "  border: 1px solid %5;"
+              "  border-radius: 8px;"
+              "  selection-background-color: %11;"
+              "  selection-color: %3;"
+              "}")
+          .arg(panelTop.name(), panelBottom.name(), theme.foregroundColor.name(),
+               cardSurface.name(), theme.borderColor.name(),
+               theme.singleLineCommentFormat.name(), inputSurface.name(),
+               focusSurface.name(), theme.accentColor.name(),
+               theme.backgroundColor.name(), theme.accentSoftColor.name()));
+
+  const QString treeStyle = QString(
+                                "QTreeWidget {"
+                                "  background: %1;"
+                                "  alternate-background-color: %2;"
+                                "  color: %3;"
+                                "  border: 1px solid %4;"
+                                "  border-radius: 8px;"
+                                "  outline: none;"
+                                "  selection-background-color: %5;"
+                                "  selection-color: %3;"
+                                "}"
+                                "QTreeWidget::item {"
+                                "  padding: 5px 8px;"
+                                "  margin: 1px 3px;"
+                                "  border-radius: 6px;"
+                                "}"
+                                "QTreeWidget::item:focus {"
+                                "  outline: none;"
+                                "}"
+                                "QTreeWidget::item:selected {"
+                                "  background: transparent;"
+                                "  color: %3;"
+                                "}"
+                                "QTreeWidget::item:hover:!selected {"
+                                "  background: transparent;"
+                                "}"
+                                "QTreeWidget::branch {"
+                                "  background: transparent;"
+                                "}"
+                                "QTreeWidget::branch:has-children:closed,"
+                                "QTreeWidget::branch:closed:has-children:has-siblings {"
+                                "  image: url(:/resources/icons/branch_closed.png);"
+                                "}"
+                                "QTreeWidget::branch:has-children:open,"
+                                "QTreeWidget::branch:open:has-children:has-siblings {"
+                                "  image: url(:/resources/icons/branch_open.png);"
+                                "}"
+                                "QTreeWidget::branch:selected {"
+                                "  background: transparent;"
+                                "}"
+                                "QHeaderView::section {"
+                                "  background: %7;"
+                                "  color: %8;"
+                                "  border: none;"
+                                "  border-bottom: 1px solid %4;"
+                                "  padding: 6px 8px;"
+                                "  font-size: 10px;"
+                                "  font-weight: 700;"
+                                "  text-transform: uppercase;"
+                                "}"
+                                "QScrollBar:vertical {"
+                                "  background: transparent;"
+                                "  width: 6px;"
+                                "  margin: 2px 0 2px 0;"
+                                "}"
+                                "QScrollBar::handle:vertical {"
+                                "  background: %4;"
+                                "  min-height: 18px;"
+                                "  border-radius: 3px;"
+                                "}"
+                                "QScrollBar::handle:vertical:hover {"
+                                "  background: %8;"
+                                "}"
+                                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                                "  height: 0px;"
+                                "}"
+                                "QScrollBar:horizontal {"
+                                "  background: transparent;"
+                                "  height: 6px;"
+                                "  margin: 0 2px 0 2px;"
+                                "}"
+                                "QScrollBar::handle:horizontal {"
+                                "  background: %4;"
+                                "  min-width: 18px;"
+                                "  border-radius: 3px;"
+                                "}"
+                                "QScrollBar::handle:horizontal:hover {"
+                                "  background: %8;"
+                                "}"
+                                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+                                "  width: 0px;"
+                                "}")
+                                .arg(theme.backgroundColor.name())
+                                .arg(theme.surfaceColor.name())
+                                .arg(theme.foregroundColor.name())
+                                .arg(theme.borderColor.name())
+                                .arg(theme.accentSoftColor.name())
+                                .arg(theme.hoverColor.name())
+                                .arg(theme.surfaceAltColor.name())
+                                .arg(theme.singleLineCommentFormat.name());
+
   for (QTreeWidget *tree :
        {m_callStackTree, m_variablesTree, m_watchTree, m_breakpointsTree}) {
     if (!tree) {
       continue;
     }
     tree->setStyleSheet(treeStyle);
+    if (tree->header()) {
+      tree->header()->setDefaultSectionSize(26);
+      tree->header()->setMinimumSectionSize(20);
+      tree->header()->setFixedHeight(24);
+    }
+    if (auto *delegate =
+            dynamic_cast<DebugTreeDelegate *>(tree->itemDelegate())) {
+      delegate->setTheme(theme);
+    }
     applyTreePalette(tree, theme);
   }
 
   if (m_toolbar) {
-    m_toolbar->setStyleSheet(QString("QToolBar {"
+    m_toolbar->setStyleSheet(QString("QToolBar#debugToolbar {"
                                      "  background: %1;"
+                                     "  border: none;"
                                      "  border-bottom: 1px solid %2;"
-                                     "  spacing: 4px;"
-                                     "  padding: 2px 4px;"
+                                     "  spacing: 6px;"
+                                     "  padding: 6px 8px;"
                                      "}"
-                                     "QToolButton {"
+                                     "QToolBar#debugToolbar::separator {"
+                                     "  background: %2;"
+                                     "  width: 1px;"
+                                     "  margin: 3px 6px;"
+                                     "}"
+                                     "QToolBar#debugToolbar QToolButton {"
                                      "  color: %3;"
-                                     "  background: %7;"
-                                     "  border: 1px solid %2;"
-                                     "  border-radius: 5px;"
+                                     "  background: transparent;"
+                                     "  border: 1px solid transparent;"
+                                     "  border-radius: 7px;"
                                      "  padding: 5px 9px;"
-                                     "  margin: 0 1px;"
+                                     "  margin: 0;"
                                      "  font-weight: 600;"
                                      "  qproperty-cursor: PointingHandCursor;"
                                      "}"
-                                     "QToolButton:hover {"
+                                     "QToolBar#debugToolbar QToolButton:hover {"
                                      "  background: %4;"
-                                     "  border-color: %8;"
-                                     "}"
-                                     "QToolButton:pressed {"
-                                     "  background: %5;"
-                                     "}"
-                                     "QToolButton:disabled {"
-                                     "  color: %6;"
-                                     "  background: %1;"
                                      "  border-color: %2;"
                                      "}"
-                                     "QComboBox {"
-                                     "  min-height: 24px;"
+                                     "QToolBar#debugToolbar QToolButton:pressed {"
+                                     "  background: %5;"
+                                     "  border-color: %6;"
+                                     "}"
+                                     "QToolBar#debugToolbar QToolButton:disabled {"
+                                     "  color: %7;"
+                                     "  background: transparent;"
+                                     "  border-color: transparent;"
+                                     "}"
+                                     "QComboBox#debugThreadSelector {"
+                                     "  min-height: 26px;"
                                      "  padding: 2px 8px;"
                                      "  border: 1px solid %2;"
-                                     "  border-radius: 4px;"
+                                     "  border-radius: 7px;"
+                                     "  background: %8;"
+                                     "  color: %3;"
+                                     "}"
+                                     "QComboBox#debugThreadSelector:hover {"
+                                     "  border-color: %6;"
+                                     "}"
+                                     "QComboBox#debugThreadSelector::drop-down {"
+                                     "  border: none;"
                                      "}"
                                      "QLabel#debugStatusLabel {"
+                                     "  padding: 4px 10px;"
+                                     "  margin-left: 6px;"
+                                     "  font-weight: 700;"
+                                     "  border: 1px solid %2;"
+                                     "  border-radius: 10px;"
+                                     "  background: %9;"
                                      "  color: %3;"
-                                     "  padding-left: 8px;"
-                                     "  font-weight: 600;"
+                                     "}"
+                                     "QLabel#debugStatusLabel[statusKind=\"ready\"] {"
+                                     "  border-color: %6;"
+                                     "  background: %9;"
+                                     "}"
+                                     "QLabel#debugStatusLabel[statusKind=\"starting\"] {"
+                                     "  border-color: %10;"
+                                     "  background: %11;"
+                                     "  color: %10;"
+                                     "}"
+                                     "QLabel#debugStatusLabel[statusKind=\"running\"] {"
+                                     "  border-color: %10;"
+                                     "  background: %12;"
+                                     "  color: %10;"
+                                     "}"
+                                     "QLabel#debugStatusLabel[statusKind=\"paused\"] {"
+                                     "  border-color: %13;"
+                                     "  background: %14;"
+                                     "  color: %13;"
+                                     "}"
+                                     "QLabel#debugStatusLabel[statusKind=\"error\"] {"
+                                     "  border-color: %15;"
+                                     "  background: %16;"
+                                     "  color: %15;"
                                      "}")
                                  .arg(theme.surfaceColor.name())
                                  .arg(theme.borderColor.name())
                                  .arg(theme.foregroundColor.name())
                                  .arg(theme.hoverColor.name())
                                  .arg(theme.pressedColor.name())
+                                 .arg(theme.accentColor.name())
                                  .arg(theme.singleLineCommentFormat.name())
                                  .arg(theme.surfaceAltColor.name())
-                                 .arg(theme.accentColor.name()));
+                                 .arg(readyBg.name(QColor::HexArgb))
+                                 .arg(theme.warningColor.name())
+                                 .arg(startingBg.name(QColor::HexArgb))
+                                 .arg(runningBg.name(QColor::HexArgb))
+                                 .arg(theme.successColor.name())
+                                 .arg(pausedBg.name(QColor::HexArgb))
+                                 .arg(theme.errorColor.name())
+                                 .arg(errorBg.name(QColor::HexArgb)));
   }
 
   if (m_tabWidget) {
-    m_tabWidget->setDocumentMode(true);
+    m_tabWidget->setDocumentMode(false);
     m_tabWidget->setUsesScrollButtons(true);
     if (m_tabWidget->tabBar()) {
       m_tabWidget->tabBar()->setExpanding(false);
       m_tabWidget->tabBar()->setElideMode(Qt::ElideRight);
     }
-    m_tabWidget->setStyleSheet(QString("QTabWidget::pane {"
+    m_tabWidget->setStyleSheet(QString("QTabWidget#debugTabWidget::pane {"
                                        "  border: 1px solid %1;"
+                                       "  border-top: none;"
                                        "  background: %2;"
-                                       "  border-radius: 6px;"
-                                       "  top: -1px;"
+                                       "  margin: 0;"
+                                       "  padding: 0;"
                                        "}"
-                                       "QTabBar::tab {"
+                                       "QTabWidget#debugTabWidget QTabBar {"
+                                       "  background: %3;"
+                                       "  margin: 0;"
+                                       "}"
+                                       "QTabWidget#debugTabWidget QTabBar::tab {"
                                        "  background: %3;"
                                        "  color: %4;"
-                                       "  border: 1px solid %1;"
-                                       "  border-bottom: none;"
-                                       "  border-top-left-radius: 5px;"
-                                       "  border-top-right-radius: 5px;"
-                                       "  padding: 7px 11px;"
-                                       "  margin-right: 2px;"
+                                       "  border: none;"
+                                       "  border-bottom: 2px solid transparent;"
+                                       "  padding: 8px 12px;"
+                                       "  margin: 0 2px 0 0;"
                                        "}"
-                                       "QTabBar::tab:selected {"
+                                       "QTabWidget#debugTabWidget QTabBar::tab:selected {"
                                        "  background: %2;"
                                        "  color: %5;"
-                                       "  border-color: %6;"
+                                       "  border-bottom: 2px solid %6;"
                                        "}"
-                                       "QTabBar::tab:hover {"
+                                       "QTabWidget#debugTabWidget QTabBar::tab:hover:!selected {"
                                        "  background: %6;"
+                                       "  color: %5;"
                                        "}")
                                    .arg(theme.borderColor.name())
-                                   .arg(theme.backgroundColor.name())
+                                   .arg(theme.surfaceAltColor.name())
                                    .arg(theme.surfaceColor.name())
                                    .arg(theme.singleLineCommentFormat.name())
                                    .arg(theme.foregroundColor.name())
@@ -242,30 +523,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
                                       .arg(theme.accentColor.name()));
   }
 
-  if (m_threadSelector) {
-    m_threadSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-  }
-  if (m_watchInput) {
-    m_watchInput->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  }
-  if (m_consoleInput) {
-    m_consoleInput->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  }
-
   if (m_consoleOutput) {
-    m_consoleOutput->setStyleSheet(QString("QTextEdit {"
-                                           "  background: %1;"
-                                           "  color: %2;"
-                                           "  border: 1px solid %3;"
-                                           "  border-radius: 4px;"
-                                           "  selection-background-color: %4;"
-                                           "  selection-color: %2;"
-                                           "}")
-                                       .arg(theme.backgroundColor.name())
-                                       .arg(theme.foregroundColor.name())
-                                       .arg(theme.borderColor.name())
-                                       .arg(theme.accentSoftColor.name()));
-
     QPalette consolePalette = m_consoleOutput->palette();
     consolePalette.setColor(QPalette::Base, theme.backgroundColor);
     consolePalette.setColor(QPalette::Text, theme.foregroundColor);
@@ -276,6 +534,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
 }
 
 void DebugPanel::setupUI() {
+  setObjectName("debugPanel");
   QVBoxLayout *mainLayout = new QVBoxLayout(this);
   mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(0);
@@ -284,27 +543,50 @@ void DebugPanel::setupUI() {
   mainLayout->addWidget(m_toolbar);
 
   m_mainSplitter = new QSplitter(Qt::Vertical, this);
+  m_mainSplitter->setObjectName("debugMainSplitter");
   m_mainSplitter->setChildrenCollapsible(false);
   m_mainSplitter->setHandleWidth(5);
 
   m_tabWidget = new QTabWidget(this);
+  m_tabWidget->setObjectName("debugTabWidget");
 
   setupVariables();
   setupWatches();
   setupCallStack();
   setupBreakpoints();
 
-  m_tabWidget->addTab(m_variablesTree, tr("Variables"));
-  m_tabWidget->addTab(m_watchTree->parentWidget(), tr("Watch"));
-  m_tabWidget->addTab(m_callStackTree, tr("Call Stack"));
-  m_tabWidget->addTab(m_breakpointsTree, tr("Breakpoints"));
+  const int variablesTab = m_tabWidget->addTab(m_variablesTree, tr("Variables"));
+  const int watchesTab =
+      m_tabWidget->addTab(m_watchTree->parentWidget(), tr("Watches"));
+  const int callStackTab = m_tabWidget->addTab(m_callStackTree, tr("Call Stack"));
+  const int breakpointsTab =
+      m_tabWidget->addTab(m_breakpointsTree, tr("Breakpoints"));
+  m_tabWidget->setTabIcon(
+      variablesTab, style()->standardIcon(QStyle::SP_FileDialogContentsView));
+  m_tabWidget->setTabIcon(
+      watchesTab, style()->standardIcon(QStyle::SP_FileDialogDetailedView));
+  m_tabWidget->setTabIcon(
+      callStackTab, style()->standardIcon(QStyle::SP_ArrowUp));
+  m_tabWidget->setTabIcon(
+      breakpointsTab, style()->standardIcon(QStyle::SP_BrowserStop));
 
-  m_mainSplitter->addWidget(m_tabWidget);
+  QWidget *tabsCard = new QWidget(this);
+  tabsCard->setObjectName("debugTabsCard");
+  QVBoxLayout *tabsCardLayout = new QVBoxLayout(tabsCard);
+  tabsCardLayout->setContentsMargins(8, 6, 8, 8);
+  tabsCardLayout->setSpacing(0);
+  tabsCardLayout->addWidget(m_tabWidget);
+  m_mainSplitter->addWidget(tabsCard);
 
   QWidget *consoleWidget = new QWidget(this);
+  consoleWidget->setObjectName("debugConsoleCard");
   QVBoxLayout *consoleLayout = new QVBoxLayout(consoleWidget);
-  consoleLayout->setContentsMargins(0, 0, 0, 0);
-  consoleLayout->setSpacing(2);
+  consoleLayout->setContentsMargins(8, 6, 8, 8);
+  consoleLayout->setSpacing(6);
+
+  QLabel *consoleTitle = new QLabel(tr("DEBUG CONSOLE"), consoleWidget);
+  consoleTitle->setObjectName("debugConsoleTitle");
+  consoleLayout->addWidget(consoleTitle);
 
   setupConsole();
   consoleLayout->addWidget(m_consoleOutput);
@@ -318,6 +600,7 @@ void DebugPanel::setupUI() {
 
 void DebugPanel::setupToolbar() {
   m_toolbar = new QToolBar(this);
+  m_toolbar->setObjectName("debugToolbar");
   m_toolbar->setIconSize(QSize(16, 16));
   m_toolbar->setMovable(false);
   m_toolbar->setFloatable(false);
@@ -399,6 +682,7 @@ void DebugPanel::setupToolbar() {
   m_toolbar->addSeparator();
 
   m_threadSelector = new QComboBox(this);
+  m_threadSelector->setObjectName("debugThreadSelector");
   m_threadSelector->setToolTip(tr("Select active thread"));
   m_threadSelector->setStatusTip(tr("Select active thread"));
   m_threadSelector->setMinimumWidth(150);
@@ -419,12 +703,19 @@ void DebugPanel::setupToolbar() {
 
 void DebugPanel::setupCallStack() {
   m_callStackTree = new QTreeWidget(this);
+  m_callStackTree->setObjectName("debugCallStackTree");
   m_callStackTree->setHeaderLabels({tr("Function"), tr("File"), tr("Line")});
   m_callStackTree->setRootIsDecorated(false);
   m_callStackTree->setSelectionMode(QAbstractItemView::SingleSelection);
-  m_callStackTree->setAlternatingRowColors(true);
+  m_callStackTree->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_callStackTree->setAlternatingRowColors(false);
   m_callStackTree->setUniformRowHeights(true);
-  m_callStackTree->setAllColumnsShowFocus(true);
+  m_callStackTree->setAllColumnsShowFocus(false);
+  m_callStackTree->setFrameShape(QFrame::NoFrame);
+  m_callStackTree->setMouseTracking(true);
+  m_callStackTree->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+  m_callStackTree->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+  m_callStackTree->setItemDelegate(new DebugTreeDelegate(m_callStackTree));
 
   m_callStackTree->header()->setStretchLastSection(false);
   m_callStackTree->header()->setHighlightSections(false);
@@ -446,12 +737,19 @@ void DebugPanel::setupCallStack() {
 
 void DebugPanel::setupVariables() {
   m_variablesTree = new QTreeWidget(this);
+  m_variablesTree->setObjectName("debugVariablesTree");
   m_variablesTree->setHeaderLabels({tr("Name"), tr("Value"), tr("Type")});
   m_variablesTree->setSelectionMode(QAbstractItemView::SingleSelection);
-  m_variablesTree->setAlternatingRowColors(true);
+  m_variablesTree->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_variablesTree->setAlternatingRowColors(false);
   m_variablesTree->setUniformRowHeights(true);
-  m_variablesTree->setAllColumnsShowFocus(true);
+  m_variablesTree->setAllColumnsShowFocus(false);
+  m_variablesTree->setFrameShape(QFrame::NoFrame);
+  m_variablesTree->setMouseTracking(true);
+  m_variablesTree->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+  m_variablesTree->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
   m_variablesTree->setIndentation(14);
+  m_variablesTree->setItemDelegate(new DebugTreeDelegate(m_variablesTree));
 
   m_variablesTree->header()->setStretchLastSection(false);
   m_variablesTree->header()->setHighlightSections(false);
@@ -467,18 +765,26 @@ void DebugPanel::setupVariables() {
 void DebugPanel::setupWatches() {
 
   QWidget *watchContainer = new QWidget(this);
+  watchContainer->setObjectName("debugWatchContainer");
   QVBoxLayout *watchLayout = new QVBoxLayout(watchContainer);
-  watchLayout->setContentsMargins(0, 0, 0, 0);
-  watchLayout->setSpacing(2);
+  watchLayout->setContentsMargins(8, 6, 8, 8);
+  watchLayout->setSpacing(6);
 
   m_watchTree = new QTreeWidget(watchContainer);
+  m_watchTree->setObjectName("debugWatchTree");
   m_watchTree->setHeaderLabels({tr("Expression"), tr("Value"), tr("Type")});
   m_watchTree->setSelectionMode(QAbstractItemView::SingleSelection);
-  m_watchTree->setAlternatingRowColors(true);
+  m_watchTree->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_watchTree->setAlternatingRowColors(false);
   m_watchTree->setRootIsDecorated(true);
   m_watchTree->setUniformRowHeights(true);
-  m_watchTree->setAllColumnsShowFocus(true);
+  m_watchTree->setAllColumnsShowFocus(false);
+  m_watchTree->setFrameShape(QFrame::NoFrame);
+  m_watchTree->setMouseTracking(true);
+  m_watchTree->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+  m_watchTree->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
   m_watchTree->setIndentation(14);
+  m_watchTree->setItemDelegate(new DebugTreeDelegate(m_watchTree));
 
   m_watchTree->header()->setStretchLastSection(false);
   m_watchTree->header()->setHighlightSections(false);
@@ -508,11 +814,13 @@ void DebugPanel::setupWatches() {
   watchLayout->addWidget(m_watchTree);
 
   QHBoxLayout *inputLayout = new QHBoxLayout();
-  inputLayout->setContentsMargins(2, 0, 2, 2);
+  inputLayout->setContentsMargins(0, 0, 0, 0);
 
   m_watchInput = new QLineEdit(watchContainer);
+  m_watchInput->setObjectName("debugWatchInput");
   m_watchInput->setPlaceholderText(tr("Add watch expression..."));
   m_watchInput->setClearButtonEnabled(true);
+  m_watchInput->setMinimumHeight(30);
   connect(m_watchInput, &QLineEdit::returnPressed, this,
           &DebugPanel::onAddWatch);
 
@@ -522,12 +830,19 @@ void DebugPanel::setupWatches() {
 
 void DebugPanel::setupBreakpoints() {
   m_breakpointsTree = new QTreeWidget(this);
+  m_breakpointsTree->setObjectName("debugBreakpointsTree");
   m_breakpointsTree->setHeaderLabels({tr(""), tr("Location"), tr("Condition")});
   m_breakpointsTree->setRootIsDecorated(false);
   m_breakpointsTree->setSelectionMode(QAbstractItemView::SingleSelection);
-  m_breakpointsTree->setAlternatingRowColors(true);
+  m_breakpointsTree->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_breakpointsTree->setAlternatingRowColors(false);
   m_breakpointsTree->setUniformRowHeights(true);
-  m_breakpointsTree->setAllColumnsShowFocus(true);
+  m_breakpointsTree->setAllColumnsShowFocus(false);
+  m_breakpointsTree->setFrameShape(QFrame::NoFrame);
+  m_breakpointsTree->setMouseTracking(true);
+  m_breakpointsTree->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+  m_breakpointsTree->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+  m_breakpointsTree->setItemDelegate(new DebugTreeDelegate(m_breakpointsTree));
 
   m_breakpointsTree->header()->setStretchLastSection(true);
   m_breakpointsTree->header()->setHighlightSections(false);
@@ -541,6 +856,7 @@ void DebugPanel::setupBreakpoints() {
 
 void DebugPanel::setupConsole() {
   m_consoleOutput = new QTextEdit(this);
+  m_consoleOutput->setObjectName("debugConsoleOutput");
   m_consoleOutput->setReadOnly(true);
   m_consoleOutput->setUndoRedoEnabled(false);
   m_consoleOutput->document()->setMaximumBlockCount(MAX_DEBUG_CONSOLE_BLOCKS);
@@ -550,9 +866,11 @@ void DebugPanel::setupConsole() {
   m_consoleOutput->setPlaceholderText(tr("Debug console output..."));
 
   m_consoleInput = new QLineEdit(this);
+  m_consoleInput->setObjectName("debugConsoleInput");
   m_consoleInput->setFont(fixedFont);
   m_consoleInput->setPlaceholderText(tr("Evaluate expression..."));
   m_consoleInput->setClearButtonEnabled(true);
+  m_consoleInput->setMinimumHeight(30);
 
   connect(m_consoleInput, &QLineEdit::returnPressed, this,
           &DebugPanel::onConsoleInput);
@@ -1293,30 +1611,42 @@ void DebugPanel::updateToolbarState() {
 
   if (m_debugStatusLabel) {
     QString statusText;
+    QString statusKind = QStringLiteral("ready");
     switch (state) {
     case DapClient::State::Disconnected:
     case DapClient::State::Ready:
     case DapClient::State::Terminated:
       statusText = tr("Ready: press Start (F5)");
+      statusKind = QStringLiteral("ready");
       break;
     case DapClient::State::Connecting:
     case DapClient::State::Initializing:
       statusText = tr("Starting debugger...");
+      statusKind = QStringLiteral("starting");
       break;
     case DapClient::State::Running:
       statusText = m_stepInProgress
                        ? tr("Stepping... waiting for next stop")
                        : tr("Running: Pause (F6) or Stop (Shift+F5)");
+      statusKind = QStringLiteral("running");
       break;
     case DapClient::State::Stopped:
       statusText = tr("Paused: Step (F10/F11) or Continue (F5)");
+      statusKind = QStringLiteral("paused");
       break;
     case DapClient::State::Error:
       statusText = tr("Debugger error: Stop and restart");
+      statusKind = QStringLiteral("error");
       break;
     }
     m_debugStatusLabel->setText(statusText);
     m_debugStatusLabel->setToolTip(statusText);
+    if (m_debugStatusLabel->property("statusKind").toString() != statusKind) {
+      m_debugStatusLabel->setProperty("statusKind", statusKind);
+      m_debugStatusLabel->style()->unpolish(m_debugStatusLabel);
+      m_debugStatusLabel->style()->polish(m_debugStatusLabel);
+      m_debugStatusLabel->update();
+    }
   }
 
   m_consoleInput->setEnabled(isStopped);
