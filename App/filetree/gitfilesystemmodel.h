@@ -5,9 +5,15 @@
 #include <QHash>
 #include <QFileSystemModel>
 #include <QIcon>
+#include <QSet>
 #include <QTimer>
 
 constexpr int GIT_STATUS_REFRESH_DEBOUNCE_MS = 500;
+
+enum GitModelRole {
+  GitStatusBadgeRole = Qt::UserRole + 100,
+  GitStatusBadgeColorRole
+};
 
 class GitFileSystemModel : public QFileSystemModel {
   Q_OBJECT
@@ -33,6 +39,10 @@ public:
   QVariant headerData(int section, Qt::Orientation orientation,
                       int role = Qt::DisplayRole) const override;
 
+  QString statusBadge(const QString &filePath) const;
+  QColor statusBadgeColor(const QString &filePath) const;
+  bool isDirtyDirectory(const QString &dirPath) const;
+
 private slots:
   void onGitStatusChanged();
 
@@ -41,6 +51,7 @@ private:
   bool m_gitStatusEnabled;
   QTimer *m_refreshTimer;
   mutable QMap<QString, GitFileInfo> m_statusCache;
+  mutable QSet<QString> m_dirtyDirectories;
   QString m_rootHeaderLabel;
   mutable QHash<QString, QIcon> m_fileIconCache;
   mutable QIcon m_folderIcon;
@@ -54,6 +65,7 @@ private:
   static QColor colorForFileExtension(const QString &extension);
 
   void updateStatusCache();
+  void rebuildDirtyDirectories();
 
   static void initializeIcons();
 

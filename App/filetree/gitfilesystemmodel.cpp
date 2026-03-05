@@ -144,9 +144,44 @@ QVariant GitFileSystemModel::data(const QModelIndex &index, int role) const {
   if (index.column() == 0 && role == Qt::ForegroundRole && m_gitStatusEnabled &&
       m_gitIntegration && m_gitIntegration->isValidRepository()) {
     QString currentFilePath = filePath(index);
-    QColor statusColor = getStatusColor(currentFilePath);
-    if (statusColor.isValid()) {
-      return statusColor;
+    if (isDir(index)) {
+      if (isDirtyDirectory(currentFilePath)) {
+        return QColor("#d8a13c");
+      }
+    } else {
+      QColor statusColor = getStatusColor(currentFilePath);
+      if (statusColor.isValid()) {
+        return statusColor;
+      }
+    }
+  }
+
+  if (index.column() == 0 && role == GitStatusBadgeRole &&
+      m_gitStatusEnabled && m_gitIntegration &&
+      m_gitIntegration->isValidRepository()) {
+    const QString currentFilePath = filePath(index);
+    if (isDir(index)) {
+      if (isDirtyDirectory(currentFilePath)) {
+        return QStringLiteral("\u2022");
+      }
+      return QVariant();
+    }
+    return statusBadge(currentFilePath);
+  }
+
+  if (index.column() == 0 && role == GitStatusBadgeColorRole &&
+      m_gitStatusEnabled && m_gitIntegration &&
+      m_gitIntegration->isValidRepository()) {
+    const QString currentFilePath = filePath(index);
+    if (isDir(index)) {
+      if (isDirtyDirectory(currentFilePath)) {
+        return QColor("#d8a13c");
+      }
+      return QVariant();
+    }
+    QColor color = statusBadgeColor(currentFilePath);
+    if (color.isValid()) {
+      return color;
     }
   }
 
@@ -176,6 +211,7 @@ void GitFileSystemModel::updateStatusCache() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
     const bool hadEntries = !m_statusCache.isEmpty();
     m_statusCache.clear();
+    m_dirtyDirectories.clear();
     if (hadEntries) {
       emit layoutChanged();
     }
@@ -193,7 +229,27 @@ void GitFileSystemModel::updateStatusCache() {
     m_statusCache[absolutePath] = info;
   }
 
+  rebuildDirtyDirectories();
+
   emit layoutChanged();
+}
+
+void GitFileSystemModel::rebuildDirtyDirectories() {
+  m_dirtyDirectories.clear();
+  for (auto it = m_statusCache.constBegin(); it != m_statusCache.constEnd();
+       ++it) {
+    QDir dir = QFileInfo(it.key()).absoluteDir();
+    while (!dir.isRoot()) {
+      const QString dirPath = dir.absolutePath();
+      if (m_dirtyDirectories.contains(dirPath)) {
+        break;
+      }
+      m_dirtyDirectories.insert(dirPath);
+      if (!dir.cdUp()) {
+        break;
+      }
+    }
+  }
 }
 
 QIcon GitFileSystemModel::getBaseIcon(const QModelIndex &index,
@@ -368,4 +424,55 @@ QColor GitFileSystemModel::getStatusColor(const QString &filePath) const {
   }
 
   return QColor();
+}
+
+QString GitFileSystemModel::statusBadge(const QString &filePath) const {
+  auto it = m_statusCache.find(filePath);
+  if (it == m_statusCache.end()) {
+    return QString();
+  }
+
+  const GitFileInfo &info = it.value();
+
+  if (info.indexStatus != GitFileStatus::Clean) {
+    switch (info.indexStatus) {
+    case GitFileStatus::Added:
+      return QStringLiteral("A");
+    case GitFileStatus::Modified:
+      return QStringLiteral("M");
+    case GitFileStatus::Deleted:
+      return QStringLiteral("D");
+    case GitFileStatus::Renamed:
+      return QStringLiteral("R");
+    case GitFileStatus::Copied:
+      return QStringLiteral("C");
+    case GitFileStatus::Unmerged:
+      return QStringLiteral("C");
+    default:
+      break;
+    }
+  }
+
+  switch (info.workTreeStatus) {
+  case GitFileStatus::Modified:
+    return QStringLiteral("M");
+  case GitFileStatus::Untracked:
+    return QStringLiteral("U");
+  case GitFileStatus::Deleted:
+    return QStringLiteral("D");
+  case GitFileStatus::Unmerged:
+    return QStringLiteral("C");
+  default:
+    break;
+  }
+
+  return QString();
+}
+
+QColor GitFileSystemModel::statusBadgeColor(const QString &filePath) const {
+  return getStatusColor(filePath);
+}
+
+bool GitFileSystemModel::isDirtyDirectory(const QString &dirPath) const {
+  return m_dirtyDirectories.contains(dirPath);
 }
