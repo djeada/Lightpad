@@ -447,7 +447,7 @@ QString GitFileSystemModel::statusBadge(const QString &filePath) const {
     case GitFileStatus::Copied:
       return QStringLiteral("C");
     case GitFileStatus::Unmerged:
-      return QStringLiteral("C");
+      return QStringLiteral("!");
     default:
       break;
     }
@@ -461,7 +461,7 @@ QString GitFileSystemModel::statusBadge(const QString &filePath) const {
   case GitFileStatus::Deleted:
     return QStringLiteral("D");
   case GitFileStatus::Unmerged:
-    return QStringLiteral("C");
+    return QStringLiteral("!");
   default:
     break;
   }

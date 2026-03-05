@@ -6,6 +6,9 @@
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
 
+constexpr int GIT_CMD_TIMEOUT_MS = 5000;
+constexpr int STATUS_REFRESH_WAIT_MS = 600;
+
 class TestGitFileSystemModel : public QObject {
   Q_OBJECT
 
@@ -38,7 +41,7 @@ bool TestGitFileSystemModel::runGitCommand(const QStringList &args) {
   QProcess process;
   process.setWorkingDirectory(m_repoPath);
   process.start("git", args);
-  process.waitForFinished(5000);
+  process.waitForFinished(GIT_CMD_TIMEOUT_MS);
   return process.exitCode() == 0;
 }
 
@@ -78,7 +81,7 @@ void TestGitFileSystemModel::testStatusBadgeModified() {
   createTestFile("initial.txt", "modified content");
   m_git->refresh();
   m_model->refreshGitStatus();
-  QTest::qWait(600);
+  QTest::qWait(STATUS_REFRESH_WAIT_MS);
 
   QString badge = m_model->statusBadge(m_repoPath + "/initial.txt");
   QCOMPARE(badge, QStringLiteral("M"));
@@ -88,7 +91,7 @@ void TestGitFileSystemModel::testStatusBadgeUntracked() {
   createTestFile("newfile.txt", "untracked");
   m_git->refresh();
   m_model->refreshGitStatus();
-  QTest::qWait(600);
+  QTest::qWait(STATUS_REFRESH_WAIT_MS);
 
   QString badge = m_model->statusBadge(m_repoPath + "/newfile.txt");
   QCOMPARE(badge, QStringLiteral("U"));
@@ -99,7 +102,7 @@ void TestGitFileSystemModel::testStatusBadgeAdded() {
   runGitCommand({"add", "staged.txt"});
   m_git->refresh();
   m_model->refreshGitStatus();
-  QTest::qWait(600);
+  QTest::qWait(STATUS_REFRESH_WAIT_MS);
 
   QString badge = m_model->statusBadge(m_repoPath + "/staged.txt");
   QCOMPARE(badge, QStringLiteral("A"));
@@ -112,7 +115,7 @@ void TestGitFileSystemModel::testStatusBadgeDeleted() {
   runGitCommand({"rm", "todelete.txt"});
   m_git->refresh();
   m_model->refreshGitStatus();
-  QTest::qWait(600);
+  QTest::qWait(STATUS_REFRESH_WAIT_MS);
 
   QString badge = m_model->statusBadge(m_repoPath + "/todelete.txt");
   QCOMPARE(badge, QStringLiteral("D"));
@@ -127,7 +130,7 @@ void TestGitFileSystemModel::testStatusBadgeColorModified() {
   createTestFile("initial.txt", "modified again");
   m_git->refresh();
   m_model->refreshGitStatus();
-  QTest::qWait(600);
+  QTest::qWait(STATUS_REFRESH_WAIT_MS);
 
   QColor color = m_model->statusBadgeColor(m_repoPath + "/initial.txt");
   QVERIFY(color.isValid());
@@ -138,7 +141,7 @@ void TestGitFileSystemModel::testStatusBadgeColorUntracked() {
   createTestFile("untracked2.txt", "content");
   m_git->refresh();
   m_model->refreshGitStatus();
-  QTest::qWait(600);
+  QTest::qWait(STATUS_REFRESH_WAIT_MS);
 
   QColor color = m_model->statusBadgeColor(m_repoPath + "/untracked2.txt");
   QVERIFY(color.isValid());
@@ -149,7 +152,7 @@ void TestGitFileSystemModel::testDirtyDirectoryPropagation() {
   createTestFile("subdir/dirty.txt", "dirty content");
   m_git->refresh();
   m_model->refreshGitStatus();
-  QTest::qWait(600);
+  QTest::qWait(STATUS_REFRESH_WAIT_MS);
 
   QVERIFY(m_model->isDirtyDirectory(m_repoPath + "/subdir"));
   QVERIFY(m_model->isDirtyDirectory(m_repoPath));
@@ -159,7 +162,7 @@ void TestGitFileSystemModel::testDirtyDirectoryNested() {
   createTestFile("a/b/c/deep.txt", "deep content");
   m_git->refresh();
   m_model->refreshGitStatus();
-  QTest::qWait(600);
+  QTest::qWait(STATUS_REFRESH_WAIT_MS);
 
   QVERIFY(m_model->isDirtyDirectory(m_repoPath + "/a/b/c"));
   QVERIFY(m_model->isDirtyDirectory(m_repoPath + "/a/b"));
@@ -174,7 +177,7 @@ void TestGitFileSystemModel::testCustomRolesViaData() {
   createTestFile("initial.txt", "changed for data test");
   m_git->refresh();
   m_model->refreshGitStatus();
-  QTest::qWait(600);
+  QTest::qWait(STATUS_REFRESH_WAIT_MS);
 
   m_model->setRootPath(m_repoPath);
   QModelIndex root = m_model->index(m_repoPath);
