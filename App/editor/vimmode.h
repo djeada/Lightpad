@@ -202,12 +202,10 @@ private:
   void setMark(QChar mark);
   bool jumpToMark(QChar mark);
 
-  // Dot-repeat
   void repeatLastChange();
   void beginChangeRecording(int count);
   void endChangeRecording();
 
-  // Registers
   void setRegister(QChar reg, const QString &text, bool linewise = false);
   VimRegister getRegister(QChar reg) const;
   void pushDeleteHistory(const QString &text, bool linewise);
@@ -215,34 +213,27 @@ private:
   void deleteToRegister(const QString &text, bool linewise = false);
   void pasteFromRegister(QChar reg, bool after);
 
-  // Macros
   void startMacroRecording(QChar reg);
   void stopMacroRecording();
   void playbackMacro(QChar reg, int count = 1);
 
-  // Increment/Decrement
   void incrementNumber(int delta);
 
-  // Search
   void searchWord(bool forward);
   void searchNext(bool forward);
   void scrollLines(int lines);
   void clearSearchHighlight();
 
-  // Visual mode helpers
   void visualIndent(bool indent);
   void visualToggleCase();
   void visualLowercase();
   void visualUppercase();
   void visualJoinLines();
 
-  // Last insert tracking
   void trackInsertPosition();
 
-  // g commands
   bool handleGPrefix(QKeyEvent *event, int count);
 
-  // Pending key display
   void updatePendingKeys();
 
   QPlainTextEdit *m_editor;
@@ -261,14 +252,11 @@ private:
 
   QMap<QChar, int> m_marks;
 
-  // Named registers: a-z, "+, "0, "1-"9, "_, "., ""
   QMap<QChar, VimRegister> m_registers;
   QChar m_pendingRegister;
 
-  // Delete history ring ("1-"9)
   QVector<VimRegister> m_deleteHistory;
 
-  // Dot-repeat
   struct ReplayableChange {
     QVector<int> keyCodes;
     QVector<Qt::KeyboardModifiers> keyMods;
@@ -283,7 +271,6 @@ private:
   int m_recordCount;
   bool m_replaying;
 
-  // Macros
   bool m_macroRecording;
   QChar m_macroRegister;
   QVector<int> m_macroKeyCodes;
@@ -291,15 +278,12 @@ private:
   QStringList m_macroKeyTexts;
   QChar m_lastMacroRegister;
 
-  // Last insert position for gi
   int m_lastInsertPosition;
 
-  // Last visual selection for gv
   int m_lastVisualStart;
   int m_lastVisualEnd;
   VimEditMode m_lastVisualMode;
 
-  // Insert/replace undo grouping — groups all edits into one undo step
   bool m_insertUndoOpen = false;
 
   QStringList m_commandHistory;

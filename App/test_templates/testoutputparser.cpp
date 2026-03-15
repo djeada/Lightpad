@@ -6,8 +6,6 @@
 #include <QRegularExpression>
 #include <QXmlStreamReader>
 
-// --- TAP Parser ---
-
 TapParser::TapParser(QObject *parent) : ITestOutputParser(parent) {}
 
 void TapParser::feed(const QByteArray &data) {
@@ -64,8 +62,6 @@ void TapParser::parseLine(const QString &line) {
     emit testFinished(result);
   }
 }
-
-// --- JUnit XML Parser ---
 
 JunitXmlParser::JunitXmlParser(QObject *parent) : ITestOutputParser(parent) {}
 
@@ -131,8 +127,6 @@ void JunitXmlParser::finish() {
   m_buffer.clear();
 }
 
-// --- JSON Parser (go test -json, jest json, cargo json) ---
-
 JsonTestParser::JsonTestParser(QObject *parent) : ITestOutputParser(parent) {}
 
 void JsonTestParser::feed(const QByteArray &data) {
@@ -162,7 +156,6 @@ void JsonTestParser::parseLine(const QString &line) {
 
   QJsonObject obj = doc.object();
 
-  // Go test -json format
   if (obj.contains("Action")) {
     QString action = obj["Action"].toString();
     QString testName = obj["Test"].toString();
@@ -183,10 +176,10 @@ void JsonTestParser::parseLine(const QString &line) {
       result.id = pkg + "/" + testName;
       result.name = testName;
       result.suite = pkg;
-      result.status = (action == "pass")    ? TestStatus::Passed
-                      : (action == "fail")  ? TestStatus::Failed
-                      : (action == "skip")  ? TestStatus::Skipped
-                                            : TestStatus::Errored;
+      result.status = (action == "pass")   ? TestStatus::Passed
+                      : (action == "fail") ? TestStatus::Failed
+                      : (action == "skip") ? TestStatus::Skipped
+                                           : TestStatus::Errored;
       double elapsed = obj["Elapsed"].toDouble();
       if (elapsed > 0)
         result.durationMs = static_cast<int>(elapsed * 1000);
@@ -195,7 +188,6 @@ void JsonTestParser::parseLine(const QString &line) {
     return;
   }
 
-  // Jest JSON format (batch)
   if (obj.contains("testResults")) {
     QJsonArray results = obj["testResults"].toArray();
     for (const QJsonValue &suiteVal : results) {
@@ -215,7 +207,7 @@ void JsonTestParser::parseLine(const QString &line) {
         result.durationMs = testObj["duration"].toInt();
 
         QString status = testObj["status"].toString();
-        result.status = (status == "passed")  ? TestStatus::Passed
+        result.status = (status == "passed")   ? TestStatus::Passed
                         : (status == "failed") ? TestStatus::Failed
                         : (status == "pending" || status == "skipped")
                             ? TestStatus::Skipped
@@ -234,7 +226,6 @@ void JsonTestParser::parseLine(const QString &line) {
     return;
   }
 
-  // Cargo test JSON format
   if (obj.contains("type")) {
     QString type = obj["type"].toString();
     if (type == "test") {
@@ -250,7 +241,7 @@ void JsonTestParser::parseLine(const QString &line) {
         TestResult result;
         result.id = name;
         result.name = name;
-        result.status = (event == "ok")      ? TestStatus::Passed
+        result.status = (event == "ok")       ? TestStatus::Passed
                         : (event == "failed") ? TestStatus::Failed
                                               : TestStatus::Skipped;
         if (obj.contains("stdout"))
@@ -260,8 +251,6 @@ void JsonTestParser::parseLine(const QString &line) {
     }
   }
 }
-
-// --- Pytest Parser ---
 
 PytestParser::PytestParser(QObject *parent) : ITestOutputParser(parent) {}
 
@@ -293,7 +282,6 @@ void PytestParser::finish() {
 void PytestParser::parseLine(const QString &line) {
   emit outputLine(line, false);
 
-  // Match pytest verbose output: path/test_file.py::test_name PASSED/FAILED/SKIPPED/ERROR
   static QRegularExpression resultRe(
       R"(^(.+?)::(.+?)\s+(PASSED|FAILED|SKIPPED|ERROR|XFAIL|XPASS)(?:\s+\[\s*\d+%\])?$)");
   auto match = resultRe.match(line.trimmed());
@@ -318,14 +306,12 @@ void PytestParser::parseLine(const QString &line) {
     return;
   }
 
-  // Match FAILURES section header
   static QRegularExpression failureHeaderRe(R"(^=+ FAILURES =+$)");
   if (failureHeaderRe.match(line.trimmed()).hasMatch()) {
     m_inFailures = true;
     return;
   }
 
-  // Match individual failure header
   if (m_inFailures) {
     static QRegularExpression failNameRe(R"(^_+ (.+?) _+$)");
     auto failMatch = failNameRe.match(line.trimmed());
@@ -345,14 +331,11 @@ void PytestParser::parseLine(const QString &line) {
     }
   }
 
-  // Duration line: e.g., "===== 2 passed in 0.12s ====="
   static QRegularExpression summaryRe(R"(=+\s+(\d+)\s+passed)");
   if (summaryRe.match(line.trimmed()).hasMatch()) {
     m_inFailures = false;
   }
 }
-
-// --- CTest Parser ---
 
 CtestParser::CtestParser(QObject *parent) : ITestOutputParser(parent) {}
 
@@ -375,7 +358,6 @@ void CtestParser::finish() {
 void CtestParser::parseLine(const QString &line) {
   emit outputLine(line, false);
 
-  // Match CTest verbose output: "N/M Test #N: TestName .............. Passed X.XX sec"
   static QRegularExpression resultRe(
       R"(^\s*\d+/\d+\s+Test\s+#(\d+):\s+(\S+)\s+\.+\s*(Passed|Failed|\*\*\*Failed|Not Run|Timeout)\s+(\d+\.\d+)\s+sec$)");
   auto match = resultRe.match(line.trimmed());
@@ -397,7 +379,6 @@ void CtestParser::parseLine(const QString &line) {
     return;
   }
 
-  // Match "Start N: TestName"
   static QRegularExpression startRe(R"(^\s*Start\s+(\d+):\s+(\S+)\s*$)");
   auto startMatch = startRe.match(line.trimmed());
   if (startMatch.hasMatch()) {
@@ -408,8 +389,6 @@ void CtestParser::parseLine(const QString &line) {
     emit testStarted(result);
   }
 }
-
-// --- Generic Regex Parser ---
 
 GenericRegexParser::GenericRegexParser(QObject *parent)
     : ITestOutputParser(parent) {
@@ -460,8 +439,7 @@ void GenericRegexParser::parseLine(const QString &line) {
   auto passMatch = m_passRegex.match(line);
   if (passMatch.hasMatch()) {
     TestResult result;
-    result.name =
-        passMatch.captured(passMatch.lastCapturedIndex()).trimmed();
+    result.name = passMatch.captured(passMatch.lastCapturedIndex()).trimmed();
     result.id = result.name;
     result.status = TestStatus::Passed;
     emit testFinished(result);
@@ -471,8 +449,7 @@ void GenericRegexParser::parseLine(const QString &line) {
   auto failMatch = m_failRegex.match(line);
   if (failMatch.hasMatch()) {
     TestResult result;
-    result.name =
-        failMatch.captured(failMatch.lastCapturedIndex()).trimmed();
+    result.name = failMatch.captured(failMatch.lastCapturedIndex()).trimmed();
     result.id = result.name;
     result.status = TestStatus::Failed;
     emit testFinished(result);
@@ -482,8 +459,7 @@ void GenericRegexParser::parseLine(const QString &line) {
   auto skipMatch = m_skipRegex.match(line);
   if (skipMatch.hasMatch()) {
     TestResult result;
-    result.name =
-        skipMatch.captured(skipMatch.lastCapturedIndex()).trimmed();
+    result.name = skipMatch.captured(skipMatch.lastCapturedIndex()).trimmed();
     result.id = result.name;
     result.status = TestStatus::Skipped;
     emit testFinished(result);
@@ -491,10 +467,9 @@ void GenericRegexParser::parseLine(const QString &line) {
   }
 }
 
-// --- Factory ---
-
-ITestOutputParser *TestOutputParserFactory::createParser(
-    const QString &formatId, QObject *parent) {
+ITestOutputParser *
+TestOutputParserFactory::createParser(const QString &formatId,
+                                      QObject *parent) {
   if (formatId == "tap")
     return new TapParser(parent);
   if (formatId == "junit_xml")
@@ -509,6 +484,5 @@ ITestOutputParser *TestOutputParserFactory::createParser(
   if (formatId == "generic")
     return new GenericRegexParser(parent);
 
-  // Default to generic
   return new GenericRegexParser(parent);
 }

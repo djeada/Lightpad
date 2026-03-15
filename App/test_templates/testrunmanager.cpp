@@ -26,8 +26,6 @@ void TestRunManager::runFailed(const TestConfiguration &config,
   if (failed.isEmpty())
     return;
 
-  // Join failed test names as the filter string; the configuration's
-  // runFailed.args template uses ${testName} for substitution
   QString filter = failed.join(':');
   startProcess(config, workspaceFolder, QString(), filter, RunMode::Failed);
 }
@@ -73,17 +71,14 @@ void TestRunManager::clearResults() {
 void TestRunManager::startProcess(const TestConfiguration &config,
                                   const QString &workspaceFolder,
                                   const QString &filePath,
-                                  const QString &testName,
-                                  RunMode mode) {
+                                  const QString &testName, RunMode mode) {
   stop();
   clearResults();
 
   m_parser = TestOutputParserFactory::createParser(config.outputFormat, this);
 
   connect(m_parser, &ITestOutputParser::testStarted, this,
-          [this](const TestResult &r) {
-            emit testStarted(r);
-          });
+          [this](const TestResult &r) { emit testStarted(r); });
 
   connect(m_parser, &ITestOutputParser::testFinished, this,
           [this](const TestResult &r) {
@@ -116,7 +111,6 @@ void TestRunManager::startProcess(const TestConfiguration &config,
 
   m_process = new QProcess(this);
 
-  // Select the appropriate args template based on run mode
   QStringList templateArgs;
   switch (mode) {
   case RunMode::Failed:
@@ -147,7 +141,6 @@ void TestRunManager::startProcess(const TestConfiguration &config,
     break;
   }
 
-  // Resolve command and args via variable substitution
   QStringList args;
   for (const QString &arg : templateArgs) {
     args.append(TestConfigurationManager::substituteVariables(

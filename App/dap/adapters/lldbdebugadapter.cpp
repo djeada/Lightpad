@@ -19,8 +19,8 @@ public:
     config["request"] = "launch";
     config["program"] = filePath;
     config["stopOnEntry"] = false;
-    config["cwd"] = workingDir.isEmpty() ? QFileInfo(filePath).absolutePath()
-                                         : workingDir;
+    config["cwd"] =
+        workingDir.isEmpty() ? QFileInfo(filePath).absolutePath() : workingDir;
     return config;
   }
 
@@ -53,9 +53,10 @@ private:
     return cfg;
   }
 
-  QString
-  adapterExecutableCandidate(const DebugConfiguration &configuration) const override {
-    const QString configured = optionValue(configuration, adapterExecutableKey());
+  QString adapterExecutableCandidate(
+      const DebugConfiguration &configuration) const override {
+    const QString configured =
+        optionValue(configuration, adapterExecutableKey());
     if (!configured.isEmpty()) {
       return configured;
     }
@@ -69,8 +70,8 @@ private:
     return config().program;
   }
 
-  QStringList
-  executableProbeArguments(const DebugConfiguration &configuration) const override {
+  QStringList executableProbeArguments(
+      const DebugConfiguration &configuration) const override {
     Q_UNUSED(configuration);
     return {"--help"};
   }
@@ -79,7 +80,8 @@ private:
                                    const QString &candidate) const override {
     Q_UNUSED(configuration);
     if (!candidate.isEmpty()) {
-      return QString("LLDB adapter '%1' not found. Install LLDB with DAP support.")
+      return QString(
+                 "LLDB adapter '%1' not found. Install LLDB with DAP support.")
           .arg(candidate);
     }
     return "LLDB adapter not found. Install LLDB with DAP support.";

@@ -16,8 +16,8 @@
 TerminalTabWidget::TerminalTabWidget(QWidget *parent)
     : QWidget(parent), m_splitter(nullptr), m_tabWidget(nullptr),
       m_newTerminalButton(nullptr), m_clearButton(nullptr),
-      m_killButton(nullptr), m_closeButton(nullptr), m_shellProfileMenu(nullptr),
-      m_terminalCounter(0) {
+      m_killButton(nullptr), m_closeButton(nullptr),
+      m_shellProfileMenu(nullptr), m_terminalCounter(0) {
   setObjectName("TerminalTabWidget");
 
   m_currentWorkingDirectory = QDir::currentPath();
@@ -82,8 +82,7 @@ void TerminalTabWidget::setupToolbar() {
 
   m_killButton = new QToolButton(toolbar);
   m_killButton->setToolTip(tr("Kill Terminal Process"));
-  m_killButton->setIcon(
-      qApp->style()->standardIcon(QStyle::SP_BrowserStop));
+  m_killButton->setIcon(qApp->style()->standardIcon(QStyle::SP_BrowserStop));
   m_killButton->setAutoRaise(true);
   m_killButton->setEnabled(false);
   connect(m_killButton, &QToolButton::clicked, this,
@@ -190,9 +189,7 @@ Terminal *TerminalTabWidget::terminalAt(int index) {
   return qobject_cast<Terminal *>(m_tabWidget->widget(index));
 }
 
-int TerminalTabWidget::terminalCount() const {
-  return m_tabWidget->count();
-}
+int TerminalTabWidget::terminalCount() const { return m_tabWidget->count(); }
 
 void TerminalTabWidget::closeTerminal(int index) {
   if (index < 0 || index >= m_tabWidget->count()) {

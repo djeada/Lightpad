@@ -321,9 +321,9 @@ private:
   QString selectedDebugConfigurationName() const;
   QString selectedCompoundDebugConfigurationName() const;
   bool prepareDebugConfigurationForStart(const DebugConfiguration &config,
-                                        const QString &currentFilePath,
-                                        DebugConfiguration *resolvedConfig,
-                                        QString *errorMessage);
+                                         const QString &currentFilePath,
+                                         DebugConfiguration *resolvedConfig,
+                                         QString *errorMessage);
   bool startDebugConfigurationByName(const QString &configurationName);
   bool startCompoundDebugConfigurationByName(const QString &compoundName);
   void startDebuggingForCurrentFile();

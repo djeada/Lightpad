@@ -30,8 +30,8 @@
 #include <QStringListModel>
 #include <QTextDocument>
 #include <QVBoxLayout>
-#include <cstring>
 #include <cstdio>
+#include <cstring>
 #include <functional>
 
 #include "../completion/completionengine.h"
@@ -46,14 +46,14 @@
 #include "../core/recentfilesmanager.h"
 #include "../core/textarea.h"
 #include "../dap/debugsettings.h"
-#include "../definition/symbolnavigationservice.h"
 #include "../definition/idefinitionprovider.h"
 #include "../definition/languagelspdefinitionprovider.h"
+#include "../definition/symbolnavigationservice.h"
 #include "../diagnostics/diagnosticsmanager.h"
 #include "../diagnostics/diagnosticutils.h"
-#include "../language/languagefeaturemanager.h"
 #include "../filetree/gitfilesystemmodel.h"
 #include "../format_templates/formattemplatemanager.h"
+#include "../language/languagefeaturemanager.h"
 #include "../run_templates/runtemplatemanager.h"
 #include "../syntax/syntaxpluginregistry.h"
 #include "dialogs/commandpalette.h"
@@ -113,27 +113,25 @@ MainWindow::MainWindow(QWidget *parent)
       vimStatusLabel(nullptr), m_vimCommandPanelActive(false),
       m_connectedVimMode(nullptr), breadcrumbWidget(nullptr),
       recentFilesManager(nullptr), navigationHistory(nullptr),
-      m_symbolNavService(nullptr),
-      autoSaveManager(nullptr), m_splitEditorContainer(nullptr),
-      m_gitIntegration(nullptr), sourceControlPanel(nullptr),
-      sourceControlDock(nullptr), m_inlineBlameEnabled(false),
-      m_heatmapEnabled(false), m_codeLensEnabled(false),
-      m_gitBranchLabel(nullptr), m_gitSyncLabel(nullptr),
-      m_gitDirtyLabel(nullptr), m_debugTargetMenu(nullptr),
-      debugPanel(nullptr), debugDock(nullptr),
-      testPanel(nullptr), testDock(nullptr),
-      m_debugStartInProgress(false), m_breakpointsSetConnection(),
-      m_breakpointChangedConnection(), m_runInTerminalConnection(),
-      m_sessionTerminatedConnection(),
+      m_symbolNavService(nullptr), autoSaveManager(nullptr),
+      m_splitEditorContainer(nullptr), m_gitIntegration(nullptr),
+      sourceControlPanel(nullptr), sourceControlDock(nullptr),
+      m_inlineBlameEnabled(false), m_heatmapEnabled(false),
+      m_codeLensEnabled(false), m_gitBranchLabel(nullptr),
+      m_gitSyncLabel(nullptr), m_gitDirtyLabel(nullptr),
+      m_debugTargetMenu(nullptr), debugPanel(nullptr), debugDock(nullptr),
+      testPanel(nullptr), testDock(nullptr), m_debugStartInProgress(false),
+      m_breakpointsSetConnection(), m_breakpointChangedConnection(),
+      m_runInTerminalConnection(), m_sessionTerminatedConnection(),
       m_sessionErrorConnection(), m_sessionStateConnection(),
       m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
       m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
       m_diagnosticsManager(nullptr), m_languageFeatureManager(nullptr),
       m_restoringSession(false), m_globalSettingsLoaded(false),
       m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
-      m_treeScrollValue(0),
-      m_treeScrollValueInitialized(false), m_treeScrollSyncing(false),
-      m_treeCurrentPath(""), m_treeSelectionSyncing(false) {
+      m_treeScrollValue(0), m_treeScrollValueInitialized(false),
+      m_treeScrollSyncing(false), m_treeCurrentPath(""),
+      m_treeSelectionSyncing(false) {
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
   ui->menubar->setNativeMenuBar(false);
@@ -243,9 +241,8 @@ MainWindow::MainWindow(QWidget *parent)
   connect(&BreakpointManager::instance(), &BreakpointManager::breakpointAdded,
           this, [saveBreakpoints](const Breakpoint &) { saveBreakpoints(); });
   connect(&BreakpointManager::instance(), &BreakpointManager::breakpointRemoved,
-          this, [saveBreakpoints](int, const QString &, int) {
-            saveBreakpoints();
-          });
+          this,
+          [saveBreakpoints](int, const QString &, int) { saveBreakpoints(); });
   connect(&BreakpointManager::instance(), &BreakpointManager::breakpointChanged,
           this, [saveBreakpoints](const Breakpoint &) { saveBreakpoints(); });
   connect(&BreakpointManager::instance(),
@@ -382,14 +379,15 @@ void MainWindow::connectVimMode(TextArea *textArea) {
             } else if (command == "nextTab") {
               LightpadTabWidget *tabWidget = currentTabWidget();
               if (tabWidget && tabWidget->count() > 1) {
-                tabWidget->setCurrentIndex(
-                    (tabWidget->currentIndex() + 1) % tabWidget->count());
+                tabWidget->setCurrentIndex((tabWidget->currentIndex() + 1) %
+                                           tabWidget->count());
               }
             } else if (command == "prevTab") {
               LightpadTabWidget *tabWidget = currentTabWidget();
               if (tabWidget && tabWidget->count() > 1) {
                 int idx = tabWidget->currentIndex() - 1;
-                if (idx < 0) idx = tabWidget->count() - 1;
+                if (idx < 0)
+                  idx = tabWidget->count() - 1;
                 tabWidget->setCurrentIndex(idx);
               }
             } else if (command == "splitHorizontal") {
@@ -409,8 +407,8 @@ void MainWindow::connectVimMode(TextArea *textArea) {
               if (vimStatusLabel)
                 updateVimStatusLabel(textArea->vimMode()->modeName());
             } else {
-              showVimStatusMessage(
-                  textArea->vimMode()->modeName() + "  " + keys);
+              showVimStatusMessage(textArea->vimMode()->modeName() + "  " +
+                                   keys);
             }
           });
 
@@ -426,13 +424,12 @@ void MainWindow::connectVimMode(TextArea *textArea) {
             if (!textArea)
               return;
             if (enabled && !pattern.isEmpty()) {
-              // Convert regex pattern to plain search term for the
-              // syntax highlighter (strip word boundary markers)
+
               QString searchTerm = pattern;
               searchTerm.remove("\\b");
               textArea->updateSyntaxHighlightTags(searchTerm);
             } else {
-              // Clear search highlights
+
               textArea->updateSyntaxHighlightTags(QString());
             }
           });
@@ -1457,7 +1454,7 @@ void MainWindow::on_actionFind_in_file_triggered() {
   showFindReplace(true);
   if (findReplacePanel) {
     findReplacePanel->setGlobalMode(false);
-    // Pre-populate with vim's last search pattern if available
+
     TextArea *textArea = getCurrentTextArea();
     if (textArea && textArea->isVimModeEnabled() && textArea->vimMode()) {
       QString vimPattern = textArea->vimMode()->searchPattern();
@@ -1596,7 +1593,8 @@ bool MainWindow::save(const QString &filePath) {
   LightpadTabWidget *currentWidget = currentTabWidget();
   if (currentWidget) {
     int currentIndex = currentWidget->currentIndex();
-    if (currentIndex >= 0 && currentWidget->getFilePath(currentIndex) == filePath) {
+    if (currentIndex >= 0 &&
+        currentWidget->getFilePath(currentIndex) == filePath) {
       LightpadPage *page = currentWidget->getPage(currentIndex);
       if (page && page->getTextArea()) {
         textArea = page->getTextArea();
@@ -1974,11 +1972,13 @@ void MainWindow::showTerminal() {
   }
 
   QString workingDirectory = manager.getWorkingDirectory(filePath, languageId);
-  QMap<QString, QString> customEnv = manager.getEnvironment(filePath, languageId);
+  QMap<QString, QString> customEnv =
+      manager.getEnvironment(filePath, languageId);
 
   QString preRunCommand = assignment.preRunCommand.trimmed();
   if (!preRunCommand.isEmpty()) {
-    preRunCommand = RunTemplateManager::substituteVariables(preRunCommand, filePath);
+    preRunCommand =
+        RunTemplateManager::substituteVariables(preRunCommand, filePath);
   }
 
   QString postRunCommand = assignment.postRunCommand.trimmed();
@@ -2063,8 +2063,8 @@ void MainWindow::showTerminal() {
 
   m_runProcessFinishedConnection = connect(
       terminalWidget, &TerminalTabWidget::processFinished, this,
-      [executionState, postRunCommand, runCurrentStage, finalizeExecution](
-          int exitCode) {
+      [executionState, postRunCommand, runCurrentStage,
+       finalizeExecution](int exitCode) {
         if (executionState->stage == RunExecutionState::Stage::PreRun) {
           if (exitCode != 0) {
             (*finalizeExecution)();
@@ -2094,9 +2094,9 @@ void MainWindow::showTerminal() {
         }
       });
 
-  m_runProcessErrorConnection = connect(
-      terminalWidget, &TerminalTabWidget::errorOccurred, this,
-      [finalizeExecution](const QString &) { (*finalizeExecution)(); });
+  m_runProcessErrorConnection =
+      connect(terminalWidget, &TerminalTabWidget::errorOccurred, this,
+              [finalizeExecution](const QString &) { (*finalizeExecution)(); });
 
   (*runCurrentStage)();
 }
@@ -2163,16 +2163,15 @@ void MainWindow::ensureStatusLabels() {
 
   if (!vimStatusLabel) {
     vimStatusLabel = new QLabel(this);
-    vimStatusLabel->setStyleSheet(
-        "QLabel {"
-        "  color: #ffffff;"
-        "  background-color: #3fb950;"
-        "  padding: 1px 10px;"
-        "  border-radius: 3px;"
-        "  font-weight: bold;"
-        "  font-size: 11px;"
-        "  letter-spacing: 1px;"
-        "}");
+    vimStatusLabel->setStyleSheet("QLabel {"
+                                  "  color: #ffffff;"
+                                  "  background-color: #3fb950;"
+                                  "  padding: 1px 10px;"
+                                  "  border-radius: 3px;"
+                                  "  font-weight: bold;"
+                                  "  font-size: 11px;"
+                                  "  letter-spacing: 1px;"
+                                  "}");
     vimStatusLabel->setText("");
     vimStatusLabel->setVisible(false);
     vimStatusLabel->setMinimumWidth(70);
@@ -2435,8 +2434,8 @@ void MainWindow::ensureTestPanel() {
 
   testDock = new QDockWidget(tr("Tests"), this);
   testDock->setObjectName("testDock");
-  testDock->setAllowedAreas(Qt::BottomDockWidgetArea |
-                            Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+  testDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::LeftDockWidgetArea |
+                            Qt::RightDockWidgetArea);
   testDock->setWidget(testPanel);
   addDockWidget(Qt::BottomDockWidgetArea, testDock);
   testDock->hide();
@@ -2819,9 +2818,8 @@ void MainWindow::setupSymbolNavigation() {
 
   connect(m_symbolNavService,
           &SymbolNavigationService::definitionRequestStarted, this, [this]() {
-            statusBar()->showMessage(
-                QCoreApplication::translate("MainWindow",
-                                            "Searching for definition..."));
+            statusBar()->showMessage(QCoreApplication::translate(
+                "MainWindow", "Searching for definition..."));
           });
 
   connect(m_symbolNavService,
@@ -2893,9 +2891,9 @@ void MainWindow::handleDefinitionResults(
     }
 
     bool ok = false;
-    QString selected = QInputDialog::getItem(
-        this, tr("Go to Definition"), tr("Multiple definitions found:"), items,
-        0, false, &ok);
+    QString selected = QInputDialog::getItem(this, tr("Go to Definition"),
+                                             tr("Multiple definitions found:"),
+                                             items, 0, false, &ok);
     if (ok && !selected.isEmpty()) {
       int idx = items.indexOf(selected);
       if (idx >= 0 && idx < targets.size()) {
@@ -2941,7 +2939,8 @@ void MainWindow::setupAutoSave() {
 
 void MainWindow::setupDiagnostics() {
   SettingsManager &sm = SettingsManager::instance();
-  QJsonObject diagSettings = sm.getValue("diagnostics", QJsonObject()).toJsonObject();
+  QJsonObject diagSettings =
+      sm.getValue("diagnostics", QJsonObject()).toJsonObject();
   bool enabled = diagSettings.value("enabled").toBool(true);
   if (!enabled) {
     return;
@@ -2957,12 +2956,12 @@ void MainWindow::setupDiagnostics() {
   connect(m_diagnosticsManager, &DiagnosticsManager::countsChanged, this,
           &MainWindow::updateProblemsStatusLabel);
 
-  connect(m_languageFeatureManager, &LanguageFeatureManager::serverError, this,
-          [this](const QString &languageId, const QString &message) {
-            LOG_WARNING(
-                QString("LSP server error for '%1': %2")
-                    .arg(languageId, message));
-          });
+  connect(
+      m_languageFeatureManager, &LanguageFeatureManager::serverError, this,
+      [this](const QString &languageId, const QString &message) {
+        LOG_WARNING(
+            QString("LSP server error for '%1': %2").arg(languageId, message));
+      });
 }
 
 void MainWindow::notifyDiagnosticsFileOpened(const QString &filePath) {
@@ -2987,7 +2986,8 @@ void MainWindow::notifyDiagnosticsFileChanged(const QString &filePath) {
   }
 
   SettingsManager &sm = SettingsManager::instance();
-  QJsonObject diagSettings = sm.getValue("diagnostics", QJsonObject()).toJsonObject();
+  QJsonObject diagSettings =
+      sm.getValue("diagnostics", QJsonObject()).toJsonObject();
   bool onType = diagSettings.value("onType").toBool(true);
   if (!onType) {
     return;
@@ -3010,7 +3010,8 @@ void MainWindow::notifyDiagnosticsFileSaved(const QString &filePath) {
   }
 
   SettingsManager &sm = SettingsManager::instance();
-  QJsonObject diagSettings = sm.getValue("diagnostics", QJsonObject()).toJsonObject();
+  QJsonObject diagSettings =
+      sm.getValue("diagnostics", QJsonObject()).toJsonObject();
   bool onSave = diagSettings.value("onSave").toBool(true);
   if (!onSave) {
     return;
@@ -3209,17 +3210,16 @@ void MainWindow::updateVimStatusLabel(const QString &text) {
         bgColor = "#bc8cff";
       else
         bgColor = "#8b949e";
-      vimStatusLabel->setStyleSheet(
-          QString("QLabel {"
-                  "  color: #ffffff;"
-                  "  background-color: %1;"
-                  "  padding: 1px 10px;"
-                  "  border-radius: 3px;"
-                  "  font-weight: bold;"
-                  "  font-size: 11px;"
-                  "  letter-spacing: 1px;"
-                  "}")
-              .arg(bgColor));
+      vimStatusLabel->setStyleSheet(QString("QLabel {"
+                                            "  color: #ffffff;"
+                                            "  background-color: %1;"
+                                            "  padding: 1px 10px;"
+                                            "  border-radius: 3px;"
+                                            "  font-weight: bold;"
+                                            "  font-size: 11px;"
+                                            "  letter-spacing: 1px;"
+                                            "}")
+                                        .arg(bgColor));
     }
   }
 }
@@ -3455,16 +3455,17 @@ void MainWindow::startDebuggingForCurrentFile() {
         DebugConfigurationManager::instance().createQuickConfig(filePath,
                                                                 languageId);
     if (!quickConfig.type.isEmpty() && details.isEmpty()) {
-      const auto adapters = DebugAdapterRegistry::instance()
-                                .adaptersForConfiguration(quickConfig);
+      const auto adapters =
+          DebugAdapterRegistry::instance().adaptersForConfiguration(
+              quickConfig);
       QStringList adapterStatuses;
       for (const auto &adapter : adapters) {
         if (!adapter) {
           continue;
         }
-        adapterStatuses << QString("%1: %2").arg(adapter->config().name,
-                                                 adapter->statusMessageForConfiguration(
-                                                     quickConfig));
+        adapterStatuses << QString("%1: %2").arg(
+            adapter->config().name,
+            adapter->statusMessageForConfiguration(quickConfig));
       }
       details = adapterStatuses.join("\n");
     }
@@ -3576,39 +3577,37 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
         QStringList args = commandLine;
         const QString program = args.takeFirst();
         const QString workingDirectory =
-            cwd.isEmpty()
-                ? (m_projectRootPath.isEmpty() ? QDir::currentPath()
-                                              : m_projectRootPath)
-                : cwd;
+            cwd.isEmpty() ? (m_projectRootPath.isEmpty() ? QDir::currentPath()
+                                                         : m_projectRootPath)
+                          : cwd;
 
         QPointer<DapClient> clientPtr(client);
         QPointer<Terminal> terminal = tabs->addNewTerminal(workingDirectory);
-        QSharedPointer<bool> responded =
-            QSharedPointer<bool>::create(false);
+        QSharedPointer<bool> responded = QSharedPointer<bool>::create(false);
 
-        connect(terminal, &Terminal::processStarted, this,
-                [clientPtr, terminal, responded, requestSeq]() {
-                  if (*responded || !clientPtr) {
-                    return;
-                  }
+        connect(
+            terminal, &Terminal::processStarted, this,
+            [clientPtr, terminal, responded, requestSeq]() {
+              if (*responded || !clientPtr) {
+                return;
+              }
 
-                  *responded = true;
-                  clientPtr->respondToRunInTerminal(
-                      requestSeq, true,
-                      terminal ? terminal->runProcessId() : 0);
-                },
-                Qt::SingleShotConnection);
-        connect(terminal, &Terminal::processError, this,
-                [clientPtr, responded, requestSeq](const QString &message) {
-                  if (*responded || !clientPtr) {
-                    return;
-                  }
+              *responded = true;
+              clientPtr->respondToRunInTerminal(
+                  requestSeq, true, terminal ? terminal->runProcessId() : 0);
+            },
+            Qt::SingleShotConnection);
+        connect(
+            terminal, &Terminal::processError, this,
+            [clientPtr, responded, requestSeq](const QString &message) {
+              if (*responded || !clientPtr) {
+                return;
+              }
 
-                  *responded = true;
-                  clientPtr->respondToRunInTerminal(requestSeq, false, 0,
-                                                    message);
-                },
-                Qt::SingleShotConnection);
+              *responded = true;
+              clientPtr->respondToRunInTerminal(requestSeq, false, 0, message);
+            },
+            Qt::SingleShotConnection);
 
         terminal->executeCommand(program, args, workingDirectory, env);
       });
@@ -4059,24 +4058,22 @@ void MainWindow::setupTextArea() {
 
     if (m_languageFeatureManager &&
         !textArea->property("diagnosticsHooked").toBool()) {
-      connect(textArea, &QPlainTextEdit::textChanged, this,
-              [this, textArea]() {
-                if (!m_languageFeatureManager || !textArea) {
-                  return;
-                }
-                QString filePath;
-                QObject *parentObject = textArea;
-                while (parentObject && filePath.isEmpty()) {
-                  if (auto *page =
-                          qobject_cast<LightpadPage *>(parentObject)) {
-                    filePath = page->getFilePath();
-                  }
-                  parentObject = parentObject->parent();
-                }
-                if (!filePath.isEmpty()) {
-                  notifyDiagnosticsFileChanged(filePath);
-                }
-              });
+      connect(textArea, &QPlainTextEdit::textChanged, this, [this, textArea]() {
+        if (!m_languageFeatureManager || !textArea) {
+          return;
+        }
+        QString filePath;
+        QObject *parentObject = textArea;
+        while (parentObject && filePath.isEmpty()) {
+          if (auto *page = qobject_cast<LightpadPage *>(parentObject)) {
+            filePath = page->getFilePath();
+          }
+          parentObject = parentObject->parent();
+        }
+        if (!filePath.isEmpty()) {
+          notifyDiagnosticsFileChanged(filePath);
+        }
+      });
       textArea->setProperty("diagnosticsHooked", true);
     }
 
@@ -4117,10 +4114,10 @@ void MainWindow::noScriptAssignedWarning() {
 }
 
 QString MainWindow::selectedDebugConfigurationName() const {
-  QString selectedName =
-      SettingsManager::instance().getValue("activeDebugTarget", QString())
-          .toString()
-          .trimmed();
+  QString selectedName = SettingsManager::instance()
+                             .getValue("activeDebugTarget", QString())
+                             .toString()
+                             .trimmed();
   if (selectedName.isEmpty() ||
       selectedName.startsWith(QLatin1String(kCompoundDebugTargetPrefix))) {
     return {};
@@ -4137,10 +4134,10 @@ QString MainWindow::selectedDebugConfigurationName() const {
 }
 
 QString MainWindow::selectedCompoundDebugConfigurationName() const {
-  QString selectedName =
-      SettingsManager::instance().getValue("activeDebugTarget", QString())
-          .toString()
-          .trimmed();
+  QString selectedName = SettingsManager::instance()
+                             .getValue("activeDebugTarget", QString())
+                             .toString()
+                             .trimmed();
   if (!selectedName.startsWith(QLatin1String(kCompoundDebugTargetPrefix))) {
     return {};
   }
@@ -4165,9 +4162,8 @@ void MainWindow::refreshDebugTargetButton() {
   const QString selectedName = selectedDebugConfigurationName();
   const QString buttonText = !selectedCompoundName.isEmpty()
                                  ? tr("Compound: %1").arg(selectedCompoundName)
-                             : selectedName.isEmpty()
-                                 ? tr("Quick Debug")
-                                 : selectedName;
+                             : selectedName.isEmpty() ? tr("Quick Debug")
+                                                      : selectedName;
   const QString tooltip =
       !selectedCompoundName.isEmpty()
           ? tr("Start compound debug configuration: %1")
@@ -4281,14 +4277,14 @@ bool MainWindow::prepareDebugConfigurationForStart(
     DebugConfiguration *resolvedConfig, QString *errorMessage) {
   if (!resolvedConfig) {
     if (errorMessage) {
-      *errorMessage = tr("Internal error: missing resolved configuration output.");
+      *errorMessage =
+          tr("Internal error: missing resolved configuration output.");
     }
     return false;
   }
 
-  *resolvedConfig =
-      DebugConfigurationManager::instance().resolveVariables(config,
-                                                            currentFilePath);
+  *resolvedConfig = DebugConfigurationManager::instance().resolveVariables(
+      config, currentFilePath);
 
   const auto hasUnresolvedCurrentFileVariable = [](const QString &value) {
     return value.contains("${file}") || value.contains("${fileDirname}") ||
@@ -4811,8 +4807,8 @@ void MainWindow::on_actionStart_Debug_Configuration_triggered() {
   const QString lastTarget =
       SettingsManager::instance()
           .getValue("activeDebugTarget",
-                    SettingsManager::instance()
-                        .getValue("lastDebugConfiguration", QString()))
+                    SettingsManager::instance().getValue(
+                        "lastDebugConfiguration", QString()))
           .toString();
   QString initialDisplay;
   for (auto it = displayToTarget.constBegin(); it != displayToTarget.constEnd();
@@ -4824,9 +4820,9 @@ void MainWindow::on_actionStart_Debug_Configuration_triggered() {
   }
   if (initialDisplay.isEmpty()) {
     const QString lastConfigName =
-      SettingsManager::instance()
-          .getValue("lastDebugConfiguration", QString())
-          .toString();
+        SettingsManager::instance()
+            .getValue("lastDebugConfiguration", QString())
+            .toString();
     initialDisplay = tr("Config: %1").arg(lastConfigName);
   }
   int currentIndex = configNames.indexOf(initialDisplay);
@@ -6169,8 +6165,8 @@ void MainWindow::ensureFileTreeModel() {
   if (!m_fileTreeSelectionModel ||
       m_fileTreeSelectionModel->model() != m_fileTreeModel) {
     m_fileTreeSelectionModel = new QItemSelectionModel(m_fileTreeModel, this);
-    connect(m_fileTreeSelectionModel, &QItemSelectionModel::currentChanged, this,
-            [this](const QModelIndex &current, const QModelIndex &) {
+    connect(m_fileTreeSelectionModel, &QItemSelectionModel::currentChanged,
+            this, [this](const QModelIndex &current, const QModelIndex &) {
               trackTreeCurrentIndex(current);
             });
   }
@@ -6266,7 +6262,6 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
     treeView->verticalScrollBar()->setValue(m_treeScrollValue);
   }
 
-  // Connect "Run as Test" from file tree context menu
   connect(treeView, &LightpadTreeView::runTestsRequested, this,
           [this](const QString &path) {
             ensureTestPanel();

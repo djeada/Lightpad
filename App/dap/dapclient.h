@@ -376,8 +376,8 @@ signals:
 
   void output(const DapOutputEvent &event);
   void runInTerminalRequested(int requestSeq, const QString &kind,
-                              const QString &title,
-                              const QStringList &args, const QString &cwd,
+                              const QString &title, const QStringList &args,
+                              const QString &cwd,
                               const QMap<QString, QString> &env);
 
   void threadsReceived(const QList<DapThread> &threads);

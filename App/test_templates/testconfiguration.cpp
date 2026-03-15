@@ -69,8 +69,7 @@ bool TestConfigurationManager::loadUserConfigurations(
   m_workspaceFolder = workspaceFolder;
   m_userConfigurations.clear();
 
-  QString configPath =
-      workspaceFolder + "/.lightpad/test/config.json";
+  QString configPath = workspaceFolder + "/.lightpad/test/config.json";
   QFile file(configPath);
   if (!file.open(QIODevice::ReadOnly))
     return false;

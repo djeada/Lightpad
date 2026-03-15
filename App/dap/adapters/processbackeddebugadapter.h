@@ -8,21 +8,21 @@
 
 class ProcessBackedDebugAdapter : public AbstractDebugAdapter {
 public:
-  ProcessBackedDebugAdapter(
-      DebugAdapterConfig baseConfig, QString adapterExecutableKey,
-      QString adapterExecutableLabel, QString adapterExecutablePlaceholder,
-      QList<DebugAdapterOption> additionalOptions = {})
-      : AbstractDebugAdapter(
-            std::move(baseConfig),
-            prependAdapterExecutableOption(adapterExecutableKey,
-                                           std::move(adapterExecutableLabel),
-                                           std::move(
-                                               adapterExecutablePlaceholder),
-                                           std::move(additionalOptions))),
+  ProcessBackedDebugAdapter(DebugAdapterConfig baseConfig,
+                            QString adapterExecutableKey,
+                            QString adapterExecutableLabel,
+                            QString adapterExecutablePlaceholder,
+                            QList<DebugAdapterOption> additionalOptions = {})
+      : AbstractDebugAdapter(std::move(baseConfig),
+                             prependAdapterExecutableOption(
+                                 adapterExecutableKey,
+                                 std::move(adapterExecutableLabel),
+                                 std::move(adapterExecutablePlaceholder),
+                                 std::move(additionalOptions))),
         m_adapterExecutableKey(adapterExecutableKey.trimmed()) {}
 
-  DebugAdapterConfig
-  configForConfiguration(const DebugConfiguration &configuration) const override {
+  DebugAdapterConfig configForConfiguration(
+      const DebugConfiguration &configuration) const override {
     DebugAdapterConfig cfg =
         AbstractDebugAdapter::configForConfiguration(configuration);
     const QString executable = resolvedAdapterExecutable(configuration);
@@ -45,8 +45,7 @@ public:
       return false;
     }
 
-    const QStringList probeArguments =
-        executableProbeArguments(configuration);
+    const QStringList probeArguments = executableProbeArguments(configuration);
     if (probeArguments.isEmpty()) {
       return true;
     }
@@ -68,8 +67,7 @@ public:
       return missingExecutableMessage(configuration, candidate);
     }
 
-    const QStringList probeArguments =
-        executableProbeArguments(configuration);
+    const QStringList probeArguments = executableProbeArguments(configuration);
     if (probeArguments.isEmpty()) {
       return readyMessage(configuration, executable, ProcessProbeResult{});
     }
@@ -91,8 +89,8 @@ protected:
     return mergedAdapterConfig(configuration)[key].toString().trimmed();
   }
 
-  virtual QString
-  defaultAdapterExecutableCandidate(const DebugConfiguration &configuration) const {
+  virtual QString defaultAdapterExecutableCandidate(
+      const DebugConfiguration &configuration) const {
     Q_UNUSED(configuration);
     return config().program.trimmed();
   }
@@ -100,7 +98,8 @@ protected:
   virtual QString
   adapterExecutableCandidate(const DebugConfiguration &configuration) const {
     if (!m_adapterExecutableKey.isEmpty()) {
-      const QString configured = optionValue(configuration, m_adapterExecutableKey);
+      const QString configured =
+          optionValue(configuration, m_adapterExecutableKey);
       if (!configured.isEmpty()) {
         return configured;
       }
@@ -138,7 +137,8 @@ protected:
     Q_UNUSED(configuration);
     Q_UNUSED(executable);
     Q_UNUSED(probe);
-    return QString("%1 is installed but did not respond to the availability probe")
+    return QString(
+               "%1 is installed but did not respond to the availability probe")
         .arg(adapterExecutableLabel());
   }
 
@@ -154,9 +154,10 @@ protected:
   }
 
 private:
-  static QList<DebugAdapterOption> prependAdapterExecutableOption(
-      const QString &key, QString label, QString placeholder,
-      QList<DebugAdapterOption> additionalOptions) {
+  static QList<DebugAdapterOption>
+  prependAdapterExecutableOption(const QString &key, QString label,
+                                 QString placeholder,
+                                 QList<DebugAdapterOption> additionalOptions) {
     QList<DebugAdapterOption> options;
     if (!key.isEmpty()) {
       DebugAdapterOption option;
@@ -170,11 +171,9 @@ private:
   }
 
   QString adapterExecutableLabel() const {
-    return configurationOptions().isEmpty() ? QStringLiteral("Adapter executable")
-                                            : configurationOptions()
-                                                  .first()
-                                                  .label
-                                                  .trimmed();
+    return configurationOptions().isEmpty()
+               ? QStringLiteral("Adapter executable")
+               : configurationOptions().first().label.trimmed();
   }
 
   QString m_adapterExecutableKey;

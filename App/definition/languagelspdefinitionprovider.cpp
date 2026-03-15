@@ -57,8 +57,7 @@ int LanguageLspDefinitionProvider::requestDefinition(
 }
 
 bool LanguageLspDefinitionProvider::isServerAvailable() const {
-  QString path =
-      QStandardPaths::findExecutable(m_config.serverCommand);
+  QString path = QStandardPaths::findExecutable(m_config.serverCommand);
   return !path.isEmpty();
 }
 
@@ -111,14 +110,13 @@ bool LanguageLspDefinitionProvider::ensureServerStarted() {
             emit definitionReady(providerRequestId, targets);
           });
 
-  connect(m_client, &LspClient::error, this,
-          [this](const QString &message) {
-            if (m_activeProviderRequestId != 0) {
-              int providerRequestId = m_activeProviderRequestId;
-              m_activeProviderRequestId = 0;
-              emit definitionFailed(providerRequestId, message);
-            }
-          });
+  connect(m_client, &LspClient::error, this, [this](const QString &message) {
+    if (m_activeProviderRequestId != 0) {
+      int providerRequestId = m_activeProviderRequestId;
+      m_activeProviderRequestId = 0;
+      emit definitionFailed(providerRequestId, message);
+    }
+  });
 
   bool started =
       m_client->start(m_config.serverCommand, m_config.serverArguments);
@@ -156,23 +154,11 @@ QList<LanguageServerConfig> LanguageLspDefinitionProvider::defaultConfigs() {
        "clangd",
        {"--background-index"}},
 
-      {"pylsp",
-       "Python Language Server",
-       {"py"},
-       "pylsp",
-       {}},
+      {"pylsp", "Python Language Server", {"py"}, "pylsp", {}},
 
-      {"rust-analyzer",
-       "rust-analyzer",
-       {"rust"},
-       "rust-analyzer",
-       {}},
+      {"rust-analyzer", "rust-analyzer", {"rust"}, "rust-analyzer", {}},
 
-      {"gopls",
-       "gopls (Go)",
-       {"go"},
-       "gopls",
-       {"serve"}},
+      {"gopls", "gopls (Go)", {"go"}, "gopls", {"serve"}},
 
       {"typescript-language-server",
        "TypeScript Language Server",
@@ -180,10 +166,6 @@ QList<LanguageServerConfig> LanguageLspDefinitionProvider::defaultConfigs() {
        "typescript-language-server",
        {"--stdio"}},
 
-      {"jdtls",
-       "Eclipse JDT Language Server (Java)",
-       {"java"},
-       "jdtls",
-       {}},
+      {"jdtls", "Eclipse JDT Language Server (Java)", {"java"}, "jdtls", {}},
   };
 }

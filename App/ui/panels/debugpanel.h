@@ -1,8 +1,8 @@
 #ifndef DEBUGPANEL_H
 #define DEBUGPANEL_H
 
-#include <QColor>
 #include <QButtonGroup>
+#include <QColor>
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -103,10 +103,12 @@ private:
   void setupWatches();
   void setupBreakpoints();
   void setupConsole();
-  QToolButton *createToolbarButton(QAction *action, const QString &role = QString());
+  QToolButton *createToolbarButton(QAction *action,
+                                   const QString &role = QString());
   QWidget *createToolbarDivider();
   QToolButton *createInspectorTabButton(const QString &label, int index);
-  QWidget *createInspectorPage(QWidget *content, QWidget *headerActions = nullptr,
+  QWidget *createInspectorPage(QWidget *content,
+                               QWidget *headerActions = nullptr,
                                QWidget *footer = nullptr);
   void setCurrentInspectorTab(int index);
   void setInspectorTabLabel(int index, const QString &label);

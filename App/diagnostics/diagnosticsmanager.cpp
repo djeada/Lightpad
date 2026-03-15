@@ -104,8 +104,7 @@ int DiagnosticsManager::errorCount() const { return m_errorCount; }
 int DiagnosticsManager::warningCount() const { return m_warningCount; }
 int DiagnosticsManager::infoCount() const { return m_infoCount; }
 
-void DiagnosticsManager::trackDocumentVersion(const QString &uri,
-                                              int version) {
+void DiagnosticsManager::trackDocumentVersion(const QString &uri, int version) {
   m_documentVersions[uri] = version;
 }
 

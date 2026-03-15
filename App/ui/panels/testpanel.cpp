@@ -41,25 +41,24 @@ void TestPanel::setupUI() {
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(0);
 
-  // Toolbar
   m_toolbar = new QToolBar(this);
   m_toolbar->setIconSize(QSize(16, 16));
   m_toolbar->setMovable(false);
   m_toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
-  m_runAllAction = m_toolbar->addAction(
-      style()->standardIcon(QStyle::SP_MediaPlay), tr("Run All"), this,
-      &TestPanel::runAll);
+  m_runAllAction =
+      m_toolbar->addAction(style()->standardIcon(QStyle::SP_MediaPlay),
+                           tr("Run All"), this, &TestPanel::runAll);
   m_runAllAction->setToolTip(tr("Run All Tests"));
 
-  m_runFailedAction = m_toolbar->addAction(
-      style()->standardIcon(QStyle::SP_BrowserReload), tr("Run Failed"), this,
-      &TestPanel::runFailed);
+  m_runFailedAction =
+      m_toolbar->addAction(style()->standardIcon(QStyle::SP_BrowserReload),
+                           tr("Run Failed"), this, &TestPanel::runFailed);
   m_runFailedAction->setToolTip(tr("Re-run Failed Tests"));
 
-  m_stopAction = m_toolbar->addAction(
-      style()->standardIcon(QStyle::SP_MediaStop), tr("Stop"), this,
-      &TestPanel::stopTests);
+  m_stopAction =
+      m_toolbar->addAction(style()->standardIcon(QStyle::SP_MediaStop),
+                           tr("Stop"), this, &TestPanel::stopTests);
   m_stopAction->setToolTip(tr("Stop"));
   m_stopAction->setEnabled(false);
 
@@ -68,17 +67,18 @@ void TestPanel::setupUI() {
       this, &TestPanel::discoverTests);
   m_discoverAction->setToolTip(tr("Discover Tests"));
 
-  m_clearAction = m_toolbar->addAction(
-      style()->standardIcon(QStyle::SP_DialogResetButton), tr("Clear"), this,
-      [this]() {
-        m_tree->clear();
-        m_detailPane->clear();
-        m_suiteItems.clear();
-        m_testItems.clear();
-        m_testResults.clear();
-        m_passedCount = m_failedCount = m_skippedCount = m_erroredCount = 0;
-        updateStatusLabel();
-      });
+  m_clearAction =
+      m_toolbar->addAction(style()->standardIcon(QStyle::SP_DialogResetButton),
+                           tr("Clear"), this, [this]() {
+                             m_tree->clear();
+                             m_detailPane->clear();
+                             m_suiteItems.clear();
+                             m_testItems.clear();
+                             m_testResults.clear();
+                             m_passedCount = m_failedCount = m_skippedCount =
+                                 m_erroredCount = 0;
+                             updateStatusLabel();
+                           });
   m_clearAction->setToolTip(tr("Clear Results"));
 
   m_toolbar->addSeparator();
@@ -103,7 +103,6 @@ void TestPanel::setupUI() {
 
   layout->addWidget(m_toolbar);
 
-  // Splitter with tree and detail pane
   m_splitter = new QSplitter(Qt::Vertical, this);
 
   m_tree = new QTreeWidget(this);
@@ -121,8 +120,7 @@ void TestPanel::setupUI() {
   m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
           &TestPanel::onItemDoubleClicked);
-  connect(m_tree, &QTreeWidget::itemClicked, this,
-          &TestPanel::onItemClicked);
+  connect(m_tree, &QTreeWidget::itemClicked, this, &TestPanel::onItemClicked);
   connect(m_tree, &QTreeWidget::customContextMenuRequested, this,
           &TestPanel::onContextMenu);
 
@@ -139,7 +137,6 @@ void TestPanel::setupUI() {
 
   layout->addWidget(m_splitter);
 
-  // Status label
   m_statusLabel = new QLabel(this);
   m_statusLabel->setContentsMargins(4, 2, 4, 2);
   layout->addWidget(m_statusLabel);
@@ -152,86 +149,87 @@ void TestPanel::applyTheme(const Theme &theme) {
 
   const QColor panelBg =
       theme.surfaceColor.isValid() ? theme.surfaceColor : QColor("#111827");
-  const QColor textColor =
-      theme.foregroundColor.isValid() ? theme.foregroundColor : QColor("#e5e7eb");
+  const QColor textColor = theme.foregroundColor.isValid()
+                               ? theme.foregroundColor
+                               : QColor("#e5e7eb");
   const QColor borderColor =
       theme.borderColor.isValid() ? theme.borderColor : QColor("#334155");
-  const QColor treeBg =
-      theme.backgroundColor.isValid() ? theme.backgroundColor : QColor("#0b1220");
+  const QColor treeBg = theme.backgroundColor.isValid() ? theme.backgroundColor
+                                                        : QColor("#0b1220");
   const QColor hoverBg = panelBg.lighter(115);
   const QColor selectedBg =
-      theme.accentSoftColor.isValid() ? theme.accentSoftColor
-      : (theme.highlightColor.isValid() ? theme.highlightColor
-                                        : QColor("#1f4b7a"));
+      theme.accentSoftColor.isValid()
+          ? theme.accentSoftColor
+          : (theme.highlightColor.isValid() ? theme.highlightColor
+                                            : QColor("#1f4b7a"));
   const QColor selectedText = QColor("#ffffff");
   const QColor mutedText = textColor.darker(130);
 
-  setStyleSheet(QString(
-                    "QWidget#TestPanel {"
-                    "  background-color: %1;"
-                    "  color: %2;"
-                    "}"
-                    "QToolBar {"
-                    "  background-color: %1;"
-                    "  border: 0;"
-                    "  border-bottom: 1px solid %3;"
-                    "  padding: 4px 6px;"
-                    "  spacing: 4px;"
-                    "}"
-                    "QToolButton {"
-                    "  color: %2;"
-                    "  border: 1px solid transparent;"
-                    "  border-radius: 4px;"
-                    "  padding: 3px 8px;"
-                    "}"
-                    "QToolButton:hover {"
-                    "  background-color: %4;"
-                    "  border-color: %3;"
-                    "}"
-                    "QToolButton:disabled {"
-                    "  color: %7;"
-                    "}"
-                    "QComboBox {"
-                    "  min-height: 24px;"
-                    "  border: 1px solid %3;"
-                    "  border-radius: 4px;"
-                    "  padding: 2px 8px;"
-                    "  background-color: %5;"
-                    "  color: %2;"
-                    "}"
-                    "QTreeWidget {"
-                    "  background-color: %5;"
-                    "  border: 1px solid %3;"
-                    "  outline: none;"
-                    "  padding: 2px;"
-                    "}"
-                    "QTreeWidget::item {"
-                    "  height: 26px;"
-                    "}"
-                    "QTreeWidget::item:hover {"
-                    "  background-color: %4;"
-                    "}"
-                    "QTreeWidget::item:selected {"
-                    "  background-color: %6;"
-                    "  color: %8;"
-                    "}"
-                    "QHeaderView::section {"
-                    "  background-color: %1;"
-                    "  color: %7;"
-                    "  border: 0;"
-                    "  border-bottom: 1px solid %3;"
-                    "  padding: 6px 8px;"
-                    "  font-weight: 600;"
-                    "}"
-                    "QTextEdit {"
-                    "  background-color: %5;"
-                    "  color: %2;"
-                    "  border: 1px solid %3;"
-                    "  padding: 6px;"
-                    "}"
-                    "QLabel {"
-                    "  color: %2;"
-                    "}")
+  setStyleSheet(QString("QWidget#TestPanel {"
+                        "  background-color: %1;"
+                        "  color: %2;"
+                        "}"
+                        "QToolBar {"
+                        "  background-color: %1;"
+                        "  border: 0;"
+                        "  border-bottom: 1px solid %3;"
+                        "  padding: 4px 6px;"
+                        "  spacing: 4px;"
+                        "}"
+                        "QToolButton {"
+                        "  color: %2;"
+                        "  border: 1px solid transparent;"
+                        "  border-radius: 4px;"
+                        "  padding: 3px 8px;"
+                        "}"
+                        "QToolButton:hover {"
+                        "  background-color: %4;"
+                        "  border-color: %3;"
+                        "}"
+                        "QToolButton:disabled {"
+                        "  color: %7;"
+                        "}"
+                        "QComboBox {"
+                        "  min-height: 24px;"
+                        "  border: 1px solid %3;"
+                        "  border-radius: 4px;"
+                        "  padding: 2px 8px;"
+                        "  background-color: %5;"
+                        "  color: %2;"
+                        "}"
+                        "QTreeWidget {"
+                        "  background-color: %5;"
+                        "  border: 1px solid %3;"
+                        "  outline: none;"
+                        "  padding: 2px;"
+                        "}"
+                        "QTreeWidget::item {"
+                        "  height: 26px;"
+                        "}"
+                        "QTreeWidget::item:hover {"
+                        "  background-color: %4;"
+                        "}"
+                        "QTreeWidget::item:selected {"
+                        "  background-color: %6;"
+                        "  color: %8;"
+                        "}"
+                        "QHeaderView::section {"
+                        "  background-color: %1;"
+                        "  color: %7;"
+                        "  border: 0;"
+                        "  border-bottom: 1px solid %3;"
+                        "  padding: 6px 8px;"
+                        "  font-weight: 600;"
+                        "}"
+                        "QTextEdit {"
+                        "  background-color: %5;"
+                        "  color: %2;"
+                        "  border: 1px solid %3;"
+                        "  padding: 6px;"
+                        "}"
+                        "QLabel {"
+                        "  color: %2;"
+                        "}")
                     .arg(panelBg.name(), textColor.name(), borderColor.name(),
                          hoverBg.name(), treeBg.name(), selectedBg.name(),
                          mutedText.name(), selectedText.name()));
@@ -272,20 +270,19 @@ void TestPanel::runCurrentFile(const QString &filePath) {
 void TestPanel::runTestsForPath(const QString &path) {
   QFileInfo fi(path);
 
-  // Try to find a matching configuration based on file extension
   if (fi.isFile()) {
     QString ext = fi.suffix().toLower();
     QList<TestConfiguration> matches =
         TestConfigurationManager::instance().configurationsForExtension(ext);
     if (!matches.isEmpty()) {
-      // Select the first matching config in the combo
+
       int idx = m_configCombo->findData(matches.first().id);
       if (idx >= 0)
         m_configCombo->setCurrentIndex(idx);
     }
     runCurrentFile(path);
   } else if (fi.isDir()) {
-    // For directories, run all tests with the directory as workspace
+
     TestConfiguration config = currentConfiguration();
     if (!config.isValid())
       return;
@@ -427,13 +424,11 @@ void TestPanel::onItemClicked(QTreeWidgetItem *item, int column) {
   if (!item)
     return;
 
-  // Navigate to source on click if file/line info is available
   QString filePath = item->data(0, FilePathRole).toString();
   int line = item->data(0, LineNumberRole).toInt();
   if (!filePath.isEmpty())
     emit locationClicked(filePath, line, 0);
 
-  // Show details in the detail pane
   QString testId = item->data(0, TestIdRole).toString();
   if (m_testResults.contains(testId)) {
     const TestResult &result = m_testResults[testId];
@@ -469,7 +464,6 @@ void TestPanel::onContextMenu(const QPoint &pos) {
   QString testName = item->text(0);
   QString filePath = item->data(0, FilePathRole).toString();
 
-  // Check if this is a suite item (has children)
   bool isSuite = (item->childCount() > 0);
 
   if (isSuite) {
@@ -602,14 +596,14 @@ void TestPanel::applyFilter() {
     bool visible = true;
 
     switch (filterIndex) {
-    case 1: // Failed
+    case 1:
       visible = (result.status == TestStatus::Failed ||
                  result.status == TestStatus::Errored);
       break;
-    case 2: // Passed
+    case 2:
       visible = (result.status == TestStatus::Passed);
       break;
-    case 3: // Skipped
+    case 3:
       visible = (result.status == TestStatus::Skipped);
       break;
     default:
@@ -620,7 +614,6 @@ void TestPanel::applyFilter() {
     item->setHidden(!visible);
   }
 
-  // Hide suite items that have no visible children
   for (auto it = m_suiteItems.begin(); it != m_suiteItems.end(); ++it) {
     QTreeWidgetItem *suite = it.value();
     bool hasVisible = false;
@@ -680,23 +673,20 @@ void TestPanel::discoverTests() {
     return;
 
   if (!m_discoveryAdapter) {
-    m_statusLabel->setText(
-        tr("No discovery adapter configured"));
+    m_statusLabel->setText(tr("No discovery adapter configured"));
     return;
   }
 
   m_statusLabel->setText(tr("Discovering tests..."));
   m_discoverAction->setEnabled(false);
 
-  // Use workspace folder as default; the adapter decides how to discover
   m_discoveryAdapter->discover(m_workspaceFolder);
 }
 
 void TestPanel::onDiscoveryFinished(const QList<DiscoveredTest> &tests) {
   m_discoverAction->setEnabled(true);
   populateTreeFromDiscovery(tests);
-  m_statusLabel->setText(
-      tr("Discovered %1 tests").arg(tests.size()));
+  m_statusLabel->setText(tr("Discovered %1 tests").arg(tests.size()));
 }
 
 void TestPanel::onDiscoveryError(const QString &message) {
@@ -704,8 +694,7 @@ void TestPanel::onDiscoveryError(const QString &message) {
   m_statusLabel->setText(tr("Discovery error: %1").arg(message));
 }
 
-void TestPanel::populateTreeFromDiscovery(
-    const QList<DiscoveredTest> &tests) {
+void TestPanel::populateTreeFromDiscovery(const QList<DiscoveredTest> &tests) {
   m_tree->clear();
   m_suiteItems.clear();
   m_testItems.clear();

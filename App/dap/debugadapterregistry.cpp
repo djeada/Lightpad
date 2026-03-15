@@ -89,8 +89,8 @@ QList<std::shared_ptr<IDebugAdapter>>
 DebugAdapterRegistry::adaptersForType(const QString &type) const {
   QList<std::shared_ptr<IDebugAdapter>> result;
   for (const auto &adapterInstance : m_adapters) {
-    if (adapterInstance &&
-        adapterInstance->config().type.compare(type, Qt::CaseInsensitive) == 0) {
+    if (adapterInstance && adapterInstance->config().type.compare(
+                               type, Qt::CaseInsensitive) == 0) {
       result.append(adapterInstance);
     }
   }

@@ -105,8 +105,8 @@ void DebugConfigurationDialog::setupUi() {
     const DebugAdapterConfig cfg = adapter->config();
     m_adapterCombo->addItem(QString("%1 (%2)").arg(cfg.name, cfg.id), cfg.id);
   }
-  connect(m_adapterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-          &DebugConfigurationDialog::updateAdapterUi);
+  connect(m_adapterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, &DebugConfigurationDialog::updateAdapterUi);
   adapterRowLayout->addWidget(m_adapterCombo);
   basicLayout->addLayout(adapterRowLayout);
 
@@ -114,9 +114,9 @@ void DebugConfigurationDialog::setupUi() {
   typeLayout->addWidget(new QLabel("Type:"));
   m_typeCombo = new QComboBox();
   m_typeCombo->setEditable(true);
-  QStringList knownTypes = {"cppdbg", "debugpy", "node", "lldb", "go",
-                            "coreclr", "java", "php", "ruby",
-                            "rust-gdb", "rust-lldb"};
+  QStringList knownTypes = {"cppdbg", "debugpy",  "node",     "lldb",
+                            "go",     "coreclr",  "java",     "php",
+                            "ruby",   "rust-gdb", "rust-lldb"};
   for (const auto &adapter : DebugAdapterRegistry::instance().allAdapters()) {
     const QString type = adapter ? adapter->config().type.trimmed() : QString();
     if (!type.isEmpty() && !knownTypes.contains(type)) {
@@ -125,8 +125,8 @@ void DebugConfigurationDialog::setupUi() {
   }
   knownTypes.removeDuplicates();
   m_typeCombo->addItems(knownTypes);
-  connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-          &DebugConfigurationDialog::updateAdapterUi);
+  connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, &DebugConfigurationDialog::updateAdapterUi);
   connect(m_typeCombo, &QComboBox::editTextChanged, this,
           &DebugConfigurationDialog::updateAdapterUi);
   typeLayout->addWidget(m_typeCombo);
@@ -533,8 +533,7 @@ void DebugConfigurationDialog::onAddConfig() {
   m_configList->setCurrentItem(item);
 }
 
-DebugConfiguration
-DebugConfigurationDialog::createTemplateConfiguration(
+DebugConfiguration DebugConfigurationDialog::createTemplateConfiguration(
     const QString &templateId) const {
   DebugConfiguration cfg;
   cfg.cwd = "${workspaceFolder}";
@@ -580,9 +579,8 @@ DebugConfigurationDialog::createTemplateConfiguration(
     cfg.adapterConfig["MIMode"] = "gdb";
     if (auto gdbAdapter =
             DebugAdapterRegistry::instance().adapter("cppdbg-gdb")) {
-      cfg.adapterConfig["miDebuggerPath"] =
-          gdbAdapter->createLaunchConfig("${workspaceFolder}/a.out",
-                                         "${workspaceFolder}")["miDebuggerPath"];
+      cfg.adapterConfig["miDebuggerPath"] = gdbAdapter->createLaunchConfig(
+          "${workspaceFolder}/a.out", "${workspaceFolder}")["miDebuggerPath"];
     } else {
       cfg.adapterConfig["miDebuggerPath"] = "gdb";
     }
@@ -643,7 +641,8 @@ void DebugConfigurationDialog::addConfigurationFromTemplate(
   m_configList->setCurrentItem(item);
 }
 
-std::shared_ptr<IDebugAdapter> DebugConfigurationDialog::selectedAdapter() const {
+std::shared_ptr<IDebugAdapter>
+DebugConfigurationDialog::selectedAdapter() const {
   const QString adapterId = m_adapterCombo->currentData().toString().trimmed();
   if (!adapterId.isEmpty()) {
     return DebugAdapterRegistry::instance().adapter(adapterId);
@@ -751,7 +750,8 @@ void DebugConfigurationDialog::updateAdapterUi() {
   }
 
   m_adapterStatusLabel->setText(
-      QString("Status: %1").arg(adapter->statusMessageForConfiguration(preview)));
+      QString("Status: %1")
+          .arg(adapter->statusMessageForConfiguration(preview)));
 }
 
 void DebugConfigurationDialog::rebuildAdapterOptionsUi(
@@ -794,8 +794,8 @@ void DebugConfigurationDialog::rebuildAdapterOptionsUi(
       QPushButton *browse = new QPushButton("Browse...");
       connect(browse, &QPushButton::clicked, this,
               [this, key = option.key, title = option.label]() {
-                const QString file =
-                    QFileDialog::getOpenFileName(this, tr("Select %1").arg(title));
+                const QString file = QFileDialog::getOpenFileName(
+                    this, tr("Select %1").arg(title));
                 if (!file.isEmpty() && m_adapterOptionEdits.contains(key) &&
                     m_adapterOptionEdits[key]) {
                   m_adapterOptionEdits[key]->setText(file);

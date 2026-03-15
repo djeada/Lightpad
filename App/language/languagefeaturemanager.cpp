@@ -67,8 +67,7 @@ void LanguageFeatureManager::openDocument(const QString &filePath,
 }
 
 void LanguageFeatureManager::changeDocument(const QString &filePath,
-                                            int version,
-                                            const QString &text) {
+                                            int version, const QString &text) {
   if (!m_fileToLanguage.contains(filePath)) {
     return;
   }
@@ -130,7 +129,8 @@ void LanguageFeatureManager::closeDocument(const QString &filePath) {
   m_fileVersions.remove(filePath);
 }
 
-LspClient *LanguageFeatureManager::clientForFile(const QString &filePath) const {
+LspClient *
+LanguageFeatureManager::clientForFile(const QString &filePath) const {
   if (!m_fileToLanguage.contains(filePath)) {
     return nullptr;
   }
@@ -185,9 +185,8 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
 
   DiagnosticsServerConfig config = configForLanguage(languageId);
   if (config.command.isEmpty()) {
-    LOG_WARNING(
-        QString("No server command configured for language '%1'")
-            .arg(languageId));
+    LOG_WARNING(QString("No server command configured for language '%1'")
+                    .arg(languageId));
     emit serverError(languageId,
                      QString("No language server configured for '%1'. "
                              "Install the appropriate server and update "
@@ -204,12 +203,10 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
             onDiagnosticsReceived(languageId, uri, diagnostics);
           });
 
-  connect(client, &LspClient::initialized, this,
-          [this, languageId]() {
-            LOG_INFO(QString("Language server for '%1' initialized")
-                         .arg(languageId));
-            emit serverStarted(languageId);
-          });
+  connect(client, &LspClient::initialized, this, [this, languageId]() {
+    LOG_INFO(QString("Language server for '%1' initialized").arg(languageId));
+    emit serverStarted(languageId);
+  });
 
   connect(client, &LspClient::error, this,
           [this, languageId](const QString &message) {
@@ -220,10 +217,9 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
 
   bool started = client->start(config.command, config.arguments);
   if (!started) {
-    LOG_WARNING(
-        QString("Failed to start language server '%1' (%2). "
-                "Make sure '%3' is installed and available on PATH.")
-            .arg(languageId, config.command, config.command));
+    LOG_WARNING(QString("Failed to start language server '%1' (%2). "
+                        "Make sure '%3' is installed and available on PATH.")
+                    .arg(languageId, config.command, config.command));
     emit serverError(
         languageId,
         QString("Failed to start '%1'. Is it installed?").arg(config.command));
@@ -232,9 +228,8 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
   }
 
   m_clients[languageId] = client;
-  LOG_INFO(
-      QString("Started language server for '%1' (%2)")
-          .arg(languageId, config.command));
+  LOG_INFO(QString("Started language server for '%1' (%2)")
+               .arg(languageId, config.command));
   return client;
 }
 

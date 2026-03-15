@@ -49,7 +49,8 @@ public:
 
   void setFoldingEnabled(bool enabled);
 
-  void setDiagnosticLines(const QMap<int, LspDiagnosticSeverity> &diagnosticLines);
+  void
+  setDiagnosticLines(const QMap<int, LspDiagnosticSeverity> &diagnosticLines);
   void clearDiagnosticLines();
 
 protected:

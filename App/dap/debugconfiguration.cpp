@@ -162,8 +162,8 @@ DebugConfigurationManager::resolveVariables(const DebugConfiguration &config,
                                             const QString &currentFile) const {
   DebugConfiguration resolved = config;
   const std::function<QJsonValue(const QJsonValue &)> substituteJsonValue =
-      [this, &currentFile, &substituteJsonValue](
-          const QJsonValue &value) -> QJsonValue {
+      [this, &currentFile,
+       &substituteJsonValue](const QJsonValue &value) -> QJsonValue {
     if (value.isString()) {
       return substituteVariable(value.toString(), currentFile);
     }

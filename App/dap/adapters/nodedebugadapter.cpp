@@ -16,7 +16,8 @@ public:
 
   bool isAvailableForConfiguration(
       const DebugConfiguration &configuration) const override {
-    if (!ProcessBackedDebugAdapter::isAvailableForConfiguration(configuration)) {
+    if (!ProcessBackedDebugAdapter::isAvailableForConfiguration(
+            configuration)) {
       return false;
     }
     if (configuration.request.compare("launch", Qt::CaseInsensitive) != 0) {
@@ -27,7 +28,8 @@ public:
 
   QString statusMessageForConfiguration(
       const DebugConfiguration &configuration) const override {
-    if (!ProcessBackedDebugAdapter::isAvailableForConfiguration(configuration)) {
+    if (!ProcessBackedDebugAdapter::isAvailableForConfiguration(
+            configuration)) {
       const QString candidate = adapterExecutableCandidate(configuration);
       if (candidate.isEmpty()) {
         return "Node DAP adapter command not configured. Set adapterCommand "
@@ -39,7 +41,8 @@ public:
     }
 
     if (configuration.request.compare("launch", Qt::CaseInsensitive) == 0) {
-      const QString runtimeCandidate = runtimeExecutableCandidate(configuration);
+      const QString runtimeCandidate =
+          runtimeExecutableCandidate(configuration);
       if (resolvedRuntimeExecutable(configuration).isEmpty()) {
         if (runtimeCandidate.isEmpty()) {
           return "Node runtime not configured. Set runtimeExecutable to a "
@@ -51,7 +54,8 @@ public:
       }
     }
 
-    return ProcessBackedDebugAdapter::statusMessageForConfiguration(configuration);
+    return ProcessBackedDebugAdapter::statusMessageForConfiguration(
+        configuration);
   }
 
   QJsonObject createLaunchConfig(const QString &filePath,
@@ -61,8 +65,8 @@ public:
     config["request"] = "launch";
     config["program"] = filePath;
     config["console"] = "integratedTerminal";
-    config["cwd"] = workingDir.isEmpty() ? QFileInfo(filePath).absolutePath()
-                                         : workingDir;
+    config["cwd"] =
+        workingDir.isEmpty() ? QFileInfo(filePath).absolutePath() : workingDir;
     const QString runtimeExecutable = preferredRuntimeExecutable();
     if (!runtimeExecutable.isEmpty()) {
       config["runtimeExecutable"] = runtimeExecutable;
@@ -89,8 +93,8 @@ public:
   }
 
 protected:
-  QStringList
-  executableProbeArguments(const DebugConfiguration &configuration) const override {
+  QStringList executableProbeArguments(
+      const DebugConfiguration &configuration) const override {
     Q_UNUSED(configuration);
     return {"--help"};
   }
@@ -98,8 +102,8 @@ protected:
   QString readyMessage(const DebugConfiguration &configuration,
                        const QString &executable,
                        const ProcessProbeResult &probe) const override {
-    const QString runtime = QFileInfo(resolvedRuntimeExecutable(configuration))
-                                .fileName();
+    const QString runtime =
+        QFileInfo(resolvedRuntimeExecutable(configuration)).fileName();
     const QString adapter = QFileInfo(executable).fileName();
     if (!runtime.isEmpty()) {
       return QString("Ready (%1 via %2)").arg(runtime, adapter);
@@ -130,8 +134,8 @@ private:
     return configured.isEmpty() ? QStringLiteral("node") : configured;
   }
 
-  QString runtimeExecutableCandidate(
-      const DebugConfiguration &configuration) const {
+  QString
+  runtimeExecutableCandidate(const DebugConfiguration &configuration) const {
     const QString configured = optionValue(configuration, "runtimeExecutable");
     if (!configured.isEmpty()) {
       return configured;
@@ -139,8 +143,8 @@ private:
     return preferredRuntimeExecutable();
   }
 
-  QString resolvedRuntimeExecutable(
-      const DebugConfiguration &configuration) const {
+  QString
+  resolvedRuntimeExecutable(const DebugConfiguration &configuration) const {
     return resolveExecutablePath(runtimeExecutableCandidate(configuration));
   }
 };

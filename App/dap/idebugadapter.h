@@ -74,8 +74,9 @@ public:
 
   virtual QString statusMessage() const = 0;
 
-  virtual QString statusMessageForContext(const QString &filePath = {},
-                                          const QString &workingDir = {}) const {
+  virtual QString
+  statusMessageForContext(const QString &filePath = {},
+                          const QString &workingDir = {}) const {
     (void)filePath;
     (void)workingDir;
     return statusMessage();
@@ -146,9 +147,8 @@ public:
 
   virtual QJsonObject
   attachArguments(const DebugConfiguration &configuration) const {
-    QJsonObject arguments =
-        createAttachConfig(configuration.processId, configuration.host,
-                           configuration.port);
+    QJsonObject arguments = createAttachConfig(
+        configuration.processId, configuration.host, configuration.port);
 
     for (auto it = configuration.adapterConfig.begin();
          it != configuration.adapterConfig.end(); ++it) {
@@ -160,7 +160,8 @@ public:
     } else if (!configuration.processIdExpression.isEmpty() &&
                !arguments.contains("processId")) {
       arguments["processId"] = configuration.processIdExpression;
-    } else if (!configuration.host.isEmpty() && !arguments.contains("connect") &&
+    } else if (!configuration.host.isEmpty() &&
+               !arguments.contains("connect") &&
                !arguments.contains("miDebuggerServerAddress") &&
                !arguments.contains("address")) {
       arguments["host"] = configuration.host;

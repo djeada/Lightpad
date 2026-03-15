@@ -105,10 +105,11 @@ resolvePythonInterpreter(const DebugConfiguration *configuration) {
     if (!configuredInterpreter.isEmpty()) {
       const QString resolved = resolveExecutablePath(configuredInterpreter);
       if (resolved.isEmpty()) {
-        return {{},
-                QString("Configured Python interpreter not found: %1. "
-                        "Set a valid interpreter override in Debug Configurations.")
-                    .arg(configuredInterpreter)};
+        return {
+            {},
+            QString("Configured Python interpreter not found: %1. "
+                    "Set a valid interpreter override in Debug Configurations.")
+                .arg(configuredInterpreter)};
       }
       if (!pythonHasDebugpy(resolved)) {
         return {{},
@@ -136,11 +137,12 @@ resolvePythonInterpreter(const DebugConfiguration *configuration) {
       return {globalPython,
               QString("Ready (%1)").arg(QFileInfo(globalPython).fileName())};
     }
-    return {{},
-            QString("debugpy not installed for global Python %1. "
-                    "Run: %1 -m pip install debugpy, or set a Python interpreter "
-                    "override in Debug Configurations.")
-                .arg(globalPython)};
+    return {
+        {},
+        QString("debugpy not installed for global Python %1. "
+                "Run: %1 -m pip install debugpy, or set a Python interpreter "
+                "override in Debug Configurations.")
+            .arg(globalPython)};
   }
 
   const QString envPython = activeEnvironmentPythonInterpreter();
@@ -149,11 +151,12 @@ resolvePythonInterpreter(const DebugConfiguration *configuration) {
       return {envPython,
               QString("Ready (%1)").arg(QFileInfo(envPython).fileName())};
     }
-    return {{},
-            QString("debugpy not installed for environment Python %1. "
-                    "Run: %1 -m pip install debugpy, or set a Python interpreter "
-                    "override in Debug Configurations.")
-                .arg(envPython)};
+    return {
+        {},
+        QString("debugpy not installed for environment Python %1. "
+                "Run: %1 -m pip install debugpy, or set a Python interpreter "
+                "override in Debug Configurations.")
+            .arg(envPython)};
   }
 
   return {{},
@@ -161,8 +164,8 @@ resolvePythonInterpreter(const DebugConfiguration *configuration) {
           "override in Debug Configurations."};
 }
 
-QString preferredPythonInterpreterCandidate(
-    const DebugConfiguration *configuration) {
+QString
+preferredPythonInterpreterCandidate(const DebugConfiguration *configuration) {
   if (configuration) {
     const QString configuredInterpreter =
         configuration->adapterConfig["python"].toString().trimmed();

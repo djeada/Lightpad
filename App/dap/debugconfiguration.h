@@ -127,11 +127,10 @@ struct DebugConfiguration {
     cfg.order = obj["order"].toInt();
 
     static const QStringList knownKeys = {
-        "name",  "adapterId",     "type",          "request",
-        "program", "args",        "cwd",           "env",
-        "stopOnEntry",            "processId",     "host",
-        "port",  "preLaunchTask", "postDebugTask", "presentation",
-        "order"};
+        "name",          "adapterId",     "type",         "request",
+        "program",       "args",          "cwd",          "env",
+        "stopOnEntry",   "processId",     "host",         "port",
+        "preLaunchTask", "postDebugTask", "presentation", "order"};
     for (auto it = obj.begin(); it != obj.end(); ++it) {
       if (!knownKeys.contains(it.key())) {
         cfg.adapterConfig[it.key()] = it.value();

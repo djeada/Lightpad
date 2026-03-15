@@ -9,12 +9,11 @@ namespace {
 class PythonDebugAdapter : public AbstractDebugAdapter {
 public:
   PythonDebugAdapter()
-      : AbstractDebugAdapter(createBaseConfig(), "python",
-                             "Python Interpreter",
+      : AbstractDebugAdapter(createBaseConfig(), "python", "Python Interpreter",
                              "/usr/bin/python3 or /path/to/venv/bin/python") {}
 
-  DebugAdapterConfig
-  configForConfiguration(const DebugConfiguration &configuration) const override {
+  DebugAdapterConfig configForConfiguration(
+      const DebugConfiguration &configuration) const override {
     DebugAdapterConfig cfg = config();
     const QString python = preferredPythonInterpreterCandidate(&configuration);
     if (!python.isEmpty()) {

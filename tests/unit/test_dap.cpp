@@ -299,7 +299,8 @@ void TestDap::testBreakpointStructuredPersistence() {
   bm.loadFromJson(json);
 
   QCOMPARE(bm.breakpointsForFile("/test/structured.cpp").count(), 2);
-  const QList<Breakpoint> source = bm.breakpointsForFile("/test/structured.cpp");
+  const QList<Breakpoint> source =
+      bm.breakpointsForFile("/test/structured.cpp");
   QCOMPARE(source.at(0).line, 12);
   QCOMPARE(source.at(0).condition, QString("count > 3"));
   QCOMPARE(source.at(1).line, 18);
@@ -395,11 +396,10 @@ void TestDap::testPythonAdapterUsesExplicitInterpreterOverride() {
   fakePython.write("#!/bin/sh\nexit 0\n");
   fakePython.close();
   QVERIFY(QFile::setPermissions(
-      fakePythonPath,
-      QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-          QFileDevice::ExeOwner | QFileDevice::ReadGroup |
-          QFileDevice::ExeGroup | QFileDevice::ReadOther |
-          QFileDevice::ExeOther));
+      fakePythonPath, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                          QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                          QFileDevice::ExeGroup | QFileDevice::ReadOther |
+                          QFileDevice::ExeOther));
 
   auto pythonAdapter =
       DebugAdapterRegistry::instance().adapter("python-debugpy");
@@ -483,11 +483,10 @@ void TestDap::testNodeAdapterRuntimeOverride() {
   fakeAdapter.write("#!/bin/sh\necho js-debug-adapter help\nexit 0\n");
   fakeAdapter.close();
   QVERIFY(QFile::setPermissions(
-      fakeAdapterPath,
-      QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-          QFileDevice::ExeOwner | QFileDevice::ReadGroup |
-          QFileDevice::ExeGroup | QFileDevice::ReadOther |
-          QFileDevice::ExeOther));
+      fakeAdapterPath, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                           QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                           QFileDevice::ExeGroup | QFileDevice::ReadOther |
+                           QFileDevice::ExeOther));
 
   const QString fakeNodePath = tempDir.filePath("node");
   QFile fakeNode(fakeNodePath);
@@ -495,16 +494,15 @@ void TestDap::testNodeAdapterRuntimeOverride() {
   fakeNode.write("#!/bin/sh\necho v20.11.0\nexit 0\n");
   fakeNode.close();
   QVERIFY(QFile::setPermissions(
-      fakeNodePath,
-      QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-          QFileDevice::ExeOwner | QFileDevice::ReadGroup |
-          QFileDevice::ExeGroup | QFileDevice::ReadOther |
-          QFileDevice::ExeOther));
+      fakeNodePath, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                        QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                        QFileDevice::ExeGroup | QFileDevice::ReadOther |
+                        QFileDevice::ExeOther));
 
-  QJsonObject nodeSettings =
-      DebugSettings::instance().adapterSettings()["adapters"]
-          .toObject()["node-debug"]
-          .toObject();
+  QJsonObject nodeSettings = DebugSettings::instance()
+                                 .adapterSettings()["adapters"]
+                                 .toObject()["node-debug"]
+                                 .toObject();
   nodeSettings["adapterCommand"] = fakeAdapterPath;
   nodeSettings["runtimeExecutable"] = fakeNodePath;
   DebugSettings::instance().setAdapterSettings("node-debug", nodeSettings);
@@ -546,10 +544,10 @@ void TestDap::testNodeAdapterMissingCommandStatus() {
   auto nodeAdapter = DebugAdapterRegistry::instance().adapter("node-debug");
   QVERIFY(nodeAdapter != nullptr);
 
-  QJsonObject nodeSettings =
-      DebugSettings::instance().adapterSettings()["adapters"]
-          .toObject()["node-debug"]
-          .toObject();
+  QJsonObject nodeSettings = DebugSettings::instance()
+                                 .adapterSettings()["adapters"]
+                                 .toObject()["node-debug"]
+                                 .toObject();
   nodeSettings["adapterCommand"] = "/definitely/missing/js-debug-adapter";
   nodeSettings["runtimeExecutable"] = "node";
   DebugSettings::instance().setAdapterSettings("node-debug", nodeSettings);
@@ -807,19 +805,19 @@ void TestDap::testConfigurationVariableSubstitution() {
   config.program = "${workspaceFolder}/main.py";
   config.cwd = "${workspaceFolder}";
   config.args = {"${fileBasename}", "${relativeFile}"};
-  config.adapterConfig["connect"] = QJsonObject{
-      {"host", "${workspaceFolder}"},
-      {"pathMappings",
-       QJsonArray{QJsonObject{{"localRoot", "${workspaceFolder}/src"},
-                              {"remoteRoot", "/app/${fileBasenameNoExtension}"}}}}};
+  config.adapterConfig["connect"] =
+      QJsonObject{{"host", "${workspaceFolder}"},
+                  {"pathMappings",
+                   QJsonArray{QJsonObject{
+                       {"localRoot", "${workspaceFolder}/src"},
+                       {"remoteRoot", "/app/${fileBasenameNoExtension}"}}}}};
 
   DebugConfiguration resolved =
       mgr.resolveVariables(config, "/home/user/project/src/app.py");
 
   QCOMPARE(resolved.program, QString("/home/user/project/main.py"));
   QCOMPARE(resolved.cwd, QString("/home/user/project"));
-  QCOMPARE(resolved.args,
-           QStringList({"app.py", QString("src/app.py")}));
+  QCOMPARE(resolved.args, QStringList({"app.py", QString("src/app.py")}));
   const QJsonObject connect = resolved.adapterConfig["connect"].toObject();
   QCOMPARE(connect["host"].toString(), QString("/home/user/project"));
   const QJsonArray pathMappings = connect["pathMappings"].toArray();
@@ -872,8 +870,7 @@ void TestDap::testCompoundConfigurationLoading() {
       mgr.allCompoundConfigurations();
   QCOMPARE(compounds.size(), 1);
   QCOMPARE(compounds.first().name, QString("Server + Client"));
-  QCOMPARE(compounds.first().configurations,
-           QStringList({"Server", "Client"}));
+  QCOMPARE(compounds.first().configurations, QStringList({"Server", "Client"}));
   QVERIFY(compounds.first().stopAll);
 }
 
@@ -881,9 +878,9 @@ void TestDap::testQuickConfigPreservesAdapterDefaults() {
   auto pythonAdapter =
       DebugAdapterRegistry::instance().adapter("python-debugpy");
   QVERIFY(pythonAdapter != nullptr);
-  const DebugConfiguration pythonCfg = DebugConfiguration::fromJson(
-      pythonAdapter->createLaunchConfig("/home/user/project/app.py",
-                                        "/home/user/project"));
+  const DebugConfiguration pythonCfg =
+      DebugConfiguration::fromJson(pythonAdapter->createLaunchConfig(
+          "/home/user/project/app.py", "/home/user/project"));
   QCOMPARE(pythonAdapter->config().id, QString("python-debugpy"));
   QCOMPARE(pythonCfg.type, QString("debugpy"));
   QCOMPARE(pythonCfg.program, QString("/home/user/project/app.py"));
@@ -892,9 +889,9 @@ void TestDap::testQuickConfigPreservesAdapterDefaults() {
 
   auto gdbAdapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
   QVERIFY(gdbAdapter != nullptr);
-  const DebugConfiguration cppCfg = DebugConfiguration::fromJson(
-      gdbAdapter->createLaunchConfig("/home/user/project/main",
-                                     "/home/user/project"));
+  const DebugConfiguration cppCfg =
+      DebugConfiguration::fromJson(gdbAdapter->createLaunchConfig(
+          "/home/user/project/main", "/home/user/project"));
   QCOMPARE(gdbAdapter->runtimeOverrideKey(), QString("miDebuggerPath"));
   QCOMPARE(cppCfg.type, QString("cppdbg"));
   QCOMPARE(cppCfg.program, QString("/home/user/project/main"));
@@ -920,8 +917,8 @@ void TestDap::testQuickConfigCreatedEvenWhenAdapterUnavailable() {
   settings.setAdapterSettings("python-debugpy", brokenPythonSettings);
 
   DebugConfiguration cfg =
-      DebugConfigurationManager::instance().createQuickConfig(
-          "/tmp/example.py", "py");
+      DebugConfigurationManager::instance().createQuickConfig("/tmp/example.py",
+                                                              "py");
   QCOMPARE(cfg.type, QString("debugpy"));
   QCOMPARE(cfg.adapterId, QString("python-debugpy"));
   QCOMPARE(cfg.program, QString("/tmp/example.py"));
@@ -1013,10 +1010,10 @@ void TestDap::testSessionManagerReportsAdapterHints() {
 
   DebugSettings::instance().initialize(tempDir.path());
 
-  QJsonObject nodeSettings =
-      DebugSettings::instance().adapterSettings()["adapters"]
-          .toObject()["node-debug"]
-          .toObject();
+  QJsonObject nodeSettings = DebugSettings::instance()
+                                 .adapterSettings()["adapters"]
+                                 .toObject()["node-debug"]
+                                 .toObject();
   nodeSettings["adapterCommand"] = "/definitely/missing/js-debug-adapter";
   nodeSettings["runtimeExecutable"] = "node";
   DebugSettings::instance().setAdapterSettings("node-debug", nodeSettings);

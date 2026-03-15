@@ -18,9 +18,9 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QSizePolicy>
-#include <QStyledItemDelegate>
 #include <QStyle>
 #include <QStyleOptionViewItem>
+#include <QStyledItemDelegate>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QtGlobal>
@@ -64,18 +64,16 @@ public:
       if (isSelected) {
         painter->setPen(Qt::NoPen);
         painter->setBrush(m_selectedBorder);
-        painter->drawRoundedRect(
-            QRect(rowRect.left() + 2, rowRect.top() + 4, 3, rowRect.height() - 8),
-            1, 1);
+        painter->drawRoundedRect(QRect(rowRect.left() + 2, rowRect.top() + 4, 3,
+                                       rowRect.height() - 8),
+                                 1, 1);
       }
     }
 
-    const QString badge =
-        index.data(GitStatusBadgeRole).toString();
+    const QString badge = index.data(GitStatusBadgeRole).toString();
     const QColor badgeColor =
         index.data(GitStatusBadgeColorRole).value<QColor>();
-    const int badgeSpace =
-        (!badge.isEmpty() && badgeColor.isValid()) ? 18 : 0;
+    const int badgeSpace = (!badge.isEmpty() && badgeColor.isValid()) ? 18 : 0;
 
     opt.rect = rowRect.adjusted(6, 0, -4 - badgeSpace, 0);
     opt.showDecorationSelected = false;
@@ -95,8 +93,8 @@ public:
       badgeFont.setWeight(QFont::Bold);
       painter->setFont(badgeFont);
       painter->setPen(badgeColor);
-      QRect badgeRect(rowRect.right() - 18, rowRect.top(),
-                      16, rowRect.height());
+      QRect badgeRect(rowRect.right() - 18, rowRect.top(), 16,
+                      rowRect.height());
       painter->drawText(badgeRect, Qt::AlignCenter, badge);
     }
 
@@ -242,8 +240,8 @@ void LightpadTreeView::showContextMenu(const QPoint &pos) {
 
   QMenu menu;
   if (parentPage && parentPage->getMainWindow()) {
-    menu.setStyleSheet(
-        UIStyleHelper::contextMenuStyle(parentPage->getMainWindow()->getTheme()));
+    menu.setStyleSheet(UIStyleHelper::contextMenuStyle(
+        parentPage->getMainWindow()->getTheme()));
   }
 
   QAction *newFileAction = menu.addAction("New File");
@@ -484,10 +482,9 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
                      treeView->setCurrentIndex(index);
                    });
 
-  QObject::connect(treeView, &QAbstractItemView::doubleClicked, this,
-                   [this](const QModelIndex &index) {
-                     activateTreeIndex(index);
-                   });
+  QObject::connect(
+      treeView, &QAbstractItemView::doubleClicked, this,
+      [this](const QModelIndex &index) { activateTreeIndex(index); });
 
   connect(treeRefreshButton, &QToolButton::clicked, this, [this]() {
     updateModel();
@@ -714,13 +711,14 @@ void LightpadPage::updateModel() {
   }
 
   treeView->setModel(model);
-  connect(model, &QFileSystemModel::directoryLoaded, this,
-          [this](const QString &) {
-            if (!m_treeFilterText.trimmed().isEmpty()) {
-              applyTreeFilter();
-            }
-          },
-          Qt::UniqueConnection);
+  connect(
+      model, &QFileSystemModel::directoryLoaded, this,
+      [this](const QString &) {
+        if (!m_treeFilterText.trimmed().isEmpty()) {
+          applyTreeFilter();
+        }
+      },
+      Qt::UniqueConnection);
 
   treeView->setColumnHidden(1, true);
   treeView->setColumnHidden(2, true);
@@ -829,48 +827,47 @@ void LightpadPage::applyTheme(const Theme &theme) {
     const QString accent = theme.accentColor.name();
     const QString pressed = theme.pressedColor.name();
     treeContainer->setStyleSheet(
-        QString(
-            "#treeContainer {"
-            "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, "
-            "stop: 0 %1, stop: 1 %2);"
-            "  border-right: 1px solid %3;"
-            "}"
-            "#treeHeader {"
-            "  background: transparent;"
-            "  border-bottom: 1px solid %3;"
-            "}"
-            "QLabel#treeTitleLabel {"
-            "  color: %4;"
-            "  font-size: 10px;"
-            "  font-weight: 700;"
-            "  letter-spacing: 1px;"
-            "  padding: 2px 0;"
-            "}"
-            "QLineEdit#treeFilterEdit {"
-            "  background: %6;"
-            "  color: %5;"
-            "  border: 1px solid %3;"
-            "  border-radius: 8px;"
-            "  padding: 7px 10px;"
-            "}"
-            "QLineEdit#treeFilterEdit:focus {"
-            "  background: %7;"
-            "  border: 1px solid %8;"
-            "}"
-            "QToolButton#treeToolButton {"
-            "  background: %6;"
-            "  border: 1px solid %3;"
-            "  border-radius: 7px;"
-            "  padding: 4px;"
-            "  color: %5;"
-            "}"
-            "QToolButton#treeToolButton:hover {"
-            "  background: %7;"
-            "  border-color: %8;"
-            "}"
-            "QToolButton#treeToolButton:pressed {"
-            "  background: %9;"
-            "}")
+        QString("#treeContainer {"
+                "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, "
+                "stop: 0 %1, stop: 1 %2);"
+                "  border-right: 1px solid %3;"
+                "}"
+                "#treeHeader {"
+                "  background: transparent;"
+                "  border-bottom: 1px solid %3;"
+                "}"
+                "QLabel#treeTitleLabel {"
+                "  color: %4;"
+                "  font-size: 10px;"
+                "  font-weight: 700;"
+                "  letter-spacing: 1px;"
+                "  padding: 2px 0;"
+                "}"
+                "QLineEdit#treeFilterEdit {"
+                "  background: %6;"
+                "  color: %5;"
+                "  border: 1px solid %3;"
+                "  border-radius: 8px;"
+                "  padding: 7px 10px;"
+                "}"
+                "QLineEdit#treeFilterEdit:focus {"
+                "  background: %7;"
+                "  border: 1px solid %8;"
+                "}"
+                "QToolButton#treeToolButton {"
+                "  background: %6;"
+                "  border: 1px solid %3;"
+                "  border-radius: 7px;"
+                "  padding: 4px;"
+                "  color: %5;"
+                "}"
+                "QToolButton#treeToolButton:hover {"
+                "  background: %7;"
+                "  border-color: %8;"
+                "}"
+                "QToolButton#treeToolButton:pressed {"
+                "  background: %9;"
+                "}")
             .arg(panelTop, panelBottom, border, muted, fg, filterBg,
                  filterFocusBg, accent, pressed));
   }

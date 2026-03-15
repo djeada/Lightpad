@@ -1,8 +1,8 @@
 #ifndef LANGUAGELSPDEFINITIONPROVIDER_H
 #define LANGUAGELSPDEFINITIONPROVIDER_H
 
-#include "idefinitionprovider.h"
 #include "../lsp/lspclient.h"
+#include "idefinitionprovider.h"
 #include <QStringList>
 #include <QUrl>
 

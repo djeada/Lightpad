@@ -599,8 +599,8 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
         tabWidth = qMax(1, mainWindow->getTabWidth());
       }
 
-      int startPosition = hasSelection ? cursor.selectionStart()
-                                       : cursor.block().position();
+      int startPosition =
+          hasSelection ? cursor.selectionStart() : cursor.block().position();
       int startColumn = hasSelection ? 0 : cursor.positionInBlock();
 
       QTextCursor startCursor(document());
@@ -651,7 +651,8 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
       cursor.endEditBlock();
 
       if (hasSelection) {
-        QTextBlock selectionStartBlock = document()->findBlockByNumber(startBlock);
+        QTextBlock selectionStartBlock =
+            document()->findBlockByNumber(startBlock);
         QTextBlock selectionEndBlock = document()->findBlockByNumber(endBlock);
 
         if (selectionStartBlock.isValid() && selectionEndBlock.isValid()) {
@@ -1187,8 +1188,8 @@ void TextArea::updateExtraSelections() {
                                   : QColor(241, 196, 15);
       break;
     case LspDiagnosticSeverity::Information:
-      underlineColor =
-          mainWindow ? mainWindow->getTheme().accentColor : QColor(52, 152, 219);
+      underlineColor = mainWindow ? mainWindow->getTheme().accentColor
+                                  : QColor(52, 152, 219);
       break;
     case LspDiagnosticSeverity::Hint:
       underlineColor = QColor(149, 165, 166);
@@ -1209,15 +1210,13 @@ void TextArea::updateExtraSelections() {
     diagCursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
                             qMin(startCol, maxStartCol));
     if (startLine == endLine && endCol > startCol) {
-      diagCursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
-                              qMin(endCol - startCol,
-                                   qMax(0, startBlock.length() - 1 - startCol)));
+      diagCursor.movePosition(
+          QTextCursor::Right, QTextCursor::KeepAnchor,
+          qMin(endCol - startCol, qMax(0, startBlock.length() - 1 - startCol)));
     } else if (endLine > startLine) {
-      diagCursor.movePosition(QTextCursor::EndOfBlock,
-                              QTextCursor::KeepAnchor);
+      diagCursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
     } else {
-      diagCursor.movePosition(QTextCursor::EndOfBlock,
-                              QTextCursor::KeepAnchor);
+      diagCursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
     }
 
     selection.cursor = diagCursor;
@@ -1244,12 +1243,9 @@ void TextArea::updateExtraSelections() {
     extraSelections.append(selection);
   }
 
-  // Full-document bracket scans are expensive on large files and can make
-  // cursor movement feel laggy.
   constexpr int kBracketScanCharacterLimit = 200000;
   const bool canScanBrackets =
-      document() &&
-      document()->characterCount() <= kBracketScanCharacterLimit;
+      document() && document()->characterCount() <= kBracketScanCharacterLimit;
   if (matchingBracketsHighlighted && canScanBrackets) {
     auto addBracketSelection =
         [&](QTextCursor::MoveOperation op, const QChar &startStr,

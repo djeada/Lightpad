@@ -2,8 +2,8 @@
 #define GITFILESYSTEMMODEL_H
 
 #include "../git/gitintegration.h"
-#include <QHash>
 #include <QFileSystemModel>
+#include <QHash>
 #include <QIcon>
 #include <QSet>
 #include <QTimer>

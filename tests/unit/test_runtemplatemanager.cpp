@@ -193,7 +193,8 @@ void TestRunTemplateManager::testAssignmentHookPersistence() {
   newAssignment.postRunCommand = "echo POST";
   QVERIFY(manager.assignTemplateToFile(testFile, newAssignment));
 
-  FileTemplateAssignment savedAssignment = manager.getAssignmentForFile(testFile);
+  FileTemplateAssignment savedAssignment =
+      manager.getAssignmentForFile(testFile);
   QCOMPARE(savedAssignment.preRunCommand, QString("echo PRE"));
   QCOMPARE(savedAssignment.postRunCommand, QString("echo POST"));
 
@@ -253,10 +254,10 @@ void TestRunTemplateManager::testRunTemplateSelectorQuoteRoundTrip() {
 
   FileTemplateAssignment originalAssignment;
   originalAssignment.templateId = "cpp_gcc";
-  originalAssignment.customArgs =
-      QStringList() << "--gtest_filter" << "Suite Name.*";
-  originalAssignment.compilerFlags =
-      QStringList() << "-DTEST_LABEL=With Space" << "-O2";
+  originalAssignment.customArgs = QStringList()
+                                  << "--gtest_filter" << "Suite Name.*";
+  originalAssignment.compilerFlags = QStringList()
+                                     << "-DTEST_LABEL=With Space" << "-O2";
   QVERIFY(manager.assignTemplateToFile(testFile, originalAssignment));
 
   RunTemplateSelector selector(testFile);
@@ -279,10 +280,11 @@ void TestRunTemplateManager::testRunTemplateSelectorQuoteRoundTrip() {
   QVERIFY(customArgsEdit->text().contains("\"Suite Name.*\""));
   QVERIFY(compilerFlagsEdit->text().contains("\"-DTEST_LABEL=With Space\""));
 
-  QVERIFY(QMetaObject::invokeMethod(&selector, "onAccept",
-                                    Qt::DirectConnection));
+  QVERIFY(
+      QMetaObject::invokeMethod(&selector, "onAccept", Qt::DirectConnection));
 
-  FileTemplateAssignment savedAssignment = manager.getAssignmentForFile(testFile);
+  FileTemplateAssignment savedAssignment =
+      manager.getAssignmentForFile(testFile);
   QCOMPARE(savedAssignment.customArgs, originalAssignment.customArgs);
   QCOMPARE(savedAssignment.compilerFlags, originalAssignment.compilerFlags);
 

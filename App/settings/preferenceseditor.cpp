@@ -11,15 +11,15 @@ PreferencesEditor::PreferencesEditor(MainWindow *parent)
   ui->tabWidth->setText("Tab width: " + QString::number(parent->getTabWidth()));
   {
     QSignalBlocker blocker(ui->checkBoxAutoSave);
-    ui->checkBoxAutoSave->setChecked(parentWindow
-                                         ? parentWindow->isAutoSaveEnabled()
-                                         : true);
+    ui->checkBoxAutoSave->setChecked(
+        parentWindow ? parentWindow->isAutoSaveEnabled() : true);
   }
-  connect(ui->checkBoxAutoSave, &QCheckBox::toggled, this, [this](bool checked) {
-    if (parentWindow) {
-      parentWindow->setAutoSaveEnabled(checked);
-    }
-  });
+  connect(ui->checkBoxAutoSave, &QCheckBox::toggled, this,
+          [this](bool checked) {
+            if (parentWindow) {
+              parentWindow->setAutoSaveEnabled(checked);
+            }
+          });
 }
 
 PreferencesEditor::~PreferencesEditor() { delete ui; }

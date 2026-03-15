@@ -96,7 +96,6 @@ void Minimap::paintEvent(QPaintEvent *event) {
     return;
   }
 
-  // Keep edits responsive by only re-rendering on the debounced update path.
   if (m_documentDirty && !m_updatePending) {
     renderDocument();
   }
@@ -174,8 +173,7 @@ void Minimap::onSourceScrollChanged(int value) {
 }
 
 void Minimap::onSourceCursorPositionChanged() {
-  // Cursor movement can be very frequent while typing. Avoid triggering
-  // immediate expensive renders when a debounced text update is pending.
+
   if (m_documentDirty) {
     return;
   }

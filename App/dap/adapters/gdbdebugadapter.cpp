@@ -72,8 +72,8 @@ public:
     config["miDebuggerPath"] = findSystemGdb();
     config["stopAtEntry"] = false;
     config["externalConsole"] = false;
-    config["cwd"] = workingDir.isEmpty() ? QFileInfo(filePath).absolutePath()
-                                         : workingDir;
+    config["cwd"] =
+        workingDir.isEmpty() ? QFileInfo(filePath).absolutePath() : workingDir;
     config["args"] = QJsonArray();
     config["environment"] = QJsonArray();
 
@@ -195,13 +195,14 @@ private:
     Q_UNUSED(gdbPath);
     return true;
 #else
-    const ProcessProbeResult probe =
-        runProcessProbe(gdbPath,
-                        {"-q", "-batch", "-ex", "file /bin/true", "-ex", "starti"});
-    if (probe.stdoutData.isEmpty() && probe.stderrData.isEmpty() && !probe.success) {
+    const ProcessProbeResult probe = runProcessProbe(
+        gdbPath, {"-q", "-batch", "-ex", "file /bin/true", "-ex", "starti"});
+    if (probe.stdoutData.isEmpty() && probe.stderrData.isEmpty() &&
+        !probe.success) {
       return false;
     }
-    const QString output = QString::fromUtf8(probe.stdoutData + probe.stderrData);
+    const QString output =
+        QString::fromUtf8(probe.stdoutData + probe.stderrData);
     const bool ptraceBlocked =
         output.contains("Could not trace the inferior process",
                         Qt::CaseInsensitive) ||

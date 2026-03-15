@@ -1,12 +1,12 @@
 #ifndef FINDREPLACEPANEL_H
 #define FINDREPLACEPANEL_H
 
+#include <QPointer>
 #include <QRegularExpression>
 #include <QStringList>
 #include <QSyntaxHighlighter>
 #include <QTreeWidget>
 #include <QWidget>
-#include <QPointer>
 
 class TextArea;
 class MainWindow;

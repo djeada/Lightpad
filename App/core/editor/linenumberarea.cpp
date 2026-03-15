@@ -643,22 +643,19 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
         QColor markerColor;
         switch (severity) {
         case LspDiagnosticSeverity::Error:
-          markerColor =
-              (m_editor && m_editor->mainWindow)
-                  ? m_editor->mainWindow->getTheme().errorColor
-                  : QColor(231, 76, 60);
+          markerColor = (m_editor && m_editor->mainWindow)
+                            ? m_editor->mainWindow->getTheme().errorColor
+                            : QColor(231, 76, 60);
           break;
         case LspDiagnosticSeverity::Warning:
-          markerColor =
-              (m_editor && m_editor->mainWindow)
-                  ? m_editor->mainWindow->getTheme().warningColor
-                  : QColor(241, 196, 15);
+          markerColor = (m_editor && m_editor->mainWindow)
+                            ? m_editor->mainWindow->getTheme().warningColor
+                            : QColor(241, 196, 15);
           break;
         case LspDiagnosticSeverity::Information:
-          markerColor =
-              (m_editor && m_editor->mainWindow)
-                  ? m_editor->mainWindow->getTheme().accentColor
-                  : QColor(52, 152, 219);
+          markerColor = (m_editor && m_editor->mainWindow)
+                            ? m_editor->mainWindow->getTheme().accentColor
+                            : QColor(52, 152, 219);
           break;
         case LspDiagnosticSeverity::Hint:
           markerColor = QColor(149, 165, 166);
@@ -671,8 +668,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
             qMax(MIN_MARKER_DIAMETER,
                  qMin(DIAGNOSTIC_MARKER_SIZE, fontHeight - MARKER_PADDING));
         const int markerX =
-            DIFF_INDICATOR_WIDTH +
-            (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;
+            DIFF_INDICATOR_WIDTH + (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;
         const int markerY =
             static_cast<int>(top + (fontHeight - markerDiameter) / 2.0);
 
@@ -686,7 +682,8 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
           QPolygon triangle;
           triangle << QPoint(markerX + markerDiameter / 2, markerY)
                    << QPoint(markerX, markerY + markerDiameter)
-                   << QPoint(markerX + markerDiameter, markerY + markerDiameter);
+                   << QPoint(markerX + markerDiameter,
+                             markerY + markerDiameter);
           painter.drawPolygon(triangle);
         }
         painter.restore();

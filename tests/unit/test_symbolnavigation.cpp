@@ -125,8 +125,7 @@ void TestSymbolNavigation::testServiceCreation() {
 
 void TestSymbolNavigation::testServiceNoProvider() {
   SymbolNavigationService service;
-  QSignalSpy noDefSpy(&service,
-                       &SymbolNavigationService::noDefinitionFound);
+  QSignalSpy noDefSpy(&service, &SymbolNavigationService::noDefinitionFound);
 
   DefinitionRequest req;
   req.filePath = "/test/file.cpp";
@@ -142,8 +141,7 @@ void TestSymbolNavigation::testServiceNoProvider() {
 
 void TestSymbolNavigation::testServiceProviderRegistration() {
   SymbolNavigationService service;
-  auto *provider =
-      new MockDefinitionProvider("mock", {"cpp", "py"}, &service);
+  auto *provider = new MockDefinitionProvider("mock", {"cpp", "py"}, &service);
   service.registerProvider(provider);
 
   DefinitionRequest req;
@@ -153,7 +151,7 @@ void TestSymbolNavigation::testServiceProviderRegistration() {
   req.languageId = "cpp";
 
   QSignalSpy startSpy(&service,
-                       &SymbolNavigationService::definitionRequestStarted);
+                      &SymbolNavigationService::definitionRequestStarted);
   service.goToDefinition(req);
 
   QCOMPARE(startSpy.count(), 1);
@@ -162,14 +160,12 @@ void TestSymbolNavigation::testServiceProviderRegistration() {
 
 void TestSymbolNavigation::testServiceGoToDefinitionSingleResult() {
   SymbolNavigationService service;
-  auto *provider =
-      new MockDefinitionProvider("mock", {"cpp"}, &service);
+  auto *provider = new MockDefinitionProvider("mock", {"cpp"}, &service);
   service.registerProvider(provider);
 
-  QSignalSpy foundSpy(&service,
-                       &SymbolNavigationService::definitionFound);
-  QSignalSpy finishedSpy(
-      &service, &SymbolNavigationService::definitionRequestFinished);
+  QSignalSpy foundSpy(&service, &SymbolNavigationService::definitionFound);
+  QSignalSpy finishedSpy(&service,
+                         &SymbolNavigationService::definitionRequestFinished);
 
   DefinitionRequest req;
   req.filePath = "/test/file.cpp";
@@ -186,8 +182,7 @@ void TestSymbolNavigation::testServiceGoToDefinitionSingleResult() {
   provider->simulateReady({target});
 
   QCOMPARE(foundSpy.count(), 1);
-  auto targets =
-      foundSpy.first().at(0).value<QList<DefinitionTarget>>();
+  auto targets = foundSpy.first().at(0).value<QList<DefinitionTarget>>();
   QCOMPARE(targets.size(), 1);
   QCOMPARE(targets.first().filePath, QString("/test/other.cpp"));
   QCOMPARE(targets.first().line, 20);
@@ -197,12 +192,10 @@ void TestSymbolNavigation::testServiceGoToDefinitionSingleResult() {
 
 void TestSymbolNavigation::testServiceGoToDefinitionNoResult() {
   SymbolNavigationService service;
-  auto *provider =
-      new MockDefinitionProvider("mock", {"cpp"}, &service);
+  auto *provider = new MockDefinitionProvider("mock", {"cpp"}, &service);
   service.registerProvider(provider);
 
-  QSignalSpy noDefSpy(&service,
-                       &SymbolNavigationService::noDefinitionFound);
+  QSignalSpy noDefSpy(&service, &SymbolNavigationService::noDefinitionFound);
 
   DefinitionRequest req;
   req.filePath = "/test/file.cpp";
@@ -219,12 +212,10 @@ void TestSymbolNavigation::testServiceGoToDefinitionNoResult() {
 
 void TestSymbolNavigation::testServiceGoToDefinitionMultipleResults() {
   SymbolNavigationService service;
-  auto *provider =
-      new MockDefinitionProvider("mock", {"cpp"}, &service);
+  auto *provider = new MockDefinitionProvider("mock", {"cpp"}, &service);
   service.registerProvider(provider);
 
-  QSignalSpy foundSpy(&service,
-                       &SymbolNavigationService::definitionFound);
+  QSignalSpy foundSpy(&service, &SymbolNavigationService::definitionFound);
 
   DefinitionRequest req;
   req.filePath = "/test/file.cpp";
@@ -247,15 +238,13 @@ void TestSymbolNavigation::testServiceGoToDefinitionMultipleResults() {
   provider->simulateReady({t1, t2});
 
   QCOMPARE(foundSpy.count(), 1);
-  auto targets =
-      foundSpy.first().at(0).value<QList<DefinitionTarget>>();
+  auto targets = foundSpy.first().at(0).value<QList<DefinitionTarget>>();
   QCOMPARE(targets.size(), 2);
 }
 
 void TestSymbolNavigation::testServiceRequestInFlight() {
   SymbolNavigationService service;
-  auto *provider =
-      new MockDefinitionProvider("mock", {"cpp"}, &service);
+  auto *provider = new MockDefinitionProvider("mock", {"cpp"}, &service);
   service.registerProvider(provider);
 
   DefinitionRequest req;
@@ -274,21 +263,19 @@ void TestSymbolNavigation::testServiceRequestInFlight() {
   req2.languageId = "cpp";
 
   QSignalSpy startSpy(&service,
-                       &SymbolNavigationService::definitionRequestStarted);
+                      &SymbolNavigationService::definitionRequestStarted);
   service.goToDefinition(req2);
   QCOMPARE(startSpy.count(), 0);
 }
 
 void TestSymbolNavigation::testServiceProviderFailed() {
   SymbolNavigationService service;
-  auto *provider =
-      new MockDefinitionProvider("mock", {"cpp"}, &service);
+  auto *provider = new MockDefinitionProvider("mock", {"cpp"}, &service);
   service.registerProvider(provider);
 
-  QSignalSpy noDefSpy(&service,
-                       &SymbolNavigationService::noDefinitionFound);
-  QSignalSpy finishedSpy(
-      &service, &SymbolNavigationService::definitionRequestFinished);
+  QSignalSpy noDefSpy(&service, &SymbolNavigationService::noDefinitionFound);
+  QSignalSpy finishedSpy(&service,
+                         &SymbolNavigationService::definitionRequestFinished);
 
   DefinitionRequest req;
   req.filePath = "/test/file.cpp";
@@ -307,12 +294,11 @@ void TestSymbolNavigation::testServiceProviderFailed() {
 
 void TestSymbolNavigation::testServiceCancelPendingRequest() {
   SymbolNavigationService service;
-  auto *provider =
-      new MockDefinitionProvider("mock", {"cpp"}, &service);
+  auto *provider = new MockDefinitionProvider("mock", {"cpp"}, &service);
   service.registerProvider(provider);
 
-  QSignalSpy finishedSpy(
-      &service, &SymbolNavigationService::definitionRequestFinished);
+  QSignalSpy finishedSpy(&service,
+                         &SymbolNavigationService::definitionRequestFinished);
 
   DefinitionRequest req;
   req.filePath = "/test/file.cpp";
@@ -332,9 +318,8 @@ void TestSymbolNavigation::testLspProviderUriConversion() {
   QCOMPARE(LspDefinitionProvider::filePathToUri("/home/user/file.cpp"),
            QString("file:///home/user/file.cpp"));
 
-  QCOMPARE(
-      LspDefinitionProvider::uriToFilePath("file:///home/user/file.cpp"),
-      QString("/home/user/file.cpp"));
+  QCOMPARE(LspDefinitionProvider::uriToFilePath("file:///home/user/file.cpp"),
+           QString("/home/user/file.cpp"));
 
   QCOMPARE(LspDefinitionProvider::uriToFilePath("/home/user/file.cpp"),
            QString("/home/user/file.cpp"));
@@ -353,8 +338,7 @@ void TestSymbolNavigation::testLspProviderWithoutClient() {
   QCOMPARE(provider.id(), QString("lsp"));
   QVERIFY(!provider.supports("cpp"));
 
-  QSignalSpy failedSpy(&provider,
-                        &IDefinitionProvider::definitionFailed);
+  QSignalSpy failedSpy(&provider, &IDefinitionProvider::definitionFailed);
 
   DefinitionRequest req;
   req.filePath = "/test/file.cpp";
@@ -401,15 +385,16 @@ void TestSymbolNavigation::testDefaultConfigsHaveValidFields() {
   for (const LanguageServerConfig &config : configs) {
     QVERIFY2(!config.providerId.isEmpty(),
              qPrintable(QString("Empty providerId")));
-    QVERIFY2(!config.displayName.isEmpty(),
-             qPrintable(QString("Empty displayName for %1")
-                            .arg(config.providerId)));
-    QVERIFY2(!config.supportedLanguages.isEmpty(),
-             qPrintable(QString("No supported languages for %1")
-                            .arg(config.providerId)));
+    QVERIFY2(
+        !config.displayName.isEmpty(),
+        qPrintable(QString("Empty displayName for %1").arg(config.providerId)));
+    QVERIFY2(
+        !config.supportedLanguages.isEmpty(),
+        qPrintable(
+            QString("No supported languages for %1").arg(config.providerId)));
     QVERIFY2(!config.serverCommand.isEmpty(),
-             qPrintable(QString("Empty serverCommand for %1")
-                            .arg(config.providerId)));
+             qPrintable(
+                 QString("Empty serverCommand for %1").arg(config.providerId)));
   }
 }
 
@@ -473,8 +458,7 @@ void TestSymbolNavigation::testLanguageProviderWithUnavailableServer() {
 
   LanguageLspDefinitionProvider provider(config);
 
-  QSignalSpy failedSpy(&provider,
-                        &IDefinitionProvider::definitionFailed);
+  QSignalSpy failedSpy(&provider, &IDefinitionProvider::definitionFailed);
 
   DefinitionRequest req;
   req.filePath = "/test/file.cpp";
@@ -514,7 +498,7 @@ void TestSymbolNavigation::testLanguageProviderRegistrationInService() {
   service.registerProvider(pyProvider);
 
   QSignalSpy startSpy(&service,
-                       &SymbolNavigationService::definitionRequestStarted);
+                      &SymbolNavigationService::definitionRequestStarted);
 
   DefinitionRequest cppReq;
   cppReq.filePath = "/test/file.cpp";

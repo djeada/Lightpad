@@ -11,20 +11,19 @@ public:
       : m_baseConfig(std::move(baseConfig)),
         m_configurationOptions(std::move(options)) {}
 
-  AbstractDebugAdapter(DebugAdapterConfig baseConfig, QString runtimeOverrideKey,
-                       QString runtimeOverrideLabel =
-                           QStringLiteral("Runtime Override"),
-                       QString runtimeOverridePlaceholder = {})
+  AbstractDebugAdapter(
+      DebugAdapterConfig baseConfig, QString runtimeOverrideKey,
+      QString runtimeOverrideLabel = QStringLiteral("Runtime Override"),
+      QString runtimeOverridePlaceholder = {})
       : m_baseConfig(std::move(baseConfig)),
-        m_configurationOptions(buildSingleOption(std::move(runtimeOverrideKey),
-                                                 std::move(runtimeOverrideLabel),
-                                                 std::move(
-                                                     runtimeOverridePlaceholder))) {}
+        m_configurationOptions(buildSingleOption(
+            std::move(runtimeOverrideKey), std::move(runtimeOverrideLabel),
+            std::move(runtimeOverridePlaceholder))) {}
 
   DebugAdapterConfig config() const override { return m_baseConfig; }
 
-  DebugAdapterConfig
-  configForConfiguration(const DebugConfiguration &configuration) const override {
+  DebugAdapterConfig configForConfiguration(
+      const DebugConfiguration &configuration) const override {
     DebugAdapterConfig cfg = m_baseConfig;
     const QString overrideKey = runtimeOverrideKey();
     if (!overrideKey.isEmpty()) {
@@ -41,8 +40,8 @@ public:
     return m_configurationOptions;
   }
 
-  QJsonObject launchArguments(
-      const DebugConfiguration &configuration) const override {
+  QJsonObject
+  launchArguments(const DebugConfiguration &configuration) const override {
     QJsonObject arguments =
         createLaunchConfig(configuration.program, configuration.cwd);
     const QJsonObject adapterConfig = mergedAdapterConfig(configuration);
@@ -81,11 +80,10 @@ public:
     return arguments;
   }
 
-  QJsonObject attachArguments(
-      const DebugConfiguration &configuration) const override {
-    QJsonObject arguments =
-        createAttachConfig(configuration.processId, configuration.host,
-                           configuration.port);
+  QJsonObject
+  attachArguments(const DebugConfiguration &configuration) const override {
+    QJsonObject arguments = createAttachConfig(
+        configuration.processId, configuration.host, configuration.port);
     const QJsonObject adapterConfig = mergedAdapterConfig(configuration);
 
     for (auto it = adapterConfig.begin(); it != adapterConfig.end(); ++it) {
@@ -97,7 +95,8 @@ public:
     } else if (!configuration.processIdExpression.isEmpty() &&
                !arguments.contains("processId")) {
       arguments["processId"] = configuration.processIdExpression;
-    } else if (!configuration.host.isEmpty() && !arguments.contains("connect") &&
+    } else if (!configuration.host.isEmpty() &&
+               !arguments.contains("connect") &&
                !arguments.contains("miDebuggerServerAddress") &&
                !arguments.contains("address")) {
       arguments["host"] = configuration.host;
@@ -133,8 +132,8 @@ public:
 protected:
   DebugAdapterConfig &baseConfig() { return m_baseConfig; }
   const DebugAdapterConfig &baseConfig() const { return m_baseConfig; }
-  QJsonObject mergedAdapterConfig(
-      const DebugConfiguration &configuration) const {
+  QJsonObject
+  mergedAdapterConfig(const DebugConfiguration &configuration) const {
     QJsonObject merged = debugAdapterSettingsObject(m_baseConfig.id);
     for (auto it = configuration.adapterConfig.begin();
          it != configuration.adapterConfig.end(); ++it) {
@@ -144,8 +143,8 @@ protected:
   }
 
 private:
-  static QList<DebugAdapterOption>
-  buildSingleOption(QString key, QString label, QString placeholder) {
+  static QList<DebugAdapterOption> buildSingleOption(QString key, QString label,
+                                                     QString placeholder) {
     if (key.isEmpty()) {
       return {};
     }

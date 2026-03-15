@@ -28,9 +28,8 @@ private slots:
   void testClampColumn();
 
 private:
-
-  LspDiagnostic makeDiag(LspDiagnosticSeverity severity,
-                         const QString &message, int line = 0, int col = 0) {
+  LspDiagnostic makeDiag(LspDiagnosticSeverity severity, const QString &message,
+                         int line = 0, int col = 0) {
     LspDiagnostic d;
     d.severity = severity;
     d.message = message;

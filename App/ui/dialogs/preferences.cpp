@@ -25,9 +25,7 @@ void Preferences::setTabWidthLabel(const QString &text) {
     preferencesEditor->setTabWidthLabel(text);
 }
 
-void Preferences::closeEvent(QCloseEvent *event) {
-  event->accept();
-}
+void Preferences::closeEvent(QCloseEvent *event) { event->accept(); }
 
 void Preferences::on_toolButton_clicked() { close(); }
 

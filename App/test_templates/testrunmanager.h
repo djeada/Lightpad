@@ -16,13 +16,11 @@ public:
   void runAll(const TestConfiguration &config, const QString &workspaceFolder,
               const QString &filePath = QString());
   void runSingleTest(const TestConfiguration &config,
-                     const QString &workspaceFolder,
-                     const QString &testName,
+                     const QString &workspaceFolder, const QString &testName,
                      const QString &filePath = QString());
   void runFailed(const TestConfiguration &config,
                  const QString &workspaceFolder);
-  void runSuite(const TestConfiguration &config,
-                const QString &workspaceFolder,
+  void runSuite(const TestConfiguration &config, const QString &workspaceFolder,
                 const QString &suiteName);
   void stop();
 
@@ -49,8 +47,8 @@ private:
   enum class RunMode { All, SingleTest, Failed, Suite };
 
   void startProcess(const TestConfiguration &config,
-                    const QString &workspaceFolder,
-                    const QString &filePath, const QString &testName,
+                    const QString &workspaceFolder, const QString &filePath,
+                    const QString &testName,
                     RunMode mode = RunMode::SingleTest);
 
   QProcess *m_process = nullptr;

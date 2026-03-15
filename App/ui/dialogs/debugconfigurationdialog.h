@@ -51,8 +51,8 @@ private:
   void saveCurrentToModel();
   void loadConfigIntoForm(const DebugConfiguration &cfg);
   void clearForm();
-  DebugConfiguration createTemplateConfiguration(
-      const QString &templateId) const;
+  DebugConfiguration
+  createTemplateConfiguration(const QString &templateId) const;
   void addConfigurationFromTemplate(const QString &templateId);
   std::shared_ptr<IDebugAdapter> selectedAdapter() const;
   void rebuildAdapterOptionsUi(const std::shared_ptr<IDebugAdapter> &adapter);

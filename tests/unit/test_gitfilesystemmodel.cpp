@@ -199,7 +199,7 @@ void TestGitFileSystemModel::testCustomRolesViaData() {
   }
   if (!foundFile) {
     QSKIP("QFileSystemModel not yet populated (async); badge logic tested "
-           "directly");
+          "directly");
   }
 }
 

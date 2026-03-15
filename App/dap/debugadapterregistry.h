@@ -42,8 +42,8 @@ public:
   std::shared_ptr<IDebugAdapter>
   preferredAdapterForLanguage(const QString &languageId) const;
 
-  std::shared_ptr<IDebugAdapter>
-  preferredAdapterForConfiguration(const DebugConfiguration &configuration) const;
+  std::shared_ptr<IDebugAdapter> preferredAdapterForConfiguration(
+      const DebugConfiguration &configuration) const;
 
   void refreshAvailability();
 

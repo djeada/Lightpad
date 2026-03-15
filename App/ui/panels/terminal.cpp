@@ -69,7 +69,7 @@ void Terminal::setupTerminal() {
   ui->textEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
 
   QFont monoFont;
-  QStringList fontFamilies = {"JetBrains Mono", "Cascadia Code", "Fira Code",
+  QStringList fontFamilies = {"JetBrains Mono",  "Cascadia Code", "Fira Code",
                               "Source Code Pro", "Consolas",      "Menlo",
                               "Monaco",          "Courier New",   "Monospace"};
   monoFont.setFamilies(fontFamilies);
@@ -1379,8 +1379,7 @@ void Terminal::setupContextMenu() {
   ui->textEdit->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(ui->textEdit, &QPlainTextEdit::customContextMenuRequested, this,
           [this](const QPoint &pos) {
-            m_copyAction->setEnabled(
-                ui->textEdit->textCursor().hasSelection());
+            m_copyAction->setEnabled(ui->textEdit->textCursor().hasSelection());
             m_contextMenu->exec(ui->textEdit->mapToGlobal(pos));
           });
 }

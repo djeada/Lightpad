@@ -1,16 +1,15 @@
 #ifndef LSPDEFINITIONPROVIDER_H
 #define LSPDEFINITIONPROVIDER_H
 
-#include "idefinitionprovider.h"
 #include "../lsp/lspclient.h"
+#include "idefinitionprovider.h"
 #include <QUrl>
 
 class LspDefinitionProvider : public IDefinitionProvider {
   Q_OBJECT
 
 public:
-  explicit LspDefinitionProvider(LspClient *client,
-                                 QObject *parent = nullptr);
+  explicit LspDefinitionProvider(LspClient *client, QObject *parent = nullptr);
   ~LspDefinitionProvider() override = default;
 
   QString id() const override;

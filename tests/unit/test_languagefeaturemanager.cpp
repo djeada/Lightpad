@@ -73,10 +73,8 @@ void TestLanguageFeatureManager::testResolveLanguageIdWithOverride() {
   DiagnosticsManager diagMgr;
   LanguageFeatureManager mgr(&diagMgr);
 
-  QCOMPARE(mgr.resolveLanguageId("/project/main.txt", "python"),
-           QString("py"));
-  QCOMPARE(mgr.resolveLanguageId("/project/main.txt", "cpp"),
-           QString("cpp"));
+  QCOMPARE(mgr.resolveLanguageId("/project/main.txt", "python"), QString("py"));
+  QCOMPARE(mgr.resolveLanguageId("/project/main.txt", "cpp"), QString("cpp"));
 }
 
 void TestLanguageFeatureManager::testResolveLanguageIdUnknown() {
@@ -114,8 +112,6 @@ void TestLanguageFeatureManager::testServerErrorEmitted() {
   DiagnosticsManager diagMgr;
   LanguageFeatureManager mgr(&diagMgr);
 
-  // Opening an unsupported language should not crash and should not create a
-  // client
   mgr.openDocument("/project/file.xyz", "unknown_lang", "content");
   QVERIFY(mgr.clientForFile("/project/file.xyz") == nullptr);
 }

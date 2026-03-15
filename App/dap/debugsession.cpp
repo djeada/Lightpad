@@ -4,7 +4,8 @@
 #include "debugadapterregistry.h"
 
 namespace {
-QString adapterConfigurationHint(const std::shared_ptr<IDebugAdapter> &adapter) {
+QString
+adapterConfigurationHint(const std::shared_ptr<IDebugAdapter> &adapter) {
   if (!adapter) {
     return {};
   }
@@ -36,10 +37,9 @@ QString adapterDiagnostic(const std::shared_ptr<IDebugAdapter> &adapter,
     return {};
   }
 
-  QString diagnostic = QString("%1: %2")
-                           .arg(adapter->config().name,
-                                adapter->statusMessageForConfiguration(
-                                    configuration));
+  QString diagnostic = QString("%1: %2").arg(
+      adapter->config().name,
+      adapter->statusMessageForConfiguration(configuration));
   const QString hint = adapterConfigurationHint(adapter);
   if (!hint.isEmpty()) {
     diagnostic += QString(". %1").arg(hint);
@@ -249,8 +249,8 @@ QString DebugSessionManager::startSession(const DebugConfiguration &config) {
       DebugAdapterRegistry::instance().adaptersForConfiguration(config);
   if (adapters.isEmpty()) {
     if (!config.adapterId.trimmed().isEmpty()) {
-      m_lastError =
-          QString("No debug adapter found for adapterId: %1").arg(config.adapterId);
+      m_lastError = QString("No debug adapter found for adapterId: %1")
+                        .arg(config.adapterId);
     } else {
       m_lastError =
           QString("No debug adapter found for type: %1").arg(config.type);
@@ -273,8 +273,8 @@ QString DebugSessionManager::startSession(const DebugConfiguration &config) {
       diagnostics.append(
           QString("No available debug adapter for type: %1").arg(config.type));
     }
-    m_lastError = QString("No available debug adapter. %1")
-                      .arg(diagnostics.join(" | "));
+    m_lastError =
+        QString("No available debug adapter. %1").arg(diagnostics.join(" | "));
     LOG_ERROR(m_lastError);
     return {};
   }

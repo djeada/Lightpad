@@ -139,11 +139,9 @@ struct TestConfiguration {
       cfg.runSingleTest =
           RunSingleTestOverride::fromJson(obj["runSingleTest"].toObject());
     if (obj.contains("runFailed"))
-      cfg.runFailed =
-          TestArgsOverride::fromJson(obj["runFailed"].toObject());
+      cfg.runFailed = TestArgsOverride::fromJson(obj["runFailed"].toObject());
     if (obj.contains("runSuite"))
-      cfg.runSuite =
-          TestArgsOverride::fromJson(obj["runSuite"].toObject());
+      cfg.runSuite = TestArgsOverride::fromJson(obj["runSuite"].toObject());
     return cfg;
   }
 };

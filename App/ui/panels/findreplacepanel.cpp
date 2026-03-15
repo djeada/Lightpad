@@ -64,7 +64,8 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
       m_vimCommandMode(false), position(-1), globalResultIndex(-1),
       resultsTree(nullptr), searchHistoryIndex(-1),
       refreshTimer(new QTimer(this)), searchStatusLabel(nullptr),
-      searchInProgress(false), searchExecuted(false), m_localSearchRequestId(0) {
+      searchInProgress(false), searchExecuted(false),
+      m_localSearchRequestId(0) {
   ui->setupUi(this);
 
   show();
@@ -137,7 +138,6 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   connect(refreshTimer, &QTimer::timeout, this,
           &FindReplacePanel::refreshSearchResults);
 
-  // Sync inline toggle buttons with the Options-panel checkboxes
   connect(ui->btnMatchCase, &QToolButton::toggled, ui->matchCase,
           &QCheckBox::setChecked);
   connect(ui->matchCase, &QCheckBox::toggled, ui->btnMatchCase,
@@ -147,7 +147,6 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   connect(ui->useRegex, &QCheckBox::toggled, ui->btnRegex,
           &QToolButton::setChecked);
 
-  // Re-trigger search when inline toggles change
   auto retriggerSearch = [this]() {
     if (!ui->searchFind->text().isEmpty()) {
       onSearchTextChanged(ui->searchFind->text());
@@ -156,7 +155,6 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   connect(ui->btnMatchCase, &QToolButton::toggled, this, retriggerSearch);
   connect(ui->btnRegex, &QToolButton::toggled, this, retriggerSearch);
 
-  // File mask is only relevant in global mode; hide initially
   ui->fileMaskWidget->setVisible(isGlobalMode());
 
   updateModeUI();
@@ -169,11 +167,14 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   ui->more->setToolTip(tr("Toggle search options"));
   ui->close->setToolTip(tr("Close (Escape)"));
   ui->matchCase->setToolTip(tr("Only match results with the same case"));
-  ui->searchStart->setToolTip(tr("Start searching from the beginning of the file"));
+  ui->searchStart->setToolTip(
+      tr("Start searching from the beginning of the file"));
   ui->searchBackward->setToolTip(tr("Search from bottom to top"));
   ui->wholeWords->setToolTip(tr("Only match whole words"));
-  ui->useRegex->setToolTip(tr("Interpret the search term as a regular expression"));
-  ui->preserveCase->setToolTip(tr("Preserve the case of the original text when replacing"));
+  ui->useRegex->setToolTip(
+      tr("Interpret the search term as a regular expression"));
+  ui->preserveCase->setToolTip(
+      tr("Preserve the case of the original text when replacing"));
 }
 
 FindReplacePanel::~FindReplacePanel() {
@@ -362,9 +363,8 @@ bool FindReplacePanel::eventFilter(QObject *obj, QEvent *event) {
         setReplaceVisibility(false);
         return true;
       }
-      if (!m_vimCommandMode &&
-          (keyEvent->key() == Qt::Key_Return ||
-           keyEvent->key() == Qt::Key_Enter)) {
+      if (!m_vimCommandMode && (keyEvent->key() == Qt::Key_Return ||
+                                keyEvent->key() == Qt::Key_Enter)) {
         if (keyEvent->modifiers() & Qt::ShiftModifier) {
           on_findPrevious_clicked();
         } else {
@@ -835,8 +835,8 @@ void FindReplacePanel::findInitial(QTextCursor &cursor,
 
   textArea->updateSyntaxHighlightTags(searchWord);
 
-  // Sync search pattern to vim mode so n/N work after Ctrl+F search
-  if (textArea->isVimModeEnabled() && textArea->vimMode() && !m_vimCommandMode) {
+  if (textArea->isVimModeEnabled() && textArea->vimMode() &&
+      !m_vimCommandMode) {
     textArea->vimMode()->setSearchPattern(
         QRegularExpression::escape(searchWord));
   }
@@ -1100,7 +1100,6 @@ QStringList FindReplacePanel::getProjectFiles() const {
     return files;
   }
 
-  // Parse file mask patterns from the UI field (comma-separated, e.g. "*.cpp, *.h")
   QStringList maskPatterns;
   if (ui->fileMaskEdit) {
     QString maskText = ui->fileMaskEdit->text().trimmed();
@@ -1125,11 +1124,12 @@ QStringList FindReplacePanel::getProjectFiles() const {
       "toml",  "md",   "txt",     "rst",  "sql",  "sh",   "bash", "zsh",
       "cmake", "make", "makefile"};
 
-  // Pre-compile glob patterns for file mask matching
   QVector<QRegularExpression> maskRegexes;
   for (const QString &pattern : maskPatterns) {
-    QString regexPattern = QRegularExpression::wildcardToRegularExpression(pattern);
-    QRegularExpression re(regexPattern, QRegularExpression::CaseInsensitiveOption);
+    QString regexPattern =
+        QRegularExpression::wildcardToRegularExpression(pattern);
+    QRegularExpression re(regexPattern,
+                          QRegularExpression::CaseInsensitiveOption);
     if (re.isValid()) {
       maskRegexes.append(re);
     }
@@ -1140,13 +1140,11 @@ QStringList FindReplacePanel::getProjectFiles() const {
     QFileInfo fileInfo(filePath);
     QString fileName = fileInfo.fileName();
 
-    // If a file mask is set, use it instead of the default extension list
     if (!maskRegexes.isEmpty()) {
-      bool matched = std::any_of(
-          maskRegexes.cbegin(), maskRegexes.cend(),
-          [&fileName](const QRegularExpression &re) {
-            return re.match(fileName).hasMatch();
-          });
+      bool matched = std::any_of(maskRegexes.cbegin(), maskRegexes.cend(),
+                                 [&fileName](const QRegularExpression &re) {
+                                   return re.match(fileName).hasMatch();
+                                 });
       if (matched) {
         files.append(filePath);
       }
@@ -1359,8 +1357,8 @@ void FindReplacePanel::refreshSearchResults() {
 
   auto refreshedPositions = std::make_shared<QVector<int>>();
   AsyncTask *task = AsyncThreadPool::instance().submitTask(
-      [text = std::move(text), pattern, searchBackward, refreshedPositions](
-          AsyncTask *worker) {
+      [text = std::move(text), pattern, searchBackward,
+       refreshedPositions](AsyncTask *worker) {
         QRegularExpressionMatchIterator matches = pattern.globalMatch(text);
         int scanCount = 0;
         while (matches.hasNext()) {
@@ -1394,7 +1392,8 @@ void FindReplacePanel::refreshSearchResults() {
                 !textArea || isGlobalMode()) {
               return;
             }
-            if (searchWord != activeSearchWord || ui->searchFind->text() != searchWord) {
+            if (searchWord != activeSearchWord ||
+                ui->searchFind->text() != searchWord) {
               return;
             }
             if (ui->searchBackward->isChecked() != searchBackward) {

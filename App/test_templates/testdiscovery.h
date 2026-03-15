@@ -18,8 +18,7 @@ class ITestDiscoveryAdapter : public QObject {
   Q_OBJECT
 
 public:
-  explicit ITestDiscoveryAdapter(QObject *parent = nullptr)
-      : QObject(parent) {}
+  explicit ITestDiscoveryAdapter(QObject *parent = nullptr) : QObject(parent) {}
   virtual ~ITestDiscoveryAdapter() = default;
 
   virtual QString adapterId() const = 0;
@@ -42,10 +41,8 @@ public:
   void discover(const QString &buildDir) override;
   void cancel() override;
 
-  static QList<DiscoveredTest>
-  parseJsonOutput(const QByteArray &data);
-  static QList<DiscoveredTest>
-  parseDashNOutput(const QString &output);
+  static QList<DiscoveredTest> parseJsonOutput(const QByteArray &data);
+  static QList<DiscoveredTest> parseDashNOutput(const QString &output);
 
 private slots:
   void onProcessFinished(int exitCode, QProcess::ExitStatus status);
@@ -68,8 +65,7 @@ public:
 
   void setExecutablePath(const QString &path);
 
-  static QList<DiscoveredTest>
-  parseListTestsOutput(const QString &output);
+  static QList<DiscoveredTest> parseListTestsOutput(const QString &output);
 
   static QString buildGTestFilter(const QStringList &testNames);
 
@@ -92,8 +88,7 @@ public:
   void discover(const QString &workDir) override;
   void cancel() override;
 
-  static QList<DiscoveredTest>
-  parseCollectOutput(const QString &output);
+  static QList<DiscoveredTest> parseCollectOutput(const QString &output);
 
 private slots:
   void onProcessFinished(int exitCode, QProcess::ExitStatus status);
@@ -113,8 +108,7 @@ public:
   void discover(const QString &workDir) override;
   void cancel() override;
 
-  static QList<DiscoveredTest>
-  parseListOutput(const QString &output);
+  static QList<DiscoveredTest> parseListOutput(const QString &output);
 
 private slots:
   void onProcessFinished(int exitCode, QProcess::ExitStatus status);
@@ -134,8 +128,7 @@ public:
   void discover(const QString &workDir) override;
   void cancel() override;
 
-  static QList<DiscoveredTest>
-  parseListOutput(const QString &output);
+  static QList<DiscoveredTest> parseListOutput(const QString &output);
 
 private slots:
   void onProcessFinished(int exitCode, QProcess::ExitStatus status);
@@ -155,8 +148,7 @@ public:
   void discover(const QString &workDir) override;
   void cancel() override;
 
-  static QList<DiscoveredTest>
-  parseListOutput(const QString &output);
+  static QList<DiscoveredTest> parseListOutput(const QString &output);
 
 private slots:
   void onProcessFinished(int exitCode, QProcess::ExitStatus status);

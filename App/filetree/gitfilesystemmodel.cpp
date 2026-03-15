@@ -121,8 +121,8 @@ QVariant GitFileSystemModel::data(const QModelIndex &index, int role) const {
       if (!statusIcon.isNull()) {
         QPixmap basePixmap = baseIcon.pixmap(18, 18);
         if (basePixmap.isNull()) {
-          basePixmap = QFileSystemModel::data(index, role).value<QIcon>().pixmap(
-              18, 18);
+          basePixmap =
+              QFileSystemModel::data(index, role).value<QIcon>().pixmap(18, 18);
         }
         if (!basePixmap.isNull()) {
           QPainter painter(&basePixmap);
@@ -156,9 +156,8 @@ QVariant GitFileSystemModel::data(const QModelIndex &index, int role) const {
     }
   }
 
-  if (index.column() == 0 && role == GitStatusBadgeRole &&
-      m_gitStatusEnabled && m_gitIntegration &&
-      m_gitIntegration->isValidRepository()) {
+  if (index.column() == 0 && role == GitStatusBadgeRole && m_gitStatusEnabled &&
+      m_gitIntegration && m_gitIntegration->isValidRepository()) {
     const QString currentFilePath = filePath(index);
     if (isDir(index)) {
       if (isDirtyDirectory(currentFilePath)) {
@@ -258,8 +257,8 @@ QIcon GitFileSystemModel::getBaseIcon(const QModelIndex &index,
     if (m_folderIcon.isNull()) {
       m_folderIcon = QApplication::style()->standardIcon(QStyle::SP_DirIcon);
       if (m_folderIcon.isNull()) {
-        m_folderIcon = QFileSystemModel::data(index, Qt::DecorationRole)
-                           .value<QIcon>();
+        m_folderIcon =
+            QFileSystemModel::data(index, Qt::DecorationRole).value<QIcon>();
       }
     }
     return m_folderIcon;
@@ -326,20 +325,20 @@ QIcon GitFileSystemModel::getFileTypeIcon(const QString &filePath) const {
 
 QColor GitFileSystemModel::colorForFileExtension(const QString &extension) {
   static const QHash<QString, QColor> extensionColors = {
-      {"c", QColor("#4ea5ff")},    {"cc", QColor("#4ea5ff")},
-      {"cpp", QColor("#4ea5ff")},  {"cxx", QColor("#4ea5ff")},
-      {"h", QColor("#74c0fc")},    {"hh", QColor("#74c0fc")},
-      {"hpp", QColor("#74c0fc")},  {"py", QColor("#f2cc60")},
-      {"js", QColor("#f7df1e")},   {"ts", QColor("#5aa9ff")},
-      {"tsx", QColor("#5aa9ff")},  {"json", QColor("#d7ba7d")},
-      {"md", QColor("#7ee787")},   {"txt", QColor("#8b949e")},
+      {"c", QColor("#4ea5ff")},     {"cc", QColor("#4ea5ff")},
+      {"cpp", QColor("#4ea5ff")},   {"cxx", QColor("#4ea5ff")},
+      {"h", QColor("#74c0fc")},     {"hh", QColor("#74c0fc")},
+      {"hpp", QColor("#74c0fc")},   {"py", QColor("#f2cc60")},
+      {"js", QColor("#f7df1e")},    {"ts", QColor("#5aa9ff")},
+      {"tsx", QColor("#5aa9ff")},   {"json", QColor("#d7ba7d")},
+      {"md", QColor("#7ee787")},    {"txt", QColor("#8b949e")},
       {"cmake", QColor("#c792ea")}, {"yml", QColor("#f087b3")},
-      {"yaml", QColor("#f087b3")}, {"toml", QColor("#f29e74")},
-      {"xml", QColor("#f29e74")},  {"html", QColor("#e06c75")},
-      {"css", QColor("#61afef")},  {"sh", QColor("#8bd49c")},
-      {"bash", QColor("#8bd49c")}, {"zsh", QColor("#8bd49c")},
-      {"go", QColor("#56d4dd")},   {"rs", QColor("#f08f68")},
-      {"java", QColor("#f89820")}, {"kt", QColor("#c792ea")}};
+      {"yaml", QColor("#f087b3")},  {"toml", QColor("#f29e74")},
+      {"xml", QColor("#f29e74")},   {"html", QColor("#e06c75")},
+      {"css", QColor("#61afef")},   {"sh", QColor("#8bd49c")},
+      {"bash", QColor("#8bd49c")},  {"zsh", QColor("#8bd49c")},
+      {"go", QColor("#56d4dd")},    {"rs", QColor("#f08f68")},
+      {"java", QColor("#f89820")},  {"kt", QColor("#c792ea")}};
 
   return extensionColors.value(extension, QColor("#9aa6b2"));
 }

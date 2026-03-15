@@ -14,71 +14,57 @@ class TestOutputParsers : public QObject {
 private slots:
   void initTestCase();
 
-  // TAP parser tests
   void testTapParserBasic();
   void testTapParserSkip();
   void testTapParserMixed();
 
-  // JUnit XML parser tests
   void testJunitXmlBasic();
   void testJunitXmlWithFailure();
   void testJunitXmlWithSkipped();
 
-  // JSON parser tests (Go test format)
   void testJsonGoTestFormat();
-  // JSON parser tests (Jest format)
+
   void testJsonJestFormat();
-  // JSON parser tests (Cargo format)
+
   void testJsonCargoFormat();
 
-  // Pytest parser tests
   void testPytestBasicOutput();
   void testPytestMixedStatuses();
 
-  // CTest parser tests
   void testCtestBasicOutput();
   void testCtestMixedResults();
 
-  // Generic regex parser tests
   void testGenericRegexDefaults();
   void testGenericRegexCustomPatterns();
 
-  // Factory tests
   void testParserFactory();
 
-  // TestConfiguration tests
   void testConfigurationFromJson();
   void testConfigurationToJson();
   void testConfigurationRunOverridesFromJson();
   void testConfigurationManagerSubstituteVariables();
   void testConfigurationManagerLoadTemplates();
 
-  // CTest discovery adapter tests
   void testCtestDiscoveryParseJsonOutput();
   void testCtestDiscoveryParseJsonOutputEmpty();
   void testCtestDiscoveryParseDashN();
   void testCtestDiscoveryParseDashNEmpty();
 
-  // GTest discovery adapter tests
   void testGTestParseListTestsOutput();
   void testGTestParseListTestsOutputEmpty();
   void testGTestBuildFilter();
   void testGTestBuildFilterEmpty();
   void testGTestBuildFilterSingle();
 
-  // Pytest discovery adapter tests
   void testPytestDiscoveryParse();
   void testPytestDiscoveryParseEmpty();
 
-  // Go test discovery adapter tests
   void testGoTestDiscoveryParse();
   void testGoTestDiscoveryParseEmpty();
 
-  // Cargo test discovery adapter tests
   void testCargoTestDiscoveryParse();
   void testCargoTestDiscoveryParseEmpty();
 
-  // Jest discovery adapter tests
   void testJestDiscoveryParse();
   void testJestDiscoveryParseEmpty();
 };
@@ -88,8 +74,6 @@ void TestOutputParsers::initTestCase() {
   qRegisterMetaType<DiscoveredTest>("DiscoveredTest");
   qRegisterMetaType<QList<DiscoveredTest>>("QList<DiscoveredTest>");
 }
-
-// --- TAP Parser ---
 
 void TestOutputParsers::testTapParserBasic() {
   TapParser parser;
@@ -146,8 +130,6 @@ void TestOutputParsers::testTapParserMixed() {
   QCOMPARE(results[2].status, TestStatus::Skipped);
   QCOMPARE(results[3].status, TestStatus::Passed);
 }
-
-// --- JUnit XML Parser ---
 
 void TestOutputParsers::testJunitXmlBasic() {
   JunitXmlParser parser;
@@ -232,8 +214,6 @@ void TestOutputParsers::testJunitXmlWithSkipped() {
   QCOMPARE(results[0].message, QString("not applicable"));
 }
 
-// --- JSON Parser (Go test format) ---
-
 void TestOutputParsers::testJsonGoTestFormat() {
   JsonTestParser parser;
   QList<TestResult> started;
@@ -265,16 +245,15 @@ void TestOutputParsers::testJsonGoTestFormat() {
   QCOMPARE(finished[1].durationMs, 1200);
 }
 
-// --- JSON Parser (Jest format) ---
-
 void TestOutputParsers::testJsonJestFormat() {
   JsonTestParser parser;
   QList<TestResult> results;
   connect(&parser, &ITestOutputParser::testFinished,
           [&results](const TestResult &r) { results.append(r); });
 
-  QByteArray data = R"({"testResults":[{"testFilePath":"/src/math.test.js","testResults":[{"fullName":"Math addition","title":"addition","status":"passed","duration":5},{"fullName":"Math subtraction","title":"subtraction","status":"failed","duration":10,"failureMessages":["Expected 3 but got 4"]},{"fullName":"Math pending","title":"pending","status":"pending","duration":0}]}]})"
-                    "\n";
+  QByteArray data =
+      R"({"testResults":[{"testFilePath":"/src/math.test.js","testResults":[{"fullName":"Math addition","title":"addition","status":"passed","duration":5},{"fullName":"Math subtraction","title":"subtraction","status":"failed","duration":10,"failureMessages":["Expected 3 but got 4"]},{"fullName":"Math pending","title":"pending","status":"pending","duration":0}]}]})"
+      "\n";
 
   parser.feed(data);
   parser.finish();
@@ -288,8 +267,6 @@ void TestOutputParsers::testJsonJestFormat() {
   QCOMPARE(results[2].status, TestStatus::Skipped);
 }
 
-// --- JSON Parser (Cargo format) ---
-
 void TestOutputParsers::testJsonCargoFormat() {
   JsonTestParser parser;
   QList<TestResult> started;
@@ -300,12 +277,18 @@ void TestOutputParsers::testJsonCargoFormat() {
           [&finished](const TestResult &r) { finished.append(r); });
 
   QByteArray data =
-      R"({"type":"test","event":"started","name":"tests::test_add"})" "\n"
-      R"({"type":"test","event":"ok","name":"tests::test_add"})" "\n"
-      R"({"type":"test","event":"started","name":"tests::test_fail"})" "\n"
-      R"({"type":"test","event":"failed","name":"tests::test_fail","stdout":"assertion failed"})" "\n"
-      R"({"type":"test","event":"started","name":"tests::test_skip"})" "\n"
-      R"({"type":"test","event":"ignored","name":"tests::test_skip"})" "\n";
+      R"({"type":"test","event":"started","name":"tests::test_add"})"
+      "\n"
+      R"({"type":"test","event":"ok","name":"tests::test_add"})"
+      "\n"
+      R"({"type":"test","event":"started","name":"tests::test_fail"})"
+      "\n"
+      R"({"type":"test","event":"failed","name":"tests::test_fail","stdout":"assertion failed"})"
+      "\n"
+      R"({"type":"test","event":"started","name":"tests::test_skip"})"
+      "\n"
+      R"({"type":"test","event":"ignored","name":"tests::test_skip"})"
+      "\n";
 
   parser.feed(data);
   parser.finish();
@@ -319,18 +302,15 @@ void TestOutputParsers::testJsonCargoFormat() {
   QCOMPARE(finished[2].status, TestStatus::Skipped);
 }
 
-// --- Pytest Parser ---
-
 void TestOutputParsers::testPytestBasicOutput() {
   PytestParser parser;
   QList<TestResult> results;
   connect(&parser, &ITestOutputParser::testFinished,
           [&results](const TestResult &r) { results.append(r); });
 
-  QByteArray data =
-      "tests/test_math.py::test_add PASSED\n"
-      "tests/test_math.py::test_subtract PASSED\n"
-      "tests/test_math.py::test_divide FAILED\n";
+  QByteArray data = "tests/test_math.py::test_add PASSED\n"
+                    "tests/test_math.py::test_subtract PASSED\n"
+                    "tests/test_math.py::test_divide FAILED\n";
 
   parser.feed(data);
   parser.finish();
@@ -349,11 +329,10 @@ void TestOutputParsers::testPytestMixedStatuses() {
   connect(&parser, &ITestOutputParser::testFinished,
           [&results](const TestResult &r) { results.append(r); });
 
-  QByteArray data =
-      "tests/test_example.py::test_pass PASSED\n"
-      "tests/test_example.py::test_skip SKIPPED\n"
-      "tests/test_example.py::test_error ERROR\n"
-      "tests/test_example.py::test_xfail XFAIL\n";
+  QByteArray data = "tests/test_example.py::test_pass PASSED\n"
+                    "tests/test_example.py::test_skip SKIPPED\n"
+                    "tests/test_example.py::test_error ERROR\n"
+                    "tests/test_example.py::test_xfail XFAIL\n";
 
   parser.feed(data);
   parser.finish();
@@ -362,10 +341,8 @@ void TestOutputParsers::testPytestMixedStatuses() {
   QCOMPARE(results[0].status, TestStatus::Passed);
   QCOMPARE(results[1].status, TestStatus::Skipped);
   QCOMPARE(results[2].status, TestStatus::Errored);
-  QCOMPARE(results[3].status, TestStatus::Passed); // XFAIL = expected failure = pass
+  QCOMPARE(results[3].status, TestStatus::Passed);
 }
-
-// --- CTest Parser ---
 
 void TestOutputParsers::testCtestBasicOutput() {
   CtestParser parser;
@@ -416,19 +393,16 @@ void TestOutputParsers::testCtestMixedResults() {
   QCOMPARE(finished[1].status, TestStatus::Skipped);
 }
 
-// --- Generic Regex Parser ---
-
 void TestOutputParsers::testGenericRegexDefaults() {
   GenericRegexParser parser;
   QList<TestResult> results;
   connect(&parser, &ITestOutputParser::testFinished,
           [&results](const TestResult &r) { results.append(r); });
 
-  QByteArray data =
-      "PASS: test_one\n"
-      "FAIL: test_two\n"
-      "SKIP: test_three\n"
-      "some other output\n";
+  QByteArray data = "PASS: test_one\n"
+                    "FAIL: test_two\n"
+                    "SKIP: test_three\n"
+                    "some other output\n";
 
   parser.feed(data);
   parser.finish();
@@ -448,10 +422,9 @@ void TestOutputParsers::testGenericRegexCustomPatterns() {
   connect(&parser, &ITestOutputParser::testFinished,
           [&results](const TestResult &r) { results.append(r); });
 
-  QByteArray data =
-      "[OK] my_test_1\n"
-      "[ERR] my_test_2\n"
-      "[SKIP] my_test_3\n";
+  QByteArray data = "[OK] my_test_1\n"
+                    "[ERR] my_test_2\n"
+                    "[SKIP] my_test_3\n";
 
   parser.feed(data);
   parser.finish();
@@ -462,8 +435,6 @@ void TestOutputParsers::testGenericRegexCustomPatterns() {
   QCOMPARE(results[1].status, TestStatus::Failed);
   QCOMPARE(results[2].status, TestStatus::Skipped);
 }
-
-// --- Factory ---
 
 void TestOutputParsers::testParserFactory() {
   auto *tap = TestOutputParserFactory::createParser("tap");
@@ -506,14 +477,11 @@ void TestOutputParsers::testParserFactory() {
   QCOMPARE(generic->formatId(), QString("generic"));
   delete generic;
 
-  // Unknown format should return generic parser
   auto *unknown = TestOutputParserFactory::createParser("unknown_format");
   QVERIFY(unknown != nullptr);
   QCOMPARE(unknown->formatId(), QString("generic"));
   delete unknown;
 }
-
-// --- TestConfiguration ---
 
 void TestOutputParsers::testConfigurationFromJson() {
   QJsonObject obj;
@@ -604,7 +572,6 @@ void TestOutputParsers::testConfigurationRunOverridesFromJson() {
   QCOMPARE(cfg.runSuite.args.size(), 2);
   QVERIFY(cfg.runSuite.args[1].contains("${testName}"));
 
-  // Verify round-trip
   QJsonObject out = cfg.toJson();
   QVERIFY(out.contains("runFailed"));
   QVERIFY(out.contains("runSuite"));
@@ -636,25 +603,21 @@ void TestOutputParsers::testConfigurationManagerSubstituteVariables() {
 }
 
 void TestOutputParsers::testConfigurationManagerLoadTemplates() {
-  // This test verifies that templates can be loaded from the QRC resource
+
   TestConfigurationManager &mgr = TestConfigurationManager::instance();
   bool loaded = mgr.loadTemplates();
 
-  // Templates may or may not be found depending on QRC availability in test
-  // binary. The important thing is the method doesn't crash.
   if (loaded) {
     QVERIFY(!mgr.allTemplates().isEmpty());
 
-    // Verify we have the expected template IDs
     TestConfiguration pytest = mgr.templateById("pytest");
     if (pytest.isValid()) {
       QCOMPARE(pytest.language, QString("Python"));
       QCOMPARE(pytest.outputFormat, QString("pytest"));
-      // Verify runFailed args are loaded
+
       QVERIFY(!pytest.runFailed.args.isEmpty());
     }
 
-    // Verify C++ template has runFailed and runSuite overrides
     TestConfiguration gtest = mgr.templateById("gtest_cmake");
     if (gtest.isValid()) {
       QCOMPARE(gtest.language, QString("C++"));
@@ -663,8 +626,6 @@ void TestOutputParsers::testConfigurationManagerLoadTemplates() {
     }
   }
 }
-
-// --- CTest Discovery Adapter ---
 
 void TestOutputParsers::testCtestDiscoveryParseJsonOutput() {
   QByteArray json = R"({
@@ -694,44 +655,38 @@ void TestOutputParsers::testCtestDiscoveryParseJsonOutput() {
     ]
   })";
 
-  QList<DiscoveredTest> tests =
-      CTestDiscoveryAdapter::parseJsonOutput(json);
+  QList<DiscoveredTest> tests = CTestDiscoveryAdapter::parseJsonOutput(json);
 
   QCOMPARE(tests.size(), 3);
   QCOMPARE(tests[0].name, QString("LoggerTests"));
   QCOMPARE(tests[0].id, QString("1"));
   QCOMPARE(tests[1].name, QString("ThemeTests"));
   QCOMPARE(tests[1].id, QString("2"));
-  QCOMPARE(tests[1].filePath,
-           QString("/home/user/project/build"));
+  QCOMPARE(tests[1].filePath, QString("/home/user/project/build"));
   QCOMPARE(tests[2].name, QString("DocumentTests"));
   QCOMPARE(tests[2].id, QString("3"));
 }
 
 void TestOutputParsers::testCtestDiscoveryParseJsonOutputEmpty() {
   QByteArray json = R"({"tests": []})";
-  QList<DiscoveredTest> tests =
-      CTestDiscoveryAdapter::parseJsonOutput(json);
+  QList<DiscoveredTest> tests = CTestDiscoveryAdapter::parseJsonOutput(json);
   QCOMPARE(tests.size(), 0);
 
-  // Invalid JSON should also return empty
   QList<DiscoveredTest> bad =
       CTestDiscoveryAdapter::parseJsonOutput("not json");
   QCOMPARE(bad.size(), 0);
 }
 
 void TestOutputParsers::testCtestDiscoveryParseDashN() {
-  QString output =
-      "Test project /home/user/project/build\n"
-      "  Test  #1: LoggerTests\n"
-      "  Test  #2: ThemeTests\n"
-      "  Test  #3: DocumentTests\n"
-      "  Test  #4: SettingsTests\n"
-      "\n"
-      "Total Tests: 4\n";
+  QString output = "Test project /home/user/project/build\n"
+                   "  Test  #1: LoggerTests\n"
+                   "  Test  #2: ThemeTests\n"
+                   "  Test  #3: DocumentTests\n"
+                   "  Test  #4: SettingsTests\n"
+                   "\n"
+                   "Total Tests: 4\n";
 
-  QList<DiscoveredTest> tests =
-      CTestDiscoveryAdapter::parseDashNOutput(output);
+  QList<DiscoveredTest> tests = CTestDiscoveryAdapter::parseDashNOutput(output);
 
   QCOMPARE(tests.size(), 4);
   QCOMPARE(tests[0].name, QString("LoggerTests"));
@@ -745,28 +700,23 @@ void TestOutputParsers::testCtestDiscoveryParseDashN() {
 }
 
 void TestOutputParsers::testCtestDiscoveryParseDashNEmpty() {
-  QList<DiscoveredTest> tests =
-      CTestDiscoveryAdapter::parseDashNOutput("");
+  QList<DiscoveredTest> tests = CTestDiscoveryAdapter::parseDashNOutput("");
   QCOMPARE(tests.size(), 0);
 
-  QList<DiscoveredTest> noTests =
-      CTestDiscoveryAdapter::parseDashNOutput(
-          "Test project /build\nTotal Tests: 0\n");
+  QList<DiscoveredTest> noTests = CTestDiscoveryAdapter::parseDashNOutput(
+      "Test project /build\nTotal Tests: 0\n");
   QCOMPARE(noTests.size(), 0);
 }
 
-// --- GTest Discovery Adapter ---
-
 void TestOutputParsers::testGTestParseListTestsOutput() {
-  QString output =
-      "Running main() from gtest_main.cc\n"
-      "MathTests.\n"
-      "  TestAdd\n"
-      "  TestSubtract\n"
-      "  TestMultiply\n"
-      "StringTests.\n"
-      "  TestConcat\n"
-      "  TestSplit # This is a comment\n";
+  QString output = "Running main() from gtest_main.cc\n"
+                   "MathTests.\n"
+                   "  TestAdd\n"
+                   "  TestSubtract\n"
+                   "  TestMultiply\n"
+                   "StringTests.\n"
+                   "  TestConcat\n"
+                   "  TestSplit # This is a comment\n";
 
   QList<DiscoveredTest> tests =
       GTestDiscoveryAdapter::parseListTestsOutput(output);
@@ -786,8 +736,7 @@ void TestOutputParsers::testGTestParseListTestsOutput() {
 }
 
 void TestOutputParsers::testGTestParseListTestsOutputEmpty() {
-  QList<DiscoveredTest> tests =
-      GTestDiscoveryAdapter::parseListTestsOutput("");
+  QList<DiscoveredTest> tests = GTestDiscoveryAdapter::parseListTestsOutput("");
   QCOMPARE(tests.size(), 0);
 }
 
@@ -811,16 +760,13 @@ void TestOutputParsers::testGTestBuildFilterSingle() {
   QCOMPARE(filter, QString("MathTests.TestAdd"));
 }
 
-// --- Pytest Discovery Adapter ---
-
 void TestOutputParsers::testPytestDiscoveryParse() {
-  QString output =
-      "test_math.py::TestArithmetic::test_add\n"
-      "test_math.py::TestArithmetic::test_subtract\n"
-      "test_math.py::test_standalone\n"
-      "tests/test_util.py::test_helper\n"
-      "\n"
-      "4 tests collected\n";
+  QString output = "test_math.py::TestArithmetic::test_add\n"
+                   "test_math.py::TestArithmetic::test_subtract\n"
+                   "test_math.py::test_standalone\n"
+                   "tests/test_util.py::test_helper\n"
+                   "\n"
+                   "4 tests collected\n";
 
   QList<DiscoveredTest> tests =
       PytestDiscoveryAdapter::parseCollectOutput(output);
@@ -840,28 +786,22 @@ void TestOutputParsers::testPytestDiscoveryParse() {
 }
 
 void TestOutputParsers::testPytestDiscoveryParseEmpty() {
-  QList<DiscoveredTest> tests =
-      PytestDiscoveryAdapter::parseCollectOutput("");
+  QList<DiscoveredTest> tests = PytestDiscoveryAdapter::parseCollectOutput("");
   QCOMPARE(tests.size(), 0);
 
   QList<DiscoveredTest> noTests =
-      PytestDiscoveryAdapter::parseCollectOutput(
-          "no tests ran in 0.01s\n");
+      PytestDiscoveryAdapter::parseCollectOutput("no tests ran in 0.01s\n");
   QCOMPARE(noTests.size(), 0);
 }
 
-// --- Go Test Discovery Adapter ---
-
 void TestOutputParsers::testGoTestDiscoveryParse() {
-  QString output =
-      "TestAdd\n"
-      "TestSubtract\n"
-      "TestSuite_MethodA\n"
-      "BenchmarkSort\n"
-      "ok  example.com/pkg 0.003s\n";
+  QString output = "TestAdd\n"
+                   "TestSubtract\n"
+                   "TestSuite_MethodA\n"
+                   "BenchmarkSort\n"
+                   "ok  example.com/pkg 0.003s\n";
 
-  QList<DiscoveredTest> tests =
-      GoTestDiscoveryAdapter::parseListOutput(output);
+  QList<DiscoveredTest> tests = GoTestDiscoveryAdapter::parseListOutput(output);
 
   QCOMPARE(tests.size(), 4);
   QCOMPARE(tests[0].name, QString("TestAdd"));
@@ -873,26 +813,21 @@ void TestOutputParsers::testGoTestDiscoveryParse() {
 }
 
 void TestOutputParsers::testGoTestDiscoveryParseEmpty() {
-  QList<DiscoveredTest> tests =
-      GoTestDiscoveryAdapter::parseListOutput("");
+  QList<DiscoveredTest> tests = GoTestDiscoveryAdapter::parseListOutput("");
   QCOMPARE(tests.size(), 0);
 
   QList<DiscoveredTest> noTests =
-      GoTestDiscoveryAdapter::parseListOutput(
-          "ok  example.com/pkg 0.001s\n");
+      GoTestDiscoveryAdapter::parseListOutput("ok  example.com/pkg 0.001s\n");
   QCOMPARE(noTests.size(), 0);
 }
 
-// --- Cargo Test Discovery Adapter ---
-
 void TestOutputParsers::testCargoTestDiscoveryParse() {
-  QString output =
-      "tests::test_basic: test\n"
-      "tests::math::test_add: test\n"
-      "tests::math::test_sub: test\n"
-      "integration::test_full: test\n"
-      "\n"
-      "4 tests, 0 benchmarks\n";
+  QString output = "tests::test_basic: test\n"
+                   "tests::math::test_add: test\n"
+                   "tests::math::test_sub: test\n"
+                   "integration::test_full: test\n"
+                   "\n"
+                   "4 tests, 0 benchmarks\n";
 
   QList<DiscoveredTest> tests =
       CargoTestDiscoveryAdapter::parseListOutput(output);
@@ -909,26 +844,20 @@ void TestOutputParsers::testCargoTestDiscoveryParse() {
 }
 
 void TestOutputParsers::testCargoTestDiscoveryParseEmpty() {
-  QList<DiscoveredTest> tests =
-      CargoTestDiscoveryAdapter::parseListOutput("");
+  QList<DiscoveredTest> tests = CargoTestDiscoveryAdapter::parseListOutput("");
   QCOMPARE(tests.size(), 0);
 
   QList<DiscoveredTest> noTests =
-      CargoTestDiscoveryAdapter::parseListOutput(
-          "\n0 tests, 0 benchmarks\n");
+      CargoTestDiscoveryAdapter::parseListOutput("\n0 tests, 0 benchmarks\n");
   QCOMPARE(noTests.size(), 0);
 }
 
-// --- Jest Discovery Adapter ---
-
 void TestOutputParsers::testJestDiscoveryParse() {
-  QString output =
-      "/home/user/project/src/__tests__/math.test.js\n"
-      "/home/user/project/src/__tests__/util.test.ts\n"
-      "/home/user/project/tests/integration.test.js\n";
+  QString output = "/home/user/project/src/__tests__/math.test.js\n"
+                   "/home/user/project/src/__tests__/util.test.ts\n"
+                   "/home/user/project/tests/integration.test.js\n";
 
-  QList<DiscoveredTest> tests =
-      JestDiscoveryAdapter::parseListOutput(output);
+  QList<DiscoveredTest> tests = JestDiscoveryAdapter::parseListOutput(output);
 
   QCOMPARE(tests.size(), 3);
   QCOMPARE(tests[0].name, QString("math.test.js"));
@@ -941,8 +870,7 @@ void TestOutputParsers::testJestDiscoveryParse() {
 }
 
 void TestOutputParsers::testJestDiscoveryParseEmpty() {
-  QList<DiscoveredTest> tests =
-      JestDiscoveryAdapter::parseListOutput("");
+  QList<DiscoveredTest> tests = JestDiscoveryAdapter::parseListOutput("");
   QCOMPARE(tests.size(), 0);
 }
 
