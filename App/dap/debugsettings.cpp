@@ -141,6 +141,28 @@ void DebugSettings::createDefaultLaunchConfig() {
   nodeConfig["_comment"] = "Example Node.js debug configuration";
   configurations.append(nodeConfig);
 
+  QJsonObject goConfig;
+  goConfig["name"] = "Go: Current File";
+  goConfig["adapterId"] = "go-delve";
+  goConfig["type"] = "go";
+  goConfig["request"] = "launch";
+  goConfig["mode"] = "debug";
+  goConfig["program"] = "${file}";
+  goConfig["cwd"] = "${workspaceFolder}";
+  goConfig["_comment"] = "Example Go debug configuration using Delve";
+  configurations.append(goConfig);
+
+  QJsonObject rustConfig;
+  rustConfig["name"] = "Rust: Debug Binary";
+  rustConfig["adapterId"] = "rust-codelldb";
+  rustConfig["type"] = "lldb";
+  rustConfig["request"] = "launch";
+  rustConfig["program"] = "${workspaceFolder}/target/debug/${workspaceFolderBasename}";
+  rustConfig["cwd"] = "${workspaceFolder}";
+  rustConfig["args"] = QJsonArray();
+  rustConfig["_comment"] = "Example Rust debug configuration using CodeLLDB";
+  configurations.append(rustConfig);
+
   config["configurations"] = configurations;
 
   QJsonArray compounds;
@@ -217,8 +239,8 @@ void DebugSettings::createDefaultAdaptersConfig() {
   defaultAdapters[".c"] = "cppdbg-gdb";
   defaultAdapters[".cc"] = "cppdbg-gdb";
   defaultAdapters[".cxx"] = "cppdbg-gdb";
-  defaultAdapters[".rs"] = "cppdbg-gdb";
-  defaultAdapters[".go"] = "cppdbg-gdb";
+  defaultAdapters[".rs"] = "rust-codelldb";
+  defaultAdapters[".go"] = "go-delve";
   config["defaultAdapters"] = defaultAdapters;
 
   QJsonObject adapters;
@@ -264,6 +286,18 @@ void DebugSettings::createDefaultAdaptersConfig() {
   nodeSettings["console"] = "integratedTerminal";
   nodeSettings["sourceMaps"] = true;
   adapters["node-debug"] = nodeSettings;
+
+  QJsonObject goSettings;
+  goSettings["_comment"] = "Go Delve debug adapter settings";
+  goSettings["dlvPath"] = "dlv";
+  goSettings["goExecutable"] = "go";
+  adapters["go-delve"] = goSettings;
+
+  QJsonObject rustSettings;
+  rustSettings["_comment"] = "Rust CodeLLDB debug adapter settings";
+  rustSettings["adapterCommand"] = "codelldb";
+  rustSettings["cargoExecutable"] = "cargo";
+  adapters["rust-codelldb"] = rustSettings;
 
   config["adapters"] = adapters;
 

@@ -19,6 +19,8 @@ void DebugAdapterRegistry::registerBuiltinAdapters() {
   registerAdapter(createNodeDebugAdapter());
   registerAdapter(createGdbDebugAdapter());
   registerAdapter(createLldbDebugAdapter());
+  registerAdapter(createGoDebugAdapter());
+  registerAdapter(createRustDebugAdapter());
   LOG_INFO("Registered built-in debug adapters");
 }
 
