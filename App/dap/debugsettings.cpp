@@ -97,6 +97,7 @@ void DebugSettings::createDefaultLaunchConfig() {
 
   QJsonObject pythonConfig;
   pythonConfig["name"] = "Python: Current File";
+  pythonConfig["adapterId"] = "python-debugpy";
   pythonConfig["type"] = "debugpy";
   pythonConfig["request"] = "launch";
   pythonConfig["program"] = "${file}";
@@ -107,6 +108,7 @@ void DebugSettings::createDefaultLaunchConfig() {
 
   QJsonObject cppConfig;
   cppConfig["name"] = "C++: GDB Launch";
+  cppConfig["adapterId"] = "cppdbg-gdb";
   cppConfig["type"] = "cppdbg";
   cppConfig["request"] = "launch";
   cppConfig["program"] = "${workspaceFolder}/a.out";
@@ -130,6 +132,7 @@ void DebugSettings::createDefaultLaunchConfig() {
 
   QJsonObject nodeConfig;
   nodeConfig["name"] = "Node.js: Current File";
+  nodeConfig["adapterId"] = "node-debug";
   nodeConfig["type"] = "node";
   nodeConfig["request"] = "launch";
   nodeConfig["program"] = "${file}";
@@ -248,6 +251,7 @@ void DebugSettings::createDefaultAdaptersConfig() {
 
   QJsonObject pythonSettings;
   pythonSettings["_comment"] = "Python debugpy settings";
+  pythonSettings["python"] = "python3";
   pythonSettings["justMyCode"] = true;
   pythonSettings["showReturnValue"] = true;
   pythonSettings["console"] = "integratedTerminal";
@@ -255,6 +259,8 @@ void DebugSettings::createDefaultAdaptersConfig() {
 
   QJsonObject nodeSettings;
   nodeSettings["_comment"] = "Node.js debug adapter settings";
+  nodeSettings["adapterCommand"] = "js-debug-adapter";
+  nodeSettings["runtimeExecutable"] = "node";
   nodeSettings["console"] = "integratedTerminal";
   nodeSettings["sourceMaps"] = true;
   adapters["node-debug"] = nodeSettings;

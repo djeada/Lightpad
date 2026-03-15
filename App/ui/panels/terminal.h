@@ -41,6 +41,7 @@ public:
   void stopShell();
 
   bool isRunning() const;
+  qint64 runProcessId() const;
 
   void executeCommand(const QString &command);
 

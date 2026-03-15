@@ -26,6 +26,7 @@ public:
   QString name() const { return m_configuration.name; }
 
   State state() const { return m_state; }
+  QString lastError() const { return m_lastError; }
 
   DapClient *client() const { return m_client.get(); }
 
@@ -88,6 +89,7 @@ private:
   bool m_launchRequestSent;
   bool m_adapterInitializedReceived;
   bool m_configurationDoneSent;
+  QString m_lastError;
 };
 
 class DebugSessionManager : public QObject {
@@ -117,6 +119,7 @@ public:
   void setFocusedSession(const QString &sessionId);
 
   int sessionCount() const { return m_sessions.size(); }
+  QString lastError() const { return m_lastError; }
 
   bool hasActiveSessions() const;
 
@@ -142,6 +145,7 @@ private:
 
   QMap<QString, DebugSession *> m_sessions;
   QString m_focusedSessionId;
+  QString m_lastError;
   int m_nextSessionNumber;
 };
 

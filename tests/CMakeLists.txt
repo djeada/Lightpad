@@ -12,6 +12,7 @@ enable_testing()
 # Find Qt6 Test module
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Test)
 find_package(Qt6 QUIET COMPONENTS Pdf PdfWidgets)
+find_package(Python3 QUIET COMPONENTS Interpreter)
 
 # Check if PDF support is available (inherit from parent build or detect)
 if(DEFINED HAVE_PDF_SUPPORT)
@@ -398,6 +399,12 @@ add_executable(test_dap
     ${CMAKE_SOURCE_DIR}/App/dap/dapclient.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/expressiontranslator.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugadapterregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/adapterutils.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/pythonruntime.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/pythondebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/nodedebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/gdbdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/lldbdebugadapter.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/breakpointmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugconfiguration.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/watchmanager.cpp
@@ -440,6 +447,27 @@ add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
 add_test(NAME CompletionProviderRegistryTests COMMAND test_completionproviderregistry)
 add_test(NAME CompletionEngineTests COMMAND test_completionengine)
 add_test(NAME DapTests COMMAND test_dap)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME DapDebugpySmoke
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/debugpy_smoke_test.py
+    )
+    set_tests_properties(DapDebugpySmoke PROPERTIES
+        SKIP_RETURN_CODE 2
+        LABELS "dap;integration"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+
+    add_test(
+        NAME DapGdbSmoke
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/gdb_dap_smoke_test.py
+    )
+    set_tests_properties(DapGdbSmoke PROPERTIES
+        SKIP_RETURN_CODE 2
+        LABELS "dap;integration"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+endif()
 
 # GitIntegration test executable
 add_executable(test_gitintegration

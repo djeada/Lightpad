@@ -88,9 +88,11 @@ signals:
   void watchChildrenReceived(int watchId, const QList<DapVariable> &children);
 
 private slots:
-  void onEvaluateResult(const QString &expression, const QString &result,
-                        const QString &type, int variablesReference);
-  void onEvaluateError(const QString &expression, const QString &errorMessage);
+  void onEvaluateResult(int requestSeq, const QString &expression,
+                        const QString &result, const QString &type,
+                        int variablesReference);
+  void onEvaluateError(int requestSeq, const QString &expression,
+                       const QString &errorMessage);
   void onVariablesReceived(int variablesReference,
                            const QList<DapVariable> &variables);
 
@@ -99,6 +101,7 @@ private:
     int watchId = 0;
     int frameId = 0;
     int fallbackStage = 0;
+    QString expression;
   };
 
   WatchManager();
@@ -108,7 +111,7 @@ private:
 
   int m_nextId;
   QMap<int, WatchExpression> m_watches;
-  QMap<QString, PendingEvaluation> m_pendingEvaluations;
+  QMap<int, PendingEvaluation> m_pendingEvaluations;
   QMap<int, int> m_pendingVariables;
 
   DapClient *m_dapClient;

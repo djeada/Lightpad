@@ -62,6 +62,11 @@ set(project_headers
     dap/expressiontranslator.h
     dap/idebugadapter.h
     dap/debugadapterregistry.h
+    dap/adapters/builtinadapters.h
+    dap/adapters/abstractdebugadapter.h
+    dap/adapters/processbackeddebugadapter.h
+    dap/adapters/adapterutils.h
+    dap/adapters/pythonruntime.h
     dap/breakpointmanager.h
     dap/debugconfiguration.h
     dap/watchmanager.h
@@ -185,6 +190,12 @@ set(project_sources
     dap/dapclient.cpp
     dap/expressiontranslator.cpp
     dap/debugadapterregistry.cpp
+    dap/adapters/adapterutils.cpp
+    dap/adapters/pythonruntime.cpp
+    dap/adapters/pythondebugadapter.cpp
+    dap/adapters/nodedebugadapter.cpp
+    dap/adapters/gdbdebugadapter.cpp
+    dap/adapters/lldbdebugadapter.cpp
     dap/breakpointmanager.cpp
     dap/debugconfiguration.cpp
     dap/watchmanager.cpp

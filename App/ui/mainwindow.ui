@@ -384,6 +384,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
       <string>Debug</string>
      </property>
      <addaction name="actionDebug_file_name"/>
+     <addaction name="actionStart_Debug_Configuration"/>
      <addaction name="actionEdit_Debug_Configurations"/>
     </widget>
    <widget class="QMenu" name="menuFormat">
@@ -553,6 +554,11 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
    </property>
    <property name="text">
     <string>Debug file_name</string>
+   </property>
+  </action>
+  <action name="actionStart_Debug_Configuration">
+   <property name="text">
+    <string>Start Debug Configuration...</string>
    </property>
   </action>
   <action name="actionEdit_Configurations">

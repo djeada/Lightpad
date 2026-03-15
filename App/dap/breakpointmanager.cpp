@@ -104,15 +104,39 @@ void BreakpointManager::removeBreakpoint(const QString &filePath, int line) {
 
 void BreakpointManager::clearAll() {
   QStringList affectedFiles = m_fileBreakpoints.keys();
+  const bool hadFunctionBreakpoints = !m_functionBreakpoints.isEmpty();
+  const bool hadDataBreakpoints = !m_dataBreakpoints.isEmpty();
+  const bool hadExceptionBreakpoints = !m_enabledExceptionFilters.isEmpty();
 
   m_breakpoints.clear();
   m_fileBreakpoints.clear();
+  m_functionBreakpoints.clear();
+  m_dataBreakpoints.clear();
+  m_enabledExceptionFilters.clear();
 
   emit allBreakpointsCleared();
+  if (hadFunctionBreakpoints) {
+    emit functionBreakpointsChanged();
+  }
+  if (hadDataBreakpoints) {
+    emit dataBreakpointsChanged();
+  }
+  if (hadExceptionBreakpoints) {
+    emit exceptionBreakpointsChanged();
+  }
 
   if (m_dapClient && m_dapClient->isDebugging()) {
     for (const QString &file : affectedFiles) {
       syncFileBreakpoints(file);
+    }
+    if (hadFunctionBreakpoints) {
+      syncFunctionBreakpoints();
+    }
+    if (hadDataBreakpoints) {
+      syncDataBreakpoints();
+    }
+    if (hadExceptionBreakpoints) {
+      m_dapClient->setExceptionBreakpoints({});
     }
   }
 }
@@ -304,6 +328,7 @@ int BreakpointManager::addFunctionBreakpoint(const QString &functionName) {
   fbp.enabled = true;
 
   m_functionBreakpoints[fbp.id] = fbp;
+  emit functionBreakpointsChanged();
 
   if (m_dapClient && m_dapClient->isDebugging()) {
     syncFunctionBreakpoints();
@@ -313,7 +338,24 @@ int BreakpointManager::addFunctionBreakpoint(const QString &functionName) {
 }
 
 void BreakpointManager::removeFunctionBreakpoint(int id) {
-  m_functionBreakpoints.remove(id);
+  if (m_functionBreakpoints.remove(id) <= 0) {
+    return;
+  }
+  emit functionBreakpointsChanged();
+
+  if (m_dapClient && m_dapClient->isDebugging()) {
+    syncFunctionBreakpoints();
+  }
+}
+
+void BreakpointManager::setFunctionBreakpointEnabled(int id, bool enabled) {
+  auto it = m_functionBreakpoints.find(id);
+  if (it == m_functionBreakpoints.end() || it->enabled == enabled) {
+    return;
+  }
+
+  it->enabled = enabled;
+  emit functionBreakpointsChanged();
 
   if (m_dapClient && m_dapClient->isDebugging()) {
     syncFunctionBreakpoints();
@@ -446,14 +488,36 @@ QJsonObject BreakpointManager::saveToJson() const {
 
 void BreakpointManager::loadFromJson(const QJsonObject &json) {
   clearAll();
-  m_functionBreakpoints.clear();
-
-  QJsonArray breakpointsArray = json["breakpoints"].toArray();
-  for (const QJsonValue &val : breakpointsArray) {
-    Breakpoint bp = Breakpoint::fromJson(val.toObject());
-    bp.id = m_nextId++;
-    m_breakpoints[bp.id] = bp;
-    m_fileBreakpoints[bp.filePath].append(bp.id);
+  const QJsonObject sourceBreakpoints = json["sourceBreakpoints"].toObject();
+  if (!sourceBreakpoints.isEmpty()) {
+    for (auto it = sourceBreakpoints.begin(); it != sourceBreakpoints.end();
+         ++it) {
+      const QString filePath = it.key();
+      const QJsonArray bpArray = it.value().toArray();
+      for (const QJsonValue &bpValue : bpArray) {
+        const QJsonObject bpObj = bpValue.toObject();
+        Breakpoint bp;
+        bp.id = m_nextId++;
+        bp.filePath = filePath;
+        bp.line = bpObj["line"].toInt();
+        bp.column = bpObj["column"].toInt();
+        bp.enabled = bpObj["enabled"].toBool(true);
+        bp.condition = bpObj["condition"].toString();
+        bp.hitCondition = bpObj["hitCondition"].toString();
+        bp.logMessage = bpObj["logMessage"].toString();
+        bp.isLogpoint = !bp.logMessage.isEmpty();
+        m_breakpoints[bp.id] = bp;
+        m_fileBreakpoints[bp.filePath].append(bp.id);
+      }
+    }
+  } else {
+    const QJsonArray breakpointsArray = json["breakpoints"].toArray();
+    for (const QJsonValue &val : breakpointsArray) {
+      Breakpoint bp = Breakpoint::fromJson(val.toObject());
+      bp.id = m_nextId++;
+      m_breakpoints[bp.id] = bp;
+      m_fileBreakpoints[bp.filePath].append(bp.id);
+    }
   }
 
   QJsonArray functionBpArray = json["functionBreakpoints"].toArray();
@@ -466,6 +530,44 @@ void BreakpointManager::loadFromJson(const QJsonObject &json) {
     fbp.condition = obj["condition"].toString();
     fbp.hitCondition = obj["hitCondition"].toString();
     m_functionBreakpoints[fbp.id] = fbp;
+  }
+
+  QJsonArray dataBpArray = json["dataBreakpoints"].toArray();
+  for (const QJsonValue &val : dataBpArray) {
+    const QJsonObject obj = val.toObject();
+    DataBreakpoint dbp;
+    dbp.id = m_nextDataBpId++;
+    dbp.dataId = obj["dataId"].toString();
+    dbp.accessType = obj["accessType"].toString("write");
+    dbp.condition = obj["condition"].toString();
+    dbp.hitCondition = obj["hitCondition"].toString();
+    dbp.enabled = obj["enabled"].toBool(true);
+    dbp.description = obj["description"].toString();
+    m_dataBreakpoints[dbp.id] = dbp;
+  }
+
+  const QJsonObject exceptionBreakpoints =
+      json["exceptionBreakpoints"].toObject();
+  QStringList enabledExceptionFilters;
+  for (auto it = exceptionBreakpoints.begin(); it != exceptionBreakpoints.end();
+       ++it) {
+    if (it.key().startsWith('_')) {
+      continue;
+    }
+    if (it.value().toBool()) {
+      enabledExceptionFilters.append(it.key());
+    }
+  }
+  m_enabledExceptionFilters = enabledExceptionFilters;
+
+  if (!m_functionBreakpoints.isEmpty()) {
+    emit functionBreakpointsChanged();
+  }
+  if (!m_dataBreakpoints.isEmpty()) {
+    emit dataBreakpointsChanged();
+  }
+  if (!m_enabledExceptionFilters.isEmpty()) {
+    emit exceptionBreakpointsChanged();
   }
 }
 

@@ -30,6 +30,7 @@
 #include <QStringListModel>
 #include <QTextDocument>
 #include <QVBoxLayout>
+#include <cstring>
 #include <cstdio>
 #include <functional>
 
@@ -77,6 +78,7 @@
 #include "panels/problemspanel.h"
 #include "panels/sourcecontrolpanel.h"
 #include "panels/spliteditorcontainer.h"
+#include "panels/terminal.h"
 #include "panels/terminaltabwidget.h"
 #include "panels/testpanel.h"
 #include "popup.h"
@@ -96,6 +98,10 @@
 #include "../settings/settingsmanager.h"
 #include "panels/spliteditorcontainer.h"
 
+namespace {
+constexpr auto kCompoundDebugTargetPrefix = "compound:";
+}
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), popupTabWidth(nullptr),
       preferences(nullptr), findReplacePanel(nullptr), terminalWidget(nullptr),
@@ -113,10 +119,12 @@ MainWindow::MainWindow(QWidget *parent)
       sourceControlDock(nullptr), m_inlineBlameEnabled(false),
       m_heatmapEnabled(false), m_codeLensEnabled(false),
       m_gitBranchLabel(nullptr), m_gitSyncLabel(nullptr),
-      m_gitDirtyLabel(nullptr), debugPanel(nullptr), debugDock(nullptr),
+      m_gitDirtyLabel(nullptr), m_debugTargetMenu(nullptr),
+      debugPanel(nullptr), debugDock(nullptr),
       testPanel(nullptr), testDock(nullptr),
       m_debugStartInProgress(false), m_breakpointsSetConnection(),
-      m_breakpointChangedConnection(), m_sessionTerminatedConnection(),
+      m_breakpointChangedConnection(), m_runInTerminalConnection(),
+      m_sessionTerminatedConnection(),
       m_sessionErrorConnection(), m_sessionStateConnection(),
       m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
       m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
@@ -205,6 +213,68 @@ MainWindow::MainWindow(QWidget *parent)
   setupBreadcrumb();
   setupGitIntegration();
   ensureDebugPanel();
+
+  m_debugTargetMenu = new QMenu(ui->debugButton);
+  ui->debugButton->setMenu(m_debugTargetMenu);
+  ui->debugButton->setPopupMode(QToolButton::MenuButtonPopup);
+  ui->debugButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+  ui->debugButton->setMinimumWidth(170);
+  connect(m_debugTargetMenu, &QMenu::aboutToShow, this,
+          &MainWindow::rebuildDebugTargetMenu);
+  connect(&DebugConfigurationManager::instance(),
+          &DebugConfigurationManager::configurationsLoaded, this,
+          &MainWindow::refreshDebugTargetButton);
+  connect(&DebugConfigurationManager::instance(),
+          &DebugConfigurationManager::configurationAdded, this,
+          &MainWindow::refreshDebugTargetButton);
+  connect(&DebugConfigurationManager::instance(),
+          &DebugConfigurationManager::configurationChanged, this,
+          &MainWindow::refreshDebugTargetButton);
+  connect(&DebugConfigurationManager::instance(),
+          &DebugConfigurationManager::configurationRemoved, this,
+          &MainWindow::refreshDebugTargetButton);
+  refreshDebugTargetButton();
+
+  const auto saveBreakpoints = []() {
+    if (!BreakpointManager::instance().lightpadBreakpointsPath().isEmpty()) {
+      BreakpointManager::instance().saveToLightpadDir();
+    }
+  };
+  connect(&BreakpointManager::instance(), &BreakpointManager::breakpointAdded,
+          this, [saveBreakpoints](const Breakpoint &) { saveBreakpoints(); });
+  connect(&BreakpointManager::instance(), &BreakpointManager::breakpointRemoved,
+          this, [saveBreakpoints](int, const QString &, int) {
+            saveBreakpoints();
+          });
+  connect(&BreakpointManager::instance(), &BreakpointManager::breakpointChanged,
+          this, [saveBreakpoints](const Breakpoint &) { saveBreakpoints(); });
+  connect(&BreakpointManager::instance(),
+          &BreakpointManager::allBreakpointsCleared, this,
+          [saveBreakpoints]() { saveBreakpoints(); });
+  connect(&BreakpointManager::instance(),
+          &BreakpointManager::dataBreakpointsChanged, this,
+          [saveBreakpoints]() { saveBreakpoints(); });
+  connect(&BreakpointManager::instance(),
+          &BreakpointManager::functionBreakpointsChanged, this,
+          [saveBreakpoints]() { saveBreakpoints(); });
+  connect(&BreakpointManager::instance(),
+          &BreakpointManager::exceptionBreakpointsChanged, this,
+          [saveBreakpoints]() { saveBreakpoints(); });
+
+  const auto saveWatches = []() {
+    if (!WatchManager::instance().lightpadWatchesPath().isEmpty()) {
+      WatchManager::instance().saveToLightpadDir();
+    }
+  };
+  connect(&WatchManager::instance(), &WatchManager::watchAdded, this,
+          [saveWatches](const WatchExpression &) { saveWatches(); });
+  connect(&WatchManager::instance(), &WatchManager::watchRemoved, this,
+          [saveWatches](int) { saveWatches(); });
+  connect(&WatchManager::instance(), &WatchManager::watchUpdated, this,
+          [saveWatches](const WatchExpression &) { saveWatches(); });
+  connect(&WatchManager::instance(), &WatchManager::allWatchesCleared, this,
+          [saveWatches]() { saveWatches(); });
+
   loadSettings();
   if (SettingsManager::instance()
           .getValue("showSourceControlDock", true)
@@ -3380,20 +3450,21 @@ void MainWindow::startDebuggingForCurrentFile() {
   QString sessionId =
       DebugSessionManager::instance().quickStart(filePath, languageId);
   if (sessionId.isEmpty()) {
-    QString details;
+    QString details = DebugSessionManager::instance().lastError();
     DebugConfiguration quickConfig =
         DebugConfigurationManager::instance().createQuickConfig(filePath,
                                                                 languageId);
-    if (!quickConfig.type.isEmpty()) {
-      const auto adapters =
-          DebugAdapterRegistry::instance().adaptersForType(quickConfig.type);
+    if (!quickConfig.type.isEmpty() && details.isEmpty()) {
+      const auto adapters = DebugAdapterRegistry::instance()
+                                .adaptersForConfiguration(quickConfig);
       QStringList adapterStatuses;
       for (const auto &adapter : adapters) {
         if (!adapter) {
           continue;
         }
         adapterStatuses << QString("%1: %2").arg(adapter->config().name,
-                                                 adapter->statusMessage());
+                                                 adapter->statusMessageForConfiguration(
+                                                     quickConfig));
       }
       details = adapterStatuses.join("\n");
     }
@@ -3448,6 +3519,9 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
   if (m_breakpointChangedConnection) {
     disconnect(m_breakpointChangedConnection);
   }
+  if (m_runInTerminalConnection) {
+    disconnect(m_runInTerminalConnection);
+  }
   if (m_sessionTerminatedConnection) {
     disconnect(m_sessionTerminatedConnection);
   }
@@ -3473,6 +3547,71 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
                       breakpoint.source.path, {breakpoint});
                 }
               });
+  m_runInTerminalConnection = connect(
+      session->client(), &DapClient::runInTerminalRequested, this,
+      [this, client = session->client()](
+          int requestSeq, const QString &kind, const QString &title,
+          const QStringList &commandLine, const QString &cwd,
+          const QMap<QString, QString> &env) {
+        Q_UNUSED(kind);
+        Q_UNUSED(title);
+
+        if (!client || commandLine.isEmpty()) {
+          if (client) {
+            client->respondToRunInTerminal(requestSeq, false, 0,
+                                           tr("Invalid terminal command"));
+          }
+          return;
+        }
+
+        TerminalTabWidget *tabs = ensureTerminalWidget();
+        if (!tabs) {
+          client->respondToRunInTerminal(requestSeq, false, 0,
+                                         tr("Terminal panel unavailable"));
+          return;
+        }
+
+        showTerminalPanel();
+
+        QStringList args = commandLine;
+        const QString program = args.takeFirst();
+        const QString workingDirectory =
+            cwd.isEmpty()
+                ? (m_projectRootPath.isEmpty() ? QDir::currentPath()
+                                              : m_projectRootPath)
+                : cwd;
+
+        QPointer<DapClient> clientPtr(client);
+        QPointer<Terminal> terminal = tabs->addNewTerminal(workingDirectory);
+        QSharedPointer<bool> responded =
+            QSharedPointer<bool>::create(false);
+
+        connect(terminal, &Terminal::processStarted, this,
+                [clientPtr, terminal, responded, requestSeq]() {
+                  if (*responded || !clientPtr) {
+                    return;
+                  }
+
+                  *responded = true;
+                  clientPtr->respondToRunInTerminal(
+                      requestSeq, true,
+                      terminal ? terminal->runProcessId() : 0);
+                },
+                Qt::SingleShotConnection);
+        connect(terminal, &Terminal::processError, this,
+                [clientPtr, responded, requestSeq](const QString &message) {
+                  if (*responded || !clientPtr) {
+                    return;
+                  }
+
+                  *responded = true;
+                  clientPtr->respondToRunInTerminal(requestSeq, false, 0,
+                                                    message);
+                },
+                Qt::SingleShotConnection);
+
+        terminal->executeCommand(program, args, workingDirectory, env);
+      });
 
   m_sessionTerminatedConnection =
       connect(session, &DebugSession::terminated, this, [this, sessionId]() {
@@ -3509,6 +3648,10 @@ void MainWindow::clearDebugSession() {
   if (m_breakpointChangedConnection) {
     disconnect(m_breakpointChangedConnection);
     m_breakpointChangedConnection = {};
+  }
+  if (m_runInTerminalConnection) {
+    disconnect(m_runInTerminalConnection);
+    m_runInTerminalConnection = {};
   }
   if (m_sessionTerminatedConnection) {
     disconnect(m_sessionTerminatedConnection);
@@ -3973,6 +4116,490 @@ void MainWindow::noScriptAssignedWarning() {
     on_actionOpen_File_triggered();
 }
 
+QString MainWindow::selectedDebugConfigurationName() const {
+  QString selectedName =
+      SettingsManager::instance().getValue("activeDebugTarget", QString())
+          .toString()
+          .trimmed();
+  if (selectedName.isEmpty() ||
+      selectedName.startsWith(QLatin1String(kCompoundDebugTargetPrefix))) {
+    return {};
+  }
+
+  for (const DebugConfiguration &config :
+       DebugConfigurationManager::instance().allConfigurations()) {
+    if (config.name == selectedName) {
+      return selectedName;
+    }
+  }
+
+  return {};
+}
+
+QString MainWindow::selectedCompoundDebugConfigurationName() const {
+  QString selectedName =
+      SettingsManager::instance().getValue("activeDebugTarget", QString())
+          .toString()
+          .trimmed();
+  if (!selectedName.startsWith(QLatin1String(kCompoundDebugTargetPrefix))) {
+    return {};
+  }
+
+  selectedName.remove(0, int(strlen(kCompoundDebugTargetPrefix)));
+  if (selectedName.isEmpty()) {
+    return {};
+  }
+
+  for (const CompoundDebugConfiguration &config :
+       DebugConfigurationManager::instance().allCompoundConfigurations()) {
+    if (config.name == selectedName) {
+      return selectedName;
+    }
+  }
+
+  return {};
+}
+
+void MainWindow::refreshDebugTargetButton() {
+  const QString selectedCompoundName = selectedCompoundDebugConfigurationName();
+  const QString selectedName = selectedDebugConfigurationName();
+  const QString buttonText = !selectedCompoundName.isEmpty()
+                                 ? tr("Compound: %1").arg(selectedCompoundName)
+                             : selectedName.isEmpty()
+                                 ? tr("Quick Debug")
+                                 : selectedName;
+  const QString tooltip =
+      !selectedCompoundName.isEmpty()
+          ? tr("Start compound debug configuration: %1")
+                .arg(selectedCompoundName)
+      : selectedName.isEmpty()
+          ? tr("Debug current file")
+          : tr("Start debug configuration: %1").arg(selectedName);
+
+  ui->debugButton->setText(buttonText);
+  ui->debugButton->setToolTip(tooltip);
+  ui->debugButton->setStatusTip(tooltip);
+
+  if (!selectedCompoundName.isEmpty()) {
+    SettingsManager::instance().setValue(
+        "activeDebugTarget",
+        QString::fromLatin1(kCompoundDebugTargetPrefix) + selectedCompoundName);
+  } else if (!selectedName.isEmpty()) {
+    SettingsManager::instance().setValue("activeDebugTarget", selectedName);
+  } else if (!SettingsManager::instance()
+                  .getValue("activeDebugTarget", QString())
+                  .toString()
+                  .isEmpty()) {
+    SettingsManager::instance().setValue("activeDebugTarget", QString());
+  }
+}
+
+void MainWindow::rebuildDebugTargetMenu() {
+  if (!m_debugTargetMenu) {
+    return;
+  }
+
+  m_debugTargetMenu->clear();
+
+  const QString selectedCompoundName = selectedCompoundDebugConfigurationName();
+  const QString selectedName = selectedDebugConfigurationName();
+  QAction *quickDebugAction =
+      m_debugTargetMenu->addAction(tr("Quick Debug Current File"));
+  quickDebugAction->setCheckable(true);
+  quickDebugAction->setChecked(selectedName.isEmpty() &&
+                               selectedCompoundName.isEmpty());
+  connect(quickDebugAction, &QAction::triggered, this, [this]() {
+    SettingsManager::instance().setValue("activeDebugTarget", QString());
+    SettingsManager::instance().saveSettings();
+    refreshDebugTargetButton();
+  });
+
+  const QList<DebugConfiguration> configs =
+      DebugConfigurationManager::instance().allConfigurations();
+  if (!configs.isEmpty()) {
+    m_debugTargetMenu->addSeparator();
+    for (const DebugConfiguration &config : configs) {
+      if (config.name.trimmed().isEmpty()) {
+        continue;
+      }
+
+      QAction *action = m_debugTargetMenu->addAction(config.name);
+      action->setCheckable(true);
+      action->setChecked(config.name == selectedName);
+      connect(action, &QAction::triggered, this,
+              [this, configName = config.name]() {
+                SettingsManager::instance().setValue("activeDebugTarget",
+                                                     configName);
+                SettingsManager::instance().setValue("lastDebugConfiguration",
+                                                     configName);
+                SettingsManager::instance().saveSettings();
+                refreshDebugTargetButton();
+              });
+    }
+  }
+
+  const QList<CompoundDebugConfiguration> compounds =
+      DebugConfigurationManager::instance().allCompoundConfigurations();
+  if (!compounds.isEmpty()) {
+    m_debugTargetMenu->addSeparator();
+    for (const CompoundDebugConfiguration &compound : compounds) {
+      if (compound.name.trimmed().isEmpty()) {
+        continue;
+      }
+
+      QAction *action =
+          m_debugTargetMenu->addAction(tr("Compound: %1").arg(compound.name));
+      action->setCheckable(true);
+      action->setChecked(compound.name == selectedCompoundName);
+      connect(action, &QAction::triggered, this,
+              [this, compoundName = compound.name]() {
+                SettingsManager::instance().setValue(
+                    "activeDebugTarget",
+                    QString::fromLatin1(kCompoundDebugTargetPrefix) +
+                        compoundName);
+                SettingsManager::instance().setValue("lastDebugConfiguration",
+                                                     compoundName);
+                SettingsManager::instance().saveSettings();
+                refreshDebugTargetButton();
+              });
+    }
+  }
+
+  m_debugTargetMenu->addSeparator();
+  QAction *chooseAction =
+      m_debugTargetMenu->addAction(tr("Choose Configuration..."));
+  connect(chooseAction, &QAction::triggered, this,
+          &MainWindow::on_actionStart_Debug_Configuration_triggered);
+  QAction *editAction =
+      m_debugTargetMenu->addAction(tr("Edit Debug Configurations..."));
+  connect(editAction, &QAction::triggered, this,
+          &MainWindow::on_actionEdit_Debug_Configurations_triggered);
+}
+
+bool MainWindow::prepareDebugConfigurationForStart(
+    const DebugConfiguration &config, const QString &currentFilePath,
+    DebugConfiguration *resolvedConfig, QString *errorMessage) {
+  if (!resolvedConfig) {
+    if (errorMessage) {
+      *errorMessage = tr("Internal error: missing resolved configuration output.");
+    }
+    return false;
+  }
+
+  *resolvedConfig =
+      DebugConfigurationManager::instance().resolveVariables(config,
+                                                            currentFilePath);
+
+  const auto hasUnresolvedCurrentFileVariable = [](const QString &value) {
+    return value.contains("${file}") || value.contains("${fileDirname}") ||
+           value.contains("${fileBasename}") ||
+           value.contains("${fileBasenameNoExtension}") ||
+           value.contains("${fileExtname}") ||
+           value.contains("${relativeFile}");
+  };
+
+  if (currentFilePath.isEmpty()) {
+    bool needsCurrentFile = hasUnresolvedCurrentFileVariable(config.program) ||
+                            hasUnresolvedCurrentFileVariable(config.cwd);
+    for (const QString &arg : config.args) {
+      if (hasUnresolvedCurrentFileVariable(arg)) {
+        needsCurrentFile = true;
+        break;
+      }
+    }
+    if (needsCurrentFile) {
+      if (errorMessage) {
+        *errorMessage =
+            tr("The selected debug configuration requires an open file.");
+      }
+      return false;
+    }
+  }
+
+  if (resolvedConfig->request == "launch" && !currentFilePath.isEmpty()) {
+    const QString absoluteCurrentFile =
+        QFileInfo(currentFilePath).absoluteFilePath();
+    const QString absoluteProgramPath =
+        resolvedConfig->program.isEmpty()
+            ? QString()
+            : QFileInfo(resolvedConfig->program).absoluteFilePath();
+    if (absoluteProgramPath == absoluteCurrentFile) {
+      const QString languageId = effectiveLanguageIdForFile(currentFilePath);
+      QString prepareError;
+      if (!prepareDebugTargetForFile(currentFilePath, languageId,
+                                     &prepareError)) {
+        if (errorMessage) {
+          *errorMessage = prepareError;
+        }
+        return false;
+      }
+
+      if (languageId == "cpp" || languageId == "c") {
+        QFileInfo sourceInfo(currentFilePath);
+        QString outputPath =
+            sourceInfo.absolutePath() + "/" + sourceInfo.completeBaseName();
+#ifdef Q_OS_WIN
+        outputPath += ".exe";
+#endif
+        resolvedConfig->program = outputPath;
+      }
+    }
+  }
+
+  return true;
+}
+
+bool MainWindow::startDebugConfigurationByName(
+    const QString &configurationName) {
+  const QString selectedName = configurationName.trimmed();
+  if (selectedName.isEmpty()) {
+    return false;
+  }
+
+  if (m_debugStartInProgress) {
+    return false;
+  }
+
+  QString currentFilePath;
+  if (LightpadTabWidget *tabWidget = currentTabWidget()) {
+    if (auto page = tabWidget->getCurrentPage()) {
+      currentFilePath = page->getFilePath();
+    }
+  }
+
+  if (!currentFilePath.isEmpty()) {
+    on_actionSave_triggered();
+    ensureProjectRootForPath(currentFilePath);
+  }
+
+  if (m_projectRootPath.isEmpty()) {
+    QMessageBox::information(
+        this, tr("Debug Configuration"),
+        tr("Open a file or project first to start a debug configuration."));
+    return false;
+  }
+
+  m_debugStartInProgress = true;
+
+  DebugSettings::instance().initialize(m_projectRootPath);
+  DebugConfigurationManager::instance().setWorkspaceFolder(m_projectRootPath);
+  DebugConfigurationManager::instance().loadFromLightpadDir();
+  BreakpointManager::instance().setWorkspaceFolder(m_projectRootPath);
+  if (BreakpointManager::instance().allBreakpoints().isEmpty()) {
+    BreakpointManager::instance().loadFromLightpadDir();
+  }
+  WatchManager::instance().setWorkspaceFolder(m_projectRootPath);
+  if (WatchManager::instance().allWatches().isEmpty()) {
+    WatchManager::instance().loadFromLightpadDir();
+  }
+
+  const DebugConfiguration config =
+      DebugConfigurationManager::instance().configuration(selectedName);
+  if (config.name.trimmed().isEmpty()) {
+    QMessageBox::warning(
+        this, tr("Debug Configuration"),
+        tr("The selected debug configuration could not be found."));
+    SettingsManager::instance().setValue("activeDebugTarget", QString());
+    SettingsManager::instance().saveSettings();
+    refreshDebugTargetButton();
+    m_debugStartInProgress = false;
+    return false;
+  }
+
+  SettingsManager::instance().setValue("lastDebugConfiguration", selectedName);
+  SettingsManager::instance().setValue("activeDebugTarget", selectedName);
+  SettingsManager::instance().saveSettings();
+  refreshDebugTargetButton();
+
+  DebugConfiguration resolvedConfig;
+  QString prepareError;
+  if (!prepareDebugConfigurationForStart(config, currentFilePath,
+                                         &resolvedConfig, &prepareError)) {
+    QMessageBox msg(this);
+    msg.setIcon(QMessageBox::Warning);
+    msg.setWindowTitle(prepareError.contains('\n') ? tr("Debug Build Failed")
+                                                   : tr("Debug Configuration"));
+    msg.setText(prepareError.contains('\n')
+                    ? tr("Unable to prepare a debuggable target for this "
+                         "configuration.")
+                    : prepareError);
+    if (prepareError.contains('\n')) {
+      msg.setDetailedText(prepareError);
+    }
+    msg.exec();
+    m_debugStartInProgress = false;
+    return false;
+  }
+
+  const QString sessionId =
+      DebugSessionManager::instance().startSession(resolvedConfig);
+  if (sessionId.isEmpty()) {
+    QMessageBox::warning(
+        this, tr("Debug Configuration"),
+        DebugSessionManager::instance().lastError().isEmpty()
+            ? tr("Unable to start the selected debug configuration.")
+            : DebugSessionManager::instance().lastError());
+    m_debugStartInProgress = false;
+    return false;
+  }
+
+  attachDebugSession(sessionId);
+  if (debugDock) {
+    debugDock->show();
+  }
+  m_debugStartInProgress = false;
+  return true;
+}
+
+bool MainWindow::startCompoundDebugConfigurationByName(
+    const QString &compoundName) {
+  const QString selectedName = compoundName.trimmed();
+  if (selectedName.isEmpty()) {
+    return false;
+  }
+
+  if (m_debugStartInProgress) {
+    return false;
+  }
+
+  QString currentFilePath;
+  if (LightpadTabWidget *tabWidget = currentTabWidget()) {
+    if (auto page = tabWidget->getCurrentPage()) {
+      currentFilePath = page->getFilePath();
+    }
+  }
+
+  if (!currentFilePath.isEmpty()) {
+    on_actionSave_triggered();
+    ensureProjectRootForPath(currentFilePath);
+  }
+
+  if (m_projectRootPath.isEmpty()) {
+    QMessageBox::information(
+        this, tr("Compound Debug Configuration"),
+        tr("Open a file or project first to start a compound configuration."));
+    return false;
+  }
+
+  m_debugStartInProgress = true;
+
+  DebugSettings::instance().initialize(m_projectRootPath);
+  DebugConfigurationManager::instance().setWorkspaceFolder(m_projectRootPath);
+  DebugConfigurationManager::instance().loadFromLightpadDir();
+  BreakpointManager::instance().setWorkspaceFolder(m_projectRootPath);
+  if (BreakpointManager::instance().allBreakpoints().isEmpty()) {
+    BreakpointManager::instance().loadFromLightpadDir();
+  }
+  WatchManager::instance().setWorkspaceFolder(m_projectRootPath);
+  if (WatchManager::instance().allWatches().isEmpty()) {
+    WatchManager::instance().loadFromLightpadDir();
+  }
+
+  CompoundDebugConfiguration selectedCompound;
+  bool foundCompound = false;
+  for (const CompoundDebugConfiguration &compound :
+       DebugConfigurationManager::instance().allCompoundConfigurations()) {
+    if (compound.name == selectedName) {
+      selectedCompound = compound;
+      foundCompound = true;
+      break;
+    }
+  }
+
+  if (!foundCompound) {
+    QMessageBox::warning(
+        this, tr("Compound Debug Configuration"),
+        tr("The selected compound configuration could not be found."));
+    SettingsManager::instance().setValue("activeDebugTarget", QString());
+    SettingsManager::instance().saveSettings();
+    refreshDebugTargetButton();
+    m_debugStartInProgress = false;
+    return false;
+  }
+
+  if (selectedCompound.configurations.isEmpty()) {
+    QMessageBox::warning(this, tr("Compound Debug Configuration"),
+                         tr("The selected compound configuration is empty."));
+    m_debugStartInProgress = false;
+    return false;
+  }
+
+  SettingsManager::instance().setValue(
+      "activeDebugTarget",
+      QString::fromLatin1(kCompoundDebugTargetPrefix) + selectedName);
+  SettingsManager::instance().setValue("lastDebugConfiguration", selectedName);
+  SettingsManager::instance().saveSettings();
+  refreshDebugTargetButton();
+
+  QList<DebugConfiguration> resolvedConfigs;
+  for (const QString &configurationName : selectedCompound.configurations) {
+    const DebugConfiguration config =
+        DebugConfigurationManager::instance().configuration(configurationName);
+    if (config.name.trimmed().isEmpty()) {
+      QMessageBox::warning(
+          this, tr("Compound Debug Configuration"),
+          tr("Compound entry '%1' does not match a saved debug configuration.")
+              .arg(configurationName));
+      m_debugStartInProgress = false;
+      return false;
+    }
+
+    DebugConfiguration resolvedConfig;
+    QString prepareError;
+    if (!prepareDebugConfigurationForStart(config, currentFilePath,
+                                           &resolvedConfig, &prepareError)) {
+      QMessageBox msg(this);
+      msg.setIcon(QMessageBox::Warning);
+      msg.setWindowTitle(prepareError.contains('\n')
+                             ? tr("Debug Build Failed")
+                             : tr("Compound Debug Configuration"));
+      msg.setText(prepareError.contains('\n')
+                      ? tr("Unable to prepare '%1' for debugging.")
+                            .arg(configurationName)
+                      : prepareError);
+      if (prepareError.contains('\n')) {
+        msg.setDetailedText(prepareError);
+      }
+      msg.exec();
+      m_debugStartInProgress = false;
+      return false;
+    }
+
+    resolvedConfigs.append(resolvedConfig);
+  }
+
+  QStringList startedSessionIds;
+  for (const DebugConfiguration &resolvedConfig : resolvedConfigs) {
+    const QString sessionId =
+        DebugSessionManager::instance().startSession(resolvedConfig);
+    if (sessionId.isEmpty()) {
+      for (const QString &startedSessionId : startedSessionIds) {
+        DebugSessionManager::instance().stopSession(startedSessionId,
+                                                    selectedCompound.stopAll);
+      }
+      QMessageBox::warning(
+          this, tr("Compound Debug Configuration"),
+          DebugSessionManager::instance().lastError().isEmpty()
+              ? tr("Unable to start one of the selected debug configurations.")
+              : DebugSessionManager::instance().lastError());
+      m_debugStartInProgress = false;
+      return false;
+    }
+
+    startedSessionIds.append(sessionId);
+  }
+
+  if (!startedSessionIds.isEmpty()) {
+    attachDebugSession(startedSessionIds.first());
+    if (debugDock) {
+      debugDock->show();
+    }
+  }
+
+  m_debugStartInProgress = false;
+  return !startedSessionIds.isEmpty();
+}
+
 void MainWindow::on_languageHighlight_clicked() {
   LightpadTabWidget *tabWidget = currentTabWidget();
   if (!tabWidget) {
@@ -4101,12 +4728,131 @@ void MainWindow::on_actionPreferences_triggered() {
 
 void MainWindow::on_runButton_clicked() { runCurrentScript(); }
 
-void MainWindow::on_debugButton_clicked() { startDebuggingForCurrentFile(); }
+void MainWindow::on_debugButton_clicked() {
+  const QString compoundName = selectedCompoundDebugConfigurationName();
+  if (!compoundName.isEmpty()) {
+    startCompoundDebugConfigurationByName(compoundName);
+    return;
+  }
+
+  const QString configurationName = selectedDebugConfigurationName();
+  if (configurationName.isEmpty()) {
+    startDebuggingForCurrentFile();
+    return;
+  }
+
+  startDebugConfigurationByName(configurationName);
+}
 
 void MainWindow::on_actionRun_file_name_triggered() { runCurrentScript(); }
 
 void MainWindow::on_actionDebug_file_name_triggered() {
   startDebuggingForCurrentFile();
+}
+
+void MainWindow::on_actionStart_Debug_Configuration_triggered() {
+  if (m_debugStartInProgress) {
+    return;
+  }
+
+  QString currentFilePath;
+  if (LightpadTabWidget *tabWidget = currentTabWidget()) {
+    if (auto page = tabWidget->getCurrentPage()) {
+      currentFilePath = page->getFilePath();
+    }
+  }
+
+  if (!currentFilePath.isEmpty()) {
+    on_actionSave_triggered();
+    ensureProjectRootForPath(currentFilePath);
+  }
+
+  if (m_projectRootPath.isEmpty()) {
+    QMessageBox::information(
+        this, tr("Debug Configuration"),
+        tr("Open a file or project first to start a debug configuration."));
+    return;
+  }
+
+  DebugSettings::instance().initialize(m_projectRootPath);
+  DebugConfigurationManager::instance().setWorkspaceFolder(m_projectRootPath);
+  DebugConfigurationManager::instance().loadFromLightpadDir();
+
+  const QList<CompoundDebugConfiguration> compounds =
+      DebugConfigurationManager::instance().allCompoundConfigurations();
+  const QList<DebugConfiguration> configs =
+      DebugConfigurationManager::instance().allConfigurations();
+  QStringList configNames;
+  QMap<QString, QString> displayToTarget;
+  for (const DebugConfiguration &cfg : configs) {
+    if (!cfg.name.trimmed().isEmpty()) {
+      const QString display = tr("Config: %1").arg(cfg.name);
+      configNames.append(display);
+      displayToTarget[display] = cfg.name;
+    }
+  }
+  for (const CompoundDebugConfiguration &compound : compounds) {
+    if (!compound.name.trimmed().isEmpty()) {
+      const QString display = tr("Compound: %1").arg(compound.name);
+      configNames.append(display);
+      displayToTarget[display] =
+          QString::fromLatin1(kCompoundDebugTargetPrefix) + compound.name;
+    }
+  }
+
+  if (configNames.isEmpty()) {
+    QMessageBox::information(
+        this, tr("Debug Configuration"),
+        tr("No debug configurations were found in this workspace."));
+    openDebugConfigurationDialog();
+    return;
+  }
+
+  const QString lastTarget =
+      SettingsManager::instance()
+          .getValue("activeDebugTarget",
+                    SettingsManager::instance()
+                        .getValue("lastDebugConfiguration", QString()))
+          .toString();
+  QString initialDisplay;
+  for (auto it = displayToTarget.constBegin(); it != displayToTarget.constEnd();
+       ++it) {
+    if (it.value() == lastTarget) {
+      initialDisplay = it.key();
+      break;
+    }
+  }
+  if (initialDisplay.isEmpty()) {
+    const QString lastConfigName =
+      SettingsManager::instance()
+          .getValue("lastDebugConfiguration", QString())
+          .toString();
+    initialDisplay = tr("Config: %1").arg(lastConfigName);
+  }
+  int currentIndex = configNames.indexOf(initialDisplay);
+  if (currentIndex < 0) {
+    currentIndex = 0;
+  }
+
+  bool ok = false;
+  const QString selectedName = QInputDialog::getItem(
+      this, tr("Start Debug Configuration"), tr("Configuration:"), configNames,
+      currentIndex, false, &ok);
+  if (!ok || selectedName.trimmed().isEmpty()) {
+    return;
+  }
+
+  const QString selectedTarget = displayToTarget.value(selectedName);
+  SettingsManager::instance().setValue("activeDebugTarget", selectedTarget);
+  SettingsManager::instance().saveSettings();
+  refreshDebugTargetButton();
+  if (selectedTarget.startsWith(QLatin1String(kCompoundDebugTargetPrefix))) {
+    startCompoundDebugConfigurationByName(
+        selectedTarget.mid(int(strlen(kCompoundDebugTargetPrefix))));
+    return;
+  }
+
+  startDebugConfigurationByName(selectedTarget);
 }
 
 void MainWindow::on_actionEdit_Configurations_triggered() {
@@ -5381,6 +6127,8 @@ void MainWindow::setProjectRootPath(const QString &path) {
     WatchManager::instance().loadFromLightpadDir();
     RunTemplateManager::instance().setWorkspaceFolder(normalizedPath);
   }
+
+  refreshDebugTargetButton();
 
   if (testPanel) {
     testPanel->setWorkspaceFolder(normalizedPath);

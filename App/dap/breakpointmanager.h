@@ -143,6 +143,8 @@ public:
 
   void removeFunctionBreakpoint(int id);
 
+  void setFunctionBreakpointEnabled(int id, bool enabled);
+
   QList<FunctionBreakpoint> allFunctionBreakpoints() const;
 
   void syncFunctionBreakpoints();
@@ -189,6 +191,8 @@ signals:
   void allBreakpointsCleared();
 
   void dataBreakpointsChanged();
+
+  void functionBreakpointsChanged();
 
   void exceptionBreakpointsChanged();
 

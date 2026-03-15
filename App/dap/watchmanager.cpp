@@ -75,9 +75,9 @@ void WatchManager::setDapClient(DapClient *client) {
   m_dapClient = client;
 
   if (m_dapClient) {
-    connect(m_dapClient, &DapClient::evaluateResult, this,
+    connect(m_dapClient, &DapClient::evaluateResponse, this,
             &WatchManager::onEvaluateResult);
-    connect(m_dapClient, &DapClient::evaluateError, this,
+    connect(m_dapClient, &DapClient::evaluateResponseError, this,
             &WatchManager::onEvaluateError);
     connect(m_dapClient, &DapClient::variablesReceived, this,
             &WatchManager::onVariablesReceived);
@@ -114,9 +114,12 @@ void WatchManager::evaluateWatch(int id, int frameId) {
   pending.watchId = id;
   pending.frameId = frameId;
   pending.fallbackStage = 0;
-  m_pendingEvaluations[expression] = pending;
+  pending.expression = expression;
 
-  m_dapClient->evaluate(expression, frameId, "watch");
+  const int requestSeq = m_dapClient->evaluate(expression, frameId, "watch");
+  if (requestSeq > 0) {
+    m_pendingEvaluations[requestSeq] = pending;
+  }
 }
 
 void WatchManager::getWatchChildren(int watchId, int variablesReference) {
@@ -128,14 +131,15 @@ void WatchManager::getWatchChildren(int watchId, int variablesReference) {
   m_dapClient->getVariables(variablesReference);
 }
 
-void WatchManager::onEvaluateResult(const QString &expression,
+void WatchManager::onEvaluateResult(int requestSeq, const QString &expression,
                                     const QString &result, const QString &type,
                                     int variablesReference) {
-  if (!m_pendingEvaluations.contains(expression)) {
+  Q_UNUSED(expression);
+  if (!m_pendingEvaluations.contains(requestSeq)) {
     return;
   }
 
-  const PendingEvaluation pending = m_pendingEvaluations.take(expression);
+  const PendingEvaluation pending = m_pendingEvaluations.take(requestSeq);
   const int watchId = pending.watchId;
 
   if (!m_watches.contains(watchId)) {
@@ -152,13 +156,13 @@ void WatchManager::onEvaluateResult(const QString &expression,
   emit watchUpdated(watch);
 }
 
-void WatchManager::onEvaluateError(const QString &expression,
+void WatchManager::onEvaluateError(int requestSeq, const QString &expression,
                                    const QString &errorMessage) {
-  if (!m_pendingEvaluations.contains(expression)) {
+  if (!m_pendingEvaluations.contains(requestSeq)) {
     return;
   }
 
-  PendingEvaluation pending = m_pendingEvaluations.value(expression);
+  PendingEvaluation pending = m_pendingEvaluations.take(requestSeq);
   const QString lowered = errorMessage.toLower();
   const bool noSymbolContext =
       lowered.contains("no symbol") && lowered.contains("current context");
@@ -166,21 +170,24 @@ void WatchManager::onEvaluateError(const QString &expression,
       m_dapClient->state() == DapClient::State::Stopped) {
     if (pending.fallbackStage == 0) {
       pending.fallbackStage = 1;
-      m_pendingEvaluations[expression] = pending;
-
-      m_dapClient->evaluate(expression, pending.frameId, "hover");
+      const int retrySeq =
+          m_dapClient->evaluate(pending.expression, pending.frameId, "hover");
+      if (retrySeq > 0) {
+        m_pendingEvaluations[retrySeq] = pending;
+      }
       return;
     }
     if (pending.fallbackStage == 1) {
       pending.fallbackStage = 2;
-      m_pendingEvaluations[expression] = pending;
-
-      m_dapClient->evaluate(expression, pending.frameId, QString());
+      const int retrySeq =
+          m_dapClient->evaluate(pending.expression, pending.frameId, QString());
+      if (retrySeq > 0) {
+        m_pendingEvaluations[retrySeq] = pending;
+      }
       return;
     }
   }
 
-  m_pendingEvaluations.remove(expression);
   const int watchId = pending.watchId;
 
   if (!m_watches.contains(watchId)) {
