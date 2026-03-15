@@ -196,6 +196,8 @@ set(project_sources
     dap/adapters/nodedebugadapter.cpp
     dap/adapters/gdbdebugadapter.cpp
     dap/adapters/lldbdebugadapter.cpp
+    dap/adapters/godebugadapter.cpp
+    dap/adapters/rustdebugadapter.cpp
     dap/breakpointmanager.cpp
     dap/debugconfiguration.cpp
     dap/watchmanager.cpp

@@ -405,6 +405,8 @@ add_executable(test_dap
     ${CMAKE_SOURCE_DIR}/App/dap/adapters/nodedebugadapter.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/adapters/gdbdebugadapter.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/adapters/lldbdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/godebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/rustdebugadapter.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/breakpointmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugconfiguration.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/watchmanager.cpp

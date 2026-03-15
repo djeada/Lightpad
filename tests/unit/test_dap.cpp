@@ -45,6 +45,12 @@ private slots:
   void testNodeAdapterMissingCommandStatus();
   void testGdbAdapterIntegration();
   void testGdbAdapterRuntimeOverride();
+  void testGoAdapterIntegration();
+  void testGoAdapterLaunchConfig();
+  void testGoAdapterLookupByFile();
+  void testRustAdapterIntegration();
+  void testRustAdapterLaunchConfig();
+  void testRustAdapterLookupByFile();
 
   void testDebugConfigurationToJson();
   void testDebugConfigurationFromJson();
@@ -366,7 +372,7 @@ void TestDap::testBuiltinAdapters() {
 
   QList<std::shared_ptr<IDebugAdapter>> adapters = reg.allAdapters();
 
-  QVERIFY(adapters.count() >= 4);
+  QVERIFY(adapters.count() >= 6);
 
   auto pythonAdapter = reg.adapter("python-debugpy");
   QVERIFY(pythonAdapter != nullptr);
@@ -381,6 +387,14 @@ void TestDap::testBuiltinAdapters() {
   QJsonObject lldbLaunchCfg =
       lldbAdapter->createLaunchConfig("/tmp/a.out", "/tmp");
   QCOMPARE(lldbLaunchCfg["type"].toString(), QString("cppdbg"));
+
+  auto goAdapter = reg.adapter("go-delve");
+  QVERIFY(goAdapter != nullptr);
+  QCOMPARE(goAdapter->config().name, QString("Go (Delve)"));
+
+  auto rustAdapter = reg.adapter("rust-codelldb");
+  QVERIFY(rustAdapter != nullptr);
+  QCOMPARE(rustAdapter->config().name, QString("Rust (CodeLLDB)"));
 }
 
 void TestDap::testPythonAdapterUsesExplicitInterpreterOverride() {
@@ -443,6 +457,14 @@ void TestDap::testAdapterLookupByFile() {
       reg.adaptersForFile("/test/main.cpp");
   QVERIFY(!cppAdapters.isEmpty());
 
+  QList<std::shared_ptr<IDebugAdapter>> goAdapters =
+      reg.adaptersForFile("/test/main.go");
+  QVERIFY(!goAdapters.isEmpty());
+
+  QList<std::shared_ptr<IDebugAdapter>> rsAdapters =
+      reg.adaptersForFile("/test/main.rs");
+  QVERIFY(!rsAdapters.isEmpty());
+
   QList<std::shared_ptr<IDebugAdapter>> unknownAdapters =
       reg.adaptersForFile("/test/file.xyz");
   QVERIFY(unknownAdapters.isEmpty());
@@ -458,6 +480,14 @@ void TestDap::testAdapterLookupByLanguage() {
   QList<std::shared_ptr<IDebugAdapter>> cppAdapters =
       reg.adaptersForLanguage("cpp");
   QVERIFY(!cppAdapters.isEmpty());
+
+  QList<std::shared_ptr<IDebugAdapter>> goAdapters =
+      reg.adaptersForLanguage("go");
+  QVERIFY(!goAdapters.isEmpty());
+
+  QList<std::shared_ptr<IDebugAdapter>> rustAdapters =
+      reg.adaptersForLanguage("rust");
+  QVERIFY(!rustAdapters.isEmpty());
 }
 
 void TestDap::testAdapterLookupByConfiguration() {
@@ -628,6 +658,159 @@ void TestDap::testGdbAdapterRuntimeOverride() {
   const DebugAdapterConfig cfg =
       gdbAdapter->configForConfiguration(configuration);
   QCOMPARE(cfg.program, QString("/custom/tools/gdb"));
+}
+
+void TestDap::testGoAdapterIntegration() {
+  DebugAdapterRegistry &reg = DebugAdapterRegistry::instance();
+
+  auto goAdapter = reg.adapter("go-delve");
+  QVERIFY(goAdapter != nullptr);
+
+  DebugAdapterConfig cfg = goAdapter->config();
+  QCOMPARE(cfg.id, QString("go-delve"));
+  QCOMPARE(cfg.name, QString("Go (Delve)"));
+  QCOMPARE(cfg.type, QString("go"));
+  QVERIFY(cfg.arguments.contains("dap"));
+
+  QVERIFY(cfg.languages.contains("go"));
+  QVERIFY(cfg.extensions.contains(".go"));
+
+  QVERIFY(cfg.supportsFunctionBreakpoints);
+  QVERIFY(cfg.supportsConditionalBreakpoints);
+  QVERIFY(cfg.supportsHitConditionalBreakpoints);
+  QVERIFY(cfg.supportsLogPoints);
+  QVERIFY(cfg.supportsRestart);
+
+  QVERIFY(goAdapter->canDebug("/path/to/main.go"));
+  QVERIFY(!goAdapter->canDebug("/path/to/main.py"));
+  QVERIFY(goAdapter->supportsLanguage("go"));
+  QVERIFY(!goAdapter->supportsLanguage("cpp"));
+
+  QCOMPARE(goAdapter->documentationUrl(),
+           QString("https://github.com/go-delve/delve"));
+
+  QString installCmd = goAdapter->installCommand();
+  QVERIFY(!installCmd.isEmpty());
+  QVERIFY(installCmd.contains("dlv"));
+}
+
+void TestDap::testGoAdapterLaunchConfig() {
+  auto goAdapter = DebugAdapterRegistry::instance().adapter("go-delve");
+  QVERIFY(goAdapter != nullptr);
+
+  QJsonObject launchConfig =
+      goAdapter->createLaunchConfig("/path/to/main.go", "/path/to");
+  QCOMPARE(launchConfig["type"].toString(), QString("go"));
+  QCOMPARE(launchConfig["request"].toString(), QString("launch"));
+  QCOMPARE(launchConfig["mode"].toString(), QString("debug"));
+  QCOMPARE(launchConfig["program"].toString(), QString("/path/to/main.go"));
+  QCOMPARE(launchConfig["cwd"].toString(), QString("/path/to"));
+
+  QJsonObject attachConfig = goAdapter->createAttachConfig(12345, "", 0);
+  QCOMPARE(attachConfig["type"].toString(), QString("go"));
+  QCOMPARE(attachConfig["request"].toString(), QString("attach"));
+  QCOMPARE(attachConfig["mode"].toString(), QString("local"));
+  QCOMPARE(attachConfig["processId"].toInt(), 12345);
+
+  QJsonObject remoteConfig =
+      goAdapter->createAttachConfig(0, "192.168.1.100", 1234);
+  QCOMPARE(remoteConfig["type"].toString(), QString("go"));
+  QCOMPARE(remoteConfig["mode"].toString(), QString("remote"));
+  QCOMPARE(remoteConfig["host"].toString(), QString("192.168.1.100"));
+  QCOMPARE(remoteConfig["port"].toInt(), 1234);
+}
+
+void TestDap::testGoAdapterLookupByFile() {
+  DebugAdapterRegistry &reg = DebugAdapterRegistry::instance();
+
+  QList<std::shared_ptr<IDebugAdapter>> goAdapters =
+      reg.adaptersForFile("/project/main.go");
+  QVERIFY(!goAdapters.isEmpty());
+
+  bool foundDelve = false;
+  for (const auto &adapter : goAdapters) {
+    if (adapter->config().id == "go-delve") {
+      foundDelve = true;
+      break;
+    }
+  }
+  QVERIFY(foundDelve);
+}
+
+void TestDap::testRustAdapterIntegration() {
+  DebugAdapterRegistry &reg = DebugAdapterRegistry::instance();
+
+  auto rustAdapter = reg.adapter("rust-codelldb");
+  QVERIFY(rustAdapter != nullptr);
+
+  DebugAdapterConfig cfg = rustAdapter->config();
+  QCOMPARE(cfg.id, QString("rust-codelldb"));
+  QCOMPARE(cfg.name, QString("Rust (CodeLLDB)"));
+  QCOMPARE(cfg.type, QString("lldb"));
+
+  QVERIFY(cfg.languages.contains("rust"));
+  QVERIFY(cfg.extensions.contains(".rs"));
+
+  QVERIFY(cfg.supportsFunctionBreakpoints);
+  QVERIFY(cfg.supportsConditionalBreakpoints);
+  QVERIFY(cfg.supportsHitConditionalBreakpoints);
+  QVERIFY(cfg.supportsLogPoints);
+
+  QVERIFY(rustAdapter->canDebug("/path/to/main.rs"));
+  QVERIFY(!rustAdapter->canDebug("/path/to/main.py"));
+  QVERIFY(rustAdapter->supportsLanguage("rust"));
+  QVERIFY(!rustAdapter->supportsLanguage("cpp"));
+
+  QCOMPARE(rustAdapter->documentationUrl(),
+           QString("https://github.com/vadimcn/codelldb"));
+
+  QString installCmd = rustAdapter->installCommand();
+  QVERIFY(!installCmd.isEmpty());
+  QVERIFY(installCmd.contains("CodeLLDB"));
+}
+
+void TestDap::testRustAdapterLaunchConfig() {
+  auto rustAdapter = DebugAdapterRegistry::instance().adapter("rust-codelldb");
+  QVERIFY(rustAdapter != nullptr);
+
+  QJsonObject launchConfig =
+      rustAdapter->createLaunchConfig("/path/to/target/debug/myapp", "/path/to");
+  QCOMPARE(launchConfig["type"].toString(), QString("lldb"));
+  QCOMPARE(launchConfig["request"].toString(), QString("launch"));
+  QCOMPARE(launchConfig["program"].toString(),
+           QString("/path/to/target/debug/myapp"));
+  QCOMPARE(launchConfig["cwd"].toString(), QString("/path/to"));
+
+  QJsonObject attachConfig = rustAdapter->createAttachConfig(12345, "", 0);
+  QCOMPARE(attachConfig["type"].toString(), QString("lldb"));
+  QCOMPARE(attachConfig["request"].toString(), QString("attach"));
+  QCOMPARE(attachConfig["pid"].toInt(), 12345);
+
+  QJsonObject remoteConfig =
+      rustAdapter->createAttachConfig(0, "127.0.0.1", 4567);
+  QCOMPARE(remoteConfig["type"].toString(), QString("lldb"));
+  QCOMPARE(remoteConfig["request"].toString(), QString("attach"));
+  QVERIFY(remoteConfig.contains("connect"));
+  QCOMPARE(remoteConfig["connect"].toObject()["host"].toString(),
+           QString("127.0.0.1"));
+  QCOMPARE(remoteConfig["connect"].toObject()["port"].toInt(), 4567);
+}
+
+void TestDap::testRustAdapterLookupByFile() {
+  DebugAdapterRegistry &reg = DebugAdapterRegistry::instance();
+
+  QList<std::shared_ptr<IDebugAdapter>> rsAdapters =
+      reg.adaptersForFile("/project/src/main.rs");
+  QVERIFY(!rsAdapters.isEmpty());
+
+  bool foundCodeLldb = false;
+  for (const auto &adapter : rsAdapters) {
+    if (adapter->config().id == "rust-codelldb") {
+      foundCodeLldb = true;
+      break;
+    }
+  }
+  QVERIFY(foundCodeLldb);
 }
 
 void TestDap::testDapBreakpointFromJson() {
