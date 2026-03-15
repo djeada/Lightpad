@@ -3,6 +3,51 @@
 #include "breakpointmanager.h"
 #include "debugadapterregistry.h"
 
+namespace {
+QString adapterConfigurationHint(const std::shared_ptr<IDebugAdapter> &adapter) {
+  if (!adapter) {
+    return {};
+  }
+
+  QStringList parts;
+  const QString install = adapter->installCommand().trimmed();
+  if (!install.isEmpty()) {
+    parts.append(QString("Install: %1").arg(install));
+  }
+
+  QStringList optionLabels;
+  for (const DebugAdapterOption &option : adapter->configurationOptions()) {
+    if (!option.label.trimmed().isEmpty()) {
+      optionLabels.append(option.label.trimmed());
+    }
+  }
+  optionLabels.removeDuplicates();
+  if (!optionLabels.isEmpty()) {
+    parts.append(QString("Override in Debug Configurations: %1")
+                     .arg(optionLabels.join(", ")));
+  }
+
+  return parts.join(". ");
+}
+
+QString adapterDiagnostic(const std::shared_ptr<IDebugAdapter> &adapter,
+                          const DebugConfiguration &configuration) {
+  if (!adapter) {
+    return {};
+  }
+
+  QString diagnostic = QString("%1: %2")
+                           .arg(adapter->config().name,
+                                adapter->statusMessageForConfiguration(
+                                    configuration));
+  const QString hint = adapterConfigurationHint(adapter);
+  if (!hint.isEmpty()) {
+    diagnostic += QString(". %1").arg(hint);
+  }
+  return diagnostic;
+}
+} // namespace
+
 DebugSession::DebugSession(const QString &id, QObject *parent)
     : QObject(parent), m_id(id), m_state(State::Idle),
       m_client(std::make_unique<DapClient>(this)), m_launchRequestSent(false),
@@ -37,26 +82,30 @@ bool DebugSession::start(const DebugConfiguration &config,
 
   m_configuration = config;
   m_adapter = adapter;
+  m_lastError.clear();
   m_launchRequestSent = false;
   m_adapterInitializedReceived = false;
   m_configurationDoneSent = false;
 
   if (!m_adapter) {
+    m_lastError = "No debug adapter specified";
     emit error("No debug adapter specified");
     return false;
   }
 
-  if (!m_adapter->isAvailable()) {
-    emit error(QString("Debug adapter not available: %1")
-                   .arg(m_adapter->statusMessage()));
+  if (!m_adapter->isAvailableForConfiguration(config)) {
+    m_lastError = QString("Debug adapter not available. %1")
+                      .arg(adapterDiagnostic(m_adapter, config));
+    emit error(m_lastError);
     return false;
   }
 
   setState(State::Starting);
 
-  DebugAdapterConfig adapterConfig = m_adapter->config();
+  DebugAdapterConfig adapterConfig = m_adapter->configForConfiguration(config);
   m_client->setAdapterMetadata(adapterConfig.id, adapterConfig.type);
   if (!m_client->start(adapterConfig.program, adapterConfig.arguments)) {
+    m_lastError = "Failed to start debug adapter";
     setState(State::Idle);
     emit error("Failed to start debug adapter");
     return false;
@@ -74,8 +123,7 @@ void DebugSession::stop(bool terminate) {
     return;
   }
 
-  Q_UNUSED(terminate);
-  m_client->stop();
+  m_client->stop(terminate);
   setState(State::Terminated);
   emit terminated();
 }
@@ -109,16 +157,9 @@ void DebugSession::onClientStateChanged(DapClient::State state) {
       }
 
       if (m_configuration.request == "attach") {
-        if (m_configuration.processId > 0) {
-          m_client->attach(m_configuration.processId);
-        } else if (!m_configuration.host.isEmpty()) {
-          m_client->attachRemote(m_configuration.host, m_configuration.port);
-        }
+        m_client->attach(m_adapter->attachArguments(m_configuration));
       } else {
-
-        m_client->launch(m_configuration.program, m_configuration.args,
-                         m_configuration.cwd, m_configuration.env,
-                         m_configuration.stopOnEntry);
+        m_client->launch(m_adapter->launchArguments(m_configuration));
       }
       m_launchRequestSent = true;
 
@@ -179,6 +220,7 @@ void DebugSession::onClientOutput(const DapOutputEvent &event) {
 }
 
 void DebugSession::onClientError(const QString &message) {
+  m_lastError = message;
   emit error(message);
 }
 
@@ -202,31 +244,38 @@ DebugSessionManager::DebugSessionManager()
     : QObject(nullptr), m_nextSessionNumber(1) {}
 
 QString DebugSessionManager::startSession(const DebugConfiguration &config) {
-
-  auto adapters = DebugAdapterRegistry::instance().adaptersForType(config.type);
+  m_lastError.clear();
+  const auto adapters =
+      DebugAdapterRegistry::instance().adaptersForConfiguration(config);
   if (adapters.isEmpty()) {
-    auto explicitAdapter =
-        DebugAdapterRegistry::instance().adapter(config.type);
-    if (explicitAdapter) {
-      adapters.append(explicitAdapter);
+    if (!config.adapterId.trimmed().isEmpty()) {
+      m_lastError =
+          QString("No debug adapter found for adapterId: %1").arg(config.adapterId);
+    } else {
+      m_lastError =
+          QString("No debug adapter found for type: %1").arg(config.type);
     }
-  }
-  if (adapters.isEmpty()) {
-    LOG_ERROR(QString("No debug adapter found for type: %1").arg(config.type));
+    LOG_ERROR(m_lastError);
     return {};
   }
 
-  std::shared_ptr<IDebugAdapter> adapter;
-  for (const auto &a : adapters) {
-    if (a->isAvailable()) {
-      adapter = a;
-      break;
-    }
-  }
-
+  std::shared_ptr<IDebugAdapter> adapter =
+      DebugAdapterRegistry::instance().preferredAdapterForConfiguration(config);
   if (!adapter) {
-    LOG_ERROR(
-        QString("No available debug adapter for type: %1").arg(config.type));
+    QStringList diagnostics;
+    for (const auto &candidate : adapters) {
+      if (!candidate) {
+        continue;
+      }
+      diagnostics.append(adapterDiagnostic(candidate, config));
+    }
+    if (diagnostics.isEmpty()) {
+      diagnostics.append(
+          QString("No available debug adapter for type: %1").arg(config.type));
+    }
+    m_lastError = QString("No available debug adapter. %1")
+                      .arg(diagnostics.join(" | "));
+    LOG_ERROR(m_lastError);
     return {};
   }
 
@@ -250,13 +299,22 @@ DebugSessionManager::startSession(const DebugConfiguration &config,
           });
   connect(session, &DebugSession::error, this,
           [this, sessionId](const QString &message) {
+            m_lastError = message;
             emit sessionError(sessionId, message);
           });
 
   if (!session->start(config, adapter)) {
+    if (!session->lastError().isEmpty()) {
+      m_lastError = session->lastError();
+    } else {
+      m_lastError = QString("Failed to start debug session '%1'.")
+                        .arg(config.name.isEmpty() ? config.type : config.name);
+    }
     delete session;
     return {};
   }
+
+  m_lastError.clear();
 
   m_sessions[sessionId] = session;
 
@@ -275,8 +333,9 @@ QString DebugSessionManager::quickStart(const QString &filePath,
       DebugConfigurationManager::instance().createQuickConfig(filePath,
                                                               languageId);
   if (config.name.isEmpty()) {
-    LOG_ERROR(
-        QString("Could not create debug configuration for: %1").arg(filePath));
+    m_lastError =
+        QString("Could not create debug configuration for: %1").arg(filePath);
+    LOG_ERROR(m_lastError);
     return {};
   }
 

@@ -8,6 +8,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QSet>
+#include <functional>
 
 DebugConfigurationManager &DebugConfigurationManager::instance() {
   static DebugConfigurationManager instance;
@@ -160,6 +161,33 @@ DebugConfiguration
 DebugConfigurationManager::resolveVariables(const DebugConfiguration &config,
                                             const QString &currentFile) const {
   DebugConfiguration resolved = config;
+  const std::function<QJsonValue(const QJsonValue &)> substituteJsonValue =
+      [this, &currentFile, &substituteJsonValue](
+          const QJsonValue &value) -> QJsonValue {
+    if (value.isString()) {
+      return substituteVariable(value.toString(), currentFile);
+    }
+
+    if (value.isArray()) {
+      QJsonArray result;
+      const QJsonArray input = value.toArray();
+      for (const QJsonValue &entry : input) {
+        result.append(substituteJsonValue(entry));
+      }
+      return result;
+    }
+
+    if (value.isObject()) {
+      QJsonObject result;
+      const QJsonObject input = value.toObject();
+      for (auto it = input.begin(); it != input.end(); ++it) {
+        result[it.key()] = substituteJsonValue(it.value());
+      }
+      return result;
+    }
+
+    return value;
+  };
 
   resolved.program = substituteVariable(config.program, currentFile);
   resolved.cwd = substituteVariable(config.cwd, currentFile);
@@ -175,12 +203,7 @@ DebugConfigurationManager::resolveVariables(const DebugConfiguration &config,
 
   for (auto it = config.adapterConfig.begin(); it != config.adapterConfig.end();
        ++it) {
-    if (it.value().isString()) {
-      resolved.adapterConfig[it.key()] =
-          substituteVariable(it.value().toString(), currentFile);
-    } else {
-      resolved.adapterConfig[it.key()] = it.value();
-    }
+    resolved.adapterConfig[it.key()] = substituteJsonValue(it.value());
   }
 
   return resolved;
@@ -235,13 +258,13 @@ DebugConfigurationManager::createQuickConfig(const QString &filePath,
   QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
 
   auto adapter =
-      canonicalLanguageId.isEmpty()
-          ? DebugAdapterRegistry::instance().preferredAdapterForFile(filePath)
-          : DebugAdapterRegistry::instance().preferredAdapterForLanguage(
-                canonicalLanguageId);
+      DebugAdapterRegistry::instance().preferredAdapterForFile(filePath);
   if (!adapter) {
     adapter =
-        DebugAdapterRegistry::instance().preferredAdapterForFile(filePath);
+        canonicalLanguageId.isEmpty()
+            ? nullptr
+            : DebugAdapterRegistry::instance().preferredAdapterForLanguage(
+                  canonicalLanguageId);
   }
   if (!adapter) {
     return config;
@@ -250,6 +273,7 @@ DebugConfigurationManager::createQuickConfig(const QString &filePath,
   QJsonObject launchConfig =
       adapter->createLaunchConfig(filePath, QFileInfo(filePath).absolutePath());
   config = DebugConfiguration::fromJson(launchConfig);
+  config.adapterId = adapter->config().id;
 
   QFileInfo fi(filePath);
   config.name = QString("Debug %1").arg(fi.fileName());

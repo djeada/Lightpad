@@ -11,6 +11,7 @@
 
 struct DebugConfiguration {
   QString name;
+  QString adapterId;
   QString type;
   QString request;
 
@@ -21,6 +22,7 @@ struct DebugConfiguration {
   bool stopOnEntry = false;
 
   int processId = 0;
+  QString processIdExpression;
   QString host;
   int port = 0;
 
@@ -35,6 +37,8 @@ struct DebugConfiguration {
   QJsonObject toJson() const {
     QJsonObject obj;
     obj["name"] = name;
+    if (!adapterId.isEmpty())
+      obj["adapterId"] = adapterId;
     obj["type"] = type;
     obj["request"] = request;
 
@@ -61,6 +65,8 @@ struct DebugConfiguration {
 
     if (processId > 0)
       obj["processId"] = processId;
+    else if (!processIdExpression.isEmpty())
+      obj["processId"] = processIdExpression;
     if (!host.isEmpty())
       obj["host"] = host;
     if (port > 0)
@@ -86,6 +92,7 @@ struct DebugConfiguration {
   static DebugConfiguration fromJson(const QJsonObject &obj) {
     DebugConfiguration cfg;
     cfg.name = obj["name"].toString();
+    cfg.adapterId = obj["adapterId"].toString();
     cfg.type = obj["type"].toString();
     cfg.request = obj["request"].toString("launch");
 
@@ -105,7 +112,11 @@ struct DebugConfiguration {
     }
     cfg.stopOnEntry = obj["stopOnEntry"].toBool();
 
-    cfg.processId = obj["processId"].toInt();
+    if (obj["processId"].isString()) {
+      cfg.processIdExpression = obj["processId"].toString();
+    } else {
+      cfg.processId = obj["processId"].toInt();
+    }
     cfg.host = obj["host"].toString();
     cfg.port = obj["port"].toInt();
 
@@ -116,9 +127,11 @@ struct DebugConfiguration {
     cfg.order = obj["order"].toInt();
 
     static const QStringList knownKeys = {
-        "name", "type",          "request",       "program",      "args",
-        "cwd",  "env",           "stopOnEntry",   "processId",    "host",
-        "port", "preLaunchTask", "postDebugTask", "presentation", "order"};
+        "name",  "adapterId",     "type",          "request",
+        "program", "args",        "cwd",           "env",
+        "stopOnEntry",            "processId",     "host",
+        "port",  "preLaunchTask", "postDebugTask", "presentation",
+        "order"};
     for (auto it = obj.begin(); it != obj.end(); ++it) {
       if (!knownKeys.contains(it.key())) {
         cfg.adapterConfig[it.key()] = it.value();

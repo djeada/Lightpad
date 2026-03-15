@@ -5,6 +5,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMap>
+#include <QMetaMethod>
 #include <QObject>
 #include <QProcess>
 #include <QVariant>
@@ -285,7 +286,7 @@ public:
 
   bool start(const QString &program, const QStringList &arguments = {});
 
-  void stop();
+  void stop(bool terminateDebuggee = true);
 
   State state() const;
 
@@ -296,10 +297,12 @@ public:
   void launch(const QString &program, const QStringList &args = {},
               const QString &cwd = {}, const QMap<QString, QString> &env = {},
               bool stopOnEntry = false);
+  void launch(const QJsonObject &arguments);
 
   void attach(int processId);
 
   void attachRemote(const QString &host, int port);
+  void attach(const QJsonObject &arguments);
 
   void disconnect(bool terminateDebuggee = true);
 
@@ -339,11 +342,15 @@ public:
   void getVariables(int variablesReference, const QString &filter = {},
                     int start = 0, int count = 0);
 
-  void evaluate(const QString &expression, int frameId = -1,
-                const QString &context = "repl");
+  int evaluate(const QString &expression, int frameId = -1,
+               const QString &context = "repl");
 
   void setVariable(int variablesReference, const QString &name,
                    const QString &value);
+
+  void respondToRunInTerminal(int requestSeq, bool success,
+                              qint64 processId = 0,
+                              const QString &message = {});
 
   int currentThreadId() const { return m_currentThreadId; }
 
@@ -368,6 +375,10 @@ signals:
   void threadEvent(int threadId, const QString &reason);
 
   void output(const DapOutputEvent &event);
+  void runInTerminalRequested(int requestSeq, const QString &kind,
+                              const QString &title,
+                              const QStringList &args, const QString &cwd,
+                              const QMap<QString, QString> &env);
 
   void threadsReceived(const QList<DapThread> &threads);
   void stackTraceReceived(int threadId, const QList<DapStackFrame> &frames,
@@ -375,8 +386,13 @@ signals:
   void scopesReceived(int frameId, const QList<DapScope> &scopes);
   void variablesReceived(int variablesReference,
                          const QList<DapVariable> &variables);
+  void evaluateResponse(int requestSeq, const QString &expression,
+                        const QString &result, const QString &type,
+                        int variablesReference);
   void evaluateResult(const QString &expression, const QString &result,
                       const QString &type, int variablesReference);
+  void evaluateResponseError(int requestSeq, const QString &expression,
+                             const QString &errorMessage);
   void evaluateError(const QString &expression, const QString &errorMessage);
   void variableSet(const QString &name, const QString &newValue,
                    const QString &type);

@@ -2,11 +2,13 @@
 #define DEBUGCONFIGURATIONDIALOG_H
 
 #include "../../dap/debugconfiguration.h"
+#include "../../dap/idebugadapter.h"
 #include "../../settings/theme.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
+#include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -20,6 +22,7 @@
 #include <QSplitter>
 #include <QTableWidget>
 #include <QVBoxLayout>
+#include <memory>
 
 class DebugConfigurationDialog : public QDialog {
   Q_OBJECT
@@ -40,6 +43,7 @@ private slots:
   void onBrowseProgram();
   void onBrowseCwd();
   void onSave();
+  void updateAdapterUi();
 
 private:
   void setupUi();
@@ -47,13 +51,22 @@ private:
   void saveCurrentToModel();
   void loadConfigIntoForm(const DebugConfiguration &cfg);
   void clearForm();
+  DebugConfiguration createTemplateConfiguration(
+      const QString &templateId) const;
+  void addConfigurationFromTemplate(const QString &templateId);
+  std::shared_ptr<IDebugAdapter> selectedAdapter() const;
+  void rebuildAdapterOptionsUi(const std::shared_ptr<IDebugAdapter> &adapter);
+  void populateAdapterOptions(const DebugConfiguration &cfg);
+  void applyAdapterOptionsToConfig(DebugConfiguration &cfg) const;
 
   QListWidget *m_configList;
   QPushButton *m_addConfigBtn;
+  QPushButton *m_addTemplateBtn;
   QPushButton *m_removeConfigBtn;
   QPushButton *m_duplicateConfigBtn;
 
   QLineEdit *m_nameEdit;
+  QComboBox *m_adapterCombo;
   QComboBox *m_typeCombo;
   QComboBox *m_requestCombo;
   QLineEdit *m_programEdit;
@@ -61,6 +74,9 @@ private:
   QLineEdit *m_argsEdit;
   QLineEdit *m_cwdEdit;
   QPushButton *m_browseCwdBtn;
+  QGroupBox *m_adapterOptionsGroup;
+  QFormLayout *m_adapterOptionsLayout;
+  QLabel *m_adapterStatusLabel;
   QCheckBox *m_stopOnEntryCheck;
 
   QTableWidget *m_envTable;
@@ -80,6 +96,8 @@ private:
   QPushButton *m_cancelButton;
 
   QString m_currentConfigName;
+  QString m_adapterOptionsSignature;
+  QMap<QString, QLineEdit *> m_adapterOptionEdits;
 };
 
 #endif

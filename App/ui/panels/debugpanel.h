@@ -2,14 +2,14 @@
 #define DEBUGPANEL_H
 
 #include <QColor>
+#include <QButtonGroup>
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QSet>
-#include <QSplitter>
-#include <QTabWidget>
-#include <QTextEdit>
-#include <QToolBar>
+#include <QStackedWidget>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -72,13 +72,16 @@ private slots:
   void onScopesReceived(int frameId, const QList<DapScope> &scopes);
   void onVariablesReceived(int variablesReference,
                            const QList<DapVariable> &variables);
-  void onEvaluateResult(const QString &expression, const QString &result,
-                        const QString &type, int variablesReference);
+  void onEvaluateResult(int requestSeq, const QString &expression,
+                        const QString &result, const QString &type,
+                        int variablesReference);
   void onOutputReceived(const DapOutputEvent &event);
 
   void onCallStackItemClicked(QTreeWidgetItem *item, int column);
   void onVariableItemExpanded(QTreeWidgetItem *item);
   void onBreakpointItemDoubleClicked(QTreeWidgetItem *item, int column);
+  void onBreakpointItemChanged(QTreeWidgetItem *item, int column);
+  void onBreakpointsContextMenuRequested(const QPoint &pos);
   void onConsoleInput();
   void onThreadSelected(int index);
 
@@ -89,7 +92,8 @@ private slots:
   void onWatchUpdated(const WatchExpression &watch);
   void onWatchItemExpanded(QTreeWidgetItem *item);
   void onWatchChildrenReceived(int watchId, const QList<DapVariable> &children);
-  void onEvaluateError(const QString &expression, const QString &errorMessage);
+  void onEvaluateError(int requestSeq, const QString &expression,
+                       const QString &errorMessage);
 
 private:
   void setupUI();
@@ -99,8 +103,18 @@ private:
   void setupWatches();
   void setupBreakpoints();
   void setupConsole();
+  QToolButton *createToolbarButton(QAction *action, const QString &role = QString());
+  QWidget *createToolbarDivider();
+  QToolButton *createInspectorTabButton(const QString &label, int index);
+  QWidget *createInspectorPage(QWidget *content, QWidget *headerActions = nullptr,
+                               QWidget *footer = nullptr);
+  void setCurrentInspectorTab(int index);
+  void setInspectorTabLabel(int index, const QString &label);
 
   void updateToolbarState();
+  void updateSectionSummaries();
+  void rebuildExceptionBreakpointMenu();
+  QJsonArray currentExceptionBreakpointFilters() const;
   int activeThreadId() const;
   void updateCallStack(int threadId);
   void populateScopeVariables(QTreeWidgetItem *scopeItem,
@@ -108,7 +122,7 @@ private:
   void refreshBreakpointList();
   void appendConsoleLine(const QString &text, const QColor &color,
                          bool bold = false);
-  int findPendingConsoleEvaluationIndex(const QString &requestExpression) const;
+  int findPendingConsoleEvaluationIndex(int requestSeq) const;
   void dispatchPendingConsoleEvaluation(int pendingIndex);
   void resizeVariablesNameColumnOnce();
   bool hasLocalsFallbackCommand() const;
@@ -127,7 +141,7 @@ private:
 
   DapClient *m_dapClient;
 
-  QToolBar *m_toolbar;
+  QWidget *m_toolbar;
   QAction *m_continueAction;
   QAction *m_pauseAction;
   QAction *m_stepOverAction;
@@ -137,8 +151,11 @@ private:
   QAction *m_stopAction;
   QLabel *m_debugStatusLabel;
 
-  QTabWidget *m_tabWidget;
-  QSplitter *m_mainSplitter;
+  QWidget *m_inspectorShell;
+  QWidget *m_inspectorTabBar;
+  QButtonGroup *m_inspectorTabGroup;
+  QList<QToolButton *> m_inspectorTabButtons;
+  QStackedWidget *m_inspectorStack;
 
   QTreeWidget *m_callStackTree;
 
@@ -146,6 +163,9 @@ private:
   QMap<int, QTreeWidgetItem *> m_variableRefToItem;
 
   QTreeWidget *m_breakpointsTree;
+  QToolButton *m_addFunctionBreakpointButton;
+  QToolButton *m_exceptionBreakpointsButton;
+  QMenu *m_exceptionBreakpointsMenu;
 
   QTreeWidget *m_watchTree;
   QLineEdit *m_watchInput;
@@ -153,7 +173,7 @@ private:
 
   QComboBox *m_threadSelector;
 
-  QTextEdit *m_consoleOutput;
+  QPlainTextEdit *m_consoleOutput;
   QLineEdit *m_consoleInput;
 
   int m_currentThreadId;
@@ -173,13 +193,13 @@ private:
     QString userExpression;
     QList<DebugEvaluateRequest> attempts;
     int activeAttemptIndex = 0;
+    int activeRequestSeq = 0;
   };
   QList<PendingConsoleEvaluation> m_pendingConsoleEvaluations;
   bool m_localsFallbackPending;
   int m_localsFallbackFrameId;
   int m_localsFallbackScopeRef;
-  int m_localsFallbackRequestNonce;
-  QString m_localsFallbackPendingExpression;
+  int m_localsFallbackRequestSeq;
   Theme m_theme;
   bool m_themeInitialized;
 };

@@ -73,7 +73,7 @@ bool DapClient::start(const QString &program, const QStringList &arguments) {
   return true;
 }
 
-void DapClient::stop() {
+void DapClient::stop(bool terminateDebuggee) {
   if (!m_process) {
     return;
   }
@@ -81,9 +81,8 @@ void DapClient::stop() {
   m_process->disconnect(this);
 
   if (isDebugging()) {
-
     QJsonObject args;
-    args["terminateDebuggee"] = true;
+    args["terminateDebuggee"] = terminateDebuggee;
     sendRequest("disconnect", args, m_nextSeq++);
   }
 
@@ -163,6 +162,15 @@ void DapClient::launch(const QString &program, const QStringList &args,
 
   arguments["stopAtBeginningOfMainSubprogram"] = stopOnEntry;
 
+  launch(arguments);
+}
+
+void DapClient::launch(const QJsonObject &arguments) {
+  if (!isReady()) {
+    LOG_WARNING("DAP: Cannot launch, client not ready");
+    return;
+  }
+
   m_launchConfig = arguments;
   m_isAttach = false;
 
@@ -180,12 +188,7 @@ void DapClient::attach(int processId) {
   QJsonObject arguments;
   arguments["processId"] = processId;
 
-  m_launchConfig = arguments;
-  m_isAttach = true;
-
-  int seq = m_nextSeq++;
-  m_pendingRequests[seq] = "attach";
-  sendRequest("attach", arguments, seq);
+  attach(arguments);
 }
 
 void DapClient::attachRemote(const QString &host, int port) {
@@ -197,6 +200,15 @@ void DapClient::attachRemote(const QString &host, int port) {
   QJsonObject arguments;
   arguments["host"] = host;
   arguments["port"] = port;
+
+  attach(arguments);
+}
+
+void DapClient::attach(const QJsonObject &arguments) {
+  if (!isReady()) {
+    LOG_WARNING("DAP: Cannot attach, client not ready");
+    return;
+  }
 
   m_launchConfig = arguments;
   m_isAttach = true;
@@ -394,7 +406,7 @@ void DapClient::restart() {
     const QString adapterProgram = m_process->program();
     const QStringList adapterArguments = m_process->arguments();
 
-    stop();
+    stop(!m_isAttach);
     if (!start(adapterProgram, adapterArguments)) {
       emit error("Restart failed: could not relaunch debug adapter");
     }
@@ -463,8 +475,8 @@ void DapClient::getVariables(int variablesReference, const QString &filter,
   sendRequest("variables", args, seq);
 }
 
-void DapClient::evaluate(const QString &expression, int frameId,
-                         const QString &context) {
+int DapClient::evaluate(const QString &expression, int frameId,
+                        const QString &context) {
   QJsonObject args;
   args["expression"] = expression;
   if (frameId >= 0)
@@ -476,6 +488,7 @@ void DapClient::evaluate(const QString &expression, int frameId,
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = QString("evaluate:%1").arg(expression);
   sendRequest("evaluate", args, seq);
+  return seq;
 }
 
 void DapClient::setVariable(int variablesReference, const QString &name,
@@ -488,6 +501,17 @@ void DapClient::setVariable(int variablesReference, const QString &name,
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "setVariable";
   sendRequest("setVariable", args, seq);
+}
+
+void DapClient::respondToRunInTerminal(int requestSeq, bool success,
+                                       qint64 processId,
+                                       const QString &message) {
+  QJsonObject body;
+  if (success && processId > 0) {
+    body["processId"] = static_cast<int>(processId);
+  }
+
+  sendResponse(requestSeq, "runInTerminal", success, body, message);
 }
 
 void DapClient::sendRequest(const QString &command,
@@ -735,9 +759,13 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     LOG_ERROR(QString("DAP error for %1: %2").arg(command).arg(message));
 
     if (command == "evaluate") {
+      if (pendingCommand.isEmpty()) {
+        return;
+      }
       QString expression = pendingCommand.startsWith("evaluate:")
                                ? pendingCommand.mid(9)
                                : command;
+      emit evaluateResponseError(requestSeq, expression, message);
       emit evaluateError(expression, message);
     } else {
       emit error(QString("%1 failed: %2").arg(command).arg(message));
@@ -837,11 +865,17 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     }
     emit variablesReceived(varRef, variables);
   } else if (command == "evaluate") {
+    if (pendingCommand.isEmpty()) {
+      return;
+    }
     QString expression;
     if (pendingCommand.startsWith("evaluate:")) {
       expression = pendingCommand.mid(9);
     }
 
+    emit evaluateResponse(requestSeq, expression, bodyObj["result"].toString(),
+                          bodyObj["type"].toString(),
+                          bodyObj["variablesReference"].toInt());
     emit evaluateResult(expression, bodyObj["result"].toString(),
                         bodyObj["type"].toString(),
                         bodyObj["variablesReference"].toInt());
@@ -904,10 +938,32 @@ void DapClient::handleReverseRequest(int seq, const QString &command,
   LOG_DEBUG(QString("DAP reverse request: %1").arg(command));
 
   if (command == "runInTerminal") {
+    QStringList commandLine;
+    const QJsonArray argsArray = arguments["args"].toArray();
+    for (const QJsonValue &argValue : argsArray) {
+      commandLine.append(argValue.toString());
+    }
 
-    QJsonObject body;
-    body["processId"] = 0;
-    sendResponse(seq, command, true, body);
+    if (commandLine.isEmpty()) {
+      sendResponse(seq, command, false, {}, "runInTerminal missing command");
+      return;
+    }
+
+    QMap<QString, QString> env;
+    const QJsonObject envObject = arguments["env"].toObject();
+    for (auto it = envObject.begin(); it != envObject.end(); ++it) {
+      env[it.key()] = it.value().toVariant().toString();
+    }
+
+    if (!isSignalConnected(
+            QMetaMethod::fromSignal(&DapClient::runInTerminalRequested))) {
+      sendResponse(seq, command, false, {}, "No terminal handler available");
+      return;
+    }
+
+    emit runInTerminalRequested(seq, arguments["kind"].toString("integrated"),
+                                arguments["title"].toString(), commandLine,
+                                arguments["cwd"].toString(), env);
   } else {
 
     sendResponse(seq, command, false, {}, "Not supported");

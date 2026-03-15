@@ -28,6 +28,7 @@ class GitIntegration;
 class GitFileSystemModel;
 class SourceControlPanel;
 class QDockWidget;
+class QMenu;
 class VimMode;
 class LightpadTreeView;
 class DebugPanel;
@@ -35,6 +36,7 @@ class TestPanel;
 class SymbolNavigationService;
 class DiagnosticsManager;
 class LanguageFeatureManager;
+struct DebugConfiguration;
 struct DefinitionTarget;
 #ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
@@ -126,6 +128,7 @@ private slots:
   void on_debugButton_clicked();
   void on_actionRun_file_name_triggered();
   void on_actionDebug_file_name_triggered();
+  void on_actionStart_Debug_Configuration_triggered();
   void on_actionEdit_Configurations_triggered();
   void on_actionEdit_Debug_Configurations_triggered();
   void on_magicButton_clicked();
@@ -208,6 +211,7 @@ private:
   class QLabel *m_gitBranchLabel;
   class QLabel *m_gitSyncLabel;
   class QLabel *m_gitDirtyLabel;
+  QMenu *m_debugTargetMenu;
   QTimer m_gitStatusBarTimer;
   DebugPanel *debugPanel;
   QDockWidget *debugDock;
@@ -221,6 +225,7 @@ private:
   QMap<QString, int> m_documentVersions;
   QMetaObject::Connection m_breakpointsSetConnection;
   QMetaObject::Connection m_breakpointChangedConnection;
+  QMetaObject::Connection m_runInTerminalConnection;
   QMetaObject::Connection m_sessionTerminatedConnection;
   QMetaObject::Connection m_sessionErrorConnection;
   QMetaObject::Connection m_sessionStateConnection;
@@ -311,6 +316,16 @@ private:
   void hideVimCommandPanel();
   void setupCompletionSystem();
   void noScriptAssignedWarning();
+  void rebuildDebugTargetMenu();
+  void refreshDebugTargetButton();
+  QString selectedDebugConfigurationName() const;
+  QString selectedCompoundDebugConfigurationName() const;
+  bool prepareDebugConfigurationForStart(const DebugConfiguration &config,
+                                        const QString &currentFilePath,
+                                        DebugConfiguration *resolvedConfig,
+                                        QString *errorMessage);
+  bool startDebugConfigurationByName(const QString &configurationName);
+  bool startCompoundDebugConfigurationByName(const QString &compoundName);
   void startDebuggingForCurrentFile();
   bool prepareDebugTargetForFile(const QString &filePath,
                                  const QString &languageId,

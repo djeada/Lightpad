@@ -205,6 +205,10 @@ bool Terminal::isRunning() const {
          m_process->state() == QProcess::Running;
 }
 
+qint64 Terminal::runProcessId() const {
+  return m_runProcess ? m_runProcess->processId() : 0;
+}
+
 void Terminal::executeCommand(const QString &command) {
   if (!isRunning()) {
     appendOutput("Error: Shell not running. Restarting...\n", true);
@@ -264,6 +268,8 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
           &Terminal::onRunProcessReadyReadStdout);
   connect(m_runProcess, &QProcess::readyReadStandardError, this,
           &Terminal::onRunProcessReadyReadStderr);
+  connect(m_runProcess, &QProcess::started, this,
+          [this]() { emit processStarted(); });
   connect(m_runProcess,
           QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
           &Terminal::onRunProcessFinished);
@@ -286,8 +292,6 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
   }
 
   m_runProcess->start(command, args);
-
-  emit processStarted();
 }
 
 bool Terminal::runFile(const QString &filePath, const QString &languageId) {

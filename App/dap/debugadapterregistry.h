@@ -33,11 +33,17 @@ public:
   QList<std::shared_ptr<IDebugAdapter>>
   adaptersForType(const QString &type) const;
 
+  QList<std::shared_ptr<IDebugAdapter>>
+  adaptersForConfiguration(const DebugConfiguration &configuration) const;
+
   std::shared_ptr<IDebugAdapter>
   preferredAdapterForFile(const QString &filePath) const;
 
   std::shared_ptr<IDebugAdapter>
   preferredAdapterForLanguage(const QString &languageId) const;
+
+  std::shared_ptr<IDebugAdapter>
+  preferredAdapterForConfiguration(const DebugConfiguration &configuration) const;
 
   void refreshAvailability();
 
