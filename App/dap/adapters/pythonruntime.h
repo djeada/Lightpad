@@ -11,9 +11,12 @@ struct PythonInterpreterResolution {
 };
 
 PythonInterpreterResolution
-resolvePythonInterpreter(const DebugConfiguration *configuration = nullptr);
+resolvePythonInterpreter(const DebugConfiguration *configuration = nullptr,
+                         const QString &filePath = {},
+                         const QString &workingDirectory = {});
 QString preferredPythonInterpreterCandidate(
-    const DebugConfiguration *configuration = nullptr);
+    const DebugConfiguration *configuration = nullptr,
+    const QString &filePath = {}, const QString &workingDirectory = {});
 QString globalPythonInterpreter();
 
 #endif

@@ -9,6 +9,8 @@
 #include <QSet>
 #include <QString>
 
+#include "../python/pythonprojectenvironment.h"
+
 struct RunTemplate {
   QString id;
   QString name;
@@ -34,6 +36,10 @@ struct FileTemplateAssignment {
   QStringList compilerFlags;
   QString preRunCommand;
   QString postRunCommand;
+  QString pythonMode;
+  QString pythonInterpreter;
+  QString pythonVenvPath;
+  QString pythonRequirementsFile;
 };
 
 class RunTemplateManager : public QObject {
@@ -60,6 +66,7 @@ public:
   bool removeAssignment(const QString &filePath);
 
   void setWorkspaceFolder(const QString &folder);
+  QString workspaceFolder() const { return m_workspaceFolder; }
 
   QPair<QString, QStringList>
   buildCommand(const QString &filePath,
@@ -90,6 +97,8 @@ private:
   bool loadBuiltInTemplates();
   bool loadUserTemplates();
   RunTemplate parseTemplate(const QJsonObject &obj) const;
+  PythonEnvironmentPreference
+  pythonPreferenceForAssignment(const FileTemplateAssignment &assignment) const;
   QString resolveTemplateIdForFile(const QString &filePath,
                                    const QString &languageId) const;
 

@@ -32,6 +32,9 @@ FormatTemplateSelector::FormatTemplateSelector(const QString &filePath,
   m_workingDirEdit->setText(assignment.workingDirectory);
   m_preFormatCommandEdit->setText(assignment.preFormatCommand);
   m_postFormatCommandEdit->setText(assignment.postFormatCommand);
+  m_pythonEnvironmentWidget->setPreference(
+      {assignment.pythonMode, assignment.pythonInterpreter,
+       assignment.pythonVenvPath, assignment.pythonRequirementsFile});
 
   int row = 0;
   for (auto it = assignment.customEnv.begin(); it != assignment.customEnv.end();
@@ -168,6 +171,18 @@ void FormatTemplateSelector::setupUi() {
       "Command to run after formatter (optional)");
   hooksLayout->addWidget(m_postFormatCommandEdit);
   rightLayout->addWidget(hooksGroup);
+
+  m_pythonEnvironmentWidget = new PythonEnvironmentWidget(this);
+  m_pythonEnvironmentWidget->setContext(
+      FormatTemplateManager::instance().workspaceFolder(), m_filePath,
+      m_workingDirEdit->text().trimmed());
+  connect(m_workingDirEdit, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            m_pythonEnvironmentWidget->setContext(
+                FormatTemplateManager::instance().workspaceFolder(), m_filePath,
+                text.trimmed());
+          });
+  rightLayout->addWidget(m_pythonEnvironmentWidget);
 
   rightLayout->addStretch();
 
@@ -334,6 +349,12 @@ void FormatTemplateSelector::onAccept() {
     assignment.workingDirectory = m_workingDirEdit->text().trimmed();
     assignment.preFormatCommand = m_preFormatCommandEdit->text().trimmed();
     assignment.postFormatCommand = m_postFormatCommandEdit->text().trimmed();
+    const PythonEnvironmentPreference pythonPreference =
+        m_pythonEnvironmentWidget->preference();
+    assignment.pythonMode = pythonPreference.mode;
+    assignment.pythonInterpreter = pythonPreference.customInterpreter;
+    assignment.pythonVenvPath = pythonPreference.venvPath;
+    assignment.pythonRequirementsFile = pythonPreference.requirementsFile;
 
     for (int row = 0; row < m_envVarTable->rowCount(); ++row) {
       QTableWidgetItem *keyItem = m_envVarTable->item(row, 0);
@@ -408,8 +429,8 @@ void FormatTemplateSelector::applyTheme(const Theme &theme) {
     m_searchEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
   }
 
-  if (m_languageCombo) {
-    m_languageCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+  for (QComboBox *combo : findChildren<QComboBox *>()) {
+    combo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
   }
 
   if (m_templateList) {
@@ -466,6 +487,13 @@ void FormatTemplateSelector::applyTheme(const Theme &theme) {
   for (QPushButton *btn :
        {m_browseWorkingDirBtn, m_addEnvVarBtn, m_removeEnvVarBtn}) {
     if (btn) {
+      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
+  }
+
+  if (m_pythonEnvironmentWidget) {
+    for (QPushButton *btn :
+         m_pythonEnvironmentWidget->findChildren<QPushButton *>()) {
       btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
     }
   }

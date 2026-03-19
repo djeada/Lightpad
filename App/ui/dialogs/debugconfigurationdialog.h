@@ -4,6 +4,7 @@
 #include "../../dap/debugconfiguration.h"
 #include "../../dap/idebugadapter.h"
 #include "../../settings/theme.h"
+#include "../widgets/pythonenvironmentwidget.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -74,6 +75,7 @@ private:
   QLineEdit *m_argsEdit;
   QLineEdit *m_cwdEdit;
   QPushButton *m_browseCwdBtn;
+  PythonEnvironmentWidget *m_pythonEnvironmentWidget;
   QGroupBox *m_adapterOptionsGroup;
   QFormLayout *m_adapterOptionsLayout;
   QLabel *m_adapterStatusLabel;

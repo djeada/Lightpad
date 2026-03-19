@@ -3716,24 +3716,8 @@ void MainWindow::formatCurrentDocument() {
 
   FileFormatAssignment assignment = manager.getAssignmentForFile(filePath);
 
-  QString workingDirectory = assignment.workingDirectory.trimmed();
-  if (workingDirectory.isEmpty()) {
-    workingDirectory = QFileInfo(filePath).absoluteDir().path();
-  } else {
-    workingDirectory =
-        FormatTemplateManager::substituteVariables(workingDirectory, filePath);
-  }
-
-  QMap<QString, QString> customEnv;
-  for (auto it = assignment.customEnv.begin(); it != assignment.customEnv.end();
-       ++it) {
-    const QString key = it.key().trimmed();
-    if (key.isEmpty()) {
-      continue;
-    }
-    customEnv[key] =
-        FormatTemplateManager::substituteVariables(it.value(), filePath);
-  }
+  QString workingDirectory = manager.getWorkingDirectory(filePath);
+  QMap<QString, QString> customEnv = manager.getEnvironment(filePath);
 
   QString preFormatCommand = assignment.preFormatCommand.trimmed();
   if (!preFormatCommand.isEmpty()) {
@@ -6113,6 +6097,9 @@ void MainWindow::setProjectRootPath(const QString &path) {
     updateGitIntegrationForPath(normalizedPath);
   }
 
+  RunTemplateManager::instance().setWorkspaceFolder(normalizedPath);
+  FormatTemplateManager::instance().setWorkspaceFolder(normalizedPath);
+
   if (!normalizedPath.isEmpty()) {
     DebugSettings::instance().initialize(normalizedPath);
     DebugConfigurationManager::instance().setWorkspaceFolder(normalizedPath);
@@ -6121,7 +6108,6 @@ void MainWindow::setProjectRootPath(const QString &path) {
     BreakpointManager::instance().loadFromLightpadDir();
     WatchManager::instance().setWorkspaceFolder(normalizedPath);
     WatchManager::instance().loadFromLightpadDir();
-    RunTemplateManager::instance().setWorkspaceFolder(normalizedPath);
   }
 
   refreshDebugTargetButton();

@@ -133,6 +133,9 @@ private:
   bool isShellStartupNoiseLine(const QString &line) const;
   QString processTextForLinks(const QString &text);
   void enforceScrollbackLimit();
+  QTextCursor clampedInputCursor(bool moveToEndWhenOutsideInput = false) const;
+  void insertInputText(const QString &text);
+  void removeInputText(bool backwards);
   QString getLinkAtPosition(const QPoint &pos);
   QString stripAnsiEscapeCodes(const QString &text);
   void appendAnsiText(const QString &text, QTextCursor &cursor);

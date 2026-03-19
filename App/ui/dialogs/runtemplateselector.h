@@ -2,6 +2,7 @@
 #define RUNTEMPLATESELECTOR_H
 
 #include "../../settings/theme.h"
+#include "../widgets/pythonenvironmentwidget.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -75,6 +76,7 @@ private:
 
   QLineEdit *m_preRunCommandEdit;
   QLineEdit *m_postRunCommandEdit;
+  PythonEnvironmentWidget *m_pythonEnvironmentWidget;
 
   QPushButton *m_okButton;
   QPushButton *m_cancelButton;

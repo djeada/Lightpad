@@ -75,6 +75,10 @@ RunTemplateSelector::RunTemplateSelector(const QString &filePath,
     m_preRunCommandEdit->setText(assignment.preRunCommand);
     m_postRunCommandEdit->setText(assignment.postRunCommand);
   }
+
+  m_pythonEnvironmentWidget->setPreference(
+      {assignment.pythonMode, assignment.pythonInterpreter,
+       assignment.pythonVenvPath, assignment.pythonRequirementsFile});
 }
 
 RunTemplateSelector::~RunTemplateSelector() {}
@@ -235,6 +239,18 @@ void RunTemplateSelector::setupUi() {
       "Command to run after execution (e.g., cleanup script)");
   hooksLayout->addWidget(m_postRunCommandEdit);
   rightLayout->addWidget(hooksGroup);
+
+  m_pythonEnvironmentWidget = new PythonEnvironmentWidget(this);
+  m_pythonEnvironmentWidget->setContext(
+      RunTemplateManager::instance().workspaceFolder(), m_filePath,
+      m_workingDirEdit->text().trimmed());
+  connect(m_workingDirEdit, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            m_pythonEnvironmentWidget->setContext(
+                RunTemplateManager::instance().workspaceFolder(), m_filePath,
+                text.trimmed());
+          });
+  rightLayout->addWidget(m_pythonEnvironmentWidget);
 
   rightLayout->addStretch();
 
@@ -403,6 +419,12 @@ void RunTemplateSelector::onAccept() {
 
     assignment.preRunCommand = m_preRunCommandEdit->text().trimmed();
     assignment.postRunCommand = m_postRunCommandEdit->text().trimmed();
+    const PythonEnvironmentPreference pythonPreference =
+        m_pythonEnvironmentWidget->preference();
+    assignment.pythonMode = pythonPreference.mode;
+    assignment.pythonInterpreter = pythonPreference.customInterpreter;
+    assignment.pythonVenvPath = pythonPreference.venvPath;
+    assignment.pythonRequirementsFile = pythonPreference.requirementsFile;
 
     RunTemplateManager::instance().assignTemplateToFile(m_filePath, assignment);
   }
@@ -485,8 +507,8 @@ void RunTemplateSelector::applyTheme(const Theme &theme) {
     m_searchEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
   }
 
-  if (m_languageCombo) {
-    m_languageCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+  for (QComboBox *combo : findChildren<QComboBox *>()) {
+    combo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
   }
 
   if (m_templateList) {
@@ -548,6 +570,13 @@ void RunTemplateSelector::applyTheme(const Theme &theme) {
        {m_addSourceFileBtn, m_removeSourceFileBtn, m_browseWorkingDirBtn,
         m_addEnvVarBtn, m_removeEnvVarBtn}) {
     if (btn) {
+      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
+  }
+
+  if (m_pythonEnvironmentWidget) {
+    for (QPushButton *btn :
+         m_pythonEnvironmentWidget->findChildren<QPushButton *>()) {
       btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
     }
   }

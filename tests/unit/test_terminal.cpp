@@ -1,5 +1,7 @@
+#define private public
 #include "ui/panels/shellprofile.h"
 #include "ui/panels/terminal.h"
+#undef private
 #include <QLabel>
 #include <QMenu>
 #include <QPlainTextEdit>
@@ -41,6 +43,8 @@ private slots:
   void testFontZoomOut();
   void testFontZoomReset();
   void testFontZoomLimits();
+  void testTypingOutsidePromptAppendsToInput();
+  void testBackspaceDoesNotDeleteTerminalOutput();
 };
 
 void TestTerminal::initTestCase() {}
@@ -357,6 +361,59 @@ void TestTerminal::testFontZoomLimits() {
     terminal.zoomOut();
   }
   QVERIFY(terminal.currentFontSize() >= 6);
+}
+
+void TestTerminal::testTypingOutsidePromptAppendsToInput() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  const QString transcript = "printed output\n$ ";
+  textEdit->setPlainText(transcript);
+  terminal.m_inputStartPosition = transcript.size();
+
+  terminal.show();
+  textEdit->setFocus();
+  QTest::qWait(50);
+
+  QTextCursor cursor = textEdit->textCursor();
+  cursor.setPosition(1);
+  textEdit->setTextCursor(cursor);
+
+  QTest::keyClicks(textEdit, "echo");
+
+  QCOMPARE(textEdit->toPlainText(), transcript + "echo");
+}
+
+void TestTerminal::testBackspaceDoesNotDeleteTerminalOutput() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  const QString transcript = "printed output\n$ cmd";
+  textEdit->setPlainText(transcript);
+  terminal.m_inputStartPosition = QString("printed output\n$ ").size();
+
+  terminal.show();
+  textEdit->setFocus();
+  QTest::qWait(50);
+
+  QTextCursor cursor = textEdit->textCursor();
+  cursor.setPosition(terminal.m_inputStartPosition);
+  textEdit->setTextCursor(cursor);
+  QTest::keyClick(textEdit, Qt::Key_Backspace);
+  QCOMPARE(textEdit->toPlainText(), transcript);
+
+  cursor.setPosition(2);
+  textEdit->setTextCursor(cursor);
+  QTest::keyClick(textEdit, Qt::Key_Backspace);
+  QCOMPARE(textEdit->toPlainText(), transcript);
 }
 
 QTEST_MAIN(TestTerminal)

@@ -2,6 +2,7 @@
 #define FORMATTEMPLATESELECTOR_H
 
 #include "../../settings/theme.h"
+#include "../widgets/pythonenvironmentwidget.h"
 #include <QComboBox>
 #include <QDialog>
 #include <QGroupBox>
@@ -60,6 +61,7 @@ private:
   QPushButton *m_removeEnvVarBtn;
   QLineEdit *m_preFormatCommandEdit;
   QLineEdit *m_postFormatCommandEdit;
+  PythonEnvironmentWidget *m_pythonEnvironmentWidget;
   QPushButton *m_okButton;
   QPushButton *m_cancelButton;
   QPushButton *m_removeButton;

@@ -85,7 +85,7 @@ void TestFormatTemplateManager::testParseTemplateFromJson() {
       foundBlack = true;
       QCOMPARE(tmpl.name, QString("Black"));
       QVERIFY(tmpl.extensions.contains("py"));
-      QCOMPARE(tmpl.command, QString("black"));
+      QCOMPARE(tmpl.command, QString("${python}"));
       break;
     }
   }
@@ -146,6 +146,8 @@ void TestFormatTemplateManager::testAssignmentPersistence() {
   newAssignment.customEnv["PYTHONPATH"] = "${fileDir}";
   newAssignment.preFormatCommand = "echo pre-format";
   newAssignment.postFormatCommand = "echo post-format";
+  newAssignment.pythonMode = PythonProjectEnvironment::workspaceVenvMode();
+  newAssignment.pythonVenvPath = "${workspaceFolder}/.venv";
 
   bool assigned = manager.assignTemplateToFile(testFile, newAssignment);
   QVERIFY(assigned);
@@ -157,6 +159,9 @@ void TestFormatTemplateManager::testAssignmentPersistence() {
   QCOMPARE(assignment.customEnv.value("PYTHONPATH"), QString("${fileDir}"));
   QCOMPARE(assignment.preFormatCommand, QString("echo pre-format"));
   QCOMPARE(assignment.postFormatCommand, QString("echo post-format"));
+  QCOMPARE(assignment.pythonMode,
+           QString(PythonProjectEnvironment::workspaceVenvMode()));
+  QCOMPARE(assignment.pythonVenvPath, QString("${workspaceFolder}/.venv"));
 
   QString configFile = m_tempDir.path() + "/.lightpad/format_config.json";
   QVERIFY(QFile::exists(configFile));
@@ -181,9 +186,8 @@ void TestFormatTemplateManager::testBuildCommand() {
 
   QPair<QString, QStringList> cmd = manager.buildCommand(testFile);
   QVERIFY(!cmd.first.isEmpty());
-
-  QVERIFY(cmd.first.contains("black") || cmd.first.contains("autopep8") ||
-          cmd.first.contains("yapf"));
+  QVERIFY(cmd.first.contains("python"));
+  QVERIFY(cmd.second.contains("-m"));
 }
 
 void TestFormatTemplateManager::testEmptyFilePath() {

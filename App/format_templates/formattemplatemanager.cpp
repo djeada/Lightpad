@@ -168,6 +168,17 @@ FormatTemplateManager::parseTemplate(const QJsonObject &obj) const {
   return tmpl;
 }
 
+PythonEnvironmentPreference
+FormatTemplateManager::pythonPreferenceForAssignment(
+    const FileFormatAssignment &assignment) const {
+  PythonEnvironmentPreference preference;
+  preference.mode = assignment.pythonMode;
+  preference.customInterpreter = assignment.pythonInterpreter;
+  preference.venvPath = assignment.pythonVenvPath;
+  preference.requirementsFile = assignment.pythonRequirementsFile;
+  return preference;
+}
+
 QList<FormatTemplate> FormatTemplateManager::getAllTemplates() const {
   return m_templates;
 }
@@ -270,6 +281,11 @@ bool FormatTemplateManager::loadAssignmentsFromDir(
     assignment.workingDirectory = obj.value("workingDirectory").toString();
     assignment.preFormatCommand = obj.value("preFormatCommand").toString();
     assignment.postFormatCommand = obj.value("postFormatCommand").toString();
+    assignment.pythonMode = obj.value("pythonMode").toString();
+    assignment.pythonInterpreter = obj.value("pythonInterpreter").toString();
+    assignment.pythonVenvPath = obj.value("pythonVenvPath").toString();
+    assignment.pythonRequirementsFile =
+        obj.value("pythonRequirementsFile").toString();
 
     m_assignments[assignment.filePath] = assignment;
   }
@@ -320,6 +336,22 @@ bool FormatTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
 
       if (!it.value().postFormatCommand.isEmpty()) {
         obj["postFormatCommand"] = it.value().postFormatCommand;
+      }
+
+      if (!it.value().pythonMode.isEmpty()) {
+        obj["pythonMode"] = it.value().pythonMode;
+      }
+
+      if (!it.value().pythonInterpreter.isEmpty()) {
+        obj["pythonInterpreter"] = it.value().pythonInterpreter;
+      }
+
+      if (!it.value().pythonVenvPath.isEmpty()) {
+        obj["pythonVenvPath"] = it.value().pythonVenvPath;
+      }
+
+      if (!it.value().pythonRequirementsFile.isEmpty()) {
+        obj["pythonRequirementsFile"] = it.value().pythonRequirementsFile;
       }
 
       assignments.append(obj);
@@ -422,22 +454,23 @@ bool FormatTemplateManager::removeAssignment(const QString &filePath) {
 
 QString FormatTemplateManager::substituteVariables(const QString &input,
                                                    const QString &filePath) {
-  QString result = input;
-  QFileInfo fileInfo(filePath);
-
-  result.replace("${file}", filePath);
-  result.replace("${fileDir}", fileInfo.absoluteDir().path());
-  result.replace("${fileBasename}", fileInfo.fileName());
-  result.replace("${fileBasenameNoExt}", fileInfo.completeBaseName());
-  result.replace("${fileExt}", fileInfo.suffix());
-  result.replace("${workspaceFolder}", fileInfo.absoluteDir().path());
-
-  return result;
+  const FormatTemplateManager &manager = FormatTemplateManager::instance();
+  const FileFormatAssignment assignment = manager.getAssignmentForFile(filePath);
+  return PythonProjectEnvironment::substituteVariables(
+      input, manager.m_workspaceFolder, filePath,
+      QFileInfo(filePath).absolutePath(),
+      manager.pythonPreferenceForAssignment(assignment));
 }
 
 QPair<QString, QStringList>
 FormatTemplateManager::buildCommand(const QString &filePath) const {
+  if (filePath.trimmed().isEmpty()) {
+    return qMakePair(QString(), QStringList());
+  }
+
   FileFormatAssignment assignment = getAssignmentForFile(filePath);
+  const PythonEnvironmentPreference pythonPreference =
+      pythonPreferenceForAssignment(assignment);
 
   QString templateId = assignment.templateId;
 
@@ -459,20 +492,71 @@ FormatTemplateManager::buildCommand(const QString &filePath) const {
     return qMakePair(QString(), QStringList());
   }
 
-  QString command = substituteVariables(tmpl.command, filePath);
+  const QString workingDirectory = getWorkingDirectory(filePath);
+  QString command = PythonProjectEnvironment::substituteVariables(
+      tmpl.command, m_workspaceFolder, filePath, workingDirectory,
+      pythonPreference);
 
   QStringList args;
   for (const QString &arg : tmpl.args) {
-    args.append(substituteVariables(arg, filePath));
+    args.append(PythonProjectEnvironment::substituteVariables(
+        arg, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
   }
 
   if (!assignment.customArgs.isEmpty()) {
     for (const QString &arg : assignment.customArgs) {
-      args.append(substituteVariables(arg, filePath));
+      args.append(PythonProjectEnvironment::substituteVariables(
+          arg, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
     }
   }
 
   return qMakePair(command, args);
+}
+
+QString FormatTemplateManager::getWorkingDirectory(const QString &filePath) const {
+  if (filePath.trimmed().isEmpty()) {
+    return QString();
+  }
+
+  const FileFormatAssignment assignment = getAssignmentForFile(filePath);
+  const PythonEnvironmentPreference pythonPreference =
+      pythonPreferenceForAssignment(assignment);
+
+  if (!assignment.workingDirectory.isEmpty()) {
+    return PythonProjectEnvironment::substituteVariables(
+        assignment.workingDirectory, m_workspaceFolder, filePath,
+        QFileInfo(filePath).absolutePath(), pythonPreference);
+  }
+
+  return PythonProjectEnvironment::substituteVariables(
+      "${fileDir}", m_workspaceFolder, filePath, QFileInfo(filePath).absolutePath(),
+      pythonPreference);
+}
+
+QMap<QString, QString>
+FormatTemplateManager::getEnvironment(const QString &filePath) const {
+  if (filePath.trimmed().isEmpty()) {
+    return {};
+  }
+
+  const FileFormatAssignment assignment = getAssignmentForFile(filePath);
+  const PythonEnvironmentPreference pythonPreference =
+      pythonPreferenceForAssignment(assignment);
+  const QString workingDirectory = getWorkingDirectory(filePath);
+
+  QMap<QString, QString> env =
+      PythonProjectEnvironment::activationEnvironment(
+          PythonProjectEnvironment::resolve(pythonPreference, m_workspaceFolder,
+                                            filePath, workingDirectory));
+
+  for (auto it = assignment.customEnv.begin(); it != assignment.customEnv.end();
+       ++it) {
+    env[it.key()] = PythonProjectEnvironment::substituteVariables(
+        it.value(), m_workspaceFolder, filePath, workingDirectory,
+        pythonPreference);
+  }
+
+  return env;
 }
 
 bool FormatTemplateManager::hasFormatTemplate(const QString &filePath) const {

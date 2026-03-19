@@ -938,6 +938,8 @@ void TestDap::testDebugConfigurationToJson() {
   config.cwd = "/path/to";
   config.stopOnEntry = true;
   config.processIdExpression = "${command:pickProcess}";
+  config.pythonMode = "workspaceVenv";
+  config.pythonVenvPath = "${workspaceFolder}/.venv";
 
   QJsonObject json = config.toJson();
 
@@ -949,6 +951,9 @@ void TestDap::testDebugConfigurationToJson() {
   QCOMPARE(json["args"].toArray().count(), 2);
   QCOMPARE(json["stopOnEntry"].toBool(), true);
   QCOMPARE(json["processId"].toString(), QString("${command:pickProcess}"));
+  QCOMPARE(json["pythonMode"].toString(), QString("workspaceVenv"));
+  QCOMPARE(json["pythonVenvPath"].toString(),
+           QString("${workspaceFolder}/.venv"));
 }
 
 void TestDap::testDebugConfigurationFromJson() {
@@ -961,6 +966,8 @@ void TestDap::testDebugConfigurationFromJson() {
   json["cwd"] = "${workspaceFolder}";
   json["stopOnEntry"] = false;
   json["processId"] = "${command:pickProcess}";
+  json["pythonMode"] = "workspaceVenv";
+  json["pythonVenvPath"] = "${workspaceFolder}/.venv";
 
   QJsonArray args;
   args.append("--arg1");
@@ -977,6 +984,8 @@ void TestDap::testDebugConfigurationFromJson() {
   QCOMPARE(config.args.count(), 2);
   QVERIFY(!config.stopOnEntry);
   QCOMPARE(config.processIdExpression, QString("${command:pickProcess}"));
+  QCOMPARE(config.pythonMode, QString("workspaceVenv"));
+  QCOMPARE(config.pythonVenvPath, QString("${workspaceFolder}/.venv"));
 }
 
 void TestDap::testConfigurationVariableSubstitution() {
@@ -985,9 +994,11 @@ void TestDap::testConfigurationVariableSubstitution() {
 
   DebugConfiguration config;
   config.name = "Test";
+  config.pythonMode = "workspaceVenv";
+  config.pythonVenvPath = "${workspaceFolder}/.venv";
   config.program = "${workspaceFolder}/main.py";
   config.cwd = "${workspaceFolder}";
-  config.args = {"${fileBasename}", "${relativeFile}"};
+  config.args = {"${fileBasename}", "${relativeFile}", "${venv}"};
   config.adapterConfig["connect"] =
       QJsonObject{{"host", "${workspaceFolder}"},
                   {"pathMappings",
@@ -1000,7 +1011,9 @@ void TestDap::testConfigurationVariableSubstitution() {
 
   QCOMPARE(resolved.program, QString("/home/user/project/main.py"));
   QCOMPARE(resolved.cwd, QString("/home/user/project"));
-  QCOMPARE(resolved.args, QStringList({"app.py", QString("src/app.py")}));
+  QCOMPARE(resolved.args.at(0), QString("app.py"));
+  QCOMPARE(resolved.args.at(1), QString("src/app.py"));
+  QVERIFY(resolved.args.at(2).contains("/home/user/project/.venv"));
   const QJsonObject connect = resolved.adapterConfig["connect"].toObject();
   QCOMPARE(connect["host"].toString(), QString("/home/user/project"));
   const QJsonArray pathMappings = connect["pathMappings"].toArray();
