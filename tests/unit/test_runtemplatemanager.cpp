@@ -86,7 +86,7 @@ void TestRunTemplateManager::testParseTemplateFromJson() {
       foundPython = true;
       QCOMPARE(tmpl.name, QString("Python 3"));
       QVERIFY(tmpl.extensions.contains("py"));
-      QCOMPARE(tmpl.command, QString("python3"));
+      QCOMPARE(tmpl.command, QString("${python}"));
       break;
     }
   }
@@ -158,12 +158,17 @@ void TestRunTemplateManager::testAssignmentPersistence() {
   FileTemplateAssignment newAssignment;
   newAssignment.templateId = "python3";
   newAssignment.customArgs = QStringList() << "-v";
+  newAssignment.pythonMode = PythonProjectEnvironment::workspaceVenvMode();
+  newAssignment.pythonVenvPath = "${workspaceFolder}/.venv";
   bool assigned = manager.assignTemplateToFile(testFile, newAssignment);
   QVERIFY(assigned);
 
   FileTemplateAssignment assignment = manager.getAssignmentForFile(testFile);
   QCOMPARE(assignment.templateId, QString("python3"));
   QVERIFY(assignment.customArgs.contains("-v"));
+  QCOMPARE(assignment.pythonMode,
+           QString(PythonProjectEnvironment::workspaceVenvMode()));
+  QCOMPARE(assignment.pythonVenvPath, QString("${workspaceFolder}/.venv"));
 
   QString configFile = m_tempDir.path() + "/.lightpad/run_config.json";
   QVERIFY(QFile::exists(configFile));

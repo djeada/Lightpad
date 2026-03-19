@@ -2,6 +2,8 @@
 #include "../../run_templates/runtemplatemanager.h"
 #include "ui_terminal.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QColor>
 #include <QDesktopServices>
 #include <QDir>
@@ -88,6 +90,73 @@ void Terminal::setupTerminal() {
   updateStyleSheet();
 
   startShell();
+}
+
+QTextCursor
+Terminal::clampedInputCursor(bool moveToEndWhenOutsideInput) const {
+  QTextCursor currentCursor = ui->textEdit->textCursor();
+  QTextCursor endCursor = currentCursor;
+  endCursor.movePosition(QTextCursor::End);
+  int endPosition = endCursor.position();
+
+  int anchor = currentCursor.anchor();
+  int position = currentCursor.position();
+  int selectionEnd = qMax(anchor, position);
+
+  if (moveToEndWhenOutsideInput && selectionEnd <= m_inputStartPosition) {
+    anchor = endPosition;
+    position = endPosition;
+  }
+
+  anchor = qBound(m_inputStartPosition, anchor, endPosition);
+  position = qBound(m_inputStartPosition, position, endPosition);
+
+  QTextCursor clampedCursor(ui->textEdit->document());
+  clampedCursor.setPosition(anchor);
+  clampedCursor.setPosition(position, QTextCursor::KeepAnchor);
+  return clampedCursor;
+}
+
+void Terminal::insertInputText(const QString &text) {
+  if (text.isEmpty()) {
+    return;
+  }
+
+  QTextCursor cursor = clampedInputCursor(true);
+  cursor.insertText(text);
+  ui->textEdit->setTextCursor(cursor);
+  scrollToBottom();
+}
+
+void Terminal::removeInputText(bool backwards) {
+  QTextCursor originalCursor = ui->textEdit->textCursor();
+  int selectionEnd =
+      qMax(originalCursor.anchor(), originalCursor.position());
+  if (!originalCursor.hasSelection() &&
+      originalCursor.position() < m_inputStartPosition) {
+    return;
+  }
+  if (originalCursor.hasSelection() && selectionEnd <= m_inputStartPosition) {
+    return;
+  }
+
+  QTextCursor cursor = clampedInputCursor(false);
+  if (cursor.hasSelection()) {
+    cursor.removeSelectedText();
+    ui->textEdit->setTextCursor(cursor);
+    return;
+  }
+
+  if (backwards) {
+    if (cursor.position() <= m_inputStartPosition) {
+      return;
+    }
+    cursor.deletePreviousChar();
+  } else {
+    cursor.deleteChar();
+  }
+
+  ui->textEdit->setTextCursor(cursor);
 }
 
 bool Terminal::startShell(const QString &workingDirectory) {
@@ -638,8 +707,13 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
     case Qt::Key_V:
       if ((keyEvent->modifiers() & Qt::ControlModifier) &&
           (keyEvent->modifiers() & Qt::ShiftModifier)) {
+        insertInputText(QApplication::clipboard()->text());
+        return true;
+      }
+      break;
 
-        ui->textEdit->paste();
+    case Qt::Key_X:
+      if (keyEvent->modifiers() & Qt::ControlModifier) {
         return true;
       }
       break;
@@ -684,8 +758,30 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
       }
       break;
 
+    case Qt::Key_Backspace:
+      removeInputText(true);
+      return true;
+
+    case Qt::Key_Delete:
+      removeInputText(false);
+      return true;
+
     default:
       break;
+    }
+
+    const QString keyText = keyEvent->text();
+    bool hasEditableText = false;
+    for (const QChar &ch : keyText) {
+      if (!ch.isNull() && ch != '\n' && ch != '\r' && ch >= QChar(' ')) {
+        hasEditableText = true;
+        break;
+      }
+    }
+
+    if (hasEditableText) {
+      insertInputText(keyText);
+      return true;
     }
   }
 
@@ -1362,7 +1458,7 @@ void Terminal::setupContextMenu() {
   QAction *pasteAction = m_contextMenu->addAction(tr("Paste"));
   pasteAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
   connect(pasteAction, &QAction::triggered, this,
-          [this]() { ui->textEdit->paste(); });
+          [this]() { insertInputText(QApplication::clipboard()->text()); });
 
   m_contextMenu->addSeparator();
 

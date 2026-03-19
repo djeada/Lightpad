@@ -88,6 +88,7 @@ set(project_headers
     ui/dialogs/gitfilehistorydialog.h
     ui/dialogs/gitrebasedialog.h
     ui/widgets/gitgraphwidget.h
+    ui/widgets/pythonenvironmentwidget.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
     ui/panels/breadcrumbwidget.h
@@ -107,6 +108,7 @@ set(project_headers
     core/autosavemanager.h
     editor/vimmode.h
     i18n/i18n.h
+    python/pythonprojectenvironment.h
     language/languagecatalog.h
     language/languagefeaturemanager.h
     diagnostics/diagnosticsmanager.h
@@ -219,6 +221,7 @@ set(project_sources
     ui/dialogs/gitfilehistorydialog.cpp
     ui/dialogs/gitrebasedialog.cpp
     ui/widgets/gitgraphwidget.cpp
+    ui/widgets/pythonenvironmentwidget.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
     ui/panels/breadcrumbwidget.cpp
@@ -238,6 +241,7 @@ set(project_sources
     core/autosavemanager.cpp
     editor/vimmode.cpp
     i18n/i18n.cpp
+    python/pythonprojectenvironment.cpp
     lsp/lspclient.cpp
     language/languagefeaturemanager.cpp
     diagnostics/diagnosticsmanager.cpp

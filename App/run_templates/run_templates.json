@@ -5,10 +5,10 @@
     {
       "id": "python3",
       "name": "Python 3",
-      "description": "Run Python 3 script",
+      "description": "Run Python 3 script using the project environment when available",
       "language": "Python",
       "extensions": ["py", "pyw"],
-      "command": "python3",
+      "command": "${python}",
       "args": ["${file}"],
       "workingDirectory": "${fileDir}",
       "env": {}
@@ -27,12 +27,34 @@
     {
       "id": "python_module",
       "name": "Python Module",
-      "description": "Run Python file as module",
+      "description": "Run Python file as module using the resolved project interpreter",
       "language": "Python",
       "extensions": ["py"],
-      "command": "python3",
+      "command": "${python}",
       "args": ["-m", "${fileBasenameNoExt}"],
       "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "python_pytest_file",
+      "name": "Python Pytest File",
+      "description": "Run pytest for the current file using the project environment",
+      "language": "Python",
+      "extensions": ["py"],
+      "command": "${python}",
+      "args": ["-m", "pytest", "${file}", "-q"],
+      "workingDirectory": "${workspaceFolder}",
+      "env": {}
+    },
+    {
+      "id": "python_pytest_workspace",
+      "name": "Python Pytest Workspace",
+      "description": "Run the workspace pytest suite using the resolved project interpreter",
+      "language": "Python",
+      "extensions": ["py"],
+      "command": "${python}",
+      "args": ["-m", "pytest", "-q"],
+      "workingDirectory": "${workspaceFolder}",
       "env": {}
     },
     {

@@ -161,11 +161,17 @@ DebugConfiguration
 DebugConfigurationManager::resolveVariables(const DebugConfiguration &config,
                                             const QString &currentFile) const {
   DebugConfiguration resolved = config;
+  const PythonEnvironmentPreference pythonPreference = {
+      config.pythonMode, config.pythonInterpreter, config.pythonVenvPath,
+      config.pythonRequirementsFile};
+  const QString baseWorkingDirectory =
+      currentFile.isEmpty() ? m_workspaceFolder : QFileInfo(currentFile).absolutePath();
   const std::function<QJsonValue(const QJsonValue &)> substituteJsonValue =
-      [this, &currentFile,
+      [this, &currentFile, &pythonPreference, &baseWorkingDirectory,
        &substituteJsonValue](const QJsonValue &value) -> QJsonValue {
     if (value.isString()) {
-      return substituteVariable(value.toString(), currentFile);
+      return substituteVariable(value.toString(), currentFile, pythonPreference,
+                                baseWorkingDirectory);
     }
 
     if (value.isArray()) {
@@ -189,16 +195,20 @@ DebugConfigurationManager::resolveVariables(const DebugConfiguration &config,
     return value;
   };
 
-  resolved.program = substituteVariable(config.program, currentFile);
-  resolved.cwd = substituteVariable(config.cwd, currentFile);
+  resolved.cwd = substituteVariable(config.cwd, currentFile, pythonPreference,
+                                    baseWorkingDirectory);
+  resolved.program = substituteVariable(config.program, currentFile,
+                                        pythonPreference, resolved.cwd);
 
   resolved.args.clear();
   for (const QString &arg : config.args) {
-    resolved.args.append(substituteVariable(arg, currentFile));
+    resolved.args.append(substituteVariable(arg, currentFile, pythonPreference,
+                                            resolved.cwd));
   }
 
   for (auto it = config.env.begin(); it != config.env.end(); ++it) {
-    resolved.env[it.key()] = substituteVariable(it.value(), currentFile);
+    resolved.env[it.key()] = substituteVariable(it.value(), currentFile,
+                                                pythonPreference, resolved.cwd);
   }
 
   for (auto it = config.adapterConfig.begin(); it != config.adapterConfig.end();
@@ -206,28 +216,27 @@ DebugConfigurationManager::resolveVariables(const DebugConfiguration &config,
     resolved.adapterConfig[it.key()] = substituteJsonValue(it.value());
   }
 
+  resolved.pythonInterpreter = substituteVariable(
+      config.pythonInterpreter, currentFile, pythonPreference, resolved.cwd);
+  resolved.pythonVenvPath = substituteVariable(config.pythonVenvPath, currentFile,
+                                               pythonPreference, resolved.cwd);
+  resolved.pythonRequirementsFile = substituteVariable(
+      config.pythonRequirementsFile, currentFile, pythonPreference, resolved.cwd);
+
   return resolved;
 }
 
 QString DebugConfigurationManager::substituteVariable(
-    const QString &value, const QString &currentFile) const {
-  QString result = value;
-
-  if (!m_workspaceFolder.isEmpty()) {
-    result.replace("${workspaceFolder}", m_workspaceFolder);
-  }
+    const QString &value, const QString &currentFile,
+    const PythonEnvironmentPreference &pythonPreference,
+    const QString &workingDirectory) const {
+  QString result = PythonProjectEnvironment::substituteVariables(
+      value, m_workspaceFolder, currentFile, workingDirectory, pythonPreference);
 
   if (!currentFile.isEmpty()) {
-    result.replace("${file}", currentFile);
-
     QFileInfo fi(currentFile);
-
-    result.replace("${fileBasename}", fi.fileName());
-
     result.replace("${fileBasenameNoExtension}", fi.completeBaseName());
-
     result.replace("${fileDirname}", fi.absolutePath());
-
     result.replace("${fileExtname}",
                    fi.suffix().isEmpty() ? "" : "." + fi.suffix());
 

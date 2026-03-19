@@ -183,6 +183,16 @@ RunTemplate RunTemplateManager::parseTemplate(const QJsonObject &obj) const {
   return tmpl;
 }
 
+PythonEnvironmentPreference RunTemplateManager::pythonPreferenceForAssignment(
+    const FileTemplateAssignment &assignment) const {
+  PythonEnvironmentPreference preference;
+  preference.mode = assignment.pythonMode;
+  preference.customInterpreter = assignment.pythonInterpreter;
+  preference.venvPath = assignment.pythonVenvPath;
+  preference.requirementsFile = assignment.pythonRequirementsFile;
+  return preference;
+}
+
 QList<RunTemplate> RunTemplateManager::getAllTemplates() const {
   return m_templates;
 }
@@ -311,6 +321,11 @@ bool RunTemplateManager::loadAssignments() const {
 
     assignment.preRunCommand = obj.value("preRunCommand").toString();
     assignment.postRunCommand = obj.value("postRunCommand").toString();
+    assignment.pythonMode = obj.value("pythonMode").toString();
+    assignment.pythonInterpreter = obj.value("pythonInterpreter").toString();
+    assignment.pythonVenvPath = obj.value("pythonVenvPath").toString();
+    assignment.pythonRequirementsFile =
+        obj.value("pythonRequirementsFile").toString();
 
     m_assignments[assignment.filePath] = assignment;
   }
@@ -385,6 +400,22 @@ bool RunTemplateManager::saveAssignments() const {
 
     if (!it.value().postRunCommand.isEmpty()) {
       obj["postRunCommand"] = it.value().postRunCommand;
+    }
+
+    if (!it.value().pythonMode.isEmpty()) {
+      obj["pythonMode"] = it.value().pythonMode;
+    }
+
+    if (!it.value().pythonInterpreter.isEmpty()) {
+      obj["pythonInterpreter"] = it.value().pythonInterpreter;
+    }
+
+    if (!it.value().pythonVenvPath.isEmpty()) {
+      obj["pythonVenvPath"] = it.value().pythonVenvPath;
+    }
+
+    if (!it.value().pythonRequirementsFile.isEmpty()) {
+      obj["pythonRequirementsFile"] = it.value().pythonRequirementsFile;
     }
 
     assignmentsArray.append(obj);
@@ -467,28 +498,21 @@ bool RunTemplateManager::removeAssignment(const QString &filePath) {
 
 QString RunTemplateManager::substituteVariables(const QString &input,
                                                 const QString &filePath) {
-  QString result = input;
-  QFileInfo fileInfo(filePath);
   const RunTemplateManager &manager = RunTemplateManager::instance();
-  QString workspaceFolder = manager.m_workspaceFolder;
-  if (workspaceFolder.isEmpty()) {
-    workspaceFolder = fileInfo.absoluteDir().path();
-  }
-
-  result.replace("${file}", filePath);
-  result.replace("${fileDir}", fileInfo.absoluteDir().path());
-  result.replace("${fileBasename}", fileInfo.fileName());
-  result.replace("${fileBasenameNoExt}", fileInfo.completeBaseName());
-  result.replace("${fileExt}", fileInfo.suffix());
-
-  result.replace("${workspaceFolder}", workspaceFolder);
-
-  return result;
+  const FileTemplateAssignment assignment = manager.getAssignmentForFile(filePath);
+  return PythonProjectEnvironment::substituteVariables(
+      input, manager.m_workspaceFolder, filePath,
+      QFileInfo(filePath).absolutePath(),
+      manager.pythonPreferenceForAssignment(assignment));
 }
 
 QPair<QString, QStringList>
 RunTemplateManager::buildCommand(const QString &filePath,
                                  const QString &languageId) const {
+  if (filePath.trimmed().isEmpty()) {
+    return qMakePair(QString(), QStringList());
+  }
+
   FileTemplateAssignment assignment = getAssignmentForFile(filePath);
 
   QString templateId = assignment.templateId;
@@ -505,26 +529,46 @@ RunTemplateManager::buildCommand(const QString &filePath,
     return qMakePair(QString(), QStringList());
   }
 
-  QString command = substituteVariables(tmpl.command, filePath);
+  const PythonEnvironmentPreference pythonPreference =
+      pythonPreferenceForAssignment(assignment);
+
+  QString workingDirectory = assignment.workingDirectory;
+  if (workingDirectory.isEmpty()) {
+    workingDirectory = tmpl.workingDirectory;
+  }
+  if (workingDirectory.isEmpty()) {
+    workingDirectory = "${fileDir}";
+  }
+  workingDirectory = PythonProjectEnvironment::substituteVariables(
+      workingDirectory, m_workspaceFolder, filePath,
+      QFileInfo(filePath).absolutePath(), pythonPreference);
+
+  QString command = PythonProjectEnvironment::substituteVariables(
+      tmpl.command, m_workspaceFolder, filePath, workingDirectory,
+      pythonPreference);
 
   QStringList args;
   for (const QString &arg : tmpl.args) {
-    args.append(substituteVariables(arg, filePath));
+    args.append(PythonProjectEnvironment::substituteVariables(
+        arg, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
   }
 
   QStringList extraFlags;
   for (const QString &flag : assignment.compilerFlags) {
-    extraFlags.append(substituteVariables(flag, filePath));
+    extraFlags.append(PythonProjectEnvironment::substituteVariables(
+        flag, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
   }
 
   QStringList extraArgs;
   for (const QString &arg : assignment.customArgs) {
-    extraArgs.append(substituteVariables(arg, filePath));
+    extraArgs.append(PythonProjectEnvironment::substituteVariables(
+        arg, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
   }
 
   QStringList extraSources;
   for (const QString &src : assignment.sourceFiles) {
-    extraSources.append(substituteVariables(src, filePath));
+    extraSources.append(PythonProjectEnvironment::substituteVariables(
+        src, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
   }
 
   bool hasExtras =
@@ -574,10 +618,18 @@ RunTemplateManager::buildCommand(const QString &filePath,
 QString
 RunTemplateManager::getWorkingDirectory(const QString &filePath,
                                         const QString &languageId) const {
+  if (filePath.trimmed().isEmpty()) {
+    return QString();
+  }
+
   FileTemplateAssignment assignment = getAssignmentForFile(filePath);
+  const PythonEnvironmentPreference pythonPreference =
+      pythonPreferenceForAssignment(assignment);
 
   if (!assignment.workingDirectory.isEmpty()) {
-    return substituteVariables(assignment.workingDirectory, filePath);
+    return PythonProjectEnvironment::substituteVariables(
+        assignment.workingDirectory, m_workspaceFolder, filePath,
+        QFileInfo(filePath).absolutePath(), pythonPreference);
   }
 
   QString templateId = assignment.templateId;
@@ -594,13 +646,22 @@ RunTemplateManager::getWorkingDirectory(const QString &filePath,
     return QFileInfo(filePath).absoluteDir().path();
   }
 
-  return substituteVariables(tmpl.workingDirectory, filePath);
+  return PythonProjectEnvironment::substituteVariables(
+      tmpl.workingDirectory, m_workspaceFolder, filePath,
+      QFileInfo(filePath).absolutePath(), pythonPreference);
 }
 
 QMap<QString, QString>
 RunTemplateManager::getEnvironment(const QString &filePath,
                                    const QString &languageId) const {
+  if (filePath.trimmed().isEmpty()) {
+    return {};
+  }
+
   FileTemplateAssignment assignment = getAssignmentForFile(filePath);
+  const PythonEnvironmentPreference pythonPreference =
+      pythonPreferenceForAssignment(assignment);
+  const QString workingDirectory = getWorkingDirectory(filePath, languageId);
 
   QString templateId = assignment.templateId;
   if (templateId.isEmpty()) {
@@ -608,19 +669,31 @@ RunTemplateManager::getEnvironment(const QString &filePath,
   }
 
   QMap<QString, QString> env;
+  const PythonEnvironmentInfo pythonEnvironment =
+      PythonProjectEnvironment::resolve(pythonPreference, m_workspaceFolder,
+                                        filePath, workingDirectory);
+  const QMap<QString, QString> activationEnv =
+      PythonProjectEnvironment::activationEnvironment(pythonEnvironment);
+  for (auto it = activationEnv.begin(); it != activationEnv.end(); ++it) {
+    env[it.key()] = it.value();
+  }
 
   if (!templateId.isEmpty()) {
     RunTemplate tmpl = getTemplateById(templateId);
     if (tmpl.isValid()) {
       for (auto it = tmpl.env.begin(); it != tmpl.env.end(); ++it) {
-        env[it.key()] = substituteVariables(it.value(), filePath);
+        env[it.key()] = PythonProjectEnvironment::substituteVariables(
+            it.value(), m_workspaceFolder, filePath, workingDirectory,
+            pythonPreference);
       }
     }
   }
 
   for (auto it = assignment.customEnv.begin(); it != assignment.customEnv.end();
        ++it) {
-    env[it.key()] = substituteVariables(it.value(), filePath);
+    env[it.key()] = PythonProjectEnvironment::substituteVariables(
+        it.value(), m_workspaceFolder, filePath, workingDirectory,
+        pythonPreference);
   }
 
   return env;

@@ -224,8 +224,10 @@ qt_add_resources(RUN_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/run_templates/ru
 
 add_executable(test_runtemplatemanager
     unit/test_runtemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/runtemplateselector.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/pythonenvironmentwidget.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${RUN_TEMPLATE_RESOURCES}
@@ -248,6 +250,7 @@ qt_add_resources(FORMAT_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/format_templa
 
 add_executable(test_formattemplatemanager
     unit/test_formattemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/format_templates/formattemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${FORMAT_TEMPLATE_RESOURCES}
@@ -268,6 +271,7 @@ target_compile_definitions(test_formattemplatemanager PRIVATE QT_DEPRECATED_WARN
 # Terminal test executable
 add_executable(test_terminal
     unit/test_terminal.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminal.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/shellprofile.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
@@ -291,6 +295,7 @@ target_compile_definitions(test_terminal PRIVATE QT_DEPRECATED_WARNINGS)
 # TerminalTabWidget test executable
 add_executable(test_terminaltabwidget
     unit/test_terminaltabwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminaltabwidget.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminal.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/shellprofile.cpp
@@ -396,6 +401,7 @@ target_compile_definitions(test_completionengine PRIVATE QT_DEPRECATED_WARNINGS)
 # DAP (Debug Adapter Protocol) test executable
 add_executable(test_dap
     unit/test_dap.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/dapclient.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/expressiontranslator.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugadapterregistry.cpp

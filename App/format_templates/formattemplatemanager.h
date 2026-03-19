@@ -9,6 +9,8 @@
 #include <QSet>
 #include <QString>
 
+#include "../python/pythonprojectenvironment.h"
+
 struct FormatTemplate {
   QString id;
   QString name;
@@ -30,6 +32,10 @@ struct FileFormatAssignment {
   QString workingDirectory;
   QString preFormatCommand;
   QString postFormatCommand;
+  QString pythonMode;
+  QString pythonInterpreter;
+  QString pythonVenvPath;
+  QString pythonRequirementsFile;
 };
 
 class FormatTemplateManager : public QObject {
@@ -58,11 +64,16 @@ public:
   bool removeAssignment(const QString &filePath);
 
   QPair<QString, QStringList> buildCommand(const QString &filePath) const;
+  QString getWorkingDirectory(const QString &filePath) const;
+  QMap<QString, QString> getEnvironment(const QString &filePath) const;
 
   bool hasFormatTemplate(const QString &filePath) const;
 
   static QString substituteVariables(const QString &input,
                                      const QString &filePath);
+
+  void setWorkspaceFolder(const QString &folder) { m_workspaceFolder = folder; }
+  QString workspaceFolder() const { return m_workspaceFolder; }
 
   bool saveAssignmentsToDir(const QString &dirPath) const;
 
@@ -81,6 +92,8 @@ private:
   bool loadBuiltInTemplates();
   bool loadUserTemplates();
   FormatTemplate parseTemplate(const QJsonObject &obj) const;
+  PythonEnvironmentPreference
+  pythonPreferenceForAssignment(const FileFormatAssignment &assignment) const;
 
   QString getConfigDirForFile(const QString &filePath) const;
   QString getConfigFileForDir(const QString &dirPath) const;
@@ -89,6 +102,7 @@ private:
   QList<FormatTemplate> m_templates;
   mutable QMap<QString, FileFormatAssignment> m_assignments;
   mutable QSet<QString> m_loadedConfigDirs;
+  QString m_workspaceFolder;
 };
 
 #endif

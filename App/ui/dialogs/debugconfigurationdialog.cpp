@@ -188,6 +188,29 @@ void DebugConfigurationDialog::setupUi() {
 
   rightLayout->addWidget(execGroup);
 
+  m_pythonEnvironmentWidget = new PythonEnvironmentWidget(this);
+  m_pythonEnvironmentWidget->setDebugToolsVisible(true);
+  m_pythonEnvironmentWidget->setContext(
+      DebugConfigurationManager::instance().workspaceFolder(),
+      m_programEdit->text().trimmed(), m_cwdEdit->text().trimmed());
+  connect(m_programEdit, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            m_pythonEnvironmentWidget->setContext(
+                DebugConfigurationManager::instance().workspaceFolder(),
+                text.trimmed(), m_cwdEdit->text().trimmed());
+          });
+  connect(m_cwdEdit, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            m_pythonEnvironmentWidget->setContext(
+                DebugConfigurationManager::instance().workspaceFolder(),
+                m_programEdit->text().trimmed(), text.trimmed());
+          });
+  connect(m_pythonEnvironmentWidget, &PythonEnvironmentWidget::preferenceChanged,
+          this, &DebugConfigurationDialog::updateAdapterUi);
+  connect(m_pythonEnvironmentWidget, &PythonEnvironmentWidget::environmentChanged,
+          this, &DebugConfigurationDialog::updateAdapterUi);
+  rightLayout->addWidget(m_pythonEnvironmentWidget);
+
   m_adapterOptionsGroup = new QGroupBox("Adapter Options");
   m_adapterOptionsLayout = new QFormLayout(m_adapterOptionsGroup);
   m_adapterOptionsLayout->setContentsMargins(12, 12, 12, 12);
@@ -399,6 +422,9 @@ void DebugConfigurationDialog::loadConfigIntoForm(
 
   m_preLaunchTaskEdit->setText(cfg.preLaunchTask);
   m_postDebugTaskEdit->setText(cfg.postDebugTask);
+  m_pythonEnvironmentWidget->setPreference(
+      {cfg.pythonMode, cfg.pythonInterpreter, cfg.pythonVenvPath,
+       cfg.pythonRequirementsFile});
 
   if (!cfg.adapterConfig.isEmpty()) {
     QJsonDocument doc(cfg.adapterConfig);
@@ -429,6 +455,7 @@ void DebugConfigurationDialog::clearForm() {
   m_portSpin->setValue(0);
   m_preLaunchTaskEdit->clear();
   m_postDebugTaskEdit->clear();
+  m_pythonEnvironmentWidget->setPreference({});
   m_adapterConfigEdit->clear();
   for (QLineEdit *edit : std::as_const(m_adapterOptionEdits)) {
     if (edit) {
@@ -478,6 +505,14 @@ void DebugConfigurationDialog::saveCurrentToModel() {
 
   cfg.preLaunchTask = m_preLaunchTaskEdit->text().trimmed();
   cfg.postDebugTask = m_postDebugTaskEdit->text().trimmed();
+  if (m_pythonEnvironmentWidget && m_pythonEnvironmentWidget->isVisible()) {
+    const PythonEnvironmentPreference pythonPreference =
+        m_pythonEnvironmentWidget->preference();
+    cfg.pythonMode = pythonPreference.mode;
+    cfg.pythonInterpreter = pythonPreference.customInterpreter;
+    cfg.pythonVenvPath = pythonPreference.venvPath;
+    cfg.pythonRequirementsFile = pythonPreference.requirementsFile;
+  }
 
   QString adapterText = m_adapterConfigEdit->toPlainText().trimmed();
   if (!adapterText.isEmpty()) {
@@ -543,6 +578,8 @@ DebugConfiguration DebugConfigurationDialog::createTemplateConfiguration(
     cfg.adapterId = "python-debugpy";
     cfg.type = "debugpy";
     cfg.request = "launch";
+    cfg.pythonMode = PythonProjectEnvironment::autoMode();
+    cfg.pythonVenvPath = "${workspaceFolder}/.venv";
     cfg.program = "${file}";
     cfg.adapterConfig["console"] = "integratedTerminal";
     cfg.adapterConfig["justMyCode"] = true;
@@ -551,6 +588,8 @@ DebugConfiguration DebugConfigurationDialog::createTemplateConfiguration(
     cfg.adapterId = "python-debugpy";
     cfg.type = "debugpy";
     cfg.request = "launch";
+    cfg.pythonMode = PythonProjectEnvironment::autoMode();
+    cfg.pythonVenvPath = "${workspaceFolder}/.venv";
     cfg.adapterConfig["module"] = "your_package.module";
     cfg.adapterConfig["console"] = "integratedTerminal";
     cfg.adapterConfig["justMyCode"] = true;
@@ -559,6 +598,8 @@ DebugConfiguration DebugConfigurationDialog::createTemplateConfiguration(
     cfg.adapterId = "python-debugpy";
     cfg.type = "debugpy";
     cfg.request = "launch";
+    cfg.pythonMode = PythonProjectEnvironment::autoMode();
+    cfg.pythonVenvPath = "${workspaceFolder}/.venv";
     cfg.args = {"${file}", "-q"};
     cfg.adapterConfig["module"] = "pytest";
     cfg.adapterConfig["console"] = "integratedTerminal";
@@ -568,6 +609,8 @@ DebugConfiguration DebugConfigurationDialog::createTemplateConfiguration(
     cfg.adapterId = "python-debugpy";
     cfg.type = "debugpy";
     cfg.request = "attach";
+    cfg.pythonMode = PythonProjectEnvironment::autoMode();
+    cfg.pythonVenvPath = "${workspaceFolder}/.venv";
     cfg.host = "127.0.0.1";
     cfg.port = 5678;
   } else if (templateId == "gdb-launch") {
@@ -711,9 +754,21 @@ void DebugConfigurationDialog::onRemoveConfig() {
 void DebugConfigurationDialog::updateAdapterUi() {
   const auto adapter = selectedAdapter();
   if (!adapter) {
+    if (m_pythonEnvironmentWidget) {
+      m_pythonEnvironmentWidget->setVisible(false);
+    }
     rebuildAdapterOptionsUi(nullptr);
     m_adapterStatusLabel->setText("No registered adapter matches this type.");
     return;
+  }
+
+  const bool isPythonAdapter = adapter->config().type == "debugpy" ||
+                               adapter->config().id.contains("python");
+  if (m_pythonEnvironmentWidget) {
+    m_pythonEnvironmentWidget->setVisible(isPythonAdapter);
+    m_pythonEnvironmentWidget->setContext(
+        DebugConfigurationManager::instance().workspaceFolder(),
+        m_programEdit->text().trimmed(), m_cwdEdit->text().trimmed());
   }
 
   rebuildAdapterOptionsUi(adapter);
@@ -724,6 +779,14 @@ void DebugConfigurationDialog::updateAdapterUi() {
   preview.request = m_requestCombo->currentText();
   preview.program = m_programEdit->text().trimmed();
   preview.cwd = m_cwdEdit->text().trimmed();
+  if (m_pythonEnvironmentWidget && m_pythonEnvironmentWidget->isVisible()) {
+    const PythonEnvironmentPreference pythonPreference =
+        m_pythonEnvironmentWidget->preference();
+    preview.pythonMode = pythonPreference.mode;
+    preview.pythonInterpreter = pythonPreference.customInterpreter;
+    preview.pythonVenvPath = pythonPreference.venvPath;
+    preview.pythonRequirementsFile = pythonPreference.requirementsFile;
+  }
 
   const QString adapterText = m_adapterConfigEdit->toPlainText().trimmed();
   if (!adapterText.isEmpty()) {
@@ -994,9 +1057,16 @@ void DebugConfigurationDialog::applyTheme(const Theme &theme) {
   }
 
   for (QPushButton *btn :
-       {m_addConfigBtn, m_removeConfigBtn, m_duplicateConfigBtn,
+       {m_addConfigBtn, m_addTemplateBtn, m_removeConfigBtn, m_duplicateConfigBtn,
         m_browseProgramBtn, m_browseCwdBtn, m_addEnvBtn, m_removeEnvBtn}) {
     if (btn) {
+      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
+  }
+
+  if (m_pythonEnvironmentWidget) {
+    for (QPushButton *btn :
+         m_pythonEnvironmentWidget->findChildren<QPushButton *>()) {
       btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
     }
   }

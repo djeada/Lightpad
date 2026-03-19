@@ -9,6 +9,8 @@
 #include <QString>
 #include <QStringList>
 
+#include "../python/pythonprojectenvironment.h"
+
 struct DebugConfiguration {
   QString name;
   QString adapterId;
@@ -28,6 +30,10 @@ struct DebugConfiguration {
 
   QString preLaunchTask;
   QString postDebugTask;
+  QString pythonMode;
+  QString pythonInterpreter;
+  QString pythonVenvPath;
+  QString pythonRequirementsFile;
 
   QJsonObject adapterConfig;
 
@@ -76,6 +82,14 @@ struct DebugConfiguration {
       obj["preLaunchTask"] = preLaunchTask;
     if (!postDebugTask.isEmpty())
       obj["postDebugTask"] = postDebugTask;
+    if (!pythonMode.isEmpty())
+      obj["pythonMode"] = pythonMode;
+    if (!pythonInterpreter.isEmpty())
+      obj["pythonInterpreter"] = pythonInterpreter;
+    if (!pythonVenvPath.isEmpty())
+      obj["pythonVenvPath"] = pythonVenvPath;
+    if (!pythonRequirementsFile.isEmpty())
+      obj["pythonRequirementsFile"] = pythonRequirementsFile;
 
     for (auto it = adapterConfig.begin(); it != adapterConfig.end(); ++it) {
       obj[it.key()] = it.value();
@@ -122,15 +136,22 @@ struct DebugConfiguration {
 
     cfg.preLaunchTask = obj["preLaunchTask"].toString();
     cfg.postDebugTask = obj["postDebugTask"].toString();
+    cfg.pythonMode = obj["pythonMode"].toString();
+    cfg.pythonInterpreter = obj["pythonInterpreter"].toString();
+    cfg.pythonVenvPath = obj["pythonVenvPath"].toString();
+    cfg.pythonRequirementsFile = obj["pythonRequirementsFile"].toString();
 
     cfg.presentation = obj["presentation"].toString();
     cfg.order = obj["order"].toInt();
 
     static const QStringList knownKeys = {
-        "name",          "adapterId",     "type",         "request",
-        "program",       "args",          "cwd",          "env",
-        "stopOnEntry",   "processId",     "host",         "port",
-        "preLaunchTask", "postDebugTask", "presentation", "order"};
+        "name",                 "adapterId",            "type",
+        "request",              "program",              "args",
+        "cwd",                  "env",                  "stopOnEntry",
+        "processId",            "host",                 "port",
+        "preLaunchTask",        "postDebugTask",        "pythonMode",
+        "pythonInterpreter",    "pythonVenvPath",
+        "pythonRequirementsFile", "presentation",       "order"};
     for (auto it = obj.begin(); it != obj.end(); ++it) {
       if (!knownKeys.contains(it.key())) {
         cfg.adapterConfig[it.key()] = it.value();
@@ -198,6 +219,7 @@ public:
   QList<CompoundDebugConfiguration> allCompoundConfigurations() const;
 
   void setWorkspaceFolder(const QString &folder);
+  QString workspaceFolder() const { return m_workspaceFolder; }
 
   DebugConfiguration resolveVariables(const DebugConfiguration &config,
                                       const QString &currentFile = {}) const;
@@ -225,8 +247,10 @@ private:
   DebugConfigurationManager &
   operator=(const DebugConfigurationManager &) = delete;
 
-  QString substituteVariable(const QString &value,
-                             const QString &currentFile) const;
+  QString substituteVariable(
+      const QString &value, const QString &currentFile,
+      const PythonEnvironmentPreference &pythonPreference,
+      const QString &workingDirectory = {}) const;
 
   QMap<QString, DebugConfiguration> m_configurations;
   QMap<QString, CompoundDebugConfiguration> m_compoundConfigurations;

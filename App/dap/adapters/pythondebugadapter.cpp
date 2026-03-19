@@ -15,7 +15,8 @@ public:
   DebugAdapterConfig configForConfiguration(
       const DebugConfiguration &configuration) const override {
     DebugAdapterConfig cfg = config();
-    const QString python = preferredPythonInterpreterCandidate(&configuration);
+    const QString python = preferredPythonInterpreterCandidate(
+        &configuration, configuration.program, configuration.cwd);
     if (!python.isEmpty()) {
       cfg.program = python;
     }
@@ -28,7 +29,9 @@ public:
 
   bool isAvailableForConfiguration(
       const DebugConfiguration &configuration) const override {
-    return !resolvePythonInterpreter(&configuration).interpreter.isEmpty();
+    return !resolvePythonInterpreter(&configuration, configuration.program,
+                                     configuration.cwd)
+                .interpreter.isEmpty();
   }
 
   QString statusMessage() const override {
@@ -37,7 +40,9 @@ public:
 
   QString statusMessageForConfiguration(
       const DebugConfiguration &configuration) const override {
-    return resolvePythonInterpreter(&configuration).statusMessage;
+    return resolvePythonInterpreter(&configuration, configuration.program,
+                                    configuration.cwd)
+        .statusMessage;
   }
 
   QJsonObject createLaunchConfig(const QString &filePath,
@@ -47,7 +52,8 @@ public:
     config["request"] = "launch";
     config["program"] = filePath;
     config["console"] = "integratedTerminal";
-    const QString python = preferredPythonInterpreterCandidate();
+    const QString python =
+        preferredPythonInterpreterCandidate(nullptr, filePath, workingDir);
     if (!python.isEmpty()) {
       config["python"] = python;
     }
