@@ -6047,14 +6047,20 @@ void MainWindow::setProjectRootPath(const QString &path) {
   }
 
   QString previousRoot = m_projectRootPath;
+  if (previousRoot != normalizedPath) {
+    if (!previousRoot.isEmpty()) {
+      persistTreeStateToSettings();
+      if (m_globalSettingsLoaded) {
+        SettingsManager::instance().saveSettings();
+      }
+    }
+  }
+
   m_projectRootPath = normalizedPath;
 
   if (previousRoot != normalizedPath) {
     m_treeExpandedPaths.clear();
-    m_treeCurrentPath.clear();
     loadTreeStateFromSettings(normalizedPath);
-    m_treeScrollValue = 0;
-    m_treeScrollValueInitialized = false;
     if (m_globalSettingsLoaded) {
       SettingsManager &globalSettings = SettingsManager::instance();
       if (globalSettings.getValue("lastProjectPath", "").toString() !=
@@ -6455,6 +6461,9 @@ void MainWindow::expandIndexInView(QTreeView *treeView,
 
 void MainWindow::loadTreeStateFromSettings(const QString &rootPath) {
   m_treeExpandedPaths.clear();
+  m_treeCurrentPath.clear();
+  m_treeScrollValue = 0;
+  m_treeScrollValueInitialized = false;
 
   if (rootPath.isEmpty()) {
     return;
@@ -6477,6 +6486,18 @@ void MainWindow::loadTreeStateFromSettings(const QString &rootPath) {
       m_treeExpandedPaths.insert(path);
     }
   }
+
+  QString currentPath = QDir::cleanPath(state.value("currentPath").toString());
+  if (!currentPath.isEmpty() &&
+      (normalizedRoot.isEmpty() || currentPath.startsWith(normalizedRoot))) {
+    m_treeCurrentPath = currentPath;
+  }
+
+  const QJsonValue scrollValue = state.value("scrollValue");
+  if (scrollValue.isDouble()) {
+    m_treeScrollValue = scrollValue.toInt();
+    m_treeScrollValueInitialized = true;
+  }
 }
 
 void MainWindow::persistTreeStateToSettings() {
@@ -6496,6 +6517,13 @@ void MainWindow::persistTreeStateToSettings() {
   state["expanded"] = expanded;
 
   QString normalizedRoot = QDir::cleanPath(m_projectRootPath);
+  if (!m_treeCurrentPath.isEmpty() &&
+      isPathWithinRoot(m_treeCurrentPath, normalizedRoot)) {
+    state["currentPath"] = QDir::cleanPath(m_treeCurrentPath);
+  }
+  if (m_treeScrollValueInitialized) {
+    state["scrollValue"] = m_treeScrollValue;
+  }
   treeStates[normalizedRoot.isEmpty() ? m_projectRootPath : normalizedRoot] =
       state;
   globalSettings.setValue("treeStateByRoot", treeStates);
