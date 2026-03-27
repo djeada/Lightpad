@@ -5,6 +5,8 @@
 #include <QListView>
 #include <QMainWindow>
 #include <QMap>
+#include <QHash>
+#include <QDateTime>
 #include <QSet>
 #include <QTimer>
 #include <memory>
@@ -203,6 +205,7 @@ private:
   SymbolNavigationService *m_symbolNavService;
 
   class AutoSaveManager *autoSaveManager;
+  QHash<QString, QDateTime> m_fileTimestamps;
   GitIntegration *m_gitIntegration;
   SourceControlPanel *sourceControlPanel;
   QDockWidget *sourceControlDock;
@@ -245,7 +248,9 @@ private:
   void undo();
   void redo();
   void open(const QString &filePath);
-  bool save(const QString &filePath);
+  bool save(const QString &filePath, bool isAutoSave = false);
+  void recordFileTimestamp(const QString &filePath);
+  bool checkExternalModification(const QString &filePath) const;
   void trimTrailingWhitespace(TextArea *textArea);
   void ensureFinalNewline(TextArea *textArea);
   void showFindReplace(bool onlyFind = true);
