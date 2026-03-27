@@ -29,12 +29,12 @@ Out of scope (separate epics):
 - [x] Problems panel can store/display diagnostics and severity counts.
 - [x] Per-file language override exists and is persisted in `.lightpad/highlight_config.json`.
 - [x] Language-specific server configs exist for C/C++, Python, Rust, Go, TS/JS, Java.
-- [ ] Diagnostics are not wired from active LSP sessions into Problems panel.
-- [ ] No central diagnostics manager exists.
-- [ ] No editor inline diagnostics rendering (squiggles/gutter diagnostics).
-- [ ] Problems panel `refreshRequested` is emitted but not connected to a refresh pipeline.
-- [ ] On-the-fly diagnostics pipeline is not connected to editor text changes.
-- [ ] LSP completion provider is not registered in the completion setup path.
+- [x] Diagnostics are wired from active LSP sessions into Problems panel.
+- [x] Central diagnostics manager exists.
+- [x] Editor inline diagnostics rendering (squiggles/gutter diagnostics) exists.
+- [x] Problems panel `refreshRequested` is connected to a save-triggered refresh pipeline.
+- [x] On-the-fly diagnostics pipeline is connected to editor text changes and honors `diagnostics.debounceMs`.
+- [x] LSP completion provider is registered in the completion setup path.
 
 ## Definition of Done
 Feature is done when all are true:

@@ -7,10 +7,15 @@
       "name": "Python 3",
       "description": "Run Python 3 script using the project environment when available",
       "language": "Python",
-      "extensions": ["py", "pyw"],
+      "extensions": [
+        "py",
+        "pyw"
+      ],
       "command": "${python}",
-      "args": ["${file}"],
-      "workingDirectory": "${fileDir}",
+      "args": [
+        "${file}"
+      ],
+      "workingDirectory": "${workspaceFolder}",
       "env": {}
     },
     {
@@ -18,10 +23,14 @@
       "name": "Python 2",
       "description": "Run Python 2 script (legacy)",
       "language": "Python",
-      "extensions": ["py"],
+      "extensions": [
+        "py"
+      ],
       "command": "python2",
-      "args": ["${file}"],
-      "workingDirectory": "${fileDir}",
+      "args": [
+        "${file}"
+      ],
+      "workingDirectory": "${workspaceFolder}",
       "env": {}
     },
     {
@@ -29,10 +38,15 @@
       "name": "Python Module",
       "description": "Run Python file as module using the resolved project interpreter",
       "language": "Python",
-      "extensions": ["py"],
+      "extensions": [
+        "py"
+      ],
       "command": "${python}",
-      "args": ["-m", "${fileBasenameNoExt}"],
-      "workingDirectory": "${fileDir}",
+      "args": [
+        "-m",
+        "${fileBasenameNoExt}"
+      ],
+      "workingDirectory": "${workspaceFolder}",
       "env": {}
     },
     {
@@ -40,9 +54,16 @@
       "name": "Python Pytest File",
       "description": "Run pytest for the current file using the project environment",
       "language": "Python",
-      "extensions": ["py"],
+      "extensions": [
+        "py"
+      ],
       "command": "${python}",
-      "args": ["-m", "pytest", "${file}", "-q"],
+      "args": [
+        "-m",
+        "pytest",
+        "${file}",
+        "-q"
+      ],
       "workingDirectory": "${workspaceFolder}",
       "env": {}
     },
@@ -51,9 +72,15 @@
       "name": "Python Pytest Workspace",
       "description": "Run the workspace pytest suite using the resolved project interpreter",
       "language": "Python",
-      "extensions": ["py"],
+      "extensions": [
+        "py"
+      ],
       "command": "${python}",
-      "args": ["-m", "pytest", "-q"],
+      "args": [
+        "-m",
+        "pytest",
+        "-q"
+      ],
       "workingDirectory": "${workspaceFolder}",
       "env": {}
     },
@@ -62,9 +89,17 @@
       "name": "C++ (GCC)",
       "description": "Compile and run C++ with g++",
       "language": "C++",
-      "extensions": ["cpp", "cxx", "cc", "C"],
+      "extensions": [
+        "cpp",
+        "cxx",
+        "cc",
+        "C"
+      ],
       "command": "bash",
-      "args": ["-c", "g++ -std=c++17 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "g++ -std=c++17 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -73,9 +108,17 @@
       "name": "C++ (Clang)",
       "description": "Compile and run C++ with clang++",
       "language": "C++",
-      "extensions": ["cpp", "cxx", "cc", "C"],
+      "extensions": [
+        "cpp",
+        "cxx",
+        "cc",
+        "C"
+      ],
       "command": "bash",
-      "args": ["-c", "clang++ -std=c++17 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "clang++ -std=c++17 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -84,9 +127,17 @@
       "name": "C++ Debug (GCC)",
       "description": "Compile C++ with debug symbols",
       "language": "C++",
-      "extensions": ["cpp", "cxx", "cc", "C"],
+      "extensions": [
+        "cpp",
+        "cxx",
+        "cc",
+        "C"
+      ],
       "command": "bash",
-      "args": ["-c", "g++ -std=c++17 -g -O0 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "g++ -std=c++17 -g -O0 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -95,9 +146,19 @@
       "name": "C++ CMake + CTest",
       "description": "Configure/build with CMake and run CTest",
       "language": "C++",
-      "extensions": ["cpp", "cxx", "cc", "C", "h", "hpp"],
+      "extensions": [
+        "cpp",
+        "cxx",
+        "cc",
+        "C",
+        "h",
+        "hpp"
+      ],
       "command": "bash",
-      "args": ["-c", "cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\" && cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure"],
+      "args": [
+        "-c",
+        "cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\" && cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure"
+      ],
       "workingDirectory": "${workspaceFolder}",
       "env": {}
     },
@@ -106,9 +167,20 @@
       "name": "C++ Make Test",
       "description": "Run Makefile test target in workspace",
       "language": "C++",
-      "extensions": ["cpp", "cxx", "cc", "C", "h", "hpp"],
+      "extensions": [
+        "cpp",
+        "cxx",
+        "cc",
+        "C",
+        "h",
+        "hpp"
+      ],
       "command": "make",
-      "args": ["-C", "${workspaceFolder}", "test"],
+      "args": [
+        "-C",
+        "${workspaceFolder}",
+        "test"
+      ],
       "workingDirectory": "${workspaceFolder}",
       "env": {}
     },
@@ -117,9 +189,14 @@
       "name": "C (GCC)",
       "description": "Compile and run C with gcc",
       "language": "C",
-      "extensions": ["c"],
+      "extensions": [
+        "c"
+      ],
       "command": "bash",
-      "args": ["-c", "gcc -std=c11 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "gcc -std=c11 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -128,9 +205,14 @@
       "name": "C (Clang)",
       "description": "Compile and run C with clang",
       "language": "C",
-      "extensions": ["c"],
+      "extensions": [
+        "c"
+      ],
       "command": "bash",
-      "args": ["-c", "clang -std=c11 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "clang -std=c11 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -139,9 +221,14 @@
       "name": "Go Run",
       "description": "Run Go file directly",
       "language": "Go",
-      "extensions": ["go"],
+      "extensions": [
+        "go"
+      ],
       "command": "go",
-      "args": ["run", "${file}"],
+      "args": [
+        "run",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -150,9 +237,14 @@
       "name": "Go Build & Run",
       "description": "Build and run Go binary",
       "language": "Go",
-      "extensions": ["go"],
+      "extensions": [
+        "go"
+      ],
       "command": "bash",
-      "args": ["-c", "go build -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "go build -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -161,9 +253,15 @@
       "name": "Go Test",
       "description": "Run Go tests in current directory",
       "language": "Go",
-      "extensions": ["go"],
+      "extensions": [
+        "go"
+      ],
       "command": "go",
-      "args": ["test", "-v", "./..."],
+      "args": [
+        "test",
+        "-v",
+        "./..."
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -172,9 +270,14 @@
       "name": "Node.js",
       "description": "Run JavaScript with Node.js",
       "language": "JavaScript",
-      "extensions": ["js", "mjs"],
+      "extensions": [
+        "js",
+        "mjs"
+      ],
       "command": "node",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -183,9 +286,15 @@
       "name": "Node.js (ESM)",
       "description": "Run JavaScript as ES module",
       "language": "JavaScript",
-      "extensions": ["js", "mjs"],
+      "extensions": [
+        "js",
+        "mjs"
+      ],
       "command": "node",
-      "args": ["--experimental-modules", "${file}"],
+      "args": [
+        "--experimental-modules",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -194,9 +303,15 @@
       "name": "Deno",
       "description": "Run JavaScript/TypeScript with Deno",
       "language": "JavaScript",
-      "extensions": ["js", "ts"],
+      "extensions": [
+        "js",
+        "ts"
+      ],
       "command": "deno",
-      "args": ["run", "${file}"],
+      "args": [
+        "run",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -205,9 +320,15 @@
       "name": "TypeScript (tsx)",
       "description": "Run TypeScript directly with tsx",
       "language": "TypeScript",
-      "extensions": ["ts", "tsx"],
+      "extensions": [
+        "ts",
+        "tsx"
+      ],
       "command": "npx",
-      "args": ["tsx", "${file}"],
+      "args": [
+        "tsx",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -216,9 +337,15 @@
       "name": "TypeScript (ts-node)",
       "description": "Run TypeScript with ts-node",
       "language": "TypeScript",
-      "extensions": ["ts", "tsx"],
+      "extensions": [
+        "ts",
+        "tsx"
+      ],
       "command": "npx",
-      "args": ["ts-node", "${file}"],
+      "args": [
+        "ts-node",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -227,9 +354,14 @@
       "name": "TypeScript Compile & Run",
       "description": "Compile TypeScript and run JavaScript",
       "language": "TypeScript",
-      "extensions": ["ts"],
+      "extensions": [
+        "ts"
+      ],
       "command": "bash",
-      "args": ["-c", "tsc \"${file}\" && node \"${fileBasenameNoExt}.js\""],
+      "args": [
+        "-c",
+        "tsc \"${file}\" && node \"${fileBasenameNoExt}.js\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -238,9 +370,14 @@
       "name": "Java",
       "description": "Compile and run Java file",
       "language": "Java",
-      "extensions": ["java"],
+      "extensions": [
+        "java"
+      ],
       "command": "bash",
-      "args": ["-c", "javac \"${file}\" && java -cp \"${fileDir}\" \"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "javac \"${file}\" && java -cp \"${fileDir}\" \"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -249,9 +386,13 @@
       "name": "Java (Single File)",
       "description": "Run single Java file directly (Java 11+)",
       "language": "Java",
-      "extensions": ["java"],
+      "extensions": [
+        "java"
+      ],
       "command": "java",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -260,9 +401,15 @@
       "name": "Kotlin",
       "description": "Compile and run Kotlin file",
       "language": "Kotlin",
-      "extensions": ["kt", "kts"],
+      "extensions": [
+        "kt",
+        "kts"
+      ],
       "command": "bash",
-      "args": ["-c", "kotlinc \"${file}\" -include-runtime -d \"${fileBasenameNoExt}.jar\" && java -jar \"${fileBasenameNoExt}.jar\""],
+      "args": [
+        "-c",
+        "kotlinc \"${file}\" -include-runtime -d \"${fileBasenameNoExt}.jar\" && java -jar \"${fileBasenameNoExt}.jar\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -271,9 +418,14 @@
       "name": "Kotlin Script",
       "description": "Run Kotlin script file",
       "language": "Kotlin",
-      "extensions": ["kts"],
+      "extensions": [
+        "kts"
+      ],
       "command": "kotlinc",
-      "args": ["-script", "${file}"],
+      "args": [
+        "-script",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -282,9 +434,14 @@
       "name": "Rust (rustc)",
       "description": "Compile and run Rust file",
       "language": "Rust",
-      "extensions": ["rs"],
+      "extensions": [
+        "rs"
+      ],
       "command": "bash",
-      "args": ["-c", "rustc \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "rustc \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -293,9 +450,13 @@
       "name": "Rust (Cargo)",
       "description": "Build and run Cargo project",
       "language": "Rust",
-      "extensions": ["rs"],
+      "extensions": [
+        "rs"
+      ],
       "command": "cargo",
-      "args": ["run"],
+      "args": [
+        "run"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -304,9 +465,13 @@
       "name": "Rust Test (Cargo)",
       "description": "Run Cargo tests",
       "language": "Rust",
-      "extensions": ["rs"],
+      "extensions": [
+        "rs"
+      ],
       "command": "cargo",
-      "args": ["test"],
+      "args": [
+        "test"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -315,9 +480,13 @@
       "name": "Ruby",
       "description": "Run Ruby script",
       "language": "Ruby",
-      "extensions": ["rb"],
+      "extensions": [
+        "rb"
+      ],
       "command": "ruby",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -326,9 +495,15 @@
       "name": "Ruby (Bundler)",
       "description": "Run Ruby with Bundler",
       "language": "Ruby",
-      "extensions": ["rb"],
+      "extensions": [
+        "rb"
+      ],
       "command": "bundle",
-      "args": ["exec", "ruby", "${file}"],
+      "args": [
+        "exec",
+        "ruby",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -337,9 +512,13 @@
       "name": "PHP",
       "description": "Run PHP script",
       "language": "PHP",
-      "extensions": ["php"],
+      "extensions": [
+        "php"
+      ],
       "command": "php",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -348,9 +527,16 @@
       "name": "PHP Development Server",
       "description": "Start PHP built-in web server",
       "language": "PHP",
-      "extensions": ["php"],
+      "extensions": [
+        "php"
+      ],
       "command": "php",
-      "args": ["-S", "localhost:8000", "-t", "${fileDir}"],
+      "args": [
+        "-S",
+        "localhost:8000",
+        "-t",
+        "${fileDir}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -359,9 +545,14 @@
       "name": "Perl",
       "description": "Run Perl script",
       "language": "Perl",
-      "extensions": ["pl", "pm"],
+      "extensions": [
+        "pl",
+        "pm"
+      ],
       "command": "perl",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -370,9 +561,14 @@
       "name": "Bash",
       "description": "Run Bash script",
       "language": "Shell",
-      "extensions": ["sh", "bash"],
+      "extensions": [
+        "sh",
+        "bash"
+      ],
       "command": "bash",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -381,9 +577,13 @@
       "name": "Zsh",
       "description": "Run Zsh script",
       "language": "Shell",
-      "extensions": ["zsh"],
+      "extensions": [
+        "zsh"
+      ],
       "command": "zsh",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -392,9 +592,14 @@
       "name": "PowerShell",
       "description": "Run PowerShell script",
       "language": "PowerShell",
-      "extensions": ["ps1"],
+      "extensions": [
+        "ps1"
+      ],
       "command": "pwsh",
-      "args": ["-File", "${file}"],
+      "args": [
+        "-File",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -403,9 +608,13 @@
       "name": "Lua",
       "description": "Run Lua script",
       "language": "Lua",
-      "extensions": ["lua"],
+      "extensions": [
+        "lua"
+      ],
       "command": "lua",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -414,9 +623,13 @@
       "name": "LuaJIT",
       "description": "Run Lua with LuaJIT",
       "language": "Lua",
-      "extensions": ["lua"],
+      "extensions": [
+        "lua"
+      ],
       "command": "luajit",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -425,9 +638,14 @@
       "name": "R",
       "description": "Run R script",
       "language": "R",
-      "extensions": ["r", "R"],
+      "extensions": [
+        "r",
+        "R"
+      ],
       "command": "Rscript",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -436,9 +654,13 @@
       "name": "Julia",
       "description": "Run Julia script",
       "language": "Julia",
-      "extensions": ["jl"],
+      "extensions": [
+        "jl"
+      ],
       "command": "julia",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -447,9 +669,14 @@
       "name": "Scala",
       "description": "Run Scala script",
       "language": "Scala",
-      "extensions": ["scala", "sc"],
+      "extensions": [
+        "scala",
+        "sc"
+      ],
       "command": "scala",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -458,9 +685,13 @@
       "name": "Scala (SBT)",
       "description": "Run Scala project with SBT",
       "language": "Scala",
-      "extensions": ["scala"],
+      "extensions": [
+        "scala"
+      ],
       "command": "sbt",
-      "args": ["run"],
+      "args": [
+        "run"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -469,9 +700,14 @@
       "name": "Groovy",
       "description": "Run Groovy script",
       "language": "Groovy",
-      "extensions": ["groovy", "gvy"],
+      "extensions": [
+        "groovy",
+        "gvy"
+      ],
       "command": "groovy",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -480,9 +716,13 @@
       "name": "Swift",
       "description": "Run Swift file",
       "language": "Swift",
-      "extensions": ["swift"],
+      "extensions": [
+        "swift"
+      ],
       "command": "swift",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -491,9 +731,13 @@
       "name": "Swift Build & Run",
       "description": "Build and run Swift package",
       "language": "Swift",
-      "extensions": ["swift"],
+      "extensions": [
+        "swift"
+      ],
       "command": "swift",
-      "args": ["run"],
+      "args": [
+        "run"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -502,9 +746,14 @@
       "name": "Haskell (runghc)",
       "description": "Run Haskell script directly",
       "language": "Haskell",
-      "extensions": ["hs", "lhs"],
+      "extensions": [
+        "hs",
+        "lhs"
+      ],
       "command": "runghc",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -513,9 +762,14 @@
       "name": "Haskell (GHC)",
       "description": "Compile and run Haskell",
       "language": "Haskell",
-      "extensions": ["hs"],
+      "extensions": [
+        "hs"
+      ],
       "command": "bash",
-      "args": ["-c", "ghc -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "ghc -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -524,9 +778,14 @@
       "name": "Elixir",
       "description": "Run Elixir script",
       "language": "Elixir",
-      "extensions": ["ex", "exs"],
+      "extensions": [
+        "ex",
+        "exs"
+      ],
       "command": "elixir",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -535,9 +794,14 @@
       "name": "Elixir (Mix)",
       "description": "Run Elixir project with Mix",
       "language": "Elixir",
-      "extensions": ["ex"],
+      "extensions": [
+        "ex"
+      ],
       "command": "mix",
-      "args": ["run", "${file}"],
+      "args": [
+        "run",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -546,9 +810,13 @@
       "name": "Erlang",
       "description": "Run Erlang script",
       "language": "Erlang",
-      "extensions": ["erl"],
+      "extensions": [
+        "erl"
+      ],
       "command": "escript",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -557,9 +825,13 @@
       "name": "OCaml",
       "description": "Run OCaml script",
       "language": "OCaml",
-      "extensions": ["ml"],
+      "extensions": [
+        "ml"
+      ],
       "command": "ocaml",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -568,9 +840,15 @@
       "name": "F#",
       "description": "Run F# script",
       "language": "F#",
-      "extensions": ["fsx", "fs"],
+      "extensions": [
+        "fsx",
+        "fs"
+      ],
       "command": "dotnet",
-      "args": ["fsi", "${file}"],
+      "args": [
+        "fsi",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -579,9 +857,13 @@
       "name": "C# (dotnet run)",
       "description": "Run C# project with dotnet",
       "language": "C#",
-      "extensions": ["cs"],
+      "extensions": [
+        "cs"
+      ],
       "command": "dotnet",
-      "args": ["run"],
+      "args": [
+        "run"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -590,9 +872,14 @@
       "name": "C# Script",
       "description": "Run C# script file",
       "language": "C#",
-      "extensions": ["csx"],
+      "extensions": [
+        "csx"
+      ],
       "command": "dotnet",
-      "args": ["script", "${file}"],
+      "args": [
+        "script",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -601,9 +888,14 @@
       "name": "Dart",
       "description": "Run Dart file",
       "language": "Dart",
-      "extensions": ["dart"],
+      "extensions": [
+        "dart"
+      ],
       "command": "dart",
-      "args": ["run", "${file}"],
+      "args": [
+        "run",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -612,9 +904,14 @@
       "name": "Dart Compile & Run",
       "description": "Compile and run Dart binary",
       "language": "Dart",
-      "extensions": ["dart"],
+      "extensions": [
+        "dart"
+      ],
       "command": "bash",
-      "args": ["-c", "dart compile exe \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "dart compile exe \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -623,9 +920,15 @@
       "name": "Clojure",
       "description": "Run Clojure file",
       "language": "Clojure",
-      "extensions": ["clj", "cljs"],
+      "extensions": [
+        "clj",
+        "cljs"
+      ],
       "command": "clojure",
-      "args": ["-M", "${file}"],
+      "args": [
+        "-M",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -634,9 +937,13 @@
       "name": "Clojure (Leiningen)",
       "description": "Run Clojure project with Leiningen",
       "language": "Clojure",
-      "extensions": ["clj"],
+      "extensions": [
+        "clj"
+      ],
       "command": "lein",
-      "args": ["run"],
+      "args": [
+        "run"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -645,9 +952,15 @@
       "name": "Nim",
       "description": "Compile and run Nim file",
       "language": "Nim",
-      "extensions": ["nim"],
+      "extensions": [
+        "nim"
+      ],
       "command": "nim",
-      "args": ["c", "-r", "${file}"],
+      "args": [
+        "c",
+        "-r",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -656,9 +969,14 @@
       "name": "Crystal",
       "description": "Run Crystal file",
       "language": "Crystal",
-      "extensions": ["cr"],
+      "extensions": [
+        "cr"
+      ],
       "command": "crystal",
-      "args": ["run", "${file}"],
+      "args": [
+        "run",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -667,9 +985,14 @@
       "name": "Zig",
       "description": "Build and run Zig file",
       "language": "Zig",
-      "extensions": ["zig"],
+      "extensions": [
+        "zig"
+      ],
       "command": "zig",
-      "args": ["run", "${file}"],
+      "args": [
+        "run",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -678,9 +1001,14 @@
       "name": "V",
       "description": "Run V file",
       "language": "V",
-      "extensions": ["v"],
+      "extensions": [
+        "v"
+      ],
       "command": "v",
-      "args": ["run", "${file}"],
+      "args": [
+        "run",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -689,9 +1017,14 @@
       "name": "D (dmd)",
       "description": "Compile and run D file",
       "language": "D",
-      "extensions": ["d"],
+      "extensions": [
+        "d"
+      ],
       "command": "bash",
-      "args": ["-c", "dmd -of=\"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "dmd -of=\"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -700,9 +1033,13 @@
       "name": "CoffeeScript",
       "description": "Run CoffeeScript file",
       "language": "CoffeeScript",
-      "extensions": ["coffee"],
+      "extensions": [
+        "coffee"
+      ],
       "command": "coffee",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -711,9 +1048,13 @@
       "name": "Racket",
       "description": "Run Racket file",
       "language": "Racket",
-      "extensions": ["rkt"],
+      "extensions": [
+        "rkt"
+      ],
       "command": "racket",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -722,9 +1063,14 @@
       "name": "Scheme",
       "description": "Run Scheme file with guile",
       "language": "Scheme",
-      "extensions": ["scm", "ss"],
+      "extensions": [
+        "scm",
+        "ss"
+      ],
       "command": "guile",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -733,9 +1079,15 @@
       "name": "Common Lisp",
       "description": "Run Common Lisp with SBCL",
       "language": "Lisp",
-      "extensions": ["lisp", "cl"],
+      "extensions": [
+        "lisp",
+        "cl"
+      ],
       "command": "sbcl",
-      "args": ["--script", "${file}"],
+      "args": [
+        "--script",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -744,9 +1096,18 @@
       "name": "Prolog",
       "description": "Run Prolog file with SWI-Prolog",
       "language": "Prolog",
-      "extensions": ["pl", "pro"],
+      "extensions": [
+        "pl",
+        "pro"
+      ],
       "command": "swipl",
-      "args": ["-g", "main", "-t", "halt", "${file}"],
+      "args": [
+        "-g",
+        "main",
+        "-t",
+        "halt",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -755,9 +1116,16 @@
       "name": "Fortran",
       "description": "Compile and run Fortran file",
       "language": "Fortran",
-      "extensions": ["f", "f90", "f95"],
+      "extensions": [
+        "f",
+        "f90",
+        "f95"
+      ],
       "command": "bash",
-      "args": ["-c", "gfortran -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "gfortran -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -766,9 +1134,15 @@
       "name": "Assembly (NASM)",
       "description": "Assemble and run NASM assembly",
       "language": "Assembly",
-      "extensions": ["asm", "s"],
+      "extensions": [
+        "asm",
+        "s"
+      ],
       "command": "bash",
-      "args": ["-c", "nasm -f elf64 \"${file}\" -o \"${fileBasenameNoExt}.o\" && ld \"${fileBasenameNoExt}.o\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "nasm -f elf64 \"${file}\" -o \"${fileBasenameNoExt}.o\" && ld \"${fileBasenameNoExt}.o\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -777,7 +1151,10 @@
       "name": "Make",
       "description": "Run make in current directory",
       "language": "Make",
-      "extensions": ["makefile", "Makefile"],
+      "extensions": [
+        "makefile",
+        "Makefile"
+      ],
       "command": "make",
       "args": [],
       "workingDirectory": "${fileDir}",
@@ -788,9 +1165,15 @@
       "name": "CMake Build",
       "description": "Configure and build CMake project",
       "language": "CMake",
-      "extensions": ["cmake", "CMakeLists.txt"],
+      "extensions": [
+        "cmake",
+        "CMakeLists.txt"
+      ],
       "command": "bash",
-      "args": ["-c", "mkdir -p build && cd build && cmake .. && make"],
+      "args": [
+        "-c",
+        "mkdir -p build && cd build && cmake .. && make"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -799,9 +1182,14 @@
       "name": "Vala",
       "description": "Compile and run Vala file",
       "language": "Vala",
-      "extensions": ["vala"],
+      "extensions": [
+        "vala"
+      ],
       "command": "bash",
-      "args": ["-c", "valac \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "valac \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -810,9 +1198,15 @@
       "name": "Ada",
       "description": "Compile and run Ada file",
       "language": "Ada",
-      "extensions": ["adb", "ads"],
+      "extensions": [
+        "adb",
+        "ads"
+      ],
       "command": "bash",
-      "args": ["-c", "gnatmake \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "gnatmake \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -821,9 +1215,15 @@
       "name": "Pascal",
       "description": "Compile and run Pascal file",
       "language": "Pascal",
-      "extensions": ["pas", "pp"],
+      "extensions": [
+        "pas",
+        "pp"
+      ],
       "command": "bash",
-      "args": ["-c", "fpc \"${file}\" -o\"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "fpc \"${file}\" -o\"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -832,9 +1232,15 @@
       "name": "COBOL",
       "description": "Compile and run COBOL file",
       "language": "COBOL",
-      "extensions": ["cob", "cbl"],
+      "extensions": [
+        "cob",
+        "cbl"
+      ],
       "command": "bash",
-      "args": ["-c", "cobc -x \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""],
+      "args": [
+        "-c",
+        "cobc -x \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -843,9 +1249,13 @@
       "name": "Tcl",
       "description": "Run Tcl script",
       "language": "Tcl",
-      "extensions": ["tcl"],
+      "extensions": [
+        "tcl"
+      ],
       "command": "tclsh",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -854,9 +1264,14 @@
       "name": "AWK",
       "description": "Run AWK script",
       "language": "AWK",
-      "extensions": ["awk"],
+      "extensions": [
+        "awk"
+      ],
       "command": "awk",
-      "args": ["-f", "${file}"],
+      "args": [
+        "-f",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },
@@ -865,9 +1280,14 @@
       "name": "Sed",
       "description": "Run Sed script",
       "language": "Sed",
-      "extensions": ["sed"],
+      "extensions": [
+        "sed"
+      ],
       "command": "sed",
-      "args": ["-f", "${file}"],
+      "args": [
+        "-f",
+        "${file}"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     }

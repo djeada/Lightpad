@@ -38,8 +38,10 @@ void LanguageFeatureManager::openDocument(const QString &filePath,
   }
 
   if (!isLanguageSupported(effectiveLang)) {
-    LOG_DEBUG(QString("Language '%1' has no configured server, skipping LSP")
-                  .arg(effectiveLang));
+    const QString message =
+        QString("No language server configured for '%1'.").arg(effectiveLang);
+    LOG_WARNING(message);
+    emit serverError(effectiveLang, message);
     return;
   }
 

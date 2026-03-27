@@ -13,6 +13,7 @@ class QLabel;
 class QTextCursor;
 
 #include "shellprofile.h"
+#include "../../python/pythonprojectenvironment.h"
 
 namespace Ui {
 class Terminal;
@@ -58,6 +59,8 @@ public:
   void setShellProfile(const ShellProfile &profile);
 
   ShellProfile shellProfile() const;
+
+  void setPythonEnvironmentBanner(const PythonEnvironmentInfo &info);
 
   QStringList availableShellProfiles() const;
 
@@ -129,6 +132,7 @@ private:
   void scheduleAutoRestart();
   void updateStyleSheet();
   void updateCwdLabel();
+  QString formatPythonBanner(const PythonEnvironmentInfo &info) const;
   QString filterShellStartupNoise(const QString &text) const;
   bool isShellStartupNoiseLine(const QString &line) const;
   QString processTextForLinks(const QString &text);
@@ -178,6 +182,7 @@ private:
 
   QMenu *m_contextMenu;
   QAction *m_copyAction;
+  QString m_pythonEnvironmentBanner;
 };
 
 #endif
