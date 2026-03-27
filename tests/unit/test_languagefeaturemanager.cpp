@@ -1,4 +1,5 @@
 #include "language/languagefeaturemanager.h"
+#include "diagnostics/diagnosticutils.h"
 #include <QSignalSpy>
 #include <QTest>
 
@@ -111,18 +112,46 @@ void TestLanguageFeatureManager::testCloseDocumentWithoutOpen() {
 void TestLanguageFeatureManager::testServerErrorEmitted() {
   DiagnosticsManager diagMgr;
   LanguageFeatureManager mgr(&diagMgr);
+  QSignalSpy spy(&mgr, &LanguageFeatureManager::serverError);
 
   mgr.openDocument("/project/file.xyz", "unknown_lang", "content");
+
+  QCOMPARE(spy.count(), 1);
+  const QList<QVariant> args = spy.takeFirst();
+  QCOMPARE(args.at(0).toString(), QString("unknown_lang"));
+  QVERIFY(args.at(1).toString().contains("No language server configured"));
   QVERIFY(mgr.clientForFile("/project/file.xyz") == nullptr);
 }
 
 void TestLanguageFeatureManager::testDiagnosticsManagerIntegration() {
   DiagnosticsManager diagMgr;
   LanguageFeatureManager mgr(&diagMgr);
+  const QString filePath = "/project/main.cpp";
+  const QString uri = DiagnosticUtils::filePathToUri(filePath);
 
   QCOMPARE(diagMgr.errorCount(), 0);
   QCOMPARE(diagMgr.warningCount(), 0);
   QCOMPARE(diagMgr.infoCount(), 0);
+
+  mgr.openDocument(filePath, "cpp", "int main() { return 0; }\n");
+  QCOMPARE(diagMgr.documentVersion(uri), 1);
+  QVERIFY(mgr.clientForFile(filePath) != nullptr);
+
+  LspDiagnostic diagnostic;
+  diagnostic.range.start = {0, 0};
+  diagnostic.range.end = {0, 3};
+  diagnostic.severity = LspDiagnosticSeverity::Error;
+  diagnostic.message = "integration test error";
+
+  diagMgr.upsertDiagnostics(uri, {diagnostic}, "lsp:cpp", 1);
+
+  QCOMPARE(diagMgr.errorCount(), 1);
+  QCOMPARE(diagMgr.diagnosticsForFile(filePath).size(), 1);
+
+  mgr.closeDocument(filePath);
+
+  QCOMPARE(diagMgr.errorCount(), 0);
+  QVERIFY(diagMgr.diagnosticsForFile(filePath).isEmpty());
 }
 
 QTEST_MAIN(TestLanguageFeatureManager)

@@ -7,6 +7,7 @@
 #include <QMap>
 #include <QSet>
 #include <QTimer>
+#include <memory>
 
 #include "../settings/textareasettings.h"
 #include "../settings/theme.h"
@@ -36,6 +37,7 @@ class TestPanel;
 class SymbolNavigationService;
 class DiagnosticsManager;
 class LanguageFeatureManager;
+class LspCompletionProvider;
 struct DebugConfiguration;
 struct DefinitionTarget;
 #ifdef HAVE_PDF_SUPPORT
@@ -190,6 +192,7 @@ private:
   class RecentFilesDialog *recentFilesDialog;
   class QLabel *problemsStatusLabel;
   class QLabel *vimStatusLabel;
+  class QToolButton *m_pythonEnvLabel;
   bool m_vimCommandPanelActive;
   VimMode *m_connectedVimMode;
   class BreadcrumbWidget *breadcrumbWidget;
@@ -222,7 +225,10 @@ private:
 
   DiagnosticsManager *m_diagnosticsManager;
   LanguageFeatureManager *m_languageFeatureManager;
+  std::shared_ptr<LspCompletionProvider> m_lspCompletionProvider;
   QMap<QString, int> m_documentVersions;
+  QMap<QString, QTimer *> m_diagnosticsChangeTimers;
+  QMap<QString, QString> m_pendingDiagnosticsTexts;
   QMetaObject::Connection m_breakpointsSetConnection;
   QMetaObject::Connection m_breakpointChangedConnection;
   QMetaObject::Connection m_runInTerminalConnection;
@@ -276,9 +282,12 @@ private:
   void setupAutoSave();
   void setupDiagnostics();
   void notifyDiagnosticsFileOpened(const QString &filePath);
-  void notifyDiagnosticsFileChanged(const QString &filePath);
+  void notifyDiagnosticsFileChanged(const QString &filePath,
+                                    const QString &text);
   void notifyDiagnosticsFileSaved(const QString &filePath);
   void notifyDiagnosticsFileClosed(const QString &filePath);
+  void flushPendingDiagnosticsChange(const QString &filePath);
+  void clearPendingDiagnosticsChange(const QString &filePath);
   void onDiagnosticsChanged(const QString &uri);
   void setupGitIntegration();
   void updateGitIntegrationForPath(const QString &path);
@@ -298,6 +307,7 @@ private:
   void ensureDebugPanel();
   void ensureTestPanel();
   void ensureStatusLabels();
+  void updatePythonEnvironmentLabel();
   void updateSourceControlDockTitle(const QString &repoRoot, bool isRepo);
   void updateProblemsStatusLabel(int errors, int warnings, int infos);
   void updateVimStatusLabel(const QString &text);

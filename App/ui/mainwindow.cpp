@@ -28,6 +28,7 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStringListModel>
+#include <QToolButton>
 #include <QTextDocument>
 #include <QVBoxLayout>
 #include <cstdio>
@@ -37,6 +38,7 @@
 #include "../completion/completionengine.h"
 #include "../completion/completionproviderregistry.h"
 #include "../completion/providers/keywordcompletionprovider.h"
+#include "../completion/providers/lspcompletionprovider.h"
 #include "../completion/providers/plugincompletionprovider.h"
 #include "../completion/providers/snippetcompletionprovider.h"
 #include "../core/autosavemanager.h"
@@ -110,7 +112,8 @@ MainWindow::MainWindow(QWidget *parent)
       problemsPanel(nullptr), goToLineDialog(nullptr),
       goToSymbolDialog(nullptr), fileQuickOpen(nullptr),
       recentFilesDialog(nullptr), problemsStatusLabel(nullptr),
-      vimStatusLabel(nullptr), m_vimCommandPanelActive(false),
+      vimStatusLabel(nullptr), m_pythonEnvLabel(nullptr),
+      m_vimCommandPanelActive(false),
       m_connectedVimMode(nullptr), breadcrumbWidget(nullptr),
       recentFilesManager(nullptr), navigationHistory(nullptr),
       m_symbolNavService(nullptr), autoSaveManager(nullptr),
@@ -127,7 +130,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
       m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
       m_diagnosticsManager(nullptr), m_languageFeatureManager(nullptr),
-      m_restoringSession(false), m_globalSettingsLoaded(false),
+      m_lspCompletionProvider(), m_restoringSession(false),
+      m_globalSettingsLoaded(false),
       m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
       m_treeScrollValue(0), m_treeScrollValueInitialized(false),
       m_treeScrollSyncing(false), m_treeCurrentPath(""),
@@ -1975,6 +1979,21 @@ void MainWindow::showTerminal() {
   QMap<QString, QString> customEnv =
       manager.getEnvironment(filePath, languageId);
 
+  const QString ext = QFileInfo(filePath).suffix().toLower();
+  if (ext == "py" || ext == "pyw" || ext == "pyi") {
+    PythonEnvironmentPreference pythonPref;
+    pythonPref.mode = assignment.pythonMode;
+    pythonPref.customInterpreter = assignment.pythonInterpreter;
+    pythonPref.venvPath = assignment.pythonVenvPath;
+    pythonPref.requirementsFile = assignment.pythonRequirementsFile;
+    const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
+        pythonPref, m_projectRootPath, filePath, workingDirectory);
+    Terminal *terminal = terminalWidget->currentTerminal();
+    if (terminal) {
+      terminal->setPythonEnvironmentBanner(info);
+    }
+  }
+
   QString preRunCommand = assignment.preRunCommand.trimmed();
   if (!preRunCommand.isEmpty()) {
     preRunCommand =
@@ -2186,6 +2205,117 @@ void MainWindow::ensureStatusLabels() {
       layout->insertWidget(insertIndex, vimStatusLabel);
     }
   }
+
+  if (!m_pythonEnvLabel) {
+    m_pythonEnvLabel = new QToolButton(this);
+    m_pythonEnvLabel->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_pythonEnvLabel->setAutoRaise(true);
+    m_pythonEnvLabel->setStyleSheet("QToolButton {"
+                                    "  color: #8b949e;"
+                                    "  padding: 0 8px;"
+                                    "  font-size: 12px;"
+                                    "  border: none;"
+                                    "  background: transparent;"
+                                    "}"
+                                    "QToolButton:hover {"
+                                    "  color: #e6edf3;"
+                                    "}");
+    m_pythonEnvLabel->setCursor(Qt::PointingHandCursor);
+    m_pythonEnvLabel->setToolTip(
+        tr("Python environment (click to configure)"));
+    m_pythonEnvLabel->setVisible(false);
+    connect(m_pythonEnvLabel, &QToolButton::clicked, this, [this]() {
+      openConfigurationDialog();
+    });
+
+    auto layout = qobject_cast<QHBoxLayout *>(ui->backgroundBottom->layout());
+    if (layout) {
+      int insertIndex = layout->count() - 1;
+      if (vimStatusLabel) {
+        insertIndex = qMax(0, layout->indexOf(vimStatusLabel) + 1);
+      } else if (problemsStatusLabel) {
+        insertIndex = qMax(0, layout->indexOf(problemsStatusLabel) + 1);
+      }
+      layout->insertWidget(insertIndex, m_pythonEnvLabel);
+    }
+  }
+}
+
+void MainWindow::updatePythonEnvironmentLabel() {
+  ensureStatusLabels();
+
+  if (!m_pythonEnvLabel) {
+    return;
+  }
+
+  auto page = currentTabWidget() ? currentTabWidget()->getCurrentPage()
+                                 : nullptr;
+  QString filePath = page ? page->getFilePath() : QString();
+
+  if (filePath.isEmpty()) {
+    m_pythonEnvLabel->setVisible(false);
+    return;
+  }
+
+  const QString ext = QFileInfo(filePath).suffix().toLower();
+  const bool isPython = (ext == "py" || ext == "pyw" || ext == "pyi");
+  if (!isPython) {
+    m_pythonEnvLabel->setVisible(false);
+    return;
+  }
+
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  if (manager.getAllTemplates().isEmpty()) {
+    manager.loadTemplates();
+  }
+
+  FileTemplateAssignment assignment = manager.getAssignmentForFile(filePath);
+  PythonEnvironmentPreference preference;
+  preference.mode = assignment.pythonMode;
+  preference.customInterpreter = assignment.pythonInterpreter;
+  preference.venvPath = assignment.pythonVenvPath;
+  preference.requirementsFile = assignment.pythonRequirementsFile;
+
+  const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
+      preference, m_projectRootPath, filePath,
+      QFileInfo(filePath).absolutePath());
+
+  QString label;
+  QString style;
+  QString tooltip;
+  if (info.found && info.isVirtualEnvironment()) {
+    const QString venvName = QFileInfo(info.venvPath).fileName();
+    label = QString::fromUtf8("\xF0\x9F\x90\x8D %1 (%2)").arg(
+        QFileInfo(info.interpreter).fileName(), venvName);
+    style = "QToolButton { color: #3fb950; padding: 0 8px; font-size: 12px;"
+            " border: none; background: transparent; }"
+            "QToolButton:hover { color: #7ee787; }";
+    tooltip = tr("Python: %1\nVenv: %2\nClick to configure")
+                  .arg(info.interpreter, info.venvPath);
+  } else if (info.found) {
+    label = QString::fromUtf8("\xF0\x9F\x90\x8D %1").arg(
+        QFileInfo(info.interpreter).fileName());
+    style = "QToolButton { color: #8b949e; padding: 0 8px; font-size: 12px;"
+            " border: none; background: transparent; }"
+            "QToolButton:hover { color: #e6edf3; }";
+    tooltip = tr("Python: %1\nNo virtual environment active\nClick to configure")
+                  .arg(info.interpreter);
+  } else {
+    label = QString::fromUtf8(
+        "\xF0\x9F\x90\x8D \xe2\x9a\xa0 No Python env");
+    style = "QToolButton { color: #d29922; padding: 0 8px; font-size: 12px;"
+            " border: none; background: transparent; }"
+            "QToolButton:hover { color: #f2cc60; }";
+    tooltip = tr("%1\nClick to configure Python environment")
+                  .arg(info.statusMessage.isEmpty()
+                           ? tr("Python interpreter not found")
+                           : info.statusMessage);
+  }
+
+  m_pythonEnvLabel->setText(label);
+  m_pythonEnvLabel->setStyleSheet(style);
+  m_pythonEnvLabel->setToolTip(tooltip);
+  m_pythonEnvLabel->setVisible(true);
 }
 
 void MainWindow::ensureSourceControlPanel() {
@@ -2980,7 +3110,8 @@ void MainWindow::notifyDiagnosticsFileOpened(const QString &filePath) {
                                          textArea->toPlainText());
 }
 
-void MainWindow::notifyDiagnosticsFileChanged(const QString &filePath) {
+void MainWindow::notifyDiagnosticsFileChanged(const QString &filePath,
+                                              const QString &text) {
   if (!m_languageFeatureManager || filePath.isEmpty()) {
     return;
   }
@@ -2993,21 +3124,39 @@ void MainWindow::notifyDiagnosticsFileChanged(const QString &filePath) {
     return;
   }
 
-  TextArea *textArea = getCurrentTextArea();
-  if (!textArea) {
+  int version = m_documentVersions.value(filePath, 0) + 1;
+  m_documentVersions[filePath] = version;
+  const QString uri = DiagnosticUtils::filePathToUri(filePath);
+  if (m_diagnosticsManager) {
+    m_diagnosticsManager->trackDocumentVersion(uri, version);
+  }
+
+  const int debounceMs = qMax(0, diagSettings.value("debounceMs").toInt(200));
+  if (debounceMs == 0) {
+    m_languageFeatureManager->changeDocument(filePath, version, text);
     return;
   }
 
-  int version = m_documentVersions.value(filePath, 0) + 1;
-  m_documentVersions[filePath] = version;
-  m_languageFeatureManager->changeDocument(filePath, version,
-                                           textArea->toPlainText());
+  m_pendingDiagnosticsTexts[filePath] = text;
+
+  QTimer *timer = m_diagnosticsChangeTimers.value(filePath, nullptr);
+  if (!timer) {
+    timer = new QTimer(this);
+    timer->setSingleShot(true);
+    connect(timer, &QTimer::timeout, this,
+            [this, filePath]() { flushPendingDiagnosticsChange(filePath); });
+    m_diagnosticsChangeTimers.insert(filePath, timer);
+  }
+
+  timer->start(debounceMs);
 }
 
 void MainWindow::notifyDiagnosticsFileSaved(const QString &filePath) {
   if (!m_languageFeatureManager || filePath.isEmpty()) {
     return;
   }
+
+  flushPendingDiagnosticsChange(filePath);
 
   SettingsManager &sm = SettingsManager::instance();
   QJsonObject diagSettings =
@@ -3025,8 +3174,38 @@ void MainWindow::notifyDiagnosticsFileClosed(const QString &filePath) {
     return;
   }
 
+  flushPendingDiagnosticsChange(filePath);
   m_languageFeatureManager->closeDocument(filePath);
   m_documentVersions.remove(filePath);
+  clearPendingDiagnosticsChange(filePath);
+}
+
+void MainWindow::flushPendingDiagnosticsChange(const QString &filePath) {
+  if (!m_languageFeatureManager || filePath.isEmpty() ||
+      !m_pendingDiagnosticsTexts.contains(filePath)) {
+    return;
+  }
+
+  if (QTimer *timer = m_diagnosticsChangeTimers.value(filePath, nullptr)) {
+    timer->stop();
+  }
+
+  const QString text = m_pendingDiagnosticsTexts.take(filePath);
+  const int version = m_documentVersions.value(filePath, 0);
+  if (version <= 0) {
+    return;
+  }
+
+  m_languageFeatureManager->changeDocument(filePath, version, text);
+}
+
+void MainWindow::clearPendingDiagnosticsChange(const QString &filePath) {
+  m_pendingDiagnosticsTexts.remove(filePath);
+
+  if (QTimer *timer = m_diagnosticsChangeTimers.take(filePath)) {
+    timer->stop();
+    timer->deleteLater();
+  }
 }
 
 void MainWindow::onDiagnosticsChanged(const QString &uri) {
@@ -3962,6 +4141,8 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
       registerTreeView(view);
     }
   }
+
+  updatePythonEnvironmentLabel();
 }
 
 void MainWindow::applyTabWidgetTheme(LightpadTabWidget *tabWidget) {
@@ -3990,6 +4171,9 @@ void MainWindow::setupCompletionSystem() {
   registry.registerProvider(std::make_shared<SnippetCompletionProvider>());
 
   registry.registerProvider(std::make_shared<PluginCompletionProvider>());
+
+  m_lspCompletionProvider = std::make_shared<LspCompletionProvider>(nullptr);
+  registry.registerProvider(m_lspCompletionProvider);
 
   m_completionEngine = new CompletionEngine(this);
 
@@ -4055,7 +4239,7 @@ void MainWindow::setupTextArea() {
           parentObject = parentObject->parent();
         }
         if (!filePath.isEmpty()) {
-          notifyDiagnosticsFileChanged(filePath);
+          notifyDiagnosticsFileChanged(filePath, textArea->toPlainText());
         }
       });
       textArea->setProperty("diagnosticsHooked", true);
@@ -4068,6 +4252,13 @@ void MainWindow::setupTextArea() {
       textArea->setCompletionEngine(m_completionEngine);
       LightpadTabWidget *tabWidget = currentTabWidget();
       QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
+      if (m_lspCompletionProvider) {
+        LspClient *client =
+            (m_languageFeatureManager && !filePath.isEmpty())
+                ? m_languageFeatureManager->clientForFile(filePath)
+                : nullptr;
+        m_lspCompletionProvider->setClient(client);
+      }
       if (filePath.isEmpty()) {
         textArea->setLanguage("plaintext");
         textArea->updateSyntaxHighlightTags("", "plaintext");

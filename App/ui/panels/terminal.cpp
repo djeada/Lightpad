@@ -357,8 +357,13 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
   clear();
   appendOutput(QString("$ %1 %2\n").arg(command, args.join(" ")));
   if (!workingDirectory.isEmpty()) {
-    appendOutput(QString("Working directory: %1\n\n").arg(workingDirectory));
+    appendOutput(QString("Working directory: %1\n").arg(workingDirectory));
   }
+  if (!m_pythonEnvironmentBanner.isEmpty()) {
+    appendOutput(m_pythonEnvironmentBanner);
+    m_pythonEnvironmentBanner.clear();
+  }
+  appendOutput("\n");
 
   m_runProcess->start(command, args);
 }
@@ -382,6 +387,22 @@ bool Terminal::runFile(const QString &filePath, const QString &languageId) {
 
   QString workingDir = manager.getWorkingDirectory(filePath, languageId);
   QMap<QString, QString> env = manager.getEnvironment(filePath, languageId);
+
+  const QString ext = QFileInfo(filePath).suffix().toLower();
+  if (ext == "py" || ext == "pyw" || ext == "pyi") {
+    FileTemplateAssignment assignment = manager.getAssignmentForFile(filePath);
+    PythonEnvironmentPreference preference;
+    preference.mode = assignment.pythonMode;
+    preference.customInterpreter = assignment.pythonInterpreter;
+    preference.venvPath = assignment.pythonVenvPath;
+    preference.requirementsFile = assignment.pythonRequirementsFile;
+
+    const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
+        preference, manager.workspaceFolder(), filePath, workingDir);
+    m_pythonEnvironmentBanner = formatPythonBanner(info);
+  } else {
+    m_pythonEnvironmentBanner.clear();
+  }
 
   executeCommand(command.first, command.second, workingDir, env);
   return true;
@@ -1212,6 +1233,10 @@ void Terminal::setShellProfile(const ShellProfile &profile) {
 
 ShellProfile Terminal::shellProfile() const { return m_shellProfile; }
 
+void Terminal::setPythonEnvironmentBanner(const PythonEnvironmentInfo &info) {
+  m_pythonEnvironmentBanner = formatPythonBanner(info);
+}
+
 QStringList Terminal::availableShellProfiles() const {
   QStringList names;
   for (const ShellProfile &profile :
@@ -1348,6 +1373,47 @@ void Terminal::updateCwdLabel() {
   }
 
   ui->cwdLabel->setText(QString("%1: %2").arg(shellName, displayPath));
+}
+
+QString
+Terminal::formatPythonBanner(const PythonEnvironmentInfo &info) const {
+  // Use ANSI escape codes for colored terminal output
+  const QString reset = "\x1b[0m";
+  const QString bold = "\x1b[1m";
+  const QString green = "\x1b[32m";
+  const QString yellow = "\x1b[33m";
+  const QString red = "\x1b[31m";
+  const QString dim = "\x1b[2m";
+  const QString cyan = "\x1b[36m";
+
+  QString banner;
+  if (info.found && info.isVirtualEnvironment()) {
+    const QString venvName = QFileInfo(info.venvPath).fileName();
+    banner = QString("%1%2%3 Python Environment%4\n"
+                     "  %5Interpreter:%4 %6\n"
+                     "  %5Venv:%4       %7 %8(%9)%4\n")
+                 .arg(bold, green,
+                      QString::fromUtf8("\xF0\x9F\x90\x8D"), reset,
+                      cyan, info.interpreter, venvName, dim,
+                      info.venvPath);
+  } else if (info.found) {
+    banner = QString("%1%2%3 Python Environment%4\n"
+                     "  %5Interpreter:%4 %6\n"
+                     "  %7%8No virtual environment active%4\n")
+                 .arg(bold, yellow,
+                      QString::fromUtf8("\xF0\x9F\x90\x8D"), reset,
+                      cyan, info.interpreter, dim, yellow);
+  } else {
+    const QString msg = info.statusMessage.isEmpty()
+                            ? QString("Python interpreter not found")
+                            : info.statusMessage;
+    banner = QString("%1%2%3 Python Environment%4\n"
+                     "  %5%6%4\n")
+                 .arg(bold, red,
+                      QString::fromUtf8("\xF0\x9F\x90\x8D"), reset,
+                      red, msg);
+  }
+  return banner;
 }
 
 void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {

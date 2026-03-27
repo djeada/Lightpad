@@ -1,10 +1,13 @@
 #include "terminaltabwidget.h"
+#include "../../python/pythonprojectenvironment.h"
+#include "../../run_templates/runtemplatemanager.h"
 #include "../../settings/theme.h"
 #include "shellprofile.h"
 #include "terminal.h"
 
 #include <QApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QMenu>
 #include <QSplitter>
@@ -235,7 +238,42 @@ bool TerminalTabWidget::runFile(const QString &filePath,
     terminal = addNewTerminal();
   }
 
-  return terminal->runFile(filePath, languageId);
+  bool result = terminal->runFile(filePath, languageId);
+
+  if (result) {
+    const QString ext = QFileInfo(filePath).suffix().toLower();
+    if (ext == "py" || ext == "pyw" || ext == "pyi") {
+      int index = m_tabWidget->indexOf(terminal);
+      if (index >= 0) {
+        RunTemplateManager &manager = RunTemplateManager::instance();
+        FileTemplateAssignment assignment =
+            manager.getAssignmentForFile(filePath);
+        PythonEnvironmentPreference preference;
+        preference.mode = assignment.pythonMode;
+        preference.customInterpreter = assignment.pythonInterpreter;
+        preference.venvPath = assignment.pythonVenvPath;
+        preference.requirementsFile = assignment.pythonRequirementsFile;
+
+        PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
+            preference, manager.workspaceFolder(), filePath,
+            QFileInfo(filePath).absolutePath());
+
+        QString tabName;
+        if (info.found && info.isVirtualEnvironment()) {
+          tabName = QString("Python (%1)")
+                        .arg(QFileInfo(info.venvPath).fileName());
+        } else if (info.found) {
+          tabName = QString("Python (%1)")
+                        .arg(QFileInfo(info.interpreter).fileName());
+        } else {
+          tabName = tr("Python");
+        }
+        m_tabWidget->setTabText(index, tabName);
+      }
+    }
+  }
+
+  return result;
 }
 
 void TerminalTabWidget::executeCommand(const QString &command,
