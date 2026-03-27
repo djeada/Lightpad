@@ -1116,18 +1116,28 @@ void MainWindow::ensureProjectRootForPath(const QString &path) {
     return;
   }
 
-  QFileInfo gitInfo(normalizedResolved + "/.git");
-  const bool shouldPromoteToGitRoot =
-      gitInfo.exists() &&
-      (!normalizedCurrent.isEmpty() &&
-       isPathWithinRoot(normalizedCurrent, normalizedResolved));
-
-  if (!shouldPromoteToGitRoot && !normalizedCurrent.isEmpty() &&
-      isPathWithinRoot(path, normalizedCurrent)) {
+  // No project root set yet — adopt the resolved root
+  if (normalizedCurrent.isEmpty()) {
+    setProjectRootPath(normalizedResolved);
     return;
   }
 
-  setProjectRootPath(normalizedResolved);
+  // File is within current project — no change needed
+  if (isPathWithinRoot(path, normalizedCurrent)) {
+    return;
+  }
+
+  // Allow promoting to a parent git root that contains current root
+  // (e.g. opening a file in a monorepo parent)
+  QFileInfo gitInfo(normalizedResolved + "/.git");
+  if (gitInfo.exists() &&
+      isPathWithinRoot(normalizedCurrent, normalizedResolved)) {
+    setProjectRootPath(normalizedResolved);
+    return;
+  }
+
+  // File is outside current project — do NOT switch project root.
+  // The file opens in a tab without affecting the project tree.
 }
 
 template <typename... Args>
@@ -1583,9 +1593,11 @@ void MainWindow::open(const QString &filePath) {
     textArea->moveCursor(QTextCursor::Start);
     textArea->centerCursor();
   }
+
+  recordFileTimestamp(filePath);
 }
 
-bool MainWindow::save(const QString &filePath) {
+bool MainWindow::save(const QString &filePath, bool isAutoSave) {
   if (filePath.isEmpty()) {
     return false;
   }
@@ -1636,6 +1648,54 @@ bool MainWindow::save(const QString &filePath) {
     return false;
   }
 
+  // Check for external modifications before saving
+  if (checkExternalModification(filePath)) {
+    if (isAutoSave) {
+      // Auto-save should never silently overwrite external changes
+      return false;
+    }
+
+    const QString fileName = QFileInfo(filePath).fileName();
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(tr("File Changed on Disk"));
+    msgBox.setIcon(QMessageBox::Warning);
+    msgBox.setText(
+        tr("<b>%1</b> has been modified by another program.").arg(fileName));
+    msgBox.setInformativeText(
+        tr("Do you want to overwrite the external changes, "
+           "reload the file from disk, or cancel?"));
+    QPushButton *overwriteBtn =
+        msgBox.addButton(tr("Overwrite"), QMessageBox::DestructiveRole);
+    QPushButton *reloadBtn =
+        msgBox.addButton(tr("Reload from Disk"), QMessageBox::AcceptRole);
+    msgBox.addButton(QMessageBox::Cancel);
+    msgBox.setDefaultButton(reloadBtn);
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == reloadBtn) {
+      QFile reloadFile(filePath);
+      if (reloadFile.open(QFile::ReadOnly | QFile::Text)) {
+        int cursorPos = textArea->textCursor().position();
+        textArea->setPlainText(QString::fromUtf8(reloadFile.readAll()));
+        reloadFile.close();
+        QTextCursor cursor = textArea->textCursor();
+        cursor.setPosition(
+            qMin(cursorPos, textArea->toPlainText().length()));
+        textArea->setTextCursor(cursor);
+        textArea->document()->setModified(false);
+        textArea->removeIconUnsaved();
+        recordFileTimestamp(filePath);
+        if (autoSaveManager) {
+          autoSaveManager->markSaved(filePath);
+        }
+      }
+      return false;
+    } else if (msgBox.clickedButton() != overwriteBtn) {
+      return false;
+    }
+    // User chose "Overwrite" — fall through to save
+  }
+
   QFile file(filePath);
 
   if (!file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
@@ -1660,6 +1720,8 @@ bool MainWindow::save(const QString &filePath) {
   textArea->document()->setModified(false);
   textArea->removeIconUnsaved();
 
+  recordFileTimestamp(filePath);
+
   const QString fileName = QFileInfo(filePath).fileName();
   targetTabWidget->setTabText(targetTabIndex, fileName);
   if (targetTabWidget == currentTabWidget() &&
@@ -1678,6 +1740,23 @@ bool MainWindow::save(const QString &filePath) {
   }
 
   return true;
+}
+
+void MainWindow::recordFileTimestamp(const QString &filePath) {
+  if (!filePath.isEmpty()) {
+    m_fileTimestamps[filePath] = QFileInfo(filePath).lastModified();
+  }
+}
+
+bool MainWindow::checkExternalModification(const QString &filePath) const {
+  if (filePath.isEmpty() || !m_fileTimestamps.contains(filePath)) {
+    return false;
+  }
+  QFileInfo info(filePath);
+  if (!info.exists()) {
+    return false;
+  }
+  return info.lastModified() > m_fileTimestamps.value(filePath);
 }
 
 void MainWindow::trimTrailingWhitespace(TextArea *textArea) {

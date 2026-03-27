@@ -95,7 +95,7 @@ void AutoSaveManager::saveAllPending() {
       continue;
     }
 
-    if (m_mainWindow->save(filePath)) {
+    if (m_mainWindow->save(filePath, true)) {
       m_pendingFiles.remove(filePath);
       emit fileSaved(filePath);
     } else {
