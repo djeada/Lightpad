@@ -877,6 +877,59 @@ target_compile_definitions(test_markdownpreviewpanel PRIVATE QT_DEPRECATED_WARNI
 
 add_test(NAME MarkdownPreviewPanelTests COMMAND test_markdownpreviewpanel)
 
+# LatexTools test executable
+add_executable(test_latextools
+    unit/test_latextools.cpp
+    ${CMAKE_SOURCE_DIR}/App/latex/latextools.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_latextools PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/latex
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_latextools
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_latextools PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME LatexToolsTests COMMAND test_latextools)
+
+# LatexPreviewPanel test executable
+add_executable(test_latexpreviewpanel
+    unit/test_latexpreviewpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/latex/latexpreviewpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/latex/latextools.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_latexpreviewpanel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/latex
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_latexpreviewpanel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_latexpreviewpanel PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME LatexPreviewPanelTests COMMAND test_latexpreviewpanel)
+
 # PdfViewer test executable (only if PDF support is available)
 if(HAVE_PDF_SUPPORT)
     add_executable(test_pdfviewer
@@ -1321,6 +1374,8 @@ set(TEST_TARGETS
     test_imageviewer
     test_markdowntools
     test_markdownpreviewpanel
+    test_latextools
+    test_latexpreviewpanel
     test_symbolnavigation
     test_testoutputparsers
     test_testrunmanager

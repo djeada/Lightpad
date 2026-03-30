@@ -1,6 +1,7 @@
 #ifndef LATEXPREVIEWPANEL_H
 #define LATEXPREVIEWPANEL_H
 
+#include "../lsp/lspclient.h"
 #include <QComboBox>
 #include <QLabel>
 #include <QProcess>
@@ -35,7 +36,7 @@ public slots:
 signals:
   void buildStarted();
   void buildFinished(bool success);
-  void diagnosticsReady(const QList<struct LspDiagnostic> &diagnostics);
+  void diagnosticsReady(const QList<LspDiagnostic> &diagnostics);
 
 private:
   void setupUi();
