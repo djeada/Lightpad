@@ -9,9 +9,12 @@
 #include <QAction>
 #include <QComboBox>
 #include <QLabel>
+#include <QLineEdit>
+#include <QProgressBar>
 #include <QSplitter>
 #include <QTextEdit>
 #include <QToolBar>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -68,21 +71,26 @@ private slots:
   void onDiscoveryError(const QString &message);
   void onAutoRunModeChanged(int index);
   void onAutoRunToggled(bool checked);
+  void onSearchTextChanged(const QString &text);
 
 private:
   void setupUI();
+  void setupToolbar();
   void updateStatusLabel();
   void updateTreeItemIcon(QTreeWidgetItem *item, TestStatus status);
   QTreeWidgetItem *findOrCreateSuiteItem(const QString &suite);
   QTreeWidgetItem *findTestItem(const QString &id);
   void applyFilter();
+  void applySearchFilter();
   void refreshConfigurations();
   void syncAutoRunConfiguration();
   TestConfiguration currentConfiguration() const;
   void populateTreeFromDiscovery(const QList<DiscoveredTest> &tests);
   void connectDiscoveryAdapter();
   void updateDiscoveryAdapterForConfig();
+  void updateEmptyState();
 
+  QWidget *m_headerShell;
   QToolBar *m_toolbar;
   QAction *m_runAllAction;
   QAction *m_runFailedAction;
@@ -93,11 +101,14 @@ private:
   QComboBox *m_filterCombo;
   QComboBox *m_configCombo;
   QComboBox *m_autoRunModeCombo;
+  QLineEdit *m_searchEdit;
+  QProgressBar *m_progressBar;
 
   QSplitter *m_splitter;
   QTreeWidget *m_tree;
   QTextEdit *m_detailPane;
   QLabel *m_statusLabel;
+  QLabel *m_emptyStateLabel;
 
   TestRunManager *m_runManager;
   AutoTestRunner *m_autoTestRunner;
