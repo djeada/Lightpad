@@ -37,13 +37,31 @@ jobs:
             cmake \
             qt6-base-dev \
             qt6-base-dev-tools \
-            qt6-pdf-dev
+            qt6-pdf-dev \
+            gcovr
 
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage"
 
       - name: Build
         run: cmake --build build -- -j$(nproc)
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Generate coverage report
+        run: |
+          gcovr --root . --filter 'App/' \
+            --exclude '.*autogen.*' --exclude '.*moc_.*' --exclude '.*qrc_.*' \
+            --print-summary \
+            --xml coverage.xml
+        continue-on-error: true
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 30
+

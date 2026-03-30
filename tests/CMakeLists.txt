@@ -47,6 +47,7 @@ include_directories(${CMAKE_SOURCE_DIR}/App/definition)
 include_directories(${CMAKE_SOURCE_DIR}/App/test_templates)
 include_directories(${CMAKE_SOURCE_DIR}/App/diagnostics)
 include_directories(${CMAKE_SOURCE_DIR}/App/language)
+include_directories(${CMAKE_SOURCE_DIR}/App/core/editor)
 
 # Logger test executable
 add_executable(test_logger
@@ -935,6 +936,175 @@ target_compile_definitions(test_runconfiguration PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME RunConfigurationTests COMMAND test_runconfiguration)
 
+# TextTransforms test executable
+add_executable(test_texttransforms
+    unit/test_texttransforms.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/editor/texttransforms.cpp
+)
+
+target_include_directories(test_texttransforms PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/core/editor
+)
+
+target_link_libraries(test_texttransforms
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_texttransforms PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME TextTransformsTests COMMAND test_texttransforms)
+
+# CodeFolding test executable
+add_executable(test_codefolding
+    unit/test_codefolding.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/editor/codefolding.cpp
+)
+
+target_include_directories(test_codefolding PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/core/editor
+)
+
+target_link_libraries(test_codefolding
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_codefolding PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME CodeFoldingTests COMMAND test_codefolding)
+
+# MultiCursor test executable
+add_executable(test_multicursor
+    unit/test_multicursor.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/editor/multicursor.cpp
+)
+
+target_include_directories(test_multicursor PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/core/editor
+)
+
+target_link_libraries(test_multicursor
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_multicursor PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME MultiCursorTests COMMAND test_multicursor)
+
+# DiagnosticsRegression test executable
+add_executable(test_diagnosticsregression
+    unit/test_diagnosticsregression.cpp
+    ${CMAKE_SOURCE_DIR}/App/diagnostics/diagnosticsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_diagnosticsregression PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/diagnostics
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_diagnosticsregression
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_diagnosticsregression PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME DiagnosticsRegressionTests COMMAND test_diagnosticsregression)
+
+# DocumentRegression test executable
+add_executable(test_documentregression
+    unit/test_documentregression.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/document.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/io/filemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_documentregression PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/core
+    ${CMAKE_SOURCE_DIR}/App/core/io
+)
+
+target_link_libraries(test_documentregression
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_documentregression PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME DocumentRegressionTests COMMAND test_documentregression)
+
+# SettingsRegression test executable
+add_executable(test_settingsregression
+    unit/test_settingsregression.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_settingsregression PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_settingsregression
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_settingsregression PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME SettingsRegressionTests COMMAND test_settingsregression)
+
+# LspRegression test executable
+add_executable(test_lspregression
+    unit/test_lspregression.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_lspregression PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_lspregression
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_lspregression PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME LspRegressionTests COMMAND test_lspregression)
+
 # Set environment variable for headless testing
 set(TEST_LIST
     LoggerTests 
@@ -971,6 +1141,13 @@ set(TEST_LIST
     TestOutputParsersTests
     AutoTestRunnerTests
     RunConfigurationTests
+    TextTransformsTests
+    CodeFoldingTests
+    MultiCursorTests
+    DiagnosticsRegressionTests
+    DocumentRegressionTests
+    SettingsRegressionTests
+    LspRegressionTests
 )
 
 if(HAVE_PDF_SUPPORT)
@@ -999,6 +1176,13 @@ set(TEST_TARGETS
     test_imageviewer
     test_symbolnavigation
     test_testoutputparsers
+    test_texttransforms
+    test_codefolding
+    test_multicursor
+    test_diagnosticsregression
+    test_documentregression
+    test_settingsregression
+    test_lspregression
 )
 
 if(HAVE_PDF_SUPPORT)
