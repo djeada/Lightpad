@@ -159,11 +159,13 @@ set(project_headers
     filetree/filedirtreecontroller.h
     filetree/gitfilesystemmodel.h
     run_templates/runtemplatemanager.h
+    run_templates/runconfiguration.h
     format_templates/formattemplatemanager.h
     test_templates/testconfiguration.h
     test_templates/testdiscovery.h
     test_templates/testoutputparser.h
     test_templates/testrunmanager.h
+    test_templates/autotestrunner.h
     settings/theme.h
     ui/uistylehelper.h
     ui/viewers/imageviewer.h)
@@ -287,11 +289,13 @@ set(project_sources
     filetree/filedirtreecontroller.cpp
     filetree/gitfilesystemmodel.cpp
     run_templates/runtemplatemanager.cpp
+    run_templates/runconfiguration.cpp
     format_templates/formattemplatemanager.cpp
     test_templates/testconfiguration.cpp
     test_templates/testdiscovery.cpp
     test_templates/testoutputparser.cpp
     test_templates/testrunmanager.cpp
+    test_templates/autotestrunner.cpp
     settings/theme.cpp
     ui/uistylehelper.cpp
     ui/viewers/imageviewer.cpp)

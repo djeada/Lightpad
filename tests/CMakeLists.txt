@@ -880,6 +880,59 @@ target_compile_definitions(test_testoutputparsers PRIVATE QT_DEPRECATED_WARNINGS
 
 add_test(NAME TestOutputParsersTests COMMAND test_testoutputparsers)
 
+# AutoTestRunner test executable
+add_executable(test_autotestrunner
+    unit/test_autotestrunner.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/autotestrunner.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testrunmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${TEST_TEMPLATE_RESOURCES}
+)
+
+target_include_directories(test_autotestrunner PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/test_templates
+)
+
+target_link_libraries(test_autotestrunner
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_autotestrunner PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME AutoTestRunnerTests COMMAND test_autotestrunner)
+
+# RunConfiguration test executable
+add_executable(test_runconfiguration
+    unit/test_runconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/run_templates/runconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_runconfiguration PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/run_templates
+)
+
+target_link_libraries(test_runconfiguration
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_runconfiguration PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME RunConfigurationTests COMMAND test_runconfiguration)
+
 # Set environment variable for headless testing
 set(TEST_LIST
     LoggerTests 
@@ -914,6 +967,8 @@ set(TEST_LIST
     ImageViewerTests
     SymbolNavigationTests
     TestOutputParsersTests
+    AutoTestRunnerTests
+    RunConfigurationTests
 )
 
 if(HAVE_PDF_SUPPORT)
