@@ -91,6 +91,8 @@
 #include "widgets/notificationwidget.h"
 #include "../markdown/markdownpreviewpanel.h"
 #include "../markdown/markdowntools.h"
+#include "../latex/latexpreviewpanel.h"
+#include "../latex/latextools.h"
 #ifdef HAVE_PDF_SUPPORT
 #include "viewers/pdfviewer.h"
 #endif
@@ -2746,6 +2748,53 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
   LOG_INFO(QString("Opened Markdown preview for: %1").arg(filePath));
 }
 
+void MainWindow::on_actionPreview_LaTeX_triggered() {
+  if (!m_splitEditorContainer)
+    return;
+
+  TextArea *textArea = getCurrentTextArea();
+  if (!textArea)
+    return;
+
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!tabWidget)
+    return;
+
+  int currentIndex = tabWidget->currentIndex();
+  QString filePath;
+  if (currentIndex >= 0)
+    filePath = tabWidget->tabToolTip(currentIndex);
+
+  QFileInfo fi(filePath);
+  if (!LatexPreviewPanel::isLatexFile(fi.suffix())) {
+    if (m_notificationManager) {
+      m_notificationManager->showWarning(
+          tr("LaTeX Build"),
+          tr("Current file is not a LaTeX file"));
+    }
+    return;
+  }
+
+  LightpadTabWidget *newGroup = m_splitEditorContainer->splitHorizontal();
+  if (!newGroup)
+    return;
+
+  auto *preview = new LatexPreviewPanel(this);
+  preview->setFilePath(filePath);
+
+  newGroup->addViewerTab(preview, filePath + " [Build]", m_projectRootPath);
+
+  connect(preview, &LatexPreviewPanel::diagnosticsReady, this,
+          [this, filePath](const QList<LspDiagnostic> &diags) {
+            if (m_diagnosticsManager) {
+              QString uri = DiagnosticUtils::filePathToUri(filePath);
+              m_diagnosticsManager->upsertDiagnostics(uri, diags, "latex");
+            }
+          });
+
+  LOG_INFO(QString("Opened LaTeX build panel for: %1").arg(filePath));
+}
+
 void MainWindow::showCommandPalette() {
   if (commandPalette) {
     commandPalette->showPalette();
@@ -3531,6 +3580,19 @@ void MainWindow::notifyDiagnosticsFileSaved(const QString &filePath) {
             MarkdownTools::lint(textArea->toPlainText(), filePath);
         QString uri = DiagnosticUtils::filePathToUri(filePath);
         m_diagnosticsManager->upsertDiagnostics(uri, mdDiags, "markdown-lint");
+      }
+    }
+  }
+
+  {
+    QFileInfo fi(filePath);
+    if (LatexTools::isLatexFile(fi.suffix()) && m_diagnosticsManager) {
+      TextArea *textArea = getCurrentTextArea();
+      if (textArea) {
+        QList<LspDiagnostic> texDiags =
+            LatexTools::lint(textArea->toPlainText(), filePath);
+        QString uri = DiagnosticUtils::filePathToUri(filePath);
+        m_diagnosticsManager->upsertDiagnostics(uri, texDiags, "latex-lint");
       }
     }
   }

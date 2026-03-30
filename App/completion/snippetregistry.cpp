@@ -455,6 +455,131 @@ void SnippetRegistry::initializeDefaults() {
         "\\addbibresource{${2:references}.bib}";
     bibSetup.description = "Biblatex bibliography setup";
     registerSnippet("latex", bibSetup);
+
+    Snippet letter;
+    letter.prefix = "letter";
+    letter.label = "Letter Template";
+    letter.body =
+        "\\documentclass{letter}\n"
+        "\\signature{${1:Your Name}}\n"
+        "\\address{${2:Your Address}}\n"
+        "\\begin{document}\n"
+        "\\begin{letter}{${3:Recipient}}\n"
+        "\\opening{Dear ${4:Sir or Madam},}\n"
+        "${0}\n"
+        "\\closing{Yours sincerely,}\n"
+        "\\end{letter}\n"
+        "\\end{document}";
+    letter.description = "Letter document template";
+    registerSnippet("latex", letter);
+
+    Snippet minipage;
+    minipage.prefix = "mini";
+    minipage.label = "Minipage";
+    minipage.body =
+        "\\begin{minipage}{${1:0.45}\\textwidth}\n"
+        "  ${0}\n"
+        "\\end{minipage}";
+    minipage.description = "Minipage environment";
+    registerSnippet("latex", minipage);
+
+    Snippet lstlisting;
+    lstlisting.prefix = "lst";
+    lstlisting.label = "Code Listing";
+    lstlisting.body =
+        "\\begin{lstlisting}[language=${1:Python}, "
+        "caption={${2:Caption}}, label={lst:${3:label}}]\n"
+        "${0}\n"
+        "\\end{lstlisting}";
+    lstlisting.description = "Code listing environment";
+    registerSnippet("latex", lstlisting);
+
+    Snippet href;
+    href.prefix = "href";
+    href.label = "Hyperlink";
+    href.body = "\\href{${1:url}}{${2:text}}";
+    href.description = "Hyperlink with text";
+    registerSnippet("latex", href);
+
+    Snippet footnote;
+    footnote.prefix = "fn";
+    footnote.label = "Footnote";
+    footnote.body = "\\footnote{${1:text}}";
+    footnote.description = "Footnote";
+    registerSnippet("latex", footnote);
+
+    Snippet multicols;
+    multicols.prefix = "multicols";
+    multicols.label = "Multiple Columns";
+    multicols.body =
+        "\\begin{multicols}{${1:2}}\n"
+        "  ${0}\n"
+        "\\end{multicols}";
+    multicols.description = "Multiple columns environment";
+    registerSnippet("latex", multicols);
+
+    Snippet bibentry;
+    bibentry.prefix = "bibentry";
+    bibentry.label = "Bibliography Entry";
+    bibentry.body =
+        "@${1:article}{${2:key},\n"
+        "  author  = {${3:Author}},\n"
+        "  title   = {${4:Title}},\n"
+        "  journal = {${5:Journal}},\n"
+        "  year    = {${6:2024}},\n"
+        "  volume  = {${7:1}},\n"
+        "  pages   = {${8:1--10}}\n"
+        "}";
+    bibentry.description = "BibTeX bibliography entry";
+    registerSnippet("latex", bibentry);
+
+    Snippet subfile;
+    subfile.prefix = "subfile";
+    subfile.label = "Subfile (Multi-file)";
+    subfile.body =
+        "\\documentclass[${1:../main}]{subfiles}\n"
+        "\\begin{document}\n"
+        "${0}\n"
+        "\\end{document}";
+    subfile.description = "Subfile for multi-file projects";
+    registerSnippet("latex", subfile);
+
+    Snippet columns;
+    columns.prefix = "cols";
+    columns.label = "Beamer Columns";
+    columns.body =
+        "\\begin{columns}\n"
+        "  \\begin{column}{${1:0.5}\\textwidth}\n"
+        "    ${2}\n"
+        "  \\end{column}\n"
+        "  \\begin{column}{${3:0.5}\\textwidth}\n"
+        "    ${0}\n"
+        "  \\end{column}\n"
+        "\\end{columns}";
+    columns.description = "Beamer columns layout";
+    registerSnippet("latex", columns);
+
+    Snippet matrixSnip;
+    matrixSnip.prefix = "matrix";
+    matrixSnip.label = "Matrix";
+    matrixSnip.body =
+        "\\begin{${1:pmatrix}}\n"
+        "  ${2:a} & ${3:b} \\\\\\\\\n"
+        "  ${4:c} & ${0:d}\n"
+        "\\end{${1:pmatrix}}";
+    matrixSnip.description = "Matrix environment";
+    registerSnippet("latex", matrixSnip);
+
+    Snippet casesSnip;
+    casesSnip.prefix = "cases";
+    casesSnip.label = "Cases";
+    casesSnip.body =
+        "\\begin{cases}\n"
+        "  ${1:expr} & \\text{if } ${2:condition} \\\\\\\\\n"
+        "  ${3:expr} & \\text{otherwise}\n"
+        "\\end{cases}";
+    casesSnip.description = "Cases environment for piecewise functions";
+    registerSnippet("latex", casesSnip);
   }
 
   Logger::instance().info("Initialized default snippets");

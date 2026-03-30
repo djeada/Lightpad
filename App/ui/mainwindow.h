@@ -42,6 +42,7 @@ class LanguageFeatureManager;
 class LspCompletionProvider;
 class NotificationManager;
 class MarkdownPreviewPanel;
+class LatexPreviewPanel;
 struct DebugConfiguration;
 struct DefinitionTarget;
 #ifdef HAVE_PDF_SUPPORT
@@ -153,6 +154,7 @@ private slots:
   void on_actionToggle_Test_Panel_triggered();
 
   void on_actionPreview_Markdown_triggered();
+  void on_actionPreview_LaTeX_triggered();
 
   void on_actionOpen_To_Side_triggered();
 
