@@ -2,11 +2,13 @@
 #include "../../git/gitintegration.h"
 #include "../../ui/uistylehelper.h"
 
+#include <QAbstractItemView>
 #include <QComboBox>
 #include <QFile>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTemporaryFile>
@@ -18,12 +20,16 @@
 static const QStringList REBASE_ACTIONS = {"pick",   "reword", "edit",
                                            "squash", "fixup",  "drop"};
 
+static const QMap<QString, QString> ACTION_COLORS = {
+    {"pick", "#3fb950"},   {"reword", "#d29922"}, {"edit", "#58a6ff"},
+    {"squash", "#a371f7"}, {"fixup", "#8b949e"},  {"drop", "#f85149"}};
+
 GitRebaseDialog::GitRebaseDialog(GitIntegration *git, const Theme &theme,
                                  QWidget *parent)
     : QDialog(parent), m_git(git), m_theme(theme) {
   setWindowTitle(tr("Interactive Rebase"));
-  setMinimumSize(700, 450);
-  resize(800, 500);
+  setMinimumSize(800, 520);
+  resize(920, 600);
   buildUi();
   applyTheme(theme);
 }
@@ -44,27 +50,54 @@ void GitRebaseDialog::loadCommits(const QString &upstream) {
     entry.action = "pick";
     entry.hash = commits[i].shortHash;
     entry.subject = commits[i].subject;
+    entry.author = commits[i].author;
     m_entries.append(entry);
 
     auto *item = new QTreeWidgetItem(m_commitList);
-    auto *combo = new QComboBox(m_commitList);
-    combo->addItems(REBASE_ACTIONS);
-    combo->setCurrentText("pick");
-    m_commitList->setItemWidget(item, 0, combo);
+    rebuildComboForItem(item, i);
     item->setText(1, entry.hash);
     item->setText(2, commits[i].author);
     item->setText(3, entry.subject);
     item->setData(0, Qt::UserRole, i);
-
-    connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            [this, item](int index) {
-              int row = item->data(0, Qt::UserRole).toInt();
-              if (row >= 0 && row < m_entries.size())
-                m_entries[row].action = REBASE_ACTIONS[index];
-            });
+    item->setToolTip(3, commits[i].subject);
   }
 
-  m_statusLabel->setText(tr("%1 commits loaded").arg(count));
+  updateSummary();
+}
+
+void GitRebaseDialog::rebuildComboForItem(QTreeWidgetItem *item, int row) {
+  auto *combo = new QComboBox(m_commitList);
+  combo->addItems(REBASE_ACTIONS);
+  QString action = (row >= 0 && row < m_entries.size()) ? m_entries[row].action
+                                                        : "pick";
+  combo->setCurrentText(action);
+
+  QString color = ACTION_COLORS.value(action, "#e6edf3");
+  combo->setStyleSheet(
+      QString("QComboBox { background: #21262d; color: %1; border: 1px solid "
+              "#30363d; border-radius: 4px; padding: 2px 6px; font-weight: "
+              "bold; font-size: 11px; min-width: 70px; }"
+              "QComboBox:hover { border-color: #58a6ff; }"
+              "QComboBox::drop-down { border: none; width: 16px; }"
+              "QComboBox::down-arrow { image: none; border-left: 4px solid "
+              "transparent; border-right: 4px solid transparent; border-top: "
+              "5px solid %1; }"
+              "QComboBox QAbstractItemView { background: #161b22; color: "
+              "#e6edf3; selection-background-color: #1f6feb; border: 1px solid "
+              "#30363d; }")
+          .arg(color));
+
+  m_commitList->setItemWidget(item, 0, combo);
+
+  connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          [this, item](int index) {
+            int r = item->data(0, Qt::UserRole).toInt();
+            if (r >= 0 && r < m_entries.size()) {
+              m_entries[r].action = REBASE_ACTIONS[index];
+              rebuildComboForItem(item, r);
+              updateSummary();
+            }
+          });
 }
 
 void GitRebaseDialog::onMoveUp() {
@@ -76,19 +109,13 @@ void GitRebaseDialog::onMoveUp() {
   m_commitList->setCurrentItem(item);
 
   m_entries.swapItemsAt(row, row - 1);
-
-  auto *combo = new QComboBox(m_commitList);
-  combo->addItems(REBASE_ACTIONS);
-  combo->setCurrentText(m_entries[row - 1].action);
-  m_commitList->setItemWidget(item, 0, combo);
+  rebuildComboForItem(item, row - 1);
   item->setData(0, Qt::UserRole, row - 1);
 
   auto *otherItem = m_commitList->topLevelItem(row);
   otherItem->setData(0, Qt::UserRole, row);
-  auto *otherCombo = new QComboBox(m_commitList);
-  otherCombo->addItems(REBASE_ACTIONS);
-  otherCombo->setCurrentText(m_entries[row].action);
-  m_commitList->setItemWidget(otherItem, 0, otherCombo);
+  rebuildComboForItem(otherItem, row);
+  updateSummary();
 }
 
 void GitRebaseDialog::onMoveDown() {
@@ -100,24 +127,192 @@ void GitRebaseDialog::onMoveDown() {
   m_commitList->setCurrentItem(item);
 
   m_entries.swapItemsAt(row, row + 1);
-  auto *combo = new QComboBox(m_commitList);
-  combo->addItems(REBASE_ACTIONS);
-  combo->setCurrentText(m_entries[row + 1].action);
-  m_commitList->setItemWidget(item, 0, combo);
+  rebuildComboForItem(item, row + 1);
   item->setData(0, Qt::UserRole, row + 1);
 
   auto *otherItem = m_commitList->topLevelItem(row);
   otherItem->setData(0, Qt::UserRole, row);
-  auto *otherCombo = new QComboBox(m_commitList);
-  otherCombo->addItems(REBASE_ACTIONS);
-  otherCombo->setCurrentText(m_entries[row].action);
-  m_commitList->setItemWidget(otherItem, 0, otherCombo);
+  rebuildComboForItem(otherItem, row);
+  updateSummary();
 }
 
 void GitRebaseDialog::onActionChanged(int) {}
 
+void GitRebaseDialog::onSquashSelected() {
+  auto selected = m_commitList->selectedItems();
+  if (selected.size() < 2) {
+    QMessageBox::information(this, tr("Squash"),
+                             tr("Select at least 2 commits to squash."));
+    return;
+  }
+
+  for (auto *item : selected) {
+    int r = item->data(0, Qt::UserRole).toInt();
+    if (r >= 0 && r < m_entries.size()) {
+      if (item == selected.first()) {
+        m_entries[r].action = "pick";
+      } else {
+        m_entries[r].action = "squash";
+      }
+      rebuildComboForItem(item, r);
+    }
+  }
+  updateSummary();
+}
+
+void GitRebaseDialog::onDropSelected() {
+  auto selected = m_commitList->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  for (auto *item : selected) {
+    int r = item->data(0, Qt::UserRole).toInt();
+    if (r >= 0 && r < m_entries.size()) {
+      m_entries[r].action = "drop";
+      rebuildComboForItem(item, r);
+    }
+  }
+  updateSummary();
+}
+
+void GitRebaseDialog::onPickAll() {
+  for (int i = 0; i < m_entries.size(); ++i) {
+    m_entries[i].action = "pick";
+    auto *item = m_commitList->topLevelItem(i);
+    if (item)
+      rebuildComboForItem(item, i);
+  }
+  updateSummary();
+}
+
+void GitRebaseDialog::onSearchChanged(const QString &text) {
+  for (int i = 0; i < m_commitList->topLevelItemCount(); ++i) {
+    auto *item = m_commitList->topLevelItem(i);
+    if (text.isEmpty()) {
+      item->setHidden(false);
+    } else {
+      bool match = item->text(1).contains(text, Qt::CaseInsensitive) ||
+                   item->text(2).contains(text, Qt::CaseInsensitive) ||
+                   item->text(3).contains(text, Qt::CaseInsensitive);
+      item->setHidden(!match);
+    }
+  }
+}
+
+void GitRebaseDialog::syncEntriesFromTree() {
+  QList<RebaseEntry> reordered;
+  for (int i = 0; i < m_commitList->topLevelItemCount(); ++i) {
+    auto *item = m_commitList->topLevelItem(i);
+    int origIdx = item->data(0, Qt::UserRole).toInt();
+    if (origIdx >= 0 && origIdx < m_entries.size()) {
+      reordered.append(m_entries[origIdx]);
+    }
+  }
+  m_entries = reordered;
+  for (int i = 0; i < m_commitList->topLevelItemCount(); ++i) {
+    m_commitList->topLevelItem(i)->setData(0, Qt::UserRole, i);
+  }
+}
+
+void GitRebaseDialog::updateSummary() {
+  int pick = 0, reword = 0, edit = 0, squash = 0, fixup = 0, drop = 0;
+  for (const auto &e : m_entries) {
+    if (e.action == "pick")
+      ++pick;
+    else if (e.action == "reword")
+      ++reword;
+    else if (e.action == "edit")
+      ++edit;
+    else if (e.action == "squash")
+      ++squash;
+    else if (e.action == "fixup")
+      ++fixup;
+    else if (e.action == "drop")
+      ++drop;
+  }
+
+  QStringList parts;
+  if (pick > 0)
+    parts << QString("<span style='color:#3fb950'>%1 pick</span>").arg(pick);
+  if (reword > 0)
+    parts << QString("<span style='color:#d29922'>%1 reword</span>")
+                 .arg(reword);
+  if (edit > 0)
+    parts << QString("<span style='color:#58a6ff'>%1 edit</span>").arg(edit);
+  if (squash > 0)
+    parts << QString("<span style='color:#a371f7'>%1 squash</span>")
+                 .arg(squash);
+  if (fixup > 0)
+    parts << QString("<span style='color:#8b949e'>%1 fixup</span>").arg(fixup);
+  if (drop > 0)
+    parts << QString("<span style='color:#f85149'>%1 drop</span>").arg(drop);
+
+  if (m_summaryLabel) {
+    m_summaryLabel->setText(
+        tr("Plan: %1 commits — %2")
+            .arg(m_entries.size())
+            .arg(parts.isEmpty() ? tr("none") : parts.join(" · ")));
+  }
+
+  bool hasWork = false;
+  for (const auto &e : m_entries) {
+    if (e.action != "pick") {
+      hasWork = true;
+      break;
+    }
+  }
+  m_startBtn->setEnabled(!m_entries.isEmpty());
+  m_statusLabel->setText(
+      hasWork ? tr("Ready — rebase plan has modifications")
+              : tr("%1 commits loaded (all set to pick)")
+                    .arg(m_entries.size()));
+}
+
 void GitRebaseDialog::onStartRebase() {
   if (m_entries.isEmpty())
+    return;
+
+  int dropCount = 0;
+  int squashCount = 0;
+  for (const auto &e : m_entries) {
+    if (e.action == "drop")
+      ++dropCount;
+    if (e.action == "squash" || e.action == "fixup")
+      ++squashCount;
+  }
+
+  QString warning;
+  if (dropCount > 0 && squashCount > 0) {
+    warning = tr("This rebase will drop %1 commit(s) and squash %2 commit(s).\n"
+                 "This rewrites history and cannot be easily undone.")
+                  .arg(dropCount)
+                  .arg(squashCount);
+  } else if (dropCount > 0) {
+    warning = tr("This rebase will drop %1 commit(s).\n"
+                 "This rewrites history and cannot be easily undone.")
+                  .arg(dropCount);
+  } else if (squashCount > 0) {
+    warning = tr("This rebase will squash %1 commit(s).\n"
+                 "This rewrites history and cannot be easily undone.")
+                  .arg(squashCount);
+  } else {
+    warning = tr("This will rewrite commit history.\n"
+                 "Are you sure you want to proceed?");
+  }
+
+  QMessageBox confirmBox(this);
+  confirmBox.setIcon(QMessageBox::Warning);
+  confirmBox.setWindowTitle(tr("Confirm Rebase"));
+  confirmBox.setText(warning);
+  confirmBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+  confirmBox.setDefaultButton(QMessageBox::No);
+  confirmBox.setStyleSheet(
+      "QMessageBox { background: #0d1117; }"
+      "QMessageBox QLabel { color: #e6edf3; }"
+      "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
+      "#30363d; border-radius: 6px; padding: 6px 16px; }"
+      "QPushButton:hover { background: #30363d; }");
+  if (confirmBox.exec() != QMessageBox::Yes)
     return;
 
   QString todoScript;
@@ -164,49 +359,157 @@ void GitRebaseDialog::onStartRebase() {
 
 void GitRebaseDialog::buildUi() {
   auto *mainLayout = new QVBoxLayout(this);
-  mainLayout->setContentsMargins(8, 8, 8, 8);
-  mainLayout->setSpacing(6);
+  mainLayout->setContentsMargins(12, 12, 12, 12);
+  mainLayout->setSpacing(8);
+
+  auto *titleLabel =
+      new QLabel(tr("🔀 Interactive Rebase"), this);
+  titleLabel->setStyleSheet(
+      "font-size: 16px; font-weight: bold; color: #e6edf3;");
+  mainLayout->addWidget(titleLabel);
 
   auto *headerLabel = new QLabel(
-      tr("Reorder, squash, or drop commits. Drag items or use ▲/▼ buttons."),
+      tr("Reorder, squash, or drop commits. Use ▲/▼ buttons to reorder, or "
+         "select multiple commits for batch operations."),
       this);
+  headerLabel->setWordWrap(true);
+  headerLabel->setStyleSheet("color: #8b949e; font-size: 12px; margin-bottom: 4px;");
   mainLayout->addWidget(headerLabel);
 
+  m_searchEdit = new QLineEdit(this);
+  m_searchEdit->setPlaceholderText(tr("🔍 Filter commits by hash, author, or message..."));
+  m_searchEdit->setClearButtonEnabled(true);
+  m_searchEdit->setStyleSheet(
+      "QLineEdit { background: #21262d; color: #e6edf3; border: 1px solid "
+      "#30363d; border-radius: 6px; padding: 6px 10px; font-size: 12px; }"
+      "QLineEdit:focus { border-color: #58a6ff; }");
+  mainLayout->addWidget(m_searchEdit);
+  connect(m_searchEdit, &QLineEdit::textChanged, this,
+          &GitRebaseDialog::onSearchChanged);
+
   auto *toolbar = new QHBoxLayout();
-  m_moveUpBtn = new QPushButton(tr("▲ Move Up"), this);
-  m_moveDownBtn = new QPushButton(tr("▼ Move Down"), this);
+  toolbar->setSpacing(6);
+
+  m_moveUpBtn = new QPushButton(tr("▲ Up"), this);
+  m_moveDownBtn = new QPushButton(tr("▼ Down"), this);
+  m_squashBtn = new QPushButton(tr("📦 Squash"), this);
+  m_dropBtn = new QPushButton(tr("🗑 Drop"), this);
+  m_pickAllBtn = new QPushButton(tr("↺ Reset All"), this);
+
+  QString toolBtnStyle =
+      "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
+      "#30363d; border-radius: 6px; padding: 5px 12px; font-size: 11px; }"
+      "QPushButton:hover { background: #30363d; border-color: #58a6ff; }"
+      "QPushButton:pressed { background: #161b22; }";
+
+  m_moveUpBtn->setStyleSheet(toolBtnStyle);
+  m_moveDownBtn->setStyleSheet(toolBtnStyle);
+  m_squashBtn->setStyleSheet(toolBtnStyle);
+  m_pickAllBtn->setStyleSheet(toolBtnStyle);
+  m_dropBtn->setStyleSheet(
+      "QPushButton { background: #21262d; color: #f85149; border: 1px solid "
+      "#30363d; border-radius: 6px; padding: 5px 12px; font-size: 11px; }"
+      "QPushButton:hover { background: #da3633; color: white; border-color: "
+      "#da3633; }"
+      "QPushButton:pressed { background: #b62324; }");
+
+  m_moveUpBtn->setToolTip(tr("Move selected commit up (earlier in history)"));
+  m_moveDownBtn->setToolTip(
+      tr("Move selected commit down (later in history)"));
+  m_squashBtn->setToolTip(
+      tr("Mark selected commits for squashing (combine into one)"));
+  m_dropBtn->setToolTip(
+      tr("Mark selected commits for dropping (remove from history)"));
+  m_pickAllBtn->setToolTip(tr("Reset all actions back to 'pick'"));
+
   toolbar->addWidget(m_moveUpBtn);
   toolbar->addWidget(m_moveDownBtn);
+  toolbar->addSpacing(8);
+  toolbar->addWidget(m_squashBtn);
+  toolbar->addWidget(m_dropBtn);
   toolbar->addStretch();
+  toolbar->addWidget(m_pickAllBtn);
   mainLayout->addLayout(toolbar);
 
   connect(m_moveUpBtn, &QPushButton::clicked, this, &GitRebaseDialog::onMoveUp);
   connect(m_moveDownBtn, &QPushButton::clicked, this,
           &GitRebaseDialog::onMoveDown);
+  connect(m_squashBtn, &QPushButton::clicked, this,
+          &GitRebaseDialog::onSquashSelected);
+  connect(m_dropBtn, &QPushButton::clicked, this,
+          &GitRebaseDialog::onDropSelected);
+  connect(m_pickAllBtn, &QPushButton::clicked, this,
+          &GitRebaseDialog::onPickAll);
 
   m_commitList = new QTreeWidget(this);
   m_commitList->setHeaderLabels(
       {tr("Action"), tr("Hash"), tr("Author"), tr("Subject")});
   m_commitList->setRootIsDecorated(false);
-  m_commitList->setSelectionMode(QAbstractItemView::SingleSelection);
+  m_commitList->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_commitList->setDragDropMode(QAbstractItemView::InternalMove);
+  m_commitList->setDragEnabled(true);
+  m_commitList->setAcceptDrops(true);
+  m_commitList->setDropIndicatorShown(true);
+  m_commitList->setDefaultDropAction(Qt::MoveAction);
+  m_commitList->setAlternatingRowColors(true);
   m_commitList->header()->setSectionResizeMode(0, QHeaderView::Fixed);
-  m_commitList->header()->resizeSection(0, 100);
+  m_commitList->header()->resizeSection(0, 110);
   m_commitList->header()->setSectionResizeMode(1,
                                                QHeaderView::ResizeToContents);
   m_commitList->header()->setSectionResizeMode(2,
                                                QHeaderView::ResizeToContents);
   m_commitList->header()->setSectionResizeMode(3, QHeaderView::Stretch);
-  mainLayout->addWidget(m_commitList);
+  m_commitList->setStyleSheet(
+      "QTreeWidget { background: #0d1117; color: #e6edf3; border: 1px solid "
+      "#30363d; border-radius: 6px; font-size: 12px; outline: none; }"
+      "QTreeWidget::item { padding: 4px 6px; border-bottom: 1px solid "
+      "#21262d; }"
+      "QTreeWidget::item:selected { background: #1f6feb; color: white; }"
+      "QTreeWidget::item:hover { background: #161b22; }"
+      "QTreeWidget::item:selected:hover { background: #388bfd; }"
+      "QTreeWidget::item:alternate { background: #0d1117; }"
+      "QHeaderView::section { background: #161b22; color: #8b949e; border: "
+      "none; border-bottom: 1px solid #30363d; padding: 6px; font-size: 11px; "
+      "font-weight: bold; text-transform: uppercase; }");
+
+  connect(m_commitList->model(), &QAbstractItemModel::rowsMoved,
+          [this]() {
+            syncEntriesFromTree();
+            for (int i = 0; i < m_commitList->topLevelItemCount(); ++i) {
+              rebuildComboForItem(m_commitList->topLevelItem(i), i);
+            }
+            updateSummary();
+          });
+
+  mainLayout->addWidget(m_commitList, 1);
+
+  m_summaryLabel = new QLabel(this);
+  m_summaryLabel->setTextFormat(Qt::RichText);
+  m_summaryLabel->setStyleSheet(
+      "color: #8b949e; font-size: 11px; padding: 4px 2px;");
+  mainLayout->addWidget(m_summaryLabel);
 
   m_statusLabel = new QLabel(this);
+  m_statusLabel->setStyleSheet("color: #8b949e; font-size: 11px;");
   mainLayout->addWidget(m_statusLabel);
 
   auto *buttonLayout = new QHBoxLayout();
   buttonLayout->addStretch();
-  m_startBtn = new QPushButton(tr("Start Rebase"), this);
   m_cancelBtn = new QPushButton(tr("Cancel"), this);
-  buttonLayout->addWidget(m_startBtn);
+  m_startBtn = new QPushButton(tr("▶ Start Rebase"), this);
+  m_cancelBtn->setStyleSheet(
+      "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
+      "#30363d; border-radius: 6px; padding: 8px 20px; font-size: 12px; }"
+      "QPushButton:hover { background: #30363d; }");
+  m_startBtn->setStyleSheet(
+      "QPushButton { background: #238636; color: white; border: none; "
+      "border-radius: 6px; padding: 8px 24px; font-size: 12px; font-weight: "
+      "bold; }"
+      "QPushButton:hover { background: #2ea043; }"
+      "QPushButton:pressed { background: #1a7f37; }"
+      "QPushButton:disabled { background: #21262d; color: #484f58; }");
   buttonLayout->addWidget(m_cancelBtn);
+  buttonLayout->addWidget(m_startBtn);
   mainLayout->addLayout(buttonLayout);
 
   connect(m_startBtn, &QPushButton::clicked, this,
@@ -221,13 +524,8 @@ void GitRebaseDialog::applyTheme(const Theme &theme) {
 
   setStyleSheet(
       QString("QDialog { background-color: %1; color: %2; }"
-              "QTreeWidget { background-color: %1; color: %2; }"
-              "QLabel { color: %2; }"
-              "QPushButton { background-color: %3; color: %2; "
-              "border: 1px solid %4; padding: 4px 12px; }"
-              "QPushButton:hover { background-color: %4; }"
-              "QHeaderView::section { background-color: %3; color: %2; }")
-          .arg(bg, fg, theme.lineNumberAreaColor.name(), highlight));
+              "QLabel { color: %2; }")
+          .arg(bg, fg));
 }
 
 void GitRebaseDialog::updateActionForItem(QTreeWidgetItem *, const QString &) {}

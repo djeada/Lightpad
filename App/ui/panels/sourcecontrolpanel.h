@@ -74,6 +74,7 @@ private slots:
   void onStashClicked();
   void onMergeConflictsDetected(const QStringList &files);
   void onResolveConflictsClicked();
+  void onHistorySearchChanged(const QString &text);
 
 private:
   void setupUI();
@@ -94,6 +95,7 @@ private:
   void updateCounts();
   void updateHeaderTitle();
   void scheduleRefresh();
+  bool confirmDestructive(const QString &title, const QString &text);
 
   GitIntegration *m_git;
   QString m_workingPath;
@@ -138,6 +140,8 @@ private:
   QLabel *m_historyLabel;
   QTreeWidget *m_historyTree;
   QPushButton *m_historyToggleButton;
+  QLineEdit *m_historySearchEdit;
+  QPushButton *m_historyRebaseBtn;
   bool m_historyExpanded;
   bool m_updatingBranchSelector;
   bool m_updatingTree;

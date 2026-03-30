@@ -44,6 +44,10 @@ private slots:
   void testRewordCommit();
   void testCherryPick();
 
+  void testDropCommit();
+  void testSquashCommits();
+  void testMoveCommitToBranch();
+
 private:
   QTemporaryDir m_tempDir;
   QString m_repoPath;
@@ -885,6 +889,107 @@ void TestGitIntegration::testCherryPick() {
 
   QFile file(m_repoPath + "/cherry_branch.txt");
   QVERIFY(file.exists());
+}
+
+void TestGitIntegration::testDropCommit() {
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(m_repoPath));
+
+  createTestFile("drop_test.txt", "Content to drop\n");
+  QVERIFY(git.stageFile("drop_test.txt"));
+  QVERIFY(git.commit("Commit to drop"));
+
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"rev-parse", "HEAD"});
+  process.waitForFinished();
+  QString headHash =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+  QVERIFY(git.dropCommit(headHash));
+
+  process.start("git", {"log", "-1", "--pretty=%s"});
+  process.waitForFinished();
+  QString lastMsg =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QVERIFY(lastMsg != "Commit to drop");
+
+  QVERIFY(!git.dropCommit(""));
+}
+
+void TestGitIntegration::testSquashCommits() {
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(m_repoPath));
+
+  createTestFile("squash1.txt", "First squash content\n");
+  QVERIFY(git.stageFile("squash1.txt"));
+  QVERIFY(git.commit("Squash commit 1"));
+
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"rev-parse", "HEAD"});
+  process.waitForFinished();
+  QString hash1 =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+  createTestFile("squash2.txt", "Second squash content\n");
+  QVERIFY(git.stageFile("squash2.txt"));
+  QVERIFY(git.commit("Squash commit 2"));
+
+  process.start("git", {"rev-parse", "HEAD"});
+  process.waitForFinished();
+  QString hash2 =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+  QStringList hashes = {hash1, hash2};
+  QVERIFY(git.squashCommits(hashes, "Squashed result"));
+
+  process.start("git", {"log", "-1", "--pretty=%s"});
+  process.waitForFinished();
+  QString lastMsg =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QCOMPARE(lastMsg, "Squashed result");
+
+  QVERIFY(!git.squashCommits({"single"}, "msg"));
+  QVERIFY(!git.squashCommits(hashes, ""));
+}
+
+void TestGitIntegration::testMoveCommitToBranch() {
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(m_repoPath));
+
+  QVERIFY(runGitCommand({"checkout", "-b", "move-source"}));
+
+  createTestFile("move_test.txt", "Content to move\n");
+  QVERIFY(git.stageFile("move_test.txt"));
+  QVERIFY(git.commit("Commit to move"));
+
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"rev-parse", "HEAD"});
+  process.waitForFinished();
+  QString moveHash =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+  QVERIFY(runGitCommand({"branch", "move-target", "HEAD~1"}));
+
+  QVERIFY(git.moveCommitToBranch(moveHash, "move-target"));
+
+  process.start("git", {"log", "-1", "--pretty=%s"});
+  process.waitForFinished();
+  QString currentMsg =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QVERIFY(currentMsg != "Commit to move");
+
+  QVERIFY(git.checkoutBranch("move-target"));
+  process.start("git", {"log", "-1", "--pretty=%s"});
+  process.waitForFinished();
+  QString targetMsg =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QCOMPARE(targetMsg, "Commit to move");
+
+  QVERIFY(!git.moveCommitToBranch("", "some-branch"));
+  QVERIFY(!git.moveCommitToBranch(moveHash, ""));
 }
 
 QTEST_MAIN(TestGitIntegration)
