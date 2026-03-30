@@ -40,6 +40,7 @@ class SymbolNavigationService;
 class DiagnosticsManager;
 class LanguageFeatureManager;
 class LspCompletionProvider;
+class NotificationManager;
 struct DebugConfiguration;
 struct DefinitionTarget;
 #ifdef HAVE_PDF_SUPPORT
@@ -229,6 +230,8 @@ private:
   DiagnosticsManager *m_diagnosticsManager;
   LanguageFeatureManager *m_languageFeatureManager;
   std::shared_ptr<LspCompletionProvider> m_lspCompletionProvider;
+  NotificationManager *m_notificationManager;
+  class QLabel *m_lspStatusLabel;
   QMap<QString, int> m_documentVersions;
   QMap<QString, QTimer *> m_diagnosticsChangeTimers;
   QMap<QString, QString> m_pendingDiagnosticsTexts;
@@ -286,6 +289,8 @@ private:
   void jumpToTarget(const DefinitionTarget &target);
   void setupAutoSave();
   void setupDiagnostics();
+  void setupNotificationManager();
+  void updateLspStatusLabel(const QString &languageId, const QString &status);
   void notifyDiagnosticsFileOpened(const QString &filePath);
   void notifyDiagnosticsFileChanged(const QString &filePath,
                                     const QString &text);

@@ -88,6 +88,7 @@ set(project_headers
     ui/dialogs/gitfilehistorydialog.h
     ui/dialogs/gitrebasedialog.h
     ui/widgets/gitgraphwidget.h
+    ui/widgets/notificationwidget.h
     ui/widgets/pythonenvironmentwidget.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
@@ -221,6 +222,7 @@ set(project_sources
     ui/dialogs/gitfilehistorydialog.cpp
     ui/dialogs/gitrebasedialog.cpp
     ui/widgets/gitgraphwidget.cpp
+    ui/widgets/notificationwidget.cpp
     ui/widgets/pythonenvironmentwidget.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
