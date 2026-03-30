@@ -315,6 +315,96 @@ void LspClient::requestCodeAction(const QString &uri, LspRange range,
   sendRequest("textDocument/codeAction", params, id);
 }
 
+void LspClient::requestFormatting(const QString &uri, int tabSize,
+                                  bool insertSpaces) {
+  QJsonObject textDocument;
+  textDocument["uri"] = uri;
+
+  QJsonObject options;
+  options["tabSize"] = tabSize;
+  options["insertSpaces"] = insertSpaces;
+
+  QJsonObject params;
+  params["textDocument"] = textDocument;
+  params["options"] = options;
+
+  int id = m_nextRequestId++;
+  m_pendingRequests[id] = "textDocument/formatting";
+  sendRequest("textDocument/formatting", params, id);
+}
+
+void LspClient::requestDeclaration(const QString &uri, LspPosition position) {
+  QJsonObject textDocument;
+  textDocument["uri"] = uri;
+
+  QJsonObject params;
+  params["textDocument"] = textDocument;
+  params["position"] = position.toJson();
+
+  int id = m_nextRequestId++;
+  m_pendingRequests[id] = "textDocument/declaration";
+  sendRequest("textDocument/declaration", params, id);
+}
+
+void LspClient::requestTypeDefinition(const QString &uri,
+                                      LspPosition position) {
+  QJsonObject textDocument;
+  textDocument["uri"] = uri;
+
+  QJsonObject params;
+  params["textDocument"] = textDocument;
+  params["position"] = position.toJson();
+
+  int id = m_nextRequestId++;
+  m_pendingRequests[id] = "textDocument/typeDefinition";
+  sendRequest("textDocument/typeDefinition", params, id);
+}
+
+void LspClient::requestWorkspaceSymbols(const QString &query) {
+  QJsonObject params;
+  params["query"] = query;
+
+  int id = m_nextRequestId++;
+  m_pendingRequests[id] = "workspace/symbol";
+  sendRequest("workspace/symbol", params, id);
+}
+
+void LspClient::setRootUri(const QString &rootUri) { m_rootUri = rootUri; }
+
+const LspServerCapabilities &LspClient::serverCapabilities() const {
+  return m_capabilities;
+}
+
+bool LspClient::supportsCapability(const QString &capability) const {
+  if (capability == "hover")
+    return m_capabilities.hoverProvider;
+  if (capability == "completion")
+    return m_capabilities.completionProvider;
+  if (capability == "definition")
+    return m_capabilities.definitionProvider;
+  if (capability == "declaration")
+    return m_capabilities.declarationProvider;
+  if (capability == "typeDefinition")
+    return m_capabilities.typeDefinitionProvider;
+  if (capability == "references")
+    return m_capabilities.referencesProvider;
+  if (capability == "rename")
+    return m_capabilities.renameProvider;
+  if (capability == "documentSymbol")
+    return m_capabilities.documentSymbolProvider;
+  if (capability == "workspaceSymbol")
+    return m_capabilities.workspaceSymbolProvider;
+  if (capability == "signatureHelp")
+    return m_capabilities.signatureHelpProvider;
+  if (capability == "formatting")
+    return m_capabilities.documentFormattingProvider;
+  if (capability == "codeAction")
+    return m_capabilities.codeActionProvider;
+  if (capability == "semanticTokens")
+    return m_capabilities.semanticTokensProvider;
+  return false;
+}
+
 void LspClient::sendRequest(const QString &method, const QJsonObject &params,
                             int id) {
   QJsonObject message;
@@ -481,6 +571,9 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
   }
 
   if (method == "initialize") {
+    QJsonObject resultObj = result.toObject();
+    QJsonObject caps = resultObj["capabilities"].toObject();
+    parseServerCapabilities(caps);
     setState(State::Ready);
     sendNotification("initialized", {});
     emit initialized();
@@ -704,6 +797,57 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
       actions.append(action);
     }
     emit codeActionReceived(id, actions);
+  } else if (method == "textDocument/formatting") {
+    QList<LspTextEdit> edits;
+    QJsonArray editsArray = result.toArray();
+    for (const QJsonValue &val : editsArray) {
+      QJsonObject obj = val.toObject();
+      LspTextEdit edit;
+      edit.range = LspRange::fromJson(obj["range"].toObject());
+      edit.newText = obj["newText"].toString();
+      edits.append(edit);
+    }
+    emit formattingReceived(id, edits);
+  } else if (method == "textDocument/declaration") {
+    QList<LspLocation> locations;
+    QJsonArray locArray =
+        result.isArray() ? result.toArray() : QJsonArray{result.toObject()};
+    for (const QJsonValue &val : locArray) {
+      QJsonObject obj = val.toObject();
+      LspLocation loc;
+      loc.uri = obj["uri"].toString();
+      loc.range = LspRange::fromJson(obj["range"].toObject());
+      locations.append(loc);
+    }
+    emit declarationReceived(id, locations);
+  } else if (method == "textDocument/typeDefinition") {
+    QList<LspLocation> locations;
+    QJsonArray locArray =
+        result.isArray() ? result.toArray() : QJsonArray{result.toObject()};
+    for (const QJsonValue &val : locArray) {
+      QJsonObject obj = val.toObject();
+      LspLocation loc;
+      loc.uri = obj["uri"].toString();
+      loc.range = LspRange::fromJson(obj["range"].toObject());
+      locations.append(loc);
+    }
+    emit typeDefinitionReceived(id, locations);
+  } else if (method == "workspace/symbol") {
+    QList<LspDocumentSymbol> symbols;
+    QJsonArray symbolsArray = result.toArray();
+    for (const QJsonValue &val : symbolsArray) {
+      QJsonObject obj = val.toObject();
+      LspDocumentSymbol symbol;
+      symbol.name = obj["name"].toString();
+      symbol.kind = static_cast<LspSymbolKind>(obj["kind"].toInt());
+      if (obj.contains("location")) {
+        QJsonObject location = obj["location"].toObject();
+        symbol.range = LspRange::fromJson(location["range"].toObject());
+        symbol.selectionRange = symbol.range;
+      }
+      symbols.append(symbol);
+    }
+    emit workspaceSymbolsReceived(id, symbols);
   }
 }
 
@@ -745,6 +889,10 @@ void LspClient::doInitialize() {
   textDocumentCaps["completion"] = QJsonObject{{"dynamicRegistration", false}};
   textDocumentCaps["hover"] = QJsonObject{{"dynamicRegistration", false}};
   textDocumentCaps["definition"] = QJsonObject{{"dynamicRegistration", false}};
+  textDocumentCaps["declaration"] =
+      QJsonObject{{"dynamicRegistration", false}};
+  textDocumentCaps["typeDefinition"] =
+      QJsonObject{{"dynamicRegistration", false}};
   textDocumentCaps["references"] = QJsonObject{{"dynamicRegistration", false}};
   textDocumentCaps["signatureHelp"] =
       QJsonObject{{"dynamicRegistration", false}};
@@ -753,8 +901,16 @@ void LspClient::doInitialize() {
                   {"hierarchicalDocumentSymbolSupport", true}};
   textDocumentCaps["rename"] =
       QJsonObject{{"dynamicRegistration", false}, {"prepareSupport", false}};
+  textDocumentCaps["formatting"] =
+      QJsonObject{{"dynamicRegistration", false}};
+  textDocumentCaps["codeAction"] =
+      QJsonObject{{"dynamicRegistration", false}};
 
   capabilities["textDocument"] = textDocumentCaps;
+
+  QJsonObject workspaceCaps;
+  workspaceCaps["symbol"] = QJsonObject{{"dynamicRegistration", false}};
+  capabilities["workspace"] = workspaceCaps;
 
   QJsonObject params;
   params["processId"] = QJsonValue::Null;
@@ -765,6 +921,53 @@ void LspClient::doInitialize() {
   int id = m_nextRequestId++;
   m_pendingRequests[id] = "initialize";
   sendRequest("initialize", params, id);
+}
+
+void LspClient::parseServerCapabilities(const QJsonObject &caps) {
+  auto isTruthy = [](const QJsonValue &v) {
+    return v.isBool() ? v.toBool() : v.isObject();
+  };
+
+  m_capabilities.hoverProvider = isTruthy(caps["hoverProvider"]);
+  m_capabilities.completionProvider = isTruthy(caps["completionProvider"]);
+  m_capabilities.definitionProvider = isTruthy(caps["definitionProvider"]);
+  m_capabilities.declarationProvider = isTruthy(caps["declarationProvider"]);
+  m_capabilities.typeDefinitionProvider =
+      isTruthy(caps["typeDefinitionProvider"]);
+  m_capabilities.referencesProvider = isTruthy(caps["referencesProvider"]);
+  m_capabilities.renameProvider = isTruthy(caps["renameProvider"]);
+  m_capabilities.documentSymbolProvider =
+      isTruthy(caps["documentSymbolProvider"]);
+  m_capabilities.workspaceSymbolProvider =
+      isTruthy(caps["workspaceSymbolProvider"]);
+  m_capabilities.signatureHelpProvider =
+      isTruthy(caps["signatureHelpProvider"]);
+  m_capabilities.documentFormattingProvider =
+      isTruthy(caps["documentFormattingProvider"]);
+  m_capabilities.codeActionProvider = isTruthy(caps["codeActionProvider"]);
+  m_capabilities.semanticTokensProvider =
+      isTruthy(caps["semanticTokensProvider"]);
+
+  QJsonValue syncVal = caps["textDocumentSync"];
+  if (syncVal.isDouble()) {
+    m_capabilities.textDocumentSyncKind = syncVal.toInt(1);
+  } else if (syncVal.isObject()) {
+    m_capabilities.textDocumentSyncKind =
+        syncVal.toObject()["change"].toInt(1);
+  }
+
+  LOG_INFO(QString("Server capabilities: hover=%1 completion=%2 definition=%3 "
+                   "declaration=%4 typeDefinition=%5 references=%6 rename=%7 "
+                   "formatting=%8 codeAction=%9")
+               .arg(m_capabilities.hoverProvider)
+               .arg(m_capabilities.completionProvider)
+               .arg(m_capabilities.definitionProvider)
+               .arg(m_capabilities.declarationProvider)
+               .arg(m_capabilities.typeDefinitionProvider)
+               .arg(m_capabilities.referencesProvider)
+               .arg(m_capabilities.renameProvider)
+               .arg(m_capabilities.documentFormattingProvider)
+               .arg(m_capabilities.codeActionProvider));
 }
 
 void LspClient::setState(State state) {

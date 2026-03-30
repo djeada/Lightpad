@@ -636,6 +636,7 @@ add_executable(test_languagefeaturemanager
     ${CMAKE_SOURCE_DIR}/App/language/languagefeaturemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/diagnostics/diagnosticsmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/syntaxpluginregistry.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/cppsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/csssyntaxplugin.cpp
@@ -659,6 +660,7 @@ target_include_directories(test_languagefeaturemanager PRIVATE
     ${CMAKE_SOURCE_DIR}/App/diagnostics
     ${CMAKE_SOURCE_DIR}/App/lsp
     ${CMAKE_SOURCE_DIR}/App/syntax
+    ${CMAKE_SOURCE_DIR}/App/settings
 )
 
 target_link_libraries(test_languagefeaturemanager

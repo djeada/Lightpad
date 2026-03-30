@@ -149,6 +149,23 @@ struct LspCodeAction {
   bool isPreferred;
 };
 
+struct LspServerCapabilities {
+  bool hoverProvider = false;
+  bool completionProvider = false;
+  bool definitionProvider = false;
+  bool declarationProvider = false;
+  bool typeDefinitionProvider = false;
+  bool referencesProvider = false;
+  bool renameProvider = false;
+  bool documentSymbolProvider = false;
+  bool workspaceSymbolProvider = false;
+  bool signatureHelpProvider = false;
+  bool documentFormattingProvider = false;
+  bool codeActionProvider = false;
+  bool semanticTokensProvider = false;
+  int textDocumentSyncKind = 1;
+};
+
 class LspClient : public QObject {
   Q_OBJECT
 
@@ -195,6 +212,21 @@ public:
   void requestCodeAction(const QString &uri, LspRange range,
                          const QList<LspDiagnostic> &diagnostics = {});
 
+  void requestFormatting(const QString &uri, int tabSize = 4,
+                         bool insertSpaces = true);
+
+  void requestDeclaration(const QString &uri, LspPosition position);
+
+  void requestTypeDefinition(const QString &uri, LspPosition position);
+
+  void requestWorkspaceSymbols(const QString &query);
+
+  void setRootUri(const QString &rootUri);
+
+  const LspServerCapabilities &serverCapabilities() const;
+
+  bool supportsCapability(const QString &capability) const;
+
 signals:
   void stateChanged(State state);
   void initialized();
@@ -213,6 +245,12 @@ signals:
                                const QList<LspDocumentSymbol> &symbols);
   void renameReceived(int requestId, const LspWorkspaceEdit &workspaceEdit);
   void codeActionReceived(int requestId, const QList<LspCodeAction> &actions);
+  void formattingReceived(int requestId, const QList<LspTextEdit> &edits);
+  void declarationReceived(int requestId, const QList<LspLocation> &locations);
+  void typeDefinitionReceived(int requestId,
+                              const QList<LspLocation> &locations);
+  void workspaceSymbolsReceived(int requestId,
+                                const QList<LspDocumentSymbol> &symbols);
 
 private slots:
   void onReadyReadStandardOutput();
@@ -231,6 +269,7 @@ private:
   void doInitialize();
   void setState(State state);
   void cancelPendingCompletionRequest();
+  void parseServerCapabilities(const QJsonObject &capabilities);
 
   QProcess *m_process;
   State m_state;
@@ -239,6 +278,7 @@ private:
   QMap<int, QString> m_pendingRequests;
   QString m_rootUri;
   int m_pendingCompletionRequestId = -1;
+  LspServerCapabilities m_capabilities;
 
   QTimer *m_changeDebounceTimer = nullptr;
   QString m_pendingChangeUri;

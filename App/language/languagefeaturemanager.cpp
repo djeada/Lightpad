@@ -1,11 +1,17 @@
 #include "languagefeaturemanager.h"
 #include "../core/logging/logger.h"
 #include "../diagnostics/diagnosticutils.h"
+#include "../settings/settingsmanager.h"
+
+#include <QDir>
+#include <QFileInfo>
 
 LanguageFeatureManager::LanguageFeatureManager(
     DiagnosticsManager *diagnosticsManager, QObject *parent)
     : QObject(parent), m_diagnosticsManager(diagnosticsManager),
-      m_serverConfigs(defaultServerConfigs()) {}
+      m_serverConfigs(defaultServerConfigs()) {
+  loadSettingsOverrides();
+}
 
 LanguageFeatureManager::~LanguageFeatureManager() {
   for (auto it = m_clients.begin(); it != m_clients.end(); ++it) {
@@ -20,8 +26,10 @@ LanguageFeatureManager::~LanguageFeatureManager() {
 
 QList<DiagnosticsServerConfig> LanguageFeatureManager::defaultServerConfigs() {
   return {
-      {"cpp", "clangd", {}},
+      {"cpp", "clangd", {"--background-index"}},
       {"py", "pylsp", {}},
+      {"rust", "rust-analyzer", {}},
+      {"go", "gopls", {"serve"}},
   };
 }
 
@@ -48,6 +56,12 @@ void LanguageFeatureManager::openDocument(const QString &filePath,
   LspClient *client = ensureClient(effectiveLang);
   if (!client) {
     return;
+  }
+
+  QString projectRoot = detectProjectRoot(filePath);
+  if (!projectRoot.isEmpty()) {
+    QString rootUri = DiagnosticUtils::filePathToUri(projectRoot);
+    client->setRootUri(rootUri);
   }
 
   m_fileToLanguage[filePath] = effectiveLang;
@@ -186,16 +200,24 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
   }
 
   DiagnosticsServerConfig config = configForLanguage(languageId);
-  if (config.command.isEmpty()) {
-    LOG_WARNING(QString("No server command configured for language '%1'")
-                    .arg(languageId));
-    emit serverError(languageId,
-                     QString("No language server configured for '%1'. "
-                             "Install the appropriate server and update "
-                             "settings.")
-                         .arg(languageId));
+  if (config.command.isEmpty() || !config.enabled) {
+    QString reason = config.command.isEmpty()
+                         ? QString("No language server configured for '%1'. "
+                                   "Install the appropriate server and update "
+                                   "settings.")
+                               .arg(languageId)
+                         : QString("Language server for '%1' is disabled in "
+                                   "settings.")
+                               .arg(languageId);
+    LOG_WARNING(reason);
+    emit serverError(languageId, reason);
+    m_serverHealth[languageId] = ServerHealthStatus::Stopped;
+    emit serverHealthChanged(languageId, ServerHealthStatus::Stopped);
     return nullptr;
   }
+
+  m_serverHealth[languageId] = ServerHealthStatus::Starting;
+  emit serverHealthChanged(languageId, ServerHealthStatus::Starting);
 
   auto *client = new LspClient(this);
 
@@ -207,6 +229,8 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
 
   connect(client, &LspClient::initialized, this, [this, languageId]() {
     LOG_INFO(QString("Language server for '%1' initialized").arg(languageId));
+    m_serverHealth[languageId] = ServerHealthStatus::Running;
+    emit serverHealthChanged(languageId, ServerHealthStatus::Running);
     emit serverStarted(languageId);
   });
 
@@ -214,6 +238,8 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
           [this, languageId](const QString &message) {
             LOG_ERROR(QString("Language server error for '%1': %2")
                           .arg(languageId, message));
+            m_serverHealth[languageId] = ServerHealthStatus::Error;
+            emit serverHealthChanged(languageId, ServerHealthStatus::Error);
             emit serverError(languageId, message);
           });
 
@@ -225,6 +251,8 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
     emit serverError(
         languageId,
         QString("Failed to start '%1'. Is it installed?").arg(config.command));
+    m_serverHealth[languageId] = ServerHealthStatus::Error;
+    emit serverHealthChanged(languageId, ServerHealthStatus::Error);
     delete client;
     return nullptr;
   }
@@ -254,4 +282,64 @@ void LanguageFeatureManager::onDiagnosticsReceived(
   QString sourceId = QString("lsp:%1").arg(languageId);
   int version = m_diagnosticsManager->documentVersion(uri);
   m_diagnosticsManager->upsertDiagnostics(uri, diagnostics, sourceId, version);
+}
+
+QString LanguageFeatureManager::detectProjectRoot(const QString &filePath) {
+  static const QStringList projectMarkers = {
+      "Cargo.toml",           // Rust
+      "go.mod",               // Go
+      "pyproject.toml",       // Python
+      "requirements.txt",     // Python
+      "setup.py",             // Python
+      "CMakeLists.txt",       // C/C++
+      "compile_commands.json" // C/C++
+  };
+
+  QDir dir = QFileInfo(filePath).absoluteDir();
+  QString prevPath;
+
+  while (dir.absolutePath() != prevPath) {
+    for (const QString &marker : projectMarkers) {
+      if (QFileInfo::exists(dir.filePath(marker))) {
+        return dir.absolutePath();
+      }
+    }
+    prevPath = dir.absolutePath();
+    dir.cdUp();
+  }
+
+  return QFileInfo(filePath).absolutePath();
+}
+
+ServerHealthStatus
+LanguageFeatureManager::serverHealth(const QString &languageId) const {
+  return m_serverHealth.value(languageId, ServerHealthStatus::Unknown);
+}
+
+void LanguageFeatureManager::loadSettingsOverrides() {
+  SettingsManager &settings = SettingsManager::instance();
+
+  for (DiagnosticsServerConfig &cfg : m_serverConfigs) {
+    QString prefix = QString("languageServers.%1").arg(cfg.languageId);
+
+    QVariant cmdVal = settings.getValue(prefix + ".command");
+    if (cmdVal.isValid() && !cmdVal.toString().isEmpty()) {
+      cfg.command = cmdVal.toString();
+    }
+
+    QVariant argsVal = settings.getValue(prefix + ".arguments");
+    if (argsVal.isValid()) {
+      cfg.arguments = argsVal.toStringList();
+    }
+
+    QVariant envVal = settings.getValue(prefix + ".environment");
+    if (envVal.isValid()) {
+      cfg.environmentVariables = envVal.toStringList();
+    }
+
+    QVariant enabledVal = settings.getValue(prefix + ".enabled");
+    if (enabledVal.isValid()) {
+      cfg.enabled = enabledVal.toBool();
+    }
+  }
 }

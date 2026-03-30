@@ -60,6 +60,38 @@ void SettingsManager::initializeDefaults() {
   diagnosticsDefaults["debounceMs"] = 200;
   m_defaults["diagnostics"] = diagnosticsDefaults;
 
+  QJsonObject languageServersDefaults;
+
+  QJsonObject cppServer;
+  cppServer["command"] = "clangd";
+  cppServer["arguments"] = QJsonArray({"--background-index"});
+  cppServer["environment"] = QJsonArray();
+  cppServer["enabled"] = true;
+  languageServersDefaults["cpp"] = cppServer;
+
+  QJsonObject pyServer;
+  pyServer["command"] = "pylsp";
+  pyServer["arguments"] = QJsonArray();
+  pyServer["environment"] = QJsonArray();
+  pyServer["enabled"] = true;
+  languageServersDefaults["py"] = pyServer;
+
+  QJsonObject rustServer;
+  rustServer["command"] = "rust-analyzer";
+  rustServer["arguments"] = QJsonArray();
+  rustServer["environment"] = QJsonArray();
+  rustServer["enabled"] = true;
+  languageServersDefaults["rust"] = rustServer;
+
+  QJsonObject goServer;
+  goServer["command"] = "gopls";
+  goServer["arguments"] = QJsonArray({"serve"});
+  goServer["environment"] = QJsonArray();
+  goServer["enabled"] = true;
+  languageServersDefaults["go"] = goServer;
+
+  m_defaults["languageServers"] = languageServersDefaults;
+
   m_settings = m_defaults;
 }
 
