@@ -17,6 +17,7 @@ constexpr int LineNumberRole = Qt::UserRole + 2;
 TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
   setObjectName("TestPanel");
   m_runManager = new TestRunManager(this);
+  m_autoTestRunner = new AutoTestRunner(m_runManager, this);
   setupUI();
 
   connect(m_runManager, &TestRunManager::testStarted, this,
@@ -80,6 +81,28 @@ void TestPanel::setupUI() {
                              updateStatusLabel();
                            });
   m_clearAction->setToolTip(tr("Clear Results"));
+
+  m_toolbar->addSeparator();
+
+  m_autoRunAction = m_toolbar->addAction(
+      style()->standardIcon(QStyle::SP_DialogApplyButton), tr("Auto"));
+  m_autoRunAction->setCheckable(true);
+  m_autoRunAction->setChecked(false);
+  m_autoRunAction->setToolTip(tr("Toggle Auto-run Tests on Save"));
+  connect(m_autoRunAction, &QAction::toggled, this,
+          &TestPanel::onAutoRunToggled);
+
+  m_autoRunModeCombo = new QComboBox(this);
+  m_autoRunModeCombo->addItem(tr("All on Save"));
+  m_autoRunModeCombo->addItem(tr("File on Save"));
+  m_autoRunModeCombo->addItem(tr("Last Selection"));
+  m_autoRunModeCombo->setMinimumWidth(130);
+  m_autoRunModeCombo->setEnabled(false);
+  m_autoRunModeCombo->setToolTip(tr("Auto-run scope"));
+  connect(m_autoRunModeCombo,
+          QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+          &TestPanel::onAutoRunModeChanged);
+  m_toolbar->addWidget(m_autoRunModeCombo);
 
   m_toolbar->addSeparator();
 
@@ -244,6 +267,16 @@ void TestPanel::setWorkspaceFolder(const QString &folder) {
   TestConfigurationManager::instance().setWorkspaceFolder(folder);
   TestConfigurationManager::instance().loadUserConfigurations(folder);
   refreshConfigurations();
+  m_autoTestRunner->setWorkspaceFolder(folder);
+  m_autoTestRunner->loadSettings(folder);
+  m_autoRunAction->setChecked(m_autoTestRunner->isEnabled());
+  m_autoRunModeCombo->setEnabled(m_autoTestRunner->isEnabled());
+  if (m_autoTestRunner->mode() != AutoRunMode::Off) {
+    int modeIdx = static_cast<int>(m_autoTestRunner->mode()) - 1;
+    if (modeIdx >= 0 && modeIdx < m_autoRunModeCombo->count())
+      m_autoRunModeCombo->setCurrentIndex(modeIdx);
+  }
+  syncAutoRunConfiguration();
 }
 
 void TestPanel::runAll() {
@@ -451,7 +484,10 @@ void TestPanel::onFilterChanged(int index) {
   applyFilter();
 }
 
-void TestPanel::onConfigChanged(int index) { Q_UNUSED(index) }
+void TestPanel::onConfigChanged(int index) {
+  Q_UNUSED(index)
+  syncAutoRunConfiguration();
+}
 
 void TestPanel::onContextMenu(const QPoint &pos) {
   QTreeWidgetItem *item = m_tree->itemAt(pos);
@@ -718,6 +754,37 @@ void TestPanel::populateTreeFromDiscovery(const QList<DiscoveredTest> &tests) {
       m_tree->addTopLevelItem(item);
     m_testItems[test.id] = item;
   }
+}
+
+void TestPanel::notifyFileSaved(const QString &filePath) {
+  syncAutoRunConfiguration();
+  m_autoTestRunner->notifyFileSaved(filePath);
+}
+
+void TestPanel::onAutoRunToggled(bool checked) {
+  m_autoTestRunner->setEnabled(checked);
+  m_autoRunModeCombo->setEnabled(checked);
+  if (checked) {
+    int modeIdx = m_autoRunModeCombo->currentIndex();
+    m_autoTestRunner->setMode(
+        static_cast<AutoRunMode>(modeIdx + 1));
+  } else {
+    m_autoTestRunner->setMode(AutoRunMode::Off);
+  }
+  m_autoTestRunner->saveSettings(m_workspaceFolder);
+}
+
+void TestPanel::onAutoRunModeChanged(int index) {
+  if (m_autoTestRunner->isEnabled()) {
+    m_autoTestRunner->setMode(
+        static_cast<AutoRunMode>(index + 1));
+    m_autoTestRunner->saveSettings(m_workspaceFolder);
+  }
+}
+
+void TestPanel::syncAutoRunConfiguration() {
+  TestConfiguration config = currentConfiguration();
+  m_autoTestRunner->setConfiguration(config);
 }
 
 void TestPanel::saveState() const {

@@ -2,6 +2,7 @@
 #define TESTPANEL_H
 
 #include "../../settings/theme.h"
+#include "../../test_templates/autotestrunner.h"
 #include "../../test_templates/testconfiguration.h"
 #include "../../test_templates/testdiscovery.h"
 #include "../../test_templates/testrunmanager.h"
@@ -32,8 +33,12 @@ public:
   int skippedCount() const { return m_skippedCount; }
   int erroredCount() const { return m_erroredCount; }
 
+  AutoTestRunner *autoTestRunner() const { return m_autoTestRunner; }
+
   void saveState() const;
   void restoreState();
+
+  void notifyFileSaved(const QString &filePath);
 
 signals:
   void locationClicked(const QString &filePath, int line, int column);
@@ -61,6 +66,8 @@ private slots:
   void onContextMenu(const QPoint &pos);
   void onDiscoveryFinished(const QList<DiscoveredTest> &tests);
   void onDiscoveryError(const QString &message);
+  void onAutoRunModeChanged(int index);
+  void onAutoRunToggled(bool checked);
 
 private:
   void setupUI();
@@ -70,6 +77,7 @@ private:
   QTreeWidgetItem *findTestItem(const QString &id);
   void applyFilter();
   void refreshConfigurations();
+  void syncAutoRunConfiguration();
   TestConfiguration currentConfiguration() const;
   void populateTreeFromDiscovery(const QList<DiscoveredTest> &tests);
   void connectDiscoveryAdapter();
@@ -80,8 +88,10 @@ private:
   QAction *m_stopAction;
   QAction *m_clearAction;
   QAction *m_discoverAction;
+  QAction *m_autoRunAction;
   QComboBox *m_filterCombo;
   QComboBox *m_configCombo;
+  QComboBox *m_autoRunModeCombo;
 
   QSplitter *m_splitter;
   QTreeWidget *m_tree;
@@ -89,6 +99,7 @@ private:
   QLabel *m_statusLabel;
 
   TestRunManager *m_runManager;
+  AutoTestRunner *m_autoTestRunner;
   ITestDiscoveryAdapter *m_discoveryAdapter = nullptr;
   bool m_ownsDiscoveryAdapter = false;
   QString m_workspaceFolder;

@@ -123,7 +123,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_codeLensEnabled(false), m_gitBranchLabel(nullptr),
       m_gitSyncLabel(nullptr), m_gitDirtyLabel(nullptr),
       m_debugTargetMenu(nullptr), debugPanel(nullptr), debugDock(nullptr),
-      testPanel(nullptr), testDock(nullptr), m_debugStartInProgress(false),
+      testPanel(nullptr), testDock(nullptr), m_testStatusLabel(nullptr),
+      m_debugStartInProgress(false),
       m_breakpointsSetConnection(), m_breakpointChangedConnection(),
       m_runInTerminalConnection(), m_sessionTerminatedConnection(),
       m_sessionErrorConnection(), m_sessionStateConnection(),
@@ -1739,6 +1740,10 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
     autoSaveManager->markSaved(filePath);
   }
 
+  if (testPanel) {
+    testPanel->notifyFileSaved(filePath);
+  }
+
   return true;
 }
 
@@ -2638,6 +2643,30 @@ void MainWindow::ensureTestPanel() {
                 textArea->centerCursor();
                 textArea->setFocus();
               }
+            }
+          });
+
+  connect(testPanel, &TestPanel::countsChanged, this,
+          [this](int passed, int failed, int skipped, int errored) {
+            Q_UNUSED(skipped)
+            Q_UNUSED(errored)
+            if (!m_testStatusLabel) {
+              m_testStatusLabel = new QLabel(this);
+              statusBar()->addPermanentWidget(m_testStatusLabel);
+            }
+            int total = passed + failed + skipped + errored;
+            if (total == 0) {
+              m_testStatusLabel->setText("");
+            } else if (failed > 0 || errored > 0) {
+              m_testStatusLabel->setText(
+                  tr("Tests: %1/%2 failed").arg(failed + errored).arg(total));
+              m_testStatusLabel->setStyleSheet(
+                  "QLabel { color: #f85149; font-weight: bold; }");
+            } else {
+              m_testStatusLabel->setText(
+                  tr("Tests: %1 passed").arg(passed));
+              m_testStatusLabel->setStyleSheet(
+                  "QLabel { color: #3fb950; font-weight: bold; }");
             }
           });
 

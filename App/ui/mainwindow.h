@@ -223,6 +223,7 @@ private:
   QDockWidget *debugDock;
   TestPanel *testPanel;
   QDockWidget *testDock;
+  QLabel *m_testStatusLabel;
   QString m_activeDebugSessionId;
   bool m_debugStartInProgress;
 
