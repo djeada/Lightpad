@@ -1,6 +1,7 @@
 #include "sourcecontrolpanel.h"
 #include "../dialogs/gitdiffdialog.h"
 #include "../dialogs/gitinitdialog.h"
+#include "../dialogs/gitrebasedialog.h"
 #include "../dialogs/gitremotedialog.h"
 #include "../dialogs/gitstashdialog.h"
 #include "../dialogs/mergeconflictdialog.h"
@@ -1776,10 +1777,40 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
   menu.addSeparator();
   QAction *checkoutAction = menu.addAction(tr("Checkout Commit"));
   QAction *createBranchAction = menu.addAction(tr("Create Branch..."));
+  QAction *cherryPickAction = menu.addAction(tr("Cherry-Pick Commit"));
+  menu.addSeparator();
+  QAction *rewordAction = menu.addAction(tr("Edit Commit Message..."));
+  QAction *revertAction = menu.addAction(tr("Revert Commit"));
+
+  QMenu *resetMenu = menu.addMenu(tr("Reset to Commit"));
+  resetMenu->setStyleSheet(menu.styleSheet());
+  QAction *resetSoftAction = resetMenu->addAction(tr("Soft (keep changes staged)"));
+  QAction *resetMixedAction = resetMenu->addAction(tr("Mixed (keep changes unstaged)"));
+  QAction *resetHardAction = resetMenu->addAction(tr("Hard (discard all changes)"));
+
+  menu.addSeparator();
+  QAction *rebaseAction = menu.addAction(tr("Interactive Rebase from Here..."));
 
   QAction *selected = menu.exec(m_historyTree->mapToGlobal(pos));
   if (!selected)
     return;
+
+  auto confirmDestructive = [this](const QString &title,
+                                   const QString &text) -> bool {
+    QMessageBox msgBox(this);
+    msgBox.setIcon(QMessageBox::Warning);
+    msgBox.setWindowTitle(title);
+    msgBox.setText(text);
+    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBox.setDefaultButton(QMessageBox::No);
+    msgBox.setStyleSheet(
+        "QMessageBox { background: #0d1117; }"
+        "QMessageBox QLabel { color: #e6edf3; }"
+        "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
+        "#30363d; border-radius: 6px; padding: 6px 16px; }"
+        "QPushButton:hover { background: #30363d; }");
+    return msgBox.exec() == QMessageBox::Yes;
+  };
 
   if (selected == viewDiffAction) {
     emit commitDiffRequested(commitHash, shortHash);
@@ -1788,7 +1819,13 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
     QToolTip::showText(QCursor::pos(), tr("✓ Copied: %1").arg(shortHash), this,
                        QRect(), 2000);
   } else if (selected == checkoutAction) {
-    m_git->checkoutCommit(commitHash);
+    if (confirmDestructive(
+            tr("Checkout Commit"),
+            tr("Checkout commit %1?\n\nThis will put the repository in a "
+               "detached HEAD state. Any uncommitted changes may be lost.")
+                .arg(shortHash))) {
+      m_git->checkoutCommit(commitHash);
+    }
   } else if (selected == createBranchAction) {
     bool ok = false;
     QString branchName = QInputDialog::getText(this, tr("Create Branch"),
@@ -1799,6 +1836,82 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
       branchName = branchName.trimmed().replace(" ", "-");
       if (m_git->createBranchFromCommit(branchName, commitHash, true)) {
         updateBranchSelector();
+      }
+    }
+  } else if (selected == cherryPickAction) {
+    if (confirmDestructive(
+            tr("Cherry-Pick Commit"),
+            tr("Cherry-pick commit %1 onto the current branch?\n\n"
+               "This will apply the changes from this commit on top of the "
+               "current HEAD.")
+                .arg(shortHash))) {
+      m_git->cherryPick(commitHash);
+      refresh();
+    }
+  } else if (selected == rewordAction) {
+    QString currentMsg = m_git->getCommitMessage(commitHash);
+    bool ok = false;
+    QString newMsg = QInputDialog::getMultiLineText(
+        this, tr("Edit Commit Message"),
+        tr("Edit message for commit %1:").arg(shortHash), currentMsg, &ok);
+
+    if (ok && !newMsg.trimmed().isEmpty()) {
+      m_git->rewordCommit(commitHash, newMsg.trimmed());
+      refresh();
+    }
+  } else if (selected == revertAction) {
+    if (confirmDestructive(
+            tr("Revert Commit"),
+            tr("Revert commit %1?\n\n"
+               "This will create a new commit that undoes the changes "
+               "introduced by the selected commit.")
+                .arg(shortHash))) {
+      m_git->revertCommit(commitHash);
+      refresh();
+    }
+  } else if (selected == resetSoftAction) {
+    if (confirmDestructive(
+            tr("Reset (Soft)"),
+            tr("Soft reset to commit %1?\n\n"
+               "All changes after this commit will be kept in the staging "
+               "area. No files will be modified.")
+                .arg(shortHash))) {
+      m_git->resetToCommit(commitHash, "soft");
+      refresh();
+    }
+  } else if (selected == resetMixedAction) {
+    if (confirmDestructive(
+            tr("Reset (Mixed)"),
+            tr("Mixed reset to commit %1?\n\n"
+               "All changes after this commit will be kept as unstaged "
+               "modifications. No files will be deleted.")
+                .arg(shortHash))) {
+      m_git->resetToCommit(commitHash, "mixed");
+      refresh();
+    }
+  } else if (selected == resetHardAction) {
+    if (confirmDestructive(
+            tr("Reset (Hard)"),
+            tr("⚠️ Hard reset to commit %1?\n\n"
+               "WARNING: This will PERMANENTLY DISCARD all changes after "
+               "this commit. This action cannot be undone.\n\n"
+               "Are you sure you want to proceed?")
+                .arg(shortHash))) {
+      m_git->resetToCommit(commitHash, "hard");
+      refresh();
+    }
+  } else if (selected == rebaseAction) {
+    if (confirmDestructive(
+            tr("Interactive Rebase"),
+            tr("Start interactive rebase from commit %1?\n\n"
+               "This will allow you to reorder, squash, edit, or drop "
+               "commits. This is a potentially destructive operation that "
+               "rewrites history.")
+                .arg(shortHash))) {
+      GitRebaseDialog rebaseDialog(m_git, m_theme, this);
+      rebaseDialog.loadCommits(commitHash);
+      if (rebaseDialog.exec() == QDialog::Accepted) {
+        refresh();
       }
     }
   }

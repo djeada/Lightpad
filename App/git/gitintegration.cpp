@@ -2007,6 +2007,108 @@ bool GitIntegration::cherryPick(const QString &commitHash) {
   return success;
 }
 
+bool GitIntegration::revertCommit(const QString &commitHash) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  if (commitHash.isEmpty()) {
+    emit errorOccurred("Commit hash cannot be empty");
+    return false;
+  }
+
+  bool success;
+  QString output =
+      executeGitCommand({"revert", "--no-edit", commitHash}, &success);
+
+  if (success) {
+    emit operationCompleted(
+        QString("Reverted commit %1").arg(commitHash.left(7)));
+    emit statusChanged();
+  } else {
+    emit errorOccurred(
+        QString("Revert failed: %1").arg(output.trimmed()));
+  }
+
+  return success;
+}
+
+bool GitIntegration::resetToCommit(const QString &commitHash,
+                                   const QString &mode) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  if (commitHash.isEmpty()) {
+    emit errorOccurred("Commit hash cannot be empty");
+    return false;
+  }
+
+  QStringList validModes = {"soft", "mixed", "hard"};
+  QString resetMode = mode.toLower();
+  if (!validModes.contains(resetMode)) {
+    emit errorOccurred("Invalid reset mode: " + mode);
+    return false;
+  }
+
+  bool success;
+  QString output = executeGitCommand(
+      {"reset", "--" + resetMode, commitHash}, &success);
+
+  if (success) {
+    updateCurrentBranch();
+    emit operationCompleted(
+        QString("Reset (%1) to %2").arg(resetMode, commitHash.left(7)));
+    emit statusChanged();
+  } else {
+    emit errorOccurred(
+        QString("Reset failed: %1").arg(output.trimmed()));
+  }
+
+  return success;
+}
+
+bool GitIntegration::rewordCommit(const QString &commitHash,
+                                  const QString &newMessage) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  if (commitHash.isEmpty() || newMessage.isEmpty()) {
+    emit errorOccurred("Commit hash and new message cannot be empty");
+    return false;
+  }
+
+  bool success;
+  QString headHash =
+      executeGitCommand({"rev-parse", "HEAD"}, &success).trimmed();
+
+  if (!success) {
+    emit errorOccurred("Failed to determine HEAD commit");
+    return false;
+  }
+
+  if (headHash.startsWith(commitHash) || commitHash.startsWith(headHash.left(commitHash.length()))) {
+    executeGitCommand({"commit", "--amend", "-m", newMessage}, &success);
+
+    if (success) {
+      emit operationCompleted(
+          QString("Reworded commit %1").arg(commitHash.left(7)));
+      emit statusChanged();
+    } else {
+      emit errorOccurred("Failed to reword commit message");
+    }
+    return success;
+  }
+
+  emit errorOccurred("Can only reword the most recent commit (HEAD). Use "
+                      "interactive rebase for older commits.");
+  return false;
+}
+
 QList<QPair<QString, QString>> GitIntegration::listWorktrees() const {
   QList<QPair<QString, QString>> result;
   if (!m_isValid)

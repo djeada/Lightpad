@@ -246,6 +246,13 @@ public:
 
   bool cherryPick(const QString &commitHash);
 
+  bool revertCommit(const QString &commitHash);
+
+  bool resetToCommit(const QString &commitHash,
+                     const QString &mode = "mixed");
+
+  bool rewordCommit(const QString &commitHash, const QString &newMessage);
+
   QList<QPair<QString, QString>> listWorktrees() const;
 
   bool addWorktree(const QString &path, const QString &branch,
