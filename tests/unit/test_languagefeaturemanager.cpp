@@ -1,6 +1,9 @@
 #include "language/languagefeaturemanager.h"
 #include "diagnostics/diagnosticutils.h"
+#include <QDir>
+#include <QFile>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTest>
 
 class TestLanguageFeatureManager : public QObject {
@@ -8,9 +11,12 @@ class TestLanguageFeatureManager : public QObject {
 
 private slots:
   void testDefaultServerConfigs();
+  void testDefaultServerConfigsRustGo();
   void testSupportedLanguages();
   void testIsLanguageSupported();
+  void testIsLanguageSupportedRustGo();
   void testResolveLanguageIdByExtension();
+  void testResolveLanguageIdRustGo();
   void testResolveLanguageIdWithOverride();
   void testResolveLanguageIdUnknown();
   void testClientForFileUnknown();
@@ -18,26 +24,63 @@ private slots:
   void testCloseDocumentWithoutOpen();
   void testServerErrorEmitted();
   void testDiagnosticsManagerIntegration();
+  void testDetectProjectRootCargo();
+  void testDetectProjectRootGoMod();
+  void testDetectProjectRootCMakeLists();
+  void testDetectProjectRootPyproject();
+  void testDetectProjectRootFallback();
+  void testServerHealthInitial();
+  void testServerHealthErrorOnBadCommand();
+  void testConfigEnabledField();
 };
 
 void TestLanguageFeatureManager::testDefaultServerConfigs() {
   QList<DiagnosticsServerConfig> configs =
       LanguageFeatureManager::defaultServerConfigs();
-  QVERIFY(configs.size() >= 2);
+  QVERIFY(configs.size() >= 4);
 
-  bool hasCpp = false, hasPy = false;
+  bool hasCpp = false, hasPy = false, hasRust = false, hasGo = false;
   for (const DiagnosticsServerConfig &cfg : configs) {
     if (cfg.languageId == "cpp") {
       hasCpp = true;
       QCOMPARE(cfg.command, QString("clangd"));
+      QVERIFY(cfg.arguments.contains("--background-index"));
     }
     if (cfg.languageId == "py") {
       hasPy = true;
       QCOMPARE(cfg.command, QString("pylsp"));
     }
+    if (cfg.languageId == "rust") {
+      hasRust = true;
+      QCOMPARE(cfg.command, QString("rust-analyzer"));
+    }
+    if (cfg.languageId == "go") {
+      hasGo = true;
+      QCOMPARE(cfg.command, QString("gopls"));
+      QVERIFY(cfg.arguments.contains("serve"));
+    }
   }
   QVERIFY(hasCpp);
   QVERIFY(hasPy);
+  QVERIFY(hasRust);
+  QVERIFY(hasGo);
+}
+
+void TestLanguageFeatureManager::testDefaultServerConfigsRustGo() {
+  QList<DiagnosticsServerConfig> configs =
+      LanguageFeatureManager::defaultServerConfigs();
+
+  bool rustEnabled = false, goEnabled = false;
+  for (const DiagnosticsServerConfig &cfg : configs) {
+    if (cfg.languageId == "rust") {
+      rustEnabled = cfg.enabled;
+    }
+    if (cfg.languageId == "go") {
+      goEnabled = cfg.enabled;
+    }
+  }
+  QVERIFY(rustEnabled);
+  QVERIFY(goEnabled);
 }
 
 void TestLanguageFeatureManager::testSupportedLanguages() {
@@ -47,6 +90,8 @@ void TestLanguageFeatureManager::testSupportedLanguages() {
   QStringList langs = mgr.supportedLanguages();
   QVERIFY(langs.contains("cpp"));
   QVERIFY(langs.contains("py"));
+  QVERIFY(langs.contains("rust"));
+  QVERIFY(langs.contains("go"));
 }
 
 void TestLanguageFeatureManager::testIsLanguageSupported() {
@@ -59,6 +104,14 @@ void TestLanguageFeatureManager::testIsLanguageSupported() {
   QVERIFY(!mgr.isLanguageSupported(""));
 }
 
+void TestLanguageFeatureManager::testIsLanguageSupportedRustGo() {
+  DiagnosticsManager diagMgr;
+  LanguageFeatureManager mgr(&diagMgr);
+
+  QVERIFY(mgr.isLanguageSupported("rust"));
+  QVERIFY(mgr.isLanguageSupported("go"));
+}
+
 void TestLanguageFeatureManager::testResolveLanguageIdByExtension() {
   DiagnosticsManager diagMgr;
   LanguageFeatureManager mgr(&diagMgr);
@@ -68,6 +121,14 @@ void TestLanguageFeatureManager::testResolveLanguageIdByExtension() {
   QCOMPARE(mgr.resolveLanguageId("/project/main.h"), QString("cpp"));
   QCOMPARE(mgr.resolveLanguageId("/project/script.py"), QString("py"));
   QCOMPARE(mgr.resolveLanguageId("/project/script.pyw"), QString("py"));
+}
+
+void TestLanguageFeatureManager::testResolveLanguageIdRustGo() {
+  DiagnosticsManager diagMgr;
+  LanguageFeatureManager mgr(&diagMgr);
+
+  QCOMPARE(mgr.resolveLanguageId("/project/main.rs"), QString("rust"));
+  QCOMPARE(mgr.resolveLanguageId("/project/main.go"), QString("go"));
 }
 
 void TestLanguageFeatureManager::testResolveLanguageIdWithOverride() {
@@ -152,6 +213,141 @@ void TestLanguageFeatureManager::testDiagnosticsManagerIntegration() {
 
   QCOMPARE(diagMgr.errorCount(), 0);
   QVERIFY(diagMgr.diagnosticsForFile(filePath).isEmpty());
+}
+
+void TestLanguageFeatureManager::testDetectProjectRootCargo() {
+  QTemporaryDir tmpDir;
+  QVERIFY(tmpDir.isValid());
+
+  QDir root(tmpDir.path());
+  root.mkpath("src");
+
+  QFile cargoToml(root.filePath("Cargo.toml"));
+  QVERIFY(cargoToml.open(QIODevice::WriteOnly));
+  cargoToml.write("[package]\nname = \"test\"\n");
+  cargoToml.close();
+
+  QString filePath = root.filePath("src/main.rs");
+  QFile mainRs(filePath);
+  QVERIFY(mainRs.open(QIODevice::WriteOnly));
+  mainRs.write("fn main() {}\n");
+  mainRs.close();
+
+  QString detected = LanguageFeatureManager::detectProjectRoot(filePath);
+  QCOMPARE(detected, root.absolutePath());
+}
+
+void TestLanguageFeatureManager::testDetectProjectRootGoMod() {
+  QTemporaryDir tmpDir;
+  QVERIFY(tmpDir.isValid());
+
+  QDir root(tmpDir.path());
+  root.mkpath("cmd");
+
+  QFile goMod(root.filePath("go.mod"));
+  QVERIFY(goMod.open(QIODevice::WriteOnly));
+  goMod.write("module example.com/test\n");
+  goMod.close();
+
+  QString filePath = root.filePath("cmd/main.go");
+  QFile mainGo(filePath);
+  QVERIFY(mainGo.open(QIODevice::WriteOnly));
+  mainGo.write("package main\n");
+  mainGo.close();
+
+  QString detected = LanguageFeatureManager::detectProjectRoot(filePath);
+  QCOMPARE(detected, root.absolutePath());
+}
+
+void TestLanguageFeatureManager::testDetectProjectRootCMakeLists() {
+  QTemporaryDir tmpDir;
+  QVERIFY(tmpDir.isValid());
+
+  QDir root(tmpDir.path());
+  root.mkpath("src");
+
+  QFile cmake(root.filePath("CMakeLists.txt"));
+  QVERIFY(cmake.open(QIODevice::WriteOnly));
+  cmake.write("cmake_minimum_required(VERSION 3.16)\n");
+  cmake.close();
+
+  QString filePath = root.filePath("src/main.cpp");
+  QFile mainCpp(filePath);
+  QVERIFY(mainCpp.open(QIODevice::WriteOnly));
+  mainCpp.write("int main() {}\n");
+  mainCpp.close();
+
+  QString detected = LanguageFeatureManager::detectProjectRoot(filePath);
+  QCOMPARE(detected, root.absolutePath());
+}
+
+void TestLanguageFeatureManager::testDetectProjectRootPyproject() {
+  QTemporaryDir tmpDir;
+  QVERIFY(tmpDir.isValid());
+
+  QDir root(tmpDir.path());
+  root.mkpath("src");
+
+  QFile pyproject(root.filePath("pyproject.toml"));
+  QVERIFY(pyproject.open(QIODevice::WriteOnly));
+  pyproject.write("[project]\nname = \"test\"\n");
+  pyproject.close();
+
+  QString filePath = root.filePath("src/app.py");
+  QFile appPy(filePath);
+  QVERIFY(appPy.open(QIODevice::WriteOnly));
+  appPy.write("print('hello')\n");
+  appPy.close();
+
+  QString detected = LanguageFeatureManager::detectProjectRoot(filePath);
+  QCOMPARE(detected, root.absolutePath());
+}
+
+void TestLanguageFeatureManager::testDetectProjectRootFallback() {
+  QTemporaryDir tmpDir;
+  QVERIFY(tmpDir.isValid());
+
+  QDir root(tmpDir.path());
+  root.mkpath("subdir");
+
+  QString filePath = root.filePath("subdir/file.txt");
+  QFile file(filePath);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("content\n");
+  file.close();
+
+  QString detected = LanguageFeatureManager::detectProjectRoot(filePath);
+  QCOMPARE(detected, root.filePath("subdir"));
+}
+
+void TestLanguageFeatureManager::testServerHealthInitial() {
+  DiagnosticsManager diagMgr;
+  LanguageFeatureManager mgr(&diagMgr);
+
+  QCOMPARE(mgr.serverHealth("cpp"), ServerHealthStatus::Unknown);
+  QCOMPARE(mgr.serverHealth("rust"), ServerHealthStatus::Unknown);
+  QCOMPARE(mgr.serverHealth("go"), ServerHealthStatus::Unknown);
+  QCOMPARE(mgr.serverHealth("py"), ServerHealthStatus::Unknown);
+}
+
+void TestLanguageFeatureManager::testServerHealthErrorOnBadCommand() {
+  DiagnosticsManager diagMgr;
+  LanguageFeatureManager mgr(&diagMgr);
+
+  QSignalSpy healthSpy(&mgr, &LanguageFeatureManager::serverHealthChanged);
+
+  mgr.openDocument("/project/file.xyz", "unknown_lang", "content");
+
+  QCOMPARE(mgr.serverHealth("unknown_lang"), ServerHealthStatus::Unknown);
+}
+
+void TestLanguageFeatureManager::testConfigEnabledField() {
+  QList<DiagnosticsServerConfig> configs =
+      LanguageFeatureManager::defaultServerConfigs();
+
+  for (const DiagnosticsServerConfig &cfg : configs) {
+    QVERIFY(cfg.enabled);
+  }
 }
 
 QTEST_MAIN(TestLanguageFeatureManager)
