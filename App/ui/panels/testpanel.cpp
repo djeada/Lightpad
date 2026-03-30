@@ -12,6 +12,33 @@ namespace {
 constexpr int TestIdRole = Qt::UserRole;
 constexpr int FilePathRole = Qt::UserRole + 1;
 constexpr int LineNumberRole = Qt::UserRole + 2;
+
+int autoRunModeToComboIndex(AutoRunMode mode) {
+  switch (mode) {
+  case AutoRunMode::AllOnSave:
+    return 0;
+  case AutoRunMode::CurrentFileOnSave:
+    return 1;
+  case AutoRunMode::LastSelection:
+    return 2;
+  case AutoRunMode::Off:
+  default:
+    return 0;
+  }
+}
+
+AutoRunMode comboIndexToAutoRunMode(int index) {
+  switch (index) {
+  case 0:
+    return AutoRunMode::AllOnSave;
+  case 1:
+    return AutoRunMode::CurrentFileOnSave;
+  case 2:
+    return AutoRunMode::LastSelection;
+  default:
+    return AutoRunMode::AllOnSave;
+  }
+}
 } // namespace
 
 TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
@@ -272,7 +299,7 @@ void TestPanel::setWorkspaceFolder(const QString &folder) {
   m_autoRunAction->setChecked(m_autoTestRunner->isEnabled());
   m_autoRunModeCombo->setEnabled(m_autoTestRunner->isEnabled());
   if (m_autoTestRunner->mode() != AutoRunMode::Off) {
-    int modeIdx = static_cast<int>(m_autoTestRunner->mode()) - 1;
+    int modeIdx = autoRunModeToComboIndex(m_autoTestRunner->mode());
     if (modeIdx >= 0 && modeIdx < m_autoRunModeCombo->count())
       m_autoRunModeCombo->setCurrentIndex(modeIdx);
   }
@@ -765,9 +792,8 @@ void TestPanel::onAutoRunToggled(bool checked) {
   m_autoTestRunner->setEnabled(checked);
   m_autoRunModeCombo->setEnabled(checked);
   if (checked) {
-    int modeIdx = m_autoRunModeCombo->currentIndex();
     m_autoTestRunner->setMode(
-        static_cast<AutoRunMode>(modeIdx + 1));
+        comboIndexToAutoRunMode(m_autoRunModeCombo->currentIndex()));
   } else {
     m_autoTestRunner->setMode(AutoRunMode::Off);
   }
@@ -776,8 +802,7 @@ void TestPanel::onAutoRunToggled(bool checked) {
 
 void TestPanel::onAutoRunModeChanged(int index) {
   if (m_autoTestRunner->isEnabled()) {
-    m_autoTestRunner->setMode(
-        static_cast<AutoRunMode>(index + 1));
+    m_autoTestRunner->setMode(comboIndexToAutoRunMode(index));
     m_autoTestRunner->saveSettings(m_workspaceFolder);
   }
 }

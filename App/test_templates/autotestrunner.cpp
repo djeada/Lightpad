@@ -174,7 +174,7 @@ void AutoTestRunner::loadSettings(const QString &workspaceFolder) {
   int modeInt = obj.value("mode").toInt(0);
   int debounce = obj.value("debounceDelay").toInt(DEFAULT_DEBOUNCE_MS);
 
-  if (modeInt >= 0 && modeInt <= 3)
+  if (modeInt >= 0 && modeInt <= static_cast<int>(AutoRunMode::LastSelection))
     m_mode = static_cast<AutoRunMode>(modeInt);
 
   m_debounceDelay = qMax(100, debounce);

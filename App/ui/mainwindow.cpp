@@ -2648,8 +2648,6 @@ void MainWindow::ensureTestPanel() {
 
   connect(testPanel, &TestPanel::countsChanged, this,
           [this](int passed, int failed, int skipped, int errored) {
-            Q_UNUSED(skipped)
-            Q_UNUSED(errored)
             if (!m_testStatusLabel) {
               m_testStatusLabel = new QLabel(this);
               statusBar()->addPermanentWidget(m_testStatusLabel);

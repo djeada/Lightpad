@@ -284,7 +284,13 @@ void TestRunConfiguration::testManagerLoadMissingFile() {
   QVERIFY(tempDir.isValid());
 
   RunConfigurationManager &manager = RunConfigurationManager::instance();
+
+  while (!manager.allConfigurations().isEmpty()) {
+    manager.removeConfiguration(manager.allConfigurations().first().id);
+  }
+
   QVERIFY(!manager.loadConfigurations(tempDir.path()));
+  QCOMPARE(manager.allConfigurations().size(), 0);
 }
 
 QTEST_MAIN(TestRunConfiguration)
