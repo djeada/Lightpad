@@ -86,6 +86,7 @@
 #include "popup.h"
 #include "ui_mainwindow.h"
 #include "viewers/imageviewer.h"
+#include "widgets/notificationwidget.h"
 #ifdef HAVE_PDF_SUPPORT
 #include "viewers/pdfviewer.h"
 #endif
@@ -131,7 +132,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
       m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
       m_diagnosticsManager(nullptr), m_languageFeatureManager(nullptr),
-      m_lspCompletionProvider(), m_restoringSession(false),
+      m_lspCompletionProvider(), m_notificationManager(nullptr),
+      m_lspStatusLabel(nullptr), m_restoringSession(false),
       m_globalSettingsLoaded(false),
       m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
       m_treeScrollValue(0), m_treeScrollValueInitialized(false),
@@ -3182,6 +3184,8 @@ void MainWindow::setupDiagnostics() {
     return;
   }
 
+  setupNotificationManager();
+
   m_diagnosticsManager = new DiagnosticsManager(this);
   m_languageFeatureManager =
       new LanguageFeatureManager(m_diagnosticsManager, this);
@@ -3197,7 +3201,118 @@ void MainWindow::setupDiagnostics() {
       [this](const QString &languageId, const QString &message) {
         LOG_WARNING(
             QString("LSP server error for '%1': %2").arg(languageId, message));
+        if (m_notificationManager) {
+          QString title =
+              tr("Language Server — %1")
+                  .arg(LanguageCatalog::displayName(languageId).isEmpty()
+                           ? languageId
+                           : LanguageCatalog::displayName(languageId));
+          m_notificationManager->showError(title, message);
+        }
+        updateLspStatusLabel(languageId, "error");
       });
+
+  connect(m_languageFeatureManager, &LanguageFeatureManager::serverStarted,
+          this, [this](const QString &languageId) {
+            if (m_notificationManager) {
+              QString displayName =
+                  LanguageCatalog::displayName(languageId).isEmpty()
+                      ? languageId
+                      : LanguageCatalog::displayName(languageId);
+              m_notificationManager->showInfo(
+                  tr("Language Server Ready"),
+                  tr("%1 language server is now active.").arg(displayName),
+                  3000);
+            }
+            updateLspStatusLabel(languageId, "running");
+          });
+
+  connect(m_languageFeatureManager,
+          &LanguageFeatureManager::serverHealthChanged, this,
+          [this](const QString &languageId, ServerHealthStatus status) {
+            switch (status) {
+            case ServerHealthStatus::Starting:
+              updateLspStatusLabel(languageId, "starting");
+              break;
+            case ServerHealthStatus::Running:
+              updateLspStatusLabel(languageId, "running");
+              break;
+            case ServerHealthStatus::Error:
+              updateLspStatusLabel(languageId, "error");
+              break;
+            case ServerHealthStatus::Stopped:
+              updateLspStatusLabel(languageId, "stopped");
+              break;
+            default:
+              updateLspStatusLabel(languageId, "");
+              break;
+            }
+          });
+}
+
+void MainWindow::setupNotificationManager() {
+  m_notificationManager = new NotificationManager(this, this);
+}
+
+void MainWindow::updateLspStatusLabel(const QString &languageId,
+                                      const QString &status) {
+  ensureStatusLabels();
+
+  if (!m_lspStatusLabel) {
+    m_lspStatusLabel = new QLabel(this);
+    m_lspStatusLabel->setCursor(Qt::PointingHandCursor);
+    m_lspStatusLabel->setToolTip(
+        tr("Language server status (click for details)"));
+
+    auto layout = qobject_cast<QHBoxLayout *>(ui->backgroundBottom->layout());
+    if (layout) {
+      int insertIndex = layout->count() - 1;
+      if (m_pythonEnvLabel && layout->indexOf(m_pythonEnvLabel) >= 0) {
+        insertIndex = layout->indexOf(m_pythonEnvLabel) + 1;
+      } else if (vimStatusLabel && layout->indexOf(vimStatusLabel) >= 0) {
+        insertIndex = layout->indexOf(vimStatusLabel) + 1;
+      } else if (problemsStatusLabel &&
+                 layout->indexOf(problemsStatusLabel) >= 0) {
+        insertIndex = layout->indexOf(problemsStatusLabel) + 1;
+      }
+      layout->insertWidget(insertIndex, m_lspStatusLabel);
+    }
+  }
+
+  QString displayName = LanguageCatalog::displayName(languageId).isEmpty()
+                            ? languageId
+                            : LanguageCatalog::displayName(languageId);
+
+  if (status == "running") {
+    m_lspStatusLabel->setText(QString::fromUtf8("● %1").arg(displayName));
+    m_lspStatusLabel->setStyleSheet(
+        "color: #3fb950; padding: 0 6px; font-size: 11px;");
+    m_lspStatusLabel->setToolTip(
+        tr("%1 language server is running").arg(displayName));
+  } else if (status == "starting") {
+    m_lspStatusLabel->setText(QString::fromUtf8("◌ %1").arg(displayName));
+    m_lspStatusLabel->setStyleSheet(
+        "color: #d29922; padding: 0 6px; font-size: 11px;");
+    m_lspStatusLabel->setToolTip(
+        tr("%1 language server is starting…").arg(displayName));
+  } else if (status == "error") {
+    m_lspStatusLabel->setText(QString::fromUtf8("✖ %1").arg(displayName));
+    m_lspStatusLabel->setStyleSheet(
+        "color: #f85149; padding: 0 6px; font-size: 11px;");
+    m_lspStatusLabel->setToolTip(
+        tr("%1 language server encountered an error").arg(displayName));
+  } else if (status == "stopped") {
+    m_lspStatusLabel->setText(QString::fromUtf8("○ %1").arg(displayName));
+    m_lspStatusLabel->setStyleSheet(
+        "color: #8b949e; padding: 0 6px; font-size: 11px;");
+    m_lspStatusLabel->setToolTip(
+        tr("%1 language server is disabled").arg(displayName));
+  } else {
+    m_lspStatusLabel->setVisible(false);
+    return;
+  }
+
+  m_lspStatusLabel->setVisible(true);
 }
 
 void MainWindow::notifyDiagnosticsFileOpened(const QString &filePath) {

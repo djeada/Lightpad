@@ -34,6 +34,10 @@ private slots:
   void testLspCodeAction();
   void testLspCodeActionKindConstants();
   void testLspCodeActionWithEdit();
+
+  void testLspServerCapabilitiesDefault();
+  void testLspClientSupportsCapability();
+  void testLspClientCapabilitiesAccessor();
 };
 
 void TestLspClient::initTestCase() {}
@@ -370,6 +374,55 @@ void TestLspClient::testLspCodeActionWithEdit() {
   QVERIFY(action.edit.changes.contains("file:///path/to/file.py"));
   QCOMPARE(action.diagnostics.count(), 1);
   QCOMPARE(action.diagnostics.at(0).message, QString("Unsorted imports"));
+}
+
+void TestLspClient::testLspServerCapabilitiesDefault() {
+  LspServerCapabilities caps;
+
+  QVERIFY(!caps.hoverProvider);
+  QVERIFY(!caps.completionProvider);
+  QVERIFY(!caps.definitionProvider);
+  QVERIFY(!caps.declarationProvider);
+  QVERIFY(!caps.typeDefinitionProvider);
+  QVERIFY(!caps.referencesProvider);
+  QVERIFY(!caps.renameProvider);
+  QVERIFY(!caps.documentSymbolProvider);
+  QVERIFY(!caps.workspaceSymbolProvider);
+  QVERIFY(!caps.signatureHelpProvider);
+  QVERIFY(!caps.documentFormattingProvider);
+  QVERIFY(!caps.codeActionProvider);
+  QVERIFY(!caps.semanticTokensProvider);
+  QCOMPARE(caps.textDocumentSyncKind, 1);
+}
+
+void TestLspClient::testLspClientSupportsCapability() {
+  LspClient client;
+
+  QVERIFY(!client.supportsCapability("hover"));
+  QVERIFY(!client.supportsCapability("completion"));
+  QVERIFY(!client.supportsCapability("definition"));
+  QVERIFY(!client.supportsCapability("declaration"));
+  QVERIFY(!client.supportsCapability("typeDefinition"));
+  QVERIFY(!client.supportsCapability("references"));
+  QVERIFY(!client.supportsCapability("rename"));
+  QVERIFY(!client.supportsCapability("documentSymbol"));
+  QVERIFY(!client.supportsCapability("workspaceSymbol"));
+  QVERIFY(!client.supportsCapability("signatureHelp"));
+  QVERIFY(!client.supportsCapability("formatting"));
+  QVERIFY(!client.supportsCapability("codeAction"));
+  QVERIFY(!client.supportsCapability("semanticTokens"));
+  QVERIFY(!client.supportsCapability("nonexistent"));
+}
+
+void TestLspClient::testLspClientCapabilitiesAccessor() {
+  LspClient client;
+
+  const LspServerCapabilities &caps = client.serverCapabilities();
+  QVERIFY(!caps.hoverProvider);
+  QVERIFY(!caps.completionProvider);
+  QVERIFY(!caps.definitionProvider);
+
+  QCOMPARE(client.state(), LspClient::State::Disconnected);
 }
 
 QTEST_MAIN(TestLspClient)

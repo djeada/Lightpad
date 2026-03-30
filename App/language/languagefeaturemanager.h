@@ -12,7 +12,11 @@ struct DiagnosticsServerConfig {
   QString languageId;
   QString command;
   QStringList arguments;
+  QStringList environmentVariables;
+  bool enabled = true;
 };
+
+enum class ServerHealthStatus { Unknown, Starting, Running, Error, Stopped };
 
 class LanguageFeatureManager : public QObject {
   Q_OBJECT
@@ -40,9 +44,17 @@ public:
 
   static QList<DiagnosticsServerConfig> defaultServerConfigs();
 
+  static QString detectProjectRoot(const QString &filePath);
+
+  ServerHealthStatus serverHealth(const QString &languageId) const;
+
+  void loadSettingsOverrides();
+
 signals:
   void serverStarted(const QString &languageId);
   void serverError(const QString &languageId, const QString &message);
+  void serverHealthChanged(const QString &languageId,
+                           ServerHealthStatus status);
 
 private:
   LspClient *ensureClient(const QString &languageId);
@@ -55,6 +67,7 @@ private:
   QMap<QString, QString> m_fileToLanguage;
   QMap<QString, int> m_fileVersions;
   QList<DiagnosticsServerConfig> m_serverConfigs;
+  QMap<QString, ServerHealthStatus> m_serverHealth;
 };
 
 #endif
