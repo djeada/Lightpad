@@ -174,7 +174,8 @@ set(project_headers
     ui/uistylehelper.h
     ui/viewers/imageviewer.h
     markdown/markdowntools.h
-    markdown/markdownpreviewpanel.h)
+    markdown/markdownpreviewpanel.h
+    latex/latextools.h)
 
 if(HAVE_PDF_SUPPORT)
     list(APPEND project_headers ui/viewers/pdfviewer.h)
@@ -310,7 +311,8 @@ set(project_sources
     ui/uistylehelper.cpp
     ui/viewers/imageviewer.cpp
     markdown/markdowntools.cpp
-    markdown/markdownpreviewpanel.cpp)
+    markdown/markdownpreviewpanel.cpp
+    latex/latextools.cpp)
 
 if(HAVE_PDF_SUPPORT)
     list(APPEND project_sources ui/viewers/pdfviewer.cpp)
