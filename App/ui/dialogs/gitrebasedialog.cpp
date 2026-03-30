@@ -373,7 +373,7 @@ void GitRebaseDialog::buildUi() {
          "select multiple commits for batch operations."),
       this);
   headerLabel->setWordWrap(true);
-  headerLabel->setStyleSheet("color: #8b949e; font-size: 12px; margin-bottom: 4px;");
+  headerLabel->setStyleSheet("color: #8b949e; font-size: 12px;");
   mainLayout->addWidget(headerLabel);
 
   m_searchEdit = new QLineEdit(this);
@@ -467,7 +467,7 @@ void GitRebaseDialog::buildUi() {
       "QTreeWidget::item:selected { background: #1f6feb; color: white; }"
       "QTreeWidget::item:hover { background: #161b22; }"
       "QTreeWidget::item:selected:hover { background: #388bfd; }"
-      "QTreeWidget::item:alternate { background: #0d1117; }"
+      "QTreeWidget::item:alternate { background: #161b22; }"
       "QHeaderView::section { background: #161b22; color: #8b949e; border: "
       "none; border-bottom: 1px solid #30363d; padding: 6px; font-size: 11px; "
       "font-weight: bold; text-transform: uppercase; }");

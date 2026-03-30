@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QTemporaryFile>
 #include <QTextStream>
 
 GitIntegration::GitIntegration(QObject *parent)
@@ -2154,12 +2155,31 @@ bool GitIntegration::dropCommit(const QString &commitHash) {
   QProcess proc;
   proc.setWorkingDirectory(m_repositoryPath);
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-  QString sedCmd = QString("sed -i '/^pick %1/d'").arg(fullHash.left(7));
-  env.insert("GIT_SEQUENCE_EDITOR", QString("sed -i '/^pick %1/d'")
-                                        .arg(fullHash.left(7)));
+
+  QTemporaryFile dropScript;
+  dropScript.setAutoRemove(false);
+  dropScript.setFileTemplate(
+      QDir::tempPath() + "/lightpad-drop-XXXXXX.sh");
+  if (!dropScript.open()) {
+    emit errorOccurred("Failed to create drop script");
+    return false;
+  }
+  QString shortHashForDrop = fullHash.left(7);
+  QTextStream scriptOut(&dropScript);
+  scriptOut << "#!/bin/sh\n"
+            << "grep -v '^pick " << shortHashForDrop << "' \"$1\" > \"$1.tmp\""
+            << " && mv \"$1.tmp\" \"$1\"\n";
+  dropScript.close();
+  QFile::setPermissions(dropScript.fileName(),
+                        QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner);
+
+  env.insert("GIT_SEQUENCE_EDITOR", dropScript.fileName());
   proc.setProcessEnvironment(env);
   proc.start("git", {"rebase", "-i", fullHash + "~1"});
   proc.waitForFinished(10000);
+
+  QFile::remove(dropScript.fileName());
 
   if (proc.exitCode() == 0) {
     updateCurrentBranch();
@@ -2284,13 +2304,15 @@ bool GitIntegration::moveCommitToBranch(const QString &commitHash,
     return false;
   }
 
-  executeGitCommand({"stash", "--include-untracked"}, &success);
-  bool stashed = success;
+  if (isDirty()) {
+    emit errorOccurred(
+        "Working tree has uncommitted changes. Please commit or stash "
+        "them before moving commits between branches.");
+    return false;
+  }
 
   executeGitCommand({"checkout", targetBranch}, &success);
   if (!success) {
-    if (stashed)
-      executeGitCommand({"stash", "pop"}, nullptr);
     emit errorOccurred(
         QString("Failed to checkout branch %1").arg(targetBranch));
     return false;
@@ -2300,8 +2322,6 @@ bool GitIntegration::moveCommitToBranch(const QString &commitHash,
   if (!success) {
     executeGitCommand({"cherry-pick", "--abort"}, nullptr);
     executeGitCommand({"checkout", currentBranch}, nullptr);
-    if (stashed)
-      executeGitCommand({"stash", "pop"}, nullptr);
     emit errorOccurred(
         QString("Failed to cherry-pick %1 onto %2")
             .arg(commitHash.left(7), targetBranch));
@@ -2310,20 +2330,13 @@ bool GitIntegration::moveCommitToBranch(const QString &commitHash,
 
   executeGitCommand({"checkout", currentBranch}, &success);
   if (!success) {
-    if (stashed)
-      executeGitCommand({"stash", "pop"}, nullptr);
     emit errorOccurred("Failed to return to original branch");
     return false;
   }
 
   if (!dropCommit(commitHash)) {
-    if (stashed)
-      executeGitCommand({"stash", "pop"}, nullptr);
     return false;
   }
-
-  if (stashed)
-    executeGitCommand({"stash", "pop"}, nullptr);
 
   updateCurrentBranch();
   emit operationCompleted(

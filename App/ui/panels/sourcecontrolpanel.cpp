@@ -2529,7 +2529,8 @@ void SourceControlPanel::onHistorySearchChanged(const QString &text) {
       bool match = item->text(0).contains(text, Qt::CaseInsensitive) ||
                    item->data(0, Qt::UserRole)
                        .toString()
-                       .contains(text, Qt::CaseInsensitive);
+                       .contains(text, Qt::CaseInsensitive) ||
+                   item->toolTip(0).contains(text, Qt::CaseInsensitive);
       item->setHidden(!match);
     }
   }
