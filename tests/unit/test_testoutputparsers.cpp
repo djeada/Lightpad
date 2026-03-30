@@ -1,6 +1,8 @@
 #include <QSignalSpy>
 #include <QtTest>
 
+#include <memory>
+
 #include "test_templates/testconfiguration.h"
 #include "test_templates/testdiscovery.h"
 #include "test_templates/testoutputparser.h"
@@ -67,6 +69,8 @@ private slots:
 
   void testJestDiscoveryParse();
   void testJestDiscoveryParseEmpty();
+
+  void testDiscoveryAdapterFactory();
 };
 
 void TestOutputParsers::initTestCase() {
@@ -872,6 +876,44 @@ void TestOutputParsers::testJestDiscoveryParse() {
 void TestOutputParsers::testJestDiscoveryParseEmpty() {
   QList<DiscoveredTest> tests = JestDiscoveryAdapter::parseListOutput("");
   QCOMPARE(tests.size(), 0);
+}
+
+void TestOutputParsers::testDiscoveryAdapterFactory() {
+  // Known config IDs should produce adapters
+  std::unique_ptr<ITestDiscoveryAdapter> pytest(
+      TestDiscoveryAdapterFactory::createForConfiguration("pytest"));
+  QVERIFY(pytest != nullptr);
+  QCOMPARE(pytest->adapterId(), QString("pytest"));
+
+  std::unique_ptr<ITestDiscoveryAdapter> ctestCmake(
+      TestDiscoveryAdapterFactory::createForConfiguration("gtest_cmake"));
+  QVERIFY(ctestCmake != nullptr);
+  QCOMPARE(ctestCmake->adapterId(), QString("ctest"));
+
+  std::unique_ptr<ITestDiscoveryAdapter> ctestMake(
+      TestDiscoveryAdapterFactory::createForConfiguration("gtest_make"));
+  QVERIFY(ctestMake != nullptr);
+  QCOMPARE(ctestMake->adapterId(), QString("ctest"));
+
+  std::unique_ptr<ITestDiscoveryAdapter> goTest(
+      TestDiscoveryAdapterFactory::createForConfiguration("go_test"));
+  QVERIFY(goTest != nullptr);
+  QCOMPARE(goTest->adapterId(), QString("go_test"));
+
+  std::unique_ptr<ITestDiscoveryAdapter> cargo(
+      TestDiscoveryAdapterFactory::createForConfiguration("cargo_test"));
+  QVERIFY(cargo != nullptr);
+  QCOMPARE(cargo->adapterId(), QString("cargo_test"));
+
+  std::unique_ptr<ITestDiscoveryAdapter> jest(
+      TestDiscoveryAdapterFactory::createForConfiguration("jest"));
+  QVERIFY(jest != nullptr);
+  QCOMPARE(jest->adapterId(), QString("jest"));
+
+  // Unknown config ID should return nullptr
+  ITestDiscoveryAdapter *unknown =
+      TestDiscoveryAdapterFactory::createForConfiguration("unknown_framework");
+  QVERIFY(unknown == nullptr);
 }
 
 QTEST_MAIN(TestOutputParsers)

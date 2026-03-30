@@ -451,7 +451,10 @@ void TestPanel::onFilterChanged(int index) {
   applyFilter();
 }
 
-void TestPanel::onConfigChanged(int index) { Q_UNUSED(index) }
+void TestPanel::onConfigChanged(int index) {
+  Q_UNUSED(index)
+  updateDiscoveryAdapterForConfig();
+}
 
 void TestPanel::onContextMenu(const QPoint &pos) {
   QTreeWidgetItem *item = m_tree->itemAt(pos);
@@ -640,6 +643,8 @@ void TestPanel::refreshConfigurations() {
     if (idx >= 0)
       m_configCombo->setCurrentIndex(idx);
   }
+
+  updateDiscoveryAdapterForConfig();
 }
 
 TestConfiguration TestPanel::currentConfiguration() const {
@@ -666,6 +671,30 @@ void TestPanel::connectDiscoveryAdapter() {
           &TestPanel::onDiscoveryFinished);
   connect(m_discoveryAdapter, &ITestDiscoveryAdapter::discoveryError, this,
           &TestPanel::onDiscoveryError);
+}
+
+void TestPanel::updateDiscoveryAdapterForConfig() {
+  TestConfiguration config = currentConfiguration();
+  if (!config.isValid())
+    return;
+
+  QString templateKey =
+      config.templateId.isEmpty() ? config.id : config.templateId;
+
+  if (m_discoveryAdapter && m_ownsDiscoveryAdapter) {
+    disconnect(m_discoveryAdapter, nullptr, this, nullptr);
+    delete m_discoveryAdapter;
+    m_discoveryAdapter = nullptr;
+    m_ownsDiscoveryAdapter = false;
+  }
+
+  ITestDiscoveryAdapter *adapter =
+      TestDiscoveryAdapterFactory::createForConfiguration(templateKey, this);
+  if (adapter) {
+    m_discoveryAdapter = adapter;
+    m_ownsDiscoveryAdapter = true;
+    connectDiscoveryAdapter();
+  }
 }
 
 void TestPanel::discoverTests() {

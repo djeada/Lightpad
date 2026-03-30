@@ -73,6 +73,7 @@ private:
   TestConfiguration currentConfiguration() const;
   void populateTreeFromDiscovery(const QList<DiscoveredTest> &tests);
   void connectDiscoveryAdapter();
+  void updateDiscoveryAdapterForConfig();
 
   QToolBar *m_toolbar;
   QAction *m_runAllAction;

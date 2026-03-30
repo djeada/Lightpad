@@ -605,3 +605,19 @@ JestDiscoveryAdapter::parseListOutput(const QString &output) {
 
   return results;
 }
+
+ITestDiscoveryAdapter *
+TestDiscoveryAdapterFactory::createForConfiguration(const QString &configId,
+                                                    QObject *parent) {
+  if (configId == "pytest")
+    return new PytestDiscoveryAdapter(parent);
+  if (configId == "gtest_cmake" || configId == "gtest_make")
+    return new CTestDiscoveryAdapter(parent);
+  if (configId == "go_test")
+    return new GoTestDiscoveryAdapter(parent);
+  if (configId == "cargo_test")
+    return new CargoTestDiscoveryAdapter(parent);
+  if (configId == "jest")
+    return new JestDiscoveryAdapter(parent);
+  return nullptr;
+}
