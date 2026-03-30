@@ -11,12 +11,9 @@ class TestLanguageFeatureManager : public QObject {
 
 private slots:
   void testDefaultServerConfigs();
-  void testDefaultServerConfigsRustGo();
   void testSupportedLanguages();
   void testIsLanguageSupported();
-  void testIsLanguageSupportedRustGo();
   void testResolveLanguageIdByExtension();
-  void testResolveLanguageIdRustGo();
   void testResolveLanguageIdWithOverride();
   void testResolveLanguageIdUnknown();
   void testClientForFileUnknown();
@@ -66,23 +63,6 @@ void TestLanguageFeatureManager::testDefaultServerConfigs() {
   QVERIFY(hasGo);
 }
 
-void TestLanguageFeatureManager::testDefaultServerConfigsRustGo() {
-  QList<DiagnosticsServerConfig> configs =
-      LanguageFeatureManager::defaultServerConfigs();
-
-  bool rustEnabled = false, goEnabled = false;
-  for (const DiagnosticsServerConfig &cfg : configs) {
-    if (cfg.languageId == "rust") {
-      rustEnabled = cfg.enabled;
-    }
-    if (cfg.languageId == "go") {
-      goEnabled = cfg.enabled;
-    }
-  }
-  QVERIFY(rustEnabled);
-  QVERIFY(goEnabled);
-}
-
 void TestLanguageFeatureManager::testSupportedLanguages() {
   DiagnosticsManager diagMgr;
   LanguageFeatureManager mgr(&diagMgr);
@@ -100,16 +80,10 @@ void TestLanguageFeatureManager::testIsLanguageSupported() {
 
   QVERIFY(mgr.isLanguageSupported("cpp"));
   QVERIFY(mgr.isLanguageSupported("py"));
-  QVERIFY(!mgr.isLanguageSupported("unknown"));
-  QVERIFY(!mgr.isLanguageSupported(""));
-}
-
-void TestLanguageFeatureManager::testIsLanguageSupportedRustGo() {
-  DiagnosticsManager diagMgr;
-  LanguageFeatureManager mgr(&diagMgr);
-
   QVERIFY(mgr.isLanguageSupported("rust"));
   QVERIFY(mgr.isLanguageSupported("go"));
+  QVERIFY(!mgr.isLanguageSupported("unknown"));
+  QVERIFY(!mgr.isLanguageSupported(""));
 }
 
 void TestLanguageFeatureManager::testResolveLanguageIdByExtension() {
@@ -121,12 +95,6 @@ void TestLanguageFeatureManager::testResolveLanguageIdByExtension() {
   QCOMPARE(mgr.resolveLanguageId("/project/main.h"), QString("cpp"));
   QCOMPARE(mgr.resolveLanguageId("/project/script.py"), QString("py"));
   QCOMPARE(mgr.resolveLanguageId("/project/script.pyw"), QString("py"));
-}
-
-void TestLanguageFeatureManager::testResolveLanguageIdRustGo() {
-  DiagnosticsManager diagMgr;
-  LanguageFeatureManager mgr(&diagMgr);
-
   QCOMPARE(mgr.resolveLanguageId("/project/main.rs"), QString("rust"));
   QCOMPARE(mgr.resolveLanguageId("/project/main.go"), QString("go"));
 }

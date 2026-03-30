@@ -37,7 +37,7 @@ private slots:
 
   void testLspServerCapabilitiesDefault();
   void testLspClientSupportsCapability();
-  void testLspClientSetRootUri();
+  void testLspClientCapabilitiesAccessor();
 };
 
 void TestLspClient::initTestCase() {}
@@ -414,11 +414,13 @@ void TestLspClient::testLspClientSupportsCapability() {
   QVERIFY(!client.supportsCapability("nonexistent"));
 }
 
-void TestLspClient::testLspClientSetRootUri() {
+void TestLspClient::testLspClientCapabilitiesAccessor() {
   LspClient client;
 
   const LspServerCapabilities &caps = client.serverCapabilities();
   QVERIFY(!caps.hoverProvider);
+  QVERIFY(!caps.completionProvider);
+  QVERIFY(!caps.definitionProvider);
 
   QCOMPARE(client.state(), LspClient::State::Disconnected);
 }

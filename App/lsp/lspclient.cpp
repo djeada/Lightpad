@@ -376,32 +376,26 @@ const LspServerCapabilities &LspClient::serverCapabilities() const {
 }
 
 bool LspClient::supportsCapability(const QString &capability) const {
-  if (capability == "hover")
-    return m_capabilities.hoverProvider;
-  if (capability == "completion")
-    return m_capabilities.completionProvider;
-  if (capability == "definition")
-    return m_capabilities.definitionProvider;
-  if (capability == "declaration")
-    return m_capabilities.declarationProvider;
-  if (capability == "typeDefinition")
-    return m_capabilities.typeDefinitionProvider;
-  if (capability == "references")
-    return m_capabilities.referencesProvider;
-  if (capability == "rename")
-    return m_capabilities.renameProvider;
-  if (capability == "documentSymbol")
-    return m_capabilities.documentSymbolProvider;
-  if (capability == "workspaceSymbol")
-    return m_capabilities.workspaceSymbolProvider;
-  if (capability == "signatureHelp")
-    return m_capabilities.signatureHelpProvider;
-  if (capability == "formatting")
-    return m_capabilities.documentFormattingProvider;
-  if (capability == "codeAction")
-    return m_capabilities.codeActionProvider;
-  if (capability == "semanticTokens")
-    return m_capabilities.semanticTokensProvider;
+  static const QMap<QString, bool LspServerCapabilities::*> capMap = {
+      {"hover", &LspServerCapabilities::hoverProvider},
+      {"completion", &LspServerCapabilities::completionProvider},
+      {"definition", &LspServerCapabilities::definitionProvider},
+      {"declaration", &LspServerCapabilities::declarationProvider},
+      {"typeDefinition", &LspServerCapabilities::typeDefinitionProvider},
+      {"references", &LspServerCapabilities::referencesProvider},
+      {"rename", &LspServerCapabilities::renameProvider},
+      {"documentSymbol", &LspServerCapabilities::documentSymbolProvider},
+      {"workspaceSymbol", &LspServerCapabilities::workspaceSymbolProvider},
+      {"signatureHelp", &LspServerCapabilities::signatureHelpProvider},
+      {"formatting", &LspServerCapabilities::documentFormattingProvider},
+      {"codeAction", &LspServerCapabilities::codeActionProvider},
+      {"semanticTokens", &LspServerCapabilities::semanticTokensProvider},
+  };
+
+  auto it = capMap.find(capability);
+  if (it != capMap.end()) {
+    return m_capabilities.*it.value();
+  }
   return false;
 }
 
