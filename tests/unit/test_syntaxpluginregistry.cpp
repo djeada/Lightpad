@@ -7,6 +7,7 @@
 #include "syntax/javascriptsyntaxplugin.h"
 #include "syntax/javasyntaxplugin.h"
 #include "syntax/jsonsyntaxplugin.h"
+#include "syntax/latexsyntaxplugin.h"
 #include "syntax/makesyntaxplugin.h"
 #include "syntax/markdownsyntaxplugin.h"
 #include "syntax/mesonsyntaxplugin.h"
@@ -198,6 +199,7 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   registry.registerPlugin(std::make_unique<JavaScriptSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JavaSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JsonSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<LatexSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MarkdownSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MesonSyntaxPlugin>());
@@ -209,7 +211,7 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   registry.registerPlugin(std::make_unique<TypeScriptSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<YamlSyntaxPlugin>());
 
-  QCOMPARE(registry.getAllLanguageIds().size(), 18);
+  QCOMPARE(registry.getAllLanguageIds().size(), 19);
 
   QVERIFY(registry.isLanguageSupported("bazel"));
   QVERIFY(registry.isLanguageSupported("cpp"));
@@ -219,6 +221,7 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isLanguageSupported("js"));
   QVERIFY(registry.isLanguageSupported("java"));
   QVERIFY(registry.isLanguageSupported("json"));
+  QVERIFY(registry.isLanguageSupported("latex"));
   QVERIFY(registry.isLanguageSupported("make"));
   QVERIFY(registry.isLanguageSupported("md"));
   QVERIFY(registry.isLanguageSupported("meson"));
@@ -238,6 +241,8 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isExtensionSupported("js"));
   QVERIFY(registry.isExtensionSupported("java"));
   QVERIFY(registry.isExtensionSupported("json"));
+  QVERIFY(registry.isExtensionSupported("tex"));
+  QVERIFY(registry.isExtensionSupported("bib"));
   QVERIFY(registry.isExtensionSupported("mk"));
   QVERIFY(registry.isExtensionSupported("makefile"));
   QVERIFY(registry.isExtensionSupported("md"));

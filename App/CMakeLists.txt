@@ -129,6 +129,7 @@ set(project_headers
     syntax/javascriptsyntaxplugin.h
     syntax/javasyntaxplugin.h
     syntax/jsonsyntaxplugin.h
+    syntax/latexsyntaxplugin.h
     syntax/markdownsyntaxplugin.h
     syntax/pythonsyntaxplugin.h
     syntax/rustsyntaxplugin.h
@@ -260,6 +261,7 @@ set(project_sources
     syntax/javascriptsyntaxplugin.cpp
     syntax/javasyntaxplugin.cpp
     syntax/jsonsyntaxplugin.cpp
+    syntax/latexsyntaxplugin.cpp
     syntax/markdownsyntaxplugin.cpp
     syntax/pythonsyntaxplugin.cpp
     syntax/rustsyntaxplugin.cpp
