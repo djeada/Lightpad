@@ -48,6 +48,8 @@ public:
   void clearCurrentFile();
   void copySelectedMessage();
 
+  void setCurrentFilePath(const QString &filePath);
+
 signals:
 
   void problemClicked(const QString &filePath, int line, int column);
@@ -77,6 +79,7 @@ private:
   QWidget *m_header;
   QLabel *m_titleLabel;
   QLabel *m_statusLabel;
+  QLabel *m_emptyStateLabel;
   QComboBox *m_filterCombo;
   QCheckBox *m_autoRefreshCheckBox;
 

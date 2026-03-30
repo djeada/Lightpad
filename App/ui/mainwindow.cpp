@@ -1349,6 +1349,10 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
 
   notifyDiagnosticsFileOpened(filePath);
 
+  if (problemsPanel) {
+    problemsPanel->setCurrentFilePath(filePath);
+  }
+
   if (recentFilesManager) {
     recentFilesManager->addFile(filePath);
   }
@@ -2244,6 +2248,14 @@ void MainWindow::showProblemsPanel() {
             [this](const QString &filePath) {
               notifyDiagnosticsFileSaved(filePath);
             });
+
+    if (m_diagnosticsManager) {
+      for (const QString &uri : m_diagnosticsManager->allUris()) {
+        QList<LspDiagnostic> diags =
+            m_diagnosticsManager->diagnosticsForUri(uri);
+        problemsPanel->setDiagnostics(uri, diags);
+      }
+    }
 
     ensureStatusLabels();
 
