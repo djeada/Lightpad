@@ -157,4 +157,11 @@ private:
   QProcess *m_process = nullptr;
 };
 
+class TestDiscoveryAdapterFactory {
+public:
+  static ITestDiscoveryAdapter *
+  createForConfiguration(const QString &configId,
+                         QObject *parent = nullptr);
+};
+
 #endif
