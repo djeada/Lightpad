@@ -14,8 +14,8 @@ NotificationWidget::NotificationWidget(QWidget *parent)
 }
 
 void NotificationWidget::setupUi() {
-  setFixedWidth(380);
-  setMaximumHeight(120);
+  setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Maximum);
+  setMinimumWidth(320);
 
   auto *mainLayout = new QHBoxLayout(this);
   mainLayout->setContentsMargins(12, 10, 8, 10);
@@ -34,13 +34,15 @@ void NotificationWidget::setupUi() {
   m_titleLabel = new QLabel(this);
   m_titleLabel->setStyleSheet(
       "font-weight: 600; font-size: 12px; background: transparent;");
+  m_titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   m_titleLabel->setWordWrap(true);
   textLayout->addWidget(m_titleLabel);
 
   m_messageLabel = new QLabel(this);
   m_messageLabel->setStyleSheet("font-size: 11px; background: transparent;");
+  m_messageLabel->setSizePolicy(QSizePolicy::Expanding,
+                                QSizePolicy::Preferred);
   m_messageLabel->setWordWrap(true);
-  m_messageLabel->setMaximumHeight(60);
   textLayout->addWidget(m_messageLabel);
 
   mainLayout->addLayout(textLayout, 1);
@@ -174,9 +176,22 @@ void NotificationWidget::positionInParent() {
   }
 
   QWidget *parent = parentWidget();
-  int x = parent->width() - width() - 16;
-  int y = parent->height() - height() - 50;
+  updateSizeForContent();
+
+  int x = qMax(16, parent->width() - width() - 16);
+  int y = qMax(16, parent->height() - height() - 50);
   move(x, y);
+}
+
+void NotificationWidget::updateSizeForContent() {
+  const QWidget *parent = parentWidget();
+  const int notificationWidth =
+      parent ? qBound(280, parent->width() - 32, 520) : 380;
+
+  setFixedWidth(notificationWidth);
+  updateGeometry();
+  layout()->activate();
+  adjustSize();
 }
 
 // NotificationManager

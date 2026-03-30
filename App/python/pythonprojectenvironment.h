@@ -24,6 +24,17 @@ struct PythonEnvironmentInfo {
   bool isVirtualEnvironment() const { return !venvPath.isEmpty(); }
 };
 
+struct PythonEnvironmentDiagnostics {
+  QString workspaceRoot;
+  QString normalizedCustomInterpreter;
+  QString normalizedConfiguredVenvPath;
+  QString resolvedRequirementsFile;
+  QString activeEnvironmentInterpreter;
+  QString globalInterpreter;
+  QStringList searchedVenvPaths;
+  QStringList searchedRequirementsRoots;
+};
+
 struct PythonInstallPlan {
   QStringList arguments;
   QString description;
@@ -58,6 +69,12 @@ public:
           const QString &workspaceFolder = {}, const QString &filePath = {},
           const QString &workingDirectory = {});
 
+  static PythonEnvironmentDiagnostics
+  diagnostics(const PythonEnvironmentPreference &preference,
+              const QString &workspaceFolder = {},
+              const QString &filePath = {},
+              const QString &workingDirectory = {});
+
   static QMap<QString, QString>
   activationEnvironment(const PythonEnvironmentInfo &info);
 
@@ -83,6 +100,9 @@ private:
   static QString workspaceRootForContext(const QString &workspaceFolder,
                                          const QString &filePath = {},
                                          const QString &workingDirectory = {});
+  static QStringList requirementsSearchRoots(const QString &workspaceFolder,
+                                             const QString &filePath = {},
+                                             const QString &workingDirectory = {});
   static QString parentVirtualEnv(const QString &interpreterPath);
 };
 

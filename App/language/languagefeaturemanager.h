@@ -47,6 +47,9 @@ public:
   static QString detectProjectRoot(const QString &filePath);
 
   ServerHealthStatus serverHealth(const QString &languageId) const;
+  DiagnosticsServerConfig serverConfig(const QString &languageId) const;
+  QString lastServerError(const QString &languageId) const;
+  void restartServer(const QString &languageId);
 
   void loadSettingsOverrides();
 
@@ -68,6 +71,7 @@ private:
   QMap<QString, int> m_fileVersions;
   QList<DiagnosticsServerConfig> m_serverConfigs;
   QMap<QString, ServerHealthStatus> m_serverHealth;
+  QMap<QString, QString> m_lastServerErrors;
 };
 
 #endif

@@ -118,32 +118,8 @@ QString PythonProjectEnvironment::defaultRequirementsPath(
     return explicitPath;
   }
 
-  QStringList searchRoots;
-  const QString workspaceRoot =
-      workspaceRootForContext(workspaceFolder, filePath, workingDirectory);
-  if (!workspaceRoot.isEmpty()) {
-    searchRoots.append(workspaceRoot);
-  }
-
-  if (!workingDirectory.trimmed().isEmpty()) {
-    searchRoots.append(QFileInfo(workingDirectory).absoluteFilePath());
-  }
-
-  if (!filePath.trimmed().isEmpty()) {
-    QDir dir(QFileInfo(filePath).absolutePath());
-    const QString limit = workspaceRoot.isEmpty() ? QString() : workspaceRoot;
-    while (dir.exists()) {
-      searchRoots.append(dir.absolutePath());
-      if (!limit.isEmpty() &&
-          QDir::cleanPath(dir.absolutePath()) == QDir::cleanPath(limit)) {
-        break;
-      }
-      if (!dir.cdUp()) {
-        break;
-      }
-    }
-  }
-
+  const QStringList searchRoots =
+      requirementsSearchRoots(workspaceFolder, filePath, workingDirectory);
   QSet<QString> seen;
   for (const QString &root : searchRoots) {
     const QString normalizedRoot = QDir::cleanPath(root);
@@ -314,6 +290,28 @@ PythonProjectEnvironment::resolve(const PythonEnvironmentPreference &preference,
   return info;
 }
 
+PythonEnvironmentDiagnostics PythonProjectEnvironment::diagnostics(
+    const PythonEnvironmentPreference &preference, const QString &workspaceFolder,
+    const QString &filePath, const QString &workingDirectory) {
+  PythonEnvironmentDiagnostics diagnostics;
+  diagnostics.workspaceRoot =
+      workspaceRootForContext(workspaceFolder, filePath, workingDirectory);
+  diagnostics.normalizedCustomInterpreter = normalizePath(
+      preference.customInterpreter, workspaceFolder, filePath, workingDirectory);
+  diagnostics.normalizedConfiguredVenvPath = normalizePath(
+      preference.venvPath, workspaceFolder, filePath, workingDirectory);
+  diagnostics.resolvedRequirementsFile = defaultRequirementsPath(
+      workspaceFolder, filePath, workingDirectory, preference.requirementsFile);
+  diagnostics.activeEnvironmentInterpreter = activeEnvironmentPythonInterpreter();
+  diagnostics.globalInterpreter = globalPythonInterpreter();
+  diagnostics.searchedVenvPaths =
+      candidateVirtualEnvPaths(workspaceFolder, filePath, workingDirectory,
+                               diagnostics.normalizedConfiguredVenvPath);
+  diagnostics.searchedRequirementsRoots =
+      requirementsSearchRoots(workspaceFolder, filePath, workingDirectory);
+  return diagnostics;
+}
+
 QMap<QString, QString>
 PythonProjectEnvironment::activationEnvironment(const PythonEnvironmentInfo &info) {
   QMap<QString, QString> env;
@@ -475,6 +473,38 @@ QString PythonProjectEnvironment::workspaceRootForContext(
   const QString preferred =
       preferredBaseDir(workspaceFolder, filePath, workingDirectory);
   return preferred.isEmpty() ? QString() : QDir::cleanPath(preferred);
+}
+
+QStringList PythonProjectEnvironment::requirementsSearchRoots(
+    const QString &workspaceFolder, const QString &filePath,
+    const QString &workingDirectory) {
+  QStringList searchRoots;
+  const QString workspaceRoot =
+      workspaceRootForContext(workspaceFolder, filePath, workingDirectory);
+  if (!workspaceRoot.isEmpty()) {
+    searchRoots.append(workspaceRoot);
+  }
+
+  if (!workingDirectory.trimmed().isEmpty()) {
+    searchRoots.append(QFileInfo(workingDirectory).absoluteFilePath());
+  }
+
+  if (!filePath.trimmed().isEmpty()) {
+    QDir dir(QFileInfo(filePath).absolutePath());
+    const QString limit = workspaceRoot.isEmpty() ? QString() : workspaceRoot;
+    while (dir.exists()) {
+      searchRoots.append(dir.absolutePath());
+      if (!limit.isEmpty() &&
+          QDir::cleanPath(dir.absolutePath()) == QDir::cleanPath(limit)) {
+        break;
+      }
+      if (!dir.cdUp()) {
+        break;
+      }
+    }
+  }
+
+  return searchRoots;
 }
 
 QString
