@@ -912,6 +912,67 @@ target_compile_definitions(test_autotestrunner PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME AutoTestRunnerTests COMMAND test_autotestrunner)
 
+# TestRunManager test executable
+add_executable(test_testrunmanager
+    unit/test_testrunmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testrunmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${TEST_TEMPLATE_RESOURCES}
+)
+
+target_include_directories(test_testrunmanager PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/test_templates
+)
+
+target_link_libraries(test_testrunmanager
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_testrunmanager PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME TestRunManagerTests COMMAND test_testrunmanager)
+
+# TestPanel test executable
+add_executable(test_testpanel
+    unit/test_testpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/testpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testrunmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/autotestrunner.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${TEST_TEMPLATE_RESOURCES}
+)
+
+target_include_directories(test_testpanel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/test_templates
+    ${CMAKE_SOURCE_DIR}/App/ui/panels
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_testpanel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_testpanel PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME TestPanelTests COMMAND test_testpanel)
+
 # RunConfiguration test executable
 add_executable(test_runconfiguration
     unit/test_runconfiguration.cpp
@@ -1140,6 +1201,8 @@ set(TEST_LIST
     SymbolNavigationTests
     TestOutputParsersTests
     AutoTestRunnerTests
+    TestRunManagerTests
+    TestPanelTests
     RunConfigurationTests
     TextTransformsTests
     CodeFoldingTests
@@ -1176,6 +1239,8 @@ set(TEST_TARGETS
     test_imageviewer
     test_symbolnavigation
     test_testoutputparsers
+    test_testrunmanager
+    test_testpanel
     test_texttransforms
     test_codefolding
     test_multicursor
