@@ -77,6 +77,7 @@ void TestPanel::setupUI() {
   m_runAllAction =
       m_toolbar->addAction(style()->standardIcon(QStyle::SP_MediaPlay),
                            tr("Run All"), this, &TestPanel::runAll);
+  m_runAllAction->setObjectName("runAllAction");
   m_runAllAction->setToolTip(tr("Run All Tests"));
 
   m_runFailedAction =
@@ -113,6 +114,7 @@ void TestPanel::setupUI() {
 
   m_autoRunAction = m_toolbar->addAction(
       style()->standardIcon(QStyle::SP_DialogApplyButton), tr("Auto"));
+  m_autoRunAction->setObjectName("autoRunAction");
   m_autoRunAction->setCheckable(true);
   m_autoRunAction->setChecked(false);
   m_autoRunAction->setToolTip(tr("Toggle Auto-run Tests on Save"));
@@ -120,6 +122,7 @@ void TestPanel::setupUI() {
           &TestPanel::onAutoRunToggled);
 
   m_autoRunModeCombo = new QComboBox(this);
+  m_autoRunModeCombo->setObjectName("autoRunModeCombo");
   m_autoRunModeCombo->addItem(tr("All on Save"));
   m_autoRunModeCombo->addItem(tr("File on Save"));
   m_autoRunModeCombo->addItem(tr("Last Selection"));
@@ -134,6 +137,7 @@ void TestPanel::setupUI() {
   m_toolbar->addSeparator();
 
   m_filterCombo = new QComboBox(this);
+  m_filterCombo->setObjectName("filterCombo");
   m_filterCombo->addItem(tr("All"));
   m_filterCombo->addItem(tr("Failed"));
   m_filterCombo->addItem(tr("Passed"));
@@ -146,6 +150,7 @@ void TestPanel::setupUI() {
   m_toolbar->addSeparator();
 
   m_configCombo = new QComboBox(this);
+  m_configCombo->setObjectName("configCombo");
   m_configCombo->setMinimumWidth(210);
   connect(m_configCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &TestPanel::onConfigChanged);
@@ -156,6 +161,7 @@ void TestPanel::setupUI() {
   m_splitter = new QSplitter(Qt::Vertical, this);
 
   m_tree = new QTreeWidget(this);
+  m_tree->setObjectName("testTree");
   m_tree->setHeaderLabels({tr("Test"), tr("Status"), tr("Duration")});
   m_tree->setRootIsDecorated(true);
   m_tree->setAlternatingRowColors(false);
@@ -188,6 +194,7 @@ void TestPanel::setupUI() {
   layout->addWidget(m_splitter);
 
   m_statusLabel = new QLabel(this);
+  m_statusLabel->setObjectName("statusLabel");
   m_statusLabel->setContentsMargins(4, 2, 4, 2);
   layout->addWidget(m_statusLabel);
 

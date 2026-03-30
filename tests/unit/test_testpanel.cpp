@@ -64,27 +64,15 @@ void TestTestPanel::initTestCase() {
 void TestTestPanel::cleanupTestCase() {}
 
 QTreeWidget *TestTestPanel::findTree(TestPanel &panel) {
-  return panel.findChild<QTreeWidget *>();
+  return panel.findChild<QTreeWidget *>("testTree");
 }
 
 QLabel *TestTestPanel::findStatusLabel(TestPanel &panel) {
-  QList<QLabel *> labels = panel.findChildren<QLabel *>();
-  for (QLabel *l : labels) {
-    if (l->text().contains("Passed") || l->text().contains("Total") ||
-        l->text().isEmpty() || l->text().contains("0"))
-      return l;
-  }
-  return labels.isEmpty() ? nullptr : labels.last();
+  return panel.findChild<QLabel *>("statusLabel");
 }
 
 QComboBox *TestTestPanel::findFilterCombo(TestPanel &panel) {
-  QList<QComboBox *> combos = panel.findChildren<QComboBox *>();
-  for (QComboBox *cb : combos) {
-    if (cb->count() > 0 && cb->itemText(0) == "All" &&
-        cb->itemText(1) == "Failed")
-      return cb;
-  }
-  return nullptr;
+  return panel.findChild<QComboBox *>("filterCombo");
 }
 
 TestRunManager *TestTestPanel::findRunManager(TestPanel &panel) {
@@ -431,15 +419,9 @@ void TestTestPanel::testAutoRunToggle() {
 
   QCOMPARE(autoRunner->isEnabled(), false);
 
-  // Find the auto-run action via child QAction
-  QList<QAction *> actions = panel.findChildren<QAction *>();
-  QAction *autoRunAction = nullptr;
-  for (QAction *a : actions) {
-    if (a->isCheckable() && a->text() == "Auto") {
-      autoRunAction = a;
-      break;
-    }
-  }
+  // Find the auto-run action by object name
+  QAction *autoRunAction =
+      panel.findChild<QAction *>("autoRunAction");
   QVERIFY(autoRunAction != nullptr);
 
   autoRunAction->setChecked(true);
@@ -454,25 +436,14 @@ void TestTestPanel::testAutoRunModeCombo() {
   AutoTestRunner *autoRunner = panel.autoTestRunner();
   QVERIFY(autoRunner != nullptr);
 
-  // Find the auto-run mode combo
-  QList<QComboBox *> combos = panel.findChildren<QComboBox *>();
-  QComboBox *modeCombo = nullptr;
-  for (QComboBox *cb : combos) {
-    if (cb->count() == 3 && cb->itemText(0) == "All on Save") {
-      modeCombo = cb;
-      break;
-    }
-  }
+  // Find the auto-run mode combo by object name
+  QComboBox *modeCombo =
+      panel.findChild<QComboBox *>("autoRunModeCombo");
   QVERIFY(modeCombo != nullptr);
 
   // Enable auto-run first
-  QAction *autoRunAction = nullptr;
-  for (QAction *a : panel.findChildren<QAction *>()) {
-    if (a->isCheckable() && a->text() == "Auto") {
-      autoRunAction = a;
-      break;
-    }
-  }
+  QAction *autoRunAction =
+      panel.findChild<QAction *>("autoRunAction");
   QVERIFY(autoRunAction != nullptr);
   autoRunAction->setChecked(true);
 
