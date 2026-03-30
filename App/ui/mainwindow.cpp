@@ -87,6 +87,8 @@
 #include "ui_mainwindow.h"
 #include "viewers/imageviewer.h"
 #include "widgets/notificationwidget.h"
+#include "../markdown/markdownpreviewpanel.h"
+#include "../markdown/markdowntools.h"
 #ifdef HAVE_PDF_SUPPORT
 #include "viewers/pdfviewer.h"
 #endif
@@ -2686,6 +2688,59 @@ void MainWindow::on_actionToggle_Test_Panel_triggered() {
   testDock->setVisible(!visible);
 }
 
+void MainWindow::on_actionPreview_Markdown_triggered() {
+  if (!m_splitEditorContainer)
+    return;
+
+  TextArea *textArea = getCurrentTextArea();
+  if (!textArea)
+    return;
+
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!tabWidget)
+    return;
+
+  int currentIndex = tabWidget->currentIndex();
+  QString filePath;
+  if (currentIndex >= 0)
+    filePath = tabWidget->tabToolTip(currentIndex);
+
+  QFileInfo fi(filePath);
+  if (!MarkdownPreviewPanel::isMarkdownFile(fi.suffix())) {
+    if (m_notificationManager) {
+      m_notificationManager->showWarning(
+          tr("Markdown Preview"),
+          tr("Current file is not a Markdown file"));
+    }
+    return;
+  }
+
+  LightpadTabWidget *newGroup = m_splitEditorContainer->splitHorizontal();
+  if (!newGroup)
+    return;
+
+  auto *preview = new MarkdownPreviewPanel(this);
+  preview->setFilePath(filePath);
+  preview->setMarkdown(textArea->toPlainText());
+  preview->updatePreview();
+
+  newGroup->addViewerTab(preview, filePath + " [Preview]", m_projectRootPath);
+
+  connect(textArea, &QPlainTextEdit::textChanged, preview,
+          [textArea, preview]() {
+            preview->setMarkdown(textArea->toPlainText());
+          });
+
+  connect(preview, &MarkdownPreviewPanel::linkClicked, this,
+          [this](const QString &path) {
+            if (QFileInfo::exists(path)) {
+              openFileAndAddToNewTab(path);
+            }
+          });
+
+  LOG_INFO(QString("Opened Markdown preview for: %1").arg(filePath));
+}
+
 void MainWindow::showCommandPalette() {
   if (commandPalette) {
     commandPalette->showPalette();
@@ -3373,7 +3428,25 @@ void MainWindow::notifyDiagnosticsFileChanged(const QString &filePath,
 }
 
 void MainWindow::notifyDiagnosticsFileSaved(const QString &filePath) {
-  if (!m_languageFeatureManager || filePath.isEmpty()) {
+  if (filePath.isEmpty()) {
+    return;
+  }
+
+  {
+    QFileInfo fi(filePath);
+    if (MarkdownPreviewPanel::isMarkdownFile(fi.suffix()) &&
+        m_diagnosticsManager) {
+      TextArea *textArea = getCurrentTextArea();
+      if (textArea) {
+        QList<LspDiagnostic> mdDiags =
+            MarkdownTools::lint(textArea->toPlainText(), filePath);
+        QString uri = DiagnosticUtils::filePathToUri(filePath);
+        m_diagnosticsManager->upsertDiagnostics(uri, mdDiags, "markdown-lint");
+      }
+    }
+  }
+
+  if (!m_languageFeatureManager) {
     return;
   }
 

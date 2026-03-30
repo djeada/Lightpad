@@ -169,7 +169,9 @@ set(project_headers
     test_templates/autotestrunner.h
     settings/theme.h
     ui/uistylehelper.h
-    ui/viewers/imageviewer.h)
+    ui/viewers/imageviewer.h
+    markdown/markdowntools.h
+    markdown/markdownpreviewpanel.h)
 
 if(HAVE_PDF_SUPPORT)
     list(APPEND project_headers ui/viewers/pdfviewer.h)
@@ -300,7 +302,9 @@ set(project_sources
     test_templates/autotestrunner.cpp
     settings/theme.cpp
     ui/uistylehelper.cpp
-    ui/viewers/imageviewer.cpp)
+    ui/viewers/imageviewer.cpp
+    markdown/markdowntools.cpp
+    markdown/markdownpreviewpanel.cpp)
 
 if(HAVE_PDF_SUPPORT)
     list(APPEND project_sources ui/viewers/pdfviewer.cpp)

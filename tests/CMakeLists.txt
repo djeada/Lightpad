@@ -797,6 +797,59 @@ target_compile_definitions(test_imageviewer PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME ImageViewerTests COMMAND test_imageviewer)
 
+# MarkdownTools test executable
+add_executable(test_markdowntools
+    unit/test_markdowntools.cpp
+    ${CMAKE_SOURCE_DIR}/App/markdown/markdowntools.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_markdowntools PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/markdown
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_markdowntools
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_markdowntools PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME MarkdownToolsTests COMMAND test_markdowntools)
+
+# MarkdownPreviewPanel test executable
+add_executable(test_markdownpreviewpanel
+    unit/test_markdownpreviewpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/markdown/markdownpreviewpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/markdown/markdowntools.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_markdownpreviewpanel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/markdown
+    ${CMAKE_SOURCE_DIR}/App/lsp
+)
+
+target_link_libraries(test_markdownpreviewpanel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_markdownpreviewpanel PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME MarkdownPreviewPanelTests COMMAND test_markdownpreviewpanel)
+
 # PdfViewer test executable (only if PDF support is available)
 if(HAVE_PDF_SUPPORT)
     add_executable(test_pdfviewer
@@ -1238,6 +1291,8 @@ set(TEST_TARGETS
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap
     test_gitintegration test_gitfilesystemmodel test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_imageviewer
+    test_markdowntools
+    test_markdownpreviewpanel
     test_symbolnavigation
     test_testoutputparsers
     test_testrunmanager
