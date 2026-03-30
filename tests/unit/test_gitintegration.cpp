@@ -39,6 +39,11 @@ private slots:
   void testCommitAmend();
   void testDiscardAllChanges();
 
+  void testRevertCommit();
+  void testResetToCommit();
+  void testRewordCommit();
+  void testCherryPick();
+
 private:
   QTemporaryDir m_tempDir;
   QString m_repoPath;
@@ -749,6 +754,137 @@ void TestGitIntegration::testDiscardAllChanges() {
     }
   }
   QVERIFY(!foundModified);
+}
+
+void TestGitIntegration::testRevertCommit() {
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(m_repoPath));
+
+  createTestFile("revert_test.txt", "Content to revert\n");
+  QVERIFY(git.stageFile("revert_test.txt"));
+  QVERIFY(git.commit("Commit to revert"));
+
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"rev-parse", "HEAD"});
+  process.waitForFinished();
+  QString commitHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+  QFile file(m_repoPath + "/revert_test.txt");
+  QVERIFY(file.exists());
+
+  QVERIFY(git.revertCommit(commitHash));
+
+  process.start("git", {"log", "-1", "--pretty=%s"});
+  process.waitForFinished();
+  QString lastMsg = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QVERIFY(lastMsg.startsWith("Revert"));
+
+  QVERIFY(!git.revertCommit(""));
+}
+
+void TestGitIntegration::testResetToCommit() {
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(m_repoPath));
+
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"rev-parse", "HEAD"});
+  process.waitForFinished();
+  QString baseHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+  createTestFile("reset_test.txt", "Reset content\n");
+  QVERIFY(git.stageFile("reset_test.txt"));
+  QVERIFY(git.commit("Commit for reset test"));
+
+  QVERIFY(git.resetToCommit(baseHash, "soft"));
+
+  QList<GitFileInfo> status = git.getStatus();
+  bool foundStaged = false;
+  for (const GitFileInfo &f : status) {
+    if (f.filePath == "reset_test.txt" && f.indexStatus == GitFileStatus::Added) {
+      foundStaged = true;
+      break;
+    }
+  }
+  QVERIFY(foundStaged);
+
+  QVERIFY(git.commit("Re-commit after soft reset"));
+
+  process.start("git", {"rev-parse", "HEAD"});
+  process.waitForFinished();
+  QString newBase = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+  createTestFile("reset_test2.txt", "Reset content 2\n");
+  QVERIFY(git.stageFile("reset_test2.txt"));
+  QVERIFY(git.commit("Another commit for reset"));
+
+  QVERIFY(git.resetToCommit(newBase, "mixed"));
+
+  status = git.getStatus();
+  bool foundUnstaged = false;
+  for (const GitFileInfo &f : status) {
+    if (f.filePath == "reset_test2.txt") {
+      foundUnstaged = true;
+      break;
+    }
+  }
+  QVERIFY(foundUnstaged);
+
+  QVERIFY(!git.resetToCommit("", "soft"));
+  QVERIFY(!git.resetToCommit(baseHash, "invalid"));
+}
+
+void TestGitIntegration::testRewordCommit() {
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(m_repoPath));
+
+  QVERIFY(git.stageAll());
+  QVERIFY(git.commit("Original message for reword"));
+
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"rev-parse", "HEAD"});
+  process.waitForFinished();
+  QString headHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+  QVERIFY(git.rewordCommit(headHash, "Reworded message"));
+
+  process.start("git", {"log", "-1", "--pretty=%s"});
+  process.waitForFinished();
+  QString lastMsg = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QCOMPARE(lastMsg, "Reworded message");
+
+  QVERIFY(!git.rewordCommit("", "Some message"));
+  QVERIFY(!git.rewordCommit(headHash, ""));
+}
+
+void TestGitIntegration::testCherryPick() {
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(m_repoPath));
+
+  createTestFile("cherry_main.txt", "Main branch content\n");
+  QVERIFY(git.stageFile("cherry_main.txt"));
+  QVERIFY(git.commit("Main branch commit"));
+
+  QVERIFY(git.createBranch("cherry-test-branch", true));
+
+  createTestFile("cherry_branch.txt", "Branch content\n");
+  QVERIFY(git.stageFile("cherry_branch.txt"));
+  QVERIFY(git.commit("Branch commit to cherry-pick"));
+
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"rev-parse", "HEAD"});
+  process.waitForFinished();
+  QString cherryHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+  QVERIFY(git.checkoutBranch("master"));
+
+  QVERIFY(git.cherryPick(cherryHash));
+
+  QFile file(m_repoPath + "/cherry_branch.txt");
+  QVERIFY(file.exists());
 }
 
 QTEST_MAIN(TestGitIntegration)
