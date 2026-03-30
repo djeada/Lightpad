@@ -1,9 +1,11 @@
 #ifndef MARKDOWNPREVIEWPANEL_H
 #define MARKDOWNPREVIEWPANEL_H
 
+#include <QLabel>
 #include <QTextBrowser>
 #include <QTimer>
 #include <QToolBar>
+#include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -23,16 +25,30 @@ public:
 
   static bool isMarkdownFile(const QString &extension);
 
+  void setSyncScrollEnabled(bool enabled);
+  bool isSyncScrollEnabled() const { return m_syncScrollEnabled; }
+
+  void setSourceScrollRatio(double ratio);
+
+  QString exportToHtml() const;
+
 public slots:
   void updatePreview();
 
 signals:
   void linkClicked(const QString &url);
+  void outlineEntryClicked(int lineNumber);
 
 private:
   void setupUi();
   void setupToolbar();
+  void setupOutlinePanel();
   void onAnchorClicked(const QUrl &url);
+  void updateWordCountLabel();
+  void updateOutline();
+  void onZoomIn();
+  void onZoomOut();
+  void onZoomReset();
 
   QTextBrowser *m_browser;
   QToolBar *m_toolbar;
@@ -40,6 +56,11 @@ private:
   QString m_markdown;
   QString m_basePath;
   QString m_filePath;
+  QLabel *m_wordCountLabel;
+  QTreeWidget *m_outlineTree;
+  QWidget *m_outlinePanel;
+  bool m_syncScrollEnabled;
+  int m_zoomLevel;
 };
 
 #endif

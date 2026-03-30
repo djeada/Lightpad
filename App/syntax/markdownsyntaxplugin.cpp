@@ -188,6 +188,24 @@ QVector<SyntaxRule> MarkdownSyntaxPlugin::syntaxRules() const {
   frontMatterRule.name = "keyword_0";
   rules.append(frontMatterRule);
 
+  SyntaxRule frontMatterKeyRule;
+  frontMatterKeyRule.pattern = QRegularExpression("^[A-Za-z_][A-Za-z0-9_]*:");
+  frontMatterKeyRule.name = "keyword_1";
+  rules.append(frontMatterKeyRule);
+
+  SyntaxRule detailsSummaryRule;
+  detailsSummaryRule.pattern =
+      QRegularExpression("</?(?:details|summary)>",
+                         QRegularExpression::CaseInsensitiveOption);
+  detailsSummaryRule.name = "keyword_1";
+  rules.append(detailsSummaryRule);
+
+  SyntaxRule admonitionRule;
+  admonitionRule.pattern =
+      QRegularExpression("^>\\s*\\*\\*(Note|Warning|Tip|Important|Caution)\\*\\*");
+  admonitionRule.name = "keyword_1";
+  rules.append(admonitionRule);
+
   return rules;
 }
 
@@ -214,20 +232,26 @@ QVector<MultiLineBlock> MarkdownSyntaxPlugin::multiLineBlocks() const {
   mathBlock.endPattern = QRegularExpression("^\\$\\$\\s*$");
   blocks.append(mathBlock);
 
+  MultiLineBlock frontmatterBlock;
+  frontmatterBlock.startPattern = QRegularExpression("^---\\s*$");
+  frontmatterBlock.endPattern = QRegularExpression("^(---|\\.\\.\\.)\\s*$");
+  blocks.append(frontmatterBlock);
+
   return blocks;
 }
 
 QStringList MarkdownSyntaxPlugin::keywords() const {
   return {
-
-      "**bold**",    "*italic*",    "~~strikethrough~~",
-      "# ",          "## ",         "### ",
-      "#### ",       "##### ",      "###### ",
-      "- ",          "* ",          "1. ",
-      "- [ ] ",      "- [x] ",      "> ",
-      "```",         "---",         "***",
-      "[text](url)", "![alt](url)", "[text][ref]",
-      "[^footnote]", "`code`",      "==highlight==",
-      "$$math$$",    "$inline$",    "| col |",
+      "**bold**",        "*italic*",        "~~strikethrough~~",
+      "# ",              "## ",             "### ",
+      "#### ",           "##### ",          "###### ",
+      "- ",              "* ",              "1. ",
+      "- [ ] ",          "- [x] ",          "> ",
+      "```",             "---",             "***",
+      "[text](url)",     "![alt](url)",     "[text][ref]",
+      "[^footnote]",     "`code`",          "==highlight==",
+      "$$math$$",        "$inline$",        "| col |",
+      "<details>",       "<summary>",       ": definition",
+      "[^ref]: text",    "> **Note**",      "> **Warning**",
   };
 }

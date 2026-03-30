@@ -359,6 +359,114 @@ void SnippetRegistry::initializeDefaults() {
     toc.description = "Table of contents markers";
     registerSnippet("md", toc);
     registerSnippet("markdown", toc);
+
+    Snippet heading4;
+    heading4.prefix = "h4";
+    heading4.label = "Heading 4";
+    heading4.body = "#### ${1:Heading}\n$0";
+    heading4.description = "Fourth-level heading";
+    registerSnippet("md", heading4);
+    registerSnippet("markdown", heading4);
+
+    Snippet heading5;
+    heading5.prefix = "h5";
+    heading5.label = "Heading 5";
+    heading5.body = "##### ${1:Heading}\n$0";
+    heading5.description = "Fifth-level heading";
+    registerSnippet("md", heading5);
+    registerSnippet("markdown", heading5);
+
+    Snippet heading6;
+    heading6.prefix = "h6";
+    heading6.label = "Heading 6";
+    heading6.body = "###### ${1:Heading}\n$0";
+    heading6.description = "Sixth-level heading";
+    registerSnippet("md", heading6);
+    registerSnippet("markdown", heading6);
+
+    Snippet hr;
+    hr.prefix = "hr";
+    hr.label = "Horizontal Rule";
+    hr.body = "\n---\n\n$0";
+    hr.description = "Horizontal rule separator";
+    registerSnippet("md", hr);
+    registerSnippet("markdown", hr);
+
+    Snippet footnote;
+    footnote.prefix = "footnote";
+    footnote.label = "Footnote";
+    footnote.body = "[^${1:ref}]\n\n[^${1:ref}]: ${2:Footnote text}\n$0";
+    footnote.description = "Footnote reference and definition";
+    registerSnippet("md", footnote);
+    registerSnippet("markdown", footnote);
+
+    Snippet deflist;
+    deflist.prefix = "deflist";
+    deflist.label = "Definition List";
+    deflist.body = "${1:Term}\n: ${2:Definition}\n\n$0";
+    deflist.description = "Definition list (term and definition)";
+    registerSnippet("md", deflist);
+    registerSnippet("markdown", deflist);
+
+    Snippet details;
+    details.prefix = "details";
+    details.label = "Collapsible Section";
+    details.body =
+        "<details>\n<summary>${1:Click to expand}</summary>\n\n${2:Content "
+        "here}\n\n</details>\n$0";
+    details.description = "Collapsible/expandable section";
+    registerSnippet("md", details);
+    registerSnippet("markdown", details);
+
+    Snippet admonition;
+    admonition.prefix = "note";
+    admonition.label = "Admonition Note";
+    admonition.body = "> **${1:Note}**\n>\n> ${2:Content}\n\n$0";
+    admonition.description = "Admonition/callout note block";
+    registerSnippet("md", admonition);
+    registerSnippet("markdown", admonition);
+
+    Snippet warning;
+    warning.prefix = "warning";
+    warning.label = "Admonition Warning";
+    warning.body = "> **⚠️ ${1:Warning}**\n>\n> ${2:Content}\n\n$0";
+    warning.description = "Admonition/callout warning block";
+    registerSnippet("md", warning);
+    registerSnippet("markdown", warning);
+
+    Snippet badge;
+    badge.prefix = "badge";
+    badge.label = "Badge/Shield";
+    badge.body = "![${1:label}](https://img.shields.io/badge/"
+                 "${2:label}-${3:message}-${4:blue})$0";
+    badge.description = "Shields.io badge image";
+    registerSnippet("md", badge);
+    registerSnippet("markdown", badge);
+
+    Snippet mathInline;
+    mathInline.prefix = "math";
+    mathInline.label = "Inline Math";
+    mathInline.body = "$${1:expression}$$0";
+    mathInline.description = "Inline math expression";
+    registerSnippet("md", mathInline);
+    registerSnippet("markdown", mathInline);
+
+    Snippet mathBlock;
+    mathBlock.prefix = "mathblock";
+    mathBlock.label = "Math Block";
+    mathBlock.body = "$$\n${1:expression}\n$$\n$0";
+    mathBlock.description = "Display math block";
+    registerSnippet("md", mathBlock);
+    registerSnippet("markdown", mathBlock);
+
+    Snippet refLink;
+    refLink.prefix = "reflink";
+    refLink.label = "Reference Link";
+    refLink.body = "[${1:text}][${2:ref}]\n\n[${2:ref}]: ${3:url}\n$0";
+    refLink.description = "Reference-style link";
+    registerSnippet("md", refLink);
+    registerSnippet("markdown", refLink);
+
     table.body = "\\begin{table}[${1:htbp}]\n\t\\centering\n"
                  "\t\\caption{${2:Caption}}\n\t\\label{tab:${3:label}}\n"
                  "\t\\begin{tabular}{${4:lcc}}\n\t\t\\hline\n"
