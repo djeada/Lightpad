@@ -1290,6 +1290,159 @@
       ],
       "workingDirectory": "${fileDir}",
       "env": {}
+    },
+    {
+      "id": "pdflatex",
+      "name": "pdfLaTeX",
+      "description": "Compile LaTeX document with pdflatex",
+      "language": "LaTeX",
+      "extensions": [
+        "tex"
+      ],
+      "command": "pdflatex",
+      "args": [
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "${file}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "xelatex",
+      "name": "XeLaTeX",
+      "description": "Compile LaTeX document with xelatex (Unicode/font support)",
+      "language": "LaTeX",
+      "extensions": [
+        "tex"
+      ],
+      "command": "xelatex",
+      "args": [
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "${file}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "lualatex",
+      "name": "LuaLaTeX",
+      "description": "Compile LaTeX document with lualatex (Lua scripting support)",
+      "language": "LaTeX",
+      "extensions": [
+        "tex"
+      ],
+      "command": "lualatex",
+      "args": [
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "${file}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "latexmk_pdf",
+      "name": "Latexmk (PDF)",
+      "description": "Build LaTeX project with latexmk using pdflatex",
+      "language": "LaTeX",
+      "extensions": [
+        "tex"
+      ],
+      "command": "latexmk",
+      "args": [
+        "-pdf",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "${file}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "latexmk_xelatex",
+      "name": "Latexmk (XeLaTeX)",
+      "description": "Build LaTeX project with latexmk using xelatex",
+      "language": "LaTeX",
+      "extensions": [
+        "tex"
+      ],
+      "command": "latexmk",
+      "args": [
+        "-xelatex",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "${file}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "latexmk_lualatex",
+      "name": "Latexmk (LuaLaTeX)",
+      "description": "Build LaTeX project with latexmk using lualatex",
+      "language": "LaTeX",
+      "extensions": [
+        "tex"
+      ],
+      "command": "latexmk",
+      "args": [
+        "-lualatex",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "${file}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "latexmk_clean",
+      "name": "Latexmk Clean",
+      "description": "Clean LaTeX auxiliary files with latexmk",
+      "language": "LaTeX",
+      "extensions": [
+        "tex"
+      ],
+      "command": "latexmk",
+      "args": [
+        "-C",
+        "${file}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "bibtex",
+      "name": "BibTeX",
+      "description": "Process bibliography with bibtex",
+      "language": "LaTeX",
+      "extensions": [
+        "tex",
+        "aux"
+      ],
+      "command": "bibtex",
+      "args": [
+        "${fileBasenameNoExt}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "biber",
+      "name": "Biber",
+      "description": "Process bibliography with biber (for biblatex)",
+      "language": "LaTeX",
+      "extensions": [
+        "tex",
+        "bcf"
+      ],
+      "command": "biber",
+      "args": [
+        "${fileBasenameNoExt}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
     }
   ],
   "variables": {

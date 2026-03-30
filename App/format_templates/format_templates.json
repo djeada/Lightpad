@@ -7,9 +7,22 @@
       "name": "clang-format",
       "description": "Format C/C++/Objective-C code with clang-format",
       "language": "C++",
-      "extensions": ["c", "cpp", "cxx", "cc", "h", "hpp", "hxx", "m", "mm"],
+      "extensions": [
+        "c",
+        "cpp",
+        "cxx",
+        "cc",
+        "h",
+        "hpp",
+        "hxx",
+        "m",
+        "mm"
+      ],
       "command": "clang-format",
-      "args": ["-i", "${file}"],
+      "args": [
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -17,9 +30,21 @@
       "name": "clang-format (Google Style)",
       "description": "Format C/C++ with Google style",
       "language": "C++",
-      "extensions": ["c", "cpp", "cxx", "cc", "h", "hpp", "hxx"],
+      "extensions": [
+        "c",
+        "cpp",
+        "cxx",
+        "cc",
+        "h",
+        "hpp",
+        "hxx"
+      ],
       "command": "clang-format",
-      "args": ["-i", "--style=Google", "${file}"],
+      "args": [
+        "-i",
+        "--style=Google",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -27,9 +52,21 @@
       "name": "clang-format (LLVM Style)",
       "description": "Format C/C++ with LLVM style",
       "language": "C++",
-      "extensions": ["c", "cpp", "cxx", "cc", "h", "hpp", "hxx"],
+      "extensions": [
+        "c",
+        "cpp",
+        "cxx",
+        "cc",
+        "h",
+        "hpp",
+        "hxx"
+      ],
       "command": "clang-format",
-      "args": ["-i", "--style=LLVM", "${file}"],
+      "args": [
+        "-i",
+        "--style=LLVM",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -37,9 +74,21 @@
       "name": "clang-format (WebKit Style)",
       "description": "Format C/C++ with WebKit style",
       "language": "C++",
-      "extensions": ["c", "cpp", "cxx", "cc", "h", "hpp", "hxx"],
+      "extensions": [
+        "c",
+        "cpp",
+        "cxx",
+        "cc",
+        "h",
+        "hpp",
+        "hxx"
+      ],
       "command": "clang-format",
-      "args": ["-i", "--style=WebKit", "${file}"],
+      "args": [
+        "-i",
+        "--style=WebKit",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -47,9 +96,16 @@
       "name": "Black",
       "description": "Format Python code with Black using the project interpreter",
       "language": "Python",
-      "extensions": ["py", "pyw"],
+      "extensions": [
+        "py",
+        "pyw"
+      ],
       "command": "${python}",
-      "args": ["-m", "black", "${file}"],
+      "args": [
+        "-m",
+        "black",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -57,9 +113,18 @@
       "name": "Black (88 columns)",
       "description": "Format Python with Black using 88 column limit and the project interpreter",
       "language": "Python",
-      "extensions": ["py", "pyw"],
+      "extensions": [
+        "py",
+        "pyw"
+      ],
       "command": "${python}",
-      "args": ["-m", "black", "--line-length", "88", "${file}"],
+      "args": [
+        "-m",
+        "black",
+        "--line-length",
+        "88",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -67,9 +132,18 @@
       "name": "Black (120 columns)",
       "description": "Format Python with Black using 120 column limit and the project interpreter",
       "language": "Python",
-      "extensions": ["py", "pyw"],
+      "extensions": [
+        "py",
+        "pyw"
+      ],
       "command": "${python}",
-      "args": ["-m", "black", "--line-length", "120", "${file}"],
+      "args": [
+        "-m",
+        "black",
+        "--line-length",
+        "120",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -77,9 +151,17 @@
       "name": "autopep8",
       "description": "Format Python code with autopep8 in the resolved Python environment",
       "language": "Python",
-      "extensions": ["py", "pyw"],
+      "extensions": [
+        "py",
+        "pyw"
+      ],
       "command": "${python}",
-      "args": ["-m", "autopep8", "--in-place", "${file}"],
+      "args": [
+        "-m",
+        "autopep8",
+        "--in-place",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -87,9 +169,17 @@
       "name": "YAPF",
       "description": "Format Python code with YAPF in the resolved Python environment",
       "language": "Python",
-      "extensions": ["py", "pyw"],
+      "extensions": [
+        "py",
+        "pyw"
+      ],
       "command": "${python}",
-      "args": ["-m", "yapf", "-i", "${file}"],
+      "args": [
+        "-m",
+        "yapf",
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -97,9 +187,16 @@
       "name": "isort",
       "description": "Sort Python imports with isort in the resolved Python environment",
       "language": "Python",
-      "extensions": ["py", "pyw"],
+      "extensions": [
+        "py",
+        "pyw"
+      ],
       "command": "${python}",
-      "args": ["-m", "isort", "${file}"],
+      "args": [
+        "-m",
+        "isort",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -107,9 +204,25 @@
       "name": "Prettier",
       "description": "Format JavaScript/TypeScript/HTML/CSS with Prettier",
       "language": "JavaScript",
-      "extensions": ["js", "jsx", "ts", "tsx", "json", "html", "css", "scss", "less", "md", "yaml", "yml"],
+      "extensions": [
+        "js",
+        "jsx",
+        "ts",
+        "tsx",
+        "json",
+        "html",
+        "css",
+        "scss",
+        "less",
+        "md",
+        "yaml",
+        "yml"
+      ],
       "command": "prettier",
-      "args": ["--write", "${file}"],
+      "args": [
+        "--write",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -117,9 +230,18 @@
       "name": "Prettier (Single Quotes)",
       "description": "Format with Prettier using single quotes",
       "language": "JavaScript",
-      "extensions": ["js", "jsx", "ts", "tsx"],
+      "extensions": [
+        "js",
+        "jsx",
+        "ts",
+        "tsx"
+      ],
       "command": "prettier",
-      "args": ["--write", "--single-quote", "${file}"],
+      "args": [
+        "--write",
+        "--single-quote",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -127,9 +249,21 @@
       "name": "Prettier (Tabs)",
       "description": "Format with Prettier using tabs",
       "language": "JavaScript",
-      "extensions": ["js", "jsx", "ts", "tsx", "json", "html", "css"],
+      "extensions": [
+        "js",
+        "jsx",
+        "ts",
+        "tsx",
+        "json",
+        "html",
+        "css"
+      ],
       "command": "prettier",
-      "args": ["--write", "--use-tabs", "${file}"],
+      "args": [
+        "--write",
+        "--use-tabs",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -137,9 +271,17 @@
       "name": "ESLint --fix",
       "description": "Fix JavaScript/TypeScript issues with ESLint",
       "language": "JavaScript",
-      "extensions": ["js", "jsx", "ts", "tsx"],
+      "extensions": [
+        "js",
+        "jsx",
+        "ts",
+        "tsx"
+      ],
       "command": "eslint",
-      "args": ["--fix", "${file}"],
+      "args": [
+        "--fix",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -147,9 +289,14 @@
       "name": "gofmt",
       "description": "Format Go code with gofmt",
       "language": "Go",
-      "extensions": ["go"],
+      "extensions": [
+        "go"
+      ],
       "command": "gofmt",
-      "args": ["-w", "${file}"],
+      "args": [
+        "-w",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -157,9 +304,14 @@
       "name": "goimports",
       "description": "Format Go code and manage imports",
       "language": "Go",
-      "extensions": ["go"],
+      "extensions": [
+        "go"
+      ],
       "command": "goimports",
-      "args": ["-w", "${file}"],
+      "args": [
+        "-w",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -167,9 +319,14 @@
       "name": "go fmt",
       "description": "Format Go code with go fmt",
       "language": "Go",
-      "extensions": ["go"],
+      "extensions": [
+        "go"
+      ],
       "command": "go",
-      "args": ["fmt", "${file}"],
+      "args": [
+        "fmt",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -177,9 +334,13 @@
       "name": "rustfmt",
       "description": "Format Rust code with rustfmt",
       "language": "Rust",
-      "extensions": ["rs"],
+      "extensions": [
+        "rs"
+      ],
       "command": "rustfmt",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -187,9 +348,15 @@
       "name": "cargo fmt",
       "description": "Format Rust project with cargo fmt",
       "language": "Rust",
-      "extensions": ["rs"],
+      "extensions": [
+        "rs"
+      ],
       "command": "cargo",
-      "args": ["fmt", "--", "${file}"],
+      "args": [
+        "fmt",
+        "--",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -197,9 +364,14 @@
       "name": "google-java-format",
       "description": "Format Java code with Google Java Format",
       "language": "Java",
-      "extensions": ["java"],
+      "extensions": [
+        "java"
+      ],
       "command": "google-java-format",
-      "args": ["-i", "${file}"],
+      "args": [
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -207,9 +379,15 @@
       "name": "ktlint",
       "description": "Format Kotlin code with ktlint",
       "language": "Kotlin",
-      "extensions": ["kt", "kts"],
+      "extensions": [
+        "kt",
+        "kts"
+      ],
       "command": "ktlint",
-      "args": ["-F", "${file}"],
+      "args": [
+        "-F",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -217,9 +395,15 @@
       "name": "ktfmt",
       "description": "Format Kotlin code with ktfmt",
       "language": "Kotlin",
-      "extensions": ["kt", "kts"],
+      "extensions": [
+        "kt",
+        "kts"
+      ],
       "command": "ktfmt",
-      "args": ["--kotlinlang-style", "${file}"],
+      "args": [
+        "--kotlinlang-style",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -227,9 +411,15 @@
       "name": "RuboCop",
       "description": "Format Ruby code with RuboCop",
       "language": "Ruby",
-      "extensions": ["rb", "rake"],
+      "extensions": [
+        "rb",
+        "rake"
+      ],
       "command": "rubocop",
-      "args": ["-a", "${file}"],
+      "args": [
+        "-a",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -237,9 +427,14 @@
       "name": "Rufo",
       "description": "Format Ruby code with Rufo",
       "language": "Ruby",
-      "extensions": ["rb", "rake"],
+      "extensions": [
+        "rb",
+        "rake"
+      ],
       "command": "rufo",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -247,9 +442,14 @@
       "name": "PHP CS Fixer",
       "description": "Format PHP code with PHP CS Fixer",
       "language": "PHP",
-      "extensions": ["php"],
+      "extensions": [
+        "php"
+      ],
       "command": "php-cs-fixer",
-      "args": ["fix", "${file}"],
+      "args": [
+        "fix",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -257,9 +457,13 @@
       "name": "PHPCBF",
       "description": "Format PHP code with PHPCBF",
       "language": "PHP",
-      "extensions": ["php"],
+      "extensions": [
+        "php"
+      ],
       "command": "phpcbf",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -267,9 +471,16 @@
       "name": "shfmt",
       "description": "Format Shell scripts with shfmt",
       "language": "Shell",
-      "extensions": ["sh", "bash", "zsh"],
+      "extensions": [
+        "sh",
+        "bash",
+        "zsh"
+      ],
       "command": "shfmt",
-      "args": ["-w", "${file}"],
+      "args": [
+        "-w",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -277,9 +488,18 @@
       "name": "shfmt (4 space indent)",
       "description": "Format Shell scripts with 4 space indent",
       "language": "Shell",
-      "extensions": ["sh", "bash", "zsh"],
+      "extensions": [
+        "sh",
+        "bash",
+        "zsh"
+      ],
       "command": "shfmt",
-      "args": ["-w", "-i", "4", "${file}"],
+      "args": [
+        "-w",
+        "-i",
+        "4",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -287,9 +507,14 @@
       "name": "dart format",
       "description": "Format Dart code with dart format",
       "language": "Dart",
-      "extensions": ["dart"],
+      "extensions": [
+        "dart"
+      ],
       "command": "dart",
-      "args": ["format", "${file}"],
+      "args": [
+        "format",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -297,9 +522,14 @@
       "name": "swift-format",
       "description": "Format Swift code with swift-format",
       "language": "Swift",
-      "extensions": ["swift"],
+      "extensions": [
+        "swift"
+      ],
       "command": "swift-format",
-      "args": ["-i", "${file}"],
+      "args": [
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -307,9 +537,13 @@
       "name": "SwiftFormat",
       "description": "Format Swift code with SwiftFormat",
       "language": "Swift",
-      "extensions": ["swift"],
+      "extensions": [
+        "swift"
+      ],
       "command": "swiftformat",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -317,9 +551,14 @@
       "name": "scalafmt",
       "description": "Format Scala code with scalafmt",
       "language": "Scala",
-      "extensions": ["scala", "sc"],
+      "extensions": [
+        "scala",
+        "sc"
+      ],
       "command": "scalafmt",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -327,9 +566,15 @@
       "name": "mix format",
       "description": "Format Elixir code with mix format",
       "language": "Elixir",
-      "extensions": ["ex", "exs"],
+      "extensions": [
+        "ex",
+        "exs"
+      ],
       "command": "mix",
-      "args": ["format", "${file}"],
+      "args": [
+        "format",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -337,9 +582,14 @@
       "name": "elm-format",
       "description": "Format Elm code with elm-format",
       "language": "Elm",
-      "extensions": ["elm"],
+      "extensions": [
+        "elm"
+      ],
       "command": "elm-format",
-      "args": ["--yes", "${file}"],
+      "args": [
+        "--yes",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -347,9 +597,16 @@
       "name": "Ormolu",
       "description": "Format Haskell code with Ormolu",
       "language": "Haskell",
-      "extensions": ["hs", "lhs"],
+      "extensions": [
+        "hs",
+        "lhs"
+      ],
       "command": "ormolu",
-      "args": ["--mode", "inplace", "${file}"],
+      "args": [
+        "--mode",
+        "inplace",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -357,9 +614,15 @@
       "name": "Fourmolu",
       "description": "Format Haskell code with Fourmolu",
       "language": "Haskell",
-      "extensions": ["hs", "lhs"],
+      "extensions": [
+        "hs",
+        "lhs"
+      ],
       "command": "fourmolu",
-      "args": ["-i", "${file}"],
+      "args": [
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -367,9 +630,15 @@
       "name": "stylish-haskell",
       "description": "Format Haskell code with stylish-haskell",
       "language": "Haskell",
-      "extensions": ["hs", "lhs"],
+      "extensions": [
+        "hs",
+        "lhs"
+      ],
       "command": "stylish-haskell",
-      "args": ["-i", "${file}"],
+      "args": [
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -377,9 +646,15 @@
       "name": "ocamlformat",
       "description": "Format OCaml code with ocamlformat",
       "language": "OCaml",
-      "extensions": ["ml", "mli"],
+      "extensions": [
+        "ml",
+        "mli"
+      ],
       "command": "ocamlformat",
-      "args": ["-i", "${file}"],
+      "args": [
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -387,9 +662,18 @@
       "name": "cljfmt",
       "description": "Format Clojure code with cljfmt",
       "language": "Clojure",
-      "extensions": ["clj", "cljs", "cljc", "edn"],
+      "extensions": [
+        "clj",
+        "cljs",
+        "cljc",
+        "edn"
+      ],
       "command": "lein",
-      "args": ["cljfmt", "fix", "${file}"],
+      "args": [
+        "cljfmt",
+        "fix",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -397,9 +681,17 @@
       "name": "zprint",
       "description": "Format Clojure code with zprint",
       "language": "Clojure",
-      "extensions": ["clj", "cljs", "cljc", "edn"],
+      "extensions": [
+        "clj",
+        "cljs",
+        "cljc",
+        "edn"
+      ],
       "command": "zprint",
-      "args": ["-w", "${file}"],
+      "args": [
+        "-w",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -407,9 +699,14 @@
       "name": "lua-format",
       "description": "Format Lua code with lua-format",
       "language": "Lua",
-      "extensions": ["lua"],
+      "extensions": [
+        "lua"
+      ],
       "command": "lua-format",
-      "args": ["-i", "${file}"],
+      "args": [
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -417,9 +714,13 @@
       "name": "StyLua",
       "description": "Format Lua code with StyLua",
       "language": "Lua",
-      "extensions": ["lua"],
+      "extensions": [
+        "lua"
+      ],
       "command": "stylua",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -427,9 +728,15 @@
       "name": "crystal tool format",
       "description": "Format Crystal code",
       "language": "Crystal",
-      "extensions": ["cr"],
+      "extensions": [
+        "cr"
+      ],
       "command": "crystal",
-      "args": ["tool", "format", "${file}"],
+      "args": [
+        "tool",
+        "format",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -437,9 +744,13 @@
       "name": "nimpretty",
       "description": "Format Nim code with nimpretty",
       "language": "Nim",
-      "extensions": ["nim"],
+      "extensions": [
+        "nim"
+      ],
       "command": "nimpretty",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -447,9 +758,14 @@
       "name": "zig fmt",
       "description": "Format Zig code with zig fmt",
       "language": "Zig",
-      "extensions": ["zig"],
+      "extensions": [
+        "zig"
+      ],
       "command": "zig",
-      "args": ["fmt", "${file}"],
+      "args": [
+        "fmt",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -457,9 +773,14 @@
       "name": "dfmt",
       "description": "Format D code with dfmt",
       "language": "D",
-      "extensions": ["d"],
+      "extensions": [
+        "d"
+      ],
       "command": "dfmt",
-      "args": ["-i", "${file}"],
+      "args": [
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -467,9 +788,15 @@
       "name": "perltidy",
       "description": "Format Perl code with perltidy",
       "language": "Perl",
-      "extensions": ["pl", "pm"],
+      "extensions": [
+        "pl",
+        "pm"
+      ],
       "command": "perltidy",
-      "args": ["-b", "${file}"],
+      "args": [
+        "-b",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -477,9 +804,18 @@
       "name": "styler (R)",
       "description": "Format R code with styler",
       "language": "R",
-      "extensions": ["r", "R"],
+      "extensions": [
+        "r",
+        "R"
+      ],
       "command": "Rscript",
-      "args": ["--vanilla", "-e", "styler::style_file(commandArgs(TRUE)[1])", "--args", "${file}"],
+      "args": [
+        "--vanilla",
+        "-e",
+        "styler::style_file(commandArgs(TRUE)[1])",
+        "--args",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -487,9 +823,14 @@
       "name": "sql-formatter",
       "description": "Format SQL with sql-formatter",
       "language": "SQL",
-      "extensions": ["sql"],
+      "extensions": [
+        "sql"
+      ],
       "command": "sql-formatter",
-      "args": ["--fix", "${file}"],
+      "args": [
+        "--fix",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -497,9 +838,14 @@
       "name": "SQLFluff fix",
       "description": "Format SQL with SQLFluff",
       "language": "SQL",
-      "extensions": ["sql"],
+      "extensions": [
+        "sql"
+      ],
       "command": "sqlfluff",
-      "args": ["fix", "${file}"],
+      "args": [
+        "fix",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -507,9 +853,19 @@
       "name": "xmllint",
       "description": "Format XML with xmllint",
       "language": "XML",
-      "extensions": ["xml", "xsl", "xslt", "svg"],
+      "extensions": [
+        "xml",
+        "xsl",
+        "xslt",
+        "svg"
+      ],
       "command": "xmllint",
-      "args": ["--format", "--output", "${file}", "${file}"],
+      "args": [
+        "--format",
+        "--output",
+        "${file}",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -517,9 +873,18 @@
       "name": "HTML Tidy",
       "description": "Format HTML with HTML Tidy",
       "language": "HTML",
-      "extensions": ["html", "htm"],
+      "extensions": [
+        "html",
+        "htm"
+      ],
       "command": "tidy",
-      "args": ["-m", "-i", "-w", "120", "${file}"],
+      "args": [
+        "-m",
+        "-i",
+        "-w",
+        "120",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -527,9 +892,14 @@
       "name": "cmake-format",
       "description": "Format CMake files with cmake-format",
       "language": "CMake",
-      "extensions": ["cmake"],
+      "extensions": [
+        "cmake"
+      ],
       "command": "cmake-format",
-      "args": ["-i", "${file}"],
+      "args": [
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -537,9 +907,15 @@
       "name": "terraform fmt",
       "description": "Format Terraform files",
       "language": "Terraform",
-      "extensions": ["tf", "tfvars"],
+      "extensions": [
+        "tf",
+        "tfvars"
+      ],
       "command": "terraform",
-      "args": ["fmt", "${file}"],
+      "args": [
+        "fmt",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -547,9 +923,14 @@
       "name": "jsonlint",
       "description": "Format JSON with jsonlint",
       "language": "JSON",
-      "extensions": ["json"],
+      "extensions": [
+        "json"
+      ],
       "command": "jsonlint",
-      "args": ["-i", "${file}"],
+      "args": [
+        "-i",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -557,9 +938,16 @@
       "name": "jq (JSON)",
       "description": "Format JSON with jq (requires jq 1.6+ with --in-place)",
       "language": "JSON",
-      "extensions": ["json"],
+      "extensions": [
+        "json"
+      ],
       "command": "jq",
-      "args": ["--indent", "2", ".", "${file}"],
+      "args": [
+        "--indent",
+        "2",
+        ".",
+        "${file}"
+      ],
       "inPlace": false
     },
     {
@@ -567,9 +955,14 @@
       "name": "yamlfmt",
       "description": "Format YAML with yamlfmt",
       "language": "YAML",
-      "extensions": ["yaml", "yml"],
+      "extensions": [
+        "yaml",
+        "yml"
+      ],
       "command": "yamlfmt",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -577,9 +970,17 @@
       "name": "dotnet format",
       "description": "Format C#/F# code with dotnet format",
       "language": "C#",
-      "extensions": ["cs", "fs", "fsx"],
+      "extensions": [
+        "cs",
+        "fs",
+        "fsx"
+      ],
       "command": "dotnet",
-      "args": ["format", "--include", "${file}"],
+      "args": [
+        "format",
+        "--include",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -587,9 +988,14 @@
       "name": "Fantomas",
       "description": "Format F# code with Fantomas",
       "language": "F#",
-      "extensions": ["fs", "fsx"],
+      "extensions": [
+        "fs",
+        "fsx"
+      ],
       "command": "fantomas",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -597,9 +1003,15 @@
       "name": "v fmt",
       "description": "Format V code with v fmt",
       "language": "V",
-      "extensions": ["v"],
+      "extensions": [
+        "v"
+      ],
       "command": "v",
-      "args": ["fmt", "-w", "${file}"],
+      "args": [
+        "fmt",
+        "-w",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -607,9 +1019,18 @@
       "name": "Artistic Style",
       "description": "Format C/C++/Java with Artistic Style",
       "language": "C++",
-      "extensions": ["c", "cpp", "cxx", "h", "hpp", "java"],
+      "extensions": [
+        "c",
+        "cpp",
+        "cxx",
+        "h",
+        "hpp",
+        "java"
+      ],
       "command": "astyle",
-      "args": ["${file}"],
+      "args": [
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -617,9 +1038,18 @@
       "name": "Artistic Style (Allman)",
       "description": "Format with Allman/BSD brace style",
       "language": "C++",
-      "extensions": ["c", "cpp", "cxx", "h", "hpp"],
+      "extensions": [
+        "c",
+        "cpp",
+        "cxx",
+        "h",
+        "hpp"
+      ],
       "command": "astyle",
-      "args": ["--style=allman", "${file}"],
+      "args": [
+        "--style=allman",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -627,9 +1057,18 @@
       "name": "Artistic Style (K&R)",
       "description": "Format with Kernighan & Ritchie brace style",
       "language": "C++",
-      "extensions": ["c", "cpp", "cxx", "h", "hpp"],
+      "extensions": [
+        "c",
+        "cpp",
+        "cxx",
+        "h",
+        "hpp"
+      ],
       "command": "astyle",
-      "args": ["--style=kr", "${file}"],
+      "args": [
+        "--style=kr",
+        "${file}"
+      ],
       "inPlace": true
     },
     {
@@ -637,9 +1076,41 @@
       "name": "Uncrustify",
       "description": "Format C/C++/C#/Java/Objective-C with Uncrustify (requires config file)",
       "language": "C++",
-      "extensions": ["c", "cpp", "cxx", "h", "hpp", "cs", "java", "m", "mm"],
+      "extensions": [
+        "c",
+        "cpp",
+        "cxx",
+        "h",
+        "hpp",
+        "cs",
+        "java",
+        "m",
+        "mm"
+      ],
       "command": "uncrustify",
-      "args": ["--no-backup", "${file}"],
+      "args": [
+        "--no-backup",
+        "${file}"
+      ],
+      "inPlace": true
+    },
+    {
+      "id": "latexindent",
+      "name": "latexindent",
+      "description": "Format LaTeX code with latexindent",
+      "language": "LaTeX",
+      "extensions": [
+        "tex",
+        "sty",
+        "cls",
+        "bib",
+        "dtx"
+      ],
+      "command": "latexindent",
+      "args": [
+        "-w",
+        "${file}"
+      ],
       "inPlace": true
     }
   ],
