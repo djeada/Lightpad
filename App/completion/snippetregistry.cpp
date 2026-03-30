@@ -267,6 +267,56 @@ void SnippetRegistry::initializeDefaults() {
     codeBlock.description = "Fenced code block with language";
     registerSnippet("md", codeBlock);
     registerSnippet("markdown", codeBlock);
+    Snippet article;
+    article.prefix = "article";
+    article.label = "Article Document";
+    article.body = "\\documentclass{article}\n\\usepackage[utf8]{inputenc}\n\n"
+                   "\\title{${1:Title}}\n\\author{${2:Author}}\n"
+                   "\\date{${3:\\today}}\n\n\\begin{document}\n\n"
+                   "\\maketitle\n\n$0\n\n\\end{document}";
+    article.description = "Article document template";
+    registerSnippet("latex", article);
+
+    Snippet report;
+    report.prefix = "report";
+    report.label = "Report Document";
+    report.body =
+        "\\documentclass{report}\n\\usepackage[utf8]{inputenc}\n\n"
+        "\\title{${1:Title}}\n\\author{${2:Author}}\n"
+        "\\date{${3:\\today}}\n\n\\begin{document}\n\n"
+        "\\maketitle\n\\tableofcontents\n\n"
+        "\\chapter{${4:Introduction}}\n$0\n\n\\end{document}";
+    report.description = "Report document template";
+    registerSnippet("latex", report);
+
+    Snippet beamer;
+    beamer.prefix = "beamer";
+    beamer.label = "Beamer Presentation";
+    beamer.body = "\\documentclass{beamer}\n\\usetheme{${1:default}}\n\n"
+                  "\\title{${2:Title}}\n\\author{${3:Author}}\n"
+                  "\\date{${4:\\today}}\n\n\\begin{document}\n\n"
+                  "\\begin{frame}\n\\titlepage\n\\end{frame}\n\n"
+                  "\\begin{frame}{${5:Slide Title}}\n$0\n"
+                  "\\end{frame}\n\n\\end{document}";
+    beamer.description = "Beamer presentation template";
+    registerSnippet("latex", beamer);
+
+    Snippet env;
+    env.prefix = "begin";
+    env.label = "Environment";
+    env.body = "\\begin{${1:environment}}\n\t$0\n\\end{${1:environment}}";
+    env.description = "LaTeX environment";
+    registerSnippet("latex", env);
+
+    Snippet figure;
+    figure.prefix = "figure";
+    figure.label = "Figure";
+    figure.body =
+        "\\begin{figure}[${1:htbp}]\n\t\\centering\n"
+        "\t\\includegraphics[width=${2:0.8}\\textwidth]{${3:image}}\n"
+        "\t\\caption{${4:Caption}}\n\t\\label{fig:${5:label}}\n\\end{figure}";
+    figure.description = "Figure environment with image";
+    registerSnippet("latex", figure);
 
     Snippet table;
     table.prefix = "table";
@@ -309,6 +359,102 @@ void SnippetRegistry::initializeDefaults() {
     toc.description = "Table of contents markers";
     registerSnippet("md", toc);
     registerSnippet("markdown", toc);
+    table.body = "\\begin{table}[${1:htbp}]\n\t\\centering\n"
+                 "\t\\caption{${2:Caption}}\n\t\\label{tab:${3:label}}\n"
+                 "\t\\begin{tabular}{${4:lcc}}\n\t\t\\hline\n"
+                 "\t\t${5:Header 1} & ${6:Header 2} \\\\\\\\\n\t\t\\hline\n"
+                 "\t\t$0 \\\\\\\\\n\t\t\\hline\n"
+                 "\t\\end{tabular}\n\\end{table}";
+    table.description = "Table environment";
+    registerSnippet("latex", table);
+
+    Snippet equation;
+    equation.prefix = "equation";
+    equation.label = "Equation";
+    equation.body = "\\begin{equation}\n\t\\label{eq:${1:label}}\n"
+                    "\t$0\n\\end{equation}";
+    equation.description = "Numbered equation";
+    registerSnippet("latex", equation);
+
+    Snippet alignEnv;
+    alignEnv.prefix = "align";
+    alignEnv.label = "Align Environment";
+    alignEnv.body = "\\begin{align}\n\t$0\n\\end{align}";
+    alignEnv.description = "Aligned equations";
+    registerSnippet("latex", alignEnv);
+
+    Snippet itemize;
+    itemize.prefix = "itemize";
+    itemize.label = "Itemize List";
+    itemize.body =
+        "\\begin{itemize}\n\t\\item ${1:First item}\n\t\\item $0\n"
+        "\\end{itemize}";
+    itemize.description = "Bulleted list";
+    registerSnippet("latex", itemize);
+
+    Snippet enumerate;
+    enumerate.prefix = "enumerate";
+    enumerate.label = "Enumerate List";
+    enumerate.body =
+        "\\begin{enumerate}\n\t\\item ${1:First item}\n\t\\item $0\n"
+        "\\end{enumerate}";
+    enumerate.description = "Numbered list";
+    registerSnippet("latex", enumerate);
+
+    Snippet theorem;
+    theorem.prefix = "theorem";
+    theorem.label = "Theorem";
+    theorem.body = "\\begin{theorem}\n\t\\label{thm:${1:label}}\n"
+                   "\t$0\n\\end{theorem}";
+    theorem.description = "Theorem environment";
+    registerSnippet("latex", theorem);
+
+    Snippet proof;
+    proof.prefix = "proof";
+    proof.label = "Proof";
+    proof.body = "\\begin{proof}\n\t$0\n\\end{proof}";
+    proof.description = "Proof environment";
+    registerSnippet("latex", proof);
+
+    Snippet tikz;
+    tikz.prefix = "tikz";
+    tikz.label = "TikZ Picture";
+    tikz.body =
+        "\\begin{tikzpicture}\n\t$0\n\\end{tikzpicture}";
+    tikz.description = "TikZ picture environment";
+    registerSnippet("latex", tikz);
+
+    Snippet frame;
+    frame.prefix = "frame";
+    frame.label = "Beamer Frame";
+    frame.body =
+        "\\begin{frame}{${1:Frame Title}}\n\t$0\n\\end{frame}";
+    frame.description = "Beamer frame (slide)";
+    registerSnippet("latex", frame);
+
+    Snippet section;
+    section.prefix = "sec";
+    section.label = "Section";
+    section.body = "\\section{${1:Section Title}}\n\\label{sec:${2:label}}\n$0";
+    section.description = "Section with label";
+    registerSnippet("latex", section);
+
+    Snippet subsection;
+    subsection.prefix = "ssec";
+    subsection.label = "Subsection";
+    subsection.body =
+        "\\subsection{${1:Subsection Title}}\n\\label{ssec:${2:label}}\n$0";
+    subsection.description = "Subsection with label";
+    registerSnippet("latex", subsection);
+
+    Snippet bibSetup;
+    bibSetup.prefix = "bib";
+    bibSetup.label = "Bibliography Setup";
+    bibSetup.body =
+        "\\usepackage[backend=biber,style=${1:numeric}]{biblatex}\n"
+        "\\addbibresource{${2:references}.bib}";
+    bibSetup.description = "Biblatex bibliography setup";
+    registerSnippet("latex", bibSetup);
   }
 
   Logger::instance().info("Initialized default snippets");

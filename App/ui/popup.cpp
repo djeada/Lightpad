@@ -1,18 +1,33 @@
 #include "popup.h"
 #include "mainwindow.h"
 #include <QStringListModel>
+#include <QStyle>
 #include <QVBoxLayout>
 
 ListView::ListView(QWidget *parent) : QListView(parent) {
   setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+  setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  setSelectionMode(QAbstractItemView::SingleSelection);
+  setEditTriggers(QAbstractItemView::NoEditTriggers);
 }
 
 QSize ListView::sizeHint() const {
-  if (model()->rowCount() == 0)
-    return QSize(width(), 0);
+  if (!model() || model()->rowCount() == 0)
+    return QListView::sizeHint();
 
-  int nToShow = 10 < model()->rowCount() ? 10 : model()->rowCount();
-  return QSize(width(), nToShow * sizeHintForRow(0));
+  const int rowCount = model()->rowCount();
+  const int rowsToShow = qMin(10, rowCount);
+  const int rowHeight =
+      qMax(sizeHintForRow(0), fontMetrics().height() + 10);
+  const int contentWidth = qMax(sizeHintForColumn(0), 0);
+  const int scrollBarWidth =
+      rowCount > rowsToShow ? style()->pixelMetric(QStyle::PM_ScrollBarExtent)
+                            : 0;
+  const int frameWidthPx = frameWidth() * 2;
+  const int width = qMax(120, contentWidth + scrollBarWidth + frameWidthPx + 24);
+  const int height = rowsToShow * rowHeight + frameWidthPx;
+
+  return QSize(width, height);
 }
 
 Popup::Popup(QStringList list, QWidget *parent) : QDialog(parent), list(list) {
@@ -23,13 +38,19 @@ Popup::Popup(QStringList list, QWidget *parent) : QDialog(parent), list(list) {
   model->setStringList(list);
 
   listView->setModel(model);
-  listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
   QVBoxLayout *layout = new QVBoxLayout(this);
   layout->addWidget(listView);
   layout->setContentsMargins(0, 0, 0, 0);
 
+  resize(sizeHint());
   show();
+}
+
+QSize Popup::sizeHint() const {
+  if (layout())
+    return layout()->sizeHint();
+  return QDialog::sizeHint();
 }
 
 PopupTabWidth::PopupTabWidth(QStringList list, QWidget *parent)

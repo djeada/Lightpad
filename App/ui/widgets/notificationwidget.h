@@ -29,6 +29,7 @@ private:
   void setupUi();
   void applyStyle(Level level);
   void positionInParent();
+  void updateSizeForContent();
 
   QLabel *m_iconLabel;
   QLabel *m_titleLabel;

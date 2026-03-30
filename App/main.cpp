@@ -9,6 +9,7 @@
 #include "syntax/javascriptsyntaxplugin.h"
 #include "syntax/javasyntaxplugin.h"
 #include "syntax/jsonsyntaxplugin.h"
+#include "syntax/latexsyntaxplugin.h"
 #include "syntax/makesyntaxplugin.h"
 #include "syntax/markdownsyntaxplugin.h"
 #include "syntax/mesonsyntaxplugin.h"
@@ -33,6 +34,7 @@ void registerBuiltInSyntaxPlugins() {
   registry.registerPlugin(std::make_unique<JavaScriptSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JavaSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JsonSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<LatexSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MarkdownSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MesonSyntaxPlugin>());

@@ -235,7 +235,8 @@ private:
   LanguageFeatureManager *m_languageFeatureManager;
   std::shared_ptr<LspCompletionProvider> m_lspCompletionProvider;
   NotificationManager *m_notificationManager;
-  class QLabel *m_lspStatusLabel;
+  class QToolButton *m_lspStatusLabel;
+  QString m_lspStatusLanguageId;
   QMap<QString, int> m_documentVersions;
   QMap<QString, QTimer *> m_diagnosticsChangeTimers;
   QMap<QString, QString> m_pendingDiagnosticsTexts;
@@ -295,6 +296,9 @@ private:
   void setupDiagnostics();
   void setupNotificationManager();
   void updateLspStatusLabel(const QString &languageId, const QString &status);
+  void openPythonEnvironmentDialog();
+  void openLanguageServerStatusDialog();
+  void retryLanguageServerForCurrentFile(const QString &languageId);
   void notifyDiagnosticsFileOpened(const QString &filePath);
   void notifyDiagnosticsFileChanged(const QString &filePath,
                                     const QString &text);

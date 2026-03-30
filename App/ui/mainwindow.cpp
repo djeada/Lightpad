@@ -68,7 +68,9 @@
 #include "dialogs/gitrebasedialog.h"
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
+#include "dialogs/languageserverstatusdialog.h"
 #include "dialogs/preferences.h"
+#include "dialogs/pythonenvironmentdialog.h"
 #include "dialogs/recentfilesdialog.h"
 #include "dialogs/runconfigurations.h"
 #include "dialogs/runtemplateselector.h"
@@ -135,7 +137,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
       m_diagnosticsManager(nullptr), m_languageFeatureManager(nullptr),
       m_lspCompletionProvider(), m_notificationManager(nullptr),
-      m_lspStatusLabel(nullptr), m_restoringSession(false),
+      m_lspStatusLabel(nullptr), m_lspStatusLanguageId(""),
+      m_restoringSession(false),
       m_globalSettingsLoaded(false),
       m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
       m_treeScrollValue(0), m_treeScrollValueInitialized(false),
@@ -149,6 +152,8 @@ MainWindow::MainWindow(QWidget *parent)
   ui->actionReplace_in_file->setShortcut(QKeySequence::Replace);
   ui->actionReplace_in_file->setShortcutContext(Qt::ApplicationShortcut);
   ensureFileTreeModel();
+  connect(&RunTemplateManager::instance(), &RunTemplateManager::assignmentChanged,
+          this, [this](const QString &) { updatePythonEnvironmentLabel(); });
 
   showMaximized();
 
@@ -2313,7 +2318,7 @@ void MainWindow::ensureStatusLabels() {
         tr("Python environment (click to configure)"));
     m_pythonEnvLabel->setVisible(false);
     connect(m_pythonEnvLabel, &QToolButton::clicked, this, [this]() {
-      openConfigurationDialog();
+      openPythonEnvironmentDialog();
     });
 
     auto layout = qobject_cast<QHBoxLayout *>(ui->backgroundBottom->layout());
@@ -3314,10 +3319,14 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
   ensureStatusLabels();
 
   if (!m_lspStatusLabel) {
-    m_lspStatusLabel = new QLabel(this);
+    m_lspStatusLabel = new QToolButton(this);
+    m_lspStatusLabel->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_lspStatusLabel->setAutoRaise(true);
     m_lspStatusLabel->setCursor(Qt::PointingHandCursor);
     m_lspStatusLabel->setToolTip(
         tr("Language server status (click for details)"));
+    connect(m_lspStatusLabel, &QToolButton::clicked, this,
+            &MainWindow::openLanguageServerStatusDialog);
 
     auto layout = qobject_cast<QHBoxLayout *>(ui->backgroundBottom->layout());
     if (layout) {
@@ -3337,29 +3346,42 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
   QString displayName = LanguageCatalog::displayName(languageId).isEmpty()
                             ? languageId
                             : LanguageCatalog::displayName(languageId);
+  m_lspStatusLanguageId = languageId;
 
   if (status == "running") {
     m_lspStatusLabel->setText(QString::fromUtf8("● %1").arg(displayName));
     m_lspStatusLabel->setStyleSheet(
-        "color: #3fb950; padding: 0 6px; font-size: 11px;");
+        "QToolButton { color: #3fb950; padding: 2px 8px; font-size: 11px; "
+        "border: 1px solid rgba(63,185,80,0.25); border-radius: 4px; "
+        "background: rgba(63,185,80,0.08); }"
+        "QToolButton:hover { background: rgba(63,185,80,0.16); }");
     m_lspStatusLabel->setToolTip(
         tr("%1 language server is running").arg(displayName));
   } else if (status == "starting") {
     m_lspStatusLabel->setText(QString::fromUtf8("◌ %1").arg(displayName));
     m_lspStatusLabel->setStyleSheet(
-        "color: #d29922; padding: 0 6px; font-size: 11px;");
+        "QToolButton { color: #d29922; padding: 2px 8px; font-size: 11px; "
+        "border: 1px solid rgba(210,153,34,0.25); border-radius: 4px; "
+        "background: rgba(210,153,34,0.08); }"
+        "QToolButton:hover { background: rgba(210,153,34,0.16); }");
     m_lspStatusLabel->setToolTip(
         tr("%1 language server is starting…").arg(displayName));
   } else if (status == "error") {
     m_lspStatusLabel->setText(QString::fromUtf8("✖ %1").arg(displayName));
     m_lspStatusLabel->setStyleSheet(
-        "color: #f85149; padding: 0 6px; font-size: 11px;");
+        "QToolButton { color: #f85149; padding: 2px 8px; font-size: 11px; "
+        "border: 1px solid rgba(248,81,73,0.35); border-radius: 4px; "
+        "background: rgba(248,81,73,0.10); }"
+        "QToolButton:hover { background: rgba(248,81,73,0.18); }");
     m_lspStatusLabel->setToolTip(
         tr("%1 language server encountered an error").arg(displayName));
   } else if (status == "stopped") {
     m_lspStatusLabel->setText(QString::fromUtf8("○ %1").arg(displayName));
     m_lspStatusLabel->setStyleSheet(
-        "color: #8b949e; padding: 0 6px; font-size: 11px;");
+        "QToolButton { color: #8b949e; padding: 2px 8px; font-size: 11px; "
+        "border: 1px solid rgba(139,148,158,0.20); border-radius: 4px; "
+        "background: rgba(139,148,158,0.08); }"
+        "QToolButton:hover { background: rgba(139,148,158,0.14); }");
     m_lspStatusLabel->setToolTip(
         tr("%1 language server is disabled").arg(displayName));
   } else {
@@ -3368,6 +3390,73 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
   }
 
   m_lspStatusLabel->setVisible(true);
+}
+
+void MainWindow::openPythonEnvironmentDialog() {
+  auto page = currentTabWidget() ? currentTabWidget()->getCurrentPage()
+                                 : nullptr;
+  const QString filePath = page ? page->getFilePath() : QString();
+  if (filePath.trimmed().isEmpty()) {
+    return;
+  }
+
+  auto *dialog = new PythonEnvironmentDialog(m_projectRootPath, filePath,
+                                             getTheme(), this);
+  connect(dialog, &PythonEnvironmentDialog::configurationSaved, this, [this]() {
+    updatePythonEnvironmentLabel();
+  });
+  dialog->show();
+  dialog->raise();
+  dialog->activateWindow();
+}
+
+void MainWindow::openLanguageServerStatusDialog() {
+  if (m_lspStatusLanguageId.trimmed().isEmpty() || !m_languageFeatureManager) {
+    return;
+  }
+
+  auto page = currentTabWidget() ? currentTabWidget()->getCurrentPage()
+                                 : nullptr;
+  const QString filePath = page ? page->getFilePath() : QString();
+  const QString effectiveLanguage =
+      filePath.trimmed().isEmpty() ? QString() : effectiveLanguageIdForFile(filePath);
+  const QString overrideLanguage =
+      filePath.trimmed().isEmpty() ? QString() : highlightOverrideForFile(filePath);
+
+  auto *dialog = new LanguageServerStatusDialog(
+      m_lspStatusLanguageId, m_projectRootPath, filePath, effectiveLanguage,
+      overrideLanguage, m_languageFeatureManager, getTheme(), this);
+  connect(dialog, &LanguageServerStatusDialog::configurationApplied, this,
+          &MainWindow::retryLanguageServerForCurrentFile);
+  connect(dialog, &LanguageServerStatusDialog::pythonEnvironmentRequested, this,
+          &MainWindow::openPythonEnvironmentDialog);
+  dialog->show();
+  dialog->raise();
+  dialog->activateWindow();
+}
+
+void MainWindow::retryLanguageServerForCurrentFile(
+    const QString &languageAssociation) {
+  auto page = currentTabWidget() ? currentTabWidget()->getCurrentPage()
+                                 : nullptr;
+  const QString filePath = page ? page->getFilePath() : QString();
+  TextArea *textArea = getCurrentTextArea();
+  if (!m_languageFeatureManager || filePath.trimmed().isEmpty() || !textArea) {
+    return;
+  }
+
+  if (languageAssociation.trimmed().isEmpty()) {
+    setHighlightOverrideForFile(filePath, "");
+    applyHighlightForFile(filePath);
+    notifyDiagnosticsFileClosed(filePath);
+    const QString effectiveLanguage = effectiveLanguageIdForFile(filePath);
+    m_languageFeatureManager->openDocument(filePath, effectiveLanguage,
+                                           textArea->toPlainText());
+    updateLspStatusLabel(effectiveLanguage, "starting");
+  } else {
+    applyLanguageOverride(languageAssociation);
+    updateLspStatusLabel(effectiveLanguageIdForFile(filePath), "starting");
+  }
 }
 
 void MainWindow::notifyDiagnosticsFileOpened(const QString &filePath) {
@@ -4437,6 +4526,30 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
   }
 
   updatePythonEnvironmentLabel();
+  if (m_languageFeatureManager && !filePath.isEmpty()) {
+    const QString languageId = effectiveLanguageIdForFile(filePath);
+    switch (m_languageFeatureManager->serverHealth(languageId)) {
+    case ServerHealthStatus::Starting:
+      updateLspStatusLabel(languageId, "starting");
+      break;
+    case ServerHealthStatus::Running:
+      updateLspStatusLabel(languageId, "running");
+      break;
+    case ServerHealthStatus::Error:
+      updateLspStatusLabel(languageId, "error");
+      break;
+    case ServerHealthStatus::Stopped:
+      updateLspStatusLabel(languageId, "stopped");
+      break;
+    default:
+      if (m_lspStatusLabel) {
+        m_lspStatusLabel->setVisible(false);
+      }
+      break;
+    }
+  } else if (m_lspStatusLabel) {
+    m_lspStatusLabel->setVisible(false);
+  }
 }
 
 void MainWindow::applyTabWidgetTheme(LightpadTabWidget *tabWidget) {
@@ -5134,8 +5247,9 @@ void MainWindow::on_tabWidth_clicked() {
   if (!popupTabWidth) {
     popupTabWidth = new PopupTabWidth(QStringList({"2", "4", "8"}), this);
     auto point = mapToGlobal(ui->tabWidth->pos());
-    QRect rect(point.x(), point.y() - 2 * popupTabWidth->height() + height(),
-               popupTabWidth->width(), popupTabWidth->height());
+    const QSize popupSize = popupTabWidth->sizeHint();
+    QRect rect(point.x(), point.y() - 2 * popupSize.height() + height(),
+               popupSize.width(), popupSize.height());
     popupTabWidth->setGeometry(rect);
   }
 

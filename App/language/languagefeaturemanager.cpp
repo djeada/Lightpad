@@ -49,6 +49,7 @@ void LanguageFeatureManager::openDocument(const QString &filePath,
     const QString message =
         QString("No language server configured for '%1'.").arg(effectiveLang);
     LOG_WARNING(message);
+    m_lastServerErrors[effectiveLang] = message;
     emit serverError(effectiveLang, message);
     return;
   }
@@ -210,6 +211,7 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
                                    "settings.")
                                .arg(languageId);
     LOG_WARNING(reason);
+    m_lastServerErrors[languageId] = reason;
     emit serverError(languageId, reason);
     m_serverHealth[languageId] = ServerHealthStatus::Stopped;
     emit serverHealthChanged(languageId, ServerHealthStatus::Stopped);
@@ -230,6 +232,7 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
   connect(client, &LspClient::initialized, this, [this, languageId]() {
     LOG_INFO(QString("Language server for '%1' initialized").arg(languageId));
     m_serverHealth[languageId] = ServerHealthStatus::Running;
+    m_lastServerErrors.remove(languageId);
     emit serverHealthChanged(languageId, ServerHealthStatus::Running);
     emit serverStarted(languageId);
   });
@@ -239,18 +242,21 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
             LOG_ERROR(QString("Language server error for '%1': %2")
                           .arg(languageId, message));
             m_serverHealth[languageId] = ServerHealthStatus::Error;
+            m_lastServerErrors[languageId] = message;
             emit serverHealthChanged(languageId, ServerHealthStatus::Error);
             emit serverError(languageId, message);
           });
 
   bool started = client->start(config.command, config.arguments);
   if (!started) {
+    const QString message =
+        QString("Failed to start '%1'. Is it installed and on PATH?")
+            .arg(config.command);
     LOG_WARNING(QString("Failed to start language server '%1' (%2). "
                         "Make sure '%3' is installed and available on PATH.")
                     .arg(languageId, config.command, config.command));
-    emit serverError(
-        languageId,
-        QString("Failed to start '%1'. Is it installed?").arg(config.command));
+    m_lastServerErrors[languageId] = message;
+    emit serverError(languageId, message);
     m_serverHealth[languageId] = ServerHealthStatus::Error;
     emit serverHealthChanged(languageId, ServerHealthStatus::Error);
     delete client;
@@ -316,7 +322,27 @@ LanguageFeatureManager::serverHealth(const QString &languageId) const {
   return m_serverHealth.value(languageId, ServerHealthStatus::Unknown);
 }
 
+DiagnosticsServerConfig
+LanguageFeatureManager::serverConfig(const QString &languageId) const {
+  return configForLanguage(languageId);
+}
+
+QString LanguageFeatureManager::lastServerError(const QString &languageId) const {
+  return m_lastServerErrors.value(languageId);
+}
+
+void LanguageFeatureManager::restartServer(const QString &languageId) {
+  LspClient *client = m_clients.take(languageId);
+  if (client) {
+    client->stop();
+    client->deleteLater();
+  }
+  m_serverHealth[languageId] = ServerHealthStatus::Unknown;
+  emit serverHealthChanged(languageId, ServerHealthStatus::Unknown);
+}
+
 void LanguageFeatureManager::loadSettingsOverrides() {
+  m_serverConfigs = defaultServerConfigs();
   SettingsManager &settings = SettingsManager::instance();
 
   for (DiagnosticsServerConfig &cfg : m_serverConfigs) {

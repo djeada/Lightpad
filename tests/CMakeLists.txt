@@ -329,6 +329,7 @@ add_executable(test_syntaxpluginregistry
     ${CMAKE_SOURCE_DIR}/App/syntax/javascriptsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/javasyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/jsonsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/latexsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/markdownsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/pythonsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/rustsyntaxplugin.cpp
@@ -353,6 +354,31 @@ target_link_libraries(test_syntaxpluginregistry
 
 target_compile_definitions(test_terminaltabwidget PRIVATE QT_DEPRECATED_WARNINGS)
 target_compile_definitions(test_syntaxpluginregistry PRIVATE QT_DEPRECATED_WARNINGS)
+
+# LatexSyntaxPlugin test executable
+add_executable(test_latexsyntaxplugin
+    unit/test_latexsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/syntaxpluginregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/latexsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_latexsyntaxplugin PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/syntax
+)
+
+target_link_libraries(test_latexsyntaxplugin
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_latexsyntaxplugin PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME LatexSyntaxPluginTests COMMAND test_latexsyntaxplugin)
 
 # CompletionProviderRegistry test executable
 add_executable(test_completionproviderregistry
@@ -646,6 +672,7 @@ add_executable(test_languagefeaturemanager
     ${CMAKE_SOURCE_DIR}/App/syntax/javascriptsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/javasyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/jsonsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/latexsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/markdownsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/pythonsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/rustsyntaxplugin.cpp
@@ -1237,6 +1264,7 @@ set(TEST_LIST
     TerminalTests 
     TerminalTabWidgetTests
     SyntaxPluginRegistryTests 
+    LatexSyntaxPluginTests
     CompletionProviderRegistryTests 
     CompletionEngineTests
     DapTests 
