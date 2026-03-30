@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include <QListView>
+#include <QSize>
 #include <QWidget>
 
 class ListView : public QListView {
@@ -18,6 +19,7 @@ class Popup : public QDialog {
 
 public:
   Popup(QStringList list, QWidget *parent = nullptr);
+  QSize sizeHint() const override;
 
 protected:
   ListView *listView;

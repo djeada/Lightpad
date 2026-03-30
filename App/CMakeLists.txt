@@ -79,6 +79,7 @@ set(project_headers
     ui/dialogs/gotosymboldialog.h
     ui/dialogs/recentfilesdialog.h
     ui/dialogs/filequickopen.h
+    ui/dialogs/languageserverstatusdialog.h
     ui/dialogs/gitinitdialog.h
     ui/dialogs/gitdiffdialog.h
     ui/dialogs/mergeconflictdialog.h
@@ -143,6 +144,7 @@ set(project_headers
     ui/mainwindow.h
     ui/popup.h
     ui/dialogs/preferences.h
+    ui/dialogs/pythonenvironmentdialog.h
     settings/preferenceseditor.h
     settings/settingsmanager.h
     ui/panels/preferencesview.h
@@ -215,6 +217,7 @@ set(project_sources
     ui/dialogs/gotosymboldialog.cpp
     ui/dialogs/recentfilesdialog.cpp
     ui/dialogs/filequickopen.cpp
+    ui/dialogs/languageserverstatusdialog.cpp
     ui/dialogs/gitinitdialog.cpp
     ui/dialogs/gitdiffdialog.cpp
     ui/dialogs/mergeconflictdialog.cpp
@@ -274,6 +277,7 @@ set(project_sources
     ui/mainwindow.cpp
     ui/popup.cpp
     ui/dialogs/preferences.cpp
+    ui/dialogs/pythonenvironmentdialog.cpp
     settings/preferenceseditor.cpp
     settings/settingsmanager.cpp
     ui/panels/preferencesview.cpp
