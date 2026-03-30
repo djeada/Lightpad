@@ -43,7 +43,7 @@ void AutoTestRunner::setMode(AutoRunMode mode) {
 AutoRunMode AutoTestRunner::mode() const { return m_mode; }
 
 void AutoTestRunner::setDebounceDelay(int ms) {
-  m_debounceDelay = qMax(100, ms);
+  m_debounceDelay = qBound(100, ms, 60000);
   m_debounceTimer.setInterval(m_debounceDelay);
 }
 
@@ -141,8 +141,8 @@ void AutoTestRunner::saveSettings(const QString &workspaceFolder) const {
     return;
 
   QDir dir(workspaceFolder);
-  if (!dir.exists(".lightpad"))
-    dir.mkdir(".lightpad");
+  if (!dir.mkpath(".lightpad"))
+    return;
 
   QString path = dir.filePath(".lightpad/autotest.json");
 
@@ -177,7 +177,7 @@ void AutoTestRunner::loadSettings(const QString &workspaceFolder) {
   if (modeInt >= 0 && modeInt <= static_cast<int>(AutoRunMode::LastSelection))
     m_mode = static_cast<AutoRunMode>(modeInt);
 
-  m_debounceDelay = qMax(100, debounce);
+  m_debounceDelay = qBound(100, debounce, 60000);
   m_debounceTimer.setInterval(m_debounceDelay);
 
   setEnabled(enabled);

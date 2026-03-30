@@ -32,7 +32,10 @@ bool RunConfigurationManager::loadConfigurations(
     return false;
 
   QJsonArray arr = doc.object().value("configurations").toArray();
+  const int maxConfigurations = 1000;
   for (const QJsonValue &v : arr) {
+    if (m_configurations.size() >= maxConfigurations)
+      break;
     RunConfiguration cfg = RunConfiguration::fromJson(v.toObject());
     if (cfg.isValid())
       m_configurations.append(cfg);
@@ -48,8 +51,8 @@ bool RunConfigurationManager::saveConfigurations(
     return false;
 
   QDir dir(workspaceFolder);
-  if (!dir.exists(".lightpad"))
-    dir.mkdir(".lightpad");
+  if (!dir.mkpath(".lightpad"))
+    return false;
 
   QString path = dir.filePath(".lightpad/run_configurations.json");
 

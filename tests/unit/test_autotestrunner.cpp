@@ -326,6 +326,9 @@ void TestAutoTestRunner::testMinDebounceDelay() {
 
   runner.setDebounceDelay(-5);
   QCOMPARE(runner.debounceDelay(), 100);
+
+  runner.setDebounceDelay(120000);
+  QCOMPARE(runner.debounceDelay(), 60000);
 }
 
 QTEST_MAIN(TestAutoTestRunner)
