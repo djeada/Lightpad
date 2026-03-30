@@ -1,6 +1,8 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTreeWidget>
+#include <QLineEdit>
+#include <QProgressBar>
 #include <QtTest>
 
 #include "test_templates/autotestrunner.h"
@@ -46,12 +48,23 @@ private slots:
   // Discovery adapter wiring
   void testSetDiscoveryAdapter();
 
+  // Modern UI features
+  void testSearchEditExists();
+  void testProgressBarHiddenInitially();
+  void testProgressBarVisibleDuringRun();
+  void testEmptyStateLabelVisibleInitially();
+  void testEmptyStateHiddenAfterDiscovery();
+  void testSearchFilterByName();
+
 private:
   QTemporaryDir m_tempDir;
   QTreeWidget *findTree(TestPanel &panel);
   QLabel *findStatusLabel(TestPanel &panel);
   QComboBox *findFilterCombo(TestPanel &panel);
   TestRunManager *findRunManager(TestPanel &panel);
+  QLineEdit *findSearchEdit(TestPanel &panel);
+  QProgressBar *findProgressBar(TestPanel &panel);
+  QLabel *findEmptyStateLabel(TestPanel &panel);
 };
 
 void TestTestPanel::initTestCase() {
@@ -77,6 +90,18 @@ QComboBox *TestTestPanel::findFilterCombo(TestPanel &panel) {
 
 TestRunManager *TestTestPanel::findRunManager(TestPanel &panel) {
   return panel.findChild<TestRunManager *>();
+}
+
+QLineEdit *TestTestPanel::findSearchEdit(TestPanel &panel) {
+  return panel.findChild<QLineEdit *>("testSearchEdit");
+}
+
+QProgressBar *TestTestPanel::findProgressBar(TestPanel &panel) {
+  return panel.findChild<QProgressBar *>("testProgressBar");
+}
+
+QLabel *TestTestPanel::findEmptyStateLabel(TestPanel &panel) {
+  return panel.findChild<QLabel *>("testEmptyState");
 }
 
 // --- Initial state tests ---
@@ -477,6 +502,119 @@ void TestTestPanel::testSetDiscoveryAdapter() {
   // Calling discover through the panel's discover method
   panel.discoverTests();
   QVERIFY(mockAdapter.discoverCalled);
+}
+
+// --- Modern UI feature tests ---
+
+void TestTestPanel::testSearchEditExists() {
+  TestPanel panel;
+  QLineEdit *searchEdit = findSearchEdit(panel);
+  QVERIFY(searchEdit != nullptr);
+  QVERIFY(searchEdit->placeholderText().contains("Filter"));
+}
+
+void TestTestPanel::testProgressBarHiddenInitially() {
+  TestPanel panel;
+  panel.show();
+  QProgressBar *progressBar = findProgressBar(panel);
+  QVERIFY(progressBar != nullptr);
+  QCOMPARE(progressBar->isVisible(), false);
+}
+
+void TestTestPanel::testProgressBarVisibleDuringRun() {
+  TestPanel panel;
+  panel.show();
+  QProgressBar *progressBar = findProgressBar(panel);
+  QVERIFY(progressBar != nullptr);
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  // Emit runStarted to simulate test run beginning
+  emit runMgr->runStarted();
+  QCOMPARE(progressBar->isVisible(), true);
+
+  // Emit runFinished to simulate test run ending
+  emit runMgr->runFinished(1, 0, 0, 0);
+  QCOMPARE(progressBar->isVisible(), false);
+}
+
+void TestTestPanel::testEmptyStateLabelVisibleInitially() {
+  TestPanel panel;
+  panel.show();
+  QLabel *emptyState = findEmptyStateLabel(panel);
+  QVERIFY(emptyState != nullptr);
+  QCOMPARE(emptyState->isVisible(), true);
+}
+
+void TestTestPanel::testEmptyStateHiddenAfterDiscovery() {
+  TestPanel panel;
+
+  class MockDiscoveryAdapter : public ITestDiscoveryAdapter {
+  public:
+    QString adapterId() const override { return "mock"; }
+    void discover(const QString &) override {
+      QList<DiscoveredTest> tests;
+      DiscoveredTest t1;
+      t1.name = "test_one";
+      t1.id = "test_one";
+      t1.suite = "";
+      tests.append(t1);
+      emit discoveryFinished(tests);
+    }
+    void cancel() override {}
+  };
+
+  MockDiscoveryAdapter mockAdapter;
+  panel.setDiscoveryAdapter(&mockAdapter);
+  panel.setWorkspaceFolder(m_tempDir.path());
+  mockAdapter.discover(m_tempDir.path());
+
+  QLabel *emptyState = findEmptyStateLabel(panel);
+  QVERIFY(emptyState != nullptr);
+  QCOMPARE(emptyState->isVisible(), false);
+}
+
+void TestTestPanel::testSearchFilterByName() {
+  TestPanel panel;
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  emit runMgr->runStarted();
+
+  // Add tests with different names
+  TestResult r1;
+  r1.id = "alpha";
+  r1.name = "test_alpha";
+  r1.suite = "";
+  r1.status = TestStatus::Passed;
+  emit runMgr->testFinished(r1);
+
+  TestResult r2;
+  r2.id = "beta";
+  r2.name = "test_beta";
+  r2.suite = "";
+  r2.status = TestStatus::Passed;
+  emit runMgr->testFinished(r2);
+
+  QTreeWidget *tree = findTree(panel);
+  QVERIFY(tree != nullptr);
+  QCOMPARE(tree->topLevelItemCount(), 2);
+
+  // Type search text to filter
+  QLineEdit *searchEdit = findSearchEdit(panel);
+  QVERIFY(searchEdit != nullptr);
+  searchEdit->setText("alpha");
+
+  // Only "test_alpha" should be visible
+  QCOMPARE(tree->topLevelItem(0)->isHidden(), false); // test_alpha
+  QCOMPARE(tree->topLevelItem(1)->isHidden(), true);   // test_beta
+
+  // Clear search shows all
+  searchEdit->setText("");
+  QCOMPARE(tree->topLevelItem(0)->isHidden(), false);
+  QCOMPARE(tree->topLevelItem(1)->isHidden(), false);
 }
 
 QTEST_MAIN(TestTestPanel)
