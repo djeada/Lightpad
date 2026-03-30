@@ -220,6 +220,53 @@ void SnippetRegistry::initializeDefaults() {
   }
 
   {
+    Snippet heading;
+    heading.prefix = "h1";
+    heading.label = "Heading 1";
+    heading.body = "# ${1:Heading}\n$0";
+    heading.description = "Top-level heading";
+    registerSnippet("md", heading);
+    registerSnippet("markdown", heading);
+
+    Snippet heading2;
+    heading2.prefix = "h2";
+    heading2.label = "Heading 2";
+    heading2.body = "## ${1:Heading}\n$0";
+    heading2.description = "Second-level heading";
+    registerSnippet("md", heading2);
+    registerSnippet("markdown", heading2);
+
+    Snippet heading3;
+    heading3.prefix = "h3";
+    heading3.label = "Heading 3";
+    heading3.body = "### ${1:Heading}\n$0";
+    heading3.description = "Third-level heading";
+    registerSnippet("md", heading3);
+    registerSnippet("markdown", heading3);
+
+    Snippet link;
+    link.prefix = "link";
+    link.label = "Link";
+    link.body = "[${1:text}](${2:url})$0";
+    link.description = "Markdown link";
+    registerSnippet("md", link);
+    registerSnippet("markdown", link);
+
+    Snippet image;
+    image.prefix = "img";
+    image.label = "Image";
+    image.body = "![${1:alt text}](${2:path})$0";
+    image.description = "Markdown image";
+    registerSnippet("md", image);
+    registerSnippet("markdown", image);
+
+    Snippet codeBlock;
+    codeBlock.prefix = "code";
+    codeBlock.label = "Fenced Code Block";
+    codeBlock.body = "```${1:language}\n${2:code}\n```\n$0";
+    codeBlock.description = "Fenced code block with language";
+    registerSnippet("md", codeBlock);
+    registerSnippet("markdown", codeBlock);
     Snippet article;
     article.prefix = "article";
     article.label = "Article Document";
@@ -274,6 +321,44 @@ void SnippetRegistry::initializeDefaults() {
     Snippet table;
     table.prefix = "table";
     table.label = "Table";
+    table.body = "| ${1:Header 1} | ${2:Header 2} |\n| --- | --- |\n| ${3:Cell "
+                 "1} | ${4:Cell 2} |\n$0";
+    table.description = "Markdown table";
+    registerSnippet("md", table);
+    registerSnippet("markdown", table);
+
+    Snippet checklist;
+    checklist.prefix = "task";
+    checklist.label = "Task List";
+    checklist.body = "- [ ] ${1:Task 1}\n- [ ] ${2:Task 2}\n$0";
+    checklist.description = "Task/checkbox list";
+    registerSnippet("md", checklist);
+    registerSnippet("markdown", checklist);
+
+    Snippet frontmatter;
+    frontmatter.prefix = "front";
+    frontmatter.label = "YAML Frontmatter";
+    frontmatter.body = "---\ntitle: ${1:Title}\ndate: ${2:2024-01-01}\ntags: "
+                       "[${3:tag1, tag2}]\n---\n$0";
+    frontmatter.description = "YAML frontmatter block";
+    registerSnippet("md", frontmatter);
+    registerSnippet("markdown", frontmatter);
+
+    Snippet blockquote;
+    blockquote.prefix = "quote";
+    blockquote.label = "Blockquote";
+    blockquote.body = "> ${1:Quote text}\n$0";
+    blockquote.description = "Blockquote";
+    registerSnippet("md", blockquote);
+    registerSnippet("markdown", blockquote);
+
+    Snippet toc;
+    toc.prefix = "toc";
+    toc.label = "Table of Contents";
+    toc.body = "<!-- TOC -->\n\n<!-- /TOC -->\n$0";
+    toc.description = "Table of contents markers";
+    registerSnippet("md", toc);
+    registerSnippet("markdown", toc);
     table.body = "\\begin{table}[${1:htbp}]\n\t\\centering\n"
                  "\t\\caption{${2:Caption}}\n\t\\label{tab:${3:label}}\n"
                  "\t\\begin{tabular}{${4:lcc}}\n\t\t\\hline\n"

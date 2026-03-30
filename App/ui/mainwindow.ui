@@ -337,6 +337,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionToggle_CodeLens"/>
     <addaction name="actionToggle_Word_Wrap"/>
     <addaction name="actionToggle_Vim_Mode"/>
+    <addaction name="actionPreview_Markdown"/>
     <addaction name="separator"/>
     <addaction name="menuFolding"/>
     <addaction name="separator"/>
@@ -816,6 +817,14 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+T</string>
+   </property>
+  </action>
+  <action name="actionPreview_Markdown">
+   <property name="text">
+    <string>Preview Markdown</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+V</string>
    </property>
   </action>
  </widget>
