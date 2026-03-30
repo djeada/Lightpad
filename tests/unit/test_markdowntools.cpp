@@ -496,7 +496,7 @@ void TestMarkdownTools::testWordCount() {
   QString md = "# Title\n\nThis is a paragraph with seven words here.";
   int count = MarkdownTools::wordCount(md);
 
-  // "Title" + "This is a paragraph with seven words here." = 1 + 8 = 9
+  // "Title" = 1, "This is a paragraph with seven words here." = 8, total = 9
   QCOMPARE(count, 9);
 }
 
