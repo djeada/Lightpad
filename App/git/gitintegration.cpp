@@ -2091,7 +2091,8 @@ bool GitIntegration::rewordCommit(const QString &commitHash,
     return false;
   }
 
-  if (headHash.startsWith(commitHash) || commitHash.startsWith(headHash.left(commitHash.length()))) {
+  if (headHash.startsWith(commitHash) ||
+      commitHash.startsWith(headHash)) {
     executeGitCommand({"commit", "--amend", "-m", newMessage}, &success);
 
     if (success) {
@@ -2104,8 +2105,8 @@ bool GitIntegration::rewordCommit(const QString &commitHash,
     return success;
   }
 
-  emit errorOccurred("Can only reword the most recent commit (HEAD). Use "
-                      "interactive rebase for older commits.");
+  emit errorOccurred("Can only reword the most recent (HEAD) commit. Use "
+                      "interactive rebase to reword older commits.");
   return false;
 }
 
