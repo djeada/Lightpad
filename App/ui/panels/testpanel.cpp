@@ -158,7 +158,6 @@ void TestPanel::setupUI() {
   m_searchEdit->setObjectName("testSearchEdit");
   m_searchEdit->setPlaceholderText(tr("Filter tests by name..."));
   m_searchEdit->setClearButtonEnabled(true);
-  m_searchEdit->setContentsMargins(6, 4, 6, 4);
   connect(m_searchEdit, &QLineEdit::textChanged, this,
           &TestPanel::onSearchTextChanged);
   headerLayout->addWidget(m_searchEdit);
