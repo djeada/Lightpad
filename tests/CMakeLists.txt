@@ -1321,6 +1321,8 @@ set(TEST_LIST
     DocumentRegressionTests
     SettingsRegressionTests
     LspRegressionTests
+    MarkdownToolsTests
+    MarkdownPreviewPanelTests
 )
 
 if(HAVE_PDF_SUPPORT)

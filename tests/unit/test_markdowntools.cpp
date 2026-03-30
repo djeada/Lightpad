@@ -32,6 +32,34 @@ private slots:
   void testToHtmlCheckboxes();
   void testToHtmlBlockquotes();
   void testToHtmlWithBasePath();
+
+  // New tests for formatting features
+  void testWrapParagraph();
+  void testWrapParagraphPreservesStructure();
+  void testNormalizeHeadingSpacing();
+  void testNormalizeBulletIndentation();
+  void testFormatCodeFences();
+
+  // New tests for extraction features
+  void testExtractLinks();
+  void testExtractLinksIgnoresImages();
+  void testExtractImages();
+  void testExtractFootnotes();
+  void testExtractFootnotesOrphanRef();
+  void testParseFrontmatter();
+  void testParseFrontmatterMissing();
+  void testGenerateDocumentOutline();
+
+  // New tests for statistics
+  void testWordCount();
+  void testWordCountIgnoresCodeBlocks();
+  void testReadingTimeMinutes();
+
+  // New tests for lint rules
+  void testLintBrokenImagePaths();
+  void testLintMalformedLists();
+  void testLintOverlongLines();
+  void testLintOverlongLinesSkipsExceptions();
 };
 
 void TestMarkdownTools::testExtractHeadings() {
@@ -301,6 +329,271 @@ void TestMarkdownTools::testToHtmlWithBasePath() {
   QString html = MarkdownTools::toHtml(md, "/tmp/docs");
 
   QVERIFY(html.contains("file:///tmp/docs"));
+}
+
+// ── New formatting feature tests ──────────────────────────────────────
+
+void TestMarkdownTools::testWrapParagraph() {
+  QString md = "This is a very long paragraph that should be wrapped at a "
+               "reasonable width to improve readability.";
+  QString result = MarkdownTools::wrapParagraph(md, 40);
+
+  QStringList lines = result.split('\n');
+  QVERIFY(lines.size() > 1);
+  for (const QString &line : lines) {
+    QVERIFY(line.length() <= 40 ||
+            !line.contains(' ')); // single-word lines may exceed
+  }
+}
+
+void TestMarkdownTools::testWrapParagraphPreservesStructure() {
+  QString md = "# Heading\n\n- List item\n\n```\ncode block\n```\n\n> "
+               "blockquote\n\nShort line";
+  QString result = MarkdownTools::wrapParagraph(md, 40);
+
+  QVERIFY(result.contains("# Heading"));
+  QVERIFY(result.contains("- List item"));
+  QVERIFY(result.contains("```\ncode block\n```"));
+  QVERIFY(result.contains("> blockquote"));
+}
+
+void TestMarkdownTools::testNormalizeHeadingSpacing() {
+  QString md = "# Title\nSome text\n## Section\n\n\n\nMore text";
+  QString result = MarkdownTools::normalizeHeadingSpacing(md);
+
+  QVERIFY(result.contains("# Title\n\nSome text"));
+  QVERIFY(result.contains("## Section\n\n"));
+}
+
+void TestMarkdownTools::testNormalizeBulletIndentation() {
+  QString md = "- Item 1\n   * Nested\n      + Deep nested";
+  QString result = MarkdownTools::normalizeBulletIndentation(md);
+
+  QVERIFY(result.contains("- Item 1"));
+  QVERIFY(result.contains("  - Nested"));
+  QVERIFY(result.contains("    - Deep nested"));
+}
+
+void TestMarkdownTools::testFormatCodeFences() {
+  QString md = "````python\nprint('hello')\n````";
+  QString result = MarkdownTools::formatCodeFences(md);
+
+  QVERIFY(result.contains("```python"));
+  QVERIFY(result.contains("print('hello')"));
+  QVERIFY(result.endsWith("```"));
+}
+
+// ── New extraction feature tests ──────────────────────────────────────
+
+void TestMarkdownTools::testExtractLinks() {
+  QString md = "Check [Google](https://google.com) and [local](file.md).\n\n"
+               "![image](pic.png)";
+  QList<MarkdownLink> links = MarkdownTools::extractLinks(md);
+
+  QCOMPARE(links.size(), 2);
+  QCOMPARE(links[0].text, QString("Google"));
+  QCOMPARE(links[0].target, QString("https://google.com"));
+  QCOMPARE(links[0].lineNumber, 0);
+  QVERIFY(!links[0].isImage);
+  QCOMPARE(links[1].text, QString("local"));
+  QCOMPARE(links[1].target, QString("file.md"));
+}
+
+void TestMarkdownTools::testExtractLinksIgnoresImages() {
+  QString md = "![alt](image.png)\n[real link](page.md)";
+  QList<MarkdownLink> links = MarkdownTools::extractLinks(md);
+
+  QCOMPARE(links.size(), 1);
+  QCOMPARE(links[0].text, QString("real link"));
+}
+
+void TestMarkdownTools::testExtractImages() {
+  QString md = "![Screenshot](./images/screen.png)\n![Logo](logo.svg)\n[not "
+               "image](link.md)";
+  QList<MarkdownLink> images = MarkdownTools::extractImages(md);
+
+  QCOMPARE(images.size(), 2);
+  QCOMPARE(images[0].text, QString("Screenshot"));
+  QCOMPARE(images[0].target, QString("./images/screen.png"));
+  QVERIFY(images[0].isImage);
+  QCOMPARE(images[1].text, QString("Logo"));
+  QCOMPARE(images[1].target, QString("logo.svg"));
+}
+
+void TestMarkdownTools::testExtractFootnotes() {
+  QString md = "Some text[^1] and more[^note].\n\n[^1]: First footnote\n[^note]: "
+               "A longer footnote";
+  QList<MarkdownFootnote> footnotes = MarkdownTools::extractFootnotes(md);
+
+  QCOMPARE(footnotes.size(), 2);
+
+  bool found1 = false, foundNote = false;
+  for (const MarkdownFootnote &fn : footnotes) {
+    if (fn.label == "1") {
+      found1 = true;
+      QCOMPARE(fn.text, QString("First footnote"));
+      QVERIFY(fn.definitionLine >= 0);
+      QVERIFY(!fn.referenceLines.isEmpty());
+    }
+    if (fn.label == "note") {
+      foundNote = true;
+      QCOMPARE(fn.text, QString("A longer footnote"));
+    }
+  }
+  QVERIFY(found1);
+  QVERIFY(foundNote);
+}
+
+void TestMarkdownTools::testExtractFootnotesOrphanRef() {
+  QString md = "Text with[^orphan] reference but no definition.";
+  QList<MarkdownFootnote> footnotes = MarkdownTools::extractFootnotes(md);
+
+  QCOMPARE(footnotes.size(), 1);
+  QCOMPARE(footnotes[0].label, QString("orphan"));
+  QCOMPARE(footnotes[0].definitionLine, -1);
+}
+
+void TestMarkdownTools::testParseFrontmatter() {
+  QString md = "---\ntitle: My Document\ndate: 2024-01-15\ntags: [a, "
+               "b]\n---\n\n# Content";
+  MarkdownFrontmatter fm = MarkdownTools::parseFrontmatter(md);
+
+  QCOMPARE(fm.startLine, 0);
+  QCOMPARE(fm.endLine, 4);
+  QVERIFY(fm.fields.contains("title"));
+  QCOMPARE(fm.fields["title"], QString("My Document"));
+  QVERIFY(fm.fields.contains("date"));
+  QCOMPARE(fm.fields["date"], QString("2024-01-15"));
+  QVERIFY(!fm.rawContent.isEmpty());
+}
+
+void TestMarkdownTools::testParseFrontmatterMissing() {
+  QString md = "# Just a heading\n\nSome content";
+  MarkdownFrontmatter fm = MarkdownTools::parseFrontmatter(md);
+
+  QCOMPARE(fm.startLine, -1);
+  QCOMPARE(fm.endLine, -1);
+  QVERIFY(fm.fields.isEmpty());
+}
+
+void TestMarkdownTools::testGenerateDocumentOutline() {
+  QString md = "# Root\n\n## Child 1\n\n### Grandchild\n\n## Child 2";
+  QList<MarkdownOutlineEntry> outline =
+      MarkdownTools::generateDocumentOutline(md);
+
+  QCOMPARE(outline.size(), 1);
+  QCOMPARE(outline[0].text, QString("Root"));
+  QCOMPARE(outline[0].children.size(), 2);
+  QCOMPARE(outline[0].children[0].text, QString("Child 1"));
+  QCOMPARE(outline[0].children[0].children.size(), 1);
+  QCOMPARE(outline[0].children[0].children[0].text, QString("Grandchild"));
+  QCOMPARE(outline[0].children[1].text, QString("Child 2"));
+}
+
+// ── New statistics tests ──────────────────────────────────────────────
+
+void TestMarkdownTools::testWordCount() {
+  QString md = "# Title\n\nThis is a paragraph with seven words here.";
+  int count = MarkdownTools::wordCount(md);
+
+  // "Title" = 1, "This is a paragraph with seven words here." = 8, total = 9
+  QCOMPARE(count, 9);
+}
+
+void TestMarkdownTools::testWordCountIgnoresCodeBlocks() {
+  QString md = "One two three\n\n```\nnot counted words here\n```\n\nFour five";
+  int count = MarkdownTools::wordCount(md);
+
+  // "One two three" = 3 + "Four five" = 2 = 5
+  QCOMPARE(count, 5);
+}
+
+void TestMarkdownTools::testReadingTimeMinutes() {
+  // 200 words at 200 wpm = 1 minute (minimum 1)
+  QString md;
+  for (int i = 0; i < 200; ++i) {
+    md += "word ";
+  }
+  int time = MarkdownTools::readingTimeMinutes(md, 200);
+  QCOMPARE(time, 1);
+
+  // Short text should still be 1 minute minimum
+  int shortTime = MarkdownTools::readingTimeMinutes("Hello world", 200);
+  QCOMPARE(shortTime, 1);
+}
+
+// ── New lint rule tests ──────────────────────────────────────────────
+
+void TestMarkdownTools::testLintBrokenImagePaths() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+
+  QString imgPath = tempDir.path() + "/real.png";
+  QFile img(imgPath);
+  QVERIFY(img.open(QIODevice::WriteOnly));
+  img.write("PNG");
+  img.close();
+
+  QString mdPath = tempDir.path() + "/test.md";
+  QString text = "![exists](real.png)\n![broken](nonexistent.png)";
+
+  QList<LspDiagnostic> diags = MarkdownTools::lint(text, mdPath);
+
+  bool foundBrokenImage = false;
+  for (const LspDiagnostic &d : diags) {
+    if (d.code == "MD041") {
+      foundBrokenImage = true;
+      QVERIFY(d.message.contains("nonexistent.png"));
+      QCOMPARE(d.severity, LspDiagnosticSeverity::Warning);
+      break;
+    }
+  }
+  QVERIFY(foundBrokenImage);
+}
+
+void TestMarkdownTools::testLintMalformedLists() {
+  QString md = "Some text\n- List without blank line before";
+  QList<LspDiagnostic> diags = MarkdownTools::lint(md);
+
+  bool foundMalformed = false;
+  for (const LspDiagnostic &d : diags) {
+    if (d.code == "MD032") {
+      foundMalformed = true;
+      QVERIFY(d.message.contains("blank lines"));
+      break;
+    }
+  }
+  QVERIFY(foundMalformed);
+}
+
+void TestMarkdownTools::testLintOverlongLines() {
+  QString longLine(150, 'x');
+  QString md = "Short line\n\n" + longLine;
+  QList<LspDiagnostic> diags = MarkdownTools::lint(md);
+
+  bool foundOverlong = false;
+  for (const LspDiagnostic &d : diags) {
+    if (d.code == "MD013") {
+      foundOverlong = true;
+      QVERIFY(d.message.contains("exceeds"));
+      QCOMPARE(d.severity, LspDiagnosticSeverity::Hint);
+      break;
+    }
+  }
+  QVERIFY(foundOverlong);
+}
+
+void TestMarkdownTools::testLintOverlongLinesSkipsExceptions() {
+  // Headings, tables, and lines with links should be skipped
+  QString longHeading = "# " + QString(150, 'H');
+  QString longTable = "| " + QString(150, 'T') + " |";
+  QString longLink = "[text](" + QString(150, 'u') + ")";
+  QString md = longHeading + "\n\n" + longTable + "\n\n" + longLink;
+  QList<LspDiagnostic> diags = MarkdownTools::lint(md);
+
+  for (const LspDiagnostic &d : diags) {
+    QVERIFY(d.code != "MD013");
+  }
 }
 
 QTEST_MAIN(TestMarkdownTools)
