@@ -8,8 +8,9 @@
 
 ProblemsPanel::ProblemsPanel(QWidget *parent)
     : QWidget(parent), m_tree(nullptr), m_statusLabel(nullptr),
-      m_filterCombo(nullptr), m_autoRefreshCheckBox(nullptr), m_errorCount(0),
-      m_warningCount(0), m_infoCount(0), m_hintCount(0), m_currentFilter(0),
+      m_emptyStateLabel(nullptr), m_filterCombo(nullptr),
+      m_autoRefreshCheckBox(nullptr), m_errorCount(0), m_warningCount(0),
+      m_infoCount(0), m_hintCount(0), m_currentFilter(0),
       m_autoRefreshEnabled(true) {
   setupUI();
 }
@@ -83,12 +84,20 @@ void ProblemsPanel::setupUI() {
   headerLayout->addWidget(copyButton);
 
   m_statusLabel = new QLabel(m_header);
+  m_statusLabel->setObjectName("problemsStatusLabel");
+  m_statusLabel->setTextFormat(Qt::RichText);
   m_statusLabel->setStyleSheet("color: #9aa4b2;");
   headerLayout->addWidget(m_statusLabel);
 
   mainLayout->addWidget(m_header);
 
-  m_tree = new QTreeWidget(this);
+  auto *treeContainer = new QWidget(this);
+  auto *treeLayout = new QVBoxLayout(treeContainer);
+  treeLayout->setContentsMargins(0, 0, 0, 0);
+  treeLayout->setSpacing(0);
+
+  m_tree = new QTreeWidget(treeContainer);
+  m_tree->setObjectName("problemsTree");
   m_tree->setHeaderLabels({tr("Problem"), tr("Location")});
   m_tree->setRootIsDecorated(true);
   m_tree->setAlternatingRowColors(true);
@@ -119,7 +128,20 @@ void ProblemsPanel::setupUI() {
   connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
           &ProblemsPanel::onItemDoubleClicked);
 
-  mainLayout->addWidget(m_tree);
+  m_emptyStateLabel = new QLabel(treeContainer);
+  m_emptyStateLabel->setObjectName("problemsEmptyState");
+  m_emptyStateLabel->setAlignment(Qt::AlignCenter);
+  m_emptyStateLabel->setText(
+      tr("No problems detected.\n"
+         "Diagnostics will appear here when issues are found in your code."));
+  m_emptyStateLabel->setWordWrap(true);
+  m_emptyStateLabel->setStyleSheet(
+      "QLabel { color: #6e7681; font-size: 13px; padding: 32px; }");
+
+  treeLayout->addWidget(m_tree);
+  treeLayout->addWidget(m_emptyStateLabel);
+
+  mainLayout->addWidget(treeContainer);
 
   updateCounts();
 }
@@ -256,11 +278,30 @@ void ProblemsPanel::updateCounts() {
     }
   }
 
-  QString status = QString("Errors: %1  Warnings: %2  Info: %3")
-                       .arg(m_errorCount)
-                       .arg(m_warningCount)
-                       .arg(m_infoCount + m_hintCount);
-  m_statusLabel->setText(status);
+  int total = m_errorCount + m_warningCount + m_infoCount + m_hintCount;
+
+  if (total == 0) {
+    m_statusLabel->setText(tr("No problems"));
+  } else {
+    QString status =
+        QString("<span style='color:#f85149;'>&#x26D4; %1</span>"
+                "&nbsp;&nbsp;"
+                "<span style='color:#d29922;'>&#x26A0; %2</span>"
+                "&nbsp;&nbsp;"
+                "<span style='color:#58a6ff;'>&#x2139; %3</span>")
+            .arg(m_errorCount)
+            .arg(m_warningCount)
+            .arg(m_infoCount + m_hintCount);
+    m_statusLabel->setText(status);
+  }
+
+  bool hasProblems = (total > 0);
+  if (m_emptyStateLabel) {
+    m_emptyStateLabel->setVisible(!hasProblems);
+  }
+  if (m_tree) {
+    m_tree->setVisible(hasProblems);
+  }
 
   emit countsChanged(m_errorCount, m_warningCount, m_infoCount + m_hintCount);
 }
@@ -465,4 +506,8 @@ void ProblemsPanel::copySelectedMessage() {
   }
   QString text = item->text(0);
   QApplication::clipboard()->setText(text);
+}
+
+void ProblemsPanel::setCurrentFilePath(const QString &filePath) {
+  m_currentFilePath = filePath;
 }

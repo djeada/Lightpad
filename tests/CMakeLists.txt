@@ -974,6 +974,33 @@ target_compile_definitions(test_testpanel PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME TestPanelTests COMMAND test_testpanel)
 
+# ProblemsPanel test executable
+add_executable(test_problemspanel
+    unit/test_problemspanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/problemspanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_problemspanel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/ui/panels
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_problemspanel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_problemspanel PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME ProblemsPanelTests COMMAND test_problemspanel)
+
 # RunConfiguration test executable
 add_executable(test_runconfiguration
     unit/test_runconfiguration.cpp
@@ -1204,6 +1231,7 @@ set(TEST_LIST
     AutoTestRunnerTests
     TestRunManagerTests
     TestPanelTests
+    ProblemsPanelTests
     RunConfigurationTests
     TextTransformsTests
     CodeFoldingTests
@@ -1242,6 +1270,7 @@ set(TEST_TARGETS
     test_testoutputparsers
     test_testrunmanager
     test_testpanel
+    test_problemspanel
     test_texttransforms
     test_codefolding
     test_multicursor
