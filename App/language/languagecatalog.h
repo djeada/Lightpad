@@ -23,6 +23,8 @@ public:
         {"cmake", "CMake", {"cmake", "cmakelists.txt"}},
         {"cpp", "C++", {"cpp", "cc", "cxx", "c", "h", "hpp", "hxx"}},
         {"css", "CSS", {"css"}},
+        {"dockerfile", "Dockerfile",
+         {"dockerfile", "containerfile"}},
         {"go", "Go", {"go"}},
         {"html", "HTML", {"html", "htm"}},
         {"java", "Java", {"java"}},
@@ -182,6 +184,9 @@ private:
     addAlias(aliases, "cmake", "cmake");
     addAlias(aliases, "html", "html");
     addAlias(aliases, "css", "css");
+    addAlias(aliases, "dockerfile", "dockerfile");
+    addAlias(aliases, "containerfile", "dockerfile");
+    addAlias(aliases, "docker", "dockerfile");
     addAlias(aliases, "yaml", "yaml");
     addAlias(aliases, "plain text", "plaintext");
     addAlias(aliases, "plaintext", "plaintext");

@@ -324,6 +324,7 @@ add_executable(test_syntaxpluginregistry
     ${CMAKE_SOURCE_DIR}/App/syntax/syntaxpluginregistry.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/cppsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/csssyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/dockerfilesyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/gosyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/htmlsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/javascriptsyntaxplugin.cpp
@@ -379,6 +380,31 @@ target_link_libraries(test_latexsyntaxplugin
 target_compile_definitions(test_latexsyntaxplugin PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME LatexSyntaxPluginTests COMMAND test_latexsyntaxplugin)
+
+# DockerfileSyntaxPlugin test executable
+add_executable(test_dockerfilesyntaxplugin
+    unit/test_dockerfilesyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/syntaxpluginregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/dockerfilesyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_dockerfilesyntaxplugin PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/syntax
+)
+
+target_link_libraries(test_dockerfilesyntaxplugin
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_dockerfilesyntaxplugin PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME DockerfileSyntaxPluginTests COMMAND test_dockerfilesyntaxplugin)
 
 # CompletionProviderRegistry test executable
 add_executable(test_completionproviderregistry
@@ -667,6 +693,7 @@ add_executable(test_languagefeaturemanager
     ${CMAKE_SOURCE_DIR}/App/syntax/syntaxpluginregistry.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/cppsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/csssyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/dockerfilesyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/gosyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/htmlsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/javascriptsyntaxplugin.cpp
@@ -1345,6 +1372,7 @@ set(TEST_LIST
     TerminalTabWidgetTests
     SyntaxPluginRegistryTests 
     LatexSyntaxPluginTests
+    DockerfileSyntaxPluginTests
     CompletionProviderRegistryTests 
     CompletionEngineTests
     DapTests 
@@ -1400,6 +1428,7 @@ set(TEST_TARGETS
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap
+    test_dockerfilesyntaxplugin
     test_gitintegration test_gitfilesystemmodel test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_imageviewer
     test_markdowntools

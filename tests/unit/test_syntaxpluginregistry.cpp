@@ -2,6 +2,7 @@
 #include "syntax/cmakesyntaxplugin.h"
 #include "syntax/cppsyntaxplugin.h"
 #include "syntax/csssyntaxplugin.h"
+#include "syntax/dockerfilesyntaxplugin.h"
 #include "syntax/gosyntaxplugin.h"
 #include "syntax/htmlsyntaxplugin.h"
 #include "syntax/javascriptsyntaxplugin.h"
@@ -194,6 +195,7 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   registry.registerPlugin(std::make_unique<BazelSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CppSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CssSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<DockerfileSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<GoSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<HtmlSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JavaScriptSyntaxPlugin>());
@@ -211,11 +213,12 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   registry.registerPlugin(std::make_unique<TypeScriptSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<YamlSyntaxPlugin>());
 
-  QCOMPARE(registry.getAllLanguageIds().size(), 19);
+  QCOMPARE(registry.getAllLanguageIds().size(), 20);
 
   QVERIFY(registry.isLanguageSupported("bazel"));
   QVERIFY(registry.isLanguageSupported("cpp"));
   QVERIFY(registry.isLanguageSupported("css"));
+  QVERIFY(registry.isLanguageSupported("dockerfile"));
   QVERIFY(registry.isLanguageSupported("go"));
   QVERIFY(registry.isLanguageSupported("html"));
   QVERIFY(registry.isLanguageSupported("js"));
@@ -236,6 +239,8 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isExtensionSupported("bzl"));
   QVERIFY(registry.isExtensionSupported("cpp"));
   QVERIFY(registry.isExtensionSupported("css"));
+  QVERIFY(registry.isExtensionSupported("dockerfile"));
+  QVERIFY(registry.isExtensionSupported("containerfile"));
   QVERIFY(registry.isExtensionSupported("go"));
   QVERIFY(registry.isExtensionSupported("html"));
   QVERIFY(registry.isExtensionSupported("js"));

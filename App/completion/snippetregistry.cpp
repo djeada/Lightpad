@@ -609,12 +609,12 @@ void SnippetRegistry::initializeDefaults() {
     href.description = "Hyperlink with text";
     registerSnippet("latex", href);
 
-    Snippet footnote;
-    footnote.prefix = "fn";
-    footnote.label = "Footnote";
-    footnote.body = "\\footnote{${1:text}}";
-    footnote.description = "Footnote";
-    registerSnippet("latex", footnote);
+    Snippet latexFootnote;
+    latexFootnote.prefix = "fn";
+    latexFootnote.label = "Footnote";
+    latexFootnote.body = "\\footnote{${1:text}}";
+    latexFootnote.description = "Footnote";
+    registerSnippet("latex", latexFootnote);
 
     Snippet multicols;
     multicols.prefix = "multicols";
@@ -688,6 +688,144 @@ void SnippetRegistry::initializeDefaults() {
         "\\end{cases}";
     casesSnip.description = "Cases environment for piecewise functions";
     registerSnippet("latex", casesSnip);
+  }
+
+  {
+    Snippet from;
+    from.prefix = "from";
+    from.label = "FROM";
+    from.body = "FROM ${1:ubuntu}:${2:latest}";
+    from.description = "Base image instruction";
+    registerSnippet("dockerfile", from);
+
+    Snippet fromAs;
+    fromAs.prefix = "fromas";
+    fromAs.label = "FROM ... AS";
+    fromAs.body = "FROM ${1:ubuntu}:${2:latest} AS ${3:builder}";
+    fromAs.description = "Multi-stage build base image";
+    registerSnippet("dockerfile", fromAs);
+
+    Snippet run;
+    run.prefix = "run";
+    run.label = "RUN";
+    run.body = "RUN ${1:command}";
+    run.description = "Execute command during build";
+    registerSnippet("dockerfile", run);
+
+    Snippet cmd;
+    cmd.prefix = "cmd";
+    cmd.label = "CMD";
+    cmd.body = "CMD [\"${1:executable}\", \"${2:arg}\"]";
+    cmd.description = "Default container command (exec form)";
+    registerSnippet("dockerfile", cmd);
+
+    Snippet entrypoint;
+    entrypoint.prefix = "entrypoint";
+    entrypoint.label = "ENTRYPOINT";
+    entrypoint.body = "ENTRYPOINT [\"${1:executable}\", \"${2:arg}\"]";
+    entrypoint.description = "Container entrypoint (exec form)";
+    registerSnippet("dockerfile", entrypoint);
+
+    Snippet copy;
+    copy.prefix = "copy";
+    copy.label = "COPY";
+    copy.body = "COPY ${1:.} ${2:/app}";
+    copy.description = "Copy files into image";
+    registerSnippet("dockerfile", copy);
+
+    Snippet copyFrom;
+    copyFrom.prefix = "copyfrom";
+    copyFrom.label = "COPY --from";
+    copyFrom.body = "COPY --from=${1:builder} ${2:/app/build} ${3:/app}";
+    copyFrom.description = "Copy from build stage";
+    registerSnippet("dockerfile", copyFrom);
+
+    Snippet add;
+    add.prefix = "add";
+    add.label = "ADD";
+    add.body = "ADD ${1:src} ${2:dest}";
+    add.description = "Add files to image";
+    registerSnippet("dockerfile", add);
+
+    Snippet workdir;
+    workdir.prefix = "workdir";
+    workdir.label = "WORKDIR";
+    workdir.body = "WORKDIR ${1:/app}";
+    workdir.description = "Set working directory";
+    registerSnippet("dockerfile", workdir);
+
+    Snippet expose;
+    expose.prefix = "expose";
+    expose.label = "EXPOSE";
+    expose.body = "EXPOSE ${1:8080}";
+    expose.description = "Expose port";
+    registerSnippet("dockerfile", expose);
+
+    Snippet env;
+    env.prefix = "env";
+    env.label = "ENV";
+    env.body = "ENV ${1:KEY}=${2:value}";
+    env.description = "Set environment variable";
+    registerSnippet("dockerfile", env);
+
+    Snippet arg;
+    arg.prefix = "arg";
+    arg.label = "ARG";
+    arg.body = "ARG ${1:name}=${2:default}";
+    arg.description = "Build argument";
+    registerSnippet("dockerfile", arg);
+
+    Snippet volume;
+    volume.prefix = "volume";
+    volume.label = "VOLUME";
+    volume.body = "VOLUME [\"${1:/data}\"]";
+    volume.description = "Create mount point";
+    registerSnippet("dockerfile", volume);
+
+    Snippet user;
+    user.prefix = "user";
+    user.label = "USER";
+    user.body = "USER ${1:appuser}";
+    user.description = "Set user for subsequent instructions";
+    registerSnippet("dockerfile", user);
+
+    Snippet label;
+    label.prefix = "label";
+    label.label = "LABEL";
+    label.body = "LABEL ${1:key}=\"${2:value}\"";
+    label.description = "Add metadata to image";
+    registerSnippet("dockerfile", label);
+
+    Snippet healthcheck;
+    healthcheck.prefix = "healthcheck";
+    healthcheck.label = "HEALTHCHECK";
+    healthcheck.body = "HEALTHCHECK --interval=${1:30s} --timeout=${2:10s} "
+                       "--retries=${3:3} CMD ${4:curl -f http://localhost/ || "
+                       "exit 1}";
+    healthcheck.description = "Container health check";
+    registerSnippet("dockerfile", healthcheck);
+
+    Snippet shellInstr;
+    shellInstr.prefix = "shell";
+    shellInstr.label = "SHELL";
+    shellInstr.body = "SHELL [\"${1:/bin/bash}\", \"${2:-c}\"]";
+    shellInstr.description = "Override default shell";
+    registerSnippet("dockerfile", shellInstr);
+
+    Snippet multistage;
+    multistage.prefix = "multistage";
+    multistage.label = "Multi-stage Build";
+    multistage.body = "FROM ${1:node}:${2:18} AS builder\n"
+                      "WORKDIR /app\n"
+                      "COPY . .\n"
+                      "RUN ${3:npm install && npm run build}\n"
+                      "\n"
+                      "FROM ${4:nginx}:${5:alpine}\n"
+                      "COPY --from=builder /app/${6:dist} ${7:/usr/share/nginx/html}\n"
+                      "EXPOSE ${8:80}\n"
+                      "CMD [\"${9:nginx}\", \"-g\", \"daemon off;\"]";
+    multistage.description = "Multi-stage Dockerfile template";
+    registerSnippet("dockerfile", multistage);
   }
 
   Logger::instance().info("Initialized default snippets");

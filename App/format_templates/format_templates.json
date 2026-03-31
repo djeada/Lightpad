@@ -1112,6 +1112,21 @@
         "${file}"
       ],
       "inPlace": true
+    },
+    {
+      "id": "dockerfile_lint",
+      "name": "hadolint",
+      "description": "Lint Dockerfile with hadolint",
+      "language": "Dockerfile",
+      "extensions": [
+        "dockerfile",
+        "containerfile"
+      ],
+      "command": "hadolint",
+      "args": [
+        "${file}"
+      ],
+      "inPlace": false
     }
   ],
   "variables": {
