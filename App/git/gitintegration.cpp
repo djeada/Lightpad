@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QTemporaryFile>
 #include <QTextStream>
 
 GitIntegration::GitIntegration(QObject *parent)
@@ -2108,6 +2109,241 @@ bool GitIntegration::rewordCommit(const QString &commitHash,
   emit errorOccurred("Can only reword the most recent (HEAD) commit. Use "
                       "interactive rebase to reword older commits.");
   return false;
+}
+
+bool GitIntegration::dropCommit(const QString &commitHash) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  if (commitHash.isEmpty()) {
+    emit errorOccurred("Commit hash cannot be empty");
+    return false;
+  }
+
+  bool success;
+  QString headHash =
+      executeGitCommand({"rev-parse", "HEAD"}, &success).trimmed();
+
+  if (!success) {
+    emit errorOccurred("Failed to determine HEAD commit");
+    return false;
+  }
+
+  if (headHash.startsWith(commitHash) || commitHash.startsWith(headHash)) {
+    executeGitCommand({"reset", "--hard", "HEAD~1"}, &success);
+    if (success) {
+      updateCurrentBranch();
+      emit operationCompleted(
+          QString("Dropped commit %1").arg(commitHash.left(7)));
+      emit statusChanged();
+    } else {
+      emit errorOccurred("Failed to drop HEAD commit");
+    }
+    return success;
+  }
+
+  QString fullHash =
+      executeGitCommand({"rev-parse", commitHash}, &success).trimmed();
+  if (!success) {
+    emit errorOccurred(
+        QString("Failed to resolve commit %1").arg(commitHash));
+    return false;
+  }
+
+  QProcess proc;
+  proc.setWorkingDirectory(m_repositoryPath);
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+
+  QTemporaryFile dropScript;
+  dropScript.setAutoRemove(false);
+  dropScript.setFileTemplate(
+      QDir::tempPath() + "/lightpad-drop-XXXXXX.sh");
+  if (!dropScript.open()) {
+    emit errorOccurred("Failed to create drop script");
+    return false;
+  }
+  QString shortHashForDrop = fullHash.left(7);
+  QTextStream scriptOut(&dropScript);
+  scriptOut << "#!/bin/sh\n"
+            << "grep -v '^pick " << shortHashForDrop << "' \"$1\" > \"$1.tmp\""
+            << " && mv \"$1.tmp\" \"$1\"\n";
+  dropScript.close();
+  QFile::setPermissions(dropScript.fileName(),
+                        QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner);
+
+  env.insert("GIT_SEQUENCE_EDITOR", dropScript.fileName());
+  proc.setProcessEnvironment(env);
+  proc.start("git", {"rebase", "-i", fullHash + "~1"});
+  proc.waitForFinished(10000);
+
+  QFile::remove(dropScript.fileName());
+
+  if (proc.exitCode() == 0) {
+    updateCurrentBranch();
+    emit operationCompleted(
+        QString("Dropped commit %1").arg(commitHash.left(7)));
+    emit statusChanged();
+    return true;
+  }
+
+  executeGitCommand({"rebase", "--abort"}, nullptr);
+  emit errorOccurred(
+      QString("Failed to drop commit %1: %2")
+          .arg(commitHash.left(7),
+               proc.readAllStandardError().trimmed()));
+  return false;
+}
+
+bool GitIntegration::squashCommits(const QStringList &commitHashes,
+                                   const QString &newMessage) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  if (commitHashes.size() < 2) {
+    emit errorOccurred("Need at least two commits to squash");
+    return false;
+  }
+
+  if (newMessage.isEmpty()) {
+    emit errorOccurred("Squash message cannot be empty");
+    return false;
+  }
+
+  bool success;
+  QString headHash =
+      executeGitCommand({"rev-parse", "HEAD"}, &success).trimmed();
+  if (!success) {
+    emit errorOccurred("Failed to determine HEAD commit");
+    return false;
+  }
+
+  QStringList fullHashes;
+  for (const QString &h : commitHashes) {
+    QString full = executeGitCommand({"rev-parse", h}, &success).trimmed();
+    if (!success) {
+      emit errorOccurred(QString("Failed to resolve commit %1").arg(h));
+      return false;
+    }
+    fullHashes.append(full);
+  }
+
+  QStringList logOutput =
+      executeGitCommand({"log", "--format=%H", "HEAD"}, &success)
+          .trimmed()
+          .split('\n');
+
+  int earliestIdx = -1;
+  for (int i = 0; i < logOutput.size(); ++i) {
+    for (const QString &fh : fullHashes) {
+      if (logOutput[i].startsWith(fh) || fh.startsWith(logOutput[i])) {
+        earliestIdx = i;
+      }
+    }
+  }
+
+  if (earliestIdx < 0) {
+    emit errorOccurred("Could not find commits in history");
+    return false;
+  }
+
+  QString resetTarget =
+      (earliestIdx + 1 < logOutput.size()) ? logOutput[earliestIdx + 1] : "";
+
+  if (resetTarget.isEmpty()) {
+    executeGitCommand({"reset", "--soft", "--root"}, &success);
+  } else {
+    executeGitCommand({"reset", "--soft", resetTarget}, &success);
+  }
+
+  if (!success) {
+    emit errorOccurred("Failed to soft reset for squash");
+    return false;
+  }
+
+  executeGitCommand({"commit", "-m", newMessage}, &success);
+  if (!success) {
+    emit errorOccurred("Failed to create squashed commit");
+    return false;
+  }
+
+  updateCurrentBranch();
+  emit operationCompleted(
+      QString("Squashed %1 commits").arg(commitHashes.size()));
+  emit statusChanged();
+  return true;
+}
+
+bool GitIntegration::moveCommitToBranch(const QString &commitHash,
+                                        const QString &targetBranch) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  if (commitHash.isEmpty() || targetBranch.isEmpty()) {
+    emit errorOccurred("Commit hash and target branch cannot be empty");
+    return false;
+  }
+
+  bool success;
+  QString currentBranch =
+      executeGitCommand({"rev-parse", "--abbrev-ref", "HEAD"}, &success)
+          .trimmed();
+  if (!success || currentBranch.isEmpty()) {
+    emit errorOccurred("Failed to determine current branch");
+    return false;
+  }
+
+  if (currentBranch == targetBranch) {
+    emit errorOccurred("Commit is already on the target branch");
+    return false;
+  }
+
+  if (isDirty()) {
+    emit errorOccurred(
+        "Working tree has uncommitted changes. Please commit or stash "
+        "them before moving commits between branches.");
+    return false;
+  }
+
+  executeGitCommand({"checkout", targetBranch}, &success);
+  if (!success) {
+    emit errorOccurred(
+        QString("Failed to checkout branch %1").arg(targetBranch));
+    return false;
+  }
+
+  executeGitCommand({"cherry-pick", commitHash}, &success);
+  if (!success) {
+    executeGitCommand({"cherry-pick", "--abort"}, nullptr);
+    executeGitCommand({"checkout", currentBranch}, nullptr);
+    emit errorOccurred(
+        QString("Failed to cherry-pick %1 onto %2")
+            .arg(commitHash.left(7), targetBranch));
+    return false;
+  }
+
+  executeGitCommand({"checkout", currentBranch}, &success);
+  if (!success) {
+    emit errorOccurred("Failed to return to original branch");
+    return false;
+  }
+
+  if (!dropCommit(commitHash)) {
+    return false;
+  }
+
+  updateCurrentBranch();
+  emit operationCompleted(
+      QString("Moved commit %1 to %2")
+          .arg(commitHash.left(7), targetBranch));
+  emit statusChanged();
+  return true;
 }
 
 QList<QPair<QString, QString>> GitIntegration::listWorktrees() const {

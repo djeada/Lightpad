@@ -48,7 +48,8 @@ SourceControlPanel::SourceControlPanel(QWidget *parent)
       m_stashButton(nullptr), m_stagedLabel(nullptr), m_stagedTree(nullptr),
       m_changesLabel(nullptr), m_changesTree(nullptr), m_historyHeader(nullptr),
       m_historyLabel(nullptr), m_historyTree(nullptr),
-      m_historyToggleButton(nullptr), m_historyExpanded(false),
+      m_historyToggleButton(nullptr), m_historySearchEdit(nullptr),
+      m_historyRebaseBtn(nullptr), m_historyExpanded(false),
       m_updatingBranchSelector(false), m_updatingTree(false), m_stagedCount(0),
       m_changesCount(0), m_refreshTimer(new QTimer(this)), m_theme(),
       m_themeInitialized(false) {
@@ -1048,12 +1049,52 @@ void SourceControlPanel::setupRepoUI() {
 
   historyHeaderLayout->addStretch();
 
+  m_historyRebaseBtn = new QPushButton(tr("🔀 Rebase"), m_historyHeader);
+  m_historyRebaseBtn->setStyleSheet(
+      "QPushButton { background: transparent; color: #a371f7; border: none; "
+      "font-size: 11px; padding: 2px 6px; }"
+      "QPushButton:hover { color: #c9a0ff; text-decoration: underline; }");
+  m_historyRebaseBtn->setToolTip(tr("Open interactive rebase dialog"));
+  m_historyRebaseBtn->setVisible(false);
+  historyHeaderLayout->addWidget(m_historyRebaseBtn);
+  connect(m_historyRebaseBtn, &QPushButton::clicked, [this]() {
+    if (!m_git || !m_git->isValidRepository())
+      return;
+    if (confirmDestructive(
+            tr("Interactive Rebase"),
+            tr("Start interactive rebase?\n\nThis will allow you to reorder, "
+               "squash, edit, or drop commits. This is a potentially "
+               "destructive operation that rewrites history."))) {
+      GitRebaseDialog rebaseDialog(m_git, m_theme, this);
+      rebaseDialog.loadCommits("HEAD~10");
+      if (rebaseDialog.exec() == QDialog::Accepted) {
+        refresh();
+      }
+    }
+  });
+
   mainLayout->addWidget(m_historyHeader);
+
+  m_historySearchEdit = new QLineEdit(m_repoWidget);
+  m_historySearchEdit->setPlaceholderText(
+      tr("🔍 Search commits..."));
+  m_historySearchEdit->setClearButtonEnabled(true);
+  m_historySearchEdit->setVisible(false);
+  m_historySearchEdit->setStyleSheet(
+      "QLineEdit { background: #21262d; color: #e6edf3; border: 1px solid "
+      "#30363d; border-radius: 6px; padding: 5px 8px; font-size: 11px; "
+      "margin: 2px 4px; }"
+      "QLineEdit:focus { border-color: #58a6ff; }");
+  mainLayout->addWidget(m_historySearchEdit);
+  connect(m_historySearchEdit, &QLineEdit::textChanged, this,
+          &SourceControlPanel::onHistorySearchChanged);
 
   connect(m_historyToggleButton, &QPushButton::clicked, [this]() {
     m_historyExpanded = !m_historyExpanded;
     m_historyToggleButton->setText(m_historyExpanded ? "▼" : "▶");
     m_historyTree->setVisible(m_historyExpanded);
+    m_historySearchEdit->setVisible(m_historyExpanded);
+    m_historyRebaseBtn->setVisible(m_historyExpanded);
     if (m_historyExpanded) {
       updateHistory();
     }
@@ -1064,6 +1105,7 @@ void SourceControlPanel::setupRepoUI() {
   m_historyTree->setRootIsDecorated(false);
   m_historyTree->setVisible(false);
   m_historyTree->setContextMenuPolicy(Qt::CustomContextMenu);
+  m_historyTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_historyTree->setStyleSheet("QTreeWidget {"
                                "  background: #0d1117;"
                                "  color: #e6edf3;"
@@ -1072,7 +1114,7 @@ void SourceControlPanel::setupRepoUI() {
                                "  outline: none;"
                                "}"
                                "QTreeWidget::item {"
-                               "  padding: 4px 8px;"
+                               "  padding: 5px 8px;"
                                "  border-bottom: 1px solid #21262d;"
                                "}"
                                "QTreeWidget::item:selected {"
@@ -1088,8 +1130,8 @@ void SourceControlPanel::setupRepoUI() {
                                "QTreeWidget:focus {"
                                "  border: 1px solid #58a6ff;"
                                "}");
-  m_historyTree->setMinimumHeight(100);
-  m_historyTree->setMaximumHeight(200);
+  m_historyTree->setMinimumHeight(120);
+  m_historyTree->setMaximumHeight(300);
   m_historyTree->setUniformRowHeights(true);
 
   connect(m_historyTree, &QTreeWidget::itemDoubleClicked,
@@ -1455,14 +1497,26 @@ void SourceControlPanel::updateHistory() {
     m_historyLabel->setText(tr("Recent Commits (%1)").arg(commits.size()));
   }
 
+  bool isFirst = true;
   for (const GitCommitInfo &commit : commits) {
     QTreeWidgetItem *item = new QTreeWidgetItem(m_historyTree);
 
-    QString displayText =
-        QString("%1  %2").arg(commit.shortHash).arg(commit.subject);
-    if (displayText.length() > MAX_COMMIT_DISPLAY_LENGTH) {
-      displayText = displayText.left(MAX_COMMIT_DISPLAY_LENGTH - 3) + "...";
+    QString hashPrefix = commit.shortHash;
+    QString subject = commit.subject;
+    if (subject.length() > 50) {
+      subject = subject.left(47) + "...";
     }
+
+    QString displayText;
+    bool isMerge = commit.parents.size() > 1;
+    if (isMerge) {
+      displayText = QString("⬦ %1  %2").arg(hashPrefix, subject);
+    } else if (isFirst) {
+      displayText = QString("● %1  %2").arg(hashPrefix, subject);
+    } else {
+      displayText = QString("○ %1  %2").arg(hashPrefix, subject);
+    }
+
     if (!commit.author.isEmpty() || !commit.relativeDate.isEmpty()) {
       QString meta;
       if (!commit.author.isEmpty() && !commit.relativeDate.isEmpty()) {
@@ -1476,23 +1530,29 @@ void SourceControlPanel::updateHistory() {
     }
 
     item->setText(0, displayText);
-    item->setToolTip(0, QString("%1\n\nAuthor: %2\nDate: %3\n\n%4")
-                            .arg(commit.hash)
-                            .arg(commit.author)
-                            .arg(commit.relativeDate)
-                            .arg(commit.subject));
+    item->setToolTip(
+        0,
+        QString("Hash: %1\nAuthor: %2 <%3>\nDate: %4\n\n%5%6")
+            .arg(commit.hash, commit.author, commit.authorEmail,
+                 commit.relativeDate, commit.subject,
+                 commit.body.isEmpty()
+                     ? ""
+                     : QString("\n\n%1").arg(commit.body)));
     item->setData(0, Qt::UserRole, commit.hash);
 
     QFont font = item->font(0);
     font.setFamily("monospace");
     item->setFont(0, font);
 
-    if (commit.parents.size() > 1) {
-
+    if (isMerge) {
       item->setForeground(0, QColor("#a371f7"));
+    } else if (isFirst) {
+      item->setForeground(0, QColor("#58a6ff"));
     } else {
       item->setForeground(0, QColor("#8b949e"));
     }
+
+    isFirst = false;
   }
 }
 
@@ -1751,6 +1811,8 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
     return;
 
   QString shortHash = commitHash.left(7);
+  auto selectedItems = m_historyTree->selectedItems();
+  bool multiSelect = selectedItems.size() > 1;
 
   QMenu menu(this);
   menu.setStyleSheet("QMenu {"
@@ -1766,58 +1828,72 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
                      "QMenu::item:selected {"
                      "  background: #1f6feb;"
                      "}"
+                     "QMenu::item:disabled {"
+                     "  color: #484f58;"
+                     "}"
                      "QMenu::separator {"
                      "  height: 1px;"
                      "  background: #30363d;"
                      "  margin: 4px 0;"
                      "}");
 
-  QAction *viewDiffAction = menu.addAction(tr("View Diff"));
-  QAction *copyHashAction = menu.addAction(tr("Copy Commit Hash"));
+  QAction *viewDiffAction = menu.addAction(tr("👁 View Diff"));
+  QAction *copyHashAction = menu.addAction(tr("📋 Copy Commit Hash"));
   menu.addSeparator();
-  QAction *checkoutAction = menu.addAction(tr("Checkout Commit"));
-  QAction *createBranchAction = menu.addAction(tr("Create Branch..."));
-  QAction *cherryPickAction = menu.addAction(tr("Cherry-Pick Commit"));
+  QAction *checkoutAction = menu.addAction(tr("⎋ Checkout Commit"));
+  QAction *createBranchAction = menu.addAction(tr("🌿 Create Branch from Here..."));
+  QAction *cherryPickAction = menu.addAction(tr("🍒 Cherry-Pick Commit"));
+  QAction *moveToBranchAction =
+      menu.addAction(tr("📤 Move Commit to Branch..."));
   menu.addSeparator();
-  QAction *rewordAction = menu.addAction(tr("Edit Commit Message..."));
-  QAction *revertAction = menu.addAction(tr("Revert Commit"));
+  QAction *rewordAction = menu.addAction(tr("✏️ Edit Commit Message..."));
+  QAction *revertAction = menu.addAction(tr("↩ Revert Commit"));
+  QAction *dropAction = menu.addAction(tr("🗑 Drop Commit"));
 
-  QMenu *resetMenu = menu.addMenu(tr("Reset to Commit"));
+  menu.addSeparator();
+
+  QAction *squashAction = nullptr;
+  if (multiSelect) {
+    squashAction = menu.addAction(
+        tr("📦 Squash %1 Selected Commits...").arg(selectedItems.size()));
+  }
+
+  QMenu *resetMenu = menu.addMenu(tr("⚡ Reset to Commit"));
   resetMenu->setStyleSheet(menu.styleSheet());
-  QAction *resetSoftAction = resetMenu->addAction(tr("Soft (keep changes staged)"));
-  QAction *resetMixedAction = resetMenu->addAction(tr("Mixed (keep changes unstaged)"));
-  QAction *resetHardAction = resetMenu->addAction(tr("Hard (discard all changes)"));
+  QAction *resetSoftAction =
+      resetMenu->addAction(tr("Soft (keep changes staged)"));
+  QAction *resetMixedAction =
+      resetMenu->addAction(tr("Mixed (keep changes unstaged)"));
+  QAction *resetHardAction =
+      resetMenu->addAction(tr("⚠️ Hard (discard all changes)"));
 
   menu.addSeparator();
-  QAction *rebaseAction = menu.addAction(tr("Interactive Rebase from Here..."));
+  QAction *rebaseAction =
+      menu.addAction(tr("🔀 Interactive Rebase from Here..."));
 
   QAction *selected = menu.exec(m_historyTree->mapToGlobal(pos));
   if (!selected)
     return;
 
-  auto confirmDestructive = [this](const QString &title,
-                                   const QString &text) -> bool {
-    QMessageBox msgBox(this);
-    msgBox.setIcon(QMessageBox::Warning);
-    msgBox.setWindowTitle(title);
-    msgBox.setText(text);
-    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    msgBox.setDefaultButton(QMessageBox::No);
-    msgBox.setStyleSheet(
-        "QMessageBox { background: #0d1117; }"
-        "QMessageBox QLabel { color: #e6edf3; }"
-        "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
-        "#30363d; border-radius: 6px; padding: 6px 16px; }"
-        "QPushButton:hover { background: #30363d; }");
-    return msgBox.exec() == QMessageBox::Yes;
-  };
-
   if (selected == viewDiffAction) {
     emit commitDiffRequested(commitHash, shortHash);
   } else if (selected == copyHashAction) {
-    QApplication::clipboard()->setText(commitHash);
-    QToolTip::showText(QCursor::pos(), tr("✓ Copied: %1").arg(shortHash), this,
-                       QRect(), 2000);
+    if (multiSelect) {
+      QStringList hashes;
+      for (auto *sel : selectedItems) {
+        hashes << sel->data(0, Qt::UserRole).toString();
+      }
+      QApplication::clipboard()->setText(hashes.join("\n"));
+      QToolTip::showText(
+          QCursor::pos(),
+          tr("✓ Copied %1 commit hashes").arg(hashes.size()), this,
+          QRect(), 2000);
+    } else {
+      QApplication::clipboard()->setText(commitHash);
+      QToolTip::showText(QCursor::pos(),
+                         tr("✓ Copied: %1").arg(shortHash), this,
+                         QRect(), 2000);
+    }
   } else if (selected == checkoutAction) {
     if (confirmDestructive(
             tr("Checkout Commit"),
@@ -1848,6 +1924,40 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
       m_git->cherryPick(commitHash);
       refresh();
     }
+  } else if (selected == moveToBranchAction) {
+    QList<GitBranchInfo> branches = m_git->getBranches();
+    QString currentBranch = m_git->currentBranch();
+    QStringList branchNames;
+    for (const auto &b : branches) {
+      if (!b.isRemote && b.name != currentBranch) {
+        branchNames << b.name;
+      }
+    }
+    if (branchNames.isEmpty()) {
+      QMessageBox::information(
+          this, tr("Move Commit"),
+          tr("No other local branches available. Create a branch first."));
+      return;
+    }
+    bool ok = false;
+    QString targetBranch = QInputDialog::getItem(
+        this, tr("Move Commit to Branch"),
+        tr("Move commit %1 to which branch?\n\n"
+           "The commit will be cherry-picked onto the target branch "
+           "and removed from the current branch.")
+            .arg(shortHash),
+        branchNames, 0, false, &ok);
+    if (ok && !targetBranch.isEmpty()) {
+      if (confirmDestructive(
+              tr("Move Commit"),
+              tr("Move commit %1 from '%2' to '%3'?\n\n"
+                 "This will cherry-pick the commit onto '%3' and remove "
+                 "it from '%2'. This rewrites history.")
+                  .arg(shortHash, currentBranch, targetBranch))) {
+        m_git->moveCommitToBranch(commitHash, targetBranch);
+        refresh();
+      }
+    }
   } else if (selected == rewordAction) {
     QString currentMsg = m_git->getCommitMessage(commitHash);
     bool ok = false;
@@ -1868,6 +1978,43 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
                 .arg(shortHash))) {
       m_git->revertCommit(commitHash);
       refresh();
+    }
+  } else if (selected == dropAction) {
+    if (confirmDestructive(
+            tr("Drop Commit"),
+            tr("⚠️ Drop commit %1?\n\n"
+               "This will permanently remove this commit from history. "
+               "This action rewrites history and cannot be easily undone.")
+                .arg(shortHash))) {
+      m_git->dropCommit(commitHash);
+      refresh();
+    }
+  } else if (squashAction && selected == squashAction) {
+    QStringList hashes;
+    for (auto *sel : selectedItems) {
+      QString h = sel->data(0, Qt::UserRole).toString();
+      if (!h.isEmpty())
+        hashes << h;
+    }
+    if (hashes.size() < 2)
+      return;
+
+    QString firstMsg = m_git->getCommitMessage(hashes.first());
+    bool ok = false;
+    QString newMsg = QInputDialog::getMultiLineText(
+        this, tr("Squash %1 Commits").arg(hashes.size()),
+        tr("Enter a message for the squashed commit:"), firstMsg, &ok);
+
+    if (ok && !newMsg.trimmed().isEmpty()) {
+      if (confirmDestructive(
+              tr("Squash Commits"),
+              tr("⚠️ Squash %1 commits into one?\n\n"
+                 "This will combine the selected commits into a single "
+                 "commit. This rewrites history and cannot be easily undone.")
+                  .arg(hashes.size()))) {
+        m_git->squashCommits(hashes, newMsg.trimmed());
+        refresh();
+      }
     }
   } else if (selected == resetSoftAction) {
     if (confirmDestructive(
@@ -2350,5 +2497,41 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
   if (m_branchLabel) {
     m_branchLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
+  }
+}
+
+bool SourceControlPanel::confirmDestructive(const QString &title,
+                                            const QString &text) {
+  QMessageBox msgBox(this);
+  msgBox.setIcon(QMessageBox::Warning);
+  msgBox.setWindowTitle(title);
+  msgBox.setText(text);
+  msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+  msgBox.setDefaultButton(QMessageBox::No);
+  msgBox.setStyleSheet(
+      "QMessageBox { background: #0d1117; }"
+      "QMessageBox QLabel { color: #e6edf3; }"
+      "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
+      "#30363d; border-radius: 6px; padding: 6px 16px; }"
+      "QPushButton:hover { background: #30363d; }");
+  return msgBox.exec() == QMessageBox::Yes;
+}
+
+void SourceControlPanel::onHistorySearchChanged(const QString &text) {
+  if (!m_historyTree)
+    return;
+
+  for (int i = 0; i < m_historyTree->topLevelItemCount(); ++i) {
+    auto *item = m_historyTree->topLevelItem(i);
+    if (text.isEmpty()) {
+      item->setHidden(false);
+    } else {
+      bool match = item->text(0).contains(text, Qt::CaseInsensitive) ||
+                   item->data(0, Qt::UserRole)
+                       .toString()
+                       .contains(text, Qt::CaseInsensitive) ||
+                   item->toolTip(0).contains(text, Qt::CaseInsensitive);
+      item->setHidden(!match);
+    }
   }
 }

@@ -253,6 +253,14 @@ public:
 
   bool rewordCommit(const QString &commitHash, const QString &newMessage);
 
+  bool dropCommit(const QString &commitHash);
+
+  bool squashCommits(const QStringList &commitHashes,
+                     const QString &newMessage);
+
+  bool moveCommitToBranch(const QString &commitHash,
+                          const QString &targetBranch);
+
   QList<QPair<QString, QString>> listWorktrees() const;
 
   bool addWorktree(const QString &path, const QString &branch,

@@ -10,11 +10,13 @@ class QTreeWidgetItem;
 class QComboBox;
 class QLabel;
 class QPushButton;
+class QLineEdit;
 
 struct RebaseEntry {
   QString action;
   QString hash;
   QString subject;
+  QString author;
 };
 
 class GitRebaseDialog : public QDialog {
@@ -31,11 +33,18 @@ private slots:
   void onMoveDown();
   void onActionChanged(int index);
   void onStartRebase();
+  void onSquashSelected();
+  void onDropSelected();
+  void onPickAll();
+  void onSearchChanged(const QString &text);
 
 private:
   void buildUi();
   void applyTheme(const Theme &theme);
   void updateActionForItem(QTreeWidgetItem *item, const QString &action);
+  void rebuildComboForItem(QTreeWidgetItem *item, int row);
+  void syncEntriesFromTree();
+  void updateSummary();
 
   GitIntegration *m_git;
   Theme m_theme;
@@ -44,9 +53,14 @@ private:
   QTreeWidget *m_commitList;
   QPushButton *m_moveUpBtn;
   QPushButton *m_moveDownBtn;
+  QPushButton *m_squashBtn;
+  QPushButton *m_dropBtn;
+  QPushButton *m_pickAllBtn;
   QPushButton *m_startBtn;
   QPushButton *m_cancelBtn;
   QLabel *m_statusLabel;
+  QLabel *m_summaryLabel;
+  QLineEdit *m_searchEdit;
 
   QList<RebaseEntry> m_entries;
 };
