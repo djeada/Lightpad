@@ -133,6 +133,7 @@ set(project_headers
     syntax/basesyntaxplugin.h
     syntax/cppsyntaxplugin.h
     syntax/csssyntaxplugin.h
+    syntax/dockerfilesyntaxplugin.h
     syntax/gosyntaxplugin.h
     syntax/htmlsyntaxplugin.h
     syntax/javascriptsyntaxplugin.h
@@ -271,6 +272,7 @@ set(project_sources
     syntax/syntaxpluginregistry.cpp
     syntax/cppsyntaxplugin.cpp
     syntax/csssyntaxplugin.cpp
+    syntax/dockerfilesyntaxplugin.cpp
     syntax/gosyntaxplugin.cpp
     syntax/htmlsyntaxplugin.cpp
     syntax/javascriptsyntaxplugin.cpp

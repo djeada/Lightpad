@@ -3,6 +3,7 @@
 #include "syntax/bazelsyntaxplugin.h"
 #include "syntax/cmakesyntaxplugin.h"
 #include "syntax/cppsyntaxplugin.h"
+#include "syntax/dockerfilesyntaxplugin.h"
 #include "syntax/csssyntaxplugin.h"
 #include "syntax/gosyntaxplugin.h"
 #include "syntax/htmlsyntaxplugin.h"
@@ -29,6 +30,7 @@ void registerBuiltInSyntaxPlugins() {
   registry.registerPlugin(std::make_unique<BazelSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CppSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CssSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<DockerfileSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<GoSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<HtmlSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JavaScriptSyntaxPlugin>());

@@ -30,6 +30,7 @@ QList<DiagnosticsServerConfig> LanguageFeatureManager::defaultServerConfigs() {
       {"py", "pylsp", {}},
       {"rust", "rust-analyzer", {}},
       {"go", "gopls", {"serve"}},
+      {"dockerfile", "docker-langserver", {"--stdio"}},
   };
 }
 

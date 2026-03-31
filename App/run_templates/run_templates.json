@@ -1443,6 +1443,96 @@
       ],
       "workingDirectory": "${fileDir}",
       "env": {}
+    },
+    {
+      "id": "docker_build",
+      "name": "Docker Build",
+      "description": "Build Docker image from Dockerfile",
+      "language": "Dockerfile",
+      "extensions": [
+        "dockerfile",
+        "containerfile"
+      ],
+      "command": "docker",
+      "args": [
+        "build",
+        "-t",
+        "${fileBasenameNoExt}:latest",
+        "-f",
+        "${file}",
+        "${fileDir}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "docker_build_run",
+      "name": "Docker Build & Run",
+      "description": "Build image and run container",
+      "language": "Dockerfile",
+      "extensions": [
+        "dockerfile",
+        "containerfile"
+      ],
+      "command": "bash",
+      "args": [
+        "-c",
+        "docker build -t ${fileBasenameNoExt}:latest -f ${file} ${fileDir} && docker run --rm ${fileBasenameNoExt}:latest"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "docker_compose_up",
+      "name": "Docker Compose Up",
+      "description": "Start services with docker compose",
+      "language": "Dockerfile",
+      "extensions": [
+        "dockerfile",
+        "containerfile"
+      ],
+      "command": "docker",
+      "args": [
+        "compose",
+        "up",
+        "--build"
+      ],
+      "workingDirectory": "${workspaceFolder}",
+      "env": {}
+    },
+    {
+      "id": "docker_compose_down",
+      "name": "Docker Compose Down",
+      "description": "Stop and remove services with docker compose",
+      "language": "Dockerfile",
+      "extensions": [
+        "dockerfile",
+        "containerfile"
+      ],
+      "command": "docker",
+      "args": [
+        "compose",
+        "down"
+      ],
+      "workingDirectory": "${workspaceFolder}",
+      "env": {}
+    },
+    {
+      "id": "docker_compose_restart",
+      "name": "Docker Compose Restart",
+      "description": "Rebuild and restart services",
+      "language": "Dockerfile",
+      "extensions": [
+        "dockerfile",
+        "containerfile"
+      ],
+      "command": "bash",
+      "args": [
+        "-c",
+        "docker compose down && docker compose up --build -d"
+      ],
+      "workingDirectory": "${workspaceFolder}",
+      "env": {}
     }
   ],
   "variables": {
