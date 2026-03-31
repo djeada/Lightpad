@@ -47,47 +47,24 @@ void ProblemsPanel::setupUI() {
 
   headerLayout->addStretch();
 
-  m_autoRefreshCheckBox = new QCheckBox(tr("Auto-refresh on save"), m_header);
-  m_autoRefreshCheckBox->setChecked(m_autoRefreshEnabled);
-  m_autoRefreshCheckBox->setStyleSheet(
-      "QCheckBox { color: #9aa4b2; }"
-      "QCheckBox::indicator { width: 14px; height: 14px; }"
-      "QCheckBox::indicator:unchecked { border: 1px solid #2a3241; background: "
-      "#1f2632; }"
-      "QCheckBox::indicator:checked { border: 1px solid #3794ff; background: "
-      "#3794ff; }");
-  connect(m_autoRefreshCheckBox, &QCheckBox::toggled, this,
-          &ProblemsPanel::onAutoRefreshToggled);
-  headerLayout->addWidget(m_autoRefreshCheckBox);
-
-  const QString buttonStyle =
-      "QPushButton { background: #1f2632; color: #e6edf3; border: 1px solid "
-      "#2a3241; padding: 2px 8px; }"
-      "QPushButton:hover { background: #2a3241; }";
-
-  auto *clearFileButton = new QPushButton(tr("Clear File"), m_header);
-  clearFileButton->setStyleSheet(buttonStyle);
-  connect(clearFileButton, &QPushButton::clicked, this,
-          &ProblemsPanel::clearCurrentFile);
-  headerLayout->addWidget(clearFileButton);
-
-  auto *clearAllButton = new QPushButton(tr("Clear All"), m_header);
-  clearAllButton->setStyleSheet(buttonStyle);
-  connect(clearAllButton, &QPushButton::clicked, this,
-          &ProblemsPanel::clearAll);
-  headerLayout->addWidget(clearAllButton);
-
-  auto *copyButton = new QPushButton(tr("Copy"), m_header);
-  copyButton->setStyleSheet(buttonStyle);
-  connect(copyButton, &QPushButton::clicked, this,
-          &ProblemsPanel::copySelectedMessage);
-  headerLayout->addWidget(copyButton);
-
   m_statusLabel = new QLabel(m_header);
   m_statusLabel->setObjectName("problemsStatusLabel");
   m_statusLabel->setTextFormat(Qt::RichText);
   m_statusLabel->setStyleSheet("color: #9aa4b2;");
   headerLayout->addWidget(m_statusLabel);
+
+  const QString buttonStyle =
+      "QPushButton { background: transparent; color: #9aa4b2; border: none; "
+      "padding: 2px 6px; font-size: 16px; }"
+      "QPushButton:hover { color: #e6edf3; }";
+
+  auto *closeButton = new QPushButton("✕", m_header);
+  closeButton->setStyleSheet(buttonStyle);
+  closeButton->setToolTip(tr("Close Problems Panel (Ctrl+Shift+M)"));
+  closeButton->setFixedSize(24, 24);
+  connect(closeButton, &QPushButton::clicked, this,
+          &ProblemsPanel::closeRequested);
+  headerLayout->addWidget(closeButton);
 
   mainLayout->addWidget(m_header);
 
@@ -99,8 +76,8 @@ void ProblemsPanel::setupUI() {
   m_tree = new QTreeWidget(treeContainer);
   m_tree->setObjectName("problemsTree");
   m_tree->setHeaderLabels({tr("Problem"), tr("Location")});
-  m_tree->setRootIsDecorated(true);
-  m_tree->setAlternatingRowColors(true);
+  m_tree->setRootIsDecorated(false);
+  m_tree->setAlternatingRowColors(false);
   m_tree->setStyleSheet("QTreeWidget {"
                         "  background: #0e1116;"
                         "  color: #e6edf3;"
@@ -125,8 +102,8 @@ void ProblemsPanel::setupUI() {
   m_tree->header()->setStretchLastSection(true);
   m_tree->setColumnWidth(0, 500);
 
-  connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
-          &ProblemsPanel::onItemDoubleClicked);
+  connect(m_tree, &QTreeWidget::itemClicked, this,
+          &ProblemsPanel::onItemClicked);
 
   m_emptyStateLabel = new QLabel(treeContainer);
   m_emptyStateLabel->setObjectName("problemsEmptyState");
@@ -235,13 +212,13 @@ ProblemsPanel::findDiagnosticsForFile(const QString &filePath) const {
   return nullptr;
 }
 
-void ProblemsPanel::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
+void ProblemsPanel::onItemClicked(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column);
 
-  if (!item->parent())
+  QString filePath = item->data(0, Qt::UserRole).toString();
+  if (filePath.isEmpty())
     return;
 
-  QString filePath = item->data(0, Qt::UserRole).toString();
   int line = item->data(0, Qt::UserRole + 1).toInt();
   int col = item->data(0, Qt::UserRole + 2).toInt();
 
@@ -331,27 +308,17 @@ void ProblemsPanel::rebuildTree() {
     if (filePath.startsWith("file://")) {
       filePath = filePath.mid(7);
     }
+
+    // Only show diagnostics for the current file
+    if (!m_currentFilePath.isEmpty() && filePath != m_currentFilePath) {
+      continue;
+    }
+
     QFileInfo fileInfo(filePath);
     QString fileName = fileInfo.fileName();
 
-    int fileErrors = 0;
-    int fileWarnings = 0;
-    int fileInfos = 0;
     int visibleCount = 0;
     for (const auto &diag : diagList) {
-      switch (diag.severity) {
-      case LspDiagnosticSeverity::Error:
-        fileErrors++;
-        break;
-      case LspDiagnosticSeverity::Warning:
-        fileWarnings++;
-        break;
-      case LspDiagnosticSeverity::Information:
-      case LspDiagnosticSeverity::Hint:
-        fileInfos++;
-        break;
-      }
-
       bool show = (m_currentFilter == 0) ||
                   (m_currentFilter == 1 &&
                    diag.severity == LspDiagnosticSeverity::Error) ||
@@ -364,15 +331,8 @@ void ProblemsPanel::rebuildTree() {
         visibleCount++;
     }
 
-    emit fileCountsChanged(filePath, fileErrors, fileWarnings, fileInfos);
-
     if (visibleCount == 0)
       continue;
-
-    QTreeWidgetItem *fileItem = new QTreeWidgetItem(m_tree);
-    fileItem->setText(0, QString("%1 (%2)").arg(fileName).arg(visibleCount));
-    fileItem->setToolTip(0, filePath);
-    fileItem->setExpanded(true);
 
     for (const auto &diag : diagList) {
       bool show = (m_currentFilter == 0) ||
@@ -386,13 +346,13 @@ void ProblemsPanel::rebuildTree() {
       if (!show)
         continue;
 
-      QTreeWidgetItem *diagItem = new QTreeWidgetItem(fileItem);
+      QTreeWidgetItem *diagItem = new QTreeWidgetItem(m_tree);
 
       QString icon = severityIcon(diag.severity);
       QString message = QString("%1 %2").arg(icon).arg(diag.message);
       diagItem->setText(0, message);
 
-      QString location = QString("[%1:%2]")
+      QString location = QString("Ln %1, Col %2")
                              .arg(diag.range.start.line + 1)
                              .arg(diag.range.start.character + 1);
       diagItem->setText(1, location);
@@ -521,5 +481,9 @@ void ProblemsPanel::copySelectedMessage() {
 }
 
 void ProblemsPanel::setCurrentFilePath(const QString &filePath) {
+  if (m_currentFilePath == filePath) {
+    return;
+  }
   m_currentFilePath = filePath;
+  rebuildTree();
 }

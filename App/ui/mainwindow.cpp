@@ -130,7 +130,9 @@ MainWindow::MainWindow(QWidget *parent)
       m_codeLensEnabled(false), m_gitBranchLabel(nullptr),
       m_gitSyncLabel(nullptr), m_gitDirtyLabel(nullptr),
       m_debugTargetMenu(nullptr), debugPanel(nullptr), debugDock(nullptr),
-      testPanel(nullptr), testDock(nullptr), m_testStatusLabel(nullptr),
+      testPanel(nullptr), testDock(nullptr), m_markdownPreviewPanel(nullptr),
+      m_markdownPreviewDock(nullptr), m_latexPreviewPanel(nullptr),
+      m_latexPreviewDock(nullptr), m_testStatusLabel(nullptr),
       m_debugStartInProgress(false),
       m_breakpointsSetConnection(), m_breakpointChangedConnection(),
       m_runInTerminalConnection(), m_sessionTerminatedConnection(),
@@ -1175,6 +1177,15 @@ void MainWindow::updateAllTextAreas(void (TextArea::*f)(const Theme &),
   }
 }
 
+bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
+  if (watched == problemsStatusLabel &&
+      event->type() == QEvent::MouseButtonPress) {
+    showProblemsPanel();
+    return true;
+  }
+  return QMainWindow::eventFilter(watched, event);
+}
+
 void MainWindow::keyPressEvent(QKeyEvent *keyEvent) {
 
   if (keyEvent->matches(QKeySequence::Undo))
@@ -1214,11 +1225,6 @@ void MainWindow::keyPressEvent(QKeyEvent *keyEvent) {
   else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
            keyEvent->key() == Qt::Key_P) {
     showCommandPalette();
-  }
-
-  else if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
-           keyEvent->key() == Qt::Key_M) {
-    showProblemsPanel();
   }
 
   else if (keyEvent->modifiers() == Qt::ControlModifier &&
@@ -2251,11 +2257,29 @@ void MainWindow::showProblemsPanel() {
               notifyDiagnosticsFileSaved(filePath);
             });
 
+    connect(problemsPanel, &ProblemsPanel::closeRequested, this,
+            [this]() {
+              if (problemsPanel) {
+                problemsPanel->setVisible(false);
+              }
+              if (ui->actionToggle_Problems) {
+                ui->actionToggle_Problems->setChecked(false);
+              }
+            });
+
     if (m_diagnosticsManager) {
       for (const QString &uri : m_diagnosticsManager->allUris()) {
         QList<LspDiagnostic> diags =
             m_diagnosticsManager->diagnosticsForUri(uri);
         problemsPanel->setDiagnostics(uri, diags);
+      }
+    }
+
+    LightpadTabWidget *tabWidget = currentTabWidget();
+    if (tabWidget) {
+      QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
+      if (!filePath.isEmpty()) {
+        problemsPanel->setCurrentFilePath(filePath);
       }
     }
 
@@ -2707,10 +2731,16 @@ void MainWindow::on_actionToggle_Test_Panel_triggered() {
   testDock->setVisible(!visible);
 }
 
-void MainWindow::on_actionPreview_Markdown_triggered() {
-  if (!m_splitEditorContainer)
-    return;
+void MainWindow::on_actionToggle_Problems_triggered() {
+  showProblemsPanel();
 
+  if (ui->actionToggle_Problems) {
+    ui->actionToggle_Problems->setChecked(
+        problemsPanel && problemsPanel->isVisible());
+  }
+}
+
+void MainWindow::on_actionPreview_Markdown_triggered() {
   TextArea *textArea = getCurrentTextArea();
   if (!textArea)
     return;
@@ -2722,7 +2752,7 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
   int currentIndex = tabWidget->currentIndex();
   QString filePath;
   if (currentIndex >= 0)
-    filePath = tabWidget->tabToolTip(currentIndex);
+    filePath = tabWidget->getFilePath(currentIndex);
 
   QFileInfo fi(filePath);
   if (!MarkdownPreviewPanel::isMarkdownFile(fi.suffix())) {
@@ -2734,26 +2764,52 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
     return;
   }
 
-  LightpadTabWidget *newGroup = m_splitEditorContainer->splitHorizontal();
-  if (!newGroup)
+  if (m_markdownPreviewDock) {
+    m_markdownPreviewPanel->setFilePath(filePath);
+    m_markdownPreviewPanel->setMarkdown(textArea->toPlainText());
+    m_markdownPreviewPanel->updatePreview();
+    m_markdownPreviewDock->show();
+    m_markdownPreviewDock->raise();
     return;
+  }
 
-  auto *preview = new MarkdownPreviewPanel(this);
-  preview->setFilePath(filePath);
-  preview->setMarkdown(textArea->toPlainText());
-  preview->updatePreview();
+  m_markdownPreviewPanel = new MarkdownPreviewPanel(this);
+  m_markdownPreviewPanel->setFilePath(filePath);
+  m_markdownPreviewPanel->setMarkdown(textArea->toPlainText());
 
-  newGroup->addViewerTab(preview, filePath + " [Preview]", m_projectRootPath);
+  m_markdownPreviewDock = new QDockWidget(tr("Markdown Preview"), this);
+  m_markdownPreviewDock->setObjectName("markdownPreviewDock");
+  m_markdownPreviewDock->setWidget(m_markdownPreviewPanel);
+  m_markdownPreviewDock->setAllowedAreas(Qt::RightDockWidgetArea |
+                                         Qt::BottomDockWidgetArea);
+  m_markdownPreviewDock->setMinimumWidth(350);
+  m_markdownPreviewDock->setStyleSheet(
+      "QDockWidget { color: #e6edf3; }"
+      "QDockWidget::title { background: #161b22; padding: 6px; "
+      "border-bottom: 1px solid #30363d; }");
+  addDockWidget(Qt::RightDockWidgetArea, m_markdownPreviewDock);
 
-  connect(textArea, &QPlainTextEdit::textChanged, preview,
-          [textArea, preview]() {
-            preview->setMarkdown(textArea->toPlainText());
+  // Delay initial render so QWebEngineView has time to initialize
+  QTimer::singleShot(100, m_markdownPreviewPanel,
+                     &MarkdownPreviewPanel::updatePreview);
+
+  connect(textArea, &QPlainTextEdit::textChanged, m_markdownPreviewPanel,
+          [textArea, this]() {
+            if (m_markdownPreviewPanel)
+              m_markdownPreviewPanel->setMarkdown(textArea->toPlainText());
           });
 
-  connect(preview, &MarkdownPreviewPanel::linkClicked, this,
+  connect(m_markdownPreviewPanel, &MarkdownPreviewPanel::linkClicked, this,
           [this](const QString &path) {
             if (QFileInfo::exists(path)) {
               openFileAndAddToNewTab(path);
+            }
+          });
+
+  connect(m_markdownPreviewDock, &QDockWidget::visibilityChanged, this,
+          [this](bool visible) {
+            if (!visible && m_markdownPreviewDock) {
+              m_markdownPreviewDock->hide();
             }
           });
 
@@ -2761,9 +2817,6 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
 }
 
 void MainWindow::on_actionPreview_LaTeX_triggered() {
-  if (!m_splitEditorContainer)
-    return;
-
   TextArea *textArea = getCurrentTextArea();
   if (!textArea)
     return;
@@ -2775,7 +2828,7 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
   int currentIndex = tabWidget->currentIndex();
   QString filePath;
   if (currentIndex >= 0)
-    filePath = tabWidget->tabToolTip(currentIndex);
+    filePath = tabWidget->getFilePath(currentIndex);
 
   QFileInfo fi(filePath);
   if (!LatexPreviewPanel::isLatexFile(fi.suffix())) {
@@ -2787,16 +2840,29 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
     return;
   }
 
-  LightpadTabWidget *newGroup = m_splitEditorContainer->splitHorizontal();
-  if (!newGroup)
+  if (m_latexPreviewDock) {
+    m_latexPreviewPanel->setFilePath(filePath);
+    m_latexPreviewDock->show();
+    m_latexPreviewDock->raise();
     return;
+  }
 
-  auto *preview = new LatexPreviewPanel(this);
-  preview->setFilePath(filePath);
+  m_latexPreviewPanel = new LatexPreviewPanel(this);
+  m_latexPreviewPanel->setFilePath(filePath);
 
-  newGroup->addViewerTab(preview, filePath + " [Build]", m_projectRootPath);
+  m_latexPreviewDock = new QDockWidget(tr("LaTeX Build"), this);
+  m_latexPreviewDock->setObjectName("latexPreviewDock");
+  m_latexPreviewDock->setWidget(m_latexPreviewPanel);
+  m_latexPreviewDock->setAllowedAreas(Qt::RightDockWidgetArea |
+                                      Qt::BottomDockWidgetArea);
+  m_latexPreviewDock->setMinimumWidth(350);
+  m_latexPreviewDock->setStyleSheet(
+      "QDockWidget { color: #e6edf3; }"
+      "QDockWidget::title { background: #161b22; padding: 6px; "
+      "border-bottom: 1px solid #30363d; }");
+  addDockWidget(Qt::RightDockWidgetArea, m_latexPreviewDock);
 
-  connect(preview, &LatexPreviewPanel::diagnosticsReady, this,
+  connect(m_latexPreviewPanel, &LatexPreviewPanel::diagnosticsReady, this,
           [this, filePath](const QList<LspDiagnostic> &diags) {
             if (m_diagnosticsManager) {
               QString uri = DiagnosticUtils::filePathToUri(filePath);
@@ -3330,7 +3396,13 @@ void MainWindow::setupDiagnostics() {
                            : LanguageCatalog::displayName(languageId));
           m_notificationManager->showError(title, message);
         }
-        updateLspStatusLabel(languageId, "error");
+        // Only update status label if this language matches current file
+        auto *tw = currentTabWidget();
+        if (tw && tw->currentIndex() >= 0) {
+          QString fp = tw->getFilePath(tw->currentIndex());
+          if (!fp.isEmpty() && effectiveLanguageIdForFile(fp) == languageId)
+            updateLspStatusLabel(languageId, "error");
+        }
       });
 
   connect(m_languageFeatureManager, &LanguageFeatureManager::serverStarted,
@@ -3345,12 +3417,29 @@ void MainWindow::setupDiagnostics() {
                   tr("%1 language server is now active.").arg(displayName),
                   3000);
             }
-            updateLspStatusLabel(languageId, "running");
+            // Only update status label if this language matches current file
+            auto *tw = currentTabWidget();
+            if (tw && tw->currentIndex() >= 0) {
+              QString fp = tw->getFilePath(tw->currentIndex());
+              if (!fp.isEmpty() && effectiveLanguageIdForFile(fp) == languageId)
+                updateLspStatusLabel(languageId, "running");
+            }
           });
 
   connect(m_languageFeatureManager,
           &LanguageFeatureManager::serverHealthChanged, this,
           [this](const QString &languageId, ServerHealthStatus status) {
+            // Only update if this language matches the current file
+            auto *tw = currentTabWidget();
+            if (!tw || tw->currentIndex() < 0)
+              return;
+            QString filePath = tw->getFilePath(tw->currentIndex());
+            if (filePath.isEmpty())
+              return;
+            QString currentLang = effectiveLanguageIdForFile(filePath);
+            if (currentLang != languageId)
+              return;
+
             switch (status) {
             case ServerHealthStatus::Starting:
               updateLspStatusLabel(languageId, "starting");
@@ -3454,6 +3543,13 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
 }
 
 void MainWindow::openPythonEnvironmentDialog() {
+  if (!findChildren<PythonEnvironmentDialog *>().isEmpty()) {
+    auto *existing = findChildren<PythonEnvironmentDialog *>().first();
+    existing->raise();
+    existing->activateWindow();
+    return;
+  }
+
   auto page = currentTabWidget() ? currentTabWidget()->getCurrentPage()
                                  : nullptr;
   const QString filePath = page ? page->getFilePath() : QString();
@@ -3463,6 +3559,7 @@ void MainWindow::openPythonEnvironmentDialog() {
 
   auto *dialog = new PythonEnvironmentDialog(m_projectRootPath, filePath,
                                              getTheme(), this);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
   connect(dialog, &PythonEnvironmentDialog::configurationSaved, this, [this]() {
     updatePythonEnvironmentLabel();
   });
@@ -3484,9 +3581,17 @@ void MainWindow::openLanguageServerStatusDialog() {
   const QString overrideLanguage =
       filePath.trimmed().isEmpty() ? QString() : highlightOverrideForFile(filePath);
 
+  if (!findChildren<LanguageServerStatusDialog *>().isEmpty()) {
+    auto *existing = findChildren<LanguageServerStatusDialog *>().first();
+    existing->raise();
+    existing->activateWindow();
+    return;
+  }
+
   auto *dialog = new LanguageServerStatusDialog(
       m_lspStatusLanguageId, m_projectRootPath, filePath, effectiveLanguage,
       overrideLanguage, m_languageFeatureManager, getTheme(), this);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
   connect(dialog, &LanguageServerStatusDialog::configurationApplied, this,
           &MainWindow::retryLanguageServerForCurrentFile);
   connect(dialog, &LanguageServerStatusDialog::pythonEnvironmentRequested, this,
@@ -3693,6 +3798,8 @@ void MainWindow::onDiagnosticsChanged(const QString &uri) {
       page->getTextArea()->setDiagnostics(diagnostics);
     }
   }
+
+  refreshProblemsStatusForCurrentFile();
 }
 
 void MainWindow::setupGitIntegration() {
@@ -3817,15 +3924,45 @@ void MainWindow::applyGitIntegrationToAllPages() {
 
 void MainWindow::updateProblemsStatusLabel(int errors, int warnings,
                                            int infos) {
-  if (problemsStatusLabel) {
-    QString text;
-    if (errors > 0 || warnings > 0) {
-      text = QString("⛔ %1  ⚠️ %2").arg(errors).arg(warnings);
-    } else {
-      text = "✓ No problems";
+  (void)errors;
+  (void)warnings;
+  (void)infos;
+  refreshProblemsStatusForCurrentFile();
+}
+
+void MainWindow::refreshProblemsStatusForCurrentFile() {
+  if (!problemsStatusLabel)
+    return;
+
+  int errors = 0, warnings = 0;
+
+  if (m_diagnosticsManager) {
+    auto *tw = currentTabWidget();
+    if (tw && tw->currentIndex() >= 0) {
+      QString filePath = tw->getFilePath(tw->currentIndex());
+      if (!filePath.isEmpty()) {
+        QString uri = filePath;
+        if (!uri.startsWith("file://"))
+          uri = "file://" + uri;
+        QList<LspDiagnostic> diags =
+            m_diagnosticsManager->diagnosticsForUri(uri);
+        for (const auto &d : diags) {
+          if (d.severity == LspDiagnosticSeverity::Error)
+            ++errors;
+          else if (d.severity == LspDiagnosticSeverity::Warning)
+            ++warnings;
+        }
+      }
     }
-    problemsStatusLabel->setText(text);
   }
+
+  QString text;
+  if (errors > 0 || warnings > 0) {
+    text = QString("⛔ %1  ⚠️ %2").arg(errors).arg(warnings);
+  } else {
+    text = "✓ No problems";
+  }
+  problemsStatusLabel->setText(text);
 }
 
 void MainWindow::updateVimStatusLabel(const QString &text) {
@@ -4600,6 +4737,10 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
   }
 
   updatePythonEnvironmentLabel();
+  if (problemsPanel && !filePath.isEmpty()) {
+    problemsPanel->setCurrentFilePath(filePath);
+  }
+  refreshProblemsStatusForCurrentFile();
   if (m_languageFeatureManager && !filePath.isEmpty()) {
     const QString languageId = effectiveLanguageIdForFile(filePath);
     switch (m_languageFeatureManager->serverHealth(languageId)) {

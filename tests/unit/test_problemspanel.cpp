@@ -114,6 +114,7 @@ void TestProblemsPanel::testEmptyStateLabelVisibleInitially() {
 
 void TestProblemsPanel::testSetDiagnosticsPopulatesTree() {
   ProblemsPanel panel;
+  panel.setCurrentFilePath("/test.cpp");
   QList<LspDiagnostic> diags;
   diags << makeDiag(LspDiagnosticSeverity::Error, "undefined variable", 5, 0);
   diags << makeDiag(LspDiagnosticSeverity::Warning, "unused import", 1, 0);
@@ -122,8 +123,7 @@ void TestProblemsPanel::testSetDiagnosticsPopulatesTree() {
 
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree);
-  QCOMPARE(tree->topLevelItemCount(), 1);
-  QCOMPARE(tree->topLevelItem(0)->childCount(), 2);
+  QCOMPARE(tree->topLevelItemCount(), 2);
 }
 
 void TestProblemsPanel::testSetDiagnosticsCountsErrors() {
@@ -264,6 +264,7 @@ void TestProblemsPanel::testCountsChangedSignal() {
 
 void TestProblemsPanel::testProblemClickedSignal() {
   ProblemsPanel panel;
+  panel.setCurrentFilePath("/test.cpp");
   QSignalSpy spy(&panel, &ProblemsPanel::problemClicked);
   QVERIFY(spy.isValid());
 
@@ -274,12 +275,10 @@ void TestProblemsPanel::testProblemClickedSignal() {
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree);
   QVERIFY(tree->topLevelItemCount() > 0);
-  QTreeWidgetItem *fileItem = tree->topLevelItem(0);
-  QVERIFY(fileItem->childCount() > 0);
-  QTreeWidgetItem *diagItem = fileItem->child(0);
+  QTreeWidgetItem *diagItem = tree->topLevelItem(0);
 
-  // Simulate double click
-  emit tree->itemDoubleClicked(diagItem, 0);
+  // Simulate click
+  emit tree->itemClicked(diagItem, 0);
 
   QCOMPARE(spy.count(), 1);
   QList<QVariant> args = spy.first();
@@ -289,7 +288,8 @@ void TestProblemsPanel::testProblemClickedSignal() {
 
 void TestProblemsPanel::testFileCountsChangedSignal() {
   ProblemsPanel panel;
-  QSignalSpy spy(&panel, &ProblemsPanel::fileCountsChanged);
+  panel.setCurrentFilePath("/test.cpp");
+  QSignalSpy spy(&panel, &ProblemsPanel::countsChanged);
   QVERIFY(spy.isValid());
 
   QList<LspDiagnostic> diags;
@@ -304,6 +304,7 @@ void TestProblemsPanel::testFileCountsChangedSignal() {
 
 void TestProblemsPanel::testFilterErrors() {
   ProblemsPanel panel;
+  panel.setCurrentFilePath("/test.cpp");
   QList<LspDiagnostic> diags;
   diags << makeDiag(LspDiagnosticSeverity::Error, "error");
   diags << makeDiag(LspDiagnosticSeverity::Warning, "warning");
@@ -315,14 +316,12 @@ void TestProblemsPanel::testFilterErrors() {
 
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree);
-  if (tree->topLevelItemCount() > 0) {
-    // Only error items should be visible
-    QCOMPARE(tree->topLevelItem(0)->childCount(), 1);
-  }
+  QCOMPARE(tree->topLevelItemCount(), 1);
 }
 
 void TestProblemsPanel::testFilterWarnings() {
   ProblemsPanel panel;
+  panel.setCurrentFilePath("/test.cpp");
   QList<LspDiagnostic> diags;
   diags << makeDiag(LspDiagnosticSeverity::Error, "error");
   diags << makeDiag(LspDiagnosticSeverity::Warning, "warning");
@@ -334,13 +333,12 @@ void TestProblemsPanel::testFilterWarnings() {
 
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree);
-  if (tree->topLevelItemCount() > 0) {
-    QCOMPARE(tree->topLevelItem(0)->childCount(), 1);
-  }
+  QCOMPARE(tree->topLevelItemCount(), 1);
 }
 
 void TestProblemsPanel::testFilterAll() {
   ProblemsPanel panel;
+  panel.setCurrentFilePath("/test.cpp");
   QList<LspDiagnostic> diags;
   diags << makeDiag(LspDiagnosticSeverity::Error, "error");
   diags << makeDiag(LspDiagnosticSeverity::Warning, "warning");
@@ -352,7 +350,7 @@ void TestProblemsPanel::testFilterAll() {
 
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree);
-  QCOMPARE(tree->topLevelItem(0)->childCount(), 2);
+  QCOMPARE(tree->topLevelItemCount(), 2);
 }
 
 // --- setCurrentFilePath ---

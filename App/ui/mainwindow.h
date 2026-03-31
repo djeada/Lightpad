@@ -67,6 +67,7 @@ public:
   explicit MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
   void keyPressEvent(QKeyEvent *event);
+  bool eventFilter(QObject *watched, QEvent *event) override;
   void openFileAndAddToNewTab(QString path);
   void closeTabPage(QString filePath);
   void setRowCol(int row, int col);
@@ -152,6 +153,7 @@ private slots:
   void on_actionToggle_Terminal_triggered();
   void on_actionToggle_Source_Control_triggered();
   void on_actionToggle_Test_Panel_triggered();
+  void on_actionToggle_Problems_triggered();
 
   void on_actionPreview_Markdown_triggered();
   void on_actionPreview_LaTeX_triggered();
@@ -229,6 +231,10 @@ private:
   QDockWidget *debugDock;
   TestPanel *testPanel;
   QDockWidget *testDock;
+  MarkdownPreviewPanel *m_markdownPreviewPanel;
+  QDockWidget *m_markdownPreviewDock;
+  LatexPreviewPanel *m_latexPreviewPanel;
+  QDockWidget *m_latexPreviewDock;
   QLabel *m_testStatusLabel;
   QString m_activeDebugSessionId;
   bool m_debugStartInProgress;
@@ -330,6 +336,7 @@ private:
   void updatePythonEnvironmentLabel();
   void updateSourceControlDockTitle(const QString &repoRoot, bool isRepo);
   void updateProblemsStatusLabel(int errors, int warnings, int infos);
+  void refreshProblemsStatusForCurrentFile();
   void updateVimStatusLabel(const QString &text);
   void showVimStatusMessage(const QString &message);
   void setMainWindowTitle(QString title);

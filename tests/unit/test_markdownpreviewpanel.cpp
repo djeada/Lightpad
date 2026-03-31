@@ -4,9 +4,13 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
-#include <QTextBrowser>
 #include <QToolBar>
-#include <QTreeWidget>
+
+#ifdef HAVE_WEBENGINE
+#include <QWebEngineView>
+#else
+#include <QTextBrowser>
+#endif
 
 class TestMarkdownPreviewPanel : public QObject {
   Q_OBJECT
@@ -18,12 +22,7 @@ private slots:
   void testUpdatePreview();
   void testLinkClickedSignal();
   void testWidgetStructure();
-
-  // New tests for expanded features
   void testWordCountLabel();
-  void testOutlinePanel();
-  void testOutlinePanelUpdates();
-  void testOutlineEntryClickedSignal();
   void testExportToHtml();
   void testSyncScrollEnabled();
   void testZoomControls();
@@ -46,12 +45,16 @@ void TestMarkdownPreviewPanel::testIsMarkdownFile() {
 void TestMarkdownPreviewPanel::testSetMarkdown() {
   MarkdownPreviewPanel panel;
   panel.setMarkdown("# Hello World");
-
   QTest::qWait(500);
 
+#ifdef HAVE_WEBENGINE
+  auto *webView = panel.findChild<QWebEngineView *>("markdownPreviewWebView");
+  QVERIFY(webView);
+#else
   auto *browser = panel.findChild<QTextBrowser *>("markdownPreviewBrowser");
   QVERIFY(browser);
   QVERIFY(!browser->toPlainText().isEmpty());
+#endif
 }
 
 void TestMarkdownPreviewPanel::testSetFilePath() {
@@ -67,10 +70,15 @@ void TestMarkdownPreviewPanel::testUpdatePreview() {
   panel.setMarkdown("**Bold text** and *italic*");
   panel.updatePreview();
 
+#ifdef HAVE_WEBENGINE
+  auto *webView = panel.findChild<QWebEngineView *>("markdownPreviewWebView");
+  QVERIFY(webView);
+#else
   auto *browser = panel.findChild<QTextBrowser *>("markdownPreviewBrowser");
   QVERIFY(browser);
   QString html = browser->toHtml();
   QVERIFY(!html.isEmpty());
+#endif
 }
 
 void TestMarkdownPreviewPanel::testLinkClickedSignal() {
@@ -82,16 +90,19 @@ void TestMarkdownPreviewPanel::testLinkClickedSignal() {
 void TestMarkdownPreviewPanel::testWidgetStructure() {
   MarkdownPreviewPanel panel;
 
+#ifdef HAVE_WEBENGINE
+  auto *webView = panel.findChild<QWebEngineView *>("markdownPreviewWebView");
+  QVERIFY(webView);
+#else
   auto *browser = panel.findChild<QTextBrowser *>("markdownPreviewBrowser");
   QVERIFY(browser);
   QVERIFY(browser->isReadOnly());
+#endif
 
   auto *toolbar = panel.findChild<QToolBar *>("markdownPreviewToolbar");
   QVERIFY(toolbar);
   QVERIFY(!toolbar->actions().isEmpty());
 }
-
-// ── New expanded feature tests ──────────────────────────────────────
 
 void TestMarkdownPreviewPanel::testWordCountLabel() {
   MarkdownPreviewPanel panel;
@@ -107,37 +118,9 @@ void TestMarkdownPreviewPanel::testWordCountLabel() {
   QVERIFY(label->text().contains("min read"));
 }
 
-void TestMarkdownPreviewPanel::testOutlinePanel() {
-  MarkdownPreviewPanel panel;
-
-  auto *outlinePanel = panel.findChild<QWidget *>("markdownOutlinePanel");
-  QVERIFY(outlinePanel);
-
-  auto *outlineTree = panel.findChild<QTreeWidget *>("markdownOutlineTree");
-  QVERIFY(outlineTree);
-  QVERIFY(outlineTree->isHeaderHidden());
-}
-
-void TestMarkdownPreviewPanel::testOutlinePanelUpdates() {
-  MarkdownPreviewPanel panel;
-  panel.setMarkdown("# Title\n\n## Section 1\n\n## Section 2\n\n### Sub");
-  panel.updatePreview();
-
-  auto *outlineTree = panel.findChild<QTreeWidget *>("markdownOutlineTree");
-  QVERIFY(outlineTree);
-  QVERIFY(outlineTree->topLevelItemCount() > 0);
-}
-
-void TestMarkdownPreviewPanel::testOutlineEntryClickedSignal() {
-  MarkdownPreviewPanel panel;
-  QSignalSpy spy(&panel, &MarkdownPreviewPanel::outlineEntryClicked);
-  QVERIFY(spy.isValid());
-}
-
 void TestMarkdownPreviewPanel::testExportToHtml() {
   MarkdownPreviewPanel panel;
 
-  // Empty markdown should return empty
   QVERIFY(panel.exportToHtml().isEmpty());
 
   panel.setMarkdown("# Hello\n\nWorld");
@@ -169,7 +152,6 @@ void TestMarkdownPreviewPanel::testZoomControls() {
   auto *toolbar = panel.findChild<QToolBar *>("markdownPreviewToolbar");
   QVERIFY(toolbar);
 
-  // Verify zoom actions exist in toolbar
   bool hasZoomIn = false, hasZoomOut = false, hasZoomReset = false;
   for (QAction *action : toolbar->actions()) {
     if (action->text().contains("Zoom In"))
