@@ -5,7 +5,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
-find_package(Qt6 QUIET COMPONENTS Pdf PdfWidgets)
+find_package(Qt6 QUIET COMPONENTS Pdf PdfWidgets WebEngineWidgets)
 
 option(ENABLE_PDF_SUPPORT "Enable PDF viewer support (requires Qt6Pdf)" ON)
 
@@ -19,6 +19,14 @@ else()
     else()
         message(STATUS "PDF support: disabled (by option)")
     endif()
+endif()
+
+if(Qt6WebEngineWidgets_FOUND)
+    set(HAVE_WEBENGINE TRUE)
+    message(STATUS "WebEngine support: enabled")
+else()
+    set(HAVE_WEBENGINE FALSE)
+    message(STATUS "WebEngine support: disabled (Qt6WebEngineWidgets not found)")
 endif()
 
 if(WIN32)
@@ -346,6 +354,11 @@ target_link_libraries(Lightpad
 if(HAVE_PDF_SUPPORT)
     target_link_libraries(Lightpad PRIVATE Qt6::Pdf Qt6::PdfWidgets)
     target_compile_definitions(Lightpad PRIVATE HAVE_PDF_SUPPORT)
+endif()
+
+if(HAVE_WEBENGINE)
+    target_link_libraries(Lightpad PRIVATE Qt6::WebEngineWidgets)
+    target_compile_definitions(Lightpad PRIVATE HAVE_WEBENGINE)
 endif()
 
 # Add QT_DEPRECATED_WARNINGS definition

@@ -609,12 +609,12 @@ void SnippetRegistry::initializeDefaults() {
     href.description = "Hyperlink with text";
     registerSnippet("latex", href);
 
-    Snippet footnote;
-    footnote.prefix = "fn";
-    footnote.label = "Footnote";
-    footnote.body = "\\footnote{${1:text}}";
-    footnote.description = "Footnote";
-    registerSnippet("latex", footnote);
+    Snippet latexFootnote;
+    latexFootnote.prefix = "fn";
+    latexFootnote.label = "Footnote";
+    latexFootnote.body = "\\footnote{${1:text}}";
+    latexFootnote.description = "Footnote";
+    registerSnippet("latex", latexFootnote);
 
     Snippet multicols;
     multicols.prefix = "multicols";

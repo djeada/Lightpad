@@ -2,12 +2,16 @@
 #define MARKDOWNPREVIEWPANEL_H
 
 #include <QLabel>
-#include <QTextBrowser>
 #include <QTimer>
 #include <QToolBar>
-#include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#ifdef HAVE_WEBENGINE
+#include <QWebEngineView>
+#else
+#include <QTextBrowser>
+#endif
 
 class MarkdownPreviewPanel : public QWidget {
   Q_OBJECT
@@ -37,28 +41,25 @@ public slots:
 
 signals:
   void linkClicked(const QString &url);
-  void outlineEntryClicked(int lineNumber);
 
 private:
   void setupUi();
   void setupToolbar();
-  void setupOutlinePanel();
-  void onAnchorClicked(const QUrl &url);
-  void updateWordCountLabel();
-  void updateOutline();
   void onZoomIn();
   void onZoomOut();
   void onZoomReset();
 
+#ifdef HAVE_WEBENGINE
+  QWebEngineView *m_webView;
+#else
   QTextBrowser *m_browser;
+#endif
   QToolBar *m_toolbar;
   QTimer m_updateTimer;
   QString m_markdown;
   QString m_basePath;
   QString m_filePath;
   QLabel *m_wordCountLabel;
-  QTreeWidget *m_outlineTree;
-  QWidget *m_outlinePanel;
   bool m_syncScrollEnabled;
   int m_zoomLevel;
 };

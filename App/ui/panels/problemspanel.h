@@ -61,8 +61,10 @@ signals:
 
   void refreshRequested(const QString &filePath);
 
+  void closeRequested();
+
 private slots:
-  void onItemDoubleClicked(QTreeWidgetItem *item, int column);
+  void onItemClicked(QTreeWidgetItem *item, int column);
   void onFilterChanged(int index);
   void onAutoRefreshToggled(bool checked);
 

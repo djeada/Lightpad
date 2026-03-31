@@ -873,6 +873,11 @@ target_link_libraries(test_markdownpreviewpanel
     Qt6::Test
 )
 
+if(HAVE_WEBENGINE)
+    target_link_libraries(test_markdownpreviewpanel PRIVATE Qt6::WebEngineWidgets)
+    target_compile_definitions(test_markdownpreviewpanel PRIVATE HAVE_WEBENGINE)
+endif()
+
 target_compile_definitions(test_markdownpreviewpanel PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME MarkdownPreviewPanelTests COMMAND test_markdownpreviewpanel)

@@ -7,13 +7,22 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QHeaderView>
 #include <QScrollBar>
-#include <QSplitter>
+#include <QUrl>
+
+#ifdef HAVE_WEBENGINE
+#include <QWebEnginePage>
+#include <QWebEngineSettings>
+#endif
 
 MarkdownPreviewPanel::MarkdownPreviewPanel(QWidget *parent)
-    : QWidget(parent), m_wordCountLabel(nullptr), m_outlineTree(nullptr),
-      m_outlinePanel(nullptr), m_syncScrollEnabled(false), m_zoomLevel(100) {
+    : QWidget(parent),
+#ifdef HAVE_WEBENGINE
+      m_webView(nullptr),
+#else
+      m_browser(nullptr),
+#endif
+      m_wordCountLabel(nullptr), m_syncScrollEnabled(false), m_zoomLevel(100) {
   setupUi();
 
   m_updateTimer.setSingleShot(true);
@@ -30,27 +39,54 @@ void MarkdownPreviewPanel::setupUi() {
   setupToolbar();
   layout->addWidget(m_toolbar);
 
-  auto *splitter = new QSplitter(Qt::Horizontal, this);
-  splitter->setObjectName("markdownPreviewSplitter");
+#ifdef HAVE_WEBENGINE
+  m_webView = new QWebEngineView(this);
+  m_webView->setObjectName("markdownPreviewWebView");
+  m_webView->page()->setBackgroundColor(QColor("#0d1117"));
+  m_webView->settings()->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, true);
+  m_webView->settings()->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, true);
 
-  setupOutlinePanel();
-  splitter->addWidget(m_outlinePanel);
+  connect(m_webView->page(), &QWebEnginePage::linkHovered, this,
+          [](const QString &) {});
+  connect(m_webView, &QWebEngineView::urlChanged, this, [this](const QUrl &url) {
+    if (url.scheme() == "http" || url.scheme() == "https") {
+      m_webView->stop();
+      QDesktopServices::openUrl(url);
+    } else if (url.scheme() == "file" && !url.toLocalFile().isEmpty()) {
+      QString localPath = url.toLocalFile();
+      QFileInfo fi(localPath);
+      if (fi.exists() && !isMarkdownFile(fi.suffix())) {
+        m_webView->stop();
+        emit linkClicked(localPath);
+      }
+    }
+  });
 
+  layout->addWidget(m_webView, 1);
+#else
   m_browser = new QTextBrowser(this);
   m_browser->setObjectName("markdownPreviewBrowser");
   m_browser->setOpenLinks(false);
   m_browser->setOpenExternalLinks(false);
   m_browser->setReadOnly(true);
 
-  connect(m_browser, &QTextBrowser::anchorClicked, this,
-          &MarkdownPreviewPanel::onAnchorClicked);
+  connect(m_browser, &QTextBrowser::anchorClicked, this, [this](const QUrl &url) {
+    QString urlStr = url.toString();
+    if (url.scheme() == "http" || url.scheme() == "https") {
+      QDesktopServices::openUrl(url);
+    } else if (urlStr.startsWith('#')) {
+      m_browser->scrollToAnchor(urlStr.mid(1));
+    } else if (!m_basePath.isEmpty()) {
+      QString resolved = QDir(m_basePath).absoluteFilePath(urlStr);
+      if (QFileInfo::exists(resolved))
+        emit linkClicked(resolved);
+    } else {
+      emit linkClicked(urlStr);
+    }
+  });
 
-  splitter->addWidget(m_browser);
-  splitter->setStretchFactor(0, 0);
-  splitter->setStretchFactor(1, 1);
-  splitter->setSizes({180, 600});
-
-  layout->addWidget(splitter, 1);
+  layout->addWidget(m_browser, 1);
+#endif
 
   m_wordCountLabel = new QLabel(this);
   m_wordCountLabel->setObjectName("markdownWordCountLabel");
@@ -65,6 +101,10 @@ void MarkdownPreviewPanel::setupToolbar() {
   m_toolbar = new QToolBar(this);
   m_toolbar->setObjectName("markdownPreviewToolbar");
   m_toolbar->setMovable(false);
+  m_toolbar->setStyleSheet(
+      "QToolBar { background: #161b22; border-bottom: 1px solid #30363d; spacing: 2px; }"
+      "QToolButton { color: #8b949e; padding: 4px 8px; border: none; font-size: 12px; }"
+      "QToolButton:hover { color: #e6edf3; background: #1f2937; border-radius: 4px; }");
 
   QAction *refreshAction = m_toolbar->addAction("⟳ Refresh");
   refreshAction->setToolTip("Refresh Preview");
@@ -73,27 +113,24 @@ void MarkdownPreviewPanel::setupToolbar() {
 
   m_toolbar->addSeparator();
 
-  QAction *zoomInAction = m_toolbar->addAction("🔍+ Zoom In");
-  zoomInAction->setToolTip("Zoom In (Ctrl+=)");
-  zoomInAction->setShortcut(QKeySequence("Ctrl+="));
+  QAction *zoomInAction = m_toolbar->addAction("+ Zoom In");
+  zoomInAction->setToolTip("Zoom In");
   connect(zoomInAction, &QAction::triggered, this,
           &MarkdownPreviewPanel::onZoomIn);
 
-  QAction *zoomOutAction = m_toolbar->addAction("🔍- Zoom Out");
-  zoomOutAction->setToolTip("Zoom Out (Ctrl+-)");
-  zoomOutAction->setShortcut(QKeySequence("Ctrl+-"));
+  QAction *zoomOutAction = m_toolbar->addAction("− Zoom Out");
+  zoomOutAction->setToolTip("Zoom Out");
   connect(zoomOutAction, &QAction::triggered, this,
           &MarkdownPreviewPanel::onZoomOut);
 
   QAction *zoomResetAction = m_toolbar->addAction("1:1 Reset");
-  zoomResetAction->setToolTip("Reset Zoom (Ctrl+0)");
-  zoomResetAction->setShortcut(QKeySequence("Ctrl+0"));
+  zoomResetAction->setToolTip("Reset Zoom");
   connect(zoomResetAction, &QAction::triggered, this,
           &MarkdownPreviewPanel::onZoomReset);
 
   m_toolbar->addSeparator();
 
-  QAction *exportHtmlAction = m_toolbar->addAction("📄 Export HTML");
+  QAction *exportHtmlAction = m_toolbar->addAction("Export HTML");
   exportHtmlAction->setToolTip("Export to HTML file");
   connect(exportHtmlAction, &QAction::triggered, this, [this]() {
     QString html = exportToHtml();
@@ -129,44 +166,6 @@ void MarkdownPreviewPanel::setupToolbar() {
           &MarkdownPreviewPanel::setSyncScrollEnabled);
 }
 
-void MarkdownPreviewPanel::setupOutlinePanel() {
-  m_outlinePanel = new QWidget(this);
-  m_outlinePanel->setObjectName("markdownOutlinePanel");
-  auto *outlineLayout = new QVBoxLayout(m_outlinePanel);
-  outlineLayout->setContentsMargins(0, 0, 0, 0);
-  outlineLayout->setSpacing(0);
-
-  auto *outlineHeader = new QLabel("Outline", m_outlinePanel);
-  outlineHeader->setObjectName("markdownOutlineHeader");
-  outlineHeader->setStyleSheet(
-      "QLabel { padding: 4px 8px; font-weight: bold; color: #e6edf3; "
-      "background: #161b22; border-bottom: 1px solid #30363d; }");
-  outlineLayout->addWidget(outlineHeader);
-
-  m_outlineTree = new QTreeWidget(m_outlinePanel);
-  m_outlineTree->setObjectName("markdownOutlineTree");
-  m_outlineTree->setHeaderHidden(true);
-  m_outlineTree->setRootIsDecorated(true);
-  m_outlineTree->setIndentation(12);
-  m_outlineTree->setStyleSheet(
-      "QTreeWidget { background: #0d1117; color: #c9d1d9; border: none; }"
-      "QTreeWidget::item:hover { background: #161b22; }"
-      "QTreeWidget::item:selected { background: #1f6feb; }");
-
-  connect(m_outlineTree, &QTreeWidget::itemClicked, this,
-          [this](QTreeWidgetItem *item) {
-            int lineNumber = item->data(0, Qt::UserRole).toInt();
-            QString anchor = item->data(0, Qt::UserRole + 1).toString();
-            if (!anchor.isEmpty()) {
-              m_browser->scrollToAnchor(anchor);
-            }
-            emit outlineEntryClicked(lineNumber);
-          });
-
-  outlineLayout->addWidget(m_outlineTree, 1);
-  m_outlinePanel->setLayout(outlineLayout);
-}
-
 void MarkdownPreviewPanel::setMarkdown(const QString &markdown) {
   m_markdown = markdown;
   m_updateTimer.start();
@@ -190,13 +189,15 @@ bool MarkdownPreviewPanel::isMarkdownFile(const QString &extension) {
 
 void MarkdownPreviewPanel::updatePreview() {
   if (m_markdown.isEmpty()) {
+#ifdef HAVE_WEBENGINE
+    m_webView->setHtml("");
+#else
     m_browser->clear();
-    updateWordCountLabel();
-    updateOutline();
+#endif
+    if (m_wordCountLabel)
+      m_wordCountLabel->setText("");
     return;
   }
-
-  int scrollPos = m_browser->verticalScrollBar()->value();
 
   QString html = MarkdownTools::toHtml(m_markdown, m_basePath);
 
@@ -206,105 +207,26 @@ void MarkdownPreviewPanel::updatePreview() {
     html.replace("</head>", zoomStyle + "</head>");
   }
 
-  if (!m_basePath.isEmpty()) {
+#ifdef HAVE_WEBENGINE
+  QUrl baseUrl = m_basePath.isEmpty()
+                     ? QUrl()
+                     : QUrl::fromLocalFile(m_basePath + "/");
+  m_webView->setHtml(html, baseUrl);
+#else
+  int scrollPos = m_browser->verticalScrollBar()->value();
+  if (!m_basePath.isEmpty())
     m_browser->setSearchPaths({m_basePath});
-  }
-
   m_browser->setHtml(html);
-
   m_browser->verticalScrollBar()->setValue(scrollPos);
+#endif
 
-  updateWordCountLabel();
-  updateOutline();
-}
-
-void MarkdownPreviewPanel::onAnchorClicked(const QUrl &url) {
-  QString urlStr = url.toString();
-
-  if (url.scheme() == "file") {
-    QString localPath = url.toLocalFile();
-    if (!localPath.isEmpty()) {
-      emit linkClicked(localPath);
-      return;
-    }
+  if (m_wordCountLabel) {
+    int words = MarkdownTools::wordCount(m_markdown);
+    int readingTime = MarkdownTools::readingTimeMinutes(m_markdown);
+    QString text =
+        QString("%1 words · %2 min read").arg(words).arg(readingTime);
+    m_wordCountLabel->setText(text);
   }
-
-  if (urlStr.startsWith('#')) {
-    m_browser->scrollToAnchor(urlStr.mid(1));
-    return;
-  }
-
-  if (url.scheme() == "http" || url.scheme() == "https") {
-    QDesktopServices::openUrl(url);
-    return;
-  }
-
-  if (!m_basePath.isEmpty()) {
-    QString resolved = QDir(m_basePath).absoluteFilePath(urlStr);
-    if (QFileInfo::exists(resolved)) {
-      emit linkClicked(resolved);
-      return;
-    }
-  }
-
-  emit linkClicked(urlStr);
-}
-
-void MarkdownPreviewPanel::updateWordCountLabel() {
-  if (!m_wordCountLabel)
-    return;
-
-  if (m_markdown.isEmpty()) {
-    m_wordCountLabel->setText("");
-    return;
-  }
-
-  int words = MarkdownTools::wordCount(m_markdown);
-  int readingTime = MarkdownTools::readingTimeMinutes(m_markdown);
-  int completed = 0;
-  int tasks = MarkdownTools::countTasks(m_markdown, &completed);
-
-  QString text = QString("%1 words · %2 min read").arg(words).arg(readingTime);
-  if (tasks > 0) {
-    text += QString(" · %1/%2 tasks").arg(completed).arg(tasks);
-  }
-  m_wordCountLabel->setText(text);
-}
-
-void MarkdownPreviewPanel::updateOutline() {
-  if (!m_outlineTree)
-    return;
-
-  m_outlineTree->clear();
-
-  QList<MarkdownHeading> headings = MarkdownTools::extractHeadings(m_markdown);
-
-  QList<QTreeWidgetItem *> stack;
-  QList<int> levelStack;
-
-  for (const MarkdownHeading &h : headings) {
-    auto *item = new QTreeWidgetItem();
-    item->setText(0, h.text);
-    item->setData(0, Qt::UserRole, h.lineNumber);
-    item->setData(0, Qt::UserRole + 1, h.anchor);
-    item->setToolTip(0, QString("Line %1").arg(h.lineNumber + 1));
-
-    while (!levelStack.isEmpty() && levelStack.last() >= h.level) {
-      stack.removeLast();
-      levelStack.removeLast();
-    }
-
-    if (stack.isEmpty()) {
-      m_outlineTree->addTopLevelItem(item);
-    } else {
-      stack.last()->addChild(item);
-    }
-
-    stack.append(item);
-    levelStack.append(h.level);
-  }
-
-  m_outlineTree->expandAll();
 }
 
 void MarkdownPreviewPanel::setSyncScrollEnabled(bool enabled) {
@@ -312,14 +234,22 @@ void MarkdownPreviewPanel::setSyncScrollEnabled(bool enabled) {
 }
 
 void MarkdownPreviewPanel::setSourceScrollRatio(double ratio) {
-  if (!m_syncScrollEnabled || !m_browser)
+  if (!m_syncScrollEnabled)
     return;
 
-  QScrollBar *scrollBar = m_browser->verticalScrollBar();
-  if (scrollBar) {
-    int maxScroll = scrollBar->maximum();
-    scrollBar->setValue(static_cast<int>(ratio * maxScroll));
+#ifdef HAVE_WEBENGINE
+  if (m_webView) {
+    QString js = QString("window.scrollTo(0, document.body.scrollHeight * %1);")
+                     .arg(ratio);
+    m_webView->page()->runJavaScript(js);
   }
+#else
+  if (m_browser) {
+    QScrollBar *scrollBar = m_browser->verticalScrollBar();
+    if (scrollBar)
+      scrollBar->setValue(static_cast<int>(ratio * scrollBar->maximum()));
+  }
+#endif
 }
 
 QString MarkdownPreviewPanel::exportToHtml() const {

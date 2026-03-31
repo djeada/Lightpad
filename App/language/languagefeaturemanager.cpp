@@ -78,7 +78,8 @@ void LanguageFeatureManager::openDocument(const QString &filePath,
     client->didOpen(uri, effectiveLang, 1, text);
     LOG_DEBUG(QString("didOpen sent for %1 [%2]").arg(filePath, effectiveLang));
   } else {
-    LOG_DEBUG(QString("Client for '%1' not ready, didOpen deferred for %2")
+    m_pendingDocuments[effectiveLang].append({filePath, effectiveLang, text});
+    LOG_DEBUG(QString("Client for '%1' not ready, didOpen queued for %2")
                   .arg(effectiveLang, filePath));
   }
 }
@@ -235,6 +236,7 @@ LspClient *LanguageFeatureManager::ensureClient(const QString &languageId) {
     m_lastServerErrors.remove(languageId);
     emit serverHealthChanged(languageId, ServerHealthStatus::Running);
     emit serverStarted(languageId);
+    flushPendingDocuments(languageId);
   });
 
   connect(client, &LspClient::error, this,
@@ -331,6 +333,29 @@ LanguageFeatureManager::serverConfig(const QString &languageId) const {
 
 QString LanguageFeatureManager::lastServerError(const QString &languageId) const {
   return m_lastServerErrors.value(languageId);
+}
+
+void LanguageFeatureManager::flushPendingDocuments(const QString &languageId) {
+  if (!m_pendingDocuments.contains(languageId)) {
+    return;
+  }
+
+  LspClient *client = m_clients.value(languageId);
+  if (!client || !client->isReady()) {
+    return;
+  }
+
+  QList<PendingDocument> pending = m_pendingDocuments.take(languageId);
+  for (const PendingDocument &doc : pending) {
+    if (!m_fileToLanguage.contains(doc.filePath)) {
+      continue;
+    }
+    QString uri = DiagnosticUtils::filePathToUri(doc.filePath);
+    int version = m_fileVersions.value(doc.filePath, 1);
+    client->didOpen(uri, doc.languageId, version, doc.text);
+    LOG_DEBUG(QString("Flushed queued didOpen for %1 [%2]")
+                  .arg(doc.filePath, doc.languageId));
+  }
 }
 
 void LanguageFeatureManager::restartServer(const QString &languageId) {

@@ -65,6 +65,14 @@ private:
   void onDiagnosticsReceived(const QString &languageId, const QString &uri,
                              const QList<LspDiagnostic> &diagnostics);
 
+  struct PendingDocument {
+    QString filePath;
+    QString languageId;
+    QString text;
+  };
+
+  void flushPendingDocuments(const QString &languageId);
+
   DiagnosticsManager *m_diagnosticsManager;
   QMap<QString, LspClient *> m_clients;
   QMap<QString, QString> m_fileToLanguage;
@@ -72,6 +80,7 @@ private:
   QList<DiagnosticsServerConfig> m_serverConfigs;
   QMap<QString, ServerHealthStatus> m_serverHealth;
   QMap<QString, QString> m_lastServerErrors;
+  QMap<QString, QList<PendingDocument>> m_pendingDocuments;
 };
 
 #endif
