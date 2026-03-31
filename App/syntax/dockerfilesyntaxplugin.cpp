@@ -49,17 +49,17 @@ QVector<SyntaxRule> DockerfileSyntaxPlugin::syntaxRules() const {
   rules.append(portRule);
 
   SyntaxRule stringRule;
-  stringRule.pattern = QRegularExpression("\"[^\"]*\"");
+  stringRule.pattern = QRegularExpression("\"(?:[^\"\\\\]|\\\\.)*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
   SyntaxRule singleQuoteRule;
-  singleQuoteRule.pattern = QRegularExpression("'[^']*'");
+  singleQuoteRule.pattern = QRegularExpression("'(?:[^'\\\\]|\\\\.)*'");
   singleQuoteRule.name = "string";
   rules.append(singleQuoteRule);
 
   SyntaxRule jsonArrayRule;
-  jsonArrayRule.pattern = QRegularExpression("\\[.*\\]");
+  jsonArrayRule.pattern = QRegularExpression("\\[.*?\\]");
   jsonArrayRule.name = "string";
   rules.append(jsonArrayRule);
 

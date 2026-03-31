@@ -241,6 +241,10 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isExtensionSupported("css"));
   QVERIFY(registry.isExtensionSupported("dockerfile"));
   QVERIFY(registry.isExtensionSupported("containerfile"));
+  QCOMPARE(registry.getPluginByExtension("dockerfile")->languageId(),
+           QString("dockerfile"));
+  QCOMPARE(registry.getPluginByExtension("containerfile")->languageId(),
+           QString("dockerfile"));
   QVERIFY(registry.isExtensionSupported("go"));
   QVERIFY(registry.isExtensionSupported("html"));
   QVERIFY(registry.isExtensionSupported("js"));
