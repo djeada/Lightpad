@@ -298,7 +298,9 @@ QString LanguageFeatureManager::detectProjectRoot(const QString &filePath) {
       "requirements.txt",     // Python
       "setup.py",             // Python
       "CMakeLists.txt",       // C/C++
-      "compile_commands.json" // C/C++
+      "compile_commands.json", // C/C++
+      "latexmkrc",            // LaTeX
+      ".latexmkrc"            // LaTeX
   };
 
   QDir dir = QFileInfo(filePath).absoluteDir();
