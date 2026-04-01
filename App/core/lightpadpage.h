@@ -29,6 +29,9 @@ public:
 
 signals:
   void runTestsRequested(const QString &path);
+  void runFileRequested(const QString &path);
+  void debugFileRequested(const QString &path);
+  void toggleTestMarkerRequested(const QString &path, bool markAsTest);
 
 protected:
   void keyPressEvent(QKeyEvent *event) override;
