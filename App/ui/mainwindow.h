@@ -102,6 +102,8 @@ public:
                        const QString &originalFilePath);
   LightpadTabWidget *currentTabWidget() const;
   void goToDefinitionAtCursor();
+  void runFileByPath(const QString &filePath);
+  void debugFileByPath(const QString &filePath);
 
 private slots:
   void on_actionQuit_triggered();

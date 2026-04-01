@@ -32,6 +32,7 @@
 #include "../settings/textareasettings.h"
 #include "../syntax/pluginbasedsyntaxhighlighter.h"
 #include "../syntax/syntaxpluginregistry.h"
+#include "../test_templates/testfileclassifier.h"
 #include "../ui/mainwindow.h"
 #include "editor/codefolding.h"
 #include "editor/linenumberarea.h"
@@ -824,6 +825,45 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
   });
 
   menu->addAction(tr("Refactor"));
+
+  menu->addSeparator();
+
+  QAction *runFileAction = menu->addAction(tr("Run File"));
+  connect(runFileAction, &QAction::triggered, this, [this]() {
+    if (mainWindow) {
+      mainWindow->runCurrentScript();
+    }
+  });
+
+  QAction *debugFileAction = menu->addAction(tr("Debug File"));
+  connect(debugFileAction, &QAction::triggered, this, [this]() {
+    if (mainWindow) {
+      QString fp = resolveFilePath();
+      if (!fp.isEmpty())
+        mainWindow->debugFileByPath(fp);
+    }
+  });
+
+  QString currentFilePath = resolveFilePath();
+  if (!currentFilePath.isEmpty()) {
+    bool isTest = TestFileClassifier::instance().isTestFile(currentFilePath);
+    QAction *runAsTestAction = menu->addAction(tr("Run as Test"));
+    connect(runAsTestAction, &QAction::triggered, this,
+            [this, currentFilePath]() {
+              if (mainWindow) {
+                mainWindow->runFileByPath(currentFilePath);
+              }
+            });
+
+    QString markLabel =
+        isTest ? tr("Unmark as Test File") : tr("Mark as Test File");
+    QAction *markTestAction = menu->addAction(markLabel);
+    connect(markTestAction, &QAction::triggered, this,
+            [currentFilePath, isTest]() {
+              TestFileClassifier::instance().setTestOverride(currentFilePath,
+                                                            !isTest);
+            });
+  }
 
   if (mainWindow) {
     auto *gitIntegration = mainWindow->getGitIntegration();

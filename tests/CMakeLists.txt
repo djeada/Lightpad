@@ -1077,6 +1077,30 @@ target_compile_definitions(test_autotestrunner PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME AutoTestRunnerTests COMMAND test_autotestrunner)
 
+# TestFileClassifier test executable
+add_executable(test_testfileclassifier
+    unit/test_testfileclassifier.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testfileclassifier.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_testfileclassifier PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/test_templates
+)
+
+target_link_libraries(test_testfileclassifier
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_testfileclassifier PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME TestFileClassifierTests COMMAND test_testfileclassifier)
+
 # TestRunManager test executable
 add_executable(test_testrunmanager
     unit/test_testrunmanager.cpp
@@ -1444,6 +1468,7 @@ set(TEST_TARGETS
     test_testoutputparsers
     test_testrunmanager
     test_testpanel
+    test_testfileclassifier
     test_problemspanel
     test_texttransforms
     test_codefolding

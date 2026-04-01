@@ -52,10 +52,12 @@ void TestFileClassifier::loadOverrides() {
 
   QString path = QDir(m_workspaceFolder).filePath(".lightpad/testfiles.json");
   QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
     return;
   }
 
   QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+  if (!doc.isObject()) {
     return;
   }
 
@@ -73,23 +75,25 @@ void TestFileClassifier::saveOverrides() const {
   }
 
   QDir dir(m_workspaceFolder);
+  if (!dir.exists(".lightpad")) {
     dir.mkdir(".lightpad");
   }
 
-  QString path = dir.filePath(".lightpad/testfiles.json");
-  QFile file(path);
+  QString savePath = dir.filePath(".lightpad/testfiles.json");
+  QFile saveFile(savePath);
+  if (!saveFile.open(QIODevice::WriteOnly)) {
     return;
   }
 
-  QJsonObject overrides;
+  QJsonObject overridesObj;
   for (auto it = m_overrides.constBegin(); it != m_overrides.constEnd(); ++it) {
-    overrides[it.key()] = it.value();
+    overridesObj[it.key()] = it.value();
   }
 
-  QJsonObject root;
-  root["overrides"] = overrides;
+  QJsonObject rootObj;
+  rootObj["overrides"] = overridesObj;
 
-  file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+  saveFile.write(QJsonDocument(rootObj).toJson(QJsonDocument::Indented));
 }
 
 bool TestFileClassifier::autoDetectTestFile(const QString &filePath) const {
