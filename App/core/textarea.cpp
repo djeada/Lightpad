@@ -831,7 +831,9 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
   QAction *runFileAction = menu->addAction(tr("Run File"));
   connect(runFileAction, &QAction::triggered, this, [this]() {
     if (mainWindow) {
-      mainWindow->runCurrentScript();
+      QString fp = resolveFilePath();
+      if (!fp.isEmpty())
+        mainWindow->runFileByPath(fp);
     }
   });
 
