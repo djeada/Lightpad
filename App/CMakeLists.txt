@@ -179,6 +179,7 @@ set(project_headers
     test_templates/testoutputparser.h
     test_templates/testrunmanager.h
     test_templates/autotestrunner.h
+    test_templates/testfileclassifier.h
     settings/theme.h
     ui/uistylehelper.h
     ui/viewers/imageviewer.h
@@ -318,6 +319,7 @@ set(project_sources
     test_templates/testoutputparser.cpp
     test_templates/testrunmanager.cpp
     test_templates/autotestrunner.cpp
+    test_templates/testfileclassifier.cpp
     settings/theme.cpp
     ui/uistylehelper.cpp
     ui/viewers/imageviewer.cpp

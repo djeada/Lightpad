@@ -1,6 +1,7 @@
 #include "lightpadpage.h"
 #include "../git/gitintegration.h"
 #include "../run_templates/runtemplatemanager.h"
+#include "../test_templates/testfileclassifier.h"
 #include "../ui/mainwindow.h"
 #include "../ui/panels/minimap.h"
 #include "../ui/uistylehelper.h"
@@ -256,8 +257,31 @@ void LightpadTreeView::showContextMenu(const QPoint &pos) {
   menu.addSeparator();
   QAction *removeAction = menu.addAction("Remove");
   menu.addSeparator();
+
+  // Run / Debug actions
+  QAction *runFileAction = nullptr;
+  QAction *debugFileAction = nullptr;
+  if (!fileInfo.isDir()) {
+    runFileAction = menu.addAction("Run File");
+    debugFileAction = menu.addAction("Debug File");
+    menu.addSeparator();
+  }
+
+  // Test classification actions
+  TestFileClassifier &classifier = TestFileClassifier::instance();
+  bool currentlyTest = fileInfo.isDir()
+                           ? classifier.isTestDirectory(filePath)
+                           : classifier.isTestFile(filePath);
+
   QAction *runTestAction = menu.addAction(
       fileInfo.isDir() ? "Run Tests in Directory" : "Run as Test");
+
+  QAction *markTestAction = nullptr;
+  if (!fileInfo.isDir()) {
+    QString markLabel = currentlyTest ? "Unmark as Test File" : "Mark as Test File";
+    markTestAction = menu.addAction(markLabel);
+  }
+
   menu.addSeparator();
   QAction *copyPathAction = menu.addAction("Copy Absolute Path");
 
@@ -280,8 +304,14 @@ void LightpadTreeView::showContextMenu(const QPoint &pos) {
       fileController->handlePaste(parentPath);
     } else if (selected == removeAction) {
       fileController->handleRemove(filePath);
+    } else if (selected == runFileAction) {
+      emit runFileRequested(filePath);
+    } else if (selected == debugFileAction) {
+      emit debugFileRequested(filePath);
     } else if (selected == runTestAction) {
       emit runTestsRequested(filePath);
+    } else if (selected == markTestAction) {
+      emit toggleTestMarkerRequested(filePath, !currentlyTest);
     } else if (selected == copyPathAction) {
       fileController->handleCopyAbsolutePath(filePath);
     }

@@ -58,6 +58,7 @@
 #include "../language/languagefeaturemanager.h"
 #include "../run_templates/runtemplatemanager.h"
 #include "../syntax/syntaxpluginregistry.h"
+#include "../test_templates/testfileclassifier.h"
 #include "dialogs/commandpalette.h"
 #include "dialogs/debugconfigurationdialog.h"
 #include "dialogs/filequickopen.h"
@@ -4262,6 +4263,24 @@ void MainWindow::startDebuggingForCurrentFile() {
   m_debugStartInProgress = false;
 }
 
+void MainWindow::runFileByPath(const QString &filePath) {
+  if (filePath.isEmpty()) {
+    return;
+  }
+
+  openFileAndAddToNewTab(filePath);
+  runCurrentScript();
+}
+
+void MainWindow::debugFileByPath(const QString &filePath) {
+  if (filePath.isEmpty()) {
+    return;
+  }
+
+  openFileAndAddToNewTab(filePath);
+  startDebuggingForCurrentFile();
+}
+
 void MainWindow::attachDebugSession(const QString &sessionId) {
   if (sessionId.isEmpty()) {
     return;
@@ -7080,6 +7099,17 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
               if (ui->actionToggle_Test_Panel)
                 ui->actionToggle_Test_Panel->setChecked(true);
             }
+          });
+
+  connect(treeView, &LightpadTreeView::runFileRequested, this,
+          &MainWindow::runFileByPath);
+
+  connect(treeView, &LightpadTreeView::debugFileRequested, this,
+          &MainWindow::debugFileByPath);
+
+  connect(treeView, &LightpadTreeView::toggleTestMarkerRequested, this,
+          [](const QString &path, bool markAsTest) {
+            TestFileClassifier::instance().setTestOverride(path, markAsTest);
           });
 }
 
