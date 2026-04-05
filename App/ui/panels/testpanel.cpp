@@ -143,7 +143,6 @@ void TestPanel::setupUI() {
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(0);
 
-  // Header shell wrapping the toolbar for consistent styling
   m_headerShell = new QWidget(this);
   m_headerShell->setObjectName("testHeaderShell");
   auto *headerLayout = new QVBoxLayout(m_headerShell);
@@ -153,7 +152,6 @@ void TestPanel::setupUI() {
   setupToolbar();
   headerLayout->addWidget(m_toolbar);
 
-  // Search/filter bar
   m_searchEdit = new QLineEdit(m_headerShell);
   m_searchEdit->setObjectName("testSearchEdit");
   m_searchEdit->setPlaceholderText(tr("Filter tests by name..."));
@@ -164,7 +162,6 @@ void TestPanel::setupUI() {
 
   layout->addWidget(m_headerShell);
 
-  // Progress bar for running tests
   m_progressBar = new QProgressBar(this);
   m_progressBar->setObjectName("testProgressBar");
   m_progressBar->setMaximumHeight(3);
@@ -175,7 +172,6 @@ void TestPanel::setupUI() {
 
   m_splitter = new QSplitter(Qt::Vertical, this);
 
-  // Tree widget with custom delegate
   auto *treeContainer = new QWidget(this);
   auto *treeLayout = new QVBoxLayout(treeContainer);
   treeLayout->setContentsMargins(0, 0, 0, 0);
@@ -203,7 +199,6 @@ void TestPanel::setupUI() {
   connect(m_tree, &QTreeWidget::customContextMenuRequested, this,
           &TestPanel::onContextMenu);
 
-  // Empty state overlay label
   m_emptyStateLabel = new QLabel(treeContainer);
   m_emptyStateLabel->setObjectName("testEmptyState");
   m_emptyStateLabel->setAlignment(Qt::AlignCenter);
@@ -229,7 +224,6 @@ void TestPanel::setupUI() {
 
   layout->addWidget(m_splitter);
 
-  // Status bar with colored count badges
   m_statusLabel = new QLabel(this);
   m_statusLabel->setObjectName("statusLabel");
   m_statusLabel->setContentsMargins(8, 4, 8, 4);
@@ -354,166 +348,166 @@ void TestPanel::applyTheme(const Theme &theme) {
   QColor mutedText = blend(theme.foregroundColor, theme.backgroundColor, 0.24);
   QColor subtleText = blend(theme.foregroundColor, theme.backgroundColor, 0.40);
   QColor hoverBg = blend(theme.backgroundColor, theme.foregroundColor, 0.06);
-  QColor selectedBg =
-      theme.accentSoftColor.isValid() ? theme.accentSoftColor : QColor("#1f4b7a");
-  QColor accentColor = theme.accentColor.isValid() ? theme.accentColor : QColor("#58a6ff");
-  QColor successColor = theme.successColor.isValid() ? theme.successColor : QColor("#3fb950");
-  QColor errorColor = theme.errorColor.isValid() ? theme.errorColor : QColor("#f85149");
+  QColor selectedBg = theme.accentSoftColor.isValid() ? theme.accentSoftColor
+                                                      : QColor("#1f4b7a");
+  QColor accentColor =
+      theme.accentColor.isValid() ? theme.accentColor : QColor("#58a6ff");
+  QColor successColor =
+      theme.successColor.isValid() ? theme.successColor : QColor("#3fb950");
+  QColor errorColor =
+      theme.errorColor.isValid() ? theme.errorColor : QColor("#f85149");
 
-  // Update tree delegate theme
   if (auto *delegate =
           dynamic_cast<TestTreeDelegate *>(m_tree->itemDelegate())) {
     delegate->setTheme(theme);
   }
 
-  setStyleSheet(
-      QString(
-          "QWidget#TestPanel {"
-          "  background: %1;"
-          "  color: %2;"
-          "}"
-          "QWidget#testHeaderShell {"
-          "  background: %3;"
-          "  border-bottom: 1px solid %4;"
-          "}"
-          "QToolBar#testToolbar {"
-          "  background: transparent;"
-          "  border: 0;"
-          "  padding: 4px 6px;"
-          "  spacing: 4px;"
-          "}"
-          "QToolButton {"
-          "  color: %2;"
-          "  background: transparent;"
-          "  border: 1px solid transparent;"
-          "  border-radius: 4px;"
-          "  padding: 4px 10px;"
-          "  font-size: 12px;"
-          "  font-weight: 600;"
-          "}"
-          "QToolButton:hover {"
-          "  background: %5;"
-          "  border-color: %4;"
-          "}"
-          "QToolButton:pressed {"
-          "  background: %6;"
-          "}"
-          "QToolButton:disabled {"
-          "  color: %7;"
-          "}"
-          "QToolButton:checked {"
-          "  background: %6;"
-          "  border-color: %9;"
-          "}"
-          "QLineEdit#testSearchEdit {"
-          "  background: %8;"
-          "  color: %2;"
-          "  border: none;"
-          "  border-top: 1px solid %4;"
-          "  padding: 6px 10px;"
-          "  font-size: 12px;"
-          "}"
-          "QLineEdit#testSearchEdit:focus {"
-          "  border-bottom: 2px solid %9;"
-          "}"
-          "QProgressBar#testProgressBar {"
-          "  background: %4;"
-          "  border: none;"
-          "  max-height: 3px;"
-          "}"
-          "QProgressBar#testProgressBar::chunk {"
-          "  background: %9;"
-          "}"
-          "QTreeWidget#testTree {"
-          "  background: %8;"
-          "  color: %2;"
-          "  border: none;"
-          "  outline: none;"
-          "  padding: 2px;"
-          "}"
-          "QTreeWidget#testTree::item {"
-          "  height: 28px;"
-          "}"
-          "QTreeWidget#testTree::item:hover {"
-          "  background: transparent;"
-          "}"
-          "QTreeWidget#testTree::item:selected {"
-          "  background: transparent;"
-          "  color: %2;"
-          "}"
-          "QHeaderView::section {"
-          "  background: %3;"
-          "  color: %7;"
-          "  border: 0;"
-          "  border-bottom: 1px solid %4;"
-          "  padding: 6px 8px;"
-          "  font-weight: 600;"
-          "  font-size: 11px;"
-          "  text-transform: uppercase;"
-          "}"
-          "QTextEdit#testDetailPane {"
-          "  background: %8;"
-          "  color: %2;"
-          "  border: none;"
-          "  border-top: 1px solid %4;"
-          "  padding: 8px;"
-          "  font-family: monospace;"
-          "  font-size: 12px;"
-          "}"
-          "QLabel#testEmptyState {"
-          "  color: %7;"
-          "  font-size: 13px;"
-          "  padding: 20px;"
-          "}"
-          "QLabel#statusLabel {"
-          "  color: %2;"
-          "  border-top: 1px solid %4;"
-          "  padding: 5px 10px;"
-          "  font-size: 12px;"
-          "}"
-          "QSplitter::handle {"
-          "  background: %4;"
-          "  height: 1px;"
-          "}"
-          "QScrollBar:vertical {"
-          "  background: transparent;"
-          "  width: 6px;"
-          "  margin: 0;"
-          "}"
-          "QScrollBar::handle:vertical {"
-          "  background: %4;"
-          "  min-height: 20px;"
-          "  border-radius: 3px;"
-          "}"
-          "QScrollBar::handle:vertical:hover {"
-          "  background: %7;"
-          "}"
-          "QScrollBar::add-line:vertical,"
-          "QScrollBar::sub-line:vertical {"
-          "  height: 0;"
-          "}"
-          "QScrollBar:horizontal {"
-          "  background: transparent;"
-          "  height: 6px;"
-          "  margin: 0;"
-          "}"
-          "QScrollBar::handle:horizontal {"
-          "  background: %4;"
-          "  min-width: 20px;"
-          "  border-radius: 3px;"
-          "}"
-          "QScrollBar::handle:horizontal:hover {"
-          "  background: %7;"
-          "}"
-          "QScrollBar::add-line:horizontal,"
-          "QScrollBar::sub-line:horizontal {"
-          "  width: 0;"
-          "}")
-          .arg(panelSurface.name(), textColor.name(), toolbarShell.name(),
-               borderColor.name(), hoverBg.name(), selectedBg.name(),
-               mutedText.name(), treeBg.name(), accentColor.name()));
+  setStyleSheet(QString("QWidget#TestPanel {"
+                        "  background: %1;"
+                        "  color: %2;"
+                        "}"
+                        "QWidget#testHeaderShell {"
+                        "  background: %3;"
+                        "  border-bottom: 1px solid %4;"
+                        "}"
+                        "QToolBar#testToolbar {"
+                        "  background: transparent;"
+                        "  border: 0;"
+                        "  padding: 4px 6px;"
+                        "  spacing: 4px;"
+                        "}"
+                        "QToolButton {"
+                        "  color: %2;"
+                        "  background: transparent;"
+                        "  border: 1px solid transparent;"
+                        "  border-radius: 4px;"
+                        "  padding: 4px 10px;"
+                        "  font-size: 12px;"
+                        "  font-weight: 600;"
+                        "}"
+                        "QToolButton:hover {"
+                        "  background: %5;"
+                        "  border-color: %4;"
+                        "}"
+                        "QToolButton:pressed {"
+                        "  background: %6;"
+                        "}"
+                        "QToolButton:disabled {"
+                        "  color: %7;"
+                        "}"
+                        "QToolButton:checked {"
+                        "  background: %6;"
+                        "  border-color: %9;"
+                        "}"
+                        "QLineEdit#testSearchEdit {"
+                        "  background: %8;"
+                        "  color: %2;"
+                        "  border: none;"
+                        "  border-top: 1px solid %4;"
+                        "  padding: 6px 10px;"
+                        "  font-size: 12px;"
+                        "}"
+                        "QLineEdit#testSearchEdit:focus {"
+                        "  border-bottom: 2px solid %9;"
+                        "}"
+                        "QProgressBar#testProgressBar {"
+                        "  background: %4;"
+                        "  border: none;"
+                        "  max-height: 3px;"
+                        "}"
+                        "QProgressBar#testProgressBar::chunk {"
+                        "  background: %9;"
+                        "}"
+                        "QTreeWidget#testTree {"
+                        "  background: %8;"
+                        "  color: %2;"
+                        "  border: none;"
+                        "  outline: none;"
+                        "  padding: 2px;"
+                        "}"
+                        "QTreeWidget#testTree::item {"
+                        "  height: 28px;"
+                        "}"
+                        "QTreeWidget#testTree::item:hover {"
+                        "  background: transparent;"
+                        "}"
+                        "QTreeWidget#testTree::item:selected {"
+                        "  background: transparent;"
+                        "  color: %2;"
+                        "}"
+                        "QHeaderView::section {"
+                        "  background: %3;"
+                        "  color: %7;"
+                        "  border: 0;"
+                        "  border-bottom: 1px solid %4;"
+                        "  padding: 6px 8px;"
+                        "  font-weight: 600;"
+                        "  font-size: 11px;"
+                        "  text-transform: uppercase;"
+                        "}"
+                        "QTextEdit#testDetailPane {"
+                        "  background: %8;"
+                        "  color: %2;"
+                        "  border: none;"
+                        "  border-top: 1px solid %4;"
+                        "  padding: 8px;"
+                        "  font-family: monospace;"
+                        "  font-size: 12px;"
+                        "}"
+                        "QLabel#testEmptyState {"
+                        "  color: %7;"
+                        "  font-size: 13px;"
+                        "  padding: 20px;"
+                        "}"
+                        "QLabel#statusLabel {"
+                        "  color: %2;"
+                        "  border-top: 1px solid %4;"
+                        "  padding: 5px 10px;"
+                        "  font-size: 12px;"
+                        "}"
+                        "QSplitter::handle {"
+                        "  background: %4;"
+                        "  height: 1px;"
+                        "}"
+                        "QScrollBar:vertical {"
+                        "  background: transparent;"
+                        "  width: 6px;"
+                        "  margin: 0;"
+                        "}"
+                        "QScrollBar::handle:vertical {"
+                        "  background: %4;"
+                        "  min-height: 20px;"
+                        "  border-radius: 3px;"
+                        "}"
+                        "QScrollBar::handle:vertical:hover {"
+                        "  background: %7;"
+                        "}"
+                        "QScrollBar::add-line:vertical,"
+                        "QScrollBar::sub-line:vertical {"
+                        "  height: 0;"
+                        "}"
+                        "QScrollBar:horizontal {"
+                        "  background: transparent;"
+                        "  height: 6px;"
+                        "  margin: 0;"
+                        "}"
+                        "QScrollBar::handle:horizontal {"
+                        "  background: %4;"
+                        "  min-width: 20px;"
+                        "  border-radius: 3px;"
+                        "}"
+                        "QScrollBar::handle:horizontal:hover {"
+                        "  background: %7;"
+                        "}"
+                        "QScrollBar::add-line:horizontal,"
+                        "QScrollBar::sub-line:horizontal {"
+                        "  width: 0;"
+                        "}")
+                    .arg(panelSurface.name(), textColor.name(),
+                         toolbarShell.name(), borderColor.name(),
+                         hoverBg.name(), selectedBg.name(), mutedText.name(),
+                         treeBg.name(), accentColor.name()));
 
-  // Apply UIStyleHelper styles for combo boxes
   QString comboStyle = UIStyleHelper::comboBoxStyle(theme);
   m_filterCombo->setStyleSheet(comboStyle);
   m_configCombo->setStyleSheet(comboStyle);
@@ -821,39 +815,36 @@ void TestPanel::onContextMenu(const QPoint &pos) {
 void TestPanel::updateStatusLabel() {
   int total = m_passedCount + m_failedCount + m_skippedCount + m_erroredCount;
 
-  QColor successColor = m_theme.successColor.isValid()
-                            ? m_theme.successColor
-                            : QColor("#3fb950");
+  QColor successColor =
+      m_theme.successColor.isValid() ? m_theme.successColor : QColor("#3fb950");
   QColor errorColor =
       m_theme.errorColor.isValid() ? m_theme.errorColor : QColor("#f85149");
-  QColor warningColor = m_theme.warningColor.isValid()
-                            ? m_theme.warningColor
-                            : QColor("#d29922");
+  QColor warningColor =
+      m_theme.warningColor.isValid() ? m_theme.warningColor : QColor("#d29922");
   QColor mutedColor = m_theme.foregroundColor.isValid()
                           ? m_theme.foregroundColor.darker(140)
                           : QColor("#8b949e");
 
-  QString text = QString(
-      "<span style='color:%6'>"
-      "<span style='color:%1'>\u2714 %2</span>"
-      " &nbsp; "
-      "<span style='color:%3'>\u2718 %4</span>"
-      " &nbsp; "
-      "<span style='color:%5'>\u25CB %7</span>"
-      " &nbsp; "
-      "<span style='color:%8'>\u26A0 %9</span>"
-      " &nbsp;&nbsp; Total: %10"
-      "</span>")
-      .arg(successColor.name())
-      .arg(m_passedCount)
-      .arg(errorColor.name())
-      .arg(m_failedCount)
-      .arg(warningColor.name())
-      .arg(mutedColor.name())
-      .arg(m_skippedCount)
-      .arg(warningColor.darker(110).name())
-      .arg(m_erroredCount)
-      .arg(total);
+  QString text = QString("<span style='color:%6'>"
+                         "<span style='color:%1'>\u2714 %2</span>"
+                         " &nbsp; "
+                         "<span style='color:%3'>\u2718 %4</span>"
+                         " &nbsp; "
+                         "<span style='color:%5'>\u25CB %7</span>"
+                         " &nbsp; "
+                         "<span style='color:%8'>\u26A0 %9</span>"
+                         " &nbsp;&nbsp; Total: %10"
+                         "</span>")
+                     .arg(successColor.name())
+                     .arg(m_passedCount)
+                     .arg(errorColor.name())
+                     .arg(m_failedCount)
+                     .arg(warningColor.name())
+                     .arg(mutedColor.name())
+                     .arg(m_skippedCount)
+                     .arg(warningColor.darker(110).name())
+                     .arg(m_erroredCount)
+                     .arg(total);
   m_statusLabel->setTextFormat(Qt::RichText);
   m_statusLabel->setText(text);
 }
@@ -913,9 +904,7 @@ QTreeWidgetItem *TestPanel::findTestItem(const QString &id) {
   return nullptr;
 }
 
-void TestPanel::applyFilter() {
-  applySearchFilter();
-}
+void TestPanel::applyFilter() { applySearchFilter(); }
 
 void TestPanel::refreshConfigurations() {
   m_configCombo->clear();
@@ -1103,7 +1092,6 @@ void TestPanel::applySearchFilter() {
     QTreeWidgetItem *item = it.value();
     bool visible = true;
 
-    // Apply status filter
     if (m_testResults.contains(it.key())) {
       const TestResult &result = m_testResults[it.key()];
       switch (filterIndex) {
@@ -1123,7 +1111,6 @@ void TestPanel::applySearchFilter() {
       }
     }
 
-    // Apply search text filter
     if (visible && !searchText.isEmpty()) {
       visible = item->text(0).contains(searchText, Qt::CaseInsensitive);
     }
@@ -1131,15 +1118,13 @@ void TestPanel::applySearchFilter() {
     item->setHidden(!visible);
   }
 
-  // Update suite visibility based on child visibility
   for (auto it = m_suiteItems.begin(); it != m_suiteItems.end(); ++it) {
     QTreeWidgetItem *suite = it.value();
     bool hasVisible = false;
 
-    // Check if suite name matches search
     if (!searchText.isEmpty() &&
         suite->text(0).contains(searchText, Qt::CaseInsensitive)) {
-      // Show entire suite when suite name matches
+
       suite->setHidden(false);
       for (int i = 0; i < suite->childCount(); ++i) {
         suite->child(i)->setHidden(false);
@@ -1158,8 +1143,7 @@ void TestPanel::applySearchFilter() {
 }
 
 void TestPanel::updateEmptyState() {
-  bool hasItems =
-      m_tree->topLevelItemCount() > 0 || !m_testItems.isEmpty();
+  bool hasItems = m_tree->topLevelItemCount() > 0 || !m_testItems.isEmpty();
   m_emptyStateLabel->setVisible(!hasItems);
   m_tree->setVisible(hasItems);
 }

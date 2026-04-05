@@ -1,6 +1,6 @@
 #include "markdownpreviewpanel.h"
-#include "markdowntools.h"
 #include "../core/logging/logger.h"
+#include "markdowntools.h"
 #include <QAction>
 #include <QDesktopServices>
 #include <QDir>
@@ -43,24 +43,27 @@ void MarkdownPreviewPanel::setupUi() {
   m_webView = new QWebEngineView(this);
   m_webView->setObjectName("markdownPreviewWebView");
   m_webView->page()->setBackgroundColor(QColor("#0d1117"));
-  m_webView->settings()->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, true);
-  m_webView->settings()->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, true);
+  m_webView->settings()->setAttribute(
+      QWebEngineSettings::LocalContentCanAccessRemoteUrls, true);
+  m_webView->settings()->setAttribute(
+      QWebEngineSettings::LocalContentCanAccessFileUrls, true);
 
   connect(m_webView->page(), &QWebEnginePage::linkHovered, this,
           [](const QString &) {});
-  connect(m_webView, &QWebEngineView::urlChanged, this, [this](const QUrl &url) {
-    if (url.scheme() == "http" || url.scheme() == "https") {
-      m_webView->stop();
-      QDesktopServices::openUrl(url);
-    } else if (url.scheme() == "file" && !url.toLocalFile().isEmpty()) {
-      QString localPath = url.toLocalFile();
-      QFileInfo fi(localPath);
-      if (fi.exists() && !isMarkdownFile(fi.suffix())) {
-        m_webView->stop();
-        emit linkClicked(localPath);
-      }
-    }
-  });
+  connect(m_webView, &QWebEngineView::urlChanged, this,
+          [this](const QUrl &url) {
+            if (url.scheme() == "http" || url.scheme() == "https") {
+              m_webView->stop();
+              QDesktopServices::openUrl(url);
+            } else if (url.scheme() == "file" && !url.toLocalFile().isEmpty()) {
+              QString localPath = url.toLocalFile();
+              QFileInfo fi(localPath);
+              if (fi.exists() && !isMarkdownFile(fi.suffix())) {
+                m_webView->stop();
+                emit linkClicked(localPath);
+              }
+            }
+          });
 
   layout->addWidget(m_webView, 1);
 #else
@@ -70,20 +73,21 @@ void MarkdownPreviewPanel::setupUi() {
   m_browser->setOpenExternalLinks(false);
   m_browser->setReadOnly(true);
 
-  connect(m_browser, &QTextBrowser::anchorClicked, this, [this](const QUrl &url) {
-    QString urlStr = url.toString();
-    if (url.scheme() == "http" || url.scheme() == "https") {
-      QDesktopServices::openUrl(url);
-    } else if (urlStr.startsWith('#')) {
-      m_browser->scrollToAnchor(urlStr.mid(1));
-    } else if (!m_basePath.isEmpty()) {
-      QString resolved = QDir(m_basePath).absoluteFilePath(urlStr);
-      if (QFileInfo::exists(resolved))
-        emit linkClicked(resolved);
-    } else {
-      emit linkClicked(urlStr);
-    }
-  });
+  connect(m_browser, &QTextBrowser::anchorClicked, this,
+          [this](const QUrl &url) {
+            QString urlStr = url.toString();
+            if (url.scheme() == "http" || url.scheme() == "https") {
+              QDesktopServices::openUrl(url);
+            } else if (urlStr.startsWith('#')) {
+              m_browser->scrollToAnchor(urlStr.mid(1));
+            } else if (!m_basePath.isEmpty()) {
+              QString resolved = QDir(m_basePath).absoluteFilePath(urlStr);
+              if (QFileInfo::exists(resolved))
+                emit linkClicked(resolved);
+            } else {
+              emit linkClicked(urlStr);
+            }
+          });
 
   layout->addWidget(m_browser, 1);
 #endif
@@ -101,10 +105,12 @@ void MarkdownPreviewPanel::setupToolbar() {
   m_toolbar = new QToolBar(this);
   m_toolbar->setObjectName("markdownPreviewToolbar");
   m_toolbar->setMovable(false);
-  m_toolbar->setStyleSheet(
-      "QToolBar { background: #161b22; border-bottom: 1px solid #30363d; spacing: 2px; }"
-      "QToolButton { color: #8b949e; padding: 4px 8px; border: none; font-size: 12px; }"
-      "QToolButton:hover { color: #e6edf3; background: #1f2937; border-radius: 4px; }");
+  m_toolbar->setStyleSheet("QToolBar { background: #161b22; border-bottom: 1px "
+                           "solid #30363d; spacing: 2px; }"
+                           "QToolButton { color: #8b949e; padding: 4px 8px; "
+                           "border: none; font-size: 12px; }"
+                           "QToolButton:hover { color: #e6edf3; background: "
+                           "#1f2937; border-radius: 4px; }");
 
   QAction *refreshAction = m_toolbar->addAction("⟳ Refresh");
   refreshAction->setToolTip("Refresh Preview");
@@ -145,9 +151,8 @@ void MarkdownPreviewPanel::setupToolbar() {
       suggestedName = "preview.html";
     }
 
-    QString path = QFileDialog::getSaveFileName(this, tr("Export HTML"),
-                                                suggestedName,
-                                                tr("HTML Files (*.html)"));
+    QString path = QFileDialog::getSaveFileName(
+        this, tr("Export HTML"), suggestedName, tr("HTML Files (*.html)"));
     if (path.isEmpty())
       return;
 
@@ -182,8 +187,8 @@ void MarkdownPreviewPanel::setFilePath(const QString &filePath) {
 }
 
 bool MarkdownPreviewPanel::isMarkdownFile(const QString &extension) {
-  static const QStringList markdownExtensions = {"md",   "markdown", "mdown",
-                                                  "mkd",  "mkdn",    "mdx"};
+  static const QStringList markdownExtensions = {"md",  "markdown", "mdown",
+                                                 "mkd", "mkdn",     "mdx"};
   return markdownExtensions.contains(extension.toLower());
 }
 
@@ -208,9 +213,8 @@ void MarkdownPreviewPanel::updatePreview() {
   }
 
 #ifdef HAVE_WEBENGINE
-  QUrl baseUrl = m_basePath.isEmpty()
-                     ? QUrl()
-                     : QUrl::fromLocalFile(m_basePath + "/");
+  QUrl baseUrl =
+      m_basePath.isEmpty() ? QUrl() : QUrl::fromLocalFile(m_basePath + "/");
   m_webView->setHtml(html, baseUrl);
 #else
   int scrollPos = m_browser->verticalScrollBar()->value();

@@ -7,23 +7,18 @@
 
 static const QRegularExpression s_headingRe(R"(^(#{1,6})\s+(.+)$)");
 static const QRegularExpression s_fencedBlockRe(R"(^(`{3,}|~{3,}))");
-static const QRegularExpression s_checkboxRe(
-    R"(^(\s*[-*+]\s+)\[([ xX])\](.*)$)");
+static const QRegularExpression
+    s_checkboxRe(R"(^(\s*[-*+]\s+)\[([ xX])\](.*)$)");
 static const QRegularExpression s_orderedListRe(R"(^(\s*)\d+\.\s+(.*)$)");
-static const QRegularExpression s_linkRe(
-    R"(\[([^\]]*)\]\(([^)]*)\))");
-static const QRegularExpression s_imageRe(
-    R"(!\[([^\]]*)\]\(([^)]*)\))");
-static const QRegularExpression s_imageNoAltRe(
-    R"(!\[\]\(([^)]*)\))");
+static const QRegularExpression s_linkRe(R"(\[([^\]]*)\]\(([^)]*)\))");
+static const QRegularExpression s_imageRe(R"(!\[([^\]]*)\]\(([^)]*)\))");
+static const QRegularExpression s_imageNoAltRe(R"(!\[\]\(([^)]*)\))");
 static const QRegularExpression s_trailingSpaceRe(R"([ \t]+$)");
-static const QRegularExpression s_tocMarkerRe(
-    R"(^\s*<!--\s*TOC\s*-->\s*$)");
-static const QRegularExpression s_tocEndMarkerRe(
-    R"(^\s*<!--\s*/TOC\s*-->\s*$)");
+static const QRegularExpression s_tocMarkerRe(R"(^\s*<!--\s*TOC\s*-->\s*$)");
+static const QRegularExpression
+    s_tocEndMarkerRe(R"(^\s*<!--\s*/TOC\s*-->\s*$)");
 static const QRegularExpression s_tablePipeRe(R"(^\|.*\|$)");
-static const QRegularExpression s_tableSepRe(
-    R"(^\|[\s:]*-[-\s:|]*\|$)");
+static const QRegularExpression s_tableSepRe(R"(^\|[\s:]*-[-\s:|]*\|$)");
 
 QList<MarkdownHeading> MarkdownTools::extractHeadings(const QString &text) {
   QList<MarkdownHeading> headings;
@@ -238,8 +233,8 @@ QString MarkdownTools::normalizeListNumbering(const QString &text) {
         }
       }
 
-      result.append(match.captured(1) +
-                    QString::number(counters[indent]) + ". " + content);
+      result.append(match.captured(1) + QString::number(counters[indent]) +
+                    ". " + content);
     } else {
       result.append(line);
     }
@@ -249,7 +244,7 @@ QString MarkdownTools::normalizeListNumbering(const QString &text) {
 }
 
 QList<LspDiagnostic> MarkdownTools::lint(const QString &text,
-                                          const QString &filePath) {
+                                         const QString &filePath) {
   QList<LspDiagnostic> diagnostics;
 
   diagnostics.append(checkDuplicateHeadings(text));
@@ -264,7 +259,8 @@ QList<LspDiagnostic> MarkdownTools::lint(const QString &text,
   return diagnostics;
 }
 
-QList<LspDiagnostic> MarkdownTools::checkDuplicateHeadings(const QString &text) {
+QList<LspDiagnostic>
+MarkdownTools::checkDuplicateHeadings(const QString &text) {
   QList<LspDiagnostic> diagnostics;
   QList<MarkdownHeading> headings = extractHeadings(text);
   QMap<QString, int> seen;
@@ -278,10 +274,9 @@ QList<LspDiagnostic> MarkdownTools::checkDuplicateHeadings(const QString &text) 
       diag.severity = LspDiagnosticSeverity::Warning;
       diag.source = "markdown-lint";
       diag.code = "MD024";
-      diag.message =
-          QString("Duplicate heading '%1' (first seen on line %2)")
-              .arg(h.text)
-              .arg(seen[key] + 1);
+      diag.message = QString("Duplicate heading '%1' (first seen on line %2)")
+                         .arg(h.text)
+                         .arg(seen[key] + 1);
       diagnostics.append(diag);
     } else {
       seen[key] = h.lineNumber;
@@ -293,7 +288,7 @@ QList<LspDiagnostic> MarkdownTools::checkDuplicateHeadings(const QString &text) 
 
 QList<LspDiagnostic>
 MarkdownTools::checkBrokenLocalLinks(const QString &text,
-                                      const QString &filePath) {
+                                     const QString &filePath) {
   QList<LspDiagnostic> diagnostics;
   if (filePath.isEmpty())
     return diagnostics;
@@ -430,10 +425,9 @@ MarkdownTools::checkInconsistentHeadingLevels(const QString &text) {
       diag.severity = LspDiagnosticSeverity::Warning;
       diag.source = "markdown-lint";
       diag.code = "MD001";
-      diag.message =
-          QString("Heading level skipped: h%1 after h%2")
-              .arg(headings[i].level)
-              .arg(headings[i - 1].level);
+      diag.message = QString("Heading level skipped: h%1 after h%2")
+                         .arg(headings[i].level)
+                         .arg(headings[i - 1].level);
       diagnostics.append(diag);
     }
   }
@@ -443,7 +437,7 @@ MarkdownTools::checkInconsistentHeadingLevels(const QString &text) {
 
 QList<LspDiagnostic>
 MarkdownTools::checkBrokenImagePaths(const QString &text,
-                                      const QString &filePath) {
+                                     const QString &filePath) {
   QList<LspDiagnostic> diagnostics;
   if (filePath.isEmpty())
     return diagnostics;
@@ -480,8 +474,7 @@ MarkdownTools::checkBrokenImagePaths(const QString &text,
         diag.severity = LspDiagnosticSeverity::Warning;
         diag.source = "markdown-lint";
         diag.code = "MD041";
-        diag.message =
-            QString("Broken image path: '%1' not found").arg(target);
+        diag.message = QString("Broken image path: '%1' not found").arg(target);
         diagnostics.append(diag);
       }
     }
@@ -494,8 +487,7 @@ QList<LspDiagnostic> MarkdownTools::checkMalformedLists(const QString &text) {
   QList<LspDiagnostic> diagnostics;
   const QStringList lines = text.split('\n');
   bool inFencedBlock = false;
-  static const QRegularExpression listItemRe(
-      R"(^(\s*)([-*+]|\d+\.)\s)");
+  static const QRegularExpression listItemRe(R"(^(\s*)([-*+]|\d+\.)\s)");
   bool prevWasList = false;
   bool prevWasBlank = true;
 
@@ -536,7 +528,7 @@ QList<LspDiagnostic> MarkdownTools::checkMalformedLists(const QString &text) {
 }
 
 QList<LspDiagnostic> MarkdownTools::checkOverlongLines(const QString &text,
-                                                         int maxLength) {
+                                                       int maxLength) {
   QList<LspDiagnostic> diagnostics;
   const QStringList lines = text.split('\n');
   bool inFencedBlock = false;
@@ -577,8 +569,6 @@ QList<LspDiagnostic> MarkdownTools::checkOverlongLines(const QString &text,
   return diagnostics;
 }
 
-// ── Formatting features ──────────────────────────────────────────────
-
 QString MarkdownTools::wrapParagraph(const QString &text, int width) {
   if (width <= 0)
     return text;
@@ -597,12 +587,10 @@ QString MarkdownTools::wrapParagraph(const QString &text, int width) {
     }
 
     if (inFencedBlock || line.trimmed().isEmpty() ||
-        s_headingRe.match(line).hasMatch() ||
-        line.trimmed().startsWith('>') ||
+        s_headingRe.match(line).hasMatch() || line.trimmed().startsWith('>') ||
         s_tablePipeRe.match(line).hasMatch() ||
         s_checkboxRe.match(line).hasMatch() ||
-        line.trimmed().startsWith("- ") ||
-        line.trimmed().startsWith("* ") ||
+        line.trimmed().startsWith("- ") || line.trimmed().startsWith("* ") ||
         line.trimmed().startsWith("+ ") ||
         s_orderedListRe.match(line).hasMatch() ||
         s_tocMarkerRe.match(line).hasMatch() ||
@@ -673,7 +661,6 @@ QString MarkdownTools::normalizeHeadingSpacing(const QString &text) {
         i = next - 1;
       } else if (next == i + 1) {
         result.append("");
-        // Don't skip; the next iteration will handle line i+1
       }
     }
   }
@@ -745,8 +732,6 @@ QString MarkdownTools::formatCodeFences(const QString &text) {
 
   return result.join('\n');
 }
-
-// ── Extraction features ──────────────────────────────────────────────
 
 QList<MarkdownLink> MarkdownTools::extractLinks(const QString &text) {
   QList<MarkdownLink> links;
@@ -930,8 +915,6 @@ MarkdownTools::generateDocumentOutline(const QString &text) {
   return root;
 }
 
-// ── Statistics ──────────────────────────────────────────────────────
-
 int MarkdownTools::wordCount(const QString &text) {
   QStringList lines = text.split('\n');
   int count = 0;
@@ -971,8 +954,7 @@ int MarkdownTools::wordCount(const QString &text) {
   return count;
 }
 
-int MarkdownTools::readingTimeMinutes(const QString &text,
-                                       int wordsPerMinute) {
+int MarkdownTools::readingTimeMinutes(const QString &text, int wordsPerMinute) {
   if (wordsPerMinute <= 0)
     return 0;
   int words = wordCount(text);
@@ -998,12 +980,10 @@ QString MarkdownTools::processInlineFormatting(const QString &text) {
                  "<strong>\\1</strong>");
   result.replace(QRegularExpression(R"(\*(.+?)\*)"), "<em>\\1</em>");
   result.replace(QRegularExpression(R"(~~(.+?)~~)"), "<del>\\1</del>");
-  result.replace(QRegularExpression(R"(`([^`]+)`)"),
-                 "<code>\\1</code>");
+  result.replace(QRegularExpression(R"(`([^`]+)`)"), "<code>\\1</code>");
 
-  result.replace(
-      QRegularExpression(R"(!\[([^\]]*)\]\(([^)]*)\))"),
-      "<img src=\"\\2\" alt=\"\\1\" style=\"max-width:100%;\">");
+  result.replace(QRegularExpression(R"(!\[([^\]]*)\]\(([^)]*)\))"),
+                 "<img src=\"\\2\" alt=\"\\1\" style=\"max-width:100%;\">");
 
   result.replace(QRegularExpression(R"(\[([^\]]+)\]\(([^)]*)\))"),
                  "<a href=\"\\2\">\\1</a>");
@@ -1012,13 +992,12 @@ QString MarkdownTools::processInlineFormatting(const QString &text) {
 }
 
 QString MarkdownTools::toHtml(const QString &markdown,
-                               const QString &basePath) {
+                              const QString &basePath) {
   QStringList lines = markdown.split('\n');
   QString html;
   QTextStream stream(&html);
 
-  stream << "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
-         << "<style>"
+  stream << "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" << "<style>"
          << "body { font-family: -apple-system, BlinkMacSystemFont, "
             "'Segoe UI', Roboto, sans-serif;"
          << " line-height: 1.6; padding: 20px; max-width: 800px; "
@@ -1035,8 +1014,7 @@ QString MarkdownTools::toHtml(const QString &markdown,
             "padding: 0 16px; color: #8b949e; }"
          << "table { border-collapse: collapse; width: 100%; }"
          << "th, td { border: 1px solid #30363d; padding: 8px 12px; }"
-         << "th { background: #161b22; }"
-         << "img { max-width: 100%; }"
+         << "th { background: #161b22; }" << "img { max-width: 100%; }"
          << "a { color: #58a6ff; }"
          << "hr { border: none; border-top: 1px solid #30363d; }"
          << ".task-list-item { list-style: none; }"
@@ -1079,7 +1057,9 @@ QString MarkdownTools::toHtml(const QString &markdown,
       fenceDelimiter = fenceMatch.captured(1);
       QString lang = line.mid(fenceDelimiter.length()).trimmed();
       stream << "<pre><code"
-             << (lang.isEmpty() ? "" : " class=\"language-" + escapeHtml(lang) + "\"")
+             << (lang.isEmpty()
+                     ? ""
+                     : " class=\"language-" + escapeHtml(lang) + "\"")
              << ">";
       continue;
     }
@@ -1227,14 +1207,13 @@ QString MarkdownTools::toHtml(const QString &markdown,
   stream << "</body></html>";
 
   if (!basePath.isEmpty()) {
-    QString absBase =
-        "file://" + QDir(basePath).absolutePath() + "/";
+    QString absBase = "file://" + QDir(basePath).absolutePath() + "/";
     html.replace(
         QRegularExpression(R"delim(src="(?!https?://|data:)([^"]+)")delim"),
         "src=\"" + absBase + "\\1\"");
-    html.replace(
-        QRegularExpression(R"delim(href="(?!https?://|mailto:|#)([^"]+)")delim"),
-        "href=\"" + absBase + "\\1\"");
+    html.replace(QRegularExpression(
+                     R"delim(href="(?!https?://|mailto:|#)([^"]+)")delim"),
+                 "href=\"" + absBase + "\\1\"");
   }
 
   return html;

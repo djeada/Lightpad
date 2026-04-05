@@ -2028,8 +2028,7 @@ bool GitIntegration::revertCommit(const QString &commitHash) {
         QString("Reverted commit %1").arg(commitHash.left(7)));
     emit statusChanged();
   } else {
-    emit errorOccurred(
-        QString("Revert failed: %1").arg(output.trimmed()));
+    emit errorOccurred(QString("Revert failed: %1").arg(output.trimmed()));
   }
 
   return success;
@@ -2055,8 +2054,8 @@ bool GitIntegration::resetToCommit(const QString &commitHash,
   }
 
   bool success;
-  QString output = executeGitCommand(
-      {"reset", "--" + resetMode, commitHash}, &success);
+  QString output =
+      executeGitCommand({"reset", "--" + resetMode, commitHash}, &success);
 
   if (success) {
     updateCurrentBranch();
@@ -2064,8 +2063,7 @@ bool GitIntegration::resetToCommit(const QString &commitHash,
         QString("Reset (%1) to %2").arg(resetMode, commitHash.left(7)));
     emit statusChanged();
   } else {
-    emit errorOccurred(
-        QString("Reset failed: %1").arg(output.trimmed()));
+    emit errorOccurred(QString("Reset failed: %1").arg(output.trimmed()));
   }
 
   return success;
@@ -2092,8 +2090,7 @@ bool GitIntegration::rewordCommit(const QString &commitHash,
     return false;
   }
 
-  if (headHash.startsWith(commitHash) ||
-      commitHash.startsWith(headHash)) {
+  if (headHash.startsWith(commitHash) || commitHash.startsWith(headHash)) {
     executeGitCommand({"commit", "--amend", "-m", newMessage}, &success);
 
     if (success) {
@@ -2107,7 +2104,7 @@ bool GitIntegration::rewordCommit(const QString &commitHash,
   }
 
   emit errorOccurred("Can only reword the most recent (HEAD) commit. Use "
-                      "interactive rebase to reword older commits.");
+                     "interactive rebase to reword older commits.");
   return false;
 }
 
@@ -2147,8 +2144,7 @@ bool GitIntegration::dropCommit(const QString &commitHash) {
   QString fullHash =
       executeGitCommand({"rev-parse", commitHash}, &success).trimmed();
   if (!success) {
-    emit errorOccurred(
-        QString("Failed to resolve commit %1").arg(commitHash));
+    emit errorOccurred(QString("Failed to resolve commit %1").arg(commitHash));
     return false;
   }
 
@@ -2158,8 +2154,7 @@ bool GitIntegration::dropCommit(const QString &commitHash) {
 
   QTemporaryFile dropScript;
   dropScript.setAutoRemove(false);
-  dropScript.setFileTemplate(
-      QDir::tempPath() + "/lightpad-drop-XXXXXX.sh");
+  dropScript.setFileTemplate(QDir::tempPath() + "/lightpad-drop-XXXXXX.sh");
   if (!dropScript.open()) {
     emit errorOccurred("Failed to create drop script");
     return false;
@@ -2170,9 +2165,9 @@ bool GitIntegration::dropCommit(const QString &commitHash) {
             << "grep -v '^pick " << shortHashForDrop << "' \"$1\" > \"$1.tmp\""
             << " && mv \"$1.tmp\" \"$1\"\n";
   dropScript.close();
-  QFile::setPermissions(dropScript.fileName(),
-                        QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                            QFileDevice::ExeOwner);
+  QFile::setPermissions(dropScript.fileName(), QFileDevice::ReadOwner |
+                                                   QFileDevice::WriteOwner |
+                                                   QFileDevice::ExeOwner);
 
   env.insert("GIT_SEQUENCE_EDITOR", dropScript.fileName());
   proc.setProcessEnvironment(env);
@@ -2192,8 +2187,7 @@ bool GitIntegration::dropCommit(const QString &commitHash) {
   executeGitCommand({"rebase", "--abort"}, nullptr);
   emit errorOccurred(
       QString("Failed to drop commit %1: %2")
-          .arg(commitHash.left(7),
-               proc.readAllStandardError().trimmed()));
+          .arg(commitHash.left(7), proc.readAllStandardError().trimmed()));
   return false;
 }
 
@@ -2322,9 +2316,8 @@ bool GitIntegration::moveCommitToBranch(const QString &commitHash,
   if (!success) {
     executeGitCommand({"cherry-pick", "--abort"}, nullptr);
     executeGitCommand({"checkout", currentBranch}, nullptr);
-    emit errorOccurred(
-        QString("Failed to cherry-pick %1 onto %2")
-            .arg(commitHash.left(7), targetBranch));
+    emit errorOccurred(QString("Failed to cherry-pick %1 onto %2")
+                           .arg(commitHash.left(7), targetBranch));
     return false;
   }
 
@@ -2340,8 +2333,7 @@ bool GitIntegration::moveCommitToBranch(const QString &commitHash,
 
   updateCurrentBranch();
   emit operationCompleted(
-      QString("Moved commit %1 to %2")
-          .arg(commitHash.left(7), targetBranch));
+      QString("Moved commit %1 to %2").arg(commitHash.left(7), targetBranch));
   emit statusChanged();
   return true;
 }
@@ -2478,8 +2470,8 @@ QList<GitTagInfo> GitIntegration::getTags() const {
     QString objectType = parts.value(3).trimmed();
 
     info.isAnnotated = (objectType == "tag");
-    info.hash = info.isAnnotated && !derefHash.isEmpty() ? derefHash
-                                                         : objectHash;
+    info.hash =
+        info.isAnnotated && !derefHash.isEmpty() ? derefHash : objectHash;
 
     result.append(info);
   }
@@ -2515,12 +2507,10 @@ bool GitIntegration::rebaseBranch(const QString &ontoBranch) {
   QString output = executeGitCommand({"rebase", ontoBranch}, &success);
 
   if (success) {
-    emit operationCompleted(
-        QString("Rebased onto '%1'").arg(ontoBranch));
+    emit operationCompleted(QString("Rebased onto '%1'").arg(ontoBranch));
   } else {
-    emit errorOccurred(
-        QString("Failed to rebase onto '%1': %2")
-            .arg(ontoBranch, output.trimmed()));
+    emit errorOccurred(QString("Failed to rebase onto '%1': %2")
+                           .arg(ontoBranch, output.trimmed()));
   }
 
   return success;
@@ -2589,8 +2579,7 @@ QStringList GitIntegration::getCommitRefs(const QString &hash) const {
 
   bool success;
   QString branchOutput = executeGitCommand(
-      {"branch", "--all", "--points-at", hash,
-       "--format=%(refname:short)"},
+      {"branch", "--all", "--points-at", hash, "--format=%(refname:short)"},
       &success);
 
   if (success && !branchOutput.isEmpty()) {
@@ -2602,8 +2591,7 @@ QStringList GitIntegration::getCommitRefs(const QString &hash) const {
     }
   }
 
-  QString tagOutput =
-      executeGitCommand({"tag", "--points-at", hash}, &success);
+  QString tagOutput = executeGitCommand({"tag", "--points-at", hash}, &success);
 
   if (success && !tagOutput.isEmpty()) {
     QStringList lines = tagOutput.split('\n', Qt::SkipEmptyParts);

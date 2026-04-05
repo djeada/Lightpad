@@ -2,104 +2,110 @@
 #include <QRegularExpression>
 
 QStringList LatexSyntaxPlugin::getSectioningCommands() {
-  return {"part",        "chapter",       "section",
-          "subsection",  "subsubsection", "paragraph",
-          "subparagraph"};
+  return {"part",          "chapter",   "section",     "subsection",
+          "subsubsection", "paragraph", "subparagraph"};
 }
 
 QStringList LatexSyntaxPlugin::getEnvironmentNames() {
-  return {"document",     "figure",      "table",
-          "equation",     "align",       "align*",
-          "enumerate",    "itemize",     "description",
-          "tabular",      "array",       "math",
-          "displaymath",  "verbatim",    "quote",
-          "quotation",    "center",      "flushleft",
-          "flushright",   "minipage",    "abstract",
-          "theorem",      "proof",       "lemma",
-          "corollary",    "definition",  "example",
-          "remark",       "note",        "proposition",
-          "tikzpicture",  "frame",       "block",
-          "columns",      "column",      "thebibliography",
-          "appendix",     "lstlisting",  "minted",
-          "algorithmic",  "algorithm",   "cases",
-          "matrix",       "pmatrix",     "bmatrix",
-          "vmatrix",      "Vmatrix",     "gather",
-          "gather*",      "multline",    "multline*",
-          "split",        "flalign",     "flalign*",
-          "eqnarray",     "eqnarray*",   "subequations"};
+  return {"document",    "figure",      "table",       "equation",
+          "align",       "align*",      "enumerate",   "itemize",
+          "description", "tabular",     "array",       "math",
+          "displaymath", "verbatim",    "quote",       "quotation",
+          "center",      "flushleft",   "flushright",  "minipage",
+          "abstract",    "theorem",     "proof",       "lemma",
+          "corollary",   "definition",  "example",     "remark",
+          "note",        "proposition", "tikzpicture", "frame",
+          "block",       "columns",     "column",      "thebibliography",
+          "appendix",    "lstlisting",  "minted",      "algorithmic",
+          "algorithm",   "cases",       "matrix",      "pmatrix",
+          "bmatrix",     "vmatrix",     "Vmatrix",     "gather",
+          "gather*",     "multline",    "multline*",   "split",
+          "flalign",     "flalign*",    "eqnarray",    "eqnarray*",
+          "subequations"};
 }
 
 QStringList LatexSyntaxPlugin::getTextFormattingCommands() {
-  return {"textbf",       "textit",       "texttt",
-          "textrm",       "textsf",       "textsc",
-          "textsl",       "emph",         "underline",
-          "textcolor",    "colorbox",     "fbox",
-          "mbox",         "makebox",      "framebox",
-          "parbox",       "footnote",     "footnotetext",
-          "marginpar"};
+  return {"textbf",   "textit",   "texttt",       "textrm",    "textsf",
+          "textsc",   "textsl",   "emph",         "underline", "textcolor",
+          "colorbox", "fbox",     "mbox",         "makebox",   "framebox",
+          "parbox",   "footnote", "footnotetext", "marginpar"};
 }
 
 QStringList LatexSyntaxPlugin::getMathCommands() {
-  return {"frac",    "sqrt",    "sum",      "prod",   "int",
-          "oint",    "lim",     "infty",    "partial", "nabla",
-          "alpha",   "beta",    "gamma",    "delta",   "epsilon",
-          "zeta",    "eta",     "theta",    "iota",    "kappa",
-          "lambda",  "mu",      "nu",       "xi",      "pi",
-          "rho",     "sigma",   "tau",      "upsilon", "phi",
-          "chi",     "psi",     "omega",    "Gamma",   "Delta",
-          "Theta",   "Lambda",  "Xi",       "Pi",      "Sigma",
-          "Phi",     "Psi",     "Omega",    "sin",     "cos",
-          "tan",     "log",     "ln",       "exp",     "max",
-          "min",     "sup",     "inf",      "det",     "dim",
-          "mod",     "gcd",     "lcm",      "deg",     "hom",
-          "ker",     "arg",     "left",     "right",   "big",
-          "Big",     "bigg",    "Bigg",     "cdot",    "cdots",
-          "ldots",   "vdots",   "ddots",    "times",   "div",
-          "pm",      "mp",      "leq",      "geq",     "neq",
-          "approx",  "equiv",   "sim",      "simeq",   "cong",
-          "subset",  "supset",  "subseteq", "supseteq", "in",
-          "notin",   "cup",     "cap",      "setminus", "emptyset",
-          "forall",  "exists",  "neg",      "land",    "lor",
-          "implies", "iff",     "rightarrow", "leftarrow",
-          "Rightarrow", "Leftarrow", "mapsto", "to",
-          "hat",     "bar",     "vec",      "dot",     "ddot",
-          "tilde",   "overline", "underline", "overbrace", "underbrace",
-          "mathbf",  "mathit",  "mathrm",   "mathsf",  "mathtt",
-          "mathcal", "mathbb",  "mathfrak"};
+  return {"frac",      "sqrt",      "sum",        "prod",      "int",
+          "oint",      "lim",       "infty",      "partial",   "nabla",
+          "alpha",     "beta",      "gamma",      "delta",     "epsilon",
+          "zeta",      "eta",       "theta",      "iota",      "kappa",
+          "lambda",    "mu",        "nu",         "xi",        "pi",
+          "rho",       "sigma",     "tau",        "upsilon",   "phi",
+          "chi",       "psi",       "omega",      "Gamma",     "Delta",
+          "Theta",     "Lambda",    "Xi",         "Pi",        "Sigma",
+          "Phi",       "Psi",       "Omega",      "sin",       "cos",
+          "tan",       "log",       "ln",         "exp",       "max",
+          "min",       "sup",       "inf",        "det",       "dim",
+          "mod",       "gcd",       "lcm",        "deg",       "hom",
+          "ker",       "arg",       "left",       "right",     "big",
+          "Big",       "bigg",      "Bigg",       "cdot",      "cdots",
+          "ldots",     "vdots",     "ddots",      "times",     "div",
+          "pm",        "mp",        "leq",        "geq",       "neq",
+          "approx",    "equiv",     "sim",        "simeq",     "cong",
+          "subset",    "supset",    "subseteq",   "supseteq",  "in",
+          "notin",     "cup",       "cap",        "setminus",  "emptyset",
+          "forall",    "exists",    "neg",        "land",      "lor",
+          "implies",   "iff",       "rightarrow", "leftarrow", "Rightarrow",
+          "Leftarrow", "mapsto",    "to",         "hat",       "bar",
+          "vec",       "dot",       "ddot",       "tilde",     "overline",
+          "underline", "overbrace", "underbrace", "mathbf",    "mathit",
+          "mathrm",    "mathsf",    "mathtt",     "mathcal",   "mathbb",
+          "mathfrak"};
 }
 
 QStringList LatexSyntaxPlugin::getReferenceCommands() {
-  return {"label",   "ref",      "eqref",    "pageref",
-          "cite",    "citep",    "citet",    "citealp",
-          "citealt", "citeauthor", "citeyear",
-          "nocite",  "bibliography", "bibliographystyle",
+  return {"label",         "ref",
+          "eqref",         "pageref",
+          "cite",          "citep",
+          "citet",         "citealp",
+          "citealt",       "citeauthor",
+          "citeyear",      "nocite",
+          "bibliography",  "bibliographystyle",
           "addbibresource"};
 }
 
 QStringList LatexSyntaxPlugin::getPackageCommands() {
-  return {"usepackage",    "RequirePackage", "documentclass",
-          "input",         "include",        "includeonly",
-          "includegraphics", "graphicspath", "newcommand",
-          "renewcommand",  "newenvironment", "renewenvironment",
+  return {"usepackage",
+          "RequirePackage",
+          "documentclass",
+          "input",
+          "include",
+          "includeonly",
+          "includegraphics",
+          "graphicspath",
+          "newcommand",
+          "renewcommand",
+          "newenvironment",
+          "renewenvironment",
           "DeclareMathOperator",
-          "setlength",     "addtolength",    "setcounter",
-          "addtocounter",  "newcounter",     "newtheorem",
-          "theoremstyle",  "pagestyle",      "thispagestyle"};
+          "setlength",
+          "addtolength",
+          "setcounter",
+          "addtocounter",
+          "newcounter",
+          "newtheorem",
+          "theoremstyle",
+          "pagestyle",
+          "thispagestyle"};
 }
 
 QVector<SyntaxRule> LatexSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
-  // Sectioning commands: \section{...}, \chapter{...} etc.
   for (const QString &cmd : getSectioningCommands()) {
     SyntaxRule rule;
-    rule.pattern =
-        QRegularExpression("\\\\(" + cmd + "\\*?)\\b");
+    rule.pattern = QRegularExpression("\\\\(" + cmd + "\\*?)\\b");
     rule.name = "keyword_0";
     rules.append(rule);
   }
 
-  // Package / document structure commands
   for (const QString &cmd : getPackageCommands()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\\\(" + cmd + ")\\b");
@@ -107,14 +113,11 @@ QVector<SyntaxRule> LatexSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // begin/end environment markers
   SyntaxRule beginEndRule;
-  beginEndRule.pattern =
-      QRegularExpression("\\\\(begin|end)\\{[^}]*\\}");
+  beginEndRule.pattern = QRegularExpression("\\\\(begin|end)\\{[^}]*\\}");
   beginEndRule.name = "keyword_0";
   rules.append(beginEndRule);
 
-  // Text formatting commands
   for (const QString &cmd : getTextFormattingCommands()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\\\(" + cmd + ")\\b");
@@ -122,7 +125,6 @@ QVector<SyntaxRule> LatexSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // Reference / citation commands
   for (const QString &cmd : getReferenceCommands()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\\\(" + cmd + ")\\b");
@@ -130,59 +132,47 @@ QVector<SyntaxRule> LatexSyntaxPlugin::syntaxRules() const {
     rules.append(rule);
   }
 
-  // General command pattern (backslash followed by letters)
   SyntaxRule generalCommandRule;
-  generalCommandRule.pattern =
-      QRegularExpression("\\\\[A-Za-z@]+");
+  generalCommandRule.pattern = QRegularExpression("\\\\[A-Za-z@]+");
   generalCommandRule.name = "keyword_1";
   rules.append(generalCommandRule);
 
-  // Inline math: $...$
   SyntaxRule inlineMathRule;
   inlineMathRule.pattern =
       QRegularExpression("(?<!\\$)\\$(?!\\$)[^$\\n]+\\$(?!\\$)");
   inlineMathRule.name = "number";
   rules.append(inlineMathRule);
 
-  // Display math: $$...$$
   SyntaxRule displayMathRule;
   displayMathRule.pattern = QRegularExpression("\\$\\$[^$]+\\$\\$");
   displayMathRule.name = "number";
   rules.append(displayMathRule);
 
-  // Math delimiters: \( \) \[ \]
   SyntaxRule mathDelimiterRule;
-  mathDelimiterRule.pattern =
-      QRegularExpression("\\\\[\\(\\)\\[\\]]");
+  mathDelimiterRule.pattern = QRegularExpression("\\\\[\\(\\)\\[\\]]");
   mathDelimiterRule.name = "number";
   rules.append(mathDelimiterRule);
 
-  // Curly braces groups (argument delimiters)
   SyntaxRule braceRule;
   braceRule.pattern = QRegularExpression("[{}]");
   braceRule.name = "keyword_2";
   rules.append(braceRule);
 
-  // Numbers
   SyntaxRule numberRule;
   numberRule.pattern = QRegularExpression("\\b\\d+\\.?\\d*\\b");
   numberRule.name = "number";
   rules.append(numberRule);
 
-  // Strings in quotes (typically for bibliography entries)
   SyntaxRule stringRule;
   stringRule.pattern = QRegularExpression("\"[^\"]*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
-  // Bibliography key in .bib files: @article{key,
   SyntaxRule bibEntryRule;
-  bibEntryRule.pattern =
-      QRegularExpression("@[A-Za-z]+\\{[^,}]*");
+  bibEntryRule.pattern = QRegularExpression("@[A-Za-z]+\\{[^,}]*");
   bibEntryRule.name = "class";
   rules.append(bibEntryRule);
 
-  // Single-line comment: %...
   SyntaxRule commentRule;
   commentRule.pattern = QRegularExpression("(?<!\\\\)%[^\n]*");
   commentRule.name = "comment";
@@ -194,28 +184,19 @@ QVector<SyntaxRule> LatexSyntaxPlugin::syntaxRules() const {
 QVector<MultiLineBlock> LatexSyntaxPlugin::multiLineBlocks() const {
   QVector<MultiLineBlock> blocks;
 
-  // Verbatim environment
   MultiLineBlock verbatimBlock;
-  verbatimBlock.startPattern =
-      QRegularExpression("\\\\begin\\{verbatim\\}");
-  verbatimBlock.endPattern =
-      QRegularExpression("\\\\end\\{verbatim\\}");
+  verbatimBlock.startPattern = QRegularExpression("\\\\begin\\{verbatim\\}");
+  verbatimBlock.endPattern = QRegularExpression("\\\\end\\{verbatim\\}");
   blocks.append(verbatimBlock);
 
-  // lstlisting environment
   MultiLineBlock lstBlock;
-  lstBlock.startPattern =
-      QRegularExpression("\\\\begin\\{lstlisting\\}");
-  lstBlock.endPattern =
-      QRegularExpression("\\\\end\\{lstlisting\\}");
+  lstBlock.startPattern = QRegularExpression("\\\\begin\\{lstlisting\\}");
+  lstBlock.endPattern = QRegularExpression("\\\\end\\{lstlisting\\}");
   blocks.append(lstBlock);
 
-  // Comment environment (from verbatim package)
   MultiLineBlock commentBlock;
-  commentBlock.startPattern =
-      QRegularExpression("\\\\begin\\{comment\\}");
-  commentBlock.endPattern =
-      QRegularExpression("\\\\end\\{comment\\}");
+  commentBlock.startPattern = QRegularExpression("\\\\begin\\{comment\\}");
+  commentBlock.endPattern = QRegularExpression("\\\\end\\{comment\\}");
   blocks.append(commentBlock);
 
   return blocks;
@@ -224,7 +205,6 @@ QVector<MultiLineBlock> LatexSyntaxPlugin::multiLineBlocks() const {
 QStringList LatexSyntaxPlugin::keywords() const {
   QStringList all;
 
-  // Prepend backslash to all commands for completion
   for (const QString &cmd : getSectioningCommands()) {
     all << ("\\" + cmd);
     all << ("\\" + cmd + "*");
@@ -246,47 +226,19 @@ QStringList LatexSyntaxPlugin::keywords() const {
     all << ("\\" + cmd);
   }
 
-  // Environment names for \begin{} / \end{}
   for (const QString &env : getEnvironmentNames()) {
     all << ("\\begin{" + env + "}");
     all << ("\\end{" + env + "}");
   }
 
-  // Common standalone commands
-  all << "\\item"
-      << "\\maketitle"
-      << "\\tableofcontents"
-      << "\\listoffigures"
-      << "\\listoftables"
-      << "\\newpage"
-      << "\\clearpage"
-      << "\\pagebreak"
-      << "\\linebreak"
-      << "\\noindent"
-      << "\\hspace"
-      << "\\vspace"
-      << "\\hfill"
-      << "\\vfill"
-      << "\\centering"
-      << "\\raggedright"
-      << "\\raggedleft"
-      << "\\tiny"
-      << "\\scriptsize"
-      << "\\footnotesize"
-      << "\\small"
-      << "\\normalsize"
-      << "\\large"
-      << "\\Large"
-      << "\\LARGE"
-      << "\\huge"
-      << "\\Huge"
-      << "\\caption"
-      << "\\title"
-      << "\\author"
-      << "\\date"
-      << "\\thanks"
-      << "\\appendix"
-      << "\\printbibliography";
+  all << "\\item" << "\\maketitle" << "\\tableofcontents" << "\\listoffigures"
+      << "\\listoftables" << "\\newpage" << "\\clearpage" << "\\pagebreak"
+      << "\\linebreak" << "\\noindent" << "\\hspace" << "\\vspace" << "\\hfill"
+      << "\\vfill" << "\\centering" << "\\raggedright" << "\\raggedleft"
+      << "\\tiny" << "\\scriptsize" << "\\footnotesize" << "\\small"
+      << "\\normalsize" << "\\large" << "\\Large" << "\\LARGE" << "\\huge"
+      << "\\Huge" << "\\caption" << "\\title" << "\\author" << "\\date"
+      << "\\thanks" << "\\appendix" << "\\printbibliography";
 
   return all;
 }

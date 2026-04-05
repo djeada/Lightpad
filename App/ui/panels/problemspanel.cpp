@@ -260,27 +260,25 @@ void ProblemsPanel::updateCounts() {
   if (total == 0) {
     m_statusLabel->setText(tr("No problems"));
   } else {
-    QString errColor = m_theme.errorColor.isValid()
-                           ? m_theme.errorColor.name()
-                           : QStringLiteral("#f85149");
+    QString errColor = m_theme.errorColor.isValid() ? m_theme.errorColor.name()
+                                                    : QStringLiteral("#f85149");
     QString warnColor = m_theme.warningColor.isValid()
                             ? m_theme.warningColor.name()
                             : QStringLiteral("#d29922");
     QString infoColor = m_theme.accentColor.isValid()
                             ? m_theme.accentColor.name()
                             : QStringLiteral("#58a6ff");
-    QString status =
-        QString("<span style='color:%1;'>&#x26D4; %2</span>"
-                "&nbsp;&nbsp;"
-                "<span style='color:%3;'>&#x26A0; %4</span>"
-                "&nbsp;&nbsp;"
-                "<span style='color:%5;'>&#x2139; %6</span>")
-            .arg(errColor)
-            .arg(m_errorCount)
-            .arg(warnColor)
-            .arg(m_warningCount)
-            .arg(infoColor)
-            .arg(m_infoCount + m_hintCount);
+    QString status = QString("<span style='color:%1;'>&#x26D4; %2</span>"
+                             "&nbsp;&nbsp;"
+                             "<span style='color:%3;'>&#x26A0; %4</span>"
+                             "&nbsp;&nbsp;"
+                             "<span style='color:%5;'>&#x2139; %6</span>")
+                         .arg(errColor)
+                         .arg(m_errorCount)
+                         .arg(warnColor)
+                         .arg(m_warningCount)
+                         .arg(infoColor)
+                         .arg(m_infoCount + m_hintCount);
     m_statusLabel->setText(status);
   }
 
@@ -309,7 +307,6 @@ void ProblemsPanel::rebuildTree() {
       filePath = filePath.mid(7);
     }
 
-    // Only show diagnostics for the current file
     if (!m_currentFilePath.isEmpty() && filePath != m_currentFilePath) {
       continue;
     }

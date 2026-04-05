@@ -455,7 +455,8 @@ bool FormatTemplateManager::removeAssignment(const QString &filePath) {
 QString FormatTemplateManager::substituteVariables(const QString &input,
                                                    const QString &filePath) {
   const FormatTemplateManager &manager = FormatTemplateManager::instance();
-  const FileFormatAssignment assignment = manager.getAssignmentForFile(filePath);
+  const FileFormatAssignment assignment =
+      manager.getAssignmentForFile(filePath);
   return PythonProjectEnvironment::substituteVariables(
       input, manager.m_workspaceFolder, filePath,
       QFileInfo(filePath).absolutePath(),
@@ -506,14 +507,16 @@ FormatTemplateManager::buildCommand(const QString &filePath) const {
   if (!assignment.customArgs.isEmpty()) {
     for (const QString &arg : assignment.customArgs) {
       args.append(PythonProjectEnvironment::substituteVariables(
-          arg, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
+          arg, m_workspaceFolder, filePath, workingDirectory,
+          pythonPreference));
     }
   }
 
   return qMakePair(command, args);
 }
 
-QString FormatTemplateManager::getWorkingDirectory(const QString &filePath) const {
+QString
+FormatTemplateManager::getWorkingDirectory(const QString &filePath) const {
   if (filePath.trimmed().isEmpty()) {
     return QString();
   }
@@ -529,8 +532,8 @@ QString FormatTemplateManager::getWorkingDirectory(const QString &filePath) cons
   }
 
   return PythonProjectEnvironment::substituteVariables(
-      "${fileDir}", m_workspaceFolder, filePath, QFileInfo(filePath).absolutePath(),
-      pythonPreference);
+      "${fileDir}", m_workspaceFolder, filePath,
+      QFileInfo(filePath).absolutePath(), pythonPreference);
 }
 
 QMap<QString, QString>
@@ -544,10 +547,9 @@ FormatTemplateManager::getEnvironment(const QString &filePath) const {
       pythonPreferenceForAssignment(assignment);
   const QString workingDirectory = getWorkingDirectory(filePath);
 
-  QMap<QString, QString> env =
-      PythonProjectEnvironment::activationEnvironment(
-          PythonProjectEnvironment::resolve(pythonPreference, m_workspaceFolder,
-                                            filePath, workingDirectory));
+  QMap<QString, QString> env = PythonProjectEnvironment::activationEnvironment(
+      PythonProjectEnvironment::resolve(pythonPreference, m_workspaceFolder,
+                                        filePath, workingDirectory));
 
   for (auto it = assignment.customEnv.begin(); it != assignment.customEnv.end();
        ++it) {

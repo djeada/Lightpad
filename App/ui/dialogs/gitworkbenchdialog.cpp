@@ -39,16 +39,13 @@ const QStringList GitWorkbenchDialog::REBASE_ACTIONS_EXTENDED = {
     "pick", "reword", "edit", "squash", "fixup", "drop", "drop-keep"};
 
 const QMap<QString, QString> GitWorkbenchDialog::ACTION_COLORS = {
-    {"pick", "#3fb950"},      {"reword", "#d29922"}, {"edit", "#58a6ff"},
-    {"squash", "#a371f7"},    {"fixup", "#8b949e"},  {"drop", "#f85149"},
-    {"drop-keep", "#d29922"}}; // amber for drop-keep (preserve content)
+    {"pick", "#3fb950"},     {"reword", "#d29922"}, {"edit", "#58a6ff"},
+    {"squash", "#a371f7"},   {"fixup", "#8b949e"},  {"drop", "#f85149"},
+    {"drop-keep", "#d29922"}};
 
 const QMap<QString, QString> GitWorkbenchDialog::ACTION_ICONS = {
-    {"pick", "✓"},      {"reword", "✏"},  {"edit", "⚙"},
-    {"squash", "◫"},    {"fixup", "⊕"},   {"drop", "✕"},
-    {"drop-keep", "◌"}};
-
-// ─── Custom delegate for painting graph lanes inline ───────────────────────
+    {"pick", "✓"},  {"reword", "✏"}, {"edit", "⚙"},     {"squash", "◫"},
+    {"fixup", "⊕"}, {"drop", "✕"},   {"drop-keep", "◌"}};
 
 class CommitGraphDelegate : public QStyledItemDelegate {
 public:
@@ -68,13 +65,11 @@ public:
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
 
-    // Draw selection/hover background
     if (option.state & QStyle::State_Selected) {
       QColor sel = m_theme->accentSoftColor;
       sel.setAlpha(80);
       painter->fillRect(option.rect, sel);
 
-      // Left accent stripe for selected rows
       QColor stripe = m_theme->accentColor;
       stripe.setAlpha(200);
       painter->fillRect(option.rect.left(), option.rect.top(), 3,
@@ -89,12 +84,10 @@ public:
       bool isDrop = (entry.action == "drop");
       bool isDropKeep = (entry.action == "drop-keep");
 
-      // Graph dot
       int dotX = option.rect.left() + 18;
       int dotY = option.rect.center().y();
       int dotR = 6;
 
-      // Lane color based on column (first parent chain)
       static const QList<QColor> laneColors = {
           QColor(0x4E, 0xC9, 0xB0), QColor(0xCE, 0x91, 0x78),
           QColor(0x56, 0x9C, 0xD6), QColor(0xDC, 0xDC, 0xAA),
@@ -103,7 +96,6 @@ public:
       };
       QColor dotColor = laneColors[0];
 
-      // Ghost styling for dropped commits
       if (isDrop) {
         dotColor = QColor("#f85149");
         dotColor.setAlpha(120);
@@ -112,7 +104,6 @@ public:
         dotColor.setAlpha(160);
       }
 
-      // Draw vertical lane line
       QPen lanePen(isDrop ? QColor(0xf8, 0x51, 0x49, 80) : dotColor, 2.0,
                    isDrop ? Qt::DashLine : Qt::SolidLine);
       painter->setPen(lanePen);
@@ -121,13 +112,11 @@ public:
       if (row < m_entries->size() - 1)
         painter->drawLine(dotX, dotY + dotR + 1, dotX, option.rect.bottom());
 
-      // Draw merge lines for parents > 1
       if (entry.parents.size() > 1) {
         QPen mergePen(laneColors[1 % laneColors.size()], 1.5, Qt::DashLine);
         painter->setPen(mergePen);
         painter->drawLine(dotX + dotR + 2, dotY, dotX + 28, dotY);
 
-        // Diamond for merge commits
         painter->setPen(Qt::NoPen);
         painter->setBrush(dotColor);
         QPolygonF diamond;
@@ -137,23 +126,22 @@ public:
                 << QPointF(dotX - dotR - 1, dotY);
         painter->drawPolygon(diamond);
       } else if (isDrop) {
-        // X mark for dropped commits
+
         painter->setPen(QPen(QColor("#f85149"), 2));
         painter->drawLine(dotX - 3, dotY - 3, dotX + 3, dotY + 3);
         painter->drawLine(dotX + 3, dotY - 3, dotX - 3, dotY + 3);
       } else if (isDropKeep) {
-        // Hollow circle for drop-keep
+
         painter->setPen(QPen(QColor("#d29922"), 2));
         painter->setBrush(Qt::NoBrush);
         painter->drawEllipse(QPointF(dotX, dotY), dotR, dotR);
       } else {
-        // Circle for normal commits
+
         painter->setPen(Qt::NoPen);
         painter->setBrush(dotColor);
         painter->drawEllipse(QPointF(dotX, dotY), dotR, dotR);
       }
 
-      // Ref labels (branch/tag pills)
       int textX = dotX + 24;
       if (!entry.refs.isEmpty()) {
         QFont refFont = option.font;
@@ -181,7 +169,6 @@ public:
         }
       }
 
-      // Subject text after graph + refs
       QFont f = option.font;
       f.setPointSize(12);
       painter->setFont(f);
@@ -217,8 +204,6 @@ private:
   const Theme *m_theme;
 };
 
-// ─── Constructor ───────────────────────────────────────────────────────────
-
 GitWorkbenchDialog::GitWorkbenchDialog(GitIntegration *git, const Theme &theme,
                                        QWidget *parent)
     : QDialog(parent), m_git(git), m_theme(theme), m_rewriteMode(false) {
@@ -229,14 +214,11 @@ GitWorkbenchDialog::GitWorkbenchDialog(GitIntegration *git, const Theme &theme,
   applyTheme();
 }
 
-// ─── Build UI ──────────────────────────────────────────────────────────────
-
 void GitWorkbenchDialog::buildUi() {
   auto *mainLayout = new QVBoxLayout(this);
   mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(0);
 
-  // ── Title bar ──
   auto *titleBar = new QWidget(this);
   titleBar->setObjectName("workbenchTitleBar");
   auto *titleLayout = new QHBoxLayout(titleBar);
@@ -246,34 +228,33 @@ void GitWorkbenchDialog::buildUi() {
   if (m_git && m_git->isValidRepository()) {
     repoName = QDir(m_git->repositoryPath()).dirName();
   }
-  auto *titleLabel =
-      new QLabel(tr("Git Workbench") +
-                     (repoName.isEmpty() ? "" : QString::fromUtf8(" \xe2\x80\x94 ") + repoName),
-                 this);
+  auto *titleLabel = new QLabel(
+      tr("Git Workbench") +
+          (repoName.isEmpty() ? ""
+                              : QString::fromUtf8(" \xe2\x80\x94 ") + repoName),
+      this);
   titleLabel->setObjectName("workbenchTitle");
   titleLayout->addWidget(titleLabel);
   titleLayout->addStretch();
 
-  auto *shortcutHint = new QLabel(tr("J/K navigate  \xc2\xb7  S squash  \xc2\xb7  D drop  \xc2\xb7  "
-                                     "R reword  \xc2\xb7  Ctrl+K commands"),
-                                  this);
+  auto *shortcutHint = new QLabel(
+      tr("J/K navigate  \xc2\xb7  S squash  \xc2\xb7  D drop  \xc2\xb7  "
+         "R reword  \xc2\xb7  Ctrl+K commands"),
+      this);
   shortcutHint->setObjectName("workbenchShortcutHint");
   titleLayout->addWidget(shortcutHint);
 
   mainLayout->addWidget(titleBar);
 
-  // ── Separator ──
   auto *sep = new QFrame(this);
   sep->setFrameShape(QFrame::HLine);
   sep->setObjectName("workbenchSeparator");
   mainLayout->addWidget(sep);
 
-  // ── 3-column splitter ──
   m_mainSplitter = new QSplitter(Qt::Horizontal, this);
   m_mainSplitter->setHandleWidth(1);
   m_mainSplitter->setChildrenCollapsible(false);
 
-  // Left: Branch explorer
   m_branchPanel = new QWidget(this);
   m_branchPanel->setObjectName("branchPanel");
   auto *branchLayout = new QVBoxLayout(m_branchPanel);
@@ -282,7 +263,6 @@ void GitWorkbenchDialog::buildUi() {
   buildBranchExplorer(branchLayout);
   m_mainSplitter->addWidget(m_branchPanel);
 
-  // Center: Commit canvas
   m_commitPanel = new QWidget(this);
   m_commitPanel->setObjectName("commitPanel");
   auto *commitLayout = new QVBoxLayout(m_commitPanel);
@@ -291,7 +271,6 @@ void GitWorkbenchDialog::buildUi() {
   buildCommitCanvas(commitLayout);
   m_mainSplitter->addWidget(m_commitPanel);
 
-  // Right: Inspector
   m_inspectorPanel = new QWidget(this);
   m_inspectorPanel->setObjectName("inspectorPanel");
   auto *inspLayout = new QVBoxLayout(m_inspectorPanel);
@@ -303,14 +282,11 @@ void GitWorkbenchDialog::buildUi() {
   m_mainSplitter->setSizes({240, 580, 340});
   mainLayout->addWidget(m_mainSplitter, 1);
 
-  // ── Bottom bar ──
   buildBottomBar(mainLayout);
 }
 
-// ─── Branch Explorer ───────────────────────────────────────────────────────
-
 void GitWorkbenchDialog::buildBranchExplorer(QVBoxLayout *layout) {
-  // Header
+
   auto *header = new QWidget(this);
   header->setObjectName("branchHeader");
   auto *headerLayout = new QHBoxLayout(header);
@@ -326,7 +302,6 @@ void GitWorkbenchDialog::buildBranchExplorer(QVBoxLayout *layout) {
   headerLayout->addWidget(m_createBranchBtn);
   layout->addWidget(header);
 
-  // Search
   m_branchSearch = new QLineEdit(this);
   m_branchSearch->setObjectName("branchSearch");
   m_branchSearch->setPlaceholderText(tr("Filter branches..."));
@@ -337,7 +312,6 @@ void GitWorkbenchDialog::buildBranchExplorer(QVBoxLayout *layout) {
   searchLayout->addWidget(m_branchSearch);
   layout->addWidget(searchContainer);
 
-  // Tree
   m_branchTree = new QTreeWidget(this);
   m_branchTree->setObjectName("branchTree");
   m_branchTree->setHeaderHidden(true);
@@ -348,7 +322,6 @@ void GitWorkbenchDialog::buildBranchExplorer(QVBoxLayout *layout) {
   m_branchTree->setFocusPolicy(Qt::NoFocus);
   layout->addWidget(m_branchTree, 1);
 
-  // Connections
   connect(m_branchTree, &QTreeWidget::itemClicked, this,
           &GitWorkbenchDialog::onBranchItemClicked);
   connect(m_branchTree, &QTreeWidget::itemDoubleClicked, this,
@@ -361,10 +334,8 @@ void GitWorkbenchDialog::buildBranchExplorer(QVBoxLayout *layout) {
           &GitWorkbenchDialog::onCreateBranchClicked);
 }
 
-// ─── Commit Canvas ─────────────────────────────────────────────────────────
-
 void GitWorkbenchDialog::buildCommitCanvas(QVBoxLayout *layout) {
-  // Header with mode toggle
+
   auto *header = new QWidget(this);
   header->setObjectName("commitHeader");
   auto *headerLayout = new QHBoxLayout(header);
@@ -383,7 +354,6 @@ void GitWorkbenchDialog::buildCommitCanvas(QVBoxLayout *layout) {
   headerLayout->addWidget(m_rewriteToggleBtn);
   layout->addWidget(header);
 
-  // Search
   m_commitSearch = new QLineEdit(this);
   m_commitSearch->setObjectName("commitSearch");
   m_commitSearch->setPlaceholderText(
@@ -395,7 +365,6 @@ void GitWorkbenchDialog::buildCommitCanvas(QVBoxLayout *layout) {
   searchLayout->addWidget(m_commitSearch);
   layout->addWidget(searchContainer);
 
-  // Rewrite toolbar (hidden by default)
   auto *toolbarContainer = new QWidget(this);
   toolbarContainer->setObjectName("rewriteToolbarContainer");
   auto *tbLayout = new QHBoxLayout(toolbarContainer);
@@ -440,10 +409,9 @@ void GitWorkbenchDialog::buildCommitCanvas(QVBoxLayout *layout) {
   tbLayout->addWidget(m_pickAllBtn);
 
   toolbarContainer->setVisible(false);
-  m_rewriteToolbar = nullptr; // We use toolbarContainer directly
+  m_rewriteToolbar = nullptr;
   layout->addWidget(toolbarContainer);
 
-  // Selection indicator bar (hidden by default, shown when 2+ commits selected)
   m_selectionBar = new QWidget(this);
   m_selectionBar->setObjectName("selectionBar");
   auto *selBarLayout = new QHBoxLayout(m_selectionBar);
@@ -455,17 +423,15 @@ void GitWorkbenchDialog::buildCommitCanvas(QVBoxLayout *layout) {
   selBarLayout->addWidget(m_selectionCountLabel);
   selBarLayout->addStretch();
 
-  auto *selHintLabel = new QLabel(
-      tr("Shift+J/K to extend  \xc2\xb7  "
-         "Enter Rewrite Mode (R) to apply actions"),
-      this);
+  auto *selHintLabel = new QLabel(tr("Shift+J/K to extend  \xc2\xb7  "
+                                     "Enter Rewrite Mode (R) to apply actions"),
+                                  this);
   selHintLabel->setObjectName("selectionHintLabel");
   selBarLayout->addWidget(selHintLabel);
 
   m_selectionBar->setVisible(false);
   layout->addWidget(m_selectionBar);
 
-  // Commit tree
   m_commitTree = new QTreeWidget(this);
   m_commitTree->setObjectName("commitTree");
   m_commitTree->setRootIsDecorated(false);
@@ -475,7 +441,6 @@ void GitWorkbenchDialog::buildCommitCanvas(QVBoxLayout *layout) {
   m_commitTree->setUniformRowHeights(true);
   m_commitTree->setFocusPolicy(Qt::StrongFocus);
 
-  // Set headers: Graph+Subject, Hash, Author, Date, [Action]
   m_commitTree->setHeaderLabels(
       {tr("Commit"), tr("Hash"), tr("Author"), tr("Date")});
   m_commitTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
@@ -486,14 +451,12 @@ void GitWorkbenchDialog::buildCommitCanvas(QVBoxLayout *layout) {
   m_commitTree->header()->setSectionResizeMode(3, QHeaderView::Fixed);
   m_commitTree->header()->resizeSection(3, 100);
 
-  // Set custom delegate for graph rendering
   m_commitTree->setItemDelegateForColumn(
       0, new CommitGraphDelegate(&m_entries, &m_hashToEntryIndex, &m_theme,
                                  m_commitTree));
 
   layout->addWidget(m_commitTree, 1);
 
-  // Status label
   m_commitStatusLabel = new QLabel(this);
   m_commitStatusLabel->setObjectName("commitStatusLabel");
   auto *statusContainer = new QWidget(this);
@@ -502,7 +465,6 @@ void GitWorkbenchDialog::buildCommitCanvas(QVBoxLayout *layout) {
   statusLayout->addWidget(m_commitStatusLabel);
   layout->addWidget(statusContainer);
 
-  // Connections
   connect(m_rewriteToggleBtn, &QPushButton::clicked, this,
           &GitWorkbenchDialog::onToggleRewriteMode);
   connect(m_commitTree, &QTreeWidget::itemSelectionChanged, this,
@@ -529,10 +491,8 @@ void GitWorkbenchDialog::buildCommitCanvas(QVBoxLayout *layout) {
           &GitWorkbenchDialog::onPickAll);
 }
 
-// ─── Inspector Panel ───────────────────────────────────────────────────────
-
 void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
-  // Header
+
   auto *header = new QWidget(this);
   header->setObjectName("inspectorHeader");
   auto *headerLayout = new QHBoxLayout(header);
@@ -542,22 +502,19 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
   headerLayout->addWidget(headerLabel);
   layout->addWidget(header);
 
-  // Stacked widget for different inspector views
   m_inspectorStack = new QStackedWidget(this);
   m_inspectorStack->setObjectName("inspectorStack");
 
-  // ── Page 0: Empty / welcome ──
   auto *emptyPage = new QWidget(this);
   auto *emptyLayout = new QVBoxLayout(emptyPage);
   emptyLayout->setAlignment(Qt::AlignCenter);
-  auto *emptyLabel =
-      new QLabel(tr("Select a commit or branch\nto view details and actions"), this);
+  auto *emptyLabel = new QLabel(
+      tr("Select a commit or branch\nto view details and actions"), this);
   emptyLabel->setObjectName("inspectorEmpty");
   emptyLabel->setAlignment(Qt::AlignCenter);
   emptyLayout->addWidget(emptyLabel);
   m_inspectorStack->addWidget(emptyPage);
 
-  // ── Page 1: Commit inspector ──
   m_commitInspectorPage = new QWidget(this);
   auto *ciLayout = new QVBoxLayout(m_commitInspectorPage);
   ciLayout->setContentsMargins(14, 12, 14, 12);
@@ -586,7 +543,6 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
   m_inspCommitRefs->setWordWrap(true);
   ciLayout->addWidget(m_inspCommitRefs);
 
-  // Separator
   auto *msgSep = new QFrame(this);
   msgSep->setFrameShape(QFrame::HLine);
   msgSep->setObjectName("inspectorSep");
@@ -598,7 +554,6 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
   m_inspCommitMessage->setMaximumHeight(100);
   ciLayout->addWidget(m_inspCommitMessage);
 
-  // Files changed
   auto *filesLabel = new QLabel(tr("Files Changed"), this);
   filesLabel->setObjectName("inspSectionLabel");
   ciLayout->addWidget(filesLabel);
@@ -619,7 +574,6 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
   m_inspPatchStats->setObjectName("inspPatchStats");
   ciLayout->addWidget(m_inspPatchStats);
 
-  // Actions
   auto *actSep = new QFrame(this);
   actSep->setFrameShape(QFrame::HLine);
   actSep->setObjectName("inspectorSep");
@@ -641,8 +595,7 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
   m_inspCherryPickBtn->setObjectName("inspActionBtn");
   ciLayout->addWidget(m_inspCherryPickBtn);
 
-  m_inspMoveToBranchBtn =
-      new QPushButton(tr("Move to Branch..."), this);
+  m_inspMoveToBranchBtn = new QPushButton(tr("Move to Branch..."), this);
   m_inspMoveToBranchBtn->setObjectName("inspActionBtn");
   ciLayout->addWidget(m_inspMoveToBranchBtn);
 
@@ -653,7 +606,6 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
   ciLayout->addStretch();
   m_inspectorStack->addWidget(m_commitInspectorPage);
 
-  // ── Page 2: Branch inspector ──
   m_branchInspectorPage = new QWidget(this);
   auto *biLayout = new QVBoxLayout(m_branchInspectorPage);
   biLayout->setContentsMargins(14, 12, 14, 12);
@@ -705,15 +657,13 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
   m_inspBranchDeleteBtn->setObjectName("inspDangerBtn");
   biLayout->addWidget(m_inspBranchDeleteBtn);
 
-  m_inspBranchResetBtn =
-      new QPushButton(tr("Reset to Tip"), this);
+  m_inspBranchResetBtn = new QPushButton(tr("Reset to Tip"), this);
   m_inspBranchResetBtn->setObjectName("inspActionBtn");
   biLayout->addWidget(m_inspBranchResetBtn);
 
   biLayout->addStretch();
   m_inspectorStack->addWidget(m_branchInspectorPage);
 
-  // ── Page 3: Plan inspector (shown during rewrite mode) ──
   m_planInspectorPage = new QWidget(this);
   auto *piLayout = new QVBoxLayout(m_planInspectorPage);
   piLayout->setContentsMargins(14, 12, 14, 12);
@@ -751,7 +701,6 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
   piLayout->addStretch();
   m_inspectorStack->addWidget(m_planInspectorPage);
 
-  // ── Page 4: Recovery center ──
   m_recoveryCenterPage = new QWidget(this);
   auto *rcLayout = new QVBoxLayout(m_recoveryCenterPage);
   rcLayout->setContentsMargins(14, 12, 14, 12);
@@ -792,7 +741,6 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
   rcLayout->addStretch();
   m_inspectorStack->addWidget(m_recoveryCenterPage);
 
-  // ── Page 5: Stash inspector ──
   m_stashInspectorPage = new QWidget(this);
   auto *siLayout = new QVBoxLayout(m_stashInspectorPage);
   siLayout->setContentsMargins(14, 12, 14, 12);
@@ -847,7 +795,6 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
 
   layout->addWidget(m_inspectorStack, 1);
 
-  // Connections for inspector actions
   connect(m_inspViewDiffBtn, &QPushButton::clicked, [this]() {
     if (!m_selectedCommitHash.isEmpty())
       emit viewCommitDiff(m_selectedCommitHash);
@@ -895,8 +842,7 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
       return;
     if (confirmOperation(
             tr("Restore"),
-            tr("Reset current branch to '%1'? This rewrites history.")
-                .arg(ref),
+            tr("Reset current branch to '%1'? This rewrites history.").arg(ref),
             OperationRisk::High)) {
       m_git->resetToCommit(ref, "mixed");
       loadRepository();
@@ -904,10 +850,9 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
   });
   connect(m_recoveryList, &QTreeWidget::currentItemChanged,
           [this](QTreeWidgetItem *item) {
-            m_recoveryRestoreBtn->setEnabled(item != nullptr &&
-                                             !item->data(1, Qt::UserRole)
-                                                  .toString()
-                                                  .isEmpty());
+            m_recoveryRestoreBtn->setEnabled(
+                item != nullptr &&
+                !item->data(1, Qt::UserRole).toString().isEmpty());
           });
   connect(m_inspStashApplyBtn, &QPushButton::clicked, [this]() {
     QString ref = m_inspStashRef->text();
@@ -928,8 +873,7 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
     int idx = match.captured(1).toInt();
     if (confirmOperation(
             tr("Pop Stash"),
-            tr("Pop %1? This removes the stash entry after applying.")
-                .arg(ref),
+            tr("Pop %1? This removes the stash entry after applying.").arg(ref),
             OperationRisk::Medium, false)) {
       m_git->stashPop(idx);
       loadRepository();
@@ -951,8 +895,6 @@ void GitWorkbenchDialog::buildInspector(QVBoxLayout *layout) {
     }
   });
 }
-
-// ─── Bottom Bar ────────────────────────────────────────────────────────────
 
 void GitWorkbenchDialog::buildBottomBar(QVBoxLayout *mainLayout) {
   auto *bottomSep = new QFrame(this);
@@ -999,8 +941,6 @@ void GitWorkbenchDialog::buildBottomBar(QVBoxLayout *mainLayout) {
           &GitWorkbenchDialog::onApplyRebase);
 }
 
-// ─── Theme ─────────────────────────────────────────────────────────────────
-
 void GitWorkbenchDialog::applyTheme() {
   QString bg = m_theme.backgroundColor.name();
   QString fg = m_theme.foregroundColor.name();
@@ -1015,164 +955,183 @@ void GitWorkbenchDialog::applyTheme() {
   QString warning = m_theme.warningColor.name();
   QString error = m_theme.errorColor.name();
 
-  setStyleSheet(QString(
-      // Dialog base
-      "QDialog { background: %1; color: %2; font-size: 13px; }"
-      // Title bar
-      "#workbenchTitleBar { background: %3; }"
-      "#workbenchTitle { font-size: 17px; font-weight: 600; color: %2; "
-      "letter-spacing: -0.3px; }"
-      "#workbenchShortcutHint { font-size: 11px; color: %11; "
-      "letter-spacing: 0.5px; }"
-      // Separators
-      "#workbenchSeparator, #inspectorSep { color: %5; background: %5; "
-      "max-height: 1px; }"
-      // Section headers
-      "#sectionHeader { font-size: 11px; font-weight: 600; color: %11; "
-      "letter-spacing: 1.5px; text-transform: uppercase; }"
-      // Panels
-      "#branchPanel, #commitPanel, #inspectorPanel { background: %1; }"
-      "#branchHeader, #commitHeader, #inspectorHeader { background: %3; "
-      "border-bottom: 1px solid %5; }"
-      // Search boxes
-      "#branchSearch, #commitSearch { background: %4; color: %2; border: 1px "
-      "solid %5; border-radius: 6px; padding: 7px 12px; font-size: 12px; }"
-      "#branchSearch:focus, #commitSearch:focus { border-color: %6; }"
-      // Branch tree
-      "#branchTree { background: %1; color: %2; border: none; outline: none; "
-      "font-size: 13px; }"
-      "#branchTree::item { padding: 5px 10px; border-radius: 6px; margin: 1px "
-      "6px; }"
-      "#branchTree::item:selected { background: %7; "
-      "border-left: 3px solid %6; }"
-      "#branchTree::item:hover:!selected { background: %8; }"
-      "#branchTree::branch { background: transparent; }"
-      // Commit tree
-      "#commitTree { background: %1; color: %2; border: none; outline: none; "
-      "font-size: 13px; }"
-      "#commitTree::item { padding: 3px 6px; border-bottom: 1px solid %4; }"
-      "#commitTree::item:selected { background: %7; "
-      "border-left: 3px solid %6; }"
-      "#commitTree::item:hover:!selected { background: %8; }"
-      "#commitTree QHeaderView::section { background: %3; color: %11; border: "
-      "none; border-bottom: 1px solid %5; padding: 6px 10px; font-size: 11px; "
-      "font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }"
-      // Create branch button
-      "#createBranchBtn { background: %4; color: %2; border: 1px solid %5; "
-      "border-radius: 6px; font-size: 15px; font-weight: bold; }"
-      "#createBranchBtn:hover { background: %8; border-color: %6; }"
-      // Rewrite toggle — pill style
-      "#rewriteToggleBtn { background: %4; color: %2; border: 1px solid %5; "
-      "border-radius: 12px; padding: 5px 16px; font-size: 12px; "
-      "font-weight: 500; }"
-      "#rewriteToggleBtn:hover { border-color: %6; background: %8; }"
-      "#rewriteToggleBtn:checked { background: %6; color: white; border-color: "
-      "%6; }"
-      // Rewrite toolbar buttons
-      "#rewriteToolBtn { background: %4; color: %2; border: 1px solid %5; "
-      "border-radius: 6px; padding: 5px 12px; font-size: 12px; }"
-      "#rewriteToolBtn:hover { background: %8; border-color: %6; }"
-      "#rewriteDropBtn { background: %4; color: %13; border: 1px solid %5; "
-      "border-radius: 6px; padding: 5px 12px; font-size: 12px; }"
-      "#rewriteDropBtn:hover { background: %13; color: white; border-color: "
-      "%13; }"
-      // Rewrite toolbar container
-      "#rewriteToolbarContainer { background: %3; border-bottom: 1px solid %5; "
-      "}"
-      // Selection indicator bar
-      "#selectionBar { background: %7; border-bottom: 1px solid %5; }"
-      "#selectionCountLabel { font-size: 13px; color: %6; padding: 2px 6px; }"
-      "#selectionHintLabel { font-size: 11px; color: %11; }"
-      // Commit status
-      "#commitStatusLabel { font-size: 12px; color: %11; }"
-      // Inspector empty — inviting
-      "#inspectorEmpty { font-size: 14px; color: %11; padding: 24px; }"
-      // Inspector labels — better hierarchy
-      "#inspMonoLabel { font-family: monospace; font-size: 12px; color: %6; }"
-      "#inspDetailLabel { font-size: 13px; color: %2; }"
-      "#inspSubduedLabel { font-size: 12px; color: %11; }"
-      "#inspCommitRefs { font-size: 12px; color: %6; }"
-      "#inspBranchActivity { font-size: 12px; color: %11; }"
-      "#inspSectionLabel { font-size: 11px; font-weight: 600; color: %11; "
-      "text-transform: uppercase; letter-spacing: 1px; margin-top: 8px; }"
-      "#inspBranchTitle { font-size: 15px; font-weight: 600; color: %2; }"
-      "#inspPatchStats { font-size: 12px; color: %11; }"
-      // Inspector commit message — card-like
-      "#inspCommitMessage { background: %4; color: %2; border: 1px solid %5; "
-      "border-radius: 6px; padding: 8px; font-size: 12px; }"
-      // Inspector file list
-      "#inspFileList { background: %1; color: %2; border: 1px solid %5; "
-      "border-radius: 6px; font-size: 12px; }"
-      "#inspFileList::item { padding: 3px 4px; }"
-      "#inspFileList QHeaderView::section { background: %3; color: %11; "
-      "border: none; font-size: 11px; padding: 4px; }"
-      // Inspector action buttons — modern
-      "#inspActionBtn { background: %4; color: %2; border: 1px solid %5; "
-      "border-radius: 6px; padding: 8px 14px; font-size: 12px; text-align: "
-      "left; }"
-      "#inspActionBtn:hover { background: %8; border-color: %6; }"
-      "#inspDangerBtn { background: %4; color: %13; border: 1px solid %5; "
-      "border-radius: 6px; padding: 8px 14px; font-size: 12px; text-align: "
-      "left; }"
-      "#inspDangerBtn:hover { background: %13; color: white; }"
-      // Plan & recovery lists
-      "#planStepsList, #recoveryList { background: %1; color: %2; "
-      "border: 1px solid %5; border-radius: 6px; font-size: 12px; }"
-      "#planStepsList QHeaderView::section, "
-      "#recoveryList QHeaderView::section { background: %3; color: %11; "
-      "border: none; font-size: 11px; padding: 4px; }"
-      "#planRiskLabel { font-size: 13px; font-weight: 600; padding: 6px 0; }"
-      // Bottom bar — premium
-      "#workbenchBottomBar { background: %3; }"
-      "#planSummaryLabel { font-size: 12px; color: %11; }"
-      "#riskIndicator { font-size: 12px; }"
-      "#workbenchCancelBtn { background: %4; color: %2; border: 1px solid %5; "
-      "border-radius: 8px; padding: 8px 22px; font-size: 13px; }"
-      "#workbenchCancelBtn:hover { background: %8; }"
-      "#workbenchApplyBtn { background: %12; color: white; border: none; "
-      "border-radius: 8px; padding: 8px 26px; font-size: 13px; font-weight: "
-      "600; }"
-      "#workbenchApplyBtn:hover { background: %14; }"
-      "#workbenchApplyBtn:disabled { background: %4; color: %5; }"
-      // Backup checkbox — refined
-      "#backupCheckbox { color: %2; font-size: 12px; }"
-      "#backupCheckbox::indicator { width: 16px; height: 16px; border-radius: "
-      "4px; border: 1px solid %5; background: %4; }"
-      "#backupCheckbox::indicator:checked { background: %12; border-color: "
-      "%12; }"
-      // Scrollbars — wider, smoother
-      "QScrollBar:vertical { background: transparent; width: 8px; margin: "
-      "2px; }"
-      "QScrollBar::handle:vertical { background: %5; min-height: 24px; "
-      "border-radius: 4px; }"
-      "QScrollBar::handle:vertical:hover { background: %11; }"
-      "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: "
-      "0; }"
-      "QScrollBar:horizontal { background: transparent; height: 8px; margin: "
-      "2px; }"
-      "QScrollBar::handle:horizontal { background: %5; min-width: 24px; "
-      "border-radius: 4px; }"
-      "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { "
-      "width: 0; }"
-      // Splitter
-      "QSplitter::handle { background: %5; }")
-                     .arg(bg)          // %1
-                     .arg(fg)          // %2
-                     .arg(surface)     // %3
-                     .arg(surfaceAlt)  // %4
-                     .arg(border)      // %5
-                     .arg(accent)      // %6
-                     .arg(accentSoft)  // %7
-                     .arg(hover)       // %8
-                     .arg("")          // %9 (unused)
-                     .arg("")          // %10 (unused)
-                     .arg(subdued)     // %11
-                     .arg(success)     // %12
-                     .arg(error)       // %13
-                     .arg(m_theme.successColor.lighter(110).name())); // %14
-}
+  setStyleSheet(
+      QString(
 
-// ─── Load Repository ───────────────────────────────────────────────────────
+          "QDialog { background: %1; color: %2; font-size: 13px; }"
+
+          "#workbenchTitleBar { background: %3; }"
+          "#workbenchTitle { font-size: 17px; font-weight: 600; color: %2; "
+          "letter-spacing: -0.3px; }"
+          "#workbenchShortcutHint { font-size: 11px; color: %11; "
+          "letter-spacing: 0.5px; }"
+
+          "#workbenchSeparator, #inspectorSep { color: %5; background: %5; "
+          "max-height: 1px; }"
+
+          "#sectionHeader { font-size: 11px; font-weight: 600; color: %11; "
+          "letter-spacing: 1.5px; text-transform: uppercase; }"
+
+          "#branchPanel, #commitPanel, #inspectorPanel { background: %1; }"
+          "#branchHeader, #commitHeader, #inspectorHeader { background: %3; "
+          "border-bottom: 1px solid %5; }"
+
+          "#branchSearch, #commitSearch { background: %4; color: %2; border: "
+          "1px "
+          "solid %5; border-radius: 6px; padding: 7px 12px; font-size: 12px; }"
+          "#branchSearch:focus, #commitSearch:focus { border-color: %6; }"
+
+          "#branchTree { background: %1; color: %2; border: none; outline: "
+          "none; "
+          "font-size: 13px; }"
+          "#branchTree::item { padding: 5px 10px; border-radius: 6px; margin: "
+          "1px "
+          "6px; }"
+          "#branchTree::item:selected { background: %7; "
+          "border-left: 3px solid %6; }"
+          "#branchTree::item:hover:!selected { background: %8; }"
+          "#branchTree::branch { background: transparent; }"
+
+          "#commitTree { background: %1; color: %2; border: none; outline: "
+          "none; "
+          "font-size: 13px; }"
+          "#commitTree::item { padding: 3px 6px; border-bottom: 1px solid %4; }"
+          "#commitTree::item:selected { background: %7; "
+          "border-left: 3px solid %6; }"
+          "#commitTree::item:hover:!selected { background: %8; }"
+          "#commitTree QHeaderView::section { background: %3; color: %11; "
+          "border: "
+          "none; border-bottom: 1px solid %5; padding: 6px 10px; font-size: "
+          "11px; "
+          "font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; "
+          "}"
+
+          "#createBranchBtn { background: %4; color: %2; border: 1px solid %5; "
+          "border-radius: 6px; font-size: 15px; font-weight: bold; }"
+          "#createBranchBtn:hover { background: %8; border-color: %6; }"
+
+          "#rewriteToggleBtn { background: %4; color: %2; border: 1px solid "
+          "%5; "
+          "border-radius: 12px; padding: 5px 16px; font-size: 12px; "
+          "font-weight: 500; }"
+          "#rewriteToggleBtn:hover { border-color: %6; background: %8; }"
+          "#rewriteToggleBtn:checked { background: %6; color: white; "
+          "border-color: "
+          "%6; }"
+
+          "#rewriteToolBtn { background: %4; color: %2; border: 1px solid %5; "
+          "border-radius: 6px; padding: 5px 12px; font-size: 12px; }"
+          "#rewriteToolBtn:hover { background: %8; border-color: %6; }"
+          "#rewriteDropBtn { background: %4; color: %13; border: 1px solid %5; "
+          "border-radius: 6px; padding: 5px 12px; font-size: 12px; }"
+          "#rewriteDropBtn:hover { background: %13; color: white; "
+          "border-color: "
+          "%13; }"
+
+          "#rewriteToolbarContainer { background: %3; border-bottom: 1px solid "
+          "%5; "
+          "}"
+
+          "#selectionBar { background: %7; border-bottom: 1px solid %5; }"
+          "#selectionCountLabel { font-size: 13px; color: %6; padding: 2px "
+          "6px; }"
+          "#selectionHintLabel { font-size: 11px; color: %11; }"
+
+          "#commitStatusLabel { font-size: 12px; color: %11; }"
+
+          "#inspectorEmpty { font-size: 14px; color: %11; padding: 24px; }"
+
+          "#inspMonoLabel { font-family: monospace; font-size: 12px; color: "
+          "%6; }"
+          "#inspDetailLabel { font-size: 13px; color: %2; }"
+          "#inspSubduedLabel { font-size: 12px; color: %11; }"
+          "#inspCommitRefs { font-size: 12px; color: %6; }"
+          "#inspBranchActivity { font-size: 12px; color: %11; }"
+          "#inspSectionLabel { font-size: 11px; font-weight: 600; color: %11; "
+          "text-transform: uppercase; letter-spacing: 1px; margin-top: 8px; }"
+          "#inspBranchTitle { font-size: 15px; font-weight: 600; color: %2; }"
+          "#inspPatchStats { font-size: 12px; color: %11; }"
+
+          "#inspCommitMessage { background: %4; color: %2; border: 1px solid "
+          "%5; "
+          "border-radius: 6px; padding: 8px; font-size: 12px; }"
+
+          "#inspFileList { background: %1; color: %2; border: 1px solid %5; "
+          "border-radius: 6px; font-size: 12px; }"
+          "#inspFileList::item { padding: 3px 4px; }"
+          "#inspFileList QHeaderView::section { background: %3; color: %11; "
+          "border: none; font-size: 11px; padding: 4px; }"
+
+          "#inspActionBtn { background: %4; color: %2; border: 1px solid %5; "
+          "border-radius: 6px; padding: 8px 14px; font-size: 12px; text-align: "
+          "left; }"
+          "#inspActionBtn:hover { background: %8; border-color: %6; }"
+          "#inspDangerBtn { background: %4; color: %13; border: 1px solid %5; "
+          "border-radius: 6px; padding: 8px 14px; font-size: 12px; text-align: "
+          "left; }"
+          "#inspDangerBtn:hover { background: %13; color: white; }"
+
+          "#planStepsList, #recoveryList { background: %1; color: %2; "
+          "border: 1px solid %5; border-radius: 6px; font-size: 12px; }"
+          "#planStepsList QHeaderView::section, "
+          "#recoveryList QHeaderView::section { background: %3; color: %11; "
+          "border: none; font-size: 11px; padding: 4px; }"
+          "#planRiskLabel { font-size: 13px; font-weight: 600; padding: 6px 0; "
+          "}"
+
+          "#workbenchBottomBar { background: %3; }"
+          "#planSummaryLabel { font-size: 12px; color: %11; }"
+          "#riskIndicator { font-size: 12px; }"
+          "#workbenchCancelBtn { background: %4; color: %2; border: 1px solid "
+          "%5; "
+          "border-radius: 8px; padding: 8px 22px; font-size: 13px; }"
+          "#workbenchCancelBtn:hover { background: %8; }"
+          "#workbenchApplyBtn { background: %12; color: white; border: none; "
+          "border-radius: 8px; padding: 8px 26px; font-size: 13px; "
+          "font-weight: "
+          "600; }"
+          "#workbenchApplyBtn:hover { background: %14; }"
+          "#workbenchApplyBtn:disabled { background: %4; color: %5; }"
+
+          "#backupCheckbox { color: %2; font-size: 12px; }"
+          "#backupCheckbox::indicator { width: 16px; height: 16px; "
+          "border-radius: "
+          "4px; border: 1px solid %5; background: %4; }"
+          "#backupCheckbox::indicator:checked { background: %12; border-color: "
+          "%12; }"
+
+          "QScrollBar:vertical { background: transparent; width: 8px; margin: "
+          "2px; }"
+          "QScrollBar::handle:vertical { background: %5; min-height: 24px; "
+          "border-radius: 4px; }"
+          "QScrollBar::handle:vertical:hover { background: %11; }"
+          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
+          "height: "
+          "0; }"
+          "QScrollBar:horizontal { background: transparent; height: 8px; "
+          "margin: "
+          "2px; }"
+          "QScrollBar::handle:horizontal { background: %5; min-width: 24px; "
+          "border-radius: 4px; }"
+          "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { "
+          "width: 0; }"
+
+          "QSplitter::handle { background: %5; }")
+          .arg(bg)
+          .arg(fg)
+          .arg(surface)
+          .arg(surfaceAlt)
+          .arg(border)
+          .arg(accent)
+          .arg(accentSoft)
+          .arg(hover)
+          .arg("")
+          .arg("")
+          .arg(subdued)
+          .arg(success)
+          .arg(error)
+          .arg(m_theme.successColor.lighter(110).name()));
+}
 
 void GitWorkbenchDialog::loadRepository() {
   if (!m_git || !m_git->isValidRepository())
@@ -1192,7 +1151,6 @@ void GitWorkbenchDialog::loadBranches() {
 
   m_branches = m_git->getBranches();
 
-  // Group: Local branches
   auto *localGroup = new QTreeWidgetItem(m_branchTree, {tr("Local Branches")});
   localGroup->setFlags(localGroup->flags() & ~Qt::ItemIsSelectable);
   localGroup->setExpanded(true);
@@ -1201,7 +1159,6 @@ void GitWorkbenchDialog::loadBranches() {
   groupFont.setPointSize(11);
   localGroup->setFont(0, groupFont);
 
-  // Group: Remote branches
   auto *remoteGroup =
       new QTreeWidgetItem(m_branchTree, {tr("Remote Branches")});
   remoteGroup->setFlags(remoteGroup->flags() & ~Qt::ItemIsSelectable);
@@ -1216,7 +1173,6 @@ void GitWorkbenchDialog::loadBranches() {
     if (branch.isCurrent)
       display = "● " + display;
 
-    // Inline ahead/behind badge
     QString badge;
     if (branch.aheadCount > 0)
       badge += "↑" + QString::number(branch.aheadCount);
@@ -1230,8 +1186,7 @@ void GitWorkbenchDialog::loadBranches() {
 
     item->setText(0, display);
     item->setToolTip(
-        0, branch.name +
-               (badge.isEmpty() ? "" : " (" + badge.trimmed() + ")"));
+        0, branch.name + (badge.isEmpty() ? "" : " (" + badge.trimmed() + ")"));
 
     item->setData(0, Qt::UserRole, branch.name);
     item->setData(0, Qt::UserRole + 1, branch.isRemote);
@@ -1244,10 +1199,8 @@ void GitWorkbenchDialog::loadBranches() {
     }
   }
 
-  // Group: Stashes
   loadStashes();
 
-  // Group: Tags (placeholder)
   loadTags();
 }
 
@@ -1273,7 +1226,7 @@ void GitWorkbenchDialog::loadStashes() {
     item->setText(
         0, QString("stash@{%1}: %2").arg(stash.index).arg(stash.message));
     item->setData(0, Qt::UserRole, QString("stash@{%1}").arg(stash.index));
-    item->setData(0, Qt::UserRole + 1, true); // is special
+    item->setData(0, Qt::UserRole + 1, true);
     item->setFlags(item->flags() | Qt::ItemIsSelectable);
   }
 }
@@ -1299,7 +1252,7 @@ void GitWorkbenchDialog::loadTags() {
     auto *item = new QTreeWidgetItem(tagGroup);
     item->setText(0, (tag.isAnnotated ? "🏷 " : "") + tag.name);
     item->setData(0, Qt::UserRole, tag.name);
-    item->setData(0, Qt::UserRole + 1, true); // is special
+    item->setData(0, Qt::UserRole + 1, true);
     item->setToolTip(0, tag.hash.left(8));
   }
 }
@@ -1316,7 +1269,6 @@ void GitWorkbenchDialog::loadCommits(const QString &branch) {
 
   QList<GitCommitInfo> commits = m_git->getCommitLog(100, branch);
 
-  // Build refs cache for all commits in one batch
   for (const auto &c : commits) {
     QStringList refs = m_git->getCommitRefs(c.hash);
     if (!refs.isEmpty())
@@ -1344,7 +1296,6 @@ void GitWorkbenchDialog::loadCommits(const QString &branch) {
     populateCommitRow(item, i);
   }
 
-  // Show HEAD and branch labels
   m_commitStatusLabel->setText(
       tr("%1 commits on %2").arg(commits.size()).arg(m_currentBranch));
 }
@@ -1355,26 +1306,21 @@ void GitWorkbenchDialog::populateCommitRow(QTreeWidgetItem *item, int index) {
 
   const auto &entry = m_entries[index];
 
-  // Column 0: Graph + Subject (painted by delegate, but store data)
   item->setData(0, Qt::UserRole, index);
   item->setData(0, Qt::UserRole + 1, entry.hash);
-  // Set tooltip for subject
+
   item->setToolTip(0, entry.subject);
 
-  // Column 1: Short hash
   item->setText(1, entry.shortHash);
   QFont monoFont = item->font(1);
   monoFont.setFamily("monospace");
   monoFont.setPointSize(10);
   item->setFont(1, monoFont);
 
-  // Column 2: Author
   item->setText(2, entry.author);
 
-  // Column 3: Date
   item->setText(3, entry.relativeDate);
 
-  // Add action column if in rewrite mode
   if (m_rewriteMode) {
     rebuildActionCombo(item, index);
   }
@@ -1384,8 +1330,6 @@ void GitWorkbenchDialog::rebuildActionCombo(QTreeWidgetItem *item, int index) {
   if (index < 0 || index >= m_entries.size())
     return;
 
-  // If there's already 5 columns (action column exists), use column 4
-  // Otherwise the tree has 4 columns, set item widget in a different way
   auto *combo = new QComboBox(m_commitTree);
   combo->addItems(REBASE_ACTIONS_EXTENDED);
   combo->setCurrentText(m_entries[index].action);
@@ -1406,14 +1350,13 @@ void GitWorkbenchDialog::rebuildActionCombo(QTreeWidgetItem *item, int index) {
                m_theme.borderColor.name(), m_theme.accentColor.name(),
                m_theme.foregroundColor.name()));
 
-  // The action column is 4 (added when entering rewrite mode)
   m_commitTree->setItemWidget(item, 4, combo);
 
   connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
           [this, item](int idx) {
             int row = item->data(0, Qt::UserRole).toInt();
-            if (row >= 0 && row < m_entries.size() &&
-                idx >= 0 && idx < REBASE_ACTIONS_EXTENDED.size()) {
+            if (row >= 0 && row < m_entries.size() && idx >= 0 &&
+                idx < REBASE_ACTIONS_EXTENDED.size()) {
               m_entries[row].action = REBASE_ACTIONS_EXTENDED[idx];
               rebuildActionCombo(item, row);
               updatePlanSummary();
@@ -1423,36 +1366,30 @@ void GitWorkbenchDialog::rebuildActionCombo(QTreeWidgetItem *item, int index) {
           });
 }
 
-// ─── Rewrite Mode ──────────────────────────────────────────────────────────
-
 void GitWorkbenchDialog::onToggleRewriteMode() {
   m_rewriteMode = !m_rewriteMode;
   m_rewriteToggleBtn->setChecked(m_rewriteMode);
 
-  // Show/hide toolbar
   auto *toolbarContainer = findChild<QWidget *>("rewriteToolbarContainer");
   if (toolbarContainer)
     toolbarContainer->setVisible(m_rewriteMode);
 
-  // Show/hide apply button and backup checkbox
   m_applyBtn->setVisible(m_rewriteMode);
   m_backupCheckbox->setVisible(m_rewriteMode);
 
   if (m_rewriteMode) {
-    // Add Action column
+
     m_commitTree->setHeaderLabels(
         {tr("Commit"), tr("Hash"), tr("Author"), tr("Date"), tr("Action")});
     m_commitTree->header()->setSectionResizeMode(4, QHeaderView::Fixed);
     m_commitTree->header()->resizeSection(4, 80);
 
-    // Enable drag-and-drop
     m_commitTree->setDragDropMode(QAbstractItemView::InternalMove);
     m_commitTree->setDragEnabled(true);
     m_commitTree->setAcceptDrops(true);
     m_commitTree->setDropIndicatorShown(true);
     m_commitTree->setDefaultDropAction(Qt::MoveAction);
 
-    // Build action combos for visible commits (limit to 30 for rebase)
     int maxRewrite = qMin(m_entries.size(), 30);
     for (int i = 0; i < maxRewrite; ++i) {
       auto *item = m_commitTree->topLevelItem(i);
@@ -1460,31 +1397,27 @@ void GitWorkbenchDialog::onToggleRewriteMode() {
         rebuildActionCombo(item, i);
     }
 
-    // Hide items beyond rebase limit
     for (int i = 30; i < m_commitTree->topLevelItemCount(); ++i) {
       auto *item = m_commitTree->topLevelItem(i);
       if (item)
         item->setHidden(true);
     }
 
-    // Connect row move signal
-    connect(m_commitTree->model(), &QAbstractItemModel::rowsMoved, this,
-            [this]() {
-              syncEntriesFromTree();
-              int count =
-                  qMin(m_entries.size(), m_commitTree->topLevelItemCount());
-              for (int i = 0; i < count; ++i) {
-                rebuildActionCombo(m_commitTree->topLevelItem(i), i);
-              }
-              updatePlanSummary();
-              showPlanInspector();
-            });
+    connect(
+        m_commitTree->model(), &QAbstractItemModel::rowsMoved, this, [this]() {
+          syncEntriesFromTree();
+          int count = qMin(m_entries.size(), m_commitTree->topLevelItemCount());
+          for (int i = 0; i < count; ++i) {
+            rebuildActionCombo(m_commitTree->topLevelItem(i), i);
+          }
+          updatePlanSummary();
+          showPlanInspector();
+        });
 
     showPlanInspector();
     m_commitStatusLabel->setText(
         tr("Rewrite mode — drag to reorder, use S/D/R keys or toolbar"));
 
-    // Update selection hint for rewrite mode
     auto *selHint = m_selectionBar->findChild<QLabel *>("selectionHintLabel");
     if (selHint)
       selHint->setText(
@@ -1492,24 +1425,20 @@ void GitWorkbenchDialog::onToggleRewriteMode() {
              "R reword  \xc2\xb7  Right-click for more"));
     updateSelectionUI();
   } else {
-    // Remove Action column by resetting headers
+
     m_commitTree->setHeaderLabels(
         {tr("Commit"), tr("Hash"), tr("Author"), tr("Date")});
 
-    // Disable drag-and-drop
     m_commitTree->setDragDropMode(QAbstractItemView::NoDragDrop);
     m_commitTree->setDragEnabled(false);
 
-    // Reset all actions to pick
     for (auto &entry : m_entries)
       entry.action = "pick";
 
-    // Unhide all items
     for (int i = 0; i < m_commitTree->topLevelItemCount(); ++i) {
       m_commitTree->topLevelItem(i)->setHidden(false);
     }
 
-    // Remove item widgets from column 4
     for (int i = 0; i < m_commitTree->topLevelItemCount(); ++i) {
       m_commitTree->removeItemWidget(m_commitTree->topLevelItem(i), 4);
     }
@@ -1518,14 +1447,11 @@ void GitWorkbenchDialog::onToggleRewriteMode() {
         tr("%1 commits on %2").arg(m_entries.size()).arg(m_currentBranch));
     clearInspector();
 
-    // Reset selection hint for browse mode
     auto *selHint = m_selectionBar->findChild<QLabel *>("selectionHintLabel");
     if (selHint)
-      selHint->setText(
-          tr("Shift+J/K to extend  \xc2\xb7  "
-             "Enter Rewrite Mode (R) to apply actions"));
+      selHint->setText(tr("Shift+J/K to extend  \xc2\xb7  "
+                          "Enter Rewrite Mode (R) to apply actions"));
 
-    // Reset button labels
     m_squashBtn->setText(tr("Squash"));
     m_fixupBtn->setText(tr("Fixup"));
     m_dropBtn->setText(tr("Drop"));
@@ -1612,19 +1538,15 @@ void GitWorkbenchDialog::updatePlanSummary() {
           .arg(limit)
           .arg(parts.isEmpty() ? tr("none") : parts.join(" · ")));
 
-  // Risk indicator
   OperationRisk risk = assessRebaseRisk();
-  m_riskIndicator->setText(
-      QString("<span style='color:%1'>● %2</span>")
-          .arg(riskColor(risk), riskLabel(risk)));
+  m_riskIndicator->setText(QString("<span style='color:%1'>● %2</span>")
+                               .arg(riskColor(risk), riskLabel(risk)));
   m_riskIndicator->setTextFormat(Qt::RichText);
 
   bool hasWork = reword > 0 || edit > 0 || squash > 0 || fixup > 0 ||
                  drop > 0 || dropKeep > 0 || pick < limit;
   m_applyBtn->setEnabled(hasWork && limit > 0);
 }
-
-// ─── Inspector ─────────────────────────────────────────────────────────────
 
 void GitWorkbenchDialog::showCommitInspector(const QString &hash) {
   if (!m_git || hash.isEmpty())
@@ -1648,7 +1570,6 @@ void GitWorkbenchDialog::showCommitInspector(const QString &hash) {
           ? tr("Root commit")
           : tr("Parents: %1").arg(details.parents.join(", ")));
 
-  // Show refs (branches/tags) pointing at this commit
   QStringList refs = m_commitRefsCache.value(hash);
   if (refs.isEmpty())
     refs = m_git->getCommitRefs(hash);
@@ -1665,7 +1586,6 @@ void GitWorkbenchDialog::showCommitInspector(const QString &hash) {
     fullMessage += "\n\n" + details.body;
   m_inspCommitMessage->setPlainText(fullMessage);
 
-  // Load file stats
   m_inspFileList->clear();
   QList<GitCommitFileStat> stats = m_git->getCommitFileStats(hash);
   int totalAdd = 0, totalDel = 0;
@@ -1688,7 +1608,7 @@ void GitWorkbenchDialog::showCommitInspector(const QString &hash) {
           .arg(totalDel));
   m_inspPatchStats->setTextFormat(Qt::RichText);
 
-  m_inspectorStack->setCurrentIndex(1); // Commit page
+  m_inspectorStack->setCurrentIndex(1);
 }
 
 void GitWorkbenchDialog::showBranchInspector(const QString &branchName) {
@@ -1709,14 +1629,12 @@ void GitWorkbenchDialog::showBranchInspector(const QString &branchName) {
     return;
   }
 
-  m_inspBranchName->setText(
-      (info.isCurrent ? "● " : "") + info.name);
-  m_inspBranchTip->setText(
-      info.trackingBranch.isEmpty()
-          ? tr("No upstream tracking")
-          : tr("Tracks: %1").arg(info.trackingBranch));
-  m_inspBranchUpstream->setText(
-      info.isRemote ? tr("Remote branch") : tr("Local branch"));
+  m_inspBranchName->setText((info.isCurrent ? "● " : "") + info.name);
+  m_inspBranchTip->setText(info.trackingBranch.isEmpty()
+                               ? tr("No upstream tracking")
+                               : tr("Tracks: %1").arg(info.trackingBranch));
+  m_inspBranchUpstream->setText(info.isRemote ? tr("Remote branch")
+                                              : tr("Local branch"));
 
   QString aheadBehind;
   if (info.aheadCount > 0 || info.behindCount > 0) {
@@ -1732,7 +1650,6 @@ void GitWorkbenchDialog::showBranchInspector(const QString &branchName) {
   }
   m_inspBranchAheadBehind->setText(aheadBehind);
 
-  // Recent activity
   auto recentCommits = m_git->getCommitLog(5, branchName);
   if (!recentCommits.isEmpty()) {
     QString activityText;
@@ -1746,16 +1663,15 @@ void GitWorkbenchDialog::showBranchInspector(const QString &branchName) {
     m_inspBranchActivity->setText(tr("No recent activity"));
   }
 
-  // Disable checkout for current branch
   m_inspBranchCheckoutBtn->setEnabled(!info.isCurrent);
-  // Disable delete for current branch
+
   m_inspBranchDeleteBtn->setEnabled(!info.isCurrent);
-  // Enable/disable branch action buttons
+
   m_inspBranchRenameBtn->setEnabled(!info.isRemote);
   m_inspBranchMergeBtn->setEnabled(!info.isCurrent);
   m_inspBranchRebaseBtn->setEnabled(!info.isCurrent);
 
-  m_inspectorStack->setCurrentIndex(2); // Branch page
+  m_inspectorStack->setCurrentIndex(2);
 }
 
 void GitWorkbenchDialog::showPlanInspector() {
@@ -1783,30 +1699,26 @@ void GitWorkbenchDialog::showPlanInspector() {
     item->setText(2, tr("No modifications planned"));
   }
 
-  // Risk assessment
   OperationRisk risk = assessRebaseRisk();
-  m_planRiskLabel->setText(
-      QString("<span style='color:%1'>● %2 Risk</span>")
-          .arg(riskColor(risk), riskLabel(risk)));
+  m_planRiskLabel->setText(QString("<span style='color:%1'>● %2 Risk</span>")
+                               .arg(riskColor(risk), riskLabel(risk)));
   m_planRiskLabel->setTextFormat(Qt::RichText);
 
-  // Affected refs
   m_planAffectedRefs->setText(
       tr("Branch: %1 — all descendant commits will be rewritten")
           .arg(m_currentBranch));
 
-  // Recovery info
   m_planRecoveryInfo->setText(
       tr("Recovery: Use 'git reflog' to find pre-rewrite state. "
          "Safety backup ref recommended."));
 
-  m_inspectorStack->setCurrentIndex(3); // Plan page
+  m_inspectorStack->setCurrentIndex(3);
 }
 
 void GitWorkbenchDialog::clearInspector() {
   m_selectedCommitHash.clear();
   m_selectedBranchName.clear();
-  m_inspectorStack->setCurrentIndex(0); // Empty page
+  m_inspectorStack->setCurrentIndex(0);
 }
 
 void GitWorkbenchDialog::showRecoveryCenter() {
@@ -1817,7 +1729,6 @@ void GitWorkbenchDialog::showRecoveryCenter() {
     return;
   }
 
-  // Backup refs
   QStringList backupRefs = m_git->getBackupRefs();
   for (const auto &ref : backupRefs) {
     auto *item = new QTreeWidgetItem(m_recoveryList);
@@ -1830,7 +1741,6 @@ void GitWorkbenchDialog::showRecoveryCenter() {
     item->setData(1, Qt::UserRole, ref);
   }
 
-  // Reflog entries
   QList<GitReflogEntry> reflogEntries = m_git->getReflog(20);
   for (const auto &entry : reflogEntries) {
     auto *item = new QTreeWidgetItem(m_recoveryList);
@@ -1840,7 +1750,6 @@ void GitWorkbenchDialog::showRecoveryCenter() {
     item->setData(1, Qt::UserRole, entry.hash);
   }
 
-  // Status label
   if (backupRefs.isEmpty() && reflogEntries.isEmpty()) {
     m_recoveryStatusLabel->setText(tr("No recovery data found"));
   } else {
@@ -1854,7 +1763,7 @@ void GitWorkbenchDialog::showRecoveryCenter() {
 }
 
 void GitWorkbenchDialog::showStashInspector(int stashIndex) {
-  // Find stash entry
+
   GitStashEntry entry;
   bool found = false;
   for (const auto &s : m_stashes) {
@@ -1872,19 +1781,19 @@ void GitWorkbenchDialog::showStashInspector(int stashIndex) {
 
   m_inspStashRef->setText(QString("stash@{%1}").arg(entry.index));
   m_inspStashMessage->setText(entry.message);
-  m_inspStashBranch->setText(
-      entry.branch.isEmpty() ? tr("Unknown branch")
-                             : tr("Created on: %1").arg(entry.branch));
+  m_inspStashBranch->setText(entry.branch.isEmpty()
+                                 ? tr("Unknown branch")
+                                 : tr("Created on: %1").arg(entry.branch));
   m_inspStashHash->setText(entry.commitHash);
 
-  m_inspectorStack->setCurrentIndex(5); // Stash page
+  m_inspectorStack->setCurrentIndex(5);
 }
 
 void GitWorkbenchDialog::onCreateStashClicked() {
   bool ok = false;
-  QString message = QInputDialog::getText(
-      this, tr("Create Stash"), tr("Stash message (optional):"),
-      QLineEdit::Normal, QString(), &ok);
+  QString message = QInputDialog::getText(this, tr("Create Stash"),
+                                          tr("Stash message (optional):"),
+                                          QLineEdit::Normal, QString(), &ok);
 
   if (!ok || !m_git)
     return;
@@ -1893,8 +1802,6 @@ void GitWorkbenchDialog::onCreateStashClicked() {
     loadRepository();
   }
 }
-
-// ─── Risk Assessment ───────────────────────────────────────────────────────
 
 OperationRisk GitWorkbenchDialog::assessRebaseRisk() const {
   int dropCount = 0;
@@ -1955,7 +1862,7 @@ bool GitWorkbenchDialog::confirmOperation(const QString &title,
                                           const QString &description,
                                           OperationRisk risk,
                                           bool offerBackup) {
-  // Typed confirmation gate for Critical risk
+
   if (risk == OperationRisk::Critical) {
     QDialog dlg(this);
     dlg.setWindowTitle(title);
@@ -1979,8 +1886,7 @@ bool GitWorkbenchDialog::confirmOperation(const QString &title,
     warningLabel->setWordWrap(true);
     layout->addWidget(warningLabel);
 
-    auto *promptLabel = new QLabel(
-        tr("Type <b>CONFIRM</b> to proceed:"), &dlg);
+    auto *promptLabel = new QLabel(tr("Type <b>CONFIRM</b> to proceed:"), &dlg);
     promptLabel->setTextFormat(Qt::RichText);
     layout->addWidget(promptLabel);
 
@@ -1997,21 +1903,24 @@ bool GitWorkbenchDialog::confirmOperation(const QString &title,
     btnLayout->addWidget(applyBtn);
     layout->addLayout(btnLayout);
 
-    connect(confirmEdit, &QLineEdit::textChanged, [applyBtn](const QString &text) {
-      applyBtn->setEnabled(text.compare("CONFIRM", Qt::CaseInsensitive) == 0);
-    });
+    connect(confirmEdit, &QLineEdit::textChanged,
+            [applyBtn](const QString &text) {
+              applyBtn->setEnabled(
+                  text.compare("CONFIRM", Qt::CaseInsensitive) == 0);
+            });
     connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
     connect(applyBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
 
     dlg.setStyleSheet(
-        QString("QDialog { background: %1; }"
-                "QLabel { color: %2; font-size: 13px; }"
-                "QLineEdit { background: %3; color: %2; border: 1px solid %4; "
-                "border-radius: 6px; padding: 8px 12px; font-size: 13px; }"
-                "QPushButton { background: %3; color: %2; border: 1px solid %4; "
-                "border-radius: 8px; padding: 8px 18px; font-size: 13px; }"
-                "QPushButton:hover { background: %5; }"
-                "QPushButton:disabled { color: %4; }")
+        QString(
+            "QDialog { background: %1; }"
+            "QLabel { color: %2; font-size: 13px; }"
+            "QLineEdit { background: %3; color: %2; border: 1px solid %4; "
+            "border-radius: 6px; padding: 8px 12px; font-size: 13px; }"
+            "QPushButton { background: %3; color: %2; border: 1px solid %4; "
+            "border-radius: 8px; padding: 8px 18px; font-size: 13px; }"
+            "QPushButton:hover { background: %5; }"
+            "QPushButton:disabled { color: %4; }")
             .arg(m_theme.backgroundColor.name(), m_theme.foregroundColor.name(),
                  m_theme.surfaceAltColor.name(), m_theme.borderColor.name(),
                  m_theme.hoverColor.name()));
@@ -2022,8 +1931,7 @@ bool GitWorkbenchDialog::confirmOperation(const QString &title,
   QMessageBox box(this);
   box.setWindowTitle(title);
 
-  QString riskBadge =
-      QString("[%1 Risk] ").arg(riskLabel(risk));
+  QString riskBadge = QString("[%1 Risk] ").arg(riskLabel(risk));
   box.setText(riskBadge + description);
 
   if (risk == OperationRisk::Critical) {
@@ -2064,8 +1972,6 @@ bool GitWorkbenchDialog::confirmOperation(const QString &title,
   return result == QMessageBox::Yes || result == QMessageBox::Ok;
 }
 
-// ─── Commit Actions ────────────────────────────────────────────────────────
-
 void GitWorkbenchDialog::onCommitSelectionChanged() {
   auto selected = m_commitTree->selectedItems();
 
@@ -2090,7 +1996,6 @@ void GitWorkbenchDialog::onCommitDoubleClicked(QTreeWidgetItem *item,
   if (hash.isEmpty())
     return;
 
-  // Double-click on message column (0) → edit commit message
   if (column == 0) {
     m_selectedCommitHash = hash;
     onEditCommitMessage();
@@ -2118,9 +2023,9 @@ void GitWorkbenchDialog::onCommitContextMenu(const QPoint &pos) {
   menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
 
   if (isMulti) {
-    // Multi-select header
-    auto *headerAction = menu.addAction(
-        tr("%1 commits selected").arg(selCount));
+
+    auto *headerAction =
+        menu.addAction(tr("%1 commits selected").arg(selCount));
     headerAction->setEnabled(false);
     menu.addSeparator();
 
@@ -2155,17 +2060,15 @@ void GitWorkbenchDialog::onCommitContextMenu(const QPoint &pos) {
       });
     }
   } else {
-    // Single selection
-    menu.addAction(tr("View Diff"), [this, hash]() {
-      emit viewCommitDiff(hash);
-    });
+
+    menu.addAction(tr("View Diff"),
+                   [this, hash]() { emit viewCommitDiff(hash); });
     menu.addAction(tr("Edit Message..."), [this, hash]() {
       m_selectedCommitHash = hash;
       onEditCommitMessage();
     });
-    menu.addAction(tr("Copy Hash"), [hash]() {
-      QApplication::clipboard()->setText(hash);
-    });
+    menu.addAction(tr("Copy Hash"),
+                   [hash]() { QApplication::clipboard()->setText(hash); });
     menu.addSeparator();
     menu.addAction(tr("Cherry-pick"), this,
                    &GitWorkbenchDialog::onCherryPickClicked);
@@ -2221,8 +2124,6 @@ void GitWorkbenchDialog::onCommitSearchChanged(const QString &text) {
   }
 }
 
-// ─── Branch Actions ────────────────────────────────────────────────────────
-
 void GitWorkbenchDialog::onBranchItemClicked(QTreeWidgetItem *item,
                                              int column) {
   Q_UNUSED(column);
@@ -2231,7 +2132,6 @@ void GitWorkbenchDialog::onBranchItemClicked(QTreeWidgetItem *item,
   if (ref.isEmpty())
     return;
 
-  // Stash item
   if (isSpecial && ref.startsWith("stash@{")) {
     QRegularExpression re("stash@\\{(\\d+)\\}");
     auto match = re.match(ref);
@@ -2241,7 +2141,6 @@ void GitWorkbenchDialog::onBranchItemClicked(QTreeWidgetItem *item,
     }
   }
 
-  // Regular branch
   if (!ref.isEmpty()) {
     showBranchInspector(ref);
   }
@@ -2268,7 +2167,6 @@ void GitWorkbenchDialog::onBranchContextMenu(const QPoint &pos) {
   if (ref.isEmpty())
     return;
 
-  // Stash-specific context menu
   if (isSpecial && ref.startsWith("stash@{")) {
     QRegularExpression re("stash@\\{(\\d+)\\}");
     auto match = re.match(ref);
@@ -2341,10 +2239,9 @@ void GitWorkbenchDialog::onBranchContextMenu(const QPoint &pos) {
   if (!isCurrent && !isRemote) {
     menu.addSeparator();
     menu.addAction(tr("Delete"), [this, branchName]() {
-      if (confirmOperation(
-              tr("Delete Branch"),
-              tr("Delete branch '%1'?").arg(branchName),
-              OperationRisk::High, false)) {
+      if (confirmOperation(tr("Delete Branch"),
+                           tr("Delete branch '%1'?").arg(branchName),
+                           OperationRisk::High, false)) {
         if (m_git)
           m_git->deleteBranch(branchName);
         loadRepository();
@@ -2353,9 +2250,8 @@ void GitWorkbenchDialog::onBranchContextMenu(const QPoint &pos) {
   }
 
   if (!isCurrent) {
-    menu.addAction(tr("View Commits"), [this, branchName]() {
-      loadCommits(branchName);
-    });
+    menu.addAction(tr("View Commits"),
+                   [this, branchName]() { loadCommits(branchName); });
   }
 
   if (!isRemote) {
@@ -2404,9 +2300,9 @@ void GitWorkbenchDialog::onCreateBranchClicked() {
     return;
 
   bool ok;
-  QString name = QInputDialog::getText(this, tr("Create Branch"),
-                                       tr("Branch name:"), QLineEdit::Normal,
-                                       QString(), &ok);
+  QString name =
+      QInputDialog::getText(this, tr("Create Branch"), tr("Branch name:"),
+                            QLineEdit::Normal, QString(), &ok);
   if (ok && !name.isEmpty()) {
     if (m_git->createBranch(name, true)) {
       loadRepository();
@@ -2422,9 +2318,9 @@ void GitWorkbenchDialog::onRenameBranchClicked() {
     return;
 
   bool ok;
-  QString newName = QInputDialog::getText(
-      this, tr("Rename Branch"), tr("New branch name:"), QLineEdit::Normal,
-      m_selectedBranchName, &ok);
+  QString newName =
+      QInputDialog::getText(this, tr("Rename Branch"), tr("New branch name:"),
+                            QLineEdit::Normal, m_selectedBranchName, &ok);
   if (ok && !newName.isEmpty() && newName != m_selectedBranchName) {
     if (m_git->renameBranch(m_selectedBranchName, newName)) {
       loadRepository();
@@ -2440,17 +2336,15 @@ void GitWorkbenchDialog::onMergeBranchClicked() {
   if (m_selectedBranchName.isEmpty() || !m_git)
     return;
 
-  if (confirmOperation(
-          tr("Merge Branch"),
-          tr("Merge branch '%1' into current branch '%2'?")
-              .arg(m_selectedBranchName, m_currentBranch),
-          OperationRisk::Medium, false)) {
+  if (confirmOperation(tr("Merge Branch"),
+                       tr("Merge branch '%1' into current branch '%2'?")
+                           .arg(m_selectedBranchName, m_currentBranch),
+                       OperationRisk::Medium, false)) {
     if (m_git->mergeBranch(m_selectedBranchName)) {
       loadRepository();
     } else {
-      QMessageBox::warning(
-          this, tr("Merge Failed"),
-          tr("Merge failed. Check for conflicts."));
+      QMessageBox::warning(this, tr("Merge Failed"),
+                           tr("Merge failed. Check for conflicts."));
     }
   }
 }
@@ -2459,22 +2353,18 @@ void GitWorkbenchDialog::onRebaseBranchClicked() {
   if (m_selectedBranchName.isEmpty() || !m_git)
     return;
 
-  if (confirmOperation(
-          tr("Rebase onto Branch"),
-          tr("Rebase current branch '%1' onto '%2'?")
-              .arg(m_currentBranch, m_selectedBranchName),
-          OperationRisk::High)) {
+  if (confirmOperation(tr("Rebase onto Branch"),
+                       tr("Rebase current branch '%1' onto '%2'?")
+                           .arg(m_currentBranch, m_selectedBranchName),
+                       OperationRisk::High)) {
     if (m_git->rebaseBranch(m_selectedBranchName)) {
       loadRepository();
     } else {
-      QMessageBox::warning(
-          this, tr("Rebase Failed"),
-          tr("Rebase failed. Check for conflicts."));
+      QMessageBox::warning(this, tr("Rebase Failed"),
+                           tr("Rebase failed. Check for conflicts."));
     }
   }
 }
-
-// ─── Rewrite Operations ───────────────────────────────────────────────────
 
 void GitWorkbenchDialog::onMoveUp() {
   if (!m_rewriteMode)
@@ -2620,15 +2510,12 @@ void GitWorkbenchDialog::onPickAll() {
   showPlanInspector();
 }
 
-// ─── Apply Rebase ──────────────────────────────────────────────────────────
-
 void GitWorkbenchDialog::onApplyRebase() {
   if (m_entries.isEmpty() || !m_git)
     return;
 
   OperationRisk risk = assessRebaseRisk();
 
-  // Build description
   int dropCount = 0, squashCount = 0, rewordCount = 0, editCount = 0;
   int dropKeepCount = 0;
   int limit = qMin(m_entries.size(), 30);
@@ -2656,7 +2543,8 @@ void GitWorkbenchDialog::onApplyRebase() {
   if (editCount > 0)
     consequences << tr("%1 commit(s) will be edited").arg(editCount);
   if (dropKeepCount > 0)
-    consequences << tr("%1 commit(s) will be removed (content preserved)").arg(dropKeepCount);
+    consequences << tr("%1 commit(s) will be removed (content preserved)")
+                        .arg(dropKeepCount);
 
   QString description =
       tr("This rewrite will affect %1 on branch '%2':\n• %3\n\n"
@@ -2668,7 +2556,6 @@ void GitWorkbenchDialog::onApplyRebase() {
                         m_backupCheckbox->isChecked()))
     return;
 
-  // Create backup ref if requested
   if (m_backupCheckbox->isChecked()) {
     QString backupRef =
         QString("refs/backup/%1-%2")
@@ -2680,7 +2567,6 @@ void GitWorkbenchDialog::onApplyRebase() {
     backupProc.waitForFinished(5000);
   }
 
-  // Build rebase todo script
   QString todoScript;
   for (int i = limit - 1; i >= 0; --i) {
     QString scriptAction = m_entries[i].action;
@@ -2730,23 +2616,19 @@ void GitWorkbenchDialog::onApplyRebase() {
   } else {
     m_commitStatusLabel->setText(
         tr("Rewrite failed or needs conflict resolution"));
-    QMessageBox::warning(
-        this, tr("Rewrite Issue"),
-        tr("Rebase encountered issues:\n%1").arg(output));
+    QMessageBox::warning(this, tr("Rewrite Issue"),
+                         tr("Rebase encountered issues:\n%1").arg(output));
   }
 }
-
-// ─── Inspector Actions ─────────────────────────────────────────────────────
 
 void GitWorkbenchDialog::onCherryPickClicked() {
   if (m_selectedCommitHash.isEmpty() || !m_git)
     return;
 
-  if (confirmOperation(
-          tr("Cherry-pick"),
-          tr("Cherry-pick commit %1 onto current branch?")
-              .arg(m_selectedCommitHash.left(8)),
-          OperationRisk::Medium, false)) {
+  if (confirmOperation(tr("Cherry-pick"),
+                       tr("Cherry-pick commit %1 onto current branch?")
+                           .arg(m_selectedCommitHash.left(8)),
+                       OperationRisk::Medium, false)) {
     if (m_git->cherryPick(m_selectedCommitHash)) {
       loadRepository();
     } else {
@@ -2760,7 +2642,6 @@ void GitWorkbenchDialog::onMoveToBranchClicked() {
   if (m_selectedCommitHash.isEmpty() || !m_git)
     return;
 
-  // Build list of target branches
   QStringList branchNames;
   for (const auto &b : m_branches) {
     if (!b.isCurrent && !b.isRemote)
@@ -2779,12 +2660,11 @@ void GitWorkbenchDialog::onMoveToBranchClicked() {
                                          tr("Select target branch:"),
                                          branchNames, 0, false, &ok);
   if (ok && !target.isEmpty()) {
-    if (confirmOperation(
-            tr("Move Commit"),
-            tr("Move commit %1 to branch '%2'? "
-               "This rewrites history on the current branch.")
-                .arg(m_selectedCommitHash.left(8), target),
-            OperationRisk::High)) {
+    if (confirmOperation(tr("Move Commit"),
+                         tr("Move commit %1 to branch '%2'? "
+                            "This rewrites history on the current branch.")
+                             .arg(m_selectedCommitHash.left(8), target),
+                         OperationRisk::High)) {
       if (m_git->moveCommitToBranch(m_selectedCommitHash, target)) {
         loadRepository();
       } else {
@@ -2821,7 +2701,6 @@ void GitWorkbenchDialog::onEditCommitMessage() {
   if (currentMsg.isEmpty())
     return;
 
-  // Build edit dialog
   QDialog editDlg(this);
   editDlg.setWindowTitle(tr("Edit Commit Message"));
   editDlg.setMinimumSize(520, 360);
@@ -2847,10 +2726,9 @@ void GitWorkbenchDialog::onEditCommitMessage() {
   auto *warningLabel = new QLabel(&editDlg);
   warningLabel->setWordWrap(true);
 
-  // Check if this is the HEAD commit (amend) or an older commit (reword via rebase)
   auto headCommits = m_git->getCommitLog(1);
-  bool isHead = !headCommits.isEmpty() &&
-                headCommits.first().hash.startsWith(m_selectedCommitHash.left(8));
+  bool isHead = !headCommits.isEmpty() && headCommits.first().hash.startsWith(
+                                              m_selectedCommitHash.left(8));
 
   if (isHead) {
     warningLabel->setText(
@@ -2871,7 +2749,6 @@ void GitWorkbenchDialog::onEditCommitMessage() {
   btnRow->addWidget(saveBtn);
   layout->addLayout(btnRow);
 
-  // Styling
   editDlg.setStyleSheet(
       QString("QDialog { background: %1; color: %2; }"
               "QTextEdit { background: %3; color: %2; border: 1px solid %4; "
@@ -2893,11 +2770,10 @@ void GitWorkbenchDialog::onEditCommitMessage() {
     return;
 
   OperationRisk risk = isHead ? OperationRisk::Low : OperationRisk::Medium;
-  if (!confirmOperation(
-          tr("Edit Commit Message"),
-          tr("Change the message of commit %1?")
-              .arg(m_selectedCommitHash.left(8)),
-          risk, !isHead))
+  if (!confirmOperation(tr("Edit Commit Message"),
+                        tr("Change the message of commit %1?")
+                            .arg(m_selectedCommitHash.left(8)),
+                        risk, !isHead))
     return;
 
   bool ok = false;
@@ -2932,12 +2808,11 @@ void GitWorkbenchDialog::onResetToBranchClicked() {
   if (ok) {
     OperationRisk risk =
         (mode == "hard") ? OperationRisk::Critical : OperationRisk::High;
-    if (confirmOperation(
-            tr("Reset"),
-            tr("Reset current branch to '%1' using %2 mode?")
-                .arg(m_selectedBranchName, mode),
-            risk)) {
-      // Get the tip of the selected branch
+    if (confirmOperation(tr("Reset"),
+                         tr("Reset current branch to '%1' using %2 mode?")
+                             .arg(m_selectedBranchName, mode),
+                         risk)) {
+
       QList<GitCommitInfo> tipCommits =
           m_git->getCommitLog(1, m_selectedBranchName);
       if (!tipCommits.isEmpty()) {
@@ -2948,20 +2823,16 @@ void GitWorkbenchDialog::onResetToBranchClicked() {
   }
 }
 
-// ─── Keyboard Shortcuts ────────────────────────────────────────────────────
-
 void GitWorkbenchDialog::keyPressEvent(QKeyEvent *event) {
-  // Ctrl+K — Command palette (global, regardless of focus)
+
   if (event->key() == Qt::Key_K && (event->modifiers() & Qt::ControlModifier)) {
     onCommandPalette();
     return;
   }
 
-  // Only handle shortcuts when commit tree is focused or no specific widget has
-  // focus
-  bool commitFocused = m_commitTree->hasFocus() ||
-                       (!m_branchSearch->hasFocus() &&
-                        !m_commitSearch->hasFocus());
+  bool commitFocused =
+      m_commitTree->hasFocus() ||
+      (!m_branchSearch->hasFocus() && !m_commitSearch->hasFocus());
 
   if (commitFocused) {
     switch (event->key()) {
@@ -3010,7 +2881,7 @@ void GitWorkbenchDialog::keyPressEvent(QKeyEvent *event) {
 
     case Qt::Key_R:
       if (event->modifiers() & Qt::ControlModifier) {
-        break; // Let Ctrl+R pass through
+        break;
       }
       if (m_rewriteMode) {
         onRewordSelected();
@@ -3086,9 +2957,9 @@ void GitWorkbenchDialog::keyPressEvent(QKeyEvent *event) {
       }
       break;
 
-    case Qt::Key_Question:
-      {
-        QMessageBox::information(this, tr("Keyboard Shortcuts"),
+    case Qt::Key_Question: {
+      QMessageBox::information(
+          this, tr("Keyboard Shortcuts"),
           tr("J/K — Navigate commits\n"
              "Shift+J/K — Extend selection / Move in rewrite\n"
              "S — Squash (rewrite mode)\n"
@@ -3106,7 +2977,7 @@ void GitWorkbenchDialog::keyPressEvent(QKeyEvent *event) {
              "Ctrl+Z — Reset all (rewrite mode)\n"
              "Ctrl+K — Command palette\n"
              "? — Show this help"));
-      }
+    }
       return;
     }
   }
@@ -3155,15 +3026,12 @@ void GitWorkbenchDialog::updateSelectionUI() {
   auto selected = m_commitTree->selectedItems();
   int count = selected.size();
 
-  // Update selection bar visibility and text
   bool showBar = count >= 2;
   m_selectionBar->setVisible(showBar);
   if (showBar) {
-    m_selectionCountLabel->setText(
-        tr("<b>%1 commits selected</b>").arg(count));
+    m_selectionCountLabel->setText(tr("<b>%1 commits selected</b>").arg(count));
   }
 
-  // Update toolbar button labels with selection counts when in rewrite mode
   if (m_rewriteMode) {
     if (count >= 2) {
       m_squashBtn->setText(tr("Squash (%1)").arg(count));
@@ -3202,8 +3070,6 @@ QString GitWorkbenchDialog::accentButtonStyle() const {
 QString GitWorkbenchDialog::ghostButtonStyle() const {
   return UIStyleHelper::breadcrumbButtonStyle(m_theme);
 }
-
-// ─── Command Palette ───────────────────────────────────────────────────────
 
 void GitWorkbenchDialog::onCommandPalette() {
   QDialog palette(this);
@@ -3263,16 +3129,14 @@ void GitWorkbenchDialog::onCommandPalette() {
     listWidget->addItem(cmd.first);
   }
 
-  // Filter list on text change
-  connect(filterEdit, &QLineEdit::textChanged, [listWidget](const QString &text) {
-    for (int i = 0; i < listWidget->count(); ++i) {
-      auto *item = listWidget->item(i);
-      item->setHidden(
-          !item->text().contains(text, Qt::CaseInsensitive));
-    }
-  });
+  connect(
+      filterEdit, &QLineEdit::textChanged, [listWidget](const QString &text) {
+        for (int i = 0; i < listWidget->count(); ++i) {
+          auto *item = listWidget->item(i);
+          item->setHidden(!item->text().contains(text, Qt::CaseInsensitive));
+        }
+      });
 
-  // Execute command on activation
   int selectedIndex = -1;
   auto executeSelection = [&]() {
     auto *item = listWidget->currentItem();
@@ -3290,9 +3154,7 @@ void GitWorkbenchDialog::onCommandPalette() {
   connect(listWidget, &QListWidget::itemActivated,
           [&](QListWidgetItem *) { executeSelection(); });
 
-  // Handle Enter key in filter edit
   connect(filterEdit, &QLineEdit::returnPressed, [&]() {
-    // Select first visible item
     for (int i = 0; i < listWidget->count(); ++i) {
       if (!listWidget->item(i)->isHidden()) {
         listWidget->setCurrentRow(i);
@@ -3309,6 +3171,4 @@ void GitWorkbenchDialog::onCommandPalette() {
   }
 }
 
-void GitWorkbenchDialog::onActionComboChanged(int) {
-  // Handled inline via lambda connections in rebuildActionCombo
-}
+void GitWorkbenchDialog::onActionComboChanged(int) {}

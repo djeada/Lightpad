@@ -10,39 +10,37 @@
 static const QRegularExpression s_sectionRe(
     R"(\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?\{([^}]*)\})");
 static const QRegularExpression s_labelRe(R"(\\label\{([^}]*)\})");
-static const QRegularExpression s_refRe(
-    R"(\\(ref|eqref|pageref|cite|citep|citet)\{([^}]*)\})");
+static const QRegularExpression
+    s_refRe(R"(\\(ref|eqref|pageref|cite|citep|citet)\{([^}]*)\})");
 static const QRegularExpression s_citeRe(
     R"(\\(cite|citep|citet|citeauthor|citeyear|citealt|citealp|parencite|textcite|autocite|fullcite)\{([^}]*)\})");
 static const QRegularExpression s_includeRe(
     R"(\\(input|include|includeonly|includegraphics)(?:\[[^\]]*\])?\{([^}]*)\})");
-static const QRegularExpression s_bibResourceRe(
-    R"(\\(addbibresource|bibliography)\{([^}]*)\})");
-static const QRegularExpression s_documentClassRe(
-    R"(\\documentclass(?:\[[^\]]*\])?\{([^}]*)\})");
-static const QRegularExpression s_usePackageRe(
-    R"(\\usepackage(?:\[[^\]]*\])?\{([^}]*)\})");
+static const QRegularExpression
+    s_bibResourceRe(R"(\\(addbibresource|bibliography)\{([^}]*)\})");
+static const QRegularExpression
+    s_documentClassRe(R"(\\documentclass(?:\[[^\]]*\])?\{([^}]*)\})");
+static const QRegularExpression
+    s_usePackageRe(R"(\\usepackage(?:\[[^\]]*\])?\{([^}]*)\})");
 static const QRegularExpression s_beginEnvRe(R"(\\begin\{([^}]*)\})");
 static const QRegularExpression s_endEnvRe(R"(\\end\{([^}]*)\})");
 static const QRegularExpression s_commentRe(R"((?:^|[^\\])%.*)");
 
 static const QRegularExpression s_logErrorRe(R"(^!\s+(.*))");
-static const QRegularExpression s_logLatexErrorRe(
-    R"(^!\s+LaTeX Error:\s+(.*))");
-static const QRegularExpression s_logWarningRe(
-    R"(^LaTeX Warning:\s+(.*))");
-static const QRegularExpression s_logPackageWarningRe(
-    R"(^Package\s+(\S+)\s+Warning:\s+(.*))");
-static const QRegularExpression s_logOverfullRe(
-    R"(^(Overfull|Underfull)\s+\\[hv]box\s+.*)");
+static const QRegularExpression
+    s_logLatexErrorRe(R"(^!\s+LaTeX Error:\s+(.*))");
+static const QRegularExpression s_logWarningRe(R"(^LaTeX Warning:\s+(.*))");
+static const QRegularExpression
+    s_logPackageWarningRe(R"(^Package\s+(\S+)\s+Warning:\s+(.*))");
+static const QRegularExpression
+    s_logOverfullRe(R"(^(Overfull|Underfull)\s+\\[hv]box\s+.*)");
 static const QRegularExpression s_logLineNumberRe(R"(\bl\.(\d+)\b)");
-static const QRegularExpression s_logInputLineRe(
-    R"(on input line\s+(\d+))");
+static const QRegularExpression s_logInputLineRe(R"(on input line\s+(\d+))");
 
 static const QMap<QString, int> s_sectionLevels = {
-    {"part", 0},           {"chapter", 1},    {"section", 2},
-    {"subsection", 3},     {"subsubsection", 4},
-    {"paragraph", 5},      {"subparagraph", 6}};
+    {"part", 0},        {"chapter", 1},       {"section", 2},
+    {"subsection", 3},  {"subsubsection", 4}, {"paragraph", 5},
+    {"subparagraph", 6}};
 
 static int lineNumberAt(const QString &text, int position) {
   int line = 0;
@@ -379,8 +377,8 @@ QList<LspDiagnostic> LatexTools::lint(const QString &text,
 }
 
 bool LatexTools::isLatexFile(const QString &extension) {
-  static const QSet<QString> s_extensions = {"tex", "ltx", "sty",
-                                             "cls", "bib", "dtx", "ins"};
+  static const QSet<QString> s_extensions = {"tex", "ltx", "sty", "cls",
+                                             "bib", "dtx", "ins"};
   return s_extensions.contains(extension.toLower());
 }
 
@@ -418,8 +416,7 @@ QPair<int, int> LatexTools::findMatchingEnvironment(const QString &text,
     int searchPos = beginMatch.capturedEnd();
 
     while (depth > 0 && searchPos < text.length()) {
-      QRegularExpressionMatch nextBegin =
-          s_beginEnvRe.match(text, searchPos);
+      QRegularExpressionMatch nextBegin = s_beginEnvRe.match(text, searchPos);
       QRegularExpressionMatch nextEnd = s_endEnvRe.match(text, searchPos);
 
       if (!nextEnd.hasMatch())
@@ -437,8 +434,8 @@ QPair<int, int> LatexTools::findMatchingEnvironment(const QString &text,
           return {position, nextEnd.capturedStart()};
         searchPos = nextEnd.capturedEnd();
       } else {
-        searchPos = beginFirst ? nextBegin.capturedEnd()
-                               : nextEnd.capturedEnd();
+        searchPos =
+            beginFirst ? nextBegin.capturedEnd() : nextEnd.capturedEnd();
       }
     }
 
@@ -457,8 +454,7 @@ QPair<int, int> LatexTools::findMatchingEnvironment(const QString &text,
       QRegularExpressionMatch bestBegin;
       QRegularExpressionMatch bestEnd;
 
-      QRegularExpressionMatchIterator beginIt =
-          s_beginEnvRe.globalMatch(text);
+      QRegularExpressionMatchIterator beginIt = s_beginEnvRe.globalMatch(text);
       while (beginIt.hasNext()) {
         QRegularExpressionMatch m = beginIt.next();
         if (m.capturedStart() < searchPos && m.captured(1) == envName) {
@@ -472,8 +468,8 @@ QPair<int, int> LatexTools::findMatchingEnvironment(const QString &text,
       QRegularExpressionMatchIterator endIt = s_endEnvRe.globalMatch(text);
       while (endIt.hasNext()) {
         QRegularExpressionMatch m = endIt.next();
-        if (m.capturedStart() < searchPos &&
-            m.capturedStart() != position && m.captured(1) == envName) {
+        if (m.capturedStart() < searchPos && m.capturedStart() != position &&
+            m.captured(1) == envName) {
           if (m.capturedStart() > bestEndPos) {
             bestEndPos = m.capturedStart();
             bestEnd = m;
@@ -515,9 +511,8 @@ QString LatexTools::resolveIncludePath(const QString &includePath,
   return QDir::cleanPath(resolved);
 }
 
-// --- Private lint helpers ---
-
-QList<LspDiagnostic> LatexTools::checkUnclosedEnvironments(const QString &text) {
+QList<LspDiagnostic>
+LatexTools::checkUnclosedEnvironments(const QString &text) {
   QList<LspDiagnostic> diagnostics;
   const QStringList lines = text.split('\n');
 
@@ -536,8 +531,8 @@ QList<LspDiagnostic> LatexTools::checkUnclosedEnvironments(const QString &text) 
       QRegularExpressionMatch match = beginIt.next();
       if (isInComment(line, match.capturedStart()))
         continue;
-      stack.append({match.captured(1), i,
-                    static_cast<int>(match.capturedStart())});
+      stack.append(
+          {match.captured(1), i, static_cast<int>(match.capturedStart())});
     }
 
     QRegularExpressionMatchIterator endIt = s_endEnvRe.globalMatch(line);
@@ -565,8 +560,7 @@ QList<LspDiagnostic> LatexTools::checkUnclosedEnvironments(const QString &text) 
         diag.source = "latex-lint";
         diag.code = "ENV001";
         diag.message =
-            QString("\\end{%1} without matching \\begin{%1}")
-                .arg(envName);
+            QString("\\end{%1} without matching \\begin{%1}").arg(envName);
         diagnostics.append(diag);
       }
     }
@@ -600,10 +594,9 @@ QList<LspDiagnostic> LatexTools::checkDuplicateLabels(const QString &text) {
       diag.severity = LspDiagnosticSeverity::Error;
       diag.source = "latex-lint";
       diag.code = "LBL001";
-      diag.message =
-          QString("Duplicate label '%1' (first defined on line %2)")
-              .arg(lbl.name)
-              .arg(seen[lbl.name] + 1);
+      diag.message = QString("Duplicate label '%1' (first defined on line %2)")
+                         .arg(lbl.name)
+                         .arg(seen[lbl.name] + 1);
       diagnostics.append(diag);
     } else {
       seen[lbl.name] = lbl.lineNumber;
@@ -613,8 +606,7 @@ QList<LspDiagnostic> LatexTools::checkDuplicateLabels(const QString &text) {
   return diagnostics;
 }
 
-QList<LspDiagnostic>
-LatexTools::checkUndefinedReferences(const QString &text) {
+QList<LspDiagnostic> LatexTools::checkUndefinedReferences(const QString &text) {
   QList<LspDiagnostic> diagnostics;
   QList<LatexLabel> labels = extractLabels(text);
   QSet<QString> labelNames;
@@ -642,8 +634,7 @@ LatexTools::checkUndefinedReferences(const QString &text) {
         diag.severity = LspDiagnosticSeverity::Warning;
         diag.source = "latex-lint";
         diag.code = "REF001";
-        diag.message =
-            QString("Undefined reference '%1'").arg(refName);
+        diag.message = QString("Undefined reference '%1'").arg(refName);
         diagnostics.append(diag);
       }
     }
@@ -742,24 +733,18 @@ QList<LspDiagnostic> LatexTools::checkCommonTypos(const QString &text) {
   const QStringList lines = text.split('\n');
 
   static const QList<QPair<QRegularExpression, QString>> s_typos = {
-      {QRegularExpression(R"(\\being\{)"),
-       "\\being should be \\begin"},
-      {QRegularExpression(R"(\\ned\{)"),
-       "\\ned should be \\end"},
-      {QRegularExpression(R"(\\bigen\{)"),
-       "\\bigen should be \\begin"},
-      {QRegularExpression(R"(\\ednl?\{)"),
-       "\\edn/\\ednl should be \\end"},
+      {QRegularExpression(R"(\\being\{)"), "\\being should be \\begin"},
+      {QRegularExpression(R"(\\ned\{)"), "\\ned should be \\end"},
+      {QRegularExpression(R"(\\bigen\{)"), "\\bigen should be \\begin"},
+      {QRegularExpression(R"(\\ednl?\{)"), "\\edn/\\ednl should be \\end"},
       {QRegularExpression(R"(\\usepackge\{)"),
        "\\usepackge should be \\usepackage"},
       {QRegularExpression(R"(\\docuemntclass\{)"),
        "\\docuemntclass should be \\documentclass"},
       {QRegularExpression(R"(\\documentcalss\{)"),
        "\\documentcalss should be \\documentclass"},
-      {QRegularExpression(R"(\\incldue\{)"),
-       "\\incldue should be \\include"},
-      {QRegularExpression(R"(\\labek\{)"),
-       "\\labek should be \\label"},
+      {QRegularExpression(R"(\\incldue\{)"), "\\incldue should be \\include"},
+      {QRegularExpression(R"(\\labek\{)"), "\\labek should be \\label"},
   };
 
   for (int i = 0; i < lines.size(); ++i) {

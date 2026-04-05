@@ -102,9 +102,8 @@ bool TestFileClassifier::autoDetectTestFile(const QString &filePath) const {
 
   static const QStringList testPrefixes = {"test_", "test-", "tests_",
                                            "tests-"};
-  static const QStringList testSuffixes = {"_test",  "-test",  "_tests",
-                                           "-tests", "_spec",  "-spec",
-                                           ".test",  ".spec"};
+  static const QStringList testSuffixes = {"_test", "-test", "_tests", "-tests",
+                                           "_spec", "-spec", ".test",  ".spec"};
 
   for (const QString &prefix : testPrefixes) {
     if (baseName.startsWith(prefix)) {
@@ -119,8 +118,8 @@ bool TestFileClassifier::autoDetectTestFile(const QString &filePath) const {
   }
 
   QString normalized = QDir::cleanPath(filePath).toLower();
-  static const QStringList testDirPatterns = {"/tests/", "/test/", "/__tests__/",
-                                              "/__test__/", "/spec/", "/specs/"};
+  static const QStringList testDirPatterns = {
+      "/tests/", "/test/", "/__tests__/", "/__test__/", "/spec/", "/specs/"};
   for (const QString &dir : testDirPatterns) {
     if (normalized.contains(dir)) {
       return true;

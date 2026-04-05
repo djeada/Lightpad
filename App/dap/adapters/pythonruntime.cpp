@@ -1,8 +1,8 @@
 #include "pythonruntime.h"
 
-#include "adapterutils.h"
 #include "../../python/pythonprojectenvironment.h"
 #include "../debugconfiguration.h"
+#include "adapterutils.h"
 
 #include <QFileInfo>
 namespace {
@@ -74,7 +74,8 @@ resolvePythonInterpreter(const DebugConfiguration *configuration,
           configuration && !configuration->cwd.isEmpty() ? configuration->cwd
                                                          : workingDirectory);
 
-  if (preferredEnvironment.found && !preferredEnvironment.interpreter.isEmpty()) {
+  if (preferredEnvironment.found &&
+      !preferredEnvironment.interpreter.isEmpty()) {
     if (!pythonHasDebugpy(preferredEnvironment.interpreter)) {
       return {{},
               QString("debugpy not installed for %1. Run: %1 -m pip install "
@@ -131,8 +132,9 @@ preferredPythonInterpreterCandidate(const DebugConfiguration *configuration,
   const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
       preferenceFromConfiguration(configuration),
       DebugConfigurationManager::instance().workspaceFolder(),
-      configuration && !configuration->program.isEmpty() ? configuration->program
-                                                         : filePath,
+      configuration && !configuration->program.isEmpty()
+          ? configuration->program
+          : filePath,
       configuration && !configuration->cwd.isEmpty() ? configuration->cwd
                                                      : workingDirectory);
   if (info.found && !info.interpreter.isEmpty()) {

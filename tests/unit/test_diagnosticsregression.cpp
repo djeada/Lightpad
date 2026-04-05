@@ -20,8 +20,8 @@ private slots:
   void testSignalEmissionOnVersionDrop();
 
 private:
-  LspDiagnostic makeDiag(LspDiagnosticSeverity severity,
-                          const QString &message, int line = 0) {
+  LspDiagnostic makeDiag(LspDiagnosticSeverity severity, const QString &message,
+                         int line = 0) {
     LspDiagnostic d;
     d.severity = severity;
     d.message = message;
@@ -171,14 +171,10 @@ void TestDiagnosticsRegression::testDiagnosticsAfterClearAll() {
   QString uri1 = "file:///test/a.cpp";
   QString uri2 = "file:///test/b.cpp";
 
-  mgr.upsertDiagnostics(
-      uri1,
-      {makeDiag(LspDiagnosticSeverity::Error, "err a")},
-      "lsp:clangd");
-  mgr.upsertDiagnostics(
-      uri2,
-      {makeDiag(LspDiagnosticSeverity::Error, "err b")},
-      "lsp:clangd");
+  mgr.upsertDiagnostics(uri1, {makeDiag(LspDiagnosticSeverity::Error, "err a")},
+                        "lsp:clangd");
+  mgr.upsertDiagnostics(uri2, {makeDiag(LspDiagnosticSeverity::Error, "err b")},
+                        "lsp:clangd");
 
   mgr.clearAllForSource("lsp:clangd");
 
@@ -186,10 +182,9 @@ void TestDiagnosticsRegression::testDiagnosticsAfterClearAll() {
   QCOMPARE(mgr.diagnosticsForUri(uri2).size(), 0);
   QCOMPARE(mgr.errorCount(), 0);
 
-  mgr.upsertDiagnostics(
-      uri1,
-      {makeDiag(LspDiagnosticSeverity::Warning, "new warn")},
-      "lsp:clangd");
+  mgr.upsertDiagnostics(uri1,
+                        {makeDiag(LspDiagnosticSeverity::Warning, "new warn")},
+                        "lsp:clangd");
   QCOMPARE(mgr.diagnosticsForUri(uri1).size(), 1);
   QCOMPARE(mgr.warningCount(), 1);
 }
@@ -200,8 +195,7 @@ void TestDiagnosticsRegression::testSameSourceMultipleFiles() {
   for (int i = 0; i < 10; i++) {
     QString uri = QString("file:///test/file%1.cpp").arg(i);
     mgr.upsertDiagnostics(
-        uri,
-        {makeDiag(LspDiagnosticSeverity::Error, QString("err %1").arg(i))},
+        uri, {makeDiag(LspDiagnosticSeverity::Error, QString("err %1").arg(i))},
         "lsp:clangd");
   }
 

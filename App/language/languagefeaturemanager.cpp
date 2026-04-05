@@ -294,17 +294,15 @@ void LanguageFeatureManager::onDiagnosticsReceived(
 }
 
 QString LanguageFeatureManager::detectProjectRoot(const QString &filePath) {
-  static const QStringList projectMarkers = {
-      "Cargo.toml",           // Rust
-      "go.mod",               // Go
-      "pyproject.toml",       // Python
-      "requirements.txt",     // Python
-      "setup.py",             // Python
-      "CMakeLists.txt",       // C/C++
-      "compile_commands.json", // C/C++
-      "latexmkrc",            // LaTeX
-      ".latexmkrc"            // LaTeX
-  };
+  static const QStringList projectMarkers = {"Cargo.toml",
+                                             "go.mod",
+                                             "pyproject.toml",
+                                             "requirements.txt",
+                                             "setup.py",
+                                             "CMakeLists.txt",
+                                             "compile_commands.json",
+                                             "latexmkrc",
+                                             ".latexmkrc"};
 
   QDir dir = QFileInfo(filePath).absoluteDir();
   QString prevPath;
@@ -332,7 +330,8 @@ LanguageFeatureManager::serverConfig(const QString &languageId) const {
   return configForLanguage(languageId);
 }
 
-QString LanguageFeatureManager::lastServerError(const QString &languageId) const {
+QString
+LanguageFeatureManager::lastServerError(const QString &languageId) const {
   return m_lastServerErrors.value(languageId);
 }
 

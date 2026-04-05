@@ -83,8 +83,7 @@ void TestLatexSyntaxPlugin::testSectioningCommandHighlighting() {
       break;
     }
   }
-  QVERIFY2(foundSection,
-           "Should highlight \\section command as keyword_0");
+  QVERIFY2(foundSection, "Should highlight \\section command as keyword_0");
 
   bool foundChapter = false;
   for (const auto &rule : rules) {
@@ -94,8 +93,7 @@ void TestLatexSyntaxPlugin::testSectioningCommandHighlighting() {
       break;
     }
   }
-  QVERIFY2(foundChapter,
-           "Should highlight \\chapter command as keyword_0");
+  QVERIFY2(foundChapter, "Should highlight \\chapter command as keyword_0");
 }
 
 void TestLatexSyntaxPlugin::testEnvironmentHighlighting() {
@@ -110,8 +108,7 @@ void TestLatexSyntaxPlugin::testEnvironmentHighlighting() {
       break;
     }
   }
-  QVERIFY2(foundBeginEnd,
-           "Should highlight \\begin{document} as keyword_0");
+  QVERIFY2(foundBeginEnd, "Should highlight \\begin{document} as keyword_0");
 }
 
 void TestLatexSyntaxPlugin::testCommentHighlighting() {
@@ -126,10 +123,8 @@ void TestLatexSyntaxPlugin::testCommentHighlighting() {
       break;
     }
   }
-  QVERIFY2(foundComment,
-           "Should highlight % comments");
+  QVERIFY2(foundComment, "Should highlight % comments");
 
-  // Verify escaped percent is NOT matched as comment
   bool escapedMatched = false;
   for (const auto &rule : rules) {
     if (rule.name == "comment") {
@@ -139,8 +134,7 @@ void TestLatexSyntaxPlugin::testCommentHighlighting() {
       }
     }
   }
-  QVERIFY2(!escapedMatched,
-           "Should not highlight escaped \\% as comment");
+  QVERIFY2(!escapedMatched, "Should not highlight escaped \\% as comment");
 }
 
 void TestLatexSyntaxPlugin::testMathModeHighlighting() {
@@ -155,8 +149,7 @@ void TestLatexSyntaxPlugin::testMathModeHighlighting() {
       break;
     }
   }
-  QVERIFY2(foundInlineMath,
-           "Should highlight inline math $...$ as number");
+  QVERIFY2(foundInlineMath, "Should highlight inline math $...$ as number");
 }
 
 void TestLatexSyntaxPlugin::testReferenceCommandHighlighting() {
@@ -196,8 +189,7 @@ void TestLatexSyntaxPlugin::testGeneralCommandHighlighting() {
       break;
     }
   }
-  QVERIFY2(foundGeneral,
-           "Should highlight general commands as keyword_1");
+  QVERIFY2(foundGeneral, "Should highlight general commands as keyword_1");
 }
 
 void TestLatexSyntaxPlugin::testBibEntryHighlighting() {
@@ -212,8 +204,7 @@ void TestLatexSyntaxPlugin::testBibEntryHighlighting() {
       break;
     }
   }
-  QVERIFY2(foundBib,
-           "Should highlight @article{key as class");
+  QVERIFY2(foundBib, "Should highlight @article{key as class");
 }
 
 void TestLatexSyntaxPlugin::testMultiLineBlocks() {
@@ -230,8 +221,7 @@ void TestLatexSyntaxPlugin::testMultiLineBlocks() {
       break;
     }
   }
-  QVERIFY2(foundVerbatim,
-           "Should have verbatim multi-line block");
+  QVERIFY2(foundVerbatim, "Should have verbatim multi-line block");
 }
 
 void TestLatexSyntaxPlugin::testKeywordsNotEmpty() {

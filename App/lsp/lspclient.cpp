@@ -883,8 +883,7 @@ void LspClient::doInitialize() {
   textDocumentCaps["completion"] = QJsonObject{{"dynamicRegistration", false}};
   textDocumentCaps["hover"] = QJsonObject{{"dynamicRegistration", false}};
   textDocumentCaps["definition"] = QJsonObject{{"dynamicRegistration", false}};
-  textDocumentCaps["declaration"] =
-      QJsonObject{{"dynamicRegistration", false}};
+  textDocumentCaps["declaration"] = QJsonObject{{"dynamicRegistration", false}};
   textDocumentCaps["typeDefinition"] =
       QJsonObject{{"dynamicRegistration", false}};
   textDocumentCaps["references"] = QJsonObject{{"dynamicRegistration", false}};
@@ -895,10 +894,8 @@ void LspClient::doInitialize() {
                   {"hierarchicalDocumentSymbolSupport", true}};
   textDocumentCaps["rename"] =
       QJsonObject{{"dynamicRegistration", false}, {"prepareSupport", false}};
-  textDocumentCaps["formatting"] =
-      QJsonObject{{"dynamicRegistration", false}};
-  textDocumentCaps["codeAction"] =
-      QJsonObject{{"dynamicRegistration", false}};
+  textDocumentCaps["formatting"] = QJsonObject{{"dynamicRegistration", false}};
+  textDocumentCaps["codeAction"] = QJsonObject{{"dynamicRegistration", false}};
 
   capabilities["textDocument"] = textDocumentCaps;
 
@@ -946,8 +943,7 @@ void LspClient::parseServerCapabilities(const QJsonObject &caps) {
   if (syncVal.isDouble()) {
     m_capabilities.textDocumentSyncKind = syncVal.toInt(1);
   } else if (syncVal.isObject()) {
-    m_capabilities.textDocumentSyncKind =
-        syncVal.toObject()["change"].toInt(1);
+    m_capabilities.textDocumentSyncKind = syncVal.toObject()["change"].toInt(1);
   }
 
   LOG_INFO(QString("Server capabilities: hover=%1 completion=%2 definition=%3 "

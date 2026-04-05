@@ -66,10 +66,10 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
   layout->setSpacing(12);
 
   auto *titleLabel =
-      new QLabel(tr("%1 Language Server").arg(
-                     LanguageCatalog::displayName(languageId).isEmpty()
-                         ? languageId
-                         : LanguageCatalog::displayName(languageId)),
+      new QLabel(tr("%1 Language Server")
+                     .arg(LanguageCatalog::displayName(languageId).isEmpty()
+                              ? languageId
+                              : LanguageCatalog::displayName(languageId)),
                  this);
   titleLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
   layout->addWidget(titleLabel);
@@ -91,8 +91,9 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
   }
   const QString selectedOverride =
       LanguageCatalog::normalize(overrideLanguageId);
-  const int languageIndex =
-      selectedOverride.isEmpty() ? 0 : m_languageCombo->findData(selectedOverride);
+  const int languageIndex = selectedOverride.isEmpty()
+                                ? 0
+                                : m_languageCombo->findData(selectedOverride);
   m_languageCombo->setCurrentIndex(languageIndex >= 0 ? languageIndex : 0);
   formLayout->addRow(tr("File language:"), m_languageCombo);
 
@@ -166,17 +167,18 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
 }
 
 void LanguageServerStatusDialog::refreshDetails() {
-  const ServerHealthStatus health =
-      m_manager ? m_manager->serverHealth(m_languageId)
-                : ServerHealthStatus::Unknown;
+  const ServerHealthStatus health = m_manager
+                                        ? m_manager->serverHealth(m_languageId)
+                                        : ServerHealthStatus::Unknown;
   const QString lastError =
       m_manager ? m_manager->lastServerError(m_languageId) : QString();
   const QString command = m_commandEdit->text().trimmed();
   const QString resolvedCommand =
       command.isEmpty() ? QString() : QStandardPaths::findExecutable(command);
-  const QString displayName = LanguageCatalog::displayName(m_languageId).isEmpty()
-                                  ? m_languageId
-                                  : LanguageCatalog::displayName(m_languageId);
+  const QString displayName =
+      LanguageCatalog::displayName(m_languageId).isEmpty()
+          ? m_languageId
+          : LanguageCatalog::displayName(m_languageId);
   const QString selectedAssociation =
       m_languageCombo->currentData().toString().trimmed();
   const QString selectedAssociationDisplay =
@@ -202,10 +204,11 @@ void LanguageServerStatusDialog::refreshDetails() {
   QString bannerHtml =
       QString("<div style='padding:8px;'><b>%1</b><br><span "
               "style='font-size:12px;'>%2</span></div>")
-          .arg(displayName.toHtmlEscaped(),
-               displayValue(lastError, tr("Click Save and Retry after adjusting "
-                                          "the command or arguments."))
-                   .toHtmlEscaped());
+          .arg(
+              displayName.toHtmlEscaped(),
+              displayValue(lastError, tr("Click Save and Retry after adjusting "
+                                         "the command or arguments."))
+                  .toHtmlEscaped());
   m_statusBanner->setStyleSheet(
       QString("QLabel { background: %1; border: 1px solid %2; border-radius: "
               "6px; color: %3; }")
@@ -213,34 +216,35 @@ void LanguageServerStatusDialog::refreshDetails() {
   m_statusBanner->setText(bannerHtml);
 
   QStringList lines;
-  lines << QString("Language: %1 (%2)").arg(displayName, m_languageId)
-        << QString("Health: %1").arg(healthLabel(health))
-        << QString("Enabled: %1").arg(m_enabledCheck->isChecked() ? "yes" : "no")
-        << QString("File language association: %1")
-               .arg(selectedAssociationDisplay)
-        << QString("Current effective language: %1")
-               .arg(displayValue(
-                   LanguageCatalog::displayName(m_effectiveLanguageId),
-                   m_effectiveLanguageId))
-        << QString("Command: %1").arg(displayValue(command))
-        << QString("Resolved executable: %1")
-               .arg(displayValue(QDir::toNativeSeparators(resolvedCommand),
-                                 "(not found on PATH)"))
-        << QString("Arguments: %1")
-               .arg(displayValue(m_argumentsEdit->text().trimmed(), "(none)"))
-        << QString("Workspace: %1")
-               .arg(displayValue(QDir::toNativeSeparators(m_workspaceFolder)))
-        << QString("Current file: %1")
-               .arg(displayValue(QDir::toNativeSeparators(m_filePath)))
-        << QString("Detected project root: %1")
-               .arg(displayValue(
-                   QDir::toNativeSeparators(
-                       LanguageFeatureManager::detectProjectRoot(m_filePath))))
-        << QString("Last error: %1").arg(displayValue(lastError, "(none)"));
+  lines
+      << QString("Language: %1 (%2)").arg(displayName, m_languageId)
+      << QString("Health: %1").arg(healthLabel(health))
+      << QString("Enabled: %1").arg(m_enabledCheck->isChecked() ? "yes" : "no")
+      << QString("File language association: %1")
+             .arg(selectedAssociationDisplay)
+      << QString("Current effective language: %1")
+             .arg(displayValue(
+                 LanguageCatalog::displayName(m_effectiveLanguageId),
+                 m_effectiveLanguageId))
+      << QString("Command: %1").arg(displayValue(command))
+      << QString("Resolved executable: %1")
+             .arg(displayValue(QDir::toNativeSeparators(resolvedCommand),
+                               "(not found on PATH)"))
+      << QString("Arguments: %1")
+             .arg(displayValue(m_argumentsEdit->text().trimmed(), "(none)"))
+      << QString("Workspace: %1")
+             .arg(displayValue(QDir::toNativeSeparators(m_workspaceFolder)))
+      << QString("Current file: %1")
+             .arg(displayValue(QDir::toNativeSeparators(m_filePath)))
+      << QString("Detected project root: %1")
+             .arg(displayValue(QDir::toNativeSeparators(
+                 LanguageFeatureManager::detectProjectRoot(m_filePath))))
+      << QString("Last error: %1").arg(displayValue(lastError, "(none)"));
 
   if (m_languageId == "py" && !m_filePath.trimmed().isEmpty()) {
     RunTemplateManager &manager = RunTemplateManager::instance();
-    const FileTemplateAssignment assignment = manager.getAssignmentForFile(m_filePath);
+    const FileTemplateAssignment assignment =
+        manager.getAssignmentForFile(m_filePath);
     PythonEnvironmentPreference preference;
     preference.mode = assignment.pythonMode;
     preference.customInterpreter = assignment.pythonInterpreter;
@@ -250,8 +254,7 @@ void LanguageServerStatusDialog::refreshDetails() {
         preference, m_workspaceFolder, m_filePath,
         QFileInfo(m_filePath).absolutePath());
 
-    lines << ""
-          << "Python environment for this file:"
+    lines << "" << "Python environment for this file:"
           << QString("  Interpreter: %1")
                  .arg(displayValue(QDir::toNativeSeparators(info.interpreter),
                                    "(not resolved)"))
@@ -263,16 +266,16 @@ void LanguageServerStatusDialog::refreshDetails() {
                      QDir::toNativeSeparators(info.requirementsFile),
                      "(not found)"))
           << QString("  Suggested install: %1")
-                 .arg(info.interpreter.isEmpty()
-                          ? QString("Resolve a Python interpreter, then install "
-                                    "python-lsp-server into it.")
-                          : QString("%1 -m pip install python-lsp-server")
-                                .arg(info.interpreter));
+                 .arg(
+                     info.interpreter.isEmpty()
+                         ? QString("Resolve a Python interpreter, then install "
+                                   "python-lsp-server into it.")
+                         : QString("%1 -m pip install python-lsp-server")
+                               .arg(info.interpreter));
   }
 
   lines << ""
-        << "PATH:"
-        << QProcessEnvironment::systemEnvironment().value("PATH");
+        << "PATH:" << QProcessEnvironment::systemEnvironment().value("PATH");
   m_detailsEdit->setPlainText(lines.join('\n'));
 }
 

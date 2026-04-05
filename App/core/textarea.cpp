@@ -863,7 +863,7 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
     connect(markTestAction, &QAction::triggered, this,
             [currentFilePath, isTest]() {
               TestFileClassifier::instance().setTestOverride(currentFilePath,
-                                                            !isTest);
+                                                             !isTest);
             });
   }
 

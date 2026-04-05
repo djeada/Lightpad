@@ -205,10 +205,12 @@ void DebugConfigurationDialog::setupUi() {
                 DebugConfigurationManager::instance().workspaceFolder(),
                 m_programEdit->text().trimmed(), text.trimmed());
           });
-  connect(m_pythonEnvironmentWidget, &PythonEnvironmentWidget::preferenceChanged,
-          this, &DebugConfigurationDialog::updateAdapterUi);
-  connect(m_pythonEnvironmentWidget, &PythonEnvironmentWidget::environmentChanged,
-          this, &DebugConfigurationDialog::updateAdapterUi);
+  connect(m_pythonEnvironmentWidget,
+          &PythonEnvironmentWidget::preferenceChanged, this,
+          &DebugConfigurationDialog::updateAdapterUi);
+  connect(m_pythonEnvironmentWidget,
+          &PythonEnvironmentWidget::environmentChanged, this,
+          &DebugConfigurationDialog::updateAdapterUi);
   rightLayout->addWidget(m_pythonEnvironmentWidget);
 
   m_adapterOptionsGroup = new QGroupBox("Adapter Options");
@@ -1056,9 +1058,9 @@ void DebugConfigurationDialog::applyTheme(const Theme &theme) {
     m_cancelButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
   }
 
-  for (QPushButton *btn :
-       {m_addConfigBtn, m_addTemplateBtn, m_removeConfigBtn, m_duplicateConfigBtn,
-        m_browseProgramBtn, m_browseCwdBtn, m_addEnvBtn, m_removeEnvBtn}) {
+  for (QPushButton *btn : {m_addConfigBtn, m_addTemplateBtn, m_removeConfigBtn,
+                           m_duplicateConfigBtn, m_browseProgramBtn,
+                           m_browseCwdBtn, m_addEnvBtn, m_removeEnvBtn}) {
     if (btn) {
       btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
     }

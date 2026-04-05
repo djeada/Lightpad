@@ -772,7 +772,8 @@ void TestGitIntegration::testRevertCommit() {
   process.setWorkingDirectory(m_repoPath);
   process.start("git", {"rev-parse", "HEAD"});
   process.waitForFinished();
-  QString commitHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QString commitHash =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
 
   QFile file(m_repoPath + "/revert_test.txt");
   QVERIFY(file.exists());
@@ -781,7 +782,8 @@ void TestGitIntegration::testRevertCommit() {
 
   process.start("git", {"log", "-1", "--pretty=%s"});
   process.waitForFinished();
-  QString lastMsg = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QString lastMsg =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
   QVERIFY(lastMsg.startsWith("Revert"));
 
   QVERIFY(!git.revertCommit(""));
@@ -795,7 +797,8 @@ void TestGitIntegration::testResetToCommit() {
   process.setWorkingDirectory(m_repoPath);
   process.start("git", {"rev-parse", "HEAD"});
   process.waitForFinished();
-  QString baseHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QString baseHash =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
 
   createTestFile("reset_test.txt", "Reset content\n");
   QVERIFY(git.stageFile("reset_test.txt"));
@@ -806,7 +809,8 @@ void TestGitIntegration::testResetToCommit() {
   QList<GitFileInfo> status = git.getStatus();
   bool foundStaged = false;
   for (const GitFileInfo &f : status) {
-    if (f.filePath == "reset_test.txt" && f.indexStatus == GitFileStatus::Added) {
+    if (f.filePath == "reset_test.txt" &&
+        f.indexStatus == GitFileStatus::Added) {
       foundStaged = true;
       break;
     }
@@ -817,7 +821,8 @@ void TestGitIntegration::testResetToCommit() {
 
   process.start("git", {"rev-parse", "HEAD"});
   process.waitForFinished();
-  QString newBase = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QString newBase =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
 
   createTestFile("reset_test2.txt", "Reset content 2\n");
   QVERIFY(git.stageFile("reset_test2.txt"));
@@ -850,13 +855,15 @@ void TestGitIntegration::testRewordCommit() {
   process.setWorkingDirectory(m_repoPath);
   process.start("git", {"rev-parse", "HEAD"});
   process.waitForFinished();
-  QString headHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QString headHash =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
 
   QVERIFY(git.rewordCommit(headHash, "Reworded message"));
 
   process.start("git", {"log", "-1", "--pretty=%s"});
   process.waitForFinished();
-  QString lastMsg = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QString lastMsg =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
   QCOMPARE(lastMsg, "Reworded message");
 
   QVERIFY(!git.rewordCommit("", "Some message"));
@@ -881,7 +888,8 @@ void TestGitIntegration::testCherryPick() {
   process.setWorkingDirectory(m_repoPath);
   process.start("git", {"rev-parse", "HEAD"});
   process.waitForFinished();
-  QString cherryHash = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QString cherryHash =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
 
   QVERIFY(git.checkoutBranch("master"));
 
@@ -929,8 +937,7 @@ void TestGitIntegration::testSquashCommits() {
   process.setWorkingDirectory(m_repoPath);
   process.start("git", {"rev-parse", "HEAD"});
   process.waitForFinished();
-  QString hash1 =
-      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QString hash1 = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
 
   createTestFile("squash2.txt", "Second squash content\n");
   QVERIFY(git.stageFile("squash2.txt"));
@@ -938,8 +945,7 @@ void TestGitIntegration::testSquashCommits() {
 
   process.start("git", {"rev-parse", "HEAD"});
   process.waitForFinished();
-  QString hash2 =
-      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  QString hash2 = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
 
   QStringList hashes = {hash1, hash2};
   QVERIFY(git.squashCommits(hashes, "Squashed result"));

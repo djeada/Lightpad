@@ -258,7 +258,6 @@ void LightpadTreeView::showContextMenu(const QPoint &pos) {
   QAction *removeAction = menu.addAction("Remove");
   menu.addSeparator();
 
-  // Run / Debug actions
   QAction *runFileAction = nullptr;
   QAction *debugFileAction = nullptr;
   if (!fileInfo.isDir()) {
@@ -267,18 +266,17 @@ void LightpadTreeView::showContextMenu(const QPoint &pos) {
     menu.addSeparator();
   }
 
-  // Test classification actions
   TestFileClassifier &classifier = TestFileClassifier::instance();
-  bool currentlyTest = fileInfo.isDir()
-                           ? classifier.isTestDirectory(filePath)
-                           : classifier.isTestFile(filePath);
+  bool currentlyTest = fileInfo.isDir() ? classifier.isTestDirectory(filePath)
+                                        : classifier.isTestFile(filePath);
 
   QAction *runTestAction = menu.addAction(
       fileInfo.isDir() ? "Run Tests in Directory" : "Run as Test");
 
   QAction *markTestAction = nullptr;
   if (!fileInfo.isDir()) {
-    QString markLabel = currentlyTest ? "Unmark as Test File" : "Mark as Test File";
+    QString markLabel =
+        currentlyTest ? "Unmark as Test File" : "Mark as Test File";
     markTestAction = menu.addAction(markLabel);
   }
 

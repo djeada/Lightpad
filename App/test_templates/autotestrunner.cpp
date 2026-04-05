@@ -161,8 +161,7 @@ void AutoTestRunner::loadSettings(const QString &workspaceFolder) {
   if (workspaceFolder.isEmpty())
     return;
 
-  QString path =
-      QDir(workspaceFolder).filePath(".lightpad/autotest.json");
+  QString path = QDir(workspaceFolder).filePath(".lightpad/autotest.json");
 
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly))

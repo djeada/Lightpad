@@ -103,8 +103,7 @@ private:
   }
 
   QString preferredDlvExecutable() const {
-    const QString configured =
-        debugAdapterSettingValue(config().id, "dlvPath");
+    const QString configured = debugAdapterSettingValue(config().id, "dlvPath");
     return configured.isEmpty() ? QStringLiteral("dlv") : configured;
   }
 };

@@ -71,24 +71,22 @@ public:
 
   static PythonEnvironmentDiagnostics
   diagnostics(const PythonEnvironmentPreference &preference,
-              const QString &workspaceFolder = {},
-              const QString &filePath = {},
+              const QString &workspaceFolder = {}, const QString &filePath = {},
               const QString &workingDirectory = {});
 
   static QMap<QString, QString>
   activationEnvironment(const PythonEnvironmentInfo &info);
 
-  static QString substituteVariables(
-      const QString &input, const QString &workspaceFolder = {},
-      const QString &filePath = {}, const QString &workingDirectory = {},
-      const PythonEnvironmentPreference &preference = {});
+  static QString
+  substituteVariables(const QString &input, const QString &workspaceFolder = {},
+                      const QString &filePath = {},
+                      const QString &workingDirectory = {},
+                      const PythonEnvironmentPreference &preference = {});
 
-  static PythonInstallPlan
-  requirementsInstallPlan(const PythonEnvironmentInfo &info,
-                          const QString &workspaceFolder = {},
-                          const QString &filePath = {},
-                          const QString &workingDirectory = {},
-                          const QString &configuredPath = {});
+  static PythonInstallPlan requirementsInstallPlan(
+      const PythonEnvironmentInfo &info, const QString &workspaceFolder = {},
+      const QString &filePath = {}, const QString &workingDirectory = {},
+      const QString &configuredPath = {});
 
 private:
   static QString activeEnvironmentPythonInterpreter();
@@ -100,9 +98,10 @@ private:
   static QString workspaceRootForContext(const QString &workspaceFolder,
                                          const QString &filePath = {},
                                          const QString &workingDirectory = {});
-  static QStringList requirementsSearchRoots(const QString &workspaceFolder,
-                                             const QString &filePath = {},
-                                             const QString &workingDirectory = {});
+  static QStringList
+  requirementsSearchRoots(const QString &workspaceFolder,
+                          const QString &filePath = {},
+                          const QString &workingDirectory = {});
   static QString parentVirtualEnv(const QString &interpreterPath);
 };
 

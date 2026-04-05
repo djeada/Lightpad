@@ -17,14 +17,14 @@ QSize ListView::sizeHint() const {
 
   const int rowCount = model()->rowCount();
   const int rowsToShow = qMin(10, rowCount);
-  const int rowHeight =
-      qMax(sizeHintForRow(0), fontMetrics().height() + 10);
+  const int rowHeight = qMax(sizeHintForRow(0), fontMetrics().height() + 10);
   const int contentWidth = qMax(sizeHintForColumn(0), 0);
   const int scrollBarWidth =
       rowCount > rowsToShow ? style()->pixelMetric(QStyle::PM_ScrollBarExtent)
                             : 0;
   const int frameWidthPx = frameWidth() * 2;
-  const int width = qMax(120, contentWidth + scrollBarWidth + frameWidthPx + 24);
+  const int width =
+      qMax(120, contentWidth + scrollBarWidth + frameWidthPx + 24);
   const int height = rowsToShow * rowHeight + frameWidthPx;
 
   return QSize(width, height);

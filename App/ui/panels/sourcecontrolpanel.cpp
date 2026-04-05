@@ -1076,8 +1076,7 @@ void SourceControlPanel::setupRepoUI() {
   mainLayout->addWidget(m_historyHeader);
 
   m_historySearchEdit = new QLineEdit(m_repoWidget);
-  m_historySearchEdit->setPlaceholderText(
-      tr("🔍 Search commits..."));
+  m_historySearchEdit->setPlaceholderText(tr("🔍 Search commits..."));
   m_historySearchEdit->setClearButtonEnabled(true);
   m_historySearchEdit->setVisible(false);
   m_historySearchEdit->setStyleSheet(
@@ -1530,14 +1529,12 @@ void SourceControlPanel::updateHistory() {
     }
 
     item->setText(0, displayText);
-    item->setToolTip(
-        0,
-        QString("Hash: %1\nAuthor: %2 <%3>\nDate: %4\n\n%5%6")
-            .arg(commit.hash, commit.author, commit.authorEmail,
-                 commit.relativeDate, commit.subject,
-                 commit.body.isEmpty()
-                     ? ""
-                     : QString("\n\n%1").arg(commit.body)));
+    item->setToolTip(0, QString("Hash: %1\nAuthor: %2 <%3>\nDate: %4\n\n%5%6")
+                            .arg(commit.hash, commit.author, commit.authorEmail,
+                                 commit.relativeDate, commit.subject,
+                                 commit.body.isEmpty()
+                                     ? ""
+                                     : QString("\n\n%1").arg(commit.body)));
     item->setData(0, Qt::UserRole, commit.hash);
 
     QFont font = item->font(0);
@@ -1841,7 +1838,8 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
   QAction *copyHashAction = menu.addAction(tr("📋 Copy Commit Hash"));
   menu.addSeparator();
   QAction *checkoutAction = menu.addAction(tr("⎋ Checkout Commit"));
-  QAction *createBranchAction = menu.addAction(tr("🌿 Create Branch from Here..."));
+  QAction *createBranchAction =
+      menu.addAction(tr("🌿 Create Branch from Here..."));
   QAction *cherryPickAction = menu.addAction(tr("🍒 Cherry-Pick Commit"));
   QAction *moveToBranchAction =
       menu.addAction(tr("📤 Move Commit to Branch..."));
@@ -1884,15 +1882,13 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
         hashes << sel->data(0, Qt::UserRole).toString();
       }
       QApplication::clipboard()->setText(hashes.join("\n"));
-      QToolTip::showText(
-          QCursor::pos(),
-          tr("✓ Copied %1 commit hashes").arg(hashes.size()), this,
-          QRect(), 2000);
+      QToolTip::showText(QCursor::pos(),
+                         tr("✓ Copied %1 commit hashes").arg(hashes.size()),
+                         this, QRect(), 2000);
     } else {
       QApplication::clipboard()->setText(commitHash);
-      QToolTip::showText(QCursor::pos(),
-                         tr("✓ Copied: %1").arg(shortHash), this,
-                         QRect(), 2000);
+      QToolTip::showText(QCursor::pos(), tr("✓ Copied: %1").arg(shortHash),
+                         this, QRect(), 2000);
     }
   } else if (selected == checkoutAction) {
     if (confirmDestructive(

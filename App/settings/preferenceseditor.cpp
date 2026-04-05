@@ -31,7 +31,8 @@ void PreferencesEditor::setTabWidthLabel(const QString &text) {
 void PreferencesEditor::on_tabWidth_clicked() {
 
   if (!popupTabWidth) {
-    popupTabWidth = new PopupTabWidth(QStringList({"2", "4", "8"}), parentWindow);
+    popupTabWidth =
+        new PopupTabWidth(QStringList({"2", "4", "8"}), parentWindow);
     QPoint point = mapToGlobal(ui->tabWidth->pos());
     const QSize popupSize = popupTabWidth->sizeHint();
     popupTabWidth->setGeometry(point.x(), point.y() + ui->tabWidth->height(),

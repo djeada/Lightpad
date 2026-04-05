@@ -11,7 +11,6 @@ PythonEnvironmentWidget::PythonEnvironmentWidget(QWidget *parent)
     : QGroupBox(tr("Python Environment"), parent) {
   auto *layout = new QVBoxLayout(this);
 
-  // Status banner at the TOP - prominent, colored, impossible to miss
   m_statusLabel = new QLabel(this);
   m_statusLabel->setWordWrap(true);
   m_statusLabel->setTextFormat(Qt::RichText);
@@ -85,7 +84,8 @@ PythonEnvironmentWidget::PythonEnvironmentWidget(QWidget *parent)
 
   auto *buttonLayout = new QHBoxLayout();
   m_createVenvButton = new QPushButton(tr("Create Venv"), this);
-  m_installRequirementsButton = new QPushButton(tr("Install Requirements"), this);
+  m_installRequirementsButton =
+      new QPushButton(tr("Install Requirements"), this);
   m_installDebugpyButton = new QPushButton(tr("Install debugpy"), this);
   connect(m_createVenvButton, &QPushButton::clicked, this,
           &PythonEnvironmentWidget::onCreateVenv);
@@ -115,8 +115,9 @@ void PythonEnvironmentWidget::setContext(const QString &workspaceFolder,
         m_workspaceFolder, m_filePath, m_workingDirectory));
   }
   if (m_requirementsEdit->text().trimmed().isEmpty()) {
-    m_requirementsEdit->setText(PythonProjectEnvironment::defaultRequirementsPath(
-        m_workspaceFolder, m_filePath, m_workingDirectory));
+    m_requirementsEdit->setText(
+        PythonProjectEnvironment::defaultRequirementsPath(
+            m_workspaceFolder, m_filePath, m_workingDirectory));
   }
 
   refreshStatus();
@@ -124,16 +125,16 @@ void PythonEnvironmentWidget::setContext(const QString &workspaceFolder,
 
 void PythonEnvironmentWidget::setPreference(
     const PythonEnvironmentPreference &preference) {
-  const QString mode =
-      preference.mode.trimmed().isEmpty() ? PythonProjectEnvironment::autoMode()
-                                          : preference.mode;
+  const QString mode = preference.mode.trimmed().isEmpty()
+                           ? PythonProjectEnvironment::autoMode()
+                           : preference.mode;
   const int modeIndex = m_modeCombo->findData(mode);
   m_modeCombo->setCurrentIndex(modeIndex >= 0 ? modeIndex : 0);
-  m_venvPathEdit->setText(preference.venvPath.isEmpty()
-                              ? PythonProjectEnvironment::defaultVenvPath(
-                                    m_workspaceFolder, m_filePath,
-                                    m_workingDirectory)
-                              : preference.venvPath);
+  m_venvPathEdit->setText(
+      preference.venvPath.isEmpty()
+          ? PythonProjectEnvironment::defaultVenvPath(
+                m_workspaceFolder, m_filePath, m_workingDirectory)
+          : preference.venvPath);
   m_interpreterEdit->setText(preference.customInterpreter);
   m_requirementsEdit->setText(
       preference.requirementsFile.isEmpty()
@@ -169,37 +170,34 @@ void PythonEnvironmentWidget::refreshStatus() {
   QString bannerTitle;
   QString bannerDetail;
 
-  // Reset field styles
   m_interpreterEdit->setStyleSheet("");
   m_venvPathEdit->setStyleSheet("");
 
   if (info.found && info.isVirtualEnvironment()) {
-    // Venv active and working
+
     bannerBg = "#0d1f0d";
     bannerBorder = "#238636";
     bannerTextColor = "#3fb950";
     bannerIcon = QString::fromUtf8("\xe2\x9c\x93");
     bannerTitle = tr("Virtual environment active");
     const QString venvName = QFileInfo(info.venvPath).fileName();
-    bannerDetail =
-        QString("<br><span style='color:#e6edf3;font-size:12px;'>"
-                "%1 &nbsp;&bull;&nbsp; %2</span>")
-            .arg(info.interpreter.toHtmlEscaped(),
-                 info.venvPath.toHtmlEscaped());
+    bannerDetail = QString("<br><span style='color:#e6edf3;font-size:12px;'>"
+                           "%1 &nbsp;&bull;&nbsp; %2</span>")
+                       .arg(info.interpreter.toHtmlEscaped(),
+                            info.venvPath.toHtmlEscaped());
   } else if (info.found) {
-    // System Python, no venv
+
     bannerBg = "#161b22";
     bannerBorder = "#30363d";
     bannerTextColor = "#8b949e";
     bannerIcon = QString::fromUtf8("\xe2\x9c\x93");
     bannerTitle = tr("System Python (no virtual environment)");
-    bannerDetail =
-        QString("<br><span style='color:#e6edf3;font-size:12px;'>"
-                "%1</span>")
-            .arg(info.interpreter.toHtmlEscaped());
+    bannerDetail = QString("<br><span style='color:#e6edf3;font-size:12px;'>"
+                           "%1</span>")
+                       .arg(info.interpreter.toHtmlEscaped());
   } else if (pref.mode == PythonProjectEnvironment::customInterpreterMode() &&
              pref.customInterpreter.isEmpty()) {
-    // Custom mode but no interpreter set — red
+
     bannerBg = "#2d0b0b";
     bannerBorder = "#f85149";
     bannerTextColor = "#f85149";
@@ -211,21 +209,19 @@ void PythonEnvironmentWidget::refreshStatus() {
     m_interpreterEdit->setStyleSheet(
         "QLineEdit { border: 2px solid #f85149; }");
   } else if (!pref.venvPath.isEmpty() && !info.found) {
-    // Venv path set but venv not found
+
     bannerBg = "#2d1b00";
     bannerBorder = "#d29922";
     bannerTextColor = "#d29922";
     bannerIcon = QString::fromUtf8("\xe2\x9a\xa0");
     bannerTitle = tr("Virtual environment not found");
-    bannerDetail =
-        QString("<br><span style='color:#f0883e;font-size:12px;'>"
-                "Expected at: %1<br>"
-                "Click <b>Create Venv</b> to create one.</span>")
-            .arg(pref.venvPath.toHtmlEscaped());
-    m_venvPathEdit->setStyleSheet(
-        "QLineEdit { border: 2px solid #d29922; }");
+    bannerDetail = QString("<br><span style='color:#f0883e;font-size:12px;'>"
+                           "Expected at: %1<br>"
+                           "Click <b>Create Venv</b> to create one.</span>")
+                       .arg(pref.venvPath.toHtmlEscaped());
+    m_venvPathEdit->setStyleSheet("QLineEdit { border: 2px solid #d29922; }");
   } else {
-    // No interpreter found at all
+
     bannerBg = "#2d0b0b";
     bannerBorder = "#f85149";
     bannerTextColor = "#f85149";
@@ -289,10 +285,8 @@ void PythonEnvironmentWidget::onBrowseRequirements() {
 }
 
 void PythonEnvironmentWidget::onCreateVenv() {
-  const QString targetPath =
-      PythonProjectEnvironment::normalizePath(preference().venvPath,
-                                              m_workspaceFolder, m_filePath,
-                                              m_workingDirectory);
+  const QString targetPath = PythonProjectEnvironment::normalizePath(
+      preference().venvPath, m_workspaceFolder, m_filePath, m_workingDirectory);
   if (targetPath.isEmpty()) {
     QMessageBox::warning(this, tr("Python Environment"),
                          tr("Set a virtual environment path first."));
@@ -301,8 +295,9 @@ void PythonEnvironmentWidget::onCreateVenv() {
 
   if (!PythonProjectEnvironment::pythonExecutableInEnvironment(targetPath)
            .isEmpty()) {
-    QMessageBox::information(this, tr("Python Environment"),
-                             tr("The selected virtual environment already exists."));
+    QMessageBox::information(
+        this, tr("Python Environment"),
+        tr("The selected virtual environment already exists."));
     return;
   }
 
@@ -328,13 +323,15 @@ void PythonEnvironmentWidget::onInstallRequirements() {
     return;
   }
 
-  const PythonInstallPlan plan = PythonProjectEnvironment::requirementsInstallPlan(
-      info, m_workspaceFolder, m_filePath, m_workingDirectory,
-      m_requirementsEdit->text().trimmed());
+  const PythonInstallPlan plan =
+      PythonProjectEnvironment::requirementsInstallPlan(
+          info, m_workspaceFolder, m_filePath, m_workingDirectory,
+          m_requirementsEdit->text().trimmed());
   if (plan.arguments.isEmpty()) {
-    QMessageBox::warning(this, tr("Python Environment"),
-                         tr("No requirements file or installable Python project "
-                            "was found."));
+    QMessageBox::warning(
+        this, tr("Python Environment"),
+        tr("No requirements file or installable Python project "
+           "was found."));
     return;
   }
 
@@ -369,9 +366,8 @@ void PythonEnvironmentWidget::onProcessError(QProcess::ProcessError error) {
 }
 
 void PythonEnvironmentWidget::updateUiVisibility() {
-  const bool customMode =
-      m_modeCombo->currentData().toString() ==
-      PythonProjectEnvironment::customInterpreterMode();
+  const bool customMode = m_modeCombo->currentData().toString() ==
+                          PythonProjectEnvironment::customInterpreterMode();
   m_interpreterEdit->setEnabled(customMode);
   m_browseInterpreterButton->setEnabled(customMode);
 }
@@ -381,8 +377,9 @@ void PythonEnvironmentWidget::startProcess(const QString &title,
                                            const QStringList &arguments,
                                            const QString &workingDirectory) {
   if (m_process) {
-    QMessageBox::information(this, tr("Python Environment"),
-                             tr("Wait for the current Python setup task to finish."));
+    QMessageBox::information(
+        this, tr("Python Environment"),
+        tr("Wait for the current Python setup task to finish."));
     return;
   }
 
@@ -411,8 +408,8 @@ void PythonEnvironmentWidget::startProcess(const QString &title,
   m_createVenvButton->setEnabled(false);
   m_installRequirementsButton->setEnabled(false);
   m_installDebugpyButton->setEnabled(false);
-  m_statusLabel->setText(tr("%1...\n%2 %3")
-                             .arg(title, program, arguments.join(" ")));
+  m_statusLabel->setText(
+      tr("%1...\n%2 %3").arg(title, program, arguments.join(" ")));
   m_process->start(program, arguments);
 }
 
@@ -439,7 +436,8 @@ void PythonEnvironmentWidget::finishProcess(const QString &message,
   QString details;
   if (m_process) {
     details = QString::fromUtf8(m_process->readAllStandardOutput());
-    const QString stderrText = QString::fromUtf8(m_process->readAllStandardError());
+    const QString stderrText =
+        QString::fromUtf8(m_process->readAllStandardError());
     if (!stderrText.trimmed().isEmpty()) {
       if (!details.trimmed().isEmpty()) {
         details += "\n";

@@ -160,8 +160,7 @@ private:
 class TestDiscoveryAdapterFactory {
 public:
   static ITestDiscoveryAdapter *
-  createForConfiguration(const QString &configId,
-                         QObject *parent = nullptr);
+  createForConfiguration(const QString &configId, QObject *parent = nullptr);
 };
 
 #endif

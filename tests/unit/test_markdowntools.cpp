@@ -33,14 +33,12 @@ private slots:
   void testToHtmlBlockquotes();
   void testToHtmlWithBasePath();
 
-  // New tests for formatting features
   void testWrapParagraph();
   void testWrapParagraphPreservesStructure();
   void testNormalizeHeadingSpacing();
   void testNormalizeBulletIndentation();
   void testFormatCodeFences();
 
-  // New tests for extraction features
   void testExtractLinks();
   void testExtractLinksIgnoresImages();
   void testExtractImages();
@@ -50,12 +48,10 @@ private slots:
   void testParseFrontmatterMissing();
   void testGenerateDocumentOutline();
 
-  // New tests for statistics
   void testWordCount();
   void testWordCountIgnoresCodeBlocks();
   void testReadingTimeMinutes();
 
-  // New tests for lint rules
   void testLintBrokenImagePaths();
   void testLintMalformedLists();
   void testLintOverlongLines();
@@ -89,7 +85,8 @@ void TestMarkdownTools::testExtractHeadingsIgnoresFencedBlocks() {
 }
 
 void TestMarkdownTools::testGenerateAnchor() {
-  QCOMPARE(MarkdownTools::generateAnchor("Hello World"), QString("hello-world"));
+  QCOMPARE(MarkdownTools::generateAnchor("Hello World"),
+           QString("hello-world"));
   QCOMPARE(MarkdownTools::generateAnchor("Section 1.2"), QString("section-12"));
   QCOMPARE(MarkdownTools::generateAnchor("C++ Guide"), QString("c-guide"));
   QCOMPARE(MarkdownTools::generateAnchor("simple"), QString("simple"));
@@ -126,10 +123,8 @@ void TestMarkdownTools::testUpdateExistingToc() {
 }
 
 void TestMarkdownTools::testToggleCheckbox() {
-  QCOMPARE(MarkdownTools::toggleCheckbox("- [ ] Task"),
-           QString("- [x] Task"));
-  QCOMPARE(MarkdownTools::toggleCheckbox("- [x] Done"),
-           QString("- [ ] Done"));
+  QCOMPARE(MarkdownTools::toggleCheckbox("- [ ] Task"), QString("- [x] Task"));
+  QCOMPARE(MarkdownTools::toggleCheckbox("- [x] Done"), QString("- [ ] Done"));
   QCOMPARE(MarkdownTools::toggleCheckbox("- [X] Also done"),
            QString("- [ ] Also done"));
   QCOMPARE(MarkdownTools::toggleCheckbox("Not a checkbox"),
@@ -218,7 +213,8 @@ void TestMarkdownTools::testLintMissingAltText() {
 }
 
 void TestMarkdownTools::testLintTrailingSpaces() {
-  QString md = "Line with trailing spaces   \nClean line\nAnother dirty line   ";
+  QString md =
+      "Line with trailing spaces   \nClean line\nAnother dirty line   ";
   QList<LspDiagnostic> diags = MarkdownTools::lint(md);
 
   int trailingCount = 0;
@@ -331,8 +327,6 @@ void TestMarkdownTools::testToHtmlWithBasePath() {
   QVERIFY(html.contains("file:///tmp/docs"));
 }
 
-// ── New formatting feature tests ──────────────────────────────────────
-
 void TestMarkdownTools::testWrapParagraph() {
   QString md = "This is a very long paragraph that should be wrapped at a "
                "reasonable width to improve readability.";
@@ -341,8 +335,7 @@ void TestMarkdownTools::testWrapParagraph() {
   QStringList lines = result.split('\n');
   QVERIFY(lines.size() > 1);
   for (const QString &line : lines) {
-    QVERIFY(line.length() <= 40 ||
-            !line.contains(' ')); // single-word lines may exceed
+    QVERIFY(line.length() <= 40 || !line.contains(' '));
   }
 }
 
@@ -383,8 +376,6 @@ void TestMarkdownTools::testFormatCodeFences() {
   QVERIFY(result.endsWith("```"));
 }
 
-// ── New extraction feature tests ──────────────────────────────────────
-
 void TestMarkdownTools::testExtractLinks() {
   QString md = "Check [Google](https://google.com) and [local](file.md).\n\n"
                "![image](pic.png)";
@@ -421,8 +412,9 @@ void TestMarkdownTools::testExtractImages() {
 }
 
 void TestMarkdownTools::testExtractFootnotes() {
-  QString md = "Some text[^1] and more[^note].\n\n[^1]: First footnote\n[^note]: "
-               "A longer footnote";
+  QString md =
+      "Some text[^1] and more[^note].\n\n[^1]: First footnote\n[^note]: "
+      "A longer footnote";
   QList<MarkdownFootnote> footnotes = MarkdownTools::extractFootnotes(md);
 
   QCOMPARE(footnotes.size(), 2);
@@ -490,13 +482,10 @@ void TestMarkdownTools::testGenerateDocumentOutline() {
   QCOMPARE(outline[0].children[1].text, QString("Child 2"));
 }
 
-// ── New statistics tests ──────────────────────────────────────────────
-
 void TestMarkdownTools::testWordCount() {
   QString md = "# Title\n\nThis is a paragraph with seven words here.";
   int count = MarkdownTools::wordCount(md);
 
-  // "Title" = 1, "This is a paragraph with seven words here." = 8, total = 9
   QCOMPARE(count, 9);
 }
 
@@ -504,12 +493,11 @@ void TestMarkdownTools::testWordCountIgnoresCodeBlocks() {
   QString md = "One two three\n\n```\nnot counted words here\n```\n\nFour five";
   int count = MarkdownTools::wordCount(md);
 
-  // "One two three" = 3 + "Four five" = 2 = 5
   QCOMPARE(count, 5);
 }
 
 void TestMarkdownTools::testReadingTimeMinutes() {
-  // 200 words at 200 wpm = 1 minute (minimum 1)
+
   QString md;
   for (int i = 0; i < 200; ++i) {
     md += "word ";
@@ -517,12 +505,9 @@ void TestMarkdownTools::testReadingTimeMinutes() {
   int time = MarkdownTools::readingTimeMinutes(md, 200);
   QCOMPARE(time, 1);
 
-  // Short text should still be 1 minute minimum
   int shortTime = MarkdownTools::readingTimeMinutes("Hello world", 200);
   QCOMPARE(shortTime, 1);
 }
-
-// ── New lint rule tests ──────────────────────────────────────────────
 
 void TestMarkdownTools::testLintBrokenImagePaths() {
   QTemporaryDir tempDir;
@@ -584,7 +569,7 @@ void TestMarkdownTools::testLintOverlongLines() {
 }
 
 void TestMarkdownTools::testLintOverlongLinesSkipsExceptions() {
-  // Headings, tables, and lines with links should be skipped
+
   QString longHeading = "# " + QString(150, 'H');
   QString longTable = "| " + QString(150, 'T') + " |";
   QString longLink = "[text](" + QString(150, 'u') + ")";

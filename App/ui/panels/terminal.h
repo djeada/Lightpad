@@ -12,8 +12,8 @@
 class QLabel;
 class QTextCursor;
 
-#include "shellprofile.h"
 #include "../../python/pythonprojectenvironment.h"
+#include "shellprofile.h"
 
 namespace Ui {
 class Terminal;

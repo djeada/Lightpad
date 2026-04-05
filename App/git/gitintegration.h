@@ -262,8 +262,7 @@ public:
 
   bool revertCommit(const QString &commitHash);
 
-  bool resetToCommit(const QString &commitHash,
-                     const QString &mode = "mixed");
+  bool resetToCommit(const QString &commitHash, const QString &mode = "mixed");
 
   bool rewordCommit(const QString &commitHash, const QString &newMessage);
 

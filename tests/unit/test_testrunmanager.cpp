@@ -112,15 +112,13 @@ void TestTestRunManager::testResultAggregation() {
   QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
   QSignalSpy testFinishSpy(&mgr, &TestRunManager::testFinished);
 
-  // Create a script that outputs TAP format with mixed results
   QString script = m_tempDir.filePath("tap_test.sh");
-  createScript(script,
-               "#!/bin/sh\n"
-               "echo '1..4'\n"
-               "echo 'ok 1 - passing_test'\n"
-               "echo 'not ok 2 - failing_test'\n"
-               "echo 'ok 3 - another_pass'\n"
-               "echo 'ok 4 - skipped_test # SKIP reason'\n");
+  createScript(script, "#!/bin/sh\n"
+                       "echo '1..4'\n"
+                       "echo 'ok 1 - passing_test'\n"
+                       "echo 'not ok 2 - failing_test'\n"
+                       "echo 'ok 3 - another_pass'\n"
+                       "echo 'ok 4 - skipped_test # SKIP reason'\n");
 
   TestConfiguration config;
   config.name = "tap-test";
@@ -148,12 +146,11 @@ void TestTestRunManager::testFailedTestNamesCollection() {
   QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
 
   QString script = m_tempDir.filePath("fail_test.sh");
-  createScript(script,
-               "#!/bin/sh\n"
-               "echo '1..3'\n"
-               "echo 'ok 1 - good_test'\n"
-               "echo 'not ok 2 - bad_test'\n"
-               "echo 'not ok 3 - worse_test'\n");
+  createScript(script, "#!/bin/sh\n"
+                       "echo '1..3'\n"
+                       "echo 'ok 1 - good_test'\n"
+                       "echo 'not ok 2 - bad_test'\n"
+                       "echo 'not ok 3 - worse_test'\n");
 
   TestConfiguration config;
   config.name = "fail-test";
@@ -194,11 +191,10 @@ void TestTestRunManager::testRunAllWithTapOutput() {
   QSignalSpy testStartSpy(&mgr, &TestRunManager::testStarted);
 
   QString script = m_tempDir.filePath("alltap.sh");
-  createScript(script,
-               "#!/bin/sh\n"
-               "echo '1..2'\n"
-               "echo 'ok 1 - first'\n"
-               "echo 'ok 2 - second'\n");
+  createScript(script, "#!/bin/sh\n"
+                       "echo '1..2'\n"
+                       "echo 'ok 1 - first'\n"
+                       "echo 'ok 2 - second'\n");
 
   TestConfiguration config;
   config.name = "tap-all";
@@ -210,8 +206,8 @@ void TestTestRunManager::testRunAllWithTapOutput() {
   QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 1, 3000);
 
   QList<QVariant> finishArgs = finishSpy.at(0);
-  QCOMPARE(finishArgs.at(0).toInt(), 2); // passed
-  QCOMPARE(finishArgs.at(1).toInt(), 0); // failed
+  QCOMPARE(finishArgs.at(0).toInt(), 2);
+  QCOMPARE(finishArgs.at(1).toInt(), 0);
 }
 
 void TestTestRunManager::testRunAllWithPytestOutput() {
@@ -219,11 +215,10 @@ void TestTestRunManager::testRunAllWithPytestOutput() {
   QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
 
   QString script = m_tempDir.filePath("pytest_out.sh");
-  createScript(script,
-               "#!/bin/sh\n"
-               "echo 'test_foo.py::test_bar PASSED'\n"
-               "echo 'test_foo.py::test_baz FAILED'\n"
-               "echo 'test_foo.py::test_skip SKIPPED'\n");
+  createScript(script, "#!/bin/sh\n"
+                       "echo 'test_foo.py::test_bar PASSED'\n"
+                       "echo 'test_foo.py::test_baz FAILED'\n"
+                       "echo 'test_foo.py::test_skip SKIPPED'\n");
 
   TestConfiguration config;
   config.name = "pytest-mock";
@@ -249,10 +244,9 @@ void TestTestRunManager::testClearAfterRun() {
   QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
 
   QString script = m_tempDir.filePath("clear_test.sh");
-  createScript(script,
-               "#!/bin/sh\n"
-               "echo '1..1'\n"
-               "echo 'ok 1 - pass'\n");
+  createScript(script, "#!/bin/sh\n"
+                       "echo '1..1'\n"
+                       "echo 'ok 1 - pass'\n");
 
   TestConfiguration config;
   config.name = "clear-test";
@@ -275,11 +269,10 @@ void TestTestRunManager::testRunReplacesStaleResults() {
   QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
 
   QString script = m_tempDir.filePath("stale_test.sh");
-  createScript(script,
-               "#!/bin/sh\n"
-               "echo '1..2'\n"
-               "echo 'ok 1 - first'\n"
-               "echo 'not ok 2 - second'\n");
+  createScript(script, "#!/bin/sh\n"
+                       "echo '1..2'\n"
+                       "echo 'ok 1 - first'\n"
+                       "echo 'not ok 2 - second'\n");
 
   TestConfiguration config;
   config.name = "stale-test";
@@ -293,11 +286,9 @@ void TestTestRunManager::testRunReplacesStaleResults() {
   QCOMPARE(mgr.results().size(), 2);
   QCOMPARE(mgr.failedTestNames().size(), 1);
 
-  // Second run clears and replaces
   mgr.runAll(config, m_tempDir.path());
   QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 2, 3000);
 
-  // Results should be from second run only
   QCOMPARE(mgr.results().size(), 2);
 }
 

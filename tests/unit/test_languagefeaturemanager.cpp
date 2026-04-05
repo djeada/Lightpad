@@ -1,5 +1,5 @@
-#include "language/languagefeaturemanager.h"
 #include "diagnostics/diagnosticutils.h"
+#include "language/languagefeaturemanager.h"
 #include <QDir>
 #include <QFile>
 #include <QSignalSpy>

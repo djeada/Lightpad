@@ -28,9 +28,7 @@ private:
   QTemporaryDir m_tempDir;
 };
 
-void TestDocumentRegression::initTestCase() {
-  QVERIFY(m_tempDir.isValid());
-}
+void TestDocumentRegression::initTestCase() { QVERIFY(m_tempDir.isValid()); }
 
 void TestDocumentRegression::cleanupTestCase() {}
 

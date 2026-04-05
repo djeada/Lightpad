@@ -194,15 +194,14 @@ QVector<SyntaxRule> MarkdownSyntaxPlugin::syntaxRules() const {
   rules.append(frontMatterKeyRule);
 
   SyntaxRule detailsSummaryRule;
-  detailsSummaryRule.pattern =
-      QRegularExpression("</?(?:details|summary)>",
-                         QRegularExpression::CaseInsensitiveOption);
+  detailsSummaryRule.pattern = QRegularExpression(
+      "</?(?:details|summary)>", QRegularExpression::CaseInsensitiveOption);
   detailsSummaryRule.name = "keyword_1";
   rules.append(detailsSummaryRule);
 
   SyntaxRule admonitionRule;
-  admonitionRule.pattern =
-      QRegularExpression("^>\\s*\\*\\*(Note|Warning|Tip|Important|Caution)\\*\\*");
+  admonitionRule.pattern = QRegularExpression(
+      "^>\\s*\\*\\*(Note|Warning|Tip|Important|Caution)\\*\\*");
   admonitionRule.name = "keyword_1";
   rules.append(admonitionRule);
 
@@ -242,16 +241,16 @@ QVector<MultiLineBlock> MarkdownSyntaxPlugin::multiLineBlocks() const {
 
 QStringList MarkdownSyntaxPlugin::keywords() const {
   return {
-      "**bold**",        "*italic*",        "~~strikethrough~~",
-      "# ",              "## ",             "### ",
-      "#### ",           "##### ",          "###### ",
-      "- ",              "* ",              "1. ",
-      "- [ ] ",          "- [x] ",          "> ",
-      "```",             "---",             "***",
-      "[text](url)",     "![alt](url)",     "[text][ref]",
-      "[^footnote]",     "`code`",          "==highlight==",
-      "$$math$$",        "$inline$",        "| col |",
-      "<details>",       "<summary>",       ": definition",
-      "[^ref]: text",    "> **Note**",      "> **Warning**",
+      "**bold**",     "*italic*",    "~~strikethrough~~",
+      "# ",           "## ",         "### ",
+      "#### ",        "##### ",      "###### ",
+      "- ",           "* ",          "1. ",
+      "- [ ] ",       "- [x] ",      "> ",
+      "```",          "---",         "***",
+      "[text](url)",  "![alt](url)", "[text][ref]",
+      "[^footnote]",  "`code`",      "==highlight==",
+      "$$math$$",     "$inline$",    "| col |",
+      "<details>",    "<summary>",   ": definition",
+      "[^ref]: text", "> **Note**",  "> **Warning**",
   };
 }

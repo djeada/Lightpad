@@ -35,7 +35,8 @@ QStringList requirementsCandidates() {
           "setup.py"};
 }
 
-QString preferredBaseDir(const QString &workspaceFolder, const QString &filePath,
+QString preferredBaseDir(const QString &workspaceFolder,
+                         const QString &filePath,
                          const QString &workingDirectory) {
   if (!workspaceFolder.trimmed().isEmpty()) {
     return QFileInfo(workspaceFolder).absoluteFilePath();
@@ -63,10 +64,9 @@ QString PythonProjectEnvironment::customInterpreterMode() {
   return "customInterpreter";
 }
 
-QString PythonProjectEnvironment::normalizePath(const QString &path,
-                                                const QString &workspaceFolder,
-                                                const QString &filePath,
-                                                const QString &workingDirectory) {
+QString PythonProjectEnvironment::normalizePath(
+    const QString &path, const QString &workspaceFolder,
+    const QString &filePath, const QString &workingDirectory) {
   QString trimmed = path.trimmed();
   if (trimmed.isEmpty()) {
     return {};
@@ -98,9 +98,10 @@ QString PythonProjectEnvironment::normalizePath(const QString &path,
   return QDir(baseDir).absoluteFilePath(trimmed);
 }
 
-QString PythonProjectEnvironment::defaultVenvPath(const QString &workspaceFolder,
-                                                  const QString &filePath,
-                                                  const QString &workingDirectory) {
+QString
+PythonProjectEnvironment::defaultVenvPath(const QString &workspaceFolder,
+                                          const QString &filePath,
+                                          const QString &workingDirectory) {
   const QString root =
       workspaceRootForContext(workspaceFolder, filePath, workingDirectory);
   if (root.isEmpty()) {
@@ -112,8 +113,8 @@ QString PythonProjectEnvironment::defaultVenvPath(const QString &workspaceFolder
 QString PythonProjectEnvironment::defaultRequirementsPath(
     const QString &workspaceFolder, const QString &filePath,
     const QString &workingDirectory, const QString &configuredPath) {
-  const QString explicitPath =
-      normalizePath(configuredPath, workspaceFolder, filePath, workingDirectory);
+  const QString explicitPath = normalizePath(configuredPath, workspaceFolder,
+                                             filePath, workingDirectory);
   if (!explicitPath.isEmpty()) {
     return explicitPath;
   }
@@ -140,8 +141,8 @@ QString PythonProjectEnvironment::defaultRequirementsPath(
   return {};
 }
 
-QString
-PythonProjectEnvironment::pythonExecutableInEnvironment(const QString &dirPath) {
+QString PythonProjectEnvironment::pythonExecutableInEnvironment(
+    const QString &dirPath) {
   if (dirPath.trimmed().isEmpty()) {
     return {};
   }
@@ -212,8 +213,9 @@ PythonProjectEnvironment::resolve(const PythonEnvironmentPreference &preference,
   const QString mode =
       preference.mode.trimmed().isEmpty() ? autoMode() : preference.mode;
 
-  const QString explicitInterpreter = normalizePath(
-      preference.customInterpreter, workspaceFolder, filePath, workingDirectory);
+  const QString explicitInterpreter =
+      normalizePath(preference.customInterpreter, workspaceFolder, filePath,
+                    workingDirectory);
   if (mode == customInterpreterMode()) {
     const QString resolved = resolveExecutablePath(explicitInterpreter);
     if (!resolved.isEmpty()) {
@@ -221,8 +223,8 @@ PythonProjectEnvironment::resolve(const PythonEnvironmentPreference &preference,
       info.venvPath = parentVirtualEnv(resolved);
       info.venvBinPath = venvBinPath(info.venvPath);
       info.found = true;
-      info.statusMessage =
-          QString("Using custom interpreter %1").arg(QFileInfo(resolved).fileName());
+      info.statusMessage = QString("Using custom interpreter %1")
+                               .arg(QFileInfo(resolved).fileName());
       return info;
     }
 
@@ -258,10 +260,11 @@ PythonProjectEnvironment::resolve(const PythonEnvironmentPreference &preference,
             : configuredVenv;
     info.venvPath = targetPath;
     info.venvBinPath = venvBinPath(targetPath);
-    info.statusMessage = targetPath.isEmpty()
-                             ? "Workspace virtual environment is not configured."
-                             : QString("Workspace virtual environment not found: %1")
-                                   .arg(targetPath);
+    info.statusMessage =
+        targetPath.isEmpty()
+            ? "Workspace virtual environment is not configured."
+            : QString("Workspace virtual environment not found: %1")
+                  .arg(targetPath);
     return info;
   }
 
@@ -271,8 +274,8 @@ PythonProjectEnvironment::resolve(const PythonEnvironmentPreference &preference,
     info.venvPath = parentVirtualEnv(envInterpreter);
     info.venvBinPath = venvBinPath(info.venvPath);
     info.found = true;
-    info.statusMessage =
-        QString("Using active environment %1").arg(QFileInfo(envInterpreter).fileName());
+    info.statusMessage = QString("Using active environment %1")
+                             .arg(QFileInfo(envInterpreter).fileName());
     return info;
   }
 
@@ -280,9 +283,8 @@ PythonProjectEnvironment::resolve(const PythonEnvironmentPreference &preference,
   if (!globalInterpreter.isEmpty()) {
     info.interpreter = globalInterpreter;
     info.found = true;
-    info.statusMessage =
-        QString("Using system interpreter %1")
-            .arg(QFileInfo(globalInterpreter).fileName());
+    info.statusMessage = QString("Using system interpreter %1")
+                             .arg(QFileInfo(globalInterpreter).fileName());
     return info;
   }
 
@@ -291,18 +293,21 @@ PythonProjectEnvironment::resolve(const PythonEnvironmentPreference &preference,
 }
 
 PythonEnvironmentDiagnostics PythonProjectEnvironment::diagnostics(
-    const PythonEnvironmentPreference &preference, const QString &workspaceFolder,
-    const QString &filePath, const QString &workingDirectory) {
+    const PythonEnvironmentPreference &preference,
+    const QString &workspaceFolder, const QString &filePath,
+    const QString &workingDirectory) {
   PythonEnvironmentDiagnostics diagnostics;
   diagnostics.workspaceRoot =
       workspaceRootForContext(workspaceFolder, filePath, workingDirectory);
-  diagnostics.normalizedCustomInterpreter = normalizePath(
-      preference.customInterpreter, workspaceFolder, filePath, workingDirectory);
+  diagnostics.normalizedCustomInterpreter =
+      normalizePath(preference.customInterpreter, workspaceFolder, filePath,
+                    workingDirectory);
   diagnostics.normalizedConfiguredVenvPath = normalizePath(
       preference.venvPath, workspaceFolder, filePath, workingDirectory);
   diagnostics.resolvedRequirementsFile = defaultRequirementsPath(
       workspaceFolder, filePath, workingDirectory, preference.requirementsFile);
-  diagnostics.activeEnvironmentInterpreter = activeEnvironmentPythonInterpreter();
+  diagnostics.activeEnvironmentInterpreter =
+      activeEnvironmentPythonInterpreter();
   diagnostics.globalInterpreter = globalPythonInterpreter();
   diagnostics.searchedVenvPaths =
       candidateVirtualEnvPaths(workspaceFolder, filePath, workingDirectory,
@@ -312,8 +317,8 @@ PythonEnvironmentDiagnostics PythonProjectEnvironment::diagnostics(
   return diagnostics;
 }
 
-QMap<QString, QString>
-PythonProjectEnvironment::activationEnvironment(const PythonEnvironmentInfo &info) {
+QMap<QString, QString> PythonProjectEnvironment::activationEnvironment(
+    const PythonEnvironmentInfo &info) {
   QMap<QString, QString> env;
   if (info.venvPath.isEmpty() || info.venvBinPath.isEmpty()) {
     return env;
@@ -321,7 +326,8 @@ PythonProjectEnvironment::activationEnvironment(const PythonEnvironmentInfo &inf
 
   env["VIRTUAL_ENV"] = info.venvPath;
 
-  const QString currentPath = QProcessEnvironment::systemEnvironment().value("PATH");
+  const QString currentPath =
+      QProcessEnvironment::systemEnvironment().value("PATH");
   if (currentPath.isEmpty()) {
     env["PATH"] = info.venvBinPath;
   } else {
@@ -332,8 +338,9 @@ PythonProjectEnvironment::activationEnvironment(const PythonEnvironmentInfo &inf
 }
 
 QString PythonProjectEnvironment::substituteVariables(
-    const QString &input, const QString &workspaceFolder, const QString &filePath,
-    const QString &workingDirectory, const PythonEnvironmentPreference &preference) {
+    const QString &input, const QString &workspaceFolder,
+    const QString &filePath, const QString &workingDirectory,
+    const PythonEnvironmentPreference &preference) {
   if (input.isEmpty()) {
     return input;
   }
@@ -454,8 +461,7 @@ QStringList PythonProjectEnvironment::candidateVirtualEnvPaths(
       for (const QString &name : venvDirectoryNames()) {
         addCandidate(dir.absoluteFilePath(name));
       }
-      if (!limit.isEmpty() &&
-          QDir::cleanPath(dir.absolutePath()) == limit) {
+      if (!limit.isEmpty() && QDir::cleanPath(dir.absolutePath()) == limit) {
         break;
       }
       if (!dir.cdUp()) {

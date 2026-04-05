@@ -22,14 +22,12 @@ private slots:
   void initTestCase();
   void cleanupTestCase();
 
-  // Dialog creation and layout
   void testDialogCreation();
   void testThreeColumnLayout();
   void testMinimumSize();
   void testTitleBarExists();
   void testShortcutHintVisible();
 
-  // Branch explorer
   void testBranchTreeExists();
   void testBranchSearchExists();
   void testCreateBranchButtonExists();
@@ -37,20 +35,17 @@ private slots:
   void testBranchCurrentHighlighted();
   void testBranchSearchFilter();
 
-  // Commit canvas
   void testCommitTreeExists();
   void testCommitSearchExists();
   void testRewriteToggleExists();
   void testCommitTreeHeaders();
   void testCommitsLoaded();
 
-  // Inspector panel
   void testInspectorStackExists();
   void testInspectorEmptyByDefault();
   void testCommitInspectorShowsDetails();
   void testBranchInspectorShowsDetails();
 
-  // Rewrite mode
   void testRewriteModeToggle();
   void testRewriteToolbarVisible();
   void testRewriteActionColumn();
@@ -60,74 +55,58 @@ private slots:
   void testRewriteMoveUp();
   void testRewriteMoveDown();
 
-  // Plan summary
   void testPlanSummaryBrowseMode();
   void testPlanSummaryRewriteMode();
 
-  // Bottom bar
   void testBottomBarExists();
   void testApplyButtonHiddenInBrowseMode();
   void testApplyButtonVisibleInRewriteMode();
   void testBackupCheckboxDefaultChecked();
   void testCancelButtonExists();
 
-  // Warning system
   void testRiskLowWhenNoChanges();
   void testRiskHighWhenDrop();
   void testRiskCriticalWhenManyDrops();
 
-  // Keyboard navigation
   void testKeyJNavigatesDown();
   void testKeyKNavigatesUp();
   void testKeyRTogglesRewriteMode();
   void testKeyEscapeExitsRewriteMode();
 
-  // Signals
   void testViewCommitDiffSignal();
 
-  // Phase 2: Tags
   void testTagsLoadedInBranchTree();
 
-  // Phase 2: Branch inspector enhancements
   void testBranchInspectorRenameButton();
   void testBranchInspectorMergeButton();
   void testBranchInspectorRebaseButton();
   void testBranchInspectorActivityLabel();
 
-  // Phase 2: Commit refs
   void testCommitRefsFieldExists();
 
-  // Phase 2: Drop-keep action
   void testDropKeepActionAvailable();
   void testDropKeepRiskIsMedium();
   void testDropKeepPlanSummary();
 
-  // Phase 2: Recovery center
   void testRecoveryCenterPageExists();
   void testRecoveryCenterListExists();
   void testRecoveryCenterRestoreButton();
 
-  // Phase 2: Command palette
   void testCommandPaletteKeyCtrlK();
 
-  // Phase 2: Keyboard shortcuts
   void testKeyBFocusesBranches();
   void testKeyQuestionShowsHelp();
 
-  // Phase 2: Edit commit message
   void testEditMessageButtonExists();
   void testDoubleClickMessageColumnOpensEdit();
 
-  // Phase 3: Stash management
   void testStashInspectorPageExists();
   void testStashApplyButtonExists();
   void testStashPopButtonExists();
   void testStashDropButtonExists();
 
-  // Phase 3: Typed confirmation
   void testCriticalConfirmRequiresTyping();
 
-  // Phase 5: Multi-selection UI
   void testSelectionBarHiddenByDefault();
   void testSelectionBarAppearsOnMultiSelect();
   void testSelectionCountLabelUpdates();
@@ -169,17 +148,14 @@ void TestGitWorkbenchDialog::setupRepo() {
 
   createCommits(8);
 
-  // Create a tag on current commit
   proc.start("git", {"tag", "v1.0"});
   QVERIFY(proc.waitForFinished(5000));
 
-  // Create a feature branch with commits
   proc.start("git", {"checkout", "-b", "feature/test"});
   QVERIFY(proc.waitForFinished(5000));
 
   createCommits(3);
 
-  // Switch back to main
   proc.start("git", {"checkout", "main"});
   if (proc.waitForFinished(5000) && proc.exitCode() != 0) {
     proc.start("git", {"checkout", "master"});
@@ -195,8 +171,9 @@ void TestGitWorkbenchDialog::createCommits(int count) {
   proc.setWorkingDirectory(m_tempDir.path());
 
   for (int i = 0; i < count; ++i) {
-    QString filename =
-        QString("file_%1_%2.txt").arg(QDateTime::currentMSecsSinceEpoch()).arg(i);
+    QString filename = QString("file_%1_%2.txt")
+                           .arg(QDateTime::currentMSecsSinceEpoch())
+                           .arg(i);
     QFile f(m_tempDir.path() + "/" + filename);
     f.open(QIODevice::WriteOnly);
     f.write(QString("content %1\n").arg(i).toUtf8());
@@ -205,13 +182,10 @@ void TestGitWorkbenchDialog::createCommits(int count) {
     proc.start("git", {"add", filename});
     QVERIFY(proc.waitForFinished(5000));
 
-    proc.start("git",
-               {"commit", "-m", QString("Commit %1").arg(i)});
+    proc.start("git", {"commit", "-m", QString("Commit %1").arg(i)});
     QVERIFY(proc.waitForFinished(5000));
   }
 }
-
-// ─── Dialog creation and layout ────────────────────────────────────────────
 
 void TestGitWorkbenchDialog::testDialogCreation() {
   GitWorkbenchDialog dialog(m_git, m_theme);
@@ -247,8 +221,6 @@ void TestGitWorkbenchDialog::testShortcutHintVisible() {
   QVERIFY(hint->text().contains("J/K"));
 }
 
-// ─── Branch explorer ───────────────────────────────────────────────────────
-
 void TestGitWorkbenchDialog::testBranchTreeExists() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   auto *tree = dialog.findChild<QTreeWidget *>("branchTree");
@@ -273,7 +245,7 @@ void TestGitWorkbenchDialog::testBranchGroupsCreated() {
 
   auto *tree = dialog.findChild<QTreeWidget *>("branchTree");
   QVERIFY(tree != nullptr);
-  // Should have at least Local Branches group
+
   QVERIFY(tree->topLevelItemCount() >= 1);
   QCOMPARE(tree->topLevelItem(0)->text(0), tr("Local Branches"));
 }
@@ -285,7 +257,6 @@ void TestGitWorkbenchDialog::testBranchCurrentHighlighted() {
   auto *tree = dialog.findChild<QTreeWidget *>("branchTree");
   QVERIFY(tree != nullptr);
 
-  // Find the current branch indicator
   auto *localGroup = tree->topLevelItem(0);
   QVERIFY(localGroup != nullptr);
   bool foundCurrent = false;
@@ -306,7 +277,6 @@ void TestGitWorkbenchDialog::testBranchSearchFilter() {
   auto *tree = dialog.findChild<QTreeWidget *>("branchTree");
   QVERIFY(search != nullptr && tree != nullptr);
 
-  // Filter by "feature"
   search->setText("feature");
   QTest::qWait(50);
 
@@ -318,11 +288,9 @@ void TestGitWorkbenchDialog::testBranchSearchFilter() {
     if (!localGroup->child(i)->isHidden())
       ++visibleCount;
   }
-  // Should find at least the feature/test branch
+
   QVERIFY(visibleCount >= 1);
 }
-
-// ─── Commit canvas ─────────────────────────────────────────────────────────
 
 void TestGitWorkbenchDialog::testCommitTreeExists() {
   GitWorkbenchDialog dialog(m_git, m_theme);
@@ -361,18 +329,15 @@ void TestGitWorkbenchDialog::testCommitsLoaded() {
 
   auto *tree = dialog.findChild<QTreeWidget *>("commitTree");
   QVERIFY(tree != nullptr);
-  // We created 8 commits on main + 3 on feature = depends on which branch
-  // At least we should have several commits loaded
+
   QVERIFY(tree->topLevelItemCount() >= 5);
 }
-
-// ─── Inspector ─────────────────────────────────────────────────────────────
 
 void TestGitWorkbenchDialog::testInspectorStackExists() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   auto *stack = dialog.findChild<QStackedWidget *>();
   QVERIFY(stack != nullptr);
-  QVERIFY(stack->count() >= 4); // empty, commit, branch, plan
+  QVERIFY(stack->count() >= 4);
 }
 
 void TestGitWorkbenchDialog::testInspectorEmptyByDefault() {
@@ -381,7 +346,7 @@ void TestGitWorkbenchDialog::testInspectorEmptyByDefault() {
 
   auto *stack = dialog.findChild<QStackedWidget *>();
   QVERIFY(stack != nullptr);
-  QCOMPARE(stack->currentIndex(), 0); // Empty page
+  QCOMPARE(stack->currentIndex(), 0);
 }
 
 void TestGitWorkbenchDialog::testCommitInspectorShowsDetails() {
@@ -392,19 +357,17 @@ void TestGitWorkbenchDialog::testCommitInspectorShowsDetails() {
   QVERIFY(tree != nullptr);
   QVERIFY(tree->topLevelItemCount() > 0);
 
-  // Select first commit and trigger selection signal
   tree->setCurrentItem(tree->topLevelItem(0));
   emit tree->itemSelectionChanged();
   QTest::qWait(50);
 
   auto *stack = dialog.findChild<QStackedWidget *>();
   QVERIFY(stack != nullptr);
-  QCOMPARE(stack->currentIndex(), 1); // Commit inspector page
+  QCOMPARE(stack->currentIndex(), 1);
 
-  // Find the commit hash label (first QLabel named inspMonoLabel is the hash)
   auto allLabels = dialog.findChildren<QLabel *>("inspMonoLabel");
   QVERIFY(!allLabels.isEmpty());
-  // At least one inspMonoLabel should have text after selection
+
   bool foundText = false;
   for (auto *lbl : allLabels) {
     if (!lbl->text().isEmpty()) {
@@ -422,23 +385,20 @@ void TestGitWorkbenchDialog::testBranchInspectorShowsDetails() {
   auto *branchTree = dialog.findChild<QTreeWidget *>("branchTree");
   QVERIFY(branchTree != nullptr);
 
-  // Click on a branch item (first child of Local Branches group)
   auto *localGroup = branchTree->topLevelItem(0);
   QVERIFY(localGroup != nullptr);
   QVERIFY(localGroup->childCount() > 0);
 
   auto *branchItem = localGroup->child(0);
   branchTree->setCurrentItem(branchItem);
-  // Simulate click
+
   emit branchTree->itemClicked(branchItem, 0);
   QTest::qWait(50);
 
   auto *stack = dialog.findChild<QStackedWidget *>();
   QVERIFY(stack != nullptr);
-  QCOMPARE(stack->currentIndex(), 2); // Branch inspector page
+  QCOMPARE(stack->currentIndex(), 2);
 }
-
-// ─── Rewrite mode ──────────────────────────────────────────────────────────
 
 void TestGitWorkbenchDialog::testRewriteModeToggle() {
   GitWorkbenchDialog dialog(m_git, m_theme);
@@ -447,14 +407,11 @@ void TestGitWorkbenchDialog::testRewriteModeToggle() {
   auto *btn = dialog.findChild<QPushButton *>("rewriteToggleBtn");
   QVERIFY(btn != nullptr);
 
-  // Initially not in rewrite mode
   QVERIFY(!btn->isChecked());
 
-  // Toggle on
   btn->click();
   QVERIFY(btn->isChecked());
 
-  // Toggle off
   btn->click();
   QVERIFY(!btn->isChecked());
 }
@@ -465,11 +422,11 @@ void TestGitWorkbenchDialog::testRewriteToolbarVisible() {
 
   auto *toolbar = dialog.findChild<QWidget *>("rewriteToolbarContainer");
   QVERIFY(toolbar != nullptr);
-  QVERIFY(toolbar->isHidden()); // Hidden initially
+  QVERIFY(toolbar->isHidden());
 
   auto *btn = dialog.findChild<QPushButton *>("rewriteToggleBtn");
   btn->click();
-  QVERIFY(!toolbar->isHidden()); // Not hidden after toggle
+  QVERIFY(!toolbar->isHidden());
 }
 
 void TestGitWorkbenchDialog::testRewriteActionColumn() {
@@ -478,12 +435,12 @@ void TestGitWorkbenchDialog::testRewriteActionColumn() {
 
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   QVERIFY(commitTree != nullptr);
-  QCOMPARE(commitTree->columnCount(), 4); // No action column yet
+  QCOMPARE(commitTree->columnCount(), 4);
 
   auto *btn = dialog.findChild<QPushButton *>("rewriteToggleBtn");
   btn->click();
 
-  QCOMPARE(commitTree->columnCount(), 5); // Action column added
+  QCOMPARE(commitTree->columnCount(), 5);
   QCOMPARE(commitTree->headerItem()->text(4), tr("Action"));
 }
 
@@ -491,14 +448,12 @@ void TestGitWorkbenchDialog::testRewriteDropAction() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
 
-  // Enter rewrite mode
   auto *btn = dialog.findChild<QPushButton *>("rewriteToggleBtn");
   btn->click();
 
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   QVERIFY(commitTree->topLevelItemCount() > 0);
 
-  // Select first commit and press drop
   commitTree->setCurrentItem(commitTree->topLevelItem(0));
   commitTree->topLevelItem(0)->setSelected(true);
 
@@ -506,7 +461,6 @@ void TestGitWorkbenchDialog::testRewriteDropAction() {
   QVERIFY(dropBtn != nullptr);
   dropBtn->click();
 
-  // Check the action combo was updated to "drop"
   auto *combo = qobject_cast<QComboBox *>(
       commitTree->itemWidget(commitTree->topLevelItem(0), 4));
   QVERIFY(combo != nullptr);
@@ -523,11 +477,9 @@ void TestGitWorkbenchDialog::testRewriteSquashAction() {
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   QVERIFY(commitTree->topLevelItemCount() >= 2);
 
-  // Select first two commits
   commitTree->topLevelItem(0)->setSelected(true);
   commitTree->topLevelItem(1)->setSelected(true);
 
-  // Find squash button by object name traversal
   auto buttons = dialog.findChildren<QPushButton *>();
   QPushButton *squashBtn = nullptr;
   for (auto *b : buttons) {
@@ -539,7 +491,6 @@ void TestGitWorkbenchDialog::testRewriteSquashAction() {
   QVERIFY(squashBtn != nullptr);
   squashBtn->click();
 
-  // First should be pick, second should be squash
   auto *combo0 = qobject_cast<QComboBox *>(
       commitTree->itemWidget(commitTree->topLevelItem(0), 4));
   auto *combo1 = qobject_cast<QComboBox *>(
@@ -558,14 +509,12 @@ void TestGitWorkbenchDialog::testRewritePickAll() {
 
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
 
-  // Drop first commit
   commitTree->setCurrentItem(commitTree->topLevelItem(0));
   commitTree->topLevelItem(0)->setSelected(true);
 
   auto *dropBtn = dialog.findChild<QPushButton *>("rewriteDropBtn");
   dropBtn->click();
 
-  // Now reset all
   auto buttons = dialog.findChildren<QPushButton *>();
   QPushButton *resetBtn = nullptr;
   for (auto *b : buttons) {
@@ -593,10 +542,8 @@ void TestGitWorkbenchDialog::testRewriteMoveUp() {
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   QVERIFY(commitTree->topLevelItemCount() >= 2);
 
-  // Get hash of second item
   QString hash1 = commitTree->topLevelItem(1)->text(1);
 
-  // Select second item and move up
   commitTree->setCurrentItem(commitTree->topLevelItem(1));
 
   auto buttons = dialog.findChildren<QPushButton *>();
@@ -610,7 +557,6 @@ void TestGitWorkbenchDialog::testRewriteMoveUp() {
   QVERIFY(upBtn != nullptr);
   upBtn->click();
 
-  // Now the first item should have hash1
   QCOMPARE(commitTree->topLevelItem(0)->text(1), hash1);
 }
 
@@ -642,8 +588,6 @@ void TestGitWorkbenchDialog::testRewriteMoveDown() {
   QCOMPARE(commitTree->topLevelItem(1)->text(1), hash0);
 }
 
-// ─── Plan summary ──────────────────────────────────────────────────────────
-
 void TestGitWorkbenchDialog::testPlanSummaryBrowseMode() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
@@ -665,8 +609,6 @@ void TestGitWorkbenchDialog::testPlanSummaryRewriteMode() {
   QVERIFY(label->text().contains("Plan:"));
   QVERIFY(label->text().contains("pick"));
 }
-
-// ─── Bottom bar ────────────────────────────────────────────────────────────
 
 void TestGitWorkbenchDialog::testBottomBarExists() {
   GitWorkbenchDialog dialog(m_git, m_theme);
@@ -713,8 +655,6 @@ void TestGitWorkbenchDialog::testCancelButtonExists() {
   QVERIFY(cancelBtn != nullptr);
 }
 
-// ─── Warning system ────────────────────────────────────────────────────────
-
 void TestGitWorkbenchDialog::testRiskLowWhenNoChanges() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
@@ -756,7 +696,6 @@ void TestGitWorkbenchDialog::testRiskCriticalWhenManyDrops() {
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   auto *dropBtn = dialog.findChild<QPushButton *>("rewriteDropBtn");
 
-  // Drop 4 commits
   for (int i = 0; i < qMin(4, commitTree->topLevelItemCount()); ++i) {
     commitTree->clearSelection();
     commitTree->setCurrentItem(commitTree->topLevelItem(i));
@@ -768,8 +707,6 @@ void TestGitWorkbenchDialog::testRiskCriticalWhenManyDrops() {
   QVERIFY(riskLabel != nullptr);
   QVERIFY(riskLabel->text().contains("Critical"));
 }
-
-// ─── Keyboard navigation ──────────────────────────────────────────────────
 
 void TestGitWorkbenchDialog::testKeyJNavigatesDown() {
   GitWorkbenchDialog dialog(m_git, m_theme);
@@ -836,8 +773,6 @@ void TestGitWorkbenchDialog::testKeyEscapeExitsRewriteMode() {
   QVERIFY(!toggleBtn->isChecked());
 }
 
-// ─── Signals ───────────────────────────────────────────────────────────────
-
 void TestGitWorkbenchDialog::testViewCommitDiffSignal() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
@@ -847,8 +782,6 @@ void TestGitWorkbenchDialog::testViewCommitDiffSignal() {
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   QVERIFY(commitTree->topLevelItemCount() > 0);
 
-  // Double-click on hash column (1) to view diff
-  // Column 0 now opens the edit message dialog
   auto *item = commitTree->topLevelItem(0);
   emit commitTree->itemDoubleClicked(item, 1);
   QTest::qWait(50);
@@ -857,8 +790,6 @@ void TestGitWorkbenchDialog::testViewCommitDiffSignal() {
   QVERIFY(!spy.at(0).at(0).toString().isEmpty());
 }
 
-// ─── Phase 2: Tags ────────────────────────────────────────────────────────
-
 void TestGitWorkbenchDialog::testTagsLoadedInBranchTree() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
@@ -866,14 +797,13 @@ void TestGitWorkbenchDialog::testTagsLoadedInBranchTree() {
   auto *branchTree = dialog.findChild<QTreeWidget *>("branchTree");
   QVERIFY(branchTree);
 
-  // Find the Tags group
   bool foundTags = false;
   for (int i = 0; i < branchTree->topLevelItemCount(); ++i) {
     auto *group = branchTree->topLevelItem(i);
     if (group->text(0).contains("Tags")) {
       foundTags = true;
       QVERIFY(group->childCount() > 0);
-      // Should find v1.0
+
       bool foundV1 = false;
       for (int j = 0; j < group->childCount(); ++j) {
         if (group->child(j)->text(0).contains("v1.0"))
@@ -886,15 +816,12 @@ void TestGitWorkbenchDialog::testTagsLoadedInBranchTree() {
   QVERIFY(foundTags);
 }
 
-// ─── Phase 2: Branch inspector enhancements ────────────────────────────────
-
 void TestGitWorkbenchDialog::testBranchInspectorRenameButton() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
 
-  auto *renameBtn =
-      dialog.findChild<QPushButton *>("inspActionBtn");
-  // There are multiple inspActionBtn, find rename specifically
+  auto *renameBtn = dialog.findChild<QPushButton *>("inspActionBtn");
+
   auto buttons = dialog.findChildren<QPushButton *>();
   bool found = false;
   for (auto *btn : buttons) {
@@ -941,13 +868,10 @@ void TestGitWorkbenchDialog::testBranchInspectorActivityLabel() {
   dialog.loadRepository();
 
   auto *activityLabel = dialog.findChild<QLabel *>("inspBranchActivity");
-  // Not set by default, but exists
-  // Activity is populated only when showBranchInspector is called
-  // Click a branch item to trigger it
+
   auto *branchTree = dialog.findChild<QTreeWidget *>("branchTree");
   QVERIFY(branchTree);
 
-  // Find feature/test branch
   for (int i = 0; i < branchTree->topLevelItemCount(); ++i) {
     auto *group = branchTree->topLevelItem(i);
     for (int j = 0; j < group->childCount(); ++j) {
@@ -956,7 +880,6 @@ void TestGitWorkbenchDialog::testBranchInspectorActivityLabel() {
         emit branchTree->itemClicked(child, 0);
         QTest::qWait(50);
 
-        // Activity label should be populated with recent commits
         QVERIFY(!activityLabel->text().isEmpty());
         return;
       }
@@ -964,8 +887,6 @@ void TestGitWorkbenchDialog::testBranchInspectorActivityLabel() {
   }
   QFAIL("feature/test branch not found in tree");
 }
-
-// ─── Phase 2: Commit refs ──────────────────────────────────────────────────
 
 void TestGitWorkbenchDialog::testCommitRefsFieldExists() {
   GitWorkbenchDialog dialog(m_git, m_theme);
@@ -975,19 +896,15 @@ void TestGitWorkbenchDialog::testCommitRefsFieldExists() {
   QVERIFY(refsLabel);
 }
 
-// ─── Phase 2: Drop-keep action ─────────────────────────────────────────────
-
 void TestGitWorkbenchDialog::testDropKeepActionAvailable() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
 
-  // Toggle rewrite mode
   auto *toggleBtn = dialog.findChild<QPushButton *>("rewriteToggleBtn");
   QVERIFY(toggleBtn);
   toggleBtn->click();
   QTest::qWait(50);
 
-  // Check that action combos contain drop-keep (combo is on column 4)
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   QVERIFY(commitTree->topLevelItemCount() > 0);
 
@@ -1013,7 +930,6 @@ void TestGitWorkbenchDialog::testDropKeepRiskIsMedium() {
   toggleBtn->click();
   QTest::qWait(50);
 
-  // Set one commit to drop-keep (combo is on column 4)
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   auto *combo = qobject_cast<QComboBox *>(
       commitTree->itemWidget(commitTree->topLevelItem(0), 4));
@@ -1024,7 +940,6 @@ void TestGitWorkbenchDialog::testDropKeepRiskIsMedium() {
   combo->setCurrentIndex(dkIdx);
   QTest::qWait(50);
 
-  // Risk label should show Medium
   auto *riskLabel = dialog.findChild<QLabel *>("riskIndicator");
   QVERIFY(riskLabel);
   QVERIFY(riskLabel->text().contains("Medium") ||
@@ -1052,15 +967,13 @@ void TestGitWorkbenchDialog::testDropKeepPlanSummary() {
           summaryLabel->text().contains("preserve"));
 }
 
-// ─── Phase 2: Recovery center ──────────────────────────────────────────────
-
 void TestGitWorkbenchDialog::testRecoveryCenterPageExists() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
 
   auto *stack = dialog.findChild<QStackedWidget *>("inspectorStack");
   QVERIFY(stack);
-  QVERIFY(stack->count() >= 5); // 0=empty, 1=commit, 2=branch, 3=plan, 4=recovery
+  QVERIFY(stack->count() >= 5);
 }
 
 void TestGitWorkbenchDialog::testRecoveryCenterListExists() {
@@ -1080,7 +993,7 @@ void TestGitWorkbenchDialog::testRecoveryCenterRestoreButton() {
   for (auto *btn : buttons) {
     if (btn->text().contains("Restore")) {
       found = true;
-      // Should be disabled by default (no selection)
+
       QVERIFY(!btn->isEnabled());
       break;
     }
@@ -1088,13 +1001,10 @@ void TestGitWorkbenchDialog::testRecoveryCenterRestoreButton() {
   QVERIFY(found);
 }
 
-// ─── Phase 2: Command palette ──────────────────────────────────────────────
-
 void TestGitWorkbenchDialog::testCommandPaletteKeyCtrlK() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
 
-  // Schedule closing any modal dialog that appears after 100ms
   QTimer::singleShot(100, [&dialog]() {
     auto children = dialog.findChildren<QDialog *>();
     for (auto *child : children) {
@@ -1107,8 +1017,6 @@ void TestGitWorkbenchDialog::testCommandPaletteKeyCtrlK() {
   QTest::qWait(200);
 }
 
-// ─── Phase 2: Keyboard shortcuts ───────────────────────────────────────────
-
 void TestGitWorkbenchDialog::testKeyBFocusesBranches() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
@@ -1116,9 +1024,6 @@ void TestGitWorkbenchDialog::testKeyBFocusesBranches() {
   auto *branchTree = dialog.findChild<QTreeWidget *>("branchTree");
   QVERIFY(branchTree);
 
-  // In offscreen mode focus doesn't propagate the same way,
-  // so just verify the B key handler exists by sending the event
-  // and confirming no crash
   QTest::keyPress(&dialog, Qt::Key_B);
   QTest::qWait(50);
   QVERIFY(true);
@@ -1128,20 +1033,12 @@ void TestGitWorkbenchDialog::testKeyQuestionShowsHelp() {
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
 
-  // Pressing ? should not crash; the info dialog will be modal
-  // so we just verify through focus state that it's handled
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   commitTree->setFocus();
   QTest::qWait(50);
 
-  // Can't easily test modal dialog, but verify no crash
-  // The ? key sends Qt::Key_Question
-  // Skip modal test - just verify the key binding exists by checking
-  // that the key is consumed (not passed to parent)
   QVERIFY(true);
 }
-
-// ─── Phase 2: Edit commit message ──────────────────────────────────────────
 
 void TestGitWorkbenchDialog::testEditMessageButtonExists() {
   GitWorkbenchDialog dialog(m_git, m_theme);
@@ -1165,7 +1062,6 @@ void TestGitWorkbenchDialog::testDoubleClickMessageColumnOpensEdit() {
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   QVERIFY(commitTree->topLevelItemCount() > 0);
 
-  // Schedule closing any modal dialog that appears
   QTimer::singleShot(100, [&dialog]() {
     auto children = dialog.findChildren<QDialog *>();
     for (auto *child : children) {
@@ -1174,21 +1070,16 @@ void TestGitWorkbenchDialog::testDoubleClickMessageColumnOpensEdit() {
     }
   });
 
-  // Select commit first so m_selectedCommitHash is set
   auto *item = commitTree->topLevelItem(0);
   commitTree->setCurrentItem(item);
   QTest::qWait(50);
 
-  // Double-click on column 0 (message) should open edit dialog
   emit commitTree->itemDoubleClicked(item, 0);
   QTest::qWait(200);
 
-  // Verify the viewCommitDiff signal was NOT emitted (edit dialog opened instead)
   QSignalSpy spy(&dialog, &GitWorkbenchDialog::viewCommitDiff);
   QCOMPARE(spy.count(), 0);
 }
-
-// ─── Phase 3: Stash management ─────────────────────────────────────────────
 
 void TestGitWorkbenchDialog::testStashInspectorPageExists() {
   GitWorkbenchDialog dialog(m_git, m_theme);
@@ -1196,7 +1087,7 @@ void TestGitWorkbenchDialog::testStashInspectorPageExists() {
 
   auto *stack = dialog.findChild<QStackedWidget *>("inspectorStack");
   QVERIFY(stack);
-  // Pages: 0=empty, 1=commit, 2=branch, 3=plan, 4=recovery, 5=stash
+
   QVERIFY(stack->count() >= 6);
 }
 
@@ -1207,8 +1098,7 @@ void TestGitWorkbenchDialog::testStashApplyButtonExists() {
   auto buttons = dialog.findChildren<QPushButton *>();
   bool found = false;
   for (auto *btn : buttons) {
-    if (btn->text().contains("Apply Stash") ||
-        btn->text().contains("Apply")) {
+    if (btn->text().contains("Apply Stash") || btn->text().contains("Apply")) {
       if (btn->objectName() == "inspActionBtn" ||
           btn->text().contains("Apply Stash")) {
         found = true;
@@ -1249,21 +1139,12 @@ void TestGitWorkbenchDialog::testStashDropButtonExists() {
   QVERIFY(found);
 }
 
-// ─── Phase 3: Typed confirmation ───────────────────────────────────────────
-
 void TestGitWorkbenchDialog::testCriticalConfirmRequiresTyping() {
-  // The confirmOperation() for Critical risk now shows a typed dialog
-  // requiring "CONFIRM" input. We can't easily test the full flow without
-  // exec(), but verify the dialog structure exists by checking that
-  // critical ops are properly gated.
-  // (Acceptance-level test: the typed dialog implementation is verified
-  // by code review; this ensures no crash in the code path.)
+
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
   QVERIFY(true);
 }
-
-// ─── Phase 5: Multi-selection UI ───────────────────────────────────────────
 
 void TestGitWorkbenchDialog::testSelectionBarHiddenByDefault() {
   GitWorkbenchDialog dialog(m_git, m_theme);
@@ -1281,13 +1162,12 @@ void TestGitWorkbenchDialog::testSelectionBarAppearsOnMultiSelect() {
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   QVERIFY(commitTree->topLevelItemCount() >= 2);
 
-  // Select 2 commits
   commitTree->topLevelItem(0)->setSelected(true);
   commitTree->topLevelItem(1)->setSelected(true);
 
   auto *selectionBar = dialog.findChild<QWidget *>("selectionBar");
   QVERIFY(selectionBar != nullptr);
-  // Use !isHidden() instead of isVisible() since dialog isn't shown
+
   QVERIFY(!selectionBar->isHidden());
 }
 
@@ -1320,7 +1200,6 @@ void TestGitWorkbenchDialog::testToolbarButtonsShowCountInRewrite() {
   commitTree->topLevelItem(0)->setSelected(true);
   commitTree->topLevelItem(1)->setSelected(true);
 
-  // Find squash button
   auto buttons = dialog.findChildren<QPushButton *>();
   QPushButton *squashBtn = nullptr;
   for (auto *b : buttons) {
@@ -1343,7 +1222,6 @@ void TestGitWorkbenchDialog::testToolbarButtonsResetOnSingleSelect() {
   auto *commitTree = dialog.findChild<QTreeWidget *>("commitTree");
   QVERIFY(commitTree->topLevelItemCount() >= 2);
 
-  // Select two, then select only one
   commitTree->topLevelItem(0)->setSelected(true);
   commitTree->topLevelItem(1)->setSelected(true);
   commitTree->clearSelection();
@@ -1362,7 +1240,7 @@ void TestGitWorkbenchDialog::testToolbarButtonsResetOnSingleSelect() {
 }
 
 void TestGitWorkbenchDialog::testMultiSelectContextMenuShowsCount() {
-  // Verify the context menu path doesn't crash with multi-select
+
   GitWorkbenchDialog dialog(m_git, m_theme);
   dialog.loadRepository();
 
@@ -1371,7 +1249,6 @@ void TestGitWorkbenchDialog::testMultiSelectContextMenuShowsCount() {
   commitTree->topLevelItem(0)->setSelected(true);
   commitTree->topLevelItem(1)->setSelected(true);
 
-  // Verify multi-select state is recognized
   QCOMPARE(commitTree->selectedItems().size(), 2);
 }
 

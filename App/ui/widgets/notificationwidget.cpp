@@ -40,8 +40,7 @@ void NotificationWidget::setupUi() {
 
   m_messageLabel = new QLabel(this);
   m_messageLabel->setStyleSheet("font-size: 11px; background: transparent;");
-  m_messageLabel->setSizePolicy(QSizePolicy::Expanding,
-                                QSizePolicy::Preferred);
+  m_messageLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   m_messageLabel->setWordWrap(true);
   textLayout->addWidget(m_messageLabel);
 
@@ -50,25 +49,23 @@ void NotificationWidget::setupUi() {
   m_closeButton = new QPushButton("✕", this);
   m_closeButton->setFixedSize(20, 20);
   m_closeButton->setCursor(Qt::PointingHandCursor);
-  m_closeButton->setStyleSheet(
-      "QPushButton {"
-      "  background: transparent;"
-      "  border: none;"
-      "  color: #8b949e;"
-      "  font-size: 12px;"
-      "  padding: 0;"
-      "}"
-      "QPushButton:hover {"
-      "  color: #e6edf3;"
-      "}");
+  m_closeButton->setStyleSheet("QPushButton {"
+                               "  background: transparent;"
+                               "  border: none;"
+                               "  color: #8b949e;"
+                               "  font-size: 12px;"
+                               "  padding: 0;"
+                               "}"
+                               "QPushButton:hover {"
+                               "  color: #e6edf3;"
+                               "}");
   connect(m_closeButton, &QPushButton::clicked, this,
           &NotificationWidget::dismiss);
   mainLayout->addWidget(m_closeButton, 0, Qt::AlignTop);
 
   m_dismissTimer = new QTimer(this);
   m_dismissTimer->setSingleShot(true);
-  connect(m_dismissTimer, &QTimer::timeout, this,
-          &NotificationWidget::dismiss);
+  connect(m_dismissTimer, &QTimer::timeout, this, &NotificationWidget::dismiss);
 
   auto *opacityEffect = new QGraphicsOpacityEffect(this);
   opacityEffect->setOpacity(1.0);
@@ -158,9 +155,8 @@ void NotificationWidget::applyStyle(Level level) {
       QString("font-size: 16px; color: %1; background: transparent;")
           .arg(accentColor));
   m_titleLabel->setStyleSheet(
-      QString(
-          "font-weight: 600; font-size: 12px; color: #e6edf3; background: "
-          "transparent;"));
+      QString("font-weight: 600; font-size: 12px; color: #e6edf3; background: "
+              "transparent;"));
   m_messageLabel->setStyleSheet(
       "font-size: 11px; color: #8b949e; background: transparent;");
 
@@ -194,24 +190,21 @@ void NotificationWidget::updateSizeForContent() {
   adjustSize();
 }
 
-// NotificationManager
-
-NotificationManager::NotificationManager(QWidget *parentWidget,
-                                         QObject *parent)
+NotificationManager::NotificationManager(QWidget *parentWidget, QObject *parent)
     : QObject(parent), m_parentWidget(parentWidget) {}
 
 void NotificationManager::showInfo(const QString &title, const QString &message,
                                    int durationMs) {
   auto *notification = new NotificationWidget(m_parentWidget);
-  notification->showNotification(title, message, NotificationWidget::Level::Info,
-                                 durationMs);
+  notification->showNotification(title, message,
+                                 NotificationWidget::Level::Info, durationMs);
 }
 
 void NotificationManager::showWarning(const QString &title,
                                       const QString &message, int durationMs) {
   auto *notification = new NotificationWidget(m_parentWidget);
-  notification->showNotification(title, message,
-                                 NotificationWidget::Level::Warning, durationMs);
+  notification->showNotification(
+      title, message, NotificationWidget::Level::Warning, durationMs);
 }
 
 void NotificationManager::showError(const QString &title,

@@ -157,7 +157,8 @@ void DebugSettings::createDefaultLaunchConfig() {
   rustConfig["adapterId"] = "rust-codelldb";
   rustConfig["type"] = "lldb";
   rustConfig["request"] = "launch";
-  rustConfig["program"] = "${workspaceFolder}/target/debug/${workspaceFolderBasename}";
+  rustConfig["program"] =
+      "${workspaceFolder}/target/debug/${workspaceFolderBasename}";
   rustConfig["cwd"] = "${workspaceFolder}";
   rustConfig["args"] = QJsonArray();
   rustConfig["_comment"] = "Example Rust debug configuration using CodeLLDB";

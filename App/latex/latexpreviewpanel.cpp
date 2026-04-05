@@ -154,9 +154,8 @@ void LatexPreviewPanel::clean() {
   QString baseName = fi.completeBaseName();
   QDir dir(m_basePath);
 
-  QStringList extensions = {"aux",  "log",          "out", "toc", "bbl",
-                            "blg",  "fls",          "fdb_latexmk",
-                            "synctex.gz"};
+  QStringList extensions = {"aux", "log", "out",         "toc",       "bbl",
+                            "blg", "fls", "fdb_latexmk", "synctex.gz"};
 
   int removed = 0;
   for (const QString &ext : extensions) {
@@ -178,7 +177,6 @@ void LatexPreviewPanel::onBuildProcessFinished(
     int exitCode, QProcess::ExitStatus exitStatus) {
   m_building = false;
 
-  // Read any remaining output
   if (m_buildProcess) {
     QByteArray remaining = m_buildProcess->readAll();
     if (!remaining.isEmpty()) {
@@ -189,7 +187,6 @@ void LatexPreviewPanel::onBuildProcessFinished(
 
   bool success = (exitStatus == QProcess::NormalExit && exitCode == 0);
 
-  // Parse log for diagnostics
   QList<LatexLogEntry> entries = LatexTools::parseLatexLog(m_buildLog);
 
   QList<LspDiagnostic> diagnostics;
@@ -233,8 +230,8 @@ void LatexPreviewPanel::onBuildProcessFinished(
     appendLog("Build completed successfully.", "green");
   } else {
     m_statusLabel->setText("Build Failed");
-    appendLog(
-        QString("Build finished with exit code %1.").arg(exitCode), "red");
+    appendLog(QString("Build finished with exit code %1.").arg(exitCode),
+              "red");
   }
 
   emit buildFinished(success && !hasErrors);
@@ -254,7 +251,6 @@ void LatexPreviewPanel::onBuildProcessOutput() {
   m_buildLog += text;
   m_logBrowser->append(text);
 
-  // Auto-scroll to bottom
   QScrollBar *sb = m_logBrowser->verticalScrollBar();
   sb->setValue(sb->maximum());
 }
@@ -263,8 +259,8 @@ void LatexPreviewPanel::appendLog(const QString &text, const QString &color) {
   if (color.isEmpty()) {
     m_logBrowser->append(text);
   } else {
-    m_logBrowser->append(
-        QString("<span style=\"color: %1;\">%2</span>").arg(color, text.toHtmlEscaped()));
+    m_logBrowser->append(QString("<span style=\"color: %1;\">%2</span>")
+                             .arg(color, text.toHtmlEscaped()));
   }
 
   QScrollBar *sb = m_logBrowser->verticalScrollBar();

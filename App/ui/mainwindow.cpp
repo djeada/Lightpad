@@ -28,8 +28,8 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStringListModel>
-#include <QToolButton>
 #include <QTextDocument>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <cstdio>
 #include <cstring>
@@ -56,6 +56,10 @@
 #include "../filetree/gitfilesystemmodel.h"
 #include "../format_templates/formattemplatemanager.h"
 #include "../language/languagefeaturemanager.h"
+#include "../latex/latexpreviewpanel.h"
+#include "../latex/latextools.h"
+#include "../markdown/markdownpreviewpanel.h"
+#include "../markdown/markdowntools.h"
 #include "../run_templates/runtemplatemanager.h"
 #include "../syntax/syntaxpluginregistry.h"
 #include "../test_templates/testfileclassifier.h"
@@ -91,10 +95,6 @@
 #include "ui_mainwindow.h"
 #include "viewers/imageviewer.h"
 #include "widgets/notificationwidget.h"
-#include "../markdown/markdownpreviewpanel.h"
-#include "../markdown/markdowntools.h"
-#include "../latex/latexpreviewpanel.h"
-#include "../latex/latextools.h"
 #ifdef HAVE_PDF_SUPPORT
 #include "viewers/pdfviewer.h"
 #endif
@@ -122,20 +122,19 @@ MainWindow::MainWindow(QWidget *parent)
       goToSymbolDialog(nullptr), fileQuickOpen(nullptr),
       recentFilesDialog(nullptr), problemsStatusLabel(nullptr),
       vimStatusLabel(nullptr), m_pythonEnvLabel(nullptr),
-      m_vimCommandPanelActive(false),
-      m_connectedVimMode(nullptr), breadcrumbWidget(nullptr),
-      recentFilesManager(nullptr), navigationHistory(nullptr),
-      m_symbolNavService(nullptr), autoSaveManager(nullptr),
-      m_splitEditorContainer(nullptr), m_gitIntegration(nullptr),
-      sourceControlPanel(nullptr), sourceControlDock(nullptr),
-      m_inlineBlameEnabled(false), m_heatmapEnabled(false),
-      m_codeLensEnabled(false), m_gitBranchLabel(nullptr),
-      m_gitSyncLabel(nullptr), m_gitDirtyLabel(nullptr),
-      m_debugTargetMenu(nullptr), debugPanel(nullptr), debugDock(nullptr),
-      testPanel(nullptr), testDock(nullptr), m_markdownPreviewPanel(nullptr),
-      m_markdownPreviewDock(nullptr), m_latexPreviewPanel(nullptr),
-      m_latexPreviewDock(nullptr), m_testStatusLabel(nullptr),
-      m_debugStartInProgress(false),
+      m_vimCommandPanelActive(false), m_connectedVimMode(nullptr),
+      breadcrumbWidget(nullptr), recentFilesManager(nullptr),
+      navigationHistory(nullptr), m_symbolNavService(nullptr),
+      autoSaveManager(nullptr), m_splitEditorContainer(nullptr),
+      m_gitIntegration(nullptr), sourceControlPanel(nullptr),
+      sourceControlDock(nullptr), m_inlineBlameEnabled(false),
+      m_heatmapEnabled(false), m_codeLensEnabled(false),
+      m_gitBranchLabel(nullptr), m_gitSyncLabel(nullptr),
+      m_gitDirtyLabel(nullptr), m_debugTargetMenu(nullptr), debugPanel(nullptr),
+      debugDock(nullptr), testPanel(nullptr), testDock(nullptr),
+      m_markdownPreviewPanel(nullptr), m_markdownPreviewDock(nullptr),
+      m_latexPreviewPanel(nullptr), m_latexPreviewDock(nullptr),
+      m_testStatusLabel(nullptr), m_debugStartInProgress(false),
       m_breakpointsSetConnection(), m_breakpointChangedConnection(),
       m_runInTerminalConnection(), m_sessionTerminatedConnection(),
       m_sessionErrorConnection(), m_sessionStateConnection(),
@@ -144,8 +143,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_diagnosticsManager(nullptr), m_languageFeatureManager(nullptr),
       m_lspCompletionProvider(), m_notificationManager(nullptr),
       m_lspStatusLabel(nullptr), m_lspStatusLanguageId(""),
-      m_restoringSession(false),
-      m_globalSettingsLoaded(false),
+      m_restoringSession(false), m_globalSettingsLoaded(false),
       m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
       m_treeScrollValue(0), m_treeScrollValueInitialized(false),
       m_treeScrollSyncing(false), m_treeCurrentPath(""),
@@ -158,8 +156,9 @@ MainWindow::MainWindow(QWidget *parent)
   ui->actionReplace_in_file->setShortcut(QKeySequence::Replace);
   ui->actionReplace_in_file->setShortcutContext(Qt::ApplicationShortcut);
   ensureFileTreeModel();
-  connect(&RunTemplateManager::instance(), &RunTemplateManager::assignmentChanged,
-          this, [this](const QString &) { updatePythonEnvironmentLabel(); });
+  connect(&RunTemplateManager::instance(),
+          &RunTemplateManager::assignmentChanged, this,
+          [this](const QString &) { updatePythonEnvironmentLabel(); });
 
   showMaximized();
 
@@ -1132,28 +1131,21 @@ void MainWindow::ensureProjectRootForPath(const QString &path) {
     return;
   }
 
-  // No project root set yet — adopt the resolved root
   if (normalizedCurrent.isEmpty()) {
     setProjectRootPath(normalizedResolved);
     return;
   }
 
-  // File is within current project — no change needed
   if (isPathWithinRoot(path, normalizedCurrent)) {
     return;
   }
 
-  // Allow promoting to a parent git root that contains current root
-  // (e.g. opening a file in a monorepo parent)
   QFileInfo gitInfo(normalizedResolved + "/.git");
   if (gitInfo.exists() &&
       isPathWithinRoot(normalizedCurrent, normalizedResolved)) {
     setProjectRootPath(normalizedResolved);
     return;
   }
-
-  // File is outside current project — do NOT switch project root.
-  // The file opens in a tab without affecting the project tree.
 }
 
 template <typename... Args>
@@ -1672,10 +1664,9 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
     return false;
   }
 
-  // Check for external modifications before saving
   if (checkExternalModification(filePath)) {
     if (isAutoSave) {
-      // Auto-save should never silently overwrite external changes
+
       return false;
     }
 
@@ -1703,8 +1694,7 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
         textArea->setPlainText(QString::fromUtf8(reloadFile.readAll()));
         reloadFile.close();
         QTextCursor cursor = textArea->textCursor();
-        cursor.setPosition(
-            qMin(cursorPos, textArea->toPlainText().length()));
+        cursor.setPosition(qMin(cursorPos, textArea->toPlainText().length()));
         textArea->setTextCursor(cursor);
         textArea->document()->setModified(false);
         textArea->removeIconUnsaved();
@@ -1717,7 +1707,6 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
     } else if (msgBox.clickedButton() != overwriteBtn) {
       return false;
     }
-    // User chose "Overwrite" — fall through to save
   }
 
   QFile file(filePath);
@@ -2259,15 +2248,14 @@ void MainWindow::showProblemsPanel() {
               notifyDiagnosticsFileSaved(filePath);
             });
 
-    connect(problemsPanel, &ProblemsPanel::closeRequested, this,
-            [this]() {
-              if (problemsPanel) {
-                problemsPanel->setVisible(false);
-              }
-              if (ui->actionToggle_Problems) {
-                ui->actionToggle_Problems->setChecked(false);
-              }
-            });
+    connect(problemsPanel, &ProblemsPanel::closeRequested, this, [this]() {
+      if (problemsPanel) {
+        problemsPanel->setVisible(false);
+      }
+      if (ui->actionToggle_Problems) {
+        ui->actionToggle_Problems->setChecked(false);
+      }
+    });
 
     if (m_diagnosticsManager) {
       for (const QString &uri : m_diagnosticsManager->allUris()) {
@@ -2354,12 +2342,10 @@ void MainWindow::ensureStatusLabels() {
                                     "  color: #e6edf3;"
                                     "}");
     m_pythonEnvLabel->setCursor(Qt::PointingHandCursor);
-    m_pythonEnvLabel->setToolTip(
-        tr("Python environment (click to configure)"));
+    m_pythonEnvLabel->setToolTip(tr("Python environment (click to configure)"));
     m_pythonEnvLabel->setVisible(false);
-    connect(m_pythonEnvLabel, &QToolButton::clicked, this, [this]() {
-      openPythonEnvironmentDialog();
-    });
+    connect(m_pythonEnvLabel, &QToolButton::clicked, this,
+            [this]() { openPythonEnvironmentDialog(); });
 
     auto layout = qobject_cast<QHBoxLayout *>(ui->backgroundBottom->layout());
     if (layout) {
@@ -2381,8 +2367,8 @@ void MainWindow::updatePythonEnvironmentLabel() {
     return;
   }
 
-  auto page = currentTabWidget() ? currentTabWidget()->getCurrentPage()
-                                 : nullptr;
+  auto page =
+      currentTabWidget() ? currentTabWidget()->getCurrentPage() : nullptr;
   QString filePath = page ? page->getFilePath() : QString();
 
   if (filePath.isEmpty()) {
@@ -2409,33 +2395,33 @@ void MainWindow::updatePythonEnvironmentLabel() {
   preference.venvPath = assignment.pythonVenvPath;
   preference.requirementsFile = assignment.pythonRequirementsFile;
 
-  const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
-      preference, m_projectRootPath, filePath,
-      QFileInfo(filePath).absolutePath());
+  const PythonEnvironmentInfo info =
+      PythonProjectEnvironment::resolve(preference, m_projectRootPath, filePath,
+                                        QFileInfo(filePath).absolutePath());
 
   QString label;
   QString style;
   QString tooltip;
   if (info.found && info.isVirtualEnvironment()) {
     const QString venvName = QFileInfo(info.venvPath).fileName();
-    label = QString::fromUtf8("\xF0\x9F\x90\x8D %1 (%2)").arg(
-        QFileInfo(info.interpreter).fileName(), venvName);
+    label = QString::fromUtf8("\xF0\x9F\x90\x8D %1 (%2)")
+                .arg(QFileInfo(info.interpreter).fileName(), venvName);
     style = "QToolButton { color: #3fb950; padding: 0 8px; font-size: 12px;"
             " border: none; background: transparent; }"
             "QToolButton:hover { color: #7ee787; }";
     tooltip = tr("Python: %1\nVenv: %2\nClick to configure")
                   .arg(info.interpreter, info.venvPath);
   } else if (info.found) {
-    label = QString::fromUtf8("\xF0\x9F\x90\x8D %1").arg(
-        QFileInfo(info.interpreter).fileName());
+    label = QString::fromUtf8("\xF0\x9F\x90\x8D %1")
+                .arg(QFileInfo(info.interpreter).fileName());
     style = "QToolButton { color: #8b949e; padding: 0 8px; font-size: 12px;"
             " border: none; background: transparent; }"
             "QToolButton:hover { color: #e6edf3; }";
-    tooltip = tr("Python: %1\nNo virtual environment active\nClick to configure")
-                  .arg(info.interpreter);
+    tooltip =
+        tr("Python: %1\nNo virtual environment active\nClick to configure")
+            .arg(info.interpreter);
   } else {
-    label = QString::fromUtf8(
-        "\xF0\x9F\x90\x8D \xe2\x9a\xa0 No Python env");
+    label = QString::fromUtf8("\xF0\x9F\x90\x8D \xe2\x9a\xa0 No Python env");
     style = "QToolButton { color: #d29922; padding: 0 8px; font-size: 12px;"
             " border: none; background: transparent; }"
             "QToolButton:hover { color: #f2cc60; }";
@@ -2710,8 +2696,7 @@ void MainWindow::ensureTestPanel() {
               m_testStatusLabel->setStyleSheet(
                   "QLabel { color: #f85149; font-weight: bold; }");
             } else {
-              m_testStatusLabel->setText(
-                  tr("Tests: %1 passed").arg(passed));
+              m_testStatusLabel->setText(tr("Tests: %1 passed").arg(passed));
               m_testStatusLabel->setStyleSheet(
                   "QLabel { color: #3fb950; font-weight: bold; }");
             }
@@ -2737,8 +2722,8 @@ void MainWindow::on_actionToggle_Problems_triggered() {
   showProblemsPanel();
 
   if (ui->actionToggle_Problems) {
-    ui->actionToggle_Problems->setChecked(
-        problemsPanel && problemsPanel->isVisible());
+    ui->actionToggle_Problems->setChecked(problemsPanel &&
+                                          problemsPanel->isVisible());
   }
 }
 
@@ -2760,8 +2745,7 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
   if (!MarkdownPreviewPanel::isMarkdownFile(fi.suffix())) {
     if (m_notificationManager) {
       m_notificationManager->showWarning(
-          tr("Markdown Preview"),
-          tr("Current file is not a Markdown file"));
+          tr("Markdown Preview"), tr("Current file is not a Markdown file"));
     }
     return;
   }
@@ -2791,7 +2775,6 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
       "border-bottom: 1px solid #30363d; }");
   addDockWidget(Qt::RightDockWidgetArea, m_markdownPreviewDock);
 
-  // Delay initial render so QWebEngineView has time to initialize
   QTimer::singleShot(100, m_markdownPreviewPanel,
                      &MarkdownPreviewPanel::updatePreview);
 
@@ -2836,8 +2819,7 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
   if (!LatexPreviewPanel::isLatexFile(fi.suffix())) {
     if (m_notificationManager) {
       m_notificationManager->showWarning(
-          tr("LaTeX Build"),
-          tr("Current file is not a LaTeX file"));
+          tr("LaTeX Build"), tr("Current file is not a LaTeX file"));
     }
     return;
   }
@@ -3398,7 +3380,7 @@ void MainWindow::setupDiagnostics() {
                            : LanguageCatalog::displayName(languageId));
           m_notificationManager->showError(title, message);
         }
-        // Only update status label if this language matches current file
+
         auto *tw = currentTabWidget();
         if (tw && tw->currentIndex() >= 0) {
           QString fp = tw->getFilePath(tw->currentIndex());
@@ -3419,7 +3401,7 @@ void MainWindow::setupDiagnostics() {
                   tr("%1 language server is now active.").arg(displayName),
                   3000);
             }
-            // Only update status label if this language matches current file
+
             auto *tw = currentTabWidget();
             if (tw && tw->currentIndex() >= 0) {
               QString fp = tw->getFilePath(tw->currentIndex());
@@ -3431,7 +3413,6 @@ void MainWindow::setupDiagnostics() {
   connect(m_languageFeatureManager,
           &LanguageFeatureManager::serverHealthChanged, this,
           [this](const QString &languageId, ServerHealthStatus status) {
-            // Only update if this language matches the current file
             auto *tw = currentTabWidget();
             if (!tw || tw->currentIndex() < 0)
               return;
@@ -3552,8 +3533,8 @@ void MainWindow::openPythonEnvironmentDialog() {
     return;
   }
 
-  auto page = currentTabWidget() ? currentTabWidget()->getCurrentPage()
-                                 : nullptr;
+  auto page =
+      currentTabWidget() ? currentTabWidget()->getCurrentPage() : nullptr;
   const QString filePath = page ? page->getFilePath() : QString();
   if (filePath.trimmed().isEmpty()) {
     return;
@@ -3562,9 +3543,8 @@ void MainWindow::openPythonEnvironmentDialog() {
   auto *dialog = new PythonEnvironmentDialog(m_projectRootPath, filePath,
                                              getTheme(), this);
   dialog->setAttribute(Qt::WA_DeleteOnClose);
-  connect(dialog, &PythonEnvironmentDialog::configurationSaved, this, [this]() {
-    updatePythonEnvironmentLabel();
-  });
+  connect(dialog, &PythonEnvironmentDialog::configurationSaved, this,
+          [this]() { updatePythonEnvironmentLabel(); });
   dialog->show();
   dialog->raise();
   dialog->activateWindow();
@@ -3575,13 +3555,15 @@ void MainWindow::openLanguageServerStatusDialog() {
     return;
   }
 
-  auto page = currentTabWidget() ? currentTabWidget()->getCurrentPage()
-                                 : nullptr;
+  auto page =
+      currentTabWidget() ? currentTabWidget()->getCurrentPage() : nullptr;
   const QString filePath = page ? page->getFilePath() : QString();
-  const QString effectiveLanguage =
-      filePath.trimmed().isEmpty() ? QString() : effectiveLanguageIdForFile(filePath);
-  const QString overrideLanguage =
-      filePath.trimmed().isEmpty() ? QString() : highlightOverrideForFile(filePath);
+  const QString effectiveLanguage = filePath.trimmed().isEmpty()
+                                        ? QString()
+                                        : effectiveLanguageIdForFile(filePath);
+  const QString overrideLanguage = filePath.trimmed().isEmpty()
+                                       ? QString()
+                                       : highlightOverrideForFile(filePath);
 
   if (!findChildren<LanguageServerStatusDialog *>().isEmpty()) {
     auto *existing = findChildren<LanguageServerStatusDialog *>().first();
@@ -3605,8 +3587,8 @@ void MainWindow::openLanguageServerStatusDialog() {
 
 void MainWindow::retryLanguageServerForCurrentFile(
     const QString &languageAssociation) {
-  auto page = currentTabWidget() ? currentTabWidget()->getCurrentPage()
-                                 : nullptr;
+  auto page =
+      currentTabWidget() ? currentTabWidget()->getCurrentPage() : nullptr;
   const QString filePath = page ? page->getFilePath() : QString();
   TextArea *textArea = getCurrentTextArea();
   if (!m_languageFeatureManager || filePath.trimmed().isEmpty() || !textArea) {
@@ -5880,8 +5862,8 @@ void MainWindow::on_actionGit_Rebase_triggered() {
             QString diff = m_gitIntegration->getCommitDiff(hash);
             GitCommitInfo info = m_gitIntegration->getCommitDetails(hash);
             GitDiffDialog *diffDialog = new GitDiffDialog(
-                m_gitIntegration, hash, GitDiffDialog::DiffTarget::Commit, false,
-                settings.theme, this);
+                m_gitIntegration, hash, GitDiffDialog::DiffTarget::Commit,
+                false, settings.theme, this);
             diffDialog->setDiffText(diff);
             diffDialog->setCommitInfo(info.author, info.date, info.subject);
             diffDialog->setAttribute(Qt::WA_DeleteOnClose);

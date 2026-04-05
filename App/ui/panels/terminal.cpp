@@ -92,8 +92,7 @@ void Terminal::setupTerminal() {
   startShell();
 }
 
-QTextCursor
-Terminal::clampedInputCursor(bool moveToEndWhenOutsideInput) const {
+QTextCursor Terminal::clampedInputCursor(bool moveToEndWhenOutsideInput) const {
   QTextCursor currentCursor = ui->textEdit->textCursor();
   QTextCursor endCursor = currentCursor;
   endCursor.movePosition(QTextCursor::End);
@@ -130,8 +129,7 @@ void Terminal::insertInputText(const QString &text) {
 
 void Terminal::removeInputText(bool backwards) {
   QTextCursor originalCursor = ui->textEdit->textCursor();
-  int selectionEnd =
-      qMax(originalCursor.anchor(), originalCursor.position());
+  int selectionEnd = qMax(originalCursor.anchor(), originalCursor.position());
   if (!originalCursor.hasSelection() &&
       originalCursor.position() < m_inputStartPosition) {
     return;
@@ -1375,9 +1373,8 @@ void Terminal::updateCwdLabel() {
   ui->cwdLabel->setText(QString("%1: %2").arg(shellName, displayPath));
 }
 
-QString
-Terminal::formatPythonBanner(const PythonEnvironmentInfo &info) const {
-  // Use ANSI escape codes for colored terminal output
+QString Terminal::formatPythonBanner(const PythonEnvironmentInfo &info) const {
+
   const QString reset = "\x1b[0m";
   const QString bold = "\x1b[1m";
   const QString green = "\x1b[32m";
@@ -1392,25 +1389,21 @@ Terminal::formatPythonBanner(const PythonEnvironmentInfo &info) const {
     banner = QString("%1%2%3 Python Environment%4\n"
                      "  %5Interpreter:%4 %6\n"
                      "  %5Venv:%4       %7 %8(%9)%4\n")
-                 .arg(bold, green,
-                      QString::fromUtf8("\xF0\x9F\x90\x8D"), reset,
-                      cyan, info.interpreter, venvName, dim,
-                      info.venvPath);
+                 .arg(bold, green, QString::fromUtf8("\xF0\x9F\x90\x8D"), reset,
+                      cyan, info.interpreter, venvName, dim, info.venvPath);
   } else if (info.found) {
     banner = QString("%1%2%3 Python Environment%4\n"
                      "  %5Interpreter:%4 %6\n"
                      "  %7%8No virtual environment active%4\n")
-                 .arg(bold, yellow,
-                      QString::fromUtf8("\xF0\x9F\x90\x8D"), reset,
-                      cyan, info.interpreter, dim, yellow);
+                 .arg(bold, yellow, QString::fromUtf8("\xF0\x9F\x90\x8D"),
+                      reset, cyan, info.interpreter, dim, yellow);
   } else {
     const QString msg = info.statusMessage.isEmpty()
                             ? QString("Python interpreter not found")
                             : info.statusMessage;
     banner = QString("%1%2%3 Python Environment%4\n"
                      "  %5%6%4\n")
-                 .arg(bold, red,
-                      QString::fromUtf8("\xF0\x9F\x90\x8D"), reset,
+                 .arg(bold, red, QString::fromUtf8("\xF0\x9F\x90\x8D"), reset,
                       red, msg);
   }
   return banner;

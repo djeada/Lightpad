@@ -95,10 +95,10 @@ PythonEnvironmentDialog::PythonEnvironmentDialog(const QString &workspaceFolder,
   buttonRow->addWidget(m_closeButton);
   layout->addLayout(buttonRow);
 
-  connect(m_environmentWidget, &PythonEnvironmentWidget::preferenceChanged, this,
-          &PythonEnvironmentDialog::refreshDiagnostics);
-  connect(m_environmentWidget, &PythonEnvironmentWidget::environmentChanged, this,
-          &PythonEnvironmentDialog::refreshDiagnostics);
+  connect(m_environmentWidget, &PythonEnvironmentWidget::preferenceChanged,
+          this, &PythonEnvironmentDialog::refreshDiagnostics);
+  connect(m_environmentWidget, &PythonEnvironmentWidget::environmentChanged,
+          this, &PythonEnvironmentDialog::refreshDiagnostics);
   connect(m_saveButton, &QPushButton::clicked, this,
           &PythonEnvironmentDialog::saveConfiguration);
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::close);
@@ -108,22 +108,25 @@ PythonEnvironmentDialog::PythonEnvironmentDialog(const QString &workspaceFolder,
 }
 
 void PythonEnvironmentDialog::refreshDiagnostics() {
-  const PythonEnvironmentPreference preference = m_environmentWidget->preference();
+  const PythonEnvironmentPreference preference =
+      m_environmentWidget->preference();
   const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
       preference, m_workspaceFolder, m_filePath,
       QFileInfo(m_filePath).absolutePath());
   const PythonEnvironmentDiagnostics diagnostics =
-      PythonProjectEnvironment::diagnostics(preference, m_workspaceFolder,
-                                            m_filePath,
-                                            QFileInfo(m_filePath).absolutePath());
+      PythonProjectEnvironment::diagnostics(
+          preference, m_workspaceFolder, m_filePath,
+          QFileInfo(m_filePath).absolutePath());
 
   QStringList lines;
-  lines << QString("File: %1").arg(displayValue(QDir::toNativeSeparators(m_filePath)))
+  lines << QString("File: %1")
+               .arg(displayValue(QDir::toNativeSeparators(m_filePath)))
         << QString("Workspace root: %1")
-               .arg(displayValue(QDir::toNativeSeparators(diagnostics.workspaceRoot)))
-        << QString("Working directory: %1")
                .arg(displayValue(
-                   QDir::toNativeSeparators(QFileInfo(m_filePath).absolutePath())))
+                   QDir::toNativeSeparators(diagnostics.workspaceRoot)))
+        << QString("Working directory: %1")
+               .arg(displayValue(QDir::toNativeSeparators(
+                   QFileInfo(m_filePath).absolutePath())))
         << QString("Mode: %1").arg(displayValue(preference.mode, "auto"))
         << QString("Resolved interpreter: %1")
                .arg(displayValue(QDir::toNativeSeparators(info.interpreter),
@@ -132,35 +135,29 @@ void PythonEnvironmentDialog::refreshDiagnostics() {
                .arg(displayValue(QDir::toNativeSeparators(info.venvPath),
                                  "(not resolved)"))
         << QString("Resolved requirements file: %1")
-               .arg(displayValue(
-                   QDir::toNativeSeparators(diagnostics.resolvedRequirementsFile),
-                   "(not found)"))
+               .arg(displayValue(QDir::toNativeSeparators(
+                                     diagnostics.resolvedRequirementsFile),
+                                 "(not found)"))
         << QString("Status: %1")
                .arg(displayValue(info.statusMessage, "(no status message)"))
         << QString("Configured custom interpreter: %1")
-               .arg(displayValue(
-                   QDir::toNativeSeparators(
-                       diagnostics.normalizedCustomInterpreter)))
+               .arg(displayValue(QDir::toNativeSeparators(
+                   diagnostics.normalizedCustomInterpreter)))
         << QString("Configured virtualenv path: %1")
-               .arg(displayValue(
-                   QDir::toNativeSeparators(
-                       diagnostics.normalizedConfiguredVenvPath)))
+               .arg(displayValue(QDir::toNativeSeparators(
+                   diagnostics.normalizedConfiguredVenvPath)))
         << QString("Active shell interpreter: %1")
-               .arg(displayValue(
-                   QDir::toNativeSeparators(
-                       diagnostics.activeEnvironmentInterpreter),
-                   "(none)"))
+               .arg(displayValue(QDir::toNativeSeparators(
+                                     diagnostics.activeEnvironmentInterpreter),
+                                 "(none)"))
         << QString("Global fallback interpreter: %1")
                .arg(displayValue(
                    QDir::toNativeSeparators(diagnostics.globalInterpreter),
                    "(not found)"))
-        << ""
-        << "Searched virtualenv locations:"
-        << joinIndentedList(diagnostics.searchedVenvPaths)
-        << ""
+        << "" << "Searched virtualenv locations:"
+        << joinIndentedList(diagnostics.searchedVenvPaths) << ""
         << "Requirements search roots:"
-        << joinIndentedList(diagnostics.searchedRequirementsRoots)
-        << ""
+        << joinIndentedList(diagnostics.searchedRequirementsRoots) << ""
         << "Saved in:"
         << "  .lightpad/run_config.json (per-file Python settings)";
 
@@ -169,14 +166,16 @@ void PythonEnvironmentDialog::refreshDiagnostics() {
 
 void PythonEnvironmentDialog::saveConfiguration() {
   if (m_filePath.trimmed().isEmpty()) {
-    QMessageBox::warning(this, tr("Python Environment"),
-                         tr("Open a Python file before editing its environment."));
+    QMessageBox::warning(
+        this, tr("Python Environment"),
+        tr("Open a Python file before editing its environment."));
     return;
   }
 
   RunTemplateManager &manager = RunTemplateManager::instance();
   FileTemplateAssignment assignment = manager.getAssignmentForFile(m_filePath);
-  const PythonEnvironmentPreference preference = m_environmentWidget->preference();
+  const PythonEnvironmentPreference preference =
+      m_environmentWidget->preference();
 
   assignment.pythonMode = preference.mode;
   assignment.pythonInterpreter = preference.customInterpreter;

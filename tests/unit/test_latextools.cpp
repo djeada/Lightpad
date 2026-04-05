@@ -49,12 +49,11 @@ private slots:
 };
 
 void TestLatexTools::testExtractSections() {
-  QString tex =
-      "\\section{Introduction}\n"
-      "Some text here.\n"
-      "\\subsection{Background}\n"
-      "More text.\n"
-      "\\section{Methods}\n";
+  QString tex = "\\section{Introduction}\n"
+                "Some text here.\n"
+                "\\subsection{Background}\n"
+                "More text.\n"
+                "\\section{Methods}\n";
 
   QList<LatexSection> sections = LatexTools::extractSections(tex);
 
@@ -80,10 +79,9 @@ void TestLatexTools::testExtractSectionsStarred() {
 }
 
 void TestLatexTools::testExtractSectionsWithLabels() {
-  QString tex =
-      "\\section{Introduction}\n"
-      "\\label{sec:intro}\n"
-      "Some text.\n";
+  QString tex = "\\section{Introduction}\n"
+                "\\label{sec:intro}\n"
+                "Some text.\n";
 
   QList<LatexSection> sections = LatexTools::extractSections(tex);
 
@@ -92,9 +90,8 @@ void TestLatexTools::testExtractSectionsWithLabels() {
 }
 
 void TestLatexTools::testExtractSectionsIgnoresComments() {
-  QString tex =
-      "\\section{Real Section}\n"
-      "% \\section{Commented Section}\n";
+  QString tex = "\\section{Real Section}\n"
+                "% \\section{Commented Section}\n";
 
   QList<LatexSection> sections = LatexTools::extractSections(tex);
 
@@ -103,10 +100,9 @@ void TestLatexTools::testExtractSectionsIgnoresComments() {
 }
 
 void TestLatexTools::testExtractLabels() {
-  QString tex =
-      "\\label{fig:plot}\n"
-      "\\label{eq:energy}\n"
-      "\\label{sec:intro}\n";
+  QString tex = "\\label{fig:plot}\n"
+                "\\label{eq:energy}\n"
+                "\\label{sec:intro}\n";
 
   QList<LatexLabel> labels = LatexTools::extractLabels(tex);
 
@@ -119,9 +115,8 @@ void TestLatexTools::testExtractLabels() {
 }
 
 void TestLatexTools::testExtractLabelsIgnoresComments() {
-  QString tex =
-      "\\label{real}\n"
-      "% \\label{commented}\n";
+  QString tex = "\\label{real}\n"
+                "% \\label{commented}\n";
 
   QList<LatexLabel> labels = LatexTools::extractLabels(tex);
 
@@ -130,9 +125,8 @@ void TestLatexTools::testExtractLabelsIgnoresComments() {
 }
 
 void TestLatexTools::testExtractReferences() {
-  QString tex =
-      "See \\ref{fig:plot} and \\eqref{eq:energy}.\n"
-      "Also \\pageref{sec:intro}.\n";
+  QString tex = "See \\ref{fig:plot} and \\eqref{eq:energy}.\n"
+                "Also \\pageref{sec:intro}.\n";
 
   QList<LatexLabel> refs = LatexTools::extractReferences(tex);
 
@@ -167,10 +161,9 @@ void TestLatexTools::testExtractCitations() {
 }
 
 void TestLatexTools::testExtractCitationsMultipleVariants() {
-  QString tex =
-      "\\citeauthor{author2020}\n"
-      "\\textcite{text2021}\n"
-      "\\autocite{auto2022}\n";
+  QString tex = "\\citeauthor{author2020}\n"
+                "\\textcite{text2021}\n"
+                "\\autocite{auto2022}\n";
 
   QList<LatexLabel> cites = LatexTools::extractCitations(tex);
 
@@ -181,10 +174,9 @@ void TestLatexTools::testExtractCitationsMultipleVariants() {
 }
 
 void TestLatexTools::testExtractIncludes() {
-  QString tex =
-      "\\input{chapters/intro}\n"
-      "\\include{chapters/methods}\n"
-      "\\includegraphics[width=0.5\\textwidth]{fig/plot.png}\n";
+  QString tex = "\\input{chapters/intro}\n"
+                "\\include{chapters/methods}\n"
+                "\\includegraphics[width=0.5\\textwidth]{fig/plot.png}\n";
 
   QList<LatexInclude> includes = LatexTools::extractIncludes(tex);
 
@@ -208,10 +200,9 @@ void TestLatexTools::testExtractIncludesBibResource() {
 }
 
 void TestLatexTools::testDetectDocumentClass() {
-  QString tex =
-      "% Comment\n"
-      "\\documentclass{article}\n"
-      "\\begin{document}\n";
+  QString tex = "% Comment\n"
+                "\\documentclass{article}\n"
+                "\\begin{document}\n";
 
   QCOMPARE(LatexTools::detectDocumentClass(tex), QString("article"));
 }
@@ -227,10 +218,9 @@ void TestLatexTools::testDetectDocumentClassMissing() {
 }
 
 void TestLatexTools::testDetectPackages() {
-  QString tex =
-      "\\usepackage{amsmath}\n"
-      "\\usepackage[utf8]{inputenc}\n"
-      "\\usepackage{graphicx,hyperref}\n";
+  QString tex = "\\usepackage{amsmath}\n"
+                "\\usepackage[utf8]{inputenc}\n"
+                "\\usepackage{graphicx,hyperref}\n";
 
   QStringList packages = LatexTools::detectPackages(tex);
 
@@ -270,11 +260,10 @@ void TestLatexTools::testDetectMainFile() {
 }
 
 void TestLatexTools::testParseLatexLogErrors() {
-  QString log =
-      "(/usr/share/texlive/texmf-dist/tex/latex/base/article.cls)\n"
-      "! LaTeX Error: File `missing.sty' not found.\n"
-      "\n"
-      "l.3 \\usepackage{missing}\n";
+  QString log = "(/usr/share/texlive/texmf-dist/tex/latex/base/article.cls)\n"
+                "! LaTeX Error: File `missing.sty' not found.\n"
+                "\n"
+                "l.3 \\usepackage{missing}\n";
 
   QList<LatexLogEntry> entries = LatexTools::parseLatexLog(log);
 
@@ -289,8 +278,8 @@ void TestLatexTools::testParseLatexLogErrors() {
 }
 
 void TestLatexTools::testParseLatexLogWarnings() {
-  QString log =
-      "LaTeX Warning: Reference `sec:missing' on page 1 undefined on input line 15.\n";
+  QString log = "LaTeX Warning: Reference `sec:missing' on page 1 undefined on "
+                "input line 15.\n";
 
   QList<LatexLogEntry> entries = LatexTools::parseLatexLog(log);
 
@@ -312,8 +301,7 @@ void TestLatexTools::testParseLatexLogOverfull() {
 }
 
 void TestLatexTools::testParseLatexLogPackageWarnings() {
-  QString log =
-      "Package hyperref Warning: Token not allowed in a PDF string\n";
+  QString log = "Package hyperref Warning: Token not allowed in a PDF string\n";
 
   QList<LatexLogEntry> entries = LatexTools::parseLatexLog(log);
 
@@ -323,11 +311,10 @@ void TestLatexTools::testParseLatexLogPackageWarnings() {
 }
 
 void TestLatexTools::testLintUnclosedEnvironments() {
-  QString tex =
-      "\\begin{document}\n"
-      "\\begin{itemize}\n"
-      "\\item First\n"
-      "\\end{document}\n";
+  QString tex = "\\begin{document}\n"
+                "\\begin{itemize}\n"
+                "\\item First\n"
+                "\\end{document}\n";
 
   QList<LspDiagnostic> diags = LatexTools::lint(tex);
 
@@ -338,14 +325,12 @@ void TestLatexTools::testLintUnclosedEnvironments() {
       break;
     }
   }
-  QVERIFY2(foundUnclosed,
-           "Should detect unclosed environments");
+  QVERIFY2(foundUnclosed, "Should detect unclosed environments");
 }
 
 void TestLatexTools::testLintDuplicateLabels() {
-  QString tex =
-      "\\label{fig:one}\n"
-      "\\label{fig:one}\n";
+  QString tex = "\\label{fig:one}\n"
+                "\\label{fig:one}\n";
 
   QList<LspDiagnostic> diags = LatexTools::lint(tex);
 
@@ -360,9 +345,8 @@ void TestLatexTools::testLintDuplicateLabels() {
 }
 
 void TestLatexTools::testLintUndefinedReferences() {
-  QString tex =
-      "\\label{fig:exists}\n"
-      "See \\ref{fig:exists} and \\ref{fig:missing}.\n";
+  QString tex = "\\label{fig:exists}\n"
+                "See \\ref{fig:exists} and \\ref{fig:missing}.\n";
 
   QList<LspDiagnostic> diags = LatexTools::lint(tex);
 
@@ -373,8 +357,7 @@ void TestLatexTools::testLintUndefinedReferences() {
       break;
     }
   }
-  QVERIFY2(foundUndefined,
-           "Should detect undefined references");
+  QVERIFY2(foundUndefined, "Should detect undefined references");
 
   bool falsePositive = false;
   for (const LspDiagnostic &d : diags) {
@@ -383,8 +366,7 @@ void TestLatexTools::testLintUndefinedReferences() {
       break;
     }
   }
-  QVERIFY2(!falsePositive,
-           "Should not report existing labels as undefined");
+  QVERIFY2(!falsePositive, "Should not report existing labels as undefined");
 }
 
 void TestLatexTools::testLintMissingDocumentClass() {
@@ -399,8 +381,7 @@ void TestLatexTools::testLintMissingDocumentClass() {
       break;
     }
   }
-  QVERIFY2(foundMissing,
-           "Should warn about missing \\documentclass");
+  QVERIFY2(foundMissing, "Should warn about missing \\documentclass");
 }
 
 void TestLatexTools::testLintUnclosedMath() {
@@ -434,18 +415,16 @@ void TestLatexTools::testLintCommonTypos() {
 }
 
 void TestLatexTools::testLintCleanDocument() {
-  QString tex =
-      "\\documentclass{article}\n"
-      "\\begin{document}\n"
-      "\\section{Hello}\n"
-      "\\label{sec:hello}\n"
-      "See Section~\\ref{sec:hello}.\n"
-      "Inline math $x = 1$.\n"
-      "\\end{document}\n";
+  QString tex = "\\documentclass{article}\n"
+                "\\begin{document}\n"
+                "\\section{Hello}\n"
+                "\\label{sec:hello}\n"
+                "See Section~\\ref{sec:hello}.\n"
+                "Inline math $x = 1$.\n"
+                "\\end{document}\n";
 
   QList<LspDiagnostic> diags = LatexTools::lint(tex, "/tmp/test.tex");
-  QVERIFY2(diags.isEmpty(),
-           "Clean document should produce no diagnostics");
+  QVERIFY2(diags.isEmpty(), "Clean document should produce no diagnostics");
 }
 
 void TestLatexTools::testLintSkipsStyleFiles() {
@@ -480,11 +459,10 @@ void TestLatexTools::testIsLatexFile() {
 }
 
 void TestLatexTools::testGenerateOutline() {
-  QString tex =
-      "\\chapter{Introduction}\n"
-      "\\section{Background}\n"
-      "\\subsection{Details}\n"
-      "\\section{Motivation}\n";
+  QString tex = "\\chapter{Introduction}\n"
+                "\\section{Background}\n"
+                "\\subsection{Details}\n"
+                "\\section{Motivation}\n";
 
   QString outline = LatexTools::generateOutline(tex);
 
@@ -495,10 +473,9 @@ void TestLatexTools::testGenerateOutline() {
 }
 
 void TestLatexTools::testGenerateOutlineMaxDepth() {
-  QString tex =
-      "\\section{Top}\n"
-      "\\subsection{Mid}\n"
-      "\\subsubsection{Deep}\n";
+  QString tex = "\\section{Top}\n"
+                "\\subsection{Mid}\n"
+                "\\subsubsection{Deep}\n";
 
   QString outline = LatexTools::generateOutline(tex, 3);
 
@@ -508,10 +485,9 @@ void TestLatexTools::testGenerateOutlineMaxDepth() {
 }
 
 void TestLatexTools::testFindMatchingEnvironment() {
-  QString tex =
-      "\\begin{document}\n"
-      "Hello World\n"
-      "\\end{document}\n";
+  QString tex = "\\begin{document}\n"
+                "Hello World\n"
+                "\\end{document}\n";
 
   QPair<int, int> result = LatexTools::findMatchingEnvironment(tex, 0);
 
@@ -520,12 +496,11 @@ void TestLatexTools::testFindMatchingEnvironment() {
 }
 
 void TestLatexTools::testFindMatchingEnvironmentNested() {
-  QString tex =
-      "\\begin{document}\n"
-      "\\begin{itemize}\n"
-      "\\item Hello\n"
-      "\\end{itemize}\n"
-      "\\end{document}\n";
+  QString tex = "\\begin{document}\n"
+                "\\begin{itemize}\n"
+                "\\item Hello\n"
+                "\\end{itemize}\n"
+                "\\end{document}\n";
 
   QPair<int, int> result = LatexTools::findMatchingEnvironment(tex, 0);
 
@@ -542,8 +517,7 @@ void TestLatexTools::testResolveIncludePath() {
   f.write("content");
   f.close();
 
-  QString resolved =
-      LatexTools::resolveIncludePath("chapter1", dir.path());
+  QString resolved = LatexTools::resolveIncludePath("chapter1", dir.path());
   QVERIFY(resolved.endsWith("chapter1.tex"));
 
   QString resolved2 =
@@ -555,8 +529,7 @@ void TestLatexTools::testResolveIncludePathAddsExtension() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());
 
-  QString resolved =
-      LatexTools::resolveIncludePath("nonexistent", dir.path());
+  QString resolved = LatexTools::resolveIncludePath("nonexistent", dir.path());
   QVERIFY(resolved.endsWith("nonexistent.tex"));
 }
 

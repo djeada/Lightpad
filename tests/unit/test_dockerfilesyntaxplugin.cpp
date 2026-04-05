@@ -71,9 +71,10 @@ void TestDockerfileSyntaxPlugin::testInstructionHighlighting() {
   DockerfileSyntaxPlugin plugin;
   auto rules = plugin.syntaxRules();
 
-  QStringList instructions = {"FROM", "RUN", "CMD", "COPY", "ADD", "ENV",
-                               "EXPOSE", "WORKDIR", "ENTRYPOINT", "VOLUME",
-                               "USER", "ARG", "LABEL", "HEALTHCHECK", "SHELL"};
+  QStringList instructions = {"FROM",       "RUN",         "CMD",    "COPY",
+                              "ADD",        "ENV",         "EXPOSE", "WORKDIR",
+                              "ENTRYPOINT", "VOLUME",      "USER",   "ARG",
+                              "LABEL",      "HEALTHCHECK", "SHELL"};
 
   for (const QString &instr : instructions) {
     bool found = false;
@@ -84,8 +85,9 @@ void TestDockerfileSyntaxPlugin::testInstructionHighlighting() {
         break;
       }
     }
-    QVERIFY2(found,
-             qPrintable(QString("Should highlight %1 as keyword_0").arg(instr)));
+    QVERIFY2(
+        found,
+        qPrintable(QString("Should highlight %1 as keyword_0").arg(instr)));
   }
 }
 

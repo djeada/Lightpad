@@ -144,14 +144,26 @@ struct DebugConfiguration {
     cfg.presentation = obj["presentation"].toString();
     cfg.order = obj["order"].toInt();
 
-    static const QStringList knownKeys = {
-        "name",                 "adapterId",            "type",
-        "request",              "program",              "args",
-        "cwd",                  "env",                  "stopOnEntry",
-        "processId",            "host",                 "port",
-        "preLaunchTask",        "postDebugTask",        "pythonMode",
-        "pythonInterpreter",    "pythonVenvPath",
-        "pythonRequirementsFile", "presentation",       "order"};
+    static const QStringList knownKeys = {"name",
+                                          "adapterId",
+                                          "type",
+                                          "request",
+                                          "program",
+                                          "args",
+                                          "cwd",
+                                          "env",
+                                          "stopOnEntry",
+                                          "processId",
+                                          "host",
+                                          "port",
+                                          "preLaunchTask",
+                                          "postDebugTask",
+                                          "pythonMode",
+                                          "pythonInterpreter",
+                                          "pythonVenvPath",
+                                          "pythonRequirementsFile",
+                                          "presentation",
+                                          "order"};
     for (auto it = obj.begin(); it != obj.end(); ++it) {
       if (!knownKeys.contains(it.key())) {
         cfg.adapterConfig[it.key()] = it.value();
@@ -247,10 +259,10 @@ private:
   DebugConfigurationManager &
   operator=(const DebugConfigurationManager &) = delete;
 
-  QString substituteVariable(
-      const QString &value, const QString &currentFile,
-      const PythonEnvironmentPreference &pythonPreference,
-      const QString &workingDirectory = {}) const;
+  QString
+  substituteVariable(const QString &value, const QString &currentFile,
+                     const PythonEnvironmentPreference &pythonPreference,
+                     const QString &workingDirectory = {}) const;
 
   QMap<QString, DebugConfiguration> m_configurations;
   QMap<QString, CompoundDebugConfiguration> m_compoundConfigurations;

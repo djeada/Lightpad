@@ -76,8 +76,7 @@ public:
   bool saveConfigurations(const QString &workspaceFolder);
 
   QList<RunConfiguration> allConfigurations() const;
-  QList<RunConfiguration>
-  configurationsOfType(RunConfigurationType type) const;
+  QList<RunConfiguration> configurationsOfType(RunConfigurationType type) const;
   RunConfiguration configurationByName(const QString &name) const;
   RunConfiguration configurationById(const QString &id) const;
 
@@ -94,8 +93,7 @@ private:
   RunConfigurationManager();
   ~RunConfigurationManager() = default;
   RunConfigurationManager(const RunConfigurationManager &) = delete;
-  RunConfigurationManager &
-  operator=(const RunConfigurationManager &) = delete;
+  RunConfigurationManager &operator=(const RunConfigurationManager &) = delete;
 
   QList<RunConfiguration> m_configurations;
   QString m_workspaceFolder;

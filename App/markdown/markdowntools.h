@@ -69,13 +69,11 @@ public:
   static QString toHtml(const QString &markdown,
                         const QString &basePath = QString());
 
-  // New formatting features
   static QString wrapParagraph(const QString &text, int width = 80);
   static QString normalizeHeadingSpacing(const QString &text);
   static QString normalizeBulletIndentation(const QString &text);
   static QString formatCodeFences(const QString &text);
 
-  // New extraction features
   static QList<MarkdownLink> extractLinks(const QString &text);
   static QList<MarkdownLink> extractImages(const QString &text);
   static QList<MarkdownFootnote> extractFootnotes(const QString &text);
@@ -83,7 +81,6 @@ public:
   static QList<MarkdownOutlineEntry>
   generateDocumentOutline(const QString &text);
 
-  // Statistics
   static int wordCount(const QString &text);
   static int readingTimeMinutes(const QString &text, int wordsPerMinute = 200);
 
@@ -92,16 +89,16 @@ private:
   static QString processInlineFormatting(const QString &text);
   static QList<LspDiagnostic> checkDuplicateHeadings(const QString &text);
   static QList<LspDiagnostic> checkBrokenLocalLinks(const QString &text,
-                                                     const QString &filePath);
+                                                    const QString &filePath);
   static QList<LspDiagnostic> checkBrokenImagePaths(const QString &text,
-                                                     const QString &filePath);
+                                                    const QString &filePath);
   static QList<LspDiagnostic> checkMissingAltText(const QString &text);
   static QList<LspDiagnostic> checkTrailingSpaces(const QString &text);
-  static QList<LspDiagnostic> checkInconsistentHeadingLevels(
-      const QString &text);
+  static QList<LspDiagnostic>
+  checkInconsistentHeadingLevels(const QString &text);
   static QList<LspDiagnostic> checkMalformedLists(const QString &text);
   static QList<LspDiagnostic> checkOverlongLines(const QString &text,
-                                                   int maxLength = 120);
+                                                 int maxLength = 120);
 };
 
 #endif

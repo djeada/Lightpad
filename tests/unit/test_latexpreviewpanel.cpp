@@ -47,8 +47,7 @@ void TestLatexPreviewPanel::testSetFilePath() {
 void TestLatexPreviewPanel::testWidgetStructure() {
   LatexPreviewPanel panel;
 
-  auto *logBrowser =
-      panel.findChild<QTextBrowser *>("latexPreviewLogBrowser");
+  auto *logBrowser = panel.findChild<QTextBrowser *>("latexPreviewLogBrowser");
   QVERIFY(logBrowser);
   QVERIFY(logBrowser->isReadOnly());
 
@@ -110,11 +109,9 @@ void TestLatexPreviewPanel::testAutoBuild() {
 void TestLatexPreviewPanel::testCleanWithNoFile() {
   LatexPreviewPanel panel;
 
-  // Should not crash when no file is set
   panel.clean();
 
-  auto *logBrowser =
-      panel.findChild<QTextBrowser *>("latexPreviewLogBrowser");
+  auto *logBrowser = panel.findChild<QTextBrowser *>("latexPreviewLogBrowser");
   QVERIFY(logBrowser);
   QVERIFY(logBrowser->toPlainText().contains("No file"));
 }
@@ -122,11 +119,9 @@ void TestLatexPreviewPanel::testCleanWithNoFile() {
 void TestLatexPreviewPanel::testBuildWithNoFile() {
   LatexPreviewPanel panel;
 
-  // Should not crash when no file is set
   panel.build();
 
-  auto *logBrowser =
-      panel.findChild<QTextBrowser *>("latexPreviewLogBrowser");
+  auto *logBrowser = panel.findChild<QTextBrowser *>("latexPreviewLogBrowser");
   QVERIFY(logBrowser);
   QVERIFY(logBrowser->toPlainText().contains("No file"));
 }

@@ -260,8 +260,8 @@ bool TerminalTabWidget::runFile(const QString &filePath,
 
         QString tabName;
         if (info.found && info.isVirtualEnvironment()) {
-          tabName = QString("Python (%1)")
-                        .arg(QFileInfo(info.venvPath).fileName());
+          tabName =
+              QString("Python (%1)").arg(QFileInfo(info.venvPath).fileName());
         } else if (info.found) {
           tabName = QString("Python (%1)")
                         .arg(QFileInfo(info.interpreter).fileName());

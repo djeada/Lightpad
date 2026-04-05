@@ -499,7 +499,8 @@ bool RunTemplateManager::removeAssignment(const QString &filePath) {
 QString RunTemplateManager::substituteVariables(const QString &input,
                                                 const QString &filePath) {
   const RunTemplateManager &manager = RunTemplateManager::instance();
-  const FileTemplateAssignment assignment = manager.getAssignmentForFile(filePath);
+  const FileTemplateAssignment assignment =
+      manager.getAssignmentForFile(filePath);
   return PythonProjectEnvironment::substituteVariables(
       input, manager.m_workspaceFolder, filePath,
       QFileInfo(filePath).absolutePath(),

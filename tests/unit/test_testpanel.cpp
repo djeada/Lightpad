@@ -1,8 +1,8 @@
+#include <QLineEdit>
+#include <QProgressBar>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTreeWidget>
-#include <QLineEdit>
-#include <QProgressBar>
 #include <QtTest>
 
 #include "test_templates/autotestrunner.h"
@@ -21,34 +21,27 @@ private slots:
   void initTestCase();
   void cleanupTestCase();
 
-  // Initial state
   void testInitialCounts();
   void testInitialTreeEmpty();
 
-  // Discovery populates tree
   void testDiscoveryPopulatesTree();
   void testDiscoveryWithSuites();
   void testDiscoveryEmptyList();
   void testDiscoveryReplacesPrevious();
 
-  // Run state transitions
   void testOnRunStartedClearsState();
   void testOnRunFinishedUpdatesCounts();
   void testOnTestFinishedAddsItem();
   void testCountsChangedSignal();
 
-  // Filter behavior
   void testFilterAllShowsEverything();
   void testFilterFailedHidesPassed();
 
-  // Auto-run toggle
   void testAutoRunToggle();
   void testAutoRunModeCombo();
 
-  // Discovery adapter wiring
   void testSetDiscoveryAdapter();
 
-  // Modern UI features
   void testSearchEditExists();
   void testProgressBarHiddenInitially();
   void testProgressBarVisibleDuringRun();
@@ -104,8 +97,6 @@ QLabel *TestTestPanel::findEmptyStateLabel(TestPanel &panel) {
   return panel.findChild<QLabel *>("testEmptyState");
 }
 
-// --- Initial state tests ---
-
 void TestTestPanel::testInitialCounts() {
   TestPanel panel;
   QCOMPARE(panel.passedCount(), 0);
@@ -121,12 +112,9 @@ void TestTestPanel::testInitialTreeEmpty() {
   QCOMPARE(tree->topLevelItemCount(), 0);
 }
 
-// --- Discovery tests ---
-
 void TestTestPanel::testDiscoveryPopulatesTree() {
   TestPanel panel;
 
-  // Use a concrete subclass to emit discoveryFinished
   class MockDiscoveryAdapter : public ITestDiscoveryAdapter {
   public:
     QString adapterId() const override { return "mock"; }
@@ -153,7 +141,6 @@ void TestTestPanel::testDiscoveryPopulatesTree() {
   panel.setDiscoveryAdapter(&mockAdapter);
   panel.setWorkspaceFolder(m_tempDir.path());
 
-  // Trigger discovery
   mockAdapter.discover(m_tempDir.path());
 
   QTreeWidget *tree = findTree(panel);
@@ -205,10 +192,8 @@ void TestTestPanel::testDiscoveryWithSuites() {
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree != nullptr);
 
-  // One suite item + one standalone item
   QCOMPARE(tree->topLevelItemCount(), 2);
 
-  // Find the suite item
   QTreeWidgetItem *suiteItem = nullptr;
   QTreeWidgetItem *standaloneItem = nullptr;
   for (int i = 0; i < tree->topLevelItemCount(); ++i) {
@@ -255,9 +240,7 @@ void TestTestPanel::testDiscoveryReplacesPrevious() {
   public:
     QList<DiscoveredTest> batch;
     QString adapterId() const override { return "mock"; }
-    void discover(const QString &) override {
-      emit discoveryFinished(batch);
-    }
+    void discover(const QString &) override { emit discoveryFinished(batch); }
     void cancel() override {}
   };
 
@@ -265,7 +248,6 @@ void TestTestPanel::testDiscoveryReplacesPrevious() {
   panel.setDiscoveryAdapter(&mockAdapter);
   panel.setWorkspaceFolder(m_tempDir.path());
 
-  // First discovery
   DiscoveredTest t1;
   t1.name = "old_test";
   t1.id = "old_test";
@@ -275,7 +257,6 @@ void TestTestPanel::testDiscoveryReplacesPrevious() {
   QTreeWidget *tree = findTree(panel);
   QCOMPARE(tree->topLevelItemCount(), 1);
 
-  // Second discovery replaces
   DiscoveredTest t2;
   t2.name = "new_test_a";
   t2.id = "new_test_a";
@@ -289,16 +270,12 @@ void TestTestPanel::testDiscoveryReplacesPrevious() {
   QCOMPARE(tree->topLevelItem(0)->text(0), "new_test_a");
 }
 
-// --- Run state transition tests ---
-
 void TestTestPanel::testOnRunStartedClearsState() {
   TestPanel panel;
 
-  // Simulate run started via internal run manager
   TestRunManager *runMgr = findRunManager(panel);
   QVERIFY(runMgr != nullptr);
 
-  // Emit runStarted signal to trigger panel state change
   emit runMgr->runStarted();
 
   QCOMPARE(panel.passedCount(), 0);
@@ -315,7 +292,6 @@ void TestTestPanel::testOnRunFinishedUpdatesCounts() {
   TestRunManager *runMgr = findRunManager(panel);
   QVERIFY(runMgr != nullptr);
 
-  // Emit runFinished with specific counts
   emit runMgr->runFinished(5, 2, 1, 0);
 
   QCOMPARE(panel.passedCount(), 5);
@@ -330,10 +306,8 @@ void TestTestPanel::testOnTestFinishedAddsItem() {
   TestRunManager *runMgr = findRunManager(panel);
   QVERIFY(runMgr != nullptr);
 
-  // Clear via runStarted
   emit runMgr->runStarted();
 
-  // Emit testFinished for a passing test
   TestResult result;
   result.id = "test1";
   result.name = "test_example";
@@ -366,8 +340,6 @@ void TestTestPanel::testCountsChangedSignal() {
   QCOMPARE(args.at(3).toInt(), 1);
 }
 
-// --- Filter tests ---
-
 void TestTestPanel::testFilterAllShowsEverything() {
   TestPanel panel;
   TestRunManager *runMgr = findRunManager(panel);
@@ -375,7 +347,6 @@ void TestTestPanel::testFilterAllShowsEverything() {
 
   emit runMgr->runStarted();
 
-  // Add a passing and failing test
   TestResult r1;
   r1.id = "pass1";
   r1.name = "pass_test";
@@ -393,7 +364,6 @@ void TestTestPanel::testFilterAllShowsEverything() {
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree != nullptr);
 
-  // Filter to "All" (index 0) - both visible
   QComboBox *filter = findFilterCombo(panel);
   QVERIFY(filter != nullptr);
   filter->setCurrentIndex(0);
@@ -425,17 +395,14 @@ void TestTestPanel::testFilterFailedHidesPassed() {
 
   QComboBox *filter = findFilterCombo(panel);
   QVERIFY(filter != nullptr);
-  filter->setCurrentIndex(1); // "Failed"
+  filter->setCurrentIndex(1);
 
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree != nullptr);
 
-  // The passed test should be hidden
-  QCOMPARE(tree->topLevelItem(0)->isHidden(), true);  // pass_test
-  QCOMPARE(tree->topLevelItem(1)->isHidden(), false);  // fail_test
+  QCOMPARE(tree->topLevelItem(0)->isHidden(), true);
+  QCOMPARE(tree->topLevelItem(1)->isHidden(), false);
 }
-
-// --- Auto-run tests ---
 
 void TestTestPanel::testAutoRunToggle() {
   TestPanel panel;
@@ -444,9 +411,7 @@ void TestTestPanel::testAutoRunToggle() {
 
   QCOMPARE(autoRunner->isEnabled(), false);
 
-  // Find the auto-run action by object name
-  QAction *autoRunAction =
-      panel.findChild<QAction *>("autoRunAction");
+  QAction *autoRunAction = panel.findChild<QAction *>("autoRunAction");
   QVERIFY(autoRunAction != nullptr);
 
   autoRunAction->setChecked(true);
@@ -461,25 +426,19 @@ void TestTestPanel::testAutoRunModeCombo() {
   AutoTestRunner *autoRunner = panel.autoTestRunner();
   QVERIFY(autoRunner != nullptr);
 
-  // Find the auto-run mode combo by object name
-  QComboBox *modeCombo =
-      panel.findChild<QComboBox *>("autoRunModeCombo");
+  QComboBox *modeCombo = panel.findChild<QComboBox *>("autoRunModeCombo");
   QVERIFY(modeCombo != nullptr);
 
-  // Enable auto-run first
-  QAction *autoRunAction =
-      panel.findChild<QAction *>("autoRunAction");
+  QAction *autoRunAction = panel.findChild<QAction *>("autoRunAction");
   QVERIFY(autoRunAction != nullptr);
   autoRunAction->setChecked(true);
 
-  modeCombo->setCurrentIndex(1); // "File on Save"
+  modeCombo->setCurrentIndex(1);
   QCOMPARE(autoRunner->mode(), AutoRunMode::CurrentFileOnSave);
 
-  modeCombo->setCurrentIndex(2); // "Last Selection"
+  modeCombo->setCurrentIndex(2);
   QCOMPARE(autoRunner->mode(), AutoRunMode::LastSelection);
 }
-
-// --- Discovery adapter wiring ---
 
 void TestTestPanel::testSetDiscoveryAdapter() {
   TestPanel panel;
@@ -499,12 +458,9 @@ void TestTestPanel::testSetDiscoveryAdapter() {
   panel.setDiscoveryAdapter(&mockAdapter);
   panel.setWorkspaceFolder(m_tempDir.path());
 
-  // Calling discover through the panel's discover method
   panel.discoverTests();
   QVERIFY(mockAdapter.discoverCalled);
 }
-
-// --- Modern UI feature tests ---
 
 void TestTestPanel::testSearchEditExists() {
   TestPanel panel;
@@ -530,11 +486,9 @@ void TestTestPanel::testProgressBarVisibleDuringRun() {
   TestRunManager *runMgr = findRunManager(panel);
   QVERIFY(runMgr != nullptr);
 
-  // Emit runStarted to simulate test run beginning
   emit runMgr->runStarted();
   QCOMPARE(progressBar->isVisible(), true);
 
-  // Emit runFinished to simulate test run ending
   emit runMgr->runFinished(1, 0, 0, 0);
   QCOMPARE(progressBar->isVisible(), false);
 }
@@ -583,7 +537,6 @@ void TestTestPanel::testSearchFilterByName() {
 
   emit runMgr->runStarted();
 
-  // Add tests with different names
   TestResult r1;
   r1.id = "alpha";
   r1.name = "test_alpha";
@@ -602,16 +555,13 @@ void TestTestPanel::testSearchFilterByName() {
   QVERIFY(tree != nullptr);
   QCOMPARE(tree->topLevelItemCount(), 2);
 
-  // Type search text to filter
   QLineEdit *searchEdit = findSearchEdit(panel);
   QVERIFY(searchEdit != nullptr);
   searchEdit->setText("alpha");
 
-  // Only "test_alpha" should be visible
-  QCOMPARE(tree->topLevelItem(0)->isHidden(), false); // test_alpha
-  QCOMPARE(tree->topLevelItem(1)->isHidden(), true);   // test_beta
+  QCOMPARE(tree->topLevelItem(0)->isHidden(), false);
+  QCOMPARE(tree->topLevelItem(1)->isHidden(), true);
 
-  // Clear search shows all
   searchEdit->setText("");
   QCOMPARE(tree->topLevelItem(0)->isHidden(), false);
   QCOMPARE(tree->topLevelItem(1)->isHidden(), false);

@@ -16,14 +16,11 @@ class LanguageServerStatusDialog : public QDialog {
   Q_OBJECT
 
 public:
-  explicit LanguageServerStatusDialog(const QString &languageId,
-                                      const QString &workspaceFolder,
-                                      const QString &filePath,
-                                      const QString &effectiveLanguageId,
-                                      const QString &overrideLanguageId,
-                                      LanguageFeatureManager *manager,
-                                      const Theme &theme,
-                                      QWidget *parent = nullptr);
+  explicit LanguageServerStatusDialog(
+      const QString &languageId, const QString &workspaceFolder,
+      const QString &filePath, const QString &effectiveLanguageId,
+      const QString &overrideLanguageId, LanguageFeatureManager *manager,
+      const Theme &theme, QWidget *parent = nullptr);
 
 signals:
   void configurationApplied(const QString &languageAssociation);

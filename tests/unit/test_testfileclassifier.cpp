@@ -36,7 +36,7 @@ void TestTestFileClassifier::init() {
   QVERIFY(m_tmpDir->isValid());
   auto &c = TestFileClassifier::instance();
   c.setWorkspaceFolder(m_tmpDir->path());
-  // Clear any leftover state
+
   c.clearOverride("/some/test_foo.py");
   c.clearOverride("/some/foo.py");
   c.clearOverride("/app/src/main.cpp");
@@ -122,7 +122,6 @@ void TestTestFileClassifier::persistenceRoundTrip() {
   auto &c = TestFileClassifier::instance();
   c.setTestOverride("/app/src/main.cpp", true);
 
-  // Reload overrides from disk
   c.loadOverrides();
   QVERIFY(c.isTestFile("/app/src/main.cpp"));
   QVERIFY(c.hasUserOverride("/app/src/main.cpp"));
@@ -131,8 +130,7 @@ void TestTestFileClassifier::persistenceRoundTrip() {
 
 void TestTestFileClassifier::overrideChangedSignal() {
   auto &c = TestFileClassifier::instance();
-  QSignalSpy spy(&c,
-                 &TestFileClassifier::overrideChanged);
+  QSignalSpy spy(&c, &TestFileClassifier::overrideChanged);
   QVERIFY(spy.isValid());
 
   c.setTestOverride("/some/foo.py", true);

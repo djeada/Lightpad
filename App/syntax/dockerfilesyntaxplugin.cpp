@@ -2,11 +2,10 @@
 #include <QRegularExpression>
 
 QStringList DockerfileSyntaxPlugin::getInstructions() {
-  return {"FROM",    "RUN",         "CMD",        "LABEL",
-          "EXPOSE",  "ENV",         "ADD",        "COPY",
-          "ENTRYPOINT", "VOLUME",   "USER",       "WORKDIR",
-          "ARG",     "ONBUILD",     "STOPSIGNAL", "HEALTHCHECK",
-          "SHELL",   "MAINTAINER"};
+  return {"FROM",        "RUN",     "CMD",       "LABEL",      "EXPOSE",
+          "ENV",         "ADD",     "COPY",      "ENTRYPOINT", "VOLUME",
+          "USER",        "WORKDIR", "ARG",       "ONBUILD",    "STOPSIGNAL",
+          "HEALTHCHECK", "SHELL",   "MAINTAINER"};
 }
 
 QVector<SyntaxRule> DockerfileSyntaxPlugin::syntaxRules() const {
@@ -15,16 +14,15 @@ QVector<SyntaxRule> DockerfileSyntaxPlugin::syntaxRules() const {
   for (const QString &instr : getInstructions()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression(
-        "^\\s*" + instr + "\\b",
-        QRegularExpression::CaseInsensitiveOption |
-            QRegularExpression::MultilineOption);
+        "^\\s*" + instr + "\\b", QRegularExpression::CaseInsensitiveOption |
+                                     QRegularExpression::MultilineOption);
     rule.name = "keyword_0";
     rules.append(rule);
   }
 
   SyntaxRule asRule;
-  asRule.pattern = QRegularExpression(
-      "\\bAS\\b", QRegularExpression::CaseInsensitiveOption);
+  asRule.pattern =
+      QRegularExpression("\\bAS\\b", QRegularExpression::CaseInsensitiveOption);
   asRule.name = "keyword_1";
   rules.append(asRule);
 
@@ -64,22 +62,22 @@ QVector<SyntaxRule> DockerfileSyntaxPlugin::syntaxRules() const {
   rules.append(jsonArrayRule);
 
   SyntaxRule imageTagRule;
-  imageTagRule.pattern = QRegularExpression(
-      "(?<=FROM\\s)[a-zA-Z0-9_./-]+(?::[a-zA-Z0-9_./-]+)?",
-      QRegularExpression::CaseInsensitiveOption);
+  imageTagRule.pattern =
+      QRegularExpression("(?<=FROM\\s)[a-zA-Z0-9_./-]+(?::[a-zA-Z0-9_./-]+)?",
+                         QRegularExpression::CaseInsensitiveOption);
   imageTagRule.name = "function";
   rules.append(imageTagRule);
 
   SyntaxRule commentRule;
-  commentRule.pattern = QRegularExpression(
-      "^\\s*#[^\n]*", QRegularExpression::MultilineOption);
+  commentRule.pattern =
+      QRegularExpression("^\\s*#[^\n]*", QRegularExpression::MultilineOption);
   commentRule.name = "comment";
   rules.append(commentRule);
 
   SyntaxRule parserDirectiveRule;
-  parserDirectiveRule.pattern = QRegularExpression(
-      "^#\\s*(syntax|escape|check)\\s*=.*$",
-      QRegularExpression::MultilineOption);
+  parserDirectiveRule.pattern =
+      QRegularExpression("^#\\s*(syntax|escape|check)\\s*=.*$",
+                         QRegularExpression::MultilineOption);
   parserDirectiveRule.name = "keyword_2";
   rules.append(parserDirectiveRule);
 

@@ -68,8 +68,8 @@ void GitRebaseDialog::loadCommits(const QString &upstream) {
 void GitRebaseDialog::rebuildComboForItem(QTreeWidgetItem *item, int row) {
   auto *combo = new QComboBox(m_commitList);
   combo->addItems(REBASE_ACTIONS);
-  QString action = (row >= 0 && row < m_entries.size()) ? m_entries[row].action
-                                                        : "pick";
+  QString action =
+      (row >= 0 && row < m_entries.size()) ? m_entries[row].action : "pick";
   combo->setCurrentText(action);
 
   QString color = ACTION_COLORS.value(action, "#e6edf3");
@@ -235,13 +235,13 @@ void GitRebaseDialog::updateSummary() {
   if (pick > 0)
     parts << QString("<span style='color:#3fb950'>%1 pick</span>").arg(pick);
   if (reword > 0)
-    parts << QString("<span style='color:#d29922'>%1 reword</span>")
-                 .arg(reword);
+    parts
+        << QString("<span style='color:#d29922'>%1 reword</span>").arg(reword);
   if (edit > 0)
     parts << QString("<span style='color:#58a6ff'>%1 edit</span>").arg(edit);
   if (squash > 0)
-    parts << QString("<span style='color:#a371f7'>%1 squash</span>")
-                 .arg(squash);
+    parts
+        << QString("<span style='color:#a371f7'>%1 squash</span>").arg(squash);
   if (fixup > 0)
     parts << QString("<span style='color:#8b949e'>%1 fixup</span>").arg(fixup);
   if (drop > 0)
@@ -263,9 +263,9 @@ void GitRebaseDialog::updateSummary() {
   }
   m_startBtn->setEnabled(!m_entries.isEmpty());
   m_statusLabel->setText(
-      hasWork ? tr("Ready — rebase plan has modifications")
-              : tr("%1 commits loaded (all set to pick)")
-                    .arg(m_entries.size()));
+      hasWork
+          ? tr("Ready — rebase plan has modifications")
+          : tr("%1 commits loaded (all set to pick)").arg(m_entries.size()));
 }
 
 void GitRebaseDialog::onStartRebase() {
@@ -362,8 +362,7 @@ void GitRebaseDialog::buildUi() {
   mainLayout->setContentsMargins(12, 12, 12, 12);
   mainLayout->setSpacing(8);
 
-  auto *titleLabel =
-      new QLabel(tr("🔀 Interactive Rebase"), this);
+  auto *titleLabel = new QLabel(tr("🔀 Interactive Rebase"), this);
   titleLabel->setStyleSheet(
       "font-size: 16px; font-weight: bold; color: #e6edf3;");
   mainLayout->addWidget(titleLabel);
@@ -377,7 +376,8 @@ void GitRebaseDialog::buildUi() {
   mainLayout->addWidget(headerLabel);
 
   m_searchEdit = new QLineEdit(this);
-  m_searchEdit->setPlaceholderText(tr("🔍 Filter commits by hash, author, or message..."));
+  m_searchEdit->setPlaceholderText(
+      tr("🔍 Filter commits by hash, author, or message..."));
   m_searchEdit->setClearButtonEnabled(true);
   m_searchEdit->setStyleSheet(
       "QLineEdit { background: #21262d; color: #e6edf3; border: 1px solid "
@@ -414,8 +414,7 @@ void GitRebaseDialog::buildUi() {
       "QPushButton:pressed { background: #b62324; }");
 
   m_moveUpBtn->setToolTip(tr("Move selected commit up (earlier in history)"));
-  m_moveDownBtn->setToolTip(
-      tr("Move selected commit down (later in history)"));
+  m_moveDownBtn->setToolTip(tr("Move selected commit down (later in history)"));
   m_squashBtn->setToolTip(
       tr("Mark selected commits for squashing (combine into one)"));
   m_dropBtn->setToolTip(
@@ -472,14 +471,13 @@ void GitRebaseDialog::buildUi() {
       "none; border-bottom: 1px solid #30363d; padding: 6px; font-size: 11px; "
       "font-weight: bold; text-transform: uppercase; }");
 
-  connect(m_commitList->model(), &QAbstractItemModel::rowsMoved,
-          [this]() {
-            syncEntriesFromTree();
-            for (int i = 0; i < m_commitList->topLevelItemCount(); ++i) {
-              rebuildComboForItem(m_commitList->topLevelItem(i), i);
-            }
-            updateSummary();
-          });
+  connect(m_commitList->model(), &QAbstractItemModel::rowsMoved, [this]() {
+    syncEntriesFromTree();
+    for (int i = 0; i < m_commitList->topLevelItemCount(); ++i) {
+      rebuildComboForItem(m_commitList->topLevelItem(i), i);
+    }
+    updateSummary();
+  });
 
   mainLayout->addWidget(m_commitList, 1);
 
@@ -522,10 +520,9 @@ void GitRebaseDialog::applyTheme(const Theme &theme) {
   QString fg = theme.foregroundColor.name();
   QString highlight = theme.highlightColor.name();
 
-  setStyleSheet(
-      QString("QDialog { background-color: %1; color: %2; }"
-              "QLabel { color: %2; }")
-          .arg(bg, fg));
+  setStyleSheet(QString("QDialog { background-color: %1; color: %2; }"
+                        "QLabel { color: %2; }")
+                    .arg(bg, fg));
 }
 
 void GitRebaseDialog::updateActionForItem(QTreeWidgetItem *, const QString &) {}

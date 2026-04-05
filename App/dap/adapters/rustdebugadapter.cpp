@@ -82,9 +82,8 @@ protected:
                                    const QString &candidate) const override {
     Q_UNUSED(configuration);
     if (!candidate.isEmpty()) {
-      return QString(
-                 "Rust adapter '%1' not found. Install CodeLLDB or set "
-                 "adapterCommand to a compatible LLDB DAP adapter.")
+      return QString("Rust adapter '%1' not found. Install CodeLLDB or set "
+                     "adapterCommand to a compatible LLDB DAP adapter.")
           .arg(candidate);
     }
     return "Rust debug adapter not found. Install CodeLLDB or a compatible "

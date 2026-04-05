@@ -879,7 +879,7 @@ void TestOutputParsers::testJestDiscoveryParseEmpty() {
 }
 
 void TestOutputParsers::testDiscoveryAdapterFactory() {
-  // Known config IDs should produce adapters
+
   std::unique_ptr<ITestDiscoveryAdapter> pytest(
       TestDiscoveryAdapterFactory::createForConfiguration("pytest"));
   QVERIFY(pytest != nullptr);
@@ -910,7 +910,6 @@ void TestOutputParsers::testDiscoveryAdapterFactory() {
   QVERIFY(jest != nullptr);
   QCOMPARE(jest->adapterId(), QString("jest"));
 
-  // Unknown config ID should return nullptr
   ITestDiscoveryAdapter *unknown =
       TestDiscoveryAdapterFactory::createForConfiguration("unknown_framework");
   QVERIFY(unknown == nullptr);

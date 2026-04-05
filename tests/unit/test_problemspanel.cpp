@@ -10,12 +10,10 @@ class TestProblemsPanel : public QObject {
 private slots:
   void initTestCase();
 
-  // Initial state
   void testInitialCounts();
   void testInitialTreeEmpty();
   void testEmptyStateLabelVisibleInitially();
 
-  // setDiagnostics
   void testSetDiagnosticsPopulatesTree();
   void testSetDiagnosticsCountsErrors();
   void testSetDiagnosticsCountsWarnings();
@@ -23,34 +21,28 @@ private slots:
   void testSetDiagnosticsEmptyListRemovesFile();
   void testSetDiagnosticsEmptyStateHidden();
 
-  // clearAll
   void testClearAllResetsToEmpty();
 
-  // clearFile
   void testClearFileRemovesSingleUri();
   void testClearFilePreservesOtherUris();
 
-  // Signal emissions
   void testCountsChangedSignal();
   void testProblemClickedSignal();
   void testFileCountsChangedSignal();
 
-  // Filter
   void testFilterErrors();
   void testFilterWarnings();
   void testFilterAll();
 
-  // setCurrentFilePath
   void testSetCurrentFilePath();
 
-  // Auto refresh
   void testAutoRefreshToggle();
   void testOnFileSavedEmitsRefreshWhenAutoRefreshEnabled();
   void testOnFileSavedDoesNotEmitWhenAutoRefreshDisabled();
 
 private:
-  LspDiagnostic makeDiag(LspDiagnosticSeverity severity,
-                         const QString &message, int line = 0, int col = 0);
+  LspDiagnostic makeDiag(LspDiagnosticSeverity severity, const QString &message,
+                         int line = 0, int col = 0);
   QTreeWidget *findTree(ProblemsPanel &panel);
   QLabel *findEmptyStateLabel(ProblemsPanel &panel);
   QLabel *findStatusLabel(ProblemsPanel &panel);
@@ -85,8 +77,6 @@ QLabel *TestProblemsPanel::findStatusLabel(ProblemsPanel &panel) {
   return panel.findChild<QLabel *>("problemsStatusLabel");
 }
 
-// --- Initial state ---
-
 void TestProblemsPanel::testInitialCounts() {
   ProblemsPanel panel;
   QCOMPARE(panel.errorCount(), 0);
@@ -109,8 +99,6 @@ void TestProblemsPanel::testEmptyStateLabelVisibleInitially() {
   QVERIFY(emptyState);
   QVERIFY(emptyState->isVisible());
 }
-
-// --- setDiagnostics ---
 
 void TestProblemsPanel::testSetDiagnosticsPopulatesTree() {
   ProblemsPanel panel;
@@ -193,8 +181,6 @@ void TestProblemsPanel::testSetDiagnosticsEmptyStateHidden() {
   QVERIFY(!emptyState->isVisible());
 }
 
-// --- clearAll ---
-
 void TestProblemsPanel::testClearAllResetsToEmpty() {
   ProblemsPanel panel;
   panel.show();
@@ -211,8 +197,6 @@ void TestProblemsPanel::testClearAllResetsToEmpty() {
   QLabel *emptyState = findEmptyStateLabel(panel);
   QVERIFY(emptyState->isVisible());
 }
-
-// --- clearFile ---
 
 void TestProblemsPanel::testClearFileRemovesSingleUri() {
   ProblemsPanel panel;
@@ -242,8 +226,6 @@ void TestProblemsPanel::testClearFilePreservesOtherUris() {
   QCOMPARE(panel.warningCount(), 1);
 }
 
-// --- Signal emissions ---
-
 void TestProblemsPanel::testCountsChangedSignal() {
   ProblemsPanel panel;
   QSignalSpy spy(&panel, &ProblemsPanel::countsChanged);
@@ -257,9 +239,9 @@ void TestProblemsPanel::testCountsChangedSignal() {
 
   QVERIFY(spy.count() >= 1);
   QList<QVariant> args = spy.last();
-  QCOMPARE(args.at(0).toInt(), 1); // errors
-  QCOMPARE(args.at(1).toInt(), 1); // warnings
-  QCOMPARE(args.at(2).toInt(), 0); // infos
+  QCOMPARE(args.at(0).toInt(), 1);
+  QCOMPARE(args.at(1).toInt(), 1);
+  QCOMPARE(args.at(2).toInt(), 0);
 }
 
 void TestProblemsPanel::testProblemClickedSignal() {
@@ -277,13 +259,12 @@ void TestProblemsPanel::testProblemClickedSignal() {
   QVERIFY(tree->topLevelItemCount() > 0);
   QTreeWidgetItem *diagItem = tree->topLevelItem(0);
 
-  // Simulate click
   emit tree->itemClicked(diagItem, 0);
 
   QCOMPARE(spy.count(), 1);
   QList<QVariant> args = spy.first();
-  QCOMPARE(args.at(1).toInt(), 10); // line
-  QCOMPARE(args.at(2).toInt(), 5);  // column
+  QCOMPARE(args.at(1).toInt(), 10);
+  QCOMPARE(args.at(2).toInt(), 5);
 }
 
 void TestProblemsPanel::testFileCountsChangedSignal() {
@@ -300,8 +281,6 @@ void TestProblemsPanel::testFileCountsChangedSignal() {
   QVERIFY(spy.count() >= 1);
 }
 
-// --- Filter ---
-
 void TestProblemsPanel::testFilterErrors() {
   ProblemsPanel panel;
   panel.setCurrentFilePath("/test.cpp");
@@ -312,7 +291,7 @@ void TestProblemsPanel::testFilterErrors() {
 
   QComboBox *filterCombo = panel.findChild<QComboBox *>();
   QVERIFY(filterCombo);
-  filterCombo->setCurrentIndex(1); // "Errors" filter
+  filterCombo->setCurrentIndex(1);
 
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree);
@@ -329,7 +308,7 @@ void TestProblemsPanel::testFilterWarnings() {
 
   QComboBox *filterCombo = panel.findChild<QComboBox *>();
   QVERIFY(filterCombo);
-  filterCombo->setCurrentIndex(2); // "Warnings" filter
+  filterCombo->setCurrentIndex(2);
 
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree);
@@ -346,14 +325,12 @@ void TestProblemsPanel::testFilterAll() {
 
   QComboBox *filterCombo = panel.findChild<QComboBox *>();
   QVERIFY(filterCombo);
-  filterCombo->setCurrentIndex(0); // "All" filter
+  filterCombo->setCurrentIndex(0);
 
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree);
   QCOMPARE(tree->topLevelItemCount(), 2);
 }
-
-// --- setCurrentFilePath ---
 
 void TestProblemsPanel::testSetCurrentFilePath() {
   ProblemsPanel panel;
@@ -366,8 +343,6 @@ void TestProblemsPanel::testSetCurrentFilePath() {
 
   QCOMPARE(panel.totalCount(), 0);
 }
-
-// --- Auto refresh ---
 
 void TestProblemsPanel::testAutoRefreshToggle() {
   ProblemsPanel panel;

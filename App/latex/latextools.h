@@ -71,8 +71,8 @@ private:
   static QList<LspDiagnostic> checkUnclosedEnvironments(const QString &text);
   static QList<LspDiagnostic> checkDuplicateLabels(const QString &text);
   static QList<LspDiagnostic> checkUndefinedReferences(const QString &text);
-  static QList<LspDiagnostic> checkMissingDocumentClass(const QString &text,
-                                                        const QString &filePath);
+  static QList<LspDiagnostic>
+  checkMissingDocumentClass(const QString &text, const QString &filePath);
   static QList<LspDiagnostic> checkUnclosedMath(const QString &text);
   static QList<LspDiagnostic> checkCommonTypos(const QString &text);
 };

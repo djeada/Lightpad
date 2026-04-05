@@ -773,8 +773,8 @@ void TestDap::testRustAdapterLaunchConfig() {
   auto rustAdapter = DebugAdapterRegistry::instance().adapter("rust-codelldb");
   QVERIFY(rustAdapter != nullptr);
 
-  QJsonObject launchConfig =
-      rustAdapter->createLaunchConfig("/path/to/target/debug/myapp", "/path/to");
+  QJsonObject launchConfig = rustAdapter->createLaunchConfig(
+      "/path/to/target/debug/myapp", "/path/to");
   QCOMPARE(launchConfig["type"].toString(), QString("lldb"));
   QCOMPARE(launchConfig["request"].toString(), QString("launch"));
   QCOMPARE(launchConfig["program"].toString(),
