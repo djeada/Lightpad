@@ -67,6 +67,7 @@
 #include "dialogs/gitfilehistorydialog.h"
 #include "dialogs/gitlogdialog.h"
 #include "dialogs/gitrebasedialog.h"
+#include "dialogs/gitworkbenchdialog.h"
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
 #include "dialogs/languageserverstatusdialog.h"
@@ -5868,13 +5869,25 @@ void MainWindow::openReadOnlyTab(const QString &content, const QString &title,
 
 void MainWindow::on_actionGit_Rebase_triggered() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
-    QMessageBox::information(this, tr("Interactive Rebase"),
+    QMessageBox::information(this, tr("Git Workbench"),
                              tr("No valid Git repository found."));
     return;
   }
 
-  GitRebaseDialog dialog(m_gitIntegration, settings.theme, this);
-  dialog.loadCommits("HEAD~10");
+  GitWorkbenchDialog dialog(m_gitIntegration, settings.theme, this);
+  connect(&dialog, &GitWorkbenchDialog::viewCommitDiff,
+          [this](const QString &hash) {
+            QString diff = m_gitIntegration->getCommitDiff(hash);
+            GitCommitInfo info = m_gitIntegration->getCommitDetails(hash);
+            GitDiffDialog *diffDialog = new GitDiffDialog(
+                m_gitIntegration, hash, GitDiffDialog::DiffTarget::Commit, false,
+                settings.theme, this);
+            diffDialog->setDiffText(diff);
+            diffDialog->setCommitInfo(info.author, info.date, info.subject);
+            diffDialog->setAttribute(Qt::WA_DeleteOnClose);
+            diffDialog->show();
+          });
+  dialog.loadRepository();
   dialog.exec();
 }
 

@@ -96,6 +96,7 @@ set(project_headers
     ui/dialogs/gitlogdialog.h
     ui/dialogs/gitfilehistorydialog.h
     ui/dialogs/gitrebasedialog.h
+    ui/dialogs/gitworkbenchdialog.h
     ui/widgets/gitgraphwidget.h
     ui/widgets/notificationwidget.h
     ui/widgets/pythonenvironmentwidget.h
@@ -241,6 +242,7 @@ set(project_sources
     ui/dialogs/gitlogdialog.cpp
     ui/dialogs/gitfilehistorydialog.cpp
     ui/dialogs/gitrebasedialog.cpp
+    ui/dialogs/gitworkbenchdialog.cpp
     ui/widgets/gitgraphwidget.cpp
     ui/widgets/notificationwidget.cpp
     ui/widgets/pythonenvironmentwidget.cpp

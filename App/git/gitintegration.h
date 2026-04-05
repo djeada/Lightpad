@@ -98,6 +98,20 @@ struct GitCommitFileStat {
   int deletions;
 };
 
+struct GitTagInfo {
+  QString name;
+  QString hash;
+  bool isAnnotated;
+};
+
+struct GitReflogEntry {
+  QString hash;
+  QString shortHash;
+  QString action;
+  QString subject;
+  QString relativeDate;
+};
+
 class GitIntegration : public QObject {
   Q_OBJECT
 
@@ -269,6 +283,18 @@ public:
   bool removeWorktree(const QString &path);
 
   QMap<int, qint64> getBlameTimestamps(const QString &filePath) const;
+
+  QList<GitTagInfo> getTags() const;
+
+  bool renameBranch(const QString &oldName, const QString &newName);
+
+  bool rebaseBranch(const QString &ontoBranch);
+
+  QList<GitReflogEntry> getReflog(int count = 20) const;
+
+  QStringList getBackupRefs() const;
+
+  QStringList getCommitRefs(const QString &hash) const;
 
 signals:
 

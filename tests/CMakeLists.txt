@@ -580,6 +580,36 @@ target_compile_definitions(test_gitfilesystemmodel PRIVATE QT_DEPRECATED_WARNING
 
 add_test(NAME GitFileSystemModelTests COMMAND test_gitfilesystemmodel)
 
+# GitWorkbenchDialog test executable
+add_executable(test_gitworkbenchdialog
+    unit/test_gitworkbenchdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitworkbenchdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitworkbenchdialog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_gitworkbenchdialog
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitworkbenchdialog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitWorkbenchDialogTests COMMAND test_gitworkbenchdialog)
+
 # GoToLineDialog test executable
 add_executable(test_gotolinedialog
     unit/test_gotolinedialog.cpp
@@ -1407,6 +1437,7 @@ set(TEST_LIST
     DapTests 
     GitIntegrationTests
     GitFileSystemModelTests
+    GitWorkbenchDialogTests
     GoToLineDialogTests
     GoToSymbolDialogTests
     LspClientTests
@@ -1450,6 +1481,7 @@ set_tests_properties(TerminalTests TerminalTabWidgetTests PROPERTIES TIMEOUT 30)
 # Set timeout for git tests that may take longer due to git operations
 set_tests_properties(GitIntegrationTests PROPERTIES TIMEOUT 30)
 set_tests_properties(GitFileSystemModelTests PROPERTIES TIMEOUT 30)
+set_tests_properties(GitWorkbenchDialogTests PROPERTIES TIMEOUT 30)
 
 # Custom target to run all tests
 set(TEST_TARGETS
@@ -1458,7 +1490,7 @@ set(TEST_TARGETS
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap
     test_dockerfilesyntaxplugin
-    test_gitintegration test_gitfilesystemmodel test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
+    test_gitintegration test_gitfilesystemmodel test_gitworkbenchdialog test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_imageviewer
     test_markdowntools
     test_markdownpreviewpanel

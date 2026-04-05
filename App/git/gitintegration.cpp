@@ -2448,3 +2448,171 @@ GitIntegration::getBlameTimestamps(const QString &filePath) const {
 
   return result;
 }
+
+QList<GitTagInfo> GitIntegration::getTags() const {
+  QList<GitTagInfo> result;
+  if (!m_isValid)
+    return result;
+
+  bool success;
+  QString output = executeGitCommand(
+      {"tag",
+       "--format=%(refname:short)%09%(objectname:short)%09%(*objectname:short)"
+       "%09%(objecttype)"},
+      &success);
+
+  if (!success)
+    return result;
+
+  QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+
+  for (const QString &line : lines) {
+    QStringList parts = line.split('\t');
+    if (parts.size() < 4)
+      continue;
+
+    GitTagInfo info;
+    info.name = parts.value(0).trimmed();
+    QString objectHash = parts.value(1).trimmed();
+    QString derefHash = parts.value(2).trimmed();
+    QString objectType = parts.value(3).trimmed();
+
+    info.isAnnotated = (objectType == "tag");
+    info.hash = info.isAnnotated && !derefHash.isEmpty() ? derefHash
+                                                         : objectHash;
+
+    result.append(info);
+  }
+
+  return result;
+}
+
+bool GitIntegration::renameBranch(const QString &oldName,
+                                  const QString &newName) {
+  if (!m_isValid)
+    return false;
+
+  bool success;
+  QString output =
+      executeGitCommand({"branch", "-m", oldName, newName}, &success);
+
+  if (success) {
+    emit operationCompleted(
+        QString("Renamed branch '%1' to '%2'").arg(oldName, newName));
+  } else {
+    emit errorOccurred(
+        QString("Failed to rename branch: %1").arg(output.trimmed()));
+  }
+
+  return success;
+}
+
+bool GitIntegration::rebaseBranch(const QString &ontoBranch) {
+  if (!m_isValid)
+    return false;
+
+  bool success;
+  QString output = executeGitCommand({"rebase", ontoBranch}, &success);
+
+  if (success) {
+    emit operationCompleted(
+        QString("Rebased onto '%1'").arg(ontoBranch));
+  } else {
+    emit errorOccurred(
+        QString("Failed to rebase onto '%1': %2")
+            .arg(ontoBranch, output.trimmed()));
+  }
+
+  return success;
+}
+
+QList<GitReflogEntry> GitIntegration::getReflog(int count) const {
+  QList<GitReflogEntry> result;
+  if (!m_isValid)
+    return result;
+
+  bool success;
+  QString output = executeGitCommand(
+      {"reflog", QString("--format=%h%x09%gd%x09%gs%x09%s%x09%cr"),
+       QString("-n"), QString::number(count)},
+      &success);
+
+  if (!success || output.isEmpty())
+    return result;
+
+  QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+
+  for (const QString &line : lines) {
+    QStringList parts = line.split('\t');
+    if (parts.size() < 5)
+      continue;
+
+    GitReflogEntry entry;
+    entry.shortHash = parts.value(0).trimmed();
+    entry.hash = entry.shortHash;
+    entry.action = parts.value(2).trimmed();
+    entry.subject = parts.value(3).trimmed();
+    entry.relativeDate = parts.value(4).trimmed();
+
+    result.append(entry);
+  }
+
+  return result;
+}
+
+QStringList GitIntegration::getBackupRefs() const {
+  QStringList result;
+  if (!m_isValid)
+    return result;
+
+  bool success;
+  QString output = executeGitCommand(
+      {"for-each-ref", "--format=%(refname)", "refs/backup/"}, &success);
+
+  if (!success || output.isEmpty())
+    return result;
+
+  QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+  for (const QString &line : lines) {
+    QString trimmed = line.trimmed();
+    if (!trimmed.isEmpty())
+      result.append(trimmed);
+  }
+
+  return result;
+}
+
+QStringList GitIntegration::getCommitRefs(const QString &hash) const {
+  QStringList result;
+  if (!m_isValid)
+    return result;
+
+  bool success;
+  QString branchOutput = executeGitCommand(
+      {"branch", "--all", "--points-at", hash,
+       "--format=%(refname:short)"},
+      &success);
+
+  if (success && !branchOutput.isEmpty()) {
+    QStringList lines = branchOutput.split('\n', Qt::SkipEmptyParts);
+    for (const QString &line : lines) {
+      QString trimmed = line.trimmed();
+      if (!trimmed.isEmpty())
+        result.append(trimmed);
+    }
+  }
+
+  QString tagOutput =
+      executeGitCommand({"tag", "--points-at", hash}, &success);
+
+  if (success && !tagOutput.isEmpty()) {
+    QStringList lines = tagOutput.split('\n', Qt::SkipEmptyParts);
+    for (const QString &line : lines) {
+      QString trimmed = line.trimmed();
+      if (!trimmed.isEmpty())
+        result.append(QString("tag: %1").arg(trimmed));
+    }
+  }
+
+  return result;
+}
