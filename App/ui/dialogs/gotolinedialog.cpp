@@ -2,7 +2,7 @@
 #include "../uistylehelper.h"
 
 GoToLineDialog::GoToLineDialog(QWidget *parent, int maxLine)
-    : QDialog(parent, Qt::Popup | Qt::FramelessWindowHint), m_lineEdit(nullptr),
+    : StyledPopupDialog(parent), m_lineEdit(nullptr),
       m_infoLabel(nullptr), m_maxLine(maxLine) {
   setupUI();
 }
@@ -19,18 +19,9 @@ void GoToLineDialog::setupUI() {
 
   m_lineEdit = new QLineEdit(this);
   m_lineEdit->setPlaceholderText(tr("Go to line..."));
-  m_lineEdit->setStyleSheet("QLineEdit {"
-                            "  padding: 8px;"
-                            "  font-size: 14px;"
-                            "  border: 1px solid #2a3241;"
-                            "  border-radius: 4px;"
-                            "  background: #1f2632;"
-                            "  color: #e6edf3;"
-                            "}");
   layout->addWidget(m_lineEdit);
 
   m_infoLabel = new QLabel(this);
-  m_infoLabel->setStyleSheet("color: #9aa4b2; font-size: 11px;");
   m_infoLabel->setText(QString(tr("Enter line number (1-%1)")).arg(m_maxLine));
   layout->addWidget(m_infoLabel);
 
@@ -38,9 +29,6 @@ void GoToLineDialog::setupUI() {
           &GoToLineDialog::onTextChanged);
   connect(m_lineEdit, &QLineEdit::returnPressed, this,
           &GoToLineDialog::onReturnPressed);
-
-  setStyleSheet("GoToLineDialog { background: #171c24; border: 1px solid "
-                "#2a3241; border-radius: 8px; }");
 }
 
 int GoToLineDialog::lineNumber() const {
@@ -60,24 +48,12 @@ void GoToLineDialog::setMaxLine(int maxLine) {
 void GoToLineDialog::showDialog() {
   m_lineEdit->clear();
 
-  if (parentWidget()) {
-    QPoint parentCenter =
-        parentWidget()->mapToGlobal(parentWidget()->rect().center());
-    int x = parentCenter.x() - width() / 2;
-    int y = parentWidget()->mapToGlobal(QPoint(0, 0)).y() + 50;
-    move(x, y);
-  }
-
-  show();
+  showCentered();
   m_lineEdit->setFocus();
 }
 
 void GoToLineDialog::keyPressEvent(QKeyEvent *event) {
-  if (event->key() == Qt::Key_Escape) {
-    hide();
-  } else {
-    QDialog::keyPressEvent(event);
-  }
+  StyledPopupDialog::keyPressEvent(event);
 }
 
 void GoToLineDialog::onTextChanged(const QString &text) {
@@ -106,9 +82,6 @@ void GoToLineDialog::onReturnPressed() {
 }
 
 void GoToLineDialog::applyTheme(const Theme &theme) {
-  m_theme = theme;
-  setStyleSheet("GoToLineDialog { " + UIStyleHelper::popupDialogStyle(theme) +
-                " }");
-  m_lineEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
+  StyledPopupDialog::applyTheme(theme);
   m_infoLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
 }

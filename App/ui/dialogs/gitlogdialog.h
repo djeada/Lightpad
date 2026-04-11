@@ -1,8 +1,7 @@
 #ifndef GITLOGDIALOG_H
 #define GITLOGDIALOG_H
 
-#include "../../settings/theme.h"
-#include <QDialog>
+#include "styleddialog.h"
 
 class GitIntegration;
 class QTreeWidget;
@@ -14,7 +13,7 @@ class QLineEdit;
 class QTabWidget;
 class GitGraphWidget;
 
-class GitLogDialog : public QDialog {
+class GitLogDialog : public StyledDialog {
   Q_OBJECT
 
 public:
@@ -39,7 +38,7 @@ private slots:
 
 private:
   void buildUi();
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
   void loadCommits();
   void showContextMenuForCommit(const QString &hash, const QPoint &pos);
 

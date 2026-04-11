@@ -1,11 +1,10 @@
 #ifndef GITREMOTEDIALOG_H
 #define GITREMOTEDIALOG_H
 
+#include "styleddialog.h"
 #include "../../git/gitintegration.h"
-#include "../../settings/theme.h"
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -16,7 +15,7 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
-class GitRemoteDialog : public QDialog {
+class GitRemoteDialog : public StyledDialog {
   Q_OBJECT
 
 public:
@@ -46,7 +45,7 @@ private:
   void applyStyles();
 
 public:
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 private:
   void updateBranchList();

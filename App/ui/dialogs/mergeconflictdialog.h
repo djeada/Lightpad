@@ -1,9 +1,8 @@
 #ifndef MERGECONFLICTDIALOG_H
 #define MERGECONFLICTDIALOG_H
 
+#include "styleddialog.h"
 #include "../../git/gitintegration.h"
-#include "../../settings/theme.h"
-#include <QDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -13,7 +12,7 @@
 #include <QTextEdit>
 #include <QVBoxLayout>
 
-class MergeConflictDialog : public QDialog {
+class MergeConflictDialog : public StyledDialog {
   Q_OBJECT
 
 public:
@@ -46,7 +45,7 @@ private:
   void updateButtons();
 
 public:
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 private:
   GitIntegration *m_git;

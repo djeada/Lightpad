@@ -153,30 +153,34 @@ void DebugSession::onClientStateChanged(DapClient::State state) {
 
       const bool adapterReadyForConfiguration = m_adapterInitializedReceived;
       if (adapterReadyForConfiguration) {
+        LOG_DEBUG("DAP session: adapter already initialized, syncing "
+                  "breakpoints before launch");
         BreakpointManager::instance().syncAllBreakpoints();
       }
 
       if (m_configuration.request == "attach") {
+        LOG_DEBUG("DAP session: sending attach request");
         m_client->attach(m_adapter->attachArguments(m_configuration));
       } else {
+        LOG_DEBUG("DAP session: sending launch request");
         m_client->launch(m_adapter->launchArguments(m_configuration));
       }
       m_launchRequestSent = true;
 
       if (adapterReadyForConfiguration && !m_configurationDoneSent) {
-        if (m_client->supportsConfigurationDoneRequest()) {
-          m_client->configurationDone();
-        }
+        m_client->configurationDone();
         m_configurationDoneSent = true;
       }
     }
     break;
 
   case DapClient::State::Running:
+    LOG_DEBUG("DAP session: client entered Running state");
     setState(State::Running);
     break;
 
   case DapClient::State::Stopped:
+    LOG_DEBUG("DAP session: client entered Stopped state");
     setState(State::Stopped);
     break;
 
@@ -194,13 +198,16 @@ void DebugSession::onClientStateChanged(DapClient::State state) {
 }
 
 void DebugSession::onClientAdapterInitialized() {
+  LOG_DEBUG(QString("DAP session: initialized event received "
+                    "(launchSent=%1, configDone=%2)")
+                .arg(m_launchRequestSent)
+                .arg(m_configurationDoneSent));
   m_adapterInitializedReceived = true;
   if (m_launchRequestSent && !m_configurationDoneSent) {
+    LOG_DEBUG("DAP session: syncing breakpoints and sending configurationDone");
     BreakpointManager::instance().setDapClient(m_client.get());
     BreakpointManager::instance().syncAllBreakpoints();
-    if (m_client->supportsConfigurationDoneRequest()) {
-      m_client->configurationDone();
-    }
+    m_client->configurationDone();
     m_configurationDoneSent = true;
   }
 }

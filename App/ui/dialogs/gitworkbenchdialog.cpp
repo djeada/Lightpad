@@ -17,7 +17,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
-#include <QMessageBox>
+#include "themedmessagebox.h"
 #include <QPainter>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -206,12 +206,12 @@ private:
 
 GitWorkbenchDialog::GitWorkbenchDialog(GitIntegration *git, const Theme &theme,
                                        QWidget *parent)
-    : QDialog(parent), m_git(git), m_theme(theme), m_rewriteMode(false) {
+    : StyledDialog(parent), m_git(git), m_rewriteMode(false) {
   setWindowTitle(tr("Git Workbench"));
   setMinimumSize(1100, 700);
   resize(1300, 820);
   buildUi();
-  applyTheme();
+  applyTheme(theme);
 }
 
 void GitWorkbenchDialog::buildUi() {
@@ -941,19 +941,21 @@ void GitWorkbenchDialog::buildBottomBar(QVBoxLayout *mainLayout) {
           &GitWorkbenchDialog::onApplyRebase);
 }
 
-void GitWorkbenchDialog::applyTheme() {
-  QString bg = m_theme.backgroundColor.name();
-  QString fg = m_theme.foregroundColor.name();
-  QString surface = m_theme.surfaceColor.name();
-  QString surfaceAlt = m_theme.surfaceAltColor.name();
-  QString border = m_theme.borderColor.name();
-  QString accent = m_theme.accentColor.name();
-  QString accentSoft = m_theme.accentSoftColor.name();
-  QString hover = m_theme.hoverColor.name();
-  QString subdued = m_theme.singleLineCommentFormat.name();
-  QString success = m_theme.successColor.name();
-  QString warning = m_theme.warningColor.name();
-  QString error = m_theme.errorColor.name();
+void GitWorkbenchDialog::applyTheme(const Theme &theme) {
+  StyledDialog::applyTheme(theme);
+
+  QString bg = theme.backgroundColor.name();
+  QString fg = theme.foregroundColor.name();
+  QString surface = theme.surfaceColor.name();
+  QString surfaceAlt = theme.surfaceAltColor.name();
+  QString border = theme.borderColor.name();
+  QString accent = theme.accentColor.name();
+  QString accentSoft = theme.accentSoftColor.name();
+  QString hover = theme.hoverColor.name();
+  QString subdued = theme.singleLineCommentFormat.name();
+  QString success = theme.successColor.name();
+  QString warning = theme.warningColor.name();
+  QString error = theme.errorColor.name();
 
   setStyleSheet(
       QString(
@@ -1082,16 +1084,6 @@ void GitWorkbenchDialog::applyTheme() {
           "#workbenchBottomBar { background: %3; }"
           "#planSummaryLabel { font-size: 12px; color: %11; }"
           "#riskIndicator { font-size: 12px; }"
-          "#workbenchCancelBtn { background: %4; color: %2; border: 1px solid "
-          "%5; "
-          "border-radius: 8px; padding: 8px 22px; font-size: 13px; }"
-          "#workbenchCancelBtn:hover { background: %8; }"
-          "#workbenchApplyBtn { background: %12; color: white; border: none; "
-          "border-radius: 8px; padding: 8px 26px; font-size: 13px; "
-          "font-weight: "
-          "600; }"
-          "#workbenchApplyBtn:hover { background: %14; }"
-          "#workbenchApplyBtn:disabled { background: %4; color: %5; }"
 
           "#backupCheckbox { color: %2; font-size: 12px; }"
           "#backupCheckbox::indicator { width: 16px; height: 16px; "
@@ -1129,8 +1121,24 @@ void GitWorkbenchDialog::applyTheme() {
           .arg("")
           .arg(subdued)
           .arg(success)
-          .arg(error)
-          .arg(m_theme.successColor.lighter(110).name()));
+          .arg(error));
+
+  // Clear per-widget styles set by base class so dialog CSS selectors apply
+  for (auto *btn : findChildren<QPushButton *>())
+    btn->setStyleSheet(QString());
+  for (auto *le : findChildren<QLineEdit *>())
+    le->setStyleSheet(QString());
+  for (auto *te : findChildren<QTextEdit *>())
+    te->setStyleSheet(QString());
+  for (auto *cb : findChildren<QCheckBox *>())
+    cb->setStyleSheet(QString());
+
+  stylePrimaryButton(m_applyBtn);
+  m_applyBtn->setStyleSheet(
+      m_applyBtn->styleSheet() +
+      QString(" QPushButton:disabled { background: %1; color: %2; }")
+          .arg(surfaceAlt, border));
+  styleSecondaryButton(m_cancelBtn);
 }
 
 void GitWorkbenchDialog::loadRepository() {
@@ -1928,48 +1936,38 @@ bool GitWorkbenchDialog::confirmOperation(const QString &title,
     return dlg.exec() == QDialog::Accepted;
   }
 
-  QMessageBox box(this);
+  ThemedMessageBox box(this);
   box.setWindowTitle(title);
 
   QString riskBadge = QString("[%1 Risk] ").arg(riskLabel(risk));
   box.setText(riskBadge + description);
 
   if (risk == OperationRisk::Critical) {
-    box.setIcon(QMessageBox::Critical);
+    box.setIcon(ThemedMessageBox::Critical);
     box.setInformativeText(
         tr("This operation may cause data loss and cannot be easily undone."));
   } else if (risk == OperationRisk::High) {
-    box.setIcon(QMessageBox::Warning);
+    box.setIcon(ThemedMessageBox::Warning);
     box.setInformativeText(
         tr("This operation rewrites history. A reflog entry will be created."));
   } else {
-    box.setIcon(QMessageBox::Question);
+    box.setIcon(ThemedMessageBox::Question);
   }
 
   if (offerBackup && risk >= OperationRisk::High) {
-    box.setStandardButtons(QMessageBox::Yes | QMessageBox::No |
-                           QMessageBox::Cancel);
-    box.button(QMessageBox::Yes)->setText(tr("Create Backup && Apply"));
-    box.button(QMessageBox::No)->setText(tr("Apply Without Backup"));
-    box.setDefaultButton(QMessageBox::Yes);
+    box.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No |
+                           ThemedMessageBox::Cancel);
+    box.button(ThemedMessageBox::Yes)->setText(tr("Create Backup && Apply"));
+    box.button(ThemedMessageBox::No)->setText(tr("Apply Without Backup"));
+    box.setDefaultButton(ThemedMessageBox::Yes);
   } else {
-    box.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
-    box.button(QMessageBox::Ok)->setText(tr("Apply"));
-    box.setDefaultButton(QMessageBox::Cancel);
+    box.setStandardButtons(ThemedMessageBox::Ok | ThemedMessageBox::Cancel);
+    box.button(ThemedMessageBox::Ok)->setText(tr("Apply"));
+    box.setDefaultButton(ThemedMessageBox::Cancel);
   }
 
-  box.setStyleSheet(
-      QString("QMessageBox { background: %1; }"
-              "QMessageBox QLabel { color: %2; font-size: 13px; }"
-              "QPushButton { background: %3; color: %2; border: 1px solid %4; "
-              "border-radius: 8px; padding: 8px 18px; font-size: 13px; }"
-              "QPushButton:hover { background: %5; }")
-          .arg(m_theme.backgroundColor.name(), m_theme.foregroundColor.name(),
-               m_theme.surfaceAltColor.name(), m_theme.borderColor.name(),
-               m_theme.hoverColor.name()));
-
   int result = box.exec();
-  return result == QMessageBox::Yes || result == QMessageBox::Ok;
+  return result == ThemedMessageBox::Yes || result == ThemedMessageBox::Ok;
 }
 
 void GitWorkbenchDialog::onCommitSelectionChanged() {
@@ -2307,8 +2305,8 @@ void GitWorkbenchDialog::onCreateBranchClicked() {
     if (m_git->createBranch(name, true)) {
       loadRepository();
     } else {
-      QMessageBox::warning(this, tr("Error"),
-                           tr("Failed to create branch '%1'.").arg(name));
+      ThemedMessageBox::warning(this, tr("Error"),
+                                tr("Failed to create branch '%1'.").arg(name));
     }
   }
 }
@@ -2325,7 +2323,7 @@ void GitWorkbenchDialog::onRenameBranchClicked() {
     if (m_git->renameBranch(m_selectedBranchName, newName)) {
       loadRepository();
     } else {
-      QMessageBox::warning(
+      ThemedMessageBox::warning(
           this, tr("Rename Failed"),
           tr("Failed to rename branch '%1'.").arg(m_selectedBranchName));
     }
@@ -2343,8 +2341,8 @@ void GitWorkbenchDialog::onMergeBranchClicked() {
     if (m_git->mergeBranch(m_selectedBranchName)) {
       loadRepository();
     } else {
-      QMessageBox::warning(this, tr("Merge Failed"),
-                           tr("Merge failed. Check for conflicts."));
+      ThemedMessageBox::warning(this, tr("Merge Failed"),
+                                tr("Merge failed. Check for conflicts."));
     }
   }
 }
@@ -2360,8 +2358,8 @@ void GitWorkbenchDialog::onRebaseBranchClicked() {
     if (m_git->rebaseBranch(m_selectedBranchName)) {
       loadRepository();
     } else {
-      QMessageBox::warning(this, tr("Rebase Failed"),
-                           tr("Rebase failed. Check for conflicts."));
+      ThemedMessageBox::warning(this, tr("Rebase Failed"),
+                                tr("Rebase failed. Check for conflicts."));
     }
   }
 }
@@ -2420,8 +2418,8 @@ void GitWorkbenchDialog::onSquashSelected() {
     return;
   auto selected = m_commitTree->selectedItems();
   if (selected.size() < 2) {
-    QMessageBox::information(this, tr("Squash"),
-                             tr("Select at least 2 commits to squash."));
+    ThemedMessageBox::information(this, tr("Squash"),
+                                  tr("Select at least 2 commits to squash."));
     return;
   }
 
@@ -2444,8 +2442,8 @@ void GitWorkbenchDialog::onFixupSelected() {
     return;
   auto selected = m_commitTree->selectedItems();
   if (selected.size() < 2) {
-    QMessageBox::information(this, tr("Fixup"),
-                             tr("Select at least 2 commits to fixup."));
+    ThemedMessageBox::information(this, tr("Fixup"),
+                                  tr("Select at least 2 commits to fixup."));
     return;
   }
 
@@ -2609,15 +2607,15 @@ void GitWorkbenchDialog::onApplyRebase() {
                      "Use 'git reflog' to recover if needed.");
     }
 
-    QMessageBox::information(
+    ThemedMessageBox::information(
         this, tr("Rewrite Complete"),
         tr("Interactive rebase completed successfully.%1").arg(backupMsg));
     accept();
   } else {
     m_commitStatusLabel->setText(
         tr("Rewrite failed or needs conflict resolution"));
-    QMessageBox::warning(this, tr("Rewrite Issue"),
-                         tr("Rebase encountered issues:\n%1").arg(output));
+    ThemedMessageBox::warning(this, tr("Rewrite Issue"),
+                              tr("Rebase encountered issues:\n%1").arg(output));
   }
 }
 
@@ -2632,8 +2630,8 @@ void GitWorkbenchDialog::onCherryPickClicked() {
     if (m_git->cherryPick(m_selectedCommitHash)) {
       loadRepository();
     } else {
-      QMessageBox::warning(this, tr("Cherry-pick Failed"),
-                           tr("Cherry-pick failed. Check for conflicts."));
+      ThemedMessageBox::warning(this, tr("Cherry-pick Failed"),
+                                tr("Cherry-pick failed. Check for conflicts."));
     }
   }
 }
@@ -2649,7 +2647,7 @@ void GitWorkbenchDialog::onMoveToBranchClicked() {
   }
 
   if (branchNames.isEmpty()) {
-    QMessageBox::information(
+    ThemedMessageBox::information(
         this, tr("Move to Branch"),
         tr("No other local branches available. Create one first."));
     return;
@@ -2668,8 +2666,8 @@ void GitWorkbenchDialog::onMoveToBranchClicked() {
       if (m_git->moveCommitToBranch(m_selectedCommitHash, target)) {
         loadRepository();
       } else {
-        QMessageBox::warning(this, tr("Move Failed"),
-                             tr("Failed to move commit to branch."));
+        ThemedMessageBox::warning(this, tr("Move Failed"),
+                                  tr("Failed to move commit to branch."));
       }
     }
   }
@@ -2687,8 +2685,8 @@ void GitWorkbenchDialog::onRevertCommitClicked() {
     if (m_git->revertCommit(m_selectedCommitHash)) {
       loadRepository();
     } else {
-      QMessageBox::warning(this, tr("Revert Failed"),
-                           tr("Revert failed. Check for conflicts."));
+      ThemedMessageBox::warning(this, tr("Revert Failed"),
+                                tr("Revert failed. Check for conflicts."));
     }
   }
 }
@@ -2788,7 +2786,7 @@ void GitWorkbenchDialog::onEditCommitMessage() {
         tr("Commit message updated for %1").arg(m_selectedCommitHash.left(8)));
     loadRepository();
   } else {
-    QMessageBox::warning(
+    ThemedMessageBox::warning(
         this, tr("Edit Message Failed"),
         tr("Failed to update commit message. Check for conflicts."));
   }
@@ -2958,7 +2956,7 @@ void GitWorkbenchDialog::keyPressEvent(QKeyEvent *event) {
       break;
 
     case Qt::Key_Question: {
-      QMessageBox::information(
+      ThemedMessageBox::information(
           this, tr("Keyboard Shortcuts"),
           tr("J/K — Navigate commits\n"
              "Shift+J/K — Extend selection / Move in rewrite\n"

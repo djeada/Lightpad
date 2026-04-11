@@ -37,12 +37,8 @@ endif()
 # add_subdirectory(libs)
 
 set(project_ui 
-    ui/dialogs/colorpicker.ui
     ui/panels/findreplacepanel.ui
     ui/mainwindow.ui
-    ui/dialogs/preferences.ui
-    settings/preferenceseditor.ui
-    ui/panels/preferencesview.ui
     ui/dialogs/runconfigurations.ui
     ui/dialogs/shortcuts.ui
     ui/panels/terminal.ui)
@@ -81,8 +77,10 @@ set(project_headers
     dap/debugsession.h
     dap/debugsettings.h
     git/gitintegration.h
-    ui/dialogs/colorpicker.h
     ui/dialogs/commandpalette.h
+    ui/dialogs/styleddialog.h
+    ui/dialogs/styledpopupdialog.h
+    ui/dialogs/themedmessagebox.h
     ui/dialogs/gotolinedialog.h
     ui/dialogs/gotosymboldialog.h
     ui/dialogs/recentfilesdialog.h
@@ -156,9 +154,7 @@ set(project_headers
     ui/popup.h
     ui/dialogs/preferences.h
     ui/dialogs/pythonenvironmentdialog.h
-    settings/preferenceseditor.h
     settings/settingsmanager.h
-    ui/panels/preferencesview.h
     ui/dialogs/runconfigurations.h
     ui/dialogs/runtemplateselector.h
     ui/dialogs/debugconfigurationdialog.h
@@ -227,8 +223,10 @@ set(project_sources
     dap/debugsession.cpp
     dap/debugsettings.cpp
     git/gitintegration.cpp
-    ui/dialogs/colorpicker.cpp
     ui/dialogs/commandpalette.cpp
+    ui/dialogs/styleddialog.cpp
+    ui/dialogs/styledpopupdialog.cpp
+    ui/dialogs/themedmessagebox.cpp
     ui/dialogs/gotolinedialog.cpp
     ui/dialogs/gotosymboldialog.cpp
     ui/dialogs/recentfilesdialog.cpp
@@ -297,9 +295,7 @@ set(project_sources
     ui/popup.cpp
     ui/dialogs/preferences.cpp
     ui/dialogs/pythonenvironmentdialog.cpp
-    settings/preferenceseditor.cpp
     settings/settingsmanager.cpp
-    ui/panels/preferencesview.cpp
     ui/dialogs/runconfigurations.cpp
     ui/dialogs/runtemplateselector.cpp
     ui/dialogs/debugconfigurationdialog.cpp

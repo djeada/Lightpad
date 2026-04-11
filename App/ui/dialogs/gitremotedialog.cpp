@@ -1,12 +1,11 @@
 #include "gitremotedialog.h"
 #include "../uistylehelper.h"
 #include <QCheckBox>
-#include <QMessageBox>
-#include <QPalette>
+#include "themedmessagebox.h"
 
 GitRemoteDialog::GitRemoteDialog(GitIntegration *git, Mode mode,
                                  QWidget *parent)
-    : QDialog(parent), m_git(git), m_mode(mode), m_remoteSelector(nullptr),
+    : StyledDialog(parent), m_git(git), m_mode(mode), m_remoteSelector(nullptr),
       m_branchSelector(nullptr), m_setUpstreamCheckbox(nullptr),
       m_forceCheckbox(nullptr), m_pushButton(nullptr), m_pullButton(nullptr),
       m_fetchButton(nullptr), m_progressBar(nullptr), m_statusLabel(nullptr),
@@ -31,7 +30,6 @@ GitRemoteDialog::GitRemoteDialog(GitIntegration *git, Mode mode,
   setWindowTitle(title);
   setMinimumSize(550, 450);
   setupUI();
-  applyStyles();
   refresh();
 }
 
@@ -229,201 +227,6 @@ void GitRemoteDialog::setupUI() {
   mainLayout->addLayout(buttonLayout);
 }
 
-void GitRemoteDialog::applyStyles() {
-  setStyleSheet(R"(
-        QDialog {
-            background: #0d1117;
-        }
-        QGroupBox {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            margin-top: 12px;
-            padding: 12px;
-            padding-top: 24px;
-            font-weight: bold;
-            color: #e6edf3;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            left: 12px;
-            padding: 0 6px;
-            color: #8b949e;
-            font-size: 11px;
-            text-transform: uppercase;
-        }
-        QLabel {
-            color: #e6edf3;
-        }
-        QComboBox {
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-size: 12px;
-        }
-        QComboBox:hover {
-            border-color: #58a6ff;
-        }
-        QComboBox::drop-down {
-            border: none;
-            width: 20px;
-        }
-        QComboBox::down-arrow {
-            image: none;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-top: 5px solid #8b949e;
-            margin-right: 8px;
-        }
-        QComboBox QAbstractItemView {
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            selection-background-color: #1f6feb;
-        }
-        QLineEdit {
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-size: 12px;
-        }
-        QLineEdit:focus {
-            border-color: #58a6ff;
-        }
-        QListWidget {
-            background: #161b22;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-        }
-        QListWidget::item {
-            padding: 8px 12px;
-            border-bottom: 1px solid #21262d;
-        }
-        QListWidget::item:selected {
-            background: #1f6feb;
-        }
-        QCheckBox {
-            color: #e6edf3;
-            font-size: 12px;
-            spacing: 8px;
-        }
-        QCheckBox::indicator {
-            width: 16px;
-            height: 16px;
-            border-radius: 4px;
-            border: 1px solid #30363d;
-            background: #21262d;
-        }
-        QCheckBox::indicator:checked {
-            background: #238636;
-            border-color: #238636;
-        }
-        QPushButton {
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 8px 20px;
-            font-size: 12px;
-        }
-        QPushButton:hover {
-            background: #30363d;
-        }
-        QPushButton#pushButton {
-            background: #238636;
-            border-color: #238636;
-            color: white;
-            font-weight: bold;
-        }
-        QPushButton#pushButton:hover {
-            background: #2ea043;
-        }
-        QPushButton#pullButton {
-            background: #1f6feb;
-            border-color: #1f6feb;
-            color: white;
-            font-weight: bold;
-        }
-        QPushButton#pullButton:hover {
-            background: #388bfd;
-        }
-        QPushButton#fetchButton {
-            background: #8b949e;
-            border-color: #8b949e;
-            color: white;
-        }
-        QPushButton#fetchButton:hover {
-            background: #a5b0bc;
-        }
-        QProgressBar {
-            background: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            height: 8px;
-        }
-        QProgressBar::chunk {
-            background: #58a6ff;
-            border-radius: 3px;
-        }
-    )");
-
-  auto applyComboPopupTheme = [](QComboBox *combo) {
-    if (!combo) {
-      return;
-    }
-    auto *view = combo->view();
-    if (!view) {
-      return;
-    }
-    view->setStyleSheet("QAbstractItemView {"
-                        "  background: #21262d;"
-                        "  color: #e6edf3;"
-                        "  border: 1px solid #30363d;"
-                        "  outline: none;"
-                        "}"
-                        "QAbstractItemView::item {"
-                        "  background: #21262d;"
-                        "  color: #e6edf3;"
-                        "  padding: 4px 8px;"
-                        "}"
-                        "QAbstractItemView::item:selected {"
-                        "  background: #1f6feb;"
-                        "  color: #ffffff;"
-                        "}"
-                        "QAbstractItemView::item:hover {"
-                        "  background: #2a3241;"
-                        "}");
-    view->setAutoFillBackground(true);
-    QPalette palette = view->palette();
-    palette.setColor(QPalette::Base, QColor("#21262d"));
-    palette.setColor(QPalette::Text, QColor("#e6edf3"));
-    palette.setColor(QPalette::Highlight, QColor("#1f6feb"));
-    palette.setColor(QPalette::HighlightedText, QColor("#ffffff"));
-    view->setPalette(palette);
-    if (auto *viewport = view->viewport()) {
-      viewport->setAutoFillBackground(true);
-      viewport->setPalette(palette);
-      viewport->setStyleSheet("background: #21262d;");
-    }
-  };
-
-  applyComboPopupTheme(m_remoteSelector);
-  applyComboPopupTheme(m_branchSelector);
-
-  if (m_pushButton)
-    m_pushButton->setObjectName("pushButton");
-  if (m_pullButton)
-    m_pullButton->setObjectName("pullButton");
-  if (m_fetchButton)
-    m_fetchButton->setObjectName("fetchButton");
-}
-
 void GitRemoteDialog::refresh() {
   updateRemoteList();
   updateBranchList();
@@ -495,8 +298,8 @@ void GitRemoteDialog::onPushClicked() {
       m_setUpstreamCheckbox && m_setUpstreamCheckbox->isChecked();
 
   if (remote.isEmpty() || branch.isEmpty()) {
-    QMessageBox::warning(this, tr("Push"),
-                         tr("Please select a remote and branch."));
+    ThemedMessageBox::warning(this, tr("Push"),
+                              tr("Please select a remote and branch."));
     return;
   }
 
@@ -526,8 +329,8 @@ void GitRemoteDialog::onPullClicked() {
   QString branch = m_branchSelector->currentText();
 
   if (remote.isEmpty() || branch.isEmpty()) {
-    QMessageBox::warning(this, tr("Pull"),
-                         tr("Please select a remote and branch."));
+    ThemedMessageBox::warning(this, tr("Pull"),
+                              tr("Please select a remote and branch."));
     return;
   }
 
@@ -562,7 +365,7 @@ void GitRemoteDialog::onFetchClicked() {
   QString remote = m_remoteSelector->currentText();
 
   if (remote.isEmpty()) {
-    QMessageBox::warning(this, tr("Fetch"), tr("Please select a remote."));
+    ThemedMessageBox::warning(this, tr("Fetch"), tr("Please select a remote."));
     return;
   }
 
@@ -591,8 +394,8 @@ void GitRemoteDialog::onAddRemoteClicked() {
   QString url = m_remoteUrlEdit->text().trimmed();
 
   if (name.isEmpty() || url.isEmpty()) {
-    QMessageBox::warning(this, tr("Add Remote"),
-                         tr("Please enter both remote name and URL."));
+    ThemedMessageBox::warning(this, tr("Add Remote"),
+                              tr("Please enter both remote name and URL."));
     return;
   }
 
@@ -614,19 +417,19 @@ void GitRemoteDialog::onRemoveRemoteClicked() {
 
   QListWidgetItem *item = m_remoteList->currentItem();
   if (!item) {
-    QMessageBox::warning(this, tr("Remove Remote"),
-                         tr("Please select a remote to remove."));
+    ThemedMessageBox::warning(this, tr("Remove Remote"),
+                              tr("Please select a remote to remove."));
     return;
   }
 
   QString name = item->data(Qt::UserRole).toString();
 
-  int result = QMessageBox::question(
+  int result = ThemedMessageBox::question(
       this, tr("Remove Remote"),
       tr("Are you sure you want to remove remote '%1'?").arg(name),
-      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+      ThemedMessageBox::Yes | ThemedMessageBox::No, ThemedMessageBox::No);
 
-  if (result == QMessageBox::Yes) {
+  if (result == ThemedMessageBox::Yes) {
     if (m_git->removeRemote(name)) {
       updateRemoteList();
       m_statusLabel->setText(tr("✓ Remote '%1' removed").arg(name));
@@ -641,58 +444,16 @@ void GitRemoteDialog::onRemoveRemoteClicked() {
 void GitRemoteDialog::onCloseClicked() { accept(); }
 
 void GitRemoteDialog::applyTheme(const Theme &theme) {
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
+  StyledDialog::applyTheme(theme);
 
-  for (QGroupBox *groupBox : findChildren<QGroupBox *>()) {
-    groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
-  }
+  stylePrimaryButton(m_pushButton);
+  stylePrimaryButton(m_pullButton);
+  stylePrimaryButton(m_fetchButton);
+  stylePrimaryButton(m_addRemoteButton);
 
-  if (m_remoteSelector) {
-    m_remoteSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-  }
-  if (m_branchSelector) {
-    m_branchSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+  if (m_progressBar) {
+    m_progressBar->setStyleSheet(UIStyleHelper::progressBarStyle(theme));
   }
 
-  if (m_remoteNameEdit) {
-    m_remoteNameEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  }
-  if (m_remoteUrlEdit) {
-    m_remoteUrlEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  }
-
-  if (m_setUpstreamCheckbox) {
-    m_setUpstreamCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
-  }
-  if (m_forceCheckbox) {
-    m_forceCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
-  }
-
-  if (m_remoteList) {
-    m_remoteList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
-  }
-
-  if (m_pushButton) {
-    m_pushButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
-  }
-  if (m_pullButton) {
-    m_pullButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
-  }
-  if (m_fetchButton) {
-    m_fetchButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
-  }
-  if (m_addRemoteButton) {
-    m_addRemoteButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
-  }
-  if (m_removeRemoteButton) {
-    m_removeRemoteButton->setStyleSheet(
-        UIStyleHelper::secondaryButtonStyle(theme));
-  }
-  if (m_closeButton) {
-    m_closeButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-  }
-
-  if (m_statusLabel) {
-    m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
-  }
+  styleSubduedLabel(m_statusLabel);
 }

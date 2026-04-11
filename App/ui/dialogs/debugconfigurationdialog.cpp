@@ -7,11 +7,11 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QMenu>
-#include <QMessageBox>
+#include "themedmessagebox.h"
 #include <QRegularExpression>
 
 DebugConfigurationDialog::DebugConfigurationDialog(QWidget *parent)
-    : QDialog(parent) {
+    : StyledDialog(parent) {
   setupUi();
   loadConfigurations();
 }
@@ -960,116 +960,17 @@ void DebugConfigurationDialog::onSave() {
   saveCurrentToModel();
 
   if (!DebugConfigurationManager::instance().saveToLightpadDir()) {
-    QMessageBox::warning(this, "Debug Configurations",
-                         "Failed to save debug configurations.");
+    ThemedMessageBox::warning(this, "Debug Configurations",
+                              "Failed to save debug configurations.");
     return;
   }
   accept();
 }
 
 void DebugConfigurationDialog::applyTheme(const Theme &theme) {
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
+  StyledDialog::applyTheme(theme);
 
-  for (QGroupBox *groupBox : findChildren<QGroupBox *>()) {
-    groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
-  }
-
-  for (QLineEdit *edit : findChildren<QLineEdit *>()) {
-    edit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  }
-
-  for (QComboBox *combo : findChildren<QComboBox *>()) {
-    combo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-  }
-
-  for (QCheckBox *check : findChildren<QCheckBox *>()) {
-    check->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
-  }
-
-  if (m_configList) {
-    m_configList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
-  }
-
-  QString tableStyle = QString("QTableWidget {"
-                               "  background: %1;"
-                               "  color: %2;"
-                               "  border: 1px solid %3;"
-                               "  border-radius: 4px;"
-                               "  gridline-color: %3;"
-                               "}"
-                               "QHeaderView::section {"
-                               "  background: %4;"
-                               "  color: %2;"
-                               "  border: none;"
-                               "  border-bottom: 1px solid %3;"
-                               "  padding: 4px 8px;"
-                               "  font-weight: bold;"
-                               "  font-size: 11px;"
-                               "}")
-                           .arg(theme.surfaceAltColor.name())
-                           .arg(theme.foregroundColor.name())
-                           .arg(theme.borderColor.name())
-                           .arg(theme.surfaceColor.name());
-  if (m_envTable) {
-    m_envTable->setStyleSheet(tableStyle);
-  }
-
-  QString spinStyle = QString("QSpinBox {"
-                              "  background: %1;"
-                              "  color: %2;"
-                              "  border: 1px solid %3;"
-                              "  border-radius: 6px;"
-                              "  padding: 4px 8px;"
-                              "}"
-                              "QSpinBox:focus {"
-                              "  border-color: %4;"
-                              "}")
-                          .arg(theme.hoverColor.name())
-                          .arg(theme.foregroundColor.name())
-                          .arg(theme.borderColor.name())
-                          .arg(theme.accentColor.name());
-  for (QSpinBox *spin : findChildren<QSpinBox *>()) {
-    spin->setStyleSheet(spinStyle);
-  }
-
-  if (m_adapterConfigEdit) {
-    m_adapterConfigEdit->setStyleSheet(QString("QPlainTextEdit {"
-                                               "  background: %1;"
-                                               "  color: %2;"
-                                               "  border: 1px solid %3;"
-                                               "  border-radius: 4px;"
-                                               "  font-family: monospace;"
-                                               "  font-size: 12px;"
-                                               "  padding: 4px;"
-                                               "}"
-                                               "QPlainTextEdit:focus {"
-                                               "  border-color: %4;"
-                                               "}")
-                                           .arg(theme.surfaceAltColor.name())
-                                           .arg(theme.foregroundColor.name())
-                                           .arg(theme.borderColor.name())
-                                           .arg(theme.accentColor.name()));
-  }
-
-  if (m_saveButton) {
-    m_saveButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
-  }
-  if (m_cancelButton) {
-    m_cancelButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-  }
-
-  for (QPushButton *btn : {m_addConfigBtn, m_addTemplateBtn, m_removeConfigBtn,
-                           m_duplicateConfigBtn, m_browseProgramBtn,
-                           m_browseCwdBtn, m_addEnvBtn, m_removeEnvBtn}) {
-    if (btn) {
-      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-    }
-  }
-
-  if (m_pythonEnvironmentWidget) {
-    for (QPushButton *btn :
-         m_pythonEnvironmentWidget->findChildren<QPushButton *>()) {
-      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-    }
-  }
+  stylePrimaryButton(m_saveButton);
+  stylePrimaryButton(m_addConfigBtn);
+  styleDangerButton(m_removeConfigBtn);
 }

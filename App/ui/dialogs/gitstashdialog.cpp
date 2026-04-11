@@ -1,17 +1,15 @@
 #include "gitstashdialog.h"
-#include "../uistylehelper.h"
-#include <QMessageBox>
+#include "themedmessagebox.h"
 
 GitStashDialog::GitStashDialog(GitIntegration *git, QWidget *parent)
-    : QDialog(parent), m_git(git), m_stashList(nullptr), m_messageEdit(nullptr),
-      m_includeUntrackedCheckbox(nullptr), m_stashButton(nullptr),
-      m_popButton(nullptr), m_applyButton(nullptr), m_dropButton(nullptr),
-      m_clearButton(nullptr), m_closeButton(nullptr), m_statusLabel(nullptr),
-      m_detailsLabel(nullptr) {
+    : StyledDialog(parent), m_git(git), m_stashList(nullptr),
+      m_messageEdit(nullptr), m_includeUntrackedCheckbox(nullptr),
+      m_stashButton(nullptr), m_popButton(nullptr), m_applyButton(nullptr),
+      m_dropButton(nullptr), m_clearButton(nullptr), m_closeButton(nullptr),
+      m_statusLabel(nullptr), m_detailsLabel(nullptr) {
   setWindowTitle(tr("Git Stash"));
   setMinimumSize(600, 500);
   setupUI();
-  applyStyles();
   refresh();
 }
 
@@ -133,124 +131,6 @@ void GitStashDialog::setupUI() {
   bottomLayout->addWidget(m_closeButton);
 
   mainLayout->addLayout(bottomLayout);
-}
-
-void GitStashDialog::applyStyles() {
-  setStyleSheet(R"(
-        QDialog {
-            background: #0d1117;
-        }
-        QGroupBox {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            margin-top: 12px;
-            padding: 12px;
-            padding-top: 24px;
-            font-weight: bold;
-            color: #e6edf3;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            left: 12px;
-            padding: 0 6px;
-            color: #8b949e;
-            font-size: 11px;
-            text-transform: uppercase;
-        }
-        QLabel {
-            color: #e6edf3;
-        }
-        QLineEdit {
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-size: 12px;
-        }
-        QLineEdit:focus {
-            border-color: #58a6ff;
-        }
-        QListWidget {
-            background: #161b22;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            font-size: 12px;
-        }
-        QListWidget::item {
-            padding: 10px 12px;
-            border-bottom: 1px solid #21262d;
-        }
-        QListWidget::item:selected {
-            background: #1f6feb;
-        }
-        QListWidget::item:hover {
-            background: #21262d;
-        }
-        QCheckBox {
-            color: #e6edf3;
-            font-size: 12px;
-            spacing: 8px;
-        }
-        QCheckBox::indicator {
-            width: 16px;
-            height: 16px;
-            border-radius: 4px;
-            border: 1px solid #30363d;
-            background: #21262d;
-        }
-        QCheckBox::indicator:checked {
-            background: #238636;
-            border-color: #238636;
-        }
-        QPushButton {
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 8px 16px;
-            font-size: 12px;
-        }
-        QPushButton:hover {
-            background: #30363d;
-        }
-        QPushButton:disabled {
-            background: #161b22;
-            color: #484f58;
-        }
-        QPushButton#stashButton {
-            background: #238636;
-            border-color: #238636;
-            color: white;
-            font-weight: bold;
-        }
-        QPushButton#stashButton:hover {
-            background: #2ea043;
-        }
-        QPushButton#popButton {
-            background: #1f6feb;
-            border-color: #1f6feb;
-            color: white;
-        }
-        QPushButton#popButton:hover {
-            background: #388bfd;
-        }
-        QPushButton#clearButton {
-            background: #da3633;
-            border-color: #da3633;
-            color: white;
-        }
-        QPushButton#clearButton:hover {
-            background: #f85149;
-        }
-    )");
-
-  m_stashButton->setObjectName("stashButton");
-  m_popButton->setObjectName("popButton");
-  m_clearButton->setObjectName("clearButton");
 }
 
 void GitStashDialog::refresh() { updateStashList(); }
@@ -398,14 +278,14 @@ void GitStashDialog::onDropClicked() {
 
   int index = item->data(Qt::UserRole).toInt();
 
-  int result = QMessageBox::question(
+  int result = ThemedMessageBox::question(
       this, tr("Drop Stash"),
       QString(tr("Are you sure you want to drop stash@{%1}?\nThis cannot be "
                  "undone."))
           .arg(index),
-      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+      ThemedMessageBox::Yes | ThemedMessageBox::No, ThemedMessageBox::No);
 
-  if (result == QMessageBox::Yes) {
+  if (result == ThemedMessageBox::Yes) {
     if (m_git->stashDrop(index)) {
       m_statusLabel->setText(QString(tr("✓ Stash %1 dropped")).arg(index));
       m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
@@ -422,13 +302,13 @@ void GitStashDialog::onClearClicked() {
   if (!m_git)
     return;
 
-  int result =
-      QMessageBox::warning(this, tr("Clear All Stashes"),
-                           tr("Are you sure you want to clear all stash "
-                              "entries?\nThis action cannot be undone!"),
-                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+  int result = ThemedMessageBox::warning(
+      this, tr("Clear All Stashes"),
+      tr("Are you sure you want to clear all stash "
+         "entries?\nThis action cannot be undone!"),
+      ThemedMessageBox::Yes | ThemedMessageBox::No);
 
-  if (result == QMessageBox::Yes) {
+  if (result == ThemedMessageBox::Yes) {
     if (m_git->stashClear()) {
       m_statusLabel->setText(tr("✓ All stashes cleared"));
       m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
@@ -444,39 +324,11 @@ void GitStashDialog::onClearClicked() {
 void GitStashDialog::onCloseClicked() { accept(); }
 
 void GitStashDialog::applyTheme(const Theme &theme) {
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
+  StyledDialog::applyTheme(theme);
 
-  for (QGroupBox *groupBox : findChildren<QGroupBox *>()) {
-    groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
-  }
-
-  if (m_stashList) {
-    m_stashList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
-  }
-
-  if (m_messageEdit) {
-    m_messageEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  }
-
-  if (m_includeUntrackedCheckbox) {
-    m_includeUntrackedCheckbox->setStyleSheet(
-        UIStyleHelper::checkBoxStyle(theme));
-  }
-
-  if (m_stashButton) {
-    m_stashButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
-  }
-  for (QPushButton *btn : {m_popButton, m_applyButton, m_dropButton,
-                           m_clearButton, m_closeButton}) {
-    if (btn) {
-      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-    }
-  }
-
-  if (m_statusLabel) {
-    m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
-  }
-  if (m_detailsLabel) {
-    m_detailsLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
-  }
+  stylePrimaryButton(m_stashButton);
+  styleDangerButton(m_dropButton);
+  styleDangerButton(m_clearButton);
+  styleSubduedLabel(m_statusLabel);
+  styleSubduedLabel(m_detailsLabel);
 }

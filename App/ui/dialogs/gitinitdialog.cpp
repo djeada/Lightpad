@@ -1,17 +1,16 @@
 #include "gitinitdialog.h"
 #include "../uistylehelper.h"
 #include <QFileDialog>
-#include <QMessageBox>
+#include "themedmessagebox.h"
 
 GitInitDialog::GitInitDialog(const QString &projectPath, QWidget *parent)
-    : QDialog(parent), m_projectPath(projectPath), m_pathEdit(nullptr),
+    : StyledDialog(parent), m_projectPath(projectPath), m_pathEdit(nullptr),
       m_browseButton(nullptr), m_initialCommitCheckbox(nullptr),
       m_gitIgnoreCheckbox(nullptr), m_remoteEdit(nullptr),
       m_initButton(nullptr), m_cancelButton(nullptr) {
   setWindowTitle(tr("Initialize Git Repository"));
   setMinimumSize(500, 350);
   setupUI();
-  applyStyles();
 }
 
 GitInitDialog::~GitInitDialog() {}
@@ -28,13 +27,11 @@ void GitInitDialog::setupUI() {
 
   QVBoxLayout *titleLayout = new QVBoxLayout();
   QLabel *titleLabel = new QLabel(tr("Initialize Git Repository"), this);
-  titleLabel->setStyleSheet(
-      "font-size: 18px; font-weight: bold; color: #e6edf3;");
+  titleLabel->setObjectName("titleLabel");
   QLabel *subtitleLabel =
       new QLabel(tr("This folder is not a Git repository. Initialize one to "
                     "start tracking changes."),
                  this);
-  subtitleLabel->setStyleSheet("color: #8b949e; font-size: 12px;");
   subtitleLabel->setWordWrap(true);
   titleLayout->addWidget(titleLabel);
   titleLayout->addWidget(subtitleLabel);
@@ -76,7 +73,6 @@ void GitInitDialog::setupUI() {
   QVBoxLayout *remoteLayout = new QVBoxLayout(remoteGroup);
 
   QLabel *remoteLabel = new QLabel(tr("Add a remote repository URL:"), this);
-  remoteLabel->setStyleSheet("color: #8b949e;");
   remoteLayout->addWidget(remoteLabel);
 
   m_remoteEdit = new QLineEdit(this);
@@ -107,82 +103,6 @@ void GitInitDialog::setupUI() {
   mainLayout->addLayout(buttonLayout);
 }
 
-void GitInitDialog::applyStyles() {
-  setStyleSheet(R"(
-        QDialog {
-            background: #0d1117;
-        }
-        QGroupBox {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            margin-top: 12px;
-            padding: 12px;
-            padding-top: 24px;
-            font-weight: bold;
-            color: #e6edf3;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            left: 12px;
-            padding: 0 6px;
-            color: #8b949e;
-            font-size: 11px;
-            text-transform: uppercase;
-        }
-        QLineEdit {
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-size: 12px;
-        }
-        QLineEdit:focus {
-            border-color: #58a6ff;
-        }
-        QCheckBox {
-            color: #e6edf3;
-            font-size: 12px;
-            spacing: 8px;
-        }
-        QCheckBox::indicator {
-            width: 16px;
-            height: 16px;
-            border-radius: 4px;
-            border: 1px solid #30363d;
-            background: #21262d;
-        }
-        QCheckBox::indicator:checked {
-            background: #238636;
-            border-color: #238636;
-        }
-        QPushButton {
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 8px 16px;
-            font-size: 12px;
-        }
-        QPushButton:hover {
-            background: #30363d;
-        }
-        QPushButton#initButton {
-            background: #238636;
-            border-color: #238636;
-            color: white;
-            font-weight: bold;
-        }
-        QPushButton#initButton:hover {
-            background: #2ea043;
-        }
-    )");
-
-  m_initButton->setObjectName("initButton");
-}
-
 QString GitInitDialog::repositoryPath() const {
   return m_pathEdit->text().trimmed();
 }
@@ -202,15 +122,15 @@ QString GitInitDialog::remoteUrl() const {
 void GitInitDialog::onInitClicked() {
   QString path = repositoryPath();
   if (path.isEmpty()) {
-    QMessageBox::warning(this, tr("Error"),
-                         tr("Please specify a repository path."));
+    ThemedMessageBox::warning(this, tr("Error"),
+                              tr("Please specify a repository path."));
     return;
   }
 
   QDir dir(path);
   if (!dir.exists()) {
-    QMessageBox::warning(this, tr("Error"),
-                         tr("The specified path does not exist."));
+    ThemedMessageBox::warning(this, tr("Error"),
+                              tr("The specified path does not exist."));
     return;
   }
 
@@ -231,33 +151,6 @@ void GitInitDialog::onBrowseClicked() {
 }
 
 void GitInitDialog::applyTheme(const Theme &theme) {
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
-
-  for (QGroupBox *groupBox : findChildren<QGroupBox *>()) {
-    groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
-  }
-
-  if (m_pathEdit) {
-    m_pathEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  }
-  if (m_remoteEdit) {
-    m_remoteEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  }
-
-  if (m_initialCommitCheckbox) {
-    m_initialCommitCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
-  }
-  if (m_gitIgnoreCheckbox) {
-    m_gitIgnoreCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
-  }
-
-  if (m_cancelButton) {
-    m_cancelButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-  }
-  if (m_browseButton) {
-    m_browseButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-  }
-  if (m_initButton) {
-    m_initButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
-  }
+  StyledDialog::applyTheme(theme);
+  stylePrimaryButton(m_initButton);
 }

@@ -1,11 +1,10 @@
 #ifndef RUNTEMPLATESELECTOR_H
 #define RUNTEMPLATESELECTOR_H
 
-#include "../../settings/theme.h"
+#include "styleddialog.h"
 #include "../widgets/pythonenvironmentwidget.h"
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -20,7 +19,7 @@
 #include <QTextEdit>
 #include <QVBoxLayout>
 
-class RunTemplateSelector : public QDialog {
+class RunTemplateSelector : public StyledDialog {
   Q_OBJECT
 
 public:
@@ -31,7 +30,7 @@ public:
   QString getSelectedTemplateId() const;
   QStringList getCustomArgs() const;
 
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 private slots:
   void onTemplateSelected(QListWidgetItem *item);

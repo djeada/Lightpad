@@ -1,14 +1,13 @@
 #ifndef DEBUGCONFIGURATIONDIALOG_H
 #define DEBUGCONFIGURATIONDIALOG_H
 
+#include "styleddialog.h"
 #include "../../dap/debugconfiguration.h"
 #include "../../dap/idebugadapter.h"
-#include "../../settings/theme.h"
 #include "../widgets/pythonenvironmentwidget.h"
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDialog>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -25,14 +24,14 @@
 #include <QVBoxLayout>
 #include <memory>
 
-class DebugConfigurationDialog : public QDialog {
+class DebugConfigurationDialog : public StyledDialog {
   Q_OBJECT
 
 public:
   explicit DebugConfigurationDialog(QWidget *parent = nullptr);
   ~DebugConfigurationDialog();
 
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 private slots:
   void onConfigSelected(QListWidgetItem *current, QListWidgetItem *previous);

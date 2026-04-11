@@ -1,6 +1,7 @@
 #ifndef TERMINAL_H
 #define TERMINAL_H
 
+#include <QElapsedTimer>
 #include <QMap>
 #include <QMenu>
 #include <QProcess>
@@ -130,8 +131,14 @@ private:
   void cleanupRunProcess(bool restartShell);
   void cleanupProcess();
   void scheduleAutoRestart();
+  void setupInputIndicator();
+  void setRunInputIndicatorActive(bool active);
+  void updateRunInputIndicator();
   void updateStyleSheet();
   void updateCwdLabel();
+  bool handleCommonInputKey(QKeyEvent *keyEvent);
+  void handleRunInputHistoryNavigation(bool up);
+  static QColor ansi256Color(int index);
   QString formatPythonBanner(const PythonEnvironmentInfo &info) const;
   QString filterShellStartupNoise(const QString &text) const;
   bool isShellStartupNoiseLine(const QString &line) const;
@@ -140,6 +147,7 @@ private:
   QTextCursor clampedInputCursor(bool moveToEndWhenOutsideInput = false) const;
   void insertInputText(const QString &text);
   void removeInputText(bool backwards);
+  QString takePendingInput();
   QString getLinkAtPosition(const QPoint &pos);
   QString stripAnsiEscapeCodes(const QString &text);
   void appendAnsiText(const QString &text, QTextCursor &cursor);
@@ -183,6 +191,15 @@ private:
   QMenu *m_contextMenu;
   QAction *m_copyAction;
   QString m_pythonEnvironmentBanner;
+
+  QElapsedTimer m_runProcessTimer;
+  QStringList m_runInputHistory;
+  int m_runInputHistoryIndex;
+  QLabel *m_runInputIndicator;
+  QTimer *m_runInputIndicatorTimer;
+  bool m_runInputIndicatorActive;
+  bool m_runInputCursorVisible;
+  static const int kInputIndicatorBlinkMs = 500;
 };
 
 #endif

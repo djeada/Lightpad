@@ -1,6 +1,5 @@
 #include "recentfilesdialog.h"
 #include "../../core/recentfilesmanager.h"
-#include "../uistylehelper.h"
 #include <QFileInfo>
 #include <algorithm>
 
@@ -11,7 +10,7 @@ const QString kEmDash = QStringLiteral("\u2014");
 
 RecentFilesDialog::RecentFilesDialog(RecentFilesManager *manager,
                                      QWidget *parent)
-    : QDialog(parent, Qt::Popup | Qt::FramelessWindowHint), m_manager(manager),
+    : StyledPopupDialog(parent), m_manager(manager),
       m_searchBox(nullptr), m_resultsList(nullptr), m_layout(nullptr) {
   setupUI();
 }
@@ -28,32 +27,9 @@ void RecentFilesDialog::setupUI() {
 
   m_searchBox = new QLineEdit(this);
   m_searchBox->setPlaceholderText(tr("Search recent files..."));
-  m_searchBox->setStyleSheet("QLineEdit {"
-                             "  padding: 8px;"
-                             "  font-size: 14px;"
-                             "  border: 1px solid #2a3241;"
-                             "  border-radius: 4px;"
-                             "  background: #1f2632;"
-                             "  color: #e6edf3;"
-                             "}");
   m_layout->addWidget(m_searchBox);
 
   m_resultsList = new QListWidget(this);
-  m_resultsList->setStyleSheet("QListWidget {"
-                               "  border: none;"
-                               "  background: #0e1116;"
-                               "  color: #e6edf3;"
-                               "}"
-                               "QListWidget::item {"
-                               "  padding: 8px;"
-                               "  border-bottom: 1px solid #2a3241;"
-                               "}"
-                               "QListWidget::item:selected {"
-                               "  background: #1b2a43;"
-                               "}"
-                               "QListWidget::item:hover {"
-                               "  background: #222a36;"
-                               "}");
   m_resultsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   m_layout->addWidget(m_resultsList);
 
@@ -66,8 +42,6 @@ void RecentFilesDialog::setupUI() {
 
   m_searchBox->installEventFilter(this);
 
-  setStyleSheet("RecentFilesDialog { background: #171c24; border: 1px solid "
-                "#2a3241; border-radius: 8px; }");
 }
 
 void RecentFilesDialog::showDialog() {
@@ -75,15 +49,7 @@ void RecentFilesDialog::showDialog() {
   m_searchBox->clear();
   updateResults(QString());
 
-  if (parentWidget()) {
-    QPoint parentCenter =
-        parentWidget()->mapToGlobal(parentWidget()->rect().center());
-    int x = parentCenter.x() - width() / 2;
-    int y = parentWidget()->mapToGlobal(QPoint(0, 0)).y() + 50;
-    move(x, y);
-  }
-
-  show();
+  showCentered();
   m_searchBox->setFocus();
 
   if (m_resultsList->count() > 0) {
@@ -99,9 +65,6 @@ void RecentFilesDialog::refresh() {
 
 void RecentFilesDialog::keyPressEvent(QKeyEvent *event) {
   switch (event->key()) {
-  case Qt::Key_Escape:
-    hide();
-    break;
   case Qt::Key_Return:
   case Qt::Key_Enter:
     if (m_resultsList->currentRow() >= 0) {
@@ -115,7 +78,7 @@ void RecentFilesDialog::keyPressEvent(QKeyEvent *event) {
     selectNext();
     break;
   default:
-    QDialog::keyPressEvent(event);
+    StyledPopupDialog::keyPressEvent(event);
   }
 }
 
@@ -137,7 +100,7 @@ bool RecentFilesDialog::eventFilter(QObject *obj, QEvent *event) {
       return true;
     }
   }
-  return QDialog::eventFilter(obj, event);
+  return StyledPopupDialog::eventFilter(obj, event);
 }
 
 void RecentFilesDialog::onSearchTextChanged(const QString &text) {
@@ -276,8 +239,5 @@ void RecentFilesDialog::selectPrevious() {
 }
 
 void RecentFilesDialog::applyTheme(const Theme &theme) {
-  setStyleSheet("RecentFilesDialog { " +
-                UIStyleHelper::popupDialogStyle(theme) + " }");
-  m_searchBox->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
-  m_resultsList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
+  StyledPopupDialog::applyTheme(theme);
 }

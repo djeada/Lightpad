@@ -1,42 +1,436 @@
 #include "preferences.h"
-#include "../../settings/preferenceseditor.h"
-#include "../panels/preferencesview.h"
-#include "colorpicker.h"
-#include "ui_preferences.h"
-#include <QCloseEvent>
+#include "../mainwindow.h"
+#include "../../settings/settingsmanager.h"
+
+#include <QColorDialog>
+#include <QGridLayout>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QScrollArea>
+#include <QVBoxLayout>
+
+static const QString kSwatchStyle =
+    "QToolButton { border: 1px solid %1; border-radius: 3px; min-width: 28px; "
+    "max-width: 28px; min-height: 28px; max-height: 28px; }";
+
+static const QString kSectionHeaderStyle =
+    "font-weight: 600; font-size: 13px; padding-top: 6px;";
+
+static const QString kDescriptionStyle = "color: #8b949e; font-size: 11px;";
 
 Preferences::Preferences(MainWindow *parent)
-    : QDialog(nullptr), ui(new Ui::Preferences), parentWindow(parent),
-      colorPicker(nullptr), preferencesView(nullptr),
-      preferencesEditor(nullptr) {
-
-  ui->setupUi(this);
+    : QDialog(nullptr), m_mainWindow(parent) {
   setAttribute(Qt::WA_DeleteOnClose, true);
+  setWindowTitle("Preferences");
+  setMinimumSize(480, 560);
+  resize(520, 640);
 
-  setWindowTitle("Lightpad Preferences");
-  setupParent();
+  buildUi();
+  loadCurrentSettings();
+  connectSignals();
   show();
 }
 
-Preferences::~Preferences() { delete ui; }
+Preferences::~Preferences() = default;
 
-void Preferences::setTabWidthLabel(const QString &text) {
-  if (preferencesEditor)
-    preferencesEditor->setTabWidthLabel(text);
+QWidget *Preferences::createSectionHeader(const QString &title) {
+  auto *label = new QLabel(title, this);
+  label->setStyleSheet(kSectionHeaderStyle);
+  return label;
 }
 
-void Preferences::closeEvent(QCloseEvent *event) { event->accept(); }
+QWidget *Preferences::createSeparator() {
+  auto *line = new QFrame(this);
+  line->setFrameShape(QFrame::HLine);
+  line->setFrameShadow(QFrame::Sunken);
+  line->setStyleSheet("color: #30363d;");
+  return line;
+}
 
-void Preferences::on_toolButton_clicked() { close(); }
+QToolButton *Preferences::createColorSwatch(const QColor &color) {
+  auto *btn = new QToolButton(this);
+  btn->setStyleSheet(kSwatchStyle.arg("#30363d") +
+                     QString("QToolButton { background-color: %1; }")
+                         .arg(color.name()));
+  btn->setCursor(Qt::PointingHandCursor);
+  btn->setToolTip(color.name());
+  return btn;
+}
 
-void Preferences::setupParent() {
-  if (parentWindow) {
-    colorPicker = new ColorPicker(parentWindow->getTheme(), parentWindow);
-    preferencesView = new PreferencesView(parentWindow);
-    preferencesEditor = new PreferencesEditor(parentWindow);
-    ui->tabWidget->addTab(preferencesView, "View");
-    ui->tabWidget->addTab(preferencesEditor, "Editor");
-    ui->tabWidget->addTab(colorPicker,
-                          "Font " + QString(u8"\uFF06") + " Colors");
+void Preferences::buildUi() {
+  auto *outerLayout = new QVBoxLayout(this);
+  outerLayout->setContentsMargins(0, 0, 0, 12);
+
+  auto *scrollArea = new QScrollArea(this);
+  scrollArea->setWidgetResizable(true);
+  scrollArea->setFrameShape(QFrame::NoFrame);
+
+  auto *scrollWidget = new QWidget();
+  auto *mainLayout = new QVBoxLayout(scrollWidget);
+  mainLayout->setContentsMargins(20, 16, 20, 16);
+  mainLayout->setSpacing(8);
+
+  // ── Font Section ──────────────────────────────────────────────────────
+  mainLayout->addWidget(createSectionHeader("Font"));
+  mainLayout->addWidget(createSeparator());
+
+  auto *fontRow = new QHBoxLayout();
+  fontRow->setSpacing(10);
+
+  auto *familyLabel = new QLabel("Family", this);
+  m_fontFamilyCombo = new QFontComboBox(this);
+  m_fontFamilyCombo->setFontFilters(QFontComboBox::MonospacedFonts);
+  m_fontFamilyCombo->setMinimumWidth(200);
+
+  auto *sizeLabel = new QLabel("Size", this);
+  m_fontSizeSpinner = new QSpinBox(this);
+  m_fontSizeSpinner->setRange(6, 72);
+  m_fontSizeSpinner->setSuffix(" pt");
+
+  fontRow->addWidget(familyLabel);
+  fontRow->addWidget(m_fontFamilyCombo, 1);
+  fontRow->addSpacing(12);
+  fontRow->addWidget(sizeLabel);
+  fontRow->addWidget(m_fontSizeSpinner);
+  mainLayout->addLayout(fontRow);
+
+  m_fontPreview = new QLabel(this);
+  m_fontPreview->setWordWrap(true);
+  m_fontPreview->setStyleSheet(
+      "QLabel { border: 1px solid #30363d; border-radius: 4px; padding: 10px; "
+      "background-color: #161b22; }");
+  m_fontPreview->setMinimumHeight(56);
+  m_fontPreview->setText(
+      "The quick brown fox jumps over the lazy dog.\n"
+      "0123456789 (){}[] <> :: -> => != == += -= */");
+  mainLayout->addWidget(m_fontPreview);
+
+  mainLayout->addSpacing(8);
+
+  // ── Editor Section ────────────────────────────────────────────────────
+  mainLayout->addWidget(createSectionHeader("Editor"));
+  mainLayout->addWidget(createSeparator());
+
+  auto *tabRow = new QHBoxLayout();
+  auto *tabLabel = new QLabel("Tab width", this);
+  m_tabWidthCombo = new QComboBox(this);
+  m_tabWidthCombo->addItems({"2", "4", "8"});
+  m_tabWidthCombo->setFixedWidth(70);
+  tabRow->addWidget(tabLabel);
+  tabRow->addWidget(m_tabWidthCombo);
+  tabRow->addStretch();
+  mainLayout->addLayout(tabRow);
+
+  m_autoIndentCheck = new QCheckBox("Enable automatic indentation", this);
+  mainLayout->addWidget(m_autoIndentCheck);
+
+  m_autoSaveCheck = new QCheckBox("Auto-save modified files", this);
+  mainLayout->addWidget(m_autoSaveCheck);
+
+  m_trimWhitespaceCheck =
+      new QCheckBox("Trim trailing whitespace on save", this);
+  mainLayout->addWidget(m_trimWhitespaceCheck);
+
+  m_finalNewlineCheck =
+      new QCheckBox("Insert final newline on save", this);
+  mainLayout->addWidget(m_finalNewlineCheck);
+
+  mainLayout->addSpacing(8);
+
+  // ── Display Section ───────────────────────────────────────────────────
+  mainLayout->addWidget(createSectionHeader("Display"));
+  mainLayout->addWidget(createSeparator());
+
+  m_lineNumbersCheck = new QCheckBox("Show line numbers", this);
+  mainLayout->addWidget(m_lineNumbersCheck);
+
+  m_currentLineCheck = new QCheckBox("Highlight current line", this);
+  mainLayout->addWidget(m_currentLineCheck);
+
+  m_bracketMatchCheck = new QCheckBox("Highlight matching brackets", this);
+  mainLayout->addWidget(m_bracketMatchCheck);
+
+  mainLayout->addSpacing(8);
+
+  // ── Color Scheme Section ──────────────────────────────────────────────
+  mainLayout->addWidget(createSectionHeader("Color Scheme"));
+  mainLayout->addWidget(createSeparator());
+
+  auto *colorGrid = new QGridLayout();
+  colorGrid->setHorizontalSpacing(16);
+  colorGrid->setVerticalSpacing(8);
+
+  struct ColorEntry {
+    QString role;
+    QString label;
+  };
+  // Two-column grid of color swatches
+  QList<ColorEntry> entries = {
+      {"backgroundColor", "Background"},
+      {"foregroundColor", "Foreground"},
+      {"keywordFormat_0", "Keywords 1"},
+      {"keywordFormat_1", "Keywords 2"},
+      {"keywordFormat_2", "Keywords 3"},
+      {"singleLineCommentFormat", "Comments"},
+      {"functionFormat", "Functions"},
+      {"quotationFormat", "Strings"},
+      {"classFormat", "Classes"},
+      {"numberFormat", "Numbers"},
+  };
+
+  int row = 0, col = 0;
+  for (const auto &entry : entries) {
+    auto *swatchBtn = createColorSwatch(QColor("#000"));
+    m_colorSwatches[entry.role] = swatchBtn;
+
+    auto *lbl = new QLabel(entry.label, this);
+    lbl->setFixedWidth(80);
+
+    auto *cellLayout = new QHBoxLayout();
+    cellLayout->setSpacing(6);
+    cellLayout->addWidget(lbl);
+    cellLayout->addWidget(swatchBtn);
+    cellLayout->addStretch();
+
+    colorGrid->addLayout(cellLayout, row, col);
+    col++;
+    if (col >= 2) {
+      col = 0;
+      row++;
+    }
   }
+  mainLayout->addLayout(colorGrid);
+
+  mainLayout->addStretch();
+
+  scrollArea->setWidget(scrollWidget);
+  outerLayout->addWidget(scrollArea);
+
+  // ── Close Button ──────────────────────────────────────────────────────
+  auto *buttonRow = new QHBoxLayout();
+  buttonRow->setContentsMargins(20, 0, 20, 0);
+  buttonRow->addStretch();
+  auto *closeBtn = new QToolButton(this);
+  closeBtn->setText("Close");
+  closeBtn->setCursor(Qt::PointingHandCursor);
+  closeBtn->setStyleSheet(
+      "QToolButton { border: 1px solid #30363d; border-radius: 4px; "
+      "padding: 4px 16px; }"
+      "QToolButton:hover { background-color: #21262d; }");
+  connect(closeBtn, &QToolButton::clicked, this, &QDialog::close);
+  buttonRow->addWidget(closeBtn);
+  outerLayout->addLayout(buttonRow);
+}
+
+void Preferences::loadCurrentSettings() {
+  if (!m_mainWindow)
+    return;
+
+  auto textSettings = m_mainWindow->getSettings();
+  auto theme = m_mainWindow->getTheme();
+  auto &sm = SettingsManager::instance();
+
+  // Font
+  m_fontFamilyCombo->setCurrentFont(textSettings.mainFont);
+  m_fontSizeSpinner->setValue(textSettings.mainFont.pointSize());
+  QFont previewFont = textSettings.mainFont;
+  previewFont.setPointSize(textSettings.mainFont.pointSize());
+  m_fontPreview->setFont(previewFont);
+
+  // Editor
+  int tabWidth = textSettings.tabWidth;
+  int idx = m_tabWidthCombo->findText(QString::number(tabWidth));
+  if (idx >= 0)
+    m_tabWidthCombo->setCurrentIndex(idx);
+
+  m_autoIndentCheck->setChecked(textSettings.autoIndent);
+  m_autoSaveCheck->setChecked(
+      sm.getValue("autoSaveFiles", true).toBool());
+  m_trimWhitespaceCheck->setChecked(
+      sm.getValue("trimTrailingWhitespace", false).toBool());
+  m_finalNewlineCheck->setChecked(
+      sm.getValue("insertFinalNewline", false).toBool());
+
+  // Display
+  m_lineNumbersCheck->setChecked(textSettings.showLineNumberArea);
+  m_currentLineCheck->setChecked(textSettings.lineHighlighted);
+  m_bracketMatchCheck->setChecked(textSettings.matchingBracketsHighlighted);
+
+  // Color swatches
+  auto updateSwatch = [&](const QString &role, const QColor &color) {
+    if (m_colorSwatches.contains(role)) {
+      auto *btn = m_colorSwatches[role];
+      btn->setStyleSheet(kSwatchStyle.arg("#30363d") +
+                         QString("QToolButton { background-color: %1; }")
+                             .arg(color.name()));
+      btn->setToolTip(color.name());
+    }
+  };
+
+  updateSwatch("backgroundColor", theme.backgroundColor);
+  updateSwatch("foregroundColor", theme.foregroundColor);
+  updateSwatch("keywordFormat_0", theme.keywordFormat_0);
+  updateSwatch("keywordFormat_1", theme.keywordFormat_1);
+  updateSwatch("keywordFormat_2", theme.keywordFormat_2);
+  updateSwatch("singleLineCommentFormat", theme.singleLineCommentFormat);
+  updateSwatch("functionFormat", theme.functionFormat);
+  updateSwatch("quotationFormat", theme.quotationFormat);
+  updateSwatch("classFormat", theme.classFormat);
+  updateSwatch("numberFormat", theme.numberFormat);
+}
+
+void Preferences::connectSignals() {
+  if (!m_mainWindow)
+    return;
+
+  // ── Font ──────────────────────────────────────────────────────────────
+  connect(m_fontFamilyCombo, &QFontComboBox::currentFontChanged, this,
+          &Preferences::onFontFamilyChanged);
+
+  connect(m_fontSizeSpinner, &QSpinBox::valueChanged, this,
+          &Preferences::onFontSizeChanged);
+
+  // ── Editor ────────────────────────────────────────────────────────────
+  connect(m_tabWidthCombo, &QComboBox::currentTextChanged, this,
+          [this](const QString &text) {
+            bool ok;
+            int width = text.toInt(&ok);
+            if (ok && m_mainWindow) {
+              m_mainWindow->setTabWidth(width);
+              persistAll();
+            }
+          });
+
+  connect(m_autoIndentCheck, &QCheckBox::toggled, this, [this](bool checked) {
+    if (m_mainWindow) {
+      SettingsManager::instance().setValue("autoIndent", checked);
+      persistAll();
+    }
+  });
+
+  connect(m_autoSaveCheck, &QCheckBox::toggled, this, [this](bool checked) {
+    if (m_mainWindow)
+      m_mainWindow->setAutoSaveEnabled(checked);
+  });
+
+  connect(m_trimWhitespaceCheck, &QCheckBox::toggled, this,
+          [this](bool checked) {
+            SettingsManager::instance().setValue("trimTrailingWhitespace",
+                                                checked);
+            SettingsManager::instance().saveSettings();
+          });
+
+  connect(m_finalNewlineCheck, &QCheckBox::toggled, this,
+          [this](bool checked) {
+            SettingsManager::instance().setValue("insertFinalNewline", checked);
+            SettingsManager::instance().saveSettings();
+          });
+
+  // ── Display ───────────────────────────────────────────────────────────
+  connect(m_lineNumbersCheck, &QCheckBox::toggled, this, [this](bool checked) {
+    if (m_mainWindow) {
+      m_mainWindow->showLineNumbers(checked);
+      persistAll();
+    }
+  });
+
+  connect(m_currentLineCheck, &QCheckBox::toggled, this, [this](bool checked) {
+    if (m_mainWindow) {
+      m_mainWindow->highlihtCurrentLine(checked);
+      persistAll();
+    }
+  });
+
+  connect(m_bracketMatchCheck, &QCheckBox::toggled, this,
+          [this](bool checked) {
+            if (m_mainWindow) {
+              m_mainWindow->highlihtMatchingBracket(checked);
+              persistAll();
+            }
+          });
+
+  // ── Color Swatches ────────────────────────────────────────────────────
+  for (auto it = m_colorSwatches.begin(); it != m_colorSwatches.end(); ++it) {
+    const QString role = it.key();
+    QToolButton *btn = it.value();
+    connect(btn, &QToolButton::clicked, this,
+            [this, btn, role]() { onColorSwatchClicked(btn, role); });
+  }
+}
+
+void Preferences::onFontFamilyChanged(const QFont &font) {
+  if (!m_mainWindow)
+    return;
+
+  QFont newFont = m_mainWindow->getFont();
+  newFont.setFamily(font.family());
+  m_mainWindow->setFont(newFont);
+  m_fontPreview->setFont(newFont);
+  persistAll();
+}
+
+void Preferences::onFontSizeChanged(int size) {
+  if (!m_mainWindow)
+    return;
+
+  QFont newFont = m_mainWindow->getFont();
+  newFont.setPointSize(size);
+  m_mainWindow->setFont(newFont);
+  m_fontPreview->setFont(newFont);
+  persistAll();
+}
+
+void Preferences::onColorSwatchClicked(QToolButton *button,
+                                       const QString &role) {
+  QColor current;
+  current.setNamedColor(button->toolTip());
+  QColor color = QColorDialog::getColor(current, this, "Select Color");
+  if (!color.isValid() || !m_mainWindow)
+    return;
+
+  button->setStyleSheet(kSwatchStyle.arg("#30363d") +
+                        QString("QToolButton { background-color: %1; }")
+                            .arg(color.name()));
+  button->setToolTip(color.name());
+
+  Theme theme = m_mainWindow->getTheme();
+
+  if (role == "backgroundColor")
+    theme.backgroundColor = color;
+  else if (role == "foregroundColor")
+    theme.foregroundColor = color;
+  else if (role == "keywordFormat_0")
+    theme.keywordFormat_0 = color;
+  else if (role == "keywordFormat_1")
+    theme.keywordFormat_1 = color;
+  else if (role == "keywordFormat_2")
+    theme.keywordFormat_2 = color;
+  else if (role == "singleLineCommentFormat")
+    theme.singleLineCommentFormat = color;
+  else if (role == "functionFormat")
+    theme.functionFormat = color;
+  else if (role == "quotationFormat")
+    theme.quotationFormat = color;
+  else if (role == "classFormat")
+    theme.classFormat = color;
+  else if (role == "numberFormat")
+    theme.numberFormat = color;
+
+  m_mainWindow->setTheme(theme);
+  persistAll();
+}
+
+void Preferences::persistAll() {
+  if (!m_mainWindow)
+    return;
+
+  auto &sm = SettingsManager::instance();
+  QFont currentFont = m_mainWindow->getFont();
+
+  sm.setValue("fontFamily", currentFont.family());
+  sm.setValue("fontSize", currentFont.pointSize());
+  sm.setValue("fontWeight", currentFont.weight());
+  sm.setValue("fontItalic", currentFont.italic());
+
+  sm.saveSettings();
 }

@@ -435,6 +435,7 @@ private:
   bool m_hasDeferredFunctionBreakpoints;
   bool m_dataBreakpointsSupported;
   bool m_dataBreakpointsConfigured;
+  bool m_pausePending;
 
   QJsonObject m_launchConfig;
   bool m_isAttach;

@@ -45,6 +45,7 @@ private slots:
   void testFontZoomLimits();
   void testTypingOutsidePromptAppendsToInput();
   void testBackspaceDoesNotDeleteTerminalOutput();
+  void testRunInputIndicatorVisibility();
 };
 
 void TestTerminal::initTestCase() {}
@@ -414,6 +415,26 @@ void TestTerminal::testBackspaceDoesNotDeleteTerminalOutput() {
   textEdit->setTextCursor(cursor);
   QTest::keyClick(textEdit, Qt::Key_Backspace);
   QCOMPARE(textEdit->toPlainText(), transcript);
+}
+
+void TestTerminal::testRunInputIndicatorVisibility() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QVERIFY(terminal.m_runInputIndicator != nullptr);
+  QVERIFY(terminal.m_runInputIndicatorTimer != nullptr);
+  QVERIFY(terminal.m_runInputIndicator->isHidden());
+  QVERIFY(!terminal.m_runInputIndicatorTimer->isActive());
+
+  terminal.setRunInputIndicatorActive(true);
+  QVERIFY(!terminal.m_runInputIndicator->isHidden());
+  QVERIFY(terminal.m_runInputIndicatorTimer->isActive());
+  QVERIFY(terminal.m_runInputIndicator->text().contains("Input ready"));
+
+  terminal.setRunInputIndicatorActive(false);
+  QVERIFY(terminal.m_runInputIndicator->isHidden());
+  QVERIFY(!terminal.m_runInputIndicatorTimer->isActive());
 }
 
 QTEST_MAIN(TestTerminal)

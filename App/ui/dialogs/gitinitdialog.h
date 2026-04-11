@@ -1,9 +1,8 @@
 #ifndef GITINITDIALOG_H
 #define GITINITDIALOG_H
 
-#include "../../settings/theme.h"
+#include "styleddialog.h"
 #include <QCheckBox>
-#include <QDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -11,7 +10,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-class GitInitDialog : public QDialog {
+class GitInitDialog : public StyledDialog {
   Q_OBJECT
 
 public:
@@ -40,7 +39,7 @@ private:
   void applyStyles();
 
 public:
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 private:
   QString m_projectPath;

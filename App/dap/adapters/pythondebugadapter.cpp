@@ -52,6 +52,8 @@ public:
     config["request"] = "launch";
     config["program"] = filePath;
     config["console"] = "integratedTerminal";
+    config["justMyCode"] = false;
+    config["subProcess"] = true;
     const QString python =
         preferredPythonInterpreterCandidate(nullptr, filePath, workingDir);
     if (!python.isEmpty()) {
@@ -65,6 +67,26 @@ public:
     }
 
     return config;
+  }
+
+  QJsonObject
+  launchArguments(const DebugConfiguration &configuration) const override {
+    QJsonObject arguments =
+        AbstractDebugAdapter::launchArguments(configuration);
+
+    const QString python = preferredPythonInterpreterCandidate(
+        &configuration, configuration.program, configuration.cwd);
+    if (!python.isEmpty()) {
+      arguments["python"] = python;
+    }
+
+    QJsonObject env = arguments["env"].toObject();
+    if (!env.contains("PYTHONUNBUFFERED")) {
+      env["PYTHONUNBUFFERED"] = "1";
+    }
+    arguments["env"] = env;
+
+    return arguments;
   }
 
   QJsonObject createAttachConfig(int processId, const QString &host,

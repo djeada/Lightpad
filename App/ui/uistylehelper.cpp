@@ -415,3 +415,170 @@ QString UIStyleHelper::successInfoLabelStyle(const Theme &theme) {
 QString UIStyleHelper::errorInfoLabelStyle(const Theme &theme) {
   return QString("color: %1; font-size: 11px;").arg(theme.errorColor.name());
 }
+
+QString UIStyleHelper::tabWidgetStyle(const Theme &theme) {
+  return QString("QTabWidget::pane {"
+                 "  border: 1px solid %1;"
+                 "  background: %2;"
+                 "  border-radius: 4px;"
+                 "}"
+                 "QTabBar::tab {"
+                 "  background: %3;"
+                 "  color: %4;"
+                 "  padding: 8px 20px;"
+                 "  border: none;"
+                 "  border-bottom: 2px solid transparent;"
+                 "}"
+                 "QTabBar::tab:selected {"
+                 "  background: %2;"
+                 "  color: %5;"
+                 "  border-bottom: 2px solid %6;"
+                 "}"
+                 "QTabBar::tab:hover:!selected {"
+                 "  background: %7;"
+                 "}")
+      .arg(theme.borderColor.name())
+      .arg(theme.surfaceColor.name())
+      .arg(theme.surfaceAltColor.name())
+      .arg(theme.singleLineCommentFormat.name())
+      .arg(theme.foregroundColor.name())
+      .arg(theme.accentColor.name())
+      .arg(theme.hoverColor.name());
+}
+
+QString UIStyleHelper::tableWidgetStyle(const Theme &theme) {
+  return QString("QTableWidget {"
+                 "  background: %1;"
+                 "  color: %2;"
+                 "  border: 1px solid %3;"
+                 "  border-radius: 4px;"
+                 "  gridline-color: %3;"
+                 "}"
+                 "QTableWidget::item {"
+                 "  padding: 4px;"
+                 "}"
+                 "QTableWidget::item:selected {"
+                 "  background: %4;"
+                 "}"
+                 "QHeaderView::section {"
+                 "  background: %5;"
+                 "  color: %6;"
+                 "  border: none;"
+                 "  border-bottom: 1px solid %3;"
+                 "  padding: 4px 8px;"
+                 "  font-size: 11px;"
+                 "}")
+      .arg(theme.surfaceAltColor.name())
+      .arg(theme.foregroundColor.name())
+      .arg(theme.borderColor.name())
+      .arg(theme.accentSoftColor.name())
+      .arg(theme.surfaceColor.name())
+      .arg(theme.singleLineCommentFormat.name());
+}
+
+QString UIStyleHelper::plainTextEditStyle(const Theme &theme) {
+  return QString("QPlainTextEdit, QTextEdit {"
+                 "  background: %1;"
+                 "  color: %2;"
+                 "  border: 1px solid %3;"
+                 "  border-radius: 6px;"
+                 "  padding: 8px;"
+                 "  font-family: monospace;"
+                 "  font-size: 12px;"
+                 "}"
+                 "QPlainTextEdit:focus, QTextEdit:focus {"
+                 "  border-color: %4;"
+                 "}")
+      .arg(theme.surfaceAltColor.name())
+      .arg(theme.foregroundColor.name())
+      .arg(theme.borderColor.name())
+      .arg(theme.accentColor.name());
+}
+
+QString UIStyleHelper::spinBoxStyle(const Theme &theme) {
+  return QString("QSpinBox {"
+                 "  background: %1;"
+                 "  color: %2;"
+                 "  border: 1px solid %3;"
+                 "  border-radius: 4px;"
+                 "  padding: 4px 8px;"
+                 "}"
+                 "QSpinBox:focus {"
+                 "  border-color: %4;"
+                 "}")
+      .arg(theme.surfaceAltColor.name())
+      .arg(theme.foregroundColor.name())
+      .arg(theme.borderColor.name())
+      .arg(theme.accentColor.name());
+}
+
+QString UIStyleHelper::dangerButtonStyle(const Theme &theme) {
+  return QString("QPushButton {"
+                 "  background: %1;"
+                 "  color: white;"
+                 "  border: 1px solid %1;"
+                 "  border-radius: 6px;"
+                 "  padding: 8px 16px;"
+                 "  font-size: 12px;"
+                 "  font-weight: bold;"
+                 "}"
+                 "QPushButton:hover {"
+                 "  background: %2;"
+                 "  border-color: %2;"
+                 "}")
+      .arg(theme.errorColor.name())
+      .arg(theme.errorColor.lighter(110).name());
+}
+
+QString UIStyleHelper::progressBarStyle(const Theme &theme) {
+  return QString("QProgressBar {"
+                 "  background: %1;"
+                 "  border: 1px solid %2;"
+                 "  border-radius: 4px;"
+                 "  text-align: center;"
+                 "  color: %3;"
+                 "  height: 8px;"
+                 "}"
+                 "QProgressBar::chunk {"
+                 "  background: %4;"
+                 "  border-radius: 3px;"
+                 "}")
+      .arg(theme.surfaceAltColor.name())
+      .arg(theme.borderColor.name())
+      .arg(theme.foregroundColor.name())
+      .arg(theme.accentColor.name());
+}
+
+QString UIStyleHelper::toolBarStyle(const Theme &theme) {
+  return QString("QToolBar {"
+                 "  background: %1;"
+                 "  border: none;"
+                 "  spacing: 2px;"
+                 "  padding: 2px;"
+                 "}"
+                 "QToolButton {"
+                 "  background: transparent;"
+                 "  color: %2;"
+                 "  border: 1px solid transparent;"
+                 "  border-radius: 4px;"
+                 "  padding: 4px 8px;"
+                 "}"
+                 "QToolButton:hover {"
+                 "  background: %3;"
+                 "  border-color: %4;"
+                 "}"
+                 "QToolButton:pressed {"
+                 "  background: %5;"
+                 "}"
+                 "QToolButton:checked {"
+                 "  background: %6;"
+                 "  border-color: %7;"
+                 "}")
+      .arg(theme.surfaceColor.name())
+      .arg(theme.foregroundColor.name())
+      .arg(theme.hoverColor.name())
+      .arg(theme.borderColor.name())
+      .arg(theme.pressedColor.name())
+      .arg(theme.accentSoftColor.name())
+      .arg(theme.accentColor.name());
+}

@@ -1,6 +1,6 @@
 #include "pdfviewer.h"
 #include <QFileInfo>
-#include <QMessageBox>
+#include "../dialogs/themedmessagebox.h"
 #include <QPdfPageNavigator>
 
 PdfViewer::PdfViewer(QWidget *parent)
@@ -115,8 +115,8 @@ bool PdfViewer::loadPdf(const QString &filePath) {
       errorMsg = tr("Unknown error");
       break;
     }
-    QMessageBox::warning(this, tr("PDF Viewer"),
-                         tr("Cannot load PDF: %1").arg(errorMsg));
+    ThemedMessageBox::warning(this, tr("PDF Viewer"),
+                              tr("Cannot load PDF: %1").arg(errorMsg));
     return false;
   }
 

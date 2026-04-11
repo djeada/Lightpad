@@ -1,8 +1,7 @@
 #ifndef RECENTFILESDIALOG_H
 #define RECENTFILESDIALOG_H
 
-#include "../../settings/theme.h"
-#include <QDialog>
+#include "styledpopupdialog.h"
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QListWidget>
@@ -10,7 +9,7 @@
 
 class RecentFilesManager;
 
-class RecentFilesDialog : public QDialog {
+class RecentFilesDialog : public StyledPopupDialog {
   Q_OBJECT
 
 public:
@@ -22,7 +21,7 @@ public:
 
   void refresh();
 
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 signals:
 

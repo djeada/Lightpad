@@ -1,9 +1,8 @@
 #ifndef COMMANDPALETTE_H
 #define COMMANDPALETTE_H
 
-#include "../../settings/theme.h"
+#include "styledpopupdialog.h"
 #include <QAction>
-#include <QDialog>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QListWidget>
@@ -18,7 +17,7 @@ struct CommandItem {
   int score;
 };
 
-class CommandPalette : public QDialog {
+class CommandPalette : public StyledPopupDialog {
   Q_OBJECT
 
 public:
@@ -33,7 +32,7 @@ public:
 
   void showPalette();
 
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 protected:
   void keyPressEvent(QKeyEvent *event) override;

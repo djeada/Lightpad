@@ -69,6 +69,7 @@ public:
   void keyPressEvent(QKeyEvent *event);
   bool eventFilter(QObject *watched, QEvent *event) override;
   void openFileAndAddToNewTab(QString path);
+  void openPathsFromCommandLine(const QStringList &paths);
   void closeTabPage(QString filePath);
   void setRowCol(int row, int col);
   void setTabWidth(int width);
@@ -190,6 +191,8 @@ private:
   Preferences *preferences;
   FindReplacePanel *findReplacePanel;
   TerminalTabWidget *terminalWidget;
+  QDockWidget *m_terminalDock;
+  QDockWidget *m_problemsDock;
   QCompleter *completer;
   CompletionEngine *m_completionEngine;
   TextAreaSettings settings;
@@ -334,6 +337,7 @@ private:
   void ensureSourceControlPanel();
   void ensureDebugPanel();
   void ensureTestPanel();
+  void tabifyBottomDock(QDockWidget *dock);
   void ensureStatusLabels();
   void updatePythonEnvironmentLabel();
   void updateSourceControlDockTitle(const QString &repoRoot, bool isRepo);

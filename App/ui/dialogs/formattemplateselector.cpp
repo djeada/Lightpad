@@ -12,7 +12,7 @@
 
 FormatTemplateSelector::FormatTemplateSelector(const QString &filePath,
                                                QWidget *parent)
-    : QDialog(parent), m_filePath(filePath) {
+    : StyledDialog(parent), m_filePath(filePath) {
   setupUi();
   loadTemplates();
 
@@ -419,82 +419,15 @@ QStringList FormatTemplateSelector::getCustomArgs() const {
 }
 
 void FormatTemplateSelector::applyTheme(const Theme &theme) {
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
-
-  for (QGroupBox *groupBox : findChildren<QGroupBox *>()) {
-    groupBox->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
-  }
+  StyledDialog::applyTheme(theme);
 
   if (m_searchEdit) {
     m_searchEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
   }
 
-  for (QComboBox *combo : findChildren<QComboBox *>()) {
-    combo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-  }
+  styleSubduedLabel(m_descriptionLabel);
+  styleSubduedLabel(m_commandLabel);
 
-  if (m_templateList) {
-    m_templateList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
-  }
-
-  for (QLineEdit *edit : findChildren<QLineEdit *>()) {
-    if (edit != m_searchEdit) {
-      edit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-    }
-  }
-
-  if (m_envVarTable) {
-    QString tableStyle = QString("QTableWidget {"
-                                 "  background: %1;"
-                                 "  color: %2;"
-                                 "  border: 1px solid %3;"
-                                 "  border-radius: 4px;"
-                                 "  gridline-color: %3;"
-                                 "}"
-                                 "QHeaderView::section {"
-                                 "  background: %4;"
-                                 "  color: %2;"
-                                 "  border: none;"
-                                 "  border-bottom: 1px solid %3;"
-                                 "  padding: 4px 8px;"
-                                 "  font-weight: bold;"
-                                 "  font-size: 11px;"
-                                 "}")
-                             .arg(theme.surfaceAltColor.name())
-                             .arg(theme.foregroundColor.name())
-                             .arg(theme.borderColor.name())
-                             .arg(theme.surfaceColor.name());
-    m_envVarTable->setStyleSheet(tableStyle);
-  }
-
-  if (m_descriptionLabel) {
-    m_descriptionLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
-  }
-  if (m_commandLabel) {
-    m_commandLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
-  }
-
-  if (m_okButton) {
-    m_okButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
-  }
-  if (m_cancelButton) {
-    m_cancelButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-  }
-  if (m_removeButton) {
-    m_removeButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-  }
-
-  for (QPushButton *btn :
-       {m_browseWorkingDirBtn, m_addEnvVarBtn, m_removeEnvVarBtn}) {
-    if (btn) {
-      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-    }
-  }
-
-  if (m_pythonEnvironmentWidget) {
-    for (QPushButton *btn :
-         m_pythonEnvironmentWidget->findChildren<QPushButton *>()) {
-      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-    }
-  }
+  stylePrimaryButton(m_okButton);
+  styleDangerButton(m_removeButton);
 }

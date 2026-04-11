@@ -1,8 +1,7 @@
 #ifndef GITREBASEDIALOG_H
 #define GITREBASEDIALOG_H
 
-#include "../../settings/theme.h"
-#include <QDialog>
+#include "styleddialog.h"
 
 class GitIntegration;
 class QTreeWidget;
@@ -19,7 +18,7 @@ struct RebaseEntry {
   QString author;
 };
 
-class GitRebaseDialog : public QDialog {
+class GitRebaseDialog : public StyledDialog {
   Q_OBJECT
 
 public:
@@ -40,7 +39,7 @@ private slots:
 
 private:
   void buildUi();
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
   void updateActionForItem(QTreeWidgetItem *item, const QString &action);
   void rebuildComboForItem(QTreeWidgetItem *item, int row);
   void syncEntriesFromTree();

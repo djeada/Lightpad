@@ -1,15 +1,14 @@
 #ifndef PYTHONENVIRONMENTDIALOG_H
 #define PYTHONENVIRONMENTDIALOG_H
 
-#include "../../settings/theme.h"
-#include <QDialog>
+#include "styleddialog.h"
 
 class QLabel;
 class QPlainTextEdit;
 class QPushButton;
 class PythonEnvironmentWidget;
 
-class PythonEnvironmentDialog : public QDialog {
+class PythonEnvironmentDialog : public StyledDialog {
   Q_OBJECT
 
 public:

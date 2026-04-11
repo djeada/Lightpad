@@ -13,7 +13,7 @@
 GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
                                            const QString &filePath,
                                            QWidget *parent)
-    : QDialog(parent), m_git(git), m_filePath(filePath) {
+    : StyledDialog(parent), m_git(git), m_filePath(filePath) {
   setWindowTitle(tr("File History — %1").arg(QFileInfo(filePath).fileName()));
   resize(750, 500);
 
