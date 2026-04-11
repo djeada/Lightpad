@@ -49,6 +49,20 @@ public:
   static QString successInfoLabelStyle(const Theme &theme);
 
   static QString errorInfoLabelStyle(const Theme &theme);
+
+  static QString tabWidgetStyle(const Theme &theme);
+
+  static QString tableWidgetStyle(const Theme &theme);
+
+  static QString plainTextEditStyle(const Theme &theme);
+
+  static QString spinBoxStyle(const Theme &theme);
+
+  static QString dangerButtonStyle(const Theme &theme);
+
+  static QString progressBarStyle(const Theme &theme);
+
+  static QString toolBarStyle(const Theme &theme);
 };
 
 #endif

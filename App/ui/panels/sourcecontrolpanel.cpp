@@ -19,7 +19,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QMenu>
-#include <QMessageBox>
+#include "../dialogs/themedmessagebox.h"
 #include <QPalette>
 #include <QPushButton>
 #include <QSizePolicy>
@@ -950,24 +950,14 @@ void SourceControlPanel::setupRepoUI() {
   connect(discardAllButton, &QPushButton::clicked, [this]() {
     if (!m_git)
       return;
-    QMessageBox msgBox(this);
-    msgBox.setIcon(QMessageBox::Warning);
+    ThemedMessageBox msgBox(this);
+    msgBox.setIcon(ThemedMessageBox::Warning);
     msgBox.setWindowTitle(tr("Discard All Changes"));
     msgBox.setText(tr("Are you sure you want to discard all changes?"));
     msgBox.setInformativeText(tr("This action cannot be undone."));
-    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    msgBox.setDefaultButton(QMessageBox::No);
-    msgBox.setStyleSheet(
-        "QMessageBox { background: #0d1117; }"
-        "QMessageBox QLabel { color: #e6edf3; }"
-        "QPushButton { background: #21262d; color: #e6edf3; border: 1px "
-        "solid #30363d; border-radius: 6px; padding: 6px 16px; margin: "
-        "2px; }"
-        "QPushButton:hover { background: #30363d; }"
-        "QPushButton[text='&Yes'] { background: #da3633; color: white; "
-        "border-color: #da3633; }"
-        "QPushButton[text='&Yes']:hover { background: #b62324; }");
-    if (msgBox.exec() == QMessageBox::Yes) {
+    msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No);
+    msgBox.setDefaultButton(ThemedMessageBox::No);
+    if (msgBox.exec() == ThemedMessageBox::Yes) {
       m_git->discardAllChanges();
     }
   });
@@ -1161,18 +1151,10 @@ void SourceControlPanel::setupRepoUI() {
                 return;
               }
 
-              QMessageBox msgBox(this);
+              ThemedMessageBox msgBox(this);
               msgBox.setWindowTitle(tr("Commit: %1").arg(info.shortHash));
               msgBox.setText(info.subject);
-              msgBox.setDetailedText(message);
-              msgBox.setStyleSheet(
-                  "QMessageBox { background: #0d1117; }"
-                  "QMessageBox QLabel { color: #e6edf3; }"
-                  "QPushButton { background: #21262d; color: #e6edf3; border: "
-                  "1px solid #30363d; border-radius: 6px; padding: 6px 16px; }"
-                  "QPushButton:hover { background: #30363d; }"
-                  "QTextEdit { background: #161b22; color: #e6edf3; "
-                  "font-family: monospace; }");
+              msgBox.setInformativeText(message);
               msgBox.exec();
             }
           });
@@ -1594,16 +1576,10 @@ void SourceControlPanel::onCommitClicked() {
 
   QString message = m_commitMessage->toPlainText().trimmed();
   if (message.isEmpty()) {
-    QMessageBox msgBox(this);
-    msgBox.setIcon(QMessageBox::Warning);
+    ThemedMessageBox msgBox(this);
+    msgBox.setIcon(ThemedMessageBox::Warning);
     msgBox.setWindowTitle(tr("Commit"));
     msgBox.setText(tr("Please enter a commit message."));
-    msgBox.setStyleSheet(
-        "QMessageBox { background: #0d1117; }"
-        "QMessageBox QLabel { color: #e6edf3; }"
-        "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
-        "#30363d; border-radius: 6px; padding: 6px 16px; }"
-        "QPushButton:hover { background: #30363d; }");
     msgBox.exec();
     return;
   }
@@ -1720,26 +1696,16 @@ void SourceControlPanel::onItemContextMenu(const QPoint &pos) {
     discardAction->setShortcut(QKeySequence(Qt::Key_D));
     connect(discardAction, &QAction::triggered, [this, filePath]() {
       if (m_git) {
-        QMessageBox msgBox(this);
-        msgBox.setIcon(QMessageBox::Warning);
+        ThemedMessageBox msgBox(this);
+        msgBox.setIcon(ThemedMessageBox::Warning);
         msgBox.setWindowTitle(tr("Discard Changes"));
         msgBox.setText(
             tr("Are you sure you want to discard changes to this file?"));
         msgBox.setInformativeText(tr("This action cannot be undone."));
-        msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-        msgBox.setDefaultButton(QMessageBox::No);
-        msgBox.setStyleSheet(
-            "QMessageBox { background: #0d1117; }"
-            "QMessageBox QLabel { color: #e6edf3; }"
-            "QPushButton { background: #21262d; color: #e6edf3; border: 1px "
-            "solid #30363d; border-radius: 6px; padding: 6px 16px; margin: "
-            "2px; }"
-            "QPushButton:hover { background: #30363d; }"
-            "QPushButton[text='&Yes'] { background: #da3633; color: white; "
-            "border-color: #da3633; }"
-            "QPushButton[text='&Yes']:hover { background: #b62324; }");
+        msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No);
+        msgBox.setDefaultButton(ThemedMessageBox::No);
 
-        if (msgBox.exec() == QMessageBox::Yes) {
+        if (msgBox.exec() == ThemedMessageBox::Yes) {
           m_git->discardChanges(filePath);
         }
       }
@@ -1930,7 +1896,7 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
       }
     }
     if (branchNames.isEmpty()) {
-      QMessageBox::information(
+      ThemedMessageBox::information(
           this, tr("Move Commit"),
           tr("No other local branches available. Create a branch first."));
       return;
@@ -2189,39 +2155,24 @@ void SourceControlPanel::onDeleteBranchClicked() {
   QString selectedBranch = m_branchSelector->currentData().toString();
 
   if (selectedBranch == currentBranch) {
-    QMessageBox msgBox(this);
-    msgBox.setIcon(QMessageBox::Warning);
+    ThemedMessageBox msgBox(this);
+    msgBox.setIcon(ThemedMessageBox::Warning);
     msgBox.setWindowTitle(tr("Delete Branch"));
     msgBox.setText(tr("Cannot delete the current branch. Please switch to "
                       "another branch first."));
-    msgBox.setStyleSheet(
-        "QMessageBox { background: #0d1117; }"
-        "QMessageBox QLabel { color: #e6edf3; }"
-        "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
-        "#30363d; border-radius: 6px; padding: 6px 16px; }"
-        "QPushButton:hover { background: #30363d; }");
     msgBox.exec();
     return;
   }
 
-  QMessageBox msgBox(this);
-  msgBox.setIcon(QMessageBox::Question);
+  ThemedMessageBox msgBox(this);
+  msgBox.setIcon(ThemedMessageBox::Question);
   msgBox.setWindowTitle(tr("Delete Branch"));
   msgBox.setText(
       tr("Are you sure you want to delete branch '%1'?").arg(selectedBranch));
-  msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-  msgBox.setDefaultButton(QMessageBox::No);
-  msgBox.setStyleSheet(
-      "QMessageBox { background: #0d1117; }"
-      "QMessageBox QLabel { color: #e6edf3; }"
-      "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
-      "#30363d; border-radius: 6px; padding: 6px 16px; margin: 2px; }"
-      "QPushButton:hover { background: #30363d; }"
-      "QPushButton[text='&Yes'] { background: #da3633; color: white; "
-      "border-color: #da3633; }"
-      "QPushButton[text='&Yes']:hover { background: #b62324; }");
+  msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No);
+  msgBox.setDefaultButton(ThemedMessageBox::No);
 
-  if (msgBox.exec() == QMessageBox::Yes) {
+  if (msgBox.exec() == ThemedMessageBox::Yes) {
     if (m_git->deleteBranch(selectedBranch, false)) {
       updateBranchSelector();
     }
@@ -2498,19 +2449,13 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
 
 bool SourceControlPanel::confirmDestructive(const QString &title,
                                             const QString &text) {
-  QMessageBox msgBox(this);
-  msgBox.setIcon(QMessageBox::Warning);
+  ThemedMessageBox msgBox(this);
+  msgBox.setIcon(ThemedMessageBox::Warning);
   msgBox.setWindowTitle(title);
   msgBox.setText(text);
-  msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-  msgBox.setDefaultButton(QMessageBox::No);
-  msgBox.setStyleSheet(
-      "QMessageBox { background: #0d1117; }"
-      "QMessageBox QLabel { color: #e6edf3; }"
-      "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
-      "#30363d; border-radius: 6px; padding: 6px 16px; }"
-      "QPushButton:hover { background: #30363d; }");
-  return msgBox.exec() == QMessageBox::Yes;
+  msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No);
+  msgBox.setDefaultButton(ThemedMessageBox::No);
+  return msgBox.exec() == ThemedMessageBox::Yes;
 }
 
 void SourceControlPanel::onHistorySearchChanged(const QString &text) {

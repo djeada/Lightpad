@@ -38,6 +38,7 @@ private slots:
   void testRegistrySingleton();
   void testBuiltinAdapters();
   void testPythonAdapterUsesExplicitInterpreterOverride();
+  void testPythonLaunchArgumentsUseResolvedInterpreter();
   void testAdapterLookupByFile();
   void testAdapterLookupByLanguage();
   void testAdapterLookupByConfiguration();
@@ -439,6 +440,45 @@ void TestDap::testPythonAdapterUsesExplicitInterpreterOverride() {
   const QJsonObject launchConfig =
       pythonAdapter->createLaunchConfig("/tmp/example.py", tempDir.path());
   QCOMPARE(launchConfig["type"].toString(), QString("debugpy"));
+}
+
+void TestDap::testPythonLaunchArgumentsUseResolvedInterpreter() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+
+  QDir temp(tempDir.path());
+  QVERIFY(temp.mkpath("tools"));
+
+  const QString fakePythonPath = temp.filePath("tools/python");
+  QFile fakePython(fakePythonPath);
+  QVERIFY(fakePython.open(QIODevice::WriteOnly | QIODevice::Text));
+  fakePython.write("#!/bin/sh\nexit 0\n");
+  fakePython.close();
+  QVERIFY(QFile::setPermissions(
+      fakePythonPath, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                          QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                          QFileDevice::ExeGroup | QFileDevice::ReadOther |
+                          QFileDevice::ExeOther));
+
+  auto pythonAdapter =
+      DebugAdapterRegistry::instance().adapter("python-debugpy");
+  QVERIFY(pythonAdapter != nullptr);
+
+  DebugConfiguration configuration;
+  configuration.adapterId = "python-debugpy";
+  configuration.type = "debugpy";
+  configuration.request = "launch";
+  configuration.program = "/tmp/example.py";
+  configuration.cwd = tempDir.path();
+  configuration.pythonMode = PythonProjectEnvironment::customInterpreterMode();
+  configuration.pythonInterpreter = fakePythonPath;
+
+  const QJsonObject launchArguments =
+      pythonAdapter->launchArguments(configuration);
+  QCOMPARE(launchArguments["python"].toString(), fakePythonPath);
+  QCOMPARE(launchArguments["program"].toString(), QString("/tmp/example.py"));
+  QCOMPARE(launchArguments["env"].toObject()["PYTHONUNBUFFERED"].toString(),
+           QString("1"));
 }
 
 void TestDap::testAdapterLookupByFile() {

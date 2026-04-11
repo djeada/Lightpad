@@ -1,19 +1,17 @@
 #include "mergeconflictdialog.h"
-#include "../uistylehelper.h"
 #include <QFileInfo>
-#include <QMessageBox>
+#include "themedmessagebox.h"
 
 MergeConflictDialog::MergeConflictDialog(GitIntegration *git, QWidget *parent)
-    : QDialog(parent), m_git(git), m_fileList(nullptr), m_oursPreview(nullptr),
-      m_theirsPreview(nullptr), m_statusLabel(nullptr),
-      m_conflictCountLabel(nullptr), m_acceptOursButton(nullptr),
-      m_acceptTheirsButton(nullptr), m_openEditorButton(nullptr),
-      m_markResolvedButton(nullptr), m_abortButton(nullptr),
-      m_continueButton(nullptr) {
+    : StyledDialog(parent), m_git(git), m_fileList(nullptr),
+      m_oursPreview(nullptr), m_theirsPreview(nullptr),
+      m_statusLabel(nullptr), m_conflictCountLabel(nullptr),
+      m_acceptOursButton(nullptr), m_acceptTheirsButton(nullptr),
+      m_openEditorButton(nullptr), m_markResolvedButton(nullptr),
+      m_abortButton(nullptr), m_continueButton(nullptr) {
   setWindowTitle(tr("Resolve Merge Conflicts"));
   setMinimumSize(800, 600);
   setupUI();
-  applyStyles();
 }
 
 MergeConflictDialog::~MergeConflictDialog() {}
@@ -170,93 +168,6 @@ void MergeConflictDialog::setupUI() {
   updateButtons();
 }
 
-void MergeConflictDialog::applyStyles() {
-  setStyleSheet(R"(
-        QDialog {
-            background: #0d1117;
-        }
-        QListWidget {
-            background: #161b22;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            font-size: 12px;
-        }
-        QListWidget::item {
-            padding: 8px 12px;
-            border-bottom: 1px solid #21262d;
-        }
-        QListWidget::item:selected {
-            background: #1f6feb;
-        }
-        QListWidget::item:hover {
-            background: #21262d;
-        }
-        QTextEdit {
-            background: #161b22;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            font-family: monospace;
-            font-size: 12px;
-            padding: 8px;
-        }
-        QPushButton {
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 8px 16px;
-            font-size: 12px;
-        }
-        QPushButton:hover {
-            background: #30363d;
-        }
-        QPushButton:disabled {
-            background: #161b22;
-            color: #484f58;
-        }
-        QPushButton#acceptOursButton {
-            background: #238636;
-            border-color: #238636;
-            color: white;
-        }
-        QPushButton#acceptOursButton:hover {
-            background: #2ea043;
-        }
-        QPushButton#acceptTheirsButton {
-            background: #1f6feb;
-            border-color: #1f6feb;
-            color: white;
-        }
-        QPushButton#acceptTheirsButton:hover {
-            background: #388bfd;
-        }
-        QPushButton#abortButton {
-            background: #da3633;
-            border-color: #da3633;
-            color: white;
-        }
-        QPushButton#abortButton:hover {
-            background: #f85149;
-        }
-        QPushButton#continueButton {
-            background: #238636;
-            border-color: #238636;
-            color: white;
-            font-weight: bold;
-        }
-        QPushButton#continueButton:hover {
-            background: #2ea043;
-        }
-    )");
-
-  m_acceptOursButton->setObjectName("acceptOursButton");
-  m_acceptTheirsButton->setObjectName("acceptTheirsButton");
-  m_abortButton->setObjectName("abortButton");
-  m_continueButton->setObjectName("continueButton");
-}
-
 void MergeConflictDialog::setConflictedFiles(const QStringList &files) {
   m_fileList->clear();
 
@@ -391,13 +302,13 @@ void MergeConflictDialog::onAbortMergeClicked() {
   if (!m_git)
     return;
 
-  int result = QMessageBox::question(
+  int result = ThemedMessageBox::question(
       this, tr("Abort Merge"),
       tr("Are you sure you want to abort the merge?\nAll merge progress will "
          "be lost."),
-      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+      ThemedMessageBox::Yes | ThemedMessageBox::No, ThemedMessageBox::No);
 
-  if (result == QMessageBox::Yes) {
+  if (result == ThemedMessageBox::Yes) {
     if (m_git->abortMerge()) {
       accept();
     }
@@ -409,7 +320,7 @@ void MergeConflictDialog::onContinueMergeClicked() {
     return;
 
   if (m_git->hasMergeConflicts()) {
-    QMessageBox::warning(
+    ThemedMessageBox::warning(
         this, tr("Unresolved Conflicts"),
         tr("There are still unresolved conflicts. Please resolve all conflicts "
            "before completing the merge."));
@@ -422,47 +333,12 @@ void MergeConflictDialog::onContinueMergeClicked() {
 }
 
 void MergeConflictDialog::applyTheme(const Theme &theme) {
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
+  StyledDialog::applyTheme(theme);
 
-  if (m_fileList) {
-    m_fileList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
-  }
-
-  QString textEditStyle = QString("QTextEdit {"
-                                  "  background: %1;"
-                                  "  color: %2;"
-                                  "  border: 1px solid %3;"
-                                  "  border-radius: 4px;"
-                                  "}")
-                              .arg(theme.surfaceAltColor.name())
-                              .arg(theme.foregroundColor.name())
-                              .arg(theme.borderColor.name());
-
-  if (m_oursPreview) {
-    m_oursPreview->setStyleSheet(textEditStyle);
-  }
-  if (m_theirsPreview) {
-    m_theirsPreview->setStyleSheet(textEditStyle);
-  }
-
-  if (m_acceptOursButton) {
-    m_acceptOursButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
-  }
-  if (m_acceptTheirsButton) {
-    m_acceptTheirsButton->setStyleSheet(
-        UIStyleHelper::primaryButtonStyle(theme));
-  }
-  for (QPushButton *btn : {m_openEditorButton, m_markResolvedButton,
-                           m_abortButton, m_continueButton}) {
-    if (btn) {
-      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-    }
-  }
-
-  if (m_statusLabel) {
-    m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
-  }
-  if (m_conflictCountLabel) {
-    m_conflictCountLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
-  }
+  stylePrimaryButton(m_acceptOursButton);
+  stylePrimaryButton(m_acceptTheirsButton);
+  styleDangerButton(m_abortButton);
+  stylePrimaryButton(m_continueButton);
+  styleSubduedLabel(m_statusLabel);
+  styleTitleLabel(m_conflictCountLabel);
 }

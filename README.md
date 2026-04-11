@@ -28,11 +28,9 @@ Cpp, Python, JavaScript, TypeScript, Java, Rust, Go, HTML, CSS, JSON, YAML, Mark
 
 ## Build on Linux (Ubuntu/Debian)
 ```bash
-sudo apt-get update
-sudo apt-get install -y build-essential cmake qt6-base-dev qt6-pdf-dev libqt6pdf6 libqt6pdfwidgets6
-
 git clone https://github.com/djeada/Lightpad.git
 cd Lightpad
+./scripts/install-deps.sh
 cmake -S . -B build -DBUILD_TESTS=ON
 cmake --build build
 ```
@@ -53,6 +51,9 @@ make install
 make build
 make run
 ```
+
+`make install` calls `scripts/install-deps.sh`, which installs the default Qt6-based development toolchain on supported platforms.
+Use `make install INSTALL_ARGS=--dry-run` to preview what it will do.
 
 ## Build on macOS
 ```bash

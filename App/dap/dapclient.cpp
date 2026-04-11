@@ -25,7 +25,8 @@ DapClient::DapClient(QObject *parent)
       m_nextSeq(1), m_currentThreadId(0),
       m_functionBreakpointsConfigured(false),
       m_hasDeferredFunctionBreakpoints(false), m_dataBreakpointsSupported(true),
-      m_dataBreakpointsConfigured(false), m_isAttach(false) {}
+      m_dataBreakpointsConfigured(false), m_pausePending(false),
+      m_isAttach(false) {}
 
 DapClient::~DapClient() { stop(); }
 
@@ -111,6 +112,7 @@ void DapClient::stop(bool terminateDebuggee) {
   m_hasDeferredFunctionBreakpoints = false;
   m_dataBreakpointsSupported = true;
   m_dataBreakpointsConfigured = false;
+  m_pausePending = false;
   setState(State::Disconnected);
 
   LOG_INFO("Debug adapter stopped");
@@ -234,13 +236,13 @@ void DapClient::terminate() {
 }
 
 void DapClient::configurationDone() {
-  if (!supportsConfigurationDoneRequest()) {
-    LOG_DEBUG("DAP: Skipping configurationDone (adapter does not request it)");
-    return;
-  }
+  // Always send configurationDone. Most adapters (including debugpy) require it
+  // before execution begins. If the adapter does not support it, the error
+  // handler gracefully ignores the failure response.
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "configurationDone";
   sendRequest("configurationDone", {}, seq);
+  LOG_DEBUG("DAP: Sent configurationDone request");
 }
 
 bool DapClient::supportsConfigurationDoneRequest() const {
@@ -350,8 +352,19 @@ void DapClient::continueExecution(int threadId) {
 }
 
 void DapClient::pause(int threadId) {
+  const int resolvedThreadId = threadId > 0 ? threadId : m_currentThreadId;
+  if (resolvedThreadId <= 0) {
+    m_pausePending = true;
+    if (!hasPendingRequestTag("threads")) {
+      getThreads();
+    } else {
+      LOG_DEBUG("DAP: Deferring pause until thread list is available");
+    }
+    return;
+  }
+
   QJsonObject args;
-  args["threadId"] = threadId > 0 ? threadId : m_currentThreadId;
+  args["threadId"] = resolvedThreadId;
 
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "pause";
@@ -506,6 +519,9 @@ void DapClient::setVariable(int variablesReference, const QString &name,
 void DapClient::respondToRunInTerminal(int requestSeq, bool success,
                                        qint64 processId,
                                        const QString &message) {
+  LOG_DEBUG(QString("DAP: respondToRunInTerminal — success=%1, pid=%2")
+                .arg(success)
+                .arg(processId));
   QJsonObject body;
   if (success && processId > 0) {
     body["processId"] = static_cast<int>(processId);
@@ -756,6 +772,14 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
       return;
     }
 
+    if (command == "threads" && m_pausePending) {
+      m_pausePending = false;
+      emit error(QString("Pause failed: %1")
+                     .arg(message.isEmpty() ? "unable to resolve active thread"
+                                            : message));
+      return;
+    }
+
     LOG_ERROR(QString("DAP error for %1: %2").arg(command).arg(message));
 
     if (command == "evaluate") {
@@ -788,12 +812,17 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
       m_dataBreakpointsSupported = true;
     }
     m_dataBreakpointsConfigured = false;
-    setState(State::Ready);
 
-    QJsonObject initEvent;
-    initEvent["seq"] = m_nextSeq++;
-    initEvent["type"] = "event";
-    initEvent["event"] = "initialized";
+    LOG_DEBUG(QString("DAP: Capabilities received — "
+                      "supportsConfigurationDoneRequest=%1, "
+                      "supportsRestartRequest=%2")
+                  .arg(m_capabilities
+                           .value("supportsConfigurationDoneRequest")
+                           .toBool(false))
+                  .arg(m_capabilities.value("supportsRestartRequest")
+                           .toBool(false)));
+
+    setState(State::Ready);
 
     emit initialized();
     LOG_INFO("DAP client initialized");
@@ -819,6 +848,17 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     for (const auto &val : bpArray) {
       breakpoints.append(DapBreakpoint::fromJson(val.toObject()));
     }
+    int verifiedCount = 0;
+    for (const auto &bp : breakpoints) {
+      if (bp.verified) {
+        ++verifiedCount;
+      }
+    }
+    LOG_DEBUG(QString("DAP: setBreakpoints response for %1 — %2 breakpoints "
+                      "(%3 verified)")
+                  .arg(sourcePath)
+                  .arg(breakpoints.size())
+                  .arg(verifiedCount));
     emit breakpointsSet(sourcePath, breakpoints);
   } else if (command == "threads") {
     QList<DapThread> threads;
@@ -826,7 +866,18 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     for (const auto &val : threadArray) {
       threads.append(DapThread::fromJson(val.toObject()));
     }
+    if (m_currentThreadId <= 0 && !threads.isEmpty()) {
+      m_currentThreadId = threads.first().id;
+    }
     emit threadsReceived(threads);
+    if (m_pausePending) {
+      m_pausePending = false;
+      if (m_currentThreadId > 0) {
+        pause(m_currentThreadId);
+      } else {
+        emit error("Pause failed: no threads reported by adapter");
+      }
+    }
   } else if (command == "stackTrace") {
     int threadId = 0;
     if (pendingCommand.startsWith("stackTrace:")) {
@@ -898,6 +949,11 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
 
   if (event == "stopped") {
     DapStoppedEvent evt = DapStoppedEvent::fromJson(body);
+    LOG_DEBUG(QString("DAP: Stopped event — reason=%1, threadId=%2, "
+                      "allThreadsStopped=%3")
+                  .arg(static_cast<int>(evt.reason))
+                  .arg(evt.threadId)
+                  .arg(evt.allThreadsStopped));
     m_currentThreadId = evt.threadId;
     setState(State::Stopped);
     emit stopped(evt);
@@ -943,6 +999,10 @@ void DapClient::handleReverseRequest(int seq, const QString &command,
     for (const QJsonValue &argValue : argsArray) {
       commandLine.append(argValue.toString());
     }
+
+    LOG_DEBUG(QString("DAP: runInTerminal — command=%1, cwd=%2")
+                  .arg(commandLine.join(' '))
+                  .arg(arguments["cwd"].toString()));
 
     if (commandLine.isEmpty()) {
       sendResponse(seq, command, false, {}, "runInTerminal missing command");

@@ -1229,11 +1229,7 @@ void DebugPanel::setDapClient(DapClient *client) {
   }
 
   m_dapClient = client;
-  m_expectStopEvent = true;
-  m_hasLastStopEvent = false;
-  m_lastStoppedThreadId = 0;
-  m_lastStoppedReason = DapStoppedReason::Unknown;
-  m_pendingConsoleEvaluations.clear();
+  clearAll();
 
   if (m_dapClient) {
     connect(m_dapClient, &DapClient::stateChanged, this,
@@ -1259,6 +1255,31 @@ void DebugPanel::setDapClient(DapClient *client) {
             &DebugPanel::onEvaluateError);
 
     WatchManager::instance().setDapClient(m_dapClient);
+
+    // Recover the inspector state if the panel attaches after the adapter has
+    // already stopped and emitted its initial pause event.
+    QTimer::singleShot(0, this, [this]() {
+      if (!m_dapClient || m_dapClient->state() != DapClient::State::Stopped) {
+        return;
+      }
+
+      m_expectStopEvent = false;
+      m_currentThreadId = m_dapClient->currentThreadId();
+      if (m_currentThreadId > 0) {
+        m_dapClient->getStackTrace(m_currentThreadId, 0,
+                                   MAX_STACK_FRAMES_PER_REFRESH);
+      } else {
+        m_dapClient->getThreads();
+      }
+    });
+
+    if (m_dapClient->state() == DapClient::State::Running) {
+      appendConsoleLine(
+          tr("Program is running. Variables and watches appear after a "
+             "breakpoint or pause. If the program is waiting for input, type "
+             "in the terminal panel."),
+          consoleMutedColor());
+    }
   }
 
   updateToolbarState();

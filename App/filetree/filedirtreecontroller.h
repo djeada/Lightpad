@@ -5,7 +5,6 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QInputDialog>
-#include <QMessageBox>
 #include <QObject>
 #include <QWidget>
 

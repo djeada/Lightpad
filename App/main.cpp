@@ -59,5 +59,10 @@ int main(int argv, char **args) {
 
   MainWindow w;
 
+  QStringList arguments = app.arguments();
+  if (arguments.size() > 1) {
+    w.openPathsFromCommandLine(arguments.mid(1));
+  }
+
   return app.exec();
 }

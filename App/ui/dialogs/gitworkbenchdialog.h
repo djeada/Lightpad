@@ -1,10 +1,9 @@
 #ifndef GITWORKBENCHDIALOG_H
 #define GITWORKBENCHDIALOG_H
 
+#include "styleddialog.h"
 #include "../../git/gitintegration.h"
-#include "../../settings/theme.h"
 #include <QCheckBox>
-#include <QDialog>
 
 class QComboBox;
 class QHBoxLayout;
@@ -36,7 +35,7 @@ struct WorkbenchRebaseEntry {
   QList<GitCommitFileStat> fileStats;
 };
 
-class GitWorkbenchDialog : public QDialog {
+class GitWorkbenchDialog : public StyledDialog {
   Q_OBJECT
 
 public:
@@ -94,7 +93,7 @@ private:
   void buildCommitCanvas(QVBoxLayout *layout);
   void buildInspector(QVBoxLayout *layout);
   void buildBottomBar(QVBoxLayout *mainLayout);
-  void applyTheme();
+  void applyTheme(const Theme &theme) override;
 
   void loadBranches();
   void loadCommits(const QString &branch = QString());
@@ -130,7 +129,6 @@ private:
   QString ghostButtonStyle() const;
 
   GitIntegration *m_git;
-  Theme m_theme;
   bool m_rewriteMode;
   QString m_currentBranch;
   QList<WorkbenchRebaseEntry> m_entries;

@@ -1,9 +1,8 @@
 #ifndef GOTOSYMBOLDIALOG_H
 #define GOTOSYMBOLDIALOG_H
 
+#include "styledpopupdialog.h"
 #include "../../lsp/lspclient.h"
-#include "../../settings/theme.h"
-#include <QDialog>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QListWidget>
@@ -18,7 +17,7 @@ struct SymbolItem {
   int score;
 };
 
-class GoToSymbolDialog : public QDialog {
+class GoToSymbolDialog : public StyledPopupDialog {
   Q_OBJECT
 
 public:
@@ -31,7 +30,7 @@ public:
 
   void showDialog();
 
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 signals:
 

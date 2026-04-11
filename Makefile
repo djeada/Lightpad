@@ -1,12 +1,19 @@
 # Lightpad - Makefile
 # Provides standard targets for building, running, testing, and formatting
 
+.SHELLFLAGS := -eu -o pipefail -c
+SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # Configuration
 BUILD_DIR := build
 BINARY_NAME := Lightpad
 DEFAULT_BUILD_TYPE ?= Release
+INSTALL_SCRIPT := scripts/install-deps.sh
+INSTALL_ARGS ?=
+CMAKE ?= $(or $(shell command -v cmake 2>/dev/null),$(shell command -v cmake3 2>/dev/null))
+CTEST ?= $(or $(shell command -v ctest 2>/dev/null),$(shell command -v ctest3 2>/dev/null))
+BUILD_PARALLELISM ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 # Formatting config
 CLANG_FORMAT ?= clang-format
@@ -27,7 +34,7 @@ help:
 	@echo "$(BOLD)Lightpad - Build System$(RESET)"
 	@echo ""
 	@echo "$(BOLD)Available targets:$(RESET)"
-	@echo "  $(GREEN)install$(RESET)       - Install dependencies (Ubuntu/Debian)"
+	@echo "  $(GREEN)install$(RESET)       - Install dependencies via scripts/install-deps.sh"
 	@echo "  $(GREEN)check-deps$(RESET)    - Check if dependencies are installed"
 	@echo "  $(GREEN)configure$(RESET)     - Configure build with CMake"
 	@echo "  $(GREEN)build$(RESET)         - Build the project"
@@ -47,32 +54,40 @@ help:
 	@echo "  make build"
 	@echo "  make test"
 
-# Install dependencies (Ubuntu/Debian)
+# Install dependencies
 .PHONY: install
 install:
-	@echo "$(BOLD)$(BLUE)Installing dependencies...$(RESET)"
-	@sudo apt-get update
-	@sudo apt-get install -y \
-		build-essential \
-		cmake \
-		qtbase5-dev \
-		qttools5-dev-tools
-	@echo "$(GREEN)✓ Dependencies installed successfully$(RESET)"
+	@echo "$(BOLD)$(BLUE)Installing dependencies via $(INSTALL_SCRIPT)...$(RESET)"
+	@if [ -f "$(INSTALL_SCRIPT)" ]; then \
+		bash "$(INSTALL_SCRIPT)" $(INSTALL_ARGS); \
+	else \
+		echo "$(RED)$(INSTALL_SCRIPT) not found$(RESET)"; exit 1; \
+	fi
+	@echo "$(GREEN)✓ Dependency installation finished$(RESET)"
 
 # Check dependencies
 .PHONY: check-deps
 check-deps:
 	@echo "$(BOLD)$(BLUE)Checking dependencies...$(RESET)"
 	@missing=0; \
-	for cmd in cmake g++ qmake; do \
+	for cmd in g++ pkg-config; do \
 		if ! command -v $$cmd >/dev/null 2>&1; then \
 			echo "$(RED)Missing: $$cmd$(RESET)"; \
 			missing=1; \
 		fi; \
 	done; \
+	if [ -z "$(CMAKE)" ]; then \
+		echo "$(RED)Missing: cmake (or cmake3)$(RESET)"; \
+		missing=1; \
+	fi; \
+	if command -v pkg-config >/dev/null 2>&1 && ! pkg-config --exists Qt6Core; then \
+		echo "$(RED)Missing: Qt6 development packages (pkg-config could not find Qt6Core)$(RESET)"; \
+		missing=1; \
+	fi; \
 	if [ $$missing -eq 0 ]; then \
 		echo "$(GREEN)✓ All required tools found$(RESET)"; \
 	else \
+		echo "$(YELLOW)Hint: run 'make install' to install the default Qt6 toolchain$(RESET)"; \
 		exit 1; \
 	fi
 
@@ -80,18 +95,33 @@ check-deps:
 build-dir:
 	@mkdir -p $(BUILD_DIR)
 
+.PHONY: require-cmake require-ctest
+require-cmake:
+	@if [ -z "$(CMAKE)" ]; then \
+		echo "$(RED)CMake was not found on PATH.$(RESET)"; \
+		echo "$(YELLOW)Run 'make install' or install CMake 3.16+ manually.$(RESET)"; \
+		exit 127; \
+	fi
+
+require-ctest:
+	@if [ -z "$(CTEST)" ]; then \
+		echo "$(RED)CTest was not found on PATH.$(RESET)"; \
+		echo "$(YELLOW)CTest is normally installed with CMake. Run 'make install' first.$(RESET)"; \
+		exit 127; \
+	fi
+
 # Configure build with CMake
 .PHONY: configure
-configure: build-dir
+configure: build-dir require-cmake
 	@echo "$(BOLD)$(BLUE)Configuring build with CMake...$(RESET)"
-	@cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(DEFAULT_BUILD_TYPE) -DBUILD_TESTS=ON
+	@"$(CMAKE)" -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(DEFAULT_BUILD_TYPE) -DBUILD_TESTS=ON
 	@echo "$(GREEN)✓ Configuration complete$(RESET)"
 
 # Build the project
 .PHONY: build
 build: configure
 	@echo "$(BOLD)$(BLUE)Building project...$(RESET)"
-	@cmake --build $(BUILD_DIR) -- -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+	@"$(CMAKE)" --build $(BUILD_DIR) --parallel $(BUILD_PARALLELISM)
 	@echo "$(GREEN)✓ Build complete$(RESET)"
 
 # Build everything (alias for build)
@@ -100,18 +130,18 @@ all: build
 
 # Debug build
 .PHONY: debug
-debug: build-dir
+debug: build-dir require-cmake
 	@echo "$(BOLD)$(BLUE)Configuring debug build...$(RESET)"
-	@cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
-	@cmake --build $(BUILD_DIR) -- -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+	@"$(CMAKE)" -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
+	@"$(CMAKE)" --build $(BUILD_DIR) --parallel $(BUILD_PARALLELISM)
 	@echo "$(GREEN)✓ Debug build complete$(RESET)"
 
 # Release build
 .PHONY: release
-release: build-dir
+release: build-dir require-cmake
 	@echo "$(BOLD)$(BLUE)Configuring release build...$(RESET)"
-	@cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
-	@cmake --build $(BUILD_DIR) -- -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+	@"$(CMAKE)" -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+	@"$(CMAKE)" --build $(BUILD_DIR) --parallel $(BUILD_PARALLELISM)
 	@echo "$(GREEN)✓ Release build complete$(RESET)"
 
 # Run the application
@@ -123,6 +153,9 @@ run: build
 		BIN_PATH="$(BUILD_DIR)/$(BINARY_NAME)"; \
 	fi; \
 	if [ ! -x "$$BIN_PATH" ]; then \
+		BIN_PATH="$(BUILD_DIR)/App/$(BINARY_NAME).app/Contents/MacOS/$(BINARY_NAME)"; \
+	fi; \
+	if [ ! -x "$$BIN_PATH" ]; then \
 		echo "$(RED)$(BINARY_NAME) not found in build output$(RESET)"; \
 		exit 127; \
 	fi; \
@@ -130,9 +163,9 @@ run: build
 
 # Run tests
 .PHONY: test
-test: build
+test: build require-ctest
 	@echo "$(BOLD)$(BLUE)Running tests...$(RESET)"
-	@ctest --test-dir $(BUILD_DIR) --output-on-failure
+	@"$(CTEST)" --test-dir $(BUILD_DIR) --output-on-failure
 
 # Clean build directory
 .PHONY: clean

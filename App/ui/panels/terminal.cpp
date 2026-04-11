@@ -14,6 +14,7 @@
 #include <QMouseEvent>
 #include <QProcessEnvironment>
 #include <QScrollBar>
+#include <QSizePolicy>
 #include <QTextBlock>
 #include <QTextCharFormat>
 #include <QTextCursor>
@@ -34,7 +35,10 @@ Terminal::Terminal(QWidget *parent)
       m_urlRegex(R"((https?://|ftp://|file://)[^\s<>\"\'\]\)]+)"),
       m_filePathRegex(R"((?:^|[\s:])(/[^\s:]+|[A-Za-z]:\\[^\s:]+))"),
       m_inputStartPosition(0), m_baseFontSize(kDefaultFontSize),
-      m_contextMenu(nullptr), m_copyAction(nullptr) {
+      m_contextMenu(nullptr), m_copyAction(nullptr),
+      m_runInputHistoryIndex(0), m_runInputIndicator(nullptr),
+      m_runInputIndicatorTimer(nullptr), m_runInputIndicatorActive(false),
+      m_runInputCursorVisible(false) {
   ui->setupUi(this);
 
   m_shellProfile = ShellProfileManager::instance().defaultProfile();
@@ -86,6 +90,7 @@ void Terminal::setupTerminal() {
 
   ui->cwdLabel->setFont(monoFont);
   updateCwdLabel();
+  setupInputIndicator();
 
   updateStyleSheet();
 
@@ -155,6 +160,282 @@ void Terminal::removeInputText(bool backwards) {
   }
 
   ui->textEdit->setTextCursor(cursor);
+}
+
+QString Terminal::takePendingInput() {
+  QTextCursor cursor(ui->textEdit->document());
+  cursor.movePosition(QTextCursor::End);
+  int endPos = cursor.position();
+  if (endPos <= m_inputStartPosition) {
+    return QString();
+  }
+  cursor.setPosition(m_inputStartPosition);
+  cursor.setPosition(endPos, QTextCursor::KeepAnchor);
+  QString pending = cursor.selectedText();
+  cursor.removeSelectedText();
+  return pending;
+}
+
+bool Terminal::handleCommonInputKey(QKeyEvent *keyEvent) {
+  const Qt::KeyboardModifiers mods = keyEvent->modifiers();
+  const bool ctrl = mods & Qt::ControlModifier;
+  const bool shift = mods & Qt::ShiftModifier;
+  const QTextCursor::MoveMode sel =
+      shift ? QTextCursor::KeepAnchor : QTextCursor::MoveAnchor;
+
+  switch (keyEvent->key()) {
+  case Qt::Key_Home: {
+    QTextCursor cursor = ui->textEdit->textCursor();
+    cursor.setPosition(m_inputStartPosition, sel);
+    ui->textEdit->setTextCursor(cursor);
+    return true;
+  }
+  case Qt::Key_End: {
+    QTextCursor cursor = ui->textEdit->textCursor();
+    cursor.movePosition(QTextCursor::End, sel);
+    ui->textEdit->setTextCursor(cursor);
+    return true;
+  }
+  case Qt::Key_Left: {
+    QTextCursor cursor = ui->textEdit->textCursor();
+    if (!shift && cursor.hasSelection()) {
+      int pos = qMin(cursor.position(), cursor.anchor());
+      cursor.setPosition(qMax(pos, m_inputStartPosition));
+      ui->textEdit->setTextCursor(cursor);
+      return true;
+    }
+    if (cursor.position() <= m_inputStartPosition && !shift) {
+      return true;
+    }
+    if (ctrl) {
+      cursor.movePosition(QTextCursor::WordLeft, sel);
+    } else {
+      cursor.movePosition(QTextCursor::Left, sel);
+    }
+    if (cursor.position() < m_inputStartPosition && !shift) {
+      cursor.setPosition(m_inputStartPosition);
+    }
+    ui->textEdit->setTextCursor(cursor);
+    return true;
+  }
+  case Qt::Key_Right: {
+    QTextCursor cursor = ui->textEdit->textCursor();
+    if (!shift && cursor.hasSelection()) {
+      int pos = qMax(cursor.position(), cursor.anchor());
+      cursor.setPosition(pos);
+      ui->textEdit->setTextCursor(cursor);
+      return true;
+    }
+    if (ctrl) {
+      cursor.movePosition(QTextCursor::WordRight, sel);
+    } else {
+      cursor.movePosition(QTextCursor::Right, sel);
+    }
+    ui->textEdit->setTextCursor(cursor);
+    return true;
+  }
+
+  case Qt::Key_C:
+    if (ctrl && shift) {
+      if (ui->textEdit->textCursor().hasSelection()) {
+        ui->textEdit->copy();
+      }
+      return true;
+    }
+    if (ctrl)
+      return false;
+    break;
+
+  case Qt::Key_V:
+    if (ctrl && shift) {
+      insertInputText(QApplication::clipboard()->text());
+      return true;
+    }
+    if (ctrl)
+      return false;
+    break;
+
+  case Qt::Key_X:
+    if (ctrl)
+      return true;
+    break;
+
+  case Qt::Key_L:
+    if (ctrl) {
+      clear();
+      return true;
+    }
+    break;
+
+  case Qt::Key_A:
+    if (ctrl) {
+      QTextCursor cursor = ui->textEdit->textCursor();
+      cursor.setPosition(m_inputStartPosition);
+      ui->textEdit->setTextCursor(cursor);
+      return true;
+    }
+    break;
+
+  case Qt::Key_E:
+    if (ctrl) {
+      ui->textEdit->moveCursor(QTextCursor::End);
+      return true;
+    }
+    break;
+
+  case Qt::Key_W:
+    if (ctrl) {
+      QTextCursor cursor = ui->textEdit->textCursor();
+      if (cursor.position() <= m_inputStartPosition) {
+        return true;
+      }
+      cursor.movePosition(QTextCursor::WordLeft, QTextCursor::KeepAnchor);
+      if (cursor.position() < m_inputStartPosition) {
+        cursor.setPosition(cursor.anchor());
+        cursor.setPosition(m_inputStartPosition, QTextCursor::KeepAnchor);
+        // Swap so deletion goes backward
+        int a = cursor.anchor(), p = cursor.position();
+        cursor.setPosition(p);
+        cursor.setPosition(a, QTextCursor::KeepAnchor);
+      }
+      cursor.removeSelectedText();
+      ui->textEdit->setTextCursor(cursor);
+      return true;
+    }
+    break;
+
+  case Qt::Key_U:
+    if (ctrl) {
+      QTextCursor cursor = ui->textEdit->textCursor();
+      int pos = cursor.position();
+      if (pos <= m_inputStartPosition) {
+        return true;
+      }
+      cursor.setPosition(m_inputStartPosition);
+      cursor.setPosition(pos, QTextCursor::KeepAnchor);
+      cursor.removeSelectedText();
+      ui->textEdit->setTextCursor(cursor);
+      return true;
+    }
+    break;
+
+  case Qt::Key_K:
+    if (ctrl) {
+      QTextCursor cursor = ui->textEdit->textCursor();
+      cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+      if (cursor.hasSelection()) {
+        cursor.removeSelectedText();
+      }
+      ui->textEdit->setTextCursor(cursor);
+      return true;
+    }
+    break;
+
+  case Qt::Key_Plus:
+  case Qt::Key_Equal:
+    if (ctrl) {
+      zoomIn();
+      return true;
+    }
+    break;
+
+  case Qt::Key_Minus:
+    if (ctrl) {
+      zoomOut();
+      return true;
+    }
+    break;
+
+  case Qt::Key_0:
+    if (ctrl) {
+      zoomReset();
+      return true;
+    }
+    break;
+
+  case Qt::Key_Backspace:
+    removeInputText(true);
+    return true;
+
+  case Qt::Key_Delete:
+    removeInputText(false);
+    return true;
+
+  default:
+    break;
+  }
+
+  const QString keyText = keyEvent->text();
+  bool hasEditableText = false;
+  for (const QChar &ch : keyText) {
+    if (!ch.isNull() && ch != '\n' && ch != '\r' && ch >= QChar(' ')) {
+      hasEditableText = true;
+      break;
+    }
+  }
+  if (hasEditableText) {
+    insertInputText(keyText);
+    return true;
+  }
+
+  return false;
+}
+
+void Terminal::handleRunInputHistoryNavigation(bool up) {
+  if (m_runInputHistory.isEmpty()) {
+    return;
+  }
+
+  if (up) {
+    if (m_runInputHistoryIndex > 0) {
+      m_runInputHistoryIndex--;
+    } else {
+      return;
+    }
+  } else {
+    if (m_runInputHistoryIndex < m_runInputHistory.size()) {
+      m_runInputHistoryIndex++;
+    } else {
+      return;
+    }
+  }
+
+  QTextCursor cursor = ui->textEdit->textCursor();
+  cursor.movePosition(QTextCursor::End);
+  cursor.setPosition(m_inputStartPosition, QTextCursor::KeepAnchor);
+  cursor.removeSelectedText();
+
+  if (m_runInputHistoryIndex < m_runInputHistory.size()) {
+    cursor.insertText(m_runInputHistory.at(m_runInputHistoryIndex));
+  }
+  ui->textEdit->setTextCursor(cursor);
+}
+
+QColor Terminal::ansi256Color(int index) {
+  static const QColor standard[16] = {
+      QColor("#282c34"), QColor("#e06c75"), QColor("#98c379"),
+      QColor("#e5c07b"), QColor("#61afef"), QColor("#c678dd"),
+      QColor("#56b6c2"), QColor("#abb2bf"), QColor("#5c6370"),
+      QColor("#be5046"), QColor("#7ec16e"), QColor("#d19a66"),
+      QColor("#4d78cc"), QColor("#b070cf"), QColor("#49a5b0"),
+      QColor("#ffffff"),
+  };
+  if (index >= 0 && index < 16) {
+    return standard[index];
+  }
+  if (index < 232) {
+    int n = index - 16;
+    int b = n % 6;
+    int g = (n / 6) % 6;
+    int r = n / 36;
+    auto toVal = [](int c) { return c == 0 ? 0 : 55 + c * 40; };
+    return QColor(toVal(r), toVal(g), toVal(b));
+  }
+  if (index <= 255) {
+    int gray = 8 + (index - 232) * 10;
+    return QColor(gray, gray, gray);
+  }
+  return QColor();
 }
 
 bool Terminal::startShell(const QString &workingDirectory) {
@@ -335,8 +616,11 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
           &Terminal::onRunProcessReadyReadStdout);
   connect(m_runProcess, &QProcess::readyReadStandardError, this,
           &Terminal::onRunProcessReadyReadStderr);
-  connect(m_runProcess, &QProcess::started, this,
-          [this]() { emit processStarted(); });
+  connect(m_runProcess, &QProcess::started, this, [this]() {
+    setRunInputIndicatorActive(true);
+    ui->textEdit->setFocus(Qt::OtherFocusReason);
+    emit processStarted();
+  });
   connect(m_runProcess,
           QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
           &Terminal::onRunProcessFinished);
@@ -344,6 +628,9 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
           &Terminal::onRunProcessError);
 
   m_runProcess->setWorkingDirectory(workingDirectory);
+  m_runInputHistory.clear();
+  m_runInputHistoryIndex = 0;
+  m_runProcessTimer.start();
 
   QProcessEnvironment processEnv = QProcessEnvironment::systemEnvironment();
   for (auto it = env.begin(); it != env.end(); ++it) {
@@ -351,8 +638,8 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
   }
   m_runProcess->setProcessEnvironment(processEnv);
 
-  ui->textEdit->setReadOnly(true);
   clear();
+  setRunInputIndicatorActive(false);
   appendOutput(QString("$ %1 %2\n").arg(command, args.join(" ")));
   if (!workingDirectory.isEmpty()) {
     appendOutput(QString("Working directory: %1\n").arg(workingDirectory));
@@ -398,6 +685,9 @@ bool Terminal::runFile(const QString &filePath, const QString &languageId) {
     const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
         preference, manager.workspaceFolder(), filePath, workingDir);
     m_pythonEnvironmentBanner = formatPythonBanner(info);
+
+    // Force unbuffered I/O so input() prompts appear immediately
+    env.insert("PYTHONUNBUFFERED", "1");
   } else {
     m_pythonEnvironmentBanner.clear();
   }
@@ -409,6 +699,8 @@ bool Terminal::runFile(const QString &filePath, const QString &languageId) {
 void Terminal::stopProcess() { cleanupRunProcess(true); }
 
 void Terminal::cleanupRunProcess(bool restartShell) {
+  setRunInputIndicatorActive(false);
+
   if (m_runProcess) {
 
     disconnect(m_runProcess, nullptr, this, nullptr);
@@ -471,29 +763,126 @@ void Terminal::scheduleAutoRestart() {
   m_restartTimer->start(kRestartDelayMs);
 }
 
+void Terminal::setupInputIndicator() {
+  if (m_runInputIndicator) {
+    return;
+  }
+
+  m_runInputIndicator = new QLabel(this);
+  m_runInputIndicator->setObjectName("runInputIndicator");
+  m_runInputIndicator->setAlignment(Qt::AlignCenter);
+  m_runInputIndicator->setSizePolicy(QSizePolicy::Fixed,
+                                     QSizePolicy::Preferred);
+  m_runInputIndicator->setText(tr("Input ready |"));
+  m_runInputIndicator->setMinimumWidth(
+      m_runInputIndicator->fontMetrics().horizontalAdvance(
+          tr("Input ready |")) +
+      18);
+  m_runInputIndicator->setVisible(false);
+  ui->horizontalLayout_3->addWidget(m_runInputIndicator);
+
+  m_runInputIndicatorTimer = new QTimer(this);
+  m_runInputIndicatorTimer->setInterval(kInputIndicatorBlinkMs);
+  connect(m_runInputIndicatorTimer, &QTimer::timeout, this, [this]() {
+    m_runInputCursorVisible = !m_runInputCursorVisible;
+    updateRunInputIndicator();
+  });
+}
+
+void Terminal::setRunInputIndicatorActive(bool active) {
+  if (!m_runInputIndicator || !m_runInputIndicatorTimer) {
+    return;
+  }
+
+  m_runInputIndicatorActive = active;
+  m_runInputCursorVisible = true;
+  updateRunInputIndicator();
+
+  if (active) {
+    if (!m_runInputIndicatorTimer->isActive()) {
+      m_runInputIndicatorTimer->start();
+    }
+  } else {
+    m_runInputIndicatorTimer->stop();
+  }
+}
+
+void Terminal::updateRunInputIndicator() {
+  if (!m_runInputIndicator) {
+    return;
+  }
+
+  m_runInputIndicator->setVisible(m_runInputIndicatorActive);
+  if (!m_runInputIndicatorActive) {
+    return;
+  }
+
+  const QString cursor = m_runInputCursorVisible ? "|" : " ";
+  m_runInputIndicator->setText(tr("Input ready %1").arg(cursor));
+}
+
 void Terminal::onRunProcessReadyReadStdout() {
   if (m_runProcess) {
     QString output = QString::fromUtf8(m_runProcess->readAllStandardOutput());
+    QString pending = takePendingInput();
+    if (m_runProcess->state() != QProcess::NotRunning) {
+      setRunInputIndicatorActive(true);
+    }
     appendOutput(output);
+    if (!pending.isEmpty()) {
+      insertInputText(pending);
+    }
   }
 }
 
 void Terminal::onRunProcessReadyReadStderr() {
   if (m_runProcess) {
     QString output = QString::fromUtf8(m_runProcess->readAllStandardError());
+    QString pending = takePendingInput();
+    if (m_runProcess->state() != QProcess::NotRunning) {
+      setRunInputIndicatorActive(true);
+    }
     appendOutput(output, true);
+    if (!pending.isEmpty()) {
+      insertInputText(pending);
+    }
   }
 }
 
 void Terminal::onRunProcessFinished(int exitCode,
                                     QProcess::ExitStatus exitStatus) {
-  if (exitStatus == QProcess::CrashExit) {
-    appendOutput(QString("\n\nProcess crashed (exit code: %1)\n").arg(exitCode),
-                 true);
+  qint64 elapsedMs = m_runProcessTimer.elapsed();
+  QString elapsed;
+  if (elapsedMs < 1000) {
+    elapsed = QString("%1ms").arg(elapsedMs);
   } else {
-    appendOutput(
-        QString("\n\nProcess finished with exit code %1\n").arg(exitCode));
+    double secs = elapsedMs / 1000.0;
+    elapsed = QString("%1s").arg(secs, 0, 'f', secs < 10.0 ? 2 : 1);
   }
+
+  QTextCursor cursor = ui->textEdit->textCursor();
+  cursor.movePosition(QTextCursor::End);
+  cursor.insertText("\n\n");
+
+  QTextCharFormat codeFmt;
+  if (exitStatus == QProcess::CrashExit) {
+    codeFmt.setForeground(QColor("#e06c75"));
+    cursor.insertText(
+        QString("Process crashed (exit code: %1)").arg(exitCode), codeFmt);
+  } else {
+    codeFmt.setForeground(exitCode == 0 ? QColor("#98c379") : QColor("#e06c75"));
+    cursor.insertText(
+        QString("Process finished with exit code %1").arg(exitCode), codeFmt);
+  }
+
+  QTextCharFormat dimFmt;
+  dimFmt.setForeground(QColor("#5c6370"));
+  cursor.insertText(QString("  [%1]\n").arg(elapsed), dimFmt);
+
+  m_inputStartPosition = cursor.position();
+  ui->textEdit->setTextCursor(cursor);
+  scrollToBottom();
+
   emit processFinished(exitCode);
   cleanupRunProcess(true);
 }
@@ -627,12 +1016,62 @@ void Terminal::onInputSubmitted() {
 
 bool Terminal::eventFilter(QObject *obj, QEvent *event) {
   if (obj == ui->textEdit && event->type() == QEvent::KeyPress) {
+    QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+
+    // Common keys shared by both shell and run-process modes
+    if (handleCommonInputKey(keyEvent)) {
+      return true;
+    }
+
     if (m_runProcess && m_runProcess->state() != QProcess::NotRunning) {
+      // Run-process specific keys
+      switch (keyEvent->key()) {
+      case Qt::Key_Return:
+      case Qt::Key_Enter: {
+        QTextCursor cursor = ui->textEdit->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        cursor.setPosition(m_inputStartPosition, QTextCursor::KeepAnchor);
+        QString userInput = cursor.selectedText();
+
+        ui->textEdit->moveCursor(QTextCursor::End);
+        ui->textEdit->insertPlainText("\n");
+        m_inputStartPosition = ui->textEdit->textCursor().position();
+
+        if (!userInput.isEmpty()) {
+          m_runInputHistory.append(userInput);
+        }
+        m_runInputHistoryIndex = m_runInputHistory.size();
+
+        m_runProcess->write((userInput + "\n").toUtf8());
+        return true;
+      }
+      case Qt::Key_C:
+        if (keyEvent->modifiers() & Qt::ControlModifier) {
+          m_runProcess->terminate();
+          appendOutput("^C\n");
+          return true;
+        }
+        break;
+      case Qt::Key_D:
+        if (keyEvent->modifiers() & Qt::ControlModifier) {
+          m_runProcess->closeWriteChannel();
+          setRunInputIndicatorActive(false);
+          return true;
+        }
+        break;
+      case Qt::Key_Up:
+        handleRunInputHistoryNavigation(true);
+        return true;
+      case Qt::Key_Down:
+        handleRunInputHistoryNavigation(false);
+        return true;
+      default:
+        break;
+      }
       return QWidget::eventFilter(obj, event);
     }
 
-    QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-
+    // Shell mode specific keys
     switch (keyEvent->key()) {
     case Qt::Key_Return:
     case Qt::Key_Enter: {
@@ -705,16 +1144,7 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
       return true;
 
     case Qt::Key_C:
-      if ((keyEvent->modifiers() & Qt::ControlModifier) &&
-          (keyEvent->modifiers() & Qt::ShiftModifier)) {
-
-        if (ui->textEdit->textCursor().hasSelection()) {
-          ui->textEdit->copy();
-        }
-        return true;
-      }
       if (keyEvent->modifiers() & Qt::ControlModifier) {
-
         if (isRunning()) {
           m_process->write("\x03");
         }
@@ -723,23 +1153,8 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
       }
       break;
 
-    case Qt::Key_V:
-      if ((keyEvent->modifiers() & Qt::ControlModifier) &&
-          (keyEvent->modifiers() & Qt::ShiftModifier)) {
-        insertInputText(QApplication::clipboard()->text());
-        return true;
-      }
-      break;
-
-    case Qt::Key_X:
-      if (keyEvent->modifiers() & Qt::ControlModifier) {
-        return true;
-      }
-      break;
-
     case Qt::Key_D:
       if (keyEvent->modifiers() & Qt::ControlModifier) {
-
         if (isRunning()) {
           m_process->write("\x04");
         }
@@ -747,60 +1162,8 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
       }
       break;
 
-    case Qt::Key_L:
-      if (keyEvent->modifiers() & Qt::ControlModifier) {
-
-        clear();
-        return true;
-      }
-      break;
-
-    case Qt::Key_Plus:
-    case Qt::Key_Equal:
-      if (keyEvent->modifiers() & Qt::ControlModifier) {
-        zoomIn();
-        return true;
-      }
-      break;
-
-    case Qt::Key_Minus:
-      if (keyEvent->modifiers() & Qt::ControlModifier) {
-        zoomOut();
-        return true;
-      }
-      break;
-
-    case Qt::Key_0:
-      if (keyEvent->modifiers() & Qt::ControlModifier) {
-        zoomReset();
-        return true;
-      }
-      break;
-
-    case Qt::Key_Backspace:
-      removeInputText(true);
-      return true;
-
-    case Qt::Key_Delete:
-      removeInputText(false);
-      return true;
-
     default:
       break;
-    }
-
-    const QString keyText = keyEvent->text();
-    bool hasEditableText = false;
-    for (const QChar &ch : keyText) {
-      if (!ch.isNull() && ch != '\n' && ch != '\r' && ch >= QChar(' ')) {
-        hasEditableText = true;
-        break;
-      }
-    }
-
-    if (hasEditableText) {
-      insertInputText(keyText);
-      return true;
     }
   }
 
@@ -1136,6 +1499,20 @@ void Terminal::updateStyleSheet() {
                                   "}")
                               .arg(m_textColor);
   ui->cwdLabel->setStyleSheet(cwdLabelStyle);
+
+  if (m_runInputIndicator) {
+    QString indicatorStyle =
+        QString("QLabel#runInputIndicator {"
+                "  color: %1;"
+                "  background: rgba(88, 166, 255, 0.14);"
+                "  border: 1px solid rgba(88, 166, 255, 0.35);"
+                "  border-radius: 4px;"
+                "  padding: 1px 6px;"
+                "  font-size: 11px;"
+                "}")
+            .arg(m_linkColor);
+    m_runInputIndicator->setStyleSheet(indicatorStyle);
+  }
 }
 
 QString Terminal::closeButtonStyle(const QString &textColor,
@@ -1419,18 +1796,6 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
       R"(|\x1b[DME78HcNO])"
       R"(|\x07)");
 
-  static const QColor ansiColors[8] = {
-      QColor("#282c34"), QColor("#e06c75"), QColor("#98c379"),
-      QColor("#e5c07b"), QColor("#61afef"), QColor("#c678dd"),
-      QColor("#56b6c2"), QColor("#abb2bf"),
-  };
-
-  static const QColor ansiBrightColors[8] = {
-      QColor("#5c6370"), QColor("#be5046"), QColor("#7ec16e"),
-      QColor("#d19a66"), QColor("#4d78cc"), QColor("#b070cf"),
-      QColor("#49a5b0"), QColor("#ffffff"),
-  };
-
   QString cleaned = text;
   cleaned.remove(nonSgrAnsiRegex);
 
@@ -1451,7 +1816,34 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
   }
 
   QColor currentFg = QColor(m_textColor);
+  QColor currentBg;
   bool bold = false;
+  bool dim = false;
+  bool italic = false;
+  bool underline = false;
+
+  auto applyFormat = [&]() -> QTextCharFormat {
+    QTextCharFormat fmt;
+    QColor fg = currentFg;
+    if (dim) {
+      fg = fg.darker(150);
+    }
+    fmt.setForeground(fg);
+    if (currentBg.isValid()) {
+      fmt.setBackground(currentBg);
+    }
+    if (bold) {
+      fmt.setFontWeight(QFont::Bold);
+    }
+    if (italic) {
+      fmt.setFontItalic(true);
+    }
+    if (underline) {
+      fmt.setFontUnderline(true);
+    }
+    return fmt;
+  };
+
   int lastEnd = 0;
   QRegularExpressionMatchIterator it = sgrRegex.globalMatch(processed);
 
@@ -1460,12 +1852,7 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
 
     if (match.capturedStart() > lastEnd) {
       QString segment = processed.mid(lastEnd, match.capturedStart() - lastEnd);
-      QTextCharFormat fmt;
-      fmt.setForeground(currentFg);
-      if (bold) {
-        fmt.setFontWeight(QFont::Bold);
-      }
-      cursor.insertText(segment, fmt);
+      cursor.insertText(segment, applyFormat());
     }
 
     QString params = match.captured(1);
@@ -1473,22 +1860,63 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
 
     if (codes.isEmpty() || params.isEmpty()) {
       currentFg = QColor(m_textColor);
-      bold = false;
+      currentBg = QColor();
+      bold = dim = italic = underline = false;
     }
 
-    for (const QString &code : codes) {
-      int n = code.toInt();
+    for (int i = 0; i < codes.size(); ++i) {
+      int n = codes[i].toInt();
       if (n == 0) {
         currentFg = QColor(m_textColor);
-        bold = false;
+        currentBg = QColor();
+        bold = dim = italic = underline = false;
       } else if (n == 1) {
         bold = true;
+      } else if (n == 2) {
+        dim = true;
+      } else if (n == 3) {
+        italic = true;
+      } else if (n == 4) {
+        underline = true;
+      } else if (n == 22) {
+        bold = false;
+        dim = false;
+      } else if (n == 23) {
+        italic = false;
+      } else if (n == 24) {
+        underline = false;
       } else if (n >= 30 && n <= 37) {
-        currentFg = ansiColors[n - 30];
-      } else if (n >= 90 && n <= 97) {
-        currentFg = ansiBrightColors[n - 90];
+        currentFg = ansi256Color(n - 30);
+      } else if (n == 38 && i + 1 < codes.size()) {
+        int mode = codes[i + 1].toInt();
+        if (mode == 5 && i + 2 < codes.size()) {
+          currentFg = ansi256Color(codes[i + 2].toInt());
+          i += 2;
+        } else if (mode == 2 && i + 4 < codes.size()) {
+          currentFg = QColor(codes[i + 2].toInt(), codes[i + 3].toInt(),
+                             codes[i + 4].toInt());
+          i += 4;
+        }
       } else if (n == 39) {
         currentFg = QColor(m_textColor);
+      } else if (n >= 40 && n <= 47) {
+        currentBg = ansi256Color(n - 40);
+      } else if (n == 48 && i + 1 < codes.size()) {
+        int mode = codes[i + 1].toInt();
+        if (mode == 5 && i + 2 < codes.size()) {
+          currentBg = ansi256Color(codes[i + 2].toInt());
+          i += 2;
+        } else if (mode == 2 && i + 4 < codes.size()) {
+          currentBg = QColor(codes[i + 2].toInt(), codes[i + 3].toInt(),
+                             codes[i + 4].toInt());
+          i += 4;
+        }
+      } else if (n == 49) {
+        currentBg = QColor();
+      } else if (n >= 90 && n <= 97) {
+        currentFg = ansi256Color(n - 90 + 8);
+      } else if (n >= 100 && n <= 107) {
+        currentBg = ansi256Color(n - 100 + 8);
       }
     }
 
@@ -1497,12 +1925,7 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
 
   if (lastEnd < processed.length()) {
     QString segment = processed.mid(lastEnd);
-    QTextCharFormat fmt;
-    fmt.setForeground(currentFg);
-    if (bold) {
-      fmt.setFontWeight(QFont::Bold);
-    }
-    cursor.insertText(segment, fmt);
+    cursor.insertText(segment, applyFormat());
   }
 }
 

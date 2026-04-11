@@ -9,7 +9,7 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMessageBox>
+#include "themedmessagebox.h"
 #include <QPushButton>
 #include <QTemporaryFile>
 #include <QTextStream>
@@ -26,7 +26,7 @@ static const QMap<QString, QString> ACTION_COLORS = {
 
 GitRebaseDialog::GitRebaseDialog(GitIntegration *git, const Theme &theme,
                                  QWidget *parent)
-    : QDialog(parent), m_git(git), m_theme(theme) {
+    : StyledDialog(parent), m_git(git), m_theme(theme) {
   setWindowTitle(tr("Interactive Rebase"));
   setMinimumSize(800, 520);
   resize(920, 600);
@@ -141,8 +141,8 @@ void GitRebaseDialog::onActionChanged(int) {}
 void GitRebaseDialog::onSquashSelected() {
   auto selected = m_commitList->selectedItems();
   if (selected.size() < 2) {
-    QMessageBox::information(this, tr("Squash"),
-                             tr("Select at least 2 commits to squash."));
+    ThemedMessageBox::information(this, tr("Squash"),
+                                  tr("Select at least 2 commits to squash."));
     return;
   }
 
@@ -300,19 +300,13 @@ void GitRebaseDialog::onStartRebase() {
                  "Are you sure you want to proceed?");
   }
 
-  QMessageBox confirmBox(this);
-  confirmBox.setIcon(QMessageBox::Warning);
+  ThemedMessageBox confirmBox(this);
+  confirmBox.setIcon(ThemedMessageBox::Warning);
   confirmBox.setWindowTitle(tr("Confirm Rebase"));
   confirmBox.setText(warning);
-  confirmBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-  confirmBox.setDefaultButton(QMessageBox::No);
-  confirmBox.setStyleSheet(
-      "QMessageBox { background: #0d1117; }"
-      "QMessageBox QLabel { color: #e6edf3; }"
-      "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
-      "#30363d; border-radius: 6px; padding: 6px 16px; }"
-      "QPushButton:hover { background: #30363d; }");
-  if (confirmBox.exec() != QMessageBox::Yes)
+  confirmBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No);
+  confirmBox.setDefaultButton(ThemedMessageBox::No);
+  if (confirmBox.exec() != ThemedMessageBox::Yes)
     return;
 
   QString todoScript;
@@ -347,13 +341,13 @@ void GitRebaseDialog::onStartRebase() {
   QString output = proc.readAllStandardOutput() + proc.readAllStandardError();
   if (proc.exitCode() == 0) {
     m_statusLabel->setText(tr("Rebase completed successfully"));
-    QMessageBox::information(this, tr("Rebase"),
-                             tr("Interactive rebase completed."));
+    ThemedMessageBox::information(this, tr("Rebase"),
+                                  tr("Interactive rebase completed."));
     accept();
   } else {
     m_statusLabel->setText(tr("Rebase failed or needs conflict resolution"));
-    QMessageBox::warning(this, tr("Rebase"),
-                         tr("Rebase encountered issues:\n%1").arg(output));
+    ThemedMessageBox::warning(this, tr("Rebase"),
+                              tr("Rebase encountered issues:\n%1").arg(output));
   }
 }
 
@@ -363,8 +357,7 @@ void GitRebaseDialog::buildUi() {
   mainLayout->setSpacing(8);
 
   auto *titleLabel = new QLabel(tr("🔀 Interactive Rebase"), this);
-  titleLabel->setStyleSheet(
-      "font-size: 16px; font-weight: bold; color: #e6edf3;");
+  titleLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(m_theme));
   mainLayout->addWidget(titleLabel);
 
   auto *headerLabel = new QLabel(
@@ -372,17 +365,13 @@ void GitRebaseDialog::buildUi() {
          "select multiple commits for batch operations."),
       this);
   headerLabel->setWordWrap(true);
-  headerLabel->setStyleSheet("color: #8b949e; font-size: 12px;");
+  headerLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(m_theme));
   mainLayout->addWidget(headerLabel);
 
   m_searchEdit = new QLineEdit(this);
   m_searchEdit->setPlaceholderText(
       tr("🔍 Filter commits by hash, author, or message..."));
   m_searchEdit->setClearButtonEnabled(true);
-  m_searchEdit->setStyleSheet(
-      "QLineEdit { background: #21262d; color: #e6edf3; border: 1px solid "
-      "#30363d; border-radius: 6px; padding: 6px 10px; font-size: 12px; }"
-      "QLineEdit:focus { border-color: #58a6ff; }");
   mainLayout->addWidget(m_searchEdit);
   connect(m_searchEdit, &QLineEdit::textChanged, this,
           &GitRebaseDialog::onSearchChanged);
@@ -395,23 +384,6 @@ void GitRebaseDialog::buildUi() {
   m_squashBtn = new QPushButton(tr("📦 Squash"), this);
   m_dropBtn = new QPushButton(tr("🗑 Drop"), this);
   m_pickAllBtn = new QPushButton(tr("↺ Reset All"), this);
-
-  QString toolBtnStyle =
-      "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
-      "#30363d; border-radius: 6px; padding: 5px 12px; font-size: 11px; }"
-      "QPushButton:hover { background: #30363d; border-color: #58a6ff; }"
-      "QPushButton:pressed { background: #161b22; }";
-
-  m_moveUpBtn->setStyleSheet(toolBtnStyle);
-  m_moveDownBtn->setStyleSheet(toolBtnStyle);
-  m_squashBtn->setStyleSheet(toolBtnStyle);
-  m_pickAllBtn->setStyleSheet(toolBtnStyle);
-  m_dropBtn->setStyleSheet(
-      "QPushButton { background: #21262d; color: #f85149; border: 1px solid "
-      "#30363d; border-radius: 6px; padding: 5px 12px; font-size: 11px; }"
-      "QPushButton:hover { background: #da3633; color: white; border-color: "
-      "#da3633; }"
-      "QPushButton:pressed { background: #b62324; }");
 
   m_moveUpBtn->setToolTip(tr("Move selected commit up (earlier in history)"));
   m_moveDownBtn->setToolTip(tr("Move selected commit down (later in history)"));
@@ -458,18 +430,6 @@ void GitRebaseDialog::buildUi() {
   m_commitList->header()->setSectionResizeMode(2,
                                                QHeaderView::ResizeToContents);
   m_commitList->header()->setSectionResizeMode(3, QHeaderView::Stretch);
-  m_commitList->setStyleSheet(
-      "QTreeWidget { background: #0d1117; color: #e6edf3; border: 1px solid "
-      "#30363d; border-radius: 6px; font-size: 12px; outline: none; }"
-      "QTreeWidget::item { padding: 4px 6px; border-bottom: 1px solid "
-      "#21262d; }"
-      "QTreeWidget::item:selected { background: #1f6feb; color: white; }"
-      "QTreeWidget::item:hover { background: #161b22; }"
-      "QTreeWidget::item:selected:hover { background: #388bfd; }"
-      "QTreeWidget::item:alternate { background: #161b22; }"
-      "QHeaderView::section { background: #161b22; color: #8b949e; border: "
-      "none; border-bottom: 1px solid #30363d; padding: 6px; font-size: 11px; "
-      "font-weight: bold; text-transform: uppercase; }");
 
   connect(m_commitList->model(), &QAbstractItemModel::rowsMoved, [this]() {
     syncEntriesFromTree();
@@ -483,29 +443,15 @@ void GitRebaseDialog::buildUi() {
 
   m_summaryLabel = new QLabel(this);
   m_summaryLabel->setTextFormat(Qt::RichText);
-  m_summaryLabel->setStyleSheet(
-      "color: #8b949e; font-size: 11px; padding: 4px 2px;");
   mainLayout->addWidget(m_summaryLabel);
 
   m_statusLabel = new QLabel(this);
-  m_statusLabel->setStyleSheet("color: #8b949e; font-size: 11px;");
   mainLayout->addWidget(m_statusLabel);
 
   auto *buttonLayout = new QHBoxLayout();
   buttonLayout->addStretch();
   m_cancelBtn = new QPushButton(tr("Cancel"), this);
   m_startBtn = new QPushButton(tr("▶ Start Rebase"), this);
-  m_cancelBtn->setStyleSheet(
-      "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid "
-      "#30363d; border-radius: 6px; padding: 8px 20px; font-size: 12px; }"
-      "QPushButton:hover { background: #30363d; }");
-  m_startBtn->setStyleSheet(
-      "QPushButton { background: #238636; color: white; border: none; "
-      "border-radius: 6px; padding: 8px 24px; font-size: 12px; font-weight: "
-      "bold; }"
-      "QPushButton:hover { background: #2ea043; }"
-      "QPushButton:pressed { background: #1a7f37; }"
-      "QPushButton:disabled { background: #21262d; color: #484f58; }");
   buttonLayout->addWidget(m_cancelBtn);
   buttonLayout->addWidget(m_startBtn);
   mainLayout->addLayout(buttonLayout);
@@ -516,13 +462,17 @@ void GitRebaseDialog::buildUi() {
 }
 
 void GitRebaseDialog::applyTheme(const Theme &theme) {
-  QString bg = theme.backgroundColor.name();
-  QString fg = theme.foregroundColor.name();
-  QString highlight = theme.highlightColor.name();
+  StyledDialog::applyTheme(theme);
 
-  setStyleSheet(QString("QDialog { background-color: %1; color: %2; }"
-                        "QLabel { color: %2; }")
-                    .arg(bg, fg));
+  stylePrimaryButton(m_startBtn);
+  styleDangerButton(m_dropBtn);
+
+  if (m_commitList) {
+    m_commitList->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+  }
+
+  styleSubduedLabel(m_summaryLabel);
+  styleSubduedLabel(m_statusLabel);
 }
 
 void GitRebaseDialog::updateActionForItem(QTreeWidgetItem *, const QString &) {}

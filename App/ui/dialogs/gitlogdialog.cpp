@@ -10,7 +10,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
-#include <QMessageBox>
+#include "themedmessagebox.h"
 #include <QSplitter>
 #include <QTabWidget>
 #include <QTextEdit>
@@ -20,7 +20,7 @@
 
 GitLogDialog::GitLogDialog(GitIntegration *git, const Theme &theme,
                            QWidget *parent)
-    : QDialog(parent), m_git(git), m_theme(theme) {
+    : StyledDialog(parent), m_git(git), m_theme(theme) {
   setWindowTitle(tr("Git Log"));
   setMinimumSize(700, 450);
   resize(850, 550);
@@ -117,22 +117,17 @@ void GitLogDialog::buildUi() {
 }
 
 void GitLogDialog::applyTheme(const Theme &theme) {
-  QString bg = theme.backgroundColor.name();
-  QString fg = theme.foregroundColor.name();
-  QString highlight = theme.highlightColor.name();
+  StyledDialog::applyTheme(theme);
 
-  setStyleSheet(
-      QString("QDialog { background-color: %1; color: %2; }"
-              "QTreeWidget { background-color: %1; color: %2; "
-              "alternate-background-color: %3; }"
-              "QTextEdit { background-color: %1; color: %2; }"
-              "QLineEdit { background-color: %3; color: %2; "
-              "border: 1px solid %4; padding: 4px; }"
-              "QHeaderView::section { background-color: %3; color: %2; }"
-              "QTabWidget::pane { border: 1px solid %4; }"
-              "QTabBar::tab { background: %3; color: %2; padding: 6px 16px; }"
-              "QTabBar::tab:selected { background: %1; }")
-          .arg(bg, fg, theme.lineNumberAreaColor.name(), highlight));
+  if (m_commitTree) {
+    m_commitTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+  }
+
+  if (m_splitter) {
+    m_splitter->setStyleSheet(
+        QString("QSplitter::handle { background: %1; }")
+            .arg(theme.borderColor.name()));
+  }
 }
 
 void GitLogDialog::loadCommits() {
@@ -238,11 +233,11 @@ void GitLogDialog::showContextMenuForCommit(const QString &hash,
     emit viewCommitDiff(hash);
   } else if (chosen == cherryPick) {
     if (m_git) {
-      int ret = QMessageBox::question(
+      int ret = ThemedMessageBox::question(
           this, tr("Cherry-pick"),
           tr("Cherry-pick commit %1 into current branch?").arg(hash.left(7)),
-          QMessageBox::Yes | QMessageBox::No);
-      if (ret == QMessageBox::Yes) {
+          ThemedMessageBox::Yes | ThemedMessageBox::No);
+      if (ret == ThemedMessageBox::Yes) {
         m_git->cherryPick(hash);
       }
     }

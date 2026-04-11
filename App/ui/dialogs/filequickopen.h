@@ -1,8 +1,7 @@
 #ifndef FILEQUICKOPEN_H
 #define FILEQUICKOPEN_H
 
-#include "../../settings/theme.h"
-#include <QDialog>
+#include "styledpopupdialog.h"
 #include <QDir>
 #include <QFileInfo>
 #include <QKeyEvent>
@@ -10,7 +9,7 @@
 #include <QListWidget>
 #include <QVBoxLayout>
 
-class FileQuickOpen : public QDialog {
+class FileQuickOpen : public StyledPopupDialog {
   Q_OBJECT
 
 public:
@@ -21,7 +20,7 @@ public:
 
   void showDialog();
 
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 signals:
 

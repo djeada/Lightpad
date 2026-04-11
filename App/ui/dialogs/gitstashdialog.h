@@ -1,10 +1,9 @@
 #ifndef GITSTASHDIALOG_H
 #define GITSTASHDIALOG_H
 
+#include "styleddialog.h"
 #include "../../git/gitintegration.h"
-#include "../../settings/theme.h"
 #include <QCheckBox>
-#include <QDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -13,7 +12,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-class GitStashDialog : public QDialog {
+class GitStashDialog : public StyledDialog {
   Q_OBJECT
 
 public:
@@ -41,7 +40,7 @@ private:
   void updateStashList();
 
 public:
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 private:
   GitIntegration *m_git;

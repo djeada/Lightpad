@@ -17,7 +17,6 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
-#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QProcess>
@@ -81,6 +80,7 @@
 #include "dialogs/runconfigurations.h"
 #include "dialogs/runtemplateselector.h"
 #include "dialogs/shortcuts.h"
+#include "dialogs/themedmessagebox.h"
 #include "mainwindow.h"
 #include "panels/breadcrumbwidget.h"
 #include "panels/debugpanel.h"
@@ -116,6 +116,7 @@ constexpr auto kCompoundDebugTargetPrefix = "compound:";
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), popupTabWidth(nullptr),
       preferences(nullptr), findReplacePanel(nullptr), terminalWidget(nullptr),
+      m_terminalDock(nullptr), m_problemsDock(nullptr),
       completer(nullptr), m_completionEngine(nullptr), highlightLanguage(""),
       font(QApplication::font()), commandPalette(nullptr),
       problemsPanel(nullptr), goToLineDialog(nullptr),
@@ -150,6 +151,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_treeSelectionSyncing(false) {
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
+  setDockOptions(QMainWindow::AllowTabbedDocks | QMainWindow::AllowNestedDocks |
+                 QMainWindow::AnimatedDocks);
   ui->menubar->setNativeMenuBar(false);
   ui->actionFind_in_file->setShortcut(QKeySequence::Find);
   ui->actionFind_in_file->setShortcutContext(Qt::ApplicationShortcut);
@@ -492,26 +495,23 @@ void MainWindow::hideVimCommandPanel() {
 
 void MainWindow::setTabWidthLabel(QString text) {
   ui->tabWidth->setText(text);
-
-  if (preferences)
-    preferences->setTabWidthLabel(text);
 }
 
 void MainWindow::setLanguageHighlightLabel(QString text) {
   ui->languageHighlight->setText(text);
 }
 
-MainWindow::~MainWindow() {
-  saveSettings();
-  delete ui;
-}
+MainWindow::~MainWindow() { delete ui; }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
-  Q_UNUSED(event);
+  LOG_INFO("closeEvent: saving settings before close");
+  saveSettings();
 
   if (preferences) {
     preferences->close();
   }
+
+  QMainWindow::closeEvent(event);
 }
 
 QString MainWindow::textAreaSettingsPath() const {
@@ -574,8 +574,12 @@ void MainWindow::loadSettings() {
 
   m_restoringSession = true;
   QJsonArray openTabs = globalSettings.getValue("openTabs").toJsonArray();
+  LOG_INFO(QString("loadSettings: openTabs has %1 entries").arg(openTabs.size()));
   for (const QJsonValue &val : openTabs) {
     QString filePath = val.toString();
+    LOG_INFO(QString("loadSettings: restoring tab '%1' exists=%2")
+                 .arg(filePath)
+                 .arg(QFileInfo(filePath).exists()));
     if (!filePath.isEmpty() && QFileInfo(filePath).exists()) {
       openFileAndAddToNewTab(filePath);
     }
@@ -604,11 +608,13 @@ void MainWindow::saveSettings() {
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); i++) {
       QString filePath = tabWidget->getFilePath(i);
+      LOG_INFO(QString("saveSettings: tab %1 filePath='%2'").arg(i).arg(filePath));
       if (!filePath.isEmpty()) {
         openTabs.append(filePath);
       }
     }
   }
+  LOG_INFO(QString("saveSettings: saving %1 open tabs").arg(openTabs.size()));
   globalSettings.setValue("openTabs", openTabs);
   persistTreeStateToSettings();
   globalSettings.saveSettings();
@@ -1374,6 +1380,26 @@ void MainWindow::closeTabPage(QString filePath) {
   }
 }
 
+void MainWindow::openPathsFromCommandLine(const QStringList &paths) {
+  for (const QString &path : paths) {
+    QFileInfo info(path);
+    if (!info.exists()) {
+      continue;
+    }
+
+    if (info.isDir()) {
+      setProjectRootPath(info.absoluteFilePath());
+      QDir::setCurrent(info.absoluteFilePath());
+      setMainWindowTitle(info.fileName());
+      if (fileQuickOpen) {
+        fileQuickOpen->setRootDirectory(info.absoluteFilePath());
+      }
+    } else {
+      openFileAndAddToNewTab(info.absoluteFilePath());
+    }
+  }
+}
+
 void MainWindow::on_actionToggle_Full_Screen_triggered() {
   const auto state = windowState();
   if (state & Qt::WindowFullScreen)
@@ -1416,6 +1442,7 @@ TextAreaSettings MainWindow::getSettings() { return settings; }
 void MainWindow::setTabWidth(int width) {
   updateAllTextAreas(&TextArea::setTabWidth, width);
   settings.tabWidth = width;
+  saveSettings();
 }
 
 void MainWindow::on_actionToggle_Undo_triggered() { undo(); }
@@ -1595,7 +1622,7 @@ void MainWindow::open(const QString &filePath) {
   QFile file(filePath);
 
   if (!file.open(QFile::ReadOnly | QFile::Text)) {
-    QMessageBox::critical(this, tr("Error"), tr("Can't open file."));
+    ThemedMessageBox::critical(this, tr("Error"), tr("Can't open file."));
     return;
   }
 
@@ -1671,23 +1698,20 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
     }
 
     const QString fileName = QFileInfo(filePath).fileName();
-    QMessageBox msgBox(this);
+    ThemedMessageBox msgBox(this);
     msgBox.setWindowTitle(tr("File Changed on Disk"));
-    msgBox.setIcon(QMessageBox::Warning);
+    msgBox.setIcon(ThemedMessageBox::Warning);
     msgBox.setText(
         tr("<b>%1</b> has been modified by another program.").arg(fileName));
     msgBox.setInformativeText(
         tr("Do you want to overwrite the external changes, "
            "reload the file from disk, or cancel?"));
-    QPushButton *overwriteBtn =
-        msgBox.addButton(tr("Overwrite"), QMessageBox::DestructiveRole);
-    QPushButton *reloadBtn =
-        msgBox.addButton(tr("Reload from Disk"), QMessageBox::AcceptRole);
-    msgBox.addButton(QMessageBox::Cancel);
-    msgBox.setDefaultButton(reloadBtn);
-    msgBox.exec();
+    msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No |
+                              ThemedMessageBox::Cancel);
+    msgBox.setDefaultButton(ThemedMessageBox::Yes);
+    int result = msgBox.exec();
 
-    if (msgBox.clickedButton() == reloadBtn) {
+    if (result == ThemedMessageBox::Yes) {
       QFile reloadFile(filePath);
       if (reloadFile.open(QFile::ReadOnly | QFile::Text)) {
         int cursorPos = textArea->textCursor().position();
@@ -1704,7 +1728,7 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
         }
       }
       return false;
-    } else if (msgBox.clickedButton() != overwriteBtn) {
+    } else if (result != ThemedMessageBox::No) {
       return false;
     }
   }
@@ -1887,7 +1911,7 @@ void MainWindow::openDialog(Dialog dialog) {
     QString filePath = page ? page->getFilePath() : QString();
 
     if (filePath.isEmpty()) {
-      QMessageBox::information(
+      ThemedMessageBox::information(
           this, "Run Configuration",
           "Please open a file first to configure run settings.");
       return;
@@ -1909,7 +1933,7 @@ void MainWindow::openDialog(Dialog dialog) {
     QString filePath = page ? page->getFilePath() : QString();
 
     if (filePath.isEmpty()) {
-      QMessageBox::information(
+      ThemedMessageBox::information(
           this, "Format Configuration",
           "Please open a file first to configure format settings.");
       return;
@@ -1930,7 +1954,7 @@ void MainWindow::openDialog(Dialog dialog) {
     QString filePath = page ? page->getFilePath() : QString();
 
     if (filePath.isEmpty()) {
-      QMessageBox::information(
+      ThemedMessageBox::information(
           this, "Debug Configurations",
           "Please open a file first to configure debug settings.");
       return;
@@ -1979,18 +2003,23 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
     terminalWidget->applyTheme(settings.theme);
 
     connect(terminalWidget, &TerminalTabWidget::closeRequested, this, [this]() {
-      if (terminalWidget) {
-        terminalWidget->hide();
+      if (m_terminalDock) {
+        m_terminalDock->hide();
       }
       if (ui->actionToggle_Terminal) {
         ui->actionToggle_Terminal->setChecked(false);
       }
     });
 
-    auto layout = qobject_cast<QBoxLayout *>(ui->centralwidget->layout());
-    if (layout != nullptr) {
-      layout->insertWidget(layout->count() - 1, terminalWidget, 0);
-    }
+    m_terminalDock = new QDockWidget(tr("Terminal"), this);
+    m_terminalDock->setObjectName("terminalDock");
+    m_terminalDock->setAllowedAreas(Qt::BottomDockWidgetArea |
+                                    Qt::LeftDockWidgetArea |
+                                    Qt::RightDockWidgetArea);
+    m_terminalDock->setWidget(terminalWidget);
+    addDockWidget(Qt::BottomDockWidgetArea, m_terminalDock);
+    tabifyBottomDock(m_terminalDock);
+    m_terminalDock->hide();
   }
 
   return terminalWidget;
@@ -1998,11 +2027,12 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
 
 void MainWindow::showTerminalPanel() {
   TerminalTabWidget *widget = ensureTerminalWidget();
-  if (!widget) {
+  if (!widget || !m_terminalDock) {
     return;
   }
 
-  widget->show();
+  m_terminalDock->show();
+  m_terminalDock->raise();
   if (ui->actionToggle_Terminal) {
     ui->actionToggle_Terminal->setChecked(true);
   }
@@ -2249,8 +2279,8 @@ void MainWindow::showProblemsPanel() {
             });
 
     connect(problemsPanel, &ProblemsPanel::closeRequested, this, [this]() {
-      if (problemsPanel) {
-        problemsPanel->setVisible(false);
+      if (m_problemsDock) {
+        m_problemsDock->hide();
       }
       if (ui->actionToggle_Problems) {
         ui->actionToggle_Problems->setChecked(false);
@@ -2275,13 +2305,25 @@ void MainWindow::showProblemsPanel() {
 
     ensureStatusLabels();
 
-    auto layout = qobject_cast<QBoxLayout *>(ui->centralwidget->layout());
-    if (layout != 0)
-      layout->insertWidget(layout->count() - 1, problemsPanel, 0);
+    m_problemsDock = new QDockWidget(tr("Problems"), this);
+    m_problemsDock->setObjectName("problemsDock");
+    m_problemsDock->setAllowedAreas(Qt::BottomDockWidgetArea |
+                                    Qt::LeftDockWidgetArea |
+                                    Qt::RightDockWidgetArea);
+    m_problemsDock->setWidget(problemsPanel);
+    addDockWidget(Qt::BottomDockWidgetArea, m_problemsDock);
+    tabifyBottomDock(m_problemsDock);
+    m_problemsDock->hide();
   }
 
-  if (!m_vimCommandPanelActive) {
-    problemsPanel->setVisible(!problemsPanel->isVisible());
+  if (!m_vimCommandPanelActive && m_problemsDock) {
+    bool visible = m_problemsDock->isVisible();
+    if (!visible) {
+      m_problemsDock->show();
+      m_problemsDock->raise();
+    } else {
+      m_problemsDock->hide();
+    }
   }
 }
 
@@ -2457,8 +2499,8 @@ void MainWindow::ensureSourceControlPanel() {
             }
             QString diff = m_gitIntegration->getFileDiff(filePath, staged);
             if (diff.trimmed().isEmpty()) {
-              QMessageBox::information(this, tr("Diff"),
-                                       tr("No changes to show for this file."));
+              ThemedMessageBox::information(this, tr("Diff"),
+                                           tr("No changes to show for this file."));
               return;
             }
 
@@ -2477,7 +2519,7 @@ void MainWindow::ensureSourceControlPanel() {
             }
             QString diff = m_gitIntegration->getCommitDiff(commitHash);
             if (diff.trimmed().isEmpty()) {
-              QMessageBox::information(
+              ThemedMessageBox::information(
                   this, tr("Commit Diff"),
                   tr("No changes to show for this commit."));
               return;
@@ -2623,6 +2665,7 @@ void MainWindow::ensureDebugPanel() {
                              Qt::RightDockWidgetArea);
   debugDock->setWidget(debugPanel);
   addDockWidget(Qt::BottomDockWidgetArea, debugDock);
+  tabifyBottomDock(debugDock);
   debugDock->hide();
 
   connect(debugDock, &QDockWidget::visibilityChanged, this,
@@ -2708,22 +2751,47 @@ void MainWindow::ensureTestPanel() {
                             Qt::RightDockWidgetArea);
   testDock->setWidget(testPanel);
   addDockWidget(Qt::BottomDockWidgetArea, testDock);
+  tabifyBottomDock(testDock);
   testDock->hide();
+}
+
+void MainWindow::tabifyBottomDock(QDockWidget *dock) {
+  QList<QDockWidget *> bottomDocks = {m_terminalDock, m_problemsDock, debugDock,
+                                      testDock};
+  for (QDockWidget *existing : bottomDocks) {
+    if (existing && existing != dock && existing->isVisible()) {
+      tabifyDockWidget(existing, dock);
+      return;
+    }
+  }
+  // Even if none are visible, tabify with the first existing one so they share
+  // the same tab bar when both become visible.
+  for (QDockWidget *existing : bottomDocks) {
+    if (existing && existing != dock) {
+      tabifyDockWidget(existing, dock);
+      return;
+    }
+  }
 }
 
 void MainWindow::on_actionToggle_Test_Panel_triggered() {
   ensureTestPanel();
 
   bool visible = testDock->isVisible();
-  testDock->setVisible(!visible);
+  if (!visible) {
+    testDock->show();
+    testDock->raise();
+  } else {
+    testDock->hide();
+  }
 }
 
 void MainWindow::on_actionToggle_Problems_triggered() {
   showProblemsPanel();
 
   if (ui->actionToggle_Problems) {
-    ui->actionToggle_Problems->setChecked(problemsPanel &&
-                                          problemsPanel->isVisible());
+    ui->actionToggle_Problems->setChecked(m_problemsDock &&
+                                          m_problemsDock->isVisible());
   }
 }
 
@@ -2769,10 +2837,6 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
   m_markdownPreviewDock->setAllowedAreas(Qt::RightDockWidgetArea |
                                          Qt::BottomDockWidgetArea);
   m_markdownPreviewDock->setMinimumWidth(350);
-  m_markdownPreviewDock->setStyleSheet(
-      "QDockWidget { color: #e6edf3; }"
-      "QDockWidget::title { background: #161b22; padding: 6px; "
-      "border-bottom: 1px solid #30363d; }");
   addDockWidget(Qt::RightDockWidgetArea, m_markdownPreviewDock);
 
   QTimer::singleShot(100, m_markdownPreviewPanel,
@@ -2840,10 +2904,6 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
   m_latexPreviewDock->setAllowedAreas(Qt::RightDockWidgetArea |
                                       Qt::BottomDockWidgetArea);
   m_latexPreviewDock->setMinimumWidth(350);
-  m_latexPreviewDock->setStyleSheet(
-      "QDockWidget { color: #e6edf3; }"
-      "QDockWidget::title { background: #161b22; padding: 6px; "
-      "border-bottom: 1px solid #30363d; }");
   addDockWidget(Qt::RightDockWidgetArea, m_latexPreviewDock);
 
   connect(m_latexPreviewPanel, &LatexPreviewPanel::diagnosticsReady, this,
@@ -4000,21 +4060,32 @@ void MainWindow::setMainWindowTitle(QString title) {
 void MainWindow::setFont(QFont newFont) {
   updateAllTextAreas(&TextArea::setFont, newFont);
   font = newFont;
+  settings.mainFont = newFont;
+
+  SettingsManager &sm = SettingsManager::instance();
+  sm.setValue("fontFamily", newFont.family());
+  sm.setValue("fontSize", newFont.pointSize());
+  sm.setValue("fontWeight", newFont.weight());
+  sm.setValue("fontItalic", newFont.italic());
+  sm.saveSettings();
 }
 
 void MainWindow::showLineNumbers(bool flag) {
   updateAllTextAreas(&TextArea::showLineNumbers, flag);
   settings.showLineNumberArea = flag;
+  saveSettings();
 }
 
 void MainWindow::highlihtCurrentLine(bool flag) {
   updateAllTextAreas(&TextArea::highlihtCurrentLine, flag);
   settings.lineHighlighted = flag;
+  saveSettings();
 }
 
 void MainWindow::highlihtMatchingBracket(bool flag) {
   updateAllTextAreas(&TextArea::highlihtMatchingBracket, flag);
   settings.matchingBracketsHighlighted = flag;
+  saveSettings();
 }
 
 void MainWindow::setAutoSaveEnabled(bool enabled) {
@@ -4156,6 +4227,7 @@ void MainWindow::startDebuggingForCurrentFile() {
         attachDebugSession(m_activeDebugSessionId);
         if (debugDock) {
           debugDock->show();
+          debugDock->raise();
         }
         return;
       }
@@ -4194,11 +4266,11 @@ void MainWindow::startDebuggingForCurrentFile() {
   const QString languageId = effectiveLanguageIdForFile(filePath);
   QString prepareError;
   if (!prepareDebugTargetForFile(filePath, languageId, &prepareError)) {
-    QMessageBox msg(this);
-    msg.setIcon(QMessageBox::Warning);
+    ThemedMessageBox msg(this);
+    msg.setIcon(ThemedMessageBox::Warning);
     msg.setWindowTitle(tr("Debug Build Failed"));
     msg.setText(tr("Unable to prepare a debuggable target for this file."));
-    msg.setDetailedText(prepareError);
+    msg.setInformativeText(prepareError);
     msg.exec();
     m_debugStartInProgress = false;
     return;
@@ -4227,12 +4299,12 @@ void MainWindow::startDebuggingForCurrentFile() {
       details = adapterStatuses.join("\n");
     }
 
-    QMessageBox msg(this);
-    msg.setIcon(QMessageBox::Warning);
+    ThemedMessageBox msg(this);
+    msg.setIcon(ThemedMessageBox::Warning);
     msg.setWindowTitle(tr("Debug"));
     msg.setText(tr("Unable to start debug session for this file."));
     if (!details.isEmpty()) {
-      msg.setDetailedText(details);
+      msg.setInformativeText(details);
     }
     msg.exec();
     m_debugStartInProgress = false;
@@ -4242,6 +4314,7 @@ void MainWindow::startDebuggingForCurrentFile() {
   attachDebugSession(sessionId);
   if (debugDock) {
     debugDock->show();
+    debugDock->raise();
   }
   m_debugStartInProgress = false;
 }
@@ -4278,6 +4351,7 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
       debugPanel->dapClient() == session->client()) {
     if (debugDock) {
       debugDock->show();
+      debugDock->raise();
     }
     return;
   }
@@ -4288,6 +4362,7 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
   WatchManager::instance().setDapClient(session->client());
   if (debugDock) {
     debugDock->show();
+    debugDock->raise();
   }
   if (m_breakpointsSetConnection) {
     disconnect(m_breakpointsSetConnection);
@@ -4395,7 +4470,7 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
       });
   m_sessionErrorConnection = connect(
       session, &DebugSession::error, this, [this](const QString &message) {
-        QMessageBox::warning(this, tr("Debug Session Error"), message);
+        ThemedMessageBox::warning(this, tr("Debug Session Error"), message);
       });
   m_sessionStateConnection =
       connect(session, &DebugSession::stateChanged, this,
@@ -4447,8 +4522,8 @@ void MainWindow::formatCurrentDocument() {
   QString filePath = page ? page->getFilePath() : QString();
 
   if (filePath.isEmpty()) {
-    QMessageBox::information(this, "Format Document",
-                             "Please save the file first before formatting.");
+    ThemedMessageBox::information(this, "Format Document",
+                                 "Please save the file first before formatting.");
     return;
   }
 
@@ -4456,8 +4531,8 @@ void MainWindow::formatCurrentDocument() {
   on_actionSave_triggered();
 
   if (textArea && textArea->changesUnsaved()) {
-    QMessageBox::warning(this, "Format Document",
-                         "Could not save the file. Formatting cancelled.");
+    ThemedMessageBox::warning(this, "Format Document",
+                              "Could not save the file. Formatting cancelled.");
     return;
   }
 
@@ -4470,7 +4545,7 @@ void MainWindow::formatCurrentDocument() {
   QPair<QString, QStringList> command = manager.buildCommand(filePath);
 
   if (command.first.isEmpty()) {
-    QMessageBox::information(
+    ThemedMessageBox::information(
         this, "Format Document",
         "No formatter found for this file type.\nUse Format > Edit Format "
         "Configurations to assign one.");
@@ -4550,7 +4625,7 @@ void MainWindow::formatCurrentDocument() {
         executionState->formatterExitCode != 0) {
       LOG_WARNING(QString("Formatter exited with code %1")
                       .arg(executionState->formatterExitCode));
-      QMessageBox::warning(
+      ThemedMessageBox::warning(
           this, "Format Document",
           QString("Formatter exited with error code %1.\nCheck the "
                   "Terminal panel for details.")
@@ -4619,7 +4694,7 @@ void MainWindow::formatCurrentDocument() {
        finalizeExecution](int exitCode) {
         if (executionState->stage == FormatExecutionState::Stage::PreFormat) {
           if (exitCode != 0) {
-            QMessageBox::warning(
+            ThemedMessageBox::warning(
                 this, "Format Document",
                 QString("Pre-format command failed with exit code %1.\nCheck "
                         "the Terminal panel for details.")
@@ -4649,7 +4724,7 @@ void MainWindow::formatCurrentDocument() {
 
         if (executionState->stage == FormatExecutionState::Stage::PostFormat) {
           if (exitCode != 0) {
-            QMessageBox::warning(
+            ThemedMessageBox::warning(
                 this, "Format Document",
                 QString("Post-format command failed with exit code %1.\nCheck "
                         "the Terminal panel for details.")
@@ -4663,7 +4738,7 @@ void MainWindow::formatCurrentDocument() {
   m_formatProcessErrorConnection = connect(
       terminalWidget, &TerminalTabWidget::errorOccurred, this,
       [this, executionState, finalizeExecution](const QString &errorMessage) {
-        QMessageBox::warning(
+        ThemedMessageBox::warning(
             this, "Format Document",
             QString("Failed to start %1.\n\n%2")
                 .arg(executionState->activeStageName, errorMessage));
@@ -4900,15 +4975,14 @@ void MainWindow::setupTextArea() {
 }
 
 void MainWindow::noScriptAssignedWarning() {
-  QMessageBox msgBox(this);
+  ThemedMessageBox msgBox(this);
   msgBox.setText("No file is currently open.");
   msgBox.setInformativeText(
       "Open a file first, then you can run it or configure a run template.");
-  auto openButton = msgBox.addButton(tr("Open File"), QMessageBox::ActionRole);
-  msgBox.addButton(QMessageBox::Cancel);
-  msgBox.exec();
+  msgBox.setStandardButtons(ThemedMessageBox::Ok | ThemedMessageBox::Cancel);
+  int result = msgBox.exec();
 
-  if (msgBox.clickedButton() == openButton)
+  if (result == ThemedMessageBox::Ok)
     on_actionOpen_File_triggered();
 }
 
@@ -5168,7 +5242,7 @@ bool MainWindow::startDebugConfigurationByName(
   }
 
   if (m_projectRootPath.isEmpty()) {
-    QMessageBox::information(
+    ThemedMessageBox::information(
         this, tr("Debug Configuration"),
         tr("Open a file or project first to start a debug configuration."));
     return false;
@@ -5191,7 +5265,7 @@ bool MainWindow::startDebugConfigurationByName(
   const DebugConfiguration config =
       DebugConfigurationManager::instance().configuration(selectedName);
   if (config.name.trimmed().isEmpty()) {
-    QMessageBox::warning(
+    ThemedMessageBox::warning(
         this, tr("Debug Configuration"),
         tr("The selected debug configuration could not be found."));
     SettingsManager::instance().setValue("activeDebugTarget", QString());
@@ -5210,8 +5284,8 @@ bool MainWindow::startDebugConfigurationByName(
   QString prepareError;
   if (!prepareDebugConfigurationForStart(config, currentFilePath,
                                          &resolvedConfig, &prepareError)) {
-    QMessageBox msg(this);
-    msg.setIcon(QMessageBox::Warning);
+    ThemedMessageBox msg(this);
+    msg.setIcon(ThemedMessageBox::Warning);
     msg.setWindowTitle(prepareError.contains('\n') ? tr("Debug Build Failed")
                                                    : tr("Debug Configuration"));
     msg.setText(prepareError.contains('\n')
@@ -5219,7 +5293,7 @@ bool MainWindow::startDebugConfigurationByName(
                          "configuration.")
                     : prepareError);
     if (prepareError.contains('\n')) {
-      msg.setDetailedText(prepareError);
+      msg.setInformativeText(prepareError);
     }
     msg.exec();
     m_debugStartInProgress = false;
@@ -5229,7 +5303,7 @@ bool MainWindow::startDebugConfigurationByName(
   const QString sessionId =
       DebugSessionManager::instance().startSession(resolvedConfig);
   if (sessionId.isEmpty()) {
-    QMessageBox::warning(
+    ThemedMessageBox::warning(
         this, tr("Debug Configuration"),
         DebugSessionManager::instance().lastError().isEmpty()
             ? tr("Unable to start the selected debug configuration.")
@@ -5241,6 +5315,7 @@ bool MainWindow::startDebugConfigurationByName(
   attachDebugSession(sessionId);
   if (debugDock) {
     debugDock->show();
+    debugDock->raise();
   }
   m_debugStartInProgress = false;
   return true;
@@ -5270,7 +5345,7 @@ bool MainWindow::startCompoundDebugConfigurationByName(
   }
 
   if (m_projectRootPath.isEmpty()) {
-    QMessageBox::information(
+    ThemedMessageBox::information(
         this, tr("Compound Debug Configuration"),
         tr("Open a file or project first to start a compound configuration."));
     return false;
@@ -5302,7 +5377,7 @@ bool MainWindow::startCompoundDebugConfigurationByName(
   }
 
   if (!foundCompound) {
-    QMessageBox::warning(
+    ThemedMessageBox::warning(
         this, tr("Compound Debug Configuration"),
         tr("The selected compound configuration could not be found."));
     SettingsManager::instance().setValue("activeDebugTarget", QString());
@@ -5313,8 +5388,8 @@ bool MainWindow::startCompoundDebugConfigurationByName(
   }
 
   if (selectedCompound.configurations.isEmpty()) {
-    QMessageBox::warning(this, tr("Compound Debug Configuration"),
-                         tr("The selected compound configuration is empty."));
+    ThemedMessageBox::warning(this, tr("Compound Debug Configuration"),
+                              tr("The selected compound configuration is empty."));
     m_debugStartInProgress = false;
     return false;
   }
@@ -5331,7 +5406,7 @@ bool MainWindow::startCompoundDebugConfigurationByName(
     const DebugConfiguration config =
         DebugConfigurationManager::instance().configuration(configurationName);
     if (config.name.trimmed().isEmpty()) {
-      QMessageBox::warning(
+      ThemedMessageBox::warning(
           this, tr("Compound Debug Configuration"),
           tr("Compound entry '%1' does not match a saved debug configuration.")
               .arg(configurationName));
@@ -5343,8 +5418,8 @@ bool MainWindow::startCompoundDebugConfigurationByName(
     QString prepareError;
     if (!prepareDebugConfigurationForStart(config, currentFilePath,
                                            &resolvedConfig, &prepareError)) {
-      QMessageBox msg(this);
-      msg.setIcon(QMessageBox::Warning);
+      ThemedMessageBox msg(this);
+      msg.setIcon(ThemedMessageBox::Warning);
       msg.setWindowTitle(prepareError.contains('\n')
                              ? tr("Debug Build Failed")
                              : tr("Compound Debug Configuration"));
@@ -5353,7 +5428,7 @@ bool MainWindow::startCompoundDebugConfigurationByName(
                             .arg(configurationName)
                       : prepareError);
       if (prepareError.contains('\n')) {
-        msg.setDetailedText(prepareError);
+        msg.setInformativeText(prepareError);
       }
       msg.exec();
       m_debugStartInProgress = false;
@@ -5372,7 +5447,7 @@ bool MainWindow::startCompoundDebugConfigurationByName(
         DebugSessionManager::instance().stopSession(startedSessionId,
                                                     selectedCompound.stopAll);
       }
-      QMessageBox::warning(
+      ThemedMessageBox::warning(
           this, tr("Compound Debug Configuration"),
           DebugSessionManager::instance().lastError().isEmpty()
               ? tr("Unable to start one of the selected debug configurations.")
@@ -5388,6 +5463,7 @@ bool MainWindow::startCompoundDebugConfigurationByName(
     attachDebugSession(startedSessionIds.first());
     if (debugDock) {
       debugDock->show();
+      debugDock->raise();
     }
   }
 
@@ -5451,8 +5527,7 @@ void MainWindow::on_actionAbout_triggered() {
   if (TextFile.open(QIODevice::ReadOnly)) {
     QTextStream in(&TextFile);
     QString license = in.readAll();
-    QMessageBox::information(this, tr("About Lightpad"), license,
-                             QMessageBox::Close);
+    ThemedMessageBox::information(this, tr("About Lightpad"), license);
     TextFile.close();
   }
 }
@@ -5564,7 +5639,7 @@ void MainWindow::on_actionStart_Debug_Configuration_triggered() {
   }
 
   if (m_projectRootPath.isEmpty()) {
-    QMessageBox::information(
+    ThemedMessageBox::information(
         this, tr("Debug Configuration"),
         tr("Open a file or project first to start a debug configuration."));
     return;
@@ -5597,7 +5672,7 @@ void MainWindow::on_actionStart_Debug_Configuration_triggered() {
   }
 
   if (configNames.isEmpty()) {
-    QMessageBox::information(
+    ThemedMessageBox::information(
         this, tr("Debug Configuration"),
         tr("No debug configurations were found in this workspace."));
     openDebugConfigurationDialog();
@@ -5725,9 +5800,16 @@ void MainWindow::on_actionUnsplit_All_triggered() {
 }
 
 void MainWindow::on_actionToggle_Terminal_triggered() {
-  TerminalTabWidget *widget = ensureTerminalWidget();
-  bool visible = widget->isVisible();
-  widget->setVisible(!visible);
+  ensureTerminalWidget();
+  if (!m_terminalDock)
+    return;
+  bool visible = m_terminalDock->isVisible();
+  if (!visible) {
+    m_terminalDock->show();
+    m_terminalDock->raise();
+  } else {
+    m_terminalDock->hide();
+  }
   ui->actionToggle_Terminal->setChecked(!visible);
 }
 
@@ -5770,8 +5852,8 @@ void MainWindow::on_actionOpen_To_Side_triggered() {
 
 void MainWindow::on_actionGit_Log_triggered() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
-    QMessageBox::information(this, tr("Git Log"),
-                             tr("No valid Git repository found."));
+    ThemedMessageBox::information(this, tr("Git Log"),
+                                 tr("No valid Git repository found."));
     return;
   }
 
@@ -5798,8 +5880,8 @@ void MainWindow::on_actionGit_File_History_triggered() { showFileHistory(); }
 
 void MainWindow::showFileHistory() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
-    QMessageBox::information(this, tr("File History"),
-                             tr("No valid Git repository found."));
+    ThemedMessageBox::information(this, tr("File History"),
+                                 tr("No valid Git repository found."));
     return;
   }
 
@@ -5809,8 +5891,8 @@ void MainWindow::showFileHistory() {
 
   QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
   if (filePath.isEmpty()) {
-    QMessageBox::information(this, tr("File History"),
-                             tr("No file is currently open."));
+    ThemedMessageBox::information(this, tr("File History"),
+                                 tr("No file is currently open."));
     return;
   }
 
@@ -5851,8 +5933,8 @@ void MainWindow::openReadOnlyTab(const QString &content, const QString &title,
 
 void MainWindow::on_actionGit_Rebase_triggered() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
-    QMessageBox::information(this, tr("Git Workbench"),
-                             tr("No valid Git repository found."));
+    ThemedMessageBox::information(this, tr("Git Workbench"),
+                                 tr("No valid Git repository found."));
     return;
   }
 
@@ -6142,6 +6224,7 @@ void MainWindow::on_actionUnfold_Comments_triggered() {
 
 void MainWindow::setTheme(Theme theme) {
   settings.theme = theme;
+  ThemedMessageBox::setGlobalTheme(theme);
 
   QString bgColor = settings.theme.backgroundColor.name();
   QString fgColor = settings.theme.foregroundColor.name();
@@ -6682,6 +6765,75 @@ void MainWindow::setTheme(Theme theme) {
       "QSplitter::handle:horizontal { width: 1px; }"
       "QSplitter::handle:vertical { height: 1px; }"
 
+      "QDockWidget { "
+      "color: " +
+      fgColor +
+      "; "
+      "titlebar-close-icon: url(none); "
+      "titlebar-normal-icon: url(none); "
+      "}"
+      "QDockWidget::title { "
+      "background-color: " +
+      surfaceColor +
+      "; "
+      "padding: 6px 8px; "
+      "border-bottom: 1px solid " +
+      borderColor +
+      "; "
+      "}"
+      "QDockWidget::close-button, QDockWidget::float-button { "
+      "background: transparent; "
+      "border: none; "
+      "padding: 2px; "
+      "}"
+      "QDockWidget::close-button:hover, QDockWidget::float-button:hover { "
+      "background-color: " +
+      hoverColor +
+      "; "
+      "border-radius: 4px; "
+      "}"
+
+      "QMainWindow::separator { "
+      "background-color: " +
+      borderColor +
+      "; "
+      "width: 2px; "
+      "height: 2px; "
+      "}"
+      "QMainWindow::separator:hover { "
+      "background-color: " +
+      accentColor +
+      "; "
+      "}"
+
+      "QTabBar::tab { "
+      "background-color: " +
+      surfaceColor +
+      "; "
+      "color: " +
+      mutedTextColor +
+      "; "
+      "padding: 6px 14px; "
+      "border: none; "
+      "border-bottom: 2px solid transparent; "
+      "}"
+      "QTabBar::tab:selected { "
+      "color: " +
+      fgColor +
+      "; "
+      "border-bottom: 2px solid " +
+      accentColor +
+      "; "
+      "}"
+      "QTabBar::tab:hover:!selected { "
+      "color: " +
+      fgColor +
+      "; "
+      "background-color: " +
+      hoverColor +
+      "; "
+      "}"
+
       "QStatusBar { "
       "background-color: " +
       surfaceColor +
@@ -6866,6 +7018,8 @@ void MainWindow::setTheme(Theme theme) {
   }
 
   updateAllTextAreas(&TextArea::applySelectionPalette, settings.theme);
+
+  saveSettings();
 }
 
 void MainWindow::setProjectRootPath(const QString &path) {

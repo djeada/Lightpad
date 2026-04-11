@@ -1,10 +1,9 @@
 #ifndef FORMATTEMPLATESELECTOR_H
 #define FORMATTEMPLATESELECTOR_H
 
-#include "../../settings/theme.h"
+#include "styleddialog.h"
 #include "../widgets/pythonenvironmentwidget.h"
 #include <QComboBox>
-#include <QDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -17,7 +16,7 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
-class FormatTemplateSelector : public QDialog {
+class FormatTemplateSelector : public StyledDialog {
   Q_OBJECT
 
 public:
@@ -28,7 +27,7 @@ public:
   QString getSelectedTemplateId() const;
   QStringList getCustomArgs() const;
 
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 private slots:
   void onTemplateSelected(QListWidgetItem *item);

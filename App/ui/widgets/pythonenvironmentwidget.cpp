@@ -3,7 +3,7 @@
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
-#include <QMessageBox>
+#include "../dialogs/themedmessagebox.h"
 #include <QPlainTextEdit>
 #include <QVBoxLayout>
 
@@ -288,14 +288,14 @@ void PythonEnvironmentWidget::onCreateVenv() {
   const QString targetPath = PythonProjectEnvironment::normalizePath(
       preference().venvPath, m_workspaceFolder, m_filePath, m_workingDirectory);
   if (targetPath.isEmpty()) {
-    QMessageBox::warning(this, tr("Python Environment"),
-                         tr("Set a virtual environment path first."));
+    ThemedMessageBox::warning(this, tr("Python Environment"),
+                              tr("Set a virtual environment path first."));
     return;
   }
 
   if (!PythonProjectEnvironment::pythonExecutableInEnvironment(targetPath)
            .isEmpty()) {
-    QMessageBox::information(
+    ThemedMessageBox::information(
         this, tr("Python Environment"),
         tr("The selected virtual environment already exists."));
     return;
@@ -303,9 +303,9 @@ void PythonEnvironmentWidget::onCreateVenv() {
 
   const QString interpreter = creationInterpreter();
   if (interpreter.isEmpty()) {
-    QMessageBox::warning(this, tr("Python Environment"),
-                         tr("No base Python interpreter is available to create "
-                            "the virtual environment."));
+    ThemedMessageBox::warning(this, tr("Python Environment"),
+                              tr("No base Python interpreter is available to create "
+                                 "the virtual environment."));
     return;
   }
 
@@ -317,9 +317,9 @@ void PythonEnvironmentWidget::onInstallRequirements() {
   const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
       preference(), m_workspaceFolder, m_filePath, m_workingDirectory);
   if (!info.found || info.interpreter.isEmpty()) {
-    QMessageBox::warning(this, tr("Python Environment"),
-                         tr("Resolve a Python interpreter before installing "
-                            "requirements."));
+    ThemedMessageBox::warning(this, tr("Python Environment"),
+                              tr("Resolve a Python interpreter before installing "
+                                 "requirements."));
     return;
   }
 
@@ -328,7 +328,7 @@ void PythonEnvironmentWidget::onInstallRequirements() {
           info, m_workspaceFolder, m_filePath, m_workingDirectory,
           m_requirementsEdit->text().trimmed());
   if (plan.arguments.isEmpty()) {
-    QMessageBox::warning(
+    ThemedMessageBox::warning(
         this, tr("Python Environment"),
         tr("No requirements file or installable Python project "
            "was found."));
@@ -343,9 +343,9 @@ void PythonEnvironmentWidget::onInstallDebugpy() {
   const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
       preference(), m_workspaceFolder, m_filePath, m_workingDirectory);
   if (!info.found || info.interpreter.isEmpty()) {
-    QMessageBox::warning(this, tr("Python Environment"),
-                         tr("Resolve a Python interpreter before installing "
-                            "debugpy."));
+    ThemedMessageBox::warning(this, tr("Python Environment"),
+                              tr("Resolve a Python interpreter before installing "
+                                 "debugpy."));
     return;
   }
 
@@ -377,7 +377,7 @@ void PythonEnvironmentWidget::startProcess(const QString &title,
                                            const QStringList &arguments,
                                            const QString &workingDirectory) {
   if (m_process) {
-    QMessageBox::information(
+    ThemedMessageBox::information(
         this, tr("Python Environment"),
         tr("Wait for the current Python setup task to finish."));
     return;
@@ -460,8 +460,8 @@ void PythonEnvironmentWidget::finishProcess(const QString &message,
   }
 
   if (success) {
-    QMessageBox::information(this, message, details);
+    ThemedMessageBox::information(this, message, details);
   } else {
-    QMessageBox::warning(this, message, details);
+    ThemedMessageBox::warning(this, message, details);
   }
 }

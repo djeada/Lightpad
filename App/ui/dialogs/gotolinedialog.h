@@ -1,14 +1,13 @@
 #ifndef GOTOLINEDIALOG_H
 #define GOTOLINEDIALOG_H
 
-#include "../../settings/theme.h"
-#include <QDialog>
+#include "styledpopupdialog.h"
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QVBoxLayout>
 
-class GoToLineDialog : public QDialog {
+class GoToLineDialog : public StyledPopupDialog {
   Q_OBJECT
 
 public:
@@ -21,7 +20,7 @@ public:
 
   void showDialog();
 
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
 
 signals:
 

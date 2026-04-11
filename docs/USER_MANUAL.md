@@ -10,12 +10,9 @@ Lightpad is a modern, lightweight code editor designed for developers. It provid
 
 #### Linux (Ubuntu/Debian)
 ```bash
-# Install dependencies
-sudo apt-get install build-essential cmake qtbase5-dev qttools5-dev-tools
-
-# Build from source
 git clone https://github.com/djeada/Lightpad.git
 cd Lightpad
+./scripts/install-deps.sh
 mkdir build && cd build
 cmake ..
 cmake --build .

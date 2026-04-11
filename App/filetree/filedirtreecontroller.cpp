@@ -1,4 +1,5 @@
 #include "filedirtreecontroller.h"
+#include "../ui/dialogs/themedmessagebox.h"
 #include <QDebug>
 
 FileDirTreeController::FileDirTreeController(FileDirTreeModel *model,
@@ -85,15 +86,15 @@ void FileDirTreeController::handleCopyAbsolutePath(const QString &path) {
 }
 
 void FileDirTreeController::showError(const QString &message) {
-  QMessageBox::warning(parentWidget, "Error", message);
+  ThemedMessageBox::warning(parentWidget, "Error", message);
 }
 
 void FileDirTreeController::showInfo(const QString &message) {
-  QMessageBox::information(parentWidget, "Information", message);
+  ThemedMessageBox::information(parentWidget, "Information", message);
 }
 
 bool FileDirTreeController::confirmAction(const QString &message) {
-  return QMessageBox::question(parentWidget, "Confirm", message,
-                               QMessageBox::Yes | QMessageBox::No) ==
-         QMessageBox::Yes;
+  return ThemedMessageBox::question(parentWidget, "Confirm", message,
+                                    ThemedMessageBox::Yes | ThemedMessageBox::No) ==
+         ThemedMessageBox::Yes;
 }

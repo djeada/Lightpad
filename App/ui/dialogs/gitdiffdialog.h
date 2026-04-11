@@ -1,8 +1,7 @@
 #ifndef GITDIFFDIALOG_H
 #define GITDIFFDIALOG_H
 
-#include "../../settings/theme.h"
-#include <QDialog>
+#include "styleddialog.h"
 #include <QPointer>
 
 class GitIntegration;
@@ -17,7 +16,7 @@ class QSplitter;
 class QFrame;
 class QScrollArea;
 
-class GitDiffDialog : public QDialog {
+class GitDiffDialog : public StyledDialog {
   Q_OBJECT
 
 public:
@@ -46,7 +45,7 @@ private slots:
 
 private:
   void buildUi();
-  void applyTheme(const Theme &theme);
+  void applyTheme(const Theme &theme) override;
   void updateDiffPresentation();
   void rebuildUnified();
   void rebuildSplit();

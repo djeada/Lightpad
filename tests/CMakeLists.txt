@@ -228,8 +228,11 @@ add_executable(test_runtemplatemanager
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/runtemplateselector.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/widgets/pythonenvironmentwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${RUN_TEMPLATE_RESOURCES}
 )
@@ -584,6 +587,8 @@ add_test(NAME GitFileSystemModelTests COMMAND test_gitfilesystemmodel)
 add_executable(test_gitworkbenchdialog
     unit/test_gitworkbenchdialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitworkbenchdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
@@ -614,6 +619,8 @@ add_test(NAME GitWorkbenchDialogTests COMMAND test_gitworkbenchdialog)
 add_executable(test_gotolinedialog
     unit/test_gotolinedialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gotolinedialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styledpopupdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
@@ -640,6 +647,8 @@ add_test(NAME GoToLineDialogTests COMMAND test_gotolinedialog)
 add_executable(test_gotosymboldialog
     unit/test_gotosymboldialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gotosymboldialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styledpopupdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
@@ -861,6 +870,9 @@ add_test(NAME FindReplacePanelTests COMMAND test_findreplacepanel)
 add_executable(test_imageviewer
     unit/test_imageviewer.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/viewers/imageviewer.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -997,6 +1009,9 @@ if(HAVE_PDF_SUPPORT)
     add_executable(test_pdfviewer
         unit/test_pdfviewer.cpp
         ${CMAKE_SOURCE_DIR}/App/ui/viewers/pdfviewer.cpp
+        ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+        ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+        ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
         ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     )
 

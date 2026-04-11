@@ -13,7 +13,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMessageBox>
+#include "themedmessagebox.h"
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QProcessEnvironment>
@@ -48,7 +48,7 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
     const QString &filePath, const QString &effectiveLanguageId,
     const QString &overrideLanguageId, LanguageFeatureManager *manager,
     const Theme &theme, QWidget *parent)
-    : QDialog(parent), m_languageId(languageId),
+    : StyledDialog(parent), m_languageId(languageId),
       m_workspaceFolder(workspaceFolder), m_filePath(filePath),
       m_effectiveLanguageId(effectiveLanguageId),
       m_overrideLanguageId(overrideLanguageId), m_manager(manager),
@@ -71,7 +71,6 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
                               ? languageId
                               : LanguageCatalog::displayName(languageId)),
                  this);
-  titleLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
   layout->addWidget(titleLabel);
 
   m_statusBanner = new QLabel(this);
@@ -107,40 +106,29 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
   auto *hintLabel = new QLabel(
       tr("Saved in settings.json under languageServers.%1.*").arg(languageId),
       this);
-  hintLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
   layout->addWidget(hintLabel);
 
   m_detailsEdit = new QPlainTextEdit(this);
   m_detailsEdit->setReadOnly(true);
-  m_detailsEdit->setStyleSheet(
-      QString("QPlainTextEdit { background: %1; color: %2; border: 1px solid "
-              "%3; border-radius: 6px; padding: 8px; }")
-          .arg(theme.surfaceAltColor.name(), theme.foregroundColor.name(),
-               theme.borderColor.name()));
   layout->addWidget(m_detailsEdit, 1);
 
   auto *buttonRow = new QHBoxLayout();
   m_pythonEnvironmentButton =
       new QPushButton(tr("Open Python Environment"), this);
   m_pythonEnvironmentButton->setVisible(languageId == "py");
-  m_pythonEnvironmentButton->setStyleSheet(
-      UIStyleHelper::secondaryButtonStyle(theme));
   buttonRow->addWidget(m_pythonEnvironmentButton);
   buttonRow->addStretch();
 
   m_saveButton = new QPushButton(tr("Save and Retry"), this);
   m_closeButton = new QPushButton(tr("Close"), this);
-  m_saveButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
-  m_closeButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
   buttonRow->addWidget(m_saveButton);
   buttonRow->addWidget(m_closeButton);
   layout->addLayout(buttonRow);
 
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
-  m_enabledCheck->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
-  m_languageCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-  m_commandEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  m_argumentsEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
+  applyTheme(theme);
+  styleTitleLabel(titleLabel);
+  styleSubduedLabel(hintLabel);
+  stylePrimaryButton(m_saveButton);
 
   if (m_manager) {
     const DiagnosticsServerConfig config = m_manager->serverConfig(languageId);
@@ -289,8 +277,8 @@ void LanguageServerStatusDialog::saveAndRetry() {
                     QProcess::splitCommand(m_argumentsEdit->text().trimmed()));
 
   if (!settings.saveSettings()) {
-    QMessageBox::warning(this, tr("Language Server"),
-                         tr("Failed to save language server settings."));
+    ThemedMessageBox::warning(this, tr("Language Server"),
+                              tr("Failed to save language server settings."));
     return;
   }
 

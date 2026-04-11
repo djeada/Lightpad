@@ -1,8 +1,7 @@
 #ifndef LANGUAGESERVERSTATUSDIALOG_H
 #define LANGUAGESERVERSTATUSDIALOG_H
 
-#include "../../settings/theme.h"
-#include <QDialog>
+#include "styleddialog.h"
 
 class QCheckBox;
 class QComboBox;
@@ -12,7 +11,7 @@ class QPlainTextEdit;
 class QPushButton;
 class LanguageFeatureManager;
 
-class LanguageServerStatusDialog : public QDialog {
+class LanguageServerStatusDialog : public StyledDialog {
   Q_OBJECT
 
 public:

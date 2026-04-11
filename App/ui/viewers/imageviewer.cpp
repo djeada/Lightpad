@@ -1,7 +1,7 @@
 #include "imageviewer.h"
 #include <QFileInfo>
 #include <QImageReader>
-#include <QMessageBox>
+#include "../dialogs/themedmessagebox.h"
 #include <QShowEvent>
 #include <QWheelEvent>
 
@@ -71,8 +71,8 @@ bool ImageViewer::loadImage(const QString &filePath) {
 
   QImage image = reader.read();
   if (image.isNull()) {
-    QMessageBox::warning(this, tr("Image Viewer"),
-                         tr("Cannot load image: %1").arg(reader.errorString()));
+    ThemedMessageBox::warning(this, tr("Image Viewer"),
+                              tr("Cannot load image: %1").arg(reader.errorString()));
     return false;
   }
 
