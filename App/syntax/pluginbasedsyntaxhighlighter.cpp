@@ -149,7 +149,7 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     }
 
     int clampedStart = qMax(0, start);
-    int clampedEnd = qMin(start + length, text.size());
+    int clampedEnd = qMin(clampedStart + length, text.size());
     int segmentStart = -1;
 
     for (int position = clampedStart; position < clampedEnd; ++position) {
