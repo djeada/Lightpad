@@ -10,11 +10,9 @@
 #include <QtTest>
 
 LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
-    : QWidget(parent), mainWindow(nullptr), treeContainer(nullptr),
-      treeHeader(nullptr), treeTitleLabel(nullptr), treeFilterEdit(nullptr),
-      treeRefreshButton(nullptr), treeCollapseButton(nullptr),
-      treeExpandButton(nullptr), treeView(nullptr), textArea(nullptr),
-      minimap(nullptr), model(nullptr), m_ownsModel(!treeViewHidden),
+    : QWidget(parent), mainWindow(nullptr), treeView(nullptr),
+      textArea(nullptr), minimap(nullptr), model(nullptr),
+      m_ownsModel(!treeViewHidden),
       m_gitIntegration(nullptr) {}
 
 QTreeView *LightpadPage::getTreeView() { return treeView; }
