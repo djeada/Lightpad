@@ -75,6 +75,10 @@ void TestSettingsManager::testDefaultValues() {
   QCOMPARE(sm.getValue("tabWidth", 0).toInt(), 4);
   QCOMPARE(sm.getValue("autoIndent", false).toBool(), true);
   QCOMPARE(sm.getValue("showLineNumberArea", false).toBool(), true);
+  QCOMPARE(sm.getValue("showSourceControlDock", false).toBool(), true);
+  QCOMPARE(sm.getValue("showDebugDock", true).toBool(), false);
+  QCOMPARE(sm.getValue("showTerminalDock", true).toBool(), false);
+  QCOMPARE(sm.getValue("showFindReplacePanel", true).toBool(), false);
 }
 
 void TestSettingsManager::testSetGetValue() {
@@ -138,6 +142,8 @@ void TestSettingsManager::testLoadSaveSettings() {
   SettingsManager &sm = SettingsManager::instance();
 
   sm.setValue("testSaveLoad", "unique_value_123");
+  sm.setValue("currentFilePath", "/tmp/example.cpp");
+  sm.setValue("showTerminalDock", true);
 
   QVERIFY(sm.saveSettings());
 
@@ -145,6 +151,9 @@ void TestSettingsManager::testLoadSaveSettings() {
   QVERIFY(sm.loadSettings());
 
   QCOMPARE(sm.getValue("testSaveLoad").toString(), QString("unique_value_123"));
+  QCOMPARE(sm.getValue("currentFilePath").toString(),
+           QString("/tmp/example.cpp"));
+  QCOMPARE(sm.getValue("showTerminalDock").toBool(), true);
 
   sm.resetToDefaults();
   sm.saveSettings();

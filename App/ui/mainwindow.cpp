@@ -114,6 +114,21 @@
 
 namespace {
 constexpr auto kCompoundDebugTargetPrefix = "compound:";
+
+template <typename T>
+bool hasVisibleChildWidget(const QObject *parent) {
+  if (!parent) {
+    return false;
+  }
+
+  const QList<T *> widgets = parent->findChildren<T *>();
+  for (T *widget : widgets) {
+    if (widget && widget->isVisible()) {
+      return true;
+    }
+  }
+  return false;
+}
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -298,20 +313,6 @@ MainWindow::MainWindow(QWidget *parent)
           [saveWatches]() { saveWatches(); });
 
   loadSettings();
-  if (SettingsManager::instance()
-          .getValue("showSourceControlDock", true)
-          .toBool()) {
-    ensureSourceControlPanel();
-    if (sourceControlDock) {
-      sourceControlDock->show();
-    }
-    if (ui->actionToggle_Source_Control) {
-      ui->actionToggle_Source_Control->setChecked(true);
-    }
-  }
-  if (debugDock) {
-    debugDock->hide();
-  }
   setWindowTitle("LightPad");
 }
 
@@ -606,9 +607,10 @@ void MainWindow::loadSettings() {
       openFileAndAddToNewTab(filePath);
     }
   }
-  m_restoringSession = false;
 
   applyTreeExpandedStateToViews();
+  restoreSessionUiState();
+  m_restoringSession = false;
 }
 
 void MainWindow::saveSettings() {
@@ -618,13 +620,56 @@ void MainWindow::saveSettings() {
 
   SettingsManager &globalSettings = SettingsManager::instance();
   globalSettings.setValue("lastProjectPath", m_projectRootPath);
-  if (sourceControlDock) {
-    globalSettings.setValue("showSourceControlDock",
-                            sourceControlDock->isVisible());
-  }
-  if (debugDock) {
-    globalSettings.setValue("showDebugDock", debugDock->isVisible());
-  }
+  globalSettings.setValue("showSourceControlDock",
+                          sourceControlDock && sourceControlDock->isVisible());
+  globalSettings.setValue("showDebugDock", debugDock && debugDock->isVisible());
+  globalSettings.setValue("showTerminalDock",
+                          m_terminalDock && m_terminalDock->isVisible());
+  globalSettings.setValue("showProblemsDock",
+                          m_problemsDock && m_problemsDock->isVisible());
+  globalSettings.setValue("showTestDock", testDock && testDock->isVisible());
+  globalSettings.setValue("showMarkdownPreviewDock",
+                          m_markdownPreviewDock &&
+                              m_markdownPreviewDock->isVisible());
+  globalSettings.setValue("showLatexPreviewDock",
+                          m_latexPreviewDock && m_latexPreviewDock->isVisible());
+  globalSettings.setValue("markdownPreviewFilePath",
+                          m_markdownPreviewPanel ? m_markdownPreviewPanel->filePath()
+                                                 : QString());
+  globalSettings.setValue("latexPreviewFilePath",
+                          m_latexPreviewPanel ? m_latexPreviewPanel->filePath()
+                                              : QString());
+  globalSettings.setValue("showFindReplacePanel",
+                          findReplacePanel && findReplacePanel->isVisible());
+  globalSettings.setValue("findReplaceOnlyFind",
+                          !findReplacePanel || findReplacePanel->isOnlyFind());
+  globalSettings.setValue(
+      "findReplaceGlobalMode",
+      findReplacePanel && findReplacePanel->isVisible() &&
+          findReplacePanel->isGlobalMode());
+  globalSettings.setValue("showPreferencesDialog",
+                          preferences && preferences->isVisible());
+  globalSettings.setValue("showRunConfigurationDialog",
+                          hasVisibleChildWidget<RunTemplateSelector>(this));
+  globalSettings.setValue("showFormatConfigurationDialog",
+                          hasVisibleChildWidget<FormatTemplateSelector>(this));
+  globalSettings.setValue("showDebugConfigurationDialog",
+                          hasVisibleChildWidget<DebugConfigurationDialog>(this));
+  globalSettings.setValue("showShortcutsDialog",
+                          hasVisibleChildWidget<ShortcutsDialog>(this));
+  globalSettings.setValue("showCommandPalette",
+                          commandPalette && commandPalette->isVisible());
+  globalSettings.setValue("showGoToLineDialog",
+                          goToLineDialog && goToLineDialog->isVisible());
+  globalSettings.setValue("showGoToSymbolDialog",
+                          goToSymbolDialog && goToSymbolDialog->isVisible());
+  globalSettings.setValue("showFileQuickOpen",
+                          fileQuickOpen && fileQuickOpen->isVisible());
+  globalSettings.setValue("showRecentFilesDialog",
+                          recentFilesDialog && recentFilesDialog->isVisible());
+  globalSettings.setValue(
+      "mainWindowDockState",
+      QString::fromLatin1(QMainWindow::saveState().toBase64()));
 
   QJsonArray openTabs;
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
@@ -638,8 +683,137 @@ void MainWindow::saveSettings() {
   }
   LOG_INFO(QString("saveSettings: saving %1 open tabs").arg(openTabs.size()));
   globalSettings.setValue("openTabs", openTabs);
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  const int currentIndex = tabWidget ? tabWidget->currentIndex() : -1;
+  globalSettings.setValue(
+      "currentFilePath",
+      (tabWidget && currentIndex >= 0) ? tabWidget->getFilePath(currentIndex)
+                                       : QString());
+  if (testPanel) {
+    testPanel->saveState();
+  }
   persistTreeStateToSettings();
   globalSettings.saveSettings();
+}
+
+void MainWindow::restoreSessionUiState() {
+  SettingsManager &globalSettings = SettingsManager::instance();
+  const QString currentFilePath =
+      globalSettings.getValue("currentFilePath", "").toString();
+
+  if (globalSettings.getValue("showSourceControlDock", true).toBool()) {
+    ensureSourceControlPanel();
+    if (sourceControlDock) {
+      sourceControlDock->show();
+    }
+  }
+
+  if (globalSettings.getValue("showDebugDock", false).toBool()) {
+    ensureDebugPanel();
+    if (debugDock) {
+      debugDock->show();
+    }
+  }
+
+  if (globalSettings.getValue("showTerminalDock", false).toBool()) {
+    showTerminalPanel();
+  }
+
+  if (globalSettings.getValue("showProblemsDock", false).toBool()) {
+    showProblemsPanel();
+  }
+
+  if (globalSettings.getValue("showTestDock", false).toBool()) {
+    ensureTestPanel();
+    if (testDock) {
+      testDock->show();
+      testDock->raise();
+    }
+  }
+
+  const QString markdownPreviewFilePath =
+      globalSettings.getValue("markdownPreviewFilePath", "").toString();
+  if (globalSettings.getValue("showMarkdownPreviewDock", false).toBool() &&
+      !markdownPreviewFilePath.isEmpty() &&
+      QFileInfo(markdownPreviewFilePath).exists()) {
+    openFileAndAddToNewTab(markdownPreviewFilePath);
+    on_actionPreview_Markdown_triggered();
+  }
+
+  const QString latexPreviewFilePath =
+      globalSettings.getValue("latexPreviewFilePath", "").toString();
+  if (globalSettings.getValue("showLatexPreviewDock", false).toBool() &&
+      !latexPreviewFilePath.isEmpty() && QFileInfo(latexPreviewFilePath).exists()) {
+    openFileAndAddToNewTab(latexPreviewFilePath);
+    on_actionPreview_LaTeX_triggered();
+  }
+
+  const QString dockStateBase64 =
+      globalSettings.getValue("mainWindowDockState", "").toString();
+  if (!dockStateBase64.isEmpty()) {
+    QMainWindow::restoreState(QByteArray::fromBase64(dockStateBase64.toLatin1()));
+  }
+
+  if (findReplacePanel && findReplacePanel->isVisible()) {
+    findReplacePanel->hide();
+  }
+  if (globalSettings.getValue("showFindReplacePanel", false).toBool()) {
+    const bool onlyFind =
+        globalSettings.getValue("findReplaceOnlyFind", true).toBool();
+    showFindReplace(onlyFind);
+    if (findReplacePanel) {
+      findReplacePanel->setGlobalMode(
+          globalSettings.getValue("findReplaceGlobalMode", false).toBool());
+      findReplacePanel->setReplaceVisibility(!onlyFind);
+    }
+  }
+
+  if (globalSettings.getValue("showPreferencesDialog", false).toBool()) {
+    on_actionPreferences_triggered();
+  }
+  if (globalSettings.getValue("showRunConfigurationDialog", false).toBool()) {
+    openConfigurationDialog();
+  }
+  if (globalSettings.getValue("showFormatConfigurationDialog", false).toBool()) {
+    openFormatConfigurationDialog();
+  }
+  if (globalSettings.getValue("showDebugConfigurationDialog", false).toBool()) {
+    openDebugConfigurationDialog();
+  }
+  if (globalSettings.getValue("showShortcutsDialog", false).toBool()) {
+    openShortcutsDialog();
+  }
+  if (globalSettings.getValue("showCommandPalette", false).toBool()) {
+    showCommandPalette();
+  }
+  if (globalSettings.getValue("showGoToLineDialog", false).toBool()) {
+    showGoToLineDialog();
+  }
+  if (globalSettings.getValue("showGoToSymbolDialog", false).toBool()) {
+    showGoToSymbolDialog();
+  }
+  if (globalSettings.getValue("showFileQuickOpen", false).toBool()) {
+    showFileQuickOpen();
+  }
+  if (globalSettings.getValue("showRecentFilesDialog", false).toBool()) {
+    showRecentFilesDialog();
+  }
+
+  if (ui->actionToggle_Source_Control) {
+    ui->actionToggle_Source_Control->setChecked(sourceControlDock &&
+                                               sourceControlDock->isVisible());
+  }
+  if (ui->actionToggle_Terminal) {
+    ui->actionToggle_Terminal->setChecked(m_terminalDock &&
+                                          m_terminalDock->isVisible());
+  }
+  if (ui->actionToggle_Problems) {
+    ui->actionToggle_Problems->setChecked(m_problemsDock &&
+                                          m_problemsDock->isVisible());
+  }
+  if (!currentFilePath.isEmpty() && QFileInfo(currentFilePath).exists()) {
+    openFileAndAddToNewTab(currentFilePath);
+  }
 }
 
 void MainWindow::ensureProjectWorkspaceVisible() {
@@ -1229,6 +1403,23 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     showProblemsPanel();
     return true;
   }
+
+  const bool isTrackedSessionWidget =
+      watched == preferences || watched == findReplacePanel ||
+      watched == commandPalette || watched == goToLineDialog ||
+      watched == goToSymbolDialog || watched == fileQuickOpen ||
+      watched == recentFilesDialog || qobject_cast<RunTemplateSelector *>(watched) ||
+      qobject_cast<FormatTemplateSelector *>(watched) ||
+      qobject_cast<DebugConfigurationDialog *>(watched) ||
+      qobject_cast<ShortcutsDialog *>(watched);
+  const bool isVisibilityEvent = event->type() == QEvent::Show ||
+                                 event->type() == QEvent::Hide ||
+                                 event->type() == QEvent::Close;
+  if (m_globalSettingsLoaded && !m_restoringSession && isTrackedSessionWidget &&
+      isVisibilityEvent) {
+    saveSettings();
+  }
+
   return QMainWindow::eventFilter(watched, event);
 }
 
@@ -1414,6 +1605,9 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
   updateBreadcrumb(filePath);
 
   tabWidget->currentChanged(tabWidget->currentIndex());
+  if (!m_restoringSession) {
+    saveSettings();
+  }
 }
 
 void MainWindow::closeTabPage(QString filePath) {
@@ -1423,6 +1617,9 @@ void MainWindow::closeTabPage(QString filePath) {
         tabWidget->removeTab(i);
       }
     }
+  }
+  if (!m_restoringSession) {
+    saveSettings();
   }
 }
 
@@ -1644,6 +1841,9 @@ void MainWindow::on_actionOpen_Project_triggered() {
   setMainWindowTitle(QFileInfo(folderPath).fileName());
   if (fileQuickOpen) {
     fileQuickOpen->setRootDirectory(folderPath);
+  }
+  if (m_globalSettingsLoaded && !m_restoringSession) {
+    saveSettings();
   }
 }
 
@@ -2078,6 +2278,15 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
     addDockWidget(Qt::BottomDockWidgetArea, m_terminalDock);
     tabifyBottomDock(m_terminalDock);
     m_terminalDock->hide();
+    connect(m_terminalDock, &QDockWidget::visibilityChanged, this,
+            [this](bool visible) {
+              if (ui->actionToggle_Terminal) {
+                ui->actionToggle_Terminal->setChecked(visible);
+              }
+              if (m_globalSettingsLoaded && !m_restoringSession) {
+                saveSettings();
+              }
+            });
   }
 
   return terminalWidget;
@@ -2372,6 +2581,15 @@ void MainWindow::showProblemsPanel() {
     addDockWidget(Qt::BottomDockWidgetArea, m_problemsDock);
     tabifyBottomDock(m_problemsDock);
     m_problemsDock->hide();
+    connect(m_problemsDock, &QDockWidget::visibilityChanged, this,
+            [this](bool visible) {
+              if (ui->actionToggle_Problems) {
+                ui->actionToggle_Problems->setChecked(visible);
+              }
+              if (m_globalSettingsLoaded && !m_restoringSession) {
+                saveSettings();
+              }
+            });
   }
 
   if (!m_vimCommandPanelActive && m_problemsDock) {
@@ -2641,9 +2859,9 @@ void MainWindow::ensureSourceControlPanel() {
             if (ui->actionToggle_Source_Control) {
               ui->actionToggle_Source_Control->setChecked(visible);
             }
-            SettingsManager::instance().setValue("showSourceControlDock",
-                                                 visible);
-            SettingsManager::instance().saveSettings();
+            if (m_globalSettingsLoaded && !m_restoringSession) {
+              saveSettings();
+            }
           });
 }
 
@@ -2738,8 +2956,10 @@ void MainWindow::ensureDebugPanel() {
 
   connect(debugDock, &QDockWidget::visibilityChanged, this,
           [this](bool visible) {
-            SettingsManager::instance().setValue("showDebugDock", visible);
-            SettingsManager::instance().saveSettings();
+            Q_UNUSED(visible)
+            if (m_globalSettingsLoaded && !m_restoringSession) {
+              saveSettings();
+            }
           });
 
   connect(&DebugSessionManager::instance(),
@@ -2767,6 +2987,7 @@ void MainWindow::ensureTestPanel() {
   }
 
   TestConfigurationManager::instance().loadTemplates();
+  testPanel->restoreState();
 
   connect(testPanel, &TestPanel::locationClicked, this,
           [this](const QString &filePath, int line, int column) {
@@ -2822,6 +3043,11 @@ void MainWindow::ensureTestPanel() {
   addDockWidget(Qt::BottomDockWidgetArea, testDock);
   tabifyBottomDock(testDock);
   testDock->hide();
+  connect(testDock, &QDockWidget::visibilityChanged, this, [this](bool) {
+    if (m_globalSettingsLoaded && !m_restoringSession) {
+      saveSettings();
+    }
+  });
 }
 
 void MainWindow::tabifyBottomDock(QDockWidget *dock) {
@@ -2929,6 +3155,9 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
             if (!visible && m_markdownPreviewDock) {
               m_markdownPreviewDock->hide();
             }
+            if (m_globalSettingsLoaded && !m_restoringSession) {
+              saveSettings();
+            }
           });
 
   LOG_INFO(QString("Opened Markdown preview for: %1").arg(filePath));
@@ -2980,6 +3209,12 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
             if (m_diagnosticsManager) {
               QString uri = DiagnosticUtils::filePathToUri(filePath);
               m_diagnosticsManager->upsertDiagnostics(uri, diags, "latex");
+            }
+          });
+  connect(m_latexPreviewDock, &QDockWidget::visibilityChanged, this,
+          [this](bool) {
+            if (m_globalSettingsLoaded && !m_restoringSession) {
+              saveSettings();
             }
           });
 
@@ -4868,12 +5103,26 @@ void MainWindow::closeCurrentTab() {
   }
 
   tabWidget->closeCurrentTab();
+  if (!m_restoringSession) {
+    saveSettings();
+  }
 }
 
 void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
   QObject::connect(tabWidget, &QTabWidget::currentChanged, this,
                    [this, tabWidget](int index) {
                      updateTabWidgetContext(tabWidget, index);
+                     if (m_globalSettingsLoaded && !m_restoringSession) {
+                       saveSettings();
+                     }
+                    });
+  QObject::connect(tabWidget, &QTabWidget::tabCloseRequested, this,
+                   [this](int) {
+                     QTimer::singleShot(0, this, [this]() {
+                       if (m_globalSettingsLoaded && !m_restoringSession) {
+                         saveSettings();
+                       }
+                     });
                    });
 }
 
@@ -5880,18 +6129,21 @@ void MainWindow::on_actionToggle_Minimap_triggered() {
 void MainWindow::on_actionSplit_Horizontally_triggered() {
   if (m_splitEditorContainer) {
     m_splitEditorContainer->splitHorizontal();
+    saveSettings();
   }
 }
 
 void MainWindow::on_actionSplit_Vertically_triggered() {
   if (m_splitEditorContainer) {
     m_splitEditorContainer->splitVertical();
+    saveSettings();
   }
 }
 
 void MainWindow::on_actionClose_Editor_Group_triggered() {
   if (m_splitEditorContainer) {
     m_splitEditorContainer->closeCurrentGroup();
+    saveSettings();
   }
 }
 
@@ -5910,6 +6162,7 @@ void MainWindow::on_actionFocus_Previous_Group_triggered() {
 void MainWindow::on_actionUnsplit_All_triggered() {
   if (m_splitEditorContainer) {
     m_splitEditorContainer->unsplitAll();
+    saveSettings();
   }
 }
 
@@ -5961,6 +6214,7 @@ void MainWindow::on_actionOpen_To_Side_triggered() {
   LightpadTabWidget *newGroup = m_splitEditorContainer->splitHorizontal();
   if (newGroup) {
     openFileAndAddToNewTab(filePath);
+    saveSettings();
   }
 }
 

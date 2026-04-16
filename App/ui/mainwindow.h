@@ -336,6 +336,7 @@ private:
   void setTreeCurrentPath(const QString &path);
   void loadTreeStateFromSettings(const QString &rootPath);
   void persistTreeStateToSettings();
+  void restoreSessionUiState();
   QList<LightpadTreeView *> allTreeViews() const;
   void expandIndexInView(QTreeView *treeView, const QModelIndex &index);
   void ensureSourceControlPanel();
