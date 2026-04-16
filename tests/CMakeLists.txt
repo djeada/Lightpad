@@ -416,6 +416,33 @@ target_compile_definitions(test_dockerfilesyntaxplugin PRIVATE QT_DEPRECATED_WAR
 
 add_test(NAME DockerfileSyntaxPluginTests COMMAND test_dockerfilesyntaxplugin)
 
+# PluginBasedSyntaxHighlighter test executable
+add_executable(test_pluginbasedsyntaxhighlighter
+    unit/test_pluginbasedsyntaxhighlighter.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/pluginbasedsyntaxhighlighter.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/shellsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/pythonsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_pluginbasedsyntaxhighlighter PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/syntax
+)
+
+target_link_libraries(test_pluginbasedsyntaxhighlighter
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_pluginbasedsyntaxhighlighter PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME PluginBasedSyntaxHighlighterTests COMMAND test_pluginbasedsyntaxhighlighter)
+
 # CompletionProviderRegistry test executable
 add_executable(test_completionproviderregistry
     unit/test_completionproviderregistry.cpp
@@ -1483,6 +1510,7 @@ set(TEST_LIST
     SyntaxPluginRegistryTests 
     LatexSyntaxPluginTests
     DockerfileSyntaxPluginTests
+    PluginBasedSyntaxHighlighterTests
     CompletionProviderRegistryTests 
     CompletionEngineTests
     DapTests 
@@ -1542,6 +1570,7 @@ set(TEST_TARGETS
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap
     test_dockerfilesyntaxplugin
+    test_pluginbasedsyntaxhighlighter
     test_gitintegration test_gitfilesystemmodel test_gitworkbenchdialog test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_spliteditorcontainer
     test_imageviewer
