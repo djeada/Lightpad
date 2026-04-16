@@ -11,6 +11,7 @@
 SplitEditorContainer::SplitEditorContainer(QWidget *parent)
     : QWidget(parent), m_mainWindow(nullptr), m_rootSplitter(nullptr),
       m_currentTabWidget(nullptr) {
+  setObjectName("splitEditorContainer");
   setupUI();
 }
 
@@ -52,6 +53,7 @@ void SplitEditorContainer::setupUI() {
   layout->setSpacing(0);
 
   m_rootSplitter = new QSplitter(Qt::Horizontal, this);
+  m_rootSplitter->setObjectName("splitEditorRootSplitter");
   m_rootSplitter->setHandleWidth(2);
   m_rootSplitter->setChildrenCollapsible(false);
   layout->addWidget(m_rootSplitter);
@@ -310,6 +312,8 @@ void SplitEditorContainer::onTabWidgetFocused() {
 
 LightpadTabWidget *SplitEditorContainer::createTabWidget() {
   LightpadTabWidget *tabWidget = new LightpadTabWidget(this);
+  tabWidget->setObjectName(
+      QString("splitEditorTabWidget%1").arg(m_tabWidgets.size() + 1));
 
   if (m_mainWindow) {
     tabWidget->setMainWindow(m_mainWindow);

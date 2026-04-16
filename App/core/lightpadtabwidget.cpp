@@ -73,12 +73,14 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
 }
 
 LightpadTabWidget::LightpadTabWidget(QWidget *parent) : QTabWidget(parent) {
+  setObjectName("lightpadTabWidget");
   setupTabBar();
   setDocumentMode(false);
   setContentsMargins(0, 0, 0, 0);
   tabBar()->setExpanding(false);
   tabBar()->setUsesScrollButtons(true);
   tabBar()->setContentsMargins(0, 0, 0, 0);
+  tabBar()->setObjectName("lightpadTabBar");
 
   QWidget::connect(tabBar(), &QTabBar::tabCloseRequested, this,
                    [this](int index) { removeTab(index); });

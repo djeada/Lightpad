@@ -40,8 +40,10 @@ void TerminalTabWidget::setupUI() {
   setupToolbar();
 
   m_splitter = new QSplitter(Qt::Horizontal, this);
+  m_splitter->setObjectName("terminalSplitter");
 
   m_tabWidget = new QTabWidget(this);
+  m_tabWidget->setObjectName("terminalTabs");
   m_tabWidget->setTabsClosable(true);
   m_tabWidget->setMovable(true);
   m_tabWidget->setDocumentMode(true);
@@ -57,11 +59,13 @@ void TerminalTabWidget::setupUI() {
 
 void TerminalTabWidget::setupToolbar() {
   QWidget *toolbar = new QWidget(this);
+  toolbar->setObjectName("terminalToolbar");
   QHBoxLayout *toolbarLayout = new QHBoxLayout(toolbar);
   toolbarLayout->setContentsMargins(4, 2, 4, 2);
   toolbarLayout->setSpacing(2);
 
   m_newTerminalButton = new QToolButton(toolbar);
+  m_newTerminalButton->setObjectName("newTerminalButton");
   m_newTerminalButton->setText("+");
   m_newTerminalButton->setToolTip(tr("New Terminal (Ctrl+Shift+`)"));
   m_newTerminalButton->setIcon(
@@ -76,6 +80,7 @@ void TerminalTabWidget::setupToolbar() {
           &TerminalTabWidget::onNewTerminalClicked);
 
   m_clearButton = new QToolButton(toolbar);
+  m_clearButton->setObjectName("clearTerminalButton");
   m_clearButton->setToolTip(tr("Clear Terminal (Ctrl+L)"));
   m_clearButton->setIcon(
       qApp->style()->standardIcon(QStyle::SP_DialogResetButton));
@@ -84,6 +89,7 @@ void TerminalTabWidget::setupToolbar() {
           &TerminalTabWidget::onClearTerminalClicked);
 
   m_killButton = new QToolButton(toolbar);
+  m_killButton->setObjectName("killTerminalButton");
   m_killButton->setToolTip(tr("Kill Terminal Process"));
   m_killButton->setIcon(qApp->style()->standardIcon(QStyle::SP_BrowserStop));
   m_killButton->setAutoRaise(true);
@@ -92,6 +98,7 @@ void TerminalTabWidget::setupToolbar() {
           &TerminalTabWidget::onKillProcessClicked);
 
   m_closeButton = new QToolButton(toolbar);
+  m_closeButton->setObjectName("closeTerminalPanelButton");
   m_closeButton->setToolTip(tr("Close Terminal Panel"));
   m_closeButton->setText(QStringLiteral("\u00D7"));
   m_closeButton->setAutoRaise(true);
