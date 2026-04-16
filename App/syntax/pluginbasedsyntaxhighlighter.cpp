@@ -1,6 +1,7 @@
 #include "pluginbasedsyntaxhighlighter.h"
 #include "../core/logging/logger.h"
 #include <QBitArray>
+#include <functional>
 
 PluginBasedSyntaxHighlighter::PluginBasedSyntaxHighlighter(
     ISyntaxPlugin *plugin, const Theme &theme, const QString &searchKeyword,
@@ -143,7 +144,7 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
 
   auto applyFormatRange = [&](int start, int length,
                               const QTextCharFormat &format, bool protect) {
-    if (start < 0 || length <= 0 || text.isEmpty()) {
+    if (start < 0 || length <= 0) {
       return;
     }
 
@@ -176,10 +177,12 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
   };
 
   auto isCommentLikeRule = [](const QString &ruleName) {
-    return ruleName.toLower().contains("comment");
+    QString normalized = ruleName.toLower();
+    return normalized.contains("comment");
   };
 
-  auto applyRules = [&](auto predicate, bool protect) {
+  auto applyRules = [&](const std::function<bool(const QString &)> &predicate,
+                        bool protect) {
     for (const SyntaxRule &rule : m_rules) {
       if (!predicate(rule.name)) {
         continue;
