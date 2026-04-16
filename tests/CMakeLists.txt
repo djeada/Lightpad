@@ -848,8 +848,37 @@ target_compile_definitions(test_minimap PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME MinimapTests COMMAND test_minimap)
 
-# SplitEditorContainer - not adding unit test due to complex MainWindow dependencies
-# The feature is tested via integration testing with the main application
+# SplitEditorContainer test executable
+add_executable(test_spliteditorcontainer
+    unit/test_spliteditorcontainer.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/spliteditorcontainer.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/spliteditorcontainer.h
+    ${CMAKE_SOURCE_DIR}/App/core/lightpadtabwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/lightpadtabwidget.h
+    ${CMAKE_SOURCE_DIR}/App/core/lightpadpage.h
+    ${CMAKE_SOURCE_DIR}/App/ui/mainwindow.h
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_spliteditorcontainer PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/core
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/ui/panels
+)
+
+target_link_libraries(test_spliteditorcontainer
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_spliteditorcontainer PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME SplitEditorContainerTests COMMAND test_spliteditorcontainer)
+
 # FindReplacePanel test executable
 add_executable(test_findreplacepanel
     unit/test_findreplacepanel.cpp
@@ -1468,6 +1497,7 @@ set(TEST_LIST
     RecentFilesManagerTests
     NavigationHistoryTests
     MinimapTests
+    SplitEditorContainerTests
     FindReplacePanelTests
     ImageViewerTests
     SymbolNavigationTests
@@ -1513,6 +1543,7 @@ set(TEST_TARGETS
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap
     test_dockerfilesyntaxplugin
     test_gitintegration test_gitfilesystemmodel test_gitworkbenchdialog test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
+    test_spliteditorcontainer
     test_imageviewer
     test_markdowntools
     test_markdownpreviewpanel
