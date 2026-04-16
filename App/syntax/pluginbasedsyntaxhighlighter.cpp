@@ -1,5 +1,6 @@
 #include "pluginbasedsyntaxhighlighter.h"
 #include "../core/logging/logger.h"
+#include <QBitArray>
 
 PluginBasedSyntaxHighlighter::PluginBasedSyntaxHighlighter(
     ISyntaxPlugin *plugin, const Theme &theme, const QString &searchKeyword,
@@ -138,15 +139,62 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     return;
   }
 
-  for (const SyntaxRule &rule : m_rules) {
-    QRegularExpressionMatchIterator matchIterator =
-        rule.pattern.globalMatch(text);
+  QBitArray protectedCharacters(text.size());
 
-    while (matchIterator.hasNext()) {
-      QRegularExpressionMatch match = matchIterator.next();
-      setFormat(match.capturedStart(), match.capturedLength(), rule.format);
+  auto applyFormatRange = [&](int start, int length,
+                              const QTextCharFormat &format, bool protect) {
+    if (start < 0 || length <= 0 || text.isEmpty()) {
+      return;
     }
-  }
+
+    int clampedStart = qMax(0, start);
+    int clampedEnd = qMin(start + length, text.size());
+    int segmentStart = -1;
+
+    for (int position = clampedStart; position < clampedEnd; ++position) {
+      if (!protectedCharacters.testBit(position)) {
+        if (segmentStart < 0) {
+          segmentStart = position;
+        }
+        if (protect) {
+          protectedCharacters.setBit(position);
+        }
+      } else if (segmentStart >= 0) {
+        setFormat(segmentStart, position - segmentStart, format);
+        segmentStart = -1;
+      }
+    }
+
+    if (segmentStart >= 0) {
+      setFormat(segmentStart, clampedEnd - segmentStart, format);
+    }
+  };
+
+  auto isStringLikeRule = [](const QString &ruleName) {
+    QString normalized = ruleName.toLower();
+    return normalized.contains("string") || normalized.contains("quotation");
+  };
+
+  auto isCommentLikeRule = [](const QString &ruleName) {
+    return ruleName.toLower().contains("comment");
+  };
+
+  auto applyRules = [&](auto predicate, bool protect) {
+    for (const SyntaxRule &rule : m_rules) {
+      if (!predicate(rule.name)) {
+        continue;
+      }
+
+      QRegularExpressionMatchIterator matchIterator =
+          rule.pattern.globalMatch(text);
+
+      while (matchIterator.hasNext()) {
+        QRegularExpressionMatch match = matchIterator.next();
+        applyFormatRange(match.capturedStart(), match.capturedLength(),
+                         rule.format, protect);
+      }
+    }
+  };
 
   setCurrentBlockState(0);
   for (int i = 0; i < m_multiLineBlocks.size(); ++i) {
@@ -181,13 +229,21 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
         blockLength = endIndex - startIndex + endMatch.capturedLength();
       }
 
-      setFormat(startIndex, blockLength, block.format);
+      applyFormatRange(startIndex, blockLength, block.format, true);
 
       QRegularExpressionMatch nextStart =
           block.startPattern.match(text, startIndex + blockLength);
       startIndex = nextStart.hasMatch() ? nextStart.capturedStart() : -1;
     }
   }
+
+  applyRules(isStringLikeRule, true);
+  applyRules(isCommentLikeRule, true);
+  applyRules(
+      [&](const QString &ruleName) {
+        return !isStringLikeRule(ruleName) && !isCommentLikeRule(ruleName);
+      },
+      false);
 
   if (!m_searchKeyword.isEmpty()) {
     QRegularExpression searchPattern(m_searchKeyword,
