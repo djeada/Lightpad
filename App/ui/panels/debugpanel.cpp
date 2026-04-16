@@ -228,24 +228,24 @@ void DebugPanel::applyTheme(const Theme &theme) {
     return color;
   };
 
-  QColor panelSurface = blend(theme.backgroundColor, QColor("#0f141b"), 0.08);
-  QColor toolbarShell = blend(theme.backgroundColor, QColor("#10161d"), 0.14);
-  QColor shellSurface = blend(theme.backgroundColor, QColor("#121821"), 0.12);
-  QColor cardSurface = blend(theme.backgroundColor, QColor("#141b24"), 0.08);
-  QColor recessedSurface = blend(theme.backgroundColor, QColor("#0d1218"), 0.1);
-  QColor inputSurface = blend(theme.backgroundColor, QColor("#10161d"), 0.08);
+  QColor panelSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
+  QColor toolbarShell = blend(theme.backgroundColor, theme.surfaceColor, 0.14);
+  QColor shellSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.12);
+  QColor cardSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
+  QColor recessedSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.1);
+  QColor inputSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
   QColor focusSurface =
       blend(theme.backgroundColor, theme.accentSoftColor, 0.06);
   QColor mutedText = blend(theme.foregroundColor, theme.backgroundColor, 0.24);
   QColor subtleText = blend(theme.foregroundColor, theme.backgroundColor, 0.34);
-  QColor consoleSurface = blend(theme.backgroundColor, QColor("#0b1016"), 0.08);
+  QColor consoleSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
   QColor readyBg = withAlpha(theme.foregroundColor, 16);
   QColor startingBg = withAlpha(theme.warningColor, 26);
   QColor runningBg = withAlpha(theme.accentColor, 28);
   QColor pausedBg = withAlpha(theme.successColor, 32);
   QColor errorBg = withAlpha(theme.errorColor, 34);
   QColor toolbarButtonBg =
-      blend(theme.backgroundColor, QColor("#0f141b"), 0.04);
+      blend(theme.backgroundColor, theme.surfaceColor, 0.04);
   QColor toolbarButtonHover =
       blend(theme.backgroundColor, theme.accentSoftColor, 0.04);
   QColor toolbarButtonPressed =
@@ -2638,7 +2638,7 @@ QColor DebugPanel::consoleErrorColor() const {
     return m_theme.errorColor;
   }
   const bool darkBackground = palette().color(QPalette::Base).lightness() < 128;
-  return darkBackground ? QColor("#ff7b72") : QColor("#b42318");
+  return darkBackground ? m_theme.errorColor.lighter(120) : m_theme.errorColor.darker(120);
 }
 
 QColor DebugPanel::consoleMutedColor() const {

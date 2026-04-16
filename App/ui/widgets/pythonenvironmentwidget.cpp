@@ -4,6 +4,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include "../dialogs/themedmessagebox.h"
+#include "../../settings/theme.h"
 #include <QPlainTextEdit>
 #include <QVBoxLayout>
 
@@ -21,7 +22,7 @@ PythonEnvironmentWidget::PythonEnvironmentWidget(QWidget *parent)
   m_hintLabel = new QLabel(
       tr("Templates can use ${python}, ${venv}, ${requirementsFile}."));
   m_hintLabel->setWordWrap(true);
-  m_hintLabel->setStyleSheet("font-size: 11px; color: #8b949e;");
+  m_hintLabel->setStyleSheet("font-size: 11px;");
   layout->addWidget(m_hintLabel);
 
   auto *formLayout = new QFormLayout();
@@ -163,6 +164,21 @@ void PythonEnvironmentWidget::refreshStatus() {
   const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
       pref, m_workspaceFolder, m_filePath, m_workingDirectory);
 
+  Theme t;
+  const QString fgColor = t.foregroundColor.name();
+  const QString successBg =
+      QColor(t.successColor.red() / 8, t.successColor.green() / 8,
+             t.successColor.blue() / 8)
+          .name();
+  const QString errorBg =
+      QColor(t.errorColor.red() / 8, t.errorColor.green() / 8,
+             t.errorColor.blue() / 8)
+          .name();
+  const QString warningBg =
+      QColor(t.warningColor.red() / 8, t.warningColor.green() / 8,
+             t.warningColor.blue() / 8)
+          .name();
+
   QString bannerBg;
   QString bannerBorder;
   QString bannerIcon;
@@ -175,62 +191,65 @@ void PythonEnvironmentWidget::refreshStatus() {
 
   if (info.found && info.isVirtualEnvironment()) {
 
-    bannerBg = "#0d1f0d";
-    bannerBorder = "#238636";
-    bannerTextColor = "#3fb950";
+    bannerBg = successBg;
+    bannerBorder = t.successColor.name();
+    bannerTextColor = t.successColor.name();
     bannerIcon = QString::fromUtf8("\xe2\x9c\x93");
     bannerTitle = tr("Virtual environment active");
     const QString venvName = QFileInfo(info.venvPath).fileName();
-    bannerDetail = QString("<br><span style='color:#e6edf3;font-size:12px;'>"
-                           "%1 &nbsp;&bull;&nbsp; %2</span>")
-                       .arg(info.interpreter.toHtmlEscaped(),
+    bannerDetail = QString("<br><span style='color:%1;font-size:12px;'>"
+                           "%2 &nbsp;&bull;&nbsp; %3</span>")
+                       .arg(fgColor, info.interpreter.toHtmlEscaped(),
                             info.venvPath.toHtmlEscaped());
   } else if (info.found) {
 
-    bannerBg = "#161b22";
-    bannerBorder = "#30363d";
-    bannerTextColor = "#8b949e";
+    bannerBg = t.surfaceColor.name();
+    bannerBorder = t.borderColor.name();
+    bannerTextColor = t.borderColor.name();
     bannerIcon = QString::fromUtf8("\xe2\x9c\x93");
     bannerTitle = tr("System Python (no virtual environment)");
-    bannerDetail = QString("<br><span style='color:#e6edf3;font-size:12px;'>"
-                           "%1</span>")
-                       .arg(info.interpreter.toHtmlEscaped());
+    bannerDetail = QString("<br><span style='color:%1;font-size:12px;'>"
+                           "%2</span>")
+                       .arg(fgColor, info.interpreter.toHtmlEscaped());
   } else if (pref.mode == PythonProjectEnvironment::customInterpreterMode() &&
              pref.customInterpreter.isEmpty()) {
 
-    bannerBg = "#2d0b0b";
-    bannerBorder = "#f85149";
-    bannerTextColor = "#f85149";
+    bannerBg = errorBg;
+    bannerBorder = t.errorColor.name();
+    bannerTextColor = t.errorColor.name();
     bannerIcon = QString::fromUtf8("\xe2\x9c\x97");
     bannerTitle = tr("No interpreter selected");
     bannerDetail =
-        QString("<br><span style='color:#f0883e;font-size:12px;'>"
-                "Set the interpreter path below to continue.</span>");
+        QString("<br><span style='color:%1;font-size:12px;'>"
+                "Set the interpreter path below to continue.</span>")
+            .arg(t.warningColor.name());
     m_interpreterEdit->setStyleSheet(
-        "QLineEdit { border: 2px solid #f85149; }");
+        QString("QLineEdit { border: 2px solid %1; }").arg(t.errorColor.name()));
   } else if (!pref.venvPath.isEmpty() && !info.found) {
 
-    bannerBg = "#2d1b00";
-    bannerBorder = "#d29922";
-    bannerTextColor = "#d29922";
+    bannerBg = warningBg;
+    bannerBorder = t.warningColor.name();
+    bannerTextColor = t.warningColor.name();
     bannerIcon = QString::fromUtf8("\xe2\x9a\xa0");
     bannerTitle = tr("Virtual environment not found");
-    bannerDetail = QString("<br><span style='color:#f0883e;font-size:12px;'>"
-                           "Expected at: %1<br>"
+    bannerDetail = QString("<br><span style='color:%1;font-size:12px;'>"
+                           "Expected at: %2<br>"
                            "Click <b>Create Venv</b> to create one.</span>")
-                       .arg(pref.venvPath.toHtmlEscaped());
-    m_venvPathEdit->setStyleSheet("QLineEdit { border: 2px solid #d29922; }");
+                       .arg(t.warningColor.name(), pref.venvPath.toHtmlEscaped());
+    m_venvPathEdit->setStyleSheet(
+        QString("QLineEdit { border: 2px solid %1; }").arg(t.warningColor.name()));
   } else {
 
-    bannerBg = "#2d0b0b";
-    bannerBorder = "#f85149";
-    bannerTextColor = "#f85149";
+    bannerBg = errorBg;
+    bannerBorder = t.errorColor.name();
+    bannerTextColor = t.errorColor.name();
     bannerIcon = QString::fromUtf8("\xe2\x9c\x97");
     bannerTitle = tr("Python interpreter not found");
     bannerDetail =
-        QString("<br><span style='color:#f0883e;font-size:12px;'>"
-                "%1</span>")
-            .arg(info.statusMessage.isEmpty()
+        QString("<br><span style='color:%1;font-size:12px;'>"
+                "%2</span>")
+            .arg(t.warningColor.name(),
+                 info.statusMessage.isEmpty()
                      ? tr("Install Python or configure a virtual environment.")
                      : info.statusMessage.toHtmlEscaped());
   }

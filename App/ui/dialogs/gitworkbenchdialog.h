@@ -224,7 +224,6 @@ private:
 
   static const QStringList REBASE_ACTIONS;
   static const QStringList REBASE_ACTIONS_EXTENDED;
-  static const QMap<QString, QString> ACTION_COLORS;
   static const QMap<QString, QString> ACTION_ICONS;
 };
 

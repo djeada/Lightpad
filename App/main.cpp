@@ -22,6 +22,7 @@
 #include "syntax/typescriptsyntaxplugin.h"
 #include "syntax/yamlsyntaxplugin.h"
 #include "ui/mainwindow.h"
+#include "ui/widgets/hacker/hackerstyle.h"
 #include <memory>
 
 void registerBuiltInSyntaxPlugins() {
@@ -54,6 +55,7 @@ int main(int argv, char **args) {
   app.setApplicationName("Lightpad");
   app.setOrganizationName("Lightpad");
   app.setWindowIcon(QIcon(":/resources/icons/app.png"));
+  app.setStyle(new HackerStyle());
 
   registerBuiltInSyntaxPlugins();
 

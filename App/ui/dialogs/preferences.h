@@ -6,6 +6,7 @@
 #include <QDialog>
 #include <QFontComboBox>
 #include <QLabel>
+#include <QListWidget>
 #include <QSpinBox>
 #include <QToolButton>
 
@@ -23,14 +24,18 @@ private:
   void loadCurrentSettings();
   void connectSignals();
   void persistAll();
+  void persistCurrentTheme(const QString &activeThemeName);
 
   QWidget *createSectionHeader(const QString &title);
   QWidget *createSeparator();
   QToolButton *createColorSwatch(const QColor &color);
+  QWidget *buildThemeSection();
 
   void onFontFamilyChanged(const QFont &font);
   void onFontSizeChanged(int size);
   void onColorSwatchClicked(QToolButton *button, const QString &role);
+  void onThemePresetChanged(int row);
+  void onScanlinesToggled(bool enabled);
 
   MainWindow *m_mainWindow;
 
@@ -50,6 +55,11 @@ private:
   QCheckBox *m_lineNumbersCheck;
   QCheckBox *m_currentLineCheck;
   QCheckBox *m_bracketMatchCheck;
+
+  // Theme controls
+  QListWidget *m_themeList;
+  QWidget *m_themePreview;
+  QCheckBox *m_scanlinesCheck = nullptr;
 
   // Color swatches (role name → button)
   QMap<QString, QToolButton *> m_colorSwatches;

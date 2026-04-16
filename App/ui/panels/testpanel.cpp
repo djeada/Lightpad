@@ -340,8 +340,8 @@ void TestPanel::applyTheme(const Theme &theme) {
     return color;
   };
 
-  QColor panelSurface = blend(theme.backgroundColor, QColor("#0f141b"), 0.08);
-  QColor toolbarShell = blend(theme.backgroundColor, QColor("#10161d"), 0.14);
+  QColor panelSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
+  QColor toolbarShell = blend(theme.backgroundColor, theme.surfaceColor, 0.14);
   QColor treeBg = theme.backgroundColor;
   QColor textColor = theme.foregroundColor;
   QColor borderColor = theme.borderColor;
@@ -349,13 +349,13 @@ void TestPanel::applyTheme(const Theme &theme) {
   QColor subtleText = blend(theme.foregroundColor, theme.backgroundColor, 0.40);
   QColor hoverBg = blend(theme.backgroundColor, theme.foregroundColor, 0.06);
   QColor selectedBg = theme.accentSoftColor.isValid() ? theme.accentSoftColor
-                                                      : QColor("#1f4b7a");
+                                                      : theme.accentColor;
   QColor accentColor =
-      theme.accentColor.isValid() ? theme.accentColor : QColor("#58a6ff");
+      theme.accentColor.isValid() ? theme.accentColor : theme.foregroundColor;
   QColor successColor =
-      theme.successColor.isValid() ? theme.successColor : QColor("#3fb950");
+      theme.successColor.isValid() ? theme.successColor : theme.successColor;
   QColor errorColor =
-      theme.errorColor.isValid() ? theme.errorColor : QColor("#f85149");
+      theme.errorColor.isValid() ? theme.errorColor : theme.errorColor;
 
   if (auto *delegate =
           dynamic_cast<TestTreeDelegate *>(m_tree->itemDelegate())) {
@@ -816,14 +816,14 @@ void TestPanel::updateStatusLabel() {
   int total = m_passedCount + m_failedCount + m_skippedCount + m_erroredCount;
 
   QColor successColor =
-      m_theme.successColor.isValid() ? m_theme.successColor : QColor("#3fb950");
+      m_theme.successColor.isValid() ? m_theme.successColor : m_theme.successColor;
   QColor errorColor =
-      m_theme.errorColor.isValid() ? m_theme.errorColor : QColor("#f85149");
+      m_theme.errorColor.isValid() ? m_theme.errorColor : m_theme.errorColor;
   QColor warningColor =
-      m_theme.warningColor.isValid() ? m_theme.warningColor : QColor("#d29922");
+      m_theme.warningColor.isValid() ? m_theme.warningColor : m_theme.accentColor;
   QColor mutedColor = m_theme.foregroundColor.isValid()
                           ? m_theme.foregroundColor.darker(140)
-                          : QColor("#8b949e");
+                          : m_theme.singleLineCommentFormat;
 
   QString text = QString("<span style='color:%6'>"
                          "<span style='color:%1'>\u2714 %2</span>"
@@ -854,27 +854,27 @@ void TestPanel::updateTreeItemIcon(QTreeWidgetItem *item, TestStatus status) {
   QStyle::StandardPixmap statusIcon = QStyle::SP_FileIcon;
   switch (status) {
   case TestStatus::Passed:
-    color = QColor("#3fb950");
+    color = m_theme.successColor.isValid() ? m_theme.successColor : m_theme.successColor;
     statusIcon = QStyle::SP_DialogApplyButton;
     break;
   case TestStatus::Failed:
-    color = QColor("#f85149");
+    color = m_theme.errorColor.isValid() ? m_theme.errorColor : m_theme.errorColor;
     statusIcon = QStyle::SP_MessageBoxCritical;
     break;
   case TestStatus::Skipped:
-    color = QColor("#d29922");
+    color = m_theme.warningColor.isValid() ? m_theme.warningColor : m_theme.accentColor;
     statusIcon = QStyle::SP_DialogCancelButton;
     break;
   case TestStatus::Errored:
-    color = QColor("#f0883e");
+    color = m_theme.warningColor.isValid() ? m_theme.warningColor.lighter(120) : m_theme.accentColor;
     statusIcon = QStyle::SP_MessageBoxWarning;
     break;
   case TestStatus::Running:
-    color = QColor("#58a6ff");
+    color = m_theme.accentColor;
     statusIcon = QStyle::SP_BrowserReload;
     break;
   case TestStatus::Queued:
-    color = QColor("#8b949e");
+    color = m_theme.singleLineCommentFormat;
     statusIcon = QStyle::SP_ArrowRight;
     break;
   }

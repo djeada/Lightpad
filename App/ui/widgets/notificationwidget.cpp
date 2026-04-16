@@ -72,7 +72,7 @@ void NotificationWidget::setupUi() {
   setGraphicsEffect(opacityEffect);
 
   m_fadeAnimation = new QPropertyAnimation(opacityEffect, "opacity", this);
-  m_fadeAnimation->setDuration(300);
+  m_fadeAnimation->setDuration(220);
   connect(m_fadeAnimation, &QPropertyAnimation::finished, this, [this]() {
     if (m_fadeAnimation->direction() == QAbstractAnimation::Backward ||
         m_fadeAnimation->endValue().toDouble() < 0.1) {
@@ -80,6 +80,10 @@ void NotificationWidget::setupUi() {
       deleteLater();
     }
   });
+
+  m_slideAnimation = new QPropertyAnimation(this, "pos", this);
+  m_slideAnimation->setDuration(260);
+  m_slideAnimation->setEasingCurve(QEasingCurve::OutCubic);
 }
 
 void NotificationWidget::showNotification(const QString &title,
@@ -105,6 +109,16 @@ void NotificationWidget::showNotification(const QString &title,
   m_fadeAnimation->setDirection(QAbstractAnimation::Forward);
   m_fadeAnimation->start();
 
+  if (parentWidget()) {
+    QPoint finalPos = pos();
+    QPoint startPos(parentWidget()->width() + 20, finalPos.y());
+    move(startPos);
+    m_slideAnimation->stop();
+    m_slideAnimation->setStartValue(startPos);
+    m_slideAnimation->setEndValue(finalPos);
+    m_slideAnimation->start();
+  }
+
   if (durationMs > 0) {
     m_dismissTimer->start(durationMs);
   }
@@ -119,6 +133,11 @@ void NotificationWidget::dismiss() {
   m_fadeAnimation->start();
 }
 
+void NotificationWidget::applyTheme(const Theme &theme) {
+  m_theme = theme;
+  update();
+}
+
 void NotificationWidget::paintEvent(QPaintEvent *event) {
   Q_UNUSED(event);
   QPainter painter(this);
@@ -126,26 +145,26 @@ void NotificationWidget::paintEvent(QPaintEvent *event) {
 
   QPainterPath path;
   path.addRoundedRect(rect().adjusted(1, 1, -1, -1), 8, 8);
-  painter.fillPath(path, QColor("#1c2128"));
-  painter.setPen(QPen(QColor("#30363d"), 1));
+  painter.fillPath(path, m_theme.surfaceColor);
+  painter.setPen(QPen(m_theme.borderColor, 1));
   painter.drawPath(path);
 }
 
 void NotificationWidget::applyStyle(Level level) {
-  QString accentColor;
+  QString levelColor;
   QString icon;
 
   switch (level) {
   case Level::Info:
-    accentColor = "#58a6ff";
+    levelColor = m_theme.accentColor.name();
     icon = "ℹ";
     break;
   case Level::Warning:
-    accentColor = "#d29922";
+    levelColor = m_theme.warningColor.name();
     icon = "⚠";
     break;
   case Level::Error:
-    accentColor = "#f85149";
+    levelColor = m_theme.errorColor.name();
     icon = "✖";
     break;
   }
@@ -153,17 +172,19 @@ void NotificationWidget::applyStyle(Level level) {
   m_iconLabel->setText(icon);
   m_iconLabel->setStyleSheet(
       QString("font-size: 16px; color: %1; background: transparent;")
-          .arg(accentColor));
+          .arg(levelColor));
   m_titleLabel->setStyleSheet(
-      QString("font-weight: 600; font-size: 12px; color: #e6edf3; background: "
-              "transparent;"));
+      QString("font-weight: 600; font-size: 12px; color: %1; background: "
+              "transparent;")
+          .arg(m_theme.foregroundColor.name()));
   m_messageLabel->setStyleSheet(
-      "font-size: 11px; color: #8b949e; background: transparent;");
+      QString("font-size: 11px; color: %1; background: transparent;")
+          .arg(m_theme.borderColor.name()));
 
   setStyleSheet(QString("NotificationWidget {"
                         "  border-left: 3px solid %1;"
                         "}")
-                    .arg(accentColor));
+                    .arg(levelColor));
 }
 
 void NotificationWidget::positionInParent() {

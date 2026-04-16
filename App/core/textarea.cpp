@@ -32,6 +32,7 @@
 #include "../settings/textareasettings.h"
 #include "../syntax/pluginbasedsyntaxhighlighter.h"
 #include "../syntax/syntaxpluginregistry.h"
+#include "../theme/themeengine.h"
 #include "../test_templates/testfileclassifier.h"
 #include "../ui/mainwindow.h"
 #include "editor/codefolding.h"
@@ -45,12 +46,27 @@
 
 QMap<QChar, QChar> brackets = {{'{', '}'}, {'(', ')'}, {'[', ']'}};
 constexpr int defaultLineSpacingPercent = 130;
+constexpr qreal editorDocumentMargin = 4.0;
 
 static bool isCompletionEnabledForLanguage(const QString &languageId) {
   QString normalized = LanguageCatalog::normalize(languageId);
   QString effectiveId =
       normalized.isEmpty() ? languageId.trimmed().toLower() : normalized;
   return !effectiveId.isEmpty() && effectiveId != "plaintext";
+}
+
+static QString editorFontStyleSheet(const QFont &font) {
+  QString family = font.family();
+  family.replace("\\", "\\\\");
+  family.replace("\"", "\\\"");
+
+  QString style =
+      QString("TextArea, QPlainTextEdit { font-family: \"%1\"; ").arg(family);
+  if (font.pointSize() > 0) {
+    style += QString("font-size: %1pt; ").arg(font.pointSize());
+  }
+  style += "}";
+  return style;
 }
 
 class LineSpacingLayout : public QPlainTextDocumentLayout {
@@ -233,12 +249,22 @@ TextArea::TextArea(QWidget *parent)
   m_codeFolding = new CodeFoldingManager(document());
   m_vimMode = new VimMode(this, this);
   mainFont = QApplication::font();
+  QPlainTextEdit::setFont(mainFont);
+  QPlainTextEdit::setStyleSheet(editorFontStyleSheet(mainFont));
   setupTextArea();
   document()->setDefaultFont(mainFont);
+  document()->setDocumentMargin(editorDocumentMargin);
 
   auto *layout = new LineSpacingLayout(document());
   document()->setDocumentLayout(layout);
+  document()->setDocumentMargin(editorDocumentMargin);
   applyLineSpacing(defaultLineSpacingPercent);
+  QTimer::singleShot(0, this, [this]() {
+    updateLineNumberAreaLayout();
+    if (lineNumberArea) {
+      lineNumberArea->update();
+    }
+  });
   show();
 }
 
@@ -264,12 +290,22 @@ TextArea::TextArea(const TextAreaSettings &settings, QWidget *parent)
   m_codeFolding = new CodeFoldingManager(document());
   m_vimMode = new VimMode(this, this);
   mainFont = settings.mainFont;
+  QPlainTextEdit::setFont(mainFont);
+  QPlainTextEdit::setStyleSheet(editorFontStyleSheet(mainFont));
   setupTextArea();
   document()->setDefaultFont(mainFont);
+  document()->setDocumentMargin(editorDocumentMargin);
 
   auto *layout = new LineSpacingLayout(document());
   document()->setDocumentLayout(layout);
+  document()->setDocumentMargin(editorDocumentMargin);
   applyLineSpacing(defaultLineSpacingPercent);
+  QTimer::singleShot(0, this, [this]() {
+    updateLineNumberAreaLayout();
+    if (lineNumberArea) {
+      lineNumberArea->update();
+    }
+  });
   show();
 }
 
@@ -364,7 +400,13 @@ void TextArea::setFontSize(int size) {
 
   if (doc) {
     mainFont.setPointSize(size);
+    QPlainTextEdit::setFont(mainFont);
+    if (viewport()) {
+      viewport()->setFont(mainFont);
+    }
+    QPlainTextEdit::setStyleSheet(editorFontStyleSheet(mainFont));
     doc->setDefaultFont(mainFont);
+    doc->setDocumentMargin(editorDocumentMargin);
     applyLineSpacing(defaultLineSpacingPercent);
   }
   if (lineNumberArea) {
@@ -375,12 +417,19 @@ void TextArea::setFontSize(int size) {
 
 void TextArea::setFont(QFont font) {
   mainFont = font;
+  QPlainTextEdit::setFont(mainFont);
+  if (viewport()) {
+    viewport()->setFont(mainFont);
+  }
+  QPlainTextEdit::setStyleSheet(editorFontStyleSheet(mainFont));
   auto doc = document();
 
-  if (doc)
-    doc->setDefaultFont(font);
+  if (doc) {
+    doc->setDefaultFont(mainFont);
+    doc->setDocumentMargin(editorDocumentMargin);
+  }
   if (lineNumberArea) {
-    lineNumberArea->setFont(font);
+    lineNumberArea->setFont(mainFont);
     updateLineNumberAreaLayout();
   }
   applyLineSpacing(defaultLineSpacingPercent);
@@ -1880,6 +1929,18 @@ void TextArea::paintEvent(QPaintEvent *event) {
         painter.drawLine(cursorRect.topLeft(), cursorRect.bottomLeft());
       }
     }
+  }
+
+  if (hasFocus()) {
+    QPainter glowPainter(viewport());
+    glowPainter.setRenderHint(QPainter::Antialiasing, true);
+    QRect cr = cursorRect();
+    QColor glow = ThemeEngine::instance().activeTheme().colors.accentPrimary;
+    glow.setAlpha(50);
+    glowPainter.setPen(Qt::NoPen);
+    glowPainter.setBrush(glow);
+    QRect halo = cr.adjusted(-2, -1, 3, 1);
+    glowPainter.drawRoundedRect(halo, 2, 2);
   }
 }
 

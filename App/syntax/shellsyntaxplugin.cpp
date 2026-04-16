@@ -2,90 +2,97 @@
 #include <QRegularExpression>
 
 QStringList ShellSyntaxPlugin::getPrimaryKeywords() {
-  return {"if",   "then",     "else",   "elif",  "fi",    "case",
-          "esac", "for",      "while",  "until", "do",    "done",
-          "in",   "function", "select", "time",  "coproc"};
+  return {"if",       "then",    "else",     "elif",    "fi",
+          "case",     "esac",    "for",      "while",   "until",
+          "do",       "done",    "in",       "function", "select",
+          "time",     "coproc",  "break",    "continue", "return"};
 }
 
 QStringList ShellSyntaxPlugin::getSecondaryKeywords() {
-  return {"break",   "continue", "return", "exit",     "shift",   "source",
-          "alias",   "unalias",  "export", "readonly", "declare", "local",
-          "typeset", "unset",    "set",    "shopt",    "trap",    "eval",
-          "exec",    "true",     "false"};
+  return {"exit",    "shift",    "source",  ".",       "alias",
+          "unalias", "export",   "readonly", "declare", "local",
+          "typeset", "unset",    "set",     "shopt",   "trap",
+          "eval",    "exec",     "true",    "false",   "test",
+          "let",     "mapfile",  "readarray", "getopts", "wait",
+          "jobs",    "fg",       "bg",      "disown",  "umask",
+          "ulimit",  "bind",     "builtin", "caller",  "command",
+          "compgen", "complete", "help",    "history", "logout"};
 }
 
 QStringList ShellSyntaxPlugin::getTertiaryKeywords() {
-  return {"echo",  "printf", "read", "cd",   "pwd",  "pushd", "popd",
-          "dirs",  "ls",     "cat",  "grep", "sed",  "awk",   "find",
-          "xargs", "sort",   "uniq", "head", "tail", "wc",    "cut",
-          "paste", "tr",     "test", "expr"};
+  return {"echo",    "printf",  "read",    "cd",       "pwd",
+          "pushd",   "popd",    "dirs",    "ls",       "cat",
+          "grep",    "egrep",   "fgrep",   "sed",      "awk",
+          "find",    "xargs",   "sort",    "uniq",     "head",
+          "tail",    "wc",      "cut",     "paste",    "tr",
+          "expr",    "basename", "dirname", "mktemp",   "mkdir",
+          "rmdir",   "rm",      "cp",      "mv",       "ln",
+          "chmod",   "chown",   "touch",   "date",     "sleep",
+          "curl",    "wget",    "tar",     "gzip",     "gunzip",
+          "zip",     "unzip",   "ssh",     "scp",      "rsync",
+          "git",     "docker",  "kubectl", "systemctl", "sudo"};
 }
 
 QVector<SyntaxRule> ShellSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
-  for (const QString &keyword : getPrimaryKeywords()) {
+  auto appendRule = [&rules](const QString &pattern, const QString &name,
+                             QRegularExpression::PatternOptions options =
+                                 QRegularExpression::NoPatternOption) {
     SyntaxRule rule;
-    rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
-    rule.name = "keyword_0";
+    rule.pattern = QRegularExpression(pattern, options);
+    rule.name = name;
     rules.append(rule);
+  };
+
+  appendRule("^#!.*$", "comment");
+
+  appendRule("(^|[\\s;|&])#.*$", "comment");
+
+  appendRule("\\$\\((?:[^()\"'`]|\\\\.|\"(?:\\\\.|[^\"\\\\])*\"|'[^']*'|`(?:\\\\.|[^`\\\\])*`)*\\)",
+             "function");
+
+  appendRule("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\(\\s*\\))", "function");
+  appendRule("\\bfunction\\s+[A-Za-z_][A-Za-z0-9_]*", "function");
+
+  appendRule("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*(?:\\[[^\\]]+\\])?=)",
+             "keyword_1");
+
+  appendRule("\\$\\{[#?!]?[A-Za-z_][A-Za-z0-9_]*(?:\\[[^\\]]+\\])?(?:[:+?=/%#-][^}]*)?\\}",
+             "keyword_1");
+  appendRule("\\$[A-Za-z_][A-Za-z0-9_]*|\\$[0-9@#?$!*-]", "keyword_1");
+
+  appendRule("\\[\\[|\\]\\]|\\b(?:-eq|-ne|-lt|-le|-gt|-ge|-nt|-ot|-ef|-z|-n|-r|-w|-x|-s|-d|-f|-e|-L|-O|-G)\\b",
+             "keyword_0");
+
+  appendRule("(?<![\\w./])-{1,2}[A-Za-z0-9][A-Za-z0-9_-]*(?:=[^\\s;|&]+)?",
+             "keyword_2");
+
+  appendRule("(?:^|[\\s;|&])(?:[0-9]?>&[0-9-]|[0-9]?>>?|[0-9]?<<?-?|&>>?|\\|&?|&&|;;|;)",
+             "keyword_0");
+
+  appendRule("\\b(?:0[xX][0-9A-Fa-f]+|[0-9]+(?:\\.[0-9]+)?)\\b", "number");
+  appendRule("(^|[\\s;|&])\\.(?=\\s+)", "keyword_1");
+
+  for (const QString &keyword : getPrimaryKeywords()) {
+    appendRule("\\b" + QRegularExpression::escape(keyword) + "\\b",
+               "keyword_0");
   }
 
   for (const QString &keyword : getSecondaryKeywords()) {
-    SyntaxRule rule;
-    rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
-    rule.name = "keyword_1";
-    rules.append(rule);
+    appendRule("\\b" + QRegularExpression::escape(keyword) + "\\b",
+               "keyword_1");
   }
 
   for (const QString &keyword : getTertiaryKeywords()) {
-    SyntaxRule rule;
-    rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
-    rule.name = "keyword_2";
-    rules.append(rule);
+    appendRule("\\b" + QRegularExpression::escape(keyword) + "\\b",
+               "keyword_2");
   }
 
-  SyntaxRule varRule;
-  varRule.pattern =
-      QRegularExpression("\\$[A-Za-z_][A-Za-z0-9_]*|\\$\\{[^}]+\\}");
-  varRule.name = "keyword_1";
-  rules.append(varRule);
-
-  SyntaxRule specialVarRule;
-  specialVarRule.pattern = QRegularExpression("\\$[0-9@#?$!*-]");
-  specialVarRule.name = "keyword_1";
-  rules.append(specialVarRule);
-
-  SyntaxRule numberRule;
-  numberRule.pattern = QRegularExpression("\\b\\d+\\b");
-  numberRule.name = "number";
-  rules.append(numberRule);
-
-  SyntaxRule stringRule;
-  stringRule.pattern = QRegularExpression("\"[^\"]*\"");
-  stringRule.name = "string";
-  rules.append(stringRule);
-
-  SyntaxRule singleQuoteRule;
-  singleQuoteRule.pattern = QRegularExpression("'[^']*'");
-  singleQuoteRule.name = "string";
-  rules.append(singleQuoteRule);
-
-  SyntaxRule functionRule;
-  functionRule.pattern =
-      QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\(\\))");
-  functionRule.name = "function";
-  rules.append(functionRule);
-
-  SyntaxRule shebangRule;
-  shebangRule.pattern = QRegularExpression("^#!.*$");
-  shebangRule.name = "comment";
-  rules.append(shebangRule);
-
-  SyntaxRule commentRule;
-  commentRule.pattern = QRegularExpression("#[^\n]*");
-  commentRule.name = "comment";
-  rules.append(commentRule);
+  appendRule("\\$'(?:\\\\.|[^'\\\\])*'", "string");
+  appendRule("\"(?:\\\\.|[^\"\\\\])*\"", "string");
+  appendRule("'[^']*'", "string");
+  appendRule("`(?:\\\\.|[^`\\\\])*`", "string");
 
   return rules;
 }

@@ -8,6 +8,8 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include "../../settings/theme.h"
+
 class NotificationWidget : public QFrame {
   Q_OBJECT
   Q_PROPERTY(qreal windowOpacity READ windowOpacity WRITE setWindowOpacity)
@@ -19,6 +21,8 @@ public:
 
   void showNotification(const QString &title, const QString &message,
                         Level level = Level::Info, int durationMs = 6000);
+
+  void applyTheme(const Theme &theme);
 
   void dismiss();
 
@@ -37,6 +41,8 @@ private:
   QPushButton *m_closeButton;
   QTimer *m_dismissTimer;
   QPropertyAnimation *m_fadeAnimation;
+  QPropertyAnimation *m_slideAnimation;
+  Theme m_theme;
 };
 
 class NotificationManager : public QObject {

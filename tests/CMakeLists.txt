@@ -280,6 +280,10 @@ add_executable(test_terminal
     ${CMAKE_SOURCE_DIR}/App/ui/panels/shellprofile.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themeengine.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themedefinition.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themepresets.cpp
 )
 
 target_include_directories(test_terminal PRIVATE
@@ -306,6 +310,9 @@ add_executable(test_terminaltabwidget
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themeengine.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themedefinition.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themepresets.cpp
 )
 
 target_include_directories(test_terminaltabwidget PRIVATE

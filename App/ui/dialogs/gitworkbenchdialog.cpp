@@ -38,11 +38,6 @@ const QStringList GitWorkbenchDialog::REBASE_ACTIONS = {
 const QStringList GitWorkbenchDialog::REBASE_ACTIONS_EXTENDED = {
     "pick", "reword", "edit", "squash", "fixup", "drop", "drop-keep"};
 
-const QMap<QString, QString> GitWorkbenchDialog::ACTION_COLORS = {
-    {"pick", "#3fb950"},     {"reword", "#d29922"}, {"edit", "#58a6ff"},
-    {"squash", "#a371f7"},   {"fixup", "#8b949e"},  {"drop", "#f85149"},
-    {"drop-keep", "#d29922"}};
-
 const QMap<QString, QString> GitWorkbenchDialog::ACTION_ICONS = {
     {"pick", "✓"},  {"reword", "✏"}, {"edit", "⚙"},     {"squash", "◫"},
     {"fixup", "⊕"}, {"drop", "✕"},   {"drop-keep", "◌"}};
@@ -97,14 +92,16 @@ public:
       QColor dotColor = laneColors[0];
 
       if (isDrop) {
-        dotColor = QColor("#f85149");
+        dotColor = m_theme->errorColor;
         dotColor.setAlpha(120);
       } else if (isDropKeep) {
-        dotColor = QColor("#d29922");
+        dotColor = m_theme->warningColor;
         dotColor.setAlpha(160);
       }
 
-      QPen lanePen(isDrop ? QColor(0xf8, 0x51, 0x49, 80) : dotColor, 2.0,
+      QColor dropLaneColor = m_theme->errorColor;
+      dropLaneColor.setAlpha(80);
+      QPen lanePen(isDrop ? dropLaneColor : dotColor, 2.0,
                    isDrop ? Qt::DashLine : Qt::SolidLine);
       painter->setPen(lanePen);
       if (row > 0)
@@ -127,12 +124,12 @@ public:
         painter->drawPolygon(diamond);
       } else if (isDrop) {
 
-        painter->setPen(QPen(QColor("#f85149"), 2));
+        painter->setPen(QPen(m_theme->errorColor, 2));
         painter->drawLine(dotX - 3, dotY - 3, dotX + 3, dotY + 3);
         painter->drawLine(dotX + 3, dotY - 3, dotX - 3, dotY + 3);
       } else if (isDropKeep) {
 
-        painter->setPen(QPen(QColor("#d29922"), 2));
+        painter->setPen(QPen(m_theme->warningColor, 2));
         painter->setBrush(Qt::NoBrush);
         painter->drawEllipse(QPointF(dotX, dotY), dotR, dotR);
       } else {
@@ -152,7 +149,7 @@ public:
         for (const auto &ref : entry.refs) {
           bool isTag = ref.startsWith("tag: ");
           QString label = isTag ? ref.mid(5) : ref;
-          QColor pillColor = isTag ? QColor("#d29922") : QColor("#58a6ff");
+          QColor pillColor = isTag ? m_theme->warningColor : m_theme->accentColor;
           int pw = rfm.horizontalAdvance(label) + 14;
           int ph = 20;
           int py = dotY - ph / 2;
@@ -1342,7 +1339,7 @@ void GitWorkbenchDialog::rebuildActionCombo(QTreeWidgetItem *item, int index) {
   combo->addItems(REBASE_ACTIONS_EXTENDED);
   combo->setCurrentText(m_entries[index].action);
 
-  QString color = ACTION_COLORS.value(m_entries[index].action, "#e6edf3");
+  QString color = actionColor(m_entries[index].action);
   combo->setStyleSheet(
       QString("QComboBox { background: %1; color: %2; border: 1px solid %3; "
               "border-radius: 3px; padding: 1px 4px; font-weight: bold; "
@@ -1527,19 +1524,19 @@ void GitWorkbenchDialog::updatePlanSummary() {
   };
 
   if (pick > 0)
-    parts << colorSpan("#3fb950", pick, "pick");
+    parts << colorSpan(actionColor("pick"), pick, "pick");
   if (reword > 0)
-    parts << colorSpan("#d29922", reword, "reword");
+    parts << colorSpan(actionColor("reword"), reword, "reword");
   if (edit > 0)
-    parts << colorSpan("#58a6ff", edit, "edit");
+    parts << colorSpan(actionColor("edit"), edit, "edit");
   if (squash > 0)
-    parts << colorSpan("#a371f7", squash, "squash");
+    parts << colorSpan(actionColor("squash"), squash, "squash");
   if (fixup > 0)
-    parts << colorSpan("#8b949e", fixup, "fixup");
+    parts << colorSpan(actionColor("fixup"), fixup, "fixup");
   if (drop > 0)
-    parts << colorSpan("#f85149", drop, "drop");
+    parts << colorSpan(actionColor("drop"), drop, "drop");
   if (dropKeep > 0)
-    parts << colorSpan("#d29922", dropKeep, "drop-keep");
+    parts << colorSpan(actionColor("drop-keep"), dropKeep, "drop-keep");
 
   m_planSummaryLabel->setText(
       tr("Plan: %1 commits — %2")
@@ -1602,18 +1599,19 @@ void GitWorkbenchDialog::showCommitInspector(const QString &hash) {
     fileItem->setText(0, fs.filePath);
     fileItem->setText(1, QString("+%1").arg(fs.additions));
     fileItem->setText(2, QString("-%1").arg(fs.deletions));
-    fileItem->setForeground(1, QColor("#3fb950"));
-    fileItem->setForeground(2, QColor("#f85149"));
+    fileItem->setForeground(1, m_theme.successColor);
+    fileItem->setForeground(2, m_theme.errorColor);
     totalAdd += fs.additions;
     totalDel += fs.deletions;
   }
 
   m_inspPatchStats->setText(
-      tr("%1 file(s) · <span style='color:#3fb950'>+%2</span> "
-         "<span style='color:#f85149'>-%3</span>")
+      tr("%1 file(s) · <span style='color:%4'>+%2</span> "
+         "<span style='color:%5'>-%3</span>")
           .arg(stats.size())
           .arg(totalAdd)
-          .arg(totalDel));
+          .arg(totalDel)
+          .arg(m_theme.successColor.name(), m_theme.errorColor.name()));
   m_inspPatchStats->setTextFormat(Qt::RichText);
 
   m_inspectorStack->setCurrentIndex(1);
@@ -1697,7 +1695,7 @@ void GitWorkbenchDialog::showPlanInspector() {
     item->setText(1, entry.action);
     item->setText(2, entry.shortHash + " " + entry.subject);
 
-    QString color = ACTION_COLORS.value(entry.action, "#e6edf3");
+    QString color = actionColor(entry.action);
     item->setForeground(1, QColor(color));
   }
 
@@ -3046,7 +3044,14 @@ void GitWorkbenchDialog::updateSelectionUI() {
 }
 
 QString GitWorkbenchDialog::actionColor(const QString &action) const {
-  return ACTION_COLORS.value(action, m_theme.foregroundColor.name());
+  if (action == "pick") return m_theme.successColor.name();
+  if (action == "reword") return m_theme.warningColor.name();
+  if (action == "edit") return m_theme.accentColor.name();
+  if (action == "squash") return m_theme.accentColor.lighter(130).name();
+  if (action == "fixup") return m_theme.singleLineCommentFormat.name();
+  if (action == "drop") return m_theme.errorColor.name();
+  if (action == "drop-keep") return m_theme.warningColor.name();
+  return m_theme.foregroundColor.name();
 }
 
 QString GitWorkbenchDialog::toolButtonStyle() const {
