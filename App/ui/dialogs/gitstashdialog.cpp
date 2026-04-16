@@ -29,10 +29,10 @@ void GitStashDialog::setupUI() {
   QVBoxLayout *titleLayout = new QVBoxLayout();
   QLabel *titleLabel = new QLabel(tr("Stash Changes"), this);
   titleLabel->setStyleSheet(
-      "font-size: 18px; font-weight: bold; color: #e6edf3;");
+      QString("font-size: 18px; font-weight: bold; color: %1;").arg(m_theme.foregroundColor.name()));
   QLabel *subtitleLabel =
       new QLabel(tr("Save your work in progress for later"), this);
-  subtitleLabel->setStyleSheet("color: #8b949e; font-size: 12px;");
+  subtitleLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(m_theme.singleLineCommentFormat.name()));
   titleLayout->addWidget(titleLabel);
   titleLayout->addWidget(subtitleLabel);
   headerLayout->addLayout(titleLayout, 1);
@@ -113,7 +113,7 @@ void GitStashDialog::setupUI() {
   QVBoxLayout *detailsLayout = new QVBoxLayout(detailsGroup);
 
   m_detailsLabel = new QLabel(tr("Select a stash entry to view details"), this);
-  m_detailsLabel->setStyleSheet("color: #8b949e; font-family: monospace;");
+  m_detailsLabel->setStyleSheet(QString("color: %1; font-family: monospace;").arg(m_theme.singleLineCommentFormat.name()));
   m_detailsLabel->setWordWrap(true);
   detailsLayout->addWidget(m_detailsLabel);
 
@@ -122,7 +122,7 @@ void GitStashDialog::setupUI() {
   QHBoxLayout *bottomLayout = new QHBoxLayout();
 
   m_statusLabel = new QLabel(this);
-  m_statusLabel->setStyleSheet("color: #8b949e; font-size: 11px;");
+  m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.singleLineCommentFormat.name()));
   bottomLayout->addWidget(m_statusLabel, 1);
 
   m_closeButton = new QPushButton(tr("Close"), this);
@@ -214,12 +214,12 @@ void GitStashDialog::onStashClicked() {
   if (m_git->stash(message, includeUntracked)) {
     m_messageEdit->clear();
     m_statusLabel->setText(tr("✓ Changes stashed successfully"));
-    m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.successColor.name()));
     refresh();
     emit stashOperationCompleted(tr("Changes stashed"));
   } else {
     m_statusLabel->setText(tr("✗ Failed to stash changes"));
-    m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
   }
 }
 
@@ -229,16 +229,16 @@ void GitStashDialog::onPopClicked() {
 
   if (m_git->stashPop()) {
     m_statusLabel->setText(tr("✓ Stash popped successfully"));
-    m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.successColor.name()));
     refresh();
     emit stashOperationCompleted(tr("Stash popped"));
   } else {
     if (m_git->hasMergeConflicts()) {
       m_statusLabel->setText(tr("⚠ Stash popped with conflicts"));
-      m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
     } else {
       m_statusLabel->setText(tr("✗ Failed to pop stash"));
-      m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
     }
   }
 }
@@ -255,15 +255,15 @@ void GitStashDialog::onApplyClicked() {
 
   if (m_git->stashApply(index)) {
     m_statusLabel->setText(QString(tr("✓ Stash %1 applied")).arg(index));
-    m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.successColor.name()));
     emit stashOperationCompleted(QString(tr("Stash %1 applied")).arg(index));
   } else {
     if (m_git->hasMergeConflicts()) {
       m_statusLabel->setText(tr("⚠ Stash applied with conflicts"));
-      m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
     } else {
       m_statusLabel->setText(tr("✗ Failed to apply stash"));
-      m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
     }
   }
 }
@@ -288,12 +288,12 @@ void GitStashDialog::onDropClicked() {
   if (result == ThemedMessageBox::Yes) {
     if (m_git->stashDrop(index)) {
       m_statusLabel->setText(QString(tr("✓ Stash %1 dropped")).arg(index));
-      m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.successColor.name()));
       refresh();
       emit stashOperationCompleted(QString(tr("Stash %1 dropped")).arg(index));
     } else {
       m_statusLabel->setText(tr("✗ Failed to drop stash"));
-      m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
     }
   }
 }
@@ -311,12 +311,12 @@ void GitStashDialog::onClearClicked() {
   if (result == ThemedMessageBox::Yes) {
     if (m_git->stashClear()) {
       m_statusLabel->setText(tr("✓ All stashes cleared"));
-      m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.successColor.name()));
       refresh();
       emit stashOperationCompleted(tr("All stashes cleared"));
     } else {
       m_statusLabel->setText(tr("✗ Failed to clear stashes"));
-      m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
     }
   }
 }

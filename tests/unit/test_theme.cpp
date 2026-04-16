@@ -14,10 +14,10 @@ private slots:
 void TestTheme::testDefaultConstructor() {
   Theme theme;
 
-  QCOMPARE(theme.backgroundColor, QColor("#0d1117"));
-  QCOMPARE(theme.foregroundColor, QColor("#e6edf3"));
+  QCOMPARE(theme.backgroundColor, QColor("#0a0e14"));
+  QCOMPARE(theme.foregroundColor, QColor("#b3b1ad"));
   QVERIFY(theme.highlightColor.isValid());
-  QCOMPARE(theme.lineNumberAreaColor, QColor("#0d1117"));
+  QCOMPARE(theme.lineNumberAreaColor, QColor("#0a0e14"));
 }
 
 void TestTheme::testWriteToJson() {

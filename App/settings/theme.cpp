@@ -4,22 +4,22 @@
 
 Theme::Theme()
 
-    : backgroundColor(QColor("#0d1117")), foregroundColor(QColor("#e6edf3")),
-      highlightColor(QColor("#1a2230")), lineNumberAreaColor(QColor("#0d1117"))
+    : backgroundColor(QColor("#0a0e14")), foregroundColor(QColor("#b3b1ad")),
+      highlightColor(QColor("#0f1419")), lineNumberAreaColor(QColor("#0a0e14"))
 
       ,
-      keywordFormat_0(QColor("#7ee787")), keywordFormat_1(QColor("#f2cc60")),
-      keywordFormat_2(QColor("#58a6ff")), searchFormat(QColor("#f2cc60")),
-      singleLineCommentFormat(QColor("#8b949e")),
-      functionFormat(QColor("#79c0ff")), quotationFormat(QColor("#a5d6ff")),
-      classFormat(QColor("#56d4dd")), numberFormat(QColor("#ff7b72"))
+      keywordFormat_0(QColor("#ff8f40")), keywordFormat_1(QColor("#ffb454")),
+      keywordFormat_2(QColor("#59c2ff")), searchFormat(QColor("#e6b450")),
+      singleLineCommentFormat(QColor("#626a73")),
+      functionFormat(QColor("#ffb454")), quotationFormat(QColor("#c2d94c")),
+      classFormat(QColor("#59c2ff")), numberFormat(QColor("#e6b450"))
 
       ,
-      surfaceColor(QColor("#161b22")), surfaceAltColor(QColor("#1c2128")),
-      borderColor(QColor("#30363d")), hoverColor(QColor("#21262d")),
-      pressedColor(QColor("#2d333b")), accentColor(QColor("#58a6ff")),
-      accentSoftColor(QColor("#1f3a5f")), successColor(QColor("#3fb950")),
-      warningColor(QColor("#d29922")), errorColor(QColor("#f85149")) {}
+      surfaceColor(QColor("#0f1419")), surfaceAltColor(QColor("#141925")),
+      borderColor(QColor("#1c2a1c")), hoverColor(QColor("#0d1218")),
+      pressedColor(QColor("#141925")), accentColor(QColor("#00ff41")),
+      accentSoftColor(QColor("#0a3a1a")), successColor(QColor("#00ff41")),
+      warningColor(QColor("#e6b450")), errorColor(QColor("#f85149")) {}
 
 void Theme::read(const QJsonObject &json) {
   const QJsonObject themeObject =

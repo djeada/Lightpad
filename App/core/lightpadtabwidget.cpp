@@ -273,7 +273,10 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "}"
 
       "QTabBar::tab { "
-      "color: #9aa4b2; "
+      "color: " +
+      foregroundColor +
+      "; "
+      "opacity: 0.6; "
       "background-color: " +
       backgroundColor +
       "; "

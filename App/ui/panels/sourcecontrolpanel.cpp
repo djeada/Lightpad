@@ -49,7 +49,14 @@ SourceControlPanel::SourceControlPanel(QWidget *parent)
       m_changesLabel(nullptr), m_changesTree(nullptr), m_historyHeader(nullptr),
       m_historyLabel(nullptr), m_historyTree(nullptr),
       m_historyToggleButton(nullptr), m_historySearchEdit(nullptr),
-      m_historyRebaseBtn(nullptr), m_historyExpanded(false),
+      m_historyRebaseBtn(nullptr), m_headerWidget(nullptr),
+      m_branchSection(nullptr), m_branchIcon(nullptr),
+      m_commitSection(nullptr), m_commitHeaderLabel(nullptr),
+      m_stagedHeader(nullptr), m_changesHeader(nullptr),
+      m_noRepoDescLabel(nullptr), m_conflictWarningHeader(nullptr),
+      m_conflictFilesHeaderLabel(nullptr), m_compareBranchesBtn(nullptr),
+      m_worktreeBtn(nullptr), m_discardAllBtn(nullptr),
+      m_historyExpanded(false),
       m_updatingBranchSelector(false), m_updatingTree(false), m_stagedCount(0),
       m_changesCount(0), m_refreshTimer(new QTimer(this)), m_theme(),
       m_themeInitialized(false) {
@@ -66,15 +73,11 @@ void SourceControlPanel::setupUI() {
   mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(0);
 
-  QWidget *header = new QWidget(this);
-  header->setStyleSheet(
-      "background: #171c24; border-bottom: 1px solid #2a3241;");
-  QHBoxLayout *headerLayout = new QHBoxLayout(header);
+  m_headerWidget = new QWidget(this);
+  QHBoxLayout *headerLayout = new QHBoxLayout(m_headerWidget);
   headerLayout->setContentsMargins(8, 4, 8, 4);
 
-  m_headerTitleLabel = new QLabel(tr("Source Control"), header);
-  m_headerTitleLabel->setStyleSheet(
-      "font-weight: bold; color: #e6edf3; font-size: 13px;");
+  m_headerTitleLabel = new QLabel(tr("Source Control"), m_headerWidget);
   m_headerTitleLabel->setSizePolicy(QSizePolicy::Ignored,
                                     QSizePolicy::Preferred);
   m_headerTitleLabel->setMinimumWidth(0);
@@ -82,19 +85,14 @@ void SourceControlPanel::setupUI() {
 
   headerLayout->addStretch();
 
-  m_refreshButton = new QPushButton("↻", header);
+  m_refreshButton = new QPushButton("↻", m_headerWidget);
   m_refreshButton->setFixedSize(24, 24);
   m_refreshButton->setToolTip(tr("Refresh"));
-  m_refreshButton->setStyleSheet(
-      "QPushButton { background: transparent; color: #e6edf3; border: none; "
-      "font-size: 14px; border-radius: 4px; }"
-      "QPushButton:hover { background: #2a3241; }"
-      "QPushButton:pressed { background: #1f6feb; }");
   connect(m_refreshButton, &QPushButton::clicked, this,
           &SourceControlPanel::onRefreshClicked);
   headerLayout->addWidget(m_refreshButton);
 
-  mainLayout->addWidget(header);
+  mainLayout->addWidget(m_headerWidget);
 
   m_stackedWidget = new QStackedWidget(this);
 
@@ -109,16 +107,6 @@ void SourceControlPanel::setupUI() {
   mainLayout->addWidget(m_stackedWidget, 1);
 
   m_statusLabel = new QLabel(this);
-  m_statusLabel->setStyleSheet("QLabel {"
-                               "  background: #161b22;"
-                               "  color: #8b949e;"
-                               "  padding: 6px 10px;"
-                               "  font-size: 11px;"
-                               "  border-top: 1px solid #21262d;"
-                               "}"
-                               "QLabel:hover {"
-                               "  color: #e6edf3;"
-                               "}");
   m_statusLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
   m_statusLabel->setMinimumWidth(0);
   m_statusLabel->setWordWrap(false);
@@ -138,37 +126,19 @@ void SourceControlPanel::setupNoRepoUI() {
   layout->addWidget(iconLabel);
 
   m_noRepoLabel = new QLabel(tr("No Git Repository"), m_noRepoWidget);
-  m_noRepoLabel->setStyleSheet(
-      "font-size: 16px; font-weight: bold; color: #e6edf3;");
   m_noRepoLabel->setAlignment(Qt::AlignCenter);
   layout->addWidget(m_noRepoLabel);
 
-  QLabel *descLabel =
+  m_noRepoDescLabel =
       new QLabel(tr("This project is not a Git repository.\nInitialize one or "
                     "open a Git project to start tracking changes."),
                  m_noRepoWidget);
-  descLabel->setStyleSheet("color: #8b949e; font-size: 12px;");
-  descLabel->setAlignment(Qt::AlignCenter);
-  descLabel->setWordWrap(true);
-  layout->addWidget(descLabel);
+  m_noRepoDescLabel->setAlignment(Qt::AlignCenter);
+  m_noRepoDescLabel->setWordWrap(true);
+  layout->addWidget(m_noRepoDescLabel);
 
   m_initRepoButton =
       new QPushButton(tr("Initialize Repository"), m_noRepoWidget);
-  m_initRepoButton->setStyleSheet("QPushButton {"
-                                  "  background: #238636;"
-                                  "  color: white;"
-                                  "  border: none;"
-                                  "  border-radius: 6px;"
-                                  "  padding: 12px 24px;"
-                                  "  font-weight: bold;"
-                                  "  font-size: 13px;"
-                                  "}"
-                                  "QPushButton:hover {"
-                                  "  background: #2ea043;"
-                                  "}"
-                                  "QPushButton:pressed {"
-                                  "  background: #1a6f2a;"
-                                  "}");
   connect(m_initRepoButton, &QPushButton::clicked, this,
           &SourceControlPanel::onInitRepositoryClicked);
 
@@ -187,94 +157,35 @@ void SourceControlPanel::setupMergeConflictUI() {
   layout->setContentsMargins(8, 8, 8, 8);
   layout->setSpacing(8);
 
-  QWidget *warningHeader = new QWidget(m_conflictWidget);
-  warningHeader->setStyleSheet(
-      "background: #f8514933; border: 1px solid #f85149; border-radius: 6px;");
-  QHBoxLayout *warningLayout = new QHBoxLayout(warningHeader);
+  m_conflictWarningHeader = new QWidget(m_conflictWidget);
+  QHBoxLayout *warningLayout = new QHBoxLayout(m_conflictWarningHeader);
   warningLayout->setContentsMargins(12, 8, 12, 8);
 
-  QLabel *warningIcon = new QLabel("⚠️", warningHeader);
+  QLabel *warningIcon = new QLabel("⚠️", m_conflictWarningHeader);
   warningIcon->setStyleSheet("font-size: 18px;");
   warningLayout->addWidget(warningIcon);
 
-  m_conflictLabel = new QLabel(tr("Merge Conflicts Detected"), warningHeader);
-  m_conflictLabel->setStyleSheet(
-      "color: #f85149; font-weight: bold; font-size: 13px;");
+  m_conflictLabel = new QLabel(tr("Merge Conflicts Detected"), m_conflictWarningHeader);
   warningLayout->addWidget(m_conflictLabel, 1);
 
-  layout->addWidget(warningHeader);
+  layout->addWidget(m_conflictWarningHeader);
 
-  QLabel *conflictFilesLabel =
+  m_conflictFilesHeaderLabel =
       new QLabel(tr("Conflicted Files:"), m_conflictWidget);
-  conflictFilesLabel->setStyleSheet(
-      "color: #8b949e; font-size: 11px; text-transform: uppercase;");
-  layout->addWidget(conflictFilesLabel);
+  layout->addWidget(m_conflictFilesHeaderLabel);
 
   m_conflictFilesList = new QListWidget(m_conflictWidget);
-  m_conflictFilesList->setStyleSheet("QListWidget {"
-                                     "  background: #161b22;"
-                                     "  color: #e6edf3;"
-                                     "  border: 1px solid #30363d;"
-                                     "  border-radius: 6px;"
-                                     "  outline: none;"
-                                     "}"
-                                     "QListWidget::item {"
-                                     "  padding: 8px;"
-                                     "  border-bottom: 1px solid #21262d;"
-                                     "}"
-                                     "QListWidget::item:hover {"
-                                     "  background: #21262d;"
-                                     "}"
-                                     "QListWidget::item:selected {"
-                                     "  background: #1f6feb;"
-                                     "  color: white;"
-                                     "}"
-                                     "QListWidget::item:selected:hover {"
-                                     "  background: #388bfd;"
-                                     "}"
-                                     "QListWidget:focus {"
-                                     "  border-color: #58a6ff;"
-                                     "}");
   layout->addWidget(m_conflictFilesList, 1);
 
   QHBoxLayout *actionLayout = new QHBoxLayout();
 
   m_resolveConflictsButton =
       new QPushButton(tr("Resolve Conflicts..."), m_conflictWidget);
-  m_resolveConflictsButton->setStyleSheet("QPushButton {"
-                                          "  background: #1f6feb;"
-                                          "  color: white;"
-                                          "  border: none;"
-                                          "  border-radius: 6px;"
-                                          "  padding: 8px 16px;"
-                                          "  font-weight: bold;"
-                                          "}"
-                                          "QPushButton:hover {"
-                                          "  background: #388bfd;"
-                                          "}"
-                                          "QPushButton:pressed {"
-                                          "  background: #0d419d;"
-                                          "}");
   connect(m_resolveConflictsButton, &QPushButton::clicked, this,
           &SourceControlPanel::onResolveConflictsClicked);
   actionLayout->addWidget(m_resolveConflictsButton);
 
   m_abortMergeButton = new QPushButton(tr("Abort Merge"), m_conflictWidget);
-  m_abortMergeButton->setStyleSheet("QPushButton {"
-                                    "  background: #21262d;"
-                                    "  color: #f85149;"
-                                    "  border: 1px solid #30363d;"
-                                    "  border-radius: 6px;"
-                                    "  padding: 8px 16px;"
-                                    "}"
-                                    "QPushButton:hover {"
-                                    "  background: #da3633;"
-                                    "  color: white;"
-                                    "  border-color: #da3633;"
-                                    "}"
-                                    "QPushButton:pressed {"
-                                    "  background: #b62324;"
-                                    "}");
   connect(m_abortMergeButton, &QPushButton::clicked, [this]() {
     if (m_git && m_git->abortMerge()) {
       refresh();
@@ -291,23 +202,18 @@ void SourceControlPanel::setupRepoUI() {
   mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(0);
 
-  QWidget *branchSection = new QWidget(m_repoWidget);
-  branchSection->setStyleSheet(
-      "background: #161b22; border-bottom: 1px solid #2a3241;");
-  QVBoxLayout *branchLayout = new QVBoxLayout(branchSection);
+  m_branchSection = new QWidget(m_repoWidget);
+  QVBoxLayout *branchLayout = new QVBoxLayout(m_branchSection);
   branchLayout->setContentsMargins(8, 8, 8, 8);
   branchLayout->setSpacing(6);
 
   QHBoxLayout *branchHeaderLayout = new QHBoxLayout();
   branchHeaderLayout->setSpacing(6);
 
-  QLabel *branchIcon = new QLabel("⎇", branchSection);
-  branchIcon->setStyleSheet("color: #58a6ff; font-size: 14px;");
-  branchHeaderLayout->addWidget(branchIcon);
+  m_branchIcon = new QLabel("⎇", m_branchSection);
+  branchHeaderLayout->addWidget(m_branchIcon);
 
-  m_branchLabel = new QLabel(tr("Branch"), branchSection);
-  m_branchLabel->setStyleSheet(
-      "color: #8b949e; font-size: 11px; text-transform: uppercase;");
+  m_branchLabel = new QLabel(tr("Branch"), m_branchSection);
   branchHeaderLayout->addWidget(m_branchLabel);
   branchHeaderLayout->addStretch();
   branchLayout->addLayout(branchHeaderLayout);
@@ -315,138 +221,22 @@ void SourceControlPanel::setupRepoUI() {
   QHBoxLayout *branchSelectorLayout = new QHBoxLayout();
   branchSelectorLayout->setSpacing(4);
 
-  m_branchSelector = new QComboBox(branchSection);
+  m_branchSelector = new QComboBox(m_branchSection);
   m_branchSelector->setMinimumWidth(120);
-  m_branchSelector->setStyleSheet("QComboBox {"
-                                  "  background: #21262d;"
-                                  "  color: #e6edf3;"
-                                  "  border: 1px solid #30363d;"
-                                  "  border-radius: 6px;"
-                                  "  padding: 6px 10px;"
-                                  "  font-size: 12px;"
-                                  "  selection-background-color: #1f6feb;"
-                                  "}"
-                                  "QComboBox:hover {"
-                                  "  border-color: #58a6ff;"
-                                  "  background: #161b22;"
-                                  "}"
-                                  "QComboBox:focus {"
-                                  "  border-color: #58a6ff;"
-                                  "  border-width: 2px;"
-                                  "}"
-                                  "QComboBox::drop-down {"
-                                  "  border: none;"
-                                  "  width: 20px;"
-                                  "}"
-                                  "QComboBox::down-arrow {"
-                                  "  image: none;"
-                                  "  border-left: 4px solid transparent;"
-                                  "  border-right: 4px solid transparent;"
-                                  "  border-top: 5px solid #8b949e;"
-                                  "  margin-right: 8px;"
-                                  "}"
-                                  "QComboBox::down-arrow:hover {"
-                                  "  border-top-color: #e6edf3;"
-                                  "}"
-                                  "QComboBox QAbstractItemView {"
-                                  "  background: #21262d;"
-                                  "  color: #e6edf3;"
-                                  "  border: 1px solid #30363d;"
-                                  "  selection-background-color: #1f6feb;"
-                                  "  outline: none;"
-                                  "}"
-                                  "QComboBox QAbstractItemView::item {"
-                                  "  padding: 6px 10px;"
-                                  "}"
-                                  "QComboBox QAbstractItemView::item:hover {"
-                                  "  background: #161b22;"
-                                  "}");
-  if (auto *branchView = m_branchSelector->view()) {
-    branchView->setStyleSheet("QAbstractItemView {"
-                              "  background: #21262d;"
-                              "  color: #e6edf3;"
-                              "  border: 1px solid #30363d;"
-                              "  outline: none;"
-                              "}"
-                              "QAbstractItemView::item {"
-                              "  background: #21262d;"
-                              "  color: #e6edf3;"
-                              "  padding: 4px 8px;"
-                              "}"
-                              "QAbstractItemView::item:selected {"
-                              "  background: #1f6feb;"
-                              "  color: #ffffff;"
-                              "}"
-                              "QAbstractItemView::item:hover {"
-                              "  background: #2a3241;"
-                              "}");
-    branchView->setAutoFillBackground(true);
-    QPalette palette = branchView->palette();
-    palette.setColor(QPalette::Base, QColor("#21262d"));
-    palette.setColor(QPalette::Text, QColor("#e6edf3"));
-    palette.setColor(QPalette::Highlight, QColor("#1f6feb"));
-    palette.setColor(QPalette::HighlightedText, QColor("#ffffff"));
-    branchView->setPalette(palette);
-    if (auto *branchViewport = branchView->viewport()) {
-      branchViewport->setAutoFillBackground(true);
-      branchViewport->setPalette(palette);
-      branchViewport->setStyleSheet("background: #21262d;");
-    }
-    if (auto *branchPopup = branchView->parentWidget()) {
-      branchPopup->setAutoFillBackground(true);
-      branchPopup->setPalette(palette);
-      branchPopup->setStyleSheet(
-          "QFrame { background: #21262d; border: 1px solid #30363d; }");
-    }
-  }
   connect(m_branchSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &SourceControlPanel::onBranchSelectorChanged);
   branchSelectorLayout->addWidget(m_branchSelector, 1);
 
-  m_newBranchButton = new QPushButton("+", branchSection);
+  m_newBranchButton = new QPushButton("+", m_branchSection);
   m_newBranchButton->setFixedSize(28, 28);
   m_newBranchButton->setToolTip(tr("Create New Branch"));
-  m_newBranchButton->setStyleSheet("QPushButton {"
-                                   "  background: #238636;"
-                                   "  color: white;"
-                                   "  border: none;"
-                                   "  border-radius: 6px;"
-                                   "  font-size: 14px;"
-                                   "  font-weight: bold;"
-                                   "}"
-                                   "QPushButton:hover {"
-                                   "  background: #2ea043;"
-                                   "}"
-                                   "QPushButton:pressed {"
-                                   "  background: #1a6f2a;"
-                                   "}");
   connect(m_newBranchButton, &QPushButton::clicked, this,
           &SourceControlPanel::onCreateBranchClicked);
   branchSelectorLayout->addWidget(m_newBranchButton);
 
-  m_deleteBranchButton = new QPushButton("🗑", branchSection);
+  m_deleteBranchButton = new QPushButton("🗑", m_branchSection);
   m_deleteBranchButton->setFixedSize(28, 28);
   m_deleteBranchButton->setToolTip(tr("Delete Branch"));
-  m_deleteBranchButton->setStyleSheet("QPushButton {"
-                                      "  background: #21262d;"
-                                      "  color: #f85149;"
-                                      "  border: 1px solid #30363d;"
-                                      "  border-radius: 6px;"
-                                      "  font-size: 12px;"
-                                      "}"
-                                      "QPushButton:hover {"
-                                      "  background: #da3633;"
-                                      "  color: white;"
-                                      "  border-color: #da3633;"
-                                      "}"
-                                      "QPushButton:pressed {"
-                                      "  background: #b62324;"
-                                      "}"
-                                      "QPushButton:disabled {"
-                                      "  background: #161b22;"
-                                      "  color: #484f58;"
-                                      "  border-color: #30363d;"
-                                      "}");
   connect(m_deleteBranchButton, &QPushButton::clicked, this,
           &SourceControlPanel::onDeleteBranchClicked);
   branchSelectorLayout->addWidget(m_deleteBranchButton);
@@ -456,133 +246,34 @@ void SourceControlPanel::setupRepoUI() {
   QHBoxLayout *remoteOpsLayout = new QHBoxLayout();
   remoteOpsLayout->setSpacing(4);
 
-  m_pullButton = new QPushButton("⬇ Pull", branchSection);
+  m_pullButton = new QPushButton("⬇ Pull", m_branchSection);
   m_pullButton->setToolTip(tr("Pull from Remote"));
-  m_pullButton->setStyleSheet("QPushButton {"
-                              "  background: #21262d;"
-                              "  color: #58a6ff;"
-                              "  border: 1px solid #30363d;"
-                              "  border-radius: 6px;"
-                              "  padding: 4px 8px;"
-                              "  font-size: 11px;"
-                              "}"
-                              "QPushButton:hover {"
-                              "  background: #1f6feb;"
-                              "  color: white;"
-                              "  border-color: #1f6feb;"
-                              "}"
-                              "QPushButton:pressed {"
-                              "  background: #0d419d;"
-                              "}"
-                              "QPushButton:disabled {"
-                              "  background: #161b22;"
-                              "  color: #484f58;"
-                              "  border-color: #30363d;"
-                              "}");
   connect(m_pullButton, &QPushButton::clicked, this,
           &SourceControlPanel::onPullClicked);
   remoteOpsLayout->addWidget(m_pullButton);
 
-  m_pushButton = new QPushButton("⬆ Push", branchSection);
+  m_pushButton = new QPushButton("⬆ Push", m_branchSection);
   m_pushButton->setToolTip(tr("Push to Remote"));
-  m_pushButton->setStyleSheet("QPushButton {"
-                              "  background: #21262d;"
-                              "  color: #3fb950;"
-                              "  border: 1px solid #30363d;"
-                              "  border-radius: 6px;"
-                              "  padding: 4px 8px;"
-                              "  font-size: 11px;"
-                              "}"
-                              "QPushButton:hover {"
-                              "  background: #238636;"
-                              "  color: white;"
-                              "  border-color: #238636;"
-                              "}"
-                              "QPushButton:pressed {"
-                              "  background: #1a6f2a;"
-                              "}"
-                              "QPushButton:disabled {"
-                              "  background: #161b22;"
-                              "  color: #484f58;"
-                              "  border-color: #30363d;"
-                              "}");
   connect(m_pushButton, &QPushButton::clicked, this,
           &SourceControlPanel::onPushClicked);
   remoteOpsLayout->addWidget(m_pushButton);
 
-  m_fetchButton = new QPushButton("🔄 Fetch", branchSection);
+  m_fetchButton = new QPushButton("🔄 Fetch", m_branchSection);
   m_fetchButton->setToolTip(tr("Fetch from Remote"));
-  m_fetchButton->setStyleSheet("QPushButton {"
-                               "  background: #21262d;"
-                               "  color: #8b949e;"
-                               "  border: 1px solid #30363d;"
-                               "  border-radius: 6px;"
-                               "  padding: 4px 8px;"
-                               "  font-size: 11px;"
-                               "}"
-                               "QPushButton:hover {"
-                               "  background: #30363d;"
-                               "  color: #e6edf3;"
-                               "}"
-                               "QPushButton:pressed {"
-                               "  background: #21262d;"
-                               "}"
-                               "QPushButton:disabled {"
-                               "  background: #161b22;"
-                               "  color: #484f58;"
-                               "  border-color: #30363d;"
-                               "}");
   connect(m_fetchButton, &QPushButton::clicked, this,
           &SourceControlPanel::onFetchClicked);
   remoteOpsLayout->addWidget(m_fetchButton);
 
-  m_stashButton = new QPushButton("📦 Stash", branchSection);
+  m_stashButton = new QPushButton("📦 Stash", m_branchSection);
   m_stashButton->setToolTip(tr("Stash Changes"));
-  m_stashButton->setStyleSheet("QPushButton {"
-                               "  background: #21262d;"
-                               "  color: #a371f7;"
-                               "  border: 1px solid #30363d;"
-                               "  border-radius: 6px;"
-                               "  padding: 4px 8px;"
-                               "  font-size: 11px;"
-                               "}"
-                               "QPushButton:hover {"
-                               "  background: #8957e5;"
-                               "  color: white;"
-                               "  border-color: #8957e5;"
-                               "}"
-                               "QPushButton:pressed {"
-                               "  background: #6e40c9;"
-                               "}"
-                               "QPushButton:disabled {"
-                               "  background: #161b22;"
-                               "  color: #484f58;"
-                               "  border-color: #30363d;"
-                               "}");
   connect(m_stashButton, &QPushButton::clicked, this,
           &SourceControlPanel::onStashClicked);
   remoteOpsLayout->addWidget(m_stashButton);
 
-  auto *compareBranchesButton =
-      new QPushButton("\u2194 Compare Branches", branchSection);
-  compareBranchesButton->setToolTip(tr("Compare two branches"));
-  compareBranchesButton->setStyleSheet("QPushButton {"
-                                       "  background: #21262d;"
-                                       "  color: #79c0ff;"
-                                       "  border: 1px solid #30363d;"
-                                       "  border-radius: 6px;"
-                                       "  padding: 4px 8px;"
-                                       "  font-size: 11px;"
-                                       "}"
-                                       "QPushButton:hover {"
-                                       "  background: #1f6feb;"
-                                       "  color: white;"
-                                       "  border-color: #1f6feb;"
-                                       "}"
-                                       "QPushButton:pressed {"
-                                       "  background: #1a5cd6;"
-                                       "}");
-  connect(compareBranchesButton, &QPushButton::clicked, this, [this]() {
+  m_compareBranchesBtn =
+      new QPushButton("\u2194 Compare Branches", m_branchSection);
+  m_compareBranchesBtn->setToolTip(tr("Compare two branches"));
+  connect(m_compareBranchesBtn, &QPushButton::clicked, this, [this]() {
     if (!m_git || !m_git->isValidRepository())
       return;
 
@@ -635,20 +326,11 @@ void SourceControlPanel::setupRepoUI() {
       }
     }
   });
-  remoteOpsLayout->addWidget(compareBranchesButton);
+  remoteOpsLayout->addWidget(m_compareBranchesBtn);
 
-  auto *worktreeButton = new QPushButton("📂 Worktrees", branchSection);
-  worktreeButton->setToolTip(tr("Manage Git worktrees"));
-  worktreeButton->setStyleSheet(
-      "QPushButton {"
-      "  background-color: #21262d;"
-      "  color: #c9d1d9;"
-      "  border: 1px solid #30363d;"
-      "  padding: 4px 10px;"
-      "  border-radius: 4px;"
-      "}"
-      "QPushButton:hover { background-color: #30363d; }");
-  connect(worktreeButton, &QPushButton::clicked, this, [this]() {
+  m_worktreeBtn = new QPushButton("📂 Worktrees", m_branchSection);
+  m_worktreeBtn->setToolTip(tr("Manage Git worktrees"));
+  connect(m_worktreeBtn, &QPushButton::clicked, this, [this]() {
     if (!m_git || !m_git->isValidRepository())
       return;
 
@@ -710,47 +392,25 @@ void SourceControlPanel::setupRepoUI() {
     connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
     dlg.exec();
   });
-  remoteOpsLayout->addWidget(worktreeButton);
+  remoteOpsLayout->addWidget(m_worktreeBtn);
 
   branchLayout->addLayout(remoteOpsLayout);
-  mainLayout->addWidget(branchSection);
+  mainLayout->addWidget(m_branchSection);
 
-  QWidget *commitSection = new QWidget(m_repoWidget);
-  commitSection->setStyleSheet("background: #0d1117;");
-  QVBoxLayout *commitLayout = new QVBoxLayout(commitSection);
+  m_commitSection = new QWidget(m_repoWidget);
+  QVBoxLayout *commitLayout = new QVBoxLayout(m_commitSection);
   commitLayout->setContentsMargins(8, 10, 8, 10);
   commitLayout->setSpacing(8);
 
-  QLabel *commitHeader = new QLabel(tr("💬 Commit Message"), commitSection);
-  commitHeader->setStyleSheet(
-      "color: #8b949e; font-size: 11px; text-transform: uppercase; "
-      "letter-spacing: 0.5px;");
-  commitLayout->addWidget(commitHeader);
+  m_commitHeaderLabel = new QLabel(tr("💬 Commit Message"), m_commitSection);
+  commitLayout->addWidget(m_commitHeaderLabel);
 
-  m_commitMessage = new QTextEdit(commitSection);
+  m_commitMessage = new QTextEdit(m_commitSection);
   m_commitMessage->setPlaceholderText(
       tr("Enter commit message (required)\n\nWrite a short summary in the "
          "first line,\nthen add a blank line followed by details."));
   m_commitMessage->setMinimumHeight(90);
   m_commitMessage->setMaximumHeight(120);
-  m_commitMessage->setStyleSheet("QTextEdit {"
-                                 "  background: #21262d;"
-                                 "  color: #e6edf3;"
-                                 "  border: 1px solid #30363d;"
-                                 "  border-radius: 6px;"
-                                 "  padding: 8px;"
-                                 "  font-size: 12px;"
-                                 "  line-height: 1.4;"
-                                 "  selection-background-color: #1f6feb;"
-                                 "}"
-                                 "QTextEdit:focus {"
-                                 "  border-color: #58a6ff;"
-                                 "  border-width: 2px;"
-                                 "  background: #161b22;"
-                                 "}"
-                                 "QTextEdit:hover {"
-                                 "  border-color: #8b949e;"
-                                 "}");
   connect(m_commitMessage, &QTextEdit::textChanged, this,
           &SourceControlPanel::onCommitMessageChanged);
   commitLayout->addWidget(m_commitMessage);
@@ -758,33 +418,7 @@ void SourceControlPanel::setupRepoUI() {
   QHBoxLayout *commitOptionsLayout = new QHBoxLayout();
   commitOptionsLayout->setSpacing(8);
 
-  m_amendCheckbox = new QCheckBox(tr("Amend last commit"), commitSection);
-  m_amendCheckbox->setStyleSheet("QCheckBox {"
-                                 "  color: #8b949e;"
-                                 "  font-size: 11px;"
-                                 "}"
-                                 "QCheckBox:hover {"
-                                 "  color: #e6edf3;"
-                                 "}"
-                                 "QCheckBox::indicator {"
-                                 "  width: 14px;"
-                                 "  height: 14px;"
-                                 "  border-radius: 3px;"
-                                 "  border: 1px solid #30363d;"
-                                 "  background: #21262d;"
-                                 "}"
-                                 "QCheckBox::indicator:hover {"
-                                 "  border-color: #58a6ff;"
-                                 "  background: #161b22;"
-                                 "}"
-                                 "QCheckBox::indicator:checked {"
-                                 "  background: #238636;"
-                                 "  border-color: #238636;"
-                                 "}"
-                                 "QCheckBox::indicator:checked:hover {"
-                                 "  background: #2ea043;"
-                                 "  border-color: #2ea043;"
-                                 "}");
+  m_amendCheckbox = new QCheckBox(tr("Amend last commit"), m_commitSection);
   commitOptionsLayout->addWidget(m_amendCheckbox);
   connect(m_amendCheckbox, &QCheckBox::toggled, this,
           &SourceControlPanel::onCommitMessageChanged);
@@ -794,97 +428,43 @@ void SourceControlPanel::setupRepoUI() {
   QHBoxLayout *commitButtonLayout = new QHBoxLayout();
   commitButtonLayout->setSpacing(8);
 
-  m_commitButton = new QPushButton(tr("✓ Commit"), commitSection);
+  m_commitButton = new QPushButton(tr("✓ Commit"), m_commitSection);
   m_commitButton->setMinimumHeight(32);
   m_commitButton->setToolTip(tr("Commit Staged Changes"));
-  m_commitButton->setStyleSheet("QPushButton {"
-                                "  background: #238636;"
-                                "  color: white;"
-                                "  border: none;"
-                                "  border-radius: 6px;"
-                                "  padding: 8px 20px;"
-                                "  font-weight: bold;"
-                                "  font-size: 12px;"
-                                "}"
-                                "QPushButton:hover {"
-                                "  background: #2ea043;"
-                                "}"
-                                "QPushButton:pressed {"
-                                "  background: #1a6f2a;"
-                                "}"
-                                "QPushButton:disabled {"
-                                "  background: #21262d;"
-                                "  color: #484f58;"
-                                "}");
   connect(m_commitButton, &QPushButton::clicked, this,
           &SourceControlPanel::onCommitClicked);
   commitButtonLayout->addWidget(m_commitButton, 1);
 
   commitLayout->addLayout(commitButtonLayout);
-  mainLayout->addWidget(commitSection);
+  mainLayout->addWidget(m_commitSection);
 
-  QWidget *stagedHeader = new QWidget(m_repoWidget);
-  stagedHeader->setStyleSheet(
-      "background: #161b22; border-bottom: 1px solid #21262d;");
-  QHBoxLayout *stagedHeaderLayout = new QHBoxLayout(stagedHeader);
+  m_stagedHeader = new QWidget(m_repoWidget);
+  QHBoxLayout *stagedHeaderLayout = new QHBoxLayout(m_stagedHeader);
   stagedHeaderLayout->setContentsMargins(8, 6, 8, 6);
 
-  QLabel *stagedIcon = new QLabel("📦", stagedHeader);
+  QLabel *stagedIcon = new QLabel("📦", m_stagedHeader);
   stagedIcon->setStyleSheet("font-size: 12px;");
   stagedHeaderLayout->addWidget(stagedIcon);
 
-  m_stagedLabel = new QLabel(tr("Staged Changes"), stagedHeader);
-  m_stagedLabel->setStyleSheet(
-      "color: #3fb950; font-weight: bold; font-size: 12px;");
+  m_stagedLabel = new QLabel(tr("Staged Changes"), m_stagedHeader);
   stagedHeaderLayout->addWidget(m_stagedLabel);
 
   stagedHeaderLayout->addStretch();
 
-  m_unstageAllButton = new QPushButton("−", stagedHeader);
+  m_unstageAllButton = new QPushButton("−", m_stagedHeader);
   m_unstageAllButton->setFixedSize(22, 22);
   m_unstageAllButton->setToolTip(tr("Unstage All"));
-  m_unstageAllButton->setStyleSheet(
-      "QPushButton { background: transparent; color: #8b949e; border: 1px "
-      "solid #30363d; border-radius: 4px; font-size: 14px; font-weight: bold; }"
-      "QPushButton:hover { background: #21262d; color: #f85149; border-color: "
-      "#f85149; }"
-      "QPushButton:pressed { background: #da3633; color: white; }"
-      "QPushButton:disabled { color: #484f58; border-color: #30363d; }");
   connect(m_unstageAllButton, &QPushButton::clicked, this,
           &SourceControlPanel::onUnstageAllClicked);
   stagedHeaderLayout->addWidget(m_unstageAllButton);
 
-  mainLayout->addWidget(stagedHeader);
+  mainLayout->addWidget(m_stagedHeader);
 
   m_stagedTree = new QTreeWidget(m_repoWidget);
   m_stagedTree->setHeaderHidden(true);
   m_stagedTree->setRootIsDecorated(false);
   m_stagedTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_stagedTree->setContextMenuPolicy(Qt::CustomContextMenu);
-  m_stagedTree->setStyleSheet("QTreeWidget {"
-                              "  background: #0d1117;"
-                              "  color: #e6edf3;"
-                              "  border: none;"
-                              "  font-size: 12px;"
-                              "  outline: none;"
-                              "}"
-                              "QTreeWidget::item {"
-                              "  padding: 6px 8px;"
-                              "  border-bottom: 1px solid #21262d;"
-                              "}"
-                              "QTreeWidget::item:selected {"
-                              "  background: #1f6feb;"
-                              "  color: white;"
-                              "}"
-                              "QTreeWidget::item:hover {"
-                              "  background: #161b22;"
-                              "}"
-                              "QTreeWidget::item:selected:hover {"
-                              "  background: #388bfd;"
-                              "}"
-                              "QTreeWidget:focus {"
-                              "  border: 1px solid #58a6ff;"
-                              "}");
   m_stagedTree->setMinimumHeight(80);
   m_stagedTree->setMaximumHeight(150);
   m_stagedTree->setUniformRowHeights(true);
@@ -906,48 +486,30 @@ void SourceControlPanel::setupRepoUI() {
           });
   mainLayout->addWidget(m_stagedTree);
 
-  QWidget *changesHeader = new QWidget(m_repoWidget);
-  changesHeader->setStyleSheet(
-      "background: #161b22; border-bottom: 1px solid #21262d;");
-  QHBoxLayout *changesHeaderLayout = new QHBoxLayout(changesHeader);
+  m_changesHeader = new QWidget(m_repoWidget);
+  QHBoxLayout *changesHeaderLayout = new QHBoxLayout(m_changesHeader);
   changesHeaderLayout->setContentsMargins(8, 6, 8, 6);
 
-  QLabel *changesIcon = new QLabel("📝", changesHeader);
+  QLabel *changesIcon = new QLabel("📝", m_changesHeader);
   changesIcon->setStyleSheet("font-size: 12px;");
   changesHeaderLayout->addWidget(changesIcon);
 
-  m_changesLabel = new QLabel(tr("Changes"), changesHeader);
-  m_changesLabel->setStyleSheet(
-      "color: #e2c08d; font-weight: bold; font-size: 12px;");
+  m_changesLabel = new QLabel(tr("Changes"), m_changesHeader);
   changesHeaderLayout->addWidget(m_changesLabel);
 
   changesHeaderLayout->addStretch();
 
-  m_stageAllButton = new QPushButton("+", changesHeader);
+  m_stageAllButton = new QPushButton("+", m_changesHeader);
   m_stageAllButton->setFixedSize(22, 22);
   m_stageAllButton->setToolTip(tr("Stage All"));
-  m_stageAllButton->setStyleSheet(
-      "QPushButton { background: transparent; color: #8b949e; border: 1px "
-      "solid #30363d; border-radius: 4px; font-size: 14px; font-weight: bold; }"
-      "QPushButton:hover { background: #21262d; color: #3fb950; border-color: "
-      "#3fb950; }"
-      "QPushButton:pressed { background: #238636; color: white; }"
-      "QPushButton:disabled { color: #484f58; border-color: #30363d; }");
   connect(m_stageAllButton, &QPushButton::clicked, this,
           &SourceControlPanel::onStageAllClicked);
   changesHeaderLayout->addWidget(m_stageAllButton);
 
-  QPushButton *discardAllButton = new QPushButton("✖", changesHeader);
-  discardAllButton->setFixedSize(22, 22);
-  discardAllButton->setToolTip(tr("Discard All Changes"));
-  discardAllButton->setStyleSheet(
-      "QPushButton { background: transparent; color: #8b949e; border: 1px "
-      "solid #30363d; border-radius: 4px; font-size: 12px; }"
-      "QPushButton:hover { background: #21262d; color: #f85149; border-color: "
-      "#f85149; }"
-      "QPushButton:pressed { background: #da3633; color: white; }"
-      "QPushButton:disabled { color: #484f58; border-color: #30363d; }");
-  connect(discardAllButton, &QPushButton::clicked, [this]() {
+  m_discardAllBtn = new QPushButton("✖", m_changesHeader);
+  m_discardAllBtn->setFixedSize(22, 22);
+  m_discardAllBtn->setToolTip(tr("Discard All Changes"));
+  connect(m_discardAllBtn, &QPushButton::clicked, [this]() {
     if (!m_git)
       return;
     ThemedMessageBox msgBox(this);
@@ -961,39 +523,15 @@ void SourceControlPanel::setupRepoUI() {
       m_git->discardAllChanges();
     }
   });
-  changesHeaderLayout->addWidget(discardAllButton);
+  changesHeaderLayout->addWidget(m_discardAllBtn);
 
-  mainLayout->addWidget(changesHeader);
+  mainLayout->addWidget(m_changesHeader);
 
   m_changesTree = new QTreeWidget(m_repoWidget);
   m_changesTree->setHeaderHidden(true);
   m_changesTree->setRootIsDecorated(false);
   m_changesTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_changesTree->setContextMenuPolicy(Qt::CustomContextMenu);
-  m_changesTree->setStyleSheet("QTreeWidget {"
-                               "  background: #0d1117;"
-                               "  color: #e6edf3;"
-                               "  border: none;"
-                               "  font-size: 12px;"
-                               "  outline: none;"
-                               "}"
-                               "QTreeWidget::item {"
-                               "  padding: 6px 8px;"
-                               "  border-bottom: 1px solid #21262d;"
-                               "}"
-                               "QTreeWidget::item:selected {"
-                               "  background: #1f6feb;"
-                               "  color: white;"
-                               "}"
-                               "QTreeWidget::item:hover {"
-                               "  background: #161b22;"
-                               "}"
-                               "QTreeWidget::item:selected:hover {"
-                               "  background: #388bfd;"
-                               "}"
-                               "QTreeWidget:focus {"
-                               "  border: 1px solid #58a6ff;"
-                               "}");
   m_changesTree->setUniformRowHeights(true);
   m_changesTree->setMouseTracking(true);
   connect(m_changesTree, &QTreeWidget::itemDoubleClicked, this,
@@ -1014,18 +552,12 @@ void SourceControlPanel::setupRepoUI() {
   mainLayout->addWidget(m_changesTree, 1);
 
   m_historyHeader = new QWidget(m_repoWidget);
-  m_historyHeader->setStyleSheet(
-      "background: #161b22; border-bottom: 1px solid #21262d;");
   m_historyHeader->setCursor(Qt::PointingHandCursor);
   QHBoxLayout *historyHeaderLayout = new QHBoxLayout(m_historyHeader);
   historyHeaderLayout->setContentsMargins(8, 6, 8, 6);
 
   m_historyToggleButton = new QPushButton("▶", m_historyHeader);
   m_historyToggleButton->setFixedSize(16, 16);
-  m_historyToggleButton->setStyleSheet(
-      "QPushButton { background: transparent; color: #8b949e; border: none; "
-      "font-size: 10px; padding: 0; }"
-      "QPushButton:hover { color: #e6edf3; }");
   historyHeaderLayout->addWidget(m_historyToggleButton);
 
   QLabel *historyIcon = new QLabel("📜", m_historyHeader);
@@ -1033,17 +565,11 @@ void SourceControlPanel::setupRepoUI() {
   historyHeaderLayout->addWidget(historyIcon);
 
   m_historyLabel = new QLabel(tr("Recent Commits"), m_historyHeader);
-  m_historyLabel->setStyleSheet(
-      "color: #a371f7; font-weight: bold; font-size: 12px;");
   historyHeaderLayout->addWidget(m_historyLabel);
 
   historyHeaderLayout->addStretch();
 
   m_historyRebaseBtn = new QPushButton(tr("🔀 Rebase"), m_historyHeader);
-  m_historyRebaseBtn->setStyleSheet(
-      "QPushButton { background: transparent; color: #a371f7; border: none; "
-      "font-size: 11px; padding: 2px 6px; }"
-      "QPushButton:hover { color: #c9a0ff; text-decoration: underline; }");
   m_historyRebaseBtn->setToolTip(tr("Open interactive rebase dialog"));
   m_historyRebaseBtn->setVisible(false);
   historyHeaderLayout->addWidget(m_historyRebaseBtn);
@@ -1069,11 +595,6 @@ void SourceControlPanel::setupRepoUI() {
   m_historySearchEdit->setPlaceholderText(tr("🔍 Search commits..."));
   m_historySearchEdit->setClearButtonEnabled(true);
   m_historySearchEdit->setVisible(false);
-  m_historySearchEdit->setStyleSheet(
-      "QLineEdit { background: #21262d; color: #e6edf3; border: 1px solid "
-      "#30363d; border-radius: 6px; padding: 5px 8px; font-size: 11px; "
-      "margin: 2px 4px; }"
-      "QLineEdit:focus { border-color: #58a6ff; }");
   mainLayout->addWidget(m_historySearchEdit);
   connect(m_historySearchEdit, &QLineEdit::textChanged, this,
           &SourceControlPanel::onHistorySearchChanged);
@@ -1095,30 +616,6 @@ void SourceControlPanel::setupRepoUI() {
   m_historyTree->setVisible(false);
   m_historyTree->setContextMenuPolicy(Qt::CustomContextMenu);
   m_historyTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
-  m_historyTree->setStyleSheet("QTreeWidget {"
-                               "  background: #0d1117;"
-                               "  color: #e6edf3;"
-                               "  border: none;"
-                               "  font-size: 11px;"
-                               "  outline: none;"
-                               "}"
-                               "QTreeWidget::item {"
-                               "  padding: 5px 8px;"
-                               "  border-bottom: 1px solid #21262d;"
-                               "}"
-                               "QTreeWidget::item:selected {"
-                               "  background: #1f6feb;"
-                               "  color: white;"
-                               "}"
-                               "QTreeWidget::item:hover {"
-                               "  background: #161b22;"
-                               "}"
-                               "QTreeWidget::item:selected:hover {"
-                               "  background: #388bfd;"
-                               "}"
-                               "QTreeWidget:focus {"
-                               "  border: 1px solid #58a6ff;"
-                               "}");
   m_historyTree->setMinimumHeight(120);
   m_historyTree->setMaximumHeight(300);
   m_historyTree->setUniformRowHeights(true);
@@ -1524,11 +1021,11 @@ void SourceControlPanel::updateHistory() {
     item->setFont(0, font);
 
     if (isMerge) {
-      item->setForeground(0, QColor("#a371f7"));
+      item->setForeground(0, m_theme.accentColor);
     } else if (isFirst) {
-      item->setForeground(0, QColor("#58a6ff"));
+      item->setForeground(0, m_theme.accentColor);
     } else {
-      item->setForeground(0, QColor("#8b949e"));
+      item->setForeground(0, m_theme.singleLineCommentFormat);
     }
 
     isFirst = false;
@@ -1637,29 +1134,7 @@ void SourceControlPanel::onItemContextMenu(const QPoint &pos) {
   }
 
   QMenu menu(this);
-  menu.setStyleSheet("QMenu {"
-                     "  background: #161b22;"
-                     "  color: #e6edf3;"
-                     "  border: 1px solid #30363d;"
-                     "  border-radius: 6px;"
-                     "  padding: 4px;"
-                     "}"
-                     "QMenu::item {"
-                     "  padding: 6px 24px 6px 12px;"
-                     "  border-radius: 4px;"
-                     "}"
-                     "QMenu::item:selected {"
-                     "  background: #1f6feb;"
-                     "  color: white;"
-                     "}"
-                     "QMenu::item:disabled {"
-                     "  color: #484f58;"
-                     "}"
-                     "QMenu::separator {"
-                     "  height: 1px;"
-                     "  background: #21262d;"
-                     "  margin: 4px 8px;"
-                     "}");
+  menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
 
   if (isStaged) {
     QAction *unstageAction = menu.addAction(tr("Unstage"));
@@ -1778,27 +1253,7 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
   bool multiSelect = selectedItems.size() > 1;
 
   QMenu menu(this);
-  menu.setStyleSheet("QMenu {"
-                     "  background: #161b22;"
-                     "  color: #e6edf3;"
-                     "  border: 1px solid #30363d;"
-                     "  padding: 4px;"
-                     "}"
-                     "QMenu::item {"
-                     "  padding: 6px 24px 6px 8px;"
-                     "  border-radius: 4px;"
-                     "}"
-                     "QMenu::item:selected {"
-                     "  background: #1f6feb;"
-                     "}"
-                     "QMenu::item:disabled {"
-                     "  color: #484f58;"
-                     "}"
-                     "QMenu::separator {"
-                     "  height: 1px;"
-                     "  background: #30363d;"
-                     "  margin: 4px 0;"
-                     "}");
+  menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
 
   QAction *viewDiffAction = menu.addAction(tr("👁 View Diff"));
   QAction *copyHashAction = menu.addAction(tr("📋 Copy Commit Hash"));
@@ -2033,7 +1488,7 @@ void SourceControlPanel::addEmptyStateItem(QTreeWidget *tree,
   QTreeWidgetItem *item = new QTreeWidgetItem(tree);
   item->setText(0, text);
   item->setFlags(Qt::NoItemFlags);
-  item->setForeground(0, QColor("#6e7681"));
+  item->setForeground(0, m_theme.singleLineCommentFormat);
   item->setData(0, Qt::UserRole + 2, true);
 }
 
@@ -2181,59 +1636,79 @@ void SourceControlPanel::onDeleteBranchClicked() {
 
 void SourceControlPanel::onOperationCompleted(const QString &message) {
   m_statusLabel->setText("✓ " + message);
-  m_statusLabel->setStyleSheet("QLabel {"
-                               "  background: #161b22;"
-                               "  color: #3fb950;"
-                               "  padding: 6px 10px;"
-                               "  font-size: 11px;"
-                               "  border-top: 1px solid #21262d;"
-                               "}"
-                               "QLabel:hover {"
-                               "  color: #56d364;"
-                               "}");
+  m_statusLabel->setStyleSheet(
+      QString("QLabel {"
+              "  background: %1;"
+              "  color: %2;"
+              "  padding: 6px 10px;"
+              "  font-size: 11px;"
+              "  border-top: 1px solid %3;"
+              "}"
+              "QLabel:hover {"
+              "  color: %4;"
+              "}")
+          .arg(m_theme.backgroundColor.name())
+          .arg(m_theme.successColor.name())
+          .arg(m_theme.surfaceAltColor.name())
+          .arg(m_theme.successColor.lighter(120).name()));
   m_statusLabel->setToolTip(tr("Success: %1").arg(message));
 
   QTimer::singleShot(3000, [this]() {
-    m_statusLabel->setStyleSheet("QLabel {"
-                                 "  background: #161b22;"
-                                 "  color: #8b949e;"
-                                 "  padding: 6px 10px;"
-                                 "  font-size: 11px;"
-                                 "  border-top: 1px solid #21262d;"
-                                 "}"
-                                 "QLabel:hover {"
-                                 "  color: #e6edf3;"
-                                 "}");
+    m_statusLabel->setStyleSheet(
+        QString("QLabel {"
+                "  background: %1;"
+                "  color: %2;"
+                "  padding: 6px 10px;"
+                "  font-size: 11px;"
+                "  border-top: 1px solid %3;"
+                "}"
+                "QLabel:hover {"
+                "  color: %4;"
+                "}")
+            .arg(m_theme.backgroundColor.name())
+            .arg(m_theme.singleLineCommentFormat.name())
+            .arg(m_theme.surfaceAltColor.name())
+            .arg(m_theme.foregroundColor.name()));
     m_statusLabel->setToolTip(QString());
   });
 }
 
 void SourceControlPanel::onErrorOccurred(const QString &error) {
   m_statusLabel->setText("⚠️ " + error);
-  m_statusLabel->setStyleSheet("QLabel {"
-                               "  background: #161b22;"
-                               "  color: #f85149;"
-                               "  padding: 6px 10px;"
-                               "  font-size: 11px;"
-                               "  border-top: 1px solid #21262d;"
-                               "}"
-                               "QLabel:hover {"
-                               "  color: #ff7b72;"
-                               "}");
+  m_statusLabel->setStyleSheet(
+      QString("QLabel {"
+              "  background: %1;"
+              "  color: %2;"
+              "  padding: 6px 10px;"
+              "  font-size: 11px;"
+              "  border-top: 1px solid %3;"
+              "}"
+              "QLabel:hover {"
+              "  color: %4;"
+              "}")
+          .arg(m_theme.backgroundColor.name())
+          .arg(m_theme.errorColor.name())
+          .arg(m_theme.surfaceAltColor.name())
+          .arg(m_theme.errorColor.lighter(120).name()));
   m_statusLabel->setToolTip(
       tr("Error: %1\n(This message will auto-clear in 5 seconds)").arg(error));
 
   QTimer::singleShot(5000, [this]() {
-    m_statusLabel->setStyleSheet("QLabel {"
-                                 "  background: #161b22;"
-                                 "  color: #8b949e;"
-                                 "  padding: 6px 10px;"
-                                 "  font-size: 11px;"
-                                 "  border-top: 1px solid #21262d;"
-                                 "}"
-                                 "QLabel:hover {"
-                                 "  color: #e6edf3;"
-                                 "}");
+    m_statusLabel->setStyleSheet(
+        QString("QLabel {"
+                "  background: %1;"
+                "  color: %2;"
+                "  padding: 6px 10px;"
+                "  font-size: 11px;"
+                "  border-top: 1px solid %3;"
+                "}"
+                "QLabel:hover {"
+                "  color: %4;"
+                "}")
+            .arg(m_theme.backgroundColor.name())
+            .arg(m_theme.singleLineCommentFormat.name())
+            .arg(m_theme.surfaceAltColor.name())
+            .arg(m_theme.foregroundColor.name()));
     m_statusLabel->setToolTip(QString());
   });
 }
@@ -2287,23 +1762,23 @@ QString SourceControlPanel::statusText(GitFileStatus status) const {
 QColor SourceControlPanel::statusColor(GitFileStatus status) const {
   switch (status) {
   case GitFileStatus::Modified:
-    return QColor("#e2c08d");
+    return m_theme.warningColor;
   case GitFileStatus::Added:
-    return QColor("#3fb950");
+    return m_theme.successColor;
   case GitFileStatus::Deleted:
-    return QColor("#f14c4c");
+    return m_theme.errorColor;
   case GitFileStatus::Renamed:
-    return QColor("#a371f7");
+    return m_theme.accentColor;
   case GitFileStatus::Copied:
-    return QColor("#a371f7");
+    return m_theme.accentColor;
   case GitFileStatus::Untracked:
-    return QColor("#3fb950");
+    return m_theme.successColor;
   case GitFileStatus::Unmerged:
-    return QColor("#f14c4c");
+    return m_theme.errorColor;
   case GitFileStatus::Ignored:
-    return QColor("#8b949e");
+    return m_theme.singleLineCommentFormat;
   default:
-    return QColor("#e6edf3");
+    return m_theme.foregroundColor;
   }
 }
 
@@ -2408,42 +1883,370 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
 
   setStyleSheet(QString("background: %1;").arg(theme.backgroundColor.name()));
 
+  // Header
+  if (m_headerWidget) {
+    m_headerWidget->setStyleSheet(UIStyleHelper::panelHeaderStyle(theme));
+  }
+  if (m_headerTitleLabel) {
+    m_headerTitleLabel->setStyleSheet(
+        QString("font-weight: bold; color: %1; font-size: 13px;")
+            .arg(theme.foregroundColor.name()));
+  }
+  if (m_refreshButton) {
+    m_refreshButton->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1; border: none; "
+                "font-size: 14px; border-radius: 4px; }"
+                "QPushButton:hover { background: %2; }"
+                "QPushButton:pressed { background: %3; }")
+            .arg(theme.foregroundColor.name())
+            .arg(theme.borderColor.name())
+            .arg(theme.accentColor.name()));
+  }
+
+  // Status label
+  if (m_statusLabel) {
+    m_statusLabel->setStyleSheet(
+        QString("QLabel {"
+                "  background: %1;"
+                "  color: %2;"
+                "  padding: 6px 10px;"
+                "  font-size: 11px;"
+                "  border-top: 1px solid %3;"
+                "}"
+                "QLabel:hover {"
+                "  color: %4;"
+                "}")
+            .arg(theme.backgroundColor.name())
+            .arg(theme.singleLineCommentFormat.name())
+            .arg(theme.surfaceAltColor.name())
+            .arg(theme.foregroundColor.name()));
+  }
+
+  // No repo UI
+  if (m_noRepoLabel) {
+    m_noRepoLabel->setStyleSheet(
+        QString("font-size: 16px; font-weight: bold; color: %1;")
+            .arg(theme.foregroundColor.name()));
+  }
+  if (m_noRepoDescLabel) {
+    m_noRepoDescLabel->setStyleSheet(
+        QString("color: %1; font-size: 12px;")
+            .arg(theme.singleLineCommentFormat.name()));
+  }
+  if (m_initRepoButton) {
+    m_initRepoButton->setStyleSheet(
+        QString("QPushButton {"
+                "  background: %1;"
+                "  color: %2;"
+                "  border: none;"
+                "  border-radius: 6px;"
+                "  padding: 12px 24px;"
+                "  font-weight: bold;"
+                "  font-size: 13px;"
+                "}"
+                "QPushButton:hover {"
+                "  background: %3;"
+                "}"
+                "QPushButton:pressed {"
+                "  background: %4;"
+                "}")
+            .arg(theme.successColor.name())
+            .arg(theme.backgroundColor.name())
+            .arg(theme.successColor.lighter(120).name())
+            .arg(theme.successColor.darker(120).name()));
+  }
+
+  // Conflict UI
+  if (m_conflictWarningHeader) {
+    QColor errorTransparent = theme.errorColor;
+    errorTransparent.setAlpha(51);
+    m_conflictWarningHeader->setStyleSheet(
+        QString("background: %1; border: 1px solid %2; border-radius: 6px;")
+            .arg(errorTransparent.name(QColor::HexArgb))
+            .arg(theme.errorColor.name()));
+  }
+  if (m_conflictLabel) {
+    m_conflictLabel->setStyleSheet(
+        QString("color: %1; font-weight: bold; font-size: 13px;")
+            .arg(theme.errorColor.name()));
+  }
+  if (m_conflictFilesHeaderLabel) {
+    m_conflictFilesHeaderLabel->setStyleSheet(
+        QString("color: %1; font-size: 11px; text-transform: uppercase;")
+            .arg(theme.singleLineCommentFormat.name()));
+  }
+  if (m_conflictFilesList) {
+    m_conflictFilesList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
+  }
+  if (m_resolveConflictsButton) {
+    m_resolveConflictsButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+  }
+  if (m_abortMergeButton) {
+    m_abortMergeButton->setStyleSheet(UIStyleHelper::dangerButtonStyle(theme));
+  }
+
+  // Branch section
+  if (m_branchSection) {
+    m_branchSection->setStyleSheet(
+        QString("background: %1; border-bottom: 1px solid %2;")
+            .arg(theme.backgroundColor.name())
+            .arg(theme.borderColor.name()));
+  }
+  if (m_branchIcon) {
+    m_branchIcon->setStyleSheet(
+        QString("color: %1; font-size: 14px;").arg(theme.accentColor.name()));
+  }
+  if (m_branchLabel) {
+    m_branchLabel->setStyleSheet(
+        QString("color: %1; font-size: 11px; text-transform: uppercase;")
+            .arg(theme.singleLineCommentFormat.name()));
+  }
+  if (m_branchSelector) {
+    m_branchSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+  }
+  if (m_newBranchButton) {
+    m_newBranchButton->setStyleSheet(
+        QString("QPushButton {"
+                "  background: %1;"
+                "  color: %2;"
+                "  border: none;"
+                "  border-radius: 6px;"
+                "  font-size: 14px;"
+                "  font-weight: bold;"
+                "}"
+                "QPushButton:hover {"
+                "  background: %3;"
+                "}"
+                "QPushButton:pressed {"
+                "  background: %4;"
+                "}")
+            .arg(theme.successColor.name())
+            .arg(theme.backgroundColor.name())
+            .arg(theme.successColor.lighter(120).name())
+            .arg(theme.successColor.darker(120).name()));
+  }
+  if (m_deleteBranchButton) {
+    m_deleteBranchButton->setStyleSheet(
+        QString("QPushButton {"
+                "  background: %1;"
+                "  color: %2;"
+                "  border: 1px solid %3;"
+                "  border-radius: 6px;"
+                "  font-size: 12px;"
+                "}"
+                "QPushButton:hover {"
+                "  background: %4;"
+                "  color: %5;"
+                "  border-color: %4;"
+                "}"
+                "QPushButton:pressed {"
+                "  background: %6;"
+                "}"
+                "QPushButton:disabled {"
+                "  background: %7;"
+                "  color: %3;"
+                "  border-color: %3;"
+                "}")
+            .arg(theme.surfaceAltColor.name())
+            .arg(theme.errorColor.name())
+            .arg(theme.borderColor.name())
+            .arg(theme.errorColor.name())
+            .arg(theme.backgroundColor.name())
+            .arg(theme.errorColor.darker(120).name())
+            .arg(theme.backgroundColor.name()));
+  }
+
+  // Remote ops buttons
+  auto styleRemoteButton = [&](QPushButton *btn, const QColor &color) {
+    if (!btn) return;
+    btn->setStyleSheet(
+        QString("QPushButton {"
+                "  background: %1;"
+                "  color: %2;"
+                "  border: 1px solid %3;"
+                "  border-radius: 6px;"
+                "  padding: 4px 8px;"
+                "  font-size: 11px;"
+                "}"
+                "QPushButton:hover {"
+                "  background: %4;"
+                "  color: %5;"
+                "  border-color: %4;"
+                "}"
+                "QPushButton:pressed {"
+                "  background: %6;"
+                "}"
+                "QPushButton:disabled {"
+                "  background: %7;"
+                "  color: %3;"
+                "  border-color: %3;"
+                "}")
+            .arg(theme.surfaceAltColor.name())
+            .arg(color.name())
+            .arg(theme.borderColor.name())
+            .arg(color.name())
+            .arg(theme.backgroundColor.name())
+            .arg(color.darker(120).name())
+            .arg(theme.backgroundColor.name()));
+  };
+
+  styleRemoteButton(m_pullButton, theme.accentColor);
+  styleRemoteButton(m_pushButton, theme.successColor);
+  styleRemoteButton(m_fetchButton, theme.singleLineCommentFormat);
+  styleRemoteButton(m_stashButton, theme.accentColor);
+  styleRemoteButton(m_compareBranchesBtn, theme.accentColor);
+  styleRemoteButton(m_worktreeBtn, theme.foregroundColor);
+
+  // Commit section
+  if (m_commitSection) {
+    m_commitSection->setStyleSheet(
+        QString("background: %1;").arg(theme.backgroundColor.name()));
+  }
+  if (m_commitHeaderLabel) {
+    m_commitHeaderLabel->setStyleSheet(
+        QString("color: %1; font-size: 11px; text-transform: uppercase; "
+                "letter-spacing: 0.5px;")
+            .arg(theme.singleLineCommentFormat.name()));
+  }
+  if (m_commitMessage) {
+    m_commitMessage->setStyleSheet(UIStyleHelper::plainTextEditStyle(theme));
+  }
+  if (m_amendCheckbox) {
+    m_amendCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
+  }
+  if (m_commitButton) {
+    m_commitButton->setStyleSheet(
+        QString("QPushButton {"
+                "  background: %1;"
+                "  color: %2;"
+                "  border: none;"
+                "  border-radius: 6px;"
+                "  padding: 8px 20px;"
+                "  font-weight: bold;"
+                "  font-size: 12px;"
+                "}"
+                "QPushButton:hover {"
+                "  background: %3;"
+                "}"
+                "QPushButton:pressed {"
+                "  background: %4;"
+                "}"
+                "QPushButton:disabled {"
+                "  background: %5;"
+                "  color: %6;"
+                "}")
+            .arg(theme.successColor.name())
+            .arg(theme.backgroundColor.name())
+            .arg(theme.successColor.lighter(120).name())
+            .arg(theme.successColor.darker(120).name())
+            .arg(theme.surfaceAltColor.name())
+            .arg(theme.borderColor.name()));
+  }
+
+  // Staged section
+  if (m_stagedHeader) {
+    m_stagedHeader->setStyleSheet(
+        QString("background: %1; border-bottom: 1px solid %2;")
+            .arg(theme.backgroundColor.name())
+            .arg(theme.surfaceAltColor.name()));
+  }
+  if (m_stagedLabel) {
+    m_stagedLabel->setStyleSheet(
+        QString("color: %1; font-weight: bold; font-size: 12px;")
+            .arg(theme.successColor.name()));
+  }
+  if (m_unstageAllButton) {
+    m_unstageAllButton->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1; border: 1px "
+                "solid %2; border-radius: 4px; font-size: 14px; font-weight: bold; }"
+                "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
+                "QPushButton:pressed { background: %4; color: %5; }"
+                "QPushButton:disabled { color: %2; border-color: %2; }")
+            .arg(theme.singleLineCommentFormat.name())
+            .arg(theme.borderColor.name())
+            .arg(theme.surfaceAltColor.name())
+            .arg(theme.errorColor.name())
+            .arg(theme.backgroundColor.name()));
+  }
+  if (m_stagedTree) {
+    m_stagedTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+  }
+
+  // Changes section
+  if (m_changesHeader) {
+    m_changesHeader->setStyleSheet(
+        QString("background: %1; border-bottom: 1px solid %2;")
+            .arg(theme.backgroundColor.name())
+            .arg(theme.surfaceAltColor.name()));
+  }
+  if (m_changesLabel) {
+    m_changesLabel->setStyleSheet(
+        QString("color: %1; font-weight: bold; font-size: 12px;")
+            .arg(theme.warningColor.name()));
+  }
+  if (m_stageAllButton) {
+    m_stageAllButton->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1; border: 1px "
+                "solid %2; border-radius: 4px; font-size: 14px; font-weight: bold; }"
+                "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
+                "QPushButton:pressed { background: %4; color: %5; }"
+                "QPushButton:disabled { color: %2; border-color: %2; }")
+            .arg(theme.singleLineCommentFormat.name())
+            .arg(theme.borderColor.name())
+            .arg(theme.surfaceAltColor.name())
+            .arg(theme.successColor.name())
+            .arg(theme.backgroundColor.name()));
+  }
+  if (m_discardAllBtn) {
+    m_discardAllBtn->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1; border: 1px "
+                "solid %2; border-radius: 4px; font-size: 12px; }"
+                "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
+                "QPushButton:pressed { background: %4; color: %5; }"
+                "QPushButton:disabled { color: %2; border-color: %2; }")
+            .arg(theme.singleLineCommentFormat.name())
+            .arg(theme.borderColor.name())
+            .arg(theme.surfaceAltColor.name())
+            .arg(theme.errorColor.name())
+            .arg(theme.backgroundColor.name()));
+  }
   if (m_changesTree) {
     m_changesTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }
 
-  if (m_commitMessage) {
-    QString textEditStyle = QString("QTextEdit {"
-                                    "  background: %1;"
-                                    "  color: %2;"
-                                    "  border: 1px solid %3;"
-                                    "  border-radius: 4px;"
-                                    "}")
-                                .arg(theme.surfaceAltColor.name())
-                                .arg(theme.foregroundColor.name())
-                                .arg(theme.borderColor.name());
-    m_commitMessage->setStyleSheet(textEditStyle);
+  // History section
+  if (m_historyHeader) {
+    m_historyHeader->setStyleSheet(
+        QString("background: %1; border-bottom: 1px solid %2;")
+            .arg(theme.backgroundColor.name())
+            .arg(theme.surfaceAltColor.name()));
   }
-
-  if (m_branchSelector) {
-    m_branchSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+  if (m_historyToggleButton) {
+    m_historyToggleButton->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1; border: none; "
+                "font-size: 10px; padding: 0; }"
+                "QPushButton:hover { color: %2; }")
+            .arg(theme.singleLineCommentFormat.name())
+            .arg(theme.foregroundColor.name()));
   }
-
-  if (m_commitButton) {
-    m_commitButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+  if (m_historyLabel) {
+    m_historyLabel->setStyleSheet(
+        QString("color: %1; font-weight: bold; font-size: 12px;")
+            .arg(theme.accentColor.name()));
   }
-  for (QPushButton *btn :
-       {m_stageAllButton, m_unstageAllButton, m_refreshButton}) {
-    if (btn) {
-      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-    }
+  if (m_historyRebaseBtn) {
+    m_historyRebaseBtn->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1; border: none; "
+                "font-size: 11px; padding: 2px 6px; }"
+                "QPushButton:hover { color: %2; text-decoration: underline; }")
+            .arg(theme.accentColor.name())
+            .arg(theme.accentColor.lighter(130).name()));
   }
-
-  if (m_statusLabel) {
-    m_statusLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+  if (m_historySearchEdit) {
+    m_historySearchEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
   }
-  if (m_branchLabel) {
-    m_branchLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
+  if (m_historyTree) {
+    m_historyTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }
 }
 

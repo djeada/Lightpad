@@ -20,10 +20,6 @@
 static const QStringList REBASE_ACTIONS = {"pick",   "reword", "edit",
                                            "squash", "fixup",  "drop"};
 
-static const QMap<QString, QString> ACTION_COLORS = {
-    {"pick", "#3fb950"},   {"reword", "#d29922"}, {"edit", "#58a6ff"},
-    {"squash", "#a371f7"}, {"fixup", "#8b949e"},  {"drop", "#f85149"}};
-
 GitRebaseDialog::GitRebaseDialog(GitIntegration *git, const Theme &theme,
                                  QWidget *parent)
     : StyledDialog(parent), m_git(git), m_theme(theme) {
@@ -72,20 +68,22 @@ void GitRebaseDialog::rebuildComboForItem(QTreeWidgetItem *item, int row) {
       (row >= 0 && row < m_entries.size()) ? m_entries[row].action : "pick";
   combo->setCurrentText(action);
 
-  QString color = ACTION_COLORS.value(action, "#e6edf3");
+  QString color = actionColor(action);
   combo->setStyleSheet(
-      QString("QComboBox { background: #21262d; color: %1; border: 1px solid "
-              "#30363d; border-radius: 4px; padding: 2px 6px; font-weight: "
+      QString("QComboBox { background: %1; color: %2; border: 1px solid "
+              "%3; border-radius: 4px; padding: 2px 6px; font-weight: "
               "bold; font-size: 11px; min-width: 70px; }"
-              "QComboBox:hover { border-color: #58a6ff; }"
+              "QComboBox:hover { border-color: %4; }"
               "QComboBox::drop-down { border: none; width: 16px; }"
               "QComboBox::down-arrow { image: none; border-left: 4px solid "
               "transparent; border-right: 4px solid transparent; border-top: "
-              "5px solid %1; }"
-              "QComboBox QAbstractItemView { background: #161b22; color: "
-              "#e6edf3; selection-background-color: #1f6feb; border: 1px solid "
-              "#30363d; }")
-          .arg(color));
+              "5px solid %2; }"
+              "QComboBox QAbstractItemView { background: %5; color: "
+              "%6; selection-background-color: %4; border: 1px solid "
+              "%3; }")
+          .arg(m_theme.surfaceAltColor.name(), color,
+               m_theme.borderColor.name(), m_theme.accentColor.name(),
+               m_theme.backgroundColor.name(), m_theme.foregroundColor.name()));
 
   m_commitList->setItemWidget(item, 0, combo);
 
@@ -233,19 +231,19 @@ void GitRebaseDialog::updateSummary() {
 
   QStringList parts;
   if (pick > 0)
-    parts << QString("<span style='color:#3fb950'>%1 pick</span>").arg(pick);
+    parts << QString("<span style='color:%1'>%2 pick</span>").arg(m_theme.successColor.name()).arg(pick);
   if (reword > 0)
     parts
-        << QString("<span style='color:#d29922'>%1 reword</span>").arg(reword);
+        << QString("<span style='color:%1'>%2 reword</span>").arg(m_theme.warningColor.name()).arg(reword);
   if (edit > 0)
-    parts << QString("<span style='color:#58a6ff'>%1 edit</span>").arg(edit);
+    parts << QString("<span style='color:%1'>%2 edit</span>").arg(m_theme.accentColor.name()).arg(edit);
   if (squash > 0)
     parts
-        << QString("<span style='color:#a371f7'>%1 squash</span>").arg(squash);
+        << QString("<span style='color:" + m_theme.accentColor.lighter(130).name() + "'>%1 squash</span>").arg(squash);
   if (fixup > 0)
-    parts << QString("<span style='color:#8b949e'>%1 fixup</span>").arg(fixup);
+    parts << QString("<span style='color:%1'>%2 fixup</span>").arg(m_theme.singleLineCommentFormat.name()).arg(fixup);
   if (drop > 0)
-    parts << QString("<span style='color:#f85149'>%1 drop</span>").arg(drop);
+    parts << QString("<span style='color:%1'>%2 drop</span>").arg(m_theme.errorColor.name()).arg(drop);
 
   if (m_summaryLabel) {
     m_summaryLabel->setText(
@@ -476,3 +474,13 @@ void GitRebaseDialog::applyTheme(const Theme &theme) {
 }
 
 void GitRebaseDialog::updateActionForItem(QTreeWidgetItem *, const QString &) {}
+
+QString GitRebaseDialog::actionColor(const QString &action) const {
+  if (action == "pick") return m_theme.successColor.name();
+  if (action == "reword") return m_theme.warningColor.name();
+  if (action == "edit") return m_theme.accentColor.name();
+  if (action == "squash") return m_theme.accentColor.lighter(130).name();
+  if (action == "fixup") return m_theme.singleLineCommentFormat.name();
+  if (action == "drop") return m_theme.errorColor.name();
+  return m_theme.foregroundColor.name();
+}

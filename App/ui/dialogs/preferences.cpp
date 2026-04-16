@@ -1,22 +1,129 @@
 #include "preferences.h"
 #include "../mainwindow.h"
 #include "../../settings/settingsmanager.h"
+#include "../../theme/themeengine.h"
+#include "../../theme/themedefinition.h"
 
 #include <QColorDialog>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QJsonObject>
+#include <QListWidget>
+#include <QListWidgetItem>
+#include <QPainter>
 #include <QScrollArea>
 #include <QVBoxLayout>
+
+namespace {
+class ThemePreviewCard : public QWidget {
+public:
+  explicit ThemePreviewCard(QWidget *parent = nullptr) : QWidget(parent) {
+    setMinimumHeight(190);
+  }
+
+  void setDefinition(const ThemeDefinition &def) {
+    m_def = def;
+    update();
+  }
+
+protected:
+  void paintEvent(QPaintEvent *) override {
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    const ThemeColors &c = m_def.colors;
+    qreal r = m_def.ui.borderRadius;
+    QRectF full = rect().adjusted(1, 1, -1, -1);
+
+    p.setPen(QPen(c.accentPrimary, 1));
+    p.setBrush(c.surfaceBase);
+    p.drawRoundedRect(full, r, r);
+
+    QRectF tb(full.left() + 6, full.top() + 6, full.width() - 12, 22);
+    p.setBrush(c.surfaceRaised);
+    p.setPen(QPen(c.borderSubtle, 1));
+    p.drawRoundedRect(tb, r / 2, r / 2);
+    p.setPen(c.textPrimary);
+    p.setFont(QFont("Monospace", 9, QFont::Bold));
+    p.drawText(tb.adjusted(8, 0, 0, 0), Qt::AlignVCenter,
+               "▶ " + m_def.name.toUpper());
+    qreal dx = tb.right() - 10;
+    for (const QColor &d : {c.statusError, c.statusWarning, c.statusSuccess}) {
+      p.setBrush(d);
+      p.setPen(Qt::NoPen);
+      p.drawEllipse(QPointF(dx, tb.center().y()), 3.0, 3.0);
+      dx -= 9;
+    }
+
+    QRectF body(full.left() + 6, tb.bottom() + 4, full.width() - 12,
+                full.bottom() - tb.bottom() - 10);
+    p.setBrush(c.editorBg);
+    p.setPen(QPen(c.borderSubtle, 1));
+    p.drawRoundedRect(body, r / 2, r / 2);
+
+    p.setFont(QFont("Monospace", 9));
+    qreal y = body.top() + 14;
+    qreal x = body.left() + 10;
+    qreal lh = 15;
+    struct Tok { QString t; QColor c; };
+    auto line = [&](std::initializer_list<Tok> toks) {
+      qreal cx = x;
+      for (const Tok &tok : toks) {
+        p.setPen(tok.c);
+        p.drawText(QPointF(cx, y), tok.t);
+        cx += p.fontMetrics().horizontalAdvance(tok.t);
+      }
+      y += lh;
+    };
+    line({{"// lightpad > hacker mode", c.syntaxComment}});
+    line({{"def ", c.syntaxKeyword},
+          {"compile", c.syntaxFunction},
+          {"(", c.textPrimary},
+          {"path", c.textPrimary},
+          {": ", c.textPrimary},
+          {"str", c.syntaxType},
+          {"):", c.textPrimary}});
+    line({{"    ", c.textPrimary},
+          {"return ", c.syntaxKeyword},
+          {"\"lightpad/\" + ", c.syntaxString},
+          {"path", c.textPrimary}});
+
+    QRectF bar(body.left() + 10, y + 2, body.width() - 20, 2);
+    p.setBrush(c.accentPrimary);
+    p.setPen(Qt::NoPen);
+    p.drawRoundedRect(bar, 1, 1);
+
+    y = bar.bottom() + 8;
+    QList<QPair<QString, QColor>> sw = {
+        {"bg", c.surfaceBase},     {"fg", c.textPrimary},
+        {"acc", c.accentPrimary},  {"ok", c.statusSuccess},
+        {"warn", c.statusWarning}, {"err", c.statusError}};
+    qreal cellW = (body.width() - 20 - (sw.size() - 1) * 3) / sw.size();
+    qreal cx = body.left() + 10;
+    p.setFont(QFont("Monospace", 7));
+    for (const auto &s : sw) {
+      QRectF rc(cx, y, cellW, 16);
+      p.setBrush(s.second);
+      p.setPen(QPen(c.borderSubtle, 1));
+      p.drawRoundedRect(rc, 2, 2);
+      p.setPen(c.textMuted);
+      p.drawText(rc, Qt::AlignCenter, s.first);
+      cx += cellW + 3;
+    }
+  }
+
+private:
+  ThemeDefinition m_def;
+};
+}
 
 static const QString kSwatchStyle =
     "QToolButton { border: 1px solid %1; border-radius: 3px; min-width: 28px; "
     "max-width: 28px; min-height: 28px; max-height: 28px; }";
 
 static const QString kSectionHeaderStyle =
-    "font-weight: 600; font-size: 13px; padding-top: 6px;";
-
-static const QString kDescriptionStyle = "color: #8b949e; font-size: 11px;";
+    "font-family: Monospace; font-weight: 700; font-size: 13px; "
+    "padding-top: 6px; letter-spacing: 1px;";
 
 Preferences::Preferences(MainWindow *parent)
     : QDialog(nullptr), m_mainWindow(parent) {
@@ -43,13 +150,15 @@ QWidget *Preferences::createSeparator() {
   auto *line = new QFrame(this);
   line->setFrameShape(QFrame::HLine);
   line->setFrameShadow(QFrame::Sunken);
-  line->setStyleSheet("color: #30363d;");
+  Theme theme = m_mainWindow->getTheme();
+  line->setStyleSheet(QString("color: %1;").arg(theme.borderColor.name()));
   return line;
 }
 
 QToolButton *Preferences::createColorSwatch(const QColor &color) {
   auto *btn = new QToolButton(this);
-  btn->setStyleSheet(kSwatchStyle.arg("#30363d") +
+  Theme theme = m_mainWindow->getTheme();
+  btn->setStyleSheet(kSwatchStyle.arg(theme.borderColor.name()) +
                      QString("QToolButton { background-color: %1; }")
                          .arg(color.name()));
   btn->setCursor(Qt::PointingHandCursor);
@@ -70,8 +179,27 @@ void Preferences::buildUi() {
   mainLayout->setContentsMargins(20, 16, 20, 16);
   mainLayout->setSpacing(8);
 
+  // ── Theme Section ─────────────────────────────────────────────────────
+  mainLayout->addWidget(createSectionHeader("◆ THEME"));
+  mainLayout->addWidget(createSeparator());
+  mainLayout->addWidget(buildThemeSection());
+  {
+    auto *fxRow = new QHBoxLayout();
+    fxRow->setSpacing(10);
+    m_scanlinesCheck = new QCheckBox("CRT scanline overlay", this);
+    m_scanlinesCheck->setChecked(SettingsManager::instance()
+                                     .getValue("scanlineEffect", false)
+                                     .toBool());
+    connect(m_scanlinesCheck, &QCheckBox::toggled, this,
+            &Preferences::onScanlinesToggled);
+    fxRow->addWidget(m_scanlinesCheck);
+    fxRow->addStretch();
+    mainLayout->addLayout(fxRow);
+  }
+  mainLayout->addSpacing(8);
+
   // ── Font Section ──────────────────────────────────────────────────────
-  mainLayout->addWidget(createSectionHeader("Font"));
+  mainLayout->addWidget(createSectionHeader("▶ FONT"));
   mainLayout->addWidget(createSeparator());
 
   auto *fontRow = new QHBoxLayout();
@@ -96,9 +224,10 @@ void Preferences::buildUi() {
 
   m_fontPreview = new QLabel(this);
   m_fontPreview->setWordWrap(true);
+  Theme theme = m_mainWindow->getTheme();
   m_fontPreview->setStyleSheet(
-      "QLabel { border: 1px solid #30363d; border-radius: 4px; padding: 10px; "
-      "background-color: #161b22; }");
+      QString("QLabel { border: 1px solid %1; border-radius: 4px; padding: 10px; "
+      "background-color: %2; }").arg(theme.borderColor.name(), theme.backgroundColor.name()));
   m_fontPreview->setMinimumHeight(56);
   m_fontPreview->setText(
       "The quick brown fox jumps over the lazy dog.\n"
@@ -108,7 +237,7 @@ void Preferences::buildUi() {
   mainLayout->addSpacing(8);
 
   // ── Editor Section ────────────────────────────────────────────────────
-  mainLayout->addWidget(createSectionHeader("Editor"));
+  mainLayout->addWidget(createSectionHeader("▶ EDITOR"));
   mainLayout->addWidget(createSeparator());
 
   auto *tabRow = new QHBoxLayout();
@@ -138,7 +267,7 @@ void Preferences::buildUi() {
   mainLayout->addSpacing(8);
 
   // ── Display Section ───────────────────────────────────────────────────
-  mainLayout->addWidget(createSectionHeader("Display"));
+  mainLayout->addWidget(createSectionHeader("▶ DISPLAY"));
   mainLayout->addWidget(createSeparator());
 
   m_lineNumbersCheck = new QCheckBox("Show line numbers", this);
@@ -153,7 +282,7 @@ void Preferences::buildUi() {
   mainLayout->addSpacing(8);
 
   // ── Color Scheme Section ──────────────────────────────────────────────
-  mainLayout->addWidget(createSectionHeader("Color Scheme"));
+  mainLayout->addWidget(createSectionHeader("▶ SYNTAX COLORS"));
   mainLayout->addWidget(createSeparator());
 
   auto *colorGrid = new QGridLayout();
@@ -214,9 +343,9 @@ void Preferences::buildUi() {
   closeBtn->setText("Close");
   closeBtn->setCursor(Qt::PointingHandCursor);
   closeBtn->setStyleSheet(
-      "QToolButton { border: 1px solid #30363d; border-radius: 4px; "
+      QString("QToolButton { border: 1px solid %1; border-radius: 4px; "
       "padding: 4px 16px; }"
-      "QToolButton:hover { background-color: #21262d; }");
+      "QToolButton:hover { background-color: %2; }").arg(theme.borderColor.name(), theme.surfaceAltColor.name()));
   connect(closeBtn, &QToolButton::clicked, this, &QDialog::close);
   buttonRow->addWidget(closeBtn);
   outerLayout->addLayout(buttonRow);
@@ -260,7 +389,7 @@ void Preferences::loadCurrentSettings() {
   auto updateSwatch = [&](const QString &role, const QColor &color) {
     if (m_colorSwatches.contains(role)) {
       auto *btn = m_colorSwatches[role];
-      btn->setStyleSheet(kSwatchStyle.arg("#30363d") +
+      btn->setStyleSheet(kSwatchStyle.arg(theme.borderColor.name()) +
                          QString("QToolButton { background-color: %1; }")
                              .arg(color.name()));
       btn->setToolTip(color.name());
@@ -388,7 +517,7 @@ void Preferences::onColorSwatchClicked(QToolButton *button,
   if (!color.isValid() || !m_mainWindow)
     return;
 
-  button->setStyleSheet(kSwatchStyle.arg("#30363d") +
+  button->setStyleSheet(kSwatchStyle.arg(m_mainWindow->getTheme().borderColor.name()) +
                         QString("QToolButton { background-color: %1; }")
                             .arg(color.name()));
   button->setToolTip(color.name());
@@ -417,6 +546,7 @@ void Preferences::onColorSwatchClicked(QToolButton *button,
     theme.numberFormat = color;
 
   m_mainWindow->setTheme(theme);
+  persistCurrentTheme(QString());
   persistAll();
 }
 
@@ -433,4 +563,80 @@ void Preferences::persistAll() {
   sm.setValue("fontItalic", currentFont.italic());
 
   sm.saveSettings();
+}
+
+void Preferences::persistCurrentTheme(const QString &activeThemeName) {
+  if (!m_mainWindow)
+    return;
+
+  auto &sm = SettingsManager::instance();
+  QJsonObject themeJson;
+  m_mainWindow->getTheme().write(themeJson);
+  sm.setValue("theme", themeJson);
+  sm.setValue("activeThemeName", activeThemeName);
+  sm.saveSettings();
+}
+
+QWidget *Preferences::buildThemeSection() {
+  auto *wrap = new QWidget(this);
+  auto *row = new QHBoxLayout(wrap);
+  row->setContentsMargins(0, 0, 0, 0);
+  row->setSpacing(10);
+
+  m_themeList = new QListWidget(wrap);
+  m_themeList->setMinimumWidth(180);
+  m_themeList->setMaximumWidth(220);
+  m_themeList->setMinimumHeight(190);
+
+  QStringList names = ThemeEngine::instance().availableThemes();
+  names.sort();
+  QString active = ThemeEngine::instance().activeTheme().name;
+  for (const QString &n : names) {
+    ThemeDefinition d = ThemeEngine::instance().themeByName(n);
+    QPixmap px(14, 14);
+    px.fill(d.colors.accentPrimary);
+    auto *item = new QListWidgetItem(QIcon(px), n);
+    m_themeList->addItem(item);
+    if (n == active)
+      m_themeList->setCurrentItem(item);
+  }
+  if (!m_themeList->currentItem() && m_themeList->count() > 0)
+    m_themeList->setCurrentRow(0);
+  row->addWidget(m_themeList);
+
+  m_themePreview = new ThemePreviewCard(wrap);
+  row->addWidget(m_themePreview, 1);
+
+  connect(m_themeList, &QListWidget::currentRowChanged, this,
+          &Preferences::onThemePresetChanged);
+
+  // Initial preview
+  if (auto *cur = m_themeList->currentItem()) {
+    ThemeDefinition d = ThemeEngine::instance().themeByName(cur->text());
+    static_cast<ThemePreviewCard *>(m_themePreview)->setDefinition(d);
+  }
+  return wrap;
+}
+
+void Preferences::onScanlinesToggled(bool enabled) {
+  SettingsManager::instance().setValue("scanlineEffect", enabled);
+  SettingsManager::instance().saveSettings();
+  if (m_mainWindow) {
+    m_mainWindow->setScanlineEffectEnabled(enabled);
+  }
+}
+
+void Preferences::onThemePresetChanged(int row) {
+  auto *item = m_themeList->item(row);
+  if (!item || !m_mainWindow)
+    return;
+  QString name = item->text();
+  ThemeDefinition d = ThemeEngine::instance().themeByName(name);
+  static_cast<ThemePreviewCard *>(m_themePreview)->setDefinition(d);
+
+  ThemeEngine::instance().setActiveTheme(d);
+  Theme classic = d.toClassicTheme();
+  m_mainWindow->setTheme(classic);
+  ThemeEngine::instance().setActiveTheme(d);
+  persistCurrentTheme(name);
 }

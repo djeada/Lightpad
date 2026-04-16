@@ -76,6 +76,7 @@ public:
   void setTabWidthLabel(QString text);
   void setLanguageHighlightLabel(QString text);
   void setTheme(Theme theme);
+  void setScanlineEffectEnabled(bool enabled);
   void setFont(QFont font);
   void showLineNumbers(bool flag);
   void highlihtCurrentLine(bool flag);
@@ -135,6 +136,7 @@ private slots:
   void on_tabWidth_clicked();
   void on_actionKeyboard_shortcuts_triggered();
   void on_actionPreferences_triggered();
+  void showThemeGallery();
   void on_runButton_clicked();
   void on_debugButton_clicked();
   void on_actionRun_file_name_triggered();
@@ -248,6 +250,7 @@ private:
   LanguageFeatureManager *m_languageFeatureManager;
   std::shared_ptr<LspCompletionProvider> m_lspCompletionProvider;
   NotificationManager *m_notificationManager;
+  class HackerScanlineOverlay *m_scanlineOverlay = nullptr;
   class QToolButton *m_lspStatusLabel;
   QString m_lspStatusLanguageId;
   QMap<QString, int> m_documentVersions;
@@ -324,6 +327,7 @@ private:
   void updateGitIntegrationForPath(const QString &path);
   void applyGitIntegrationToAllPages();
   void ensureFileTreeModel();
+  void ensureProjectWorkspaceVisible();
   void trackTreeExpandedState(const QModelIndex &index, bool expanded);
   void trackTreeCurrentIndex(const QModelIndex &index);
   void applyTreeStateToView(QTreeView *treeView);

@@ -23,13 +23,10 @@ void ProblemsPanel::setupUI() {
   mainLayout->setSpacing(0);
 
   m_header = new QWidget(this);
-  m_header->setStyleSheet(
-      "background: #171c24; border-bottom: 1px solid #2a3241;");
   QHBoxLayout *headerLayout = new QHBoxLayout(m_header);
   headerLayout->setContentsMargins(8, 4, 8, 4);
 
   m_titleLabel = new QLabel(tr("Problems"), m_header);
-  m_titleLabel->setStyleSheet("font-weight: bold; color: #e6edf3;");
   headerLayout->addWidget(m_titleLabel);
 
   m_filterCombo = new QComboBox(m_header);
@@ -37,10 +34,6 @@ void ProblemsPanel::setupUI() {
   m_filterCombo->addItem(tr("Errors"));
   m_filterCombo->addItem(tr("Warnings"));
   m_filterCombo->addItem(tr("Info"));
-  m_filterCombo->setStyleSheet(
-      "QComboBox { background: #1f2632; color: #e6edf3; border: 1px solid "
-      "#2a3241; padding: 2px 8px; }"
-      "QComboBox::drop-down { border: none; }");
   connect(m_filterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &ProblemsPanel::onFilterChanged);
   headerLayout->addWidget(m_filterCombo);
@@ -50,13 +43,12 @@ void ProblemsPanel::setupUI() {
   m_statusLabel = new QLabel(m_header);
   m_statusLabel->setObjectName("problemsStatusLabel");
   m_statusLabel->setTextFormat(Qt::RichText);
-  m_statusLabel->setStyleSheet("color: #9aa4b2;");
   headerLayout->addWidget(m_statusLabel);
 
   const QString buttonStyle =
-      "QPushButton { background: transparent; color: #9aa4b2; border: none; "
+      "QPushButton { background: transparent; border: none; "
       "padding: 2px 6px; font-size: 16px; }"
-      "QPushButton:hover { color: #e6edf3; }";
+      "QPushButton:hover { opacity: 0.8; }";
 
   auto *closeButton = new QPushButton("✕", m_header);
   closeButton->setStyleSheet(buttonStyle);
@@ -79,25 +71,10 @@ void ProblemsPanel::setupUI() {
   m_tree->setRootIsDecorated(false);
   m_tree->setAlternatingRowColors(false);
   m_tree->setStyleSheet("QTreeWidget {"
-                        "  background: #0e1116;"
-                        "  color: #e6edf3;"
                         "  border: none;"
                         "}"
                         "QTreeWidget::item {"
                         "  padding: 4px;"
-                        "}"
-                        "QTreeWidget::item:selected {"
-                        "  background: #1b2a43;"
-                        "}"
-                        "QTreeWidget::item:hover {"
-                        "  background: #222a36;"
-                        "}"
-                        "QHeaderView::section {"
-                        "  background: #171c24;"
-                        "  color: #9aa4b2;"
-                        "  padding: 4px;"
-                        "  border: none;"
-                        "  border-right: 1px solid #2a3241;"
                         "}");
   m_tree->header()->setStretchLastSection(true);
   m_tree->setColumnWidth(0, 500);
@@ -113,7 +90,7 @@ void ProblemsPanel::setupUI() {
          "Diagnostics will appear here when issues are found in your code."));
   m_emptyStateLabel->setWordWrap(true);
   m_emptyStateLabel->setStyleSheet(
-      "QLabel { color: #6e7681; font-size: 13px; padding: 32px; }");
+      "QLabel { font-size: 13px; padding: 32px; }");
 
   treeLayout->addWidget(m_tree);
   treeLayout->addWidget(m_emptyStateLabel);
@@ -261,13 +238,13 @@ void ProblemsPanel::updateCounts() {
     m_statusLabel->setText(tr("No problems"));
   } else {
     QString errColor = m_theme.errorColor.isValid() ? m_theme.errorColor.name()
-                                                    : QStringLiteral("#f85149");
+                                                    : m_theme.errorColor.name();
     QString warnColor = m_theme.warningColor.isValid()
                             ? m_theme.warningColor.name()
-                            : QStringLiteral("#d29922");
+                            : m_theme.accentColor.name();
     QString infoColor = m_theme.accentColor.isValid()
                             ? m_theme.accentColor.name()
-                            : QStringLiteral("#58a6ff");
+                            : m_theme.foregroundColor.name();
     QString status = QString("<span style='color:%1;'>&#x26D4; %2</span>"
                              "&nbsp;&nbsp;"
                              "<span style='color:%3;'>&#x26A0; %4</span>"

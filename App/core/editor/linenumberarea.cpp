@@ -54,6 +54,7 @@ int LineNumberArea::calculateWidth() const {
 
 void LineNumberArea::setFont(const QFont &font) {
   m_font = font;
+  QWidget::setFont(font);
   updateBlameTextWidth();
   update();
 }
@@ -205,6 +206,12 @@ QString LineNumberArea::buildDiffHunkTooltip(const GitDiffHunk &hunk) const {
     return QString();
   }
 
+  const Theme theme = (m_editor && m_editor->mainWindow)
+                          ? m_editor->mainWindow->getTheme()
+                          : Theme();
+  const QColor added = theme.successColor;
+  const QColor removed = theme.errorColor;
+
   QString html =
       QStringLiteral("<div style='font-family: monospace; font-size: 11px; "
                      "white-space: pre; padding: 4px;'>");
@@ -216,13 +223,19 @@ QString LineNumberArea::buildDiffHunkTooltip(const GitDiffHunk &hunk) const {
   for (const QString &line : hunk.lines) {
     QString escaped = line.toHtmlEscaped();
     if (!line.isEmpty() && line[0] == '+') {
-      html += QStringLiteral("<div style='background: rgba(76,175,80,0.2); "
-                             "color: #4caf50;'>%1</div>")
-                  .arg(escaped);
+      html += QString("<div style='background: rgba(%1,%2,%3,0.2); "
+                      "color: %4;'>%5</div>")
+                  .arg(added.red())
+                  .arg(added.green())
+                  .arg(added.blue())
+                  .arg(added.name(), escaped);
     } else if (!line.isEmpty() && line[0] == '-') {
-      html += QStringLiteral("<div style='background: rgba(244,67,54,0.2); "
-                             "color: #f44336;'>%1</div>")
-                  .arg(escaped);
+      html += QString("<div style='background: rgba(%1,%2,%3,0.2); "
+                      "color: %4;'>%5</div>")
+                  .arg(removed.red())
+                  .arg(removed.green())
+                  .arg(removed.blue())
+                  .arg(removed.name(), escaped);
     } else {
       html += QStringLiteral("<div>%1</div>").arg(escaped);
     }
@@ -255,7 +268,7 @@ int LineNumberArea::lineAtPosition(int y) const {
   QRectF blockRect = m_editor->blockBoundingGeometry(block);
   blockRect.translate(m_editor->contentOffset());
   qreal top = blockRect.top();
-  qreal bottom = top + blockRect.height();
+  qreal bottom = top + m_editor->blockBoundingRect(block).height();
   int blockNumber = block.blockNumber();
 
   while (block.isValid() && top <= height()) {
@@ -269,7 +282,7 @@ int LineNumberArea::lineAtPosition(int y) const {
     }
     blockRect = m_editor->blockBoundingGeometry(block);
     blockRect.translate(m_editor->contentOffset());
-    bottom = top + blockRect.height();
+    bottom = top + m_editor->blockBoundingRect(block).height();
     ++blockNumber;
   }
 
@@ -296,7 +309,7 @@ bool LineNumberArea::event(QEvent *event) {
     QRectF blockRect = m_editor->blockBoundingGeometry(block);
     blockRect.translate(m_editor->contentOffset());
     qreal top = blockRect.top();
-    qreal bottom = top + blockRect.height();
+    qreal bottom = top + m_editor->blockBoundingRect(block).height();
     int blockNumber = block.blockNumber();
     const int fontHeight = QFontMetrics(m_font).height();
     const int numArea = numberAreaWidth();
@@ -380,6 +393,10 @@ bool LineNumberArea::event(QEvent *event) {
                     "<div style='margin-top: 6px; font-size: 11px; "
                     "color: #aaa; border-top: 1px solid #555; "
                     "padding-top: 4px;'>");
+                const Theme statsTheme =
+                    (m_editor && m_editor->mainWindow)
+                        ? m_editor->mainWindow->getTheme()
+                        : Theme();
                 int shown = 0;
                 for (const auto &stat : stats) {
                   if (shown >= 8) {
@@ -389,10 +406,11 @@ bool LineNumberArea::event(QEvent *event) {
                     break;
                   }
                   tooltip +=
-                      QStringLiteral(
-                          "<div><span style='color:#4caf50;'>+%1</span> "
-                          "<span style='color:#f44336;'>-%2</span> %3</div>")
+                      QString("<div><span style='color:%1;'>+%2</span> "
+                              "<span style='color:%3;'>-%4</span> %5</div>")
+                          .arg(statsTheme.successColor.name())
                           .arg(stat.additions)
+                          .arg(statsTheme.errorColor.name())
                           .arg(stat.deletions)
                           .arg(stat.filePath.toHtmlEscaped());
                   ++shown;
@@ -424,7 +442,7 @@ bool LineNumberArea::event(QEvent *event) {
       }
       blockRect = m_editor->blockBoundingGeometry(block);
       blockRect.translate(m_editor->contentOffset());
-      bottom = top + blockRect.height();
+      bottom = top + m_editor->blockBoundingRect(block).height();
       ++blockNumber;
     }
 
@@ -548,7 +566,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
   QRectF blockRect = m_editor->blockBoundingGeometry(block);
   blockRect.translate(m_editor->contentOffset());
   qreal top = blockRect.top();
-  qreal bottom = top + blockRect.height();
+  qreal bottom = top + m_editor->blockBoundingRect(block).height();
 
   const int fontHeight = QFontMetrics(m_font).height();
   const int areaWidth = width();
@@ -577,17 +595,18 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
   while (block.isValid() && top <= event->rect().bottom()) {
     if (block.isVisible() && bottom >= event->rect().top()) {
       QString number = QString::number(blockNumber + 1);
+      const int blockTop = qRound(top);
+      const int blockHeight = qMax(fontHeight, qRound(bottom - top));
 
       int lineNum = blockNumber + 1;
       if (m_heatmapEnabled && m_heatmapTimestamps.contains(lineNum)) {
         QColor heat = heatmapColor(m_heatmapTimestamps[lineNum]);
-        painter.fillRect(DIFF_INDICATOR_WIDTH, static_cast<int>(top),
-                         areaWidth - DIFF_INDICATOR_WIDTH,
-                         static_cast<int>(bottom - top), heat);
+        painter.fillRect(DIFF_INDICATOR_WIDTH, blockTop,
+                         areaWidth - DIFF_INDICATOR_WIDTH, blockHeight, heat);
       }
 
       painter.setPen(m_textColor);
-      painter.drawText(numberStartX, top, numberTextWidth, fontHeight,
+      painter.drawText(numberStartX, blockTop, numberTextWidth, fontHeight,
                        Qt::AlignCenter, number);
 
       if (diffLineMap.contains(lineNum)) {
@@ -604,8 +623,8 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
           diffColor = QColor(244, 67, 54);
           break;
         }
-        painter.fillRect(0, static_cast<int>(top), DIFF_INDICATOR_WIDTH,
-                         static_cast<int>(bottom - top), diffColor);
+        painter.fillRect(0, blockTop, DIFF_INDICATOR_WIDTH, blockHeight,
+                         diffColor);
       }
 
       if (breakpointLines.contains(lineNum)) {
@@ -627,7 +646,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
         const int markerX =
             DIFF_INDICATOR_WIDTH + (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;
         const int markerY =
-            static_cast<int>(top + (fontHeight - markerDiameter) / 2.0);
+            blockTop + (blockHeight - markerDiameter) / 2;
 
         painter.save();
         painter.setRenderHint(QPainter::Antialiasing, true);
@@ -670,7 +689,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
         const int markerX =
             DIFF_INDICATOR_WIDTH + (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;
         const int markerY =
-            static_cast<int>(top + (fontHeight - markerDiameter) / 2.0);
+            blockTop + (blockHeight - markerDiameter) / 2;
 
         painter.save();
         painter.setRenderHint(QPainter::Antialiasing, true);
@@ -699,8 +718,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
           const int indicatorSize =
               qMin(fontHeight - 4, FOLD_INDICATOR_WIDTH - 2);
           const int ix = foldX + (FOLD_INDICATOR_WIDTH - indicatorSize) / 2;
-          const int iy =
-              static_cast<int>(top + (fontHeight - indicatorSize) / 2.0);
+          const int iy = blockTop + (blockHeight - indicatorSize) / 2;
 
           painter.save();
           painter.setRenderHint(QPainter::Antialiasing, true);
@@ -724,8 +742,8 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
       if (m_blameTextWidth > 0) {
         auto it = m_gitBlameLines.find(lineNum);
         if (it != m_gitBlameLines.end()) {
-          QRect blameRect(numberArea + BLAME_PADDING, static_cast<int>(top),
-                          areaWidth - numberArea - BLAME_PADDING, fontHeight);
+          QRect blameRect(numberArea + BLAME_PADDING, blockTop,
+                          areaWidth - numberArea - BLAME_PADDING, blockHeight);
           painter.setPen(QColor(Qt::gray).lighter(120));
           painter.drawText(blameRect, Qt::AlignVCenter | Qt::AlignLeft,
                            QFontMetrics(m_font).elidedText(
@@ -741,7 +759,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
     }
     blockRect = m_editor->blockBoundingGeometry(block);
     blockRect.translate(m_editor->contentOffset());
-    bottom = top + blockRect.height();
+    bottom = top + m_editor->blockBoundingRect(block).height();
     ++blockNumber;
   }
 }

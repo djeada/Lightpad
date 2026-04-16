@@ -44,6 +44,7 @@ private:
   void rebuildComboForItem(QTreeWidgetItem *item, int row);
   void syncEntriesFromTree();
   void updateSummary();
+  QString actionColor(const QString &action) const;
 
   GitIntegration *m_git;
   Theme m_theme;

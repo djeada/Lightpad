@@ -62,10 +62,12 @@
 #include "../run_templates/runtemplatemanager.h"
 #include "../syntax/syntaxpluginregistry.h"
 #include "../test_templates/testfileclassifier.h"
+#include "../theme/themeengine.h"
 #include "dialogs/commandpalette.h"
 #include "dialogs/debugconfigurationdialog.h"
 #include "dialogs/filequickopen.h"
 #include "dialogs/formattemplateselector.h"
+#include "dialogs/themegallerydialog.h"
 #include "dialogs/gitdiffdialog.h"
 #include "dialogs/gitfilehistorydialog.h"
 #include "dialogs/gitlogdialog.h"
@@ -95,6 +97,7 @@
 #include "ui_mainwindow.h"
 #include "viewers/imageviewer.h"
 #include "widgets/notificationwidget.h"
+#include "widgets/hacker/hackerscanlineoverlay.h"
 #ifdef HAVE_PDF_SUPPORT
 #include "viewers/pdfviewer.h"
 #endif
@@ -557,7 +560,26 @@ void MainWindow::loadSettings() {
   settings.mainFont = QFont(fontFamily, fontSize, fontWeight, fontItalic);
 
   updateAllTextAreas(&TextArea::loadSettings, settings);
+  const QJsonObject savedThemeObject =
+      globalSettings.getSettingsObject().value("theme").toObject();
+  if (!savedThemeObject.isEmpty()) {
+    settings.theme.read(savedThemeObject);
+  }
+  QString savedThemeName =
+      globalSettings.getValue("activeThemeName", QString()).toString();
+  ThemeDefinition savedThemeDefinition;
+  bool hasSavedThemeDefinition = false;
+  if (!savedThemeName.isEmpty() &&
+      ThemeEngine::instance().hasTheme(savedThemeName)) {
+    savedThemeDefinition = ThemeEngine::instance().themeByName(savedThemeName);
+    hasSavedThemeDefinition = true;
+    ThemeEngine::instance().setActiveTheme(savedThemeDefinition);
+    settings.theme = savedThemeDefinition.toClassicTheme();
+  }
   setTheme(settings.theme);
+  if (hasSavedThemeDefinition) {
+    ThemeEngine::instance().setActiveTheme(savedThemeDefinition);
+  }
   if (ui->actionToggle_Vim_Mode) {
     ui->actionToggle_Vim_Mode->setChecked(settings.vimModeEnabled);
   }
@@ -618,6 +640,30 @@ void MainWindow::saveSettings() {
   globalSettings.setValue("openTabs", openTabs);
   persistTreeStateToSettings();
   globalSettings.saveSettings();
+}
+
+void MainWindow::ensureProjectWorkspaceVisible() {
+  if (m_projectRootPath.isEmpty()) {
+    return;
+  }
+
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    if (!tabWidget) {
+      continue;
+    }
+
+    bool hasPage = false;
+    for (int i = 0; i < tabWidget->count(); i++) {
+      if (tabWidget->getPage(i)) {
+        hasPage = true;
+        break;
+      }
+    }
+
+    if (!hasPage) {
+      tabWidget->addNewTab();
+    }
+  }
 }
 
 void MainWindow::applyLanguageOverride(const QString &languageId) {
@@ -1451,26 +1497,38 @@ void MainWindow::on_actionToggle_Redo_triggered() { redo(); }
 
 void MainWindow::on_actionIncrease_Font_Size_triggered() {
   updateAllTextAreas(&TextArea::increaseFontSize);
+  if (!getCurrentTextArea()) {
+    return;
+  }
   settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
   SettingsManager::instance().setValue("fontSize",
                                        settings.mainFont.pointSize());
   SettingsManager::instance().saveSettings();
+  settings.saveSettings(textAreaSettingsPath());
 }
 
 void MainWindow::on_actionDecrease_Font_Size_triggered() {
   updateAllTextAreas(&TextArea::decreaseFontSize);
+  if (!getCurrentTextArea()) {
+    return;
+  }
   settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
   SettingsManager::instance().setValue("fontSize",
                                        settings.mainFont.pointSize());
   SettingsManager::instance().saveSettings();
+  settings.saveSettings(textAreaSettingsPath());
 }
 
 void MainWindow::on_actionReset_Font_Size_triggered() {
   updateAllTextAreas(&TextArea::setFontSize, defaultFontSize);
+  if (!getCurrentTextArea()) {
+    return;
+  }
   settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
   SettingsManager::instance().setValue("fontSize",
                                        settings.mainFont.pointSize());
   SettingsManager::instance().saveSettings();
+  settings.saveSettings(textAreaSettingsPath());
 }
 
 void MainWindow::on_actionCut_triggered() {
@@ -2328,9 +2386,11 @@ void MainWindow::showProblemsPanel() {
 }
 
 void MainWindow::ensureStatusLabels() {
+  Theme theme = getTheme();
   if (!problemsStatusLabel) {
     problemsStatusLabel = new QLabel(this);
-    problemsStatusLabel->setStyleSheet("color: #9aa4b2; padding: 0 8px;");
+    problemsStatusLabel->setStyleSheet(
+        QString("color: %1; padding: 0 8px;").arg(theme.borderColor.name()));
     problemsStatusLabel->setText("✓ No problems");
     problemsStatusLabel->setCursor(Qt::PointingHandCursor);
 
@@ -2345,15 +2405,17 @@ void MainWindow::ensureStatusLabels() {
 
   if (!vimStatusLabel) {
     vimStatusLabel = new QLabel(this);
-    vimStatusLabel->setStyleSheet("QLabel {"
-                                  "  color: #ffffff;"
-                                  "  background-color: #3fb950;"
+    vimStatusLabel->setStyleSheet(QString("QLabel {"
+                                  "  color: %1;"
+                                  "  background-color: %2;"
                                   "  padding: 1px 10px;"
                                   "  border-radius: 3px;"
                                   "  font-weight: bold;"
                                   "  font-size: 11px;"
                                   "  letter-spacing: 1px;"
-                                  "}");
+                                  "}")
+                                     .arg(theme.backgroundColor.name(),
+                                          theme.successColor.name()));
     vimStatusLabel->setText("");
     vimStatusLabel->setVisible(false);
     vimStatusLabel->setMinimumWidth(70);
@@ -2373,16 +2435,18 @@ void MainWindow::ensureStatusLabels() {
     m_pythonEnvLabel = new QToolButton(this);
     m_pythonEnvLabel->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_pythonEnvLabel->setAutoRaise(true);
-    m_pythonEnvLabel->setStyleSheet("QToolButton {"
-                                    "  color: #8b949e;"
-                                    "  padding: 0 8px;"
-                                    "  font-size: 12px;"
-                                    "  border: none;"
-                                    "  background: transparent;"
-                                    "}"
-                                    "QToolButton:hover {"
-                                    "  color: #e6edf3;"
-                                    "}");
+    m_pythonEnvLabel->setStyleSheet(
+        QString("QToolButton {"
+                "  color: %1;"
+                "  padding: 0 8px;"
+                "  font-size: 12px;"
+                "  border: none;"
+                "  background: transparent;"
+                "}"
+                "QToolButton:hover {"
+                "  color: %2;"
+                "}")
+            .arg(theme.borderColor.name(), theme.foregroundColor.name()));
     m_pythonEnvLabel->setCursor(Qt::PointingHandCursor);
     m_pythonEnvLabel->setToolTip(tr("Python environment (click to configure)"));
     m_pythonEnvLabel->setVisible(false);
@@ -2404,6 +2468,7 @@ void MainWindow::ensureStatusLabels() {
 
 void MainWindow::updatePythonEnvironmentLabel() {
   ensureStatusLabels();
+  Theme theme = getTheme();
 
   if (!m_pythonEnvLabel) {
     return;
@@ -2448,25 +2513,28 @@ void MainWindow::updatePythonEnvironmentLabel() {
     const QString venvName = QFileInfo(info.venvPath).fileName();
     label = QString::fromUtf8("\xF0\x9F\x90\x8D %1 (%2)")
                 .arg(QFileInfo(info.interpreter).fileName(), venvName);
-    style = "QToolButton { color: #3fb950; padding: 0 8px; font-size: 12px;"
+    style = QString("QToolButton { color: %1; padding: 0 8px; font-size: 12px;"
             " border: none; background: transparent; }"
-            "QToolButton:hover { color: #7ee787; }";
+            "QToolButton:hover { color: %2; }")
+                .arg(theme.successColor.name(), theme.successColor.lighter(130).name());
     tooltip = tr("Python: %1\nVenv: %2\nClick to configure")
                   .arg(info.interpreter, info.venvPath);
   } else if (info.found) {
     label = QString::fromUtf8("\xF0\x9F\x90\x8D %1")
                 .arg(QFileInfo(info.interpreter).fileName());
-    style = "QToolButton { color: #8b949e; padding: 0 8px; font-size: 12px;"
+    style = QString("QToolButton { color: %1; padding: 0 8px; font-size: 12px;"
             " border: none; background: transparent; }"
-            "QToolButton:hover { color: #e6edf3; }";
+            "QToolButton:hover { color: %2; }")
+                .arg(theme.borderColor.name(), theme.foregroundColor.name());
     tooltip =
         tr("Python: %1\nNo virtual environment active\nClick to configure")
             .arg(info.interpreter);
   } else {
     label = QString::fromUtf8("\xF0\x9F\x90\x8D \xe2\x9a\xa0 No Python env");
-    style = "QToolButton { color: #d29922; padding: 0 8px; font-size: 12px;"
+    style = QString("QToolButton { color: %1; padding: 0 8px; font-size: 12px;"
             " border: none; background: transparent; }"
-            "QToolButton:hover { color: #f2cc60; }";
+            "QToolButton:hover { color: %2; }")
+                .arg(theme.warningColor.name(), theme.warningColor.lighter(130).name());
     tooltip = tr("%1\nClick to configure Python environment")
                   .arg(info.statusMessage.isEmpty()
                            ? tr("Python interpreter not found")
@@ -2726,6 +2794,7 @@ void MainWindow::ensureTestPanel() {
 
   connect(testPanel, &TestPanel::countsChanged, this,
           [this](int passed, int failed, int skipped, int errored) {
+            Theme t = getTheme();
             if (!m_testStatusLabel) {
               m_testStatusLabel = new QLabel(this);
               statusBar()->addPermanentWidget(m_testStatusLabel);
@@ -2737,11 +2806,11 @@ void MainWindow::ensureTestPanel() {
               m_testStatusLabel->setText(
                   tr("Tests: %1/%2 failed").arg(failed + errored).arg(total));
               m_testStatusLabel->setStyleSheet(
-                  "QLabel { color: #f85149; font-weight: bold; }");
+                  QString("QLabel { color: %1; font-weight: bold; }").arg(t.errorColor.name()));
             } else {
               m_testStatusLabel->setText(tr("Tests: %1 passed").arg(passed));
               m_testStatusLabel->setStyleSheet(
-                  "QLabel { color: #3fb950; font-weight: bold; }");
+                  QString("QLabel { color: %1; font-weight: bold; }").arg(t.successColor.name()));
             }
           });
 
@@ -3505,11 +3574,26 @@ void MainWindow::setupDiagnostics() {
 
 void MainWindow::setupNotificationManager() {
   m_notificationManager = new NotificationManager(this, this);
+  m_scanlineOverlay = new HackerScanlineOverlay(this);
+  bool scanlinesOn =
+      SettingsManager::instance().getValue("scanlineEffect", false).toBool();
+  m_scanlineOverlay->setEnabled(scanlinesOn);
+}
+
+void MainWindow::setScanlineEffectEnabled(bool enabled) {
+  if (!m_scanlineOverlay)
+    m_scanlineOverlay = new HackerScanlineOverlay(this);
+  m_scanlineOverlay->setEnabled(enabled);
+  if (enabled) {
+    m_scanlineOverlay->setGeometry(rect());
+    m_scanlineOverlay->raise();
+  }
 }
 
 void MainWindow::updateLspStatusLabel(const QString &languageId,
                                       const QString &status) {
   ensureStatusLabels();
+  Theme theme = getTheme();
 
   if (!m_lspStatusLabel) {
     m_lspStatusLabel = new QToolButton(this);
@@ -3543,38 +3627,46 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
 
   if (status == "running") {
     m_lspStatusLabel->setText(QString::fromUtf8("● %1").arg(displayName));
+    QColor c = theme.successColor;
     m_lspStatusLabel->setStyleSheet(
-        "QToolButton { color: #3fb950; padding: 2px 8px; font-size: 11px; "
-        "border: 1px solid rgba(63,185,80,0.25); border-radius: 4px; "
-        "background: rgba(63,185,80,0.08); }"
-        "QToolButton:hover { background: rgba(63,185,80,0.16); }");
+        QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
+        "border: 1px solid rgba(%2,%3,%4,0.25); border-radius: 4px; "
+        "background: rgba(%2,%3,%4,0.08); }"
+        "QToolButton:hover { background: rgba(%2,%3,%4,0.16); }")
+            .arg(c.name()).arg(c.red()).arg(c.green()).arg(c.blue()));
     m_lspStatusLabel->setToolTip(
         tr("%1 language server is running").arg(displayName));
   } else if (status == "starting") {
     m_lspStatusLabel->setText(QString::fromUtf8("◌ %1").arg(displayName));
+    QColor c = theme.warningColor;
     m_lspStatusLabel->setStyleSheet(
-        "QToolButton { color: #d29922; padding: 2px 8px; font-size: 11px; "
-        "border: 1px solid rgba(210,153,34,0.25); border-radius: 4px; "
-        "background: rgba(210,153,34,0.08); }"
-        "QToolButton:hover { background: rgba(210,153,34,0.16); }");
+        QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
+        "border: 1px solid rgba(%2,%3,%4,0.25); border-radius: 4px; "
+        "background: rgba(%2,%3,%4,0.08); }"
+        "QToolButton:hover { background: rgba(%2,%3,%4,0.16); }")
+            .arg(c.name()).arg(c.red()).arg(c.green()).arg(c.blue()));
     m_lspStatusLabel->setToolTip(
         tr("%1 language server is starting…").arg(displayName));
   } else if (status == "error") {
     m_lspStatusLabel->setText(QString::fromUtf8("✖ %1").arg(displayName));
+    QColor c = theme.errorColor;
     m_lspStatusLabel->setStyleSheet(
-        "QToolButton { color: #f85149; padding: 2px 8px; font-size: 11px; "
-        "border: 1px solid rgba(248,81,73,0.35); border-radius: 4px; "
-        "background: rgba(248,81,73,0.10); }"
-        "QToolButton:hover { background: rgba(248,81,73,0.18); }");
+        QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
+        "border: 1px solid rgba(%2,%3,%4,0.35); border-radius: 4px; "
+        "background: rgba(%2,%3,%4,0.10); }"
+        "QToolButton:hover { background: rgba(%2,%3,%4,0.18); }")
+            .arg(c.name()).arg(c.red()).arg(c.green()).arg(c.blue()));
     m_lspStatusLabel->setToolTip(
         tr("%1 language server encountered an error").arg(displayName));
   } else if (status == "stopped") {
     m_lspStatusLabel->setText(QString::fromUtf8("○ %1").arg(displayName));
+    QColor c = theme.borderColor;
     m_lspStatusLabel->setStyleSheet(
-        "QToolButton { color: #8b949e; padding: 2px 8px; font-size: 11px; "
-        "border: 1px solid rgba(139,148,158,0.20); border-radius: 4px; "
-        "background: rgba(139,148,158,0.08); }"
-        "QToolButton:hover { background: rgba(139,148,158,0.14); }");
+        QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
+        "border: 1px solid rgba(%2,%3,%4,0.20); border-radius: 4px; "
+        "background: rgba(%2,%3,%4,0.08); }"
+        "QToolButton:hover { background: rgba(%2,%3,%4,0.14); }")
+            .arg(c.name()).arg(c.red()).arg(c.green()).arg(c.blue()));
     m_lspStatusLabel->setToolTip(
         tr("%1 language server is disabled").arg(displayName));
   } else {
@@ -4010,33 +4102,34 @@ void MainWindow::refreshProblemsStatusForCurrentFile() {
 }
 
 void MainWindow::updateVimStatusLabel(const QString &text) {
+  Theme theme = getTheme();
   if (vimStatusLabel) {
     vimStatusLabel->setText(text);
     vimStatusLabel->setVisible(!text.isEmpty());
     if (!text.isEmpty()) {
       QString bgColor;
       if (text == "NORMAL")
-        bgColor = "#3fb950";
+        bgColor = theme.successColor.name();
       else if (text == "INSERT")
-        bgColor = "#58a6ff";
+        bgColor = theme.accentColor.name();
       else if (text == "VISUAL" || text == "V-LINE" || text == "V-BLOCK")
-        bgColor = "#d29922";
+        bgColor = theme.warningColor.name();
       else if (text == "REPLACE")
-        bgColor = "#f85149";
+        bgColor = theme.errorColor.name();
       else if (text == "COMMAND")
-        bgColor = "#bc8cff";
+        bgColor = theme.accentColor.lighter(140).name();
       else
-        bgColor = "#8b949e";
+        bgColor = theme.borderColor.name();
       vimStatusLabel->setStyleSheet(QString("QLabel {"
-                                            "  color: #ffffff;"
-                                            "  background-color: %1;"
+                                            "  color: %1;"
+                                            "  background-color: %2;"
                                             "  padding: 1px 10px;"
                                             "  border-radius: 3px;"
                                             "  font-weight: bold;"
                                             "  font-size: 11px;"
                                             "  letter-spacing: 1px;"
                                             "}")
-                                        .arg(bgColor));
+                                        .arg(theme.backgroundColor.name(), bgColor));
     }
   }
 }
@@ -4068,6 +4161,7 @@ void MainWindow::setFont(QFont newFont) {
   sm.setValue("fontWeight", newFont.weight());
   sm.setValue("fontItalic", newFont.italic());
   sm.saveSettings();
+  settings.saveSettings(textAreaSettingsPath());
 }
 
 void MainWindow::showLineNumbers(bool flag) {
@@ -4851,7 +4945,7 @@ void MainWindow::applyTabWidgetTheme(LightpadTabWidget *tabWidget) {
   tabWidget->setTheme(
       settings.theme.backgroundColor.name(),
       settings.theme.foregroundColor.name(), settings.theme.surfaceColor.name(),
-      settings.theme.hoverColor.name(), settings.theme.accentColor.name(),
+      settings.theme.accentSoftColor.name(), settings.theme.accentColor.name(),
       settings.theme.borderColor.name());
 }
 
@@ -5597,6 +5691,26 @@ void MainWindow::on_actionPreferences_triggered() {
   }
 }
 
+void MainWindow::showThemeGallery() {
+  auto *dlg = new ThemeGalleryDialog(this);
+  dlg->setAttribute(Qt::WA_DeleteOnClose);
+  connect(dlg, &ThemeGalleryDialog::themeSelected, this,
+          [this](const ThemeDefinition &def) {
+            ThemeEngine::instance().setActiveTheme(def);
+            Theme classic = def.toClassicTheme();
+            settings.theme = classic;
+            setTheme(classic);
+            ThemeEngine::instance().setActiveTheme(def);
+            SettingsManager::instance().setValue("activeThemeName", def.name);
+            QJsonObject themeJson;
+            classic.write(themeJson);
+            SettingsManager::instance().setValue("theme", themeJson);
+            SettingsManager::instance().saveSettings();
+            settings.saveSettings(textAreaSettingsPath());
+          });
+  dlg->show();
+}
+
 void MainWindow::on_runButton_clicked() { runCurrentScript(); }
 
 void MainWindow::on_debugButton_clicked() {
@@ -6226,19 +6340,40 @@ void MainWindow::setTheme(Theme theme) {
   settings.theme = theme;
   ThemedMessageBox::setGlobalTheme(theme);
 
-  QString bgColor = settings.theme.backgroundColor.name();
-  QString fgColor = settings.theme.foregroundColor.name();
-  QString surfaceColor = settings.theme.surfaceColor.name();
-  QString surfaceAltColor = settings.theme.surfaceAltColor.name();
-  QString hoverColor = settings.theme.hoverColor.name();
-  QString pressedColor = settings.theme.pressedColor.name();
-  QString borderColor = settings.theme.borderColor.name();
-  QString accentColor = settings.theme.accentColor.name();
-  QString accentSoftColor = settings.theme.accentSoftColor.name();
-  QString mutedTextColor = settings.theme.singleLineCommentFormat.name();
-  QString successColor = settings.theme.successColor.name();
-  QString warningColor = settings.theme.warningColor.name();
-  QString errorColor = settings.theme.errorColor.name();
+  // Feed the ThemeEngine so all connected widgets update
+  ThemeDefinition td = ThemeDefinition::fromClassicTheme(theme, "Active");
+  ThemeEngine::instance().setActiveTheme(td);
+  const ThemeColors &tc = td.colors;
+
+  QString bgColor = tc.surfaceBase.name();
+  QString fgColor = tc.textPrimary.name();
+  QString surfaceColor = tc.surfaceRaised.name();
+  QString surfaceAltColor = tc.surfaceOverlay.name();
+  QString pressedColor = tc.btnGhostActive.name();
+  QString borderColor = tc.borderDefault.name();
+  QString borderSubtle = tc.borderSubtle.name();
+  QString accentColor = tc.accentPrimary.name();
+  QString accentSoftColor = tc.accentSoft.name();
+  QString secondaryText = tc.textSecondary.name();
+  QString disabledText = tc.textDisabled.name();
+  QString inputBg = tc.inputBg.name();
+  QString scrollThumb = tc.scrollThumb.name();
+  QString scrollThumbHover = tc.scrollThumbHover.name();
+  QString tabActiveBg = tc.tabActiveBg.name();
+  QString tabActiveBorder = tc.tabActiveBorder.name();
+  QString tabFg = tc.tabFg.name();
+  QString tabActiveFg = tc.tabActiveFg.name();
+  QString btnPrimaryBg = tc.btnPrimaryBg.name();
+  QString btnPrimaryFg = tc.btnPrimaryFg.name();
+  QString btnPrimaryHover = tc.btnPrimaryHover.name();
+  QString editorFontFamily = settings.mainFont.family();
+  editorFontFamily.replace("\\", "\\\\");
+  editorFontFamily.replace("\"", "\\\"");
+  QString editorFontSizeRule;
+  if (settings.mainFont.pointSize() > 0) {
+    editorFontSizeRule =
+        QString("font-size: %1pt; ").arg(settings.mainFont.pointSize());
+  }
 
   QString styleSheet =
 
@@ -6249,10 +6384,12 @@ void MainWindow::setTheme(Theme theme) {
       "color: " +
       fgColor +
       "; "
+      "font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', "
+      "'SF Mono', Menlo, Monaco, 'Courier New', monospace; "
       "}"
       "QDialog { background-color: " +
       bgColor +
-      "; }"
+      "; border: 1px solid " + accentColor + "; }"
 
       "QMenu { "
       "color: " +
@@ -6262,7 +6399,7 @@ void MainWindow::setTheme(Theme theme) {
       surfaceColor +
       "; "
       "selection-background-color: " +
-      hoverColor +
+      accentSoftColor +
       "; "
       "border: 1px solid " +
       borderColor +
@@ -6277,13 +6414,16 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QMenu::item:selected { "
       "background-color: " +
-      hoverColor +
+      accentSoftColor +
+      "; "
+      "color: " +
+      accentColor +
       "; "
       "}"
       "QMenu::separator { "
       "height: 1px; "
       "background: " +
-      borderColor +
+      borderSubtle +
       "; "
       "margin: 4px 8px; "
       "}"
@@ -6296,23 +6436,32 @@ void MainWindow::setTheme(Theme theme) {
       surfaceColor +
       "; "
       "border-bottom: 1px solid " +
-      borderColor +
+      accentColor +
       "; "
-      "spacing: 4px; "
-      "padding: 4px 6px; "
+      "spacing: 2px; "
+      "padding: 3px 6px; "
       "min-height: 28px; "
+      "font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace'; "
+      "font-weight: 600; "
       "}"
       "QMenuBar::item { "
       "color: " +
-      fgColor +
+      secondaryText +
       "; "
-      "padding: 6px 10px; "
-      "margin: 0 2px; "
-      "border-radius: 6px; "
+      "padding: 5px 12px; "
+      "margin: 0 1px; "
+      "border-radius: 3px; "
+      "border-bottom: 2px solid transparent; "
       "}"
       "QMenuBar::item:selected { "
       "background-color: " +
-      hoverColor +
+      accentSoftColor +
+      "; "
+      "color: " +
+      accentColor +
+      "; "
+      "border-bottom: 2px solid " +
+      accentColor +
       "; "
       "}"
       "QMenuBar::item:pressed { "
@@ -6353,9 +6502,12 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QPushButton:hover { "
       "background-color: " +
-      hoverColor +
+      accentSoftColor +
       "; "
       "border-color: " +
+      accentColor +
+      "; "
+      "color: " +
       accentColor +
       "; "
       "}"
@@ -6372,22 +6524,25 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QPushButton:default { "
       "background-color: " +
-      accentColor +
+      btnPrimaryBg +
       "; "
       "border: 1px solid " +
-      accentColor +
+      btnPrimaryBg +
       "; "
       "color: " +
-      bgColor +
+      btnPrimaryFg +
       "; "
+      "font-weight: bold; "
       "}"
       "QPushButton:default:hover { "
-      "background-color: #6eb5ff; "
+      "background-color: " +
+      btnPrimaryHover +
+      "; "
       "}"
 
       "QToolButton { "
       "color: " +
-      fgColor +
+      secondaryText +
       "; "
       "border: 1px solid transparent; "
       "padding: 6px 10px; "
@@ -6396,10 +6551,13 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QToolButton:hover { "
       "background-color: " +
-      hoverColor +
+      accentSoftColor +
       "; "
       "border-color: " +
       borderColor +
+      "; "
+      "color: " +
+      accentColor +
       "; "
       "}"
       "QToolButton:pressed { "
@@ -6426,7 +6584,7 @@ void MainWindow::setTheme(Theme theme) {
       "QToolButton#runButton:hover, QToolButton#debugButton:hover, "
       "QToolButton#magicButton:hover { "
       "background-color: " +
-      hoverColor +
+      accentSoftColor +
       "; "
       "border-color: " +
       accentColor +
@@ -6449,7 +6607,7 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QLabel#rowCol { "
       "color: " +
-      mutedTextColor +
+      secondaryText +
       "; "
       "font-size: 12px; "
       "padding: 0 4px; "
@@ -6464,7 +6622,7 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "outline: 0; "
       "border: 1px solid " +
-      borderColor +
+      borderSubtle +
       "; "
       "border-radius: 6px; "
       "}"
@@ -6475,7 +6633,7 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QAbstractItemView::item:hover { "
       "background-color: " +
-      hoverColor +
+      accentSoftColor +
       "; "
       "}"
       "QAbstractItemView::item:focus { "
@@ -6489,7 +6647,7 @@ void MainWindow::setTheme(Theme theme) {
       accentSoftColor +
       "; "
       "color: " +
-      fgColor +
+      accentColor +
       "; "
       "}"
       "QHeaderView::section { "
@@ -6497,7 +6655,7 @@ void MainWindow::setTheme(Theme theme) {
       surfaceColor +
       "; "
       "color: " +
-      mutedTextColor +
+      accentColor +
       "; "
       "padding: 8px 10px; "
       "border: none; "
@@ -6507,11 +6665,12 @@ void MainWindow::setTheme(Theme theme) {
       "font-weight: 600; "
       "text-transform: uppercase; "
       "font-size: 11px; "
+      "letter-spacing: 1px; "
       "}"
 
       "QLineEdit { "
       "background-color: " +
-      surfaceAltColor +
+      inputBg +
       "; "
       "color: " +
       fgColor +
@@ -6525,7 +6684,7 @@ void MainWindow::setTheme(Theme theme) {
       accentSoftColor +
       "; "
       "selection-color: " +
-      fgColor +
+      accentColor +
       "; "
       "}"
       "QLineEdit:focus { "
@@ -6538,13 +6697,13 @@ void MainWindow::setTheme(Theme theme) {
       surfaceColor +
       "; "
       "color: " +
-      mutedTextColor +
+      disabledText +
       "; "
       "}"
 
       "QComboBox { "
       "background-color: " +
-      surfaceAltColor +
+      inputBg +
       "; "
       "color: " +
       fgColor +
@@ -6569,7 +6728,7 @@ void MainWindow::setTheme(Theme theme) {
       "image: none; "
       "border: 4px solid transparent; "
       "border-top-color: " +
-      mutedTextColor +
+      secondaryText +
       "; "
       "margin-top: 4px; "
       "}"
@@ -6583,7 +6742,10 @@ void MainWindow::setTheme(Theme theme) {
       "border-radius: 6px; "
       "padding: 4px; "
       "selection-background-color: " +
-      hoverColor +
+      accentSoftColor +
+      "; "
+      "selection-color: " +
+      accentColor +
       "; "
       "}"
 
@@ -6594,6 +6756,10 @@ void MainWindow::setTheme(Theme theme) {
       "background-color: " +
       bgColor +
       "; "
+      "font-family: \"" +
+      editorFontFamily +
+      "\"; " +
+      editorFontSizeRule +
       "border: none; "
       "}"
       "QTextEdit { "
@@ -6620,7 +6786,7 @@ void MainWindow::setTheme(Theme theme) {
       "subcontrol-position: top left; "
       "padding: 0 8px; "
       "color: " +
-      mutedTextColor +
+      accentColor +
       "; "
       "font-size: 12px; "
       "}"
@@ -6646,10 +6812,10 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QRadioButton::indicator:unchecked { "
       "background-color: " +
-      bgColor +
+      inputBg +
       "; "
       "border: 2px solid " +
-      mutedTextColor +
+      borderColor +
       "; "
       "}"
       "QRadioButton::indicator:unchecked:hover { "
@@ -6669,10 +6835,10 @@ void MainWindow::setTheme(Theme theme) {
       "height: 16px; "
       "border-radius: 4px; "
       "border: 2px solid " +
-      mutedTextColor +
+      borderColor +
       "; "
       "background-color: " +
-      bgColor +
+      inputBg +
       "; "
       "}"
       "QCheckBox::indicator:checked { "
@@ -6691,20 +6857,20 @@ void MainWindow::setTheme(Theme theme) {
 
       "QScrollBar:vertical { "
       "background-color: transparent; "
-      "width: 12px; "
+      "width: 8px; "
       "margin: 0; "
       "}"
       "QScrollBar::handle:vertical { "
       "background-color: " +
-      borderColor +
+      scrollThumb +
       "; "
       "min-height: 32px; "
       "border-radius: 4px; "
-      "margin: 2px 3px; "
+      "margin: 2px 1px; "
       "}"
       "QScrollBar::handle:vertical:hover { "
       "background-color: " +
-      mutedTextColor +
+      scrollThumbHover +
       "; "
       "}"
       "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
@@ -6715,20 +6881,20 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QScrollBar:horizontal { "
       "background-color: transparent; "
-      "height: 12px; "
+      "height: 8px; "
       "margin: 0; "
       "}"
       "QScrollBar::handle:horizontal { "
       "background-color: " +
-      borderColor +
+      scrollThumb +
       "; "
       "min-width: 32px; "
       "border-radius: 4px; "
-      "margin: 3px 2px; "
+      "margin: 1px 2px; "
       "}"
       "QScrollBar::handle:horizontal:hover { "
       "background-color: " +
-      mutedTextColor +
+      scrollThumbHover +
       "; "
       "}"
       "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { "
@@ -6754,7 +6920,7 @@ void MainWindow::setTheme(Theme theme) {
 
       "QSplitter::handle { "
       "background-color: " +
-      borderColor +
+      borderSubtle +
       "; "
       "}"
       "QSplitter::handle:hover { "
@@ -6788,7 +6954,7 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QDockWidget::close-button:hover, QDockWidget::float-button:hover { "
       "background-color: " +
-      hoverColor +
+      accentSoftColor +
       "; "
       "border-radius: 4px; "
       "}"
@@ -6811,26 +6977,35 @@ void MainWindow::setTheme(Theme theme) {
       surfaceColor +
       "; "
       "color: " +
-      mutedTextColor +
+      tabFg +
       "; "
-      "padding: 6px 14px; "
+      "padding: 7px 16px; "
       "border: none; "
-      "border-bottom: 2px solid transparent; "
+      "border-bottom: 3px solid transparent; "
+      "font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace'; "
+      "font-weight: 500; "
       "}"
       "QTabBar::tab:selected { "
       "color: " +
-      fgColor +
-      "; "
-      "border-bottom: 2px solid " +
       accentColor +
       "; "
+      "background-color: " +
+      tabActiveBg +
+      "; "
+      "border-bottom: 3px solid " +
+      accentColor +
+      "; "
+      "font-weight: 700; "
       "}"
       "QTabBar::tab:hover:!selected { "
       "color: " +
       fgColor +
       "; "
       "background-color: " +
-      hoverColor +
+      accentSoftColor +
+      "; "
+      "border-bottom: 3px solid " +
+      accentSoftColor +
       "; "
       "}"
 
@@ -6839,24 +7014,60 @@ void MainWindow::setTheme(Theme theme) {
       surfaceColor +
       "; "
       "color: " +
-      fgColor +
+      secondaryText +
       "; "
       "border-top: 1px solid " +
-      borderColor +
+      accentColor +
       "; "
+      "font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace'; "
       "}"
 
       "QWidget#backgroundBottom { "
       "background-color: " +
       surfaceColor +
       "; "
-      "border-top: 1px solid " +
+      "border-top: 2px solid " +
+      accentColor +
+      "; "
+      "}"
+      "QWidget#backgroundBottom QLabel { "
+      "font-family: 'JetBrains Mono','Fira Code','Ubuntu Mono',monospace; "
+      "font-size: 11px; "
+      "padding: 0 10px; "
+      "border-right: 1px solid " +
       borderColor +
       "; "
       "}"
       "QWidget#backgroundBottom QToolButton { "
       "min-height: 28px; "
       "max-height: 28px; "
+      "font-family: 'JetBrains Mono','Fira Code','Ubuntu Mono',monospace; "
+      "font-size: 11px; "
+      "padding: 0 10px; "
+      "border-right: 1px solid " +
+      borderColor +
+      "; "
+      "}"
+      "QDockWidget { "
+      "titlebar-close-icon: none; "
+      "titlebar-normal-icon: none; "
+      "font-family: 'JetBrains Mono','Fira Code','Ubuntu Mono',monospace; "
+      "}"
+      "QDockWidget::title { "
+      "text-align: left; "
+      "padding: 4px 10px; "
+      "background-color: " +
+      surfaceAltColor +
+      "; "
+      "color: " +
+      accentColor +
+      "; "
+      "border-bottom: 1px solid " +
+      accentColor +
+      "; "
+      "font-weight: bold; "
+      "letter-spacing: 1px; "
+      "text-transform: uppercase; "
       "}"
       "QWidget#FindReplacePanel { "
       "background-color: " +
@@ -6893,7 +7104,7 @@ void MainWindow::setTheme(Theme theme) {
 
       "LineEditIcon { "
       "background-color: " +
-      surfaceAltColor +
+      inputBg +
       "; "
       "border: 1px solid " +
       borderColor +
@@ -6922,7 +7133,7 @@ void MainWindow::setTheme(Theme theme) {
 
       "QSpinBox { "
       "background-color: " +
-      surfaceAltColor +
+      inputBg +
       "; "
       "color: " +
       fgColor +
@@ -6940,14 +7151,14 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QSpinBox::up-button, QSpinBox::down-button { "
       "background-color: " +
-      hoverColor +
+      surfaceColor +
       "; "
       "border: none; "
       "width: 16px; "
       "}"
       "QSpinBox::up-button:hover, QSpinBox::down-button:hover { "
       "background-color: " +
-      pressedColor +
+      accentSoftColor +
       "; "
       "}"
 
@@ -6972,6 +7183,7 @@ void MainWindow::setTheme(Theme theme) {
       "}";
 
   qApp->setStyleSheet(styleSheet);
+  updateAllTextAreas(&TextArea::setFont, settings.mainFont);
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     applyTabWidgetTheme(tabWidget);
@@ -7055,6 +7267,7 @@ void MainWindow::setProjectRootPath(const QString &path) {
 
   if (!normalizedPath.isEmpty()) {
     ensureProjectSettings(normalizedPath);
+    ensureProjectWorkspaceVisible();
   }
 
   ensureFileTreeModel();

@@ -179,14 +179,20 @@ void LanguageServerStatusDialog::refreshDetails() {
   QString bannerBorder = m_theme.borderColor.name();
   QString bannerText = QString("Status: %1").arg(healthLabel(health));
   if (health == ServerHealthStatus::Running) {
-    bannerBg = "#0d1f0d";
-    bannerBorder = "#238636";
+    bannerBg = QColor((m_theme.backgroundColor.red() * 9 + m_theme.successColor.red()) / 10,
+                      (m_theme.backgroundColor.green() * 9 + m_theme.successColor.green()) / 10,
+                      (m_theme.backgroundColor.blue() * 9 + m_theme.successColor.blue()) / 10).name();
+    bannerBorder = m_theme.successColor.name();
   } else if (health == ServerHealthStatus::Starting) {
-    bannerBg = "#2d1b00";
-    bannerBorder = "#d29922";
+    bannerBg = QColor((m_theme.backgroundColor.red() * 9 + m_theme.warningColor.red()) / 10,
+                      (m_theme.backgroundColor.green() * 9 + m_theme.warningColor.green()) / 10,
+                      (m_theme.backgroundColor.blue() * 9 + m_theme.warningColor.blue()) / 10).name();
+    bannerBorder = m_theme.warningColor.name();
   } else if (health == ServerHealthStatus::Error) {
-    bannerBg = "#2d0b0b";
-    bannerBorder = "#f85149";
+    bannerBg = QColor((m_theme.backgroundColor.red() * 9 + m_theme.errorColor.red()) / 10,
+                      (m_theme.backgroundColor.green() * 9 + m_theme.errorColor.green()) / 10,
+                      (m_theme.backgroundColor.blue() * 9 + m_theme.errorColor.blue()) / 10).name();
+    bannerBorder = m_theme.errorColor.name();
   }
 
   QString bannerHtml =

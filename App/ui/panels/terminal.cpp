@@ -1,5 +1,6 @@
 #include "terminal.h"
 #include "../../run_templates/runtemplatemanager.h"
+#include "../../theme/themeengine.h"
 #include "ui_terminal.h"
 
 #include <QApplication>
@@ -12,6 +13,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QProcess>
 #include <QProcessEnvironment>
 #include <QScrollBar>
 #include <QSizePolicy>
@@ -866,17 +868,18 @@ void Terminal::onRunProcessFinished(int exitCode,
 
   QTextCharFormat codeFmt;
   if (exitStatus == QProcess::CrashExit) {
-    codeFmt.setForeground(QColor("#e06c75"));
+    codeFmt.setForeground(QColor(m_errorColor));
     cursor.insertText(
         QString("Process crashed (exit code: %1)").arg(exitCode), codeFmt);
   } else {
-    codeFmt.setForeground(exitCode == 0 ? QColor("#98c379") : QColor("#e06c75"));
+    QColor successColor = QColor(m_textColor).lighter(110);
+    codeFmt.setForeground(exitCode == 0 ? successColor : QColor(m_errorColor));
     cursor.insertText(
         QString("Process finished with exit code %1").arg(exitCode), codeFmt);
   }
 
   QTextCharFormat dimFmt;
-  dimFmt.setForeground(QColor("#5c6370"));
+  dimFmt.setForeground(QColor(m_textColor).darker(160));
   cursor.insertText(QString("  [%1]\n").arg(elapsed), dimFmt);
 
   m_inputStartPosition = cursor.position();
@@ -1205,14 +1208,79 @@ void Terminal::appendPrompt() {
   QTextCursor cursor = ui->textEdit->textCursor();
   cursor.movePosition(QTextCursor::End);
 
-  QTextCharFormat dirFormat;
-  dirFormat.setForeground(QColor(m_linkColor));
-  dirFormat.setFontWeight(QFont::Bold);
-  cursor.insertText(m_workingDirectory, dirFormat);
+  const ThemeDefinition &td = ThemeEngine::instance().activeTheme();
+  QColor accent = td.colors.accentPrimary;
+  QColor muted = td.colors.textMuted;
+  QColor path = td.colors.syntaxString.isValid() ? td.colors.syntaxString
+                                                 : td.colors.accentPrimary;
+  QColor git = td.colors.statusWarning;
 
-  QTextCharFormat promptFormat;
-  promptFormat.setForeground(QColor(m_textColor));
-  cursor.insertText(" $ ", promptFormat);
+  QString host = qEnvironmentVariable("HOSTNAME", QString());
+  if (host.isEmpty()) {
+    QProcess hp;
+    hp.start("hostname", {});
+    if (hp.waitForFinished(80))
+      host = QString::fromUtf8(hp.readAllStandardOutput()).trimmed();
+  }
+  if (host.isEmpty())
+    host = "localhost";
+  QString userHost = QString("%1@%2")
+                         .arg(qEnvironmentVariable("USER",
+                                                   qEnvironmentVariable("USERNAME", "user")),
+                              host.split('.').first());
+
+  QString home = QDir::homePath();
+  QString shownPath = m_workingDirectory;
+  if (shownPath.startsWith(home))
+    shownPath.replace(0, home.length(), "~");
+
+  QString gitBranch;
+  {
+    QProcess proc;
+    proc.setWorkingDirectory(m_workingDirectory);
+    proc.start("git", {"symbolic-ref", "--short", "HEAD"});
+    if (proc.waitForFinished(120) && proc.exitCode() == 0) {
+      gitBranch = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+    }
+  }
+
+  auto seg = [&](const QString &text, const QColor &fg, bool bold = false) {
+    QTextCharFormat f;
+    f.setForeground(fg);
+    if (bold) {
+      QFont ft = f.font();
+      ft.setBold(true);
+      f.setFont(ft);
+    }
+    cursor.insertText(text, f);
+  };
+
+  QTextCharFormat plain;
+  plain.setForeground(muted);
+
+  if (cursor.position() > 0) {
+    QTextCursor pc = cursor;
+    pc.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
+    if (pc.selectedText() != QChar(0x2029) && pc.selectedText() != "\n")
+      cursor.insertText("\n", plain);
+  }
+
+  seg("╭─", muted);
+  seg(" ", muted);
+  seg(userHost, accent, true);
+  seg(" ", muted);
+  seg("", muted);
+  seg(" ", muted);
+  seg(shownPath, path, true);
+  if (!gitBranch.isEmpty()) {
+    seg(" ", muted);
+    seg("", muted);
+    seg(" ", muted);
+    seg("⎇ " + gitBranch, git, true);
+  }
+  seg("\n", muted);
+  seg("╰─", muted);
+  seg("❯ ", accent, true);
 
   ui->textEdit->setTextCursor(cursor);
   scrollToBottom();

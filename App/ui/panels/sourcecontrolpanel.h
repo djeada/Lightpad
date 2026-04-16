@@ -142,6 +142,21 @@ private:
   QPushButton *m_historyToggleButton;
   QLineEdit *m_historySearchEdit;
   QPushButton *m_historyRebaseBtn;
+
+  QWidget *m_headerWidget;
+  QWidget *m_branchSection;
+  QLabel *m_branchIcon;
+  QWidget *m_commitSection;
+  QLabel *m_commitHeaderLabel;
+  QWidget *m_stagedHeader;
+  QWidget *m_changesHeader;
+  QLabel *m_noRepoDescLabel;
+  QWidget *m_conflictWarningHeader;
+  QLabel *m_conflictFilesHeaderLabel;
+  QPushButton *m_compareBranchesBtn;
+  QPushButton *m_worktreeBtn;
+  QPushButton *m_discardAllBtn;
+
   bool m_historyExpanded;
   bool m_updatingBranchSelector;
   bool m_updatingTree;

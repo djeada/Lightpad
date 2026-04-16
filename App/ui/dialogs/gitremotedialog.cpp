@@ -77,9 +77,9 @@ void GitRemoteDialog::setupUI() {
   QVBoxLayout *titleLayout = new QVBoxLayout();
   QLabel *titleLabel = new QLabel(titleText, this);
   titleLabel->setStyleSheet(
-      "font-size: 18px; font-weight: bold; color: #e6edf3;");
+      QString("font-size: 18px; font-weight: bold; color: %1;").arg(m_theme.foregroundColor.name()));
   QLabel *subtitleLabel = new QLabel(subtitleText, this);
-  subtitleLabel->setStyleSheet("color: #8b949e; font-size: 12px;");
+  subtitleLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(m_theme.singleLineCommentFormat.name()));
   titleLayout->addWidget(titleLabel);
   titleLayout->addWidget(subtitleLabel);
   headerLayout->addLayout(titleLayout, 1);
@@ -127,7 +127,7 @@ void GitRemoteDialog::setupUI() {
       m_forceCheckbox = new QCheckBox(tr("Force push (dangerous!)"), this);
       m_forceCheckbox->setToolTip(tr("Force push even if it would overwrite "
                                      "remote changes. Use with caution!"));
-      m_forceCheckbox->setStyleSheet("QCheckBox { color: #f85149; }");
+      m_forceCheckbox->setStyleSheet(QString("QCheckBox { color: %1; }").arg(m_theme.errorColor.name()));
       optionsLayout->addWidget(m_forceCheckbox);
     }
 
@@ -187,7 +187,7 @@ void GitRemoteDialog::setupUI() {
   mainLayout->addWidget(m_progressBar);
 
   m_statusLabel = new QLabel(this);
-  m_statusLabel->setStyleSheet("color: #8b949e; font-size: 11px;");
+  m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.singleLineCommentFormat.name()));
   mainLayout->addWidget(m_statusLabel);
 
   mainLayout->addStretch();
@@ -313,11 +313,11 @@ void GitRemoteDialog::onPushClicked() {
   if (success) {
     m_statusLabel->setText(
         tr("✓ Successfully pushed to %1/%2").arg(remote).arg(branch));
-    m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.successColor.name()));
     emit operationCompleted(QString("Pushed to %1/%2").arg(remote).arg(branch));
   } else {
     m_statusLabel->setText(tr("✗ Push failed"));
-    m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
   }
 }
 
@@ -344,16 +344,16 @@ void GitRemoteDialog::onPullClicked() {
   if (success) {
     m_statusLabel->setText(
         tr("✓ Successfully pulled from %1/%2").arg(remote).arg(branch));
-    m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.successColor.name()));
     emit operationCompleted(
         QString("Pulled from %1/%2").arg(remote).arg(branch));
   } else {
     if (m_git->hasMergeConflicts()) {
       m_statusLabel->setText(tr("⚠ Pull completed with merge conflicts"));
-      m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
     } else {
       m_statusLabel->setText(tr("✗ Pull failed"));
-      m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
     }
   }
 }
@@ -378,11 +378,11 @@ void GitRemoteDialog::onFetchClicked() {
 
   if (success) {
     m_statusLabel->setText(tr("✓ Successfully fetched from %1").arg(remote));
-    m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.successColor.name()));
     emit operationCompleted(QString("Fetched from %1").arg(remote));
   } else {
     m_statusLabel->setText(tr("✗ Fetch failed"));
-    m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
   }
 }
 
@@ -404,10 +404,10 @@ void GitRemoteDialog::onAddRemoteClicked() {
     m_remoteUrlEdit->clear();
     updateRemoteList();
     m_statusLabel->setText(tr("✓ Remote '%1' added").arg(name));
-    m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.successColor.name()));
   } else {
     m_statusLabel->setText(tr("✗ Failed to add remote"));
-    m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
   }
 }
 
@@ -433,10 +433,10 @@ void GitRemoteDialog::onRemoveRemoteClicked() {
     if (m_git->removeRemote(name)) {
       updateRemoteList();
       m_statusLabel->setText(tr("✓ Remote '%1' removed").arg(name));
-      m_statusLabel->setStyleSheet("color: #3fb950; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.successColor.name()));
     } else {
       m_statusLabel->setText(tr("✗ Failed to remove remote"));
-      m_statusLabel->setStyleSheet("color: #f85149; font-size: 11px;");
+      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
     }
   }
 }

@@ -80,12 +80,15 @@ set(project_headers
     ui/dialogs/commandpalette.h
     ui/dialogs/styleddialog.h
     ui/dialogs/styledpopupdialog.h
+    ui/dialogs/hackerdialog.h
+    ui/dialogs/hackerpopupdialog.h
     ui/dialogs/themedmessagebox.h
     ui/dialogs/gotolinedialog.h
     ui/dialogs/gotosymboldialog.h
     ui/dialogs/recentfilesdialog.h
     ui/dialogs/filequickopen.h
     ui/dialogs/languageserverstatusdialog.h
+    ui/dialogs/themegallerydialog.h
     ui/dialogs/gitinitdialog.h
     ui/dialogs/gitdiffdialog.h
     ui/dialogs/mergeconflictdialog.h
@@ -98,6 +101,19 @@ set(project_headers
     ui/widgets/gitgraphwidget.h
     ui/widgets/notificationwidget.h
     ui/widgets/pythonenvironmentwidget.h
+    ui/widgets/hacker/hackerwidget.h
+    ui/widgets/hacker/hackerbutton.h
+    ui/widgets/hacker/hackerlineedit.h
+    ui/widgets/hacker/hackercombobox.h
+    ui/widgets/hacker/hackerlistwidget.h
+    ui/widgets/hacker/hackertabbar.h
+    ui/widgets/hacker/hackerscrollbar.h
+    ui/widgets/hacker/hackercheckbox.h
+    ui/widgets/hacker/hackerspinbox.h
+    ui/widgets/hacker/hackerprogressbar.h
+    ui/widgets/hacker/hackertablewidget.h
+    ui/widgets/hacker/hackerstyle.h
+    ui/widgets/hacker/hackerscanlineoverlay.h
     ui/panels/findreplacepanel.h
     ui/panels/problemspanel.h
     ui/panels/breadcrumbwidget.h
@@ -178,6 +194,9 @@ set(project_headers
     test_templates/autotestrunner.h
     test_templates/testfileclassifier.h
     settings/theme.h
+    theme/themedefinition.h
+    theme/themeengine.h
+    theme/themepresets.h
     ui/uistylehelper.h
     ui/viewers/imageviewer.h
     markdown/markdowntools.h
@@ -226,12 +245,15 @@ set(project_sources
     ui/dialogs/commandpalette.cpp
     ui/dialogs/styleddialog.cpp
     ui/dialogs/styledpopupdialog.cpp
+    ui/dialogs/hackerdialog.cpp
+    ui/dialogs/hackerpopupdialog.cpp
     ui/dialogs/themedmessagebox.cpp
     ui/dialogs/gotolinedialog.cpp
     ui/dialogs/gotosymboldialog.cpp
     ui/dialogs/recentfilesdialog.cpp
     ui/dialogs/filequickopen.cpp
     ui/dialogs/languageserverstatusdialog.cpp
+    ui/dialogs/themegallerydialog.cpp
     ui/dialogs/gitinitdialog.cpp
     ui/dialogs/gitdiffdialog.cpp
     ui/dialogs/mergeconflictdialog.cpp
@@ -244,6 +266,19 @@ set(project_sources
     ui/widgets/gitgraphwidget.cpp
     ui/widgets/notificationwidget.cpp
     ui/widgets/pythonenvironmentwidget.cpp
+    ui/widgets/hacker/hackerwidget.cpp
+    ui/widgets/hacker/hackerbutton.cpp
+    ui/widgets/hacker/hackerlineedit.cpp
+    ui/widgets/hacker/hackercombobox.cpp
+    ui/widgets/hacker/hackerlistwidget.cpp
+    ui/widgets/hacker/hackertabbar.cpp
+    ui/widgets/hacker/hackerscrollbar.cpp
+    ui/widgets/hacker/hackercheckbox.cpp
+    ui/widgets/hacker/hackerspinbox.cpp
+    ui/widgets/hacker/hackerprogressbar.cpp
+    ui/widgets/hacker/hackertablewidget.cpp
+    ui/widgets/hacker/hackerstyle.cpp
+    ui/widgets/hacker/hackerscanlineoverlay.cpp
     ui/panels/findreplacepanel.cpp
     ui/panels/problemspanel.cpp
     ui/panels/breadcrumbwidget.cpp
@@ -319,6 +354,9 @@ set(project_sources
     test_templates/autotestrunner.cpp
     test_templates/testfileclassifier.cpp
     settings/theme.cpp
+    theme/themedefinition.cpp
+    theme/themeengine.cpp
+    theme/themepresets.cpp
     ui/uistylehelper.cpp
     ui/viewers/imageviewer.cpp
     markdown/markdowntools.cpp

@@ -22,19 +22,13 @@ CompletionWidget::CompletionWidget(QWidget *parent)
   m_docLabel->setTextFormat(Qt::RichText);
   m_docLabel->setVisible(false);
   m_docLabel->setMaximumHeight(100);
-  m_docLabel->setStyleSheet("QLabel { padding: 5px; background: #f5f5f5; "
-                            "border-top: 1px solid #ddd; }");
 
   m_layout->setContentsMargins(0, 0, 0, 0);
   m_layout->setSpacing(0);
   m_layout->addWidget(m_listView);
   m_layout->addWidget(m_docLabel);
 
-  setStyleSheet(
-      "CompletionWidget { background: white; border: 1px solid #ccc; }"
-      "QListView { border: none; }"
-      "QListView::item { padding: 3px 5px; }"
-      "QListView::item:selected { background: #0078d4; color: white; }");
+  applyTheme(Theme());
 
   connect(m_listView->selectionModel(), &QItemSelectionModel::currentChanged,
           this, &CompletionWidget::onSelectionChanged);

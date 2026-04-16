@@ -16,14 +16,17 @@ QString UIStyleHelper::searchBoxStyle(const Theme &theme) {
                  "  border-radius: 4px;"
                  "  background: %2;"
                  "  color: %3;"
+                 "  selection-background-color: %5;"
+                 "  selection-color: %4;"
                  "}"
                  "QLineEdit:focus {"
                  "  border-color: %4;"
                  "}")
       .arg(theme.borderColor.name())
-      .arg(theme.surfaceAltColor.name())
+      .arg(theme.surfaceColor.name())
       .arg(theme.foregroundColor.name())
-      .arg(theme.accentColor.name());
+      .arg(theme.accentColor.name())
+      .arg(theme.accentSoftColor.name());
 }
 
 QString UIStyleHelper::resultListStyle(const Theme &theme) {
@@ -38,15 +41,16 @@ QString UIStyleHelper::resultListStyle(const Theme &theme) {
                  "}"
                  "QListWidget::item:selected {"
                  "  background: %4;"
+                 "  color: %5;"
                  "}"
                  "QListWidget::item:hover {"
-                 "  background: %5;"
+                 "  background: %4;"
                  "}")
       .arg(theme.backgroundColor.name())
       .arg(theme.foregroundColor.name())
       .arg(theme.borderColor.name())
       .arg(theme.accentSoftColor.name())
-      .arg(theme.hoverColor.name());
+      .arg(theme.accentColor.name());
 }
 
 QString UIStyleHelper::panelHeaderStyle(const Theme &theme) {
@@ -146,7 +150,7 @@ QString UIStyleHelper::treeViewStyle(const Theme &theme) {
                  "}")
       .arg(theme.foregroundColor.name())
       .arg(theme.surfaceAltColor.name())
-      .arg(theme.singleLineCommentFormat.name())
+      .arg(theme.accentColor.name())
       .arg(theme.borderColor.name());
 }
 
@@ -165,6 +169,7 @@ QString UIStyleHelper::contextMenuStyle(const Theme &theme) {
                  "}"
                  "QMenu::item:selected {"
                  "  background: %4;"
+                 "  color: %5;"
                  "}"
                  "QMenu::separator {"
                  "  height: 1px;"
@@ -174,7 +179,8 @@ QString UIStyleHelper::contextMenuStyle(const Theme &theme) {
       .arg(theme.surfaceColor.name())
       .arg(theme.foregroundColor.name())
       .arg(theme.borderColor.name())
-      .arg(theme.hoverColor.name());
+      .arg(theme.accentSoftColor.name())
+      .arg(theme.accentColor.name());
 }
 
 QString UIStyleHelper::treeWidgetStyle(const Theme &theme) {
@@ -184,18 +190,18 @@ QString UIStyleHelper::treeWidgetStyle(const Theme &theme) {
                  "  color: %2;"
                  "  border: none;"
                  "  selection-background-color: %3;"
-                 "  selection-color: %2;"
+                 "  selection-color: %9;"
                  "}"
                  "QTreeWidget::item {"
                  "  padding: 4px;"
                  "}"
                  "QTreeWidget::item:selected {"
                  "  background: %3;"
-                 "  color: %2;"
+                 "  color: %9;"
                  "}"
                  "QTreeWidget::item:!active:selected {"
                  "  background: %3;"
-                 "  color: %2;"
+                 "  color: %9;"
                  "}"
                  "QTreeWidget::item:hover {"
                  "  background: %4;"
@@ -210,11 +216,12 @@ QString UIStyleHelper::treeWidgetStyle(const Theme &theme) {
       .arg(theme.backgroundColor.name())
       .arg(theme.foregroundColor.name())
       .arg(theme.accentSoftColor.name())
-      .arg(theme.hoverColor.name())
+      .arg(theme.accentSoftColor.name())
       .arg(theme.surfaceColor.name())
-      .arg(theme.singleLineCommentFormat.name())
+      .arg(theme.accentColor.name())
       .arg(theme.borderColor.name())
-      .arg(theme.surfaceAltColor.name());
+      .arg(theme.surfaceAltColor.name())
+      .arg(theme.accentColor.name());
 }
 
 QString UIStyleHelper::subduedLabelStyle(const Theme &theme) {
@@ -264,11 +271,14 @@ QString UIStyleHelper::checkBoxStyle(const Theme &theme) {
                  "QCheckBox::indicator:checked {"
                  "  background: %4;"
                  "  border-color: %4;"
+                 "}"
+                 "QCheckBox::indicator:hover {"
+                 "  border-color: %4;"
                  "}")
       .arg(theme.foregroundColor.name())
       .arg(theme.borderColor.name())
       .arg(theme.surfaceAltColor.name())
-      .arg(theme.successColor.name());
+      .arg(theme.accentColor.name());
 }
 
 QString UIStyleHelper::formDialogStyle(const Theme &theme) {
@@ -297,11 +307,12 @@ QString UIStyleHelper::groupBoxStyle(const Theme &theme) {
                  "  color: %4;"
                  "  font-size: 11px;"
                  "  text-transform: uppercase;"
+                 "  letter-spacing: 1px;"
                  "}")
       .arg(theme.surfaceColor.name())
       .arg(theme.borderColor.name())
       .arg(theme.foregroundColor.name())
-      .arg(theme.singleLineCommentFormat.name());
+      .arg(theme.accentColor.name());
 }
 
 QString UIStyleHelper::lineEditStyle(const Theme &theme) {
@@ -312,32 +323,36 @@ QString UIStyleHelper::lineEditStyle(const Theme &theme) {
                  "  border-radius: 6px;"
                  "  padding: 8px 12px;"
                  "  font-size: 12px;"
+                 "  selection-background-color: %5;"
+                 "  selection-color: %4;"
                  "}"
                  "QLineEdit:focus {"
                  "  border-color: %4;"
                  "}")
-      .arg(theme.hoverColor.name())
+      .arg(theme.surfaceColor.name())
       .arg(theme.foregroundColor.name())
       .arg(theme.borderColor.name())
-      .arg(theme.accentColor.name());
+      .arg(theme.accentColor.name())
+      .arg(theme.accentSoftColor.name());
 }
 
 QString UIStyleHelper::primaryButtonStyle(const Theme &theme) {
   return QString("QPushButton {"
                  "  background: %1;"
                  "  border: 1px solid %1;"
-                 "  color: white;"
+                 "  color: %2;"
                  "  border-radius: 6px;"
                  "  padding: 8px 16px;"
                  "  font-size: 12px;"
                  "  font-weight: bold;"
                  "}"
                  "QPushButton:hover {"
-                 "  background: %2;"
-                 "  border-color: %2;"
+                 "  background: %3;"
+                 "  border-color: %3;"
                  "}")
-      .arg(theme.successColor.name())
-      .arg(theme.successColor.lighter(110).name());
+      .arg(theme.accentColor.name())
+      .arg(theme.backgroundColor.name())
+      .arg(theme.accentColor.lighter(120).name());
 }
 
 QString UIStyleHelper::secondaryButtonStyle(const Theme &theme) {
@@ -351,11 +366,14 @@ QString UIStyleHelper::secondaryButtonStyle(const Theme &theme) {
                  "}"
                  "QPushButton:hover {"
                  "  background: %4;"
+                 "  border-color: %5;"
+                 "  color: %5;"
                  "}")
-      .arg(theme.hoverColor.name())
+      .arg(theme.surfaceColor.name())
       .arg(theme.foregroundColor.name())
       .arg(theme.borderColor.name())
-      .arg(theme.pressedColor.name());
+      .arg(theme.accentSoftColor.name())
+      .arg(theme.accentColor.name());
 }
 
 QString UIStyleHelper::breadcrumbButtonStyle(const Theme &theme) {
@@ -363,7 +381,8 @@ QString UIStyleHelper::breadcrumbButtonStyle(const Theme &theme) {
                  "  background: transparent;"
                  "  color: %1;"
                  "  border: none;"
-                 "  padding: 2px 6px;"
+                 "  padding: 2px 8px;"
+                 "  font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace';"
                  "  font-size: 12px;"
                  "}"
                  "QPushButton:hover {"
@@ -372,8 +391,8 @@ QString UIStyleHelper::breadcrumbButtonStyle(const Theme &theme) {
                  "  border-radius: 3px;"
                  "}")
       .arg(theme.singleLineCommentFormat.name())
-      .arg(theme.foregroundColor.name())
-      .arg(theme.borderColor.name());
+      .arg(theme.accentColor.name())
+      .arg(theme.accentSoftColor.name());
 }
 
 QString UIStyleHelper::breadcrumbActiveButtonStyle(const Theme &theme) {
@@ -381,7 +400,8 @@ QString UIStyleHelper::breadcrumbActiveButtonStyle(const Theme &theme) {
                  "  background: transparent;"
                  "  color: %1;"
                  "  border: none;"
-                 "  padding: 2px 6px;"
+                 "  padding: 2px 8px;"
+                 "  font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace';"
                  "  font-size: 12px;"
                  "  font-weight: bold;"
                  "}"
@@ -390,17 +410,20 @@ QString UIStyleHelper::breadcrumbActiveButtonStyle(const Theme &theme) {
                  "  background: %3;"
                  "  border-radius: 3px;"
                  "}")
-      .arg(theme.foregroundColor.name())
-      .arg(theme.foregroundColor.lighter(110).name())
-      .arg(theme.borderColor.name());
+      .arg(theme.accentColor.name())
+      .arg(theme.accentColor.lighter(115).name())
+      .arg(theme.accentSoftColor.name());
 }
 
 QString UIStyleHelper::breadcrumbSeparatorStyle(const Theme &theme) {
   return QString("QLabel {"
                  "  color: %1;"
+                 "  font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace';"
                  "  font-size: 12px;"
+                 "  font-weight: bold;"
+                 "  padding: 0 2px;"
                  "}")
-      .arg(theme.borderColor.darker(110).name());
+      .arg(theme.accentColor.name());
 }
 
 QString UIStyleHelper::infoLabelStyle(const Theme &theme) {
@@ -436,6 +459,7 @@ QString UIStyleHelper::tabWidgetStyle(const Theme &theme) {
                  "}"
                  "QTabBar::tab:hover:!selected {"
                  "  background: %7;"
+                 "  color: %5;"
                  "}")
       .arg(theme.borderColor.name())
       .arg(theme.surfaceColor.name())
@@ -459,6 +483,7 @@ QString UIStyleHelper::tableWidgetStyle(const Theme &theme) {
                  "}"
                  "QTableWidget::item:selected {"
                  "  background: %4;"
+                 "  color: %7;"
                  "}"
                  "QHeaderView::section {"
                  "  background: %5;"
@@ -467,13 +492,16 @@ QString UIStyleHelper::tableWidgetStyle(const Theme &theme) {
                  "  border-bottom: 1px solid %3;"
                  "  padding: 4px 8px;"
                  "  font-size: 11px;"
+                 "  text-transform: uppercase;"
+                 "  letter-spacing: 1px;"
                  "}")
       .arg(theme.surfaceAltColor.name())
       .arg(theme.foregroundColor.name())
       .arg(theme.borderColor.name())
       .arg(theme.accentSoftColor.name())
       .arg(theme.surfaceColor.name())
-      .arg(theme.singleLineCommentFormat.name());
+      .arg(theme.accentColor.name())
+      .arg(theme.accentColor.name());
 }
 
 QString UIStyleHelper::plainTextEditStyle(const Theme &theme) {
@@ -566,6 +594,7 @@ QString UIStyleHelper::toolBarStyle(const Theme &theme) {
                  "QToolButton:hover {"
                  "  background: %3;"
                  "  border-color: %4;"
+                 "  color: %4;"
                  "}"
                  "QToolButton:pressed {"
                  "  background: %5;"

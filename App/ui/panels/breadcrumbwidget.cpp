@@ -92,7 +92,7 @@ void BreadcrumbWidget::rebuildBreadcrumbs() {
     m_segments.append(btn);
 
     if (i < segments.size() - 1) {
-      QLabel *sep = new QLabel("\u203A", this);
+      QLabel *sep = new QLabel("\u276F", this);
       sep->setStyleSheet(separatorStyle);
       m_layout->addWidget(sep);
       m_separators.append(sep);
