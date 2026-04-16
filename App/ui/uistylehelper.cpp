@@ -467,7 +467,7 @@ QString UIStyleHelper::tabWidgetStyle(const Theme &theme) {
       .arg(theme.singleLineCommentFormat.name())
       .arg(theme.foregroundColor.name())
       .arg(theme.accentColor.name())
-      .arg(theme.accentSoftColor.name());
+      .arg(theme.hoverColor.name());
 }
 
 QString UIStyleHelper::tableWidgetStyle(const Theme &theme) {
@@ -601,12 +601,13 @@ QString UIStyleHelper::toolBarStyle(const Theme &theme) {
                  "}"
                  "QToolButton:checked {"
                  "  background: %6;"
-                 "  border-color: %4;"
+                 "  border-color: %7;"
                  "}")
       .arg(theme.surfaceColor.name())
       .arg(theme.foregroundColor.name())
-      .arg(theme.accentSoftColor.name())
-      .arg(theme.accentColor.name())
+      .arg(theme.hoverColor.name())
+      .arg(theme.borderColor.name())
       .arg(theme.pressedColor.name())
-      .arg(theme.accentSoftColor.name());
+      .arg(theme.accentSoftColor.name())
+      .arg(theme.accentColor.name());
 }

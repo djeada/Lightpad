@@ -7230,6 +7230,8 @@ void MainWindow::setTheme(Theme theme) {
   }
 
   updateAllTextAreas(&TextArea::applySelectionPalette, settings.theme);
+
+  saveSettings();
 }
 
 void MainWindow::setProjectRootPath(const QString &path) {
