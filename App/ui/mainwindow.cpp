@@ -608,12 +608,6 @@ void MainWindow::loadSettings() {
     }
   }
 
-  const QString currentFilePath =
-      globalSettings.getValue("currentFilePath", "").toString();
-  if (!currentFilePath.isEmpty() && QFileInfo(currentFilePath).exists()) {
-    openFileAndAddToNewTab(currentFilePath);
-  }
-
   applyTreeExpandedStateToViews();
   restoreSessionUiState();
   m_restoringSession = false;
@@ -1766,7 +1760,6 @@ void MainWindow::on_actionClose_Tab_triggered() {
 
 void MainWindow::on_actionClose_All_Tabs_triggered() {
   currentTabWidget()->closeAllTabs();
-  saveSettings();
 }
 
 void MainWindow::on_actionFind_in_file_triggered() {
@@ -1849,7 +1842,9 @@ void MainWindow::on_actionOpen_Project_triggered() {
   if (fileQuickOpen) {
     fileQuickOpen->setRootDirectory(folderPath);
   }
-  saveSettings();
+  if (m_globalSettingsLoaded && !m_restoringSession) {
+    saveSettings();
+  }
 }
 
 void MainWindow::on_actionSave_triggered() {
