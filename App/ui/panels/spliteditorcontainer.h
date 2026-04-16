@@ -67,6 +67,7 @@ private:
   QSplitter *m_rootSplitter;
   QList<QPointer<LightpadTabWidget>> m_tabWidgets;
   QPointer<LightpadTabWidget> m_currentTabWidget;
+  int m_tabWidgetCounter;
 };
 
 #endif
