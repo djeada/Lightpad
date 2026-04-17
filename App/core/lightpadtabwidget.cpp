@@ -19,6 +19,10 @@
 #include <QTextEdit>
 #include <QUrl>
 
+namespace {
+constexpr int kInactiveTabTextAlpha = 176;
+}
+
 LightpadTabBar::LightpadTabBar(QWidget *parent) : QTabBar(parent) {}
 
 void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
@@ -137,7 +141,7 @@ void LightpadTabWidget::tabInserted(int index) {
 
 void LightpadTabWidget::updateCloseButtons() {
   const QString closeIconColor =
-      QColor(m_foregroundColor).lighter(115).name(QColor::HexArgb);
+      QColor(m_foregroundColor).lighter(115).name();
   const QString closeHoverBackground =
       QColor(m_hoverColor).name();
   const QString closePressedBackground =
@@ -266,7 +270,8 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
   QColor border(borderColor);
 
   const QString inactiveText =
-      QColor(foreground.red(), foreground.green(), foreground.blue(), 176)
+      QColor(foreground.red(), foreground.green(), foreground.blue(),
+             kInactiveTabTextAlpha)
           .name(QColor::HexArgb);
   const QString tabStripTop = surface.lighter(108).name();
   const QString tabStripBottom = background.name();
