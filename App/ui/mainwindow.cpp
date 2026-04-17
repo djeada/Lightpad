@@ -2305,9 +2305,6 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
               if (ui->actionToggle_Terminal) {
                 ui->actionToggle_Terminal->setChecked(visible);
               }
-              if (m_globalSettingsLoaded && !m_restoringSession) {
-                saveSettings();
-              }
             });
   }
 
@@ -2607,9 +2604,6 @@ void MainWindow::showProblemsPanel() {
               if (ui->actionToggle_Problems) {
                 ui->actionToggle_Problems->setChecked(visible);
               }
-              if (m_globalSettingsLoaded && !m_restoringSession) {
-                saveSettings();
-              }
             });
   }
 
@@ -2880,9 +2874,6 @@ void MainWindow::ensureSourceControlPanel() {
             if (ui->actionToggle_Source_Control) {
               ui->actionToggle_Source_Control->setChecked(visible);
             }
-            if (m_globalSettingsLoaded && !m_restoringSession) {
-              saveSettings();
-            }
           });
 }
 
@@ -2978,9 +2969,6 @@ void MainWindow::ensureDebugPanel() {
   connect(debugDock, &QDockWidget::visibilityChanged, this,
           [this](bool visible) {
             Q_UNUSED(visible)
-            if (m_globalSettingsLoaded && !m_restoringSession) {
-              saveSettings();
-            }
           });
 
   connect(&DebugSessionManager::instance(),
@@ -3064,11 +3052,6 @@ void MainWindow::ensureTestPanel() {
   tabifyBottomDock(testDock);
   trackDockLayoutChanges(testDock);
   testDock->hide();
-  connect(testDock, &QDockWidget::visibilityChanged, this, [this](bool) {
-    if (m_globalSettingsLoaded && !m_restoringSession) {
-      saveSettings();
-    }
-  });
 }
 
 void MainWindow::trackDockLayoutChanges(QDockWidget *dock) {
@@ -3076,6 +3059,11 @@ void MainWindow::trackDockLayoutChanges(QDockWidget *dock) {
     return;
   }
 
+  connect(dock, &QDockWidget::visibilityChanged, this, [this](bool) {
+    if (m_globalSettingsLoaded && !m_restoringSession) {
+      saveSettings();
+    }
+  });
   connect(dock, &QDockWidget::dockLocationChanged, this,
           [this](Qt::DockWidgetArea) {
             if (m_globalSettingsLoaded && !m_restoringSession) {
@@ -3194,9 +3182,6 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
             if (!visible && m_markdownPreviewDock) {
               m_markdownPreviewDock->hide();
             }
-            if (m_globalSettingsLoaded && !m_restoringSession) {
-              saveSettings();
-            }
           });
 
   LOG_INFO(QString("Opened Markdown preview for: %1").arg(filePath));
@@ -3252,9 +3237,6 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
           });
   connect(m_latexPreviewDock, &QDockWidget::visibilityChanged, this,
           [this](bool) {
-            if (m_globalSettingsLoaded && !m_restoringSession) {
-              saveSettings();
-            }
           });
 
   LOG_INFO(QString("Opened LaTeX build panel for: %1").arg(filePath));
