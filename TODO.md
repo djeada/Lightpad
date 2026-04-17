@@ -38,72 +38,72 @@ Out of scope (separate epics):
 
 ## Definition of Done
 Feature is done when all are true:
-- [ ] Opening a supported file starts the correct language service and sends `didOpen`.
-- [ ] Typing triggers debounced `didChange` and diagnostics refresh without manual save.
-- [ ] Save triggers `didSave` and diagnostics are refreshed if server requires it.
-- [ ] Closing a file sends `didClose` and clears stale diagnostics for that document.
-- [ ] Problems panel updates live with accurate counts by severity and file.
-- [ ] Status bar reflects current global counts from central diagnostics state.
-- [ ] Clicking a problem navigates to exact file/line/column.
-- [ ] Editor shows inline diagnostics (underline) and gutter markers.
-- [ ] Switching language override for a file rebinds diagnostics to the new provider.
+- [x] Opening a supported file starts the correct language service and sends `didOpen`.
+- [x] Typing triggers debounced `didChange` and diagnostics refresh without manual save.
+- [x] Save triggers `didSave` and diagnostics are refreshed if server requires it.
+- [x] Closing a file sends `didClose` and clears stale diagnostics for that document.
+- [x] Problems panel updates live with accurate counts by severity and file.
+- [x] Status bar reflects current global counts from central diagnostics state.
+- [x] Clicking a problem navigates to exact file/line/column.
+- [x] Editor shows inline diagnostics (underline) and gutter markers.
+- [x] Switching language override for a file rebinds diagnostics to the new provider.
 - [ ] Unit/integration tests pass for lifecycle, mapping, debounce, and stale result handling.
 
 ## Milestones
 
 ### M0 - Foundation and Guardrails
-- [ ] Add `docs/DIAGNOSTICS_ARCHITECTURE.md` with data flow diagram.
-- [ ] Define canonical URI/path conversion utilities and use one implementation everywhere.
+- [x] Add `docs/DIAGNOSTICS_ARCHITECTURE.md` with data flow diagram.
+- [x] Define canonical URI/path conversion utilities and use one implementation everywhere.
 - [ ] Add feature flags in settings:
-  - [ ] `diagnostics.enabled`
-  - [ ] `diagnostics.onType`
-  - [ ] `diagnostics.onSave`
-  - [ ] `diagnostics.debounceMs`
+  - [x] `diagnostics.enabled`
+  - [x] `diagnostics.onType`
+  - [x] `diagnostics.onSave`
+  - [x] `diagnostics.debounceMs`
 - [ ] Add structured diagnostic logging categories and levels.
 
 Acceptance criteria:
 - [ ] Architecture doc reviewed.
-- [ ] Settings loaded with defaults and can be toggled safely.
+- [x] Settings loaded with defaults and can be toggled safely.
 
 ### M1 - Central Diagnostics Core
 Create a central service (suggested: `DiagnosticsManager`) to own diagnostic state and routing.
 
-- [ ] Add `App/diagnostics/diagnosticsmanager.h/.cpp`.
+- [x] Add `App/diagnostics/diagnosticsmanager.h/.cpp`.
 - [ ] Define model:
-  - [ ] `QMap<QString, QList<LspDiagnostic>> byUri`
+  - [x] `QMap<QString, QList<LspDiagnostic>> byUri`
   - [ ] reverse index by file path
-  - [ ] aggregate counts (error/warning/info/hint)
+  - [x] aggregate counts (error/warning/info/hint)
 - [ ] Public API:
-  - [ ] `upsertDiagnostics(uri, diagnostics, sourceId)`
-  - [ ] `clearDiagnostics(uri)`
-  - [ ] `clearAllForSource(sourceId)`
-  - [ ] `diagnosticsForFile(filePath)`
+  - [x] `upsertDiagnostics(uri, diagnostics, sourceId)`
+  - [x] `clearDiagnostics(uri)`
+  - [x] `clearAllForSource(sourceId)`
+  - [x] `diagnosticsForFile(filePath)`
 - [ ] Signals:
-  - [ ] `diagnosticsChanged(uri)`
-  - [ ] `countsChanged(errors, warnings, infos)`
-  - [ ] `fileCountsChanged(filePath, ...)`
-- [ ] Implement stale-result protection by version/epoch per document.
+  - [x] `diagnosticsChanged(uri)`
+  - [x] `countsChanged(errors, warnings, infos)`
+  - [x] `fileCountsChanged(filePath, ...)`
+- [x] Implement stale-result protection by version/epoch per document.
 
 Acceptance criteria:
-- [ ] Unit tests for merge/replace/clear semantics.
-- [ ] Unit tests for URI and file path matching.
+- [x] Unit tests for merge/replace/clear semantics.
+- [x] Unit tests for URI and file path matching.
 
 ### M2 - Language Service Session Management
 Add a reusable session manager (suggested: `LanguageFeatureManager`) that manages per-language LSP clients for diagnostics and future features.
 
-- [ ] Add `App/language/languagefeaturemanager.h/.cpp`.
+- [x] Add `App/language/languagefeaturemanager.h/.cpp`.
 - [ ] Session responsibilities:
-  - [ ] resolve language id per file (override + detection)
-  - [ ] choose configured server command/args per language
-  - [ ] lazy-start and reuse client per language/workspace
-  - [ ] expose `clientForFile(filePath)`
-- [ ] Hook `LspClient::diagnosticsReceived` to `DiagnosticsManager`.
+  - [x] resolve language id per file (override + detection)
+  - [x] choose configured server command/args per language
+  - [x] lazy-start and reuse client per language/workspace
+  - [x] expose `clientForFile(filePath)`
+- [x] Hook `LspClient::diagnosticsReceived` to `DiagnosticsManager`.
 - [ ] Implement document lifecycle methods:
-  - [ ] `openDocument(filePath, languageId, text)`
-  - [ ] `changeDocument(filePath, version, text)`
-  - [ ] `saveDocument(filePath)`
-  - [ ] `closeDocument(filePath)`
-- [ ] Handle server unavailable state and report actionable messages.
+  - [x] `openDocument(filePath, languageId, text)`
+  - [x] `changeDocument(filePath, version, text)`
+  - [x] `saveDocument(filePath)`
+  - [x] `closeDocument(filePath)`
+- [x] Handle server unavailable state and report actionable messages.
 
 Acceptance criteria:
 - [ ] Switching between multiple files in same language reuses one session.
@@ -113,18 +113,18 @@ Acceptance criteria:
 Connect editor and window events to service lifecycle.
 
 - [ ] On open file:
-  - [ ] send `didOpen` with current text and effective language id.
+  - [x] send `didOpen` with current text and effective language id.
 - [ ] On text change:
-  - [ ] increment per-document version counter.
-  - [ ] send debounced `didChange` when `diagnostics.onType = true`.
+  - [x] increment per-document version counter.
+  - [x] send debounced `didChange` when `diagnostics.onType = true`.
 - [ ] On save:
-  - [ ] send `didSave` when `diagnostics.onSave = true`.
+  - [x] send `didSave` when `diagnostics.onSave = true`.
 - [ ] On tab close:
-  - [ ] send `didClose` and clear diagnostics for file.
+  - [x] send `didClose` and clear diagnostics for file.
 - [ ] On language override change:
-  - [ ] close old language session binding for that file.
-  - [ ] open document on new language session.
-  - [ ] clear stale diagnostics from previous source.
+  - [x] close old language session binding for that file.
+  - [x] open document on new language session.
+  - [x] clear stale diagnostics from previous source.
 
 Acceptance criteria:
 - [ ] End-to-end diagnostics update on typing for at least one language server.
@@ -134,9 +134,9 @@ Acceptance criteria:
 Wire central diagnostics state to Problems panel and status bar.
 
 - [ ] Replace ad-hoc panel updates with manager-driven updates.
-- [ ] Connect `DiagnosticsManager::countsChanged` to status label update.
+- [x] Connect `DiagnosticsManager::countsChanged` to status label update.
 - [ ] Connect per-file updates to file tree badges (if enabled).
-- [ ] Wire `ProblemsPanel::refreshRequested(filePath)` to on-demand reanalysis.
+- [x] Wire `ProblemsPanel::refreshRequested(filePath)` to on-demand reanalysis.
 - [ ] Add panel actions:
   - [ ] clear current file
   - [ ] clear all
@@ -149,15 +149,15 @@ Acceptance criteria:
 ### M5 - Editor Rendering (Inline + Gutter)
 Introduce visual diagnostics directly in code editor.
 
-- [ ] Extend `TextArea` to render diagnostic underlines via `ExtraSelection`.
+- [x] Extend `TextArea` to render diagnostic underlines via `ExtraSelection`.
 - [ ] Severity styles:
-  - [ ] Error: red underline
-  - [ ] Warning: yellow underline
-  - [ ] Info: blue underline
-  - [ ] Hint: subtle dotted underline
-- [ ] Extend `LineNumberArea` for diagnostic markers and tooltips.
-- [ ] Add hover tooltip on marked lines with message/source/code.
-- [ ] Ensure coexistence with breakpoint and git-diff visuals.
+  - [x] Error: red underline
+  - [x] Warning: yellow underline
+  - [x] Info: blue underline
+  - [x] Hint: subtle dotted underline
+- [x] Extend `LineNumberArea` for diagnostic markers and tooltips.
+- [x] Add hover tooltip on marked lines with message/source/code.
+- [x] Ensure coexistence with breakpoint and git-diff visuals.
 
 Acceptance criteria:
 - [ ] Marker layering is deterministic (breakpoint, diff, diagnostics).
@@ -187,15 +187,15 @@ Acceptance criteria:
 ## Detailed Task Board
 
 ### A. Data Model and Utilities
-- [ ] Add `DiagnosticOrigin` enum (`Lsp`, `CliAnalyzer`, `Manual`).
+- [x] Add `DiagnosticOrigin` enum (`Lsp`, `CliAnalyzer`, `Manual`).
 - [ ] Add `DocumentState` store: uri, filePath, languageId, version, isOpen.
-- [ ] Add utility for URI normalization and percent-decoding safety.
+- [x] Add utility for URI normalization and percent-decoding safety.
 - [ ] Add utility to clamp diagnostic ranges to valid document bounds.
 
 ### B. Concurrency and Performance
-- [ ] Debounce on-type diagnostics (`150-300ms`, configurable).
-- [ ] Coalesce rapid updates per file.
-- [ ] Ignore responses older than active document version.
+- [x] Debounce on-type diagnostics (`150-300ms`, configurable).
+- [x] Coalesce rapid updates per file.
+- [x] Ignore responses older than active document version.
 - [ ] Avoid rebuilding full Problems tree for single-file changes.
 - [ ] Add metric counters:
   - [ ] `diagnostics_updates_total`
@@ -204,8 +204,8 @@ Acceptance criteria:
 
 ### C. UX and Behavior
 - [ ] Add status text variants:
-  - [ ] `No problems`
-  - [ ] `<E> errors, <W> warnings`
+  - [x] `No problems`
+  - [x] `<E> errors, <W> warnings`
   - [ ] `Analyzing...`
 - [ ] Add command palette actions:
   - [ ] Toggle diagnostics on type
@@ -214,46 +214,46 @@ Acceptance criteria:
 - [ ] Add preference UI for diagnostics settings.
 
 ### D. Error Handling
-- [ ] If server executable is missing, show one-time actionable message with install hint.
+- [x] If server executable is missing, show one-time actionable message with install hint.
 - [ ] If server crashes, mark session degraded and auto-retry with backoff.
-- [ ] If invalid diagnostics payload is received, log and continue.
+- [x] If invalid diagnostics payload is received, log and continue.
 
 ### E. Telemetry and Debugging
-- [ ] Add debug log line per lifecycle event (`open/change/save/close`).
-- [ ] Add debug log line per diagnostics publish with counts and file.
+- [x] Add debug log line per lifecycle event (`open/change/save/close`).
+- [x] Add debug log line per diagnostics publish with counts and file.
 - [ ] Add runtime command to dump diagnostics state to logs.
 
 ## File-Level Implementation Plan
 
 ### New files
-- [ ] `App/diagnostics/diagnosticsmanager.h`
-- [ ] `App/diagnostics/diagnosticsmanager.cpp`
-- [ ] `App/language/languagefeaturemanager.h`
-- [ ] `App/language/languagefeaturemanager.cpp`
-- [ ] `tests/unit/test_diagnosticsmanager.cpp`
-- [ ] `tests/unit/test_languagefeaturemanager.cpp`
-- [ ] `docs/DIAGNOSTICS_ARCHITECTURE.md`
+- [x] `App/diagnostics/diagnosticsmanager.h`
+- [x] `App/diagnostics/diagnosticsmanager.cpp`
+- [x] `App/language/languagefeaturemanager.h`
+- [x] `App/language/languagefeaturemanager.cpp`
+- [x] `tests/unit/test_diagnosticsmanager.cpp`
+- [x] `tests/unit/test_languagefeaturemanager.cpp`
+- [x] `docs/DIAGNOSTICS_ARCHITECTURE.md`
 
 ### Existing files to modify
-- [ ] `App/ui/mainwindow.h`
-- [ ] `App/ui/mainwindow.cpp`
-- [ ] `App/core/textarea.h`
-- [ ] `App/core/textarea.cpp`
-- [ ] `App/core/editor/linenumberarea.h`
-- [ ] `App/core/editor/linenumberarea.cpp`
-- [ ] `App/ui/panels/problemspanel.h`
-- [ ] `App/ui/panels/problemspanel.cpp`
-- [ ] `App/lsp/lspclient.h`
-- [ ] `App/lsp/lspclient.cpp`
-- [ ] `App/CMakeLists.txt`
-- [ ] `tests/CMakeLists.txt`
+- [x] `App/ui/mainwindow.h`
+- [x] `App/ui/mainwindow.cpp`
+- [x] `App/core/textarea.h`
+- [x] `App/core/textarea.cpp`
+- [x] `App/core/editor/linenumberarea.h`
+- [x] `App/core/editor/linenumberarea.cpp`
+- [x] `App/ui/panels/problemspanel.h`
+- [x] `App/ui/panels/problemspanel.cpp`
+- [x] `App/lsp/lspclient.h`
+- [x] `App/lsp/lspclient.cpp`
+- [x] `App/CMakeLists.txt`
+- [x] `tests/CMakeLists.txt`
 
 ## Test Plan
 
 ### Unit tests
-- [ ] `DiagnosticsManager`: upsert/replace/clear/counts.
-- [ ] `DiagnosticsManager`: URI to file matching edge cases.
-- [ ] `LanguageFeatureManager`: language resolution with override precedence.
+- [x] `DiagnosticsManager`: upsert/replace/clear/counts.
+- [x] `DiagnosticsManager`: URI to file matching edge cases.
+- [x] `LanguageFeatureManager`: language resolution with override precedence.
 - [ ] `LanguageFeatureManager`: server startup failure handling.
 - [ ] Versioning: stale diagnostics dropped.
 
@@ -302,16 +302,16 @@ Acceptance criteria:
 - [ ] Decide whether diagnostics are workspace-scoped or global across windows.
 
 ## Immediate Next 10 Tasks
-1. [ ] Add `DiagnosticsManager` skeleton and tests.
-2. [ ] Add `LanguageFeatureManager` skeleton and server config plumbing.
-3. [ ] Wire `diagnosticsReceived` from `LspClient` into manager.
-4. [ ] Wire Problems panel to manager signals.
-5. [ ] Add per-document version tracking in `MainWindow`.
-6. [ ] Send `didOpen` on file open.
-7. [ ] Send debounced `didChange` on text edits.
-8. [ ] Send `didSave` on save and connect panel refresh action.
-9. [ ] Send `didClose` on tab close and cleanup diagnostics.
-10. [ ] Add inline underline rendering for error/warning first.
+1. [x] Add `DiagnosticsManager` skeleton and tests.
+2. [x] Add `LanguageFeatureManager` skeleton and server config plumbing.
+3. [x] Wire `diagnosticsReceived` from `LspClient` into manager.
+4. [x] Wire Problems panel to manager signals.
+5. [x] Add per-document version tracking in `MainWindow`.
+6. [x] Send `didOpen` on file open.
+7. [x] Send debounced `didChange` on text edits.
+8. [x] Send `didSave` on save and connect panel refresh action.
+9. [x] Send `didClose` on tab close and cleanup diagnostics.
+10. [x] Add inline underline rendering for error/warning first.
 
 ## Progress Tracking
 - [ ] M0 complete
@@ -324,4 +324,4 @@ Acceptance criteria:
 
 Owner: TBD
 Target branch: `feature/diagnostics-pipeline`
-Last updated: 2026-03-01
+Last updated: 2026-04-17
