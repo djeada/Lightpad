@@ -9,6 +9,43 @@
 #include <QSplitter>
 #include <QtTest>
 
+Theme::Theme() = default;
+
+TextAreaSettings::TextAreaSettings()
+    : autoIndent(false), showLineNumberArea(true), lineHighlighted(true),
+      matchingBracketsHighlighted(true), vimModeEnabled(false), tabWidth(2) {}
+
+LightpadTreeView::LightpadTreeView(LightpadPage *parent)
+    : QTreeView(parent), parentPage(parent), fileModel(nullptr),
+      fileController(nullptr) {}
+
+LightpadTreeView::~LightpadTreeView() = default;
+
+void LightpadTreeView::renameFile(QString oldFilePath, QString newFilePath) {
+  Q_UNUSED(oldFilePath);
+  Q_UNUSED(newFilePath);
+}
+
+void LightpadTreeView::keyPressEvent(QKeyEvent *event) {
+  QTreeView::keyPressEvent(event);
+}
+
+void LightpadTreeView::mouseReleaseEvent(QMouseEvent *event) {
+  QTreeView::mouseReleaseEvent(event);
+}
+
+void LightpadTreeView::dragEnterEvent(QDragEnterEvent *event) {
+  QTreeView::dragEnterEvent(event);
+}
+
+void LightpadTreeView::dragMoveEvent(QDragMoveEvent *event) {
+  QTreeView::dragMoveEvent(event);
+}
+
+void LightpadTreeView::dropEvent(QDropEvent *event) {
+  QTreeView::dropEvent(event);
+}
+
 LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
     : QWidget(parent), mainWindow(nullptr), treeView(nullptr),
       textArea(nullptr), minimap(nullptr), model(nullptr),
@@ -53,6 +90,101 @@ QString MainWindow::getProjectRootPath() const { return QString(); }
 
 GitIntegration *MainWindow::getGitIntegration() const { return nullptr; }
 
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(nullptr) {}
+
+MainWindow::~MainWindow() = default;
+
+void MainWindow::keyPressEvent(QKeyEvent *event) {
+  QMainWindow::keyPressEvent(event);
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
+  return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+  QMainWindow::closeEvent(event);
+}
+
+#define DEFINE_MAINWINDOW_SLOT(name) void MainWindow::name() {}
+#define DEFINE_MAINWINDOW_BOOL_SLOT(name) void MainWindow::name(bool) {}
+
+DEFINE_MAINWINDOW_SLOT(on_actionQuit_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Full_Screen_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Undo_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Redo_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionIncrease_Font_Size_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionDecrease_Font_Size_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionReset_Font_Size_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionCut_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionCopy_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionPaste_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionNew_Window_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionClose_Tab_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionClose_All_Tabs_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionFind_in_file_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionFind_in_project_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionNew_File_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionOpen_File_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionOpen_Project_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionSave_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionSave_as_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionReplace_in_file_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionReplace_in_project_triggered)
+DEFINE_MAINWINDOW_SLOT(on_languageHighlight_clicked)
+DEFINE_MAINWINDOW_SLOT(on_actionAbout_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionAbout_Qt_triggered)
+DEFINE_MAINWINDOW_SLOT(on_tabWidth_clicked)
+DEFINE_MAINWINDOW_SLOT(on_actionKeyboard_shortcuts_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionPreferences_triggered)
+DEFINE_MAINWINDOW_SLOT(showThemeGallery)
+DEFINE_MAINWINDOW_SLOT(on_runButton_clicked)
+DEFINE_MAINWINDOW_SLOT(on_debugButton_clicked)
+DEFINE_MAINWINDOW_SLOT(on_actionRun_file_name_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionDebug_file_name_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionStart_Debug_Configuration_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionEdit_Configurations_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionEdit_Debug_Configurations_triggered)
+DEFINE_MAINWINDOW_SLOT(on_magicButton_clicked)
+DEFINE_MAINWINDOW_SLOT(on_actionFormat_Document_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionEdit_Format_Configurations_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionGo_to_Line_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Minimap_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionSplit_Horizontally_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionSplit_Vertically_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionClose_Editor_Group_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionFocus_Next_Group_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionFocus_Previous_Group_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionUnsplit_All_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Terminal_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Source_Control_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Test_Panel_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Problems_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionPreview_Markdown_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionPreview_LaTeX_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionOpen_To_Side_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionGit_Log_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionGit_File_History_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionGit_Rebase_triggered)
+DEFINE_MAINWINDOW_BOOL_SLOT(on_actionToggle_Heatmap_triggered)
+DEFINE_MAINWINDOW_BOOL_SLOT(on_actionToggle_CodeLens_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionTransform_Uppercase_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionTransform_Lowercase_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionTransform_Title_Case_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionSort_Lines_Ascending_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionSort_Lines_Descending_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Word_Wrap_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Vim_Mode_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionFold_Current_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionUnfold_Current_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionFold_All_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionUnfold_All_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionFold_Comments_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionUnfold_Comments_triggered)
+
+#undef DEFINE_MAINWINDOW_SLOT
+#undef DEFINE_MAINWINDOW_BOOL_SLOT
+
 class TestSplitEditorContainer : public QObject {
   Q_OBJECT
 
@@ -65,6 +197,7 @@ private slots:
   void testUnsplitAllRestoresSingleGroup();
   void testFocusEventUpdatesCurrentGroup();
   void testSnapshotNotEmpty();
+  void testTabThemeUsesThemeDrivenColors();
 
 private:
   QSplitter *findRootSplitter(SplitEditorContainer &container);
@@ -184,6 +317,26 @@ void TestSplitEditorContainer::testSnapshotNotEmpty() {
 
   QVERIFY(!snapshot.isNull());
   QCOMPARE(snapshot.size(), container.size());
+}
+
+void TestSplitEditorContainer::testTabThemeUsesThemeDrivenColors() {
+  LightpadTabWidget tabWidget;
+  tabWidget.addTab(new QWidget(&tabWidget), QStringLiteral("main.cpp"));
+  tabWidget.setTheme("#101820", "#f2f5f7", "#17232d", "#23435b", "#61dafb",
+                     "#314657");
+
+  const QString style = tabWidget.styleSheet();
+  QVERIFY(style.contains("#23435b"));
+  QVERIFY(style.contains("#61dafb"));
+  QVERIFY(style.contains("border-top-left-radius: 10px;"));
+  QVERIFY(style.contains("QToolButton#AddTabButton"));
+
+  auto *closeButton =
+      qobject_cast<QToolButton *>(tabWidget.tabBar()->tabButton(0, QTabBar::RightSide));
+  QVERIFY(closeButton != nullptr);
+  QVERIFY(closeButton->styleSheet().contains("#23435b"));
+  QVERIFY(closeButton->styleSheet().contains("#61dafb"));
+  QVERIFY(!closeButton->styleSheet().contains("#e81123"));
 }
 
 QTEST_MAIN(TestSplitEditorContainer)
