@@ -84,6 +84,7 @@
 #include "dialogs/shortcuts.h"
 #include "dialogs/themedmessagebox.h"
 #include "mainwindow.h"
+#include "dockutils.h"
 #include "panels/breadcrumbwidget.h"
 #include "panels/debugpanel.h"
 #include "panels/findreplacepanel.h"
@@ -169,8 +170,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_treeSelectionSyncing(false) {
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
-  setDockOptions(QMainWindow::AllowTabbedDocks | QMainWindow::AllowNestedDocks |
-                 QMainWindow::AnimatedDocks);
+  setDockOptions(DockUtils::mainWindowDockOptions());
   ui->menubar->setNativeMenuBar(false);
   ui->actionFind_in_file->setShortcut(QKeySequence::Find);
   ui->actionFind_in_file->setShortcutContext(Qt::ApplicationShortcut);
@@ -2271,9 +2271,7 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
 
     m_terminalDock = new QDockWidget(tr("Terminal"), this);
     m_terminalDock->setObjectName("terminalDock");
-    m_terminalDock->setAllowedAreas(Qt::BottomDockWidgetArea |
-                                    Qt::LeftDockWidgetArea |
-                                    Qt::RightDockWidgetArea);
+    DockUtils::configureToolPanelDock(m_terminalDock);
     m_terminalDock->setWidget(terminalWidget);
     addDockWidget(Qt::BottomDockWidgetArea, m_terminalDock);
     tabifyBottomDock(m_terminalDock);
@@ -2574,9 +2572,7 @@ void MainWindow::showProblemsPanel() {
 
     m_problemsDock = new QDockWidget(tr("Problems"), this);
     m_problemsDock->setObjectName("problemsDock");
-    m_problemsDock->setAllowedAreas(Qt::BottomDockWidgetArea |
-                                    Qt::LeftDockWidgetArea |
-                                    Qt::RightDockWidgetArea);
+    DockUtils::configureToolPanelDock(m_problemsDock);
     m_problemsDock->setWidget(problemsPanel);
     addDockWidget(Qt::BottomDockWidgetArea, m_problemsDock);
     tabifyBottomDock(m_problemsDock);
@@ -2845,8 +2841,7 @@ void MainWindow::ensureSourceControlPanel() {
 
   sourceControlDock = new QDockWidget(tr("Source Control"), this);
   sourceControlDock->setObjectName("sourceControlDock");
-  sourceControlDock->setAllowedAreas(Qt::LeftDockWidgetArea |
-                                     Qt::RightDockWidgetArea);
+  DockUtils::configureToolPanelDock(sourceControlDock);
   sourceControlDock->setWidget(sourceControlPanel);
   addDockWidget(Qt::RightDockWidgetArea, sourceControlDock);
   sourceControlDock->hide();
@@ -2947,8 +2942,7 @@ void MainWindow::ensureDebugPanel() {
 
   debugDock = new QDockWidget(tr("Debug"), this);
   debugDock->setObjectName("debugDock");
-  debugDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::LeftDockWidgetArea |
-                             Qt::RightDockWidgetArea);
+  DockUtils::configureToolPanelDock(debugDock);
   debugDock->setWidget(debugPanel);
   addDockWidget(Qt::BottomDockWidgetArea, debugDock);
   tabifyBottomDock(debugDock);
@@ -3037,8 +3031,7 @@ void MainWindow::ensureTestPanel() {
 
   testDock = new QDockWidget(tr("Tests"), this);
   testDock->setObjectName("testDock");
-  testDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::LeftDockWidgetArea |
-                            Qt::RightDockWidgetArea);
+  DockUtils::configureToolPanelDock(testDock);
   testDock->setWidget(testPanel);
   addDockWidget(Qt::BottomDockWidgetArea, testDock);
   tabifyBottomDock(testDock);
@@ -3129,8 +3122,7 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
   m_markdownPreviewDock = new QDockWidget(tr("Markdown Preview"), this);
   m_markdownPreviewDock->setObjectName("markdownPreviewDock");
   m_markdownPreviewDock->setWidget(m_markdownPreviewPanel);
-  m_markdownPreviewDock->setAllowedAreas(Qt::RightDockWidgetArea |
-                                         Qt::BottomDockWidgetArea);
+  DockUtils::configureToolPanelDock(m_markdownPreviewDock);
   m_markdownPreviewDock->setMinimumWidth(350);
   addDockWidget(Qt::RightDockWidgetArea, m_markdownPreviewDock);
 
@@ -3199,8 +3191,7 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
   m_latexPreviewDock = new QDockWidget(tr("LaTeX Build"), this);
   m_latexPreviewDock->setObjectName("latexPreviewDock");
   m_latexPreviewDock->setWidget(m_latexPreviewPanel);
-  m_latexPreviewDock->setAllowedAreas(Qt::RightDockWidgetArea |
-                                      Qt::BottomDockWidgetArea);
+  DockUtils::configureToolPanelDock(m_latexPreviewDock);
   m_latexPreviewDock->setMinimumWidth(350);
   addDockWidget(Qt::RightDockWidgetArea, m_latexPreviewDock);
 

@@ -176,6 +176,7 @@ set(project_headers
     ui/dialogs/debugconfigurationdialog.h
     ui/dialogs/formattemplateselector.h
     ui/dialogs/shortcuts.h
+    ui/dockutils.h
     ui/panels/terminal.h
     ui/panels/terminaltabwidget.h
     ui/panels/shellprofile.h
