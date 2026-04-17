@@ -342,6 +342,7 @@ private:
   void ensureSourceControlPanel();
   void ensureDebugPanel();
   void ensureTestPanel();
+  void trackDockLayoutChanges(QDockWidget *dock);
   void tabifyBottomDock(QDockWidget *dock);
   void ensureStatusLabels();
   void updatePythonEnvironmentLabel();

@@ -906,6 +906,28 @@ target_compile_definitions(test_spliteditorcontainer PRIVATE QT_DEPRECATED_WARNI
 
 add_test(NAME SplitEditorContainerTests COMMAND test_spliteditorcontainer)
 
+# DockUtils test executable
+add_executable(test_dockutils
+    unit/test_dockutils.cpp
+)
+
+target_include_directories(test_dockutils PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/ui
+)
+
+target_link_libraries(test_dockutils
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_dockutils PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME DockUtilsTests COMMAND test_dockutils)
+
 # FindReplacePanel test executable
 add_executable(test_findreplacepanel
     unit/test_findreplacepanel.cpp
@@ -1525,6 +1547,7 @@ set(TEST_LIST
     RecentFilesManagerTests
     NavigationHistoryTests
     MinimapTests
+    DockUtilsTests
     SplitEditorContainerTests
     FindReplacePanelTests
     ImageViewerTests
@@ -1572,6 +1595,7 @@ set(TEST_TARGETS
     test_dockerfilesyntaxplugin
     test_pluginbasedsyntaxhighlighter
     test_gitintegration test_gitfilesystemmodel test_gitworkbenchdialog test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
+    test_dockutils
     test_spliteditorcontainer
     test_imageviewer
     test_markdowntools

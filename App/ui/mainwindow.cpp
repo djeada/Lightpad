@@ -84,6 +84,7 @@
 #include "dialogs/shortcuts.h"
 #include "dialogs/themedmessagebox.h"
 #include "mainwindow.h"
+#include "dockutils.h"
 #include "panels/breadcrumbwidget.h"
 #include "panels/debugpanel.h"
 #include "panels/findreplacepanel.h"
@@ -169,8 +170,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_treeSelectionSyncing(false) {
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
-  setDockOptions(QMainWindow::AllowTabbedDocks | QMainWindow::AllowNestedDocks |
-                 QMainWindow::AnimatedDocks);
+  setDockOptions(DockUtils::mainWindowDockOptions());
   ui->menubar->setNativeMenuBar(false);
   ui->actionFind_in_file->setShortcut(QKeySequence::Find);
   ui->actionFind_in_file->setShortcutContext(Qt::ApplicationShortcut);
@@ -700,30 +700,55 @@ void MainWindow::restoreSessionUiState() {
   SettingsManager &globalSettings = SettingsManager::instance();
   const QString currentFilePath =
       globalSettings.getValue("currentFilePath", "").toString();
+  const bool showSourceControlDock =
+      globalSettings.getValue("showSourceControlDock", true).toBool();
+  const bool showDebugDock =
+      globalSettings.getValue("showDebugDock", false).toBool();
+  const bool showTerminalDock =
+      globalSettings.getValue("showTerminalDock", false).toBool();
+  const bool showProblemsDock =
+      globalSettings.getValue("showProblemsDock", false).toBool();
+  const bool showTestDock =
+      globalSettings.getValue("showTestDock", false).toBool();
+  const QString dockStateBase64 =
+      globalSettings.getValue("mainWindowDockState", "").toString();
 
-  if (globalSettings.getValue("showSourceControlDock", true).toBool()) {
+  if (!dockStateBase64.isEmpty()) {
+    ensureTerminalWidget();
+    if (!m_problemsDock) {
+      showProblemsPanel();
+      if (m_problemsDock) {
+        m_problemsDock->hide();
+      }
+    }
+    ensureSourceControlPanel();
+    ensureDebugPanel();
+    ensureTestPanel();
+  }
+
+  if (showSourceControlDock) {
     ensureSourceControlPanel();
     if (sourceControlDock) {
       sourceControlDock->show();
     }
   }
 
-  if (globalSettings.getValue("showDebugDock", false).toBool()) {
+  if (showDebugDock) {
     ensureDebugPanel();
     if (debugDock) {
       debugDock->show();
     }
   }
 
-  if (globalSettings.getValue("showTerminalDock", false).toBool()) {
+  if (showTerminalDock) {
     showTerminalPanel();
   }
 
-  if (globalSettings.getValue("showProblemsDock", false).toBool()) {
+  if (showProblemsDock) {
     showProblemsPanel();
   }
 
-  if (globalSettings.getValue("showTestDock", false).toBool()) {
+  if (showTestDock) {
     ensureTestPanel();
     if (testDock) {
       testDock->show();
@@ -748,8 +773,6 @@ void MainWindow::restoreSessionUiState() {
     on_actionPreview_LaTeX_triggered();
   }
 
-  const QString dockStateBase64 =
-      globalSettings.getValue("mainWindowDockState", "").toString();
   if (!dockStateBase64.isEmpty()) {
     QMainWindow::restoreState(QByteArray::fromBase64(dockStateBase64.toLatin1()));
   }
@@ -2271,20 +2294,16 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
 
     m_terminalDock = new QDockWidget(tr("Terminal"), this);
     m_terminalDock->setObjectName("terminalDock");
-    m_terminalDock->setAllowedAreas(Qt::BottomDockWidgetArea |
-                                    Qt::LeftDockWidgetArea |
-                                    Qt::RightDockWidgetArea);
+    DockUtils::configureToolPanelDock(m_terminalDock);
     m_terminalDock->setWidget(terminalWidget);
     addDockWidget(Qt::BottomDockWidgetArea, m_terminalDock);
     tabifyBottomDock(m_terminalDock);
+    trackDockLayoutChanges(m_terminalDock);
     m_terminalDock->hide();
     connect(m_terminalDock, &QDockWidget::visibilityChanged, this,
             [this](bool visible) {
               if (ui->actionToggle_Terminal) {
                 ui->actionToggle_Terminal->setChecked(visible);
-              }
-              if (m_globalSettingsLoaded && !m_restoringSession) {
-                saveSettings();
               }
             });
   }
@@ -2574,20 +2593,16 @@ void MainWindow::showProblemsPanel() {
 
     m_problemsDock = new QDockWidget(tr("Problems"), this);
     m_problemsDock->setObjectName("problemsDock");
-    m_problemsDock->setAllowedAreas(Qt::BottomDockWidgetArea |
-                                    Qt::LeftDockWidgetArea |
-                                    Qt::RightDockWidgetArea);
+    DockUtils::configureToolPanelDock(m_problemsDock);
     m_problemsDock->setWidget(problemsPanel);
     addDockWidget(Qt::BottomDockWidgetArea, m_problemsDock);
     tabifyBottomDock(m_problemsDock);
+    trackDockLayoutChanges(m_problemsDock);
     m_problemsDock->hide();
     connect(m_problemsDock, &QDockWidget::visibilityChanged, this,
             [this](bool visible) {
               if (ui->actionToggle_Problems) {
                 ui->actionToggle_Problems->setChecked(visible);
-              }
-              if (m_globalSettingsLoaded && !m_restoringSession) {
-                saveSettings();
               }
             });
   }
@@ -2845,10 +2860,10 @@ void MainWindow::ensureSourceControlPanel() {
 
   sourceControlDock = new QDockWidget(tr("Source Control"), this);
   sourceControlDock->setObjectName("sourceControlDock");
-  sourceControlDock->setAllowedAreas(Qt::LeftDockWidgetArea |
-                                     Qt::RightDockWidgetArea);
+  DockUtils::configureToolPanelDock(sourceControlDock);
   sourceControlDock->setWidget(sourceControlPanel);
   addDockWidget(Qt::RightDockWidgetArea, sourceControlDock);
+  trackDockLayoutChanges(sourceControlDock);
   sourceControlDock->hide();
   updateSourceControlDockTitle(
       m_gitIntegration ? m_gitIntegration->repositoryPath() : QString(),
@@ -2858,9 +2873,6 @@ void MainWindow::ensureSourceControlPanel() {
           [this](bool visible) {
             if (ui->actionToggle_Source_Control) {
               ui->actionToggle_Source_Control->setChecked(visible);
-            }
-            if (m_globalSettingsLoaded && !m_restoringSession) {
-              saveSettings();
             }
           });
 }
@@ -2947,19 +2959,16 @@ void MainWindow::ensureDebugPanel() {
 
   debugDock = new QDockWidget(tr("Debug"), this);
   debugDock->setObjectName("debugDock");
-  debugDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::LeftDockWidgetArea |
-                             Qt::RightDockWidgetArea);
+  DockUtils::configureToolPanelDock(debugDock);
   debugDock->setWidget(debugPanel);
   addDockWidget(Qt::BottomDockWidgetArea, debugDock);
   tabifyBottomDock(debugDock);
+  trackDockLayoutChanges(debugDock);
   debugDock->hide();
 
   connect(debugDock, &QDockWidget::visibilityChanged, this,
           [this](bool visible) {
             Q_UNUSED(visible)
-            if (m_globalSettingsLoaded && !m_restoringSession) {
-              saveSettings();
-            }
           });
 
   connect(&DebugSessionManager::instance(),
@@ -3037,13 +3046,31 @@ void MainWindow::ensureTestPanel() {
 
   testDock = new QDockWidget(tr("Tests"), this);
   testDock->setObjectName("testDock");
-  testDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::LeftDockWidgetArea |
-                            Qt::RightDockWidgetArea);
+  DockUtils::configureToolPanelDock(testDock);
   testDock->setWidget(testPanel);
   addDockWidget(Qt::BottomDockWidgetArea, testDock);
   tabifyBottomDock(testDock);
+  trackDockLayoutChanges(testDock);
   testDock->hide();
-  connect(testDock, &QDockWidget::visibilityChanged, this, [this](bool) {
+}
+
+void MainWindow::trackDockLayoutChanges(QDockWidget *dock) {
+  if (!dock) {
+    return;
+  }
+
+  connect(dock, &QDockWidget::visibilityChanged, this, [this](bool) {
+    if (m_globalSettingsLoaded && !m_restoringSession) {
+      saveSettings();
+    }
+  });
+  connect(dock, &QDockWidget::dockLocationChanged, this,
+          [this](Qt::DockWidgetArea) {
+            if (m_globalSettingsLoaded && !m_restoringSession) {
+              saveSettings();
+            }
+          });
+  connect(dock, &QDockWidget::topLevelChanged, this, [this](bool) {
     if (m_globalSettingsLoaded && !m_restoringSession) {
       saveSettings();
     }
@@ -3129,10 +3156,10 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
   m_markdownPreviewDock = new QDockWidget(tr("Markdown Preview"), this);
   m_markdownPreviewDock->setObjectName("markdownPreviewDock");
   m_markdownPreviewDock->setWidget(m_markdownPreviewPanel);
-  m_markdownPreviewDock->setAllowedAreas(Qt::RightDockWidgetArea |
-                                         Qt::BottomDockWidgetArea);
+  DockUtils::configureToolPanelDock(m_markdownPreviewDock);
   m_markdownPreviewDock->setMinimumWidth(350);
   addDockWidget(Qt::RightDockWidgetArea, m_markdownPreviewDock);
+  trackDockLayoutChanges(m_markdownPreviewDock);
 
   QTimer::singleShot(100, m_markdownPreviewPanel,
                      &MarkdownPreviewPanel::updatePreview);
@@ -3154,9 +3181,6 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
           [this](bool visible) {
             if (!visible && m_markdownPreviewDock) {
               m_markdownPreviewDock->hide();
-            }
-            if (m_globalSettingsLoaded && !m_restoringSession) {
-              saveSettings();
             }
           });
 
@@ -3199,10 +3223,10 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
   m_latexPreviewDock = new QDockWidget(tr("LaTeX Build"), this);
   m_latexPreviewDock->setObjectName("latexPreviewDock");
   m_latexPreviewDock->setWidget(m_latexPreviewPanel);
-  m_latexPreviewDock->setAllowedAreas(Qt::RightDockWidgetArea |
-                                      Qt::BottomDockWidgetArea);
+  DockUtils::configureToolPanelDock(m_latexPreviewDock);
   m_latexPreviewDock->setMinimumWidth(350);
   addDockWidget(Qt::RightDockWidgetArea, m_latexPreviewDock);
+  trackDockLayoutChanges(m_latexPreviewDock);
 
   connect(m_latexPreviewPanel, &LatexPreviewPanel::diagnosticsReady, this,
           [this, filePath](const QList<LspDiagnostic> &diags) {
@@ -3213,9 +3237,6 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
           });
   connect(m_latexPreviewDock, &QDockWidget::visibilityChanged, this,
           [this](bool) {
-            if (m_globalSettingsLoaded && !m_restoringSession) {
-              saveSettings();
-            }
           });
 
   LOG_INFO(QString("Opened LaTeX build panel for: %1").arg(filePath));
