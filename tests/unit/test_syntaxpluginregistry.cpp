@@ -1,3 +1,4 @@
+#include "language/languagecatalog.h"
 #include "syntax/bazelsyntaxplugin.h"
 #include "syntax/cmakesyntaxplugin.h"
 #include "syntax/cppsyntaxplugin.h"
@@ -40,6 +41,7 @@ private slots:
   void testPluginReplacement();
   void testAllBuiltInPlugins();
   void testCppPreprocessorAndScopePatterns();
+  void testLanguageCatalogIncludesLatex();
 };
 
 void TestSyntaxPluginRegistry::init() {
@@ -314,6 +316,23 @@ void TestSyntaxPluginRegistry::testCppPreprocessorAndScopePatterns() {
   QVERIFY(preprocessorPattern.globalMatch("#include <iostream>").hasNext());
   QVERIFY(scopeQualifierPattern.globalMatch("std::vector").hasNext());
   QVERIFY(scopedIdentifierPattern.globalMatch("std::vector").hasNext());
+}
+
+void TestSyntaxPluginRegistry::testLanguageCatalogIncludesLatex() {
+  const auto languages = LanguageCatalog::builtInLanguages();
+  auto latexIt =
+      std::find_if(languages.begin(), languages.end(), [](const LanguageInfo &info) {
+        return info.id == "latex";
+      });
+
+  QVERIFY(latexIt != languages.end());
+  QCOMPARE(latexIt->displayName, QString("LaTeX"));
+  QVERIFY(latexIt->extensions.contains("tex"));
+  QVERIFY(latexIt->extensions.contains("bib"));
+  QCOMPARE(LanguageCatalog::normalize("latex"), QString("latex"));
+  QCOMPARE(LanguageCatalog::normalize(".tex"), QString("latex"));
+  QCOMPARE(LanguageCatalog::languageForExtension("bib"), QString("latex"));
+  QCOMPARE(LanguageCatalog::displayName("latex"), QString("LaTeX"));
 }
 
 QTEST_MAIN(TestSyntaxPluginRegistry)
