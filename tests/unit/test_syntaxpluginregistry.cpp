@@ -329,8 +329,11 @@ void TestSyntaxPluginRegistry::testLanguageCatalogIncludesLatex() {
   QCOMPARE(latexIt->displayName, QString("LaTeX"));
   QVERIFY(latexIt->extensions.contains("tex"));
   QVERIFY(latexIt->extensions.contains("bib"));
+  QVERIFY(latexIt->extensions.contains("sty"));
+  QVERIFY(latexIt->extensions.contains("cls"));
   QCOMPARE(LanguageCatalog::normalize("latex"), QString("latex"));
   QCOMPARE(LanguageCatalog::normalize(".tex"), QString("latex"));
+  QCOMPARE(LanguageCatalog::normalize(".sty"), QString("latex"));
   QCOMPARE(LanguageCatalog::languageForExtension("bib"), QString("latex"));
   QCOMPARE(LanguageCatalog::displayName("latex"), QString("LaTeX"));
 }
