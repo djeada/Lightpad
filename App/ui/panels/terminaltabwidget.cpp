@@ -10,6 +10,7 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QMenu>
+#include <QSizePolicy>
 #include <QSplitter>
 #include <QStyle>
 #include <QTabWidget>
@@ -41,9 +42,11 @@ void TerminalTabWidget::setupUI() {
 
   m_splitter = new QSplitter(Qt::Horizontal, this);
   m_splitter->setObjectName("terminalSplitter");
+  m_splitter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
   m_tabWidget = new QTabWidget(this);
   m_tabWidget->setObjectName("terminalTabs");
+  m_tabWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   m_tabWidget->setTabsClosable(true);
   m_tabWidget->setMovable(true);
   m_tabWidget->setDocumentMode(true);
@@ -54,12 +57,13 @@ void TerminalTabWidget::setupUI() {
           &TerminalTabWidget::onCurrentTabChanged);
 
   m_splitter->addWidget(m_tabWidget);
-  mainLayout->addWidget(m_splitter);
+  mainLayout->addWidget(m_splitter, 1);
 }
 
 void TerminalTabWidget::setupToolbar() {
   QWidget *toolbar = new QWidget(this);
   toolbar->setObjectName("terminalToolbar");
+  toolbar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   QHBoxLayout *toolbarLayout = new QHBoxLayout(toolbar);
   toolbarLayout->setContentsMargins(4, 2, 4, 2);
   toolbarLayout->setSpacing(2);
@@ -90,9 +94,12 @@ void TerminalTabWidget::setupToolbar() {
 
   m_killButton = new QToolButton(toolbar);
   m_killButton->setObjectName("killTerminalButton");
-  m_killButton->setToolTip(tr("Kill Terminal Process"));
+  m_killButton->setText(tr("Stop"));
+  m_killButton->setToolTip(
+      tr("Stop running program or interrupt the terminal (Ctrl+C)"));
   m_killButton->setIcon(qApp->style()->standardIcon(QStyle::SP_BrowserStop));
   m_killButton->setAutoRaise(true);
+  m_killButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
   m_killButton->setEnabled(false);
   connect(m_killButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onKillProcessClicked);
@@ -114,7 +121,7 @@ void TerminalTabWidget::setupToolbar() {
   toolbarLayout->addStretch();
   toolbarLayout->addWidget(m_closeButton);
 
-  qobject_cast<QVBoxLayout *>(layout())->addWidget(toolbar);
+  qobject_cast<QVBoxLayout *>(layout())->addWidget(toolbar, 0);
 }
 
 void TerminalTabWidget::setupShellProfileMenu() {
@@ -150,6 +157,12 @@ Terminal *TerminalTabWidget::addNewTerminal(const QString &workingDirectory) {
           &TerminalTabWidget::updateRunningState);
   connect(terminal, &Terminal::processFinished, this,
           [this](int) { updateRunningState(); });
+  connect(terminal, &Terminal::processError, this,
+          [this](const QString &) { updateRunningState(); });
+  connect(terminal, &Terminal::shellStarted, this,
+          &TerminalTabWidget::updateRunningState);
+  connect(terminal, &Terminal::shellFinished, this,
+          [this](int) { updateRunningState(); });
 
   QString tabName = generateTerminalName();
   int index = m_tabWidget->addTab(terminal, tabName);
@@ -182,6 +195,12 @@ TerminalTabWidget::addNewTerminalWithProfile(const QString &profileName,
   connect(terminal, &Terminal::processStarted, this,
           &TerminalTabWidget::updateRunningState);
   connect(terminal, &Terminal::processFinished, this,
+          [this](int) { updateRunningState(); });
+  connect(terminal, &Terminal::processError, this,
+          [this](const QString &) { updateRunningState(); });
+  connect(terminal, &Terminal::shellStarted, this,
+          &TerminalTabWidget::updateRunningState);
+  connect(terminal, &Terminal::shellFinished, this,
           [this](int) { updateRunningState(); });
 
   QString tabName = generateTerminalName(profileName);
@@ -298,7 +317,7 @@ void TerminalTabWidget::executeCommand(const QString &command,
 void TerminalTabWidget::stopCurrentProcess() {
   Terminal *terminal = currentTerminal();
   if (terminal) {
-    terminal->stopProcess();
+    terminal->interruptActiveProcess();
   }
 }
 
@@ -394,19 +413,19 @@ void TerminalTabWidget::onCurrentTabChanged(int index) {
 void TerminalTabWidget::onKillProcessClicked() {
   Terminal *terminal = currentTerminal();
   if (terminal) {
-    terminal->stopProcess();
+    terminal->interruptActiveProcess();
     updateRunningState();
   }
 }
 
 void TerminalTabWidget::updateRunningState() {
   Terminal *terminal = currentTerminal();
-  bool hasRunningProcess = terminal && terminal->isRunning();
-  m_killButton->setEnabled(hasRunningProcess);
+  bool canStopProcess = terminal && terminal->canInterruptActiveProcess();
+  m_killButton->setEnabled(canStopProcess);
 
   for (int i = 0; i < m_tabWidget->count(); ++i) {
     Terminal *t = terminalAt(i);
-    if (t && t->isRunning()) {
+    if (t && t->hasActiveRunProcess()) {
       m_tabWidget->setTabIcon(
           i, qApp->style()->standardIcon(QStyle::SP_MediaPlay));
     } else {

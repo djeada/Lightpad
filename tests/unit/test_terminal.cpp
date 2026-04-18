@@ -2,6 +2,7 @@
 #include "ui/panels/shellprofile.h"
 #include "ui/panels/terminal.h"
 #undef private
+#include <QDir>
 #include <QLabel>
 #include <QMenu>
 #include <QPlainTextEdit>
@@ -35,6 +36,7 @@ private slots:
   void testScrollbackLines();
   void testLinkDetection();
   void testSendText();
+  void testInterruptActiveRunProcess();
   void testNoEmbeddedCloseButton();
   void testCwdLabelExists();
   void testCwdLabelUpdatesOnDirectoryChange();
@@ -248,6 +250,25 @@ void TestTerminal::testSendText() {
   terminal.sendText("test", true);
 
   QVERIFY(true);
+}
+
+void TestTerminal::testInterruptActiveRunProcess() {
+  Terminal terminal;
+  QSignalSpy finishedSpy(&terminal, &Terminal::processFinished);
+  QVERIFY(finishedSpy.isValid());
+
+  terminal.executeCommand("sh", QStringList() << "-c" << "sleep 30",
+                          QDir::tempPath());
+
+  QTRY_VERIFY_WITH_TIMEOUT(terminal.hasActiveRunProcess(), 3000);
+  QVERIFY(terminal.canInterruptActiveProcess());
+  QVERIFY(terminal.interruptActiveProcess());
+  QTRY_VERIFY_WITH_TIMEOUT(!terminal.hasActiveRunProcess(), 5000);
+  QCOMPARE(finishedSpy.count(), 1);
+  QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 130);
+
+  terminal.stopShell();
+  QTest::qWait(200);
 }
 
 void TestTerminal::testNoEmbeddedCloseButton() {

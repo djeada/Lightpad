@@ -23,6 +23,7 @@
 #include <QUrl>
 
 #ifndef Q_OS_WIN
+#include <signal.h>
 #include <unistd.h>
 #endif
 
@@ -38,7 +39,8 @@ Terminal::Terminal(QWidget *parent)
       m_filePathRegex(R"((?:^|[\s:])(/[^\s:]+|[A-Za-z]:\\[^\s:]+))"),
       m_inputStartPosition(0), m_baseFontSize(kDefaultFontSize),
       m_contextMenu(nullptr), m_copyAction(nullptr),
-      m_runInputHistoryIndex(0), m_runInputIndicator(nullptr),
+      m_stopAction(nullptr), m_runInputHistoryIndex(0),
+      m_runInputIndicator(nullptr),
       m_runInputIndicatorTimer(nullptr), m_runInputIndicatorActive(false),
       m_runInputCursorVisible(false) {
   ui->setupUi(this);
@@ -555,6 +557,44 @@ bool Terminal::isRunning() const {
          m_process->state() == QProcess::Running;
 }
 
+bool Terminal::hasActiveRunProcess() const {
+  return m_runProcess && m_runProcess->state() != QProcess::NotRunning;
+}
+
+bool Terminal::canInterruptActiveProcess() const {
+  return hasActiveRunProcess() || isRunning();
+}
+
+bool Terminal::interruptActiveProcess() {
+  if (hasActiveRunProcess()) {
+    stopProcess();
+    return true;
+  }
+
+  if (!isRunning() || !m_process) {
+    return false;
+  }
+
+  bool interrupted = false;
+
+#ifndef Q_OS_WIN
+  const qint64 processId = m_process->processId();
+  if (processId > 0) {
+    interrupted = (::kill(-static_cast<pid_t>(processId), SIGINT) == 0);
+  }
+#endif
+
+  if (!interrupted) {
+    interrupted = (m_process->write("\x03", 1) == 1);
+  }
+
+  if (interrupted) {
+    appendOutput("^C\n");
+  }
+
+  return interrupted;
+}
+
 qint64 Terminal::runProcessId() const {
   return m_runProcess ? m_runProcess->processId() : 0;
 }
@@ -698,7 +738,15 @@ bool Terminal::runFile(const QString &filePath, const QString &languageId) {
   return true;
 }
 
-void Terminal::stopProcess() { cleanupRunProcess(true); }
+void Terminal::stopProcess() {
+  if (!hasActiveRunProcess()) {
+    return;
+  }
+
+  appendOutput("\nProcess stopped by user.\n");
+  cleanupRunProcess(true);
+  emit processFinished(130);
+}
 
 void Terminal::cleanupRunProcess(bool restartShell) {
   setRunInputIndicatorActive(false);
@@ -1050,8 +1098,7 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
       }
       case Qt::Key_C:
         if (keyEvent->modifiers() & Qt::ControlModifier) {
-          m_runProcess->terminate();
-          appendOutput("^C\n");
+          stopProcess();
           return true;
         }
         break;
@@ -1148,10 +1195,7 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
 
     case Qt::Key_C:
       if (keyEvent->modifiers() & Qt::ControlModifier) {
-        if (isRunning()) {
-          m_process->write("\x03");
-        }
-        appendOutput("^C\n");
+        interruptActiveProcess();
         return true;
       }
       break;
@@ -2019,6 +2063,12 @@ void Terminal::setupContextMenu() {
 
   m_contextMenu->addSeparator();
 
+  m_stopAction = m_contextMenu->addAction(tr("Stop Running Program"));
+  connect(m_stopAction, &QAction::triggered, this,
+          &Terminal::interruptActiveProcess);
+
+  m_contextMenu->addSeparator();
+
   QAction *clearAction = m_contextMenu->addAction(tr("Clear"));
   connect(clearAction, &QAction::triggered, this, &Terminal::clear);
 
@@ -2026,6 +2076,7 @@ void Terminal::setupContextMenu() {
   connect(ui->textEdit, &QPlainTextEdit::customContextMenuRequested, this,
           [this](const QPoint &pos) {
             m_copyAction->setEnabled(ui->textEdit->textCursor().hasSelection());
+            m_stopAction->setEnabled(canInterruptActiveProcess());
             m_contextMenu->exec(ui->textEdit->mapToGlobal(pos));
           });
 }

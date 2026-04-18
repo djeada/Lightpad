@@ -29,6 +29,8 @@ private slots:
   void testCloseButtonEmitsSignal();
   void testKillButtonExists();
   void testKillButtonInitialState();
+  void testStopButtonIsVisibleAction();
+  void testToolbarDoesNotConsumeExtraHeight();
   void testNewTerminalButtonClickAddsTab();
   void testApplyThemeUpdatesTabStyles();
   void testSnapshotNotEmpty();
@@ -150,6 +152,38 @@ void TestTerminalTabWidget::testKillButtonInitialState() {
   QVERIFY(killButton->isEnabled());
 
   widget.stopCurrentProcess();
+
+  widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testStopButtonIsVisibleAction() {
+  TerminalTabWidget widget;
+
+  QToolButton *stopButton = widget.findChild<QToolButton *>("killTerminalButton");
+
+  QVERIFY(stopButton != nullptr);
+  QCOMPARE(stopButton->text(), QString("Stop"));
+  QCOMPARE(stopButton->toolButtonStyle(), Qt::ToolButtonTextBesideIcon);
+  QVERIFY(stopButton->toolTip().contains("Stop"));
+
+  widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testToolbarDoesNotConsumeExtraHeight() {
+  TerminalTabWidget widget;
+  UiTestHelpers::showWidget(widget, QSize(960, 640));
+
+  QWidget *toolbar = widget.findChild<QWidget *>("terminalToolbar");
+  QSplitter *splitter = widget.findChild<QSplitter *>("terminalSplitter");
+
+  QVERIFY(toolbar != nullptr);
+  QVERIFY(splitter != nullptr);
+  QCOMPARE(toolbar->sizePolicy().verticalPolicy(), QSizePolicy::Fixed);
+  QVERIFY2(toolbar->height() <= toolbar->sizeHint().height() + 2,
+           qPrintable(QString("toolbar height %1 exceeded size hint %2")
+                          .arg(toolbar->height())
+                          .arg(toolbar->sizeHint().height())));
+  QVERIFY(splitter->height() > toolbar->height());
 
   widget.closeAllTerminals();
 }

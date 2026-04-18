@@ -11,6 +11,7 @@
 #include <QWidget>
 
 class QLabel;
+class QAction;
 class QTextCursor;
 
 #include "../../python/pythonprojectenvironment.h"
@@ -43,6 +44,9 @@ public:
   void stopShell();
 
   bool isRunning() const;
+  bool hasActiveRunProcess() const;
+  bool canInterruptActiveProcess() const;
+  bool interruptActiveProcess();
   qint64 runProcessId() const;
 
   void executeCommand(const QString &command);
@@ -190,6 +194,7 @@ private:
 
   QMenu *m_contextMenu;
   QAction *m_copyAction;
+  QAction *m_stopAction;
   QString m_pythonEnvironmentBanner;
 
   QElapsedTimer m_runProcessTimer;
