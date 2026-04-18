@@ -29,6 +29,7 @@ public:
         {"java", "Java", {"java"}},
         {"js", "JavaScript", {"js", "jsx", "mjs", "cjs"}},
         {"json", "JSON", {"json"}},
+        {"latex", "LaTeX", {"tex", "sty", "cls", "bib", "dtx", "ins", "ltx"}},
         {"make", "Make", {"mk", "makefile"}},
         {"md", "Markdown", {"md", "markdown"}},
         {"meson", "Meson", {"meson", "meson.build", "meson_options.txt"}},
