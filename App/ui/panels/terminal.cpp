@@ -693,6 +693,13 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
   appendOutput("\n");
 
   m_runProcess->start(command, args);
+  if (m_runProcess->state() == QProcess::NotRunning) {
+    appendOutput(QString("\nError: Failed to start process '%1': %2\n")
+                     .arg(command, m_runProcess->errorString()),
+                 true);
+    emit processError(m_runProcess->errorString());
+    cleanupRunProcess(true);
+  }
 }
 
 bool Terminal::runFile(const QString &filePath, const QString &languageId) {
@@ -965,7 +972,7 @@ void Terminal::onRunProcessError(QProcess::ProcessError error) {
   appendOutput(QString("\nError: %1\n").arg(errorMessage), true);
   emit processError(errorMessage);
 
-  if (error == QProcess::FailedToStart || error == QProcess::Crashed) {
+  if (error == QProcess::FailedToStart) {
     cleanupRunProcess(true);
   }
 }

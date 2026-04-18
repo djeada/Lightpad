@@ -22,6 +22,7 @@ private slots:
 
   void testDapClientInitialState();
   void testDapClientStateEnum();
+  void testDapClientAdapterExitIsReported();
 
   void testBreakpointManagerSingleton();
   void testAddBreakpoint();
@@ -114,6 +115,28 @@ void TestDap::testDapClientStateEnum() {
   QVERIFY(DapClient::State::Running != DapClient::State::Stopped);
   QVERIFY(DapClient::State::Stopped != DapClient::State::Terminated);
   QVERIFY(DapClient::State::Error != DapClient::State::Ready);
+}
+
+void TestDap::testDapClientAdapterExitIsReported() {
+  DapClient client;
+  QSignalSpy errorSpy(&client, &DapClient::error);
+  QSignalSpy terminatedSpy(&client, &DapClient::terminated);
+  QVERIFY(errorSpy.isValid());
+  QVERIFY(terminatedSpy.isValid());
+
+#ifdef Q_OS_WIN
+  const QString program = "cmd";
+  const QStringList args = {"/C", "exit 42"};
+#else
+  const QString program = "sh";
+  const QStringList args = {"-c", "sleep 0.1; echo adapter failed >&2; exit 42"};
+#endif
+
+  QVERIFY(client.start(program, args));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Error, 5000);
+  QCOMPARE(errorSpy.count(), 1);
+  QCOMPARE(terminatedSpy.count(), 1);
+  QVERIFY(errorSpy.takeFirst().at(0).toString().contains("exited"));
 }
 
 void TestDap::testBreakpointManagerSingleton() {

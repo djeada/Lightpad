@@ -532,6 +532,14 @@ void DapClient::respondToRunInTerminal(int requestSeq, bool success,
 
 void DapClient::sendRequest(const QString &command,
                             const QJsonObject &arguments, int seq) {
+  if (!m_process || m_process->state() == QProcess::NotRunning) {
+    LOG_WARNING(QString("DAP: Cannot send %1 request, adapter process is not "
+                        "running")
+                    .arg(command));
+    m_pendingRequests.remove(seq);
+    return;
+  }
+
   if (m_pendingRequests.size() > MAX_PENDING_REQUESTS) {
     int toDrop = m_pendingRequests.size() - MAX_PENDING_REQUESTS;
     auto it = m_pendingRequests.begin();
@@ -553,11 +561,6 @@ void DapClient::sendRequest(const QString &command,
   QJsonDocument doc(message);
   QByteArray content = doc.toJson(QJsonDocument::Compact);
 
-  if (!m_process) {
-    LOG_WARNING("DAP: Cannot send request, process not started");
-    return;
-  }
-
   QString header = QString("Content-Length: %1\r\n\r\n").arg(content.size());
   m_process->write(header.toUtf8());
   m_process->write(content);
@@ -568,6 +571,13 @@ void DapClient::sendRequest(const QString &command,
 void DapClient::sendResponse(int requestSeq, const QString &command,
                              bool success, const QJsonObject &body,
                              const QString &message) {
+  if (!m_process || m_process->state() == QProcess::NotRunning) {
+    LOG_WARNING(QString("DAP: Cannot send %1 response, adapter process is not "
+                        "running")
+                    .arg(command));
+    return;
+  }
+
   QJsonObject response;
   response["seq"] = m_nextSeq++;
   response["type"] = "response";
@@ -584,11 +594,9 @@ void DapClient::sendResponse(int requestSeq, const QString &command,
   QJsonDocument doc(response);
   QByteArray content = doc.toJson(QJsonDocument::Compact);
 
-  if (m_process) {
-    QString header = QString("Content-Length: %1\r\n\r\n").arg(content.size());
-    m_process->write(header.toUtf8());
-    m_process->write(content);
-  }
+  QString header = QString("Content-Length: %1\r\n\r\n").arg(content.size());
+  m_process->write(header.toUtf8());
+  m_process->write(content);
 }
 
 void DapClient::onReadyReadStandardOutput() {
@@ -681,6 +689,10 @@ void DapClient::onReadyReadStandardOutput() {
 }
 
 void DapClient::onReadyReadStandardError() {
+  if (!m_process) {
+    return;
+  }
+
   QString stderrText = QString::fromUtf8(m_process->readAllStandardError());
   LOG_DEBUG(QString("DAP stderr: %1").arg(stderrText.trimmed()));
 
@@ -700,9 +712,68 @@ void DapClient::onProcessError(QProcess::ProcessError processError) {
 
 void DapClient::onProcessFinished(int exitCode,
                                   QProcess::ExitStatus exitStatus) {
-  Q_UNUSED(exitStatus);
+  QProcess *finishedProcess = qobject_cast<QProcess *>(sender());
+  if (!finishedProcess || finishedProcess != m_process) {
+    return;
+  }
+
+  const State previousState = m_state;
+  const QString program = finishedProcess->program();
+  const QString stderrText =
+      QString::fromUtf8(finishedProcess->readAllStandardError()).trimmed();
+
   LOG_INFO(QString("Debug adapter exited with code: %1").arg(exitCode));
-  setState(State::Disconnected);
+
+  m_process = nullptr;
+  finishedProcess->deleteLater();
+  m_buffer.clear();
+  m_pendingRequests.clear();
+  m_currentThreadId = 0;
+  m_capabilities = QJsonObject();
+  m_functionBreakpointsConfigured = false;
+  m_deferredFunctionBreakpoints.clear();
+  m_hasDeferredFunctionBreakpoints = false;
+  m_dataBreakpointsSupported = true;
+  m_dataBreakpointsConfigured = false;
+  m_pausePending = false;
+
+  if (previousState == State::Terminated ||
+      previousState == State::Disconnected) {
+    setState(State::Disconnected);
+    return;
+  }
+
+  if (previousState == State::Error) {
+    emit terminated();
+    return;
+  }
+
+  QString message;
+  if (exitStatus == QProcess::CrashExit) {
+    message = QString("Debug adapter crashed: %1")
+                  .arg(program.isEmpty() ? QStringLiteral("unknown adapter")
+                                         : program);
+  } else if (exitCode != 0) {
+    message = QString("Debug adapter exited unexpectedly with code %1: %2")
+                  .arg(exitCode)
+                  .arg(program.isEmpty() ? QStringLiteral("unknown adapter")
+                                         : program);
+  } else {
+    message = QString("Debug adapter exited before the debug session "
+                      "completed: %1")
+                  .arg(program.isEmpty() ? QStringLiteral("unknown adapter")
+                                         : program);
+  }
+
+  if (!stderrText.isEmpty()) {
+    message += QString("\n\n%1").arg(stderrText.left(4000));
+  }
+
+  setState(exitCode == 0 && exitStatus == QProcess::NormalExit
+               ? State::Terminated
+               : State::Error);
+  emit error(message);
+  emit terminated();
 }
 
 void DapClient::handleMessage(const QJsonObject &message) {

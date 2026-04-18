@@ -37,6 +37,7 @@ private slots:
   void testLinkDetection();
   void testSendText();
   void testInterruptActiveRunProcess();
+  void testExternalRunCrashDoesNotBreakTerminal();
   void testNoEmbeddedCloseButton();
   void testCwdLabelExists();
   void testCwdLabelUpdatesOnDirectoryChange();
@@ -266,6 +267,29 @@ void TestTerminal::testInterruptActiveRunProcess() {
   QTRY_VERIFY_WITH_TIMEOUT(!terminal.hasActiveRunProcess(), 5000);
   QCOMPARE(finishedSpy.count(), 1);
   QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 130);
+
+  terminal.stopShell();
+  QTest::qWait(200);
+}
+
+void TestTerminal::testExternalRunCrashDoesNotBreakTerminal() {
+  Terminal terminal;
+  QSignalSpy finishedSpy(&terminal, &Terminal::processFinished);
+  QSignalSpy errorSpy(&terminal, &Terminal::processError);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(errorSpy.isValid());
+
+#ifdef Q_OS_WIN
+  terminal.executeCommand("cmd", QStringList() << "/C" << "exit 1",
+                          QDir::tempPath());
+#else
+  terminal.executeCommand("sh", QStringList() << "-c" << "kill -SEGV $$",
+                          QDir::tempPath());
+#endif
+
+  QTRY_VERIFY_WITH_TIMEOUT(!terminal.hasActiveRunProcess(), 5000);
+  QVERIFY(finishedSpy.count() >= 1);
+  QVERIFY(terminal.isRunning());
 
   terminal.stopShell();
   QTest::qWait(200);
