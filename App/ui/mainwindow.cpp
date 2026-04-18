@@ -115,6 +115,10 @@
 
 namespace {
 constexpr auto kCompoundDebugTargetPrefix = "compound:";
+constexpr auto kSessionTabPathKey = "path";
+constexpr auto kSessionTabCursorKey = "cursorPosition";
+constexpr auto kSessionTabVerticalScrollKey = "verticalScroll";
+constexpr auto kSessionTabHorizontalScrollKey = "horizontalScroll";
 
 template <typename T>
 bool hasVisibleChildWidget(const QObject *parent) {
@@ -129,6 +133,18 @@ bool hasVisibleChildWidget(const QObject *parent) {
     }
   }
   return false;
+}
+
+QJsonArray settingsArray(const SettingsManager &settings,
+                         const QString &key) {
+  const QJsonValue value = settings.getSettingsObject().value(key);
+  return value.isArray() ? value.toArray() : QJsonArray();
+}
+
+QJsonObject settingsObject(const SettingsManager &settings,
+                           const QString &key) {
+  const QJsonValue value = settings.getSettingsObject().value(key);
+  return value.isObject() ? value.toObject() : QJsonObject();
 }
 }
 
@@ -548,7 +564,7 @@ void MainWindow::loadSettings() {
 
   SettingsManager &globalSettings = SettingsManager::instance();
   globalSettings.loadSettings();
-  m_globalSettingsLoaded = true;
+  m_restoringSession = true;
   if (autoSaveManager) {
     autoSaveManager->setEnabled(
         globalSettings.getValue("autoSaveFiles", true).toBool());
@@ -595,22 +611,47 @@ void MainWindow::loadSettings() {
 
   loadTreeStateFromSettings(m_projectRootPath);
 
-  m_restoringSession = true;
-  QJsonArray openTabs = globalSettings.getValue("openTabs").toJsonArray();
+  const QJsonArray openTabs = settingsArray(globalSettings, "openTabs");
+  const QJsonObject savedFilePositions =
+      settingsObject(globalSettings, "currentFilePositions");
   LOG_INFO(QString("loadSettings: openTabs has %1 entries").arg(openTabs.size()));
   for (const QJsonValue &val : openTabs) {
-    QString filePath = val.toString();
+    QJsonObject tabState;
+    QString filePath;
+    if (val.isObject()) {
+      tabState = val.toObject();
+      filePath = tabState.value(kSessionTabPathKey).toString();
+    } else {
+      filePath = val.toString();
+      tabState = savedFilePositions.value(filePath).toObject();
+    }
     LOG_INFO(QString("loadSettings: restoring tab '%1' exists=%2")
                  .arg(filePath)
                  .arg(QFileInfo(filePath).exists()));
     if (!filePath.isEmpty() && QFileInfo(filePath).exists()) {
       openFileAndAddToNewTab(filePath);
+      if (TextArea *textArea = getCurrentTextArea()) {
+        QTextCursor cursor = textArea->textCursor();
+        cursor.setPosition(qBound(0,
+                                  tabState.value(kSessionTabCursorKey).toInt(),
+                                  textArea->document()->characterCount() - 1));
+        textArea->setTextCursor(cursor);
+        if (QScrollBar *scrollBar = textArea->verticalScrollBar()) {
+          scrollBar->setValue(
+              tabState.value(kSessionTabVerticalScrollKey).toInt());
+        }
+        if (QScrollBar *scrollBar = textArea->horizontalScrollBar()) {
+          scrollBar->setValue(
+              tabState.value(kSessionTabHorizontalScrollKey).toInt());
+        }
+      }
     }
   }
 
   applyTreeExpandedStateToViews();
   restoreSessionUiState();
   m_restoringSession = false;
+  m_globalSettingsLoaded = true;
 }
 
 void MainWindow::saveSettings() {
@@ -672,17 +713,34 @@ void MainWindow::saveSettings() {
       QString::fromLatin1(QMainWindow::saveState().toBase64()));
 
   QJsonArray openTabs;
+  QJsonObject filePositions;
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); i++) {
       QString filePath = tabWidget->getFilePath(i);
       LOG_INFO(QString("saveSettings: tab %1 filePath='%2'").arg(i).arg(filePath));
       if (!filePath.isEmpty()) {
-        openTabs.append(filePath);
+        QJsonObject tabState;
+        tabState[kSessionTabPathKey] = filePath;
+        if (LightpadPage *page = tabWidget->getPage(i)) {
+          if (TextArea *textArea = page->getTextArea()) {
+            tabState[kSessionTabCursorKey] =
+                textArea->textCursor().position();
+            if (QScrollBar *scrollBar = textArea->verticalScrollBar()) {
+              tabState[kSessionTabVerticalScrollKey] = scrollBar->value();
+            }
+            if (QScrollBar *scrollBar = textArea->horizontalScrollBar()) {
+              tabState[kSessionTabHorizontalScrollKey] = scrollBar->value();
+            }
+          }
+        }
+        openTabs.append(tabState);
+        filePositions[filePath] = tabState;
       }
     }
   }
   LOG_INFO(QString("saveSettings: saving %1 open tabs").arg(openTabs.size()));
   globalSettings.setValue("openTabs", openTabs);
+  globalSettings.setValue("currentFilePositions", filePositions);
   LightpadTabWidget *tabWidget = currentTabWidget();
   const int currentIndex = tabWidget ? tabWidget->currentIndex() : -1;
   globalSettings.setValue(
@@ -7506,7 +7564,9 @@ void MainWindow::setTheme(Theme theme) {
 
   updateAllTextAreas(&TextArea::applySelectionPalette, settings.theme);
 
-  saveSettings();
+  if (m_globalSettingsLoaded && !m_restoringSession) {
+    saveSettings();
+  }
 }
 
 void MainWindow::setProjectRootPath(const QString &path) {
