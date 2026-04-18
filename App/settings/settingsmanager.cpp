@@ -50,6 +50,7 @@ void SettingsManager::initializeDefaults() {
 
   m_defaults["lastProjectPath"] = "";
   m_defaults["openTabs"] = QJsonArray();
+  m_defaults["currentFilePositions"] = QJsonObject();
   m_defaults["treeStateByRoot"] = QJsonObject();
   m_defaults["showSourceControlDock"] = true;
   m_defaults["showDebugDock"] = false;
