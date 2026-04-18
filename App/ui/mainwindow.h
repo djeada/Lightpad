@@ -422,6 +422,7 @@ private:
   int m_treeScrollValue;
   bool m_treeScrollValueInitialized;
   bool m_treeScrollSyncing;
+  QString m_treeFilterText;
   QString m_treeCurrentPath;
   bool m_treeSelectionSyncing;
 
@@ -430,6 +431,8 @@ public:
   QString getProjectRootPath() const;
   GitIntegration *getGitIntegration() const;
   GitFileSystemModel *getFileTreeModel() const;
+  void setTreeFilterText(const QString &text);
+  QString getTreeFilterText() const;
   void registerTreeView(LightpadTreeView *treeView);
 };
 

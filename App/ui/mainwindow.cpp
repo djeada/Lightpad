@@ -166,7 +166,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_restoringSession(false), m_globalSettingsLoaded(false),
       m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
       m_treeScrollValue(0), m_treeScrollValueInitialized(false),
-      m_treeScrollSyncing(false), m_treeCurrentPath(""),
+      m_treeScrollSyncing(false), m_treeFilterText(""), m_treeCurrentPath(""),
       m_treeSelectionSyncing(false) {
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
@@ -7565,6 +7565,7 @@ void MainWindow::setProjectRootPath(const QString &path) {
         if (!normalizedPath.isEmpty()) {
           page->setModelRootIndex(normalizedPath);
         }
+        page->setTreeFilterText(m_treeFilterText);
       }
     }
   }
@@ -7723,6 +7724,9 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
   if (m_treeScrollValueInitialized) {
     treeView->verticalScrollBar()->setValue(m_treeScrollValue);
   }
+  if (auto *page = qobject_cast<LightpadPage *>(treeView->parentWidget())) {
+    page->setTreeFilterText(m_treeFilterText);
+  }
 
   connect(treeView, &LightpadTreeView::runTestsRequested, this,
           [this](const QString &path) {
@@ -7749,6 +7753,21 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
             TestFileClassifier::instance().setTestOverride(path, markAsTest);
           });
 }
+
+void MainWindow::setTreeFilterText(const QString &text) {
+  m_treeFilterText = text;
+
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    for (int i = 0; i < tabWidget->count(); i++) {
+      auto page = tabWidget->getPage(i);
+      if (page) {
+        page->setTreeFilterText(m_treeFilterText);
+      }
+    }
+  }
+}
+
+QString MainWindow::getTreeFilterText() const { return m_treeFilterText; }
 
 void MainWindow::trackTreeExpandedState(const QModelIndex &index,
                                         bool expanded) {
@@ -7945,6 +7964,7 @@ void MainWindow::loadTreeStateFromSettings(const QString &rootPath) {
   m_treeCurrentPath.clear();
   m_treeScrollValue = 0;
   m_treeScrollValueInitialized = false;
+  m_treeFilterText.clear();
 
   if (rootPath.isEmpty()) {
     return;
@@ -7979,6 +7999,8 @@ void MainWindow::loadTreeStateFromSettings(const QString &rootPath) {
     m_treeScrollValue = scrollValue.toInt();
     m_treeScrollValueInitialized = true;
   }
+
+  m_treeFilterText = state.value("filterText").toString();
 }
 
 void MainWindow::persistTreeStateToSettings() {
@@ -8004,6 +8026,9 @@ void MainWindow::persistTreeStateToSettings() {
   }
   if (m_treeScrollValueInitialized) {
     state["scrollValue"] = m_treeScrollValue;
+  }
+  if (!m_treeFilterText.isEmpty()) {
+    state["filterText"] = m_treeFilterText;
   }
   treeStates[normalizedRoot.isEmpty() ? m_projectRootPath : normalizedRoot] =
       state;

@@ -86,6 +86,8 @@ public:
   void setGitStatusEnabled(bool enabled);
 
   void refreshGitStatus();
+  void setTreeFilterText(const QString &text);
+  QString getTreeFilterText() const;
   void activateTreeIndex(const QModelIndex &index);
   void applyTheme(const Theme &theme);
   MainWindow *getMainWindow() const;
