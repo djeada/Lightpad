@@ -18,6 +18,7 @@
 #include <QMenu>
 #include <QMimeData>
 #include <QPainter>
+#include <QSignalBlocker>
 #include <QSizePolicy>
 #include <QStyle>
 #include <QStyleOptionViewItem>
@@ -528,8 +529,11 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   });
   connect(treeFilterEdit, &QLineEdit::textChanged, this,
           [this](const QString &text) {
-            m_treeFilterText = text;
-            applyTreeFilter();
+            if (mainWindow) {
+              mainWindow->setTreeFilterText(text);
+              return;
+            }
+            setTreeFilterText(text);
           });
 }
 
@@ -554,6 +558,17 @@ void LightpadPage::setMinimapVisible(bool flag) {
 bool LightpadPage::isMinimapVisible() const {
   return minimap ? minimap->isMinimapVisible() : false;
 }
+
+void LightpadPage::setTreeFilterText(const QString &text) {
+  m_treeFilterText = text;
+  if (treeFilterEdit && treeFilterEdit->text() != text) {
+    QSignalBlocker blocker(treeFilterEdit);
+    treeFilterEdit->setText(text);
+  }
+  applyTreeFilter();
+}
+
+QString LightpadPage::getTreeFilterText() const { return m_treeFilterText; }
 
 void LightpadPage::applyTreeFilter() {
   if (!treeView || !model) {
@@ -685,6 +700,7 @@ void LightpadPage::setMainWindow(MainWindow *window) {
     if (view) {
       mainWindow->registerTreeView(view);
     }
+    setTreeFilterText(mainWindow->getTreeFilterText());
     applyTheme(mainWindow->getTheme());
   }
 }
