@@ -67,7 +67,6 @@
 #include "dialogs/debugconfigurationdialog.h"
 #include "dialogs/filequickopen.h"
 #include "dialogs/formattemplateselector.h"
-#include "dialogs/themegallerydialog.h"
 #include "dialogs/gitdiffdialog.h"
 #include "dialogs/gitfilehistorydialog.h"
 #include "dialogs/gitlogdialog.h"
@@ -83,8 +82,9 @@
 #include "dialogs/runtemplateselector.h"
 #include "dialogs/shortcuts.h"
 #include "dialogs/themedmessagebox.h"
-#include "mainwindow.h"
+#include "dialogs/themegallerydialog.h"
 #include "dockutils.h"
+#include "mainwindow.h"
 #include "panels/breadcrumbwidget.h"
 #include "panels/debugpanel.h"
 #include "panels/findreplacepanel.h"
@@ -97,8 +97,8 @@
 #include "popup.h"
 #include "ui_mainwindow.h"
 #include "viewers/imageviewer.h"
-#include "widgets/notificationwidget.h"
 #include "widgets/hacker/hackerscanlineoverlay.h"
+#include "widgets/notificationwidget.h"
 #ifdef HAVE_PDF_SUPPORT
 #include "viewers/pdfviewer.h"
 #endif
@@ -120,8 +120,7 @@ constexpr auto kSessionTabCursorKey = "cursorPosition";
 constexpr auto kSessionTabVerticalScrollKey = "verticalScroll";
 constexpr auto kSessionTabHorizontalScrollKey = "horizontalScroll";
 
-template <typename T>
-bool hasVisibleChildWidget(const QObject *parent) {
+template <typename T> bool hasVisibleChildWidget(const QObject *parent) {
   if (!parent) {
     return false;
   }
@@ -135,8 +134,7 @@ bool hasVisibleChildWidget(const QObject *parent) {
   return false;
 }
 
-QJsonArray settingsArray(const SettingsManager &settings,
-                         const QString &key) {
+QJsonArray settingsArray(const SettingsManager &settings, const QString &key) {
   const QJsonValue value = settings.getSettingsObject().value(key);
   return value.isArray() ? value.toArray() : QJsonArray();
 }
@@ -146,13 +144,13 @@ QJsonObject settingsObject(const SettingsManager &settings,
   const QJsonValue value = settings.getSettingsObject().value(key);
   return value.isObject() ? value.toObject() : QJsonObject();
 }
-}
+} // namespace
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), popupTabWidth(nullptr),
       preferences(nullptr), findReplacePanel(nullptr), terminalWidget(nullptr),
-      m_terminalDock(nullptr), m_problemsDock(nullptr),
-      completer(nullptr), m_completionEngine(nullptr), highlightLanguage(""),
+      m_terminalDock(nullptr), m_problemsDock(nullptr), completer(nullptr),
+      m_completionEngine(nullptr), highlightLanguage(""),
       font(QApplication::font()), commandPalette(nullptr),
       problemsPanel(nullptr), goToLineDialog(nullptr),
       goToSymbolDialog(nullptr), fileQuickOpen(nullptr),
@@ -513,9 +511,7 @@ void MainWindow::hideVimCommandPanel() {
   m_vimCommandPanelActive = false;
 }
 
-void MainWindow::setTabWidthLabel(QString text) {
-  ui->tabWidth->setText(text);
-}
+void MainWindow::setTabWidthLabel(QString text) { ui->tabWidth->setText(text); }
 
 void MainWindow::setLanguageHighlightLabel(QString text) {
   ui->languageHighlight->setText(text);
@@ -614,7 +610,8 @@ void MainWindow::loadSettings() {
   const QJsonArray openTabs = settingsArray(globalSettings, "openTabs");
   const QJsonObject savedFilePositions =
       settingsObject(globalSettings, "currentFilePositions");
-  LOG_INFO(QString("loadSettings: openTabs has %1 entries").arg(openTabs.size()));
+  LOG_INFO(
+      QString("loadSettings: openTabs has %1 entries").arg(openTabs.size()));
   for (const QJsonValue &val : openTabs) {
     QJsonObject tabState;
     QString filePath;
@@ -673,10 +670,11 @@ void MainWindow::saveSettings() {
                           m_markdownPreviewDock &&
                               m_markdownPreviewDock->isVisible());
   globalSettings.setValue("showLatexPreviewDock",
-                          m_latexPreviewDock && m_latexPreviewDock->isVisible());
-  globalSettings.setValue("markdownPreviewFilePath",
-                          m_markdownPreviewPanel ? m_markdownPreviewPanel->filePath()
-                                                 : QString());
+                          m_latexPreviewDock &&
+                              m_latexPreviewDock->isVisible());
+  globalSettings.setValue(
+      "markdownPreviewFilePath",
+      m_markdownPreviewPanel ? m_markdownPreviewPanel->filePath() : QString());
   globalSettings.setValue("latexPreviewFilePath",
                           m_latexPreviewPanel ? m_latexPreviewPanel->filePath()
                                               : QString());
@@ -684,18 +682,18 @@ void MainWindow::saveSettings() {
                           findReplacePanel && findReplacePanel->isVisible());
   globalSettings.setValue("findReplaceOnlyFind",
                           !findReplacePanel || findReplacePanel->isOnlyFind());
-  globalSettings.setValue(
-      "findReplaceGlobalMode",
-      findReplacePanel && findReplacePanel->isVisible() &&
-          findReplacePanel->isGlobalMode());
+  globalSettings.setValue("findReplaceGlobalMode",
+                          findReplacePanel && findReplacePanel->isVisible() &&
+                              findReplacePanel->isGlobalMode());
   globalSettings.setValue("showPreferencesDialog",
                           preferences && preferences->isVisible());
   globalSettings.setValue("showRunConfigurationDialog",
                           hasVisibleChildWidget<RunTemplateSelector>(this));
   globalSettings.setValue("showFormatConfigurationDialog",
                           hasVisibleChildWidget<FormatTemplateSelector>(this));
-  globalSettings.setValue("showDebugConfigurationDialog",
-                          hasVisibleChildWidget<DebugConfigurationDialog>(this));
+  globalSettings.setValue(
+      "showDebugConfigurationDialog",
+      hasVisibleChildWidget<DebugConfigurationDialog>(this));
   globalSettings.setValue("showShortcutsDialog",
                           hasVisibleChildWidget<ShortcutsDialog>(this));
   globalSettings.setValue("showCommandPalette",
@@ -717,14 +715,14 @@ void MainWindow::saveSettings() {
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); i++) {
       QString filePath = tabWidget->getFilePath(i);
-      LOG_INFO(QString("saveSettings: tab %1 filePath='%2'").arg(i).arg(filePath));
+      LOG_INFO(
+          QString("saveSettings: tab %1 filePath='%2'").arg(i).arg(filePath));
       if (!filePath.isEmpty()) {
         QJsonObject tabState;
         tabState[kSessionTabPathKey] = filePath;
         if (LightpadPage *page = tabWidget->getPage(i)) {
           if (TextArea *textArea = page->getTextArea()) {
-            tabState[kSessionTabCursorKey] =
-                textArea->textCursor().position();
+            tabState[kSessionTabCursorKey] = textArea->textCursor().position();
             if (QScrollBar *scrollBar = textArea->verticalScrollBar()) {
               tabState[kSessionTabVerticalScrollKey] = scrollBar->value();
             }
@@ -743,10 +741,10 @@ void MainWindow::saveSettings() {
   globalSettings.setValue("currentFilePositions", filePositions);
   LightpadTabWidget *tabWidget = currentTabWidget();
   const int currentIndex = tabWidget ? tabWidget->currentIndex() : -1;
-  globalSettings.setValue(
-      "currentFilePath",
-      (tabWidget && currentIndex >= 0) ? tabWidget->getFilePath(currentIndex)
-                                       : QString());
+  globalSettings.setValue("currentFilePath",
+                          (tabWidget && currentIndex >= 0)
+                              ? tabWidget->getFilePath(currentIndex)
+                              : QString());
   if (testPanel) {
     testPanel->saveState();
   }
@@ -826,13 +824,15 @@ void MainWindow::restoreSessionUiState() {
   const QString latexPreviewFilePath =
       globalSettings.getValue("latexPreviewFilePath", "").toString();
   if (globalSettings.getValue("showLatexPreviewDock", false).toBool() &&
-      !latexPreviewFilePath.isEmpty() && QFileInfo(latexPreviewFilePath).exists()) {
+      !latexPreviewFilePath.isEmpty() &&
+      QFileInfo(latexPreviewFilePath).exists()) {
     openFileAndAddToNewTab(latexPreviewFilePath);
     on_actionPreview_LaTeX_triggered();
   }
 
   if (!dockStateBase64.isEmpty()) {
-    QMainWindow::restoreState(QByteArray::fromBase64(dockStateBase64.toLatin1()));
+    QMainWindow::restoreState(
+        QByteArray::fromBase64(dockStateBase64.toLatin1()));
   }
 
   if (findReplacePanel && findReplacePanel->isVisible()) {
@@ -855,7 +855,8 @@ void MainWindow::restoreSessionUiState() {
   if (globalSettings.getValue("showRunConfigurationDialog", false).toBool()) {
     openConfigurationDialog();
   }
-  if (globalSettings.getValue("showFormatConfigurationDialog", false).toBool()) {
+  if (globalSettings.getValue("showFormatConfigurationDialog", false)
+          .toBool()) {
     openFormatConfigurationDialog();
   }
   if (globalSettings.getValue("showDebugConfigurationDialog", false).toBool()) {
@@ -882,7 +883,7 @@ void MainWindow::restoreSessionUiState() {
 
   if (ui->actionToggle_Source_Control) {
     ui->actionToggle_Source_Control->setChecked(sourceControlDock &&
-                                               sourceControlDock->isVisible());
+                                                sourceControlDock->isVisible());
   }
   if (ui->actionToggle_Terminal) {
     ui->actionToggle_Terminal->setChecked(m_terminalDock &&
@@ -1489,7 +1490,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
       watched == preferences || watched == findReplacePanel ||
       watched == commandPalette || watched == goToLineDialog ||
       watched == goToSymbolDialog || watched == fileQuickOpen ||
-      watched == recentFilesDialog || qobject_cast<RunTemplateSelector *>(watched) ||
+      watched == recentFilesDialog ||
+      qobject_cast<RunTemplateSelector *>(watched) ||
       qobject_cast<FormatTemplateSelector *>(watched) ||
       qobject_cast<DebugConfigurationDialog *>(watched) ||
       qobject_cast<ShortcutsDialog *>(watched);
@@ -2696,17 +2698,17 @@ void MainWindow::ensureStatusLabels() {
 
   if (!vimStatusLabel) {
     vimStatusLabel = new QLabel(this);
-    vimStatusLabel->setStyleSheet(QString("QLabel {"
-                                  "  color: %1;"
-                                  "  background-color: %2;"
-                                  "  padding: 1px 10px;"
-                                  "  border-radius: 3px;"
-                                  "  font-weight: bold;"
-                                  "  font-size: 11px;"
-                                  "  letter-spacing: 1px;"
-                                  "}")
-                                     .arg(theme.backgroundColor.name(),
-                                          theme.successColor.name()));
+    vimStatusLabel->setStyleSheet(
+        QString("QLabel {"
+                "  color: %1;"
+                "  background-color: %2;"
+                "  padding: 1px 10px;"
+                "  border-radius: 3px;"
+                "  font-weight: bold;"
+                "  font-size: 11px;"
+                "  letter-spacing: 1px;"
+                "}")
+            .arg(theme.backgroundColor.name(), theme.successColor.name()));
     vimStatusLabel->setText("");
     vimStatusLabel->setVisible(false);
     vimStatusLabel->setMinimumWidth(70);
@@ -2805,17 +2807,18 @@ void MainWindow::updatePythonEnvironmentLabel() {
     label = QString::fromUtf8("\xF0\x9F\x90\x8D %1 (%2)")
                 .arg(QFileInfo(info.interpreter).fileName(), venvName);
     style = QString("QToolButton { color: %1; padding: 0 8px; font-size: 12px;"
-            " border: none; background: transparent; }"
-            "QToolButton:hover { color: %2; }")
-                .arg(theme.successColor.name(), theme.successColor.lighter(130).name());
+                    " border: none; background: transparent; }"
+                    "QToolButton:hover { color: %2; }")
+                .arg(theme.successColor.name(),
+                     theme.successColor.lighter(130).name());
     tooltip = tr("Python: %1\nVenv: %2\nClick to configure")
                   .arg(info.interpreter, info.venvPath);
   } else if (info.found) {
     label = QString::fromUtf8("\xF0\x9F\x90\x8D %1")
                 .arg(QFileInfo(info.interpreter).fileName());
     style = QString("QToolButton { color: %1; padding: 0 8px; font-size: 12px;"
-            " border: none; background: transparent; }"
-            "QToolButton:hover { color: %2; }")
+                    " border: none; background: transparent; }"
+                    "QToolButton:hover { color: %2; }")
                 .arg(theme.borderColor.name(), theme.foregroundColor.name());
     tooltip =
         tr("Python: %1\nNo virtual environment active\nClick to configure")
@@ -2823,9 +2826,10 @@ void MainWindow::updatePythonEnvironmentLabel() {
   } else {
     label = QString::fromUtf8("\xF0\x9F\x90\x8D \xe2\x9a\xa0 No Python env");
     style = QString("QToolButton { color: %1; padding: 0 8px; font-size: 12px;"
-            " border: none; background: transparent; }"
-            "QToolButton:hover { color: %2; }")
-                .arg(theme.warningColor.name(), theme.warningColor.lighter(130).name());
+                    " border: none; background: transparent; }"
+                    "QToolButton:hover { color: %2; }")
+                .arg(theme.warningColor.name(),
+                     theme.warningColor.lighter(130).name());
     tooltip = tr("%1\nClick to configure Python environment")
                   .arg(info.statusMessage.isEmpty()
                            ? tr("Python interpreter not found")
@@ -2858,8 +2862,8 @@ void MainWindow::ensureSourceControlPanel() {
             }
             QString diff = m_gitIntegration->getFileDiff(filePath, staged);
             if (diff.trimmed().isEmpty()) {
-              ThemedMessageBox::information(this, tr("Diff"),
-                                           tr("No changes to show for this file."));
+              ThemedMessageBox::information(
+                  this, tr("Diff"), tr("No changes to show for this file."));
               return;
             }
 
@@ -3025,9 +3029,7 @@ void MainWindow::ensureDebugPanel() {
   debugDock->hide();
 
   connect(debugDock, &QDockWidget::visibilityChanged, this,
-          [this](bool visible) {
-            Q_UNUSED(visible)
-          });
+          [this](bool visible) { Q_UNUSED(visible) });
 
   connect(&DebugSessionManager::instance(),
           &DebugSessionManager::focusedSessionChanged, this,
@@ -3094,11 +3096,13 @@ void MainWindow::ensureTestPanel() {
               m_testStatusLabel->setText(
                   tr("Tests: %1/%2 failed").arg(failed + errored).arg(total));
               m_testStatusLabel->setStyleSheet(
-                  QString("QLabel { color: %1; font-weight: bold; }").arg(t.errorColor.name()));
+                  QString("QLabel { color: %1; font-weight: bold; }")
+                      .arg(t.errorColor.name()));
             } else {
               m_testStatusLabel->setText(tr("Tests: %1 passed").arg(passed));
               m_testStatusLabel->setStyleSheet(
-                  QString("QLabel { color: %1; font-weight: bold; }").arg(t.successColor.name()));
+                  QString("QLabel { color: %1; font-weight: bold; }")
+                      .arg(t.successColor.name()));
             }
           });
 
@@ -3144,8 +3148,7 @@ void MainWindow::tabifyBottomDock(QDockWidget *dock) {
       return;
     }
   }
-  // Even if none are visible, tabify with the first existing one so they share
-  // the same tab bar when both become visible.
+
   for (QDockWidget *existing : bottomDocks) {
     if (existing && existing != dock) {
       tabifyDockWidget(existing, dock);
@@ -3294,8 +3297,7 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
             }
           });
   connect(m_latexPreviewDock, &QDockWidget::visibilityChanged, this,
-          [this](bool) {
-          });
+          [this](bool) {});
 
   LOG_INFO(QString("Opened LaTeX build panel for: %1").arg(filePath));
 }
@@ -3944,10 +3946,13 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
     QColor c = theme.successColor;
     m_lspStatusLabel->setStyleSheet(
         QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
-        "border: 1px solid rgba(%2,%3,%4,0.25); border-radius: 4px; "
-        "background: rgba(%2,%3,%4,0.08); }"
-        "QToolButton:hover { background: rgba(%2,%3,%4,0.16); }")
-            .arg(c.name()).arg(c.red()).arg(c.green()).arg(c.blue()));
+                "border: 1px solid rgba(%2,%3,%4,0.25); border-radius: 4px; "
+                "background: rgba(%2,%3,%4,0.08); }"
+                "QToolButton:hover { background: rgba(%2,%3,%4,0.16); }")
+            .arg(c.name())
+            .arg(c.red())
+            .arg(c.green())
+            .arg(c.blue()));
     m_lspStatusLabel->setToolTip(
         tr("%1 language server is running").arg(displayName));
   } else if (status == "starting") {
@@ -3955,10 +3960,13 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
     QColor c = theme.warningColor;
     m_lspStatusLabel->setStyleSheet(
         QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
-        "border: 1px solid rgba(%2,%3,%4,0.25); border-radius: 4px; "
-        "background: rgba(%2,%3,%4,0.08); }"
-        "QToolButton:hover { background: rgba(%2,%3,%4,0.16); }")
-            .arg(c.name()).arg(c.red()).arg(c.green()).arg(c.blue()));
+                "border: 1px solid rgba(%2,%3,%4,0.25); border-radius: 4px; "
+                "background: rgba(%2,%3,%4,0.08); }"
+                "QToolButton:hover { background: rgba(%2,%3,%4,0.16); }")
+            .arg(c.name())
+            .arg(c.red())
+            .arg(c.green())
+            .arg(c.blue()));
     m_lspStatusLabel->setToolTip(
         tr("%1 language server is starting…").arg(displayName));
   } else if (status == "error") {
@@ -3966,10 +3974,13 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
     QColor c = theme.errorColor;
     m_lspStatusLabel->setStyleSheet(
         QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
-        "border: 1px solid rgba(%2,%3,%4,0.35); border-radius: 4px; "
-        "background: rgba(%2,%3,%4,0.10); }"
-        "QToolButton:hover { background: rgba(%2,%3,%4,0.18); }")
-            .arg(c.name()).arg(c.red()).arg(c.green()).arg(c.blue()));
+                "border: 1px solid rgba(%2,%3,%4,0.35); border-radius: 4px; "
+                "background: rgba(%2,%3,%4,0.10); }"
+                "QToolButton:hover { background: rgba(%2,%3,%4,0.18); }")
+            .arg(c.name())
+            .arg(c.red())
+            .arg(c.green())
+            .arg(c.blue()));
     m_lspStatusLabel->setToolTip(
         tr("%1 language server encountered an error").arg(displayName));
   } else if (status == "stopped") {
@@ -3977,10 +3988,13 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
     QColor c = theme.borderColor;
     m_lspStatusLabel->setStyleSheet(
         QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
-        "border: 1px solid rgba(%2,%3,%4,0.20); border-radius: 4px; "
-        "background: rgba(%2,%3,%4,0.08); }"
-        "QToolButton:hover { background: rgba(%2,%3,%4,0.14); }")
-            .arg(c.name()).arg(c.red()).arg(c.green()).arg(c.blue()));
+                "border: 1px solid rgba(%2,%3,%4,0.20); border-radius: 4px; "
+                "background: rgba(%2,%3,%4,0.08); }"
+                "QToolButton:hover { background: rgba(%2,%3,%4,0.14); }")
+            .arg(c.name())
+            .arg(c.red())
+            .arg(c.green())
+            .arg(c.blue()));
     m_lspStatusLabel->setToolTip(
         tr("%1 language server is disabled").arg(displayName));
   } else {
@@ -4434,16 +4448,17 @@ void MainWindow::updateVimStatusLabel(const QString &text) {
         bgColor = theme.accentColor.lighter(140).name();
       else
         bgColor = theme.borderColor.name();
-      vimStatusLabel->setStyleSheet(QString("QLabel {"
-                                            "  color: %1;"
-                                            "  background-color: %2;"
-                                            "  padding: 1px 10px;"
-                                            "  border-radius: 3px;"
-                                            "  font-weight: bold;"
-                                            "  font-size: 11px;"
-                                            "  letter-spacing: 1px;"
-                                            "}")
-                                        .arg(theme.backgroundColor.name(), bgColor));
+      vimStatusLabel->setStyleSheet(
+          QString("QLabel {"
+                  "  color: %1;"
+                  "  background-color: %2;"
+                  "  padding: 1px 10px;"
+                  "  border-radius: 3px;"
+                  "  font-weight: bold;"
+                  "  font-size: 11px;"
+                  "  letter-spacing: 1px;"
+                  "}")
+              .arg(theme.backgroundColor.name(), bgColor));
     }
   }
 }
@@ -4930,8 +4945,9 @@ void MainWindow::formatCurrentDocument() {
   QString filePath = page ? page->getFilePath() : QString();
 
   if (filePath.isEmpty()) {
-    ThemedMessageBox::information(this, "Format Document",
-                                 "Please save the file first before formatting.");
+    ThemedMessageBox::information(
+        this, "Format Document",
+        "Please save the file first before formatting.");
     return;
   }
 
@@ -5194,7 +5210,7 @@ void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
                      if (m_globalSettingsLoaded && !m_restoringSession) {
                        saveSettings();
                      }
-                    });
+                   });
   QObject::connect(tabWidget, &QTabWidget::tabCloseRequested, this,
                    [this](int) {
                      QTimer::singleShot(0, this, [this]() {
@@ -5810,8 +5826,9 @@ bool MainWindow::startCompoundDebugConfigurationByName(
   }
 
   if (selectedCompound.configurations.isEmpty()) {
-    ThemedMessageBox::warning(this, tr("Compound Debug Configuration"),
-                              tr("The selected compound configuration is empty."));
+    ThemedMessageBox::warning(
+        this, tr("Compound Debug Configuration"),
+        tr("The selected compound configuration is empty."));
     m_debugStartInProgress = false;
     return false;
   }
@@ -6300,7 +6317,7 @@ void MainWindow::on_actionOpen_To_Side_triggered() {
 void MainWindow::on_actionGit_Log_triggered() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
     ThemedMessageBox::information(this, tr("Git Log"),
-                                 tr("No valid Git repository found."));
+                                  tr("No valid Git repository found."));
     return;
   }
 
@@ -6328,7 +6345,7 @@ void MainWindow::on_actionGit_File_History_triggered() { showFileHistory(); }
 void MainWindow::showFileHistory() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
     ThemedMessageBox::information(this, tr("File History"),
-                                 tr("No valid Git repository found."));
+                                  tr("No valid Git repository found."));
     return;
   }
 
@@ -6339,7 +6356,7 @@ void MainWindow::showFileHistory() {
   QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
   if (filePath.isEmpty()) {
     ThemedMessageBox::information(this, tr("File History"),
-                                 tr("No file is currently open."));
+                                  tr("No file is currently open."));
     return;
   }
 
@@ -6381,7 +6398,7 @@ void MainWindow::openReadOnlyTab(const QString &content, const QString &title,
 void MainWindow::on_actionGit_Rebase_triggered() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
     ThemedMessageBox::information(this, tr("Git Workbench"),
-                                 tr("No valid Git repository found."));
+                                  tr("No valid Git repository found."));
     return;
   }
 
@@ -6673,7 +6690,6 @@ void MainWindow::setTheme(Theme theme) {
   settings.theme = theme;
   ThemedMessageBox::setGlobalTheme(theme);
 
-  // Feed the ThemeEngine so all connected widgets update
   ThemeDefinition td = ThemeDefinition::fromClassicTheme(theme, "Active");
   ThemeEngine::instance().setActiveTheme(td);
   const ThemeColors &tc = td.colors;
@@ -6721,8 +6737,8 @@ void MainWindow::setTheme(Theme theme) {
       "'SF Mono', Menlo, Monaco, 'Courier New', monospace; "
       "}"
       "QDialog { background-color: " +
-      bgColor +
-      "; border: 1px solid " + accentColor + "; }"
+      bgColor + "; border: 1px solid " + accentColor +
+      "; }"
 
       "QMenu { "
       "color: " +
@@ -7090,9 +7106,7 @@ void MainWindow::setTheme(Theme theme) {
       bgColor +
       "; "
       "font-family: \"" +
-      editorFontFamily +
-      "\"; " +
-      editorFontSizeRule +
+      editorFontFamily + "\"; " + editorFontSizeRule +
       "border: none; "
       "}"
       "QTextEdit { "

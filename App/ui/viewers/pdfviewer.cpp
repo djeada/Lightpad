@@ -1,6 +1,6 @@
 #include "pdfviewer.h"
-#include <QFileInfo>
 #include "../dialogs/themedmessagebox.h"
+#include <QFileInfo>
 #include <QPdfPageNavigator>
 
 PdfViewer::PdfViewer(QWidget *parent)

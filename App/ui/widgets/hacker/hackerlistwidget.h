@@ -10,8 +10,8 @@ class HackerListDelegate : public QStyledItemDelegate {
 public:
   enum CustomRole {
     DescriptionRole = Qt::UserRole + 100,
-    ShortcutRole    = Qt::UserRole + 101,
-    IconRole        = Qt::UserRole + 102
+    ShortcutRole = Qt::UserRole + 101,
+    IconRole = Qt::UserRole + 102
   };
 
   explicit HackerListDelegate(QObject *parent = nullptr);

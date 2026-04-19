@@ -141,7 +141,6 @@ void ThemedMessageBox::buildUI() {
   m_buttonLayout->setSpacing(8);
   m_buttonLayout->addStretch();
 
-  // Add buttons in order: Cancel/No first (left), then Ok/Yes (right)
   if (m_buttons & Cancel)
     addButton(tr("Cancel"), Cancel);
   if (m_buttons & No)
@@ -155,7 +154,6 @@ void ThemedMessageBox::buildUI() {
 
   applyStyle();
 
-  // Set default button focus
   if (m_defaultButton != NoButton && m_buttonMap.contains(m_defaultButton)) {
     m_buttonMap[m_defaultButton]->setDefault(true);
     m_buttonMap[m_defaultButton]->setFocus();
@@ -180,11 +178,10 @@ QPushButton *ThemedMessageBox::addButton(const QString &text, int role) {
 void ThemedMessageBox::applyStyle() {
   Theme theme = s_themeSet ? s_theme : Theme();
 
-  setStyleSheet(
-      QString("ThemedMessageBox {"
-              "  background: %1;"
-              "}")
-          .arg(theme.surfaceColor.name()));
+  setStyleSheet(QString("ThemedMessageBox {"
+                        "  background: %1;"
+                        "}")
+                    .arg(theme.surfaceColor.name()));
 
   if (m_textLabel) {
     m_textLabel->setStyleSheet(
@@ -199,7 +196,6 @@ void ThemedMessageBox::applyStyle() {
             .arg(theme.singleLineCommentFormat.name()));
   }
 
-  // Style buttons based on role and icon type
   for (auto it = m_buttonMap.begin(); it != m_buttonMap.end(); ++it) {
     int role = it.key();
     QPushButton *btn = it.value();
@@ -210,7 +206,7 @@ void ThemedMessageBox::applyStyle() {
     if (role == Ok || role == Yes) {
       isPrimary = true;
       if (m_icon == Critical || m_icon == Warning) {
-        // For warning/critical questions, Yes/OK is a danger action
+
         if (m_buttons & (Cancel | No)) {
           isDanger = (m_icon == Critical);
         }

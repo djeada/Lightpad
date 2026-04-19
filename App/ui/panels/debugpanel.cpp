@@ -232,13 +232,15 @@ void DebugPanel::applyTheme(const Theme &theme) {
   QColor toolbarShell = blend(theme.backgroundColor, theme.surfaceColor, 0.14);
   QColor shellSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.12);
   QColor cardSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
-  QColor recessedSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.1);
+  QColor recessedSurface =
+      blend(theme.backgroundColor, theme.surfaceColor, 0.1);
   QColor inputSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
   QColor focusSurface =
       blend(theme.backgroundColor, theme.accentSoftColor, 0.06);
   QColor mutedText = blend(theme.foregroundColor, theme.backgroundColor, 0.24);
   QColor subtleText = blend(theme.foregroundColor, theme.backgroundColor, 0.34);
-  QColor consoleSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
+  QColor consoleSurface =
+      blend(theme.backgroundColor, theme.surfaceColor, 0.08);
   QColor readyBg = withAlpha(theme.foregroundColor, 16);
   QColor startingBg = withAlpha(theme.warningColor, 26);
   QColor runningBg = withAlpha(theme.accentColor, 28);
@@ -1256,8 +1258,6 @@ void DebugPanel::setDapClient(DapClient *client) {
 
     WatchManager::instance().setDapClient(m_dapClient);
 
-    // Recover the inspector state if the panel attaches after the adapter has
-    // already stopped and emitted its initial pause event.
     QTimer::singleShot(0, this, [this]() {
       if (!m_dapClient || m_dapClient->state() != DapClient::State::Stopped) {
         return;
@@ -2638,7 +2638,8 @@ QColor DebugPanel::consoleErrorColor() const {
     return m_theme.errorColor;
   }
   const bool darkBackground = palette().color(QPalette::Base).lightness() < 128;
-  return darkBackground ? m_theme.errorColor.lighter(120) : m_theme.errorColor.darker(120);
+  return darkBackground ? m_theme.errorColor.lighter(120)
+                        : m_theme.errorColor.darker(120);
 }
 
 QColor DebugPanel::consoleMutedColor() const {

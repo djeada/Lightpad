@@ -1,10 +1,10 @@
 #include "pythonenvironmentwidget.h"
 
+#include "../../settings/theme.h"
+#include "../dialogs/themedmessagebox.h"
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
-#include "../dialogs/themedmessagebox.h"
-#include "../../settings/theme.h"
 #include <QPlainTextEdit>
 #include <QVBoxLayout>
 
@@ -219,12 +219,12 @@ void PythonEnvironmentWidget::refreshStatus() {
     bannerTextColor = t.errorColor.name();
     bannerIcon = QString::fromUtf8("\xe2\x9c\x97");
     bannerTitle = tr("No interpreter selected");
-    bannerDetail =
-        QString("<br><span style='color:%1;font-size:12px;'>"
-                "Set the interpreter path below to continue.</span>")
-            .arg(t.warningColor.name());
+    bannerDetail = QString("<br><span style='color:%1;font-size:12px;'>"
+                           "Set the interpreter path below to continue.</span>")
+                       .arg(t.warningColor.name());
     m_interpreterEdit->setStyleSheet(
-        QString("QLineEdit { border: 2px solid %1; }").arg(t.errorColor.name()));
+        QString("QLineEdit { border: 2px solid %1; }")
+            .arg(t.errorColor.name()));
   } else if (!pref.venvPath.isEmpty() && !info.found) {
 
     bannerBg = warningBg;
@@ -232,12 +232,13 @@ void PythonEnvironmentWidget::refreshStatus() {
     bannerTextColor = t.warningColor.name();
     bannerIcon = QString::fromUtf8("\xe2\x9a\xa0");
     bannerTitle = tr("Virtual environment not found");
-    bannerDetail = QString("<br><span style='color:%1;font-size:12px;'>"
-                           "Expected at: %2<br>"
-                           "Click <b>Create Venv</b> to create one.</span>")
-                       .arg(t.warningColor.name(), pref.venvPath.toHtmlEscaped());
-    m_venvPathEdit->setStyleSheet(
-        QString("QLineEdit { border: 2px solid %1; }").arg(t.warningColor.name()));
+    bannerDetail =
+        QString("<br><span style='color:%1;font-size:12px;'>"
+                "Expected at: %2<br>"
+                "Click <b>Create Venv</b> to create one.</span>")
+            .arg(t.warningColor.name(), pref.venvPath.toHtmlEscaped());
+    m_venvPathEdit->setStyleSheet(QString("QLineEdit { border: 2px solid %1; }")
+                                      .arg(t.warningColor.name()));
   } else {
 
     bannerBg = errorBg;
@@ -322,9 +323,10 @@ void PythonEnvironmentWidget::onCreateVenv() {
 
   const QString interpreter = creationInterpreter();
   if (interpreter.isEmpty()) {
-    ThemedMessageBox::warning(this, tr("Python Environment"),
-                              tr("No base Python interpreter is available to create "
-                                 "the virtual environment."));
+    ThemedMessageBox::warning(
+        this, tr("Python Environment"),
+        tr("No base Python interpreter is available to create "
+           "the virtual environment."));
     return;
   }
 
@@ -336,9 +338,10 @@ void PythonEnvironmentWidget::onInstallRequirements() {
   const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
       preference(), m_workspaceFolder, m_filePath, m_workingDirectory);
   if (!info.found || info.interpreter.isEmpty()) {
-    ThemedMessageBox::warning(this, tr("Python Environment"),
-                              tr("Resolve a Python interpreter before installing "
-                                 "requirements."));
+    ThemedMessageBox::warning(
+        this, tr("Python Environment"),
+        tr("Resolve a Python interpreter before installing "
+           "requirements."));
     return;
   }
 
@@ -362,9 +365,10 @@ void PythonEnvironmentWidget::onInstallDebugpy() {
   const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
       preference(), m_workspaceFolder, m_filePath, m_workingDirectory);
   if (!info.found || info.interpreter.isEmpty()) {
-    ThemedMessageBox::warning(this, tr("Python Environment"),
-                              tr("Resolve a Python interpreter before installing "
-                                 "debugpy."));
+    ThemedMessageBox::warning(
+        this, tr("Python Environment"),
+        tr("Resolve a Python interpreter before installing "
+           "debugpy."));
     return;
   }
 

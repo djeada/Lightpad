@@ -2,8 +2,8 @@
 #include "../uistylehelper.h"
 
 GoToLineDialog::GoToLineDialog(QWidget *parent, int maxLine)
-    : StyledPopupDialog(parent), m_lineEdit(nullptr),
-      m_infoLabel(nullptr), m_maxLine(maxLine) {
+    : StyledPopupDialog(parent), m_lineEdit(nullptr), m_infoLabel(nullptr),
+      m_maxLine(maxLine) {
   setupUI();
 }
 

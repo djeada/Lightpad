@@ -26,8 +26,8 @@ public:
 
   static int information(QWidget *parent, const QString &title,
                          const QString &text, int buttons = Ok);
-  static int warning(QWidget *parent, const QString &title,
-                     const QString &text, int buttons = Ok);
+  static int warning(QWidget *parent, const QString &title, const QString &text,
+                     int buttons = Ok);
   static int critical(QWidget *parent, const QString &title,
                       const QString &text, int buttons = Ok);
   static int question(QWidget *parent, const QString &title,

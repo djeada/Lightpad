@@ -26,7 +26,6 @@ public:
 
   virtual void applyTheme(const ThemeDefinition &theme);
 
-  // Backward-compat: accept legacy Theme
   virtual void applyTheme(const Theme &theme);
 
 protected:
@@ -45,8 +44,8 @@ protected:
 private:
   void connectToThemeEngine();
   void applyWidgetStyles();
-  QString buttonStyle(const QColor &bg, const QColor &fg,
-                      const QColor &hover, const QColor &border) const;
+  QString buttonStyle(const QColor &bg, const QColor &fg, const QColor &hover,
+                      const QColor &border) const;
   QString inputStyle() const;
   QString comboStyle() const;
   QString checkBoxStyle() const;

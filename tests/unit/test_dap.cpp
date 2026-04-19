@@ -129,7 +129,8 @@ void TestDap::testDapClientAdapterExitIsReported() {
   const QStringList args = {"/C", "exit 42"};
 #else
   const QString program = "sh";
-  const QStringList args = {"-c", "sleep 0.1; echo adapter failed >&2; exit 42"};
+  const QStringList args = {"-c",
+                            "sleep 0.1; echo adapter failed >&2; exit 42"};
 #endif
 
   QVERIFY(client.start(program, args));

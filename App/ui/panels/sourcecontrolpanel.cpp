@@ -5,6 +5,7 @@
 #include "../dialogs/gitremotedialog.h"
 #include "../dialogs/gitstashdialog.h"
 #include "../dialogs/mergeconflictdialog.h"
+#include "../dialogs/themedmessagebox.h"
 #include "../uistylehelper.h"
 #include <QApplication>
 #include <QBoxLayout>
@@ -19,7 +20,6 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QMenu>
-#include "../dialogs/themedmessagebox.h"
 #include <QPalette>
 #include <QPushButton>
 #include <QSizePolicy>
@@ -50,13 +50,12 @@ SourceControlPanel::SourceControlPanel(QWidget *parent)
       m_historyLabel(nullptr), m_historyTree(nullptr),
       m_historyToggleButton(nullptr), m_historySearchEdit(nullptr),
       m_historyRebaseBtn(nullptr), m_headerWidget(nullptr),
-      m_branchSection(nullptr), m_branchIcon(nullptr),
-      m_commitSection(nullptr), m_commitHeaderLabel(nullptr),
-      m_stagedHeader(nullptr), m_changesHeader(nullptr),
-      m_noRepoDescLabel(nullptr), m_conflictWarningHeader(nullptr),
-      m_conflictFilesHeaderLabel(nullptr), m_compareBranchesBtn(nullptr),
-      m_worktreeBtn(nullptr), m_discardAllBtn(nullptr),
-      m_historyExpanded(false),
+      m_branchSection(nullptr), m_branchIcon(nullptr), m_commitSection(nullptr),
+      m_commitHeaderLabel(nullptr), m_stagedHeader(nullptr),
+      m_changesHeader(nullptr), m_noRepoDescLabel(nullptr),
+      m_conflictWarningHeader(nullptr), m_conflictFilesHeaderLabel(nullptr),
+      m_compareBranchesBtn(nullptr), m_worktreeBtn(nullptr),
+      m_discardAllBtn(nullptr), m_historyExpanded(false),
       m_updatingBranchSelector(false), m_updatingTree(false), m_stagedCount(0),
       m_changesCount(0), m_refreshTimer(new QTimer(this)), m_theme(),
       m_themeInitialized(false) {
@@ -165,7 +164,8 @@ void SourceControlPanel::setupMergeConflictUI() {
   warningIcon->setStyleSheet("font-size: 18px;");
   warningLayout->addWidget(warningIcon);
 
-  m_conflictLabel = new QLabel(tr("Merge Conflicts Detected"), m_conflictWarningHeader);
+  m_conflictLabel =
+      new QLabel(tr("Merge Conflicts Detected"), m_conflictWarningHeader);
   warningLayout->addWidget(m_conflictLabel, 1);
 
   layout->addWidget(m_conflictWarningHeader);
@@ -1883,7 +1883,6 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
 
   setStyleSheet(QString("background: %1;").arg(theme.backgroundColor.name()));
 
-  // Header
   if (m_headerWidget) {
     m_headerWidget->setStyleSheet(UIStyleHelper::panelHeaderStyle(theme));
   }
@@ -1894,35 +1893,33 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
   if (m_refreshButton) {
     m_refreshButton->setStyleSheet(
-        QString("QPushButton { background: transparent; color: %1; border: none; "
-                "font-size: 14px; border-radius: 4px; }"
-                "QPushButton:hover { background: %2; }"
-                "QPushButton:pressed { background: %3; }")
+        QString(
+            "QPushButton { background: transparent; color: %1; border: none; "
+            "font-size: 14px; border-radius: 4px; }"
+            "QPushButton:hover { background: %2; }"
+            "QPushButton:pressed { background: %3; }")
             .arg(theme.foregroundColor.name())
             .arg(theme.borderColor.name())
             .arg(theme.accentColor.name()));
   }
 
-  // Status label
   if (m_statusLabel) {
-    m_statusLabel->setStyleSheet(
-        QString("QLabel {"
-                "  background: %1;"
-                "  color: %2;"
-                "  padding: 6px 10px;"
-                "  font-size: 11px;"
-                "  border-top: 1px solid %3;"
-                "}"
-                "QLabel:hover {"
-                "  color: %4;"
-                "}")
-            .arg(theme.backgroundColor.name())
-            .arg(theme.singleLineCommentFormat.name())
-            .arg(theme.surfaceAltColor.name())
-            .arg(theme.foregroundColor.name()));
+    m_statusLabel->setStyleSheet(QString("QLabel {"
+                                         "  background: %1;"
+                                         "  color: %2;"
+                                         "  padding: 6px 10px;"
+                                         "  font-size: 11px;"
+                                         "  border-top: 1px solid %3;"
+                                         "}"
+                                         "QLabel:hover {"
+                                         "  color: %4;"
+                                         "}")
+                                     .arg(theme.backgroundColor.name())
+                                     .arg(theme.singleLineCommentFormat.name())
+                                     .arg(theme.surfaceAltColor.name())
+                                     .arg(theme.foregroundColor.name()));
   }
 
-  // No repo UI
   if (m_noRepoLabel) {
     m_noRepoLabel->setStyleSheet(
         QString("font-size: 16px; font-weight: bold; color: %1;")
@@ -1956,7 +1953,6 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
             .arg(theme.successColor.darker(120).name()));
   }
 
-  // Conflict UI
   if (m_conflictWarningHeader) {
     QColor errorTransparent = theme.errorColor;
     errorTransparent.setAlpha(51);
@@ -1979,13 +1975,13 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_conflictFilesList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
   }
   if (m_resolveConflictsButton) {
-    m_resolveConflictsButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+    m_resolveConflictsButton->setStyleSheet(
+        UIStyleHelper::primaryButtonStyle(theme));
   }
   if (m_abortMergeButton) {
     m_abortMergeButton->setStyleSheet(UIStyleHelper::dangerButtonStyle(theme));
   }
 
-  // Branch section
   if (m_branchSection) {
     m_branchSection->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;")
@@ -2056,38 +2052,37 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
             .arg(theme.backgroundColor.name()));
   }
 
-  // Remote ops buttons
   auto styleRemoteButton = [&](QPushButton *btn, const QColor &color) {
-    if (!btn) return;
-    btn->setStyleSheet(
-        QString("QPushButton {"
-                "  background: %1;"
-                "  color: %2;"
-                "  border: 1px solid %3;"
-                "  border-radius: 6px;"
-                "  padding: 4px 8px;"
-                "  font-size: 11px;"
-                "}"
-                "QPushButton:hover {"
-                "  background: %4;"
-                "  color: %5;"
-                "  border-color: %4;"
-                "}"
-                "QPushButton:pressed {"
-                "  background: %6;"
-                "}"
-                "QPushButton:disabled {"
-                "  background: %7;"
-                "  color: %3;"
-                "  border-color: %3;"
-                "}")
-            .arg(theme.surfaceAltColor.name())
-            .arg(color.name())
-            .arg(theme.borderColor.name())
-            .arg(color.name())
-            .arg(theme.backgroundColor.name())
-            .arg(color.darker(120).name())
-            .arg(theme.backgroundColor.name()));
+    if (!btn)
+      return;
+    btn->setStyleSheet(QString("QPushButton {"
+                               "  background: %1;"
+                               "  color: %2;"
+                               "  border: 1px solid %3;"
+                               "  border-radius: 6px;"
+                               "  padding: 4px 8px;"
+                               "  font-size: 11px;"
+                               "}"
+                               "QPushButton:hover {"
+                               "  background: %4;"
+                               "  color: %5;"
+                               "  border-color: %4;"
+                               "}"
+                               "QPushButton:pressed {"
+                               "  background: %6;"
+                               "}"
+                               "QPushButton:disabled {"
+                               "  background: %7;"
+                               "  color: %3;"
+                               "  border-color: %3;"
+                               "}")
+                           .arg(theme.surfaceAltColor.name())
+                           .arg(color.name())
+                           .arg(theme.borderColor.name())
+                           .arg(color.name())
+                           .arg(theme.backgroundColor.name())
+                           .arg(color.darker(120).name())
+                           .arg(theme.backgroundColor.name()));
   };
 
   styleRemoteButton(m_pullButton, theme.accentColor);
@@ -2097,7 +2092,6 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   styleRemoteButton(m_compareBranchesBtn, theme.accentColor);
   styleRemoteButton(m_worktreeBtn, theme.foregroundColor);
 
-  // Commit section
   if (m_commitSection) {
     m_commitSection->setStyleSheet(
         QString("background: %1;").arg(theme.backgroundColor.name()));
@@ -2143,7 +2137,6 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
             .arg(theme.borderColor.name()));
   }
 
-  // Staged section
   if (m_stagedHeader) {
     m_stagedHeader->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;")
@@ -2157,11 +2150,13 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
   if (m_unstageAllButton) {
     m_unstageAllButton->setStyleSheet(
-        QString("QPushButton { background: transparent; color: %1; border: 1px "
-                "solid %2; border-radius: 4px; font-size: 14px; font-weight: bold; }"
-                "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
-                "QPushButton:pressed { background: %4; color: %5; }"
-                "QPushButton:disabled { color: %2; border-color: %2; }")
+        QString(
+            "QPushButton { background: transparent; color: %1; border: 1px "
+            "solid %2; border-radius: 4px; font-size: 14px; font-weight: bold; "
+            "}"
+            "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
+            "QPushButton:pressed { background: %4; color: %5; }"
+            "QPushButton:disabled { color: %2; border-color: %2; }")
             .arg(theme.singleLineCommentFormat.name())
             .arg(theme.borderColor.name())
             .arg(theme.surfaceAltColor.name())
@@ -2172,7 +2167,6 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_stagedTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }
 
-  // Changes section
   if (m_changesHeader) {
     m_changesHeader->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;")
@@ -2186,11 +2180,13 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
   if (m_stageAllButton) {
     m_stageAllButton->setStyleSheet(
-        QString("QPushButton { background: transparent; color: %1; border: 1px "
-                "solid %2; border-radius: 4px; font-size: 14px; font-weight: bold; }"
-                "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
-                "QPushButton:pressed { background: %4; color: %5; }"
-                "QPushButton:disabled { color: %2; border-color: %2; }")
+        QString(
+            "QPushButton { background: transparent; color: %1; border: 1px "
+            "solid %2; border-radius: 4px; font-size: 14px; font-weight: bold; "
+            "}"
+            "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
+            "QPushButton:pressed { background: %4; color: %5; }"
+            "QPushButton:disabled { color: %2; border-color: %2; }")
             .arg(theme.singleLineCommentFormat.name())
             .arg(theme.borderColor.name())
             .arg(theme.surfaceAltColor.name())
@@ -2199,11 +2195,12 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
   if (m_discardAllBtn) {
     m_discardAllBtn->setStyleSheet(
-        QString("QPushButton { background: transparent; color: %1; border: 1px "
-                "solid %2; border-radius: 4px; font-size: 12px; }"
-                "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
-                "QPushButton:pressed { background: %4; color: %5; }"
-                "QPushButton:disabled { color: %2; border-color: %2; }")
+        QString(
+            "QPushButton { background: transparent; color: %1; border: 1px "
+            "solid %2; border-radius: 4px; font-size: 12px; }"
+            "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
+            "QPushButton:pressed { background: %4; color: %5; }"
+            "QPushButton:disabled { color: %2; border-color: %2; }")
             .arg(theme.singleLineCommentFormat.name())
             .arg(theme.borderColor.name())
             .arg(theme.surfaceAltColor.name())
@@ -2214,7 +2211,6 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_changesTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }
 
-  // History section
   if (m_historyHeader) {
     m_historyHeader->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;")
@@ -2223,9 +2219,10 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
   if (m_historyToggleButton) {
     m_historyToggleButton->setStyleSheet(
-        QString("QPushButton { background: transparent; color: %1; border: none; "
-                "font-size: 10px; padding: 0; }"
-                "QPushButton:hover { color: %2; }")
+        QString(
+            "QPushButton { background: transparent; color: %1; border: none; "
+            "font-size: 10px; padding: 0; }"
+            "QPushButton:hover { color: %2; }")
             .arg(theme.singleLineCommentFormat.name())
             .arg(theme.foregroundColor.name()));
   }
@@ -2236,9 +2233,10 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
   if (m_historyRebaseBtn) {
     m_historyRebaseBtn->setStyleSheet(
-        QString("QPushButton { background: transparent; color: %1; border: none; "
-                "font-size: 11px; padding: 2px 6px; }"
-                "QPushButton:hover { color: %2; text-decoration: underline; }")
+        QString(
+            "QPushButton { background: transparent; color: %1; border: none; "
+            "font-size: 11px; padding: 2px 6px; }"
+            "QPushButton:hover { color: %2; text-decoration: underline; }")
             .arg(theme.accentColor.name())
             .arg(theme.accentColor.lighter(130).name()));
   }

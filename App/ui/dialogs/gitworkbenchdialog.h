@@ -1,8 +1,8 @@
 #ifndef GITWORKBENCHDIALOG_H
 #define GITWORKBENCHDIALOG_H
 
-#include "styleddialog.h"
 #include "../../git/gitintegration.h"
+#include "styleddialog.h"
 #include <QCheckBox>
 
 class QComboBox;

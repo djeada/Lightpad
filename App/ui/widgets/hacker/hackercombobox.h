@@ -6,15 +6,18 @@
 
 class HackerComboBox : public HackerWidget {
   Q_OBJECT
-  Q_PROPERTY(qreal chevronRotation READ chevronRotation WRITE setChevronRotation)
+  Q_PROPERTY(
+      qreal chevronRotation READ chevronRotation WRITE setChevronRotation)
 
 public:
   explicit HackerComboBox(QWidget *parent = nullptr);
 
   void addItem(const QString &text, const QVariant &userData = QVariant());
-  void addItem(const QIcon &icon, const QString &text, const QVariant &userData = QVariant());
+  void addItem(const QIcon &icon, const QString &text,
+               const QVariant &userData = QVariant());
   void addItems(const QStringList &texts);
-  void insertItem(int index, const QString &text, const QVariant &userData = QVariant());
+  void insertItem(int index, const QString &text,
+                  const QVariant &userData = QVariant());
   void removeItem(int index);
   void clear();
 

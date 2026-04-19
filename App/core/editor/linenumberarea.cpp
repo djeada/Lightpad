@@ -393,10 +393,9 @@ bool LineNumberArea::event(QEvent *event) {
                     "<div style='margin-top: 6px; font-size: 11px; "
                     "color: #aaa; border-top: 1px solid #555; "
                     "padding-top: 4px;'>");
-                const Theme statsTheme =
-                    (m_editor && m_editor->mainWindow)
-                        ? m_editor->mainWindow->getTheme()
-                        : Theme();
+                const Theme statsTheme = (m_editor && m_editor->mainWindow)
+                                             ? m_editor->mainWindow->getTheme()
+                                             : Theme();
                 int shown = 0;
                 for (const auto &stat : stats) {
                   if (shown >= 8) {
@@ -645,8 +644,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
             qMax(6, qMin(fontHeight - 2, BREAKPOINT_AREA_WIDTH - 4));
         const int markerX =
             DIFF_INDICATOR_WIDTH + (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;
-        const int markerY =
-            blockTop + (blockHeight - markerDiameter) / 2;
+        const int markerY = blockTop + (blockHeight - markerDiameter) / 2;
 
         painter.save();
         painter.setRenderHint(QPainter::Antialiasing, true);
@@ -688,8 +686,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
                  qMin(DIAGNOSTIC_MARKER_SIZE, fontHeight - MARKER_PADDING));
         const int markerX =
             DIFF_INDICATOR_WIDTH + (BREAKPOINT_AREA_WIDTH - markerDiameter) / 2;
-        const int markerY =
-            blockTop + (blockHeight - markerDiameter) / 2;
+        const int markerY = blockTop + (blockHeight - markerDiameter) / 2;
 
         painter.save();
         painter.setRenderHint(QPainter::Antialiasing, true);

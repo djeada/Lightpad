@@ -1,8 +1,8 @@
 #ifndef MERGECONFLICTDIALOG_H
 #define MERGECONFLICTDIALOG_H
 
-#include "styleddialog.h"
 #include "../../git/gitintegration.h"
+#include "styleddialog.h"
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>

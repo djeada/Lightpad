@@ -2,9 +2,9 @@
 #define HACKERTABLEWIDGET_H
 
 #include "hackerwidget.h"
-#include <QTableWidget>
 #include <QHeaderView>
 #include <QStyledItemDelegate>
+#include <QTableWidget>
 
 class HackerTableDelegate : public QStyledItemDelegate {
   Q_OBJECT
@@ -18,10 +18,12 @@ public:
 class HackerTableHeader : public QHeaderView {
   Q_OBJECT
 public:
-  explicit HackerTableHeader(Qt::Orientation orientation, QWidget *parent = nullptr);
+  explicit HackerTableHeader(Qt::Orientation orientation,
+                             QWidget *parent = nullptr);
 
 protected:
-  void paintSection(QPainter *painter, const QRect &rect, int logicalIndex) const override;
+  void paintSection(QPainter *painter, const QRect &rect,
+                    int logicalIndex) const override;
 };
 
 class HackerTableWidget : public HackerWidget {
@@ -53,8 +55,8 @@ public:
 signals:
   void cellClicked(int row, int column);
   void cellDoubleClicked(int row, int column);
-  void currentCellChanged(int currentRow, int currentColumn,
-                          int previousRow, int previousColumn);
+  void currentCellChanged(int currentRow, int currentColumn, int previousRow,
+                          int previousColumn);
   void itemSelectionChanged();
 
 protected:

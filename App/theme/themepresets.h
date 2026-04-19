@@ -4,15 +4,15 @@
 #include "themedefinition.h"
 
 namespace ThemePresets {
-  ThemeDefinition hackerDark();
-  ThemeDefinition midnightBlue();
-  ThemeDefinition dracula();
-  ThemeDefinition monokaiPro();
-  ThemeDefinition nord();
-  ThemeDefinition solarizedDark();
-  ThemeDefinition cyberpunk();
-  ThemeDefinition matrix();
-  ThemeDefinition ghost();
-}
+ThemeDefinition hackerDark();
+ThemeDefinition midnightBlue();
+ThemeDefinition dracula();
+ThemeDefinition monokaiPro();
+ThemeDefinition nord();
+ThemeDefinition solarizedDark();
+ThemeDefinition cyberpunk();
+ThemeDefinition matrix();
+ThemeDefinition ghost();
+} // namespace ThemePresets
 
 #endif

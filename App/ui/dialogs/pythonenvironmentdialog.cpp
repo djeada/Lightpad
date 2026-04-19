@@ -3,10 +3,10 @@
 #include "../uistylehelper.h"
 #include "../widgets/pythonenvironmentwidget.h"
 
+#include "themedmessagebox.h"
 #include <QDir>
 #include <QFileInfo>
 #include <QLabel>
-#include "themedmessagebox.h"
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -34,9 +34,10 @@ PythonEnvironmentDialog::PythonEnvironmentDialog(const QString &workspaceFolder,
                                                  const QString &filePath,
                                                  const Theme &theme,
                                                  QWidget *parent)
-    : StyledDialog(parent), m_workspaceFolder(workspaceFolder), m_filePath(filePath),
-      m_theme(theme), m_contextLabel(nullptr), m_environmentWidget(nullptr),
-      m_detailsEdit(nullptr), m_saveButton(nullptr), m_closeButton(nullptr) {
+    : StyledDialog(parent), m_workspaceFolder(workspaceFolder),
+      m_filePath(filePath), m_theme(theme), m_contextLabel(nullptr),
+      m_environmentWidget(nullptr), m_detailsEdit(nullptr),
+      m_saveButton(nullptr), m_closeButton(nullptr) {
   setAttribute(Qt::WA_DeleteOnClose);
   setWindowTitle(tr("Python Environment"));
   resize(760, 680);
@@ -177,8 +178,9 @@ void PythonEnvironmentDialog::saveConfiguration() {
   assignment.pythonRequirementsFile = preference.requirementsFile;
 
   if (!manager.assignTemplateToFile(m_filePath, assignment)) {
-    ThemedMessageBox::warning(this, tr("Python Environment"),
-                              tr("Failed to save Python environment settings."));
+    ThemedMessageBox::warning(
+        this, tr("Python Environment"),
+        tr("Failed to save Python environment settings."));
     return;
   }
 

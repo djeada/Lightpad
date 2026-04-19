@@ -140,12 +140,9 @@ void LightpadTabWidget::tabInserted(int index) {
 }
 
 void LightpadTabWidget::updateCloseButtons() {
-  const QString closeIconColor =
-      QColor(m_foregroundColor).lighter(115).name();
-  const QString closeHoverBackground =
-      QColor(m_hoverColor).name();
-  const QString closePressedBackground =
-      QColor(m_accentColor).name();
+  const QString closeIconColor = QColor(m_foregroundColor).lighter(115).name();
+  const QString closeHoverBackground = QColor(m_hoverColor).name();
+  const QString closePressedBackground = QColor(m_accentColor).name();
 
   for (int i = 0; i < count(); ++i) {
     if (i == count() - 1) {
@@ -156,26 +153,26 @@ void LightpadTabWidget::updateCloseButtons() {
     QWidget *existingButton = tabBar()->tabButton(i, QTabBar::RightSide);
     if (existingButton && existingButton != newTabButton) {
 
-      existingButton->setStyleSheet(
-          QString("QToolButton {"
-                  "  color: %1;"
-                  "  background: transparent;"
-                  "  border: none;"
-                  "  border-radius: 8px;"
-                  "  padding: 1px;"
-                  "  font-size: 14px;"
-                  "  font-weight: bold;"
-                  "}"
-                  "QToolButton:hover {"
-                  "  color: %2;"
-                  "  background: %3;"
-                  "}"
-                  "QToolButton:pressed {"
-                  "  color: #ffffff;"
-                  "  background: %4;"
-                  "}")
-              .arg(closeIconColor, m_foregroundColor, closeHoverBackground,
-                   closePressedBackground));
+      existingButton->setStyleSheet(QString("QToolButton {"
+                                            "  color: %1;"
+                                            "  background: transparent;"
+                                            "  border: none;"
+                                            "  border-radius: 8px;"
+                                            "  padding: 1px;"
+                                            "  font-size: 14px;"
+                                            "  font-weight: bold;"
+                                            "}"
+                                            "QToolButton:hover {"
+                                            "  color: %2;"
+                                            "  background: %3;"
+                                            "}"
+                                            "QToolButton:pressed {"
+                                            "  color: #ffffff;"
+                                            "  background: %4;"
+                                            "}")
+                                        .arg(closeIconColor, m_foregroundColor,
+                                             closeHoverBackground,
+                                             closePressedBackground));
       continue;
     }
 
@@ -186,26 +183,26 @@ void LightpadTabWidget::updateCloseButtons() {
     closeButton->setAutoRaise(true);
     closeButton->setCursor(Qt::ArrowCursor);
     closeButton->setToolTip(tr("Close Tab"));
-    closeButton->setStyleSheet(
-        QString("QToolButton {"
-                "  color: %1;"
-                "  background: transparent;"
-                "  border: none;"
-                "  border-radius: 8px;"
-                "  padding: 1px;"
-                "  font-size: 14px;"
-                "  font-weight: bold;"
-                "}"
-                "QToolButton:hover {"
-                "  color: %2;"
-                "  background: %3;"
-                "}"
-                "QToolButton:pressed {"
-                "  color: #ffffff;"
-                "  background: %4;"
-                "}")
-            .arg(closeIconColor, m_foregroundColor, closeHoverBackground,
-                 closePressedBackground));
+    closeButton->setStyleSheet(QString("QToolButton {"
+                                       "  color: %1;"
+                                       "  background: transparent;"
+                                       "  border: none;"
+                                       "  border-radius: 8px;"
+                                       "  padding: 1px;"
+                                       "  font-size: 14px;"
+                                       "  font-weight: bold;"
+                                       "}"
+                                       "QToolButton:hover {"
+                                       "  color: %2;"
+                                       "  background: %3;"
+                                       "}"
+                                       "QToolButton:pressed {"
+                                       "  color: #ffffff;"
+                                       "  background: %4;"
+                                       "}")
+                                   .arg(closeIconColor, m_foregroundColor,
+                                        closeHoverBackground,
+                                        closePressedBackground));
     connect(closeButton, &QToolButton::clicked, this, [this, closeButton]() {
       for (int index = 0; index < count(); ++index) {
         if (tabBar()->tabButton(index, QTabBar::RightSide) == closeButton) {
@@ -269,10 +266,9 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
   QColor hover(hoverColor);
   QColor border(borderColor);
 
-  const QString inactiveText =
-      QColor(foreground.red(), foreground.green(), foreground.blue(),
-             kInactiveTabTextAlpha)
-          .name(QColor::HexArgb);
+  const QString inactiveText = QColor(foreground.red(), foreground.green(),
+                                      foreground.blue(), kInactiveTabTextAlpha)
+                                   .name(QColor::HexArgb);
   const QString tabStripTop = surface.lighter(108).name();
   const QString tabStripBottom = background.name();
   const QString tabBackground = surface.darker(104).name();
@@ -302,9 +298,7 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
 
       "QTabBar { "
       "background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 " +
-      tabStripTop +
-      ", stop: 1 " +
-      tabStripBottom +
+      tabStripTop + ", stop: 1 " + tabStripBottom +
       "); "
       "qproperty-drawBase: 0; "
       "margin: 0px; "

@@ -55,9 +55,7 @@ void ThemeEngine::setActiveTheme(const ThemeDefinition &theme) {
   emit themeChanged(m_activeTheme);
 }
 
-QStringList ThemeEngine::availableThemes() const {
-  return m_themes.keys();
-}
+QStringList ThemeEngine::availableThemes() const { return m_themes.keys(); }
 
 ThemeDefinition ThemeEngine::themeByName(const QString &name) const {
   return m_themes.value(name);
@@ -89,7 +87,8 @@ bool ThemeEngine::importTheme(const QString &filePath) {
   return true;
 }
 
-bool ThemeEngine::exportTheme(const QString &name, const QString &filePath) const {
+bool ThemeEngine::exportTheme(const QString &name,
+                              const QString &filePath) const {
   if (!m_themes.contains(name))
     return false;
 
@@ -106,7 +105,8 @@ bool ThemeEngine::exportTheme(const QString &name, const QString &filePath) cons
 }
 
 QString ThemeEngine::userThemesDirectory() const {
-  QString configDir = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+  QString configDir =
+      QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
   return configDir + "/Lightpad/themes";
 }
 
@@ -155,10 +155,14 @@ void ThemeEngine::saveUserTheme(const ThemeDefinition &theme) {
 
 int ThemeEngine::animationDuration() const {
   const QString &speed = m_activeTheme.ui.animationSpeed;
-  if (speed == "off")    return 0;
-  if (speed == "subtle") return 80;
-  if (speed == "normal") return 150;
-  if (speed == "fancy")  return 300;
+  if (speed == "off")
+    return 0;
+  if (speed == "subtle")
+    return 80;
+  if (speed == "normal")
+    return 150;
+  if (speed == "fancy")
+    return 300;
   return 150;
 }
 
@@ -166,6 +170,4 @@ qreal ThemeEngine::glowIntensity() const {
   return m_activeTheme.ui.glowIntensity;
 }
 
-int ThemeEngine::borderRadius() const {
-  return m_activeTheme.ui.borderRadius;
-}
+int ThemeEngine::borderRadius() const { return m_activeTheme.ui.borderRadius; }

@@ -312,8 +312,8 @@ void SplitEditorContainer::onTabWidgetFocused() {
 
 LightpadTabWidget *SplitEditorContainer::createTabWidget() {
   LightpadTabWidget *tabWidget = new LightpadTabWidget(this);
-  tabWidget->setObjectName(QString("splitEditorTabWidget%1")
-                               .arg(++m_tabWidgetCounter));
+  tabWidget->setObjectName(
+      QString("splitEditorTabWidget%1").arg(++m_tabWidgetCounter));
 
   if (m_mainWindow) {
     tabWidget->setMainWindow(m_mainWindow);

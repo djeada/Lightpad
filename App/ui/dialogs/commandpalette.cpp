@@ -7,8 +7,8 @@
 #include <algorithm>
 
 CommandPalette::CommandPalette(QWidget *parent)
-    : StyledPopupDialog(parent),
-      m_searchBox(nullptr), m_resultsList(nullptr), m_layout(nullptr) {
+    : StyledPopupDialog(parent), m_searchBox(nullptr), m_resultsList(nullptr),
+      m_layout(nullptr) {
   setupUI();
   loadRecentCommands();
 }

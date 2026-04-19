@@ -236,9 +236,7 @@ void DapClient::terminate() {
 }
 
 void DapClient::configurationDone() {
-  // Always send configurationDone. Most adapters (including debugpy) require it
-  // before execution begins. If the adapter does not support it, the error
-  // handler gracefully ignores the failure response.
+
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "configurationDone";
   sendRequest("configurationDone", {}, seq);
@@ -884,14 +882,13 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     }
     m_dataBreakpointsConfigured = false;
 
-    LOG_DEBUG(QString("DAP: Capabilities received — "
-                      "supportsConfigurationDoneRequest=%1, "
-                      "supportsRestartRequest=%2")
-                  .arg(m_capabilities
-                           .value("supportsConfigurationDoneRequest")
-                           .toBool(false))
-                  .arg(m_capabilities.value("supportsRestartRequest")
-                           .toBool(false)));
+    LOG_DEBUG(
+        QString("DAP: Capabilities received — "
+                "supportsConfigurationDoneRequest=%1, "
+                "supportsRestartRequest=%2")
+            .arg(m_capabilities.value("supportsConfigurationDoneRequest")
+                     .toBool(false))
+            .arg(m_capabilities.value("supportsRestartRequest").toBool(false)));
 
     setState(State::Ready);
 

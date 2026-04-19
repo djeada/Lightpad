@@ -1,8 +1,8 @@
 #ifndef FORMATTEMPLATESELECTOR_H
 #define FORMATTEMPLATESELECTOR_H
 
-#include "styleddialog.h"
 #include "../widgets/pythonenvironmentwidget.h"
+#include "styleddialog.h"
 #include <QComboBox>
 #include <QGroupBox>
 #include <QHBoxLayout>

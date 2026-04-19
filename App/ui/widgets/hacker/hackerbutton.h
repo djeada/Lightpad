@@ -10,8 +10,10 @@ public:
   enum Variant { Primary, Secondary, Danger, Ghost };
   Q_ENUM(Variant)
 
-  explicit HackerButton(const QString &text = QString(), QWidget *parent = nullptr);
-  explicit HackerButton(const QIcon &icon, const QString &text, QWidget *parent = nullptr);
+  explicit HackerButton(const QString &text = QString(),
+                        QWidget *parent = nullptr);
+  explicit HackerButton(const QIcon &icon, const QString &text,
+                        QWidget *parent = nullptr);
 
   void setText(const QString &text);
   QString text() const;

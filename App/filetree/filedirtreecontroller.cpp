@@ -95,6 +95,7 @@ void FileDirTreeController::showInfo(const QString &message) {
 
 bool FileDirTreeController::confirmAction(const QString &message) {
   return ThemedMessageBox::question(parentWidget, "Confirm", message,
-                                    ThemedMessageBox::Yes | ThemedMessageBox::No) ==
+                                    ThemedMessageBox::Yes |
+                                        ThemedMessageBox::No) ==
          ThemedMessageBox::Yes;
 }

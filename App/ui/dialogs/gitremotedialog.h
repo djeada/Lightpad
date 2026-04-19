@@ -1,8 +1,8 @@
 #ifndef GITREMOTEDIALOG_H
 #define GITREMOTEDIALOG_H
 
-#include "styleddialog.h"
 #include "../../git/gitintegration.h"
+#include "styleddialog.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGroupBox>

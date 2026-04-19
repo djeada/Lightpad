@@ -429,29 +429,27 @@ void GitDiffDialog::buildUi() {
 void GitDiffDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
 
-  // Dialog-level layout/structural styles using object names
   QString styles =
-      QString(
-          "#diffHeader { background: %2; border-bottom: 1px solid %3; }"
-          "#diffTitle { font-size: 14px; font-weight: 600; color: %4; }"
-          "#changeCounter { font-size: 11px; color: %5; background: %6; "
-          "  padding: 3px 10px; border-radius: 10px; }"
+      QString("#diffHeader { background: %2; border-bottom: 1px solid %3; }"
+              "#diffTitle { font-size: 14px; font-weight: 600; color: %4; }"
+              "#changeCounter { font-size: 11px; color: %5; background: %6; "
+              "  padding: 3px 10px; border-radius: 10px; }"
 
-          "#toolbarGroup { background: %7; border: 1px solid %3; "
-          "border-radius: 6px; }"
+              "#toolbarGroup { background: %7; border: 1px solid %3; "
+              "border-radius: 6px; }"
 
-          "#searchCounter { font-size: 11px; color: %8; }"
+              "#searchCounter { font-size: 11px; color: %8; }"
 
-          "#commitInfo { font-size: 12px; color: %4; background: %9; "
-          "  border-bottom: 1px solid %3; padding: 10px 16px; }"
+              "#commitInfo { font-size: 12px; color: %4; background: %9; "
+              "  border-bottom: 1px solid %3; padding: 10px 16px; }"
 
-          "#diffFooter { background: %2; border-top: 1px solid %3; }"
-          "#shortcutsLabel { font-size: 11px; color: %8; }"
+              "#diffFooter { background: %2; border-top: 1px solid %3; }"
+              "#shortcutsLabel { font-size: 11px; color: %8; }"
 
-          "#fileListPanel { background: %2; border-right: 1px solid %3; }"
-          "#fileListHeader { font-size: 10px; font-weight: 600; color: %8; "
-          "  letter-spacing: 1px; background: %7; padding: 10px 12px; "
-          "  border-bottom: 1px solid %3; }")
+              "#fileListPanel { background: %2; border-right: 1px solid %3; }"
+              "#fileListHeader { font-size: 10px; font-weight: 600; color: %8; "
+              "  letter-spacing: 1px; background: %7; padding: 10px 12px; "
+              "  border-bottom: 1px solid %3; }")
           .arg(theme.backgroundColor.name())
           .arg(theme.surfaceColor.name())
           .arg(theme.borderColor.name())
@@ -464,7 +462,6 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
 
   setStyleSheet(styles);
 
-  // Toolbar nav/search buttons need compact diff-specific styling
   QString buttonStyle =
       QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
               "  border-radius: 4px; padding: 5px 10px; font-size: 12px; }"
@@ -483,10 +480,8 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
       btn->setStyleSheet(buttonStyle);
   }
 
-  // Copy button uses primary/accent style
   stylePrimaryButton(m_copyButton);
 
-  // Search field needs compact diff-specific styling
   if (m_searchField) {
     QString searchStyle =
         QString(
@@ -501,7 +496,6 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
     m_searchField->setStyleSheet(searchStyle);
   }
 
-  // File list needs diff-specific styling
   if (m_fileList) {
     m_fileList->setStyleSheet(
         QString("QListWidget { background: %1; color: %2; border: none; "
@@ -518,7 +512,6 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
             .arg(theme.hoverColor.name()));
   }
 
-  // Diff view with custom scrollbar styling
   if (m_diffView) {
     QString diffStyle =
         QString("QTextEdit { background: %1; color: %2; border: none; "

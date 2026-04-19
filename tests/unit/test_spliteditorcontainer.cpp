@@ -49,8 +49,7 @@ void LightpadTreeView::dropEvent(QDropEvent *event) {
 LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
     : QWidget(parent), mainWindow(nullptr), treeView(nullptr),
       textArea(nullptr), minimap(nullptr), model(nullptr),
-      m_ownsModel(!treeViewHidden),
-      m_gitIntegration(nullptr) {}
+      m_ownsModel(!treeViewHidden), m_gitIntegration(nullptr) {}
 
 QTreeView *LightpadPage::getTreeView() { return treeView; }
 
@@ -106,8 +105,10 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   QMainWindow::closeEvent(event);
 }
 
-#define DEFINE_MAINWINDOW_SLOT(name) void MainWindow::name() {}
-#define DEFINE_MAINWINDOW_BOOL_SLOT(name) void MainWindow::name(bool) {}
+#define DEFINE_MAINWINDOW_SLOT(name)                                           \
+  void MainWindow::name() {}
+#define DEFINE_MAINWINDOW_BOOL_SLOT(name)                                      \
+  void MainWindow::name(bool) {}
 
 DEFINE_MAINWINDOW_SLOT(on_actionQuit_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionToggle_Full_Screen_triggered)
@@ -203,8 +204,8 @@ private:
   QSplitter *findRootSplitter(SplitEditorContainer &container);
 };
 
-QSplitter *TestSplitEditorContainer::findRootSplitter(
-    SplitEditorContainer &container) {
+QSplitter *
+TestSplitEditorContainer::findRootSplitter(SplitEditorContainer &container) {
   return container.findChild<QSplitter *>("splitEditorRootSplitter");
 }
 
@@ -331,8 +332,8 @@ void TestSplitEditorContainer::testTabThemeUsesThemeDrivenColors() {
   QVERIFY(style.contains("border-top-left-radius: 10px;"));
   QVERIFY(style.contains("QToolButton#AddTabButton"));
 
-  auto *closeButton =
-      qobject_cast<QToolButton *>(tabWidget.tabBar()->tabButton(0, QTabBar::RightSide));
+  auto *closeButton = qobject_cast<QToolButton *>(
+      tabWidget.tabBar()->tabButton(0, QTabBar::RightSide));
   QVERIFY(closeButton != nullptr);
   QVERIFY(closeButton->styleSheet().contains("#23435b"));
   QVERIFY(closeButton->styleSheet().contains("#61dafb"));

@@ -10,7 +10,6 @@
 
 HackerStyle::HackerStyle(QStyle *baseStyle) : QProxyStyle(baseStyle) {}
 
-// --- palette polish: dark base with accent glow ---
 void HackerStyle::polish(QPalette &palette) {
   const auto &tc = ThemeEngine::instance().activeTheme().colors;
   palette.setColor(QPalette::Window, tc.surfaceBase);
@@ -34,7 +33,6 @@ void HackerStyle::polish(QPalette &palette) {
   palette.setColor(QPalette::Disabled, QPalette::Highlight, tc.borderDefault);
 }
 
-// --- primitive elements ---
 void HackerStyle::drawPrimitive(PrimitiveElement element,
                                 const QStyleOption *option, QPainter *painter,
                                 const QWidget *widget) const {
@@ -44,128 +42,126 @@ void HackerStyle::drawPrimitive(PrimitiveElement element,
   switch (element) {
 
   case PE_FrameFocusRect:
-    // Replace dotted focus rect with accent glow line
-    {
-      painter->save();
-      QPen pen(tc.accentPrimary, 1.5);
-      painter->setPen(pen);
-      painter->setBrush(Qt::NoBrush);
-      painter->drawRoundedRect(
-          QRectF(option->rect).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4);
-      painter->restore();
-    }
+
+  {
+    painter->save();
+    QPen pen(tc.accentPrimary, 1.5);
+    painter->setPen(pen);
+    painter->setBrush(Qt::NoBrush);
+    painter->drawRoundedRect(
+        QRectF(option->rect).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4);
+    painter->restore();
+  }
     return;
 
   case PE_PanelItemViewItem:
-    // Tree/list/table item backgrounds with accent tint
-    {
-      painter->save();
-      QRectF r = QRectF(option->rect).adjusted(1, 0.5, -1, -0.5);
 
-      if (option->state & QStyle::State_Selected) {
-        painter->setBrush(tc.accentSoft);
-        painter->setPen(Qt::NoPen);
-        painter->drawRoundedRect(r, 4, 4);
-      } else if (option->state & QStyle::State_MouseOver) {
-        QColor hover = tc.accentSoft;
-        hover.setAlpha(40);
-        painter->setBrush(hover);
-        painter->setPen(Qt::NoPen);
-        painter->drawRoundedRect(r, 4, 4);
-      }
-      painter->restore();
+  {
+    painter->save();
+    QRectF r = QRectF(option->rect).adjusted(1, 0.5, -1, -0.5);
+
+    if (option->state & QStyle::State_Selected) {
+      painter->setBrush(tc.accentSoft);
+      painter->setPen(Qt::NoPen);
+      painter->drawRoundedRect(r, 4, 4);
+    } else if (option->state & QStyle::State_MouseOver) {
+      QColor hover = tc.accentSoft;
+      hover.setAlpha(40);
+      painter->setBrush(hover);
+      painter->setPen(Qt::NoPen);
+      painter->drawRoundedRect(r, 4, 4);
     }
+    painter->restore();
+  }
     return;
 
   case PE_IndicatorCheckBox:
-    // Custom checkbox with rounded corners
-    {
-      painter->save();
-      QRectF boxRect(option->rect);
-      boxRect = boxRect.adjusted(1, 1, -1, -1);
-      qreal radius = 3;
 
-      bool checked = option->state & QStyle::State_On;
-      bool hovered = option->state & QStyle::State_MouseOver;
+  {
+    painter->save();
+    QRectF boxRect(option->rect);
+    boxRect = boxRect.adjusted(1, 1, -1, -1);
+    qreal radius = 3;
 
-      // Box background
-      QColor bg = checked ? tc.accentPrimary : tc.inputBg;
-      QColor border = checked ? tc.accentPrimary
-                     : hovered ? tc.accentPrimary
-                               : tc.borderDefault;
+    bool checked = option->state & QStyle::State_On;
+    bool hovered = option->state & QStyle::State_MouseOver;
 
-      painter->setBrush(bg);
-      painter->setPen(QPen(border, 1.5));
-      painter->drawRoundedRect(boxRect, radius, radius);
+    QColor bg = checked ? tc.accentPrimary : tc.inputBg;
+    QColor border = checked   ? tc.accentPrimary
+                    : hovered ? tc.accentPrimary
+                              : tc.borderDefault;
 
-      // Checkmark
-      if (checked) {
-        painter->setPen(QPen(tc.surfaceBase, 2.0, Qt::SolidLine, Qt::RoundCap,
-                             Qt::RoundJoin));
-        qreal cx = boxRect.center().x();
-        qreal cy = boxRect.center().y();
-        qreal s = boxRect.width() * 0.25;
-        QPainterPath checkPath;
-        checkPath.moveTo(cx - s, cy);
-        checkPath.lineTo(cx - s * 0.3, cy + s * 0.7);
-        checkPath.lineTo(cx + s, cy - s * 0.6);
-        painter->drawPath(checkPath);
-      }
-      painter->restore();
+    painter->setBrush(bg);
+    painter->setPen(QPen(border, 1.5));
+    painter->drawRoundedRect(boxRect, radius, radius);
+
+    if (checked) {
+      painter->setPen(QPen(tc.surfaceBase, 2.0, Qt::SolidLine, Qt::RoundCap,
+                           Qt::RoundJoin));
+      qreal cx = boxRect.center().x();
+      qreal cy = boxRect.center().y();
+      qreal s = boxRect.width() * 0.25;
+      QPainterPath checkPath;
+      checkPath.moveTo(cx - s, cy);
+      checkPath.lineTo(cx - s * 0.3, cy + s * 0.7);
+      checkPath.lineTo(cx + s, cy - s * 0.6);
+      painter->drawPath(checkPath);
     }
+    painter->restore();
+  }
     return;
 
   case PE_IndicatorRadioButton:
-    // Custom radio with glow dot
-    {
-      painter->save();
-      QRectF r(option->rect);
-      r = r.adjusted(1, 1, -1, -1);
 
-      bool checked = option->state & QStyle::State_On;
-      bool hovered = option->state & QStyle::State_MouseOver;
+  {
+    painter->save();
+    QRectF r(option->rect);
+    r = r.adjusted(1, 1, -1, -1);
 
-      QColor border = checked  ? tc.accentPrimary
-                      : hovered ? tc.accentPrimary
-                                : tc.borderDefault;
-      QColor bg = tc.inputBg;
+    bool checked = option->state & QStyle::State_On;
+    bool hovered = option->state & QStyle::State_MouseOver;
 
-      painter->setPen(QPen(border, 1.5));
-      painter->setBrush(bg);
-      painter->drawEllipse(r);
+    QColor border = checked   ? tc.accentPrimary
+                    : hovered ? tc.accentPrimary
+                              : tc.borderDefault;
+    QColor bg = tc.inputBg;
 
-      if (checked) {
-        QRectF dotR = r.adjusted(4, 4, -4, -4);
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(tc.accentPrimary);
-        painter->drawEllipse(dotR);
-      }
-      painter->restore();
+    painter->setPen(QPen(border, 1.5));
+    painter->setBrush(bg);
+    painter->drawEllipse(r);
+
+    if (checked) {
+      QRectF dotR = r.adjusted(4, 4, -4, -4);
+      painter->setPen(Qt::NoPen);
+      painter->setBrush(tc.accentPrimary);
+      painter->drawEllipse(dotR);
     }
+    painter->restore();
+  }
     return;
 
   case PE_FrameGroupBox:
-    // Rounded group box border
-    {
-      painter->save();
-      QRectF r = QRectF(option->rect).adjusted(0.5, 0.5, -0.5, -0.5);
-      painter->setPen(QPen(tc.borderDefault, 1));
-      painter->setBrush(Qt::NoBrush);
-      painter->drawRoundedRect(r, 8, 8);
-      painter->restore();
-    }
+
+  {
+    painter->save();
+    QRectF r = QRectF(option->rect).adjusted(0.5, 0.5, -0.5, -0.5);
+    painter->setPen(QPen(tc.borderDefault, 1));
+    painter->setBrush(Qt::NoBrush);
+    painter->drawRoundedRect(r, 8, 8);
+    painter->restore();
+  }
     return;
 
   case PE_PanelToolBar:
-    // Flat toolbar background
-    {
-      painter->save();
-      painter->fillRect(option->rect, tc.surfaceRaised);
-      // subtle bottom border
-      painter->setPen(QPen(tc.borderSubtle, 1));
-      painter->drawLine(option->rect.bottomLeft(), option->rect.bottomRight());
-      painter->restore();
-    }
+
+  {
+    painter->save();
+    painter->fillRect(option->rect, tc.surfaceRaised);
+
+    painter->setPen(QPen(tc.borderSubtle, 1));
+    painter->drawLine(option->rect.bottomLeft(), option->rect.bottomRight());
+    painter->restore();
+  }
     return;
 
   default:
@@ -175,7 +171,6 @@ void HackerStyle::drawPrimitive(PrimitiveElement element,
   QProxyStyle::drawPrimitive(element, option, painter, widget);
 }
 
-// --- control elements ---
 void HackerStyle::drawControl(ControlElement element,
                               const QStyleOption *option, QPainter *painter,
                               const QWidget *widget) const {
@@ -198,7 +193,6 @@ void HackerStyle::drawControl(ControlElement element,
   QProxyStyle::drawControl(element, option, painter, widget);
 }
 
-// --- complex controls ---
 void HackerStyle::drawComplexControl(ComplexControl control,
                                      const QStyleOptionComplex *option,
                                      QPainter *painter,
@@ -213,12 +207,11 @@ void HackerStyle::drawComplexControl(ComplexControl control,
   QProxyStyle::drawComplexControl(control, option, painter, widget);
 }
 
-// --- pixel metrics ---
 int HackerStyle::pixelMetric(PixelMetric metric, const QStyleOption *option,
                              const QWidget *widget) const {
   switch (metric) {
   case PM_ScrollBarExtent:
-    return 8; // thin scrollbars
+    return 8;
   case PM_ScrollBarSliderMin:
     return 30;
   case PM_IndicatorWidth:
@@ -268,7 +261,7 @@ int HackerStyle::styleHint(StyleHint hint, const QStyleOption *option,
                            QStyleHintReturn *returnData) const {
   switch (hint) {
   case SH_ScrollBar_ContextMenu:
-    return 0; // no context menu on scrollbars
+    return 0;
   case SH_ItemView_ShowDecorationSelected:
     return 1;
   default:
@@ -276,8 +269,6 @@ int HackerStyle::styleHint(StyleHint hint, const QStyleOption *option,
   }
   return QProxyStyle::styleHint(hint, option, widget, returnData);
 }
-
-// === Private draw helpers ===
 
 void HackerStyle::drawMenuItem(const QStyleOption *option, QPainter *painter,
                                const QWidget *widget) const {
@@ -290,7 +281,6 @@ void HackerStyle::drawMenuItem(const QStyleOption *option, QPainter *painter,
 
   QRect r = mi->rect;
 
-  // Separator
   if (mi->menuItemType == QStyleOptionMenuItem::Separator) {
     painter->setPen(QPen(tc.borderSubtle, 1));
     int y = r.center().y();
@@ -299,7 +289,6 @@ void HackerStyle::drawMenuItem(const QStyleOption *option, QPainter *painter,
     return;
   }
 
-  // Background
   bool selected = mi->state & QStyle::State_Selected;
   bool enabled = mi->state & QStyle::State_Enabled;
 
@@ -310,20 +299,18 @@ void HackerStyle::drawMenuItem(const QStyleOption *option, QPainter *painter,
     painter->fillPath(path, tc.accentSoft);
   }
 
-  // Icon
   QRect iconRect(r.x() + 8, r.y(), 24, r.height());
   if (!mi->icon.isNull()) {
-    QPixmap pix = mi->icon.pixmap(16, 16,
-                                  enabled ? QIcon::Normal : QIcon::Disabled);
-    QRect pr = QStyle::alignedRect(Qt::LeftToRight, Qt::AlignCenter,
-                                   pix.size(), iconRect);
+    QPixmap pix =
+        mi->icon.pixmap(16, 16, enabled ? QIcon::Normal : QIcon::Disabled);
+    QRect pr = QStyle::alignedRect(Qt::LeftToRight, Qt::AlignCenter, pix.size(),
+                                   iconRect);
     painter->drawPixmap(pr, pix);
   }
 
-  // Text
   int textX = iconRect.right() + 4;
   QRect textRect(textX, r.y(), r.width() - textX - 8, r.height());
-  QColor textColor = !enabled ? tc.textDisabled
+  QColor textColor = !enabled   ? tc.textDisabled
                      : selected ? tc.accentPrimary
                                 : tc.textPrimary;
   painter->setPen(textColor);
@@ -334,7 +321,6 @@ void HackerStyle::drawMenuItem(const QStyleOption *option, QPainter *painter,
     QString shortcut = text.mid(tabIdx + 1);
     text = text.left(tabIdx);
 
-    // Shortcut in muted text
     QRect scRect = textRect;
     painter->setPen(selected ? tc.textSecondary : tc.textMuted);
     painter->drawText(scRect, Qt::AlignVCenter | Qt::AlignRight, shortcut);
@@ -343,7 +329,6 @@ void HackerStyle::drawMenuItem(const QStyleOption *option, QPainter *painter,
   painter->setPen(textColor);
   painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
 
-  // Submenu arrow
   if (mi->menuItemType == QStyleOptionMenuItem::SubMenu) {
     int arrowX = r.right() - 16;
     int arrowY = r.center().y();
@@ -369,10 +354,8 @@ void HackerStyle::drawScrollBarHandle(const QStyleOptionComplex *option,
   painter->setRenderHint(QPainter::Antialiasing, true);
   painter->save();
 
-  // Transparent track
   painter->fillRect(option->rect, Qt::transparent);
 
-  // Thumb
   QRect thumbRect =
       proxy()->subControlRect(CC_ScrollBar, sbOpt, SC_ScrollBarSlider, widget);
 
@@ -423,7 +406,6 @@ void HackerStyle::drawProgressBarContents(const QStyleOption *option,
     path.addRoundedRect(fillR.adjusted(0, 0.5, 0, -0.5), 3, 3);
     painter->fillPath(path, grad);
 
-    // Glow at leading edge
     if (fillW > 4) {
       QRectF glowR(fillR.right() - 6, fillR.top(), 6, fillR.height());
       QLinearGradient glowGrad(glowR.topLeft(), glowR.topRight());
@@ -452,13 +434,11 @@ void HackerStyle::drawTabShape(const QStyleOption *option, QPainter *painter,
   bool selected = tabOpt->state & QStyle::State_Selected;
   bool hovered = tabOpt->state & QStyle::State_MouseOver;
 
-  // Background
-  QColor bg = selected ? tc.tabActiveBg
+  QColor bg = selected  ? tc.tabActiveBg
               : hovered ? tc.accentSoft
                         : tc.surfaceRaised;
   painter->fillRect(r, bg);
 
-  // Active indicator line at bottom
   if (selected) {
     painter->setPen(Qt::NoPen);
     painter->setBrush(tc.accentPrimary);
@@ -479,11 +459,9 @@ void HackerStyle::drawHeaderSection(const QStyleOption *option,
   QRect r = option->rect;
   painter->fillRect(r, tc.surfaceRaised);
 
-  // Bottom border
   painter->setPen(QPen(tc.borderDefault, 1));
   painter->drawLine(r.bottomLeft(), r.bottomRight());
 
-  // Right separator
   painter->setPen(QPen(tc.borderSubtle, 1));
   painter->drawLine(r.topRight(), r.bottomRight());
 

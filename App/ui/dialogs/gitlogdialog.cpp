@@ -3,6 +3,7 @@
 #include "../../ui/uistylehelper.h"
 #include "../widgets/gitgraphwidget.h"
 
+#include "themedmessagebox.h"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QHeaderView>
@@ -10,7 +11,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
-#include "themedmessagebox.h"
 #include <QSplitter>
 #include <QTabWidget>
 #include <QTextEdit>
@@ -124,9 +124,8 @@ void GitLogDialog::applyTheme(const Theme &theme) {
   }
 
   if (m_splitter) {
-    m_splitter->setStyleSheet(
-        QString("QSplitter::handle { background: %1; }")
-            .arg(theme.borderColor.name()));
+    m_splitter->setStyleSheet(QString("QSplitter::handle { background: %1; }")
+                                  .arg(theme.borderColor.name()));
   }
 }
 

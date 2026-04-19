@@ -8,7 +8,8 @@ class HackerLineEdit : public HackerWidget {
   Q_OBJECT
 public:
   explicit HackerLineEdit(QWidget *parent = nullptr);
-  explicit HackerLineEdit(const QString &placeholder, QWidget *parent = nullptr);
+  explicit HackerLineEdit(const QString &placeholder,
+                          QWidget *parent = nullptr);
 
   void setText(const QString &text);
   QString text() const;

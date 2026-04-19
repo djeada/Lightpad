@@ -1,8 +1,8 @@
 #ifndef THEMEGALLERYDIALOG_H
 #define THEMEGALLERYDIALOG_H
 
-#include "styleddialog.h"
 #include "../../theme/themedefinition.h"
+#include "styleddialog.h"
 
 class QListWidget;
 class QListWidgetItem;

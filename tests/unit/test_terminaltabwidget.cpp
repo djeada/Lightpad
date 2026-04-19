@@ -1,8 +1,8 @@
 #include "uitesthelpers.h"
 
+#include "settings/theme.h"
 #include "ui/panels/terminal.h"
 #include "ui/panels/terminaltabwidget.h"
-#include "settings/theme.h"
 #include <QObject>
 #include <QSignalSpy>
 #include <QSplitter>
@@ -135,7 +135,8 @@ void TestTerminalTabWidget::testCloseButtonEmitsSignal() {
 void TestTerminalTabWidget::testKillButtonExists() {
   TerminalTabWidget widget;
 
-  QToolButton *killButton = widget.findChild<QToolButton *>("killTerminalButton");
+  QToolButton *killButton =
+      widget.findChild<QToolButton *>("killTerminalButton");
 
   QVERIFY(killButton != nullptr);
   QVERIFY(killButton->autoRaise());
@@ -146,7 +147,8 @@ void TestTerminalTabWidget::testKillButtonExists() {
 void TestTerminalTabWidget::testKillButtonInitialState() {
   TerminalTabWidget widget;
 
-  QToolButton *killButton = widget.findChild<QToolButton *>("killTerminalButton");
+  QToolButton *killButton =
+      widget.findChild<QToolButton *>("killTerminalButton");
 
   QVERIFY(killButton != nullptr);
   QVERIFY(killButton->isEnabled());
@@ -159,7 +161,8 @@ void TestTerminalTabWidget::testKillButtonInitialState() {
 void TestTerminalTabWidget::testStopButtonIsVisibleAction() {
   TerminalTabWidget widget;
 
-  QToolButton *stopButton = widget.findChild<QToolButton *>("killTerminalButton");
+  QToolButton *stopButton =
+      widget.findChild<QToolButton *>("killTerminalButton");
 
   QVERIFY(stopButton != nullptr);
   QCOMPARE(stopButton->text(), QString("Stop"));

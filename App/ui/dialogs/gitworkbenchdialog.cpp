@@ -1,6 +1,7 @@
 #include "gitworkbenchdialog.h"
 #include "../../ui/uistylehelper.h"
 
+#include "themedmessagebox.h"
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QCheckBox>
@@ -17,7 +18,6 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
-#include "themedmessagebox.h"
 #include <QPainter>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -149,7 +149,8 @@ public:
         for (const auto &ref : entry.refs) {
           bool isTag = ref.startsWith("tag: ");
           QString label = isTag ? ref.mid(5) : ref;
-          QColor pillColor = isTag ? m_theme->warningColor : m_theme->accentColor;
+          QColor pillColor =
+              isTag ? m_theme->warningColor : m_theme->accentColor;
           int pw = rfm.horizontalAdvance(label) + 14;
           int ph = 20;
           int py = dotY - ph / 2;
@@ -1120,7 +1121,6 @@ void GitWorkbenchDialog::applyTheme(const Theme &theme) {
           .arg(success)
           .arg(error));
 
-  // Clear per-widget styles set by base class so dialog CSS selectors apply
   for (auto *btn : findChildren<QPushButton *>())
     btn->setStyleSheet(QString());
   for (auto *le : findChildren<QLineEdit *>())
@@ -3044,13 +3044,20 @@ void GitWorkbenchDialog::updateSelectionUI() {
 }
 
 QString GitWorkbenchDialog::actionColor(const QString &action) const {
-  if (action == "pick") return m_theme.successColor.name();
-  if (action == "reword") return m_theme.warningColor.name();
-  if (action == "edit") return m_theme.accentColor.name();
-  if (action == "squash") return m_theme.accentColor.lighter(130).name();
-  if (action == "fixup") return m_theme.singleLineCommentFormat.name();
-  if (action == "drop") return m_theme.errorColor.name();
-  if (action == "drop-keep") return m_theme.warningColor.name();
+  if (action == "pick")
+    return m_theme.successColor.name();
+  if (action == "reword")
+    return m_theme.warningColor.name();
+  if (action == "edit")
+    return m_theme.accentColor.name();
+  if (action == "squash")
+    return m_theme.accentColor.lighter(130).name();
+  if (action == "fixup")
+    return m_theme.singleLineCommentFormat.name();
+  if (action == "drop")
+    return m_theme.errorColor.name();
+  if (action == "drop-keep")
+    return m_theme.warningColor.name();
   return m_theme.foregroundColor.name();
 }
 

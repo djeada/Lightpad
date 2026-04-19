@@ -14,20 +14,18 @@ void HackerPopupDialog::applyTheme(const ThemeDefinition &theme) {
   const auto &c = colors();
   int r = borderRadius();
 
-  // Popup-specific: search boxes and result lists
   for (auto *w : findChildren<QLineEdit *>()) {
-    w->setStyleSheet(
-        QString("QLineEdit {"
-                "  padding: 10px 14px; font-size: 14px;"
-                "  border: none; border-bottom: 2px solid %1;"
-                "  border-radius: 0; background: %2; color: %3;"
-                "  font-family: monospace;"
-                "  selection-background-color: %4;"
-                "}"
-                "QLineEdit:focus { border-bottom-color: %5; }")
-            .arg(c.borderSubtle.name(), c.surfaceBase.name(),
-                 c.textPrimary.name(), c.inputSelection.name(),
-                 c.accentPrimary.name()));
+    w->setStyleSheet(QString("QLineEdit {"
+                             "  padding: 10px 14px; font-size: 14px;"
+                             "  border: none; border-bottom: 2px solid %1;"
+                             "  border-radius: 0; background: %2; color: %3;"
+                             "  font-family: monospace;"
+                             "  selection-background-color: %4;"
+                             "}"
+                             "QLineEdit:focus { border-bottom-color: %5; }")
+                         .arg(c.borderSubtle.name(), c.surfaceBase.name(),
+                              c.textPrimary.name(), c.inputSelection.name(),
+                              c.accentPrimary.name()));
   }
   for (auto *w : findChildren<QListWidget *>()) {
     w->setStyleSheet(
@@ -72,7 +70,6 @@ void HackerPopupDialog::paintEvent(QPaintEvent *) {
 
   QRectF outer = QRectF(rect()).adjusted(4, 4, -4, -4);
 
-  // Glow shadow behind popup
   if (glow > 0.01) {
     for (int i = 3; i >= 1; --i) {
       QColor shadow = c.accentGlow;
@@ -84,12 +81,10 @@ void HackerPopupDialog::paintEvent(QPaintEvent *) {
     }
   }
 
-  // Background
   QPainterPath bg;
   bg.addRoundedRect(outer, r, r);
   p.fillPath(bg, c.surfaceOverlay);
 
-  // Border
   p.setPen(QPen(c.borderDefault, 1));
   p.drawRoundedRect(outer, r, r);
 }

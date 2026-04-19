@@ -815,12 +815,12 @@ void TestPanel::onContextMenu(const QPoint &pos) {
 void TestPanel::updateStatusLabel() {
   int total = m_passedCount + m_failedCount + m_skippedCount + m_erroredCount;
 
-  QColor successColor =
-      m_theme.successColor.isValid() ? m_theme.successColor : m_theme.successColor;
+  QColor successColor = m_theme.successColor.isValid() ? m_theme.successColor
+                                                       : m_theme.successColor;
   QColor errorColor =
       m_theme.errorColor.isValid() ? m_theme.errorColor : m_theme.errorColor;
-  QColor warningColor =
-      m_theme.warningColor.isValid() ? m_theme.warningColor : m_theme.accentColor;
+  QColor warningColor = m_theme.warningColor.isValid() ? m_theme.warningColor
+                                                       : m_theme.accentColor;
   QColor mutedColor = m_theme.foregroundColor.isValid()
                           ? m_theme.foregroundColor.darker(140)
                           : m_theme.singleLineCommentFormat;
@@ -854,19 +854,23 @@ void TestPanel::updateTreeItemIcon(QTreeWidgetItem *item, TestStatus status) {
   QStyle::StandardPixmap statusIcon = QStyle::SP_FileIcon;
   switch (status) {
   case TestStatus::Passed:
-    color = m_theme.successColor.isValid() ? m_theme.successColor : m_theme.successColor;
+    color = m_theme.successColor.isValid() ? m_theme.successColor
+                                           : m_theme.successColor;
     statusIcon = QStyle::SP_DialogApplyButton;
     break;
   case TestStatus::Failed:
-    color = m_theme.errorColor.isValid() ? m_theme.errorColor : m_theme.errorColor;
+    color =
+        m_theme.errorColor.isValid() ? m_theme.errorColor : m_theme.errorColor;
     statusIcon = QStyle::SP_MessageBoxCritical;
     break;
   case TestStatus::Skipped:
-    color = m_theme.warningColor.isValid() ? m_theme.warningColor : m_theme.accentColor;
+    color = m_theme.warningColor.isValid() ? m_theme.warningColor
+                                           : m_theme.accentColor;
     statusIcon = QStyle::SP_DialogCancelButton;
     break;
   case TestStatus::Errored:
-    color = m_theme.warningColor.isValid() ? m_theme.warningColor.lighter(120) : m_theme.accentColor;
+    color = m_theme.warningColor.isValid() ? m_theme.warningColor.lighter(120)
+                                           : m_theme.accentColor;
     statusIcon = QStyle::SP_MessageBoxWarning;
     break;
   case TestStatus::Running:

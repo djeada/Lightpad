@@ -3,8 +3,8 @@
 #include <algorithm>
 
 GoToSymbolDialog::GoToSymbolDialog(QWidget *parent)
-    : StyledPopupDialog(parent),
-      m_searchBox(nullptr), m_resultsList(nullptr), m_layout(nullptr) {
+    : StyledPopupDialog(parent), m_searchBox(nullptr), m_resultsList(nullptr),
+      m_layout(nullptr) {
   setupUI();
 }
 
@@ -34,7 +34,6 @@ void GoToSymbolDialog::setupUI() {
           &GoToSymbolDialog::onItemClicked);
 
   m_searchBox->installEventFilter(this);
-
 }
 
 void GoToSymbolDialog::setSymbols(const QList<LspDocumentSymbol> &symbols) {

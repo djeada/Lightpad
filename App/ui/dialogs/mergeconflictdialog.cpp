@@ -1,14 +1,14 @@
 #include "mergeconflictdialog.h"
-#include <QFileInfo>
 #include "themedmessagebox.h"
+#include <QFileInfo>
 
 MergeConflictDialog::MergeConflictDialog(GitIntegration *git, QWidget *parent)
     : StyledDialog(parent), m_git(git), m_fileList(nullptr),
-      m_oursPreview(nullptr), m_theirsPreview(nullptr),
-      m_statusLabel(nullptr), m_conflictCountLabel(nullptr),
-      m_acceptOursButton(nullptr), m_acceptTheirsButton(nullptr),
-      m_openEditorButton(nullptr), m_markResolvedButton(nullptr),
-      m_abortButton(nullptr), m_continueButton(nullptr) {
+      m_oursPreview(nullptr), m_theirsPreview(nullptr), m_statusLabel(nullptr),
+      m_conflictCountLabel(nullptr), m_acceptOursButton(nullptr),
+      m_acceptTheirsButton(nullptr), m_openEditorButton(nullptr),
+      m_markResolvedButton(nullptr), m_abortButton(nullptr),
+      m_continueButton(nullptr) {
   setWindowTitle(tr("Resolve Merge Conflicts"));
   setMinimumSize(800, 600);
   setupUI();
@@ -30,10 +30,13 @@ void MergeConflictDialog::setupUI() {
   QVBoxLayout *titleLayout = new QVBoxLayout();
   QLabel *titleLabel = new QLabel(tr("Merge Conflicts Detected"), this);
   titleLabel->setStyleSheet(
-      QString("font-size: 18px; font-weight: bold; color: %1;").arg(m_theme.errorColor.name()));
+      QString("font-size: 18px; font-weight: bold; color: %1;")
+          .arg(m_theme.errorColor.name()));
   m_statusLabel =
       new QLabel(tr("Resolve conflicts before completing the merge"), this);
-  m_statusLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(m_theme.singleLineCommentFormat.name()));
+  m_statusLabel->setStyleSheet(
+      QString("color: %1; font-size: 12px;")
+          .arg(m_theme.singleLineCommentFormat.name()));
   titleLayout->addWidget(titleLabel);
   titleLayout->addWidget(m_statusLabel);
   headerLayout->addLayout(titleLayout, 1);
@@ -41,7 +44,8 @@ void MergeConflictDialog::setupUI() {
   m_conflictCountLabel = new QLabel(this);
   m_conflictCountLabel->setStyleSheet(
       QString("background: %1; color: white; padding: 4px 12px; border-radius: "
-      "12px; font-weight: bold;").arg(m_theme.errorColor.name()));
+              "12px; font-weight: bold;")
+          .arg(m_theme.errorColor.name()));
   headerLayout->addWidget(m_conflictCountLabel);
 
   mainLayout->addLayout(headerLayout);
@@ -53,8 +57,10 @@ void MergeConflictDialog::setupUI() {
   leftLayout->setContentsMargins(0, 0, 0, 0);
 
   QLabel *filesLabel = new QLabel(tr("Conflicted Files"), this);
-  filesLabel->setStyleSheet(QString("color: %1; font-size: 11px; text-transform: "
-                            "uppercase; font-weight: bold;").arg(m_theme.singleLineCommentFormat.name()));
+  filesLabel->setStyleSheet(
+      QString("color: %1; font-size: 11px; text-transform: "
+              "uppercase; font-weight: bold;")
+          .arg(m_theme.singleLineCommentFormat.name()));
   leftLayout->addWidget(filesLabel);
 
   m_fileList = new QListWidget(this);
@@ -76,7 +82,8 @@ void MergeConflictDialog::setupUI() {
 
   QLabel *oursLabel = new QLabel(tr("⬅ Current Branch (Ours)"), this);
   oursLabel->setStyleSheet(
-      QString("color: %1; font-weight: bold; font-size: 12px;").arg(m_theme.successColor.name()));
+      QString("color: %1; font-weight: bold; font-size: 12px;")
+          .arg(m_theme.successColor.name()));
   oursLayout->addWidget(oursLabel);
 
   m_oursPreview = new QTextEdit(this);
@@ -93,7 +100,8 @@ void MergeConflictDialog::setupUI() {
 
   QLabel *theirsLabel = new QLabel(tr("Incoming Changes (Theirs) ➡"), this);
   theirsLabel->setStyleSheet(
-      QString("color: %1; font-weight: bold; font-size: 12px;").arg(m_theme.accentColor.name()));
+      QString("color: %1; font-weight: bold; font-size: 12px;")
+          .arg(m_theme.accentColor.name()));
   theirsLayout->addWidget(theirsLabel);
 
   m_theirsPreview = new QTextEdit(this);
@@ -193,7 +201,8 @@ void MergeConflictDialog::refresh() {
   if (conflicts.isEmpty()) {
     m_statusLabel->setText(
         tr("All conflicts resolved! You can complete the merge."));
-    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(m_theme.successColor.name()));
+    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 12px;")
+                                     .arg(m_theme.successColor.name()));
     emit allConflictsResolved();
   }
 }

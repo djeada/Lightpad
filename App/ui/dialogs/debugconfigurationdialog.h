@@ -1,10 +1,10 @@
 #ifndef DEBUGCONFIGURATIONDIALOG_H
 #define DEBUGCONFIGURATIONDIALOG_H
 
-#include "styleddialog.h"
 #include "../../dap/debugconfiguration.h"
 #include "../../dap/idebugadapter.h"
 #include "../widgets/pythonenvironmentwidget.h"
+#include "styleddialog.h"
 
 #include <QCheckBox>
 #include <QComboBox>

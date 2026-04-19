@@ -12,7 +12,8 @@ class HackerScrollBar : public HackerWidget {
   Q_PROPERTY(qreal thumbPosition READ thumbPosition WRITE setThumbPosition)
 
 public:
-  explicit HackerScrollBar(Qt::Orientation orientation, QWidget *parent = nullptr);
+  explicit HackerScrollBar(Qt::Orientation orientation,
+                           QWidget *parent = nullptr);
 
   void attachTo(QAbstractScrollArea *area);
   void setRange(int min, int max);

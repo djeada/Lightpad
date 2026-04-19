@@ -1,8 +1,8 @@
 #ifndef GOTOSYMBOLDIALOG_H
 #define GOTOSYMBOLDIALOG_H
 
-#include "styledpopupdialog.h"
 #include "../../lsp/lspclient.h"
+#include "styledpopupdialog.h"
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QListWidget>

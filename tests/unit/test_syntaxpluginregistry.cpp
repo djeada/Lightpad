@@ -321,9 +321,8 @@ void TestSyntaxPluginRegistry::testCppPreprocessorAndScopePatterns() {
 void TestSyntaxPluginRegistry::testLanguageCatalogIncludesLatex() {
   const auto languages = LanguageCatalog::builtInLanguages();
   auto latexIt =
-      std::find_if(languages.begin(), languages.end(), [](const LanguageInfo &info) {
-        return info.id == "latex";
-      });
+      std::find_if(languages.begin(), languages.end(),
+                   [](const LanguageInfo &info) { return info.id == "latex"; });
 
   QVERIFY(latexIt != languages.end());
   QCOMPARE(latexIt->displayName, QString("LaTeX"));

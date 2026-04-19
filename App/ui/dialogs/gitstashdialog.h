@@ -1,8 +1,8 @@
 #ifndef GITSTASHDIALOG_H
 #define GITSTASHDIALOG_H
 
-#include "styleddialog.h"
 #include "../../git/gitintegration.h"
+#include "styleddialog.h"
 #include <QCheckBox>
 #include <QGroupBox>
 #include <QHBoxLayout>

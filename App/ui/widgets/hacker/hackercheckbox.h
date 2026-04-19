@@ -8,7 +8,8 @@ class HackerCheckBox : public HackerWidget {
   Q_PROPERTY(qreal checkProgress READ checkProgress WRITE setCheckProgress)
 
 public:
-  explicit HackerCheckBox(const QString &text = QString(), QWidget *parent = nullptr);
+  explicit HackerCheckBox(const QString &text = QString(),
+                          QWidget *parent = nullptr);
 
   void setText(const QString &text);
   QString text() const;

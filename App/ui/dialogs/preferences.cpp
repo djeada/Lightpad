@@ -1,8 +1,8 @@
 #include "preferences.h"
-#include "../mainwindow.h"
 #include "../../settings/settingsmanager.h"
-#include "../../theme/themeengine.h"
 #include "../../theme/themedefinition.h"
+#include "../../theme/themeengine.h"
+#include "../mainwindow.h"
 
 #include <QColorDialog>
 #include <QGridLayout>
@@ -65,7 +65,10 @@ protected:
     qreal y = body.top() + 14;
     qreal x = body.left() + 10;
     qreal lh = 15;
-    struct Tok { QString t; QColor c; };
+    struct Tok {
+      QString t;
+      QColor c;
+    };
     auto line = [&](std::initializer_list<Tok> toks) {
       qreal cx = x;
       for (const Tok &tok : toks) {
@@ -115,7 +118,7 @@ protected:
 private:
   ThemeDefinition m_def;
 };
-}
+} // namespace
 
 static const QString kSwatchStyle =
     "QToolButton { border: 1px solid %1; border-radius: 3px; min-width: 28px; "
@@ -158,9 +161,9 @@ QWidget *Preferences::createSeparator() {
 QToolButton *Preferences::createColorSwatch(const QColor &color) {
   auto *btn = new QToolButton(this);
   Theme theme = m_mainWindow->getTheme();
-  btn->setStyleSheet(kSwatchStyle.arg(theme.borderColor.name()) +
-                     QString("QToolButton { background-color: %1; }")
-                         .arg(color.name()));
+  btn->setStyleSheet(
+      kSwatchStyle.arg(theme.borderColor.name()) +
+      QString("QToolButton { background-color: %1; }").arg(color.name()));
   btn->setCursor(Qt::PointingHandCursor);
   btn->setToolTip(color.name());
   return btn;
@@ -179,7 +182,6 @@ void Preferences::buildUi() {
   mainLayout->setContentsMargins(20, 16, 20, 16);
   mainLayout->setSpacing(8);
 
-  // ── Theme Section ─────────────────────────────────────────────────────
   mainLayout->addWidget(createSectionHeader("◆ THEME"));
   mainLayout->addWidget(createSeparator());
   mainLayout->addWidget(buildThemeSection());
@@ -187,9 +189,8 @@ void Preferences::buildUi() {
     auto *fxRow = new QHBoxLayout();
     fxRow->setSpacing(10);
     m_scanlinesCheck = new QCheckBox("CRT scanline overlay", this);
-    m_scanlinesCheck->setChecked(SettingsManager::instance()
-                                     .getValue("scanlineEffect", false)
-                                     .toBool());
+    m_scanlinesCheck->setChecked(
+        SettingsManager::instance().getValue("scanlineEffect", false).toBool());
     connect(m_scanlinesCheck, &QCheckBox::toggled, this,
             &Preferences::onScanlinesToggled);
     fxRow->addWidget(m_scanlinesCheck);
@@ -198,7 +199,6 @@ void Preferences::buildUi() {
   }
   mainLayout->addSpacing(8);
 
-  // ── Font Section ──────────────────────────────────────────────────────
   mainLayout->addWidget(createSectionHeader("▶ FONT"));
   mainLayout->addWidget(createSeparator());
 
@@ -226,17 +226,17 @@ void Preferences::buildUi() {
   m_fontPreview->setWordWrap(true);
   Theme theme = m_mainWindow->getTheme();
   m_fontPreview->setStyleSheet(
-      QString("QLabel { border: 1px solid %1; border-radius: 4px; padding: 10px; "
-      "background-color: %2; }").arg(theme.borderColor.name(), theme.backgroundColor.name()));
+      QString(
+          "QLabel { border: 1px solid %1; border-radius: 4px; padding: 10px; "
+          "background-color: %2; }")
+          .arg(theme.borderColor.name(), theme.backgroundColor.name()));
   m_fontPreview->setMinimumHeight(56);
-  m_fontPreview->setText(
-      "The quick brown fox jumps over the lazy dog.\n"
-      "0123456789 (){}[] <> :: -> => != == += -= */");
+  m_fontPreview->setText("The quick brown fox jumps over the lazy dog.\n"
+                         "0123456789 (){}[] <> :: -> => != == += -= */");
   mainLayout->addWidget(m_fontPreview);
 
   mainLayout->addSpacing(8);
 
-  // ── Editor Section ────────────────────────────────────────────────────
   mainLayout->addWidget(createSectionHeader("▶ EDITOR"));
   mainLayout->addWidget(createSeparator());
 
@@ -260,13 +260,11 @@ void Preferences::buildUi() {
       new QCheckBox("Trim trailing whitespace on save", this);
   mainLayout->addWidget(m_trimWhitespaceCheck);
 
-  m_finalNewlineCheck =
-      new QCheckBox("Insert final newline on save", this);
+  m_finalNewlineCheck = new QCheckBox("Insert final newline on save", this);
   mainLayout->addWidget(m_finalNewlineCheck);
 
   mainLayout->addSpacing(8);
 
-  // ── Display Section ───────────────────────────────────────────────────
   mainLayout->addWidget(createSectionHeader("▶ DISPLAY"));
   mainLayout->addWidget(createSeparator());
 
@@ -281,7 +279,6 @@ void Preferences::buildUi() {
 
   mainLayout->addSpacing(8);
 
-  // ── Color Scheme Section ──────────────────────────────────────────────
   mainLayout->addWidget(createSectionHeader("▶ SYNTAX COLORS"));
   mainLayout->addWidget(createSeparator());
 
@@ -293,7 +290,7 @@ void Preferences::buildUi() {
     QString role;
     QString label;
   };
-  // Two-column grid of color swatches
+
   QList<ColorEntry> entries = {
       {"backgroundColor", "Background"},
       {"foregroundColor", "Foreground"},
@@ -335,7 +332,6 @@ void Preferences::buildUi() {
   scrollArea->setWidget(scrollWidget);
   outerLayout->addWidget(scrollArea);
 
-  // ── Close Button ──────────────────────────────────────────────────────
   auto *buttonRow = new QHBoxLayout();
   buttonRow->setContentsMargins(20, 0, 20, 0);
   buttonRow->addStretch();
@@ -344,8 +340,9 @@ void Preferences::buildUi() {
   closeBtn->setCursor(Qt::PointingHandCursor);
   closeBtn->setStyleSheet(
       QString("QToolButton { border: 1px solid %1; border-radius: 4px; "
-      "padding: 4px 16px; }"
-      "QToolButton:hover { background-color: %2; }").arg(theme.borderColor.name(), theme.surfaceAltColor.name()));
+              "padding: 4px 16px; }"
+              "QToolButton:hover { background-color: %2; }")
+          .arg(theme.borderColor.name(), theme.surfaceAltColor.name()));
   connect(closeBtn, &QToolButton::clicked, this, &QDialog::close);
   buttonRow->addWidget(closeBtn);
   outerLayout->addLayout(buttonRow);
@@ -359,39 +356,34 @@ void Preferences::loadCurrentSettings() {
   auto theme = m_mainWindow->getTheme();
   auto &sm = SettingsManager::instance();
 
-  // Font
   m_fontFamilyCombo->setCurrentFont(textSettings.mainFont);
   m_fontSizeSpinner->setValue(textSettings.mainFont.pointSize());
   QFont previewFont = textSettings.mainFont;
   previewFont.setPointSize(textSettings.mainFont.pointSize());
   m_fontPreview->setFont(previewFont);
 
-  // Editor
   int tabWidth = textSettings.tabWidth;
   int idx = m_tabWidthCombo->findText(QString::number(tabWidth));
   if (idx >= 0)
     m_tabWidthCombo->setCurrentIndex(idx);
 
   m_autoIndentCheck->setChecked(textSettings.autoIndent);
-  m_autoSaveCheck->setChecked(
-      sm.getValue("autoSaveFiles", true).toBool());
+  m_autoSaveCheck->setChecked(sm.getValue("autoSaveFiles", true).toBool());
   m_trimWhitespaceCheck->setChecked(
       sm.getValue("trimTrailingWhitespace", false).toBool());
   m_finalNewlineCheck->setChecked(
       sm.getValue("insertFinalNewline", false).toBool());
 
-  // Display
   m_lineNumbersCheck->setChecked(textSettings.showLineNumberArea);
   m_currentLineCheck->setChecked(textSettings.lineHighlighted);
   m_bracketMatchCheck->setChecked(textSettings.matchingBracketsHighlighted);
 
-  // Color swatches
   auto updateSwatch = [&](const QString &role, const QColor &color) {
     if (m_colorSwatches.contains(role)) {
       auto *btn = m_colorSwatches[role];
-      btn->setStyleSheet(kSwatchStyle.arg(theme.borderColor.name()) +
-                         QString("QToolButton { background-color: %1; }")
-                             .arg(color.name()));
+      btn->setStyleSheet(
+          kSwatchStyle.arg(theme.borderColor.name()) +
+          QString("QToolButton { background-color: %1; }").arg(color.name()));
       btn->setToolTip(color.name());
     }
   };
@@ -412,14 +404,12 @@ void Preferences::connectSignals() {
   if (!m_mainWindow)
     return;
 
-  // ── Font ──────────────────────────────────────────────────────────────
   connect(m_fontFamilyCombo, &QFontComboBox::currentFontChanged, this,
           &Preferences::onFontFamilyChanged);
 
   connect(m_fontSizeSpinner, &QSpinBox::valueChanged, this,
           &Preferences::onFontSizeChanged);
 
-  // ── Editor ────────────────────────────────────────────────────────────
   connect(m_tabWidthCombo, &QComboBox::currentTextChanged, this,
           [this](const QString &text) {
             bool ok;
@@ -442,20 +432,17 @@ void Preferences::connectSignals() {
       m_mainWindow->setAutoSaveEnabled(checked);
   });
 
-  connect(m_trimWhitespaceCheck, &QCheckBox::toggled, this,
-          [this](bool checked) {
-            SettingsManager::instance().setValue("trimTrailingWhitespace",
-                                                checked);
-            SettingsManager::instance().saveSettings();
-          });
+  connect(
+      m_trimWhitespaceCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        SettingsManager::instance().setValue("trimTrailingWhitespace", checked);
+        SettingsManager::instance().saveSettings();
+      });
 
-  connect(m_finalNewlineCheck, &QCheckBox::toggled, this,
-          [this](bool checked) {
-            SettingsManager::instance().setValue("insertFinalNewline", checked);
-            SettingsManager::instance().saveSettings();
-          });
+  connect(m_finalNewlineCheck, &QCheckBox::toggled, this, [this](bool checked) {
+    SettingsManager::instance().setValue("insertFinalNewline", checked);
+    SettingsManager::instance().saveSettings();
+  });
 
-  // ── Display ───────────────────────────────────────────────────────────
   connect(m_lineNumbersCheck, &QCheckBox::toggled, this, [this](bool checked) {
     if (m_mainWindow) {
       m_mainWindow->showLineNumbers(checked);
@@ -470,15 +457,13 @@ void Preferences::connectSignals() {
     }
   });
 
-  connect(m_bracketMatchCheck, &QCheckBox::toggled, this,
-          [this](bool checked) {
-            if (m_mainWindow) {
-              m_mainWindow->highlihtMatchingBracket(checked);
-              persistAll();
-            }
-          });
+  connect(m_bracketMatchCheck, &QCheckBox::toggled, this, [this](bool checked) {
+    if (m_mainWindow) {
+      m_mainWindow->highlihtMatchingBracket(checked);
+      persistAll();
+    }
+  });
 
-  // ── Color Swatches ────────────────────────────────────────────────────
   for (auto it = m_colorSwatches.begin(); it != m_colorSwatches.end(); ++it) {
     const QString role = it.key();
     QToolButton *btn = it.value();
@@ -517,9 +502,9 @@ void Preferences::onColorSwatchClicked(QToolButton *button,
   if (!color.isValid() || !m_mainWindow)
     return;
 
-  button->setStyleSheet(kSwatchStyle.arg(m_mainWindow->getTheme().borderColor.name()) +
-                        QString("QToolButton { background-color: %1; }")
-                            .arg(color.name()));
+  button->setStyleSheet(
+      kSwatchStyle.arg(m_mainWindow->getTheme().borderColor.name()) +
+      QString("QToolButton { background-color: %1; }").arg(color.name()));
   button->setToolTip(color.name());
 
   Theme theme = m_mainWindow->getTheme();
@@ -610,7 +595,6 @@ QWidget *Preferences::buildThemeSection() {
   connect(m_themeList, &QListWidget::currentRowChanged, this,
           &Preferences::onThemePresetChanged);
 
-  // Initial preview
   if (auto *cur = m_themeList->currentItem()) {
     ThemeDefinition d = ThemeEngine::instance().themeByName(cur->text());
     static_cast<ThemePreviewCard *>(m_themePreview)->setDefinition(d);

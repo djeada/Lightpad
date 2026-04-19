@@ -1,8 +1,8 @@
 #ifndef RUNTEMPLATESELECTOR_H
 #define RUNTEMPLATESELECTOR_H
 
-#include "styleddialog.h"
 #include "../widgets/pythonenvironmentwidget.h"
+#include "styleddialog.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGroupBox>

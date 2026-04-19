@@ -39,29 +39,24 @@ private:
 
   MainWindow *m_mainWindow;
 
-  // Font controls
   QFontComboBox *m_fontFamilyCombo;
   QSpinBox *m_fontSizeSpinner;
   QLabel *m_fontPreview;
 
-  // Editor controls
   QComboBox *m_tabWidthCombo;
   QCheckBox *m_autoIndentCheck;
   QCheckBox *m_autoSaveCheck;
   QCheckBox *m_trimWhitespaceCheck;
   QCheckBox *m_finalNewlineCheck;
 
-  // Display controls
   QCheckBox *m_lineNumbersCheck;
   QCheckBox *m_currentLineCheck;
   QCheckBox *m_bracketMatchCheck;
 
-  // Theme controls
   QListWidget *m_themeList;
   QWidget *m_themePreview;
   QCheckBox *m_scanlinesCheck = nullptr;
 
-  // Color swatches (role name → button)
   QMap<QString, QToolButton *> m_colorSwatches;
 };
 

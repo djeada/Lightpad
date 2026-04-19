@@ -10,8 +10,8 @@ const QString kEmDash = QStringLiteral("\u2014");
 
 RecentFilesDialog::RecentFilesDialog(RecentFilesManager *manager,
                                      QWidget *parent)
-    : StyledPopupDialog(parent), m_manager(manager),
-      m_searchBox(nullptr), m_resultsList(nullptr), m_layout(nullptr) {
+    : StyledPopupDialog(parent), m_manager(manager), m_searchBox(nullptr),
+      m_resultsList(nullptr), m_layout(nullptr) {
   setupUI();
 }
 
@@ -41,7 +41,6 @@ void RecentFilesDialog::setupUI() {
           &RecentFilesDialog::onItemClicked);
 
   m_searchBox->installEventFilter(this);
-
 }
 
 void RecentFilesDialog::showDialog() {

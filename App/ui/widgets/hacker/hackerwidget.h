@@ -1,10 +1,10 @@
 #ifndef HACKERWIDGET_H
 #define HACKERWIDGET_H
 
-#include <QWidget>
-#include <QPropertyAnimation>
-#include <QPainter>
 #include <QEnterEvent>
+#include <QPainter>
+#include <QPropertyAnimation>
+#include <QWidget>
 
 class ThemeDefinition;
 struct ThemeColors;
@@ -33,12 +33,12 @@ protected:
   int radius() const;
 
   void drawGlowBorder(QPainter &p, const QRectF &rect, const QColor &color,
-                       qreal intensity, qreal radius);
-  void drawRoundedSurface(QPainter &p, const QRectF &rect,
-                           const QColor &bg, qreal radius);
+                      qreal intensity, qreal radius);
+  void drawRoundedSurface(QPainter &p, const QRectF &rect, const QColor &bg,
+                          qreal radius);
   void drawTextInRect(QPainter &p, const QRectF &rect, const QString &text,
-                       const QColor &color, int alignment = Qt::AlignCenter,
-                       const QFont &font = QFont());
+                      const QColor &color, int alignment = Qt::AlignCenter,
+                      const QFont &font = QFont());
   static QColor blendColors(const QColor &a, const QColor &b, qreal t);
 
   void enterEvent(QEnterEvent *event) override;

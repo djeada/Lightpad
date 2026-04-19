@@ -3,11 +3,11 @@
 #include "../../dap/debugconfiguration.h"
 #include "../uistylehelper.h"
 
+#include "themedmessagebox.h"
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QMenu>
-#include "themedmessagebox.h"
 #include <QRegularExpression>
 
 DebugConfigurationDialog::DebugConfigurationDialog(QWidget *parent)

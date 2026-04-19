@@ -49,7 +49,8 @@ protected:
 
     qreal dotX = titlebar.right() - 14;
     qreal dotY = titlebar.center().y();
-    for (const QColor &dot : {c.statusError, c.statusWarning, c.statusSuccess}) {
+    for (const QColor &dot :
+         {c.statusError, c.statusWarning, c.statusSuccess}) {
       p.setBrush(dot);
       p.setPen(Qt::NoPen);
       p.drawEllipse(QPointF(dotX, dotY), 3.5, 3.5);
@@ -114,7 +115,8 @@ protected:
     QList<Sw> swatches = {{"bg", c.surfaceBase},     {"fg", c.textPrimary},
                           {"acc", c.accentPrimary},  {"ok", c.statusSuccess},
                           {"warn", c.statusWarning}, {"err", c.statusError}};
-    qreal sw = (body.width() - 20 - (swatches.size() - 1) * 4) / swatches.size();
+    qreal sw =
+        (body.width() - 20 - (swatches.size() - 1) * 4) / swatches.size();
     qreal sx = body.left() + 10;
     p.setFont(QFont("Monospace", 7));
     for (const Sw &s : swatches) {
@@ -233,8 +235,7 @@ void ThemeGalleryDialog::onSelectionChanged() {
   auto *item = m_list->currentItem();
   if (!item)
     return;
-  ThemeDefinition d =
-      ThemeEngine::instance().themeByName(item->text());
+  ThemeDefinition d = ThemeEngine::instance().themeByName(item->text());
   updatePreview(d);
 }
 
@@ -271,9 +272,8 @@ void ThemeGalleryDialog::onExportClicked() {
   auto *item = m_list->currentItem();
   if (!item)
     return;
-  QString path = QFileDialog::getSaveFileName(this, tr("Export Theme"),
-                                              item->text() + ".json",
-                                              tr("JSON (*.json)"));
+  QString path = QFileDialog::getSaveFileName(
+      this, tr("Export Theme"), item->text() + ".json", tr("JSON (*.json)"));
   if (path.isEmpty())
     return;
   if (!ThemeEngine::instance().exportTheme(item->text(), path)) {

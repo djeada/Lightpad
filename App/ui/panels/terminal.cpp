@@ -38,9 +38,8 @@ Terminal::Terminal(QWidget *parent)
       m_urlRegex(R"((https?://|ftp://|file://)[^\s<>\"\'\]\)]+)"),
       m_filePathRegex(R"((?:^|[\s:])(/[^\s:]+|[A-Za-z]:\\[^\s:]+))"),
       m_inputStartPosition(0), m_baseFontSize(kDefaultFontSize),
-      m_contextMenu(nullptr), m_copyAction(nullptr),
-      m_stopAction(nullptr), m_runInputHistoryIndex(0),
-      m_runInputIndicator(nullptr),
+      m_contextMenu(nullptr), m_copyAction(nullptr), m_stopAction(nullptr),
+      m_runInputHistoryIndex(0), m_runInputIndicator(nullptr),
       m_runInputIndicatorTimer(nullptr), m_runInputIndicatorActive(false),
       m_runInputCursorVisible(false) {
   ui->setupUi(this);
@@ -297,7 +296,7 @@ bool Terminal::handleCommonInputKey(QKeyEvent *keyEvent) {
       if (cursor.position() < m_inputStartPosition) {
         cursor.setPosition(cursor.anchor());
         cursor.setPosition(m_inputStartPosition, QTextCursor::KeepAnchor);
-        // Swap so deletion goes backward
+
         int a = cursor.anchor(), p = cursor.position();
         cursor.setPosition(p);
         cursor.setPosition(a, QTextCursor::KeepAnchor);
@@ -735,7 +734,6 @@ bool Terminal::runFile(const QString &filePath, const QString &languageId) {
         preference, manager.workspaceFolder(), filePath, workingDir);
     m_pythonEnvironmentBanner = formatPythonBanner(info);
 
-    // Force unbuffered I/O so input() prompts appear immediately
     env.insert("PYTHONUNBUFFERED", "1");
   } else {
     m_pythonEnvironmentBanner.clear();
@@ -924,8 +922,8 @@ void Terminal::onRunProcessFinished(int exitCode,
   QTextCharFormat codeFmt;
   if (exitStatus == QProcess::CrashExit) {
     codeFmt.setForeground(QColor(m_errorColor));
-    cursor.insertText(
-        QString("Process crashed (exit code: %1)").arg(exitCode), codeFmt);
+    cursor.insertText(QString("Process crashed (exit code: %1)").arg(exitCode),
+                      codeFmt);
   } else {
     QColor successColor = QColor(m_textColor).lighter(110);
     codeFmt.setForeground(exitCode == 0 ? successColor : QColor(m_errorColor));
@@ -1076,13 +1074,12 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
   if (obj == ui->textEdit && event->type() == QEvent::KeyPress) {
     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
 
-    // Common keys shared by both shell and run-process modes
     if (handleCommonInputKey(keyEvent)) {
       return true;
     }
 
     if (m_runProcess && m_runProcess->state() != QProcess::NotRunning) {
-      // Run-process specific keys
+
       switch (keyEvent->key()) {
       case Qt::Key_Return:
       case Qt::Key_Enter: {
@@ -1128,7 +1125,6 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
       return QWidget::eventFilter(obj, event);
     }
 
-    // Shell mode specific keys
     switch (keyEvent->key()) {
     case Qt::Key_Return:
     case Qt::Key_Enter: {
@@ -1275,10 +1271,9 @@ void Terminal::appendPrompt() {
   }
   if (host.isEmpty())
     host = "localhost";
-  QString userHost = QString("%1@%2")
-                         .arg(qEnvironmentVariable("USER",
-                                                   qEnvironmentVariable("USERNAME", "user")),
-                              host.split('.').first());
+  QString userHost = QString("%1@%2").arg(
+      qEnvironmentVariable("USER", qEnvironmentVariable("USERNAME", "user")),
+      host.split('.').first());
 
   QString home = QDir::homePath();
   QString shownPath = m_workingDirectory;

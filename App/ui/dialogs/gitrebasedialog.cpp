@@ -2,6 +2,7 @@
 #include "../../git/gitintegration.h"
 #include "../../ui/uistylehelper.h"
 
+#include "themedmessagebox.h"
 #include <QAbstractItemView>
 #include <QComboBox>
 #include <QFile>
@@ -9,7 +10,6 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
-#include "themedmessagebox.h"
 #include <QPushButton>
 #include <QTemporaryFile>
 #include <QTextStream>
@@ -231,19 +231,30 @@ void GitRebaseDialog::updateSummary() {
 
   QStringList parts;
   if (pick > 0)
-    parts << QString("<span style='color:%1'>%2 pick</span>").arg(m_theme.successColor.name()).arg(pick);
+    parts << QString("<span style='color:%1'>%2 pick</span>")
+                 .arg(m_theme.successColor.name())
+                 .arg(pick);
   if (reword > 0)
-    parts
-        << QString("<span style='color:%1'>%2 reword</span>").arg(m_theme.warningColor.name()).arg(reword);
+    parts << QString("<span style='color:%1'>%2 reword</span>")
+                 .arg(m_theme.warningColor.name())
+                 .arg(reword);
   if (edit > 0)
-    parts << QString("<span style='color:%1'>%2 edit</span>").arg(m_theme.accentColor.name()).arg(edit);
+    parts << QString("<span style='color:%1'>%2 edit</span>")
+                 .arg(m_theme.accentColor.name())
+                 .arg(edit);
   if (squash > 0)
-    parts
-        << QString("<span style='color:" + m_theme.accentColor.lighter(130).name() + "'>%1 squash</span>").arg(squash);
+    parts << QString("<span style='color:" +
+                     m_theme.accentColor.lighter(130).name() +
+                     "'>%1 squash</span>")
+                 .arg(squash);
   if (fixup > 0)
-    parts << QString("<span style='color:%1'>%2 fixup</span>").arg(m_theme.singleLineCommentFormat.name()).arg(fixup);
+    parts << QString("<span style='color:%1'>%2 fixup</span>")
+                 .arg(m_theme.singleLineCommentFormat.name())
+                 .arg(fixup);
   if (drop > 0)
-    parts << QString("<span style='color:%1'>%2 drop</span>").arg(m_theme.errorColor.name()).arg(drop);
+    parts << QString("<span style='color:%1'>%2 drop</span>")
+                 .arg(m_theme.errorColor.name())
+                 .arg(drop);
 
   if (m_summaryLabel) {
     m_summaryLabel->setText(
@@ -476,11 +487,17 @@ void GitRebaseDialog::applyTheme(const Theme &theme) {
 void GitRebaseDialog::updateActionForItem(QTreeWidgetItem *, const QString &) {}
 
 QString GitRebaseDialog::actionColor(const QString &action) const {
-  if (action == "pick") return m_theme.successColor.name();
-  if (action == "reword") return m_theme.warningColor.name();
-  if (action == "edit") return m_theme.accentColor.name();
-  if (action == "squash") return m_theme.accentColor.lighter(130).name();
-  if (action == "fixup") return m_theme.singleLineCommentFormat.name();
-  if (action == "drop") return m_theme.errorColor.name();
+  if (action == "pick")
+    return m_theme.successColor.name();
+  if (action == "reword")
+    return m_theme.warningColor.name();
+  if (action == "edit")
+    return m_theme.accentColor.name();
+  if (action == "squash")
+    return m_theme.accentColor.lighter(130).name();
+  if (action == "fixup")
+    return m_theme.singleLineCommentFormat.name();
+  if (action == "drop")
+    return m_theme.errorColor.name();
   return m_theme.foregroundColor.name();
 }

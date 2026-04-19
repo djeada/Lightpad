@@ -1,7 +1,7 @@
 #include "gitinitdialog.h"
 #include "../uistylehelper.h"
-#include <QFileDialog>
 #include "themedmessagebox.h"
+#include <QFileDialog>
 
 GitInitDialog::GitInitDialog(const QString &projectPath, QWidget *parent)
     : StyledDialog(parent), m_projectPath(projectPath), m_pathEdit(nullptr),
