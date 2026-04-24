@@ -12,8 +12,8 @@ public:
 
   void setVisualTheme(const QColor &background, const QColor &foreground,
                       const QColor &accent, const QColor &selection,
-                      const QColor &border, const QColor &glow,
-                      bool scanlines, qreal glowIntensity);
+                      const QColor &border, const QColor &glow, bool scanlines,
+                      qreal glowIntensity);
 
 protected:
   void paintEvent(QPaintEvent *event) override;

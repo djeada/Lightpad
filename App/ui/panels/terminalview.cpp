@@ -1,17 +1,16 @@
 #include "terminalview.h"
 
 #include <QLinearGradient>
-#include <QPainter>
 #include <QPaintEvent>
+#include <QPainter>
 #include <QPalette>
 #include <QRadialGradient>
 #include <QScrollBar>
 
 TerminalView::TerminalView(QWidget *parent)
-    : QPlainTextEdit(parent), m_background("#101418"),
-      m_foreground("#b8c9c1"), m_accent("#7dffb2"),
-      m_selection("#213a35"), m_border("#263832"), m_glow("#7dffb2"),
-      m_scanlines(false), m_glowIntensity(0.3) {
+    : QPlainTextEdit(parent), m_background("#101418"), m_foreground("#b8c9c1"),
+      m_accent("#7dffb2"), m_selection("#213a35"), m_border("#263832"),
+      m_glow("#7dffb2"), m_scanlines(false), m_glowIntensity(0.3) {
   setFrameShape(QFrame::NoFrame);
   viewport()->setAttribute(Qt::WA_Hover, true);
   viewport()->setAutoFillBackground(false);
@@ -20,8 +19,7 @@ TerminalView::TerminalView(QWidget *parent)
 
 void TerminalView::setVisualTheme(const QColor &background,
                                   const QColor &foreground,
-                                  const QColor &accent,
-                                  const QColor &selection,
+                                  const QColor &accent, const QColor &selection,
                                   const QColor &border, const QColor &glow,
                                   bool scanlines, qreal glowIntensity) {
   m_background = background.isValid() ? background : m_background;
@@ -55,9 +53,9 @@ void TerminalView::paintEvent(QPaintEvent *event) {
     backgroundPainter.fillRect(r, base);
 
     if (m_glowIntensity > 0.01) {
-      QRadialGradient upperLeft(QPointF(r.left() + r.width() * 0.16,
-                                        r.top() + r.height() * 0.08),
-                                qMax(r.width(), r.height()) * 0.42);
+      QRadialGradient upperLeft(
+          QPointF(r.left() + r.width() * 0.16, r.top() + r.height() * 0.08),
+          qMax(r.width(), r.height()) * 0.42);
       upperLeft.setColorAt(0.0, withAlpha(m_glow, 0.035 * m_glowIntensity));
       upperLeft.setColorAt(0.42, withAlpha(m_accent, 0.012 * m_glowIntensity));
       upperLeft.setColorAt(1.0, Qt::transparent);

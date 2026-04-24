@@ -51,10 +51,9 @@ Terminal::Terminal(QWidget *parent)
 #endif
       m_runProcess(nullptr), m_restartTimer(nullptr), m_historyIndex(0),
       m_processRunning(false), m_shellStopRequested(false),
-      m_restartShellAfterRun(false),
-      m_autoRestartEnabled(true), m_restartAttempts(0),
-      m_backgroundColor("#0e1116"), m_textColor("#e6edf3"),
-      m_errorColor("#f44336"), m_linkColor("#58a6ff"),
+      m_restartShellAfterRun(false), m_autoRestartEnabled(true),
+      m_restartAttempts(0), m_backgroundColor("#0e1116"),
+      m_textColor("#e6edf3"), m_errorColor("#f44336"), m_linkColor("#58a6ff"),
       m_scrollbackLines(kDefaultScrollbackLines), m_linkDetectionEnabled(true),
       m_urlRegex(R"((https?://|ftp://|file://)[^\s<>\"\'\]\)]+)"),
       m_filePathRegex(R"((?:^|[\s:])(/[^\s:]+|[A-Za-z]:\\[^\s:]+))"),
@@ -674,8 +673,7 @@ bool Terminal::startShell(const QString &workingDirectory) {
     m_shellPty = new TerminalPty(this);
     connect(m_shellPty, &TerminalPty::readyRead, this,
             &Terminal::onPtyReadyRead);
-    connect(m_shellPty, &TerminalPty::finished, this,
-            &Terminal::onPtyFinished);
+    connect(m_shellPty, &TerminalPty::finished, this, &Terminal::onPtyFinished);
     connect(m_shellPty, &TerminalPty::errorOccurred, this,
             &Terminal::onPtyError);
   }
@@ -821,10 +819,10 @@ bool Terminal::interruptActiveProcess() {
   if (m_shellPty && m_shellPty->isRunning()) {
     interrupted = m_shellPty->interruptProcessGroup();
   } else {
-  const qint64 processId = m_process->processId();
-  if (processId > 0) {
-    interrupted = (::kill(-static_cast<pid_t>(processId), SIGINT) == 0);
-  }
+    const qint64 processId = m_process->processId();
+    if (processId > 0) {
+      interrupted = (::kill(-static_cast<pid_t>(processId), SIGINT) == 0);
+    }
   }
 #endif
 
@@ -1862,17 +1860,17 @@ void Terminal::updateStyleSheet() {
   QColor bg = colors.termBg.isValid()
                   ? colors.termBg
                   : (colors.surfaceBase.isValid() ? colors.surfaceBase
-                                                   : QColor(m_backgroundColor));
+                                                  : QColor(m_backgroundColor));
   QColor fg = colors.termFg.isValid() ? colors.termFg : QColor(m_textColor);
   QColor accent = colors.termCursor.isValid()
                       ? colors.termCursor
                       : (colors.accentPrimary.isValid() ? colors.accentPrimary
                                                         : QColor(m_linkColor));
-  QColor selection = colors.termSelection.isValid()
-                         ? colors.termSelection
-                         : (colors.inputSelection.isValid()
-                                ? colors.inputSelection
-                                : QColor(m_linkColor));
+  QColor selection =
+      colors.termSelection.isValid()
+          ? colors.termSelection
+          : (colors.inputSelection.isValid() ? colors.inputSelection
+                                             : QColor(m_linkColor));
   QColor border = colors.borderSubtle.isValid()
                       ? colors.borderSubtle
                       : (colors.borderDefault.isValid() ? colors.borderDefault
@@ -1952,20 +1950,20 @@ void Terminal::updateStyleSheet() {
 
   ui->textEdit->setStyleSheet(styleSheet);
 
-  QString cwdLabelStyle = QString("QLabel {"
-                                  "  color: %2;"
-                                  "  font-size: 11px;"
-                                  "  font-weight: 600;"
-                                  "  padding: 5px 12px;"
-                                  "  background: %1;"
-                                  "  border-top: 1px solid %3;"
-                                  "  border-left: 1px solid %3;"
-                                  "  border-right: 1px solid %3;"
-                                  "}")
-                              .arg(colors.surfaceRaised.isValid()
-                                       ? colors.surfaceRaised.name()
-                                       : bg.lighter(104).name(),
-                                   accent.name(), rgba(border, 0.44));
+  QString cwdLabelStyle =
+      QString("QLabel {"
+              "  color: %2;"
+              "  font-size: 11px;"
+              "  font-weight: 600;"
+              "  padding: 5px 12px;"
+              "  background: %1;"
+              "  border-top: 1px solid %3;"
+              "  border-left: 1px solid %3;"
+              "  border-right: 1px solid %3;"
+              "}")
+          .arg(colors.surfaceRaised.isValid() ? colors.surfaceRaised.name()
+                                              : bg.lighter(104).name(),
+               accent.name(), rgba(border, 0.44));
   ui->cwdLabel->setStyleSheet(cwdLabelStyle);
 
   if (m_runInputIndicator) {
@@ -2360,8 +2358,7 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
       return;
     }
     QTextCursor probe = cursor;
-    probe.movePosition(QTextCursor::PreviousCharacter,
-                       QTextCursor::KeepAnchor);
+    probe.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
     if (probe.selectedText() == QChar(0x2029)) {
       return;
     }
@@ -2387,10 +2384,8 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
       const QChar next = text.at(i + 1);
       if (next == '[') {
         int j = i + 2;
-        while (j < text.length() &&
-               !text.at(j).isLetter() &&
-               text.at(j) != QChar('~') &&
-               text.at(j) != QChar('@')) {
+        while (j < text.length() && !text.at(j).isLetter() &&
+               text.at(j) != QChar('~') && text.at(j) != QChar('@')) {
           ++j;
         }
         if (j >= text.length()) {

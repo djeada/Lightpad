@@ -1,8 +1,8 @@
 #ifndef TERMINALPTY_H
 #define TERMINALPTY_H
 
-#include <QObject>
 #include <QMap>
+#include <QObject>
 #include <QString>
 #include <QStringList>
 

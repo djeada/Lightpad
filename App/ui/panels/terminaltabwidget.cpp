@@ -209,9 +209,10 @@ void TerminalTabWidget::connectTerminal(Terminal *terminal) {
           [this](int) { updateRunningState(); });
 }
 
-Terminal *TerminalTabWidget::addTerminalToTabWidget(
-    QTabWidget *tabWidget, const QString &workingDirectory,
-    const QString &tabName) {
+Terminal *
+TerminalTabWidget::addTerminalToTabWidget(QTabWidget *tabWidget,
+                                          const QString &workingDirectory,
+                                          const QString &tabName) {
   Terminal *terminal = new Terminal(this);
   if (!workingDirectory.isEmpty()) {
     terminal->setWorkingDirectory(workingDirectory);
@@ -412,10 +413,10 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
           : (colors.accentPrimary.isValid()
                  ? colors.accentPrimary
                  : (theme.accentColor.isValid() ? theme.accentColor : text));
-  QColor pressed = colors.statusError.isValid()
-                       ? colors.statusError
-                       : (theme.errorColor.isValid() ? theme.errorColor
-                                                     : QColor("#e81123"));
+  QColor pressed =
+      colors.statusError.isValid()
+          ? colors.statusError
+          : (theme.errorColor.isValid() ? theme.errorColor : QColor("#e81123"));
 
   setAttribute(Qt::WA_StyledBackground, true);
   setStyleSheet(QString("QWidget#TerminalTabWidget {"
@@ -450,67 +451,67 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
     const QString stopButtonBorder = rgba(pressed, 0.44);
     const QString stopHoverButtonBg = rgba(pressed, 0.18);
     const QString stopHoverButtonBorder = rgba(pressed, 0.78);
-    toolbar->setStyleSheet(QString("QWidget#terminalToolbar {"
-                                   "  background-color: %1;"
-                                   "  border: none;"
-                                   "}"
-                                   "QWidget#terminalToolbar QToolButton#newTerminalButton,"
-                                   "QWidget#terminalToolbar QToolButton#clearTerminalButton,"
-                                   "QWidget#terminalToolbar QToolButton#killTerminalButton {"
-                                   "  color: %2;"
-                                   "  background-color: %4;"
-                                   "  border: 1px solid %5;"
-                                   "  border-radius: 4px;"
-                                   "  padding: 0 12px;"
-                                   "  margin: 0;"
-                                   "  font-size: 11px;"
-                                   "  font-weight: 700;"
-                                   "  min-height: 26px;"
-                                   "}"
-                                   "QWidget#terminalToolbar QToolButton#newTerminalButton:hover,"
-                                   "QWidget#terminalToolbar QToolButton#clearTerminalButton:hover,"
-                                   "QWidget#terminalToolbar QToolButton#killTerminalButton:hover,"
-                                   "QWidget#terminalToolbar QToolButton#newTerminalButton:pressed,"
-                                   "QWidget#terminalToolbar QToolButton#clearTerminalButton:pressed,"
-                                   "QWidget#terminalToolbar QToolButton#killTerminalButton:pressed {"
-                                   "  color: %2;"
-                                   "  background-color: %11;"
-                                   "  border: 1px solid %12;"
-                                   "}"
-                                   "QWidget#terminalToolbar QToolButton#newTerminalButton:pressed,"
-                                   "QWidget#terminalToolbar QToolButton#clearTerminalButton:pressed {"
-                                   "  background-color: %13;"
-                                   "}"
-                                   "QWidget#terminalToolbar QToolButton#killTerminalButton {"
-                                   "  color: %7;"
-                                   "  background-color: %8;"
-                                   "  border: 1px solid %9;"
-                                   "}"
-                                   "QWidget#terminalToolbar QToolButton#killTerminalButton:hover,"
-                                   "QWidget#terminalToolbar QToolButton#killTerminalButton:pressed {"
-                                   "  color: %7;"
-                                   "  background-color: %14;"
-                                   "  border: 1px solid %15;"
-                                   "}"
-                                   "QWidget#terminalToolbar QToolButton#killTerminalButton:pressed {"
-                                   "  background-color: %16;"
-                                   "}"
-                                   "QWidget#terminalToolbar QToolButton#killTerminalButton:disabled {"
-                                   "  color: %3;"
-                                   "  background-color: transparent;"
-                                   "  border: 1px solid %6;"
-                                   "}"
-                                   "QWidget#terminalToolbar QToolButton::menu-indicator {"
-                                   "  image: none;"
-                                   "  width: 0;"
-                                   "}")
-                               .arg(bg.name(), text.name(), rgba(text, 0.48),
-                                    normalButtonBg, normalButtonBorder,
-                                    rgba(text, 0.22), pressed.name(),
-                                    stopButtonBg, stopButtonBorder,
-                                    hoverButtonBg, hoverButtonBorder,
-                                    pressedButtonBg, stopHoverButtonBg,
-                                    stopHoverButtonBorder, rgba(pressed, 0.28)));
+    toolbar->setStyleSheet(
+        QString(
+            "QWidget#terminalToolbar {"
+            "  background-color: %1;"
+            "  border: none;"
+            "}"
+            "QWidget#terminalToolbar QToolButton#newTerminalButton,"
+            "QWidget#terminalToolbar QToolButton#clearTerminalButton,"
+            "QWidget#terminalToolbar QToolButton#killTerminalButton {"
+            "  color: %2;"
+            "  background-color: %4;"
+            "  border: 1px solid %5;"
+            "  border-radius: 4px;"
+            "  padding: 0 12px;"
+            "  margin: 0;"
+            "  font-size: 11px;"
+            "  font-weight: 700;"
+            "  min-height: 26px;"
+            "}"
+            "QWidget#terminalToolbar QToolButton#newTerminalButton:hover,"
+            "QWidget#terminalToolbar QToolButton#clearTerminalButton:hover,"
+            "QWidget#terminalToolbar QToolButton#killTerminalButton:hover,"
+            "QWidget#terminalToolbar QToolButton#newTerminalButton:pressed,"
+            "QWidget#terminalToolbar QToolButton#clearTerminalButton:pressed,"
+            "QWidget#terminalToolbar QToolButton#killTerminalButton:pressed {"
+            "  color: %2;"
+            "  background-color: %11;"
+            "  border: 1px solid %12;"
+            "}"
+            "QWidget#terminalToolbar QToolButton#newTerminalButton:pressed,"
+            "QWidget#terminalToolbar QToolButton#clearTerminalButton:pressed {"
+            "  background-color: %13;"
+            "}"
+            "QWidget#terminalToolbar QToolButton#killTerminalButton {"
+            "  color: %7;"
+            "  background-color: %8;"
+            "  border: 1px solid %9;"
+            "}"
+            "QWidget#terminalToolbar QToolButton#killTerminalButton:hover,"
+            "QWidget#terminalToolbar QToolButton#killTerminalButton:pressed {"
+            "  color: %7;"
+            "  background-color: %14;"
+            "  border: 1px solid %15;"
+            "}"
+            "QWidget#terminalToolbar QToolButton#killTerminalButton:pressed {"
+            "  background-color: %16;"
+            "}"
+            "QWidget#terminalToolbar QToolButton#killTerminalButton:disabled {"
+            "  color: %3;"
+            "  background-color: transparent;"
+            "  border: 1px solid %6;"
+            "}"
+            "QWidget#terminalToolbar QToolButton::menu-indicator {"
+            "  image: none;"
+            "  width: 0;"
+            "}")
+            .arg(bg.name(), text.name(), rgba(text, 0.48), normalButtonBg,
+                 normalButtonBorder, rgba(text, 0.22), pressed.name(),
+                 stopButtonBg, stopButtonBorder, hoverButtonBg,
+                 hoverButtonBorder, pressedButtonBg, stopHoverButtonBg,
+                 stopHoverButtonBorder, rgba(pressed, 0.28)));
   }
 
   m_splitter->setStyleSheet(QString("QSplitter::handle {"
@@ -546,61 +547,60 @@ void TerminalTabWidget::applyTabStyle(QTabWidget *tabWidget,
   if (!tabWidget) {
     return;
   }
-  QString tabWidgetStyle =
-      QString("QTabWidget::pane {"
-              "  border: none;"
-              "  background-color: %1;"
-              "  top: 0px;"
-              "  margin: 0;"
-              "  padding: 0;"
-              "}"
-              "QTabWidget::tab-bar {"
-              "  left: 0;"
-              "}"
-              "QTabWidget::right-corner {"
-              "  background-color: %1;"
-              "  border: none;"
-              "  margin: 0;"
-              "  padding: 0;"
-              "}"
-              "QTabBar {"
-              "  background: %1;"
-              "  border: none;"
-              "}"
-              "QTabBar::base {"
-              "  height: 0;"
-              "  border: none;"
-              "  background: %1;"
-              "}"
-              "QTabBar::tab {"
-              "  background-color: transparent;"
-              "  color: %2;"
-              "  padding: 6px 13px;"
-              "  border: none;"
-              "  margin: 0;"
-              "  font-weight: 600;"
-              "}"
-              "QTabBar::tab:selected {"
-              "  color: %3;"
-              "  background-color: transparent;"
-              "  border: none;"
-              "}"
-              "QTabBar::tab:hover {"
-              "  color: %3;"
-              "  background-color: transparent;"
-              "}"
-              "QTabBar::close-button {"
-              "  image: none;"
-              "  width: 8px;"
-              "  height: 8px;"
-              "  border-radius: 4px;"
-              "  background: transparent;"
-              "  margin-left: 4px;"
-              "}"
-              "QTabBar::close-button:hover {"
-              "  background: %3;"
-              "}")
-          .arg(bgColor, textColor, accentColor);
+  QString tabWidgetStyle = QString("QTabWidget::pane {"
+                                   "  border: none;"
+                                   "  background-color: %1;"
+                                   "  top: 0px;"
+                                   "  margin: 0;"
+                                   "  padding: 0;"
+                                   "}"
+                                   "QTabWidget::tab-bar {"
+                                   "  left: 0;"
+                                   "}"
+                                   "QTabWidget::right-corner {"
+                                   "  background-color: %1;"
+                                   "  border: none;"
+                                   "  margin: 0;"
+                                   "  padding: 0;"
+                                   "}"
+                                   "QTabBar {"
+                                   "  background: %1;"
+                                   "  border: none;"
+                                   "}"
+                                   "QTabBar::base {"
+                                   "  height: 0;"
+                                   "  border: none;"
+                                   "  background: %1;"
+                                   "}"
+                                   "QTabBar::tab {"
+                                   "  background-color: transparent;"
+                                   "  color: %2;"
+                                   "  padding: 6px 13px;"
+                                   "  border: none;"
+                                   "  margin: 0;"
+                                   "  font-weight: 600;"
+                                   "}"
+                                   "QTabBar::tab:selected {"
+                                   "  color: %3;"
+                                   "  background-color: transparent;"
+                                   "  border: none;"
+                                   "}"
+                                   "QTabBar::tab:hover {"
+                                   "  color: %3;"
+                                   "  background-color: transparent;"
+                                   "}"
+                                   "QTabBar::close-button {"
+                                   "  image: none;"
+                                   "  width: 8px;"
+                                   "  height: 8px;"
+                                   "  border-radius: 4px;"
+                                   "  background: transparent;"
+                                   "  margin-left: 4px;"
+                                   "}"
+                                   "QTabBar::close-button:hover {"
+                                   "  background: %3;"
+                                   "}")
+                               .arg(bgColor, textColor, accentColor);
   tabWidget->setStyleSheet(tabWidgetStyle);
 }
 

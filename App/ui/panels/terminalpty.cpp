@@ -2,10 +2,10 @@
 
 #ifndef Q_OS_WIN
 
+#include <QFile>
 #include <QProcessEnvironment>
 #include <QSocketNotifier>
 #include <QTimer>
-#include <QFile>
 #include <QVector>
 
 #if defined(Q_OS_MACOS)

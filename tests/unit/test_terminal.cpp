@@ -534,7 +534,8 @@ void TestTerminal::testPtyCursorLeftAllowsMidLineInsert() {
   QVERIFY(textEdit != nullptr);
 
   terminal.appendOutput("$ ac");
-  terminal.appendOutput("\x1b[D""b");
+  terminal.appendOutput("\x1b[D"
+                        "b");
 
   QCOMPARE(textEdit->toPlainText(), QString("$ abc"));
 }
