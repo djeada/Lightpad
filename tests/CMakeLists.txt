@@ -277,6 +277,8 @@ add_executable(test_terminal
     unit/test_terminal.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminal.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/terminalpty.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/terminalview.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/shellprofile.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
@@ -287,6 +289,7 @@ add_executable(test_terminal
 )
 
 target_include_directories(test_terminal PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
     ${CMAKE_SOURCE_DIR}/App/ui/panels
 )
 
@@ -298,6 +301,10 @@ target_link_libraries(test_terminal
     Qt6::Test
 )
 
+if(UNIX AND NOT APPLE)
+    target_link_libraries(test_terminal PRIVATE util)
+endif()
+
 target_compile_definitions(test_terminal PRIVATE QT_DEPRECATED_WARNINGS)
 
 # TerminalTabWidget test executable
@@ -306,6 +313,8 @@ add_executable(test_terminaltabwidget
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminaltabwidget.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminal.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/terminalpty.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/terminalview.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/shellprofile.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
@@ -327,6 +336,10 @@ target_link_libraries(test_terminaltabwidget
     Qt6::Widgets
     Qt6::Test
 )
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(test_terminaltabwidget PRIVATE util)
+endif()
 
 # SyntaxPluginRegistry test executable
 add_executable(test_syntaxpluginregistry

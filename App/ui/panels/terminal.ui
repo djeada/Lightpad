@@ -53,10 +53,17 @@
     </layout>
    </item>
    <item>
-    <widget class="QPlainTextEdit" name="textEdit"/>
+    <widget class="TerminalView" name="textEdit"/>
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>TerminalView</class>
+   <extends>QPlainTextEdit</extends>
+   <header>ui/panels/terminalview.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

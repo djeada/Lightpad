@@ -26,6 +26,7 @@ private slots:
   void testSetWorkingDirectory();
 
   void testClear();
+  void testPtyClearRedrawsPrompt();
 
   void testShellStartedSignal();
 
@@ -48,6 +49,12 @@ private slots:
   void testFontZoomLimits();
   void testTypingOutsidePromptAppendsToInput();
   void testBackspaceDoesNotDeleteTerminalOutput();
+  void testPtyBackspaceErasesEchoedInput();
+  void testPtyCarriageReturnCanReplaceLine();
+  void testPtyCrLfKeepsOutputHistoryOnSeparateLines();
+  void testPtyCursorLeftAllowsMidLineInsert();
+  void testPtyMouseClickDoesNotMoveInputCursor();
+  void testRunProcessAcceptsInteractiveInput();
   void testRunInputIndicatorVisibility();
 };
 
@@ -130,6 +137,20 @@ void TestTerminal::testClear() {
   terminal.stopShell();
   QTest::qWait(200);
   QVERIFY(true);
+}
+
+void TestTerminal::testPtyClearRedrawsPrompt() {
+  Terminal terminal;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  QTRY_VERIFY_WITH_TIMEOUT(terminal.isRunning(), 3000);
+  terminal.appendOutput("temporary output\n");
+  terminal.clear();
+
+  QTRY_VERIFY_WITH_TIMEOUT(!textEdit->toPlainText().trimmed().isEmpty(), 3000);
+
+  terminal.stopShell();
 }
 
 void TestTerminal::testShellStartedSignal() {
@@ -311,7 +332,7 @@ void TestTerminal::testCwdLabelExists() {
 
   QLabel *cwdLabel = terminal.findChild<QLabel *>("cwdLabel");
   QVERIFY(cwdLabel != nullptr);
-  QVERIFY(!cwdLabel->text().isEmpty());
+  QVERIFY(!cwdLabel->isVisible());
 }
 
 void TestTerminal::testCwdLabelUpdatesOnDirectoryChange() {
@@ -323,6 +344,7 @@ void TestTerminal::testCwdLabelUpdatesOnDirectoryChange() {
 
   QLabel *cwdLabel = terminal.findChild<QLabel *>("cwdLabel");
   QVERIFY(cwdLabel != nullptr);
+  QVERIFY(!cwdLabel->isVisible());
   QVERIFY(cwdLabel->text().contains("/tmp"));
 }
 
@@ -460,6 +482,115 @@ void TestTerminal::testBackspaceDoesNotDeleteTerminalOutput() {
   textEdit->setTextCursor(cursor);
   QTest::keyClick(textEdit, Qt::Key_Backspace);
   QCOMPARE(textEdit->toPlainText(), transcript);
+}
+
+void TestTerminal::testPtyBackspaceErasesEchoedInput() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("$ abc");
+  terminal.appendOutput("\b \b");
+
+  QCOMPARE(textEdit->toPlainText(), QString("$ ab"));
+}
+
+void TestTerminal::testPtyCarriageReturnCanReplaceLine() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("downloading 99%");
+  terminal.appendOutput("\rready\x1b[K");
+
+  QCOMPARE(textEdit->toPlainText(), QString("ready"));
+}
+
+void TestTerminal::testPtyCrLfKeepsOutputHistoryOnSeparateLines() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("$ echo hi\r\nhi\r\n$ ");
+
+  QCOMPARE(textEdit->toPlainText(), QString("$ echo hi\nhi\n$ "));
+}
+
+void TestTerminal::testPtyCursorLeftAllowsMidLineInsert() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("$ ac");
+  terminal.appendOutput("\x1b[D"
+                        "b");
+
+  QCOMPARE(textEdit->toPlainText(), QString("$ abc"));
+}
+
+void TestTerminal::testPtyMouseClickDoesNotMoveInputCursor() {
+  Terminal terminal;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  QTRY_VERIFY_WITH_TIMEOUT(terminal.isRunning(), 3000);
+  terminal.clear();
+  terminal.appendOutput("old output\n$ ");
+  textEdit->moveCursor(QTextCursor::End);
+
+  terminal.show();
+  textEdit->setFocus();
+  QTest::qWait(50);
+  QTest::mouseClick(textEdit->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    QPoint(4, 4));
+
+  QTextCursor endCursor(textEdit->document());
+  endCursor.movePosition(QTextCursor::End);
+  QCOMPARE(textEdit->textCursor().position(), endCursor.position());
+
+  terminal.stopShell();
+}
+
+void TestTerminal::testRunProcessAcceptsInteractiveInput() {
+  Terminal terminal;
+  QSignalSpy finishedSpy(&terminal, &Terminal::processFinished);
+  QVERIFY(finishedSpy.isValid());
+
+  terminal.executeCommand(
+      "sh",
+      QStringList() << "-c"
+                    << "printf 'Name: '; read name; printf 'Hello %s\\n' "
+                       "\"$name\"",
+      QDir::tempPath());
+
+  QTRY_VERIFY_WITH_TIMEOUT(terminal.hasActiveRunProcess(), 3000);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+  terminal.show();
+  textEdit->setFocus();
+  QTest::qWait(50);
+
+  QTest::keyClicks(textEdit, "Ada");
+  QTest::keyClick(textEdit, Qt::Key_Return);
+
+  QTRY_VERIFY_WITH_TIMEOUT(!terminal.hasActiveRunProcess(), 5000);
+  QVERIFY(textEdit->toPlainText().contains("Hello Ada"));
+  QVERIFY(finishedSpy.count() >= 1);
+
+  terminal.stopShell();
 }
 
 void TestTerminal::testRunInputIndicatorVisibility() {
