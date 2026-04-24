@@ -1,6 +1,7 @@
 #include "uitesthelpers.h"
 
 #include "settings/theme.h"
+#include "theme/themeengine.h"
 #include "ui/panels/terminal.h"
 #include "ui/panels/terminaltabwidget.h"
 #include <QObject>
@@ -24,13 +25,15 @@ private slots:
 
   void testAvailableShellProfiles();
   void testIsSplit();
+  void testSplitHorizontalAddsPane();
+  void testUnsplitKeepsTerminals();
   void testObjectNames();
   void testCloseButtonConfiguration();
   void testCloseButtonEmitsSignal();
   void testKillButtonExists();
   void testKillButtonInitialState();
   void testStopButtonIsVisibleAction();
-  void testToolbarDoesNotConsumeExtraHeight();
+  void testControlsLiveInTabCorner();
   void testNewTerminalButtonClickAddsTab();
   void testApplyThemeUpdatesTabStyles();
   void testSnapshotNotEmpty();
@@ -91,6 +94,34 @@ void TestTerminalTabWidget::testIsSplit() {
   widget.closeAllTerminals();
 }
 
+void TestTerminalTabWidget::testSplitHorizontalAddsPane() {
+  TerminalTabWidget widget;
+  const int initialCount = widget.terminalCount();
+
+  widget.splitHorizontal();
+
+  QVERIFY(widget.isSplit());
+  QCOMPARE(widget.terminalCount(), initialCount + 1);
+  QVERIFY(widget.findChild<QTabWidget *>("terminalSplitTabs") != nullptr);
+
+  widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testUnsplitKeepsTerminals() {
+  TerminalTabWidget widget;
+
+  widget.splitHorizontal();
+  const int splitCount = widget.terminalCount();
+
+  widget.unsplit();
+
+  QVERIFY(!widget.isSplit());
+  QCOMPARE(widget.terminalCount(), splitCount);
+  QVERIFY(widget.findChild<QTabWidget *>("terminalSplitTabs") == nullptr);
+
+  widget.closeAllTerminals();
+}
+
 void TestTerminalTabWidget::testObjectNames() {
   TerminalTabWidget widget;
 
@@ -139,7 +170,7 @@ void TestTerminalTabWidget::testKillButtonExists() {
       widget.findChild<QToolButton *>("killTerminalButton");
 
   QVERIFY(killButton != nullptr);
-  QVERIFY(killButton->autoRaise());
+  QVERIFY(!killButton->autoRaise());
 
   widget.closeAllTerminals();
 }
@@ -166,27 +197,26 @@ void TestTerminalTabWidget::testStopButtonIsVisibleAction() {
 
   QVERIFY(stopButton != nullptr);
   QCOMPARE(stopButton->text(), QString("Stop"));
-  QCOMPARE(stopButton->toolButtonStyle(), Qt::ToolButtonTextBesideIcon);
+  QCOMPARE(stopButton->toolButtonStyle(), Qt::ToolButtonTextOnly);
+  QVERIFY(!stopButton->autoRaise());
   QVERIFY(stopButton->toolTip().contains("Stop"));
 
   widget.closeAllTerminals();
 }
 
-void TestTerminalTabWidget::testToolbarDoesNotConsumeExtraHeight() {
+void TestTerminalTabWidget::testControlsLiveInTabCorner() {
   TerminalTabWidget widget;
   UiTestHelpers::showWidget(widget, QSize(960, 640));
 
   QWidget *toolbar = widget.findChild<QWidget *>("terminalToolbar");
+  QTabWidget *tabWidget = widget.findChild<QTabWidget *>("terminalTabs");
   QSplitter *splitter = widget.findChild<QSplitter *>("terminalSplitter");
 
   QVERIFY(toolbar != nullptr);
+  QVERIFY(tabWidget != nullptr);
   QVERIFY(splitter != nullptr);
-  QCOMPARE(toolbar->sizePolicy().verticalPolicy(), QSizePolicy::Fixed);
-  QVERIFY2(toolbar->height() <= toolbar->sizeHint().height() + 2,
-           qPrintable(QString("toolbar height %1 exceeded size hint %2")
-                          .arg(toolbar->height())
-                          .arg(toolbar->sizeHint().height())));
-  QVERIFY(splitter->height() > toolbar->height());
+  QCOMPARE(tabWidget->cornerWidget(Qt::TopRightCorner), toolbar);
+  QVERIFY(splitter->geometry().top() <= tabWidget->geometry().top() + 1);
 
   widget.closeAllTerminals();
 }
@@ -217,8 +247,9 @@ void TestTerminalTabWidget::testApplyThemeUpdatesTabStyles() {
 
   QTabWidget *tabWidget = widget.findChild<QTabWidget *>("terminalTabs");
   QVERIFY(tabWidget != nullptr);
-  QVERIFY(tabWidget->styleSheet().contains("#101820"));
-  QVERIFY(tabWidget->styleSheet().contains("#f2f5f7"));
+  const ThemeDefinition &activeTheme = ThemeEngine::instance().activeTheme();
+  QVERIFY(tabWidget->styleSheet().contains(activeTheme.colors.termBg.name()));
+  QVERIFY(tabWidget->styleSheet().contains(activeTheme.colors.termFg.name()));
 
   widget.closeAllTerminals();
 }

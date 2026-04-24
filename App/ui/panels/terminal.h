@@ -13,6 +13,9 @@
 class QLabel;
 class QAction;
 class QTextCursor;
+#ifndef Q_OS_WIN
+class TerminalPty;
+#endif
 
 #include "../../python/pythonprojectenvironment.h"
 #include "shellprofile.h"
@@ -117,10 +120,16 @@ private slots:
   void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
   void onInputSubmitted();
   void onLinkActivated(const QString &link);
+#ifndef Q_OS_WIN
+  void onPtyReadyRead(const QByteArray &data);
+  void onPtyFinished(int exitCode, bool crashed);
+  void onPtyError(const QString &message);
+#endif
 
 protected:
   bool eventFilter(QObject *obj, QEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
 
 private:
   void setupTerminal();
@@ -141,6 +150,10 @@ private:
   void updateStyleSheet();
   void updateCwdLabel();
   bool handleCommonInputKey(QKeyEvent *keyEvent);
+  bool handlePtyKeyPress(QKeyEvent *keyEvent);
+  bool isPtyShellActive() const;
+  void writeToShell(const QByteArray &data);
+  void updatePtySize();
   void handleRunInputHistoryNavigation(bool up);
   static QColor ansi256Color(int index);
   QString formatPythonBanner(const PythonEnvironmentInfo &info) const;
@@ -158,6 +171,9 @@ private:
 
   Ui::Terminal *ui;
   QProcess *m_process;
+#ifndef Q_OS_WIN
+  TerminalPty *m_shellPty;
+#endif
   QProcess *m_runProcess;
   QTimer *m_restartTimer;
   QString m_workingDirectory;
@@ -165,6 +181,7 @@ private:
   QStringList m_commandHistory;
   int m_historyIndex;
   bool m_processRunning;
+  bool m_shellStopRequested;
   bool m_restartShellAfterRun;
   bool m_autoRestartEnabled;
   int m_restartAttempts;

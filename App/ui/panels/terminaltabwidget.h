@@ -89,11 +89,21 @@ private:
   void setupUI();
   void setupToolbar();
   void setupShellProfileMenu();
+  QTabWidget *createTabWidget();
+  void connectTerminal(Terminal *terminal);
+  Terminal *addTerminalToTabWidget(QTabWidget *tabWidget,
+                                   const QString &workingDirectory,
+                                   const QString &tabName);
+  void applyTabStyle(QTabWidget *tabWidget, const QString &borderColor,
+                     const QString &bgColor, const QString &raisedColor,
+                     const QString &textColor, const QString &accentColor);
   QString generateTerminalName();
   QString generateTerminalName(const QString &profileName);
 
   QSplitter *m_splitter;
   QTabWidget *m_tabWidget;
+  QTabWidget *m_splitTabWidget;
+  QTabWidget *m_activeTabWidget;
   QToolButton *m_newTerminalButton;
   QToolButton *m_clearButton;
   QToolButton *m_killButton;

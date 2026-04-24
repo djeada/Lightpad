@@ -178,6 +178,8 @@ set(project_headers
     ui/dialogs/shortcuts.h
     ui/dockutils.h
     ui/panels/terminal.h
+    ui/panels/terminalpty.h
+    ui/panels/terminalview.h
     ui/panels/terminaltabwidget.h
     ui/panels/shellprofile.h
     core/textarea.h
@@ -338,6 +340,8 @@ set(project_sources
     ui/dialogs/formattemplateselector.cpp
     ui/dialogs/shortcuts.cpp
     ui/panels/terminal.cpp
+    ui/panels/terminalpty.cpp
+    ui/panels/terminalview.cpp
     ui/panels/terminaltabwidget.cpp
     ui/panels/shellprofile.cpp
     core/textarea.cpp
@@ -391,6 +395,10 @@ target_link_libraries(Lightpad
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets)
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(Lightpad PRIVATE util)
+endif()
 
 if(HAVE_PDF_SUPPORT)
     target_link_libraries(Lightpad PRIVATE Qt6::Pdf Qt6::PdfWidgets)

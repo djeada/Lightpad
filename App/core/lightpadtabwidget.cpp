@@ -157,7 +157,7 @@ void LightpadTabWidget::updateCloseButtons() {
                                             "  color: %1;"
                                             "  background: transparent;"
                                             "  border: none;"
-                                            "  border-radius: 8px;"
+                                            "  border-radius: 2px;"
                                             "  padding: 1px;"
                                             "  font-size: 14px;"
                                             "  font-weight: bold;"
@@ -187,7 +187,7 @@ void LightpadTabWidget::updateCloseButtons() {
                                        "  color: %1;"
                                        "  background: transparent;"
                                        "  border: none;"
-                                       "  border-radius: 8px;"
+                                       "  border-radius: 2px;"
                                        "  padding: 1px;"
                                        "  font-size: 14px;"
                                        "  font-weight: bold;"
@@ -269,14 +269,12 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
   const QString inactiveText = QColor(foreground.red(), foreground.green(),
                                       foreground.blue(), kInactiveTabTextAlpha)
                                    .name(QColor::HexArgb);
-  const QString tabStripTop = surface.lighter(108).name();
-  const QString tabStripBottom = background.name();
-  const QString tabBackground = surface.darker(104).name();
-  const QString selectedTabBackground = surface.lighter(106).name();
-  const QString hoverTabBackground = hover.lighter(106).name();
-  const QString addButtonBackground = surface.name();
-  const QString addButtonHoverBackground = hover.lighter(110).name();
-  const QString addButtonBorder = border.lighter(112).name();
+  const QString tabBackground = surface.darker(112).name();
+  const QString selectedTabBackground = background.darker(102).name();
+  const QString hoverTabBackground = surface.darker(104).name();
+  const QString addButtonBackground = surface.darker(108).name();
+  const QString addButtonHoverBackground = surface.darker(100).name();
+  const QString addButtonBorder = border.name();
   const QString closeHoverBackground = hover.name();
   const QString closePressedBackground = accentColor;
   const QString paneBackground = background.darker(102).name();
@@ -287,7 +285,7 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "QScrollBar:horizontal { background: transparent; }"
       "QTabWidget::tab-bar { "
       "  alignment: left; "
-      "  top: -3px; "
+      "  top: 0px; "
       "  left: 0px; "
       "  right: 0px; "
       "  margin: 0px; "
@@ -297,13 +295,16 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "}"
 
       "QTabBar { "
-      "background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 " +
-      tabStripTop + ", stop: 1 " + tabStripBottom +
-      "); "
+      "background: " +
+      background.name() +
+      "; "
       "qproperty-drawBase: 0; "
       "margin: 0px; "
-      "padding: 6px 6px 0px 6px; "
+      "padding: 0px; "
       "border: none; "
+      "border-bottom: 1px solid " +
+      borderColor +
+      "; "
       "}"
 
       "QTabBar::tab { "
@@ -313,23 +314,23 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "background-color: " +
       tabBackground +
       "; "
-      "padding: 8px 16px 9px 16px; "
-      "margin: 4px 4px 0px 0px; "
-      "border: 1px solid " +
+      "padding: 9px 16px 8px 16px; "
+      "margin: 0px; "
+      "border: none; "
+      "border-right: 1px solid " +
       borderColor +
       "; "
-      "border-bottom: none; "
-      "border-top-left-radius: 10px; "
-      "border-top-right-radius: 10px; "
+      "border-bottom: 2px solid transparent; "
+      "border-radius: 0px; "
       "font-size: 13px; "
-      "font-weight: 500; "
-      "min-height: 30px; "
+      "font-weight: 600; "
+      "min-height: 32px; "
       "}"
       "QTabBar::tab:disabled { "
-      "min-width: 34px; "
-      "max-width: 34px; "
+      "min-width: 30px; "
+      "max-width: 30px; "
       "padding: 0px; "
-      "margin: 4px 0px 0px 2px; "
+      "margin: 0px; "
       "color: transparent; "
       "background: transparent; "
       "border: none; "
@@ -345,13 +346,9 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "background-color: " +
       selectedTabBackground +
       "; "
-      "border: 1px solid " +
-      borderColor +
-      "; "
       "border-bottom: 2px solid " +
       accentColor +
       "; "
-      "padding-bottom: 8px; "
       "font-weight: 700; "
       "}"
 
@@ -362,8 +359,8 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "background-color: " +
       hoverTabBackground +
       "; "
-      "border-color: " +
-      addButtonBorder +
+      "border-bottom: 2px solid " +
+      accentColor +
       "; "
       "}"
 
@@ -371,12 +368,12 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "background: " +
       addButtonBackground +
       "; "
-      "border-radius: 10px; "
+      "border-radius: 0px; "
       "padding: 4px; "
       "border: 1px solid " +
       addButtonBorder +
       "; "
-      "margin: 4px 0px 2px 0px; "
+      "margin: 4px 0px 4px 6px; "
       "color: " +
       foregroundColor +
       "; "
@@ -396,7 +393,7 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "; "
       "background: transparent; "
       "border: none; "
-      "border-radius: 8px; "
+      "border-radius: 2px; "
       "padding: 1px; "
       "font-size: 14px; "
       "font-weight: bold; "
@@ -418,10 +415,7 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
 
       "QTabWidget::pane { "
       "border: none; "
-      "border-top: 1px solid " +
-      borderColor +
-      "; "
-      "top: -1px; "
+      "top: 0px; "
       "margin: 0px; "
       "padding: 0px; "
       "background-color: " +

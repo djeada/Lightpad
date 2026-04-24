@@ -1,6 +1,10 @@
 #include "terminal.h"
 #include "../../run_templates/runtemplatemanager.h"
 #include "../../theme/themeengine.h"
+#ifndef Q_OS_WIN
+#include "terminalpty.h"
+#endif
+#include "terminalview.h"
 #include "ui_terminal.h"
 
 #include <QApplication>
@@ -10,11 +14,13 @@
 #include <QDir>
 #include <QFont>
 #include <QFontDatabase>
+#include <QFontMetrics>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QResizeEvent>
 #include <QScrollBar>
 #include <QSizePolicy>
 #include <QTextBlock>
@@ -27,10 +33,25 @@
 #include <unistd.h>
 #endif
 
+namespace {
+QString rgba(const QColor &color, qreal alpha) {
+  QColor c = color.isValid() ? color : QColor("#ffffff");
+  return QString("rgba(%1, %2, %3, %4)")
+      .arg(c.red())
+      .arg(c.green())
+      .arg(c.blue())
+      .arg(qBound(0.0, alpha, 1.0), 0, 'f', 3);
+}
+} // namespace
+
 Terminal::Terminal(QWidget *parent)
     : QWidget(parent), ui(new Ui::Terminal), m_process(nullptr),
+#ifndef Q_OS_WIN
+      m_shellPty(nullptr),
+#endif
       m_runProcess(nullptr), m_restartTimer(nullptr), m_historyIndex(0),
-      m_processRunning(false), m_restartShellAfterRun(false),
+      m_processRunning(false), m_shellStopRequested(false),
+      m_restartShellAfterRun(false),
       m_autoRestartEnabled(true), m_restartAttempts(0),
       m_backgroundColor("#0e1116"), m_textColor("#e6edf3"),
       m_errorColor("#f44336"), m_linkColor("#58a6ff"),
@@ -72,10 +93,16 @@ Terminal::~Terminal() {
 }
 
 void Terminal::setupTerminal() {
+  ui->horizontalLayout_3->setContentsMargins(0, 0, 0, 0);
+  ui->horizontalLayout_3->setSpacing(0);
+  ui->cwdLabel->setMaximumHeight(0);
+  ui->cwdLabel->hide();
 
   ui->textEdit->setReadOnly(false);
   ui->textEdit->setTextInteractionFlags(Qt::TextEditorInteraction);
   ui->textEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
+  ui->textEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  ui->textEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
   QFont monoFont;
   QStringList fontFamilies = {"JetBrains Mono",  "Cascadia Code", "Fira Code",
@@ -88,6 +115,7 @@ void Terminal::setupTerminal() {
   ui->textEdit->setCursorWidth(2);
 
   ui->textEdit->installEventFilter(this);
+  ui->textEdit->viewport()->installEventFilter(this);
 
   setupContextMenu();
 
@@ -384,6 +412,163 @@ bool Terminal::handleCommonInputKey(QKeyEvent *keyEvent) {
   return false;
 }
 
+bool Terminal::isPtyShellActive() const {
+#ifndef Q_OS_WIN
+  return m_shellPty && m_shellPty->isRunning();
+#else
+  return false;
+#endif
+}
+
+void Terminal::writeToShell(const QByteArray &data) {
+  if (data.isEmpty()) {
+    return;
+  }
+#ifndef Q_OS_WIN
+  if (m_shellPty && m_shellPty->isRunning()) {
+    m_shellPty->writeData(data);
+    return;
+  }
+#endif
+  if (m_process && m_process->state() == QProcess::Running) {
+    m_process->write(data);
+  }
+}
+
+bool Terminal::handlePtyKeyPress(QKeyEvent *keyEvent) {
+  const Qt::KeyboardModifiers mods = keyEvent->modifiers();
+  const bool ctrl = mods & Qt::ControlModifier;
+  const bool shift = mods & Qt::ShiftModifier;
+
+  if (ctrl && shift && keyEvent->key() == Qt::Key_C) {
+    if (ui->textEdit->textCursor().hasSelection()) {
+      ui->textEdit->copy();
+    }
+    return true;
+  }
+
+  if (ctrl && shift && keyEvent->key() == Qt::Key_V) {
+    writeToShell(QApplication::clipboard()->text().toUtf8());
+    return true;
+  }
+
+  if (ctrl) {
+    switch (keyEvent->key()) {
+    case Qt::Key_Plus:
+    case Qt::Key_Equal:
+      zoomIn();
+      return true;
+    case Qt::Key_Minus:
+      zoomOut();
+      return true;
+    case Qt::Key_0:
+      zoomReset();
+      return true;
+    case Qt::Key_C:
+      interruptActiveProcess();
+      return true;
+    case Qt::Key_D:
+      writeToShell(QByteArray(1, '\x04'));
+      return true;
+    case Qt::Key_L:
+      writeToShell(QByteArray(1, '\x0c'));
+      return true;
+    case Qt::Key_A:
+      writeToShell(QByteArray(1, '\x01'));
+      return true;
+    case Qt::Key_E:
+      writeToShell(QByteArray(1, '\x05'));
+      return true;
+    case Qt::Key_K:
+      writeToShell(QByteArray(1, '\x0b'));
+      return true;
+    case Qt::Key_U:
+      writeToShell(QByteArray(1, '\x15'));
+      return true;
+    case Qt::Key_W:
+      writeToShell(QByteArray(1, '\x17'));
+      return true;
+    default:
+      break;
+    }
+  }
+
+  QByteArray sequence;
+  switch (keyEvent->key()) {
+  case Qt::Key_Return:
+  case Qt::Key_Enter:
+    sequence = "\r";
+    break;
+  case Qt::Key_Backspace:
+    sequence = "\x7f";
+    break;
+  case Qt::Key_Tab:
+    sequence = "\t";
+    break;
+  case Qt::Key_Escape:
+    sequence = "\x1b";
+    break;
+  case Qt::Key_Up:
+    sequence = "\x1b[A";
+    break;
+  case Qt::Key_Down:
+    sequence = "\x1b[B";
+    break;
+  case Qt::Key_Right:
+    sequence = "\x1b[C";
+    break;
+  case Qt::Key_Left:
+    sequence = "\x1b[D";
+    break;
+  case Qt::Key_Home:
+    sequence = "\x1b[H";
+    break;
+  case Qt::Key_End:
+    sequence = "\x1b[F";
+    break;
+  case Qt::Key_Delete:
+    sequence = "\x1b[3~";
+    break;
+  case Qt::Key_PageUp:
+    sequence = "\x1b[5~";
+    break;
+  case Qt::Key_PageDown:
+    sequence = "\x1b[6~";
+    break;
+  default:
+    break;
+  }
+
+  if (!sequence.isEmpty()) {
+    writeToShell(sequence);
+    return true;
+  }
+
+  const QString text = keyEvent->text();
+  if (!text.isEmpty()) {
+    writeToShell(text.toUtf8());
+    return true;
+  }
+
+  return true;
+}
+
+void Terminal::updatePtySize() {
+#ifndef Q_OS_WIN
+  if (!m_shellPty || !ui || !ui->textEdit) {
+    return;
+  }
+
+  QFontMetrics metrics(ui->textEdit->font());
+  int charWidth = qMax(1, metrics.horizontalAdvance(QLatin1Char('M')));
+  int lineHeight = qMax(1, metrics.lineSpacing());
+  const QRect viewport = ui->textEdit->viewport()->rect();
+  int columns = qMax(20, viewport.width() / charWidth);
+  int rows = qMax(4, viewport.height() / lineHeight);
+  m_shellPty->resize(columns, rows);
+#endif
+}
+
 void Terminal::handleRunInputHistoryNavigation(bool up) {
   if (m_runInputHistory.isEmpty()) {
     return;
@@ -447,6 +632,12 @@ bool Terminal::startShell(const QString &workingDirectory) {
     m_restartTimer->stop();
   }
 
+#ifndef Q_OS_WIN
+  if (m_shellPty && m_shellPty->isRunning()) {
+    return true;
+  }
+#endif
+
   if (m_process && m_processRunning) {
     return true;
   }
@@ -460,17 +651,6 @@ bool Terminal::startShell(const QString &workingDirectory) {
     delete m_process;
     m_process = nullptr;
   }
-
-  m_process = new QProcess(this);
-
-  connect(m_process, &QProcess::readyReadStandardOutput, this,
-          &Terminal::onReadyReadStandardOutput);
-  connect(m_process, &QProcess::readyReadStandardError, this,
-          &Terminal::onReadyReadStandardError);
-  connect(m_process, &QProcess::errorOccurred, this, &Terminal::onProcessError);
-  connect(m_process,
-          QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-          &Terminal::onProcessFinished);
 
   if (!workingDirectory.isEmpty()) {
     m_workingDirectory = workingDirectory;
@@ -489,10 +669,58 @@ bool Terminal::startShell(const QString &workingDirectory) {
     m_workingDirectory = QDir::homePath();
   }
 
+#ifndef Q_OS_WIN
+  if (!m_shellPty) {
+    m_shellPty = new TerminalPty(this);
+    connect(m_shellPty, &TerminalPty::readyRead, this,
+            &Terminal::onPtyReadyRead);
+    connect(m_shellPty, &TerminalPty::finished, this,
+            &Terminal::onPtyFinished);
+    connect(m_shellPty, &TerminalPty::errorOccurred, this,
+            &Terminal::onPtyError);
+  }
+
+  QMap<QString, QString> ptyEnv = m_shellProfile.environment;
+  ptyEnv.insert("TERM", "xterm-256color");
+  ptyEnv.insert("COLORTERM", "truecolor");
+  ptyEnv.insert("LIGHTPAD_TERMINAL", "1");
+
+  QString shell = getShellCommand();
+  QStringList args = getShellArguments();
+  if (!m_shellPty->start(shell, args, m_workingDirectory, ptyEnv)) {
+    appendOutput("Error: Failed to start PTY shell process.\n", true);
+    emit errorOccurred("Failed to start shell");
+    return false;
+  }
+
+  m_processRunning = true;
+  m_restartAttempts = 0;
+  ui->textEdit->setReadOnly(false);
+  updatePtySize();
+  emit shellStarted();
+  return true;
+#else
+  m_process = new QProcess(this);
+
+  connect(m_process, &QProcess::readyReadStandardOutput, this,
+          &Terminal::onReadyReadStandardOutput);
+  connect(m_process, &QProcess::readyReadStandardError, this,
+          &Terminal::onReadyReadStandardError);
+  connect(m_process, &QProcess::errorOccurred, this, &Terminal::onProcessError);
+  connect(m_process,
+          QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+          &Terminal::onProcessFinished);
+
   m_process->setWorkingDirectory(m_workingDirectory);
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-  env.insert("TERM", "dumb");
+  env.insert("TERM", "xterm-256color");
+  env.insert("COLORTERM", "truecolor");
+  env.insert("LIGHTPAD_TERMINAL", "1");
+  for (auto it = m_shellProfile.environment.constBegin();
+       it != m_shellProfile.environment.constEnd(); ++it) {
+    env.insert(it.key(), it.value());
+  }
   m_process->setProcessEnvironment(env);
 
 #ifndef Q_OS_WIN
@@ -523,6 +751,7 @@ bool Terminal::startShell(const QString &workingDirectory) {
   emit shellStarted();
 
   return true;
+#endif
 }
 
 void Terminal::stopShell() {
@@ -532,6 +761,13 @@ void Terminal::stopShell() {
   }
 
   if (!m_process) {
+#ifndef Q_OS_WIN
+    if (m_shellPty) {
+      m_shellStopRequested = true;
+      m_shellPty->stop();
+      m_shellStopRequested = false;
+    }
+#endif
     return;
   }
 
@@ -552,6 +788,11 @@ void Terminal::stopShell() {
 }
 
 bool Terminal::isRunning() const {
+#ifndef Q_OS_WIN
+  if (m_shellPty && m_shellPty->isRunning()) {
+    return true;
+  }
+#endif
   return m_processRunning && m_process &&
          m_process->state() == QProcess::Running;
 }
@@ -577,14 +818,19 @@ bool Terminal::interruptActiveProcess() {
   bool interrupted = false;
 
 #ifndef Q_OS_WIN
+  if (m_shellPty && m_shellPty->isRunning()) {
+    interrupted = m_shellPty->interruptProcessGroup();
+  } else {
   const qint64 processId = m_process->processId();
   if (processId > 0) {
     interrupted = (::kill(-static_cast<pid_t>(processId), SIGINT) == 0);
   }
+  }
 #endif
 
   if (!interrupted) {
-    interrupted = (m_process->write("\x03", 1) == 1);
+    writeToShell(QByteArray(1, '\x03'));
+    interrupted = true;
   }
 
   if (interrupted) {
@@ -614,7 +860,7 @@ void Terminal::executeCommand(const QString &command) {
   }
 
   QString cmdWithNewline = command + "\n";
-  m_process->write(cmdWithNewline.toUtf8());
+  writeToShell(cmdWithNewline.toUtf8());
 }
 
 void Terminal::setWorkingDirectory(const QString &directory) {
@@ -631,7 +877,11 @@ void Terminal::clear() {
   m_inputStartPosition = 0;
   if (isRunning() &&
       !(m_runProcess && m_runProcess->state() != QProcess::NotRunning)) {
-    appendPrompt();
+    if (isPtyShellActive()) {
+      writeToShell(QByteArray(1, '\x0c'));
+    } else {
+      appendPrompt();
+    }
   }
 }
 
@@ -1063,6 +1313,37 @@ void Terminal::onProcessFinished(int exitCode,
   emit shellFinished(exitCode);
 }
 
+#ifndef Q_OS_WIN
+void Terminal::onPtyReadyRead(const QByteArray &data) {
+  QString output = QString::fromLocal8Bit(data);
+  appendOutput(output);
+}
+
+void Terminal::onPtyFinished(int exitCode, bool crashed) {
+  m_processRunning = false;
+  if (m_shellStopRequested) {
+    emit shellFinished(exitCode);
+    return;
+  }
+  if (crashed) {
+    appendOutput(QString("\nShell crashed (exit code: %1)\n").arg(exitCode),
+                 true);
+    if (m_autoRestartEnabled) {
+      scheduleAutoRestart();
+    }
+  } else {
+    appendOutput(QString("\nShell exited with code: %1\n").arg(exitCode));
+  }
+  emit shellFinished(exitCode);
+}
+
+void Terminal::onPtyError(const QString &message) {
+  m_processRunning = false;
+  appendOutput(QString("Error: %1\n").arg(message), true);
+  emit errorOccurred(message);
+}
+#endif
+
 void Terminal::onInputSubmitted() {
   if (!m_currentInput.isEmpty()) {
     executeCommand(m_currentInput);
@@ -1071,8 +1352,26 @@ void Terminal::onInputSubmitted() {
 }
 
 bool Terminal::eventFilter(QObject *obj, QEvent *event) {
-  if (obj == ui->textEdit && event->type() == QEvent::KeyPress) {
+  const bool terminalTextObject =
+      obj == ui->textEdit || obj == ui->textEdit->viewport();
+
+  if (terminalTextObject && event->type() == QEvent::MouseButtonRelease) {
+    const bool protectedInputSurface =
+        isPtyShellActive() ||
+        (m_runProcess && m_runProcess->state() != QProcess::NotRunning);
+    if (protectedInputSurface && !ui->textEdit->textCursor().hasSelection()) {
+      ui->textEdit->moveCursor(QTextCursor::End);
+      return true;
+    }
+  }
+
+  if (terminalTextObject && event->type() == QEvent::KeyPress) {
     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+
+    if (isPtyShellActive() &&
+        !(m_runProcess && m_runProcess->state() != QProcess::NotRunning)) {
+      return handlePtyKeyPress(keyEvent);
+    }
 
     if (handleCommonInputKey(keyEvent)) {
       return true;
@@ -1178,7 +1477,7 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
       } else {
 
         if (m_process && m_process->state() == QProcess::Running) {
-          m_process->write("\n");
+          writeToShell("\n");
         }
       }
       return true;
@@ -1206,7 +1505,7 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
     case Qt::Key_D:
       if (keyEvent->modifiers() & Qt::ControlModifier) {
         if (isRunning()) {
-          m_process->write("\x04");
+          writeToShell(QByteArray(1, '\x04'));
         }
         return true;
       }
@@ -1534,38 +1833,85 @@ void Terminal::handleTabCompletion() {
 
 void Terminal::applyTheme(const QString &backgroundColor,
                           const QString &textColor, const QString &errorColor) {
+  const ThemeDefinition &td = ThemeEngine::instance().activeTheme();
   if (!backgroundColor.isEmpty()) {
-    m_backgroundColor = backgroundColor;
+    m_backgroundColor =
+        td.colors.termBg.isValid() ? td.colors.termBg.name() : backgroundColor;
   }
   if (!textColor.isEmpty()) {
-    m_textColor = textColor;
+    m_textColor =
+        td.colors.termFg.isValid() ? td.colors.termFg.name() : textColor;
   }
   if (!errorColor.isEmpty()) {
     m_errorColor = errorColor;
+  } else if (td.colors.statusError.isValid()) {
+    m_errorColor = td.colors.statusError.name();
+  }
+  if (td.colors.textLink.isValid()) {
+    m_linkColor = td.colors.textLink.name();
+  } else if (td.colors.accentPrimary.isValid()) {
+    m_linkColor = td.colors.accentPrimary.name();
   }
 
   updateStyleSheet();
 }
 
 void Terminal::updateStyleSheet() {
-  QColor bg(m_backgroundColor);
-  bool isDark = bg.lightnessF() < 0.5;
-  QString scrollbarColor =
-      isDark ? bg.lighter(200).name() : bg.darker(150).name();
-  QString scrollbarHoverColor =
-      isDark ? bg.lighter(250).name() : bg.darker(200).name();
+  const ThemeDefinition &td = ThemeEngine::instance().activeTheme();
+  const ThemeColors &colors = td.colors;
+  QColor bg = colors.termBg.isValid()
+                  ? colors.termBg
+                  : (colors.surfaceBase.isValid() ? colors.surfaceBase
+                                                   : QColor(m_backgroundColor));
+  QColor fg = colors.termFg.isValid() ? colors.termFg : QColor(m_textColor);
+  QColor accent = colors.termCursor.isValid()
+                      ? colors.termCursor
+                      : (colors.accentPrimary.isValid() ? colors.accentPrimary
+                                                        : QColor(m_linkColor));
+  QColor selection = colors.termSelection.isValid()
+                         ? colors.termSelection
+                         : (colors.inputSelection.isValid()
+                                ? colors.inputSelection
+                                : QColor(m_linkColor));
+  QColor border = colors.borderSubtle.isValid()
+                      ? colors.borderSubtle
+                      : (colors.borderDefault.isValid() ? colors.borderDefault
+                                                        : bg.lighter(160));
+  QColor glow = colors.accentGlow.isValid() ? colors.accentGlow : accent;
+  QColor scrollTrack = colors.scrollTrack.isValid() ? colors.scrollTrack : bg;
+  QColor scrollThumb =
+      colors.scrollThumb.isValid() ? colors.scrollThumb : border;
+  QColor scrollThumbHover =
+      colors.scrollThumbHover.isValid() ? colors.scrollThumbHover : accent;
+
+  m_backgroundColor = bg.name();
+  m_textColor = fg.name();
+  m_linkColor = accent.name();
+
+  setAttribute(Qt::WA_StyledBackground, true);
+  setStyleSheet(QString("QWidget#Terminal {"
+                        "  background-color: %1;"
+                        "  border: none;"
+                        "  margin: 0;"
+                        "  padding: 0;"
+                        "}")
+                    .arg(bg.name()));
+
+  ui->textEdit->setVisualTheme(bg, fg, accent, selection, border, glow,
+                               td.ui.scanlineEffect,
+                               ThemeEngine::instance().glowIntensity());
 
   QString styleSheet =
       QString("QPlainTextEdit {"
               "  background-color: %1;"
               "  color: %2;"
-              "  selection-background-color: rgba(88, 166, 255, 0.25);"
+              "  selection-background-color: %5;"
               "  selection-color: %2;"
               "  border: none;"
-              "  padding: 4px 8px;"
+              "  padding: 0;"
               "}"
               "QPlainTextEdit QScrollBar:vertical {"
-              "  background: %1;"
+              "  background: %6;"
               "  width: 10px;"
               "  margin: 0;"
               "}"
@@ -1583,7 +1929,7 @@ void Terminal::updateStyleSheet() {
               "  background: none;"
               "}"
               "QPlainTextEdit QScrollBar:horizontal {"
-              "  background: %1;"
+              "  background: %6;"
               "  height: 10px;"
               "  margin: 0;"
               "}"
@@ -1600,31 +1946,39 @@ void Terminal::updateStyleSheet() {
               "  width: 0;"
               "  background: none;"
               "}")
-          .arg(m_backgroundColor, m_textColor, scrollbarColor,
-               scrollbarHoverColor);
+          .arg(bg.name(), fg.name(), scrollThumb.name(),
+               scrollThumbHover.name(), rgba(selection, 0.34),
+               scrollTrack.name());
 
   ui->textEdit->setStyleSheet(styleSheet);
 
   QString cwdLabelStyle = QString("QLabel {"
-                                  "  color: %1;"
+                                  "  color: %2;"
                                   "  font-size: 11px;"
-                                  "  padding: 2px 0;"
-                                  "  background: transparent;"
+                                  "  font-weight: 600;"
+                                  "  padding: 5px 12px;"
+                                  "  background: %1;"
+                                  "  border-top: 1px solid %3;"
+                                  "  border-left: 1px solid %3;"
+                                  "  border-right: 1px solid %3;"
                                   "}")
-                              .arg(m_textColor);
+                              .arg(colors.surfaceRaised.isValid()
+                                       ? colors.surfaceRaised.name()
+                                       : bg.lighter(104).name(),
+                                   accent.name(), rgba(border, 0.44));
   ui->cwdLabel->setStyleSheet(cwdLabelStyle);
 
   if (m_runInputIndicator) {
     QString indicatorStyle =
         QString("QLabel#runInputIndicator {"
                 "  color: %1;"
-                "  background: rgba(88, 166, 255, 0.14);"
-                "  border: 1px solid rgba(88, 166, 255, 0.35);"
+                "  background: %2;"
+                "  border: 1px solid %3;"
                 "  border-radius: 4px;"
                 "  padding: 1px 6px;"
                 "  font-size: 11px;"
                 "}")
-            .arg(m_linkColor);
+            .arg(accent.name(), rgba(selection, 0.28), rgba(accent, 0.32));
     m_runInputIndicator->setStyleSheet(indicatorStyle);
   }
 }
@@ -1756,7 +2110,7 @@ void Terminal::sendText(const QString &text, bool appendNewline) {
     textToSend += "\n";
   }
 
-  m_process->write(textToSend.toUtf8());
+  writeToShell(textToSend.toUtf8());
 }
 
 void Terminal::setScrollbackLines(int lines) {
@@ -1795,6 +2149,11 @@ void Terminal::mousePressEvent(QMouseEvent *event) {
     }
   }
   QWidget::mousePressEvent(event);
+}
+
+void Terminal::resizeEvent(QResizeEvent *event) {
+  QWidget::resizeEvent(event);
+  updatePtySize();
 }
 
 QString Terminal::getLinkAtPosition(const QPoint &pos) {
@@ -1901,34 +2260,6 @@ QString Terminal::formatPythonBanner(const PythonEnvironmentInfo &info) const {
 }
 
 void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
-  static const QRegularExpression sgrRegex(R"(\x1b\[([0-9;]*)m)");
-  static const QRegularExpression nonSgrAnsiRegex(
-      R"(\x1b\[[0-9;?]*[A-Za-np-zA-NP-Z])"
-      R"(|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?)"
-      R"(|\x1b[()][AB012])"
-      R"(|\x1b[=>])"
-      R"(|\x1b[DME78HcNO])"
-      R"(|\x07)");
-
-  QString cleaned = text;
-  cleaned.remove(nonSgrAnsiRegex);
-
-  QString processed;
-  processed.reserve(cleaned.size());
-  for (const QChar &ch : cleaned) {
-    if (ch == '\x08') {
-      if (!processed.isEmpty()) {
-        processed.chop(1);
-      }
-    } else {
-      processed.append(ch);
-    }
-  }
-
-  if (processed.isEmpty()) {
-    return;
-  }
-
   QColor currentFg = QColor(m_textColor);
   QColor currentBg;
   bool bold = false;
@@ -1958,18 +2289,7 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
     return fmt;
   };
 
-  int lastEnd = 0;
-  QRegularExpressionMatchIterator it = sgrRegex.globalMatch(processed);
-
-  while (it.hasNext()) {
-    QRegularExpressionMatch match = it.next();
-
-    if (match.capturedStart() > lastEnd) {
-      QString segment = processed.mid(lastEnd, match.capturedStart() - lastEnd);
-      cursor.insertText(segment, applyFormat());
-    }
-
-    QString params = match.captured(1);
+  auto applySgrCodes = [&](const QString &params) {
     QStringList codes = params.split(';', Qt::SkipEmptyParts);
 
     if (codes.isEmpty() || params.isEmpty()) {
@@ -2033,13 +2353,130 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
         currentBg = ansi256Color(n - 100 + 8);
       }
     }
+  };
 
-    lastEnd = match.capturedEnd();
-  }
+  auto deletePreviousCharacter = [&]() {
+    if (cursor.position() <= 0) {
+      return;
+    }
+    QTextCursor probe = cursor;
+    probe.movePosition(QTextCursor::PreviousCharacter,
+                       QTextCursor::KeepAnchor);
+    if (probe.selectedText() == QChar(0x2029)) {
+      return;
+    }
+    probe.removeSelectedText();
+    cursor = probe;
+  };
 
-  if (lastEnd < processed.length()) {
-    QString segment = processed.mid(lastEnd);
-    cursor.insertText(segment, applyFormat());
+  auto eraseToEndOfLine = [&]() {
+    QTextCursor erase = cursor;
+    erase.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    erase.removeSelectedText();
+    cursor = erase;
+  };
+
+  for (int i = 0; i < text.length(); ++i) {
+    const QChar ch = text.at(i);
+
+    if (ch == QChar('\x1b')) {
+      if (i + 1 >= text.length()) {
+        continue;
+      }
+
+      const QChar next = text.at(i + 1);
+      if (next == '[') {
+        int j = i + 2;
+        while (j < text.length() &&
+               !text.at(j).isLetter() &&
+               text.at(j) != QChar('~') &&
+               text.at(j) != QChar('@')) {
+          ++j;
+        }
+        if (j >= text.length()) {
+          break;
+        }
+
+        const QString params = text.mid(i + 2, j - i - 2);
+        const QChar final = text.at(j);
+        QStringList parts = params.split(';', Qt::SkipEmptyParts);
+        int count = parts.isEmpty() ? 1 : qMax(1, parts.first().toInt());
+
+        if (final == 'm') {
+          applySgrCodes(params);
+        } else if (final == 'D') {
+          for (int n = 0; n < count; ++n) {
+            cursor.movePosition(QTextCursor::PreviousCharacter);
+          }
+        } else if (final == 'C') {
+          for (int n = 0; n < count; ++n) {
+            cursor.movePosition(QTextCursor::NextCharacter);
+          }
+        } else if (final == 'K') {
+          const int mode = parts.isEmpty() ? 0 : parts.first().toInt();
+          if (mode == 0) {
+            eraseToEndOfLine();
+          } else if (mode == 1) {
+            QTextCursor erase = cursor;
+            erase.movePosition(QTextCursor::StartOfBlock,
+                               QTextCursor::KeepAnchor);
+            erase.removeSelectedText();
+            cursor = erase;
+          } else if (mode == 2) {
+            cursor.movePosition(QTextCursor::StartOfBlock);
+            eraseToEndOfLine();
+          }
+        } else if (final == 'G') {
+          cursor.movePosition(QTextCursor::StartOfBlock);
+          for (int n = 1; n < count; ++n) {
+            cursor.movePosition(QTextCursor::NextCharacter);
+          }
+        }
+        i = j;
+      } else if (next == ']') {
+        int j = i + 2;
+        while (j < text.length()) {
+          if (text.at(j) == QChar('\x07')) {
+            break;
+          }
+          if (text.at(j) == QChar('\x1b') && j + 1 < text.length() &&
+              text.at(j + 1) == '\\') {
+            ++j;
+            break;
+          }
+          ++j;
+        }
+        i = j;
+      } else {
+        ++i;
+      }
+      continue;
+    }
+
+    if (ch == QChar('\x08') || ch == QChar('\x7f')) {
+      deletePreviousCharacter();
+      continue;
+    }
+
+    if (ch == QChar('\r')) {
+      if (i + 1 < text.length() && text.at(i + 1) == QChar('\n')) {
+        continue;
+      }
+      cursor.movePosition(QTextCursor::StartOfBlock);
+      continue;
+    }
+
+    if (ch == QChar('\n')) {
+      cursor.movePosition(QTextCursor::EndOfBlock);
+      cursor.insertBlock();
+      continue;
+    }
+
+    if (ch == QChar('\x07')) {
+      continue;
+    }
+
+    cursor.insertText(QString(ch), applyFormat());
   }
 }
 

@@ -329,7 +329,8 @@ void TestSplitEditorContainer::testTabThemeUsesThemeDrivenColors() {
   const QString style = tabWidget.styleSheet();
   QVERIFY(style.contains("#23435b"));
   QVERIFY(style.contains("#61dafb"));
-  QVERIFY(style.contains("border-top-left-radius: 10px;"));
+  QVERIFY(style.contains("border-radius: 0px;"));
+  QVERIFY(style.contains("border-right: 1px solid #314657;"));
   QVERIFY(style.contains("QToolButton#AddTabButton"));
 
   auto *closeButton = qobject_cast<QToolButton *>(

@@ -9,6 +9,7 @@
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QHBoxLayout>
 #include <QInputDialog>
 #include <QItemSelectionModel>
 #include <QJsonArray>
@@ -185,6 +186,8 @@ MainWindow::MainWindow(QWidget *parent)
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
   setDockOptions(DockUtils::mainWindowDockOptions());
+  setCorner(Qt::BottomLeftCorner, Qt::BottomDockWidgetArea);
+  setCorner(Qt::BottomRightCorner, Qt::BottomDockWidgetArea);
   ui->menubar->setNativeMenuBar(false);
   ui->actionFind_in_file->setShortcut(QKeySequence::Find);
   ui->actionFind_in_file->setShortcutContext(Qt::ApplicationShortcut);
@@ -833,6 +836,37 @@ void MainWindow::restoreSessionUiState() {
   if (!dockStateBase64.isEmpty()) {
     QMainWindow::restoreState(
         QByteArray::fromBase64(dockStateBase64.toLatin1()));
+  }
+  setCorner(Qt::BottomLeftCorner, Qt::BottomDockWidgetArea);
+  setCorner(Qt::BottomRightCorner, Qt::BottomDockWidgetArea);
+
+  if (showTerminalDock) {
+    ensureTerminalWidget();
+    if (m_terminalDock) {
+      m_terminalDock->show();
+      m_terminalDock->raise();
+    }
+  }
+  if (showProblemsDock) {
+    showProblemsPanel();
+  }
+  if (showDebugDock) {
+    ensureDebugPanel();
+    if (debugDock) {
+      debugDock->show();
+      debugDock->raise();
+    }
+  }
+  if (showTestDock) {
+    ensureTestPanel();
+    if (testDock) {
+      testDock->show();
+      testDock->raise();
+    }
+  }
+  if (ui->actionToggle_Terminal) {
+    ui->actionToggle_Terminal->setChecked(m_terminalDock &&
+                                          m_terminalDock->isVisible());
   }
 
   if (findReplacePanel && findReplacePanel->isVisible()) {
@@ -2352,9 +2386,10 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
       }
     });
 
-    m_terminalDock = new QDockWidget(tr("Terminal"), this);
+    m_terminalDock = new QDockWidget(QString(), this);
     m_terminalDock->setObjectName("terminalDock");
     DockUtils::configureToolPanelDock(m_terminalDock);
+
     m_terminalDock->setWidget(terminalWidget);
     addDockWidget(Qt::BottomDockWidgetArea, m_terminalDock);
     tabifyBottomDock(m_terminalDock);
@@ -6695,6 +6730,8 @@ void MainWindow::setTheme(Theme theme) {
   const ThemeColors &tc = td.colors;
 
   QString bgColor = tc.surfaceBase.name();
+  QString terminalBgColor =
+      tc.termBg.isValid() ? tc.termBg.name() : tc.surfaceBase.name();
   QString fgColor = tc.textPrimary.name();
   QString surfaceColor = tc.surfaceRaised.name();
   QString surfaceAltColor = tc.surfaceOverlay.name();
@@ -7305,6 +7342,27 @@ void MainWindow::setTheme(Theme theme) {
       "; "
       "border-radius: 4px; "
       "}"
+      "QDockWidget#terminalDock { "
+      "background-color: " +
+      terminalBgColor +
+      "; "
+      "border: none; "
+      "margin: 0; "
+      "padding: 0; "
+      "}"
+      "QDockWidget#terminalDock::title { "
+      "background-color: " +
+      terminalBgColor +
+      "; "
+      "color: " +
+      terminalBgColor +
+      "; "
+      "border: none; "
+      "border-bottom: 1px solid " +
+      terminalBgColor +
+      "; "
+      "padding: 0; "
+      "}"
 
       "QMainWindow::separator { "
       "background-color: " +
@@ -7416,6 +7474,28 @@ void MainWindow::setTheme(Theme theme) {
       "letter-spacing: 1px; "
       "text-transform: uppercase; "
       "}"
+      "QDockWidget#terminalDock { "
+      "background-color: " +
+      terminalBgColor +
+      "; "
+      "border: none; "
+      "margin: 0; "
+      "padding: 0; "
+      "}"
+      "QDockWidget#terminalDock::title { "
+      "background-color: " +
+      terminalBgColor +
+      "; "
+      "color: " +
+      terminalBgColor +
+      "; "
+      "border: none; "
+      "border-bottom: 1px solid " +
+      terminalBgColor +
+      "; "
+      "padding: 0; "
+      "margin: 0; "
+      "}"
       "QWidget#FindReplacePanel { "
       "background-color: " +
       surfaceColor +
@@ -7426,19 +7506,19 @@ void MainWindow::setTheme(Theme theme) {
       "}"
       "QWidget#Terminal { "
       "background-color: " +
-      surfaceColor +
+      terminalBgColor +
       "; "
-      "border-top: 1px solid " +
-      borderColor +
-      "; "
+      "border: none; "
+      "margin: 0; "
+      "padding: 0; "
       "}"
       "QWidget#TerminalTabWidget { "
       "background-color: " +
-      surfaceColor +
+      terminalBgColor +
       "; "
-      "border-top: 1px solid " +
-      borderColor +
-      "; "
+      "border: none; "
+      "margin: 0; "
+      "padding: 0; "
       "}"
 
       "QDialog QPushButton { "
