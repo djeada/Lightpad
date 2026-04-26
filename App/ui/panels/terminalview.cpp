@@ -1,10 +1,8 @@
 #include "terminalview.h"
 
-#include <QLinearGradient>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
-#include <QRadialGradient>
 #include <QScrollBar>
 
 TerminalView::TerminalView(QWidget *parent)
@@ -45,22 +43,7 @@ void TerminalView::paintEvent(QPaintEvent *event) {
     QPainter backgroundPainter(viewport());
     backgroundPainter.setRenderHint(QPainter::Antialiasing, false);
     const QRect r = viewport()->rect();
-
-    QLinearGradient base(r.topLeft(), r.bottomLeft());
-    base.setColorAt(0.0, m_background.lighter(102));
-    base.setColorAt(0.52, m_background);
-    base.setColorAt(1.0, m_background.darker(103));
-    backgroundPainter.fillRect(r, base);
-
-    if (m_glowIntensity > 0.01) {
-      QRadialGradient upperLeft(
-          QPointF(r.left() + r.width() * 0.16, r.top() + r.height() * 0.08),
-          qMax(r.width(), r.height()) * 0.42);
-      upperLeft.setColorAt(0.0, withAlpha(m_glow, 0.035 * m_glowIntensity));
-      upperLeft.setColorAt(0.42, withAlpha(m_accent, 0.012 * m_glowIntensity));
-      upperLeft.setColorAt(1.0, Qt::transparent);
-      backgroundPainter.fillRect(r, upperLeft);
-    }
+    backgroundPainter.fillRect(r, m_background);
   }
 
   QPlainTextEdit::paintEvent(event);
@@ -79,44 +62,12 @@ void TerminalView::paintEvent(QPaintEvent *event) {
                      caretGlow);
   }
 
-  if (m_glowIntensity > 0.01) {
-    QLinearGradient topGlow(r.topLeft(), QPoint(r.left(), r.top() + 52));
-    topGlow.setColorAt(0.0, withAlpha(m_glow, 0.012 * m_glowIntensity));
-    topGlow.setColorAt(1.0, Qt::transparent);
-    painter.fillRect(QRect(r.left(), r.top(), r.width(), 52), topGlow);
-
-    QLinearGradient leftGlow(r.topLeft(), QPoint(r.left() + 72, r.top()));
-    leftGlow.setColorAt(0.0, withAlpha(m_accent, 0.014 * m_glowIntensity));
-    leftGlow.setColorAt(1.0, Qt::transparent);
-    painter.fillRect(QRect(r.left(), r.top(), 72, r.height()), leftGlow);
-  }
-
   if (m_scanlines) {
     painter.setPen(withAlpha(m_foreground, 0.018));
     for (int y = r.top(); y < r.bottom(); y += 5) {
       painter.drawLine(r.left(), y, r.right(), y);
     }
   }
-
-  QRadialGradient vignette(r.center(), qMax(r.width(), r.height()) * 0.72);
-  vignette.setColorAt(0.0, Qt::transparent);
-  vignette.setColorAt(0.86, Qt::transparent);
-  vignette.setColorAt(1.0, QColor(0, 0, 0, 18));
-  painter.fillRect(r, vignette);
-
-  QPen edgePen(withAlpha(m_border, 0.28));
-  painter.setPen(edgePen);
-  painter.drawLine(r.bottomLeft(), r.bottomRight());
-
-  QColor accentLine = withAlpha(m_accent, 0.14 + 0.12 * m_glowIntensity);
-  painter.fillRect(QRect(r.left(), r.top(), 1, r.height()), accentLine);
-
-  const int corner = 18;
-  painter.setPen(QPen(withAlpha(m_accent, 0.11 + 0.14 * m_glowIntensity), 1));
-  painter.drawLine(r.left() + 6, r.top() + 6, r.left() + corner, r.top() + 6);
-  painter.drawLine(r.left() + 6, r.top() + 6, r.left() + 6, r.top() + corner);
-  painter.drawLine(r.right() - 6, r.top() + 6, r.right() - corner, r.top() + 6);
-  painter.drawLine(r.right() - 6, r.top() + 6, r.right() - 6, r.top() + corner);
 }
 
 QColor TerminalView::withAlpha(const QColor &color, qreal alpha) const {

@@ -14,6 +14,7 @@
 #include <QMenu>
 #include <QSizePolicy>
 #include <QSplitter>
+#include <QTabBar>
 #include <QStyle>
 #include <QTabWidget>
 #include <QToolButton>
@@ -77,6 +78,7 @@ QTabWidget *TerminalTabWidget::createTabWidget() {
   tabWidget->setMovable(true);
   tabWidget->setDocumentMode(true);
   tabWidget->setUsesScrollButtons(false);
+  tabWidget->tabBar()->setDrawBase(false);
 
   connect(tabWidget, &QTabWidget::tabCloseRequested, this,
           &TerminalTabWidget::onTabCloseRequested);
@@ -566,11 +568,14 @@ void TerminalTabWidget::applyTabStyle(QTabWidget *tabWidget,
                                    "QTabBar {"
                                    "  background: %1;"
                                    "  border: none;"
+                                   "  qproperty-drawBase: 0;"
                                    "}"
                                    "QTabBar::base {"
-                                   "  height: 0;"
+                                   "  height: 0px;"
+                                   "  min-height: 0px;"
+                                   "  max-height: 0px;"
                                    "  border: none;"
-                                   "  background: %1;"
+                                   "  background: transparent;"
                                    "}"
                                    "QTabBar::tab {"
                                    "  background-color: transparent;"
