@@ -42,8 +42,7 @@ void TerminalView::paintEvent(QPaintEvent *event) {
   {
     QPainter backgroundPainter(viewport());
     backgroundPainter.setRenderHint(QPainter::Antialiasing, false);
-    const QRect r = viewport()->rect();
-    backgroundPainter.fillRect(r, m_background);
+    backgroundPainter.fillRect(viewport()->rect(), m_background);
   }
 
   QPlainTextEdit::paintEvent(event);
