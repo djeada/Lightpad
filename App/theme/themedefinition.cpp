@@ -127,8 +127,10 @@ ThemeDefinition::ThemeDefinition() {
 
   ui.borderRadius = 7;
   ui.glowIntensity = 0.16;
+  ui.chromeOpacity = 1.0;
   ui.animationSpeed = "normal";
   ui.scanlineEffect = false;
+  ui.panelBorders = true;
 }
 
 Theme ThemeDefinition::toClassicTheme() const {
@@ -158,6 +160,11 @@ Theme ThemeDefinition::toClassicTheme() const {
   t.successColor = colors.statusSuccess;
   t.warningColor = colors.statusWarning;
   t.errorColor = colors.statusError;
+  t.borderRadius = ui.borderRadius;
+  t.glowIntensity = ui.glowIntensity;
+  t.chromeOpacity = ui.chromeOpacity;
+  t.scanlineEffect = ui.scanlineEffect;
+  t.panelBorders = ui.panelBorders;
   return t;
 }
 
@@ -287,6 +294,12 @@ ThemeDefinition ThemeDefinition::fromClassicTheme(const Theme &c,
   d.colors.statusWarning = c.warningColor;
   d.colors.statusError = c.errorColor;
   d.colors.statusInfo = c.accentColor;
+
+  d.ui.borderRadius = c.borderRadius;
+  d.ui.glowIntensity = c.glowIntensity;
+  d.ui.chromeOpacity = c.chromeOpacity;
+  d.ui.scanlineEffect = c.scanlineEffect;
+  d.ui.panelBorders = c.panelBorders;
 
   return d;
 }
@@ -460,10 +473,14 @@ void ThemeDefinition::read(const QJsonObject &json) {
       ui.borderRadius = uiObj["borderRadius"].toInt();
     if (uiObj.contains("glowIntensity") && uiObj["glowIntensity"].isDouble())
       ui.glowIntensity = uiObj["glowIntensity"].toDouble();
+    if (uiObj.contains("chromeOpacity") && uiObj["chromeOpacity"].isDouble())
+      ui.chromeOpacity = uiObj["chromeOpacity"].toDouble();
     if (uiObj.contains("animationSpeed") && uiObj["animationSpeed"].isString())
       ui.animationSpeed = uiObj["animationSpeed"].toString();
     if (uiObj.contains("scanlineEffect") && uiObj["scanlineEffect"].isBool())
       ui.scanlineEffect = uiObj["scanlineEffect"].toBool();
+    if (uiObj.contains("panelBorders") && uiObj["panelBorders"].isBool())
+      ui.panelBorders = uiObj["panelBorders"].toBool();
   }
 }
 
@@ -596,8 +613,10 @@ void ThemeDefinition::write(QJsonObject &json) const {
   QJsonObject uiObj;
   uiObj["borderRadius"] = ui.borderRadius;
   uiObj["glowIntensity"] = ui.glowIntensity;
+  uiObj["chromeOpacity"] = ui.chromeOpacity;
   uiObj["animationSpeed"] = ui.animationSpeed;
   uiObj["scanlineEffect"] = ui.scanlineEffect;
+  uiObj["panelBorders"] = ui.panelBorders;
   json["ui"] = uiObj;
 }
 

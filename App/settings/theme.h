@@ -33,6 +33,12 @@ struct Theme {
   QColor warningColor;
   QColor errorColor;
 
+  int borderRadius = 6;
+  qreal glowIntensity = 0.0;
+  qreal chromeOpacity = 1.0;
+  bool scanlineEffect = false;
+  bool panelBorders = true;
+
   Theme();
   void read(const QJsonObject &json);
   void write(QJsonObject &json);

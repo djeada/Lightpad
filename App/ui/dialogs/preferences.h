@@ -36,6 +36,10 @@ private:
   void onColorSwatchClicked(QToolButton *button, const QString &role);
   void onThemePresetChanged(int row);
   void onScanlinesToggled(bool enabled);
+  void onGlowPresetChanged(int index);
+  void onPanelBordersToggled(bool enabled);
+  void onTransparencyPresetChanged(int index);
+  void applyThemeEffects();
 
   MainWindow *m_mainWindow;
 
@@ -56,6 +60,9 @@ private:
   QListWidget *m_themeList;
   QWidget *m_themePreview;
   QCheckBox *m_scanlinesCheck = nullptr;
+  QComboBox *m_glowCombo = nullptr;
+  QCheckBox *m_panelBordersCheck = nullptr;
+  QComboBox *m_transparencyCombo = nullptr;
 
   QMap<QString, QToolButton *> m_colorSwatches;
 };

@@ -30,7 +30,9 @@ public:
 
   int animationDuration() const;
   qreal glowIntensity() const;
+  qreal chromeOpacity() const;
   int borderRadius() const;
+  bool panelBordersEnabled() const;
 
 signals:
   void themeChanged(const ThemeDefinition &theme);

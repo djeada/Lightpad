@@ -55,8 +55,10 @@ struct ThemeColors {
 struct ThemeUiConfig {
   int borderRadius = 6;
   qreal glowIntensity = 0.3;
+  qreal chromeOpacity = 1.0;
   QString animationSpeed = "normal";
   bool scanlineEffect = false;
+  bool panelBorders = true;
 };
 
 class ThemeDefinition {

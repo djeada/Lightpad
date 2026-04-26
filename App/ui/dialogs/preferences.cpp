@@ -14,6 +14,7 @@
 #include <QPainter>
 #include <QScrollArea>
 #include <QVBoxLayout>
+#include <QtGlobal>
 
 namespace {
 class ThemePreviewCard : public QWidget {
@@ -186,16 +187,47 @@ void Preferences::buildUi() {
   mainLayout->addWidget(createSeparator());
   mainLayout->addWidget(buildThemeSection());
   {
-    auto *fxRow = new QHBoxLayout();
-    fxRow->setSpacing(10);
+    auto *fxGrid = new QGridLayout();
+    fxGrid->setHorizontalSpacing(12);
+    fxGrid->setVerticalSpacing(8);
+
+    auto *glowLabel = new QLabel("Glow", this);
+    m_glowCombo = new QComboBox(this);
+    m_glowCombo->addItem("Off", 0.0);
+    m_glowCombo->addItem("Low", 0.12);
+    m_glowCombo->addItem("Medium", 0.28);
+    m_glowCombo->addItem("High", 0.5);
+    connect(m_glowCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &Preferences::onGlowPresetChanged);
+    fxGrid->addWidget(glowLabel, 0, 0);
+    fxGrid->addWidget(m_glowCombo, 0, 1);
+
+    auto *transparencyLabel = new QLabel("Transparency", this);
+    m_transparencyCombo = new QComboBox(this);
+    m_transparencyCombo->addItem("Off", 1.0);
+    m_transparencyCombo->addItem("Low", 0.94);
+    m_transparencyCombo->addItem("Medium", 0.86);
+    connect(m_transparencyCombo,
+            QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &Preferences::onTransparencyPresetChanged);
+    fxGrid->addWidget(transparencyLabel, 0, 2);
+    fxGrid->addWidget(m_transparencyCombo, 0, 3);
+
     m_scanlinesCheck = new QCheckBox("CRT scanline overlay", this);
     m_scanlinesCheck->setChecked(
-        SettingsManager::instance().getValue("scanlineEffect", false).toBool());
+        ThemeEngine::instance().activeTheme().ui.scanlineEffect);
     connect(m_scanlinesCheck, &QCheckBox::toggled, this,
             &Preferences::onScanlinesToggled);
-    fxRow->addWidget(m_scanlinesCheck);
-    fxRow->addStretch();
-    mainLayout->addLayout(fxRow);
+    fxGrid->addWidget(m_scanlinesCheck, 1, 0, 1, 2);
+
+    m_panelBordersCheck = new QCheckBox("Subtle panel borders", this);
+    m_panelBordersCheck->setChecked(
+        ThemeEngine::instance().activeTheme().ui.panelBorders);
+    connect(m_panelBordersCheck, &QCheckBox::toggled, this,
+            &Preferences::onPanelBordersToggled);
+    fxGrid->addWidget(m_panelBordersCheck, 1, 2, 1, 2);
+    fxGrid->setColumnStretch(4, 1);
+    mainLayout->addLayout(fxGrid);
   }
   mainLayout->addSpacing(8);
 
@@ -377,6 +409,39 @@ void Preferences::loadCurrentSettings() {
   m_lineNumbersCheck->setChecked(textSettings.showLineNumberArea);
   m_currentLineCheck->setChecked(textSettings.lineHighlighted);
   m_bracketMatchCheck->setChecked(textSettings.matchingBracketsHighlighted);
+
+  const ThemeDefinition &activeTheme = ThemeEngine::instance().activeTheme();
+  if (m_glowCombo) {
+    const qreal glow = activeTheme.ui.glowIntensity;
+    int best = 0;
+    qreal bestDistance = 10.0;
+    for (int i = 0; i < m_glowCombo->count(); ++i) {
+      qreal distance = qAbs(m_glowCombo->itemData(i).toDouble() - glow);
+      if (distance < bestDistance) {
+        best = i;
+        bestDistance = distance;
+      }
+    }
+    m_glowCombo->setCurrentIndex(best);
+  }
+  if (m_transparencyCombo) {
+    const qreal opacity = activeTheme.ui.chromeOpacity;
+    int best = 0;
+    qreal bestDistance = 10.0;
+    for (int i = 0; i < m_transparencyCombo->count(); ++i) {
+      qreal distance =
+          qAbs(m_transparencyCombo->itemData(i).toDouble() - opacity);
+      if (distance < bestDistance) {
+        best = i;
+        bestDistance = distance;
+      }
+    }
+    m_transparencyCombo->setCurrentIndex(best);
+  }
+  if (m_scanlinesCheck)
+    m_scanlinesCheck->setChecked(activeTheme.ui.scanlineEffect);
+  if (m_panelBordersCheck)
+    m_panelBordersCheck->setChecked(activeTheme.ui.panelBorders);
 
   auto updateSwatch = [&](const QString &role, const QColor &color) {
     if (m_colorSwatches.contains(role)) {
@@ -603,11 +668,49 @@ QWidget *Preferences::buildThemeSection() {
 }
 
 void Preferences::onScanlinesToggled(bool enabled) {
-  SettingsManager::instance().setValue("scanlineEffect", enabled);
-  SettingsManager::instance().saveSettings();
-  if (m_mainWindow) {
-    m_mainWindow->setScanlineEffectEnabled(enabled);
-  }
+  ThemeDefinition d = ThemeEngine::instance().activeTheme();
+  d.ui.scanlineEffect = enabled;
+  ThemeEngine::instance().setActiveTheme(d);
+  applyThemeEffects();
+}
+
+void Preferences::onGlowPresetChanged(int index) {
+  if (!m_glowCombo || index < 0)
+    return;
+  ThemeDefinition d = ThemeEngine::instance().activeTheme();
+  d.ui.glowIntensity = m_glowCombo->itemData(index).toDouble();
+  ThemeEngine::instance().setActiveTheme(d);
+  applyThemeEffects();
+}
+
+void Preferences::onPanelBordersToggled(bool enabled) {
+  ThemeDefinition d = ThemeEngine::instance().activeTheme();
+  d.ui.panelBorders = enabled;
+  ThemeEngine::instance().setActiveTheme(d);
+  applyThemeEffects();
+}
+
+void Preferences::onTransparencyPresetChanged(int index) {
+  if (!m_transparencyCombo || index < 0)
+    return;
+  ThemeDefinition d = ThemeEngine::instance().activeTheme();
+  d.ui.chromeOpacity = m_transparencyCombo->itemData(index).toDouble();
+  ThemeEngine::instance().setActiveTheme(d);
+  applyThemeEffects();
+}
+
+void Preferences::applyThemeEffects() {
+  if (!m_mainWindow)
+    return;
+
+  ThemeDefinition d = ThemeEngine::instance().activeTheme();
+  Theme classic = d.toClassicTheme();
+  m_mainWindow->setTheme(classic);
+  ThemeEngine::instance().setActiveTheme(d);
+  m_mainWindow->setScanlineEffectEnabled(d.ui.scanlineEffect);
+  persistCurrentTheme(d.name);
+  if (m_themePreview)
+    static_cast<ThemePreviewCard *>(m_themePreview)->setDefinition(d);
 }
 
 void Preferences::onThemePresetChanged(int row) {
@@ -616,11 +719,38 @@ void Preferences::onThemePresetChanged(int row) {
     return;
   QString name = item->text();
   ThemeDefinition d = ThemeEngine::instance().themeByName(name);
+  if (m_glowCombo) {
+    int idx = m_glowCombo->findData(d.ui.glowIntensity);
+    if (idx < 0)
+      idx = d.ui.glowIntensity <= 0.01 ? 0 : (d.ui.glowIntensity < 0.2 ? 1 : 2);
+    m_glowCombo->blockSignals(true);
+    m_glowCombo->setCurrentIndex(idx);
+    m_glowCombo->blockSignals(false);
+  }
+  if (m_transparencyCombo) {
+    int idx = m_transparencyCombo->findData(d.ui.chromeOpacity);
+    if (idx < 0)
+      idx = d.ui.chromeOpacity > 0.98 ? 0 : (d.ui.chromeOpacity > 0.9 ? 1 : 2);
+    m_transparencyCombo->blockSignals(true);
+    m_transparencyCombo->setCurrentIndex(idx);
+    m_transparencyCombo->blockSignals(false);
+  }
+  if (m_scanlinesCheck) {
+    m_scanlinesCheck->blockSignals(true);
+    m_scanlinesCheck->setChecked(d.ui.scanlineEffect);
+    m_scanlinesCheck->blockSignals(false);
+  }
+  if (m_panelBordersCheck) {
+    m_panelBordersCheck->blockSignals(true);
+    m_panelBordersCheck->setChecked(d.ui.panelBorders);
+    m_panelBordersCheck->blockSignals(false);
+  }
   static_cast<ThemePreviewCard *>(m_themePreview)->setDefinition(d);
 
   ThemeEngine::instance().setActiveTheme(d);
   Theme classic = d.toClassicTheme();
   m_mainWindow->setTheme(classic);
   ThemeEngine::instance().setActiveTheme(d);
+  m_mainWindow->setScanlineEffectEnabled(d.ui.scanlineEffect);
   persistCurrentTheme(name);
 }

@@ -5,6 +5,8 @@
 
 namespace ThemePresets {
 ThemeDefinition hackerDark();
+ThemeDefinition minimalDark();
+ThemeDefinition githubDark();
 ThemeDefinition midnightBlue();
 ThemeDefinition dracula();
 ThemeDefinition monokaiPro();
@@ -13,6 +15,7 @@ ThemeDefinition solarizedDark();
 ThemeDefinition cyberpunk();
 ThemeDefinition matrix();
 ThemeDefinition ghost();
+ThemeDefinition daylight();
 } // namespace ThemePresets
 
 #endif

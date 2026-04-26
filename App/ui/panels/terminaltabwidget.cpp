@@ -15,6 +15,7 @@
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QStyle>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -77,6 +78,7 @@ QTabWidget *TerminalTabWidget::createTabWidget() {
   tabWidget->setMovable(true);
   tabWidget->setDocumentMode(true);
   tabWidget->setUsesScrollButtons(false);
+  tabWidget->tabBar()->setDrawBase(false);
 
   connect(tabWidget, &QTabWidget::tabCloseRequested, this,
           &TerminalTabWidget::onTabCloseRequested);
@@ -417,6 +419,10 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
       colors.statusError.isValid()
           ? colors.statusError
           : (theme.errorColor.isValid() ? theme.errorColor : QColor("#e81123"));
+  const QString chromeBg =
+      td.ui.chromeOpacity >= 0.999 ? bg.name() : rgba(bg, td.ui.chromeOpacity);
+  const QString splitHandle =
+      td.ui.panelBorders ? border.name() : QStringLiteral("transparent");
 
   setAttribute(Qt::WA_StyledBackground, true);
   setStyleSheet(QString("QWidget#TerminalTabWidget {"
@@ -425,12 +431,12 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
                         "  margin: 0;"
                         "  padding: 0;"
                         "}")
-                    .arg(bg.name()));
+                    .arg(chromeBg));
 
-  applyTabStyle(m_tabWidget, border.name(), bg.name(), raised.name(),
+  applyTabStyle(m_tabWidget, border.name(), chromeBg, raised.name(),
                 text.name(), accent.name());
   if (m_splitTabWidget) {
-    applyTabStyle(m_splitTabWidget, border.name(), bg.name(), raised.name(),
+    applyTabStyle(m_splitTabWidget, border.name(), chromeBg, raised.name(),
                   text.name(), accent.name());
   }
 
@@ -507,7 +513,7 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
             "  image: none;"
             "  width: 0;"
             "}")
-            .arg(bg.name(), text.name(), rgba(text, 0.48), normalButtonBg,
+            .arg(chromeBg, text.name(), rgba(text, 0.48), normalButtonBg,
                  normalButtonBorder, rgba(text, 0.22), pressed.name(),
                  stopButtonBg, stopButtonBorder, hoverButtonBg,
                  hoverButtonBorder, pressedButtonBg, stopHoverButtonBg,
@@ -518,7 +524,7 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
                                     "  background: %1;"
                                     "  width: 1px;"
                                     "}")
-                                .arg(border.name()));
+                                .arg(splitHandle));
 
   for (int i = 0; i < terminalCount(); ++i) {
     Terminal *terminal = terminalAt(i);
@@ -566,11 +572,14 @@ void TerminalTabWidget::applyTabStyle(QTabWidget *tabWidget,
                                    "QTabBar {"
                                    "  background: %1;"
                                    "  border: none;"
+                                   "  qproperty-drawBase: 0;"
                                    "}"
                                    "QTabBar::base {"
-                                   "  height: 0;"
+                                   "  height: 0px;"
+                                   "  min-height: 0px;"
+                                   "  max-height: 0px;"
                                    "  border: none;"
-                                   "  background: %1;"
+                                   "  background: transparent;"
                                    "}"
                                    "QTabBar::tab {"
                                    "  background-color: transparent;"

@@ -119,6 +119,26 @@ void Theme::read(const QJsonObject &json) {
   if (themeObject.contains("errorColor") &&
       themeObject["errorColor"].isString())
     errorColor = QColor(themeObject["errorColor"].toString());
+
+  if (themeObject.contains("borderRadius") &&
+      themeObject["borderRadius"].isDouble())
+    borderRadius = themeObject["borderRadius"].toInt();
+
+  if (themeObject.contains("glowIntensity") &&
+      themeObject["glowIntensity"].isDouble())
+    glowIntensity = themeObject["glowIntensity"].toDouble();
+
+  if (themeObject.contains("chromeOpacity") &&
+      themeObject["chromeOpacity"].isDouble())
+    chromeOpacity = themeObject["chromeOpacity"].toDouble();
+
+  if (themeObject.contains("scanlineEffect") &&
+      themeObject["scanlineEffect"].isBool())
+    scanlineEffect = themeObject["scanlineEffect"].toBool();
+
+  if (themeObject.contains("panelBorders") &&
+      themeObject["panelBorders"].isBool())
+    panelBorders = themeObject["panelBorders"].toBool();
 }
 
 void Theme::write(QJsonObject &json) {
@@ -146,4 +166,9 @@ void Theme::write(QJsonObject &json) {
   json["successColor"] = successColor.name();
   json["warningColor"] = warningColor.name();
   json["errorColor"] = errorColor.name();
+  json["borderRadius"] = borderRadius;
+  json["glowIntensity"] = glowIntensity;
+  json["chromeOpacity"] = chromeOpacity;
+  json["scanlineEffect"] = scanlineEffect;
+  json["panelBorders"] = panelBorders;
 }
