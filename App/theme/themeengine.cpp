@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
+#include <QtGlobal>
 
 ThemeEngine &ThemeEngine::instance() {
   static ThemeEngine engine;
@@ -23,6 +24,8 @@ void ThemeEngine::registerBuiltinThemes() {
     m_themes.insert(t.name, t);
   };
   reg(ThemePresets::hackerDark);
+  reg(ThemePresets::minimalDark);
+  reg(ThemePresets::githubDark);
   reg(ThemePresets::midnightBlue);
   reg(ThemePresets::dracula);
   reg(ThemePresets::monokaiPro);
@@ -31,6 +34,7 @@ void ThemeEngine::registerBuiltinThemes() {
   reg(ThemePresets::cyberpunk);
   reg(ThemePresets::matrix);
   reg(ThemePresets::ghost);
+  reg(ThemePresets::daylight);
 }
 
 const ThemeDefinition &ThemeEngine::activeTheme() const {
@@ -170,4 +174,12 @@ qreal ThemeEngine::glowIntensity() const {
   return m_activeTheme.ui.glowIntensity;
 }
 
+qreal ThemeEngine::chromeOpacity() const {
+  return qBound(0.0, m_activeTheme.ui.chromeOpacity, 1.0);
+}
+
 int ThemeEngine::borderRadius() const { return m_activeTheme.ui.borderRadius; }
+
+bool ThemeEngine::panelBordersEnabled() const {
+  return m_activeTheme.ui.panelBorders;
+}

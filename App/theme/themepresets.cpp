@@ -1,8 +1,60 @@
 #include "themepresets.h"
+#include "../settings/theme.h"
 
 namespace ThemePresets {
 
 ThemeDefinition hackerDark() { return ThemeDefinition(); }
+
+ThemeDefinition minimalDark() {
+  Theme classic;
+  classic.backgroundColor = QColor("#0a0b0d");
+  classic.foregroundColor = QColor("#d7dde4");
+  classic.highlightColor = QColor("#101318");
+  classic.lineNumberAreaColor = QColor("#08090b");
+  classic.keywordFormat_0 = QColor("#8ab4f8");
+  classic.keywordFormat_1 = QColor("#c58af9");
+  classic.keywordFormat_2 = QColor("#7dd3c7");
+  classic.searchFormat = QColor("#d8b45f55");
+  classic.singleLineCommentFormat = QColor("#68707a");
+  classic.functionFormat = QColor("#93c5fd");
+  classic.quotationFormat = QColor("#a7c080");
+  classic.classFormat = QColor("#7dd3c7");
+  classic.numberFormat = QColor("#e5b567");
+  classic.surfaceColor = QColor("#111418");
+  classic.surfaceAltColor = QColor("#171b21");
+  classic.borderColor = QColor("#242a32");
+  classic.hoverColor = QColor("#171d24");
+  classic.pressedColor = QColor("#1e2630");
+  classic.accentColor = QColor("#7dd3fc");
+  classic.accentSoftColor = QColor("#10283a");
+  classic.successColor = QColor("#86efac");
+  classic.warningColor = QColor("#facc15");
+  classic.errorColor = QColor("#f87171");
+
+  ThemeDefinition t =
+      ThemeDefinition::fromClassicTheme(classic, "Minimal Dark");
+  t.author = "Lightpad";
+  t.colors.termBg = QColor("#050607");
+  t.colors.termFg = QColor("#d7dde4");
+  t.ui.borderRadius = 4;
+  t.ui.glowIntensity = 0.0;
+  t.ui.chromeOpacity = 1.0;
+  t.ui.animationSpeed = "subtle";
+  t.ui.scanlineEffect = false;
+  t.ui.panelBorders = false;
+  return t;
+}
+
+ThemeDefinition githubDark() {
+  ThemeDefinition t = midnightBlue();
+  t.name = "GitHub Dark";
+  t.ui.glowIntensity = 0.0;
+  t.ui.chromeOpacity = 1.0;
+  t.ui.animationSpeed = "subtle";
+  t.ui.scanlineEffect = false;
+  t.ui.panelBorders = true;
+  return t;
+}
 
 ThemeDefinition midnightBlue() {
   ThemeDefinition t;
@@ -1065,6 +1117,48 @@ ThemeDefinition ghost() {
   t.ui.animationSpeed = "subtle";
   t.ui.scanlineEffect = false;
 
+  return t;
+}
+
+ThemeDefinition daylight() {
+  Theme classic;
+  classic.backgroundColor = QColor("#f7f8fa");
+  classic.foregroundColor = QColor("#1f2937");
+  classic.highlightColor = QColor("#eef2f7");
+  classic.lineNumberAreaColor = QColor("#eef1f5");
+  classic.keywordFormat_0 = QColor("#0f66d0");
+  classic.keywordFormat_1 = QColor("#7c3aed");
+  classic.keywordFormat_2 = QColor("#047857");
+  classic.searchFormat = QColor("#fde68a");
+  classic.singleLineCommentFormat = QColor("#6b7280");
+  classic.functionFormat = QColor("#2563eb");
+  classic.quotationFormat = QColor("#047857");
+  classic.classFormat = QColor("#0f766e");
+  classic.numberFormat = QColor("#b45309");
+  classic.surfaceColor = QColor("#ffffff");
+  classic.surfaceAltColor = QColor("#eef2f7");
+  classic.borderColor = QColor("#d1d5db");
+  classic.hoverColor = QColor("#e8edf4");
+  classic.pressedColor = QColor("#dce4ee");
+  classic.accentColor = QColor("#2563eb");
+  classic.accentSoftColor = QColor("#dbeafe");
+  classic.successColor = QColor("#15803d");
+  classic.warningColor = QColor("#b45309");
+  classic.errorColor = QColor("#dc2626");
+
+  ThemeDefinition t = ThemeDefinition::fromClassicTheme(classic, "Daylight");
+  t.author = "Lightpad";
+  t.type = "light";
+  t.colors.termBg = QColor("#ffffff");
+  t.colors.termFg = QColor("#1f2937");
+  t.colors.termCursor = QColor("#2563eb");
+  t.colors.termSelection = QColor("#dbeafe");
+  t.ui.borderRadius = 6;
+  t.ui.glowIntensity = 0.0;
+  t.ui.chromeOpacity = 1.0;
+  t.ui.animationSpeed = "subtle";
+  t.ui.scanlineEffect = false;
+  t.ui.panelBorders = true;
   return t;
 }
 

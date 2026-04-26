@@ -1,19 +1,99 @@
 #include "uistylehelper.h"
+#include "../theme/themedefinition.h"
+
+#include <QColor>
+
+namespace {
+QColor blend(const QColor &a, const QColor &b, qreal t) {
+  t = qBound(0.0, t, 1.0);
+  return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t,
+                          a.greenF() + (b.greenF() - a.greenF()) * t,
+                          a.blueF() + (b.blueF() - a.blueF()) * t,
+                          a.alphaF() + (b.alphaF() - a.alphaF()) * t);
+}
+
+ThemeColors activeTheme(const Theme &theme) {
+  ThemeColors c;
+  c.surfaceBase = theme.backgroundColor;
+  c.surfaceRaised = theme.surfaceColor;
+  c.surfaceOverlay = theme.surfaceAltColor;
+  c.surfacePopover = theme.surfaceColor;
+  c.borderDefault = theme.borderColor;
+  c.borderSubtle = blend(theme.borderColor, theme.backgroundColor, 0.35);
+  c.borderFocus = theme.accentColor;
+  c.textPrimary = theme.foregroundColor;
+  c.textSecondary = blend(theme.foregroundColor, theme.backgroundColor, 0.35);
+  c.textMuted = blend(theme.foregroundColor, theme.backgroundColor, 0.55);
+  c.inputBg = theme.surfaceColor;
+  c.inputFg = theme.foregroundColor;
+  c.inputBorder = theme.borderColor;
+  c.inputBorderFocus = theme.accentColor;
+  c.inputSelection = theme.accentSoftColor;
+  c.btnPrimaryBg = theme.accentColor;
+  c.btnPrimaryFg = theme.backgroundColor;
+  c.btnPrimaryHover = blend(theme.accentColor, theme.foregroundColor, 0.15);
+  c.btnPrimaryActive = blend(theme.accentColor, theme.backgroundColor, 0.2);
+  c.btnSecondaryBg = theme.surfaceColor;
+  c.btnSecondaryFg = theme.foregroundColor;
+  c.btnSecondaryHover = theme.hoverColor;
+  c.btnDangerBg = theme.errorColor;
+  c.btnDangerFg = QColor("#ffffff");
+  c.btnDangerHover = blend(theme.errorColor, theme.foregroundColor, 0.15);
+  c.btnGhostHover = theme.hoverColor;
+  c.btnGhostActive = theme.pressedColor;
+  c.accentPrimary = theme.accentColor;
+  c.accentSoft = theme.accentSoftColor;
+  c.tabBg = theme.backgroundColor;
+  c.tabHoverBg = theme.hoverColor;
+  c.tabFg = blend(theme.foregroundColor, theme.backgroundColor, 0.4);
+  c.tabActiveFg = theme.foregroundColor;
+  c.tabActiveBorder = theme.accentColor;
+  c.treeSelectedBg = theme.accentSoftColor;
+  c.treeHoverBg = theme.hoverColor;
+  return c;
+}
+
+QString rgba(QColor color, qreal alpha) {
+  color.setAlphaF(qBound(0.0, alpha, 1.0));
+  return color.name(QColor::HexArgb);
+}
+
+QString chrome(const Theme &theme, const QColor &color) {
+  return rgba(color, theme.chromeOpacity);
+}
+
+QString borderRule(const Theme &theme, const QColor &color,
+                   const QString &edge = QString()) {
+  if (!theme.panelBorders)
+    return edge.isEmpty() ? QString("border: none;")
+                          : QString("border-%1: none;").arg(edge);
+  return edge.isEmpty()
+             ? QString("border: 1px solid %1;").arg(color.name())
+             : QString("border-%1: 1px solid %2;").arg(edge, color.name());
+}
+
+int radius(const Theme &theme) { return qMax(0, theme.borderRadius); }
+} // namespace
 
 QString UIStyleHelper::popupDialogStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("background: %1; "
-                 "border: 1px solid %2; "
-                 "border-radius: 8px;")
-      .arg(theme.surfaceColor.name())
-      .arg(theme.borderColor.name());
+                 "%2 "
+                 "border-radius: %3px;")
+      .arg(chrome(theme, c.surfacePopover.isValid() ? c.surfacePopover
+                                                    : theme.surfaceColor))
+      .arg(borderRule(theme, c.borderDefault.isValid() ? c.borderDefault
+                                                       : theme.borderColor))
+      .arg(qMin(radius(theme) + 2, 10));
 }
 
 QString UIStyleHelper::searchBoxStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("QLineEdit {"
                  "  padding: 8px;"
                  "  font-size: 14px;"
                  "  border: 1px solid %1;"
-                 "  border-radius: 4px;"
+                 "  border-radius: %6px;"
                  "  background: %2;"
                  "  color: %3;"
                  "  selection-background-color: %5;"
@@ -22,14 +102,20 @@ QString UIStyleHelper::searchBoxStyle(const Theme &theme) {
                  "QLineEdit:focus {"
                  "  border-color: %4;"
                  "}")
-      .arg(theme.borderColor.name())
-      .arg(theme.surfaceColor.name())
-      .arg(theme.foregroundColor.name())
-      .arg(theme.accentColor.name())
-      .arg(theme.accentSoftColor.name());
+      .arg((c.inputBorder.isValid() ? c.inputBorder : theme.borderColor).name())
+      .arg(chrome(theme, c.inputBg.isValid() ? c.inputBg : theme.surfaceColor))
+      .arg((c.inputFg.isValid() ? c.inputFg : theme.foregroundColor).name())
+      .arg((c.inputBorderFocus.isValid() ? c.inputBorderFocus
+                                         : theme.accentColor)
+               .name())
+      .arg((c.inputSelection.isValid() ? c.inputSelection
+                                       : theme.accentSoftColor)
+               .name())
+      .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::resultListStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("QListWidget {"
                  "  border: none;"
                  "  background: %1;"
@@ -46,18 +132,28 @@ QString UIStyleHelper::resultListStyle(const Theme &theme) {
                  "QListWidget::item:hover {"
                  "  background: %4;"
                  "}")
-      .arg(theme.backgroundColor.name())
-      .arg(theme.foregroundColor.name())
-      .arg(theme.borderColor.name())
-      .arg(theme.accentSoftColor.name())
-      .arg(theme.accentColor.name());
+      .arg(chrome(theme, c.surfaceBase.isValid() ? c.surfaceBase
+                                                 : theme.backgroundColor))
+      .arg((c.textPrimary.isValid() ? c.textPrimary : theme.foregroundColor)
+               .name())
+      .arg((c.borderSubtle.isValid() ? c.borderSubtle : theme.borderColor)
+               .name())
+      .arg((c.treeSelectedBg.isValid() ? c.treeSelectedBg
+                                       : theme.accentSoftColor)
+               .name())
+      .arg(
+          (c.textPrimary.isValid() ? c.textPrimary : theme.accentColor).name());
 }
 
 QString UIStyleHelper::panelHeaderStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("background: %1; "
-                 "border-bottom: 1px solid %2;")
-      .arg(theme.surfaceColor.name())
-      .arg(theme.borderColor.name());
+                 "%2")
+      .arg(chrome(theme, c.surfaceRaised.isValid() ? c.surfaceRaised
+                                                   : theme.surfaceColor))
+      .arg(borderRule(
+          theme, c.borderSubtle.isValid() ? c.borderSubtle : theme.borderColor,
+          "bottom"));
 }
 
 QString UIStyleHelper::treeViewStyle(const Theme &theme) {
@@ -234,12 +330,19 @@ QString UIStyleHelper::titleLabelStyle(const Theme &theme) {
 }
 
 QString UIStyleHelper::comboBoxStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("QComboBox {"
                  "  background: %1;"
                  "  color: %2;"
                  "  border: 1px solid %3;"
                  "  padding: 2px 8px;"
-                 "  border-radius: 4px;"
+                 "  border-radius: %5px;"
+                 "}"
+                 "QComboBox:hover {"
+                 "  border-color: %6;"
+                 "}"
+                 "QComboBox:focus {"
+                 "  border-color: %6;"
                  "}"
                  "QComboBox::drop-down {"
                  "  border: none;"
@@ -250,10 +353,17 @@ QString UIStyleHelper::comboBoxStyle(const Theme &theme) {
                  "  border: 1px solid %3;"
                  "  selection-background-color: %4;"
                  "}")
-      .arg(theme.surfaceAltColor.name())
-      .arg(theme.foregroundColor.name())
-      .arg(theme.borderColor.name())
-      .arg(theme.accentSoftColor.name());
+      .arg(chrome(theme,
+                  c.inputBg.isValid() ? c.inputBg : theme.surfaceAltColor))
+      .arg((c.inputFg.isValid() ? c.inputFg : theme.foregroundColor).name())
+      .arg((c.inputBorder.isValid() ? c.inputBorder : theme.borderColor).name())
+      .arg((c.inputSelection.isValid() ? c.inputSelection
+                                       : theme.accentSoftColor)
+               .name())
+      .arg(qMax(3, radius(theme)))
+      .arg((c.inputBorderFocus.isValid() ? c.inputBorderFocus
+                                         : theme.accentColor)
+               .name());
 }
 
 QString UIStyleHelper::checkBoxStyle(const Theme &theme) {
@@ -316,11 +426,12 @@ QString UIStyleHelper::groupBoxStyle(const Theme &theme) {
 }
 
 QString UIStyleHelper::lineEditStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("QLineEdit {"
                  "  background: %1;"
                  "  color: %2;"
                  "  border: 1px solid %3;"
-                 "  border-radius: 6px;"
+                 "  border-radius: %6px;"
                  "  padding: 8px 12px;"
                  "  font-size: 12px;"
                  "  selection-background-color: %5;"
@@ -329,19 +440,25 @@ QString UIStyleHelper::lineEditStyle(const Theme &theme) {
                  "QLineEdit:focus {"
                  "  border-color: %4;"
                  "}")
-      .arg(theme.surfaceColor.name())
-      .arg(theme.foregroundColor.name())
-      .arg(theme.borderColor.name())
-      .arg(theme.accentColor.name())
-      .arg(theme.accentSoftColor.name());
+      .arg(chrome(theme, c.inputBg.isValid() ? c.inputBg : theme.surfaceColor))
+      .arg((c.inputFg.isValid() ? c.inputFg : theme.foregroundColor).name())
+      .arg((c.inputBorder.isValid() ? c.inputBorder : theme.borderColor).name())
+      .arg((c.inputBorderFocus.isValid() ? c.inputBorderFocus
+                                         : theme.accentColor)
+               .name())
+      .arg((c.inputSelection.isValid() ? c.inputSelection
+                                       : theme.accentSoftColor)
+               .name())
+      .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::primaryButtonStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("QPushButton {"
                  "  background: %1;"
                  "  border: 1px solid %1;"
                  "  color: %2;"
-                 "  border-radius: 6px;"
+                 "  border-radius: %5px;"
                  "  padding: 8px 16px;"
                  "  font-size: 12px;"
                  "  font-weight: bold;"
@@ -349,18 +466,31 @@ QString UIStyleHelper::primaryButtonStyle(const Theme &theme) {
                  "QPushButton:hover {"
                  "  background: %3;"
                  "  border-color: %3;"
+                 "}"
+                 "QPushButton:pressed {"
+                 "  background: %4;"
+                 "  border-color: %4;"
                  "}")
-      .arg(theme.accentColor.name())
-      .arg(theme.backgroundColor.name())
-      .arg(theme.accentColor.lighter(120).name());
+      .arg((c.btnPrimaryBg.isValid() ? c.btnPrimaryBg : theme.accentColor)
+               .name())
+      .arg((c.btnPrimaryFg.isValid() ? c.btnPrimaryFg : theme.backgroundColor)
+               .name())
+      .arg((c.btnPrimaryHover.isValid() ? c.btnPrimaryHover
+                                        : theme.accentColor.lighter(120))
+               .name())
+      .arg((c.btnPrimaryActive.isValid() ? c.btnPrimaryActive
+                                         : theme.accentColor.darker(110))
+               .name())
+      .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::secondaryButtonStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("QPushButton {"
                  "  background: %1;"
                  "  color: %2;"
                  "  border: 1px solid %3;"
-                 "  border-radius: 6px;"
+                 "  border-radius: %6px;"
                  "  padding: 8px 16px;"
                  "  font-size: 12px;"
                  "}"
@@ -369,11 +499,17 @@ QString UIStyleHelper::secondaryButtonStyle(const Theme &theme) {
                  "  border-color: %5;"
                  "  color: %5;"
                  "}")
-      .arg(theme.surfaceColor.name())
-      .arg(theme.foregroundColor.name())
-      .arg(theme.borderColor.name())
-      .arg(theme.accentSoftColor.name())
-      .arg(theme.accentColor.name());
+      .arg(chrome(theme, c.btnSecondaryBg.isValid() ? c.btnSecondaryBg
+                                                    : theme.surfaceColor))
+      .arg((c.btnSecondaryFg.isValid() ? c.btnSecondaryFg
+                                       : theme.foregroundColor)
+               .name())
+      .arg((c.borderDefault.isValid() ? c.borderDefault : theme.borderColor)
+               .name())
+      .arg(chrome(theme, c.btnSecondaryHover.isValid() ? c.btnSecondaryHover
+                                                       : theme.accentSoftColor))
+      .arg((c.borderFocus.isValid() ? c.borderFocus : theme.accentColor).name())
+      .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::breadcrumbButtonStyle(const Theme &theme) {
@@ -440,10 +576,21 @@ QString UIStyleHelper::errorInfoLabelStyle(const Theme &theme) {
 }
 
 QString UIStyleHelper::tabWidgetStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("QTabWidget::pane {"
-                 "  border: 1px solid %1;"
+                 "  %1"
                  "  background: %2;"
-                 "  border-radius: 4px;"
+                 "  border-radius: %8px;"
+                 "}"
+                 "QTabBar {"
+                 "  background: %3;"
+                 "  border: none;"
+                 "  qproperty-drawBase: 0;"
+                 "}"
+                 "QTabBar::base {"
+                 "  height: 0px;"
+                 "  border: none;"
+                 "  background: transparent;"
                  "}"
                  "QTabBar::tab {"
                  "  background: %3;"
@@ -461,13 +608,19 @@ QString UIStyleHelper::tabWidgetStyle(const Theme &theme) {
                  "  background: %7;"
                  "  color: %5;"
                  "}")
-      .arg(theme.borderColor.name())
-      .arg(theme.surfaceColor.name())
-      .arg(theme.surfaceAltColor.name())
-      .arg(theme.singleLineCommentFormat.name())
-      .arg(theme.foregroundColor.name())
-      .arg(theme.accentColor.name())
-      .arg(theme.hoverColor.name());
+      .arg(borderRule(theme, c.borderSubtle.isValid() ? c.borderSubtle
+                                                      : theme.borderColor))
+      .arg(chrome(theme, c.surfaceRaised.isValid() ? c.surfaceRaised
+                                                   : theme.surfaceColor))
+      .arg(chrome(theme, c.tabBg.isValid() ? c.tabBg : theme.surfaceAltColor))
+      .arg((c.tabFg.isValid() ? c.tabFg : theme.singleLineCommentFormat).name())
+      .arg((c.tabActiveFg.isValid() ? c.tabActiveFg : theme.foregroundColor)
+               .name())
+      .arg((c.tabActiveBorder.isValid() ? c.tabActiveBorder : theme.accentColor)
+               .name())
+      .arg(chrome(theme,
+                  c.tabHoverBg.isValid() ? c.tabHoverBg : theme.hoverColor))
+      .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::tableWidgetStyle(const Theme &theme) {
@@ -505,11 +658,12 @@ QString UIStyleHelper::tableWidgetStyle(const Theme &theme) {
 }
 
 QString UIStyleHelper::plainTextEditStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("QPlainTextEdit, QTextEdit {"
                  "  background: %1;"
                  "  color: %2;"
                  "  border: 1px solid %3;"
-                 "  border-radius: 6px;"
+                 "  border-radius: %5px;"
                  "  padding: 8px;"
                  "  font-family: monospace;"
                  "  font-size: 12px;"
@@ -517,10 +671,14 @@ QString UIStyleHelper::plainTextEditStyle(const Theme &theme) {
                  "QPlainTextEdit:focus, QTextEdit:focus {"
                  "  border-color: %4;"
                  "}")
-      .arg(theme.surfaceAltColor.name())
-      .arg(theme.foregroundColor.name())
-      .arg(theme.borderColor.name())
-      .arg(theme.accentColor.name());
+      .arg(chrome(theme,
+                  c.inputBg.isValid() ? c.inputBg : theme.surfaceAltColor))
+      .arg((c.inputFg.isValid() ? c.inputFg : theme.foregroundColor).name())
+      .arg((c.inputBorder.isValid() ? c.inputBorder : theme.borderColor).name())
+      .arg((c.inputBorderFocus.isValid() ? c.inputBorderFocus
+                                         : theme.accentColor)
+               .name())
+      .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::spinBoxStyle(const Theme &theme) {
@@ -541,11 +699,12 @@ QString UIStyleHelper::spinBoxStyle(const Theme &theme) {
 }
 
 QString UIStyleHelper::dangerButtonStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("QPushButton {"
                  "  background: %1;"
-                 "  color: white;"
+                 "  color: %3;"
                  "  border: 1px solid %1;"
-                 "  border-radius: 6px;"
+                 "  border-radius: %4px;"
                  "  padding: 8px 16px;"
                  "  font-size: 12px;"
                  "  font-weight: bold;"
@@ -554,8 +713,12 @@ QString UIStyleHelper::dangerButtonStyle(const Theme &theme) {
                  "  background: %2;"
                  "  border-color: %2;"
                  "}")
-      .arg(theme.errorColor.name())
-      .arg(theme.errorColor.lighter(110).name());
+      .arg((c.btnDangerBg.isValid() ? c.btnDangerBg : theme.errorColor).name())
+      .arg((c.btnDangerHover.isValid() ? c.btnDangerHover
+                                       : theme.errorColor.lighter(110))
+               .name())
+      .arg((c.btnDangerFg.isValid() ? c.btnDangerFg : QColor("#ffffff")).name())
+      .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::progressBarStyle(const Theme &theme) {
@@ -578,6 +741,7 @@ QString UIStyleHelper::progressBarStyle(const Theme &theme) {
 }
 
 QString UIStyleHelper::toolBarStyle(const Theme &theme) {
+  const ThemeColors c = activeTheme(theme);
   return QString("QToolBar {"
                  "  background: %1;"
                  "  border: none;"
@@ -588,7 +752,7 @@ QString UIStyleHelper::toolBarStyle(const Theme &theme) {
                  "  background: transparent;"
                  "  color: %2;"
                  "  border: 1px solid transparent;"
-                 "  border-radius: 4px;"
+                 "  border-radius: %8px;"
                  "  padding: 4px 8px;"
                  "}"
                  "QToolButton:hover {"
@@ -603,11 +767,19 @@ QString UIStyleHelper::toolBarStyle(const Theme &theme) {
                  "  background: %6;"
                  "  border-color: %7;"
                  "}")
-      .arg(theme.surfaceColor.name())
-      .arg(theme.foregroundColor.name())
-      .arg(theme.hoverColor.name())
-      .arg(theme.borderColor.name())
-      .arg(theme.pressedColor.name())
-      .arg(theme.accentSoftColor.name())
-      .arg(theme.accentColor.name());
+      .arg(chrome(theme, c.surfaceRaised.isValid() ? c.surfaceRaised
+                                                   : theme.surfaceColor))
+      .arg((c.textPrimary.isValid() ? c.textPrimary : theme.foregroundColor)
+               .name())
+      .arg(chrome(theme, c.btnGhostHover.isValid() ? c.btnGhostHover
+                                                   : theme.hoverColor))
+      .arg((c.borderDefault.isValid() ? c.borderDefault : theme.borderColor)
+               .name())
+      .arg(chrome(theme, c.btnGhostActive.isValid() ? c.btnGhostActive
+                                                    : theme.pressedColor))
+      .arg(chrome(theme, c.accentSoft.isValid() ? c.accentSoft
+                                                : theme.accentSoftColor))
+      .arg((c.accentPrimary.isValid() ? c.accentPrimary : theme.accentColor)
+               .name())
+      .arg(qMax(3, radius(theme)));
 }
