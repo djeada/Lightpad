@@ -12,6 +12,7 @@ class TextArea;
 class MainWindow;
 class QTimer;
 class QLabel;
+class QToolButton;
 class AsyncTask;
 
 namespace Ui {
@@ -70,6 +71,8 @@ private slots:
   void onSearchTextChanged(const QString &text);
   void onTextAreaContentsChanged();
   void refreshSearchResults();
+  void onPrevPageClicked();
+  void onNextPageClicked();
 
 private:
   void handleVimCommandKey(QKeyEvent *event);
@@ -142,6 +145,16 @@ private:
   QPointer<AsyncTask> m_localSearchTask;
   int m_localSearchRequestId;
   static constexpr int kAsyncLocalSearchThresholdChars = 200000;
+
+  int m_globalResultsPage;
+  QWidget *m_paginationWidget;
+  QLabel *m_pageInfoLabel;
+  QToolButton *m_prevPageButton;
+  QToolButton *m_nextPageButton;
+  static constexpr int kGlobalResultsPageSize = 100;
+
+  void updatePaginationControls();
+  int globalResultsPageCount() const;
 };
 
 #endif

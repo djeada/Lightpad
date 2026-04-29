@@ -26,6 +26,7 @@
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <memory>
 
 namespace {
@@ -132,7 +133,9 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
       resultsTree(nullptr), searchHistoryIndex(-1),
       refreshTimer(new QTimer(this)), searchStatusLabel(nullptr),
       searchInProgress(false), searchExecuted(false),
-      m_localSearchRequestId(0) {
+      m_localSearchRequestId(0), m_globalResultsPage(0),
+      m_paginationWidget(nullptr), m_pageInfoLabel(nullptr),
+      m_prevPageButton(nullptr), m_nextPageButton(nullptr) {
   ui->setupUi(this);
   configureSearchRows(ui);
 
@@ -180,9 +183,36 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   searchStatusLabel = new QLabel(this);
   searchStatusLabel->setVisible(false);
 
+  m_paginationWidget = new QWidget(this);
+  auto *paginationLayout = new QHBoxLayout(m_paginationWidget);
+  paginationLayout->setContentsMargins(0, 2, 0, 2);
+  paginationLayout->setSpacing(6);
+
+  m_prevPageButton = new QToolButton(m_paginationWidget);
+  m_prevPageButton->setText(tr("< Previous"));
+  m_prevPageButton->setEnabled(false);
+
+  m_pageInfoLabel = new QLabel(m_paginationWidget);
+  m_pageInfoLabel->setAlignment(Qt::AlignCenter);
+
+  m_nextPageButton = new QToolButton(m_paginationWidget);
+  m_nextPageButton->setText(tr("Next >"));
+  m_nextPageButton->setEnabled(false);
+
+  paginationLayout->addWidget(m_prevPageButton);
+  paginationLayout->addWidget(m_pageInfoLabel, 1);
+  paginationLayout->addWidget(m_nextPageButton);
+  m_paginationWidget->setVisible(false);
+
+  connect(m_prevPageButton, &QToolButton::clicked, this,
+          &FindReplacePanel::onPrevPageClicked);
+  connect(m_nextPageButton, &QToolButton::clicked, this,
+          &FindReplacePanel::onNextPageClicked);
+
   if (layout()) {
     layout()->addWidget(searchStatusLabel);
     layout()->addWidget(resultsTree);
+    layout()->addWidget(m_paginationWidget);
   }
 
   connect(resultsTree, &QTreeWidget::itemClicked, this,
@@ -585,9 +615,15 @@ void FindReplacePanel::updateModeUI() {
     globalResultIndex = -1;
   }
 
+  m_globalResultsPage = 0;
+
   if (resultsTree) {
     resultsTree->clear();
     resultsTree->setVisible(false);
+  }
+
+  if (m_paginationWidget) {
+    m_paginationWidget->setVisible(false);
   }
 
   clearSearchFeedback();
@@ -1247,6 +1283,7 @@ void FindReplacePanel::performGlobalSearch(const QString &searchWord,
   globalResults.clear();
   globalResultsByFile.clear();
   globalResultIndex = -1;
+  m_globalResultsPage = 0;
 
   if (resultsTree) {
     resultsTree->clear();
@@ -1336,6 +1373,9 @@ void FindReplacePanel::refreshSearchResults() {
     if (resultsTree) {
       resultsTree->clear();
       resultsTree->setVisible(false);
+    }
+    if (m_paginationWidget) {
+      m_paginationWidget->setVisible(false);
     }
     if (textArea) {
       textArea->updateSyntaxHighlightTags();
@@ -1730,16 +1770,28 @@ void FindReplacePanel::displayGlobalResults() {
 
   resultsTree->clear();
 
+  if (globalResults.isEmpty()) {
+    resultsTree->setVisible(false);
+    updatePaginationControls();
+    return;
+  }
+
+  const int totalResults = globalResults.size();
+  const int totalPages = globalResultsPageCount();
+  m_globalResultsPage = qBound(0, m_globalResultsPage, totalPages - 1);
+
+  const int pageStart = m_globalResultsPage * kGlobalResultsPageSize;
+  const int pageEnd = qMin(pageStart + kGlobalResultsPageSize, totalResults);
+
   QMap<QString, QVector<GlobalSearchResult>> fileGroups;
-  for (const GlobalSearchResult &result : globalResults) {
-    fileGroups[result.filePath].append(result);
+  for (int i = pageStart; i < pageEnd; ++i) {
+    fileGroups[globalResults[i].filePath].append(globalResults[i]);
   }
 
   for (auto it = fileGroups.begin(); it != fileGroups.end(); ++it) {
     const QString &filePath = it.key();
     const QVector<GlobalSearchResult> &results = it.value();
 
-    QFileInfo fileInfo(filePath);
     QString displayPath = filePath;
     if (!projectPath.isEmpty() && filePath.startsWith(projectPath)) {
       displayPath = filePath.mid(projectPath.length() + 1);
@@ -1752,9 +1804,7 @@ void FindReplacePanel::displayGlobalResults() {
     fileItem->setData(0, kDataRoleLineNumber, -1);
     fileItem->setData(0, kDataRoleResultScope, kScopeGlobal);
 
-    for (int i = 0; i < results.size(); ++i) {
-      const GlobalSearchResult &result = results[i];
-
+    for (const GlobalSearchResult &result : results) {
       QTreeWidgetItem *resultItem = new QTreeWidgetItem(fileItem);
       resultItem->setText(0, "");
       resultItem->setText(1, QString::number(result.lineNumber));
@@ -1770,7 +1820,8 @@ void FindReplacePanel::displayGlobalResults() {
     fileItem->setExpanded(true);
   }
 
-  resultsTree->setVisible(!globalResults.isEmpty());
+  resultsTree->setVisible(true);
+  updatePaginationControls();
 }
 
 void FindReplacePanel::navigateToGlobalResult(int index, bool emitNavigation) {
@@ -1780,13 +1831,22 @@ void FindReplacePanel::navigateToGlobalResult(int index, bool emitNavigation) {
 
   const GlobalSearchResult &result = globalResults[index];
 
+  // Switch to the page containing this result if necessary
+  const int targetPage = index / kGlobalResultsPageSize;
+  if (targetPage != m_globalResultsPage) {
+    m_globalResultsPage = targetPage;
+    displayGlobalResults();
+  }
+
   if (resultsTree) {
+    const int pageStart = m_globalResultsPage * kGlobalResultsPageSize;
+    const int localIndex = index - pageStart;
     bool found = false;
     int currentIndex = 0;
     for (int i = 0; i < resultsTree->topLevelItemCount(); ++i) {
       QTreeWidgetItem *fileItem = resultsTree->topLevelItem(i);
       for (int j = 0; j < fileItem->childCount(); ++j) {
-        if (currentIndex == index) {
+        if (currentIndex == localIndex) {
           resultsTree->setCurrentItem(fileItem->child(j));
           found = true;
           break;
@@ -1945,4 +2005,57 @@ void FindReplacePanel::onLocalResultClicked(QTreeWidgetItem *item, int column) {
   }
 
   updateCounterLabels();
+}
+
+int FindReplacePanel::globalResultsPageCount() const {
+  if (globalResults.isEmpty()) {
+    return 0;
+  }
+  return (globalResults.size() + kGlobalResultsPageSize - 1) /
+         kGlobalResultsPageSize;
+}
+
+void FindReplacePanel::updatePaginationControls() {
+  if (!m_paginationWidget) {
+    return;
+  }
+
+  const int totalPages = globalResultsPageCount();
+
+  if (totalPages <= 1) {
+    m_paginationWidget->setVisible(false);
+    return;
+  }
+
+  m_paginationWidget->setVisible(true);
+
+  const int totalResults = globalResults.size();
+  const int pageStart = m_globalResultsPage * kGlobalResultsPageSize + 1;
+  const int pageEnd =
+      qMin((m_globalResultsPage + 1) * kGlobalResultsPageSize, totalResults);
+
+  m_pageInfoLabel->setText(
+      tr("Page %1 of %2  (%3–%4 of %5 results)")
+          .arg(m_globalResultsPage + 1)
+          .arg(totalPages)
+          .arg(pageStart)
+          .arg(pageEnd)
+          .arg(totalResults));
+
+  m_prevPageButton->setEnabled(m_globalResultsPage > 0);
+  m_nextPageButton->setEnabled(m_globalResultsPage < totalPages - 1);
+}
+
+void FindReplacePanel::onPrevPageClicked() {
+  if (m_globalResultsPage > 0) {
+    --m_globalResultsPage;
+    displayGlobalResults();
+  }
+}
+
+void FindReplacePanel::onNextPageClicked() {
+  if (m_globalResultsPage < globalResultsPageCount() - 1) {
+    ++m_globalResultsPage;
+    displayGlobalResults();
+  }
 }
