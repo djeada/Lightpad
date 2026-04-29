@@ -12,6 +12,7 @@ private slots:
   void testEscapeSpecialCharacters();
   void testPreserveCase();
   void testSearchResultsLineCalculation();
+  void testGlobalResultsPagination();
 
 private:
   QRegularExpression buildSearchPattern(const QString &searchWord,
@@ -22,6 +23,11 @@ private:
                             bool preserveCase) const;
 
   QPair<int, int> calculateLineColumn(const QString &text, int position) const;
+
+  static constexpr int kGlobalResultsPageSize = 100;
+  int globalResultsPageCount(int totalResults) const;
+  int pageStart(int page) const;
+  int pageEnd(int page, int totalResults) const;
 };
 
 QRegularExpression
@@ -231,6 +237,71 @@ void TestSearchPatterns::testSearchResultsLineCalculation() {
 
   QCOMPARE(results[1].first, 4);
   QCOMPARE(results[1].second, 8);
+}
+
+int TestSearchPatterns::globalResultsPageCount(int totalResults) const {
+  if (totalResults <= 0) {
+    return 0;
+  }
+  return (totalResults + kGlobalResultsPageSize - 1) / kGlobalResultsPageSize;
+}
+
+int TestSearchPatterns::pageStart(int page) const {
+  return page * kGlobalResultsPageSize;
+}
+
+int TestSearchPatterns::pageEnd(int page, int totalResults) const {
+  return qMin((page + 1) * kGlobalResultsPageSize, totalResults);
+}
+
+void TestSearchPatterns::testGlobalResultsPagination() {
+  // Zero results -> zero pages
+  QCOMPARE(globalResultsPageCount(0), 0);
+
+  // Fewer results than one page
+  QCOMPARE(globalResultsPageCount(50), 1);
+
+  // Exactly one page
+  QCOMPARE(globalResultsPageCount(100), 1);
+
+  // Just over one page
+  QCOMPARE(globalResultsPageCount(101), 2);
+
+  // Multiple complete pages
+  QCOMPARE(globalResultsPageCount(300), 3);
+
+  // Partial last page
+  QCOMPARE(globalResultsPageCount(250), 3);
+
+  // Page 0 range for 250 results
+  QCOMPARE(pageStart(0), 0);
+  QCOMPARE(pageEnd(0, 250), 100);
+
+  // Page 1 range for 250 results
+  QCOMPARE(pageStart(1), 100);
+  QCOMPARE(pageEnd(1, 250), 200);
+
+  // Last page range for 250 results
+  QCOMPARE(pageStart(2), 200);
+  QCOMPARE(pageEnd(2, 250), 250);
+
+  // Single result on last page
+  QCOMPARE(pageStart(1), 100);
+  QCOMPARE(pageEnd(1, 101), 101);
+
+  // Navigation: result at index 150 is on page 1
+  QCOMPARE(150 / kGlobalResultsPageSize, 1);
+  // Its local index within the page is 50
+  QCOMPARE(150 - pageStart(1), 50);
+
+  // Result at index 0 is on page 0
+  QCOMPARE(0 / kGlobalResultsPageSize, 0);
+
+  // Result at index 99 is still on page 0
+  QCOMPARE(99 / kGlobalResultsPageSize, 0);
+
+  // Result at index 100 is on page 1
+  QCOMPARE(100 / kGlobalResultsPageSize, 1);
 }
 
 QTEST_MAIN(TestSearchPatterns)
