@@ -26,6 +26,8 @@ private slots:
   void testStopTerminatesProcess();
   void testRunAllWithTapOutput();
   void testRunAllWithPytestOutput();
+  void testRunFileUsesRunFileOverride();
+  void testPytestRunFailedUsesOrExpression();
   void testClearAfterRun();
   void testRunReplacesStaleResults();
 
@@ -237,6 +239,67 @@ void TestTestRunManager::testRunAllWithPytestOutput() {
   QCOMPARE(passed, 1);
   QCOMPARE(failed, 1);
   QCOMPARE(skipped, 1);
+}
+
+void TestTestRunManager::testRunFileUsesRunFileOverride() {
+  TestRunManager mgr;
+  QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
+
+  const QString outputPath = m_tempDir.filePath("runfile-output.txt");
+  const QString fileScript = m_tempDir.filePath("run_file.sh");
+  createScript(fileScript, "#!/bin/sh\n"
+                           "printf '%s' \"$1\" > \"$2\"\n"
+                           "echo 'test_file.py::test_scoped PASSED'\n");
+
+  TestConfiguration config;
+  config.name = "pytest-file";
+  config.command = "/bin/sh";
+  config.args = {"-c", "exit 99"};
+  config.runFile.args = {fileScript, "${file}", outputPath};
+  config.outputFormat = "pytest";
+  config.language = "Python";
+
+  mgr.runFile(config, m_tempDir.path(), "/tmp/example/test_file.py");
+  QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 1, 3000);
+
+  QFile outputFile(outputPath);
+  QVERIFY(outputFile.open(QIODevice::ReadOnly));
+  QCOMPARE(QString::fromUtf8(outputFile.readAll()),
+           QString("/tmp/example/test_file.py"));
+}
+
+void TestTestRunManager::testPytestRunFailedUsesOrExpression() {
+  TestRunManager mgr;
+  QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
+
+  const QString allScript = m_tempDir.filePath("pytest_all.sh");
+  createScript(allScript, "#!/bin/sh\n"
+                          "echo 'test_sample.py::bad_test FAILED'\n"
+                          "echo 'test_sample.py::worse_test FAILED'\n");
+
+  TestConfiguration config;
+  config.name = "pytest-failed";
+  config.command = "/bin/sh";
+  config.args = {allScript};
+  config.outputFormat = "pytest";
+  config.language = "Python";
+
+  mgr.runAll(config, m_tempDir.path());
+  QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 1, 3000);
+
+  const QString outputPath = m_tempDir.filePath("runfailed-output.txt");
+  const QString failedScript = m_tempDir.filePath("pytest_failed.sh");
+  createScript(failedScript, "#!/bin/sh\n"
+                             "printf '%s' \"$1\" > \"$2\"\n");
+
+  config.runFailed.args = {failedScript, "${testName}", outputPath};
+  mgr.runFailed(config, m_tempDir.path());
+  QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 2, 3000);
+
+  QFile outputFile(outputPath);
+  QVERIFY(outputFile.open(QIODevice::ReadOnly));
+  QCOMPARE(QString::fromUtf8(outputFile.readAll()),
+           QString("bad_test or worse_test"));
 }
 
 void TestTestRunManager::testClearAfterRun() {

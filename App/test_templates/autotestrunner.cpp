@@ -108,14 +108,14 @@ void AutoTestRunner::onDebounceTimeout() {
   case AutoRunMode::CurrentFileOnSave:
     if (!m_pendingFilePath.isEmpty()) {
       m_lastFilePath = m_pendingFilePath;
-      m_runManager->runAll(m_config, m_workspaceFolder, m_pendingFilePath);
+      m_runManager->runFile(m_config, m_workspaceFolder, m_pendingFilePath);
       emit autoRunTriggered();
     }
     break;
 
   case AutoRunMode::LastSelection:
     if (!m_lastFilePath.isEmpty()) {
-      m_runManager->runAll(m_config, m_workspaceFolder, m_lastFilePath);
+      m_runManager->runFile(m_config, m_workspaceFolder, m_lastFilePath);
       emit autoRunTriggered();
     } else {
       m_runManager->runAll(m_config, m_workspaceFolder);

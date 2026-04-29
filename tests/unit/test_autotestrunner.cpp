@@ -29,6 +29,7 @@ private slots:
   void testLoadMissingSettingsFile();
   void testAutoRunModeAllOnSave();
   void testAutoRunModeCurrentFile();
+  void testAutoRunModeCurrentFileUsesRunFileOverride();
   void testAutoRunModeLastSelection();
   void testSkipWhenAlreadyRunning();
   void testMinDebounceDelay();
@@ -270,6 +271,48 @@ void TestAutoTestRunner::testAutoRunModeCurrentFile() {
   QTest::qWait(200);
   QCOMPARE(spy.count(), 1);
   QCOMPARE(runner.lastFilePath(), "/some/file.py");
+}
+
+void TestAutoTestRunner::testAutoRunModeCurrentFileUsesRunFileOverride() {
+  TestRunManager runManager;
+  AutoTestRunner runner(&runManager);
+
+  const QString outputPath = m_tempDir.filePath("autorun-file-output.txt");
+  const QString allScript = m_tempDir.filePath("autorun_all.sh");
+  QFile allFile(allScript);
+  QVERIFY(allFile.open(QIODevice::WriteOnly));
+  allFile.write("#!/bin/sh\nprintf 'ALL' > \"$1\"\n");
+  allFile.close();
+  allFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                         QFileDevice::ExeOwner);
+
+  const QString runFileScript = m_tempDir.filePath("autorun_file.sh");
+  QFile runFile(runFileScript);
+  QVERIFY(runFile.open(QIODevice::WriteOnly));
+  runFile.write("#!/bin/sh\nprintf '%s' \"$1\" > \"$2\"\n");
+  runFile.close();
+  runFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                         QFileDevice::ExeOwner);
+
+  TestConfiguration config;
+  config.name = "pytest";
+  config.command = "/bin/sh";
+  config.args = {allScript, outputPath};
+  config.runFile.args = {runFileScript, "${file}", outputPath};
+  runner.setConfiguration(config);
+  runner.setWorkspaceFolder(m_tempDir.path());
+  runner.setEnabled(true);
+  runner.setMode(AutoRunMode::CurrentFileOnSave);
+  runner.setDebounceDelay(100);
+
+  QSignalSpy spy(&runner, &AutoTestRunner::autoRunTriggered);
+  runner.notifyFileSaved("/some/file.py");
+  QTest::qWait(250);
+  QCOMPARE(spy.count(), 1);
+
+  QFile outputFile(outputPath);
+  QVERIFY(outputFile.open(QIODevice::ReadOnly));
+  QCOMPARE(QString::fromUtf8(outputFile.readAll()), QString("/some/file.py"));
 }
 
 void TestAutoTestRunner::testAutoRunModeLastSelection() {

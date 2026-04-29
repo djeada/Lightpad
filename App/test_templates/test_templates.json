@@ -7,8 +7,11 @@
       "name": "pytest",
       "language": "Python",
       "extensions": ["py"],
-      "command": "python3",
-      "args": ["-m", "pytest", "--tb=short", "-v", "${file}"],
+      "command": "${python}",
+      "args": ["-m", "pytest", "--tb=short", "-v"],
+      "runFile": {
+        "args": ["-m", "pytest", "--tb=short", "-v", "${file}"]
+      },
       "runSingleTest": {
         "args": ["-m", "pytest", "--tb=short", "-v", "${file}::${testName}"]
       },
@@ -36,6 +39,7 @@
         "args": ["-lc", "cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '^${testName}'"]
       },
       "workingDirectory": "${workspaceFolder}",
+      "discoveryDirectory": "${workspaceFolder}/build",
       "outputFormat": "ctest",
       "testFilePattern": "test_*.cpp"
     },
@@ -47,6 +51,7 @@
       "command": "make",
       "args": ["-C", "${workspaceFolder}", "test"],
       "workingDirectory": "${workspaceFolder}",
+      "discoveryDirectory": "${workspaceFolder}/build",
       "outputFormat": "ctest",
       "testFilePattern": "test_*.cpp"
     },

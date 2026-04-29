@@ -1,4 +1,5 @@
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest>
 
 #include <memory>
@@ -34,6 +35,7 @@ private slots:
   void testPytestMixedStatuses();
 
   void testCtestBasicOutput();
+  void testCtestCapturesFailureOutput();
   void testCtestMixedResults();
 
   void testGenericRegexDefaults();
@@ -46,6 +48,8 @@ private slots:
   void testConfigurationRunOverridesFromJson();
   void testConfigurationManagerSubstituteVariables();
   void testConfigurationManagerLoadTemplates();
+  void testPreferredConfigurationForPythonFile();
+  void testPreferredConfigurationForPythonDirectory();
 
   void testCtestDiscoveryParseJsonOutput();
   void testCtestDiscoveryParseJsonOutputEmpty();
@@ -378,6 +382,29 @@ void TestOutputParsers::testCtestBasicOutput() {
   QCOMPARE(finished[2].name, QString("FailTest"));
 }
 
+void TestOutputParsers::testCtestCapturesFailureOutput() {
+  CtestParser parser;
+  QList<TestResult> finished;
+  connect(&parser, &ITestOutputParser::testFinished,
+          [&finished](const TestResult &r) { finished.append(r); });
+
+  QByteArray data =
+      "    Start 1: FailingTests\n"
+      "1: [ RUN      ] FailingTests.ProducesDiff\n"
+      "1: expected: 2\n"
+      "1: actual  : 3\n"
+      "1: [  FAILED  ] FailingTests.ProducesDiff\n"
+      "1/1 Test #1: FailingTests ................***Failed    0.04 sec\n";
+
+  parser.feed(data);
+  parser.finish();
+
+  QCOMPARE(finished.size(), 1);
+  QCOMPARE(finished[0].status, TestStatus::Failed);
+  QVERIFY(finished[0].stdoutOutput.contains("expected: 2"));
+  QVERIFY(finished[0].stdoutOutput.contains("[  FAILED  ]"));
+}
+
 void TestOutputParsers::testCtestMixedResults() {
   CtestParser parser;
   QList<TestResult> finished;
@@ -494,6 +521,7 @@ void TestOutputParsers::testConfigurationFromJson() {
   obj["language"] = "Python";
   obj["command"] = "python3";
   obj["workingDirectory"] = "${workspaceFolder}";
+  obj["discoveryDirectory"] = "${workspaceFolder}/build";
   obj["outputFormat"] = "pytest";
   obj["testFilePattern"] = "test_*.py";
   QJsonArray ext;
@@ -504,6 +532,13 @@ void TestOutputParsers::testConfigurationFromJson() {
   args.append("pytest");
   args.append("-v");
   obj["args"] = args;
+  QJsonObject runFile;
+  QJsonArray runFileArgs;
+  runFileArgs.append("-m");
+  runFileArgs.append("pytest");
+  runFileArgs.append("${file}");
+  runFile["args"] = runFileArgs;
+  obj["runFile"] = runFile;
 
   TestConfiguration cfg = TestConfiguration::fromJson(obj);
 
@@ -514,6 +549,8 @@ void TestOutputParsers::testConfigurationFromJson() {
   QCOMPARE(cfg.extensions.size(), 1);
   QCOMPARE(cfg.extensions[0], QString("py"));
   QCOMPARE(cfg.args.size(), 3);
+  QCOMPARE(cfg.runFile.args.size(), 3);
+  QCOMPARE(cfg.discoveryDirectory, QString("${workspaceFolder}/build"));
   QCOMPARE(cfg.outputFormat, QString("pytest"));
   QCOMPARE(cfg.testFilePattern, QString("test_*.py"));
   QVERIFY(cfg.isValid());
@@ -528,7 +565,9 @@ void TestOutputParsers::testConfigurationToJson() {
   cfg.args = {"test", "-v", "-json"};
   cfg.extensions = {"go"};
   cfg.workingDirectory = "${workspaceFolder}";
+  cfg.discoveryDirectory = "${workspaceFolder}/build";
   cfg.outputFormat = "go_json";
+  cfg.runFile.args = {"test", "./single.go"};
   cfg.runFailed.args = {"test", "-v", "-json", "-run", "${testName}", "./..."};
   cfg.runSuite.args = {"test", "-v", "-json", "-run", "^${testName}", "./..."};
 
@@ -538,7 +577,11 @@ void TestOutputParsers::testConfigurationToJson() {
   QCOMPARE(obj["name"].toString(), QString("Go Test"));
   QCOMPARE(obj["command"].toString(), QString("go"));
   QCOMPARE(obj["args"].toArray().size(), 3);
+  QCOMPARE(obj["discoveryDirectory"].toString(),
+           QString("${workspaceFolder}/build"));
   QCOMPARE(obj["outputFormat"].toString(), QString("go_json"));
+  QVERIFY(obj.contains("runFile"));
+  QCOMPARE(obj["runFile"].toObject()["args"].toArray().size(), 2);
   QVERIFY(obj.contains("runFailed"));
   QCOMPARE(obj["runFailed"].toObject()["args"].toArray().size(), 6);
   QVERIFY(obj.contains("runSuite"));
@@ -554,6 +597,14 @@ void TestOutputParsers::testConfigurationRunOverridesFromJson() {
   args.append("-lc");
   args.append("ctest --test-dir build -V");
   obj["args"] = args;
+  obj["discoveryDirectory"] = "${workspaceFolder}/build";
+
+  QJsonObject runFile;
+  QJsonArray runFileArgs;
+  runFileArgs.append("-lc");
+  runFileArgs.append("ctest --test-dir build -V -R '${fileBasenameNoExt}'");
+  runFile["args"] = runFileArgs;
+  obj["runFile"] = runFile;
 
   QJsonObject runFailed;
   QJsonArray failedArgs;
@@ -571,14 +622,21 @@ void TestOutputParsers::testConfigurationRunOverridesFromJson() {
 
   TestConfiguration cfg = TestConfiguration::fromJson(obj);
 
+  QCOMPARE(cfg.runFile.args.size(), 2);
+  QVERIFY(cfg.runFile.args[1].contains("${fileBasenameNoExt}"));
   QCOMPARE(cfg.runFailed.args.size(), 2);
   QVERIFY(cfg.runFailed.args[1].contains("${testName}"));
   QCOMPARE(cfg.runSuite.args.size(), 2);
   QVERIFY(cfg.runSuite.args[1].contains("${testName}"));
+  QCOMPARE(cfg.discoveryDirectory, QString("${workspaceFolder}/build"));
 
   QJsonObject out = cfg.toJson();
   QVERIFY(out.contains("runFailed"));
   QVERIFY(out.contains("runSuite"));
+  QVERIFY(out.contains("runFile"));
+  QCOMPARE(out["discoveryDirectory"].toString(),
+           QString("${workspaceFolder}/build"));
+  QCOMPARE(out["runFile"].toObject()["args"].toArray().size(), 2);
   QCOMPARE(out["runFailed"].toObject()["args"].toArray().size(), 2);
   QCOMPARE(out["runSuite"].toObject()["args"].toArray().size(), 2);
 }
@@ -617,7 +675,9 @@ void TestOutputParsers::testConfigurationManagerLoadTemplates() {
     TestConfiguration pytest = mgr.templateById("pytest");
     if (pytest.isValid()) {
       QCOMPARE(pytest.language, QString("Python"));
+      QCOMPARE(pytest.command, QString("${python}"));
       QCOMPARE(pytest.outputFormat, QString("pytest"));
+      QVERIFY(!pytest.runFile.args.isEmpty());
 
       QVERIFY(!pytest.runFailed.args.isEmpty());
     }
@@ -625,10 +685,53 @@ void TestOutputParsers::testConfigurationManagerLoadTemplates() {
     TestConfiguration gtest = mgr.templateById("gtest_cmake");
     if (gtest.isValid()) {
       QCOMPARE(gtest.language, QString("C++"));
+      QCOMPARE(gtest.discoveryDirectory, QString("${workspaceFolder}/build"));
       QVERIFY(!gtest.runFailed.args.isEmpty());
       QVERIFY(!gtest.runSuite.args.isEmpty());
     }
   }
+}
+
+void TestOutputParsers::testPreferredConfigurationForPythonFile() {
+  TestConfigurationManager &mgr = TestConfigurationManager::instance();
+  QVERIFY(mgr.loadTemplates());
+
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  const QString filePath = QDir(tempDir.path()).filePath("test_math.py");
+  QFile file(filePath);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("def test_add():\n    assert 1 + 1 == 2\n");
+  file.close();
+
+  const TestConfiguration cfg = mgr.preferredConfigurationForPath(filePath);
+  QVERIFY(cfg.isValid());
+  QCOMPARE(cfg.id, QString("pytest"));
+}
+
+void TestOutputParsers::testPreferredConfigurationForPythonDirectory() {
+  TestConfigurationManager &mgr = TestConfigurationManager::instance();
+  QVERIFY(mgr.loadTemplates());
+
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  QDir root(tempDir.path());
+  QVERIFY(root.mkpath("tests"));
+
+  QFile testFile(root.filePath("tests/test_math.py"));
+  QVERIFY(testFile.open(QIODevice::WriteOnly));
+  testFile.write("def test_add():\n    assert 1 + 1 == 2\n");
+  testFile.close();
+
+  QFile sourceFile(root.filePath("app.py"));
+  QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+  sourceFile.write("print('hello')\n");
+  sourceFile.close();
+
+  const TestConfiguration cfg =
+      mgr.preferredConfigurationForPath(root.filePath("tests"));
+  QVERIFY(cfg.isValid());
+  QCOMPARE(cfg.id, QString("pytest"));
 }
 
 void TestOutputParsers::testCtestDiscoveryParseJsonOutput() {

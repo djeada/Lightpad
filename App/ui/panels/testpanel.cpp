@@ -3,12 +3,14 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDir>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QMenu>
 #include <QPainter>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QStyle>
 #include <QStyledItemDelegate>
 
@@ -120,6 +122,12 @@ TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
   m_runManager = new TestRunManager(this);
   m_autoTestRunner = new AutoTestRunner(m_runManager, this);
   setupUI();
+
+  auto &configManager = TestConfigurationManager::instance();
+  connect(&configManager, &TestConfigurationManager::templatesLoaded, this,
+          &TestPanel::refreshConfigurations);
+  connect(&configManager, &TestConfigurationManager::configurationsChanged,
+          this, &TestPanel::refreshConfigurations);
 
   connect(m_runManager, &TestRunManager::testStarted, this,
           &TestPanel::onTestStarted);
@@ -549,22 +557,20 @@ void TestPanel::runCurrentFile(const QString &filePath) {
   TestConfiguration config = currentConfiguration();
   if (!config.isValid())
     return;
-  m_runManager->runAll(config, m_workspaceFolder, filePath);
+  m_runManager->runFile(config, m_workspaceFolder, filePath);
 }
 
 void TestPanel::runTestsForPath(const QString &path) {
   QFileInfo fi(path);
+  const TestConfiguration preferredConfig =
+      TestConfigurationManager::instance().preferredConfigurationForPath(path);
+  if (preferredConfig.isValid()) {
+    const int idx = m_configCombo->findData(preferredConfig.id);
+    if (idx >= 0)
+      m_configCombo->setCurrentIndex(idx);
+  }
 
   if (fi.isFile()) {
-    QString ext = fi.suffix().toLower();
-    QList<TestConfiguration> matches =
-        TestConfigurationManager::instance().configurationsForExtension(ext);
-    if (!matches.isEmpty()) {
-
-      int idx = m_configCombo->findData(matches.first().id);
-      if (idx >= 0)
-        m_configCombo->setCurrentIndex(idx);
-    }
     runCurrentFile(path);
   } else if (fi.isDir()) {
 
@@ -911,25 +917,46 @@ QTreeWidgetItem *TestPanel::findTestItem(const QString &id) {
 void TestPanel::applyFilter() { applySearchFilter(); }
 
 void TestPanel::refreshConfigurations() {
+  const QString previousId = m_configCombo->currentData().toString();
+  const QString previousName = m_configCombo->currentText();
+  const QString defaultName =
+      TestConfigurationManager::instance().defaultConfigurationName();
+
+  QSignalBlocker blocker(m_configCombo);
   m_configCombo->clear();
   auto configs = TestConfigurationManager::instance().allConfigurations();
   for (const TestConfiguration &cfg : configs)
     m_configCombo->addItem(cfg.name, cfg.id);
 
-  QString defaultName =
-      TestConfigurationManager::instance().defaultConfigurationName();
-  if (!defaultName.isEmpty()) {
-    int idx = m_configCombo->findText(defaultName);
-    if (idx >= 0)
-      m_configCombo->setCurrentIndex(idx);
-  }
+  int idx = -1;
+  if (!previousId.isEmpty())
+    idx = m_configCombo->findData(previousId);
+  if (idx < 0 && !previousName.isEmpty())
+    idx = m_configCombo->findText(previousName);
+  if (idx < 0 && !defaultName.isEmpty())
+    idx = m_configCombo->findText(defaultName);
+  if (idx < 0 && m_configCombo->count() > 0)
+    idx = 0;
+  if (idx >= 0)
+    m_configCombo->setCurrentIndex(idx);
 
+  syncAutoRunConfiguration();
   updateDiscoveryAdapterForConfig();
 }
 
 TestConfiguration TestPanel::currentConfiguration() const {
-  QString name = m_configCombo->currentText();
-  return TestConfigurationManager::instance().configurationByName(name);
+  const QString selectedId = m_configCombo->currentData().toString();
+  if (!selectedId.isEmpty()) {
+    const QList<TestConfiguration> configs =
+        TestConfigurationManager::instance().allConfigurations();
+    for (const TestConfiguration &cfg : configs) {
+      if (cfg.id == selectedId)
+        return cfg;
+    }
+  }
+
+  return TestConfigurationManager::instance().configurationByName(
+      m_configCombo->currentText());
 }
 
 void TestPanel::setDiscoveryAdapter(ITestDiscoveryAdapter *adapter) {
@@ -955,7 +982,17 @@ void TestPanel::connectDiscoveryAdapter() {
 
 void TestPanel::updateDiscoveryAdapterForConfig() {
   TestConfiguration config = currentConfiguration();
-  if (!config.isValid())
+  if (!config.isValid()) {
+    if (m_discoveryAdapter && m_ownsDiscoveryAdapter) {
+      disconnect(m_discoveryAdapter, nullptr, this, nullptr);
+      delete m_discoveryAdapter;
+      m_discoveryAdapter = nullptr;
+      m_ownsDiscoveryAdapter = false;
+    }
+    return;
+  }
+
+  if (m_discoveryAdapter && !m_ownsDiscoveryAdapter)
     return;
 
   QString templateKey =
@@ -977,6 +1014,27 @@ void TestPanel::updateDiscoveryAdapterForConfig() {
   }
 }
 
+QString TestPanel::discoveryRootForConfiguration(
+    const TestConfiguration &config) const {
+  QString discoveryRoot;
+  if (!config.discoveryDirectory.isEmpty()) {
+    discoveryRoot = TestConfigurationManager::substituteVariables(
+        config.discoveryDirectory, QString(), m_workspaceFolder);
+  } else if (m_discoveryAdapter && m_discoveryAdapter->adapterId() == "ctest" &&
+             !m_workspaceFolder.isEmpty()) {
+    discoveryRoot = QDir(m_workspaceFolder).absoluteFilePath("build");
+  } else {
+    discoveryRoot = m_workspaceFolder;
+  }
+
+  if (!discoveryRoot.isEmpty() && QFileInfo(discoveryRoot).isRelative() &&
+      !m_workspaceFolder.isEmpty()) {
+    discoveryRoot = QDir(m_workspaceFolder).absoluteFilePath(discoveryRoot);
+  }
+
+  return discoveryRoot;
+}
+
 void TestPanel::discoverTests() {
   if (m_workspaceFolder.isEmpty())
     return;
@@ -989,7 +1047,8 @@ void TestPanel::discoverTests() {
   m_statusLabel->setText(tr("Discovering tests..."));
   m_discoverAction->setEnabled(false);
 
-  m_discoveryAdapter->discover(m_workspaceFolder);
+  m_discoveryAdapter->discover(
+      discoveryRootForConfiguration(currentConfiguration()));
 }
 
 void TestPanel::onDiscoveryFinished(const QList<DiscoveredTest> &tests) {

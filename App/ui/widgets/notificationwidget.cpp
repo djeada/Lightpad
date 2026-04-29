@@ -216,21 +216,64 @@ NotificationManager::NotificationManager(QWidget *parentWidget, QObject *parent)
 
 void NotificationManager::showInfo(const QString &title, const QString &message,
                                    int durationMs) {
-  auto *notification = new NotificationWidget(m_parentWidget);
-  notification->showNotification(title, message,
-                                 NotificationWidget::Level::Info, durationMs);
+  showNotification(QString(), title, message, NotificationWidget::Level::Info,
+                   durationMs);
 }
 
 void NotificationManager::showWarning(const QString &title,
                                       const QString &message, int durationMs) {
-  auto *notification = new NotificationWidget(m_parentWidget);
-  notification->showNotification(
-      title, message, NotificationWidget::Level::Warning, durationMs);
+  showNotification(QString(), title, message,
+                   NotificationWidget::Level::Warning, durationMs);
 }
 
 void NotificationManager::showError(const QString &title,
                                     const QString &message, int durationMs) {
+  showNotification(QString(), title, message, NotificationWidget::Level::Error,
+                   durationMs);
+}
+
+void NotificationManager::showKeyedError(const QString &key,
+                                         const QString &title,
+                                         const QString &message,
+                                         int durationMs) {
+  showNotification(key, title, message, NotificationWidget::Level::Error,
+                   durationMs);
+}
+
+void NotificationManager::dismiss(const QString &key) {
+  QPointer<NotificationWidget> notification = m_keyedNotifications.value(key);
+  if (!notification) {
+    m_keyedNotifications.remove(key);
+    return;
+  }
+
+  notification->dismiss();
+}
+
+void NotificationManager::showNotification(const QString &key,
+                                           const QString &title,
+                                           const QString &message,
+                                           NotificationWidget::Level level,
+                                           int durationMs) {
+  if (!key.isEmpty()) {
+    QPointer<NotificationWidget> existing = m_keyedNotifications.value(key);
+    if (existing) {
+      existing->showNotification(title, message, level, durationMs);
+      return;
+    }
+    m_keyedNotifications.remove(key);
+  }
+
   auto *notification = new NotificationWidget(m_parentWidget);
-  notification->showNotification(title, message,
-                                 NotificationWidget::Level::Error, durationMs);
+  if (!key.isEmpty()) {
+    m_keyedNotifications.insert(key, notification);
+    connect(notification, &QObject::destroyed, this,
+            [this, key, notification]() {
+              if (m_keyedNotifications.value(key) == notification) {
+                m_keyedNotifications.remove(key);
+              }
+            });
+  }
+
+  notification->showNotification(title, message, level, durationMs);
 }

@@ -22,6 +22,7 @@ struct GlobalSearchResult {
   QString filePath;
   int lineNumber;
   int columnNumber;
+  int matchStart;
   int matchLength;
   QString lineContent;
 };
@@ -78,6 +79,7 @@ private:
   MainWindow *mainWindow;
   Ui::FindReplacePanel *ui;
   QVector<int> positions;
+  QVector<int> matchLengths;
   bool onlyFind;
   bool m_vimCommandMode;
   QString m_searchPrefix;
@@ -119,6 +121,9 @@ private:
   QVector<GlobalSearchResult>
   collectMatchesInContent(const QString &filePath, const QString &content,
                           const QRegularExpression &pattern) const;
+  int currentMatchLength(const QString &searchWord) const;
+  QString replacementForMatch(const QString &replaceWord,
+                              const QRegularExpressionMatch &match) const;
   QString currentFilePath() const;
   void displayGlobalResults();
   void navigateToGlobalResult(int index, bool emitNavigation = true);

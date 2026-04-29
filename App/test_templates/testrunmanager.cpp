@@ -1,6 +1,7 @@
 #include "testrunmanager.h"
 
 #include "core/logging/logger.h"
+#include "python/pythonprojectenvironment.h"
 
 TestRunManager::TestRunManager(QObject *parent) : QObject(parent) {}
 
@@ -10,6 +11,12 @@ void TestRunManager::runAll(const TestConfiguration &config,
                             const QString &workspaceFolder,
                             const QString &filePath) {
   startProcess(config, workspaceFolder, filePath, QString(), RunMode::All);
+}
+
+void TestRunManager::runFile(const TestConfiguration &config,
+                             const QString &workspaceFolder,
+                             const QString &filePath) {
+  startProcess(config, workspaceFolder, filePath, QString(), RunMode::File);
 }
 
 void TestRunManager::runSingleTest(const TestConfiguration &config,
@@ -26,7 +33,8 @@ void TestRunManager::runFailed(const TestConfiguration &config,
   if (failed.isEmpty())
     return;
 
-  QString filter = failed.join(':');
+  QString filter = (config.outputFormat == "pytest") ? failed.join(" or ")
+                                                     : failed.join(':');
   startProcess(config, workspaceFolder, QString(), filter, RunMode::Failed);
 }
 
@@ -113,6 +121,12 @@ void TestRunManager::startProcess(const TestConfiguration &config,
 
   QStringList templateArgs;
   switch (mode) {
+  case RunMode::File:
+    if (!filePath.isEmpty() && !config.runFile.args.isEmpty())
+      templateArgs = config.runFile.args;
+    else
+      templateArgs = config.args;
+    break;
   case RunMode::Failed:
     if (!config.runFailed.args.isEmpty())
       templateArgs = config.runFailed.args;
@@ -156,6 +170,19 @@ void TestRunManager::startProcess(const TestConfiguration &config,
     workDir = workspaceFolder;
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  const bool usesPythonEnvironment =
+      config.outputFormat == "pytest" ||
+      config.language.compare("Python", Qt::CaseInsensitive) == 0 ||
+      config.command.contains("${python}");
+  if (usesPythonEnvironment) {
+    const PythonEnvironmentInfo pythonEnvironment =
+        PythonProjectEnvironment::resolve({}, workspaceFolder, filePath,
+                                          workDir);
+    const QMap<QString, QString> activationEnv =
+        PythonProjectEnvironment::activationEnvironment(pythonEnvironment);
+    for (auto it = activationEnv.begin(); it != activationEnv.end(); ++it)
+      env.insert(it.key(), it.value());
+  }
   for (auto it = config.env.begin(); it != config.env.end(); ++it) {
     env.insert(it.key(), TestConfigurationManager::substituteVariables(
                              it.value(), filePath, workspaceFolder, testName));

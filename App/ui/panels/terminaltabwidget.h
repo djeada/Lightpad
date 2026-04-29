@@ -50,6 +50,8 @@ public:
 
   void setWorkingDirectory(const QString &directory);
 
+  void resetForWorkspace(const QString &directory);
+
   void applyTheme(const Theme &theme);
 
   void sendTextToTerminal(const QString &text, bool appendNewline = false);
