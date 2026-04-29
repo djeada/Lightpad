@@ -11,6 +11,7 @@ private slots:
   void testToolPanelsStayMovableClosableAndFloatable();
   void testMainWindowDockOptionsSupportDockRearrangement();
   void testDockStateRestoreKeepsHiddenDockPosition();
+  void testFloatingDockHasResizeFrame();
 };
 
 void TestDockUtils::testToolPanelsAllowAllDockAreas() {
@@ -77,6 +78,22 @@ void TestDockUtils::testDockStateRestoreKeepsHiddenDockPosition() {
   QVERIFY(secondWindow.restoreState(savedState));
   QCOMPARE(secondWindow.dockWidgetArea(&secondSourceControlDock),
            Qt::LeftDockWidgetArea);
+}
+
+void TestDockUtils::testFloatingDockHasResizeFrame() {
+  QMainWindow mainWindow;
+  mainWindow.setDockOptions(DockUtils::mainWindowDockOptions());
+
+  QDockWidget dock("Test");
+  DockUtils::configureToolPanelDock(&dock);
+  dock.setWidget(new QWidget(&dock));
+  mainWindow.addDockWidget(Qt::BottomDockWidgetArea, &dock);
+  mainWindow.show();
+
+  dock.setFloating(true);
+
+  QVERIFY(dock.isFloating());
+  QVERIFY(dock.windowFlags().testFlag(Qt::Window));
 }
 
 QTEST_MAIN(TestDockUtils)
