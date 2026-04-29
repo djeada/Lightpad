@@ -32,6 +32,7 @@ class GitFileSystemModel;
 class SourceControlPanel;
 class QDockWidget;
 class QMenu;
+class QFileSystemWatcher;
 class VimMode;
 class LightpadTreeView;
 class DebugPanel;
@@ -221,6 +222,9 @@ private:
 
   class AutoSaveManager *autoSaveManager;
   QHash<QString, QDateTime> m_fileTimestamps;
+  QFileSystemWatcher *m_openFileWatcher;
+  QSet<QString> m_externalChangePrompts;
+  QSet<QString> m_internalFileWrites;
   GitIntegration *m_gitIntegration;
   SourceControlPanel *sourceControlPanel;
   QDockWidget *sourceControlDock;
@@ -275,6 +279,13 @@ private:
   bool save(const QString &filePath, bool isAutoSave = false);
   void recordFileTimestamp(const QString &filePath);
   bool checkExternalModification(const QString &filePath) const;
+  void setupOpenFileWatcher();
+  void watchOpenFile(const QString &filePath);
+  void unwatchOpenFileIfUnused(const QString &filePath);
+  void recheckOpenFilesForExternalChanges();
+  bool handleExternalModification(const QString &filePath, bool allowOverwrite);
+  bool reloadOpenFileFromDisk(const QString &filePath);
+  bool writeOpenFileToDisk(const QString &filePath);
   void trimTrailingWhitespace(TextArea *textArea);
   void ensureFinalNewline(TextArea *textArea);
   void showFindReplace(bool onlyFind = true);

@@ -1170,6 +1170,7 @@ add_executable(test_testoutputparsers
     ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${TEST_TEMPLATE_RESOURCES}
 )
@@ -1199,6 +1200,7 @@ add_executable(test_autotestrunner
     ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${TEST_TEMPLATE_RESOURCES}
 )
@@ -1251,6 +1253,7 @@ add_executable(test_testrunmanager
     ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${TEST_TEMPLATE_RESOURCES}
 )
@@ -1282,6 +1285,7 @@ add_executable(test_testpanel
     ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${TEST_TEMPLATE_RESOURCES}

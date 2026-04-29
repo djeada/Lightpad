@@ -353,6 +353,8 @@ void CtestParser::finish() {
   if (!m_buffer.trimmed().isEmpty())
     parseLine(m_buffer);
   m_buffer.clear();
+  m_activeTests.clear();
+  m_currentTestId.clear();
 }
 
 void CtestParser::parseLine(const QString &line) {
@@ -362,8 +364,10 @@ void CtestParser::parseLine(const QString &line) {
       R"(^\s*\d+/\d+\s+Test\s+#(\d+):\s+(\S+)\s+\.+\s*(Passed|Failed|\*\*\*Failed|Not Run|Timeout)\s+(\d+\.\d+)\s+sec$)");
   auto match = resultRe.match(line.trimmed());
   if (match.hasMatch()) {
-    TestResult result;
-    result.id = match.captured(1);
+    const QString testId = match.captured(1);
+
+    TestResult result = m_activeTests.take(testId);
+    result.id = testId;
     result.name = match.captured(2);
 
     QString status = match.captured(3);
@@ -375,6 +379,9 @@ void CtestParser::parseLine(const QString &line) {
       result.status = TestStatus::Failed;
 
     result.durationMs = static_cast<int>(match.captured(4).toDouble() * 1000);
+    result.stdoutOutput = result.stdoutOutput.trimmed();
+    if (m_currentTestId == testId)
+      m_currentTestId.clear();
     emit testFinished(result);
     return;
   }
@@ -386,8 +393,31 @@ void CtestParser::parseLine(const QString &line) {
     result.id = startMatch.captured(1);
     result.name = startMatch.captured(2);
     result.status = TestStatus::Running;
+    m_activeTests[result.id] = result;
+    m_currentTestId = result.id;
     emit testStarted(result);
+    return;
   }
+
+  static QRegularExpression prefixedOutputRe(R"(^\s*(\d+):\s?(.*)$)");
+  auto outputMatch = prefixedOutputRe.match(line);
+  if (outputMatch.hasMatch()) {
+    appendOutput(outputMatch.captured(1), outputMatch.captured(2));
+    return;
+  }
+
+  if (!m_currentTestId.isEmpty())
+    appendOutput(m_currentTestId, line);
+}
+
+void CtestParser::appendOutput(const QString &testId, const QString &line) {
+  auto it = m_activeTests.find(testId);
+  if (it == m_activeTests.end())
+    return;
+
+  if (!it->stdoutOutput.isEmpty())
+    it->stdoutOutput += "\n";
+  it->stdoutOutput += line;
 }
 
 GenericRegexParser::GenericRegexParser(QObject *parent)

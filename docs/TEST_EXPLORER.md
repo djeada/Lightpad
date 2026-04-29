@@ -85,8 +85,8 @@ Lightpad ships with built-in templates stored in `test_templates.json`:
 {
   "id": "pytest",
   "name": "pytest",
-  "command": "python3",
-  "args": ["-m", "pytest", "--tb=short", "-v", "${file}"],
+  "command": "${python}",
+  "args": ["-m", "pytest", "--tb=short", "-v"],
   "outputFormat": "pytest",
   ...
 }

@@ -1,3 +1,4 @@
+#include <QDir>
 #include <QLineEdit>
 #include <QProgressBar>
 #include <QSignalSpy>
@@ -23,6 +24,8 @@ private slots:
 
   void testInitialCounts();
   void testInitialTreeEmpty();
+  void testConfigurationComboRefreshesAfterTemplateLoad();
+  void testCtestDiscoveryUsesBuildDirectory();
 
   void testDiscoveryPopulatesTree();
   void testDiscoveryWithSuites();
@@ -54,6 +57,7 @@ private:
   QTreeWidget *findTree(TestPanel &panel);
   QLabel *findStatusLabel(TestPanel &panel);
   QComboBox *findFilterCombo(TestPanel &panel);
+  QComboBox *findConfigCombo(TestPanel &panel);
   TestRunManager *findRunManager(TestPanel &panel);
   QLineEdit *findSearchEdit(TestPanel &panel);
   QProgressBar *findProgressBar(TestPanel &panel);
@@ -79,6 +83,10 @@ QLabel *TestTestPanel::findStatusLabel(TestPanel &panel) {
 
 QComboBox *TestTestPanel::findFilterCombo(TestPanel &panel) {
   return panel.findChild<QComboBox *>("filterCombo");
+}
+
+QComboBox *TestTestPanel::findConfigCombo(TestPanel &panel) {
+  return panel.findChild<QComboBox *>("configCombo");
 }
 
 TestRunManager *TestTestPanel::findRunManager(TestPanel &panel) {
@@ -110,6 +118,46 @@ void TestTestPanel::testInitialTreeEmpty() {
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree != nullptr);
   QCOMPARE(tree->topLevelItemCount(), 0);
+}
+
+void TestTestPanel::testConfigurationComboRefreshesAfterTemplateLoad() {
+  TestPanel panel;
+  QComboBox *configCombo = findConfigCombo(panel);
+  QVERIFY(configCombo != nullptr);
+  QCOMPARE(configCombo->count(), 0);
+
+  QVERIFY(TestConfigurationManager::instance().loadTemplates());
+  QVERIFY(configCombo->count() > 0);
+}
+
+void TestTestPanel::testCtestDiscoveryUsesBuildDirectory() {
+  TestPanel panel;
+  QVERIFY(TestConfigurationManager::instance().loadTemplates());
+
+  QComboBox *configCombo = findConfigCombo(panel);
+  QVERIFY(configCombo != nullptr);
+  const int gtestIndex = configCombo->findData("gtest_cmake");
+  QVERIFY(gtestIndex >= 0);
+  configCombo->setCurrentIndex(gtestIndex);
+
+  class CapturingDiscoveryAdapter : public ITestDiscoveryAdapter {
+  public:
+    QString lastPath;
+
+    QString adapterId() const override { return "ctest"; }
+    void discover(const QString &path) override {
+      lastPath = path;
+      emit discoveryFinished({});
+    }
+    void cancel() override {}
+  };
+
+  CapturingDiscoveryAdapter adapter;
+  panel.setDiscoveryAdapter(&adapter);
+  panel.setWorkspaceFolder(m_tempDir.path());
+  panel.discoverTests();
+
+  QCOMPARE(adapter.lastPath, QDir(m_tempDir.path()).absoluteFilePath("build"));
 }
 
 void TestTestPanel::testDiscoveryPopulatesTree() {

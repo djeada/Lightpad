@@ -92,7 +92,10 @@ public:
 
 private:
   void parseLine(const QString &line);
+  void appendOutput(const QString &testId, const QString &line);
   QString m_buffer;
+  QMap<QString, TestResult> m_activeTests;
+  QString m_currentTestId;
 };
 
 class GenericRegexParser : public ITestOutputParser {

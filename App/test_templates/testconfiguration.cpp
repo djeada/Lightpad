@@ -1,12 +1,17 @@
 #include "testconfiguration.h"
 
+#include "../python/pythonprojectenvironment.h"
+
 #include <QCoreApplication>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QStandardPaths>
 
 #include "core/logging/logger.h"
@@ -139,6 +144,74 @@ TestConfigurationManager::configurationsForExtension(const QString &ext) const {
   return result;
 }
 
+TestConfiguration TestConfigurationManager::preferredConfigurationForPath(
+    const QString &path) const {
+  const QFileInfo info(path);
+  if (info.isFile()) {
+    const QList<TestConfiguration> matches =
+        configurationsForExtension(info.suffix().toLower());
+    return matches.isEmpty() ? TestConfiguration() : matches.first();
+  }
+
+  if (!info.isDir())
+    return TestConfiguration();
+
+  const QList<TestConfiguration> configs = allConfigurations();
+  if (configs.isEmpty())
+    return TestConfiguration();
+
+  QHash<QString, int> scores;
+  int scannedFiles = 0;
+  QDirIterator it(path, QDir::Files, QDirIterator::Subdirectories);
+  while (it.hasNext() && scannedFiles < 500) {
+    const QString filePath = it.next();
+    ++scannedFiles;
+
+    const QFileInfo fileInfo(filePath);
+    const QString ext = fileInfo.suffix().toLower();
+    if (ext.isEmpty())
+      continue;
+
+    const QString fileName = fileInfo.fileName();
+    for (const TestConfiguration &cfg : configs) {
+      if (!cfg.extensions.contains(ext, Qt::CaseInsensitive))
+        continue;
+
+      int weight = 1;
+      if (!cfg.testFilePattern.isEmpty() &&
+          !cfg.testFilePattern.contains('{')) {
+        const QRegularExpression pattern(
+            QRegularExpression::wildcardToRegularExpression(
+                cfg.testFilePattern,
+                QRegularExpression::UnanchoredWildcardConversion));
+        if (pattern.match(fileName).hasMatch())
+          weight += 4;
+      }
+      scores[cfg.id] += weight;
+    }
+  }
+
+  if (scores.isEmpty())
+    return TestConfiguration();
+
+  QString bestId;
+  int bestScore = -1;
+  for (const TestConfiguration &cfg : configs) {
+    const int score = scores.value(cfg.id, 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = cfg.id;
+    }
+  }
+
+  for (const TestConfiguration &cfg : configs) {
+    if (cfg.id == bestId)
+      return cfg;
+  }
+
+  return TestConfiguration();
+}
+
 TestConfiguration
 TestConfigurationManager::configurationByName(const QString &name) const {
   for (const TestConfiguration &cfg : m_userConfigurations) {
@@ -203,17 +276,12 @@ QString TestConfigurationManager::workspaceFolder() const {
 QString TestConfigurationManager::substituteVariables(
     const QString &input, const QString &filePath,
     const QString &workspaceFolder, const QString &testName) {
-  QString result = input;
-  if (!filePath.isEmpty()) {
-    QFileInfo fi(filePath);
-    result.replace("${file}", filePath);
-    result.replace("${fileDir}", fi.absolutePath());
-    result.replace("${fileBasename}", fi.fileName());
-    result.replace("${fileBasenameNoExt}", fi.completeBaseName());
-    result.replace("${fileExt}", fi.suffix());
-  }
-  if (!workspaceFolder.isEmpty())
-    result.replace("${workspaceFolder}", workspaceFolder);
+  QString workingDirectory = workspaceFolder;
+  if (!filePath.isEmpty())
+    workingDirectory = QFileInfo(filePath).absolutePath();
+
+  QString result = PythonProjectEnvironment::substituteVariables(
+      input, workspaceFolder, filePath, workingDirectory);
   if (!testName.isEmpty())
     result.replace("${testName}", testName);
   return result;

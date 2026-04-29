@@ -55,12 +55,14 @@ struct TestConfiguration {
   QString command;
   QStringList args;
   QString workingDirectory;
+  QString discoveryDirectory;
   QString outputFormat;
   QString testFilePattern;
   QMap<QString, QString> env;
   QString preLaunchTask;
   QString postRunTask;
   QString templateId;
+  TestArgsOverride runFile;
   RunSingleTestOverride runSingleTest;
   TestArgsOverride runFailed;
   TestArgsOverride runSuite;
@@ -89,6 +91,8 @@ struct TestConfiguration {
     }
     if (!workingDirectory.isEmpty())
       obj["workingDirectory"] = workingDirectory;
+    if (!discoveryDirectory.isEmpty())
+      obj["discoveryDirectory"] = discoveryDirectory;
     if (!outputFormat.isEmpty())
       obj["outputFormat"] = outputFormat;
     if (!testFilePattern.isEmpty())
@@ -105,6 +109,8 @@ struct TestConfiguration {
       obj["postRunTask"] = postRunTask;
     if (!templateId.isEmpty())
       obj["templateId"] = templateId;
+    if (!runFile.args.isEmpty())
+      obj["runFile"] = runFile.toJson();
     if (!runSingleTest.args.isEmpty())
       obj["runSingleTest"] = runSingleTest.toJson();
     if (!runFailed.args.isEmpty())
@@ -125,6 +131,7 @@ struct TestConfiguration {
     for (const auto &v : obj["args"].toArray())
       cfg.args.append(v.toString());
     cfg.workingDirectory = obj["workingDirectory"].toString();
+    cfg.discoveryDirectory = obj["discoveryDirectory"].toString();
     cfg.outputFormat = obj["outputFormat"].toString();
     cfg.testFilePattern = obj["testFilePattern"].toString();
     if (obj.contains("env")) {
@@ -135,6 +142,8 @@ struct TestConfiguration {
     cfg.preLaunchTask = obj["preLaunchTask"].toString();
     cfg.postRunTask = obj["postRunTask"].toString();
     cfg.templateId = obj["templateId"].toString();
+    if (obj.contains("runFile"))
+      cfg.runFile = TestArgsOverride::fromJson(obj["runFile"].toObject());
     if (obj.contains("runSingleTest"))
       cfg.runSingleTest =
           RunSingleTestOverride::fromJson(obj["runSingleTest"].toObject());
@@ -159,6 +168,7 @@ public:
   QList<TestConfiguration> allTemplates() const;
   QList<TestConfiguration> allConfigurations() const;
   QList<TestConfiguration> configurationsForExtension(const QString &ext) const;
+  TestConfiguration preferredConfigurationForPath(const QString &path) const;
   TestConfiguration configurationByName(const QString &name) const;
   TestConfiguration templateById(const QString &id) const;
 

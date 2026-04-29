@@ -85,6 +85,7 @@ private:
   void refreshConfigurations();
   void syncAutoRunConfiguration();
   TestConfiguration currentConfiguration() const;
+  QString discoveryRootForConfiguration(const TestConfiguration &config) const;
   void populateTreeFromDiscovery(const QList<DiscoveredTest> &tests);
   void connectDiscoveryAdapter();
   void updateDiscoveryAdapterForConfig();

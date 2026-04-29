@@ -389,6 +389,14 @@ void TerminalTabWidget::setWorkingDirectory(const QString &directory) {
   }
 }
 
+void TerminalTabWidget::resetForWorkspace(const QString &directory) {
+  m_currentWorkingDirectory =
+      directory.isEmpty() ? QDir::currentPath() : QDir::cleanPath(directory);
+  m_terminalCounter = 0;
+  closeAllTerminals();
+  addNewTerminal(m_currentWorkingDirectory);
+}
+
 void TerminalTabWidget::applyTheme(const Theme &theme) {
   const ThemeDefinition &td = ThemeEngine::instance().activeTheme();
   const ThemeColors &colors = td.colors;

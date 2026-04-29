@@ -15,6 +15,8 @@ public:
 
   void runAll(const TestConfiguration &config, const QString &workspaceFolder,
               const QString &filePath = QString());
+  void runFile(const TestConfiguration &config, const QString &workspaceFolder,
+               const QString &filePath);
   void runSingleTest(const TestConfiguration &config,
                      const QString &workspaceFolder, const QString &testName,
                      const QString &filePath = QString());
@@ -44,7 +46,7 @@ private slots:
   void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
 private:
-  enum class RunMode { All, SingleTest, Failed, Suite };
+  enum class RunMode { All, File, SingleTest, Failed, Suite };
 
   void startProcess(const TestConfiguration &config,
                     const QString &workspaceFolder, const QString &filePath,

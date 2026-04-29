@@ -70,6 +70,13 @@ void ThemedMessageBox::setDefaultButton(int button) {
   m_defaultButton = button;
 }
 
+void ThemedMessageBox::setButtonText(int button, const QString &text) {
+  m_customButtonTexts[button] = text;
+  if (m_buttonMap.contains(button)) {
+    m_buttonMap[button]->setText(text);
+  }
+}
+
 QPushButton *ThemedMessageBox::button(int which) const {
   return m_buttonMap.value(which, nullptr);
 }
@@ -161,7 +168,8 @@ void ThemedMessageBox::buildUI() {
 }
 
 QPushButton *ThemedMessageBox::addButton(const QString &text, int role) {
-  QPushButton *btn = new QPushButton(text, this);
+  QPushButton *btn =
+      new QPushButton(m_customButtonTexts.value(role, text), this);
   btn->setMinimumWidth(80);
   btn->setCursor(Qt::PointingHandCursor);
   m_buttonMap[role] = btn;

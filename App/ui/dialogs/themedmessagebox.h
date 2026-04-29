@@ -41,6 +41,7 @@ public:
   void setInformativeText(const QString &text);
   void setStandardButtons(int buttons);
   void setDefaultButton(int button);
+  void setButtonText(int button, const QString &text);
   QPushButton *button(int which) const;
   int exec() override;
 
@@ -59,6 +60,7 @@ private:
   int m_defaultButton = NoButton;
   int m_clickedButton = NoButton;
   bool m_built = false;
+  QMap<int, QString> m_customButtonTexts;
 
   QLabel *m_iconLabel = nullptr;
   QLabel *m_textLabel = nullptr;

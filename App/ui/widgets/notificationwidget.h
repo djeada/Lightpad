@@ -2,7 +2,9 @@
 #define NOTIFICATIONWIDGET_H
 
 #include <QFrame>
+#include <QHash>
 #include <QLabel>
+#include <QPointer>
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QTimer>
@@ -58,9 +60,17 @@ public:
                    int durationMs = 8000);
   void showError(const QString &title, const QString &message,
                  int durationMs = 10000);
+  void showKeyedError(const QString &key, const QString &title,
+                      const QString &message, int durationMs = 10000);
+  void dismiss(const QString &key);
 
 private:
+  void showNotification(const QString &key, const QString &title,
+                        const QString &message, NotificationWidget::Level level,
+                        int durationMs);
+
   QWidget *m_parentWidget;
+  QHash<QString, QPointer<NotificationWidget>> m_keyedNotifications;
 };
 
 #endif

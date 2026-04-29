@@ -9,6 +9,7 @@
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFileSystemWatcher>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QItemSelectionModel>
@@ -116,6 +117,7 @@
 
 namespace {
 constexpr auto kCompoundDebugTargetPrefix = "compound:";
+constexpr auto kCurrentFileLspErrorNotificationKey = "current-file-lsp-error";
 constexpr auto kSessionTabPathKey = "path";
 constexpr auto kSessionTabCursorKey = "cursorPosition";
 constexpr auto kSessionTabVerticalScrollKey = "verticalScroll";
@@ -160,7 +162,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_vimCommandPanelActive(false), m_connectedVimMode(nullptr),
       breadcrumbWidget(nullptr), recentFilesManager(nullptr),
       navigationHistory(nullptr), m_symbolNavService(nullptr),
-      autoSaveManager(nullptr), m_splitEditorContainer(nullptr),
+      autoSaveManager(nullptr), m_openFileWatcher(nullptr),
       m_gitIntegration(nullptr), sourceControlPanel(nullptr),
       sourceControlDock(nullptr), m_inlineBlameEnabled(false),
       m_heatmapEnabled(false), m_codeLensEnabled(false),
@@ -175,13 +177,14 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionErrorConnection(), m_sessionStateConnection(),
       m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
       m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
-      m_diagnosticsManager(nullptr), m_languageFeatureManager(nullptr),
-      m_lspCompletionProvider(), m_notificationManager(nullptr),
-      m_lspStatusLabel(nullptr), m_lspStatusLanguageId(""),
-      m_restoringSession(false), m_globalSettingsLoaded(false),
-      m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
-      m_treeScrollValue(0), m_treeScrollValueInitialized(false),
-      m_treeScrollSyncing(false), m_treeFilterText(""), m_treeCurrentPath(""),
+      m_splitEditorContainer(nullptr), m_diagnosticsManager(nullptr),
+      m_languageFeatureManager(nullptr), m_lspCompletionProvider(),
+      m_notificationManager(nullptr), m_lspStatusLabel(nullptr),
+      m_lspStatusLanguageId(""), m_restoringSession(false),
+      m_globalSettingsLoaded(false), m_fileTreeModel(nullptr),
+      m_fileTreeSelectionModel(nullptr), m_treeScrollValue(0),
+      m_treeScrollValueInitialized(false), m_treeScrollSyncing(false),
+      m_treeFilterText(""), m_treeCurrentPath(""),
       m_treeSelectionSyncing(false) {
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
@@ -241,6 +244,7 @@ MainWindow::MainWindow(QWidget *parent)
   setupSymbolNavigation();
 
   setupAutoSave();
+  setupOpenFileWatcher();
 
   setupDiagnostics();
 
@@ -1732,6 +1736,7 @@ void MainWindow::closeTabPage(QString filePath) {
     for (int i = 0; i < tabWidget->count(); i++) {
       if (tabWidget->getFilePath(i) == filePath) {
         tabWidget->removeTab(i);
+        unwatchOpenFileIfUnused(filePath);
       }
     }
   }
@@ -1872,6 +1877,7 @@ void MainWindow::on_actionClose_Tab_triggered() {
     QString filePath = tabWidget->getFilePath(index);
     notifyDiagnosticsFileClosed(filePath);
     tabWidget->removeTab(index);
+    unwatchOpenFileIfUnused(filePath);
   }
 }
 
@@ -1943,18 +1949,67 @@ void MainWindow::on_actionOpen_Project_triggered() {
 
   const QString normalizedCurrentRoot = QDir::cleanPath(m_projectRootPath);
   const QString normalizedNextRoot = QDir::cleanPath(folderPath);
+  bool replacingProject = false;
   if (!normalizedCurrentRoot.isEmpty() &&
       normalizedCurrentRoot != normalizedNextRoot) {
+    ThemedMessageBox confirmBox(this);
+    confirmBox.setWindowTitle(tr("Replace Project"));
+    confirmBox.setIcon(ThemedMessageBox::Question);
+    confirmBox.setText(
+        tr("A project is already open. Replace it with the selected project?"));
+    confirmBox.setInformativeText(
+        tr("Open editors from the current project will be closed and the "
+           "workspace view will be reset."));
+    confirmBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No);
+    confirmBox.setDefaultButton(ThemedMessageBox::No);
+
+    if (confirmBox.exec() != ThemedMessageBox::Yes) {
+      return;
+    }
+
+    QSet<QString> closedFiles;
     for (LightpadTabWidget *tabWidget : allTabWidgets()) {
-      if (tabWidget) {
-        tabWidget->closeAllTabs();
+      if (!tabWidget) {
+        continue;
+      }
+
+      for (int i = 0; i < tabWidget->count(); ++i) {
+        const QString filePath = tabWidget->getFilePath(i);
+        if (!filePath.isEmpty()) {
+          notifyDiagnosticsFileClosed(filePath);
+          closedFiles.insert(filePath);
+        }
       }
     }
+
+    if (m_splitEditorContainer && m_splitEditorContainer->hasSplits()) {
+      m_splitEditorContainer->unsplitAll();
+    }
+
+    if (LightpadTabWidget *tabWidget = currentTabWidget()) {
+      tabWidget->closeAllTabs();
+    }
+
+    for (const QString &filePath : closedFiles) {
+      unwatchOpenFileIfUnused(filePath);
+    }
+
+    m_treeCurrentPath.clear();
+    m_treeScrollValue = 0;
+    m_treeScrollValueInitialized = false;
+    replacingProject = true;
   }
 
   setProjectRootPath(folderPath);
 
   QDir::setCurrent(folderPath);
+  if (terminalWidget) {
+    if (replacingProject) {
+      terminalWidget->resetForWorkspace(folderPath);
+    } else {
+      terminalWidget->setWorkingDirectory(folderPath);
+    }
+  }
   setMainWindowTitle(QFileInfo(folderPath).fileName());
   if (fileQuickOpen) {
     fileQuickOpen->setRootDirectory(folderPath);
@@ -2013,6 +2068,7 @@ void MainWindow::open(const QString &filePath) {
   }
 
   recordFileTimestamp(filePath);
+  watchOpenFile(filePath);
 }
 
 bool MainWindow::save(const QString &filePath, bool isAutoSave) {
@@ -2072,38 +2128,7 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
       return false;
     }
 
-    const QString fileName = QFileInfo(filePath).fileName();
-    ThemedMessageBox msgBox(this);
-    msgBox.setWindowTitle(tr("File Changed on Disk"));
-    msgBox.setIcon(ThemedMessageBox::Warning);
-    msgBox.setText(
-        tr("<b>%1</b> has been modified by another program.").arg(fileName));
-    msgBox.setInformativeText(
-        tr("Do you want to overwrite the external changes, "
-           "reload the file from disk, or cancel?"));
-    msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No |
-                              ThemedMessageBox::Cancel);
-    msgBox.setDefaultButton(ThemedMessageBox::Yes);
-    int result = msgBox.exec();
-
-    if (result == ThemedMessageBox::Yes) {
-      QFile reloadFile(filePath);
-      if (reloadFile.open(QFile::ReadOnly | QFile::Text)) {
-        int cursorPos = textArea->textCursor().position();
-        textArea->setPlainText(QString::fromUtf8(reloadFile.readAll()));
-        reloadFile.close();
-        QTextCursor cursor = textArea->textCursor();
-        cursor.setPosition(qMin(cursorPos, textArea->toPlainText().length()));
-        textArea->setTextCursor(cursor);
-        textArea->document()->setModified(false);
-        textArea->removeIconUnsaved();
-        recordFileTimestamp(filePath);
-        if (autoSaveManager) {
-          autoSaveManager->markSaved(filePath);
-        }
-      }
-      return false;
-    } else if (result != ThemedMessageBox::No) {
+    if (!handleExternalModification(filePath, false)) {
       return false;
     }
   }
@@ -2124,7 +2149,13 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
 
   targetTabWidget->setFilePath(targetTabIndex, filePath);
 
+  const QString normalizedSavePath = QDir::cleanPath(filePath);
+  m_internalFileWrites.insert(normalizedSavePath);
+  QTimer::singleShot(1000, this, [this, normalizedSavePath]() {
+    m_internalFileWrites.remove(normalizedSavePath);
+  });
   if (file.write(textArea->toPlainText().toUtf8()) == -1) {
+    m_internalFileWrites.remove(normalizedSavePath);
     return false;
   }
   file.close();
@@ -2133,6 +2164,7 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
   textArea->removeIconUnsaved();
 
   recordFileTimestamp(filePath);
+  watchOpenFile(filePath);
 
   const QString fileName = QFileInfo(filePath).fileName();
   targetTabWidget->setTabText(targetTabIndex, fileName);
@@ -2160,19 +2192,255 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
 
 void MainWindow::recordFileTimestamp(const QString &filePath) {
   if (!filePath.isEmpty()) {
-    m_fileTimestamps[filePath] = QFileInfo(filePath).lastModified();
+    const QString normalizedPath = QDir::cleanPath(filePath);
+    m_fileTimestamps[normalizedPath] = QFileInfo(normalizedPath).lastModified();
   }
 }
 
 bool MainWindow::checkExternalModification(const QString &filePath) const {
-  if (filePath.isEmpty() || !m_fileTimestamps.contains(filePath)) {
+  const QString normalizedPath = QDir::cleanPath(filePath);
+  if (normalizedPath.isEmpty() || !m_fileTimestamps.contains(normalizedPath)) {
     return false;
   }
-  QFileInfo info(filePath);
+  QFileInfo info(normalizedPath);
   if (!info.exists()) {
     return false;
   }
-  return info.lastModified() > m_fileTimestamps.value(filePath);
+  return info.lastModified() > m_fileTimestamps.value(normalizedPath);
+}
+
+void MainWindow::setupOpenFileWatcher() {
+  if (m_openFileWatcher) {
+    return;
+  }
+
+  m_openFileWatcher = new QFileSystemWatcher(this);
+  connect(m_openFileWatcher, &QFileSystemWatcher::fileChanged, this,
+          [this](const QString &path) {
+            const QString filePath = QDir::cleanPath(path);
+            if (m_internalFileWrites.remove(filePath)) {
+              watchOpenFile(filePath);
+              return;
+            }
+
+            QTimer::singleShot(100, this, [this, filePath]() {
+              if (!QFileInfo::exists(filePath)) {
+                return;
+              }
+              watchOpenFile(filePath);
+              if (checkExternalModification(filePath)) {
+                handleExternalModification(filePath, true);
+              }
+            });
+          });
+}
+
+void MainWindow::watchOpenFile(const QString &filePath) {
+  if (filePath.isEmpty()) {
+    return;
+  }
+  setupOpenFileWatcher();
+
+  const QString normalizedPath = QDir::cleanPath(filePath);
+  if (!QFileInfo::exists(normalizedPath) ||
+      m_openFileWatcher->files().contains(normalizedPath)) {
+    return;
+  }
+  m_openFileWatcher->addPath(normalizedPath);
+}
+
+void MainWindow::unwatchOpenFileIfUnused(const QString &filePath) {
+  if (!m_openFileWatcher || filePath.isEmpty()) {
+    return;
+  }
+
+  const QString normalizedPath = QDir::cleanPath(filePath);
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    if (!tabWidget) {
+      continue;
+    }
+    for (int i = 0; i < tabWidget->count(); ++i) {
+      if (QDir::cleanPath(tabWidget->getFilePath(i)) == normalizedPath) {
+        return;
+      }
+    }
+  }
+
+  if (m_openFileWatcher->files().contains(normalizedPath)) {
+    m_openFileWatcher->removePath(normalizedPath);
+  }
+  m_fileTimestamps.remove(normalizedPath);
+  m_externalChangePrompts.remove(normalizedPath);
+  m_internalFileWrites.remove(normalizedPath);
+}
+
+void MainWindow::recheckOpenFilesForExternalChanges() {
+  QSet<QString> checkedPaths;
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    if (!tabWidget) {
+      continue;
+    }
+    for (int i = 0; i < tabWidget->count(); ++i) {
+      const QString filePath = QDir::cleanPath(tabWidget->getFilePath(i));
+      if (filePath.isEmpty() || checkedPaths.contains(filePath)) {
+        continue;
+      }
+      checkedPaths.insert(filePath);
+      if (checkExternalModification(filePath)) {
+        handleExternalModification(filePath, true);
+      }
+    }
+  }
+}
+
+bool MainWindow::handleExternalModification(const QString &filePath,
+                                            bool allowOverwrite) {
+  const QString normalizedPath = QDir::cleanPath(filePath);
+  if (normalizedPath.isEmpty() ||
+      m_externalChangePrompts.contains(normalizedPath)) {
+    return false;
+  }
+
+  m_externalChangePrompts.insert(normalizedPath);
+  const QString fileName = QFileInfo(normalizedPath).fileName();
+  ThemedMessageBox msgBox(this);
+  msgBox.setWindowTitle(tr("File Changed on Disk"));
+  msgBox.setIcon(ThemedMessageBox::Warning);
+  msgBox.setText(
+      tr("<b>%1</b> has been modified by another program.").arg(fileName));
+  msgBox.setInformativeText(
+      allowOverwrite
+          ? tr("Choose Yes to overwrite the disk file with the editor "
+               "contents, No to reload the disk version, or Cancel to decide "
+               "later.")
+          : tr("Choose Yes to overwrite the disk file, No to reload the disk "
+               "version, or Cancel to stop saving."));
+  msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No |
+                            ThemedMessageBox::Cancel);
+  msgBox.setButtonText(ThemedMessageBox::Yes, tr("Overwrite"));
+  msgBox.setButtonText(ThemedMessageBox::No, tr("Reload from Disk"));
+  msgBox.setDefaultButton(ThemedMessageBox::Cancel);
+  const int result = msgBox.exec();
+  m_externalChangePrompts.remove(normalizedPath);
+
+  if (result == ThemedMessageBox::No) {
+    reloadOpenFileFromDisk(normalizedPath);
+    return false;
+  }
+  if (result == ThemedMessageBox::Yes) {
+    if (allowOverwrite) {
+      writeOpenFileToDisk(normalizedPath);
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+bool MainWindow::reloadOpenFileFromDisk(const QString &filePath) {
+  QFile reloadFile(filePath);
+  if (!reloadFile.open(QFile::ReadOnly | QFile::Text)) {
+    return false;
+  }
+  const QString diskText = QString::fromUtf8(reloadFile.readAll());
+  reloadFile.close();
+
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    if (!tabWidget) {
+      continue;
+    }
+    for (int i = 0; i < tabWidget->count(); ++i) {
+      if (QDir::cleanPath(tabWidget->getFilePath(i)) != filePath) {
+        continue;
+      }
+      LightpadPage *page = tabWidget->getPage(i);
+      TextArea *area = page ? page->getTextArea() : nullptr;
+      if (!area) {
+        continue;
+      }
+      const int cursorPos = area->textCursor().position();
+      area->setPlainText(diskText);
+      QTextCursor cursor = area->textCursor();
+      cursor.setPosition(qMin(cursorPos, area->toPlainText().length()));
+      area->setTextCursor(cursor);
+      area->document()->setModified(false);
+      area->removeIconUnsaved();
+    }
+  }
+
+  recordFileTimestamp(filePath);
+  watchOpenFile(filePath);
+  if (autoSaveManager) {
+    autoSaveManager->markSaved(filePath);
+  }
+  notifyDiagnosticsFileOpened(filePath);
+  return true;
+}
+
+bool MainWindow::writeOpenFileToDisk(const QString &filePath) {
+  TextArea *textArea = nullptr;
+  LightpadTabWidget *targetTabWidget = nullptr;
+  int targetTabIndex = -1;
+
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    if (!tabWidget) {
+      continue;
+    }
+    for (int i = 0; i < tabWidget->count(); ++i) {
+      if (QDir::cleanPath(tabWidget->getFilePath(i)) != filePath) {
+        continue;
+      }
+      LightpadPage *page = tabWidget->getPage(i);
+      if (page && page->getTextArea()) {
+        textArea = page->getTextArea();
+        targetTabWidget = tabWidget;
+        targetTabIndex = i;
+        break;
+      }
+    }
+    if (textArea) {
+      break;
+    }
+  }
+
+  if (!textArea) {
+    return false;
+  }
+
+  QFile file(filePath);
+  if (!file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
+    return false;
+  }
+
+  const QString normalizedPath = QDir::cleanPath(filePath);
+  m_internalFileWrites.insert(normalizedPath);
+  QTimer::singleShot(1000, this, [this, normalizedPath]() {
+    m_internalFileWrites.remove(normalizedPath);
+  });
+  const bool ok = file.write(textArea->toPlainText().toUtf8()) != -1;
+  file.close();
+  if (!ok) {
+    m_internalFileWrites.remove(normalizedPath);
+    return false;
+  }
+
+  textArea->document()->setModified(false);
+  textArea->removeIconUnsaved();
+  recordFileTimestamp(normalizedPath);
+  watchOpenFile(normalizedPath);
+
+  if (targetTabWidget && targetTabIndex >= 0) {
+    targetTabWidget->setTabText(targetTabIndex,
+                                QFileInfo(normalizedPath).fileName());
+  }
+  notifyDiagnosticsFileSaved(normalizedPath);
+  if (autoSaveManager) {
+    autoSaveManager->markSaved(normalizedPath);
+  }
+  if (testPanel) {
+    testPanel->notifyFileSaved(normalizedPath);
+  }
+  return true;
 }
 
 void MainWindow::trimTrailingWhitespace(TextArea *textArea) {
@@ -3082,6 +3350,7 @@ void MainWindow::ensureTestPanel() {
     return;
   }
 
+  TestConfigurationManager::instance().loadTemplates();
   testPanel = new TestPanel(this);
   testPanel->setObjectName("testPanel");
   testPanel->applyTheme(settings.theme);
@@ -3090,7 +3359,6 @@ void MainWindow::ensureTestPanel() {
     testPanel->setWorkspaceFolder(m_projectRootPath);
   }
 
-  TestConfigurationManager::instance().loadTemplates();
   testPanel->restoreState();
 
   connect(testPanel, &TestPanel::locationClicked, this,
@@ -3852,26 +4120,38 @@ void MainWindow::setupDiagnostics() {
       [this](const QString &languageId, const QString &message) {
         LOG_WARNING(
             QString("LSP server error for '%1': %2").arg(languageId, message));
-        if (m_notificationManager) {
+        auto *tw = currentTabWidget();
+        const QString filePath = (tw && tw->currentIndex() >= 0)
+                                     ? tw->getFilePath(tw->currentIndex())
+                                     : QString();
+        const bool errorBelongsToCurrentFile =
+            !filePath.isEmpty() &&
+            effectiveLanguageIdForFile(filePath) == languageId;
+
+        if (m_notificationManager && errorBelongsToCurrentFile) {
           QString title =
               tr("Language Server — %1")
                   .arg(LanguageCatalog::displayName(languageId).isEmpty()
                            ? languageId
                            : LanguageCatalog::displayName(languageId));
-          m_notificationManager->showError(title, message);
+          m_notificationManager->showKeyedError(
+              QString::fromLatin1(kCurrentFileLspErrorNotificationKey), title,
+              message);
         }
 
-        auto *tw = currentTabWidget();
         if (tw && tw->currentIndex() >= 0) {
-          QString fp = tw->getFilePath(tw->currentIndex());
-          if (!fp.isEmpty() && effectiveLanguageIdForFile(fp) == languageId)
+          const QString fp = tw->getFilePath(tw->currentIndex());
+          if (!fp.isEmpty() && effectiveLanguageIdForFile(fp) == languageId) {
             updateLspStatusLabel(languageId, "error");
+          }
         }
       });
 
   connect(m_languageFeatureManager, &LanguageFeatureManager::serverStarted,
           this, [this](const QString &languageId) {
             if (m_notificationManager) {
+              m_notificationManager->dismiss(
+                  QString::fromLatin1(kCurrentFileLspErrorNotificationKey));
               QString displayName =
                   LanguageCatalog::displayName(languageId).isEmpty()
                       ? languageId
@@ -4343,6 +4623,8 @@ void MainWindow::updateGitIntegrationForPath(const QString &path) {
   if (!m_gitIntegration || path.isEmpty()) {
     return;
   }
+
+  recheckOpenFilesForExternalChanges();
 
   bool isRepo = m_gitIntegration->setRepositoryPath(path);
   if (!isRepo) {
@@ -5227,12 +5509,16 @@ void MainWindow::closeCurrentTab() {
 
   LightpadTabWidget *tabWidget = currentTabWidget();
   int index = tabWidget->currentIndex();
+  QString filePath;
   if (index >= 0) {
-    QString filePath = tabWidget->getFilePath(index);
+    filePath = tabWidget->getFilePath(index);
     notifyDiagnosticsFileClosed(filePath);
   }
 
   tabWidget->closeCurrentTab();
+  if (!filePath.isEmpty()) {
+    unwatchOpenFileIfUnused(filePath);
+  }
   if (!m_restoringSession) {
     saveSettings();
   }
@@ -5270,6 +5556,12 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
   }
 
   QString filePath = tabWidget->getFilePath(index);
+  if (!filePath.isEmpty()) {
+    watchOpenFile(filePath);
+    if (checkExternalModification(filePath)) {
+      handleExternalModification(filePath, true);
+    }
+  }
   applyHighlightForFile(filePath);
 
   setupTextArea();
@@ -7769,7 +8061,10 @@ void MainWindow::ensureFileTreeModel() {
   if (!m_fileTreeModel) {
     m_fileTreeModel = new GitFileSystemModel(this);
     connect(m_fileTreeModel, &QFileSystemModel::directoryLoaded, this,
-            [this](const QString &) { applyTreeExpandedStateToViews(); });
+            [this](const QString &) {
+              recheckOpenFilesForExternalChanges();
+              applyTreeExpandedStateToViews();
+            });
     QString rootPath =
         m_projectRootPath.isEmpty() ? QDir::home().path() : m_projectRootPath;
     m_fileTreeModel->setRootPath(rootPath);
