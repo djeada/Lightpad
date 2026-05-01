@@ -1148,8 +1148,8 @@
     },
     {
       "id": "make",
-      "name": "Make",
-      "description": "Run make in current directory",
+      "name": "Make (Default Target)",
+      "description": "Build the default target defined in the Makefile",
       "language": "Make",
       "extensions": [
         "makefile",
@@ -1157,6 +1157,103 @@
       ],
       "command": "make",
       "args": [],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "make_all",
+      "name": "Make All",
+      "description": "Build all targets defined in the Makefile",
+      "language": "Make",
+      "extensions": [
+        "makefile",
+        "Makefile"
+      ],
+      "command": "make",
+      "args": [
+        "all"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "make_clean",
+      "name": "Make Clean",
+      "description": "Remove build artifacts using the clean target",
+      "language": "Make",
+      "extensions": [
+        "makefile",
+        "Makefile"
+      ],
+      "command": "make",
+      "args": [
+        "clean"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "make_test",
+      "name": "Make Test",
+      "description": "Run tests using the test target",
+      "language": "Make",
+      "extensions": [
+        "makefile",
+        "Makefile"
+      ],
+      "command": "make",
+      "args": [
+        "test"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "make_install",
+      "name": "Make Install",
+      "description": "Install build artifacts using the install target",
+      "language": "Make",
+      "extensions": [
+        "makefile",
+        "Makefile"
+      ],
+      "command": "make",
+      "args": [
+        "install"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "make_run",
+      "name": "Make Run",
+      "description": "Run the project using the run target",
+      "language": "Make",
+      "extensions": [
+        "makefile",
+        "Makefile"
+      ],
+      "command": "make",
+      "args": [
+        "run"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "make_parallel",
+      "name": "Make (Parallel)",
+      "description": "Build using all available CPU cores",
+      "language": "Make",
+      "extensions": [
+        "makefile",
+        "Makefile"
+      ],
+      "command": "bash",
+      "args": [
+        "-c",
+        "make -j$(nproc)"
+      ],
       "workingDirectory": "${fileDir}",
       "env": {}
     },

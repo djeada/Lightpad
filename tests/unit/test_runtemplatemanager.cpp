@@ -21,6 +21,7 @@ private slots:
   void testSubstituteVariablesWithComplexPath();
   void testParseTemplateFromJson();
   void testCommonCppTestTemplatesPresent();
+  void testMakefileTemplatesPresent();
   void testGetTemplatesForExtension();
   void testGetTemplateById();
   void testAssignmentPersistence();
@@ -106,6 +107,52 @@ void TestRunTemplateManager::testCommonCppTestTemplatesPresent() {
   QVERIFY(makeTemplate.isValid());
   QCOMPARE(makeTemplate.command, QString("make"));
   QVERIFY(makeTemplate.args.contains("test"));
+}
+
+void TestRunTemplateManager::testMakefileTemplatesPresent() {
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+
+  RunTemplate defaultTarget = manager.getTemplateById("make");
+  QVERIFY(defaultTarget.isValid());
+  QCOMPARE(defaultTarget.command, QString("make"));
+  QVERIFY(defaultTarget.extensions.contains("Makefile"));
+  QCOMPARE(defaultTarget.workingDirectory, QString("${fileDir}"));
+
+  RunTemplate makeAll = manager.getTemplateById("make_all");
+  QVERIFY(makeAll.isValid());
+  QCOMPARE(makeAll.command, QString("make"));
+  QVERIFY(makeAll.args.contains("all"));
+  QVERIFY(makeAll.extensions.contains("Makefile"));
+
+  RunTemplate makeClean = manager.getTemplateById("make_clean");
+  QVERIFY(makeClean.isValid());
+  QCOMPARE(makeClean.command, QString("make"));
+  QVERIFY(makeClean.args.contains("clean"));
+
+  RunTemplate makeTest = manager.getTemplateById("make_test");
+  QVERIFY(makeTest.isValid());
+  QCOMPARE(makeTest.command, QString("make"));
+  QVERIFY(makeTest.args.contains("test"));
+
+  RunTemplate makeInstall = manager.getTemplateById("make_install");
+  QVERIFY(makeInstall.isValid());
+  QCOMPARE(makeInstall.command, QString("make"));
+  QVERIFY(makeInstall.args.contains("install"));
+
+  RunTemplate makeRun = manager.getTemplateById("make_run");
+  QVERIFY(makeRun.isValid());
+  QCOMPARE(makeRun.command, QString("make"));
+  QVERIFY(makeRun.args.contains("run"));
+
+  RunTemplate makeParallel = manager.getTemplateById("make_parallel");
+  QVERIFY(makeParallel.isValid());
+  QCOMPARE(makeParallel.command, QString("bash"));
+  QVERIFY(makeParallel.args.join(" ").contains("nproc"));
+
+  QList<RunTemplate> makefileTemplates =
+      manager.getTemplatesForExtension("Makefile");
+  QVERIFY(makefileTemplates.size() >= 7);
 }
 
 void TestRunTemplateManager::testGetTemplatesForExtension() {
