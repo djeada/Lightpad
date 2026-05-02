@@ -378,15 +378,16 @@ void CtestParser::parseLine(const QString &line) {
     result.id = testId;
     result.name = match.captured(2);
 
-    QString status = match.captured(3);
-    if (status == "Passed")
+  QString status = match.captured(3);
+  if (status == "Passed")
       result.status = TestStatus::Passed;
-    else if (status == "Not Run")
+  else if (status == "Not Run")
       result.status = TestStatus::Skipped;
-    else
+  else
       result.status = TestStatus::Failed;
 
-    result.durationMs = static_cast<int>(match.captured(4).toDouble() * 1000);
+    if (result.durationMs < 0)
+      result.durationMs = static_cast<int>(match.captured(4).toDouble() * 1000);
     result.stdoutOutput = result.stdoutOutput.trimmed();
     if (m_currentTestId == testId)
       m_currentTestId.clear();
@@ -422,6 +423,12 @@ void CtestParser::appendOutput(const QString &testId, const QString &line) {
   auto it = m_activeTests.find(testId);
   if (it == m_activeTests.end())
     return;
+
+  static QRegularExpression gtestResultRe(
+      R"(^\[\s*(OK|FAILED|SKIPPED)\s*\]\s+(.+?)\s+\((\d+)\s+ms\)\s*$)");
+  const QRegularExpressionMatch gtestMatch = gtestResultRe.match(line.trimmed());
+  if (gtestMatch.hasMatch())
+    it->durationMs = gtestMatch.captured(3).toInt();
 
   if (!it->stdoutOutput.isEmpty())
     it->stdoutOutput += "\n";

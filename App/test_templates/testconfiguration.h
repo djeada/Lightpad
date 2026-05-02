@@ -166,15 +166,20 @@ public:
   bool saveUserConfigurations(const QString &workspaceFolder);
 
   QList<TestConfiguration> allTemplates() const;
+  QList<TestConfiguration> userConfigurations() const;
   QList<TestConfiguration> allConfigurations() const;
   QList<TestConfiguration> configurationsForExtension(const QString &ext) const;
   TestConfiguration preferredConfigurationForPath(const QString &path) const;
+  TestConfiguration configurationById(const QString &id) const;
   TestConfiguration configurationByName(const QString &name) const;
   TestConfiguration templateById(const QString &id) const;
+  bool hasUserConfiguration(const QString &id) const;
 
   void addConfiguration(const TestConfiguration &config);
-  void removeConfiguration(const QString &name);
+  void removeConfiguration(const QString &id);
 
+  void setDefaultConfigurationId(const QString &id);
+  QString defaultConfigurationId() const;
   void setDefaultConfiguration(const QString &name);
   QString defaultConfigurationName() const;
 
@@ -199,7 +204,8 @@ private:
 
   QList<TestConfiguration> m_templates;
   QList<TestConfiguration> m_userConfigurations;
-  QString m_defaultConfiguration;
+  QString m_defaultConfigurationId;
+  QString m_defaultConfigurationName;
   QString m_workspaceFolder;
 };
 

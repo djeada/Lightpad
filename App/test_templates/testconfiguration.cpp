@@ -13,6 +13,8 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QStandardPaths>
+#include <QSet>
+#include <QUuid>
 
 #include "core/logging/logger.h"
 
@@ -73,6 +75,8 @@ bool TestConfigurationManager::loadUserConfigurations(
     const QString &workspaceFolder) {
   m_workspaceFolder = workspaceFolder;
   m_userConfigurations.clear();
+  m_defaultConfigurationId.clear();
+  m_defaultConfigurationName.clear();
 
   QString configPath = workspaceFolder + "/.lightpad/test/config.json";
   QFile file(configPath);
@@ -92,11 +96,21 @@ bool TestConfigurationManager::loadUserConfigurations(
   QJsonArray configs = root["configurations"].toArray();
   for (const QJsonValue &v : configs) {
     TestConfiguration cfg = TestConfiguration::fromJson(v.toObject());
+    if (!cfg.id.isEmpty() && hasUserConfiguration(cfg.id))
+      continue;
+    if (cfg.id.isEmpty())
+      cfg.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     if (cfg.isValid())
       m_userConfigurations.append(cfg);
   }
 
-  m_defaultConfiguration = root["defaultConfiguration"].toString();
+  m_defaultConfigurationId = root["defaultConfigurationId"].toString();
+  m_defaultConfigurationName = root["defaultConfiguration"].toString();
+  if (m_defaultConfigurationId.isEmpty() && !m_defaultConfigurationName.isEmpty()) {
+    const TestConfiguration cfg = configurationByName(m_defaultConfigurationName);
+    if (cfg.isValid())
+      m_defaultConfigurationId = cfg.id;
+  }
   emit configurationsChanged();
   return true;
 }
@@ -116,8 +130,11 @@ bool TestConfigurationManager::saveUserConfigurations(
   for (const TestConfiguration &cfg : m_userConfigurations)
     configs.append(cfg.toJson());
   root["configurations"] = configs;
-  if (!m_defaultConfiguration.isEmpty())
-    root["defaultConfiguration"] = m_defaultConfiguration;
+  if (!m_defaultConfigurationId.isEmpty())
+    root["defaultConfigurationId"] = m_defaultConfigurationId;
+  const QString defaultName = defaultConfigurationName();
+  if (!defaultName.isEmpty())
+    root["defaultConfiguration"] = defaultName;
 
   file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
   file.close();
@@ -128,9 +145,23 @@ QList<TestConfiguration> TestConfigurationManager::allTemplates() const {
   return m_templates;
 }
 
+QList<TestConfiguration> TestConfigurationManager::userConfigurations() const {
+  return m_userConfigurations;
+}
+
 QList<TestConfiguration> TestConfigurationManager::allConfigurations() const {
   QList<TestConfiguration> result = m_userConfigurations;
-  result.append(m_templates);
+  QSet<QString> userIds;
+  for (const TestConfiguration &cfg : m_userConfigurations) {
+    if (!cfg.id.isEmpty())
+      userIds.insert(cfg.id);
+  }
+
+  for (const TestConfiguration &cfg : m_templates) {
+    if (!cfg.id.isEmpty() && userIds.contains(cfg.id))
+      continue;
+    result.append(cfg);
+  }
   return result;
 }
 
@@ -213,12 +244,28 @@ TestConfiguration TestConfigurationManager::preferredConfigurationForPath(
 }
 
 TestConfiguration
-TestConfigurationManager::configurationByName(const QString &name) const {
+TestConfigurationManager::configurationById(const QString &id) const {
+  if (id.isEmpty())
+    return TestConfiguration();
+
   for (const TestConfiguration &cfg : m_userConfigurations) {
-    if (cfg.name == name)
+    if (cfg.id == id)
       return cfg;
   }
   for (const TestConfiguration &cfg : m_templates) {
+    if (cfg.id == id && !hasUserConfiguration(id))
+      return cfg;
+  }
+  for (const TestConfiguration &cfg : m_templates) {
+    if (cfg.id == id)
+      return cfg;
+  }
+  return TestConfiguration();
+}
+
+TestConfiguration
+TestConfigurationManager::configurationByName(const QString &name) const {
+  for (const TestConfiguration &cfg : allConfigurations()) {
     if (cfg.name == name)
       return cfg;
   }
@@ -234,35 +281,94 @@ TestConfigurationManager::templateById(const QString &id) const {
   return TestConfiguration();
 }
 
+bool TestConfigurationManager::hasUserConfiguration(const QString &id) const {
+  if (id.isEmpty())
+    return false;
+
+  for (const TestConfiguration &cfg : m_userConfigurations) {
+    if (cfg.id == id)
+      return true;
+  }
+  return false;
+}
+
 void TestConfigurationManager::addConfiguration(
     const TestConfiguration &config) {
+  TestConfiguration cfg = config;
+  if (cfg.id.isEmpty())
+    cfg.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
   for (int i = 0; i < m_userConfigurations.size(); ++i) {
-    if (m_userConfigurations[i].name == config.name) {
-      m_userConfigurations[i] = config;
+    if (m_userConfigurations[i].id == cfg.id) {
+      m_userConfigurations[i] = cfg;
       emit configurationsChanged();
       return;
     }
   }
-  m_userConfigurations.append(config);
+  m_userConfigurations.append(cfg);
   emit configurationsChanged();
 }
 
-void TestConfigurationManager::removeConfiguration(const QString &name) {
+void TestConfigurationManager::removeConfiguration(const QString &id) {
   for (int i = 0; i < m_userConfigurations.size(); ++i) {
-    if (m_userConfigurations[i].name == name) {
+    if (m_userConfigurations[i].id == id ||
+        m_userConfigurations[i].name == id) {
+      const QString removedId = m_userConfigurations[i].id;
       m_userConfigurations.removeAt(i);
+      if (m_defaultConfigurationId == removedId &&
+          !templateById(removedId).isValid()) {
+        m_defaultConfigurationId.clear();
+        m_defaultConfigurationName.clear();
+      }
       emit configurationsChanged();
       return;
     }
   }
 }
 
+void TestConfigurationManager::setDefaultConfigurationId(const QString &id) {
+  if (m_defaultConfigurationId == id &&
+      (id.isEmpty() || m_defaultConfigurationName == defaultConfigurationName())) {
+    return;
+  }
+
+  m_defaultConfigurationId = id;
+  m_defaultConfigurationName.clear();
+  if (!id.isEmpty()) {
+    const TestConfiguration cfg = configurationById(id);
+    if (cfg.isValid())
+      m_defaultConfigurationName = cfg.name;
+  }
+  emit configurationsChanged();
+}
+
+QString TestConfigurationManager::defaultConfigurationId() const {
+  if (!m_defaultConfigurationId.isEmpty())
+    return m_defaultConfigurationId;
+
+  if (!m_defaultConfigurationName.isEmpty()) {
+    const TestConfiguration cfg = configurationByName(m_defaultConfigurationName);
+    if (cfg.isValid())
+      return cfg.id;
+  }
+
+  return QString();
+}
+
 void TestConfigurationManager::setDefaultConfiguration(const QString &name) {
-  m_defaultConfiguration = name;
+  m_defaultConfigurationName = name;
+  const TestConfiguration cfg = configurationByName(name);
+  m_defaultConfigurationId = cfg.id;
+  emit configurationsChanged();
 }
 
 QString TestConfigurationManager::defaultConfigurationName() const {
-  return m_defaultConfiguration;
+  if (!m_defaultConfigurationId.isEmpty()) {
+    const TestConfiguration cfg = configurationById(m_defaultConfigurationId);
+    if (cfg.isValid())
+      return cfg.name;
+  }
+  return m_defaultConfigurationName;
 }
 
 void TestConfigurationManager::setWorkspaceFolder(const QString &folder) {

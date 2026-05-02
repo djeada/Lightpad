@@ -56,6 +56,7 @@ public slots:
                               const QString &filePath = QString());
   void stopTests();
   void discoverTests();
+  void openConfigurationDialog();
 
 private slots:
   void onTestStarted(const TestResult &result);
@@ -63,6 +64,9 @@ private slots:
   void onRunStarted();
   void onRunFinished(int passed, int failed, int skipped, int errored);
   void onOutputLine(const QString &line, bool isError);
+  void onProcessStarted(const QString &command, const QStringList &args,
+                        const QString &workingDirectory);
+  void onProcessFinished(int exitCode, bool normalExit);
   void onItemDoubleClicked(QTreeWidgetItem *item, int column);
   void onItemClicked(QTreeWidgetItem *item, int column);
   void onFilterChanged(int index);
@@ -92,7 +96,22 @@ private:
   void connectDiscoveryAdapter();
   void updateDiscoveryAdapterForConfig();
   void updateEmptyState();
+  void setDetailsExpanded(bool expanded);
+  bool supportsGoogleTestPathScoping(const TestConfiguration &config) const;
+  bool runGoogleTestScopedPath(const TestConfiguration &config,
+                               const QString &path);
+  QStringList googleTestNamesForPath(const TestConfiguration &config,
+                                     const QString &path) const;
+  void resetRunContext();
+  void recordRunRequest(const TestConfiguration &config, const QString &scope,
+                        const QString &targetPath = QString());
+  void refreshRunDetails();
+  QString buildRunDetailsText() const;
   const DiscoveredTest *findDiscoveredTestByName(const QString &name) const;
+  bool resolveSourceLocation(QTreeWidgetItem *item, QString *filePath,
+                             int *line);
+  bool resolveWorkspaceSourceLocation(QTreeWidgetItem *item, QString *filePath,
+                                      int *line) const;
 
   QWidget *m_headerShell;
   QToolBar *m_toolbar;
@@ -102,6 +121,7 @@ private:
   QAction *m_clearAction;
   QAction *m_discoverAction;
   QAction *m_autoRunAction;
+  QAction *m_configureAction;
   QComboBox *m_filterCombo;
   QComboBox *m_configCombo;
   QComboBox *m_autoRunModeCombo;
@@ -110,6 +130,8 @@ private:
 
   QSplitter *m_splitter;
   QTreeWidget *m_tree;
+  QWidget *m_detailSection;
+  QToolButton *m_detailToggleButton;
   QTextEdit *m_detailPane;
   QLabel *m_statusLabel;
   QLabel *m_emptyStateLabel;
@@ -132,6 +154,17 @@ private:
   QMap<QString, DiscoveredTest> m_discoveredTests;
 
   QString m_latestStdoutLine;
+  QString m_lastRunConfigurationName;
+  QString m_lastRunScope;
+  QString m_lastRunTargetPath;
+  QString m_lastRunCommand;
+  QStringList m_lastRunArgs;
+  QString m_lastRunWorkingDirectory;
+  QString m_lastRunOutput;
+  int m_lastRunExitCode = 0;
+  bool m_lastRunExitedNormally = true;
+  bool m_hasRunContext = false;
+  bool m_lastRunProducedResults = false;
 };
 
 #endif

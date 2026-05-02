@@ -38,6 +38,15 @@ void TestRunManager::runFailed(const TestConfiguration &config,
   startProcess(config, workspaceFolder, QString(), filter, RunMode::Failed);
 }
 
+void TestRunManager::runPattern(const TestConfiguration &config,
+                                const QString &workspaceFolder,
+                                const QString &pattern,
+                                const QString &filePath) {
+  if (pattern.isEmpty())
+    return;
+  startProcess(config, workspaceFolder, filePath, pattern, RunMode::Pattern);
+}
+
 void TestRunManager::runSuite(const TestConfiguration &config,
                               const QString &workspaceFolder,
                               const QString &suiteName) {
@@ -128,6 +137,7 @@ void TestRunManager::startProcess(const TestConfiguration &config,
       templateArgs = config.args;
     break;
   case RunMode::Failed:
+  case RunMode::Pattern:
     if (!config.runFailed.args.isEmpty())
       templateArgs = config.runFailed.args;
     else if (!config.runSingleTest.args.isEmpty())
@@ -200,6 +210,7 @@ void TestRunManager::startProcess(const TestConfiguration &config,
 
   LOG_INFO("Starting: " + command + " " + args.join(" "));
 
+  emit processStarted(command, args, workDir);
   emit runStarted();
   m_process->start(command, args);
 }
@@ -220,11 +231,9 @@ void TestRunManager::onStderrReady() {
 
 void TestRunManager::onProcessFinished(int exitCode,
                                        QProcess::ExitStatus exitStatus) {
-  Q_UNUSED(exitCode)
-  Q_UNUSED(exitStatus)
-
   if (m_parser)
     m_parser->finish();
 
+  emit processFinished(exitCode, exitStatus == QProcess::NormalExit);
   emit runFinished(m_passed, m_failed, m_skipped, m_errored);
 }

@@ -28,6 +28,7 @@ private slots:
   void testRunAllWithPytestOutput();
   void testRunFileUsesRunFileOverride();
   void testPytestRunFailedUsesOrExpression();
+  void testRunPatternUsesRunFailedOverride();
   void testClearAfterRun();
   void testRunReplacesStaleResults();
 
@@ -300,6 +301,32 @@ void TestTestRunManager::testPytestRunFailedUsesOrExpression() {
   QVERIFY(outputFile.open(QIODevice::ReadOnly));
   QCOMPARE(QString::fromUtf8(outputFile.readAll()),
            QString("bad_test or worse_test"));
+}
+
+void TestTestRunManager::testRunPatternUsesRunFailedOverride() {
+  TestRunManager mgr;
+  QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
+
+  const QString outputPath = m_tempDir.filePath("runpattern-output.txt");
+  const QString patternScript = m_tempDir.filePath("run_pattern.sh");
+  createScript(patternScript, "#!/bin/sh\n"
+                              "printf '%s' \"$1\" > \"$2\"\n");
+
+  TestConfiguration config;
+  config.name = "ctest-pattern";
+  config.command = "/bin/sh";
+  config.args = {"-c", "exit 99"};
+  config.runFailed.args = {patternScript, "${testName}", outputPath};
+  config.outputFormat = "ctest";
+  config.language = "C++";
+
+  mgr.runPattern(config, m_tempDir.path(), "^(Suite\\.One|Suite\\.Two)$");
+  QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 1, 3000);
+
+  QFile outputFile(outputPath);
+  QVERIFY(outputFile.open(QIODevice::ReadOnly));
+  QCOMPARE(QString::fromUtf8(outputFile.readAll()),
+           QString("^(Suite\\.One|Suite\\.Two)$"));
 }
 
 void TestTestRunManager::testClearAfterRun() {
