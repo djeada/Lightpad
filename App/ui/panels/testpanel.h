@@ -92,6 +92,7 @@ private:
   void connectDiscoveryAdapter();
   void updateDiscoveryAdapterForConfig();
   void updateEmptyState();
+  const DiscoveredTest *findDiscoveredTestByName(const QString &name) const;
 
   QWidget *m_headerShell;
   QToolBar *m_toolbar;
