@@ -639,8 +639,18 @@ void TestPanel::onTestFinished(const TestResult &result) {
 
   item->setText(0, result.name);
   item->setData(0, TestIdRole, result.id);
-  item->setData(0, FilePathRole, result.filePath);
-  item->setData(0, LineNumberRole, result.line);
+  if (!result.filePath.isEmpty()) {
+    item->setData(0, FilePathRole, result.filePath);
+    if (result.line >= 0)
+      item->setData(0, LineNumberRole, result.line);
+  } else if (m_discoveredTests.contains(result.id)) {
+    const DiscoveredTest &dt = m_discoveredTests[result.id];
+    if (!dt.filePath.isEmpty()) {
+      item->setData(0, FilePathRole, dt.filePath);
+      if (dt.line >= 0)
+        item->setData(0, LineNumberRole, dt.line);
+    }
+  }
 
   updateTreeItemIcon(item, result.status);
 
@@ -1066,8 +1076,10 @@ void TestPanel::populateTreeFromDiscovery(const QList<DiscoveredTest> &tests) {
   m_tree->clear();
   m_suiteItems.clear();
   m_testItems.clear();
+  m_discoveredTests.clear();
 
   for (const DiscoveredTest &test : tests) {
+    m_discoveredTests[test.id] = test;
     QTreeWidgetItem *suiteItem = findOrCreateSuiteItem(test.suite);
 
     auto *item = new QTreeWidgetItem();

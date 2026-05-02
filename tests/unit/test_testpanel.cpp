@@ -52,6 +52,11 @@ private slots:
   void testEmptyStateHiddenAfterDiscovery();
   void testSearchFilterByName();
 
+  void testDoubleClickEmitsLocationClicked();
+  void testDoubleClickPreservesDiscoveryFilePath();
+  void testDoubleClickPytestPreservesFilePath();
+  void testDoubleClickCtestIdMatchesFallback();
+
 private:
   QTemporaryDir m_tempDir;
   QTreeWidget *findTree(TestPanel &panel);
@@ -613,6 +618,197 @@ void TestTestPanel::testSearchFilterByName() {
   searchEdit->setText("");
   QCOMPARE(tree->topLevelItem(0)->isHidden(), false);
   QCOMPARE(tree->topLevelItem(1)->isHidden(), false);
+}
+
+void TestTestPanel::testDoubleClickEmitsLocationClicked() {
+  TestPanel panel;
+  QSignalSpy spy(&panel, &TestPanel::locationClicked);
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  emit runMgr->runStarted();
+
+  TestResult result;
+  result.id = "test1";
+  result.name = "test_example";
+  result.suite = "";
+  result.status = TestStatus::Passed;
+  result.filePath = "/path/to/test.cpp";
+  result.line = 42;
+  emit runMgr->testFinished(result);
+
+  QTreeWidget *tree = findTree(panel);
+  QVERIFY(tree != nullptr);
+  QTreeWidgetItem *item = tree->topLevelItem(0);
+  QVERIFY(item != nullptr);
+
+  emit tree->itemDoubleClicked(item, 0);
+
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.at(0).at(0).toString(), QString("/path/to/test.cpp"));
+  QCOMPARE(spy.at(0).at(1).toInt(), 42);
+}
+
+void TestTestPanel::testDoubleClickPreservesDiscoveryFilePath() {
+  TestPanel panel;
+  QSignalSpy spy(&panel, &TestPanel::locationClicked);
+
+  class MockDiscoveryAdapter : public ITestDiscoveryAdapter {
+  public:
+    QString adapterId() const override { return "mock"; }
+    void discover(const QString &) override {
+      QList<DiscoveredTest> tests;
+      DiscoveredTest dt;
+      dt.name = "test_example";
+      dt.id = "test1";
+      dt.suite = "";
+      dt.filePath = "/discovered/path/test.cpp";
+      dt.line = 10;
+      tests.append(dt);
+      emit discoveryFinished(tests);
+    }
+    void cancel() override {}
+  };
+
+  MockDiscoveryAdapter mockAdapter;
+  panel.setDiscoveryAdapter(&mockAdapter);
+  panel.setWorkspaceFolder(m_tempDir.path());
+  mockAdapter.discover(m_tempDir.path());
+
+  // Run the test without file path info (runner doesn't report source location)
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  emit runMgr->runStarted();
+
+  TestResult result;
+  result.id = "test1";
+  result.name = "test_example";
+  result.suite = "";
+  result.status = TestStatus::Passed;
+  // filePath intentionally left empty — runner does not report source location
+  emit runMgr->testFinished(result);
+
+  QTreeWidget *tree = findTree(panel);
+  QVERIFY(tree != nullptr);
+  QTreeWidgetItem *item = tree->topLevelItem(0);
+  QVERIFY(item != nullptr);
+
+  emit tree->itemDoubleClicked(item, 0);
+
+  // The discovery file path must have been preserved
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.at(0).at(0).toString(), QString("/discovered/path/test.cpp"));
+  QCOMPARE(spy.at(0).at(1).toInt(), 10);
+}
+
+void TestTestPanel::testDoubleClickPytestPreservesFilePath() {
+  // pytest results carry the file path in TestResult::filePath, so the panel
+  // must use result.filePath directly and emit locationClicked with it.
+  TestPanel panel;
+  QSignalSpy spy(&panel, &TestPanel::locationClicked);
+
+  // Simulate pytest discovery: ID = "tests/test_math.py::TestArithmetic::test_add"
+  class MockPytestDiscovery : public ITestDiscoveryAdapter {
+  public:
+    QString adapterId() const override { return "mock_pytest"; }
+    void discover(const QString &) override {
+      QList<DiscoveredTest> tests;
+      DiscoveredTest dt;
+      dt.name = "test_add";
+      dt.suite = "TestArithmetic";
+      dt.filePath = "tests/test_math.py";
+      dt.id = "tests/test_math.py::TestArithmetic::test_add";
+      tests.append(dt);
+      emit discoveryFinished(tests);
+    }
+    void cancel() override {}
+  };
+
+  MockPytestDiscovery mockAdapter;
+  panel.setDiscoveryAdapter(&mockAdapter);
+  panel.setWorkspaceFolder(m_tempDir.path());
+  mockAdapter.discover(m_tempDir.path());
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+  emit runMgr->runStarted();
+
+  // pytest result carries filePath directly (as PytestParser emits it)
+  TestResult result;
+  result.id = "tests/test_math.py::TestArithmetic::test_add";
+  result.name = "TestArithmetic::test_add";
+  result.suite = "tests/test_math.py";
+  result.filePath = "tests/test_math.py";
+  result.status = TestStatus::Passed;
+  emit runMgr->testFinished(result);
+
+  QTreeWidget *tree = findTree(panel);
+  QVERIFY(tree != nullptr);
+  // The result has suite="tests/test_math.py", so the tree has a suite item at
+  // the top level and the actual test item is its child.
+  QVERIFY(tree->topLevelItemCount() > 0);
+  QTreeWidgetItem *suiteItem = tree->topLevelItem(0);
+  QVERIFY(suiteItem != nullptr);
+  QVERIFY(suiteItem->childCount() > 0);
+  QTreeWidgetItem *item = suiteItem->child(0);
+  QVERIFY(item != nullptr);
+
+  emit tree->itemDoubleClicked(item, 0);
+
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.at(0).at(0).toString(), QString("tests/test_math.py"));
+}
+
+void TestTestPanel::testDoubleClickCtestIdMatchesFallback() {
+  // ctest results carry no filePath. The discovery stores WORKING_DIRECTORY
+  // under filePath. The panel must fall back to the discovery entry whose ID
+  // (test-number string) matches the result ID so double-click can navigate.
+  TestPanel panel;
+  QSignalSpy spy(&panel, &TestPanel::locationClicked);
+
+  class MockCtestDiscovery : public ITestDiscoveryAdapter {
+  public:
+    QString adapterId() const override { return "mock_ctest"; }
+    void discover(const QString &) override {
+      QList<DiscoveredTest> tests;
+      DiscoveredTest dt;
+      dt.name = "LoggerTests";
+      dt.id = "1"; // ctest uses test-number as ID
+      dt.filePath = "/project/build"; // WORKING_DIRECTORY from ctest JSON
+      tests.append(dt);
+      emit discoveryFinished(tests);
+    }
+    void cancel() override {}
+  };
+
+  MockCtestDiscovery mockAdapter;
+  panel.setDiscoveryAdapter(&mockAdapter);
+  panel.setWorkspaceFolder(m_tempDir.path());
+  mockAdapter.discover(m_tempDir.path());
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+  emit runMgr->runStarted();
+
+  // ctest result: ID is the test number, no filePath
+  TestResult result;
+  result.id = "1";
+  result.name = "LoggerTests";
+  result.status = TestStatus::Passed;
+  emit runMgr->testFinished(result);
+
+  QTreeWidget *tree = findTree(panel);
+  QVERIFY(tree != nullptr);
+  QTreeWidgetItem *item = tree->topLevelItem(0);
+  QVERIFY(item != nullptr);
+
+  emit tree->itemDoubleClicked(item, 0);
+
+  // The fallback must have used the discovery filePath
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.at(0).at(0).toString(), QString("/project/build"));
 }
 
 QTEST_MAIN(TestTestPanel)

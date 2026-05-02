@@ -85,6 +85,14 @@ void JunitXmlParser::finish() {
           result.suite = currentSuite;
         result.id = result.suite + "::" + result.name;
 
+        // GTest XML includes source file and line on every <testcase>
+        QString file = xml.attributes().value("file").toString();
+        if (!file.isEmpty())
+          result.filePath = file;
+        QString lineStr = xml.attributes().value("line").toString();
+        if (!lineStr.isEmpty())
+          result.line = lineStr.toInt();
+
         QString timeStr = xml.attributes().value("time").toString();
         if (!timeStr.isEmpty())
           result.durationMs = static_cast<int>(timeStr.toDouble() * 1000);
