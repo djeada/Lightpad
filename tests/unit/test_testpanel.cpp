@@ -817,9 +817,11 @@ void TestTestPanel::testDoubleClickCtestIdMatchesFallback() {
 }
 
 void TestTestPanel::testSuiteItemCollapsedByDefault() {
-  // Suite items must start collapsed so only the suite row is visible;
-  // the user expands them to see individual tests.
+  // Suite items remain expanded so that individual test rows are immediately
+  // visible. It is the individual test rows that are collapsed (folded); the
+  // user expands a test row to reveal its execution details.
   TestPanel panel;
+  panel.show();
 
   TestRunManager *runMgr = findRunManager(panel);
   QVERIFY(runMgr != nullptr);
@@ -840,8 +842,8 @@ void TestTestPanel::testSuiteItemCollapsedByDefault() {
   QTreeWidgetItem *suiteItem = tree->topLevelItem(0);
   QVERIFY(suiteItem != nullptr);
   QCOMPARE(suiteItem->text(0), QString("MySuite"));
-  // Suite must not be expanded by default
-  QCOMPARE(suiteItem->isExpanded(), false);
+  // Suite must remain expanded so tests inside it are visible without an extra click
+  QCOMPARE(suiteItem->isExpanded(), true);
 }
 
 void TestTestPanel::testTestItemFoldedByDefault() {

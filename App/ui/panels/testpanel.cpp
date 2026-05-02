@@ -948,8 +948,8 @@ QTreeWidgetItem *TestPanel::findOrCreateSuiteItem(const QString &suite) {
   item->setText(0, suite);
   item->setData(0, TestIdRole, suite);
   item->setData(0, IsSuiteRole, true);
-  // Start collapsed by default; user can expand to see individual tests
   m_tree->addTopLevelItem(item);
+  item->setExpanded(true);
   m_suiteItems[suite] = item;
   return item;
 }
