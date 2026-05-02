@@ -18,6 +18,8 @@ namespace {
 constexpr int TestIdRole = Qt::UserRole;
 constexpr int FilePathRole = Qt::UserRole + 1;
 constexpr int LineNumberRole = Qt::UserRole + 2;
+constexpr int IsSuiteRole = Qt::UserRole + 3;
+constexpr int IsDetailItemRole = Qt::UserRole + 4;
 
 int autoRunModeToComboIndex(AutoRunMode mode) {
   switch (mode) {
@@ -676,6 +678,34 @@ void TestPanel::onTestFinished(const TestResult &result) {
     item->setText(2, QString::number(result.durationMs) + " ms");
 
   m_testResults[result.id] = result;
+
+  // Remove any stale detail children (e.g. from a re-run of the same test)
+  while (item->childCount() > 0)
+    delete item->takeChild(0);
+
+  // Add collapsible detail children so the user can expand a result to see
+  // all execution info without leaving the tree.
+  auto addDetailChild = [&](const QString &label, const QString &content) {
+    if (content.isEmpty())
+      return;
+    auto *child = new QTreeWidgetItem(item);
+    const QString firstLine = content.split('\n').first().trimmed();
+    child->setText(0, label + firstLine);
+    child->setData(0, TestIdRole, result.id);
+    child->setData(0, IsDetailItemRole, true);
+    child->setToolTip(0, content);
+  };
+
+  if (!result.message.isEmpty())
+    addDetailChild(tr("Message: "), result.message);
+  if (!result.stackTrace.isEmpty())
+    addDetailChild(tr("Stack Trace: "), result.stackTrace);
+  if (!result.stdoutOutput.isEmpty())
+    addDetailChild(tr("stdout: "), result.stdoutOutput);
+  if (!result.stderrOutput.isEmpty())
+    addDetailChild(tr("stderr: "), result.stderrOutput);
+  // item stays collapsed by default; expand arrow appears when children exist
+
   applyFilter();
 }
 
@@ -773,11 +803,16 @@ void TestPanel::onContextMenu(const QPoint &pos) {
     menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
   }
 
+  // Detail child items have their own role; skip the context menu for them
+  if (item->data(0, IsDetailItemRole).toBool())
+    return;
+
   QString testId = item->data(0, TestIdRole).toString();
   QString testName = item->text(0);
   QString filePath = item->data(0, FilePathRole).toString();
 
-  bool isSuite = (item->childCount() > 0);
+  // Distinguish real suite items from test items that have detail children
+  bool isSuite = item->data(0, IsSuiteRole).toBool();
 
   if (isSuite) {
     menu.addAction(tr("Run Suite"), [this, testName]() {
@@ -912,8 +947,9 @@ QTreeWidgetItem *TestPanel::findOrCreateSuiteItem(const QString &suite) {
   auto *item = new QTreeWidgetItem();
   item->setText(0, suite);
   item->setData(0, TestIdRole, suite);
-  item->setExpanded(true);
+  item->setData(0, IsSuiteRole, true);
   m_tree->addTopLevelItem(item);
+  item->setExpanded(true);
   m_suiteItems[suite] = item;
   return item;
 }
