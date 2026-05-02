@@ -650,8 +650,6 @@ void TestPanel::onTestFinished(const TestResult &result) {
       if (dt.line >= 0)
         item->setData(0, LineNumberRole, dt.line);
     }
-  } else if (result.line >= 0) {
-    item->setData(0, LineNumberRole, result.line);
   }
 
   updateTreeItemIcon(item, result.status);
