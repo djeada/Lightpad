@@ -654,6 +654,13 @@ void TestPanel::onTestFinished(const TestResult &result) {
       if (dt.line >= 0)
         item->setData(0, LineNumberRole, dt.line);
     }
+  } else {
+    // Name-based fallback: search discovered tests by name when ID doesn't match
+    if (const DiscoveredTest *dt = findDiscoveredTestByName(result.name)) {
+      item->setData(0, FilePathRole, dt->filePath);
+      if (dt->line >= 0)
+        item->setData(0, LineNumberRole, dt->line);
+    }
   }
 
   updateTreeItemIcon(item, result.status);
@@ -761,8 +768,25 @@ void TestPanel::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
   if (!item)
     return;
 
+  // Detail children (message, stack trace, stdout, stderr) carry no source
+  // location of their own — navigate to the parent test item instead.
+  if (item->data(0, IsDetailItemRole).toBool()) {
+    item = item->parent();
+    if (!item)
+      return;
+  }
+
   QString filePath = item->data(0, FilePathRole).toString();
   int line = item->data(0, LineNumberRole).toInt();
+
+  // Name-based fallback: if no path was stored at result time, search
+  // discovered tests by name so the user can still navigate to the source.
+  if (filePath.isEmpty()) {
+    if (const DiscoveredTest *dt = findDiscoveredTestByName(item->text(0))) {
+      filePath = dt->filePath;
+      line = dt->line >= 0 ? dt->line : 0;
+    }
+  }
 
   if (!filePath.isEmpty())
     emit locationClicked(filePath, line, 0);
@@ -983,6 +1007,15 @@ QTreeWidgetItem *TestPanel::findOrCreateSuiteItem(const QString &suite) {
 QTreeWidgetItem *TestPanel::findTestItem(const QString &id) {
   if (m_testItems.contains(id))
     return m_testItems[id];
+  return nullptr;
+}
+
+const DiscoveredTest *
+TestPanel::findDiscoveredTestByName(const QString &name) const {
+  for (const DiscoveredTest &dt : m_discoveredTests) {
+    if (dt.name == name && !dt.filePath.isEmpty())
+      return &dt;
+  }
   return nullptr;
 }
 

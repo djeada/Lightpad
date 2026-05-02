@@ -56,6 +56,8 @@ private slots:
   void testDoubleClickPreservesDiscoveryFilePath();
   void testDoubleClickPytestPreservesFilePath();
   void testDoubleClickCtestIdMatchesFallback();
+  void testDoubleClickOnDetailChildNavigatesToParent();
+  void testDoubleClickNameFallback();
 
   void testSuiteItemCollapsedByDefault();
   void testTestItemFoldedByDefault();
@@ -820,6 +822,101 @@ void TestTestPanel::testDoubleClickCtestIdMatchesFallback() {
   // The fallback must have used the discovery filePath
   QCOMPARE(spy.count(), 1);
   QCOMPARE(spy.at(0).at(0).toString(), QString("/project/build"));
+}
+
+void TestTestPanel::testDoubleClickOnDetailChildNavigatesToParent() {
+  // Double-clicking a detail child item (message, stack trace, stdout, stderr)
+  // must navigate to the parent test item's source location instead of doing
+  // nothing (which is the bad-UX case described in the issue).
+  TestPanel panel;
+  QSignalSpy spy(&panel, &TestPanel::locationClicked);
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  emit runMgr->runStarted();
+
+  TestResult result;
+  result.id = "test_fail";
+  result.name = "test_fail";
+  result.suite = "";
+  result.status = TestStatus::Failed;
+  result.filePath = "/src/test_fail.cpp";
+  result.line = 10;
+  result.message = "Expected 1 but got 2";
+  emit runMgr->testFinished(result);
+
+  QTreeWidget *tree = findTree(panel);
+  QVERIFY(tree != nullptr);
+  QTreeWidgetItem *testItem = tree->topLevelItem(0);
+  QVERIFY(testItem != nullptr);
+  // The test item must have at least one detail child (the message).
+  QVERIFY(testItem->childCount() > 0);
+  QTreeWidgetItem *detailChild = testItem->child(0);
+  QVERIFY(detailChild != nullptr);
+
+  // Double-clicking the detail child must emit locationClicked with the
+  // parent test's file path and line.
+  emit tree->itemDoubleClicked(detailChild, 0);
+
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.at(0).at(0).toString(), QString("/src/test_fail.cpp"));
+  QCOMPARE(spy.at(0).at(1).toInt(), 10);
+}
+
+void TestTestPanel::testDoubleClickNameFallback() {
+  // When a test result carries neither a file path nor an ID that matches any
+  // discovered test, the panel must fall back to a name-based lookup among
+  // discovered tests so that double-click can still navigate.
+  TestPanel panel;
+  QSignalSpy spy(&panel, &TestPanel::locationClicked);
+
+  class MockNameDiscovery : public ITestDiscoveryAdapter {
+  public:
+    QString adapterId() const override { return "mock_name"; }
+    void discover(const QString &) override {
+      QList<DiscoveredTest> tests;
+      DiscoveredTest dt;
+      dt.name = "test_example";
+      dt.id = "discovered.test_example"; // ID differs from what runner emits
+      dt.suite = "";
+      dt.filePath = "/src/discovered_test.cpp";
+      dt.line = 5;
+      tests.append(dt);
+      emit discoveryFinished(tests);
+    }
+    void cancel() override {}
+  };
+
+  MockNameDiscovery mockAdapter;
+  panel.setDiscoveryAdapter(&mockAdapter);
+  panel.setWorkspaceFolder(m_tempDir.path());
+  mockAdapter.discover(m_tempDir.path());
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+  emit runMgr->runStarted();
+
+  // Runner emits a result whose ID does not match the discovery ID.
+  // No filePath from the runner either.
+  TestResult result;
+  result.id = "runner.test_example"; // does not match discovery ID
+  result.name = "test_example";       // but name matches
+  result.suite = "";
+  result.status = TestStatus::Passed;
+  emit runMgr->testFinished(result);
+
+  QTreeWidget *tree = findTree(panel);
+  QVERIFY(tree != nullptr);
+  QTreeWidgetItem *item = tree->topLevelItem(0);
+  QVERIFY(item != nullptr);
+
+  emit tree->itemDoubleClicked(item, 0);
+
+  // The name-based fallback must have found the discovered path.
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.at(0).at(0).toString(), QString("/src/discovered_test.cpp"));
+  QCOMPARE(spy.at(0).at(1).toInt(), 5);
 }
 
 void TestTestPanel::testSuiteItemCollapsedByDefault() {
