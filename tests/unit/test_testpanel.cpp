@@ -62,6 +62,12 @@ private slots:
   void testTestItemHasDetailChildrenOnFailure();
   void testDetailChildrenClearedOnRerun();
 
+  void testStatusLabelShowsRunningDuringRun();
+  void testStatusLabelShowsLatestStdoutLine();
+  void testStatusLabelTruncatesLongStdoutLine();
+  void testStatusLabelIgnoresStderrLines();
+  void testStatusLabelClearedOnNewRun();
+
 private:
   QTemporaryDir m_tempDir;
   QTreeWidget *findTree(TestPanel &panel);
@@ -973,6 +979,90 @@ void TestTestPanel::testDetailChildrenClearedOnRerun() {
   // Must have exactly one child with the new message, not two
   QCOMPARE(item->childCount(), 1);
   QVERIFY(item->child(0)->text(0).contains("second failure message"));
+}
+
+void TestTestPanel::testStatusLabelShowsRunningDuringRun() {
+  TestPanel panel;
+  QLabel *statusLabel = findStatusLabel(panel);
+  QVERIFY(statusLabel != nullptr);
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  emit runMgr->runStarted();
+
+  QVERIFY(statusLabel->text().contains("Running tests"));
+}
+
+void TestTestPanel::testStatusLabelShowsLatestStdoutLine() {
+  TestPanel panel;
+  QLabel *statusLabel = findStatusLabel(panel);
+  QVERIFY(statusLabel != nullptr);
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  emit runMgr->runStarted();
+  emit runMgr->outputLine("Building project...", false);
+
+  QVERIFY(statusLabel->text().contains("Building project..."));
+  QVERIFY(statusLabel->text().contains("Running tests"));
+}
+
+void TestTestPanel::testStatusLabelTruncatesLongStdoutLine() {
+  TestPanel panel;
+  QLabel *statusLabel = findStatusLabel(panel);
+  QVERIFY(statusLabel != nullptr);
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  emit runMgr->runStarted();
+
+  // Emit a line longer than the 120-char truncation limit
+  const QString longLine = QString("x").repeated(200);
+  emit runMgr->outputLine(longLine, false);
+
+  const QString labelText = statusLabel->text();
+  // The label must not contain the full 200-char line
+  QVERIFY(!labelText.contains(longLine));
+  // The label must contain the ellipsis truncation indicator
+  QVERIFY(labelText.contains(QChar(0x2026)));
+}
+
+void TestTestPanel::testStatusLabelIgnoresStderrLines() {
+  TestPanel panel;
+  QLabel *statusLabel = findStatusLabel(panel);
+  QVERIFY(statusLabel != nullptr);
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  emit runMgr->runStarted();
+  // Emit a stderr line (isError=true); it should not appear in status label
+  emit runMgr->outputLine("some error text", true);
+
+  const QString labelText = statusLabel->text();
+  QVERIFY(!labelText.contains("some error text"));
+}
+
+void TestTestPanel::testStatusLabelClearedOnNewRun() {
+  TestPanel panel;
+  QLabel *statusLabel = findStatusLabel(panel);
+  QVERIFY(statusLabel != nullptr);
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  // First run: emit a stdout line
+  emit runMgr->runStarted();
+  emit runMgr->outputLine("first run output", false);
+  QVERIFY(statusLabel->text().contains("first run output"));
+
+  // Second run: onRunStarted must clear the previous stdout line
+  emit runMgr->runStarted();
+  QVERIFY(!statusLabel->text().contains("first run output"));
+  QVERIFY(statusLabel->text().contains("Running tests"));
 }
 
 QTEST_MAIN(TestTestPanel)

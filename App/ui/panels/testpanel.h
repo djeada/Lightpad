@@ -62,6 +62,7 @@ private slots:
   void onTestFinished(const TestResult &result);
   void onRunStarted();
   void onRunFinished(int passed, int failed, int skipped, int errored);
+  void onOutputLine(const QString &line, bool isError);
   void onItemDoubleClicked(QTreeWidgetItem *item, int column);
   void onItemClicked(QTreeWidgetItem *item, int column);
   void onFilterChanged(int index);
@@ -77,6 +78,7 @@ private:
   void setupUI();
   void setupToolbar();
   void updateStatusLabel();
+  void updateRunningStatusLabel();
   void updateTreeItemIcon(QTreeWidgetItem *item, TestStatus status);
   QTreeWidgetItem *findOrCreateSuiteItem(const QString &suite);
   QTreeWidgetItem *findTestItem(const QString &id);
@@ -127,6 +129,8 @@ private:
   QMap<QString, QTreeWidgetItem *> m_testItems;
   QMap<QString, TestResult> m_testResults;
   QMap<QString, DiscoveredTest> m_discoveredTests;
+
+  QString m_latestStdoutLine;
 };
 
 #endif
