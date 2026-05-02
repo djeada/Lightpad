@@ -1584,6 +1584,9 @@ set(TEST_LIST
     LspRegressionTests
     MarkdownToolsTests
     MarkdownPreviewPanelTests
+    LatexToolsTests
+    LatexPreviewPanelTests
+    TestFileClassifierTests
 )
 
 if(HAVE_PDF_SUPPORT)
