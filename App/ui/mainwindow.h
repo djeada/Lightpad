@@ -357,6 +357,8 @@ private:
   void ensureTestPanel();
   void trackDockLayoutChanges(QDockWidget *dock);
   void tabifyBottomDock(QDockWidget *dock);
+  void syncViewToggleActionStates();
+  bool isCurrentMinimapVisible() const;
   void ensureStatusLabels();
   void updatePythonEnvironmentLabel();
   void updateSourceControlDockTitle(const QString &repoRoot, bool isRepo);

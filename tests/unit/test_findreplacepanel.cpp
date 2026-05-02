@@ -255,52 +255,39 @@ int TestSearchPatterns::pageEnd(int page, int totalResults) const {
 }
 
 void TestSearchPatterns::testGlobalResultsPagination() {
-  // Zero results -> zero pages
+
   QCOMPARE(globalResultsPageCount(0), 0);
 
-  // Fewer results than one page
   QCOMPARE(globalResultsPageCount(50), 1);
 
-  // Exactly one page
   QCOMPARE(globalResultsPageCount(100), 1);
 
-  // Just over one page
   QCOMPARE(globalResultsPageCount(101), 2);
 
-  // Multiple complete pages
   QCOMPARE(globalResultsPageCount(300), 3);
 
-  // Partial last page
   QCOMPARE(globalResultsPageCount(250), 3);
 
-  // Page 0 range for 250 results
   QCOMPARE(pageStart(0), 0);
   QCOMPARE(pageEnd(0, 250), 100);
 
-  // Page 1 range for 250 results
   QCOMPARE(pageStart(1), 100);
   QCOMPARE(pageEnd(1, 250), 200);
 
-  // Last page range for 250 results
   QCOMPARE(pageStart(2), 200);
   QCOMPARE(pageEnd(2, 250), 250);
 
-  // Single result on last page
   QCOMPARE(pageStart(1), 100);
   QCOMPARE(pageEnd(1, 101), 101);
 
-  // Navigation: result at index 150 is on page 1
   QCOMPARE(150 / kGlobalResultsPageSize, 1);
-  // Its local index within the page is 50
+
   QCOMPARE(150 - pageStart(1), 50);
 
-  // Result at index 0 is on page 0
   QCOMPARE(0 / kGlobalResultsPageSize, 0);
 
-  // Result at index 99 is still on page 0
   QCOMPARE(99 / kGlobalResultsPageSize, 0);
 
-  // Result at index 100 is on page 1
   QCOMPARE(100 / kGlobalResultsPageSize, 1);
 }
 

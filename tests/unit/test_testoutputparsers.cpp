@@ -85,7 +85,6 @@ private slots:
 
   void testDiscoveryAdapterFactory();
 
-  // Roundtrip: discovery ID matches result ID so fallback navigation works
   void testPytestDiscoveryAndResultIdsMatch();
   void testCtestDiscoveryAndResultIdsMatch();
 };
@@ -371,7 +370,6 @@ void TestOutputParsers::testJunitXmlWithFileAndLine() {
   connect(&parser, &ITestOutputParser::testFinished,
           [&results](const TestResult &r) { results.append(r); });
 
-  // GTest emits 'file' and 'line' attributes on every <testcase> element
   QByteArray xml = R"(<?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
   <testsuite name="MathTests" tests="2">
@@ -477,7 +475,8 @@ void TestOutputParsers::testCtestPrefersGoogleTestInnerDuration() {
       "    Start 1: MissionProgressTest.SaveCampaignMissionResult\n"
       "1: [ RUN      ] MissionProgressTest.SaveCampaignMissionResult\n"
       "1: [       OK ] MissionProgressTest.SaveCampaignMissionResult (0 ms)\n"
-      "1/1 Test #1: MissionProgressTest.SaveCampaignMissionResult ...   Passed    0.06 sec\n";
+      "1/1 Test #1: MissionProgressTest.SaveCampaignMissionResult ...   Passed "
+      "   0.06 sec\n";
 
   parser.feed(data);
   parser.finish();
@@ -1210,10 +1209,7 @@ void TestOutputParsers::testDiscoveryAdapterFactory() {
 }
 
 void TestOutputParsers::testPytestDiscoveryAndResultIdsMatch() {
-  // Verify that the ID produced by PytestDiscoveryAdapter::parseCollectOutput
-  // matches the ID produced by PytestParser for the same test. This is required
-  // for the TestPanel fallback logic to retrieve discovery file-path info when
-  // a pytest result lacks source location.
+
   QString collectOutput = "tests/test_math.py::TestArithmetic::test_add\n"
                           "tests/test_math.py::test_standalone\n"
                           "\n"
@@ -1234,22 +1230,18 @@ void TestOutputParsers::testPytestDiscoveryAndResultIdsMatch() {
   parser.finish();
   QCOMPARE(results.size(), 2);
 
-  // IDs must match so TestPanel can find the discovery entry
   QCOMPARE(results[0].id, discovered[0].id);
   QCOMPARE(results[1].id, discovered[1].id);
 
-  // Discovery file path should be available
   QCOMPARE(discovered[0].filePath, QString("tests/test_math.py"));
   QCOMPARE(discovered[1].filePath, QString("tests/test_math.py"));
 
-  // Result should also carry the file path directly
   QCOMPARE(results[0].filePath, QString("tests/test_math.py"));
   QCOMPARE(results[1].filePath, QString("tests/test_math.py"));
 }
 
 void TestOutputParsers::testCtestDiscoveryAndResultIdsMatch() {
-  // Verify that CTestDiscoveryAdapter and CtestParser produce matching IDs so
-  // that the TestPanel fallback can retrieve discovery metadata after a run.
+
   QByteArray json = R"({
     "tests": [
       { "name": "LoggerTests", "index": 1, "command": ["/build/test_logger"], "properties": [] },
@@ -1276,7 +1268,6 @@ void TestOutputParsers::testCtestDiscoveryAndResultIdsMatch() {
   parser.finish();
   QCOMPARE(results.size(), 2);
 
-  // IDs must match so TestPanel fallback can find the discovery entry
   QCOMPARE(results[0].id, discovered[0].id);
   QCOMPARE(results[1].id, discovered[1].id);
 }

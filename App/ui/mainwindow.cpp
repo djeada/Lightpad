@@ -171,23 +171,22 @@ MainWindow::MainWindow(QWidget *parent)
       m_gitBranchLabel(nullptr), m_gitSyncLabel(nullptr),
       m_gitDirtyLabel(nullptr), m_testTargetMenu(nullptr),
       m_debugTargetMenu(nullptr), debugPanel(nullptr), debugDock(nullptr),
-      testPanel(nullptr), testDock(nullptr),
-      m_markdownPreviewPanel(nullptr), m_markdownPreviewDock(nullptr),
-      m_latexPreviewPanel(nullptr), m_latexPreviewDock(nullptr),
-      m_testStatusLabel(nullptr), m_debugStartInProgress(false),
-      m_breakpointsSetConnection(), m_breakpointChangedConnection(),
-      m_runInTerminalConnection(), m_sessionTerminatedConnection(),
-      m_sessionErrorConnection(), m_sessionStateConnection(),
-      m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
-      m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
-      m_splitEditorContainer(nullptr), m_diagnosticsManager(nullptr),
-      m_languageFeatureManager(nullptr), m_lspCompletionProvider(),
-      m_notificationManager(nullptr), m_lspStatusLabel(nullptr),
-      m_lspStatusLanguageId(""), m_restoringSession(false),
-      m_globalSettingsLoaded(false), m_fileTreeModel(nullptr),
-      m_fileTreeSelectionModel(nullptr), m_treeScrollValue(0),
-      m_treeScrollValueInitialized(false), m_treeScrollSyncing(false),
-      m_treeFilterText(""), m_treeCurrentPath(""),
+      testPanel(nullptr), testDock(nullptr), m_markdownPreviewPanel(nullptr),
+      m_markdownPreviewDock(nullptr), m_latexPreviewPanel(nullptr),
+      m_latexPreviewDock(nullptr), m_testStatusLabel(nullptr),
+      m_debugStartInProgress(false), m_breakpointsSetConnection(),
+      m_breakpointChangedConnection(), m_runInTerminalConnection(),
+      m_sessionTerminatedConnection(), m_sessionErrorConnection(),
+      m_sessionStateConnection(), m_runProcessFinishedConnection(),
+      m_runProcessErrorConnection(), m_formatProcessFinishedConnection(),
+      m_formatProcessErrorConnection(), m_splitEditorContainer(nullptr),
+      m_diagnosticsManager(nullptr), m_languageFeatureManager(nullptr),
+      m_lspCompletionProvider(), m_notificationManager(nullptr),
+      m_lspStatusLabel(nullptr), m_lspStatusLanguageId(""),
+      m_restoringSession(false), m_globalSettingsLoaded(false),
+      m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
+      m_treeScrollValue(0), m_treeScrollValueInitialized(false),
+      m_treeScrollSyncing(false), m_treeFilterText(""), m_treeCurrentPath(""),
       m_treeSelectionSyncing(false) {
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
@@ -202,6 +201,10 @@ MainWindow::MainWindow(QWidget *parent)
   if (ui->actionEdit_Test_Configurations) {
     connect(ui->actionEdit_Test_Configurations, &QAction::triggered, this,
             &MainWindow::openTestConfigurationDialog);
+  }
+  if (ui->menuView) {
+    connect(ui->menuView, &QMenu::aboutToShow, this,
+            &MainWindow::syncViewToggleActionStates);
   }
   if (ui->testButton) {
     connect(ui->testButton, &QToolButton::clicked, this,
@@ -289,7 +292,8 @@ MainWindow::MainWindow(QWidget *parent)
   TestConfigurationManager::instance().loadTemplates();
 
   if (ui->testButton) {
-    ui->testButton->setIcon(style()->standardIcon(QStyle::SP_FileDialogContentsView));
+    ui->testButton->setIcon(
+        style()->standardIcon(QStyle::SP_FileDialogContentsView));
     m_testTargetMenu = new QMenu(ui->testButton);
     ui->testButton->setMenu(m_testTargetMenu);
     ui->testButton->setPopupMode(QToolButton::MenuButtonPopup);
@@ -957,6 +961,24 @@ void MainWindow::restoreSessionUiState() {
     showRecentFilesDialog();
   }
 
+  if (!currentFilePath.isEmpty() && QFileInfo(currentFilePath).exists()) {
+    openFileAndAddToNewTab(currentFilePath);
+  }
+  syncViewToggleActionStates();
+}
+
+bool MainWindow::isCurrentMinimapVisible() const {
+  LightpadTabWidget *tabWidget =
+      const_cast<MainWindow *>(this)->currentTabWidget();
+  if (!tabWidget) {
+    return false;
+  }
+
+  LightpadPage *page = qobject_cast<LightpadPage *>(tabWidget->currentWidget());
+  return page && page->isMinimapVisible();
+}
+
+void MainWindow::syncViewToggleActionStates() {
   if (ui->actionToggle_Source_Control) {
     ui->actionToggle_Source_Control->setChecked(sourceControlDock &&
                                                 sourceControlDock->isVisible());
@@ -965,12 +987,15 @@ void MainWindow::restoreSessionUiState() {
     ui->actionToggle_Terminal->setChecked(m_terminalDock &&
                                           m_terminalDock->isVisible());
   }
+  if (ui->actionToggle_Test_Panel) {
+    ui->actionToggle_Test_Panel->setChecked(testDock && testDock->isVisible());
+  }
   if (ui->actionToggle_Problems) {
     ui->actionToggle_Problems->setChecked(m_problemsDock &&
                                           m_problemsDock->isVisible());
   }
-  if (!currentFilePath.isEmpty() && QFileInfo(currentFilePath).exists()) {
-    openFileAndAddToNewTab(currentFilePath);
+  if (ui->actionToggle_Minimap) {
+    ui->actionToggle_Minimap->setChecked(isCurrentMinimapVisible());
   }
 }
 
@@ -2684,9 +2709,9 @@ void MainWindow::openTestConfigurationDialog() {
     auto *page = tabWidget ? tabWidget->getCurrentPage() : nullptr;
     const QString filePath = page ? page->getFilePath() : QString();
     if (filePath.isEmpty()) {
-      ThemedMessageBox::information(
-          this, tr("Test Configurations"),
-          tr("Please open a file or project first to configure test settings."));
+      ThemedMessageBox::information(this, tr("Test Configurations"),
+                                    tr("Please open a file or project first to "
+                                       "configure test settings."));
       return;
     }
     ensureProjectRootForPath(filePath);
@@ -2709,9 +2734,6 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
       if (m_terminalDock) {
         m_terminalDock->hide();
       }
-      if (ui->actionToggle_Terminal) {
-        ui->actionToggle_Terminal->setChecked(false);
-      }
     });
 
     m_terminalDock = new QDockWidget(QString(), this);
@@ -2725,9 +2747,8 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
     m_terminalDock->hide();
     connect(m_terminalDock, &QDockWidget::visibilityChanged, this,
             [this](bool visible) {
-              if (ui->actionToggle_Terminal) {
-                ui->actionToggle_Terminal->setChecked(visible);
-              }
+              Q_UNUSED(visible)
+              syncViewToggleActionStates();
             });
   }
 
@@ -2742,9 +2763,7 @@ void MainWindow::showTerminalPanel() {
 
   m_terminalDock->show();
   m_terminalDock->raise();
-  if (ui->actionToggle_Terminal) {
-    ui->actionToggle_Terminal->setChecked(true);
-  }
+  syncViewToggleActionStates();
 }
 
 void MainWindow::showTerminal() {
@@ -2796,9 +2815,7 @@ void MainWindow::showTerminal() {
 
       testDock->show();
       testDock->raise();
-      if (ui->actionToggle_Test_Panel) {
-        ui->actionToggle_Test_Panel->setChecked(true);
-      }
+      syncViewToggleActionStates();
       return;
     }
   }
@@ -2991,9 +3008,6 @@ void MainWindow::showProblemsPanel() {
       if (m_problemsDock) {
         m_problemsDock->hide();
       }
-      if (ui->actionToggle_Problems) {
-        ui->actionToggle_Problems->setChecked(false);
-      }
     });
 
     if (m_diagnosticsManager) {
@@ -3024,9 +3038,8 @@ void MainWindow::showProblemsPanel() {
     m_problemsDock->hide();
     connect(m_problemsDock, &QDockWidget::visibilityChanged, this,
             [this](bool visible) {
-              if (ui->actionToggle_Problems) {
-                ui->actionToggle_Problems->setChecked(visible);
-              }
+              Q_UNUSED(visible)
+              syncViewToggleActionStates();
             });
   }
 
@@ -3296,9 +3309,8 @@ void MainWindow::ensureSourceControlPanel() {
 
   connect(sourceControlDock, &QDockWidget::visibilityChanged, this,
           [this](bool visible) {
-            if (ui->actionToggle_Source_Control) {
-              ui->actionToggle_Source_Control->setChecked(visible);
-            }
+            Q_UNUSED(visible)
+            syncViewToggleActionStates();
           });
 }
 
@@ -3392,7 +3404,10 @@ void MainWindow::ensureDebugPanel() {
   debugDock->hide();
 
   connect(debugDock, &QDockWidget::visibilityChanged, this,
-          [this](bool visible) { Q_UNUSED(visible) });
+          [this](bool visible) {
+            Q_UNUSED(visible)
+            syncViewToggleActionStates();
+          });
 
   connect(&DebugSessionManager::instance(),
           &DebugSessionManager::focusedSessionChanged, this,
@@ -3477,6 +3492,11 @@ void MainWindow::ensureTestPanel() {
   tabifyBottomDock(testDock);
   trackDockLayoutChanges(testDock);
   testDock->hide();
+  connect(testDock, &QDockWidget::visibilityChanged, this,
+          [this](bool visible) {
+            Q_UNUSED(visible)
+            syncViewToggleActionStates();
+          });
 }
 
 void MainWindow::trackDockLayoutChanges(QDockWidget *dock) {
@@ -3534,11 +3554,7 @@ void MainWindow::on_actionToggle_Test_Panel_triggered() {
 
 void MainWindow::on_actionToggle_Problems_triggered() {
   showProblemsPanel();
-
-  if (ui->actionToggle_Problems) {
-    ui->actionToggle_Problems->setChecked(m_problemsDock &&
-                                          m_problemsDock->isVisible());
-  }
+  syncViewToggleActionStates();
 }
 
 void MainWindow::on_actionPreview_Markdown_triggered() {
@@ -5640,6 +5656,7 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
 
   updatePythonEnvironmentLabel();
   refreshTestTargetButton();
+  syncViewToggleActionStates();
   if (problemsPanel && !filePath.isEmpty()) {
     problemsPanel->setCurrentFilePath(filePath);
   }
@@ -5813,11 +5830,13 @@ void MainWindow::noScriptAssignedWarning() {
 }
 
 QString MainWindow::selectedTestConfigurationId() const {
-  const TestConfigurationManager &manager = TestConfigurationManager::instance();
-  const QString explicitId = SettingsManager::instance()
-                                 .getValue("activeTestConfigurationId", QString())
-                                 .toString()
-                                 .trimmed();
+  const TestConfigurationManager &manager =
+      TestConfigurationManager::instance();
+  const QString explicitId =
+      SettingsManager::instance()
+          .getValue("activeTestConfigurationId", QString())
+          .toString()
+          .trimmed();
   if (!explicitId.isEmpty() && manager.configurationById(explicitId).isValid())
     return explicitId;
 
@@ -5838,8 +5857,8 @@ void MainWindow::refreshTestTargetButton() {
     manager.loadTemplates();
   }
 
-  TestConfiguration selectedConfig = manager.configurationById(
-      selectedTestConfigurationId());
+  TestConfiguration selectedConfig =
+      manager.configurationById(selectedTestConfigurationId());
   if (!selectedConfig.isValid()) {
     QString currentFilePath;
     if (LightpadTabWidget *tabWidget = currentTabWidget()) {
@@ -5854,10 +5873,10 @@ void MainWindow::refreshTestTargetButton() {
 
   const QString buttonText =
       selectedConfig.isValid() ? selectedConfig.name : tr("Test");
-  const QString tooltip = selectedConfig.isValid()
-                              ? tr("Run tests with configuration: %1")
-                                    .arg(selectedConfig.name)
-                              : tr("Run tests for the current file or workspace");
+  const QString tooltip =
+      selectedConfig.isValid()
+          ? tr("Run tests with configuration: %1").arg(selectedConfig.name)
+          : tr("Run tests for the current file or workspace");
 
   ui->testButton->setText(buttonText);
   ui->testButton->setToolTip(tooltip);
@@ -5876,17 +5895,18 @@ void MainWindow::rebuildTestTargetMenu() {
     manager.loadTemplates();
   }
 
-  const QString selectedId = SettingsManager::instance()
-                                 .getValue("activeTestConfigurationId", QString())
-                                 .toString()
-                                 .trimmed();
+  const QString selectedId =
+      SettingsManager::instance()
+          .getValue("activeTestConfigurationId", QString())
+          .toString()
+          .trimmed();
 
-  QAction *automaticAction =
-      m_testTargetMenu->addAction(tr("Automatic"));
+  QAction *automaticAction = m_testTargetMenu->addAction(tr("Automatic"));
   automaticAction->setCheckable(true);
   automaticAction->setChecked(selectedId.isEmpty());
   connect(automaticAction, &QAction::triggered, this, [this]() {
-    SettingsManager::instance().setValue("activeTestConfigurationId", QString());
+    SettingsManager::instance().setValue("activeTestConfigurationId",
+                                         QString());
     SettingsManager::instance().saveSettings();
     refreshTestTargetButton();
   });
@@ -5909,8 +5929,8 @@ void MainWindow::rebuildTestTargetMenu() {
       action->setChecked(config.id == selectedId);
       connect(action, &QAction::triggered, this,
               [this, configId = config.id]() {
-                SettingsManager::instance().setValue("activeTestConfigurationId",
-                                                     configId);
+                SettingsManager::instance().setValue(
+                    "activeTestConfigurationId", configId);
                 SettingsManager::instance().saveSettings();
                 refreshTestTargetButton();
               });
@@ -5927,8 +5947,7 @@ void MainWindow::rebuildTestTargetMenu() {
       testDock->show();
       testDock->raise();
     }
-    if (ui->actionToggle_Test_Panel)
-      ui->actionToggle_Test_Panel->setChecked(testDock && testDock->isVisible());
+    syncViewToggleActionStates();
   });
 
   QAction *editAction =
@@ -6586,13 +6605,13 @@ void MainWindow::runTestsForCurrentContext() {
 
   if (m_projectRootPath.isEmpty()) {
     ThemedMessageBox::information(
-        this, tr("Test"),
-        tr("Open a file or project first to run tests."));
+        this, tr("Test"), tr("Open a file or project first to run tests."));
     return;
   }
 
   TestConfigurationManager::instance().setWorkspaceFolder(m_projectRootPath);
-  TestConfigurationManager::instance().loadUserConfigurations(m_projectRootPath);
+  TestConfigurationManager::instance().loadUserConfigurations(
+      m_projectRootPath);
   refreshTestTargetButton();
 
   if (!testPanel) {
@@ -6621,8 +6640,7 @@ void MainWindow::runTestsForCurrentContext() {
     testDock->show();
     testDock->raise();
   }
-  if (ui->actionToggle_Test_Panel)
-    ui->actionToggle_Test_Panel->setChecked(testDock && testDock->isVisible());
+  syncViewToggleActionStates();
 }
 
 void MainWindow::on_runButton_clicked() { runCurrentScript(); }
@@ -6789,6 +6807,7 @@ void MainWindow::on_actionToggle_Minimap_triggered() {
       }
     }
   }
+  syncViewToggleActionStates();
 }
 
 void MainWindow::on_actionSplit_Horizontally_triggered() {
@@ -6842,7 +6861,7 @@ void MainWindow::on_actionToggle_Terminal_triggered() {
   } else {
     m_terminalDock->hide();
   }
-  ui->actionToggle_Terminal->setChecked(!visible);
+  syncViewToggleActionStates();
 }
 
 void MainWindow::on_actionToggle_Source_Control_triggered() {
@@ -6850,9 +6869,7 @@ void MainWindow::on_actionToggle_Source_Control_triggered() {
 
   bool visible = sourceControlDock->isVisible();
   sourceControlDock->setVisible(!visible);
-  if (ui->actionToggle_Source_Control) {
-    ui->actionToggle_Source_Control->setChecked(!visible);
-  }
+  syncViewToggleActionStates();
 }
 
 void MainWindow::on_actionOpen_To_Side_triggered() {
@@ -8432,8 +8449,7 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
               testPanel->runTestsForPath(path);
               testDock->show();
               testDock->raise();
-              if (ui->actionToggle_Test_Panel)
-                ui->actionToggle_Test_Panel->setChecked(true);
+              syncViewToggleActionStates();
             }
           });
 

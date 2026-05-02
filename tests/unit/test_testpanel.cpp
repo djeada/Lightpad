@@ -738,7 +738,8 @@ void TestTestPanel::testDirectoryRunShowsRunDetailsAndUsesWorkspaceRoot() {
 
   QTextEdit *detailPane = findDetailPane(panel);
   QVERIFY(detailPane != nullptr);
-  QTRY_VERIFY(detailPane->toPlainText().contains("Configuration: Panel Echo Directory Run"));
+  QTRY_VERIFY(detailPane->toPlainText().contains(
+      "Configuration: Panel Echo Directory Run"));
   const QString detailText = detailPane->toPlainText();
   QVERIFY(detailText.contains("Scope: Directory"));
   QVERIFY(detailText.contains("Target: " + testsDir));
@@ -904,7 +905,6 @@ void TestTestPanel::testDoubleClickPreservesDiscoveryFilePath() {
   panel.setWorkspaceFolder(m_tempDir.path());
   mockAdapter.discover(m_tempDir.path());
 
-  // Run the test without file path info (runner doesn't report source location)
   TestRunManager *runMgr = findRunManager(panel);
   QVERIFY(runMgr != nullptr);
 
@@ -915,7 +915,7 @@ void TestTestPanel::testDoubleClickPreservesDiscoveryFilePath() {
   result.name = "test_example";
   result.suite = "";
   result.status = TestStatus::Passed;
-  // filePath intentionally left empty — runner does not report source location
+
   emit runMgr->testFinished(result);
 
   QTreeWidget *tree = findTree(panel);
@@ -925,19 +925,16 @@ void TestTestPanel::testDoubleClickPreservesDiscoveryFilePath() {
 
   emit tree->itemDoubleClicked(item, 0);
 
-  // The discovery file path must have been preserved
   QCOMPARE(spy.count(), 1);
   QCOMPARE(spy.at(0).at(0).toString(), mockAdapter.sourcePath);
   QCOMPARE(spy.at(0).at(1).toInt(), 10);
 }
 
 void TestTestPanel::testDoubleClickPytestPreservesFilePath() {
-  // pytest results carry the file path in TestResult::filePath, so the panel
-  // must use result.filePath directly and emit locationClicked with it.
+
   TestPanel panel;
   QSignalSpy spy(&panel, &TestPanel::locationClicked);
 
-  // Simulate pytest discovery: ID = "tests/test_math.py::TestArithmetic::test_add"
   class MockPytestDiscovery : public ITestDiscoveryAdapter {
   public:
     QString adapterId() const override { return "mock_pytest"; }
@@ -970,7 +967,6 @@ void TestTestPanel::testDoubleClickPytestPreservesFilePath() {
   QVERIFY(runMgr != nullptr);
   emit runMgr->runStarted();
 
-  // pytest result carries filePath directly (as PytestParser emits it)
   TestResult result;
   result.id = "tests/test_math.py::TestArithmetic::test_add";
   result.name = "TestArithmetic::test_add";
@@ -981,8 +977,7 @@ void TestTestPanel::testDoubleClickPytestPreservesFilePath() {
 
   QTreeWidget *tree = findTree(panel);
   QVERIFY(tree != nullptr);
-  // The result has suite="tests/test_math.py", so the tree has a suite item at
-  // the top level and the actual test item is its child.
+
   QVERIFY(tree->topLevelItemCount() > 0);
   QTreeWidgetItem *suiteItem = tree->topLevelItem(0);
   QVERIFY(suiteItem != nullptr);
@@ -997,9 +992,7 @@ void TestTestPanel::testDoubleClickPytestPreservesFilePath() {
 }
 
 void TestTestPanel::testDoubleClickCtestIdMatchesFallback() {
-  // ctest discovery may only provide WORKING_DIRECTORY. That path is not a
-  // source file, so the panel must not emit a bogus navigation target when no
-  // better workspace source match can be found.
+
   TestPanel panel;
   QSignalSpy spy(&panel, &TestPanel::locationClicked);
 
@@ -1010,8 +1003,8 @@ void TestTestPanel::testDoubleClickCtestIdMatchesFallback() {
       QList<DiscoveredTest> tests;
       DiscoveredTest dt;
       dt.name = "LoggerTests";
-      dt.id = "1"; // ctest uses test-number as ID
-      dt.filePath = "/project/build"; // WORKING_DIRECTORY from ctest JSON
+      dt.id = "1";
+      dt.filePath = "/project/build";
       tests.append(dt);
       emit discoveryFinished(tests);
     }
@@ -1027,7 +1020,6 @@ void TestTestPanel::testDoubleClickCtestIdMatchesFallback() {
   QVERIFY(runMgr != nullptr);
   emit runMgr->runStarted();
 
-  // ctest result: ID is the test number, no filePath
   TestResult result;
   result.id = "1";
   result.name = "LoggerTests";
@@ -1111,9 +1103,7 @@ void TestTestPanel::testDoubleClickCtestUsesWorkspaceSourceFallback() {
 }
 
 void TestTestPanel::testDoubleClickOnDetailChildNavigatesToParent() {
-  // Double-clicking a detail child item (message, stack trace, stdout, stderr)
-  // must navigate to the parent test item's source location instead of doing
-  // nothing (which is the bad-UX case described in the issue).
+
   TestPanel panel;
   QSignalSpy spy(&panel, &TestPanel::locationClicked);
 
@@ -1144,13 +1134,11 @@ void TestTestPanel::testDoubleClickOnDetailChildNavigatesToParent() {
   QVERIFY(tree != nullptr);
   QTreeWidgetItem *testItem = tree->topLevelItem(0);
   QVERIFY(testItem != nullptr);
-  // The test item must have at least one detail child (the message).
+
   QVERIFY(testItem->childCount() > 0);
   QTreeWidgetItem *detailChild = testItem->child(0);
   QVERIFY(detailChild != nullptr);
 
-  // Double-clicking the detail child must emit locationClicked with the
-  // parent test's file path and line.
   emit tree->itemDoubleClicked(detailChild, 0);
 
   QCOMPARE(spy.count(), 1);
@@ -1159,9 +1147,7 @@ void TestTestPanel::testDoubleClickOnDetailChildNavigatesToParent() {
 }
 
 void TestTestPanel::testDoubleClickNameFallback() {
-  // When a test result carries neither a file path nor an ID that matches any
-  // discovered test, the panel must fall back to a name-based lookup among
-  // discovered tests so that double-click can still navigate.
+
   TestPanel panel;
   QSignalSpy spy(&panel, &TestPanel::locationClicked);
 
@@ -1174,7 +1160,7 @@ void TestTestPanel::testDoubleClickNameFallback() {
       QList<DiscoveredTest> tests;
       DiscoveredTest dt;
       dt.name = "test_example";
-      dt.id = "discovered.test_example"; // ID differs from what runner emits
+      dt.id = "discovered.test_example";
       dt.suite = "";
       dt.filePath = sourcePath;
       dt.line = 5;
@@ -1200,11 +1186,9 @@ void TestTestPanel::testDoubleClickNameFallback() {
   QVERIFY(runMgr != nullptr);
   emit runMgr->runStarted();
 
-  // Runner emits a result whose ID does not match the discovery ID.
-  // No filePath from the runner either.
   TestResult result;
-  result.id = "runner.test_example"; // does not match discovery ID
-  result.name = "test_example";       // but name matches
+  result.id = "runner.test_example";
+  result.name = "test_example";
   result.suite = "";
   result.status = TestStatus::Passed;
   emit runMgr->testFinished(result);
@@ -1216,16 +1200,13 @@ void TestTestPanel::testDoubleClickNameFallback() {
 
   emit tree->itemDoubleClicked(item, 0);
 
-  // The name-based fallback must have found the discovered path.
   QCOMPARE(spy.count(), 1);
   QCOMPARE(spy.at(0).at(0).toString(), mockAdapter.sourcePath);
   QCOMPARE(spy.at(0).at(1).toInt(), 5);
 }
 
 void TestTestPanel::testSuiteItemCollapsedByDefault() {
-  // Suite items remain expanded so that individual test rows are immediately
-  // visible. It is the individual test rows that are collapsed (folded); the
-  // user expands a test row to reveal its execution details.
+
   TestPanel panel;
   panel.show();
 
@@ -1248,12 +1229,12 @@ void TestTestPanel::testSuiteItemCollapsedByDefault() {
   QTreeWidgetItem *suiteItem = tree->topLevelItem(0);
   QVERIFY(suiteItem != nullptr);
   QCOMPARE(suiteItem->text(0), QString("MySuite"));
-  // Suite must remain expanded so tests inside it are visible without an extra click
+
   QCOMPARE(suiteItem->isExpanded(), true);
 }
 
 void TestTestPanel::testTestItemFoldedByDefault() {
-  // A test item with execution details must start collapsed (folded).
+
   TestPanel panel;
 
   TestRunManager *runMgr = findRunManager(panel);
@@ -1274,14 +1255,12 @@ void TestTestPanel::testTestItemFoldedByDefault() {
   QTreeWidgetItem *item = tree->topLevelItem(0);
   QVERIFY(item != nullptr);
 
-  // Item has detail children but must not be expanded by default
   QVERIFY(item->childCount() > 0);
   QCOMPARE(item->isExpanded(), false);
 }
 
 void TestTestPanel::testTestItemHasDetailChildrenOnFailure() {
-  // A failed test with message/stdout/stderr must expose them as collapsible
-  // child items so the user can expand to see all execution info.
+
   TestPanel panel;
 
   TestRunManager *runMgr = findRunManager(panel);
@@ -1305,10 +1284,8 @@ void TestTestPanel::testTestItemHasDetailChildrenOnFailure() {
   QTreeWidgetItem *item = tree->topLevelItem(0);
   QVERIFY(item != nullptr);
 
-  // Expect 4 detail children: message, stack trace, stdout, stderr
   QCOMPARE(item->childCount(), 4);
 
-  // Verify children carry execution info in their text
   QStringList childTexts;
   for (int i = 0; i < item->childCount(); ++i)
     childTexts << item->child(i)->text(0);
@@ -1318,9 +1295,8 @@ void TestTestPanel::testTestItemHasDetailChildrenOnFailure() {
   QVERIFY(childTexts.at(2).contains("stdout:"));
   QVERIFY(childTexts.at(3).contains("stderr:"));
 
-  // A passed test with no output must have no detail children
   emit runMgr->runStarted();
-  // runStarted() triggers onRunStarted() which clears the tree
+
   QCOMPARE(tree->topLevelItemCount(), 0);
 
   TestResult passedResult;
@@ -1337,8 +1313,7 @@ void TestTestPanel::testTestItemHasDetailChildrenOnFailure() {
 }
 
 void TestTestPanel::testDetailChildrenClearedOnRerun() {
-  // When the run is restarted, old detail children are replaced with fresh
-  // ones so stale output from a previous run is not shown.
+
   TestPanel panel;
 
   TestRunManager *runMgr = findRunManager(panel);
@@ -1361,9 +1336,8 @@ void TestTestPanel::testDetailChildrenClearedOnRerun() {
   QCOMPARE(item->childCount(), 1);
   QVERIFY(item->child(0)->text(0).contains("first failure message"));
 
-  // Second run: tree is cleared by onRunStarted, item is re-created
   emit runMgr->runStarted();
-  // Verify the tree is cleared before the second run populates it
+
   QCOMPARE(tree->topLevelItemCount(), 0);
 
   TestResult secondRun;
@@ -1376,7 +1350,7 @@ void TestTestPanel::testDetailChildrenClearedOnRerun() {
 
   item = tree->topLevelItem(0);
   QVERIFY(item != nullptr);
-  // Must have exactly one child with the new message, not two
+
   QCOMPARE(item->childCount(), 1);
   QVERIFY(item->child(0)->text(0).contains("second failure message"));
 }
@@ -1419,14 +1393,13 @@ void TestTestPanel::testStatusLabelTruncatesLongStdoutLine() {
 
   emit runMgr->runStarted();
 
-  // Emit a line longer than the 120-char truncation limit
   const QString longLine = QString("x").repeated(200);
   emit runMgr->outputLine(longLine, false);
 
   const QString labelText = statusLabel->text();
-  // The label must not contain the full 200-char line
+
   QVERIFY(!labelText.contains(longLine));
-  // The label must contain the ellipsis truncation indicator
+
   QVERIFY(labelText.contains(QChar(0x2026)));
 }
 
@@ -1439,7 +1412,7 @@ void TestTestPanel::testStatusLabelIgnoresStderrLines() {
   QVERIFY(runMgr != nullptr);
 
   emit runMgr->runStarted();
-  // Emit a stderr line (isError=true); it should not appear in status label
+
   emit runMgr->outputLine("some error text", true);
 
   const QString labelText = statusLabel->text();
@@ -1454,12 +1427,10 @@ void TestTestPanel::testStatusLabelClearedOnNewRun() {
   TestRunManager *runMgr = findRunManager(panel);
   QVERIFY(runMgr != nullptr);
 
-  // First run: emit a stdout line
   emit runMgr->runStarted();
   emit runMgr->outputLine("first run output", false);
   QVERIFY(statusLabel->text().contains("first run output"));
 
-  // Second run: onRunStarted must clear the previous stdout line
   emit runMgr->runStarted();
   QVERIFY(!statusLabel->text().contains("first run output"));
   QVERIFY(statusLabel->text().contains("Running tests"));

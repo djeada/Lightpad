@@ -12,8 +12,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
-#include <QStandardPaths>
 #include <QSet>
+#include <QStandardPaths>
 #include <QUuid>
 
 #include "core/logging/logger.h"
@@ -106,8 +106,10 @@ bool TestConfigurationManager::loadUserConfigurations(
 
   m_defaultConfigurationId = root["defaultConfigurationId"].toString();
   m_defaultConfigurationName = root["defaultConfiguration"].toString();
-  if (m_defaultConfigurationId.isEmpty() && !m_defaultConfigurationName.isEmpty()) {
-    const TestConfiguration cfg = configurationByName(m_defaultConfigurationName);
+  if (m_defaultConfigurationId.isEmpty() &&
+      !m_defaultConfigurationName.isEmpty()) {
+    const TestConfiguration cfg =
+        configurationByName(m_defaultConfigurationName);
     if (cfg.isValid())
       m_defaultConfigurationId = cfg.id;
   }
@@ -328,7 +330,8 @@ void TestConfigurationManager::removeConfiguration(const QString &id) {
 
 void TestConfigurationManager::setDefaultConfigurationId(const QString &id) {
   if (m_defaultConfigurationId == id &&
-      (id.isEmpty() || m_defaultConfigurationName == defaultConfigurationName())) {
+      (id.isEmpty() ||
+       m_defaultConfigurationName == defaultConfigurationName())) {
     return;
   }
 
@@ -347,7 +350,8 @@ QString TestConfigurationManager::defaultConfigurationId() const {
     return m_defaultConfigurationId;
 
   if (!m_defaultConfigurationName.isEmpty()) {
-    const TestConfiguration cfg = configurationByName(m_defaultConfigurationName);
+    const TestConfiguration cfg =
+        configurationByName(m_defaultConfigurationName);
     if (cfg.isValid())
       return cfg.id;
   }

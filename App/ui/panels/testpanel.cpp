@@ -1,7 +1,7 @@
 #include "testpanel.h"
 #include "../dialogs/testconfigurationdialog.h"
-#include "../uistylehelper.h"
 #include "../dialogs/themedmessagebox.h"
+#include "../uistylehelper.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -106,14 +106,15 @@ bool resolveNavigableFilePath(const QString &candidatePath,
 
 bool findGoogleTestMacroLocation(const QString &content,
                                  const QStringList &suiteCandidates,
-                                 const QStringList &testCandidates,
-                                 int *line) {
+                                 const QStringList &testCandidates, int *line) {
   if (suiteCandidates.isEmpty() || testCandidates.isEmpty())
     return false;
 
   const QString pattern =
-      QString(R"(\b(?:TEST|TEST_F|TEST_P|TYPED_TEST|TYPED_TEST_P)\s*\(\s*(?:%1)\s*,\s*(?:%2)\s*\))")
-          .arg(toRegexAlternation(suiteCandidates), toRegexAlternation(testCandidates));
+      QString(
+          R"(\b(?:TEST|TEST_F|TEST_P|TYPED_TEST|TYPED_TEST_P)\s*\(\s*(?:%1)\s*,\s*(?:%2)\s*\))")
+          .arg(toRegexAlternation(suiteCandidates),
+               toRegexAlternation(testCandidates));
   const QRegularExpression regex(pattern);
   const QRegularExpressionMatch match = regex.match(content);
   if (!match.hasMatch())
@@ -410,11 +411,11 @@ void TestPanel::setupToolbar() {
                              m_testItems.clear();
                              m_testResults.clear();
                              m_passedCount = m_failedCount = m_skippedCount =
-                                  m_erroredCount = 0;
-                              resetRunContext();
-                              updateStatusLabel();
-                              updateEmptyState();
-                            });
+                                 m_erroredCount = 0;
+                             resetRunContext();
+                             updateStatusLabel();
+                             updateEmptyState();
+                           });
   m_clearAction->setToolTip(tr("Clear Results"));
 
   m_toolbar->addSeparator();
@@ -790,7 +791,8 @@ void TestPanel::openConfigurationDialog() {
   }
 
   TestConfigurationManager::instance().setWorkspaceFolder(m_workspaceFolder);
-  TestConfigurationManager::instance().loadUserConfigurations(m_workspaceFolder);
+  TestConfigurationManager::instance().loadUserConfigurations(
+      m_workspaceFolder);
 
   if (auto *existing = window()->findChild<TestConfigurationDialog *>()) {
     if (existing->isVisible()) {
@@ -858,7 +860,7 @@ void TestPanel::onTestFinished(const TestResult &result) {
         item->setData(0, LineNumberRole, dt.line);
     }
   } else {
-    // Name-based fallback: search discovered tests by name when ID doesn't match
+
     if (const DiscoveredTest *dt = findDiscoveredTestByName(result.name)) {
       item->setData(0, FilePathRole, dt->filePath);
       if (dt->line >= 0)
@@ -891,12 +893,9 @@ void TestPanel::onTestFinished(const TestResult &result) {
 
   m_testResults[result.id] = result;
 
-  // Remove any stale detail children (e.g. from a re-run of the same test)
   while (item->childCount() > 0)
     delete item->takeChild(0);
 
-  // Add collapsible detail children so the user can expand a result to see
-  // all execution info without leaving the tree.
   auto addDetailChild = [&](const QString &label, const QString &content) {
     if (content.isEmpty())
       return;
@@ -916,7 +915,6 @@ void TestPanel::onTestFinished(const TestResult &result) {
     addDetailChild(tr("stdout: "), result.stdoutOutput);
   if (!result.stderrOutput.isEmpty())
     addDetailChild(tr("stderr: "), result.stderrOutput);
-  // item stays collapsed by default; expand arrow appears when children exist
 
   applyFilter();
 }
@@ -980,7 +978,8 @@ void TestPanel::onOutputLine(const QString &line, bool isError) {
   updateRunningStatusLabel();
 }
 
-void TestPanel::onProcessStarted(const QString &command, const QStringList &args,
+void TestPanel::onProcessStarted(const QString &command,
+                                 const QStringList &args,
                                  const QString &workingDirectory) {
   m_lastRunCommand = command;
   m_lastRunArgs = args;
@@ -1051,7 +1050,6 @@ void TestPanel::onContextMenu(const QPoint &pos) {
     menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
   }
 
-  // Detail child items have their own role; skip the context menu for them
   if (item->data(0, IsDetailItemRole).toBool())
     return;
 
@@ -1059,7 +1057,6 @@ void TestPanel::onContextMenu(const QPoint &pos) {
   QString testName = item->text(0);
   QString filePath = item->data(0, FilePathRole).toString();
 
-  // Distinguish real suite items from test items that have detail children
   bool isSuite = item->data(0, IsSuiteRole).toBool();
 
   if (isSuite) {
@@ -1167,8 +1164,8 @@ void TestPanel::updateRunningStatusLabel() {
   if (!m_latestStdoutLine.isEmpty()) {
     QString display = m_latestStdoutLine;
     if (display.length() > kMaxLen)
-      display = display.left(kMaxLen) + QChar(0x2026); // "…"
-    label += QString(QChar(0x20)) + QChar(0x2502) + QChar(0x20) + display; // " │ "
+      display = display.left(kMaxLen) + QChar(0x2026);
+    label += QString(QChar(0x20)) + QChar(0x2502) + QChar(0x20) + display;
   }
   m_statusLabel->setTextFormat(Qt::PlainText);
   m_statusLabel->setText(label);
@@ -1405,8 +1402,8 @@ QString TestPanel::buildRunDetailsText() const {
 
   if (!m_runManager || !m_runManager->isRunning()) {
     if (m_lastRunProducedResults) {
-      lines << tr("Result: %1 test item(s) reported.")
-                   .arg(m_testResults.size());
+      lines
+          << tr("Result: %1 test item(s) reported.").arg(m_testResults.size());
     } else {
       lines << tr("Result: No tests were reported for this run.");
     }
@@ -1433,9 +1430,8 @@ void TestPanel::setDetailsExpanded(bool expanded) {
     return;
 
   if (expanded) {
-    const int total = qMax(m_splitter->sizes().value(0) +
-                               m_splitter->sizes().value(1),
-                           1);
+    const int total =
+        qMax(m_splitter->sizes().value(0) + m_splitter->sizes().value(1), 1);
     const int desiredDetails = qMax(140, total / 5);
     if (sizes[1] < desiredDetails) {
       sizes[1] = desiredDetails;
@@ -1556,7 +1552,8 @@ bool TestPanel::resolveWorkspaceSourceLocation(QTreeWidgetItem *item,
                   QDirIterator::Subdirectories);
   while (it.hasNext()) {
     const QString candidatePath = it.next();
-    if (candidatePath.startsWith(buildRoot) || candidatePath.startsWith(gitRoot) ||
+    if (candidatePath.startsWith(buildRoot) ||
+        candidatePath.startsWith(gitRoot) ||
         candidatePath.startsWith(lightpadRoot)) {
       continue;
     }

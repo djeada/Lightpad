@@ -343,17 +343,17 @@ QString UIStyleHelper::comboBoxStyle(const Theme &theme) {
                  "  border-color: %6;"
                  "}"
                  "QComboBox:focus {"
-                  "  border-color: %6;"
-                  "}"
-                  "QComboBox::drop-down {"
+                 "  border-color: %6;"
+                 "}"
+                 "QComboBox::drop-down {"
                  "  border: none;"
                  "  width: 24px;"
-                  "}"
-                  "QComboBox QAbstractItemView {"
-                  "  background: %1;"
-                  "  color: %2;"
-                  "  border: 1px solid %3;"
-                  "  selection-background-color: %4;"
+                 "}"
+                 "QComboBox QAbstractItemView {"
+                 "  background: %1;"
+                 "  color: %2;"
+                 "  border: 1px solid %3;"
+                 "  selection-background-color: %4;"
                  "  selection-color: %7;"
                  "  padding: 4px;"
                  "  outline: none;"
@@ -377,7 +377,7 @@ QString UIStyleHelper::comboBoxStyle(const Theme &theme) {
                .name())
       .arg(qMax(3, radius(theme)))
       .arg((c.inputBorderFocus.isValid() ? c.inputBorderFocus
-                                          : theme.accentColor)
+                                         : theme.accentColor)
                .name())
       .arg(theme.backgroundColor.name());
 }

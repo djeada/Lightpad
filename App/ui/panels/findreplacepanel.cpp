@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QLabel>
@@ -26,7 +27,6 @@
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
-#include <QHBoxLayout>
 #include <memory>
 
 namespace {
@@ -132,10 +132,10 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
       m_vimCommandMode(false), position(-1), globalResultIndex(-1),
       resultsTree(nullptr), searchHistoryIndex(-1),
       refreshTimer(new QTimer(this)), searchStatusLabel(nullptr),
-      searchInProgress(false), searchExecuted(false),
-      m_localSearchRequestId(0), m_globalResultsPage(0),
-      m_paginationWidget(nullptr), m_pageInfoLabel(nullptr),
-      m_prevPageButton(nullptr), m_nextPageButton(nullptr) {
+      searchInProgress(false), searchExecuted(false), m_localSearchRequestId(0),
+      m_globalResultsPage(0), m_paginationWidget(nullptr),
+      m_pageInfoLabel(nullptr), m_prevPageButton(nullptr),
+      m_nextPageButton(nullptr) {
   ui->setupUi(this);
   configureSearchRows(ui);
 
@@ -1831,7 +1831,6 @@ void FindReplacePanel::navigateToGlobalResult(int index, bool emitNavigation) {
 
   const GlobalSearchResult &result = globalResults[index];
 
-  // Switch to the page containing this result if necessary
   const int targetPage = index / kGlobalResultsPageSize;
   if (targetPage != m_globalResultsPage) {
     m_globalResultsPage = targetPage;
@@ -2034,13 +2033,12 @@ void FindReplacePanel::updatePaginationControls() {
   const int pageEnd =
       qMin((m_globalResultsPage + 1) * kGlobalResultsPageSize, totalResults);
 
-  m_pageInfoLabel->setText(
-      tr("Page %1 of %2  (%3–%4 of %5 results)")
-          .arg(m_globalResultsPage + 1)
-          .arg(totalPages)
-          .arg(pageStart)
-          .arg(pageEnd)
-          .arg(totalResults));
+  m_pageInfoLabel->setText(tr("Page %1 of %2  (%3–%4 of %5 results)")
+                               .arg(m_globalResultsPage + 1)
+                               .arg(totalPages)
+                               .arg(pageStart)
+                               .arg(pageEnd)
+                               .arg(totalResults));
 
   m_prevPageButton->setEnabled(m_globalResultsPage > 0);
   m_nextPageButton->setEnabled(m_globalResultsPage < totalPages - 1);

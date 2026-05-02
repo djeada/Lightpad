@@ -39,8 +39,8 @@ private:
   void setupUi();
   void populateTemplateCombo();
   void reloadConfigurationList(const QString &selectedId = QString());
-  void loadConfigurationIntoForm(const TestConfiguration &cfg, bool isUserConfig,
-                                 bool isDraftConfig);
+  void loadConfigurationIntoForm(const TestConfiguration &cfg,
+                                 bool isUserConfig, bool isDraftConfig);
   void clearForm();
   TestConfiguration formConfiguration() const;
   QStringList parseArgs(QPlainTextEdit *edit) const;

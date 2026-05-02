@@ -2,17 +2,17 @@
 
 #include "themedmessagebox.h"
 
-#include <QGridLayout>
 #include <QFormLayout>
-#include <QHeaderView>
+#include <QGridLayout>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QListView>
 #include <QMenu>
 #include <QRegularExpression>
 #include <QSignalBlocker>
 #include <QSplitter>
-#include <QVBoxLayout>
 #include <QUuid>
+#include <QVBoxLayout>
 
 namespace {
 constexpr int ConfigIdRole = Qt::UserRole;
@@ -28,7 +28,7 @@ void configureFormLayout(QFormLayout *layout) {
   layout->setHorizontalSpacing(16);
   layout->setVerticalSpacing(12);
 }
-}
+} // namespace
 
 TestConfigurationDialog::TestConfigurationDialog(QWidget *parent,
                                                  const QString &initialConfigId)
@@ -76,7 +76,8 @@ void TestConfigurationDialog::setupUi() {
   m_removeConfigBtn = new QPushButton(tr("Remove"), leftPanel);
   m_addConfigBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   m_addTemplateBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-  m_duplicateConfigBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  m_duplicateConfigBtn->setSizePolicy(QSizePolicy::Expanding,
+                                      QSizePolicy::Fixed);
   m_removeConfigBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   connect(m_addConfigBtn, &QPushButton::clicked, this,
           &TestConfigurationDialog::onAddConfiguration);
@@ -90,7 +91,7 @@ void TestConfigurationDialog::setupUi() {
        TestConfigurationManager::instance().allTemplates()) {
     QAction *action = templateMenu->addAction(cfg.name);
     connect(action, &QAction::triggered, this,
-             [this, templateId = cfg.id]() { onAddFromTemplate(templateId); });
+            [this, templateId = cfg.id]() { onAddFromTemplate(templateId); });
   }
   m_addTemplateBtn->setMenu(templateMenu);
 
@@ -128,8 +129,8 @@ void TestConfigurationDialog::setupUi() {
   m_templateCombo->setMaxVisibleItems(12);
   basicLayout->addRow(tr("Base template:"), m_templateCombo);
 
-  m_defaultCheck = new QCheckBox(tr("Use as default test configuration"),
-                                 basicGroup);
+  m_defaultCheck =
+      new QCheckBox(tr("Use as default test configuration"), basicGroup);
   basicLayout->addRow(QString(), m_defaultCheck);
 
   m_languageEdit = new QLineEdit(basicGroup);
@@ -178,8 +179,7 @@ void TestConfigurationDialog::setupUi() {
 
   m_discoveryDirectoryEdit = new QLineEdit(executionGroup);
   m_discoveryDirectoryEdit->setPlaceholderText(tr("Optional discovery root"));
-  executionLayout->addRow(tr("Discovery directory:"),
-                          m_discoveryDirectoryEdit);
+  executionLayout->addRow(tr("Discovery directory:"), m_discoveryDirectoryEdit);
 
   rightLayout->addWidget(executionGroup);
 
@@ -196,15 +196,13 @@ void TestConfigurationDialog::setupUi() {
   m_runSingleTestArgsEdit = new QPlainTextEdit(overrideGroup);
   m_runSingleTestArgsEdit->setMinimumHeight(70);
   m_runSingleTestArgsEdit->setMaximumHeight(92);
-  m_runSingleTestArgsEdit->setPlaceholderText(
-      tr("Override args for Run Test"));
+  m_runSingleTestArgsEdit->setPlaceholderText(tr("Override args for Run Test"));
   overrideLayout->addRow(tr("Run test args:"), m_runSingleTestArgsEdit);
 
   m_runFailedArgsEdit = new QPlainTextEdit(overrideGroup);
   m_runFailedArgsEdit->setMinimumHeight(70);
   m_runFailedArgsEdit->setMaximumHeight(92);
-  m_runFailedArgsEdit->setPlaceholderText(
-      tr("Override args for Run Failed"));
+  m_runFailedArgsEdit->setPlaceholderText(tr("Override args for Run Failed"));
   overrideLayout->addRow(tr("Run failed args:"), m_runFailedArgsEdit);
 
   m_runSuiteArgsEdit = new QPlainTextEdit(overrideGroup);
@@ -289,11 +287,13 @@ void TestConfigurationDialog::populateTemplateCombo() {
   }
 }
 
-void TestConfigurationDialog::reloadConfigurationList(const QString &selectedId) {
+void TestConfigurationDialog::reloadConfigurationList(
+    const QString &selectedId) {
   QSignalBlocker blocker(m_configList);
   m_configList->clear();
 
-  const TestConfigurationManager &manager = TestConfigurationManager::instance();
+  const TestConfigurationManager &manager =
+      TestConfigurationManager::instance();
   const QList<TestConfiguration> configs = manager.allConfigurations();
   int selectedRow = -1;
   for (int i = 0; i < configs.size(); ++i) {
@@ -348,7 +348,8 @@ void TestConfigurationDialog::loadConfigurationIntoForm(
   {
     QSignalBlocker blocker(m_defaultCheck);
     m_defaultCheck->setChecked(
-        TestConfigurationManager::instance().defaultConfigurationId() == cfg.id);
+        TestConfigurationManager::instance().defaultConfigurationId() ==
+        cfg.id);
   }
 
   m_languageEdit->setText(cfg.language);
@@ -446,9 +447,8 @@ TestConfiguration TestConfigurationDialog::formConfiguration() const {
 
 QStringList TestConfigurationDialog::parseArgs(QPlainTextEdit *edit) const {
   QStringList args;
-  const QStringList lines =
-      edit->toPlainText().split(QRegularExpression("[\r\n]+"),
-                                Qt::SkipEmptyParts);
+  const QStringList lines = edit->toPlainText().split(
+      QRegularExpression("[\r\n]+"), Qt::SkipEmptyParts);
   for (const QString &line : lines) {
     const QString trimmed = line.trimmed();
     if (!trimmed.isEmpty())
@@ -462,7 +462,8 @@ void TestConfigurationDialog::setArgs(QPlainTextEdit *edit,
   edit->setPlainText(args.join("\n"));
 }
 
-QStringList TestConfigurationDialog::parseExtensions(const QString &text) const {
+QStringList
+TestConfigurationDialog::parseExtensions(const QString &text) const {
   QStringList result;
   const QStringList parts =
       text.split(QRegularExpression("[,\\s]+"), Qt::SkipEmptyParts);
@@ -478,8 +479,9 @@ QStringList TestConfigurationDialog::parseExtensions(const QString &text) const 
 
 QString TestConfigurationDialog::uniqueName(const QString &baseName,
                                             const QString &excludeId) const {
-  QString candidate = baseName.trimmed().isEmpty() ? tr("New Test Configuration")
-                                                   : baseName.trimmed();
+  QString candidate = baseName.trimmed().isEmpty()
+                          ? tr("New Test Configuration")
+                          : baseName.trimmed();
   QStringList existingNames;
   for (const TestConfiguration &cfg :
        TestConfigurationManager::instance().allConfigurations()) {
@@ -503,9 +505,9 @@ void TestConfigurationDialog::setOriginText() {
         tr("Draft workspace configuration. Save to persist it to "
            ".lightpad/test/config.json."));
   } else if (m_currentIsUserConfig) {
-    if (!m_currentConfigId.isEmpty() &&
-        TestConfigurationManager::instance().templateById(m_currentConfigId)
-            .isValid()) {
+    if (!m_currentConfigId.isEmpty() && TestConfigurationManager::instance()
+                                            .templateById(m_currentConfigId)
+                                            .isValid()) {
       m_originLabel->setText(tr("Workspace override for a built-in template."));
     } else {
       m_originLabel->setText(
@@ -519,7 +521,8 @@ void TestConfigurationDialog::setOriginText() {
     m_originLabel->clear();
   }
 
-  m_removeConfigBtn->setEnabled(m_currentIsUserConfig && !m_currentIsDraftConfig);
+  m_removeConfigBtn->setEnabled(m_currentIsUserConfig &&
+                                !m_currentIsDraftConfig);
 }
 
 bool TestConfigurationDialog::currentSelectionIsUserConfiguration() const {
@@ -602,9 +605,10 @@ void TestConfigurationDialog::onAddEnvVar() {
 }
 
 void TestConfigurationDialog::onRemoveEnvVar() {
-  const QModelIndexList rows = m_envTable->selectionModel()
-                                   ? m_envTable->selectionModel()->selectedRows()
-                                   : QModelIndexList();
+  const QModelIndexList rows =
+      m_envTable->selectionModel()
+          ? m_envTable->selectionModel()->selectedRows()
+          : QModelIndexList();
   if (rows.isEmpty()) {
     if (m_envTable->currentRow() >= 0)
       m_envTable->removeRow(m_envTable->currentRow());
@@ -629,9 +633,9 @@ void TestConfigurationDialog::onSave() {
   }
 
   TestConfigurationManager &manager = TestConfigurationManager::instance();
-  const bool shouldPersistConfig =
-      m_currentIsDraftConfig || m_currentIsUserConfig ||
-      cfg.toJson() != m_loadedConfig.toJson();
+  const bool shouldPersistConfig = m_currentIsDraftConfig ||
+                                   m_currentIsUserConfig ||
+                                   cfg.toJson() != m_loadedConfig.toJson();
   if (shouldPersistConfig)
     manager.addConfiguration(cfg);
 

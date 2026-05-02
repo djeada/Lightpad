@@ -28,8 +28,6 @@ inline void configureToolPanelDock(QDockWidget *dock) {
   dock->setAllowedAreas(toolPanelAllowedAreas());
   dock->setFeatures(toolPanelFeatures());
 
-  // Ensure a resizing frame is available when the dock is in "free"
-  // (floating) state by switching to a standard resizable window frame.
   QObject::connect(
       dock, &QDockWidget::topLevelChanged, dock, [dock](bool topLevel) {
         if (topLevel) {
