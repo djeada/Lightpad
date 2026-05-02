@@ -136,6 +136,7 @@ private:
   void setupContextMenu();
   void appendOutput(const QString &text, bool isError = false);
   void appendPrompt();
+  static bool looksLikeInputPrompt(const QString &text);
   QString getShellCommand() const;
   QStringList getShellArguments() const;
   void scrollToBottom();
@@ -166,7 +167,7 @@ private:
   void removeInputText(bool backwards);
   QString takePendingInput();
   QString getLinkAtPosition(const QPoint &pos);
-  QString stripAnsiEscapeCodes(const QString &text);
+  static QString stripAnsiEscapeCodes(const QString &text);
   void appendAnsiText(const QString &text, QTextCursor &cursor);
 
   Ui::Terminal *ui;
@@ -222,6 +223,10 @@ private:
   bool m_runInputIndicatorActive;
   bool m_runInputCursorVisible;
   static const int kInputIndicatorBlinkMs = 500;
+
+  QTimer *m_inputIndicatorDebounceTimer;
+  QString m_lastRunProcessOutput;
+  static const int kInputIndicatorDebounceMs = 80;
 };
 
 #endif
