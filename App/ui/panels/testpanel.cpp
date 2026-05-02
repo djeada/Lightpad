@@ -139,6 +139,8 @@ TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
           &TestPanel::onRunStarted);
   connect(m_runManager, &TestRunManager::runFinished, this,
           &TestPanel::onRunFinished);
+  connect(m_runManager, &TestRunManager::outputLine, this,
+          &TestPanel::onOutputLine);
 
   refreshConfigurations();
 }
@@ -716,6 +718,7 @@ void TestPanel::onRunStarted() {
   m_testItems.clear();
   m_testResults.clear();
   m_passedCount = m_failedCount = m_skippedCount = m_erroredCount = 0;
+  m_latestStdoutLine.clear();
 
   m_stopAction->setEnabled(true);
   m_runAllAction->setEnabled(false);
@@ -723,7 +726,7 @@ void TestPanel::onRunStarted() {
   m_progressBar->setRange(0, 0);
   m_progressBar->setVisible(true);
   m_emptyStateLabel->setVisible(false);
-  m_statusLabel->setText(tr("Running tests..."));
+  updateRunningStatusLabel();
 }
 
 void TestPanel::onRunFinished(int passed, int failed, int skipped,
@@ -741,6 +744,16 @@ void TestPanel::onRunFinished(int passed, int failed, int skipped,
   updateStatusLabel();
   updateEmptyState();
   emit countsChanged(passed, failed, skipped, errored);
+}
+
+void TestPanel::onOutputLine(const QString &line, bool isError) {
+  if (isError)
+    return;
+  const QString trimmed = line.trimmed();
+  if (trimmed.isEmpty())
+    return;
+  m_latestStdoutLine = trimmed;
+  updateRunningStatusLabel();
 }
 
 void TestPanel::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
@@ -898,6 +911,19 @@ void TestPanel::updateStatusLabel() {
                      .arg(total);
   m_statusLabel->setTextFormat(Qt::RichText);
   m_statusLabel->setText(text);
+}
+
+void TestPanel::updateRunningStatusLabel() {
+  constexpr int kMaxLen = 120;
+  QString label = tr("Running tests...");
+  if (!m_latestStdoutLine.isEmpty()) {
+    QString display = m_latestStdoutLine;
+    if (display.length() > kMaxLen)
+      display = display.left(kMaxLen) + QChar(0x2026); // "…"
+    label += QString(QChar(0x20)) + QChar(0x2502) + QChar(0x20) + display; // " │ "
+  }
+  m_statusLabel->setTextFormat(Qt::PlainText);
+  m_statusLabel->setText(label);
 }
 
 void TestPanel::updateTreeItemIcon(QTreeWidgetItem *item, TestStatus status) {
