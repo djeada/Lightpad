@@ -52,6 +52,9 @@ private slots:
   void testEmptyStateHiddenAfterDiscovery();
   void testSearchFilterByName();
 
+  void testDoubleClickEmitsLocationClicked();
+  void testDoubleClickPreservesDiscoveryFilePath();
+
 private:
   QTemporaryDir m_tempDir;
   QTreeWidget *findTree(TestPanel &panel);
@@ -613,6 +616,89 @@ void TestTestPanel::testSearchFilterByName() {
   searchEdit->setText("");
   QCOMPARE(tree->topLevelItem(0)->isHidden(), false);
   QCOMPARE(tree->topLevelItem(1)->isHidden(), false);
+}
+
+void TestTestPanel::testDoubleClickEmitsLocationClicked() {
+  TestPanel panel;
+  QSignalSpy spy(&panel, &TestPanel::locationClicked);
+
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  emit runMgr->runStarted();
+
+  TestResult result;
+  result.id = "test1";
+  result.name = "test_example";
+  result.suite = "";
+  result.status = TestStatus::Passed;
+  result.filePath = "/path/to/test.cpp";
+  result.line = 42;
+  emit runMgr->testFinished(result);
+
+  QTreeWidget *tree = findTree(panel);
+  QVERIFY(tree != nullptr);
+  QTreeWidgetItem *item = tree->topLevelItem(0);
+  QVERIFY(item != nullptr);
+
+  emit tree->itemDoubleClicked(item, 0);
+
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.at(0).at(0).toString(), QString("/path/to/test.cpp"));
+  QCOMPARE(spy.at(0).at(1).toInt(), 42);
+}
+
+void TestTestPanel::testDoubleClickPreservesDiscoveryFilePath() {
+  TestPanel panel;
+  QSignalSpy spy(&panel, &TestPanel::locationClicked);
+
+  class MockDiscoveryAdapter : public ITestDiscoveryAdapter {
+  public:
+    QString adapterId() const override { return "mock"; }
+    void discover(const QString &) override {
+      QList<DiscoveredTest> tests;
+      DiscoveredTest dt;
+      dt.name = "test_example";
+      dt.id = "test1";
+      dt.suite = "";
+      dt.filePath = "/discovered/path/test.cpp";
+      dt.line = 10;
+      tests.append(dt);
+      emit discoveryFinished(tests);
+    }
+    void cancel() override {}
+  };
+
+  MockDiscoveryAdapter mockAdapter;
+  panel.setDiscoveryAdapter(&mockAdapter);
+  panel.setWorkspaceFolder(m_tempDir.path());
+  mockAdapter.discover(m_tempDir.path());
+
+  // Run the test without file path info (runner doesn't report source location)
+  TestRunManager *runMgr = findRunManager(panel);
+  QVERIFY(runMgr != nullptr);
+
+  emit runMgr->runStarted();
+
+  TestResult result;
+  result.id = "test1";
+  result.name = "test_example";
+  result.suite = "";
+  result.status = TestStatus::Passed;
+  // filePath intentionally left empty — runner does not report source location
+  emit runMgr->testFinished(result);
+
+  QTreeWidget *tree = findTree(panel);
+  QVERIFY(tree != nullptr);
+  QTreeWidgetItem *item = tree->topLevelItem(0);
+  QVERIFY(item != nullptr);
+
+  emit tree->itemDoubleClicked(item, 0);
+
+  // The discovery file path must have been preserved
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.at(0).at(0).toString(), QString("/discovered/path/test.cpp"));
+  QCOMPARE(spy.at(0).at(1).toInt(), 10);
 }
 
 QTEST_MAIN(TestTestPanel)

@@ -126,6 +126,7 @@ private:
   QMap<QString, QTreeWidgetItem *> m_suiteItems;
   QMap<QString, QTreeWidgetItem *> m_testItems;
   QMap<QString, TestResult> m_testResults;
+  QMap<QString, DiscoveredTest> m_discoveredTests;
 };
 
 #endif
