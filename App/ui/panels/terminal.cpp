@@ -42,6 +42,17 @@ QString rgba(const QColor &color, qreal alpha) {
       .arg(c.blue())
       .arg(qBound(0.0, alpha, 1.0), 0, 'f', 3);
 }
+
+// Prompt-detection patterns used by Terminal::looksLikeInputPrompt().
+// Declared here so they are initialised once at file scope.
+const QRegularExpression kYesNoPromptPattern(
+    R"(\[y/n\]|\[Y/n\]|\[n/Y\]|\(yes/no\)|\(y/n\))",
+    QRegularExpression::CaseInsensitiveOption);
+
+const QLatin1String kPromptSuffixes[] = {
+    QLatin1String("? "),   QLatin1String(": "),  QLatin1String("> "),
+    QLatin1String("$ "),   QLatin1String("# "),  QLatin1String(">>> "),
+    QLatin1String("... ")};
 } // namespace
 
 Terminal::Terminal(QWidget *parent)
@@ -61,7 +72,7 @@ Terminal::Terminal(QWidget *parent)
       m_contextMenu(nullptr), m_copyAction(nullptr), m_stopAction(nullptr),
       m_runInputHistoryIndex(0), m_runInputIndicator(nullptr),
       m_runInputIndicatorTimer(nullptr), m_runInputIndicatorActive(false),
-      m_runInputCursorVisible(false) {
+      m_runInputCursorVisible(false), m_inputIndicatorDebounceTimer(nullptr) {
   ui->setupUi(this);
 
   m_shellProfile = ShellProfileManager::instance().defaultProfile();
@@ -906,7 +917,9 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
   connect(m_runProcess, &QProcess::readyReadStandardError, this,
           &Terminal::onRunProcessReadyReadStderr);
   connect(m_runProcess, &QProcess::started, this, [this]() {
-    setRunInputIndicatorActive(true);
+    // Do not show "Input ready" merely because the process started.  The
+    // indicator will be activated later if and when the process actually prints
+    // a prompt (detected by onRunProcessReadyReadStdout via looksLikeInputPrompt).
     ui->textEdit->setFocus(Qt::OtherFocusReason);
     emit processStarted();
   });
@@ -1004,6 +1017,11 @@ void Terminal::stopProcess() {
 void Terminal::cleanupRunProcess(bool restartShell) {
   setRunInputIndicatorActive(false);
 
+  if (m_inputIndicatorDebounceTimer) {
+    m_inputIndicatorDebounceTimer->stop();
+  }
+  m_lastRunProcessOutput.clear();
+
   if (m_runProcess) {
 
     disconnect(m_runProcess, nullptr, this, nullptr);
@@ -1090,6 +1108,15 @@ void Terminal::setupInputIndicator() {
     m_runInputCursorVisible = !m_runInputCursorVisible;
     updateRunInputIndicator();
   });
+
+  m_inputIndicatorDebounceTimer = new QTimer(this);
+  m_inputIndicatorDebounceTimer->setSingleShot(true);
+  m_inputIndicatorDebounceTimer->setInterval(kInputIndicatorDebounceMs);
+  connect(m_inputIndicatorDebounceTimer, &QTimer::timeout, this, [this]() {
+    if (m_runProcess && m_runProcess->state() != QProcess::NotRunning) {
+      setRunInputIndicatorActive(looksLikeInputPrompt(m_lastRunProcessOutput));
+    }
+  });
 }
 
 void Terminal::setRunInputIndicatorActive(bool active) {
@@ -1124,12 +1151,69 @@ void Terminal::updateRunInputIndicator() {
   m_runInputIndicator->setText(tr("Input ready %1").arg(cursor));
 }
 
+bool Terminal::looksLikeInputPrompt(const QString &text) {
+  if (text.isEmpty()) {
+    return false;
+  }
+
+  // Strip ANSI escape codes so prompt-pattern matching is not confused by
+  // color or cursor-positioning sequences that programs embed in their prompts.
+  const QString stripped = stripAnsiEscapeCodes(text);
+  if (stripped.isEmpty()) {
+    return false;
+  }
+
+  // Most reliable indicator: the output chunk does not end with a newline.
+  // Programs waiting for input (e.g. Python's input(), shell read) print their
+  // prompt without a trailing newline so the cursor stays on the same line.
+  if (!stripped.endsWith('\n') && !stripped.endsWith('\r')) {
+    return true;
+  }
+
+  // For output that does end with a newline, scan the last non-empty line for
+  // well-known prompt patterns.  Use the untrimmed line for suffix matching so
+  // that trailing spaces (e.g. "Enter value: ") are preserved.
+  const QStringList lines = stripped.split('\n');
+  QString lastLine;
+  for (int i = lines.size() - 1; i >= 0; --i) {
+    const QString &candidate = lines.at(i);
+    if (!candidate.trimmed().isEmpty()) {
+      lastLine = candidate; // keep original content for suffix matching
+      break;
+    }
+  }
+
+  if (lastLine.isEmpty()) {
+    return false;
+  }
+
+  // Yes/no confirmation prompts: [y/n], [Y/n], (yes/no), (y/n), etc.
+  if (kYesNoPromptPattern.match(lastLine).hasMatch()) {
+    return true;
+  }
+
+  // Common prompt-character suffixes that appear at the end of a prompt line.
+  for (const QLatin1String &suffix : kPromptSuffixes) {
+    if (lastLine.endsWith(suffix)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void Terminal::onRunProcessReadyReadStdout() {
   if (m_runProcess) {
     QString output = QString::fromUtf8(m_runProcess->readAllStandardOutput());
     QString pending = takePendingInput();
-    if (m_runProcess->state() != QProcess::NotRunning) {
-      setRunInputIndicatorActive(true);
+    // Schedule a debounced check: only show "Input ready" after output has
+    // stopped arriving for kInputIndicatorDebounceMs and the last chunk looks
+    // like a prompt.  This eliminates false positives caused by rapid bursts of
+    // non-prompt output where some intermediate chunk lacks a trailing newline.
+    if (m_runProcess->state() != QProcess::NotRunning &&
+        m_inputIndicatorDebounceTimer) {
+      m_lastRunProcessOutput = output;
+      m_inputIndicatorDebounceTimer->start();
     }
     appendOutput(output);
     if (!pending.isEmpty()) {
@@ -1142,9 +1226,8 @@ void Terminal::onRunProcessReadyReadStderr() {
   if (m_runProcess) {
     QString output = QString::fromUtf8(m_runProcess->readAllStandardError());
     QString pending = takePendingInput();
-    if (m_runProcess->state() != QProcess::NotRunning) {
-      setRunInputIndicatorActive(true);
-    }
+    // Stderr is diagnostic/error output and is not a user-input prompt.
+    // Do not activate the input indicator for stderr data.
     appendOutput(output, true);
     if (!pending.isEmpty()) {
       insertInputText(pending);
