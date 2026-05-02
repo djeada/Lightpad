@@ -85,7 +85,6 @@ void JunitXmlParser::finish() {
           result.suite = currentSuite;
         result.id = result.suite + "::" + result.name;
 
-        // GTest XML includes source file and line on every <testcase>
         QString file = xml.attributes().value("file").toString();
         if (!file.isEmpty())
           result.filePath = file;
@@ -386,7 +385,8 @@ void CtestParser::parseLine(const QString &line) {
     else
       result.status = TestStatus::Failed;
 
-    result.durationMs = static_cast<int>(match.captured(4).toDouble() * 1000);
+    if (result.durationMs < 0)
+      result.durationMs = static_cast<int>(match.captured(4).toDouble() * 1000);
     result.stdoutOutput = result.stdoutOutput.trimmed();
     if (m_currentTestId == testId)
       m_currentTestId.clear();
@@ -422,6 +422,13 @@ void CtestParser::appendOutput(const QString &testId, const QString &line) {
   auto it = m_activeTests.find(testId);
   if (it == m_activeTests.end())
     return;
+
+  static QRegularExpression gtestResultRe(
+      R"(^\[\s*(OK|FAILED|SKIPPED)\s*\]\s+(.+?)\s+\((\d+)\s+ms\)\s*$)");
+  const QRegularExpressionMatch gtestMatch =
+      gtestResultRe.match(line.trimmed());
+  if (gtestMatch.hasMatch())
+    it->durationMs = gtestMatch.captured(3).toInt();
 
   if (!it->stdoutOutput.isEmpty())
     it->stdoutOutput += "\n";

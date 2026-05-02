@@ -22,6 +22,7 @@ private slots:
   void testParseTemplateFromJson();
   void testCommonCppTestTemplatesPresent();
   void testMakefileTemplatesPresent();
+  void testBuildCommandForMakefile();
   void testGetTemplatesForExtension();
   void testGetTemplateById();
   void testAssignmentPersistence();
@@ -153,6 +154,37 @@ void TestRunTemplateManager::testMakefileTemplatesPresent() {
   QList<RunTemplate> makefileTemplates =
       manager.getTemplatesForExtension("Makefile");
   QVERIFY(makefileTemplates.size() >= 7);
+}
+
+void TestRunTemplateManager::testBuildCommandForMakefile() {
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+  manager.setWorkspaceFolder(m_tempDir.path());
+
+  QString makefilePath = m_tempDir.path() + "/Makefile";
+  QFile file(makefilePath);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("help:\n\t@echo help\n");
+  file.close();
+
+  QList<RunTemplate> templates = manager.getTemplatesForFilePath(makefilePath);
+  QVERIFY(!templates.isEmpty());
+  QCOMPARE(templates.first().id, QString("make"));
+
+  QPair<QString, QStringList> cmd = manager.buildCommand(makefilePath);
+  QCOMPARE(cmd.first, QString("make"));
+  QVERIFY(cmd.second.isEmpty());
+
+  FileTemplateAssignment assignment;
+  assignment.templateId = "make";
+  assignment.customArgs = QStringList() << "arena";
+  QVERIFY(manager.assignTemplateToFile(makefilePath, assignment));
+
+  cmd = manager.buildCommand(makefilePath);
+  QCOMPARE(cmd.first, QString("make"));
+  QCOMPARE(cmd.second, QStringList() << "arena");
+
+  QVERIFY(manager.removeAssignment(makefilePath));
 }
 
 void TestRunTemplateManager::testGetTemplatesForExtension() {

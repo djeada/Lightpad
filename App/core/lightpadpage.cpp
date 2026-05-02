@@ -796,9 +796,7 @@ bool LightpadPage::hasRunTemplate() const {
     return true;
   }
 
-  QFileInfo fileInfo(filePath);
-  QList<RunTemplate> templates =
-      manager.getTemplatesForExtension(fileInfo.suffix());
+  QList<RunTemplate> templates = manager.getTemplatesForFilePath(filePath);
   return !templates.isEmpty();
 }
 
@@ -814,9 +812,7 @@ QString LightpadPage::getAssignedTemplateId() const {
     return assignment.templateId;
   }
 
-  QFileInfo fileInfo(filePath);
-  QList<RunTemplate> templates =
-      manager.getTemplatesForExtension(fileInfo.suffix());
+  QList<RunTemplate> templates = manager.getTemplatesForFilePath(filePath);
   if (!templates.isEmpty()) {
     return templates.first().id;
   }

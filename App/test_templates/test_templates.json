@@ -28,15 +28,15 @@
       "language": "C++",
       "extensions": ["cpp", "cc", "cxx", "h", "hpp"],
       "command": "bash",
-      "args": ["-lc", "cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\" && cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V"],
+      "args": ["-lc", "(test -f \"${workspaceFolder}/build/CMakeCache.txt\" || cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\") && cmake --build \"${workspaceFolder}/build\" -j2 && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V"],
       "runSingleTest": {
-        "args": ["-lc", "cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '^${testName}$'"]
+        "args": ["-lc", "(test -f \"${workspaceFolder}/build/CMakeCache.txt\" || cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\") && cmake --build \"${workspaceFolder}/build\" -j2 && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '^${testName}$'"]
       },
       "runFailed": {
-        "args": ["-lc", "cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '${testName}'"]
+        "args": ["-lc", "(test -f \"${workspaceFolder}/build/CMakeCache.txt\" || cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\") && cmake --build \"${workspaceFolder}/build\" -j2 && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '${testName}'"]
       },
       "runSuite": {
-        "args": ["-lc", "cmake --build \"${workspaceFolder}/build\" -j && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '^${testName}'"]
+        "args": ["-lc", "(test -f \"${workspaceFolder}/build/CMakeCache.txt\" || cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\") && cmake --build \"${workspaceFolder}/build\" -j2 && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '^${testName}'"]
       },
       "workingDirectory": "${workspaceFolder}",
       "discoveryDirectory": "${workspaceFolder}/build",

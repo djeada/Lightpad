@@ -236,6 +236,7 @@ private:
   class QLabel *m_gitBranchLabel;
   class QLabel *m_gitSyncLabel;
   class QLabel *m_gitDirtyLabel;
+  QMenu *m_testTargetMenu;
   QMenu *m_debugTargetMenu;
   QTimer m_gitStatusBarTimer;
   DebugPanel *debugPanel;
@@ -293,6 +294,7 @@ private:
   void openConfigurationDialog();
   void openFormatConfigurationDialog();
   void openDebugConfigurationDialog();
+  void openTestConfigurationDialog();
   void openShortcutsDialog();
   TerminalTabWidget *ensureTerminalWidget();
   void showTerminalPanel();
@@ -355,6 +357,8 @@ private:
   void ensureTestPanel();
   void trackDockLayoutChanges(QDockWidget *dock);
   void tabifyBottomDock(QDockWidget *dock);
+  void syncViewToggleActionStates();
+  bool isCurrentMinimapVisible() const;
   void ensureStatusLabels();
   void updatePythonEnvironmentLabel();
   void updateSourceControlDockTitle(const QString &repoRoot, bool isRepo);
@@ -376,6 +380,10 @@ private:
   void hideVimCommandPanel();
   void setupCompletionSystem();
   void noScriptAssignedWarning();
+  void runTestsForCurrentContext();
+  void rebuildTestTargetMenu();
+  void refreshTestTargetButton();
+  QString selectedTestConfigurationId() const;
   void rebuildDebugTargetMenu();
   void refreshDebugTargetButton();
   QString selectedDebugConfigurationName() const;

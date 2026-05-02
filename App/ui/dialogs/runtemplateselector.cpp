@@ -305,9 +305,8 @@ void RunTemplateSelector::loadTemplates() {
     m_languageCombo->addItem(lang);
   }
 
-  QFileInfo fileInfo(m_filePath);
-  QString ext = fileInfo.suffix().toLower();
-  QList<RunTemplate> matchingTemplates = manager.getTemplatesForExtension(ext);
+  QList<RunTemplate> matchingTemplates =
+      manager.getTemplatesForFilePath(m_filePath);
   if (!matchingTemplates.isEmpty()) {
     QString matchedLanguage = matchingTemplates.first().language;
     int idx = m_languageCombo->findText(matchedLanguage);

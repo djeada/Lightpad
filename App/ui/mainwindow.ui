@@ -135,7 +135,14 @@ qproperty-icon: url(":/resources/icons/run.png");
          </widget>
         </item>
         <item>
-         <widget class="QToolButton" name="debugButton">
+         <widget class="QToolButton" name="testButton">
+          <property name="text">
+           <string>...</string>
+          </property>
+         </widget>
+        </item>
+         <item>
+          <widget class="QToolButton" name="debugButton">
           <property name="styleSheet">
            <string notr="true">QToolButton {
 qproperty-icon: url(":/resources/icons/debug.png");
@@ -380,10 +387,18 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
      </property>
      <addaction name="actionRun_file_name"/>
      <addaction name="actionEdit_Configurations"/>
-    </widget>
-    <widget class="QMenu" name="menuDebug">
+     </widget>
+    <widget class="QMenu" name="menuTest">
      <property name="title">
-      <string>Debug</string>
+      <string>Test</string>
+     </property>
+     <addaction name="actionToggle_Test_Panel"/>
+     <addaction name="separator"/>
+     <addaction name="actionEdit_Test_Configurations"/>
+    </widget>
+     <widget class="QMenu" name="menuDebug">
+      <property name="title">
+       <string>Debug</string>
      </property>
      <addaction name="actionDebug_file_name"/>
      <addaction name="actionStart_Debug_Configuration"/>
@@ -398,12 +413,13 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
-   <addaction name="menuView"/>
-   <addaction name="menuSearch"/>
-   <addaction name="menuRun"/>
-    <addaction name="menuDebug"/>
-    <addaction name="menuFormat"/>
-    <addaction name="menuHelp"/>
+    <addaction name="menuView"/>
+    <addaction name="menuSearch"/>
+    <addaction name="menuRun"/>
+    <addaction name="menuTest"/>
+     <addaction name="menuDebug"/>
+     <addaction name="menuFormat"/>
+     <addaction name="menuHelp"/>
    </widget>
   <action name="actionToggle_Undo">
    <property name="text">
@@ -566,6 +582,11 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   <action name="actionEdit_Configurations">
    <property name="text">
     <string>Edit Configurations</string>
+   </property>
+  </action>
+  <action name="actionEdit_Test_Configurations">
+   <property name="text">
+    <string>Edit Test Configurations</string>
    </property>
   </action>
   <action name="actionEdit_Debug_Configurations">

@@ -174,6 +174,7 @@ set(project_headers
     ui/dialogs/runconfigurations.h
     ui/dialogs/runtemplateselector.h
     ui/dialogs/debugconfigurationdialog.h
+    ui/dialogs/testconfigurationdialog.h
     ui/dialogs/formattemplateselector.h
     ui/dialogs/shortcuts.h
     ui/dockutils.h
@@ -337,6 +338,7 @@ set(project_sources
     ui/dialogs/runconfigurations.cpp
     ui/dialogs/runtemplateselector.cpp
     ui/dialogs/debugconfigurationdialog.cpp
+    ui/dialogs/testconfigurationdialog.cpp
     ui/dialogs/formattemplateselector.cpp
     ui/dialogs/shortcuts.cpp
     ui/panels/terminal.cpp

@@ -22,6 +22,9 @@ public:
                      const QString &filePath = QString());
   void runFailed(const TestConfiguration &config,
                  const QString &workspaceFolder);
+  void runPattern(const TestConfiguration &config,
+                  const QString &workspaceFolder, const QString &pattern,
+                  const QString &filePath = QString());
   void runSuite(const TestConfiguration &config, const QString &workspaceFolder,
                 const QString &suiteName);
   void stop();
@@ -37,6 +40,9 @@ signals:
   void testSuiteStarted(const QString &name);
   void testSuiteFinished(const QString &name, int passed, int failed);
   void outputLine(const QString &line, bool isError);
+  void processStarted(const QString &command, const QStringList &args,
+                      const QString &workingDirectory);
+  void processFinished(int exitCode, bool normalExit);
   void runStarted();
   void runFinished(int passed, int failed, int skipped, int errored);
 
@@ -46,7 +52,7 @@ private slots:
   void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
 private:
-  enum class RunMode { All, File, SingleTest, Failed, Suite };
+  enum class RunMode { All, File, SingleTest, Failed, Pattern, Suite };
 
   void startProcess(const TestConfiguration &config,
                     const QString &workspaceFolder, const QString &filePath,

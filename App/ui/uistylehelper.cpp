@@ -335,7 +335,8 @@ QString UIStyleHelper::comboBoxStyle(const Theme &theme) {
                  "  background: %1;"
                  "  color: %2;"
                  "  border: 1px solid %3;"
-                 "  padding: 2px 8px;"
+                 "  padding: 6px 10px;"
+                 "  min-height: 20px;"
                  "  border-radius: %5px;"
                  "}"
                  "QComboBox:hover {"
@@ -346,12 +347,26 @@ QString UIStyleHelper::comboBoxStyle(const Theme &theme) {
                  "}"
                  "QComboBox::drop-down {"
                  "  border: none;"
+                 "  width: 24px;"
                  "}"
                  "QComboBox QAbstractItemView {"
                  "  background: %1;"
                  "  color: %2;"
                  "  border: 1px solid %3;"
                  "  selection-background-color: %4;"
+                 "  selection-color: %7;"
+                 "  padding: 4px;"
+                 "  outline: none;"
+                 "}"
+                 "QComboBox QAbstractItemView::item {"
+                 "  min-height: 22px;"
+                 "  padding: 6px 10px;"
+                 "  color: %2;"
+                 "  background: %1;"
+                 "}"
+                 "QComboBox QAbstractItemView::item:selected {"
+                 "  background: %4;"
+                 "  color: %7;"
                  "}")
       .arg(chrome(theme,
                   c.inputBg.isValid() ? c.inputBg : theme.surfaceAltColor))
@@ -363,7 +378,8 @@ QString UIStyleHelper::comboBoxStyle(const Theme &theme) {
       .arg(qMax(3, radius(theme)))
       .arg((c.inputBorderFocus.isValid() ? c.inputBorderFocus
                                          : theme.accentColor)
-               .name());
+               .name())
+      .arg(theme.backgroundColor.name());
 }
 
 QString UIStyleHelper::checkBoxStyle(const Theme &theme) {

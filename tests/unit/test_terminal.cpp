@@ -618,52 +618,42 @@ void TestTerminal::testRunInputIndicatorVisibility() {
 }
 
 void TestTerminal::testLooksLikeInputPromptPatterns() {
-  // No trailing newline — always a prompt
+
   QVERIFY(Terminal::looksLikeInputPrompt("Enter your name: "));
   QVERIFY(Terminal::looksLikeInputPrompt("Password:"));
   QVERIFY(Terminal::looksLikeInputPrompt(">>> "));
   QVERIFY(Terminal::looksLikeInputPrompt("Continue? "));
 
-  // Common prompt suffix on last line (output ends with newline): the
-  // last non-empty line is kept as-is (no trimming) so trailing spaces are
-  // preserved when matching the suffix patterns.
   QVERIFY(Terminal::looksLikeInputPrompt("some output\nEnter value: \n"));
 
-  // Yes/no confirmation patterns
   QVERIFY(Terminal::looksLikeInputPrompt("Are you sure? [y/n]\n"));
   QVERIFY(Terminal::looksLikeInputPrompt("Overwrite? [Y/n]\n"));
   QVERIFY(Terminal::looksLikeInputPrompt("Continue (yes/no)\n"));
 
-  // Shell-style prompts (with trailing space before newline)
   QVERIFY(Terminal::looksLikeInputPrompt("user@host:~$ \n"));
   QVERIFY(Terminal::looksLikeInputPrompt("root@host:~# \n"));
 
-  // Normal output with trailing newline — NOT a prompt
   QVERIFY(!Terminal::looksLikeInputPrompt("Hello, World!\n"));
   QVERIFY(!Terminal::looksLikeInputPrompt("Processing complete.\n"));
   QVERIFY(!Terminal::looksLikeInputPrompt("file1.txt\nfile2.txt\nfile3.txt\n"));
 
-  // Empty / whitespace-only — NOT a prompt
   QVERIFY(!Terminal::looksLikeInputPrompt(""));
   QVERIFY(!Terminal::looksLikeInputPrompt("\n"));
   QVERIFY(!Terminal::looksLikeInputPrompt("\n\n\n"));
 }
 
 void TestTerminal::testIndicatorNotShownForNonPromptOutput() {
-  // Run a process that produces only normal output (ends with newline) and
-  // verify that the input indicator is never shown.
+
   Terminal terminal;
   QSignalSpy finishedSpy(&terminal, &Terminal::processFinished);
   QVERIFY(finishedSpy.isValid());
 
   terminal.executeCommand("sh",
-                          QStringList() << "-c"
-                                        << "printf 'line1\\nline2\\n'",
+                          QStringList() << "-c" << "printf 'line1\\nline2\\n'",
                           QDir::tempPath());
 
   QTRY_VERIFY_WITH_TIMEOUT(!terminal.hasActiveRunProcess(), 5000);
 
-  // The indicator must stay hidden: no input prompt was produced.
   QVERIFY(terminal.m_runInputIndicator != nullptr);
   QVERIFY(terminal.m_runInputIndicator->isHidden());
 
@@ -671,27 +661,20 @@ void TestTerminal::testIndicatorNotShownForNonPromptOutput() {
 }
 
 void TestTerminal::testIndicatorNotShownOnProcessStart() {
-  // The indicator must be hidden immediately after a process starts (before any
-  // output is produced).  Previously a false positive was triggered via the
-  // QProcess::started signal.
+
   Terminal terminal;
   terminal.stopShell();
   QTest::qWait(200);
 
-  // Ensure indicator is hidden before executing the command.
   QVERIFY(terminal.m_runInputIndicator != nullptr);
   QVERIFY(terminal.m_runInputIndicator->isHidden());
 
-  // Start a process that sleeps briefly so we can sample the indicator state
-  // before it exits.
-  terminal.executeCommand("sh", QStringList() << "-c"
-                                              << "sleep 0.1 && printf 'done\\n'",
-                          QDir::tempPath());
+  terminal.executeCommand(
+      "sh", QStringList() << "-c" << "sleep 0.1 && printf 'done\\n'",
+      QDir::tempPath());
 
-  // Allow the process to start but not yet produce output.
   QTest::qWait(30);
 
-  // The indicator must still be hidden — process start is not a prompt.
   QVERIFY(terminal.m_runInputIndicator->isHidden());
 
   QTRY_VERIFY_WITH_TIMEOUT(!terminal.hasActiveRunProcess(), 5000);
@@ -699,9 +682,7 @@ void TestTerminal::testIndicatorNotShownOnProcessStart() {
 }
 
 void TestTerminal::testIndicatorHiddenAfterNonPromptOutput() {
-  // When a process emits non-prompt stdout (ends with newline) the indicator
-  // must not become visible.  This verifies the debounce + looksLikeInputPrompt
-  // path end-to-end.
+
   Terminal terminal;
   QSignalSpy finishedSpy(&terminal, &Terminal::processFinished);
   QVERIFY(finishedSpy.isValid());
@@ -714,7 +695,6 @@ void TestTerminal::testIndicatorHiddenAfterNonPromptOutput() {
 
   QTRY_VERIFY_WITH_TIMEOUT(!terminal.hasActiveRunProcess(), 5000);
 
-  // Debounce window has definitely elapsed — indicator must be hidden.
   QTest::qWait(200);
   QVERIFY(terminal.m_runInputIndicator != nullptr);
   QVERIFY(terminal.m_runInputIndicator->isHidden());

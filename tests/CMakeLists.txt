@@ -1279,6 +1279,9 @@ add_test(NAME TestRunManagerTests COMMAND test_testrunmanager)
 add_executable(test_testpanel
     unit/test_testpanel.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/testpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/testconfigurationdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testrunmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/autotestrunner.cpp

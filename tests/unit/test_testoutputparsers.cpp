@@ -1,3 +1,5 @@
+#include <QFile>
+#include <QJsonDocument>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -39,6 +41,7 @@ private slots:
   void testCtestBasicOutput();
   void testCtestCapturesFailureOutput();
   void testCtestMixedResults();
+  void testCtestPrefersGoogleTestInnerDuration();
 
   void testGenericRegexDefaults();
   void testGenericRegexCustomPatterns();
@@ -50,6 +53,10 @@ private slots:
   void testConfigurationRunOverridesFromJson();
   void testConfigurationManagerSubstituteVariables();
   void testConfigurationManagerLoadTemplates();
+  void testGtestCmakeTemplateSkipsRedundantConfigure();
+  void testConfigurationManagerAssignsIdsToUserConfigs();
+  void testConfigurationManagerPersistsDefaultById();
+  void testConfigurationManagerPrefersUserOverridesById();
   void testPreferredConfigurationForPythonFile();
   void testPreferredConfigurationForPythonDirectory();
 
@@ -78,7 +85,6 @@ private slots:
 
   void testDiscoveryAdapterFactory();
 
-  // Roundtrip: discovery ID matches result ID so fallback navigation works
   void testPytestDiscoveryAndResultIdsMatch();
   void testCtestDiscoveryAndResultIdsMatch();
 };
@@ -364,7 +370,6 @@ void TestOutputParsers::testJunitXmlWithFileAndLine() {
   connect(&parser, &ITestOutputParser::testFinished,
           [&results](const TestResult &r) { results.append(r); });
 
-  // GTest emits 'file' and 'line' attributes on every <testcase> element
   QByteArray xml = R"(<?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
   <testsuite name="MathTests" tests="2">
@@ -458,6 +463,29 @@ void TestOutputParsers::testCtestMixedResults() {
   QCOMPARE(finished[0].status, TestStatus::Passed);
   QCOMPARE(finished[0].durationMs, 100);
   QCOMPARE(finished[1].status, TestStatus::Skipped);
+}
+
+void TestOutputParsers::testCtestPrefersGoogleTestInnerDuration() {
+  CtestParser parser;
+  QList<TestResult> finished;
+  connect(&parser, &ITestOutputParser::testFinished,
+          [&finished](const TestResult &r) { finished.append(r); });
+
+  QByteArray data =
+      "    Start 1: MissionProgressTest.SaveCampaignMissionResult\n"
+      "1: [ RUN      ] MissionProgressTest.SaveCampaignMissionResult\n"
+      "1: [       OK ] MissionProgressTest.SaveCampaignMissionResult (0 ms)\n"
+      "1/1 Test #1: MissionProgressTest.SaveCampaignMissionResult ...   Passed "
+      "   0.06 sec\n";
+
+  parser.feed(data);
+  parser.finish();
+
+  QCOMPARE(finished.size(), 1);
+  QCOMPARE(finished[0].status, TestStatus::Passed);
+  QCOMPARE(finished[0].name,
+           QString("MissionProgressTest.SaveCampaignMissionResult"));
+  QCOMPARE(finished[0].durationMs, 0);
 }
 
 void TestOutputParsers::testGenericRegexDefaults() {
@@ -728,8 +756,131 @@ void TestOutputParsers::testConfigurationManagerLoadTemplates() {
   }
 }
 
+void TestOutputParsers::testGtestCmakeTemplateSkipsRedundantConfigure() {
+  TestConfigurationManager &mgr = TestConfigurationManager::instance();
+  QVERIFY(mgr.loadTemplates());
+
+  const TestConfiguration gtest = mgr.templateById("gtest_cmake");
+  QVERIFY(gtest.isValid());
+  QCOMPARE(gtest.command, QString("bash"));
+  QVERIFY(!gtest.args.isEmpty());
+  QVERIFY(gtest.args[1].contains("CMakeCache.txt"));
+  QVERIFY(gtest.args[1].contains("cmake -S"));
+  QVERIFY(gtest.args[1].contains("cmake --build"));
+  QVERIFY(gtest.args[1].contains("-j2"));
+  QVERIFY(gtest.args[1].contains("ctest --test-dir"));
+  QVERIFY(gtest.args[1].contains("--output-on-failure -V"));
+
+  QVERIFY(!gtest.runSingleTest.args.isEmpty());
+  QVERIFY(gtest.runSingleTest.args[1].contains("CMakeCache.txt"));
+  QVERIFY(gtest.runSingleTest.args[1].contains("-j2"));
+  QVERIFY(gtest.runSingleTest.args[1].contains("-R '^${testName}$'"));
+
+  QVERIFY(!gtest.runFailed.args.isEmpty());
+  QVERIFY(gtest.runFailed.args[1].contains("CMakeCache.txt"));
+  QVERIFY(gtest.runFailed.args[1].contains("-j2"));
+
+  QVERIFY(!gtest.runSuite.args.isEmpty());
+  QVERIFY(gtest.runSuite.args[1].contains("CMakeCache.txt"));
+  QVERIFY(gtest.runSuite.args[1].contains("-j2"));
+}
+
+void TestOutputParsers::testConfigurationManagerAssignsIdsToUserConfigs() {
+  TestConfigurationManager &mgr = TestConfigurationManager::instance();
+  QVERIFY(mgr.loadTemplates());
+
+  while (!mgr.userConfigurations().isEmpty())
+    mgr.removeConfiguration(mgr.userConfigurations().first().id);
+  mgr.setDefaultConfigurationId(QString());
+
+  TestConfiguration cfg;
+  cfg.name = "Custom Pytest";
+  cfg.command = "${python}";
+  cfg.templateId = "pytest";
+  mgr.addConfiguration(cfg);
+
+  const QList<TestConfiguration> users = mgr.userConfigurations();
+  QCOMPARE(users.size(), 1);
+  QVERIFY(!users.first().id.isEmpty());
+  QVERIFY(users.first().id != QString("pytest"));
+}
+
+void TestOutputParsers::testConfigurationManagerPersistsDefaultById() {
+  TestConfigurationManager &mgr = TestConfigurationManager::instance();
+  QVERIFY(mgr.loadTemplates());
+
+  while (!mgr.userConfigurations().isEmpty())
+    mgr.removeConfiguration(mgr.userConfigurations().first().id);
+  mgr.setDefaultConfigurationId(QString());
+
+  TestConfiguration cfg;
+  cfg.name = "Workspace Pytest";
+  cfg.command = "${python}";
+  cfg.args = {"-m", "pytest", "-q"};
+  cfg.outputFormat = "pytest";
+  cfg.workingDirectory = "${workspaceFolder}";
+  cfg.runFile.args = {"-m", "pytest", "${file}"};
+  mgr.addConfiguration(cfg);
+
+  const QString savedId = mgr.userConfigurations().first().id;
+  QVERIFY(!savedId.isEmpty());
+  mgr.setDefaultConfigurationId(savedId);
+
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  QVERIFY(mgr.saveUserConfigurations(tempDir.path()));
+
+  QFile file(tempDir.path() + "/.lightpad/test/config.json");
+  QVERIFY(file.open(QIODevice::ReadOnly));
+  const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+  QVERIFY(doc.isObject());
+  QCOMPARE(doc.object().value("defaultConfigurationId").toString(), savedId);
+  QCOMPARE(doc.object().value("defaultConfiguration").toString(),
+           QString("Workspace Pytest"));
+
+  while (!mgr.userConfigurations().isEmpty())
+    mgr.removeConfiguration(mgr.userConfigurations().first().id);
+  mgr.setDefaultConfigurationId(QString());
+
+  QVERIFY(mgr.loadUserConfigurations(tempDir.path()));
+  QCOMPARE(mgr.defaultConfigurationId(), savedId);
+  QCOMPARE(mgr.defaultConfigurationName(), QString("Workspace Pytest"));
+  QCOMPARE(mgr.configurationById(savedId).runFile.args.size(), 3);
+}
+
+void TestOutputParsers::testConfigurationManagerPrefersUserOverridesById() {
+  TestConfigurationManager &mgr = TestConfigurationManager::instance();
+  QVERIFY(mgr.loadTemplates());
+
+  while (!mgr.userConfigurations().isEmpty())
+    mgr.removeConfiguration(mgr.userConfigurations().first().id);
+  mgr.setDefaultConfigurationId(QString());
+
+  TestConfiguration override = mgr.templateById("pytest");
+  QVERIFY(override.isValid());
+  override.name = "Pytest Override";
+  override.command = "python3";
+  mgr.addConfiguration(override);
+
+  const QList<TestConfiguration> configs = mgr.allConfigurations();
+  int pytestCount = 0;
+  for (const TestConfiguration &cfg : configs) {
+    if (cfg.id == "pytest")
+      ++pytestCount;
+  }
+
+  QCOMPARE(pytestCount, 1);
+  QCOMPARE(mgr.configurationById("pytest").name, QString("Pytest Override"));
+
+  mgr.setDefaultConfigurationId("pytest");
+  QCOMPARE(mgr.defaultConfigurationName(), QString("Pytest Override"));
+}
+
 void TestOutputParsers::testPreferredConfigurationForPythonFile() {
   TestConfigurationManager &mgr = TestConfigurationManager::instance();
+  while (!mgr.userConfigurations().isEmpty())
+    mgr.removeConfiguration(mgr.userConfigurations().first().id);
+  mgr.setDefaultConfigurationId(QString());
   QVERIFY(mgr.loadTemplates());
 
   QTemporaryDir tempDir;
@@ -747,6 +898,9 @@ void TestOutputParsers::testPreferredConfigurationForPythonFile() {
 
 void TestOutputParsers::testPreferredConfigurationForPythonDirectory() {
   TestConfigurationManager &mgr = TestConfigurationManager::instance();
+  while (!mgr.userConfigurations().isEmpty())
+    mgr.removeConfiguration(mgr.userConfigurations().first().id);
+  mgr.setDefaultConfigurationId(QString());
   QVERIFY(mgr.loadTemplates());
 
   QTemporaryDir tempDir;
@@ -1055,10 +1209,7 @@ void TestOutputParsers::testDiscoveryAdapterFactory() {
 }
 
 void TestOutputParsers::testPytestDiscoveryAndResultIdsMatch() {
-  // Verify that the ID produced by PytestDiscoveryAdapter::parseCollectOutput
-  // matches the ID produced by PytestParser for the same test. This is required
-  // for the TestPanel fallback logic to retrieve discovery file-path info when
-  // a pytest result lacks source location.
+
   QString collectOutput = "tests/test_math.py::TestArithmetic::test_add\n"
                           "tests/test_math.py::test_standalone\n"
                           "\n"
@@ -1079,22 +1230,18 @@ void TestOutputParsers::testPytestDiscoveryAndResultIdsMatch() {
   parser.finish();
   QCOMPARE(results.size(), 2);
 
-  // IDs must match so TestPanel can find the discovery entry
   QCOMPARE(results[0].id, discovered[0].id);
   QCOMPARE(results[1].id, discovered[1].id);
 
-  // Discovery file path should be available
   QCOMPARE(discovered[0].filePath, QString("tests/test_math.py"));
   QCOMPARE(discovered[1].filePath, QString("tests/test_math.py"));
 
-  // Result should also carry the file path directly
   QCOMPARE(results[0].filePath, QString("tests/test_math.py"));
   QCOMPARE(results[1].filePath, QString("tests/test_math.py"));
 }
 
 void TestOutputParsers::testCtestDiscoveryAndResultIdsMatch() {
-  // Verify that CTestDiscoveryAdapter and CtestParser produce matching IDs so
-  // that the TestPanel fallback can retrieve discovery metadata after a run.
+
   QByteArray json = R"({
     "tests": [
       { "name": "LoggerTests", "index": 1, "command": ["/build/test_logger"], "properties": [] },
@@ -1121,7 +1268,6 @@ void TestOutputParsers::testCtestDiscoveryAndResultIdsMatch() {
   parser.finish();
   QCOMPARE(results.size(), 2);
 
-  // IDs must match so TestPanel fallback can find the discovery entry
   QCOMPARE(results[0].id, discovered[0].id);
   QCOMPARE(results[1].id, discovered[1].id);
 }
