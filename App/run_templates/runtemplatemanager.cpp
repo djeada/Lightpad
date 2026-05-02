@@ -10,6 +10,32 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 
+namespace {
+QStringList templateMatchKeysForFilePath(const QString &filePath) {
+  const QFileInfo fileInfo(filePath);
+  QStringList keys;
+
+  auto appendKey = [&keys](const QString &value) {
+    const QString trimmed = value.trimmed();
+    if (trimmed.isEmpty()) {
+      return;
+    }
+
+    for (const QString &existing : keys) {
+      if (existing.compare(trimmed, Qt::CaseInsensitive) == 0) {
+        return;
+      }
+    }
+    keys.append(trimmed);
+  };
+
+  appendKey(fileInfo.completeSuffix());
+  appendKey(fileInfo.suffix());
+  appendKey(fileInfo.fileName());
+  return keys;
+}
+} // namespace
+
 RunTemplateManager &RunTemplateManager::instance() {
   static RunTemplateManager instance;
   return instance;
@@ -211,6 +237,25 @@ RunTemplateManager::getTemplatesForExtension(const QString &extension) const {
         result.append(tmpl);
         break;
       }
+    }
+  }
+
+  return result;
+}
+
+QList<RunTemplate>
+RunTemplateManager::getTemplatesForFilePath(const QString &filePath) const {
+  QList<RunTemplate> result;
+  QSet<QString> seenTemplateIds;
+
+  for (const QString &key : templateMatchKeysForFilePath(filePath)) {
+    const QList<RunTemplate> templates = getTemplatesForExtension(key);
+    for (const RunTemplate &tmpl : templates) {
+      if (seenTemplateIds.contains(tmpl.id)) {
+        continue;
+      }
+      seenTemplateIds.insert(tmpl.id);
+      result.append(tmpl);
     }
   }
 
@@ -712,9 +757,7 @@ RunTemplateManager::resolveTemplateIdForFile(const QString &filePath,
     }
   }
 
-  QFileInfo fileInfo(filePath);
-  QList<RunTemplate> extensionTemplates =
-      getTemplatesForExtension(fileInfo.suffix());
+  QList<RunTemplate> extensionTemplates = getTemplatesForFilePath(filePath);
   if (!extensionTemplates.isEmpty()) {
     return extensionTemplates.first().id;
   }

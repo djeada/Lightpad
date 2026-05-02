@@ -53,6 +53,7 @@ public:
   QList<RunTemplate> getAllTemplates() const;
 
   QList<RunTemplate> getTemplatesForExtension(const QString &extension) const;
+  QList<RunTemplate> getTemplatesForFilePath(const QString &filePath) const;
 
   QList<RunTemplate> getTemplatesForLanguageId(const QString &languageId) const;
 
