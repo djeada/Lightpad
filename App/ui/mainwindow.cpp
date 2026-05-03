@@ -8198,6 +8198,9 @@ void MainWindow::setTheme(Theme theme) {
   if (debugPanel) {
     debugPanel->applyTheme(theme);
   }
+  if (testPanel) {
+    testPanel->applyTheme(theme);
+  }
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); i++) {

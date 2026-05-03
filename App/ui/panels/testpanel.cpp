@@ -510,7 +510,7 @@ void TestPanel::applyTheme(const Theme &theme) {
     delegate->setTheme(theme);
   }
 
-  setStyleSheet(QString("QWidget#TestPanel {"
+  setStyleSheet(QString("QWidget#TestPanel, QWidget#testPanel {"
                         "  background: %1;"
                         "  color: %2;"
                         "}"
