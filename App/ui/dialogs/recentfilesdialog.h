@@ -16,6 +16,7 @@ public:
   explicit RecentFilesDialog(RecentFilesManager *manager,
                              QWidget *parent = nullptr);
   ~RecentFilesDialog();
+  using StyledPopupDialog::applyTheme;
 
   void showDialog();
 

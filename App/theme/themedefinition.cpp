@@ -2,6 +2,30 @@
 #include "../settings/theme.h"
 
 #include <QJsonArray>
+#include <QtGlobal>
+
+namespace {
+QColor withAlpha(QColor color, int alpha) {
+  color.setAlpha(qBound(0, alpha, 255));
+  return color;
+}
+
+QColor mix(const QColor &a, const QColor &b, qreal t) {
+  return ThemeDefinition::lerp(a, b, t);
+}
+
+QColor accentVariant(const QColor &accent, int hueShift, int saturationDelta,
+                     int valueDelta) {
+  QColor hsv = accent.toHsv();
+  int hue = hsv.hue();
+  if (hue < 0)
+    hue = 200;
+  const int saturation = qBound(0, hsv.saturation() + saturationDelta, 255);
+  const int value = qBound(48, hsv.value() + valueDelta, 255);
+  return QColor::fromHsv((hue + hueShift + 360) % 360, saturation, value,
+                         accent.alpha());
+}
+} // namespace
 
 ThemeDefinition::ThemeDefinition() {
   name = "Hacker Dark";
@@ -131,6 +155,7 @@ ThemeDefinition::ThemeDefinition() {
   ui.animationSpeed = "normal";
   ui.scanlineEffect = false;
   ui.panelBorders = true;
+  normalize();
 }
 
 Theme ThemeDefinition::toClassicTheme() const {
@@ -160,11 +185,41 @@ Theme ThemeDefinition::toClassicTheme() const {
   t.successColor = colors.statusSuccess;
   t.warningColor = colors.statusWarning;
   t.errorColor = colors.statusError;
+  t.infoColor = colors.statusInfo;
+  t.diagnosticErrorColor = colors.diagnosticError;
+  t.diagnosticWarningColor = colors.diagnosticWarning;
+  t.diagnosticInfoColor = colors.diagnosticInfo;
+  t.diagnosticHintColor = colors.diagnosticHint;
+  t.gitAddedColor = colors.gitAdded;
+  t.gitModifiedColor = colors.gitModified;
+  t.gitDeletedColor = colors.gitDeleted;
+  t.gitRenamedColor = colors.gitRenamed;
+  t.gitCopiedColor = colors.gitCopied;
+  t.gitUntrackedColor = colors.gitUntracked;
+  t.gitConflictedColor = colors.gitConflicted;
+  t.gitIgnoredColor = colors.gitIgnored;
+  t.diffAddedColor = colors.diffAdded;
+  t.diffModifiedColor = colors.diffModified;
+  t.diffRemovedColor = colors.diffRemoved;
+  t.diffConflictColor = colors.diffConflict;
+  t.testPassedColor = colors.testPassed;
+  t.testFailedColor = colors.testFailed;
+  t.testSkippedColor = colors.testSkipped;
+  t.testRunningColor = colors.testRunning;
+  t.testQueuedColor = colors.testQueued;
+  t.debugReadyColor = colors.debugReady;
+  t.debugStartingColor = colors.debugStarting;
+  t.debugRunningColor = colors.debugRunning;
+  t.debugPausedColor = colors.debugPaused;
+  t.debugErrorColor = colors.debugError;
+  t.debugBreakpointColor = colors.debugBreakpoint;
+  t.debugCurrentLineColor = colors.debugCurrentLine;
   t.borderRadius = ui.borderRadius;
   t.glowIntensity = ui.glowIntensity;
   t.chromeOpacity = ui.chromeOpacity;
   t.scanlineEffect = ui.scanlineEffect;
   t.panelBorders = ui.panelBorders;
+  t.normalize();
   return t;
 }
 
@@ -293,7 +348,70 @@ ThemeDefinition ThemeDefinition::fromClassicTheme(const Theme &c,
   d.colors.statusSuccess = c.successColor;
   d.colors.statusWarning = c.warningColor;
   d.colors.statusError = c.errorColor;
-  d.colors.statusInfo = c.accentColor;
+  d.colors.statusInfo = c.infoColor.isValid() ? c.infoColor : c.accentColor;
+  d.colors.diagnosticError =
+      c.diagnosticErrorColor.isValid() ? c.diagnosticErrorColor : c.errorColor;
+  d.colors.diagnosticWarning = c.diagnosticWarningColor.isValid()
+                                   ? c.diagnosticWarningColor
+                                   : c.warningColor;
+  d.colors.diagnosticInfo = c.diagnosticInfoColor.isValid()
+                                ? c.diagnosticInfoColor
+                                : d.colors.statusInfo;
+  d.colors.diagnosticHint = c.diagnosticHintColor.isValid()
+                                ? c.diagnosticHintColor
+                                : c.singleLineCommentFormat;
+  d.colors.gitAdded =
+      c.gitAddedColor.isValid() ? c.gitAddedColor : c.successColor;
+  d.colors.gitModified =
+      c.gitModifiedColor.isValid() ? c.gitModifiedColor : c.warningColor;
+  d.colors.gitDeleted =
+      c.gitDeletedColor.isValid() ? c.gitDeletedColor : c.errorColor;
+  d.colors.gitRenamed =
+      c.gitRenamedColor.isValid() ? c.gitRenamedColor : d.colors.statusInfo;
+  d.colors.gitCopied =
+      c.gitCopiedColor.isValid() ? c.gitCopiedColor : d.colors.gitRenamed;
+  d.colors.gitUntracked =
+      c.gitUntrackedColor.isValid() ? c.gitUntrackedColor : c.successColor;
+  d.colors.gitConflicted =
+      c.gitConflictedColor.isValid() ? c.gitConflictedColor : c.errorColor;
+  d.colors.gitIgnored = c.gitIgnoredColor.isValid() ? c.gitIgnoredColor
+                                                    : c.singleLineCommentFormat;
+  d.colors.diffAdded =
+      c.diffAddedColor.isValid() ? c.diffAddedColor : d.colors.gitAdded;
+  d.colors.diffModified = c.diffModifiedColor.isValid() ? c.diffModifiedColor
+                                                        : d.colors.gitModified;
+  d.colors.diffRemoved =
+      c.diffRemovedColor.isValid() ? c.diffRemovedColor : d.colors.gitDeleted;
+  d.colors.diffConflict = c.diffConflictColor.isValid()
+                              ? c.diffConflictColor
+                              : d.colors.gitConflicted;
+  d.colors.testPassed =
+      c.testPassedColor.isValid() ? c.testPassedColor : c.successColor;
+  d.colors.testFailed =
+      c.testFailedColor.isValid() ? c.testFailedColor : c.errorColor;
+  d.colors.testSkipped = c.testSkippedColor.isValid()
+                             ? c.testSkippedColor
+                             : c.singleLineCommentFormat;
+  d.colors.testRunning =
+      c.testRunningColor.isValid() ? c.testRunningColor : d.colors.statusInfo;
+  d.colors.testQueued = c.testQueuedColor.isValid() ? c.testQueuedColor
+                                                    : c.singleLineCommentFormat;
+  d.colors.debugReady = c.debugReadyColor.isValid()
+                            ? c.debugReadyColor
+                            : lerp(c.foregroundColor, c.backgroundColor, 0.35);
+  d.colors.debugStarting =
+      c.debugStartingColor.isValid() ? c.debugStartingColor : c.warningColor;
+  d.colors.debugRunning =
+      c.debugRunningColor.isValid() ? c.debugRunningColor : d.colors.statusInfo;
+  d.colors.debugPaused =
+      c.debugPausedColor.isValid() ? c.debugPausedColor : c.successColor;
+  d.colors.debugError =
+      c.debugErrorColor.isValid() ? c.debugErrorColor : c.errorColor;
+  d.colors.debugBreakpoint =
+      c.debugBreakpointColor.isValid() ? c.debugBreakpointColor : c.errorColor;
+  d.colors.debugCurrentLine = c.debugCurrentLineColor.isValid()
+                                  ? c.debugCurrentLineColor
+                                  : c.accentColor;
 
   d.ui.borderRadius = c.borderRadius;
   d.ui.glowIntensity = c.glowIntensity;
@@ -301,7 +419,165 @@ ThemeDefinition ThemeDefinition::fromClassicTheme(const Theme &c,
   d.ui.scanlineEffect = c.scanlineEffect;
   d.ui.panelBorders = c.panelBorders;
 
+  d.normalize();
   return d;
+}
+
+ThemeDefinition ThemeDefinition::generateFromSeed(const ThemeDefinition &base,
+                                                  const QString &themeName,
+                                                  const QString &themeAuthor,
+                                                  const QColor &background,
+                                                  const QColor &foreground,
+                                                  const QColor &accent) {
+  ThemeDefinition generated = base;
+  generated.name = themeName.trimmed().isEmpty()
+                       ? QStringLiteral("Custom Theme")
+                       : themeName.trimmed();
+  generated.author = themeAuthor.trimmed().isEmpty() ? QStringLiteral("User")
+                                                     : themeAuthor.trimmed();
+  generated.type = background.lightness() > 150 ? QStringLiteral("light")
+                                                : QStringLiteral("dark");
+
+  const bool isLight = generated.type == QLatin1String("light");
+  const QColor raised = isLight ? mix(background, QColor("#ffffff"), 0.28)
+                                : mix(background, foreground, 0.06);
+  const QColor overlay = isLight ? mix(background, QColor("#000000"), 0.04)
+                                 : mix(background, foreground, 0.1);
+  const QColor sunken = isLight ? mix(background, QColor("#000000"), 0.06)
+                                : mix(background, QColor("#000000"), 0.18);
+  const QColor accentSoft = withAlpha(
+      mix(accent, background, isLight ? 0.82 : 0.72), isLight ? 96 : 128);
+
+  generated.colors.editorBg = background;
+  generated.colors.editorFg = foreground;
+  generated.colors.editorGutter =
+      isLight ? mix(background, QColor("#000000"), 0.03)
+              : mix(background, QColor("#000000"), 0.18);
+  generated.colors.editorGutterFg = mix(foreground, background, 0.48);
+  generated.colors.editorLineHighlight =
+      isLight ? mix(accent, background, 0.94)
+              : mix(foreground, background, 0.08);
+  generated.colors.editorSelection = accentSoft;
+  generated.colors.editorSelectionFg = foreground;
+  generated.colors.editorCursor = accent;
+  generated.colors.editorFindMatch =
+      withAlpha(mix(accent, generated.colors.statusWarning, 0.35), 96);
+  generated.colors.editorFindMatchActive =
+      withAlpha(mix(accent, foreground, 0.22), 128);
+  generated.colors.editorBracketMatch = withAlpha(accent, 64);
+  generated.colors.editorIndentGuide = mix(background, foreground, 0.12);
+  generated.colors.editorWhitespace = mix(background, foreground, 0.16);
+
+  generated.colors.surfaceBase = background;
+  generated.colors.surfaceRaised = raised;
+  generated.colors.surfaceOverlay = overlay;
+  generated.colors.surfaceSunken = sunken;
+  generated.colors.surfacePopover = mix(raised, overlay, 0.45);
+
+  generated.colors.borderDefault =
+      mix(background, foreground, isLight ? 0.18 : 0.15);
+  generated.colors.borderSubtle =
+      mix(background, foreground, isLight ? 0.1 : 0.08);
+  generated.colors.borderStrong =
+      mix(background, foreground, isLight ? 0.28 : 0.24);
+  generated.colors.borderFocus = accent;
+
+  generated.colors.textPrimary = foreground;
+  generated.colors.textSecondary = mix(foreground, background, 0.32);
+  generated.colors.textMuted = mix(foreground, background, 0.5);
+  generated.colors.textDisabled = mix(foreground, background, 0.66);
+  generated.colors.textInverse =
+      isLight ? QColor("#ffffff") : QColor("#0c1014");
+  generated.colors.textLink = accentVariant(accent, isLight ? -10 : 8, 10, 10);
+
+  generated.colors.btnPrimaryBg = accent;
+  generated.colors.btnPrimaryFg =
+      accent.lightness() > 150 ? QColor("#0b1117") : QColor("#ffffff");
+  generated.colors.btnPrimaryHover =
+      isLight ? accent.darker(108) : accent.lighter(112);
+  generated.colors.btnPrimaryActive =
+      isLight ? accent.darker(118) : accent.darker(112);
+  generated.colors.btnSecondaryBg = raised;
+  generated.colors.btnSecondaryFg = foreground;
+  generated.colors.btnSecondaryHover = mix(raised, foreground, 0.08);
+  generated.colors.btnSecondaryActive = mix(raised, foreground, 0.14);
+  generated.colors.btnDangerBg =
+      accentVariant(accent, -28, 24, isLight ? -12 : 16);
+  generated.colors.btnDangerFg = QColor("#ffffff");
+  generated.colors.btnDangerHover = generated.colors.btnDangerBg.lighter(108);
+  generated.colors.btnDangerActive = generated.colors.btnDangerBg.darker(112);
+  generated.colors.btnGhostHover = mix(background, foreground, 0.05);
+  generated.colors.btnGhostActive = mix(background, foreground, 0.1);
+
+  generated.colors.inputBg = mix(raised, background, isLight ? 0.3 : 0.45);
+  generated.colors.inputFg = foreground;
+  generated.colors.inputBorder = generated.colors.borderDefault;
+  generated.colors.inputBorderFocus = accent;
+  generated.colors.inputPlaceholder = generated.colors.textMuted;
+  generated.colors.inputSelection = accentSoft;
+
+  generated.colors.accentPrimary = accent;
+  generated.colors.accentSoft = accentSoft;
+  generated.colors.accentGlow = withAlpha(accent, isLight ? 40 : 56);
+
+  generated.colors.scrollTrack = sunken;
+  generated.colors.scrollThumb = mix(background, foreground, 0.18);
+  generated.colors.scrollThumbHover = mix(background, foreground, 0.28);
+
+  generated.colors.tabBg = background;
+  generated.colors.tabActiveBg = raised;
+  generated.colors.tabActiveBorder = accent;
+  generated.colors.tabHoverBg = generated.colors.btnGhostHover;
+  generated.colors.tabFg = generated.colors.textSecondary;
+  generated.colors.tabActiveFg = foreground;
+
+  generated.colors.treeSelectedBg = accentSoft;
+  generated.colors.treeHoverBg = generated.colors.btnGhostHover;
+  generated.colors.treeIndentGuide = generated.colors.editorIndentGuide;
+
+  generated.colors.termBg = background;
+  generated.colors.termFg = foreground;
+  generated.colors.termCursor = accent;
+  generated.colors.termSelection = accentSoft;
+
+  generated.colors.syntaxKeyword =
+      accentVariant(accent, 0, 12, isLight ? -10 : 14);
+  generated.colors.syntaxKeyword2 =
+      accentVariant(accent, 32, 6, isLight ? -6 : 18);
+  generated.colors.syntaxKeyword3 =
+      accentVariant(accent, -36, 10, isLight ? -8 : 16);
+  generated.colors.syntaxString =
+      mix(base.colors.syntaxString, accentVariant(accent, 92, 18, 12), 0.45);
+  generated.colors.syntaxComment = mix(foreground, background, 0.58);
+  generated.colors.syntaxFunction =
+      mix(base.colors.syntaxFunction, accentVariant(accent, 18, 4, 18), 0.42);
+  generated.colors.syntaxClass =
+      mix(base.colors.syntaxClass, accentVariant(accent, 74, 8, 14), 0.42);
+  generated.colors.syntaxNumber =
+      mix(base.colors.syntaxNumber, accentVariant(accent, -62, 22, 10), 0.45);
+  generated.colors.syntaxOperator =
+      mix(base.colors.syntaxOperator, accentVariant(accent, -22, 6, 8), 0.4);
+  generated.colors.syntaxType =
+      mix(generated.colors.syntaxClass, foreground, 0.1);
+  generated.colors.syntaxConstant =
+      mix(generated.colors.syntaxNumber, generated.colors.syntaxKeyword2, 0.35);
+  generated.colors.syntaxTag = generated.colors.syntaxKeyword;
+  generated.colors.syntaxAttribute = generated.colors.syntaxKeyword3;
+  generated.colors.syntaxRegex =
+      mix(generated.colors.syntaxString, generated.colors.syntaxKeyword3, 0.3);
+  generated.colors.syntaxEscape =
+      mix(generated.colors.syntaxString, generated.colors.syntaxNumber, 0.45);
+
+  generated.colors.statusSuccess =
+      mix(base.colors.statusSuccess, accentVariant(accent, 118, 14, 8), 0.35);
+  generated.colors.statusWarning =
+      mix(base.colors.statusWarning, accentVariant(accent, -76, 18, 10), 0.25);
+  generated.colors.statusError =
+      mix(base.colors.statusError, accentVariant(accent, -24, 28, 10), 0.22);
+  generated.colors.statusInfo = accentVariant(accent, 8, 4, 8);
+
+  generated.normalize();
+  return generated;
 }
 
 static QColor readColor(const QJsonObject &obj, const QString &key) {
@@ -334,6 +610,51 @@ static void writeColor(QJsonObject &root, const QString &key, const QColor &c) {
   QString childKey = parts.mid(1).join('.');
   writeColor(sub, childKey, c);
   root[group] = sub;
+}
+
+void ThemeDefinition::normalize() {
+  auto ensure = [](QColor &dest, const QColor &fallback) {
+    if (!dest.isValid())
+      dest = fallback;
+  };
+
+  ensure(colors.statusInfo, colors.accentPrimary);
+
+  ensure(colors.diagnosticError, colors.statusError);
+  ensure(colors.diagnosticWarning, colors.statusWarning);
+  ensure(colors.diagnosticInfo, colors.statusInfo);
+  ensure(colors.diagnosticHint, mix(colors.textMuted, colors.textPrimary, 0.2));
+
+  ensure(colors.gitAdded, colors.statusSuccess);
+  ensure(colors.gitModified, colors.statusWarning);
+  ensure(colors.gitDeleted, colors.statusError);
+  ensure(colors.gitRenamed, colors.statusInfo);
+  ensure(colors.gitCopied, mix(colors.gitRenamed, colors.accentPrimary, 0.35));
+  ensure(colors.gitUntracked,
+         mix(colors.statusSuccess, colors.accentPrimary, 0.2));
+  ensure(colors.gitConflicted, colors.statusError);
+  ensure(colors.gitIgnored, colors.textMuted);
+
+  ensure(colors.diffAdded, mix(colors.gitAdded, colors.accentPrimary, 0.15));
+  ensure(colors.diffModified, colors.gitModified);
+  ensure(colors.diffRemoved, colors.gitDeleted);
+  ensure(colors.diffConflict,
+         mix(colors.gitConflicted, colors.gitModified, 0.3));
+
+  ensure(colors.testPassed, colors.statusSuccess);
+  ensure(colors.testFailed, colors.statusError);
+  ensure(colors.testSkipped, mix(colors.textMuted, colors.statusWarning, 0.15));
+  ensure(colors.testRunning, colors.statusInfo);
+  ensure(colors.testQueued, colors.textMuted);
+
+  ensure(colors.debugReady, colors.textSecondary);
+  ensure(colors.debugStarting, colors.statusWarning);
+  ensure(colors.debugRunning, colors.statusInfo);
+  ensure(colors.debugPaused, colors.statusSuccess);
+  ensure(colors.debugError, colors.statusError);
+  ensure(colors.debugBreakpoint,
+         mix(colors.statusError, colors.accentPrimary, 0.12));
+  ensure(colors.debugCurrentLine, colors.accentPrimary);
 }
 
 void ThemeDefinition::read(const QJsonObject &json) {
@@ -466,6 +787,34 @@ void ThemeDefinition::read(const QJsonObject &json) {
   apply(colors.statusWarning, c("status.warning"));
   apply(colors.statusError, c("status.error"));
   apply(colors.statusInfo, c("status.info"));
+  apply(colors.diagnosticError, c("diagnostic.error"));
+  apply(colors.diagnosticWarning, c("diagnostic.warning"));
+  apply(colors.diagnosticInfo, c("diagnostic.info"));
+  apply(colors.diagnosticHint, c("diagnostic.hint"));
+  apply(colors.gitAdded, c("git.added"));
+  apply(colors.gitModified, c("git.modified"));
+  apply(colors.gitDeleted, c("git.deleted"));
+  apply(colors.gitRenamed, c("git.renamed"));
+  apply(colors.gitCopied, c("git.copied"));
+  apply(colors.gitUntracked, c("git.untracked"));
+  apply(colors.gitConflicted, c("git.conflicted"));
+  apply(colors.gitIgnored, c("git.ignored"));
+  apply(colors.diffAdded, c("diff.added"));
+  apply(colors.diffModified, c("diff.modified"));
+  apply(colors.diffRemoved, c("diff.removed"));
+  apply(colors.diffConflict, c("diff.conflict"));
+  apply(colors.testPassed, c("test.passed"));
+  apply(colors.testFailed, c("test.failed"));
+  apply(colors.testSkipped, c("test.skipped"));
+  apply(colors.testRunning, c("test.running"));
+  apply(colors.testQueued, c("test.queued"));
+  apply(colors.debugReady, c("debug.ready"));
+  apply(colors.debugStarting, c("debug.starting"));
+  apply(colors.debugRunning, c("debug.running"));
+  apply(colors.debugPaused, c("debug.paused"));
+  apply(colors.debugError, c("debug.error"));
+  apply(colors.debugBreakpoint, c("debug.breakpoint"));
+  apply(colors.debugCurrentLine, c("debug.currentLine"));
 
   if (json.contains("ui") && json["ui"].isObject()) {
     QJsonObject uiObj = json["ui"].toObject();
@@ -482,6 +831,7 @@ void ThemeDefinition::read(const QJsonObject &json) {
     if (uiObj.contains("panelBorders") && uiObj["panelBorders"].isBool())
       ui.panelBorders = uiObj["panelBorders"].toBool();
   }
+  normalize();
 }
 
 void ThemeDefinition::write(QJsonObject &json) const {
@@ -609,6 +959,34 @@ void ThemeDefinition::write(QJsonObject &json) const {
   w("status.warning", colors.statusWarning);
   w("status.error", colors.statusError);
   w("status.info", colors.statusInfo);
+  w("diagnostic.error", colors.diagnosticError);
+  w("diagnostic.warning", colors.diagnosticWarning);
+  w("diagnostic.info", colors.diagnosticInfo);
+  w("diagnostic.hint", colors.diagnosticHint);
+  w("git.added", colors.gitAdded);
+  w("git.modified", colors.gitModified);
+  w("git.deleted", colors.gitDeleted);
+  w("git.renamed", colors.gitRenamed);
+  w("git.copied", colors.gitCopied);
+  w("git.untracked", colors.gitUntracked);
+  w("git.conflicted", colors.gitConflicted);
+  w("git.ignored", colors.gitIgnored);
+  w("diff.added", colors.diffAdded);
+  w("diff.modified", colors.diffModified);
+  w("diff.removed", colors.diffRemoved);
+  w("diff.conflict", colors.diffConflict);
+  w("test.passed", colors.testPassed);
+  w("test.failed", colors.testFailed);
+  w("test.skipped", colors.testSkipped);
+  w("test.running", colors.testRunning);
+  w("test.queued", colors.testQueued);
+  w("debug.ready", colors.debugReady);
+  w("debug.starting", colors.debugStarting);
+  w("debug.running", colors.debugRunning);
+  w("debug.paused", colors.debugPaused);
+  w("debug.error", colors.debugError);
+  w("debug.breakpoint", colors.debugBreakpoint);
+  w("debug.currentLine", colors.debugCurrentLine);
 
   QJsonObject uiObj;
   uiObj["borderRadius"] = ui.borderRadius;

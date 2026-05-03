@@ -23,6 +23,7 @@ class GoToSymbolDialog : public StyledPopupDialog {
 public:
   explicit GoToSymbolDialog(QWidget *parent = nullptr);
   ~GoToSymbolDialog();
+  using StyledPopupDialog::applyTheme;
 
   void setSymbols(const QList<LspDocumentSymbol> &symbols);
 

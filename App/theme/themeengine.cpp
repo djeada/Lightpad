@@ -5,8 +5,17 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QtGlobal>
+
+namespace {
+QString sanitizedThemeFileName(const QString &name) {
+  QString safeName = name;
+  safeName.replace(QRegularExpression("[^a-zA-Z0-9_-]"), "_");
+  return safeName;
+}
+} // namespace
 
 ThemeEngine &ThemeEngine::instance() {
   static ThemeEngine engine;
@@ -15,13 +24,16 @@ ThemeEngine &ThemeEngine::instance() {
 
 ThemeEngine::ThemeEngine() : QObject(nullptr) {
   registerBuiltinThemes();
+  loadUserThemes();
   m_activeTheme = m_themes.value("Hacker Dark");
 }
 
 void ThemeEngine::registerBuiltinThemes() {
   auto reg = [this](ThemeDefinition (*fn)()) {
     ThemeDefinition t = fn();
+    t.normalize();
     m_themes.insert(t.name, t);
+    m_builtinThemes.insert(t.name);
   };
   reg(ThemePresets::hackerDark);
   reg(ThemePresets::minimalDark);
@@ -48,14 +60,15 @@ Theme ThemeEngine::classicTheme() const {
 void ThemeEngine::setActiveTheme(const QString &name) {
   if (m_themes.contains(name)) {
     m_activeTheme = m_themes.value(name);
+    m_activeTheme.normalize();
     emit themeChanged(m_activeTheme);
   }
 }
 
 void ThemeEngine::setActiveTheme(const ThemeDefinition &theme) {
   m_activeTheme = theme;
-  if (!m_themes.contains(theme.name))
-    m_themes.insert(theme.name, theme);
+  m_activeTheme.normalize();
+  m_themes.insert(m_activeTheme.name, m_activeTheme);
   emit themeChanged(m_activeTheme);
 }
 
@@ -67,6 +80,10 @@ ThemeDefinition ThemeEngine::themeByName(const QString &name) const {
 
 bool ThemeEngine::hasTheme(const QString &name) const {
   return m_themes.contains(name);
+}
+
+bool ThemeEngine::isBuiltinTheme(const QString &name) const {
+  return m_builtinThemes.contains(name);
 }
 
 bool ThemeEngine::importTheme(const QString &filePath) {
@@ -86,6 +103,7 @@ bool ThemeEngine::importTheme(const QString &filePath) {
   if (theme.name.isEmpty())
     return false;
 
+  theme.normalize();
   m_themes.insert(theme.name, theme);
   saveUserTheme(theme);
   return true;
@@ -114,7 +132,37 @@ QString ThemeEngine::userThemesDirectory() const {
   return configDir + "/Lightpad/themes";
 }
 
+QString ThemeEngine::userThemeFilePath(const QString &name) const {
+  QDir dir(userThemesDirectory());
+  return dir.absoluteFilePath(sanitizedThemeFileName(name) + ".json");
+}
+
+QString ThemeEngine::makeUniqueCustomThemeName(const QString &baseName) const {
+  const QString trimmedBase = baseName.trimmed().isEmpty()
+                                  ? QStringLiteral("Custom Theme")
+                                  : baseName.trimmed();
+  if (!m_themes.contains(trimmedBase))
+    return trimmedBase;
+
+  int suffix = 2;
+  while (true) {
+    const QString candidate =
+        QStringLiteral("%1 %2").arg(trimmedBase).arg(suffix);
+    if (!m_themes.contains(candidate))
+      return candidate;
+    ++suffix;
+  }
+}
+
 void ThemeEngine::loadUserThemes() {
+  for (auto it = m_themes.begin(); it != m_themes.end();) {
+    if (!m_builtinThemes.contains(it.key())) {
+      it = m_themes.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
   QDir dir(userThemesDirectory());
   if (!dir.exists())
     return;
@@ -134,27 +182,64 @@ void ThemeEngine::loadUserThemes() {
 
     ThemeDefinition theme;
     theme.read(doc.object());
+    theme.normalize();
     if (!theme.name.isEmpty())
       m_themes.insert(theme.name, theme);
   }
 }
 
-void ThemeEngine::saveUserTheme(const ThemeDefinition &theme) {
+ThemeDefinition ThemeEngine::saveUserTheme(const ThemeDefinition &theme) {
   QDir dir(userThemesDirectory());
   if (!dir.exists())
     dir.mkpath(".");
 
-  QString safeName = theme.name;
-  safeName.replace(QRegularExpression("[^a-zA-Z0-9_-]"), "_");
+  ThemeDefinition normalized = theme;
+  normalized.normalize();
+  normalized.type = QStringLiteral("custom");
+
+  if (normalized.name.trimmed().isEmpty())
+    normalized.name = QStringLiteral("Custom Theme");
+
+  if (m_builtinThemes.contains(normalized.name)) {
+    normalized.name =
+        makeUniqueCustomThemeName(normalized.name + QStringLiteral(" Custom"));
+  }
 
   QJsonObject json;
-  theme.write(json);
+  normalized.write(json);
 
-  QFile file(dir.absoluteFilePath(safeName + ".json"));
+  QFile file(userThemeFilePath(normalized.name));
   if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
     file.write(QJsonDocument(json).toJson(QJsonDocument::Indented));
     file.close();
   }
+
+  m_themes.insert(normalized.name, normalized);
+  return normalized;
+}
+
+bool ThemeEngine::deleteUserTheme(const QString &name) {
+  if (name.isEmpty() || m_builtinThemes.contains(name) ||
+      !m_themes.contains(name))
+    return false;
+
+  const bool wasActive = m_activeTheme.name == name;
+  m_themes.remove(name);
+  QFile::remove(userThemeFilePath(name));
+
+  if (wasActive) {
+    const QString fallback = m_builtinThemes.contains("Hacker Dark")
+                                 ? QStringLiteral("Hacker Dark")
+                             : m_themes.isEmpty() ? QString()
+                                                  : m_themes.firstKey();
+    if (!fallback.isEmpty()) {
+      m_activeTheme = m_themes.value(fallback);
+      m_activeTheme.normalize();
+      emit themeChanged(m_activeTheme);
+    }
+  }
+
+  return true;
 }
 
 int ThemeEngine::animationDuration() const {

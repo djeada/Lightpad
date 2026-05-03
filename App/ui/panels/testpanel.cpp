@@ -499,11 +499,15 @@ void TestPanel::applyTheme(const Theme &theme) {
   QColor selectedBg = theme.accentSoftColor.isValid() ? theme.accentSoftColor
                                                       : theme.accentColor;
   QColor accentColor =
-      theme.accentColor.isValid() ? theme.accentColor : theme.foregroundColor;
-  QColor successColor =
-      theme.successColor.isValid() ? theme.successColor : theme.successColor;
-  QColor errorColor =
-      theme.errorColor.isValid() ? theme.errorColor : theme.errorColor;
+      theme.accentColor.isValid() ? theme.accentColor : theme.testRunningColor;
+  const QString panelBorder =
+      theme.panelBorders ? borderColor.name() : QStringLiteral("transparent");
+  const QString glowAccent =
+      accentColor.lighter(100 + static_cast<int>(theme.glowIntensity * 28.0))
+          .name();
+  const QString glowHover =
+      hoverBg.lighter(100 + static_cast<int>(theme.glowIntensity * 20.0))
+          .name();
 
   if (auto *delegate =
           dynamic_cast<TestTreeDelegate *>(m_tree->itemDelegate())) {
@@ -513,6 +517,8 @@ void TestPanel::applyTheme(const Theme &theme) {
   setStyleSheet(QString("QWidget#TestPanel, QWidget#testPanel {"
                         "  background: %1;"
                         "  color: %2;"
+                        "  border-left: 1px solid %10;"
+                        "  border-right: 1px solid %10;"
                         "}"
                         "QWidget#testHeaderShell {"
                         "  background: %3;"
@@ -535,7 +541,7 @@ void TestPanel::applyTheme(const Theme &theme) {
                         "}"
                         "QToolButton:hover {"
                         "  background: %5;"
-                        "  border-color: %4;"
+                        "  border-color: %11;"
                         "}"
                         "QToolButton:pressed {"
                         "  background: %6;"
@@ -545,7 +551,7 @@ void TestPanel::applyTheme(const Theme &theme) {
                         "}"
                         "QToolButton:checked {"
                         "  background: %6;"
-                        "  border-color: %9;"
+                        "  border-color: %11;"
                         "}"
                         "QLineEdit#testSearchEdit {"
                         "  background: %8;"
@@ -556,7 +562,7 @@ void TestPanel::applyTheme(const Theme &theme) {
                         "  font-size: 12px;"
                         "}"
                         "QLineEdit#testSearchEdit:focus {"
-                        "  border-bottom: 2px solid %9;"
+                        "  border-bottom: 2px solid %11;"
                         "}"
                         "QProgressBar#testProgressBar {"
                         "  background: %4;"
@@ -673,9 +679,9 @@ void TestPanel::applyTheme(const Theme &theme) {
                         "  width: 0;"
                         "}")
                     .arg(panelSurface.name(), textColor.name(),
-                         toolbarShell.name(), borderColor.name(),
-                         hoverBg.name(), selectedBg.name(), mutedText.name(),
-                         treeBg.name(), accentColor.name()));
+                         toolbarShell.name(), panelBorder, glowHover,
+                         selectedBg.name(), mutedText.name(), treeBg.name(),
+                         accentColor.name(), panelBorder, glowAccent));
 
   QString comboStyle = UIStyleHelper::comboBoxStyle(theme);
   m_filterCombo->setStyleSheet(comboStyle);
@@ -1124,12 +1130,9 @@ void TestPanel::updateStatusLabel() {
     return;
   }
 
-  QColor successColor = m_theme.successColor.isValid() ? m_theme.successColor
-                                                       : m_theme.successColor;
-  QColor errorColor =
-      m_theme.errorColor.isValid() ? m_theme.errorColor : m_theme.errorColor;
-  QColor warningColor = m_theme.warningColor.isValid() ? m_theme.warningColor
-                                                       : m_theme.accentColor;
+  QColor successColor = m_theme.testPassedColor;
+  QColor errorColor = m_theme.testFailedColor;
+  QColor warningColor = m_theme.testSkippedColor;
   QColor mutedColor = m_theme.foregroundColor.isValid()
                           ? m_theme.foregroundColor.darker(140)
                           : m_theme.singleLineCommentFormat;
@@ -1176,31 +1179,27 @@ void TestPanel::updateTreeItemIcon(QTreeWidgetItem *item, TestStatus status) {
   QStyle::StandardPixmap statusIcon = QStyle::SP_FileIcon;
   switch (status) {
   case TestStatus::Passed:
-    color = m_theme.successColor.isValid() ? m_theme.successColor
-                                           : m_theme.successColor;
+    color = m_theme.testPassedColor;
     statusIcon = QStyle::SP_DialogApplyButton;
     break;
   case TestStatus::Failed:
-    color =
-        m_theme.errorColor.isValid() ? m_theme.errorColor : m_theme.errorColor;
+    color = m_theme.testFailedColor;
     statusIcon = QStyle::SP_MessageBoxCritical;
     break;
   case TestStatus::Skipped:
-    color = m_theme.warningColor.isValid() ? m_theme.warningColor
-                                           : m_theme.accentColor;
+    color = m_theme.testSkippedColor;
     statusIcon = QStyle::SP_DialogCancelButton;
     break;
   case TestStatus::Errored:
-    color = m_theme.warningColor.isValid() ? m_theme.warningColor.lighter(120)
-                                           : m_theme.accentColor;
+    color = m_theme.testFailedColor.lighter(112);
     statusIcon = QStyle::SP_MessageBoxWarning;
     break;
   case TestStatus::Running:
-    color = m_theme.accentColor;
+    color = m_theme.testRunningColor;
     statusIcon = QStyle::SP_BrowserReload;
     break;
   case TestStatus::Queued:
-    color = m_theme.singleLineCommentFormat;
+    color = m_theme.testQueuedColor;
     statusIcon = QStyle::SP_ArrowRight;
     break;
   }

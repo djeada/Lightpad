@@ -2,6 +2,7 @@
 #define COMPLETIONWIDGET_H
 
 #include "../settings/theme.h"
+#include "../theme/themedefinition.h"
 #include "completionitem.h"
 #include "completionitemmodel.h"
 #include <QLabel>
@@ -15,6 +16,7 @@ class CompletionWidget : public QWidget {
 public:
   explicit CompletionWidget(QWidget *parent = nullptr);
   void applyTheme(const Theme &theme);
+  void applyTheme(const ThemeDefinition &theme);
 
   void setItems(const QList<CompletionItem> &items);
 

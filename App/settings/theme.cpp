@@ -1,25 +1,89 @@
 #include "theme.h"
 
 #include <QJsonObject>
+#include <QtGlobal>
+
+namespace {
+QColor mix(const QColor &a, const QColor &b, qreal t) {
+  const qreal clamped = qBound(0.0, t, 1.0);
+  return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * clamped,
+                          a.greenF() + (b.greenF() - a.greenF()) * clamped,
+                          a.blueF() + (b.blueF() - a.blueF()) * clamped,
+                          a.alphaF() + (b.alphaF() - a.alphaF()) * clamped);
+}
+
+void writeColor(QJsonObject &json, const char *key, const QColor &color) {
+  if (!color.isValid())
+    return;
+  json[key] =
+      color.name(color.alpha() < 255 ? QColor::HexArgb : QColor::HexRgb);
+}
+
+void readColor(const QJsonObject &json, const char *key, QColor &dest) {
+  if (json.contains(key) && json[key].isString())
+    dest = QColor(json[key].toString());
+}
+} // namespace
 
 Theme::Theme()
-
     : backgroundColor(QColor("#0a0e14")), foregroundColor(QColor("#b3b1ad")),
-      highlightColor(QColor("#0f1419")), lineNumberAreaColor(QColor("#0a0e14"))
-
-      ,
+      highlightColor(QColor("#0f1419")), lineNumberAreaColor(QColor("#0a0e14")),
       keywordFormat_0(QColor("#ff8f40")), keywordFormat_1(QColor("#ffb454")),
       keywordFormat_2(QColor("#59c2ff")), searchFormat(QColor("#e6b450")),
       singleLineCommentFormat(QColor("#626a73")),
       functionFormat(QColor("#ffb454")), quotationFormat(QColor("#c2d94c")),
-      classFormat(QColor("#59c2ff")), numberFormat(QColor("#e6b450"))
-
-      ,
+      classFormat(QColor("#59c2ff")), numberFormat(QColor("#e6b450")),
       surfaceColor(QColor("#0f1419")), surfaceAltColor(QColor("#141925")),
       borderColor(QColor("#1c2a1c")), hoverColor(QColor("#0d1218")),
       pressedColor(QColor("#141925")), accentColor(QColor("#00ff41")),
       accentSoftColor(QColor("#0a3a1a")), successColor(QColor("#00ff41")),
-      warningColor(QColor("#e6b450")), errorColor(QColor("#f85149")) {}
+      warningColor(QColor("#e6b450")), errorColor(QColor("#f85149")),
+      infoColor(QColor("#59c2ff")) {
+  normalize();
+}
+
+void Theme::normalize() {
+  auto ensure = [](QColor &dest, const QColor &fallback) {
+    if (!dest.isValid())
+      dest = fallback;
+  };
+
+  ensure(infoColor, accentColor);
+
+  ensure(diagnosticErrorColor, errorColor);
+  ensure(diagnosticWarningColor, warningColor);
+  ensure(diagnosticInfoColor, infoColor);
+  ensure(diagnosticHintColor,
+         mix(singleLineCommentFormat, foregroundColor, 0.2));
+
+  ensure(gitAddedColor, successColor);
+  ensure(gitModifiedColor, warningColor);
+  ensure(gitDeletedColor, errorColor);
+  ensure(gitRenamedColor, infoColor);
+  ensure(gitCopiedColor, mix(infoColor, accentColor, 0.35));
+  ensure(gitUntrackedColor, mix(successColor, accentColor, 0.2));
+  ensure(gitConflictedColor, errorColor);
+  ensure(gitIgnoredColor, singleLineCommentFormat);
+
+  ensure(diffAddedColor, mix(successColor, accentColor, 0.15));
+  ensure(diffModifiedColor, warningColor);
+  ensure(diffRemovedColor, errorColor);
+  ensure(diffConflictColor, mix(errorColor, warningColor, 0.35));
+
+  ensure(testPassedColor, successColor);
+  ensure(testFailedColor, errorColor);
+  ensure(testSkippedColor, mix(singleLineCommentFormat, warningColor, 0.15));
+  ensure(testRunningColor, infoColor);
+  ensure(testQueuedColor, singleLineCommentFormat);
+
+  ensure(debugReadyColor, mix(foregroundColor, backgroundColor, 0.35));
+  ensure(debugStartingColor, warningColor);
+  ensure(debugRunningColor, infoColor);
+  ensure(debugPausedColor, successColor);
+  ensure(debugErrorColor, errorColor);
+  ensure(debugBreakpointColor, mix(errorColor, accentColor, 0.12));
+  ensure(debugCurrentLineColor, accentColor);
+}
 
 void Theme::read(const QJsonObject &json) {
   const QJsonObject themeObject =
@@ -27,98 +91,65 @@ void Theme::read(const QJsonObject &json) {
           ? json["theme"].toObject()
           : json;
 
-  if (themeObject.contains("backgroundColor") &&
-      themeObject["backgroundColor"].isString())
-    backgroundColor = QColor(themeObject["backgroundColor"].toString());
+  readColor(themeObject, "backgroundColor", backgroundColor);
+  readColor(themeObject, "foregroundColor", foregroundColor);
+  readColor(themeObject, "highlightColor", highlightColor);
+  readColor(themeObject, "lineNumberAreaColor", lineNumberAreaColor);
 
-  if (themeObject.contains("foregroundColor") &&
-      themeObject["foregroundColor"].isString())
-    foregroundColor = QColor(themeObject["foregroundColor"].toString());
+  readColor(themeObject, "keywordFormat_0", keywordFormat_0);
+  readColor(themeObject, "keywordFormat_1", keywordFormat_1);
+  readColor(themeObject, "keywordFormat_2", keywordFormat_2);
+  readColor(themeObject, "searchFormat", searchFormat);
+  readColor(themeObject, "singleLineCommentFormat", singleLineCommentFormat);
+  readColor(themeObject, "functionFormat", functionFormat);
+  readColor(themeObject, "quotationFormat", quotationFormat);
+  readColor(themeObject, "classFormat", classFormat);
+  readColor(themeObject, "numberFormat", numberFormat);
 
-  if (themeObject.contains("highlightColor") &&
-      themeObject["highlightColor"].isString())
-    highlightColor = QColor(themeObject["highlightColor"].toString());
+  readColor(themeObject, "surfaceColor", surfaceColor);
+  readColor(themeObject, "surfaceAltColor", surfaceAltColor);
+  readColor(themeObject, "borderColor", borderColor);
+  readColor(themeObject, "hoverColor", hoverColor);
+  readColor(themeObject, "pressedColor", pressedColor);
+  readColor(themeObject, "accentColor", accentColor);
+  readColor(themeObject, "accentSoftColor", accentSoftColor);
+  readColor(themeObject, "successColor", successColor);
+  readColor(themeObject, "warningColor", warningColor);
+  readColor(themeObject, "errorColor", errorColor);
+  readColor(themeObject, "infoColor", infoColor);
 
-  if (themeObject.contains("lineNumberAreaColor") &&
-      themeObject["lineNumberAreaColor"].isString())
-    lineNumberAreaColor = QColor(themeObject["lineNumberAreaColor"].toString());
+  readColor(themeObject, "diagnosticErrorColor", diagnosticErrorColor);
+  readColor(themeObject, "diagnosticWarningColor", diagnosticWarningColor);
+  readColor(themeObject, "diagnosticInfoColor", diagnosticInfoColor);
+  readColor(themeObject, "diagnosticHintColor", diagnosticHintColor);
 
-  if (themeObject.contains("keywordFormat_0") &&
-      themeObject["keywordFormat_0"].isString())
-    keywordFormat_0 = QColor(themeObject["keywordFormat_0"].toString());
+  readColor(themeObject, "gitAddedColor", gitAddedColor);
+  readColor(themeObject, "gitModifiedColor", gitModifiedColor);
+  readColor(themeObject, "gitDeletedColor", gitDeletedColor);
+  readColor(themeObject, "gitRenamedColor", gitRenamedColor);
+  readColor(themeObject, "gitCopiedColor", gitCopiedColor);
+  readColor(themeObject, "gitUntrackedColor", gitUntrackedColor);
+  readColor(themeObject, "gitConflictedColor", gitConflictedColor);
+  readColor(themeObject, "gitIgnoredColor", gitIgnoredColor);
 
-  if (themeObject.contains("keywordFormat_1") &&
-      themeObject["keywordFormat_1"].isString())
-    keywordFormat_1 = QColor(themeObject["keywordFormat_1"].toString());
+  readColor(themeObject, "diffAddedColor", diffAddedColor);
+  readColor(themeObject, "diffModifiedColor", diffModifiedColor);
+  readColor(themeObject, "diffRemovedColor", diffRemovedColor);
+  readColor(themeObject, "diffConflictColor", diffConflictColor);
 
-  if (themeObject.contains("keywordFormat_2") &&
-      themeObject["keywordFormat_2"].isString())
-    keywordFormat_2 = QColor(themeObject["keywordFormat_2"].toString());
+  readColor(themeObject, "testPassedColor", testPassedColor);
+  readColor(themeObject, "testFailedColor", testFailedColor);
+  readColor(themeObject, "testSkippedColor", testSkippedColor);
+  readColor(themeObject, "testRunningColor", testRunningColor);
+  readColor(themeObject, "testQueuedColor", testQueuedColor);
 
-  if (themeObject.contains("searchFormat") &&
-      themeObject["searchFormat"].isString())
-    searchFormat = QColor(themeObject["searchFormat"].toString());
-
-  if (themeObject.contains("singleLineCommentFormat") &&
-      themeObject["singleLineCommentFormat"].isString())
-    singleLineCommentFormat =
-        QColor(themeObject["singleLineCommentFormat"].toString());
-
-  if (themeObject.contains("functionFormat") &&
-      themeObject["functionFormat"].isString())
-    functionFormat = QColor(themeObject["functionFormat"].toString());
-
-  if (themeObject.contains("quotationFormat") &&
-      themeObject["quotationFormat"].isString())
-    quotationFormat = QColor(themeObject["quotationFormat"].toString());
-
-  if (themeObject.contains("classFormat") &&
-      themeObject["classFormat"].isString())
-    classFormat = QColor(themeObject["classFormat"].toString());
-
-  if (themeObject.contains("numberFormat") &&
-      themeObject["numberFormat"].isString())
-    numberFormat = QColor(themeObject["numberFormat"].toString());
-
-  if (themeObject.contains("surfaceColor") &&
-      themeObject["surfaceColor"].isString())
-    surfaceColor = QColor(themeObject["surfaceColor"].toString());
-
-  if (themeObject.contains("surfaceAltColor") &&
-      themeObject["surfaceAltColor"].isString())
-    surfaceAltColor = QColor(themeObject["surfaceAltColor"].toString());
-
-  if (themeObject.contains("borderColor") &&
-      themeObject["borderColor"].isString())
-    borderColor = QColor(themeObject["borderColor"].toString());
-
-  if (themeObject.contains("hoverColor") &&
-      themeObject["hoverColor"].isString())
-    hoverColor = QColor(themeObject["hoverColor"].toString());
-
-  if (themeObject.contains("pressedColor") &&
-      themeObject["pressedColor"].isString())
-    pressedColor = QColor(themeObject["pressedColor"].toString());
-
-  if (themeObject.contains("accentColor") &&
-      themeObject["accentColor"].isString())
-    accentColor = QColor(themeObject["accentColor"].toString());
-
-  if (themeObject.contains("accentSoftColor") &&
-      themeObject["accentSoftColor"].isString())
-    accentSoftColor = QColor(themeObject["accentSoftColor"].toString());
-
-  if (themeObject.contains("successColor") &&
-      themeObject["successColor"].isString())
-    successColor = QColor(themeObject["successColor"].toString());
-
-  if (themeObject.contains("warningColor") &&
-      themeObject["warningColor"].isString())
-    warningColor = QColor(themeObject["warningColor"].toString());
-
-  if (themeObject.contains("errorColor") &&
-      themeObject["errorColor"].isString())
-    errorColor = QColor(themeObject["errorColor"].toString());
+  readColor(themeObject, "debugReadyColor", debugReadyColor);
+  readColor(themeObject, "debugStartingColor", debugStartingColor);
+  readColor(themeObject, "debugRunningColor", debugRunningColor);
+  readColor(themeObject, "debugPausedColor", debugPausedColor);
+  readColor(themeObject, "debugErrorColor", debugErrorColor);
+  readColor(themeObject, "debugBreakpointColor", debugBreakpointColor);
+  readColor(themeObject, "debugCurrentLineColor", debugCurrentLineColor);
 
   if (themeObject.contains("borderRadius") &&
       themeObject["borderRadius"].isDouble())
@@ -139,33 +170,70 @@ void Theme::read(const QJsonObject &json) {
   if (themeObject.contains("panelBorders") &&
       themeObject["panelBorders"].isBool())
     panelBorders = themeObject["panelBorders"].toBool();
+
+  normalize();
 }
 
 void Theme::write(QJsonObject &json) {
-  json["backgroundColor"] = backgroundColor.name();
-  json["foregroundColor"] = foregroundColor.name();
-  json["highlightColor"] = highlightColor.name();
-  json["lineNumberAreaColor"] = lineNumberAreaColor.name();
-  json["keywordFormat_0"] = keywordFormat_0.name();
-  json["keywordFormat_1"] = keywordFormat_1.name();
-  json["keywordFormat_2"] = keywordFormat_2.name();
-  json["searchFormat"] = searchFormat.name();
-  json["singleLineCommentFormat"] = singleLineCommentFormat.name();
-  json["functionFormat"] = functionFormat.name();
-  json["quotationFormat"] = quotationFormat.name();
-  json["classFormat"] = classFormat.name();
-  json["numberFormat"] = numberFormat.name();
+  writeColor(json, "backgroundColor", backgroundColor);
+  writeColor(json, "foregroundColor", foregroundColor);
+  writeColor(json, "highlightColor", highlightColor);
+  writeColor(json, "lineNumberAreaColor", lineNumberAreaColor);
+  writeColor(json, "keywordFormat_0", keywordFormat_0);
+  writeColor(json, "keywordFormat_1", keywordFormat_1);
+  writeColor(json, "keywordFormat_2", keywordFormat_2);
+  writeColor(json, "searchFormat", searchFormat);
+  writeColor(json, "singleLineCommentFormat", singleLineCommentFormat);
+  writeColor(json, "functionFormat", functionFormat);
+  writeColor(json, "quotationFormat", quotationFormat);
+  writeColor(json, "classFormat", classFormat);
+  writeColor(json, "numberFormat", numberFormat);
 
-  json["surfaceColor"] = surfaceColor.name();
-  json["surfaceAltColor"] = surfaceAltColor.name();
-  json["borderColor"] = borderColor.name();
-  json["hoverColor"] = hoverColor.name();
-  json["pressedColor"] = pressedColor.name();
-  json["accentColor"] = accentColor.name();
-  json["accentSoftColor"] = accentSoftColor.name();
-  json["successColor"] = successColor.name();
-  json["warningColor"] = warningColor.name();
-  json["errorColor"] = errorColor.name();
+  writeColor(json, "surfaceColor", surfaceColor);
+  writeColor(json, "surfaceAltColor", surfaceAltColor);
+  writeColor(json, "borderColor", borderColor);
+  writeColor(json, "hoverColor", hoverColor);
+  writeColor(json, "pressedColor", pressedColor);
+  writeColor(json, "accentColor", accentColor);
+  writeColor(json, "accentSoftColor", accentSoftColor);
+  writeColor(json, "successColor", successColor);
+  writeColor(json, "warningColor", warningColor);
+  writeColor(json, "errorColor", errorColor);
+  writeColor(json, "infoColor", infoColor);
+
+  writeColor(json, "diagnosticErrorColor", diagnosticErrorColor);
+  writeColor(json, "diagnosticWarningColor", diagnosticWarningColor);
+  writeColor(json, "diagnosticInfoColor", diagnosticInfoColor);
+  writeColor(json, "diagnosticHintColor", diagnosticHintColor);
+
+  writeColor(json, "gitAddedColor", gitAddedColor);
+  writeColor(json, "gitModifiedColor", gitModifiedColor);
+  writeColor(json, "gitDeletedColor", gitDeletedColor);
+  writeColor(json, "gitRenamedColor", gitRenamedColor);
+  writeColor(json, "gitCopiedColor", gitCopiedColor);
+  writeColor(json, "gitUntrackedColor", gitUntrackedColor);
+  writeColor(json, "gitConflictedColor", gitConflictedColor);
+  writeColor(json, "gitIgnoredColor", gitIgnoredColor);
+
+  writeColor(json, "diffAddedColor", diffAddedColor);
+  writeColor(json, "diffModifiedColor", diffModifiedColor);
+  writeColor(json, "diffRemovedColor", diffRemovedColor);
+  writeColor(json, "diffConflictColor", diffConflictColor);
+
+  writeColor(json, "testPassedColor", testPassedColor);
+  writeColor(json, "testFailedColor", testFailedColor);
+  writeColor(json, "testSkippedColor", testSkippedColor);
+  writeColor(json, "testRunningColor", testRunningColor);
+  writeColor(json, "testQueuedColor", testQueuedColor);
+
+  writeColor(json, "debugReadyColor", debugReadyColor);
+  writeColor(json, "debugStartingColor", debugStartingColor);
+  writeColor(json, "debugRunningColor", debugRunningColor);
+  writeColor(json, "debugPausedColor", debugPausedColor);
+  writeColor(json, "debugErrorColor", debugErrorColor);
+  writeColor(json, "debugBreakpointColor", debugBreakpointColor);
+  writeColor(json, "debugCurrentLineColor", debugCurrentLineColor);
+
   json["borderRadius"] = borderRadius;
   json["glowIntensity"] = glowIntensity;
   json["chromeOpacity"] = chromeOpacity;

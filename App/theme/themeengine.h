@@ -5,6 +5,7 @@
 #include "themedefinition.h"
 #include <QMap>
 #include <QObject>
+#include <QSet>
 #include <QStringList>
 
 class ThemeEngine : public QObject {
@@ -21,12 +22,14 @@ public:
   QStringList availableThemes() const;
   ThemeDefinition themeByName(const QString &name) const;
   bool hasTheme(const QString &name) const;
+  bool isBuiltinTheme(const QString &name) const;
 
   bool importTheme(const QString &filePath);
   bool exportTheme(const QString &name, const QString &filePath) const;
 
   void loadUserThemes();
-  void saveUserTheme(const ThemeDefinition &theme);
+  ThemeDefinition saveUserTheme(const ThemeDefinition &theme);
+  bool deleteUserTheme(const QString &name);
 
   int animationDuration() const;
   qreal glowIntensity() const;
@@ -45,9 +48,12 @@ private:
 
   void registerBuiltinThemes();
   QString userThemesDirectory() const;
+  QString userThemeFilePath(const QString &name) const;
+  QString makeUniqueCustomThemeName(const QString &baseName) const;
 
   ThemeDefinition m_activeTheme;
   QMap<QString, ThemeDefinition> m_themes;
+  QSet<QString> m_builtinThemes;
 };
 
 #endif

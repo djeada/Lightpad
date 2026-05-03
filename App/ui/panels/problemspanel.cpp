@@ -237,14 +237,9 @@ void ProblemsPanel::updateCounts() {
   if (total == 0) {
     m_statusLabel->setText(tr("No problems"));
   } else {
-    QString errColor = m_theme.errorColor.isValid() ? m_theme.errorColor.name()
-                                                    : m_theme.errorColor.name();
-    QString warnColor = m_theme.warningColor.isValid()
-                            ? m_theme.warningColor.name()
-                            : m_theme.accentColor.name();
-    QString infoColor = m_theme.accentColor.isValid()
-                            ? m_theme.accentColor.name()
-                            : m_theme.foregroundColor.name();
+    QString errColor = m_theme.diagnosticErrorColor.name();
+    QString warnColor = m_theme.diagnosticWarningColor.name();
+    QString infoColor = m_theme.diagnosticInfoColor.name();
     QString status = QString("<span style='color:%1;'>&#x26D4; %2</span>"
                              "&nbsp;&nbsp;"
                              "<span style='color:%3;'>&#x26A0; %4</span>"
@@ -338,16 +333,16 @@ void ProblemsPanel::rebuildTree() {
       QColor color;
       switch (diag.severity) {
       case LspDiagnosticSeverity::Error:
-        color = m_theme.errorColor;
+        color = m_theme.diagnosticErrorColor;
         break;
       case LspDiagnosticSeverity::Warning:
-        color = m_theme.warningColor;
+        color = m_theme.diagnosticWarningColor;
         break;
       case LspDiagnosticSeverity::Information:
-        color = m_theme.accentColor;
+        color = m_theme.diagnosticInfoColor;
         break;
       case LspDiagnosticSeverity::Hint:
-        color = m_theme.singleLineCommentFormat;
+        color = m_theme.diagnosticHintColor;
         break;
       }
       diagItem->setForeground(0, color);

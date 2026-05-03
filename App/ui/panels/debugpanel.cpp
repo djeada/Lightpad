@@ -27,6 +27,15 @@ constexpr int MAX_DEBUG_CONSOLE_ENTRY_CHARS = 8192;
 constexpr int MAX_EAGER_SCOPE_LOADS = 1;
 constexpr int MAX_STACK_FRAMES_PER_REFRESH = 64;
 
+QString fillStyleTemplate(
+    QString style,
+    std::initializer_list<std::pair<const char *, QString>> replacements) {
+  for (const auto &[key, value] : replacements) {
+    style.replace(QString("{%1}").arg(QString::fromLatin1(key)), value);
+  }
+  return style;
+}
+
 class DebugTreeDelegate : public QStyledItemDelegate {
 public:
   explicit DebugTreeDelegate(QObject *parent = nullptr)
@@ -241,11 +250,11 @@ void DebugPanel::applyTheme(const Theme &theme) {
   QColor subtleText = blend(theme.foregroundColor, theme.backgroundColor, 0.34);
   QColor consoleSurface =
       blend(theme.backgroundColor, theme.surfaceColor, 0.08);
-  QColor readyBg = withAlpha(theme.foregroundColor, 16);
-  QColor startingBg = withAlpha(theme.warningColor, 26);
-  QColor runningBg = withAlpha(theme.accentColor, 28);
-  QColor pausedBg = withAlpha(theme.successColor, 32);
-  QColor errorBg = withAlpha(theme.errorColor, 34);
+  QColor readyBg = withAlpha(theme.debugReadyColor, 22);
+  QColor startingBg = withAlpha(theme.debugStartingColor, 30);
+  QColor runningBg = withAlpha(theme.debugRunningColor, 30);
+  QColor pausedBg = withAlpha(theme.debugPausedColor, 34);
+  QColor errorBg = withAlpha(theme.debugErrorColor, 36);
   QColor toolbarButtonBg =
       blend(theme.backgroundColor, theme.surfaceColor, 0.04);
   QColor toolbarButtonHover =
@@ -259,15 +268,15 @@ void DebugPanel::applyTheme(const Theme &theme) {
   QColor tabSelected = withAlpha(theme.foregroundColor, 6);
   QColor tabSelectedBorder = withAlpha(theme.accentColor, 80);
 
-  setStyleSheet(
-      QString(
+  setStyleSheet(fillStyleTemplate(
+      QStringLiteral(
           "QWidget#debugPanel {"
-          "  background: %1;"
-          "  color: %2;"
+          "  background: {panelBg};"
+          "  color: {fg};"
           "}"
           "QWidget#debugToolbarShell {"
-          "  background: %3;"
-          "  border: 1px solid %4;"
+          "  background: {toolbarBg};"
+          "  border: 1px solid {shellBorder};"
           "  border-radius: 4px;"
           "}"
           "QWidget#debugToolbar {"
@@ -279,14 +288,14 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  border: none;"
           "}"
           "QFrame#debugToolbarDivider {"
-          "  background: %4;"
+          "  background: {shellBorder};"
           "  min-width: 1px;"
           "  max-width: 1px;"
           "}"
           "QToolButton#debugToolbarButton {"
-          "  color: %2;"
-          "  background: %12;"
-          "  border: 1px solid %4;"
+          "  color: {fg};"
+          "  background: {inputSurface};"
+          "  border: 1px solid {shellBorder};"
           "  border-radius: 3px;"
           "  padding: 6px 11px;"
           "  font-size: 12px;"
@@ -294,49 +303,49 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  text-align: left;"
           "}"
           "QToolButton#debugToolbarButton:hover {"
-          "  background: %13;"
-          "  border-color: %10;"
+          "  background: {focusSurface};"
+          "  border-color: {tabSelectedBorder};"
           "}"
           "QToolButton#debugToolbarButton:pressed {"
-          "  background: %14;"
-          "  border-color: %10;"
+          "  background: {accentSoft};"
+          "  border-color: {tabSelectedBorder};"
           "}"
           "QToolButton#debugToolbarButton:disabled {"
-          "  color: %6;"
+          "  color: {subtleText};"
           "  background: transparent;"
           "  border-color: transparent;"
           "}"
           "QToolButton#debugToolbarButton[role=\"primary\"] {"
-          "  background: %9;"
-          "  color: %2;"
-          "  border-color: %10;"
+          "  background: {tabSelected};"
+          "  color: {fg};"
+          "  border-color: {tabSelectedBorder};"
           "}"
           "QToolButton#debugToolbarButton[role=\"primary\"]:hover {"
-          "  background: %14;"
+          "  background: {accentSoft};"
           "}"
           "QToolButton#debugToolbarButton[role=\"danger\"] {"
           "  background: transparent;"
           "}"
           "QWidget#debugInspectorShell {"
-          "  background: %5;"
-          "  border: 1px solid %4;"
+          "  background: {shellSurface};"
+          "  border: 1px solid {shellBorder};"
           "  border-radius: 4px;"
           "}"
           "QWidget#debugPanel QLabel {"
-          "  color: %2;"
+          "  color: {fg};"
           "}"
           "QWidget#debugInspectorTabBar {"
           "  background: transparent;"
           "  border: none;"
-          "  border-bottom: 1px solid %4;"
+          "  border-bottom: 1px solid {shellBorder};"
           "}"
           "QStackedWidget#debugInspectorStack {"
           "  background: transparent;"
           "  border: none;"
           "}"
           "QToolButton#debugInspectorTab {"
-          "  color: %6;"
-          "  background: %7;"
+          "  color: {subtleText};"
+          "  background: {tabBg};"
           "  border: none;"
           "  border-bottom: 2px solid transparent;"
           "  padding: 8px 10px 7px 10px;"
@@ -346,13 +355,13 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  text-align: left;"
           "}"
           "QToolButton#debugInspectorTab:hover {"
-          "  color: %2;"
-          "  background: %8;"
+          "  color: {fg};"
+          "  background: {tabHover};"
           "}"
           "QToolButton#debugInspectorTab:checked {"
-          "  color: %2;"
-          "  background: %9;"
-          "  border-bottom-color: %10;"
+          "  color: {fg};"
+          "  background: {tabSelected};"
+          "  border-bottom-color: {tabSelectedBorder};"
           "}"
           "QWidget#debugInspectorPage {"
           "  background: transparent;"
@@ -367,35 +376,35 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  border: none;"
           "}"
           "QToolButton#debugSectionAction {"
-          "  color: %2;"
-          "  background: %12;"
-          "  border: 1px solid %4;"
+          "  color: {fg};"
+          "  background: {inputSurface};"
+          "  border: 1px solid {shellBorder};"
           "  border-radius: 3px;"
           "  padding: 3px 8px;"
           "  font-weight: 600;"
           "}"
           "QToolButton#debugSectionAction:hover {"
-          "  background: %13;"
-          "  border-color: %10;"
+          "  background: {focusSurface};"
+          "  border-color: {tabSelectedBorder};"
           "}"
           "QToolButton#debugSectionAction:pressed {"
-          "  background: %14;"
+          "  background: {accentSoft};"
           "}"
           "QLineEdit#debugWatchInput, QLineEdit#debugConsoleInput {"
-          "  background: %12;"
-          "  color: %2;"
-          "  border: 1px solid %4;"
+          "  background: {inputSurface};"
+          "  color: {fg};"
+          "  border: 1px solid {shellBorder};"
           "  border-radius: 3px;"
           "  padding: 7px 10px;"
           "}"
           "QLineEdit#debugWatchInput:focus, QLineEdit#debugConsoleInput:focus {"
-          "  background: %13;"
-          "  border-color: %10;"
+          "  background: {focusSurface};"
+          "  border-color: {tabSelectedBorder};"
           "}"
           "QMenu {"
-          "  background: %11;"
-          "  color: %2;"
-          "  border: 1px solid %4;"
+          "  background: {cardSurface};"
+          "  color: {fg};"
+          "  border: 1px solid {shellBorder};"
           "  padding: 6px;"
           "}"
           "QMenu::item {"
@@ -403,25 +412,25 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  border-radius: 2px;"
           "}"
           "QMenu::item:selected {"
-          "  background: %13;"
+          "  background: {focusSurface};"
           "}"
           "QComboBox#debugThreadSelector {"
           "  min-height: 30px;"
           "  padding: 2px 10px;"
-          "  border: 1px solid %4;"
+          "  border: 1px solid {shellBorder};"
           "  border-radius: 3px;"
-          "  background: %12;"
-          "  color: %2;"
+          "  background: {inputSurface};"
+          "  color: {fg};"
           "}"
           "QComboBox#debugThreadSelector:hover {"
-          "  border-color: %10;"
+          "  border-color: {tabSelectedBorder};"
           "}"
           "QComboBox#debugThreadSelector QAbstractItemView {"
-          "  background: %5;"
-          "  color: %2;"
-          "  border: 1px solid %4;"
-          "  selection-background-color: %14;"
-          "  selection-color: %2;"
+          "  background: {shellSurface};"
+          "  color: {fg};"
+          "  border: 1px solid {shellBorder};"
+          "  selection-background-color: {accentSoft};"
+          "  selection-color: {fg};"
           "}"
           "QComboBox#debugThreadSelector::drop-down {"
           "  border: none;"
@@ -429,71 +438,82 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "QLabel#debugStatusLabel {"
           "  padding: 6px 12px;"
           "  font-weight: 600;"
-          "  border: 1px solid %10;"
+          "  border: 1px solid {tabSelectedBorder};"
           "  border-radius: 3px;"
-          "  background: %8;"
-          "  color: %2;"
+          "  background: {tabHover};"
+          "  color: {fg};"
           "}"
           "QLabel#debugStatusLabel[statusKind=\"ready\"] {"
-          "  border-color: %4;"
-          "  background: %23;"
+          "  border-color: {shellBorder};"
+          "  background: {readyBg};"
           "}"
           "QLabel#debugStatusLabel[statusKind=\"starting\"] {"
-          "  border-color: %16;"
-          "  background: %17;"
-          "  color: %16;"
+          "  border-color: {warningColor};"
+          "  background: {startingBg};"
+          "  color: {warningColor};"
           "}"
           "QLabel#debugStatusLabel[statusKind=\"running\"] {"
-          "  border-color: %10;"
-          "  background: %18;"
-          "  color: %10;"
+          "  border-color: {tabSelectedBorder};"
+          "  background: {runningBg};"
+          "  color: {tabSelectedBorder};"
           "}"
           "QLabel#debugStatusLabel[statusKind=\"paused\"] {"
-          "  border-color: %19;"
-          "  background: %20;"
-          "  color: %19;"
+          "  border-color: {successColor};"
+          "  background: {pausedBg};"
+          "  color: {successColor};"
           "}"
           "QLabel#debugStatusLabel[statusKind=\"error\"] {"
-          "  border-color: %21;"
-          "  background: %22;"
-          "  color: %21;"
+          "  border-color: {errorColor};"
+          "  background: {errorBg};"
+          "  color: {errorColor};"
           "}"
           "QPlainTextEdit#debugConsoleOutput {"
-          "  background: %15;"
-          "  color: %2;"
-          "  border: 1px solid %4;"
+          "  background: {consoleSurface};"
+          "  color: {fg};"
+          "  border: 1px solid {shellBorder};"
           "  border-radius: 0px;"
-          "  selection-background-color: %14;"
-          "  selection-color: %2;"
+          "  selection-background-color: {accentSoft};"
+          "  selection-color: {fg};"
           "  padding: 6px;"
-          "}")
-          .arg(panelSurface.name(), theme.foregroundColor.name(),
-               toolbarShell.name(), shellBorder.name(QColor::HexArgb),
-               shellSurface.name(), subtleText.name(),
-               tabBg.name(QColor::HexArgb), tabHover.name(QColor::HexArgb),
-               tabSelected.name(QColor::HexArgb),
-               tabSelectedBorder.name(QColor::HexArgb), cardSurface.name(),
-               inputSurface.name(), focusSurface.name(),
-               theme.accentSoftColor.name(), consoleSurface.name(),
-               theme.warningColor.name(), startingBg.name(QColor::HexArgb),
-               runningBg.name(QColor::HexArgb), theme.successColor.name(),
-               pausedBg.name(QColor::HexArgb), theme.errorColor.name(),
-               errorBg.name(QColor::HexArgb), readyBg.name(QColor::HexArgb)));
+          "}"),
+      {{"panelBg", panelSurface.name()},
+       {"fg", theme.foregroundColor.name()},
+       {"toolbarBg", toolbarShell.name()},
+       {"shellBorder", shellBorder.name(QColor::HexArgb)},
+       {"shellSurface", shellSurface.name()},
+       {"subtleText", subtleText.name()},
+       {"tabBg", tabBg.name(QColor::HexArgb)},
+       {"tabHover", tabHover.name(QColor::HexArgb)},
+       {"tabSelected", tabSelected.name(QColor::HexArgb)},
+       {"tabSelectedBorder", tabSelectedBorder.name(QColor::HexArgb)},
+       {"cardSurface", cardSurface.name()},
+       {"inputSurface", inputSurface.name()},
+       {"focusSurface", focusSurface.name()},
+       {"accentSoft", theme.accentSoftColor.name()},
+       {"consoleSurface", consoleSurface.name()},
+       {"warningColor", theme.warningColor.name()},
+       {"startingBg", startingBg.name(QColor::HexArgb)},
+       {"runningBg", runningBg.name(QColor::HexArgb)},
+       {"successColor", theme.successColor.name()},
+       {"pausedBg", pausedBg.name(QColor::HexArgb)},
+       {"errorColor", theme.errorColor.name()},
+       {"errorBg", errorBg.name(QColor::HexArgb)},
+       {"readyBg", readyBg.name(QColor::HexArgb)}}));
 
-  const QString treeStyle =
-      QString(
+  const QString treeStyle = fillStyleTemplate(
+      QStringLiteral(
           "QTreeWidget {"
-          "  background: %1;"
-          "  alternate-background-color: %2;"
-          "  color: %3;"
-          "  border: 1px solid %4;"
+          "  background: {bg};"
+          "  alternate-background-color: {altBg};"
+          "  color: {fg};"
+          "  border: 1px solid {border};"
           "  border-radius: 0px;"
           "  outline: none;"
-          "  selection-background-color: %5;"
-          "  selection-color: %3;"
+          "  selection-background-color: {selectionBg};"
+          "  selection-color: {fg};"
           "}"
           "QTreeWidget::item {"
-          "  color: %3;"
+          "  color: {fg};"
           "  padding: 4px 8px;"
           "  margin: 0;"
           "  border-radius: 0px;"
@@ -503,7 +523,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "}"
           "QTreeWidget::item:selected {"
           "  background: transparent;"
-          "  color: %3;"
+          "  color: {fg};"
           "}"
           "QTreeWidget::item:hover:!selected {"
           "  background: transparent;"
@@ -524,9 +544,9 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "}"
           "QHeaderView::section {"
           "  background: transparent;"
-          "  color: %8;"
+          "  color: {subtleText};"
           "  border: none;"
-          "  border-bottom: 1px solid %4;"
+          "  border-bottom: 1px solid {border};"
           "  padding: 6px 8px 5px 8px;"
           "  font-size: 10px;"
           "  font-weight: 600;"
@@ -537,12 +557,12 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  margin: 2px 0 2px 0;"
           "}"
           "QScrollBar::handle:vertical {"
-          "  background: %4;"
+          "  background: {border};"
           "  min-height: 18px;"
           "  border-radius: 2px;"
           "}"
           "QScrollBar::handle:vertical:hover {"
-          "  background: %8;"
+          "  background: {subtleText};"
           "}"
           "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
           "  height: 0px;"
@@ -553,24 +573,22 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  margin: 0 2px 0 2px;"
           "}"
           "QScrollBar::handle:horizontal {"
-          "  background: %4;"
+          "  background: {border};"
           "  min-width: 18px;"
           "  border-radius: 2px;"
           "}"
           "QScrollBar::handle:horizontal:hover {"
-          "  background: %8;"
+          "  background: {subtleText};"
           "}"
           "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
           "  width: 0px;"
-          "}")
-          .arg(recessedSurface.name())
-          .arg(cardSurface.name())
-          .arg(theme.foregroundColor.name())
-          .arg(treeBorder.name(QColor::HexArgb))
-          .arg(theme.accentSoftColor.name())
-          .arg(theme.hoverColor.name())
-          .arg(cardSurface.name())
-          .arg(subtleText.name());
+          "}"),
+      {{"bg", recessedSurface.name()},
+       {"altBg", cardSurface.name()},
+       {"fg", theme.foregroundColor.name()},
+       {"border", treeBorder.name(QColor::HexArgb)},
+       {"selectionBg", theme.accentSoftColor.name()},
+       {"subtleText", subtleText.name()}});
 
   for (QTreeWidget *tree :
        {m_callStackTree, m_variablesTree, m_watchTree, m_breakpointsTree}) {
@@ -2635,16 +2653,16 @@ void DebugPanel::resizeVariablesNameColumnOnce() {
 
 QColor DebugPanel::consoleErrorColor() const {
   if (m_themeInitialized) {
-    return m_theme.errorColor;
+    return m_theme.debugErrorColor;
   }
   const bool darkBackground = palette().color(QPalette::Base).lightness() < 128;
-  return darkBackground ? m_theme.errorColor.lighter(120)
-                        : m_theme.errorColor.darker(120);
+  return darkBackground ? m_theme.debugErrorColor.lighter(120)
+                        : m_theme.debugErrorColor.darker(120);
 }
 
 QColor DebugPanel::consoleMutedColor() const {
   if (m_themeInitialized) {
-    return m_theme.singleLineCommentFormat;
+    return m_theme.debugReadyColor;
   }
   QColor muted = palette().color(QPalette::PlaceholderText);
   if (!muted.isValid()) {
@@ -2655,7 +2673,7 @@ QColor DebugPanel::consoleMutedColor() const {
 
 QColor DebugPanel::consoleInfoColor() const {
   if (m_themeInitialized) {
-    return m_theme.accentColor;
+    return m_theme.debugRunningColor;
   }
   QColor info = palette().color(QPalette::Link);
   if (!info.isValid()) {

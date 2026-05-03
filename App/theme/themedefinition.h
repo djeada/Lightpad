@@ -50,6 +50,18 @@ struct ThemeColors {
   QColor ansiBrightBlue, ansiBrightMagenta, ansiBrightCyan, ansiBrightWhite;
 
   QColor statusSuccess, statusWarning, statusError, statusInfo;
+
+  QColor diagnosticError, diagnosticWarning, diagnosticInfo, diagnosticHint;
+
+  QColor gitAdded, gitModified, gitDeleted, gitRenamed, gitCopied, gitUntracked,
+      gitConflicted, gitIgnored;
+
+  QColor diffAdded, diffModified, diffRemoved, diffConflict;
+
+  QColor testPassed, testFailed, testSkipped, testRunning, testQueued;
+
+  QColor debugReady, debugStarting, debugRunning, debugPaused, debugError,
+      debugBreakpoint, debugCurrentLine;
 };
 
 struct ThemeUiConfig {
@@ -76,9 +88,14 @@ public:
 
   static ThemeDefinition fromClassicTheme(const Theme &classic,
                                           const QString &name = "Custom");
+  static ThemeDefinition
+  generateFromSeed(const ThemeDefinition &base, const QString &name,
+                   const QString &author, const QColor &background,
+                   const QColor &foreground, const QColor &accent);
 
   void read(const QJsonObject &json);
   void write(QJsonObject &json) const;
+  void normalize();
 
   static QColor lerp(const QColor &a, const QColor &b, qreal t);
 };

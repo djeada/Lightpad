@@ -11,6 +11,7 @@ public:
   explicit StyledPopupDialog(QWidget *parent = nullptr);
 
   void applyTheme(const Theme &theme) override;
+  void applyTheme(const ThemeDefinition &theme);
 
   void showCentered();
 

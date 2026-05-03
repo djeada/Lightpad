@@ -9,6 +9,8 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+class ThemeDefinition;
+
 class ThemedMessageBox : public QDialog {
   Q_OBJECT
 
@@ -23,6 +25,7 @@ public:
   };
 
   static void setGlobalTheme(const Theme &theme);
+  static void setGlobalTheme(const ThemeDefinition &theme);
 
   static int information(QWidget *parent, const QString &title,
                          const QString &text, int buttons = Ok);
@@ -52,6 +55,13 @@ private:
 
   static Theme s_theme;
   static bool s_themeSet;
+  static bool s_semanticThemeSet;
+  static QString s_dialogStyle;
+  static QString s_textStyle;
+  static QString s_infoStyle;
+  static QString s_primaryButtonStyle;
+  static QString s_secondaryButtonStyle;
+  static QString s_dangerButtonStyle;
 
   Icon m_icon = NoIcon;
   QString m_text;

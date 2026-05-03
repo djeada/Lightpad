@@ -85,3 +85,8 @@ void GoToLineDialog::applyTheme(const Theme &theme) {
   StyledPopupDialog::applyTheme(theme);
   m_infoLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
 }
+
+void GoToLineDialog::applyTheme(const ThemeDefinition &theme) {
+  StyledPopupDialog::applyTheme(theme);
+  m_infoLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
+}

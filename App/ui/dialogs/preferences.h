@@ -6,9 +6,13 @@
 #include <QDialog>
 #include <QFontComboBox>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
+#include <QPushButton>
 #include <QSpinBox>
 #include <QToolButton>
+
+#include "../../theme/themedefinition.h"
 
 class MainWindow;
 
@@ -25,6 +29,10 @@ private:
   void connectSignals();
   void persistAll();
   void persistCurrentTheme(const QString &activeThemeName);
+  void refreshThemeList(const QString &selectedName = QString());
+  void syncThemeControls(const ThemeDefinition &theme);
+  void refreshThemeSwatches();
+  void applyEditedTheme(const QString &activeThemeName);
 
   QWidget *createSectionHeader(const QString &title);
   QWidget *createSeparator();
@@ -39,6 +47,10 @@ private:
   void onGlowPresetChanged(int index);
   void onPanelBordersToggled(bool enabled);
   void onTransparencyPresetChanged(int index);
+  void onGenerateThemeClicked();
+  void onSaveThemeClicked();
+  void onDeleteThemeClicked();
+  void onThemeMetadataChanged();
   void applyThemeEffects();
 
   MainWindow *m_mainWindow;
@@ -59,12 +71,20 @@ private:
 
   QListWidget *m_themeList;
   QWidget *m_themePreview;
+  QLineEdit *m_themeNameEdit = nullptr;
+  QLineEdit *m_themeAuthorEdit = nullptr;
+  QComboBox *m_themeBaseCombo = nullptr;
+  QPushButton *m_generateThemeButton = nullptr;
+  QPushButton *m_saveThemeButton = nullptr;
+  QPushButton *m_deleteThemeButton = nullptr;
   QCheckBox *m_scanlinesCheck = nullptr;
   QComboBox *m_glowCombo = nullptr;
   QCheckBox *m_panelBordersCheck = nullptr;
   QComboBox *m_transparencyCombo = nullptr;
 
   QMap<QString, QToolButton *> m_colorSwatches;
+  ThemeDefinition m_editTheme;
+  bool m_updatingThemeUi = false;
 };
 
 #endif

@@ -17,6 +17,46 @@
 #include "../../ui/mainwindow.h"
 #include "codefolding.h"
 
+namespace {
+Theme currentThemeFor(const TextArea *editor) {
+  if (!editor) {
+    return Theme();
+  }
+
+  if (auto *window = qobject_cast<MainWindow *>(editor->window())) {
+    return window->getTheme();
+  }
+
+  return Theme();
+}
+
+QColor diffColorForType(const Theme &theme, int diffType) {
+  switch (diffType) {
+  case 0:
+    return theme.diffAddedColor;
+  case 1:
+    return theme.diffModifiedColor;
+  default:
+    return theme.diffRemovedColor;
+  }
+}
+
+QColor diagnosticColorFor(const Theme &theme, LspDiagnosticSeverity severity) {
+  switch (severity) {
+  case LspDiagnosticSeverity::Error:
+    return theme.diagnosticErrorColor;
+  case LspDiagnosticSeverity::Warning:
+    return theme.diagnosticWarningColor;
+  case LspDiagnosticSeverity::Information:
+    return theme.diagnosticInfoColor;
+  case LspDiagnosticSeverity::Hint:
+    return theme.diagnosticHintColor;
+  }
+
+  return theme.diagnosticInfoColor;
+}
+} // namespace
+
 LineNumberArea::LineNumberArea(TextArea *editor, QWidget *parent)
     : QWidget(parent ? parent : editor), m_editor(editor),
       m_gitIntegration(nullptr), m_backgroundColor(QColor(40, 40, 40)),
@@ -206,11 +246,9 @@ QString LineNumberArea::buildDiffHunkTooltip(const GitDiffHunk &hunk) const {
     return QString();
   }
 
-  const Theme theme = (m_editor && m_editor->mainWindow)
-                          ? m_editor->mainWindow->getTheme()
-                          : Theme();
-  const QColor added = theme.successColor;
-  const QColor removed = theme.errorColor;
+  const Theme theme = currentThemeFor(m_editor);
+  const QColor added = theme.diffAddedColor;
+  const QColor removed = theme.diffRemovedColor;
 
   QString html =
       QStringLiteral("<div style='font-family: monospace; font-size: 11px; "
@@ -393,9 +431,7 @@ bool LineNumberArea::event(QEvent *event) {
                     "<div style='margin-top: 6px; font-size: 11px; "
                     "color: #aaa; border-top: 1px solid #555; "
                     "padding-top: 4px;'>");
-                const Theme statsTheme = (m_editor && m_editor->mainWindow)
-                                             ? m_editor->mainWindow->getTheme()
-                                             : Theme();
+                const Theme statsTheme = currentThemeFor(m_editor);
                 int shown = 0;
                 for (const auto &stat : stats) {
                   if (shown >= 8) {
@@ -407,9 +443,9 @@ bool LineNumberArea::event(QEvent *event) {
                   tooltip +=
                       QString("<div><span style='color:%1;'>+%2</span> "
                               "<span style='color:%3;'>-%4</span> %5</div>")
-                          .arg(statsTheme.successColor.name())
+                          .arg(statsTheme.diffAddedColor.name())
                           .arg(stat.additions)
-                          .arg(statsTheme.errorColor.name())
+                          .arg(statsTheme.diffRemovedColor.name())
                           .arg(stat.deletions)
                           .arg(stat.filePath.toHtmlEscaped());
                   ++shown;
@@ -610,28 +646,15 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
 
       if (diffLineMap.contains(lineNum)) {
         int diffType = diffLineMap[lineNum];
-        QColor diffColor;
-        switch (diffType) {
-        case 0:
-          diffColor = QColor(76, 175, 80);
-          break;
-        case 1:
-          diffColor = QColor(33, 150, 243);
-          break;
-        default:
-          diffColor = QColor(244, 67, 54);
-          break;
-        }
+        const QColor diffColor =
+            diffColorForType(currentThemeFor(m_editor), diffType);
         painter.fillRect(0, blockTop, DIFF_INDICATOR_WIDTH, blockHeight,
                          diffColor);
       }
 
       if (breakpointLines.contains(lineNum)) {
         const Breakpoint &bp = breakpointLines[lineNum];
-        QColor baseColor(231, 76, 60);
-        if (m_editor && m_editor->mainWindow) {
-          baseColor = m_editor->mainWindow->getTheme().errorColor;
-        }
+        QColor baseColor = currentThemeFor(m_editor).debugBreakpointColor;
 
         QColor markerColor = baseColor;
         if (!bp.enabled) {
@@ -657,27 +680,8 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
       if (m_diagnosticLines.contains(lineNum) &&
           !breakpointLines.contains(lineNum)) {
         LspDiagnosticSeverity severity = m_diagnosticLines[lineNum];
-        QColor markerColor;
-        switch (severity) {
-        case LspDiagnosticSeverity::Error:
-          markerColor = (m_editor && m_editor->mainWindow)
-                            ? m_editor->mainWindow->getTheme().errorColor
-                            : QColor(231, 76, 60);
-          break;
-        case LspDiagnosticSeverity::Warning:
-          markerColor = (m_editor && m_editor->mainWindow)
-                            ? m_editor->mainWindow->getTheme().warningColor
-                            : QColor(241, 196, 15);
-          break;
-        case LspDiagnosticSeverity::Information:
-          markerColor = (m_editor && m_editor->mainWindow)
-                            ? m_editor->mainWindow->getTheme().accentColor
-                            : QColor(52, 152, 219);
-          break;
-        case LspDiagnosticSeverity::Hint:
-          markerColor = QColor(149, 165, 166);
-          break;
-        }
+        const QColor markerColor =
+            diagnosticColorFor(currentThemeFor(m_editor), severity);
 
         static constexpr int MIN_MARKER_DIAMETER = 4;
         static constexpr int MARKER_PADDING = 4;

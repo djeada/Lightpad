@@ -17,6 +17,7 @@ class QLabel;
 class QLineEdit;
 class QToolButton;
 struct Theme;
+class ThemeDefinition;
 
 class LightpadTreeView : public QTreeView {
 
@@ -90,6 +91,7 @@ public:
   QString getTreeFilterText() const;
   void activateTreeIndex(const QModelIndex &index);
   void applyTheme(const Theme &theme);
+  void applyTheme(const ThemeDefinition &theme);
   MainWindow *getMainWindow() const;
 
 private:

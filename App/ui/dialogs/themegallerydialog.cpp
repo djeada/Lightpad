@@ -1,10 +1,14 @@
 #include "themegallerydialog.h"
 #include "../../theme/themeengine.h"
 
+#include <QColorDialog>
+#include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QJsonDocument>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPainter>
@@ -171,11 +175,11 @@ ThemeGalleryDialog::ThemeGalleryDialog(QWidget *parent) : StyledDialog(parent) {
   auto *metaLay = new QFormLayout(meta);
   metaLay->setContentsMargins(4, 4, 4, 4);
   metaLay->setLabelAlignment(Qt::AlignRight);
-  m_nameLabel = new QLabel(meta);
-  m_authorLabel = new QLabel(meta);
+  m_nameEdit = new QLineEdit(meta);
+  m_authorEdit = new QLineEdit(meta);
   m_typeLabel = new QLabel(meta);
-  metaLay->addRow(tr("Name:"), m_nameLabel);
-  metaLay->addRow(tr("Author:"), m_authorLabel);
+  metaLay->addRow(tr("Name:"), m_nameEdit);
+  metaLay->addRow(tr("Author:"), m_authorEdit);
   metaLay->addRow(tr("Type:"), m_typeLabel);
   rightLay->addWidget(meta);
 
@@ -187,11 +191,21 @@ ThemeGalleryDialog::ThemeGalleryDialog(QWidget *parent) : StyledDialog(parent) {
   auto *btnRow = new QHBoxLayout();
   m_importBtn = new QPushButton(tr("Import…"), this);
   m_exportBtn = new QPushButton(tr("Export…"), this);
+  m_generateBtn = new QPushButton(tr("Generate Variant…"), this);
+  m_saveBtn = new QPushButton(tr("Save Custom Theme"), this);
+  m_deleteBtn = new QPushButton(tr("Delete Custom Theme"), this);
   m_applyBtn = new QPushButton(tr("Apply Theme"), this);
   m_closeBtn = new QPushButton(tr("Close"), this);
+  styleSecondaryButton(m_generateBtn);
+  styleSecondaryButton(m_saveBtn);
+  styleDangerButton(m_deleteBtn);
   stylePrimaryButton(m_applyBtn);
   btnRow->addWidget(m_importBtn);
   btnRow->addWidget(m_exportBtn);
+  btnRow->addWidget(m_generateBtn);
+  btnRow->addWidget(m_saveBtn);
+  btnRow->addWidget(m_deleteBtn);
+  m_deleteBtn->hide();
   btnRow->addStretch(1);
   btnRow->addWidget(m_closeBtn);
   btnRow->addWidget(m_applyBtn);
@@ -207,16 +221,31 @@ ThemeGalleryDialog::ThemeGalleryDialog(QWidget *parent) : StyledDialog(parent) {
           &ThemeGalleryDialog::onImportClicked);
   connect(m_exportBtn, &QPushButton::clicked, this,
           &ThemeGalleryDialog::onExportClicked);
+  connect(m_generateBtn, &QPushButton::clicked, this,
+          &ThemeGalleryDialog::onGenerateClicked);
+  connect(m_saveBtn, &QPushButton::clicked, this,
+          &ThemeGalleryDialog::onSaveClicked);
+  connect(m_deleteBtn, &QPushButton::clicked, this,
+          &ThemeGalleryDialog::onDeleteClicked);
   connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::accept);
+  connect(m_nameEdit, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            m_workingTheme.name = text.trimmed();
+            m_preview->setDefinition(m_workingTheme);
+          });
+  connect(
+      m_authorEdit, &QLineEdit::textChanged, this,
+      [this](const QString &text) { m_workingTheme.author = text.trimmed(); });
 
   populateThemes();
-  applyTheme(ThemeEngine::instance().classicTheme());
+  StyledDialog::applyTheme(ThemeEngine::instance().activeTheme());
 }
 
 void ThemeGalleryDialog::populateThemes() {
   m_list->clear();
   QStringList names = ThemeEngine::instance().availableThemes();
   names.sort();
+  const QString preferred = m_workingTheme.name;
   QString active = ThemeEngine::instance().activeTheme().name;
   for (const QString &n : names) {
     ThemeDefinition d = ThemeEngine::instance().themeByName(n);
@@ -224,8 +253,10 @@ void ThemeGalleryDialog::populateThemes() {
     px.fill(d.colors.accentPrimary);
     auto *item = new QListWidgetItem(QIcon(px), n);
     m_list->addItem(item);
-    if (n == active)
+    if ((!preferred.isEmpty() && n == preferred) ||
+        (preferred.isEmpty() && n == active)) {
       m_list->setCurrentItem(item);
+    }
   }
   if (!m_list->currentItem() && m_list->count() > 0)
     m_list->setCurrentRow(0);
@@ -240,18 +271,34 @@ void ThemeGalleryDialog::onSelectionChanged() {
 }
 
 void ThemeGalleryDialog::updatePreview(const ThemeDefinition &def) {
-  m_preview->setDefinition(def);
-  m_nameLabel->setText(def.name);
-  m_authorLabel->setText(def.author.isEmpty() ? tr("—") : def.author);
-  m_typeLabel->setText(def.type);
+  m_workingTheme = def;
+  m_preview->setDefinition(m_workingTheme);
+  m_nameEdit->setText(m_workingTheme.name);
+  m_authorEdit->setText(m_workingTheme.author);
+  m_typeLabel->setText(m_workingTheme.type);
+  if (m_deleteBtn)
+    m_deleteBtn->setVisible(
+        !m_workingTheme.name.isEmpty() &&
+        ThemeEngine::instance().hasTheme(m_workingTheme.name) &&
+        !ThemeEngine::instance().isBuiltinTheme(m_workingTheme.name));
+}
+
+ThemeDefinition ThemeGalleryDialog::currentEditedTheme() const {
+  ThemeDefinition current = m_workingTheme;
+  current.name = m_nameEdit->text().trimmed();
+  current.author = m_authorEdit->text().trimmed();
+  current.normalize();
+  return current;
 }
 
 void ThemeGalleryDialog::onApplyClicked() {
-  auto *item = m_list->currentItem();
-  if (!item)
+  ThemeDefinition current = currentEditedTheme();
+  if (current.name.isEmpty()) {
+    QMessageBox::warning(this, tr("Missing name"),
+                         tr("Set a theme name before applying it."));
     return;
-  ThemeDefinition d = ThemeEngine::instance().themeByName(item->text());
-  emit themeSelected(d);
+  }
+  emit themeSelected(current);
   accept();
 }
 
@@ -269,17 +316,107 @@ void ThemeGalleryDialog::onImportClicked() {
 }
 
 void ThemeGalleryDialog::onExportClicked() {
-  auto *item = m_list->currentItem();
-  if (!item)
+  ThemeDefinition current = currentEditedTheme();
+  if (current.name.isEmpty())
     return;
   QString path = QFileDialog::getSaveFileName(
-      this, tr("Export Theme"), item->text() + ".json", tr("JSON (*.json)"));
+      this, tr("Export Theme"), current.name + ".json", tr("JSON (*.json)"));
   if (path.isEmpty())
     return;
-  if (!ThemeEngine::instance().exportTheme(item->text(), path)) {
+  QJsonObject json;
+  current.write(json);
+  QFile file(path);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text) ||
+      file.write(QJsonDocument(json).toJson(QJsonDocument::Indented)) < 0) {
     QMessageBox::warning(this, tr("Export failed"),
                          tr("Could not write theme file."));
   }
+}
+
+void ThemeGalleryDialog::onGenerateClicked() {
+  ThemeDefinition base = currentEditedTheme();
+  if (base.name.isEmpty()) {
+    auto *item = m_list->currentItem();
+    if (!item)
+      return;
+    base = ThemeEngine::instance().themeByName(item->text());
+  }
+
+  const QColor background = QColorDialog::getColor(
+      base.colors.surfaceBase, this, tr("Choose Background Color"));
+  if (!background.isValid())
+    return;
+
+  const QColor foreground = QColorDialog::getColor(
+      base.colors.textPrimary, this, tr("Choose Foreground Color"));
+  if (!foreground.isValid())
+    return;
+
+  const QColor accent = QColorDialog::getColor(base.colors.accentPrimary, this,
+                                               tr("Choose Accent Color"));
+  if (!accent.isValid())
+    return;
+
+  ThemeDefinition generated = ThemeDefinition::generateFromSeed(
+      base,
+      base.name.isEmpty() ? tr("Generated Theme") : base.name + tr(" Variant"),
+      base.author, background, foreground, accent);
+  generated.type = "custom";
+  updatePreview(generated);
+}
+
+void ThemeGalleryDialog::onSaveClicked() {
+  ThemeDefinition current = currentEditedTheme();
+  const QString requestedName = current.name;
+  if (current.name.isEmpty()) {
+    QMessageBox::warning(this, tr("Missing name"),
+                         tr("Set a theme name before saving it."));
+    return;
+  }
+
+  current.type = "custom";
+  current = ThemeEngine::instance().saveUserTheme(current);
+  ThemeEngine::instance().loadUserThemes();
+  updatePreview(current);
+  populateThemes();
+  if (!requestedName.isEmpty() && requestedName != current.name) {
+    QMessageBox::information(
+        this, tr("Saved as custom copy"),
+        tr("Built-in themes are protected. Your theme was saved as \"%1\".")
+            .arg(current.name));
+  }
+}
+
+void ThemeGalleryDialog::onDeleteClicked() {
+  auto *item = m_list->currentItem();
+  if (!item)
+    return;
+
+  const QString name = item->text().trimmed();
+  if (name.isEmpty() || ThemeEngine::instance().isBuiltinTheme(name)) {
+    QMessageBox::information(this, tr("Built-in theme"),
+                             tr("Built-in themes cannot be deleted. Only "
+                                "custom themes can be removed."));
+    return;
+  }
+
+  const auto answer = QMessageBox::warning(
+      this, tr("Delete custom theme"),
+      tr("Delete the custom theme \"%1\"? This cannot be undone.").arg(name),
+      QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+  if (answer != QMessageBox::Yes)
+    return;
+
+  const bool wasActive = ThemeEngine::instance().activeTheme().name == name;
+  if (!ThemeEngine::instance().deleteUserTheme(name)) {
+    QMessageBox::warning(this, tr("Delete failed"),
+                         tr("Could not delete the selected custom theme."));
+    return;
+  }
+
+  populateThemes();
+  if (wasActive)
+    emit themeSelected(ThemeEngine::instance().activeTheme());
 }
 
 void ThemeGalleryDialog::applyTheme(const Theme &theme) {

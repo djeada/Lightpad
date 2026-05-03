@@ -1,4 +1,5 @@
 #include "completionwidget.h"
+#include "../theme/themeengine.h"
 #include <QApplication>
 #include <QGuiApplication>
 #include <QKeyEvent>
@@ -28,7 +29,7 @@ CompletionWidget::CompletionWidget(QWidget *parent)
   m_layout->addWidget(m_listView);
   m_layout->addWidget(m_docLabel);
 
-  applyTheme(Theme());
+  applyTheme(ThemeEngine::instance().activeTheme());
 
   connect(m_listView->selectionModel(), &QItemSelectionModel::currentChanged,
           this, &CompletionWidget::onSelectionChanged);
@@ -78,6 +79,43 @@ void CompletionWidget::applyTheme(const Theme &theme) {
                             "; "
                             "border-top: 1px solid " +
                             borderColor + "; }");
+}
+
+void CompletionWidget::applyTheme(const ThemeDefinition &theme) {
+  const ThemeColors &c = theme.colors;
+  const QString bgColor =
+      (c.surfacePopover.isValid() ? c.surfacePopover : c.surfaceRaised).name();
+  const QString fgColor = c.textPrimary.name();
+  const QString borderColor =
+      (c.borderStrong.isValid() ? c.borderStrong : c.borderDefault).name();
+  const QString hoverColor =
+      (c.treeHoverBg.isValid() ? c.treeHoverBg : c.btnGhostHover).name();
+  const QString selectionColor =
+      (c.treeSelectedBg.isValid() ? c.treeSelectedBg : c.accentSoft).name();
+  const QString focusColor =
+      (c.borderFocus.isValid() ? c.borderFocus : c.accentPrimary).name();
+  const QString docBorder =
+      (c.borderSubtle.isValid() ? c.borderSubtle : c.borderDefault).name();
+
+  setStyleSheet("CompletionWidget { background: " + bgColor +
+                "; border: 1px solid " + borderColor +
+                "; }"
+                "QListView { border: none; background: " +
+                bgColor + "; color: " + fgColor +
+                "; }"
+                "QListView::item { padding: 3px 5px; }"
+                "QListView::item:selected { background: " +
+                selectionColor + "; color: " + fgColor +
+                "; }"
+                "QListView::item:hover { background: " +
+                hoverColor +
+                "; }"
+                "QListView::item:focus { outline: none; border: 1px solid " +
+                focusColor + "; }");
+
+  m_docLabel->setStyleSheet("QLabel { padding: 5px; background: " + bgColor +
+                            "; color: " + fgColor + "; border-top: 1px solid " +
+                            docBorder + "; }");
 }
 
 void CompletionWidget::setItems(const QList<CompletionItem> &items) {

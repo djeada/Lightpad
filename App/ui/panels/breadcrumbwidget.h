@@ -8,6 +8,8 @@
 #include <QPushButton>
 #include <QWidget>
 
+class ThemeDefinition;
+
 class BreadcrumbWidget : public QWidget {
   Q_OBJECT
 
@@ -22,6 +24,7 @@ public:
   void clear();
 
   void applyTheme(const Theme &theme);
+  void applyTheme(const ThemeDefinition &theme);
 
 signals:
 
@@ -45,6 +48,11 @@ private:
   QList<QPushButton *> m_segments;
   QList<QLabel *> m_separators;
   Theme m_theme;
+  bool m_hasSemanticStyles = false;
+  QString m_headerStyle;
+  QString m_buttonStyle;
+  QString m_activeButtonStyle;
+  QString m_separatorStyle;
 };
 
 #endif

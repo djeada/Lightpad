@@ -149,6 +149,24 @@ QJsonObject settingsObject(const SettingsManager &settings,
   const QJsonValue value = settings.getSettingsObject().value(key);
   return value.isObject() ? value.toObject() : QJsonObject();
 }
+
+QString persistedThemeName(const ThemeDefinition &theme) {
+  return (theme.name == "Custom" || theme.name == "Active") ? QString()
+                                                            : theme.name;
+}
+
+QColor blendColor(const QColor &a, const QColor &b, qreal t) {
+  t = qBound(0.0, t, 1.0);
+  return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t,
+                          a.greenF() + (b.greenF() - a.greenF()) * t,
+                          a.blueF() + (b.blueF() - a.blueF()) * t,
+                          a.alphaF() + (b.alphaF() - a.alphaF()) * t);
+}
+
+QColor glowShift(const QColor &base, const QColor &glow, qreal glowLevel,
+                 qreal strength) {
+  return blendColor(base, glow, qBound(0.0, glowLevel * strength, 1.0));
+}
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent)
@@ -622,20 +640,25 @@ void MainWindow::loadSettings() {
   if (!savedThemeObject.isEmpty()) {
     settings.theme.read(savedThemeObject);
   }
-  QString savedThemeName =
-      globalSettings.getValue("activeThemeName", QString()).toString();
   ThemeDefinition savedThemeDefinition;
   bool hasSavedThemeDefinition = false;
-  if (!savedThemeName.isEmpty() &&
-      ThemeEngine::instance().hasTheme(savedThemeName)) {
-    savedThemeDefinition = ThemeEngine::instance().themeByName(savedThemeName);
-    hasSavedThemeDefinition = true;
-    ThemeEngine::instance().setActiveTheme(savedThemeDefinition);
-    settings.theme = savedThemeDefinition.toClassicTheme();
+  const QJsonObject savedThemeDefinitionObject =
+      settingsObject(globalSettings, "activeThemeDefinition");
+  if (!savedThemeDefinitionObject.isEmpty()) {
+    savedThemeDefinition.read(savedThemeDefinitionObject);
+    hasSavedThemeDefinition = !savedThemeDefinition.name.trimmed().isEmpty();
   }
-  setTheme(settings.theme);
   if (hasSavedThemeDefinition) {
-    ThemeEngine::instance().setActiveTheme(savedThemeDefinition);
+    setTheme(savedThemeDefinition);
+  } else {
+    const QString savedThemeName =
+        globalSettings.getValue("activeThemeName", QString()).toString();
+    if (!savedThemeName.isEmpty() &&
+        ThemeEngine::instance().hasTheme(savedThemeName)) {
+      setTheme(ThemeEngine::instance().themeByName(savedThemeName));
+    } else {
+      setTheme(settings.theme);
+    }
   }
   if (ui->actionToggle_Vim_Mode) {
     ui->actionToggle_Vim_Mode->setChecked(settings.vimModeEnabled);
@@ -785,6 +808,16 @@ void MainWindow::saveSettings() {
   LOG_INFO(QString("saveSettings: saving %1 open tabs").arg(openTabs.size()));
   globalSettings.setValue("openTabs", openTabs);
   globalSettings.setValue("currentFilePositions", filePositions);
+  QJsonObject themeJson;
+  settings.theme.write(themeJson);
+  globalSettings.setValue("theme", themeJson);
+  const ThemeDefinition activeThemeDefinition =
+      ThemeEngine::instance().activeTheme();
+  QJsonObject activeThemeJson;
+  activeThemeDefinition.write(activeThemeJson);
+  globalSettings.setValue("activeThemeDefinition", activeThemeJson);
+  globalSettings.setValue("activeThemeName",
+                          persistedThemeName(activeThemeDefinition));
   LightpadTabWidget *tabWidget = currentTabWidget();
   const int currentIndex = tabWidget ? tabWidget->currentIndex() : -1;
   globalSettings.setValue("currentFilePath",
@@ -1861,7 +1894,7 @@ TextArea *MainWindow::getCurrentTextArea() {
   return nullptr;
 }
 
-Theme MainWindow::getTheme() { return settings.theme; }
+Theme MainWindow::getTheme() { return ThemeEngine::instance().classicTheme(); }
 
 QFont MainWindow::getFont() { return settings.mainFont; }
 
@@ -2728,7 +2761,7 @@ void MainWindow::openShortcutsDialog() { openDialog(Dialog::shortcuts); }
 TerminalTabWidget *MainWindow::ensureTerminalWidget() {
   if (!terminalWidget) {
     terminalWidget = new TerminalTabWidget();
-    terminalWidget->applyTheme(settings.theme);
+    terminalWidget->applyTheme(getTheme());
 
     connect(terminalWidget, &TerminalTabWidget::closeRequested, this, [this]() {
       if (m_terminalDock) {
@@ -3321,7 +3354,7 @@ void MainWindow::ensureDebugPanel() {
 
   debugPanel = new DebugPanel(this);
   debugPanel->setObjectName("debugPanel");
-  debugPanel->applyTheme(settings.theme);
+  debugPanel->applyTheme(getTheme());
   debugPanel->hide();
 
   connect(debugPanel, &DebugPanel::locationClicked, this,
@@ -3428,7 +3461,7 @@ void MainWindow::ensureTestPanel() {
   TestConfigurationManager::instance().loadTemplates();
   testPanel = new TestPanel(this);
   testPanel->setObjectName("testPanel");
-  testPanel->applyTheme(settings.theme);
+  testPanel->applyTheme(getTheme());
 
   if (!m_projectRootPath.isEmpty()) {
     testPanel->setWorkspaceFolder(m_projectRootPath);
@@ -4282,9 +4315,8 @@ void MainWindow::setupDiagnostics() {
 void MainWindow::setupNotificationManager() {
   m_notificationManager = new NotificationManager(this, this);
   m_scanlineOverlay = new HackerScanlineOverlay(this);
-  bool scanlinesOn =
-      SettingsManager::instance().getValue("scanlineEffect", false).toBool();
-  m_scanlineOverlay->setEnabled(scanlinesOn);
+  m_scanlineOverlay->setEnabled(
+      ThemeEngine::instance().activeTheme().ui.scanlineEffect);
 }
 
 void MainWindow::setScanlineEffectEnabled(bool enabled) {
@@ -5691,11 +5723,11 @@ void MainWindow::applyTabWidgetTheme(LightpadTabWidget *tabWidget) {
   if (!tabWidget) {
     return;
   }
-  tabWidget->setTheme(
-      settings.theme.backgroundColor.name(),
-      settings.theme.foregroundColor.name(), settings.theme.surfaceColor.name(),
-      settings.theme.accentSoftColor.name(), settings.theme.accentColor.name(),
-      settings.theme.borderColor.name());
+  const Theme theme = getTheme();
+  tabWidget->setTheme(theme.backgroundColor.name(),
+                      theme.foregroundColor.name(), theme.surfaceColor.name(),
+                      theme.accentSoftColor.name(), theme.accentColor.name(),
+                      theme.borderColor.name());
 }
 
 void MainWindow::setupTabWidget() {
@@ -6572,19 +6604,7 @@ void MainWindow::showThemeGallery() {
   auto *dlg = new ThemeGalleryDialog(this);
   dlg->setAttribute(Qt::WA_DeleteOnClose);
   connect(dlg, &ThemeGalleryDialog::themeSelected, this,
-          [this](const ThemeDefinition &def) {
-            ThemeEngine::instance().setActiveTheme(def);
-            Theme classic = def.toClassicTheme();
-            settings.theme = classic;
-            setTheme(classic);
-            ThemeEngine::instance().setActiveTheme(def);
-            SettingsManager::instance().setValue("activeThemeName", def.name);
-            QJsonObject themeJson;
-            classic.write(themeJson);
-            SettingsManager::instance().setValue("theme", themeJson);
-            SettingsManager::instance().saveSettings();
-            settings.saveSettings(textAreaSettingsPath());
-          });
+          [this](const ThemeDefinition &def) { setTheme(def); });
   dlg->show();
 }
 
@@ -7273,36 +7293,61 @@ void MainWindow::on_actionUnfold_Comments_triggered() {
 }
 
 void MainWindow::setTheme(Theme theme) {
-  settings.theme = theme;
-  ThemedMessageBox::setGlobalTheme(theme);
+  setTheme(ThemeDefinition::fromClassicTheme(theme, "Custom"));
+}
 
-  ThemeDefinition td = ThemeDefinition::fromClassicTheme(theme, "Active");
-  ThemeEngine::instance().setActiveTheme(td);
-  const ThemeColors &tc = td.colors;
+void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
+  Theme theme = themeDefinition.toClassicTheme();
+  settings.theme = theme;
+  ThemedMessageBox::setGlobalTheme(themeDefinition);
+
+  ThemeEngine::instance().setActiveTheme(themeDefinition);
+  const ThemeColors &tc = themeDefinition.colors;
+  const qreal glowLevel = qBound(0.0, themeDefinition.ui.glowIntensity, 1.0);
+  QColor glowSource = tc.accentPrimary.lighter(130 + qRound(glowLevel * 45.0));
+  if (tc.accentGlow.isValid()) {
+    QColor accentGlow = tc.accentGlow;
+    accentGlow.setAlpha(255);
+    glowSource = blendColor(accentGlow, glowSource, 0.55);
+  }
+  const bool panelBordersEnabled = themeDefinition.ui.panelBorders;
 
   QString bgColor = tc.surfaceBase.name();
   QString terminalBgColor =
       tc.termBg.isValid() ? tc.termBg.name() : tc.surfaceBase.name();
   QString fgColor = tc.textPrimary.name();
-  QString surfaceColor = tc.surfaceRaised.name();
-  QString surfaceAltColor = tc.surfaceOverlay.name();
+  QString surfaceColor =
+      glowShift(tc.surfaceRaised, glowSource, glowLevel, 0.18).name();
+  QString surfaceAltColor =
+      glowShift(tc.surfaceOverlay, glowSource, glowLevel, 0.14).name();
   QString pressedColor = tc.btnGhostActive.name();
-  QString borderColor = tc.borderDefault.name();
-  QString borderSubtle = tc.borderSubtle.name();
-  QString accentColor = tc.accentPrimary.name();
-  QString accentSoftColor = tc.accentSoft.name();
+  QString borderColor =
+      panelBordersEnabled
+          ? glowShift(tc.borderDefault, glowSource, glowLevel, 0.42).name()
+          : QStringLiteral("transparent");
+  QString borderSubtle =
+      panelBordersEnabled
+          ? glowShift(tc.borderSubtle, glowSource, glowLevel, 0.28).name()
+          : QStringLiteral("transparent");
+  QString accentColor =
+      glowShift(tc.accentPrimary, glowSource, glowLevel, 0.34).name();
+  QString accentSoftColor =
+      glowShift(tc.accentSoft, glowSource, glowLevel, 0.46).name();
   QString secondaryText = tc.textSecondary.name();
   QString disabledText = tc.textDisabled.name();
-  QString inputBg = tc.inputBg.name();
+  QString inputBg = glowShift(tc.inputBg, glowSource, glowLevel, 0.12).name();
   QString scrollThumb = tc.scrollThumb.name();
   QString scrollThumbHover = tc.scrollThumbHover.name();
-  QString tabActiveBg = tc.tabActiveBg.name();
-  QString tabActiveBorder = tc.tabActiveBorder.name();
+  QString tabActiveBg =
+      glowShift(tc.tabActiveBg, glowSource, glowLevel, 0.20).name();
+  QString tabActiveBorder =
+      glowShift(tc.tabActiveBorder, glowSource, glowLevel, 0.44).name();
   QString tabFg = tc.tabFg.name();
   QString tabActiveFg = tc.tabActiveFg.name();
   QString btnPrimaryBg = tc.btnPrimaryBg.name();
   QString btnPrimaryFg = tc.btnPrimaryFg.name();
-  QString btnPrimaryHover = tc.btnPrimaryHover.name();
+  QString btnPrimaryHover =
+      glowShift(tc.btnPrimaryHover, glowSource, glowLevel, 0.32).name();
   QString editorFontFamily = settings.mainFont.family();
   editorFontFamily.replace("\\", "\\\\");
   editorFontFamily.replace("\"", "\\\"");
@@ -8172,22 +8217,22 @@ void MainWindow::setTheme(Theme theme) {
   }
 
   if (commandPalette) {
-    commandPalette->applyTheme(theme);
+    commandPalette->applyTheme(themeDefinition);
   }
   if (goToLineDialog) {
-    goToLineDialog->applyTheme(theme);
+    goToLineDialog->applyTheme(themeDefinition);
   }
   if (goToSymbolDialog) {
-    goToSymbolDialog->applyTheme(theme);
+    goToSymbolDialog->applyTheme(themeDefinition);
   }
   if (fileQuickOpen) {
-    fileQuickOpen->applyTheme(theme);
+    fileQuickOpen->applyTheme(themeDefinition);
   }
   if (recentFilesDialog) {
-    recentFilesDialog->applyTheme(theme);
+    recentFilesDialog->applyTheme(themeDefinition);
   }
   if (breadcrumbWidget) {
-    breadcrumbWidget->applyTheme(theme);
+    breadcrumbWidget->applyTheme(themeDefinition);
   }
   if (problemsPanel) {
     problemsPanel->applyTheme(theme);
@@ -8206,12 +8251,13 @@ void MainWindow::setTheme(Theme theme) {
     for (int i = 0; i < tabWidget->count(); i++) {
       auto page = tabWidget->getPage(i);
       if (page) {
-        page->applyTheme(theme);
+        page->applyTheme(themeDefinition);
       }
     }
   }
 
-  updateAllTextAreas(&TextArea::applySelectionPalette, settings.theme);
+  updateAllTextAreas(&TextArea::applySelectionPalette, theme);
+  setScanlineEffectEnabled(themeDefinition.ui.scanlineEffect);
 
   if (m_globalSettingsLoaded && !m_restoringSession) {
     saveSettings();

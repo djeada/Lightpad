@@ -1,4 +1,5 @@
 #include "breadcrumbwidget.h"
+#include "../../theme/themedefinition.h"
 #include "../uistylehelper.h"
 #include <QDir>
 #include <QFileInfo>
@@ -66,9 +67,12 @@ void BreadcrumbWidget::rebuildBreadcrumbs() {
 
   QStringList segments = getPathSegments(displayPath);
 
-  const QString buttonStyle = UIStyleHelper::breadcrumbButtonStyle(m_theme);
+  const QString buttonStyle =
+      m_hasSemanticStyles ? m_buttonStyle
+                          : UIStyleHelper::breadcrumbButtonStyle(m_theme);
   const QString separatorStyle =
-      UIStyleHelper::breadcrumbSeparatorStyle(m_theme);
+      m_hasSemanticStyles ? m_separatorStyle
+                          : UIStyleHelper::breadcrumbSeparatorStyle(m_theme);
 
   if (m_layout->count() > 0) {
     QLayoutItem *stretchItem = m_layout->itemAt(m_layout->count() - 1);
@@ -101,7 +105,9 @@ void BreadcrumbWidget::rebuildBreadcrumbs() {
 
   if (!m_segments.isEmpty()) {
     m_segments.last()->setStyleSheet(
-        UIStyleHelper::breadcrumbActiveButtonStyle(m_theme));
+        m_hasSemanticStyles
+            ? m_activeButtonStyle
+            : UIStyleHelper::breadcrumbActiveButtonStyle(m_theme));
   }
 
   m_layout->addStretch();
@@ -160,7 +166,18 @@ void BreadcrumbWidget::onDropdownClicked() {}
 
 void BreadcrumbWidget::applyTheme(const Theme &theme) {
   m_theme = theme;
+  m_hasSemanticStyles = false;
   setStyleSheet(QString("BreadcrumbWidget { %1 }")
                     .arg(UIStyleHelper::panelHeaderStyle(theme)));
+  rebuildBreadcrumbs();
+}
+
+void BreadcrumbWidget::applyTheme(const ThemeDefinition &theme) {
+  m_hasSemanticStyles = true;
+  m_headerStyle = UIStyleHelper::panelHeaderStyle(theme);
+  m_buttonStyle = UIStyleHelper::breadcrumbButtonStyle(theme);
+  m_activeButtonStyle = UIStyleHelper::breadcrumbActiveButtonStyle(theme);
+  m_separatorStyle = UIStyleHelper::breadcrumbSeparatorStyle(theme);
+  setStyleSheet(QString("BreadcrumbWidget { %1 }").arg(m_headerStyle));
   rebuildBreadcrumbs();
 }
