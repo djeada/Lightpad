@@ -156,7 +156,7 @@ void NotificationWidget::applyStyle(Level level) {
 
   switch (level) {
   case Level::Info:
-    levelColor = m_theme.accentColor.name();
+    levelColor = m_theme.infoColor.name();
     icon = "ℹ";
     break;
   case Level::Warning:
@@ -179,7 +179,7 @@ void NotificationWidget::applyStyle(Level level) {
           .arg(m_theme.foregroundColor.name()));
   m_messageLabel->setStyleSheet(
       QString("font-size: 11px; color: %1; background: transparent;")
-          .arg(m_theme.borderColor.name()));
+          .arg(m_theme.diagnosticHintColor.name()));
 
   setStyleSheet(QString("NotificationWidget {"
                         "  border-left: 3px solid %1;"

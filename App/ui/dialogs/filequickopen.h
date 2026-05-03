@@ -15,6 +15,7 @@ class FileQuickOpen : public StyledPopupDialog {
 public:
   explicit FileQuickOpen(QWidget *parent = nullptr);
   ~FileQuickOpen();
+  using StyledPopupDialog::applyTheme;
 
   void setRootDirectory(const QString &path);
 

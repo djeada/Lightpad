@@ -5,7 +5,20 @@ StyledPopupDialog::StyledPopupDialog(QWidget *parent)
     : StyledDialog(parent, Qt::Popup | Qt::FramelessWindowHint) {}
 
 void StyledPopupDialog::applyTheme(const Theme &theme) {
-  m_theme = theme;
+  StyledDialog::applyTheme(theme);
+
+  QString className = metaObject()->className();
+  setStyleSheet(className + " { " + UIStyleHelper::popupDialogStyle(theme) +
+                " }");
+
+  for (auto *w : findChildren<QLineEdit *>())
+    w->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
+  for (auto *w : findChildren<QListWidget *>())
+    w->setStyleSheet(UIStyleHelper::resultListStyle(theme));
+}
+
+void StyledPopupDialog::applyTheme(const ThemeDefinition &theme) {
+  StyledDialog::applyTheme(theme);
 
   QString className = metaObject()->className();
   setStyleSheet(className + " { " + UIStyleHelper::popupDialogStyle(theme) +

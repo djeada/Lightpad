@@ -49,6 +49,8 @@ private slots:
   void testSetDiscoveryAdapter();
 
   void testSearchEditExists();
+
+  void testApplyThemeUpdatesStylesheet();
   void testRunDetailsCollapsedByDefault();
   void testClickingTestExpandsDetailsPane();
   void testProgressBarHiddenInitially();
@@ -551,6 +553,42 @@ void TestTestPanel::testSearchEditExists() {
   QLineEdit *searchEdit = findSearchEdit(panel);
   QVERIFY(searchEdit != nullptr);
   QVERIFY(searchEdit->placeholderText().contains("Filter"));
+}
+
+void TestTestPanel::testApplyThemeUpdatesStylesheet() {
+  TestPanel panel;
+  panel.setObjectName("testPanel");
+
+  Theme firstTheme;
+  firstTheme.backgroundColor = QColor("#101820");
+  firstTheme.surfaceColor = QColor("#17232d");
+  firstTheme.foregroundColor = QColor("#f2f5f7");
+  firstTheme.borderColor = QColor("#2d3c48");
+  firstTheme.accentColor = QColor("#61dafb");
+  firstTheme.accentSoftColor = QColor("#23435b");
+  firstTheme.successColor = QColor("#3ddc97");
+  firstTheme.errorColor = QColor("#ff5f56");
+
+  Theme secondTheme = firstTheme;
+  secondTheme.backgroundColor = QColor("#2b1b12");
+  secondTheme.surfaceColor = QColor("#3a2418");
+  secondTheme.foregroundColor = QColor("#f7eadf");
+  secondTheme.borderColor = QColor("#6b4a38");
+  secondTheme.accentColor = QColor("#ffb454");
+  secondTheme.accentSoftColor = QColor("#6a4522");
+
+  panel.applyTheme(firstTheme);
+  const QString firstStyleSheet = panel.styleSheet();
+
+  panel.applyTheme(secondTheme);
+  const QString secondStyleSheet = panel.styleSheet();
+
+  QVERIFY(firstStyleSheet.contains("QWidget#testPanel"));
+  QVERIFY(firstStyleSheet.contains(firstTheme.backgroundColor.name()));
+  QVERIFY(firstStyleSheet.contains(firstTheme.accentColor.name()));
+  QVERIFY(secondStyleSheet.contains(secondTheme.backgroundColor.name()));
+  QVERIFY(secondStyleSheet.contains(secondTheme.accentColor.name()));
+  QVERIFY(!secondStyleSheet.contains(firstTheme.accentColor.name()));
 }
 
 void TestTestPanel::testRunDetailsCollapsedByDefault() {

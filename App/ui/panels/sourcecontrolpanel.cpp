@@ -1762,21 +1762,21 @@ QString SourceControlPanel::statusText(GitFileStatus status) const {
 QColor SourceControlPanel::statusColor(GitFileStatus status) const {
   switch (status) {
   case GitFileStatus::Modified:
-    return m_theme.warningColor;
+    return m_theme.gitModifiedColor;
   case GitFileStatus::Added:
-    return m_theme.successColor;
+    return m_theme.gitAddedColor;
   case GitFileStatus::Deleted:
-    return m_theme.errorColor;
+    return m_theme.gitDeletedColor;
   case GitFileStatus::Renamed:
-    return m_theme.accentColor;
+    return m_theme.gitRenamedColor;
   case GitFileStatus::Copied:
-    return m_theme.accentColor;
+    return m_theme.gitCopiedColor;
   case GitFileStatus::Untracked:
-    return m_theme.successColor;
+    return m_theme.gitUntrackedColor;
   case GitFileStatus::Unmerged:
-    return m_theme.errorColor;
+    return m_theme.gitConflictedColor;
   case GitFileStatus::Ignored:
-    return m_theme.singleLineCommentFormat;
+    return m_theme.gitIgnoredColor;
   default:
     return m_theme.foregroundColor;
   }
@@ -1880,8 +1880,20 @@ void SourceControlPanel::onResolveConflictsClicked() {
 void SourceControlPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
   m_themeInitialized = true;
+  const QString panelBorder = theme.panelBorders
+                                  ? theme.borderColor.name()
+                                  : QStringLiteral("transparent");
+  const QString sectionBorder = theme.panelBorders
+                                    ? theme.surfaceAltColor.name()
+                                    : QStringLiteral("transparent");
+  const QString glowAccent =
+      theme.accentColor
+          .lighter(100 + static_cast<int>(theme.glowIntensity * 28.0))
+          .name();
 
-  setStyleSheet(QString("background: %1;").arg(theme.backgroundColor.name()));
+  setStyleSheet(QString("background: %1; border-left: 1px solid %2; "
+                        "border-right: 1px solid %2;")
+                    .arg(theme.backgroundColor.name(), panelBorder));
 
   if (m_headerWidget) {
     m_headerWidget->setStyleSheet(UIStyleHelper::panelHeaderStyle(theme));
@@ -1899,7 +1911,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
             "QPushButton:hover { background: %2; }"
             "QPushButton:pressed { background: %3; }")
             .arg(theme.foregroundColor.name())
-            .arg(theme.borderColor.name())
+            .arg(theme.surfaceAltColor.name())
             .arg(theme.accentColor.name()));
   }
 
@@ -1916,7 +1928,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
                                          "}")
                                      .arg(theme.backgroundColor.name())
                                      .arg(theme.singleLineCommentFormat.name())
-                                     .arg(theme.surfaceAltColor.name())
+                                     .arg(sectionBorder)
                                      .arg(theme.foregroundColor.name()));
   }
 
@@ -1986,7 +1998,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_branchSection->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;")
             .arg(theme.backgroundColor.name())
-            .arg(theme.borderColor.name()));
+            .arg(panelBorder));
   }
   if (m_branchIcon) {
     m_branchIcon->setStyleSheet(
@@ -2094,7 +2106,9 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
 
   if (m_commitSection) {
     m_commitSection->setStyleSheet(
-        QString("background: %1;").arg(theme.backgroundColor.name()));
+        QString("background: %1; border-top: 1px solid %2;")
+            .arg(theme.backgroundColor.name())
+            .arg(sectionBorder));
   }
   if (m_commitHeaderLabel) {
     m_commitHeaderLabel->setStyleSheet(
@@ -2141,7 +2155,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_stagedHeader->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;")
             .arg(theme.backgroundColor.name())
-            .arg(theme.surfaceAltColor.name()));
+            .arg(sectionBorder));
   }
   if (m_stagedLabel) {
     m_stagedLabel->setStyleSheet(
@@ -2171,7 +2185,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_changesHeader->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;")
             .arg(theme.backgroundColor.name())
-            .arg(theme.surfaceAltColor.name()));
+            .arg(sectionBorder));
   }
   if (m_changesLabel) {
     m_changesLabel->setStyleSheet(
@@ -2215,7 +2229,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_historyHeader->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;")
             .arg(theme.backgroundColor.name())
-            .arg(theme.surfaceAltColor.name()));
+            .arg(sectionBorder));
   }
   if (m_historyToggleButton) {
     m_historyToggleButton->setStyleSheet(
@@ -2238,7 +2252,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
             "font-size: 11px; padding: 2px 6px; }"
             "QPushButton:hover { color: %2; text-decoration: underline; }")
             .arg(theme.accentColor.name())
-            .arg(theme.accentColor.lighter(130).name()));
+            .arg(glowAccent));
   }
   if (m_historySearchEdit) {
     m_historySearchEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));

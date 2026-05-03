@@ -19,6 +19,7 @@ class TerminalTabWidget;
 class Popup;
 class FindReplacePanel;
 class TextArea;
+class ThemeDefinition;
 class QCompleter;
 class Preferences;
 class CompletionEngine;
@@ -77,6 +78,7 @@ public:
   void setTabWidthLabel(QString text);
   void setLanguageHighlightLabel(QString text);
   void setTheme(Theme theme);
+  void setTheme(const ThemeDefinition &theme);
   void setScanlineEffectEnabled(bool enabled);
   void setFont(QFont font);
   void showLineNumbers(bool flag);

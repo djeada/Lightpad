@@ -2,6 +2,7 @@
 #include "../git/gitintegration.h"
 #include "../run_templates/runtemplatemanager.h"
 #include "../test_templates/testfileclassifier.h"
+#include "../theme/themeengine.h"
 #include "../ui/mainwindow.h"
 #include "../ui/panels/minimap.h"
 #include "../ui/uistylehelper.h"
@@ -39,6 +40,18 @@ public:
     m_hoverBackground = theme.hoverColor.lighter(112);
     m_selectedBackground = theme.accentSoftColor.lighter(115);
     m_selectedBorder = theme.accentColor;
+  }
+
+  void setTheme(const ThemeDefinition &theme) {
+    m_textColor = theme.colors.textPrimary;
+    m_selectedTextColor = theme.colors.textPrimary;
+    m_hoverBackground = theme.colors.treeHoverBg.isValid()
+                            ? theme.colors.treeHoverBg
+                            : theme.colors.btnGhostHover;
+    m_selectedBackground = theme.colors.treeSelectedBg.isValid()
+                               ? theme.colors.treeSelectedBg
+                               : theme.colors.accentSoft;
+    m_selectedBorder = theme.colors.accentPrimary;
   }
 
   void paint(QPainter *painter, const QStyleOptionViewItem &option,
@@ -701,7 +714,7 @@ void LightpadPage::setMainWindow(MainWindow *window) {
       mainWindow->registerTreeView(view);
     }
     setTreeFilterText(mainWindow->getTreeFilterText());
-    applyTheme(mainWindow->getTheme());
+    applyTheme(ThemeEngine::instance().activeTheme());
   }
 }
 
@@ -914,6 +927,89 @@ void LightpadPage::applyTheme(const Theme &theme) {
 
   if (treeView) {
     treeView->setStyleSheet(UIStyleHelper::treeViewStyle(theme));
+    if (auto *delegate =
+            dynamic_cast<ExplorerTreeDelegate *>(treeView->itemDelegate())) {
+      delegate->setTheme(theme);
+    }
+    treeView->viewport()->update();
+  }
+}
+
+void LightpadPage::applyTheme(const ThemeDefinition &theme) {
+  if (treeContainer) {
+    const ThemeColors &c = theme.colors;
+    QColor glowAccent =
+        (c.accentPrimary.isValid() ? c.accentPrimary : c.borderFocus);
+    glowAccent =
+        glowAccent.lighter(100 + qRound(theme.ui.glowIntensity * 24.0));
+    const QString panelTop =
+        (c.surfaceRaised.isValid() ? c.surfaceRaised : c.surfaceBase).name();
+    const QString panelBottom =
+        (c.surfaceOverlay.isValid() ? c.surfaceOverlay : c.surfaceRaised)
+            .name();
+    const QString border =
+        (c.borderDefault.isValid() ? c.borderDefault : c.borderSubtle).name();
+    const QString panelBorder =
+        theme.ui.panelBorders ? border : QStringLiteral("transparent");
+    const QString muted = c.textMuted.name();
+    const QString fg = c.textPrimary.name();
+    const QString filterBg =
+        (c.inputBg.isValid() ? c.inputBg : c.surfaceOverlay).name();
+    const QString filterFocusBg =
+        (c.surfacePopover.isValid() ? c.surfacePopover : c.inputBg).name();
+    const QString accent = glowAccent.name();
+    const QString pressed =
+        (c.btnGhostActive.isValid() ? c.btnGhostActive : c.btnGhostHover)
+            .name();
+    treeContainer->setStyleSheet(
+        QString("#treeContainer {"
+                "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, "
+                "stop: 0 %1, stop: 1 %2);"
+                "  border-right: 1px solid %3;"
+                "}"
+                "#treeHeader {"
+                "  background: transparent;"
+                "  border-bottom: 1px solid %3;"
+                "}"
+                "QLabel#treeTitleLabel {"
+                "  color: %4;"
+                "  font-size: 10px;"
+                "  font-weight: 700;"
+                "  letter-spacing: 1px;"
+                "  padding: 2px 0;"
+                "}"
+                "QLineEdit#treeFilterEdit {"
+                "  background: %6;"
+                "  color: %5;"
+                "  border: 1px solid %3;"
+                "  border-radius: 8px;"
+                "  padding: 7px 10px;"
+                "}"
+                "QLineEdit#treeFilterEdit:focus {"
+                "  background: %7;"
+                "  border: 1px solid %8;"
+                "}"
+                "QToolButton#treeToolButton {"
+                "  background: %6;"
+                "  border: 1px solid %3;"
+                "  border-radius: 7px;"
+                "  padding: 4px;"
+                "  color: %5;"
+                "}"
+                "QToolButton#treeToolButton:hover {"
+                "  background: %7;"
+                "  border-color: %8;"
+                "}"
+                "QToolButton#treeToolButton:pressed {"
+                "  background: %9;"
+                "}")
+            .arg(panelTop, panelBottom, panelBorder, muted, fg, filterBg,
+                 filterFocusBg, accent, pressed));
+  }
+
+  if (treeView) {
+    treeView->setStyleSheet(
+        UIStyleHelper::treeViewStyle(theme.toClassicTheme()));
     if (auto *delegate =
             dynamic_cast<ExplorerTreeDelegate *>(treeView->itemDelegate())) {
       delegate->setTheme(theme);

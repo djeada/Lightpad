@@ -1,12 +1,35 @@
 #include "themedmessagebox.h"
+#include "../../theme/themedefinition.h"
 #include "../uistylehelper.h"
 
 Theme ThemedMessageBox::s_theme;
 bool ThemedMessageBox::s_themeSet = false;
+bool ThemedMessageBox::s_semanticThemeSet = false;
+QString ThemedMessageBox::s_dialogStyle;
+QString ThemedMessageBox::s_textStyle;
+QString ThemedMessageBox::s_infoStyle;
+QString ThemedMessageBox::s_primaryButtonStyle;
+QString ThemedMessageBox::s_secondaryButtonStyle;
+QString ThemedMessageBox::s_dangerButtonStyle;
 
 void ThemedMessageBox::setGlobalTheme(const Theme &theme) {
   s_theme = theme;
   s_themeSet = true;
+  s_semanticThemeSet = false;
+}
+
+void ThemedMessageBox::setGlobalTheme(const ThemeDefinition &theme) {
+  s_semanticThemeSet = true;
+  s_dialogStyle = QString("ThemedMessageBox { %1 }")
+                      .arg(UIStyleHelper::popupDialogStyle(theme));
+  s_textStyle = QString("font-size: 13px; font-weight: 500; color: %1; "
+                        "background: transparent;")
+                    .arg(theme.colors.textPrimary.name());
+  s_infoStyle = QString("font-size: 12px; color: %1; background: transparent;")
+                    .arg(theme.colors.textMuted.name());
+  s_primaryButtonStyle = UIStyleHelper::primaryButtonStyle(theme);
+  s_secondaryButtonStyle = UIStyleHelper::secondaryButtonStyle(theme);
+  s_dangerButtonStyle = UIStyleHelper::dangerButtonStyle(theme);
 }
 
 int ThemedMessageBox::information(QWidget *parent, const QString &title,
@@ -185,23 +208,29 @@ QPushButton *ThemedMessageBox::addButton(const QString &text, int role) {
 
 void ThemedMessageBox::applyStyle() {
   Theme theme = s_themeSet ? s_theme : Theme();
+  const bool useSemanticTheme = s_semanticThemeSet;
 
-  setStyleSheet(QString("ThemedMessageBox {"
-                        "  background: %1;"
-                        "}")
-                    .arg(theme.surfaceColor.name()));
+  setStyleSheet(useSemanticTheme ? s_dialogStyle
+                                 : QString("ThemedMessageBox {"
+                                           "  background: %1;"
+                                           "}")
+                                       .arg(theme.surfaceColor.name()));
 
   if (m_textLabel) {
     m_textLabel->setStyleSheet(
-        QString("font-size: 13px; font-weight: 500; color: %1; "
-                "background: transparent;")
-            .arg(theme.foregroundColor.name()));
+        useSemanticTheme
+            ? s_textStyle
+            : QString("font-size: 13px; font-weight: 500; color: %1; "
+                      "background: transparent;")
+                  .arg(theme.foregroundColor.name()));
   }
 
   if (m_infoLabel) {
     m_infoLabel->setStyleSheet(
-        QString("font-size: 12px; color: %1; background: transparent;")
-            .arg(theme.singleLineCommentFormat.name()));
+        useSemanticTheme
+            ? s_infoStyle
+            : QString("font-size: 12px; color: %1; background: transparent;")
+                  .arg(theme.singleLineCommentFormat.name()));
   }
 
   for (auto it = m_buttonMap.begin(); it != m_buttonMap.end(); ++it) {
@@ -222,11 +251,17 @@ void ThemedMessageBox::applyStyle() {
     }
 
     if (isDanger) {
-      btn->setStyleSheet(UIStyleHelper::dangerButtonStyle(theme));
+      btn->setStyleSheet(useSemanticTheme
+                             ? s_dangerButtonStyle
+                             : UIStyleHelper::dangerButtonStyle(theme));
     } else if (isPrimary) {
-      btn->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
+      btn->setStyleSheet(useSemanticTheme
+                             ? s_primaryButtonStyle
+                             : UIStyleHelper::primaryButtonStyle(theme));
     } else {
-      btn->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+      btn->setStyleSheet(useSemanticTheme
+                             ? s_secondaryButtonStyle
+                             : UIStyleHelper::secondaryButtonStyle(theme));
     }
   }
 }

@@ -23,6 +23,7 @@ class CommandPalette : public StyledPopupDialog {
 public:
   explicit CommandPalette(QWidget *parent = nullptr);
   ~CommandPalette();
+  using StyledPopupDialog::applyTheme;
 
   void registerAction(QAction *action, const QString &category = QString());
 

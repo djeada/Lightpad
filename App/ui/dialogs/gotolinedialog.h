@@ -13,6 +13,7 @@ class GoToLineDialog : public StyledPopupDialog {
 public:
   explicit GoToLineDialog(QWidget *parent = nullptr, int maxLine = 1);
   ~GoToLineDialog();
+  using StyledPopupDialog::applyTheme;
 
   int lineNumber() const;
 
@@ -21,6 +22,7 @@ public:
   void showDialog();
 
   void applyTheme(const Theme &theme) override;
+  void applyTheme(const ThemeDefinition &theme);
 
 signals:
 

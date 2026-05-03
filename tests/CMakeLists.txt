@@ -69,6 +69,10 @@ target_compile_definitions(test_logger PRIVATE QT_DEPRECATED_WARNINGS)
 add_executable(test_theme
     unit/test_theme.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themedefinition.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themeengine.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themepresets.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
 )
 
 target_link_libraries(test_theme

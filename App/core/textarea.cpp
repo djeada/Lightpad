@@ -270,14 +270,15 @@ TextArea::TextArea(QWidget *parent)
 
 TextArea::TextArea(const TextAreaSettings &settings, QWidget *parent)
     : QPlainTextEdit(parent), mainWindow(nullptr),
-      highlightColor(settings.theme.highlightColor),
-      lineNumberAreaPenColor(settings.theme.lineNumberAreaColor),
-      defaultPenColor(settings.theme.foregroundColor),
-      backgroundColor(settings.theme.backgroundColor), bufferText(""),
-      highlightLang(""), syntaxHighlighter(nullptr), m_completer(nullptr),
-      m_completionEngine(nullptr), m_completionWidget(nullptr),
-      m_languageId("plaintext"), searchWord(""), areChangesUnsaved(false),
-      autoIndent(settings.autoIndent),
+      highlightColor(ThemeEngine::instance().classicTheme().highlightColor),
+      lineNumberAreaPenColor(
+          ThemeEngine::instance().classicTheme().lineNumberAreaColor),
+      defaultPenColor(ThemeEngine::instance().classicTheme().foregroundColor),
+      backgroundColor(ThemeEngine::instance().classicTheme().backgroundColor),
+      bufferText(""), highlightLang(""), syntaxHighlighter(nullptr),
+      m_completer(nullptr), m_completionEngine(nullptr),
+      m_completionWidget(nullptr), m_languageId("plaintext"), searchWord(""),
+      areChangesUnsaved(false), autoIndent(settings.autoIndent),
       showLineNumberArea(settings.showLineNumberArea),
       lineHighlighted(settings.lineHighlighted),
       matchingBracketsHighlighted(settings.matchingBracketsHighlighted),
@@ -443,7 +444,7 @@ void TextArea::setPlainText(const QString &text) {
 void TextArea::setMainWindow(MainWindow *window) {
   mainWindow = window;
   if (m_completionWidget && mainWindow) {
-    m_completionWidget->applyTheme(mainWindow->getTheme());
+    m_completionWidget->applyTheme(ThemeEngine::instance().activeTheme());
   }
   if (mainWindow) {
     applySelectionPalette(mainWindow->getTheme());
@@ -484,14 +485,16 @@ void TextArea::highlihtMatchingBracket(bool flag) {
 }
 
 void TextArea::loadSettings(const TextAreaSettings settings) {
-  highlightColor = settings.theme.highlightColor;
-  lineNumberAreaPenColor = settings.theme.lineNumberAreaColor;
-  defaultPenColor = settings.theme.foregroundColor;
-  backgroundColor = settings.theme.backgroundColor;
+  const Theme theme = mainWindow ? mainWindow->getTheme()
+                                 : ThemeEngine::instance().classicTheme();
+  highlightColor = theme.highlightColor;
+  lineNumberAreaPenColor = theme.lineNumberAreaColor;
+  defaultPenColor = theme.foregroundColor;
+  backgroundColor = theme.backgroundColor;
   if (m_completionWidget) {
-    m_completionWidget->applyTheme(settings.theme);
+    m_completionWidget->applyTheme(ThemeEngine::instance().activeTheme());
   }
-  applySelectionPalette(settings.theme);
+  applySelectionPalette(theme);
   setAutoIdent(settings.autoIndent);
   showLineNumbers(settings.showLineNumberArea);
   highlihtCurrentLine(settings.lineHighlighted);
@@ -1210,7 +1213,7 @@ void TextArea::updateExtraSelections() {
   if (!breakpointsByLine.isEmpty()) {
     QColor baseColor(231, 76, 60);
     if (mainWindow) {
-      baseColor = mainWindow->getTheme().errorColor;
+      baseColor = mainWindow->getTheme().debugBreakpointColor;
     }
 
     for (auto it = breakpointsByLine.cbegin(); it != breakpointsByLine.cend();
@@ -1242,8 +1245,9 @@ void TextArea::updateExtraSelections() {
         document()->findBlockByNumber(m_debugExecutionLine - 1);
     if (debugBlock.isValid()) {
       QTextEdit::ExtraSelection selection;
-      QColor debugColor =
-          mainWindow ? mainWindow->getTheme().accentColor : QColor(255, 193, 7);
+      QColor debugColor = mainWindow
+                              ? mainWindow->getTheme().debugCurrentLineColor
+                              : QColor(255, 193, 7);
       debugColor.setAlpha(95);
       selection.format.setBackground(debugColor);
       selection.format.setProperty(QTextFormat::FullWidthSelection, true);
@@ -1271,19 +1275,21 @@ void TextArea::updateExtraSelections() {
     QColor underlineColor;
     switch (diag.severity) {
     case LspDiagnosticSeverity::Error:
-      underlineColor =
-          mainWindow ? mainWindow->getTheme().errorColor : QColor(231, 76, 60);
+      underlineColor = mainWindow ? mainWindow->getTheme().diagnosticErrorColor
+                                  : QColor(231, 76, 60);
       break;
     case LspDiagnosticSeverity::Warning:
-      underlineColor = mainWindow ? mainWindow->getTheme().warningColor
-                                  : QColor(241, 196, 15);
+      underlineColor = mainWindow
+                           ? mainWindow->getTheme().diagnosticWarningColor
+                           : QColor(241, 196, 15);
       break;
     case LspDiagnosticSeverity::Information:
-      underlineColor = mainWindow ? mainWindow->getTheme().accentColor
+      underlineColor = mainWindow ? mainWindow->getTheme().diagnosticInfoColor
                                   : QColor(52, 152, 219);
       break;
     case LspDiagnosticSeverity::Hint:
-      underlineColor = QColor(149, 165, 166);
+      underlineColor = mainWindow ? mainWindow->getTheme().diagnosticHintColor
+                                  : QColor(149, 165, 166);
       break;
     }
 
@@ -1320,8 +1326,8 @@ void TextArea::updateExtraSelections() {
         mainWindow ? mainWindow->getTheme().highlightColor : highlightColor;
     if (m_debugExecutionLine > 0 &&
         m_debugExecutionLine == cursor.blockNumber() + 1) {
-      color =
-          mainWindow ? mainWindow->getTheme().accentColor : QColor(255, 193, 7);
+      color = mainWindow ? mainWindow->getTheme().debugCurrentLineColor
+                         : QColor(255, 193, 7);
       color.setAlpha(120);
     }
     if (breakpointsByLine.contains(cursor.blockNumber() + 1)) {
@@ -1543,7 +1549,7 @@ void TextArea::setCompletionEngine(CompletionEngine *engine) {
   if (!m_completionWidget) {
     m_completionWidget = new CompletionWidget(this);
     if (mainWindow) {
-      m_completionWidget->applyTheme(mainWindow->getTheme());
+      m_completionWidget->applyTheme(ThemeEngine::instance().activeTheme());
     }
     connect(m_completionWidget, &CompletionWidget::itemAccepted, this,
             &TextArea::onCompletionAccepted);

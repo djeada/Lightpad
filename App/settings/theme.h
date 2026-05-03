@@ -32,6 +32,40 @@ struct Theme {
   QColor successColor;
   QColor warningColor;
   QColor errorColor;
+  QColor infoColor;
+
+  QColor diagnosticErrorColor;
+  QColor diagnosticWarningColor;
+  QColor diagnosticInfoColor;
+  QColor diagnosticHintColor;
+
+  QColor gitAddedColor;
+  QColor gitModifiedColor;
+  QColor gitDeletedColor;
+  QColor gitRenamedColor;
+  QColor gitCopiedColor;
+  QColor gitUntrackedColor;
+  QColor gitConflictedColor;
+  QColor gitIgnoredColor;
+
+  QColor diffAddedColor;
+  QColor diffModifiedColor;
+  QColor diffRemovedColor;
+  QColor diffConflictColor;
+
+  QColor testPassedColor;
+  QColor testFailedColor;
+  QColor testSkippedColor;
+  QColor testRunningColor;
+  QColor testQueuedColor;
+
+  QColor debugReadyColor;
+  QColor debugStartingColor;
+  QColor debugRunningColor;
+  QColor debugPausedColor;
+  QColor debugErrorColor;
+  QColor debugBreakpointColor;
+  QColor debugCurrentLineColor;
 
   int borderRadius = 6;
   qreal glowIntensity = 0.0;
@@ -42,6 +76,7 @@ struct Theme {
   Theme();
   void read(const QJsonObject &json);
   void write(QJsonObject &json);
+  void normalize();
 };
 
 #endif
