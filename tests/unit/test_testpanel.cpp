@@ -49,6 +49,7 @@ private slots:
   void testSetDiscoveryAdapter();
 
   void testSearchEditExists();
+
   void testApplyThemeUpdatesStylesheet();
   void testRunDetailsCollapsedByDefault();
   void testClickingTestExpandsDetailsPane();
