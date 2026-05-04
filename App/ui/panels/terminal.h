@@ -1,12 +1,14 @@
 #ifndef TERMINAL_H
 #define TERMINAL_H
 
+#include <QColor>
 #include <QElapsedTimer>
 #include <QMap>
 #include <QMenu>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStringList>
+#include <QTextCharFormat>
 #include <QTimer>
 #include <QWidget>
 
@@ -156,7 +158,7 @@ private:
   void writeToShell(const QByteArray &data);
   void updatePtySize();
   void handleRunInputHistoryNavigation(bool up);
-  static QColor ansi256Color(int index);
+  QColor ansi256Color(int index) const;
   QString formatPythonBanner(const PythonEnvironmentInfo &info) const;
   QString filterShellStartupNoise(const QString &text) const;
   bool isShellStartupNoiseLine(const QString &line) const;
@@ -167,6 +169,15 @@ private:
   void removeInputText(bool backwards);
   QString takePendingInput();
   QString getLinkAtPosition(const QPoint &pos);
+  void resetAnsiState();
+  QTextCharFormat currentAnsiFormat() const;
+  void ensureAnsiLineExists(int row);
+  QTextCursor ansiCursor(bool padToColumn = false);
+  void syncAnsiCursor(const QTextCursor &cursor);
+  void syncAnsiCursorToDocumentEnd();
+  void enterAlternateScreen();
+  void leaveAlternateScreen();
+  bool hasProtectedInputSurface() const;
   static QString stripAnsiEscapeCodes(const QString &text);
   void appendAnsiText(const QString &text, QTextCursor &cursor);
 
@@ -204,6 +215,27 @@ private:
   QRegularExpression m_filePathRegex;
 
   int m_inputStartPosition;
+  QColor m_ansiForeground;
+  QColor m_ansiBackground;
+  int m_ansiRow;
+  int m_ansiColumn;
+  int m_savedAnsiRow;
+  int m_savedAnsiColumn;
+  bool m_ansiBold;
+  bool m_ansiDim;
+  bool m_ansiItalic;
+  bool m_ansiUnderline;
+  bool m_ansiInverse;
+  bool m_ansiOverwriteMode;
+  bool m_ansiChunkUsedScreenOps;
+  bool m_alternateScreenActive;
+  int m_terminalColumns;
+  int m_terminalRows;
+  QString m_savedPrimaryScreenText;
+  QString m_pendingAnsiText;
+  int m_savedPrimaryInputStartPosition;
+  int m_savedPrimaryAnsiRow;
+  int m_savedPrimaryAnsiColumn;
 
   int m_baseFontSize;
   static const int kMinFontSize = 6;

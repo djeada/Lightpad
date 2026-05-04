@@ -81,8 +81,8 @@ bool TerminalPty::start(const QString &program, const QStringList &arguments,
       ::setenv(entry.first.constData(), entry.second.constData(), 1);
     }
 
-    ::setenv("TERM", "xterm-256color", 1);
-    ::setenv("COLORTERM", "truecolor", 1);
+    ::setenv("TERM", "ansi", 1);
+    ::unsetenv("COLORTERM");
     ::setenv("LIGHTPAD_TERMINAL", "1", 1);
 
     ::execvp(programBytes.constData(), argv.data());

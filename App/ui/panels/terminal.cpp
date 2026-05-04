@@ -51,6 +51,80 @@ const QLatin1String kPromptSuffixes[] = {
     QLatin1String("? "),  QLatin1String(": "), QLatin1String("> "),
     QLatin1String("$ "),  QLatin1String("# "), QLatin1String(">>> "),
     QLatin1String("... ")};
+
+int findTrailingIncompleteEscapeStart(const QString &text) {
+  for (int i = 0; i < text.size(); ++i) {
+    if (text.at(i) != QChar('\x1b')) {
+      continue;
+    }
+
+    if (i + 1 >= text.size()) {
+      return i;
+    }
+
+    const QChar next = text.at(i + 1);
+    if (next == '[') {
+      int j = i + 2;
+      while (j < text.size() && !text.at(j).isLetter() &&
+             text.at(j) != QChar('~') && text.at(j) != QChar('@')) {
+        ++j;
+      }
+      if (j >= text.size()) {
+        return i;
+      }
+      i = j;
+    } else if (next == ']') {
+      int j = i + 2;
+      bool terminated = false;
+      while (j < text.size()) {
+        if (text.at(j) == QChar('\x07')) {
+          terminated = true;
+          break;
+        }
+        if (text.at(j) == QChar('\x1b') && j + 1 < text.size() &&
+            text.at(j + 1) == QChar('\\')) {
+          terminated = true;
+          ++j;
+          break;
+        }
+        ++j;
+      }
+      if (!terminated) {
+        return i;
+      }
+      i = j;
+    } else if (QStringLiteral("()#%*+,-./").contains(next)) {
+      if (i + 2 >= text.size()) {
+        return i;
+      }
+      i += 2;
+    } else if (next == 'P' || next == '^' || next == '_' || next == 'X') {
+      int j = i + 2;
+      bool terminated = false;
+      while (j < text.size()) {
+        if (text.at(j) == QChar('\x07')) {
+          terminated = true;
+          break;
+        }
+        if (text.at(j) == QChar('\x1b') && j + 1 < text.size() &&
+            text.at(j + 1) == QChar('\\')) {
+          terminated = true;
+          ++j;
+          break;
+        }
+        ++j;
+      }
+      if (!terminated) {
+        return i;
+      }
+      i = j;
+    } else {
+      ++i;
+    }
+  }
+
+  return -1;
+}
 } // namespace
 
 Terminal::Terminal(QWidget *parent)
@@ -66,7 +140,14 @@ Terminal::Terminal(QWidget *parent)
       m_scrollbackLines(kDefaultScrollbackLines), m_linkDetectionEnabled(true),
       m_urlRegex(R"((https?://|ftp://|file://)[^\s<>\"\'\]\)]+)"),
       m_filePathRegex(R"((?:^|[\s:])(/[^\s:]+|[A-Za-z]:\\[^\s:]+))"),
-      m_inputStartPosition(0), m_baseFontSize(kDefaultFontSize),
+      m_inputStartPosition(0), m_ansiForeground(m_textColor), m_ansiRow(0),
+      m_ansiColumn(0), m_savedAnsiRow(0), m_savedAnsiColumn(0),
+      m_ansiBold(false), m_ansiDim(false), m_ansiItalic(false),
+      m_ansiUnderline(false), m_ansiInverse(false), m_ansiOverwriteMode(false),
+      m_ansiChunkUsedScreenOps(false), m_alternateScreenActive(false),
+      m_terminalColumns(80), m_terminalRows(24),
+      m_savedPrimaryInputStartPosition(0), m_savedPrimaryAnsiRow(0),
+      m_savedPrimaryAnsiColumn(0), m_baseFontSize(kDefaultFontSize),
       m_contextMenu(nullptr), m_copyAction(nullptr), m_stopAction(nullptr),
       m_runInputHistoryIndex(0), m_runInputIndicator(nullptr),
       m_runInputIndicatorTimer(nullptr), m_runInputIndicatorActive(false),
@@ -111,6 +192,7 @@ void Terminal::setupTerminal() {
   ui->textEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
   ui->textEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   ui->textEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  ui->textEdit->document()->setDocumentMargin(0);
 
   QFont monoFont;
   QStringList fontFamilies = {"JetBrains Mono",  "Cascadia Code", "Fira Code",
@@ -134,6 +216,140 @@ void Terminal::setupTerminal() {
   updateStyleSheet();
 
   startShell();
+}
+
+void Terminal::resetAnsiState() {
+  m_ansiForeground = QColor(m_textColor);
+  m_ansiBackground = QColor();
+  m_ansiRow = 0;
+  m_ansiColumn = 0;
+  m_savedAnsiRow = 0;
+  m_savedAnsiColumn = 0;
+  m_ansiBold = false;
+  m_ansiDim = false;
+  m_ansiItalic = false;
+  m_ansiUnderline = false;
+  m_ansiInverse = false;
+  m_ansiOverwriteMode = false;
+  m_ansiChunkUsedScreenOps = false;
+}
+
+QTextCharFormat Terminal::currentAnsiFormat() const {
+  QTextCharFormat fmt;
+  QColor fg = m_ansiForeground;
+  QColor bg = m_ansiBackground;
+  if (m_ansiDim) {
+    fg = fg.darker(135);
+  }
+
+  if (m_ansiInverse) {
+    const QColor defaultFg(m_textColor);
+    const QColor defaultBg(m_backgroundColor);
+    qSwap(fg, bg);
+    if (!fg.isValid()) {
+      fg = defaultBg;
+    }
+    if (!bg.isValid()) {
+      bg = defaultFg;
+    }
+  }
+
+  fmt.setForeground(fg.isValid() ? fg : QColor(m_textColor));
+  if (bg.isValid()) {
+    fmt.setBackground(bg);
+  }
+  if (m_ansiBold) {
+    fmt.setFontWeight(QFont::Bold);
+  }
+  if (m_ansiItalic) {
+    fmt.setFontItalic(true);
+  }
+  if (m_ansiUnderline) {
+    fmt.setFontUnderline(true);
+  }
+  return fmt;
+}
+
+void Terminal::ensureAnsiLineExists(int row) {
+  row = qMax(0, row);
+  QTextDocument *doc = ui->textEdit->document();
+  QTextCursor cursor(doc);
+  cursor.movePosition(QTextCursor::End);
+  while (doc->blockCount() <= row) {
+    cursor.insertBlock();
+  }
+}
+
+QTextCursor Terminal::ansiCursor(bool padToColumn) {
+  m_ansiRow = qMax(0, m_ansiRow);
+  m_ansiColumn = qMax(0, m_ansiColumn);
+  ensureAnsiLineExists(m_ansiRow);
+
+  QTextDocument *doc = ui->textEdit->document();
+  QTextBlock block = doc->findBlockByNumber(m_ansiRow);
+  QTextCursor cursor(block);
+  cursor.movePosition(QTextCursor::StartOfBlock);
+
+  int blockLength = block.text().size();
+  if (padToColumn && blockLength < m_ansiColumn) {
+    cursor.insertText(QString(m_ansiColumn - blockLength, ' '));
+    block = cursor.block();
+  }
+
+  cursor.setPosition(block.position() +
+                     qMin(m_ansiColumn, block.text().size()));
+  return cursor;
+}
+
+void Terminal::syncAnsiCursor(const QTextCursor &cursor) {
+  QTextBlock block = cursor.block();
+  m_ansiRow = qMax(0, block.blockNumber());
+  m_ansiColumn = qMax(0, cursor.position() - block.position());
+}
+
+void Terminal::syncAnsiCursorToDocumentEnd() {
+  QTextCursor endCursor(ui->textEdit->document());
+  endCursor.movePosition(QTextCursor::End);
+  syncAnsiCursor(endCursor);
+}
+
+void Terminal::enterAlternateScreen() {
+  if (m_alternateScreenActive) {
+    return;
+  }
+
+  m_savedPrimaryScreenText = ui->textEdit->toPlainText();
+  m_savedPrimaryInputStartPosition = m_inputStartPosition;
+  m_savedPrimaryAnsiRow = m_ansiRow;
+  m_savedPrimaryAnsiColumn = m_ansiColumn;
+  m_alternateScreenActive = true;
+
+  ui->textEdit->clear();
+  resetAnsiState();
+}
+
+void Terminal::leaveAlternateScreen() {
+  if (!m_alternateScreenActive) {
+    return;
+  }
+
+  ui->textEdit->setPlainText(m_savedPrimaryScreenText);
+  m_alternateScreenActive = false;
+  m_ansiOverwriteMode = false;
+  m_ansiChunkUsedScreenOps = false;
+  m_ansiRow = m_savedPrimaryAnsiRow;
+  m_ansiColumn = m_savedPrimaryAnsiColumn;
+
+  QTextCursor cursor = ansiCursor(false);
+  ui->textEdit->setTextCursor(cursor);
+  m_inputStartPosition = qMin(m_savedPrimaryInputStartPosition,
+                              ui->textEdit->document()->characterCount() - 1);
+  scrollToBottom();
+}
+
+bool Terminal::hasProtectedInputSurface() const {
+  return isPtyShellActive() ||
+         (m_runProcess && m_runProcess->state() != QProcess::NotRunning);
 }
 
 QTextCursor Terminal::clampedInputCursor(bool moveToEndWhenOutsideInput) const {
@@ -571,9 +787,15 @@ void Terminal::updatePtySize() {
   int charWidth = qMax(1, metrics.horizontalAdvance(QLatin1Char('M')));
   int lineHeight = qMax(1, metrics.lineSpacing());
   const QRect viewport = ui->textEdit->viewport()->rect();
-  int columns = qMax(20, viewport.width() / charWidth);
-  int rows = qMax(4, viewport.height() / lineHeight);
-  m_shellPty->resize(columns, rows);
+  const int documentMargin =
+      qMax(0, qRound(ui->textEdit->document()->documentMargin()) * 2);
+  const int availableWidth = qMax(charWidth, viewport.width() - documentMargin -
+                                                 ui->textEdit->cursorWidth());
+  const int availableHeight =
+      qMax(lineHeight, viewport.height() - documentMargin);
+  m_terminalColumns = qMax(20, availableWidth / charWidth);
+  m_terminalRows = qMax(4, availableHeight / lineHeight);
+  m_shellPty->resize(m_terminalColumns, m_terminalRows);
 #endif
 }
 
@@ -607,15 +829,36 @@ void Terminal::handleRunInputHistoryNavigation(bool up) {
   ui->textEdit->setTextCursor(cursor);
 }
 
-QColor Terminal::ansi256Color(int index) {
-  static const QColor standard[16] = {
-      QColor("#282c34"), QColor("#e06c75"), QColor("#98c379"),
-      QColor("#e5c07b"), QColor("#61afef"), QColor("#c678dd"),
-      QColor("#56b6c2"), QColor("#abb2bf"), QColor("#5c6370"),
-      QColor("#be5046"), QColor("#7ec16e"), QColor("#d19a66"),
-      QColor("#4d78cc"), QColor("#b070cf"), QColor("#49a5b0"),
-      QColor("#ffffff"),
+QColor Terminal::ansi256Color(int index) const {
+  const ThemeDefinition &td = ThemeEngine::instance().activeTheme();
+  const ThemeColors &colors = td.colors;
+
+  const QColor standard[16] = {
+      colors.ansiBlack.isValid() ? colors.ansiBlack : QColor(m_backgroundColor),
+      colors.ansiRed.isValid() ? colors.ansiRed : QColor("#f85149"),
+      colors.ansiGreen.isValid() ? colors.ansiGreen : QColor("#7dffb2"),
+      colors.ansiYellow.isValid() ? colors.ansiYellow : QColor("#e6b450"),
+      colors.ansiBlue.isValid() ? colors.ansiBlue : QColor("#7bb7ff"),
+      colors.ansiMagenta.isValid() ? colors.ansiMagenta : QColor("#c7a7ff"),
+      colors.ansiCyan.isValid() ? colors.ansiCyan : QColor("#65d6c4"),
+      colors.ansiWhite.isValid() ? colors.ansiWhite : QColor(m_textColor),
+      colors.ansiBrightBlack.isValid() ? colors.ansiBrightBlack
+                                       : QColor(m_textColor).darker(160),
+      colors.ansiBrightRed.isValid() ? colors.ansiBrightRed : QColor("#ff7b72"),
+      colors.ansiBrightGreen.isValid() ? colors.ansiBrightGreen
+                                       : QColor("#9dffc7"),
+      colors.ansiBrightYellow.isValid() ? colors.ansiBrightYellow
+                                        : QColor("#ffee99"),
+      colors.ansiBrightBlue.isValid() ? colors.ansiBrightBlue
+                                      : QColor("#9dccff"),
+      colors.ansiBrightMagenta.isValid() ? colors.ansiBrightMagenta
+                                         : QColor("#d8c2ff"),
+      colors.ansiBrightCyan.isValid() ? colors.ansiBrightCyan
+                                      : QColor("#9ce7da"),
+      colors.ansiBrightWhite.isValid() ? colors.ansiBrightWhite
+                                       : QColor("#e4f3ed"),
   };
+
   if (index >= 0 && index < 16) {
     return standard[index];
   }
@@ -677,6 +920,8 @@ bool Terminal::startShell(const QString &workingDirectory) {
     m_workingDirectory = QDir::homePath();
   }
 
+  m_pendingAnsiText.clear();
+
 #ifndef Q_OS_WIN
   if (!m_shellPty) {
     m_shellPty = new TerminalPty(this);
@@ -688,8 +933,8 @@ bool Terminal::startShell(const QString &workingDirectory) {
   }
 
   QMap<QString, QString> ptyEnv = m_shellProfile.environment;
-  ptyEnv.insert("TERM", "xterm-256color");
-  ptyEnv.insert("COLORTERM", "truecolor");
+  ptyEnv.insert("TERM", "ansi");
+  ptyEnv.remove("COLORTERM");
   ptyEnv.insert("LIGHTPAD_TERMINAL", "1");
 
   QString shell = getShellCommand();
@@ -702,7 +947,9 @@ bool Terminal::startShell(const QString &workingDirectory) {
 
   m_processRunning = true;
   m_restartAttempts = 0;
-  ui->textEdit->setReadOnly(false);
+  ui->textEdit->setReadOnly(true);
+  ui->textEdit->setTextInteractionFlags(Qt::TextSelectableByMouse |
+                                        Qt::TextSelectableByKeyboard);
   updatePtySize();
   emit shellStarted();
   return true;
@@ -775,6 +1022,9 @@ void Terminal::stopShell() {
       m_shellStopRequested = false;
     }
 #endif
+    m_pendingAnsiText.clear();
+    ui->textEdit->setReadOnly(false);
+    ui->textEdit->setTextInteractionFlags(Qt::TextEditorInteraction);
     return;
   }
 
@@ -792,6 +1042,9 @@ void Terminal::stopShell() {
 
   delete m_process;
   m_process = nullptr;
+  m_pendingAnsiText.clear();
+  ui->textEdit->setReadOnly(false);
+  ui->textEdit->setTextInteractionFlags(Qt::TextEditorInteraction);
 }
 
 bool Terminal::isRunning() const {
@@ -881,6 +1134,10 @@ void Terminal::setWorkingDirectory(const QString &directory) {
 
 void Terminal::clear() {
   ui->textEdit->clear();
+  m_alternateScreenActive = false;
+  m_savedPrimaryScreenText.clear();
+  m_pendingAnsiText.clear();
+  resetAnsiState();
   m_inputStartPosition = 0;
   if (isRunning() &&
       !(m_runProcess && m_runProcess->state() != QProcess::NotRunning)) {
@@ -1033,6 +1290,7 @@ void Terminal::cleanupRunProcess(bool restartShell) {
   }
 
   ui->textEdit->setReadOnly(false);
+  ui->textEdit->setTextInteractionFlags(Qt::TextEditorInteraction);
 
   if (restartShell && m_restartShellAfterRun && !isRunning()) {
     startShell(m_workingDirectory);
@@ -1417,12 +1675,22 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
   const bool terminalTextObject =
       obj == ui->textEdit || obj == ui->textEdit->viewport();
 
-  if (terminalTextObject && event->type() == QEvent::MouseButtonRelease) {
-    const bool protectedInputSurface =
-        isPtyShellActive() ||
-        (m_runProcess && m_runProcess->state() != QProcess::NotRunning);
-    if (protectedInputSurface && !ui->textEdit->textCursor().hasSelection()) {
-      ui->textEdit->moveCursor(QTextCursor::End);
+  if (terminalTextObject && (event->type() == QEvent::MouseButtonPress ||
+                             event->type() == QEvent::MouseButtonRelease ||
+                             event->type() == QEvent::MouseButtonDblClick)) {
+    QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+    const bool plainLeftClick = mouseEvent->button() == Qt::LeftButton &&
+                                mouseEvent->modifiers() == Qt::NoModifier;
+    if (plainLeftClick && hasProtectedInputSurface() &&
+        !ui->textEdit->textCursor().hasSelection()) {
+      ui->textEdit->setFocus(Qt::MouseFocusReason);
+      QTextCursor endCursor(ui->textEdit->document());
+      endCursor.movePosition(QTextCursor::End);
+      ui->textEdit->setTextCursor(endCursor);
+      if (QScrollBar *hScrollBar = ui->textEdit->horizontalScrollBar()) {
+        hScrollBar->setValue(hScrollBar->minimum());
+      }
+      scrollToBottom();
       return true;
     }
   }
@@ -1582,26 +1850,45 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
 }
 
 void Terminal::appendOutput(const QString &text, bool isError) {
-
   if (text.isEmpty()) {
     return;
   }
 
-  QTextCursor cursor = ui->textEdit->textCursor();
+  QString output = text;
+  if (!isError) {
+    if (!m_pendingAnsiText.isEmpty()) {
+      output.prepend(m_pendingAnsiText);
+      m_pendingAnsiText.clear();
+    }
+
+    const int incompleteEscapeStart = findTrailingIncompleteEscapeStart(output);
+    if (incompleteEscapeStart >= 0) {
+      m_pendingAnsiText = output.mid(incompleteEscapeStart);
+      output.truncate(incompleteEscapeStart);
+    }
+  }
+
+  if (output.isEmpty()) {
+    return;
+  }
+
+  QTextCursor cursor(ui->textEdit->document());
   cursor.movePosition(QTextCursor::End);
 
   if (isError) {
+    m_ansiChunkUsedScreenOps = false;
 
-    QString cleanText = stripAnsiEscapeCodes(text);
+    QString cleanText = stripAnsiEscapeCodes(output);
     if (cleanText.isEmpty()) {
       return;
     }
     QTextCharFormat errorFormat;
     errorFormat.setForeground(QColor(m_errorColor));
     cursor.insertText(cleanText, errorFormat);
+    syncAnsiCursor(cursor);
   } else {
-
-    appendAnsiText(text, cursor);
+    cursor = ansiCursor(false);
+    appendAnsiText(output, cursor);
   }
 
   ui->textEdit->setTextCursor(cursor);
@@ -1609,7 +1896,9 @@ void Terminal::appendOutput(const QString &text, bool isError) {
 
   enforceScrollbackLimit();
 
-  m_inputStartPosition = ui->textEdit->textCursor().position();
+  QTextCursor endCursor(ui->textEdit->document());
+  endCursor.movePosition(QTextCursor::End);
+  m_inputStartPosition = endCursor.position();
 }
 
 void Terminal::appendPrompt() {
@@ -1692,7 +1981,8 @@ void Terminal::appendPrompt() {
   ui->textEdit->setTextCursor(cursor);
   scrollToBottom();
 
-  m_inputStartPosition = ui->textEdit->textCursor().position();
+  syncAnsiCursor(cursor);
+  m_inputStartPosition = cursor.position();
   updateCwdLabel();
 }
 
@@ -1733,7 +2023,12 @@ QStringList Terminal::getShellArguments() const {
 
 void Terminal::scrollToBottom() {
   QScrollBar *vScrollBar = ui->textEdit->verticalScrollBar();
-  vScrollBar->setValue(vScrollBar->maximum());
+  const bool screenLikeChunk =
+      m_alternateScreenActive ||
+      (m_ansiChunkUsedScreenOps &&
+       ui->textEdit->document()->blockCount() <= m_terminalRows);
+  vScrollBar->setValue(screenLikeChunk ? vScrollBar->minimum()
+                                       : vScrollBar->maximum());
 }
 
 void Terminal::handleHistoryNavigation(bool up) {
@@ -2322,119 +2617,201 @@ QString Terminal::formatPythonBanner(const PythonEnvironmentInfo &info) const {
 }
 
 void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
-  QColor currentFg = QColor(m_textColor);
-  QColor currentBg;
-  bool bold = false;
-  bool dim = false;
-  bool italic = false;
-  bool underline = false;
+  m_ansiChunkUsedScreenOps = false;
 
-  auto applyFormat = [&]() -> QTextCharFormat {
-    QTextCharFormat fmt;
-    QColor fg = currentFg;
-    if (dim) {
-      fg = fg.darker(150);
+  auto parseParam = [](const QString &value, int defaultValue) {
+    QString normalized = value;
+    normalized.remove('?');
+    if (normalized.isEmpty()) {
+      return defaultValue;
     }
-    fmt.setForeground(fg);
-    if (currentBg.isValid()) {
-      fmt.setBackground(currentBg);
-    }
-    if (bold) {
-      fmt.setFontWeight(QFont::Bold);
-    }
-    if (italic) {
-      fmt.setFontItalic(true);
-    }
-    if (underline) {
-      fmt.setFontUnderline(true);
-    }
-    return fmt;
+    bool ok = false;
+    int parsed = normalized.toInt(&ok);
+    return ok ? parsed : defaultValue;
+  };
+
+  auto syncCursorFromState = [&](bool padToColumn = false) {
+    cursor = ansiCursor(padToColumn);
   };
 
   auto applySgrCodes = [&](const QString &params) {
-    QStringList codes = params.split(';', Qt::SkipEmptyParts);
+    QStringList codes = params.split(';', Qt::KeepEmptyParts);
 
     if (codes.isEmpty() || params.isEmpty()) {
-      currentFg = QColor(m_textColor);
-      currentBg = QColor();
-      bold = dim = italic = underline = false;
+      m_ansiForeground = QColor(m_textColor);
+      m_ansiBackground = QColor();
+      m_ansiBold = m_ansiDim = m_ansiItalic = m_ansiUnderline = false;
+      m_ansiInverse = false;
+      return;
     }
 
     for (int i = 0; i < codes.size(); ++i) {
-      int n = codes[i].toInt();
+      int n = parseParam(codes[i], 0);
       if (n == 0) {
-        currentFg = QColor(m_textColor);
-        currentBg = QColor();
-        bold = dim = italic = underline = false;
+        m_ansiForeground = QColor(m_textColor);
+        m_ansiBackground = QColor();
+        m_ansiBold = m_ansiDim = m_ansiItalic = m_ansiUnderline = false;
+        m_ansiInverse = false;
       } else if (n == 1) {
-        bold = true;
+        m_ansiBold = true;
       } else if (n == 2) {
-        dim = true;
+        m_ansiDim = true;
       } else if (n == 3) {
-        italic = true;
+        m_ansiItalic = true;
       } else if (n == 4) {
-        underline = true;
+        m_ansiUnderline = true;
+      } else if (n == 7) {
+        m_ansiInverse = true;
       } else if (n == 22) {
-        bold = false;
-        dim = false;
+        m_ansiBold = false;
+        m_ansiDim = false;
       } else if (n == 23) {
-        italic = false;
+        m_ansiItalic = false;
       } else if (n == 24) {
-        underline = false;
+        m_ansiUnderline = false;
+      } else if (n == 27) {
+        m_ansiInverse = false;
       } else if (n >= 30 && n <= 37) {
-        currentFg = ansi256Color(n - 30);
+        m_ansiForeground = ansi256Color(n - 30);
       } else if (n == 38 && i + 1 < codes.size()) {
-        int mode = codes[i + 1].toInt();
+        int mode = parseParam(codes[i + 1], 0);
         if (mode == 5 && i + 2 < codes.size()) {
-          currentFg = ansi256Color(codes[i + 2].toInt());
+          m_ansiForeground = ansi256Color(parseParam(codes[i + 2], 0));
           i += 2;
         } else if (mode == 2 && i + 4 < codes.size()) {
-          currentFg = QColor(codes[i + 2].toInt(), codes[i + 3].toInt(),
-                             codes[i + 4].toInt());
+          m_ansiForeground =
+              QColor(parseParam(codes[i + 2], 0), parseParam(codes[i + 3], 0),
+                     parseParam(codes[i + 4], 0));
           i += 4;
         }
       } else if (n == 39) {
-        currentFg = QColor(m_textColor);
+        m_ansiForeground = QColor(m_textColor);
       } else if (n >= 40 && n <= 47) {
-        currentBg = ansi256Color(n - 40);
+        m_ansiBackground = ansi256Color(n - 40);
       } else if (n == 48 && i + 1 < codes.size()) {
-        int mode = codes[i + 1].toInt();
+        int mode = parseParam(codes[i + 1], 0);
         if (mode == 5 && i + 2 < codes.size()) {
-          currentBg = ansi256Color(codes[i + 2].toInt());
+          m_ansiBackground = ansi256Color(parseParam(codes[i + 2], 0));
           i += 2;
         } else if (mode == 2 && i + 4 < codes.size()) {
-          currentBg = QColor(codes[i + 2].toInt(), codes[i + 3].toInt(),
-                             codes[i + 4].toInt());
+          m_ansiBackground =
+              QColor(parseParam(codes[i + 2], 0), parseParam(codes[i + 3], 0),
+                     parseParam(codes[i + 4], 0));
           i += 4;
         }
       } else if (n == 49) {
-        currentBg = QColor();
+        m_ansiBackground = QColor();
       } else if (n >= 90 && n <= 97) {
-        currentFg = ansi256Color(n - 90 + 8);
+        m_ansiForeground = ansi256Color(n - 90 + 8);
       } else if (n >= 100 && n <= 107) {
-        currentBg = ansi256Color(n - 100 + 8);
+        m_ansiBackground = ansi256Color(n - 100 + 8);
       }
     }
   };
 
   auto deletePreviousCharacter = [&]() {
-    if (cursor.position() <= 0) {
+    if (m_ansiRow == 0 && m_ansiColumn == 0) {
       return;
     }
-    QTextCursor probe = cursor;
-    probe.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
-    if (probe.selectedText() == QChar(0x2029)) {
+    if (m_ansiColumn > 0) {
+      --m_ansiColumn;
+    }
+    syncCursorFromState(false);
+    QTextBlock block = cursor.block();
+    if (!block.isValid() || m_ansiColumn >= block.text().size()) {
       return;
     }
-    probe.removeSelectedText();
-    cursor = probe;
+    cursor.deleteChar();
   };
 
   auto eraseToEndOfLine = [&]() {
+    syncCursorFromState(false);
     QTextCursor erase = cursor;
     erase.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
     erase.removeSelectedText();
     cursor = erase;
+  };
+
+  auto deleteCharacters = [&](int count) {
+    syncCursorFromState(false);
+    QTextBlock block = cursor.block();
+    if (!block.isValid() || count <= 0) {
+      return;
+    }
+
+    const int available = qMax(0, block.text().size() - m_ansiColumn);
+    if (available == 0) {
+      return;
+    }
+
+    QTextCursor edit = cursor;
+    edit.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor,
+                      qMin(count, available));
+    edit.removeSelectedText();
+    cursor = edit;
+  };
+
+  auto eraseCharacters = [&](int count) {
+    if (count <= 0) {
+      return;
+    }
+
+    syncCursorFromState(true);
+    const int originalColumn = m_ansiColumn;
+    QTextBlock block = cursor.block();
+    const int requiredWidth = originalColumn + count;
+    if (block.isValid() && block.text().size() < requiredWidth) {
+      cursor.movePosition(QTextCursor::EndOfBlock);
+      cursor.insertText(QString(requiredWidth - block.text().size(), ' '));
+      syncCursorFromState(false);
+      syncCursorFromState(true);
+      block = cursor.block();
+    }
+
+    QTextCursor edit = cursor;
+    edit.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor,
+                      count);
+    edit.removeSelectedText();
+    edit.insertText(QString(count, ' '), currentAnsiFormat());
+    m_ansiColumn = originalColumn;
+    syncCursorFromState(false);
+  };
+
+  auto insertCharacters = [&](int count) {
+    if (count <= 0) {
+      return;
+    }
+
+    syncCursorFromState(true);
+    const int originalColumn = m_ansiColumn;
+    cursor.insertText(QString(count, ' '), currentAnsiFormat());
+    m_ansiColumn = originalColumn;
+    syncCursorFromState(false);
+  };
+
+  auto eraseDisplay = [&](int mode) {
+    if (mode == 2) {
+      ui->textEdit->clear();
+      m_ansiRow = 0;
+      m_ansiColumn = 0;
+      m_ansiOverwriteMode = true;
+      cursor = QTextCursor(ui->textEdit->document());
+      return;
+    }
+
+    syncCursorFromState(false);
+    QTextCursor erase(ui->textEdit->document());
+    if (mode == 0) {
+      erase.setPosition(cursor.position());
+      erase.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+      erase.removeSelectedText();
+      cursor = ansiCursor(false);
+    } else if (mode == 1) {
+      erase.movePosition(QTextCursor::Start);
+      erase.setPosition(cursor.position(), QTextCursor::KeepAnchor);
+      erase.removeSelectedText();
+      syncCursorFromState(false);
+    }
   };
 
   for (int i = 0; i < text.length(); ++i) {
@@ -2458,37 +2835,99 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
 
         const QString params = text.mid(i + 2, j - i - 2);
         const QChar final = text.at(j);
-        QStringList parts = params.split(';', Qt::SkipEmptyParts);
-        int count = parts.isEmpty() ? 1 : qMax(1, parts.first().toInt());
+        QStringList parts = params.split(';', Qt::KeepEmptyParts);
+        int count =
+            qMax(1, parseParam(parts.isEmpty() ? QString() : parts.first(), 1));
 
         if (final == 'm') {
           applySgrCodes(params);
+        } else if (final == 'A') {
+          m_ansiRow = qMax(0, m_ansiRow - count);
+          m_ansiOverwriteMode = true;
+          m_ansiChunkUsedScreenOps = true;
+        } else if (final == 'B') {
+          m_ansiRow += count;
+          m_ansiOverwriteMode = true;
+          m_ansiChunkUsedScreenOps = true;
         } else if (final == 'D') {
-          for (int n = 0; n < count; ++n) {
-            cursor.movePosition(QTextCursor::PreviousCharacter);
-          }
+          m_ansiColumn = qMax(0, m_ansiColumn - count);
+          m_ansiChunkUsedScreenOps = true;
         } else if (final == 'C') {
-          for (int n = 0; n < count; ++n) {
-            cursor.movePosition(QTextCursor::NextCharacter);
-          }
+          m_ansiColumn += count;
+          m_ansiChunkUsedScreenOps = true;
+        } else if (final == 'E') {
+          m_ansiRow += count;
+          m_ansiColumn = 0;
+          m_ansiOverwriteMode = true;
+          m_ansiChunkUsedScreenOps = true;
+        } else if (final == 'F') {
+          m_ansiRow = qMax(0, m_ansiRow - count);
+          m_ansiColumn = 0;
+          m_ansiOverwriteMode = true;
+          m_ansiChunkUsedScreenOps = true;
         } else if (final == 'K') {
-          const int mode = parts.isEmpty() ? 0 : parts.first().toInt();
+          m_ansiChunkUsedScreenOps = true;
+          const int mode =
+              parseParam(parts.isEmpty() ? QString() : parts.first(), 0);
           if (mode == 0) {
             eraseToEndOfLine();
           } else if (mode == 1) {
+            syncCursorFromState(false);
             QTextCursor erase = cursor;
             erase.movePosition(QTextCursor::StartOfBlock,
                                QTextCursor::KeepAnchor);
             erase.removeSelectedText();
             cursor = erase;
           } else if (mode == 2) {
-            cursor.movePosition(QTextCursor::StartOfBlock);
+            m_ansiColumn = 0;
+            syncCursorFromState(false);
             eraseToEndOfLine();
           }
+        } else if (final == 'J') {
+          m_ansiChunkUsedScreenOps = true;
+          eraseDisplay(
+              parseParam(parts.isEmpty() ? QString() : parts.first(), 0));
+        } else if (final == 'P') {
+          m_ansiChunkUsedScreenOps = true;
+          deleteCharacters(count);
+        } else if (final == 'X') {
+          m_ansiChunkUsedScreenOps = true;
+          eraseCharacters(count);
+        } else if (final == '@') {
+          m_ansiChunkUsedScreenOps = true;
+          insertCharacters(count);
         } else if (final == 'G') {
-          cursor.movePosition(QTextCursor::StartOfBlock);
-          for (int n = 1; n < count; ++n) {
-            cursor.movePosition(QTextCursor::NextCharacter);
+          m_ansiColumn = count - 1;
+          m_ansiChunkUsedScreenOps = true;
+        } else if (final == 'H' || final == 'f') {
+          int row = parseParam(parts.value(0), 1);
+          int column = parseParam(parts.value(1), 1);
+          m_ansiRow = qBound(0, row - 1, qMax(0, m_terminalRows - 1));
+          m_ansiColumn = qBound(0, column - 1, qMax(0, m_terminalColumns - 1));
+          m_ansiOverwriteMode = true;
+          m_ansiChunkUsedScreenOps = true;
+        } else if (final == 'd') {
+          m_ansiRow = qBound(0, count - 1, qMax(0, m_terminalRows - 1));
+          m_ansiOverwriteMode = true;
+          m_ansiChunkUsedScreenOps = true;
+        } else if (final == 's') {
+          m_savedAnsiRow = m_ansiRow;
+          m_savedAnsiColumn = m_ansiColumn;
+        } else if (final == 'u') {
+          m_ansiRow = m_savedAnsiRow;
+          m_ansiColumn = m_savedAnsiColumn;
+          m_ansiOverwriteMode = true;
+          m_ansiChunkUsedScreenOps = true;
+        } else if (final == 'h' || final == 'l') {
+          const bool enable = final == 'h';
+          if (params == "?1049" || params == "?1047" || params == "?47") {
+            if (enable) {
+              enterAlternateScreen();
+            } else {
+              leaveAlternateScreen();
+            }
+            cursor = ansiCursor(false);
+            m_ansiChunkUsedScreenOps = true;
           }
         }
         i = j;
@@ -2506,6 +2945,35 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
           ++j;
         }
         i = j;
+      } else if (QStringLiteral("()#%*+,-./").contains(next)) {
+        if (i + 2 >= text.length()) {
+          break;
+        }
+        i += 2;
+      } else if (next == 'P' || next == '^' || next == '_' || next == 'X') {
+        int j = i + 2;
+        while (j < text.length()) {
+          if (text.at(j) == QChar('\x07')) {
+            break;
+          }
+          if (text.at(j) == QChar('\x1b') && j + 1 < text.length() &&
+              text.at(j + 1) == '\\') {
+            ++j;
+            break;
+          }
+          ++j;
+        }
+        i = j;
+      } else if (next == '7') {
+        m_savedAnsiRow = m_ansiRow;
+        m_savedAnsiColumn = m_ansiColumn;
+        ++i;
+      } else if (next == '8') {
+        m_ansiRow = m_savedAnsiRow;
+        m_ansiColumn = m_savedAnsiColumn;
+        m_ansiOverwriteMode = true;
+        m_ansiChunkUsedScreenOps = true;
+        ++i;
       } else {
         ++i;
       }
@@ -2521,13 +2989,25 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
       if (i + 1 < text.length() && text.at(i + 1) == QChar('\n')) {
         continue;
       }
-      cursor.movePosition(QTextCursor::StartOfBlock);
+      m_ansiColumn = 0;
+      m_ansiChunkUsedScreenOps = true;
       continue;
     }
 
     if (ch == QChar('\n')) {
-      cursor.movePosition(QTextCursor::EndOfBlock);
-      cursor.insertBlock();
+      ++m_ansiRow;
+      m_ansiColumn = 0;
+      continue;
+    }
+
+    if (ch == QChar('\f')) {
+      eraseDisplay(2);
+      m_ansiChunkUsedScreenOps = true;
+      continue;
+    }
+
+    if (ch == QChar('\t')) {
+      m_ansiColumn = ((m_ansiColumn / 8) + 1) * 8;
       continue;
     }
 
@@ -2535,8 +3015,33 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
       continue;
     }
 
-    cursor.insertText(QString(ch), applyFormat());
+    if (ch.unicode() < 0x20) {
+      continue;
+    }
+
+    if (m_terminalColumns > 0 && m_ansiColumn >= m_terminalColumns) {
+      ++m_ansiRow;
+      m_ansiColumn = 0;
+    }
+
+    syncCursorFromState(true);
+    QTextBlock block = cursor.block();
+    if (m_ansiOverwriteMode && block.isValid() &&
+        m_ansiColumn < block.text().size()) {
+      QTextCursor overwrite = cursor;
+      overwrite.movePosition(QTextCursor::NextCharacter,
+                             QTextCursor::KeepAnchor);
+      if (overwrite.selectedText() != QChar(0x2029)) {
+        overwrite.removeSelectedText();
+        cursor = overwrite;
+      }
+    }
+    cursor.insertText(QString(ch), currentAnsiFormat());
+    syncAnsiCursor(cursor);
   }
+
+  syncCursorFromState(true);
+  syncAnsiCursor(cursor);
 }
 
 void Terminal::setupContextMenu() {
@@ -2631,6 +3136,8 @@ void Terminal::enforceScrollbackLimit() {
     cursor.removeSelectedText();
 
     m_inputStartPosition = qMax(0, m_inputStartPosition - removedLength);
+    m_ansiRow = qMax(0, m_ansiRow - linesToRemove);
+    m_savedAnsiRow = qMax(0, m_savedAnsiRow - linesToRemove);
   }
 }
 

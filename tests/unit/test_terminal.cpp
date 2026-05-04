@@ -2,6 +2,7 @@
 #include "ui/panels/shellprofile.h"
 #include "ui/panels/terminal.h"
 #undef private
+#include "theme/themeengine.h"
 #include <QDir>
 #include <QLabel>
 #include <QMenu>
@@ -27,6 +28,8 @@ private slots:
 
   void testClear();
   void testPtyClearRedrawsPrompt();
+  void testTerminalDocumentMarginIsZero();
+  void testPtyGridFitsViewport();
 
   void testShellStartedSignal();
 
@@ -53,6 +56,17 @@ private slots:
   void testPtyCarriageReturnCanReplaceLine();
   void testPtyCrLfKeepsOutputHistoryOnSeparateLines();
   void testPtyCursorLeftAllowsMidLineInsert();
+  void testPtyDeleteCharactersRemovesLeadingPadding();
+  void testAnsiColorsFollowThemePalette();
+  void testAnsiReverseVideoSwapsForegroundAndBackground();
+  void testPtyAutoWrapsLongLinesAtTerminalWidth();
+  void testPtyCharsetDesignatorsDoNotLeakIntoTranscript();
+  void testPtyAbsoluteCursorAddressingPlacesTextOnTargetLine();
+  void testPtyOutOfBoundsCursorAddressingClampsToVisibleScreen();
+  void testPtyCursorStatePersistsAcrossChunks();
+  void testPtyAlternateScreenRestoreRemovesTransientUi();
+  void testPtyAlternateScreenExitSplitAcrossChunksRestoresPrimaryScreen();
+  void testPtyDumbVimStartupDoesNotLeakControlCharacters();
   void testPtyMouseClickDoesNotMoveInputCursor();
   void testRunProcessAcceptsInteractiveInput();
   void testRunInputIndicatorVisibility();
@@ -153,6 +167,36 @@ void TestTerminal::testPtyClearRedrawsPrompt() {
   terminal.clear();
 
   QTRY_VERIFY_WITH_TIMEOUT(!textEdit->toPlainText().trimmed().isEmpty(), 3000);
+
+  terminal.stopShell();
+}
+
+void TestTerminal::testTerminalDocumentMarginIsZero() {
+  Terminal terminal;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  QCOMPARE(qRound(textEdit->document()->documentMargin()), 0);
+}
+
+void TestTerminal::testPtyGridFitsViewport() {
+  Terminal terminal;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.resize(900, 320);
+  terminal.show();
+  QTest::qWait(50);
+  terminal.updatePtySize();
+
+  const QFontMetrics metrics(textEdit->font());
+  const QRect viewport = textEdit->viewport()->rect();
+  QVERIFY(terminal.m_terminalColumns *
+                  qMax(1, metrics.horizontalAdvance(QLatin1Char('M'))) +
+              textEdit->cursorWidth() <=
+          viewport.width());
+  QVERIFY(terminal.m_terminalRows * qMax(1, metrics.lineSpacing()) <=
+          viewport.height());
 
   terminal.stopShell();
 }
@@ -544,24 +588,202 @@ void TestTerminal::testPtyCursorLeftAllowsMidLineInsert() {
   QCOMPARE(textEdit->toPlainText(), QString("$ abc"));
 }
 
+void TestTerminal::testPtyDeleteCharactersRemovesLeadingPadding() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("    alpha");
+  terminal.appendOutput("\x1b[1G\x1b[4P");
+
+  QCOMPARE(textEdit->toPlainText(), QString("alpha"));
+}
+
+void TestTerminal::testAnsiColorsFollowThemePalette() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("\x1b[31mR\x1b[32mG\x1b[94mB");
+
+  QTextCursor cursor(textEdit->document());
+  cursor.setPosition(0);
+  cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
+  QCOMPARE(cursor.charFormat().foreground().color(),
+           ThemeEngine::instance().activeTheme().colors.ansiRed);
+
+  cursor.setPosition(1);
+  cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
+  QCOMPARE(cursor.charFormat().foreground().color(),
+           ThemeEngine::instance().activeTheme().colors.ansiGreen);
+
+  cursor.setPosition(2);
+  cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
+  QCOMPARE(cursor.charFormat().foreground().color(),
+           ThemeEngine::instance().activeTheme().colors.ansiBrightBlue);
+}
+
+void TestTerminal::testAnsiReverseVideoSwapsForegroundAndBackground() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("\x1b[31;47;7mX");
+
+  QTextCursor cursor(textEdit->document());
+  cursor.setPosition(0);
+  cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
+  const QTextCharFormat format = cursor.charFormat();
+  QCOMPARE(format.foreground().color(),
+           ThemeEngine::instance().activeTheme().colors.ansiWhite);
+  QCOMPARE(format.background().color(),
+           ThemeEngine::instance().activeTheme().colors.ansiRed);
+}
+
+void TestTerminal::testPtyAutoWrapsLongLinesAtTerminalWidth() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalColumns = 10;
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("0123456789X");
+
+  QCOMPARE(textEdit->toPlainText(), QString("0123456789\nX"));
+}
+
+void TestTerminal::testPtyCharsetDesignatorsDoNotLeakIntoTranscript() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("\x1b(B\x1b)0plain");
+
+  QCOMPARE(textEdit->toPlainText(), QString("plain"));
+}
+
+void TestTerminal::testPtyAbsoluteCursorAddressingPlacesTextOnTargetLine() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("\f\x1b[1;1Htop");
+  terminal.appendOutput("\x1b[3;1Hbottom");
+
+  QCOMPARE(textEdit->toPlainText(), QString("top\n\nbottom"));
+}
+
+void TestTerminal::testPtyOutOfBoundsCursorAddressingClampsToVisibleScreen() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalRows = 5;
+  terminal.m_terminalColumns = 20;
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("\f\x1b[80;1Hstatus");
+
+  QCOMPARE(textEdit->toPlainText(), QString("\n\n\n\nstatus"));
+}
+
+void TestTerminal::testPtyCursorStatePersistsAcrossChunks() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("\f\x1b[2;3Hhe");
+  terminal.appendOutput("llo");
+
+  QCOMPARE(textEdit->toPlainText(), QString("\n  hello"));
+}
+
+void TestTerminal::testPtyAlternateScreenRestoreRemovesTransientUi() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("$ vim README.md\n");
+  terminal.appendOutput("\x1b[?1049h\x1b[1;1Hvim screen");
+  terminal.appendOutput("\x1b[?1049l");
+
+  QCOMPARE(textEdit->toPlainText(), QString("$ vim README.md\n"));
+}
+
+void TestTerminal::
+    testPtyAlternateScreenExitSplitAcrossChunksRestoresPrimaryScreen() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("$ vim README.md\n");
+  terminal.appendOutput("\x1b[?1049h\x1b[1;1Hvim screen\x1b[?1049");
+  terminal.appendOutput("l");
+
+  QCOMPARE(textEdit->toPlainText(), QString("$ vim README.md\n"));
+}
+
+void TestTerminal::testPtyDumbVimStartupDoesNotLeakControlCharacters() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput("stale output");
+  terminal.appendOutput("\f\x1b[80;1H\x1b[80;1H");
+
+  QVERIFY(textEdit->toPlainText().trimmed().isEmpty());
+}
+
 void TestTerminal::testPtyMouseClickDoesNotMoveInputCursor() {
   Terminal terminal;
   QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
   QVERIFY(textEdit != nullptr);
 
   QTRY_VERIFY_WITH_TIMEOUT(terminal.isRunning(), 3000);
-  terminal.clear();
-  terminal.appendOutput("old output\n$ ");
-  textEdit->moveCursor(QTextCursor::End);
+  QTRY_VERIFY_WITH_TIMEOUT(!textEdit->toPlainText().trimmed().isEmpty(), 3000);
+  const QString beforeClick = textEdit->toPlainText();
+  QVERIFY(textEdit->isReadOnly());
 
   terminal.show();
   textEdit->setFocus();
   QTest::qWait(50);
   QTest::mouseClick(textEdit->viewport(), Qt::LeftButton, Qt::NoModifier,
                     QPoint(4, 4));
+  QTest::qWait(100);
 
   QTextCursor endCursor(textEdit->document());
   endCursor.movePosition(QTextCursor::End);
+  QCOMPARE(textEdit->toPlainText(), beforeClick);
   QCOMPARE(textEdit->textCursor().position(), endCursor.position());
 
   terminal.stopShell();
