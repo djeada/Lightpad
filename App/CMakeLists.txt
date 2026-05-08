@@ -150,16 +150,20 @@ set(project_headers
     syntax/csssyntaxplugin.h
     syntax/dockerfilesyntaxplugin.h
     syntax/gosyntaxplugin.h
+    syntax/glslsyntaxplugin.h
+    syntax/hlslsyntaxplugin.h
     syntax/htmlsyntaxplugin.h
     syntax/javascriptsyntaxplugin.h
     syntax/javasyntaxplugin.h
     syntax/jsonsyntaxplugin.h
     syntax/latexsyntaxplugin.h
     syntax/markdownsyntaxplugin.h
+    syntax/metalsyntaxplugin.h
     syntax/pythonsyntaxplugin.h
     syntax/rustsyntaxplugin.h
     syntax/shellsyntaxplugin.h
     syntax/typescriptsyntaxplugin.h
+    syntax/wgslsyntaxplugin.h
     syntax/yamlsyntaxplugin.h
     definition/idefinitionprovider.h
     definition/lspdefinitionprovider.h
@@ -314,16 +318,20 @@ set(project_sources
     syntax/csssyntaxplugin.cpp
     syntax/dockerfilesyntaxplugin.cpp
     syntax/gosyntaxplugin.cpp
+    syntax/glslsyntaxplugin.cpp
+    syntax/hlslsyntaxplugin.cpp
     syntax/htmlsyntaxplugin.cpp
     syntax/javascriptsyntaxplugin.cpp
     syntax/javasyntaxplugin.cpp
     syntax/jsonsyntaxplugin.cpp
     syntax/latexsyntaxplugin.cpp
     syntax/markdownsyntaxplugin.cpp
+    syntax/metalsyntaxplugin.cpp
     syntax/pythonsyntaxplugin.cpp
     syntax/rustsyntaxplugin.cpp
     syntax/shellsyntaxplugin.cpp
     syntax/typescriptsyntaxplugin.cpp
+    syntax/wgslsyntaxplugin.cpp
     syntax/yamlsyntaxplugin.cpp
     definition/idefinitionprovider.cpp
     definition/lspdefinitionprovider.cpp

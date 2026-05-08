@@ -352,17 +352,21 @@ add_executable(test_syntaxpluginregistry
     ${CMAKE_SOURCE_DIR}/App/syntax/cppsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/csssyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/dockerfilesyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/glslsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/gosyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/hlslsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/htmlsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/javascriptsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/javasyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/jsonsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/latexsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/markdownsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/metalsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/pythonsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/rustsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/shellsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/typescriptsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/wgslsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/yamlsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -784,17 +788,21 @@ add_executable(test_languagefeaturemanager
     ${CMAKE_SOURCE_DIR}/App/syntax/cppsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/csssyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/dockerfilesyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/glslsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/gosyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/hlslsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/htmlsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/javascriptsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/javasyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/jsonsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/latexsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/markdownsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/metalsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/pythonsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/rustsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/shellsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/typescriptsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/wgslsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/yamlsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
