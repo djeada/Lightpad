@@ -25,6 +25,8 @@ public:
         {"css", "CSS", {"css"}},
         {"dockerfile", "Dockerfile", {"dockerfile", "containerfile"}},
         {"go", "Go", {"go"}},
+        {"glsl", "GLSL", {"glsl", "vert", "frag", "geom", "comp", "tesc", "tese", "rgen", "rint", "rahit", "rchit", "rmiss", "rcall"}},
+        {"hlsl", "HLSL", {"hlsl", "fx", "fxh", "hlsli"}},
         {"html", "HTML", {"html", "htm"}},
         {"java", "Java", {"java"}},
         {"js", "JavaScript", {"js", "jsx", "mjs", "cjs"}},
@@ -32,12 +34,14 @@ public:
         {"latex", "LaTeX", {"tex", "sty", "cls", "bib", "dtx", "ins", "ltx"}},
         {"make", "Make", {"mk", "makefile"}},
         {"md", "Markdown", {"md", "markdown"}},
+        {"metal", "Metal", {"metal"}},
         {"meson", "Meson", {"meson", "meson.build", "meson_options.txt"}},
         {"ninja", "Ninja", {"ninja", "build.ninja"}},
         {"py", "Python", {"py", "pyw", "pyi"}},
         {"rust", "Rust", {"rs"}},
         {"sh", "Shell", {"sh", "bash", "zsh"}},
         {"ts", "TypeScript", {"ts", "tsx"}},
+        {"wgsl", "WGSL", {"wgsl"}},
         {"yaml", "YAML", {"yaml", "yml"}},
     };
   }
@@ -192,6 +196,15 @@ private:
     addAlias(aliases, "plaintext", "plaintext");
     addAlias(aliases, "text", "plaintext");
     addAlias(aliases, "normal text", "plaintext");
+
+    addAlias(aliases, "glsl", "glsl");
+    addAlias(aliases, "opengl shading language", "glsl");
+    addAlias(aliases, "hlsl", "hlsl");
+    addAlias(aliases, "high level shading language", "hlsl");
+    addAlias(aliases, "wgsl", "wgsl");
+    addAlias(aliases, "webgpu shading language", "wgsl");
+    addAlias(aliases, "metal", "metal");
+    addAlias(aliases, "metal shading language", "metal");
 
     return aliases;
   }

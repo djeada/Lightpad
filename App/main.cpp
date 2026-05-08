@@ -5,7 +5,9 @@
 #include "syntax/cppsyntaxplugin.h"
 #include "syntax/csssyntaxplugin.h"
 #include "syntax/dockerfilesyntaxplugin.h"
+#include "syntax/glslsyntaxplugin.h"
 #include "syntax/gosyntaxplugin.h"
+#include "syntax/hlslsyntaxplugin.h"
 #include "syntax/htmlsyntaxplugin.h"
 #include "syntax/javascriptsyntaxplugin.h"
 #include "syntax/javasyntaxplugin.h"
@@ -14,12 +16,14 @@
 #include "syntax/makesyntaxplugin.h"
 #include "syntax/markdownsyntaxplugin.h"
 #include "syntax/mesonsyntaxplugin.h"
+#include "syntax/metalsyntaxplugin.h"
 #include "syntax/ninjasyntaxplugin.h"
 #include "syntax/pythonsyntaxplugin.h"
 #include "syntax/rustsyntaxplugin.h"
 #include "syntax/shellsyntaxplugin.h"
 #include "syntax/syntaxpluginregistry.h"
 #include "syntax/typescriptsyntaxplugin.h"
+#include "syntax/wgslsyntaxplugin.h"
 #include "syntax/yamlsyntaxplugin.h"
 #include "ui/mainwindow.h"
 #include "ui/widgets/hacker/hackerstyle.h"
@@ -44,9 +48,13 @@ void registerBuiltInSyntaxPlugins() {
   registry.registerPlugin(std::make_unique<NinjaSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CMakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<PythonSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<GlslSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<HlslSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<MetalSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<RustSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<ShellSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<TypeScriptSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<WgslSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<YamlSyntaxPlugin>());
 }
 

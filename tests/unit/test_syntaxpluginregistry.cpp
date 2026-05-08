@@ -4,7 +4,9 @@
 #include "syntax/cppsyntaxplugin.h"
 #include "syntax/csssyntaxplugin.h"
 #include "syntax/dockerfilesyntaxplugin.h"
+#include "syntax/glslsyntaxplugin.h"
 #include "syntax/gosyntaxplugin.h"
+#include "syntax/hlslsyntaxplugin.h"
 #include "syntax/htmlsyntaxplugin.h"
 #include "syntax/javascriptsyntaxplugin.h"
 #include "syntax/javasyntaxplugin.h"
@@ -13,12 +15,14 @@
 #include "syntax/makesyntaxplugin.h"
 #include "syntax/markdownsyntaxplugin.h"
 #include "syntax/mesonsyntaxplugin.h"
+#include "syntax/metalsyntaxplugin.h"
 #include "syntax/ninjasyntaxplugin.h"
 #include "syntax/pythonsyntaxplugin.h"
 #include "syntax/rustsyntaxplugin.h"
 #include "syntax/shellsyntaxplugin.h"
 #include "syntax/syntaxpluginregistry.h"
 #include "syntax/typescriptsyntaxplugin.h"
+#include "syntax/wgslsyntaxplugin.h"
 #include "syntax/yamlsyntaxplugin.h"
 #include <QRegularExpression>
 #include <QtTest/QtTest>
@@ -42,6 +46,10 @@ private slots:
   void testAllBuiltInPlugins();
   void testCppPreprocessorAndScopePatterns();
   void testLanguageCatalogIncludesLatex();
+  void testGlslPlugin();
+  void testHlslPlugin();
+  void testWgslPlugin();
+  void testMetalPlugin();
 };
 
 void TestSyntaxPluginRegistry::init() {
@@ -198,7 +206,9 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   registry.registerPlugin(std::make_unique<CppSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CssSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<DockerfileSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<GlslSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<GoSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<HlslSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<HtmlSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JavaScriptSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<JavaSyntaxPlugin>());
@@ -207,21 +217,25 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   registry.registerPlugin(std::make_unique<MakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MarkdownSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<MesonSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<MetalSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<NinjaSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<CMakeSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<PythonSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<RustSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<ShellSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<TypeScriptSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<WgslSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<YamlSyntaxPlugin>());
 
-  QCOMPARE(registry.getAllLanguageIds().size(), 20);
+  QCOMPARE(registry.getAllLanguageIds().size(), 24);
 
   QVERIFY(registry.isLanguageSupported("bazel"));
   QVERIFY(registry.isLanguageSupported("cpp"));
   QVERIFY(registry.isLanguageSupported("css"));
   QVERIFY(registry.isLanguageSupported("dockerfile"));
+  QVERIFY(registry.isLanguageSupported("glsl"));
   QVERIFY(registry.isLanguageSupported("go"));
+  QVERIFY(registry.isLanguageSupported("hlsl"));
   QVERIFY(registry.isLanguageSupported("html"));
   QVERIFY(registry.isLanguageSupported("js"));
   QVERIFY(registry.isLanguageSupported("java"));
@@ -230,12 +244,14 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isLanguageSupported("make"));
   QVERIFY(registry.isLanguageSupported("md"));
   QVERIFY(registry.isLanguageSupported("meson"));
+  QVERIFY(registry.isLanguageSupported("metal"));
   QVERIFY(registry.isLanguageSupported("ninja"));
   QVERIFY(registry.isLanguageSupported("cmake"));
   QVERIFY(registry.isLanguageSupported("py"));
   QVERIFY(registry.isLanguageSupported("rust"));
   QVERIFY(registry.isLanguageSupported("sh"));
   QVERIFY(registry.isLanguageSupported("ts"));
+  QVERIFY(registry.isLanguageSupported("wgsl"));
   QVERIFY(registry.isLanguageSupported("yaml"));
 
   QVERIFY(registry.isExtensionSupported("bzl"));
@@ -247,6 +263,11 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
            QString("dockerfile"));
   QCOMPARE(registry.getPluginByExtension("containerfile")->languageId(),
            QString("dockerfile"));
+  QVERIFY(registry.isExtensionSupported("glsl"));
+  QVERIFY(registry.isExtensionSupported("vert"));
+  QVERIFY(registry.isExtensionSupported("frag"));
+  QVERIFY(registry.isExtensionSupported("hlsl"));
+  QVERIFY(registry.isExtensionSupported("fx"));
   QVERIFY(registry.isExtensionSupported("go"));
   QVERIFY(registry.isExtensionSupported("html"));
   QVERIFY(registry.isExtensionSupported("js"));
@@ -257,6 +278,7 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isExtensionSupported("mk"));
   QVERIFY(registry.isExtensionSupported("makefile"));
   QVERIFY(registry.isExtensionSupported("md"));
+  QVERIFY(registry.isExtensionSupported("metal"));
   QVERIFY(registry.isExtensionSupported("meson"));
   QVERIFY(registry.isExtensionSupported("ninja"));
   QVERIFY(registry.isExtensionSupported("cmake"));
@@ -265,6 +287,7 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isExtensionSupported("rs"));
   QVERIFY(registry.isExtensionSupported("sh"));
   QVERIFY(registry.isExtensionSupported("ts"));
+  QVERIFY(registry.isExtensionSupported("wgsl"));
   QVERIFY(registry.isExtensionSupported("yaml"));
   QVERIFY(registry.isExtensionSupported("yml"));
 
@@ -335,6 +358,122 @@ void TestSyntaxPluginRegistry::testLanguageCatalogIncludesLatex() {
   QCOMPARE(LanguageCatalog::normalize(".sty"), QString("latex"));
   QCOMPARE(LanguageCatalog::languageForExtension("bib"), QString("latex"));
   QCOMPARE(LanguageCatalog::displayName("latex"), QString("LaTeX"));
+}
+
+void TestSyntaxPluginRegistry::testGlslPlugin() {
+  GlslSyntaxPlugin plugin;
+
+  QCOMPARE(plugin.languageId(), QString("glsl"));
+  QCOMPARE(plugin.languageName(), QString("GLSL"));
+  QVERIFY(plugin.fileExtensions().contains("glsl"));
+  QVERIFY(plugin.fileExtensions().contains("vert"));
+  QVERIFY(plugin.fileExtensions().contains("frag"));
+  QVERIFY(plugin.fileExtensions().contains("comp"));
+
+  QVector<SyntaxRule> rules = plugin.syntaxRules();
+  QVERIFY(!rules.isEmpty());
+
+  // Verify type keywords are present
+  QStringList keywords = plugin.keywords();
+  QVERIFY(keywords.contains("vec4"));
+  QVERIFY(keywords.contains("mat4"));
+  QVERIFY(keywords.contains("sampler2D"));
+  QVERIFY(keywords.contains("uniform"));
+  QVERIFY(keywords.contains("gl_Position"));
+
+  // Verify all rules have valid patterns
+  for (const auto &rule : rules) {
+    QVERIFY2(rule.pattern.isValid(),
+             qPrintable(QString("Invalid pattern in GLSL rule: %1")
+                            .arg(rule.pattern.errorString())));
+  }
+
+  // Verify comment and multiline blocks
+  QVector<MultiLineBlock> blocks = plugin.multiLineBlocks();
+  QVERIFY(!blocks.isEmpty());
+}
+
+void TestSyntaxPluginRegistry::testHlslPlugin() {
+  HlslSyntaxPlugin plugin;
+
+  QCOMPARE(plugin.languageId(), QString("hlsl"));
+  QCOMPARE(plugin.languageName(), QString("HLSL"));
+  QVERIFY(plugin.fileExtensions().contains("hlsl"));
+  QVERIFY(plugin.fileExtensions().contains("fx"));
+  QVERIFY(plugin.fileExtensions().contains("fxh"));
+
+  QVector<SyntaxRule> rules = plugin.syntaxRules();
+  QVERIFY(!rules.isEmpty());
+
+  QStringList keywords = plugin.keywords();
+  QVERIFY(keywords.contains("float4"));
+  QVERIFY(keywords.contains("Texture2D"));
+  QVERIFY(keywords.contains("cbuffer"));
+  QVERIFY(keywords.contains("SamplerState"));
+  QVERIFY(keywords.contains("SV_Position"));
+
+  for (const auto &rule : rules) {
+    QVERIFY2(rule.pattern.isValid(),
+             qPrintable(QString("Invalid pattern in HLSL rule: %1")
+                            .arg(rule.pattern.errorString())));
+  }
+
+  QVector<MultiLineBlock> blocks = plugin.multiLineBlocks();
+  QVERIFY(!blocks.isEmpty());
+}
+
+void TestSyntaxPluginRegistry::testWgslPlugin() {
+  WgslSyntaxPlugin plugin;
+
+  QCOMPARE(plugin.languageId(), QString("wgsl"));
+  QCOMPARE(plugin.languageName(), QString("WGSL"));
+  QVERIFY(plugin.fileExtensions().contains("wgsl"));
+
+  QVector<SyntaxRule> rules = plugin.syntaxRules();
+  QVERIFY(!rules.isEmpty());
+
+  QStringList keywords = plugin.keywords();
+  QVERIFY(keywords.contains("vec4f"));
+  QVERIFY(keywords.contains("fn"));
+  QVERIFY(keywords.contains("var"));
+  QVERIFY(keywords.contains("@vertex"));
+  QVERIFY(keywords.contains("@fragment"));
+
+  for (const auto &rule : rules) {
+    QVERIFY2(rule.pattern.isValid(),
+             qPrintable(QString("Invalid pattern in WGSL rule: %1")
+                            .arg(rule.pattern.errorString())));
+  }
+}
+
+void TestSyntaxPluginRegistry::testMetalPlugin() {
+  MetalSyntaxPlugin plugin;
+
+  QCOMPARE(plugin.languageId(), QString("metal"));
+  QCOMPARE(plugin.languageName(), QString("Metal"));
+  QVERIFY(plugin.fileExtensions().contains("metal"));
+
+  QVector<SyntaxRule> rules = plugin.syntaxRules();
+  QVERIFY(!rules.isEmpty());
+
+  QStringList keywords = plugin.keywords();
+  QVERIFY(keywords.contains("float4"));
+  QVERIFY(keywords.contains("texture2d"));
+  QVERIFY(keywords.contains("kernel"));
+  QVERIFY(keywords.contains("vertex"));
+  QVERIFY(keywords.contains("fragment"));
+  QVERIFY(keywords.contains("constant"));
+  QVERIFY(keywords.contains("device"));
+  QVERIFY(keywords.contains("threadgroup"));
+
+  for (const auto &rule : rules) {
+    QVERIFY2(rule.pattern.isValid(),
+             qPrintable(QString("Invalid pattern in Metal rule: %1")
+                            .arg(rule.pattern.errorString())));
+  }
+
+  QVector<MultiLineBlock> blocks = plugin.multiLineBlocks();
+  QVERIFY(!blocks.isEmpty());
 }
 
 QTEST_MAIN(TestSyntaxPluginRegistry)
