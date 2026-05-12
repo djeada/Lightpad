@@ -2305,6 +2305,25 @@ bool MainWindow::checkExternalModification(const QString &filePath) const {
   return info.lastModified() > m_fileTimestamps.value(normalizedPath);
 }
 
+bool MainWindow::isFileOpenInEditor(const QString &filePath) const {
+  const QString normalizedPath = QDir::cleanPath(filePath);
+  if (normalizedPath.isEmpty()) {
+    return false;
+  }
+
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    if (!tabWidget) {
+      continue;
+    }
+    for (int i = 0; i < tabWidget->count(); ++i) {
+      if (QDir::cleanPath(tabWidget->getFilePath(i)) == normalizedPath) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void MainWindow::setupOpenFileWatcher() {
   if (m_openFileWatcher) {
     return;
@@ -2325,7 +2344,12 @@ void MainWindow::setupOpenFileWatcher() {
               }
               watchOpenFile(filePath);
               if (checkExternalModification(filePath)) {
-                handleExternalModification(filePath, true);
+                if (isFileOpenInEditor(filePath)) {
+                  handleExternalModification(filePath, true);
+                } else {
+                  recordFileTimestamp(filePath);
+                  unwatchOpenFileIfUnused(filePath);
+                }
               }
             });
           });
@@ -5642,12 +5666,19 @@ void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
                    });
   QObject::connect(tabWidget, &QTabWidget::tabCloseRequested, this,
                    [this](int) {
-                     QTimer::singleShot(0, this, [this]() {
-                       if (m_globalSettingsLoaded && !m_restoringSession) {
-                         saveSettings();
-                       }
-                     });
-                   });
+                      QTimer::singleShot(0, this, [this]() {
+                        if (m_openFileWatcher) {
+                          const QStringList watchedFiles =
+                              m_openFileWatcher->files();
+                          for (const QString &watchedPath : watchedFiles) {
+                            unwatchOpenFileIfUnused(watchedPath);
+                          }
+                        }
+                        if (m_globalSettingsLoaded && !m_restoringSession) {
+                          saveSettings();
+                        }
+                      });
+                    });
 }
 
 void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
