@@ -282,6 +282,7 @@ private:
   bool save(const QString &filePath, bool isAutoSave = false);
   void recordFileTimestamp(const QString &filePath);
   bool checkExternalModification(const QString &filePath) const;
+  bool isFileOpenInEditor(const QString &filePath) const;
   void setupOpenFileWatcher();
   void watchOpenFile(const QString &filePath);
   void unwatchOpenFileIfUnused(const QString &filePath);
