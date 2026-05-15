@@ -31,6 +31,7 @@ private slots:
   void testShellCommentsOverrideKeywords();
   void testShellStringsOverrideKeywords();
   void testPythonMultilineBlocksOverrideKeywords();
+  void testPythonFStringExpressionsAreHighlighted();
 };
 
 void TestPluginBasedSyntaxHighlighter::testShellCommentsOverrideKeywords() {
@@ -88,6 +89,26 @@ void TestPluginBasedSyntaxHighlighter::
            theme.singleLineCommentFormat);
   QCOMPARE(formatAt(document, 3, 0).foreground().color(),
            theme.keywordFormat_0);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testPythonFStringExpressionsAreHighlighted() {
+  Theme theme;
+  PythonSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+
+  const QString text =
+      "print(f\"my pid is: {os.getpid()}, returned: {value}\")";
+  document.setPlainText(text);
+  highlighter.rehighlight();
+
+  QCOMPARE(formatAt(document, 0, text.indexOf("print")).foreground().color(),
+           theme.functionFormat);
+  QCOMPARE(formatAt(document, 0, text.indexOf("getpid")).foreground().color(),
+           theme.functionFormat);
+  QCOMPARE(formatAt(document, 0, text.indexOf("my pid")).foreground().color(),
+           theme.quotationFormat);
 }
 
 QTEST_MAIN(TestPluginBasedSyntaxHighlighter)

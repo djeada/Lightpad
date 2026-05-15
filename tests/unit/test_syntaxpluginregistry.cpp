@@ -373,7 +373,6 @@ void TestSyntaxPluginRegistry::testGlslPlugin() {
   QVector<SyntaxRule> rules = plugin.syntaxRules();
   QVERIFY(!rules.isEmpty());
 
-  // Verify type keywords are present
   QStringList keywords = plugin.keywords();
   QVERIFY(keywords.contains("vec4"));
   QVERIFY(keywords.contains("mat4"));
@@ -381,14 +380,12 @@ void TestSyntaxPluginRegistry::testGlslPlugin() {
   QVERIFY(keywords.contains("uniform"));
   QVERIFY(keywords.contains("gl_Position"));
 
-  // Verify all rules have valid patterns
   for (const auto &rule : rules) {
     QVERIFY2(rule.pattern.isValid(),
              qPrintable(QString("Invalid pattern in GLSL rule: %1")
                             .arg(rule.pattern.errorString())));
   }
 
-  // Verify comment and multiline blocks
   QVector<MultiLineBlock> blocks = plugin.multiLineBlocks();
   QVERIFY(!blocks.isEmpty());
 }

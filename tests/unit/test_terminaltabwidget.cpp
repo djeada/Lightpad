@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QSignalSpy>
 #include <QSplitter>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
 #include <QtTest/QtTest>
@@ -35,6 +36,8 @@ private slots:
   void testStopButtonIsVisibleAction();
   void testControlsLiveInTabCorner();
   void testNewTerminalButtonClickAddsTab();
+  void testMultipleTerminalTabsRemainVisible();
+  void testNewTerminalWhileProcessRunsKeepsOldTab();
   void testApplyThemeUpdatesTabStyles();
   void testSnapshotNotEmpty();
 };
@@ -232,6 +235,62 @@ void TestTerminalTabWidget::testNewTerminalButtonClickAddsTab() {
   QTest::mouseClick(newButton, Qt::LeftButton);
   QCOMPARE(widget.terminalCount(), initialCount + 1);
 
+  widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testMultipleTerminalTabsRemainVisible() {
+  TerminalTabWidget widget;
+  UiTestHelpers::showWidget(widget, QSize(960, 360));
+
+  QTabWidget *tabWidget = widget.findChild<QTabWidget *>("terminalTabs");
+  QVERIFY(tabWidget != nullptr);
+  QTabBar *tabBar = tabWidget->tabBar();
+  QVERIFY(tabBar != nullptr);
+
+  widget.addNewTerminal();
+  widget.addNewTerminal();
+  QTest::qWait(50);
+
+  QCOMPARE(tabWidget->count(), 3);
+  QVERIFY(tabBar->isVisible());
+  QVERIFY(!tabBar->expanding());
+  QVERIFY(tabBar->usesScrollButtons());
+  for (int i = 0; i < tabBar->count(); ++i) {
+    QVERIFY2(tabBar->tabRect(i).width() > 0,
+             qPrintable(QString("tab %1 has no visible width").arg(i)));
+  }
+
+  widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testNewTerminalWhileProcessRunsKeepsOldTab() {
+  TerminalTabWidget widget;
+  UiTestHelpers::showWidget(widget, QSize(960, 360));
+
+  QTabWidget *tabWidget = widget.findChild<QTabWidget *>("terminalTabs");
+  QVERIFY(tabWidget != nullptr);
+  QTabBar *tabBar = tabWidget->tabBar();
+  QVERIFY(tabBar != nullptr);
+
+  Terminal *runningTerminal = widget.currentTerminal();
+  QVERIFY(runningTerminal != nullptr);
+  runningTerminal->executeCommand("sh", QStringList() << "-c" << "sleep 30",
+                                  QDir::tempPath());
+  QTRY_VERIFY_WITH_TIMEOUT(runningTerminal->hasActiveRunProcess(), 3000);
+
+  QToolButton *newButton = widget.findChild<QToolButton *>("newTerminalButton");
+  QVERIFY(newButton != nullptr);
+  QTest::mouseClick(newButton, Qt::LeftButton);
+  QTest::qWait(50);
+
+  QCOMPARE(widget.terminalCount(), 2);
+  QCOMPARE(tabWidget->count(), 2);
+  QCOMPARE(widget.terminalAt(0), runningTerminal);
+  QVERIFY(runningTerminal->hasActiveRunProcess());
+  QVERIFY(tabBar->tabRect(0).width() > 0);
+  QVERIFY(tabBar->tabRect(1).width() > 0);
+
+  runningTerminal->stopProcess();
   widget.closeAllTerminals();
 }
 

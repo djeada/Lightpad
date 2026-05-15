@@ -28,6 +28,7 @@ private slots:
   void testAssignmentPersistence();
   void testAssignmentHookPersistence();
   void testBuildCommand();
+  void testPythonEnvironmentDisablesOutputBuffering();
   void testEmptyFilePath();
   void testWorkspaceFolderSubstitution();
   void testRunTemplateSelectorQuoteRoundTrip();
@@ -299,6 +300,21 @@ void TestRunTemplateManager::testBuildCommand() {
   QVERIFY(!cmd.first.isEmpty());
 
   QVERIFY(cmd.first.contains("python"));
+}
+
+void TestRunTemplateManager::testPythonEnvironmentDisablesOutputBuffering() {
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+  manager.setWorkspaceFolder(m_tempDir.path());
+
+  QString testFile = m_tempDir.path() + "/unbuffered.py";
+  QFile file(testFile);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("print('ready')\n");
+  file.close();
+
+  QMap<QString, QString> env = manager.getEnvironment(testFile);
+  QCOMPARE(env.value("PYTHONUNBUFFERED"), QString("1"));
 }
 
 void TestRunTemplateManager::testEmptyFilePath() {

@@ -78,6 +78,8 @@ public:
 
   void sendText(const QString &text, bool appendNewline = false);
 
+  void refreshTerminalSize();
+
   void setScrollbackLines(int lines);
 
   int scrollbackLines() const;
@@ -165,7 +167,9 @@ private:
   QString processTextForLinks(const QString &text);
   void enforceScrollbackLimit();
   QTextCursor clampedInputCursor(bool moveToEndWhenOutsideInput = false) const;
+  void copySelectionToClipboard() const;
   void insertInputText(const QString &text);
+  void pasteClipboardText();
   void removeInputText(bool backwards);
   QString takePendingInput();
   QString getLinkAtPosition(const QPoint &pos);

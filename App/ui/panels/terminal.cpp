@@ -52,6 +52,12 @@ const QLatin1String kPromptSuffixes[] = {
     QLatin1String("$ "),  QLatin1String("# "), QLatin1String(">>> "),
     QLatin1String("... ")};
 
+QString normalizeInputText(QString text) {
+  text.replace(QChar::ParagraphSeparator, QLatin1Char('\n'));
+  text.replace(QChar::LineSeparator, QLatin1Char('\n'));
+  return text;
+}
+
 int findTrailingIncompleteEscapeStart(const QString &text) {
   for (int i = 0; i < text.size(); ++i) {
     if (text.at(i) != QChar('\x1b')) {
@@ -376,6 +382,15 @@ QTextCursor Terminal::clampedInputCursor(bool moveToEndWhenOutsideInput) const {
   return clampedCursor;
 }
 
+void Terminal::copySelectionToClipboard() const {
+  QTextCursor cursor = ui->textEdit->textCursor();
+  if (!cursor.hasSelection()) {
+    return;
+  }
+
+  QApplication::clipboard()->setText(normalizeInputText(cursor.selectedText()));
+}
+
 void Terminal::insertInputText(const QString &text) {
   if (text.isEmpty()) {
     return;
@@ -385,6 +400,21 @@ void Terminal::insertInputText(const QString &text) {
   cursor.insertText(text);
   ui->textEdit->setTextCursor(cursor);
   scrollToBottom();
+}
+
+void Terminal::pasteClipboardText() {
+  const QString text = QApplication::clipboard()->text();
+  if (text.isEmpty()) {
+    return;
+  }
+
+  if (isPtyShellActive() &&
+      !(m_runProcess && m_runProcess->state() != QProcess::NotRunning)) {
+    writeToShell(text.toUtf8());
+    return;
+  }
+
+  insertInputText(text);
 }
 
 void Terminal::removeInputText(bool backwards) {
@@ -426,7 +456,7 @@ QString Terminal::takePendingInput() {
   }
   cursor.setPosition(m_inputStartPosition);
   cursor.setPosition(endPos, QTextCursor::KeepAnchor);
-  QString pending = cursor.selectedText();
+  QString pending = normalizeInputText(cursor.selectedText());
   cursor.removeSelectedText();
   return pending;
 }
@@ -492,9 +522,7 @@ bool Terminal::handleCommonInputKey(QKeyEvent *keyEvent) {
 
   case Qt::Key_C:
     if (ctrl && shift) {
-      if (ui->textEdit->textCursor().hasSelection()) {
-        ui->textEdit->copy();
-      }
+      copySelectionToClipboard();
       return true;
     }
     if (ctrl)
@@ -502,12 +530,10 @@ bool Terminal::handleCommonInputKey(QKeyEvent *keyEvent) {
     break;
 
   case Qt::Key_V:
-    if (ctrl && shift) {
-      insertInputText(QApplication::clipboard()->text());
+    if ((ctrl && shift) || keyEvent->matches(QKeySequence::Paste)) {
+      pasteClipboardText();
       return true;
     }
-    if (ctrl)
-      return false;
     break;
 
   case Qt::Key_X:
@@ -665,14 +691,13 @@ bool Terminal::handlePtyKeyPress(QKeyEvent *keyEvent) {
   const bool shift = mods & Qt::ShiftModifier;
 
   if (ctrl && shift && keyEvent->key() == Qt::Key_C) {
-    if (ui->textEdit->textCursor().hasSelection()) {
-      ui->textEdit->copy();
-    }
+    copySelectionToClipboard();
     return true;
   }
 
-  if (ctrl && shift && keyEvent->key() == Qt::Key_V) {
-    writeToShell(QApplication::clipboard()->text().toUtf8());
+  if (((ctrl && shift) || keyEvent->matches(QKeySequence::Paste)) &&
+      keyEvent->key() == Qt::Key_V) {
+    pasteClipboardText();
     return true;
   }
 
@@ -1675,9 +1700,7 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
   const bool terminalTextObject =
       obj == ui->textEdit || obj == ui->textEdit->viewport();
 
-  if (terminalTextObject && (event->type() == QEvent::MouseButtonPress ||
-                             event->type() == QEvent::MouseButtonRelease ||
-                             event->type() == QEvent::MouseButtonDblClick)) {
+  if (terminalTextObject && event->type() == QEvent::MouseButtonRelease) {
     QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
     const bool plainLeftClick = mouseEvent->button() == Qt::LeftButton &&
                                 mouseEvent->modifiers() == Qt::NoModifier;
@@ -1715,7 +1738,7 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
         QTextCursor cursor = ui->textEdit->textCursor();
         cursor.movePosition(QTextCursor::End);
         cursor.setPosition(m_inputStartPosition, QTextCursor::KeepAnchor);
-        QString userInput = cursor.selectedText();
+        QString userInput = normalizeInputText(cursor.selectedText());
 
         ui->textEdit->moveCursor(QTextCursor::End);
         ui->textEdit->insertPlainText("\n");
@@ -1764,7 +1787,7 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
 
       cursor.setPosition(m_inputStartPosition);
       cursor.setPosition(endPos, QTextCursor::KeepAnchor);
-      QString userInput = cursor.selectedText();
+      QString userInput = normalizeInputText(cursor.selectedText());
 
       ui->textEdit->moveCursor(QTextCursor::End);
       ui->textEdit->insertPlainText("\n");
@@ -2470,6 +2493,8 @@ void Terminal::sendText(const QString &text, bool appendNewline) {
   writeToShell(textToSend.toUtf8());
 }
 
+void Terminal::refreshTerminalSize() { updatePtySize(); }
+
 void Terminal::setScrollbackLines(int lines) {
   m_scrollbackLines = lines;
   enforceScrollbackLimit();
@@ -3050,12 +3075,12 @@ void Terminal::setupContextMenu() {
   m_copyAction = m_contextMenu->addAction(tr("Copy"));
   m_copyAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C));
   connect(m_copyAction, &QAction::triggered, this,
-          [this]() { ui->textEdit->copy(); });
+          [this]() { copySelectionToClipboard(); });
 
   QAction *pasteAction = m_contextMenu->addAction(tr("Paste"));
   pasteAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
   connect(pasteAction, &QAction::triggered, this,
-          [this]() { insertInputText(QApplication::clipboard()->text()); });
+          [this]() { pasteClipboardText(); });
 
   m_contextMenu->addSeparator();
 

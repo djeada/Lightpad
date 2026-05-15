@@ -9,8 +9,8 @@ public:
   QString languageId() const override { return "glsl"; }
   QString languageName() const override { return "GLSL"; }
   QStringList fileExtensions() const override {
-    return {"glsl", "vert", "frag", "geom", "comp", "tesc", "tese", "rgen",
-            "rint", "rahit", "rchit", "rmiss", "rcall"};
+    return {"glsl", "vert", "frag",  "geom",  "comp",  "tesc", "tese",
+            "rgen", "rint", "rahit", "rchit", "rmiss", "rcall"};
   }
 
   QVector<SyntaxRule> syntaxRules() const override;

@@ -47,13 +47,27 @@ QVector<SyntaxRule> PythonSyntaxPlugin::syntaxRules() const {
   numberRule.name = "number";
   rules.append(numberRule);
 
+  SyntaxRule fStringRule;
+  fStringRule.pattern =
+      QRegularExpression("\\b(?:[fF][rR]?|[rR][fF])\"(?:\\\\.|[^\"\\\\])*\"");
+  fStringRule.name = "interpolated_string";
+  rules.append(fStringRule);
+
+  SyntaxRule fSingleQuoteRule;
+  fSingleQuoteRule.pattern =
+      QRegularExpression("\\b(?:[fF][rR]?|[rR][fF])'(?:\\\\.|[^'\\\\])*'");
+  fSingleQuoteRule.name = "interpolated_string";
+  rules.append(fSingleQuoteRule);
+
   SyntaxRule stringRule;
-  stringRule.pattern = QRegularExpression("\".*\"");
+  stringRule.pattern =
+      QRegularExpression("(?<![A-Za-z0-9_])\"(?:\\\\.|[^\"\\\\])*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
   SyntaxRule singleQuoteRule;
-  singleQuoteRule.pattern = QRegularExpression("'.*'");
+  singleQuoteRule.pattern =
+      QRegularExpression("(?<![A-Za-z0-9_])'(?:\\\\.|[^'\\\\])*'");
   singleQuoteRule.name = "string";
   rules.append(singleQuoteRule);
 

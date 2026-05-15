@@ -17,6 +17,7 @@
 #include <QStyle>
 #include <QTabBar>
 #include <QTabWidget>
+#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -33,7 +34,7 @@ QString rgba(const QColor &color, qreal alpha) {
 
 TerminalTabWidget::TerminalTabWidget(QWidget *parent)
     : QWidget(parent), m_splitter(nullptr), m_tabWidget(nullptr),
-      m_splitTabWidget(nullptr), m_activeTabWidget(nullptr),
+      m_splitTabWidget(nullptr), m_activeTabWidget(nullptr), m_toolbar(nullptr),
       m_newTerminalButton(nullptr), m_clearButton(nullptr),
       m_killButton(nullptr), m_closeButton(nullptr),
       m_shellProfileMenu(nullptr), m_terminalCounter(0) {
@@ -77,8 +78,10 @@ QTabWidget *TerminalTabWidget::createTabWidget() {
   tabWidget->setTabsClosable(true);
   tabWidget->setMovable(true);
   tabWidget->setDocumentMode(true);
-  tabWidget->setUsesScrollButtons(false);
+  tabWidget->setUsesScrollButtons(true);
+  tabWidget->setElideMode(Qt::ElideRight);
   tabWidget->tabBar()->setDrawBase(false);
+  tabWidget->tabBar()->setExpanding(false);
 
   connect(tabWidget, &QTabWidget::tabCloseRequested, this,
           &TerminalTabWidget::onTabCloseRequested);
@@ -88,15 +91,16 @@ QTabWidget *TerminalTabWidget::createTabWidget() {
 }
 
 void TerminalTabWidget::setupToolbar() {
-  QWidget *toolbar = new QWidget(m_tabWidget);
-  toolbar->setObjectName("terminalToolbar");
-  toolbar->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-  QHBoxLayout *toolbarLayout = new QHBoxLayout(toolbar);
+  m_toolbar = new QWidget(m_tabWidget);
+  m_toolbar->setObjectName("terminalToolbar");
+  m_toolbar->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  m_toolbar->setFixedHeight(30);
+  QHBoxLayout *toolbarLayout = new QHBoxLayout(m_toolbar);
   toolbarLayout->setContentsMargins(8, 0, 0, 0);
   toolbarLayout->setSpacing(8);
   toolbarLayout->setAlignment(Qt::AlignVCenter);
 
-  m_newTerminalButton = new QToolButton(toolbar);
+  m_newTerminalButton = new QToolButton(m_toolbar);
   m_newTerminalButton->setObjectName("newTerminalButton");
   m_newTerminalButton->setText(tr("+ New"));
   m_newTerminalButton->setToolTip(tr("New Terminal (Ctrl+Shift+`)"));
@@ -113,7 +117,7 @@ void TerminalTabWidget::setupToolbar() {
   connect(m_newTerminalButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onNewTerminalClicked);
 
-  m_clearButton = new QToolButton(toolbar);
+  m_clearButton = new QToolButton(m_toolbar);
   m_clearButton->setObjectName("clearTerminalButton");
   m_clearButton->setText(tr("Clear"));
   m_clearButton->setToolTip(tr("Clear Terminal (Ctrl+L)"));
@@ -125,7 +129,7 @@ void TerminalTabWidget::setupToolbar() {
   connect(m_clearButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onClearTerminalClicked);
 
-  m_killButton = new QToolButton(toolbar);
+  m_killButton = new QToolButton(m_toolbar);
   m_killButton->setObjectName("killTerminalButton");
   m_killButton->setText(tr("Stop"));
   m_killButton->setToolTip(
@@ -139,7 +143,7 @@ void TerminalTabWidget::setupToolbar() {
   connect(m_killButton, &QToolButton::clicked, this,
           &TerminalTabWidget::onKillProcessClicked);
 
-  m_closeButton = new QToolButton(toolbar);
+  m_closeButton = new QToolButton(m_toolbar);
   m_closeButton->setObjectName("closeTerminalPanelButton");
   m_closeButton->setToolTip(tr("Close Terminal Panel"));
   m_closeButton->setText(QStringLiteral("\u00D7"));
@@ -155,7 +159,7 @@ void TerminalTabWidget::setupToolbar() {
   toolbarLayout->addWidget(m_killButton);
   toolbarLayout->addWidget(m_closeButton);
 
-  m_tabWidget->setCornerWidget(toolbar, Qt::TopRightCorner);
+  m_tabWidget->setCornerWidget(m_toolbar, Qt::TopRightCorner);
 }
 
 void TerminalTabWidget::setupShellProfileMenu() {
@@ -224,6 +228,8 @@ TerminalTabWidget::addTerminalToTabWidget(QTabWidget *tabWidget,
   int index = tabWidget->addTab(terminal, tabName);
   tabWidget->setCurrentIndex(index);
   m_activeTabWidget = tabWidget;
+  QTimer::singleShot(0, terminal,
+                     [terminal]() { terminal->refreshTerminalSize(); });
   return terminal;
 }
 
@@ -593,6 +599,8 @@ void TerminalTabWidget::applyTabStyle(QTabWidget *tabWidget,
                                    "  background-color: transparent;"
                                    "  color: %2;"
                                    "  padding: 6px 13px;"
+                                   "  min-width: 82px;"
+                                   "  max-width: 180px;"
                                    "  border: none;"
                                    "  margin: 0;"
                                    "  font-weight: 600;"
@@ -683,6 +691,10 @@ void TerminalTabWidget::onCurrentTabChanged(int index) {
   QTabWidget *tabs = qobject_cast<QTabWidget *>(sender());
   if (tabs) {
     m_activeTabWidget = tabs;
+  }
+  if (Terminal *terminal = currentTerminal()) {
+    QTimer::singleShot(0, terminal,
+                       [terminal]() { terminal->refreshTerminalSize(); });
   }
   updateRunningState();
 }

@@ -715,6 +715,11 @@ RunTemplateManager::getEnvironment(const QString &filePath,
   }
 
   QMap<QString, QString> env;
+  const QString ext = QFileInfo(filePath).suffix().toLower();
+  if (ext == "py" || ext == "pyw" || ext == "pyi") {
+    env.insert("PYTHONUNBUFFERED", "1");
+  }
+
   const PythonEnvironmentInfo pythonEnvironment =
       PythonProjectEnvironment::resolve(pythonPreference, m_workspaceFolder,
                                         filePath, workingDirectory);
