@@ -176,6 +176,53 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     return normalized.contains("string") || normalized.contains("quotation");
   };
 
+  auto isInterpolatedStringRule = [](const QString &ruleName) {
+    return ruleName.toLower().contains("interpolated");
+  };
+
+  auto applyInterpolatedStringRange = [&](int start, int length,
+                                          const QTextCharFormat &format) {
+    if (start < 0 || length <= 0) {
+      return;
+    }
+
+    int end = qMin(start + length, text.size());
+    int literalStart = start;
+    int expressionDepth = 0;
+
+    for (int position = start; position < end; ++position) {
+      QChar character = text.at(position);
+
+      if (character == '{') {
+        if (position + 1 < end && text.at(position + 1) == '{' &&
+            expressionDepth == 0) {
+          ++position;
+          continue;
+        }
+
+        if (expressionDepth == 0) {
+          applyFormatRange(literalStart, position - literalStart + 1, format,
+                           true);
+          literalStart = position + 1;
+        }
+        ++expressionDepth;
+        continue;
+      }
+
+      if (character == '}' && expressionDepth > 0) {
+        --expressionDepth;
+        if (expressionDepth == 0) {
+          applyFormatRange(position, 1, format, true);
+          literalStart = position + 1;
+        }
+      }
+    }
+
+    if (literalStart < end) {
+      applyFormatRange(literalStart, end - literalStart, format, true);
+    }
+  };
+
   auto isCommentLikeRule = [](const QString &ruleName) {
     QString normalized = ruleName.toLower();
     return normalized.contains("comment");
@@ -193,8 +240,13 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
 
       while (matchIterator.hasNext()) {
         QRegularExpressionMatch match = matchIterator.next();
-        applyFormatRange(match.capturedStart(), match.capturedLength(),
-                         rule.format, protect);
+        if (protect && isInterpolatedStringRule(rule.name)) {
+          applyInterpolatedStringRange(match.capturedStart(),
+                                       match.capturedLength(), rule.format);
+        } else {
+          applyFormatRange(match.capturedStart(), match.capturedLength(),
+                           rule.format, protect);
+        }
       }
     }
   };

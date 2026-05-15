@@ -3,6 +3,7 @@
 #include "ui/panels/terminal.h"
 #undef private
 #include "theme/themeengine.h"
+#include <QClipboard>
 #include <QDir>
 #include <QLabel>
 #include <QMenu>
@@ -46,6 +47,7 @@ private slots:
   void testCwdLabelExists();
   void testCwdLabelUpdatesOnDirectoryChange();
   void testContextMenuExists();
+  void testCopySelectionToClipboard();
   void testFontZoomIn();
   void testFontZoomOut();
   void testFontZoomReset();
@@ -69,6 +71,7 @@ private slots:
   void testPtyDumbVimStartupDoesNotLeakControlCharacters();
   void testPtyMouseClickDoesNotMoveInputCursor();
   void testRunProcessAcceptsInteractiveInput();
+  void testRunProcessAcceptsMultilinePastedInput();
   void testRunInputIndicatorVisibility();
   void testLooksLikeInputPromptPatterns();
   void testIndicatorNotShownForNonPromptOutput();
@@ -427,6 +430,29 @@ void TestTerminal::testContextMenuExists() {
   QVERIFY(hasPaste);
   QVERIFY(hasSelectAll);
   QVERIFY(hasClear);
+}
+
+void TestTerminal::testCopySelectionToClipboard() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  textEdit->setPlainText("first line\nsecond line");
+  QTextCursor cursor = textEdit->textCursor();
+  cursor.setPosition(0);
+  cursor.setPosition(QString("first line\nsecond").size(),
+                     QTextCursor::KeepAnchor);
+  textEdit->setTextCursor(cursor);
+
+  terminal.show();
+  textEdit->setFocus();
+  QApplication::clipboard()->clear();
+  QTest::keyClick(textEdit, Qt::Key_C, Qt::ControlModifier | Qt::ShiftModifier);
+
+  QCOMPARE(QApplication::clipboard()->text(), QString("first line\nsecond"));
 }
 
 void TestTerminal::testFontZoomIn() {
@@ -814,6 +840,41 @@ void TestTerminal::testRunProcessAcceptsInteractiveInput() {
 
   QTRY_VERIFY_WITH_TIMEOUT(!terminal.hasActiveRunProcess(), 5000);
   QVERIFY(textEdit->toPlainText().contains("Hello Ada"));
+  QVERIFY(finishedSpy.count() >= 1);
+
+  terminal.stopShell();
+}
+
+void TestTerminal::testRunProcessAcceptsMultilinePastedInput() {
+  Terminal terminal;
+  QSignalSpy finishedSpy(&terminal, &Terminal::processFinished);
+  QVERIFY(finishedSpy.isValid());
+
+  terminal.executeCommand(
+      "sh",
+      QStringList()
+          << "-c"
+          << "while IFS= read -r line; do printf '<%s>\\n' \"$line\"; "
+             "[ \"$line\" = done ] && break; done",
+      QDir::tempPath());
+
+  QTRY_VERIFY_WITH_TIMEOUT(terminal.hasActiveRunProcess(), 3000);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+  terminal.show();
+  textEdit->setFocus();
+  QTest::qWait(50);
+
+  QApplication::clipboard()->setText("alpha\nbeta\ndone");
+  QTest::keyClick(textEdit, Qt::Key_V, Qt::ControlModifier);
+  QTest::keyClick(textEdit, Qt::Key_Return);
+
+  QTRY_VERIFY_WITH_TIMEOUT(!terminal.hasActiveRunProcess(), 5000);
+  const QString transcript = textEdit->toPlainText();
+  QVERIFY(transcript.contains("<alpha>"));
+  QVERIFY(transcript.contains("<beta>"));
+  QVERIFY(transcript.contains("<done>"));
   QVERIFY(finishedSpy.count() >= 1);
 
   terminal.stopShell();

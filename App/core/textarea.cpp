@@ -1074,13 +1074,6 @@ void TextArea::closeParentheses(QString startStr, QString endStr) {
     cursor.insertText(endStr);
   }
 
-  else if (startStr == "{") {
-    auto pos = cursor.position();
-    cursor.setPosition(pos, cursor.MoveAnchor);
-    cursor.insertText("{\n\t\n}");
-    cursor.setPosition(pos + 3);
-  }
-
   else {
     auto pos = cursor.position();
     cursor.setPosition(pos, cursor.MoveAnchor);

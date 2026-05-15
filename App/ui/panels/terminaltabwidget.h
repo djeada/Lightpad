@@ -106,6 +106,7 @@ private:
   QTabWidget *m_tabWidget;
   QTabWidget *m_splitTabWidget;
   QTabWidget *m_activeTabWidget;
+  QWidget *m_toolbar;
   QToolButton *m_newTerminalButton;
   QToolButton *m_clearButton;
   QToolButton *m_killButton;
