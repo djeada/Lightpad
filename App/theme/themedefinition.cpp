@@ -174,6 +174,10 @@ Theme ThemeDefinition::toClassicTheme() const {
   t.quotationFormat = colors.syntaxString;
   t.classFormat = colors.syntaxClass;
   t.numberFormat = colors.syntaxNumber;
+  t.operatorFormat = colors.syntaxOperator;
+  t.constantFormat = colors.syntaxConstant;
+  t.escapeFormat = colors.syntaxEscape;
+  t.regexFormat = colors.syntaxRegex;
 
   t.surfaceColor = colors.surfaceRaised;
   t.surfaceAltColor = colors.surfaceOverlay;
@@ -252,13 +256,13 @@ ThemeDefinition ThemeDefinition::fromClassicTheme(const Theme &c,
   d.colors.syntaxFunction = c.functionFormat;
   d.colors.syntaxClass = c.classFormat;
   d.colors.syntaxNumber = c.numberFormat;
-  d.colors.syntaxOperator = lerp(c.foregroundColor, c.keywordFormat_0, 0.3);
+  d.colors.syntaxOperator = c.operatorFormat;
   d.colors.syntaxType = c.classFormat;
-  d.colors.syntaxConstant = c.keywordFormat_1;
+  d.colors.syntaxConstant = c.constantFormat;
   d.colors.syntaxTag = c.keywordFormat_0;
   d.colors.syntaxAttribute = c.quotationFormat;
-  d.colors.syntaxRegex = lerp(c.quotationFormat, c.keywordFormat_2, 0.5);
-  d.colors.syntaxEscape = lerp(c.quotationFormat, c.keywordFormat_2, 0.5);
+  d.colors.syntaxRegex = c.regexFormat;
+  d.colors.syntaxEscape = c.escapeFormat;
 
   d.colors.surfaceBase = c.backgroundColor;
   d.colors.surfaceRaised = c.surfaceColor;

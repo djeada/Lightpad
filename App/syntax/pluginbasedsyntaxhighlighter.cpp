@@ -108,12 +108,20 @@ PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRule &rule,
       format.setForeground(theme.keywordFormat_0);
       format.setFontWeight(QFont::Bold);
     }
+  } else if (ruleName.contains("escape")) {
+    format.setForeground(theme.escapeFormat);
+  } else if (ruleName.contains("regex")) {
+    format.setForeground(theme.regexFormat);
   } else if (ruleName.contains("number")) {
     format.setForeground(theme.numberFormat);
   } else if (ruleName.contains("string") || ruleName.contains("quotation")) {
     format.setForeground(theme.quotationFormat);
   } else if (ruleName.contains("comment")) {
     format.setForeground(theme.singleLineCommentFormat);
+  } else if (ruleName.contains("operator")) {
+    format.setForeground(theme.operatorFormat);
+  } else if (ruleName.contains("constant")) {
+    format.setForeground(theme.constantFormat);
   } else if (ruleName.contains("function")) {
     format.setForeground(theme.functionFormat);
     format.setFontItalic(true);

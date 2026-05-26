@@ -52,27 +52,51 @@ QVector<SyntaxRule> JavaScriptSyntaxPlugin::syntaxRules() const {
   }
 
   SyntaxRule numberRule;
-  numberRule.pattern = QRegularExpression("\\b[-+.,]*\\d{1,}f*\\b");
+  numberRule.pattern = QRegularExpression(
+      "\\b(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|"
+      "0[bB][01_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?"
+      ")n?\\b");
   numberRule.name = "number";
   rules.append(numberRule);
 
+  SyntaxRule regexRule;
+  regexRule.pattern =
+      QRegularExpression("(?<=[=(:,;!&|?]\\s{0,4})/(?!\\/|\\*)(?:\\\\.|"
+                         "[^/\\\\\\n])+/[gimsuy]*");
+  regexRule.name = "regex";
+  rules.append(regexRule);
+
+  SyntaxRule templateRule;
+  templateRule.pattern = QRegularExpression("`(?:\\\\.|[^`\\\\])*`");
+  templateRule.name = "interpolated_string";
+  rules.append(templateRule);
+
+  SyntaxRule escapeRule;
+  escapeRule.pattern = QRegularExpression(
+      "\\\\(?:[bfnrtv\\\\'\"`0]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|"
+      "u\\{[0-9a-fA-F]+\\})");
+  escapeRule.name = "escape";
+  rules.append(escapeRule);
+
   SyntaxRule stringRule;
-  stringRule.pattern = QRegularExpression("\".*\"");
+  stringRule.pattern = QRegularExpression("\"(?:\\\\.|[^\"\\\\])*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
   SyntaxRule singleQuoteRule;
-  singleQuoteRule.pattern = QRegularExpression("'.*'");
+  singleQuoteRule.pattern = QRegularExpression("'(?:\\\\.|[^'\\\\])*'");
   singleQuoteRule.name = "string";
   rules.append(singleQuoteRule);
 
-  SyntaxRule templateRule;
-  templateRule.pattern = QRegularExpression("`.*`");
-  templateRule.name = "string";
-  rules.append(templateRule);
+  SyntaxRule operatorRule;
+  operatorRule.pattern = QRegularExpression(
+      "(?:===|!==|==|!=|<=|>=|=>|\\+\\+|--|&&|\\|\\||\\?\\.|\\.{3}|"
+      "\\?\\?|[+\\-*/%&|^~!=<>]=?|\\?)");
+  operatorRule.name = "operator";
+  rules.append(operatorRule);
 
   SyntaxRule functionRule;
-  functionRule.pattern = QRegularExpression("\\b[A-Za-z0-9_]+(?=\\()");
+  functionRule.pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()");
   functionRule.name = "function";
   rules.append(functionRule);
 

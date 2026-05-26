@@ -144,7 +144,9 @@ static void loadHighlightingRules(QVector<HighlightingRule> &highlightingRules,
   QTextCharFormat numberFormat;
   numberFormat.setForeground(colors.numberFormat);
   highlightingRules.append(HighlightingRule(
-      QRegularExpression(QStringLiteral("\\b[-+.,]*\\d{1,}f*\\b")),
+      QRegularExpression(QStringLiteral(
+          "\\b(?:0[xX][0-9a-fA-F'][0-9a-fA-F']*|0[bB][01'][01']*|"
+          "\\d[\\d']*(?:\\.\\d[\\d']*)?(?:[eE][+-]?\\d[\\d']*)?)[uUlLfF]*\\b")),
       numberFormat));
 
   QTextCharFormat classFormat;
@@ -157,13 +159,14 @@ static void loadHighlightingRules(QVector<HighlightingRule> &highlightingRules,
   QTextCharFormat quotationFormat;
   quotationFormat.setForeground(colors.quotationFormat);
   highlightingRules.append(HighlightingRule(
-      QRegularExpression(QStringLiteral("\".*\"")), quotationFormat));
+      QRegularExpression(QStringLiteral("\"(?:\\\\.|[^\"\\\\])*\"")),
+      quotationFormat));
 
   QTextCharFormat functionFormat;
   functionFormat.setFontItalic(true);
   functionFormat.setForeground(colors.functionFormat);
   highlightingRules.append(HighlightingRule(
-      QRegularExpression(QStringLiteral("\\b[A-Za-z0-9_]+(?=\\()")),
+      QRegularExpression(QStringLiteral("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()")),
       functionFormat));
 
   QTextCharFormat singleLineCommentFormat;

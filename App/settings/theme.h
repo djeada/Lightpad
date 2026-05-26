@@ -21,6 +21,10 @@ struct Theme {
   QColor quotationFormat;
   QColor classFormat;
   QColor numberFormat;
+  QColor operatorFormat;
+  QColor constantFormat;
+  QColor escapeFormat;
+  QColor regexFormat;
 
   QColor surfaceColor;
   QColor surfaceAltColor;

@@ -43,7 +43,10 @@ QVector<SyntaxRule> PythonSyntaxPlugin::syntaxRules() const {
   }
 
   SyntaxRule numberRule;
-  numberRule.pattern = QRegularExpression("\\b[-+.,]*\\d{1,}f*\\b");
+  numberRule.pattern = QRegularExpression(
+      "\\b(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|"
+      "0[bB][01_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?"
+      "[jJ]?)\\b");
   numberRule.name = "number";
   rules.append(numberRule);
 
@@ -59,6 +62,13 @@ QVector<SyntaxRule> PythonSyntaxPlugin::syntaxRules() const {
   fSingleQuoteRule.name = "interpolated_string";
   rules.append(fSingleQuoteRule);
 
+  SyntaxRule escapeRule;
+  escapeRule.pattern = QRegularExpression(
+      "\\\\(?:[abfnrtv\\\\'\"]|[0-7]{1,3}|x[0-9a-fA-F]{2}|"
+      "u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|N\\{[^}]+\\})");
+  escapeRule.name = "escape";
+  rules.append(escapeRule);
+
   SyntaxRule stringRule;
   stringRule.pattern =
       QRegularExpression("(?<![A-Za-z0-9_])\"(?:\\\\.|[^\"\\\\])*\"");
@@ -71,8 +81,14 @@ QVector<SyntaxRule> PythonSyntaxPlugin::syntaxRules() const {
   singleQuoteRule.name = "string";
   rules.append(singleQuoteRule);
 
+  SyntaxRule operatorRule;
+  operatorRule.pattern = QRegularExpression(
+      "(?:\\*\\*|//|<<|>>|<=|>=|==|!=|:=|[+\\-*/%@&|^~<>=]=?|->)");
+  operatorRule.name = "operator";
+  rules.append(operatorRule);
+
   SyntaxRule functionRule;
-  functionRule.pattern = QRegularExpression("\\b[A-Za-z0-9_]+(?=\\()");
+  functionRule.pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()");
   functionRule.name = "function";
   rules.append(functionRule);
 
