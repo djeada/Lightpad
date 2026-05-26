@@ -33,6 +33,8 @@ Theme::Theme()
       singleLineCommentFormat(QColor("#626a73")),
       functionFormat(QColor("#ffb454")), quotationFormat(QColor("#c2d94c")),
       classFormat(QColor("#59c2ff")), numberFormat(QColor("#e6b450")),
+      operatorFormat(QColor("#d99adf")), constantFormat(QColor("#e7d789")),
+      escapeFormat(QColor("#ffb06b")), regexFormat(QColor("#d2a8ff")),
       surfaceColor(QColor("#0f1419")), surfaceAltColor(QColor("#141925")),
       borderColor(QColor("#1c2a1c")), hoverColor(QColor("#0d1218")),
       pressedColor(QColor("#141925")), accentColor(QColor("#00ff41")),
@@ -105,6 +107,10 @@ void Theme::read(const QJsonObject &json) {
   readColor(themeObject, "quotationFormat", quotationFormat);
   readColor(themeObject, "classFormat", classFormat);
   readColor(themeObject, "numberFormat", numberFormat);
+  readColor(themeObject, "operatorFormat", operatorFormat);
+  readColor(themeObject, "constantFormat", constantFormat);
+  readColor(themeObject, "escapeFormat", escapeFormat);
+  readColor(themeObject, "regexFormat", regexFormat);
 
   readColor(themeObject, "surfaceColor", surfaceColor);
   readColor(themeObject, "surfaceAltColor", surfaceAltColor);
@@ -188,6 +194,10 @@ void Theme::write(QJsonObject &json) {
   writeColor(json, "quotationFormat", quotationFormat);
   writeColor(json, "classFormat", classFormat);
   writeColor(json, "numberFormat", numberFormat);
+  writeColor(json, "operatorFormat", operatorFormat);
+  writeColor(json, "constantFormat", constantFormat);
+  writeColor(json, "escapeFormat", escapeFormat);
+  writeColor(json, "regexFormat", regexFormat);
 
   writeColor(json, "surfaceColor", surfaceColor);
   writeColor(json, "surfaceAltColor", surfaceAltColor);

@@ -1096,18 +1096,18 @@ ThemeDefinition matrix() {
   c.syntaxKeyword = QColor("#00ff66");
   c.syntaxKeyword2 = QColor("#33d6ff");
   c.syntaxKeyword3 = QColor("#c6ff00");
-  c.syntaxString = QColor("#8dff8a");
+  c.syntaxString = QColor("#a8ffa6");
   c.syntaxComment = QColor("#2d7a3e");
   c.syntaxFunction = QColor("#35ffd2");
   c.syntaxClass = QColor("#00ff9c");
   c.syntaxNumber = QColor("#ffd24d");
-  c.syntaxOperator = QColor("#7ee787");
+  c.syntaxOperator = QColor("#b8e6b8");
   c.syntaxType = QColor("#00ff9c");
-  c.syntaxConstant = QColor("#d8ff78");
+  c.syntaxConstant = QColor("#ffe066");
   c.syntaxTag = QColor("#00ff66");
   c.syntaxAttribute = QColor("#33d6ff");
-  c.syntaxRegex = QColor("#8dff8a");
-  c.syntaxEscape = QColor("#35ffd2");
+  c.syntaxRegex = QColor("#ff9cf0");
+  c.syntaxEscape = QColor("#ffab57");
 
   c.surfaceBase = QColor("#000000");
   c.surfaceRaised = QColor("#0a0a0a");

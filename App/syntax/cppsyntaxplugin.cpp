@@ -84,7 +84,9 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
   rules.append(scopedIdentifierRule);
 
   SyntaxRule numberRule;
-  numberRule.pattern = QRegularExpression("\\b[-+.,]*\\d{1,}f*\\b");
+  numberRule.pattern = QRegularExpression(
+      "\\b(?:0[xX][0-9a-fA-F][0-9a-fA-F']*|0[bB][01][01']*|0[0-7][0-7']*|"
+      "\\d[\\d']*(?:\\.\\d[\\d']*)?(?:[eE][+-]?\\d[\\d']*)?)[uUlLfF]*\\b");
   numberRule.name = "number";
   rules.append(numberRule);
 
@@ -93,13 +95,32 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
   qtClassRule.name = "class";
   rules.append(qtClassRule);
 
+  SyntaxRule escapeRule;
+  escapeRule.pattern = QRegularExpression(
+      "\\\\(?:[abfnrtv\\\\'\"]|[0-7]{1,3}|x[0-9a-fA-F]+|u[0-9a-fA-F]{4}|"
+      "U[0-9a-fA-F]{8})");
+  escapeRule.name = "escape";
+  rules.append(escapeRule);
+
   SyntaxRule stringRule;
-  stringRule.pattern = QRegularExpression("\".*\"");
+  stringRule.pattern =
+      QRegularExpression("\"(?:\\\\.|[^\"\\\\])*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 
+  SyntaxRule charLiteralRule;
+  charLiteralRule.pattern = QRegularExpression("'(?:\\\\.|[^'\\\\])*'");
+  charLiteralRule.name = "string";
+  rules.append(charLiteralRule);
+
+  SyntaxRule operatorRule;
+  operatorRule.pattern = QRegularExpression(
+      "(?:<<|>>|<=>|->|\\+\\+|--|&&|\\|\\||[+\\-*/%&|^~!=<>]=?|::|\\?)");
+  operatorRule.name = "operator";
+  rules.append(operatorRule);
+
   SyntaxRule functionRule;
-  functionRule.pattern = QRegularExpression("\\b[A-Za-z0-9_]+(?=\\()");
+  functionRule.pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()");
   functionRule.name = "function";
   rules.append(functionRule);
 
