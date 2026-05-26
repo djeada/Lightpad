@@ -85,7 +85,7 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
 
   SyntaxRule numberRule;
   numberRule.pattern = QRegularExpression(
-      "\\b(?:0[xX][0-9a-fA-F][0-9a-fA-F']*|0[bB][01][01']*|0[0-7][0-7']*|"
+      "\\b(?:0[xX][0-9a-fA-F'][0-9a-fA-F']*|0[bB][01'][01']*|0[0-7']+|"
       "\\d[\\d']*(?:\\.\\d[\\d']*)?(?:[eE][+-]?\\d[\\d']*)?)[uUlLfF]*\\b");
   numberRule.name = "number";
   rules.append(numberRule);

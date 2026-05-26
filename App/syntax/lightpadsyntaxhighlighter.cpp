@@ -145,7 +145,7 @@ static void loadHighlightingRules(QVector<HighlightingRule> &highlightingRules,
   numberFormat.setForeground(colors.numberFormat);
   highlightingRules.append(HighlightingRule(
       QRegularExpression(QStringLiteral(
-          "\\b(?:0[xX][0-9a-fA-F][0-9a-fA-F']*|0[bB][01][01']*|"
+          "\\b(?:0[xX][0-9a-fA-F'][0-9a-fA-F']*|0[bB][01'][01']*|"
           "\\d[\\d']*(?:\\.\\d[\\d']*)?(?:[eE][+-]?\\d[\\d']*)?)[uUlLfF]*\\b")),
       numberFormat));
 

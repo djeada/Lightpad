@@ -53,8 +53,8 @@ QVector<SyntaxRule> JavaScriptSyntaxPlugin::syntaxRules() const {
 
   SyntaxRule numberRule;
   numberRule.pattern = QRegularExpression(
-      "\\b(?:0[xX][0-9a-fA-F][0-9a-fA-F_]*|0[oO][0-7][0-7_]*|"
-      "0[bB][01][01_]*|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?"
+      "\\b(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|"
+      "0[bB][01_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?"
       ")n?\\b");
   numberRule.name = "number";
   rules.append(numberRule);
