@@ -77,8 +77,9 @@ void PluginBasedSyntaxHighlighter::loadRulesFromPlugin(ISyntaxPlugin *plugin,
   m_multiLineBlocks = plugin->multiLineBlocks();
 
   for (MultiLineBlock &block : m_multiLineBlocks) {
-
-    block.format.setForeground(theme.singleLineCommentFormat);
+    SyntaxRule syntheticRule;
+    syntheticRule.name = block.name;
+    block.format = applyThemeToFormat(syntheticRule, theme);
   }
 
   Logger::instance().info(
@@ -94,8 +95,41 @@ PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRule &rule,
   QTextCharFormat format = rule.format;
   QString ruleName = rule.name.toLower();
 
-  if (ruleName.contains("keyword") || ruleName.contains("preprocessor") ||
-      ruleName.contains("directive")) {
+  if (ruleName.contains("function") && ruleName.contains("definition")) {
+    format.setForeground(theme.functionFormat);
+    format.setFontItalic(false);
+    format.setFontWeight(QFont::Bold);
+  } else if ((ruleName.contains("class") || ruleName.contains("type")) &&
+             ruleName.contains("definition")) {
+    format.setForeground(theme.classFormat);
+    format.setFontWeight(QFont::Bold);
+    format.setFontItalic(false);
+  } else if (ruleName.contains("decorator")) {
+    format.setForeground(theme.keywordFormat_1);
+    format.setFontItalic(false);
+    format.setFontWeight(QFont::Normal);
+  } else if (ruleName.contains("builtin")) {
+    if (ruleName.contains("type") || ruleName.contains("class")) {
+      format.setForeground(theme.classFormat);
+    } else if (ruleName.contains("function")) {
+      format.setForeground(theme.keywordFormat_1);
+    } else {
+      format.setForeground(theme.constantFormat);
+    }
+    format.setFontItalic(false);
+    format.setFontWeight(QFont::Normal);
+  } else if (ruleName.contains("magic")) {
+    format.setForeground(theme.constantFormat);
+    format.setFontItalic(false);
+    format.setFontWeight(QFont::Normal);
+  } else if (ruleName.contains("attribute") || ruleName.contains("member") ||
+             ruleName.contains("property") || ruleName.contains("field")) {
+    format.setForeground(theme.keywordFormat_2);
+    format.setFontItalic(false);
+    format.setFontWeight(QFont::Normal);
+  } else if (ruleName.contains("keyword") ||
+             ruleName.contains("preprocessor") ||
+             ruleName.contains("directive")) {
     if (ruleName.contains("0") || ruleName.contains("primary")) {
       format.setForeground(theme.keywordFormat_0);
       format.setFontWeight(QFont::Bold);
@@ -124,11 +158,13 @@ PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRule &rule,
     format.setForeground(theme.constantFormat);
   } else if (ruleName.contains("function")) {
     format.setForeground(theme.functionFormat);
-    format.setFontItalic(true);
+    format.setFontItalic(false);
+    format.setFontWeight(QFont::Normal);
   } else if (ruleName.contains("class") || ruleName.contains("type") ||
              ruleName.contains("scope") || ruleName.contains("scoped")) {
     format.setForeground(theme.classFormat);
-    format.setFontWeight(QFont::Bold);
+    format.setFontItalic(false);
+    format.setFontWeight(QFont::Normal);
   }
 
   return format;
@@ -149,9 +185,13 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
   }
 
   QBitArray protectedCharacters(text.size());
+  QBitArray stringCharacters(text.size());
 
   auto applyFormatRange = [&](int start, int length,
-                              const QTextCharFormat &format, bool protect) {
+                              const QTextCharFormat &format, bool protect,
+                              QBitArray *trackedCharacters = nullptr,
+                              bool allowProtected = false,
+                              const QBitArray *requiredMask = nullptr) {
     if (start < 0 || length <= 0) {
       return;
     }
@@ -161,12 +201,20 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     int segmentStart = -1;
 
     for (int position = clampedStart; position < clampedEnd; ++position) {
-      if (!protectedCharacters.testBit(position)) {
+      const bool isProtected = protectedCharacters.testBit(position);
+      const bool inRequiredMask =
+          !requiredMask || requiredMask->testBit(position);
+      const bool canApply = inRequiredMask && (!isProtected || allowProtected);
+
+      if (canApply) {
         if (segmentStart < 0) {
           segmentStart = position;
         }
         if (protect) {
           protectedCharacters.setBit(position);
+        }
+        if (trackedCharacters) {
+          trackedCharacters->setBit(position);
         }
       } else if (segmentStart >= 0) {
         setFormat(segmentStart, position - segmentStart, format);
@@ -188,8 +236,13 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     return ruleName.toLower().contains("interpolated");
   };
 
+  auto isEscapeLikeRule = [](const QString &ruleName) {
+    return ruleName.toLower().contains("escape");
+  };
+
   auto applyInterpolatedStringRange = [&](int start, int length,
-                                          const QTextCharFormat &format) {
+                                          const QTextCharFormat &format,
+                                          QBitArray *trackedCharacters) {
     if (start < 0 || length <= 0) {
       return;
     }
@@ -210,7 +263,7 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
 
         if (expressionDepth == 0) {
           applyFormatRange(literalStart, position - literalStart + 1, format,
-                           true);
+                           true, trackedCharacters);
           literalStart = position + 1;
         }
         ++expressionDepth;
@@ -220,14 +273,15 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
       if (character == '}' && expressionDepth > 0) {
         --expressionDepth;
         if (expressionDepth == 0) {
-          applyFormatRange(position, 1, format, true);
+          applyFormatRange(position, 1, format, true, trackedCharacters);
           literalStart = position + 1;
         }
       }
     }
 
     if (literalStart < end) {
-      applyFormatRange(literalStart, end - literalStart, format, true);
+      applyFormatRange(literalStart, end - literalStart, format, true,
+                       trackedCharacters);
     }
   };
 
@@ -237,7 +291,9 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
   };
 
   auto applyRules = [&](const std::function<bool(const QString &)> &predicate,
-                        bool protect) {
+                        bool protect, QBitArray *trackedCharacters = nullptr,
+                        bool allowProtected = false,
+                        const QBitArray *requiredMask = nullptr) {
     for (const SyntaxRule &rule : m_rules) {
       if (!predicate(rule.name)) {
         continue;
@@ -248,12 +304,17 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
 
       while (matchIterator.hasNext()) {
         QRegularExpressionMatch match = matchIterator.next();
+        int start = match.capturedStart(rule.captureGroup);
+        int length = match.capturedLength(rule.captureGroup);
+        if (start < 0 || length <= 0) {
+          continue;
+        }
         if (protect && isInterpolatedStringRule(rule.name)) {
-          applyInterpolatedStringRange(match.capturedStart(),
-                                       match.capturedLength(), rule.format);
+          applyInterpolatedStringRange(start, length, rule.format,
+                                       trackedCharacters);
         } else {
-          applyFormatRange(match.capturedStart(), match.capturedLength(),
-                           rule.format, protect);
+          applyFormatRange(start, length, rule.format, protect,
+                           trackedCharacters, allowProtected, requiredMask);
         }
       }
     }
@@ -292,7 +353,9 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
         blockLength = endIndex - startIndex + endMatch.capturedLength();
       }
 
-      applyFormatRange(startIndex, blockLength, block.format, true);
+      applyFormatRange(startIndex, blockLength, block.format, true,
+                       isStringLikeRule(block.name) ? &stringCharacters
+                                                    : nullptr);
 
       QRegularExpressionMatch nextStart =
           block.startPattern.match(text, startIndex + blockLength);
@@ -300,11 +363,13 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     }
   }
 
-  applyRules(isStringLikeRule, true);
+  applyRules(isStringLikeRule, true, &stringCharacters);
+  applyRules(isEscapeLikeRule, false, nullptr, true, &stringCharacters);
   applyRules(isCommentLikeRule, true);
   applyRules(
       [&](const QString &ruleName) {
-        return !isStringLikeRule(ruleName) && !isCommentLikeRule(ruleName);
+        return !isStringLikeRule(ruleName) && !isCommentLikeRule(ruleName) &&
+               !isEscapeLikeRule(ruleName);
       },
       false);
 

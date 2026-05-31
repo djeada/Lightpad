@@ -103,8 +103,7 @@ QVector<SyntaxRule> CppSyntaxPlugin::syntaxRules() const {
   rules.append(escapeRule);
 
   SyntaxRule stringRule;
-  stringRule.pattern =
-      QRegularExpression("\"(?:\\\\.|[^\"\\\\])*\"");
+  stringRule.pattern = QRegularExpression("\"(?:\\\\.|[^\"\\\\])*\"");
   stringRule.name = "string";
   rules.append(stringRule);
 

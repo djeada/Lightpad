@@ -7,6 +7,17 @@
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
 
+namespace {
+
+int colorDistanceSquared(const QColor &a, const QColor &b) {
+  const int dr = a.red() - b.red();
+  const int dg = a.green() - b.green();
+  const int db = a.blue() - b.blue();
+  return dr * dr + dg * dg + db * db;
+}
+
+} // namespace
+
 class TestTheme : public QObject {
   Q_OBJECT
 
@@ -15,6 +26,7 @@ private slots:
   void testWriteToJson();
   void testReadFromJson();
   void testBuiltInPresetsStayDistinct();
+  void testBuiltInPresetsKeepStringsDistinctFromEditorText();
   void testDaylightUsesLightSemantics();
   void testMatrixKeepsSemanticStatusColors();
   void testLegacyThemeBridgeCarriesExpandedSemanticTokens();
@@ -93,6 +105,26 @@ void TestTheme::testBuiltInPresetsStayDistinct() {
   QCOMPARE(github.ui.glowIntensity, 0.0);
 }
 
+void TestTheme::testBuiltInPresetsKeepStringsDistinctFromEditorText() {
+  const QVector<ThemeDefinition> presets = {
+      ThemePresets::hackerDark(), ThemePresets::minimalDark(),
+      ThemePresets::githubDark(), ThemePresets::midnightBlue(),
+      ThemePresets::dracula(),    ThemePresets::monokaiPro(),
+      ThemePresets::nord(),       ThemePresets::solarizedDark(),
+      ThemePresets::cyberpunk(),  ThemePresets::matrix(),
+      ThemePresets::ghost(),      ThemePresets::daylight(),
+  };
+
+  for (const ThemeDefinition &preset : presets) {
+    QVERIFY2(colorDistanceSquared(preset.colors.editorFg,
+                                  preset.colors.syntaxString) > 7000,
+             qPrintable(QString("%1 string color is still too close to editor "
+                                "foreground (%2 vs %3)")
+                            .arg(preset.name, preset.colors.editorFg.name(),
+                                 preset.colors.syntaxString.name())));
+  }
+}
+
 void TestTheme::testDaylightUsesLightSemantics() {
   const ThemeDefinition daylight = ThemePresets::daylight();
 
@@ -113,6 +145,9 @@ void TestTheme::testMatrixKeepsSemanticStatusColors() {
   QVERIFY(matrix.colors.statusError != matrix.colors.statusSuccess);
   QVERIFY(matrix.colors.statusWarning != matrix.colors.statusSuccess);
   QVERIFY(matrix.colors.ansiRed != matrix.colors.ansiGreen);
+  QVERIFY(matrix.colors.syntaxKeyword != matrix.colors.syntaxClass);
+  QVERIFY(matrix.colors.syntaxFunction != matrix.colors.syntaxString);
+  QVERIFY(matrix.colors.syntaxType != matrix.colors.syntaxKeyword2);
 }
 
 void TestTheme::testLegacyThemeBridgeCarriesExpandedSemanticTokens() {

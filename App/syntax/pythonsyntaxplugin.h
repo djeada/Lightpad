@@ -20,8 +20,10 @@ public:
 
 private:
   static QStringList getPrimaryKeywords();
-  static QStringList getSecondaryKeywords();
-  static QStringList getTertiaryKeywords();
+  static QStringList getBuiltinConstants();
+  static QStringList getBuiltinFunctions();
+  static QStringList getBuiltinTypes();
+  static QStringList getContextKeywords();
 };
 
 #endif

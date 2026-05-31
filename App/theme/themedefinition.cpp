@@ -49,7 +49,7 @@ ThemeDefinition::ThemeDefinition() {
   colors.syntaxKeyword = QColor("#65d6c4");
   colors.syntaxKeyword2 = QColor("#7bb7ff");
   colors.syntaxKeyword3 = QColor("#c7a7ff");
-  colors.syntaxString = QColor("#9bd889");
+  colors.syntaxString = QColor("#cbe775");
   colors.syntaxComment = QColor("#63746d");
   colors.syntaxFunction = QColor("#8fcfff");
   colors.syntaxClass = QColor("#8ee6b8");

@@ -648,17 +648,15 @@ void MainWindow::loadSettings() {
     savedThemeDefinition.read(savedThemeDefinitionObject);
     hasSavedThemeDefinition = !savedThemeDefinition.name.trimmed().isEmpty();
   }
-  if (hasSavedThemeDefinition) {
+  const QString savedThemeName =
+      globalSettings.getValue("activeThemeName", QString()).toString();
+  if (!savedThemeName.isEmpty() &&
+      ThemeEngine::instance().hasTheme(savedThemeName)) {
+    setTheme(ThemeEngine::instance().themeByName(savedThemeName));
+  } else if (hasSavedThemeDefinition) {
     setTheme(savedThemeDefinition);
   } else {
-    const QString savedThemeName =
-        globalSettings.getValue("activeThemeName", QString()).toString();
-    if (!savedThemeName.isEmpty() &&
-        ThemeEngine::instance().hasTheme(savedThemeName)) {
-      setTheme(ThemeEngine::instance().themeByName(savedThemeName));
-    } else {
-      setTheme(settings.theme);
-    }
+    setTheme(settings.theme);
   }
   if (ui->actionToggle_Vim_Mode) {
     ui->actionToggle_Vim_Mode->setChecked(settings.vimModeEnabled);
@@ -813,11 +811,13 @@ void MainWindow::saveSettings() {
   globalSettings.setValue("theme", themeJson);
   const ThemeDefinition activeThemeDefinition =
       ThemeEngine::instance().activeTheme();
+  const QString activeThemeName = persistedThemeName(activeThemeDefinition);
   QJsonObject activeThemeJson;
-  activeThemeDefinition.write(activeThemeJson);
+  if (activeThemeName.isEmpty()) {
+    activeThemeDefinition.write(activeThemeJson);
+  }
   globalSettings.setValue("activeThemeDefinition", activeThemeJson);
-  globalSettings.setValue("activeThemeName",
-                          persistedThemeName(activeThemeDefinition));
+  globalSettings.setValue("activeThemeName", activeThemeName);
   LightpadTabWidget *tabWidget = currentTabWidget();
   const int currentIndex = tabWidget ? tabWidget->currentIndex() : -1;
   globalSettings.setValue("currentFilePath",
@@ -5664,21 +5664,20 @@ void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
                        saveSettings();
                      }
                    });
-  QObject::connect(tabWidget, &QTabWidget::tabCloseRequested, this,
-                   [this](int) {
-                      QTimer::singleShot(0, this, [this]() {
-                        if (m_openFileWatcher) {
-                          const QStringList watchedFiles =
-                              m_openFileWatcher->files();
-                          for (const QString &watchedPath : watchedFiles) {
-                            unwatchOpenFileIfUnused(watchedPath);
-                          }
-                        }
-                        if (m_globalSettingsLoaded && !m_restoringSession) {
-                          saveSettings();
-                        }
-                      });
-                    });
+  QObject::connect(
+      tabWidget, &QTabWidget::tabCloseRequested, this, [this](int) {
+        QTimer::singleShot(0, this, [this]() {
+          if (m_openFileWatcher) {
+            const QStringList watchedFiles = m_openFileWatcher->files();
+            for (const QString &watchedPath : watchedFiles) {
+              unwatchOpenFileIfUnused(watchedPath);
+            }
+          }
+          if (m_globalSettingsLoaded && !m_restoringSession) {
+            saveSettings();
+          }
+        });
+      });
 }
 
 void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,

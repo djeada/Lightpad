@@ -1163,8 +1163,10 @@ void Preferences::persistCurrentTheme(const QString &activeThemeName) {
   QJsonObject themeJson;
   m_mainWindow->getTheme().write(themeJson);
   QJsonObject themeDefinitionJson;
-  ThemeEngine::instance().activeTheme().write(themeDefinitionJson);
   sm.setValue("theme", themeJson);
+  if (activeThemeName.isEmpty()) {
+    ThemeEngine::instance().activeTheme().write(themeDefinitionJson);
+  }
   sm.setValue("activeThemeDefinition", themeDefinitionJson);
   sm.setValue("activeThemeName", activeThemeName);
   sm.saveSettings();

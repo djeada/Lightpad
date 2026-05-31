@@ -1,106 +1,117 @@
 #include "pythonsyntaxplugin.h"
 #include <QRegularExpression>
 
+namespace {
+
+QString wordPattern(const QString &word) {
+  return "\\b" + QRegularExpression::escape(word) + "\\b";
+}
+
+void appendWordRules(QVector<SyntaxRule> &rules, const QStringList &words,
+                     const QString &name) {
+  for (const QString &word : words) {
+    SyntaxRule rule;
+    rule.pattern = QRegularExpression(wordPattern(word));
+    rule.name = name;
+    rules.append(rule);
+  }
+}
+
+void appendPatternRule(QVector<SyntaxRule> &rules, const QString &pattern,
+                       const QString &name, int captureGroup = 0) {
+  SyntaxRule rule;
+  rule.pattern = QRegularExpression(pattern);
+  rule.name = name;
+  rule.captureGroup = captureGroup;
+  rules.append(rule);
+}
+
+} // namespace
+
 QStringList PythonSyntaxPlugin::getPrimaryKeywords() {
-  return {"False",  "None",     "True",  "and",    "as",       "assert",
-          "async",  "await",    "break", "class",  "continue", "def",
-          "del",    "elif",     "else",  "except", "finally",  "for",
-          "from",   "global",   "if",    "import", "in",       "is",
-          "lambda", "nonlocal", "not",   "or",     "pass",     "raise",
-          "return", "try",      "while", "with",   "yield"};
+  return {"and",      "as",     "assert",   "async", "await",  "break",
+          "case",     "class",  "continue", "def",   "del",    "elif",
+          "else",     "except", "finally",  "for",   "from",   "global",
+          "if",       "import", "in",       "is",    "lambda", "match",
+          "nonlocal", "not",    "or",       "pass",  "raise",  "return",
+          "try",      "while",  "with",     "yield"};
 }
 
-QStringList PythonSyntaxPlugin::getSecondaryKeywords() {
-  return {"int", "float", "str", "bool", "list", "dict", "tuple", "set"};
+QStringList PythonSyntaxPlugin::getBuiltinConstants() {
+  return {"Ellipsis", "False", "None", "NotImplemented", "True", "__debug__"};
 }
 
-QStringList PythonSyntaxPlugin::getTertiaryKeywords() {
-  return {"self", "super", "__init__"};
+QStringList PythonSyntaxPlugin::getBuiltinFunctions() {
+  return {"abs",        "all",          "any",        "ascii",       "bin",
+          "breakpoint", "callable",     "chr",        "classmethod", "dir",
+          "enumerate",  "filter",       "format",     "getattr",     "hasattr",
+          "hex",        "input",        "isinstance", "issubclass",  "iter",
+          "len",        "map",          "max",        "min",         "next",
+          "open",       "ord",          "pow",        "print",       "property",
+          "range",      "repr",         "reversed",   "round",       "setattr",
+          "sorted",     "staticmethod", "sum",        "super",       "vars",
+          "zip"};
 }
+
+QStringList PythonSyntaxPlugin::getBuiltinTypes() {
+  return {"bool",  "bytearray", "bytes", "complex", "dict",
+          "float", "frozenset", "int",   "list",    "object",
+          "set",   "str",       "tuple", "type"};
+}
+
+QStringList PythonSyntaxPlugin::getContextKeywords() { return {"cls", "self"}; }
 
 QVector<SyntaxRule> PythonSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
-  for (const QString &keyword : getPrimaryKeywords()) {
-    SyntaxRule rule;
-    rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
-    rule.name = "keyword_0";
-    rules.append(rule);
-  }
+  appendWordRules(rules, getPrimaryKeywords(), "keyword_0");
+  appendWordRules(rules, getBuiltinConstants(), "builtin_constant");
+  appendWordRules(rules, getBuiltinTypes(), "builtin_type");
+  appendWordRules(rules, getContextKeywords(), "keyword_2");
 
-  for (const QString &keyword : getSecondaryKeywords()) {
-    SyntaxRule rule;
-    rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
-    rule.name = "keyword_1";
-    rules.append(rule);
-  }
-
-  for (const QString &keyword : getTertiaryKeywords()) {
-    SyntaxRule rule;
-    rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
-    rule.name = "keyword_2";
-    rules.append(rule);
-  }
-
-  SyntaxRule numberRule;
-  numberRule.pattern = QRegularExpression(
+  appendPatternRule(
+      rules,
       "\\b(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|"
       "0[bB][01_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?"
-      "[jJ]?)\\b");
-  numberRule.name = "number";
-  rules.append(numberRule);
+      "[jJ]?)\\b",
+      "number");
 
-  SyntaxRule fStringRule;
-  fStringRule.pattern =
-      QRegularExpression("\\b(?:[fF][rR]?|[rR][fF])\"(?:\\\\.|[^\"\\\\])*\"");
-  fStringRule.name = "interpolated_string";
-  rules.append(fStringRule);
+  appendPatternRule(
+      rules, "(?<![A-Za-z0-9_])(?:[fF][rR]?|[rR][fF])\"(?:\\\\.|[^\"\\\\])*\"",
+      "interpolated_string");
+  appendPatternRule(
+      rules, "(?<![A-Za-z0-9_])(?:[fF][rR]?|[rR][fF])'(?:\\\\.|[^'\\\\])*'",
+      "interpolated_string");
 
-  SyntaxRule fSingleQuoteRule;
-  fSingleQuoteRule.pattern =
-      QRegularExpression("\\b(?:[fF][rR]?|[rR][fF])'(?:\\\\.|[^'\\\\])*'");
-  fSingleQuoteRule.name = "interpolated_string";
-  rules.append(fSingleQuoteRule);
+  appendPatternRule(rules,
+                    "\\\\(?:[abfnrtv\\\\'\"]|[0-7]{1,3}|x[0-9a-fA-F]{2}|"
+                    "u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|N\\{[^}]+\\})",
+                    "escape");
 
-  SyntaxRule escapeRule;
-  escapeRule.pattern = QRegularExpression(
-      "\\\\(?:[abfnrtv\\\\'\"]|[0-7]{1,3}|x[0-9a-fA-F]{2}|"
-      "u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|N\\{[^}]+\\})");
-  escapeRule.name = "escape";
-  rules.append(escapeRule);
+  appendPatternRule(
+      rules, "(?<![A-Za-z0-9_])(?:[rRuUbB]{0,2})\"(?:\\\\.|[^\"\\\\])*\"",
+      "string");
+  appendPatternRule(rules,
+                    "(?<![A-Za-z0-9_])(?:[rRuUbB]{0,2})'(?:\\\\.|[^'\\\\])*'",
+                    "string");
 
-  SyntaxRule stringRule;
-  stringRule.pattern =
-      QRegularExpression("(?<![A-Za-z0-9_])\"(?:\\\\.|[^\"\\\\])*\"");
-  stringRule.name = "string";
-  rules.append(stringRule);
-
-  SyntaxRule singleQuoteRule;
-  singleQuoteRule.pattern =
-      QRegularExpression("(?<![A-Za-z0-9_])'(?:\\\\.|[^'\\\\])*'");
-  singleQuoteRule.name = "string";
-  rules.append(singleQuoteRule);
-
-  SyntaxRule operatorRule;
-  operatorRule.pattern = QRegularExpression(
-      "(?:\\*\\*|//|<<|>>|<=|>=|==|!=|:=|[+\\-*/%@&|^~<>=]=?|->)");
-  operatorRule.name = "operator";
-  rules.append(operatorRule);
-
-  SyntaxRule functionRule;
-  functionRule.pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()");
-  functionRule.name = "function";
-  rules.append(functionRule);
-
-  SyntaxRule decoratorRule;
-  decoratorRule.pattern = QRegularExpression("@[A-Za-z0-9_]+");
-  decoratorRule.name = "keyword_1";
-  rules.append(decoratorRule);
-
-  SyntaxRule commentRule;
-  commentRule.pattern = QRegularExpression("#[^\n]*");
-  commentRule.name = "comment";
-  rules.append(commentRule);
+  appendPatternRule(rules,
+                    "(?:\\*\\*|//|<<|>>|<=|>=|==|!=|:=|[+\\-*/%@&|^~<>=]=?|->)",
+                    "operator");
+  appendPatternRule(rules, "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()", "function");
+  appendPatternRule(rules, "\\b[A-Z][A-Za-z0-9_]*(?=\\()", "type");
+  appendPatternRule(rules, "(?<=\\.)[A-Za-z_][A-Za-z0-9_]*\\b(?!\\s*\\()",
+                    "attribute");
+  appendWordRules(rules, getBuiltinFunctions(), "builtin_function");
+  appendPatternRule(rules, "\\b__[A-Za-z_][A-Za-z0-9_]*__\\b", "magic");
+  appendPatternRule(rules, "\\bdef\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+                    "function_definition", 1);
+  appendPatternRule(rules, "\\bclass\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+                    "class_definition", 1);
+  appendPatternRule(rules,
+                    "@[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*",
+                    "decorator");
+  appendPatternRule(rules, "#[^\n]*", "comment");
 
   return rules;
 }
@@ -109,13 +120,17 @@ QVector<MultiLineBlock> PythonSyntaxPlugin::multiLineBlocks() const {
   QVector<MultiLineBlock> blocks;
 
   MultiLineBlock singleQuoteBlock;
-  singleQuoteBlock.startPattern = QRegularExpression("'''");
+  singleQuoteBlock.startPattern =
+      QRegularExpression("(?<![A-Za-z0-9_])(?:[rRuUbBfF]{0,3})'''");
   singleQuoteBlock.endPattern = QRegularExpression("'''");
+  singleQuoteBlock.name = "string";
   blocks.append(singleQuoteBlock);
 
   MultiLineBlock doubleQuoteBlock;
-  doubleQuoteBlock.startPattern = QRegularExpression("\"\"\"");
+  doubleQuoteBlock.startPattern =
+      QRegularExpression("(?<![A-Za-z0-9_])(?:[rRuUbBfF]{0,3})\"\"\"");
   doubleQuoteBlock.endPattern = QRegularExpression("\"\"\"");
+  doubleQuoteBlock.name = "string";
   blocks.append(doubleQuoteBlock);
 
   return blocks;
@@ -123,7 +138,7 @@ QVector<MultiLineBlock> PythonSyntaxPlugin::multiLineBlocks() const {
 
 QStringList PythonSyntaxPlugin::keywords() const {
   QStringList all;
-  all << getPrimaryKeywords() << getSecondaryKeywords()
-      << getTertiaryKeywords();
+  all << getPrimaryKeywords() << getBuiltinConstants() << getBuiltinFunctions()
+      << getBuiltinTypes() << getContextKeywords();
   return all;
 }

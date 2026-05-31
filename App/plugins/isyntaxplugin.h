@@ -10,12 +10,14 @@ struct SyntaxRule {
   QRegularExpression pattern;
   QTextCharFormat format;
   QString name;
+  int captureGroup = 0;
 };
 
 struct MultiLineBlock {
   QRegularExpression startPattern;
   QRegularExpression endPattern;
   QTextCharFormat format;
+  QString name = "comment";
 };
 
 class ISyntaxPlugin : public IPlugin {

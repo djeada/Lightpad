@@ -164,7 +164,7 @@ ThemeDefinition githubDark() {
   c.syntaxKeyword = QColor("#f47067");
   c.syntaxKeyword2 = QColor("#dcbdfb");
   c.syntaxKeyword3 = QColor("#6cb6ff");
-  c.syntaxString = QColor("#96d0ff");
+  c.syntaxString = QColor("#7ee787");
   c.syntaxComment = QColor("#768390");
   c.syntaxFunction = QColor("#dcbdfb");
   c.syntaxClass = QColor("#6cb6ff");
@@ -298,7 +298,7 @@ ThemeDefinition midnightBlue() {
   c.syntaxKeyword = QColor("#7ee787");
   c.syntaxKeyword2 = QColor("#f2cc60");
   c.syntaxKeyword3 = QColor("#58a6ff");
-  c.syntaxString = QColor("#a5d6ff");
+  c.syntaxString = QColor("#a5d6a7");
   c.syntaxComment = QColor("#8b949e");
   c.syntaxFunction = QColor("#79c0ff");
   c.syntaxClass = QColor("#56d4dd");
@@ -1093,19 +1093,19 @@ ThemeDefinition matrix() {
   c.editorIndentGuide = QColor("#0a1a0a");
   c.editorWhitespace = QColor("#0a2a0a");
 
-  c.syntaxKeyword = QColor("#00ff66");
-  c.syntaxKeyword2 = QColor("#33d6ff");
-  c.syntaxKeyword3 = QColor("#c6ff00");
-  c.syntaxString = QColor("#a8ffa6");
-  c.syntaxComment = QColor("#2d7a3e");
-  c.syntaxFunction = QColor("#35ffd2");
-  c.syntaxClass = QColor("#00ff9c");
-  c.syntaxNumber = QColor("#ffd24d");
-  c.syntaxOperator = QColor("#b8e6b8");
-  c.syntaxType = QColor("#00ff9c");
-  c.syntaxConstant = QColor("#ffe066");
+  c.syntaxKeyword = QColor("#5ef1ff");
+  c.syntaxKeyword2 = QColor("#ffb454");
+  c.syntaxKeyword3 = QColor("#8aff80");
+  c.syntaxString = QColor("#ffd866");
+  c.syntaxComment = QColor("#3b7f47");
+  c.syntaxFunction = QColor("#72d6ff");
+  c.syntaxClass = QColor("#f6e27a");
+  c.syntaxNumber = QColor("#ffaf5f");
+  c.syntaxOperator = QColor("#d6f5d0");
+  c.syntaxType = QColor("#c8ff9b");
+  c.syntaxConstant = QColor("#ffd166");
   c.syntaxTag = QColor("#00ff66");
-  c.syntaxAttribute = QColor("#33d6ff");
+  c.syntaxAttribute = QColor("#8aff80");
   c.syntaxRegex = QColor("#ff9cf0");
   c.syntaxEscape = QColor("#ffab57");
 
@@ -1229,7 +1229,7 @@ ThemeDefinition ghost() {
   c.syntaxKeyword = QColor("#ffffff");
   c.syntaxKeyword2 = QColor("#dddddd");
   c.syntaxKeyword3 = QColor("#bbbbbb");
-  c.syntaxString = QColor("#aaaaaa");
+  c.syntaxString = QColor("#88c0ff");
   c.syntaxComment = QColor("#555555");
   c.syntaxFunction = QColor("#eeeeee");
   c.syntaxClass = QColor("#ffffff");
