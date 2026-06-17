@@ -14,6 +14,7 @@
 class MainWindow;
 class QSyntaxHighlighter;
 class QCompleter;
+class QMimeData;
 class CompletionEngine;
 class CompletionWidget;
 class LineNumberArea;
@@ -150,6 +151,7 @@ protected:
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
+  void insertFromMimeData(const QMimeData *source) override;
 
 private:
   MainWindow *mainWindow;
@@ -228,6 +230,9 @@ private:
   void updateLineNumberAreaLayout();
   QString resolveFilePath() const;
   void invalidateCompletionRequest();
+  int effectiveTabWidth() const;
+  bool shouldExpandTabsToSpaces() const;
+  void expandTabsToSpacesInDocument();
 
 private slots:
   void onCompletionsReady(const QList<CompletionItem> &items);

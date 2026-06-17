@@ -16,6 +16,7 @@ private slots:
   void testSaveAsDocument();
   void testModificationState();
   void testLanguageHint();
+  void testPythonSaveExpandsTabsToSpaces();
   void testSignals();
 
 private:
@@ -115,6 +116,20 @@ void TestDocument::testLanguageHint() {
   Document unknownDoc;
   unknownDoc.setFilePath("/path/to/file.xyz");
   QCOMPARE(unknownDoc.languageHint(), QString("text"));
+}
+
+void TestDocument::testPythonSaveExpandsTabsToSpaces() {
+  QString pyPath = m_tempDir.path() + "/script.py";
+  Document doc;
+  doc.setFilePath(pyPath);
+  doc.setContent("if True:\n\tprint('ok')\n");
+
+  QVERIFY(doc.save());
+
+  FileManager::FileResult result = FileManager::instance().readFile(pyPath);
+  QVERIFY(result.success);
+  QCOMPARE(result.content, QString("if True:\n    print('ok')\n"));
+  QVERIFY(!result.content.contains('\t'));
 }
 
 void TestDocument::testSignals() {

@@ -18,6 +18,9 @@ private slots:
   void testGetDirectory();
   void testReadNonExistentFile();
   void testWriteToEmptyPath();
+  void testPythonWriteExpandsTabsToSpaces();
+  void testShebangPythonWriteExpandsTabsToSpaces();
+  void testNonPythonWritePreservesTabs();
 
 private:
   QTemporaryDir m_tempDir;
@@ -109,6 +112,43 @@ void TestFileManager::testWriteToEmptyPath() {
 
   QVERIFY(!result.success);
   QVERIFY(!result.errorMessage.isEmpty());
+}
+
+void TestFileManager::testPythonWriteExpandsTabsToSpaces() {
+  FileManager &fm = FileManager::instance();
+  QString path = m_tempDir.path() + "/script.py";
+
+  auto result = fm.writeFile(path, "if True:\n\tprint('ok')\n");
+
+  QVERIFY(result.success);
+  auto readResult = fm.readFile(path);
+  QCOMPARE(readResult.content, QString("if True:\n    print('ok')\n"));
+  QVERIFY(!readResult.content.contains('\t'));
+}
+
+void TestFileManager::testShebangPythonWriteExpandsTabsToSpaces() {
+  FileManager &fm = FileManager::instance();
+  QString path = m_tempDir.path() + "/script";
+
+  auto result =
+      fm.writeFile(path, "#!/usr/bin/env python3\nif True:\n\tprint('ok')\n");
+
+  QVERIFY(result.success);
+  auto readResult = fm.readFile(path);
+  QCOMPARE(readResult.content,
+           QString("#!/usr/bin/env python3\nif True:\n    print('ok')\n"));
+  QVERIFY(!readResult.content.contains('\t'));
+}
+
+void TestFileManager::testNonPythonWritePreservesTabs() {
+  FileManager &fm = FileManager::instance();
+  QString path = m_tempDir.path() + "/notes.txt";
+
+  auto result = fm.writeFile(path, "a\tb\n");
+
+  QVERIFY(result.success);
+  auto readResult = fm.readFile(path);
+  QCOMPARE(readResult.content, QString("a\tb\n"));
 }
 
 QTEST_MAIN(TestFileManager)

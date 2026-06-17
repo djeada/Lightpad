@@ -20,6 +20,15 @@ public:
 
   FileResult writeFile(const QString &filePath, const QString &content);
 
+  static bool isPythonFile(const QString &filePath,
+                           const QString &content = {});
+
+  static QString expandTabsToSpaces(const QString &content, int tabWidth = 4);
+
+  static QString normalizeContentForSave(const QString &filePath,
+                                         const QString &content,
+                                         int tabWidth = 4);
+
   bool fileExists(const QString &filePath);
 
   QString getFileExtension(const QString &filePath);

@@ -6,6 +6,7 @@
 #include <QFileInfo>
 #include <QInputDialog>
 #include <QMenu>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPlainTextDocumentLayout>
@@ -39,6 +40,7 @@
 #include "editor/linenumberarea.h"
 #include "editor/multicursor.h"
 #include "editor/texttransforms.h"
+#include "io/filemanager.h"
 #include "lightpadpage.h"
 #include "lightpadtabwidget.h"
 #include "logging/logger.h"
@@ -139,18 +141,48 @@ static int findOpeningParentheses(const QString &text, int pos, QChar startStr,
 
 static int leadingSpaces(const QString &str, int tabWidth) {
 
-  int n = 0;
+  const int width = qMax(1, tabWidth);
+  int column = 0;
 
   for (int i = 0; i < str.size(); i++) {
 
-    if (str[i] == '\x9')
-      n += (tabWidth - 1);
+    if (str[i] == '\x9') {
+      column += width - (column % width);
+    }
 
     else if (!str[i].isSpace())
-      return i + n;
+      return column;
+    else
+      ++column;
   }
 
-  return str.size();
+  return column;
+}
+
+static int expandedPositionForTabs(const QString &text, int position,
+                                   int tabWidth) {
+  const int width = qMax(1, tabWidth);
+  int column = 0;
+  int expandedPosition = 0;
+  const int limit = qMin(position, text.size());
+
+  for (int i = 0; i < limit; ++i) {
+    const QChar ch = text.at(i);
+    if (ch == '\t') {
+      const int spaces = width - (column % width);
+      expandedPosition += spaces;
+      column += spaces;
+    } else {
+      ++expandedPosition;
+      if (ch == '\n' || ch == '\r') {
+        column = 0;
+      } else {
+        ++column;
+      }
+    }
+  }
+
+  return expandedPosition;
 }
 
 static bool isLastNonSpaceCharacterOpenBrace(const QString &str) {
@@ -548,6 +580,7 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
 
   if (m_vimMode && m_vimMode->isEnabled() &&
       m_vimMode->processKeyEvent(keyEvent)) {
+    expandTabsToSpacesInDocument();
     return;
   }
 
@@ -646,12 +679,12 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     QTextCursor cursor = textCursor();
     const bool hasSelection = cursor.hasSelection();
 
-    if (hasSelection || isBacktab) {
-      int tabWidth = 4;
-      if (mainWindow) {
-        tabWidth = qMax(1, mainWindow->getTabWidth());
-      }
+    int tabWidth = 4;
+    if (mainWindow) {
+      tabWidth = qMax(1, mainWindow->getTabWidth());
+    }
 
+    if (hasSelection || isBacktab) {
       int startPosition =
           hasSelection ? cursor.selectionStart() : cursor.block().position();
       int startColumn = hasSelection ? 0 : cursor.positionInBlock();
@@ -731,6 +764,9 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
                                      QTextCursor::MoveAnchor, nextColumn);
           setTextCursor(updatedCursor);
         }
+      } else {
+        cursor.insertText(QString(" ").repeated(tabWidth));
+        setTextCursor(cursor);
       }
 
       keyEvent->accept();
@@ -744,6 +780,7 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     QString text = keyEvent->text();
     applyToAllCursors(
         [&text](QTextCursor &cursor) { cursor.insertText(text); });
+    expandTabsToSpacesInDocument();
     return;
   }
 
@@ -803,6 +840,7 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
 
     if (keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return)
       handleKeyEnterPressed();
+    expandTabsToSpacesInDocument();
   }
 
   if (m_completionEngine) {
@@ -1037,6 +1075,11 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
 
   menu->exec(event->globalPos());
   delete menu;
+}
+
+void TextArea::insertFromMimeData(const QMimeData *source) {
+  QPlainTextEdit::insertFromMimeData(source);
+  expandTabsToSpacesInDocument();
 }
 
 void TextArea::setTabWidgetIcon(QIcon icon) {
@@ -1517,6 +1560,7 @@ void TextArea::insertCompletion(const QString &completion) {
   tc.movePosition(QTextCursor::EndOfWord);
   tc.insertText(completion.right(extra));
   setTextCursor(tc);
+  expandTabsToSpacesInDocument();
 }
 
 QString TextArea::textUnderCursor() const {
@@ -1597,6 +1641,64 @@ QString TextArea::resolveFilePath() const {
   return filePath;
 }
 
+int TextArea::effectiveTabWidth() const {
+  if (mainWindow) {
+    return qMax(1, mainWindow->getTabWidth());
+  }
+  return 4;
+}
+
+bool TextArea::shouldExpandTabsToSpaces() const {
+  const QString normalizedLanguage = LanguageCatalog::normalize(m_languageId);
+  if (normalizedLanguage == "py") {
+    return true;
+  }
+
+  if (!normalizedLanguage.isEmpty() && normalizedLanguage != "plaintext") {
+    return false;
+  }
+
+  const QString filePath = resolveFilePath();
+  if (FileManager::isPythonFile(filePath)) {
+    return true;
+  }
+
+  return filePath.isEmpty() &&
+         FileManager::isPythonFile(filePath, toPlainText());
+}
+
+void TextArea::expandTabsToSpacesInDocument() {
+  if (!shouldExpandTabsToSpaces()) {
+    return;
+  }
+
+  const QString text = toPlainText();
+  if (!text.contains('\t')) {
+    return;
+  }
+
+  const int tabWidth = effectiveTabWidth();
+  const QString expanded = FileManager::expandTabsToSpaces(text, tabWidth);
+  QTextCursor currentCursor = textCursor();
+  const int position = currentCursor.position();
+  const int anchor = currentCursor.anchor();
+
+  QTextCursor editCursor(document());
+  editCursor.beginEditBlock();
+  editCursor.select(QTextCursor::Document);
+  editCursor.insertText(expanded);
+  editCursor.endEditBlock();
+
+  QTextCursor restored(document());
+  const int restoredAnchor = expandedPositionForTabs(text, anchor, tabWidth);
+  const int restoredPosition =
+      expandedPositionForTabs(text, position, tabWidth);
+  restored.setPosition(qMin(restoredAnchor, expanded.length()));
+  restored.setPosition(qMin(restoredPosition, expanded.length()),
+                       QTextCursor::KeepAnchor);
+  setTextCursor(restored);
+}
+
 void TextArea::triggerCompletion() {
   if (!m_completionEngine || !isCompletionEnabledForLanguage(m_languageId))
     return;
@@ -1675,6 +1777,7 @@ void TextArea::insertCompletionItem(const CompletionItem &item) {
 
   tc.insertText(insertText);
   setTextCursor(tc);
+  expandTabsToSpacesInDocument();
 }
 
 void TextArea::showCompletionPopup() {

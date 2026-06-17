@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QTextStream>
+#include <QtGlobal>
 
 FileManager &FileManager::instance() {
   static FileManager instance;
@@ -11,6 +12,54 @@ FileManager &FileManager::instance() {
 }
 
 FileManager::FileManager() : QObject(nullptr) {}
+
+bool FileManager::isPythonFile(const QString &filePath,
+                               const QString &content) {
+  const QString suffix = QFileInfo(filePath).suffix().toLower();
+  if (suffix == "py" || suffix == "pyw" || suffix == "pyi") {
+    return true;
+  }
+
+  const int firstLineEnd = content.indexOf('\n');
+  const QString firstLine =
+      (firstLineEnd >= 0 ? content.left(firstLineEnd) : content).trimmed();
+  return firstLine.startsWith("#!") &&
+         firstLine.contains("python", Qt::CaseInsensitive);
+}
+
+QString FileManager::expandTabsToSpaces(const QString &content, int tabWidth) {
+  const int width = qMax(1, tabWidth);
+  QString expanded;
+  expanded.reserve(content.size());
+
+  int column = 0;
+  for (const QChar &ch : content) {
+    if (ch == '\t') {
+      const int spaces = width - (column % width);
+      expanded.append(QString(" ").repeated(spaces));
+      column += spaces;
+    } else {
+      expanded.append(ch);
+      if (ch == '\n' || ch == '\r') {
+        column = 0;
+      } else {
+        ++column;
+      }
+    }
+  }
+
+  return expanded;
+}
+
+QString FileManager::normalizeContentForSave(const QString &filePath,
+                                             const QString &content,
+                                             int tabWidth) {
+  if (!isPythonFile(filePath, content) || !content.contains('\t')) {
+    return content;
+  }
+
+  return expandTabsToSpaces(content, tabWidth);
+}
 
 FileManager::FileResult FileManager::readFile(const QString &filePath) {
   FileResult result;
@@ -72,7 +121,7 @@ FileManager::FileResult FileManager::writeFile(const QString &filePath,
   }
 
   QTextStream stream(&file);
-  stream << content;
+  stream << normalizeContentForSave(filePath, content);
   file.close();
 
   result.success = true;

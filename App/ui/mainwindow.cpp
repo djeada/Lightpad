@@ -43,6 +43,7 @@
 #include "../completion/providers/plugincompletionprovider.h"
 #include "../completion/providers/snippetcompletionprovider.h"
 #include "../core/autosavemanager.h"
+#include "../core/io/filemanager.h"
 #include "../core/lightpadpage.h"
 #include "../core/logging/logger.h"
 #include "../core/navigationhistory.h"
@@ -166,6 +167,15 @@ QColor blendColor(const QColor &a, const QColor &b, qreal t) {
 QColor glowShift(const QColor &base, const QColor &glow, qreal glowLevel,
                  qreal strength) {
   return blendColor(base, glow, qBound(0.0, glowLevel * strength, 1.0));
+}
+
+QString normalizeEditorTextForSave(const QString &filePath,
+                                   const QString &languageId,
+                                   const QString &content, int tabWidth) {
+  if (LanguageCatalog::normalize(languageId) == "py") {
+    return FileManager::expandTabsToSpaces(content, tabWidth);
+  }
+  return FileManager::normalizeContentForSave(filePath, content, tabWidth);
 }
 } // namespace
 
@@ -2250,7 +2260,17 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
   QTimer::singleShot(1000, this, [this, normalizedSavePath]() {
     m_internalFileWrites.remove(normalizedSavePath);
   });
-  if (file.write(textArea->toPlainText().toUtf8()) == -1) {
+  const QString languageId = effectiveLanguageIdForFile(filePath);
+  const QString textToSave = normalizeEditorTextForSave(
+      filePath, languageId, textArea->toPlainText(), getTabWidth());
+  if (textToSave != textArea->toPlainText()) {
+    const int cursorPos = textArea->textCursor().position();
+    textArea->setPlainText(textToSave);
+    QTextCursor cursor = textArea->textCursor();
+    cursor.setPosition(qMin(cursorPos, textToSave.length()));
+    textArea->setTextCursor(cursor);
+  }
+  if (file.write(textToSave.toUtf8()) == -1) {
     m_internalFileWrites.remove(normalizedSavePath);
     return false;
   }
@@ -2537,7 +2557,17 @@ bool MainWindow::writeOpenFileToDisk(const QString &filePath) {
   QTimer::singleShot(1000, this, [this, normalizedPath]() {
     m_internalFileWrites.remove(normalizedPath);
   });
-  const bool ok = file.write(textArea->toPlainText().toUtf8()) != -1;
+  const QString languageId = effectiveLanguageIdForFile(filePath);
+  const QString textToSave = normalizeEditorTextForSave(
+      filePath, languageId, textArea->toPlainText(), getTabWidth());
+  if (textToSave != textArea->toPlainText()) {
+    const int cursorPos = textArea->textCursor().position();
+    textArea->setPlainText(textToSave);
+    QTextCursor cursor = textArea->textCursor();
+    cursor.setPosition(qMin(cursorPos, textToSave.length()));
+    textArea->setTextCursor(cursor);
+  }
+  const bool ok = file.write(textToSave.toUtf8()) != -1;
   file.close();
   if (!ok) {
     m_internalFileWrites.remove(normalizedPath);
