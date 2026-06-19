@@ -210,7 +210,9 @@ private:
 
   void setupTextArea();
   void setTabWidgetIcon(QIcon icon);
-  void closeParentheses(QString startSr, QString closeStr);
+  bool handleAutoPairKey(QKeyEvent *event);
+  bool handleAutoPairBackspace(QKeyEvent *event);
+  void closeParentheses(QString startStr, QString endStr);
   void handleKeyEnterPressed();
   void drawCurrentLineHighlight();
   void clearLineHighlight();

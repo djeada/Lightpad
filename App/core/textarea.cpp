@@ -14,6 +14,7 @@
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QStackedWidget>
+#include <QSet>
 #include <QTextBlock>
 #include <QTextBlockFormat>
 #include <QTextCursor>
@@ -236,6 +237,240 @@ static bool isTextInsertionKeyEvent(const QKeyEvent *event) {
 
   const QChar first = text.at(0);
   return first.isLetterOrNumber() || first == '_';
+}
+
+struct AutoPairCharacters {
+  QString open;
+  QString close;
+};
+
+struct AutoPairContext {
+  bool languageSupportsPairing = true;
+  bool inString = false;
+  bool inComment = false;
+};
+
+static QString normalizedPairingLanguage(const QString &languageId) {
+  QString normalized = LanguageCatalog::normalize(languageId);
+  if (!normalized.isEmpty()) {
+    return normalized;
+  }
+  return languageId.trimmed().toLower();
+}
+
+static bool isAutoPairLanguage(const QString &languageId) {
+  static const QSet<QString> supported = {
+      "bazel", "c",     "cmake", "cpp", "css",  "dockerfile", "go",
+      "glsl",  "hlsl",  "html",  "java", "js",   "json",       "latex",
+      "make",  "metal", "meson", "ninja", "py",   "rust",       "sh",
+      "ts",    "wgsl",  "yaml"};
+  return supported.contains(normalizedPairingLanguage(languageId));
+}
+
+static bool supportsApostrophePairing(const QString &languageId) {
+  const QString language = normalizedPairingLanguage(languageId);
+  return language != "plaintext" && language != "md" && language != "make" &&
+         language != "ninja" && language != "cmake";
+}
+
+static bool supportsQuotePairing(const QString &languageId) {
+  const QString language = normalizedPairingLanguage(languageId);
+  return language != "plaintext" && language != "md";
+}
+
+static bool isLikelyRawTextLanguage(const QString &languageId) {
+  const QString language = normalizedPairingLanguage(languageId);
+  return language == "plaintext" || language == "md";
+}
+
+static bool isEscapedAt(const QString &text, int index) {
+  int slashCount = 0;
+  for (int pos = index - 1; pos >= 0 && text.at(pos) == '\\'; --pos) {
+    ++slashCount;
+  }
+  return slashCount % 2 == 1;
+}
+
+static AutoPairCharacters autoPairForKey(int key) {
+  switch (key) {
+  case Qt::Key_BraceLeft:
+    return {"{", "}"};
+  case Qt::Key_ParenLeft:
+    return {"(", ")"};
+  case Qt::Key_BracketLeft:
+    return {"[", "]"};
+  case Qt::Key_QuoteDbl:
+    return {"\"", "\""};
+  case Qt::Key_Apostrophe:
+    return {"'", "'"};
+  default:
+    return {};
+  }
+}
+
+static QString autoPairClosingForKey(int key) {
+  switch (key) {
+  case Qt::Key_BraceRight:
+    return "}";
+  case Qt::Key_ParenRight:
+    return ")";
+  case Qt::Key_BracketRight:
+    return "]";
+  case Qt::Key_QuoteDbl:
+    return "\"";
+  case Qt::Key_Apostrophe:
+    return "'";
+  default:
+    return {};
+  }
+}
+
+static bool isPairBoundaryAfter(const QTextCursor &cursor) {
+  QTextCursor next = cursor;
+  if (!next.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor)) {
+    return true;
+  }
+
+  const QString selected = next.selectedText();
+  if (selected.isEmpty()) {
+    return true;
+  }
+
+  const QChar ch = selected.at(0);
+  return ch.isSpace() || QStringLiteral(")]};,.:+-*/%&|^!?<>").contains(ch);
+}
+
+static bool isPairBoundaryBefore(const QTextCursor &cursor) {
+  QTextCursor previous = cursor;
+  if (!previous.movePosition(QTextCursor::PreviousCharacter,
+                             QTextCursor::KeepAnchor)) {
+    return true;
+  }
+
+  const QString selected = previous.selectedText();
+  if (selected.isEmpty()) {
+    return true;
+  }
+
+  const QChar ch = selected.at(0);
+  return ch.isSpace() || QStringLiteral("([{=,:+-*/%&|^!<>").contains(ch);
+}
+
+static bool hasLineCommentAt(const QString &text, int position,
+                             const QString &languageId) {
+  const QString language = normalizedPairingLanguage(languageId);
+  static const QSet<QString> slashCommentLanguages = {
+      "c",    "cpp",  "go",   "glsl", "hlsl", "java",
+      "js",   "ts",   "rust", "wgsl", "metal"};
+  if (position + 1 < text.size() && text.mid(position, 2) == "//" &&
+      slashCommentLanguages.contains(language)) {
+    return true;
+  }
+  if (text.at(position) == '#' &&
+      (language == "py" || language == "sh" || language == "yaml" ||
+       language == "dockerfile" || language == "make" ||
+       language == "cmake")) {
+    return true;
+  }
+  return false;
+}
+
+static AutoPairContext autoPairContextForText(const QString &text,
+                                              const QString &languageId) {
+  AutoPairContext context;
+  context.languageSupportsPairing = isAutoPairLanguage(languageId);
+  if (!context.languageSupportsPairing || isLikelyRawTextLanguage(languageId)) {
+    return context;
+  }
+
+  const QString language = normalizedPairingLanguage(languageId);
+  QChar stringQuote;
+  bool inLineComment = false;
+  bool inBlockComment = false;
+  bool inTriplePythonString = false;
+  QChar triplePythonQuote;
+
+  for (int i = 0; i < text.size(); ++i) {
+    const QChar ch = text.at(i);
+
+    if (inLineComment) {
+      if (ch == '\n') {
+        inLineComment = false;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (i + 1 < text.size() && text.mid(i, 2) == "*/") {
+        inBlockComment = false;
+        ++i;
+      } else if (language == "html" && i + 2 < text.size() &&
+                 text.mid(i, 3) == "-->") {
+        inBlockComment = false;
+        i += 2;
+      }
+      continue;
+    }
+
+    if (inTriplePythonString) {
+      if (i + 2 < text.size() && text.at(i) == triplePythonQuote &&
+          text.at(i + 1) == triplePythonQuote &&
+          text.at(i + 2) == triplePythonQuote && !isEscapedAt(text, i)) {
+        inTriplePythonString = false;
+        i += 2;
+      }
+      continue;
+    }
+
+    if (!stringQuote.isNull()) {
+      if (ch == stringQuote && !isEscapedAt(text, i)) {
+        stringQuote = QChar();
+      }
+      continue;
+    }
+
+    if (hasLineCommentAt(text, i, languageId)) {
+      inLineComment = true;
+      continue;
+    }
+
+    if (i + 1 < text.size() && text.mid(i, 2) == "/*" && language != "py" &&
+        language != "sh" && language != "yaml") {
+      inBlockComment = true;
+      ++i;
+      continue;
+    }
+
+    if (language == "html" && i + 3 < text.size() && text.mid(i, 4) == "<!--") {
+      inBlockComment = true;
+      i += 3;
+      continue;
+    }
+
+    if (language == "py" && i + 2 < text.size() &&
+        (ch == '\'' || ch == '"') && text.at(i + 1) == ch &&
+        text.at(i + 2) == ch && !isEscapedAt(text, i)) {
+      inTriplePythonString = true;
+      triplePythonQuote = ch;
+      i += 2;
+      continue;
+    }
+
+    if ((ch == '\'' || ch == '"') && !isEscapedAt(text, i)) {
+      stringQuote = ch;
+      continue;
+    }
+
+    if (ch == '`' && (language == "js" || language == "ts") &&
+        !isEscapedAt(text, i)) {
+      stringQuote = ch;
+      continue;
+    }
+  }
+
+  context.inString = !stringQuote.isNull() || inTriplePythonString;
+  context.inComment = inLineComment || inBlockComment;
+  return context;
 }
 
 static int selectionEndBlock(const QTextCursor &cursor) {
@@ -806,28 +1041,11 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     return;
   }
 
-  if (keyEvent->key() == Qt::Key_BraceLeft) {
-    closeParentheses("{", "}");
+  if (handleAutoPairBackspace(keyEvent)) {
     return;
   }
 
-  else if (keyEvent->key() == Qt::Key_ParenLeft) {
-    closeParentheses("(", ")");
-    return;
-  }
-
-  else if (keyEvent->key() == Qt::Key_BracketLeft) {
-    closeParentheses("[", "]");
-    return;
-  }
-
-  else if (keyEvent->key() == Qt::Key_QuoteDbl) {
-    closeParentheses("\"", "\"");
-    return;
-  }
-
-  else if (keyEvent->key() == Qt::Key_Apostrophe) {
-    closeParentheses("\'", "\'");
+  if (handleAutoPairKey(keyEvent)) {
     return;
   }
 
@@ -1105,22 +1323,122 @@ void TextArea::setTabWidgetIcon(QIcon icon) {
   }
 }
 
+bool TextArea::handleAutoPairKey(QKeyEvent *event) {
+  if (!event || (event->modifiers() &
+                 (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))) {
+    return false;
+  }
+
+  const AutoPairCharacters pair = autoPairForKey(event->key());
+  const QString closing = autoPairClosingForKey(event->key());
+  if (pair.open.isEmpty() && closing.isEmpty()) {
+    return false;
+  }
+
+  const AutoPairContext context =
+      autoPairContextForText(toPlainText().left(textCursor().position()),
+                             m_languageId);
+
+  QTextCursor cursor = textCursor();
+
+  if (!closing.isEmpty() && context.languageSupportsPairing &&
+      !context.inComment &&
+      (!context.inString || closing == "\"" || closing == "'") &&
+      !cursor.hasSelection()) {
+    QTextCursor next = cursor;
+    if (next.movePosition(QTextCursor::NextCharacter,
+                          QTextCursor::KeepAnchor) &&
+        next.selectedText() == closing) {
+      cursor.movePosition(QTextCursor::NextCharacter);
+      setTextCursor(cursor);
+      event->accept();
+      return true;
+    }
+  }
+
+  if (pair.open.isEmpty()) {
+    return false;
+  }
+
+  if (!context.languageSupportsPairing || context.inComment ||
+      context.inString) {
+    return false;
+  }
+
+  const bool isQuotePair = pair.open == pair.close;
+  if (pair.open == "\"" && !supportsQuotePairing(m_languageId)) {
+    return false;
+  }
+  if (pair.open == "'" && !supportsApostrophePairing(m_languageId)) {
+    return false;
+  }
+  if (isQuotePair && !cursor.hasSelection() &&
+      (!isPairBoundaryBefore(cursor) || !isPairBoundaryAfter(cursor))) {
+    return false;
+  }
+  if (!isQuotePair && !cursor.hasSelection() && !isPairBoundaryAfter(cursor)) {
+    return false;
+  }
+
+  closeParentheses(pair.open, pair.close);
+  event->accept();
+  return true;
+}
+
+bool TextArea::handleAutoPairBackspace(QKeyEvent *event) {
+  if (!event || event->key() != Qt::Key_Backspace ||
+      event->modifiers() != Qt::NoModifier) {
+    return false;
+  }
+
+  QTextCursor cursor = textCursor();
+  if (cursor.hasSelection()) {
+    return false;
+  }
+
+  QTextCursor previous = cursor;
+  QTextCursor next = cursor;
+  if (!previous.movePosition(QTextCursor::PreviousCharacter,
+                             QTextCursor::KeepAnchor) ||
+      !next.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor)) {
+    return false;
+  }
+
+  const QString open = previous.selectedText();
+  const QString close = next.selectedText();
+  if (!((open == "{" && close == "}") || (open == "(" && close == ")") ||
+        (open == "[" && close == "]") || (open == "\"" && close == "\"") ||
+        (open == "'" && close == "'"))) {
+    return false;
+  }
+
+  cursor.beginEditBlock();
+  cursor.deletePreviousChar();
+  cursor.deleteChar();
+  cursor.endEditBlock();
+  setTextCursor(cursor);
+  event->accept();
+  return true;
+}
+
 void TextArea::closeParentheses(QString startStr, QString endStr) {
   auto cursor = textCursor();
 
   if (cursor.hasSelection()) {
     auto start = cursor.selectionStart();
     auto end = cursor.selectionEnd();
-    cursor.setPosition(start, cursor.MoveAnchor);
+    cursor.setPosition(start, QTextCursor::MoveAnchor);
     cursor.insertText(startStr);
-    cursor.setPosition(end + startStr.size(), cursor.MoveAnchor);
+    cursor.setPosition(end + startStr.size(), QTextCursor::MoveAnchor);
     cursor.insertText(endStr);
   }
 
   else {
     auto pos = cursor.position();
-    cursor.setPosition(pos, cursor.MoveAnchor);
+    cursor.setPosition(pos, QTextCursor::MoveAnchor);
     cursor.insertText(startStr + endStr);
+    cursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::MoveAnchor,
+                        endStr.size());
   }
 
   setTextCursor(cursor);
