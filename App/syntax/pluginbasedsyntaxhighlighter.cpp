@@ -44,8 +44,7 @@ void PluginBasedSyntaxHighlighter::setVisibleBlockRange(int first, int last) {
   m_lastVisibleBlock = newLast;
 
   if (!wasInitialized) {
-    rehighlightBlockRange(m_firstVisibleBlock - VIEWPORT_BUFFER,
-                          m_lastVisibleBlock + VIEWPORT_BUFFER);
+    rehighlightBlockRange(0, m_lastVisibleBlock + VIEWPORT_BUFFER);
     return;
   }
 
@@ -55,10 +54,10 @@ void PluginBasedSyntaxHighlighter::setVisibleBlockRange(int first, int last) {
   int newMax = m_lastVisibleBlock + VIEWPORT_BUFFER;
 
   if (newMin < oldMin) {
-    rehighlightBlockRange(newMin, qMin(oldMin - 1, newMax));
+    rehighlightBlockRange(0, qMin(oldMin - 1, newMax));
   }
   if (newMax > oldMax) {
-    rehighlightBlockRange(qMax(oldMax + 1, newMin), newMax);
+    rehighlightBlockRange(0, newMax);
   }
 }
 
@@ -178,11 +177,7 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
   }
 
   int blockNum = currentBlock().blockNumber();
-  if (!isBlockVisible(blockNum)) {
-
-    setCurrentBlockState(previousBlockState());
-    return;
-  }
+  const bool shouldFormat = isBlockVisible(blockNum);
 
   QBitArray protectedCharacters(text.size());
   QBitArray stringCharacters(text.size());
@@ -353,14 +348,20 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
         blockLength = endIndex - startIndex + endMatch.capturedLength();
       }
 
-      applyFormatRange(startIndex, blockLength, block.format, true,
-                       isStringLikeRule(block.name) ? &stringCharacters
-                                                    : nullptr);
+      if (shouldFormat) {
+        applyFormatRange(startIndex, blockLength, block.format, true,
+                         isStringLikeRule(block.name) ? &stringCharacters
+                                                      : nullptr);
+      }
 
       QRegularExpressionMatch nextStart =
           block.startPattern.match(text, startIndex + blockLength);
       startIndex = nextStart.hasMatch() ? nextStart.capturedStart() : -1;
     }
+  }
+
+  if (!shouldFormat) {
+    return;
   }
 
   applyRules(isStringLikeRule, true, &stringCharacters);

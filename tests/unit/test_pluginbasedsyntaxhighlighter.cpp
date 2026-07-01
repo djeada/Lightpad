@@ -34,6 +34,9 @@ private slots:
   void testPythonDefinitionsDecoratorsAndMembersAreSemantic();
   void testPythonBuiltinsAndEscapesStayDistinct();
   void testPythonFStringExpressionsAreHighlighted();
+  void testPythonModuleDocstringDoesNotSwallowFollowingCode();
+  void testPythonMultilineStateSurvivesViewportSkippedBlocks();
+  void testPythonMainThreadLoopsSurviveDirectViewportJump();
 };
 
 void TestPluginBasedSyntaxHighlighter::testShellCommentsOverrideKeywords() {
@@ -190,6 +193,169 @@ void TestPluginBasedSyntaxHighlighter::
            theme.functionFormat);
   QCOMPARE(formatAt(document, 0, text.indexOf("my pid")).foreground().color(),
            theme.quotationFormat);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testPythonModuleDocstringDoesNotSwallowFollowingCode() {
+  Theme theme;
+  PythonSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+
+  const QString text =
+      "\"\"\"\n"
+      "Reader Writer Pattern\n"
+      "\n"
+      "shared data <- concurrent access from multiple entities\n"
+      "\n"
+      "\"\"\"\n"
+      "\n"
+      "from threading import Thread, Lock\n"
+      "import random\n"
+      "import time\n"
+      "\n"
+      "class ReaderWriterLock:\n"
+      "\n"
+      "    def __init__(self):\n"
+      "        self._data = 0\n"
+      "        print(f\"READER {reader_id} reads the data: {self._data}\")\n"
+      "\n"
+      "if __name__ == \"__main__\":\n"
+      "    main()\n";
+  document.setPlainText(text);
+  highlighter.rehighlight();
+
+  QCOMPARE(formatAt(document, 0, 0).foreground().color(),
+           theme.quotationFormat);
+  QCOMPARE(formatAt(document, 1, 0).foreground().color(),
+           theme.quotationFormat);
+  QCOMPARE(formatAt(document, 7, 0).foreground().color(),
+           theme.keywordFormat_0);
+  QCOMPARE(formatAt(document, 11, 0).foreground().color(),
+           theme.keywordFormat_0);
+  QCOMPARE(formatAt(document, 13, 4).foreground().color(),
+           theme.keywordFormat_0);
+  QCOMPARE(formatAt(document, 15, 8).foreground().color(),
+           theme.keywordFormat_1);
+  QCOMPARE(formatAt(document, 15, 17).foreground().color(),
+           theme.quotationFormat);
+  QCOMPARE(formatAt(document, 17, 0).foreground().color(),
+           theme.keywordFormat_0);
+  QCOMPARE(formatAt(document, 17, 3).foreground().color(),
+           theme.constantFormat);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testPythonMultilineStateSurvivesViewportSkippedBlocks() {
+  Theme theme;
+  PythonSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+  highlighter.setVisibleBlockRange(2, 5);
+
+  const QString text = "def before():\n"
+                       "    \"\"\"\n"
+                       "    return is still text\n"
+                       "    \"\"\"\n"
+                       "    return 1\n";
+  document.setPlainText(text);
+  highlighter.rehighlight();
+
+  QCOMPARE(formatAt(document, 2, 4).foreground().color(),
+           theme.quotationFormat);
+  QCOMPARE(formatAt(document, 4, 4).foreground().color(),
+           theme.keywordFormat_0);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testPythonMainThreadLoopsSurviveDirectViewportJump() {
+  Theme theme;
+  PythonSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+
+  const QString text =
+      "\"\"\"\n"
+      "Reader Writer Pattern\n"
+      "\n"
+      "shared data <- concurrent access from multiple entities\n"
+      "\n"
+      "writers require exlcusive access\n"
+      "readers can read concurrently (improved throughput)\n"
+      "\n"
+      "use cases:\n"
+      "-> caches with rare updates\n"
+      "-> config shared between threads\n"
+      "-> database like systems with read heavy load\n"
+      "\n"
+      "\"\"\"\n"
+      "\n"
+      "from threading import Thread, Lock\n"
+      "import random\n"
+      "import time\n"
+      "\n"
+      "class ReaderWriterLock:\n"
+      "\n"
+      "    def __init__(self):\n"
+      "        self._data = 0\n"
+      "        self._reader_count = 0\n"
+      "        self._reader_lock = Lock()\n"
+      "        self._writer_lock = Lock()\n"
+      "        \n"
+      "    def read(self, reader_id):\n"
+      "        print(f\"READER {reader_id} reads the data: {self._data}\")\n"
+      "        \n"
+      "    def write(self, writer_id, val):\n"
+      "        with self._writer_lock:\n"
+      "            print(f\"Writer {writer_id} increments the {self._data} by {val}\")\n"
+      "\n"
+      "def reader(rw_lock, reader_id, n):\n"
+      "    for _ in range(n):\n"
+      "        rw_lock.read(reader_id)\n"
+      "\n"
+      "def writer(rw_lock, writer_id, n):\n"
+      "    for i in range(n):\n"
+      "        rw_lock.write(writer_id, i)\n"
+      "        \n"
+      "def main():\n"
+      "    num_readers = 5\n"
+      "    num_writers = 3\n"
+      "    n = 10\n"
+      "    \n"
+      "    threads = list()\n"
+      "    rw_lock = ReaderWriterLock()\n"
+      "    \n"
+      "    threads.extend([Thread(target=writer, args=(rw_lock, i, n)) for i in range(num_writers)])\n"
+      "    threads.extend([Thread(target=reader, args=(rw_lock, i, n)) for i in range(num_readers)])\n"
+      "\n"
+      "    # random.shuffle(threads)\n"
+      "    \n"
+      "    for thread in threads:\n"
+      "        thread.start()\n"
+      "        \n"
+      "    for thread in threads:\n"
+      "        thread.join()    \n"
+      "        \n"
+      "if __name__ == \"__main__\":\n"
+      "    main()\n";
+  document.setPlainText(text);
+
+  highlighter.setVisibleBlockRange(55, 62);
+
+  QCOMPARE(formatAt(document, 55, 4).foreground().color(),
+           theme.keywordFormat_0);
+  QCOMPARE(formatAt(document, 55, 15).foreground().color(),
+           theme.keywordFormat_0);
+  QCOMPARE(formatAt(document, 56, 15).foreground().color(),
+           theme.functionFormat);
+  QCOMPARE(formatAt(document, 58, 4).foreground().color(),
+           theme.keywordFormat_0);
+  QCOMPARE(formatAt(document, 58, 15).foreground().color(),
+           theme.keywordFormat_0);
+  QCOMPARE(formatAt(document, 59, 15).foreground().color(),
+           theme.functionFormat);
+  QCOMPARE(formatAt(document, 61, 0).foreground().color(),
+           theme.keywordFormat_0);
 }
 
 QTEST_MAIN(TestPluginBasedSyntaxHighlighter)
