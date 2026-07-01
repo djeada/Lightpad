@@ -213,6 +213,8 @@ private:
 
   int m_scrollbackLines;
   static const int kDefaultScrollbackLines = 10000;
+  static const int kMaxOutputChunkCharacters = 65536;
+  static const int kMaxDocumentCharacters = 2097152;
 
   bool m_linkDetectionEnabled;
   QRegularExpression m_urlRegex;

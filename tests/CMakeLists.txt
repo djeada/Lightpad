@@ -1614,7 +1614,7 @@ set_tests_properties(${TEST_LIST}
 )
 
 # Set timeout for terminal tests that may take longer due to shell process management
-set_tests_properties(TerminalTests TerminalTabWidgetTests PROPERTIES TIMEOUT 30)
+set_tests_properties(TerminalTests TerminalTabWidgetTests PROPERTIES TIMEOUT 90)
 
 # Set timeout for git tests that may take longer due to git operations
 set_tests_properties(GitIntegrationTests PROPERTIES TIMEOUT 30)

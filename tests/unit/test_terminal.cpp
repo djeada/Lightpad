@@ -39,6 +39,8 @@ private slots:
 
   void testShellProfiles();
   void testScrollbackLines();
+  void testLargeSingleLineOutputIsBounded();
+  void testLargeMultilineOutputKeepsRecentScrollback();
   void testLinkDetection();
   void testSendText();
   void testInterruptActiveRunProcess();
@@ -293,6 +295,44 @@ void TestTerminal::testScrollbackLines() {
 
   terminal.setScrollbackLines(1000);
   QCOMPARE(terminal.scrollbackLines(), 1000);
+}
+
+void TestTerminal::testLargeSingleLineOutputIsBounded() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  terminal.appendOutput(QString(3 * 1024 * 1024, QLatin1Char('x')) +
+                        "TAIL_MARKER");
+
+  QVERIFY(textEdit->document()->characterCount() <=
+          Terminal::kMaxDocumentCharacters + 1);
+  QVERIFY(textEdit->toPlainText().size() <=
+          Terminal::kMaxOutputChunkCharacters + 4096);
+  QVERIFY(textEdit->toPlainText().contains("TAIL_MARKER"));
+}
+
+void TestTerminal::testLargeMultilineOutputKeepsRecentScrollback() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.setScrollbackLines(25);
+
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QVERIFY(textEdit != nullptr);
+
+  QString output;
+  for (int i = 0; i < 200; ++i) {
+    output += QString("line %1\n").arg(i);
+  }
+  terminal.appendOutput(output);
+
+  QVERIFY(textEdit->document()->blockCount() <= terminal.scrollbackLines());
+  QVERIFY(!textEdit->toPlainText().contains("line 0\n"));
+  QVERIFY(textEdit->toPlainText().contains("line 199"));
 }
 
 void TestTerminal::testLinkDetection() {

@@ -1878,6 +1878,13 @@ void Terminal::appendOutput(const QString &text, bool isError) {
   }
 
   QString output = text;
+  if (output.size() > kMaxOutputChunkCharacters) {
+    const int dropped = output.size() - kMaxOutputChunkCharacters;
+    output = QString("\n[Lightpad truncated %1 characters of terminal output]\n")
+                 .arg(dropped) +
+             output.right(kMaxOutputChunkCharacters);
+  }
+
   if (!isError) {
     if (!m_pendingAnsiText.isEmpty()) {
       output.prepend(m_pendingAnsiText);
@@ -3142,13 +3149,23 @@ void Terminal::zoomReset() {
 int Terminal::currentFontSize() const { return m_baseFontSize; }
 
 void Terminal::enforceScrollbackLimit() {
+  QTextDocument *doc = ui->textEdit->document();
+  if (doc->characterCount() > kMaxDocumentCharacters) {
+    const int charsToRemove = doc->characterCount() - kMaxDocumentCharacters;
+    QTextCursor cursor(doc);
+    cursor.setPosition(0);
+    cursor.setPosition(charsToRemove, QTextCursor::KeepAnchor);
+    cursor.removeSelectedText();
+
+    m_inputStartPosition = qMax(0, m_inputStartPosition - charsToRemove);
+    syncAnsiCursorToDocumentEnd();
+  }
+
   if (m_scrollbackLines <= 0) {
     return;
   }
 
-  QTextDocument *doc = ui->textEdit->document();
   int blockCount = doc->blockCount();
-
   if (blockCount > m_scrollbackLines) {
     QTextCursor cursor(doc);
     cursor.movePosition(QTextCursor::Start);
