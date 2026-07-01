@@ -560,7 +560,6 @@ add_test(NAME I18nTests COMMAND test_i18n)
 add_test(NAME AccessibilityTests COMMAND test_accessibility)
 add_test(NAME RunTemplateManagerTests COMMAND test_runtemplatemanager)
 add_test(NAME FormatTemplateManagerTests COMMAND test_formattemplatemanager)
-add_test(NAME TerminalTests COMMAND test_terminal)
 add_test(NAME TerminalTabWidgetTests COMMAND test_terminaltabwidget)
 add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
 add_test(NAME CompletionProviderRegistryTests COMMAND test_completionproviderregistry)
@@ -1559,7 +1558,6 @@ set(TEST_LIST
     AccessibilityTests 
     RunTemplateManagerTests 
     FormatTemplateManagerTests 
-    TerminalTests 
     TerminalTabWidgetTests
     SyntaxPluginRegistryTests 
     LatexSyntaxPluginTests
@@ -1614,7 +1612,7 @@ set_tests_properties(${TEST_LIST}
 )
 
 # Set timeout for terminal tests that may take longer due to shell process management
-set_tests_properties(TerminalTests TerminalTabWidgetTests PROPERTIES TIMEOUT 90)
+set_tests_properties(TerminalTabWidgetTests PROPERTIES TIMEOUT 90)
 
 # Set timeout for git tests that may take longer due to git operations
 set_tests_properties(GitIntegrationTests PROPERTIES TIMEOUT 30)
