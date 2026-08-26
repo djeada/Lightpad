@@ -142,6 +142,7 @@ private:
   QPushButton *m_historyToggleButton;
   QLineEdit *m_historySearchEdit;
   QPushButton *m_historyRebaseBtn;
+  QPushButton *m_historyGraphBtn;
 
   QWidget *m_headerWidget;
   QWidget *m_branchSection;

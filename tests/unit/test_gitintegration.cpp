@@ -1,8 +1,11 @@
 #include "git/gitintegration.h"
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 #include <QProcess>
+#include <QSet>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QtTest/QtTest>
 
 class TestGitIntegration : public QObject {
@@ -47,6 +50,10 @@ private slots:
   void testDropCommit();
   void testSquashCommits();
   void testMoveCommitToBranch();
+
+  void testGetCommitLogPage();
+  void testGetCommitLogPageAsync();
+  void testGetCommitRefsMap();
 
 private:
   QTemporaryDir m_tempDir;
@@ -996,6 +1003,161 @@ void TestGitIntegration::testMoveCommitToBranch() {
 
   QVERIFY(!git.moveCommitToBranch("", "some-branch"));
   QVERIFY(!git.moveCommitToBranch(moveHash, ""));
+}
+
+void TestGitIntegration::testGetCommitLogPage() {
+
+  QTemporaryDir pagingDir;
+  QVERIFY(pagingDir.isValid());
+  const QString repoPath = pagingDir.path() + "/paging_repo";
+  QVERIFY(QDir().mkpath(repoPath));
+
+  auto gitAt = [&repoPath](const QStringList &args) {
+    QProcess process;
+    process.setWorkingDirectory(repoPath);
+    process.start("git", args);
+    process.waitForFinished(GIT_COMMAND_TIMEOUT_MS);
+    return process.exitCode() == 0;
+  };
+
+  QVERIFY(gitAt({"init"}));
+  QVERIFY(gitAt({"config", "user.email", "test@test.com"}));
+  QVERIFY(gitAt({"config", "user.name", "Test User"}));
+
+  const int totalCommits = 12;
+  for (int i = 0; i < totalCommits; ++i) {
+    QFile file(repoPath + QString("/file%1.txt").arg(i));
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write(QString("content %1\n").arg(i).toUtf8());
+    file.close();
+    QVERIFY(gitAt({"add", "."}));
+    QVERIFY(gitAt({"commit", "-m", QString("Commit %1").arg(i)}));
+  }
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repoPath));
+
+  const QList<GitCommitInfo> page1 = git.getCommitLogPage({}, 0, 5);
+  const QList<GitCommitInfo> page2 = git.getCommitLogPage({}, 5, 5);
+  const QList<GitCommitInfo> page3 = git.getCommitLogPage({}, 10, 5);
+  const QList<GitCommitInfo> page4 = git.getCommitLogPage({}, 12, 5);
+
+  QCOMPARE(page1.size(), 5);
+  QCOMPARE(page2.size(), 5);
+  QCOMPARE(page3.size(), 2);
+  QVERIFY(page4.isEmpty());
+
+  QSet<QString> seen;
+  const QList<QList<GitCommitInfo>> allPages = {page1, page2, page3};
+  QString previousHash;
+  for (const QList<GitCommitInfo> &page : allPages) {
+    for (const GitCommitInfo &c : page) {
+      QVERIFY(!seen.contains(c.hash));
+      seen.insert(c.hash);
+      if (!previousHash.isEmpty()) {
+        QCOMPARE(c.hash, previousHash);
+      }
+      previousHash = c.parents.value(0);
+    }
+  }
+  QVERIFY(previousHash.isEmpty());
+  QCOMPARE(seen.size(), totalCommits);
+
+  QCOMPARE(page1.last().parents.first(), page2.first().hash);
+  QCOMPARE(page2.last().parents.first(), page3.first().hash);
+
+  QVERIFY(git.getCommitLogPage({}, -1, 5).isEmpty());
+  QCOMPARE(git.getCommitLogPage({}, 0, 100).size(), totalCommits);
+}
+
+void TestGitIntegration::testGetCommitLogPageAsync() {
+  QTemporaryDir asyncDir;
+  QVERIFY(asyncDir.isValid());
+  const QString repoPath = asyncDir.path() + "/async_repo";
+  QVERIFY(QDir().mkpath(repoPath));
+
+  auto gitAt = [&repoPath](const QStringList &args) {
+    QProcess process;
+    process.setWorkingDirectory(repoPath);
+    process.start("git", args);
+    process.waitForFinished(GIT_COMMAND_TIMEOUT_MS);
+    return process.exitCode() == 0;
+  };
+
+  QVERIFY(gitAt({"init"}));
+  QVERIFY(gitAt({"config", "user.email", "test@test.com"}));
+  QVERIFY(gitAt({"config", "user.name", "Test User"}));
+  QFile seed(repoPath + "/seed.txt");
+  QVERIFY(seed.open(QIODevice::WriteOnly));
+  seed.write("seed\n");
+  seed.close();
+  QVERIFY(gitAt({"add", "."}));
+  QVERIFY(gitAt({"commit", "-m", "seed"}));
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repoPath));
+
+  QEventLoop loop;
+  QList<GitCommitInfo> received;
+  QTimer::singleShot(5000, &loop, &QEventLoop::quit);
+
+  git.getCommitLogPageAsync({}, 0, 50, [&](QList<GitCommitInfo> page) {
+    received = page;
+    loop.quit();
+  });
+  loop.exec();
+
+  QCOMPARE(received.size(), 1);
+  QCOMPARE(received.first().subject, QString("seed"));
+}
+
+void TestGitIntegration::testGetCommitRefsMap() {
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(m_repoPath));
+
+  QVERIFY(runGitCommand({"tag", "test-tag-v1", "HEAD"}));
+  QVERIFY(runGitCommand({"branch", "refs-test-branch"}));
+
+  const QMap<QString, QList<GitRefDecoration>> refs = git.getCommitRefsMap();
+  QVERIFY(!refs.isEmpty());
+
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"rev-parse", "HEAD"});
+  process.waitForFinished();
+  const QString headHash =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+  QVERIFY(refs.contains(headHash));
+
+  bool sawTag = false;
+  bool sawLocalBranch = false;
+  bool sawRemote = false;
+  bool sawHeadMarker = false;
+
+  const QList<GitRefDecoration> decorations = refs.value(headHash);
+  for (const GitRefDecoration &decoration : decorations) {
+    if (decoration.kind == GitRefDecoration::Kind::Tag &&
+        decoration.name == "test-tag-v1") {
+      sawTag = true;
+    }
+    if (decoration.kind == GitRefDecoration::Kind::LocalBranch &&
+        decoration.name == "refs-test-branch") {
+      sawLocalBranch = true;
+    }
+    if (decoration.kind == GitRefDecoration::Kind::RemoteBranch) {
+      sawRemote = true;
+    }
+    if (decoration.isHead &&
+        decoration.kind == GitRefDecoration::Kind::LocalBranch) {
+      sawHeadMarker = true;
+    }
+  }
+
+  QVERIFY(sawTag);
+  QVERIFY(sawLocalBranch);
+  Q_UNUSED(sawRemote);
+  QVERIFY(sawHeadMarker);
 }
 
 QTEST_MAIN(TestGitIntegration)

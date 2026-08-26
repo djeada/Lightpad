@@ -8,6 +8,7 @@
 #include <QMetaMethod>
 #include <QObject>
 #include <QProcess>
+#include <QTcpSocket>
 #include <QVariant>
 
 struct DapSource {
@@ -179,6 +180,48 @@ struct DapThread {
   }
 };
 
+struct DapExceptionDetails {
+  QString message;
+  QString typeName;
+  QString fullTypeName;
+  QString evaluateName;
+  QString stackTrace;
+  QList<DapExceptionDetails> innerExceptions;
+
+  static DapExceptionDetails fromJson(const QJsonObject &obj) {
+    DapExceptionDetails details;
+    details.message = obj["message"].toString();
+    details.typeName = obj["typeName"].toString();
+    details.fullTypeName = obj["fullTypeName"].toString();
+    details.evaluateName = obj["evaluateName"].toString();
+    details.stackTrace = obj["stackTrace"].toString();
+    const QJsonArray inner = obj["innerException"].toArray();
+    for (const auto &val : inner) {
+      details.innerExceptions.append(
+          DapExceptionDetails::fromJson(val.toObject()));
+    }
+    return details;
+  }
+};
+
+struct DapExceptionInfo {
+  QString exceptionId;
+  QString description;
+  QString breakMode;
+  DapExceptionDetails details;
+
+  static DapExceptionInfo fromJson(const QJsonObject &body) {
+    DapExceptionInfo info;
+    info.exceptionId = body["exceptionId"].toString();
+    info.description = body["description"].toString();
+    info.breakMode = body["breakMode"].toString();
+    if (body.contains("details")) {
+      info.details = DapExceptionDetails::fromJson(body["details"].toObject());
+    }
+    return info;
+  }
+};
+
 struct DapOutputEvent {
   QString category;
   QString output;
@@ -218,6 +261,7 @@ enum class DapStoppedReason {
 
 struct DapStoppedEvent {
   DapStoppedReason reason = DapStoppedReason::Unknown;
+  QString rawReason;
   QString description;
   int threadId = 0;
   bool preserveFocusHint = false;
@@ -228,6 +272,7 @@ struct DapStoppedEvent {
   static DapStoppedEvent fromJson(const QJsonObject &obj) {
     DapStoppedEvent evt;
     QString reasonStr = obj["reason"].toString();
+    evt.rawReason = reasonStr;
     if (reasonStr == "step")
       evt.reason = DapStoppedReason::Step;
     else if (reasonStr == "breakpoint")
@@ -246,6 +291,9 @@ struct DapStoppedEvent {
       evt.reason = DapStoppedReason::DataBreakpoint;
     else if (reasonStr == "instruction breakpoint")
       evt.reason = DapStoppedReason::InstructionBreakpoint;
+    else if (reasonStr.compare("signal", Qt::CaseInsensitive) == 0)
+
+      evt.reason = DapStoppedReason::Exception;
 
     evt.description = obj["description"].toString();
     evt.threadId = obj["threadId"].toInt();
@@ -286,6 +334,12 @@ public:
 
   bool start(const QString &program, const QStringList &arguments = {});
 
+  bool startSocket(const QString &host, quint16 port);
+
+  bool isSocketTransport() const { return m_socket != nullptr; }
+
+  void feedAdapterData(const QByteArray &data);
+
   void stop(bool terminateDebuggee = true);
 
   State state() const;
@@ -311,6 +365,10 @@ public:
   void configurationDone();
   bool supportsConfigurationDoneRequest() const;
   bool supportsRestartRequest() const;
+  bool supportsTerminateRequest() const;
+  bool supportsSetVariable() const;
+  bool supportsExceptionInfoRequest() const;
+  QJsonObject capabilities() const { return m_capabilities; }
 
   void setBreakpoints(const QString &sourcePath,
                       const QList<DapSourceBreakpoint> &breakpoints);
@@ -347,6 +405,8 @@ public:
 
   void setVariable(int variablesReference, const QString &name,
                    const QString &value);
+
+  void exceptionInfo(int threadId);
 
   void respondToRunInTerminal(int requestSeq, bool success,
                               qint64 processId = 0,
@@ -396,6 +456,8 @@ signals:
   void evaluateError(const QString &expression, const QString &errorMessage);
   void variableSet(const QString &name, const QString &newValue,
                    const QString &type);
+  void exceptionInfoReceived(int threadId, const DapExceptionInfo &info);
+  void exceptionInfoError(int threadId, const QString &errorMessage);
 
 private slots:
   void onReadyReadStandardOutput();
@@ -408,6 +470,11 @@ private:
                    int seq);
   void sendResponse(int requestSeq, const QString &command, bool success,
                     const QJsonObject &body = {}, const QString &message = {});
+  bool writeToAdapter(const QByteArray &bytes);
+  bool hasLiveChannel() const;
+  void handleAdapterData(const QByteArray &data);
+  void shutdownChannel();
+  void onChannelClosed();
   void handleMessage(const QJsonObject &message);
   void handleResponse(int requestSeq, const QString &command, bool success,
                       const QJsonValue &body, const QString &message);
@@ -422,6 +489,9 @@ private:
   void clearPendingInspectionRequests();
 
   QProcess *m_process;
+  QTcpSocket *m_socket = nullptr;
+  QString m_socketHost;
+  quint16 m_socketPort = 0;
   State m_state;
   int m_nextSeq;
   QByteArray m_buffer;

@@ -5,9 +5,10 @@
 #include "../../settings/theme.h"
 #include <QWidget>
 
-class QScrollBar;
 class QPaintEvent;
 class QMouseEvent;
+class QKeyEvent;
+class QScrollBar;
 
 struct GraphCommitNode {
   GitCommitInfo info;
@@ -26,35 +27,78 @@ public:
   void loadGraph(int maxCount = 200, const QString &branch = QString());
   void setTheme(const Theme &theme);
 
+  void setFilter(const QString &filter);
+  QString filter() const { return m_filter; }
+
+  int loadedCommitCount() const { return m_nodes.size(); }
+  QString selectedHash() const;
+
+  void selectCommit(const QString &hash, bool emitSignal = false);
+
 signals:
   void commitSelected(const QString &hash);
   void commitDoubleClicked(const QString &hash);
+  void commitsAppended(int totalLoaded);
+  void historyExhausted();
+  void contextMenuRequested(const QString &hash, const QPoint &globalPos);
 
 protected:
   void paintEvent(QPaintEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
   void mouseDoubleClickEvent(QMouseEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
+  void leaveEvent(QEvent *event) override;
+  void contextMenuEvent(QContextMenuEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
+  void keyPressEvent(QKeyEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
 
 private:
   void layoutGraph();
+  void requestMoreCommits();
+  void loadRefDecorations();
+  void drawRefBadges(QPainter &painter, const GraphCommitNode &node, int y,
+                     const QFontMetrics &fm, const QColor &fgColor,
+                     bool dimmed) const;
+  bool rowMatches(int index) const;
+  void rebuildFilterCache();
   int commitAtY(int y) const;
   QColor laneColor(int lane) const;
+  void clampScrollOffset();
+  void setScrollOffset(int offset);
+  void syncScrollBarRange();
+  void applyZoom(int deltaRows);
+  void relayout();
 
   GitIntegration *m_git;
   Theme m_theme;
   QList<GraphCommitNode> m_nodes;
   QMap<QString, int> m_hashToIndex;
+  QMap<QString, QList<GitRefDecoration>> m_refs;
+  QString m_branch;
+  bool m_loadingMore = false;
+  bool m_historyExhausted = false;
+  int m_pageSize = 100;
   int m_maxLanes;
   int m_scrollOffset;
   int m_selectedIndex;
+  int m_hoverIndex = -1;
 
-  static constexpr int ROW_HEIGHT = 28;
+  QString m_filter;
+  QVector<bool> m_filterCache;
+
+  QScrollBar *m_scrollBar;
+  bool m_syncingScrollBar = false;
+  int m_rowHeight = 28;
+
+  static constexpr int DEFAULT_ROW_HEIGHT = 28;
+  static constexpr int MIN_ROW_HEIGHT = 16;
+  static constexpr int MAX_ROW_HEIGHT = 48;
   static constexpr int LANE_WIDTH = 16;
   static constexpr int GRAPH_LEFT_MARGIN = 8;
   static constexpr int TEXT_LEFT_PADDING = 12;
   static constexpr int DOT_RADIUS = 4;
+  static constexpr int SCROLLBAR_WIDTH = 12;
 
   static const QList<QColor> s_laneColors;
 };

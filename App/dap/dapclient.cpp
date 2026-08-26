@@ -30,6 +30,78 @@ DapClient::DapClient(QObject *parent)
 
 DapClient::~DapClient() { stop(); }
 
+bool DapClient::startSocket(const QString &host, quint16 port) {
+  if (m_process || m_socket) {
+    LOG_WARNING("DAP client already started");
+    return false;
+  }
+
+#ifdef QT_NO_NETWORK
+  Q_UNUSED(host);
+  Q_UNUSED(port);
+  emit error("Socket transport unavailable: Qt built without network support");
+  return false;
+#else
+  m_socket = new QTcpSocket(this);
+  m_socketHost = host.isEmpty() ? QStringLiteral("127.0.0.1") : host;
+  m_socketPort = port;
+
+  connect(m_socket, &QTcpSocket::readyRead, this, [this]() {
+    if (m_socket) {
+      handleAdapterData(m_socket->readAll());
+    }
+  });
+  connect(m_socket, &QTcpSocket::disconnected, this,
+          &DapClient::onChannelClosed);
+  connect(m_socket, &QAbstractSocket::errorOccurred, this,
+          [this](QAbstractSocket::SocketError socketError) {
+            if (socketError == QAbstractSocket::RemoteHostClosedError) {
+              return;
+            }
+            QString errorMsg = m_socket ? m_socket->errorString()
+                                        : QStringLiteral("Unknown error");
+            LOG_ERROR(QString("DAP socket error: %1").arg(errorMsg));
+            setState(State::Error);
+            emit error(
+                QString("Failed to connect to debug adapter at %1:%2: %3")
+                    .arg(m_socketHost)
+                    .arg(m_socketPort)
+                    .arg(errorMsg));
+          });
+
+  setState(State::Connecting);
+  m_socket->connectToHost(m_socketHost, m_socketPort);
+
+  if (!m_socket->waitForConnected(5000)) {
+    const QString errorMsg =
+        m_socket ? m_socket->errorString() : QStringLiteral("Unknown error");
+    LOG_ERROR(QString("Failed to connect to debug adapter at %1:%2: %3")
+                  .arg(m_socketHost)
+                  .arg(m_socketPort)
+                  .arg(errorMsg));
+    setState(State::Error);
+    emit error(QString("Failed to connect to debug adapter at %1:%2: %3")
+                   .arg(m_socketHost)
+                   .arg(m_socketPort)
+                   .arg(errorMsg));
+    m_socket->deleteLater();
+    m_socket = nullptr;
+    return false;
+  }
+
+  LOG_INFO(QString("Connected to debug adapter at %1:%2")
+               .arg(m_socketHost)
+               .arg(m_socketPort));
+  doInitialize();
+
+  return true;
+#endif
+}
+
+void DapClient::feedAdapterData(const QByteArray &data) {
+  handleAdapterData(data);
+}
+
 void DapClient::setAdapterMetadata(const QString &adapterId,
                                    const QString &adapterType) {
   m_adapterId = adapterId.trimmed();
@@ -75,33 +147,33 @@ bool DapClient::start(const QString &program, const QStringList &arguments) {
 }
 
 void DapClient::stop(bool terminateDebuggee) {
-  if (!m_process) {
+  if (!m_process && !m_socket) {
     return;
   }
 
-  m_process->disconnect(this);
-
+  bool disconnectSent = false;
   if (isDebugging()) {
     QJsonObject args;
     args["terminateDebuggee"] = terminateDebuggee;
     sendRequest("disconnect", args, m_nextSeq++);
+    disconnectSent = true;
   }
 
-  QProcess *proc = m_process;
-  m_process = nullptr;
-
-  if (proc->state() != QProcess::NotRunning) {
-    proc->terminate();
-
-    QTimer::singleShot(2000, proc, [proc]() {
-      if (proc->state() != QProcess::NotRunning) {
-        proc->kill();
-      }
-      proc->deleteLater();
-    });
-  } else {
-    proc->deleteLater();
+  if (disconnectSent) {
+    if (m_process) {
+      m_process->waitForBytesWritten(500);
+      m_process->waitForFinished(500);
+    }
+#ifdef QT_NO_NETWORK
+#else
+    if (m_socket) {
+      m_socket->flush();
+      m_socket->waitForBytesWritten(500);
+    }
+#endif
   }
+
+  shutdownChannel();
 
   m_buffer.clear();
   m_pendingRequests.clear();
@@ -116,6 +188,119 @@ void DapClient::stop(bool terminateDebuggee) {
   setState(State::Disconnected);
 
   LOG_INFO("Debug adapter stopped");
+}
+
+bool DapClient::hasLiveChannel() const {
+  if (m_process) {
+    return m_process->state() != QProcess::NotRunning;
+  }
+#ifdef QT_NO_NETWORK
+  return false;
+#else
+  if (m_socket) {
+    return m_socket->state() == QAbstractSocket::ConnectedState;
+  }
+  return false;
+#endif
+}
+
+bool DapClient::writeToAdapter(const QByteArray &bytes) {
+  if (m_process) {
+    if (m_process->state() == QProcess::NotRunning) {
+      return false;
+    }
+    m_process->write(bytes);
+    return true;
+  }
+
+#ifdef QT_NO_NETWORK
+  return false;
+#else
+  if (m_socket) {
+    if (m_socket->state() != QAbstractSocket::ConnectedState) {
+      return false;
+    }
+    m_socket->write(bytes);
+    return true;
+  }
+  return false;
+#endif
+}
+
+void DapClient::shutdownChannel() {
+  if (QProcess *proc = m_process) {
+    m_process = nullptr;
+    proc->disconnect(this);
+
+    if (proc->state() != QProcess::NotRunning) {
+      proc->terminate();
+
+      QTimer::singleShot(2000, proc, [proc]() {
+        if (proc->state() != QProcess::NotRunning) {
+          proc->kill();
+        }
+        proc->deleteLater();
+      });
+    } else {
+      proc->deleteLater();
+    }
+    return;
+  }
+
+#ifdef QT_NO_NETWORK
+#else
+  if (QTcpSocket *sock = m_socket) {
+    m_socket = nullptr;
+    m_socketHost.clear();
+    m_socketPort = 0;
+    sock->disconnect(this);
+    sock->flush();
+    sock->disconnectFromHost();
+    if (!sock->waitForDisconnected(1000)) {
+      sock->abort();
+    }
+    sock->deleteLater();
+  }
+#endif
+}
+
+void DapClient::onChannelClosed() {
+  QObject *channel = sender();
+  const bool isCurrentChannel =
+      channel && (channel == m_process || channel == m_socket);
+  if (!isCurrentChannel) {
+    return;
+  }
+
+  const State previousState = m_state;
+
+  LOG_INFO("Debug adapter connection closed");
+
+  shutdownChannel();
+  m_buffer.clear();
+  m_pendingRequests.clear();
+  m_currentThreadId = 0;
+  m_capabilities = QJsonObject();
+  m_functionBreakpointsConfigured = false;
+  m_deferredFunctionBreakpoints.clear();
+  m_hasDeferredFunctionBreakpoints = false;
+  m_dataBreakpointsSupported = true;
+  m_dataBreakpointsConfigured = false;
+  m_pausePending = false;
+
+  if (previousState == State::Terminated ||
+      previousState == State::Disconnected) {
+    setState(State::Disconnected);
+    return;
+  }
+  if (previousState == State::Error) {
+    emit terminated();
+    return;
+  }
+
+  setState(State::Terminated);
+  emit error("Debug adapter closed the connection before the session ended");
+  emit terminated();
 }
 
 DapClient::State DapClient::state() const { return m_state; }
@@ -230,12 +415,25 @@ void DapClient::disconnect(bool terminateDebuggee) {
 }
 
 void DapClient::terminate() {
+  if (!supportsTerminateRequest()) {
+    LOG_DEBUG("DAP: Adapter does not support terminate; using disconnect "
+              "with terminateDebuggee instead");
+    disconnect(true);
+    return;
+  }
+
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "terminate";
   sendRequest("terminate", {}, seq);
 }
 
 void DapClient::configurationDone() {
+  if (m_capabilities.contains("supportsConfigurationDoneRequest") &&
+      !m_capabilities.value("supportsConfigurationDoneRequest").toBool()) {
+    LOG_WARNING("DAP: Skipping configurationDone request (not supported by "
+                "adapter)");
+    return;
+  }
 
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "configurationDone";
@@ -249,6 +447,18 @@ bool DapClient::supportsConfigurationDoneRequest() const {
 
 bool DapClient::supportsRestartRequest() const {
   return m_capabilities.value("supportsRestartRequest").toBool(false);
+}
+
+bool DapClient::supportsTerminateRequest() const {
+  return m_capabilities.value("supportsTerminateRequest").toBool(false);
+}
+
+bool DapClient::supportsSetVariable() const {
+  return m_capabilities.value("supportsSetVariable").toBool(true);
+}
+
+bool DapClient::supportsExceptionInfoRequest() const {
+  return m_capabilities.value("supportsExceptionInfoRequest").toBool(false);
 }
 
 void DapClient::setBreakpoints(const QString &sourcePath,
@@ -407,6 +617,18 @@ void DapClient::restart() {
     int seq = m_nextSeq++;
     m_pendingRequests[seq] = "restart";
     sendRequest("restart", m_launchConfig, seq);
+  } else if (m_socket) {
+#ifdef QT_NO_NETWORK
+    emit error("Restart failed: socket transport unavailable");
+#else
+    const QString host = m_socketHost;
+    const quint16 port = m_socketPort;
+
+    stop(!m_isAttach);
+    if (!startSocket(host, port)) {
+      emit error("Restart failed: could not reconnect to debug adapter");
+    }
+#endif
   } else {
     if (!m_process) {
       LOG_WARNING("DAP: Cannot restart, adapter process is not running");
@@ -504,6 +726,12 @@ int DapClient::evaluate(const QString &expression, int frameId,
 
 void DapClient::setVariable(int variablesReference, const QString &name,
                             const QString &value) {
+  if (!supportsSetVariable()) {
+    LOG_WARNING("DAP: setVariable not supported by adapter, ignoring request");
+    emit variableSet(name, value, {});
+    return;
+  }
+
   QJsonObject args;
   args["variablesReference"] = variablesReference;
   args["name"] = name;
@@ -512,6 +740,27 @@ void DapClient::setVariable(int variablesReference, const QString &name,
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "setVariable";
   sendRequest("setVariable", args, seq);
+}
+
+void DapClient::exceptionInfo(int threadId) {
+  if (!supportsExceptionInfoRequest()) {
+    LOG_DEBUG("DAP: exceptionInfo not supported by adapter");
+    emit exceptionInfoError(threadId,
+                            "exceptionInfo is not supported by the adapter");
+    return;
+  }
+
+  QJsonObject args;
+  if (threadId > 0) {
+    args["threadId"] = threadId;
+  } else if (m_currentThreadId > 0) {
+    args["threadId"] = m_currentThreadId;
+  }
+
+  int seq = m_nextSeq++;
+  m_pendingRequests[seq] =
+      QString("exceptionInfo:%1").arg(args.value("threadId").toInt());
+  sendRequest("exceptionInfo", args, seq);
 }
 
 void DapClient::respondToRunInTerminal(int requestSeq, bool success,
@@ -530,9 +779,9 @@ void DapClient::respondToRunInTerminal(int requestSeq, bool success,
 
 void DapClient::sendRequest(const QString &command,
                             const QJsonObject &arguments, int seq) {
-  if (!m_process || m_process->state() == QProcess::NotRunning) {
-    LOG_WARNING(QString("DAP: Cannot send %1 request, adapter process is not "
-                        "running")
+  if (!hasLiveChannel()) {
+    LOG_WARNING(QString("DAP: Cannot send %1 request, adapter channel is not "
+                        "open")
                     .arg(command));
     m_pendingRequests.remove(seq);
     return;
@@ -557,11 +806,12 @@ void DapClient::sendRequest(const QString &command,
   }
 
   QJsonDocument doc(message);
-  QByteArray content = doc.toJson(QJsonDocument::Compact);
+  const QByteArray content = doc.toJson(QJsonDocument::Compact);
+  const QByteArray header =
+      QString("Content-Length: %1\r\n\r\n").arg(content.size()).toUtf8();
 
-  QString header = QString("Content-Length: %1\r\n\r\n").arg(content.size());
-  m_process->write(header.toUtf8());
-  m_process->write(content);
+  writeToAdapter(header);
+  writeToAdapter(content);
 
   LOG_DEBUG(QString("DAP request: %1 (seq=%2)").arg(command).arg(seq));
 }
@@ -569,9 +819,9 @@ void DapClient::sendRequest(const QString &command,
 void DapClient::sendResponse(int requestSeq, const QString &command,
                              bool success, const QJsonObject &body,
                              const QString &message) {
-  if (!m_process || m_process->state() == QProcess::NotRunning) {
-    LOG_WARNING(QString("DAP: Cannot send %1 response, adapter process is not "
-                        "running")
+  if (!hasLiveChannel()) {
+    LOG_WARNING(QString("DAP: Cannot send %1 response, adapter channel is not "
+                        "open")
                     .arg(command));
     return;
   }
@@ -590,18 +840,23 @@ void DapClient::sendResponse(int requestSeq, const QString &command,
   }
 
   QJsonDocument doc(response);
-  QByteArray content = doc.toJson(QJsonDocument::Compact);
+  const QByteArray content = doc.toJson(QJsonDocument::Compact);
+  const QByteArray header =
+      QString("Content-Length: %1\r\n\r\n").arg(content.size()).toUtf8();
 
-  QString header = QString("Content-Length: %1\r\n\r\n").arg(content.size());
-  m_process->write(header.toUtf8());
-  m_process->write(content);
+  writeToAdapter(header);
+  writeToAdapter(content);
 }
 
 void DapClient::onReadyReadStandardOutput() {
   if (!m_process) {
     return;
   }
-  m_buffer += m_process->readAllStandardOutput();
+  handleAdapterData(m_process->readAllStandardOutput());
+}
+
+void DapClient::handleAdapterData(const QByteArray &data) {
+  m_buffer += data;
 
   if (m_buffer.size() > MAX_DAP_BUFFER_BYTES) {
     const int headerPos = lastHeaderStart(m_buffer);
@@ -860,6 +1115,13 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
                                : command;
       emit evaluateResponseError(requestSeq, expression, message);
       emit evaluateError(expression, message);
+    } else if (command == "exceptionInfo") {
+      int threadId = m_currentThreadId;
+      if (pendingCommand.startsWith("exceptionInfo:")) {
+        threadId = pendingCommand.mid(14).toInt();
+      }
+      emit exceptionInfoError(threadId,
+                              message.isEmpty() ? "Unknown error" : message);
     } else {
       emit error(QString("%1 failed: %2").arg(command).arg(message));
     }
@@ -1009,6 +1271,15 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
   } else if (command == "setDataBreakpoints") {
     LOG_DEBUG(QString("Data breakpoints set: %1")
                   .arg(bodyObj["breakpoints"].toArray().count()));
+  } else if (command == "exceptionInfo") {
+    int threadId = m_currentThreadId;
+    if (pendingCommand.startsWith("exceptionInfo:")) {
+      threadId = pendingCommand.mid(14).toInt();
+    }
+    const DapExceptionInfo info = DapExceptionInfo::fromJson(bodyObj);
+    LOG_DEBUG(QString("DAP: exceptionInfo received — id=%1, breakMode=%2")
+                  .arg(info.exceptionId, info.breakMode));
+    emit exceptionInfoReceived(threadId, info);
   }
 }
 
@@ -1113,8 +1384,6 @@ void DapClient::doInitialize() {
   args["supportsVariableType"] = true;
   args["supportsVariablePaging"] = true;
   args["supportsRunInTerminalRequest"] = true;
-  args["supportsMemoryReferences"] = true;
-  args["supportsProgressReporting"] = true;
 
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "initialize";

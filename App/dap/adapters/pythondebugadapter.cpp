@@ -23,6 +23,8 @@ public:
     return cfg;
   }
 
+  bool launchesBeforeInitialized() const override { return true; }
+
   bool isAvailable() const override {
     return !resolvePythonInterpreter().interpreter.isEmpty();
   }

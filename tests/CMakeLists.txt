@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 enable_testing()
 
 # Find Qt6 Test module
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Test)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Test Network)
 find_package(Qt6 QUIET COMPONENTS Pdf PdfWidgets)
 find_package(Python3 QUIET COMPONENTS Interpreter)
 
@@ -542,10 +542,95 @@ target_link_libraries(test_dap
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::Network
     Qt6::Test
 )
 
 target_compile_definitions(test_dap PRIVATE QT_DEPRECATED_WARNINGS)
+
+# Fake DAP adapter used by protocol round-trip tests. Built next to test_dap so
+# the tests can locate it via QCoreApplication::applicationDirPath().
+add_executable(fakedap_adapter
+    unit/fakedapadapter_main.cpp
+)
+
+target_link_libraries(fakedap_adapter
+    PRIVATE
+    Qt6::Core
+    Qt6::Network
+)
+
+set_target_properties(test_dap fakedap_adapter PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/bin"
+)
+
+# Real-adapter integration tests (GDB DAP + debugpy). Skips gracefully when
+# the toolchain is unavailable.
+add_executable(test_dap_integration
+    unit/test_dap_integration.cpp
+    ${CMAKE_SOURCE_DIR}/App/build/cmakeproject.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/dapclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/expressiontranslator.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugadapterregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/adapterutils.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/pythonruntime.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/pythondebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/nodedebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/gdbdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/lldbdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/godebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/rustdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/breakpointmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/watchmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugsession.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugsettings.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_dap_integration PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/dap
+)
+
+target_link_libraries(test_dap_integration
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Network
+    Qt6::Test
+)
+
+target_compile_definitions(test_dap_integration PRIVATE QT_DEPRECATED_WARNINGS)
+
+set_target_properties(test_dap_integration PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/bin"
+)
+
+# CMake project support (detection, parsing, configure/build round-trip).
+add_executable(test_cmakeproject
+    unit/test_cmakeproject.cpp
+    ${CMAKE_SOURCE_DIR}/App/build/cmakeproject.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_cmakeproject PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+)
+
+target_link_libraries(test_cmakeproject
+    PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+set_target_properties(test_cmakeproject PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/bin"
+)
+
+add_test(NAME CMakeProjectTests COMMAND test_cmakeproject)
 
 # Register tests with CTest
 add_test(NAME LoggerTests COMMAND test_logger)
@@ -565,6 +650,8 @@ add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
 add_test(NAME CompletionProviderRegistryTests COMMAND test_completionproviderregistry)
 add_test(NAME CompletionEngineTests COMMAND test_completionengine)
 add_test(NAME DapTests COMMAND test_dap)
+add_test(NAME DapIntegrationTests COMMAND test_dap_integration)
+set_tests_properties(DapIntegrationTests PROPERTIES TIMEOUT 300)
 if(Python3_Interpreter_FOUND)
     add_test(
         NAME DapDebugpySmoke
@@ -1565,7 +1652,9 @@ set(TEST_LIST
     PluginBasedSyntaxHighlighterTests
     CompletionProviderRegistryTests 
     CompletionEngineTests
-    DapTests 
+    DapTests
+    DapIntegrationTests
+    CMakeProjectTests
     GitIntegrationTests
     GitFileSystemModelTests
     GitWorkbenchDialogTests
@@ -1624,7 +1713,7 @@ set(TEST_TARGETS
     test_logger test_theme test_filemanager test_document test_settingsmanager 
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
-    test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap
+    test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap test_dap_integration test_cmakeproject
     test_dockerfilesyntaxplugin
     test_pluginbasedsyntaxhighlighter
     test_gitintegration test_gitfilesystemmodel test_gitworkbenchdialog test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel

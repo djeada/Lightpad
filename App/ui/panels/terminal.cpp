@@ -1880,9 +1880,10 @@ void Terminal::appendOutput(const QString &text, bool isError) {
   QString output = text;
   if (output.size() > kMaxOutputChunkCharacters) {
     const int dropped = output.size() - kMaxOutputChunkCharacters;
-    output = QString("\n[Lightpad truncated %1 characters of terminal output]\n")
-                 .arg(dropped) +
-             output.right(kMaxOutputChunkCharacters);
+    output =
+        QString("\n[Lightpad truncated %1 characters of terminal output]\n")
+            .arg(dropped) +
+        output.right(kMaxOutputChunkCharacters);
   }
 
   if (!isError) {

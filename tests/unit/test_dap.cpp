@@ -1,8 +1,15 @@
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
+#include <QHostAddress>
+#include <QJsonDocument>
+#include <QProcess>
 #include <QSignalSpy>
+#include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
+
+#include <QCoreApplication>
 
 #include "dap/breakpointmanager.h"
 #include "dap/dapclient.h"
@@ -12,6 +19,9 @@
 #include "dap/debugsettings.h"
 #include "dap/expressiontranslator.h"
 #include "dap/watchmanager.h"
+
+Q_DECLARE_METATYPE(DapExceptionInfo)
+Q_DECLARE_METATYPE(QList<DapVariable>)
 
 class TestDap : public QObject {
   Q_OBJECT
@@ -88,12 +98,30 @@ private slots:
   void testDapVariableFromJson();
   void testDapStoppedEventFromJson();
 
+  void testDapClientFramingHandlesUtf8AndChunkedDelivery();
+  void testDapClientFakeAdapterFullSession();
+  void testDapClientFakeAdapterExceptionInfo();
+  void testDapClientCapabilityGating();
+  void testDapClientSocketTransport();
+  void testDapClientSocketTransportDisconnectIsReported();
+
+private:
+  QString fakeAdapterPath() const;
+  static QByteArray frameMessage(const QJsonObject &message);
+  bool traceFileContains(const QString &path, const QByteArray &needle,
+                         int *outCount = nullptr) const;
+  static bool waitForAdapterListening(QProcess *adapterProcess, int timeoutMs);
+
 private:
   void cleanupBreakpoints();
   void cleanupWatches();
 };
 
-void TestDap::initTestCase() { cleanupBreakpoints(); }
+void TestDap::initTestCase() {
+  qRegisterMetaType<DapExceptionInfo>("DapExceptionInfo");
+  qRegisterMetaType<QList<DapVariable>>("QList<DapVariable>");
+  cleanupBreakpoints();
+}
 
 void TestDap::cleanupTestCase() { cleanupBreakpoints(); }
 
@@ -1455,6 +1483,286 @@ void TestDap::testExpressionTranslatorLocalsFallbackRequest() {
   const DebugEvaluateRequest lldbRequest =
       DebugExpressionTranslator::localsFallbackRequest("cppdbg-lldb", "cppdbg");
   QVERIFY(lldbRequest.expression.isEmpty());
+}
+
+QString TestDap::fakeAdapterPath() const {
+  return QCoreApplication::applicationDirPath() + "/fakedap_adapter";
+}
+
+QByteArray TestDap::frameMessage(const QJsonObject &message) {
+  const QByteArray content =
+      QJsonDocument(message).toJson(QJsonDocument::Compact);
+  return QString("Content-Length: %1\r\n\r\n")
+      .arg(content.size())
+      .toUtf8()
+      .append(content);
+}
+
+bool TestDap::traceFileContains(const QString &path, const QByteArray &needle,
+                                int *outCount) const {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    if (outCount) {
+      *outCount = -1;
+    }
+    return false;
+  }
+  const QByteArray contents = file.readAll();
+  int count = 0;
+  for (int pos = contents.indexOf(needle); pos >= 0;
+       pos = contents.indexOf(needle, pos + needle.size())) {
+    ++count;
+  }
+  if (outCount) {
+    *outCount = count;
+  }
+  return count > 0;
+}
+
+bool TestDap::waitForAdapterListening(QProcess *adapterProcess, int timeoutMs) {
+  QElapsedTimer timer;
+  timer.start();
+  QByteArray stderrText;
+  while (timer.elapsed() < timeoutMs) {
+    stderrText += adapterProcess->readAllStandardError();
+    if (stderrText.contains("listening")) {
+      return true;
+    }
+    adapterProcess->waitForReadyRead(50);
+  }
+  return false;
+}
+
+void TestDap::testDapClientFramingHandlesUtf8AndChunkedDelivery() {
+  DapClient client;
+  QSignalSpy outputSpy(&client, &DapClient::output);
+  QVERIFY(outputSpy.isValid());
+
+  DapOutputEvent evt;
+  evt.category = "console";
+  evt.output = QString::fromUtf8("h\u00e9llo \u4e16\u754c \U0001F680");
+  QJsonObject message;
+  message["seq"] = 1;
+  message["type"] = "event";
+  message["event"] = "output";
+  message["body"] =
+      QJsonObject{{"category", evt.category}, {"output", evt.output}};
+
+  client.feedAdapterData(frameMessage(message));
+
+  QCOMPARE(outputSpy.count(), 1);
+  const DapOutputEvent received =
+      outputSpy.first().at(0).value<DapOutputEvent>();
+  QCOMPARE(received.output, evt.output);
+
+  const QByteArray framed = frameMessage(message);
+  for (int i = 0; i < framed.size(); i += 3) {
+    client.feedAdapterData(framed.mid(i, 3));
+  }
+
+  QCOMPARE(outputSpy.count(), 2);
+}
+
+void TestDap::testDapClientFakeAdapterFullSession() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString tracePath = dir.filePath("trace.jsonl");
+
+  DapClient client;
+  client.setAdapterMetadata("fake", "fake");
+
+  QSignalSpy initializedSpy(&client, &DapClient::initialized);
+  QSignalSpy launchedSpy(&client, &DapClient::launched);
+  QSignalSpy threadsSpy(&client, &DapClient::threadsReceived);
+  QSignalSpy stackSpy(&client, &DapClient::stackTraceReceived);
+  QSignalSpy scopesSpy(&client, &DapClient::scopesReceived);
+  QSignalSpy variablesSpy(&client, &DapClient::variablesReceived);
+  QSignalSpy evaluateSpy(&client, &DapClient::evaluateResult);
+  QSignalSpy variableSetSpy(&client, &DapClient::variableSet);
+  QSignalSpy exceptionInfoSpy(&client, &DapClient::exceptionInfoReceived);
+
+  QVERIFY(client.start(fakeAdapterPath(), {"--trace", tracePath}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  QCOMPARE(initializedSpy.count(), 1);
+  QVERIFY(client.capabilities().contains("supportsExceptionInfoRequest"));
+
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+  QCOMPARE(launchedSpy.count(), 1);
+
+  client.getThreads();
+  QTRY_COMPARE_WITH_TIMEOUT(threadsSpy.count(), 1, 5000);
+  QCOMPARE(client.currentThreadId(), 1);
+
+  client.getStackTrace(1);
+  QTRY_COMPARE_WITH_TIMEOUT(stackSpy.count(), 1, 5000);
+  QCOMPARE(stackSpy.at(0).at(0).toInt(), 1);
+  QCOMPARE(stackSpy.at(0).at(2).toInt(), 1);
+
+  client.getScopes(100);
+  QTRY_COMPARE_WITH_TIMEOUT(scopesSpy.count(), 1, 5000);
+
+  client.getVariables(1000);
+  QTRY_COMPARE_WITH_TIMEOUT(variablesSpy.count(), 1, 5000);
+  const QList<DapVariable> variables =
+      variablesSpy.at(0).at(1).value<QList<DapVariable>>();
+  QCOMPARE(variables.size(), 2);
+  QCOMPARE(variables.at(1).name,
+           QString::fromUtf8("\u6f22\u5b57_\u00e9\u00e8"));
+  QCOMPARE(variables.at(1).value, QString::fromUtf8("v\u00e0lue \U0001F680"));
+
+  client.evaluate(QString::fromUtf8("x + \u00fc"), 100, "repl");
+  QTRY_COMPARE_WITH_TIMEOUT(evaluateSpy.count(), 1, 5000);
+  QCOMPARE(evaluateSpy.at(0).at(1).toString(), QString::fromUtf8("x + \u00fc"));
+
+  client.setVariable(1000, "x", "42");
+  QTRY_COMPARE_WITH_TIMEOUT(variableSetSpy.count(), 1, 5000);
+
+  client.exceptionInfo(1);
+  QTRY_COMPARE_WITH_TIMEOUT(exceptionInfoSpy.count(), 1, 5000);
+  const DapExceptionInfo info =
+      exceptionInfoSpy.at(0).at(1).value<DapExceptionInfo>();
+  QCOMPARE(info.exceptionId, QString("ZeroDivisionError"));
+  QCOMPARE(info.details.typeName, QString("ZeroDivisionError"));
+  QCOMPARE(exceptionInfoSpy.at(0).at(0).toInt(), 1);
+
+  client.stop(false);
+
+  QTRY_VERIFY_WITH_TIMEOUT(traceFileContains(tracePath, "\"disconnect\""),
+                           5000);
+  int disconnectCount = 0;
+  traceFileContains(tracePath, "\"disconnect\"", &disconnectCount);
+  QCOMPARE(disconnectCount, 1);
+  int terminateCount = 0;
+  traceFileContains(tracePath, "\"terminate\"", &terminateCount);
+  QCOMPARE(terminateCount, 0);
+}
+
+void TestDap::testDapClientFakeAdapterExceptionInfo() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+
+  DapClient client;
+
+  QSignalSpy errorSpy(&client, &DapClient::exceptionInfoError);
+  QSignalSpy infoSpy(&client, &DapClient::exceptionInfoReceived);
+  QVERIFY(errorSpy.isValid());
+  QVERIFY(infoSpy.isValid());
+
+  client.start(fakeAdapterPath(),
+               {"--trace", dir.filePath("t.jsonl"), "--caps",
+                R"({"supportsConfigurationDoneRequest":true})"});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+
+  client.exceptionInfo(7);
+  QCOMPARE(errorSpy.count(), 1);
+  QCOMPARE(infoSpy.count(), 0);
+
+  client.stop(false);
+}
+
+void TestDap::testDapClientCapabilityGating() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString tracePath = dir.filePath("trace.jsonl");
+
+  DapClient client;
+  client.start(
+      fakeAdapterPath(),
+      {"--trace", tracePath, "--caps",
+       R"({"supportsConfigurationDoneRequest":false,"supportsTerminateRequest":false,"supportsSetVariable":false})"});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+
+  QVERIFY(!client.supportsConfigurationDoneRequest());
+  QVERIFY(!client.supportsTerminateRequest());
+  QVERIFY(!client.supportsSetVariable());
+
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+
+  QSignalSpy variableSetSpy(&client, &DapClient::variableSet);
+  client.configurationDone();
+  client.terminate();
+  client.setVariable(1000, "x", "1");
+
+  QCOMPARE(variableSetSpy.count(), 1);
+
+  QTRY_VERIFY_WITH_TIMEOUT(traceFileContains(tracePath, "\"disconnect\""),
+                           5000);
+  int disconnectCount = 0;
+  traceFileContains(tracePath, "\"disconnect\"", &disconnectCount);
+  QCOMPARE(disconnectCount, 1);
+
+  int configurationDoneCount = 0;
+  traceFileContains(tracePath, "\"configurationDone\"",
+                    &configurationDoneCount);
+  QCOMPARE(configurationDoneCount, 0);
+
+  int terminateCount = 0;
+  traceFileContains(tracePath, "\"terminate\"", &terminateCount);
+  QCOMPARE(terminateCount, 0);
+
+  int setVariableCount = 0;
+  traceFileContains(tracePath, "\"setVariable\"", &setVariableCount);
+  QCOMPARE(setVariableCount, 0);
+
+  client.stop(true);
+}
+
+void TestDap::testDapClientSocketTransport() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+
+  const quint16 port = static_cast<quint16>(
+      20000 + (QCoreApplication::applicationPid() % 20000));
+
+  QProcess adapterProcess;
+  adapterProcess.setProgram(fakeAdapterPath());
+  adapterProcess.setArguments({"--listen", QString::number(port), "--trace",
+                               dir.filePath("trace.jsonl")});
+  adapterProcess.start();
+  QVERIFY(adapterProcess.waitForStarted(5000));
+  QVERIFY(waitForAdapterListening(&adapterProcess, 10000));
+
+  DapClient client;
+  QSignalSpy initializedSpy(&client, &DapClient::initialized);
+  QVERIFY(client.startSocket("127.0.0.1", port));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 10000);
+  QCOMPARE(initializedSpy.count(), 1);
+  QVERIFY(client.isSocketTransport());
+
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+
+  QTRY_VERIFY_WITH_TIMEOUT(
+      traceFileContains(dir.filePath("trace.jsonl"), "\"launch\""), 5000);
+
+  client.stop(true);
+  adapterProcess.waitForFinished(3000);
+  adapterProcess.kill();
+}
+
+void TestDap::testDapClientSocketTransportDisconnectIsReported() {
+  const quint16 port = static_cast<quint16>(
+      20000 + ((QCoreApplication::applicationPid() + 1) % 20000));
+
+  QProcess adapterProcess;
+  adapterProcess.setProgram(fakeAdapterPath());
+  adapterProcess.setArguments({"--listen", QString::number(port)});
+  adapterProcess.start();
+  QVERIFY(adapterProcess.waitForStarted(5000));
+  QVERIFY(waitForAdapterListening(&adapterProcess, 10000));
+
+  DapClient client;
+  QSignalSpy terminatedSpy(&client, &DapClient::terminated);
+  QVERIFY(client.startSocket("127.0.0.1", port));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 10000);
+
+  adapterProcess.kill();
+  adapterProcess.waitForFinished(3000);
+
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Terminated, 5000);
+  QVERIFY(terminatedSpy.count() >= 1);
 }
 
 QTEST_MAIN(TestDap)

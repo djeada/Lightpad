@@ -3,10 +3,12 @@
 #include <QApplication>
 #include <QBoxLayout>
 #include <QCompleter>
+#include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDockWidget>
+#include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
@@ -22,6 +24,7 @@
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QProcess>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollBar>
@@ -30,6 +33,7 @@
 #include <QStatusBar>
 #include <QStringListModel>
 #include <QTextDocument>
+#include <QThread>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <cstdio>
@@ -67,6 +71,7 @@
 #include "../test_templates/testconfiguration.h"
 #include "../test_templates/testfileclassifier.h"
 #include "../theme/themeengine.h"
+#include "dialogs/cmaketargetpickerdialog.h"
 #include "dialogs/commandpalette.h"
 #include "dialogs/debugconfigurationdialog.h"
 #include "dialogs/filequickopen.h"
@@ -76,6 +81,9 @@
 #include "dialogs/gitlogdialog.h"
 #include "dialogs/gitrebasedialog.h"
 #include "dialogs/gitworkbenchdialog.h"
+#include "dialogs/processpickerdialog.h"
+
+#include "../build/cmakeproject.h"
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
 #include "dialogs/languageserverstatusdialog.h"
@@ -6207,6 +6215,280 @@ void MainWindow::rebuildDebugTargetMenu() {
           &MainWindow::on_actionEdit_Debug_Configurations_triggered);
 }
 
+bool MainWindow::runBuildProcessWithProgress(const QString &title,
+                                             const QStringList &command,
+                                             const QString &workingDirectory,
+                                             QString *output,
+                                             QString *errorMessage) {
+  if (output) {
+    output->clear();
+  }
+
+  QProgressDialog progress(title, tr("Cancel"), 0, 0, this);
+  progress.setWindowModality(Qt::WindowModal);
+  progress.setMinimumDuration(400);
+  progress.setAutoClose(false);
+  progress.setMinimumWidth(420);
+
+  QProcess process;
+  process.setWorkingDirectory(workingDirectory);
+  process.start(command.first(), command.mid(1));
+
+  if (!process.waitForStarted(10000)) {
+    if (errorMessage) {
+      *errorMessage =
+          tr("Failed to start '%1': %2")
+              .arg(command.join(QLatin1Char(' ')), process.errorString());
+    }
+    return false;
+  }
+
+  QByteArray accumulated;
+  QEventLoop loop;
+  const qint64 commandStartTime = QDateTime::currentMSecsSinceEpoch();
+  constexpr qint64 kBuildTimeoutMs = 600000;
+
+  QTimer tailTimer;
+  tailTimer.setInterval(500);
+  QObject::connect(&tailTimer, &QTimer::timeout, &progress, [&]() {
+    accumulated += process.readAllStandardOutput();
+    accumulated += process.readAllStandardError();
+
+    const QList<QByteArray> lines = accumulated.trimmed().split('\n');
+    QString tail;
+    for (int i = qMax(0, lines.size() - 4); i < lines.size(); ++i) {
+      tail += QString::fromUtf8(lines.at(i)).left(120) + QLatin1Char('\n');
+    }
+    progress.setLabelText(QStringLiteral("%1\n%2").arg(title, tail.trimmed()));
+
+    const bool userCancelled = progress.wasCanceled();
+    const bool timedOut =
+        QDateTime::currentMSecsSinceEpoch() - commandStartTime >
+        kBuildTimeoutMs;
+    if (userCancelled || timedOut) {
+      process.kill();
+    }
+  });
+
+  QObject::connect(
+      &process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+      &loop, [&loop](int, QProcess::ExitStatus) { loop.quit(); });
+
+  tailTimer.start();
+  loop.exec();
+  tailTimer.stop();
+
+  accumulated += process.readAllStandardOutput();
+  accumulated += process.readAllStandardError();
+
+  if (output) {
+    *output = QString::fromUtf8(accumulated);
+  }
+
+  if (process.state() != QProcess::NotRunning) {
+    process.waitForFinished(2000);
+  }
+
+  if (progress.wasCanceled()) {
+    if (errorMessage) {
+      *errorMessage = tr("Build cancelled.");
+    }
+    return false;
+  }
+
+  if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+    if (errorMessage) {
+      const QString details = QString::fromUtf8(accumulated).trimmed();
+      *errorMessage =
+          tr("'%1' failed:\n%2")
+              .arg(command.join(QLatin1Char(' ')),
+                   details.isEmpty()
+                       ? tr("exited with code %1").arg(process.exitCode())
+                       : details.right(4000));
+    }
+    return false;
+  }
+
+  return true;
+}
+
+bool MainWindow::runPreLaunchTask(const QString &taskCommand,
+                                  QString *errorMessage) {
+  const QString command = taskCommand.trimmed();
+  if (command.isEmpty()) {
+    return true;
+  }
+
+#ifdef Q_OS_WIN
+  const QString shell = QStringLiteral("cmd.exe");
+  const QStringList args = {QStringLiteral("/C"), command};
+#else
+  const QString shell = QStringLiteral("sh");
+  const QStringList args = {QStringLiteral("-c"), command};
+#endif
+
+  QProcess process;
+  process.setWorkingDirectory(m_projectRootPath.isEmpty() ? QDir::homePath()
+                                                          : m_projectRootPath);
+  process.start(shell, args);
+
+  if (!process.waitForStarted(5000)) {
+    if (errorMessage) {
+      *errorMessage = tr("Failed to run pre-launch task '%1': %2")
+                          .arg(command, process.errorString());
+    }
+    return false;
+  }
+  if (!process.waitForFinished(600000)) {
+    process.kill();
+    if (errorMessage) {
+      *errorMessage = tr("Pre-launch task timed out: %1").arg(command);
+    }
+    return false;
+  }
+
+  if (process.exitCode() != 0 || process.exitStatus() != QProcess::NormalExit) {
+    const QString details = QString::fromUtf8(process.readAllStandardOutput() +
+                                              process.readAllStandardError())
+                                .trimmed();
+    if (errorMessage) {
+      *errorMessage =
+          tr("Pre-launch task failed:\n%1\n\n%2")
+              .arg(command,
+                   details.isEmpty()
+                       ? tr("exited with code %1").arg(process.exitCode())
+                       : details.left(4000));
+    }
+    return false;
+  }
+
+  LOG_INFO(QString("Pre-launch task completed: %1").arg(command));
+  return true;
+}
+
+bool MainWindow::buildCMakeDebugTarget(DebugConfiguration *resolvedConfig,
+                                       const QString &currentFilePath,
+                                       QString *errorMessage) {
+  if (!resolvedConfig) {
+    return false;
+  }
+  if (resolvedConfig->request.compare("attach", Qt::CaseInsensitive) == 0) {
+    return true;
+  }
+
+  const QString languageId = currentFilePath.isEmpty()
+                                 ? QString()
+                                 : effectiveLanguageIdForFile(currentFilePath);
+  const QString normalizedLanguageId = LanguageCatalog::normalize(languageId);
+  const bool cppLike =
+      normalizedLanguageId == "cpp" || normalizedLanguageId == "c";
+  if (!cppLike) {
+    return true;
+  }
+
+  const QString searchRoot = m_projectRootPath.isEmpty()
+                                 ? QFileInfo(currentFilePath).absolutePath()
+                                 : m_projectRootPath;
+  const QString cmakeRoot = CMakeProject::findProjectRoot(searchRoot);
+  if (cmakeRoot.isEmpty()) {
+
+    return true;
+  }
+
+  CMakeProject project;
+  const QList<CMakeTargetInfo> executables =
+      project.parseExecutableTargets(cmakeRoot);
+
+  const QVariant configuredBinaryDir =
+      resolvedConfig->adapterConfig.value(QStringLiteral("cmakeBinaryDir"));
+  const QString binaryDir = CMakeProject::resolveBinaryDirectory(
+      cmakeRoot, configuredBinaryDir.toString());
+
+  const QString configuredProgram = resolvedConfig->program.trimmed();
+  QString exePath;
+
+  if (!executables.isEmpty()) {
+    if (!configuredProgram.isEmpty()) {
+      const QString programFile = QFileInfo(configuredProgram).fileName();
+      const QString programStem =
+          QFileInfo(configuredProgram).completeBaseName();
+      for (const CMakeTargetInfo &target : executables) {
+        if (target.name == programFile || target.name == programStem) {
+          exePath = CMakeProject::executablePathFor(target, binaryDir);
+          break;
+        }
+      }
+    }
+
+    if (exePath.isEmpty() && executables.size() == 1) {
+      exePath = CMakeProject::executablePathFor(executables.first(), binaryDir);
+    }
+
+    if (exePath.isEmpty()) {
+      CMakeTargetPickerDialog picker(executables, this);
+      picker.setWindowModality(Qt::ApplicationModal);
+      if (picker.exec() != QDialog::Accepted ||
+          picker.selectedTargetName().isEmpty()) {
+        if (errorMessage) {
+          *errorMessage = tr("A build target must be selected to debug this "
+                             "CMake project.");
+        }
+        return false;
+      }
+      for (const CMakeTargetInfo &target : executables) {
+        if (target.name == picker.selectedTargetName()) {
+          exePath = CMakeProject::executablePathFor(target, binaryDir);
+          break;
+        }
+      }
+    }
+  } else if (configuredProgram.isEmpty()) {
+    if (errorMessage) {
+      *errorMessage =
+          tr("No executable targets were found in %1. Add an "
+             "add_executable() declaration or point 'program' at a built "
+             "binary.")
+              .arg(cmakeRoot);
+    }
+    return false;
+  }
+
+  QString configureOutput;
+  if (CMakeProject::needsConfigure(binaryDir)) {
+    if (!runBuildProcessWithProgress(
+            tr("Configuring CMake project…"),
+            CMakeProject::configureCommand(cmakeRoot, binaryDir), cmakeRoot,
+            &configureOutput, errorMessage)) {
+      return false;
+    }
+  }
+
+  QString buildOutput;
+  const int jobs = qMax(1, QThread::idealThreadCount());
+  if (!runBuildProcessWithProgress(tr("Building debug target…"),
+                                   CMakeProject::buildCommand(binaryDir, jobs),
+                                   binaryDir, &buildOutput, errorMessage)) {
+    return false;
+  }
+
+  LOG_INFO(QString("CMake build output tail: %1")
+               .arg(buildOutput.trimmed().section(QLatin1Char('\n'), -3, -1)));
+
+  if (!exePath.isEmpty()) {
+    resolvedConfig->program = exePath;
+  } else if (!QFileInfo::exists(configuredProgram)) {
+    if (errorMessage) {
+      *errorMessage =
+          tr("The built program was not found: %1").arg(configuredProgram);
+    }
+    return false;
+  }
+
+  LOG_INFO(
+      QString("CMake debug target ready: %1").arg(resolvedConfig->program));
+  return true;
+}
+
 bool MainWindow::prepareDebugConfigurationForStart(
     const DebugConfiguration &config, const QString &currentFilePath,
     DebugConfiguration *resolvedConfig, QString *errorMessage) {
@@ -6220,6 +6502,46 @@ bool MainWindow::prepareDebugConfigurationForStart(
 
   *resolvedConfig = DebugConfigurationManager::instance().resolveVariables(
       config, currentFilePath);
+
+  if (resolvedConfig->request.compare("attach", Qt::CaseInsensitive) == 0 &&
+      resolvedConfig->processId <= 0) {
+    const bool placeholderInExpression =
+        resolvedConfig->processIdExpression.trimmed() ==
+        QStringLiteral("${command:pickProcess}");
+    const QVariant adapterProcessId =
+        resolvedConfig->adapterConfig.value(QStringLiteral("processId"));
+    const bool placeholderInAdapterConfig =
+        adapterProcessId.isValid() &&
+        adapterProcessId.toString().trimmed() ==
+            QStringLiteral("${command:pickProcess}");
+
+    if (placeholderInExpression || placeholderInAdapterConfig) {
+      ProcessPickerDialog picker(this);
+      picker.setWindowModality(Qt::ApplicationModal);
+      if (picker.exec() != QDialog::Accepted || picker.selectedPid() <= 0) {
+        if (errorMessage) {
+          *errorMessage =
+              tr("A process must be selected to attach the debugger.");
+        }
+        return false;
+      }
+
+      resolvedConfig->processId = static_cast<int>(
+          qBound<qint64>(1, picker.selectedPid(), qint64(4194304)));
+      resolvedConfig->processIdExpression.clear();
+      if (placeholderInAdapterConfig) {
+        resolvedConfig->adapterConfig.remove(QStringLiteral("processId"));
+      }
+    }
+  }
+
+  if (!runPreLaunchTask(resolvedConfig->preLaunchTask, errorMessage)) {
+    return false;
+  }
+
+  if (!buildCMakeDebugTarget(resolvedConfig, currentFilePath, errorMessage)) {
+    return false;
+  }
 
   const auto hasUnresolvedCurrentFileVariable = [](const QString &value) {
     return value.contains("${file}") || value.contains("${fileDirname}") ||

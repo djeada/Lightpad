@@ -13,8 +13,8 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollBar>
-#include <QStackedWidget>
 #include <QSet>
+#include <QStackedWidget>
 #include <QTextBlock>
 #include <QTextBlockFormat>
 #include <QTextCursor>
@@ -260,10 +260,9 @@ static QString normalizedPairingLanguage(const QString &languageId) {
 
 static bool isAutoPairLanguage(const QString &languageId) {
   static const QSet<QString> supported = {
-      "bazel", "c",     "cmake", "cpp", "css",  "dockerfile", "go",
-      "glsl",  "hlsl",  "html",  "java", "js",   "json",       "latex",
-      "make",  "metal", "meson", "ninja", "py",   "rust",       "sh",
-      "ts",    "wgsl",  "yaml"};
+      "bazel", "c",     "cmake", "cpp",  "css",  "dockerfile", "go",   "glsl",
+      "hlsl",  "html",  "java",  "js",   "json", "latex",      "make", "metal",
+      "meson", "ninja", "py",    "rust", "sh",   "ts",         "wgsl", "yaml"};
   return supported.contains(normalizedPairingLanguage(languageId));
 }
 
@@ -360,16 +359,15 @@ static bool hasLineCommentAt(const QString &text, int position,
                              const QString &languageId) {
   const QString language = normalizedPairingLanguage(languageId);
   static const QSet<QString> slashCommentLanguages = {
-      "c",    "cpp",  "go",   "glsl", "hlsl", "java",
-      "js",   "ts",   "rust", "wgsl", "metal"};
+      "c",  "cpp", "go",   "glsl", "hlsl", "java",
+      "js", "ts",  "rust", "wgsl", "metal"};
   if (position + 1 < text.size() && text.mid(position, 2) == "//" &&
       slashCommentLanguages.contains(language)) {
     return true;
   }
   if (text.at(position) == '#' &&
       (language == "py" || language == "sh" || language == "yaml" ||
-       language == "dockerfile" || language == "make" ||
-       language == "cmake")) {
+       language == "dockerfile" || language == "make" || language == "cmake")) {
     return true;
   }
   return false;
@@ -447,9 +445,8 @@ static AutoPairContext autoPairContextForText(const QString &text,
       continue;
     }
 
-    if (language == "py" && i + 2 < text.size() &&
-        (ch == '\'' || ch == '"') && text.at(i + 1) == ch &&
-        text.at(i + 2) == ch && !isEscapedAt(text, i)) {
+    if (language == "py" && i + 2 < text.size() && (ch == '\'' || ch == '"') &&
+        text.at(i + 1) == ch && text.at(i + 2) == ch && !isEscapedAt(text, i)) {
       inTriplePythonString = true;
       triplePythonQuote = ch;
       i += 2;
@@ -1335,9 +1332,8 @@ bool TextArea::handleAutoPairKey(QKeyEvent *event) {
     return false;
   }
 
-  const AutoPairContext context =
-      autoPairContextForText(toPlainText().left(textCursor().position()),
-                             m_languageId);
+  const AutoPairContext context = autoPairContextForText(
+      toPlainText().left(textCursor().position()), m_languageId);
 
   QTextCursor cursor = textCursor();
 

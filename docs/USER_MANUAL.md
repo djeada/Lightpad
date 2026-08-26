@@ -75,6 +75,28 @@ Lightpad works like any standard text editor:
 
 ## Features
 
+### Building and Debugging CMake Projects
+
+When you start debugging a C/C++ file inside a project that contains a
+`CMakeLists.txt`, Lightpad builds the project automatically before launching
+the debugger:
+
+1. The project is configured on first use (`cmake -S . -B build`); results are
+   cached in `build/`.
+2. `cmake --build build -j<nproc>` compiles the targets, with a progress
+   dialog showing live output (Cancel aborts the build).
+3. If `CMakeLists.txt` declares exactly one executable target, it is selected
+   automatically; with several targets a picker dialog appears.
+4. The debug session launches against the freshly built binary.
+
+Notes:
+- Override the build directory per configuration with `"cmakeBinaryDir"` in
+  the launch configuration.
+- A `preLaunchTask` string in the debug configuration runs as a shell command
+  from the project root before the CMake step (useful for code generators).
+- Projects without `CMakeLists.txt` keep the single-file behavior: the current
+  file is compiled with `-g -O0` when its binary is missing or stale.
+
 ### Syntax Highlighting
 
 Lightpad automatically detects the programming language based on file extension:

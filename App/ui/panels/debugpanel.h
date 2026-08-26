@@ -76,6 +76,7 @@ private slots:
                         const QString &result, const QString &type,
                         int variablesReference);
   void onOutputReceived(const DapOutputEvent &event);
+  void onExceptionInfoReceived(int threadId, const DapExceptionInfo &info);
 
   void onCallStackItemClicked(QTreeWidgetItem *item, int column);
   void onVariableItemExpanded(QTreeWidgetItem *item);

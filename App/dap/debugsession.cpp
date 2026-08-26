@@ -65,6 +65,8 @@ DebugSession::DebugSession(const QString &id, QObject *parent)
           &DebugSession::onClientOutput);
   connect(m_client.get(), &DapClient::error, this,
           &DebugSession::onClientError);
+  connect(m_client.get(), &DapClient::exceptionInfoReceived, this,
+          &DebugSession::exceptionInfoReceived);
 }
 
 DebugSession::~DebugSession() {
@@ -151,25 +153,20 @@ void DebugSession::onClientStateChanged(DapClient::State state) {
     if (m_state == State::Starting) {
       BreakpointManager::instance().setDapClient(m_client.get());
 
-      const bool adapterReadyForConfiguration = m_adapterInitializedReceived;
-      if (adapterReadyForConfiguration) {
-        LOG_DEBUG("DAP session: adapter already initialized, syncing "
-                  "breakpoints before launch");
-        BreakpointManager::instance().syncAllBreakpoints();
-      }
+      const bool launchesFirst =
+          m_adapter && m_adapter->launchesBeforeInitialized();
 
-      if (m_configuration.request == "attach") {
-        LOG_DEBUG("DAP session: sending attach request");
-        m_client->attach(m_adapter->attachArguments(m_configuration));
+      if (m_adapterInitializedReceived) {
+
+        startConfigurationSequence();
+      } else if (launchesFirst) {
+
+        LOG_DEBUG("DAP session: sending early launch/attach for "
+                  "launch-first adapter");
+        sendLaunchOrAttach();
       } else {
-        LOG_DEBUG("DAP session: sending launch request");
-        m_client->launch(m_adapter->launchArguments(m_configuration));
-      }
-      m_launchRequestSent = true;
-
-      if (adapterReadyForConfiguration && !m_configurationDoneSent) {
-        m_client->configurationDone();
-        m_configurationDoneSent = true;
+        LOG_DEBUG("DAP session: waiting for initialized event before "
+                  "configuration");
       }
     }
     break;
@@ -203,18 +200,61 @@ void DebugSession::onClientAdapterInitialized() {
                 .arg(m_launchRequestSent)
                 .arg(m_configurationDoneSent));
   m_adapterInitializedReceived = true;
-  if (m_launchRequestSent && !m_configurationDoneSent) {
-    LOG_DEBUG("DAP session: syncing breakpoints and sending configurationDone");
+
+  if (m_launchRequestSent) {
+
     BreakpointManager::instance().setDapClient(m_client.get());
     BreakpointManager::instance().syncAllBreakpoints();
+    if (!m_configurationDoneSent) {
+      m_client->configurationDone();
+      m_configurationDoneSent = true;
+    }
+    return;
+  }
+
+  startConfigurationSequence();
+}
+
+void DebugSession::startConfigurationSequence() {
+  if (m_configurationDoneSent && m_launchRequestSent) {
+    return;
+  }
+
+  BreakpointManager::instance().setDapClient(m_client.get());
+  BreakpointManager::instance().syncAllBreakpoints();
+
+  if (!m_configurationDoneSent) {
     m_client->configurationDone();
     m_configurationDoneSent = true;
   }
+
+  sendLaunchOrAttach();
+}
+
+void DebugSession::sendLaunchOrAttach() {
+  if (m_launchRequestSent) {
+    return;
+  }
+
+  if (m_configuration.request == "attach") {
+    LOG_DEBUG("DAP session: sending attach request");
+    m_client->attach(m_adapter ? m_adapter->attachArguments(m_configuration)
+                               : QJsonObject{});
+  } else {
+    LOG_DEBUG("DAP session: sending launch request");
+    m_client->launch(m_adapter ? m_adapter->launchArguments(m_configuration)
+                               : QJsonObject{});
+  }
+  m_launchRequestSent = true;
 }
 
 void DebugSession::onClientStopped(const DapStoppedEvent &event) {
   setState(State::Stopped);
   emit stopped(event);
+
+  if (event.reason == DapStoppedReason::Exception && m_client) {
+    m_client->exceptionInfo(event.threadId);
+  }
 }
 
 void DebugSession::onClientTerminated() {

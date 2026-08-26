@@ -4,9 +4,11 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QPointer>
 #include <QRegularExpression>
 #include <QTemporaryFile>
 #include <QTextStream>
+#include <QThreadPool>
 
 GitIntegration::GitIntegration(QObject *parent)
     : QObject(parent), m_isValid(false) {}
@@ -702,10 +704,8 @@ bool GitIntegration::discardAllChanges() {
 
 QList<GitCommitInfo> GitIntegration::getCommitLog(int maxCount,
                                                   const QString &branch) const {
-  QList<GitCommitInfo> result;
-
   if (!m_isValid) {
-    return result;
+    return {};
   }
 
   QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
@@ -721,10 +721,22 @@ QList<GitCommitInfo> GitIntegration::getCommitLog(int maxCount,
   QString output = executeGitCommand(args, &success);
 
   if (!success || output.isEmpty()) {
+    return {};
+  }
+
+  return parseCommitLogOutput(output);
+}
+
+QList<GitCommitInfo>
+GitIntegration::parseCommitLogOutput(const QString &output) const {
+  QList<GitCommitInfo> result;
+
+  if (output.isEmpty()) {
     return result;
   }
 
-  QStringList commits = output.split('\n', Qt::SkipEmptyParts);
+  const QStringList commits = output.split('\n', Qt::SkipEmptyParts);
+  result.reserve(commits.size());
 
   for (const QString &line : commits) {
     QStringList parts = line.split(QChar('\0'));
@@ -749,6 +761,224 @@ QList<GitCommitInfo> GitIntegration::getCommitLog(int maxCount,
   }
 
   return result;
+}
+
+QList<GitCommitInfo> GitIntegration::getCommitLogPage(const QString &branch,
+                                                      int skip,
+                                                      int limit) const {
+  if (!m_isValid || limit <= 0 || skip < 0) {
+    return {};
+  }
+
+  const QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
+
+  QStringList args = {"log", "--date-order", QString("--skip=%1").arg(skip),
+                      QString("--max-count=%1").arg(limit),
+                      QString("--pretty=format:%1").arg(format)};
+
+  if (!branch.isEmpty()) {
+    args.append(branch);
+  }
+
+  bool success;
+  const QString output = executeGitCommand(args, &success);
+
+  if (!success) {
+    return {};
+  }
+
+  return parseCommitLogOutput(output);
+}
+
+QMap<QString, QList<GitRefDecoration>>
+GitIntegration::getCommitRefsMap() const {
+  QMap<QString, QList<GitRefDecoration>> result;
+
+  if (!m_isValid) {
+    return result;
+  }
+
+  bool success = false;
+  const QString headHash =
+      executeGitCommand({"rev-parse", "HEAD"}, &success).trimmed();
+  const bool headValid = success && !headHash.isEmpty();
+
+  const QString refsOutput = executeGitCommand(
+      {"for-each-ref", "--format=%(objectname)%00%(*objectname)%00%(refname)",
+       "refs/heads", "refs/tags", "refs/remotes"},
+      &success);
+
+  if (success && !refsOutput.isEmpty()) {
+    const QStringList lines = refsOutput.split('\n', Qt::SkipEmptyParts);
+    for (const QString &line : lines) {
+      const QStringList parts = line.split(QChar('\0'));
+      if (parts.size() < 3) {
+        continue;
+      }
+
+      QString hash = parts[0];
+      if (!parts[1].isEmpty()) {
+        hash = parts[1];
+      }
+      if (hash.isEmpty()) {
+        continue;
+      }
+
+      GitRefDecoration decoration;
+      const QString refname = parts[2];
+      if (refname.startsWith("refs/heads/")) {
+        decoration.kind = GitRefDecoration::Kind::LocalBranch;
+        decoration.name = refname.mid(11);
+      } else if (refname.startsWith("refs/remotes/")) {
+        decoration.kind = GitRefDecoration::Kind::RemoteBranch;
+        decoration.name = refname.mid(13);
+      } else if (refname.startsWith("refs/tags/")) {
+        decoration.kind = GitRefDecoration::Kind::Tag;
+        decoration.name = refname.mid(10);
+      } else {
+        continue;
+      }
+
+      if (decoration.name.isEmpty()) {
+        continue;
+      }
+
+      if (headValid && hash == headHash &&
+          decoration.kind == GitRefDecoration::Kind::LocalBranch) {
+        decoration.isHead = true;
+      }
+
+      result[hash].append(decoration);
+    }
+  }
+
+  return result;
+}
+
+void GitIntegration::getCommitLogPageAsync(
+    const QString &branch, int skip, int limit,
+    const std::function<void(QList<GitCommitInfo>)> &callback) {
+
+  QPointer<GitIntegration> self(this);
+  const QString repoPath = m_repositoryPath;
+
+  QThreadPool::globalInstance()->start([self, repoPath, branch, skip, limit,
+                                        callback]() {
+    QList<GitCommitInfo> page;
+
+    if (self && !repoPath.isEmpty() && limit > 0 && skip >= 0) {
+      const QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
+
+      QStringList args = {"log", "--date-order", QString("--skip=%1").arg(skip),
+                          QString("--max-count=%1").arg(limit),
+                          QString("--pretty=format:%1").arg(format)};
+      if (!branch.isEmpty()) {
+        args.append(branch);
+      }
+
+      bool success = false;
+      const QString output =
+          self->executeGitCommandAtPath(repoPath, args, &success);
+      if (success) {
+        page = self->parseCommitLogOutput(output);
+      }
+    }
+
+    if (!self) {
+      return;
+    }
+
+    QMetaObject::invokeMethod(
+        self,
+        [self, callback, page]() {
+          if (self && callback) {
+            callback(page);
+          }
+        },
+        Qt::QueuedConnection);
+  });
+}
+
+void GitIntegration::getCommitRefsMapAsync(
+    const std::function<void(QMap<QString, QList<GitRefDecoration>>)>
+        &callback) {
+
+  QPointer<GitIntegration> self(this);
+  const QString repoPath = m_repositoryPath;
+
+  QThreadPool::globalInstance()->start([self, repoPath, callback]() {
+    QMap<QString, QList<GitRefDecoration>> refs;
+
+    if (self && !repoPath.isEmpty()) {
+      bool headSuccess = false;
+      const QString headHash =
+          self->executeGitCommandAtPath(repoPath, {"rev-parse", "HEAD"},
+                                        &headSuccess)
+              .trimmed();
+
+      bool refsSuccess = false;
+      const QString refsOutput = self->executeGitCommandAtPath(
+          repoPath,
+          {"for-each-ref",
+           "--format=%(objectname)%00%(*objectname)%00%(refname)", "refs/heads",
+           "refs/tags", "refs/remotes"},
+          &refsSuccess);
+
+      if (refsSuccess && !refsOutput.isEmpty()) {
+        const QStringList lines = refsOutput.split('\n', Qt::SkipEmptyParts);
+        for (const QString &line : lines) {
+          const QStringList parts = line.split(QChar('\0'));
+          if (parts.size() < 3) {
+            continue;
+          }
+
+          QString hash = parts[1].isEmpty() ? parts[0] : parts[1];
+          if (hash.isEmpty()) {
+            continue;
+          }
+
+          GitRefDecoration decoration;
+          const QString refname = parts[2];
+          if (refname.startsWith("refs/heads/")) {
+            decoration.kind = GitRefDecoration::Kind::LocalBranch;
+            decoration.name = refname.mid(11);
+          } else if (refname.startsWith("refs/remotes/")) {
+            decoration.kind = GitRefDecoration::Kind::RemoteBranch;
+            decoration.name = refname.mid(13);
+          } else if (refname.startsWith("refs/tags/")) {
+            decoration.kind = GitRefDecoration::Kind::Tag;
+            decoration.name = refname.mid(10);
+          } else {
+            continue;
+          }
+
+          if (decoration.name.isEmpty()) {
+            continue;
+          }
+
+          if (headSuccess && !headHash.isEmpty() && hash == headHash &&
+              decoration.kind == GitRefDecoration::Kind::LocalBranch) {
+            decoration.isHead = true;
+          }
+
+          refs[hash].append(decoration);
+        }
+      }
+    }
+
+    if (!self) {
+      return;
+    }
+
+    QMetaObject::invokeMethod(
+        self,
+        [self, callback, refs]() {
+          if (self && callback) {
+            callback(refs);
+          }
+        },
+        Qt::QueuedConnection);
+  });
 }
 
 GitCommitInfo

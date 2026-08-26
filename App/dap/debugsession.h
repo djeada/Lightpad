@@ -69,6 +69,7 @@ signals:
   void terminated();
   void outputReceived(const DapOutputEvent &event);
   void error(const QString &message);
+  void exceptionInfoReceived(int threadId, const DapExceptionInfo &info);
 
 private slots:
   void onClientStateChanged(DapClient::State state);
@@ -80,6 +81,8 @@ private slots:
 
 private:
   void setState(State state);
+  void startConfigurationSequence();
+  void sendLaunchOrAttach();
 
   QString m_id;
   State m_state;
