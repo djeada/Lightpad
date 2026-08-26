@@ -1,6 +1,7 @@
 #include "sourcecontrolpanel.h"
 #include "../dialogs/gitdiffdialog.h"
 #include "../dialogs/gitinitdialog.h"
+#include "../dialogs/gitlogdialog.h"
 #include "../dialogs/gitrebasedialog.h"
 #include "../dialogs/gitremotedialog.h"
 #include "../dialogs/gitstashdialog.h"
@@ -569,6 +570,31 @@ void SourceControlPanel::setupRepoUI() {
 
   historyHeaderLayout->addStretch();
 
+  m_historyGraphBtn = new QPushButton(tr("🌱 Graph"), m_historyHeader);
+  m_historyGraphBtn->setToolTip(tr("Open the commit graph view"));
+  m_historyGraphBtn->setVisible(false);
+  historyHeaderLayout->addWidget(m_historyGraphBtn);
+  connect(m_historyGraphBtn, &QPushButton::clicked, [this]() {
+    if (!m_git || !m_git->isValidRepository()) {
+      return;
+    }
+    GitLogDialog logDialog(m_git, m_theme, this);
+    connect(
+        &logDialog, &GitLogDialog::viewCommitDiff, [this](const QString &hash) {
+          QString diff = m_git->getCommitDiff(hash);
+          GitCommitInfo info = m_git->getCommitDetails(hash);
+          GitDiffDialog *diffDialog =
+              new GitDiffDialog(m_git, hash, GitDiffDialog::DiffTarget::Commit,
+                                false, m_theme, this);
+          diffDialog->setDiffText(diff);
+          diffDialog->setCommitInfo(info.author, info.date, info.subject);
+          diffDialog->setAttribute(Qt::WA_DeleteOnClose);
+          diffDialog->show();
+        });
+    logDialog.exec();
+    refresh();
+  });
+
   m_historyRebaseBtn = new QPushButton(tr("🔀 Rebase"), m_historyHeader);
   m_historyRebaseBtn->setToolTip(tr("Open interactive rebase dialog"));
   m_historyRebaseBtn->setVisible(false);
@@ -605,6 +631,7 @@ void SourceControlPanel::setupRepoUI() {
     m_historyTree->setVisible(m_historyExpanded);
     m_historySearchEdit->setVisible(m_historyExpanded);
     m_historyRebaseBtn->setVisible(m_historyExpanded);
+    m_historyGraphBtn->setVisible(m_historyExpanded);
     if (m_historyExpanded) {
       updateHistory();
     }

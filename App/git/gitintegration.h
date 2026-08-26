@@ -6,6 +6,7 @@
 #include <QProcess>
 #include <QString>
 #include <QStringList>
+#include <functional>
 
 constexpr int GIT_COMMAND_TIMEOUT_MS = 5000;
 
@@ -112,6 +113,13 @@ struct GitReflogEntry {
   QString relativeDate;
 };
 
+struct GitRefDecoration {
+  enum class Kind { LocalBranch, RemoteBranch, Tag };
+  Kind kind = Kind::LocalBranch;
+  QString name;
+  bool isHead = false;
+};
+
 class GitIntegration : public QObject {
   Q_OBJECT
 
@@ -170,6 +178,19 @@ public:
 
   QList<GitCommitInfo> getCommitLog(int maxCount = 50,
                                     const QString &branch = QString()) const;
+
+  QList<GitCommitInfo> getCommitLogPage(const QString &branch, int skip,
+                                        int limit) const;
+
+  QMap<QString, QList<GitRefDecoration>> getCommitRefsMap() const;
+
+  void getCommitLogPageAsync(
+      const QString &branch, int skip, int limit,
+      const std::function<void(QList<GitCommitInfo>)> &callback);
+
+  void getCommitRefsMapAsync(
+      const std::function<void(QMap<QString, QList<GitRefDecoration>>)>
+          &callback);
 
   GitCommitInfo getCommitDetails(const QString &commitHash) const;
 
@@ -327,6 +348,8 @@ private:
                                   bool *success = nullptr) const;
 
   QList<GitFileInfo> parseStatusOutput(const QString &output) const;
+
+  QList<GitCommitInfo> parseCommitLogOutput(const QString &output) const;
 
   GitFileStatus parseStatusChar(QChar c) const;
 

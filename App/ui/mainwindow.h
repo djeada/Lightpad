@@ -395,6 +395,14 @@ private:
                                          const QString &currentFilePath,
                                          DebugConfiguration *resolvedConfig,
                                          QString *errorMessage);
+  bool runPreLaunchTask(const QString &taskCommand, QString *errorMessage);
+  bool buildCMakeDebugTarget(DebugConfiguration *resolvedConfig,
+                             const QString &currentFilePath,
+                             QString *errorMessage);
+  bool runBuildProcessWithProgress(const QString &title,
+                                   const QStringList &command,
+                                   const QString &workingDirectory,
+                                   QString *output, QString *errorMessage);
   bool startDebugConfigurationByName(const QString &configurationName);
   bool startCompoundDebugConfigurationByName(const QString &compoundName);
   void startDebuggingForCurrentFile();

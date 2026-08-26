@@ -22,8 +22,8 @@ GitLogDialog::GitLogDialog(GitIntegration *git, const Theme &theme,
                            QWidget *parent)
     : StyledDialog(parent), m_git(git), m_theme(theme) {
   setWindowTitle(tr("Git Log"));
-  setMinimumSize(700, 450);
-  resize(850, 550);
+  setMinimumSize(760, 480);
+  resize(900, 580);
   buildUi();
   applyTheme(theme);
   loadCommits();
@@ -50,7 +50,7 @@ void GitLogDialog::buildUi() {
   mainLayout->setSpacing(6);
 
   m_searchField = new QLineEdit(this);
-  m_searchField->setPlaceholderText(tr("Filter commits..."));
+  m_searchField->setPlaceholderText(tr("Filter by subject, author or hash…"));
   m_searchField->setClearButtonEnabled(true);
   connect(m_searchField, &QLineEdit::textChanged, this,
           &GitLogDialog::onSearchChanged);
@@ -58,11 +58,39 @@ void GitLogDialog::buildUi() {
 
   m_tabWidget = new QTabWidget(this);
 
+  auto *graphTab = new QWidget(this);
+  auto *graphLayout = new QVBoxLayout(graphTab);
+  graphLayout->setContentsMargins(0, 0, 0, 0);
+
+  m_graphWidget = new GitGraphWidget(m_git, m_theme, graphTab);
+  connect(m_graphWidget, &GitGraphWidget::commitSelected, this,
+          &GitLogDialog::onGraphCommitSelected);
+  connect(m_graphWidget, &GitGraphWidget::commitDoubleClicked, this,
+          [this](const QString &hash) { emit viewCommitDiff(hash); });
+  connect(m_graphWidget, &GitGraphWidget::commitsAppended, this,
+          [this](int totalLoaded) {
+            m_statusLabel->setText(tr("%1 commits loaded").arg(totalLoaded));
+          });
+  connect(m_graphWidget, &GitGraphWidget::contextMenuRequested, this,
+          &GitLogDialog::onGraphContextMenu);
+
+  auto *graphSplitter = new QSplitter(Qt::Vertical, graphTab);
+  graphSplitter->addWidget(m_graphWidget);
+
+  m_detailView = new QTextEdit(graphTab);
+  m_detailView->setReadOnly(true);
+  m_splitter = graphSplitter;
+  graphSplitter->addWidget(m_detailView);
+  graphSplitter->setStretchFactor(0, 3);
+  graphSplitter->setStretchFactor(1, 1);
+  m_commitTree = nullptr;
+
+  graphLayout->addWidget(graphSplitter);
+  m_tabWidget->addTab(graphTab, tr("Graph"));
+
   auto *listTab = new QWidget(this);
   auto *listLayout = new QVBoxLayout(listTab);
   listLayout->setContentsMargins(0, 0, 0, 0);
-
-  m_splitter = new QSplitter(Qt::Vertical, listTab);
 
   m_commitTree = new QTreeWidget(listTab);
   m_commitTree->setHeaderLabels(
@@ -91,28 +119,15 @@ void GitLogDialog::buildUi() {
             }
           });
 
-  m_splitter->addWidget(m_commitTree);
-
-  m_detailView = new QTextEdit(listTab);
-  m_detailView->setReadOnly(true);
-  m_splitter->addWidget(m_detailView);
-
-  m_splitter->setStretchFactor(0, 3);
-  m_splitter->setStretchFactor(1, 1);
-  listLayout->addWidget(m_splitter);
-
+  listLayout->addWidget(m_commitTree);
   m_tabWidget->addTab(listTab, tr("List"));
-
-  m_graphWidget = new GitGraphWidget(m_git, m_theme, this);
-  connect(m_graphWidget, &GitGraphWidget::commitSelected, this,
-          &GitLogDialog::onGraphCommitSelected);
-  connect(m_graphWidget, &GitGraphWidget::commitDoubleClicked, this,
-          [this](const QString &hash) { emit viewCommitDiff(hash); });
-  m_tabWidget->addTab(m_graphWidget, tr("Graph"));
+  m_tabWidget->setCurrentIndex(0);
 
   mainLayout->addWidget(m_tabWidget);
 
   m_statusLabel = new QLabel(this);
+  m_statusLabel->setStyleSheet(
+      QStringLiteral("color: palette(mid); font-size: 11px;"));
   mainLayout->addWidget(m_statusLabel);
 }
 
@@ -130,7 +145,9 @@ void GitLogDialog::applyTheme(const Theme &theme) {
 }
 
 void GitLogDialog::loadCommits() {
-  m_commitTree->clear();
+  if (m_commitTree) {
+    m_commitTree->clear();
+  }
 
   if (!m_git || !m_git->isValidRepository()) {
     m_statusLabel->setText(tr("No valid repository"));
@@ -138,10 +155,10 @@ void GitLogDialog::loadCommits() {
   }
 
   QList<GitCommitInfo> commits;
-  if (m_filePath.isEmpty()) {
-    commits = m_git->getCommitLog(100);
-  } else {
+  if (!m_filePath.isEmpty()) {
     commits = m_git->getCommitLog(100, m_filePath);
+  } else {
+    commits = m_git->getCommitLog(100);
   }
 
   for (const GitCommitInfo &commit : commits) {
@@ -154,68 +171,132 @@ void GitLogDialog::loadCommits() {
     item->setToolTip(1, commit.subject);
   }
 
-  m_graphWidget->loadGraph(200);
+  m_graphWidget->loadGraph(200, m_filePath);
 
   m_statusLabel->setText(tr("%1 commits").arg(commits.size()));
 }
 
-void GitLogDialog::onCommitSelected(QTreeWidgetItem *current,
-                                    QTreeWidgetItem *) {
-  if (!current || !m_git)
+void GitLogDialog::showCommitDetails(const QString &hash) {
+  if (!m_git || hash.isEmpty()) {
     return;
+  }
 
-  QString hash = current->data(0, Qt::UserRole).toString();
   GitCommitInfo details = m_git->getCommitDetails(hash);
 
-  QString html =
-      QString("<b>Commit:</b> %1<br>"
-              "<b>Author:</b> %2 &lt;%3&gt;<br>"
-              "<b>Date:</b> %4<br><br>"
-              "<b>%5</b>")
-          .arg(details.hash.left(12), details.author, details.authorEmail,
-               details.date, details.subject.toHtmlEscaped());
+  QString html = QStringLiteral("<table width=\"100%\" cellspacing=\"0\">");
+  html +=
+      QStringLiteral("<tr><td><b>Commit</b></td><td><code>%1</code></td></tr>")
+          .arg(details.hash.left(12).toHtmlEscaped());
+  html +=
+      QStringLiteral("<tr><td><b>Author</b></td><td>%1 &lt;%2&gt;</td></tr>")
+          .arg(details.author.toHtmlEscaped(),
+               details.authorEmail.toHtmlEscaped());
+  html += QStringLiteral("<tr><td><b>Date</b></td><td>%1 (%2)</td></tr>")
+              .arg(details.date.toHtmlEscaped(),
+                   details.relativeDate.toHtmlEscaped());
 
-  if (!details.body.isEmpty()) {
-    html += "<br><pre>" + details.body.toHtmlEscaped() + "</pre>";
+  const QStringList refs = m_git->getCommitRefs(hash);
+  if (!refs.isEmpty()) {
+    html += QStringLiteral("<tr><td><b>Refs</b></td><td>%1</td></tr>")
+                .arg(refs.join(QStringLiteral(", ")).toHtmlEscaped());
+  }
+  html += QLatin1String("</table>");
+
+  html += QStringLiteral("<br><b>%1</b>").arg(details.subject.toHtmlEscaped());
+
+  if (!details.body.trimmed().isEmpty()) {
+    html += QStringLiteral("<br><pre style=\"margin-top:4px;\">%1</pre>")
+                .arg(details.body.toHtmlEscaped());
+  }
+
+  const QList<GitCommitFileStat> stats = m_git->getCommitFileStats(hash);
+  if (!stats.isEmpty()) {
+    html +=
+        QStringLiteral("<br><b>%1 changed %2</b><ul style=\"margin-top:2px;\">")
+            .arg(stats.size())
+            .arg(stats.size() == 1 ? tr("file") : tr("files"));
+    int shown = 0;
+    for (const GitCommitFileStat &stat : stats) {
+      if (++shown > 50) {
+        html += QStringLiteral("<li>… +%1 more</li>").arg(stats.size() - 50);
+        break;
+      }
+      html += QStringLiteral("<li><code>%1</code>&nbsp;&nbsp;"
+                             "<span style=\"color:#3fb950;\">+%2</span> "
+                             "<span style=\"color:#f85149;\">−%3</span></li>")
+                  .arg(stat.filePath.toHtmlEscaped())
+                  .arg(stat.additions)
+                  .arg(stat.deletions);
+    }
+    html += QLatin1String("</ul>");
   }
 
   m_detailView->setHtml(html);
 }
 
-void GitLogDialog::onSearchChanged(const QString &text) {
+void GitLogDialog::selectInList(const QString &hash, bool reveal) {
+  if (!m_commitTree || m_syncingSelection) {
+    return;
+  }
+
   for (int i = 0; i < m_commitTree->topLevelItemCount(); ++i) {
     QTreeWidgetItem *item = m_commitTree->topLevelItem(i);
-    bool matches = text.isEmpty();
-    if (!matches) {
-      for (int col = 0; col < 4; ++col) {
-        if (item->text(col).contains(text, Qt::CaseInsensitive)) {
-          matches = true;
-          break;
-        }
+    if (item->data(0, Qt::UserRole).toString() == hash) {
+      m_syncingSelection = true;
+      m_commitTree->setCurrentItem(item);
+      if (reveal) {
+        m_commitTree->scrollToItem(item);
       }
+      m_syncingSelection = false;
+      return;
     }
-    item->setHidden(!matches);
   }
+}
+
+void GitLogDialog::onCommitSelected(QTreeWidgetItem *current,
+                                    QTreeWidgetItem *) {
+  if (!current || !m_git || m_syncingSelection) {
+    return;
+  }
+
+  const QString hash = current->data(0, Qt::UserRole).toString();
+
+  m_syncingSelection = true;
+  m_graphWidget->selectCommit(hash);
+  m_syncingSelection = false;
+
+  showCommitDetails(hash);
 }
 
 void GitLogDialog::onGraphCommitSelected(const QString &hash) {
-  if (!m_git)
-    return;
+  selectInList(hash);
+  showCommitDetails(hash);
+}
 
-  GitCommitInfo details = m_git->getCommitDetails(hash);
-  QString html =
-      QString("<b>Commit:</b> %1<br>"
-              "<b>Author:</b> %2 &lt;%3&gt;<br>"
-              "<b>Date:</b> %4<br><br>"
-              "<b>%5</b>")
-          .arg(details.hash.left(12), details.author, details.authorEmail,
-               details.date, details.subject.toHtmlEscaped());
+void GitLogDialog::onSearchChanged(const QString &text) {
 
-  if (!details.body.isEmpty()) {
-    html += "<br><pre>" + details.body.toHtmlEscaped() + "</pre>";
+  if (m_commitTree) {
+    for (int i = 0; i < m_commitTree->topLevelItemCount(); ++i) {
+      QTreeWidgetItem *item = m_commitTree->topLevelItem(i);
+      bool matches = text.isEmpty();
+      if (!matches) {
+        for (int col = 0; col < 4; ++col) {
+          if (item->text(col).contains(text, Qt::CaseInsensitive)) {
+            matches = true;
+            break;
+          }
+        }
+      }
+      item->setHidden(!matches);
+    }
   }
 
-  m_detailView->setHtml(html);
+  m_graphWidget->setFilter(text);
+}
+
+void GitLogDialog::onGraphContextMenu(const QString &hash,
+                                      const QPoint &globalPos) {
+  showContextMenuForCommit(hash, globalPos);
 }
 
 void GitLogDialog::showContextMenuForCommit(const QString &hash,

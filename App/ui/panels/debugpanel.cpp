@@ -1121,6 +1121,8 @@ void DebugPanel::setupConsole() {
   m_consoleOutput->setPlaceholderText(tr("Debug console output..."));
 
   m_consoleInput = new QLineEdit(this);
+  m_consoleInput->setPlaceholderText(
+      tr("Evaluate an expression while paused…"));
   m_consoleInput->setObjectName("debugConsoleInput");
   m_consoleInput->setFont(fixedFont);
   m_consoleInput->setPlaceholderText(tr("Evaluate expression..."));
@@ -1273,6 +1275,12 @@ void DebugPanel::setDapClient(DapClient *client) {
             &DebugPanel::onEvaluateResult);
     connect(m_dapClient, &DapClient::evaluateResponseError, this,
             &DebugPanel::onEvaluateError);
+    connect(m_dapClient, &DapClient::exceptionInfoReceived, this,
+            &DebugPanel::onExceptionInfoReceived);
+    connect(m_dapClient, &DapClient::exited, this, [this](int exitCode) {
+      appendConsoleLine(tr("Program exited with code %1.").arg(exitCode),
+                        consoleMutedColor());
+    });
 
     WatchManager::instance().setDapClient(m_dapClient);
 
@@ -1372,7 +1380,18 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
     reasonText = tr("Step completed");
     break;
   case DapStoppedReason::Exception:
-    reasonText = tr("Exception: %1").arg(event.description);
+    if (!event.description.isEmpty()) {
+      reasonText = tr("Exception: %1").arg(event.description);
+    } else if (!event.text.isEmpty()) {
+      reasonText = tr("Exception: %1").arg(event.text);
+    } else if (!event.rawReason.isEmpty() &&
+               event.rawReason.compare("exception", Qt::CaseInsensitive) != 0) {
+
+      reasonText =
+          tr("Program halted by signal (%1)").arg(event.rawReason.toUpper());
+    } else {
+      reasonText = tr("Exception");
+    }
     break;
   case DapStoppedReason::Pause:
     reasonText = tr("Paused");
@@ -1381,10 +1400,20 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
     reasonText = tr("Entry point");
     break;
   default:
-    reasonText = tr("Stopped");
+    reasonText = event.description.isEmpty()
+                     ? tr("Stopped")
+                     : tr("Stopped: %1").arg(event.description);
   }
 
   appendConsoleLine(reasonText, consoleInfoColor());
+
+  if (event.reason == DapStoppedReason::Exception && m_dapClient &&
+      !m_dapClient->supportsExceptionInfoRequest()) {
+    appendConsoleLine(
+        tr("The debug adapter does not provide exception details; check the "
+           "adapter output above for the signal or error report."),
+        consoleMutedColor());
+  }
 
   m_variablesTree->clear();
   m_variableRefToItem.clear();
@@ -1873,6 +1902,51 @@ void DebugPanel::onOutputReceived(const DapOutputEvent &event) {
   appendConsoleLine(event.output, color);
 }
 
+void DebugPanel::onExceptionInfoReceived(int threadId,
+                                         const DapExceptionInfo &info) {
+  if (m_currentThreadId > 0 && threadId > 0 && threadId != m_currentThreadId) {
+    return;
+  }
+
+  QString title = info.exceptionId;
+
+  const int noteIndex = title.indexOf(QStringLiteral(" (note:"));
+  if (noteIndex > 0) {
+    title.truncate(noteIndex);
+  }
+  appendConsoleLine(QString("%1: %2").arg(title, info.details.message.isEmpty()
+                                                     ? info.description
+                                                     : info.details.message),
+                    consoleErrorColor(), true);
+
+  const QString stackTrace = info.details.stackTrace.trimmed();
+  if (!stackTrace.isEmpty()) {
+    const QStringList lines = stackTrace.split('\n');
+    const int maxLines = 30;
+    for (int i = 0; i < lines.size() && i < maxLines; ++i) {
+      appendConsoleLine(lines[i], consoleErrorColor());
+    }
+    if (lines.size() > maxLines) {
+      appendConsoleLine(tr("… %1 more frames").arg(lines.size() - maxLines),
+                        consoleMutedColor());
+    }
+  }
+
+  for (const DapExceptionDetails &inner : info.details.innerExceptions) {
+    appendConsoleLine(
+        tr("Caused by %1: %2")
+            .arg(inner.typeName.isEmpty() ? tr("exception") : inner.typeName,
+                 inner.message),
+        consoleErrorColor());
+  }
+
+  if (!info.details.typeName.isEmpty() && !info.exceptionId.isEmpty() &&
+      info.details.typeName != info.exceptionId) {
+    appendConsoleLine(tr("Type: %1").arg(info.details.typeName),
+                      consoleMutedColor());
+  }
+}
+
 void DebugPanel::onCallStackItemClicked(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column);
   if (!item) {
@@ -2235,10 +2309,22 @@ void DebugPanel::updateToolbarState() {
       statusText = m_stepInProgress ? tr("Stepping") : tr("Running");
       statusKind = QStringLiteral("running");
       break;
-    case DapClient::State::Stopped:
-      statusText = tr("Paused");
+    case DapClient::State::Stopped: {
+
+      QString location;
+      for (const DapStackFrame &frame : m_stackFrames) {
+        if (!frame.source.name.isEmpty()) {
+          const QString fileName = frame.source.name;
+          location = tr("Paused at %1 · %2:%3")
+                         .arg(frame.name, fileName)
+                         .arg(frame.line);
+          break;
+        }
+      }
+      statusText = location.isEmpty() ? tr("Paused") : location;
       statusKind = QStringLiteral("paused");
       break;
+    }
     case DapClient::State::Error:
       statusText = tr("Debugger error");
       statusKind = QStringLiteral("error");

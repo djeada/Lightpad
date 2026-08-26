@@ -95,80 +95,71 @@ Implemented:
 - `exited`
 - `terminated`
 
-## 6) Main gaps / risks
+## 6) Main gaps / risks (status as of this update)
 
-### 6.1 Protocol framing bug (high impact)
+### 6.1 Protocol framing bug — FIXED
 
-`Content-Length` is byte-based in DAP, but parsing is currently done on `QString` character indices.  
-This can break parsing for non-ASCII payloads.
+Parsing is byte-based on `QByteArray` with buffer/message caps (`App/dap/dapclient.cpp`,
+`handleAdapterData`). Covered by `testDapClientFramingHandlesUtf8AndChunkedDelivery`
+(UTF-8 payloads, chunked delivery).
 
-Files:
-- `App/dap/dapclient.cpp` (buffering/parsing logic around `onReadyReadStandardOutput`)
+### 6.2 `runInTerminal` — IMPLEMENTED
 
-### 6.2 `runInTerminal` advertised but not truly implemented
+Reverse requests spawn the command in an integrated terminal tab
+(`App/ui/mainwindow.cpp`) and reply with the real pid. Note: the requested terminal
+`kind` is currently ignored (integrated is always used).
 
-Client reports support in `initialize`, but reverse `runInTerminal` requests are only acknowledged and not actually launched.
+### 6.3 Adapter-specific launch/attach arguments — FORWARDED
 
-Files:
-- `App/dap/dapclient.cpp` (`doInitialize`, `handleReverseRequest`)
+`DebugSession` sends adapter-built launch/attach arguments which merge all of
+`DebugConfiguration::adapterConfig` over adapter defaults.
 
-### 6.3 Adapter-specific launch/attach arguments are not forwarded
+### 6.4 Detach vs stop conflict — FIXED
 
-`DebugConfiguration` stores adapter-specific fields (`adapterConfig`), but `DebugSession` only forwards a fixed subset to DAP `launch`/`attach`.
+A single `disconnect{terminateDebuggee}` is sent; no second forced terminate.
+`stop()` now also grants a short drain window so the disconnect is not truncated.
 
-Files:
-- `App/dap/debugconfiguration.h`
-- `App/dap/debugsession.cpp`
+### 6.5 Restart fallback path — COMPLETE
 
-### 6.4 Detach behavior can conflict with stop flow
+Non-restart-capable adapters are relaunched by capturing and restarting the adapter
+program (stdio) or reconnecting (socket).
 
-`stop(false)` calls `disconnect(false)`, then `DapClient::stop()` may also send `disconnect` with `terminateDebuggee=true`, which can violate detach intent.
+### 6.6 Capability gating — IMPLEMENTED
 
-Files:
-- `App/dap/debugsession.cpp`
-- `App/dap/dapclient.cpp`
+- `configurationDone`: skipped only when the capability is explicitly `false`
+  (lenient default for older adapters).
+- `terminate`: falls back to `disconnect(terminateDebuggee=true)` unless
+  `supportsTerminateRequest` is advertised.
+- `setVariable`: gated on `supportsSetVariable` (lenient default).
+- The client no longer advertises unimplemented client capabilities:
+  `supportsMemoryReferences` and `supportsProgressReporting` were removed from
+  `initialize`.
 
-### 6.5 Restart fallback path is incomplete
+## 7) Newly supported protocol areas
 
-If adapter does not support `restart`, code issues `disconnect(true)` and comments that reconnect will happen, but reconnect logic is missing.
+- `exceptionInfo` request/response parsing, auto-requested on exception stops by
+  `DebugSession`, surfaced in the debug console (traceback, inner exceptions,
+  type name). Gated on `supportsExceptionInfoRequest`.
+- Socket transport: `DapClient::startSocket(host, port)` attaches to adapters
+  already listening over TCP (e.g. debugpy/codelldb server mode). Connection loss
+  maps to session termination.
+- `${command:pickProcess}` placeholder resolution via the process picker dialog
+  (`App/ui/dialogs/processpickerdialog.*`), wired into
+  `MainWindow::prepareDebugConfigurationForStart`.
+- A scripted fake DAP adapter (`tests/unit/fakedapadapter_main.cpp`) provides full
+  protocol round-trip tests: initialize → launch → threads/stack/scopes/variables/
+  evaluate/setVariable/exceptionInfo → disconnect, plus capability-gating assertions
+  via a request trace file.
 
-File:
-- `App/dap/dapclient.cpp`
+## 8) Still missing (not required for basic debugging)
 
-### 6.6 Capability gating is partial
+- `setInstructionBreakpoints`, `gotoTargets`/`goto`, `stepBack`/`reverseContinue`,
+  completions in the debug console, `dataBreakpointInfo` UI, memory read/write UI,
+  disassembly view, modules request, progress/cancel UI.
 
-Some requests are gated by capabilities (`configurationDone`, `restart`), others are not consistently gated (`setVariable`, `setFunctionBreakpoints`, `terminate`, etc.).
+## 9) Recommended next steps
 
-File:
-- `App/dap/dapclient.cpp`
-
-## 7) Missing protocol areas (not currently implemented)
-
-Not seen in current client:
-
-- `setInstructionBreakpoints`
-- `gotoTargets` / `goto`
-- `stepBack`, `reverseContinue`
-- `completions`
-- `exceptionInfo`
-- `dataBreakpointInfo`
-- Memory requests (`readMemory`, `writeMemory`)
-- Disassembly requests
-- Loaded sources/modules requests
-- Progress/cancel handling (`progressStart`/`progressUpdate`/`progressEnd`, `cancel`)
-
-Note: Not all are required for a functional debugger, but they improve compatibility and advanced debugging workflows.
-
-## 8) Recommended priority order
-
-1. Fix byte-correct DAP framing/parsing in `DapClient`.
-2. Implement real `runInTerminal` handling (or stop advertising support).
-3. Forward adapter-specific launch/attach arguments from `DebugConfiguration::adapterConfig`.
-4. Fix detach vs terminate semantics in stop/disconnect flow.
-5. Complete manual restart fallback path.
-6. Add systematic capability-based request gating.
-
-## 9) Short conclusion
-
-Lightpad has a solid base DAP integration with good support for core debugging workflows (launch/attach, breakpoints, stepping, stack/variables, watches, console).  
-The main work left is protocol correctness and interoperability hardening, especially around framing, reverse requests, and adapter-specific configuration flow.
+1. Inline variable values in the editor during stops.
+2. Debug-console completions via the `completions` request.
+3. Data-breakpoint creation UI (manager/persistence already exist).
+4. External-terminal `kind` support in `runInTerminal`.

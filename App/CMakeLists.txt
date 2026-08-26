@@ -4,8 +4,10 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Network)
 find_package(Qt6 QUIET COMPONENTS Pdf PdfWidgets WebEngineWidgets)
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/build)
 
 option(ENABLE_PDF_SUPPORT "Enable PDF viewer support (requires Qt6Pdf)" ON)
 
@@ -98,6 +100,8 @@ set(project_headers
     ui/dialogs/gitfilehistorydialog.h
     ui/dialogs/gitrebasedialog.h
     ui/dialogs/gitworkbenchdialog.h
+    ui/dialogs/processpickerdialog.h
+    ui/dialogs/cmaketargetpickerdialog.h
     ui/widgets/gitgraphwidget.h
     ui/widgets/notificationwidget.h
     ui/widgets/pythonenvironmentwidget.h
@@ -123,6 +127,7 @@ set(project_headers
     ui/panels/spliteditorcontainer.h
     ui/panels/testpanel.h
     core/async/asyncworker.h
+    build/cmakeproject.h
     core/document.h
     core/formatter.h
     core/io/filemanager.h
@@ -271,6 +276,8 @@ set(project_sources
     ui/dialogs/gitfilehistorydialog.cpp
     ui/dialogs/gitrebasedialog.cpp
     ui/dialogs/gitworkbenchdialog.cpp
+    ui/dialogs/processpickerdialog.cpp
+    ui/dialogs/cmaketargetpickerdialog.cpp
     ui/widgets/gitgraphwidget.cpp
     ui/widgets/notificationwidget.cpp
     ui/widgets/pythonenvironmentwidget.cpp
@@ -296,6 +303,7 @@ set(project_sources
     ui/panels/spliteditorcontainer.cpp
     ui/panels/testpanel.cpp
     core/async/asyncworker.cpp
+    build/cmakeproject.cpp
     core/document.cpp
     core/formatter.cpp
     core/io/filemanager.cpp
@@ -400,11 +408,12 @@ if(APPLE)
   set_target_properties(Lightpad PROPERTIES MACOSX_BUNDLE TRUE)
 endif()
 
-target_link_libraries(Lightpad 
-    PRIVATE 
+target_link_libraries(Lightpad
+    PRIVATE
     Qt6::Core
     Qt6::Gui
-    Qt6::Widgets)
+    Qt6::Widgets
+    Qt6::Network)
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(Lightpad PRIVATE util)

@@ -35,12 +35,15 @@ private slots:
   void onCommitSelected(QTreeWidgetItem *current, QTreeWidgetItem *previous);
   void onGraphCommitSelected(const QString &hash);
   void onSearchChanged(const QString &text);
+  void onGraphContextMenu(const QString &hash, const QPoint &globalPos);
 
 private:
   void buildUi();
   void applyTheme(const Theme &theme) override;
   void loadCommits();
   void showContextMenuForCommit(const QString &hash, const QPoint &pos);
+  void showCommitDetails(const QString &hash);
+  void selectInList(const QString &hash, bool reveal = true);
 
   GitIntegration *m_git;
   QString m_filePath;
@@ -53,6 +56,7 @@ private:
   QTextEdit *m_detailView;
   GitGraphWidget *m_graphWidget;
   QLabel *m_statusLabel;
+  bool m_syncingSelection = false;
 };
 
 #endif

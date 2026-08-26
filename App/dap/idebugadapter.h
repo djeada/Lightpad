@@ -97,6 +97,8 @@ public:
                                  Qt::CaseInsensitive) == 0;
   }
 
+  virtual bool launchesBeforeInitialized() const { return false; }
+
   virtual QJsonObject
   createLaunchConfig(const QString &filePath,
                      const QString &workingDir = {}) const = 0;
