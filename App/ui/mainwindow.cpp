@@ -242,6 +242,12 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->menuView, &QMenu::aboutToShow, this,
             &MainWindow::syncViewToggleActionStates);
   }
+  for (QMenu *menu : {ui->menuRun, ui->menuDebug}) {
+    if (menu) {
+      connect(menu, &QMenu::aboutToShow, this,
+              &MainWindow::refreshRunAndDebugActionLabels);
+    }
+  }
   if (ui->testButton) {
     connect(ui->testButton, &QToolButton::clicked, this,
             &MainWindow::runTestsForCurrentContext);
@@ -1529,27 +1535,45 @@ QString MainWindow::resolveProjectRootForPath(const QString &path) const {
     return QString();
   }
 
+  const QString homePath = QDir::cleanPath(QDir::homePath());
+
   QDir dir(startDirPath);
   QString outermostLightpadRoot;
+  QString innermostBuildRoot;
 
   while (dir.exists()) {
+    const QString current = QDir::cleanPath(dir.absolutePath());
+    // The home directory is where stray dot-directories accumulate; adopting
+    // it as a project root spills .lightpad state across every unrelated file
+    // opened from it, so stop the marker search there.
+    const bool atHome = current == homePath;
+
     QFileInfo gitInfo(dir.filePath(".git"));
-    if (gitInfo.exists()) {
-      return QDir::cleanPath(dir.absolutePath());
+    if (gitInfo.exists() && !atHome) {
+      return current;
+    }
+
+    if (innermostBuildRoot.isEmpty() && !atHome &&
+        QFileInfo::exists(dir.filePath("CMakeLists.txt"))) {
+      innermostBuildRoot = current;
     }
 
     QFileInfo lightpadInfo(dir.filePath(".lightpad"));
-    if (lightpadInfo.exists() && lightpadInfo.isDir()) {
-      outermostLightpadRoot = dir.absolutePath();
+    if (lightpadInfo.exists() && lightpadInfo.isDir() && !atHome) {
+      outermostLightpadRoot = current;
     }
 
-    if (!dir.cdUp()) {
+    if (atHome || !dir.cdUp()) {
       break;
     }
   }
 
   if (!outermostLightpadRoot.isEmpty()) {
-    return QDir::cleanPath(outermostLightpadRoot);
+    return outermostLightpadRoot;
+  }
+
+  if (!innermostBuildRoot.isEmpty()) {
+    return innermostBuildRoot;
   }
 
   return QDir::cleanPath(startDirPath);
@@ -2441,6 +2465,26 @@ void MainWindow::recheckOpenFilesForExternalChanges() {
   }
 }
 
+bool MainWindow::isOpenFileModified(const QString &filePath) const {
+  const QString normalizedPath = QDir::cleanPath(filePath);
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    if (!tabWidget) {
+      continue;
+    }
+    for (int i = 0; i < tabWidget->count(); ++i) {
+      if (QDir::cleanPath(tabWidget->getFilePath(i)) != normalizedPath) {
+        continue;
+      }
+      LightpadPage *page = tabWidget->getPage(i);
+      TextArea *area = page ? page->getTextArea() : nullptr;
+      if (area && area->document() && area->document()->isModified()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool MainWindow::handleExternalModification(const QString &filePath,
                                             bool allowOverwrite) {
   const QString normalizedPath = QDir::cleanPath(filePath);
@@ -2449,8 +2493,20 @@ bool MainWindow::handleExternalModification(const QString &filePath,
     return false;
   }
 
-  m_externalChangePrompts.insert(normalizedPath);
   const QString fileName = QFileInfo(normalizedPath).fileName();
+
+  // Nothing is at stake when the buffer has no unsaved edits: the editor holds
+  // a stale copy and the only useful answer is to reload. Asking anyway - with
+  // "Overwrite" among the choices - invites the user to push the stale text
+  // back over whatever just changed on disk.
+  if (allowOverwrite && !isOpenFileModified(normalizedPath)) {
+    reloadOpenFileFromDisk(normalizedPath);
+    statusBar()->showMessage(
+        tr("%1 changed on disk and was reloaded.").arg(fileName), 5000);
+    return false;
+  }
+
+  m_externalChangePrompts.insert(normalizedPath);
   ThemedMessageBox msgBox(this);
   msgBox.setWindowTitle(tr("File Changed on Disk"));
   msgBox.setIcon(ThemedMessageBox::Warning);
@@ -2458,11 +2514,12 @@ bool MainWindow::handleExternalModification(const QString &filePath,
       tr("<b>%1</b> has been modified by another program.").arg(fileName));
   msgBox.setInformativeText(
       allowOverwrite
-          ? tr("Choose Yes to overwrite the disk file with the editor "
-               "contents, No to reload the disk version, or Cancel to decide "
-               "later.")
-          : tr("Choose Yes to overwrite the disk file, No to reload the disk "
-               "version, or Cancel to stop saving."));
+          ? tr("You have unsaved changes. Choose Reload from Disk to discard "
+               "them and take the new file, Overwrite to replace the disk file "
+               "with the editor contents, or Cancel to decide later.")
+          : tr("Choose Reload from Disk to take the new file, Overwrite to "
+               "replace it with the editor contents, or Cancel to stop "
+               "saving."));
   msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No |
                             ThemedMessageBox::Cancel);
   msgBox.setButtonText(ThemedMessageBox::Yes, tr("Overwrite"));
@@ -2915,7 +2972,22 @@ void MainWindow::showTerminal() {
     }
   }
 
+  QString cmakeProgram;
+  QString cmakeError;
+  if (!resolveCMakeRunTarget(filePath, languageId, assignedTemplateId,
+                             &cmakeProgram, &cmakeError)) {
+    showBuildFailure(tr("Build Failed"),
+                     tr("Unable to build a runnable target for this file."),
+                     tr("The build has to succeed before the program can run."),
+                     cmakeError);
+    return;
+  }
+
   showTerminalPanel();
+
+  if (!cmakeProgram.isEmpty()) {
+    command = qMakePair(cmakeProgram, QStringList());
+  }
 
   if (command.first.isEmpty()) {
     terminalWidget->runFile(filePath, languageId);
@@ -2923,6 +2995,11 @@ void MainWindow::showTerminal() {
   }
 
   QString workingDirectory = manager.getWorkingDirectory(filePath, languageId);
+  if (!cmakeProgram.isEmpty()) {
+    // Run beside the binary so relative paths resolve the way they do when
+    // the program is launched from its build directory.
+    workingDirectory = QFileInfo(cmakeProgram).absolutePath();
+  }
   QMap<QString, QString> customEnv =
       manager.getEnvironment(filePath, languageId);
 
@@ -3497,6 +3574,14 @@ void MainWindow::ensureDebugPanel() {
   tabifyBottomDock(debugDock);
   trackDockLayoutChanges(debugDock);
   debugDock->hide();
+
+  // The transport actions live on the panel, which starts hidden - a hidden
+  // widget's shortcuts never fire, so F5/F10/F11 would do nothing until the
+  // dock was opened. Register them on the window instead.
+  for (QAction *action : debugPanel->transportActions()) {
+    action->setShortcutContext(Qt::ApplicationShortcut);
+    addAction(action);
+  }
 
   connect(debugDock, &QDockWidget::visibilityChanged, this,
           [this](bool visible) {
@@ -5025,9 +5110,72 @@ void MainWindow::runCurrentScript() {
     showTerminal();
 }
 
+void MainWindow::showBuildFailure(const QString &title, const QString &text,
+                                  const QString &informativeText,
+                                  const QString &details) {
+  ThemedMessageBox msg(this);
+  msg.setIcon(ThemedMessageBox::Warning);
+  msg.setWindowTitle(title);
+  msg.setText(text);
+  msg.setInformativeText(informativeText);
+  msg.setDetailedText(details);
+  msg.exec();
+}
+
+void MainWindow::showDebugBuildFailure(const QString &details) {
+  showBuildFailure(
+      tr("Debug Build Failed"),
+      tr("Unable to prepare a debuggable target for this file."),
+      tr("The build has to succeed before the debugger can launch."), details);
+}
+
+// Run, like Debug, cannot treat a file inside a CMake project as a standalone
+// translation unit: it needs the project's include paths, generated sources
+// and link libraries. Build the owning executable target and report it in
+// `programPath`, which stays empty when this file is not such a case.
+bool MainWindow::resolveCMakeRunTarget(const QString &filePath,
+                                       const QString &languageId,
+                                       const QString &assignedTemplateId,
+                                       QString *programPath,
+                                       QString *errorMessage) {
+  if (programPath) {
+    programPath->clear();
+  }
+
+  // Only the built-in single-file and build-only templates are overridden; a
+  // template the user picked deliberately is left alone.
+  static const QSet<QString> overridableTemplates = {
+      QString(), "cpp_gcc", "cpp_clang",  "cpp_debug",
+      "c_gcc",   "c_clang", "cmake_build"};
+  if (!overridableTemplates.contains(assignedTemplateId)) {
+    return true;
+  }
+
+  const QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
+  const bool cppLike =
+      canonicalLanguageId == "cpp" || canonicalLanguageId == "c";
+  const bool isCMakeLists =
+      QFileInfo(filePath).fileName().compare(QStringLiteral("CMakeLists.txt"),
+                                             Qt::CaseInsensitive) == 0;
+  if (!cppLike && !isCMakeLists) {
+    return true;
+  }
+  if (cmakeRootForSource(filePath).isEmpty()) {
+    return true;
+  }
+
+  return buildCMakeExecutableForSource(filePath, QString(), QString(),
+                                       programPath, errorMessage);
+}
+
 bool MainWindow::prepareDebugTargetForFile(const QString &filePath,
                                            const QString &languageId,
-                                           QString *errorMessage) const {
+                                           QString *resolvedProgram,
+                                           QString *errorMessage) {
+  if (resolvedProgram) {
+    resolvedProgram->clear();
+  }
+
   const QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
   if (canonicalLanguageId != "cpp" && canonicalLanguageId != "c") {
     return true;
@@ -5041,6 +5189,23 @@ bool MainWindow::prepareDebugTargetForFile(const QString &filePath,
     return false;
   }
 
+  // A file that belongs to a CMake project cannot be compiled on its own: it
+  // needs the project's include paths, generated sources and link libraries.
+  // Build the owning executable target instead.
+  if (!cmakeRootForSource(filePath).isEmpty()) {
+    QString programPath;
+    if (!buildCMakeExecutableForSource(filePath, QString(), QString(),
+                                       &programPath, errorMessage)) {
+      return false;
+    }
+    if (!programPath.isEmpty()) {
+      if (resolvedProgram) {
+        *resolvedProgram = programPath;
+      }
+      return true;
+    }
+  }
+
   QString outputPath =
       sourceInfo.absolutePath() + "/" + sourceInfo.completeBaseName();
 #ifdef Q_OS_WIN
@@ -5050,12 +5215,15 @@ bool MainWindow::prepareDebugTargetForFile(const QString &filePath,
   QFileInfo outputInfo(outputPath);
   const bool needsBuild = !outputInfo.exists() ||
                           outputInfo.lastModified() < sourceInfo.lastModified();
-  if (!needsBuild) {
-    return true;
+  if (needsBuild && !compileSourceForDebug(filePath, canonicalLanguageId,
+                                           outputPath, errorMessage)) {
+    return false;
   }
 
-  return compileSourceForDebug(filePath, canonicalLanguageId, outputPath,
-                               errorMessage);
+  if (resolvedProgram) {
+    *resolvedProgram = outputPath;
+  }
+  return true;
 }
 
 bool MainWindow::compileSourceForDebug(const QString &filePath,
@@ -5175,19 +5343,16 @@ void MainWindow::startDebuggingForCurrentFile() {
 
   const QString languageId = effectiveLanguageIdForFile(filePath);
   QString prepareError;
-  if (!prepareDebugTargetForFile(filePath, languageId, &prepareError)) {
-    ThemedMessageBox msg(this);
-    msg.setIcon(ThemedMessageBox::Warning);
-    msg.setWindowTitle(tr("Debug Build Failed"));
-    msg.setText(tr("Unable to prepare a debuggable target for this file."));
-    msg.setInformativeText(prepareError);
-    msg.exec();
+  QString preparedProgram;
+  if (!prepareDebugTargetForFile(filePath, languageId, &preparedProgram,
+                                 &prepareError)) {
+    showDebugBuildFailure(prepareError);
     m_debugStartInProgress = false;
     return;
   }
 
-  QString sessionId =
-      DebugSessionManager::instance().quickStart(filePath, languageId);
+  QString sessionId = DebugSessionManager::instance().quickStart(
+      filePath, languageId, preparedProgram);
   if (sessionId.isEmpty()) {
     QString details = DebugSessionManager::instance().lastError();
     DebugConfiguration quickConfig =
@@ -5718,6 +5883,29 @@ void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
       });
 }
 
+void MainWindow::refreshRunAndDebugActionLabels() {
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  const QString fileName =
+      tabWidget ? tabWidget->tabText(tabWidget->currentIndex()) : QString();
+  updateRunAndDebugActionLabels(fileName);
+}
+
+void MainWindow::updateRunAndDebugActionLabels(const QString &fileName) {
+  const QString label = fileName.trimmed();
+  if (ui->actionRun_file_name) {
+    ui->actionRun_file_name->setText(label.isEmpty() ? tr("Run Current File")
+                                                     : tr("Run %1").arg(label));
+  }
+  if (ui->actionDebug_file_name) {
+    // The F5 shortcut is owned by the debug panel's start/continue action, so
+    // advertise it here through the menu's shortcut column rather than binding
+    // a second, conflicting sequence.
+    const QString debugLabel =
+        label.isEmpty() ? tr("Debug Current File") : tr("Debug %1").arg(label);
+    ui->actionDebug_file_name->setText(debugLabel + QLatin1String("\tF5"));
+  }
+}
+
 void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
                                         int index) {
   if (!tabWidget) {
@@ -5727,9 +5915,7 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
   auto text = tabWidget->tabText(index);
   setMainWindowTitle(text);
 
-  if (!ui->menuRun->actions().empty()) {
-    ui->menuRun->actions().front()->setText("Run " + text);
-  }
+  updateRunAndDebugActionLabels(text);
 
   QString filePath = tabWidget->getFilePath(index);
   if (!filePath.isEmpty()) {
@@ -6366,32 +6552,34 @@ bool MainWindow::runPreLaunchTask(const QString &taskCommand,
   return true;
 }
 
-bool MainWindow::buildCMakeDebugTarget(DebugConfiguration *resolvedConfig,
-                                       const QString &currentFilePath,
-                                       QString *errorMessage) {
-  if (!resolvedConfig) {
-    return false;
-  }
-  if (resolvedConfig->request.compare("attach", Qt::CaseInsensitive) == 0) {
-    return true;
-  }
-
-  const QString languageId = currentFilePath.isEmpty()
-                                 ? QString()
-                                 : effectiveLanguageIdForFile(currentFilePath);
-  const QString normalizedLanguageId = LanguageCatalog::normalize(languageId);
-  const bool cppLike =
-      normalizedLanguageId == "cpp" || normalizedLanguageId == "c";
-  if (!cppLike) {
-    return true;
-  }
-
+QString MainWindow::cmakeRootForSource(const QString &filePath) const {
   const QString searchRoot = m_projectRootPath.isEmpty()
-                                 ? QFileInfo(currentFilePath).absolutePath()
+                                 ? QFileInfo(filePath).absolutePath()
                                  : m_projectRootPath;
   const QString cmakeRoot = CMakeProject::findProjectRoot(searchRoot);
-  if (cmakeRoot.isEmpty()) {
+  if (!cmakeRoot.isEmpty()) {
+    return cmakeRoot;
+  }
 
+  // The open project root can sit outside the CMake tree that owns the file,
+  // for example when a single file was opened without a folder.
+  if (filePath.isEmpty()) {
+    return QString();
+  }
+  return CMakeProject::findProjectRoot(QFileInfo(filePath).absolutePath());
+}
+
+bool MainWindow::buildCMakeExecutableForSource(
+    const QString &filePath, const QString &configuredProgram,
+    const QString &configuredBinaryDir, QString *programPath,
+    QString *errorMessage) {
+  if (programPath) {
+    programPath->clear();
+  }
+
+  const QString cmakeRoot = cmakeRootForSource(filePath);
+  if (cmakeRoot.isEmpty()) {
+    // Not a CMake project: the caller falls back to its own build strategy.
     return true;
   }
 
@@ -6399,14 +6587,10 @@ bool MainWindow::buildCMakeDebugTarget(DebugConfiguration *resolvedConfig,
   const QList<CMakeTargetInfo> executables =
       project.parseExecutableTargets(cmakeRoot);
 
-  const QVariant configuredBinaryDir =
-      resolvedConfig->adapterConfig.value(QStringLiteral("cmakeBinaryDir"));
-  const QString binaryDir = CMakeProject::resolveBinaryDirectory(
-      cmakeRoot, configuredBinaryDir.toString());
+  const QString binaryDir =
+      CMakeProject::resolveBinaryDirectory(cmakeRoot, configuredBinaryDir);
 
-  const QString configuredProgram = resolvedConfig->program.trimmed();
   QString exePath;
-
   if (!executables.isEmpty()) {
     if (!configuredProgram.isEmpty()) {
       const QString programFile = QFileInfo(configuredProgram).fileName();
@@ -6416,6 +6600,19 @@ bool MainWindow::buildCMakeDebugTarget(DebugConfiguration *resolvedConfig,
         if (target.name == programFile || target.name == programStem) {
           exePath = CMakeProject::executablePathFor(target, binaryDir);
           break;
+        }
+      }
+    }
+
+    if (exePath.isEmpty()) {
+      const QString owner =
+          CMakeProject::targetForSource(executables, cmakeRoot, filePath);
+      if (!owner.isEmpty()) {
+        for (const CMakeTargetInfo &target : executables) {
+          if (target.name == owner) {
+            exePath = CMakeProject::executablePathFor(target, binaryDir);
+            break;
+          }
         }
       }
     }
@@ -6474,18 +6671,55 @@ bool MainWindow::buildCMakeDebugTarget(DebugConfiguration *resolvedConfig,
   LOG_INFO(QString("CMake build output tail: %1")
                .arg(buildOutput.trimmed().section(QLatin1Char('\n'), -3, -1)));
 
-  if (!exePath.isEmpty()) {
-    resolvedConfig->program = exePath;
-  } else if (!QFileInfo::exists(configuredProgram)) {
+  const QString resolved = exePath.isEmpty() ? configuredProgram : exePath;
+  if (resolved.isEmpty() || !QFileInfo::exists(resolved)) {
     if (errorMessage) {
-      *errorMessage =
-          tr("The built program was not found: %1").arg(configuredProgram);
+      *errorMessage = tr("The built program was not found: %1")
+                          .arg(resolved.isEmpty() ? tr("(no executable target)")
+                                                  : resolved);
     }
     return false;
   }
 
-  LOG_INFO(
-      QString("CMake debug target ready: %1").arg(resolvedConfig->program));
+  if (programPath) {
+    *programPath = resolved;
+  }
+  LOG_INFO(QString("CMake debug target ready: %1").arg(resolved));
+  return true;
+}
+
+bool MainWindow::buildCMakeDebugTarget(DebugConfiguration *resolvedConfig,
+                                       const QString &currentFilePath,
+                                       QString *errorMessage) {
+  if (!resolvedConfig) {
+    return false;
+  }
+  if (resolvedConfig->request.compare("attach", Qt::CaseInsensitive) == 0) {
+    return true;
+  }
+
+  const QString languageId = currentFilePath.isEmpty()
+                                 ? QString()
+                                 : effectiveLanguageIdForFile(currentFilePath);
+  const QString normalizedLanguageId = LanguageCatalog::normalize(languageId);
+  const bool cppLike =
+      normalizedLanguageId == "cpp" || normalizedLanguageId == "c";
+  if (!cppLike) {
+    return true;
+  }
+
+  const QVariant configuredBinaryDir =
+      resolvedConfig->adapterConfig.value(QStringLiteral("cmakeBinaryDir"));
+
+  QString programPath;
+  if (!buildCMakeExecutableForSource(
+          currentFilePath, resolvedConfig->program.trimmed(),
+          configuredBinaryDir.toString(), &programPath, errorMessage)) {
+    return false;
+  }
+  if (!programPath.isEmpty()) {
+    resolvedConfig->program = programPath;
+  }
   return true;
 }
 
@@ -6579,22 +6813,17 @@ bool MainWindow::prepareDebugConfigurationForStart(
     if (absoluteProgramPath == absoluteCurrentFile) {
       const QString languageId = effectiveLanguageIdForFile(currentFilePath);
       QString prepareError;
+      QString preparedProgram;
       if (!prepareDebugTargetForFile(currentFilePath, languageId,
-                                     &prepareError)) {
+                                     &preparedProgram, &prepareError)) {
         if (errorMessage) {
           *errorMessage = prepareError;
         }
         return false;
       }
 
-      if (languageId == "cpp" || languageId == "c") {
-        QFileInfo sourceInfo(currentFilePath);
-        QString outputPath =
-            sourceInfo.absolutePath() + "/" + sourceInfo.completeBaseName();
-#ifdef Q_OS_WIN
-        outputPath += ".exe";
-#endif
-        resolvedConfig->program = outputPath;
+      if (!preparedProgram.isEmpty()) {
+        resolvedConfig->program = preparedProgram;
       }
     }
   }
@@ -7703,6 +7932,10 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
   QString surfaceAltColor =
       glowShift(tc.surfaceOverlay, glowSource, glowLevel, 0.14).name();
   QString pressedColor = tc.btnGhostActive.name();
+  // Hover is a low-contrast surface change, distinct from the accent-tinted
+  // selection so the two states stay tellable apart.
+  QString rowHoverColor = tc.treeHoverBg.isValid() ? tc.treeHoverBg.name()
+                                                   : tc.btnGhostHover.name();
   QString borderColor =
       panelBordersEnabled
           ? glowShift(tc.borderDefault, glowSource, glowLevel, 0.42).name()
@@ -7934,15 +8167,22 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       accentColor +
       "; "
       "}"
-      "QToolButton#runButton, QToolButton#testButton, QToolButton#debugButton, "
-      "QToolButton#magicButton "
-      "{ "
+      // Status-strip controls are chrome, not content: no fill and no outline
+      // at rest, so the strip reads as one row rather than a line of boxes.
+      // Only the run action keeps a surface, marking it as the primary one.
+      "QToolButton#runButton { "
       "background-color: " +
       surfaceAltColor +
       "; "
-      "border: 1px solid " +
-      borderColor +
-      "; "
+      "border: 1px solid transparent; "
+      "padding: 6px; "
+      "border-radius: 6px; "
+      "}"
+      "QToolButton#testButton, QToolButton#debugButton, "
+      "QToolButton#magicButton "
+      "{ "
+      "background-color: transparent; "
+      "border: 1px solid transparent; "
       "padding: 6px; "
       "border-radius: 6px; "
       "}"
@@ -7951,23 +8191,35 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       "background-color: " +
       accentSoftColor +
       "; "
-      "border-color: " +
-      accentColor +
-      "; "
+      "}"
+      // A styled MenuButtonPopup tool button paints its menu-button
+      // sub-control itself; without a rule it falls back to an opaque default
+      // that shows up as a black block once the parent is transparent.
+      "QToolButton#testButton::menu-button, "
+      "QToolButton#debugButton::menu-button { "
+      "background: transparent; "
+      "border: none; "
+      "width: 14px; "
+      "}"
+      "QToolButton#testButton::menu-arrow, "
+      "QToolButton#debugButton::menu-arrow { "
+      "image: none; "
       "}"
       "QToolButton#languageHighlight, QToolButton#tabWidth { "
-      "background-color: " +
-      surfaceAltColor +
-      "; "
-      "border: 1px solid " +
-      borderColor +
+      "background-color: transparent; "
+      "border: 1px solid transparent; "
+      "color: " +
+      secondaryText +
       "; "
       "padding: 6px 10px; "
       "font-size: 12px; "
       "}"
       "QToolButton#languageHighlight:hover, QToolButton#tabWidth:hover { "
-      "border: 1px solid " +
-      accentColor +
+      "background-color: " +
+      accentSoftColor +
+      "; "
+      "color: " +
+      fgColor +
       "; "
       "}"
       "QLabel#rowCol { "
@@ -7978,6 +8230,8 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       "padding: 0 4px; "
       "}"
 
+      // Item views sit inside panels that already provide their own surface;
+      // an outline here is a second frame around the same region.
       "QAbstractItemView { "
       "color: " +
       fgColor +
@@ -7986,47 +8240,43 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       bgColor +
       "; "
       "outline: 0; "
-      "border: 1px solid " +
-      borderSubtle +
-      "; "
-      "border-radius: 6px; "
+      "border: none; "
+      "border-radius: 0px; "
       "}"
       "QAbstractItemView::item { "
-      "padding: 6px 8px; "
-      "border-radius: 4px; "
+      "padding: 4px 8px; "
+      "border-radius: 3px; "
       "margin: 1px 2px; "
       "}"
       "QAbstractItemView::item:hover { "
       "background-color: " +
-      accentSoftColor +
+      rowHoverColor +
       "; "
       "}"
+      // A focus ring drawn as a full box around a row is louder than the
+      // selection it sits inside; the selection itself already marks the row.
       "QAbstractItemView::item:focus { "
       "outline: none; "
-      "border: 1px solid " +
-      accentColor +
-      "; "
+      "border: none; "
       "}"
+      // Selection is a quiet surface change. Recolouring the row's text to the
+      // accent made every selected line shout and cost legibility.
       "QAbstractItemView::item:selected { "
       "background-color: " +
       accentSoftColor +
       "; "
       "color: " +
-      accentColor +
+      fgColor +
       "; "
       "}"
+      // Column headers are labels, not a banded toolbar.
       "QHeaderView::section { "
-      "background-color: " +
-      surfaceColor +
-      "; "
+      "background-color: transparent; "
       "color: " +
-      accentColor +
+      secondaryText +
       "; "
-      "padding: 8px 10px; "
+      "padding: 5px 10px; "
       "border: none; "
-      "border-bottom: 1px solid " +
-      borderColor +
-      "; "
       "font-weight: 600; "
       "text-transform: uppercase; "
       "font-size: 11px; "

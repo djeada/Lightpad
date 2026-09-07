@@ -64,6 +64,8 @@ private slots:
   void testParseTargets();
   void testExecutablePathMapping();
   void testBinaryDirResolution();
+  void testTargetForSource();
+  void testConfigureCommandRequestsDebugInfo();
   void testRealConfigureAndBuild();
 
 private:
@@ -135,6 +137,42 @@ void TestCMakeProject::testExecutablePathMapping() {
 
   CMakeTargetInfo unnamed;
   QVERIFY(CMakeProject::executablePathFor(unnamed, "/x/build").isEmpty());
+}
+
+void TestCMakeProject::testTargetForSource() {
+  const QString root = makeProject(m_dir);
+
+  CMakeProject project;
+  const QList<CMakeTargetInfo> executables =
+      project.parseExecutableTargets(root);
+
+  // A source is matched relative to the CMakeLists that declared its target.
+  QCOMPARE(
+      CMakeProject::targetForSource(executables, root, root + "/src/main.cpp"),
+      QString("app"));
+  QCOMPARE(CMakeProject::targetForSource(executables, root, root + "/tool.cpp"),
+           QString("tool"));
+
+  // A file no executable target lists leaves the choice to the caller.
+  QVERIFY(
+      CMakeProject::targetForSource(executables, root, root + "/src/unused.cpp")
+          .isEmpty());
+  QVERIFY(
+      CMakeProject::targetForSource(executables, root, QString()).isEmpty());
+  QVERIFY(
+      CMakeProject::targetForSource({}, root, root + "/tool.cpp").isEmpty());
+}
+
+void TestCMakeProject::testConfigureCommandRequestsDebugInfo() {
+  const QStringList command =
+      CMakeProject::configureCommand("/proj", "/proj/build");
+
+  QCOMPARE(command.first(), QString("cmake"));
+  QVERIFY(command.contains("/proj"));
+  QVERIFY(command.contains("/proj/build"));
+  // Without an explicit build type single-config generators emit no -g and the
+  // debugger has no line information to stop on.
+  QVERIFY(command.contains("-DCMAKE_BUILD_TYPE=Debug"));
 }
 
 void TestCMakeProject::testBinaryDirResolution() {

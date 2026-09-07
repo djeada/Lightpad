@@ -2,6 +2,8 @@
 #include "../../theme/themedefinition.h"
 #include "../uistylehelper.h"
 
+#include <QFontDatabase>
+
 Theme ThemedMessageBox::s_theme;
 bool ThemedMessageBox::s_themeSet = false;
 bool ThemedMessageBox::s_semanticThemeSet = false;
@@ -86,6 +88,9 @@ void ThemedMessageBox::setText(const QString &text) { m_text = text; }
 void ThemedMessageBox::setInformativeText(const QString &text) {
   m_informativeText = text;
 }
+void ThemedMessageBox::setDetailedText(const QString &text) {
+  m_detailedText = text;
+}
 
 void ThemedMessageBox::setStandardButtons(int buttons) { m_buttons = buttons; }
 
@@ -110,7 +115,9 @@ void ThemedMessageBox::buildUI() {
   m_built = true;
 
   setMinimumWidth(380);
-  setMaximumWidth(560);
+  // A prose message reads better narrow, but build output needs room for the
+  // compiler's own line wrapping.
+  setMaximumWidth(m_detailedText.isEmpty() ? 560 : 860);
 
   QVBoxLayout *mainLayout = new QVBoxLayout(this);
   mainLayout->setSpacing(16);
@@ -161,6 +168,16 @@ void ThemedMessageBox::buildUI() {
     m_infoLabel = new QLabel(m_informativeText, this);
     m_infoLabel->setWordWrap(true);
     textLayout->addWidget(m_infoLabel);
+  }
+
+  if (!m_detailedText.isEmpty()) {
+    m_detailsView = new QPlainTextEdit(m_detailedText, this);
+    m_detailsView->setReadOnly(true);
+    m_detailsView->setLineWrapMode(QPlainTextEdit::NoWrap);
+    m_detailsView->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    m_detailsView->setMinimumSize(700, 200);
+    m_detailsView->setMaximumHeight(320);
+    textLayout->addWidget(m_detailsView, 1);
   }
 
   contentLayout->addLayout(textLayout, 1);
@@ -240,7 +257,13 @@ void ThemedMessageBox::applyStyle() {
     bool isPrimary = false;
     bool isDanger = false;
 
-    if (role == Ok || role == Yes) {
+    // The accent marks the recommended action. When a dialog nominates a
+    // default it is stating what that action is, so follow it - otherwise a
+    // dialog that deliberately defaults to Cancel still advertises Yes, which
+    // is exactly the destructive choice it wanted to steer away from.
+    const bool hasDefault =
+        m_defaultButton != NoButton && m_buttonMap.contains(m_defaultButton);
+    if (hasDefault ? role == m_defaultButton : (role == Ok || role == Yes)) {
       isPrimary = true;
       if (m_icon == Critical || m_icon == Warning) {
 
