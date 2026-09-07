@@ -96,6 +96,7 @@ private slots:
   void testDapBreakpointFromJson();
   void testDapStackFrameFromJson();
   void testDapVariableFromJson();
+  void testDapSourceNameFallsBackToPath();
   void testDapStoppedEventFromJson();
 
   void testDapClientFramingHandlesUtf8AndChunkedDelivery();
@@ -948,6 +949,31 @@ void TestDap::testDapStackFrameFromJson() {
   QCOMPARE(frame.line, 50);
   QCOMPARE(frame.source.name, QString("main.cpp"));
   QCOMPARE(frame.presentationHint, QString("normal"));
+}
+
+void TestDap::testDapSourceNameFallsBackToPath() {
+  // `name` is optional in the protocol; debugpy sends only `path`, and the
+  // stack view has to show a file name for those frames too.
+  QJsonObject source;
+  source["path"] = "/project/tools/analyze_mesh.py";
+
+  QJsonObject json;
+  json["id"] = 2;
+  json["name"] = "main";
+  json["line"] = 65;
+  json["source"] = source;
+
+  const DapStackFrame frame = DapStackFrame::fromJson(json);
+  QCOMPARE(frame.source.name, QString("analyze_mesh.py"));
+  QCOMPARE(frame.source.path, QString("/project/tools/analyze_mesh.py"));
+
+  // An explicit name still wins, and a source with neither stays empty.
+  source["name"] = "custom label";
+  json["source"] = source;
+  QCOMPARE(DapStackFrame::fromJson(json).source.name, QString("custom label"));
+
+  json["source"] = QJsonObject();
+  QVERIFY(DapStackFrame::fromJson(json).source.name.isEmpty());
 }
 
 void TestDap::testDapVariableFromJson() {

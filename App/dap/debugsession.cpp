@@ -3,6 +3,8 @@
 #include "breakpointmanager.h"
 #include "debugadapterregistry.h"
 
+#include <QFileInfo>
+
 namespace {
 QString
 adapterConfigurationHint(const std::shared_ptr<IDebugAdapter> &adapter) {
@@ -127,7 +129,7 @@ void DebugSession::stop(bool terminate) {
 
   m_client->stop(terminate);
   setState(State::Terminated);
-  emit terminated();
+  reportTermination();
 }
 
 void DebugSession::restart() {
@@ -140,6 +142,7 @@ void DebugSession::restart() {
     m_launchRequestSent = false;
     m_adapterInitializedReceived = false;
     m_configurationDoneSent = false;
+    m_terminationReported = false;
     setState(State::Starting);
   }
 
@@ -259,6 +262,17 @@ void DebugSession::onClientStopped(const DapStoppedEvent &event) {
 
 void DebugSession::onClientTerminated() {
   setState(State::Terminated);
+  reportTermination();
+}
+
+void DebugSession::reportTermination() {
+  // The adapter reports termination through several routes - stop(), the
+  // client's terminated signal and its Terminated state change. The session
+  // ends once, so only the first of them is passed on.
+  if (m_terminationReported) {
+    return;
+  }
+  m_terminationReported = true;
   emit terminated();
 }
 
@@ -375,10 +389,17 @@ DebugSessionManager::startSession(const DebugConfiguration &config,
 }
 
 QString DebugSessionManager::quickStart(const QString &filePath,
-                                        const QString &languageId) {
+                                        const QString &languageId,
+                                        const QString &programOverride) {
   DebugConfiguration config =
       DebugConfigurationManager::instance().createQuickConfig(filePath,
                                                               languageId);
+  if (!programOverride.isEmpty()) {
+    config.program = programOverride;
+    if (config.cwd.isEmpty()) {
+      config.cwd = QFileInfo(programOverride).absolutePath();
+    }
+  }
   if (config.name.isEmpty()) {
     m_lastError =
         QString("Could not create debug configuration for: %1").arg(filePath);
@@ -391,17 +412,20 @@ QString DebugSessionManager::quickStart(const QString &filePath,
 
 void DebugSessionManager::stopSession(const QString &sessionId,
                                       bool terminate) {
-  auto it = m_sessions.find(sessionId);
-  if (it == m_sessions.end()) {
+  // stop() reports termination synchronously, which deregisters the session,
+  // so hold the pointer rather than an iterator into the map being changed.
+  DebugSession *session = m_sessions.value(sessionId);
+  if (!session) {
     return;
   }
 
-  it.value()->stop(terminate);
+  session->stop(terminate);
 }
 
 void DebugSessionManager::stopAllSessions(bool terminate) {
-  for (auto it = m_sessions.begin(); it != m_sessions.end(); ++it) {
-    it.value()->stop(terminate);
+  const QList<DebugSession *> sessions = m_sessions.values();
+  for (DebugSession *session : sessions) {
+    session->stop(terminate);
   }
 }
 
@@ -449,13 +473,24 @@ void DebugSessionManager::onSessionTerminated() {
     return;
   }
 
-  QString sessionId = senderSession->id();
+  const QString sessionId = senderSession->id();
+
+  // Deregister synchronously and never capture the session pointer in the
+  // queued notification. A session that reports termination twice would
+  // otherwise schedule two deletes of the same object; the second one runs
+  // against freed memory.
+  if (m_sessions.value(sessionId) != senderSession) {
+    return;
+  }
+  m_sessions.remove(sessionId);
+  senderSession->disconnect(this);
+  // We are inside the session's own signal emission, so it cannot be deleted
+  // outright.
+  senderSession->deleteLater();
 
   QMetaObject::invokeMethod(
       this,
-      [this, sessionId, senderSession]() {
-        m_sessions.remove(sessionId);
-        delete senderSession;
+      [this, sessionId]() {
         emit sessionTerminated(sessionId);
 
         if (m_focusedSessionId == sessionId) {

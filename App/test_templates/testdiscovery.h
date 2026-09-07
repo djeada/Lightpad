@@ -28,6 +28,23 @@ public:
 signals:
   void discoveryFinished(const QList<DiscoveredTest> &tests);
   void discoveryError(const QString &message);
+
+protected:
+  // Adapters delete their QProcess from its own finished slot, which frees the
+  // object while it is still emitting. Detach it from its signals and let the
+  // event loop reclaim it once the emission has unwound.
+  static void disposeProcess(QProcess *&process) {
+    if (!process) {
+      return;
+    }
+    QProcess *doomed = process;
+    process = nullptr;
+    doomed->disconnect();
+    if (doomed->state() != QProcess::NotRunning) {
+      doomed->kill();
+    }
+    doomed->deleteLater();
+  }
 };
 
 class CTestDiscoveryAdapter : public ITestDiscoveryAdapter {

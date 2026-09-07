@@ -6,6 +6,7 @@
 #include <QList>
 #include <QMap>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 
 #include "dapclient.h"
@@ -216,7 +217,11 @@ private:
 
   QStringList m_enabledExceptionFilters;
 
-  DapClient *m_dapClient;
+  // The client is owned by the DebugSession and dies with it, while this
+  // manager is a singleton that outlives every session. A guarded pointer
+  // self-clears on destruction; a raw one left this dereferencing freed memory
+  // the first time breakpoints were touched after a session ended.
+  QPointer<DapClient> m_dapClient;
   QString m_workspaceFolder;
 };
 
