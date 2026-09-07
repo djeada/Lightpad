@@ -122,6 +122,7 @@ set(project_headers
     ui/panels/problemspanel.h
     ui/panels/breadcrumbwidget.h
     ui/panels/debugpanel.h
+    ui/panels/debugglyphs.h
     ui/panels/sourcecontrolpanel.h
     ui/panels/minimap.h
     ui/panels/spliteditorcontainer.h
@@ -211,6 +212,7 @@ set(project_headers
     theme/themeengine.h
     theme/themepresets.h
     ui/uistylehelper.h
+    ui/uimetrics.h
     ui/viewers/imageviewer.h
     markdown/markdowntools.h
     markdown/markdownpreviewpanel.h
