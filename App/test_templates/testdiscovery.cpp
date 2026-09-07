@@ -38,8 +38,7 @@ void CTestDiscoveryAdapter::cancel() {
     m_process->kill();
     m_process->waitForFinished(3000);
   }
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 }
 
 void CTestDiscoveryAdapter::onProcessFinished(int exitCode,
@@ -55,7 +54,7 @@ void CTestDiscoveryAdapter::onProcessFinished(int exitCode,
                       stdoutData.trimmed().isEmpty())) {
 
     m_usingJson = false;
-    delete m_process;
+    disposeProcess(m_process);
     m_process = new QProcess(this);
     m_process->setWorkingDirectory(workDir);
     connect(m_process,
@@ -65,8 +64,7 @@ void CTestDiscoveryAdapter::onProcessFinished(int exitCode,
     return;
   }
 
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 
   if (exitCode != 0 || status != QProcess::NormalExit) {
     QString err = QString::fromUtf8(stderrData).trimmed();
@@ -175,8 +173,7 @@ void GTestDiscoveryAdapter::cancel() {
     m_process->kill();
     m_process->waitForFinished(3000);
   }
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 }
 
 void GTestDiscoveryAdapter::setExecutablePath(const QString &path) {
@@ -191,8 +188,7 @@ void GTestDiscoveryAdapter::onProcessFinished(int exitCode,
   QByteArray stdoutData = m_process->readAllStandardOutput();
   QByteArray stderrData = m_process->readAllStandardError();
 
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 
   if (exitCode != 0 || status != QProcess::NormalExit) {
     QString err = QString::fromUtf8(stderrData).trimmed();
@@ -281,8 +277,7 @@ void PytestDiscoveryAdapter::cancel() {
     m_process->kill();
     m_process->waitForFinished(3000);
   }
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 }
 
 void PytestDiscoveryAdapter::onProcessFinished(int exitCode,
@@ -293,8 +288,7 @@ void PytestDiscoveryAdapter::onProcessFinished(int exitCode,
   QByteArray stdoutData = m_process->readAllStandardOutput();
   QByteArray stderrData = m_process->readAllStandardError();
 
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 
   if (status != QProcess::NormalExit || (exitCode != 0 && exitCode != 5)) {
     QString err = QString::fromUtf8(stderrData).trimmed();
@@ -378,8 +372,7 @@ void GoTestDiscoveryAdapter::cancel() {
     m_process->kill();
     m_process->waitForFinished(3000);
   }
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 }
 
 void GoTestDiscoveryAdapter::onProcessFinished(int exitCode,
@@ -390,8 +383,7 @@ void GoTestDiscoveryAdapter::onProcessFinished(int exitCode,
   QByteArray stdoutData = m_process->readAllStandardOutput();
   QByteArray stderrData = m_process->readAllStandardError();
 
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 
   if (exitCode != 0 || status != QProcess::NormalExit) {
     QString err = QString::fromUtf8(stderrData).trimmed();
@@ -464,8 +456,7 @@ void CargoTestDiscoveryAdapter::cancel() {
     m_process->kill();
     m_process->waitForFinished(3000);
   }
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 }
 
 void CargoTestDiscoveryAdapter::onProcessFinished(int exitCode,
@@ -476,8 +467,7 @@ void CargoTestDiscoveryAdapter::onProcessFinished(int exitCode,
   QByteArray stdoutData = m_process->readAllStandardOutput();
   QByteArray stderrData = m_process->readAllStandardError();
 
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 
   if (exitCode != 0 || status != QProcess::NormalExit) {
     QString err = QString::fromUtf8(stderrData).trimmed();
@@ -553,8 +543,7 @@ void JestDiscoveryAdapter::cancel() {
     m_process->kill();
     m_process->waitForFinished(3000);
   }
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 }
 
 void JestDiscoveryAdapter::onProcessFinished(int exitCode,
@@ -565,8 +554,7 @@ void JestDiscoveryAdapter::onProcessFinished(int exitCode,
   QByteArray stdoutData = m_process->readAllStandardOutput();
   QByteArray stderrData = m_process->readAllStandardError();
 
-  delete m_process;
-  m_process = nullptr;
+  disposeProcess(m_process);
 
   if (exitCode != 0 || status != QProcess::NormalExit) {
     QString err = QString::fromUtf8(stderrData).trimmed();

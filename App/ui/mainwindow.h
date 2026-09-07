@@ -287,6 +287,7 @@ private:
   void watchOpenFile(const QString &filePath);
   void unwatchOpenFileIfUnused(const QString &filePath);
   void recheckOpenFilesForExternalChanges();
+  bool isOpenFileModified(const QString &filePath) const;
   bool handleExternalModification(const QString &filePath, bool allowOverwrite);
   bool reloadOpenFileFromDisk(const QString &filePath);
   bool writeOpenFileToDisk(const QString &filePath);
@@ -399,6 +400,18 @@ private:
   bool buildCMakeDebugTarget(DebugConfiguration *resolvedConfig,
                              const QString &currentFilePath,
                              QString *errorMessage);
+  QString cmakeRootForSource(const QString &filePath) const;
+  bool buildCMakeExecutableForSource(const QString &filePath,
+                                     const QString &configuredProgram,
+                                     const QString &configuredBinaryDir,
+                                     QString *programPath,
+                                     QString *errorMessage);
+  void showBuildFailure(const QString &title, const QString &text,
+                        const QString &informativeText, const QString &details);
+  void showDebugBuildFailure(const QString &details);
+  bool resolveCMakeRunTarget(const QString &filePath, const QString &languageId,
+                             const QString &assignedTemplateId,
+                             QString *programPath, QString *errorMessage);
   bool runBuildProcessWithProgress(const QString &title,
                                    const QStringList &command,
                                    const QString &workingDirectory,
@@ -406,9 +419,15 @@ private:
   bool startDebugConfigurationByName(const QString &configurationName);
   bool startCompoundDebugConfigurationByName(const QString &compoundName);
   void startDebuggingForCurrentFile();
+  void updateRunAndDebugActionLabels(const QString &fileName);
+  void refreshRunAndDebugActionLabels();
+  // Builds whatever `filePath` needs to be debuggable and reports the
+  // executable to launch in `resolvedProgram` (empty for languages that run
+  // from source).
   bool prepareDebugTargetForFile(const QString &filePath,
                                  const QString &languageId,
-                                 QString *errorMessage) const;
+                                 QString *resolvedProgram,
+                                 QString *errorMessage);
   bool compileSourceForDebug(const QString &filePath, const QString &languageId,
                              const QString &outputPath,
                              QString *errorMessage) const;

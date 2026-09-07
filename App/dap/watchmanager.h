@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QList>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 
 #include "dapclient.h"
@@ -114,7 +115,9 @@ private:
   QMap<int, PendingEvaluation> m_pendingEvaluations;
   QMap<int, int> m_pendingVariables;
 
-  DapClient *m_dapClient;
+  // Same lifetime hazard as BreakpointManager: this singleton outlives the
+  // DebugSession that owns the client.
+  QPointer<DapClient> m_dapClient;
   QString m_workspaceFolder;
 };
 

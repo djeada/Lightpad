@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMap>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -42,6 +43,9 @@ public:
   void setIcon(Icon icon);
   void setText(const QString &text);
   void setInformativeText(const QString &text);
+  // Long, pre-formatted output (compiler/build logs). Rendered in a
+  // monospaced, read-only, scrollable box instead of an ever-growing label.
+  void setDetailedText(const QString &text);
   void setStandardButtons(int buttons);
   void setDefaultButton(int button);
   void setButtonText(int button, const QString &text);
@@ -66,6 +70,7 @@ private:
   Icon m_icon = NoIcon;
   QString m_text;
   QString m_informativeText;
+  QString m_detailedText;
   int m_buttons = Ok;
   int m_defaultButton = NoButton;
   int m_clickedButton = NoButton;
@@ -75,6 +80,7 @@ private:
   QLabel *m_iconLabel = nullptr;
   QLabel *m_textLabel = nullptr;
   QLabel *m_infoLabel = nullptr;
+  QPlainTextEdit *m_detailsView = nullptr;
   QHBoxLayout *m_buttonLayout = nullptr;
   QMap<int, QPushButton *> m_buttonMap;
 };
