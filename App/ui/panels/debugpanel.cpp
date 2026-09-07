@@ -1,20 +1,32 @@
 #include "debugpanel.h"
+
 #include "../../core/logging/logger.h"
 #include "../../dap/debugadapterregistry.h"
+#include "debugglyphs.h"
 
+#include "../uimetrics.h"
+#include "../uistylehelper.h"
 #include <QAction>
+#include <QApplication>
+#include <QClipboard>
 #include <QFontDatabase>
 #include <QFrame>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPalette>
+#include <QRegularExpression>
+#include <QScrollBar>
 #include <QSignalBlocker>
 #include <QStyle>
 #include <QStyledItemDelegate>
+#include <QTextBlock>
 #include <QTextCharFormat>
 #include <QTextCursor>
 #include <QTextDocument>
@@ -38,6 +50,15 @@ QString fillStyleTemplate(
 
 class DebugTreeDelegate : public QStyledItemDelegate {
 public:
+  // Horizontal room paint() takes away from the item rect for the row
+  // background and its inner text inset. sizeHint() has to add it back or
+  // ResizeToContents columns come out too narrow and elide their content.
+  static constexpr int kRowInset = 3;
+  static constexpr int kTextInsetLeft = 10;
+  static constexpr int kTextInsetRight = 8;
+  static constexpr int kHorizontalPadding =
+      2 * kRowInset + kTextInsetLeft + kTextInsetRight;
+
   explicit DebugTreeDelegate(QObject *parent = nullptr)
       : QStyledItemDelegate(parent) {}
 
@@ -64,7 +85,7 @@ public:
     const bool isSelected = opt.state.testFlag(QStyle::State_Selected);
     const bool isHovered = opt.state.testFlag(QStyle::State_MouseOver);
 
-    QRect rowRect = opt.rect.adjusted(3, 1, -3, -1);
+    QRect rowRect = opt.rect.adjusted(kRowInset, 1, -kRowInset, -1);
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, false);
 
@@ -83,7 +104,7 @@ public:
       }
     }
 
-    opt.rect = rowRect.adjusted(10, 0, -8, 0);
+    opt.rect = rowRect.adjusted(kTextInsetLeft, 0, -kTextInsetRight, 0);
     opt.state &= ~QStyle::State_HasFocus;
     opt.showDecorationSelected = false;
     opt.palette.setColor(QPalette::Highlight, Qt::transparent);
@@ -98,7 +119,7 @@ public:
                  const QModelIndex &index) const override {
     QSize size = QStyledItemDelegate::sizeHint(option, index);
     size.setHeight(qMax(size.height(), 20));
-    return size + QSize(0, 1);
+    return size + QSize(kHorizontalPadding, 1);
   }
 
 private:
@@ -167,14 +188,10 @@ QList<QPair<QString, QString>> parseInfoLocalsOutput(const QString &raw) {
 } // namespace
 
 DebugPanel::DebugPanel(QWidget *parent)
-    : QWidget(parent), m_dapClient(nullptr), m_debugStatusLabel(nullptr),
-      m_inspectorShell(nullptr), m_inspectorTabBar(nullptr),
-      m_inspectorTabGroup(nullptr), m_inspectorStack(nullptr),
-      m_addFunctionBreakpointButton(nullptr),
-      m_exceptionBreakpointsButton(nullptr),
-      m_exceptionBreakpointsMenu(nullptr), m_currentThreadId(0),
+    : QWidget(parent), m_dapClient(nullptr), m_currentThreadId(0),
       m_currentFrameId(0), m_programmaticVariablesExpand(false),
-      m_variablesNameColumnAutofitPending(false), m_stepInProgress(false),
+      m_variablesNameColumnUserSized(false),
+      m_variablesNameColumnAutofitting(false), m_stepInProgress(false),
       m_expectStopEvent(true), m_hasLastStopEvent(false),
       m_lastStoppedThreadId(0), m_lastStoppedReason(DapStoppedReason::Unknown),
       m_localsFallbackPending(false), m_localsFallbackFrameId(-1),
@@ -223,6 +240,10 @@ DebugPanel::~DebugPanel() {}
 void DebugPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
   m_themeInitialized = true;
+
+  // The transport glyphs are painted in palette colours, so they have to be
+  // redrawn whenever the palette changes.
+  applyTransportIcons();
 
   const auto blend = [](const QColor &base, const QColor &overlay,
                         qreal ratio) {
@@ -292,23 +313,25 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  min-width: 1px;"
           "  max-width: 1px;"
           "}"
+          // Ghost controls: no border and no fill by default, so a row of
+          // actions reads as one strip instead of a line of outlined boxes.
+          // Weight is carried by the surface on hover and by the accent on the
+          // single primary action.
           "QToolButton#debugToolbarButton {"
           "  color: {fg};"
-          "  background: {inputSurface};"
-          "  border: 1px solid {shellBorder};"
+          "  background: transparent;"
+          "  border: 1px solid transparent;"
           "  border-radius: 3px;"
-          "  padding: 6px 11px;"
+          "  padding: 5px 10px;"
           "  font-size: 12px;"
-          "  font-weight: 600;"
+          "  font-weight: 500;"
           "  text-align: left;"
           "}"
           "QToolButton#debugToolbarButton:hover {"
           "  background: {focusSurface};"
-          "  border-color: {tabSelectedBorder};"
           "}"
           "QToolButton#debugToolbarButton:pressed {"
           "  background: {accentSoft};"
-          "  border-color: {tabSelectedBorder};"
           "}"
           "QToolButton#debugToolbarButton:disabled {"
           "  color: {subtleText};"
@@ -316,19 +339,24 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  border-color: transparent;"
           "}"
           "QToolButton#debugToolbarButton[role=\"primary\"] {"
-          "  background: {tabSelected};"
+          "  background: {accentSoft};"
           "  color: {fg};"
-          "  border-color: {tabSelectedBorder};"
+          "  font-weight: 600;"
           "}"
           "QToolButton#debugToolbarButton[role=\"primary\"]:hover {"
-          "  background: {accentSoft};"
+          "  background: {tabSelected};"
+          "  border-color: {tabSelectedBorder};"
           "}"
-          "QToolButton#debugToolbarButton[role=\"danger\"] {"
+          "QToolButton#debugToolbarButton[role=\"primary\"]:disabled {"
           "  background: transparent;"
+          "}"
+          "QToolButton#debugToolbarButton[role=\"danger\"]:hover {"
+          "  background: {errorBg};"
+          "  border-color: {errorColor};"
           "}"
           "QWidget#debugInspectorShell {"
           "  background: {shellSurface};"
-          "  border: 1px solid {shellBorder};"
+          "  border: none;"
           "  border-radius: 4px;"
           "}"
           "QWidget#debugPanel QLabel {"
@@ -343,15 +371,18 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  background: transparent;"
           "  border: none;"
           "}"
+          // One indicator marks the active tab: an accent underline plus
+          // primary text. A filled box as well would make the tab bar compete
+          // with the content it labels.
           "QToolButton#debugInspectorTab {"
           "  color: {subtleText};"
-          "  background: {tabBg};"
+          "  background: transparent;"
           "  border: none;"
-          "  border-bottom: 2px solid transparent;"
-          "  padding: 8px 10px 7px 10px;"
-          "  margin: 0 10px 0 0;"
+          "  border-bottom: {tabIndicator}px solid transparent;"
+          "  padding: 7px {tabPadH}px 6px {tabPadH}px;"
+          "  margin: 0 {space}px 0 0;"
           "  font-size: 11px;"
-          "  font-weight: 600;"
+          "  font-weight: 500;"
           "  text-align: left;"
           "}"
           "QToolButton#debugInspectorTab:hover {"
@@ -360,7 +391,8 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "}"
           "QToolButton#debugInspectorTab:checked {"
           "  color: {fg};"
-          "  background: {tabSelected};"
+          "  background: transparent;"
+          "  font-weight: 600;"
           "  border-bottom-color: {tabSelectedBorder};"
           "}"
           "QWidget#debugInspectorPage {"
@@ -498,15 +530,20 @@ void DebugPanel::applyTheme(const Theme &theme) {
        {"pausedBg", pausedBg.name(QColor::HexArgb)},
        {"errorColor", theme.errorColor.name()},
        {"errorBg", errorBg.name(QColor::HexArgb)},
-       {"readyBg", readyBg.name(QColor::HexArgb)}}));
+       {"readyBg", readyBg.name(QColor::HexArgb)},
+       {"tabPadH", QString::number(UiMetrics::TabPaddingH)},
+       {"tabIndicator", QString::number(UiMetrics::TabIndicatorThickness)},
+       {"space", QString::number(UiMetrics::SpaceMd)}}));
 
   const QString treeStyle = fillStyleTemplate(
       QStringLiteral(
+          // No outline: the tree already sits on its own surface inside the
+          // inspector, and a box here would be the third nested frame.
           "QTreeWidget {"
           "  background: {bg};"
           "  alternate-background-color: {altBg};"
           "  color: {fg};"
-          "  border: 1px solid {border};"
+          "  border: none;"
           "  border-radius: 0px;"
           "  outline: none;"
           "  selection-background-color: {selectionBg};"
@@ -546,8 +583,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  background: transparent;"
           "  color: {subtleText};"
           "  border: none;"
-          "  border-bottom: 1px solid {border};"
-          "  padding: 6px 8px 5px 8px;"
+          "  padding: 5px 8px 4px 8px;"
           "  font-size: 10px;"
           "  font-weight: 600;"
           "}"
@@ -695,8 +731,16 @@ void DebugPanel::setupUI() {
       createInspectorPage(m_breakpointsTree, breakpointActions);
 
   setupConsole();
-  QWidget *consolePage =
-      createInspectorPage(m_consoleOutput, nullptr, m_consoleInput);
+  m_consolePage =
+      createInspectorPage(m_consoleOutput, m_consoleToolbar, m_consoleInput);
+  QWidget *consolePage = m_consolePage;
+
+  for (QTreeWidget *tree :
+       {m_callStackTree, m_variablesTree, m_watchTree, m_breakpointsTree}) {
+    if (tree) {
+      tree->viewport()->installEventFilter(this);
+    }
+  }
 
   m_inspectorStack = new QStackedWidget(m_inspectorShell);
   m_inspectorStack->setObjectName("debugInspectorStack");
@@ -785,6 +829,12 @@ void DebugPanel::setCurrentInspectorTab(int index) {
       button->setChecked(i == index);
     }
   }
+
+  // Refit once the tree is actually on screen and knows its real width.
+  if (m_variablesTree && m_inspectorStack->currentWidget() &&
+      m_inspectorStack->currentWidget()->isAncestorOf(m_variablesTree)) {
+    QTimer::singleShot(0, this, [this]() { fitVariablesNameColumn(); });
+  }
 }
 
 void DebugPanel::setInspectorTabLabel(int index, const QString &label) {
@@ -796,13 +846,25 @@ void DebugPanel::setInspectorTabLabel(int index, const QString &label) {
   }
 }
 
+QList<QAction *> DebugPanel::transportActions() const {
+  QList<QAction *> actions;
+  for (QAction *action :
+       {m_continueAction, m_pauseAction, m_stepOverAction, m_stepIntoAction,
+        m_stepOutAction, m_restartAction, m_stopAction}) {
+    if (action) {
+      actions.append(action);
+    }
+  }
+  return actions;
+}
+
 void DebugPanel::setupToolbar() {
   m_toolbar = new QWidget(this);
   m_toolbar->setObjectName("debugToolbar");
 
   QHBoxLayout *toolbarLayout = new QHBoxLayout(m_toolbar);
   toolbarLayout->setContentsMargins(0, 0, 0, 0);
-  toolbarLayout->setSpacing(12);
+  toolbarLayout->setSpacing(UiMetrics::SpaceLg);
 
   const auto configureAction = [](QAction *action, const QString &toolTip,
                                   const QString &helpText) {
@@ -814,55 +876,48 @@ void DebugPanel::setupToolbar() {
     action->setWhatsThis(helpText);
   };
 
-  m_continueAction = new QAction(style()->standardIcon(QStyle::SP_MediaPlay),
-                                 tr("Start"), this);
+  m_continueAction = new QAction(tr("Start"), this);
   m_continueAction->setShortcut(QKeySequence(Qt::Key_F5));
   configureAction(m_continueAction, tr("Start or continue debugging (F5)"),
                   tr("Starts a debug session when idle, or continues execution "
                      "when paused."));
   connect(m_continueAction, &QAction::triggered, this, &DebugPanel::onContinue);
 
-  m_pauseAction = new QAction(style()->standardIcon(QStyle::SP_MediaPause),
-                              tr("Pause"), this);
+  m_pauseAction = new QAction(tr("Pause"), this);
   m_pauseAction->setShortcut(QKeySequence(Qt::Key_F6));
   configureAction(
       m_pauseAction, tr("Pause execution (F6)"),
       tr("Interrupts a running debug session at the next safe point."));
   connect(m_pauseAction, &QAction::triggered, this, &DebugPanel::onPause);
 
-  m_stepOverAction = new QAction(style()->standardIcon(QStyle::SP_ArrowRight),
-                                 tr("Over"), this);
+  m_stepOverAction = new QAction(tr("Over"), this);
   m_stepOverAction->setShortcut(QKeySequence(Qt::Key_F10));
   configureAction(
       m_stepOverAction, tr("Step over current line (F10)"),
       tr("Executes the current line without entering called functions."));
   connect(m_stepOverAction, &QAction::triggered, this, &DebugPanel::onStepOver);
 
-  m_stepIntoAction = new QAction(style()->standardIcon(QStyle::SP_ArrowDown),
-                                 tr("Into"), this);
+  m_stepIntoAction = new QAction(tr("Into"), this);
   m_stepIntoAction->setShortcut(QKeySequence(Qt::Key_F11));
   configureAction(
       m_stepIntoAction, tr("Step into function call (F11)"),
       tr("Advances into the function being called on the current line."));
   connect(m_stepIntoAction, &QAction::triggered, this, &DebugPanel::onStepInto);
 
-  m_stepOutAction =
-      new QAction(style()->standardIcon(QStyle::SP_ArrowUp), tr("Out"), this);
+  m_stepOutAction = new QAction(tr("Out"), this);
   m_stepOutAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F11));
   configureAction(m_stepOutAction,
                   tr("Step out of current function (Shift+F11)"),
                   tr("Runs until the current function returns to its caller."));
   connect(m_stepOutAction, &QAction::triggered, this, &DebugPanel::onStepOut);
 
-  m_restartAction = new QAction(style()->standardIcon(QStyle::SP_BrowserReload),
-                                tr("Restart"), this);
+  m_restartAction = new QAction(tr("Restart"), this);
   m_restartAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F5));
   configureAction(m_restartAction, tr("Restart debugging (Ctrl+Shift+F5)"),
                   tr("Stops and relaunches the current debug session."));
   connect(m_restartAction, &QAction::triggered, this, &DebugPanel::onRestart);
 
-  m_stopAction = new QAction(style()->standardIcon(QStyle::SP_MediaStop),
-                             tr("Stop"), this);
+  m_stopAction = new QAction(tr("Stop"), this);
   m_stopAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F5));
   configureAction(
       m_stopAction, tr("Stop debugging (Shift+F5)"),
@@ -873,7 +928,7 @@ void DebugPanel::setupToolbar() {
   transportGroup->setObjectName("debugToolbarGroup");
   QHBoxLayout *transportLayout = new QHBoxLayout(transportGroup);
   transportLayout->setContentsMargins(0, 0, 0, 0);
-  transportLayout->setSpacing(8);
+  transportLayout->setSpacing(UiMetrics::ToolbarGroupSpacing);
   transportLayout->addWidget(
       createToolbarButton(m_continueAction, QStringLiteral("primary")));
   transportLayout->addWidget(createToolbarButton(m_pauseAction));
@@ -882,7 +937,7 @@ void DebugPanel::setupToolbar() {
   stepGroup->setObjectName("debugToolbarGroup");
   QHBoxLayout *stepLayout = new QHBoxLayout(stepGroup);
   stepLayout->setContentsMargins(0, 0, 0, 0);
-  stepLayout->setSpacing(8);
+  stepLayout->setSpacing(UiMetrics::ToolbarGroupSpacing);
   stepLayout->addWidget(createToolbarButton(m_stepOverAction));
   stepLayout->addWidget(createToolbarButton(m_stepIntoAction));
   stepLayout->addWidget(createToolbarButton(m_stepOutAction));
@@ -891,7 +946,7 @@ void DebugPanel::setupToolbar() {
   sessionGroup->setObjectName("debugToolbarGroup");
   QHBoxLayout *sessionLayout = new QHBoxLayout(sessionGroup);
   sessionLayout->setContentsMargins(0, 0, 0, 0);
-  sessionLayout->setSpacing(8);
+  sessionLayout->setSpacing(UiMetrics::ToolbarGroupSpacing);
   sessionLayout->addWidget(createToolbarButton(m_restartAction));
   sessionLayout->addWidget(
       createToolbarButton(m_stopAction, QStringLiteral("danger")));
@@ -909,6 +964,9 @@ void DebugPanel::setupToolbar() {
   m_debugStatusLabel = new QLabel(tr("Ready"), this);
   m_debugStatusLabel->setObjectName("debugStatusLabel");
   m_debugStatusLabel->setMinimumWidth(110);
+  m_debugStatusText = m_debugStatusLabel->text();
+  // Re-elide whenever the pill is given a new width.
+  m_debugStatusLabel->installEventFilter(this);
   m_debugStatusLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
 
   QWidget *metaGroup = new QWidget(m_toolbar);
@@ -919,6 +977,8 @@ void DebugPanel::setupToolbar() {
   metaLayout->addWidget(m_threadSelector);
   metaLayout->addWidget(m_debugStatusLabel);
 
+  applyTransportIcons();
+
   toolbarLayout->addWidget(transportGroup);
   toolbarLayout->addWidget(createToolbarDivider());
   toolbarLayout->addWidget(stepGroup);
@@ -926,6 +986,35 @@ void DebugPanel::setupToolbar() {
   toolbarLayout->addWidget(sessionGroup);
   toolbarLayout->addStretch(1);
   toolbarLayout->addWidget(metaGroup);
+}
+
+void DebugPanel::applyTransportIcons() {
+  // Stepping and session control are neutral chrome; only the primary action
+  // and the destructive one earn a colour of their own.
+  const QColor neutral = m_themeInitialized ? m_theme.foregroundColor
+                                            : palette().color(QPalette::Text);
+  const QColor accent = m_themeInitialized ? m_theme.accentColor : neutral;
+  const QColor danger = m_themeInitialized ? m_theme.errorColor : neutral;
+
+  const struct {
+    QAction *action;
+    DebugGlyphs::Glyph glyph;
+    QColor color;
+  } glyphs[] = {
+      {m_continueAction, DebugGlyphs::Glyph::Play, accent},
+      {m_pauseAction, DebugGlyphs::Glyph::Pause, neutral},
+      {m_stepOverAction, DebugGlyphs::Glyph::StepOver, neutral},
+      {m_stepIntoAction, DebugGlyphs::Glyph::StepInto, neutral},
+      {m_stepOutAction, DebugGlyphs::Glyph::StepOut, neutral},
+      {m_restartAction, DebugGlyphs::Glyph::Restart, neutral},
+      {m_stopAction, DebugGlyphs::Glyph::Stop, danger},
+  };
+
+  for (const auto &entry : glyphs) {
+    if (entry.action) {
+      entry.action->setIcon(DebugGlyphs::icon(entry.glyph, entry.color));
+    }
+  }
 }
 
 QToolButton *DebugPanel::createToolbarButton(QAction *action,
@@ -999,9 +1088,22 @@ void DebugPanel::setupVariables() {
   m_variablesTree->setIndentation(14);
   m_variablesTree->setItemDelegate(new DebugTreeDelegate(m_variablesTree));
 
+  m_variablesTree->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_variablesTree, &QTreeWidget::customContextMenuRequested, this,
+          &DebugPanel::showVariablesContextMenu);
+
   m_variablesTree->header()->setStretchLastSection(false);
   m_variablesTree->header()->setHighlightSections(false);
   m_variablesTree->header()->setSectionResizeMode(0, QHeaderView::Interactive);
+  connect(m_variablesTree->header(), &QHeaderView::sectionResized, this,
+          [this](int section, int, int) {
+            // Layout passes resize sections too; only a live drag (left button
+            // held over the header) counts as the user choosing a width.
+            if (section == 0 && !m_variablesNameColumnAutofitting &&
+                (QApplication::mouseButtons() & Qt::LeftButton)) {
+              m_variablesNameColumnUserSized = true;
+            }
+          });
   m_variablesTree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
   m_variablesTree->header()->setSectionResizeMode(
       2, QHeaderView::ResizeToContents);
@@ -1119,18 +1221,339 @@ void DebugPanel::setupConsole() {
   m_consoleOutput->setFrameShape(QFrame::NoFrame);
   m_consoleOutput->setWordWrapMode(QTextOption::NoWrap);
   m_consoleOutput->setPlaceholderText(tr("Debug console output..."));
+  m_consoleOutput->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_consoleOutput, &QPlainTextEdit::customContextMenuRequested, this,
+          &DebugPanel::showConsoleContextMenu);
+  // A location printed in a traceback or adapter message is the fastest way
+  // back to the code, so make the line it sits on openable.
+  m_consoleOutput->viewport()->installEventFilter(this);
 
   m_consoleInput = new QLineEdit(this);
-  m_consoleInput->setPlaceholderText(
-      tr("Evaluate an expression while paused…"));
   m_consoleInput->setObjectName("debugConsoleInput");
   m_consoleInput->setFont(fixedFont);
-  m_consoleInput->setPlaceholderText(tr("Evaluate expression..."));
   m_consoleInput->setClearButtonEnabled(true);
-  m_consoleInput->setMinimumHeight(34);
+  m_consoleInput->setMinimumHeight(UiMetrics::ControlHeight + 4);
+  // Up/Down recall previous expressions instead of moving the caret.
+  m_consoleInput->installEventFilter(this);
 
   connect(m_consoleInput, &QLineEdit::returnPressed, this,
           &DebugPanel::onConsoleInput);
+
+  setupConsoleToolbar();
+  updateConsoleInputAffordances();
+}
+
+void DebugPanel::setupConsoleToolbar() {
+  m_consoleToolbar = new QWidget(this);
+  m_consoleToolbar->setObjectName("debugConsoleToolbar");
+
+  QHBoxLayout *layout = new QHBoxLayout(m_consoleToolbar);
+  layout->setContentsMargins(0, 0, 0, 0);
+  layout->setSpacing(UiMetrics::ToolbarGroupSpacing);
+
+  m_consoleFindInput = new QLineEdit(m_consoleToolbar);
+  m_consoleFindInput->setObjectName("debugConsoleFind");
+  m_consoleFindInput->setPlaceholderText(tr("Find in console…"));
+  m_consoleFindInput->setClearButtonEnabled(true);
+  m_consoleFindInput->setFixedHeight(UiMetrics::ControlHeight);
+  m_consoleFindInput->setFixedWidth(240);
+  connect(m_consoleFindInput, &QLineEdit::returnPressed, this,
+          [this]() { findInConsole(false); });
+  layout->addWidget(m_consoleFindInput);
+  layout->addStretch(1);
+
+  m_consoleWrapAction = new QAction(tr("Wrap"), this);
+  m_consoleWrapAction->setCheckable(true);
+  m_consoleWrapAction->setToolTip(tr("Wrap long lines instead of scrolling "
+                                     "horizontally"));
+  connect(m_consoleWrapAction, &QAction::toggled, this, [this](bool wrap) {
+    m_consoleOutput->setWordWrapMode(
+        wrap ? QTextOption::WrapAtWordBoundaryOrAnywhere : QTextOption::NoWrap);
+  });
+
+  m_consoleClearAction = new QAction(tr("Clear"), this);
+  m_consoleClearAction->setToolTip(tr("Clear the console output"));
+  connect(m_consoleClearAction, &QAction::triggered, this,
+          [this]() { m_consoleOutput->clear(); });
+
+  m_consoleDetachAction = new QAction(tr("Detach"), this);
+  m_consoleDetachAction->setToolTip(
+      tr("Open the console in its own window, where long output is readable"));
+  connect(m_consoleDetachAction, &QAction::triggered, this,
+          &DebugPanel::toggleConsoleDetached);
+
+  for (QAction *action :
+       {m_consoleWrapAction, m_consoleDetachAction, m_consoleClearAction}) {
+    QToolButton *button = new QToolButton(m_consoleToolbar);
+    button->setDefaultAction(action);
+    button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    button->setFixedHeight(UiMetrics::ControlHeight);
+    button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    button->setObjectName("debugConsoleToolButton");
+    layout->addWidget(button);
+  }
+}
+
+void DebugPanel::toggleConsoleDetached() {
+  if (m_consoleWindow) {
+    reattachConsole();
+    return;
+  }
+  if (!m_consolePage || !m_inspectorStack) {
+    return;
+  }
+
+  // A bottom dock leaves the console a few lines tall, which is unusable for
+  // reading a traceback. Move the very same page into a window the user can
+  // size freely; reattaching puts it back where it came from.
+  m_consoleWindow = new QWidget(window(), Qt::Window);
+  m_consoleWindow->setWindowTitle(tr("Debug Console"));
+  m_consoleWindow->setAttribute(Qt::WA_DeleteOnClose, false);
+  m_consoleWindow->resize(900, 520);
+
+  auto *layout = new QVBoxLayout(m_consoleWindow);
+  layout->setContentsMargins(UiMetrics::PanelMargin, UiMetrics::PanelMargin,
+                             UiMetrics::PanelMargin, UiMetrics::PanelMargin);
+  layout->setSpacing(0);
+
+  m_inspectorStack->removeWidget(m_consolePage);
+  layout->addWidget(m_consolePage);
+  m_consolePage->show();
+
+  m_consoleWindow->installEventFilter(this);
+  m_consoleWindow->show();
+  m_consoleWindow->raise();
+
+  m_consoleDetachAction->setText(tr("Attach"));
+  m_consoleDetachAction->setToolTip(tr("Put the console back in the panel"));
+
+  // The tab it used to occupy would now switch to an empty page.
+  setInspectorTabLabel(4, tr("Console ↗"));
+  setCurrentInspectorTab(0);
+}
+
+void DebugPanel::reattachConsole() {
+  if (!m_consoleWindow || !m_consolePage || !m_inspectorStack) {
+    return;
+  }
+
+  m_consoleWindow->removeEventFilter(this);
+  m_consolePage->setParent(nullptr);
+  m_inspectorStack->insertWidget(4, m_consolePage);
+
+  m_consoleWindow->deleteLater();
+  m_consoleWindow = nullptr;
+
+  m_consoleDetachAction->setText(tr("Detach"));
+  m_consoleDetachAction->setToolTip(
+      tr("Open the console in its own window, where long output is readable"));
+  setInspectorTabLabel(4, tr("Console"));
+  setCurrentInspectorTab(4);
+}
+
+void DebugPanel::recallConsoleHistory(int direction) {
+  if (m_consoleHistory.isEmpty()) {
+    return;
+  }
+
+  // Leaving the newest entry keeps whatever the user had half-typed, so that
+  // browsing history and coming back does not lose it.
+  if (m_consoleHistoryIndex == m_consoleHistory.size()) {
+    m_consoleHistoryDraft = m_consoleInput->text();
+  }
+
+  const int target =
+      qBound(0, m_consoleHistoryIndex + direction, m_consoleHistory.size());
+  if (target == m_consoleHistoryIndex) {
+    return;
+  }
+  m_consoleHistoryIndex = target;
+
+  m_consoleInput->setText(target == m_consoleHistory.size()
+                              ? m_consoleHistoryDraft
+                              : m_consoleHistory.at(target));
+  m_consoleInput->setCursorPosition(m_consoleInput->text().size());
+}
+
+void DebugPanel::findInConsole(bool backwards) {
+  const QString needle = m_consoleFindInput->text();
+  if (needle.isEmpty()) {
+    return;
+  }
+
+  QTextDocument::FindFlags flags;
+  if (backwards) {
+    flags |= QTextDocument::FindBackward;
+  }
+  if (m_consoleOutput->find(needle, flags)) {
+    return;
+  }
+
+  // Wrap around rather than silently doing nothing at the last match.
+  QTextCursor cursor = m_consoleOutput->textCursor();
+  cursor.movePosition(backwards ? QTextCursor::End : QTextCursor::Start);
+  m_consoleOutput->setTextCursor(cursor);
+  if (!m_consoleOutput->find(needle, flags)) {
+    appendConsoleLine(tr("No match for \"%1\"").arg(needle),
+                      consoleMutedColor());
+  }
+}
+
+QString
+DebugPanel::expressionForVariableItem(const QTreeWidgetItem *item) const {
+  if (!item) {
+    return QString();
+  }
+  // Adapters supply evaluateName for rows that can be re-evaluated; a scope
+  // header or a synthetic row has none and cannot become a watch.
+  const QString evaluateName = item->data(0, Qt::UserRole + 1).toString();
+  if (!evaluateName.isEmpty()) {
+    return evaluateName;
+  }
+  return item->parent() ? item->text(0) : QString();
+}
+
+void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
+  QTreeWidgetItem *item = m_variablesTree->itemAt(pos);
+  if (!item) {
+    return;
+  }
+
+  const QString name = item->text(0);
+  const QString value = item->text(1);
+  const QString expression = expressionForVariableItem(item);
+
+  QMenu menu(m_variablesTree);
+  menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
+
+  QAction *copyName = menu.addAction(tr("Copy Name"));
+  QAction *copyValue = menu.addAction(tr("Copy Value"));
+  copyValue->setEnabled(!value.isEmpty());
+  QAction *copyExpression = menu.addAction(tr("Copy Expression"));
+  copyExpression->setEnabled(!expression.isEmpty());
+
+  menu.addSeparator();
+  QAction *addWatch = menu.addAction(tr("Add to Watch"));
+  addWatch->setEnabled(!expression.isEmpty());
+
+  menu.addSeparator();
+  QAction *expand = menu.addAction(tr("Expand"));
+  QAction *collapse = menu.addAction(tr("Collapse"));
+  const bool expandable =
+      item->childCount() > 0 || item->data(0, Qt::UserRole).toInt() > 0;
+  expand->setEnabled(expandable && !item->isExpanded());
+  collapse->setEnabled(expandable && item->isExpanded());
+  QAction *refresh = menu.addAction(tr("Refresh"));
+
+  QAction *chosen = menu.exec(m_variablesTree->viewport()->mapToGlobal(pos));
+  if (!chosen) {
+    return;
+  }
+
+  if (chosen == copyName) {
+    QGuiApplication::clipboard()->setText(name);
+  } else if (chosen == copyValue) {
+    QGuiApplication::clipboard()->setText(value);
+  } else if (chosen == copyExpression) {
+    QGuiApplication::clipboard()->setText(expression);
+  } else if (chosen == addWatch) {
+    WatchManager::instance().addWatch(expression);
+  } else if (chosen == expand) {
+    item->setExpanded(true);
+  } else if (chosen == collapse) {
+    item->setExpanded(false);
+  } else if (chosen == refresh) {
+    // Re-request the frame's scopes, which repopulates the whole tree.
+    setCurrentFrame(m_currentFrameId);
+  }
+}
+
+void DebugPanel::showConsoleContextMenu(const QPoint &pos) {
+  QMenu menu(m_consoleOutput);
+  menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
+
+  QAction *copy = menu.addAction(tr("Copy"));
+  copy->setEnabled(m_consoleOutput->textCursor().hasSelection());
+  QAction *copyAll = menu.addAction(tr("Copy All"));
+  QAction *selectAll = menu.addAction(tr("Select All"));
+  menu.addSeparator();
+  QAction *wrap = menu.addAction(tr("Word Wrap"));
+  wrap->setCheckable(true);
+  wrap->setChecked(m_consoleOutput->wordWrapMode() != QTextOption::NoWrap);
+  menu.addSeparator();
+  QAction *clear = menu.addAction(tr("Clear"));
+
+  QAction *chosen = menu.exec(m_consoleOutput->viewport()->mapToGlobal(pos));
+  if (chosen == copy) {
+    m_consoleOutput->copy();
+  } else if (chosen == copyAll) {
+    QGuiApplication::clipboard()->setText(m_consoleOutput->toPlainText());
+  } else if (chosen == selectAll) {
+    m_consoleOutput->selectAll();
+  } else if (chosen == wrap) {
+    m_consoleWrapAction->setChecked(wrap->isChecked());
+  } else if (chosen == clear) {
+    m_consoleOutput->clear();
+  }
+}
+
+void DebugPanel::navigateToConsoleLocation(const QString &lineText) {
+  // Matches "/abs/path.cpp:42" and "file.py", line 8 - the two shapes gdb and
+  // debugpy actually emit. Anything else is left alone rather than guessed at.
+  static const QRegularExpression pathLine(
+      QStringLiteral("([^\\s\"'<>|]+\\.[A-Za-z0-9_+]+):(\\d+)"));
+  static const QRegularExpression pythonFrame(
+      QStringLiteral("File \"([^\"]+)\", line (\\d+)"));
+
+  QString path;
+  int line = 0;
+
+  QRegularExpressionMatch match = pythonFrame.match(lineText);
+  if (match.hasMatch()) {
+    path = match.captured(1);
+    line = match.captured(2).toInt();
+  } else {
+    match = pathLine.match(lineText);
+    if (match.hasMatch()) {
+      path = match.captured(1);
+      line = match.captured(2).toInt();
+    }
+  }
+
+  if (path.isEmpty() || line <= 0) {
+    return;
+  }
+  emit locationClicked(path, line, 0);
+}
+
+void DebugPanel::updateConsoleInputAffordances() {
+  if (!m_consoleInput) {
+    return;
+  }
+
+  const DapClient::State state =
+      m_dapClient ? m_dapClient->state() : DapClient::State::Disconnected;
+
+  // The input stays enabled in every state: a disabled box that swallows the
+  // click explains nothing, whereas submitting prints why it cannot evaluate.
+  if (state == DapClient::State::Stopped) {
+    QString frameLabel;
+    for (const DapStackFrame &frame : m_stackFrames) {
+      if (frame.id == m_currentFrameId) {
+        frameLabel = frame.name;
+        break;
+      }
+    }
+    m_consoleInput->setPlaceholderText(
+        frameLabel.isEmpty() ? tr("Evaluate expression…")
+                             : tr("Evaluate in %1…").arg(frameLabel));
+  } else if (state == DapClient::State::Running) {
+    m_consoleInput->setPlaceholderText(
+        tr("Pause execution to evaluate expressions"));
+  } else {
+    m_consoleInput->setPlaceholderText(
+        tr("Start debugging to evaluate expressions"));
+  }
 }
 
 QJsonArray DebugPanel::currentExceptionBreakpointFilters() const {
@@ -1316,17 +1739,21 @@ void DebugPanel::clearAll() {
   m_callStackTree->clear();
   m_variablesTree->clear();
   m_variableRefToItem.clear();
+  m_pendingTreeSummaries.clear();
   m_pendingScopeVariableLoads.clear();
   m_pendingVariableRequests.clear();
   clearLocalsFallbackState();
   m_programmaticVariablesExpand = false;
-  m_variablesNameColumnAutofitPending = false;
+  m_variablesNameColumnUserSized = false;
   m_stepInProgress = false;
   m_expectStopEvent = true;
   m_hasLastStopEvent = false;
   m_lastStoppedThreadId = 0;
   m_lastStoppedReason = DapStoppedReason::Unknown;
   m_pendingConsoleEvaluations.clear();
+  m_consoleExpansions.clear();
+  m_consoleExpansionNodeByRef.clear();
+  m_previousVariableValues.clear();
   m_consoleOutput->clear();
   m_threads.clear();
   m_stackFrames.clear();
@@ -1417,6 +1844,7 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
 
   m_variablesTree->clear();
   m_variableRefToItem.clear();
+  m_pendingTreeSummaries.clear();
   m_pendingScopeVariableLoads.clear();
   m_pendingVariableRequests.clear();
   clearLocalsFallbackState();
@@ -1440,6 +1868,7 @@ void DebugPanel::onContinued() {
   m_stepInProgress = false;
   m_variablesTree->clear();
   m_variableRefToItem.clear();
+  m_pendingTreeSummaries.clear();
   m_pendingScopeVariableLoads.clear();
   m_pendingVariableRequests.clear();
   clearLocalsFallbackState();
@@ -1573,7 +2002,9 @@ void DebugPanel::onStackTraceReceived(int threadId,
     QTreeWidgetItem *item = new QTreeWidgetItem();
     item->setText(0, frame.name);
     item->setText(1, frame.source.name);
-    item->setText(2, QString::number(frame.line));
+    // Frames without source information report line 0; a bare "0" reads as a
+    // real location, so leave the cell empty instead.
+    item->setText(2, frame.line > 0 ? QString::number(frame.line) : QString());
     item->setData(0, Qt::UserRole, frame.id);
     item->setData(0, Qt::UserRole + 1, frame.source.path);
     item->setData(0, Qt::UserRole + 2, frame.line);
@@ -1611,6 +2042,9 @@ void DebugPanel::onStackTraceReceived(int threadId,
     WatchManager::instance().evaluateAll(activeFrame.id);
   }
 
+  // The status pill names the paused location, which is only known once the
+  // frames arrive - the state change alone came too early to show it.
+  updateToolbarState();
   updateSectionSummaries();
 }
 
@@ -1622,10 +2056,10 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
 
   m_variablesTree->clear();
   m_variableRefToItem.clear();
+  m_pendingTreeSummaries.clear();
   m_pendingScopeVariableLoads.clear();
   m_pendingVariableRequests.clear();
   clearLocalsFallbackState();
-  m_variablesNameColumnAutofitPending = true;
 
   QList<int> eagerScopeRefs;
   for (const DapScope &scope : scopes) {
@@ -1709,8 +2143,7 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
   }
 
   if (m_pendingScopeVariableLoads.isEmpty()) {
-    resizeVariablesNameColumnOnce();
-    m_variablesNameColumnAutofitPending = false;
+    fitVariablesNameColumn();
   }
   updateSectionSummaries();
 }
@@ -1718,10 +2151,25 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
 void DebugPanel::onVariablesReceived(int variablesReference,
                                      const QList<DapVariable> &variables) {
   m_pendingVariableRequests.remove(variablesReference);
+
+  applyConsoleExpansion(variablesReference, variables);
+
+  const auto summaryFor = m_pendingTreeSummaries.find(variablesReference);
+  if (summaryFor != m_pendingTreeSummaries.end()) {
+    QTreeWidgetItem *aggregateItem = summaryFor.value();
+    m_pendingTreeSummaries.erase(summaryFor);
+    aggregateItem->setText(1, previewForVariables(variables));
+  }
+
   QTreeWidgetItem *parentItem = m_variableRefToItem.value(variablesReference);
   if (!parentItem) {
     return;
   }
+
+  // Any preview still in flight may point at a row about to be freed.
+  // QTreeWidgetItem is not a QObject, so there is no guarded pointer to lean
+  // on - drop the pending previews rather than risk a dangling write.
+  m_pendingTreeSummaries.clear();
 
   while (parentItem->childCount() > 0) {
     delete parentItem->takeChild(0);
@@ -1733,7 +2181,37 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     item->setText(1, var.value);
     item->setText(2, var.type);
     item->setData(0, Qt::UserRole, var.variablesReference);
+    item->setData(0, Qt::UserRole + 1, var.evaluateName);
     item->setIcon(0, variableIcon(var));
+
+    // A value that moved since the previous stop is what the user stepped to
+    // find, so mark it - on the value cell only, and only until the next stop.
+    QString path = var.name;
+    for (QTreeWidgetItem *ancestor = parentItem; ancestor;
+         ancestor = ancestor->parent()) {
+      path.prepend(ancestor->text(0) + QLatin1Char('/'));
+    }
+    const auto previous = m_previousVariableValues.constFind(path);
+    if (previous != m_previousVariableValues.constEnd() &&
+        previous.value() != var.value) {
+      item->setForeground(1, m_themeInitialized ? m_theme.warningColor
+                                                : item->foreground(1));
+    }
+    m_previousVariableValues.insert(path, var.value);
+
+    // Columns elide; the tooltip keeps the whole value and type reachable.
+    QStringList tip;
+    tip << var.name;
+    if (!var.value.isEmpty()) {
+      tip << var.value;
+    }
+    if (!var.type.isEmpty()) {
+      tip << QStringLiteral("(%1)").arg(var.type);
+    }
+    const QString tipText = tip.join(QLatin1Char('\n'));
+    for (int column = 0; column < 3; ++column) {
+      item->setToolTip(column, tipText);
+    }
 
     if (var.variablesReference > 0) {
       item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
@@ -1741,6 +2219,8 @@ void DebugPanel::onVariablesReceived(int variablesReference,
 
     parentItem->addChild(item);
   }
+
+  requestAggregatePreviews(variables, parentItem);
 
   bool requestedLocalFallback = false;
   if (variables.isEmpty() && !parentItem->parent()) {
@@ -1756,12 +2236,10 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     parentItem->setExpanded(true);
   }
 
-  if (m_variablesNameColumnAutofitPending &&
-      m_pendingScopeVariableLoads.remove(variablesReference) &&
-      m_pendingScopeVariableLoads.isEmpty()) {
-    m_variablesNameColumnAutofitPending = false;
-    QTimer::singleShot(0, this, [this]() { resizeVariablesNameColumnOnce(); });
-  }
+  m_pendingScopeVariableLoads.remove(variablesReference);
+  // Names get longer as the user drills into a value, so refit after every
+  // batch instead of only once per stop - until the column is sized by hand.
+  QTimer::singleShot(0, this, [this]() { fitVariablesNameColumn(); });
   updateSectionSummaries();
 }
 
@@ -1860,7 +2338,7 @@ void DebugPanel::populateLocalsFromGdbEvaluate(int scopeVariablesReference,
   }
 
   scopeItem->setExpanded(true);
-  QTimer::singleShot(0, this, [this]() { resizeVariablesNameColumnOnce(); });
+  QTimer::singleShot(0, this, [this]() { fitVariablesNameColumn(); });
 }
 
 void DebugPanel::showLocalsFallbackMessage(int scopeVariablesReference,
@@ -2230,7 +2708,16 @@ void DebugPanel::onConsoleInput() {
     return;
   }
 
+  if (m_consoleHistory.isEmpty() || m_consoleHistory.last() != expr) {
+    m_consoleHistory.append(expr);
+  }
+  m_consoleHistoryIndex = m_consoleHistory.size();
+  m_consoleHistoryDraft.clear();
+
   m_consoleInput->clear();
+  // Evaluating usually means evaluating again with a small edit, so the input
+  // keeps focus rather than making the user click back into it every time.
+  m_consoleInput->setFocus();
 
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
     const QList<DebugEvaluateRequest> attempts =
@@ -2292,6 +2779,7 @@ void DebugPanel::updateToolbarState() {
 
   if (m_debugStatusLabel) {
     QString statusText;
+    QString statusDetail;
     QString statusKind = QStringLiteral("ready");
     switch (state) {
     case DapClient::State::Disconnected:
@@ -2311,13 +2799,16 @@ void DebugPanel::updateToolbarState() {
       break;
     case DapClient::State::Stopped: {
 
+      // The pill is narrow, so lead with the location: it is what the user
+      // needs at a glance, and the function name lives in the tooltip.
       QString location;
       for (const DapStackFrame &frame : m_stackFrames) {
         if (!frame.source.name.isEmpty()) {
-          const QString fileName = frame.source.name;
-          location = tr("Paused at %1 · %2:%3")
-                         .arg(frame.name, fileName)
-                         .arg(frame.line);
+          location =
+              tr("Paused · %1:%2").arg(frame.source.name).arg(frame.line);
+          statusDetail = tr("Paused at %1 · %2:%3")
+                             .arg(frame.name, frame.source.name)
+                             .arg(frame.line);
           break;
         }
       }
@@ -2330,8 +2821,10 @@ void DebugPanel::updateToolbarState() {
       statusKind = QStringLiteral("error");
       break;
     }
-    m_debugStatusLabel->setText(statusText);
-    m_debugStatusLabel->setToolTip(statusText);
+    m_debugStatusText = statusText;
+    applyDebugStatusText();
+    m_debugStatusLabel->setToolTip(statusDetail.isEmpty() ? statusText
+                                                          : statusDetail);
     if (m_debugStatusLabel->property("statusKind").toString() != statusKind) {
       m_debugStatusLabel->setProperty("statusKind", statusKind);
       m_debugStatusLabel->style()->unpolish(m_debugStatusLabel);
@@ -2340,7 +2833,7 @@ void DebugPanel::updateToolbarState() {
     }
   }
 
-  m_consoleInput->setEnabled(isStopped);
+  updateConsoleInputAffordances();
 }
 
 int DebugPanel::activeThreadId() const {
@@ -2592,8 +3085,6 @@ void DebugPanel::onWatchChildrenReceived(int watchId,
 void DebugPanel::onEvaluateResult(int requestSeq, const QString &expression,
                                   const QString &result, const QString &type,
                                   int variablesReference) {
-  Q_UNUSED(variablesReference);
-
   if (m_localsFallbackPending && requestSeq == m_localsFallbackRequestSeq) {
     const int scopeRef = m_localsFallbackScopeRef;
     const bool staleFrame = m_localsFallbackFrameId != m_currentFrameId;
@@ -2612,11 +3103,129 @@ void DebugPanel::onEvaluateResult(int requestSeq, const QString &expression,
     m_pendingConsoleEvaluations.removeAt(pendingIndex);
   }
 
+  // Structured values (a struct, a container, a QString) come back with an
+  // empty result and a reference to their children. Printing "expr = (Type)"
+  // tells the user nothing, so fetch the children and summarise them.
+  if (result.trimmed().isEmpty() && variablesReference > 0 && m_dapClient) {
+    startConsoleExpansion(displayExpression, type, variablesReference);
+    return;
+  }
+
   QString line = QString("%1 = %2").arg(displayExpression, result);
   if (!type.isEmpty()) {
     line += QString(" (%1)").arg(type);
   }
   appendConsoleLine(line, palette().color(QPalette::Text), true);
+}
+
+void DebugPanel::startConsoleExpansion(const QString &expression,
+                                       const QString &type,
+                                       int variablesReference) {
+  const int id = m_nextConsoleExpansionId++;
+
+  ConsoleExpansion expansion;
+  expansion.expression = expression;
+  expansion.type = type;
+
+  ConsoleExpansionNode root;
+  root.name = expression;
+  root.reference = variablesReference;
+  expansion.nodes.append(root);
+  expansion.pendingRequests = 1;
+
+  m_consoleExpansions.insert(id, expansion);
+  m_consoleExpansionNodeByRef.insert(variablesReference, {id, 0});
+  m_dapClient->getVariables(variablesReference);
+}
+
+bool DebugPanel::applyConsoleExpansion(int variablesReference,
+                                       const QList<DapVariable> &variables) {
+  // Deep enough to render nested wrappers such as QVector3D's float array,
+  // capped so a large container cannot flood the adapter with requests.
+  constexpr int kMaxDepth = 3;
+  constexpr int kMaxNodes = 64;
+
+  const auto located = m_consoleExpansionNodeByRef.find(variablesReference);
+  if (located == m_consoleExpansionNodeByRef.end()) {
+    return false;
+  }
+  const int expansionId = located.value().first;
+  const int nodeIndex = located.value().second;
+  m_consoleExpansionNodeByRef.erase(located);
+
+  const auto found = m_consoleExpansions.find(expansionId);
+  if (found == m_consoleExpansions.end()) {
+    return false;
+  }
+  ConsoleExpansion &expansion = found.value();
+  expansion.pendingRequests = qMax(0, expansion.pendingRequests - 1);
+
+  const int childDepth = expansion.nodes.at(nodeIndex).depth + 1;
+  for (const DapVariable &var : variables) {
+    if (expansion.nodes.size() >= kMaxNodes) {
+      break;
+    }
+    ConsoleExpansionNode child;
+    child.name = var.name;
+    child.value = var.value.trimmed();
+    child.reference = var.variablesReference;
+    child.depth = childDepth;
+    expansion.nodes.append(child);
+    const int childIndex = expansion.nodes.size() - 1;
+    expansion.nodes[nodeIndex].children.append(childIndex);
+
+    if (child.value.isEmpty() && child.reference > 0 &&
+        childDepth < kMaxDepth && m_dapClient &&
+        !m_consoleExpansionNodeByRef.contains(child.reference)) {
+      m_consoleExpansionNodeByRef.insert(child.reference,
+                                         {expansionId, childIndex});
+      expansion.pendingRequests++;
+      m_dapClient->getVariables(child.reference);
+    }
+  }
+
+  if (expansion.pendingRequests > 0) {
+    return true;
+  }
+
+  const ConsoleExpansion finished = expansion;
+  m_consoleExpansions.erase(found);
+
+  QString line = QString("%1 = %2").arg(finished.expression,
+                                        renderConsoleExpansion(finished, 0));
+  if (!finished.type.isEmpty()) {
+    line += QString(" (%1)").arg(finished.type);
+  }
+  appendConsoleLine(line, palette().color(QPalette::Text), true);
+  return true;
+}
+
+QString DebugPanel::renderConsoleExpansion(const ConsoleExpansion &expansion,
+                                           int nodeIndex) const {
+  constexpr int kMaxChildrenShown = 12;
+
+  if (nodeIndex < 0 || nodeIndex >= expansion.nodes.size()) {
+    return QStringLiteral("{...}");
+  }
+  const ConsoleExpansionNode &node = expansion.nodes.at(nodeIndex);
+  if (node.children.isEmpty()) {
+    if (!node.value.isEmpty()) {
+      return node.value;
+    }
+    return node.reference > 0 ? QStringLiteral("{...}") : QStringLiteral("{}");
+  }
+
+  QStringList parts;
+  for (int childIndex : node.children) {
+    if (parts.size() >= kMaxChildrenShown) {
+      parts << QStringLiteral("...");
+      break;
+    }
+    const ConsoleExpansionNode &child = expansion.nodes.at(childIndex);
+    parts << QString("%1 = %2").arg(
+        child.name, renderConsoleExpansion(expansion, childIndex));
+  }
+  return QString("{%1}").arg(parts.join(QStringLiteral(", ")));
 }
 
 void DebugPanel::onEvaluateError(int requestSeq, const QString &expression,
@@ -2670,6 +3279,13 @@ void DebugPanel::appendConsoleLine(const QString &text, const QColor &color,
     output += tr(" ... [truncated %1 chars]").arg(truncated);
   }
 
+  // Follow new output only when the view is already at the bottom; scrolling
+  // back to read something must not be undone by the next line arriving.
+  QScrollBar *scrollBar = m_consoleOutput->verticalScrollBar();
+  const bool wasAtBottom =
+      !scrollBar || scrollBar->value() >= scrollBar->maximum() - 4;
+  const int previousScroll = scrollBar ? scrollBar->value() : 0;
+
   QTextCursor cursor(m_consoleOutput->document());
   cursor.movePosition(QTextCursor::End);
 
@@ -2682,8 +3298,12 @@ void DebugPanel::appendConsoleLine(const QString &text, const QColor &color,
     cursor.insertBlock();
   }
 
-  m_consoleOutput->setTextCursor(cursor);
-  m_consoleOutput->ensureCursorVisible();
+  if (wasAtBottom) {
+    m_consoleOutput->setTextCursor(cursor);
+    m_consoleOutput->ensureCursorVisible();
+  } else if (scrollBar) {
+    scrollBar->setValue(previousScroll);
+  }
 }
 
 int DebugPanel::findPendingConsoleEvaluationIndex(int requestSeq) const {
@@ -2723,18 +3343,181 @@ void DebugPanel::dispatchPendingConsoleEvaluation(int pendingIndex) {
       m_dapClient->evaluate(attempt.expression, m_currentFrameId, context);
 }
 
-void DebugPanel::resizeVariablesNameColumnOnce() {
-  if (!m_variablesTree) {
+void DebugPanel::requestAggregatePreviews(const QList<DapVariable> &variables,
+                                          QTreeWidgetItem *parentItem) {
+  // gdb reports structs and containers with an empty value, leaving the row
+  // blank until it is expanded. Fetch one level of children so the row can
+  // preview them - bounded, so a large container does not fan out.
+  constexpr int kMaxPreviewedChildren = 24;
+
+  if (!m_dapClient || !parentItem || variables.size() > kMaxPreviewedChildren) {
     return;
   }
 
+  for (int i = 0; i < variables.size() && i < parentItem->childCount(); ++i) {
+    const DapVariable &var = variables.at(i);
+    if (!var.value.trimmed().isEmpty() || var.variablesReference <= 0) {
+      continue;
+    }
+    if (m_pendingTreeSummaries.contains(var.variablesReference) ||
+        m_pendingVariableRequests.contains(var.variablesReference)) {
+      continue;
+    }
+    m_pendingTreeSummaries.insert(var.variablesReference, parentItem->child(i));
+    m_dapClient->getVariables(var.variablesReference);
+  }
+}
+
+QString DebugPanel::previewForVariables(const QList<DapVariable> &variables) {
+  constexpr int kMaxPreviewParts = 6;
+
+  QStringList parts;
+  for (const DapVariable &var : variables) {
+    if (parts.size() >= kMaxPreviewParts) {
+      parts << QStringLiteral("...");
+      break;
+    }
+    const QString value = var.value.trimmed();
+    parts << (value.isEmpty() ? QString("%1 = {...}").arg(var.name)
+                              : QString("%1 = %2").arg(var.name, value));
+  }
+  if (parts.isEmpty()) {
+    return QStringLiteral("{}");
+  }
+  return QString("{%1}").arg(parts.join(QStringLiteral(", ")));
+}
+
+QString DebugPanel::emptyStateTextFor(const QTreeWidget *tree) const {
+  const DapClient::State state =
+      m_dapClient ? m_dapClient->state() : DapClient::State::Disconnected;
+  const bool paused = state == DapClient::State::Stopped;
+  const bool running = state == DapClient::State::Running;
+
+  if (tree == m_breakpointsTree) {
+    return tr("No breakpoints yet.\n"
+              "Click in the gutter beside a line number to add one.");
+  }
+  if (tree == m_watchTree) {
+    return tr("No watches yet.\n"
+              "Add an expression below to follow it while you step.");
+  }
+  if (tree == m_callStackTree) {
+    if (running) {
+      return tr("Running.\nPause or hit a breakpoint to see the call stack.");
+    }
+    return paused ? QString()
+                  : tr("Not debugging.\nPress F5 to start a debug session.");
+  }
+  if (tree == m_variablesTree) {
+    if (running) {
+      return tr("Running.\nPause or hit a breakpoint to inspect variables.");
+    }
+    return paused ? QString()
+                  : tr("Not debugging.\nPress F5 to start a debug session.");
+  }
+  return QString();
+}
+
+bool DebugPanel::paintTreeEmptyState(QTreeWidget *tree) {
+  if (!tree || tree->topLevelItemCount() > 0) {
+    return false;
+  }
+  const QString text = emptyStateTextFor(tree);
+  if (text.isEmpty()) {
+    return false;
+  }
+
+  QPainter painter(tree->viewport());
+  painter.fillRect(tree->viewport()->rect(), tree->palette().base());
+
+  QColor textColor = m_themeInitialized ? m_theme.foregroundColor
+                                        : tree->palette().color(QPalette::Text);
+  textColor.setAlpha(140);
+  painter.setPen(textColor);
+  painter.drawText(tree->viewport()->rect().adjusted(24, 0, -24, 0),
+                   Qt::AlignCenter | Qt::TextWordWrap, text);
+  return true;
+}
+
+bool DebugPanel::eventFilter(QObject *watched, QEvent *event) {
+  if (watched == m_debugStatusLabel && event->type() == QEvent::Resize) {
+    applyDebugStatusText();
+  }
+
+  // An empty tree is a blank rectangle that explains nothing; say what the
+  // view needs instead.
+  if (event->type() == QEvent::Paint) {
+    for (QTreeWidget *tree :
+         {m_callStackTree, m_variablesTree, m_watchTree, m_breakpointsTree}) {
+      if (tree && watched == tree->viewport()) {
+        if (paintTreeEmptyState(tree)) {
+          return true;
+        }
+        break;
+      }
+    }
+  }
+
+  if (watched == m_consoleWindow && event->type() == QEvent::Close) {
+    reattachConsole();
+    return true;
+  }
+
+  if (watched == m_consoleInput && event->type() == QEvent::KeyPress) {
+    auto *keyEvent = static_cast<QKeyEvent *>(event);
+    if (keyEvent->key() == Qt::Key_Up) {
+      recallConsoleHistory(-1);
+      return true;
+    }
+    if (keyEvent->key() == Qt::Key_Down) {
+      recallConsoleHistory(1);
+      return true;
+    }
+  }
+
+  if (m_consoleOutput && watched == m_consoleOutput->viewport() &&
+      event->type() == QEvent::MouseButtonDblClick) {
+    auto *mouseEvent = static_cast<QMouseEvent *>(event);
+    const QTextCursor cursor =
+        m_consoleOutput->cursorForPosition(mouseEvent->pos());
+    navigateToConsoleLocation(cursor.block().text());
+  }
+
+  return QWidget::eventFilter(watched, event);
+}
+
+void DebugPanel::applyDebugStatusText() {
+  if (!m_debugStatusLabel) {
+    return;
+  }
+  // The pill competes for width with the thread selector, so a long location
+  // has to end in an ellipsis rather than be sliced mid-word - a clipped
+  // "meshview.cpp:7" would read as a real, wrong line number. The subtracted
+  // room matches the stylesheet's 12px horizontal padding plus its border.
+  const int available = m_debugStatusLabel->width() - 2 * (12 + 1);
+  if (available <= 0) {
+    m_debugStatusLabel->setText(m_debugStatusText);
+    return;
+  }
+  m_debugStatusLabel->setText(m_debugStatusLabel->fontMetrics().elidedText(
+      m_debugStatusText, Qt::ElideRight, available));
+}
+
+void DebugPanel::fitVariablesNameColumn() {
+  if (!m_variablesTree || m_variablesNameColumnUserSized) {
+    return;
+  }
+
+  m_variablesNameColumnAutofitting = true;
   m_variablesTree->resizeColumnToContents(0);
   const int measured = m_variablesTree->columnWidth(0);
-  const int padded = measured + 18;
+  // Variables usually arrive while another inspector tab is showing; a hidden
+  // tree reports a stale viewport width, so fall back to the panel's width.
+  const int available = qMax(m_variablesTree->viewport()->width(), width());
   const int minWidth = 180;
-  const int maxWidth = qMax(
-      minWidth, static_cast<int>(m_variablesTree->viewport()->width() * 0.55));
-  m_variablesTree->setColumnWidth(0, qBound(minWidth, padded, maxWidth));
+  const int maxWidth = qMax(minWidth, static_cast<int>(available * 0.55));
+  m_variablesTree->setColumnWidth(0, qBound(minWidth, measured, maxWidth));
+  m_variablesNameColumnAutofitting = false;
 }
 
 QColor DebugPanel::consoleErrorColor() const {
