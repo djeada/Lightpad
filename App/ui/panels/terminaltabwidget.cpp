@@ -379,6 +379,17 @@ void TerminalTabWidget::executeCommand(const QString &command,
   terminal->executeCommand(command, args, workingDirectory, env);
 }
 
+void TerminalTabWidget::appendNotice(const QString &text, bool isError) {
+  if (Terminal *terminal = currentTerminal()) {
+    terminal->appendNotice(text, isError);
+  }
+}
+
+QString TerminalTabWidget::currentRunTranscript() const {
+  Terminal *terminal = const_cast<TerminalTabWidget *>(this)->currentTerminal();
+  return terminal ? terminal->runTranscript() : QString();
+}
+
 void TerminalTabWidget::stopCurrentProcess() {
   Terminal *terminal = currentTerminal();
   if (terminal) {

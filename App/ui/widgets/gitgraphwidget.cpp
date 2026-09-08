@@ -35,13 +35,49 @@ GitGraphWidget::GitGraphWidget(GitIntegration *git, const Theme &theme,
   });
 }
 
-void GitGraphWidget::loadGraph(int maxCount, const QString &branch) {
+void GitGraphWidget::setLogOptions(const GitLogOptions &options) {
+  m_logOptions = options;
+  loadGraph(qMax(m_pageSize, 200));
+}
+
+void GitGraphWidget::setWorkingTreeState(const GitRepositoryState &state) {
+  m_workingState = state;
+  const bool show = state.valid && state.hasChanges();
+  if (show == m_showWip) {
+    if (show) {
+      update();
+    }
+    return;
+  }
+  m_showWip = show;
+  relayout();
+}
+
+void GitGraphWidget::clearCompareAnchor() {
+  if (m_compareAnchor.isEmpty()) {
+    return;
+  }
+  m_compareAnchor.clear();
+  emit compareAnchorChanged(QString());
+  update();
+}
+
+int GitGraphWidget::totalRows() const {
+  return m_nodes.size() + (m_showWip ? 1 : 0);
+}
+
+int GitGraphWidget::rowForIndex(int index) const {
+  return index + (m_showWip ? 1 : 0);
+}
+
+int GitGraphWidget::contentHeight() const { return totalRows() * m_rowHeight; }
+
+void GitGraphWidget::loadGraph(int maxCount) {
   m_nodes.clear();
   m_hashToIndex.clear();
   m_maxLanes = 0;
   m_selectedIndex = -1;
   m_hoverIndex = -1;
-  m_branch = branch;
   m_loadingMore = false;
   m_historyExhausted = false;
 
@@ -53,7 +89,7 @@ void GitGraphWidget::loadGraph(int maxCount, const QString &branch) {
 
   const int initialCount = qMax(1, maxCount);
   QList<GitCommitInfo> commits =
-      m_git->getCommitLogPage(branch, 0, initialCount);
+      m_git->getLogPage(m_logOptions, 0, initialCount);
 
   if (commits.size() < initialCount) {
     m_historyExhausted = true;
@@ -72,6 +108,7 @@ void GitGraphWidget::loadGraph(int maxCount, const QString &branch) {
   }
 
   loadRefDecorations();
+  loadAnchorDecorations();
 
   layoutGraph();
   rebuildFilterCache();
@@ -107,7 +144,7 @@ void GitGraphWidget::selectCommit(const QString &hash, bool emitSignal) {
   const int index = it.value();
   m_selectedIndex = index;
 
-  const int rowTop = index * m_rowHeight;
+  const int rowTop = rowForIndex(index) * m_rowHeight;
   if (rowTop < m_scrollOffset ||
       rowTop + m_rowHeight > m_scrollOffset + height()) {
     setScrollOffset(qMax(0, rowTop - height() / 2 + m_rowHeight));
@@ -128,6 +165,45 @@ void GitGraphWidget::loadRefDecorations() {
   m_refs = m_git->getCommitRefsMap();
 }
 
+void GitGraphWidget::loadAnchorDecorations() {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  const QMap<QString, QStringList> worktrees = m_git->getWorktreeAnchors();
+  for (auto it = worktrees.constBegin(); it != worktrees.constEnd(); ++it) {
+    for (const QString &name : it.value()) {
+      GitRefDecoration decoration;
+      decoration.kind = GitRefDecoration::Kind::Worktree;
+      decoration.name = name;
+      m_refs[it.key()].append(decoration);
+    }
+  }
+
+  const QMap<QString, QStringList> stashes = m_git->getStashAnchors();
+  for (auto it = stashes.constBegin(); it != stashes.constEnd(); ++it) {
+    for (const QString &name : it.value()) {
+      GitRefDecoration decoration;
+      decoration.kind = GitRefDecoration::Kind::Stash;
+      decoration.name = name;
+      m_refs[it.key()].append(decoration);
+    }
+  }
+}
+
+int GitGraphWidget::matchingCommitCount() const {
+  if (m_filter.trimmed().isEmpty()) {
+    return m_nodes.size();
+  }
+  int count = 0;
+  for (int i = 0; i < m_nodes.size(); ++i) {
+    if (rowMatches(i)) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 bool GitGraphWidget::rowMatches(int index) const {
   if (index < 0 || index >= m_filterCache.size()) {
     return true;
@@ -145,11 +221,27 @@ void GitGraphWidget::rebuildFilterCache() {
       continue;
     }
     const GraphCommitNode &node = m_nodes.at(i);
-    m_filterCache[i] =
+    bool matches =
         node.info.subject.contains(needle, Qt::CaseInsensitive) ||
         node.info.shortHash.contains(needle, Qt::CaseInsensitive) ||
         node.info.hash.contains(needle, Qt::CaseInsensitive) ||
-        node.info.author.contains(needle, Qt::CaseInsensitive);
+        node.info.author.contains(needle, Qt::CaseInsensitive) ||
+        node.info.authorEmail.contains(needle, Qt::CaseInsensitive) ||
+        node.info.date.contains(needle, Qt::CaseInsensitive) ||
+        node.info.relativeDate.contains(needle, Qt::CaseInsensitive);
+
+    if (!matches) {
+      const auto refIt = m_refs.constFind(node.info.hash);
+      if (refIt != m_refs.constEnd()) {
+        for (const GitRefDecoration &decoration : *refIt) {
+          if (decoration.name.contains(needle, Qt::CaseInsensitive)) {
+            matches = true;
+            break;
+          }
+        }
+      }
+    }
+    m_filterCache[i] = matches;
   }
 }
 
@@ -163,51 +255,52 @@ void GitGraphWidget::requestMoreCommits() {
   update();
 
   QPointer<GitGraphWidget> self(this);
-  m_git->getCommitLogPageAsync(
-      m_branch, m_nodes.size(), m_pageSize, [self](QList<GitCommitInfo> page) {
-        if (!self) {
-          return;
-        }
+  m_git->getLogPageAsync(m_logOptions, m_nodes.size(), m_pageSize,
+                         [self](QList<GitCommitInfo> page) {
+                           if (!self) {
+                             return;
+                           }
 
-        self->m_loadingMore = false;
+                           self->m_loadingMore = false;
 
-        if (page.isEmpty()) {
-          self->m_historyExhausted = true;
-          emit self->historyExhausted();
-          self->update();
-          return;
-        }
+                           if (page.isEmpty()) {
+                             self->m_historyExhausted = true;
+                             emit self->historyExhausted();
+                             self->update();
+                             return;
+                           }
 
-        if (page.size() < self->m_pageSize) {
-          self->m_historyExhausted = true;
-          emit self->historyExhausted();
-        }
+                           if (page.size() < self->m_pageSize) {
+                             self->m_historyExhausted = true;
+                             emit self->historyExhausted();
+                           }
 
-        const int previousScroll = self->m_scrollOffset;
-        for (const GitCommitInfo &info : page) {
-          if (self->m_hashToIndex.contains(info.hash)) {
-            continue;
-          }
-          GraphCommitNode node;
-          node.info = info;
-          node.parents = info.parents;
-          node.column = 0;
-          node.color = Qt::white;
-          self->m_nodes.append(node);
-        }
+                           const int previousScroll = self->m_scrollOffset;
+                           for (const GitCommitInfo &info : page) {
+                             if (self->m_hashToIndex.contains(info.hash)) {
+                               continue;
+                             }
+                             GraphCommitNode node;
+                             node.info = info;
+                             node.parents = info.parents;
+                             node.column = 0;
+                             node.color = Qt::white;
+                             self->m_nodes.append(node);
+                           }
 
-        self->m_hashToIndex.clear();
-        for (int i = 0; i < self->m_nodes.size(); ++i) {
-          self->m_hashToIndex[self->m_nodes[i].info.hash] = i;
-        }
+                           self->m_hashToIndex.clear();
+                           for (int i = 0; i < self->m_nodes.size(); ++i) {
+                             self->m_hashToIndex[self->m_nodes[i].info.hash] =
+                                 i;
+                           }
 
-        self->layoutGraph();
-        self->rebuildFilterCache();
-        self->relayout();
-        self->setScrollOffset(previousScroll);
-        self->update();
-        emit self->commitsAppended(self->m_nodes.size());
-      });
+                           self->layoutGraph();
+                           self->rebuildFilterCache();
+                           self->relayout();
+                           self->setScrollOffset(previousScroll);
+                           self->update();
+                           emit self->commitsAppended(self->m_nodes.size());
+                         });
 }
 
 void GitGraphWidget::layoutGraph() {
@@ -273,7 +366,7 @@ void GitGraphWidget::layoutGraph() {
 }
 
 void GitGraphWidget::relayout() {
-  setMinimumHeight(m_nodes.size() * m_rowHeight);
+  setMinimumHeight(contentHeight());
   syncScrollBarRange();
   clampScrollOffset();
   update();
@@ -284,19 +377,26 @@ QColor GitGraphWidget::laneColor(int lane) const {
 }
 
 int GitGraphWidget::commitAtY(int y) const {
-  int idx = (y + m_scrollOffset) / m_rowHeight;
+  const int row = (y + m_scrollOffset) / m_rowHeight;
+  if (row < 0) {
+    return -1;
+  }
+  if (m_showWip && row == 0) {
+    return WIP_INDEX;
+  }
+  const int idx = row - (m_showWip ? 1 : 0);
   if (idx >= 0 && idx < m_nodes.size())
     return idx;
   return -1;
 }
 
 void GitGraphWidget::clampScrollOffset() {
-  setScrollOffset(qBound(0, m_scrollOffset,
-                         qMax(0, m_nodes.size() * m_rowHeight - height())));
+  setScrollOffset(
+      qBound(0, m_scrollOffset, qMax(0, contentHeight() - height())));
 }
 
 void GitGraphWidget::setScrollOffset(int offset) {
-  offset = qBound(0, offset, qMax(0, m_nodes.size() * m_rowHeight - height()));
+  offset = qBound(0, offset, qMax(0, contentHeight() - height()));
   if (offset == m_scrollOffset) {
     return;
   }
@@ -308,13 +408,21 @@ void GitGraphWidget::setScrollOffset(int offset) {
 }
 
 void GitGraphWidget::syncScrollBarRange() {
-  const int maxExtent = qMax(0, m_nodes.size() * m_rowHeight - height());
+  const int maxExtent = qMax(0, contentHeight() - height());
   m_syncingScrollBar = true;
   m_scrollBar->setRange(0, maxExtent);
   m_scrollBar->setPageStep(qMax(1, height()));
   m_scrollBar->setSingleStep(m_rowHeight);
   m_scrollBar->setValue(m_scrollOffset);
   m_syncingScrollBar = false;
+}
+
+void GitGraphWidget::zoomIn() { applyZoom(4); }
+
+void GitGraphWidget::zoomOut() { applyZoom(-4); }
+
+void GitGraphWidget::resetZoom() {
+  applyZoom(DEFAULT_ROW_HEIGHT - m_rowHeight);
 }
 
 void GitGraphWidget::applyZoom(int deltaRows) {
@@ -344,8 +452,12 @@ void GitGraphWidget::drawRefBadges(QPainter &painter,
   painter.setFont(badgeFont);
   const QFontMetrics badgeFm(badgeFont);
 
-  QColor headBg = m_theme.highlightColor;
-  QColor headFg = m_theme.backgroundColor;
+  QColor headBg = m_theme.accentColor;
+  if (headBg.alpha() == 0 || headBg == m_theme.backgroundColor) {
+    headBg = m_theme.highlightColor;
+  }
+  const QColor headFg =
+      headBg.lightnessF() > 0.55 ? QColor(Qt::black) : QColor(Qt::white);
 
   QColor tagBg = fgColor;
   tagBg.setAlpha(dimmed ? 8 : 28);
@@ -362,8 +474,31 @@ void GitGraphWidget::drawRefBadges(QPainter &painter,
   const int pillHeight = qMin(m_rowHeight - 10, 20);
 
   for (const GitRefDecoration &decoration : *it) {
-    QString label = decoration.name;
+
+    QString glyph;
+    switch (decoration.kind) {
+    case GitRefDecoration::Kind::LocalBranch:
+      glyph = QStringLiteral("⎇ ");
+      break;
+    case GitRefDecoration::Kind::RemoteBranch:
+      glyph = QStringLiteral("☁ ");
+      break;
+    case GitRefDecoration::Kind::Tag:
+      glyph = QStringLiteral("◆ ");
+      break;
+    case GitRefDecoration::Kind::Worktree:
+      glyph = QStringLiteral("⌂ ");
+      break;
+    case GitRefDecoration::Kind::Stash:
+      glyph = QStringLiteral("▤ ");
+      break;
+    }
+
     bool isHead = decoration.isHead;
+    QString label = glyph + decoration.name;
+    if (isHead) {
+      label = tr("HEAD → ") + label;
+    }
 
     int textWidth = badgeFm.horizontalAdvance(label);
     int pillWidth = textWidth + 14;
@@ -408,6 +543,27 @@ void GitGraphWidget::drawRefBadges(QPainter &painter,
                        Qt::AlignVCenter | Qt::AlignLeft, label);
       break;
     }
+    case GitRefDecoration::Kind::Worktree: {
+
+      QPen outlinePen(dimFg, 1.2);
+      painter.setPen(outlinePen);
+      painter.setBrush(Qt::NoBrush);
+      painter.drawRect(pillRect);
+      painter.setPen(dimFg);
+      painter.drawText(pillRect.adjusted(7, 0, -7, 0),
+                       Qt::AlignVCenter | Qt::AlignLeft, label);
+      break;
+    }
+    case GitRefDecoration::Kind::Stash: {
+      QPen outlinePen(remoteFg, 1.0, Qt::DotLine);
+      painter.setPen(outlinePen);
+      painter.setBrush(Qt::NoBrush);
+      painter.drawRect(pillRect);
+      painter.setPen(remoteFg);
+      painter.drawText(pillRect.adjusted(7, 0, -7, 0),
+                       Qt::AlignVCenter | Qt::AlignLeft, label);
+      break;
+    }
     }
 
     x += pillWidth + 5;
@@ -446,8 +602,9 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
   hashFont.setPointSize(9);
   QFontMetrics fm(commitFont);
 
-  int firstVisible = m_scrollOffset / m_rowHeight;
-  int lastVisible = (m_scrollOffset + height()) / m_rowHeight + 1;
+  const int wipRows = m_showWip ? 1 : 0;
+  int firstVisible = m_scrollOffset / m_rowHeight - wipRows;
+  int lastVisible = (m_scrollOffset + height()) / m_rowHeight + 1 - wipRows;
   firstVisible = qMax(0, firstVisible);
   lastVisible = qMin(m_nodes.size() - 1, lastVisible);
 
@@ -459,7 +616,7 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
   for (int i = firstVisible; i <= lastVisible; ++i) {
     const GraphCommitNode &node = m_nodes[i];
     const bool dimmed = !rowMatches(i);
-    int y = i * m_rowHeight - m_scrollOffset + m_rowHeight / 2;
+    int y = rowForIndex(i) * m_rowHeight - m_scrollOffset + m_rowHeight / 2;
     int x = GRAPH_LEFT_MARGIN + node.column * LANE_WIDTH + LANE_WIDTH / 2;
 
     for (const QString &parentHash : node.parents) {
@@ -469,7 +626,8 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
 
       int parentIdx = it.value();
       const GraphCommitNode &parentNode = m_nodes[parentIdx];
-      int py = parentIdx * m_rowHeight - m_scrollOffset + m_rowHeight / 2;
+      int py = rowForIndex(parentIdx) * m_rowHeight - m_scrollOffset +
+               m_rowHeight / 2;
       int px =
           GRAPH_LEFT_MARGIN + parentNode.column * LANE_WIDTH + LANE_WIDTH / 2;
 
@@ -495,7 +653,7 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
     const bool hovered = (i == m_hoverIndex);
     const bool dimmed = !rowMatches(i);
 
-    int y = i * m_rowHeight - m_scrollOffset;
+    int y = rowForIndex(i) * m_rowHeight - m_scrollOffset;
     int cx = GRAPH_LEFT_MARGIN + node.column * LANE_WIDTH + LANE_WIDTH / 2;
     int cy = y + m_rowHeight / 2;
 
@@ -549,6 +707,17 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
       painter.drawEllipse(QPointF(cx, cy), DOT_RADIUS + 3.5, DOT_RADIUS + 3.5);
     }
 
+    if (!m_compareAnchor.isEmpty() && node.info.hash == m_compareAnchor) {
+      painter.setPen(QPen(m_theme.warningColor, 2.0));
+      painter.setBrush(Qt::NoBrush);
+      painter.drawRect(QRectF(cx - DOT_RADIUS - 5, cy - DOT_RADIUS - 5,
+                              2 * (DOT_RADIUS + 5), 2 * (DOT_RADIUS + 5)));
+      painter.setFont(hashFont);
+      painter.setPen(m_theme.warningColor);
+      painter.drawText(0, y, GRAPH_LEFT_MARGIN + LANE_WIDTH, m_rowHeight,
+                       Qt::AlignVCenter | Qt::AlignLeft, tr("A"));
+    }
+
     painter.setFont(hashFont);
     painter.setPen(
         dimmed ? veryMuted
@@ -568,7 +737,13 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
       badgeFont.setPointSize(qMax(7, badgeFont.pointSize() - 2));
       const QFontMetrics badgeFm(badgeFont);
       for (const GitRefDecoration &decoration : *refIt) {
-        subjectX += badgeFm.horizontalAdvance(decoration.name) + 19;
+
+        int width = badgeFm.horizontalAdvance(decoration.name) +
+                    badgeFm.horizontalAdvance(QStringLiteral("⎇ "));
+        if (decoration.isHead) {
+          width += badgeFm.horizontalAdvance(tr("HEAD → "));
+        }
+        subjectX += width + 19;
       }
     }
 
@@ -586,30 +761,123 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
                      fm.elidedText(meta, Qt::ElideRight, 240));
   }
 
+  if (m_showWip) {
+
+    const int y = -m_scrollOffset;
+    if (y + m_rowHeight > 0 && y < height()) {
+      const int lane = m_nodes.isEmpty() ? 0 : m_nodes.first().column;
+      const int cx = GRAPH_LEFT_MARGIN + lane * LANE_WIDTH + LANE_WIDTH / 2;
+      const int cy = y + m_rowHeight / 2;
+
+      if (m_selectedIndex == WIP_INDEX) {
+        QColor selectionFill = selColor;
+        selectionFill.setAlpha(52);
+        painter.fillRect(0, y, width(), m_rowHeight, selectionFill);
+        painter.fillRect(0, y, 3, m_rowHeight, selColor);
+      } else if (m_hoverIndex == WIP_INDEX) {
+        QColor hoverFill = fgColor;
+        hoverFill.setAlpha(14);
+        painter.fillRect(0, y, width(), m_rowHeight, hoverFill);
+      }
+
+      if (!m_nodes.isEmpty()) {
+        QPen dashed(m_theme.gitModifiedColor, 1.6, Qt::DashLine);
+        painter.setPen(dashed);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawLine(cx, cy, cx, y + m_rowHeight + m_rowHeight / 2);
+      }
+
+      painter.setBrush(bgColor);
+      painter.setPen(QPen(m_theme.gitModifiedColor, 1.8, Qt::DashLine));
+      painter.drawEllipse(QPointF(cx, cy), DOT_RADIUS + 1, DOT_RADIUS + 1);
+
+      painter.setFont(hashFont);
+      painter.setPen(m_theme.gitModifiedColor);
+      painter.drawText(textX, y, 70, m_rowHeight, Qt::AlignVCenter, tr("WIP"));
+
+      painter.setFont(commitFont);
+      painter.setPen(m_theme.gitModifiedColor);
+      QStringList bits;
+      if (m_workingState.stagedCount > 0) {
+        bits << tr("%1 staged").arg(m_workingState.stagedCount);
+      }
+      if (m_workingState.workingTreeCount() > 0) {
+        bits << tr("%1 unstaged").arg(m_workingState.workingTreeCount());
+      }
+      if (m_workingState.conflictedCount > 0) {
+        bits << tr("%1 conflicted").arg(m_workingState.conflictedCount);
+      }
+      const QString label =
+          bits.isEmpty() ? tr("Uncommitted changes")
+                         : tr("Uncommitted changes — %1").arg(bits.join(", "));
+      painter.drawText(
+          textX + 75, y, qMax(40, width() - textX - 90), m_rowHeight,
+          Qt::AlignVCenter,
+          fm.elidedText(label, Qt::ElideRight, qMax(40, width() - textX - 90)));
+    }
+  }
+
   painter.setFont(commitFont);
   if (m_loadingMore) {
     painter.setPen(muted);
-    painter.drawText(QRect(0, m_nodes.size() * m_rowHeight - m_scrollOffset,
-                           width(), m_rowHeight),
-                     Qt::AlignCenter, tr("Loading more history…"));
+    painter.drawText(
+        QRect(0, contentHeight() - m_scrollOffset, width(), m_rowHeight),
+        Qt::AlignCenter, tr("Loading more history…"));
   } else if (m_historyExhausted &&
-             m_scrollOffset + height() >= m_nodes.size() * m_rowHeight) {
+             m_scrollOffset + height() >= contentHeight()) {
     painter.setPen(veryMuted);
-    painter.drawText(QRect(0, m_nodes.size() * m_rowHeight - m_scrollOffset,
-                           width(), m_rowHeight),
-                     Qt::AlignCenter, tr("Beginning of history"));
+    painter.drawText(
+        QRect(0, contentHeight() - m_scrollOffset, width(), m_rowHeight),
+        Qt::AlignCenter, tr("Beginning of history"));
+  }
+}
+
+void GitGraphWidget::selectRow(int index, bool emitSignal) {
+  if (index == m_selectedIndex) {
+    return;
+  }
+  m_selectedIndex = index;
+
+  const int row = index == WIP_INDEX ? 0 : rowForIndex(index);
+  const int rowTop = row * m_rowHeight;
+  if (rowTop < m_scrollOffset ||
+      rowTop + m_rowHeight > m_scrollOffset + height()) {
+    setScrollOffset(rowTop - height() / 2 + m_rowHeight);
+  }
+  update();
+
+  if (!emitSignal) {
+    return;
+  }
+  if (index == WIP_INDEX) {
+    emit workingTreeSelected();
+  } else if (index >= 0 && index < m_nodes.size()) {
+    emit commitSelected(m_nodes[index].info.hash);
   }
 }
 
 void GitGraphWidget::mousePressEvent(QMouseEvent *event) {
   setFocus();
-  int idx = commitAtY(event->pos().y());
-  if (idx != m_selectedIndex) {
-    m_selectedIndex = idx;
-    update();
-    if (idx >= 0)
-      emit commitSelected(m_nodes[idx].info.hash);
+  const int idx = commitAtY(event->pos().y());
+
+  if (event->modifiers().testFlag(Qt::ControlModifier) && idx >= 0 &&
+      idx < m_nodes.size()) {
+    const QString hash = m_nodes[idx].info.hash;
+    if (m_compareAnchor.isEmpty()) {
+      m_compareAnchor = hash;
+      emit compareAnchorChanged(m_compareAnchor);
+      update();
+    } else if (m_compareAnchor == hash) {
+      clearCompareAnchor();
+    } else {
+      const QString from = m_compareAnchor;
+      clearCompareAnchor();
+      emit compareRequested(from, hash);
+    }
+    return;
   }
+
+  selectRow(idx, true);
 }
 
 void GitGraphWidget::mouseDoubleClickEvent(QMouseEvent *event) {
@@ -623,6 +891,14 @@ void GitGraphWidget::mouseMoveEvent(QMouseEvent *event) {
   if (idx != m_hoverIndex) {
     m_hoverIndex = idx;
     update();
+  }
+
+  if (idx == WIP_INDEX) {
+    QToolTip::showText(event->globalPosition().toPoint(),
+                       tr("Uncommitted changes — not part of the commit graph "
+                          "until you commit them."),
+                       this);
+    return;
   }
 
   if (idx >= 0) {
@@ -647,14 +923,10 @@ void GitGraphWidget::leaveEvent(QEvent *) {
 
 void GitGraphWidget::contextMenuEvent(QContextMenuEvent *event) {
   const int idx = commitAtY(event->pos().y());
-  if (idx < 0) {
+  if (idx < 0 || idx >= m_nodes.size()) {
     return;
   }
-  if (idx != m_selectedIndex) {
-    m_selectedIndex = idx;
-    update();
-    emit commitSelected(m_nodes[idx].info.hash);
-  }
+  selectRow(idx, true);
   emit contextMenuRequested(m_nodes[idx].info.hash, event->globalPos());
 }
 
@@ -668,7 +940,7 @@ void GitGraphWidget::wheelEvent(QWheelEvent *event) {
   setScrollOffset(m_scrollOffset - event->angleDelta().y());
   update();
 
-  const int totalHeight = m_nodes.size() * m_rowHeight;
+  const int totalHeight = contentHeight();
   const int nearEndThreshold = totalHeight - (height() * 3 / 2);
   if (m_scrollOffset >= nearEndThreshold && totalHeight > 0) {
     requestMoreCommits();
@@ -676,14 +948,46 @@ void GitGraphWidget::wheelEvent(QWheelEvent *event) {
 }
 
 void GitGraphWidget::keyPressEvent(QKeyEvent *event) {
-  const int step =
-      event->modifiers() & Qt::ShiftModifier ? height() * 3 / 4 : m_rowHeight;
+  Q_UNUSED(m_rowHeight);
+  const int firstRow = m_showWip ? WIP_INDEX : 0;
   switch (event->key()) {
   case Qt::Key_Down:
-    setScrollOffset(m_scrollOffset + step);
+    if (m_selectedIndex == WIP_INDEX) {
+      selectRow(0, true);
+    } else if (m_selectedIndex < 0) {
+      selectRow(firstRow, true);
+    } else if (m_selectedIndex + 1 < m_nodes.size()) {
+      selectRow(m_selectedIndex + 1, true);
+    }
     break;
   case Qt::Key_Up:
-    setScrollOffset(m_scrollOffset - step);
+    if (m_selectedIndex == 0 && m_showWip) {
+      selectRow(WIP_INDEX, true);
+    } else if (m_selectedIndex > 0) {
+      selectRow(m_selectedIndex - 1, true);
+    }
+    break;
+  case Qt::Key_Return:
+  case Qt::Key_Enter:
+    if (m_selectedIndex >= 0 && m_selectedIndex < m_nodes.size()) {
+      emit commitDoubleClicked(m_nodes[m_selectedIndex].info.hash);
+    }
+    break;
+  case Qt::Key_Space:
+
+    if (m_selectedIndex >= 0 && m_selectedIndex < m_nodes.size()) {
+      const QString hash = m_nodes[m_selectedIndex].info.hash;
+      if (m_compareAnchor.isEmpty()) {
+        m_compareAnchor = hash;
+        emit compareAnchorChanged(m_compareAnchor);
+      } else if (m_compareAnchor == hash) {
+        clearCompareAnchor();
+      } else {
+        const QString from = m_compareAnchor;
+        clearCompareAnchor();
+        emit compareRequested(from, hash);
+      }
+    }
     break;
   case Qt::Key_PageDown:
     setScrollOffset(m_scrollOffset + height() * 3 / 4);
@@ -695,7 +999,7 @@ void GitGraphWidget::keyPressEvent(QKeyEvent *event) {
     setScrollOffset(0);
     break;
   case Qt::Key_End:
-    setScrollOffset(m_nodes.size() * m_rowHeight);
+    setScrollOffset(contentHeight());
     break;
   default:
     QWidget::keyPressEvent(event);
@@ -705,7 +1009,7 @@ void GitGraphWidget::keyPressEvent(QKeyEvent *event) {
   update();
   event->accept();
 
-  const int totalHeight = m_nodes.size() * m_rowHeight;
+  const int totalHeight = contentHeight();
   const int nearEndThreshold = totalHeight - (height() * 3 / 2);
   if (m_scrollOffset >= nearEndThreshold && totalHeight > 0) {
     requestMoreCommits();

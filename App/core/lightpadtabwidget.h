@@ -30,6 +30,10 @@ signals:
   void copyRelativePath(int index);
   void copyFileName(int index);
   void revealInFileExplorer(int index);
+  void runTab(int index);
+  void debugTab(int index);
+  void pinRunTab(int index, bool pin);
+  void configureRunTab(int index);
 };
 
 class LightpadTabWidget : public QTabWidget {
@@ -52,6 +56,7 @@ public:
   LightpadPage *getCurrentPage();
   QString getFilePath(int index);
   bool isViewerTab(int index) const;
+  bool isPinnedRunFile(const QString &filePath) const;
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
@@ -67,6 +72,10 @@ private slots:
   void onCopyRelativePath(int index);
   void onCopyFileName(int index);
   void onRevealInFileExplorer(int index);
+  void onRunTab(int index);
+  void onDebugTab(int index);
+  void onPinRunTab(int index, bool pin);
+  void onConfigureRunTab(int index);
 
 private:
   void updateCloseButtons();

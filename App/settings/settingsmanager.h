@@ -56,6 +56,8 @@ private:
   QJsonObject m_settings;
   QJsonObject m_defaults;
   bool m_dirty;
+
+  bool m_loaded = false;
 };
 
 #endif

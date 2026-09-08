@@ -1133,32 +1133,39 @@ void TextArea::contextMenuEvent(QContextMenuEvent *event) {
 
   menu->addSeparator();
 
-  QAction *runFileAction = menu->addAction(tr("Run File"));
-  connect(runFileAction, &QAction::triggered, this, [this]() {
-    if (mainWindow) {
-      QString fp = resolveFilePath();
-      if (!fp.isEmpty())
-        mainWindow->runFileByPath(fp);
+  const QString contextFilePath = resolveFilePath();
+  const QString contextFileName = QFileInfo(contextFilePath).fileName();
+
+  QAction *runFileAction = menu->addAction(
+      contextFileName.isEmpty() ? tr("Run File")
+                                : tr("Run %1").arg(contextFileName));
+  runFileAction->setEnabled(!contextFilePath.isEmpty());
+  connect(runFileAction, &QAction::triggered, this, [this, contextFilePath]() {
+    if (mainWindow && !contextFilePath.isEmpty()) {
+      mainWindow->runFileByPath(contextFilePath);
     }
   });
 
-  QAction *debugFileAction = menu->addAction(tr("Debug File"));
-  connect(debugFileAction, &QAction::triggered, this, [this]() {
-    if (mainWindow) {
-      QString fp = resolveFilePath();
-      if (!fp.isEmpty())
-        mainWindow->debugFileByPath(fp);
-    }
-  });
+  QAction *debugFileAction = menu->addAction(
+      contextFileName.isEmpty() ? tr("Debug File")
+                                : tr("Debug %1").arg(contextFileName));
+  debugFileAction->setEnabled(!contextFilePath.isEmpty());
+  connect(debugFileAction, &QAction::triggered, this,
+          [this, contextFilePath]() {
+            if (mainWindow && !contextFilePath.isEmpty()) {
+              mainWindow->debugFileByPath(contextFilePath);
+            }
+          });
 
-  QString currentFilePath = resolveFilePath();
+  const QString currentFilePath = contextFilePath;
   if (!currentFilePath.isEmpty()) {
     bool isTest = TestFileClassifier::instance().isTestFile(currentFilePath);
     QAction *runAsTestAction = menu->addAction(tr("Run as Test"));
     connect(runAsTestAction, &QAction::triggered, this,
             [this, currentFilePath]() {
               if (mainWindow) {
-                mainWindow->runFileByPath(currentFilePath);
+
+                mainWindow->runTestsForPath(currentFilePath);
               }
             });
 

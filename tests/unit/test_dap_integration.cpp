@@ -161,6 +161,8 @@ private slots:
   void pythonBreakpointVariablesAndEvaluate();
   void pythonUncaughtExceptionSurfacesTraceback();
   void cmakeBuildFeedsDebugSession();
+  void cmakeQuickStartUsesTargetOwningTheOpenFile();
+  void stoppingSessionReportsTerminationOnce();
 
 private:
   QTemporaryDir m_dir;
@@ -798,6 +800,168 @@ void TestDapIntegration::cmakeBuildFeedsDebugSession() {
   QTRY_COMPARE_WITH_TIMEOUT(terminatedSpy.count(), 1, kAdapterTimeoutMs);
 
   manager.stopAllSessions(false);
+  breakpoints.clearAll();
+}
+
+void TestDapIntegration::cmakeQuickStartUsesTargetOwningTheOpenFile() {
+  const QString gdb = findTool("gdb");
+  const QString cmake = findTool("cmake");
+  if (gdb.isEmpty() || cmake.isEmpty()) {
+    QSKIP("gdb/cmake not installed");
+  }
+
+  const QString root = m_dir.path() + "/cmake_multi";
+  QVERIFY(QDir().mkpath(root + "/src"));
+
+  const auto writeFile = [](const QString &path, const QString &contents) {
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+    f.write(contents.toUtf8());
+    f.close();
+  };
+
+  writeFile(root + "/CMakeLists.txt", "cmake_minimum_required(VERSION 3.16)\n"
+                                      "project(cmake_multi CXX)\n"
+                                      "add_subdirectory(src)\n");
+
+  writeFile(root + "/src/CMakeLists.txt",
+            "add_executable(other other.cpp)\n"
+            "add_executable(renderer renderer.cpp scene.cpp)\n"
+            "target_compile_options(renderer PRIVATE -g -O0)\n");
+  writeFile(root + "/src/other.cpp", "int main() { return 0; }\n");
+  writeFile(root + "/src/scene.cpp", "int triangle_count() { return 4; }\n");
+  writeFile(root + "/src/renderer.cpp", "#include <cstdio>\n"
+                                        "int triangle_count();\n"
+                                        "\n"
+                                        "int main() {\n"
+                                        "    int tris = triangle_count();\n"
+                                        "    printf(\"tris=%d\\n\", tris);\n"
+                                        "    return 0;\n"
+                                        "}\n");
+
+  const QString sourcePath = root + "/src/renderer.cpp";
+
+  CMakeProject project;
+  const QList<CMakeTargetInfo> executables =
+      project.parseExecutableTargets(root);
+  QCOMPARE(executables.size(), 2);
+
+  const QString targetName =
+      CMakeProject::targetForSource(executables, root, sourcePath);
+  QCOMPARE(targetName, QString("renderer"));
+
+  const QString binaryDir = CMakeProject::defaultBinaryDir(root);
+  QString error;
+  QVERIFY2(project.configure(root, binaryDir, nullptr, &error),
+           qPrintable(error));
+  QVERIFY2(project.build(binaryDir, 2, nullptr, &error), qPrintable(error));
+
+  CMakeTargetInfo chosen;
+  for (const CMakeTargetInfo &target : executables) {
+    if (target.name == targetName) {
+      chosen = target;
+    }
+  }
+  const QString exePath = CMakeProject::executablePathFor(chosen, binaryDir);
+  QVERIFY(QFileInfo::exists(exePath));
+
+  QVERIFY(!QFileInfo::exists(root + "/src/renderer"));
+
+  BreakpointManager &breakpoints = BreakpointManager::instance();
+  breakpoints.clearAll();
+  breakpoints.setWorkspaceFolder(root);
+  Breakpoint bp;
+  bp.filePath = sourcePath;
+  bp.line = 6;
+  QVERIFY(breakpoints.addBreakpoint(bp) > 0);
+
+  DebugSessionManager &manager = DebugSessionManager::instance();
+  QSignalSpy stoppedSpy(&manager, &DebugSessionManager::sessionStopped);
+
+  const QString sessionId = manager.quickStart(sourcePath, "cpp", exePath);
+  if (sessionId.isEmpty()) {
+    const QString reason = manager.lastError();
+    if (reason.contains("ptrace", Qt::CaseInsensitive)) {
+      QSKIP(qPrintable(
+          QStringLiteral("environment blocks debugging: %1").arg(reason)));
+    }
+    QFAIL(
+        qPrintable(QStringLiteral("session failed to start: %1").arg(reason)));
+  }
+
+  DebugSession *session = manager.session(sessionId);
+  QVERIFY(session);
+  QCOMPARE(session->configuration().program, exePath);
+
+  QTRY_COMPARE_WITH_TIMEOUT(stoppedSpy.count(), 1, kAdapterTimeoutMs * 2);
+  const DapStoppedEvent stop = stoppedSpy.at(0).at(1).value<DapStoppedEvent>();
+  QCOMPARE(stop.reason, DapStoppedReason::Breakpoint);
+
+  manager.stopAllSessions(true);
+  breakpoints.clearAll();
+}
+
+void TestDapIntegration::stoppingSessionReportsTerminationOnce() {
+  const QString gdb = findTool("gdb");
+  const QString cxx = findTool("g++");
+  if (gdb.isEmpty() || cxx.isEmpty()) {
+    QSKIP("gdb/g++ not installed");
+  }
+
+  const CppSample sample = writeAndBuildCppSample(m_dir, cxx, false);
+  if (sample.binaryPath.isEmpty() || !QFileInfo::exists(sample.binaryPath)) {
+    QSKIP("cannot build the C++ sample");
+  }
+
+  BreakpointManager &breakpoints = BreakpointManager::instance();
+  breakpoints.clearAll();
+  Breakpoint bp;
+  bp.filePath = sample.sourcePath;
+  bp.line = sample.breakpointLine;
+  QVERIFY(breakpoints.addBreakpoint(bp) > 0);
+
+  DebugConfiguration config;
+  config.name = "stop-once";
+  config.type = "cppdbg";
+  config.request = "launch";
+  config.program = sample.binaryPath;
+  config.cwd = QFileInfo(sample.binaryPath).absolutePath();
+
+  DebugSessionManager &manager = DebugSessionManager::instance();
+  QSignalSpy stoppedSpy(&manager, &DebugSessionManager::sessionStopped);
+  QSignalSpy terminatedSpy(&manager, &DebugSessionManager::sessionTerminated);
+
+  const QString sessionId = manager.startSession(config);
+  if (sessionId.isEmpty()) {
+    const QString reason = manager.lastError();
+    if (reason.contains("ptrace", Qt::CaseInsensitive)) {
+      QSKIP(qPrintable(
+          QStringLiteral("environment blocks debugging: %1").arg(reason)));
+    }
+    QFAIL(
+        qPrintable(QStringLiteral("session failed to start: %1").arg(reason)));
+  }
+
+  QTRY_COMPARE_WITH_TIMEOUT(stoppedSpy.count(), 1, kAdapterTimeoutMs * 2);
+
+  const auto terminationsForSession = [&terminatedSpy, &sessionId]() {
+    int count = 0;
+    for (const QList<QVariant> &args : terminatedSpy) {
+      if (!args.isEmpty() && args.first().toString() == sessionId) {
+        ++count;
+      }
+    }
+    return count;
+  };
+
+  manager.stopSession(sessionId, true);
+  QTRY_COMPARE_WITH_TIMEOUT(terminationsForSession(), 1, kAdapterTimeoutMs);
+
+  QVERIFY(manager.session(sessionId) == nullptr);
+  QTest::qWait(1500);
+  QCOMPARE(terminationsForSession(), 1);
+  QVERIFY(manager.session(sessionId) == nullptr);
+
   breakpoints.clearAll();
 }
 

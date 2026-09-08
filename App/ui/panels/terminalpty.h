@@ -27,7 +27,10 @@ public:
 
   qint64 writeData(const QByteArray &data);
   bool interruptProcessGroup();
+
   void resize(int columns, int rows);
+  int columns() const { return m_columns; }
+  int rows() const { return m_rows; }
 
 signals:
   void readyRead(const QByteArray &data);
@@ -47,6 +50,8 @@ private:
   QSocketNotifier *m_readNotifier;
   QTimer *m_reapTimer;
   bool m_running;
+  int m_columns;
+  int m_rows;
 };
 
 #endif

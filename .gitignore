@@ -71,5 +71,8 @@ Desktop.ini
 ## Builds
 ############
 *build*
+# App/build is source, not a build tree: it holds the CMake project support
+# the debug launch flow compiles into the app and the tests.
+!App/build/
 _codeql_detected_source_root
 Testing/

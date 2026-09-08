@@ -2,10 +2,8 @@
 #define FILEDIRTREECONTROLLER_H
 
 #include "filedirtreemodel.h"
-#include <QClipboard>
-#include <QGuiApplication>
-#include <QInputDialog>
 #include <QObject>
+#include <QStringList>
 #include <QWidget>
 
 class FileDirTreeController : public QObject {
@@ -18,25 +16,31 @@ public:
 
   void handleNewFile(const QString &dirPath);
   void handleNewDirectory(const QString &parentPath);
-  void handleRemove(const QString &path);
+  void handleRemove(const QStringList &paths,
+                    DeleteMode mode = DeleteMode::Trash);
   void handleRename(const QString &oldPath);
   void handleDuplicate(const QString &path);
-  void handleCopy(const QString &path);
-  void handleCut(const QString &path);
+  void handleCopy(const QStringList &paths);
+  void handleCut(const QStringList &paths);
   void handlePaste(const QString &destPath);
-  void handleCopyAbsolutePath(const QString &path);
+  void handleCopyAbsolutePath(const QStringList &paths);
+  void handleCopyRelativePath(const QStringList &paths,
+                              const QString &basePath);
 
 signals:
   void actionCompleted();
   void fileRemoved(const QString &path);
+
+  void pathCreated(const QString &path, bool isDirectory);
+  void statusMessage(const QString &message);
 
 private:
   FileDirTreeModel *model;
   QWidget *parentWidget;
 
   void showError(const QString &message);
-  void showInfo(const QString &message);
-  bool confirmAction(const QString &message);
+  bool confirmDeletion(const QStringList &paths, DeleteMode mode);
+  static QString describe(const QStringList &paths);
 };
 
 #endif

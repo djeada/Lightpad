@@ -1,12 +1,29 @@
 #include "sourcecontrolpanel.h"
+#include "../dialogs/bisectdialog.h"
+#include "../dialogs/branchhygienedialog.h"
+#include "../dialogs/branchsyncradardialog.h"
+#include "../dialogs/commandmirrordialog.h"
+#include "../dialogs/commitcraftingdialog.h"
+#include "../dialogs/conflictstoryboarddialog.h"
 #include "../dialogs/gitdiffdialog.h"
 #include "../dialogs/gitinitdialog.h"
 #include "../dialogs/gitlogdialog.h"
 #include "../dialogs/gitrebasedialog.h"
 #include "../dialogs/gitremotedialog.h"
 #include "../dialogs/gitstashdialog.h"
+#include "../dialogs/integrationadvisordialog.h"
 #include "../dialogs/mergeconflictdialog.h"
+#include "../dialogs/operationpreviewdialog.h"
+#include "../dialogs/rebasetimelinedialog.h"
+#include "../dialogs/recoverycenterdialog.h"
+#include "../dialogs/stagingcanvasdialog.h"
+#include "../dialogs/stashshelfdialog.h"
 #include "../dialogs/themedmessagebox.h"
+#include "../dialogs/timetraveldialog.h"
+#include "../dialogs/undochangeswizarddialog.h"
+#include "../dialogs/whatifsandboxdialog.h"
+#include "../dialogs/worktreemapdialog.h"
+#include "../uimetrics.h"
 #include "../uistylehelper.h"
 #include <QApplication>
 #include <QBoxLayout>
@@ -50,16 +67,17 @@ SourceControlPanel::SourceControlPanel(QWidget *parent)
       m_changesLabel(nullptr), m_changesTree(nullptr), m_historyHeader(nullptr),
       m_historyLabel(nullptr), m_historyTree(nullptr),
       m_historyToggleButton(nullptr), m_historySearchEdit(nullptr),
-      m_historyRebaseBtn(nullptr), m_headerWidget(nullptr),
+      m_historyRebaseBtn(nullptr), m_headerWidget(nullptr), m_stateMap(nullptr),
       m_branchSection(nullptr), m_branchIcon(nullptr), m_commitSection(nullptr),
       m_commitHeaderLabel(nullptr), m_stagedHeader(nullptr),
       m_changesHeader(nullptr), m_noRepoDescLabel(nullptr),
       m_conflictWarningHeader(nullptr), m_conflictFilesHeaderLabel(nullptr),
       m_compareBranchesBtn(nullptr), m_worktreeBtn(nullptr),
-      m_discardAllBtn(nullptr), m_historyExpanded(false),
-      m_updatingBranchSelector(false), m_updatingTree(false), m_stagedCount(0),
-      m_changesCount(0), m_refreshTimer(new QTimer(this)), m_theme(),
-      m_themeInitialized(false) {
+      m_discardAllBtn(nullptr), m_stagingCanvasBtn(nullptr),
+      m_syncRadarBtn(nullptr), m_craftBtn(nullptr), m_integrateBtn(nullptr),
+      m_historyExpanded(false), m_updatingBranchSelector(false),
+      m_updatingTree(false), m_stagedCount(0), m_changesCount(0),
+      m_refreshTimer(new QTimer(this)), m_theme(), m_themeInitialized(false) {
   m_refreshTimer->setSingleShot(true);
   m_refreshTimer->setInterval(0);
   connect(m_refreshTimer, &QTimer::timeout, this, &SourceControlPanel::refresh);
@@ -85,6 +103,35 @@ void SourceControlPanel::setupUI() {
 
   headerLayout->addStretch();
 
+  QPushButton *sandboxButton = new QPushButton("⚗", m_headerWidget);
+  sandboxButton->setObjectName(QStringLiteral("whatIfSandboxButton"));
+  sandboxButton->setFixedSize(24, 24);
+  sandboxButton->setToolTip(
+      tr("What-if sandbox — try merges, rebases and resets on a copy of the "
+         "graph without touching the repository"));
+  connect(sandboxButton, &QPushButton::clicked, this,
+          &SourceControlPanel::openWhatIfSandbox);
+  headerLayout->addWidget(sandboxButton);
+
+  QPushButton *mirrorButton = new QPushButton("⌨", m_headerWidget);
+  mirrorButton->setObjectName(QStringLiteral("commandMirrorButton"));
+  mirrorButton->setFixedSize(24, 24);
+  mirrorButton->setToolTip(
+      tr("Command Mirror — the exact Git commands behind everything here"));
+  connect(mirrorButton, &QPushButton::clicked, this,
+          &SourceControlPanel::openCommandMirror);
+  headerLayout->addWidget(mirrorButton);
+
+  QPushButton *recoveryButton = new QPushButton("⏱", m_headerWidget);
+  recoveryButton->setObjectName(QStringLiteral("recoveryCenterButton"));
+  recoveryButton->setFixedSize(24, 24);
+  recoveryButton->setToolTip(
+      tr("Recovery Center — everywhere your refs have been, and how to get "
+         "back to any of them"));
+  connect(recoveryButton, &QPushButton::clicked, this,
+          &SourceControlPanel::openRecoveryCenter);
+  headerLayout->addWidget(recoveryButton);
+
   m_refreshButton = new QPushButton("↻", m_headerWidget);
   m_refreshButton->setFixedSize(24, 24);
   m_refreshButton->setToolTip(tr("Refresh"));
@@ -93,6 +140,14 @@ void SourceControlPanel::setupUI() {
   headerLayout->addWidget(m_refreshButton);
 
   mainLayout->addWidget(m_headerWidget);
+
+  m_stateMap = new RepositoryStateMapWidget(this);
+  connect(m_stateMap, &RepositoryStateMapWidget::layerActivated, this,
+          &SourceControlPanel::onStateMapLayerActivated);
+  mainLayout->addWidget(m_stateMap);
+
+  setupDetachedHeadCard();
+  mainLayout->addWidget(m_detachedCard);
 
   m_stackedWidget = new QStackedWidget(this);
 
@@ -237,9 +292,11 @@ void SourceControlPanel::setupRepoUI() {
 
   m_deleteBranchButton = new QPushButton("🗑", m_branchSection);
   m_deleteBranchButton->setFixedSize(28, 28);
-  m_deleteBranchButton->setToolTip(tr("Delete Branch"));
+  m_deleteBranchButton->setToolTip(
+      tr("Branch hygiene — which branches are merged, stale, checked out "
+         "elsewhere or holding the only copy of some commits"));
   connect(m_deleteBranchButton, &QPushButton::clicked, this,
-          &SourceControlPanel::onDeleteBranchClicked);
+          &SourceControlPanel::openBranchHygiene);
   branchSelectorLayout->addWidget(m_deleteBranchButton);
 
   branchLayout->addLayout(branchSelectorLayout);
@@ -260,139 +317,55 @@ void SourceControlPanel::setupRepoUI() {
   remoteOpsLayout->addWidget(m_pushButton);
 
   m_fetchButton = new QPushButton("🔄 Fetch", m_branchSection);
-  m_fetchButton->setToolTip(tr("Fetch from Remote"));
+  m_fetchButton->setToolTip(
+      tr("Fetch from the remote. This updates remote-tracking refs only — it "
+         "never changes your branch or your files."));
   connect(m_fetchButton, &QPushButton::clicked, this,
           &SourceControlPanel::onFetchClicked);
   remoteOpsLayout->addWidget(m_fetchButton);
 
   m_stashButton = new QPushButton("📦 Stash", m_branchSection);
-  m_stashButton->setToolTip(tr("Stash Changes"));
+  m_stashButton->setToolTip(
+      tr("Open the stash shelf — read, compare and replay stashed work"));
   connect(m_stashButton, &QPushButton::clicked, this,
           &SourceControlPanel::onStashClicked);
   remoteOpsLayout->addWidget(m_stashButton);
 
+  m_integrateBtn = new QPushButton("⤵ Bring changes…", m_branchSection);
+  m_integrateBtn->setToolTip(
+      tr("Choose between merge, rebase, cherry-pick and apply-without-commit "
+         "by what you are trying to do, with a preview of each"));
+  connect(m_integrateBtn, &QPushButton::clicked, this,
+          &SourceControlPanel::openIntegrationAdvisor);
+  remoteOpsLayout->addWidget(m_integrateBtn);
+
+  m_syncRadarBtn = new QPushButton("📡 Sync", m_branchSection);
+  m_syncRadarBtn->setToolTip(
+      tr("Open the Branch Sync Radar — what is coming in, what is going out, "
+         "and what merge, rebase or fast-forward would each do"));
+  connect(m_syncRadarBtn, &QPushButton::clicked, this,
+          &SourceControlPanel::openSyncRadar);
+  remoteOpsLayout->addWidget(m_syncRadarBtn);
+
   m_compareBranchesBtn =
-      new QPushButton("\u2194 Compare Branches", m_branchSection);
-  m_compareBranchesBtn->setToolTip(tr("Compare two branches"));
+      new QPushButton("\u2194 Compare\u2026", m_branchSection);
+  m_compareBranchesBtn->setToolTip(
+      tr("Compare any two states — branches, commits, tags, stashes, the "
+         "index or the working tree"));
   connect(m_compareBranchesBtn, &QPushButton::clicked, this, [this]() {
-    if (!m_git || !m_git->isValidRepository())
+    if (!m_git || !m_git->isValidRepository()) {
       return;
-
-    QList<GitBranchInfo> branches = m_git->getBranches();
-    if (branches.size() < 2)
-      return;
-
-    QStringList branchNames;
-    QString current;
-    for (const auto &b : branches) {
-      branchNames << b.name;
-      if (b.isCurrent)
-        current = b.name;
     }
-
-    QDialog dlg(this);
-    dlg.setWindowTitle(tr("Compare Branches"));
-    dlg.resize(350, 150);
-    auto *layout = new QVBoxLayout(&dlg);
-
-    layout->addWidget(new QLabel(tr("Base branch:"), &dlg));
-    auto *base = new QComboBox(&dlg);
-    base->addItems(branchNames);
-    if (!current.isEmpty())
-      base->setCurrentText(current);
-    layout->addWidget(base);
-
-    layout->addWidget(new QLabel(tr("Compare with:"), &dlg));
-    auto *compare = new QComboBox(&dlg);
-    compare->addItems(branchNames);
-    layout->addWidget(compare);
-
-    auto *btnLayout = new QHBoxLayout;
-    auto *okBtn = new QPushButton(tr("Compare"), &dlg);
-    auto *cancelBtn = new QPushButton(tr("Cancel"), &dlg);
-    btnLayout->addStretch();
-    btnLayout->addWidget(cancelBtn);
-    btnLayout->addWidget(okBtn);
-    layout->addLayout(btnLayout);
-
-    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
-    connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
-
-    if (dlg.exec() == QDialog::Accepted) {
-      QString diff =
-          m_git->getBranchDiff(base->currentText(), compare->currentText());
-      if (!diff.isEmpty()) {
-        emit compareBranchesRequested(base->currentText(),
-                                      compare->currentText());
-      }
-    }
+    emit compareRequested(QString(), QString(), QString());
   });
   remoteOpsLayout->addWidget(m_compareBranchesBtn);
 
   m_worktreeBtn = new QPushButton("📂 Worktrees", m_branchSection);
-  m_worktreeBtn->setToolTip(tr("Manage Git worktrees"));
-  connect(m_worktreeBtn, &QPushButton::clicked, this, [this]() {
-    if (!m_git || !m_git->isValidRepository())
-      return;
-
-    QDialog dlg(this);
-    dlg.setWindowTitle(tr("Git Worktrees"));
-    dlg.setMinimumSize(500, 350);
-    auto *layout = new QVBoxLayout(&dlg);
-
-    auto *list = new QTreeWidget(&dlg);
-    list->setHeaderLabels({tr("Path"), tr("Branch")});
-    list->setRootIsDecorated(false);
-    list->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-    list->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-
-    auto worktrees = m_git->listWorktrees();
-    for (const auto &wt : worktrees) {
-      auto *item = new QTreeWidgetItem(list);
-      item->setText(0, wt.first);
-      item->setText(1, wt.second);
-    }
-    layout->addWidget(list);
-
-    auto *btnLayout = new QHBoxLayout();
-    auto *addBtn = new QPushButton(tr("Add Worktree"), &dlg);
-    auto *removeBtn = new QPushButton(tr("Remove Selected"), &dlg);
-    auto *closeBtn = new QPushButton(tr("Close"), &dlg);
-    btnLayout->addWidget(addBtn);
-    btnLayout->addWidget(removeBtn);
-    btnLayout->addStretch();
-    btnLayout->addWidget(closeBtn);
-    layout->addLayout(btnLayout);
-
-    connect(addBtn, &QPushButton::clicked, [&]() {
-      QString path = QInputDialog::getText(&dlg, tr("Worktree Path"),
-                                           tr("Directory path:"));
-      if (path.isEmpty())
-        return;
-      QString branch =
-          QInputDialog::getText(&dlg, tr("Branch"), tr("Branch name:"));
-      if (branch.isEmpty())
-        return;
-      if (m_git->addWorktree(path, branch, true)) {
-        auto *item = new QTreeWidgetItem(list);
-        item->setText(0, path);
-        item->setText(1, branch);
-      }
-    });
-
-    connect(removeBtn, &QPushButton::clicked, [&]() {
-      auto *item = list->currentItem();
-      if (!item)
-        return;
-      QString path = item->text(0);
-      if (m_git->removeWorktree(path)) {
-        delete item;
-      }
-    });
-
-    connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
-    dlg.exec();
-  });
+  m_worktreeBtn->setToolTip(
+      tr("Worktree map — every working directory attached to this repository, "
+         "with its own branch and its own uncommitted work"));
+  connect(m_worktreeBtn, &QPushButton::clicked, this,
+          &SourceControlPanel::openWorktreeMap);
   remoteOpsLayout->addWidget(m_worktreeBtn);
 
   branchLayout->addLayout(remoteOpsLayout);
@@ -500,6 +473,24 @@ void SourceControlPanel::setupRepoUI() {
 
   changesHeaderLayout->addStretch();
 
+  m_craftBtn = new QPushButton("✂", m_changesHeader);
+  m_craftBtn->setFixedSize(22, 22);
+  m_craftBtn->setToolTip(
+      tr("Open the Commit Crafting Workspace — sort mixed changes into named "
+         "commits before staging anything"));
+  connect(m_craftBtn, &QPushButton::clicked, this,
+          &SourceControlPanel::openCommitCrafting);
+  changesHeaderLayout->addWidget(m_craftBtn);
+
+  m_stagingCanvasBtn = new QPushButton("⧉", m_changesHeader);
+  m_stagingCanvasBtn->setFixedSize(22, 22);
+  m_stagingCanvasBtn->setToolTip(
+      tr("Open the Staging Canvas — Working Tree, Index and HEAD side by "
+         "side, with hunk and line staging"));
+  connect(m_stagingCanvasBtn, &QPushButton::clicked, this,
+          &SourceControlPanel::onStagingCanvasClicked);
+  changesHeaderLayout->addWidget(m_stagingCanvasBtn);
+
   m_stageAllButton = new QPushButton("+", m_changesHeader);
   m_stageAllButton->setFixedSize(22, 22);
   m_stageAllButton->setToolTip(tr("Stage All"));
@@ -507,23 +498,13 @@ void SourceControlPanel::setupRepoUI() {
           &SourceControlPanel::onStageAllClicked);
   changesHeaderLayout->addWidget(m_stageAllButton);
 
-  m_discardAllBtn = new QPushButton("✖", m_changesHeader);
+  m_discardAllBtn = new QPushButton("↶", m_changesHeader);
   m_discardAllBtn->setFixedSize(22, 22);
-  m_discardAllBtn->setToolTip(tr("Discard All Changes"));
-  connect(m_discardAllBtn, &QPushButton::clicked, [this]() {
-    if (!m_git)
-      return;
-    ThemedMessageBox msgBox(this);
-    msgBox.setIcon(ThemedMessageBox::Warning);
-    msgBox.setWindowTitle(tr("Discard All Changes"));
-    msgBox.setText(tr("Are you sure you want to discard all changes?"));
-    msgBox.setInformativeText(tr("This action cannot be undone."));
-    msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No);
-    msgBox.setDefaultButton(ThemedMessageBox::No);
-    if (msgBox.exec() == ThemedMessageBox::Yes) {
-      m_git->discardAllChanges();
-    }
-  });
+  m_discardAllBtn->setToolTip(
+      tr("Undo changes — discard, unstage, move the branch back or revert, "
+         "with what each one touches shown first"));
+  connect(m_discardAllBtn, &QPushButton::clicked, this,
+          [this]() { openUndoWizard(QString(), QStringList()); });
   changesHeaderLayout->addWidget(m_discardAllBtn);
 
   mainLayout->addWidget(m_changesHeader);
@@ -591,6 +572,62 @@ void SourceControlPanel::setupRepoUI() {
           diffDialog->setAttribute(Qt::WA_DeleteOnClose);
           diffDialog->show();
         });
+    connect(&logDialog, &GitLogDialog::compareRequested, this,
+            [this](const QString &from, const QString &to) {
+              emit compareRequested(from, to, QString());
+            });
+    connect(&logDialog, &GitLogDialog::repositoryChanged, this,
+            &SourceControlPanel::scheduleRefresh);
+    connect(&logDialog, &GitLogDialog::workingTreeRequested, this,
+            [this]() { openStagingCanvas(QString()); });
+    connect(
+        &logDialog, &GitLogDialog::undoCommitRequested, this,
+        [this](const QString &hash) { openUndoWizard(hash, QStringList()); });
+    logDialog.exec();
+    refresh();
+  });
+
+  m_historyRebaseBtn = new QPushButton(tr("🔀 Rebase"), m_historyHeader);
+  m_historyRebaseBtn->setToolTip(
+      tr("Open the rebase timeline — reorder, squash, reword or drop commits "
+         "with the resulting history shown as you edit"));
+  m_historyRebaseBtn->setVisible(false);
+  historyHeaderLayout->addWidget(m_historyRebaseBtn);
+  connect(m_historyRebaseBtn, &QPushButton::clicked, this,
+          &SourceControlPanel::openRebaseTimeline);
+
+  m_historyGraphBtn = new QPushButton(tr("🌱 Graph"), m_historyHeader);
+  m_historyGraphBtn->setToolTip(tr("Open the commit graph view"));
+  m_historyGraphBtn->setVisible(false);
+  historyHeaderLayout->addWidget(m_historyGraphBtn);
+  connect(m_historyGraphBtn, &QPushButton::clicked, [this]() {
+    if (!m_git || !m_git->isValidRepository()) {
+      return;
+    }
+    GitLogDialog logDialog(m_git, m_theme, this);
+    connect(
+        &logDialog, &GitLogDialog::viewCommitDiff, [this](const QString &hash) {
+          QString diff = m_git->getCommitDiff(hash);
+          GitCommitInfo info = m_git->getCommitDetails(hash);
+          GitDiffDialog *diffDialog =
+              new GitDiffDialog(m_git, hash, GitDiffDialog::DiffTarget::Commit,
+                                false, m_theme, this);
+          diffDialog->setDiffText(diff);
+          diffDialog->setCommitInfo(info.author, info.date, info.subject);
+          diffDialog->setAttribute(Qt::WA_DeleteOnClose);
+          diffDialog->show();
+        });
+    connect(&logDialog, &GitLogDialog::compareRequested, this,
+            [this](const QString &from, const QString &to) {
+              emit compareRequested(from, to, QString());
+            });
+    connect(&logDialog, &GitLogDialog::repositoryChanged, this,
+            &SourceControlPanel::scheduleRefresh);
+    connect(&logDialog, &GitLogDialog::workingTreeRequested, this,
+            [this]() { openStagingCanvas(QString()); });
+    connect(
+        &logDialog, &GitLogDialog::undoCommitRequested, this,
+        [this](const QString &hash) { openUndoWizard(hash, QStringList()); });
     logDialog.exec();
     refresh();
   });
@@ -720,6 +757,8 @@ void SourceControlPanel::setWorkingPath(const QString &path) {
 void SourceControlPanel::refresh() {
   updateUIState();
   updateHeaderTitle();
+  updateStateMap();
+  updateDetachedHeadCard();
 
   if (!m_git || !m_git->isValidRepository()) {
     resetChangeCounts();
@@ -1228,6 +1267,23 @@ void SourceControlPanel::onItemContextMenu(const QPoint &pos) {
     emit diffRequested(filePath, isStaged);
   });
 
+  QAction *undoAction = menu.addAction(tr("Undo changes to this file…"));
+  connect(undoAction, &QAction::triggered, [this, relativePath]() {
+    openUndoWizard(QString(), {relativePath});
+  });
+
+  QAction *compareAction = menu.addAction(tr("Compare with…"));
+  compareAction->setToolTip(
+      tr("Open this file in the comparison surface, where any two states can "
+         "be picked"));
+  connect(compareAction, &QAction::triggered, [this, relativePath]() {
+    emit compareRequested(QString(), QString(), relativePath);
+  });
+
+  QAction *canvasAction = menu.addAction(tr("Open in Staging Canvas"));
+  connect(canvasAction, &QAction::triggered,
+          [this, filePath]() { openStagingCanvas(filePath); });
+
   QAction *copyPathAction = menu.addAction(tr("Copy Path"));
   copyPathAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_C));
   connect(copyPathAction, &QAction::triggered,
@@ -1586,6 +1642,424 @@ void SourceControlPanel::updateHeaderTitle() {
   m_headerTitleLabel->setToolTip(repoRoot);
 }
 
+void SourceControlPanel::openUndoWizard(const QString &commit,
+                                        const QStringList &paths) {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  UndoChangesWizardDialog dialog(m_git, m_theme, this);
+  dialog.setTarget(commit, paths);
+  connect(&dialog, &UndoChangesWizardDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  connect(&dialog, &UndoChangesWizardDialog::amendRequested, this, [this]() {
+    if (m_amendCheckbox) {
+      m_amendCheckbox->setChecked(true);
+    }
+    if (m_commitMessage) {
+      m_commitMessage->setFocus();
+    }
+  });
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::openIntegrationAdvisor() {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  IntegrationAdvisorDialog dialog(m_git, m_theme, this);
+  connect(&dialog, &IntegrationAdvisorDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+
+  connect(&dialog, &IntegrationAdvisorDialog::reviewAppliedChangesRequested,
+          this, [this]() {
+            QTimer::singleShot(0, this,
+                               [this]() { openStagingCanvas(QString()); });
+          });
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::openCommitCrafting() {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  CommitCraftingDialog dialog(m_git, m_theme, this);
+  connect(&dialog, &CommitCraftingDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::openSyncRadar() {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  BranchSyncRadarDialog dialog(m_git, m_theme, this);
+  connect(&dialog, &BranchSyncRadarDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  connect(&dialog, &BranchSyncRadarDialog::commitRequested, this,
+          [this](const QString &hash) {
+            emit commitDiffRequested(hash, hash.left(7));
+          });
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::onStagingCanvasClicked() {
+  openStagingCanvas(QString());
+}
+
+void SourceControlPanel::openStagingCanvas(const QString &filePath) {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  StagingCanvasDialog dialog(m_git, m_theme, this);
+  connect(&dialog, &StagingCanvasDialog::fileOpenRequested, this,
+          &SourceControlPanel::fileOpenRequested);
+  connect(&dialog, &StagingCanvasDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  if (!filePath.isEmpty()) {
+    dialog.selectFile(filePath);
+  }
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::setupDetachedHeadCard() {
+  m_detachedCard = new QWidget(this);
+  m_detachedCard->setObjectName(QStringLiteral("detachedHeadCard"));
+  QVBoxLayout *layout = new QVBoxLayout(m_detachedCard);
+  layout->setContentsMargins(UiMetrics::SpaceMd, UiMetrics::SpaceSm,
+                             UiMetrics::SpaceMd, UiMetrics::SpaceSm);
+  layout->setSpacing(UiMetrics::SpaceSm);
+
+  m_detachedLabel = new QLabel(m_detachedCard);
+  m_detachedLabel->setObjectName(QStringLiteral("detachedHeadLabel"));
+  m_detachedLabel->setWordWrap(true);
+  layout->addWidget(m_detachedLabel);
+
+  QHBoxLayout *buttons = new QHBoxLayout();
+  m_detachedBranchButton =
+      new QPushButton(tr("Create branch from this commit"), m_detachedCard);
+  m_detachedBranchButton->setObjectName(
+      QStringLiteral("detachedHeadBranchButton"));
+  m_detachedBranchButton->setToolTip(
+      tr("Gives the commit you are on a name, so anything you commit here "
+         "stays easy to find."));
+  connect(m_detachedBranchButton, &QPushButton::clicked, this, [this]() {
+    if (!m_git) {
+      return;
+    }
+    bool ok = false;
+    const QString name = QInputDialog::getText(
+        this, tr("Create branch here"), tr("Name for this line of work:"),
+        QLineEdit::Normal, QString(), &ok);
+    if (!ok || name.trimmed().isEmpty()) {
+      return;
+    }
+    if (m_git->createBranchFromCommit(name.trimmed(), QStringLiteral("HEAD"),
+                                      true)) {
+      refresh();
+    }
+  });
+  buttons->addWidget(m_detachedBranchButton);
+
+  m_detachedListButton =
+      new QPushButton(tr("Show unnamed commits"), m_detachedCard);
+  m_detachedListButton->setObjectName(QStringLiteral("detachedHeadListButton"));
+  connect(m_detachedListButton, &QPushButton::clicked, this, [this]() {
+    ThemedMessageBox::information(this, tr("Commits with no name"),
+                                  gitDetachedHeadLeaveWarning(m_detachedState));
+  });
+  buttons->addWidget(m_detachedListButton);
+  buttons->addStretch();
+  layout->addLayout(buttons);
+
+  m_detachedCard->hide();
+}
+
+void SourceControlPanel::updateDetachedHeadCard() {
+  if (!m_detachedCard) {
+    return;
+  }
+
+  m_detachedState = gitDetachedHeadState(m_git);
+  const bool detached = m_detachedState.valid && m_detachedState.detached;
+  m_detachedCard->setVisible(detached);
+  if (!detached) {
+    return;
+  }
+
+  m_detachedLabel->setText(gitDetachedHeadExplanation(m_detachedState));
+  m_detachedListButton->setVisible(m_detachedState.hasUnreferencedWork());
+}
+
+bool SourceControlPanel::confirmLeavingDetachedHead() {
+  const QString warning = gitDetachedHeadLeaveWarning(m_detachedState);
+  if (warning.isEmpty()) {
+    return true;
+  }
+
+  ThemedMessageBox box(this);
+  box.setIcon(ThemedMessageBox::Warning);
+  box.setWindowTitle(tr("Unnamed commits would be left behind"));
+  box.setText(warning);
+  box.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No);
+  box.setDefaultButton(ThemedMessageBox::No);
+  return box.exec() == ThemedMessageBox::Yes;
+}
+
+void SourceControlPanel::openWhatIfSandbox() {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  WhatIfSandboxDialog dialog(m_git, m_theme, this);
+  connect(
+      &dialog, &WhatIfSandboxDialog::planRequested, this,
+      [this](const QList<GitOperationRequest> &plan) {
+        for (const GitOperationRequest &request : plan) {
+          if (!OperationPreviewDialog::confirm(m_git, request, m_theme, this)) {
+            return;
+          }
+          switch (request.kind) {
+          case GitOperationKind::Merge:
+            m_git->mergeBranch(request.target);
+            break;
+          case GitOperationKind::Rebase:
+            m_git->rebaseBranch(request.target);
+            break;
+          case GitOperationKind::Reset:
+            m_git->resetToCommit(request.target, request.resetMode);
+            break;
+          case GitOperationKind::CherryPick:
+            m_git->cherryPick(request.target);
+            break;
+          case GitOperationKind::BranchDelete:
+            m_git->deleteBranch(request.target, false);
+            break;
+          default:
+            break;
+          }
+        }
+        refresh();
+      });
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::openBisect(const QString &goodRef,
+                                    const QString &badRef) {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  BisectDialog dialog(m_git, m_theme, this);
+  dialog.setEndpoints(goodRef, badRef);
+  connect(&dialog, &BisectDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  connect(&dialog, &BisectDialog::inspectCommitRequested, this,
+          [this](const QString &hash) {
+            emit commitDiffRequested(hash, hash.left(7));
+          });
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::openWorktreeMap() {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  WorktreeMapDialog dialog(m_git, m_theme, this);
+  connect(&dialog, &WorktreeMapDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  connect(&dialog, &WorktreeMapDialog::openWorktreeRequested, this,
+          &SourceControlPanel::openWorktreeRequested);
+  connect(&dialog, &WorktreeMapDialog::showBranchInGraphRequested, this,
+          [this](const QString &branchName) {
+            emit compareRequested(branchName, QStringLiteral("HEAD"),
+                                  QString());
+          });
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::openBranchHygiene() {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  BranchHygieneDialog dialog(m_git, m_theme, this);
+  connect(&dialog, &BranchHygieneDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  connect(&dialog, &BranchHygieneDialog::showBranchInGraphRequested, this,
+          [this](const QString &branchName) {
+            emit compareRequested(branchName, QStringLiteral("HEAD"),
+                                  QString());
+          });
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::openCommandMirror() {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+  CommandMirrorDialog dialog(m_git, m_theme, this);
+  dialog.exec();
+}
+
+void SourceControlPanel::openRecoveryCenter() {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  RecoveryCenterDialog dialog(m_git, m_theme, this);
+  connect(&dialog, &RecoveryCenterDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  connect(&dialog, &RecoveryCenterDialog::inspectCommitRequested, this,
+          [this](const QString &hash) {
+            emit commitDiffRequested(hash, hash.left(7));
+          });
+  connect(&dialog, &RecoveryCenterDialog::compareRequested, this,
+          [this](const QString &from, const QString &to) {
+            emit compareRequested(from, to, QString());
+          });
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::openRebaseTimeline() {
+  if (!m_git || !m_git->isValidRepository()) {
+    return;
+  }
+
+  RebaseTimelineDialog dialog(m_git, m_theme, this);
+  connect(&dialog, &RebaseTimelineDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  connect(&dialog, &RebaseTimelineDialog::resolveConflictsRequested, this,
+          &SourceControlPanel::onResolveConflictsClicked);
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::openTimeTravel(const QString &commitHash) {
+  if (!m_git || !m_git->isValidRepository() || commitHash.isEmpty()) {
+    return;
+  }
+
+  TimeTravelDialog dialog(m_git, commitHash, m_theme, this);
+  connect(&dialog, &TimeTravelDialog::inspectSnapshotRequested, this,
+          [this](const QString &hash) {
+            emit commitDiffRequested(hash, hash.left(7));
+          });
+  connect(&dialog, &TimeTravelDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  connect(&dialog, &TimeTravelDialog::worktreeOpened, this,
+          [this](const QString &path, const QString &) {
+            ThemedMessageBox::information(
+                this, tr("Worktree ready"),
+                tr("A second working directory is checked out at %1. Your "
+                   "current checkout was not touched.")
+                    .arg(path));
+          });
+  dialog.exec();
+  refresh();
+}
+
+void SourceControlPanel::updateStateMap() {
+  if (!m_stateMap) {
+    return;
+  }
+
+  if (!m_git || !m_git->isValidRepository()) {
+    m_stateMap->setState(GitRepositoryState());
+    return;
+  }
+
+  m_stateMap->setState(m_git->repositoryState());
+}
+
+void SourceControlPanel::onStateMapLayerActivated(
+    RepositoryStateMapWidget::Layer layer) {
+  if (!m_git || !m_git->isValidRepository() || !m_stateMap) {
+    return;
+  }
+
+  using Layer = RepositoryStateMapWidget::Layer;
+  const GitRepositoryState state = m_stateMap->state();
+
+  const auto focusTree = [this](QTreeWidget *tree) {
+    if (!tree || m_stackedWidget->currentWidget() != m_repoWidget) {
+      return;
+    }
+    tree->setFocus();
+    if (tree->topLevelItemCount() > 0) {
+      tree->setCurrentItem(tree->topLevelItem(0));
+      tree->scrollToItem(tree->topLevelItem(0));
+    }
+  };
+
+  switch (layer) {
+  case Layer::WorkingTree:
+    if (state.conflictedCount > 0 && m_conflictFilesList &&
+        m_stackedWidget->currentWidget() == m_conflictWidget) {
+      m_conflictFilesList->setFocus();
+      if (m_conflictFilesList->count() > 0) {
+        m_conflictFilesList->setCurrentRow(0);
+      }
+      return;
+    }
+    focusTree(m_changesTree);
+    break;
+
+  case Layer::Index:
+    focusTree(m_stagedTree);
+    break;
+
+  case Layer::Head: {
+    if (state.unbornBranch) {
+      return;
+    }
+    const GitCommitInfo head = m_git->getCommitDetails(QStringLiteral("HEAD"));
+    if (!head.hash.isEmpty()) {
+      emit commitDiffRequested(head.hash, head.shortHash.isEmpty()
+                                              ? head.hash.left(7)
+                                              : head.shortHash);
+    }
+    break;
+  }
+
+  case Layer::Branch:
+    if (m_branchSelector && m_stackedWidget->currentWidget() == m_repoWidget) {
+      m_branchSelector->setFocus();
+      m_branchSelector->showPopup();
+    }
+    break;
+
+  case Layer::Upstream:
+    openSyncRadar();
+    break;
+
+  case Layer::Stash:
+    onStashClicked();
+    break;
+
+  case Layer::Operation:
+    if (m_git->hasMergeConflicts()) {
+      onResolveConflictsClicked();
+    }
+    break;
+  }
+}
+
 void SourceControlPanel::onStatusChanged() { scheduleRefresh(); }
 
 void SourceControlPanel::onBranchChanged(const QString &branchName) {
@@ -1607,6 +2081,11 @@ void SourceControlPanel::onBranchSelectorChanged(int index) {
   QString currentBranch = m_git->currentBranch();
 
   if (branchName != currentBranch && !branchName.isEmpty()) {
+
+    if (!confirmLeavingDetachedHead()) {
+      updateBranchSelector();
+      return;
+    }
     m_git->checkoutBranch(branchName);
   }
 }
@@ -1646,18 +2125,17 @@ void SourceControlPanel::onDeleteBranchClicked() {
     return;
   }
 
-  ThemedMessageBox msgBox(this);
-  msgBox.setIcon(ThemedMessageBox::Question);
-  msgBox.setWindowTitle(tr("Delete Branch"));
-  msgBox.setText(
-      tr("Are you sure you want to delete branch '%1'?").arg(selectedBranch));
-  msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No);
-  msgBox.setDefaultButton(ThemedMessageBox::No);
+  GitOperationRequest request;
+  request.kind = GitOperationKind::BranchDelete;
+  request.target = selectedBranch;
+  if (!OperationPreviewDialog::confirm(m_git, request, m_theme, this)) {
+    return;
+  }
 
-  if (msgBox.exec() == ThemedMessageBox::Yes) {
-    if (m_git->deleteBranch(selectedBranch, false)) {
-      updateBranchSelector();
-    }
+  const GitOperationPreview preview = previewGitOperation(m_git, request);
+  const bool force = !preview.effect.commitsUnreachable.isEmpty();
+  if (m_git->deleteBranch(selectedBranch, force)) {
+    updateBranchSelector();
   }
 }
 
@@ -1876,13 +2354,19 @@ void SourceControlPanel::onStashClicked() {
   if (!m_git || !m_git->isValidRepository())
     return;
 
-  GitStashDialog dialog(m_git, this);
-  connect(&dialog, &GitStashDialog::stashOperationCompleted,
-          [this](const QString &msg) {
-            m_statusLabel->setText(msg);
-            refresh();
+  StashShelfDialog dialog(m_git, m_theme, this);
+  connect(&dialog, &StashShelfDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
+  connect(&dialog, &StashShelfDialog::showBaseInGraphRequested, this,
+          [this](const QString &hash) {
+            emit commitDiffRequested(hash, hash.left(7));
+          });
+  connect(&dialog, &StashShelfDialog::compareRequested, this,
+          [this](const QString &from, const QString &to) {
+            emit compareRequested(from, to, QString());
           });
   dialog.exec();
+  refresh();
 }
 
 void SourceControlPanel::onMergeConflictsDetected(const QStringList &files) {
@@ -1894,11 +2378,11 @@ void SourceControlPanel::onResolveConflictsClicked() {
   if (!m_git || !m_git->isValidRepository())
     return;
 
-  MergeConflictDialog dialog(m_git, this);
-  connect(&dialog, &MergeConflictDialog::openFileRequested, this,
+  ConflictStoryboardDialog dialog(m_git, m_theme, this);
+  connect(&dialog, &ConflictStoryboardDialog::fileOpenRequested, this,
           &SourceControlPanel::fileOpenRequested);
-  connect(&dialog, &MergeConflictDialog::allConflictsResolved,
-          [this]() { refresh(); });
+  connect(&dialog, &ConflictStoryboardDialog::repositoryChanged, this,
+          &SourceControlPanel::scheduleRefresh);
 
   dialog.exec();
   refresh();
@@ -1924,6 +2408,25 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
 
   if (m_headerWidget) {
     m_headerWidget->setStyleSheet(UIStyleHelper::panelHeaderStyle(theme));
+  }
+  if (m_stateMap) {
+    m_stateMap->applyTheme(theme);
+  }
+  if (m_detachedCard) {
+    m_detachedCard->setStyleSheet(
+        QString("QWidget#detachedHeadCard { background: %1; border: 1px solid "
+                "%2; border-radius: %3px; }")
+            .arg(theme.surfaceColor.name(), theme.warningColor.name())
+            .arg(UiMetrics::RadiusSm));
+  }
+  if (m_detachedLabel) {
+    m_detachedLabel->setStyleSheet(
+        QString("color: %1; font-size: 11px;").arg(theme.warningColor.name()));
+  }
+  for (QPushButton *button : {m_detachedBranchButton, m_detachedListButton}) {
+    if (button) {
+      button->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
+    }
   }
   if (m_headerTitleLabel) {
     m_headerTitleLabel->setStyleSheet(

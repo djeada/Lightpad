@@ -3,6 +3,8 @@
 #include "breakpointmanager.h"
 #include "debugadapterregistry.h"
 
+#include <QFileInfo>
+
 namespace {
 QString
 adapterConfigurationHint(const std::shared_ptr<IDebugAdapter> &adapter) {
@@ -127,7 +129,7 @@ void DebugSession::stop(bool terminate) {
 
   m_client->stop(terminate);
   setState(State::Terminated);
-  emit terminated();
+  reportTermination();
 }
 
 void DebugSession::restart() {
@@ -140,6 +142,7 @@ void DebugSession::restart() {
     m_launchRequestSent = false;
     m_adapterInitializedReceived = false;
     m_configurationDoneSent = false;
+    m_terminationReported = false;
     setState(State::Starting);
   }
 
@@ -259,6 +262,15 @@ void DebugSession::onClientStopped(const DapStoppedEvent &event) {
 
 void DebugSession::onClientTerminated() {
   setState(State::Terminated);
+  reportTermination();
+}
+
+void DebugSession::reportTermination() {
+
+  if (m_terminationReported) {
+    return;
+  }
+  m_terminationReported = true;
   emit terminated();
 }
 
@@ -375,10 +387,17 @@ DebugSessionManager::startSession(const DebugConfiguration &config,
 }
 
 QString DebugSessionManager::quickStart(const QString &filePath,
-                                        const QString &languageId) {
+                                        const QString &languageId,
+                                        const QString &programOverride) {
   DebugConfiguration config =
       DebugConfigurationManager::instance().createQuickConfig(filePath,
                                                               languageId);
+  if (!programOverride.isEmpty()) {
+    config.program = programOverride;
+    if (config.cwd.isEmpty()) {
+      config.cwd = QFileInfo(programOverride).absolutePath();
+    }
+  }
   if (config.name.isEmpty()) {
     m_lastError =
         QString("Could not create debug configuration for: %1").arg(filePath);
@@ -391,17 +410,19 @@ QString DebugSessionManager::quickStart(const QString &filePath,
 
 void DebugSessionManager::stopSession(const QString &sessionId,
                                       bool terminate) {
-  auto it = m_sessions.find(sessionId);
-  if (it == m_sessions.end()) {
+
+  DebugSession *session = m_sessions.value(sessionId);
+  if (!session) {
     return;
   }
 
-  it.value()->stop(terminate);
+  session->stop(terminate);
 }
 
 void DebugSessionManager::stopAllSessions(bool terminate) {
-  for (auto it = m_sessions.begin(); it != m_sessions.end(); ++it) {
-    it.value()->stop(terminate);
+  const QList<DebugSession *> sessions = m_sessions.values();
+  for (DebugSession *session : sessions) {
+    session->stop(terminate);
   }
 }
 
@@ -449,13 +470,19 @@ void DebugSessionManager::onSessionTerminated() {
     return;
   }
 
-  QString sessionId = senderSession->id();
+  const QString sessionId = senderSession->id();
+
+  if (m_sessions.value(sessionId) != senderSession) {
+    return;
+  }
+  m_sessions.remove(sessionId);
+  senderSession->disconnect(this);
+
+  senderSession->deleteLater();
 
   QMetaObject::invokeMethod(
       this,
-      [this, sessionId, senderSession]() {
-        m_sessions.remove(sessionId);
-        delete senderSession;
+      [this, sessionId]() {
         emit sessionTerminated(sessionId);
 
         if (m_focusedSessionId == sessionId) {

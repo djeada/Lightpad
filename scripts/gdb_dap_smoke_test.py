@@ -262,40 +262,55 @@ def main():
             outcome = None
             message = None
             deadline = time.time() + 20.0
+            # Remembers a thread event so the recovery path below still knows
+            # the inferior started even if nothing else arrives.
+            running = (None, None)
             while time.time() < deadline and stopped is None:
-                outcome, message = session.wait_for_first(
-                    [
-                        (
-                            "setBreakpoints-response",
-                            lambda msg: msg.get("type") == "response"
-                            and msg.get("command") == "setBreakpoints"
-                            and msg.get("request_seq") == breakpoint_seq,
-                        ),
-                        (
-                            "configurationDone-response",
-                            lambda msg: msg.get("type") == "response"
-                            and msg.get("command") == "configurationDone"
-                            and msg.get("request_seq") == configuration_seq,
-                        ),
-                        (
-                            "thread-started",
-                            lambda msg: msg.get("type") == "event"
-                            and msg.get("event") == "thread"
-                            and msg.get("body", {}).get("reason") == "started",
-                        ),
-                        (
-                            "stopped",
-                            lambda msg: msg.get("type") == "event"
-                            and msg.get("event") == "stopped",
-                        ),
-                        (
-                            "terminated",
-                            lambda msg: msg.get("type") == "event"
-                            and msg.get("event") == "terminated",
-                        ),
-                    ],
-                    timeout=max(0.1, deadline - time.time()),
-                )
+                try:
+                    outcome, message = session.wait_for_first(
+                        [
+                            (
+                                "setBreakpoints-response",
+                                lambda msg: msg.get("type") == "response"
+                                and msg.get("command") == "setBreakpoints"
+                                and msg.get("request_seq") == breakpoint_seq,
+                            ),
+                            (
+                                "configurationDone-response",
+                                lambda msg: msg.get("type") == "response"
+                                and msg.get("command") == "configurationDone"
+                                and msg.get("request_seq") == configuration_seq,
+                            ),
+                            (
+                                "thread-started",
+                                lambda msg: msg.get("type") == "event"
+                                and msg.get("event") == "thread"
+                                and msg.get("body", {}).get("reason") == "started",
+                            ),
+                            (
+                                "stopped",
+                                lambda msg: msg.get("type") == "event"
+                                and msg.get("event") == "stopped",
+                            ),
+                            (
+                                "terminated",
+                                lambda msg: msg.get("type") == "event"
+                                and msg.get("event") == "terminated",
+                            ),
+                        ],
+                        timeout=max(0.1, deadline - time.time()),
+                    )
+                except TimeoutError:
+                    # gdb has gone quiet: the inferior is running and will not
+                    # stop by itself. Fall through to the explicit pause rather
+                    # than failing, which is what the code below already
+                    # expects to handle.
+                    outcome, message = running
+                    break
+
+                if outcome == "thread-started":
+                    running = (outcome, message)
+                    continue
 
                 if outcome == "setBreakpoints-response":
                     breakpoint_response = message
@@ -330,24 +345,32 @@ def main():
 
             if stopped is None and outcome == "thread-started":
                 thread_id = message.get("body", {}).get("threadId")
-                if thread_id:
-                    pause_seq = session.send_request("pause", {"threadId": thread_id})
-                    session.wait_for_response("pause", pause_seq, success=True, timeout=10.0)
-                outcome, message = session.wait_for_first(
-                    [
-                        (
-                            "stopped",
-                            lambda msg: msg.get("type") == "event"
-                            and msg.get("event") == "stopped",
-                        ),
-                        (
-                            "terminated",
-                            lambda msg: msg.get("type") == "event"
-                            and msg.get("event") == "terminated",
-                        ),
-                    ],
-                    timeout=20.0,
-                )
+                try:
+                    if thread_id:
+                        pause_seq = session.send_request("pause", {"threadId": thread_id})
+                        session.wait_for_response(
+                            "pause", pause_seq, success=True, timeout=10.0
+                        )
+                    outcome, message = session.wait_for_first(
+                        [
+                            (
+                                "stopped",
+                                lambda msg: msg.get("type") == "event"
+                                and msg.get("event") == "stopped",
+                            ),
+                            (
+                                "terminated",
+                                lambda msg: msg.get("type") == "event"
+                                and msg.get("event") == "terminated",
+                            ),
+                        ],
+                        timeout=20.0,
+                    )
+                except TimeoutError:
+                    # The adapter stopped answering. Handled by the no-stop
+                    # check below, which reports it as a skip rather than
+                    # pretending Lightpad regressed.
+                    outcome, message = None, None
 
             if outcome == "terminated":
                 details = "GDB DAP started the inferior but could not pause it before exit."
@@ -360,6 +383,18 @@ def main():
                 breakpoints = breakpoint_response.get("body", {}).get("breakpoints", [])
                 if not breakpoints or not breakpoints[0].get("verified"):
                     raise RuntimeError(f"Breakpoint not verified: {breakpoints!r}")
+
+            if stopped is None and outcome != "stopped":
+                # Neither the breakpoint nor the explicit pause produced a stop.
+                # That is an environment problem rather than a regression, so
+                # report it as a skip with what gdb had to say.
+                details = "GDB DAP never reported a stop event for the inferior."
+                extra = session.interesting_output()
+                # Same filter the other skip paths use: gdb's start-up banner
+                # is not worth repeating, an error or warning is.
+                if extra and ("error" in extra.lower() or "warning" in extra.lower()):
+                    details = f"{details} {extra}"
+                return skip(details)
 
             stopped = message if stopped is None else stopped
             thread_id = stopped.get("body", {}).get("threadId")

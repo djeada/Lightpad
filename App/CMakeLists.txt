@@ -79,6 +79,27 @@ set(project_headers
     dap/debugsession.h
     dap/debugsettings.h
     git/gitintegration.h
+    git/gitrepositorystate.h
+    git/gitdiffmodel.h
+    git/gitcomparison.h
+    git/gitcommittypes.h
+    git/gitsyncmodel.h
+    git/commitplan.h
+    git/gitfiletimeline.h
+    git/gitoperationpreview.h
+    git/gitintegrationadvice.h
+    git/gitundoplan.h
+    git/gittimetravel.h
+    git/gitrebaseplan.h
+    git/gitconflictmodel.h
+    git/gitrecovery.h
+    git/gitstashshelf.h
+    git/gitcommandlog.h
+    git/gitbranchhygiene.h
+    git/gitworktreemap.h
+    git/gitbisect.h
+    git/gitprovenance.h
+    git/gitsandbox.h
     ui/dialogs/commandpalette.h
     ui/dialogs/styleddialog.h
     ui/dialogs/styledpopupdialog.h
@@ -100,9 +121,30 @@ set(project_headers
     ui/dialogs/gitfilehistorydialog.h
     ui/dialogs/gitrebasedialog.h
     ui/dialogs/gitworkbenchdialog.h
+    ui/dialogs/stagingcanvasdialog.h
+    ui/dialogs/compareanythingdialog.h
+    ui/dialogs/branchsyncradardialog.h
+    ui/dialogs/commitcraftingdialog.h
+    ui/dialogs/filetimelinedialog.h
+    ui/dialogs/operationpreviewdialog.h
+    ui/dialogs/integrationadvisordialog.h
+    ui/dialogs/undochangeswizarddialog.h
+    ui/dialogs/timetraveldialog.h
+    ui/dialogs/rebasetimelinedialog.h
+    ui/dialogs/conflictstoryboarddialog.h
+    ui/dialogs/recoverycenterdialog.h
+    ui/dialogs/stashshelfdialog.h
+    ui/dialogs/commandmirrordialog.h
+    ui/dialogs/branchhygienedialog.h
+    ui/dialogs/worktreemapdialog.h
+    ui/dialogs/bisectdialog.h
+    ui/dialogs/provenancelensdialog.h
+    ui/dialogs/whatifsandboxdialog.h
     ui/dialogs/processpickerdialog.h
     ui/dialogs/cmaketargetpickerdialog.h
     ui/widgets/gitgraphwidget.h
+    ui/widgets/flowlayout.h
+    ui/widgets/repositorystatemapwidget.h
     ui/widgets/notificationwidget.h
     ui/widgets/pythonenvironmentwidget.h
     ui/widgets/hacker/hackerwidget.h
@@ -122,6 +164,7 @@ set(project_headers
     ui/panels/problemspanel.h
     ui/panels/breadcrumbwidget.h
     ui/panels/debugpanel.h
+    ui/panels/debugglyphs.h
     ui/panels/sourcecontrolpanel.h
     ui/panels/minimap.h
     ui/panels/spliteditorcontainer.h
@@ -142,6 +185,7 @@ set(project_headers
     language/languagecatalog.h
     language/languagefeaturemanager.h
     diagnostics/diagnosticsmanager.h
+    diagnostics/compilerdiagnosticparser.h
     diagnostics/diagnosticutils.h
     lsp/lspclient.h
     plugins/iplugin.h
@@ -199,6 +243,7 @@ set(project_headers
     filetree/gitfilesystemmodel.h
     run_templates/runtemplatemanager.h
     run_templates/runconfiguration.h
+    run_templates/runtargetresolver.h
     format_templates/formattemplatemanager.h
     test_templates/testconfiguration.h
     test_templates/testdiscovery.h
@@ -211,6 +256,7 @@ set(project_headers
     theme/themeengine.h
     theme/themepresets.h
     ui/uistylehelper.h
+    ui/uimetrics.h
     ui/viewers/imageviewer.h
     markdown/markdowntools.h
     markdown/markdownpreviewpanel.h
@@ -255,6 +301,26 @@ set(project_sources
     dap/debugsession.cpp
     dap/debugsettings.cpp
     git/gitintegration.cpp
+    git/gitrepositorystate.cpp
+    git/gitdiffmodel.cpp
+    git/gitcomparison.cpp
+    git/gitsyncmodel.cpp
+    git/commitplan.cpp
+    git/gitfiletimeline.cpp
+    git/gitoperationpreview.cpp
+    git/gitintegrationadvice.cpp
+    git/gitundoplan.cpp
+    git/gittimetravel.cpp
+    git/gitrebaseplan.cpp
+    git/gitconflictmodel.cpp
+    git/gitrecovery.cpp
+    git/gitstashshelf.cpp
+    git/gitcommandlog.cpp
+    git/gitbranchhygiene.cpp
+    git/gitworktreemap.cpp
+    git/gitbisect.cpp
+    git/gitprovenance.cpp
+    git/gitsandbox.cpp
     ui/dialogs/commandpalette.cpp
     ui/dialogs/styleddialog.cpp
     ui/dialogs/styledpopupdialog.cpp
@@ -276,9 +342,30 @@ set(project_sources
     ui/dialogs/gitfilehistorydialog.cpp
     ui/dialogs/gitrebasedialog.cpp
     ui/dialogs/gitworkbenchdialog.cpp
+    ui/dialogs/stagingcanvasdialog.cpp
+    ui/dialogs/compareanythingdialog.cpp
+    ui/dialogs/branchsyncradardialog.cpp
+    ui/dialogs/commitcraftingdialog.cpp
+    ui/dialogs/filetimelinedialog.cpp
+    ui/dialogs/operationpreviewdialog.cpp
+    ui/dialogs/integrationadvisordialog.cpp
+    ui/dialogs/undochangeswizarddialog.cpp
+    ui/dialogs/timetraveldialog.cpp
+    ui/dialogs/rebasetimelinedialog.cpp
+    ui/dialogs/conflictstoryboarddialog.cpp
+    ui/dialogs/recoverycenterdialog.cpp
+    ui/dialogs/stashshelfdialog.cpp
+    ui/dialogs/commandmirrordialog.cpp
+    ui/dialogs/branchhygienedialog.cpp
+    ui/dialogs/worktreemapdialog.cpp
+    ui/dialogs/bisectdialog.cpp
+    ui/dialogs/provenancelensdialog.cpp
+    ui/dialogs/whatifsandboxdialog.cpp
     ui/dialogs/processpickerdialog.cpp
     ui/dialogs/cmaketargetpickerdialog.cpp
     ui/widgets/gitgraphwidget.cpp
+    ui/widgets/flowlayout.cpp
+    ui/widgets/repositorystatemapwidget.cpp
     ui/widgets/notificationwidget.cpp
     ui/widgets/pythonenvironmentwidget.cpp
     ui/widgets/hacker/hackerwidget.cpp
@@ -318,6 +405,7 @@ set(project_sources
     lsp/lspclient.cpp
     language/languagefeaturemanager.cpp
     diagnostics/diagnosticsmanager.cpp
+    diagnostics/compilerdiagnosticparser.cpp
     plugins/pluginmanager.cpp
     syntax/lightpadsyntaxhighlighter.cpp
     syntax/pluginbasedsyntaxhighlighter.cpp
@@ -369,6 +457,7 @@ set(project_sources
     filetree/gitfilesystemmodel.cpp
     run_templates/runtemplatemanager.cpp
     run_templates/runconfiguration.cpp
+    run_templates/runtargetresolver.cpp
     format_templates/formattemplatemanager.cpp
     test_templates/testconfiguration.cpp
     test_templates/testdiscovery.cpp

@@ -28,6 +28,20 @@ public:
 signals:
   void discoveryFinished(const QList<DiscoveredTest> &tests);
   void discoveryError(const QString &message);
+
+protected:
+  static void disposeProcess(QProcess *&process) {
+    if (!process) {
+      return;
+    }
+    QProcess *doomed = process;
+    process = nullptr;
+    doomed->disconnect();
+    if (doomed->state() != QProcess::NotRunning) {
+      doomed->kill();
+    }
+    doomed->deleteLater();
+  }
 };
 
 class CTestDiscoveryAdapter : public ITestDiscoveryAdapter {

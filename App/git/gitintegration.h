@@ -1,6 +1,15 @@
 #ifndef GITINTEGRATION_H
 #define GITINTEGRATION_H
 
+#include "gitcommandlog.h"
+#include "gitcommittypes.h"
+#include "gitconflictmodel.h"
+#include "gitdiffmodel.h"
+#include "gitfiletimeline.h"
+#include "gitoperationpreview.h"
+#include "gitrebaseplan.h"
+#include "gitrepositorystate.h"
+#include "gitsyncmodel.h"
 #include <QMap>
 #include <QObject>
 #include <QProcess>
@@ -49,11 +58,37 @@ struct GitRemoteInfo {
   QString pushUrl;
 };
 
+struct GitStashDetail {
+  int index = 0;
+  QString message;
+  QString branch;
+  QString commitHash;
+  QString baseHash;
+  QString baseSubject;
+  QString relativeDate;
+  int parentCount = 0;
+};
+
 struct GitStashEntry {
   int index;
   QString message;
   QString branch;
   QString commitHash;
+};
+
+struct GitConflictIdentities {
+  QString oursLabel;
+  QString oursHash;
+  QString oursAuthor;
+  QString oursSubject;
+
+  QString theirsLabel;
+  QString theirsHash;
+  QString theirsAuthor;
+  QString theirsSubject;
+
+  QString mergeBase;
+  QString mergeBaseSubject;
 };
 
 struct GitConflictMarker {
@@ -62,18 +97,6 @@ struct GitConflictMarker {
   int endLine;
   QString oursContent;
   QString theirsContent;
-};
-
-struct GitCommitInfo {
-  QString hash;
-  QString shortHash;
-  QString author;
-  QString authorEmail;
-  QString date;
-  QString relativeDate;
-  QString subject;
-  QString body;
-  QStringList parents;
 };
 
 struct GitBlameLineInfo {
@@ -114,10 +137,24 @@ struct GitReflogEntry {
 };
 
 struct GitRefDecoration {
-  enum class Kind { LocalBranch, RemoteBranch, Tag };
+
+  enum class Kind { LocalBranch, RemoteBranch, Tag, Worktree, Stash };
   Kind kind = Kind::LocalBranch;
   QString name;
   bool isHead = false;
+
+  bool isUpstream = false;
+};
+
+struct GitLogOptions {
+
+  QString revisionRange;
+
+  QString pathFilter;
+
+  bool firstParentOnly = false;
+
+  bool allRefs = false;
 };
 
 class GitIntegration : public QObject {
@@ -147,11 +184,21 @@ public:
 
   QList<GitBranchInfo> getBranches() const;
 
+  QString branchRefDetails() const;
+
+  QSet<QString> mergedBranchNames(const QString &baseRef) const;
+
+  QMap<QString, QString> branchWorktreePaths() const;
+
+  int countCommitsNotIn(const QString &ref, const QString &baseRef) const;
+
   bool stageFile(const QString &filePath);
 
   bool stageAll();
 
   bool unstageFile(const QString &filePath);
+
+  bool unstageAll();
 
   bool commit(const QString &message);
 
@@ -206,12 +253,25 @@ public:
 
   QList<GitBlameLineInfo> getBlameInfo(const QString &filePath) const;
 
+  QString blameCommitForLine(const QString &filePath, int line,
+                             bool detectMoves) const;
+
+  QString blameOriginalPath(const QString &filePath, int line) const;
+
+  QString fileLines(const QString &filePath, int startLine, int endLine) const;
+  QString fileLinesAtRevision(const QString &filePath, const QString &revision,
+                              int startLine, int endLine) const;
+
   GitDiffHunk getDiffHunkAtLine(const QString &filePath, int lineNumber) const;
 
   QList<GitCommitFileStat> getCommitFileStats(const QString &commitHash) const;
 
   QList<GitCommitInfo> getFileLog(const QString &filePath,
                                   int maxCount = 50) const;
+
+  QList<GitCommitInfo> getFileLogRange(const QString &filePath,
+                                       const QString &range,
+                                       int maxCount = 50) const;
 
   QList<GitCommitInfo> getLineHistory(const QString &filePath, int startLine,
                                       int endLine) const;
@@ -220,6 +280,14 @@ public:
                             const QString &revision) const;
 
   QString getBranchDiff(const QString &branch1, const QString &branch2) const;
+
+  QString getMergeBase(const QString &refA, const QString &refB) const;
+
+  QStringList predictMergeConflicts(const QString &refA,
+                                    const QString &refB) const;
+
+  QList<GitCommitInfo> getUnreachableAfterDelete(const QString &branchName,
+                                                 int maxCount = 100) const;
 
   bool getAheadBehind(int &ahead, int &behind) const;
 
@@ -253,9 +321,22 @@ public:
 
   QList<GitStashEntry> stashList() const;
 
+  QList<GitStashDetail> stashDetails() const;
+
+  QString stashNumstat(int index) const;
+  QString stashNameStatus(int index) const;
+  QString stashDiff(int index) const;
+
+  bool stashPaths(const QStringList &paths, const QString &message,
+                  bool includeUntracked = false);
+
+  bool restoreStashPaths(int index, const QStringList &paths);
+
   QList<GitStashEntry> getStashList() const;
 
   bool stashClear();
+
+  bool stashBranch(const QString &branchName, int index);
 
   void refresh();
 
@@ -264,6 +345,16 @@ public:
   bool hasMergeConflicts() const;
 
   QStringList getConflictedFiles() const;
+
+  QList<QPair<QString, QString>> unmergedEntries() const;
+
+  QString stageContent(const QString &filePath, int stage) const;
+
+  QString workingFileContent(const QString &filePath) const;
+
+  GitConflictIdentities conflictIdentities() const;
+
+  bool resolveConflictWith(const QString &filePath, const QString &content);
 
   QList<GitConflictMarker> getConflictMarkers(const QString &filePath) const;
 
@@ -281,6 +372,8 @@ public:
 
   bool cherryPick(const QString &commitHash);
 
+  bool cherryPickNoCommit(const QString &commitHash);
+
   bool revertCommit(const QString &commitHash);
 
   bool resetToCommit(const QString &commitHash, const QString &mode = "mixed");
@@ -297,6 +390,12 @@ public:
 
   QList<QPair<QString, QString>> listWorktrees() const;
 
+  QString worktreeListRaw() const;
+
+  GitRepositoryState worktreeState(const QString &worktreePath) const;
+
+  bool pruneWorktrees();
+
   bool addWorktree(const QString &path, const QString &branch,
                    bool createBranch = false);
 
@@ -306,19 +405,95 @@ public:
 
   QList<GitTagInfo> getTags() const;
 
+  bool createTag(const QString &name, const QString &commitHash = QString(),
+                 const QString &message = QString());
+
+  bool deleteTag(const QString &name);
+
   bool renameBranch(const QString &oldName, const QString &newName);
 
   bool rebaseBranch(const QString &ontoBranch);
 
+  bool startInteractiveRebase(const QString &onto, const GitRebasePlan &plan);
+
+  bool rebaseContinue();
+  bool rebaseSkip();
+  bool rebaseAbort();
+
+  bool isRebaseInProgress() const;
+
+  bool rebaseProgress(int &current, int &total) const;
+
   QList<GitReflogEntry> getReflog(int count = 20) const;
+
+  QString reflogRaw(int count = 100) const;
+
+  bool isCommitReachable(const QString &commitHash) const;
 
   QStringList getBackupRefs() const;
 
+  bool isBisecting() const;
+  QString bisectStart(const QString &badRef, const QString &goodRef);
+  QString bisectMark(const QString &verdict);
+  QString bisectLog() const;
+  bool bisectReset();
+
+  QString bisectRun(const QString &command, int *exitCode = nullptr);
+
+  QList<GitCommitInfo> getCommitsWithoutRef(int maxCount = 100) const;
+
+  QString worktreeDirtySummary(const QString &worktreePath) const;
+
   QStringList getCommitRefs(const QString &hash) const;
+
+  QList<GitCommandRecord> commandHistory() const { return m_commandHistory; }
+  void clearCommandHistory();
+
+  static GitCommandMirrorMode mirrorMode();
+  static void setMirrorMode(GitCommandMirrorMode mode);
+
+  GitRepositoryState repositoryState() const;
+
+  QString gitDirPath() const;
+
+  QString getWorkingVsHeadDiff(const QString &filePath) const;
+
+  bool applyPatch(const QString &patch, bool cached, bool reverse);
+
+  QList<GitCommitInfo> getLogPage(const GitLogOptions &options, int skip,
+                                  int limit) const;
+
+  void
+  getLogPageAsync(const GitLogOptions &options, int skip, int limit,
+                  const std::function<void(QList<GitCommitInfo>)> &callback);
+
+  QMap<QString, QStringList> getWorktreeAnchors() const;
+
+  QMap<QString, QStringList> getStashAnchors() const;
+
+  GitSyncState syncState(int maxCommits = 200) const;
+
+  QList<GitFileRevision> getFileTimeline(const QString &filePath,
+                                         const GitFileTimelineOptions &options,
+                                         int skip, int limit) const;
+
+  GitPullStrategy configuredPullStrategy() const;
+
+  bool pullWithStrategy(const QString &remoteName, const QString &branchName,
+                        GitPullStrategy strategy);
+
+  bool pushWithForce(const QString &remoteName, const QString &branchName,
+                     bool setUpstream, GitPushForce force);
+
+  bool setUpstreamBranch(const QString &remoteName, const QString &branchName);
+
+  bool unsetUpstream(const QString &branchName);
 
 signals:
 
   void statusChanged();
+
+  void commandExecuted(const GitCommandRecord &record);
 
   void branchChanged(const QString &branchName);
 
@@ -341,11 +516,32 @@ private:
   QString m_currentBranch;
   QList<GitFileInfo> m_statusCache;
 
+  mutable QList<GitCommandRecord> m_commandHistory;
+
+  void recordCommand(const QStringList &args, const QString &workingDirectory,
+                     const QString &output, const QString &error,
+                     int exitCode) const;
+
   QString executeGitCommand(const QStringList &args,
                             bool *success = nullptr) const;
 
   QString executeGitCommandAtPath(const QString &path, const QStringList &args,
                                   bool *success = nullptr) const;
+
+  QString executeGitCommandWithInput(const QStringList &args,
+                                     const QByteArray &input,
+                                     bool *success = nullptr,
+                                     QString *errorOutput = nullptr) const;
+
+  QString executeGitCommandWithEnv(const QStringList &args,
+                                   const QMap<QString, QString> &extraEnv,
+                                   bool *success = nullptr,
+                                   QString *errorOutput = nullptr) const;
+
+  QString prepareRebaseHelpers(const QString &todoText,
+                               const QStringList &messages) const;
+
+  QMap<QString, QString> rebaseHelperEnvironment() const;
 
   QList<GitFileInfo> parseStatusOutput(const QString &output) const;
 

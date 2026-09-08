@@ -5,7 +5,10 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QPointer>
+#include <QProcessEnvironment>
 #include <QRegularExpression>
+#include <QSet>
+#include <QSettings>
 #include <QTemporaryFile>
 #include <QTextStream>
 #include <QThreadPool>
@@ -95,8 +98,12 @@ QString GitIntegration::executeGitCommand(const QStringList &args,
       break;
   }
   output.truncate(end);
+
+  const QString error = QString::fromUtf8(process.readAllStandardError());
+  recordCommand(args, process.workingDirectory(), output, error,
+                process.exitCode());
+
   if (process.exitCode() != 0) {
-    QString error = process.readAllStandardError();
     LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " + error);
     return output;
   }
@@ -844,7 +851,8 @@ GitIntegration::getCommitRefsMap() const {
       }
 
       if (headValid && hash == headHash &&
-          decoration.kind == GitRefDecoration::Kind::LocalBranch) {
+          decoration.kind == GitRefDecoration::Kind::LocalBranch &&
+          decoration.name == m_currentBranch) {
         decoration.isHead = true;
       }
 
@@ -1575,13 +1583,17 @@ QString GitIntegration::executeGitCommandAtPath(const QString &path,
     *success = (process.exitCode() == 0);
   }
 
+  const QString error = QString::fromUtf8(process.readAllStandardError());
+  const QString output =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  recordCommand(args, path, output, error, process.exitCode());
+
   if (process.exitCode() != 0) {
-    QString error = QString::fromUtf8(process.readAllStandardError());
     LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " + error);
     return error;
   }
 
-  return QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  return output;
 }
 
 bool GitIntegration::initRepository(const QString &path) {
@@ -2833,4 +2845,1679 @@ QStringList GitIntegration::getCommitRefs(const QString &hash) const {
   }
 
   return result;
+}
+
+namespace {
+
+QString readTrimmedFile(const QString &path) {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return QString();
+  }
+  return QString::fromUtf8(file.readAll()).trimmed();
+}
+
+QString sequencerProgress(const QString &dir, const QString &currentFile,
+                          const QString &totalFile) {
+  const QString current = readTrimmedFile(dir + "/" + currentFile);
+  const QString total = readTrimmedFile(dir + "/" + totalFile);
+  if (current.isEmpty() || total.isEmpty()) {
+    return QString();
+  }
+  return QObject::tr("%1 of %2").arg(current, total);
+}
+
+GitOperation detectGitOperation(const QString &gitDir, QString *detail) {
+  if (detail) {
+    detail->clear();
+  }
+  if (gitDir.isEmpty()) {
+    return GitOperation::None;
+  }
+
+  const QString rebaseMerge = gitDir + "/rebase-merge";
+  if (QFileInfo::exists(rebaseMerge)) {
+    if (detail) {
+      *detail = sequencerProgress(rebaseMerge, "msgnum", "end");
+    }
+    return GitOperation::Rebase;
+  }
+
+  const QString rebaseApply = gitDir + "/rebase-apply";
+  if (QFileInfo::exists(rebaseApply)) {
+
+    const bool isAm = QFileInfo::exists(rebaseApply + "/applying");
+    if (detail) {
+      *detail = sequencerProgress(rebaseApply, "next", "last");
+    }
+    return isAm ? GitOperation::ApplyMailbox : GitOperation::Rebase;
+  }
+
+  if (QFileInfo::exists(gitDir + "/CHERRY_PICK_HEAD")) {
+    return GitOperation::CherryPick;
+  }
+  if (QFileInfo::exists(gitDir + "/REVERT_HEAD")) {
+    return GitOperation::Revert;
+  }
+  if (QFileInfo::exists(gitDir + "/MERGE_HEAD")) {
+    return GitOperation::Merge;
+  }
+  if (QFileInfo::exists(gitDir + "/BISECT_LOG")) {
+    return GitOperation::Bisect;
+  }
+  return GitOperation::None;
+}
+
+} // namespace
+
+QString GitIntegration::gitDirPath() const {
+  if (!m_isValid) {
+    return QString();
+  }
+
+  bool success = false;
+  const QString dir =
+      executeGitCommand({"rev-parse", "--absolute-git-dir"}, &success);
+  if (success && !dir.isEmpty()) {
+    return dir;
+  }
+  return m_repositoryPath + "/.git";
+}
+
+GitRepositoryState GitIntegration::repositoryState() const {
+  GitRepositoryState state;
+  if (!m_isValid) {
+    return state;
+  }
+
+  state.valid = true;
+  state.repositoryRoot = m_repositoryPath;
+
+  bool success = false;
+  const QString status = executeGitCommand(
+      {"status", "--porcelain=v2", "--branch", "--untracked-files=all"},
+      &success);
+  if (success) {
+    parseGitStatusPorcelainV2(status, state);
+  }
+
+  if (!state.unbornBranch) {
+    const QString subject =
+        executeGitCommand({"log", "-1", "--format=%s"}, &success);
+    if (success) {
+      state.headSubject = subject;
+    }
+  }
+
+  const QString stashes = executeGitCommand({"stash", "list"}, &success);
+  if (success) {
+    state.stashCount = stashes.split('\n', Qt::SkipEmptyParts).size();
+  }
+
+  state.operation = detectGitOperation(gitDirPath(), &state.operationDetail);
+
+  return state;
+}
+
+QString GitIntegration::executeGitCommandWithInput(const QStringList &args,
+                                                   const QByteArray &input,
+                                                   bool *success,
+                                                   QString *errorOutput) const {
+  if (!m_isValid) {
+    if (success) {
+      *success = false;
+    }
+    return QString();
+  }
+
+  QProcess process;
+  process.setWorkingDirectory(m_repositoryPath.isEmpty() ? QDir::currentPath()
+                                                         : m_repositoryPath);
+  process.start("git", args);
+  if (!process.waitForStarted(GIT_COMMAND_TIMEOUT_MS)) {
+    LOG_WARNING("Git command failed to start: git " + args.join(" "));
+    if (success) {
+      *success = false;
+    }
+    return QString();
+  }
+
+  process.write(input);
+  process.closeWriteChannel();
+
+  if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS)) {
+    LOG_WARNING("Git command timed out: git " + args.join(" "));
+    process.kill();
+    process.waitForFinished(1000);
+    if (success) {
+      *success = false;
+    }
+    return QString();
+  }
+
+  const QString error = QString::fromUtf8(process.readAllStandardError());
+  if (errorOutput) {
+    *errorOutput = error.trimmed();
+  }
+  if (success) {
+    *success = process.exitCode() == 0;
+  }
+  if (process.exitCode() != 0) {
+    LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " + error);
+  }
+
+  const QString output = QString::fromUtf8(process.readAllStandardOutput());
+  recordCommand(args, process.workingDirectory(), output, error,
+                process.exitCode());
+  return output;
+}
+
+QString GitIntegration::getWorkingVsHeadDiff(const QString &filePath) const {
+  if (!m_isValid) {
+    return QString();
+  }
+
+  bool success = false;
+  const QString output =
+      executeGitCommand({"diff", "HEAD", "--", filePath}, &success);
+  return success ? output : QString();
+}
+
+bool GitIntegration::applyPatch(const QString &patch, bool cached,
+                                bool reverse) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+  if (patch.trimmed().isEmpty()) {
+    return false;
+  }
+
+  QStringList args{"apply"};
+  if (cached) {
+    args << "--cached";
+  }
+  if (reverse) {
+    args << "--reverse";
+  }
+
+  args << "--recount" << "--unidiff-zero" << "--whitespace=nowarn" << "-";
+
+  bool success = false;
+  QString error;
+  executeGitCommandWithInput(args, patch.toUtf8(), &success, &error);
+
+  if (!success) {
+    emit errorOccurred(error.isEmpty() ? QStringLiteral("git apply failed")
+                                       : error);
+    return false;
+  }
+
+  emit statusChanged();
+  return true;
+}
+
+QList<GitCommitInfo> GitIntegration::getLogPage(const GitLogOptions &options,
+                                                int skip, int limit) const {
+  if (!m_isValid || limit <= 0 || skip < 0) {
+    return {};
+  }
+
+  const QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
+
+  QStringList args = {"log", "--date-order", QString("--skip=%1").arg(skip),
+                      QString("--max-count=%1").arg(limit),
+                      QString("--pretty=format:%1").arg(format)};
+
+  if (options.firstParentOnly) {
+    args << "--first-parent";
+  }
+  if (options.allRefs && options.revisionRange.isEmpty()) {
+
+    args << "--branches" << "--tags" << "--remotes";
+  }
+  if (!options.revisionRange.isEmpty()) {
+    args << options.revisionRange;
+  }
+  if (!options.pathFilter.isEmpty()) {
+
+    args << "--" << options.pathFilter;
+  }
+
+  bool success = false;
+  const QString output = executeGitCommand(args, &success);
+  if (!success) {
+    return {};
+  }
+
+  return parseCommitLogOutput(output);
+}
+
+void GitIntegration::getLogPageAsync(
+    const GitLogOptions &options, int skip, int limit,
+    const std::function<void(QList<GitCommitInfo>)> &callback) {
+  QPointer<GitIntegration> self(this);
+  QThreadPool::globalInstance()->start([self, options, skip, limit,
+                                        callback]() {
+    if (!self) {
+      return;
+    }
+    const QList<GitCommitInfo> page = self->getLogPage(options, skip, limit);
+    QMetaObject::invokeMethod(
+        self, [callback, page]() { callback(page); }, Qt::QueuedConnection);
+  });
+}
+
+QMap<QString, QStringList> GitIntegration::getWorktreeAnchors() const {
+  QMap<QString, QStringList> anchors;
+  if (!m_isValid) {
+    return anchors;
+  }
+
+  bool success = false;
+  const QString output =
+      executeGitCommand({"worktree", "list", "--porcelain"}, &success);
+  if (!success) {
+    return anchors;
+  }
+
+  QString path;
+  QString head;
+  const auto flush = [&]() {
+    if (!path.isEmpty() && !head.isEmpty() &&
+        QDir(path).absolutePath() != QDir(m_repositoryPath).absolutePath()) {
+      anchors[head] << QDir(path).dirName();
+    }
+    path.clear();
+    head.clear();
+  };
+
+  const QStringList lines = output.split('\n');
+  for (const QString &line : lines) {
+    if (line.startsWith(QLatin1String("worktree "))) {
+      flush();
+      path = line.mid(9).trimmed();
+    } else if (line.startsWith(QLatin1String("HEAD "))) {
+      head = line.mid(5).trimmed();
+    }
+  }
+  flush();
+
+  return anchors;
+}
+
+QMap<QString, QStringList> GitIntegration::getStashAnchors() const {
+  QMap<QString, QStringList> anchors;
+  if (!m_isValid) {
+    return anchors;
+  }
+
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"reflog", "show", "--format=%gd%x00%P", "refs/stash"}, &success);
+  if (!success) {
+    return anchors;
+  }
+
+  const QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+  for (const QString &line : lines) {
+    const QStringList parts = line.split(QChar('\0'));
+    if (parts.size() < 2) {
+      continue;
+    }
+    const QStringList parents = parts[1].split(' ', Qt::SkipEmptyParts);
+    if (parents.isEmpty()) {
+      continue;
+    }
+    anchors[parents.first()] << parts[0];
+  }
+
+  return anchors;
+}
+
+bool GitIntegration::createTag(const QString &name, const QString &commitHash,
+                               const QString &message) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  QStringList args{"tag"};
+  if (!message.isEmpty()) {
+    args << "-a" << name << "-m" << message;
+  } else {
+    args << name;
+  }
+  if (!commitHash.isEmpty()) {
+    args << commitHash;
+  }
+
+  bool success = false;
+  executeGitCommand(args, &success);
+  if (success) {
+    emit operationCompleted("Created tag: " + name);
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Failed to create tag: " + name);
+  }
+  return success;
+}
+
+bool GitIntegration::deleteTag(const QString &name) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  bool success = false;
+  executeGitCommand({"tag", "-d", name}, &success);
+  if (success) {
+    emit operationCompleted("Deleted tag: " + name);
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Failed to delete tag: " + name);
+  }
+  return success;
+}
+
+QString GitIntegration::getMergeBase(const QString &refA,
+                                     const QString &refB) const {
+  if (!m_isValid || refA.isEmpty() || refB.isEmpty()) {
+    return QString();
+  }
+
+  bool success = false;
+  const QString output =
+      executeGitCommand({"merge-base", refA, refB}, &success);
+  return success ? output.trimmed() : QString();
+}
+
+GitSyncState GitIntegration::syncState(int maxCommits) const {
+  GitSyncState state;
+  if (!m_isValid) {
+    return state;
+  }
+
+  state.valid = true;
+
+  bool success = false;
+  const QString head =
+      executeGitCommand({"rev-parse", "--abbrev-ref", "HEAD"}, &success);
+  if (!success) {
+    return state;
+  }
+  if (head == QLatin1String("HEAD")) {
+    state.detachedHead = true;
+    return state;
+  }
+  state.branch = head;
+
+  const QString upstream = executeGitCommand(
+      {"rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"},
+      &success);
+  if (!success || upstream.isEmpty()) {
+    return state;
+  }
+  state.upstream = upstream;
+  state.hasUpstream = true;
+
+  state.mergeBase = getMergeBase(QStringLiteral("HEAD"), upstream);
+
+  state.incoming =
+      getCommitLogPage(QStringLiteral("HEAD..%1").arg(upstream), 0, maxCommits);
+  state.outgoing =
+      getCommitLogPage(QStringLiteral("%1..HEAD").arg(upstream), 0, maxCommits);
+
+  return state;
+}
+
+GitPullStrategy GitIntegration::configuredPullStrategy() const {
+  if (!m_isValid) {
+    return GitPullStrategy::Merge;
+  }
+
+  bool success = false;
+  const QString rebase =
+      executeGitCommand({"config", "--get", "pull.rebase"}, &success);
+  const QString ff =
+      executeGitCommand({"config", "--get", "pull.ff"}, &success);
+  return parsePullStrategyConfig(rebase, ff);
+}
+
+bool GitIntegration::pullWithStrategy(const QString &remoteName,
+                                      const QString &branchName,
+                                      GitPullStrategy strategy) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  QStringList args{"pull"};
+  switch (strategy) {
+  case GitPullStrategy::Merge:
+    args << "--no-rebase";
+    break;
+  case GitPullStrategy::Rebase:
+    args << "--rebase";
+    break;
+  case GitPullStrategy::FastForwardOnly:
+    args << "--ff-only";
+    break;
+  }
+  if (!remoteName.isEmpty()) {
+    args << remoteName;
+    if (!branchName.isEmpty()) {
+      args << branchName;
+    }
+  }
+
+  bool success = false;
+  executeGitCommand(args, &success);
+
+  if (success) {
+    updateCurrentBranch();
+    emit operationCompleted("Pulled from " + remoteName);
+    emit pullCompleted(remoteName, branchName);
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Failed to pull from " + remoteName);
+  }
+  return success;
+}
+
+bool GitIntegration::pushWithForce(const QString &remoteName,
+                                   const QString &branchName, bool setUpstream,
+                                   GitPushForce force) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  QStringList args{"push"};
+  switch (force) {
+  case GitPushForce::None:
+    break;
+  case GitPushForce::WithLease:
+    args << "--force-with-lease";
+    break;
+  case GitPushForce::Force:
+    args << "--force";
+    break;
+  }
+  if (setUpstream) {
+    args << "--set-upstream";
+  }
+  if (!remoteName.isEmpty()) {
+    args << remoteName;
+    if (!branchName.isEmpty()) {
+      args << branchName;
+    }
+  }
+
+  bool success = false;
+  executeGitCommand(args, &success);
+
+  if (success) {
+    emit operationCompleted("Pushed to " + remoteName);
+    emit pushCompleted(remoteName, branchName);
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Failed to push to " + remoteName);
+  }
+  return success;
+}
+
+bool GitIntegration::setUpstreamBranch(const QString &remoteName,
+                                       const QString &branchName) {
+  if (!m_isValid || remoteName.isEmpty() || branchName.isEmpty()) {
+    return false;
+  }
+
+  bool success = false;
+  executeGitCommand(
+      {"branch", "--set-upstream-to", remoteName + "/" + branchName}, &success);
+
+  if (success) {
+    emit operationCompleted("Upstream set to " + remoteName + "/" + branchName);
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Failed to set upstream to " + remoteName + "/" +
+                       branchName);
+  }
+  return success;
+}
+
+bool GitIntegration::unstageAll() {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  bool success = false;
+  executeGitCommand({"reset", "--mixed", "HEAD"}, &success);
+  if (success) {
+    emit statusChanged();
+  }
+  return success;
+}
+
+QList<GitFileRevision>
+GitIntegration::getFileTimeline(const QString &filePath,
+                                const GitFileTimelineOptions &options, int skip,
+                                int limit) const {
+  if (!m_isValid || filePath.isEmpty() || limit <= 0 || skip < 0) {
+    return {};
+  }
+
+  const QString format = "%x01%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
+
+  QStringList base{"log", QString("--skip=%1").arg(skip),
+                   QString("--max-count=%1").arg(limit),
+                   QString("--pretty=format:%1").arg(format)};
+  if (options.followRenames) {
+
+    base << "--follow";
+  }
+  if (options.firstParentOnly) {
+    base << "--first-parent";
+  }
+  if (options.allBranches) {
+    base << "--branches" << "--tags" << "--remotes";
+  }
+  if (!options.author.isEmpty()) {
+    base << QString("--author=%1").arg(options.author);
+  }
+  if (!options.since.isEmpty()) {
+    base << QString("--since=%1").arg(options.since);
+  }
+  if (!options.until.isEmpty()) {
+    base << QString("--until=%1").arg(options.until);
+  }
+
+  QStringList nameArgs = base;
+  nameArgs << "--name-status" << "--" << filePath;
+  QStringList statArgs = base;
+  statArgs << "--numstat" << "--" << filePath;
+
+  bool success = false;
+  const QString nameStatus = executeGitCommand(nameArgs, &success);
+  if (!success) {
+    return {};
+  }
+  const QString numstat = executeGitCommand(statArgs, &success);
+
+  QList<GitFileRevision> revisions =
+      parseFileTimeline(nameStatus, success ? numstat : QString());
+
+  if (options.hasLineRange()) {
+
+    QSet<QString> touching;
+    for (const GitCommitInfo &commit : getLineHistory(
+             filePath, options.lineRangeStart, options.lineRangeEnd)) {
+      touching.insert(commit.hash);
+    }
+    QList<GitFileRevision> filtered;
+    for (const GitFileRevision &revision : revisions) {
+      if (touching.contains(revision.commit.hash)) {
+        filtered.append(revision);
+      }
+    }
+    revisions = filtered;
+  }
+
+  return revisions;
+}
+
+QStringList GitIntegration::predictMergeConflicts(const QString &refA,
+                                                  const QString &refB) const {
+  if (!m_isValid || refA.isEmpty() || refB.isEmpty()) {
+    return {};
+  }
+
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"merge-tree", "--write-tree", "--name-only", refA, refB}, &success);
+  if (success) {
+
+    return {};
+  }
+  if (output.trimmed().isEmpty()) {
+
+    return {};
+  }
+  return parseMergeTreeConflicts(output);
+}
+
+QList<GitCommitInfo>
+GitIntegration::getUnreachableAfterDelete(const QString &branchName,
+                                          int maxCount) const {
+  if (!m_isValid || branchName.isEmpty()) {
+    return {};
+  }
+
+  const QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
+  QStringList args = {"log", QString("--max-count=%1").arg(maxCount),
+                      QString("--pretty=format:%1").arg(format), branchName,
+                      "--not"};
+
+  bool success = false;
+  const QString refs =
+      executeGitCommand({"for-each-ref", "--format=%(refname)", "refs/heads",
+                         "refs/remotes", "refs/tags"},
+                        &success);
+  if (!success) {
+    return {};
+  }
+
+  const QString selfRef = QStringLiteral("refs/heads/%1").arg(branchName);
+  bool haveOther = false;
+  for (const QString &ref : refs.split('\n', Qt::SkipEmptyParts)) {
+    if (ref == selfRef) {
+      continue;
+    }
+    args << ref;
+    haveOther = true;
+  }
+  if (!haveOther) {
+
+    args.removeAll(QStringLiteral("--not"));
+  }
+
+  const QString output = executeGitCommand(args, &success);
+  if (!success) {
+    return {};
+  }
+  return parseCommitLogOutput(output);
+}
+
+bool GitIntegration::cherryPickNoCommit(const QString &commitHash) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  bool success = false;
+  executeGitCommand({"cherry-pick", "-n", commitHash}, &success);
+  if (success) {
+    emit operationCompleted("Applied " + commitHash.left(7) +
+                            " without committing");
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Failed to apply " + commitHash.left(7));
+  }
+  return success;
+}
+
+QList<GitCommitInfo> GitIntegration::getCommitsWithoutRef(int maxCount) const {
+  if (!m_isValid) {
+    return {};
+  }
+
+  const QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
+  bool success = false;
+  const QString output =
+      executeGitCommand({"log", QString("--max-count=%1").arg(maxCount),
+                         QString("--pretty=format:%1").arg(format), "HEAD",
+                         "--not", "--branches", "--tags", "--remotes"},
+                        &success);
+  if (!success) {
+    return {};
+  }
+  return parseCommitLogOutput(output);
+}
+
+QString
+GitIntegration::worktreeDirtySummary(const QString &worktreePath) const {
+  if (!m_isValid || worktreePath.isEmpty()) {
+    return QString();
+  }
+
+  bool success = false;
+  const QString output = executeGitCommandAtPath(
+      worktreePath, {"status", "--porcelain", "-uall"}, &success);
+  if (!success) {
+    return QString();
+  }
+
+  QStringList paths;
+  for (const QString &line : output.split('\n', Qt::SkipEmptyParts)) {
+    const QString entry = line.trimmed();
+    const int space = entry.indexOf(QLatin1Char(' '));
+    if (space > 0) {
+      paths << entry.mid(space + 1).trimmed();
+    }
+  }
+  return paths.join(QStringLiteral(", "));
+}
+
+QString GitIntegration::executeGitCommandWithEnv(
+    const QStringList &args, const QMap<QString, QString> &extraEnv,
+    bool *success, QString *errorOutput) const {
+  if (!m_isValid) {
+    if (success) {
+      *success = false;
+    }
+    return QString();
+  }
+
+  QProcess process;
+  process.setWorkingDirectory(m_repositoryPath.isEmpty() ? QDir::currentPath()
+                                                         : m_repositoryPath);
+
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  for (auto it = extraEnv.constBegin(); it != extraEnv.constEnd(); ++it) {
+    env.insert(it.key(), it.value());
+  }
+  process.setProcessEnvironment(env);
+
+  process.start("git", args);
+
+  if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS * 6)) {
+    LOG_WARNING("Git command timed out: git " + args.join(" "));
+    process.kill();
+    process.waitForFinished(1000);
+    if (success) {
+      *success = false;
+    }
+    return QString();
+  }
+
+  const QString error = QString::fromUtf8(process.readAllStandardError());
+  if (errorOutput) {
+    *errorOutput = error.trimmed();
+  }
+  if (success) {
+    *success = process.exitCode() == 0;
+  }
+
+  const QString output = QString::fromUtf8(process.readAllStandardOutput());
+  recordCommand(args, process.workingDirectory(), output, error,
+                process.exitCode());
+  return output;
+}
+
+QString
+GitIntegration::prepareRebaseHelpers(const QString &todoText,
+                                     const QStringList &messages) const {
+  const QString gitDir = gitDirPath();
+  if (gitDir.isEmpty()) {
+    return QString();
+  }
+
+  const QString dir = gitDir + "/lightpad-rebase";
+  QDir().mkpath(dir);
+
+  const auto writeFile = [](const QString &path, const QString &content,
+                            bool executable) {
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+      return false;
+    }
+    file.write(content.toUtf8());
+    file.close();
+    if (executable) {
+      file.setPermissions(file.permissions() | QFileDevice::ExeOwner |
+                          QFileDevice::ExeGroup);
+    }
+    return true;
+  };
+
+  if (!writeFile(dir + "/todo", todoText, false)) {
+    return QString();
+  }
+
+  QFile::remove(dir + "/counter");
+  for (int i = 0; i < messages.size(); ++i) {
+    writeFile(dir + QStringLiteral("/msg-%1").arg(i + 1), messages.at(i),
+              false);
+  }
+
+  writeFile(dir + "/seq-editor.sh",
+            QStringLiteral("#!/bin/sh\ncat \"%1/todo\" > \"$1\"\n").arg(dir),
+            true);
+
+  writeFile(dir + "/msg-editor.sh",
+            QStringLiteral("#!/bin/sh\n"
+                           "d=\"%1\"\n"
+                           "n=`cat \"$d/counter\" 2>/dev/null || echo 0`\n"
+                           "n=`expr $n + 1`\n"
+                           "echo $n > \"$d/counter\"\n"
+                           "if [ -f \"$d/msg-$n\" ]; then\n"
+                           "  cat \"$d/msg-$n\" > \"$1\"\n"
+                           "fi\n"
+                           "exit 0\n")
+                .arg(dir),
+            true);
+
+  return dir;
+}
+
+QMap<QString, QString> GitIntegration::rebaseHelperEnvironment() const {
+  const QString dir = gitDirPath() + "/lightpad-rebase";
+  QMap<QString, QString> env;
+  if (QFileInfo::exists(dir + "/seq-editor.sh")) {
+    env.insert("GIT_SEQUENCE_EDITOR", dir + "/seq-editor.sh");
+    env.insert("GIT_EDITOR", dir + "/msg-editor.sh");
+  }
+  return env;
+}
+
+bool GitIntegration::startInteractiveRebase(const QString &onto,
+                                            const GitRebasePlan &plan) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+  if (plan.isEmpty()) {
+    return false;
+  }
+
+  const QString dir =
+      prepareRebaseHelpers(plan.todoText(), plan.pendingMessages());
+  if (dir.isEmpty()) {
+    emit errorOccurred("Could not prepare the rebase plan");
+    return false;
+  }
+
+  bool success = false;
+  QString error;
+  executeGitCommandWithEnv({"rebase", "-i", onto}, rebaseHelperEnvironment(),
+                           &success, &error);
+
+  if (success) {
+    updateCurrentBranch();
+    emit operationCompleted("Rebase finished");
+  } else if (isRebaseInProgress()) {
+
+    emit operationCompleted("Rebase stopped — resolve and continue");
+  } else {
+    emit errorOccurred(error.isEmpty() ? QStringLiteral("Rebase failed")
+                                       : error);
+  }
+
+  emit statusChanged();
+  return success;
+}
+
+bool GitIntegration::rebaseContinue() {
+  if (!m_isValid) {
+    return false;
+  }
+  bool success = false;
+  QString error;
+  executeGitCommandWithEnv({"rebase", "--continue"}, rebaseHelperEnvironment(),
+                           &success, &error);
+  if (!success && !isRebaseInProgress()) {
+    emit errorOccurred(error.isEmpty() ? QStringLiteral("Could not continue")
+                                       : error);
+  }
+  updateCurrentBranch();
+  emit statusChanged();
+  return success;
+}
+
+bool GitIntegration::rebaseSkip() {
+  if (!m_isValid) {
+    return false;
+  }
+  bool success = false;
+  executeGitCommandWithEnv({"rebase", "--skip"}, rebaseHelperEnvironment(),
+                           &success);
+  updateCurrentBranch();
+  emit statusChanged();
+  return success;
+}
+
+bool GitIntegration::rebaseAbort() {
+  if (!m_isValid) {
+    return false;
+  }
+  bool success = false;
+  executeGitCommand({"rebase", "--abort"}, &success);
+  updateCurrentBranch();
+  emit statusChanged();
+  return success;
+}
+
+bool GitIntegration::isRebaseInProgress() const {
+  const QString gitDir = gitDirPath();
+  if (gitDir.isEmpty()) {
+    return false;
+  }
+  return QFileInfo::exists(gitDir + "/rebase-merge") ||
+         QFileInfo::exists(gitDir + "/rebase-apply");
+}
+
+bool GitIntegration::rebaseProgress(int &current, int &total) const {
+  current = 0;
+  total = 0;
+
+  const QString gitDir = gitDirPath();
+  if (gitDir.isEmpty()) {
+    return false;
+  }
+
+  const auto readInt = [](const QString &path, int *value) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      return false;
+    }
+    bool ok = false;
+    const int parsed = QString::fromUtf8(file.readAll()).trimmed().toInt(&ok);
+    if (ok) {
+      *value = parsed;
+    }
+    return ok;
+  };
+
+  const QString merge = gitDir + "/rebase-merge";
+  if (QFileInfo::exists(merge)) {
+    return readInt(merge + "/msgnum", &current) &&
+           readInt(merge + "/end", &total);
+  }
+  const QString apply = gitDir + "/rebase-apply";
+  if (QFileInfo::exists(apply)) {
+    return readInt(apply + "/next", &current) &&
+           readInt(apply + "/last", &total);
+  }
+  return false;
+}
+
+QList<QPair<QString, QString>> GitIntegration::unmergedEntries() const {
+  if (!m_isValid) {
+    return {};
+  }
+
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"status", "--porcelain=v2", "--untracked-files=no"}, &success);
+  if (!success) {
+    return {};
+  }
+  return parseUnmergedEntries(output);
+}
+
+QString GitIntegration::stageContent(const QString &filePath, int stage) const {
+  if (!m_isValid || filePath.isEmpty() || stage < 1 || stage > 3) {
+    return QString();
+  }
+
+  bool success = false;
+  const QString content = executeGitCommand(
+      {"show", QStringLiteral(":%1:%2").arg(stage).arg(filePath)}, &success);
+
+  return success ? content : QString();
+}
+
+QString GitIntegration::workingFileContent(const QString &filePath) const {
+  if (!m_isValid || filePath.isEmpty()) {
+    return QString();
+  }
+
+  QFile file(QDir(m_repositoryPath).filePath(filePath));
+  if (!file.open(QIODevice::ReadOnly)) {
+    return QString();
+  }
+  return QString::fromUtf8(file.readAll());
+}
+
+GitConflictIdentities GitIntegration::conflictIdentities() const {
+  GitConflictIdentities identities;
+  if (!m_isValid) {
+    return identities;
+  }
+
+  const QString gitDir = gitDirPath();
+  const auto readRef = [&](const QString &relative) {
+    QFile file(gitDir + "/" + relative);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      return QString();
+    }
+    return QString::fromUtf8(file.readAll()).trimmed();
+  };
+  const auto describe = [&](const QString &hash, QString *author,
+                            QString *subject) {
+    if (hash.isEmpty()) {
+      return;
+    }
+    const GitCommitInfo info = getCommitDetails(hash);
+    *author = info.author;
+    *subject = info.subject;
+  };
+
+  QString oursRef = QStringLiteral("HEAD");
+  QString theirsRef;
+
+  if (QFileInfo::exists(gitDir + "/rebase-merge")) {
+
+    const QString onto = readRef("rebase-merge/onto");
+    const QString headName = readRef("rebase-merge/head-name");
+    identities.oursLabel =
+        headName.isEmpty() ? tr("the branch being replayed onto")
+                           : tr("%1 (replaying onto)")
+                                 .arg(headName.section(QLatin1Char('/'), 2));
+    oursRef = onto.isEmpty() ? QStringLiteral("HEAD") : onto;
+    theirsRef = readRef("REBASE_HEAD");
+    identities.theirsLabel = tr("the commit being replayed");
+  } else if (QFileInfo::exists(gitDir + "/CHERRY_PICK_HEAD")) {
+    theirsRef = readRef("CHERRY_PICK_HEAD");
+    identities.oursLabel = tr("%1 (current branch)").arg(m_currentBranch);
+    identities.theirsLabel = tr("the commit being copied");
+  } else if (QFileInfo::exists(gitDir + "/REVERT_HEAD")) {
+    theirsRef = readRef("REVERT_HEAD");
+    identities.oursLabel = tr("%1 (current branch)").arg(m_currentBranch);
+    identities.theirsLabel = tr("the commit being undone");
+  } else {
+    theirsRef = readRef("MERGE_HEAD");
+    identities.oursLabel = tr("%1 (current branch)").arg(m_currentBranch);
+    identities.theirsLabel = tr("the branch being merged in");
+  }
+
+  identities.oursHash = getCommitDetails(oursRef).hash;
+  identities.theirsHash =
+      theirsRef.isEmpty() ? QString() : getCommitDetails(theirsRef).hash;
+  describe(identities.oursHash, &identities.oursAuthor,
+           &identities.oursSubject);
+  describe(identities.theirsHash, &identities.theirsAuthor,
+           &identities.theirsSubject);
+
+  if (!identities.oursHash.isEmpty() && !identities.theirsHash.isEmpty()) {
+    identities.mergeBase =
+        getMergeBase(identities.oursHash, identities.theirsHash);
+    if (!identities.mergeBase.isEmpty()) {
+      identities.mergeBaseSubject =
+          getCommitDetails(identities.mergeBase).subject;
+    }
+  }
+
+  if (!identities.theirsLabel.isEmpty() && !identities.theirsHash.isEmpty()) {
+    const QStringList refs = getCommitRefs(identities.theirsHash);
+    if (!refs.isEmpty()) {
+      identities.theirsLabel =
+          tr("%1 (%2)").arg(refs.first(), identities.theirsLabel);
+    }
+  }
+
+  return identities;
+}
+
+bool GitIntegration::resolveConflictWith(const QString &filePath,
+                                         const QString &content) {
+  if (!m_isValid || filePath.isEmpty()) {
+    return false;
+  }
+
+  QFile file(QDir(m_repositoryPath).filePath(filePath));
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    emit errorOccurred("Could not write " + filePath);
+    return false;
+  }
+  file.write(content.toUtf8());
+  file.close();
+
+  return markConflictResolved(filePath);
+}
+
+QList<GitCommitInfo> GitIntegration::getFileLogRange(const QString &filePath,
+                                                     const QString &range,
+                                                     int maxCount) const {
+  if (!m_isValid || filePath.isEmpty() || range.isEmpty()) {
+    return {};
+  }
+
+  const QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"log", QString("--max-count=%1").arg(maxCount),
+       QString("--pretty=format:%1").arg(format), range, "--", filePath},
+      &success);
+  if (!success) {
+    return {};
+  }
+  return parseCommitLogOutput(output);
+}
+
+QString GitIntegration::reflogRaw(int count) const {
+  if (!m_isValid) {
+    return QString();
+  }
+
+  bool success = false;
+  const QString output =
+      executeGitCommand({"reflog", QString("--max-count=%1").arg(count),
+                         "--format=%gd%x00%gs%x00%H%x00%s%x00%ar"},
+                        &success);
+  return success ? output : QString();
+}
+
+bool GitIntegration::isCommitReachable(const QString &commitHash) const {
+  if (!m_isValid || commitHash.isEmpty()) {
+    return false;
+  }
+
+  bool success = false;
+  const QString branches = executeGitCommand(
+      {"branch", "--all", "--contains", commitHash}, &success);
+  if (success && !branches.trimmed().isEmpty()) {
+    return true;
+  }
+
+  const QString tags =
+      executeGitCommand({"tag", "--contains", commitHash}, &success);
+  return success && !tags.trimmed().isEmpty();
+}
+
+QList<GitStashDetail> GitIntegration::stashDetails() const {
+  QList<GitStashDetail> details;
+  if (!m_isValid) {
+    return details;
+  }
+
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"reflog", "show", "--format=%gd%x00%gs%x00%H%x00%P%x00%ar",
+       "refs/stash"},
+      &success);
+  if (!success) {
+    return details;
+  }
+
+  int index = 0;
+  for (const QString &line :
+       output.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+    const QStringList fields = line.split(QChar(0));
+    if (fields.size() < 5) {
+      continue;
+    }
+
+    GitStashDetail detail;
+    detail.index = index++;
+    detail.commitHash = fields.at(2);
+    detail.relativeDate = fields.at(4);
+
+    const QStringList parents =
+        fields.at(3).split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    detail.parentCount = parents.size();
+    if (!parents.isEmpty()) {
+      detail.baseHash = parents.first();
+      detail.baseSubject = getCommitDetails(detail.baseHash).subject;
+    }
+
+    const QString subject = fields.at(1);
+    const int colon = subject.indexOf(QLatin1Char(':'));
+    if (colon > 0) {
+      QString prefix = subject.left(colon).trimmed();
+      detail.message = subject.mid(colon + 1).trimmed();
+      if (prefix.startsWith(QLatin1String("WIP on "), Qt::CaseInsensitive)) {
+        prefix = prefix.mid(7);
+      } else if (prefix.startsWith(QLatin1String("On "), Qt::CaseInsensitive)) {
+        prefix = prefix.mid(3);
+      }
+      detail.branch = prefix.trimmed();
+    } else {
+      detail.message = subject;
+    }
+
+    details.append(detail);
+  }
+
+  return details;
+}
+
+QString GitIntegration::stashNumstat(int index) const {
+  if (!m_isValid) {
+    return QString();
+  }
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"stash", "show", "--numstat", QStringLiteral("stash@{%1}").arg(index)},
+      &success);
+  return success ? output : QString();
+}
+
+QString GitIntegration::stashNameStatus(int index) const {
+  if (!m_isValid) {
+    return QString();
+  }
+  bool success = false;
+  const QString output =
+      executeGitCommand({"stash", "show", "--name-status",
+                         QStringLiteral("stash@{%1}").arg(index)},
+                        &success);
+  return success ? output : QString();
+}
+
+QString GitIntegration::stashDiff(int index) const {
+  if (!m_isValid) {
+    return QString();
+  }
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"stash", "show", "-p", QStringLiteral("stash@{%1}").arg(index)},
+      &success);
+  return success ? output : QString();
+}
+
+bool GitIntegration::stashPaths(const QStringList &paths,
+                                const QString &message, bool includeUntracked) {
+  if (!m_isValid || paths.isEmpty()) {
+    return false;
+  }
+
+  QStringList args{"stash", "push"};
+  if (includeUntracked) {
+    args << "--include-untracked";
+  }
+  if (!message.isEmpty()) {
+    args << "-m" << message;
+  }
+  args << "--";
+  args += paths;
+
+  bool success = false;
+  executeGitCommand(args, &success);
+  if (success) {
+    emit operationCompleted("Stashed " + QString::number(paths.size()) +
+                            " path(s)");
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Could not stash the selected paths");
+  }
+  return success;
+}
+
+bool GitIntegration::restoreStashPaths(int index, const QStringList &paths) {
+  if (!m_isValid || paths.isEmpty()) {
+    return false;
+  }
+
+  QStringList args{"checkout", QStringLiteral("stash@{%1}").arg(index), "--"};
+  args += paths;
+
+  bool success = false;
+  executeGitCommand(args, &success);
+  if (success) {
+    emit operationCompleted("Restored " + QString::number(paths.size()) +
+                            " path(s) from the stash");
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Could not restore those paths from the stash");
+  }
+  return success;
+}
+
+bool GitIntegration::stashBranch(const QString &branchName, int index) {
+  if (!m_isValid || branchName.isEmpty()) {
+    return false;
+  }
+
+  bool success = false;
+  executeGitCommand(
+      {"stash", "branch", branchName, QStringLiteral("stash@{%1}").arg(index)},
+      &success);
+  if (success) {
+    updateCurrentBranch();
+    emit operationCompleted("Created " + branchName + " from the stash");
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Could not create a branch from the stash");
+  }
+  return success;
+}
+
+namespace {
+
+constexpr int MAX_COMMAND_HISTORY = 500;
+const char *MIRROR_MODE_KEY = "git/commandMirrorMode";
+} // namespace
+
+void GitIntegration::recordCommand(const QStringList &args,
+                                   const QString &workingDirectory,
+                                   const QString &output, const QString &error,
+                                   int exitCode) const {
+  GitCommandRecord record;
+  record.args = args;
+  record.workingDirectory = workingDirectory;
+
+  record.output = redactSecrets(output);
+  record.error = redactSecrets(error);
+  record.exitCode = exitCode;
+  record.succeeded = exitCode == 0;
+  record.when = QDateTime::currentDateTime();
+
+  m_commandHistory.append(record);
+  while (m_commandHistory.size() > MAX_COMMAND_HISTORY) {
+    m_commandHistory.removeFirst();
+  }
+
+  GitIntegration *self = const_cast<GitIntegration *>(this);
+  emit self->commandExecuted(record);
+}
+
+void GitIntegration::clearCommandHistory() { m_commandHistory.clear(); }
+
+GitCommandMirrorMode GitIntegration::mirrorMode() {
+  QSettings settings("Lightpad", "Lightpad");
+  return static_cast<GitCommandMirrorMode>(
+      settings
+          .value(QString::fromLatin1(MIRROR_MODE_KEY),
+                 static_cast<int>(GitCommandMirrorMode::Hidden))
+          .toInt());
+}
+
+void GitIntegration::setMirrorMode(GitCommandMirrorMode mode) {
+  QSettings settings("Lightpad", "Lightpad");
+  settings.setValue(QString::fromLatin1(MIRROR_MODE_KEY),
+                    static_cast<int>(mode));
+}
+
+QString GitIntegration::branchRefDetails() const {
+  if (!m_isValid) {
+    return QString();
+  }
+
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"for-each-ref",
+       "--format=%(refname)%00%(objectname)%00%(committerdate:relative)%00"
+       "%(upstream:short)%00%(upstream:track)%00%(HEAD)",
+       "refs/heads", "refs/remotes"},
+      &success);
+  return success ? output : QString();
+}
+
+QSet<QString> GitIntegration::mergedBranchNames(const QString &baseRef) const {
+  QSet<QString> merged;
+  if (!m_isValid || baseRef.isEmpty()) {
+    return merged;
+  }
+
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"branch", "--all", "--merged", baseRef, "--format=%(refname:short)"},
+      &success);
+  if (!success) {
+    return merged;
+  }
+
+  for (const QString &line : output.split('\n', Qt::SkipEmptyParts)) {
+    merged.insert(line.trimmed());
+  }
+  return merged;
+}
+
+QMap<QString, QString> GitIntegration::branchWorktreePaths() const {
+  QMap<QString, QString> paths;
+  if (!m_isValid) {
+    return paths;
+  }
+
+  bool success = false;
+  const QString output =
+      executeGitCommand({"worktree", "list", "--porcelain"}, &success);
+  if (!success) {
+    return paths;
+  }
+
+  QString path;
+  for (const QString &line : output.split('\n')) {
+    if (line.startsWith(QLatin1String("worktree "))) {
+      path = line.mid(9).trimmed();
+    } else if (line.startsWith(QLatin1String("branch "))) {
+      const QString ref = line.mid(7).trimmed();
+      if (ref.startsWith(QLatin1String("refs/heads/"))) {
+        paths.insert(ref.mid(11), path);
+      }
+    }
+  }
+  return paths;
+}
+
+int GitIntegration::countCommitsNotIn(const QString &ref,
+                                      const QString &baseRef) const {
+  if (!m_isValid || ref.isEmpty() || baseRef.isEmpty()) {
+    return 0;
+  }
+
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"rev-list", "--count", QStringLiteral("%1..%2").arg(baseRef, ref)},
+      &success);
+  return success ? output.trimmed().toInt() : 0;
+}
+
+bool GitIntegration::unsetUpstream(const QString &branchName) {
+  if (!m_isValid || branchName.isEmpty()) {
+    return false;
+  }
+
+  bool success = false;
+  executeGitCommand({"branch", "--unset-upstream", branchName}, &success);
+  if (success) {
+    emit operationCompleted(branchName + " no longer tracks anything");
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Could not clear the upstream of " + branchName);
+  }
+  return success;
+}
+
+QString GitIntegration::worktreeListRaw() const {
+  if (!m_isValid) {
+    return QString();
+  }
+  bool success = false;
+  const QString output =
+      executeGitCommand({"worktree", "list", "--porcelain"}, &success);
+  return success ? output : QString();
+}
+
+GitRepositoryState
+GitIntegration::worktreeState(const QString &worktreePath) const {
+  GitRepositoryState state;
+  if (!m_isValid || worktreePath.isEmpty()) {
+    return state;
+  }
+
+  bool success = false;
+  const QString status = executeGitCommandAtPath(
+      worktreePath,
+      {"status", "--porcelain=v2", "--branch", "--untracked-files=all"},
+      &success);
+  if (!success) {
+    return state;
+  }
+
+  state.valid = true;
+  state.repositoryRoot = worktreePath;
+  parseGitStatusPorcelainV2(status, state);
+
+  const QString subject = executeGitCommandAtPath(
+      worktreePath, {"log", "-1", "--format=%s"}, &success);
+  if (success) {
+    state.headSubject = subject;
+  }
+  return state;
+}
+
+bool GitIntegration::pruneWorktrees() {
+  if (!m_isValid) {
+    return false;
+  }
+  bool success = false;
+  executeGitCommand({"worktree", "prune"}, &success);
+  if (success) {
+    emit operationCompleted("Pruned stale worktree entries");
+    emit statusChanged();
+  }
+  return success;
+}
+
+bool GitIntegration::isBisecting() const {
+  const QString gitDir = gitDirPath();
+  return !gitDir.isEmpty() && QFileInfo::exists(gitDir + "/BISECT_LOG");
+}
+
+QString GitIntegration::bisectStart(const QString &badRef,
+                                    const QString &goodRef) {
+  if (!m_isValid || badRef.isEmpty() || goodRef.isEmpty()) {
+    return QString();
+  }
+
+  bool success = false;
+
+  const QString output =
+      executeGitCommand({"bisect", "start", badRef, goodRef}, &success);
+  if (success) {
+    emit operationCompleted("Bisect started");
+  } else {
+    emit errorOccurred("Could not start the bisect");
+  }
+  emit statusChanged();
+  return output;
+}
+
+QString GitIntegration::bisectMark(const QString &verdict) {
+  if (!m_isValid || verdict.isEmpty()) {
+    return QString();
+  }
+
+  bool success = false;
+  const QString output = executeGitCommand({"bisect", verdict}, &success);
+  updateCurrentBranch();
+  emit statusChanged();
+  return output;
+}
+
+QString GitIntegration::bisectLog() const {
+  if (!m_isValid) {
+    return QString();
+  }
+  bool success = false;
+  const QString output = executeGitCommand({"bisect", "log"}, &success);
+  return success ? output : QString();
+}
+
+bool GitIntegration::bisectReset() {
+  if (!m_isValid) {
+    return false;
+  }
+  bool success = false;
+  executeGitCommand({"bisect", "reset"}, &success);
+  updateCurrentBranch();
+  emit statusChanged();
+  return success;
+}
+
+QString GitIntegration::bisectRun(const QString &command, int *exitCode) {
+  if (!m_isValid || command.trimmed().isEmpty()) {
+    return QString();
+  }
+
+  QProcess process;
+  process.setWorkingDirectory(m_repositoryPath);
+  process.setProcessChannelMode(QProcess::MergedChannels);
+
+  process.start("git", {"bisect", "run", "sh", "-c", command});
+
+  if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS * 120)) {
+    process.kill();
+    process.waitForFinished(1000);
+    emit errorOccurred("The bisect run took too long and was stopped");
+    if (exitCode) {
+      *exitCode = -1;
+    }
+    return QString();
+  }
+
+  if (exitCode) {
+    *exitCode = process.exitCode();
+  }
+  const QString output = QString::fromUtf8(process.readAll());
+  recordCommand({"bisect", "run", "sh", "-c", command}, m_repositoryPath,
+                output, QString(), process.exitCode());
+  emit statusChanged();
+  return output;
+}
+
+namespace {
+
+QString sliceLines(const QString &content, int startLine, int endLine) {
+  const QStringList lines = content.split(QLatin1Char('\n'));
+  QStringList slice;
+  for (int i = startLine; i <= endLine && i <= lines.size(); ++i) {
+    slice << lines.at(i - 1);
+  }
+  return slice.join(QLatin1Char('\n'));
+}
+
+} // namespace
+
+QString GitIntegration::blameCommitForLine(const QString &filePath, int line,
+                                           bool detectMoves) const {
+  if (!m_isValid || filePath.isEmpty() || line <= 0) {
+    return QString();
+  }
+
+  QStringList args{"blame", "--porcelain", "-L",
+                   QStringLiteral("%1,%1").arg(line)};
+  if (detectMoves) {
+    args << "-M" << "-C";
+  }
+  args << "--" << filePath;
+
+  bool success = false;
+  const QString output = executeGitCommand(args, &success);
+  if (!success || output.isEmpty()) {
+    return QString();
+  }
+
+  return output.section(QLatin1Char('\n'), 0, 0)
+      .section(QLatin1Char(' '), 0, 0);
+}
+
+QString GitIntegration::blameOriginalPath(const QString &filePath,
+                                          int line) const {
+  if (!m_isValid || filePath.isEmpty() || line <= 0) {
+    return QString();
+  }
+
+  bool success = false;
+  const QString output =
+      executeGitCommand({"blame", "--porcelain", "-M", "-C", "-L",
+                         QStringLiteral("%1,%1").arg(line), "--", filePath},
+                        &success);
+  if (!success) {
+    return QString();
+  }
+
+  for (const QString &outputLine : output.split(QLatin1Char('\n'))) {
+    if (outputLine.startsWith(QLatin1String("filename "))) {
+      return outputLine.mid(9).trimmed();
+    }
+  }
+  return QString();
+}
+
+QString GitIntegration::fileLines(const QString &filePath, int startLine,
+                                  int endLine) const {
+  if (!m_isValid || filePath.isEmpty()) {
+    return QString();
+  }
+
+  QFile file(QDir(m_repositoryPath).filePath(filePath));
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return QString();
+  }
+  return sliceLines(QString::fromUtf8(file.readAll()), startLine, endLine);
+}
+
+QString GitIntegration::fileLinesAtRevision(const QString &filePath,
+                                            const QString &revision,
+                                            int startLine, int endLine) const {
+  const QString content = getFileAtRevision(filePath, revision);
+  if (content.isEmpty()) {
+    return QString();
+  }
+  return sliceLines(content, startLine, endLine);
 }

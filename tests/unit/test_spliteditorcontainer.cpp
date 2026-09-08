@@ -21,17 +21,12 @@ LightpadTreeView::LightpadTreeView(LightpadPage *parent)
 
 LightpadTreeView::~LightpadTreeView() = default;
 
-void LightpadTreeView::renameFile(QString oldFilePath, QString newFilePath) {
-  Q_UNUSED(oldFilePath);
-  Q_UNUSED(newFilePath);
-}
-
 void LightpadTreeView::keyPressEvent(QKeyEvent *event) {
   QTreeView::keyPressEvent(event);
 }
 
-void LightpadTreeView::mouseReleaseEvent(QMouseEvent *event) {
-  QTreeView::mouseReleaseEvent(event);
+void LightpadTreeView::contextMenuEvent(QContextMenuEvent *event) {
+  QTreeView::contextMenuEvent(event);
 }
 
 void LightpadTreeView::dragEnterEvent(QDragEnterEvent *event) {
@@ -88,6 +83,14 @@ MainWindow *LightpadPage::getMainWindow() const { return mainWindow; }
 QString MainWindow::getProjectRootPath() const { return QString(); }
 
 GitIntegration *MainWindow::getGitIntegration() const { return nullptr; }
+
+void MainWindow::runFileByPath(const QString &) {}
+
+void MainWindow::debugFileByPath(const QString &) {}
+
+void MainWindow::setPinnedRunFilePath(const QString &) {}
+
+void MainWindow::openRunConfigurationForFile(const QString &) {}
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(nullptr) {}
 
@@ -165,8 +168,11 @@ DEFINE_MAINWINDOW_SLOT(on_actionPreview_Markdown_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionPreview_LaTeX_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionOpen_To_Side_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionGit_Log_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionGit_Compare_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionGit_File_History_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionGit_Provenance_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionGit_Rebase_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionGit_Workbench_triggered)
 DEFINE_MAINWINDOW_BOOL_SLOT(on_actionToggle_Heatmap_triggered)
 DEFINE_MAINWINDOW_BOOL_SLOT(on_actionToggle_CodeLens_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionTransform_Uppercase_triggered)

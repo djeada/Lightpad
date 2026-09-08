@@ -750,6 +750,19 @@ RunTemplateManager::getEnvironment(const QString &filePath,
   return env;
 }
 
+QString RunTemplateManager::effectiveTemplateIdForFile(
+    const QString &filePath, const QString &languageId) const {
+  if (filePath.trimmed().isEmpty()) {
+    return {};
+  }
+
+  const QString assigned = getAssignmentForFile(filePath).templateId.trimmed();
+  if (!assigned.isEmpty()) {
+    return assigned;
+  }
+  return resolveTemplateIdForFile(filePath, languageId);
+}
+
 QString
 RunTemplateManager::resolveTemplateIdForFile(const QString &filePath,
                                              const QString &languageId) const {

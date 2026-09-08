@@ -51,6 +51,8 @@ protected:
   SemanticStyleCache m_semanticStyles;
   bool m_hasSemanticStyles = false;
 
+  void setKeyboardDefault(QPushButton *button);
+
   void stylePrimaryButton(QPushButton *btn);
   void styleSecondaryButton(QPushButton *btn);
   void styleDangerButton(QPushButton *btn);

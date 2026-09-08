@@ -338,8 +338,11 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionToggle_Test_Panel"/>
     <addaction name="actionToggle_Problems"/>
     <addaction name="actionGit_Log"/>
+    <addaction name="actionGit_Compare"/>
     <addaction name="actionGit_File_History"/>
+    <addaction name="actionGit_Provenance"/>
     <addaction name="actionGit_Rebase"/>
+    <addaction name="actionGit_Workbench"/>
     <addaction name="separator"/>
     <addaction name="actionToggle_Heatmap"/>
     <addaction name="actionToggle_CodeLens"/>
@@ -801,14 +804,32 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <string>Git Log</string>
    </property>
   </action>
+  <action name="actionGit_Compare">
+   <property name="text">
+    <string>Compare Anything...</string>
+   </property>
+  </action>
   <action name="actionGit_File_History">
    <property name="text">
     <string>File History</string>
    </property>
   </action>
+  <action name="actionGit_Provenance">
+   <property name="text">
+    <string>Where did this line come from?</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+B</string>
+   </property>
+  </action>
   <action name="actionGit_Rebase">
    <property name="text">
     <string>Interactive Rebase...</string>
+   </property>
+  </action>
+  <action name="actionGit_Workbench">
+   <property name="text">
+    <string>Git Workbench...</string>
    </property>
   </action>
   <action name="actionToggle_Heatmap">

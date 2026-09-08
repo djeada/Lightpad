@@ -4,9 +4,11 @@
 #include <QButtonGroup>
 #include <QColor>
 #include <QComboBox>
+#include <QHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QSet>
 #include <QStackedWidget>
 #include <QToolButton>
@@ -38,6 +40,8 @@ public:
   void setCurrentFrame(int frameId);
   void applyTheme(const Theme &theme);
 
+  QList<QAction *> transportActions() const;
+
 signals:
 
   void locationClicked(const QString &filePath, int line, int column);
@@ -55,6 +59,9 @@ public slots:
   void onContinued();
 
   void onTerminated();
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
 
@@ -127,7 +134,24 @@ private:
                          bool bold = false);
   int findPendingConsoleEvaluationIndex(int requestSeq) const;
   void dispatchPendingConsoleEvaluation(int pendingIndex);
-  void resizeVariablesNameColumnOnce();
+  void fitVariablesNameColumn();
+  void applyDebugStatusText();
+  void setupConsoleToolbar();
+  void toggleConsoleDetached();
+  void reattachConsole();
+  void applyTransportIcons();
+  QString emptyStateTextFor(const QTreeWidget *tree) const;
+  void showVariablesContextMenu(const QPoint &pos);
+  QString expressionForVariableItem(const QTreeWidgetItem *item) const;
+  bool paintTreeEmptyState(QTreeWidget *tree);
+  void recallConsoleHistory(int direction);
+  void findInConsole(bool backwards);
+  void showConsoleContextMenu(const QPoint &pos);
+  void navigateToConsoleLocation(const QString &lineText);
+  void updateConsoleInputAffordances();
+  void requestAggregatePreviews(const QList<DapVariable> &variables,
+                                QTreeWidgetItem *parentItem);
+  static QString previewForVariables(const QList<DapVariable> &variables);
   bool hasLocalsFallbackCommand() const;
   void requestLocalsFallback(int scopeVariablesReference);
   void populateLocalsFromGdbEvaluate(int scopeVariablesReference,
@@ -142,42 +166,42 @@ private:
   QString formatVariable(const DapVariable &var) const;
   QIcon variableIcon(const DapVariable &var) const;
 
-  DapClient *m_dapClient;
+  QPointer<DapClient> m_dapClient;
 
-  QWidget *m_toolbar;
-  QAction *m_continueAction;
-  QAction *m_pauseAction;
-  QAction *m_stepOverAction;
-  QAction *m_stepIntoAction;
-  QAction *m_stepOutAction;
-  QAction *m_restartAction;
-  QAction *m_stopAction;
-  QLabel *m_debugStatusLabel;
+  QWidget *m_toolbar = nullptr;
+  QAction *m_continueAction = nullptr;
+  QAction *m_pauseAction = nullptr;
+  QAction *m_stepOverAction = nullptr;
+  QAction *m_stepIntoAction = nullptr;
+  QAction *m_stepOutAction = nullptr;
+  QAction *m_restartAction = nullptr;
+  QAction *m_stopAction = nullptr;
+  QLabel *m_debugStatusLabel = nullptr;
 
-  QWidget *m_inspectorShell;
-  QWidget *m_inspectorTabBar;
-  QButtonGroup *m_inspectorTabGroup;
+  QWidget *m_inspectorShell = nullptr;
+  QWidget *m_inspectorTabBar = nullptr;
+  QButtonGroup *m_inspectorTabGroup = nullptr;
   QList<QToolButton *> m_inspectorTabButtons;
-  QStackedWidget *m_inspectorStack;
+  QStackedWidget *m_inspectorStack = nullptr;
 
-  QTreeWidget *m_callStackTree;
+  QTreeWidget *m_callStackTree = nullptr;
 
-  QTreeWidget *m_variablesTree;
+  QTreeWidget *m_variablesTree = nullptr;
   QMap<int, QTreeWidgetItem *> m_variableRefToItem;
 
-  QTreeWidget *m_breakpointsTree;
-  QToolButton *m_addFunctionBreakpointButton;
-  QToolButton *m_exceptionBreakpointsButton;
-  QMenu *m_exceptionBreakpointsMenu;
+  QTreeWidget *m_breakpointsTree = nullptr;
+  QToolButton *m_addFunctionBreakpointButton = nullptr;
+  QToolButton *m_exceptionBreakpointsButton = nullptr;
+  QMenu *m_exceptionBreakpointsMenu = nullptr;
 
-  QTreeWidget *m_watchTree;
-  QLineEdit *m_watchInput;
+  QTreeWidget *m_watchTree = nullptr;
+  QLineEdit *m_watchInput = nullptr;
   QMap<int, QTreeWidgetItem *> m_watchIdToItem;
 
-  QComboBox *m_threadSelector;
+  QComboBox *m_threadSelector = nullptr;
 
-  QPlainTextEdit *m_consoleOutput;
-  QLineEdit *m_consoleInput;
+  QPlainTextEdit *m_consoleOutput = nullptr;
+  QLineEdit *m_consoleInput = nullptr;
 
   int m_currentThreadId;
   int m_currentFrameId;
@@ -186,7 +210,9 @@ private:
   QSet<int> m_pendingScopeVariableLoads;
   QSet<int> m_pendingVariableRequests;
   bool m_programmaticVariablesExpand;
-  bool m_variablesNameColumnAutofitPending;
+
+  bool m_variablesNameColumnUserSized;
+  bool m_variablesNameColumnAutofitting;
   bool m_stepInProgress;
   bool m_expectStopEvent;
   bool m_hasLastStopEvent;
@@ -199,6 +225,50 @@ private:
     int activeRequestSeq = 0;
   };
   QList<PendingConsoleEvaluation> m_pendingConsoleEvaluations;
+
+  struct ConsoleExpansionNode {
+    QString name;
+    QString value;
+    int reference = 0;
+    int depth = 0;
+    QList<int> children;
+  };
+  struct ConsoleExpansion {
+    QString expression;
+    QString type;
+    QList<ConsoleExpansionNode> nodes;
+    int pendingRequests = 0;
+  };
+  QHash<int, ConsoleExpansion> m_consoleExpansions;
+
+  QHash<int, QPair<int, int>> m_consoleExpansionNodeByRef;
+  int m_nextConsoleExpansionId = 1;
+
+  void startConsoleExpansion(const QString &expression, const QString &type,
+                             int variablesReference);
+  bool applyConsoleExpansion(int variablesReference,
+                             const QList<DapVariable> &variables);
+  QString renderConsoleExpansion(const ConsoleExpansion &expansion,
+                                 int nodeIndex) const;
+
+  QHash<int, QTreeWidgetItem *> m_pendingTreeSummaries;
+
+  QHash<QString, QString> m_previousVariableValues;
+
+  QString m_debugStatusText;
+
+  QStringList m_consoleHistory;
+  int m_consoleHistoryIndex = 0;
+  QString m_consoleHistoryDraft;
+  QWidget *m_consoleToolbar = nullptr;
+
+  QWidget *m_consolePage = nullptr;
+  QWidget *m_consoleWindow = nullptr;
+  QAction *m_consoleDetachAction = nullptr;
+  QAction *m_consoleClearAction = nullptr;
+  QAction *m_consoleWrapAction = nullptr;
+  QLineEdit *m_consoleFindInput = nullptr;
+
   bool m_localsFallbackPending;
   int m_localsFallbackFrameId;
   int m_localsFallbackScopeRef;

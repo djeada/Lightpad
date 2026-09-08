@@ -6,6 +6,7 @@
 #include <QList>
 #include <QMap>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 
 #include "dapclient.h"
@@ -216,7 +217,7 @@ private:
 
   QStringList m_enabledExceptionFilters;
 
-  DapClient *m_dapClient;
+  QPointer<DapClient> m_dapClient;
   QString m_workspaceFolder;
 };
 

@@ -1,8 +1,62 @@
 #include "uistylehelper.h"
 #include "../theme/themedefinition.h"
 #include <QColor>
+#include <QDir>
+#include <QFileInfo>
+#include <QHash>
+#include <QImage>
+#include <QPainter>
+#include <QPainterPath>
+#include <QStandardPaths>
 
 namespace {
+
+QString chevronImagePath(const QColor &color) {
+  static QHash<QRgb, QString> cache;
+  const auto cached = cache.constFind(color.rgba());
+  if (cached != cache.constEnd()) {
+    return *cached;
+  }
+
+  const QString dir =
+      QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
+      QStringLiteral("/chrome");
+  if (!QDir().mkpath(dir)) {
+    cache.insert(color.rgba(), QString());
+    return QString();
+  }
+  const QString path = QStringLiteral("%1/chevron-%2.png")
+                           .arg(dir, QString::number(color.rgba(), 16));
+
+  if (!QFileInfo::exists(path)) {
+
+    const int scale = 4;
+    QImage image(9 * scale, 6 * scale, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    QPainterPath triangle;
+    triangle.moveTo(0.5 * scale, 1.5 * scale);
+    triangle.lineTo(8.5 * scale, 1.5 * scale);
+    triangle.lineTo(4.5 * scale, 5.0 * scale);
+    triangle.closeSubpath();
+    painter.fillPath(triangle, color);
+    painter.end();
+    if (!image.save(path, "PNG")) {
+      cache.insert(color.rgba(), QString());
+      return QString();
+    }
+  }
+
+  cache.insert(color.rgba(), path);
+  return path;
+}
+
+QString chevronImageRule(const QColor &color) {
+  const QString path = chevronImagePath(color);
+  return path.isEmpty() ? QString()
+                        : QStringLiteral("  image: url(\"%1\");").arg(path);
+}
 QColor withAlpha(QColor color, qreal alpha) {
   color.setAlphaF(qBound(0.0, alpha, 1.0));
   return color;
@@ -595,8 +649,35 @@ QString UIStyleHelper::comboBoxStyle(const Theme &theme) {
                  "  border-color: %6;"
                  "}"
                  "QComboBox::drop-down {"
+                 "  subcontrol-origin: padding;"
+                 "  subcontrol-position: center right;"
                  "  border: none;"
-                 "  width: 24px;"
+                 "  width: 22px;"
+                 "}"
+                 "QComboBox::down-arrow {"
+                 "  width: 9px;"
+                 "  height: 6px;"
+                 "%8"
+                 "}"
+                 "QComboBox::down-arrow:disabled {"
+                 "%9"
+                 "}"
+                 "QComboBox:disabled {"
+                 "  color: %10;"
+                 "}"
+                 "QComboBox:editable {"
+                 "  padding: 0px 0px 0px 10px;"
+                 "  min-height: 28px;"
+                 "}"
+                 "QComboBox QLineEdit {"
+                 "  background: transparent;"
+                 "  border: none;"
+                 "  border-radius: 0;"
+                 "  margin: 0;"
+                 "  padding: 0px;"
+                 "  color: %2;"
+                 "  selection-background-color: %4;"
+                 "  selection-color: %7;"
                  "}"
                  "QComboBox QAbstractItemView {"
                  "  background: %1;"
@@ -626,7 +707,15 @@ QString UIStyleHelper::comboBoxStyle(const Theme &theme) {
                .name())
       .arg(qMax(3, radius(theme)))
       .arg(focus.name())
-      .arg(theme.backgroundColor.name());
+      .arg(theme.backgroundColor.name())
+      .arg(chevronImageRule(c.textMuted.isValid() ? c.textMuted
+                                                  : theme.foregroundColor))
+      .arg(chevronImageRule(c.textDisabled.isValid()
+                                ? c.textDisabled
+                                : theme.singleLineCommentFormat))
+      .arg((c.textDisabled.isValid() ? c.textDisabled
+                                     : theme.singleLineCommentFormat)
+               .name());
 }
 
 QString UIStyleHelper::comboBoxStyle(const ThemeDefinition &theme) {
@@ -647,8 +736,35 @@ QString UIStyleHelper::comboBoxStyle(const ThemeDefinition &theme) {
                  "  border-color: %6;"
                  "}"
                  "QComboBox::drop-down {"
+                 "  subcontrol-origin: padding;"
+                 "  subcontrol-position: center right;"
                  "  border: none;"
-                 "  width: 24px;"
+                 "  width: 22px;"
+                 "}"
+                 "QComboBox::down-arrow {"
+                 "  width: 9px;"
+                 "  height: 6px;"
+                 "%8"
+                 "}"
+                 "QComboBox::down-arrow:disabled {"
+                 "%9"
+                 "}"
+                 "QComboBox:disabled {"
+                 "  color: %10;"
+                 "}"
+                 "QComboBox:editable {"
+                 "  padding: 0px 0px 0px 10px;"
+                 "  min-height: 28px;"
+                 "}"
+                 "QComboBox QLineEdit {"
+                 "  background: transparent;"
+                 "  border: none;"
+                 "  border-radius: 0;"
+                 "  margin: 0;"
+                 "  padding: 0px;"
+                 "  color: %2;"
+                 "  selection-background-color: %4;"
+                 "  selection-color: %7;"
                  "}"
                  "QComboBox QAbstractItemView {"
                  "  background: %1;"
@@ -675,7 +791,10 @@ QString UIStyleHelper::comboBoxStyle(const ThemeDefinition &theme) {
       .arg(c.inputSelection.name())
       .arg(qMax(3, radius(theme)))
       .arg(focus.name())
-      .arg(c.textInverse.name());
+      .arg(c.textInverse.name())
+      .arg(chevronImageRule(c.textMuted))
+      .arg(chevronImageRule(c.textDisabled))
+      .arg(c.textDisabled.name());
 }
 
 QString UIStyleHelper::checkBoxStyle(const Theme &theme) {
@@ -697,6 +816,9 @@ QString UIStyleHelper::checkBoxStyle(const Theme &theme) {
                  "}"
                  "QCheckBox::indicator:hover {"
                  "  border-color: %4;"
+                 "}"
+                 "QCheckBox:disabled {"
+                 "  color: %5;"
                  "}")
       .arg((c.textPrimary.isValid() ? c.textPrimary : theme.foregroundColor)
                .name())
@@ -704,6 +826,9 @@ QString UIStyleHelper::checkBoxStyle(const Theme &theme) {
       .arg(chrome(theme,
                   c.inputBg.isValid() ? c.inputBg : theme.surfaceAltColor))
       .arg((c.accentPrimary.isValid() ? c.accentPrimary : theme.accentColor)
+               .name())
+      .arg((c.textDisabled.isValid() ? c.textDisabled
+                                     : theme.singleLineCommentFormat)
                .name());
 }
 
@@ -726,11 +851,15 @@ QString UIStyleHelper::checkBoxStyle(const ThemeDefinition &theme) {
                  "}"
                  "QCheckBox::indicator:hover {"
                  "  border-color: %4;"
+                 "}"
+                 "QCheckBox:disabled {"
+                 "  color: %5;"
                  "}")
       .arg(c.textPrimary.name())
       .arg(c.inputBorder.name())
       .arg(chrome(theme, c.inputBg))
-      .arg(c.accentPrimary.name());
+      .arg(c.accentPrimary.name())
+      .arg(c.textDisabled.name());
 }
 
 QString UIStyleHelper::formDialogStyle(const Theme &theme) {
@@ -850,6 +979,11 @@ QString UIStyleHelper::lineEditStyle(const Theme &theme) {
                  "}"
                  "QLineEdit:focus {"
                  "  border-color: %4;"
+                 "}"
+                 "QLineEdit:disabled {"
+                 "  background: %7;"
+                 "  color: %8;"
+                 "  border-color: %7;"
                  "}")
       .arg(chrome(theme, c.inputBg.isValid() ? c.inputBg : theme.surfaceColor))
       .arg((c.inputFg.isValid() ? c.inputFg : theme.foregroundColor).name())
@@ -858,7 +992,12 @@ QString UIStyleHelper::lineEditStyle(const Theme &theme) {
       .arg((c.inputSelection.isValid() ? c.inputSelection
                                        : theme.accentSoftColor)
                .name())
-      .arg(qMax(3, radius(theme)));
+      .arg(qMax(3, radius(theme)))
+      .arg(chrome(theme, c.surfaceSunken.isValid() ? c.surfaceSunken
+                                                   : theme.surfaceAltColor))
+      .arg((c.textDisabled.isValid() ? c.textDisabled
+                                     : theme.singleLineCommentFormat)
+               .name());
 }
 
 QString UIStyleHelper::lineEditStyle(const ThemeDefinition &theme) {
@@ -876,14 +1015,34 @@ QString UIStyleHelper::lineEditStyle(const ThemeDefinition &theme) {
                  "}"
                  "QLineEdit:focus {"
                  "  border-color: %4;"
+                 "}"
+                 "QLineEdit:disabled {"
+                 "  background: %7;"
+                 "  color: %8;"
+                 "  border-color: %7;"
                  "}")
       .arg(chrome(theme, c.inputBg))
       .arg(c.inputFg.name())
       .arg(c.inputBorder.name())
       .arg(focus.name())
       .arg(c.inputSelection.name())
-      .arg(qMax(3, radius(theme)));
+      .arg(qMax(3, radius(theme)))
+      .arg(chrome(theme, c.surfaceSunken))
+      .arg(c.textDisabled.name());
 }
+
+namespace {
+
+QString disabledButtonRule(const QColor &background, const QColor &foreground) {
+  return QString("QPushButton:disabled {"
+                 "  background: %1;"
+                 "  border: 1px solid %1;"
+                 "  color: %2;"
+                 "}")
+      .arg(background.name(), foreground.name());
+}
+
+} // namespace
 
 QString UIStyleHelper::primaryButtonStyle(const Theme &theme) {
   const ThemeColors c = activeTheme(theme);
@@ -897,7 +1056,12 @@ QString UIStyleHelper::primaryButtonStyle(const Theme &theme) {
                   c.btnPrimaryActive.isValid() ? c.btnPrimaryActive
                                                : theme.accentColor.darker(110),
                   0.9);
-  return QString("QPushButton {"
+  return disabledButtonRule(c.surfaceSunken.isValid() ? c.surfaceSunken
+                                                      : theme.surfaceAltColor,
+                            c.textDisabled.isValid()
+                                ? c.textDisabled
+                                : theme.singleLineCommentFormat) +
+         QString("QPushButton {"
                  "  background: %1;"
                  "  border: 1px solid %1;"
                  "  color: %2;"
@@ -914,20 +1078,23 @@ QString UIStyleHelper::primaryButtonStyle(const Theme &theme) {
                  "  background: %4;"
                  "  border-color: %4;"
                  "}")
-      .arg((c.btnPrimaryBg.isValid() ? c.btnPrimaryBg : theme.accentColor)
-               .name())
-      .arg((c.btnPrimaryFg.isValid() ? c.btnPrimaryFg : theme.backgroundColor)
-               .name())
-      .arg(hover.name())
-      .arg(pressed.name())
-      .arg(qMax(3, radius(theme)));
+             .arg(
+                 (c.btnPrimaryBg.isValid() ? c.btnPrimaryBg : theme.accentColor)
+                     .name())
+             .arg((c.btnPrimaryFg.isValid() ? c.btnPrimaryFg
+                                            : theme.backgroundColor)
+                      .name())
+             .arg(hover.name())
+             .arg(pressed.name())
+             .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::primaryButtonStyle(const ThemeDefinition &theme) {
   const ThemeColors &c = theme.colors;
   const QColor hover = glowSurface(theme, c, c.btnPrimaryHover, 1.0);
   const QColor pressed = glowSurface(theme, c, c.btnPrimaryActive, 0.9);
-  return QString("QPushButton {"
+  return disabledButtonRule(c.surfaceSunken, c.textDisabled) +
+         QString("QPushButton {"
                  "  background: %1;"
                  "  border: 1px solid %1;"
                  "  color: %2;"
@@ -944,11 +1111,11 @@ QString UIStyleHelper::primaryButtonStyle(const ThemeDefinition &theme) {
                  "  background: %4;"
                  "  border-color: %4;"
                  "}")
-      .arg(c.btnPrimaryBg.name())
-      .arg(c.btnPrimaryFg.name())
-      .arg(hover.name())
-      .arg(pressed.name())
-      .arg(qMax(3, radius(theme)));
+             .arg(c.btnPrimaryBg.name())
+             .arg(c.btnPrimaryFg.name())
+             .arg(hover.name())
+             .arg(pressed.name())
+             .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::secondaryButtonStyle(const Theme &theme) {
@@ -963,7 +1130,12 @@ QString UIStyleHelper::secondaryButtonStyle(const Theme &theme) {
                   1.0);
   const QColor focus = glowFocus(
       theme, c, c.borderFocus.isValid() ? c.borderFocus : theme.accentColor);
-  return QString("QPushButton {"
+  return disabledButtonRule(c.surfaceSunken.isValid() ? c.surfaceSunken
+                                                      : theme.surfaceAltColor,
+                            c.textDisabled.isValid()
+                                ? c.textDisabled
+                                : theme.singleLineCommentFormat) +
+         QString("QPushButton {"
                  "  background: %1;"
                  "  color: %2;"
                  "  border: 1px solid %3;"
@@ -976,15 +1148,16 @@ QString UIStyleHelper::secondaryButtonStyle(const Theme &theme) {
                  "  border-color: %5;"
                  "  color: %5;"
                  "}")
-      .arg(chrome(theme, c.btnSecondaryBg.isValid() ? c.btnSecondaryBg
-                                                    : theme.surfaceColor))
-      .arg((c.btnSecondaryFg.isValid() ? c.btnSecondaryFg
-                                       : theme.foregroundColor)
-               .name())
-      .arg(border.name())
-      .arg(chrome(theme, hover))
-      .arg(focus.name())
-      .arg(qMax(3, radius(theme)));
+             .arg(chrome(theme, c.btnSecondaryBg.isValid()
+                                    ? c.btnSecondaryBg
+                                    : theme.surfaceColor))
+             .arg((c.btnSecondaryFg.isValid() ? c.btnSecondaryFg
+                                              : theme.foregroundColor)
+                      .name())
+             .arg(border.name())
+             .arg(chrome(theme, hover))
+             .arg(focus.name())
+             .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::secondaryButtonStyle(const ThemeDefinition &theme) {
@@ -992,7 +1165,8 @@ QString UIStyleHelper::secondaryButtonStyle(const ThemeDefinition &theme) {
   const QColor border = emphasizedBorder(theme, c, c.borderDefault);
   const QColor hover = glowSurface(theme, c, c.btnSecondaryHover, 1.0);
   const QColor focus = glowFocus(theme, c, c.borderFocus);
-  return QString("QPushButton {"
+  return disabledButtonRule(c.surfaceSunken, c.textDisabled) +
+         QString("QPushButton {"
                  "  background: %1;"
                  "  color: %2;"
                  "  border: 1px solid %3;"
@@ -1005,12 +1179,12 @@ QString UIStyleHelper::secondaryButtonStyle(const ThemeDefinition &theme) {
                  "  border-color: %5;"
                  "  color: %5;"
                  "}")
-      .arg(chrome(theme, c.btnSecondaryBg))
-      .arg(c.btnSecondaryFg.name())
-      .arg(border.name())
-      .arg(chrome(theme, hover))
-      .arg(focus.name())
-      .arg(qMax(3, radius(theme)));
+             .arg(chrome(theme, c.btnSecondaryBg))
+             .arg(c.btnSecondaryFg.name())
+             .arg(border.name())
+             .arg(chrome(theme, hover))
+             .arg(focus.name())
+             .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::breadcrumbButtonStyle(const Theme &theme) {
@@ -1438,7 +1612,12 @@ QString UIStyleHelper::dangerButtonStyle(const Theme &theme) {
                   c.btnDangerHover.isValid() ? c.btnDangerHover
                                              : theme.errorColor.lighter(110),
                   1.0);
-  return QString("QPushButton {"
+  return disabledButtonRule(c.surfaceSunken.isValid() ? c.surfaceSunken
+                                                      : theme.surfaceAltColor,
+                            c.textDisabled.isValid()
+                                ? c.textDisabled
+                                : theme.singleLineCommentFormat) +
+         QString("QPushButton {"
                  "  background: %1;"
                  "  color: %3;"
                  "  border: 1px solid %1;"
@@ -1451,16 +1630,19 @@ QString UIStyleHelper::dangerButtonStyle(const Theme &theme) {
                  "  background: %2;"
                  "  border-color: %2;"
                  "}")
-      .arg((c.btnDangerBg.isValid() ? c.btnDangerBg : theme.errorColor).name())
-      .arg(hover.name())
-      .arg((c.btnDangerFg.isValid() ? c.btnDangerFg : QColor("#ffffff")).name())
-      .arg(qMax(3, radius(theme)));
+             .arg((c.btnDangerBg.isValid() ? c.btnDangerBg : theme.errorColor)
+                      .name())
+             .arg(hover.name())
+             .arg((c.btnDangerFg.isValid() ? c.btnDangerFg : QColor("#ffffff"))
+                      .name())
+             .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::dangerButtonStyle(const ThemeDefinition &theme) {
   const ThemeColors &c = theme.colors;
   const QColor hover = glowSurface(theme, c, c.btnDangerHover, 1.0);
-  return QString("QPushButton {"
+  return disabledButtonRule(c.surfaceSunken, c.textDisabled) +
+         QString("QPushButton {"
                  "  background: %1;"
                  "  color: %3;"
                  "  border: 1px solid %1;"
@@ -1473,10 +1655,10 @@ QString UIStyleHelper::dangerButtonStyle(const ThemeDefinition &theme) {
                  "  background: %2;"
                  "  border-color: %2;"
                  "}")
-      .arg(c.btnDangerBg.name())
-      .arg(hover.name())
-      .arg(c.btnDangerFg.name())
-      .arg(qMax(3, radius(theme)));
+             .arg(c.btnDangerBg.name())
+             .arg(hover.name())
+             .arg(c.btnDangerFg.name())
+             .arg(qMax(3, radius(theme)));
 }
 
 QString UIStyleHelper::progressBarStyle(const Theme &theme) {

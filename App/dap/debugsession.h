@@ -89,9 +89,13 @@ private:
   DebugConfiguration m_configuration;
   std::shared_ptr<IDebugAdapter> m_adapter;
   std::unique_ptr<DapClient> m_client;
+  void reportTermination();
+
   bool m_launchRequestSent;
   bool m_adapterInitializedReceived;
   bool m_configurationDoneSent;
+
+  bool m_terminationReported = false;
   QString m_lastError;
 };
 
@@ -107,7 +111,8 @@ public:
                        std::shared_ptr<IDebugAdapter> adapter);
 
   QString quickStart(const QString &filePath,
-                     const QString &languageId = QString());
+                     const QString &languageId = QString(),
+                     const QString &programOverride = QString());
 
   void stopSession(const QString &sessionId, bool terminate = true);
 
