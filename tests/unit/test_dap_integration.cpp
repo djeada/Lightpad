@@ -803,9 +803,6 @@ void TestDapIntegration::cmakeBuildFeedsDebugSession() {
   breakpoints.clearAll();
 }
 
-// The "Debug this file" flow cannot compile a source that belongs to a CMake
-// project on its own; it has to build the executable target that lists the file
-// and launch that binary instead of a guessed <dir>/<basename> path.
 void TestDapIntegration::cmakeQuickStartUsesTargetOwningTheOpenFile() {
   const QString gdb = findTool("gdb");
   const QString cmake = findTool("cmake");
@@ -826,7 +823,7 @@ void TestDapIntegration::cmakeQuickStartUsesTargetOwningTheOpenFile() {
   writeFile(root + "/CMakeLists.txt", "cmake_minimum_required(VERSION 3.16)\n"
                                       "project(cmake_multi CXX)\n"
                                       "add_subdirectory(src)\n");
-  // Two executables: only one of them compiles renderer.cpp.
+
   writeFile(root + "/src/CMakeLists.txt",
             "add_executable(other other.cpp)\n"
             "add_executable(renderer renderer.cpp scene.cpp)\n"
@@ -867,7 +864,7 @@ void TestDapIntegration::cmakeQuickStartUsesTargetOwningTheOpenFile() {
   }
   const QString exePath = CMakeProject::executablePathFor(chosen, binaryDir);
   QVERIFY(QFileInfo::exists(exePath));
-  // The naive single-file guess would have pointed the debugger here.
+
   QVERIFY(!QFileInfo::exists(root + "/src/renderer"));
 
   BreakpointManager &breakpoints = BreakpointManager::instance();
@@ -904,9 +901,6 @@ void TestDapIntegration::cmakeQuickStartUsesTargetOwningTheOpenFile() {
   breakpoints.clearAll();
 }
 
-// Stopping a session used to crash the editor: DebugSession::stop() reports
-// termination, the adapter process exiting reports it again, and each report
-// queued a delete of the same session object.
 void TestDapIntegration::stoppingSessionReportsTerminationOnce() {
   const QString gdb = findTool("gdb");
   const QString cxx = findTool("g++");
@@ -950,8 +944,6 @@ void TestDapIntegration::stoppingSessionReportsTerminationOnce() {
 
   QTRY_COMPARE_WITH_TIMEOUT(stoppedSpy.count(), 1, kAdapterTimeoutMs * 2);
 
-  // Earlier tests share this singleton and can still have a queued
-  // notification in flight, so count only reports for this session.
   const auto terminationsForSession = [&terminatedSpy, &sessionId]() {
     int count = 0;
     for (const QList<QVariant> &args : terminatedSpy) {
@@ -965,8 +957,6 @@ void TestDapIntegration::stoppingSessionReportsTerminationOnce() {
   manager.stopSession(sessionId, true);
   QTRY_COMPARE_WITH_TIMEOUT(terminationsForSession(), 1, kAdapterTimeoutMs);
 
-  // The session is deregistered immediately, and the adapter's own termination
-  // notification arriving afterwards must not report or free it a second time.
   QVERIFY(manager.session(sessionId) == nullptr);
   QTest::qWait(1500);
   QCOMPARE(terminationsForSession(), 1);

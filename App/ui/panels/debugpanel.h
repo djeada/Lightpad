@@ -40,8 +40,6 @@ public:
   void setCurrentFrame(int frameId);
   void applyTheme(const Theme &theme);
 
-  // Start/step/stop actions. The window registers them so their function-key
-  // shortcuts stay live while the debug dock is hidden.
   QList<QAction *> transportActions() const;
 
 signals:
@@ -168,12 +166,8 @@ private:
   QString formatVariable(const DapVariable &var) const;
   QIcon variableIcon(const DapVariable &var) const;
 
-  // The panel outlives the sessions whose clients it is handed, so the
-  // pointer has to self-clear when a client is destroyed.
   QPointer<DapClient> m_dapClient;
 
-  // Widget pointers are assigned by setupUI(); default them to null so a
-  // filter or slot that fires mid-construction sees a null, not garbage.
   QWidget *m_toolbar = nullptr;
   QAction *m_continueAction = nullptr;
   QAction *m_pauseAction = nullptr;
@@ -216,7 +210,7 @@ private:
   QSet<int> m_pendingScopeVariableLoads;
   QSet<int> m_pendingVariableRequests;
   bool m_programmaticVariablesExpand;
-  // Autofit stops once the user drags the Name column to their own width.
+
   bool m_variablesNameColumnUserSized;
   bool m_variablesNameColumnAutofitting;
   bool m_stepInProgress;
@@ -231,9 +225,7 @@ private:
     int activeRequestSeq = 0;
   };
   QList<PendingConsoleEvaluation> m_pendingConsoleEvaluations;
-  // Console evaluations whose result was a structured value: the adapter
-  // returns an empty string plus a reference, so the children are fetched
-  // (recursively, within tight bounds) to build a readable one-line summary.
+
   struct ConsoleExpansionNode {
     QString name;
     QString value;
@@ -244,11 +236,11 @@ private:
   struct ConsoleExpansion {
     QString expression;
     QString type;
-    QList<ConsoleExpansionNode> nodes; // index 0 is the evaluated expression
+    QList<ConsoleExpansionNode> nodes;
     int pendingRequests = 0;
   };
   QHash<int, ConsoleExpansion> m_consoleExpansions;
-  // variablesReference -> (expansion id, node index) for in-flight requests.
+
   QHash<int, QPair<int, int>> m_consoleExpansionNodeByRef;
   int m_nextConsoleExpansionId = 1;
 
@@ -259,24 +251,17 @@ private:
   QString renderConsoleExpansion(const ConsoleExpansion &expansion,
                                  int nodeIndex) const;
 
-  // Aggregate rows whose adapter value is empty: their children are fetched
-  // once so the row can preview its contents without being expanded.
   QHash<int, QTreeWidgetItem *> m_pendingTreeSummaries;
-  // Values seen at the previous stop, keyed by the row's full path, so a step
-  // can mark what actually changed.
+
   QHash<QString, QString> m_previousVariableValues;
-  // Untruncated status text; the label shows an elided version of it.
+
   QString m_debugStatusText;
 
-  // Debug console state: submitted expressions for Up/Down recall, and the
-  // index the user has scrolled back to (== size() when composing a new one).
   QStringList m_consoleHistory;
   int m_consoleHistoryIndex = 0;
   QString m_consoleHistoryDraft;
   QWidget *m_consoleToolbar = nullptr;
-  // The console page normally lives in the inspector stack. Detaching moves
-  // the same widget into a top-level window; nothing is duplicated, so state
-  // and signal connections survive the move.
+
   QWidget *m_consolePage = nullptr;
   QWidget *m_consoleWindow = nullptr;
   QAction *m_consoleDetachAction = nullptr;

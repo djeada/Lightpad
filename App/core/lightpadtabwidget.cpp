@@ -34,6 +34,29 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
 
   QMenu menu(this);
 
+  LightpadTabWidget *owner = nullptr;
+  for (QWidget *ancestor = parentWidget(); ancestor && !owner;
+       ancestor = ancestor->parentWidget()) {
+    owner = qobject_cast<LightpadTabWidget *>(ancestor);
+  }
+  const QString filePath = owner ? owner->getFilePath(index) : QString();
+  const QString fileName = QFileInfo(filePath).fileName();
+
+  QAction *runAction = nullptr;
+  QAction *debugAction = nullptr;
+  QAction *pinRunAction = nullptr;
+  QAction *configureRunAction = nullptr;
+  if (!filePath.isEmpty()) {
+    runAction = menu.addAction(tr("Run %1").arg(fileName));
+    debugAction = menu.addAction(tr("Debug %1").arg(fileName));
+    pinRunAction = menu.addAction(tr("Always Run This File"));
+    pinRunAction->setCheckable(true);
+    pinRunAction->setChecked(owner && owner->isPinnedRunFile(filePath));
+    configureRunAction =
+        menu.addAction(tr("Configure How %1 Runs…").arg(fileName));
+    menu.addSeparator();
+  }
+
   QAction *closeAction = menu.addAction(tr("Close Tab"));
   QAction *closeOthersAction = menu.addAction(tr("Close Other Tabs"));
   QAction *closeToRightAction = menu.addAction(tr("Close Tabs to the Right"));
@@ -74,6 +97,14 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
     emit copyFileName(index);
   } else if (selectedAction == revealInExplorerAction) {
     emit revealInFileExplorer(index);
+  } else if (runAction && selectedAction == runAction) {
+    emit runTab(index);
+  } else if (debugAction && selectedAction == debugAction) {
+    emit debugTab(index);
+  } else if (pinRunAction && selectedAction == pinRunAction) {
+    emit pinRunTab(index, pinRunAction->isChecked());
+  } else if (configureRunAction && selectedAction == configureRunAction) {
+    emit configureRunTab(index);
   }
 }
 
@@ -545,6 +576,50 @@ void LightpadTabWidget::setupTabBar() {
           &LightpadTabWidget::onCopyFileName);
   connect(customTabBar, &LightpadTabBar::revealInFileExplorer, this,
           &LightpadTabWidget::onRevealInFileExplorer);
+  connect(customTabBar, &LightpadTabBar::runTab, this,
+          &LightpadTabWidget::onRunTab);
+  connect(customTabBar, &LightpadTabBar::debugTab, this,
+          &LightpadTabWidget::onDebugTab);
+  connect(customTabBar, &LightpadTabBar::pinRunTab, this,
+          &LightpadTabWidget::onPinRunTab);
+  connect(customTabBar, &LightpadTabBar::configureRunTab, this,
+          &LightpadTabWidget::onConfigureRunTab);
+}
+
+bool LightpadTabWidget::isPinnedRunFile(const QString &filePath) const {
+  if (!mainWindow || filePath.isEmpty()) {
+    return false;
+  }
+  const QString pinned = mainWindow->pinnedRunFilePath();
+  return !pinned.isEmpty() && QFileInfo(pinned) == QFileInfo(filePath);
+}
+
+void LightpadTabWidget::onRunTab(int index) {
+  const QString filePath = getFilePath(index);
+  if (mainWindow && !filePath.isEmpty()) {
+    mainWindow->runFileByPath(filePath);
+  }
+}
+
+void LightpadTabWidget::onDebugTab(int index) {
+  const QString filePath = getFilePath(index);
+  if (mainWindow && !filePath.isEmpty()) {
+    mainWindow->debugFileByPath(filePath);
+  }
+}
+
+void LightpadTabWidget::onPinRunTab(int index, bool pin) {
+  const QString filePath = getFilePath(index);
+  if (mainWindow && !filePath.isEmpty()) {
+    mainWindow->setPinnedRunFilePath(pin ? filePath : QString());
+  }
+}
+
+void LightpadTabWidget::onConfigureRunTab(int index) {
+  const QString filePath = getFilePath(index);
+  if (mainWindow && !filePath.isEmpty()) {
+    mainWindow->openRunConfigurationForFile(filePath);
+  }
 }
 
 void LightpadTabWidget::onCloseTab(int index) {

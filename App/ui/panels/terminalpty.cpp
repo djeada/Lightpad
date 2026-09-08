@@ -25,7 +25,8 @@
 
 TerminalPty::TerminalPty(QObject *parent)
     : QObject(parent), m_masterFd(-1), m_pid(-1), m_readNotifier(nullptr),
-      m_reapTimer(new QTimer(this)), m_running(false) {
+      m_reapTimer(new QTimer(this)), m_running(false), m_columns(80),
+      m_rows(24) {
   m_reapTimer->setInterval(80);
   connect(m_reapTimer, &QTimer::timeout, this, &TerminalPty::reapChild);
 }
@@ -63,7 +64,12 @@ bool TerminalPty::start(const QString &program, const QStringList &arguments,
   argv.append(nullptr);
 
   int masterFd = -1;
-  pid_t childPid = forkpty(&masterFd, nullptr, nullptr, nullptr);
+
+  winsize initialSize;
+  memset(&initialSize, 0, sizeof(initialSize));
+  initialSize.ws_col = static_cast<unsigned short>(qMax(1, m_columns));
+  initialSize.ws_row = static_cast<unsigned short>(qMax(1, m_rows));
+  pid_t childPid = forkpty(&masterFd, nullptr, nullptr, &initialSize);
   if (childPid < 0) {
     emit errorOccurred(QString::fromLocal8Bit(strerror(errno)));
     return false;
@@ -160,7 +166,14 @@ bool TerminalPty::interruptProcessGroup() {
 }
 
 void TerminalPty::resize(int columns, int rows) {
-  if (!m_running || m_masterFd < 0 || columns <= 0 || rows <= 0) {
+  if (columns <= 0 || rows <= 0) {
+    return;
+  }
+
+  m_columns = columns;
+  m_rows = rows;
+
+  if (!m_running || m_masterFd < 0) {
     return;
   }
 

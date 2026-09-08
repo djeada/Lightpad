@@ -80,6 +80,10 @@ public:
   getEnvironment(const QString &filePath,
                  const QString &languageId = QString()) const;
 
+  QString
+  effectiveTemplateIdForFile(const QString &filePath,
+                             const QString &languageId = QString()) const;
+
   static QString substituteVariables(const QString &input,
                                      const QString &filePath);
 

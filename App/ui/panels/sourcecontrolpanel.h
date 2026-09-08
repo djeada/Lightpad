@@ -2,7 +2,9 @@
 #define SOURCECONTROLPANEL_H
 
 #include "../../git/gitintegration.h"
+#include "../../git/gittimetravel.h"
 #include "../../settings/theme.h"
+#include "../widgets/repositorystatemapwidget.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QHBoxLayout>
@@ -45,9 +47,12 @@ signals:
 
   void repositoryInitialized(const QString &path);
 
+  void openWorktreeRequested(const QString &path);
+
   void commitDiffRequested(const QString &commitHash, const QString &shortHash);
 
-  void compareBranchesRequested(const QString &branch1, const QString &branch2);
+  void compareRequested(const QString &baseRef, const QString &compareRef,
+                        const QString &filePath);
 
 private slots:
   void onStageAllClicked();
@@ -75,6 +80,8 @@ private slots:
   void onMergeConflictsDetected(const QStringList &files);
   void onResolveConflictsClicked();
   void onHistorySearchChanged(const QString &text);
+  void onStateMapLayerActivated(RepositoryStateMapWidget::Layer layer);
+  void onStagingCanvasClicked();
 
 private:
   void setupUI();
@@ -94,6 +101,24 @@ private:
   void addEmptyStateItem(QTreeWidget *tree, const QString &text);
   void updateCounts();
   void updateHeaderTitle();
+  void updateStateMap();
+  void openStagingCanvas(const QString &filePath);
+  void openSyncRadar();
+  void openCommitCrafting();
+  void openIntegrationAdvisor();
+  void openUndoWizard(const QString &commit, const QStringList &paths);
+  void openTimeTravel(const QString &commitHash);
+  void openRebaseTimeline();
+  void openRecoveryCenter();
+  void openCommandMirror();
+  void openBranchHygiene();
+  void openWorktreeMap();
+  void openBisect(const QString &goodRef, const QString &badRef);
+  void openWhatIfSandbox();
+  void setupDetachedHeadCard();
+  void updateDetachedHeadCard();
+
+  bool confirmLeavingDetachedHead();
   void scheduleRefresh();
   bool confirmDestructive(const QString &title, const QString &text);
 
@@ -145,6 +170,12 @@ private:
   QPushButton *m_historyGraphBtn;
 
   QWidget *m_headerWidget;
+  RepositoryStateMapWidget *m_stateMap;
+  QWidget *m_detachedCard;
+  QLabel *m_detachedLabel;
+  QPushButton *m_detachedBranchButton;
+  QPushButton *m_detachedListButton;
+  GitDetachedHeadState m_detachedState;
   QWidget *m_branchSection;
   QLabel *m_branchIcon;
   QWidget *m_commitSection;
@@ -157,6 +188,10 @@ private:
   QPushButton *m_compareBranchesBtn;
   QPushButton *m_worktreeBtn;
   QPushButton *m_discardAllBtn;
+  QPushButton *m_stagingCanvasBtn;
+  QPushButton *m_syncRadarBtn;
+  QPushButton *m_craftBtn;
+  QPushButton *m_integrateBtn;
 
   bool m_historyExpanded;
   bool m_updatingBranchSelector;

@@ -26,17 +26,31 @@ class LightpadTreeView : public QTreeView {
 public:
   LightpadTreeView(LightpadPage *parent = nullptr);
   ~LightpadTreeView();
-  void renameFile(QString oldFilePath, QString newFilePath);
+
+  QStringList selectedPaths() const;
+
+  QString targetDirectory() const;
+
+  QString rootPath() const;
+
+  FileDirTreeController *fileOperationsController() const {
+    return fileController;
+  }
+
+  void promptNewFile();
+  void promptNewFolder();
 
 signals:
   void runTestsRequested(const QString &path);
   void runFileRequested(const QString &path);
   void debugFileRequested(const QString &path);
   void toggleTestMarkerRequested(const QString &path, bool markAsTest);
+  void revealInFileManagerRequested(const QString &path);
+  void openInTerminalRequested(const QString &directory);
 
 protected:
   void keyPressEvent(QKeyEvent *event) override;
-  void mouseReleaseEvent(QMouseEvent *e) override;
+  void contextMenuEvent(QContextMenuEvent *event) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
   void dropEvent(QDropEvent *event) override;
@@ -46,9 +60,23 @@ private:
   FileDirTreeModel *fileModel;
   FileDirTreeController *fileController;
 
-  void duplicateFile(QString filePath);
-  void removeFile(QString filePath);
+  void setupShortcuts();
   void showContextMenu(const QPoint &pos);
+  void buildRootMenu(QMenu &menu);
+  void buildEntryMenu(QMenu &menu, const QString &filePath,
+                      const QStringList &selection);
+
+  QString dropDirectoryAt(const QPoint &position) const;
+  bool acceptsDropOf(const QStringList &sources,
+                     const QString &destination) const;
+  void performDrop(const QStringList &sources, const QString &destination,
+                   bool copy);
+  void copySelection();
+  void cutSelection();
+  void pasteIntoTarget();
+  void renameSelection();
+  void duplicateSelection();
+  void deleteSelection(DeleteMode mode);
 };
 
 class LightpadPage : public QWidget {
@@ -90,6 +118,8 @@ public:
   void setTreeFilterText(const QString &text);
   QString getTreeFilterText() const;
   void activateTreeIndex(const QModelIndex &index);
+
+  void revealPath(const QString &path);
   void applyTheme(const Theme &theme);
   void applyTheme(const ThemeDefinition &theme);
   MainWindow *getMainWindow() const;
@@ -104,6 +134,8 @@ private:
   QWidget *treeHeader;
   QLabel *treeTitleLabel;
   QLineEdit *treeFilterEdit;
+  QToolButton *treeNewFileButton;
+  QToolButton *treeNewFolderButton;
   QToolButton *treeRefreshButton;
   QToolButton *treeCollapseButton;
   QToolButton *treeExpandButton;

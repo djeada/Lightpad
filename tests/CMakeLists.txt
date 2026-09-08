@@ -609,6 +609,90 @@ set_target_properties(test_dap_integration PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/bin"
 )
 
+# Compiler output -> clickable diagnostics.
+add_executable(test_compilerdiagnosticparser
+    unit/test_compilerdiagnosticparser.cpp
+    ${CMAKE_SOURCE_DIR}/App/diagnostics/compilerdiagnosticparser.cpp
+)
+
+target_include_directories(test_compilerdiagnosticparser PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+)
+
+target_link_libraries(test_compilerdiagnosticparser
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Network
+    Qt6::Test
+)
+
+target_compile_definitions(test_compilerdiagnosticparser PRIVATE QT_DEPRECATED_WARNINGS)
+
+set_target_properties(test_compilerdiagnosticparser PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/bin"
+)
+
+add_test(NAME CompilerDiagnosticParserTests COMMAND test_compilerdiagnosticparser)
+
+# File explorer filesystem operations: the cases that silently lose data.
+add_executable(test_filedirtreemodel
+    unit/test_filedirtreemodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/filetree/filedirtreemodel.cpp
+)
+
+target_include_directories(test_filedirtreemodel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+)
+
+target_link_libraries(test_filedirtreemodel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Test
+)
+
+target_compile_definitions(test_filedirtreemodel PRIVATE QT_DEPRECATED_WARNINGS)
+
+set_target_properties(test_filedirtreemodel PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/bin"
+)
+
+add_test(NAME FileDirTreeModelTests COMMAND test_filedirtreemodel)
+
+# Run target resolution: what the Run button promises must be what launches.
+qt_add_resources(RUN_TARGET_RESOLVER_RESOURCES ${CMAKE_SOURCE_DIR}/App/run_templates/run_templates.qrc)
+
+add_executable(test_runtargetresolver
+    unit/test_runtargetresolver.cpp
+    ${CMAKE_SOURCE_DIR}/App/run_templates/runtargetresolver.cpp
+    ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/build/cmakeproject.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${RUN_TARGET_RESOLVER_RESOURCES}
+)
+
+target_include_directories(test_runtargetresolver PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+)
+
+target_link_libraries(test_runtargetresolver
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_runtargetresolver PRIVATE QT_DEPRECATED_WARNINGS)
+
+set_target_properties(test_runtargetresolver PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/bin"
+)
+
+add_test(NAME RunTargetResolverTests COMMAND test_runtargetresolver)
+
 # CMake project support (detection, parsing, configure/build round-trip).
 add_executable(test_cmakeproject
     unit/test_cmakeproject.cpp
@@ -651,15 +735,20 @@ add_test(NAME CompletionProviderRegistryTests COMMAND test_completionproviderreg
 add_test(NAME CompletionEngineTests COMMAND test_completionengine)
 add_test(NAME DapTests COMMAND test_dap)
 add_test(NAME DapIntegrationTests COMMAND test_dap_integration)
-set_tests_properties(DapIntegrationTests PROPERTIES TIMEOUT 300)
+set_tests_properties(DapIntegrationTests PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE)
 if(Python3_Interpreter_FOUND)
     add_test(
         NAME DapDebugpySmoke
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/debugpy_smoke_test.py
     )
+    # Spawns a real debug adapter and asserts against wall-clock deadlines, so
+    # it has to run on its own: sharing the machine with a parallel ctest run
+    # makes it fail on timing rather than on behaviour.
     set_tests_properties(DapDebugpySmoke PROPERTIES
         SKIP_RETURN_CODE 2
         LABELS "dap;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 300
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
 
@@ -667,9 +756,13 @@ if(Python3_Interpreter_FOUND)
         NAME DapGdbSmoke
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/gdb_dap_smoke_test.py
     )
+    # Same again: this one also compiles a sample program with gcc before it
+    # can start, which is the first thing to slow down under load.
     set_tests_properties(DapGdbSmoke PROPERTIES
         SKIP_RETURN_CODE 2
         LABELS "dap;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 300
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
 endif()
@@ -678,6 +771,16 @@ endif()
 add_executable(test_gitintegration
     unit/test_gitintegration.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -698,10 +801,114 @@ target_compile_definitions(test_gitintegration PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GitIntegrationTests COMMAND test_gitintegration)
 
+# GitRepositoryState test executable
+add_executable(test_gitrepositorystate
+    unit/test_gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitrepositorystate PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitrepositorystate
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitrepositorystate PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitRepositoryStateTests COMMAND test_gitrepositorystate)
+
+# Repository State Map widget test executable
+add_executable(test_repositorystatemapwidget
+    unit/test_repositorystatemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/repositorystatemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/flowlayout.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+)
+
+target_include_directories(test_repositorystatemapwidget PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+)
+
+target_link_libraries(test_repositorystatemapwidget
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_repositorystatemapwidget PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME RepositoryStateMapWidgetTests COMMAND test_repositorystatemapwidget)
+
+# Diff/hunk model: partial staging is only safe if the patches are exact.
+add_executable(test_gitdiffmodel
+    unit/test_gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitdiffmodel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitdiffmodel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitdiffmodel PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitDiffModelTests COMMAND test_gitdiffmodel)
+
 # GitFileSystemModel test executable
 add_executable(test_gitfilesystemmodel
     unit/test_gitfilesystemmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/filetree/gitfilesystemmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -732,6 +939,16 @@ add_executable(test_gitworkbenchdialog
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -755,6 +972,873 @@ target_link_libraries(test_gitworkbenchdialog
 target_compile_definitions(test_gitworkbenchdialog PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GitWorkbenchDialogTests COMMAND test_gitworkbenchdialog)
+
+# Staging canvas: the three-state view and its hunk/line staging.
+add_executable(test_stagingcanvasdialog
+    unit/test_stagingcanvasdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/stagingcanvasdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_stagingcanvasdialog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_stagingcanvasdialog
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_stagingcanvasdialog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME StagingCanvasDialogTests COMMAND test_stagingcanvasdialog)
+
+# Commit graph: topology, WIP node, scope controls and comparison anchors.
+add_executable(test_gitgraphwidget
+    unit/test_gitgraphwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/gitgraphwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitgraphwidget PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_gitgraphwidget
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitgraphwidget PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitGraphWidgetTests COMMAND test_gitgraphwidget)
+
+# Commit graph surface: scope controls, inspector and commit actions.
+add_executable(test_gitlogdialog
+    unit/test_gitlogdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitlogdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/operationpreviewdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/gitgraphwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitlogdialog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_gitlogdialog
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitlogdialog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitLogDialogTests COMMAND test_gitlogdialog)
+
+# Compare Anything: the direction logic is what makes a diff mean something.
+add_executable(test_gitcomparison
+    unit/test_gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitcomparison PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitcomparison
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitcomparison PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitComparisonTests COMMAND test_gitcomparison)
+
+# Compare Anything surface: endpoints, presets, recents and the result view.
+add_executable(test_compareanythingdialog
+    unit/test_compareanythingdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/compareanythingdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_compareanythingdialog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_compareanythingdialog
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_compareanythingdialog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME CompareAnythingDialogTests COMMAND test_compareanythingdialog)
+
+# Branch sync: lanes, strategies and the difference between lease and force.
+add_executable(test_gitsyncmodel
+    unit/test_gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitsyncmodel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitsyncmodel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitsyncmodel PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitSyncModelTests COMMAND test_gitsyncmodel)
+
+# Sync radar surface: lanes, strategy previews and push-mode safety.
+add_executable(test_branchsyncradardialog
+    unit/test_branchsyncradardialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/branchsyncradardialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/operationpreviewdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_branchsyncradardialog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_branchsyncradardialog
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_branchsyncradardialog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME BranchSyncRadarDialogTests COMMAND test_branchsyncradardialog)
+
+# Commit crafting model: buckets, stale assignments and review prompts.
+add_executable(test_commitplan
+    unit/test_commitplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/commitplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+)
+
+target_include_directories(test_commitplan PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_commitplan
+    PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+target_compile_definitions(test_commitplan PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME CommitPlanTests COMMAND test_commitplan)
+
+# Commit crafting workspace: bucket assignment and exact per-bucket commits.
+add_executable(test_commitcraftingdialog
+    unit/test_commitcraftingdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/commitcraftingdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/commitplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_commitcraftingdialog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_commitcraftingdialog
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_commitcraftingdialog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME CommitCraftingDialogTests COMMAND test_commitcraftingdialog)
+
+# File evolution timeline: rename following, filters and paging.
+add_executable(test_gitfiletimeline
+    unit/test_gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitfiletimeline PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitfiletimeline
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitfiletimeline PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitFileTimelineTests COMMAND test_gitfiletimeline)
+
+# Operation preview: consequences worked out without touching the repository.
+add_executable(test_gitoperationpreview
+    unit/test_gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitoperationpreview PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitoperationpreview
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitoperationpreview PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitOperationPreviewTests COMMAND test_gitoperationpreview)
+
+# Integration advisor: intent to command, with the trade-off spelled out.
+add_executable(test_gitintegrationadvice
+    unit/test_gitintegrationadvice.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegrationadvice.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitintegrationadvice PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitintegrationadvice
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitintegrationadvice PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitIntegrationAdviceTests COMMAND test_gitintegrationadvice)
+
+# Undo wizard model: seven goals, four layers, and which one is safe.
+add_executable(test_gitundoplan
+    unit/test_gitundoplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitundoplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitundoplan PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitundoplan
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitundoplan PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitUndoPlanTests COMMAND test_gitundoplan)
+
+# Safe time travel: three intents, and what a detached HEAD really means.
+add_executable(test_gittimetravel
+    unit/test_gittimetravel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gittimetravel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gittimetravel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gittimetravel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gittimetravel PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitTimeTravelTests COMMAND test_gittimetravel)
+
+# Interactive rebase plan: the todo, the messages and what the result becomes.
+add_executable(test_gitrebaseplan
+    unit/test_gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitrebaseplan PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitrebaseplan
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitrebaseplan PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitRebasePlanTests COMMAND test_gitrebaseplan)
+
+# Conflict storyboard model: classification and who the two sides really are.
+add_executable(test_gitconflictmodel
+    unit/test_gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitconflictmodel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitconflictmodel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitconflictmodel PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitConflictModelTests COMMAND test_gitconflictmodel)
+
+# Recovery timeline: grouping reflog noise into events you can act on.
+add_executable(test_gitrecovery
+    unit/test_gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitrecovery PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitrecovery
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitrecovery PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitRecoveryTests COMMAND test_gitrecovery)
+
+# Stash shelf: what a stash holds, and the apply/pop difference.
+add_executable(test_gitstashshelf
+    unit/test_gitstashshelf.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitstashshelf.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitstashshelf PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitstashshelf
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitstashshelf PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitStashShelfTests COMMAND test_gitstashshelf)
+
+# Command mirror: what the UI actually runs, with credentials redacted.
+add_executable(test_gitcommandlog
+    unit/test_gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitstashshelf.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitcommandlog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitcommandlog
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitcommandlog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitCommandLogTests COMMAND test_gitcommandlog)
+
+# Branch hygiene: classification relative to a chosen base, and delete safety.
+add_executable(test_gitbranchhygiene
+    unit/test_gitbranchhygiene.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitbranchhygiene.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitstashshelf.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitbranchhygiene PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitbranchhygiene
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitbranchhygiene PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitBranchHygieneTests COMMAND test_gitbranchhygiene)
+
+# Worktree map: each attached directory with its own branch and its own state.
+add_executable(test_gitworktreemap
+    unit/test_gitworktreemap.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitworktreemap.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitbranchhygiene.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitstashshelf.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitworktreemap PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitworktreemap
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitworktreemap PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitWorktreeMapTests COMMAND test_gitworktreemap)
+
+# Guided bisect: progress parsing, verdicts and the automated run.
+add_executable(test_gitbisect
+    unit/test_gitbisect.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitbisect.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitworktreemap.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitbranchhygiene.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitstashshelf.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitbisect PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitbisect
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitbisect PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitBisectTests COMMAND test_gitbisect)
+
+# Provenance lens: what blame says, and what it does not.
+add_executable(test_gitprovenance
+    unit/test_gitprovenance.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitprovenance.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitbisect.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitworktreemap.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitbranchhygiene.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitstashshelf.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitprovenance PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitprovenance
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitprovenance PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitProvenanceTests COMMAND test_gitprovenance)
+
+# What-if sandbox: graph simulation that never touches the repository.
+add_executable(test_gitsandbox
+    unit/test_gitsandbox.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsandbox.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitprovenance.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitbisect.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitworktreemap.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitbranchhygiene.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitstashshelf.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitsandbox PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitsandbox
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitsandbox PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitSandboxTests COMMAND test_gitsandbox)
 
 # GoToLineDialog test executable
 add_executable(test_gotolinedialog
@@ -1714,9 +2798,10 @@ set(TEST_TARGETS
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap test_dap_integration test_cmakeproject
+    test_runtargetresolver test_filedirtreemodel test_compilerdiagnosticparser
     test_dockerfilesyntaxplugin
     test_pluginbasedsyntaxhighlighter
-    test_gitintegration test_gitfilesystemmodel test_gitworkbenchdialog test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
+    test_gitintegration test_gitrepositorystate test_gitdiffmodel test_stagingcanvasdialog test_gitgraphwidget test_gitlogdialog test_gitcomparison test_compareanythingdialog test_gitsyncmodel test_branchsyncradardialog test_commitplan test_commitcraftingdialog test_gitfiletimeline test_gitoperationpreview test_gitintegrationadvice test_gitundoplan test_gittimetravel test_gitrebaseplan test_gitconflictmodel test_gitrecovery test_gitstashshelf test_gitcommandlog test_gitbranchhygiene test_gitworktreemap test_gitbisect test_gitprovenance test_gitsandbox test_repositorystatemapwidget test_gitfilesystemmodel test_gitworkbenchdialog test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_dockutils
     test_spliteditorcontainer
     test_imageviewer

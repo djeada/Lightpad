@@ -29,6 +29,9 @@ public:
 
   Terminal *currentTerminal();
 
+  QString currentRunTranscript() const;
+  void appendNotice(const QString &text, bool isError = false);
+
   Terminal *terminalAt(int index);
 
   int terminalCount() const;

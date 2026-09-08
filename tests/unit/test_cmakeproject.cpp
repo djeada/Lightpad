@@ -146,14 +146,12 @@ void TestCMakeProject::testTargetForSource() {
   const QList<CMakeTargetInfo> executables =
       project.parseExecutableTargets(root);
 
-  // A source is matched relative to the CMakeLists that declared its target.
   QCOMPARE(
       CMakeProject::targetForSource(executables, root, root + "/src/main.cpp"),
       QString("app"));
   QCOMPARE(CMakeProject::targetForSource(executables, root, root + "/tool.cpp"),
            QString("tool"));
 
-  // A file no executable target lists leaves the choice to the caller.
   QVERIFY(
       CMakeProject::targetForSource(executables, root, root + "/src/unused.cpp")
           .isEmpty());
@@ -170,8 +168,7 @@ void TestCMakeProject::testConfigureCommandRequestsDebugInfo() {
   QCOMPARE(command.first(), QString("cmake"));
   QVERIFY(command.contains("/proj"));
   QVERIFY(command.contains("/proj/build"));
-  // Without an explicit build type single-config generators emit no -g and the
-  // debugger has no line information to stop on.
+
   QVERIFY(command.contains("-DCMAKE_BUILD_TYPE=Debug"));
 }
 

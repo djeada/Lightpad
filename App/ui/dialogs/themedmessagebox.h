@@ -43,8 +43,7 @@ public:
   void setIcon(Icon icon);
   void setText(const QString &text);
   void setInformativeText(const QString &text);
-  // Long, pre-formatted output (compiler/build logs). Rendered in a
-  // monospaced, read-only, scrollable box instead of an ever-growing label.
+
   void setDetailedText(const QString &text);
   void setStandardButtons(int buttons);
   void setDefaultButton(int button);

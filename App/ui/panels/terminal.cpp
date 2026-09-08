@@ -808,18 +808,29 @@ void Terminal::updatePtySize() {
     return;
   }
 
-  QFontMetrics metrics(ui->textEdit->font());
-  int charWidth = qMax(1, metrics.horizontalAdvance(QLatin1Char('M')));
-  int lineHeight = qMax(1, metrics.lineSpacing());
-  const QRect viewport = ui->textEdit->viewport()->rect();
-  const int documentMargin =
-      qMax(0, qRound(ui->textEdit->document()->documentMargin()) * 2);
-  const int availableWidth = qMax(charWidth, viewport.width() - documentMargin -
-                                                 ui->textEdit->cursorWidth());
-  const int availableHeight =
-      qMax(lineHeight, viewport.height() - documentMargin);
-  m_terminalColumns = qMax(20, availableWidth / charWidth);
-  m_terminalRows = qMax(4, availableHeight / lineHeight);
+  const bool laidOut = ui->textEdit->isVisible() &&
+                       ui->textEdit->viewport()->width() > 0 &&
+                       ui->textEdit->viewport()->height() > 0;
+  if (laidOut) {
+    const QFontMetrics metrics(ui->textEdit->font());
+    const int charWidth = qMax(1, metrics.horizontalAdvance(QLatin1Char('M')));
+    const int lineHeight = qMax(1, metrics.lineSpacing());
+    const QRect viewport = ui->textEdit->viewport()->rect();
+    const int documentMargin =
+        qMax(0, qRound(ui->textEdit->document()->documentMargin()) * 2);
+    const int availableWidth =
+        qMax(charWidth,
+             viewport.width() - documentMargin - ui->textEdit->cursorWidth());
+    const int availableHeight =
+        qMax(lineHeight, viewport.height() - documentMargin);
+    m_terminalColumns = qMax(20, availableWidth / charWidth);
+    m_terminalRows = qMax(4, availableHeight / lineHeight);
+  }
+
+  if (m_shellPty->columns() == m_terminalColumns &&
+      m_shellPty->rows() == m_terminalRows) {
+    return;
+  }
   m_shellPty->resize(m_terminalColumns, m_terminalRows);
 #endif
 }
@@ -1218,6 +1229,7 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
   m_runProcess->setProcessEnvironment(processEnv);
 
   clear();
+  m_runTranscript.clear();
   setRunInputIndicatorActive(false);
   appendOutput(QString("$ %1 %2\n").arg(command, args.join(" ")));
   if (!workingDirectory.isEmpty()) {
@@ -1470,9 +1482,27 @@ bool Terminal::looksLikeInputPrompt(const QString &text) {
   return false;
 }
 
+void Terminal::appendNotice(const QString &text, bool isError) {
+  if (text.isEmpty()) {
+    return;
+  }
+  appendOutput(text.endsWith(QLatin1Char('\n')) ? text
+                                                : text + QLatin1Char('\n'),
+               isError);
+}
+
+void Terminal::recordRunOutput(const QString &text) {
+  constexpr int kMaxTranscriptChars = 512 * 1024;
+  if (m_runTranscript.size() >= kMaxTranscriptChars) {
+    return;
+  }
+  m_runTranscript.append(text);
+}
+
 void Terminal::onRunProcessReadyReadStdout() {
   if (m_runProcess) {
     QString output = QString::fromUtf8(m_runProcess->readAllStandardOutput());
+    recordRunOutput(output);
     QString pending = takePendingInput();
 
     if (m_runProcess->state() != QProcess::NotRunning &&
@@ -1490,6 +1520,7 @@ void Terminal::onRunProcessReadyReadStdout() {
 void Terminal::onRunProcessReadyReadStderr() {
   if (m_runProcess) {
     QString output = QString::fromUtf8(m_runProcess->readAllStandardError());
+    recordRunOutput(output);
     QString pending = takePendingInput();
 
     appendOutput(output, true);
@@ -2544,6 +2575,12 @@ void Terminal::mousePressEvent(QMouseEvent *event) {
 void Terminal::resizeEvent(QResizeEvent *event) {
   QWidget::resizeEvent(event);
   updatePtySize();
+}
+
+void Terminal::showEvent(QShowEvent *event) {
+  QWidget::showEvent(event);
+
+  QTimer::singleShot(0, this, [this]() { updatePtySize(); });
 }
 
 QString Terminal::getLinkAtPosition(const QPoint &pos) {

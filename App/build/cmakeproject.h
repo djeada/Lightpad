@@ -47,6 +47,11 @@ public:
                                  const QString &projectRoot,
                                  const QString &sourcePath);
 
+  // True when any target lists sources this parser cannot expand (a CMake
+  // variable or a glob). Ownership answers are only trustworthy as a negative
+  // - "no target claims this file" - when every source list was resolvable.
+  static bool hasUnresolvedSources(const QList<CMakeTargetInfo> &targets);
+
   // Runs `cmake -S <root> -B <binaryDir>` when the binary dir is not yet
   // configured; returns true when no configure step is needed.
   bool configure(const QString &projectRoot, const QString &binaryDir,
@@ -64,6 +69,11 @@ public:
   static QStringList configureCommand(const QString &projectRoot,
                                       const QString &binaryDir);
   static QStringList buildCommand(const QString &binaryDir, int jobs);
+
+  // Builds a single target instead of everything the project declares, so
+  // running one file does not wait on every unrelated test binary.
+  static QStringList buildCommand(const QString &binaryDir, int jobs,
+                                  const QString &targetName);
 };
 
 #endif

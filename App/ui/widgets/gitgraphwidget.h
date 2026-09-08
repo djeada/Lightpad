@@ -2,6 +2,7 @@
 #define GITGRAPHWIDGET_H
 
 #include "../../git/gitintegration.h"
+#include "../../git/gitrepositorystate.h"
 #include "../../settings/theme.h"
 #include <QWidget>
 
@@ -24,19 +25,40 @@ public:
   explicit GitGraphWidget(GitIntegration *git, const Theme &theme,
                           QWidget *parent = nullptr);
 
-  void loadGraph(int maxCount = 200, const QString &branch = QString());
+  static constexpr int WIP_INDEX = -2;
+
+  void loadGraph(int maxCount = 200);
   void setTheme(const Theme &theme);
+
+  void setLogOptions(const GitLogOptions &options);
+  GitLogOptions logOptions() const { return m_logOptions; }
+
+  void setWorkingTreeState(const GitRepositoryState &state);
+  bool hasWorkingTreeNode() const { return m_showWip; }
+
+  void zoomIn();
+  void zoomOut();
+  void resetZoom();
+  int rowHeight() const { return m_rowHeight; }
+
+  QString compareAnchor() const { return m_compareAnchor; }
+  void clearCompareAnchor();
 
   void setFilter(const QString &filter);
   QString filter() const { return m_filter; }
 
   int loadedCommitCount() const { return m_nodes.size(); }
+
+  int matchingCommitCount() const;
   QString selectedHash() const;
 
   void selectCommit(const QString &hash, bool emitSignal = false);
 
 signals:
   void commitSelected(const QString &hash);
+  void workingTreeSelected();
+  void compareRequested(const QString &fromHash, const QString &toHash);
+  void compareAnchorChanged(const QString &hash);
   void commitDoubleClicked(const QString &hash);
   void commitsAppended(int totalLoaded);
   void historyExhausted();
@@ -55,6 +77,11 @@ protected:
 
 private:
   void layoutGraph();
+  void loadAnchorDecorations();
+  void selectRow(int index, bool emitSignal);
+  int totalRows() const;
+  int rowForIndex(int index) const;
+  int contentHeight() const;
   void requestMoreCommits();
   void loadRefDecorations();
   void drawRefBadges(QPainter &painter, const GraphCommitNode &node, int y,
@@ -75,7 +102,10 @@ private:
   QList<GraphCommitNode> m_nodes;
   QMap<QString, int> m_hashToIndex;
   QMap<QString, QList<GitRefDecoration>> m_refs;
-  QString m_branch;
+  GitLogOptions m_logOptions;
+  GitRepositoryState m_workingState;
+  bool m_showWip = false;
+  QString m_compareAnchor;
   bool m_loadingMore = false;
   bool m_historyExhausted = false;
   int m_pageSize = 100;

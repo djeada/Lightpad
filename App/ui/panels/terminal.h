@@ -74,6 +74,10 @@ public:
 
   QStringList availableShellProfiles() const;
 
+  QString runTranscript() const { return m_runTranscript; }
+
+  void appendNotice(const QString &text, bool isError = false);
+
   bool setShellProfileByName(const QString &profileName);
 
   void sendText(const QString &text, bool appendNewline = false);
@@ -113,6 +117,7 @@ signals:
   void shellProfileChanged(const QString &profileName);
 
 private slots:
+  void recordRunOutput(const QString &text);
   void onRunProcessReadyReadStdout();
   void onRunProcessReadyReadStderr();
   void onRunProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
@@ -134,6 +139,7 @@ protected:
   bool eventFilter(QObject *obj, QEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
+  void showEvent(QShowEvent *event) override;
 
 private:
   void setupTerminal();
@@ -264,6 +270,7 @@ private:
 
   QTimer *m_inputIndicatorDebounceTimer;
   QString m_lastRunProcessOutput;
+  QString m_runTranscript;
   static const int kInputIndicatorDebounceMs = 80;
 };
 

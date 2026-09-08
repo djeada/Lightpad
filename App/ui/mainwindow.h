@@ -11,6 +11,7 @@
 #include <QTimer>
 #include <memory>
 
+#include "../run_templates/runtargetresolver.h"
 #include "../settings/textareasettings.h"
 #include "../settings/theme.h"
 
@@ -110,6 +111,17 @@ public:
   void runFileByPath(const QString &filePath);
   void debugFileByPath(const QString &filePath);
 
+  QString runSourceFilePath() const;
+
+  QString pinnedRunFilePath() const { return m_pinnedRunFilePath; }
+  void setPinnedRunFilePath(const QString &filePath);
+  void openRunConfigurationForFile(const QString &filePath);
+  void runTestsForPath(const QString &filePath);
+  void revealPathInFileManager(const QString &path);
+  void openTerminalAtPath(const QString &path);
+
+  RunTarget currentRunTarget();
+
 private slots:
   void on_actionQuit_triggered();
   void on_actionToggle_Full_Screen_triggered();
@@ -169,8 +181,20 @@ private slots:
   void on_actionOpen_To_Side_triggered();
 
   void on_actionGit_Log_triggered();
+  void on_actionGit_Compare_triggered();
   void on_actionGit_File_History_triggered();
+  void on_actionGit_Provenance_triggered();
+
+public:
+  void showGitWorkbench();
+
+  void showCompareAnything(const QString &baseRef = QString(),
+                           const QString &compareRef = QString(),
+                           const QString &filePath = QString());
+
+private slots:
   void on_actionGit_Rebase_triggered();
+  void on_actionGit_Workbench_triggered();
   void on_actionToggle_Heatmap_triggered(bool checked);
   void on_actionToggle_CodeLens_triggered(bool checked);
 
@@ -240,6 +264,7 @@ private:
   class QLabel *m_gitDirtyLabel;
   QMenu *m_testTargetMenu;
   QMenu *m_debugTargetMenu;
+  QMenu *m_runTargetMenu;
   QTimer m_gitStatusBarTimer;
   DebugPanel *debugPanel;
   QDockWidget *debugDock;
@@ -252,6 +277,19 @@ private:
   QLabel *m_testStatusLabel;
   QString m_activeDebugSessionId;
   bool m_debugStartInProgress;
+
+  QString m_pinnedRunFilePath;
+
+  QString m_preferredCMakeTarget;
+
+  QString m_preferredCMakeTargetRoot;
+
+  QString m_lastBuildDirectory;
+
+  bool m_buildInProgress = false;
+
+  QString m_cachedRunTargetKey;
+  RunTarget m_cachedRunTarget;
 
   DiagnosticsManager *m_diagnosticsManager;
   LanguageFeatureManager *m_languageFeatureManager;
@@ -302,7 +340,6 @@ private:
   void openShortcutsDialog();
   TerminalTabWidget *ensureTerminalWidget();
   void showTerminalPanel();
-  void showTerminal();
   void showProblemsPanel();
   void showCommandPalette();
   void showGoToLineDialog();
@@ -390,6 +427,22 @@ private:
   QString selectedTestConfigurationId() const;
   void rebuildDebugTargetMenu();
   void refreshDebugTargetButton();
+  void rebuildRunTargetMenu();
+  void refreshRunTargetButton();
+  void addCMakeTargetActions(QMenu *menu, const QString &filePath);
+  void addRunTemplateActions(QMenu *menu, const QString &filePath);
+
+  RunTarget resolveRunTargetForFile(const QString &filePath);
+  void invalidateRunTargetCache();
+
+  void runPath(const QString &filePath);
+  void executeRunTarget(const RunTarget &target);
+  void runStructuredTestTarget(const RunTarget &target);
+  void setPreferredCMakeTarget(const QString &targetName);
+
+  QString effectivePreferredCMakeTarget() const;
+  QString activeEditorFilePath() const;
+  void announceRunTarget(const RunTarget &target);
   QString selectedDebugConfigurationName() const;
   QString selectedCompoundDebugConfigurationName() const;
   bool prepareDebugConfigurationForStart(const DebugConfiguration &config,
@@ -401,17 +454,19 @@ private:
                              const QString &currentFilePath,
                              QString *errorMessage);
   QString cmakeRootForSource(const QString &filePath) const;
+
   bool buildCMakeExecutableForSource(const QString &filePath,
                                      const QString &configuredProgram,
                                      const QString &configuredBinaryDir,
                                      QString *programPath,
-                                     QString *errorMessage);
+                                     QString *errorMessage,
+                                     QString *chosenTargetName = nullptr);
+
+  int publishBuildDiagnostics(const QString &buildOutput,
+                              const QString &workingDirectory);
   void showBuildFailure(const QString &title, const QString &text,
                         const QString &informativeText, const QString &details);
   void showDebugBuildFailure(const QString &details);
-  bool resolveCMakeRunTarget(const QString &filePath, const QString &languageId,
-                             const QString &assignedTemplateId,
-                             QString *programPath, QString *errorMessage);
   bool runBuildProcessWithProgress(const QString &title,
                                    const QStringList &command,
                                    const QString &workingDirectory,
@@ -419,11 +474,10 @@ private:
   bool startDebugConfigurationByName(const QString &configurationName);
   bool startCompoundDebugConfigurationByName(const QString &compoundName);
   void startDebuggingForCurrentFile();
+  void startDebuggingForFile(const QString &filePath);
   void updateRunAndDebugActionLabels(const QString &fileName);
   void refreshRunAndDebugActionLabels();
-  // Builds whatever `filePath` needs to be debuggable and reports the
-  // executable to launch in `resolvedProgram` (empty for languages that run
-  // from source).
+
   bool prepareDebugTargetForFile(const QString &filePath,
                                  const QString &languageId,
                                  QString *resolvedProgram,

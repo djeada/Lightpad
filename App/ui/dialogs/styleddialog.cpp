@@ -120,6 +120,17 @@ void StyledDialog::applyTheme(const ThemeDefinition &theme) {
     w->setStyleSheet(m_semanticStyles.tabWidget);
 }
 
+void StyledDialog::setKeyboardDefault(QPushButton *button) {
+  for (QPushButton *candidate : findChildren<QPushButton *>()) {
+    candidate->setAutoDefault(false);
+    candidate->setDefault(false);
+  }
+  if (button) {
+    button->setAutoDefault(true);
+    button->setDefault(true);
+  }
+}
+
 void StyledDialog::stylePrimaryButton(QPushButton *btn) {
   if (btn)
     btn->setStyleSheet(m_hasSemanticStyles

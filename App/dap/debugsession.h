@@ -94,8 +94,7 @@ private:
   bool m_launchRequestSent;
   bool m_adapterInitializedReceived;
   bool m_configurationDoneSent;
-  // terminated() must fire exactly once per run: stop() reports it, and so
-  // does the adapter process going away afterwards.
+
   bool m_terminationReported = false;
   QString m_lastError;
 };
@@ -111,8 +110,6 @@ public:
   QString startSession(const DebugConfiguration &config,
                        std::shared_ptr<IDebugAdapter> adapter);
 
-  // `programOverride` is the executable a prior build step produced; it wins
-  // over the guess the quick configuration makes from the file name.
   QString quickStart(const QString &filePath,
                      const QString &languageId = QString(),
                      const QString &programOverride = QString());

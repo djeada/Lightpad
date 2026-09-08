@@ -266,9 +266,7 @@ void DebugSession::onClientTerminated() {
 }
 
 void DebugSession::reportTermination() {
-  // The adapter reports termination through several routes - stop(), the
-  // client's terminated signal and its Terminated state change. The session
-  // ends once, so only the first of them is passed on.
+
   if (m_terminationReported) {
     return;
   }
@@ -412,8 +410,7 @@ QString DebugSessionManager::quickStart(const QString &filePath,
 
 void DebugSessionManager::stopSession(const QString &sessionId,
                                       bool terminate) {
-  // stop() reports termination synchronously, which deregisters the session,
-  // so hold the pointer rather than an iterator into the map being changed.
+
   DebugSession *session = m_sessions.value(sessionId);
   if (!session) {
     return;
@@ -475,17 +472,12 @@ void DebugSessionManager::onSessionTerminated() {
 
   const QString sessionId = senderSession->id();
 
-  // Deregister synchronously and never capture the session pointer in the
-  // queued notification. A session that reports termination twice would
-  // otherwise schedule two deletes of the same object; the second one runs
-  // against freed memory.
   if (m_sessions.value(sessionId) != senderSession) {
     return;
   }
   m_sessions.remove(sessionId);
   senderSession->disconnect(this);
-  // We are inside the session's own signal emission, so it cannot be deleted
-  // outright.
+
   senderSession->deleteLater();
 
   QMetaObject::invokeMethod(

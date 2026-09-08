@@ -33,8 +33,7 @@ struct DapSource {
     src.name = obj["name"].toString();
     src.path = obj["path"].toString();
     src.sourceReference = obj["sourceReference"].toInt();
-    // `name` is optional in the protocol and debugpy omits it, so derive the
-    // display name from the path rather than showing an empty File column.
+
     if (src.name.isEmpty() && !src.path.isEmpty()) {
       src.name = QFileInfo(src.path).fileName();
     }

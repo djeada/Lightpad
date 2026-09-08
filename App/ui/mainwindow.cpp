@@ -2,8 +2,10 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QBoxLayout>
+#include <QClipboard>
 #include <QCompleter>
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -12,6 +14,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QItemSelectionModel>
@@ -24,7 +27,6 @@
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QProcess>
-#include <QProgressDialog>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollBar>
@@ -73,8 +75,10 @@
 #include "../theme/themeengine.h"
 #include "dialogs/cmaketargetpickerdialog.h"
 #include "dialogs/commandpalette.h"
+#include "dialogs/compareanythingdialog.h"
 #include "dialogs/debugconfigurationdialog.h"
 #include "dialogs/filequickopen.h"
+#include "dialogs/filetimelinedialog.h"
 #include "dialogs/formattemplateselector.h"
 #include "dialogs/gitdiffdialog.h"
 #include "dialogs/gitfilehistorydialog.h"
@@ -82,8 +86,13 @@
 #include "dialogs/gitrebasedialog.h"
 #include "dialogs/gitworkbenchdialog.h"
 #include "dialogs/processpickerdialog.h"
+#include "dialogs/provenancelensdialog.h"
+#include "dialogs/rebasetimelinedialog.h"
 
 #include "../build/cmakeproject.h"
+#include "../diagnostics/compilerdiagnosticparser.h"
+#include "../filetree/filedirtreemodel.h"
+#include "../run_templates/runtargetresolver.h"
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
 #include "dialogs/languageserverstatusdialog.h"
@@ -128,6 +137,8 @@
 
 namespace {
 constexpr auto kCompoundDebugTargetPrefix = "compound:";
+
+constexpr auto kBuildDiagnosticsSource = "build";
 constexpr auto kCurrentFileLspErrorNotificationKey = "current-file-lsp-error";
 constexpr auto kSessionTabPathKey = "path";
 constexpr auto kSessionTabCursorKey = "cursorPosition";
@@ -206,23 +217,24 @@ MainWindow::MainWindow(QWidget *parent)
       m_heatmapEnabled(false), m_codeLensEnabled(false),
       m_gitBranchLabel(nullptr), m_gitSyncLabel(nullptr),
       m_gitDirtyLabel(nullptr), m_testTargetMenu(nullptr),
-      m_debugTargetMenu(nullptr), debugPanel(nullptr), debugDock(nullptr),
-      testPanel(nullptr), testDock(nullptr), m_markdownPreviewPanel(nullptr),
-      m_markdownPreviewDock(nullptr), m_latexPreviewPanel(nullptr),
-      m_latexPreviewDock(nullptr), m_testStatusLabel(nullptr),
-      m_debugStartInProgress(false), m_breakpointsSetConnection(),
-      m_breakpointChangedConnection(), m_runInTerminalConnection(),
-      m_sessionTerminatedConnection(), m_sessionErrorConnection(),
-      m_sessionStateConnection(), m_runProcessFinishedConnection(),
-      m_runProcessErrorConnection(), m_formatProcessFinishedConnection(),
-      m_formatProcessErrorConnection(), m_splitEditorContainer(nullptr),
-      m_diagnosticsManager(nullptr), m_languageFeatureManager(nullptr),
-      m_lspCompletionProvider(), m_notificationManager(nullptr),
-      m_lspStatusLabel(nullptr), m_lspStatusLanguageId(""),
-      m_restoringSession(false), m_globalSettingsLoaded(false),
-      m_fileTreeModel(nullptr), m_fileTreeSelectionModel(nullptr),
-      m_treeScrollValue(0), m_treeScrollValueInitialized(false),
-      m_treeScrollSyncing(false), m_treeFilterText(""), m_treeCurrentPath(""),
+      m_debugTargetMenu(nullptr), m_runTargetMenu(nullptr), debugPanel(nullptr),
+      debugDock(nullptr), testPanel(nullptr), testDock(nullptr),
+      m_markdownPreviewPanel(nullptr), m_markdownPreviewDock(nullptr),
+      m_latexPreviewPanel(nullptr), m_latexPreviewDock(nullptr),
+      m_testStatusLabel(nullptr), m_debugStartInProgress(false),
+      m_breakpointsSetConnection(), m_breakpointChangedConnection(),
+      m_runInTerminalConnection(), m_sessionTerminatedConnection(),
+      m_sessionErrorConnection(), m_sessionStateConnection(),
+      m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
+      m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
+      m_splitEditorContainer(nullptr), m_diagnosticsManager(nullptr),
+      m_languageFeatureManager(nullptr), m_lspCompletionProvider(),
+      m_notificationManager(nullptr), m_lspStatusLabel(nullptr),
+      m_lspStatusLanguageId(""), m_restoringSession(false),
+      m_globalSettingsLoaded(false), m_fileTreeModel(nullptr),
+      m_fileTreeSelectionModel(nullptr), m_treeScrollValue(0),
+      m_treeScrollValueInitialized(false), m_treeScrollSyncing(false),
+      m_treeFilterText(""), m_treeCurrentPath(""),
       m_treeSelectionSyncing(false) {
   QApplication::instance()->installEventFilter(this);
   ui->setupUi(this);
@@ -351,6 +363,40 @@ MainWindow::MainWindow(QWidget *parent)
           &TestConfigurationManager::configurationsChanged, this,
           &MainWindow::refreshTestTargetButton);
   refreshTestTargetButton();
+
+  if (ui->actionRun_file_name) {
+
+    ui->actionRun_file_name->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F5));
+    ui->actionRun_file_name->setShortcutContext(Qt::ApplicationShortcut);
+  }
+
+  if (ui->runButton) {
+    m_runTargetMenu = new QMenu(ui->runButton);
+    ui->runButton->setMenu(m_runTargetMenu);
+    ui->runButton->setPopupMode(QToolButton::MenuButtonPopup);
+    ui->runButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    ui->runButton->setMinimumWidth(170);
+    connect(m_runTargetMenu, &QMenu::aboutToShow, this,
+            &MainWindow::rebuildRunTargetMenu);
+
+    m_runTargetMenu->setTitle(tr("Run Target"));
+    if (ui->menuRun) {
+      ui->menuRun->addSeparator();
+      ui->menuRun->addMenu(m_runTargetMenu);
+    }
+  }
+  connect(&RunTemplateManager::instance(), &RunTemplateManager::templatesLoaded,
+          this, [this]() {
+            invalidateRunTargetCache();
+            refreshRunTargetButton();
+          });
+  connect(&RunTemplateManager::instance(),
+          &RunTemplateManager::assignmentChanged, this,
+          [this](const QString &) {
+            invalidateRunTargetCache();
+            refreshRunTargetButton();
+          });
+  refreshRunTargetButton();
 
   m_debugTargetMenu = new QMenu(ui->debugButton);
   ui->debugButton->setMenu(m_debugTargetMenu);
@@ -647,6 +693,16 @@ void MainWindow::loadSettings() {
   SettingsManager &globalSettings = SettingsManager::instance();
   globalSettings.loadSettings();
   m_restoringSession = true;
+
+  m_pinnedRunFilePath =
+      globalSettings.getValue("pinnedRunTarget", QString()).toString();
+  m_preferredCMakeTarget =
+      globalSettings.getValue("preferredCMakeTarget", QString()).toString();
+  m_preferredCMakeTargetRoot =
+      globalSettings.getValue("preferredCMakeTargetRoot", QString()).toString();
+  invalidateRunTargetCache();
+  refreshRunTargetButton();
+
   if (autoSaveManager) {
     autoSaveManager->setEnabled(
         globalSettings.getValue("autoSaveFiles", true).toBool());
@@ -1543,9 +1599,7 @@ QString MainWindow::resolveProjectRootForPath(const QString &path) const {
 
   while (dir.exists()) {
     const QString current = QDir::cleanPath(dir.absolutePath());
-    // The home directory is where stray dot-directories accumulate; adopting
-    // it as a project root spills .lightpad state across every unrelated file
-    // opened from it, so stop the marker search there.
+
     const bool atHome = current == homePath;
 
     QFileInfo gitInfo(dir.filePath(".git"));
@@ -2288,6 +2342,11 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
   targetTabWidget->setFilePath(targetTabIndex, filePath);
 
   const QString normalizedSavePath = QDir::cleanPath(filePath);
+  if (QFileInfo(filePath).fileName().compare(QStringLiteral("CMakeLists.txt"),
+                                             Qt::CaseInsensitive) == 0) {
+
+    invalidateRunTargetCache();
+  }
   m_internalFileWrites.insert(normalizedSavePath);
   QTimer::singleShot(1000, this, [this, normalizedSavePath]() {
     m_internalFileWrites.remove(normalizedSavePath);
@@ -2495,10 +2554,6 @@ bool MainWindow::handleExternalModification(const QString &filePath,
 
   const QString fileName = QFileInfo(normalizedPath).fileName();
 
-  // Nothing is at stake when the buffer has no unsaved edits: the editor holds
-  // a stale copy and the only useful answer is to reload. Asking anyway - with
-  // "Overwrite" among the choices - invites the user to push the stale text
-  // back over whatever just changed on disk.
   if (allowOverwrite && !isOpenFileModified(normalizedPath)) {
     reloadOpenFileFromDisk(normalizedPath);
     statusBar()->showMessage(
@@ -2763,27 +2818,9 @@ void MainWindow::showFindReplace(bool onlyFind) {
 
 void MainWindow::openDialog(Dialog dialog) {
   switch (dialog) {
-  case Dialog::runConfiguration: {
-
-    auto page = currentTabWidget()->getCurrentPage();
-    QString filePath = page ? page->getFilePath() : QString();
-
-    if (filePath.isEmpty()) {
-      ThemedMessageBox::information(
-          this, "Run Configuration",
-          "Please open a file first to configure run settings.");
-      return;
-    }
-
-    ensureProjectRootForPath(filePath);
-
-    if (findChildren<RunTemplateSelector *>().isEmpty()) {
-      auto selector = new RunTemplateSelector(filePath, this);
-      selector->setAttribute(Qt::WA_DeleteOnClose);
-      selector->show();
-    }
+  case Dialog::runConfiguration:
+    openRunConfigurationForFile(runSourceFilePath());
     break;
-  }
 
   case Dialog::formatConfiguration: {
 
@@ -2918,90 +2955,275 @@ void MainWindow::showTerminalPanel() {
   syncViewToggleActionStates();
 }
 
-void MainWindow::showTerminal() {
-  auto page = currentTabWidget()->getCurrentPage();
-  QString filePath = page ? page->getFilePath() : QString();
+QString MainWindow::activeEditorFilePath() const {
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!tabWidget) {
+    return QString();
+  }
+  auto page = tabWidget->getCurrentPage();
+  return page ? page->getFilePath() : QString();
+}
 
+QString MainWindow::runSourceFilePath() const {
+
+  if (!m_pinnedRunFilePath.isEmpty() &&
+      QFileInfo::exists(m_pinnedRunFilePath) &&
+      (m_projectRootPath.isEmpty() ||
+       FileDirTreeModel::isInside(m_projectRootPath, m_pinnedRunFilePath))) {
+    return m_pinnedRunFilePath;
+  }
+  return activeEditorFilePath();
+}
+
+QString MainWindow::effectivePreferredCMakeTarget() const {
+  if (m_preferredCMakeTarget.isEmpty() ||
+      m_preferredCMakeTargetRoot.isEmpty() || m_projectRootPath.isEmpty()) {
+    return m_preferredCMakeTarget;
+  }
+  return QDir::cleanPath(m_preferredCMakeTargetRoot) ==
+                 QDir::cleanPath(m_projectRootPath)
+             ? m_preferredCMakeTarget
+             : QString();
+}
+
+void MainWindow::invalidateRunTargetCache() {
+  m_cachedRunTargetKey.clear();
+  m_cachedRunTarget = RunTarget();
+}
+
+RunTarget MainWindow::resolveRunTargetForFile(const QString &filePath) {
+  const QString key = filePath + QLatin1Char('\n') + m_projectRootPath +
+                      QLatin1Char('\n') + effectivePreferredCMakeTarget();
+  if (!m_cachedRunTargetKey.isEmpty() && m_cachedRunTargetKey == key) {
+    return m_cachedRunTarget;
+  }
+
+  RunTargetContext context;
+  context.filePath = filePath;
+  context.projectRoot = m_projectRootPath;
+  context.preferredCMakeTarget = effectivePreferredCMakeTarget();
+  if (!filePath.isEmpty()) {
+    context.languageId = effectiveLanguageIdForFile(filePath);
+  }
+
+  m_cachedRunTarget = RunTargetResolver::resolve(context);
+  m_cachedRunTargetKey = key;
+  return m_cachedRunTarget;
+}
+
+RunTarget MainWindow::currentRunTarget() {
+  return resolveRunTargetForFile(runSourceFilePath());
+}
+
+void MainWindow::setPinnedRunFilePath(const QString &filePath) {
+  const QString normalized =
+      filePath.isEmpty() ? QString() : QFileInfo(filePath).absoluteFilePath();
+  if (m_pinnedRunFilePath == normalized) {
+    return;
+  }
+  m_pinnedRunFilePath = normalized;
+  invalidateRunTargetCache();
+  SettingsManager::instance().setValue("pinnedRunTarget", m_pinnedRunFilePath);
+  SettingsManager::instance().saveSettings();
+  refreshRunTargetButton();
+}
+
+void MainWindow::setPreferredCMakeTarget(const QString &targetName) {
+  const QString trimmed = targetName.trimmed();
+  if (m_preferredCMakeTarget == trimmed) {
+    return;
+  }
+  m_preferredCMakeTarget = trimmed;
+  m_preferredCMakeTargetRoot =
+      trimmed.isEmpty() ? QString() : m_projectRootPath;
+  invalidateRunTargetCache();
+  SettingsManager::instance().setValue("preferredCMakeTarget",
+                                       m_preferredCMakeTarget);
+  SettingsManager::instance().setValue("preferredCMakeTargetRoot",
+                                       m_preferredCMakeTargetRoot);
+  SettingsManager::instance().saveSettings();
+  refreshRunTargetButton();
+}
+
+void MainWindow::announceRunTarget(const RunTarget &target) {
+  const QString path = target.targetPath();
+  if (path.isEmpty()) {
+    return;
+  }
+  statusBar()->showMessage(tr("Running %1").arg(QDir::toNativeSeparators(path)),
+                           8000);
+}
+
+void MainWindow::runPath(const QString &filePath) {
   if (filePath.isEmpty()) {
     noScriptAssignedWarning();
     return;
   }
 
+  save(filePath);
+
+  invalidateRunTargetCache();
   ensureProjectRootForPath(filePath);
+  executeRunTarget(resolveRunTargetForFile(filePath));
+}
 
-  showTerminalPanel();
-
-  RunTemplateManager &manager = RunTemplateManager::instance();
-  if (manager.getAllTemplates().isEmpty()) {
-    manager.loadTemplates();
+void MainWindow::revealPathInFileManager(const QString &path) {
+  const QFileInfo info(path);
+  if (!info.exists()) {
+    return;
   }
 
-  const QString languageId = effectiveLanguageIdForFile(filePath);
-  QPair<QString, QStringList> command =
-      manager.buildCommand(filePath, languageId);
-  FileTemplateAssignment assignment = manager.getAssignmentForFile(filePath);
+#ifdef Q_OS_WIN
+  QProcess::startDetached(
+      "explorer", QStringList() << "/select," + QDir::toNativeSeparators(
+                                                    info.absoluteFilePath()));
+#elif defined(Q_OS_MAC)
+  QProcess::startDetached("open", QStringList()
+                                      << "-R" << info.absoluteFilePath());
+#else
+  const QString directory =
+      info.isDir() ? info.absoluteFilePath() : info.absolutePath();
+  QDesktopServices::openUrl(QUrl::fromLocalFile(directory));
+#endif
+}
 
-  const QString assignedTemplateId = assignment.templateId.trimmed();
-  const QString runCommandPreview =
-      (command.first + " " + command.second.join(" ")).toLower();
-  const bool isStructuredCppTestRun =
-      (assignedTemplateId == "cpp_cmake_ctest" ||
-       assignedTemplateId == "cpp_make_test" ||
-       runCommandPreview.contains("ctest"));
-  if (isStructuredCppTestRun) {
-    ensureTestPanel();
-    if (testPanel && testDock) {
-      if (!m_projectRootPath.isEmpty()) {
-        testPanel->setWorkspaceFolder(m_projectRootPath);
-      }
+void MainWindow::openTerminalAtPath(const QString &path) {
+  const QFileInfo info(path);
+  if (!info.exists()) {
+    return;
+  }
 
-      QString configId =
-          assignedTemplateId == "cpp_make_test" ? "gtest_make" : "gtest_cmake";
-      bool launched = testPanel->runWithConfigurationId(configId, filePath);
-      if (!launched) {
-        launched = testPanel->runWithConfigurationId("gtest_cmake", filePath);
-      }
-      if (!launched) {
-        testPanel->runCurrentFile(filePath);
-      }
+  const QString directory =
+      info.isDir() ? info.absoluteFilePath() : info.absolutePath();
 
-      testDock->show();
-      testDock->raise();
-      syncViewToggleActionStates();
+  showTerminalPanel();
+  if (terminalWidget) {
+    terminalWidget->addNewTerminal(directory);
+    terminalWidget->setWorkingDirectory(directory);
+  }
+}
+
+void MainWindow::runTestsForPath(const QString &filePath) {
+  if (filePath.isEmpty()) {
+    return;
+  }
+  ensureProjectRootForPath(filePath);
+  ensureTestPanel();
+  if (!testPanel || !testDock) {
+    return;
+  }
+  if (!m_projectRootPath.isEmpty()) {
+    testPanel->setWorkspaceFolder(m_projectRootPath);
+  }
+  testPanel->runTestsForPath(filePath);
+  testDock->show();
+  testDock->raise();
+  syncViewToggleActionStates();
+}
+
+void MainWindow::runStructuredTestTarget(const RunTarget &target) {
+  ensureTestPanel();
+  if (!testPanel || !testDock) {
+    return;
+  }
+
+  if (!m_projectRootPath.isEmpty()) {
+    testPanel->setWorkspaceFolder(m_projectRootPath);
+  }
+
+  const QString configId = target.templateId == QLatin1String("cpp_make_test")
+                               ? QStringLiteral("gtest_make")
+                               : QStringLiteral("gtest_cmake");
+  bool launched = testPanel->runWithConfigurationId(configId, target.filePath);
+  if (!launched) {
+    launched = testPanel->runWithConfigurationId(QStringLiteral("gtest_cmake"),
+                                                 target.filePath);
+  }
+  if (!launched) {
+    testPanel->runCurrentFile(target.filePath);
+  }
+
+  testDock->show();
+  testDock->raise();
+  syncViewToggleActionStates();
+}
+
+void MainWindow::executeRunTarget(const RunTarget &target) {
+  if (!target.isValid()) {
+
+    ThemedMessageBox msg(this);
+    msg.setIcon(ThemedMessageBox::Warning);
+    msg.setWindowTitle(tr("Run"));
+    msg.setText(tr("Nothing to run."));
+    msg.setInformativeText(target.unavailableReason.isEmpty()
+                               ? tr("Open and save a file to run it.")
+                               : target.unavailableReason);
+
+    const bool canConfigure = !target.filePath.isEmpty();
+    if (canConfigure) {
+      msg.setStandardButtons(ThemedMessageBox::Ok | ThemedMessageBox::Cancel);
+      msg.setButtonText(ThemedMessageBox::Ok, tr("Choose How to Run…"));
+      msg.setButtonText(ThemedMessageBox::Cancel, tr("Close"));
+      msg.setDefaultButton(ThemedMessageBox::Ok);
+    }
+
+    const int answer = msg.exec();
+    if (canConfigure && answer == ThemedMessageBox::Ok) {
+      openRunConfigurationForFile(target.filePath);
+    }
+    return;
+  }
+
+  if (target.kind == RunTarget::Kind::CTest) {
+    runStructuredTestTarget(target);
+    return;
+  }
+
+  RunTarget resolved = target;
+
+  if (resolved.requiresBuild) {
+    QString programPath;
+    QString chosenTarget;
+    QString buildError;
+    if (!buildCMakeExecutableForSource(resolved.filePath, resolved.program,
+                                       resolved.cmakeBinaryDir, &programPath,
+                                       &buildError, &chosenTarget)) {
+      showBuildFailure(
+          tr("Build Failed"),
+          tr("Unable to build a runnable target for this file."),
+          tr("The build has to succeed before the program can run."),
+          buildError);
       return;
+    }
+    if (!programPath.isEmpty()) {
+      resolved.program = programPath;
+      resolved.arguments.clear();
+
+      resolved.workingDirectory = QFileInfo(programPath).absolutePath();
+      if (!chosenTarget.isEmpty()) {
+        resolved.cmakeTargetName = chosenTarget;
+      }
     }
   }
 
-  QString cmakeProgram;
-  QString cmakeError;
-  if (!resolveCMakeRunTarget(filePath, languageId, assignedTemplateId,
-                             &cmakeProgram, &cmakeError)) {
-    showBuildFailure(tr("Build Failed"),
-                     tr("Unable to build a runnable target for this file."),
-                     tr("The build has to succeed before the program can run."),
-                     cmakeError);
+  if (resolved.program.isEmpty()) {
+    showTerminalPanel();
+    terminalWidget->runFile(resolved.filePath, resolved.languageId);
+    announceRunTarget(resolved);
     return;
   }
 
   showTerminalPanel();
+  announceRunTarget(resolved);
 
-  if (!cmakeProgram.isEmpty()) {
-    command = qMakePair(cmakeProgram, QStringList());
-  }
+  const QString filePath = resolved.filePath;
+  const QPair<QString, QStringList> command =
+      qMakePair(resolved.program, resolved.arguments);
+  const QString workingDirectory = resolved.workingDirectory;
+  const QMap<QString, QString> customEnv = resolved.environment;
 
-  if (command.first.isEmpty()) {
-    terminalWidget->runFile(filePath, languageId);
-    return;
-  }
-
-  QString workingDirectory = manager.getWorkingDirectory(filePath, languageId);
-  if (!cmakeProgram.isEmpty()) {
-    // Run beside the binary so relative paths resolve the way they do when
-    // the program is launched from its build directory.
-    workingDirectory = QFileInfo(cmakeProgram).absolutePath();
-  }
-  QMap<QString, QString> customEnv =
-      manager.getEnvironment(filePath, languageId);
+  const FileTemplateAssignment assignment =
+      RunTemplateManager::instance().getAssignmentForFile(filePath);
 
   const QString ext = QFileInfo(filePath).suffix().toLower();
   if (ext == "py" || ext == "pyw" || ext == "pyi") {
@@ -3106,8 +3328,17 @@ void MainWindow::showTerminal() {
 
   m_runProcessFinishedConnection = connect(
       terminalWidget, &TerminalTabWidget::processFinished, this,
-      [executionState, postRunCommand, runCurrentStage,
-       finalizeExecution](int exitCode) {
+      [this, executionState, postRunCommand, runCurrentStage, finalizeExecution,
+       workingDirectory](int exitCode) {
+        if (executionState->stage != RunExecutionState::Stage::PostRun) {
+          if (exitCode != 0) {
+            publishBuildDiagnostics(terminalWidget->currentRunTranscript(),
+                                    workingDirectory);
+          } else if (m_diagnosticsManager) {
+            m_diagnosticsManager->clearAllForSource(kBuildDiagnosticsSource);
+          }
+        }
+
         if (executionState->stage == RunExecutionState::Stage::PreRun) {
           if (exitCode != 0) {
             (*finalizeExecution)();
@@ -3455,17 +3686,20 @@ void MainWindow::ensureSourceControlPanel() {
             updateGitIntegrationForPath(path);
           });
 
-  connect(sourceControlPanel, &SourceControlPanel::compareBranchesRequested,
-          this, [this](const QString &branch1, const QString &branch2) {
-            if (!m_gitIntegration)
-              return;
-            QString targetId = QString("%1...%2").arg(branch1).arg(branch2);
-            GitDiffDialog diffDialog(m_gitIntegration, targetId,
-                                     GitDiffDialog::DiffTarget::Commit, false,
-                                     settings.theme, this);
-            diffDialog.setWindowTitle(
-                tr("Compare: %1 ↔ %2").arg(branch1).arg(branch2));
-            diffDialog.exec();
+  connect(
+      sourceControlPanel, &SourceControlPanel::openWorktreeRequested, this,
+      [this](const QString &path) {
+        if (!QProcess::startDetached(QCoreApplication::applicationFilePath(),
+                                     {path})) {
+          ThemedMessageBox::warning(
+              this, tr("Could not open the worktree"),
+              tr("Lightpad could not start a second window for %1.").arg(path));
+        }
+      });
+  connect(sourceControlPanel, &SourceControlPanel::compareRequested, this,
+          [this](const QString &baseRef, const QString &compareRef,
+                 const QString &filePath) {
+            showCompareAnything(baseRef, compareRef, filePath);
           });
 
   sourceControlDock = new QDockWidget(tr("Source Control"), this);
@@ -3575,9 +3809,6 @@ void MainWindow::ensureDebugPanel() {
   trackDockLayoutChanges(debugDock);
   debugDock->hide();
 
-  // The transport actions live on the panel, which starts hidden - a hidden
-  // widget's shortcuts never fire, so F5/F10/F11 would do nothing until the
-  // dock was opened. Register them on the window instead.
   for (QAction *action : debugPanel->transportActions()) {
     action->setShortcutContext(Qt::ApplicationShortcut);
     addAction(action);
@@ -5102,17 +5333,98 @@ bool MainWindow::isAutoSaveEnabled() const {
   return SettingsManager::instance().getValue("autoSaveFiles", true).toBool();
 }
 
-void MainWindow::runCurrentScript() {
-  on_actionSave_triggered();
-  auto textArea = getCurrentTextArea();
+void MainWindow::runCurrentScript() { runPath(runSourceFilePath()); }
 
-  if (textArea && !textArea->changesUnsaved())
-    showTerminal();
+int MainWindow::publishBuildDiagnostics(const QString &buildOutput,
+                                        const QString &workingDirectory) {
+  if (!m_diagnosticsManager) {
+    return 0;
+  }
+
+  const QMap<QString, QList<LspDiagnostic>> byFile =
+      CompilerDiagnosticParser::parseByFile(buildOutput, workingDirectory);
+
+  m_diagnosticsManager->clearAllForSource(kBuildDiagnosticsSource);
+  if (byFile.isEmpty()) {
+    return 0;
+  }
+
+  int published = 0;
+  QString firstErrorFile;
+  int firstErrorLine = 0;
+  int firstErrorColumn = 0;
+
+  for (auto it = byFile.constBegin(); it != byFile.constEnd(); ++it) {
+    m_diagnosticsManager->upsertDiagnostics(
+        DiagnosticUtils::filePathToUri(it.key()), it.value(),
+        kBuildDiagnosticsSource);
+    published += it.value().size();
+
+    if (firstErrorFile.isEmpty()) {
+      for (const LspDiagnostic &diagnostic : it.value()) {
+        if (diagnostic.severity == LspDiagnosticSeverity::Error) {
+          firstErrorFile = it.key();
+          firstErrorLine = diagnostic.range.start.line;
+          firstErrorColumn = diagnostic.range.start.character;
+          break;
+        }
+      }
+    }
+  }
+
+  showProblemsPanel();
+  if (m_problemsDock) {
+    m_problemsDock->show();
+    m_problemsDock->raise();
+  }
+  syncViewToggleActionStates();
+
+  if (!firstErrorFile.isEmpty()) {
+    openFileAndAddToNewTab(firstErrorFile);
+    if (TextArea *textArea = getCurrentTextArea()) {
+      QTextCursor cursor = textArea->textCursor();
+      cursor.movePosition(QTextCursor::Start);
+      cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
+                          firstErrorLine);
+      cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
+                          firstErrorColumn);
+      textArea->setTextCursor(cursor);
+      textArea->centerCursor();
+      textArea->setFocus();
+    }
+  }
+
+  return published;
 }
 
 void MainWindow::showBuildFailure(const QString &title, const QString &text,
                                   const QString &informativeText,
                                   const QString &details) {
+
+  const int published = publishBuildDiagnostics(details, m_lastBuildDirectory);
+  if (published > 0) {
+    const int errors =
+        m_diagnosticsManager ? m_diagnosticsManager->errorCount() : published;
+
+    const int count = errors > 0 ? errors : published;
+    const QString noun = errors > 0
+                             ? (count == 1 ? tr("error") : tr("errors"))
+                             : (count == 1 ? tr("message") : tr("messages"));
+    const QString summary =
+        tr("%1 %2 - see the Problems panel").arg(count).arg(noun);
+
+    if (terminalWidget) {
+      terminalWidget->appendNotice(
+          QStringLiteral("\n%1").arg(tr("%1 - %2").arg(title, summary)), true);
+    }
+    if (m_notificationManager) {
+      m_notificationManager->showWarning(title, summary);
+    }
+    statusBar()->showMessage(QStringLiteral("%1: %2").arg(title, summary),
+                             10000);
+    return;
+  }
+
   ThemedMessageBox msg(this);
   msg.setIcon(ThemedMessageBox::Warning);
   msg.setWindowTitle(title);
@@ -5127,45 +5439,6 @@ void MainWindow::showDebugBuildFailure(const QString &details) {
       tr("Debug Build Failed"),
       tr("Unable to prepare a debuggable target for this file."),
       tr("The build has to succeed before the debugger can launch."), details);
-}
-
-// Run, like Debug, cannot treat a file inside a CMake project as a standalone
-// translation unit: it needs the project's include paths, generated sources
-// and link libraries. Build the owning executable target and report it in
-// `programPath`, which stays empty when this file is not such a case.
-bool MainWindow::resolveCMakeRunTarget(const QString &filePath,
-                                       const QString &languageId,
-                                       const QString &assignedTemplateId,
-                                       QString *programPath,
-                                       QString *errorMessage) {
-  if (programPath) {
-    programPath->clear();
-  }
-
-  // Only the built-in single-file and build-only templates are overridden; a
-  // template the user picked deliberately is left alone.
-  static const QSet<QString> overridableTemplates = {
-      QString(), "cpp_gcc", "cpp_clang",  "cpp_debug",
-      "c_gcc",   "c_clang", "cmake_build"};
-  if (!overridableTemplates.contains(assignedTemplateId)) {
-    return true;
-  }
-
-  const QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
-  const bool cppLike =
-      canonicalLanguageId == "cpp" || canonicalLanguageId == "c";
-  const bool isCMakeLists =
-      QFileInfo(filePath).fileName().compare(QStringLiteral("CMakeLists.txt"),
-                                             Qt::CaseInsensitive) == 0;
-  if (!cppLike && !isCMakeLists) {
-    return true;
-  }
-  if (cmakeRootForSource(filePath).isEmpty()) {
-    return true;
-  }
-
-  return buildCMakeExecutableForSource(filePath, QString(), QString(),
-                                       programPath, errorMessage);
 }
 
 bool MainWindow::prepareDebugTargetForFile(const QString &filePath,
@@ -5189,9 +5462,6 @@ bool MainWindow::prepareDebugTargetForFile(const QString &filePath,
     return false;
   }
 
-  // A file that belongs to a CMake project cannot be compiled on its own: it
-  // needs the project's include paths, generated sources and link libraries.
-  // Build the owning executable target instead.
   if (!cmakeRootForSource(filePath).isEmpty()) {
     QString programPath;
     if (!buildCMakeExecutableForSource(filePath, QString(), QString(),
@@ -5293,6 +5563,10 @@ bool MainWindow::compileSourceForDebug(const QString &filePath,
 }
 
 void MainWindow::startDebuggingForCurrentFile() {
+  startDebuggingForFile(runSourceFilePath());
+}
+
+void MainWindow::startDebuggingForFile(const QString &filePath) {
   if (m_debugStartInProgress) {
     return;
   }
@@ -5312,19 +5586,12 @@ void MainWindow::startDebuggingForCurrentFile() {
     }
   }
 
-  on_actionSave_triggered();
-  LightpadTabWidget *tabWidget = currentTabWidget();
-  if (!tabWidget) {
-    return;
-  }
-  auto page = tabWidget->getCurrentPage();
-  QString filePath = page ? page->getFilePath() : QString();
-
   if (filePath.isEmpty()) {
     noScriptAssignedWarning();
     return;
   }
 
+  save(filePath);
   ensureProjectRootForPath(filePath);
 
   m_debugStartInProgress = true;
@@ -5400,7 +5667,8 @@ void MainWindow::runFileByPath(const QString &filePath) {
   }
 
   openFileAndAddToNewTab(filePath);
-  runCurrentScript();
+
+  runPath(filePath);
 }
 
 void MainWindow::debugFileByPath(const QString &filePath) {
@@ -5409,7 +5677,7 @@ void MainWindow::debugFileByPath(const QString &filePath) {
   }
 
   openFileAndAddToNewTab(filePath);
-  startDebuggingForCurrentFile();
+  startDebuggingForFile(filePath);
 }
 
 void MainWindow::attachDebugSession(const QString &sessionId) {
@@ -5891,15 +6159,15 @@ void MainWindow::refreshRunAndDebugActionLabels() {
 }
 
 void MainWindow::updateRunAndDebugActionLabels(const QString &fileName) {
+  refreshRunTargetButton();
+  refreshDebugTargetButton();
   const QString label = fileName.trimmed();
   if (ui->actionRun_file_name) {
     ui->actionRun_file_name->setText(label.isEmpty() ? tr("Run Current File")
                                                      : tr("Run %1").arg(label));
   }
   if (ui->actionDebug_file_name) {
-    // The F5 shortcut is owned by the debug panel's start/continue action, so
-    // advertise it here through the menu's shortcut column rather than binding
-    // a second, conflicting sequence.
+
     const QString debugLabel =
         label.isEmpty() ? tr("Debug Current File") : tr("Debug %1").arg(label);
     ui->actionDebug_file_name->setText(debugLabel + QLatin1String("\tF5"));
@@ -6286,24 +6554,308 @@ QString MainWindow::selectedCompoundDebugConfigurationName() const {
   return {};
 }
 
+namespace {
+QString elideMiddle(const QString &text, int maxLength) {
+  if (text.length() <= maxLength || maxLength < 8) {
+    return text;
+  }
+  const int head = maxLength / 2 - 1;
+  const int tail = maxLength - head - 1;
+  return text.left(head) + QChar(0x2026) + text.right(tail);
+}
+} // namespace
+
+void MainWindow::refreshRunTargetButton() {
+  if (!ui->runButton) {
+    return;
+  }
+
+  const QString sourcePath = runSourceFilePath();
+  const RunTarget target = resolveRunTargetForFile(sourcePath);
+  const bool pinned = !m_pinnedRunFilePath.isEmpty();
+
+  QString label;
+  if (!target.isValid()) {
+    label = tr("Run");
+  } else if (target.needsTargetChoice) {
+    label = tr("Run: choose target…");
+  } else {
+    label = tr("Run: %1").arg(elideMiddle(target.displayName(), 28));
+  }
+  if (pinned) {
+
+    label = tr("%1 (pinned)").arg(label);
+  }
+  ui->runButton->setText(label);
+
+  QStringList lines;
+  auto addField = [&lines](const QString &caption, const QString &value) {
+    lines << QStringLiteral("<b>%1</b> %2")
+                 .arg(caption.toHtmlEscaped(), value.toHtmlEscaped());
+  };
+
+  if (!target.isValid()) {
+    lines
+        << QStringLiteral("<b>%1</b>").arg(tr("Nothing to run").toHtmlEscaped())
+        << target.unavailableReason.toHtmlEscaped();
+  } else {
+    addField(tr("Runs:"), QDir::toNativeSeparators(target.targetPath()));
+    const QString commandLine = target.commandLine();
+    if (!commandLine.isEmpty() && commandLine != target.targetPath()) {
+      addField(tr("Command:"), commandLine);
+    }
+    if (!target.workingDirectory.isEmpty()) {
+      addField(tr("Directory:"),
+               QDir::toNativeSeparators(target.workingDirectory));
+    }
+    const QString rationale = target.rationale();
+    if (!rationale.isEmpty()) {
+      lines << rationale.toHtmlEscaped();
+    }
+    if (pinned) {
+      lines << tr("Pinned, so switching tabs will not change this.")
+                   .toHtmlEscaped();
+    }
+  }
+
+  const QString tooltip =
+      QStringLiteral("<div style='white-space:pre-wrap;'>") +
+      lines.join(QStringLiteral("<br>")) + QStringLiteral("</div>");
+  ui->runButton->setToolTip(tooltip);
+  ui->runButton->setStatusTip(
+      target.isValid()
+          ? tr("Run %1").arg(QDir::toNativeSeparators(target.targetPath()))
+          : target.unavailableReason);
+  ui->runButton->setAccessibleName(label);
+
+  if (ui->actionRun_file_name) {
+    ui->actionRun_file_name->setToolTip(tooltip);
+  }
+}
+
+void MainWindow::rebuildRunTargetMenu() {
+  if (!m_runTargetMenu) {
+    return;
+  }
+
+  m_runTargetMenu->clear();
+
+  const QString activePath = activeEditorFilePath();
+  const QString sourcePath = runSourceFilePath();
+  const RunTarget target = resolveRunTargetForFile(sourcePath);
+
+  QAction *summary = m_runTargetMenu->addAction(
+      target.isValid()
+          ? tr("Runs: %1").arg(QDir::toNativeSeparators(target.targetPath()))
+          : tr("Nothing to run"));
+  summary->setEnabled(false);
+
+  if (target.isValid()) {
+    const QString commandLine = target.commandLine();
+    if (!commandLine.isEmpty()) {
+      QAction *copyAction = m_runTargetMenu->addAction(tr("Copy Run Command"));
+      connect(copyAction, &QAction::triggered, this, [commandLine]() {
+        QGuiApplication::clipboard()->setText(commandLine);
+      });
+    }
+
+    m_runTargetMenu->addSeparator();
+    QAction *runNow =
+        m_runTargetMenu->addAction(tr("Run %1").arg(target.displayName()));
+    connect(runNow, &QAction::triggered, this,
+            [this, sourcePath]() { runPath(sourcePath); });
+    QAction *debugNow =
+        m_runTargetMenu->addAction(tr("Debug %1").arg(target.displayName()));
+    connect(debugNow, &QAction::triggered, this,
+            [this, sourcePath]() { startDebuggingForFile(sourcePath); });
+  }
+
+  m_runTargetMenu->addSeparator();
+
+  QAction *followAction =
+      m_runTargetMenu->addAction(tr("Follow Active Editor"));
+  followAction->setCheckable(true);
+  followAction->setChecked(m_pinnedRunFilePath.isEmpty());
+  connect(followAction, &QAction::triggered, this,
+          [this]() { setPinnedRunFilePath(QString()); });
+
+  if (!activePath.isEmpty()) {
+    QAction *pinAction = m_runTargetMenu->addAction(
+        tr("Always Run %1").arg(QFileInfo(activePath).fileName()));
+    pinAction->setCheckable(true);
+    pinAction->setChecked(!m_pinnedRunFilePath.isEmpty() &&
+                          QFileInfo(m_pinnedRunFilePath) ==
+                              QFileInfo(activePath));
+    connect(pinAction, &QAction::triggered, this,
+            [this, activePath](bool checked) {
+              setPinnedRunFilePath(checked ? activePath : QString());
+            });
+  }
+
+  if (!m_pinnedRunFilePath.isEmpty() &&
+      (activePath.isEmpty() ||
+       QFileInfo(m_pinnedRunFilePath) != QFileInfo(activePath))) {
+    QAction *pinnedAction = m_runTargetMenu->addAction(
+        tr("Pinned: %1").arg(QFileInfo(m_pinnedRunFilePath).fileName()));
+    pinnedAction->setCheckable(true);
+    pinnedAction->setChecked(true);
+    connect(pinnedAction, &QAction::triggered, this,
+            [this]() { setPinnedRunFilePath(QString()); });
+  }
+
+  addCMakeTargetActions(m_runTargetMenu, sourcePath);
+  addRunTemplateActions(m_runTargetMenu, sourcePath);
+
+  m_runTargetMenu->addSeparator();
+  QAction *configureAction = m_runTargetMenu->addAction(
+      sourcePath.isEmpty()
+          ? tr("Run Configuration…")
+          : tr("Configure How %1 Runs…").arg(QFileInfo(sourcePath).fileName()));
+  connect(configureAction, &QAction::triggered, this,
+          [this, sourcePath]() { openRunConfigurationForFile(sourcePath); });
+}
+
+void MainWindow::addCMakeTargetActions(QMenu *menu, const QString &filePath) {
+  if (!menu || filePath.isEmpty()) {
+    return;
+  }
+
+  const QString cmakeRoot =
+      RunTargetResolver::cmakeRootFor(filePath, m_projectRootPath);
+  if (cmakeRoot.isEmpty()) {
+    return;
+  }
+
+  CMakeProject project;
+  const QList<CMakeTargetInfo> executables =
+      project.parseExecutableTargets(cmakeRoot);
+  if (executables.size() < 2) {
+    return;
+  }
+
+  QMenu *targetMenu = menu->addMenu(tr("CMake Target"));
+  QAction *autoAction = targetMenu->addAction(tr("Automatic (target owning "
+                                                 "the file)"));
+  autoAction->setCheckable(true);
+  autoAction->setChecked(effectivePreferredCMakeTarget().isEmpty());
+  connect(autoAction, &QAction::triggered, this,
+          [this]() { setPreferredCMakeTarget(QString()); });
+
+  targetMenu->addSeparator();
+  for (const CMakeTargetInfo &executable : executables) {
+    QAction *action = targetMenu->addAction(executable.name);
+    action->setCheckable(true);
+    action->setChecked(executable.name == effectivePreferredCMakeTarget());
+    connect(
+        action, &QAction::triggered, this,
+        [this, name = executable.name]() { setPreferredCMakeTarget(name); });
+  }
+}
+
+void MainWindow::addRunTemplateActions(QMenu *menu, const QString &filePath) {
+  if (!menu || filePath.isEmpty()) {
+    return;
+  }
+
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  if (manager.getAllTemplates().isEmpty()) {
+    manager.loadTemplates();
+  }
+
+  QList<RunTemplate> candidates = manager.getTemplatesForFilePath(filePath);
+  const QString languageId = effectiveLanguageIdForFile(filePath);
+  for (const RunTemplate &languageTemplate :
+       manager.getTemplatesForLanguageId(languageId)) {
+    bool alreadyListed = false;
+    for (const RunTemplate &candidate : candidates) {
+      if (candidate.id == languageTemplate.id) {
+        alreadyListed = true;
+        break;
+      }
+    }
+    if (!alreadyListed) {
+      candidates.append(languageTemplate);
+    }
+  }
+
+  if (candidates.isEmpty()) {
+    return;
+  }
+
+  const QString activeId =
+      manager.effectiveTemplateIdForFile(filePath, languageId);
+  QMenu *templateMenu = menu->addMenu(tr("Run Template"));
+  for (const RunTemplate &candidate : candidates) {
+    QAction *action = templateMenu->addAction(candidate.name);
+    action->setCheckable(true);
+    action->setChecked(candidate.id == activeId);
+    action->setToolTip(candidate.description);
+    connect(action, &QAction::triggered, this,
+            [this, filePath, id = candidate.id]() {
+              RunTemplateManager &templates = RunTemplateManager::instance();
+              FileTemplateAssignment assignment =
+                  templates.getAssignmentForFile(filePath);
+              assignment.filePath = filePath;
+              assignment.templateId = id;
+              templates.assignTemplateToFile(filePath, assignment);
+              refreshRunTargetButton();
+            });
+  }
+}
+
+void MainWindow::openRunConfigurationForFile(const QString &filePath) {
+  if (filePath.isEmpty()) {
+    ThemedMessageBox::information(
+        this, tr("Run Configuration"),
+        tr("Please open a file first to configure run settings."));
+    return;
+  }
+
+  ensureProjectRootForPath(filePath);
+
+  if (findChildren<RunTemplateSelector *>().isEmpty()) {
+    auto selector = new RunTemplateSelector(filePath, this);
+    selector->setAttribute(Qt::WA_DeleteOnClose);
+    connect(selector, &QObject::destroyed, this,
+            [this]() { refreshRunTargetButton(); });
+    selector->show();
+  }
+}
+
 void MainWindow::refreshDebugTargetButton() {
   const QString selectedCompoundName = selectedCompoundDebugConfigurationName();
   const QString selectedName = selectedDebugConfigurationName();
-  const QString buttonText = !selectedCompoundName.isEmpty()
-                                 ? tr("Compound: %1").arg(selectedCompoundName)
-                             : selectedName.isEmpty() ? tr("Quick Debug")
-                                                      : selectedName;
-  const QString tooltip =
-      !selectedCompoundName.isEmpty()
-          ? tr("Start compound debug configuration: %1")
-                .arg(selectedCompoundName)
-      : selectedName.isEmpty()
-          ? tr("Debug current file")
-          : tr("Start debug configuration: %1").arg(selectedName);
+
+  const QString quickSource = runSourceFilePath();
+  const RunTarget quickTarget = resolveRunTargetForFile(quickSource);
+  const QString quickName = quickTarget.isValid()
+                                ? quickTarget.displayName()
+                                : QFileInfo(quickSource).fileName();
+
+  QString buttonText;
+  QString tooltip;
+  if (!selectedCompoundName.isEmpty()) {
+    buttonText = tr("Compound: %1").arg(selectedCompoundName);
+    tooltip =
+        tr("Start compound debug configuration: %1").arg(selectedCompoundName);
+  } else if (!selectedName.isEmpty()) {
+    buttonText = selectedName;
+    tooltip = tr("Start debug configuration: %1").arg(selectedName);
+  } else if (!quickName.isEmpty()) {
+    buttonText = tr("Debug: %1").arg(elideMiddle(quickName, 26));
+    tooltip = tr("Debug %1")
+                  .arg(QDir::toNativeSeparators(quickTarget.isValid()
+                                                    ? quickTarget.targetPath()
+                                                    : quickSource));
+  } else {
+    buttonText = tr("Debug");
+    tooltip = tr("Open a file to debug it.");
+  }
 
   ui->debugButton->setText(buttonText);
   ui->debugButton->setToolTip(tooltip);
   ui->debugButton->setStatusTip(tooltip);
+  ui->debugButton->setAccessibleName(buttonText);
 
   if (!selectedCompoundName.isEmpty()) {
     SettingsManager::instance().setValue(
@@ -6328,8 +6880,11 @@ void MainWindow::rebuildDebugTargetMenu() {
 
   const QString selectedCompoundName = selectedCompoundDebugConfigurationName();
   const QString selectedName = selectedDebugConfigurationName();
-  QAction *quickDebugAction =
-      m_debugTargetMenu->addAction(tr("Quick Debug Current File"));
+  const QString quickSource = runSourceFilePath();
+  QAction *quickDebugAction = m_debugTargetMenu->addAction(
+      quickSource.isEmpty()
+          ? tr("Quick Debug Current File")
+          : tr("Quick Debug %1").arg(QFileInfo(quickSource).fileName()));
   quickDebugAction->setCheckable(true);
   quickDebugAction->setChecked(selectedName.isEmpty() &&
                                selectedCompoundName.isEmpty());
@@ -6409,92 +6964,110 @@ bool MainWindow::runBuildProcessWithProgress(const QString &title,
   if (output) {
     output->clear();
   }
-
-  QProgressDialog progress(title, tr("Cancel"), 0, 0, this);
-  progress.setWindowModality(Qt::WindowModal);
-  progress.setMinimumDuration(400);
-  progress.setAutoClose(false);
-  progress.setMinimumWidth(420);
-
-  QProcess process;
-  process.setWorkingDirectory(workingDirectory);
-  process.start(command.first(), command.mid(1));
-
-  if (!process.waitForStarted(10000)) {
+  if (command.isEmpty()) {
     if (errorMessage) {
-      *errorMessage =
-          tr("Failed to start '%1': %2")
-              .arg(command.join(QLatin1Char(' ')), process.errorString());
+      *errorMessage = tr("No build command to run.");
     }
     return false;
   }
 
-  QByteArray accumulated;
+  if (m_buildInProgress) {
+    if (errorMessage) {
+      *errorMessage = tr("A build is already running.");
+    }
+    return false;
+  }
+
+  m_lastBuildDirectory = workingDirectory;
+
+  TerminalTabWidget *terminal = ensureTerminalWidget();
+  if (!terminal) {
+    if (errorMessage) {
+      *errorMessage = tr("The terminal panel is unavailable.");
+    }
+    return false;
+  }
+
+  showTerminalPanel();
+  statusBar()->showMessage(title);
+
+  if (m_runProcessFinishedConnection) {
+    disconnect(m_runProcessFinishedConnection);
+    m_runProcessFinishedConnection = {};
+  }
+  if (m_runProcessErrorConnection) {
+    disconnect(m_runProcessErrorConnection);
+    m_runProcessErrorConnection = {};
+  }
+
+  m_buildInProgress = true;
+
   QEventLoop loop;
-  const qint64 commandStartTime = QDateTime::currentMSecsSinceEpoch();
-  constexpr qint64 kBuildTimeoutMs = 600000;
+  int exitCode = -1;
+  bool startFailed = false;
+  QString startError;
 
-  QTimer tailTimer;
-  tailTimer.setInterval(500);
-  QObject::connect(&tailTimer, &QTimer::timeout, &progress, [&]() {
-    accumulated += process.readAllStandardOutput();
-    accumulated += process.readAllStandardError();
+  const QMetaObject::Connection finishedConnection =
+      connect(terminal, &TerminalTabWidget::processFinished, &loop,
+              [&loop, &exitCode](int code) {
+                exitCode = code;
+                loop.quit();
+              });
+  const QMetaObject::Connection errorConnection =
+      connect(terminal, &TerminalTabWidget::errorOccurred, &loop,
+              [&loop, &startFailed, &startError](const QString &message) {
+                startFailed = true;
+                startError = message;
+                loop.quit();
+              });
 
-    const QList<QByteArray> lines = accumulated.trimmed().split('\n');
-    QString tail;
-    for (int i = qMax(0, lines.size() - 4); i < lines.size(); ++i) {
-      tail += QString::fromUtf8(lines.at(i)).left(120) + QLatin1Char('\n');
-    }
-    progress.setLabelText(QStringLiteral("%1\n%2").arg(title, tail.trimmed()));
+  QTimer timeoutTimer;
+  timeoutTimer.setSingleShot(true);
+  timeoutTimer.setInterval(600000);
+  connect(&timeoutTimer, &QTimer::timeout, terminal,
+          [terminal]() { terminal->stopCurrentProcess(); });
+  timeoutTimer.start();
 
-    const bool userCancelled = progress.wasCanceled();
-    const bool timedOut =
-        QDateTime::currentMSecsSinceEpoch() - commandStartTime >
-        kBuildTimeoutMs;
-    if (userCancelled || timedOut) {
-      process.kill();
-    }
-  });
-
-  QObject::connect(
-      &process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-      &loop, [&loop](int, QProcess::ExitStatus) { loop.quit(); });
-
-  tailTimer.start();
+  terminal->executeCommand(command.first(), command.mid(1), workingDirectory);
   loop.exec();
-  tailTimer.stop();
 
-  accumulated += process.readAllStandardOutput();
-  accumulated += process.readAllStandardError();
+  timeoutTimer.stop();
+  disconnect(finishedConnection);
+  disconnect(errorConnection);
+  m_buildInProgress = false;
 
+  const QString transcript = terminal->currentRunTranscript();
   if (output) {
-    *output = QString::fromUtf8(accumulated);
+    *output = transcript;
   }
 
-  if (process.state() != QProcess::NotRunning) {
-    process.waitForFinished(2000);
-  }
-
-  if (progress.wasCanceled()) {
+  if (startFailed) {
     if (errorMessage) {
-      *errorMessage = tr("Build cancelled.");
+      *errorMessage = tr("Could not run '%1': %2")
+                          .arg(command.join(QLatin1Char(' ')), startError);
     }
+    statusBar()->clearMessage();
     return false;
   }
 
-  if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+  if (exitCode != 0) {
     if (errorMessage) {
-      const QString details = QString::fromUtf8(accumulated).trimmed();
+      const QString details = transcript.trimmed();
       *errorMessage =
           tr("'%1' failed:\n%2")
               .arg(command.join(QLatin1Char(' ')),
-                   details.isEmpty()
-                       ? tr("exited with code %1").arg(process.exitCode())
-                       : details.right(4000));
+                   details.isEmpty() ? tr("exited with code %1").arg(exitCode)
+                                     : details.right(8000));
     }
+    statusBar()->showMessage(tr("%1 failed").arg(title), 8000);
     return false;
   }
 
+  if (m_diagnosticsManager) {
+
+    m_diagnosticsManager->clearAllForSource(kBuildDiagnosticsSource);
+  }
+  statusBar()->clearMessage();
   return true;
 }
 
@@ -6553,33 +7126,24 @@ bool MainWindow::runPreLaunchTask(const QString &taskCommand,
 }
 
 QString MainWindow::cmakeRootForSource(const QString &filePath) const {
-  const QString searchRoot = m_projectRootPath.isEmpty()
-                                 ? QFileInfo(filePath).absolutePath()
-                                 : m_projectRootPath;
-  const QString cmakeRoot = CMakeProject::findProjectRoot(searchRoot);
-  if (!cmakeRoot.isEmpty()) {
-    return cmakeRoot;
-  }
 
-  // The open project root can sit outside the CMake tree that owns the file,
-  // for example when a single file was opened without a folder.
-  if (filePath.isEmpty()) {
-    return QString();
-  }
-  return CMakeProject::findProjectRoot(QFileInfo(filePath).absolutePath());
+  return RunTargetResolver::cmakeRootFor(filePath, m_projectRootPath);
 }
 
 bool MainWindow::buildCMakeExecutableForSource(
     const QString &filePath, const QString &configuredProgram,
     const QString &configuredBinaryDir, QString *programPath,
-    QString *errorMessage) {
+    QString *errorMessage, QString *chosenTargetName) {
   if (programPath) {
     programPath->clear();
+  }
+  if (chosenTargetName) {
+    chosenTargetName->clear();
   }
 
   const QString cmakeRoot = cmakeRootForSource(filePath);
   if (cmakeRoot.isEmpty()) {
-    // Not a CMake project: the caller falls back to its own build strategy.
+
     return true;
   }
 
@@ -6591,6 +7155,7 @@ bool MainWindow::buildCMakeExecutableForSource(
       CMakeProject::resolveBinaryDirectory(cmakeRoot, configuredBinaryDir);
 
   QString exePath;
+  QString targetName;
   if (!executables.isEmpty()) {
     if (!configuredProgram.isEmpty()) {
       const QString programFile = QFileInfo(configuredProgram).fileName();
@@ -6599,6 +7164,7 @@ bool MainWindow::buildCMakeExecutableForSource(
       for (const CMakeTargetInfo &target : executables) {
         if (target.name == programFile || target.name == programStem) {
           exePath = CMakeProject::executablePathFor(target, binaryDir);
+          targetName = target.name;
           break;
         }
       }
@@ -6611,14 +7177,32 @@ bool MainWindow::buildCMakeExecutableForSource(
         for (const CMakeTargetInfo &target : executables) {
           if (target.name == owner) {
             exePath = CMakeProject::executablePathFor(target, binaryDir);
+            targetName = target.name;
             break;
           }
         }
       }
     }
 
-    if (exePath.isEmpty() && executables.size() == 1) {
+    const QString preferredTarget = effectivePreferredCMakeTarget();
+    if (exePath.isEmpty() && !preferredTarget.isEmpty()) {
+      for (const CMakeTargetInfo &target : executables) {
+        if (target.name == preferredTarget) {
+          exePath = CMakeProject::executablePathFor(target, binaryDir);
+          targetName = target.name;
+          break;
+        }
+      }
+    }
+
+    const bool sourceIsCMakeLists =
+        QFileInfo(filePath).fileName().compare(QStringLiteral("CMakeLists.txt"),
+                                               Qt::CaseInsensitive) == 0;
+    if (exePath.isEmpty() && executables.size() == 1 &&
+        (sourceIsCMakeLists ||
+         CMakeProject::hasUnresolvedSources(executables))) {
       exePath = CMakeProject::executablePathFor(executables.first(), binaryDir);
+      targetName = executables.first().name;
     }
 
     if (exePath.isEmpty()) {
@@ -6627,17 +7211,19 @@ bool MainWindow::buildCMakeExecutableForSource(
       if (picker.exec() != QDialog::Accepted ||
           picker.selectedTargetName().isEmpty()) {
         if (errorMessage) {
-          *errorMessage = tr("A build target must be selected to debug this "
-                             "CMake project.");
+          *errorMessage = tr("A build target must be selected to run or debug "
+                             "this CMake project.");
         }
         return false;
       }
       for (const CMakeTargetInfo &target : executables) {
         if (target.name == picker.selectedTargetName()) {
           exePath = CMakeProject::executablePathFor(target, binaryDir);
+          targetName = target.name;
           break;
         }
       }
+      setPreferredCMakeTarget(targetName);
     }
   } else if (configuredProgram.isEmpty()) {
     if (errorMessage) {
@@ -6662,9 +7248,13 @@ bool MainWindow::buildCMakeExecutableForSource(
 
   QString buildOutput;
   const int jobs = qMax(1, QThread::idealThreadCount());
-  if (!runBuildProcessWithProgress(tr("Building debug target…"),
-                                   CMakeProject::buildCommand(binaryDir, jobs),
-                                   binaryDir, &buildOutput, errorMessage)) {
+
+  const QString buildTitle = targetName.isEmpty()
+                                 ? tr("Building project…")
+                                 : tr("Building %1…").arg(targetName);
+  if (!runBuildProcessWithProgress(
+          buildTitle, CMakeProject::buildCommand(binaryDir, jobs, targetName),
+          binaryDir, &buildOutput, errorMessage)) {
     return false;
   }
 
@@ -6684,7 +7274,10 @@ bool MainWindow::buildCMakeExecutableForSource(
   if (programPath) {
     *programPath = resolved;
   }
-  LOG_INFO(QString("CMake debug target ready: %1").arg(resolved));
+  if (chosenTargetName) {
+    *chosenTargetName = targetName;
+  }
+  LOG_INFO(QString("CMake target ready: %1").arg(resolved));
   return true;
 }
 
@@ -7404,7 +7997,7 @@ void MainWindow::on_actionStart_Debug_Configuration_triggered() {
 }
 
 void MainWindow::on_actionEdit_Configurations_triggered() {
-  openConfigurationDialog();
+  openRunConfigurationForFile(runSourceFilePath());
 }
 
 void MainWindow::on_actionEdit_Debug_Configurations_triggered() {
@@ -7539,6 +8132,23 @@ void MainWindow::on_actionGit_Log_triggered() {
   }
 
   GitLogDialog dialog(m_gitIntegration, settings.theme, this);
+  connect(&dialog, &GitLogDialog::compareRequested, this,
+          [this](const QString &from, const QString &to) {
+            showCompareAnything(from, to);
+          });
+  connect(&dialog, &GitLogDialog::viewCommitDiff, this,
+          [this](const QString &hash) {
+            GitDiffDialog diffDialog(m_gitIntegration, hash,
+                                     GitDiffDialog::DiffTarget::Commit, false,
+                                     settings.theme, this);
+            diffDialog.setDiffText(m_gitIntegration->getCommitDiff(hash));
+            diffDialog.exec();
+          });
+  connect(&dialog, &GitLogDialog::repositoryChanged, this, [this]() {
+    if (sourceControlPanel) {
+      sourceControlPanel->refresh();
+    }
+  });
 
   TextArea *textArea = getCurrentTextArea();
   if (textArea) {
@@ -7557,7 +8167,105 @@ void MainWindow::on_actionGit_Log_triggered() {
   dialog.exec();
 }
 
+void MainWindow::on_actionGit_Compare_triggered() { showCompareAnything(); }
+
+void MainWindow::showCompareAnything(const QString &baseRef,
+                                     const QString &compareRef,
+                                     const QString &filePath) {
+  if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
+    ThemedMessageBox::information(this, tr("Compare Anything"),
+                                  tr("No valid Git repository found."));
+    return;
+  }
+
+  CompareAnythingDialog dialog(m_gitIntegration, settings.theme, this);
+  connect(&dialog, &CompareAnythingDialog::fileOpenRequested, this,
+          [this](const QString &path) {
+            openFileAndAddToNewTab(
+                QDir(m_gitIntegration->repositoryPath()).filePath(path));
+          });
+
+  if (!baseRef.isEmpty() || !compareRef.isEmpty()) {
+    const GitCompareEndpoint base =
+        baseRef.isEmpty() ? GitCompareEndpoint::head()
+                          : GitCompareEndpoint::commit(baseRef, baseRef);
+    const GitCompareEndpoint compare =
+        compareRef.isEmpty()
+            ? GitCompareEndpoint::workingTree()
+            : GitCompareEndpoint::commit(compareRef, compareRef);
+    dialog.setEndpoints(base, compare);
+  }
+  if (!filePath.isEmpty()) {
+    dialog.selectFile(filePath);
+  }
+
+  dialog.exec();
+}
+
 void MainWindow::on_actionGit_File_History_triggered() { showFileHistory(); }
+
+void MainWindow::on_actionGit_Provenance_triggered() {
+  if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
+    ThemedMessageBox::information(this, tr("Code provenance"),
+                                  tr("No valid Git repository found."));
+    return;
+  }
+
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  TextArea *textArea = getCurrentTextArea();
+  if (!tabWidget || !textArea) {
+    return;
+  }
+
+  const QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
+  if (filePath.isEmpty()) {
+    ThemedMessageBox::information(this, tr("Code provenance"),
+                                  tr("Save the file first — Git can only "
+                                     "trace a file it knows about."));
+    return;
+  }
+
+  QString relativePath = filePath;
+  const QString root = m_gitIntegration->repositoryPath();
+  if (!root.isEmpty() && filePath.startsWith(root)) {
+    relativePath = QDir(root).relativeFilePath(filePath);
+  }
+
+  const QTextCursor cursor = textArea->textCursor();
+  int startLine = cursor.blockNumber() + 1;
+  int endLine = startLine;
+  if (cursor.hasSelection()) {
+    QTextCursor start(cursor);
+    start.setPosition(cursor.selectionStart());
+    QTextCursor end(cursor);
+    end.setPosition(cursor.selectionEnd());
+    startLine = start.blockNumber() + 1;
+    endLine = end.blockNumber() + 1;
+  }
+
+  ProvenanceLensDialog dialog(m_gitIntegration, relativePath, startLine,
+                              endLine, settings.theme, this);
+  connect(&dialog, &ProvenanceLensDialog::openCommitRequested, this,
+          [this](const QString &hash) {
+            GitDiffDialog diffDialog(m_gitIntegration, hash,
+                                     GitDiffDialog::DiffTarget::Commit, false,
+                                     settings.theme, this);
+            diffDialog.setDiffText(m_gitIntegration->getCommitDiff(hash));
+            diffDialog.exec();
+          });
+  connect(
+      &dialog, &ProvenanceLensDialog::openParentDiffRequested, this,
+      [this](const QString &hash) { showCompareAnything(hash + "^", hash); });
+  connect(&dialog, &ProvenanceLensDialog::openFileHistoryRequested, this,
+          [this](const QString &, int, int) { showFileHistory(); });
+  connect(&dialog, &ProvenanceLensDialog::showInGraphRequested, this,
+          [this](const QString &hash) {
+            GitLogDialog logDialog(m_gitIntegration, settings.theme, this);
+            logDialog.selectCommit(hash);
+            logDialog.exec();
+          });
+  dialog.exec();
+}
 
 void MainWindow::showFileHistory() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
@@ -7577,13 +8285,44 @@ void MainWindow::showFileHistory() {
     return;
   }
 
-  GitFileHistoryDialog dialog(m_gitIntegration, filePath, this);
-  connect(&dialog, &GitFileHistoryDialog::viewCommitDiff, this,
+  QString relativePath = filePath;
+  const QString root = m_gitIntegration->repositoryPath();
+  if (!root.isEmpty() && filePath.startsWith(root)) {
+    relativePath = QDir(root).relativeFilePath(filePath);
+  }
+
+  FileTimelineDialog dialog(m_gitIntegration, relativePath, settings.theme,
+                            this);
+
+  if (TextArea *area = getCurrentTextArea()) {
+    const QTextCursor cursor = area->textCursor();
+    if (cursor.hasSelection()) {
+      QTextCursor start(cursor);
+      start.setPosition(cursor.selectionStart());
+      QTextCursor end(cursor);
+      end.setPosition(cursor.selectionEnd());
+      dialog.setLineRange(start.blockNumber() + 1, end.blockNumber() + 1);
+    }
+  }
+
+  connect(&dialog, &FileTimelineDialog::openCommitRequested, this,
           [this](const QString &hash) {
             GitDiffDialog diffDialog(m_gitIntegration, hash,
                                      GitDiffDialog::DiffTarget::Commit, false,
                                      settings.theme, this);
+            diffDialog.setDiffText(m_gitIntegration->getCommitDiff(hash));
             diffDialog.exec();
+          });
+  connect(&dialog, &FileTimelineDialog::compareRequested, this,
+          [this](const QString &from, const QString &to, const QString &path) {
+            showCompareAnything(from, to, path);
+          });
+  connect(&dialog, &FileTimelineDialog::showInGraphRequested, this,
+          [this](const QString &hash, const QString &path) {
+            GitLogDialog logDialog(m_gitIntegration, settings.theme, this);
+            logDialog.setFilePath(path);
+            logDialog.selectCommit(hash);
+            logDialog.exec();
           });
   dialog.exec();
 }
@@ -7613,6 +8352,24 @@ void MainWindow::openReadOnlyTab(const QString &content, const QString &title,
 }
 
 void MainWindow::on_actionGit_Rebase_triggered() {
+  if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
+    ThemedMessageBox::information(this, tr("Rebase timeline"),
+                                  tr("No valid Git repository found."));
+    return;
+  }
+
+  RebaseTimelineDialog dialog(m_gitIntegration, settings.theme, this);
+  connect(&dialog, &RebaseTimelineDialog::repositoryChanged, this, [this]() {
+    if (sourceControlPanel) {
+      sourceControlPanel->refresh();
+    }
+  });
+  dialog.exec();
+}
+
+void MainWindow::on_actionGit_Workbench_triggered() { showGitWorkbench(); }
+
+void MainWindow::showGitWorkbench() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
     ThemedMessageBox::information(this, tr("Git Workbench"),
                                   tr("No valid Git repository found."));
@@ -7932,8 +8689,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
   QString surfaceAltColor =
       glowShift(tc.surfaceOverlay, glowSource, glowLevel, 0.14).name();
   QString pressedColor = tc.btnGhostActive.name();
-  // Hover is a low-contrast surface change, distinct from the accent-tinted
-  // selection so the two states stay tellable apart.
+
   QString rowHoverColor = tc.treeHoverBg.isValid() ? tc.treeHoverBg.name()
                                                    : tc.btnGhostHover.name();
   QString borderColor =
@@ -8167,9 +8923,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       accentColor +
       "; "
       "}"
-      // Status-strip controls are chrome, not content: no fill and no outline
-      // at rest, so the strip reads as one row rather than a line of boxes.
-      // Only the run action keeps a surface, marking it as the primary one.
+
       "QToolButton#runButton { "
       "background-color: " +
       surfaceAltColor +
@@ -8192,9 +8946,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       accentSoftColor +
       "; "
       "}"
-      // A styled MenuButtonPopup tool button paints its menu-button
-      // sub-control itself; without a rule it falls back to an opaque default
-      // that shows up as a black block once the parent is transparent.
+
       "QToolButton#testButton::menu-button, "
       "QToolButton#debugButton::menu-button { "
       "background: transparent; "
@@ -8230,8 +8982,6 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       "padding: 0 4px; "
       "}"
 
-      // Item views sit inside panels that already provide their own surface;
-      // an outline here is a second frame around the same region.
       "QAbstractItemView { "
       "color: " +
       fgColor +
@@ -8253,14 +9003,12 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       rowHoverColor +
       "; "
       "}"
-      // A focus ring drawn as a full box around a row is louder than the
-      // selection it sits inside; the selection itself already marks the row.
+
       "QAbstractItemView::item:focus { "
       "outline: none; "
       "border: none; "
       "}"
-      // Selection is a quiet surface change. Recolouring the row's text to the
-      // accent made every selected line shout and cost legibility.
+
       "QAbstractItemView::item:selected { "
       "background-color: " +
       accentSoftColor +
@@ -8269,7 +9017,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       fgColor +
       "; "
       "}"
-      // Column headers are labels, not a banded toolbar.
+
       "QHeaderView::section { "
       "background-color: transparent; "
       "color: " +
@@ -9121,18 +9869,17 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
     page->setTreeFilterText(m_treeFilterText);
   }
 
+  QObject::disconnect(treeView, &LightpadTreeView::runTestsRequested, this,
+                      nullptr);
+  QObject::disconnect(treeView, &LightpadTreeView::runFileRequested, this,
+                      nullptr);
+  QObject::disconnect(treeView, &LightpadTreeView::debugFileRequested, this,
+                      nullptr);
+  QObject::disconnect(treeView, &LightpadTreeView::toggleTestMarkerRequested,
+                      this, nullptr);
+
   connect(treeView, &LightpadTreeView::runTestsRequested, this,
-          [this](const QString &path) {
-            ensureTestPanel();
-            if (testPanel && testDock) {
-              if (!m_projectRootPath.isEmpty())
-                testPanel->setWorkspaceFolder(m_projectRootPath);
-              testPanel->runTestsForPath(path);
-              testDock->show();
-              testDock->raise();
-              syncViewToggleActionStates();
-            }
-          });
+          &MainWindow::runTestsForPath);
 
   connect(treeView, &LightpadTreeView::runFileRequested, this,
           &MainWindow::runFileByPath);
@@ -9144,6 +9891,15 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
           [](const QString &path, bool markAsTest) {
             TestFileClassifier::instance().setTestOverride(path, markAsTest);
           });
+
+  QObject::disconnect(treeView, &LightpadTreeView::revealInFileManagerRequested,
+                      this, nullptr);
+  QObject::disconnect(treeView, &LightpadTreeView::openInTerminalRequested,
+                      this, nullptr);
+  connect(treeView, &LightpadTreeView::revealInFileManagerRequested, this,
+          &MainWindow::revealPathInFileManager);
+  connect(treeView, &LightpadTreeView::openInTerminalRequested, this,
+          &MainWindow::openTerminalAtPath);
 }
 
 void MainWindow::setTreeFilterText(const QString &text) {

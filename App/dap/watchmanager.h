@@ -115,8 +115,6 @@ private:
   QMap<int, PendingEvaluation> m_pendingEvaluations;
   QMap<int, int> m_pendingVariables;
 
-  // Same lifetime hazard as BreakpointManager: this singleton outlives the
-  // DebugSession that owns the client.
   QPointer<DapClient> m_dapClient;
   QString m_workspaceFolder;
 };

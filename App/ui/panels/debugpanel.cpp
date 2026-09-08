@@ -50,9 +50,6 @@ QString fillStyleTemplate(
 
 class DebugTreeDelegate : public QStyledItemDelegate {
 public:
-  // Horizontal room paint() takes away from the item rect for the row
-  // background and its inner text inset. sizeHint() has to add it back or
-  // ResizeToContents columns come out too narrow and elide their content.
   static constexpr int kRowInset = 3;
   static constexpr int kTextInsetLeft = 10;
   static constexpr int kTextInsetRight = 8;
@@ -241,8 +238,6 @@ void DebugPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
   m_themeInitialized = true;
 
-  // The transport glyphs are painted in palette colours, so they have to be
-  // redrawn whenever the palette changes.
   applyTransportIcons();
 
   const auto blend = [](const QColor &base, const QColor &overlay,
@@ -313,10 +308,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  min-width: 1px;"
           "  max-width: 1px;"
           "}"
-          // Ghost controls: no border and no fill by default, so a row of
-          // actions reads as one strip instead of a line of outlined boxes.
-          // Weight is carried by the surface on hover and by the accent on the
-          // single primary action.
+
           "QToolButton#debugToolbarButton {"
           "  color: {fg};"
           "  background: transparent;"
@@ -371,9 +363,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  background: transparent;"
           "  border: none;"
           "}"
-          // One indicator marks the active tab: an accent underline plus
-          // primary text. A filled box as well would make the tab bar compete
-          // with the content it labels.
+
           "QToolButton#debugInspectorTab {"
           "  color: {subtleText};"
           "  background: transparent;"
@@ -537,8 +527,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
 
   const QString treeStyle = fillStyleTemplate(
       QStringLiteral(
-          // No outline: the tree already sits on its own surface inside the
-          // inspector, and a box here would be the third nested frame.
+
           "QTreeWidget {"
           "  background: {bg};"
           "  alternate-background-color: {altBg};"
@@ -830,7 +819,6 @@ void DebugPanel::setCurrentInspectorTab(int index) {
     }
   }
 
-  // Refit once the tree is actually on screen and knows its real width.
   if (m_variablesTree && m_inspectorStack->currentWidget() &&
       m_inspectorStack->currentWidget()->isAncestorOf(m_variablesTree)) {
     QTimer::singleShot(0, this, [this]() { fitVariablesNameColumn(); });
@@ -965,7 +953,7 @@ void DebugPanel::setupToolbar() {
   m_debugStatusLabel->setObjectName("debugStatusLabel");
   m_debugStatusLabel->setMinimumWidth(110);
   m_debugStatusText = m_debugStatusLabel->text();
-  // Re-elide whenever the pill is given a new width.
+
   m_debugStatusLabel->installEventFilter(this);
   m_debugStatusLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
 
@@ -989,8 +977,7 @@ void DebugPanel::setupToolbar() {
 }
 
 void DebugPanel::applyTransportIcons() {
-  // Stepping and session control are neutral chrome; only the primary action
-  // and the destructive one earn a colour of their own.
+
   const QColor neutral = m_themeInitialized ? m_theme.foregroundColor
                                             : palette().color(QPalette::Text);
   const QColor accent = m_themeInitialized ? m_theme.accentColor : neutral;
@@ -1097,8 +1084,6 @@ void DebugPanel::setupVariables() {
   m_variablesTree->header()->setSectionResizeMode(0, QHeaderView::Interactive);
   connect(m_variablesTree->header(), &QHeaderView::sectionResized, this,
           [this](int section, int, int) {
-            // Layout passes resize sections too; only a live drag (left button
-            // held over the header) counts as the user choosing a width.
             if (section == 0 && !m_variablesNameColumnAutofitting &&
                 (QApplication::mouseButtons() & Qt::LeftButton)) {
               m_variablesNameColumnUserSized = true;
@@ -1224,8 +1209,7 @@ void DebugPanel::setupConsole() {
   m_consoleOutput->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(m_consoleOutput, &QPlainTextEdit::customContextMenuRequested, this,
           &DebugPanel::showConsoleContextMenu);
-  // A location printed in a traceback or adapter message is the fastest way
-  // back to the code, so make the line it sits on openable.
+
   m_consoleOutput->viewport()->installEventFilter(this);
 
   m_consoleInput = new QLineEdit(this);
@@ -1233,7 +1217,7 @@ void DebugPanel::setupConsole() {
   m_consoleInput->setFont(fixedFont);
   m_consoleInput->setClearButtonEnabled(true);
   m_consoleInput->setMinimumHeight(UiMetrics::ControlHeight + 4);
-  // Up/Down recall previous expressions instead of moving the caret.
+
   m_consoleInput->installEventFilter(this);
 
   connect(m_consoleInput, &QLineEdit::returnPressed, this,
@@ -1303,9 +1287,6 @@ void DebugPanel::toggleConsoleDetached() {
     return;
   }
 
-  // A bottom dock leaves the console a few lines tall, which is unusable for
-  // reading a traceback. Move the very same page into a window the user can
-  // size freely; reattaching puts it back where it came from.
   m_consoleWindow = new QWidget(window(), Qt::Window);
   m_consoleWindow->setWindowTitle(tr("Debug Console"));
   m_consoleWindow->setAttribute(Qt::WA_DeleteOnClose, false);
@@ -1327,7 +1308,6 @@ void DebugPanel::toggleConsoleDetached() {
   m_consoleDetachAction->setText(tr("Attach"));
   m_consoleDetachAction->setToolTip(tr("Put the console back in the panel"));
 
-  // The tab it used to occupy would now switch to an empty page.
   setInspectorTabLabel(4, tr("Console ↗"));
   setCurrentInspectorTab(0);
 }
@@ -1356,8 +1336,6 @@ void DebugPanel::recallConsoleHistory(int direction) {
     return;
   }
 
-  // Leaving the newest entry keeps whatever the user had half-typed, so that
-  // browsing history and coming back does not lose it.
   if (m_consoleHistoryIndex == m_consoleHistory.size()) {
     m_consoleHistoryDraft = m_consoleInput->text();
   }
@@ -1389,7 +1367,6 @@ void DebugPanel::findInConsole(bool backwards) {
     return;
   }
 
-  // Wrap around rather than silently doing nothing at the last match.
   QTextCursor cursor = m_consoleOutput->textCursor();
   cursor.movePosition(backwards ? QTextCursor::End : QTextCursor::Start);
   m_consoleOutput->setTextCursor(cursor);
@@ -1404,8 +1381,7 @@ DebugPanel::expressionForVariableItem(const QTreeWidgetItem *item) const {
   if (!item) {
     return QString();
   }
-  // Adapters supply evaluateName for rows that can be re-evaluated; a scope
-  // header or a synthetic row has none and cannot become a watch.
+
   const QString evaluateName = item->data(0, Qt::UserRole + 1).toString();
   if (!evaluateName.isEmpty()) {
     return evaluateName;
@@ -1463,7 +1439,7 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
   } else if (chosen == collapse) {
     item->setExpanded(false);
   } else if (chosen == refresh) {
-    // Re-request the frame's scopes, which repopulates the whole tree.
+
     setCurrentFrame(m_currentFrameId);
   }
 }
@@ -1498,8 +1474,7 @@ void DebugPanel::showConsoleContextMenu(const QPoint &pos) {
 }
 
 void DebugPanel::navigateToConsoleLocation(const QString &lineText) {
-  // Matches "/abs/path.cpp:42" and "file.py", line 8 - the two shapes gdb and
-  // debugpy actually emit. Anything else is left alone rather than guessed at.
+
   static const QRegularExpression pathLine(
       QStringLiteral("([^\\s\"'<>|]+\\.[A-Za-z0-9_+]+):(\\d+)"));
   static const QRegularExpression pythonFrame(
@@ -1534,8 +1509,6 @@ void DebugPanel::updateConsoleInputAffordances() {
   const DapClient::State state =
       m_dapClient ? m_dapClient->state() : DapClient::State::Disconnected;
 
-  // The input stays enabled in every state: a disabled box that swallows the
-  // click explains nothing, whereas submitting prints why it cannot evaluate.
   if (state == DapClient::State::Stopped) {
     QString frameLabel;
     for (const DapStackFrame &frame : m_stackFrames) {
@@ -2002,8 +1975,7 @@ void DebugPanel::onStackTraceReceived(int threadId,
     QTreeWidgetItem *item = new QTreeWidgetItem();
     item->setText(0, frame.name);
     item->setText(1, frame.source.name);
-    // Frames without source information report line 0; a bare "0" reads as a
-    // real location, so leave the cell empty instead.
+
     item->setText(2, frame.line > 0 ? QString::number(frame.line) : QString());
     item->setData(0, Qt::UserRole, frame.id);
     item->setData(0, Qt::UserRole + 1, frame.source.path);
@@ -2042,8 +2014,6 @@ void DebugPanel::onStackTraceReceived(int threadId,
     WatchManager::instance().evaluateAll(activeFrame.id);
   }
 
-  // The status pill names the paused location, which is only known once the
-  // frames arrive - the state change alone came too early to show it.
   updateToolbarState();
   updateSectionSummaries();
 }
@@ -2166,9 +2136,6 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     return;
   }
 
-  // Any preview still in flight may point at a row about to be freed.
-  // QTreeWidgetItem is not a QObject, so there is no guarded pointer to lean
-  // on - drop the pending previews rather than risk a dangling write.
   m_pendingTreeSummaries.clear();
 
   while (parentItem->childCount() > 0) {
@@ -2184,8 +2151,6 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     item->setData(0, Qt::UserRole + 1, var.evaluateName);
     item->setIcon(0, variableIcon(var));
 
-    // A value that moved since the previous stop is what the user stepped to
-    // find, so mark it - on the value cell only, and only until the next stop.
     QString path = var.name;
     for (QTreeWidgetItem *ancestor = parentItem; ancestor;
          ancestor = ancestor->parent()) {
@@ -2199,7 +2164,6 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     }
     m_previousVariableValues.insert(path, var.value);
 
-    // Columns elide; the tooltip keeps the whole value and type reachable.
     QStringList tip;
     tip << var.name;
     if (!var.value.isEmpty()) {
@@ -2237,8 +2201,7 @@ void DebugPanel::onVariablesReceived(int variablesReference,
   }
 
   m_pendingScopeVariableLoads.remove(variablesReference);
-  // Names get longer as the user drills into a value, so refit after every
-  // batch instead of only once per stop - until the column is sized by hand.
+
   QTimer::singleShot(0, this, [this]() { fitVariablesNameColumn(); });
   updateSectionSummaries();
 }
@@ -2715,8 +2678,7 @@ void DebugPanel::onConsoleInput() {
   m_consoleHistoryDraft.clear();
 
   m_consoleInput->clear();
-  // Evaluating usually means evaluating again with a small edit, so the input
-  // keeps focus rather than making the user click back into it every time.
+
   m_consoleInput->setFocus();
 
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
@@ -2799,8 +2761,6 @@ void DebugPanel::updateToolbarState() {
       break;
     case DapClient::State::Stopped: {
 
-      // The pill is narrow, so lead with the location: it is what the user
-      // needs at a glance, and the function name lives in the tooltip.
       QString location;
       for (const DapStackFrame &frame : m_stackFrames) {
         if (!frame.source.name.isEmpty()) {
@@ -3103,9 +3063,6 @@ void DebugPanel::onEvaluateResult(int requestSeq, const QString &expression,
     m_pendingConsoleEvaluations.removeAt(pendingIndex);
   }
 
-  // Structured values (a struct, a container, a QString) come back with an
-  // empty result and a reference to their children. Printing "expr = (Type)"
-  // tells the user nothing, so fetch the children and summarise them.
   if (result.trimmed().isEmpty() && variablesReference > 0 && m_dapClient) {
     startConsoleExpansion(displayExpression, type, variablesReference);
     return;
@@ -3140,8 +3097,7 @@ void DebugPanel::startConsoleExpansion(const QString &expression,
 
 bool DebugPanel::applyConsoleExpansion(int variablesReference,
                                        const QList<DapVariable> &variables) {
-  // Deep enough to render nested wrappers such as QVector3D's float array,
-  // capped so a large container cannot flood the adapter with requests.
+
   constexpr int kMaxDepth = 3;
   constexpr int kMaxNodes = 64;
 
@@ -3279,8 +3235,6 @@ void DebugPanel::appendConsoleLine(const QString &text, const QColor &color,
     output += tr(" ... [truncated %1 chars]").arg(truncated);
   }
 
-  // Follow new output only when the view is already at the bottom; scrolling
-  // back to read something must not be undone by the next line arriving.
   QScrollBar *scrollBar = m_consoleOutput->verticalScrollBar();
   const bool wasAtBottom =
       !scrollBar || scrollBar->value() >= scrollBar->maximum() - 4;
@@ -3345,9 +3299,7 @@ void DebugPanel::dispatchPendingConsoleEvaluation(int pendingIndex) {
 
 void DebugPanel::requestAggregatePreviews(const QList<DapVariable> &variables,
                                           QTreeWidgetItem *parentItem) {
-  // gdb reports structs and containers with an empty value, leaving the row
-  // blank until it is expanded. Fetch one level of children so the row can
-  // preview them - bounded, so a large container does not fan out.
+
   constexpr int kMaxPreviewedChildren = 24;
 
   if (!m_dapClient || !parentItem || variables.size() > kMaxPreviewedChildren) {
@@ -3444,8 +3396,6 @@ bool DebugPanel::eventFilter(QObject *watched, QEvent *event) {
     applyDebugStatusText();
   }
 
-  // An empty tree is a blank rectangle that explains nothing; say what the
-  // view needs instead.
   if (event->type() == QEvent::Paint) {
     for (QTreeWidget *tree :
          {m_callStackTree, m_variablesTree, m_watchTree, m_breakpointsTree}) {
@@ -3490,10 +3440,7 @@ void DebugPanel::applyDebugStatusText() {
   if (!m_debugStatusLabel) {
     return;
   }
-  // The pill competes for width with the thread selector, so a long location
-  // has to end in an ellipsis rather than be sliced mid-word - a clipped
-  // "meshview.cpp:7" would read as a real, wrong line number. The subtracted
-  // room matches the stylesheet's 12px horizontal padding plus its border.
+
   const int available = m_debugStatusLabel->width() - 2 * (12 + 1);
   if (available <= 0) {
     m_debugStatusLabel->setText(m_debugStatusText);
@@ -3511,8 +3458,7 @@ void DebugPanel::fitVariablesNameColumn() {
   m_variablesNameColumnAutofitting = true;
   m_variablesTree->resizeColumnToContents(0);
   const int measured = m_variablesTree->columnWidth(0);
-  // Variables usually arrive while another inspector tab is showing; a hidden
-  // tree reports a stale viewport width, so fall back to the panel's width.
+
   const int available = qMax(m_variablesTree->viewport()->width(), width());
   const int minWidth = 180;
   const int maxWidth = qMax(minWidth, static_cast<int>(available * 0.55));

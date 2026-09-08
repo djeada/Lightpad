@@ -31,6 +31,8 @@ private slots:
   void testPtyClearRedrawsPrompt();
   void testTerminalDocumentMarginIsZero();
   void testPtyGridFitsViewport();
+  void testPtyKeepsStandardWidthBeforeLayout();
+  void testPtyWidthFollowsWidgetOnceShown();
 
   void testShellStartedSignal();
 
@@ -202,6 +204,29 @@ void TestTerminal::testPtyGridFitsViewport() {
           viewport.width());
   QVERIFY(terminal.m_terminalRows * qMax(1, metrics.lineSpacing()) <=
           viewport.height());
+
+  terminal.stopShell();
+}
+
+void TestTerminal::testPtyKeepsStandardWidthBeforeLayout() {
+  Terminal terminal;
+  terminal.updatePtySize();
+
+  QCOMPARE(terminal.m_terminalColumns, 80);
+  QCOMPARE(terminal.m_terminalRows, 24);
+
+  terminal.stopShell();
+}
+
+void TestTerminal::testPtyWidthFollowsWidgetOnceShown() {
+  Terminal terminal;
+  terminal.resize(900, 320);
+  terminal.show();
+  QTest::qWait(50);
+  terminal.updatePtySize();
+
+  QVERIFY(terminal.m_terminalColumns > 40);
+  QVERIFY(terminal.m_terminalRows >= 4);
 
   terminal.stopShell();
 }

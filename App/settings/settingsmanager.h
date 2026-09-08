@@ -56,8 +56,7 @@ private:
   QJsonObject m_settings;
   QJsonObject m_defaults;
   bool m_dirty;
-  // Until the on-disk file has been read once, m_settings holds only defaults
-  // and is not authoritative; writing it out would discard the user's file.
+
   bool m_loaded = false;
 };
 

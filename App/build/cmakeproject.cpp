@@ -203,6 +203,18 @@ QString CMakeProject::targetForSource(const QList<CMakeTargetInfo> &targets,
   return QString();
 }
 
+bool CMakeProject::hasUnresolvedSources(const QList<CMakeTargetInfo> &targets) {
+  for (const CMakeTargetInfo &target : targets) {
+    for (const QString &source : target.sources) {
+      if (source.contains(QLatin1String("${")) ||
+          source.contains(QLatin1Char('*'))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool CMakeProject::needsConfigure(const QString &binaryDir) {
   return !QFileInfo::exists(binaryDir + "/CMakeCache.txt");
 }
@@ -222,7 +234,15 @@ QStringList CMakeProject::configureCommand(const QString &projectRoot,
 }
 
 QStringList CMakeProject::buildCommand(const QString &binaryDir, int jobs) {
+  return buildCommand(binaryDir, jobs, QString());
+}
+
+QStringList CMakeProject::buildCommand(const QString &binaryDir, int jobs,
+                                       const QString &targetName) {
   QStringList args = {"cmake", "--build", binaryDir};
+  if (!targetName.trimmed().isEmpty()) {
+    args << "--target" << targetName.trimmed();
+  }
   if (jobs > 0) {
     args << "-j" << QString::number(jobs);
   }

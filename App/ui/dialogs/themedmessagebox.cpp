@@ -115,8 +115,7 @@ void ThemedMessageBox::buildUI() {
   m_built = true;
 
   setMinimumWidth(380);
-  // A prose message reads better narrow, but build output needs room for the
-  // compiler's own line wrapping.
+
   setMaximumWidth(m_detailedText.isEmpty() ? 560 : 860);
 
   QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -257,10 +256,6 @@ void ThemedMessageBox::applyStyle() {
     bool isPrimary = false;
     bool isDanger = false;
 
-    // The accent marks the recommended action. When a dialog nominates a
-    // default it is stating what that action is, so follow it - otherwise a
-    // dialog that deliberately defaults to Cancel still advertises Yes, which
-    // is exactly the destructive choice it wanted to steer away from.
     const bool hasDefault =
         m_defaultButton != NoButton && m_buttonMap.contains(m_defaultButton);
     if (hasDefault ? role == m_defaultButton : (role == Ok || role == Yes)) {

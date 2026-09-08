@@ -216,11 +216,7 @@ bool SettingsManager::loadSettings() {
 }
 
 bool SettingsManager::saveSettings() {
-  // Startup persists state while the window is still being constructed, before
-  // loadSettings() has run. Writing then would put bare defaults over the
-  // user's file - which is how a chosen theme got lost on every restart. Only
-  // refuse when there is an unread file to protect; a first run with no file
-  // yet, and every save after a load, proceed normally.
+
   if (!m_loaded && QFileInfo::exists(getSettingsFilePath())) {
     LOG_WARNING("Ignoring settings save requested before the existing settings "
                 "file was read");

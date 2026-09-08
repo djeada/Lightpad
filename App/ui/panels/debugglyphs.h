@@ -8,12 +8,6 @@
 #include <QPainterPath>
 #include <QPixmap>
 
-// Monochrome transport glyphs for the debugger toolbar.
-//
-// QStyle::standardIcon gives platform icons in fixed colours - an orange
-// chevron and a blue reload arrow sit badly in a themed editor, and they cannot
-// follow the palette. These are drawn from paths in a caller-supplied colour so
-// the toolbar reads in whatever theme is active.
 namespace DebugGlyphs {
 
 enum class Glyph { Play, Pause, StepOver, StepInto, StepOut, Restart, Stop };
@@ -28,7 +22,6 @@ inline QIcon icon(Glyph glyph, const QColor &color, int size = 16) {
   QPainter painter(&pixmap);
   painter.setRenderHint(QPainter::Antialiasing, true);
 
-  // Work in a 16x16 design grid whatever the requested size.
   painter.scale(size / 16.0, size / 16.0);
   painter.setPen(Qt::NoPen);
   painter.setBrush(color);
@@ -55,7 +48,7 @@ inline QIcon icon(Glyph glyph, const QColor &color, int size = 16) {
     painter.drawRoundedRect(QRectF(3.5, 3.5, 9.0, 9.0), 1.2, 1.2);
     break;
   case Glyph::StepOver: {
-    // An arc hopping over the statement, which stays put as a dot.
+
     painter.setBrush(Qt::NoBrush);
     painter.setPen(stroke);
     QPainterPath arc;
@@ -74,7 +67,7 @@ inline QIcon icon(Glyph glyph, const QColor &color, int size = 16) {
     break;
   }
   case Glyph::StepInto: {
-    // An arrow descending into the statement.
+
     painter.setBrush(Qt::NoBrush);
     painter.setPen(stroke);
     painter.drawLine(QPointF(8.0, 2.5), QPointF(8.0, 8.4));
@@ -90,7 +83,7 @@ inline QIcon icon(Glyph glyph, const QColor &color, int size = 16) {
     break;
   }
   case Glyph::StepOut: {
-    // The same arrow, climbing back out to the caller.
+
     painter.setBrush(Qt::NoBrush);
     painter.setPen(stroke);
     painter.drawLine(QPointF(8.0, 13.5), QPointF(8.0, 7.6));
