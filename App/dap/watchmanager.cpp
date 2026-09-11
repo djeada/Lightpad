@@ -233,8 +233,12 @@ void WatchManager::loadFromJson(const QJsonObject &json) {
   for (const auto &val : watchesArray) {
     WatchExpression watch = WatchExpression::fromJson(val.toObject());
 
+    if (watch.expression.trimmed().isEmpty()) {
+      continue;
+    }
     watch.id = m_nextId++;
     m_watches[watch.id] = watch;
+    emit watchAdded(watch);
   }
 }
 

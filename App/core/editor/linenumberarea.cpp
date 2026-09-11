@@ -2,6 +2,7 @@
 #include "../textarea.h"
 #include <QContextMenuEvent>
 #include <QHelpEvent>
+#include <QInputDialog>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPaintEvent>
@@ -503,6 +504,23 @@ void LineNumberArea::contextMenuEvent(QContextMenuEvent *event) {
 
   QMenu menu(this);
   QAction *breakpointAction = menu.addAction(tr("Toggle Breakpoint"));
+  const Breakpoint existing =
+      filePath.isEmpty()
+          ? Breakpoint()
+          : BreakpointManager::instance().breakpointAt(filePath, clickedLine);
+  const bool hasExisting = existing.id > 0;
+  QAction *conditionAction =
+      menu.addAction(hasExisting ? tr("Edit Condition...")
+                                 : tr("Add Conditional Breakpoint..."));
+  QAction *logpointAction = menu.addAction(hasExisting ? tr("Edit Logpoint...")
+                                                       : tr("Add Logpoint..."));
+  conditionAction->setEnabled(!filePath.isEmpty());
+  logpointAction->setEnabled(!filePath.isEmpty());
+  QAction *enableAction = nullptr;
+  if (hasExisting) {
+    enableAction = menu.addAction(existing.enabled ? tr("Disable Breakpoint")
+                                                   : tr("Enable Breakpoint"));
+  }
   menu.addSeparator();
   QAction *blameAction = menu.addAction(tr("Git Blame"));
 
@@ -534,6 +552,36 @@ void LineNumberArea::contextMenuEvent(QContextMenuEvent *event) {
       return;
     }
     BreakpointManager::instance().toggleBreakpoint(filePath, clickedLine);
+  } else if (selected == conditionAction || selected == logpointAction) {
+    const bool editingLogpoint = selected == logpointAction;
+    bool ok = false;
+    const QString value =
+        QInputDialog::getText(
+            this, editingLogpoint ? tr("Logpoint") : tr("Breakpoint Condition"),
+            editingLogpoint ? tr("Log message (use braces for expressions):")
+                            : tr("Pause when expression is true:"),
+            QLineEdit::Normal,
+            editingLogpoint ? existing.logMessage : existing.condition, &ok)
+            .trimmed();
+    if (!ok) {
+      return;
+    }
+    int breakpointId = existing.id;
+    if (breakpointId <= 0) {
+      if (value.isEmpty()) {
+        return;
+      }
+      breakpointId = BreakpointManager::instance()
+                         .toggleBreakpoint(filePath, clickedLine)
+                         .id;
+    }
+    if (editingLogpoint) {
+      BreakpointManager::instance().setLogMessage(breakpointId, value);
+    } else {
+      BreakpointManager::instance().setCondition(breakpointId, value);
+    }
+  } else if (enableAction && selected == enableAction) {
+    BreakpointManager::instance().setEnabled(existing.id, !existing.enabled);
   } else if (selected == blameAction && mainWindow) {
     bool enabled = mainWindow->isGitBlameEnabledForFile(filePath);
     mainWindow->showGitBlameForCurrentFile(!enabled);
@@ -673,7 +721,29 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
         painter.setRenderHint(QPainter::Antialiasing, true);
         painter.setPen(Qt::NoPen);
         painter.setBrush(markerColor);
-        painter.drawEllipse(markerX, markerY, markerDiameter, markerDiameter);
+        if (bp.isLogpoint) {
+          const int half = markerDiameter / 2;
+          QPolygon diamond;
+          diamond << QPoint(markerX + half, markerY)
+                  << QPoint(markerX + markerDiameter, markerY + half)
+                  << QPoint(markerX + half, markerY + markerDiameter)
+                  << QPoint(markerX, markerY + half);
+          painter.drawPolygon(diamond);
+        } else {
+          painter.drawEllipse(markerX, markerY, markerDiameter, markerDiameter);
+          if (!bp.condition.isEmpty() || !bp.hitCondition.isEmpty()) {
+            const int centerX = markerX + markerDiameter / 2;
+            const int centerY = markerY + markerDiameter / 2;
+            const int barHalfWidth = qMax(2, markerDiameter / 4);
+            const int barGap = qMax(1, markerDiameter / 6);
+            painter.setPen(
+                QPen(m_backgroundColor, qMax(1, markerDiameter / 7)));
+            painter.drawLine(centerX - barHalfWidth, centerY - barGap,
+                             centerX + barHalfWidth, centerY - barGap);
+            painter.drawLine(centerX - barHalfWidth, centerY + barGap,
+                             centerX + barHalfWidth, centerY + barGap);
+          }
+        }
         painter.restore();
       }
 

@@ -43,7 +43,7 @@ Breakpoint BreakpointManager::toggleBreakpoint(const QString &filePath,
     bp.filePath = filePath;
     bp.line = line;
     bp.enabled = true;
-    addBreakpoint(bp);
+    bp.id = addBreakpoint(bp);
     return bp;
   }
 }
@@ -216,7 +216,7 @@ void BreakpointManager::setCondition(int id, const QString &condition) {
   }
 
   m_breakpoints[id].condition = condition;
-  m_breakpoints[id].isLogpoint = false;
+  m_breakpoints[id].isLogpoint = !m_breakpoints[id].logMessage.isEmpty();
   emit breakpointChanged(m_breakpoints[id]);
 
   if (m_dapClient && m_dapClient->isDebugging()) {
@@ -318,6 +318,19 @@ void BreakpointManager::updateVerification(
         break;
       }
     }
+  }
+}
+
+void BreakpointManager::resetVerification() {
+  for (auto it = m_breakpoints.begin(); it != m_breakpoints.end(); ++it) {
+    Breakpoint &bp = it.value();
+    if (!bp.verified && bp.verificationMessage.isEmpty() && bp.boundLine <= 0) {
+      continue;
+    }
+    bp.verified = false;
+    bp.verificationMessage.clear();
+    bp.boundLine = 0;
+    emit breakpointChanged(bp);
   }
 }
 

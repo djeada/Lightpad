@@ -140,6 +140,8 @@ public:
   void updateVerification(const QString &filePath,
                           const QList<DapBreakpoint> &verified);
 
+  void resetVerification();
+
   int addFunctionBreakpoint(const QString &functionName);
 
   void removeFunctionBreakpoint(int id);

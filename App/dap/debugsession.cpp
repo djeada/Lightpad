@@ -144,12 +144,25 @@ void DebugSession::restart() {
     m_configurationDoneSent = false;
     m_terminationReported = false;
     setState(State::Starting);
+    m_restarting = true;
   }
 
   m_client->restart();
+  m_restarting = false;
+
+  const DapClient::State clientState = m_client->state();
+  if (clientState == DapClient::State::Error ||
+      clientState == DapClient::State::Disconnected) {
+    setState(State::Terminated);
+    reportTermination();
+  }
 }
 
 void DebugSession::onClientStateChanged(DapClient::State state) {
+  if (m_restarting) {
+    return;
+  }
+
   switch (state) {
   case DapClient::State::Ready:
 
@@ -198,6 +211,9 @@ void DebugSession::onClientStateChanged(DapClient::State state) {
 }
 
 void DebugSession::onClientAdapterInitialized() {
+  if (m_restarting) {
+    return;
+  }
   LOG_DEBUG(QString("DAP session: initialized event received "
                     "(launchSent=%1, configDone=%2)")
                 .arg(m_launchRequestSent)
@@ -261,6 +277,9 @@ void DebugSession::onClientStopped(const DapStoppedEvent &event) {
 }
 
 void DebugSession::onClientTerminated() {
+  if (m_restarting) {
+    return;
+  }
   setState(State::Terminated);
   reportTermination();
 }

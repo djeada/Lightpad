@@ -146,6 +146,7 @@ private:
   bool m_ownsModel;
   GitIntegration *m_gitIntegration;
   QString m_treeFilterText;
+  QMetaObject::Connection m_directoryLoadedConnection;
   QString filePath;
   QString projectRootPath;
 };

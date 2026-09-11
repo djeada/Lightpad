@@ -718,6 +718,10 @@ QString UIStyleHelper::comboBoxStyle(const Theme &theme) {
                .name());
 }
 
+QString UIStyleHelper::comboArrowImageRule(const QColor &color) {
+  return chevronImageRule(color);
+}
+
 QString UIStyleHelper::comboBoxStyle(const ThemeDefinition &theme) {
   const ThemeColors &c = theme.colors;
   const QColor focus = glowFocus(theme, c, c.inputBorderFocus);

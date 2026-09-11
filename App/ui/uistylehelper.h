@@ -34,6 +34,7 @@ public:
 
   static QString comboBoxStyle(const Theme &theme);
   static QString comboBoxStyle(const ThemeDefinition &theme);
+  static QString comboArrowImageRule(const QColor &color);
 
   static QString checkBoxStyle(const Theme &theme);
   static QString checkBoxStyle(const ThemeDefinition &theme);

@@ -4,6 +4,7 @@
 #include <QCompleter>
 #include <QDialog>
 #include <QFileInfo>
+#include <QHelpEvent>
 #include <QInputDialog>
 #include <QMenu>
 #include <QMimeData>
@@ -1489,8 +1490,8 @@ void TextArea::clearLineHighlight() {
 
 void TextArea::updateRowColDisplay() {
   if (mainWindow)
-    mainWindow->setRowCol(textCursor().blockNumber(),
-                          textCursor().positionInBlock());
+    mainWindow->setRowCol(textCursor().blockNumber() + 1,
+                          textCursor().positionInBlock() + 1);
 }
 
 void TextArea::drawMatchingBrackets() {
@@ -1677,16 +1678,13 @@ void TextArea::updateExtraSelections() {
     extraSelections.append(selection);
   }
 
-  if (lineHighlighted && !cursor.hasSelection()) {
+  const bool cursorOnExecutionLine =
+      m_debugExecutionLine > 0 &&
+      m_debugExecutionLine == cursor.blockNumber() + 1;
+  if (lineHighlighted && !cursor.hasSelection() && !cursorOnExecutionLine) {
     QTextEdit::ExtraSelection selection;
     QColor color =
         mainWindow ? mainWindow->getTheme().highlightColor : highlightColor;
-    if (m_debugExecutionLine > 0 &&
-        m_debugExecutionLine == cursor.blockNumber() + 1) {
-      color = mainWindow ? mainWindow->getTheme().debugCurrentLineColor
-                         : QColor(255, 193, 7);
-      color.setAlpha(120);
-    }
     if (breakpointsByLine.contains(cursor.blockNumber() + 1)) {
       color.setAlpha(qMin(color.alpha(), 160));
     }
@@ -2416,6 +2414,62 @@ void TextArea::mouseMoveEvent(QMouseEvent *event) {
   }
 
   QPlainTextEdit::mouseMoveEvent(event);
+}
+
+bool TextArea::viewportEvent(QEvent *event) {
+  if (event->type() != QEvent::ToolTip || !mainWindow) {
+    return QPlainTextEdit::viewportEvent(event);
+  }
+
+  auto *helpEvent = static_cast<QHelpEvent *>(event);
+  const QTextCursor cursor = cursorForPosition(helpEvent->pos());
+  const QTextBlock block = cursor.block();
+  const QString text = block.text();
+  const auto isIdentifierChar = [](QChar c) {
+    return c.isLetterOrNumber() || c == QLatin1Char('_');
+  };
+
+  int column = cursor.positionInBlock();
+  if (column >= text.size() || !isIdentifierChar(text.at(column))) {
+    --column;
+  }
+  if (column < 0 || column >= text.size() ||
+      !isIdentifierChar(text.at(column))) {
+    return QPlainTextEdit::viewportEvent(event);
+  }
+
+  int start = column;
+  int end = column;
+  while (start > 0 && (isIdentifierChar(text.at(start - 1)) ||
+                       (text.at(start - 1) == QLatin1Char('.') && start > 1 &&
+                        isIdentifierChar(text.at(start - 2))))) {
+    --start;
+  }
+  while (end + 1 < text.size() && isIdentifierChar(text.at(end + 1))) {
+    ++end;
+  }
+
+  const QString expression = text.mid(start, end - start + 1);
+  if (expression.isEmpty() || expression.at(0).isDigit()) {
+    return QPlainTextEdit::viewportEvent(event);
+  }
+
+  QTextCursor startCursor(block);
+  startCursor.setPosition(block.position() + start);
+  QTextCursor endCursor(block);
+  endCursor.setPosition(block.position() + end + 1);
+  const QRect wordRect = cursorRect(startCursor)
+                             .united(cursorRect(endCursor))
+                             .adjusted(0, 0, 1, 0);
+  if (!wordRect.contains(helpEvent->pos())) {
+    return QPlainTextEdit::viewportEvent(event);
+  }
+
+  if (mainWindow->requestDebugHover(expression, helpEvent->globalPos(),
+                                    viewport(), wordRect)) {
+    return true;
+  }
+  return QPlainTextEdit::viewportEvent(event);
 }
 
 void TextArea::mouseReleaseEvent(QMouseEvent *event) {
