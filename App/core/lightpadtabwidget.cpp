@@ -117,6 +117,7 @@ LightpadTabWidget::LightpadTabWidget(QWidget *parent) : QTabWidget(parent) {
   tabBar()->setUsesScrollButtons(true);
   tabBar()->setContentsMargins(0, 0, 0, 0);
   tabBar()->setObjectName("lightpadTabBar");
+  tabBar()->setFocusPolicy(Qt::NoFocus);
 
   QWidget::connect(tabBar(), &QTabBar::tabCloseRequested, this,
                    [this](int index) { removeTab(index); });
@@ -380,7 +381,6 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "border-bottom: 2px solid " +
       accentColor +
       "; "
-      "font-weight: 700; "
       "}"
 
       "QTabBar::tab:hover:!selected { "

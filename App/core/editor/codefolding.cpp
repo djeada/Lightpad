@@ -36,6 +36,8 @@ bool CodeFoldingManager::isFoldable(int blockNumber) const {
 
   QString text = block.text();
   QString trimmed = text.trimmed();
+  if (trimmed.isEmpty())
+    return false;
 
   if (isRegionStart(blockNumber))
     return true;

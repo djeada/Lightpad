@@ -7,6 +7,7 @@
 #include <QStyleOptionMenuItem>
 #include <QStyleOptionProgressBar>
 #include <QStyleOptionTab>
+#include <QTabBar>
 
 HackerStyle::HackerStyle(QStyle *baseStyle) : QProxyStyle(baseStyle) {}
 
@@ -44,6 +45,9 @@ void HackerStyle::drawPrimitive(PrimitiveElement element,
   case PE_FrameFocusRect:
 
   {
+    if (qobject_cast<const QTabBar *>(widget)) {
+      return;
+    }
     painter->save();
     QPen pen(tc.accentPrimary, 1.5);
     painter->setPen(pen);

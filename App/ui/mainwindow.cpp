@@ -34,6 +34,7 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStringListModel>
+#include <QTabBar>
 #include <QTextDocument>
 #include <QThread>
 #include <QToolButton>
@@ -88,6 +89,7 @@
 #include "dialogs/processpickerdialog.h"
 #include "dialogs/provenancelensdialog.h"
 #include "dialogs/rebasetimelinedialog.h"
+#include "uistylehelper.h"
 
 #include "../build/cmakeproject.h"
 #include "../diagnostics/compilerdiagnosticparser.h"
@@ -453,8 +455,6 @@ MainWindow::MainWindow(QWidget *parent)
           [saveWatches](const WatchExpression &) { saveWatches(); });
   connect(&WatchManager::instance(), &WatchManager::watchRemoved, this,
           [saveWatches](int) { saveWatches(); });
-  connect(&WatchManager::instance(), &WatchManager::watchUpdated, this,
-          [saveWatches](const WatchExpression &) { saveWatches(); });
   connect(&WatchManager::instance(), &WatchManager::allWatchesCleared, this,
           [saveWatches]() { saveWatches(); });
 
@@ -992,6 +992,7 @@ void MainWindow::restoreSessionUiState() {
   if (!dockStateBase64.isEmpty()) {
     QMainWindow::restoreState(
         QByteArray::fromBase64(dockStateBase64.toLatin1()));
+    polishDockTabBars();
   }
   setCorner(Qt::BottomLeftCorner, Qt::BottomDockWidgetArea);
   setCorner(Qt::BottomRightCorner, Qt::BottomDockWidgetArea);
@@ -1324,10 +1325,17 @@ void MainWindow::updateGitStatusBar() {
     return;
   }
 
+  const auto syncVisibility = [this]() {
+    for (QLabel *label : {m_gitBranchLabel, m_gitSyncLabel, m_gitDirtyLabel}) {
+      label->setVisible(!label->text().isEmpty());
+    }
+  };
+
   if (!m_gitIntegration->isValidRepository()) {
     m_gitBranchLabel->clear();
     m_gitSyncLabel->clear();
     m_gitDirtyLabel->clear();
+    syncVisibility();
     return;
   }
 
@@ -1358,6 +1366,7 @@ void MainWindow::updateGitStatusBar() {
   m_gitDirtyLabel->setText(dirty ? "\u25CF" : "");
   m_gitDirtyLabel->setToolTip(dirty ? tr("Uncommitted changes")
                                     : tr("Working tree clean"));
+  syncVisibility();
 }
 
 QString
@@ -1945,7 +1954,25 @@ void MainWindow::openPathsFromCommandLine(const QStringList &paths) {
     }
 
     if (info.isDir()) {
-      setProjectRootPath(info.absoluteFilePath());
+      const QString newRoot = info.absoluteFilePath();
+      for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+        for (int i = tabWidget->count() - 1; i >= 0; --i) {
+          const QString tabPath = tabWidget->getFilePath(i);
+          if (tabPath.isEmpty() ||
+              FileDirTreeModel::isInside(newRoot, tabPath)) {
+            continue;
+          }
+          LightpadPage *page = tabWidget->getPage(i);
+          if (page && page->getTextArea() &&
+              page->getTextArea()->changesUnsaved()) {
+            continue;
+          }
+          notifyDiagnosticsFileClosed(tabPath);
+          tabWidget->removeTab(i);
+          unwatchOpenFileIfUnused(tabPath);
+        }
+      }
+      setProjectRootPath(newRoot);
       QDir::setCurrent(info.absoluteFilePath());
       setMainWindowTitle(info.fileName());
       if (fileQuickOpen) {
@@ -2925,7 +2952,7 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
       }
     });
 
-    m_terminalDock = new QDockWidget(QString(), this);
+    m_terminalDock = new QDockWidget(tr("Terminal"), this);
     m_terminalDock->setObjectName("terminalDock");
     DockUtils::configureToolPanelDock(m_terminalDock);
 
@@ -3583,8 +3610,8 @@ void MainWindow::updatePythonEnvironmentLabel() {
   QString tooltip;
   if (info.found && info.isVirtualEnvironment()) {
     const QString venvName = QFileInfo(info.venvPath).fileName();
-    label = QString::fromUtf8("\xF0\x9F\x90\x8D %1 (%2)")
-                .arg(QFileInfo(info.interpreter).fileName(), venvName);
+    label = QStringLiteral("%1 (%2)").arg(
+        QFileInfo(info.interpreter).fileName(), venvName);
     style = QString("QToolButton { color: %1; padding: 0 8px; font-size: 12px;"
                     " border: none; background: transparent; }"
                     "QToolButton:hover { color: %2; }")
@@ -3593,8 +3620,7 @@ void MainWindow::updatePythonEnvironmentLabel() {
     tooltip = tr("Python: %1\nVenv: %2\nClick to configure")
                   .arg(info.interpreter, info.venvPath);
   } else if (info.found) {
-    label = QString::fromUtf8("\xF0\x9F\x90\x8D %1")
-                .arg(QFileInfo(info.interpreter).fileName());
+    label = QStringLiteral("%1").arg(QFileInfo(info.interpreter).fileName());
     style = QString("QToolButton { color: %1; padding: 0 8px; font-size: 12px;"
                     " border: none; background: transparent; }"
                     "QToolButton:hover { color: %2; }")
@@ -3603,7 +3629,7 @@ void MainWindow::updatePythonEnvironmentLabel() {
         tr("Python: %1\nNo virtual environment active\nClick to configure")
             .arg(info.interpreter);
   } else {
-    label = QString::fromUtf8("\xF0\x9F\x90\x8D \xe2\x9a\xa0 No Python env");
+    label = QString::fromUtf8("\xe2\x9a\xa0 No Python env");
     style = QString("QToolButton { color: %1; padding: 0 8px; font-size: 12px;"
                     " border: none; background: transparent; }"
                     "QToolButton:hover { color: %2; }")
@@ -3939,6 +3965,7 @@ void MainWindow::tabifyBottomDock(QDockWidget *dock) {
   for (QDockWidget *existing : bottomDocks) {
     if (existing && existing != dock && existing->isVisible()) {
       tabifyDockWidget(existing, dock);
+      polishDockTabBars();
       return;
     }
   }
@@ -3946,9 +3973,40 @@ void MainWindow::tabifyBottomDock(QDockWidget *dock) {
   for (QDockWidget *existing : bottomDocks) {
     if (existing && existing != dock) {
       tabifyDockWidget(existing, dock);
-      return;
+      break;
     }
   }
+  polishDockTabBars();
+}
+
+void MainWindow::polishDockTabBars() {
+  const QList<QTabBar *> tabBars =
+      findChildren<QTabBar *>(QString(), Qt::FindDirectChildrenOnly);
+  for (QTabBar *tabBar : tabBars) {
+    tabBar->setElideMode(Qt::ElideNone);
+  }
+}
+
+QString MainWindow::activeDebugTarget() const {
+  const SettingsManager &settings = SettingsManager::instance();
+  const QString target =
+      settings.getValue("activeDebugTarget", QString()).toString().trimmed();
+  if (target.isEmpty()) {
+    return {};
+  }
+  const QString owner =
+      settings.getValue("activeDebugTargetProject", QString()).toString();
+  if (QDir::cleanPath(owner) != QDir::cleanPath(m_projectRootPath)) {
+    return {};
+  }
+  return target;
+}
+
+void MainWindow::setActiveDebugTarget(const QString &target) {
+  SettingsManager &settings = SettingsManager::instance();
+  settings.setValue("activeDebugTarget", target);
+  settings.setValue("activeDebugTargetProject",
+                    target.isEmpty() ? QString() : m_projectRootPath);
 }
 
 void MainWindow::on_actionToggle_Test_Panel_triggered() {
@@ -5680,6 +5738,13 @@ void MainWindow::debugFileByPath(const QString &filePath) {
   startDebuggingForFile(filePath);
 }
 
+bool MainWindow::requestDebugHover(const QString &expression,
+                                   const QPoint &globalPos, QWidget *anchor,
+                                   const QRect &anchorRect) {
+  return debugPanel && debugPanel->requestHoverEvaluation(expression, globalPos,
+                                                          anchor, anchorRect);
+}
+
 void MainWindow::attachDebugSession(const QString &sessionId) {
   if (sessionId.isEmpty()) {
     return;
@@ -5765,7 +5830,11 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
           return;
         }
 
+        const bool keepDebugPanelInFront = debugDock && debugDock->isVisible();
         showTerminalPanel();
+        if (keepDebugPanelInFront) {
+          debugDock->raise();
+        }
 
         QStringList args = commandLine;
         const QString program = args.takeFirst();
@@ -5822,12 +5891,16 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
                     state == DebugSession::State::Terminated ||
                     state == DebugSession::State::Idle) {
                   updateAllTextAreas(&TextArea::setDebugExecutionLine, 0);
+                } else if (state == DebugSession::State::Stopped && debugDock) {
+                  debugDock->show();
+                  debugDock->raise();
                 }
               });
 }
 
 void MainWindow::clearDebugSession() {
   m_activeDebugSessionId.clear();
+  BreakpointManager::instance().resetVerification();
   if (debugPanel) {
     debugPanel->setDapClient(nullptr);
     debugPanel->clearAll();
@@ -6511,10 +6584,7 @@ void MainWindow::rebuildTestTargetMenu() {
 }
 
 QString MainWindow::selectedDebugConfigurationName() const {
-  QString selectedName = SettingsManager::instance()
-                             .getValue("activeDebugTarget", QString())
-                             .toString()
-                             .trimmed();
+  QString selectedName = activeDebugTarget().trimmed();
   if (selectedName.isEmpty() ||
       selectedName.startsWith(QLatin1String(kCompoundDebugTargetPrefix))) {
     return {};
@@ -6531,10 +6601,7 @@ QString MainWindow::selectedDebugConfigurationName() const {
 }
 
 QString MainWindow::selectedCompoundDebugConfigurationName() const {
-  QString selectedName = SettingsManager::instance()
-                             .getValue("activeDebugTarget", QString())
-                             .toString()
-                             .trimmed();
+  QString selectedName = activeDebugTarget().trimmed();
   if (!selectedName.startsWith(QLatin1String(kCompoundDebugTargetPrefix))) {
     return {};
   }
@@ -6858,16 +6925,12 @@ void MainWindow::refreshDebugTargetButton() {
   ui->debugButton->setAccessibleName(buttonText);
 
   if (!selectedCompoundName.isEmpty()) {
-    SettingsManager::instance().setValue(
-        "activeDebugTarget",
-        QString::fromLatin1(kCompoundDebugTargetPrefix) + selectedCompoundName);
+    setActiveDebugTarget(QString::fromLatin1(kCompoundDebugTargetPrefix) +
+                         selectedCompoundName);
   } else if (!selectedName.isEmpty()) {
-    SettingsManager::instance().setValue("activeDebugTarget", selectedName);
-  } else if (!SettingsManager::instance()
-                  .getValue("activeDebugTarget", QString())
-                  .toString()
-                  .isEmpty()) {
-    SettingsManager::instance().setValue("activeDebugTarget", QString());
+    setActiveDebugTarget(selectedName);
+  } else if (!activeDebugTarget().isEmpty()) {
+    setActiveDebugTarget(QString());
   }
 }
 
@@ -6889,7 +6952,7 @@ void MainWindow::rebuildDebugTargetMenu() {
   quickDebugAction->setChecked(selectedName.isEmpty() &&
                                selectedCompoundName.isEmpty());
   connect(quickDebugAction, &QAction::triggered, this, [this]() {
-    SettingsManager::instance().setValue("activeDebugTarget", QString());
+    setActiveDebugTarget(QString());
     SettingsManager::instance().saveSettings();
     refreshDebugTargetButton();
   });
@@ -6908,8 +6971,7 @@ void MainWindow::rebuildDebugTargetMenu() {
       action->setChecked(config.name == selectedName);
       connect(action, &QAction::triggered, this,
               [this, configName = config.name]() {
-                SettingsManager::instance().setValue("activeDebugTarget",
-                                                     configName);
+                setActiveDebugTarget(configName);
                 SettingsManager::instance().setValue("lastDebugConfiguration",
                                                      configName);
                 SettingsManager::instance().saveSettings();
@@ -6933,10 +6995,9 @@ void MainWindow::rebuildDebugTargetMenu() {
       action->setChecked(compound.name == selectedCompoundName);
       connect(action, &QAction::triggered, this,
               [this, compoundName = compound.name]() {
-                SettingsManager::instance().setValue(
-                    "activeDebugTarget",
+                setActiveDebugTarget(
                     QString::fromLatin1(kCompoundDebugTargetPrefix) +
-                        compoundName);
+                    compoundName);
                 SettingsManager::instance().setValue("lastDebugConfiguration",
                                                      compoundName);
                 SettingsManager::instance().saveSettings();
@@ -7474,7 +7535,7 @@ bool MainWindow::startDebugConfigurationByName(
     ThemedMessageBox::warning(
         this, tr("Debug Configuration"),
         tr("The selected debug configuration could not be found."));
-    SettingsManager::instance().setValue("activeDebugTarget", QString());
+    setActiveDebugTarget(QString());
     SettingsManager::instance().saveSettings();
     refreshDebugTargetButton();
     m_debugStartInProgress = false;
@@ -7482,7 +7543,7 @@ bool MainWindow::startDebugConfigurationByName(
   }
 
   SettingsManager::instance().setValue("lastDebugConfiguration", selectedName);
-  SettingsManager::instance().setValue("activeDebugTarget", selectedName);
+  setActiveDebugTarget(selectedName);
   SettingsManager::instance().saveSettings();
   refreshDebugTargetButton();
 
@@ -7586,7 +7647,7 @@ bool MainWindow::startCompoundDebugConfigurationByName(
     ThemedMessageBox::warning(
         this, tr("Compound Debug Configuration"),
         tr("The selected compound configuration could not be found."));
-    SettingsManager::instance().setValue("activeDebugTarget", QString());
+    setActiveDebugTarget(QString());
     SettingsManager::instance().saveSettings();
     refreshDebugTargetButton();
     m_debugStartInProgress = false;
@@ -7601,9 +7662,8 @@ bool MainWindow::startCompoundDebugConfigurationByName(
     return false;
   }
 
-  SettingsManager::instance().setValue(
-      "activeDebugTarget",
-      QString::fromLatin1(kCompoundDebugTargetPrefix) + selectedName);
+  setActiveDebugTarget(QString::fromLatin1(kCompoundDebugTargetPrefix) +
+                       selectedName);
   SettingsManager::instance().setValue("lastDebugConfiguration", selectedName);
   SettingsManager::instance().saveSettings();
   refreshDebugTargetButton();
@@ -7949,12 +8009,12 @@ void MainWindow::on_actionStart_Debug_Configuration_triggered() {
     return;
   }
 
-  const QString lastTarget =
-      SettingsManager::instance()
-          .getValue("activeDebugTarget",
-                    SettingsManager::instance().getValue(
-                        "lastDebugConfiguration", QString()))
-          .toString();
+  QString lastTarget = activeDebugTarget();
+  if (lastTarget.isEmpty()) {
+    lastTarget = SettingsManager::instance()
+                     .getValue("lastDebugConfiguration", QString())
+                     .toString();
+  }
   QString initialDisplay;
   for (auto it = displayToTarget.constBegin(); it != displayToTarget.constEnd();
        ++it) {
@@ -7984,7 +8044,7 @@ void MainWindow::on_actionStart_Debug_Configuration_triggered() {
   }
 
   const QString selectedTarget = displayToTarget.value(selectedName);
-  SettingsManager::instance().setValue("activeDebugTarget", selectedTarget);
+  setActiveDebugTarget(selectedTarget);
   SettingsManager::instance().saveSettings();
   refreshDebugTargetButton();
   if (selectedTarget.startsWith(QLatin1String(kCompoundDebugTargetPrefix))) {
@@ -9088,12 +9148,9 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       "; "
       "}"
       "QComboBox::down-arrow { "
-      "image: none; "
-      "border: 4px solid transparent; "
-      "border-top-color: " +
-      secondaryText +
-      "; "
-      "margin-top: 4px; "
+      "width: 9px; "
+      "height: 6px; " +
+      UIStyleHelper::comboArrowImageRule(QColor(secondaryText)) +
       "}"
       "QComboBox QAbstractItemView { "
       "background-color: " +
@@ -9377,7 +9434,6 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       "border-bottom: 3px solid " +
       accentColor +
       "; "
-      "font-weight: 700; "
       "}"
       "QTabBar::tab:hover:!selected { "
       "color: " +

@@ -511,6 +511,7 @@ private:
   bool m_dataBreakpointsSupported;
   bool m_dataBreakpointsConfigured;
   bool m_pausePending;
+  bool m_stopping = false;
 
   QJsonObject m_launchConfig;
   bool m_isAttach;

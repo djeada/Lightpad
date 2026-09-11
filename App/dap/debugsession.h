@@ -96,6 +96,7 @@ private:
   bool m_configurationDoneSent;
 
   bool m_terminationReported = false;
+  bool m_restarting = false;
   QString m_lastError;
 };
 

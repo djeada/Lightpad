@@ -689,11 +689,38 @@ void TestPanel::applyTheme(const Theme &theme) {
   m_autoRunModeCombo->setStyleSheet(comboStyle);
 }
 
+static QString workspaceConfigurationKey(const QString &folder) {
+  return QStringLiteral("workspaceConfigurationId_%1")
+      .arg(qHash(QDir::cleanPath(folder)));
+}
+
+static QString workspaceConfigurationId(const QString &folder) {
+  if (folder.isEmpty()) {
+    return {};
+  }
+  QSettings settings;
+  settings.beginGroup("TestPanel");
+  QString configId =
+      settings.value(workspaceConfigurationKey(folder)).toString();
+  settings.endGroup();
+  if (configId.isEmpty()) {
+    configId = TestConfigurationManager::instance()
+                   .preferredConfigurationForPath(folder)
+                   .id;
+  }
+  return configId;
+}
+
 void TestPanel::setWorkspaceFolder(const QString &folder) {
   m_workspaceFolder = folder;
   TestConfigurationManager::instance().setWorkspaceFolder(folder);
   TestConfigurationManager::instance().loadUserConfigurations(folder);
   refreshConfigurations();
+  const int workspaceIndex =
+      m_configCombo->findData(workspaceConfigurationId(folder));
+  if (workspaceIndex >= 0) {
+    m_configCombo->setCurrentIndex(workspaceIndex);
+  }
   m_autoTestRunner->setWorkspaceFolder(folder);
   m_autoTestRunner->loadSettings(folder);
   m_autoRunAction->setChecked(m_autoTestRunner->isEnabled());
@@ -1793,6 +1820,10 @@ void TestPanel::saveState() const {
   settings.beginGroup("TestPanel");
   settings.setValue("lastConfigurationId", m_configCombo->currentData());
   settings.setValue("lastConfiguration", m_configCombo->currentText());
+  if (!m_workspaceFolder.isEmpty()) {
+    settings.setValue(workspaceConfigurationKey(m_workspaceFolder),
+                      m_configCombo->currentData());
+  }
   settings.setValue("lastFilter", m_filterCombo->currentIndex());
   settings.endGroup();
 }
@@ -1805,8 +1836,9 @@ void TestPanel::restoreState() {
   int lastFilter = settings.value("lastFilter", 0).toInt();
   settings.endGroup();
 
-  int idx = -1;
-  if (!lastConfigId.isEmpty())
+  int idx =
+      m_configCombo->findData(workspaceConfigurationId(m_workspaceFolder));
+  if (idx < 0 && !lastConfigId.isEmpty())
     idx = m_configCombo->findData(lastConfigId);
   if (idx < 0 && !lastConfig.isEmpty())
     idx = m_configCombo->findText(lastConfig);

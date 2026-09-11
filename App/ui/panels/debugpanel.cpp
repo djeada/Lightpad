@@ -32,6 +32,8 @@
 #include <QTextDocument>
 #include <QTimer>
 #include <QToolButton>
+#include <QToolTip>
+#include <algorithm>
 
 namespace {
 constexpr int MAX_DEBUG_CONSOLE_BLOCKS = 2000;
@@ -59,6 +61,11 @@ public:
   explicit DebugTreeDelegate(QObject *parent = nullptr)
       : QStyledItemDelegate(parent) {}
 
+  static QRect contentRect(const QRect &itemRect) {
+    return itemRect.adjusted(kRowInset + kTextInsetLeft, 1,
+                             -(kRowInset + kTextInsetRight), -1);
+  }
+
   void setTheme(const Theme &theme) {
     m_textColor = theme.foregroundColor;
     m_hoverBackground =
@@ -82,6 +89,11 @@ public:
     const bool isSelected = opt.state.testFlag(QStyle::State_Selected);
     const bool isHovered = opt.state.testFlag(QStyle::State_MouseOver);
 
+    const QVariant foreground = index.data(Qt::ForegroundRole);
+    const QColor textColor = foreground.isValid()
+                                 ? qvariant_cast<QBrush>(foreground).color()
+                                 : m_textColor;
+
     QRect rowRect = opt.rect.adjusted(kRowInset, 1, -kRowInset, -1);
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, false);
@@ -101,15 +113,23 @@ public:
       }
     }
 
-    opt.rect = rowRect.adjusted(kTextInsetLeft, 0, -kTextInsetRight, 0);
+    opt.rect = contentRect(opt.rect);
     opt.state &= ~QStyle::State_HasFocus;
     opt.showDecorationSelected = false;
     opt.palette.setColor(QPalette::Highlight, Qt::transparent);
-    opt.palette.setColor(QPalette::HighlightedText, m_textColor);
-    opt.palette.setColor(QPalette::Text, m_textColor);
+    opt.palette.setColor(QPalette::HighlightedText, textColor);
+    opt.palette.setColor(QPalette::Text, textColor);
 
     QStyledItemDelegate::paint(painter, opt, index);
     painter->restore();
+  }
+
+  bool editorEvent(QEvent *event, QAbstractItemModel *model,
+                   const QStyleOptionViewItem &option,
+                   const QModelIndex &index) override {
+    QStyleOptionViewItem adjusted(option);
+    adjusted.rect = contentRect(option.rect);
+    return QStyledItemDelegate::editorEvent(event, model, adjusted, index);
   }
 
   QSize sizeHint(const QStyleOptionViewItem &option,
@@ -226,6 +246,12 @@ DebugPanel::DebugPanel(QWidget *parent)
           &DebugPanel::onWatchUpdated);
   connect(&WatchManager::instance(), &WatchManager::watchChildrenReceived, this,
           &DebugPanel::onWatchChildrenReceived);
+  connect(&WatchManager::instance(), &WatchManager::allWatchesCleared, this,
+          [this]() {
+            m_watchTree->clear();
+            m_watchIdToItem.clear();
+            updateSectionSummaries();
+          });
 
   for (const WatchExpression &w : WatchManager::instance().allWatches()) {
     onWatchAdded(w);
@@ -341,6 +367,8 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "}"
           "QToolButton#debugToolbarButton[role=\"primary\"]:disabled {"
           "  background: transparent;"
+          "  color: {subtleText};"
+          "  font-weight: 500;"
           "}"
           "QToolButton#debugToolbarButton[role=\"danger\"]:hover {"
           "  background: {errorBg};"
@@ -475,9 +503,9 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  color: {warningColor};"
           "}"
           "QLabel#debugStatusLabel[statusKind=\"running\"] {"
-          "  border-color: {tabSelectedBorder};"
+          "  border-color: {accentColor};"
           "  background: {runningBg};"
-          "  color: {tabSelectedBorder};"
+          "  color: {accentColor};"
           "}"
           "QLabel#debugStatusLabel[statusKind=\"paused\"] {"
           "  border-color: {successColor};"
@@ -497,6 +525,19 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  selection-background-color: {accentSoft};"
           "  selection-color: {fg};"
           "  padding: 6px;"
+          "  font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;"
+          "  font-size: 12px;"
+          "}"
+          "QLineEdit#debugConsoleInput {"
+          "  font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;"
+          "  font-size: 12px;"
+          "}"
+          "QLineEdit#debugConsoleFind {"
+          "  background: {inputSurface};"
+          "  color: {fg};"
+          "  border: 1px solid {shellBorder};"
+          "  border-radius: 3px;"
+          "  padding: 2px 8px;"
           "}"),
       {{"panelBg", panelSurface.name()},
        {"fg", theme.foregroundColor.name()},
@@ -512,6 +553,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
        {"inputSurface", inputSurface.name()},
        {"focusSurface", focusSurface.name()},
        {"accentSoft", theme.accentSoftColor.name()},
+       {"accentColor", theme.accentColor.name()},
        {"consoleSurface", consoleSurface.name()},
        {"warningColor", theme.warningColor.name()},
        {"startingBg", startingBg.name(QColor::HexArgb)},
@@ -539,7 +581,6 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  selection-color: {fg};"
           "}"
           "QTreeWidget::item {"
-          "  color: {fg};"
           "  padding: 4px 8px;"
           "  margin: 0;"
           "  border-radius: 0px;"
@@ -549,7 +590,6 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "}"
           "QTreeWidget::item:selected {"
           "  background: transparent;"
-          "  color: {fg};"
           "}"
           "QTreeWidget::item:hover:!selected {"
           "  background: transparent;"
@@ -631,6 +671,10 @@ void DebugPanel::applyTheme(const Theme &theme) {
       delegate->setTheme(theme);
     }
     applyTreePalette(tree, theme);
+  }
+
+  if (m_watchTree && m_watchTree->columnWidth(0) < 200) {
+    m_watchTree->setColumnWidth(0, 240);
   }
 
   if (m_consoleOutput) {
@@ -834,6 +878,28 @@ void DebugPanel::setInspectorTabLabel(int index, const QString &label) {
   }
 }
 
+bool DebugPanel::requestHoverEvaluation(const QString &expression,
+                                        const QPoint &globalPos,
+                                        QWidget *anchor,
+                                        const QRect &anchorRect) {
+  if (!m_dapClient || m_dapClient->state() != DapClient::State::Stopped ||
+      m_stackFrames.isEmpty() || expression.trimmed().isEmpty()) {
+    return false;
+  }
+
+  if (m_hoverRequestSeq > 0 && expression == m_hoverExpression) {
+    return true;
+  }
+
+  m_hoverExpression = expression;
+  m_hoverGlobalPos = globalPos;
+  m_hoverAnchor = anchor;
+  m_hoverAnchorRect = anchorRect;
+  m_hoverRequestSeq = m_dapClient->evaluate(expression, m_currentFrameId,
+                                            QStringLiteral("hover"));
+  return m_hoverRequestSeq > 0;
+}
+
 QList<QAction *> DebugPanel::transportActions() const {
   QList<QAction *> actions;
   for (QAction *action :
@@ -944,6 +1010,9 @@ void DebugPanel::setupToolbar() {
   m_threadSelector->setToolTip(tr("Select active thread"));
   m_threadSelector->setStatusTip(tr("Select active thread"));
   m_threadSelector->setMinimumWidth(160);
+  m_threadSelector->setMaximumWidth(320);
+  m_threadSelector->setPlaceholderText(tr("No threads"));
+  m_threadSelector->setSizeAdjustPolicy(QComboBox::AdjustToContents);
   m_threadSelector->setEnabled(false);
   m_threadSelector->setCursor(Qt::PointingHandCursor);
   connect(m_threadSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -1184,7 +1253,8 @@ void DebugPanel::setupBreakpoints() {
   m_breakpointsTree->header()->setHighlightSections(false);
   m_breakpointsTree->header()->setSectionResizeMode(
       0, QHeaderView::ResizeToContents);
-  m_breakpointsTree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
+  m_breakpointsTree->header()->setSectionResizeMode(
+      1, QHeaderView::ResizeToContents);
 
   connect(m_breakpointsTree, &QTreeWidget::itemDoubleClicked, this,
           &DebugPanel::onBreakpointItemDoubleClicked);
@@ -1289,6 +1359,7 @@ void DebugPanel::toggleConsoleDetached() {
 
   m_consoleWindow = new QWidget(window(), Qt::Window);
   m_consoleWindow->setWindowTitle(tr("Debug Console"));
+  m_consoleWindow->setStyleSheet(styleSheet());
   m_consoleWindow->setAttribute(Qt::WA_DeleteOnClose, false);
   m_consoleWindow->resize(900, 520);
 
@@ -1724,6 +1795,7 @@ void DebugPanel::clearAll() {
   m_lastStoppedThreadId = 0;
   m_lastStoppedReason = DapStoppedReason::Unknown;
   m_pendingConsoleEvaluations.clear();
+  m_hoverRequestSeq = 0;
   m_consoleExpansions.clear();
   m_consoleExpansionNodeByRef.clear();
   m_previousVariableValues.clear();
@@ -1839,6 +1911,8 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
 
 void DebugPanel::onContinued() {
   m_stepInProgress = false;
+  m_hoverRequestSeq = 0;
+  QToolTip::hideText();
   m_variablesTree->clear();
   m_variableRefToItem.clear();
   m_pendingTreeSummaries.clear();
@@ -1949,6 +2023,16 @@ void DebugPanel::onThreadsReceived(const QList<DapThread> &threads) {
   }
 
   m_threadSelector->setEnabled(!threads.isEmpty());
+  if (QAbstractItemView *popup = m_threadSelector->view()) {
+    int widest = m_threadSelector->width();
+    const QFontMetrics metrics(popup->font());
+    for (int i = 0; i < m_threadSelector->count(); ++i) {
+      widest =
+          qMax(widest,
+               metrics.horizontalAdvance(m_threadSelector->itemText(i)) + 48);
+    }
+    popup->setMinimumWidth(widest);
+  }
   m_threadSelector->blockSignals(false);
 
   if (m_dapClient && hasCurrentThread) {
@@ -2812,6 +2896,13 @@ void DebugPanel::refreshBreakpointList() {
 
   QList<Breakpoint> breakpoints =
       BreakpointManager::instance().allBreakpoints();
+  std::sort(breakpoints.begin(), breakpoints.end(),
+            [](const Breakpoint &a, const Breakpoint &b) {
+              if (a.filePath != b.filePath) {
+                return a.filePath < b.filePath;
+              }
+              return a.line < b.line;
+            });
 
   for (const Breakpoint &bp : breakpoints) {
     QTreeWidgetItem *item = new QTreeWidgetItem();
@@ -3055,13 +3146,46 @@ void DebugPanel::onEvaluateResult(int requestSeq, const QString &expression,
     return;
   }
 
-  const int pendingIndex = findPendingConsoleEvaluationIndex(requestSeq);
-  QString displayExpression = expression;
-  if (pendingIndex >= 0) {
-    displayExpression =
-        m_pendingConsoleEvaluations.at(pendingIndex).userExpression;
-    m_pendingConsoleEvaluations.removeAt(pendingIndex);
+  Q_UNUSED(expression);
+  if (m_hoverRequestSeq > 0 && requestSeq == m_hoverRequestSeq) {
+    m_hoverRequestSeq = 0;
+    if (m_hoverAnchor && m_hoverAnchor->isVisible()) {
+      constexpr int kMaxHoverValueChars = 600;
+      constexpr int kHoverLineChars = 100;
+      QString value = result.trimmed();
+      if (value.size() > kMaxHoverValueChars) {
+        value = value.left(kMaxHoverValueChars) + QStringLiteral("…");
+      }
+      QStringList lines;
+      for (const QString &line : value.split(QLatin1Char('\n'))) {
+        for (int offset = 0; offset < line.size() || offset == 0;
+             offset += kHoverLineChars) {
+          lines.append(line.mid(offset, kHoverLineChars));
+          if (line.isEmpty()) {
+            break;
+          }
+        }
+      }
+      QString html = QStringLiteral("<p style='white-space:pre'><b>%1</b> = %2")
+                         .arg(m_hoverExpression.toHtmlEscaped(),
+                              lines.join(QLatin1Char('\n')).toHtmlEscaped());
+      if (!type.isEmpty()) {
+        html += QStringLiteral("  <i>(%1)</i>").arg(type.toHtmlEscaped());
+      }
+      html += QStringLiteral("</p>");
+      QToolTip::showText(m_hoverGlobalPos, html, m_hoverAnchor,
+                         m_hoverAnchorRect);
+    }
+    return;
   }
+
+  const int pendingIndex = findPendingConsoleEvaluationIndex(requestSeq);
+  if (pendingIndex < 0) {
+    return;
+  }
+  const QString displayExpression =
+      m_pendingConsoleEvaluations.at(pendingIndex).userExpression;
+  m_pendingConsoleEvaluations.removeAt(pendingIndex);
 
   if (result.trimmed().isEmpty() && variablesReference > 0 && m_dapClient) {
     startConsoleExpansion(displayExpression, type, variablesReference);
@@ -3186,6 +3310,11 @@ QString DebugPanel::renderConsoleExpansion(const ConsoleExpansion &expansion,
 
 void DebugPanel::onEvaluateError(int requestSeq, const QString &expression,
                                  const QString &errorMessage) {
+  if (m_hoverRequestSeq > 0 && requestSeq == m_hoverRequestSeq) {
+    m_hoverRequestSeq = 0;
+    return;
+  }
+
   if (m_localsFallbackPending && requestSeq == m_localsFallbackRequestSeq) {
     const int scopeRef = m_localsFallbackScopeRef;
     const bool staleFrame = m_localsFallbackFrameId != m_currentFrameId;
@@ -3216,8 +3345,7 @@ void DebugPanel::onEvaluateError(int requestSeq, const QString &expression,
     return;
   }
 
-  appendConsoleLine(QString("%1: %2").arg(expression, errorMessage),
-                    consoleErrorColor(), true);
+  Q_UNUSED(expression);
 }
 
 void DebugPanel::appendConsoleLine(const QString &text, const QColor &color,
@@ -3441,13 +3569,9 @@ void DebugPanel::applyDebugStatusText() {
     return;
   }
 
-  const int available = m_debugStatusLabel->width() - 2 * (12 + 1);
-  if (available <= 0) {
-    m_debugStatusLabel->setText(m_debugStatusText);
-    return;
-  }
+  constexpr int kMaxStatusTextWidth = 320;
   m_debugStatusLabel->setText(m_debugStatusLabel->fontMetrics().elidedText(
-      m_debugStatusText, Qt::ElideRight, available));
+      m_debugStatusText, Qt::ElideRight, kMaxStatusTextWidth));
 }
 
 void DebugPanel::fitVariablesNameColumn() {

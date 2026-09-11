@@ -151,6 +151,7 @@ void DapClient::stop(bool terminateDebuggee) {
     return;
   }
 
+  m_stopping = true;
   bool disconnectSent = false;
   if (isDebugging()) {
     QJsonObject args;
@@ -185,6 +186,7 @@ void DapClient::stop(bool terminateDebuggee) {
   m_dataBreakpointsSupported = true;
   m_dataBreakpointsConfigured = false;
   m_pausePending = false;
+  m_stopping = false;
   setState(State::Disconnected);
 
   LOG_INFO("Debug adapter stopped");
@@ -288,7 +290,7 @@ void DapClient::onChannelClosed() {
   m_dataBreakpointsConfigured = false;
   m_pausePending = false;
 
-  if (previousState == State::Terminated ||
+  if (m_stopping || previousState == State::Terminated ||
       previousState == State::Disconnected) {
     setState(State::Disconnected);
     return;
@@ -990,7 +992,7 @@ void DapClient::onProcessFinished(int exitCode,
   m_dataBreakpointsConfigured = false;
   m_pausePending = false;
 
-  if (previousState == State::Terminated ||
+  if (m_stopping || previousState == State::Terminated ||
       previousState == State::Disconnected) {
     setState(State::Disconnected);
     return;

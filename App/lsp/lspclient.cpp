@@ -512,8 +512,12 @@ void LspClient::onReadyReadStandardError() {
 }
 
 void LspClient::onProcessError(QProcess::ProcessError processError) {
-  Q_UNUSED(processError);
   QString errorMsg = m_process ? m_process->errorString() : "Unknown error";
+  if (m_process && processError == QProcess::FailedToStart) {
+    errorMsg = QString("Could not start '%1' (%2). Install the language server "
+                       "or change its command in the language server settings.")
+                   .arg(m_process->program(), errorMsg);
+  }
   LOG_ERROR(QString("LSP process error: %1").arg(errorMsg));
   setState(State::Error);
   emit error(errorMsg);

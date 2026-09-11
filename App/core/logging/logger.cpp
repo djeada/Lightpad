@@ -9,7 +9,18 @@ Logger &Logger::instance() {
 
 Logger::Logger()
     : m_logLevel(LogLevel::Info), m_fileLoggingEnabled(false),
-      m_consoleLoggingEnabled(true) {}
+      m_consoleLoggingEnabled(true) {
+  const QString level =
+      qEnvironmentVariable("LIGHTPAD_LOG_LEVEL").trimmed().toLower();
+  if (level == QLatin1String("debug")) {
+    m_logLevel = LogLevel::Debug;
+  } else if (level == QLatin1String("warning") ||
+             level == QLatin1String("warn")) {
+    m_logLevel = LogLevel::Warning;
+  } else if (level == QLatin1String("error")) {
+    m_logLevel = LogLevel::Error;
+  }
+}
 
 Logger::~Logger() { shutdown(); }
 

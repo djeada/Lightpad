@@ -42,6 +42,10 @@ public:
 
   QList<QAction *> transportActions() const;
 
+  bool requestHoverEvaluation(const QString &expression,
+                              const QPoint &globalPos, QWidget *anchor,
+                              const QRect &anchorRect);
+
 signals:
 
   void locationClicked(const QString &filePath, int line, int column);
@@ -275,6 +279,11 @@ private:
   int m_localsFallbackRequestSeq;
   Theme m_theme;
   bool m_themeInitialized;
+  int m_hoverRequestSeq = 0;
+  QString m_hoverExpression;
+  QPoint m_hoverGlobalPos;
+  QPointer<QWidget> m_hoverAnchor;
+  QRect m_hoverAnchorRect;
 };
 
 #endif

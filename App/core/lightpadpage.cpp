@@ -1041,14 +1041,13 @@ void LightpadPage::updateModel() {
     treeView->setModel(model);
   }
   model->sort(0, Qt::AscendingOrder);
-  connect(
-      model, &QFileSystemModel::directoryLoaded, this,
-      [this](const QString &) {
+  disconnect(m_directoryLoadedConnection);
+  m_directoryLoadedConnection = connect(
+      model, &QFileSystemModel::directoryLoaded, this, [this](const QString &) {
         if (!m_treeFilterText.trimmed().isEmpty()) {
           applyTreeFilter();
         }
-      },
-      Qt::UniqueConnection);
+      });
 
   treeView->setColumnHidden(1, true);
   treeView->setColumnHidden(2, true);

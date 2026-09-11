@@ -110,6 +110,8 @@ public:
   void goToDefinitionAtCursor();
   void runFileByPath(const QString &filePath);
   void debugFileByPath(const QString &filePath);
+  bool requestDebugHover(const QString &expression, const QPoint &globalPos,
+                         QWidget *anchor, const QRect &anchorRect);
 
   QString runSourceFilePath() const;
 
@@ -398,6 +400,9 @@ private:
   void ensureTestPanel();
   void trackDockLayoutChanges(QDockWidget *dock);
   void tabifyBottomDock(QDockWidget *dock);
+  void polishDockTabBars();
+  QString activeDebugTarget() const;
+  void setActiveDebugTarget(const QString &target);
   void syncViewToggleActionStates();
   bool isCurrentMinimapVisible() const;
   void ensureStatusLabels();
