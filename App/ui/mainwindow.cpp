@@ -498,26 +498,27 @@ void MainWindow::connectVimMode(TextArea *textArea) {
   ensureStatusLabels();
   m_connectedVimMode = vimMode;
 
-  connect(vimMode, &VimMode::modeChanged, this,
-          [this, textArea](VimEditMode mode) {
-            if (!textArea || !textArea->isVimModeEnabled()) {
-              updateVimStatusLabel("");
-              hideVimCommandPanel();
-              return;
-            }
-            if (mode == VimEditMode::Command) {
-              showVimCommandPanel(":", textArea->vimMode()->commandBuffer());
-            } else {
-              hideVimCommandPanel();
-            }
-            updateVimStatusLabel(textArea->vimMode()->modeName());
-          });
+  connect(
+      vimMode, &VimMode::modeChanged, this, [this, textArea](VimEditMode mode) {
+        if (!textArea || !textArea->isVimModeEnabled()) {
+          updateVimStatusLabel("");
+          hideVimCommandPanel();
+          return;
+        }
+        if (mode == VimEditMode::Command) {
+          VimMode *vim = textArea->vimMode();
+          showVimCommandPanel(QString(vim->commandType()), vim->commandText());
+        } else {
+          hideVimCommandPanel();
+        }
+        updateVimStatusLabel(textArea->vimMode()->modeName());
+      });
 
   connect(vimMode, &VimMode::statusMessage, this,
           [this](const QString &message) { showVimStatusMessage(message); });
 
   connect(vimMode, &VimMode::commandBufferChanged, this,
-          [this, textArea](const QString &buffer) {
+          [this, textArea](const QString &) {
             if (!textArea || !textArea->isVimModeEnabled()) {
               return;
             }
@@ -525,21 +526,68 @@ void MainWindow::connectVimMode(TextArea *textArea) {
             if (!currentVim || currentVim->mode() != VimEditMode::Command) {
               return;
             }
-            if (buffer.startsWith("/") || buffer.startsWith("?")) {
-              showVimCommandPanel(buffer.left(1), buffer.mid(1));
-            } else {
-              showVimCommandPanel(":", buffer);
-            }
+            showVimCommandPanel(QString(currentVim->commandType()),
+                                currentVim->commandText());
+            if (findReplacePanel)
+              findReplacePanel->setSearchCursorPosition(
+                  currentVim->commandCursorPosition());
           });
 
   connect(vimMode, &VimMode::commandExecuted, this,
-          [this](const QString &command) {
+          [this, textArea](const QString &command) {
+            auto later = [this](std::function<void()> action) {
+              QTimer::singleShot(0, this, std::move(action));
+            };
             if (command == "save") {
               on_actionSave_triggered();
+            } else if (command == "saveAll") {
+              for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+                if (!tabWidget)
+                  continue;
+                for (int i = 0; i < tabWidget->count(); ++i) {
+                  LightpadPage *page = tabWidget->getPage(i);
+                  const QString path = tabWidget->getFilePath(i);
+                  if (page && page->getTextArea() && !path.isEmpty() &&
+                      page->getTextArea()->changesUnsaved())
+                    save(path);
+                }
+              }
+            } else if (command == "saveAs") {
+              on_actionSave_as_triggered();
             } else if (command == "quit") {
-              closeCurrentTab();
-            } else if (command == "forceQuit") {
-              on_actionQuit_triggered();
+              later([this]() { closeCurrentTab(); });
+            } else if (command == "closeWithoutSaving") {
+              QPointer<TextArea> area(textArea);
+              later([this, area]() {
+                if (area)
+                  area->removeIconUnsaved();
+                closeCurrentTab();
+              });
+            } else if (command == "quitAll" || command == "forceQuit") {
+              later([this]() { on_actionQuit_triggered(); });
+            } else if (command == "newFile") {
+              later([this]() { on_actionNew_File_triggered(); });
+            } else if (command == "closeSplit") {
+              later([this]() { on_actionClose_Editor_Group_triggered(); });
+            } else if (command == "unsplitAll") {
+              later([this]() { on_actionUnsplit_All_triggered(); });
+            } else if (command == "focusNextSplit") {
+              later([this]() { on_actionFocus_Next_Group_triggered(); });
+            } else if (command == "focusPrevSplit") {
+              later([this]() { on_actionFocus_Previous_Group_triggered(); });
+            } else if (command == "goToDefinition") {
+              goToDefinitionAtCursor();
+            } else if (command == "fold") {
+              on_actionFold_Current_triggered();
+            } else if (command == "unfold") {
+              on_actionUnfold_Current_triggered();
+            } else if (command == "toggleFold") {
+              if (TextArea *area = getCurrentTextArea())
+                area->toggleFoldAtLine(area->textCursor().blockNumber());
+            } else if (command == "foldAll") {
+              on_actionFold_All_triggered();
+            } else if (command == "unfoldAll") {
+              on_actionUnfold_All_triggered();
             } else if (command == "vim:on") {
               if (!settings.vimModeEnabled) {
                 on_actionToggle_Vim_Mode_triggered();
@@ -567,7 +615,8 @@ void MainWindow::connectVimMode(TextArea *textArea) {
             } else if (command == "splitVertical") {
               on_actionSplit_Vertically_triggered();
             } else if (command.startsWith("edit:")) {
-              openFileAndAddToNewTab(command.mid(QString("edit:").size()));
+              const QString path = command.mid(QString("edit:").size());
+              later([this, path]() { openFileAndAddToNewTab(path); });
             }
           });
 
@@ -597,9 +646,7 @@ void MainWindow::connectVimMode(TextArea *textArea) {
               return;
             if (enabled && !pattern.isEmpty()) {
 
-              QString searchTerm = pattern;
-              searchTerm.remove("\\b");
-              textArea->updateSyntaxHighlightTags(searchTerm);
+              textArea->updateSyntaxHighlightTags(pattern);
             } else {
 
               textArea->updateSyntaxHighlightTags(QString());
@@ -623,6 +670,9 @@ void MainWindow::disconnectVimMode() {
 void MainWindow::showVimCommandPanel(const QString &prefix,
                                      const QString &buffer) {
   m_vimCommandPanelActive = true;
+  if (findReplacePanel) {
+    findReplacePanel->setVimCommandMode(true);
+  }
   showFindReplace(true);
   if (!findReplacePanel) {
     return;
@@ -636,11 +686,17 @@ void MainWindow::showVimCommandPanel(const QString &prefix,
 }
 
 void MainWindow::hideVimCommandPanel() {
-  if (findReplacePanel && findReplacePanel->isVimCommandMode()) {
+  const bool wasActive =
+      findReplacePanel && findReplacePanel->isVimCommandMode();
+  if (wasActive) {
     findReplacePanel->setVimCommandMode(false);
     findReplacePanel->close();
   }
   m_vimCommandPanelActive = false;
+  if (wasActive) {
+    if (TextArea *textArea = getCurrentTextArea())
+      textArea->setFocus();
+  }
 }
 
 void MainWindow::setTabWidthLabel(QString text) { ui->tabWidth->setText(text); }
@@ -2114,7 +2170,9 @@ void MainWindow::on_actionFind_in_file_triggered() {
       QString vimPattern = textArea->vimMode()->searchPattern();
       if (!vimPattern.isEmpty()) {
         QString searchTerm = vimPattern;
-        searchTerm.remove("\\b");
+        searchTerm.remove("\\<");
+        searchTerm.remove("\\>");
+        searchTerm.remove("\\V");
         findReplacePanel->setSearchText(searchTerm);
       }
     }

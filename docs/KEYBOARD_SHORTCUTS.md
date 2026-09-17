@@ -81,233 +81,151 @@ This document lists all keyboard shortcuts available in Lightpad.
 
 ## VIM Mode
 
-When VIM mode is enabled, the editor uses modal editing with different shortcuts:
+When VIM mode is enabled, the editor uses modal editing that follows Vim's behaviour (motions, operators, counts, registers, text objects, dot-repeat, macros and Ex commands). The implementation is checked against Vim 9.1 in the unit tests.
 
-> **Note:** In VIM Normal mode, `Ctrl+D` means "Page down" instead of "Duplicate line".
+> **Note:** While VIM mode is active, Vim's own `Ctrl` keys take priority over application shortcuts in the editor. In Normal/Visual mode that is `Ctrl+A B D E F G I L O Q R U V W X Y ] [`; in Insert mode `Ctrl+A D E H O R T U V W Y [`. Other shortcuts (for example `Ctrl+S`) keep working.
 > Use `:set novim` to disable VIM mode, `:set vim` to re-enable it, or disable VIM mode in preferences.
 
-### Normal Mode — Movement
+### Motions
+
+Every motion accepts a count and can be combined with an operator.
 
 | Key | Action |
 |-----|--------|
-| `h` / `←` | Move left |
-| `j` / `↓` | Move down |
-| `k` / `↑` | Move up |
-| `l` / `→` | Move right |
-| `w` | Next word start |
-| `b` | Previous word start |
-| `e` | End of word |
-| `W` | Next WORD start (whitespace-delimited) |
-| `B` | Previous WORD start (whitespace-delimited) |
-| `E` | End of WORD (whitespace-delimited) |
-| `0` | Start of line (column 0) |
-| `$` | End of line |
-| `^` | First non-space character |
-| `gg` | Go to start of file |
-| `G` | Go to end of file (or line N with count) |
-| `H` | Move to top of visible screen |
-| `M` | Move to middle of visible screen |
-| `L` | Move to bottom of visible screen |
-| `Ctrl+U` | Half page up |
-| `Ctrl+D` | Half page down |
-| `Ctrl+B` | Full page up |
-| `Ctrl+F` | Full page down |
-| `Ctrl+E` | Scroll down one line |
-| `Ctrl+Y` | Scroll up one line |
-| `%` | Jump to matching bracket |
-| `{` | Previous paragraph |
-| `}` | Next paragraph |
-| `(` | Previous sentence |
-| `)` | Next sentence |
-| `f{char}` | Find character forward |
-| `F{char}` | Find character backward |
-| `t{char}` | Move to before character forward |
-| `T{char}` | Move to before character backward |
-| `;` | Repeat last f/F/t/T |
-| `,` | Repeat last f/F/t/T (opposite direction) |
-| `*` | Search word under cursor forward |
-| `#` | Search word under cursor backward |
-| `n` | Next search result |
-| `N` | Previous search result |
-| `:` | Enter command mode |
-| `/` | Search forward |
-| `?` | Search backward |
+| `h` `j` `k` `l`, arrows, `<BS>`, `<Space>` | Character / line movement |
+| `w` `b` `e` `ge` | Word forward, back, end, back to end |
+| `W` `B` `E` `gE` | WORD (whitespace-delimited) variants |
+| `0` `^` `$` `g_` `\|` | Line start, first non-blank, line end, last non-blank, column N |
+| `gg` `G` `{N}G` `{N}%` | File start/end, line N, N percent |
+| `+` `-` `_` `<CR>` | First non-blank of next / previous / current line |
+| `f{c}` `F{c}` `t{c}` `T{c}` `;` `,` | Find character in line and repeat |
+| `%` | Matching bracket |
+| `[(` `[{` `])` `]}` | Unmatched parenthesis / brace |
+| `{` `}` `(` `)` | Paragraph / sentence |
+| `[[` `]]` `[]` `][` | Section (brace in column 0) |
+| `H` `M` `L` | Top / middle / bottom of window |
+| `/pat` `?pat` `n` `N` | Search (Vim regex, offsets such as `/pat/e+1`) |
+| `*` `#` `g*` `g#` | Search word under cursor |
+| `'{a-z}` `` `{a-z} `` `''` ` `` ` | Marks, previous context |
+| `` `[ `` `` `] `` `` `< `` `` `> `` `` `. `` `` `^ `` | Special marks |
+| `Ctrl+O` / `Ctrl+I` | Jump list back / forward |
+| `g;` `g,` | Change list |
 
-### Mode Switching
+### Operators
 
 | Key | Action |
 |-----|--------|
-| `i` | Enter Insert mode |
-| `I` | Insert at line start |
-| `a` | Append after cursor |
-| `A` | Append at line end |
-| `o` | Open line below |
-| `O` | Open line above |
-| `v` | Enter Visual mode |
-| `V` | Enter Visual Line mode |
-| `Ctrl+V` | Enter Visual Block mode |
-| `R` | Enter Replace mode |
-| `:` | Enter Command mode |
-| `/` | Start forward search |
-| `?` | Start backward search |
-| `Esc` / `Ctrl+[` | Return to Normal mode |
+| `d` `c` `y` | Delete, change, yank |
+| `>` `<` `=` | Shift right / left, re-indent |
+| `g~` `gu` `gU` `g?` | Toggle case, lowercase, uppercase, rot13 |
+| `gq` `gw` | Format lines (`gw` keeps the cursor) |
 
-### Operators (combine with motions)
+Double the operator for whole lines (`dd`, `cc`, `yy`, `>>`, `guu`, `gUU`, `g~~`, `gqq`). Motions can be forced with `v`, `V` or `Ctrl+V` (for example `dvj`). Operators also work with searches (`d/foo<CR>`) and with `gn` (`cgn` then `.` to change the next match).
+
+### Text Objects
 
 | Key | Action |
 |-----|--------|
-| `d` | Delete |
-| `c` | Change |
-| `y` | Yank (copy) |
-| `>` | Indent |
-| `<` | Unindent |
-| `g~` | Toggle case (with motion) |
-| `gu` | Lowercase (with motion) |
-| `gU` | Uppercase (with motion) |
-| `dd` | Delete line |
-| `yy` | Yank line |
-| `cc` | Change line |
-| `>>` | Indent line |
-| `<<` | Unindent line |
-| `dw` | Delete word |
-| `cw` | Change word |
-| `D` | Delete to end of line |
-| `C` | Change to end of line |
+| `iw` `aw` `iW` `aW` | Word / WORD |
+| `is` `as` `ip` `ap` | Sentence / paragraph |
+| `i(` `a(` `ib` `ab` | Parentheses |
+| `i{` `a{` `iB` `aB` | Braces (multi-line blocks become linewise) |
+| `i[` `a[` `i<` `a<` | Brackets |
+| `i"` `a"` `i'` `a'` `` i` `` `` a` `` | Quotes (searches forward on the line) |
+| `it` `at` | XML/HTML tag |
+| `gn` `gN` | Next / previous search match |
 
-### Text Objects (use with operators: d, c, y, g~, gu, gU)
+### Editing Commands
 
 | Key | Action |
 |-----|--------|
-| `iw` | Inner word |
-| `aw` | Around word (includes space) |
-| `iW` | Inner WORD (whitespace-delimited) |
-| `aW` | Around WORD (includes surrounding space) |
-| `ip` | Inner paragraph |
-| `ap` | Around paragraph (includes trailing blank lines) |
-| `is` | Inner sentence |
-| `as` | Around sentence (includes trailing space) |
-| `it` | Inner HTML/XML tag |
-| `at` | Around HTML/XML tag (includes the tags) |
-| `i(` or `i)` | Inner parentheses |
-| `a(` or `a)` | Around parentheses |
-| `i[` or `i]` | Inner brackets |
-| `a[` or `a]` | Around brackets |
-| `i{` or `i}` | Inner braces |
-| `a{` or `a}` | Around braces |
-| `i<` or `i>` | Inner angle brackets |
-| `a<` or `a>` | Around angle brackets |
-| `i"` | Inner double quotes |
-| `a"` | Around double quotes |
-| `i'` | Inner single quotes |
-| `a'` | Around single quotes |
-| `` i` `` | Inner backticks |
-| `` a` `` | Around backticks |
+| `i` `a` `I` `A` `gI` `gi` `o` `O` | Insert (counts repeat the inserted text) |
+| `x` `X` `D` `C` `s` `S` `Y` | Short forms of `dl` `dh` `d$` `c$` `cl` `cc` `yy` |
+| `r{c}` `R` | Replace character(s) / Replace mode |
+| `J` `gJ` | Join lines with / without spaces |
+| `~` | Toggle case |
+| `p` `P` `gp` `gP` `]p` `[p` | Put (linewise, charwise and blockwise) |
+| `u` `U` `Ctrl+R` | Undo / redo (an insert session is one undo step) |
+| `.` | Repeat last change (with a new count if given) |
+| `Ctrl+A` `Ctrl+X` | Increment / decrement decimal, hex (`0x`) and binary (`0b`) numbers |
+| `q{r}` `q` `@{r}` `@@` `@:` | Record / play macros, repeat last Ex command |
+| `m{a-zA-Z}` | Set mark |
+| `&` `g&` | Repeat last `:s` on the line / whole file |
+| `zz` `zt` `zb` `z<CR>` `z.` `z-` | Scroll cursor line |
+| `Ctrl+E` `Ctrl+Y` `Ctrl+D` `Ctrl+U` `Ctrl+F` `Ctrl+B` | Scroll |
+| `zo` `zc` `za` `zR` `zM` | Folds |
+| `gd` `Ctrl+]` `gf` | Go to definition, open file under cursor |
+| `gt` `gT` | Next / previous tab |
+| `Ctrl+W s` `Ctrl+W v` `Ctrl+W w` `Ctrl+W q` `Ctrl+W o` | Split, focus, close, unsplit |
+| `ZZ` `ZQ` | Save and close / close without saving |
+| `ga` `Ctrl+G` | Character info / file info |
 
-### Registers
-
-Named registers allow you to store and recall multiple clipboard values.
+### Insert and Replace Mode
 
 | Key | Action |
 |-----|--------|
-| `"{reg}` | Use register `{reg}` for the next yank/delete/paste |
-| `"a`–`"z` | Named registers (lowercase writes, uppercase appends) |
-| `"0` | Yank register (last yanked text) |
-| `"1`–`"9` | Delete history (most recent to oldest) |
-| `"+` | System clipboard register |
-| `"_` | Black hole register (discard) |
-| `".` | Last inserted text (read-only) |
-
-Example: `"ayy` yanks the current line into register `a`, `"ap` pastes from register `a`.
-
-### Macros
-
-| Key | Action |
-|-----|--------|
-| `q{a-z}` | Start recording macro into register |
-| `q` | Stop recording macro (when recording) |
-| `@{a-z}` | Play back macro from register |
-| `@@` | Replay last played macro |
-
-The status bar shows **●REC @{reg}** while recording.
-
-### Marks
-
-| Key | Action |
-|-----|--------|
-| `m{a-z}` | Set mark at cursor position |
-| `'{a-z}` | Jump to mark (line) |
-
-### g-Prefix Commands
-
-| Key | Action |
-|-----|--------|
-| `gi` | Go to last insert position and enter Insert mode |
-| `gv` | Reselect last visual selection |
-| `g~{motion}` | Toggle case over motion |
-| `gu{motion}` | Lowercase over motion |
-| `gU{motion}` | Uppercase over motion |
-
-### Other Normal Mode Commands
-
-| Key | Action |
-|-----|--------|
-| `x` | Delete character |
-| `r{char}` | Replace character |
-| `s` | Delete character and enter insert mode |
-| `S` | Delete line and enter insert mode |
-| `~` | Toggle case of character |
-| `u` | Undo |
-| `Ctrl+R` | Redo |
-| `p` | Paste after cursor |
-| `P` | Paste before cursor |
-| `J` | Join current line with next (supports count) |
-| `.` | Repeat last change |
-| `Ctrl+A` | Increment number under cursor |
-| `Ctrl+X` | Decrement number under cursor |
-| `zz` | Center cursor on screen |
-| `zt` | Scroll cursor to top |
-| `zb` | Scroll cursor to bottom |
+| `Esc` `Ctrl+[` `Ctrl+C` | Back to Normal mode |
+| `Ctrl+W` `Ctrl+U` `Ctrl+H` | Delete word / line / character before the cursor |
+| `Ctrl+T` `Ctrl+D` | Indent / unindent the line |
+| `Ctrl+R {r}` | Insert register contents |
+| `Ctrl+O {cmd}` | Run one Normal-mode command |
+| `Ctrl+E` `Ctrl+Y` | Copy the character below / above |
+| `Ctrl+A` | Insert the last inserted text |
+| `Ctrl+V {c}` | Insert a character literally |
+| `Insert` | Toggle Insert / Replace |
+| `BS` in Replace mode | Restore the replaced characters |
 
 ### Visual Mode
 
-All normal motions work to extend the selection. Additional commands:
+`v`, `V` and `Ctrl+V` start characterwise, linewise and block selections; pressing another one switches type. All motions and text objects extend the selection, and a mouse selection is treated as a visual selection.
 
 | Key | Action |
 |-----|--------|
-| `d` / `x` | Delete selection |
-| `c` / `s` | Change selection (delete and enter Insert) |
-| `y` | Yank selection |
-| `>` | Indent selection |
-| `<` | Unindent selection |
-| `~` | Toggle case of selection |
-| `u` | Lowercase selection |
-| `U` | Uppercase selection |
-| `J` | Join selected lines |
-| `o` | Move cursor to other end of selection |
+| `o` `O` | Other end / other corner |
+| `d` `x` `X` `D` `y` `Y` | Delete / yank (uppercase: whole lines, or to end of line in block mode) |
+| `c` `s` `C` `S` `R` | Change |
+| `r{c}` `J` `gJ` `>` `<` `=` `~` `u` `U` `g?` `gq` | Replace, join, shift, indent, case, format |
+| `p` `P` | Replace the selection with a register (`P` keeps the register) |
+| `I` `A` `$A` | Block insert / append on every line |
+| `Ctrl+A` `Ctrl+X` `g Ctrl+A` | Increment numbers (progressively with `g`) |
+| `gv` | Reselect the previous area |
+| `:` | Ex command on the selected lines (`:'<,'>`) |
 
-### Command Mode (Ex Commands)
+### Registers
+
+| Register | Contents |
+|----------|----------|
+| `"a`–`"z`, `"A`–`"Z` | Named registers (uppercase appends) |
+| `""` | Unnamed register |
+| `"0` | Last yank |
+| `"1`–`"9` | Last deletions of a line or more (shifted on each delete) |
+| `"-` | Last small (within a line) delete |
+| `"+` `"*` | System clipboard (`:set clipboard=unnamedplus` to use it by default) |
+| `"_` | Black hole |
+| `".` `":` `"/` | Last inserted text, last Ex command, last search |
+
+### Ex Commands
+
+Ranges are supported everywhere they make sense: `%`, `.`, `$`, `N`, `'a`, `'<,'>`, `/pat/`, `?pat?`, `+N`/`-N` and `;`. Commands can be chained with `|`, and the command line supports `Up`/`Down` history (prefix filtered), `Ctrl+R {r}`, `Ctrl+R Ctrl+W`, `Ctrl+U`, `Ctrl+W`, `Left`/`Right` and incremental search.
 
 | Command | Action |
 |---------|--------|
-| `:w` | Save file |
-| `:q` | Close tab |
-| `:wq` / `:x` | Save and close |
-| `:q!` | Force quit application |
-| `:e {file}` | Open file |
-| `:{number}` | Go to line number |
-| `/pattern` | Search forward for pattern |
-| `?pattern` | Search backward for pattern |
-| `:s/old/new/` | Substitute on current line |
-| `:%s/old/new/g` | Substitute in entire file |
-| `:noh` / `:nohlsearch` | Clear search highlighting |
-| `:bn` | Next buffer (tab) |
-| `:bp` | Previous buffer (tab) |
-| `:sp` | Split horizontally |
-| `:vsp` | Split vertically |
-| `:sort` | Sort selected lines (or all lines) |
-| `:registers` | Show register contents |
-| `:marks` | Show marks |
-| `↑` / `↓` | Recall previous `:` commands |
+| `:w` `:wa` `:up` `:sav` | Save, save all, save if modified, save as |
+| `:q` `:q!` `:wq` `:x` `:qa` `:wqa` | Close tab / quit |
+| `:e {file}` `:tabe {file}` `:enew` | Open file, new file |
+| `:sp` `:vs` `:close` `:only` `:bn` `:bp` `:tabn` `:tabp` | Splits and tabs |
+| `:{N}` | Go to line |
+| `:s/pat/rep/[gine]` `:&` `:&&` `:~` | Substitute (`\1`, `&`, `\r`, `\u` `\U` `\l` `\L` `\e`, `~` in the replacement) |
+| `:g/pat/cmd` `:v/pat/cmd` | Run a command on matching / non-matching lines |
+| `:normal {keys}` | Run Normal-mode keys (on each line of a range) |
+| `:d` `:y` `:pu` `:m` `:t` `:co` `:j` `:>` `:<` | Line editing |
+| `:sort [n] [u] [i] [x] [/pat/]` `:sort!` | Sort lines (whole file by default) |
+| `:retab` | Convert tabs using `tabstop` / `expandtab` |
+| `:noh` | Clear search highlight |
+| `:undo` `:redo` `:marks` `:reg` `:ma {a-z}` | Undo, redo, marks, registers |
+| `:set {option}` | `ignorecase` `smartcase` `hlsearch` `incsearch` `wrapscan` `expandtab` `autoindent` `joinspaces` `tabstop` `shiftwidth` `textwidth` `clipboard` `nrformats` (supports `no`, `inv`, `!`, `?`, `+=`, `-=`) |
+
+Search patterns use Vim regular expression syntax: `\<` `\>`, `\(` `\)`, `\|`, `\+`, `\=`, `\{n,m}` / `\{-}`, character classes (`\s \d \w \a \u \l \x \h`), `\zs` / `\ze`, `\c` / `\C`, and the `\v` / `\m` / `\M` / `\V` magic levels.
 
 ### Status Bar Indicators
 

@@ -513,6 +513,8 @@ TextArea::TextArea(QWidget *parent)
   m_multiCursor = new MultiCursorHandler(this);
   m_codeFolding = new CodeFoldingManager(document());
   m_vimMode = new VimMode(this, this);
+  connect(m_vimMode, &VimMode::visualSelectionChanged, this,
+          &TextArea::scheduleExtraSelectionsRefresh);
   mainFont = QApplication::font();
   QPlainTextEdit::setFont(mainFont);
   QPlainTextEdit::setStyleSheet(editorFontStyleSheet(mainFont));
@@ -555,6 +557,8 @@ TextArea::TextArea(const TextAreaSettings &settings, QWidget *parent)
   m_multiCursor = new MultiCursorHandler(this);
   m_codeFolding = new CodeFoldingManager(document());
   m_vimMode = new VimMode(this, this);
+  connect(m_vimMode, &VimMode::visualSelectionChanged, this,
+          &TextArea::scheduleExtraSelectionsRefresh);
   mainFont = settings.mainFont;
   QPlainTextEdit::setFont(mainFont);
   QPlainTextEdit::setStyleSheet(editorFontStyleSheet(mainFont));
@@ -811,10 +815,23 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     return;
   }
 
+  const bool completionPopupVisible =
+      (m_completionWidget && m_completionWidget->isVisible()) ||
+      (m_completer && m_completer->popup()->isVisible());
+  const bool completionKey =
+      keyEvent->key() == Qt::Key_Tab || keyEvent->key() == Qt::Key_Return ||
+      keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Up ||
+      keyEvent->key() == Qt::Key_Down || keyEvent->key() == Qt::Key_PageUp ||
+      keyEvent->key() == Qt::Key_PageDown;
   if (m_vimMode && m_vimMode->isEnabled() &&
-      m_vimMode->processKeyEvent(keyEvent)) {
-    expandTabsToSpacesInDocument();
-    return;
+      !(completionPopupVisible && completionKey &&
+        m_vimMode->mode() == VimEditMode::Insert)) {
+    m_vimMode->setTabWidth(effectiveTabWidth());
+    m_vimMode->setAutoIndent(autoIndent);
+    if (m_vimMode->processKeyEvent(keyEvent)) {
+      expandTabsToSpacesInDocument();
+      return;
+    }
   }
 
   if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::AltModifier)) {
@@ -1745,7 +1762,32 @@ void TextArea::updateExtraSelections() {
                           endStr, &findOpeningParentheses);
   }
 
+  if (m_vimMode && m_vimMode->isEnabled()) {
+    const QVector<QPair<int, int>> blockRanges = m_vimMode->visualBlockRanges();
+    for (const auto &range : blockRanges) {
+      QTextEdit::ExtraSelection selection;
+      selection.format.setBackground(palette().highlight());
+      selection.format.setForeground(palette().highlightedText());
+      selection.cursor = QTextCursor(document());
+      selection.cursor.setPosition(range.first);
+      selection.cursor.setPosition(range.second, QTextCursor::KeepAnchor);
+      extraSelections.append(selection);
+    }
+  }
+
   setExtraSelections(extraSelections);
+}
+
+bool TextArea::event(QEvent *event) {
+  if (event->type() == QEvent::ShortcutOverride && m_vimMode &&
+      m_vimMode->isEnabled()) {
+    auto *keyEvent = static_cast<QKeyEvent *>(event);
+    if (m_vimMode->shouldOverrideShortcut(keyEvent)) {
+      keyEvent->accept();
+      return true;
+    }
+  }
+  return QPlainTextEdit::event(event);
 }
 
 void TextArea::updateCursorPositionChangedCallbacks() {

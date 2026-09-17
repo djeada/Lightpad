@@ -400,6 +400,12 @@ set(project_sources
     core/navigationhistory.cpp
     core/autosavemanager.cpp
     editor/vimmode.cpp
+    editor/vimmode_motions.cpp
+    editor/vimmode_normal.cpp
+    editor/vimmode_visual.cpp
+    editor/vimmode_edit.cpp
+    editor/vimmode_search.cpp
+    editor/vimmode_ex.cpp
     i18n/i18n.cpp
     python/pythonprojectenvironment.cpp
     lsp/lspclient.cpp
