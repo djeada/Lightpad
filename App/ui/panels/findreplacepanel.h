@@ -48,6 +48,7 @@ public:
   bool isVimCommandMode() const;
   void setSearchPrefix(const QString &prefix);
   void setSearchText(const QString &text);
+  void setSearchCursorPosition(int position);
 
   bool eventFilter(QObject *obj, QEvent *event) override;
 

@@ -175,6 +175,12 @@ target_compile_definitions(test_pluginmanager PRIVATE QT_DEPRECATED_WARNINGS)
 add_executable(test_vimmode
     unit/test_vimmode.cpp
     ${CMAKE_SOURCE_DIR}/App/editor/vimmode.cpp
+    ${CMAKE_SOURCE_DIR}/App/editor/vimmode_motions.cpp
+    ${CMAKE_SOURCE_DIR}/App/editor/vimmode_normal.cpp
+    ${CMAKE_SOURCE_DIR}/App/editor/vimmode_visual.cpp
+    ${CMAKE_SOURCE_DIR}/App/editor/vimmode_edit.cpp
+    ${CMAKE_SOURCE_DIR}/App/editor/vimmode_search.cpp
+    ${CMAKE_SOURCE_DIR}/App/editor/vimmode_ex.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 

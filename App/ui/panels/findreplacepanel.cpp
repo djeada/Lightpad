@@ -438,14 +438,25 @@ void FindReplacePanel::setSearchPrefix(const QString &prefix) {
 }
 
 void FindReplacePanel::setSearchText(const QString &text) {
-  ui->searchFind->setText(text);
+  if (ui->searchFind->text() != text)
+    ui->searchFind->setText(text);
   ui->searchFind->setCursorPosition(text.length());
+}
+
+void FindReplacePanel::setSearchCursorPosition(int position) {
+  ui->searchFind->setCursorPosition(
+      qBound(0, position, ui->searchFind->text().length()));
 }
 
 bool FindReplacePanel::eventFilter(QObject *obj, QEvent *event) {
   if ((obj == ui->searchFind || obj == ui->fieldReplace) &&
       event->type() == QEvent::KeyPress) {
     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+
+    if (obj == ui->searchFind && m_vimCommandMode) {
+      handleVimCommandKey(keyEvent);
+      return true;
+    }
 
     if (keyEvent->key() == Qt::Key_Escape) {
       on_close_clicked();
@@ -527,51 +538,12 @@ void FindReplacePanel::handleVimCommandKey(QKeyEvent *event) {
 
   VimMode *vimMode = textArea->vimMode();
   const int key = event->key();
-  const Qt::KeyboardModifiers mods = event->modifiers();
-  const QString text = event->text();
-  const QString prefix =
-      m_searchPrefix.isEmpty() ? QString(":") : m_searchPrefix;
-
-  if ((mods & Qt::ControlModifier) &&
-      (key == Qt::Key_C || key == Qt::Key_BracketLeft)) {
-    QKeyEvent escEvent(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
-    vimMode->processKeyEvent(&escEvent);
-    return;
+  if ((key == Qt::Key_Return || key == Qt::Key_Enter) &&
+      vimMode->mode() == VimEditMode::Command &&
+      vimMode->commandText() != ui->searchFind->text()) {
+    vimMode->setCommandText(ui->searchFind->text());
   }
-
-  if (key == Qt::Key_Escape) {
-    vimMode->processKeyEvent(event);
-    return;
-  }
-
-  if (key == Qt::Key_Return || key == Qt::Key_Enter) {
-    QString command = prefix + ui->searchFind->text();
-    for (int i = 0; i < command.size(); ++i) {
-      QKeyEvent cmdEvent(QEvent::KeyPress, 0, Qt::NoModifier,
-                         command.mid(i, 1));
-      vimMode->processKeyEvent(&cmdEvent);
-    }
-    QKeyEvent enterEvent(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
-    vimMode->processKeyEvent(&enterEvent);
-    return;
-  }
-
-  if (key == Qt::Key_Backspace) {
-    QKeyEvent backspaceEvent(QEvent::KeyPress, Qt::Key_Backspace,
-                             Qt::NoModifier);
-    vimMode->processKeyEvent(&backspaceEvent);
-    return;
-  }
-
-  if (key == Qt::Key_Up || key == Qt::Key_Down) {
-    vimMode->processKeyEvent(event);
-    return;
-  }
-
-  if (!text.isEmpty()) {
-    QKeyEvent textEvent(QEvent::KeyPress, 0, Qt::NoModifier, text);
-    vimMode->processKeyEvent(&textEvent);
-  }
+  vimMode->processKeyEvent(event);
 }
 
 bool FindReplacePanel::isGlobalMode() const {
@@ -979,8 +951,7 @@ void FindReplacePanel::findInitial(QTextCursor &cursor,
 
   if (textArea->isVimModeEnabled() && textArea->vimMode() &&
       !m_vimCommandMode) {
-    textArea->vimMode()->setSearchPattern(
-        QRegularExpression::escape(searchWord));
+    textArea->vimMode()->setSearchPattern(VimMode::escapePattern(searchWord));
   }
 
   QRegularExpression pattern = buildSearchPattern(searchWord);

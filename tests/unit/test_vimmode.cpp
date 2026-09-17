@@ -1,6 +1,33 @@
 #include "editor/vimmode.h"
+#include "vim_oracle_cases.h"
+#include <QApplication>
+#include <QClipboard>
 #include <QPlainTextEdit>
+#include <QTextBlock>
 #include <QtTest/QtTest>
+
+namespace {
+
+class VimTestEditor : public QPlainTextEdit {
+public:
+  VimMode *vim = nullptr;
+
+protected:
+  void keyPressEvent(QKeyEvent *event) override {
+    if (vim && vim->processKeyEvent(event))
+      return;
+    QPlainTextEdit::keyPressEvent(event);
+  }
+};
+
+void placeCursor(QPlainTextEdit *editor, int line, int col) {
+  QTextCursor cursor(editor->document());
+  cursor.setPosition(editor->document()->findBlockByNumber(line).position() +
+                     col);
+  editor->setTextCursor(cursor);
+}
+
+} // namespace
 
 class TestVimMode : public QObject {
   Q_OBJECT
@@ -28,6 +55,24 @@ private slots:
   void testSetNoVim();
   void testSetVim();
   void testCommandHistory();
+  void testMatchesVim_data();
+  void testMatchesVim();
+  void testKeyTokens();
+  void testKeyNotationRoundTrip();
+  void testShortcutOverride();
+  void testInsertSessionIsSingleUndoStep();
+  void testRealKeyEventsInsertText();
+  void testMacroRegisterContent();
+  void testEditorCommandSignals();
+  void testSearchHighlightSignals();
+  void testIncrementalSearchEscapeRestoresCursor();
+  void testCommandLineEditing();
+  void testVisualBlockRanges();
+  void testMouseSelectionEntersVisual();
+  void testSetShiftWidth();
+  void testClipboardRegister();
+  void testRegexTranslation();
+  void testPendingKeysDisplay();
 
 private:
   QPlainTextEdit *m_editor;
@@ -390,6 +435,272 @@ void TestVimMode::testCommandHistory() {
   QKeyEvent downKey(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
   m_vim->processKeyEvent(&downKey);
   QCOMPARE(m_vim->commandBuffer(), QString(""));
+}
+
+void TestVimMode::testMatchesVim_data() {
+  QTest::addColumn<int>("index");
+  const int count = int(sizeof(kVimOracleCases) / sizeof(kVimOracleCases[0]));
+  for (int i = 0; i < count; ++i) {
+    QTest::newRow(qPrintable(QString("%1: %2").arg(i).arg(
+        QString::fromUtf8(kVimOracleCases[i].keys))))
+        << i;
+  }
+}
+
+void TestVimMode::testMatchesVim() {
+  QFETCH(int, index);
+  const VimOracleCase &c = kVimOracleCases[index];
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText(QString::fromUtf8(kVimOracleTexts[c.text]));
+  placeCursor(&editor, c.line, c.col);
+  vim.setEnabled(true);
+  vim.feedKeys(QString::fromUtf8(c.keys));
+  if (vim.mode() != VimEditMode::Normal || !vim.pendingKeys().isEmpty())
+    vim.feedKeys("<Esc>");
+
+  QCOMPARE(editor.toPlainText(), QString::fromUtf8(c.expectedText));
+  QTextCursor cursor = editor.textCursor();
+  QCOMPARE(cursor.blockNumber(), c.expectedLine);
+  QCOMPARE(cursor.positionInBlock(), c.expectedCol);
+  if (c.expectedRegister)
+    QCOMPARE(vim.registerContent('"'), QString::fromUtf8(c.expectedRegister));
+}
+
+void TestVimMode::testKeyTokens() {
+  QKeyEvent ctrlR(QEvent::KeyPress, Qt::Key_R, Qt::ControlModifier);
+  QCOMPARE(VimMode::keyEventToToken(&ctrlR), QString("<C-r>"));
+  QKeyEvent shiftA(QEvent::KeyPress, Qt::Key_A, Qt::ShiftModifier, "A");
+  QCOMPARE(VimMode::keyEventToToken(&shiftA), QString("A"));
+  QKeyEvent esc(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+  QCOMPARE(VimMode::keyEventToToken(&esc), QString("<Esc>"));
+  QKeyEvent enter(QEvent::KeyPress, Qt::Key_Enter, Qt::KeypadModifier);
+  QCOMPARE(VimMode::keyEventToToken(&enter), QString("<CR>"));
+  QKeyEvent ctrlBracket(QEvent::KeyPress, Qt::Key_BracketLeft,
+                        Qt::ControlModifier);
+  QCOMPARE(VimMode::keyEventToToken(&ctrlBracket), QString("<C-[>"));
+  QKeyEvent shift(QEvent::KeyPress, Qt::Key_Shift, Qt::ShiftModifier);
+  QVERIFY(VimMode::keyEventToToken(&shift).isEmpty());
+  QKeyEvent backtab(QEvent::KeyPress, Qt::Key_Backtab, Qt::ShiftModifier);
+  QCOMPARE(VimMode::keyEventToToken(&backtab), QString("<S-Tab>"));
+}
+
+void TestVimMode::testKeyNotationRoundTrip() {
+  const QStringList tokens =
+      VimMode::parseKeyNotation("d2w<Esc>:s/a/b/<CR><lt>x<C-r>\"");
+  QCOMPARE(tokens, QStringList({"d", "2", "w", "<Esc>", ":", "s", "/", "a", "/",
+                                "b", "/", "<CR>", "<", "x", "<C-r>", "\""}));
+  QCOMPARE(VimMode::tokensToNotation(tokens),
+           QString("d2w<Esc>:s/a/b/<CR><lt>x<C-r>\""));
+  QCOMPARE(VimMode::parseKeyNotation("a<b"), QStringList({"a", "<", "b"}));
+}
+
+void TestVimMode::testShortcutOverride() {
+  m_vim->setEnabled(true);
+  QKeyEvent ctrlR(QEvent::ShortcutOverride, Qt::Key_R, Qt::ControlModifier);
+  QKeyEvent ctrlS(QEvent::ShortcutOverride, Qt::Key_S, Qt::ControlModifier);
+  QKeyEvent ctrlW(QEvent::ShortcutOverride, Qt::Key_W, Qt::ControlModifier);
+  QVERIFY(m_vim->shouldOverrideShortcut(&ctrlR));
+  QVERIFY(!m_vim->shouldOverrideShortcut(&ctrlS));
+  m_vim->feedKeys("i");
+  QVERIFY(m_vim->shouldOverrideShortcut(&ctrlW));
+  m_vim->feedKeys("<Esc>");
+  m_vim->setEnabled(false);
+  QVERIFY(!m_vim->shouldOverrideShortcut(&ctrlR));
+}
+
+void TestVimMode::testInsertSessionIsSingleUndoStep() {
+  m_editor->setPlainText("start");
+  m_vim->setEnabled(true);
+  m_vim->feedKeys("Aone<CR>two<BS>o three<Esc>");
+  QCOMPARE(m_editor->toPlainText(), QString("startone\ntwo three"));
+  m_vim->feedKeys("ciwX<Esc>");
+  QCOMPARE(m_editor->toPlainText(), QString("startone\ntwo X"));
+  m_vim->feedKeys("u");
+  QCOMPARE(m_editor->toPlainText(), QString("startone\ntwo three"));
+  m_vim->feedKeys("u");
+  QCOMPARE(m_editor->toPlainText(), QString("start"));
+  m_vim->feedKeys("<C-r><C-r>");
+  QCOMPARE(m_editor->toPlainText(), QString("startone\ntwo X"));
+}
+
+void TestVimMode::testRealKeyEventsInsertText() {
+  VimTestEditor editor;
+  VimMode vim(&editor);
+  editor.vim = &vim;
+  editor.setPlainText("abc");
+  vim.setEnabled(true);
+  QTest::keyClicks(&editor, "A-xyz");
+  QTest::keyClick(&editor, Qt::Key_Escape);
+  QCOMPARE(editor.toPlainText(), QString("abc-xyz"));
+  QCOMPARE(vim.mode(), VimEditMode::Normal);
+  QTest::keyClick(&editor, Qt::Key_Period);
+  QCOMPARE(editor.toPlainText(), QString("abc-xyz-xyz"));
+  QTest::keyClick(&editor, Qt::Key_U);
+  QCOMPARE(editor.toPlainText(), QString("abc-xyz"));
+  QTest::keyClick(&editor, Qt::Key_R, Qt::ControlModifier);
+  QCOMPARE(editor.toPlainText(), QString("abc-xyz-xyz"));
+}
+
+void TestVimMode::testMacroRegisterContent() {
+  m_editor->setPlainText("a\nb\nc");
+  m_vim->setEnabled(true);
+  m_vim->feedKeys("qqA;<Esc>jq");
+  QCOMPARE(m_vim->registerContent('q'), QString("A;<Esc>j"));
+  m_vim->feedKeys("@q");
+  QCOMPARE(m_editor->toPlainText(), QString("a;\nb;\nc"));
+  m_vim->feedKeys("@@");
+  QCOMPARE(m_editor->toPlainText(), QString("a;\nb;\nc;"));
+}
+
+void TestVimMode::testEditorCommandSignals() {
+  m_editor->setPlainText("text");
+  m_vim->setEnabled(true);
+  QSignalSpy spy(m_vim, &VimMode::commandExecuted);
+  auto run = [this, &spy](const QString &keys) {
+    spy.clear();
+    m_vim->feedKeys(keys);
+    QStringList commands;
+    for (const QList<QVariant> &args : spy)
+      commands << args.at(0).toString();
+    return commands;
+  };
+  QCOMPARE(run(":w<CR>"), QStringList({"save"}));
+  QCOMPARE(run(":wq<CR>"), QStringList({"save", "quit"}));
+  QCOMPARE(run("ZZ"), QStringList({"save", "quit"}));
+  QCOMPARE(run(":q!<CR>"), QStringList({"closeWithoutSaving"}));
+  QCOMPARE(run(":wa<CR>"), QStringList({"saveAll"}));
+  QCOMPARE(run(":vsp<CR>"), QStringList({"splitVertical"}));
+  QCOMPARE(run("<C-w>s"), QStringList({"splitHorizontal"}));
+  QCOMPARE(run("gt"), QStringList({"nextTab"}));
+  QCOMPARE(run(":bp<CR>"), QStringList({"prevTab"}));
+  QCOMPARE(run(":e other.txt<CR>"), QStringList({"edit:other.txt"}));
+  QCOMPARE(run("gd"), QStringList({"goToDefinition"}));
+  QCOMPARE(run("zc"), QStringList({"fold"}));
+}
+
+void TestVimMode::testSearchHighlightSignals() {
+  m_editor->setPlainText("foo bar foo");
+  m_vim->setEnabled(true);
+  QSignalSpy spy(m_vim, &VimMode::searchHighlightRequested);
+  m_vim->feedKeys("/fo\\+<CR>");
+  QVERIFY(!spy.isEmpty());
+  QVERIFY(spy.last().at(1).toBool());
+  QCOMPARE(m_editor->textCursor().position(), 8);
+  QCOMPARE(m_vim->searchPattern(), QString("fo\\+"));
+  spy.clear();
+  m_vim->feedKeys(":noh<CR>");
+  QCOMPARE(spy.count(), 1);
+  QVERIFY(!spy.last().at(1).toBool());
+}
+
+void TestVimMode::testIncrementalSearchEscapeRestoresCursor() {
+  m_editor->setPlainText("alpha beta gamma");
+  placeCursor(m_editor, 0, 2);
+  m_vim->setEnabled(true);
+  m_vim->feedKeys("/gam");
+  QCOMPARE(m_vim->mode(), VimEditMode::Command);
+  QCOMPARE(m_editor->textCursor().selectionStart(), 11);
+  m_vim->feedKeys("<Esc>");
+  QCOMPARE(m_vim->mode(), VimEditMode::Normal);
+  QCOMPARE(m_editor->textCursor().position(), 2);
+  QVERIFY(!m_editor->textCursor().hasSelection());
+}
+
+void TestVimMode::testCommandLineEditing() {
+  m_editor->setPlainText("one");
+  m_vim->setEnabled(true);
+  m_vim->feedKeys(":abc<Left><BS>");
+  QCOMPARE(m_vim->commandBuffer(), QString("ac"));
+  QCOMPARE(m_vim->commandCursorPosition(), 1);
+  m_vim->feedKeys("<C-u>");
+  QCOMPARE(m_vim->commandBuffer(), QString("c"));
+  m_vim->feedKeys("<Esc>");
+  m_vim->feedKeys("yiw:<C-r>\"");
+  QCOMPARE(m_vim->commandBuffer(), QString("one"));
+  m_vim->feedKeys("<C-w>set ts=8<CR>");
+  m_vim->feedKeys(":se<Up>");
+  QCOMPARE(m_vim->commandBuffer(), QString("set ts=8"));
+  m_vim->feedKeys("<Esc>/on");
+  QCOMPARE(m_vim->commandBuffer(), QString("/on"));
+  m_vim->feedKeys("<Esc>");
+}
+
+void TestVimMode::testVisualBlockRanges() {
+  m_editor->setPlainText("abcd\nefgh\nij");
+  m_vim->setEnabled(true);
+  m_vim->feedKeys("l<C-v>jjl");
+  const QVector<QPair<int, int>> ranges = m_vim->visualBlockRanges();
+  QCOMPARE(ranges.size(), 3);
+  QCOMPARE(ranges[0], qMakePair(1, 3));
+  QCOMPARE(ranges[1], qMakePair(6, 8));
+  QCOMPARE(ranges[2], qMakePair(11, 12));
+  m_vim->feedKeys("<Esc>");
+  QVERIFY(m_vim->visualBlockRanges().isEmpty());
+}
+
+void TestVimMode::testMouseSelectionEntersVisual() {
+  m_editor->setPlainText("hello world");
+  m_vim->setEnabled(true);
+  QTextCursor cursor = m_editor->textCursor();
+  cursor.setPosition(6);
+  cursor.setPosition(11, QTextCursor::KeepAnchor);
+  m_editor->setTextCursor(cursor);
+  m_vim->feedKeys("d");
+  QCOMPARE(m_editor->toPlainText(), QString("hello "));
+  QCOMPARE(m_vim->mode(), VimEditMode::Normal);
+}
+
+void TestVimMode::testSetShiftWidth() {
+  m_editor->setPlainText("x\ny");
+  m_vim->setEnabled(true);
+  m_vim->feedKeys(":set sw=2<CR>>>j:set noet ts=4 sw=4<CR>>>");
+  QCOMPARE(m_editor->toPlainText(), QString("  x\n\ty"));
+  m_vim->feedKeys(":set sw=4 et<CR>");
+}
+
+void TestVimMode::testClipboardRegister() {
+  m_editor->setPlainText("copy me\nnext");
+  m_vim->setEnabled(true);
+  m_vim->feedKeys("\"+yy");
+  QCOMPARE(QApplication::clipboard()->text(), QString("copy me\n"));
+  QApplication::clipboard()->setText("pasted");
+  m_vim->feedKeys("j\"+P");
+  QCOMPARE(m_editor->toPlainText(), QString("copy me\npastednext"));
+}
+
+void TestVimMode::testRegexTranslation() {
+  auto matches = [](const QString &vimPattern, const QString &text) {
+    bool cs = true;
+    QRegularExpression re(VimMode::toRegularExpression(vimPattern, &cs),
+                          QRegularExpression::MultilineOption);
+    if (!cs)
+      re.setPatternOptions(re.patternOptions() |
+                           QRegularExpression::CaseInsensitiveOption);
+    return re.match(text).captured();
+  };
+  QCOMPARE(matches("\\<foo\\>", "afoo foo"), QString("foo"));
+  QCOMPARE(matches("a\\(b\\|c\\)\\+", "xacbd"), QString("acb"));
+  QCOMPARE(matches("\\v(ab)+", "ababx"), QString("abab"));
+  QCOMPARE(matches("x\\{2,3}", "xxxxx"), QString("xxx"));
+  QCOMPARE(matches("x\\{-1,}", "xxxxx"), QString("x"));
+  QCOMPARE(matches("\\cFOO", "foo"), QString("foo"));
+  QCOMPARE(matches("a.c", "a+c"), QString("a+c"));
+  QCOMPARE(matches("\\Va.c", "abc a.c"), QString("a.c"));
+  QCOMPARE(matches("foo\\zsbar", "foobar"), QString("bar"));
+  QCOMPARE(matches("(x)", "(x)"), QString("(x)"));
+  QCOMPARE(VimMode::escapePattern("a.b*c/"), QString("a\\.b\\*c\\/"));
+}
+
+void TestVimMode::testPendingKeysDisplay() {
+  m_editor->setPlainText("text");
+  m_vim->setEnabled(true);
+  QSignalSpy spy(m_vim, &VimMode::pendingKeysChanged);
+  m_vim->feedKeys("\"a2d");
+  QCOMPARE(m_vim->pendingKeys(), QString("\"a2d"));
+  m_vim->feedKeys("<Esc>");
+  QVERIFY(m_vim->pendingKeys().isEmpty());
+  QVERIFY(!spy.isEmpty());
 }
 
 QTEST_MAIN(TestVimMode)
