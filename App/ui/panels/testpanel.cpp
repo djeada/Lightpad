@@ -434,7 +434,9 @@ void TestPanel::setupToolbar() {
   m_autoRunModeCombo->addItem(tr("All on Save"));
   m_autoRunModeCombo->addItem(tr("File on Save"));
   m_autoRunModeCombo->addItem(tr("Last Selection"));
-  m_autoRunModeCombo->setMinimumWidth(130);
+  m_autoRunModeCombo->setMinimumContentsLength(8);
+  m_autoRunModeCombo->setSizeAdjustPolicy(
+      QComboBox::AdjustToMinimumContentsLengthWithIcon);
   m_autoRunModeCombo->setEnabled(false);
   m_autoRunModeCombo->setToolTip(tr("Auto-run scope"));
   connect(m_autoRunModeCombo,
@@ -452,14 +454,18 @@ void TestPanel::setupToolbar() {
   m_filterCombo->addItem(tr("Skipped"));
   connect(m_filterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &TestPanel::onFilterChanged);
-  m_filterCombo->setMinimumWidth(110);
+  m_filterCombo->setMinimumContentsLength(6);
+  m_filterCombo->setSizeAdjustPolicy(
+      QComboBox::AdjustToMinimumContentsLengthWithIcon);
   m_toolbar->addWidget(m_filterCombo);
 
   m_toolbar->addSeparator();
 
   m_configCombo = new QComboBox(this);
   m_configCombo->setObjectName("configCombo");
-  m_configCombo->setMinimumWidth(210);
+  m_configCombo->setMinimumContentsLength(10);
+  m_configCombo->setSizeAdjustPolicy(
+      QComboBox::AdjustToMinimumContentsLengthWithIcon);
   connect(m_configCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &TestPanel::onConfigChanged);
   m_toolbar->addWidget(m_configCombo);
@@ -474,6 +480,7 @@ void TestPanel::setupToolbar() {
 
 void TestPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
+  setObjectName(QStringLiteral("testPanel"));
 
   const auto blend = [](const QColor &base, const QColor &overlay,
                         qreal ratio) {
@@ -488,14 +495,14 @@ void TestPanel::applyTheme(const Theme &theme) {
     return color;
   };
 
-  QColor panelSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
-  QColor toolbarShell = blend(theme.backgroundColor, theme.surfaceColor, 0.14);
+  QColor panelSurface = theme.backgroundColor;
+  QColor toolbarShell = theme.surfaceColor;
   QColor treeBg = theme.backgroundColor;
   QColor textColor = theme.foregroundColor;
   QColor borderColor = theme.borderColor;
   QColor mutedText = blend(theme.foregroundColor, theme.backgroundColor, 0.24);
   QColor subtleText = blend(theme.foregroundColor, theme.backgroundColor, 0.40);
-  QColor hoverBg = blend(theme.backgroundColor, theme.foregroundColor, 0.06);
+  QColor hoverBg = theme.hoverColor;
   QColor selectedBg = theme.accentSoftColor.isValid() ? theme.accentSoftColor
                                                       : theme.accentColor;
   QColor accentColor =
@@ -514,7 +521,8 @@ void TestPanel::applyTheme(const Theme &theme) {
     delegate->setTheme(theme);
   }
 
-  setStyleSheet(QString("QWidget#TestPanel, QWidget#testPanel {"
+  setStyleSheet(UIStyleHelper::panelStyle(theme, objectName()) +
+                QString("QWidget#TestPanel, QWidget#testPanel {"
                         "  background: %1;"
                         "  color: %2;"
                         "  border-left: 1px solid %10;"

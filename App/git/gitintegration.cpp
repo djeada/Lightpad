@@ -2016,6 +2016,127 @@ bool GitIntegration::isMergeInProgress() const {
   return mergeHead.exists();
 }
 
+bool GitIntegration::mergeBranchWithOptions(const QString &branchName,
+                                            const GitMergeOptions &options) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+  if (branchName.isEmpty()) {
+    emit errorOccurred("No branch selected to merge");
+    return false;
+  }
+
+  QStringList args{"merge"};
+  if (!options.allowFastForward) {
+    args << "--no-ff";
+  }
+  if (!options.commitOnSuccess) {
+    args << "--no-commit" << "--no-ff";
+  }
+  switch (options.preference) {
+  case GitMergeOptions::Preference::PreferOurs:
+    args << "-X" << "ours";
+    break;
+  case GitMergeOptions::Preference::PreferTheirs:
+    args << "-X" << "theirs";
+    break;
+  case GitMergeOptions::Preference::Manual:
+    break;
+  }
+  if (!options.message.trimmed().isEmpty()) {
+    args << "-m" << options.message;
+  }
+  args << branchName;
+
+  bool success = false;
+  executeGitCommand(args, &success);
+
+  if (success) {
+    emit operationCompleted("Merged branch: " + branchName);
+    emit statusChanged();
+  } else if (hasMergeConflicts()) {
+    emit mergeConflictsDetected(getConflictedFiles());
+    emit errorOccurred("Merge conflicts detected");
+  } else {
+    emit errorOccurred("Failed to merge branch: " + branchName);
+  }
+
+  emit statusChanged();
+  return success && !hasMergeConflicts();
+}
+
+GitRefSummary GitIntegration::refSummary(const QString &ref) const {
+  GitRefSummary summary;
+  summary.ref = ref;
+  if (!m_isValid || ref.isEmpty()) {
+    return summary;
+  }
+
+  bool success = false;
+  const QString output = executeGitCommand(
+      {"log", "-1", "--format=%h%x1f%s%x1f%an%x1f%ar", ref, "--"}, &success);
+  if (!success) {
+    return summary;
+  }
+
+  const QStringList fields = output.trimmed().split(QChar(0x1f));
+  if (fields.size() < 4) {
+    return summary;
+  }
+
+  summary.exists = true;
+  summary.shortHash = fields.at(0);
+  summary.subject = fields.at(1);
+  summary.author = fields.at(2);
+  summary.relativeDate = fields.at(3);
+  return summary;
+}
+
+bool GitIntegration::isAncestorRef(const QString &ancestor,
+                                   const QString &descendant) const {
+  if (!m_isValid || ancestor.isEmpty() || descendant.isEmpty()) {
+    return false;
+  }
+
+  bool success = false;
+  executeGitCommand({"merge-base", "--is-ancestor", ancestor, descendant},
+                    &success);
+  return success;
+}
+
+QStringList GitIntegration::filesChangedBetween(const QString &baseRef,
+                                                const QString &ref) const {
+  if (!m_isValid || baseRef.isEmpty() || ref.isEmpty()) {
+    return {};
+  }
+
+  bool success = false;
+  const QString output =
+      executeGitCommand({"diff", "--name-only", baseRef, ref}, &success);
+  if (!success) {
+    return {};
+  }
+  return output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+}
+
+bool GitIntegration::writeWorkingFile(const QString &filePath,
+                                      const QString &content) {
+  if (!m_isValid || filePath.isEmpty()) {
+    return false;
+  }
+
+  QFile file(QDir(m_repositoryPath).filePath(filePath));
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    emit errorOccurred("Could not write " + filePath);
+    return false;
+  }
+  file.write(content.toUtf8());
+  file.close();
+  emit statusChanged();
+  return true;
+}
+
 bool GitIntegration::mergeBranch(const QString &branchName) {
   if (!m_isValid) {
     emit errorOccurred("Not in a git repository");

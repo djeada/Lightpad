@@ -75,6 +75,7 @@ ThemeColors derivedTheme(const Theme &theme) {
   c.surfaceBase = theme.backgroundColor;
   c.surfaceRaised = theme.surfaceColor;
   c.surfaceOverlay = theme.surfaceAltColor;
+  c.surfaceSunken = theme.backgroundColor;
   c.surfacePopover = theme.surfaceColor;
   c.borderDefault = theme.borderColor;
   c.borderSubtle = blend(theme.borderColor, theme.backgroundColor, 0.35);
@@ -82,6 +83,7 @@ ThemeColors derivedTheme(const Theme &theme) {
   c.textPrimary = theme.foregroundColor;
   c.textSecondary = blend(theme.foregroundColor, theme.backgroundColor, 0.35);
   c.textMuted = blend(theme.foregroundColor, theme.backgroundColor, 0.55);
+  c.textDisabled = blend(theme.foregroundColor, theme.backgroundColor, 0.45);
   c.inputBg = theme.surfaceColor;
   c.inputFg = theme.foregroundColor;
   c.inputBorder = theme.borderColor;
@@ -94,6 +96,7 @@ ThemeColors derivedTheme(const Theme &theme) {
   c.btnSecondaryBg = theme.surfaceColor;
   c.btnSecondaryFg = theme.foregroundColor;
   c.btnSecondaryHover = theme.hoverColor;
+  c.btnSecondaryActive = theme.pressedColor;
   c.btnDangerBg = theme.errorColor;
   c.btnDangerFg = QColor("#ffffff");
   c.btnDangerHover = blend(theme.errorColor, theme.foregroundColor, 0.15);
@@ -162,34 +165,32 @@ QColor glowAccent(const ThemeDefinition &theme, const ThemeColors &c) {
 
 QColor emphasizedBorder(const Theme &theme, const ThemeColors &c,
                         const QColor &border) {
-  return blend(border, glowAccent(theme, c), 0.08 + 0.22 * glow(theme));
+  return blend(border, glowAccent(theme, c), 0.08 * glow(theme));
 }
 
 QColor emphasizedBorder(const ThemeDefinition &theme, const ThemeColors &c,
                         const QColor &border) {
-  return blend(border, glowAccent(theme, c), 0.08 + 0.22 * glow(theme));
+  return blend(border, glowAccent(theme, c), 0.08 * glow(theme));
 }
 
 QColor glowSurface(const Theme &theme, const ThemeColors &c, const QColor &base,
                    qreal strength = 1.0) {
-  return blend(base, glowAccent(theme, c),
-               (0.04 + 0.12 * glow(theme)) * strength);
+  return blend(base, glowAccent(theme, c), 0.04 * glow(theme) * strength);
 }
 
 QColor glowSurface(const ThemeDefinition &theme, const ThemeColors &c,
                    const QColor &base, qreal strength = 1.0) {
-  return blend(base, glowAccent(theme, c),
-               (0.04 + 0.12 * glow(theme)) * strength);
+  return blend(base, glowAccent(theme, c), 0.04 * glow(theme) * strength);
 }
 
 QColor glowFocus(const Theme &theme, const ThemeColors &c,
                  const QColor &accent) {
-  return blend(accent, glowAccent(theme, c), 0.18 + 0.28 * glow(theme));
+  return blend(accent, glowAccent(theme, c), 0.08 * glow(theme));
 }
 
 QColor glowFocus(const ThemeDefinition &theme, const ThemeColors &c,
                  const QColor &accent) {
-  return blend(accent, glowAccent(theme, c), 0.18 + 0.28 * glow(theme));
+  return blend(accent, glowAccent(theme, c), 0.08 * glow(theme));
 }
 
 QString borderRule(const Theme &theme, const QColor &color,
@@ -218,6 +219,26 @@ int radius(const ThemeDefinition &theme) {
   return qMax(0, theme.ui.borderRadius);
 }
 } // namespace
+
+QString UIStyleHelper::panelStyle(const Theme &theme,
+                                  const QString &objectName) {
+  const ThemeColors c = activeTheme(theme);
+  return QStringLiteral(
+             "QWidget#%1 { background: %2; color: %3; }"
+             "QLabel { color: %3; background: transparent; }"
+             "QToolButton { color: %3; background: transparent; "
+             "border: 1px solid transparent; border-radius: %7px; padding: 4px "
+             "8px; }"
+             "QToolButton:hover { background: %4; border-color: %5; }"
+             "QToolButton:pressed, QToolButton:checked { background: %6; }"
+             "QToolButton:disabled { color: %8; }"
+             "QSplitter::handle { background: %5; }"
+             "QScrollArea { background: %2; border: none; }")
+      .arg(objectName, c.surfaceBase.name(), c.textPrimary.name(),
+           theme.hoverColor.name(), c.borderDefault.name(), c.accentSoft.name())
+      .arg(qMax(3, radius(theme)))
+      .arg(c.textDisabled.name());
+}
 
 QString UIStyleHelper::popupDialogStyle(const Theme &theme) {
   const ThemeColors c = activeTheme(theme);
@@ -391,6 +412,12 @@ QString UIStyleHelper::panelHeaderStyle(const ThemeDefinition &theme) {
                  "%2")
       .arg(chrome(theme, surface))
       .arg(borderRule(theme, border, "bottom"));
+}
+
+QString UIStyleHelper::panelHeaderStyle(const Theme &theme,
+                                        const QString &objectName) {
+  return QStringLiteral("QWidget#%1 { %2 }")
+      .arg(objectName, panelHeaderStyle(theme));
 }
 
 QString UIStyleHelper::treeViewStyle(const Theme &theme) {
@@ -877,10 +904,12 @@ QString UIStyleHelper::formDialogStyle(const Theme &theme) {
                  "  background: %1;"
                  "  %2"
                  "  border-radius: %3px;"
-                 "}")
+                 "}"
+                 "QLabel { color: %4; background: transparent; }")
       .arg(chrome(theme, bg))
       .arg(borderRule(theme, border))
-      .arg(qMax(4, radius(theme)));
+      .arg(qMax(4, radius(theme)))
+      .arg(c.textPrimary.name());
 }
 
 QString UIStyleHelper::formDialogStyle(const ThemeDefinition &theme) {
@@ -891,10 +920,12 @@ QString UIStyleHelper::formDialogStyle(const ThemeDefinition &theme) {
                  "  background: %1;"
                  "  %2"
                  "  border-radius: %3px;"
-                 "}")
+                 "}"
+                 "QLabel { color: %4; background: transparent; }")
       .arg(chrome(theme, bg))
       .arg(borderRule(theme, border))
-      .arg(qMax(4, radius(theme)));
+      .arg(qMax(4, radius(theme)))
+      .arg(c.textPrimary.name());
 }
 
 QString UIStyleHelper::groupBoxStyle(const Theme &theme) {

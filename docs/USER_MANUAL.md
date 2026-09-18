@@ -117,6 +117,68 @@ The Source Control panel shows recent commits for the current repository. Right-
 - **Checkout Commit** to view files at that revision (detached HEAD)
 - **Create Branch** to start a new branch from that commit
 
+### Merging Branches
+
+Press **Merge…** in the Source Control panel to combine two branches. The merge
+screen asks four questions in order and answers each one before anything runs:
+
+1. **Which work do you want to bring in?** Pick a branch. When the same branch
+   name exists both on this machine and on a remote, Lightpad asks which copy you
+   mean and warns you when the two are not at the same commit.
+2. **Where it lands.** The branch you are standing on. It is the only one that
+   changes; the branch you are merging from is left untouched.
+3. **What will happen.** How many commits come in, how many files they touch,
+   and which files are likely to need a decision from you. If the merge cannot
+   start — uncommitted edits, another half-finished operation — it says so
+   instead of failing halfway.
+4. **If the same lines disagree.** Decide each one yourself (the default), or
+   have one side always win. This step is hidden when the merge cannot conflict.
+
+### Resolving Merge Conflicts
+
+When a merge stops, the **Merge Conflicts** panel opens by itself
+(`Ctrl+Shift+K`, or **View → Toggle Merge Conflicts**). It lists every file the
+merge is waiting on, how many separate spots inside each file still need an
+answer, why each one clashed, and how far along you are. It stays up until the
+merge is finished, so the **Finish the merge** button is where you left it once
+the last file is settled.
+
+Opening a conflicted file does not show you raw `<<<<<<<` markers. Instead the
+file becomes a list of numbered cards, one per disagreement, showing:
+
+- **YOUR VERSION** — what is on the branch you are standing on
+- **THEIR VERSION** — what is coming in
+
+Each side names the branch it came from and how many lines it is. For every
+disagreement you can keep one side, keep both in either order, keep neither, see
+what both branches started from, or type the replacement yourself. Long stretches
+of unchanged code are folded away and can be unfolded on demand.
+
+Every choice is undoable (`Ctrl+Z`), a decided card can be reopened with **Change
+my mind**, and `Alt+Down` / `Alt+Up` walk between disagreements. **Save and mark
+fixed** only becomes available once nothing is left undecided; until then the
+file stays unmerged as far as Git is concerned, so partial work is never
+mistaken for a finished file.
+
+### Opening Large or Binary Files
+
+Reading a file into the editor costs far more memory than the file itself: the
+bytes, then a UTF-16 copy, then the document built on top — roughly seven times
+the file size. A few hundred megabytes is therefore enough to exhaust memory and
+end the process, and binary files are worse still, because they have no line
+breaks and land on a single enormous line.
+
+Lightpad now checks a file before reading it:
+
+- **Large text files** (8 MB or more) offer a read-only preview of the first
+  2 MB, opening the whole file anyway, or cancelling.
+- **Binary files** (detected by a NUL byte in the opening 8 KB, the same rule
+  Git uses) offer a read-only look or cancelling.
+
+A preview holds only part of the file, so it opens read-only and **saving it is
+refused** — writing the buffer back would discard everything after the preview.
+Autosave skips previews for the same reason.
+
 ### Line Numbers
 
 Line numbers are displayed by default. Toggle them in:

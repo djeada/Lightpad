@@ -1,14 +1,15 @@
 #include "styleddialog.h"
 #include "../../theme/themedefinition.h"
 #include "../uistylehelper.h"
+#include <QTreeWidget>
 
 namespace {
 Theme classicThemeFromDefinition(const ThemeDefinition &themeDefinition) {
   Theme theme;
   const ThemeColors &c = themeDefinition.colors;
 
-  theme.backgroundColor = c.editorBg;
-  theme.foregroundColor = c.editorFg;
+  theme.backgroundColor = c.surfaceBase;
+  theme.foregroundColor = c.textPrimary;
   theme.highlightColor = c.editorSelection;
   theme.lineNumberAreaColor = c.editorGutter;
 
@@ -16,7 +17,7 @@ Theme classicThemeFromDefinition(const ThemeDefinition &themeDefinition) {
   theme.keywordFormat_1 = c.syntaxKeyword2;
   theme.keywordFormat_2 = c.syntaxKeyword3;
   theme.searchFormat = c.editorFindMatchActive;
-  theme.singleLineCommentFormat = c.syntaxComment;
+  theme.singleLineCommentFormat = c.textSecondary;
   theme.functionFormat = c.syntaxFunction;
   theme.quotationFormat = c.syntaxString;
   theme.classFormat = c.syntaxClass;
@@ -61,6 +62,8 @@ void StyledDialog::applyTheme(const Theme &theme) {
     w->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
   for (auto *w : findChildren<QListWidget *>())
     w->setStyleSheet(UIStyleHelper::resultListStyle(theme));
+  for (auto *w : findChildren<QTreeWidget *>())
+    w->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   for (auto *w : findChildren<QPushButton *>())
     w->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
   for (auto *w : findChildren<QTableWidget *>())
@@ -106,6 +109,8 @@ void StyledDialog::applyTheme(const ThemeDefinition &theme) {
     w->setStyleSheet(m_semanticStyles.checkBox);
   for (auto *w : findChildren<QListWidget *>())
     w->setStyleSheet(m_semanticStyles.resultList);
+  for (auto *w : findChildren<QTreeWidget *>())
+    w->setStyleSheet(UIStyleHelper::treeWidgetStyle(m_theme));
   for (auto *w : findChildren<QPushButton *>())
     w->setStyleSheet(m_semanticStyles.secondaryButton);
   for (auto *w : findChildren<QTableWidget *>())

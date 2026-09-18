@@ -76,8 +76,20 @@ This document lists all keyboard shortcuts available in Lightpad.
 | `Ctrl+B` | Toggle sidebar |
 | `Ctrl+\`` | Toggle terminal |
 | `Ctrl+Shift+G` | Toggle Source Control |
+| `Ctrl+Shift+K` | Toggle Merge Conflicts panel |
 | `F3` | Next diff change when diff viewer is focused |
 | `Shift+F3` | Previous diff change when diff viewer is focused |
+
+## Merge Conflict Resolver
+
+These apply while a conflicted file is open in the resolver.
+
+| Shortcut | Action |
+|----------|--------|
+| `Alt+Down` | Go to the next disagreement that still needs an answer |
+| `Alt+Up` | Go to the previous disagreement |
+| `Ctrl+Z` | Undo the last decision |
+| `Ctrl+Shift+Z` / `Ctrl+Y` | Redo the decision you just undid |
 
 ## VIM Mode
 

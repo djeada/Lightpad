@@ -3,6 +3,7 @@
 #include "../../run_templates/runtemplatemanager.h"
 #include "../../settings/theme.h"
 #include "../../theme/themeengine.h"
+#include "../uistylehelper.h"
 #include "shellprofile.h"
 #include "terminal.h"
 
@@ -473,76 +474,11 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
   if (toolbar) {
     toolbar->setAttribute(Qt::WA_StyledBackground, true);
     toolbar->setFixedHeight(30);
-    const QString normalButtonBg = rgba(accent, 0.06);
-    const QString normalButtonBorder = rgba(accent, 0.42);
-    const QString hoverButtonBg = rgba(accent, 0.18);
-    const QString hoverButtonBorder = rgba(accent, 0.82);
-    const QString pressedButtonBg = rgba(accent, 0.28);
-    const QString stopButtonBg = rgba(pressed, 0.08);
-    const QString stopButtonBorder = rgba(pressed, 0.44);
-    const QString stopHoverButtonBg = rgba(pressed, 0.18);
-    const QString stopHoverButtonBorder = rgba(pressed, 0.78);
     toolbar->setStyleSheet(
-        QString(
-            "QWidget#terminalToolbar {"
-            "  background-color: %1;"
-            "  border: none;"
-            "}"
-            "QWidget#terminalToolbar QToolButton#newTerminalButton,"
-            "QWidget#terminalToolbar QToolButton#clearTerminalButton,"
-            "QWidget#terminalToolbar QToolButton#killTerminalButton {"
-            "  color: %2;"
-            "  background-color: %4;"
-            "  border: 1px solid %5;"
-            "  border-radius: 4px;"
-            "  padding: 0 12px;"
-            "  margin: 0;"
-            "  font-size: 11px;"
-            "  font-weight: 700;"
-            "  min-height: 26px;"
-            "}"
-            "QWidget#terminalToolbar QToolButton#newTerminalButton:hover,"
-            "QWidget#terminalToolbar QToolButton#clearTerminalButton:hover,"
-            "QWidget#terminalToolbar QToolButton#killTerminalButton:hover,"
-            "QWidget#terminalToolbar QToolButton#newTerminalButton:pressed,"
-            "QWidget#terminalToolbar QToolButton#clearTerminalButton:pressed,"
-            "QWidget#terminalToolbar QToolButton#killTerminalButton:pressed {"
-            "  color: %2;"
-            "  background-color: %11;"
-            "  border: 1px solid %12;"
-            "}"
-            "QWidget#terminalToolbar QToolButton#newTerminalButton:pressed,"
-            "QWidget#terminalToolbar QToolButton#clearTerminalButton:pressed {"
-            "  background-color: %13;"
-            "}"
-            "QWidget#terminalToolbar QToolButton#killTerminalButton {"
-            "  color: %7;"
-            "  background-color: %8;"
-            "  border: 1px solid %9;"
-            "}"
-            "QWidget#terminalToolbar QToolButton#killTerminalButton:hover,"
-            "QWidget#terminalToolbar QToolButton#killTerminalButton:pressed {"
-            "  color: %7;"
-            "  background-color: %14;"
-            "  border: 1px solid %15;"
-            "}"
-            "QWidget#terminalToolbar QToolButton#killTerminalButton:pressed {"
-            "  background-color: %16;"
-            "}"
-            "QWidget#terminalToolbar QToolButton#killTerminalButton:disabled {"
-            "  color: %3;"
-            "  background-color: transparent;"
-            "  border: 1px solid %6;"
-            "}"
-            "QWidget#terminalToolbar QToolButton::menu-indicator {"
-            "  image: none;"
-            "  width: 0;"
-            "}")
-            .arg(chromeBg, text.name(), rgba(text, 0.48), normalButtonBg,
-                 normalButtonBorder, rgba(text, 0.22), pressed.name(),
-                 stopButtonBg, stopButtonBorder, hoverButtonBg,
-                 hoverButtonBorder, pressedButtonBg, stopHoverButtonBg,
-                 stopHoverButtonBorder, rgba(pressed, 0.28)));
+        UIStyleHelper::panelStyle(theme, QStringLiteral("terminalToolbar")) +
+        QStringLiteral("QWidget#terminalToolbar { background: %1; }"
+                       "QToolButton::menu-indicator { image: none; width: 0; }")
+            .arg(theme.surfaceColor.name()));
   }
 
   m_splitter->setStyleSheet(QString("QSplitter::handle {"

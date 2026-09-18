@@ -279,30 +279,24 @@ void DebugPanel::applyTheme(const Theme &theme) {
     return color;
   };
 
-  QColor panelSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
-  QColor toolbarShell = blend(theme.backgroundColor, theme.surfaceColor, 0.14);
-  QColor shellSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.12);
-  QColor cardSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
-  QColor recessedSurface =
-      blend(theme.backgroundColor, theme.surfaceColor, 0.1);
-  QColor inputSurface = blend(theme.backgroundColor, theme.surfaceColor, 0.08);
-  QColor focusSurface =
-      blend(theme.backgroundColor, theme.accentSoftColor, 0.06);
+  QColor panelSurface = theme.backgroundColor;
+  QColor toolbarShell = theme.surfaceColor;
+  QColor shellSurface = theme.surfaceColor;
+  QColor cardSurface = theme.surfaceColor;
+  QColor recessedSurface = theme.backgroundColor;
+  QColor inputSurface = theme.surfaceColor;
+  QColor focusSurface = theme.accentSoftColor;
   QColor mutedText = blend(theme.foregroundColor, theme.backgroundColor, 0.24);
   QColor subtleText = blend(theme.foregroundColor, theme.backgroundColor, 0.34);
-  QColor consoleSurface =
-      blend(theme.backgroundColor, theme.surfaceColor, 0.08);
+  QColor consoleSurface = theme.backgroundColor;
   QColor readyBg = withAlpha(theme.debugReadyColor, 22);
   QColor startingBg = withAlpha(theme.debugStartingColor, 30);
   QColor runningBg = withAlpha(theme.debugRunningColor, 30);
   QColor pausedBg = withAlpha(theme.debugPausedColor, 34);
   QColor errorBg = withAlpha(theme.debugErrorColor, 36);
-  QColor toolbarButtonBg =
-      blend(theme.backgroundColor, theme.surfaceColor, 0.04);
-  QColor toolbarButtonHover =
-      blend(theme.backgroundColor, theme.accentSoftColor, 0.04);
-  QColor toolbarButtonPressed =
-      blend(theme.backgroundColor, theme.accentSoftColor, 0.08);
+  QColor toolbarButtonBg = theme.surfaceColor;
+  QColor toolbarButtonHover = theme.hoverColor;
+  QColor toolbarButtonPressed = theme.pressedColor;
   QColor treeBorder = withAlpha(theme.borderColor, 110);
   QColor shellBorder = withAlpha(theme.borderColor, 115);
   QColor tabBg = Qt::transparent;
@@ -310,262 +304,265 @@ void DebugPanel::applyTheme(const Theme &theme) {
   QColor tabSelected = withAlpha(theme.foregroundColor, 6);
   QColor tabSelectedBorder = withAlpha(theme.accentColor, 80);
 
-  setStyleSheet(fillStyleTemplate(
-      QStringLiteral(
-          "QWidget#debugPanel {"
-          "  background: {panelBg};"
-          "  color: {fg};"
-          "}"
-          "QWidget#debugToolbarShell {"
-          "  background: {toolbarBg};"
-          "  border: 1px solid {shellBorder};"
-          "  border-radius: 4px;"
-          "}"
-          "QWidget#debugToolbar {"
-          "  background: transparent;"
-          "  border: none;"
-          "}"
-          "QWidget#debugToolbarGroup {"
-          "  background: transparent;"
-          "  border: none;"
-          "}"
-          "QFrame#debugToolbarDivider {"
-          "  background: {shellBorder};"
-          "  min-width: 1px;"
-          "  max-width: 1px;"
-          "}"
+  setStyleSheet(
+      UIStyleHelper::panelStyle(theme, objectName()) +
+      fillStyleTemplate(
+          QStringLiteral(
+              "QWidget#debugPanel {"
+              "  background: {panelBg};"
+              "  color: {fg};"
+              "}"
+              "QWidget#debugToolbarShell {"
+              "  background: {toolbarBg};"
+              "  border: 1px solid {shellBorder};"
+              "  border-radius: 4px;"
+              "}"
+              "QWidget#debugToolbar {"
+              "  background: transparent;"
+              "  border: none;"
+              "}"
+              "QWidget#debugToolbarGroup {"
+              "  background: transparent;"
+              "  border: none;"
+              "}"
+              "QFrame#debugToolbarDivider {"
+              "  background: {shellBorder};"
+              "  min-width: 1px;"
+              "  max-width: 1px;"
+              "}"
 
-          "QToolButton#debugToolbarButton {"
-          "  color: {fg};"
-          "  background: transparent;"
-          "  border: 1px solid transparent;"
-          "  border-radius: 3px;"
-          "  padding: 5px 10px;"
-          "  font-size: 12px;"
-          "  font-weight: 500;"
-          "  text-align: left;"
-          "}"
-          "QToolButton#debugToolbarButton:hover {"
-          "  background: {focusSurface};"
-          "}"
-          "QToolButton#debugToolbarButton:pressed {"
-          "  background: {accentSoft};"
-          "}"
-          "QToolButton#debugToolbarButton:disabled {"
-          "  color: {subtleText};"
-          "  background: transparent;"
-          "  border-color: transparent;"
-          "}"
-          "QToolButton#debugToolbarButton[role=\"primary\"] {"
-          "  background: {accentSoft};"
-          "  color: {fg};"
-          "  font-weight: 600;"
-          "}"
-          "QToolButton#debugToolbarButton[role=\"primary\"]:hover {"
-          "  background: {tabSelected};"
-          "  border-color: {tabSelectedBorder};"
-          "}"
-          "QToolButton#debugToolbarButton[role=\"primary\"]:disabled {"
-          "  background: transparent;"
-          "  color: {subtleText};"
-          "  font-weight: 500;"
-          "}"
-          "QToolButton#debugToolbarButton[role=\"danger\"]:hover {"
-          "  background: {errorBg};"
-          "  border-color: {errorColor};"
-          "}"
-          "QWidget#debugInspectorShell {"
-          "  background: {shellSurface};"
-          "  border: none;"
-          "  border-radius: 4px;"
-          "}"
-          "QWidget#debugPanel QLabel {"
-          "  color: {fg};"
-          "}"
-          "QWidget#debugInspectorTabBar {"
-          "  background: transparent;"
-          "  border: none;"
-          "  border-bottom: 1px solid {shellBorder};"
-          "}"
-          "QStackedWidget#debugInspectorStack {"
-          "  background: transparent;"
-          "  border: none;"
-          "}"
+              "QToolButton#debugToolbarButton {"
+              "  color: {fg};"
+              "  background: transparent;"
+              "  border: 1px solid transparent;"
+              "  border-radius: 3px;"
+              "  padding: 5px 10px;"
+              "  font-size: 12px;"
+              "  font-weight: 500;"
+              "  text-align: left;"
+              "}"
+              "QToolButton#debugToolbarButton:hover {"
+              "  background: {focusSurface};"
+              "}"
+              "QToolButton#debugToolbarButton:pressed {"
+              "  background: {accentSoft};"
+              "}"
+              "QToolButton#debugToolbarButton:disabled {"
+              "  color: {subtleText};"
+              "  background: transparent;"
+              "  border-color: transparent;"
+              "}"
+              "QToolButton#debugToolbarButton[role=\"primary\"] {"
+              "  background: {accentSoft};"
+              "  color: {fg};"
+              "  font-weight: 600;"
+              "}"
+              "QToolButton#debugToolbarButton[role=\"primary\"]:hover {"
+              "  background: {tabSelected};"
+              "  border-color: {tabSelectedBorder};"
+              "}"
+              "QToolButton#debugToolbarButton[role=\"primary\"]:disabled {"
+              "  background: transparent;"
+              "  color: {subtleText};"
+              "  font-weight: 500;"
+              "}"
+              "QToolButton#debugToolbarButton[role=\"danger\"]:hover {"
+              "  background: {errorBg};"
+              "  border-color: {errorColor};"
+              "}"
+              "QWidget#debugInspectorShell {"
+              "  background: {shellSurface};"
+              "  border: none;"
+              "  border-radius: 4px;"
+              "}"
+              "QWidget#debugPanel QLabel {"
+              "  color: {fg};"
+              "}"
+              "QWidget#debugInspectorTabBar {"
+              "  background: transparent;"
+              "  border: none;"
+              "  border-bottom: 1px solid {shellBorder};"
+              "}"
+              "QStackedWidget#debugInspectorStack {"
+              "  background: transparent;"
+              "  border: none;"
+              "}"
 
-          "QToolButton#debugInspectorTab {"
-          "  color: {subtleText};"
-          "  background: transparent;"
-          "  border: none;"
-          "  border-bottom: {tabIndicator}px solid transparent;"
-          "  padding: 7px {tabPadH}px 6px {tabPadH}px;"
-          "  margin: 0 {space}px 0 0;"
-          "  font-size: 11px;"
-          "  font-weight: 500;"
-          "  text-align: left;"
-          "}"
-          "QToolButton#debugInspectorTab:hover {"
-          "  color: {fg};"
-          "  background: {tabHover};"
-          "}"
-          "QToolButton#debugInspectorTab:checked {"
-          "  color: {fg};"
-          "  background: transparent;"
-          "  font-weight: 600;"
-          "  border-bottom-color: {tabSelectedBorder};"
-          "}"
-          "QWidget#debugInspectorPage {"
-          "  background: transparent;"
-          "}"
-          "QFrame#debugSectionCard {"
-          "  background: transparent;"
-          "  border: none;"
-          "  border-radius: 0px;"
-          "}"
-          "QWidget#debugWatchContainer {"
-          "  background: transparent;"
-          "  border: none;"
-          "}"
-          "QToolButton#debugSectionAction {"
-          "  color: {fg};"
-          "  background: {inputSurface};"
-          "  border: 1px solid {shellBorder};"
-          "  border-radius: 3px;"
-          "  padding: 3px 8px;"
-          "  font-weight: 600;"
-          "}"
-          "QToolButton#debugSectionAction:hover {"
-          "  background: {focusSurface};"
-          "  border-color: {tabSelectedBorder};"
-          "}"
-          "QToolButton#debugSectionAction:pressed {"
-          "  background: {accentSoft};"
-          "}"
-          "QLineEdit#debugWatchInput, QLineEdit#debugConsoleInput {"
-          "  background: {inputSurface};"
-          "  color: {fg};"
-          "  border: 1px solid {shellBorder};"
-          "  border-radius: 3px;"
-          "  padding: 7px 10px;"
-          "}"
-          "QLineEdit#debugWatchInput:focus, QLineEdit#debugConsoleInput:focus {"
-          "  background: {focusSurface};"
-          "  border-color: {tabSelectedBorder};"
-          "}"
-          "QMenu {"
-          "  background: {cardSurface};"
-          "  color: {fg};"
-          "  border: 1px solid {shellBorder};"
-          "  padding: 6px;"
-          "}"
-          "QMenu::item {"
-          "  padding: 6px 10px;"
-          "  border-radius: 2px;"
-          "}"
-          "QMenu::item:selected {"
-          "  background: {focusSurface};"
-          "}"
-          "QComboBox#debugThreadSelector {"
-          "  min-height: 30px;"
-          "  padding: 2px 10px;"
-          "  border: 1px solid {shellBorder};"
-          "  border-radius: 3px;"
-          "  background: {inputSurface};"
-          "  color: {fg};"
-          "}"
-          "QComboBox#debugThreadSelector:hover {"
-          "  border-color: {tabSelectedBorder};"
-          "}"
-          "QComboBox#debugThreadSelector QAbstractItemView {"
-          "  background: {shellSurface};"
-          "  color: {fg};"
-          "  border: 1px solid {shellBorder};"
-          "  selection-background-color: {accentSoft};"
-          "  selection-color: {fg};"
-          "}"
-          "QComboBox#debugThreadSelector::drop-down {"
-          "  border: none;"
-          "}"
-          "QLabel#debugStatusLabel {"
-          "  padding: 6px 12px;"
-          "  font-weight: 600;"
-          "  border: 1px solid {tabSelectedBorder};"
-          "  border-radius: 3px;"
-          "  background: {tabHover};"
-          "  color: {fg};"
-          "}"
-          "QLabel#debugStatusLabel[statusKind=\"ready\"] {"
-          "  border-color: {shellBorder};"
-          "  background: {readyBg};"
-          "}"
-          "QLabel#debugStatusLabel[statusKind=\"starting\"] {"
-          "  border-color: {warningColor};"
-          "  background: {startingBg};"
-          "  color: {warningColor};"
-          "}"
-          "QLabel#debugStatusLabel[statusKind=\"running\"] {"
-          "  border-color: {accentColor};"
-          "  background: {runningBg};"
-          "  color: {accentColor};"
-          "}"
-          "QLabel#debugStatusLabel[statusKind=\"paused\"] {"
-          "  border-color: {successColor};"
-          "  background: {pausedBg};"
-          "  color: {successColor};"
-          "}"
-          "QLabel#debugStatusLabel[statusKind=\"error\"] {"
-          "  border-color: {errorColor};"
-          "  background: {errorBg};"
-          "  color: {errorColor};"
-          "}"
-          "QPlainTextEdit#debugConsoleOutput {"
-          "  background: {consoleSurface};"
-          "  color: {fg};"
-          "  border: 1px solid {shellBorder};"
-          "  border-radius: 0px;"
-          "  selection-background-color: {accentSoft};"
-          "  selection-color: {fg};"
-          "  padding: 6px;"
-          "  font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;"
-          "  font-size: 12px;"
-          "}"
-          "QLineEdit#debugConsoleInput {"
-          "  font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;"
-          "  font-size: 12px;"
-          "}"
-          "QLineEdit#debugConsoleFind {"
-          "  background: {inputSurface};"
-          "  color: {fg};"
-          "  border: 1px solid {shellBorder};"
-          "  border-radius: 3px;"
-          "  padding: 2px 8px;"
-          "}"),
-      {{"panelBg", panelSurface.name()},
-       {"fg", theme.foregroundColor.name()},
-       {"toolbarBg", toolbarShell.name()},
-       {"shellBorder", shellBorder.name(QColor::HexArgb)},
-       {"shellSurface", shellSurface.name()},
-       {"subtleText", subtleText.name()},
-       {"tabBg", tabBg.name(QColor::HexArgb)},
-       {"tabHover", tabHover.name(QColor::HexArgb)},
-       {"tabSelected", tabSelected.name(QColor::HexArgb)},
-       {"tabSelectedBorder", tabSelectedBorder.name(QColor::HexArgb)},
-       {"cardSurface", cardSurface.name()},
-       {"inputSurface", inputSurface.name()},
-       {"focusSurface", focusSurface.name()},
-       {"accentSoft", theme.accentSoftColor.name()},
-       {"accentColor", theme.accentColor.name()},
-       {"consoleSurface", consoleSurface.name()},
-       {"warningColor", theme.warningColor.name()},
-       {"startingBg", startingBg.name(QColor::HexArgb)},
-       {"runningBg", runningBg.name(QColor::HexArgb)},
-       {"successColor", theme.successColor.name()},
-       {"pausedBg", pausedBg.name(QColor::HexArgb)},
-       {"errorColor", theme.errorColor.name()},
-       {"errorBg", errorBg.name(QColor::HexArgb)},
-       {"readyBg", readyBg.name(QColor::HexArgb)},
-       {"tabPadH", QString::number(UiMetrics::TabPaddingH)},
-       {"tabIndicator", QString::number(UiMetrics::TabIndicatorThickness)},
-       {"space", QString::number(UiMetrics::SpaceMd)}}));
+              "QToolButton#debugInspectorTab {"
+              "  color: {subtleText};"
+              "  background: transparent;"
+              "  border: none;"
+              "  border-bottom: {tabIndicator}px solid transparent;"
+              "  padding: 7px {tabPadH}px 6px {tabPadH}px;"
+              "  margin: 0 {space}px 0 0;"
+              "  font-size: 11px;"
+              "  font-weight: 500;"
+              "  text-align: left;"
+              "}"
+              "QToolButton#debugInspectorTab:hover {"
+              "  color: {fg};"
+              "  background: {tabHover};"
+              "}"
+              "QToolButton#debugInspectorTab:checked {"
+              "  color: {fg};"
+              "  background: transparent;"
+              "  font-weight: 600;"
+              "  border-bottom-color: {tabSelectedBorder};"
+              "}"
+              "QWidget#debugInspectorPage {"
+              "  background: transparent;"
+              "}"
+              "QFrame#debugSectionCard {"
+              "  background: transparent;"
+              "  border: none;"
+              "  border-radius: 0px;"
+              "}"
+              "QWidget#debugWatchContainer {"
+              "  background: transparent;"
+              "  border: none;"
+              "}"
+              "QToolButton#debugSectionAction {"
+              "  color: {fg};"
+              "  background: {inputSurface};"
+              "  border: 1px solid {shellBorder};"
+              "  border-radius: 3px;"
+              "  padding: 3px 8px;"
+              "  font-weight: 600;"
+              "}"
+              "QToolButton#debugSectionAction:hover {"
+              "  background: {focusSurface};"
+              "  border-color: {tabSelectedBorder};"
+              "}"
+              "QToolButton#debugSectionAction:pressed {"
+              "  background: {accentSoft};"
+              "}"
+              "QLineEdit#debugWatchInput, QLineEdit#debugConsoleInput {"
+              "  background: {inputSurface};"
+              "  color: {fg};"
+              "  border: 1px solid {shellBorder};"
+              "  border-radius: 3px;"
+              "  padding: 7px 10px;"
+              "}"
+              "QLineEdit#debugWatchInput:focus, "
+              "QLineEdit#debugConsoleInput:focus {"
+              "  background: {focusSurface};"
+              "  border-color: {tabSelectedBorder};"
+              "}"
+              "QMenu {"
+              "  background: {cardSurface};"
+              "  color: {fg};"
+              "  border: 1px solid {shellBorder};"
+              "  padding: 6px;"
+              "}"
+              "QMenu::item {"
+              "  padding: 6px 10px;"
+              "  border-radius: 2px;"
+              "}"
+              "QMenu::item:selected {"
+              "  background: {focusSurface};"
+              "}"
+              "QComboBox#debugThreadSelector {"
+              "  min-height: 30px;"
+              "  padding: 2px 10px;"
+              "  border: 1px solid {shellBorder};"
+              "  border-radius: 3px;"
+              "  background: {inputSurface};"
+              "  color: {fg};"
+              "}"
+              "QComboBox#debugThreadSelector:hover {"
+              "  border-color: {tabSelectedBorder};"
+              "}"
+              "QComboBox#debugThreadSelector QAbstractItemView {"
+              "  background: {shellSurface};"
+              "  color: {fg};"
+              "  border: 1px solid {shellBorder};"
+              "  selection-background-color: {accentSoft};"
+              "  selection-color: {fg};"
+              "}"
+              "QComboBox#debugThreadSelector::drop-down {"
+              "  border: none;"
+              "}"
+              "QLabel#debugStatusLabel {"
+              "  padding: 6px 12px;"
+              "  font-weight: 600;"
+              "  border: 1px solid {tabSelectedBorder};"
+              "  border-radius: 3px;"
+              "  background: {tabHover};"
+              "  color: {fg};"
+              "}"
+              "QLabel#debugStatusLabel[statusKind=\"ready\"] {"
+              "  border-color: {shellBorder};"
+              "  background: {readyBg};"
+              "}"
+              "QLabel#debugStatusLabel[statusKind=\"starting\"] {"
+              "  border-color: {warningColor};"
+              "  background: {startingBg};"
+              "  color: {warningColor};"
+              "}"
+              "QLabel#debugStatusLabel[statusKind=\"running\"] {"
+              "  border-color: {accentColor};"
+              "  background: {runningBg};"
+              "  color: {accentColor};"
+              "}"
+              "QLabel#debugStatusLabel[statusKind=\"paused\"] {"
+              "  border-color: {successColor};"
+              "  background: {pausedBg};"
+              "  color: {successColor};"
+              "}"
+              "QLabel#debugStatusLabel[statusKind=\"error\"] {"
+              "  border-color: {errorColor};"
+              "  background: {errorBg};"
+              "  color: {errorColor};"
+              "}"
+              "QPlainTextEdit#debugConsoleOutput {"
+              "  background: {consoleSurface};"
+              "  color: {fg};"
+              "  border: 1px solid {shellBorder};"
+              "  border-radius: 0px;"
+              "  selection-background-color: {accentSoft};"
+              "  selection-color: {fg};"
+              "  padding: 6px;"
+              "  font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;"
+              "  font-size: 12px;"
+              "}"
+              "QLineEdit#debugConsoleInput {"
+              "  font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;"
+              "  font-size: 12px;"
+              "}"
+              "QLineEdit#debugConsoleFind {"
+              "  background: {inputSurface};"
+              "  color: {fg};"
+              "  border: 1px solid {shellBorder};"
+              "  border-radius: 3px;"
+              "  padding: 2px 8px;"
+              "}"),
+          {{"panelBg", panelSurface.name()},
+           {"fg", theme.foregroundColor.name()},
+           {"toolbarBg", toolbarShell.name()},
+           {"shellBorder", shellBorder.name(QColor::HexArgb)},
+           {"shellSurface", shellSurface.name()},
+           {"subtleText", subtleText.name()},
+           {"tabBg", tabBg.name(QColor::HexArgb)},
+           {"tabHover", tabHover.name(QColor::HexArgb)},
+           {"tabSelected", tabSelected.name(QColor::HexArgb)},
+           {"tabSelectedBorder", tabSelectedBorder.name(QColor::HexArgb)},
+           {"cardSurface", cardSurface.name()},
+           {"inputSurface", inputSurface.name()},
+           {"focusSurface", focusSurface.name()},
+           {"accentSoft", theme.accentSoftColor.name()},
+           {"accentColor", theme.accentColor.name()},
+           {"consoleSurface", consoleSurface.name()},
+           {"warningColor", theme.warningColor.name()},
+           {"startingBg", startingBg.name(QColor::HexArgb)},
+           {"runningBg", runningBg.name(QColor::HexArgb)},
+           {"successColor", theme.successColor.name()},
+           {"pausedBg", pausedBg.name(QColor::HexArgb)},
+           {"errorColor", theme.errorColor.name()},
+           {"errorBg", errorBg.name(QColor::HexArgb)},
+           {"readyBg", readyBg.name(QColor::HexArgb)},
+           {"tabPadH", QString::number(UiMetrics::TabPaddingH)},
+           {"tabIndicator", QString::number(UiMetrics::TabIndicatorThickness)},
+           {"space", QString::number(UiMetrics::SpaceMd)}}));
 
   const QString treeStyle = fillStyleTemplate(
       QStringLiteral(
@@ -1009,7 +1006,9 @@ void DebugPanel::setupToolbar() {
   m_threadSelector->setObjectName("debugThreadSelector");
   m_threadSelector->setToolTip(tr("Select active thread"));
   m_threadSelector->setStatusTip(tr("Select active thread"));
-  m_threadSelector->setMinimumWidth(160);
+  m_threadSelector->setMinimumContentsLength(8);
+  m_threadSelector->setSizeAdjustPolicy(
+      QComboBox::AdjustToMinimumContentsLengthWithIcon);
   m_threadSelector->setMaximumWidth(320);
   m_threadSelector->setPlaceholderText(tr("No threads"));
   m_threadSelector->setSizeAdjustPolicy(QComboBox::AdjustToContents);
@@ -1020,7 +1019,8 @@ void DebugPanel::setupToolbar() {
 
   m_debugStatusLabel = new QLabel(tr("Ready"), this);
   m_debugStatusLabel->setObjectName("debugStatusLabel");
-  m_debugStatusLabel->setMinimumWidth(110);
+  m_debugStatusLabel->setMinimumWidth(0);
+  m_debugStatusLabel->setWordWrap(true);
   m_debugStatusText = m_debugStatusLabel->text();
 
   m_debugStatusLabel->installEventFilter(this);
@@ -1310,7 +1310,8 @@ void DebugPanel::setupConsoleToolbar() {
   m_consoleFindInput->setPlaceholderText(tr("Find in console…"));
   m_consoleFindInput->setClearButtonEnabled(true);
   m_consoleFindInput->setFixedHeight(UiMetrics::ControlHeight);
-  m_consoleFindInput->setFixedWidth(240);
+  m_consoleFindInput->setMinimumWidth(80);
+  m_consoleFindInput->setMaximumWidth(240);
   connect(m_consoleFindInput, &QLineEdit::returnPressed, this,
           [this]() { findInConsole(false); });
   layout->addWidget(m_consoleFindInput);

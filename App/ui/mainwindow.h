@@ -32,6 +32,8 @@ class ImageViewer;
 class GitIntegration;
 class GitFileSystemModel;
 class SourceControlPanel;
+class ConflictCenterPanel;
+class ConflictResolverView;
 class QDockWidget;
 class QMenu;
 class QFileSystemWatcher;
@@ -174,6 +176,7 @@ private slots:
   void on_actionUnsplit_All_triggered();
   void on_actionToggle_Terminal_triggered();
   void on_actionToggle_Source_Control_triggered();
+  void on_actionToggle_Merge_Conflicts_triggered();
   void on_actionToggle_Test_Panel_triggered();
   void on_actionToggle_Problems_triggered();
 
@@ -256,6 +259,10 @@ private:
   GitIntegration *m_gitIntegration;
   SourceControlPanel *sourceControlPanel;
   QDockWidget *sourceControlDock;
+  ConflictCenterPanel *conflictCenterPanel;
+  QDockWidget *conflictCenterDock;
+
+  QString m_rawConflictOpenPath;
   QSet<QString> m_blameEnabledFiles;
   bool m_inlineBlameEnabled;
   bool m_heatmapEnabled;
@@ -396,6 +403,19 @@ private:
   QList<LightpadTreeView *> allTreeViews() const;
   void expandIndexInView(QTreeView *treeView, const QModelIndex &index);
   void ensureSourceControlPanel();
+  void ensureConflictCenterPanel();
+  void showConflictCenter();
+
+  void revealRightDock(QDockWidget *dock, int preferredWidth);
+
+  bool openConflictResolver(const QString &filePath);
+
+  bool isConflictedPath(const QString &filePath) const;
+
+  enum class FileOpenChoice { Cancel, Preview, Whole };
+  FileOpenChoice confirmLargeOrBinaryOpen(const QString &filePath);
+
+  QSet<QString> m_previewOnlyFiles;
   void ensureDebugPanel();
   void ensureTestPanel();
   void trackDockLayoutChanges(QDockWidget *dock);

@@ -335,6 +335,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionToggle_Minimap"/>
     <addaction name="actionToggle_Terminal"/>
     <addaction name="actionToggle_Source_Control"/>
+    <addaction name="actionToggle_Merge_Conflicts"/>
     <addaction name="actionToggle_Test_Panel"/>
     <addaction name="actionToggle_Problems"/>
     <addaction name="actionGit_Log"/>
@@ -697,6 +698,23 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+G</string>
+   </property>
+  </action>
+  <action name="actionToggle_Merge_Conflicts">
+   <property name="text">
+    <string>Toggle Merge Conflicts</string>
+   </property>
+   <property name="toolTip">
+    <string>Every file a halted merge is waiting on, in one place</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+K</string>
    </property>
   </action>
   <action name="actionTransform_Uppercase">
