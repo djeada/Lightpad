@@ -326,6 +326,7 @@ add_executable(test_terminaltabwidget
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminalpty.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminalview.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/shellprofile.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
@@ -1520,7 +1521,7 @@ target_compile_definitions(test_gitrebaseplan PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GitRebasePlanTests COMMAND test_gitrebaseplan)
 
-# Conflict storyboard model: classification and who the two sides really are.
+# Conflict model: classification and who the two sides really are.
 add_executable(test_gitconflictmodel
     unit/test_gitconflictmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
@@ -1552,6 +1553,218 @@ target_link_libraries(test_gitconflictmodel
 target_compile_definitions(test_gitconflictmodel PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GitConflictModelTests COMMAND test_gitconflictmodel)
+
+# Conflict resolution: taking a conflicted file apart, deciding per region, and
+# being able to take every decision back.
+add_executable(test_gitconflictresolution
+    unit/test_gitconflictresolution.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictresolution.cpp
+)
+
+target_include_directories(test_gitconflictresolution PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitconflictresolution
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitconflictresolution PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitConflictResolutionTests COMMAND test_gitconflictresolution)
+
+# Opening guard: what is safe to read into the editor, and how much of it.
+add_executable(test_fileopenguard
+    unit/test_fileopenguard.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/io/fileopenguard.cpp
+)
+
+target_include_directories(test_fileopenguard PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+)
+
+target_link_libraries(test_fileopenguard
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_fileopenguard PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME FileOpenGuardTests COMMAND test_fileopenguard)
+
+# Merge planning: which branch copies can be brought in, and what happens if you do.
+add_executable(test_gitmergeplan
+    unit/test_gitmergeplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitmergeplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_gitmergeplan PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+
+target_link_libraries(test_gitmergeplan
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_gitmergeplan PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME GitMergePlanTests COMMAND test_gitmergeplan)
+
+# The merge screen: what goes into what, which copy, and what happens on clash.
+
+add_executable(test_mergestartdialog
+    unit/test_mergestartdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/mergestartdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitmergeplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictresolution.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_mergestartdialog PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/ui/panels
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_mergestartdialog
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_mergestartdialog PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME MergeStartDialogTests COMMAND test_mergestartdialog)
+
+# The per-file resolver: one card per disagreement, every choice undoable.
+
+add_executable(test_conflictresolverview
+    unit/test_conflictresolverview.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/conflictresolverview.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/flowlayout.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictresolution.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_conflictresolverview PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/ui/panels
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_conflictresolverview
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_conflictresolverview PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME ConflictResolverViewTests COMMAND test_conflictresolverview)
+
+# The dedicated conflict panel: the one place that says a merge is stuck.
+
+add_executable(test_conflictcenterpanel
+    unit/test_conflictcenterpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/conflictcenterpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/flowlayout.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictresolution.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+
+target_include_directories(test_conflictcenterpanel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+    ${CMAKE_SOURCE_DIR}/App/ui
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs
+    ${CMAKE_SOURCE_DIR}/App/ui/panels
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+
+target_link_libraries(test_conflictcenterpanel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_compile_definitions(test_conflictcenterpanel PRIVATE QT_DEPRECATED_WARNINGS)
+
+add_test(NAME ConflictCenterPanelTests COMMAND test_conflictcenterpanel)
 
 # Recovery timeline: grouping reflog noise into events you can act on.
 add_executable(test_gitrecovery
@@ -2789,6 +3002,19 @@ set_tests_properties(${TEST_LIST}
     PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# The list above is maintained by hand, and forgetting to add a test to it does
+# not fail locally - it fails on CI, where there is no display and QTEST_MAIN's
+# QApplication aborts before a single assertion runs. Sweeping every registered
+# test closes that gap for good, including the ones already missing from the
+# list. Tests that are not Qt programs simply ignore the variable.
+get_property(REGISTERED_TESTS DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY TESTS)
+if(REGISTERED_TESTS)
+    set_tests_properties(${REGISTERED_TESTS}
+        PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    )
+endif()
 
 # Set timeout for terminal tests that may take longer due to shell process management
 set_tests_properties(TerminalTabWidgetTests PROPERTIES TIMEOUT 90)

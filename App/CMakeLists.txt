@@ -92,6 +92,8 @@ set(project_headers
     git/gittimetravel.h
     git/gitrebaseplan.h
     git/gitconflictmodel.h
+    git/gitconflictresolution.h
+    git/gitmergeplan.h
     git/gitrecovery.h
     git/gitstashshelf.h
     git/gitcommandlog.h
@@ -114,7 +116,7 @@ set(project_headers
     ui/dialogs/themegallerydialog.h
     ui/dialogs/gitinitdialog.h
     ui/dialogs/gitdiffdialog.h
-    ui/dialogs/mergeconflictdialog.h
+    ui/dialogs/mergestartdialog.h
     ui/dialogs/gitremotedialog.h
     ui/dialogs/gitstashdialog.h
     ui/dialogs/gitlogdialog.h
@@ -131,7 +133,6 @@ set(project_headers
     ui/dialogs/undochangeswizarddialog.h
     ui/dialogs/timetraveldialog.h
     ui/dialogs/rebasetimelinedialog.h
-    ui/dialogs/conflictstoryboarddialog.h
     ui/dialogs/recoverycenterdialog.h
     ui/dialogs/stashshelfdialog.h
     ui/dialogs/commandmirrordialog.h
@@ -166,6 +167,8 @@ set(project_headers
     ui/panels/debugpanel.h
     ui/panels/debugglyphs.h
     ui/panels/sourcecontrolpanel.h
+    ui/panels/conflictcenterpanel.h
+    ui/panels/conflictresolverview.h
     ui/panels/minimap.h
     ui/panels/spliteditorcontainer.h
     ui/panels/testpanel.h
@@ -174,6 +177,7 @@ set(project_headers
     core/document.h
     core/formatter.h
     core/io/filemanager.h
+    core/io/fileopenguard.h
     core/lightpadpage.h
     core/logging/logger.h
     core/recentfilesmanager.h
@@ -313,6 +317,8 @@ set(project_sources
     git/gittimetravel.cpp
     git/gitrebaseplan.cpp
     git/gitconflictmodel.cpp
+    git/gitconflictresolution.cpp
+    git/gitmergeplan.cpp
     git/gitrecovery.cpp
     git/gitstashshelf.cpp
     git/gitcommandlog.cpp
@@ -335,7 +341,7 @@ set(project_sources
     ui/dialogs/themegallerydialog.cpp
     ui/dialogs/gitinitdialog.cpp
     ui/dialogs/gitdiffdialog.cpp
-    ui/dialogs/mergeconflictdialog.cpp
+    ui/dialogs/mergestartdialog.cpp
     ui/dialogs/gitremotedialog.cpp
     ui/dialogs/gitstashdialog.cpp
     ui/dialogs/gitlogdialog.cpp
@@ -352,7 +358,6 @@ set(project_sources
     ui/dialogs/undochangeswizarddialog.cpp
     ui/dialogs/timetraveldialog.cpp
     ui/dialogs/rebasetimelinedialog.cpp
-    ui/dialogs/conflictstoryboarddialog.cpp
     ui/dialogs/recoverycenterdialog.cpp
     ui/dialogs/stashshelfdialog.cpp
     ui/dialogs/commandmirrordialog.cpp
@@ -386,6 +391,8 @@ set(project_sources
     ui/panels/breadcrumbwidget.cpp
     ui/panels/debugpanel.cpp
     ui/panels/sourcecontrolpanel.cpp
+    ui/panels/conflictcenterpanel.cpp
+    ui/panels/conflictresolverview.cpp
     ui/panels/minimap.cpp
     ui/panels/spliteditorcontainer.cpp
     ui/panels/testpanel.cpp
@@ -394,6 +401,7 @@ set(project_sources
     core/document.cpp
     core/formatter.cpp
     core/io/filemanager.cpp
+    core/io/fileopenguard.cpp
     core/lightpadpage.cpp
     core/logging/logger.cpp
     core/recentfilesmanager.cpp

@@ -83,13 +83,7 @@ public:
       int dotY = option.rect.center().y();
       int dotR = 6;
 
-      static const QList<QColor> laneColors = {
-          QColor(0x4E, 0xC9, 0xB0), QColor(0xCE, 0x91, 0x78),
-          QColor(0x56, 0x9C, 0xD6), QColor(0xDC, 0xDC, 0xAA),
-          QColor(0xC5, 0x86, 0xC0), QColor(0xD7, 0xBA, 0x7D),
-          QColor(0x6A, 0x99, 0x55), QColor(0xD1, 0x6D, 0x6D),
-      };
-      QColor dotColor = laneColors[0];
+      QColor dotColor = m_theme->accentColor;
 
       if (isDrop) {
         dotColor = m_theme->errorColor;
@@ -110,7 +104,7 @@ public:
         painter->drawLine(dotX, dotY + dotR + 1, dotX, option.rect.bottom());
 
       if (entry.parents.size() > 1) {
-        QPen mergePen(laneColors[1 % laneColors.size()], 1.5, Qt::DashLine);
+        QPen mergePen(m_theme->accentColor, 1.5, Qt::DashLine);
         painter->setPen(mergePen);
         painter->drawLine(dotX + dotR + 2, dotY, dotX + 28, dotY);
 
@@ -232,6 +226,8 @@ void GitWorkbenchDialog::buildUi() {
                               : QString::fromUtf8(" \xe2\x80\x94 ") + repoName),
       this);
   titleLabel->setObjectName("workbenchTitle");
+  titleLabel->setWordWrap(true);
+  titleLabel->setMinimumWidth(0);
   titleLayout->addWidget(titleLabel);
   titleLayout->addStretch();
 
@@ -240,6 +236,7 @@ void GitWorkbenchDialog::buildUi() {
          "R reword  \xc2\xb7  Ctrl+K commands"),
       this);
   shortcutHint->setObjectName("workbenchShortcutHint");
+  shortcutHint->setWordWrap(true);
   titleLayout->addWidget(shortcutHint);
 
   mainLayout->addWidget(titleBar);
@@ -959,6 +956,7 @@ void GitWorkbenchDialog::applyTheme(const Theme &theme) {
       QString(
 
           "QDialog { background: %1; color: %2; font-size: 13px; }"
+          "QLabel { color: %2; background: transparent; }"
 
           "#workbenchTitleBar { background: %3; }"
           "#workbenchTitle { font-size: 17px; font-weight: 600; color: %2; "

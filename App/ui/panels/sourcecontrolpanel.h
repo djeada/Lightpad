@@ -20,7 +20,6 @@
 #include <QWidget>
 
 class GitInitDialog;
-class MergeConflictDialog;
 class GitRemoteDialog;
 class GitStashDialog;
 
@@ -48,6 +47,8 @@ signals:
   void repositoryInitialized(const QString &path);
 
   void openWorktreeRequested(const QString &path);
+
+  void conflictCenterRequested();
 
   void commitDiffRequested(const QString &commitHash, const QString &shortHash);
 
@@ -79,6 +80,7 @@ private slots:
   void onStashClicked();
   void onMergeConflictsDetected(const QStringList &files);
   void onResolveConflictsClicked();
+  void onMergeClicked();
   void onHistorySearchChanged(const QString &text);
   void onStateMapLayerActivated(RepositoryStateMapWidget::Layer layer);
   void onStagingCanvasClicked();
@@ -156,6 +158,7 @@ private:
   QPushButton *m_pullButton;
   QPushButton *m_fetchButton;
   QPushButton *m_stashButton;
+  QPushButton *m_mergeButton;
   QLabel *m_stagedLabel;
   QTreeWidget *m_stagedTree;
   QLabel *m_changesLabel;

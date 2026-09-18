@@ -4,7 +4,6 @@
 #include "../dialogs/branchsyncradardialog.h"
 #include "../dialogs/commandmirrordialog.h"
 #include "../dialogs/commitcraftingdialog.h"
-#include "../dialogs/conflictstoryboarddialog.h"
 #include "../dialogs/gitdiffdialog.h"
 #include "../dialogs/gitinitdialog.h"
 #include "../dialogs/gitlogdialog.h"
@@ -12,7 +11,7 @@
 #include "../dialogs/gitremotedialog.h"
 #include "../dialogs/gitstashdialog.h"
 #include "../dialogs/integrationadvisordialog.h"
-#include "../dialogs/mergeconflictdialog.h"
+#include "../dialogs/mergestartdialog.h"
 #include "../dialogs/operationpreviewdialog.h"
 #include "../dialogs/rebasetimelinedialog.h"
 #include "../dialogs/recoverycenterdialog.h"
@@ -25,6 +24,7 @@
 #include "../dialogs/worktreemapdialog.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "../widgets/flowlayout.h"
 #include <QApplication>
 #include <QBoxLayout>
 #include <QClipboard>
@@ -40,6 +40,7 @@
 #include <QMenu>
 #include <QPalette>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSizePolicy>
 #include <QTimer>
 #include <QToolTip>
@@ -72,12 +73,13 @@ SourceControlPanel::SourceControlPanel(QWidget *parent)
       m_commitHeaderLabel(nullptr), m_stagedHeader(nullptr),
       m_changesHeader(nullptr), m_noRepoDescLabel(nullptr),
       m_conflictWarningHeader(nullptr), m_conflictFilesHeaderLabel(nullptr),
-      m_compareBranchesBtn(nullptr), m_worktreeBtn(nullptr),
-      m_discardAllBtn(nullptr), m_stagingCanvasBtn(nullptr),
-      m_syncRadarBtn(nullptr), m_craftBtn(nullptr), m_integrateBtn(nullptr),
-      m_historyExpanded(false), m_updatingBranchSelector(false),
-      m_updatingTree(false), m_stagedCount(0), m_changesCount(0),
-      m_refreshTimer(new QTimer(this)), m_theme(), m_themeInitialized(false) {
+      m_mergeButton(nullptr), m_compareBranchesBtn(nullptr),
+      m_worktreeBtn(nullptr), m_discardAllBtn(nullptr),
+      m_stagingCanvasBtn(nullptr), m_syncRadarBtn(nullptr), m_craftBtn(nullptr),
+      m_integrateBtn(nullptr), m_historyExpanded(false),
+      m_updatingBranchSelector(false), m_updatingTree(false), m_stagedCount(0),
+      m_changesCount(0), m_refreshTimer(new QTimer(this)), m_theme(),
+      m_themeInitialized(false) {
   m_refreshTimer->setSingleShot(true);
   m_refreshTimer->setInterval(0);
   connect(m_refreshTimer, &QTimer::timeout, this, &SourceControlPanel::refresh);
@@ -87,6 +89,7 @@ SourceControlPanel::SourceControlPanel(QWidget *parent)
 SourceControlPanel::~SourceControlPanel() {}
 
 void SourceControlPanel::setupUI() {
+  setObjectName(QStringLiteral("sourceControlPanel"));
   QVBoxLayout *mainLayout = new QVBoxLayout(this);
   mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(0);
@@ -157,7 +160,13 @@ void SourceControlPanel::setupUI() {
 
   m_stackedWidget->addWidget(m_noRepoWidget);
   m_stackedWidget->addWidget(m_conflictWidget);
-  m_stackedWidget->addWidget(m_repoWidget);
+  auto *repoScroll = new QScrollArea(m_stackedWidget);
+  repoScroll->setObjectName(QStringLiteral("sourceControlScroll"));
+  repoScroll->setWidgetResizable(true);
+  repoScroll->setFrameShape(QFrame::NoFrame);
+  repoScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  repoScroll->setWidget(m_repoWidget);
+  m_stackedWidget->addWidget(repoScroll);
 
   mainLayout->addWidget(m_stackedWidget, 1);
 
@@ -231,12 +240,36 @@ void SourceControlPanel::setupMergeConflictUI() {
   layout->addWidget(m_conflictFilesHeaderLabel);
 
   m_conflictFilesList = new QListWidget(m_conflictWidget);
+  m_conflictFilesList->setToolTip(
+      tr("Double-click a file to open it in the conflict resolver"));
+  connect(m_conflictFilesList, &QListWidget::itemActivated, this,
+          [this](QListWidgetItem *item) {
+            if (!item || !m_git) {
+              return;
+            }
+            const QString path = item->data(Qt::UserRole).toString();
+            if (!path.isEmpty()) {
+              emit fileOpenRequested(m_git->repositoryPath() + "/" + path);
+            }
+          });
+  connect(m_conflictFilesList, &QListWidget::itemDoubleClicked, this,
+          [this](QListWidgetItem *item) {
+            if (!item || !m_git) {
+              return;
+            }
+            const QString path = item->data(Qt::UserRole).toString();
+            if (!path.isEmpty()) {
+              emit fileOpenRequested(m_git->repositoryPath() + "/" + path);
+            }
+          });
   layout->addWidget(m_conflictFilesList, 1);
 
   QHBoxLayout *actionLayout = new QHBoxLayout();
 
   m_resolveConflictsButton =
-      new QPushButton(tr("Resolve Conflicts..."), m_conflictWidget);
+      new QPushButton(tr("Open the conflict panel"), m_conflictWidget);
+  m_resolveConflictsButton->setToolTip(
+      tr("Show every conflicted file in one place, with a way into each"));
   connect(m_resolveConflictsButton, &QPushButton::clicked, this,
           &SourceControlPanel::onResolveConflictsClicked);
   actionLayout->addWidget(m_resolveConflictsButton);
@@ -278,7 +311,11 @@ void SourceControlPanel::setupRepoUI() {
   branchSelectorLayout->setSpacing(4);
 
   m_branchSelector = new QComboBox(m_branchSection);
-  m_branchSelector->setMinimumWidth(120);
+  m_branchSelector->setMinimumWidth(0);
+  m_branchSelector->setSizeAdjustPolicy(
+      QComboBox::AdjustToMinimumContentsLengthWithIcon);
+  m_branchSelector->setMinimumContentsLength(8);
+  m_branchSelector->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   connect(m_branchSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &SourceControlPanel::onBranchSelectorChanged);
   branchSelectorLayout->addWidget(m_branchSelector, 1);
@@ -301,8 +338,15 @@ void SourceControlPanel::setupRepoUI() {
 
   branchLayout->addLayout(branchSelectorLayout);
 
-  QHBoxLayout *remoteOpsLayout = new QHBoxLayout();
-  remoteOpsLayout->setSpacing(4);
+  QWidget *remoteOpsRow = new QWidget(m_branchSection);
+  QSizePolicy remoteOpsPolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  remoteOpsPolicy.setHeightForWidth(true);
+  remoteOpsRow->setSizePolicy(remoteOpsPolicy);
+  remoteOpsRow->setMinimumWidth(0);
+
+  FlowLayout *remoteOpsLayout =
+      new FlowLayout(remoteOpsRow, 0, UiMetrics::SpaceSm, UiMetrics::SpaceSm);
+  remoteOpsLayout->setSizeConstraint(QLayout::SetNoConstraint);
 
   m_pullButton = new QPushButton("⬇ Pull", m_branchSection);
   m_pullButton->setToolTip(tr("Pull from Remote"));
@@ -330,6 +374,16 @@ void SourceControlPanel::setupRepoUI() {
   connect(m_stashButton, &QPushButton::clicked, this,
           &SourceControlPanel::onStashClicked);
   remoteOpsLayout->addWidget(m_stashButton);
+
+  m_mergeButton = new QPushButton("🔀 Merge…", m_branchSection);
+  m_mergeButton->setObjectName(QStringLiteral("sourceControlMergeButton"));
+  m_mergeButton->setToolTip(
+      tr("Combine two branches — pick the work to bring in, see exactly what "
+         "will change, and decide up front what happens if the same lines "
+         "disagree"));
+  connect(m_mergeButton, &QPushButton::clicked, this,
+          &SourceControlPanel::onMergeClicked);
+  remoteOpsLayout->addWidget(m_mergeButton);
 
   m_integrateBtn = new QPushButton("⤵ Bring changes…", m_branchSection);
   m_integrateBtn->setToolTip(
@@ -368,7 +422,7 @@ void SourceControlPanel::setupRepoUI() {
           &SourceControlPanel::openWorktreeMap);
   remoteOpsLayout->addWidget(m_worktreeBtn);
 
-  branchLayout->addLayout(remoteOpsLayout);
+  branchLayout->addWidget(remoteOpsRow);
   mainLayout->addWidget(m_branchSection);
 
   m_commitSection = new QWidget(m_repoWidget);
@@ -510,6 +564,7 @@ void SourceControlPanel::setupRepoUI() {
   mainLayout->addWidget(m_changesHeader);
 
   m_changesTree = new QTreeWidget(m_repoWidget);
+  m_changesTree->setMinimumHeight(120);
   m_changesTree->setHeaderHidden(true);
   m_changesTree->setRootIsDecorated(false);
   m_changesTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -723,6 +778,16 @@ void SourceControlPanel::setupRepoUI() {
           &SourceControlPanel::onHistoryContextMenu);
 
   mainLayout->addWidget(m_historyTree);
+  for (QLabel *label : {m_stagedLabel, m_changesLabel, m_historyLabel}) {
+    label->setMinimumWidth(0);
+    label->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  }
+  for (QTreeWidget *tree : {m_stagedTree, m_changesTree, m_historyTree}) {
+    tree->setMinimumWidth(0);
+    tree->setTextElideMode(Qt::ElideMiddle);
+    tree->header()->setMinimumSectionSize(0);
+    tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+  }
 }
 
 void SourceControlPanel::setGitIntegration(GitIntegration *git) {
@@ -808,6 +873,8 @@ void SourceControlPanel::updateUIState() {
       m_fetchButton->setEnabled(false);
     if (m_stashButton)
       m_stashButton->setEnabled(false);
+    if (m_mergeButton)
+      m_mergeButton->setEnabled(false);
     if (m_stageAllButton)
       m_stageAllButton->setEnabled(false);
     if (m_unstageAllButton)
@@ -844,6 +911,8 @@ void SourceControlPanel::updateUIState() {
       m_fetchButton->setEnabled(false);
     if (m_stashButton)
       m_stashButton->setEnabled(false);
+    if (m_mergeButton)
+      m_mergeButton->setEnabled(false);
     if (m_stageAllButton)
       m_stageAllButton->setEnabled(false);
     if (m_unstageAllButton)
@@ -852,7 +921,8 @@ void SourceControlPanel::updateUIState() {
       m_commitButton->setEnabled(false);
   } else {
 
-    m_stackedWidget->setCurrentWidget(m_repoWidget);
+    m_stackedWidget->setCurrentWidget(
+        findChild<QScrollArea *>(QStringLiteral("sourceControlScroll")));
     if (m_pullButton)
       m_pullButton->setEnabled(true);
     if (m_pushButton)
@@ -861,6 +931,8 @@ void SourceControlPanel::updateUIState() {
       m_fetchButton->setEnabled(true);
     if (m_stashButton)
       m_stashButton->setEnabled(true);
+    if (m_mergeButton)
+      m_mergeButton->setEnabled(true);
     if (m_stageAllButton)
       m_stageAllButton->setEnabled(true);
     if (m_unstageAllButton)
@@ -2378,14 +2450,38 @@ void SourceControlPanel::onResolveConflictsClicked() {
   if (!m_git || !m_git->isValidRepository())
     return;
 
-  ConflictStoryboardDialog dialog(m_git, m_theme, this);
-  connect(&dialog, &ConflictStoryboardDialog::fileOpenRequested, this,
-          &SourceControlPanel::fileOpenRequested);
-  connect(&dialog, &ConflictStoryboardDialog::repositoryChanged, this,
-          &SourceControlPanel::scheduleRefresh);
+  emit conflictCenterRequested();
+}
 
-  dialog.exec();
+void SourceControlPanel::onMergeClicked() {
+  if (!m_git || !m_git->isValidRepository())
+    return;
+
+  MergeStartDialog dialog(m_git, m_theme, this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  const QString ref = dialog.selectedRef();
+  const QString target = dialog.selectedTarget();
+  const GitMergePlan plan = buildGitMergePlan(m_git, ref, target);
+  if (ref.isEmpty() || target.isEmpty() || !plan.canStart()) {
+    ThemedMessageBox::warning(this, tr("Merge unavailable"),
+                              tr("The repository changed. Reopen the merge "
+                                 "preview before continuing."));
+    return;
+  }
+  if (target != m_git->currentBranch() && !m_git->checkoutBranch(target)) {
+    refresh();
+    return;
+  }
+
+  m_git->mergeBranchWithOptions(ref, dialog.mergeOptions());
   refresh();
+
+  if (m_git->hasMergeConflicts()) {
+    emit conflictCenterRequested();
+  }
 }
 
 void SourceControlPanel::applyTheme(const Theme &theme) {
@@ -2402,12 +2498,25 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
           .lighter(100 + static_cast<int>(theme.glowIntensity * 28.0))
           .name();
 
-  setStyleSheet(QString("background: %1; border-left: 1px solid %2; "
-                        "border-right: 1px solid %2;")
-                    .arg(theme.backgroundColor.name(), panelBorder));
+  setStyleSheet(
+      UIStyleHelper::panelStyle(theme, objectName()) +
+      QString("QWidget#sourceControlPanel { background: %1; "
+              "border-left: 1px solid %2; border-right: 1px solid %2; }"
+              "QLabel { color: %3; background: transparent; }")
+          .arg(theme.backgroundColor.name(), panelBorder,
+               theme.foregroundColor.name()) +
+      UIStyleHelper::secondaryButtonStyle(theme));
+  for (QPushButton *button : findChildren<QPushButton *>()) {
+    if (button->maximumWidth() <= 28) {
+      button->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme) +
+                            QStringLiteral("QPushButton { padding: 0; }"));
+    }
+  }
 
   if (m_headerWidget) {
-    m_headerWidget->setStyleSheet(UIStyleHelper::panelHeaderStyle(theme));
+    m_headerWidget->setObjectName(QStringLiteral("sourceControlHeader"));
+    m_headerWidget->setStyleSheet(
+        UIStyleHelper::panelHeaderStyle(theme, m_headerWidget->objectName()));
   }
   if (m_stateMap) {
     m_stateMap->applyTheme(theme);
@@ -2525,8 +2634,10 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
 
   if (m_branchSection) {
+    m_branchSection->setObjectName(QStringLiteral("branchSection"));
     m_branchSection->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;")
+        QString("QWidget#branchSection { background: %1; border-bottom: 1px "
+                "solid %2; }")
             .arg(theme.backgroundColor.name())
             .arg(panelBorder));
   }
@@ -2594,49 +2705,20 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
             .arg(theme.backgroundColor.name()));
   }
 
-  auto styleRemoteButton = [&](QPushButton *btn, const QColor &color) {
-    if (!btn)
-      return;
-    btn->setStyleSheet(QString("QPushButton {"
-                               "  background: %1;"
-                               "  color: %2;"
-                               "  border: 1px solid %3;"
-                               "  border-radius: 6px;"
-                               "  padding: 4px 8px;"
-                               "  font-size: 11px;"
-                               "}"
-                               "QPushButton:hover {"
-                               "  background: %4;"
-                               "  color: %5;"
-                               "  border-color: %4;"
-                               "}"
-                               "QPushButton:pressed {"
-                               "  background: %6;"
-                               "}"
-                               "QPushButton:disabled {"
-                               "  background: %7;"
-                               "  color: %3;"
-                               "  border-color: %3;"
-                               "}")
-                           .arg(theme.surfaceAltColor.name())
-                           .arg(color.name())
-                           .arg(theme.borderColor.name())
-                           .arg(color.name())
-                           .arg(theme.backgroundColor.name())
-                           .arg(color.darker(120).name())
-                           .arg(theme.backgroundColor.name()));
-  };
-
-  styleRemoteButton(m_pullButton, theme.accentColor);
-  styleRemoteButton(m_pushButton, theme.successColor);
-  styleRemoteButton(m_fetchButton, theme.singleLineCommentFormat);
-  styleRemoteButton(m_stashButton, theme.accentColor);
-  styleRemoteButton(m_compareBranchesBtn, theme.accentColor);
-  styleRemoteButton(m_worktreeBtn, theme.foregroundColor);
-
+  for (QPushButton *button :
+       {m_pullButton, m_pushButton, m_fetchButton, m_stashButton, m_mergeButton,
+        m_compareBranchesBtn, m_worktreeBtn, m_syncRadarBtn, m_integrateBtn}) {
+    if (button) {
+      button->setStyleSheet(
+          UIStyleHelper::secondaryButtonStyle(theme) +
+          QStringLiteral("QPushButton { padding: 4px 8px; }"));
+    }
+  }
   if (m_commitSection) {
+    m_commitSection->setObjectName(QStringLiteral("commitSection"));
     m_commitSection->setStyleSheet(
-        QString("background: %1; border-top: 1px solid %2;")
+        QString("QWidget#commitSection { background: %1; border-top: 1px solid "
+                "%2; }")
             .arg(theme.backgroundColor.name())
             .arg(sectionBorder));
   }
@@ -2653,44 +2735,19 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_amendCheckbox->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
   }
   if (m_commitButton) {
-    m_commitButton->setStyleSheet(
-        QString("QPushButton {"
-                "  background: %1;"
-                "  color: %2;"
-                "  border: none;"
-                "  border-radius: 6px;"
-                "  padding: 8px 20px;"
-                "  font-weight: bold;"
-                "  font-size: 12px;"
-                "}"
-                "QPushButton:hover {"
-                "  background: %3;"
-                "}"
-                "QPushButton:pressed {"
-                "  background: %4;"
-                "}"
-                "QPushButton:disabled {"
-                "  background: %5;"
-                "  color: %6;"
-                "}")
-            .arg(theme.successColor.name())
-            .arg(theme.backgroundColor.name())
-            .arg(theme.successColor.lighter(120).name())
-            .arg(theme.successColor.darker(120).name())
-            .arg(theme.surfaceAltColor.name())
-            .arg(theme.borderColor.name()));
+    m_commitButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
   }
-
   if (m_stagedHeader) {
-    m_stagedHeader->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;")
-            .arg(theme.backgroundColor.name())
-            .arg(sectionBorder));
+    m_stagedHeader->setObjectName(QStringLiteral("stagedHeader"));
+    m_stagedHeader->setStyleSheet(QString("QWidget#stagedHeader { background: "
+                                          "%1; border-bottom: 1px solid %2; }")
+                                      .arg(theme.backgroundColor.name())
+                                      .arg(sectionBorder));
   }
   if (m_stagedLabel) {
     m_stagedLabel->setStyleSheet(
         QString("color: %1; font-weight: bold; font-size: 12px;")
-            .arg(theme.successColor.name()));
+            .arg(theme.foregroundColor.name()));
   }
   if (m_unstageAllButton) {
     m_unstageAllButton->setStyleSheet(
@@ -2712,15 +2769,17 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
 
   if (m_changesHeader) {
+    m_changesHeader->setObjectName(QStringLiteral("changesHeader"));
     m_changesHeader->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;")
+        QString("QWidget#changesHeader { background: %1; border-bottom: 1px "
+                "solid %2; }")
             .arg(theme.backgroundColor.name())
             .arg(sectionBorder));
   }
   if (m_changesLabel) {
     m_changesLabel->setStyleSheet(
         QString("color: %1; font-weight: bold; font-size: 12px;")
-            .arg(theme.warningColor.name()));
+            .arg(theme.foregroundColor.name()));
   }
   if (m_stageAllButton) {
     m_stageAllButton->setStyleSheet(
@@ -2756,8 +2815,10 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
 
   if (m_historyHeader) {
+    m_historyHeader->setObjectName(QStringLiteral("historyHeader"));
     m_historyHeader->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;")
+        QString("QWidget#historyHeader { background: %1; border-bottom: 1px "
+                "solid %2; }")
             .arg(theme.backgroundColor.name())
             .arg(sectionBorder));
   }
@@ -2773,7 +2834,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   if (m_historyLabel) {
     m_historyLabel->setStyleSheet(
         QString("color: %1; font-weight: bold; font-size: 12px;")
-            .arg(theme.accentColor.name()));
+            .arg(theme.foregroundColor.name()));
   }
   if (m_historyRebaseBtn) {
     m_historyRebaseBtn->setStyleSheet(

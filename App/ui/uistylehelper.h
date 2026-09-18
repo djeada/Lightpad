@@ -8,6 +8,7 @@ class ThemeDefinition;
 
 class UIStyleHelper {
 public:
+  static QString panelStyle(const Theme &theme, const QString &objectName);
   static QString popupDialogStyle(const Theme &theme);
   static QString popupDialogStyle(const ThemeDefinition &theme);
 
@@ -18,6 +19,8 @@ public:
   static QString resultListStyle(const ThemeDefinition &theme);
 
   static QString panelHeaderStyle(const Theme &theme);
+  static QString panelHeaderStyle(const Theme &theme,
+                                  const QString &objectName);
   static QString panelHeaderStyle(const ThemeDefinition &theme);
 
   static QString treeWidgetStyle(const Theme &theme);

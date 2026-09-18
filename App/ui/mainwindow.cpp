@@ -95,6 +95,7 @@
 #include "../diagnostics/compilerdiagnosticparser.h"
 #include "../filetree/filedirtreemodel.h"
 #include "../run_templates/runtargetresolver.h"
+#include "core/io/fileopenguard.h"
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
 #include "dialogs/languageserverstatusdialog.h"
@@ -110,6 +111,8 @@
 #include "dockutils.h"
 #include "mainwindow.h"
 #include "panels/breadcrumbwidget.h"
+#include "panels/conflictcenterpanel.h"
+#include "panels/conflictresolverview.h"
 #include "panels/debugpanel.h"
 #include "panels/findreplacepanel.h"
 #include "panels/problemspanel.h"
@@ -215,7 +218,8 @@ MainWindow::MainWindow(QWidget *parent)
       navigationHistory(nullptr), m_symbolNavService(nullptr),
       autoSaveManager(nullptr), m_openFileWatcher(nullptr),
       m_gitIntegration(nullptr), sourceControlPanel(nullptr),
-      sourceControlDock(nullptr), m_inlineBlameEnabled(false),
+      sourceControlDock(nullptr), conflictCenterPanel(nullptr),
+      conflictCenterDock(nullptr), m_inlineBlameEnabled(false),
       m_heatmapEnabled(false), m_codeLensEnabled(false),
       m_gitBranchLabel(nullptr), m_gitSyncLabel(nullptr),
       m_gitDirtyLabel(nullptr), m_testTargetMenu(nullptr),
@@ -999,9 +1003,7 @@ void MainWindow::restoreSessionUiState() {
 
   if (showSourceControlDock) {
     ensureSourceControlPanel();
-    if (sourceControlDock) {
-      sourceControlDock->show();
-    }
+    revealRightDock(sourceControlDock, 340);
   }
 
   if (showDebugDock) {
@@ -1076,6 +1078,10 @@ void MainWindow::restoreSessionUiState() {
       testDock->show();
       testDock->raise();
     }
+  }
+  if (ui->actionToggle_Merge_Conflicts) {
+    ui->actionToggle_Merge_Conflicts->setChecked(
+        conflictCenterDock && conflictCenterDock->isVisible());
   }
   if (ui->actionToggle_Terminal) {
     ui->actionToggle_Terminal->setChecked(m_terminalDock &&
@@ -1914,10 +1920,22 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
 
   for (int i = 0; i < tabWidget->count(); i++) {
     QString tabFilePath = tabWidget->getFilePath(i);
-    if (tabFilePath == filePath) {
-      tabWidget->setCurrentIndex(i);
-      return;
+    if (tabFilePath != filePath) {
+      continue;
     }
+
+    if (!tabWidget->isViewerTab(i) && isConflictedPath(filePath)) {
+      LightpadPage *openPage =
+          qobject_cast<LightpadPage *>(tabWidget->widget(i));
+      TextArea *openArea = openPage ? openPage->getTextArea() : nullptr;
+      if (!openArea || !openArea->changesUnsaved()) {
+        tabWidget->removeTab(i);
+        break;
+      }
+    }
+
+    tabWidget->setCurrentIndex(i);
+    return;
   }
 
   QString extension = fileInfo.suffix().toLower();
@@ -1930,6 +1948,20 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
       delete imageViewer;
     }
     return;
+  }
+
+  if (openConflictResolver(filePath)) {
+    return;
+  }
+
+  const FileOpenChoice choice = confirmLargeOrBinaryOpen(filePath);
+  if (choice == FileOpenChoice::Cancel) {
+    return;
+  }
+  if (choice == FileOpenChoice::Preview) {
+    m_previewOnlyFiles.insert(filePath);
+  } else {
+    m_previewOnlyFiles.remove(filePath);
   }
 
 #ifdef HAVE_PDF_SUPPORT
@@ -1989,6 +2021,8 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
 }
 
 void MainWindow::closeTabPage(QString filePath) {
+  m_previewOnlyFiles.remove(filePath);
+
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); i++) {
       if (tabWidget->getFilePath(i) == filePath) {
@@ -2326,9 +2360,14 @@ void MainWindow::on_actionSave_as_triggered() {
 
 void MainWindow::open(const QString &filePath) {
 
-  QFile file(filePath);
+  const bool previewOnly = m_previewOnlyFiles.contains(filePath);
 
-  if (!file.open(QFile::ReadOnly | QFile::Text)) {
+  bool ok = false;
+  bool truncated = false;
+  const QString content = FileOpenGuard::readTextCapped(
+      filePath, previewOnly ? FileOpenGuard::PreviewBytes : 0, &truncated, &ok);
+
+  if (!ok) {
     ThemedMessageBox::critical(this, tr("Error"), tr("Can't open file."));
     return;
   }
@@ -2339,9 +2378,16 @@ void MainWindow::open(const QString &filePath) {
 
   if (getCurrentTextArea()) {
     auto *textArea = getCurrentTextArea();
-    textArea->setPlainText(QString::fromUtf8(file.readAll()));
+    textArea->setPlainText(content);
     textArea->moveCursor(QTextCursor::Start);
     textArea->centerCursor();
+
+    textArea->setReadOnly(truncated);
+    if (truncated) {
+      textArea->setToolTip(
+          tr("Preview only - the first %1 of this file, read-only.")
+              .arg(FileOpenGuard::formatSize(FileOpenGuard::PreviewBytes)));
+    }
   }
 
   recordFileTimestamp(filePath);
@@ -2350,6 +2396,17 @@ void MainWindow::open(const QString &filePath) {
 
 bool MainWindow::save(const QString &filePath, bool isAutoSave) {
   if (filePath.isEmpty()) {
+    return false;
+  }
+
+  if (m_previewOnlyFiles.contains(filePath)) {
+    if (!isAutoSave) {
+      ThemedMessageBox::warning(
+          this, tr("This is only a preview"),
+          tr("Lightpad loaded just the first part of %1, so saving would throw "
+             "away everything after it. The file has been left untouched.")
+              .arg(QFileInfo(filePath).fileName()));
+    }
     return false;
   }
 
@@ -3705,6 +3762,162 @@ void MainWindow::updatePythonEnvironmentLabel() {
   m_pythonEnvLabel->setVisible(true);
 }
 
+void MainWindow::ensureConflictCenterPanel() {
+  if (conflictCenterDock) {
+    return;
+  }
+
+  conflictCenterPanel = new ConflictCenterPanel(this);
+  conflictCenterPanel->setObjectName("conflictCenterPanel");
+  conflictCenterPanel->setGitIntegration(m_gitIntegration);
+  conflictCenterPanel->applyTheme(getTheme());
+
+  connect(
+      conflictCenterPanel, &ConflictCenterPanel::fileOpenRequested, this,
+      [this](const QString &filePath) { openFileAndAddToNewTab(filePath); });
+  connect(conflictCenterPanel, &ConflictCenterPanel::repositoryChanged, this,
+          [this]() {
+            if (sourceControlPanel) {
+              sourceControlPanel->refresh();
+            }
+          });
+  connect(conflictCenterPanel, &ConflictCenterPanel::attentionNeeded, this,
+          &MainWindow::showConflictCenter);
+
+  conflictCenterDock = new QDockWidget(tr("Merge Conflicts"), this);
+  conflictCenterDock->setObjectName("conflictCenterDock");
+  DockUtils::configureToolPanelDock(conflictCenterDock);
+  conflictCenterDock->setWidget(conflictCenterPanel);
+  addDockWidget(Qt::RightDockWidgetArea, conflictCenterDock);
+  trackDockLayoutChanges(conflictCenterDock);
+  conflictCenterDock->hide();
+
+  connect(conflictCenterDock, &QDockWidget::visibilityChanged, this,
+          [this](bool) { syncViewToggleActionStates(); });
+}
+
+void MainWindow::revealRightDock(QDockWidget *dock, int preferredWidth) {
+  if (!dock) {
+    return;
+  }
+
+  dock->show();
+  dock->raise();
+
+  const int ceiling = qMax(260, width() / 3);
+  const int target = qBound(220, preferredWidth, ceiling);
+  if (dock->width() < target) {
+    resizeDocks({dock}, {target}, Qt::Horizontal);
+  }
+}
+
+void MainWindow::showConflictCenter() {
+  ensureConflictCenterPanel();
+  if (!conflictCenterDock) {
+    return;
+  }
+
+  if (sourceControlDock && sourceControlDock->isVisible() &&
+      !tabifiedDockWidgets(sourceControlDock).contains(conflictCenterDock)) {
+    tabifyDockWidget(sourceControlDock, conflictCenterDock);
+  }
+
+  conflictCenterPanel->refresh();
+  revealRightDock(conflictCenterDock, 340);
+}
+
+MainWindow::FileOpenChoice
+MainWindow::confirmLargeOrBinaryOpen(const QString &filePath) {
+  const FileOpenGuard::Assessment assessment = FileOpenGuard::assess(filePath);
+  if (!assessment.needsConfirmation()) {
+    return FileOpenChoice::Whole;
+  }
+
+  ThemedMessageBox box(this);
+  box.setIcon(ThemedMessageBox::Warning);
+  box.setText(assessment.summary);
+  box.setInformativeText(assessment.consequence);
+
+  if (assessment.verdict == FileOpenGuard::Verdict::Binary) {
+    box.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::Cancel);
+    box.setButtonText(ThemedMessageBox::Yes, tr("Look at it read-only"));
+  } else {
+    box.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No |
+                           ThemedMessageBox::Cancel);
+    box.setButtonText(
+        ThemedMessageBox::Yes,
+        tr("Preview the first %1")
+            .arg(FileOpenGuard::formatSize(FileOpenGuard::PreviewBytes)));
+    box.setButtonText(ThemedMessageBox::No, tr("Open the whole file"));
+  }
+  box.setButtonText(ThemedMessageBox::Cancel, tr("Do not open it"));
+  box.setDefaultButton(ThemedMessageBox::Yes);
+  box.setWindowTitle(tr("Open %1?").arg(QFileInfo(filePath).fileName()));
+
+  switch (box.exec()) {
+  case ThemedMessageBox::Yes:
+    return FileOpenChoice::Preview;
+  case ThemedMessageBox::No:
+    return FileOpenChoice::Whole;
+  default:
+    return FileOpenChoice::Cancel;
+  }
+}
+
+bool MainWindow::isConflictedPath(const QString &filePath) const {
+  if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
+    return false;
+  }
+
+  const QString root = m_gitIntegration->repositoryPath();
+  if (root.isEmpty() || !filePath.startsWith(root)) {
+    return false;
+  }
+
+  return m_gitIntegration->getConflictedFiles().contains(
+      filePath.mid(root.length() + 1));
+}
+
+bool MainWindow::openConflictResolver(const QString &filePath) {
+  if (!m_rawConflictOpenPath.isEmpty() && m_rawConflictOpenPath == filePath) {
+    return false;
+  }
+  if (!isConflictedPath(filePath)) {
+    return false;
+  }
+
+  const QString relative =
+      filePath.mid(m_gitIntegration->repositoryPath().length() + 1);
+
+  ConflictResolverView *view =
+      new ConflictResolverView(m_gitIntegration, relative, this);
+  view->applyTheme(getTheme());
+
+  connect(view, &ConflictResolverView::fileResolved, this,
+          [this](const QString &) {
+            if (conflictCenterPanel) {
+              conflictCenterPanel->refresh();
+            }
+            if (sourceControlPanel) {
+              sourceControlPanel->refresh();
+            }
+          });
+  connect(view, &ConflictResolverView::progressChanged, this, [this]() {
+    if (conflictCenterPanel) {
+      conflictCenterPanel->refresh();
+    }
+  });
+  connect(view, &ConflictResolverView::rawFileRequested, this,
+          [this](const QString &path) {
+            m_rawConflictOpenPath = path;
+            openFileAndAddToNewTab(path);
+            m_rawConflictOpenPath.clear();
+          });
+
+  currentTabWidget()->addViewerTab(view, filePath, m_projectRootPath);
+  return true;
+}
+
 void MainWindow::ensureSourceControlPanel() {
   if (sourceControlDock) {
     return;
@@ -3785,6 +3998,8 @@ void MainWindow::ensureSourceControlPanel() {
                  const QString &filePath) {
             showCompareAnything(baseRef, compareRef, filePath);
           });
+  connect(sourceControlPanel, &SourceControlPanel::conflictCenterRequested,
+          this, &MainWindow::showConflictCenter);
 
   sourceControlDock = new QDockWidget(tr("Source Control"), this);
   sourceControlDock->setObjectName("sourceControlDock");
@@ -5218,6 +5433,9 @@ void MainWindow::setupGitIntegration() {
   connect(m_gitIntegration, &GitIntegration::branchChanged, this,
           [this](const QString &) { m_gitStatusBarTimer.start(); });
 
+  connect(m_gitIntegration, &GitIntegration::mergeConflictsDetected, this,
+          [this](const QStringList &) { showConflictCenter(); });
+
   updateGitIntegrationForPath(QDir::currentPath());
 }
 
@@ -5236,6 +5454,9 @@ void MainWindow::updateGitIntegrationForPath(const QString &path) {
   }
 
   applyGitIntegrationToAllPages();
+  if (conflictCenterPanel) {
+    conflictCenterPanel->setGitIntegration(m_gitIntegration);
+  }
   m_gitIntegration->refresh();
 
   if (sourceControlPanel) {
@@ -5244,6 +5465,10 @@ void MainWindow::updateGitIntegrationForPath(const QString &path) {
     sourceControlPanel->refresh();
   }
   updateSourceControlDockTitle(m_gitIntegration->repositoryPath(), isRepo);
+
+  if (isRepo && m_gitIntegration->hasMergeConflicts()) {
+    showConflictCenter();
+  }
 
   auto textArea = getCurrentTextArea();
   LightpadTabWidget *tabWidget = currentTabWidget();
@@ -8209,8 +8434,22 @@ void MainWindow::on_actionToggle_Terminal_triggered() {
 void MainWindow::on_actionToggle_Source_Control_triggered() {
   ensureSourceControlPanel();
 
-  bool visible = sourceControlDock->isVisible();
-  sourceControlDock->setVisible(!visible);
+  if (sourceControlDock->isVisible()) {
+    sourceControlDock->hide();
+  } else {
+    revealRightDock(sourceControlDock, 340);
+  }
+  syncViewToggleActionStates();
+}
+
+void MainWindow::on_actionToggle_Merge_Conflicts_triggered() {
+  ensureConflictCenterPanel();
+
+  if (conflictCenterDock->isVisible()) {
+    conflictCenterDock->hide();
+  } else {
+    showConflictCenter();
+  }
   syncViewToggleActionStates();
 }
 
@@ -9733,6 +9972,9 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
   }
   if (sourceControlPanel) {
     sourceControlPanel->applyTheme(theme);
+  }
+  if (conflictCenterPanel) {
+    conflictCenterPanel->applyTheme(theme);
   }
   if (debugPanel) {
     debugPanel->applyTheme(theme);

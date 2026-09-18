@@ -401,9 +401,17 @@ void ProblemsPanel::onAutoRefreshToggled(bool checked) {
 
 void ProblemsPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
+  setObjectName(QStringLiteral("problemsPanel"));
+  setStyleSheet(UIStyleHelper::panelStyle(theme, objectName()));
+  m_emptyStateLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+  m_emptyStateLabel->setWordWrap(true);
+  m_statusLabel->setMinimumWidth(0);
+  m_statusLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 
   if (m_header) {
-    m_header->setStyleSheet(UIStyleHelper::panelHeaderStyle(theme));
+    m_header->setObjectName(QStringLiteral("problemsHeader"));
+    m_header->setStyleSheet(
+        UIStyleHelper::panelHeaderStyle(theme, m_header->objectName()));
   }
 
   if (m_titleLabel) {

@@ -99,6 +99,29 @@ struct GitConflictMarker {
   QString theirsContent;
 };
 
+struct GitRefSummary {
+  bool exists = false;
+  QString ref;
+  QString shortHash;
+  QString subject;
+  QString author;
+  QString relativeDate;
+};
+
+struct GitMergeOptions {
+
+  enum class Preference {
+    Manual,
+    PreferOurs,
+    PreferTheirs,
+  };
+
+  Preference preference = Preference::Manual;
+  bool allowFastForward = true;
+  bool commitOnSuccess = true;
+  QString message;
+};
+
 struct GitBlameLineInfo {
   int lineNumber;
   QString author;
@@ -216,6 +239,18 @@ public:
   bool deleteBranch(const QString &branchName, bool force = false);
 
   bool mergeBranch(const QString &branchName);
+
+  bool mergeBranchWithOptions(const QString &branchName,
+                              const GitMergeOptions &options);
+
+  GitRefSummary refSummary(const QString &ref) const;
+
+  bool isAncestorRef(const QString &ancestor, const QString &descendant) const;
+
+  QStringList filesChangedBetween(const QString &baseRef,
+                                  const QString &ref) const;
+
+  bool writeWorkingFile(const QString &filePath, const QString &content);
 
   QString getFileDiff(const QString &filePath, bool staged = false) const;
 
