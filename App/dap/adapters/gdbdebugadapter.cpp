@@ -69,7 +69,14 @@ public:
     config["request"] = "launch";
     config["program"] = filePath;
     config["MIMode"] = "gdb";
-    config["miDebuggerPath"] = findSystemGdb();
+    // Launch values override adapters.json, so carry over a debugger the user
+    // configured there instead of always pinning the system GDB.
+    const QString configuredGdb = debugAdapterSettingValue(
+        this->config().id, QStringLiteral("miDebuggerPath"));
+    config["miDebuggerPath"] =
+        configuredGdb.isEmpty() || configuredGdb == QLatin1String("gdb")
+            ? findSystemGdb()
+            : configuredGdb;
     config["stopAtEntry"] = false;
     config["externalConsole"] = false;
     config["cwd"] =

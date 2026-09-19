@@ -113,6 +113,11 @@ void TestGitBisect::testParseFoundCommit() {
                       &state);
   QCOMPARE(state.status, GitBisectStatus::Found);
   QCOMPARE(state.suspectHash, QString("abc1234def5678"));
+
+  GitBisectState quoted;
+  parseBisectProgress("abc1234def5678 is the first 'bad' commit\n", &quoted);
+  QCOMPARE(quoted.status, GitBisectStatus::Found);
+  QCOMPARE(quoted.suspectHash, QString("abc1234def5678"));
 }
 
 void TestGitBisect::testParseLogCounts() {

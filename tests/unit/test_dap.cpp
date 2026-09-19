@@ -57,6 +57,7 @@ private slots:
   void testNodeAdapterMissingCommandStatus();
   void testGdbAdapterIntegration();
   void testGdbAdapterRuntimeOverride();
+  void testGdbLaunchConfigUsesConfiguredDebugger();
   void testGoAdapterIntegration();
   void testGoAdapterLaunchConfig();
   void testGoAdapterLookupByFile();
@@ -751,6 +752,37 @@ void TestDap::testGdbAdapterRuntimeOverride() {
   const DebugAdapterConfig cfg =
       gdbAdapter->configForConfiguration(configuration);
   QCOMPARE(cfg.program, QString("/custom/tools/gdb"));
+}
+
+void TestDap::testGdbLaunchConfigUsesConfiguredDebugger() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+
+  DebugSettings::instance().initialize(tempDir.path());
+
+  auto gdbAdapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
+  QVERIFY(gdbAdapter != nullptr);
+
+  QJsonObject gdbSettings = DebugSettings::instance()
+                                .adapterSettings()["adapters"]
+                                .toObject()["cppdbg-gdb"]
+                                .toObject();
+  gdbSettings["miDebuggerPath"] = "/custom/tools/gdb";
+  DebugSettings::instance().setAdapterSettings("cppdbg-gdb", gdbSettings);
+
+  const DebugConfiguration configuration = DebugConfiguration::fromJson(
+      gdbAdapter->createLaunchConfig("/path/to/program", "/path/to"));
+  QCOMPARE(configuration.adapterConfig["miDebuggerPath"].toString(),
+           QString("/custom/tools/gdb"));
+  QCOMPARE(gdbAdapter->configForConfiguration(configuration).program,
+           QString("/custom/tools/gdb"));
+
+  gdbSettings["miDebuggerPath"] = "gdb";
+  DebugSettings::instance().setAdapterSettings("cppdbg-gdb", gdbSettings);
+  const QJsonObject defaultLaunch =
+      gdbAdapter->createLaunchConfig("/path/to/program", "/path/to");
+  QVERIFY(defaultLaunch["miDebuggerPath"].toString() !=
+          QString("/custom/tools/gdb"));
 }
 
 void TestDap::testGoAdapterIntegration() {

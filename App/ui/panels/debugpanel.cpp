@@ -300,6 +300,8 @@ DebugPanel::DebugPanel(QWidget *parent)
           [this]() {
             m_watchTree->clear();
             m_watchIdToItem.clear();
+            m_watchChildRequests.clear();
+            m_watchPreviewRequests.clear();
             updateSectionSummaries();
           });
 
@@ -1646,8 +1648,18 @@ void DebugPanel::updateSectionSummaries() {
         BreakpointManager::instance().allFunctionBreakpoints().size();
     const int dataCount =
         BreakpointManager::instance().allDataBreakpoints().size();
-    const int exceptionCount =
-        BreakpointManager::instance().enabledExceptionFilters().size();
+    // Count only filters the breakpoint list actually shows; a filter enabled
+    // for another adapter (e.g. debugpy's "uncaught" in a GDB session) has no
+    // row here.
+    const QStringList enabledExceptionFilters =
+        BreakpointManager::instance().enabledExceptionFilters();
+    int exceptionCount = 0;
+    for (const QJsonValue &filterValue : currentExceptionBreakpointFilters()) {
+      if (enabledExceptionFilters.contains(
+              filterValue.toObject()["filter"].toString())) {
+        ++exceptionCount;
+      }
+    }
 
     QString stackLabel = tr("Stack");
     if (!m_threads.isEmpty() || !m_stackFrames.isEmpty()) {
@@ -1681,7 +1693,13 @@ void DebugPanel::setDapClient(DapClient *client) {
   }
 
   m_dapClient = client;
-  clearAll();
+  if (m_dapClient) {
+    clearAll();
+  } else {
+    // Keep the console so program output and errors stay readable after the
+    // session ends.
+    clearSessionState();
+  }
 
   if (m_dapClient) {
     connect(m_dapClient, &DapClient::stateChanged, this,
@@ -1743,6 +1761,11 @@ void DebugPanel::setDapClient(DapClient *client) {
 }
 
 void DebugPanel::clearAll() {
+  clearSessionState();
+  m_consoleOutput->clear();
+}
+
+void DebugPanel::clearSessionState() {
   m_callStackTree->clear();
   m_variablesTree->clear();
   m_variableRefToItem.clear();
@@ -1762,7 +1785,7 @@ void DebugPanel::clearAll() {
   m_consoleExpansions.clear();
   m_consoleExpansionNodeByRef.clear();
   m_previousVariableValues.clear();
-  m_consoleOutput->clear();
+  resetWatchValues();
   m_threads.clear();
   m_stackFrames.clear();
   m_currentThreadId = 0;
@@ -1887,7 +1910,7 @@ void DebugPanel::onContinued() {
 }
 
 void DebugPanel::onTerminated() {
-  clearAll();
+  clearSessionState();
   appendConsoleLine(tr("Debug session ended."), consoleMutedColor());
   updateToolbarState();
 }
@@ -2169,6 +2192,11 @@ void DebugPanel::onVariablesReceived(int variablesReference,
                                      const QList<DapVariable> &variables) {
   m_pendingVariableRequests.remove(variablesReference);
 
+  if (QTreeWidgetItem *watchChild =
+          m_watchChildRequests.take(variablesReference)) {
+    populateWatchChildren(watchChild, variables, true);
+  }
+
   applyConsoleExpansion(variablesReference, variables);
 
   const auto summaryFor = m_pendingTreeSummaries.find(variablesReference);
@@ -2381,6 +2409,12 @@ void DebugPanel::clearLocalsFallbackState() {
 }
 
 void DebugPanel::onOutputReceived(const DapOutputEvent &event) {
+  // Telemetry events are adapter bookkeeping (debugpy sends "ptvsd" and
+  // "debugpy"), not output meant for the user.
+  if (event.category == QLatin1String("telemetry")) {
+    return;
+  }
+
   QColor color = palette().color(QPalette::Text);
   if (event.category == "stderr") {
     color = consoleErrorColor();
@@ -2983,8 +3017,9 @@ void DebugPanel::onAddWatch() {
   m_watchInput->clear();
   int id = WatchManager::instance().addWatch(expr);
 
+  // Frame ids are adapter-defined and may start at 0 (GDB).
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped &&
-      m_currentFrameId > 0) {
+      m_currentFrameId >= 0) {
     WatchManager::instance().evaluateWatch(id, m_currentFrameId);
   }
 }
@@ -3018,7 +3053,9 @@ void DebugPanel::onWatchAdded(const WatchExpression &watch) {
 
 void DebugPanel::onWatchRemoved(int id) {
   QTreeWidgetItem *item = m_watchIdToItem.take(id);
+  m_watchPreviewRequests.remove(id);
   if (item) {
+    clearWatchChildren(item);
     delete item;
   }
   updateSectionSummaries();
@@ -3042,29 +3079,44 @@ void DebugPanel::onWatchUpdated(const WatchExpression &watch) {
   item->setText(2, watch.type);
   item->setData(0, Qt::UserRole + 1, watch.variablesReference);
 
-  if (watch.variablesReference > 0) {
+  // Child references belong to the stop that produced them, so drop the old
+  // children and refetch them with the new reference. An item that was
+  // expanded stays expanded even while the watch is out of scope, which keeps
+  // it open once the expression becomes available again.
+  clearWatchChildren(item);
+  m_watchPreviewRequests.remove(watch.id);
+  if (watch.variablesReference > 0 && !watch.isError) {
     item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-    item->setExpanded(wasExpanded || item->childCount() > 0);
+    const bool needsPreview = watch.value.trimmed().isEmpty();
+    if (wasExpanded || needsPreview) {
+      if (!wasExpanded) {
+        m_watchPreviewRequests.insert(watch.id);
+      }
+      WatchManager::instance().getWatchChildren(watch.id,
+                                                watch.variablesReference);
+    }
   } else {
     item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-
-    while (item->childCount() > 0) {
-      delete item->takeChild(0);
-    }
   }
   updateSectionSummaries();
 }
 
 void DebugPanel::onWatchItemExpanded(QTreeWidgetItem *item) {
-
-  if (!item || item->parent())
+  if (!item) {
     return;
+  }
 
-  int watchId = item->data(0, Qt::UserRole).toInt();
-  int varRef = item->data(0, Qt::UserRole + 1).toInt();
+  const int varRef = item->data(0, Qt::UserRole + 1).toInt();
+  if (varRef <= 0 || item->childCount() > 0) {
+    return;
+  }
 
-  if (varRef > 0 && item->childCount() == 0) {
-    WatchManager::instance().getWatchChildren(watchId, varRef);
+  if (!item->parent()) {
+    WatchManager::instance().getWatchChildren(
+        item->data(0, Qt::UserRole).toInt(), varRef);
+  } else if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
+    m_watchChildRequests.insert(varRef, item);
+    m_dapClient->getVariables(varRef);
   }
 }
 
@@ -3074,9 +3126,41 @@ void DebugPanel::onWatchChildrenReceived(int watchId,
   if (!parentItem)
     return;
 
-  while (parentItem->childCount() > 0) {
-    delete parentItem->takeChild(0);
+  const bool previewOnly = m_watchPreviewRequests.remove(watchId);
+  populateWatchChildren(parentItem, children, !previewOnly);
+}
+
+void DebugPanel::clearWatchChildren(QTreeWidgetItem *item) {
+  if (!item) {
+    return;
   }
+
+  for (auto it = m_watchChildRequests.begin();
+       it != m_watchChildRequests.end();) {
+    bool isDescendant = false;
+    for (QTreeWidgetItem *ancestor = it.value(); ancestor;
+         ancestor = ancestor->parent()) {
+      if (ancestor == item) {
+        isDescendant = true;
+        break;
+      }
+    }
+    it = isDescendant ? m_watchChildRequests.erase(it) : std::next(it);
+  }
+
+  while (item->childCount() > 0) {
+    delete item->takeChild(0);
+  }
+}
+
+void DebugPanel::populateWatchChildren(QTreeWidgetItem *parentItem,
+                                       const QList<DapVariable> &children,
+                                       bool expand) {
+  if (!parentItem) {
+    return;
+  }
+
+  clearWatchChildren(parentItem);
 
   for (const DapVariable &var : children) {
     QTreeWidgetItem *childItem = new QTreeWidgetItem();
@@ -3093,7 +3177,30 @@ void DebugPanel::onWatchChildrenReceived(int watchId,
     parentItem->addChild(childItem);
   }
 
-  parentItem->setExpanded(true);
+  // Some adapters (GDB for plain structs) report an empty value for
+  // aggregates; summarize the members instead of showing a blank cell.
+  if (parentItem->text(1).trimmed().isEmpty()) {
+    parentItem->setText(1, previewForVariables(children));
+  }
+
+  if (expand) {
+    parentItem->setExpanded(true);
+  }
+}
+
+void DebugPanel::resetWatchValues() {
+  m_watchChildRequests.clear();
+  m_watchPreviewRequests.clear();
+  for (QTreeWidgetItem *item : std::as_const(m_watchIdToItem)) {
+    while (item->childCount() > 0) {
+      delete item->takeChild(0);
+    }
+    item->setText(1, tr("<not evaluated>"));
+    item->setText(2, QString());
+    item->setData(0, Qt::UserRole + 1, 0);
+    item->setForeground(1, palette().color(QPalette::Text));
+    item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+  }
 }
 
 void DebugPanel::onEvaluateResult(int requestSeq, const QString &expression,

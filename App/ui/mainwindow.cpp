@@ -6179,7 +6179,6 @@ void MainWindow::clearDebugSession() {
   BreakpointManager::instance().resetVerification();
   if (debugPanel) {
     debugPanel->setDapClient(nullptr);
-    debugPanel->clearAll();
   }
   WatchManager::instance().setDapClient(nullptr);
   if (m_breakpointsSetConnection) {

@@ -163,6 +163,11 @@ private:
   void showLocalsFallbackMessage(int scopeVariablesReference,
                                  const QString &message, bool isError = false);
   void clearLocalsFallbackState();
+  void clearSessionState();
+  void resetWatchValues();
+  void clearWatchChildren(QTreeWidgetItem *item);
+  void populateWatchChildren(QTreeWidgetItem *parentItem,
+                             const QList<DapVariable> &children, bool expand);
   QColor consoleErrorColor() const;
   QColor consoleMutedColor() const;
   QColor consoleInfoColor() const;
@@ -201,6 +206,8 @@ private:
   QTreeWidget *m_watchTree = nullptr;
   QLineEdit *m_watchInput = nullptr;
   QMap<int, QTreeWidgetItem *> m_watchIdToItem;
+  QHash<int, QTreeWidgetItem *> m_watchChildRequests;
+  QSet<int> m_watchPreviewRequests;
 
   QComboBox *m_threadSelector = nullptr;
 
