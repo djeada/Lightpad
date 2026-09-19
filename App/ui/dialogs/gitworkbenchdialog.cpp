@@ -1,5 +1,7 @@
 #include "gitworkbenchdialog.h"
+#include "../../theme/colorcontrast.h"
 #include "../../ui/uistylehelper.h"
+#include "gitautorefresh.h"
 
 #include "themedmessagebox.h"
 #include <QAbstractItemView>
@@ -153,8 +155,10 @@ public:
           pillBg.setAlpha(30);
           painter->setBrush(pillBg);
           painter->drawRoundedRect(textX, py, pw, ph, 5, 5);
-          pillColor.setAlpha(220);
-          painter->setPen(pillColor);
+          painter->setPen(UIStyleHelper::readableText(
+              *m_theme,
+              ColorContrast::flatten(pillBg, m_theme->backgroundColor),
+              pillColor));
           painter->drawText(textX + 7, py, pw - 14, ph, Qt::AlignVCenter,
                             label);
           textX += pw + 5;
@@ -166,11 +170,11 @@ public:
       painter->setFont(f);
       QColor textColor = m_theme->foregroundColor;
       if (isDrop) {
-        textColor.setAlpha(100);
+        textColor = UIStyleHelper::mutedTextColor(*m_theme);
         f.setStrikeOut(true);
         painter->setFont(f);
       } else if (isDropKeep) {
-        textColor.setAlpha(180);
+        textColor = UIStyleHelper::secondaryTextColor(*m_theme);
       }
       painter->setPen(textColor);
       QString subject = entry.subject;
@@ -204,6 +208,12 @@ GitWorkbenchDialog::GitWorkbenchDialog(GitIntegration *git, const Theme &theme,
   resize(1300, 820);
   buildUi();
   applyTheme(theme);
+
+  reloadOnExternalGitChanges(this, m_git, [this]() {
+    if (!m_rewriteMode) {
+      loadRepository();
+    }
+  });
 }
 
 void GitWorkbenchDialog::buildUi() {
@@ -939,185 +949,163 @@ void GitWorkbenchDialog::buildBottomBar(QVBoxLayout *mainLayout) {
 void GitWorkbenchDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
 
-  QString bg = theme.backgroundColor.name();
-  QString fg = theme.foregroundColor.name();
-  QString surface = theme.surfaceColor.name();
-  QString surfaceAlt = theme.surfaceAltColor.name();
-  QString border = theme.borderColor.name();
-  QString accent = theme.accentColor.name();
-  QString accentSoft = theme.accentSoftColor.name();
-  QString hover = theme.hoverColor.name();
-  QString subdued = theme.singleLineCommentFormat.name();
-  QString success = theme.successColor.name();
-  QString warning = theme.warningColor.name();
-  QString error = theme.errorColor.name();
+  using Tone = UIStyleHelper::Tone;
+  const QString bg = theme.backgroundColor.name();
+  const QString fg = theme.foregroundColor.name();
+  const QString surface = theme.surfaceColor.name();
+  const QString surfaceAlt = theme.surfaceAltColor.name();
+  const QString border = theme.borderColor.name();
+  const QString accent = theme.accentColor.name();
+  const QString accentSoft = theme.accentSoftColor.name();
+  const QString hover = theme.hoverColor.name();
+  const QString muted = UIStyleHelper::mutedTextColor(theme).name();
+  const QString success = theme.successColor.name();
+  const QString error = theme.errorColor.name();
+  const QString accentText =
+      UIStyleHelper::toneColor(theme, Tone::Accent).name();
+  const QString errorText = UIStyleHelper::toneColor(theme, Tone::Error).name();
+  const QString onAccent =
+      UIStyleHelper::readableText(theme, theme.accentColor).name();
+  const QString onError =
+      UIStyleHelper::readableText(theme, theme.errorColor).name();
+  const QString selectionCount =
+      UIStyleHelper::readableText(theme, theme.accentSoftColor,
+                                  UIStyleHelper::toneColor(theme, Tone::Accent))
+          .name();
+  const QString selectionHint =
+      UIStyleHelper::readableText(theme, theme.accentSoftColor,
+                                  UIStyleHelper::mutedTextColor(theme))
+          .name();
+
+  const QString headerStrip = UIStyleHelper::panelHeaderStyle(theme);
+  const QString sectionLabel = UIStyleHelper::sectionLabelStyle(theme);
 
   setStyleSheet(
-      QString(
+      QString("QDialog { background: %1; color: %2; font-size: 13px; }"
+              "QLabel { color: %2; background: transparent; }"
 
-          "QDialog { background: %1; color: %2; font-size: 13px; }"
-          "QLabel { color: %2; background: transparent; }"
+              "#workbenchTitleBar { background: %3; }"
+              "#workbenchShortcutHint { font-size: 11px; color: %9; "
+              "letter-spacing: 0.5px; }"
 
-          "#workbenchTitleBar { background: %3; }"
-          "#workbenchTitle { font-size: 17px; font-weight: 600; color: %2; "
-          "letter-spacing: -0.3px; }"
-          "#workbenchShortcutHint { font-size: 11px; color: %11; "
-          "letter-spacing: 0.5px; }"
+              "#workbenchSeparator, #inspectorSep { color: %5; background: "
+              "%5; max-height: 1px; }"
 
-          "#workbenchSeparator, #inspectorSep { color: %5; background: %5; "
-          "max-height: 1px; }"
+              "#branchPanel, #commitPanel, #inspectorPanel { background: %1; "
+              "}"
 
-          "#sectionHeader { font-size: 11px; font-weight: 600; color: %11; "
-          "letter-spacing: 1.5px; text-transform: uppercase; }"
+              "#branchSearch, #commitSearch { background: %4; color: %2; "
+              "border: 1px solid %5; border-radius: 6px; padding: 7px 12px; "
+              "font-size: 12px; }"
+              "#branchSearch:focus, #commitSearch:focus { border-color: %6; }"
 
-          "#branchPanel, #commitPanel, #inspectorPanel { background: %1; }"
-          "#branchHeader, #commitHeader, #inspectorHeader { background: %3; "
-          "border-bottom: 1px solid %5; }"
+              "#branchTree { background: %1; color: %2; border: none; "
+              "outline: none; font-size: 13px; }"
+              "#branchTree::item { padding: 5px 10px; border-radius: 6px; "
+              "margin: 1px 6px; }"
+              "#branchTree::item:selected { background: %7; color: %2; "
+              "border-left: 3px solid %6; }"
+              "#branchTree::item:hover:!selected { background: %8; }"
+              "#branchTree::branch { background: transparent; }"
 
-          "#branchSearch, #commitSearch { background: %4; color: %2; border: "
-          "1px "
-          "solid %5; border-radius: 6px; padding: 7px 12px; font-size: 12px; }"
-          "#branchSearch:focus, #commitSearch:focus { border-color: %6; }"
+              "#commitTree { background: %1; color: %2; border: none; "
+              "outline: none; font-size: 13px; }"
+              "#commitTree::item { padding: 3px 6px; border-bottom: 1px solid "
+              "%4; }"
+              "#commitTree::item:selected { background: %7; color: %2; "
+              "border-left: 3px solid %6; }"
+              "#commitTree::item:hover:!selected { background: %8; }"
+              "#commitTree QHeaderView::section { background: %3; color: %9; "
+              "border: none; border-bottom: 1px solid %5; padding: 6px 10px; "
+              "font-size: 10px; font-weight: bold; text-transform: uppercase; "
+              "letter-spacing: 1px; }"
 
-          "#branchTree { background: %1; color: %2; border: none; outline: "
-          "none; "
-          "font-size: 13px; }"
-          "#branchTree::item { padding: 5px 10px; border-radius: 6px; margin: "
-          "1px "
-          "6px; }"
-          "#branchTree::item:selected { background: %7; "
-          "border-left: 3px solid %6; }"
-          "#branchTree::item:hover:!selected { background: %8; }"
-          "#branchTree::branch { background: transparent; }"
+              "#createBranchBtn { background: %4; color: %2; border: 1px "
+              "solid %5; border-radius: 6px; font-size: 15px; font-weight: "
+              "bold; }"
+              "#createBranchBtn:hover { background: %8; border-color: %6; }")
+          .arg(bg, fg, surface, surfaceAlt, border, accent, accentSoft, hover,
+               muted) +
+      QString("#rewriteToggleBtn { background: %1; color: %2; border: 1px "
+              "solid %3; border-radius: 12px; padding: 5px 16px; font-size: "
+              "12px; font-weight: 500; }"
+              "#rewriteToggleBtn:hover { border-color: %4; background: %5; }"
+              "#rewriteToggleBtn:checked { background: %4; color: %6; "
+              "border-color: %4; }"
 
-          "#commitTree { background: %1; color: %2; border: none; outline: "
-          "none; "
-          "font-size: 13px; }"
-          "#commitTree::item { padding: 3px 6px; border-bottom: 1px solid %4; }"
-          "#commitTree::item:selected { background: %7; "
-          "border-left: 3px solid %6; }"
-          "#commitTree::item:hover:!selected { background: %8; }"
-          "#commitTree QHeaderView::section { background: %3; color: %11; "
-          "border: "
-          "none; border-bottom: 1px solid %5; padding: 6px 10px; font-size: "
-          "11px; "
-          "font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; "
-          "}"
+              "#rewriteToolBtn { background: %1; color: %2; border: 1px solid "
+              "%3; border-radius: 6px; padding: 5px 12px; font-size: 12px; }"
+              "#rewriteToolBtn:hover { background: %5; border-color: %4; }"
+              "#rewriteDropBtn { background: %1; color: %7; border: 1px solid "
+              "%3; border-radius: 6px; padding: 5px 12px; font-size: 12px; }"
+              "#rewriteDropBtn:hover { background: %8; color: %9; "
+              "border-color: %8; }"
 
-          "#createBranchBtn { background: %4; color: %2; border: 1px solid %5; "
-          "border-radius: 6px; font-size: 15px; font-weight: bold; }"
-          "#createBranchBtn:hover { background: %8; border-color: %6; }"
+              "#inspActionBtn { background: %1; color: %2; border: 1px solid "
+              "%3; border-radius: 6px; padding: 8px 14px; font-size: 12px; "
+              "text-align: left; }"
+              "#inspActionBtn:hover { background: %5; border-color: %4; }"
+              "#inspDangerBtn { background: %1; color: %7; border: 1px solid "
+              "%3; border-radius: 6px; padding: 8px 14px; font-size: 12px; "
+              "text-align: left; }"
+              "#inspDangerBtn:hover { background: %8; color: %9; "
+              "border-color: %8; }")
+          .arg(surfaceAlt, fg, border, accent, hover, onAccent, errorText,
+               error, onError) +
+      QString("#workbenchTitle { %1 letter-spacing: -0.3px; }"
+              "#sectionHeader, #inspSectionLabel { %2 }"
+              "#inspSectionLabel { margin-top: 8px; }"
+              "#branchHeader, #commitHeader, #inspectorHeader, "
+              "#rewriteToolbarContainer { %3 }"
+              "#inspectorEmpty { %4 font-size: 14px; padding: 24px; }"
+              "#inspBranchTitle { %5 }"
+              "#selectionBar { background: %6; border-bottom: 1px solid %7; }"
+              "#selectionCountLabel { font-size: 13px; font-weight: bold; "
+              "color: %8; padding: 2px 6px; }"
+              "#selectionHintLabel { font-size: 11px; color: %9; }")
+          .arg(UIStyleHelper::headingStyle(theme, 17), sectionLabel,
+               headerStrip, UIStyleHelper::emptyStateStyle(theme),
+               UIStyleHelper::headingStyle(theme, 15), accentSoft, border,
+               selectionCount, selectionHint) +
+      QString("#commitStatusLabel { font-size: 12px; color: %1; }"
+              "#inspMonoLabel { font-family: monospace; font-size: 12px; "
+              "color: %2; }"
+              "#inspDetailLabel { font-size: 13px; color: %3; }"
+              "#inspSubduedLabel { font-size: 12px; color: %1; }"
+              "#inspCommitRefs { font-size: 12px; color: %2; }"
+              "#inspBranchActivity { font-size: 12px; color: %1; }"
+              "#inspPatchStats { font-size: 12px; color: %1; }"
 
-          "#rewriteToggleBtn { background: %4; color: %2; border: 1px solid "
-          "%5; "
-          "border-radius: 12px; padding: 5px 16px; font-size: 12px; "
-          "font-weight: 500; }"
-          "#rewriteToggleBtn:hover { border-color: %6; background: %8; }"
-          "#rewriteToggleBtn:checked { background: %6; color: white; "
-          "border-color: "
-          "%6; }"
+              "#inspCommitMessage { background: %4; color: %3; border: 1px "
+              "solid %5; border-radius: 6px; padding: 8px; font-size: 12px; }"
 
-          "#rewriteToolBtn { background: %4; color: %2; border: 1px solid %5; "
-          "border-radius: 6px; padding: 5px 12px; font-size: 12px; }"
-          "#rewriteToolBtn:hover { background: %8; border-color: %6; }"
-          "#rewriteDropBtn { background: %4; color: %13; border: 1px solid %5; "
-          "border-radius: 6px; padding: 5px 12px; font-size: 12px; }"
-          "#rewriteDropBtn:hover { background: %13; color: white; "
-          "border-color: "
-          "%13; }"
+              "#inspFileList { background: %6; color: %3; border: 1px solid "
+              "%5; border-radius: 6px; font-size: 12px; }"
+              "#inspFileList::item { padding: 3px 4px; }"
+              "#inspFileList QHeaderView::section { background: %7; color: "
+              "%1; border: none; font-size: 11px; padding: 4px; }"
 
-          "#rewriteToolbarContainer { background: %3; border-bottom: 1px solid "
-          "%5; "
-          "}"
+              "#planStepsList, #recoveryList { background: %6; color: %3; "
+              "border: 1px solid %5; border-radius: 6px; font-size: 12px; }"
+              "#planStepsList QHeaderView::section, "
+              "#recoveryList QHeaderView::section { background: %7; color: "
+              "%1; border: none; font-size: 11px; padding: 4px; }"
+              "#planRiskLabel { font-size: 13px; font-weight: 600; padding: "
+              "6px 0; }"
 
-          "#selectionBar { background: %7; border-bottom: 1px solid %5; }"
-          "#selectionCountLabel { font-size: 13px; color: %6; padding: 2px "
-          "6px; }"
-          "#selectionHintLabel { font-size: 11px; color: %11; }"
+              "#workbenchBottomBar { background: %7; }"
+              "#planSummaryLabel { font-size: 12px; color: %1; }"
+              "#riskIndicator { font-size: 12px; }"
 
-          "#commitStatusLabel { font-size: 12px; color: %11; }"
+              "#backupCheckbox { color: %3; font-size: 12px; }"
+              "#backupCheckbox::indicator { width: 16px; height: 16px; "
+              "border-radius: 4px; border: 1px solid %5; background: %4; }"
+              "#backupCheckbox::indicator:checked { background: %8; "
+              "border-color: %8; }"
 
-          "#inspectorEmpty { font-size: 14px; color: %11; padding: 24px; }"
-
-          "#inspMonoLabel { font-family: monospace; font-size: 12px; color: "
-          "%6; }"
-          "#inspDetailLabel { font-size: 13px; color: %2; }"
-          "#inspSubduedLabel { font-size: 12px; color: %11; }"
-          "#inspCommitRefs { font-size: 12px; color: %6; }"
-          "#inspBranchActivity { font-size: 12px; color: %11; }"
-          "#inspSectionLabel { font-size: 11px; font-weight: 600; color: %11; "
-          "text-transform: uppercase; letter-spacing: 1px; margin-top: 8px; }"
-          "#inspBranchTitle { font-size: 15px; font-weight: 600; color: %2; }"
-          "#inspPatchStats { font-size: 12px; color: %11; }"
-
-          "#inspCommitMessage { background: %4; color: %2; border: 1px solid "
-          "%5; "
-          "border-radius: 6px; padding: 8px; font-size: 12px; }"
-
-          "#inspFileList { background: %1; color: %2; border: 1px solid %5; "
-          "border-radius: 6px; font-size: 12px; }"
-          "#inspFileList::item { padding: 3px 4px; }"
-          "#inspFileList QHeaderView::section { background: %3; color: %11; "
-          "border: none; font-size: 11px; padding: 4px; }"
-
-          "#inspActionBtn { background: %4; color: %2; border: 1px solid %5; "
-          "border-radius: 6px; padding: 8px 14px; font-size: 12px; text-align: "
-          "left; }"
-          "#inspActionBtn:hover { background: %8; border-color: %6; }"
-          "#inspDangerBtn { background: %4; color: %13; border: 1px solid %5; "
-          "border-radius: 6px; padding: 8px 14px; font-size: 12px; text-align: "
-          "left; }"
-          "#inspDangerBtn:hover { background: %13; color: white; }"
-
-          "#planStepsList, #recoveryList { background: %1; color: %2; "
-          "border: 1px solid %5; border-radius: 6px; font-size: 12px; }"
-          "#planStepsList QHeaderView::section, "
-          "#recoveryList QHeaderView::section { background: %3; color: %11; "
-          "border: none; font-size: 11px; padding: 4px; }"
-          "#planRiskLabel { font-size: 13px; font-weight: 600; padding: 6px 0; "
-          "}"
-
-          "#workbenchBottomBar { background: %3; }"
-          "#planSummaryLabel { font-size: 12px; color: %11; }"
-          "#riskIndicator { font-size: 12px; }"
-
-          "#backupCheckbox { color: %2; font-size: 12px; }"
-          "#backupCheckbox::indicator { width: 16px; height: 16px; "
-          "border-radius: "
-          "4px; border: 1px solid %5; background: %4; }"
-          "#backupCheckbox::indicator:checked { background: %12; border-color: "
-          "%12; }"
-
-          "QScrollBar:vertical { background: transparent; width: 8px; margin: "
-          "2px; }"
-          "QScrollBar::handle:vertical { background: %5; min-height: 24px; "
-          "border-radius: 4px; }"
-          "QScrollBar::handle:vertical:hover { background: %11; }"
-          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
-          "height: "
-          "0; }"
-          "QScrollBar:horizontal { background: transparent; height: 8px; "
-          "margin: "
-          "2px; }"
-          "QScrollBar::handle:horizontal { background: %5; min-width: 24px; "
-          "border-radius: 4px; }"
-          "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { "
-          "width: 0; }"
-
-          "QSplitter::handle { background: %5; }")
-          .arg(bg)
-          .arg(fg)
-          .arg(surface)
-          .arg(surfaceAlt)
-          .arg(border)
-          .arg(accent)
-          .arg(accentSoft)
-          .arg(hover)
-          .arg("")
-          .arg("")
-          .arg(subdued)
-          .arg(success)
-          .arg(error));
+              "QSplitter::handle { background: %5; }")
+          .arg(muted, accentText, fg, surfaceAlt, border, bg, surface,
+               success));
 
   for (auto *btn : findChildren<QPushButton *>())
     btn->setStyleSheet(QString());
@@ -1129,10 +1117,6 @@ void GitWorkbenchDialog::applyTheme(const Theme &theme) {
     cb->setStyleSheet(QString());
 
   stylePrimaryButton(m_applyBtn);
-  m_applyBtn->setStyleSheet(
-      m_applyBtn->styleSheet() +
-      QString(" QPushButton:disabled { background: %1; color: %2; }")
-          .arg(surfaceAlt, border));
   styleSecondaryButton(m_cancelBtn);
 }
 
@@ -1337,7 +1321,10 @@ void GitWorkbenchDialog::rebuildActionCombo(QTreeWidgetItem *item, int index) {
   combo->addItems(REBASE_ACTIONS_EXTENDED);
   combo->setCurrentText(m_entries[index].action);
 
-  QString color = actionColor(m_entries[index].action);
+  QString color =
+      UIStyleHelper::readableText(m_theme, m_theme.surfaceAltColor,
+                                  QColor(actionColor(m_entries[index].action)))
+          .name();
   combo->setStyleSheet(
       QString("QComboBox { background: %1; color: %2; border: 1px solid %3; "
               "border-radius: 3px; padding: 1px 4px; font-weight: bold; "
@@ -1609,7 +1596,10 @@ void GitWorkbenchDialog::showCommitInspector(const QString &hash) {
           .arg(stats.size())
           .arg(totalAdd)
           .arg(totalDel)
-          .arg(m_theme.successColor.name(), m_theme.errorColor.name()));
+          .arg(UIStyleHelper::toneColor(m_theme, UIStyleHelper::Tone::Success)
+                   .name(),
+               UIStyleHelper::toneColor(m_theme, UIStyleHelper::Tone::Error)
+                   .name()));
   m_inspPatchStats->setTextFormat(Qt::RichText);
 
   m_inspectorStack->setCurrentIndex(1);
@@ -1851,13 +1841,16 @@ QString GitWorkbenchDialog::riskLabel(OperationRisk risk) const {
 QString GitWorkbenchDialog::riskColor(OperationRisk risk) const {
   switch (risk) {
   case OperationRisk::Low:
-    return m_theme.successColor.name();
+    return UIStyleHelper::toneColor(m_theme, UIStyleHelper::Tone::Success)
+        .name();
   case OperationRisk::Medium:
-    return m_theme.accentColor.name();
+    return UIStyleHelper::toneColor(m_theme, UIStyleHelper::Tone::Accent)
+        .name();
   case OperationRisk::High:
-    return m_theme.warningColor.name();
+    return UIStyleHelper::toneColor(m_theme, UIStyleHelper::Tone::Warning)
+        .name();
   case OperationRisk::Critical:
-    return m_theme.errorColor.name();
+    return UIStyleHelper::toneColor(m_theme, UIStyleHelper::Tone::Error).name();
   }
   return m_theme.foregroundColor.name();
 }
@@ -1915,19 +1908,10 @@ bool GitWorkbenchDialog::confirmOperation(const QString &title,
     connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
     connect(applyBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
 
-    dlg.setStyleSheet(
-        QString(
-            "QDialog { background: %1; }"
-            "QLabel { color: %2; font-size: 13px; }"
-            "QLineEdit { background: %3; color: %2; border: 1px solid %4; "
-            "border-radius: 6px; padding: 8px 12px; font-size: 13px; }"
-            "QPushButton { background: %3; color: %2; border: 1px solid %4; "
-            "border-radius: 8px; padding: 8px 18px; font-size: 13px; }"
-            "QPushButton:hover { background: %5; }"
-            "QPushButton:disabled { color: %4; }")
-            .arg(m_theme.backgroundColor.name(), m_theme.foregroundColor.name(),
-                 m_theme.surfaceAltColor.name(), m_theme.borderColor.name(),
-                 m_theme.hoverColor.name()));
+    dlg.setStyleSheet(UIStyleHelper::formDialogStyle(m_theme) +
+                      UIStyleHelper::lineEditStyle(m_theme) +
+                      UIStyleHelper::secondaryButtonStyle(m_theme));
+    applyBtn->setStyleSheet(UIStyleHelper::dangerButtonStyle(m_theme));
 
     return dlg.exec() == QDialog::Accepted;
   }
@@ -2743,13 +2727,11 @@ void GitWorkbenchDialog::onEditCommitMessage() {
   btnRow->addWidget(saveBtn);
   layout->addLayout(btnRow);
 
-  editDlg.setStyleSheet(
-      QString("QDialog { background: %1; color: %2; }"
-              "QTextEdit { background: %3; color: %2; border: 1px solid %4; "
-              "border-radius: 6px; padding: 8px; font-size: 13px; }"
-              "QLabel { color: %2; font-size: 13px; }")
-          .arg(m_theme.surfaceColor.name(), m_theme.foregroundColor.name(),
-               m_theme.surfaceAltColor.name(), m_theme.borderColor.name()));
+  editDlg.setStyleSheet(UIStyleHelper::formDialogStyle(m_theme) +
+                        UIStyleHelper::plainTextEditStyle(m_theme));
+  warningLabel->setStyleSheet(UIStyleHelper::toneLabelStyle(
+      m_theme,
+      isHead ? UIStyleHelper::Tone::Neutral : UIStyleHelper::Tone::Warning));
   cancelBtn->setStyleSheet(toolButtonStyle());
   saveBtn->setStyleSheet(accentButtonStyle());
 
@@ -3042,20 +3024,21 @@ void GitWorkbenchDialog::updateSelectionUI() {
 }
 
 QString GitWorkbenchDialog::actionColor(const QString &action) const {
+  using Tone = UIStyleHelper::Tone;
   if (action == "pick")
-    return m_theme.successColor.name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Success).name();
   if (action == "reword")
-    return m_theme.warningColor.name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Warning).name();
   if (action == "edit")
-    return m_theme.accentColor.name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Accent).name();
   if (action == "squash")
-    return m_theme.accentColor.lighter(130).name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Info).name();
   if (action == "fixup")
-    return m_theme.singleLineCommentFormat.name();
+    return UIStyleHelper::mutedTextColor(m_theme).name();
   if (action == "drop")
-    return m_theme.errorColor.name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Error).name();
   if (action == "drop-keep")
-    return m_theme.warningColor.name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Warning).name();
   return m_theme.foregroundColor.name();
 }
 
@@ -3064,11 +3047,7 @@ QString GitWorkbenchDialog::toolButtonStyle() const {
 }
 
 QString GitWorkbenchDialog::dangerButtonStyle() const {
-  return QString("QPushButton { background: %1; color: %2; border: 1px solid "
-                 "%3; border-radius: 6px; padding: 6px 12px; }"
-                 "QPushButton:hover { background: %2; color: white; }")
-      .arg(m_theme.surfaceAltColor.name(), m_theme.errorColor.name(),
-           m_theme.borderColor.name());
+  return UIStyleHelper::dangerButtonStyle(m_theme);
 }
 
 QString GitWorkbenchDialog::accentButtonStyle() const {
@@ -3084,9 +3063,7 @@ void GitWorkbenchDialog::onCommandPalette() {
   palette.setWindowTitle(tr("Command Palette"));
   palette.setFixedSize(440, 420);
   palette.setStyleSheet(
-      QString("QDialog { background: %1; border: 1px solid %2; "
-              "border-radius: 8px; }")
-          .arg(m_theme.surfaceColor.name(), m_theme.borderColor.name()));
+      QString("QDialog { %1 }").arg(UIStyleHelper::popupDialogStyle(m_theme)));
 
   auto *layout = new QVBoxLayout(&palette);
   layout->setContentsMargins(12, 12, 12, 12);
@@ -3094,22 +3071,11 @@ void GitWorkbenchDialog::onCommandPalette() {
 
   auto *filterEdit = new QLineEdit(&palette);
   filterEdit->setPlaceholderText(tr("Type to filter commands..."));
-  filterEdit->setStyleSheet(
-      QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
-              "border-radius: 6px; padding: 8px 12px; font-size: 13px; }")
-          .arg(m_theme.surfaceAltColor.name(), m_theme.foregroundColor.name(),
-               m_theme.borderColor.name()));
+  filterEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(m_theme));
   layout->addWidget(filterEdit);
 
   auto *listWidget = new QListWidget(&palette);
-  listWidget->setStyleSheet(
-      QString("QListWidget { background: %1; color: %2; border: none; "
-              "font-size: 13px; }"
-              "QListWidget::item { padding: 6px 10px; border-radius: 4px; }"
-              "QListWidget::item:selected { background: %3; }"
-              "QListWidget::item:hover:!selected { background: %4; }")
-          .arg(m_theme.surfaceColor.name(), m_theme.foregroundColor.name(),
-               m_theme.accentSoftColor.name(), m_theme.hoverColor.name()));
+  listWidget->setStyleSheet(UIStyleHelper::resultListStyle(m_theme));
   layout->addWidget(listWidget);
 
   using Command = QPair<QString, std::function<void()>>;

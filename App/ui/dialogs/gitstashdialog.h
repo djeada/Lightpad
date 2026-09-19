@@ -38,6 +38,9 @@ private:
   void setupUI();
   void applyStyles();
   void updateStashList();
+  void applyHeroHeaderStyle();
+  void applyStatusStyle();
+  void setStatus(const QString &text, UIStyleHelper::Tone tone);
 
 public:
   void applyTheme(const Theme &theme) override;
@@ -56,6 +59,10 @@ private:
   QPushButton *m_closeButton;
   QLabel *m_statusLabel;
   QLabel *m_detailsLabel;
+  QLabel *m_iconLabel = nullptr;
+  QLabel *m_titleLabel = nullptr;
+  QLabel *m_subtitleLabel = nullptr;
+  UIStyleHelper::Tone m_statusTone = UIStyleHelper::Tone::Neutral;
 };
 
 #endif

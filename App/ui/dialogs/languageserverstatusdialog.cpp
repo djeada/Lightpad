@@ -52,8 +52,8 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
       m_workspaceFolder(workspaceFolder), m_filePath(filePath),
       m_effectiveLanguageId(effectiveLanguageId),
       m_overrideLanguageId(overrideLanguageId), m_manager(manager),
-      m_theme(theme), m_statusBanner(nullptr), m_enabledCheck(nullptr),
-      m_languageCombo(nullptr), m_commandEdit(nullptr),
+      m_titleLabel(nullptr), m_hintLabel(nullptr), m_statusBanner(nullptr),
+      m_enabledCheck(nullptr), m_languageCombo(nullptr), m_commandEdit(nullptr),
       m_argumentsEdit(nullptr), m_detailsEdit(nullptr),
       m_pythonEnvironmentButton(nullptr), m_saveButton(nullptr),
       m_closeButton(nullptr) {
@@ -65,13 +65,13 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
   layout->setContentsMargins(16, 16, 16, 16);
   layout->setSpacing(12);
 
-  auto *titleLabel =
+  m_titleLabel =
       new QLabel(tr("%1 Language Server")
                      .arg(LanguageCatalog::displayName(languageId).isEmpty()
                               ? languageId
                               : LanguageCatalog::displayName(languageId)),
                  this);
-  layout->addWidget(titleLabel);
+  layout->addWidget(m_titleLabel);
 
   m_statusBanner = new QLabel(this);
   m_statusBanner->setWordWrap(true);
@@ -103,10 +103,10 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
   formLayout->addRow(tr("Arguments:"), m_argumentsEdit);
   layout->addLayout(formLayout);
 
-  auto *hintLabel = new QLabel(
+  m_hintLabel = new QLabel(
       tr("Saved in settings.json under languageServers.%1.*").arg(languageId),
       this);
-  layout->addWidget(hintLabel);
+  layout->addWidget(m_hintLabel);
 
   m_detailsEdit = new QPlainTextEdit(this);
   m_detailsEdit->setReadOnly(true);
@@ -126,9 +126,6 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
   layout->addLayout(buttonRow);
 
   applyTheme(theme);
-  styleTitleLabel(titleLabel);
-  styleSubduedLabel(hintLabel);
-  stylePrimaryButton(m_saveButton);
 
   if (m_manager) {
     const DiagnosticsServerConfig config = m_manager->serverConfig(languageId);
@@ -154,6 +151,19 @@ LanguageServerStatusDialog::LanguageServerStatusDialog(
   refreshDetails();
 }
 
+void LanguageServerStatusDialog::applyTheme(const Theme &theme) {
+  StyledDialog::applyTheme(theme);
+
+  styleTitleLabel(m_titleLabel);
+  styleSubduedLabel(m_hintLabel);
+  stylePrimaryButton(m_saveButton);
+  if (m_statusBanner) {
+    m_statusBanner->setStyleSheet(
+        QString("QLabel { %1 }")
+            .arg(UIStyleHelper::bannerStyle(theme, m_bannerTone)));
+  }
+}
+
 void LanguageServerStatusDialog::refreshDetails() {
   const ServerHealthStatus health = m_manager
                                         ? m_manager->serverHealth(m_languageId)
@@ -175,44 +185,11 @@ void LanguageServerStatusDialog::refreshDetails() {
           : displayValue(LanguageCatalog::displayName(selectedAssociation),
                          selectedAssociation);
 
-  QString bannerBg = m_theme.surfaceColor.name();
-  QString bannerBorder = m_theme.borderColor.name();
-  QString bannerText = QString("Status: %1").arg(healthLabel(health));
-  if (health == ServerHealthStatus::Running) {
-    bannerBg =
-        QColor(
-            (m_theme.backgroundColor.red() * 9 + m_theme.successColor.red()) /
-                10,
-            (m_theme.backgroundColor.green() * 9 +
-             m_theme.successColor.green()) /
-                10,
-            (m_theme.backgroundColor.blue() * 9 + m_theme.successColor.blue()) /
-                10)
-            .name();
-    bannerBorder = m_theme.successColor.name();
-  } else if (health == ServerHealthStatus::Starting) {
-    bannerBg =
-        QColor(
-            (m_theme.backgroundColor.red() * 9 + m_theme.warningColor.red()) /
-                10,
-            (m_theme.backgroundColor.green() * 9 +
-             m_theme.warningColor.green()) /
-                10,
-            (m_theme.backgroundColor.blue() * 9 + m_theme.warningColor.blue()) /
-                10)
-            .name();
-    bannerBorder = m_theme.warningColor.name();
-  } else if (health == ServerHealthStatus::Error) {
-    bannerBg =
-        QColor(
-            (m_theme.backgroundColor.red() * 9 + m_theme.errorColor.red()) / 10,
-            (m_theme.backgroundColor.green() * 9 + m_theme.errorColor.green()) /
-                10,
-            (m_theme.backgroundColor.blue() * 9 + m_theme.errorColor.blue()) /
-                10)
-            .name();
-    bannerBorder = m_theme.errorColor.name();
-  }
+  m_bannerTone =
+      health == ServerHealthStatus::Running    ? UIStyleHelper::Tone::Success
+      : health == ServerHealthStatus::Starting ? UIStyleHelper::Tone::Warning
+      : health == ServerHealthStatus::Error    ? UIStyleHelper::Tone::Error
+                                               : UIStyleHelper::Tone::Neutral;
 
   QString bannerHtml =
       QString("<div style='padding:8px;'><b>%1</b><br><span "
@@ -223,9 +200,8 @@ void LanguageServerStatusDialog::refreshDetails() {
                                          "the command or arguments."))
                   .toHtmlEscaped());
   m_statusBanner->setStyleSheet(
-      QString("QLabel { background: %1; border: 1px solid %2; border-radius: "
-              "6px; color: %3; }")
-          .arg(bannerBg, bannerBorder, m_theme.foregroundColor.name()));
+      QString("QLabel { %1 }")
+          .arg(UIStyleHelper::bannerStyle(m_theme, m_bannerTone)));
   m_statusBanner->setText(bannerHtml);
 
   QStringList lines;

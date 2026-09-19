@@ -10,6 +10,19 @@
 #include <algorithm>
 #include <functional>
 
+namespace {
+QString commandPreviewStyle(const Theme &theme) {
+  const QColor fill = theme.surfaceAltColor.isValid() ? theme.surfaceAltColor
+                                                      : theme.surfaceColor;
+  return QString("font-family: monospace; background-color: %1; color: %2; "
+                 "border: 1px solid %3; padding: 6px; border-radius: 6px;")
+      .arg(fill.name(),
+           UIStyleHelper::readableText(theme, fill, theme.foregroundColor)
+               .name(),
+           theme.borderColor.name());
+}
+} // namespace
+
 FormatTemplateSelector::FormatTemplateSelector(const QString &filePath,
                                                QWidget *parent)
     : StyledDialog(parent), m_filePath(filePath) {
@@ -96,9 +109,7 @@ void FormatTemplateSelector::setupUi() {
 
   m_commandLabel = new QLabel();
   m_commandLabel->setWordWrap(true);
-  m_commandLabel->setStyleSheet(
-      "font-family: monospace; background-color: #1f2632; color: #e6edf3; "
-      "padding: 6px; border-radius: 6px;");
+  m_commandLabel->setStyleSheet(commandPreviewStyle(m_theme));
   templatesLayout->addWidget(m_commandLabel);
   leftLayout->addWidget(templatesGroup);
 
@@ -426,7 +437,9 @@ void FormatTemplateSelector::applyTheme(const Theme &theme) {
   }
 
   styleSubduedLabel(m_descriptionLabel);
-  styleSubduedLabel(m_commandLabel);
+  m_commandLabel->setStyleSheet(commandPreviewStyle(theme));
+  if (m_pythonEnvironmentWidget)
+    m_pythonEnvironmentWidget->applyTheme(theme);
 
   stylePrimaryButton(m_okButton);
   styleDangerButton(m_removeButton);

@@ -321,26 +321,23 @@ void WhatIfSandboxDialog::onApplyPlan() {
 
 void WhatIfSandboxDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
   if (m_bannerLabel) {
-
     m_bannerLabel->setStyleSheet(
-        QString("QLabel { background: %1; color: %2; border: 1px dashed %2; "
-                "border-radius: %3px; padding: 6px; font-weight: bold; }")
-            .arg(theme.surfaceAltColor.name(), theme.infoColor.name())
-            .arg(UiMetrics::RadiusSm));
+        QString("QLabel { %1 font-weight: bold; }")
+            .arg(UIStyleHelper::bannerStyle(theme, UIStyleHelper::Tone::Info)));
   }
-  for (QComboBox *combo : {m_leftRefCombo, m_rightRefCombo}) {
-    if (combo) {
-      combo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+  const QString sandboxList =
+      UIStyleHelper::listWidgetStyle(theme) +
+      QString("QListWidget { border: 1px dashed %1; }")
+          .arg(UIStyleHelper::toneColor(theme, UIStyleHelper::Tone::Info)
+                   .name());
+  for (QListWidget *list : {m_graphList, m_journalList, m_limitationList}) {
+    if (list) {
+      list->setStyleSheet(sandboxList);
     }
   }
-  const QString dashed =
-      QString("QListWidget { background: %1; border: 1px dashed %2; }")
-          .arg(theme.surfaceColor.name(), theme.infoColor.name());
   if (m_graphList) {
-    m_graphList->setStyleSheet(dashed);
     for (int i = 0; i < m_graphList->count(); ++i) {
       QListWidgetItem *item = m_graphList->item(i);
       const QString text = item->text();
@@ -353,38 +350,15 @@ void WhatIfSandboxDialog::applyTheme(const Theme &theme) {
       }
     }
   }
-  for (QListWidget *list : {m_journalList, m_limitationList}) {
-    if (list) {
-      list->setStyleSheet(
-          QString("QListWidget { background: %1; color: %2; border: 1px "
-                  "dashed %3; }")
-              .arg(theme.surfaceColor.name(),
-                   theme.singleLineCommentFormat.name(),
-                   theme.infoColor.name()));
-    }
-  }
   if (m_unreachableLabel) {
-    m_unreachableLabel->setStyleSheet(
-        QString("color: %1;")
-            .arg((m_sandbox.unreachableCommitIds().isEmpty()
-                      ? theme.successColor
-                      : theme.warningColor)
-                     .name()));
+    styleToneLabel(m_unreachableLabel,
+                   m_sandbox.unreachableCommitIds().isEmpty()
+                       ? UIStyleHelper::Tone::Success
+                       : UIStyleHelper::Tone::Warning);
   }
-  for (const char *name :
-       {"sandboxLeftLabel", "sandboxRightLabel", "sandboxJournalLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
+  for (const char *name : {"sandboxLeftLabel", "sandboxRightLabel"}) {
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
-  for (QPushButton *button :
-       {m_mergeButton, m_rebaseButton, m_cherryPickButton, m_resetButton,
-        m_deleteButton, m_resetSandboxButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
-  if (m_applyButton) {
-    stylePrimaryButton(m_applyButton);
-  }
+  styleSectionLabel(findChild<QLabel *>(QStringLiteral("sandboxJournalLabel")));
+  stylePrimaryButton(m_applyButton);
 }

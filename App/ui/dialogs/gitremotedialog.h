@@ -50,6 +50,9 @@ public:
 private:
   void updateBranchList();
   void updateRemoteList();
+  void applyHeroHeaderStyle();
+  void applyStatusStyle();
+  void setStatus(const QString &text, UIStyleHelper::Tone tone);
 
   GitIntegration *m_git;
   Mode m_mode;
@@ -71,6 +74,10 @@ private:
   QPushButton *m_removeRemoteButton;
 
   QPushButton *m_closeButton;
+  QLabel *m_iconLabel = nullptr;
+  QLabel *m_titleLabel = nullptr;
+  QLabel *m_subtitleLabel = nullptr;
+  UIStyleHelper::Tone m_statusTone = UIStyleHelper::Tone::Neutral;
 };
 
 #endif

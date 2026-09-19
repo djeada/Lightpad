@@ -21,20 +21,19 @@ void GitInitDialog::setupUI() {
   mainLayout->setContentsMargins(24, 24, 24, 24);
 
   QHBoxLayout *headerLayout = new QHBoxLayout();
-  QLabel *iconLabel = new QLabel("🗃️", this);
-  iconLabel->setStyleSheet("font-size: 32px;");
-  headerLayout->addWidget(iconLabel);
+  m_iconLabel = new QLabel("🗃️", this);
+  headerLayout->addWidget(m_iconLabel);
 
   QVBoxLayout *titleLayout = new QVBoxLayout();
-  QLabel *titleLabel = new QLabel(tr("Initialize Git Repository"), this);
-  titleLabel->setObjectName("titleLabel");
-  QLabel *subtitleLabel =
+  m_titleLabel = new QLabel(tr("Initialize Git Repository"), this);
+  m_titleLabel->setObjectName("titleLabel");
+  m_subtitleLabel =
       new QLabel(tr("This folder is not a Git repository. Initialize one to "
                     "start tracking changes."),
                  this);
-  subtitleLabel->setWordWrap(true);
-  titleLayout->addWidget(titleLabel);
-  titleLayout->addWidget(subtitleLabel);
+  m_subtitleLabel->setWordWrap(true);
+  titleLayout->addWidget(m_titleLabel);
+  titleLayout->addWidget(m_subtitleLabel);
   headerLayout->addLayout(titleLayout, 1);
   mainLayout->addLayout(headerLayout);
 
@@ -153,4 +152,8 @@ void GitInitDialog::onBrowseClicked() {
 void GitInitDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
   stylePrimaryButton(m_initButton);
+  m_iconLabel->setStyleSheet("font-size: 28px; background: transparent;");
+  m_titleLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 17));
+  m_subtitleLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme) +
+                                 " font-size: 12px;");
 }

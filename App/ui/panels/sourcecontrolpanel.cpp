@@ -1,4 +1,5 @@
 #include "sourcecontrolpanel.h"
+#include "../../theme/colorcontrast.h"
 #include "../dialogs/bisectdialog.h"
 #include "../dialogs/branchhygienedialog.h"
 #include "../dialogs/branchsyncradardialog.h"
@@ -49,6 +50,55 @@ namespace {
 constexpr int DEFAULT_HISTORY_COMMIT_COUNT = 20;
 constexpr int MAX_COMMIT_DISPLAY_LENGTH = 60;
 constexpr int STAGED_STATUS_ROLE = Qt::UserRole + 1;
+constexpr int EMPTY_STATE_ROLE = Qt::UserRole + 2;
+constexpr int FILE_STATUS_ROLE = Qt::UserRole + 3;
+constexpr int HISTORY_EMPHASIS_ROLE = Qt::UserRole + 4;
+
+QString statusLineStyle(const Theme &theme, UIStyleHelper::Tone tone) {
+  const QString border = theme.panelBorders ? theme.surfaceAltColor.name()
+                                            : QStringLiteral("transparent");
+  const bool neutral = tone == UIStyleHelper::Tone::Neutral;
+  const QString text = neutral ? UIStyleHelper::infoLabelStyle(theme)
+                               : UIStyleHelper::toneLabelStyle(theme, tone);
+  QString style = QString("QLabel { background: %1; padding: 6px 10px; "
+                          "border-top: 1px solid %2; %3 }")
+                      .arg(theme.backgroundColor.name(), border, text);
+  if (neutral) {
+    style += QString("QLabel:hover { color: %1; }")
+                 .arg(theme.foregroundColor.name());
+  }
+  return style;
+}
+
+QString solidButtonStyle(const Theme &theme, const QColor &fill,
+                         const QString &extra) {
+  const QColor hover = fill.lighter(120);
+  const QColor pressed = fill.darker(120);
+  return QString("QPushButton { background: %1; color: %2; border: none; "
+                 "border-radius: 6px; %7 }"
+                 "QPushButton:hover { background: %3; color: %4; }"
+                 "QPushButton:pressed { background: %5; color: %6; }")
+      .arg(fill.name(), UIStyleHelper::readableText(theme, fill).name(),
+           hover.name(), UIStyleHelper::readableText(theme, hover).name(),
+           pressed.name(), UIStyleHelper::readableText(theme, pressed).name(),
+           extra);
+}
+
+QString outlineHeaderButtonStyle(const Theme &theme, const QColor &accent,
+                                 const QString &extra) {
+  const QColor hoverText = ColorContrast::ensure(accent, theme.surfaceAltColor);
+  return QString("QPushButton { background: transparent; color: %1; "
+                 "border: 1px solid %2; border-radius: 4px; %8 }"
+                 "QPushButton:hover { background: %3; color: %4; "
+                 "border-color: %5; }"
+                 "QPushButton:pressed { background: %5; color: %6; }"
+                 "QPushButton:disabled { color: %7; border-color: %2; }")
+      .arg(UIStyleHelper::secondaryTextColor(theme).name(),
+           theme.borderColor.name(), theme.surfaceAltColor.name(),
+           hoverText.name(), accent.name(),
+           UIStyleHelper::readableText(theme, accent).name(),
+           UIStyleHelper::mutedTextColor(theme).name(), extra);
+}
 } // namespace
 
 SourceControlPanel::SourceControlPanel(QWidget *parent)
@@ -1027,6 +1077,7 @@ void SourceControlPanel::updateTree() {
       item->setToolTip(0, fullPath);
       item->setData(0, Qt::UserRole, fullPath);
       item->setData(0, STAGED_STATUS_ROLE, true);
+      item->setData(0, FILE_STATUS_ROLE, static_cast<int>(file.indexStatus));
       item->setForeground(0, statusColor(file.indexStatus));
       item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
       item->setCheckState(0, Qt::Checked);
@@ -1043,6 +1094,7 @@ void SourceControlPanel::updateTree() {
       item->setToolTip(0, fullPath);
       item->setData(0, Qt::UserRole, fullPath);
       item->setData(0, STAGED_STATUS_ROLE, false);
+      item->setData(0, FILE_STATUS_ROLE, static_cast<int>(file.workTreeStatus));
       item->setForeground(0, statusColor(file.workTreeStatus));
       item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
       item->setCheckState(0, Qt::Unchecked);
@@ -1158,13 +1210,10 @@ void SourceControlPanel::updateHistory() {
     font.setFamily("monospace");
     item->setFont(0, font);
 
-    if (isMerge) {
-      item->setForeground(0, m_theme.accentColor);
-    } else if (isFirst) {
-      item->setForeground(0, m_theme.accentColor);
-    } else {
-      item->setForeground(0, m_theme.singleLineCommentFormat);
-    }
+    item->setData(0, HISTORY_EMPHASIS_ROLE, isMerge || isFirst);
+    item->setForeground(0, (isMerge || isFirst)
+                               ? m_theme.accentColor
+                               : UIStyleHelper::mutedTextColor(m_theme));
 
     isFirst = false;
   }
@@ -1260,7 +1309,7 @@ void SourceControlPanel::onItemContextMenu(const QPoint &pos) {
   QTreeWidgetItem *item = tree->itemAt(pos);
   if (!item)
     return;
-  if (item->data(0, Qt::UserRole + 2).toBool())
+  if (item->data(0, EMPTY_STATE_ROLE).toBool())
     return;
 
   QString filePath = item->data(0, Qt::UserRole).toString();
@@ -1374,7 +1423,7 @@ void SourceControlPanel::onItemContextMenu(const QPoint &pos) {
 void SourceControlPanel::onItemCheckChanged(QTreeWidgetItem *item, int column) {
   if (!item || column != 0 || m_updatingTree)
     return;
-  if (item->data(0, Qt::UserRole + 2).toBool())
+  if (item->data(0, EMPTY_STATE_ROLE).toBool())
     return;
   if (!m_git)
     return;
@@ -1643,8 +1692,35 @@ void SourceControlPanel::addEmptyStateItem(QTreeWidget *tree,
   QTreeWidgetItem *item = new QTreeWidgetItem(tree);
   item->setText(0, text);
   item->setFlags(Qt::NoItemFlags);
-  item->setForeground(0, m_theme.singleLineCommentFormat);
-  item->setData(0, Qt::UserRole + 2, true);
+  item->setForeground(0, UIStyleHelper::mutedTextColor(m_theme));
+  item->setData(0, EMPTY_STATE_ROLE, true);
+}
+
+void SourceControlPanel::recolorItems() {
+  const bool wasUpdating = m_updatingTree;
+  m_updatingTree = true;
+  for (QTreeWidget *tree : {m_stagedTree, m_changesTree}) {
+    if (!tree)
+      continue;
+    for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+      QTreeWidgetItem *item = tree->topLevelItem(i);
+      if (item->data(0, EMPTY_STATE_ROLE).toBool()) {
+        item->setForeground(0, UIStyleHelper::mutedTextColor(m_theme));
+      } else if (item->data(0, FILE_STATUS_ROLE).isValid()) {
+        item->setForeground(0, statusColor(static_cast<GitFileStatus>(
+                                   item->data(0, FILE_STATUS_ROLE).toInt())));
+      }
+    }
+  }
+  if (m_historyTree) {
+    for (int i = 0; i < m_historyTree->topLevelItemCount(); ++i) {
+      QTreeWidgetItem *item = m_historyTree->topLevelItem(i);
+      item->setForeground(0, item->data(0, HISTORY_EMPHASIS_ROLE).toBool()
+                                 ? m_theme.accentColor
+                                 : UIStyleHelper::mutedTextColor(m_theme));
+    }
+  }
+  m_updatingTree = wasUpdating;
 }
 
 void SourceControlPanel::updateCounts() {
@@ -2214,38 +2290,12 @@ void SourceControlPanel::onDeleteBranchClicked() {
 void SourceControlPanel::onOperationCompleted(const QString &message) {
   m_statusLabel->setText("✓ " + message);
   m_statusLabel->setStyleSheet(
-      QString("QLabel {"
-              "  background: %1;"
-              "  color: %2;"
-              "  padding: 6px 10px;"
-              "  font-size: 11px;"
-              "  border-top: 1px solid %3;"
-              "}"
-              "QLabel:hover {"
-              "  color: %4;"
-              "}")
-          .arg(m_theme.backgroundColor.name())
-          .arg(m_theme.successColor.name())
-          .arg(m_theme.surfaceAltColor.name())
-          .arg(m_theme.successColor.lighter(120).name()));
+      statusLineStyle(m_theme, UIStyleHelper::Tone::Success));
   m_statusLabel->setToolTip(tr("Success: %1").arg(message));
 
-  QTimer::singleShot(3000, [this]() {
+  QTimer::singleShot(3000, this, [this]() {
     m_statusLabel->setStyleSheet(
-        QString("QLabel {"
-                "  background: %1;"
-                "  color: %2;"
-                "  padding: 6px 10px;"
-                "  font-size: 11px;"
-                "  border-top: 1px solid %3;"
-                "}"
-                "QLabel:hover {"
-                "  color: %4;"
-                "}")
-            .arg(m_theme.backgroundColor.name())
-            .arg(m_theme.singleLineCommentFormat.name())
-            .arg(m_theme.surfaceAltColor.name())
-            .arg(m_theme.foregroundColor.name()));
+        statusLineStyle(m_theme, UIStyleHelper::Tone::Neutral));
     m_statusLabel->setToolTip(QString());
   });
 }
@@ -2253,39 +2303,13 @@ void SourceControlPanel::onOperationCompleted(const QString &message) {
 void SourceControlPanel::onErrorOccurred(const QString &error) {
   m_statusLabel->setText("⚠️ " + error);
   m_statusLabel->setStyleSheet(
-      QString("QLabel {"
-              "  background: %1;"
-              "  color: %2;"
-              "  padding: 6px 10px;"
-              "  font-size: 11px;"
-              "  border-top: 1px solid %3;"
-              "}"
-              "QLabel:hover {"
-              "  color: %4;"
-              "}")
-          .arg(m_theme.backgroundColor.name())
-          .arg(m_theme.errorColor.name())
-          .arg(m_theme.surfaceAltColor.name())
-          .arg(m_theme.errorColor.lighter(120).name()));
+      statusLineStyle(m_theme, UIStyleHelper::Tone::Error));
   m_statusLabel->setToolTip(
       tr("Error: %1\n(This message will auto-clear in 5 seconds)").arg(error));
 
-  QTimer::singleShot(5000, [this]() {
+  QTimer::singleShot(5000, this, [this]() {
     m_statusLabel->setStyleSheet(
-        QString("QLabel {"
-                "  background: %1;"
-                "  color: %2;"
-                "  padding: 6px 10px;"
-                "  font-size: 11px;"
-                "  border-top: 1px solid %3;"
-                "}"
-                "QLabel:hover {"
-                "  color: %4;"
-                "}")
-            .arg(m_theme.backgroundColor.name())
-            .arg(m_theme.singleLineCommentFormat.name())
-            .arg(m_theme.surfaceAltColor.name())
-            .arg(m_theme.foregroundColor.name()));
+        statusLineStyle(m_theme, UIStyleHelper::Tone::Neutral));
     m_statusLabel->setToolTip(QString());
   });
 }
@@ -2380,6 +2404,7 @@ void SourceControlPanel::onInitRepositoryClicked() {
             }
           });
 
+  dialog.applyTheme(m_theme);
   dialog.exec();
 }
 
@@ -2393,6 +2418,7 @@ void SourceControlPanel::onPushClicked() {
             m_statusLabel->setText(msg);
             refresh();
           });
+  dialog.applyTheme(m_theme);
   dialog.exec();
 }
 
@@ -2406,6 +2432,7 @@ void SourceControlPanel::onPullClicked() {
             m_statusLabel->setText(msg);
             refresh();
           });
+  dialog.applyTheme(m_theme);
   dialog.exec();
 }
 
@@ -2419,6 +2446,7 @@ void SourceControlPanel::onFetchClicked() {
             m_statusLabel->setText(msg);
             refresh();
           });
+  dialog.applyTheme(m_theme);
   dialog.exec();
 }
 
@@ -2493,10 +2521,11 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   const QString sectionBorder = theme.panelBorders
                                     ? theme.surfaceAltColor.name()
                                     : QStringLiteral("transparent");
-  const QString glowAccent =
-      theme.accentColor
-          .lighter(100 + static_cast<int>(theme.glowIntensity * 28.0))
-          .name();
+  const QColor linkColor =
+      UIStyleHelper::toneColor(theme, UIStyleHelper::Tone::Accent);
+  const QColor linkHover = ColorContrast::ensure(
+      linkColor.lighter(100 + static_cast<int>(theme.glowIntensity * 28.0)),
+      theme.backgroundColor);
 
   setStyleSheet(
       UIStyleHelper::panelStyle(theme, objectName()) +
@@ -2523,14 +2552,17 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
   if (m_detachedCard) {
     m_detachedCard->setStyleSheet(
-        QString("QWidget#detachedHeadCard { background: %1; border: 1px solid "
-                "%2; border-radius: %3px; }")
-            .arg(theme.surfaceColor.name(), theme.warningColor.name())
-            .arg(UiMetrics::RadiusSm));
+        QString("QWidget#detachedHeadCard { %1 }"
+                "QWidget#detachedHeadCard QLabel { background: transparent; "
+                "border: none; }")
+            .arg(UIStyleHelper::bannerStyle(theme,
+                                            UIStyleHelper::Tone::Warning)));
   }
   if (m_detachedLabel) {
     m_detachedLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px;").arg(theme.warningColor.name()));
+        QString("color: %1; font-size: 11px;")
+            .arg(UIStyleHelper::toneColor(theme, UIStyleHelper::Tone::Warning)
+                     .name()));
   }
   for (QPushButton *button : {m_detachedBranchButton, m_detachedListButton}) {
     if (button) {
@@ -2538,89 +2570,51 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     }
   }
   if (m_headerTitleLabel) {
-    m_headerTitleLabel->setStyleSheet(
-        QString("font-weight: bold; color: %1; font-size: 13px;")
-            .arg(theme.foregroundColor.name()));
+    m_headerTitleLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 13));
   }
   if (m_refreshButton) {
     m_refreshButton->setStyleSheet(
-        QString(
-            "QPushButton { background: transparent; color: %1; border: none; "
-            "font-size: 14px; border-radius: 4px; }"
-            "QPushButton:hover { background: %2; }"
-            "QPushButton:pressed { background: %3; }")
-            .arg(theme.foregroundColor.name())
-            .arg(theme.surfaceAltColor.name())
-            .arg(theme.accentColor.name()));
+        UIStyleHelper::iconButtonStyle(theme) +
+        QStringLiteral("QPushButton { font-size: 14px; }"));
   }
 
   if (m_statusLabel) {
-    m_statusLabel->setStyleSheet(QString("QLabel {"
-                                         "  background: %1;"
-                                         "  color: %2;"
-                                         "  padding: 6px 10px;"
-                                         "  font-size: 11px;"
-                                         "  border-top: 1px solid %3;"
-                                         "}"
-                                         "QLabel:hover {"
-                                         "  color: %4;"
-                                         "}")
-                                     .arg(theme.backgroundColor.name())
-                                     .arg(theme.singleLineCommentFormat.name())
-                                     .arg(sectionBorder)
-                                     .arg(theme.foregroundColor.name()));
+    m_statusLabel->setStyleSheet(
+        statusLineStyle(theme, UIStyleHelper::Tone::Neutral));
   }
 
   if (m_noRepoLabel) {
-    m_noRepoLabel->setStyleSheet(
-        QString("font-size: 16px; font-weight: bold; color: %1;")
-            .arg(theme.foregroundColor.name()));
+    m_noRepoLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 16));
   }
   if (m_noRepoDescLabel) {
-    m_noRepoDescLabel->setStyleSheet(
-        QString("color: %1; font-size: 12px;")
-            .arg(theme.singleLineCommentFormat.name()));
+    m_noRepoDescLabel->setStyleSheet(UIStyleHelper::emptyStateStyle(theme));
   }
   if (m_initRepoButton) {
-    m_initRepoButton->setStyleSheet(
-        QString("QPushButton {"
-                "  background: %1;"
-                "  color: %2;"
-                "  border: none;"
-                "  border-radius: 6px;"
-                "  padding: 12px 24px;"
-                "  font-weight: bold;"
-                "  font-size: 13px;"
-                "}"
-                "QPushButton:hover {"
-                "  background: %3;"
-                "}"
-                "QPushButton:pressed {"
-                "  background: %4;"
-                "}")
-            .arg(theme.successColor.name())
-            .arg(theme.backgroundColor.name())
-            .arg(theme.successColor.lighter(120).name())
-            .arg(theme.successColor.darker(120).name()));
+    m_initRepoButton->setStyleSheet(solidButtonStyle(
+        theme, theme.successColor,
+        QStringLiteral("padding: 12px 24px; font-weight: bold; "
+                       "font-size: 13px;")));
   }
 
   if (m_conflictWarningHeader) {
-    QColor errorTransparent = theme.errorColor;
-    errorTransparent.setAlpha(51);
+    m_conflictWarningHeader->setObjectName(
+        QStringLiteral("conflictWarningHeader"));
     m_conflictWarningHeader->setStyleSheet(
-        QString("background: %1; border: 1px solid %2; border-radius: 6px;")
-            .arg(errorTransparent.name(QColor::HexArgb))
-            .arg(theme.errorColor.name()));
+        QString("QWidget#conflictWarningHeader { %1 }"
+                "QWidget#conflictWarningHeader QLabel { background: "
+                "transparent; border: none; }")
+            .arg(
+                UIStyleHelper::bannerStyle(theme, UIStyleHelper::Tone::Error)));
   }
   if (m_conflictLabel) {
     m_conflictLabel->setStyleSheet(
         QString("color: %1; font-weight: bold; font-size: 13px;")
-            .arg(theme.errorColor.name()));
+            .arg(UIStyleHelper::toneColor(theme, UIStyleHelper::Tone::Error)
+                     .name()));
   }
   if (m_conflictFilesHeaderLabel) {
     m_conflictFilesHeaderLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px; text-transform: uppercase;")
-            .arg(theme.singleLineCommentFormat.name()));
+        UIStyleHelper::sectionLabelStyle(theme));
   }
   if (m_conflictFilesList) {
     m_conflictFilesList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
@@ -2643,66 +2637,39 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   }
   if (m_branchIcon) {
     m_branchIcon->setStyleSheet(
-        QString("color: %1; font-size: 14px;").arg(theme.accentColor.name()));
+        QString("color: %1; font-size: 14px;").arg(linkColor.name()));
   }
   if (m_branchLabel) {
-    m_branchLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px; text-transform: uppercase;")
-            .arg(theme.singleLineCommentFormat.name()));
+    m_branchLabel->setStyleSheet(UIStyleHelper::sectionLabelStyle(theme));
   }
   if (m_branchSelector) {
     m_branchSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
   }
   if (m_newBranchButton) {
-    m_newBranchButton->setStyleSheet(
-        QString("QPushButton {"
-                "  background: %1;"
-                "  color: %2;"
-                "  border: none;"
-                "  border-radius: 6px;"
-                "  font-size: 14px;"
-                "  font-weight: bold;"
-                "}"
-                "QPushButton:hover {"
-                "  background: %3;"
-                "}"
-                "QPushButton:pressed {"
-                "  background: %4;"
-                "}")
-            .arg(theme.successColor.name())
-            .arg(theme.backgroundColor.name())
-            .arg(theme.successColor.lighter(120).name())
-            .arg(theme.successColor.darker(120).name()));
+    m_newBranchButton->setStyleSheet(solidButtonStyle(
+        theme, theme.successColor,
+        QStringLiteral("font-size: 14px; font-weight: bold; padding: 0;")));
   }
   if (m_deleteBranchButton) {
+    const QColor danger = theme.errorColor;
+    const QColor dangerPressed = danger.darker(120);
     m_deleteBranchButton->setStyleSheet(
-        QString("QPushButton {"
-                "  background: %1;"
-                "  color: %2;"
-                "  border: 1px solid %3;"
-                "  border-radius: 6px;"
-                "  font-size: 12px;"
-                "}"
-                "QPushButton:hover {"
-                "  background: %4;"
-                "  color: %5;"
-                "  border-color: %4;"
-                "}"
-                "QPushButton:pressed {"
-                "  background: %6;"
-                "}"
-                "QPushButton:disabled {"
-                "  background: %7;"
-                "  color: %3;"
-                "  border-color: %3;"
-                "}")
-            .arg(theme.surfaceAltColor.name())
-            .arg(theme.errorColor.name())
-            .arg(theme.borderColor.name())
-            .arg(theme.errorColor.name())
-            .arg(theme.backgroundColor.name())
-            .arg(theme.errorColor.darker(120).name())
-            .arg(theme.backgroundColor.name()));
+        QString("QPushButton { background: %1; color: %2; "
+                "border: 1px solid %3; border-radius: 6px; font-size: 12px; "
+                "padding: 0; }"
+                "QPushButton:hover { background: %4; color: %5; "
+                "border-color: %4; }"
+                "QPushButton:pressed { background: %6; color: %7; }"
+                "QPushButton:disabled { background: %8; color: %9; "
+                "border-color: %3; }")
+            .arg(theme.surfaceAltColor.name(),
+                 ColorContrast::ensure(danger, theme.surfaceAltColor).name(),
+                 theme.borderColor.name(), danger.name(),
+                 UIStyleHelper::readableText(theme, danger).name(),
+                 dangerPressed.name(),
+                 UIStyleHelper::readableText(theme, dangerPressed).name(),
+                 theme.backgroundColor.name(),
+                 UIStyleHelper::mutedTextColor(theme).name()));
   }
 
   for (QPushButton *button :
@@ -2723,10 +2690,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
             .arg(sectionBorder));
   }
   if (m_commitHeaderLabel) {
-    m_commitHeaderLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px; text-transform: uppercase; "
-                "letter-spacing: 0.5px;")
-            .arg(theme.singleLineCommentFormat.name()));
+    m_commitHeaderLabel->setStyleSheet(UIStyleHelper::sectionLabelStyle(theme));
   }
   if (m_commitMessage) {
     m_commitMessage->setStyleSheet(UIStyleHelper::plainTextEditStyle(theme));
@@ -2737,32 +2701,20 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   if (m_commitButton) {
     m_commitButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
   }
+
+  const QString strongGlyph =
+      QStringLiteral("font-size: 14px; font-weight: bold; padding: 0;");
   if (m_stagedHeader) {
     m_stagedHeader->setObjectName(QStringLiteral("stagedHeader"));
-    m_stagedHeader->setStyleSheet(QString("QWidget#stagedHeader { background: "
-                                          "%1; border-bottom: 1px solid %2; }")
-                                      .arg(theme.backgroundColor.name())
-                                      .arg(sectionBorder));
+    m_stagedHeader->setStyleSheet(
+        UIStyleHelper::panelHeaderStyle(theme, m_stagedHeader->objectName()));
   }
   if (m_stagedLabel) {
-    m_stagedLabel->setStyleSheet(
-        QString("color: %1; font-weight: bold; font-size: 12px;")
-            .arg(theme.foregroundColor.name()));
+    m_stagedLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 12));
   }
   if (m_unstageAllButton) {
     m_unstageAllButton->setStyleSheet(
-        QString(
-            "QPushButton { background: transparent; color: %1; border: 1px "
-            "solid %2; border-radius: 4px; font-size: 14px; font-weight: bold; "
-            "}"
-            "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
-            "QPushButton:pressed { background: %4; color: %5; }"
-            "QPushButton:disabled { color: %2; border-color: %2; }")
-            .arg(theme.singleLineCommentFormat.name())
-            .arg(theme.borderColor.name())
-            .arg(theme.surfaceAltColor.name())
-            .arg(theme.errorColor.name())
-            .arg(theme.backgroundColor.name()));
+        outlineHeaderButtonStyle(theme, theme.errorColor, strongGlyph));
   }
   if (m_stagedTree) {
     m_stagedTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
@@ -2771,44 +2723,19 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   if (m_changesHeader) {
     m_changesHeader->setObjectName(QStringLiteral("changesHeader"));
     m_changesHeader->setStyleSheet(
-        QString("QWidget#changesHeader { background: %1; border-bottom: 1px "
-                "solid %2; }")
-            .arg(theme.backgroundColor.name())
-            .arg(sectionBorder));
+        UIStyleHelper::panelHeaderStyle(theme, m_changesHeader->objectName()));
   }
   if (m_changesLabel) {
-    m_changesLabel->setStyleSheet(
-        QString("color: %1; font-weight: bold; font-size: 12px;")
-            .arg(theme.foregroundColor.name()));
+    m_changesLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 12));
   }
   if (m_stageAllButton) {
     m_stageAllButton->setStyleSheet(
-        QString(
-            "QPushButton { background: transparent; color: %1; border: 1px "
-            "solid %2; border-radius: 4px; font-size: 14px; font-weight: bold; "
-            "}"
-            "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
-            "QPushButton:pressed { background: %4; color: %5; }"
-            "QPushButton:disabled { color: %2; border-color: %2; }")
-            .arg(theme.singleLineCommentFormat.name())
-            .arg(theme.borderColor.name())
-            .arg(theme.surfaceAltColor.name())
-            .arg(theme.successColor.name())
-            .arg(theme.backgroundColor.name()));
+        outlineHeaderButtonStyle(theme, theme.successColor, strongGlyph));
   }
   if (m_discardAllBtn) {
-    m_discardAllBtn->setStyleSheet(
-        QString(
-            "QPushButton { background: transparent; color: %1; border: 1px "
-            "solid %2; border-radius: 4px; font-size: 12px; }"
-            "QPushButton:hover { background: %3; color: %4; border-color: %4; }"
-            "QPushButton:pressed { background: %4; color: %5; }"
-            "QPushButton:disabled { color: %2; border-color: %2; }")
-            .arg(theme.singleLineCommentFormat.name())
-            .arg(theme.borderColor.name())
-            .arg(theme.surfaceAltColor.name())
-            .arg(theme.errorColor.name())
-            .arg(theme.backgroundColor.name()));
+    m_discardAllBtn->setStyleSheet(outlineHeaderButtonStyle(
+        theme, theme.errorColor,
+        QStringLiteral("font-size: 12px; padding: 0;")));
   }
   if (m_changesTree) {
     m_changesTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
@@ -2817,10 +2744,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   if (m_historyHeader) {
     m_historyHeader->setObjectName(QStringLiteral("historyHeader"));
     m_historyHeader->setStyleSheet(
-        QString("QWidget#historyHeader { background: %1; border-bottom: 1px "
-                "solid %2; }")
-            .arg(theme.backgroundColor.name())
-            .arg(sectionBorder));
+        UIStyleHelper::panelHeaderStyle(theme, m_historyHeader->objectName()));
   }
   if (m_historyToggleButton) {
     m_historyToggleButton->setStyleSheet(
@@ -2828,13 +2752,11 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
             "QPushButton { background: transparent; color: %1; border: none; "
             "font-size: 10px; padding: 0; }"
             "QPushButton:hover { color: %2; }")
-            .arg(theme.singleLineCommentFormat.name())
+            .arg(UIStyleHelper::mutedTextColor(theme).name())
             .arg(theme.foregroundColor.name()));
   }
   if (m_historyLabel) {
-    m_historyLabel->setStyleSheet(
-        QString("color: %1; font-weight: bold; font-size: 12px;")
-            .arg(theme.foregroundColor.name()));
+    m_historyLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 12));
   }
   if (m_historyRebaseBtn) {
     m_historyRebaseBtn->setStyleSheet(
@@ -2842,8 +2764,8 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
             "QPushButton { background: transparent; color: %1; border: none; "
             "font-size: 11px; padding: 2px 6px; }"
             "QPushButton:hover { color: %2; text-decoration: underline; }")
-            .arg(theme.accentColor.name())
-            .arg(glowAccent));
+            .arg(linkColor.name())
+            .arg(linkHover.name()));
   }
   if (m_historySearchEdit) {
     m_historySearchEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
@@ -2851,6 +2773,8 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
   if (m_historyTree) {
     m_historyTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }
+
+  recolorItems();
 }
 
 bool SourceControlPanel::confirmDestructive(const QString &title,

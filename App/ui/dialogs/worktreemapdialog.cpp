@@ -2,6 +2,7 @@
 #include "../../git/gitintegration.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "themedmessagebox.h"
 #include <QDir>
 #include <QHBoxLayout>
@@ -30,6 +31,7 @@ WorktreeMapDialog::WorktreeMapDialog(GitIntegration *git, const Theme &theme,
   setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void WorktreeMapDialog::buildUi() {
@@ -296,34 +298,13 @@ void WorktreeMapDialog::onShowInGraph() {
 
 void WorktreeMapDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  if (m_worktreeTree) {
-    m_worktreeTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-  }
-  for (const char *name : {"worktreeHeaderLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
-  }
-  if (m_detailLabel) {
-    m_detailLabel->setStyleSheet(
-        QString("color: %1;").arg(theme.foregroundColor.name()));
-  }
+  styleSubduedLabel(findChild<QLabel *>(QStringLiteral("worktreeHeaderLabel")));
   if (m_warningLabel) {
     const GitWorktreeCard *card = currentCard();
     const bool safe = card && gitWorktreeRemovalWarning(*card).isEmpty();
-    m_warningLabel->setStyleSheet(
-        QString("color: %1;")
-            .arg((safe ? theme.successColor : theme.warningColor).name()));
+    styleToneLabel(m_warningLabel, safe ? UIStyleHelper::Tone::Success
+                                        : UIStyleHelper::Tone::Warning);
   }
-  for (QPushButton *button : {m_createButton, m_openButton, m_graphButton,
-                              m_pruneButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
-  if (m_removeButton) {
-    styleDangerButton(m_removeButton);
-  }
+  styleDangerButton(m_removeButton);
 }

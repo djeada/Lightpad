@@ -60,6 +60,8 @@ private:
   QPushButton *m_cancelBtn;
   QLabel *m_statusLabel;
   QLabel *m_summaryLabel;
+  QLabel *m_titleLabel = nullptr;
+  QLabel *m_subtitleLabel = nullptr;
   QLineEdit *m_searchEdit;
 
   QList<RebaseEntry> m_entries;

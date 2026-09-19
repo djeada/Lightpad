@@ -1,13 +1,37 @@
 #include "settings/theme.h"
+#include "theme/colorcontrast.h"
 #include "theme/themeengine.h"
 #include "theme/themepresets.h"
 #include "ui/uistylehelper.h"
 #include <QFileInfo>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
 
 namespace {
+
+QVector<ThemeDefinition> allPresets() {
+  return {
+      ThemePresets::hackerDark(), ThemePresets::minimalDark(),
+      ThemePresets::githubDark(), ThemePresets::midnightBlue(),
+      ThemePresets::dracula(),    ThemePresets::monokaiPro(),
+      ThemePresets::nord(),       ThemePresets::solarizedDark(),
+      ThemePresets::cyberpunk(),  ThemePresets::matrix(),
+      ThemePresets::ghost(),      ThemePresets::daylight(),
+  };
+}
+
+QVector<QColor> declaredColors(const QString &style, const QString &property) {
+  QVector<QColor> colors;
+  const QRegularExpression re(
+      QStringLiteral("(?:^|[;{\\s])%1:\\s*(#[0-9a-fA-F]{6,8})")
+          .arg(QRegularExpression::escape(property)));
+  auto it = re.globalMatch(style);
+  while (it.hasNext())
+    colors.append(QColor(it.next().captured(1)));
+  return colors;
+}
 
 int colorDistanceSquared(const QColor &a, const QColor &b) {
   const int dr = a.red() - b.red();
@@ -34,6 +58,12 @@ private slots:
   void testUiStyleHelperHonorsPanelBorders();
   void testUiStyleHelperGlowChangesSharedStyles();
   void testThemeEngineDeletesOnlyCustomThemes();
+  void testReadablePresetsMeetContrast();
+  void testReadableIsIdempotent();
+  void testPresetsDeriveSemanticColorsFromOwnPalette();
+  void testStyleHelperSelectionTextIsReadable();
+  void testThemeEngineKeepsAuthoredSourceTheme();
+  void testContrastEnsureReachesTarget();
 };
 
 void TestTheme::testDefaultConstructor() {
@@ -251,6 +281,191 @@ void TestTheme::testThemeEngineDeletesOnlyCustomThemes() {
 
   QVERIFY(engine.deleteUserTheme(savedCopy.name));
   QVERIFY(!engine.hasTheme(savedCopy.name));
+}
+
+void TestTheme::testReadablePresetsMeetContrast() {
+  using ColorContrast::flatten;
+  using ColorContrast::ratio;
+  struct Pair {
+    const char *name;
+    QColor ThemeColors::*fg;
+    QColor ThemeColors::*bg;
+    qreal minimum;
+  };
+  using C = ThemeColors;
+  const QVector<Pair> pairs = {
+      {"textPrimary/surfaceBase", &C::textPrimary, &C::surfaceBase, 4.5},
+      {"textPrimary/surfaceRaised", &C::textPrimary, &C::surfaceRaised, 4.5},
+      {"textPrimary/surfaceOverlay", &C::textPrimary, &C::surfaceOverlay, 4.5},
+      {"textPrimary/accentSoft", &C::textPrimary, &C::accentSoft, 4.5},
+      {"textPrimary/treeSelectedBg", &C::textPrimary, &C::treeSelectedBg, 4.5},
+      {"textSecondary/surfaceBase", &C::textSecondary, &C::surfaceBase, 4.5},
+      {"textSecondary/surfaceRaised", &C::textSecondary, &C::surfaceRaised,
+       4.5},
+      {"textMuted/surfaceBase", &C::textMuted, &C::surfaceBase, 3.0},
+      {"textMuted/surfaceRaised", &C::textMuted, &C::surfaceRaised, 3.0},
+      {"textInverse/accentPrimary", &C::textInverse, &C::accentPrimary, 4.5},
+      {"accentPrimary/surfaceBase", &C::accentPrimary, &C::surfaceBase, 3.0},
+      {"btnPrimaryFg/btnPrimaryBg", &C::btnPrimaryFg, &C::btnPrimaryBg, 4.5},
+      {"btnPrimaryFg/btnPrimaryHover", &C::btnPrimaryFg, &C::btnPrimaryHover,
+       4.5},
+      {"btnSecondaryFg/btnSecondaryHover", &C::btnSecondaryFg,
+       &C::btnSecondaryHover, 4.5},
+      {"btnDangerFg/btnDangerBg", &C::btnDangerFg, &C::btnDangerBg, 4.5},
+      {"btnDangerFg/btnDangerHover", &C::btnDangerFg, &C::btnDangerHover, 4.5},
+      {"inputFg/inputBg", &C::inputFg, &C::inputBg, 4.5},
+      {"inputFg/inputSelection", &C::inputFg, &C::inputSelection, 4.5},
+      {"tabFg/tabBg", &C::tabFg, &C::tabBg, 3.5},
+      {"tabActiveFg/tabActiveBg", &C::tabActiveFg, &C::tabActiveBg, 4.5},
+      {"editorFg/editorBg", &C::editorFg, &C::editorBg, 4.5},
+      {"editorGutterFg/editorGutter", &C::editorGutterFg, &C::editorGutter,
+       3.0},
+      {"termFg/termBg", &C::termFg, &C::termBg, 4.5},
+      {"syntaxComment/editorBg", &C::syntaxComment, &C::editorBg, 2.5},
+      {"statusError/surfaceRaised", &C::statusError, &C::surfaceRaised, 3.0},
+      {"statusWarning/surfaceRaised", &C::statusWarning, &C::surfaceRaised,
+       3.0},
+      {"gitAdded/surfaceBase", &C::gitAdded, &C::surfaceBase, 3.0},
+      {"gitModified/surfaceBase", &C::gitModified, &C::surfaceBase, 3.0},
+      {"testFailed/surfaceBase", &C::testFailed, &C::surfaceBase, 3.0},
+  };
+
+  for (ThemeDefinition preset : allPresets()) {
+    preset.normalize();
+    const ThemeDefinition readable = preset.readable();
+    const ThemeColors &c = readable.colors;
+    for (const Pair &pair : pairs) {
+      const QColor bg = flatten(c.*pair.bg, flatten(c.surfaceBase, Qt::black));
+      const QColor fg = flatten(c.*pair.fg, bg);
+      const qreal r = ratio(fg, bg);
+      QVERIFY2(r + 0.01 >= pair.minimum,
+               qPrintable(QString("%1 %2 contrast %3 < %4 (%5 on %6)")
+                              .arg(readable.name, pair.name)
+                              .arg(r, 0, 'f', 2)
+                              .arg(pair.minimum)
+                              .arg(fg.name(), bg.name())));
+    }
+  }
+}
+
+void TestTheme::testReadableIsIdempotent() {
+  for (ThemeDefinition preset : allPresets()) {
+    preset.normalize();
+    const ThemeDefinition once = preset.readable();
+    const ThemeDefinition twice = once.readable();
+    QJsonObject a;
+    QJsonObject b;
+    once.write(a);
+    twice.write(b);
+    QVERIFY2(a == b, qPrintable(preset.name));
+  }
+}
+
+void TestTheme::testPresetsDeriveSemanticColorsFromOwnPalette() {
+  const ThemeDefinition hacker = ThemePresets::hackerDark();
+  const ThemeDefinition daylight = ThemePresets::daylight();
+  const ThemeDefinition dracula = ThemePresets::dracula();
+
+  QCOMPARE(daylight.colors.gitAdded, daylight.colors.statusSuccess);
+  QCOMPARE(daylight.colors.testFailed, daylight.colors.statusError);
+  QCOMPARE(daylight.colors.diagnosticWarning, daylight.colors.statusWarning);
+  QCOMPARE(dracula.colors.gitDeleted, dracula.colors.statusError);
+  QVERIFY(dracula.colors.gitAdded != hacker.colors.gitAdded);
+
+  QJsonObject json;
+  daylight.write(json);
+  json.remove(QStringLiteral("git"));
+  ThemeDefinition reread;
+  reread.read(json);
+  QCOMPARE(reread.colors.gitAdded, reread.colors.statusSuccess);
+}
+
+void TestTheme::testStyleHelperSelectionTextIsReadable() {
+  for (ThemeDefinition preset : allPresets()) {
+    preset.normalize();
+    const ThemeDefinition readable = preset.readable();
+    const Theme classic = readable.toClassicTheme();
+    const ThemeColors &c = readable.colors;
+
+    struct Check {
+      QString label;
+      QString style;
+      QColor background;
+    };
+    const QVector<Check> checks = {
+        {"combo(def)", UIStyleHelper::comboBoxStyle(readable),
+         c.inputSelection},
+        {"combo(classic)", UIStyleHelper::comboBoxStyle(classic),
+         classic.accentSoftColor},
+        {"lineEdit(def)", UIStyleHelper::lineEditStyle(readable),
+         c.inputSelection},
+        {"lineEdit(classic)", UIStyleHelper::lineEditStyle(classic),
+         classic.accentSoftColor},
+        {"tree(def)", UIStyleHelper::treeWidgetStyle(readable),
+         c.treeSelectedBg},
+        {"tree(classic)", UIStyleHelper::treeWidgetStyle(classic),
+         classic.accentSoftColor},
+        {"table(def)", UIStyleHelper::tableWidgetStyle(readable), c.accentSoft},
+        {"table(classic)", UIStyleHelper::tableWidgetStyle(classic),
+         classic.accentSoftColor},
+    };
+    for (const Check &check : checks) {
+      const QVector<QColor> colors =
+          declaredColors(check.style, QStringLiteral("selection-color"));
+      QVERIFY2(!colors.isEmpty(), qPrintable(check.label));
+      const QColor bg = ColorContrast::flatten(check.background, c.surfaceBase);
+      for (const QColor &fg : colors) {
+        QVERIFY2(ColorContrast::ratio(fg, bg) >= 4.4,
+                 qPrintable(QString("%1 %2: %3 on %4")
+                                .arg(readable.name, check.label, fg.name(),
+                                     bg.name())));
+      }
+    }
+
+    for (UIStyleHelper::Tone tone :
+         {UIStyleHelper::Tone::Neutral, UIStyleHelper::Tone::Accent,
+          UIStyleHelper::Tone::Success, UIStyleHelper::Tone::Warning,
+          UIStyleHelper::Tone::Error, UIStyleHelper::Tone::Info}) {
+      const QString badge = UIStyleHelper::badgeStyle(readable, tone);
+      const QVector<QColor> bgs =
+          declaredColors(badge, QStringLiteral("background"));
+      const QVector<QColor> fgs =
+          declaredColors(badge, QStringLiteral("color"));
+      QVERIFY(!bgs.isEmpty() && !fgs.isEmpty());
+      QVERIFY2(ColorContrast::ratio(fgs.first(), bgs.first()) >= 4.4,
+               qPrintable(QString("%1 badge tone %2")
+                              .arg(readable.name)
+                              .arg(static_cast<int>(tone))));
+    }
+  }
+}
+
+void TestTheme::testThemeEngineKeepsAuthoredSourceTheme() {
+  ThemeEngine &engine = ThemeEngine::instance();
+  engine.setActiveTheme(QStringLiteral("Nord"));
+  const ThemeDefinition authored = engine.themeByName(QStringLiteral("Nord"));
+  QCOMPARE(engine.activeThemeSource().colors.textMuted,
+           authored.colors.textMuted);
+  QVERIFY(engine.activeTheme().colors.textMuted != authored.colors.textMuted);
+  QVERIFY(ColorContrast::ratio(engine.activeTheme().colors.textMuted,
+                               engine.activeTheme().colors.surfaceBase) >= 3.0);
+  engine.setActiveTheme(QStringLiteral("Hacker Dark"));
+}
+
+void TestTheme::testContrastEnsureReachesTarget() {
+  const QColor darkBg("#101418");
+  const QColor lightBg("#f6f8fa");
+  const QColor adjustedOnDark =
+      ColorContrast::ensure(QColor("#202830"), darkBg);
+  QVERIFY(ColorContrast::ratio(adjustedOnDark, darkBg) >= 4.5);
+  const QColor adjustedOnLight =
+      ColorContrast::ensure(QColor("#e0e4e8"), lightBg);
+  QVERIFY(ColorContrast::ratio(adjustedOnLight, lightBg) >= 4.5);
+  const QColor untouched = ColorContrast::ensure(QColor("#ffffff"), darkBg);
+  QCOMPARE(untouched, QColor("#ffffff"));
+  QCOMPARE(ColorContrast::bestOf(QColor("#0969da"),
+                                 {QColor("#0969da"), QColor("#ffffff")}),
+           QColor("#ffffff"));
 }
 
 QTEST_MAIN(TestTheme)

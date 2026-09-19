@@ -2,11 +2,13 @@
 #include "../git/gitintegration.h"
 #include "../run_templates/runtemplatemanager.h"
 #include "../test_templates/testfileclassifier.h"
+#include "../theme/colorcontrast.h"
 #include "../theme/themeengine.h"
 #include "../ui/mainwindow.h"
 #include "../ui/panels/minimap.h"
 #include "../ui/uistylehelper.h"
 #include <QAction>
+#include <QApplication>
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QDragEnterEvent>
@@ -38,23 +40,12 @@ public:
   explicit ExplorerTreeDelegate(QObject *parent = nullptr)
       : QStyledItemDelegate(parent) {}
 
-  void setTheme(const Theme &theme) {
-    m_textColor = theme.foregroundColor;
-    m_selectedTextColor = theme.foregroundColor;
-    m_hoverBackground = theme.hoverColor.lighter(112);
-    m_selectedBackground = theme.accentSoftColor.lighter(115);
-    m_selectedBorder = theme.accentColor;
-  }
-
   void setTheme(const ThemeDefinition &theme) {
     m_textColor = theme.colors.textPrimary;
-    m_selectedTextColor = theme.colors.textPrimary;
-    m_hoverBackground = theme.colors.treeHoverBg.isValid()
-                            ? theme.colors.treeHoverBg
-                            : theme.colors.btnGhostHover;
-    m_selectedBackground = theme.colors.treeSelectedBg.isValid()
-                               ? theme.colors.treeSelectedBg
-                               : theme.colors.accentSoft;
+    m_hoverBackground = ColorContrast::flatten(theme.colors.treeHoverBg,
+                                               theme.colors.surfaceBase);
+    m_selectedBackground = ColorContrast::flatten(theme.colors.treeSelectedBg,
+                                                  theme.colors.surfaceBase);
     m_selectedBorder = theme.colors.accentPrimary;
   }
 
@@ -100,9 +91,21 @@ public:
     if (index.model() && index.model()->hasChildren(index)) {
       opt.font.setWeight(QFont::DemiBold);
     }
+    const QColor rowBackground =
+        isSelected ? m_selectedBackground
+                   : (isHovered ? m_hoverBackground : QColor());
+    const QVariant itemForeground = index.data(Qt::ForegroundRole);
+    QColor textColor = itemForeground.canConvert<QColor>()
+                           ? itemForeground.value<QColor>()
+                           : m_textColor;
+    if (!textColor.isValid())
+      textColor = m_textColor;
+    if (rowBackground.isValid())
+      textColor = ColorContrast::ensure(textColor, rowBackground,
+                                        ColorContrast::SecondaryTextRatio);
     opt.palette.setColor(QPalette::Highlight, Qt::transparent);
-    opt.palette.setColor(QPalette::HighlightedText, m_selectedTextColor);
-    opt.palette.setColor(QPalette::Text, m_textColor);
+    opt.palette.setColor(QPalette::HighlightedText, textColor);
+    opt.palette.setColor(QPalette::Text, textColor);
 
     QStyledItemDelegate::paint(painter, opt, index);
 
@@ -111,7 +114,10 @@ public:
       badgeFont.setPixelSize(10);
       badgeFont.setWeight(QFont::Bold);
       painter->setFont(badgeFont);
-      painter->setPen(badgeColor);
+      painter->setPen(rowBackground.isValid()
+                          ? ColorContrast::ensure(badgeColor, rowBackground,
+                                                  ColorContrast::GlyphRatio)
+                          : badgeColor);
       QRect badgeRect(rowRect.right() - 18, rowRect.top(), 16,
                       rowRect.height());
       painter->drawText(badgeRect, Qt::AlignCenter, badge);
@@ -128,11 +134,12 @@ public:
   }
 
 private:
-  QColor m_textColor = QColor("#dce4ee");
-  QColor m_selectedTextColor = QColor("#eef4ff");
-  QColor m_hoverBackground = QColor("#232a33");
-  QColor m_selectedBackground = QColor("#1f3554");
-  QColor m_selectedBorder = QColor("#5fa8ff");
+  QColor m_textColor = QApplication::palette().color(QPalette::Text);
+  QColor m_hoverBackground =
+      QApplication::palette().color(QPalette::AlternateBase);
+  QColor m_selectedBackground =
+      QApplication::palette().color(QPalette::Highlight);
+  QColor m_selectedBorder = QApplication::palette().color(QPalette::Link);
 };
 } // namespace
 
@@ -1149,70 +1156,7 @@ void LightpadPage::refreshGitStatus() {
 }
 
 void LightpadPage::applyTheme(const Theme &theme) {
-  if (treeContainer) {
-    const QString panelTop = theme.surfaceColor.lighter(108).name();
-    const QString panelBottom = theme.surfaceColor.darker(102).name();
-    const QString border = theme.borderColor.name();
-    const QString muted = theme.singleLineCommentFormat.name();
-    const QString fg = theme.foregroundColor.name();
-    const QString filterBg = theme.surfaceAltColor.lighter(105).name();
-    const QString filterFocusBg = theme.surfaceAltColor.lighter(112).name();
-    const QString accent = theme.accentColor.name();
-    const QString pressed = theme.pressedColor.name();
-    treeContainer->setStyleSheet(
-        QString("#treeContainer {"
-                "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, "
-                "stop: 0 %1, stop: 1 %2);"
-                "  border-right: 1px solid %3;"
-                "}"
-                "#treeHeader {"
-                "  background: transparent;"
-                "  border-bottom: 1px solid %3;"
-                "}"
-                "QLabel#treeTitleLabel {"
-                "  color: %4;"
-                "  font-size: 10px;"
-                "  font-weight: 700;"
-                "  letter-spacing: 1px;"
-                "  padding: 2px 0;"
-                "}"
-                "QLineEdit#treeFilterEdit {"
-                "  background: %6;"
-                "  color: %5;"
-                "  border: 1px solid %3;"
-                "  border-radius: 8px;"
-                "  padding: 7px 10px;"
-                "}"
-                "QLineEdit#treeFilterEdit:focus {"
-                "  background: %7;"
-                "  border: 1px solid %8;"
-                "}"
-                "QToolButton#treeToolButton {"
-                "  background: %6;"
-                "  border: 1px solid %3;"
-                "  border-radius: 7px;"
-                "  padding: 4px;"
-                "  color: %5;"
-                "}"
-                "QToolButton#treeToolButton:hover {"
-                "  background: %7;"
-                "  border-color: %8;"
-                "}"
-                "QToolButton#treeToolButton:pressed {"
-                "  background: %9;"
-                "}")
-            .arg(panelTop, panelBottom, border, muted, fg, filterBg,
-                 filterFocusBg, accent, pressed));
-  }
-
-  if (treeView) {
-    treeView->setStyleSheet(UIStyleHelper::treeViewStyle(theme));
-    if (auto *delegate =
-            dynamic_cast<ExplorerTreeDelegate *>(treeView->itemDelegate())) {
-      delegate->setTheme(theme);
-    }
-    treeView->viewport()->update();
-  }
+  applyTheme(ThemeDefinition::fromClassicTheme(theme, QStringLiteral("Page")));
 }
 
 void LightpadPage::applyTheme(const ThemeDefinition &theme) {
@@ -1287,9 +1231,30 @@ void LightpadPage::applyTheme(const ThemeDefinition &theme) {
                  filterFocusBg, accent, pressed));
   }
 
+  if (minimap) {
+    minimap->setThemeColors(theme.colors.editorBg, theme.colors.editorFg,
+                            theme.colors.accentPrimary);
+  }
+
+  if (model) {
+    const ThemeColors &c = theme.colors;
+    const QColor base = ColorContrast::flatten(c.surfaceRaised, c.surfaceBase);
+    auto readable = [&](const QColor &color) {
+      return ColorContrast::ensureOnAll(color, {base, c.surfaceBase},
+                                        ColorContrast::SecondaryTextRatio);
+    };
+    GitFileSystemModel::StatusColors colors;
+    colors.modified = readable(c.gitModified);
+    colors.staged = readable(c.gitAdded);
+    colors.untracked = readable(c.gitUntracked);
+    colors.added = readable(c.gitAdded);
+    colors.deleted = readable(c.gitDeleted);
+    colors.conflict = readable(c.gitConflicted);
+    model->setStatusColors(colors);
+  }
+
   if (treeView) {
-    treeView->setStyleSheet(
-        UIStyleHelper::treeViewStyle(theme.toClassicTheme()));
+    treeView->setStyleSheet(UIStyleHelper::treeViewStyle(theme));
     if (auto *delegate =
             dynamic_cast<ExplorerTreeDelegate *>(treeView->itemDelegate())) {
       delegate->setTheme(theme);

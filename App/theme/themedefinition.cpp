@@ -1,5 +1,6 @@
 #include "themedefinition.h"
 #include "../settings/theme.h"
+#include "colorcontrast.h"
 
 #include <QJsonArray>
 #include <QtGlobal>
@@ -661,6 +662,120 @@ void ThemeDefinition::normalize() {
   ensure(colors.debugCurrentLine, colors.accentPrimary);
 }
 
+void ThemeDefinition::rederiveSemanticColors() {
+  for (QColor *token : {&colors.diagnosticError, &colors.diagnosticWarning,
+                        &colors.diagnosticInfo,  &colors.diagnosticHint,
+                        &colors.gitAdded,        &colors.gitModified,
+                        &colors.gitDeleted,      &colors.gitRenamed,
+                        &colors.gitCopied,       &colors.gitUntracked,
+                        &colors.gitConflicted,   &colors.gitIgnored,
+                        &colors.diffAdded,       &colors.diffModified,
+                        &colors.diffRemoved,     &colors.diffConflict,
+                        &colors.testPassed,      &colors.testFailed,
+                        &colors.testSkipped,     &colors.testRunning,
+                        &colors.testQueued,      &colors.debugReady,
+                        &colors.debugStarting,   &colors.debugRunning,
+                        &colors.debugPaused,     &colors.debugError,
+                        &colors.debugBreakpoint, &colors.debugCurrentLine}) {
+    *token = QColor();
+  }
+  normalize();
+}
+
+void ThemeDefinition::ensureReadable() {
+  using namespace ColorContrast;
+  ThemeColors &c = colors;
+  const QColor base = flatten(c.surfaceBase, QColor(Qt::black));
+  auto solid = [&](const QColor &color) { return flatten(color, base); };
+
+  const QColor raised = solid(c.surfaceRaised);
+  const QColor overlay = solid(c.surfaceOverlay);
+  const QColor popover = solid(c.surfacePopover);
+  const QColor accentSoft = solid(c.accentSoft);
+  const QColor treeSelected = solid(c.treeSelectedBg);
+  const QColor treeHover = solid(c.treeHoverBg);
+
+  c.textPrimary =
+      ensureOnAll(c.textPrimary, {base, raised, overlay, popover, accentSoft,
+                                  treeSelected, treeHover});
+  c.textSecondary = ensureOnAll(c.textSecondary, {base, raised, popover});
+  c.textMuted = ensureOnAll(c.textMuted, {base, raised, overlay}, GlyphRatio);
+  c.textDisabled = ensureOnAll(c.textDisabled, {base, raised}, 2.0);
+  c.textLink = ensureOnAll(c.textLink, {base, raised});
+  c.accentPrimary = ensureOnAll(c.accentPrimary, {base, raised}, GlyphRatio);
+  c.borderFocus = ensureOnAll(c.borderFocus, {base, raised}, GlyphRatio);
+
+  c.inputFg =
+      ensureOnAll(c.inputFg, {solid(c.inputBg), solid(c.inputSelection)});
+  c.inputPlaceholder = ensure(c.inputPlaceholder, solid(c.inputBg), 2.8);
+
+  c.tabFg = ensureOnAll(c.tabFg, {solid(c.tabBg)}, SecondaryTextRatio);
+  c.tabActiveFg = ensureOnAll(c.tabActiveFg, {solid(c.tabActiveBg)});
+
+  const QColor editorBg = flatten(c.editorBg, QColor(Qt::black));
+  c.editorFg = ensureOnAll(
+      c.editorFg, {editorBg, flatten(c.editorLineHighlight, editorBg)});
+  c.editorGutterFg =
+      ensure(c.editorGutterFg, flatten(c.editorGutter, editorBg), GlyphRatio);
+  c.editorSelectionFg =
+      ensure(c.editorSelectionFg, flatten(c.editorSelection, editorBg));
+  for (QColor *syntax :
+       {&c.syntaxKeyword, &c.syntaxKeyword2, &c.syntaxKeyword3, &c.syntaxString,
+        &c.syntaxFunction, &c.syntaxClass, &c.syntaxNumber, &c.syntaxOperator,
+        &c.syntaxType, &c.syntaxConstant, &c.syntaxTag, &c.syntaxAttribute,
+        &c.syntaxRegex, &c.syntaxEscape}) {
+    *syntax = ensure(*syntax, editorBg, GlyphRatio);
+  }
+  c.syntaxComment = ensure(c.syntaxComment, editorBg, 2.6);
+
+  const QColor termBg = flatten(c.termBg, QColor(Qt::black));
+  c.termFg = ensure(c.termFg, termBg);
+
+  c.btnSecondaryFg = ensureOnAll(
+      c.btnSecondaryFg, {solid(c.btnSecondaryBg), solid(c.btnSecondaryHover),
+                         solid(c.btnSecondaryActive)});
+  auto fillBehind = [&](QColor &fill, const QColor &label) {
+    if (!fill.isValid() || !label.isValid())
+      return;
+    fill = solid(fill);
+    if (ratio(fill, label) >= TextRatio)
+      return;
+    const QColor away = isDark(label) ? QColor(Qt::white) : QColor(Qt::black);
+    for (int step = 1; step <= 20 && ratio(fill, label) < TextRatio; ++step)
+      fill = ColorContrast::mix(fill, away, 0.05);
+  };
+  fillBehind(c.btnPrimaryBg, c.btnPrimaryFg);
+  fillBehind(c.btnPrimaryHover, c.btnPrimaryFg);
+  fillBehind(c.btnPrimaryActive, c.btnPrimaryFg);
+  fillBehind(c.btnDangerBg, c.btnDangerFg);
+  fillBehind(c.btnDangerHover, c.btnDangerFg);
+  fillBehind(c.btnDangerActive, c.btnDangerFg);
+
+  c.textInverse =
+      bestOf(c.accentPrimary, {c.textInverse, c.surfaceBase, c.textPrimary,
+                               QColor(Qt::black), QColor(Qt::white)});
+
+  for (QColor *status :
+       {&c.statusSuccess,  &c.statusWarning,   &c.statusError,
+        &c.statusInfo,     &c.diagnosticError, &c.diagnosticWarning,
+        &c.diagnosticInfo, &c.diagnosticHint,  &c.gitAdded,
+        &c.gitModified,    &c.gitDeleted,      &c.gitRenamed,
+        &c.gitCopied,      &c.gitUntracked,    &c.gitConflicted,
+        &c.testPassed,     &c.testFailed,      &c.testSkipped,
+        &c.testRunning,    &c.testQueued,      &c.debugReady,
+        &c.debugStarting,  &c.debugRunning,    &c.debugPaused,
+        &c.debugError,     &c.debugBreakpoint, &c.debugCurrentLine}) {
+    *status = ensureOnAll(*status, {base, raised}, GlyphRatio);
+  }
+  c.gitIgnored = ensureOnAll(c.gitIgnored, {base, raised}, 2.0);
+}
+
+ThemeDefinition ThemeDefinition::readable() const {
+  ThemeDefinition copy = *this;
+  copy.ensureReadable();
+  return copy;
+}
+
 void ThemeDefinition::read(const QJsonObject &json) {
   if (json.contains("name") && json["name"].isString())
     name = json["name"].toString();
@@ -674,6 +789,7 @@ void ThemeDefinition::read(const QJsonObject &json) {
     if (src.isValid())
       dest = src;
   };
+  auto derive = [](QColor &dest, const QColor &src) { dest = src; };
 
   apply(colors.editorBg, c("editor.background"));
   apply(colors.editorFg, c("editor.foreground"));
@@ -791,34 +907,34 @@ void ThemeDefinition::read(const QJsonObject &json) {
   apply(colors.statusWarning, c("status.warning"));
   apply(colors.statusError, c("status.error"));
   apply(colors.statusInfo, c("status.info"));
-  apply(colors.diagnosticError, c("diagnostic.error"));
-  apply(colors.diagnosticWarning, c("diagnostic.warning"));
-  apply(colors.diagnosticInfo, c("diagnostic.info"));
-  apply(colors.diagnosticHint, c("diagnostic.hint"));
-  apply(colors.gitAdded, c("git.added"));
-  apply(colors.gitModified, c("git.modified"));
-  apply(colors.gitDeleted, c("git.deleted"));
-  apply(colors.gitRenamed, c("git.renamed"));
-  apply(colors.gitCopied, c("git.copied"));
-  apply(colors.gitUntracked, c("git.untracked"));
-  apply(colors.gitConflicted, c("git.conflicted"));
-  apply(colors.gitIgnored, c("git.ignored"));
-  apply(colors.diffAdded, c("diff.added"));
-  apply(colors.diffModified, c("diff.modified"));
-  apply(colors.diffRemoved, c("diff.removed"));
-  apply(colors.diffConflict, c("diff.conflict"));
-  apply(colors.testPassed, c("test.passed"));
-  apply(colors.testFailed, c("test.failed"));
-  apply(colors.testSkipped, c("test.skipped"));
-  apply(colors.testRunning, c("test.running"));
-  apply(colors.testQueued, c("test.queued"));
-  apply(colors.debugReady, c("debug.ready"));
-  apply(colors.debugStarting, c("debug.starting"));
-  apply(colors.debugRunning, c("debug.running"));
-  apply(colors.debugPaused, c("debug.paused"));
-  apply(colors.debugError, c("debug.error"));
-  apply(colors.debugBreakpoint, c("debug.breakpoint"));
-  apply(colors.debugCurrentLine, c("debug.currentLine"));
+  derive(colors.diagnosticError, c("diagnostic.error"));
+  derive(colors.diagnosticWarning, c("diagnostic.warning"));
+  derive(colors.diagnosticInfo, c("diagnostic.info"));
+  derive(colors.diagnosticHint, c("diagnostic.hint"));
+  derive(colors.gitAdded, c("git.added"));
+  derive(colors.gitModified, c("git.modified"));
+  derive(colors.gitDeleted, c("git.deleted"));
+  derive(colors.gitRenamed, c("git.renamed"));
+  derive(colors.gitCopied, c("git.copied"));
+  derive(colors.gitUntracked, c("git.untracked"));
+  derive(colors.gitConflicted, c("git.conflicted"));
+  derive(colors.gitIgnored, c("git.ignored"));
+  derive(colors.diffAdded, c("diff.added"));
+  derive(colors.diffModified, c("diff.modified"));
+  derive(colors.diffRemoved, c("diff.removed"));
+  derive(colors.diffConflict, c("diff.conflict"));
+  derive(colors.testPassed, c("test.passed"));
+  derive(colors.testFailed, c("test.failed"));
+  derive(colors.testSkipped, c("test.skipped"));
+  derive(colors.testRunning, c("test.running"));
+  derive(colors.testQueued, c("test.queued"));
+  derive(colors.debugReady, c("debug.ready"));
+  derive(colors.debugStarting, c("debug.starting"));
+  derive(colors.debugRunning, c("debug.running"));
+  derive(colors.debugPaused, c("debug.paused"));
+  derive(colors.debugError, c("debug.error"));
+  derive(colors.debugBreakpoint, c("debug.breakpoint"));
+  derive(colors.debugCurrentLine, c("debug.currentLine"));
 
   if (json.contains("ui") && json["ui"].isObject()) {
     QJsonObject uiObj = json["ui"].toObject();

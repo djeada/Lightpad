@@ -846,6 +846,7 @@ add_test(NAME GitRepositoryStateTests COMMAND test_gitrepositorystate)
 add_executable(test_repositorystatemapwidget
     unit/test_repositorystatemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/widgets/repositorystatemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/widgets/flowlayout.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
@@ -1026,6 +1027,7 @@ add_test(NAME StagingCanvasDialogTests COMMAND test_stagingcanvasdialog)
 add_executable(test_gitgraphwidget
     unit/test_gitgraphwidget.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/widgets/gitgraphwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp

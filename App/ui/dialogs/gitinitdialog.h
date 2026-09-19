@@ -50,6 +50,9 @@ private:
   QLineEdit *m_remoteEdit;
   QPushButton *m_initButton;
   QPushButton *m_cancelButton;
+  QLabel *m_iconLabel = nullptr;
+  QLabel *m_titleLabel = nullptr;
+  QLabel *m_subtitleLabel = nullptr;
 };
 
 #endif

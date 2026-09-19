@@ -1,5 +1,6 @@
 #include "latexpreviewpanel.h"
 #include "../core/logging/logger.h"
+#include "../theme/colorcontrast.h"
 #include "latextools.h"
 #include <QAction>
 #include <QCheckBox>
@@ -259,8 +260,11 @@ void LatexPreviewPanel::appendLog(const QString &text, const QString &color) {
   if (color.isEmpty()) {
     m_logBrowser->append(text);
   } else {
+    const QColor readable = ColorContrast::ensure(
+        QColor(color), m_logBrowser->palette().color(QPalette::Base),
+        ColorContrast::SecondaryTextRatio);
     m_logBrowser->append(QString("<span style=\"color: %1;\">%2</span>")
-                             .arg(color, text.toHtmlEscaped()));
+                             .arg(readable.name(), text.toHtmlEscaped()));
   }
 
   QScrollBar *sb = m_logBrowser->verticalScrollBar();

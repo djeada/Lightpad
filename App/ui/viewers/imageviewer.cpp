@@ -1,7 +1,10 @@
 #include "imageviewer.h"
+#include "../../theme/colorcontrast.h"
 #include "../dialogs/themedmessagebox.h"
+#include <QEvent>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QPainter>
 #include <QShowEvent>
 #include <QWheelEvent>
 
@@ -26,7 +29,7 @@ void ImageViewer::setupUi() {
                                  QPainter::SmoothPixmapTransform);
   m_graphicsView->setDragMode(QGraphicsView::ScrollHandDrag);
   m_graphicsView->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
-  m_graphicsView->setBackgroundBrush(QBrush(QColor(40, 40, 40)));
+  updateBackground();
   layout->addWidget(m_graphicsView, 1);
 
   auto *infoBar = new QHBoxLayout();
@@ -39,6 +42,31 @@ void ImageViewer::setupUi() {
   layout->addLayout(infoBar);
 
   setLayout(layout);
+}
+
+void ImageViewer::updateBackground() {
+  if (!m_graphicsView) {
+    return;
+  }
+  const QColor base = palette().color(QPalette::Base);
+  const QColor alt =
+      ColorContrast::mix(base, palette().color(QPalette::Text), 0.06);
+  constexpr int cell = 8;
+  QPixmap tile(cell * 2, cell * 2);
+  tile.fill(base);
+  QPainter painter(&tile);
+  painter.fillRect(0, 0, cell, cell, alt);
+  painter.fillRect(cell, cell, cell, cell, alt);
+  painter.end();
+  m_graphicsView->setBackgroundBrush(QBrush(tile));
+}
+
+void ImageViewer::changeEvent(QEvent *event) {
+  QWidget::changeEvent(event);
+  if (event->type() == QEvent::PaletteChange ||
+      event->type() == QEvent::ApplicationPaletteChange) {
+    updateBackground();
+  }
 }
 
 void ImageViewer::setupToolbar() {

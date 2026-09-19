@@ -1,4 +1,5 @@
 #include "hackercheckbox.h"
+#include "../../../theme/colorcontrast.h"
 #include "../../../theme/themeengine.h"
 #include <QFontMetrics>
 #include <QKeyEvent>
@@ -89,7 +90,10 @@ void HackerCheckBox::paintEvent(QPaintEvent *) {
   if (m_checkProgress > 0.05) {
     p.save();
     p.setClipRect(boxRect);
-    QPen checkPen(Qt::white, 2.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    QPen checkPen(
+        ColorContrast::bestOf(c.accentPrimary,
+                              {c.textInverse, c.surfaceBase, c.textPrimary}),
+        2.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
     p.setPen(checkPen);
     p.setBrush(Qt::NoBrush);
 

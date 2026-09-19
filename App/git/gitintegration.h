@@ -10,6 +10,7 @@
 #include "gitrebaseplan.h"
 #include "gitrepositorystate.h"
 #include "gitsyncmodel.h"
+#include <QByteArray>
 #include <QMap>
 #include <QObject>
 #include <QProcess>
@@ -18,6 +19,9 @@
 #include <functional>
 
 constexpr int GIT_COMMAND_TIMEOUT_MS = 5000;
+constexpr int GIT_AUTO_REFRESH_INTERVAL_MS = 30000;
+
+class QTimer;
 
 enum class GitFileStatus {
   Untracked,
@@ -524,6 +528,16 @@ public:
 
   bool unsetUpstream(const QString &branchName);
 
+  void setAutoRefreshInterval(int intervalMs);
+  int autoRefreshInterval() const;
+
+  void setAutoRefreshGate(const std::function<bool()> &gate);
+
+  void checkForExternalChanges();
+
+  static QByteArray repositoryFingerprint(const QString &repositoryPath,
+                                          QStringList *conflictedFiles);
+
 signals:
 
   void statusChanged();
@@ -544,7 +558,22 @@ signals:
 
   void pullCompleted(const QString &remoteName, const QString &branchName);
 
+  void externalChangesDetected();
+
 private:
+  QTimer *m_autoRefreshTimer;
+  QTimer *m_rebaselineTimer;
+  std::function<bool()> m_autoRefreshGate;
+  QByteArray m_repositoryFingerprint;
+  QStringList m_knownConflicts;
+  quint64 m_fingerprintGeneration = 0;
+  bool m_fingerprintCheckRunning = false;
+  bool m_announcingExternalChange = false;
+
+  void startFingerprintCheck(bool announceChanges);
+  void applyFingerprint(quint64 generation, const QByteArray &fingerprint,
+                        const QStringList &conflicts, bool announceChanges);
+
   QString m_repositoryPath;
   QString m_workingPath;
   bool m_isValid;

@@ -103,6 +103,7 @@ public:
   void setGitBlameEnabledForFile(const QString &filePath, bool enabled);
   void updateInlineBlameForCurrentFile();
   void updateGitStatusBar();
+  void updateGitGutterForCurrentFile(const QString &path = QString());
   void updateHeatmapForCurrentFile();
   void updateCodeLensForCurrentFile();
   void showFileHistory();
@@ -307,6 +308,7 @@ private:
   class HackerScanlineOverlay *m_scanlineOverlay = nullptr;
   class QToolButton *m_lspStatusLabel;
   QString m_lspStatusLanguageId;
+  QString m_lspStatusState;
   QMap<QString, int> m_documentVersions;
   QMap<QString, QTimer *> m_diagnosticsChangeTimers;
   QMap<QString, QString> m_pendingDiagnosticsTexts;
@@ -430,6 +432,7 @@ private:
   void updateSourceControlDockTitle(const QString &repoRoot, bool isRepo);
   void updateProblemsStatusLabel(int errors, int warnings, int infos);
   void refreshProblemsStatusForCurrentFile();
+  void restyleStatusBarItems();
   void updateVimStatusLabel(const QString &text);
   void showVimStatusMessage(const QString &message);
   void setMainWindowTitle(QString title);

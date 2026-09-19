@@ -96,6 +96,9 @@ public:
   void read(const QJsonObject &json);
   void write(QJsonObject &json) const;
   void normalize();
+  void rederiveSemanticColors();
+  void ensureReadable();
+  ThemeDefinition readable() const;
 
   static QColor lerp(const QColor &a, const QColor &b, qreal t);
 };

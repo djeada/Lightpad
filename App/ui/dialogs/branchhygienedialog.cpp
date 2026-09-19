@@ -2,6 +2,7 @@
 #include "../../git/gitintegration.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "operationpreviewdialog.h"
 #include "themedmessagebox.h"
 #include <QComboBox>
@@ -46,6 +47,7 @@ BranchHygieneDialog::BranchHygieneDialog(GitIntegration *git,
   setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void BranchHygieneDialog::buildUi() {
@@ -431,45 +433,18 @@ void BranchHygieneDialog::onShowInGraph() {
 
 void BranchHygieneDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  if (m_branchTree) {
-    m_branchTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-  }
-  if (m_baseCombo) {
-    m_baseCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-  }
   if (m_filterEdit) {
     m_filterEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
   }
-  if (m_stateList) {
-    m_stateList->setStyleSheet(
-        QString("QListWidget { background: %1; color: %2; border: 1px solid "
-                "%3; }")
-            .arg(theme.surfaceColor.name(),
-                 theme.singleLineCommentFormat.name(),
-                 theme.borderColor.name()));
-  }
-  if (m_detailLabel) {
-    m_detailLabel->setStyleSheet(
-        QString("color: %1;").arg(theme.foregroundColor.name()));
-  }
+  styleSubduedLabel(findChild<QLabel *>(QStringLiteral("hygieneBaseLabel")));
   if (m_warningLabel) {
     const GitBranchHealth *branch = currentBranch();
     const bool safe = branch && branch->deleteWarning().isEmpty();
-    m_warningLabel->setStyleSheet(
-        QString("color: %1;")
-            .arg((safe ? theme.successColor : theme.warningColor).name()));
-  }
-  for (QPushButton *button :
-       {m_pinButton, m_graphButton, m_upstreamButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
+    styleToneLabel(m_warningLabel, safe ? UIStyleHelper::Tone::Success
+                                        : UIStyleHelper::Tone::Warning);
   }
   for (QPushButton *button : {m_deleteButton, m_cleanupButton}) {
-    if (button) {
-      styleDangerButton(button);
-    }
+    styleDangerButton(button);
   }
 }

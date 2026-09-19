@@ -93,7 +93,7 @@ void OperationPreviewDialog::buildUi() {
   m_riskLabel = new QLabel(this);
   m_riskLabel->setObjectName(QStringLiteral("previewRiskLabel"));
   m_riskLabel->setText(gitOperationRiskName(m_preview.effect.risk));
-  layout->addWidget(m_riskLabel);
+  layout->addWidget(m_riskLabel, 0, Qt::AlignLeft);
 
   m_rationaleLabel = new QLabel(m_preview.effect.rationale, this);
   m_rationaleLabel->setObjectName(QStringLiteral("previewRationaleLabel"));
@@ -253,47 +253,35 @@ void OperationPreviewDialog::fillGraph(QListWidget *list,
 
 void OperationPreviewDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  QColor riskColor = theme.successColor;
+  UIStyleHelper::Tone riskTone = UIStyleHelper::Tone::Success;
   switch (m_preview.effect.risk) {
   case GitOperationRisk::Safe:
-    riskColor = theme.successColor;
+    riskTone = UIStyleHelper::Tone::Success;
     break;
   case GitOperationRisk::RewritesLocalHistory:
-    riskColor = theme.warningColor;
+    riskTone = UIStyleHelper::Tone::Warning;
     break;
   case GitOperationRisk::MayDiscardUncommitted:
   case GitOperationRisk::AffectsSharedHistory:
-    riskColor = theme.errorColor;
+    riskTone = UIStyleHelper::Tone::Error;
     break;
   }
 
-  if (m_headlineLabel) {
-    styleTitleLabel(m_headlineLabel);
-  }
-  if (m_riskLabel) {
-    m_riskLabel->setStyleSheet(
-        QString("QLabel { color: %1; border: 1px solid %1; border-radius: "
-                "%2px; padding: 2px 8px; font-weight: bold; }")
-            .arg(riskColor.name())
-            .arg(UiMetrics::RadiusSm));
-  }
+  styleTitleLabel(m_headlineLabel);
+  styleBadge(m_riskLabel, riskTone);
   for (const char *name : {"previewRationaleLabel", "previewLayersLabel",
-                           "previewCommandLabel", "previewLegendLabel",
-                           "previewBeforeListLabel", "previewAfterListLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
+                           "previewCommandLabel", "previewLegendLabel"}) {
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
+  }
+  for (const char *name : {"previewBeforeListLabel", "previewAfterListLabel"}) {
+    styleSectionLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
 
-  const auto styleGraph = [&](QListWidget *list) {
+  for (QListWidget *list : {m_beforeList, m_afterList}) {
     if (!list) {
-      return;
+      continue;
     }
-    list->setStyleSheet(
-        QString("QListWidget { background: %1; border: 1px solid %2; }")
-            .arg(theme.surfaceColor.name(), theme.borderColor.name()));
     for (int i = 0; i < list->count(); ++i) {
       QListWidgetItem *item = list->item(i);
       switch (
@@ -312,37 +300,24 @@ void OperationPreviewDialog::applyTheme(const Theme &theme) {
         break;
       }
     }
-  };
-  styleGraph(m_beforeList);
-  styleGraph(m_afterList);
+  }
 
   if (m_riskList) {
-
     const bool hasWarnings = !m_preview.effect.atRiskPaths.isEmpty() ||
                              !m_preview.effect.conflictPaths.isEmpty();
-    const QColor listColor = !m_preview.effect.atRiskPaths.isEmpty()
-                                 ? theme.errorColor
-                             : hasWarnings ? theme.warningColor
-                                           : theme.singleLineCommentFormat;
+    const QColor listColor =
+        !m_preview.effect.atRiskPaths.isEmpty()
+            ? UIStyleHelper::toneColor(theme, UIStyleHelper::Tone::Error)
+        : hasWarnings
+            ? UIStyleHelper::toneColor(theme, UIStyleHelper::Tone::Warning)
+            : UIStyleHelper::secondaryTextColor(theme);
     m_riskList->setStyleSheet(
-        QString("QListWidget { background: %1; color: %2; border: 1px solid "
-                "%3; }")
-            .arg(theme.surfaceColor.name(), listColor.name(),
-                 theme.borderColor.name()));
+        UIStyleHelper::listWidgetStyle(theme) +
+        QString("QListWidget { color: %1; }").arg(listColor.name()));
   }
-  if (m_skipSafeCheck) {
-    m_skipSafeCheck->setStyleSheet(
-        UIStyleHelper::checkBoxStyle(theme) +
-        QString("QCheckBox { color: %1; }").arg(theme.foregroundColor.name()));
-  }
-  if (m_cancelButton) {
-    styleSecondaryButton(m_cancelButton);
-  }
-  if (m_proceedButton) {
-    if (m_preview.effect.risk == GitOperationRisk::Safe) {
-      stylePrimaryButton(m_proceedButton);
-    } else {
-      styleDangerButton(m_proceedButton);
-    }
+  if (m_preview.effect.risk == GitOperationRisk::Safe) {
+    stylePrimaryButton(m_proceedButton);
+  } else {
+    styleDangerButton(m_proceedButton);
   }
 }

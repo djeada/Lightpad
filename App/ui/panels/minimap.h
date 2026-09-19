@@ -31,6 +31,9 @@ public:
 
   void setBackgroundColor(const QColor &color);
 
+  void setThemeColors(const QColor &editorBackground,
+                      const QColor &editorForeground, const QColor &accent);
+
 signals:
 
   void scrollRequested(int lineNumber);
@@ -66,6 +69,8 @@ private:
   QRect m_viewportRect;
   QColor m_viewportColor;
   QColor m_backgroundColor;
+  QColor m_glyphColor;
+  QColor m_borderColor;
 
   qreal m_charWidth;
   qreal m_lineHeight;

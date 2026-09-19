@@ -37,6 +37,19 @@ QString joinArgumentsForDisplay(const QStringList &args) {
 }
 } // namespace
 
+namespace {
+QString commandPreviewStyle(const Theme &theme) {
+  const QColor fill = theme.surfaceAltColor.isValid() ? theme.surfaceAltColor
+                                                      : theme.surfaceColor;
+  return QString("font-family: monospace; background-color: %1; color: %2; "
+                 "border: 1px solid %3; padding: 6px; border-radius: 6px;")
+      .arg(fill.name(),
+           UIStyleHelper::readableText(theme, fill, theme.foregroundColor)
+               .name(),
+           theme.borderColor.name());
+}
+} // namespace
+
 RunTemplateSelector::RunTemplateSelector(const QString &filePath,
                                          QWidget *parent)
     : StyledDialog(parent), m_filePath(filePath) {
@@ -130,9 +143,7 @@ void RunTemplateSelector::setupUi() {
 
   m_commandLabel = new QLabel();
   m_commandLabel->setWordWrap(true);
-  m_commandLabel->setStyleSheet(
-      "font-family: monospace; background-color: #1f2632; color: #e6edf3; "
-      "padding: 6px; border-radius: 6px;");
+  m_commandLabel->setStyleSheet(commandPreviewStyle(m_theme));
   templatesLayout->addWidget(m_commandLabel);
   leftLayout->addWidget(templatesGroup);
 
@@ -159,7 +170,8 @@ void RunTemplateSelector::setupUi() {
       "Additional source files for compilation (e.g., multi-file C/C++).\n"
       "Supports variables: ${fileDir}, ${workspaceFolder}");
   sourceHint->setWordWrap(true);
-  sourceHint->setStyleSheet("font-size: 11px; color: #8b949e;");
+  sourceHint->setObjectName(QStringLiteral("sourceFilesHint"));
+  sourceHint->setStyleSheet(UIStyleHelper::infoLabelStyle(m_theme));
   sourceLayout->addWidget(sourceHint);
 
   m_sourceFilesList = new QListWidget();
@@ -503,7 +515,11 @@ void RunTemplateSelector::applyTheme(const Theme &theme) {
   }
 
   styleSubduedLabel(m_descriptionLabel);
-  styleSubduedLabel(m_commandLabel);
+  m_commandLabel->setStyleSheet(commandPreviewStyle(theme));
+  if (auto *hint = findChild<QLabel *>(QStringLiteral("sourceFilesHint")))
+    hint->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
+  if (m_pythonEnvironmentWidget)
+    m_pythonEnvironmentWidget->applyTheme(theme);
 
   stylePrimaryButton(m_okButton);
   styleDangerButton(m_removeButton);

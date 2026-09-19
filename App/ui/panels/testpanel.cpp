@@ -1,4 +1,5 @@
 #include "testpanel.h"
+#include "../../theme/colorcontrast.h"
 #include "../dialogs/testconfigurationdialog.h"
 #include "../dialogs/themedmessagebox.h"
 #include "../uistylehelper.h"
@@ -159,13 +160,14 @@ public:
 
   void setTheme(const Theme &theme) {
     m_textColor = theme.foregroundColor;
+    m_baseBackground = theme.backgroundColor;
     m_hoverBackground =
-        QColor::fromRgbF(theme.hoverColor.redF(), theme.hoverColor.greenF(),
-                         theme.hoverColor.blueF(), 0.2);
-    m_selectedBackground = QColor::fromRgbF(
-        theme.accentSoftColor.redF(), theme.accentSoftColor.greenF(),
-        theme.accentSoftColor.blueF(), 0.18);
-    m_selectedBorder = theme.accentColor.lighter(102);
+        ColorContrast::mix(theme.backgroundColor, theme.hoverColor, 0.6);
+    m_selectedBackground = theme.accentSoftColor.isValid()
+                               ? theme.accentSoftColor
+                               : ColorContrast::mix(theme.backgroundColor,
+                                                    theme.accentColor, 0.25);
+    m_selectedBorder = theme.accentColor;
   }
 
   void paint(QPainter *painter, const QStyleOptionViewItem &option,
@@ -179,30 +181,57 @@ public:
     const bool isSelected = opt.state.testFlag(QStyle::State_Selected);
     const bool isHovered = opt.state.testFlag(QStyle::State_MouseOver);
 
+    const QColor base = m_baseBackground.isValid()
+                            ? m_baseBackground
+                            : option.palette.color(QPalette::Base);
+    const QColor hoverBg = m_hoverBackground.isValid()
+                               ? m_hoverBackground
+                               : option.palette.color(QPalette::AlternateBase);
+    const QColor selectedBg =
+        m_selectedBackground.isValid()
+            ? m_selectedBackground
+            : ColorContrast::mix(
+                  base, option.palette.color(QPalette::Highlight), 0.3);
+    const QColor selectedBorder =
+        m_selectedBorder.isValid() ? m_selectedBorder
+                                   : option.palette.color(QPalette::Highlight);
+
     QRect rowRect = opt.rect.adjusted(2, 1, -2, -1);
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, false);
 
+    QColor fill = base;
     if (isSelected || isHovered) {
-      const QColor bg = isSelected ? m_selectedBackground : m_hoverBackground;
+      fill = isSelected ? selectedBg : hoverBg;
       painter->setPen(Qt::NoPen);
-      painter->setBrush(bg);
+      painter->setBrush(fill);
       painter->drawRect(rowRect);
 
       if (isSelected) {
         painter->setPen(Qt::NoPen);
-        painter->setBrush(m_selectedBorder);
+        painter->setBrush(selectedBorder);
         painter->drawRect(
             QRect(rowRect.left(), rowRect.top(), 2, rowRect.height()));
       }
     }
 
+    QColor text = m_textColor.isValid() ? m_textColor
+                                        : option.palette.color(QPalette::Text);
+    const QVariant foreground = index.data(Qt::ForegroundRole);
+    const bool hasItemColor = foreground.canConvert<QBrush>() &&
+                              foreground.value<QBrush>().style() != Qt::NoBrush;
+    if (hasItemColor)
+      text = foreground.value<QBrush>().color();
+    text = ColorContrast::ensure(text, ColorContrast::flatten(fill, base),
+                                 hasItemColor ? ColorContrast::GlyphRatio
+                                              : ColorContrast::TextRatio);
+
     opt.rect = rowRect.adjusted(8, 0, -6, 0);
     opt.state &= ~QStyle::State_HasFocus;
     opt.showDecorationSelected = false;
     opt.palette.setColor(QPalette::Highlight, Qt::transparent);
-    opt.palette.setColor(QPalette::HighlightedText, m_textColor);
-    opt.palette.setColor(QPalette::Text, m_textColor);
+    opt.palette.setColor(QPalette::HighlightedText, text);
+    opt.palette.setColor(QPalette::Text, text);
 
     QStyledItemDelegate::paint(painter, opt, index);
     painter->restore();
@@ -216,10 +245,11 @@ public:
   }
 
 private:
-  QColor m_textColor = QColor("#dce4ee");
-  QColor m_hoverBackground = QColor("#171e27");
-  QColor m_selectedBackground = QColor("#17283d");
-  QColor m_selectedBorder = QColor("#5da7ff");
+  QColor m_textColor;
+  QColor m_baseBackground;
+  QColor m_hoverBackground;
+  QColor m_selectedBackground;
+  QColor m_selectedBorder;
 };
 } // namespace
 
@@ -482,219 +512,140 @@ void TestPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
   setObjectName(QStringLiteral("testPanel"));
 
-  const auto blend = [](const QColor &base, const QColor &overlay,
-                        qreal ratio) {
-    const qreal clamped = qBound(0.0, ratio, 1.0);
-    return QColor::fromRgbF(
-        base.redF() * (1.0 - clamped) + overlay.redF() * clamped,
-        base.greenF() * (1.0 - clamped) + overlay.greenF() * clamped,
-        base.blueF() * (1.0 - clamped) + overlay.blueF() * clamped, 1.0);
-  };
-  const auto withAlpha = [](QColor color, int alpha) {
-    color.setAlpha(alpha);
-    return color;
-  };
-
-  QColor panelSurface = theme.backgroundColor;
-  QColor toolbarShell = theme.surfaceColor;
-  QColor treeBg = theme.backgroundColor;
-  QColor textColor = theme.foregroundColor;
-  QColor borderColor = theme.borderColor;
-  QColor mutedText = blend(theme.foregroundColor, theme.backgroundColor, 0.24);
-  QColor subtleText = blend(theme.foregroundColor, theme.backgroundColor, 0.40);
-  QColor hoverBg = theme.hoverColor;
-  QColor selectedBg = theme.accentSoftColor.isValid() ? theme.accentSoftColor
-                                                      : theme.accentColor;
-  QColor accentColor =
+  const QColor panelSurface = theme.backgroundColor;
+  const QColor headerSurface = theme.surfaceColor;
+  const QColor textColor =
+      UIStyleHelper::readableText(theme, panelSurface, theme.foregroundColor);
+  const QColor secondaryText = UIStyleHelper::secondaryTextColor(theme);
+  const QColor borderColor = theme.borderColor;
+  const QColor hoverBg = theme.hoverColor;
+  const QColor accentColor =
       theme.accentColor.isValid() ? theme.accentColor : theme.testRunningColor;
-  const QString panelBorder =
-      theme.panelBorders ? borderColor.name() : QStringLiteral("transparent");
-  const QString glowAccent =
-      accentColor.lighter(100 + static_cast<int>(theme.glowIntensity * 28.0))
-          .name();
-  const QString glowHover =
-      hoverBg.lighter(100 + static_cast<int>(theme.glowIntensity * 20.0))
-          .name();
+  const QColor progressTrack = theme.surfaceAltColor.isValid()
+                                   ? theme.surfaceAltColor
+                                   : theme.surfaceColor;
+  const QString sideBorders =
+      theme.panelBorders ? QStringLiteral("border-left: 1px solid %1;"
+                                          "border-right: 1px solid %1;")
+                               .arg(borderColor.name())
+                         : QString();
 
   if (auto *delegate =
           dynamic_cast<TestTreeDelegate *>(m_tree->itemDelegate())) {
     delegate->setTheme(theme);
   }
 
-  setStyleSheet(UIStyleHelper::panelStyle(theme, objectName()) +
-                QString("QWidget#TestPanel, QWidget#testPanel {"
-                        "  background: %1;"
-                        "  color: %2;"
-                        "  border-left: 1px solid %10;"
-                        "  border-right: 1px solid %10;"
-                        "}"
-                        "QWidget#testHeaderShell {"
-                        "  background: %3;"
-                        "  border-bottom: 1px solid %4;"
-                        "}"
-                        "QToolBar#testToolbar {"
-                        "  background: transparent;"
-                        "  border: 0;"
-                        "  padding: 4px 6px;"
-                        "  spacing: 4px;"
-                        "}"
-                        "QToolButton {"
-                        "  color: %2;"
-                        "  background: transparent;"
-                        "  border: 1px solid transparent;"
-                        "  border-radius: 4px;"
-                        "  padding: 4px 10px;"
-                        "  font-size: 12px;"
-                        "  font-weight: 600;"
-                        "}"
-                        "QToolButton:hover {"
-                        "  background: %5;"
-                        "  border-color: %11;"
-                        "}"
-                        "QToolButton:pressed {"
-                        "  background: %6;"
-                        "}"
-                        "QToolButton:disabled {"
-                        "  color: %7;"
-                        "}"
-                        "QToolButton:checked {"
-                        "  background: %6;"
-                        "  border-color: %11;"
-                        "}"
-                        "QLineEdit#testSearchEdit {"
-                        "  background: %8;"
-                        "  color: %2;"
-                        "  border: none;"
-                        "  border-top: 1px solid %4;"
-                        "  padding: 6px 10px;"
-                        "  font-size: 12px;"
-                        "}"
-                        "QLineEdit#testSearchEdit:focus {"
-                        "  border-bottom: 2px solid %11;"
-                        "}"
-                        "QProgressBar#testProgressBar {"
-                        "  background: %4;"
-                        "  border: none;"
-                        "  max-height: 3px;"
-                        "}"
-                        "QProgressBar#testProgressBar::chunk {"
-                        "  background: %9;"
-                        "}"
-                        "QTreeWidget#testTree {"
-                        "  background: %8;"
-                        "  color: %2;"
-                        "  border: none;"
-                        "  outline: none;"
-                        "  padding: 2px;"
-                        "}"
-                        "QTreeWidget#testTree::item {"
-                        "  height: 28px;"
-                        "}"
-                        "QTreeWidget#testTree::item:hover {"
-                        "  background: transparent;"
-                        "}"
-                        "QTreeWidget#testTree::item:selected {"
-                        "  background: transparent;"
-                        "  color: %2;"
-                        "}"
-                        "QHeaderView::section {"
-                        "  background: %3;"
-                        "  color: %7;"
-                        "  border: 0;"
-                        "  border-bottom: 1px solid %4;"
-                        "  padding: 6px 8px;"
-                        "  font-weight: 600;"
-                        "  font-size: 11px;"
-                        "  text-transform: uppercase;"
-                        "}"
-                        "QWidget#testDetailSection {"
-                        "  background: %8;"
-                        "  border-top: 1px solid %4;"
-                        "}"
-                        "QToolButton#testDetailToggle {"
-                        "  background: %3;"
-                        "  border: none;"
-                        "  border-bottom: 1px solid %4;"
-                        "  border-radius: 0;"
-                        "  padding: 6px 10px;"
-                        "  text-align: left;"
-                        "  font-size: 11px;"
-                        "  font-weight: 600;"
-                        "}"
-                        "QToolButton#testDetailToggle:hover {"
-                        "  background: %5;"
-                        "  border-color: %4;"
-                        "}"
-                        "QToolButton#testDetailToggle:checked {"
-                        "  background: %3;"
-                        "  border-color: %4;"
-                        "}"
-                        "QTextEdit#testDetailPane {"
-                        "  background: %8;"
-                        "  color: %2;"
-                        "  border: none;"
-                        "  padding: 8px;"
-                        "  font-family: monospace;"
-                        "  font-size: 12px;"
-                        "}"
-                        "QLabel#testEmptyState {"
-                        "  color: %7;"
-                        "  font-size: 13px;"
-                        "  padding: 20px;"
-                        "}"
-                        "QLabel#statusLabel {"
-                        "  color: %2;"
-                        "  border-top: 1px solid %4;"
-                        "  padding: 5px 10px;"
-                        "  font-size: 12px;"
-                        "}"
-                        "QSplitter::handle {"
-                        "  background: %4;"
-                        "  height: 1px;"
-                        "}"
-                        "QScrollBar:vertical {"
-                        "  background: transparent;"
-                        "  width: 6px;"
-                        "  margin: 0;"
-                        "}"
-                        "QScrollBar::handle:vertical {"
-                        "  background: %4;"
-                        "  min-height: 20px;"
-                        "  border-radius: 3px;"
-                        "}"
-                        "QScrollBar::handle:vertical:hover {"
-                        "  background: %7;"
-                        "}"
-                        "QScrollBar::add-line:vertical,"
-                        "QScrollBar::sub-line:vertical {"
-                        "  height: 0;"
-                        "}"
-                        "QScrollBar:horizontal {"
-                        "  background: transparent;"
-                        "  height: 6px;"
-                        "  margin: 0;"
-                        "}"
-                        "QScrollBar::handle:horizontal {"
-                        "  background: %4;"
-                        "  min-width: 20px;"
-                        "  border-radius: 3px;"
-                        "}"
-                        "QScrollBar::handle:horizontal:hover {"
-                        "  background: %7;"
-                        "}"
-                        "QScrollBar::add-line:horizontal,"
-                        "QScrollBar::sub-line:horizontal {"
-                        "  width: 0;"
-                        "}")
-                    .arg(panelSurface.name(), textColor.name(),
-                         toolbarShell.name(), panelBorder, glowHover,
-                         selectedBg.name(), mutedText.name(), treeBg.name(),
-                         accentColor.name(), panelBorder, glowAccent));
+  setStyleSheet(
+      UIStyleHelper::panelStyle(theme, objectName()) +
+      UIStyleHelper::panelHeaderStyle(theme, m_headerShell->objectName()) +
+      QString("QWidget#testPanel { %1 }"
+              "QToolBar#testToolbar {"
+              "  background: transparent;"
+              "  border: 0;"
+              "  padding: 4px 6px;"
+              "  spacing: 4px;"
+              "}"
+              "QLineEdit#testSearchEdit {"
+              "  background: %2;"
+              "  color: %3;"
+              "  border: none;"
+              "  border-top: 1px solid %4;"
+              "  padding: 6px 10px;"
+              "  font-size: 12px;"
+              "}"
+              "QLineEdit#testSearchEdit:focus {"
+              "  border-bottom: 2px solid %5;"
+              "}"
+              "QProgressBar#testProgressBar {"
+              "  background: %6;"
+              "  border: none;"
+              "  max-height: 3px;"
+              "}"
+              "QProgressBar#testProgressBar::chunk {"
+              "  background: %5;"
+              "}"
+              "QTreeWidget#testTree {"
+              "  background: %2;"
+              "  color: %3;"
+              "  border: none;"
+              "  outline: none;"
+              "  padding: 2px;"
+              "}"
+              "QTreeWidget#testTree::item {"
+              "  height: 28px;"
+              "}"
+              "QTreeWidget#testTree::item:hover,"
+              "QTreeWidget#testTree::item:selected {"
+              "  background: transparent;"
+              "}"
+              "QHeaderView::section {"
+              "  %7"
+              "  background: %8;"
+              "  border: 0;"
+              "  border-bottom: 1px solid %4;"
+              "  padding: 6px 8px;"
+              "}"
+              "QWidget#testDetailSection {"
+              "  background: %2;"
+              "  border-top: 1px solid %4;"
+              "}"
+              "QToolButton#testDetailToggle {"
+              "  background: %8;"
+              "  color: %9;"
+              "  border: none;"
+              "  border-bottom: 1px solid %4;"
+              "  border-radius: 0;"
+              "  padding: 6px 10px;"
+              "  text-align: left;"
+              "  font-size: 11px;"
+              "  font-weight: 600;"
+              "}"
+              "QToolButton#testDetailToggle:hover {"
+              "  background: %10;"
+              "  color: %3;"
+              "}"
+              "QToolButton#testDetailToggle:checked {"
+              "  background: %8;"
+              "}"
+              "QTextEdit#testDetailPane {"
+              "  background: %2;"
+              "  color: %3;"
+              "  border: none;"
+              "  padding: 8px;"
+              "  font-family: monospace;"
+              "  font-size: 12px;"
+              "}"
+              "QLabel#statusLabel {"
+              "  color: %9;"
+              "  border-top: 1px solid %4;"
+              "  padding: 5px 10px;"
+              "  font-size: 12px;"
+              "}"
+              "QSplitter::handle {"
+              "  background: %4;"
+              "  height: 1px;"
+              "}")
+          .arg(sideBorders, panelSurface.name(), textColor.name(),
+               borderColor.name(), accentColor.name(), progressTrack.name(),
+               UIStyleHelper::sectionLabelStyle(theme), headerSurface.name(),
+               secondaryText.name())
+          .arg(hoverBg.name()));
+
+  m_emptyStateLabel->setStyleSheet(UIStyleHelper::emptyStateStyle(theme));
 
   QString comboStyle = UIStyleHelper::comboBoxStyle(theme);
   m_filterCombo->setStyleSheet(comboStyle);
   m_configCombo->setStyleSheet(comboStyle);
   m_autoRunModeCombo->setStyleSheet(comboStyle);
+
+  for (auto it = m_testItems.constBegin(); it != m_testItems.constEnd(); ++it) {
+    const auto result = m_testResults.constFind(it.key());
+    if (it.value() && result != m_testResults.constEnd())
+      updateTreeItemIcon(it.value(), result->status);
+  }
+  if (!m_runManager || !m_runManager->isRunning())
+    updateStatusLabel();
+  m_tree->viewport()->update();
 }
 
 static QString workspaceConfigurationKey(const QString &folder) {
@@ -1168,30 +1119,30 @@ void TestPanel::updateStatusLabel() {
   QColor successColor = m_theme.testPassedColor;
   QColor errorColor = m_theme.testFailedColor;
   QColor warningColor = m_theme.testSkippedColor;
-  QColor mutedColor = m_theme.foregroundColor.isValid()
-                          ? m_theme.foregroundColor.darker(140)
-                          : m_theme.singleLineCommentFormat;
+  QColor mutedColor = UIStyleHelper::secondaryTextColor(m_theme);
 
-  QString text = QString("<span style='color:%6'>"
-                         "<span style='color:%1'>\u2714 %2</span>"
-                         " &nbsp; "
-                         "<span style='color:%3'>\u2718 %4</span>"
-                         " &nbsp; "
-                         "<span style='color:%5'>\u25CB %7</span>"
-                         " &nbsp; "
-                         "<span style='color:%8'>\u26A0 %9</span>"
-                         " &nbsp;&nbsp; Total: %10"
-                         "</span>")
-                     .arg(successColor.name())
-                     .arg(m_passedCount)
-                     .arg(errorColor.name())
-                     .arg(m_failedCount)
-                     .arg(warningColor.name())
-                     .arg(mutedColor.name())
-                     .arg(m_skippedCount)
-                     .arg(warningColor.darker(110).name())
-                     .arg(m_erroredCount)
-                     .arg(total);
+  QString text =
+      QString("<span style='color:%6'>"
+              "<span style='color:%1'>\u2714 %2</span>"
+              " &nbsp; "
+              "<span style='color:%3'>\u2718 %4</span>"
+              " &nbsp; "
+              "<span style='color:%5'>\u25CB %7</span>"
+              " &nbsp; "
+              "<span style='color:%8'>\u26A0 %9</span>"
+              " &nbsp;&nbsp; Total: %10"
+              "</span>")
+          .arg(successColor.name())
+          .arg(m_passedCount)
+          .arg(errorColor.name())
+          .arg(m_failedCount)
+          .arg(warningColor.name())
+          .arg(mutedColor.name())
+          .arg(m_skippedCount)
+          .arg(UIStyleHelper::toneColor(m_theme, UIStyleHelper::Tone::Warning)
+                   .name())
+          .arg(m_erroredCount)
+          .arg(total);
   m_statusLabel->setTextFormat(Qt::RichText);
   m_statusLabel->setText(text);
 }
@@ -1226,7 +1177,7 @@ void TestPanel::updateTreeItemIcon(QTreeWidgetItem *item, TestStatus status) {
     statusIcon = QStyle::SP_DialogCancelButton;
     break;
   case TestStatus::Errored:
-    color = m_theme.testFailedColor.lighter(112);
+    color = m_theme.testFailedColor;
     statusIcon = QStyle::SP_MessageBoxWarning;
     break;
   case TestStatus::Running:

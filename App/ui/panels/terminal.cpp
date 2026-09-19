@@ -1,5 +1,6 @@
 #include "terminal.h"
 #include "../../run_templates/runtemplatemanager.h"
+#include "../../theme/colorcontrast.h"
 #include "../../theme/themeengine.h"
 #ifndef Q_OS_WIN
 #include "terminalpty.h"
@@ -35,7 +36,9 @@
 
 namespace {
 QString rgba(const QColor &color, qreal alpha) {
-  QColor c = color.isValid() ? color : QColor("#ffffff");
+  if (!color.isValid())
+    return QStringLiteral("transparent");
+  const QColor &c = color;
   return QString("rgba(%1, %2, %3, %4)")
       .arg(c.red())
       .arg(c.green())
@@ -2371,6 +2374,12 @@ void Terminal::updateStyleSheet() {
 
   ui->textEdit->setStyleSheet(styleSheet);
 
+  const QColor cwdSurface =
+      colors.surfaceRaised.isValid() ? colors.surfaceRaised : bg.lighter(104);
+  QColor indicatorFill = selection;
+  indicatorFill.setAlphaF(0.28);
+  indicatorFill = ColorContrast::flatten(indicatorFill, bg);
+
   QString cwdLabelStyle =
       QString("QLabel {"
               "  color: %2;"
@@ -2382,9 +2391,9 @@ void Terminal::updateStyleSheet() {
               "  border-left: 1px solid %3;"
               "  border-right: 1px solid %3;"
               "}")
-          .arg(colors.surfaceRaised.isValid() ? colors.surfaceRaised.name()
-                                              : bg.lighter(104).name(),
-               accent.name(), rgba(border, 0.44));
+          .arg(cwdSurface.name(),
+               ColorContrast::ensure(accent, cwdSurface).name(),
+               rgba(border, 0.44));
   ui->cwdLabel->setStyleSheet(cwdLabelStyle);
 
   if (m_runInputIndicator) {
@@ -2397,7 +2406,8 @@ void Terminal::updateStyleSheet() {
                 "  padding: 1px 6px;"
                 "  font-size: 11px;"
                 "}")
-            .arg(accent.name(), rgba(selection, 0.28), rgba(accent, 0.32));
+            .arg(ColorContrast::ensure(accent, indicatorFill).name(),
+                 indicatorFill.name(), rgba(accent, 0.32));
     m_runInputIndicator->setStyleSheet(indicatorStyle);
   }
 }
@@ -2405,11 +2415,11 @@ void Terminal::updateStyleSheet() {
 QString Terminal::closeButtonStyle(const QString &textColor,
                                    const QString &pressedColor) {
   const QColor baseColor(textColor);
-  const QString subduedColor = QString("rgba(%1, %2, %3, 0.4)")
-                                   .arg(baseColor.red())
-                                   .arg(baseColor.green())
-                                   .arg(baseColor.blue());
+  const QString subduedColor = rgba(baseColor, 0.72);
+  const QString hoverColor = rgba(baseColor, 0.14);
   const QString fullTextColor = baseColor.name();
+  const QString pressedTextColor =
+      ColorContrast::ensure(baseColor, QColor(pressedColor)).name();
 
   return QString("QToolButton {"
                  "  color: %1;"
@@ -2422,13 +2432,14 @@ QString Terminal::closeButtonStyle(const QString &textColor,
                  "}"
                  "QToolButton:hover {"
                  "  color: %2;"
-                 "  background: rgba(255, 255, 255, 0.15);"
+                 "  background: %4;"
                  "}"
                  "QToolButton:pressed {"
-                 "  color: %2;"
+                 "  color: %5;"
                  "  background: %3;"
                  "}")
-      .arg(subduedColor, fullTextColor, pressedColor);
+      .arg(subduedColor, fullTextColor, pressedColor, hoverColor,
+           pressedTextColor);
 }
 
 QString Terminal::filterShellStartupNoise(const QString &text) const {

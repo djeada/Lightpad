@@ -1,9 +1,11 @@
 #include "markdownpreviewpanel.h"
 #include "../core/logging/logger.h"
+#include "../theme/colorcontrast.h"
 #include "markdowntools.h"
 #include <QAction>
 #include <QDesktopServices>
 #include <QDir>
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -42,7 +44,7 @@ void MarkdownPreviewPanel::setupUi() {
 #ifdef HAVE_WEBENGINE
   m_webView = new QWebEngineView(this);
   m_webView->setObjectName("markdownPreviewWebView");
-  m_webView->page()->setBackgroundColor(QColor("#0d1117"));
+  m_webView->page()->setBackgroundColor(palette().color(QPalette::Base));
   m_webView->settings()->setAttribute(
       QWebEngineSettings::LocalContentCanAccessRemoteUrls, true);
   m_webView->settings()->setAttribute(
@@ -94,23 +96,61 @@ void MarkdownPreviewPanel::setupUi() {
 
   m_wordCountLabel = new QLabel(this);
   m_wordCountLabel->setObjectName("markdownWordCountLabel");
-  m_wordCountLabel->setStyleSheet(
-      "QLabel { padding: 2px 8px; color: #8b949e; font-size: 11px; }");
   layout->addWidget(m_wordCountLabel);
 
   setLayout(layout);
+  applyPaletteStyles();
+}
+
+void MarkdownPreviewPanel::applyPaletteStyles() {
+  using ColorContrast::ensure;
+  using ColorContrast::mix;
+  const QPalette pal = palette();
+  const QColor base = pal.color(QPalette::Base);
+  const QColor text = pal.color(QPalette::Text);
+  const QColor bar = pal.color(QPalette::Button);
+  const QColor border = pal.color(QPalette::Midlight);
+  const QColor hover = mix(bar, text, 0.1);
+  const QColor muted = ensure(pal.color(QPalette::PlaceholderText), base,
+                              ColorContrast::GlyphRatio);
+  const QColor buttonText =
+      ensure(mix(text, bar, 0.3), bar, ColorContrast::SecondaryTextRatio);
+  const QColor checked = mix(bar, pal.color(QPalette::Highlight), 0.3);
+
+  m_toolbar->setStyleSheet(
+      QString("QToolBar { background: %1; border: none; border-bottom: 1px "
+              "solid %2; spacing: 2px; }"
+              "QToolButton { color: %3; background: transparent; "
+              "padding: 4px 8px; border: none; border-radius: 4px; "
+              "font-size: 12px; }"
+              "QToolButton:hover { color: %4; background: %5; }"
+              "QToolButton:checked { color: %6; background: %7; }")
+          .arg(bar.name(), border.name(), buttonText.name(),
+               ensure(text, hover).name(), hover.name(),
+               ensure(text, checked).name(), checked.name()));
+  m_wordCountLabel->setStyleSheet(
+      QString("QLabel { padding: 2px 8px; color: %1; font-size: 11px; }")
+          .arg(muted.name()));
+#ifdef HAVE_WEBENGINE
+  if (m_webView)
+    m_webView->page()->setBackgroundColor(base);
+#endif
+}
+
+void MarkdownPreviewPanel::changeEvent(QEvent *event) {
+  QWidget::changeEvent(event);
+  if (event->type() == QEvent::PaletteChange ||
+      event->type() == QEvent::ApplicationPaletteChange) {
+    applyPaletteStyles();
+    if (!m_markdown.isEmpty())
+      m_updateTimer.start();
+  }
 }
 
 void MarkdownPreviewPanel::setupToolbar() {
   m_toolbar = new QToolBar(this);
   m_toolbar->setObjectName("markdownPreviewToolbar");
   m_toolbar->setMovable(false);
-  m_toolbar->setStyleSheet("QToolBar { background: #161b22; border-bottom: 1px "
-                           "solid #30363d; spacing: 2px; }"
-                           "QToolButton { color: #8b949e; padding: 4px 8px; "
-                           "border: none; font-size: 12px; }"
-                           "QToolButton:hover { color: #e6edf3; background: "
-                           "#1f2937; border-radius: 4px; }");
 
   QAction *refreshAction = m_toolbar->addAction("⟳ Refresh");
   refreshAction->setToolTip("Refresh Preview");
@@ -204,7 +244,8 @@ void MarkdownPreviewPanel::updatePreview() {
     return;
   }
 
-  QString html = MarkdownTools::toHtml(m_markdown, m_basePath);
+  QString html = MarkdownTools::toHtml(
+      m_markdown, m_basePath, MarkdownPreviewColors::fromPalette(palette()));
 
   if (m_zoomLevel != 100) {
     QString zoomStyle =
@@ -259,7 +300,8 @@ void MarkdownPreviewPanel::setSourceScrollRatio(double ratio) {
 QString MarkdownPreviewPanel::exportToHtml() const {
   if (m_markdown.isEmpty())
     return QString();
-  return MarkdownTools::toHtml(m_markdown, m_basePath);
+  return MarkdownTools::toHtml(m_markdown, m_basePath,
+                               MarkdownPreviewColors::fromPalette(palette()));
 }
 
 void MarkdownPreviewPanel::onZoomIn() {

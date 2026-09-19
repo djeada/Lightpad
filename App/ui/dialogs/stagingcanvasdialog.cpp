@@ -1,6 +1,7 @@
 #include "stagingcanvasdialog.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "themedmessagebox.h"
 #include <QComboBox>
 #include <QFileInfo>
@@ -96,6 +97,7 @@ StagingCanvasDialog::StagingCanvasDialog(GitIntegration *git,
   setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void StagingCanvasDialog::buildUi() {
@@ -108,8 +110,8 @@ void StagingCanvasDialog::buildUi() {
   topBar->setSpacing(UiMetrics::ToolbarSpacing);
 
   QLabel *title = new QLabel(tr("Staging Canvas"), this);
+  title->setObjectName(QStringLiteral("stagingTitleLabel"));
   title->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-  styleTitleLabel(title);
   topBar->addWidget(title);
 
   topBar->addStretch();
@@ -164,7 +166,6 @@ void StagingCanvasDialog::buildFileList(QWidget *parent) {
 
   QLabel *header = new QLabel(tr("Changed files"), container);
   header->setObjectName(QStringLiteral("stagingFilesLabel"));
-  styleSubduedLabel(header);
   layout->addWidget(header);
 
   m_fileTree = new QTreeWidget(container);
@@ -858,15 +859,7 @@ void StagingCanvasDialog::keyPressEvent(QKeyEvent *event) {
 void StagingCanvasDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
 
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
-
-  if (m_fileTree) {
-    m_fileTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-  }
-  if (m_compareSelector) {
-    m_compareSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-  }
-
+  const QColor mutedText = UIStyleHelper::mutedTextColor(theme);
   const auto styleColumn = [&](QLabel *header, QListWidget *list,
                                const QColor &accent, bool active) {
     if (!header || !list) {
@@ -874,21 +867,18 @@ void StagingCanvasDialog::applyTheme(const Theme &theme) {
     }
     const bool flashing = m_flashTarget == list;
     const QColor border = flashing ? theme.successColor : accent;
+    const QColor text = active ? theme.foregroundColor : mutedText;
     header->setStyleSheet(
-        QString("QLabel { color: %1; font-weight: bold; padding: 4px; "
+        QString("QLabel { color: %1; background: transparent; "
+                "font-weight: bold; padding: 4px; "
                 "border-bottom: 2px solid %2; }")
-            .arg(active ? theme.foregroundColor.name()
-                        : theme.singleLineCommentFormat.name(),
-                 border.name()));
+            .arg(text.name(), border.name()));
     list->setStyleSheet(
-        QString("QListWidget { background: %1; color: %2; border: 1px solid "
-                "%3; }"
-                "QListWidget::item:selected { background: %4; color: %5; }")
-            .arg(theme.surfaceColor.name(),
-                 active ? theme.foregroundColor.name()
-                        : theme.singleLineCommentFormat.name(),
-                 border.name(), theme.accentColor.name(),
-                 theme.backgroundColor.name()));
+        UIStyleHelper::listWidgetStyle(theme) +
+        QString("QListWidget { color: %1; border: 1px solid %2; }"
+                "QListWidget::item:selected { background: %3; color: %4; }")
+            .arg(text.name(), border.name(), theme.accentColor.name(),
+                 UIStyleHelper::readableText(theme, theme.accentColor).name()));
   };
 
   const bool workingActive = m_comparePair != ComparePair::IndexHead;
@@ -900,27 +890,13 @@ void StagingCanvasDialog::applyTheme(const Theme &theme) {
               m_comparePair != ComparePair::WorkingIndex);
 
   for (QPushButton *button : {m_stageButton, m_unstageButton, m_amendButton}) {
-    if (button) {
-      stylePrimaryButton(button);
-    }
-  }
-  for (QPushButton *button : {m_refreshButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
+    stylePrimaryButton(button);
   }
   for (QPushButton *button : {m_discardButton, m_restoreButton}) {
-    if (button) {
-      styleDangerButton(button);
-    }
+    styleDangerButton(button);
   }
-  if (m_statusLabel) {
-    styleSubduedLabel(m_statusLabel);
-  }
-
-  for (const char *name : {"stagingCompareLabel", "stagingFilesLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
-  }
+  styleTitleLabel(findChild<QLabel *>(QStringLiteral("stagingTitleLabel")));
+  styleSectionLabel(findChild<QLabel *>(QStringLiteral("stagingFilesLabel")));
+  styleSubduedLabel(findChild<QLabel *>(QStringLiteral("stagingCompareLabel")));
+  styleSubduedLabel(m_statusLabel);
 }

@@ -166,7 +166,8 @@ QToolButton *RepositoryStateMapWidget::addChip(Layer layer,
     arrow->setAccessibleName(tr("then"));
     if (m_themeInitialized) {
       arrow->setStyleSheet(
-          QString("color: %1;").arg(m_theme.singleLineCommentFormat.name()));
+          QString("color: %1;")
+              .arg(UIStyleHelper::mutedTextColor(m_theme).name()));
     }
     cellLayout->addWidget(arrow);
     host = cell;
@@ -194,11 +195,7 @@ void RepositoryStateMapWidget::rebuildChips() {
     delete item;
   }
 
-  const QColor muted = m_themeInitialized ? m_theme.singleLineCommentFormat
-                                          : palette().color(QPalette::Mid);
-  const QColor accent = m_themeInitialized
-                            ? m_theme.accentColor
-                            : palette().color(QPalette::Highlight);
+  using Tone = UIStyleHelper::Tone;
 
   if (!m_state.valid) {
     m_summaryLabel->setText(gitRepositoryStateSummary(m_state));
@@ -223,9 +220,7 @@ void RepositoryStateMapWidget::rebuildChips() {
            "<br><code>git status</code> · <code>git diff</code>")
             .arg(m_state.modifiedCount)
             .arg(m_state.untrackedCount));
-    styleChip(chip, count > 0 ? (m_themeInitialized ? m_theme.gitModifiedColor
-                                                    : accent)
-                              : muted);
+    styleChip(chip, count > 0 ? Tone::Warning : Tone::Neutral);
   }
 
   {
@@ -244,9 +239,7 @@ void RepositoryStateMapWidget::rebuildChips() {
            "<br><code>git add</code> · <code>git restore --staged</code>")
             .arg(countOf(m_state.stagedCount, tr("1 staged change"),
                          tr("%1 staged changes"))));
-    styleChip(chip, m_state.stagedCount > 0
-                        ? (m_themeInitialized ? m_theme.gitAddedColor : accent)
-                        : muted);
+    styleChip(chip, m_state.stagedCount > 0 ? Tone::Success : Tone::Neutral);
   }
 
   {
@@ -266,7 +259,7 @@ void RepositoryStateMapWidget::rebuildChips() {
                  "<br><code>git show HEAD</code>")
                   .arg(hash,
                        elideMiddle(m_state.headSubject, 40).toHtmlEscaped()));
-    styleChip(chip, accent);
+    styleChip(chip, Tone::Accent);
   }
 
   {
@@ -281,7 +274,7 @@ void RepositoryStateMapWidget::rebuildChips() {
              "commits belong to no branch and are easy to lose."
              "<br><br>Click to pick a branch to return to."
              "<br><code>git switch -c &lt;name&gt;</code> to keep this work."));
-      styleChip(chip, m_themeInitialized ? m_theme.warningColor : accent);
+      styleChip(chip, Tone::Warning);
     } else {
       const QString branch =
           m_state.branch.isEmpty() ? tr("(no branch)") : m_state.branch;
@@ -294,7 +287,7 @@ void RepositoryStateMapWidget::rebuildChips() {
              "<br><br>Click to switch branch."
              "<br><code>git switch</code> · <code>git branch</code>")
               .arg(branch.toHtmlEscaped()));
-      styleChip(chip, accent);
+      styleChip(chip, Tone::Accent);
     }
   }
 
@@ -310,7 +303,7 @@ void RepositoryStateMapWidget::rebuildChips() {
              "<br><br><code>git push -u origin %1</code>")
               .arg(m_state.branch.isEmpty() ? tr("&lt;branch&gt;")
                                             : m_state.branch.toHtmlEscaped()));
-      styleChip(chip, muted);
+      styleChip(chip, Tone::Neutral);
     } else {
       QString divergence;
       if (m_state.ahead > 0) {
@@ -338,9 +331,7 @@ void RepositoryStateMapWidget::rebuildChips() {
               .arg(m_state.behind)
               .arg(m_state.upstream.toHtmlEscaped()));
       const bool diverged = m_state.ahead > 0 || m_state.behind > 0;
-      styleChip(chip,
-                diverged ? (m_themeInitialized ? m_theme.warningColor : accent)
-                         : (m_themeInitialized ? m_theme.successColor : muted));
+      styleChip(chip, diverged ? Tone::Warning : Tone::Success);
     }
   }
 
@@ -357,7 +348,7 @@ void RepositoryStateMapWidget::rebuildChips() {
            "<br><br>Click to focus the conflicted files."
            "<br><code>git status</code> · <code>git add &lt;file&gt;</code> "
            "once resolved."));
-    styleChip(chip, m_themeInitialized ? m_theme.errorColor : accent);
+    styleChip(chip, Tone::Error);
   }
 
   if (m_state.stashCount > 0) {
@@ -372,7 +363,7 @@ void RepositoryStateMapWidget::rebuildChips() {
            "<br><br>Click to open the stash list."
            "<br><code>git stash list</code> · <code>git stash pop</code>")
             .arg(m_state.stashCount));
-    styleChip(chip, m_themeInitialized ? m_theme.infoColor : accent);
+    styleChip(chip, Tone::Info);
   }
 
   if (m_state.operation != GitOperation::None) {
@@ -390,8 +381,7 @@ void RepositoryStateMapWidget::rebuildChips() {
            "<br><code>%2</code>")
             .arg(name,
                  gitOperationExitHint(m_state.operation).toHtmlEscaped()));
-    styleChip(m_operationChip,
-              m_themeInitialized ? m_theme.warningColor : accent);
+    styleChip(m_operationChip, Tone::Warning);
     m_operationChip->show();
   } else {
     m_operationChip->hide();
@@ -402,35 +392,18 @@ void RepositoryStateMapWidget::rebuildChips() {
 }
 
 void RepositoryStateMapWidget::styleChip(QToolButton *chip,
-                                         const QColor &accent) const {
-  if (!chip) {
+                                         UIStyleHelper::Tone tone) const {
+  if (!chip || !m_themeInitialized) {
     return;
   }
 
-  const QColor background = m_themeInitialized
-                                ? m_theme.surfaceColor
-                                : palette().color(QPalette::Base);
-  const QColor foreground = m_themeInitialized
-                                ? m_theme.foregroundColor
-                                : palette().color(QPalette::Text);
-  const QColor hover = m_themeInitialized ? m_theme.hoverColor
-                                          : palette().color(QPalette::Midlight);
-
+  const QColor emphasis = UIStyleHelper::toneColor(m_theme, tone);
   chip->setStyleSheet(
-      QString("QToolButton {"
-              "  background: %1;"
-              "  color: %2;"
-              "  border: 1px solid %3;"
-              "  border-radius: %4px;"
-              "  padding: 2px %5px;"
-              "  font-size: 11px;"
-              "}"
-              "QToolButton:hover { background: %6; }"
-              "QToolButton:focus { border: 1px solid %2; }")
-          .arg(background.name(), foreground.name(), accent.name())
-          .arg(UiMetrics::RadiusSm)
+      QString("QToolButton { %1 padding: 2px %2px; font-weight: normal; }"
+              "QToolButton:hover, QToolButton:focus { border-color: %3; }")
+          .arg(UIStyleHelper::badgeStyle(m_theme, tone))
           .arg(UiMetrics::SpaceMd)
-          .arg(hover.name()));
+          .arg(emphasis.name()));
 }
 
 void RepositoryStateMapWidget::applyTheme(const Theme &theme) {
@@ -439,12 +412,10 @@ void RepositoryStateMapWidget::applyTheme(const Theme &theme) {
 
   setStyleSheet(QString("background: %1;").arg(theme.backgroundColor.name()));
   if (m_summaryLabel) {
-    m_summaryLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px;")
-            .arg(theme.singleLineCommentFormat.name()));
+    m_summaryLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
   }
   if (m_collapsedButton) {
-    styleChip(m_collapsedButton, theme.accentColor);
+    styleChip(m_collapsedButton, UIStyleHelper::Tone::Accent);
   }
 
   rebuildChips();

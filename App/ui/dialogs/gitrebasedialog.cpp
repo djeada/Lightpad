@@ -68,7 +68,9 @@ void GitRebaseDialog::rebuildComboForItem(QTreeWidgetItem *item, int row) {
       (row >= 0 && row < m_entries.size()) ? m_entries[row].action : "pick";
   combo->setCurrentText(action);
 
-  QString color = actionColor(action);
+  QString color = UIStyleHelper::readableText(m_theme, m_theme.surfaceAltColor,
+                                              QColor(actionColor(action)))
+                      .name();
   combo->setStyleSheet(
       QString("QComboBox { background: %1; color: %2; border: 1px solid "
               "%3; border-radius: 4px; padding: 2px 6px; font-weight: "
@@ -230,31 +232,19 @@ void GitRebaseDialog::updateSummary() {
   }
 
   QStringList parts;
-  if (pick > 0)
-    parts << QString("<span style='color:%1'>%2 pick</span>")
-                 .arg(m_theme.successColor.name())
-                 .arg(pick);
-  if (reword > 0)
-    parts << QString("<span style='color:%1'>%2 reword</span>")
-                 .arg(m_theme.warningColor.name())
-                 .arg(reword);
-  if (edit > 0)
-    parts << QString("<span style='color:%1'>%2 edit</span>")
-                 .arg(m_theme.accentColor.name())
-                 .arg(edit);
-  if (squash > 0)
-    parts << QString("<span style='color:" +
-                     m_theme.accentColor.lighter(130).name() +
-                     "'>%1 squash</span>")
-                 .arg(squash);
-  if (fixup > 0)
-    parts << QString("<span style='color:%1'>%2 fixup</span>")
-                 .arg(m_theme.singleLineCommentFormat.name())
-                 .arg(fixup);
-  if (drop > 0)
-    parts << QString("<span style='color:%1'>%2 drop</span>")
-                 .arg(m_theme.errorColor.name())
-                 .arg(drop);
+  const auto addPart = [&](int count, const QString &action) {
+    if (count > 0)
+      parts << QString("<span style='color:%1'>%2 %3</span>")
+                   .arg(actionColor(action))
+                   .arg(count)
+                   .arg(action);
+  };
+  addPart(pick, "pick");
+  addPart(reword, "reword");
+  addPart(edit, "edit");
+  addPart(squash, "squash");
+  addPart(fixup, "fixup");
+  addPart(drop, "drop");
 
   if (m_summaryLabel) {
     m_summaryLabel->setText(
@@ -365,16 +355,15 @@ void GitRebaseDialog::buildUi() {
   mainLayout->setContentsMargins(12, 12, 12, 12);
   mainLayout->setSpacing(8);
 
-  auto *titleLabel = new QLabel(tr("🔀 Interactive Rebase"), this);
-  titleLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(m_theme));
-  mainLayout->addWidget(titleLabel);
+  m_titleLabel = new QLabel(tr("🔀 Interactive Rebase"), this);
+  mainLayout->addWidget(m_titleLabel);
 
   auto *headerLabel = new QLabel(
       tr("Reorder, squash, or drop commits. Use ▲/▼ buttons to reorder, or "
          "select multiple commits for batch operations."),
       this);
   headerLabel->setWordWrap(true);
-  headerLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(m_theme));
+  m_subtitleLabel = headerLabel;
   mainLayout->addWidget(headerLabel);
 
   m_searchEdit = new QLineEdit(this);
@@ -480,24 +469,41 @@ void GitRebaseDialog::applyTheme(const Theme &theme) {
     m_commitList->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }
 
+  m_theme = theme;
+
+  if (m_titleLabel)
+    m_titleLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 17));
+  styleSubduedLabel(m_subtitleLabel);
   styleSubduedLabel(m_summaryLabel);
-  styleSubduedLabel(m_statusLabel);
+  if (m_statusLabel)
+    m_statusLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
+
+  if (m_commitList) {
+    for (int i = 0; i < m_commitList->topLevelItemCount(); ++i) {
+      QTreeWidgetItem *item = m_commitList->topLevelItem(i);
+      if (m_commitList->itemWidget(item, 0))
+        rebuildComboForItem(item, item->data(0, Qt::UserRole).toInt());
+    }
+  }
+  if (!m_entries.isEmpty())
+    updateSummary();
 }
 
 void GitRebaseDialog::updateActionForItem(QTreeWidgetItem *, const QString &) {}
 
 QString GitRebaseDialog::actionColor(const QString &action) const {
+  using Tone = UIStyleHelper::Tone;
   if (action == "pick")
-    return m_theme.successColor.name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Success).name();
   if (action == "reword")
-    return m_theme.warningColor.name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Warning).name();
   if (action == "edit")
-    return m_theme.accentColor.name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Accent).name();
   if (action == "squash")
-    return m_theme.accentColor.lighter(130).name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Info).name();
   if (action == "fixup")
-    return m_theme.singleLineCommentFormat.name();
+    return UIStyleHelper::mutedTextColor(m_theme).name();
   if (action == "drop")
-    return m_theme.errorColor.name();
+    return UIStyleHelper::toneColor(m_theme, Tone::Error).name();
   return m_theme.foregroundColor.name();
 }

@@ -2,6 +2,7 @@
 #define STYLEDDIALOG_H
 
 #include "../../settings/theme.h"
+#include "../uistylehelper.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -28,7 +29,6 @@ public:
   virtual void applyTheme(const Theme &theme);
   void applyTheme(const ThemeDefinition &theme);
 
-protected:
   struct SemanticStyleCache {
     QString formDialog;
     QString groupBox;
@@ -36,6 +36,7 @@ protected:
     QString comboBox;
     QString checkBox;
     QString resultList;
+    QString treeWidget;
     QString secondaryButton;
     QString tableWidget;
     QString plainTextEdit;
@@ -45,8 +46,11 @@ protected:
     QString dangerButton;
     QString titleLabel;
     QString subduedLabel;
+    QString sectionLabel;
+    QString emptyState;
   };
 
+protected:
   Theme m_theme;
   SemanticStyleCache m_semanticStyles;
   bool m_hasSemanticStyles = false;
@@ -58,6 +62,15 @@ protected:
   void styleDangerButton(QPushButton *btn);
   void styleTitleLabel(QLabel *label);
   void styleSubduedLabel(QLabel *label);
+  void styleSectionLabel(QLabel *label);
+  void styleEmptyState(QLabel *label);
+  void styleToneLabel(QLabel *label, UIStyleHelper::Tone tone);
+  void styleBadge(QLabel *label, UIStyleHelper::Tone tone);
+
+private:
+  void applySemanticStyles();
+
+  const ThemeDefinition *m_pendingDefinition = nullptr;
 };
 
 #endif

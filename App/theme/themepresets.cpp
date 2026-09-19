@@ -136,6 +136,7 @@ ThemeDefinition minimalDark() {
   t.ui.animationSpeed = "subtle";
   t.ui.scanlineEffect = false;
   t.ui.panelBorders = false;
+  t.rederiveSemanticColors();
   return t;
 }
 
@@ -270,6 +271,7 @@ ThemeDefinition githubDark() {
   t.ui.animationSpeed = "subtle";
   t.ui.scanlineEffect = false;
   t.ui.panelBorders = true;
+  t.rederiveSemanticColors();
   return t;
 }
 
@@ -403,6 +405,7 @@ ThemeDefinition midnightBlue() {
   t.ui.animationSpeed = "normal";
   t.ui.scanlineEffect = false;
 
+  t.rederiveSemanticColors();
   return t;
 }
 
@@ -536,6 +539,7 @@ ThemeDefinition dracula() {
   t.ui.animationSpeed = "normal";
   t.ui.scanlineEffect = false;
 
+  t.rederiveSemanticColors();
   return t;
 }
 
@@ -669,6 +673,7 @@ ThemeDefinition monokaiPro() {
   t.ui.animationSpeed = "normal";
   t.ui.scanlineEffect = false;
 
+  t.rederiveSemanticColors();
   return t;
 }
 
@@ -802,6 +807,7 @@ ThemeDefinition nord() {
   t.ui.animationSpeed = "subtle";
   t.ui.scanlineEffect = false;
 
+  t.rederiveSemanticColors();
   return t;
 }
 
@@ -935,6 +941,7 @@ ThemeDefinition solarizedDark() {
   t.ui.animationSpeed = "subtle";
   t.ui.scanlineEffect = false;
 
+  t.rederiveSemanticColors();
   return t;
 }
 
@@ -1068,6 +1075,7 @@ ThemeDefinition cyberpunk() {
   t.ui.animationSpeed = "fancy";
   t.ui.scanlineEffect = true;
 
+  t.rederiveSemanticColors();
   return t;
 }
 
@@ -1201,6 +1209,7 @@ ThemeDefinition matrix() {
   t.ui.animationSpeed = "fancy";
   t.ui.scanlineEffect = true;
 
+  t.rederiveSemanticColors();
   return t;
 }
 
@@ -1334,6 +1343,7 @@ ThemeDefinition ghost() {
   t.ui.animationSpeed = "subtle";
   t.ui.scanlineEffect = false;
 
+  t.rederiveSemanticColors();
   return t;
 }
 
@@ -1468,6 +1478,7 @@ ThemeDefinition daylight() {
   t.ui.animationSpeed = "subtle";
   t.ui.scanlineEffect = false;
   t.ui.panelBorders = true;
+  t.rederiveSemanticColors();
   return t;
 }
 

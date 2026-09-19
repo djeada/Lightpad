@@ -250,44 +250,19 @@ void TimeTravelDialog::onExecute() {
 
 void TimeTravelDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  if (m_headerLabel) {
-    styleTitleLabel(m_headerLabel);
-  }
-  for (QRadioButton *radio : m_radios) {
-    radio->setStyleSheet(UIStyleHelper::checkBoxStyle(theme) +
-                         QString("QRadioButton { color: %1; }")
-                             .arg(theme.foregroundColor.name()));
-  }
+  styleTitleLabel(m_headerLabel);
   for (QLabel *label : m_explanations) {
     styleSubduedLabel(label);
   }
   for (const char *name : {"timeTravelBranchLabel", "timeTravelWorktreeLabel",
                            "timeTravelCommandLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
-  }
-  for (QLineEdit *edit : {m_branchNameEdit, m_worktreePathEdit}) {
-    if (edit) {
-      edit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-    }
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
 
   const GitTimeTravelOption *option = optionFor(selectedMode());
   const bool moves = option && option->changesCheckout;
-  if (m_checkoutLabel) {
-    m_checkoutLabel->setStyleSheet(
-        QString("color: %1;")
-            .arg((moves ? theme.warningColor : theme.successColor).name()));
-  }
-  for (QPushButton *button : {m_graphButton, m_cancelButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
-  if (m_executeButton) {
-    stylePrimaryButton(m_executeButton);
-  }
+  styleToneLabel(m_checkoutLabel, moves ? UIStyleHelper::Tone::Warning
+                                        : UIStyleHelper::Tone::Success);
+  stylePrimaryButton(m_executeButton);
 }

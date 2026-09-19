@@ -2,6 +2,7 @@
 #include "../../git/gitintegration.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "themedmessagebox.h"
 #include <QComboBox>
 #include <QFontDatabase>
@@ -45,6 +46,7 @@ RebaseTimelineDialog::RebaseTimelineDialog(GitIntegration *git,
   setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void RebaseTimelineDialog::buildUi() {
@@ -517,65 +519,38 @@ void RebaseTimelineDialog::keyPressEvent(QKeyEvent *event) {
 
 void RebaseTimelineDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  if (m_timelineTree) {
-    m_timelineTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-  }
   for (QListWidget *list : {m_previewList, m_problemList}) {
     if (list) {
+      const UIStyleHelper::Tone tone = list == m_problemList
+                                           ? UIStyleHelper::Tone::Error
+                                           : UIStyleHelper::Tone::Success;
       list->setStyleSheet(
-          QString("QListWidget { background: %1; border: 1px solid %2; "
-                  "color: %3; }")
-              .arg(theme.surfaceColor.name(), theme.borderColor.name(),
-                   list == m_problemList ? theme.errorColor.name()
-                                         : theme.successColor.name()));
+          UIStyleHelper::listWidgetStyle(theme) +
+          QString("QListWidget { color: %1; }")
+              .arg(UIStyleHelper::toneColor(theme, tone).name()));
     }
   }
   if (m_countSpin) {
-
     m_countSpin->setStyleSheet(
-        QString("QSpinBox { background: %1; color: %2; border: 1px solid %3; "
-                "border-radius: %4px; padding: 0px; min-height: %5px; "
+        UIStyleHelper::spinBoxStyle(theme) +
+        QString("QSpinBox { padding: 0px 4px; min-height: %1px; "
                 "min-width: 56px; }"
                 "QSpinBox::up-button, QSpinBox::down-button { width: 16px; }")
-            .arg(theme.surfaceColor.name(), theme.foregroundColor.name(),
-                 theme.borderColor.name())
-            .arg(UiMetrics::RadiusSm)
             .arg(UiMetrics::ControlHeight + 4));
   }
-
-  for (QComboBox *combo : m_timelineTree->findChildren<QComboBox *>()) {
-    combo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
+  for (const char *name : {"rebaseCountLabel", "rebaseCommitsLabel",
+                           "rebaseOntoLabel", "rebaseProgressLabel"}) {
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
-  for (const char *name :
-       {"rebaseCountLabel", "rebaseCommitsLabel", "rebaseOntoLabel",
-        "rebasePreviewLabel", "rebaseProgressLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
-  }
-  if (m_publishedLabel) {
-    m_publishedLabel->setStyleSheet(
-        QString("color: %1;")
-            .arg((m_plan.touchesPublishedHistory() ? theme.warningColor
-                                                   : theme.successColor)
-                     .name()));
-  }
-  for (QPushButton *button : {m_upButton, m_downButton, m_autosquashButton,
-                              m_closeButton, m_skipButton, m_continueButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
-  if (m_abortButton) {
-    styleDangerButton(m_abortButton);
-  }
-  if (m_startButton) {
-    if (m_plan.touchesPublishedHistory()) {
-      styleDangerButton(m_startButton);
-    } else {
-      stylePrimaryButton(m_startButton);
-    }
+  styleSectionLabel(findChild<QLabel *>(QStringLiteral("rebasePreviewLabel")));
+  styleToneLabel(m_publishedLabel, m_plan.touchesPublishedHistory()
+                                       ? UIStyleHelper::Tone::Warning
+                                       : UIStyleHelper::Tone::Success);
+  styleDangerButton(m_abortButton);
+  if (m_plan.touchesPublishedHistory()) {
+    styleDangerButton(m_startButton);
+  } else {
+    stylePrimaryButton(m_startButton);
   }
 }

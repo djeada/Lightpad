@@ -1,6 +1,10 @@
 #include "markdowntools.h"
+#include "../theme/colorcontrast.h"
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QGuiApplication>
+#include <QPalette>
 #include <QSet>
 #include <QStringList>
 #include <QTextStream>
@@ -991,35 +995,86 @@ QString MarkdownTools::processInlineFormatting(const QString &text) {
   return result;
 }
 
+MarkdownPreviewColors
+MarkdownPreviewColors::fromPalette(const QPalette &palette) {
+  using ColorContrast::ensure;
+  using ColorContrast::mix;
+  MarkdownPreviewColors colors;
+  const QColor bg = palette.color(QPalette::Base);
+  const QColor fg = palette.color(QPalette::Text);
+  colors.background = bg;
+  colors.codeBackground = mix(bg, fg, 0.06);
+  colors.tableHeaderBackground = colors.codeBackground;
+  colors.tableStripe = mix(bg, fg, 0.03);
+  colors.border = mix(bg, fg, 0.18);
+  colors.heading = ensure(fg, colors.codeBackground);
+  colors.text = ensure(mix(fg, bg, 0.12), colors.codeBackground);
+  colors.muted = ensure(palette.color(QPalette::PlaceholderText),
+                        colors.background, ColorContrast::SecondaryTextRatio);
+  colors.link = ensure(palette.color(QPalette::Link), colors.tableStripe);
+  return colors;
+}
+
+MarkdownPreviewColors MarkdownPreviewColors::defaults() {
+  if (qobject_cast<QGuiApplication *>(QCoreApplication::instance())) {
+    return fromPalette(QGuiApplication::palette());
+  }
+  MarkdownPreviewColors colors;
+  colors.background = QColor(0x0d, 0x11, 0x17);
+  colors.text = QColor(0xc9, 0xd1, 0xd9);
+  colors.heading = QColor(0xe6, 0xed, 0xf3);
+  colors.muted = QColor(0x8b, 0x94, 0x9e);
+  colors.link = QColor(0x58, 0xa6, 0xff);
+  colors.codeBackground = QColor(0x16, 0x1b, 0x22);
+  colors.border = QColor(0x30, 0x36, 0x3d);
+  colors.tableHeaderBackground = colors.codeBackground;
+  colors.tableStripe = QColor(0x11, 0x16, 0x1d);
+  return colors;
+}
+
+QString MarkdownTools::previewCss(const MarkdownPreviewColors &colors) {
+  return QString("body { font-family: -apple-system, BlinkMacSystemFont, "
+                 "'Segoe UI', Roboto, sans-serif;"
+                 " line-height: 1.6; padding: 20px; max-width: 800px; "
+                 "margin: 0 auto;"
+                 " color: %1; background-color: %2; }"
+                 "h1,h2,h3,h4,h5,h6 { color: %3; border-bottom: 1px solid "
+                 "%4; padding-bottom: 0.3em; }"
+                 "code { background: %5; padding: 2px 6px; border-radius: "
+                 "3px; font-size: 0.9em; }"
+                 "pre { background: %5; padding: 16px; border-radius: 6px; "
+                 "overflow-x: auto; }"
+                 "pre code { background: none; padding: 0; }"
+                 "blockquote { border-left: 4px solid %4; margin: 0; "
+                 "padding: 0 16px; color: %6; }"
+                 "table { border-collapse: collapse; width: 100%; }"
+                 "th, td { border: 1px solid %4; padding: 8px 12px; }"
+                 "th { background: %7; color: %3; }"
+                 "tr:nth-child(even) td { background: %8; }"
+                 "img { max-width: 100%; }"
+                 "a { color: %9; }"
+                 "hr { border: none; border-top: 1px solid %4; }"
+                 ".task-list-item { list-style: none; }"
+                 ".task-list-item input { margin-right: 0.5em; }")
+      .arg(colors.text.name(), colors.background.name(), colors.heading.name(),
+           colors.border.name(), colors.codeBackground.name(),
+           colors.muted.name(), colors.tableHeaderBackground.name(),
+           colors.tableStripe.name(), colors.link.name());
+}
+
 QString MarkdownTools::toHtml(const QString &markdown,
                               const QString &basePath) {
+  return toHtml(markdown, basePath, MarkdownPreviewColors::defaults());
+}
+
+QString MarkdownTools::toHtml(const QString &markdown, const QString &basePath,
+                              const MarkdownPreviewColors &colors) {
   QStringList lines = markdown.split('\n');
   QString html;
   QTextStream stream(&html);
 
   stream << "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" << "<style>"
-         << "body { font-family: -apple-system, BlinkMacSystemFont, "
-            "'Segoe UI', Roboto, sans-serif;"
-         << " line-height: 1.6; padding: 20px; max-width: 800px; "
-            "margin: 0 auto;"
-         << " color: #c9d1d9; background-color: #0d1117; }"
-         << "h1,h2,h3,h4,h5,h6 { color: #e6edf3; border-bottom: 1px solid "
-            "#30363d; padding-bottom: 0.3em; }"
-         << "code { background: #161b22; padding: 2px 6px; border-radius: "
-            "3px; font-size: 0.9em; }"
-         << "pre { background: #161b22; padding: 16px; border-radius: 6px; "
-            "overflow-x: auto; }"
-         << "pre code { background: none; padding: 0; }"
-         << "blockquote { border-left: 4px solid #30363d; margin: 0; "
-            "padding: 0 16px; color: #8b949e; }"
-         << "table { border-collapse: collapse; width: 100%; }"
-         << "th, td { border: 1px solid #30363d; padding: 8px 12px; }"
-         << "th { background: #161b22; }" << "img { max-width: 100%; }"
-         << "a { color: #58a6ff; }"
-         << "hr { border: none; border-top: 1px solid #30363d; }"
-         << ".task-list-item { list-style: none; }"
-         << ".task-list-item input { margin-right: 0.5em; }"
-         << "</style></head><body>\n";
+         << previewCss(colors) << "</style></head><body>\n";
 
   bool inFencedBlock = false;
   bool inBlockquote = false;

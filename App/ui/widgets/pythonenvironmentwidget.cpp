@@ -1,15 +1,35 @@
 #include "pythonenvironmentwidget.h"
 
-#include "../../settings/theme.h"
+#include "../../theme/colorcontrast.h"
 #include "../dialogs/themedmessagebox.h"
+#include "../uistylehelper.h"
+#include <QApplication>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QPlainTextEdit>
 #include <QVBoxLayout>
 
+namespace {
+Theme paletteTheme(const QPalette &palette) {
+  Theme theme;
+  theme.backgroundColor = palette.color(QPalette::Window);
+  theme.foregroundColor = palette.color(QPalette::WindowText);
+  theme.surfaceColor = palette.color(QPalette::Base);
+  theme.surfaceAltColor = palette.color(QPalette::AlternateBase);
+  theme.borderColor = palette.color(QPalette::Mid);
+  theme.hoverColor = palette.color(QPalette::Midlight);
+  theme.pressedColor = palette.color(QPalette::Dark);
+  theme.accentColor = palette.color(QPalette::Highlight);
+  theme.accentSoftColor =
+      ColorContrast::mix(theme.backgroundColor, theme.accentColor, 0.25);
+  return theme;
+}
+} // namespace
+
 PythonEnvironmentWidget::PythonEnvironmentWidget(QWidget *parent)
-    : QGroupBox(tr("Python Environment"), parent) {
+    : QGroupBox(tr("Python Environment"), parent),
+      m_theme(paletteTheme(QApplication::palette())) {
   auto *layout = new QVBoxLayout(this);
 
   m_statusLabel = new QLabel(this);
@@ -22,7 +42,7 @@ PythonEnvironmentWidget::PythonEnvironmentWidget(QWidget *parent)
   m_hintLabel = new QLabel(
       tr("Templates can use ${python}, ${venv}, ${requirementsFile}."));
   m_hintLabel->setWordWrap(true);
-  m_hintLabel->setStyleSheet("font-size: 11px;");
+  m_hintLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(m_theme));
   layout->addWidget(m_hintLabel);
 
   auto *formLayout = new QFormLayout();
@@ -164,109 +184,78 @@ void PythonEnvironmentWidget::refreshStatus() {
   const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
       pref, m_workspaceFolder, m_filePath, m_workingDirectory);
 
-  Theme t;
-  const QString fgColor = t.foregroundColor.name();
-  const QString successBg =
-      QColor(t.successColor.red() / 8, t.successColor.green() / 8,
-             t.successColor.blue() / 8)
-          .name();
-  const QString errorBg =
-      QColor(t.errorColor.red() / 8, t.errorColor.green() / 8,
-             t.errorColor.blue() / 8)
-          .name();
-  const QString warningBg =
-      QColor(t.warningColor.red() / 8, t.warningColor.green() / 8,
-             t.warningColor.blue() / 8)
-          .name();
-
-  QString bannerBg;
-  QString bannerBorder;
+  UIStyleHelper::Tone tone = UIStyleHelper::Tone::Neutral;
   QString bannerIcon;
-  QString bannerTextColor;
   QString bannerTitle;
   QString bannerDetail;
 
-  m_interpreterEdit->setStyleSheet("");
-  m_venvPathEdit->setStyleSheet("");
+  const QString editStyle = UIStyleHelper::lineEditStyle(m_theme);
+  m_interpreterEdit->setStyleSheet(editStyle);
+  m_venvPathEdit->setStyleSheet(editStyle);
+
+  const auto detailHtml = [](const QString &html) {
+    return QString("<br><span style='font-size:12px;'>%1</span>").arg(html);
+  };
+  const auto invalidBorder = [this, editStyle](UIStyleHelper::Tone borderTone) {
+    return editStyle +
+           QString("QLineEdit { border: 2px solid %1; }")
+               .arg(UIStyleHelper::toneColor(m_theme, borderTone).name());
+  };
 
   if (info.found && info.isVirtualEnvironment()) {
-
-    bannerBg = successBg;
-    bannerBorder = t.successColor.name();
-    bannerTextColor = t.successColor.name();
+    tone = UIStyleHelper::Tone::Success;
     bannerIcon = QString::fromUtf8("\xe2\x9c\x93");
     bannerTitle = tr("Virtual environment active");
-    const QString venvName = QFileInfo(info.venvPath).fileName();
-    bannerDetail = QString("<br><span style='color:%1;font-size:12px;'>"
-                           "%2 &nbsp;&bull;&nbsp; %3</span>")
-                       .arg(fgColor, info.interpreter.toHtmlEscaped(),
-                            info.venvPath.toHtmlEscaped());
+    bannerDetail = detailHtml(QString("%1 &nbsp;&bull;&nbsp; %2")
+                                  .arg(info.interpreter.toHtmlEscaped(),
+                                       info.venvPath.toHtmlEscaped()));
   } else if (info.found) {
-
-    bannerBg = t.surfaceColor.name();
-    bannerBorder = t.borderColor.name();
-    bannerTextColor = t.borderColor.name();
+    tone = UIStyleHelper::Tone::Neutral;
     bannerIcon = QString::fromUtf8("\xe2\x9c\x93");
     bannerTitle = tr("System Python (no virtual environment)");
-    bannerDetail = QString("<br><span style='color:%1;font-size:12px;'>"
-                           "%2</span>")
-                       .arg(fgColor, info.interpreter.toHtmlEscaped());
+    bannerDetail = detailHtml(info.interpreter.toHtmlEscaped());
   } else if (pref.mode == PythonProjectEnvironment::customInterpreterMode() &&
              pref.customInterpreter.isEmpty()) {
-
-    bannerBg = errorBg;
-    bannerBorder = t.errorColor.name();
-    bannerTextColor = t.errorColor.name();
+    tone = UIStyleHelper::Tone::Error;
     bannerIcon = QString::fromUtf8("\xe2\x9c\x97");
     bannerTitle = tr("No interpreter selected");
-    bannerDetail = QString("<br><span style='color:%1;font-size:12px;'>"
-                           "Set the interpreter path below to continue.</span>")
-                       .arg(t.warningColor.name());
-    m_interpreterEdit->setStyleSheet(
-        QString("QLineEdit { border: 2px solid %1; }")
-            .arg(t.errorColor.name()));
+    bannerDetail = detailHtml(
+        QStringLiteral("Set the interpreter path below to continue."));
+    m_interpreterEdit->setStyleSheet(invalidBorder(tone));
   } else if (!pref.venvPath.isEmpty() && !info.found) {
-
-    bannerBg = warningBg;
-    bannerBorder = t.warningColor.name();
-    bannerTextColor = t.warningColor.name();
+    tone = UIStyleHelper::Tone::Warning;
     bannerIcon = QString::fromUtf8("\xe2\x9a\xa0");
     bannerTitle = tr("Virtual environment not found");
-    bannerDetail =
-        QString("<br><span style='color:%1;font-size:12px;'>"
-                "Expected at: %2<br>"
-                "Click <b>Create Venv</b> to create one.</span>")
-            .arg(t.warningColor.name(), pref.venvPath.toHtmlEscaped());
-    m_venvPathEdit->setStyleSheet(QString("QLineEdit { border: 2px solid %1; }")
-                                      .arg(t.warningColor.name()));
+    bannerDetail = detailHtml(QString("Expected at: %1<br>"
+                                      "Click <b>Create Venv</b> to create one.")
+                                  .arg(pref.venvPath.toHtmlEscaped()));
+    m_venvPathEdit->setStyleSheet(invalidBorder(tone));
   } else {
-
-    bannerBg = errorBg;
-    bannerBorder = t.errorColor.name();
-    bannerTextColor = t.errorColor.name();
+    tone = UIStyleHelper::Tone::Error;
     bannerIcon = QString::fromUtf8("\xe2\x9c\x97");
     bannerTitle = tr("Python interpreter not found");
-    bannerDetail =
-        QString("<br><span style='color:%1;font-size:12px;'>"
-                "%2</span>")
-            .arg(t.warningColor.name(),
-                 info.statusMessage.isEmpty()
-                     ? tr("Install Python or configure a virtual environment.")
-                     : info.statusMessage.toHtmlEscaped());
+    bannerDetail = detailHtml(
+        info.statusMessage.isEmpty()
+            ? tr("Install Python or configure a virtual environment.")
+            : info.statusMessage.toHtmlEscaped());
   }
 
   const QString bannerHtml =
-      QString("<div style='padding:8px;'>"
-              "<span style='color:%1;font-size:16px;font-weight:bold;'>"
-              "%2 &nbsp;%3</span>"
-              "%4</div>")
-          .arg(bannerTextColor, bannerIcon, bannerTitle, bannerDetail);
+      QString("<div style='padding:4px;'>"
+              "<span style='font-size:16px;font-weight:bold;'>"
+              "%1 &nbsp;%2</span>"
+              "%3</div>")
+          .arg(bannerIcon, bannerTitle, bannerDetail);
 
   m_statusLabel->setStyleSheet(
-      QString("QLabel { background-color: %1; border: 1px solid %2;"
-              " border-radius: 6px; padding: 4px; }")
-          .arg(bannerBg, bannerBorder));
+      QString("QLabel { %1 }").arg(UIStyleHelper::bannerStyle(m_theme, tone)));
   m_statusLabel->setText(bannerHtml);
+}
+
+void PythonEnvironmentWidget::applyTheme(const Theme &theme) {
+  m_theme = theme;
+  m_hintLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(m_theme));
+  refreshStatus();
 }
 
 void PythonEnvironmentWidget::onModeChanged() {

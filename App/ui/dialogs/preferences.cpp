@@ -1165,7 +1165,7 @@ void Preferences::persistCurrentTheme(const QString &activeThemeName) {
   QJsonObject themeDefinitionJson;
   sm.setValue("theme", themeJson);
   if (activeThemeName.isEmpty()) {
-    ThemeEngine::instance().activeTheme().write(themeDefinitionJson);
+    ThemeEngine::instance().activeThemeSource().write(themeDefinitionJson);
   }
   sm.setValue("activeThemeDefinition", themeDefinitionJson);
   sm.setValue("activeThemeName", activeThemeName);
@@ -1440,7 +1440,7 @@ void Preferences::onDeleteThemeClicked() {
     return;
   }
 
-  const ThemeDefinition fallback = ThemeEngine::instance().activeTheme();
+  const ThemeDefinition fallback = ThemeEngine::instance().activeThemeSource();
   if (wasActive && m_mainWindow)
     m_mainWindow->setTheme(fallback);
   persistCurrentTheme(fallback.name);

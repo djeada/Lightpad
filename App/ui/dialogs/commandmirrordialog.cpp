@@ -248,45 +248,22 @@ void CommandMirrorDialog::onClear() {
 
 void CommandMirrorDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  if (m_commandTree) {
-    m_commandTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-  }
-  if (m_modeCombo) {
-    m_modeCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-  }
   if (m_searchEdit) {
     m_searchEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
   }
-  if (m_outputView) {
-    m_outputView->setStyleSheet(
-        QString("QPlainTextEdit { background: %1; color: %2; border: 1px "
-                "solid %3; }")
-            .arg(theme.surfaceColor.name(), theme.foregroundColor.name(),
-                 theme.borderColor.name()));
-  }
   for (const char *name :
        {"mirrorHeaderLabel", "mirrorModeLabel", "mirrorExplanationLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
   if (m_riskLabel) {
     const GitCommandRecord *record = currentRecord();
     const GitOperationRisk risk =
         record ? gitCommandRisk(record->args) : GitOperationRisk::Safe;
-    m_riskLabel->setStyleSheet(
-        QString("color: %1;")
-            .arg((risk == GitOperationRisk::Safe ? theme.successColor
-                  : risk == GitOperationRisk::RewritesLocalHistory
-                      ? theme.warningColor
-                      : theme.errorColor)
-                     .name()));
-  }
-  for (QPushButton *button : {m_copyButton, m_clearButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
+    styleToneLabel(m_riskLabel, risk == GitOperationRisk::Safe
+                                    ? UIStyleHelper::Tone::Success
+                                : risk == GitOperationRisk::RewritesLocalHistory
+                                    ? UIStyleHelper::Tone::Warning
+                                    : UIStyleHelper::Tone::Error);
   }
 }

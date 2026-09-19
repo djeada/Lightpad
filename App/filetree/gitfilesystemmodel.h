@@ -2,6 +2,7 @@
 #define GITFILESYSTEMMODEL_H
 
 #include "../git/gitintegration.h"
+#include <QColor>
 #include <QFileSystemModel>
 #include <QHash>
 #include <QIcon>
@@ -19,7 +20,17 @@ class GitFileSystemModel : public QFileSystemModel {
   Q_OBJECT
 
 public:
+  struct StatusColors {
+    QColor modified = QColor("#d8a13c");
+    QColor staged = QColor("#3fb97f");
+    QColor untracked = QColor("#9aa6b2");
+    QColor added = QColor("#2fbf71");
+    QColor deleted = QColor("#e35d6a");
+    QColor conflict = QColor("#c678dd");
+  };
+
   explicit GitFileSystemModel(QObject *parent = nullptr);
+  void setStatusColors(const StatusColors &colors);
   ~GitFileSystemModel();
   void setRootHeaderLabel(const QString &label);
 
@@ -67,15 +78,15 @@ private:
   void updateStatusCache();
   void rebuildDirtyDirectories();
 
-  static void initializeIcons();
+  void rebuildStatusIcons();
 
-  static QIcon s_modifiedIcon;
-  static QIcon s_stagedIcon;
-  static QIcon s_untrackedIcon;
-  static QIcon s_addedIcon;
-  static QIcon s_deletedIcon;
-  static QIcon s_conflictIcon;
-  static bool s_iconsInitialized;
+  StatusColors m_colors;
+  QIcon m_modifiedIcon;
+  QIcon m_stagedIcon;
+  QIcon m_untrackedIcon;
+  QIcon m_addedIcon;
+  QIcon m_deletedIcon;
+  QIcon m_conflictIcon;
 };
 
 #endif

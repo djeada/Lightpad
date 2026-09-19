@@ -11,6 +11,8 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+class QPushButton;
+
 class ProblemsPanel : public QWidget {
   Q_OBJECT
 
@@ -74,6 +76,7 @@ private:
   void rebuildTree();
   QString severityIcon(LspDiagnosticSeverity severity) const;
   QString severityText(LspDiagnosticSeverity severity) const;
+  QColor severityColor(LspDiagnosticSeverity severity) const;
   const QList<LspDiagnostic> *
   findDiagnosticsForFile(const QString &filePath) const;
 
@@ -94,6 +97,7 @@ private:
 
   int m_currentFilter;
   bool m_autoRefreshEnabled;
+  QPushButton *m_closeButton;
   Theme m_theme;
   QString m_currentFilePath;
 };

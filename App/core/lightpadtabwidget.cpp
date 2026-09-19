@@ -1,4 +1,5 @@
 #include "lightpadtabwidget.h"
+#include "../theme/colorcontrast.h"
 #include "../ui/mainwindow.h"
 #include "lightpadpage.h"
 
@@ -172,9 +173,31 @@ void LightpadTabWidget::tabInserted(int index) {
 }
 
 void LightpadTabWidget::updateCloseButtons() {
-  const QString closeIconColor = QColor(m_foregroundColor).lighter(115).name();
-  const QString closeHoverBackground = QColor(m_hoverColor).name();
-  const QString closePressedBackground = QColor(m_accentColor).name();
+  const QColor pressedBackground(m_accentColor);
+  const QString closeButtonStyle =
+      QString("QToolButton {"
+              "  color: %1;"
+              "  background: transparent;"
+              "  border: none;"
+              "  border-radius: 2px;"
+              "  padding: 1px;"
+              "  font-size: 14px;"
+              "  font-weight: bold;"
+              "}"
+              "QToolButton:hover {"
+              "  color: %2;"
+              "  background: %3;"
+              "}"
+              "QToolButton:pressed {"
+              "  color: %5;"
+              "  background: %4;"
+              "}")
+          .arg(QColor(m_foregroundColor).lighter(115).name(), m_foregroundColor,
+               QColor(m_hoverColor).name(), pressedBackground.name(),
+               ColorContrast::bestOf(
+                   pressedBackground,
+                   {QColor(m_foregroundColor), QColor(m_backgroundColor)})
+                   .name());
 
   for (int i = 0; i < count(); ++i) {
     if (i == count() - 1) {
@@ -185,26 +208,7 @@ void LightpadTabWidget::updateCloseButtons() {
     QWidget *existingButton = tabBar()->tabButton(i, QTabBar::RightSide);
     if (existingButton && existingButton != newTabButton) {
 
-      existingButton->setStyleSheet(QString("QToolButton {"
-                                            "  color: %1;"
-                                            "  background: transparent;"
-                                            "  border: none;"
-                                            "  border-radius: 2px;"
-                                            "  padding: 1px;"
-                                            "  font-size: 14px;"
-                                            "  font-weight: bold;"
-                                            "}"
-                                            "QToolButton:hover {"
-                                            "  color: %2;"
-                                            "  background: %3;"
-                                            "}"
-                                            "QToolButton:pressed {"
-                                            "  color: #ffffff;"
-                                            "  background: %4;"
-                                            "}")
-                                        .arg(closeIconColor, m_foregroundColor,
-                                             closeHoverBackground,
-                                             closePressedBackground));
+      existingButton->setStyleSheet(closeButtonStyle);
       continue;
     }
 
@@ -215,26 +219,7 @@ void LightpadTabWidget::updateCloseButtons() {
     closeButton->setAutoRaise(true);
     closeButton->setCursor(Qt::ArrowCursor);
     closeButton->setToolTip(tr("Close Tab"));
-    closeButton->setStyleSheet(QString("QToolButton {"
-                                       "  color: %1;"
-                                       "  background: transparent;"
-                                       "  border: none;"
-                                       "  border-radius: 2px;"
-                                       "  padding: 1px;"
-                                       "  font-size: 14px;"
-                                       "  font-weight: bold;"
-                                       "}"
-                                       "QToolButton:hover {"
-                                       "  color: %2;"
-                                       "  background: %3;"
-                                       "}"
-                                       "QToolButton:pressed {"
-                                       "  color: #ffffff;"
-                                       "  background: %4;"
-                                       "}")
-                                   .arg(closeIconColor, m_foregroundColor,
-                                        closeHoverBackground,
-                                        closePressedBackground));
+    closeButton->setStyleSheet(closeButtonStyle);
     connect(closeButton, &QToolButton::clicked, this, [this, closeButton]() {
       for (int index = 0; index < count(); ++index) {
         if (tabBar()->tabButton(index, QTabBar::RightSide) == closeButton) {
@@ -289,6 +274,7 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
                                  const QString &accentColor,
                                  const QString &borderColor) {
   m_foregroundColor = foregroundColor;
+  m_backgroundColor = backgroundColor;
   m_hoverColor = hoverColor;
   m_accentColor = accentColor;
 
@@ -438,7 +424,11 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       "; "
       "}"
       "QToolButton#TabCloseButton:pressed { "
-      "color: #ffffff; "
+      "color: " +
+      ColorContrast::bestOf(QColor(closePressedBackground),
+                            {foreground, background})
+          .name() +
+      "; "
       "background: " +
       closePressedBackground +
       "; "

@@ -4,6 +4,7 @@
 #include "../../dap/debugadapterregistry.h"
 #include "debugglyphs.h"
 
+#include "../../theme/colorcontrast.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
 #include <QAction>
@@ -68,13 +69,14 @@ public:
 
   void setTheme(const Theme &theme) {
     m_textColor = theme.foregroundColor;
+    m_baseBackground = theme.backgroundColor;
     m_hoverBackground =
-        QColor::fromRgbF(theme.hoverColor.redF(), theme.hoverColor.greenF(),
-                         theme.hoverColor.blueF(), 0.2);
-    m_selectedBackground = QColor::fromRgbF(
-        theme.accentSoftColor.redF(), theme.accentSoftColor.greenF(),
-        theme.accentSoftColor.blueF(), 0.18);
-    m_selectedBorder = theme.accentColor.lighter(102);
+        ColorContrast::mix(theme.backgroundColor, theme.hoverColor, 0.6);
+    m_selectedBackground = theme.accentSoftColor.isValid()
+                               ? theme.accentSoftColor
+                               : ColorContrast::mix(theme.backgroundColor,
+                                                    theme.accentColor, 0.25);
+    m_selectedBorder = theme.accentColor;
   }
 
   void paint(QPainter *painter, const QStyleOptionViewItem &option,
@@ -89,29 +91,51 @@ public:
     const bool isSelected = opt.state.testFlag(QStyle::State_Selected);
     const bool isHovered = opt.state.testFlag(QStyle::State_MouseOver);
 
+    const QColor base = m_baseBackground.isValid()
+                            ? m_baseBackground
+                            : option.palette.color(QPalette::Base);
+    const QColor hoverBg = m_hoverBackground.isValid()
+                               ? m_hoverBackground
+                               : option.palette.color(QPalette::AlternateBase);
+    const QColor selectedBg =
+        m_selectedBackground.isValid()
+            ? m_selectedBackground
+            : ColorContrast::mix(
+                  base, option.palette.color(QPalette::Highlight), 0.3);
+    const QColor selectedBorder =
+        m_selectedBorder.isValid() ? m_selectedBorder
+                                   : option.palette.color(QPalette::Highlight);
+
     const QVariant foreground = index.data(Qt::ForegroundRole);
-    const QColor textColor = foreground.isValid()
-                                 ? qvariant_cast<QBrush>(foreground).color()
-                                 : m_textColor;
+    const bool hasItemColor = foreground.canConvert<QBrush>() &&
+                              foreground.value<QBrush>().style() != Qt::NoBrush;
+    QColor textColor = hasItemColor ? foreground.value<QBrush>().color()
+                       : m_textColor.isValid()
+                           ? m_textColor
+                           : option.palette.color(QPalette::Text);
 
     QRect rowRect = opt.rect.adjusted(kRowInset, 1, -kRowInset, -1);
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, false);
 
+    QColor fill = base;
     if (isSelected || isHovered) {
-      const QColor bg = isSelected ? m_selectedBackground : m_hoverBackground;
-      const QColor border = isSelected ? m_selectedBorder : bg.lighter(110);
+      fill = isSelected ? selectedBg : hoverBg;
       painter->setPen(Qt::NoPen);
-      painter->setBrush(bg);
+      painter->setBrush(fill);
       painter->drawRect(rowRect);
 
       if (isSelected) {
         painter->setPen(Qt::NoPen);
-        painter->setBrush(m_selectedBorder);
+        painter->setBrush(selectedBorder);
         painter->drawRect(
             QRect(rowRect.left(), rowRect.top(), 2, rowRect.height()));
       }
     }
+
+    textColor = ColorContrast::ensure(
+        textColor, ColorContrast::flatten(fill, base),
+        hasItemColor ? ColorContrast::GlyphRatio : ColorContrast::TextRatio);
 
     opt.rect = contentRect(opt.rect);
     opt.state &= ~QStyle::State_HasFocus;
@@ -140,11 +164,35 @@ public:
   }
 
 private:
-  QColor m_textColor = QColor("#dce4ee");
-  QColor m_hoverBackground = QColor("#171e27");
-  QColor m_selectedBackground = QColor("#17283d");
-  QColor m_selectedBorder = QColor("#5da7ff");
+  QColor m_textColor;
+  QColor m_baseBackground;
+  QColor m_hoverBackground;
+  QColor m_selectedBackground;
+  QColor m_selectedBorder;
 };
+
+QString debugStatusPillStyle(const Theme &theme, const QColor &surface) {
+  const QString base =
+      QStringLiteral("QLabel#debugStatusLabel { %1 padding: 3px 10px; }")
+          .arg(UIStyleHelper::badgeStyle(theme, UIStyleHelper::Tone::Neutral));
+  const auto pill = [&](const char *kind, const QColor &color) {
+    const QColor fill = ColorContrast::mix(surface, color, 0.16);
+    const QColor border = ColorContrast::mix(fill, color, 0.45);
+    const QColor text = UIStyleHelper::readableText(theme, fill, color);
+    return QStringLiteral("QLabel#debugStatusLabel[statusKind=\"%1\"] {"
+                          "  background: %2;"
+                          "  color: %3;"
+                          "  border-color: %4;"
+                          "}")
+        .arg(QString::fromLatin1(kind), fill.name(), text.name(),
+             border.name());
+  };
+  return base + pill("ready", theme.debugReadyColor) +
+         pill("starting", theme.debugStartingColor) +
+         pill("running", theme.debugRunningColor) +
+         pill("paused", theme.debugPausedColor) +
+         pill("error", theme.debugErrorColor);
+}
 
 void applyTreePalette(QTreeWidget *tree, const Theme &theme) {
   if (!tree) {
@@ -156,7 +204,9 @@ void applyTreePalette(QTreeWidget *tree, const Theme &theme) {
   palette.setColor(QPalette::AlternateBase, theme.surfaceAltColor);
   palette.setColor(QPalette::Text, theme.foregroundColor);
   palette.setColor(QPalette::Highlight, theme.accentSoftColor);
-  palette.setColor(QPalette::HighlightedText, theme.foregroundColor);
+  palette.setColor(QPalette::HighlightedText,
+                   UIStyleHelper::readableText(theme, theme.accentSoftColor,
+                                               theme.foregroundColor));
   tree->setPalette(palette);
 }
 
@@ -266,14 +316,6 @@ void DebugPanel::applyTheme(const Theme &theme) {
 
   applyTransportIcons();
 
-  const auto blend = [](const QColor &base, const QColor &overlay,
-                        qreal ratio) {
-    const qreal clamped = qBound(0.0, ratio, 1.0);
-    return QColor::fromRgbF(
-        base.redF() * (1.0 - clamped) + overlay.redF() * clamped,
-        base.greenF() * (1.0 - clamped) + overlay.greenF() * clamped,
-        base.blueF() * (1.0 - clamped) + overlay.blueF() * clamped, 1.0);
-  };
   const auto withAlpha = [](QColor color, int alpha) {
     color.setAlpha(alpha);
     return color;
@@ -286,20 +328,13 @@ void DebugPanel::applyTheme(const Theme &theme) {
   QColor recessedSurface = theme.backgroundColor;
   QColor inputSurface = theme.surfaceColor;
   QColor focusSurface = theme.accentSoftColor;
-  QColor mutedText = blend(theme.foregroundColor, theme.backgroundColor, 0.24);
-  QColor subtleText = blend(theme.foregroundColor, theme.backgroundColor, 0.34);
+  const QColor fg = UIStyleHelper::readableText(theme, theme.backgroundColor,
+                                                theme.foregroundColor);
+  QColor subtleText = UIStyleHelper::secondaryTextColor(theme);
+  QColor disabledText = UIStyleHelper::mutedTextColor(theme);
   QColor consoleSurface = theme.backgroundColor;
-  QColor readyBg = withAlpha(theme.debugReadyColor, 22);
-  QColor startingBg = withAlpha(theme.debugStartingColor, 30);
-  QColor runningBg = withAlpha(theme.debugRunningColor, 30);
-  QColor pausedBg = withAlpha(theme.debugPausedColor, 34);
   QColor errorBg = withAlpha(theme.debugErrorColor, 36);
-  QColor toolbarButtonBg = theme.surfaceColor;
-  QColor toolbarButtonHover = theme.hoverColor;
-  QColor toolbarButtonPressed = theme.pressedColor;
-  QColor treeBorder = withAlpha(theme.borderColor, 110);
   QColor shellBorder = withAlpha(theme.borderColor, 115);
-  QColor tabBg = Qt::transparent;
   QColor tabHover = withAlpha(theme.foregroundColor, 8);
   QColor tabSelected = withAlpha(theme.foregroundColor, 6);
   QColor tabSelectedBorder = withAlpha(theme.accentColor, 80);
@@ -311,11 +346,6 @@ void DebugPanel::applyTheme(const Theme &theme) {
               "QWidget#debugPanel {"
               "  background: {panelBg};"
               "  color: {fg};"
-              "}"
-              "QWidget#debugToolbarShell {"
-              "  background: {toolbarBg};"
-              "  border: 1px solid {shellBorder};"
-              "  border-radius: 4px;"
               "}"
               "QWidget#debugToolbar {"
               "  background: transparent;"
@@ -348,7 +378,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
               "  background: {accentSoft};"
               "}"
               "QToolButton#debugToolbarButton:disabled {"
-              "  color: {subtleText};"
+              "  color: {disabledText};"
               "  background: transparent;"
               "  border-color: transparent;"
               "}"
@@ -363,7 +393,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
               "}"
               "QToolButton#debugToolbarButton[role=\"primary\"]:disabled {"
               "  background: transparent;"
-              "  color: {subtleText};"
+              "  color: {disabledText};"
               "  font-weight: 500;"
               "}"
               "QToolButton#debugToolbarButton[role=\"danger\"]:hover {"
@@ -482,38 +512,6 @@ void DebugPanel::applyTheme(const Theme &theme) {
               "QComboBox#debugThreadSelector::drop-down {"
               "  border: none;"
               "}"
-              "QLabel#debugStatusLabel {"
-              "  padding: 6px 12px;"
-              "  font-weight: 600;"
-              "  border: 1px solid {tabSelectedBorder};"
-              "  border-radius: 3px;"
-              "  background: {tabHover};"
-              "  color: {fg};"
-              "}"
-              "QLabel#debugStatusLabel[statusKind=\"ready\"] {"
-              "  border-color: {shellBorder};"
-              "  background: {readyBg};"
-              "}"
-              "QLabel#debugStatusLabel[statusKind=\"starting\"] {"
-              "  border-color: {warningColor};"
-              "  background: {startingBg};"
-              "  color: {warningColor};"
-              "}"
-              "QLabel#debugStatusLabel[statusKind=\"running\"] {"
-              "  border-color: {accentColor};"
-              "  background: {runningBg};"
-              "  color: {accentColor};"
-              "}"
-              "QLabel#debugStatusLabel[statusKind=\"paused\"] {"
-              "  border-color: {successColor};"
-              "  background: {pausedBg};"
-              "  color: {successColor};"
-              "}"
-              "QLabel#debugStatusLabel[statusKind=\"error\"] {"
-              "  border-color: {errorColor};"
-              "  background: {errorBg};"
-              "  color: {errorColor};"
-              "}"
               "QPlainTextEdit#debugConsoleOutput {"
               "  background: {consoleSurface};"
               "  color: {fg};"
@@ -537,12 +535,11 @@ void DebugPanel::applyTheme(const Theme &theme) {
               "  padding: 2px 8px;"
               "}"),
           {{"panelBg", panelSurface.name()},
-           {"fg", theme.foregroundColor.name()},
-           {"toolbarBg", toolbarShell.name()},
+           {"fg", fg.name()},
+           {"disabledText", disabledText.name()},
            {"shellBorder", shellBorder.name(QColor::HexArgb)},
            {"shellSurface", shellSurface.name()},
            {"subtleText", subtleText.name()},
-           {"tabBg", tabBg.name(QColor::HexArgb)},
            {"tabHover", tabHover.name(QColor::HexArgb)},
            {"tabSelected", tabSelected.name(QColor::HexArgb)},
            {"tabSelectedBorder", tabSelectedBorder.name(QColor::HexArgb)},
@@ -552,17 +549,13 @@ void DebugPanel::applyTheme(const Theme &theme) {
            {"accentSoft", theme.accentSoftColor.name()},
            {"accentColor", theme.accentColor.name()},
            {"consoleSurface", consoleSurface.name()},
-           {"warningColor", theme.warningColor.name()},
-           {"startingBg", startingBg.name(QColor::HexArgb)},
-           {"runningBg", runningBg.name(QColor::HexArgb)},
-           {"successColor", theme.successColor.name()},
-           {"pausedBg", pausedBg.name(QColor::HexArgb)},
            {"errorColor", theme.errorColor.name()},
            {"errorBg", errorBg.name(QColor::HexArgb)},
-           {"readyBg", readyBg.name(QColor::HexArgb)},
            {"tabPadH", QString::number(UiMetrics::TabPaddingH)},
            {"tabIndicator", QString::number(UiMetrics::TabIndicatorThickness)},
-           {"space", QString::number(UiMetrics::SpaceMd)}}));
+           {"space", QString::number(UiMetrics::SpaceMd)}}) +
+      UIStyleHelper::panelHeaderStyle(theme, "debugToolbarShell") +
+      debugStatusPillStyle(theme, toolbarShell));
 
   const QString treeStyle = fillStyleTemplate(
       QStringLiteral(
@@ -612,43 +605,10 @@ void DebugPanel::applyTheme(const Theme &theme) {
           "  padding: 5px 8px 4px 8px;"
           "  font-size: 10px;"
           "  font-weight: 600;"
-          "}"
-          "QScrollBar:vertical {"
-          "  background: transparent;"
-          "  width: 8px;"
-          "  margin: 2px 0 2px 0;"
-          "}"
-          "QScrollBar::handle:vertical {"
-          "  background: {border};"
-          "  min-height: 18px;"
-          "  border-radius: 2px;"
-          "}"
-          "QScrollBar::handle:vertical:hover {"
-          "  background: {subtleText};"
-          "}"
-          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-          "  height: 0px;"
-          "}"
-          "QScrollBar:horizontal {"
-          "  background: transparent;"
-          "  height: 8px;"
-          "  margin: 0 2px 0 2px;"
-          "}"
-          "QScrollBar::handle:horizontal {"
-          "  background: {border};"
-          "  min-width: 18px;"
-          "  border-radius: 2px;"
-          "}"
-          "QScrollBar::handle:horizontal:hover {"
-          "  background: {subtleText};"
-          "}"
-          "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
-          "  width: 0px;"
           "}"),
       {{"bg", recessedSurface.name()},
        {"altBg", cardSurface.name()},
-       {"fg", theme.foregroundColor.name()},
-       {"border", treeBorder.name(QColor::HexArgb)},
+       {"fg", fg.name()},
        {"selectionBg", theme.accentSoftColor.name()},
        {"subtleText", subtleText.name()}});
 
@@ -677,9 +637,11 @@ void DebugPanel::applyTheme(const Theme &theme) {
   if (m_consoleOutput) {
     QPalette consolePalette = m_consoleOutput->palette();
     consolePalette.setColor(QPalette::Base, consoleSurface);
-    consolePalette.setColor(QPalette::Text, theme.foregroundColor);
+    consolePalette.setColor(QPalette::Text, fg);
     consolePalette.setColor(QPalette::Highlight, focusSurface);
-    consolePalette.setColor(QPalette::HighlightedText, theme.foregroundColor);
+    consolePalette.setColor(
+        QPalette::HighlightedText,
+        UIStyleHelper::readableText(theme, focusSurface, fg));
     m_consoleOutput->setPalette(consolePalette);
   }
 }
@@ -2068,7 +2030,7 @@ void DebugPanel::onStackTraceReceived(int threadId,
     item->setData(0, Qt::UserRole + 3, frame.column);
 
     if (frame.presentationHint == "subtle") {
-      item->setForeground(0, Qt::gray);
+      item->setForeground(0, consoleMutedColor());
     }
 
     m_callStackTree->addTopLevelItem(item);
@@ -3511,9 +3473,9 @@ bool DebugPanel::paintTreeEmptyState(QTreeWidget *tree) {
   QPainter painter(tree->viewport());
   painter.fillRect(tree->viewport()->rect(), tree->palette().base());
 
-  QColor textColor = m_themeInitialized ? m_theme.foregroundColor
-                                        : tree->palette().color(QPalette::Text);
-  textColor.setAlpha(140);
+  const QColor textColor =
+      m_themeInitialized ? UIStyleHelper::mutedTextColor(m_theme)
+                         : tree->palette().color(QPalette::PlaceholderText);
   painter.setPen(textColor);
   painter.drawText(tree->viewport()->rect().adjusted(24, 0, -24, 0),
                    Qt::AlignCenter | Qt::TextWordWrap, text);
@@ -3595,14 +3557,14 @@ QColor DebugPanel::consoleErrorColor() const {
   if (m_themeInitialized) {
     return m_theme.debugErrorColor;
   }
-  const bool darkBackground = palette().color(QPalette::Base).lightness() < 128;
-  return darkBackground ? m_theme.debugErrorColor.lighter(120)
-                        : m_theme.debugErrorColor.darker(120);
+  return ColorContrast::ensure(m_theme.debugErrorColor,
+                               palette().color(QPalette::Base),
+                               ColorContrast::GlyphRatio);
 }
 
 QColor DebugPanel::consoleMutedColor() const {
   if (m_themeInitialized) {
-    return m_theme.debugReadyColor;
+    return UIStyleHelper::mutedTextColor(m_theme);
   }
   QColor muted = palette().color(QPalette::PlaceholderText);
   if (!muted.isValid()) {

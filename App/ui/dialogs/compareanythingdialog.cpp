@@ -23,6 +23,24 @@ constexpr int PATH_ROLE = Qt::UserRole + 3;
 constexpr int MAX_RECENT_COMPARISONS = 10;
 const char *RECENT_SETTINGS_KEY = "git/recentComparisons";
 
+QColor diffLineColor(const Theme &theme, const QString &line) {
+  if (line.startsWith(QLatin1Char('+')) &&
+      !line.startsWith(QLatin1String("+++"))) {
+    return theme.diffAddedColor;
+  }
+  if (line.startsWith(QLatin1Char('-')) &&
+      !line.startsWith(QLatin1String("---"))) {
+    return theme.diffRemovedColor;
+  }
+  if (line.startsWith(QLatin1String("@@"))) {
+    return theme.accentColor;
+  }
+  if (line.startsWith(QLatin1String("diff --git"))) {
+    return theme.foregroundColor;
+  }
+  return UIStyleHelper::secondaryTextColor(theme);
+}
+
 QString encodeEndpoint(const GitCompareEndpoint &endpoint) {
   return QStringLiteral("%1:%2")
       .arg(static_cast<int>(endpoint.kind))
@@ -602,61 +620,36 @@ void CompareAnythingDialog::renderDiffLines(const QString &diffText) {
 
   for (const QString &line : diffText.split(QLatin1Char('\n'))) {
     QListWidgetItem *item = new QListWidgetItem(line, m_diffView);
-    if (line.startsWith(QLatin1Char('+')) &&
-        !line.startsWith(QLatin1String("+++"))) {
-      item->setForeground(m_theme.diffAddedColor);
-    } else if (line.startsWith(QLatin1Char('-')) &&
-               !line.startsWith(QLatin1String("---"))) {
-      item->setForeground(m_theme.diffRemovedColor);
-    } else if (line.startsWith(QLatin1String("@@"))) {
-      item->setForeground(m_theme.accentColor);
-    } else if (line.startsWith(QLatin1String("diff --git"))) {
-      item->setForeground(m_theme.foregroundColor);
-    } else {
-      item->setForeground(m_theme.singleLineCommentFormat);
-    }
+    item->setForeground(diffLineColor(m_theme, line));
   }
 }
 
 void CompareAnythingDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  for (QComboBox *combo :
-       {m_presetCombo, m_recentCombo, m_baseCombo, m_compareCombo}) {
-    if (combo) {
-      combo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-    }
-  }
-  for (QTreeWidget *tree : {m_fileTree, m_onlyBaseTree, m_onlyCompareTree}) {
-    if (tree) {
-      tree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-    }
-  }
-  if (m_diffView) {
-    m_diffView->setStyleSheet(
-        QString("QListWidget { background: %1; border: 1px solid %2; }"
-                "QListWidget::item:selected { background: %3; }")
-            .arg(theme.surfaceColor.name(), theme.borderColor.name(),
-                 theme.hoverColor.name()));
-  }
-  if (m_compareButton) {
-    stylePrimaryButton(m_compareButton);
-  }
-  if (m_swapButton) {
-    styleSecondaryButton(m_swapButton);
-  }
+  stylePrimaryButton(m_compareButton);
   for (const char *name :
        {"comparePresetLabel", "compareRecentLabel", "compareBaseLabel",
-        "compareCompareLabel", "compareOnlyBaseTreeLabel",
-        "compareOnlyCompareTreeLabel", "compareMergeBaseLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
+        "compareCompareLabel", "compareMergeBaseLabel"}) {
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
+  }
+  for (const char *name :
+       {"compareOnlyBaseTreeLabel", "compareOnlyCompareTreeLabel"}) {
+    styleSectionLabel(findChild<QLabel *>(QString::fromLatin1(name)));
+  }
+  styleTitleLabel(m_summaryLabel);
+
+  if (!m_diffView) {
+    return;
+  }
+  if (m_diffView->count() == 0) {
+    renderDiffLines(m_result.diffText);
+    return;
+  }
+  for (int i = 0; i < m_diffView->count(); ++i) {
+    QListWidgetItem *item = m_diffView->item(i);
+    if (item->flags() & Qt::ItemIsSelectable) {
+      item->setForeground(diffLineColor(theme, item->text()));
     }
   }
-  if (m_summaryLabel) {
-    styleTitleLabel(m_summaryLabel);
-  }
-
-  renderDiffLines(m_result.diffText);
 }

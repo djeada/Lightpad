@@ -2,13 +2,19 @@
 #define UISTYLEHELPER_H
 
 #include "../settings/theme.h"
+#include <QColor>
 #include <QString>
+#include <QVector>
 
 class ThemeDefinition;
 
 class UIStyleHelper {
 public:
+  enum class Tone { Neutral, Accent, Success, Warning, Error, Info };
+
   static QString panelStyle(const Theme &theme, const QString &objectName);
+  static QString panelStyle(const ThemeDefinition &theme,
+                            const QString &objectName);
   static QString popupDialogStyle(const Theme &theme);
   static QString popupDialogStyle(const ThemeDefinition &theme);
 
@@ -22,12 +28,17 @@ public:
   static QString panelHeaderStyle(const Theme &theme,
                                   const QString &objectName);
   static QString panelHeaderStyle(const ThemeDefinition &theme);
+  static QString panelHeaderStyle(const ThemeDefinition &theme,
+                                  const QString &objectName);
 
   static QString treeWidgetStyle(const Theme &theme);
+  static QString treeWidgetStyle(const ThemeDefinition &theme);
 
   static QString treeViewStyle(const Theme &theme);
+  static QString treeViewStyle(const ThemeDefinition &theme);
 
   static QString contextMenuStyle(const Theme &theme);
+  static QString contextMenuStyle(const ThemeDefinition &theme);
 
   static QString subduedLabelStyle(const Theme &theme);
   static QString subduedLabelStyle(const ThemeDefinition &theme);
@@ -91,8 +102,56 @@ public:
   static QString dangerButtonStyle(const ThemeDefinition &theme);
 
   static QString progressBarStyle(const Theme &theme);
+  static QString progressBarStyle(const ThemeDefinition &theme);
 
   static QString toolBarStyle(const Theme &theme);
+  static QString toolBarStyle(const ThemeDefinition &theme);
+
+  static QString sectionLabelStyle(const Theme &theme);
+  static QString sectionLabelStyle(const ThemeDefinition &theme);
+
+  static QString emptyStateStyle(const Theme &theme);
+  static QString emptyStateStyle(const ThemeDefinition &theme);
+
+  static QString iconButtonStyle(const Theme &theme);
+  static QString iconButtonStyle(const ThemeDefinition &theme);
+
+  static QString toneLabelStyle(const Theme &theme, Tone tone);
+  static QString toneLabelStyle(const ThemeDefinition &theme, Tone tone);
+
+  static QString badgeStyle(const Theme &theme, Tone tone);
+  static QString badgeStyle(const ThemeDefinition &theme, Tone tone);
+
+  static QString bannerStyle(const Theme &theme, Tone tone);
+  static QString bannerStyle(const ThemeDefinition &theme, Tone tone);
+
+  static QString cardStyle(const Theme &theme,
+                           const QString &objectName = QString());
+  static QString cardStyle(const ThemeDefinition &theme,
+                           const QString &objectName = QString());
+
+  static QString headingStyle(const Theme &theme, int pixelSize = 13);
+  static QString headingStyle(const ThemeDefinition &theme, int pixelSize = 13);
+
+  static QString listWidgetStyle(const Theme &theme);
+  static QString listWidgetStyle(const ThemeDefinition &theme);
+
+  static QColor mutedTextColor(const Theme &theme);
+  static QColor mutedTextColor(const ThemeDefinition &theme);
+  static QColor secondaryTextColor(const Theme &theme);
+  static QColor secondaryTextColor(const ThemeDefinition &theme);
+
+  static QVector<QColor> seriesColors(const Theme &theme);
+  static QVector<QColor> seriesColors(const ThemeDefinition &theme);
+
+  static QColor toneColor(const Theme &theme, Tone tone);
+  static QColor toneColor(const ThemeDefinition &theme, Tone tone);
+
+  static QColor readableText(const Theme &theme, const QColor &background,
+                             const QColor &preferred = QColor());
+  static QColor readableText(const ThemeDefinition &theme,
+                             const QColor &background,
+                             const QColor &preferred = QColor());
 };
 
 #endif

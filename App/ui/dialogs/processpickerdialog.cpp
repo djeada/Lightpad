@@ -161,8 +161,8 @@ void ProcessPickerDialog::setupUi() {
   layout->addWidget(m_processTree);
 
   m_countLabel = new QLabel(this);
-  m_countLabel->setStyleSheet(
-      QStringLiteral("color: palette(mid); font-size: 11px;"));
+  m_countLabel->setForegroundRole(QPalette::PlaceholderText);
+  m_countLabel->setStyleSheet(QStringLiteral("font-size: 11px;"));
   layout->addWidget(m_countLabel);
 
   QHBoxLayout *buttonLayout = new QHBoxLayout();

@@ -1,6 +1,7 @@
 #include "commitcraftingdialog.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "themedmessagebox.h"
 #include <QDir>
 #include <QFile>
@@ -74,6 +75,7 @@ CommitCraftingDialog::CommitCraftingDialog(GitIntegration *git,
   setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void CommitCraftingDialog::buildUi() {
@@ -647,50 +649,16 @@ void CommitCraftingDialog::keyPressEvent(QKeyEvent *event) {
 
 void CommitCraftingDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  for (QTreeWidget *tree : {m_unassignedTree, m_bucketTree}) {
-    if (tree) {
-      tree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-    }
+  m_promptWarningColor = theme.warningColor;
+  m_promptNormalColor = theme.foregroundColor;
+  stylePromptItems();
+  styleTitleLabel(m_headerLabel);
+  for (const char *name : {"craftUnassignedLabel", "craftBucketsLabel"}) {
+    styleSectionLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
-  if (m_promptList) {
-    m_promptList->setStyleSheet(
-        QString("QListWidget { background: %1; color: %2; border: 1px solid "
-                "%3; }")
-            .arg(theme.surfaceColor.name(), theme.foregroundColor.name(),
-                 theme.borderColor.name()));
-    m_promptWarningColor = theme.warningColor;
-    m_promptNormalColor = theme.foregroundColor;
-    stylePromptItems();
+  for (const char *name : {"craftNameLabel", "craftBucketStatsLabel"}) {
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
-  if (m_bucketNameEdit) {
-    m_bucketNameEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  }
-  if (m_messageEdit) {
-    m_messageEdit->setStyleSheet(
-        QString("QTextEdit { background: %1; color: %2; border: 1px solid %3; "
-                "}")
-            .arg(theme.surfaceColor.name(), theme.foregroundColor.name(),
-                 theme.borderColor.name()));
-  }
-  if (m_headerLabel) {
-    styleTitleLabel(m_headerLabel);
-  }
-  for (const char *name : {"craftUnassignedLabel", "craftBucketsLabel",
-                           "craftNameLabel", "craftBucketStatsLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
-  }
-  if (m_commitButton) {
-    stylePrimaryButton(m_commitButton);
-  }
-  for (QPushButton *button :
-       {m_addBucketButton, m_removeBucketButton, m_assignButton, m_returnButton,
-        m_refreshButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
+  stylePrimaryButton(m_commitButton);
 }

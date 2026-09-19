@@ -1,5 +1,8 @@
 #include "gitfilehistorydialog.h"
 #include "../../git/gitintegration.h"
+#include "../../theme/colorcontrast.h"
+#include "../uistylehelper.h"
+#include "gitautorefresh.h"
 
 #include <QBoxLayout>
 #include <QFileInfo>
@@ -60,6 +63,10 @@ GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
           &GitFileHistoryDialog::onCommitDoubleClicked);
 
   loadHistory();
+  reloadOnExternalGitChanges(this, m_git, [this]() {
+    m_commitTree->clear();
+    loadHistory();
+  });
 }
 
 void GitFileHistoryDialog::loadHistory() {
@@ -95,30 +102,49 @@ void GitFileHistoryDialog::onCommitDoubleClicked(QTreeWidgetItem *item, int) {
 }
 
 void GitFileHistoryDialog::showCommitDetails(const GitCommitInfo &info) {
-  QString html = QStringLiteral(
-      "<div style='font-family: monospace;'>"
-      "<div style='font-size: 14px; font-weight: bold;'>%1</div>"
-      "<div style='color: #aaa; margin: 4px 0;'>%2 &lt;%3&gt;</div>"
-      "<div style='color: #888;'>%4 (%5)</div>"
-      "<hr>"
-      "<div style='margin-top: 8px;'>%6</div>");
+  m_currentHash = info.hash;
+  const QColor surface = m_theme.surfaceColor;
+  const QString secondary = UIStyleHelper::secondaryTextColor(m_theme).name();
+  const QString muted = UIStyleHelper::mutedTextColor(m_theme).name();
+  const QString body =
+      UIStyleHelper::readableText(m_theme, surface, m_theme.foregroundColor)
+          .name();
+  const QString added =
+      ColorContrast::ensure(m_theme.gitAddedColor, surface).name();
+  const QString deleted =
+      ColorContrast::ensure(m_theme.gitDeletedColor, surface).name();
+
+  QString html =
+      QStringLiteral(
+          "<div style='font-family: monospace;'>"
+          "<div style='font-size: 14px; font-weight: bold;'>%1</div>"
+          "<div style='color: %7; margin: 4px 0;'>%2 &lt;%3&gt;</div>"
+          "<div style='color: %8;'>%4 (%5)</div>"
+          "<hr>"
+          "<div style='margin-top: 8px;'>%6</div>")
+          .arg(info.shortHash.toHtmlEscaped(), info.author.toHtmlEscaped(),
+               info.authorEmail.toHtmlEscaped(), info.date.toHtmlEscaped(),
+               info.relativeDate.toHtmlEscaped(), info.subject.toHtmlEscaped(),
+               secondary, muted);
 
   if (!info.body.isEmpty()) {
-    html +=
-        QStringLiteral("<div style='margin-top: 8px; color: #ccc;'>%1</div>")
-            .arg(info.body.toHtmlEscaped().replace('\n', "<br>"));
+    html += QStringLiteral("<div style='margin-top: 8px; color: %1;'>%2</div>")
+                .arg(body, info.body.toHtmlEscaped().replace('\n', "<br>"));
   }
 
   QList<GitCommitFileStat> stats = m_git->getCommitFileStats(info.hash);
   if (!stats.isEmpty()) {
     html += QStringLiteral(
-                "<div style='margin-top: 10px; border-top: 1px solid #555; "
-                "padding-top: 6px;'><b>Changed files (%1):</b></div>")
+                "<div style='margin-top: 10px; border-top: 1px solid %1; "
+                "padding-top: 6px;'><b>Changed files (%2):</b></div>")
+                .arg(m_theme.borderColor.name())
                 .arg(stats.size());
     for (const auto &stat : stats) {
-      html += QStringLiteral("<div><span style='color:#4caf50;'>+%1</span> "
-                             "<span style='color:#f44336;'>-%2</span> %3</div>")
+      html += QStringLiteral("<div><span style='color:%1;'>+%2</span> "
+                             "<span style='color:%3;'>-%4</span> %5</div>")
+                  .arg(added)
                   .arg(stat.additions)
+                  .arg(deleted)
                   .arg(stat.deletions)
                   .arg(stat.filePath.toHtmlEscaped());
     }
@@ -126,10 +152,13 @@ void GitFileHistoryDialog::showCommitDetails(const GitCommitInfo &info) {
 
   html += QStringLiteral("</div>");
 
-  m_detailView->setHtml(html.arg(info.shortHash.toHtmlEscaped())
-                            .arg(info.author.toHtmlEscaped())
-                            .arg(info.authorEmail.toHtmlEscaped())
-                            .arg(info.date.toHtmlEscaped())
-                            .arg(info.relativeDate.toHtmlEscaped())
-                            .arg(info.subject.toHtmlEscaped()));
+  m_detailView->setHtml(html);
+}
+
+void GitFileHistoryDialog::applyTheme(const Theme &theme) {
+  StyledDialog::applyTheme(theme);
+  styleTitleLabel(m_titleLabel);
+  if (m_git && !m_currentHash.isEmpty()) {
+    showCommitDetails(m_git->getCommitDetails(m_currentHash));
+  }
 }

@@ -3,6 +3,7 @@
 
 #include "../../git/gitrepositorystate.h"
 #include "../../settings/theme.h"
+#include "../uistylehelper.h"
 #include <QWidget>
 
 class QLabel;
@@ -50,7 +51,7 @@ private:
                        bool leadingArrow);
   void rebuildChips();
   void updateCollapsedState();
-  void styleChip(QToolButton *chip, const QColor &accent) const;
+  void styleChip(QToolButton *chip, UIStyleHelper::Tone tone) const;
 
   GitRepositoryState m_state;
   Theme m_theme;

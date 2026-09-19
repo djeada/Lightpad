@@ -2,6 +2,7 @@
 #include "../../git/gitintegration.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "operationpreviewdialog.h"
 #include "themedmessagebox.h"
 #include <QCheckBox>
@@ -64,6 +65,7 @@ IntegrationAdvisorDialog::IntegrationAdvisorDialog(GitIntegration *git,
   setKeyboardDefault(m_executeButton);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void IntegrationAdvisorDialog::buildUi() {
@@ -495,46 +497,24 @@ void IntegrationAdvisorDialog::onExecute() {
 
 void IntegrationAdvisorDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  for (QComboBox *combo : {m_sourceCombo, m_commitCombo}) {
-    if (combo) {
-      combo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-    }
-  }
-  for (QRadioButton *radio : m_radios) {
-    radio->setStyleSheet(UIStyleHelper::checkBoxStyle(theme) +
-                         QString("QRadioButton { color: %1; }"
-                                 "QRadioButton:disabled { color: %2; }")
-                             .arg(theme.foregroundColor.name(),
-                                  theme.singleLineCommentFormat.name()));
-  }
   for (QLabel *label : m_consequences) {
     styleSubduedLabel(label);
   }
   for (const char *name :
        {"advisorFromLabel", "advisorCommitLabel", "advisorTargetLabel",
         "advisorCommandLabel", "advisorRecommendationLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
 
   const GitIntegrationOption *option = optionFor(selectedIntent());
   const bool risky =
       option && (option->rewritesHistory || option->affectsSharedHistory);
-  if (m_riskLabel) {
-    m_riskLabel->setStyleSheet(
-        QString("color: %1;")
-            .arg((option && option->affectsSharedHistory ? theme.errorColor
-                  : risky                                ? theme.warningColor
-                                                         : theme.successColor)
-                     .name()));
-  }
+  styleToneLabel(m_riskLabel, option && option->affectsSharedHistory
+                                  ? UIStyleHelper::Tone::Error
+                              : risky ? UIStyleHelper::Tone::Warning
+                                      : UIStyleHelper::Tone::Success);
   if (m_topologyList) {
-    m_topologyList->setStyleSheet(
-        QString("QListWidget { background: %1; border: 1px solid %2; }")
-            .arg(theme.surfaceColor.name(), theme.borderColor.name()));
     for (int i = 0; i < m_topologyList->count(); ++i) {
       QListWidgetItem *item = m_topologyList->item(i);
       switch (
@@ -554,21 +534,9 @@ void IntegrationAdvisorDialog::applyTheme(const Theme &theme) {
       }
     }
   }
-  if (m_expertCheck) {
-    m_expertCheck->setStyleSheet(
-        UIStyleHelper::checkBoxStyle(theme) +
-        QString("QCheckBox { color: %1; }").arg(theme.foregroundColor.name()));
-  }
-  for (QPushButton *button : {m_previewButton, m_cancelButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
-  if (m_executeButton) {
-    if (risky) {
-      styleDangerButton(m_executeButton);
-    } else {
-      stylePrimaryButton(m_executeButton);
-    }
+  if (risky) {
+    styleDangerButton(m_executeButton);
+  } else {
+    stylePrimaryButton(m_executeButton);
   }
 }
