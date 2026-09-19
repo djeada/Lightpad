@@ -1,4 +1,6 @@
 #include "gitgraphwidget.h"
+#include "../../theme/colorcontrast.h"
+#include "../uistylehelper.h"
 
 #include <QContextMenuEvent>
 #include <QKeyEvent>
@@ -9,19 +11,13 @@
 #include <QToolTip>
 #include <QWheelEvent>
 
-const QList<QColor> GitGraphWidget::s_laneColors = {
-    QColor(0x4E, 0xC9, 0xB0), QColor(0xCE, 0x91, 0x78),
-    QColor(0x56, 0x9C, 0xD6), QColor(0xDC, 0xDC, 0xAA),
-    QColor(0xC5, 0x86, 0xC0), QColor(0xD7, 0xBA, 0x7D),
-    QColor(0x6A, 0x99, 0x55), QColor(0xD1, 0x6D, 0x6D),
-};
-
 GitGraphWidget::GitGraphWidget(GitIntegration *git, const Theme &theme,
                                QWidget *parent)
     : QWidget(parent), m_git(git), m_theme(theme), m_maxLanes(0),
       m_scrollOffset(0), m_selectedIndex(-1) {
   setMouseTracking(true);
   setFocusPolicy(Qt::StrongFocus);
+  refreshThemeColors();
 
   m_scrollBar = new QScrollBar(Qt::Vertical, this);
   m_scrollBar->setRange(0, 0);
@@ -117,7 +113,22 @@ void GitGraphWidget::loadGraph(int maxCount) {
 
 void GitGraphWidget::setTheme(const Theme &theme) {
   m_theme = theme;
+  refreshThemeColors();
+  for (GraphCommitNode &node : m_nodes) {
+    node.color = laneColor(node.column);
+  }
   update();
+}
+
+void GitGraphWidget::refreshThemeColors() {
+  const QColor bg = m_theme.backgroundColor;
+  m_laneColors = UIStyleHelper::seriesColors(m_theme);
+  m_mutedText = UIStyleHelper::mutedTextColor(m_theme);
+  m_secondaryText = UIStyleHelper::secondaryTextColor(m_theme);
+  m_dimmedText = ColorContrast::ensure(
+      ColorContrast::mix(m_theme.foregroundColor, bg, 0.65), bg, 2.0);
+  m_warningText = ColorContrast::ensure(m_theme.warningColor, bg);
+  m_modifiedText = ColorContrast::ensure(m_theme.gitModifiedColor, bg);
 }
 
 void GitGraphWidget::setFilter(const QString &filter) {
@@ -373,7 +384,10 @@ void GitGraphWidget::relayout() {
 }
 
 QColor GitGraphWidget::laneColor(int lane) const {
-  return s_laneColors[lane % s_laneColors.size()];
+  if (m_laneColors.isEmpty()) {
+    return m_theme.foregroundColor;
+  }
+  return m_laneColors[lane % m_laneColors.size()];
 }
 
 int GitGraphWidget::commitAtY(int y) const {
@@ -456,17 +470,19 @@ void GitGraphWidget::drawRefBadges(QPainter &painter,
   if (headBg.alpha() == 0 || headBg == m_theme.backgroundColor) {
     headBg = m_theme.highlightColor;
   }
-  const QColor headFg =
-      headBg.lightnessF() > 0.55 ? QColor(Qt::black) : QColor(Qt::white);
+  const QColor headFg = UIStyleHelper::readableText(m_theme, headBg);
 
   QColor tagBg = fgColor;
   tagBg.setAlpha(dimmed ? 8 : 28);
+  const QColor tagFg =
+      dimmed
+          ? m_dimmedText
+          : UIStyleHelper::readableText(
+                m_theme, ColorContrast::flatten(tagBg, m_theme.backgroundColor),
+                fgColor);
 
-  QColor remoteFg = fgColor;
-  remoteFg.setAlpha(dimmed ? 45 : 150);
-
-  QColor dimFg = fgColor;
-  dimFg.setAlpha(dimmed ? 40 : 255);
+  const QColor remoteFg = dimmed ? m_dimmedText : m_secondaryText;
+  const QColor dimFg = dimmed ? m_dimmedText : fgColor;
 
   int x = GRAPH_LEFT_MARGIN + (m_maxLanes + 1) * LANE_WIDTH +
           TEXT_LEFT_PADDING + 72;
@@ -538,7 +554,7 @@ void GitGraphWidget::drawRefBadges(QPainter &painter,
       painter.setPen(Qt::NoPen);
       painter.setBrush(tagBg);
       painter.drawRoundedRect(pillRect, pillHeight / 2, pillHeight / 2);
-      painter.setPen(dimmed ? remoteFg : fgColor);
+      painter.setPen(tagFg);
       painter.drawText(pillRect.adjusted(7, 0, -7, 0),
                        Qt::AlignVCenter | Qt::AlignLeft, label);
       break;
@@ -581,7 +597,7 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
   painter.fillRect(rect(), bgColor);
 
   if (m_nodes.isEmpty()) {
-    painter.setPen(QColor(fgColor.red(), fgColor.green(), fgColor.blue(), 120));
+    painter.setPen(m_mutedText);
     painter.setFont(font());
     painter.drawText(rect(), Qt::AlignCenter,
                      tr("No commits to display.\nMake a commit or reload the "
@@ -589,8 +605,8 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
     return;
   }
 
-  const QColor muted(fgColor.red(), fgColor.green(), fgColor.blue(), 140);
-  const QColor veryMuted(fgColor.red(), fgColor.green(), fgColor.blue(), 60);
+  const QColor muted = m_mutedText;
+  const QColor veryMuted = m_dimmedText;
 
   int graphWidth = GRAPH_LEFT_MARGIN + (m_maxLanes + 1) * LANE_WIDTH;
   int textX = graphWidth + TEXT_LEFT_PADDING;
@@ -713,15 +729,13 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
       painter.drawRect(QRectF(cx - DOT_RADIUS - 5, cy - DOT_RADIUS - 5,
                               2 * (DOT_RADIUS + 5), 2 * (DOT_RADIUS + 5)));
       painter.setFont(hashFont);
-      painter.setPen(m_theme.warningColor);
+      painter.setPen(m_warningText);
       painter.drawText(0, y, GRAPH_LEFT_MARGIN + LANE_WIDTH, m_rowHeight,
                        Qt::AlignVCenter | Qt::AlignLeft, tr("A"));
     }
 
     painter.setFont(hashFont);
-    painter.setPen(
-        dimmed ? veryMuted
-               : QColor(fgColor.red(), fgColor.green(), fgColor.blue(), 150));
+    painter.setPen(dimmed ? veryMuted : m_secondaryText);
     painter.drawText(textX, y, 70, m_rowHeight, Qt::AlignVCenter,
                      node.info.shortHash);
 
@@ -792,11 +806,11 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
       painter.drawEllipse(QPointF(cx, cy), DOT_RADIUS + 1, DOT_RADIUS + 1);
 
       painter.setFont(hashFont);
-      painter.setPen(m_theme.gitModifiedColor);
+      painter.setPen(m_modifiedText);
       painter.drawText(textX, y, 70, m_rowHeight, Qt::AlignVCenter, tr("WIP"));
 
       painter.setFont(commitFont);
-      painter.setPen(m_theme.gitModifiedColor);
+      painter.setPen(m_modifiedText);
       QStringList bits;
       if (m_workingState.stagedCount > 0) {
         bits << tr("%1 staged").arg(m_workingState.stagedCount);
@@ -825,7 +839,7 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
         Qt::AlignCenter, tr("Loading more history…"));
   } else if (m_historyExhausted &&
              m_scrollOffset + height() >= contentHeight()) {
-    painter.setPen(veryMuted);
+    painter.setPen(muted);
     painter.drawText(
         QRect(0, contentHeight() - m_scrollOffset, width(), m_rowHeight),
         Qt::AlignCenter, tr("Beginning of history"));

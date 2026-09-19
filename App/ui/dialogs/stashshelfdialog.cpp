@@ -3,6 +3,7 @@
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
 #include "../widgets/flowlayout.h"
+#include "gitautorefresh.h"
 #include "themedmessagebox.h"
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -37,6 +38,7 @@ StashShelfDialog::StashShelfDialog(GitIntegration *git, const Theme &theme,
   setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void StashShelfDialog::buildUi() {
@@ -419,7 +421,6 @@ void StashShelfDialog::onCompareWithWorkingTree() {
 
 void StashShelfDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
   if (m_searchEdit) {
     m_searchEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));
@@ -427,34 +428,13 @@ void StashShelfDialog::applyTheme(const Theme &theme) {
   if (m_shelfList) {
     m_shelfList->setStyleSheet(UIStyleHelper::resultListStyle(theme));
   }
-  if (m_fileTree) {
-    m_fileTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-  }
-  if (m_detailLabel) {
-    m_detailLabel->setStyleSheet(
-        QString("color: %1;").arg(theme.foregroundColor.name()));
-  }
-  if (m_applyExplanation) {
-    styleSubduedLabel(m_applyExplanation);
-  }
+  styleSubduedLabel(m_applyExplanation);
   if (m_conflictLabel) {
     const GitStashCard *card = currentCard();
     const bool risky = card && !predictStashConflicts(m_git, *card).isEmpty();
-    m_conflictLabel->setStyleSheet(
-        QString("color: %1;")
-            .arg((risky ? theme.warningColor : theme.successColor).name()));
+    styleToneLabel(m_conflictLabel, risky ? UIStyleHelper::Tone::Warning
+                                          : UIStyleHelper::Tone::Success);
   }
-  for (QPushButton *button :
-       {m_popButton, m_restoreFilesButton, m_branchButton, m_baseButton,
-        m_compareButton, m_newStashButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
-  if (m_applyButton) {
-    stylePrimaryButton(m_applyButton);
-  }
-  if (m_dropButton) {
-    styleDangerButton(m_dropButton);
-  }
+  stylePrimaryButton(m_applyButton);
+  styleDangerButton(m_dropButton);
 }

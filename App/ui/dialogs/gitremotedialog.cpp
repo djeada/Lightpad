@@ -1,5 +1,6 @@
 #include "gitremotedialog.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "themedmessagebox.h"
 #include <QCheckBox>
 
@@ -31,6 +32,7 @@ GitRemoteDialog::GitRemoteDialog(GitIntegration *git, Mode mode,
   setMinimumSize(550, 450);
   setupUI();
   refresh();
+  reloadOnExternalGitChanges(this, m_git, [this]() { refresh(); });
 }
 
 GitRemoteDialog::~GitRemoteDialog() {}
@@ -70,21 +72,14 @@ void GitRemoteDialog::setupUI() {
     break;
   }
 
-  QLabel *iconLabel = new QLabel(iconText, this);
-  iconLabel->setStyleSheet("font-size: 28px;");
-  headerLayout->addWidget(iconLabel);
+  m_iconLabel = new QLabel(iconText, this);
+  headerLayout->addWidget(m_iconLabel);
 
   QVBoxLayout *titleLayout = new QVBoxLayout();
-  QLabel *titleLabel = new QLabel(titleText, this);
-  titleLabel->setStyleSheet(
-      QString("font-size: 18px; font-weight: bold; color: %1;")
-          .arg(m_theme.foregroundColor.name()));
-  QLabel *subtitleLabel = new QLabel(subtitleText, this);
-  subtitleLabel->setStyleSheet(
-      QString("color: %1; font-size: 12px;")
-          .arg(m_theme.singleLineCommentFormat.name()));
-  titleLayout->addWidget(titleLabel);
-  titleLayout->addWidget(subtitleLabel);
+  m_titleLabel = new QLabel(titleText, this);
+  m_subtitleLabel = new QLabel(subtitleText, this);
+  titleLayout->addWidget(m_titleLabel);
+  titleLayout->addWidget(m_subtitleLabel);
   headerLayout->addLayout(titleLayout, 1);
 
   mainLayout->addLayout(headerLayout);
@@ -130,8 +125,6 @@ void GitRemoteDialog::setupUI() {
       m_forceCheckbox = new QCheckBox(tr("Force push (dangerous!)"), this);
       m_forceCheckbox->setToolTip(tr("Force push even if it would overwrite "
                                      "remote changes. Use with caution!"));
-      m_forceCheckbox->setStyleSheet(
-          QString("QCheckBox { color: %1; }").arg(m_theme.errorColor.name()));
       optionsLayout->addWidget(m_forceCheckbox);
     }
 
@@ -191,9 +184,6 @@ void GitRemoteDialog::setupUI() {
   mainLayout->addWidget(m_progressBar);
 
   m_statusLabel = new QLabel(this);
-  m_statusLabel->setStyleSheet(
-      QString("color: %1; font-size: 11px;")
-          .arg(m_theme.singleLineCommentFormat.name()));
   mainLayout->addWidget(m_statusLabel);
 
   mainLayout->addStretch();
@@ -310,22 +300,19 @@ void GitRemoteDialog::onPushClicked() {
   }
 
   m_progressBar->show();
-  m_statusLabel->setText(tr("Pushing to %1/%2...").arg(remote).arg(branch));
+  setStatus(tr("Pushing to %1/%2...").arg(remote).arg(branch),
+            UIStyleHelper::Tone::Neutral);
 
   bool success = m_git->push(remote, branch, setUpstream);
 
   m_progressBar->hide();
 
   if (success) {
-    m_statusLabel->setText(
-        tr("✓ Successfully pushed to %1/%2").arg(remote).arg(branch));
-    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;")
-                                     .arg(m_theme.successColor.name()));
+    setStatus(tr("✓ Successfully pushed to %1/%2").arg(remote).arg(branch),
+              UIStyleHelper::Tone::Success);
     emit operationCompleted(QString("Pushed to %1/%2").arg(remote).arg(branch));
   } else {
-    m_statusLabel->setText(tr("✗ Push failed"));
-    m_statusLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
+    setStatus(tr("✗ Push failed"), UIStyleHelper::Tone::Error);
   }
 }
 
@@ -343,28 +330,24 @@ void GitRemoteDialog::onPullClicked() {
   }
 
   m_progressBar->show();
-  m_statusLabel->setText(tr("Pulling from %1/%2...").arg(remote).arg(branch));
+  setStatus(tr("Pulling from %1/%2...").arg(remote).arg(branch),
+            UIStyleHelper::Tone::Neutral);
 
   bool success = m_git->pull(remote, branch);
 
   m_progressBar->hide();
 
   if (success) {
-    m_statusLabel->setText(
-        tr("✓ Successfully pulled from %1/%2").arg(remote).arg(branch));
-    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;")
-                                     .arg(m_theme.successColor.name()));
+    setStatus(tr("✓ Successfully pulled from %1/%2").arg(remote).arg(branch),
+              UIStyleHelper::Tone::Success);
     emit operationCompleted(
         QString("Pulled from %1/%2").arg(remote).arg(branch));
   } else {
     if (m_git->hasMergeConflicts()) {
-      m_statusLabel->setText(tr("⚠ Pull completed with merge conflicts"));
-      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;")
-                                       .arg(m_theme.errorColor.name()));
+      setStatus(tr("⚠ Pull completed with merge conflicts"),
+                UIStyleHelper::Tone::Warning);
     } else {
-      m_statusLabel->setText(tr("✗ Pull failed"));
-      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;")
-                                       .arg(m_theme.errorColor.name()));
+      setStatus(tr("✗ Pull failed"), UIStyleHelper::Tone::Error);
     }
   }
 }
@@ -381,21 +364,19 @@ void GitRemoteDialog::onFetchClicked() {
   }
 
   m_progressBar->show();
-  m_statusLabel->setText(tr("Fetching from %1...").arg(remote));
+  setStatus(tr("Fetching from %1...").arg(remote),
+            UIStyleHelper::Tone::Neutral);
 
   bool success = m_git->fetch(remote);
 
   m_progressBar->hide();
 
   if (success) {
-    m_statusLabel->setText(tr("✓ Successfully fetched from %1").arg(remote));
-    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;")
-                                     .arg(m_theme.successColor.name()));
+    setStatus(tr("✓ Successfully fetched from %1").arg(remote),
+              UIStyleHelper::Tone::Success);
     emit operationCompleted(QString("Fetched from %1").arg(remote));
   } else {
-    m_statusLabel->setText(tr("✗ Fetch failed"));
-    m_statusLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
+    setStatus(tr("✗ Fetch failed"), UIStyleHelper::Tone::Error);
   }
 }
 
@@ -416,13 +397,10 @@ void GitRemoteDialog::onAddRemoteClicked() {
     m_remoteNameEdit->clear();
     m_remoteUrlEdit->clear();
     updateRemoteList();
-    m_statusLabel->setText(tr("✓ Remote '%1' added").arg(name));
-    m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;")
-                                     .arg(m_theme.successColor.name()));
+    setStatus(tr("✓ Remote '%1' added").arg(name),
+              UIStyleHelper::Tone::Success);
   } else {
-    m_statusLabel->setText(tr("✗ Failed to add remote"));
-    m_statusLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px;").arg(m_theme.errorColor.name()));
+    setStatus(tr("✗ Failed to add remote"), UIStyleHelper::Tone::Error);
   }
 }
 
@@ -447,13 +425,10 @@ void GitRemoteDialog::onRemoveRemoteClicked() {
   if (result == ThemedMessageBox::Yes) {
     if (m_git->removeRemote(name)) {
       updateRemoteList();
-      m_statusLabel->setText(tr("✓ Remote '%1' removed").arg(name));
-      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;")
-                                       .arg(m_theme.successColor.name()));
+      setStatus(tr("✓ Remote '%1' removed").arg(name),
+                UIStyleHelper::Tone::Success);
     } else {
-      m_statusLabel->setText(tr("✗ Failed to remove remote"));
-      m_statusLabel->setStyleSheet(QString("color: %1; font-size: 11px;")
-                                       .arg(m_theme.errorColor.name()));
+      setStatus(tr("✗ Failed to remove remote"), UIStyleHelper::Tone::Error);
     }
   }
 }
@@ -472,5 +447,39 @@ void GitRemoteDialog::applyTheme(const Theme &theme) {
     m_progressBar->setStyleSheet(UIStyleHelper::progressBarStyle(theme));
   }
 
-  styleSubduedLabel(m_statusLabel);
+  applyHeroHeaderStyle();
+  applyStatusStyle();
+
+  if (m_forceCheckbox) {
+    m_forceCheckbox->setStyleSheet(
+        UIStyleHelper::checkBoxStyle(theme) +
+        QString("QCheckBox { color: %1; }")
+            .arg(UIStyleHelper::toneColor(theme, UIStyleHelper::Tone::Error)
+                     .name()));
+  }
+}
+
+void GitRemoteDialog::applyHeroHeaderStyle() {
+  if (m_iconLabel)
+    m_iconLabel->setStyleSheet("font-size: 28px; background: transparent;");
+  if (m_titleLabel)
+    m_titleLabel->setStyleSheet(UIStyleHelper::headingStyle(m_theme, 17));
+  if (m_subtitleLabel)
+    m_subtitleLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(m_theme) +
+                                   " font-size: 12px;");
+}
+
+void GitRemoteDialog::setStatus(const QString &text, UIStyleHelper::Tone tone) {
+  m_statusTone = tone;
+  m_statusLabel->setText(text);
+  applyStatusStyle();
+}
+
+void GitRemoteDialog::applyStatusStyle() {
+  if (!m_statusLabel)
+    return;
+  m_statusLabel->setStyleSheet(
+      m_statusTone == UIStyleHelper::Tone::Neutral
+          ? UIStyleHelper::infoLabelStyle(m_theme)
+          : UIStyleHelper::toneLabelStyle(m_theme, m_statusTone));
 }

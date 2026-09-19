@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QProcess>
 #include <QSet>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QtTest/QtTest>
@@ -54,6 +55,8 @@ private slots:
   void testGetCommitLogPage();
   void testGetCommitLogPageAsync();
   void testGetCommitRefsMap();
+  void testRepositoryFingerprint();
+  void testExternalChangesDetected();
 
 private:
   QTemporaryDir m_tempDir;
@@ -1158,6 +1161,141 @@ void TestGitIntegration::testGetCommitRefsMap() {
   QVERIFY(sawLocalBranch);
   Q_UNUSED(sawRemote);
   QVERIFY(sawHeadMarker);
+}
+
+namespace {
+bool gitIn(const QString &path, const QStringList &args) {
+  QProcess process;
+  process.setWorkingDirectory(path);
+  process.start("git", args);
+  process.waitForFinished(GIT_COMMAND_TIMEOUT_MS);
+  return process.exitStatus() == QProcess::NormalExit &&
+         process.exitCode() == 0;
+}
+
+void writeFile(const QString &path, const QByteArray &content) {
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+  file.write(content);
+}
+
+bool initSeededRepo(const QString &path) {
+  if (!QDir().mkpath(path) || !gitIn(path, {"init", "-b", "main"}) ||
+      !gitIn(path, {"config", "user.email", "test@test.com"}) ||
+      !gitIn(path, {"config", "user.name", "Test User"})) {
+    return false;
+  }
+  writeFile(path + "/a.txt", "one\n");
+  return gitIn(path, {"add", "."}) && gitIn(path, {"commit", "-m", "seed"});
+}
+} // namespace
+
+void TestGitIntegration::testRepositoryFingerprint() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString repo = dir.path() + "/fp_repo";
+  QVERIFY(initSeededRepo(repo));
+
+  QStringList conflicts;
+  const QByteArray clean =
+      GitIntegration::repositoryFingerprint(repo, &conflicts);
+  QVERIFY(!clean.isEmpty());
+  QVERIFY(conflicts.isEmpty());
+  QCOMPARE(GitIntegration::repositoryFingerprint(repo, nullptr), clean);
+
+  writeFile(repo + "/a.txt", "two\n");
+  const QByteArray dirty = GitIntegration::repositoryFingerprint(repo, nullptr);
+  QVERIFY(dirty != clean);
+  writeFile(repo + "/a.txt", "two, longer\n");
+  QVERIFY(GitIntegration::repositoryFingerprint(repo, nullptr) != dirty);
+
+  QVERIFY(gitIn(repo, {"commit", "-am", "second"}));
+  const QByteArray committed =
+      GitIntegration::repositoryFingerprint(repo, nullptr);
+  QVERIFY(committed != clean);
+
+  writeFile(repo + "/a.txt", "stashed\n");
+  QVERIFY(gitIn(repo, {"stash"}));
+  QVERIFY(GitIntegration::repositoryFingerprint(repo, nullptr) != committed);
+  QVERIFY(gitIn(repo, {"stash", "drop"}));
+
+  QVERIFY(gitIn(repo, {"checkout", "-b", "other", "HEAD~1"}));
+  writeFile(repo + "/a.txt", "other\n");
+  QVERIFY(gitIn(repo, {"commit", "-am", "other"}));
+  QVERIFY(gitIn(repo, {"checkout", "main"}));
+  QVERIFY(!gitIn(repo, {"merge", "other"}));
+
+  conflicts.clear();
+  QVERIFY(!GitIntegration::repositoryFingerprint(repo, &conflicts).isEmpty());
+  QCOMPARE(conflicts, QStringList{"a.txt"});
+
+  QVERIFY(
+      GitIntegration::repositoryFingerprint(dir.path() + "/missing", nullptr)
+          .isEmpty());
+}
+
+void TestGitIntegration::testExternalChangesDetected() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString repo = dir.path() + "/poll_repo";
+  QVERIFY(initSeededRepo(repo));
+  QVERIFY(gitIn(repo, {"checkout", "-b", "other"}));
+  writeFile(repo + "/a.txt", "other\n");
+  QVERIFY(gitIn(repo, {"commit", "-am", "other"}));
+  QVERIFY(gitIn(repo, {"checkout", "main"}));
+
+  GitIntegration git;
+  git.setAutoRefreshInterval(0);
+  QCOMPARE(git.autoRefreshInterval(), 0);
+  QVERIFY(git.setRepositoryPath(repo));
+  QSignalSpy external(&git, &GitIntegration::externalChangesDetected);
+  QSignalSpy status(&git, &GitIntegration::statusChanged);
+  QSignalSpy conflicts(&git, &GitIntegration::mergeConflictsDetected);
+  QTest::qWait(500);
+
+  git.checkForExternalChanges();
+  QTest::qWait(500);
+  QCOMPARE(external.count(), 0);
+
+  writeFile(repo + "/b.txt", "new\n");
+  QVERIFY(gitIn(repo, {"add", "b.txt"}));
+  QVERIFY(gitIn(repo, {"commit", "-m", "external"}));
+  git.checkForExternalChanges();
+  QTRY_COMPARE_WITH_TIMEOUT(external.count(), 1, 5000);
+  QVERIFY(status.count() >= 1);
+  git.checkForExternalChanges();
+  QTest::qWait(500);
+  QCOMPARE(external.count(), 1);
+
+  writeFile(repo + "/c.txt", "mine\n");
+  QVERIFY(git.stageFile("c.txt"));
+  QTest::qWait(800);
+  git.checkForExternalChanges();
+  QTest::qWait(500);
+  QCOMPARE(external.count(), 1);
+
+  bool open = false;
+  git.setAutoRefreshGate([&open]() { return open; });
+  writeFile(repo + "/a.txt", "main\n");
+  QVERIFY(gitIn(repo, {"commit", "-am", "external two"}));
+  git.checkForExternalChanges();
+  QTest::qWait(800);
+  QCOMPARE(external.count(), 1);
+  open = true;
+  git.checkForExternalChanges();
+  QTRY_COMPARE_WITH_TIMEOUT(external.count(), 2, 5000);
+
+  QVERIFY(!gitIn(repo, {"merge", "other"}));
+  git.checkForExternalChanges();
+  QTRY_COMPARE_WITH_TIMEOUT(external.count(), 3, 5000);
+  QCOMPARE(conflicts.count(), 1);
+  QCOMPARE(conflicts.first().first().toStringList(), QStringList{"a.txt"});
+
+  writeFile(repo + "/a.txt", "resolved\n");
+  QVERIFY(gitIn(repo, {"commit", "-am", "merge"}));
+  git.checkForExternalChanges();
+  QTRY_COMPARE_WITH_TIMEOUT(external.count(), 4, 5000);
+  QVERIFY(!git.hasMergeConflicts());
 }
 
 QTEST_MAIN(TestGitIntegration)

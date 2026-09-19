@@ -1,6 +1,7 @@
 #include "branchsyncradardialog.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "operationpreviewdialog.h"
 #include "themedmessagebox.h"
 #include <QComboBox>
@@ -12,6 +13,15 @@
 #include <QRadioButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+
+namespace {
+QString divergenceStyle(const Theme &theme, bool diverged) {
+  return QString("QLabel { %1 padding: 4px; }")
+      .arg(UIStyleHelper::toneLabelStyle(
+          theme, diverged ? UIStyleHelper::Tone::Warning
+                          : UIStyleHelper::Tone::Neutral));
+}
+} // namespace
 
 BranchSyncRadarDialog::BranchSyncRadarDialog(GitIntegration *git,
                                              const Theme &theme,
@@ -33,6 +43,7 @@ BranchSyncRadarDialog::BranchSyncRadarDialog(GitIntegration *git,
   setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void BranchSyncRadarDialog::buildUi() {
@@ -315,10 +326,7 @@ void BranchSyncRadarDialog::updateFromState() {
   }
 
   m_divergenceLabel->setStyleSheet(
-      QString("color: %1; padding: 4px;")
-          .arg((m_state.diverged() ? m_theme.warningColor
-                                   : m_theme.singleLineCommentFormat)
-                   .name()));
+      divergenceStyle(m_theme, m_state.diverged()));
 
   onStrategyChanged();
   onPushModeChanged();
@@ -462,66 +470,41 @@ void BranchSyncRadarDialog::onSetUpstreamClicked() {
 
 void BranchSyncRadarDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  if (m_headerLabel) {
-    styleTitleLabel(m_headerLabel);
-  }
+  styleTitleLabel(m_headerLabel);
   for (const char *name :
        {"radarMergeBaseLabel", "radarStrategyLabel", "radarConfiguredLabel",
         "radarPushLabel", "radarStrategyPreview", "radarPushPreview",
         "radarSummaryLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
 
   const auto styleLane = [&](QLabel *label, QTreeWidget *tree,
-                             const QColor &accent) {
+                             UIStyleHelper::Tone tone, const QColor &border) {
     if (label) {
       label->setStyleSheet(
-          QString("color: %1; font-weight: bold;").arg(accent.name()));
+          QString("%1 color: %2;")
+              .arg(UIStyleHelper::sectionLabelStyle(theme),
+                   UIStyleHelper::toneColor(theme, tone).name()));
     }
     if (tree) {
       tree->setStyleSheet(
           UIStyleHelper::treeWidgetStyle(theme) +
-          QString("QTreeWidget { border: 1px solid %1; }").arg(accent.name()));
+          QString("QTreeWidget { border: 1px solid %1; }").arg(border.name()));
     }
   };
-  styleLane(m_incomingLabel, m_incomingTree, theme.infoColor);
-  styleLane(m_outgoingLabel, m_outgoingTree, theme.successColor);
+  styleLane(m_incomingLabel, m_incomingTree, UIStyleHelper::Tone::Info,
+            theme.infoColor);
+  styleLane(m_outgoingLabel, m_outgoingTree, UIStyleHelper::Tone::Success,
+            theme.successColor);
 
   if (m_divergenceLabel) {
     m_divergenceLabel->setStyleSheet(
-        QString("color: %1; padding: 4px;")
-            .arg((m_state.diverged() ? theme.warningColor
-                                     : theme.singleLineCommentFormat)
-                     .name()));
+        divergenceStyle(theme, m_state.diverged()));
   }
-  if (m_pushModeCombo) {
-    m_pushModeCombo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-  }
-
-  for (QRadioButton *radio : {m_mergeRadio, m_rebaseRadio, m_ffRadio}) {
-    if (radio) {
-      radio->setStyleSheet(UIStyleHelper::checkBoxStyle(theme) +
-                           QString("QRadioButton { color: %1; }"
-                                   "QRadioButton:disabled { color: %2; }")
-                               .arg(theme.foregroundColor.name(),
-                                    theme.singleLineCommentFormat.name()));
-    }
-  }
-  for (QPushButton *button :
-       {m_fetchButton, m_pullButton, m_upstreamButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
-  if (m_pushButton) {
-    if (selectedPushForce() == GitPushForce::None) {
-      stylePrimaryButton(m_pushButton);
-    } else {
-      styleDangerButton(m_pushButton);
-    }
+  if (selectedPushForce() == GitPushForce::None) {
+    stylePrimaryButton(m_pushButton);
+  } else {
+    styleDangerButton(m_pushButton);
   }
 }

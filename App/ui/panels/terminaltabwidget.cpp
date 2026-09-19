@@ -24,7 +24,9 @@
 
 namespace {
 QString rgba(const QColor &color, qreal alpha) {
-  QColor c = color.isValid() ? color : QColor("#ffffff");
+  if (!color.isValid())
+    return QStringLiteral("transparent");
+  const QColor &c = color;
   return QString("rgba(%1, %2, %3, %4)")
       .arg(c.red())
       .arg(c.green())
@@ -419,18 +421,20 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
   const ThemeDefinition &td = ThemeEngine::instance().activeTheme();
   const ThemeColors &colors = td.colors;
 
-  QColor bg = colors.termBg.isValid()
-                  ? colors.termBg
-                  : (theme.backgroundColor.isValid() ? theme.backgroundColor
-                                                     : QColor("#0a0e14"));
-  QColor text = colors.termFg.isValid()
-                    ? colors.termFg
-                    : (theme.foregroundColor.isValid() ? theme.foregroundColor
-                                                       : QColor("#b3b1ad"));
-  QColor border = colors.borderSubtle.isValid()
-                      ? colors.borderSubtle
-                      : (theme.borderColor.isValid() ? theme.borderColor
-                                                     : QColor("#1c2a1c"));
+  QColor bg = colors.termBg.isValid() ? colors.termBg
+                                      : (theme.backgroundColor.isValid()
+                                             ? theme.backgroundColor
+                                             : palette().color(QPalette::Base));
+  QColor text =
+      colors.termFg.isValid()
+          ? colors.termFg
+          : (theme.foregroundColor.isValid() ? theme.foregroundColor
+                                             : palette().color(QPalette::Text));
+  QColor border =
+      colors.borderSubtle.isValid()
+          ? colors.borderSubtle
+          : (theme.borderColor.isValid() ? theme.borderColor
+                                         : palette().color(QPalette::Mid));
   QColor raised = colors.surfaceRaised.isValid()
                       ? colors.surfaceRaised
                       : (theme.surfaceColor.isValid() ? theme.surfaceColor
@@ -441,10 +445,6 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
           : (colors.accentPrimary.isValid()
                  ? colors.accentPrimary
                  : (theme.accentColor.isValid() ? theme.accentColor : text));
-  QColor pressed =
-      colors.statusError.isValid()
-          ? colors.statusError
-          : (theme.errorColor.isValid() ? theme.errorColor : QColor("#e81123"));
   const QString chromeBg =
       td.ui.chromeOpacity >= 0.999 ? bg.name() : rgba(bg, td.ui.chromeOpacity);
   const QString splitHandle =
@@ -466,9 +466,10 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
                   text.name(), accent.name());
   }
 
-  const QString closeButtonStyle =
-      Terminal::closeButtonStyle(text.name(), pressed.name());
-  m_closeButton->setStyleSheet(closeButtonStyle);
+  m_closeButton->setStyleSheet(
+      UIStyleHelper::iconButtonStyle(theme) +
+      QStringLiteral("QToolButton { padding: 2px; font-size: 14px; "
+                     "font-weight: bold; }"));
 
   QWidget *toolbar = findChild<QWidget *>("terminalToolbar");
   if (toolbar) {

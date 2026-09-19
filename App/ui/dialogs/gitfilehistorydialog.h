@@ -18,6 +18,8 @@ public:
   explicit GitFileHistoryDialog(GitIntegration *git, const QString &filePath,
                                 QWidget *parent = nullptr);
 
+  void applyTheme(const Theme &theme) override;
+
 signals:
   void viewCommitDiff(const QString &commitHash);
   void openFileAtRevision(const QString &filePath, const QString &commitHash);
@@ -35,6 +37,7 @@ private:
   QTreeWidget *m_commitTree;
   QTextEdit *m_detailView;
   QLabel *m_titleLabel;
+  QString m_currentHash;
 };
 
 #endif

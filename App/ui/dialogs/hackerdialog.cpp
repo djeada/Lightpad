@@ -1,4 +1,5 @@
 #include "hackerdialog.h"
+#include "../uistylehelper.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -70,58 +71,16 @@ QString HackerDialog::buttonStyle(const QColor &bg, const QColor &fg,
 }
 
 QString HackerDialog::inputStyle() const {
-  const auto &c = colors();
-  int r = borderRadius();
-  return QString("QLineEdit {"
-                 "  background: %1; color: %2; border: 1px solid %3;"
-                 "  border-radius: %4px; padding: 8px 12px;"
-                 "  font-size: 12px; font-family: monospace;"
-                 "  selection-background-color: %5;"
-                 "}"
-                 "QLineEdit:focus {"
-                 "  border-color: %6;"
-                 "  border-bottom: 2px solid %6;"
-                 "}")
-      .arg(c.inputBg.name(), c.inputFg.name(), c.inputBorder.name())
-      .arg(r)
-      .arg(c.inputSelection.name(), c.inputBorderFocus.name());
+  return UIStyleHelper::lineEditStyle(m_themeDef) +
+         QStringLiteral("QLineEdit { font-family: monospace; }");
 }
 
 QString HackerDialog::comboStyle() const {
-  const auto &c = colors();
-  int r = borderRadius();
-  return QString("QComboBox {"
-                 "  background: %1; color: %2; border: 1px solid %3;"
-                 "  padding: 6px 12px; border-radius: %4px;"
-                 "  font-family: monospace;"
-                 "}"
-                 "QComboBox::drop-down { border: none; width: 20px; }"
-                 "QComboBox::down-arrow { image: none; }"
-                 "QComboBox QAbstractItemView {"
-                 "  background: %5; color: %2; border: 1px solid %3;"
-                 "  selection-background-color: %6;"
-                 "  outline: none;"
-                 "}")
-      .arg(c.inputBg.name(), c.inputFg.name(), c.inputBorder.name())
-      .arg(r)
-      .arg(c.surfacePopover.name(), c.accentSoft.name());
+  return UIStyleHelper::comboBoxStyle(m_themeDef);
 }
 
 QString HackerDialog::checkBoxStyle() const {
-  const auto &c = colors();
-  return QString("QCheckBox { color: %1; spacing: 8px; }"
-                 "QCheckBox::indicator {"
-                 "  width: 16px; height: 16px; border-radius: 4px;"
-                 "  border: 1px solid %2; background: %3;"
-                 "}"
-                 "QCheckBox::indicator:checked {"
-                 "  background: %4; border-color: %4;"
-                 "}"
-                 "QCheckBox::indicator:hover {"
-                 "  border-color: %5;"
-                 "}")
-      .arg(c.textPrimary.name(), c.borderDefault.name(), c.surfaceSunken.name(),
-           c.accentPrimary.name(), c.accentPrimary.name());
+  return UIStyleHelper::checkBoxStyle(m_themeDef);
 }
 
 QString HackerDialog::listWidgetStyle() const {
@@ -143,103 +102,23 @@ QString HackerDialog::listWidgetStyle() const {
 }
 
 QString HackerDialog::tableWidgetStyle() const {
-  const auto &c = colors();
-  return QString("QTableWidget {"
-                 "  background: %1; alternate-background-color: %2;"
-                 "  color: %3; border: 1px solid %4;"
-                 "  border-radius: 4px; gridline-color: %4;"
-                 "  selection-background-color: %5;"
-                 "}"
-                 "QTableWidget::item { padding: 4px; }"
-                 "QTableWidget::item:selected {"
-                 "  background: %5; color: %3;"
-                 "}"
-                 "QHeaderView::section {"
-                 "  background: %2; color: %6; border: none;"
-                 "  border-bottom: 1px solid %4; padding: 6px 8px;"
-                 "  font-size: 11px; font-weight: bold;"
-                 "}")
-      .arg(c.surfaceBase.name(), c.surfaceRaised.name(), c.textPrimary.name(),
-           c.borderDefault.name(), c.accentSoft.name(), c.textMuted.name());
+  return UIStyleHelper::tableWidgetStyle(m_themeDef);
 }
 
 QString HackerDialog::tabWidgetStyle() const {
-  const auto &c = colors();
-  return QString("QTabWidget::pane {"
-                 "  border: 1px solid %1; background: %2; border-radius: 4px;"
-                 "}"
-                 "QTabBar::tab {"
-                 "  background: %3; color: %4; padding: 8px 20px;"
-                 "  border: none; border-bottom: 2px solid transparent;"
-                 "}"
-                 "QTabBar::tab:selected {"
-                 "  background: %2; color: %5;"
-                 "  border-bottom: 2px solid %6;"
-                 "}"
-                 "QTabBar::tab:hover:!selected {"
-                 "  background: %7;"
-                 "}")
-      .arg(c.borderDefault.name(), c.surfaceBase.name(), c.surfaceRaised.name(),
-           c.textMuted.name(), c.textPrimary.name(), c.accentPrimary.name(),
-           c.treeHoverBg.name());
+  return UIStyleHelper::tabWidgetStyle(m_themeDef);
 }
 
 QString HackerDialog::groupBoxStyle() const {
-  const auto &c = colors();
-  int r = borderRadius();
-  return QString("QGroupBox {"
-                 "  background: %1; border: 1px solid %2;"
-                 "  border-radius: %3px; margin-top: 16px;"
-                 "  padding: 16px; padding-top: 28px;"
-                 "  font-weight: bold; color: %4;"
-                 "}"
-                 "QGroupBox::title {"
-                 "  subcontrol-origin: margin;"
-                 "  subcontrol-position: top left;"
-                 "  left: 12px; padding: 0 6px;"
-                 "  color: %5; font-size: 11px;"
-                 "}")
-      .arg(c.surfaceRaised.name(), c.borderSubtle.name())
-      .arg(r)
-      .arg(c.textPrimary.name(), c.textMuted.name());
+  return UIStyleHelper::groupBoxStyle(m_themeDef);
 }
 
 QString HackerDialog::textEditStyle() const {
-  const auto &c = colors();
-  int r = borderRadius();
-  return QString("QPlainTextEdit, QTextEdit {"
-                 "  background: %1; color: %2; border: 1px solid %3;"
-                 "  border-radius: %4px; padding: 8px;"
-                 "  font-family: monospace; font-size: 12px;"
-                 "  selection-background-color: %5;"
-                 "}"
-                 "QPlainTextEdit:focus, QTextEdit:focus {"
-                 "  border-color: %6;"
-                 "}")
-      .arg(c.inputBg.name(), c.inputFg.name(), c.inputBorder.name())
-      .arg(r)
-      .arg(c.inputSelection.name(), c.inputBorderFocus.name());
+  return UIStyleHelper::plainTextEditStyle(m_themeDef);
 }
 
 QString HackerDialog::spinBoxStyle() const {
-  const auto &c = colors();
-  int r = borderRadius();
-  return QString("QSpinBox {"
-                 "  background: %1; color: %2; border: 1px solid %3;"
-                 "  border-radius: %4px; padding: 4px 8px;"
-                 "  font-family: monospace;"
-                 "}"
-                 "QSpinBox:focus { border-color: %5; }"
-                 "QSpinBox::up-button, QSpinBox::down-button {"
-                 "  background: %6; border: none; width: 16px;"
-                 "}"
-                 "QSpinBox::up-button:hover, QSpinBox::down-button:hover {"
-                 "  background: %7;"
-                 "}")
-      .arg(c.inputBg.name(), c.inputFg.name(), c.inputBorder.name())
-      .arg(r)
-      .arg(c.inputBorderFocus.name(), c.surfaceRaised.name(),
-           c.treeHoverBg.name());
+  return UIStyleHelper::spinBoxStyle(m_themeDef);
 }
 
 QString HackerDialog::scrollBarStyle() const {

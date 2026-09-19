@@ -1,5 +1,6 @@
 #include "conflictresolverview.h"
 #include "../../git/gitintegration.h"
+#include "../../theme/colorcontrast.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
 #include "../widgets/flowlayout.h"
@@ -30,12 +31,7 @@ QString joinLines(const QStringList &lines) {
 }
 
 QColor tintOf(const QColor &base, const QColor &background) {
-  QColor result;
-  const qreal mix = 0.12;
-  result.setRedF(base.redF() * mix + background.redF() * (1.0 - mix));
-  result.setGreenF(base.greenF() * mix + background.greenF() * (1.0 - mix));
-  result.setBlueF(base.blueF() * mix + background.blueF() * (1.0 - mix));
-  return result;
+  return ColorContrast::mix(background, base, 0.12);
 }
 
 QString describeLines(const QStringList &lines) {
@@ -421,7 +417,9 @@ QWidget *ConflictResolverView::buildCodeBlock(QWidget *parent,
     block->setStyleSheet(
         QStringLiteral("QPlainTextEdit { background: %1; color: %2; border: "
                        "none; padding: 4px; }")
-            .arg(tint.name(), m_theme.foregroundColor.name()));
+            .arg(tint.name(), UIStyleHelper::readableText(
+                                  m_theme, tint, m_theme.foregroundColor)
+                                  .name()));
   }
   return block;
 }
@@ -442,18 +440,25 @@ QWidget *ConflictResolverView::buildSidePane(
                                    UiMetrics::SpaceMd, UiMetrics::SpaceSm);
   headerLayout->setSpacing(UiMetrics::SpaceMd);
 
+  const QColor headerFill = tintOf(tint, m_theme.surfaceColor);
+
   QLabel *titleLabel = new QLabel(title, headerRow);
   titleLabel->setWordWrap(true);
   titleLabel->setMinimumWidth(0);
   titleLabel->setStyleSheet(
-      QStringLiteral("font-weight: bold; color: %1;").arg(tint.name()));
+      QStringLiteral("font-weight: bold; color: %1;")
+          .arg(ColorContrast::ensure(tint, headerFill).name()));
   headerLayout->addWidget(titleLabel);
 
   QLabel *subtitleLabel = new QLabel(subtitle, headerRow);
   subtitleLabel->setWordWrap(true);
   subtitleLabel->setMinimumWidth(0);
   subtitleLabel->setStyleSheet(
-      QStringLiteral("color: %1;").arg(m_theme.singleLineCommentFormat.name()));
+      QStringLiteral("color: %1;")
+          .arg(ColorContrast::ensure(UIStyleHelper::mutedTextColor(m_theme),
+                                     headerFill,
+                                     ColorContrast::SecondaryTextRatio)
+                   .name()));
   headerLayout->addWidget(subtitleLabel, 1);
 
   QPushButton *keepButton = new QPushButton(buttonText, headerRow);
@@ -471,14 +476,14 @@ QWidget *ConflictResolverView::buildSidePane(
       QStringLiteral("QWidget#conflictSideHeader { background: %1; "
                      "border-top-left-radius: %2px; "
                      "border-top-right-radius: %2px; }")
-          .arg(tintOf(tint, m_theme.surfaceColor).name())
+          .arg(headerFill.name())
           .arg(UiMetrics::RadiusMd));
   layout->addWidget(headerRow);
 
   if (lines.isEmpty()) {
     QLabel *emptyLabel = new QLabel(tr("(this side has nothing here)"), pane);
-    emptyLabel->setStyleSheet(QStringLiteral("color: %1; padding: 6px;")
-                                  .arg(m_theme.singleLineCommentFormat.name()));
+    emptyLabel->setStyleSheet(UIStyleHelper::emptyStateStyle(m_theme) +
+                              QStringLiteral("padding: 6px;"));
     layout->addWidget(emptyLabel);
   } else {
     layout->addWidget(
@@ -501,10 +506,14 @@ QWidget *ConflictResolverView::buildConflictCard(const ConflictRegion &region,
 
   const QColor accent =
       region.resolved() ? m_theme.successColor : m_theme.errorColor;
+  const UIStyleHelper::Tone tone = region.resolved()
+                                       ? UIStyleHelper::Tone::Success
+                                       : UIStyleHelper::Tone::Error;
   card->setStyleSheet(
-      QStringLiteral("QWidget#conflictCard { background: %1; border: 2px solid "
-                     "%2; border-radius: %3px; }")
-          .arg(m_theme.surfaceColor.name(), accent.name())
+      UIStyleHelper::cardStyle(m_theme, card->objectName()) +
+      QStringLiteral("QWidget#conflictCard { border: 2px solid %1; "
+                     "border-radius: %2px; }")
+          .arg(accent.name())
           .arg(UiMetrics::RadiusMd));
 
   QWidget *titleRow = new QWidget(card);
@@ -518,15 +527,15 @@ QWidget *ConflictResolverView::buildConflictCard(const ConflictRegion &region,
                                titleRow);
   heading->setObjectName(QStringLiteral("conflictCardHeading"));
   heading->setStyleSheet(
-      QStringLiteral("font-size: 14px; font-weight: bold; color: %1;")
-          .arg(accent.name()));
+      UIStyleHelper::headingStyle(m_theme, 14) +
+      QStringLiteral("color: %1;")
+          .arg(UIStyleHelper::toneColor(m_theme, tone).name()));
   titleLayout->addWidget(heading);
 
   QLabel *lineLabel =
       new QLabel(tr("starts at line %1").arg(startLine), titleRow);
   lineLabel->setObjectName(QStringLiteral("conflictCardLineLabel"));
-  lineLabel->setStyleSheet(
-      QStringLiteral("color: %1;").arg(m_theme.singleLineCommentFormat.name()));
+  lineLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(m_theme));
   titleLayout->addWidget(lineLabel);
   titleLayout->addStretch();
 
@@ -535,8 +544,9 @@ QWidget *ConflictResolverView::buildConflictCard(const ConflictRegion &region,
         tr("Decided: you %1").arg(conflictChoiceOutcome(region.choice)),
         titleRow);
     outcome->setObjectName(QStringLiteral("conflictCardOutcomeLabel"));
-    outcome->setStyleSheet(QStringLiteral("font-weight: bold; color: %1;")
-                               .arg(m_theme.successColor.name()));
+    outcome->setStyleSheet(
+        QStringLiteral("font-weight: bold; color: %1;")
+            .arg(UIStyleHelper::toneColor(m_theme, tone).name()));
     titleLayout->addWidget(outcome);
 
     QPushButton *change = new QPushButton(tr("Change my mind"), titleRow);
@@ -558,17 +568,15 @@ QWidget *ConflictResolverView::buildConflictCard(const ConflictRegion &region,
   if (region.resolved()) {
     QLabel *resultLabel =
         new QLabel(tr("This is what ends up in the file:"), card);
-    resultLabel->setStyleSheet(
-        QStringLiteral("color: %1;")
-            .arg(m_theme.singleLineCommentFormat.name()));
+    resultLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(m_theme));
     layout->addWidget(resultLabel);
 
     const QStringList result = region.resultLines();
     if (result.isEmpty()) {
       QLabel *nothing =
           new QLabel(tr("(nothing - both versions dropped)"), card);
-      nothing->setStyleSheet(QStringLiteral("color: %1; font-style: italic;")
-                                 .arg(m_theme.singleLineCommentFormat.name()));
+      nothing->setStyleSheet(UIStyleHelper::subduedLabelStyle(m_theme) +
+                             QStringLiteral("font-style: italic;"));
       layout->addWidget(nothing);
     } else {
       layout->addWidget(buildCodeBlock(
@@ -606,8 +614,7 @@ QWidget *ConflictResolverView::buildConflictCard(const ConflictRegion &region,
                                       "either of them touched it:"),
                                    card);
     baseLabel->setWordWrap(true);
-    baseLabel->setStyleSheet(QStringLiteral("color: %1;")
-                                 .arg(m_theme.singleLineCommentFormat.name()));
+    baseLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(m_theme));
     layout->addWidget(baseLabel);
     layout->addWidget(
         buildCodeBlock(card, region.baseLines, m_theme.surfaceAltColor));
@@ -900,18 +907,12 @@ void ConflictResolverView::applyTheme(const Theme &theme) {
   if (QWidget *header =
           findChild<QWidget *>(QStringLiteral("conflictResolverHeader"))) {
     header->setStyleSheet(
-        QStringLiteral("QWidget#conflictResolverHeader { background: %1; "
-                       "border-bottom: 1px solid %2; }")
-            .arg(theme.surfaceColor.name(), theme.borderColor.name()));
+        UIStyleHelper::panelHeaderStyle(theme, header->objectName()));
   }
 
-  m_fileLabel->setStyleSheet(
-      QStringLiteral("font-size: 16px; font-weight: bold; color: %1;")
-          .arg(theme.foregroundColor.name()));
-  m_branchesLabel->setStyleSheet(
-      QStringLiteral("color: %1;").arg(theme.singleLineCommentFormat.name()));
-  m_countLabel->setStyleSheet(QStringLiteral("font-weight: bold; color: %1;")
-                                  .arg(theme.foregroundColor.name()));
+  m_fileLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 16));
+  m_branchesLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+  m_countLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
   m_progress->setStyleSheet(
       QStringLiteral("QProgressBar { background: %1; border: none; "
                      "border-radius: 4px; } QProgressBar::chunk { background: "

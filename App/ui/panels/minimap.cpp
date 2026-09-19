@@ -1,4 +1,5 @@
 #include "minimap.h"
+#include "../../theme/colorcontrast.h"
 #include <QAbstractTextDocumentLayout>
 #include <QApplication>
 #include <QMouseEvent>
@@ -11,15 +12,17 @@
 
 Minimap::Minimap(QWidget *parent)
     : QWidget(parent), m_sourceEditor(nullptr), m_scale(0.15), m_visible(true),
-      m_isDragging(false), m_documentDirty(true),
-      m_viewportColor(QColor(100, 149, 237, 60)),
-      m_backgroundColor(QColor(30, 30, 30)), m_charWidth(1.5),
+      m_isDragging(false), m_documentDirty(true), m_charWidth(1.5),
       m_lineHeight(3.0), m_maxVisibleLines(0), m_scrollOffset(0),
       m_updatePending(false) {
   setMinimumWidth(80);
   setMaximumWidth(120);
   setMouseTracking(true);
   setCursor(Qt::PointingHandCursor);
+
+  const QPalette pal = palette();
+  setThemeColors(pal.color(QPalette::Base), pal.color(QPalette::Text),
+                 pal.color(QPalette::Highlight));
 }
 
 Minimap::~Minimap() {}
@@ -78,6 +81,25 @@ void Minimap::setViewportColor(const QColor &color) {
   update();
 }
 
+void Minimap::setThemeColors(const QColor &editorBackground,
+                             const QColor &editorForeground,
+                             const QColor &accent) {
+  if (!editorBackground.isValid() || !editorForeground.isValid()) {
+    return;
+  }
+  m_backgroundColor =
+      ColorContrast::isDark(editorBackground)
+          ? ColorContrast::mix(editorBackground, QColor(Qt::white), 0.03)
+          : ColorContrast::mix(editorBackground, QColor(Qt::black), 0.03);
+  m_glyphColor = ColorContrast::mix(editorForeground, m_backgroundColor, 0.4);
+  m_borderColor = ColorContrast::mix(m_backgroundColor, editorForeground, 0.15);
+  QColor viewport = accent.isValid() ? accent : editorForeground;
+  viewport.setAlpha(48);
+  m_viewportColor = viewport;
+  m_documentDirty = true;
+  update();
+}
+
 void Minimap::setBackgroundColor(const QColor &color) {
   m_backgroundColor = color;
   m_documentDirty = true;
@@ -110,13 +132,15 @@ void Minimap::paintEvent(QPaintEvent *event) {
   if (!m_viewportRect.isEmpty()) {
     painter.fillRect(m_viewportRect, m_viewportColor);
 
-    QPen borderPen(m_viewportColor.lighter(150));
+    QColor border = m_viewportColor;
+    border.setAlpha(qMin(255, m_viewportColor.alpha() * 3));
+    QPen borderPen(border);
     borderPen.setWidth(1);
     painter.setPen(borderPen);
     painter.drawRect(m_viewportRect);
   }
 
-  painter.setPen(QColor(60, 60, 60));
+  painter.setPen(m_borderColor);
   painter.drawLine(0, 0, 0, height());
 }
 
@@ -306,7 +330,7 @@ void Minimap::renderDocument() {
           continue;
         }
 
-        QColor charColor(150, 150, 150);
+        QColor charColor = m_glyphColor;
 
         for (const auto &format : formats) {
           if (charIndex >= format.start &&
@@ -337,7 +361,7 @@ void Minimap::renderDocument() {
           continue;
         }
 
-        QColor charColor(150, 150, 150);
+        QColor charColor = m_glyphColor;
         painter.fillRect(QRectF(x, y, m_charWidth * 0.8, m_lineHeight * 0.7),
                          charColor);
         x += m_charWidth;

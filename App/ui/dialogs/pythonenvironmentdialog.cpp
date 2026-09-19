@@ -95,6 +95,7 @@ PythonEnvironmentDialog::PythonEnvironmentDialog(const QString &workspaceFolder,
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::close);
 
   applyTheme(theme);
+  m_environmentWidget->applyTheme(theme);
   styleTitleLabel(titleLabel);
   styleTitleLabel(detailsTitle);
   styleSubduedLabel(m_contextLabel);

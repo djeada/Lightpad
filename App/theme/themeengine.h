@@ -14,6 +14,7 @@ public:
   static ThemeEngine &instance();
 
   const ThemeDefinition &activeTheme() const;
+  const ThemeDefinition &activeThemeSource() const;
   Theme classicTheme() const;
 
   void setActiveTheme(const QString &name);
@@ -51,7 +52,10 @@ private:
   QString userThemeFilePath(const QString &name) const;
   QString makeUniqueCustomThemeName(const QString &baseName) const;
 
+  void activate(const ThemeDefinition &theme);
+
   ThemeDefinition m_activeTheme;
+  ThemeDefinition m_activeThemeSource;
   QMap<QString, ThemeDefinition> m_themes;
   QSet<QString> m_builtinThemes;
 };

@@ -141,7 +141,7 @@ void DebugConfigurationDialog::setupUi() {
 
   m_adapterStatusLabel = new QLabel();
   m_adapterStatusLabel->setWordWrap(true);
-  m_adapterStatusLabel->setStyleSheet("font-size: 11px; color: #8b949e;");
+  m_adapterStatusLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(m_theme));
   basicLayout->addWidget(m_adapterStatusLabel);
 
   rightLayout->addWidget(basicGroup);
@@ -300,7 +300,8 @@ void DebugConfigurationDialog::setupUi() {
   QLabel *adapterHint = new QLabel(
       "Extra JSON properties passed to the debug adapter. One JSON object.");
   adapterHint->setWordWrap(true);
-  adapterHint->setStyleSheet("font-size: 11px; color: #8b949e;");
+  adapterHint->setObjectName(QStringLiteral("adapterConfigHint"));
+  adapterHint->setStyleSheet(UIStyleHelper::infoLabelStyle(m_theme));
   adapterLayout->addWidget(adapterHint);
 
   m_adapterConfigEdit = new QPlainTextEdit();
@@ -973,4 +974,11 @@ void DebugConfigurationDialog::applyTheme(const Theme &theme) {
   stylePrimaryButton(m_saveButton);
   stylePrimaryButton(m_addConfigBtn);
   styleDangerButton(m_removeConfigBtn);
+
+  if (m_adapterStatusLabel)
+    m_adapterStatusLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
+  if (auto *hint = findChild<QLabel *>(QStringLiteral("adapterConfigHint")))
+    hint->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
+  if (m_pythonEnvironmentWidget)
+    m_pythonEnvironmentWidget->applyTheme(theme);
 }

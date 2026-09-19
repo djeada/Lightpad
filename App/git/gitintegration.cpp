@@ -1,5 +1,6 @@
 #include "gitintegration.h"
 #include "../core/logging/logger.h"
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -12,19 +13,67 @@
 #include <QTemporaryFile>
 #include <QTextStream>
 #include <QThreadPool>
+#include <QTimer>
+
+namespace {
+constexpr int GIT_FINGERPRINT_TIMEOUT_MS = 15000;
+constexpr int GIT_REBASELINE_DELAY_MS = 250;
+constexpr int GIT_GATED_RETRY_MS = 2000;
+constexpr int GIT_FINGERPRINT_MAX_STAT_FILES = 2000;
+
+QByteArray runFingerprintCommand(const QString &repositoryPath,
+                                 const QStringList &args, bool *ok) {
+  QProcess process;
+  process.setWorkingDirectory(repositoryPath);
+
+  process.start("git", QStringList{"--no-optional-locks"} + args);
+  if (!process.waitForFinished(GIT_FINGERPRINT_TIMEOUT_MS)) {
+    process.kill();
+    process.waitForFinished();
+    *ok = false;
+    return QByteArray();
+  }
+  *ok = process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
+  return process.readAllStandardOutput();
+}
+} // namespace
 
 GitIntegration::GitIntegration(QObject *parent)
-    : QObject(parent), m_isValid(false) {}
+    : QObject(parent), m_isValid(false), m_autoRefreshTimer(new QTimer(this)),
+      m_rebaselineTimer(new QTimer(this)) {
+  m_autoRefreshTimer->setInterval(GIT_AUTO_REFRESH_INTERVAL_MS);
+  connect(m_autoRefreshTimer, &QTimer::timeout, this,
+          &GitIntegration::checkForExternalChanges);
+
+  m_rebaselineTimer->setSingleShot(true);
+  m_rebaselineTimer->setInterval(GIT_REBASELINE_DELAY_MS);
+  connect(m_rebaselineTimer, &QTimer::timeout, this,
+          [this]() { startFingerprintCheck(false); });
+  connect(this, &GitIntegration::statusChanged, this, [this]() {
+    if (m_announcingExternalChange || !m_isValid) {
+      return;
+    }
+    ++m_fingerprintGeneration;
+    m_rebaselineTimer->start();
+  });
+}
 
 GitIntegration::~GitIntegration() {}
 
 bool GitIntegration::setRepositoryPath(const QString &path) {
   QString repoRoot = findRepositoryRoot(path);
 
+  if (repoRoot != m_repositoryPath || !m_isValid) {
+    ++m_fingerprintGeneration;
+    m_repositoryFingerprint.clear();
+    m_knownConflicts.clear();
+  }
+
   if (repoRoot.isEmpty()) {
     m_isValid = false;
     m_repositoryPath.clear();
     m_currentBranch.clear();
+    m_autoRefreshTimer->stop();
     LOG_DEBUG("No git repository found at: " + path);
     return false;
   }
@@ -32,6 +81,12 @@ bool GitIntegration::setRepositoryPath(const QString &path) {
   m_repositoryPath = repoRoot;
   m_isValid = true;
   updateCurrentBranch();
+  if (m_autoRefreshTimer->interval() > 0 && !m_autoRefreshTimer->isActive()) {
+    m_autoRefreshTimer->start();
+  }
+  if (m_repositoryFingerprint.isEmpty()) {
+    startFingerprintCheck(false);
+  }
 
   LOG_INFO("Git repository found at: " + m_repositoryPath);
   return true;
@@ -1612,6 +1667,12 @@ bool GitIntegration::initRepository(const QString &path) {
     m_isValid = true;
     m_workingPath = m_repositoryPath;
     updateCurrentBranch();
+    ++m_fingerprintGeneration;
+    m_repositoryFingerprint.clear();
+    m_knownConflicts.clear();
+    if (m_autoRefreshTimer->interval() > 0) {
+      m_autoRefreshTimer->start();
+    }
 
     emit repositoryInitialized(m_repositoryPath);
     emit operationCompleted("Repository initialized at: " + m_repositoryPath);
@@ -4641,4 +4702,200 @@ QString GitIntegration::fileLinesAtRevision(const QString &filePath,
     return QString();
   }
   return sliceLines(content, startLine, endLine);
+}
+
+void GitIntegration::setAutoRefreshInterval(int intervalMs) {
+  if (intervalMs <= 0) {
+    m_autoRefreshTimer->stop();
+    m_autoRefreshTimer->setInterval(0);
+    return;
+  }
+  m_autoRefreshTimer->setInterval(intervalMs);
+  if (m_isValid) {
+    m_autoRefreshTimer->start();
+  }
+}
+
+int GitIntegration::autoRefreshInterval() const {
+  return m_autoRefreshTimer->interval();
+}
+
+void GitIntegration::setAutoRefreshGate(const std::function<bool()> &gate) {
+  m_autoRefreshGate = gate;
+}
+
+void GitIntegration::checkForExternalChanges() {
+  if (!m_isValid || m_fingerprintCheckRunning) {
+    return;
+  }
+  startFingerprintCheck(true);
+}
+
+void GitIntegration::startFingerprintCheck(bool announceChanges) {
+  if (!m_isValid) {
+    return;
+  }
+
+  const QString repositoryPath = m_repositoryPath;
+  const quint64 generation = m_fingerprintGeneration;
+  if (announceChanges) {
+    m_fingerprintCheckRunning = true;
+  }
+
+  QPointer<GitIntegration> self(this);
+  QThreadPool::globalInstance()->start(
+      [self, repositoryPath, generation, announceChanges]() {
+        QStringList conflicts;
+        const QByteArray fingerprint =
+            repositoryFingerprint(repositoryPath, &conflicts);
+        if (!self) {
+          return;
+        }
+        QMetaObject::invokeMethod(
+            self,
+            [self, generation, fingerprint, conflicts, announceChanges]() {
+              if (self) {
+                self->applyFingerprint(generation, fingerprint, conflicts,
+                                       announceChanges);
+              }
+            },
+            Qt::QueuedConnection);
+      });
+}
+
+void GitIntegration::applyFingerprint(quint64 generation,
+                                      const QByteArray &fingerprint,
+                                      const QStringList &conflicts,
+                                      bool announceChanges) {
+  if (announceChanges) {
+    m_fingerprintCheckRunning = false;
+  }
+
+  if (generation != m_fingerprintGeneration || fingerprint.isEmpty() ||
+      !m_isValid) {
+    return;
+  }
+
+  if (m_repositoryFingerprint.isEmpty() || !announceChanges) {
+    m_repositoryFingerprint = fingerprint;
+    m_knownConflicts = conflicts;
+    return;
+  }
+
+  if (fingerprint == m_repositoryFingerprint) {
+    return;
+  }
+
+  if (m_autoRefreshGate && !m_autoRefreshGate()) {
+    QTimer::singleShot(GIT_GATED_RETRY_MS, this,
+                       &GitIntegration::checkForExternalChanges);
+    return;
+  }
+
+  const bool conflictsAppeared =
+      m_knownConflicts.isEmpty() && !conflicts.isEmpty();
+  m_repositoryFingerprint = fingerprint;
+  m_knownConflicts = conflicts;
+
+  LOG_DEBUG("Git repository changed outside Lightpad: " + m_repositoryPath);
+
+  m_announcingExternalChange = true;
+  updateCurrentBranch();
+  emit statusChanged();
+  emit externalChangesDetected();
+  if (conflictsAppeared) {
+    emit mergeConflictsDetected(conflicts);
+  }
+  m_announcingExternalChange = false;
+}
+
+QByteArray GitIntegration::repositoryFingerprint(const QString &repositoryPath,
+                                                 QStringList *conflictedFiles) {
+  if (repositoryPath.isEmpty()) {
+    return QByteArray();
+  }
+
+  bool ok = false;
+  const QByteArray status =
+      runFingerprintCommand(repositoryPath,
+                            {"status", "--porcelain=v2", "--branch",
+                             "--untracked-files=normal", "-z"},
+                            &ok);
+  if (!ok) {
+    return QByteArray();
+  }
+
+  QCryptographicHash hash(QCryptographicHash::Sha1);
+  hash.addData(status);
+
+  hash.addData(runFingerprintCommand(
+      repositoryPath, {"for-each-ref", "--format=%(objectname) %(refname)"},
+      &ok));
+
+  const QDir root(repositoryPath);
+  const QList<QByteArray> entries = status.split('\0');
+  int statted = 0;
+  for (int i = 0; i < entries.size(); ++i) {
+    const QByteArray &entry = entries.at(i);
+    int pathField = -1;
+    if (entry.startsWith("1 ")) {
+      pathField = 8;
+    } else if (entry.startsWith("2 ")) {
+      pathField = 9;
+      ++i;
+    } else if (entry.startsWith("u ")) {
+      pathField = 10;
+    } else if (entry.startsWith("? ")) {
+      pathField = 1;
+    }
+    if (pathField < 0) {
+      continue;
+    }
+
+    int start = 0;
+    for (int field = 0; field < pathField && start >= 0; ++field) {
+      start = entry.indexOf(' ', start);
+      if (start >= 0) {
+        ++start;
+      }
+    }
+    if (start < 0) {
+      continue;
+    }
+    const QString path = QString::fromUtf8(entry.mid(start));
+    if (entry.startsWith("u ") && conflictedFiles) {
+      conflictedFiles->append(path);
+    }
+    if (statted++ < GIT_FINGERPRINT_MAX_STAT_FILES) {
+      const QFileInfo info(root.filePath(path));
+      hash.addData(path.toUtf8());
+      hash.addData(QByteArray::number(info.exists() ? info.size() : -1));
+      hash.addData(QByteArray::number(
+          info.exists() ? info.lastModified().toMSecsSinceEpoch() : 0));
+    }
+  }
+
+  const QString gitDir = QString::fromUtf8(
+      runFingerprintCommand(repositoryPath, {"rev-parse", "--absolute-git-dir"},
+                            &ok)
+          .trimmed());
+  if (ok && !gitDir.isEmpty()) {
+    const QDir dir(gitDir);
+    for (const QString &marker :
+         {QStringLiteral("MERGE_HEAD"), QStringLiteral("CHERRY_PICK_HEAD"),
+          QStringLiteral("REVERT_HEAD"), QStringLiteral("REBASE_HEAD"),
+          QStringLiteral("BISECT_LOG"), QStringLiteral("rebase-merge/msgnum"),
+          QStringLiteral("rebase-apply/next"),
+          QStringLiteral("sequencer/todo")}) {
+      const QFileInfo info(dir.filePath(marker));
+      if (info.exists()) {
+        hash.addData(marker.toUtf8());
+        hash.addData(QByteArray::number(info.size()));
+        hash.addData(
+            QByteArray::number(info.lastModified().toMSecsSinceEpoch()));
+      }
+    }
+  }
+
+  return hash.result();
 }

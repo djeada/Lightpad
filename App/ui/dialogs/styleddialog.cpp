@@ -1,6 +1,8 @@
 #include "styleddialog.h"
 #include "../../theme/themedefinition.h"
 #include "../uistylehelper.h"
+#include <QAbstractSpinBox>
+#include <QRadioButton>
 #include <QTreeWidget>
 
 namespace {
@@ -33,6 +35,40 @@ Theme classicThemeFromDefinition(const ThemeDefinition &themeDefinition) {
   theme.successColor = c.statusSuccess;
   theme.warningColor = c.statusWarning;
   theme.errorColor = c.statusError;
+  theme.infoColor = c.statusInfo;
+  theme.operatorFormat = c.syntaxOperator;
+  theme.constantFormat = c.syntaxConstant;
+  theme.escapeFormat = c.syntaxEscape;
+  theme.regexFormat = c.syntaxRegex;
+
+  theme.diagnosticErrorColor = c.diagnosticError;
+  theme.diagnosticWarningColor = c.diagnosticWarning;
+  theme.diagnosticInfoColor = c.diagnosticInfo;
+  theme.diagnosticHintColor = c.diagnosticHint;
+  theme.gitAddedColor = c.gitAdded;
+  theme.gitModifiedColor = c.gitModified;
+  theme.gitDeletedColor = c.gitDeleted;
+  theme.gitRenamedColor = c.gitRenamed;
+  theme.gitCopiedColor = c.gitCopied;
+  theme.gitUntrackedColor = c.gitUntracked;
+  theme.gitConflictedColor = c.gitConflicted;
+  theme.gitIgnoredColor = c.gitIgnored;
+  theme.diffAddedColor = c.diffAdded;
+  theme.diffModifiedColor = c.diffModified;
+  theme.diffRemovedColor = c.diffRemoved;
+  theme.diffConflictColor = c.diffConflict;
+  theme.testPassedColor = c.testPassed;
+  theme.testFailedColor = c.testFailed;
+  theme.testSkippedColor = c.testSkipped;
+  theme.testRunningColor = c.testRunning;
+  theme.testQueuedColor = c.testQueued;
+  theme.debugReadyColor = c.debugReady;
+  theme.debugStartingColor = c.debugStarting;
+  theme.debugRunningColor = c.debugRunning;
+  theme.debugPausedColor = c.debugPaused;
+  theme.debugErrorColor = c.debugError;
+  theme.debugBreakpointColor = c.debugBreakpoint;
+  theme.debugCurrentLineColor = c.debugCurrentLine;
 
   theme.borderRadius = themeDefinition.ui.borderRadius;
   theme.glowIntensity = themeDefinition.ui.glowIntensity;
@@ -43,86 +79,78 @@ Theme classicThemeFromDefinition(const ThemeDefinition &themeDefinition) {
 }
 } // namespace
 
+template <typename ThemeT>
+StyledDialog::SemanticStyleCache buildSemanticStyles(const ThemeT &theme) {
+  StyledDialog::SemanticStyleCache styles;
+  styles.formDialog = UIStyleHelper::formDialogStyle(theme);
+  styles.groupBox = UIStyleHelper::groupBoxStyle(theme);
+  styles.lineEdit = UIStyleHelper::lineEditStyle(theme);
+  styles.comboBox = UIStyleHelper::comboBoxStyle(theme);
+  styles.checkBox = UIStyleHelper::checkBoxStyle(theme);
+  styles.resultList = UIStyleHelper::listWidgetStyle(theme);
+  styles.treeWidget = UIStyleHelper::treeWidgetStyle(theme);
+  styles.secondaryButton = UIStyleHelper::secondaryButtonStyle(theme);
+  styles.tableWidget = UIStyleHelper::tableWidgetStyle(theme);
+  styles.plainTextEdit = UIStyleHelper::plainTextEditStyle(theme);
+  styles.spinBox = UIStyleHelper::spinBoxStyle(theme);
+  styles.tabWidget = UIStyleHelper::tabWidgetStyle(theme);
+  styles.primaryButton = UIStyleHelper::primaryButtonStyle(theme);
+  styles.dangerButton = UIStyleHelper::dangerButtonStyle(theme);
+  styles.titleLabel = UIStyleHelper::titleLabelStyle(theme);
+  styles.subduedLabel = UIStyleHelper::subduedLabelStyle(theme);
+  styles.sectionLabel = UIStyleHelper::sectionLabelStyle(theme);
+  styles.emptyState = UIStyleHelper::emptyStateStyle(theme);
+  return styles;
+}
+
 StyledDialog::StyledDialog(QWidget *parent, Qt::WindowFlags flags)
     : QDialog(parent, flags) {}
 
 void StyledDialog::applyTheme(const Theme &theme) {
   m_theme = theme;
-  m_hasSemanticStyles = false;
-
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
-
-  for (auto *w : findChildren<QGroupBox *>())
-    w->setStyleSheet(UIStyleHelper::groupBoxStyle(theme));
-  for (auto *w : findChildren<QLineEdit *>())
-    w->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  for (auto *w : findChildren<QComboBox *>())
-    w->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-  for (auto *w : findChildren<QCheckBox *>())
-    w->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
-  for (auto *w : findChildren<QListWidget *>())
-    w->setStyleSheet(UIStyleHelper::resultListStyle(theme));
-  for (auto *w : findChildren<QTreeWidget *>())
-    w->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-  for (auto *w : findChildren<QPushButton *>())
-    w->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
-  for (auto *w : findChildren<QTableWidget *>())
-    w->setStyleSheet(UIStyleHelper::tableWidgetStyle(theme));
-  for (auto *w : findChildren<QPlainTextEdit *>())
-    w->setStyleSheet(UIStyleHelper::plainTextEditStyle(theme));
-  for (auto *w : findChildren<QTextEdit *>())
-    w->setStyleSheet(UIStyleHelper::plainTextEditStyle(theme));
-  for (auto *w : findChildren<QSpinBox *>())
-    w->setStyleSheet(UIStyleHelper::spinBoxStyle(theme));
-  for (auto *w : findChildren<QTabWidget *>())
-    w->setStyleSheet(UIStyleHelper::tabWidgetStyle(theme));
+  m_semanticStyles = m_pendingDefinition
+                         ? buildSemanticStyles(*m_pendingDefinition)
+                         : buildSemanticStyles(theme);
+  m_hasSemanticStyles = true;
+  applySemanticStyles();
 }
 
 void StyledDialog::applyTheme(const ThemeDefinition &theme) {
-  m_theme = classicThemeFromDefinition(theme);
-  m_hasSemanticStyles = true;
-  m_semanticStyles.formDialog = UIStyleHelper::formDialogStyle(theme);
-  m_semanticStyles.groupBox = UIStyleHelper::groupBoxStyle(theme);
-  m_semanticStyles.lineEdit = UIStyleHelper::lineEditStyle(theme);
-  m_semanticStyles.comboBox = UIStyleHelper::comboBoxStyle(theme);
-  m_semanticStyles.checkBox = UIStyleHelper::checkBoxStyle(theme);
-  m_semanticStyles.resultList = UIStyleHelper::resultListStyle(theme);
-  m_semanticStyles.secondaryButton = UIStyleHelper::secondaryButtonStyle(theme);
-  m_semanticStyles.tableWidget = UIStyleHelper::tableWidgetStyle(theme);
-  m_semanticStyles.plainTextEdit = UIStyleHelper::plainTextEditStyle(theme);
-  m_semanticStyles.spinBox = UIStyleHelper::spinBoxStyle(theme);
-  m_semanticStyles.tabWidget = UIStyleHelper::tabWidgetStyle(theme);
-  m_semanticStyles.primaryButton = UIStyleHelper::primaryButtonStyle(theme);
-  m_semanticStyles.dangerButton = UIStyleHelper::dangerButtonStyle(theme);
-  m_semanticStyles.titleLabel = UIStyleHelper::titleLabelStyle(theme);
-  m_semanticStyles.subduedLabel = UIStyleHelper::subduedLabelStyle(theme);
+  m_pendingDefinition = &theme;
+  applyTheme(classicThemeFromDefinition(theme));
+  m_pendingDefinition = nullptr;
+}
 
-  setStyleSheet(m_semanticStyles.formDialog);
+void StyledDialog::applySemanticStyles() {
+  const SemanticStyleCache &s = m_semanticStyles;
+  setStyleSheet(s.formDialog);
 
   for (auto *w : findChildren<QGroupBox *>())
-    w->setStyleSheet(m_semanticStyles.groupBox);
+    w->setStyleSheet(s.groupBox);
   for (auto *w : findChildren<QLineEdit *>())
-    w->setStyleSheet(m_semanticStyles.lineEdit);
+    w->setStyleSheet(s.lineEdit);
   for (auto *w : findChildren<QComboBox *>())
-    w->setStyleSheet(m_semanticStyles.comboBox);
+    w->setStyleSheet(s.comboBox);
   for (auto *w : findChildren<QCheckBox *>())
-    w->setStyleSheet(m_semanticStyles.checkBox);
+    w->setStyleSheet(s.checkBox);
+  for (auto *w : findChildren<QRadioButton *>())
+    w->setStyleSheet(s.checkBox);
   for (auto *w : findChildren<QListWidget *>())
-    w->setStyleSheet(m_semanticStyles.resultList);
+    w->setStyleSheet(s.resultList);
   for (auto *w : findChildren<QTreeWidget *>())
-    w->setStyleSheet(UIStyleHelper::treeWidgetStyle(m_theme));
+    w->setStyleSheet(s.treeWidget);
   for (auto *w : findChildren<QPushButton *>())
-    w->setStyleSheet(m_semanticStyles.secondaryButton);
+    w->setStyleSheet(s.secondaryButton);
   for (auto *w : findChildren<QTableWidget *>())
-    w->setStyleSheet(m_semanticStyles.tableWidget);
+    w->setStyleSheet(s.tableWidget);
   for (auto *w : findChildren<QPlainTextEdit *>())
-    w->setStyleSheet(m_semanticStyles.plainTextEdit);
+    w->setStyleSheet(s.plainTextEdit);
   for (auto *w : findChildren<QTextEdit *>())
-    w->setStyleSheet(m_semanticStyles.plainTextEdit);
-  for (auto *w : findChildren<QSpinBox *>())
-    w->setStyleSheet(m_semanticStyles.spinBox);
+    w->setStyleSheet(s.plainTextEdit);
+  for (auto *w : findChildren<QAbstractSpinBox *>())
+    w->setStyleSheet(s.spinBox);
   for (auto *w : findChildren<QTabWidget *>())
-    w->setStyleSheet(m_semanticStyles.tabWidget);
+    w->setStyleSheet(s.tabWidget);
 }
 
 void StyledDialog::setKeyboardDefault(QPushButton *button) {
@@ -169,4 +197,28 @@ void StyledDialog::styleSubduedLabel(QLabel *label) {
     label->setStyleSheet(m_hasSemanticStyles
                              ? m_semanticStyles.subduedLabel
                              : UIStyleHelper::subduedLabelStyle(m_theme));
+}
+
+void StyledDialog::styleSectionLabel(QLabel *label) {
+  if (label)
+    label->setStyleSheet(m_hasSemanticStyles
+                             ? m_semanticStyles.sectionLabel
+                             : UIStyleHelper::sectionLabelStyle(m_theme));
+}
+
+void StyledDialog::styleEmptyState(QLabel *label) {
+  if (label)
+    label->setStyleSheet(m_hasSemanticStyles
+                             ? m_semanticStyles.emptyState
+                             : UIStyleHelper::emptyStateStyle(m_theme));
+}
+
+void StyledDialog::styleToneLabel(QLabel *label, UIStyleHelper::Tone tone) {
+  if (label)
+    label->setStyleSheet(UIStyleHelper::toneLabelStyle(m_theme, tone));
+}
+
+void StyledDialog::styleBadge(QLabel *label, UIStyleHelper::Tone tone) {
+  if (label)
+    label->setStyleSheet(UIStyleHelper::badgeStyle(m_theme, tone));
 }

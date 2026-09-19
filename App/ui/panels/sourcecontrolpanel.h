@@ -101,6 +101,7 @@ private:
   QString statusText(GitFileStatus status) const;
   QColor statusColor(GitFileStatus status) const;
   void addEmptyStateItem(QTreeWidget *tree, const QString &text);
+  void recolorItems();
   void updateCounts();
   void updateHeaderTitle();
   void updateStateMap();

@@ -39,12 +39,16 @@ public:
 public slots:
   void updatePreview();
 
+protected:
+  void changeEvent(QEvent *event) override;
+
 signals:
   void linkClicked(const QString &url);
 
 private:
   void setupUi();
   void setupToolbar();
+  void applyPaletteStyles();
   void onZoomIn();
   void onZoomOut();
   void onZoomReset();

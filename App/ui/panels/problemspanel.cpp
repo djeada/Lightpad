@@ -11,7 +11,7 @@ ProblemsPanel::ProblemsPanel(QWidget *parent)
       m_emptyStateLabel(nullptr), m_filterCombo(nullptr),
       m_autoRefreshCheckBox(nullptr), m_errorCount(0), m_warningCount(0),
       m_infoCount(0), m_hintCount(0), m_currentFilter(0),
-      m_autoRefreshEnabled(true) {
+      m_autoRefreshEnabled(true), m_closeButton(nullptr) {
   setupUI();
 }
 
@@ -45,13 +45,9 @@ void ProblemsPanel::setupUI() {
   m_statusLabel->setTextFormat(Qt::RichText);
   headerLayout->addWidget(m_statusLabel);
 
-  const QString buttonStyle =
-      "QPushButton { background: transparent; border: none; "
-      "padding: 2px 6px; font-size: 16px; }"
-      "QPushButton:hover { opacity: 0.8; }";
-
-  auto *closeButton = new QPushButton("✕", m_header);
-  closeButton->setStyleSheet(buttonStyle);
+  m_closeButton = new QPushButton("✕", m_header);
+  m_closeButton->setObjectName("problemsCloseButton");
+  QPushButton *closeButton = m_closeButton;
   closeButton->setToolTip(tr("Close Problems Panel (Ctrl+Shift+M)"));
   closeButton->setFixedSize(24, 24);
   connect(closeButton, &QPushButton::clicked, this,
@@ -70,12 +66,6 @@ void ProblemsPanel::setupUI() {
   m_tree->setHeaderLabels({tr("Problem"), tr("Location")});
   m_tree->setRootIsDecorated(false);
   m_tree->setAlternatingRowColors(false);
-  m_tree->setStyleSheet("QTreeWidget {"
-                        "  border: none;"
-                        "}"
-                        "QTreeWidget::item {"
-                        "  padding: 4px;"
-                        "}");
   m_tree->header()->setStretchLastSection(true);
   m_tree->setColumnWidth(0, 500);
 
@@ -89,8 +79,6 @@ void ProblemsPanel::setupUI() {
       tr("No problems detected.\n"
          "Diagnostics will appear here when issues are found in your code."));
   m_emptyStateLabel->setWordWrap(true);
-  m_emptyStateLabel->setStyleSheet(
-      "QLabel { font-size: 13px; padding: 32px; }");
 
   treeLayout->addWidget(m_tree);
   treeLayout->addWidget(m_emptyStateLabel);
@@ -329,25 +317,24 @@ void ProblemsPanel::rebuildTree() {
       diagItem->setData(0, Qt::UserRole, filePath);
       diagItem->setData(0, Qt::UserRole + 1, diag.range.start.line);
       diagItem->setData(0, Qt::UserRole + 2, diag.range.start.character);
-
-      QColor color;
-      switch (diag.severity) {
-      case LspDiagnosticSeverity::Error:
-        color = m_theme.diagnosticErrorColor;
-        break;
-      case LspDiagnosticSeverity::Warning:
-        color = m_theme.diagnosticWarningColor;
-        break;
-      case LspDiagnosticSeverity::Information:
-        color = m_theme.diagnosticInfoColor;
-        break;
-      case LspDiagnosticSeverity::Hint:
-        color = m_theme.diagnosticHintColor;
-        break;
-      }
-      diagItem->setForeground(0, color);
+      diagItem->setData(0, Qt::UserRole + 3, static_cast<int>(diag.severity));
+      diagItem->setForeground(0, severityColor(diag.severity));
     }
   }
+}
+
+QColor ProblemsPanel::severityColor(LspDiagnosticSeverity severity) const {
+  switch (severity) {
+  case LspDiagnosticSeverity::Error:
+    return m_theme.diagnosticErrorColor;
+  case LspDiagnosticSeverity::Warning:
+    return m_theme.diagnosticWarningColor;
+  case LspDiagnosticSeverity::Information:
+    return m_theme.diagnosticInfoColor;
+  case LspDiagnosticSeverity::Hint:
+    return m_theme.diagnosticHintColor;
+  }
+  return UIStyleHelper::secondaryTextColor(m_theme);
 }
 
 QString ProblemsPanel::severityIcon(LspDiagnosticSeverity severity) const {
@@ -403,7 +390,7 @@ void ProblemsPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
   setObjectName(QStringLiteral("problemsPanel"));
   setStyleSheet(UIStyleHelper::panelStyle(theme, objectName()));
-  m_emptyStateLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
+  m_emptyStateLabel->setStyleSheet(UIStyleHelper::emptyStateStyle(theme));
   m_emptyStateLabel->setWordWrap(true);
   m_statusLabel->setMinimumWidth(0);
   m_statusLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
@@ -415,7 +402,11 @@ void ProblemsPanel::applyTheme(const Theme &theme) {
   }
 
   if (m_titleLabel) {
-    m_titleLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
+    m_titleLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 13));
+  }
+
+  if (m_closeButton) {
+    m_closeButton->setStyleSheet(UIStyleHelper::iconButtonStyle(theme));
   }
 
   if (m_filterCombo) {
@@ -432,7 +423,17 @@ void ProblemsPanel::applyTheme(const Theme &theme) {
 
   if (m_tree) {
     m_tree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+      QTreeWidgetItem *item = m_tree->topLevelItem(i);
+      const QVariant severity = item->data(0, Qt::UserRole + 3);
+      if (severity.isValid()) {
+        item->setForeground(0, severityColor(static_cast<LspDiagnosticSeverity>(
+                                   severity.toInt())));
+      }
+    }
   }
+
+  updateCounts();
 }
 
 void ProblemsPanel::clearCurrentFile() {

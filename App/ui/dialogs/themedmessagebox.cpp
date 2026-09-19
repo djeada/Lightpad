@@ -246,7 +246,7 @@ void ThemedMessageBox::applyStyle() {
         useSemanticTheme
             ? s_infoStyle
             : QString("font-size: 12px; color: %1; background: transparent;")
-                  .arg(theme.singleLineCommentFormat.name()));
+                  .arg(UIStyleHelper::secondaryTextColor(theme).name()));
   }
 
   for (auto it = m_buttonMap.begin(); it != m_buttonMap.end(); ++it) {

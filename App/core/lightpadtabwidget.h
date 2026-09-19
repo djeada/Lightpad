@@ -84,6 +84,7 @@ private:
   QToolButton *newTabButton;
   QMap<QWidget *, QString> m_viewerFilePaths;
   QString m_foregroundColor;
+  QString m_backgroundColor;
   QString m_hoverColor;
   QString m_accentColor;
 };

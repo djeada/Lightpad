@@ -16,6 +16,7 @@
 #include "../../core/lightpadtabwidget.h"
 #include "../../dap/breakpointmanager.h"
 #include "../../ui/mainwindow.h"
+#include "../../ui/uistylehelper.h"
 #include "codefolding.h"
 
 namespace {
@@ -223,15 +224,16 @@ QColor LineNumberArea::heatmapColor(qint64 timestamp) const {
 
 QString
 LineNumberArea::buildRichBlameTooltip(const GitBlameLineInfo &info) const {
+  const Theme theme = currentThemeFor(m_editor);
   QString html = QStringLiteral(
       "<div style='font-family: sans-serif; padding: 4px;'>"
       "<div style='font-size: 13px; font-weight: bold; "
       "margin-bottom: 4px;'>%1</div>"
-      "<div style='color: #aaa; font-size: 11px; margin-bottom: 6px;'>"
+      "<div style='color: %7; font-size: 11px; margin-bottom: 6px;'>"
       "<b>%2</b> &lt;%3&gt;<br>"
       "%4 (%5)</div>"
       "<div style='font-size: 12px; padding: 4px; "
-      "background: rgba(255,255,255,0.05); border-radius: 3px;'>%6</div>"
+      "background: %8; border-radius: 3px;'>%6</div>"
       "</div>");
 
   return html.arg(info.shortHash.toHtmlEscaped())
@@ -239,7 +241,9 @@ LineNumberArea::buildRichBlameTooltip(const GitBlameLineInfo &info) const {
       .arg(info.authorEmail.toHtmlEscaped())
       .arg(info.date.toHtmlEscaped())
       .arg(info.relativeDate.toHtmlEscaped())
-      .arg(info.summary.toHtmlEscaped());
+      .arg(info.summary.toHtmlEscaped())
+      .arg(UIStyleHelper::secondaryTextColor(theme).name(),
+           theme.surfaceAltColor.name());
 }
 
 QString LineNumberArea::buildDiffHunkTooltip(const GitDiffHunk &hunk) const {
@@ -255,9 +259,9 @@ QString LineNumberArea::buildDiffHunkTooltip(const GitDiffHunk &hunk) const {
       QStringLiteral("<div style='font-family: monospace; font-size: 11px; "
                      "white-space: pre; padding: 4px;'>");
 
-  html +=
-      QStringLiteral("<div style='color: #888; margin-bottom: 4px;'>%1</div>")
-          .arg(hunk.header.toHtmlEscaped());
+  html += QStringLiteral("<div style='color: %1; margin-bottom: 4px;'>%2</div>")
+              .arg(UIStyleHelper::mutedTextColor(theme).name(),
+                   hunk.header.toHtmlEscaped());
 
   for (const QString &line : hunk.lines) {
     QString escaped = line.toHtmlEscaped();
@@ -428,11 +432,15 @@ bool LineNumberArea::event(QEvent *event) {
                   m_gitIntegration->getCommitFileStats(
                       richIt.value().shortHash);
               if (!stats.isEmpty()) {
-                tooltip += QStringLiteral(
-                    "<div style='margin-top: 6px; font-size: 11px; "
-                    "color: #aaa; border-top: 1px solid #555; "
-                    "padding-top: 4px;'>");
                 const Theme statsTheme = currentThemeFor(m_editor);
+                tooltip +=
+                    QStringLiteral(
+                        "<div style='margin-top: 6px; font-size: 11px; "
+                        "color: %1; border-top: 1px solid %2; "
+                        "padding-top: 4px;'>")
+                        .arg(UIStyleHelper::secondaryTextColor(statsTheme)
+                                 .name(),
+                             statsTheme.borderColor.name());
                 int shown = 0;
                 for (const auto &stat : stats) {
                   if (shown >= 8) {

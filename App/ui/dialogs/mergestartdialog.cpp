@@ -2,6 +2,7 @@
 #include "../../git/gitintegration.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 
 #include <QComboBox>
 #include <QFrame>
@@ -46,6 +47,7 @@ MergeStartDialog::MergeStartDialog(GitIntegration *git, const Theme &theme,
   loadChoices();
   applyTheme(theme);
   refreshPlan();
+  reloadOnExternalGitChanges(this, m_git, [this]() { refreshPlan(); });
 }
 
 void MergeStartDialog::buildUi() {
@@ -486,65 +488,50 @@ void MergeStartDialog::applyTheme(const Theme &theme) {
       UIStyleHelper::comboBoxStyle(theme) +
       UIStyleHelper::resultListStyle(theme) + scrollRules +
       QStringLiteral("QGroupBox { padding: 8px; padding-top: 16px; }"
-                     "QGroupBox::title { color: %1; font-size: 12px; }"
-                     "QRadioButton { color: %1; background: transparent; "
-                     "spacing: 8px; padding: 4px; }"
-                     "QRadioButton::indicator { width: 14px; height: 14px; "
-                     "border-radius: 7px; "
-                     "border: 1px solid %2; background: %3; }"
-                     "QRadioButton::indicator:checked { background: %4; "
-                     "border-color: %4; }")
-          .arg(theme.foregroundColor.name(), theme.borderColor.name(),
-               theme.surfaceColor.name(), theme.accentColor.name()));
+                     "QGroupBox::title { color: %1; font-size: 12px; }")
+          .arg(theme.foregroundColor.name()));
 
   if (QScrollArea *scroll =
           findChild<QScrollArea *>(QStringLiteral("mergeStepsScrollArea"))) {
     scroll->viewport()->setAutoFillBackground(false);
   }
 
+  const QString accentText =
+      QStringLiteral("color: %1;")
+          .arg(UIStyleHelper::toneColor(theme, UIStyleHelper::Tone::Accent)
+                   .name());
+
   if (QLabel *title = findChild<QLabel *>(QStringLiteral("mergeTitleLabel"))) {
-    title->setStyleSheet(
-        QStringLiteral("font-size: 19px; font-weight: bold; color: %1;")
-            .arg(theme.foregroundColor.name()));
+    title->setStyleSheet(UIStyleHelper::headingStyle(theme, 17));
   }
   if (QLabel *subtitle =
           findChild<QLabel *>(QStringLiteral("mergeSubtitleLabel"))) {
     styleSubduedLabel(subtitle);
   }
   if (QLabel *arrow = findChild<QLabel *>(QStringLiteral("mergeArrowLabel"))) {
-    arrow->setStyleSheet(
-        QStringLiteral("font-size: 13px; font-weight: bold; color: %1;")
-            .arg(theme.accentColor.name()));
+    arrow->setStyleSheet(UIStyleHelper::headingStyle(theme, 13) + accentText);
   }
 
-  m_targetLabel->setStyleSheet(
-      QStringLiteral("font-size: 16px; font-weight: bold; color: %1;")
-          .arg(theme.accentColor.name()));
+  m_targetLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 16) +
+                               accentText);
   styleSubduedLabel(m_targetHintLabel);
 
-  m_headlineLabel->setStyleSheet(
-      QStringLiteral("font-size: 14px; font-weight: bold; color: %1;")
-          .arg(theme.foregroundColor.name()));
-  styleSubduedLabel(m_outcomeLabel);
-  styleSubduedLabel(m_filesLabel);
-  styleSubduedLabel(m_preferenceExplanation);
+  m_headlineLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 14));
 
+  const QString bodyText = QStringLiteral("color: %1; background: transparent;")
+                               .arg(theme.foregroundColor.name());
   for (QLabel *label :
-       {m_targetHintLabel, m_outcomeLabel, m_filesLabel,
-        m_preferenceExplanation,
-        findChild<QLabel *>(QStringLiteral("mergeSubtitleLabel"))}) {
+       {m_outcomeLabel, m_filesLabel, m_preferenceExplanation}) {
     if (label) {
-      label->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
-                               .arg(theme.foregroundColor.name()));
+      label->setStyleSheet(bodyText);
     }
   }
 
-  m_conflictLabel->setStyleSheet(QStringLiteral("font-weight: bold; color: %1;")
-                                     .arg(theme.foregroundColor.name()));
-  m_copyWarningLabel->setStyleSheet(
-      QStringLiteral("color: %1;").arg(theme.warningColor.name()));
-  m_blockerLabel->setStyleSheet(QStringLiteral("color: %1; font-weight: bold;")
-                                    .arg(theme.errorColor.name()));
+  m_conflictLabel->setStyleSheet(UIStyleHelper::titleLabelStyle(theme));
+  styleToneLabel(m_copyWarningLabel, UIStyleHelper::Tone::Warning);
+  m_blockerLabel->setStyleSheet(
+      UIStyleHelper::toneLabelStyle(theme, UIStyleHelper::Tone::Error) +
+      QStringLiteral("font-weight: bold;"));
 
   stylePrimaryButton(m_startButton);
   styleSecondaryButton(m_cancelButton);

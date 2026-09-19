@@ -2,6 +2,7 @@
 #include "../../git/gitdiffmodel.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include <QCheckBox>
 #include <QDir>
 #include <QFile>
@@ -23,6 +24,20 @@ namespace {
 constexpr int PAGE_SIZE = 100;
 constexpr int REVISION_INDEX_ROLE = Qt::UserRole + 1;
 
+QColor diffLineColor(const Theme &theme, const QString &line) {
+  if (line.startsWith(QLatin1Char('+')) &&
+      !line.startsWith(QLatin1String("+++"))) {
+    return theme.diffAddedColor;
+  }
+  if (line.startsWith(QLatin1Char('-')) &&
+      !line.startsWith(QLatin1String("---"))) {
+    return theme.diffRemovedColor;
+  }
+  if (line.startsWith(QLatin1String("@@"))) {
+    return theme.accentColor;
+  }
+  return UIStyleHelper::secondaryTextColor(theme);
+}
 } // namespace
 
 FileTimelineDialog::FileTimelineDialog(GitIntegration *git,
@@ -46,6 +61,7 @@ FileTimelineDialog::FileTimelineDialog(GitIntegration *git,
   setKeyboardDefault(m_closeButton);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void FileTimelineDialog::setLineRange(int startLine, int endLine) {
@@ -466,17 +482,7 @@ void FileTimelineDialog::renderDiff(const QString &diffText) {
 
   for (const QString &line : diffText.split(QLatin1Char('\n'))) {
     QListWidgetItem *item = new QListWidgetItem(line, m_diffView);
-    if (line.startsWith(QLatin1Char('+')) &&
-        !line.startsWith(QLatin1String("+++"))) {
-      item->setForeground(m_theme.diffAddedColor);
-    } else if (line.startsWith(QLatin1Char('-')) &&
-               !line.startsWith(QLatin1String("---"))) {
-      item->setForeground(m_theme.diffRemovedColor);
-    } else if (line.startsWith(QLatin1String("@@"))) {
-      item->setForeground(m_theme.accentColor);
-    } else {
-      item->setForeground(m_theme.singleLineCommentFormat);
-    }
+    item->setForeground(diffLineColor(m_theme, line));
   }
 }
 
@@ -517,52 +523,19 @@ void FileTimelineDialog::onShowInGraph() {
 
 void FileTimelineDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  if (m_timelineTree) {
-    m_timelineTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-  }
-  for (QCheckBox *check : {m_followRenamesCheck, m_allBranchesCheck,
-                           m_firstParentCheck, m_lineRangeCheck}) {
-    if (check) {
-      check->setStyleSheet(UIStyleHelper::checkBoxStyle(theme));
-    }
-  }
-  for (QLineEdit *edit : {m_authorEdit, m_sinceEdit, m_untilEdit}) {
-    if (edit) {
-      edit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-    }
-  }
-  if (m_contentView) {
-    m_contentView->setStyleSheet(
-        QString("QPlainTextEdit { background: %1; color: %2; border: 1px "
-                "solid %3; }")
-            .arg(theme.surfaceColor.name(), theme.foregroundColor.name(),
-                 theme.borderColor.name()));
-  }
   if (m_diffView) {
-    m_diffView->setStyleSheet(
-        QString("QListWidget { background: %1; border: 1px solid %2; }")
-            .arg(theme.surfaceColor.name(), theme.borderColor.name()));
-  }
-  if (m_headerLabel) {
-    styleTitleLabel(m_headerLabel);
-  }
-  if (m_previewHeader) {
-    styleSubduedLabel(m_previewHeader);
-  }
-  for (QPushButton *button :
-       {m_compareCurrentButton, m_compareSelectedButton, m_openCommitButton,
-        m_showInGraphButton, m_refreshButton, m_closeButton,
-        m_loadMoreButton}) {
-    if (button) {
-      styleSecondaryButton(button);
+    for (int i = 0; i < m_diffView->count(); ++i) {
+      QListWidgetItem *item = m_diffView->item(i);
+      if (item->flags() & Qt::ItemIsSelectable) {
+        item->setForeground(diffLineColor(theme, item->text()));
+      }
     }
   }
+  styleTitleLabel(m_headerLabel);
+  styleSubduedLabel(m_previewHeader);
   for (const char *name : {"timelineAuthorEditLabel", "timelineSinceEditLabel",
                            "timelineUntilEditLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
 }

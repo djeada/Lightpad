@@ -21,6 +21,8 @@ public:
       const QString &overrideLanguageId, LanguageFeatureManager *manager,
       const Theme &theme, QWidget *parent = nullptr);
 
+  void applyTheme(const Theme &theme) override;
+
 signals:
   void configurationApplied(const QString &languageAssociation);
   void pythonEnvironmentRequested();
@@ -36,8 +38,10 @@ private:
   QString m_effectiveLanguageId;
   QString m_overrideLanguageId;
   LanguageFeatureManager *m_manager;
-  Theme m_theme;
+  UIStyleHelper::Tone m_bannerTone = UIStyleHelper::Tone::Neutral;
 
+  QLabel *m_titleLabel;
+  QLabel *m_hintLabel;
   QLabel *m_statusBanner;
   QCheckBox *m_enabledCheck;
   QComboBox *m_languageCombo;

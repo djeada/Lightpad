@@ -28,9 +28,6 @@ public:
 
   void dismiss();
 
-protected:
-  void paintEvent(QPaintEvent *event) override;
-
 private:
   void setupUi();
   void applyStyle(Level level);
@@ -45,6 +42,7 @@ private:
   QPropertyAnimation *m_fadeAnimation;
   QPropertyAnimation *m_slideAnimation;
   Theme m_theme;
+  Level m_level = Level::Info;
 };
 
 class NotificationManager : public QObject {

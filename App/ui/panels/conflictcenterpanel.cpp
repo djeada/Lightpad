@@ -544,24 +544,25 @@ void ConflictCenterPanel::applyTheme(const Theme &theme) {
           .arg(theme.backgroundColor.name(), theme.foregroundColor.name()));
 
   m_banner->setStyleSheet(
-      QStringLiteral("QWidget#conflictCenterBanner { background: %1; border: "
-                     "2px solid %2; border-radius: %3px; }")
-          .arg(theme.surfaceColor.name(), theme.errorColor.name())
+      UIStyleHelper::cardStyle(theme, m_banner->objectName()) +
+      QStringLiteral("QWidget#conflictCenterBanner { border: 2px solid %1; "
+                     "border-radius: %2px; }")
+          .arg(theme.errorColor.name())
           .arg(UiMetrics::RadiusMd));
 
   m_bannerIcon->setStyleSheet(
-      QStringLiteral("background: %1; color: white; font-weight: bold; "
-                     "font-size: 14px; border-radius: 10px; min-width: 20px; "
-                     "max-width: 20px; min-height: 20px; max-height: 20px; "
-                     "qproperty-alignment: AlignCenter;")
-          .arg(theme.errorColor.name()));
+      UIStyleHelper::badgeStyle(theme, UIStyleHelper::Tone::Error) +
+      QStringLiteral("font-size: 14px; border-radius: 10px; padding: 0; "
+                     "min-width: 20px; max-width: 20px; min-height: 20px; "
+                     "max-height: 20px; qproperty-alignment: AlignCenter;"));
   m_bannerTitle->setStyleSheet(
-      QStringLiteral("font-size: 15px; font-weight: bold; color: %1;")
-          .arg(theme.errorColor.name()));
+      UIStyleHelper::headingStyle(theme, 15) +
+      QStringLiteral("color: %1;")
+          .arg(UIStyleHelper::toneColor(theme, UIStyleHelper::Tone::Error)
+                   .name()));
   m_operationLabel->setStyleSheet(
       QStringLiteral("color: %1;").arg(theme.foregroundColor.name()));
-  m_summaryLabel->setStyleSheet(
-      QStringLiteral("color: %1;").arg(theme.singleLineCommentFormat.name()));
+  m_summaryLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme));
   m_progress->setStyleSheet(
       QStringLiteral("QProgressBar { background: %1; border: none; "
                      "border-radius: 4px; } QProgressBar::chunk { background: "
@@ -570,12 +571,11 @@ void ConflictCenterPanel::applyTheme(const Theme &theme) {
 
   m_fileTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
 
-  const QString hintStyle =
-      QStringLiteral("color: %1;").arg(theme.singleLineCommentFormat.name());
+  const QString hintStyle = UIStyleHelper::subduedLabelStyle(theme);
   m_glossaryOurs->setStyleSheet(hintStyle);
   m_glossaryTheirs->setStyleSheet(hintStyle);
   m_glossaryBase->setStyleSheet(hintStyle);
-  m_emptyLabel->setStyleSheet(hintStyle);
+  m_emptyLabel->setStyleSheet(UIStyleHelper::emptyStateStyle(theme));
 
   m_openButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));
   m_finishButton->setStyleSheet(UIStyleHelper::primaryButtonStyle(theme));

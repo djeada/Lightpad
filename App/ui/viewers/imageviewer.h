@@ -34,12 +34,14 @@ public slots:
 protected:
   void wheelEvent(QWheelEvent *event) override;
   void showEvent(QShowEvent *event) override;
+  void changeEvent(QEvent *event) override;
 
 private:
   void setupUi();
   void setupToolbar();
   void updateZoomLabel();
   void applyZoom();
+  void updateBackground();
 
   QGraphicsView *m_graphicsView;
   QGraphicsScene *m_scene;

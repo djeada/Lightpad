@@ -1,5 +1,7 @@
 #include "hackerstyle.h"
+#include "../../../theme/colorcontrast.h"
 #include "../../../theme/themeengine.h"
+#include "../../../theme/themepalette.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QStyleOption>
@@ -12,26 +14,7 @@
 HackerStyle::HackerStyle(QStyle *baseStyle) : QProxyStyle(baseStyle) {}
 
 void HackerStyle::polish(QPalette &palette) {
-  const auto &tc = ThemeEngine::instance().activeTheme().colors;
-  palette.setColor(QPalette::Window, tc.surfaceBase);
-  palette.setColor(QPalette::WindowText, tc.textPrimary);
-  palette.setColor(QPalette::Base, tc.surfaceRaised);
-  palette.setColor(QPalette::AlternateBase, tc.surfaceOverlay);
-  palette.setColor(QPalette::Text, tc.textPrimary);
-  palette.setColor(QPalette::BrightText, tc.accentPrimary);
-  palette.setColor(QPalette::Button, tc.surfaceRaised);
-  palette.setColor(QPalette::ButtonText, tc.textPrimary);
-  palette.setColor(QPalette::Highlight, tc.accentSoft);
-  palette.setColor(QPalette::HighlightedText, tc.accentPrimary);
-  palette.setColor(QPalette::ToolTipBase, tc.surfaceOverlay);
-  palette.setColor(QPalette::ToolTipText, tc.textPrimary);
-  palette.setColor(QPalette::Link, tc.textLink);
-  palette.setColor(QPalette::PlaceholderText, tc.textMuted);
-
-  palette.setColor(QPalette::Disabled, QPalette::WindowText, tc.textDisabled);
-  palette.setColor(QPalette::Disabled, QPalette::Text, tc.textDisabled);
-  palette.setColor(QPalette::Disabled, QPalette::ButtonText, tc.textDisabled);
-  palette.setColor(QPalette::Disabled, QPalette::Highlight, tc.borderDefault);
+  palette = ThemePalette::build(ThemeEngine::instance().activeTheme());
 }
 
 void HackerStyle::drawPrimitive(PrimitiveElement element,
@@ -314,9 +297,10 @@ void HackerStyle::drawMenuItem(const QStyleOption *option, QPainter *painter,
 
   int textX = iconRect.right() + 4;
   QRect textRect(textX, r.y(), r.width() - textX - 8, r.height());
-  QColor textColor = !enabled   ? tc.textDisabled
-                     : selected ? tc.accentPrimary
-                                : tc.textPrimary;
+  QColor textColor =
+      !enabled   ? tc.textDisabled
+      : selected ? ColorContrast::ensure(tc.accentPrimary, tc.accentSoft)
+                 : tc.textPrimary;
   painter->setPen(textColor);
 
   QString text = mi->text;

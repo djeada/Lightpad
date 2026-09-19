@@ -137,7 +137,7 @@ void GitDiffDialog::setCommitInfo(const QString &author, const QString &date,
             .arg(htmlEscape(author))
             .arg(htmlEscape(date))
             .arg(htmlEscape(shortMsg))
-            .arg(m_theme.singleLineCommentFormat.name());
+            .arg(UIStyleHelper::mutedTextColor(m_theme).name());
 
     m_commitInfoLabel->setText(html);
     m_commitInfoLabel->setTextFormat(Qt::RichText);
@@ -429,51 +429,34 @@ void GitDiffDialog::buildUi() {
 void GitDiffDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
 
+  const QString muted = UIStyleHelper::mutedTextColor(theme).name();
+  const QString border = theme.borderColor.name();
+  const QString surface = theme.surfaceColor.name();
+  const QString surfaceAlt = theme.surfaceAltColor.name();
+
   QString styles =
-      QString("#diffHeader { background: %2; border-bottom: 1px solid %3; }"
-              "#diffTitle { font-size: 14px; font-weight: 600; color: %4; }"
-              "#changeCounter { font-size: 11px; color: %5; background: %6; "
-              "  padding: 3px 10px; border-radius: 10px; }"
-
-              "#toolbarGroup { background: %7; border: 1px solid %3; "
+      UIStyleHelper::panelHeaderStyle(theme, "diffHeader") +
+      QString("#diffTitle { %1 }"
+              "#changeCounter { %2 }"
+              "#fileListHeader { %3 background: %4; padding: 10px 12px; "
+              "border-bottom: 1px solid %5; }")
+          .arg(UIStyleHelper::headingStyle(theme, 14),
+               UIStyleHelper::badgeStyle(theme, UIStyleHelper::Tone::Neutral),
+               UIStyleHelper::sectionLabelStyle(theme), surfaceAlt, border) +
+      QString("#toolbarGroup { background: %1; border: 1px solid %2; "
               "border-radius: 6px; }"
-
-              "#searchCounter { font-size: 11px; color: %8; }"
-
-              "#commitInfo { font-size: 12px; color: %4; background: %9; "
-              "  border-bottom: 1px solid %3; padding: 10px 16px; }"
-
-              "#diffFooter { background: %2; border-top: 1px solid %3; }"
-              "#shortcutsLabel { font-size: 11px; color: %8; }"
-
-              "#fileListPanel { background: %2; border-right: 1px solid %3; }"
-              "#fileListHeader { font-size: 10px; font-weight: 600; color: %8; "
-              "  letter-spacing: 1px; background: %7; padding: 10px 12px; "
-              "  border-bottom: 1px solid %3; }")
-          .arg(theme.backgroundColor.name())
-          .arg(theme.surfaceColor.name())
-          .arg(theme.borderColor.name())
-          .arg(theme.foregroundColor.name())
-          .arg(theme.foregroundColor.name())
-          .arg(theme.hoverColor.name())
-          .arg(theme.surfaceAltColor.name())
-          .arg(theme.singleLineCommentFormat.name())
-          .arg(theme.surfaceAltColor.name());
+              "#searchCounter { font-size: 11px; color: %3; }"
+              "#commitInfo { font-size: 12px; color: %4; background: %1; "
+              "border-bottom: 1px solid %2; padding: 10px 16px; }"
+              "#diffFooter { background: %5; border-top: 1px solid %2; }"
+              "#shortcutsLabel { font-size: 11px; color: %3; }"
+              "#fileListPanel { background: %5; border-right: 1px solid %2; }")
+          .arg(surfaceAlt, border, muted, theme.foregroundColor.name(),
+               surface);
 
   setStyleSheet(styles);
 
-  QString buttonStyle =
-      QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
-              "  border-radius: 4px; padding: 5px 10px; font-size: 12px; }"
-              "QPushButton:hover { background: %4; border-color: %5; }"
-              "QPushButton:pressed { background: %6; }")
-          .arg(theme.surfaceAltColor.name())
-          .arg(theme.foregroundColor.name())
-          .arg(theme.borderColor.name())
-          .arg(theme.hoverColor.name())
-          .arg(theme.borderColor.darker(110).name())
-          .arg(theme.pressedColor.name());
-
+  const QString buttonStyle = UIStyleHelper::secondaryButtonStyle(theme);
   for (QPushButton *btn :
        {m_prevButton, m_nextButton, m_findPrevButton, m_findNextButton}) {
     if (btn)
@@ -483,51 +466,27 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
   stylePrimaryButton(m_copyButton);
 
   if (m_searchField) {
-    QString searchStyle =
-        QString(
-            "QLineEdit { background: %1; color: %2; border: 1px solid %3; "
-            "  border-radius: 4px; padding: 4px 8px; font-size: 12px; }"
-            "QLineEdit:focus { border-color: %4; }"
-            "QLineEdit::clear-button { image: none; width: 0px; height: 0px; }")
-            .arg(theme.backgroundColor.name())
-            .arg(theme.foregroundColor.name())
-            .arg(theme.borderColor.name())
-            .arg(theme.accentColor.name());
-    m_searchField->setStyleSheet(searchStyle);
+    m_searchField->setStyleSheet(
+        UIStyleHelper::lineEditStyle(theme) +
+        "QLineEdit::clear-button { image: none; width: 0px; height: 0px; }");
   }
 
-  if (m_fileList) {
-    m_fileList->setStyleSheet(
-        QString("QListWidget { background: %1; color: %2; border: none; "
-                "outline: none; }"
-                "QListWidget::item { padding: 8px 12px; border-left: 3px solid "
-                "transparent; }"
-                "QListWidget::item:selected { background: %3; "
-                "border-left-color: %4; }"
-                "QListWidget::item:hover { background: %5; }")
-            .arg(theme.surfaceColor.name())
-            .arg(theme.foregroundColor.name())
-            .arg(theme.accentSoftColor.name())
-            .arg(theme.accentColor.name())
-            .arg(theme.hoverColor.name()));
-  }
+  if (m_fileList)
+    m_fileList->setStyleSheet(UIStyleHelper::listWidgetStyle(theme));
 
   if (m_diffView) {
-    QString diffStyle =
+    m_diffView->setStyleSheet(
         QString("QTextEdit { background: %1; color: %2; border: none; "
-                "  selection-background-color: %3; }"
-                "QScrollBar:vertical { background: %4; width: 10px; }"
-                "QScrollBar::handle:vertical { background: %5; border-radius: "
-                "5px; min-height: 30px; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical "
-                "{ height: 0; }")
-            .arg(theme.backgroundColor.name())
-            .arg(theme.foregroundColor.name())
-            .arg(theme.accentSoftColor.name())
-            .arg(theme.surfaceColor.name())
-            .arg(theme.borderColor.name());
-    m_diffView->setStyleSheet(diffStyle);
+                "selection-background-color: %3; selection-color: %4; }")
+            .arg(theme.backgroundColor.name(), theme.foregroundColor.name(),
+                 theme.accentSoftColor.name(),
+                 UIStyleHelper::readableText(theme, theme.accentSoftColor)
+                     .name()));
   }
+
+  if (m_changeCounterLabel &&
+      m_changeCounterLabel->textFormat() == Qt::RichText)
+    updateChangeCounter();
 }
 
 void GitDiffDialog::updateDiffPresentation() {
@@ -550,7 +509,7 @@ void GitDiffDialog::updateDiffPresentation() {
             "</body></html>")
             .arg(m_theme.backgroundColor.name())
             .arg(m_theme.foregroundColor.name())
-            .arg(m_theme.singleLineCommentFormat.name());
+            .arg(UIStyleHelper::mutedTextColor(m_theme).name());
     m_diffView->setHtml(emptyHtml);
     if (m_summaryLabel && !m_summaryText.isEmpty()) {
       m_summaryLabel->setText(m_summaryText);
@@ -610,7 +569,7 @@ void GitDiffDialog::rebuildUnified() {
   html += QString(".ln { color: %1; text-align: right; width: 50px; "
                   "padding-right: 12px; border-right: 1px solid %2; "
                   "user-select: none; background: %3; }")
-              .arg(m_theme.singleLineCommentFormat.name())
+              .arg(UIStyleHelper::mutedTextColor(m_theme).name())
               .arg(m_theme.borderColor.name())
               .arg(m_theme.surfaceColor.name());
   html += QString(".gutter { width: 4px; padding: 0; }");
@@ -621,7 +580,9 @@ void GitDiffDialog::rebuildUnified() {
   html += QString(".hunk { color: %1; background: %2; font-weight: 500; "
                   "padding: 8px 12px; border-top: 1px solid %3; "
                   "border-bottom: 1px solid %3; }")
-              .arg(m_theme.accentColor.name())
+              .arg(UIStyleHelper::readableText(m_theme, m_theme.surfaceAltColor,
+                                               m_theme.accentColor)
+                       .name())
               .arg(m_theme.surfaceAltColor.name())
               .arg(m_theme.borderColor.name());
   html += QString(".file { color: %1; background: %2; font-weight: 600; "
@@ -699,7 +660,7 @@ void GitDiffDialog::rebuildSplit() {
       "padding: 0 8px; line-height: 20px; vertical-align: top; }");
   html += QString(".ln { color: %1; text-align: right; width: 40px; "
                   "user-select: none; background: %2; }")
-              .arg(m_theme.singleLineCommentFormat.name())
+              .arg(UIStyleHelper::mutedTextColor(m_theme).name())
               .arg(m_theme.surfaceColor.name());
   html += QString(".sep { width: 2px; background: %1; padding: 0; }")
               .arg(m_theme.borderColor.name());
@@ -710,7 +671,9 @@ void GitDiffDialog::rebuildSplit() {
       QString(".gutter-del { background: %1; }").arg(m_theme.errorColor.name());
   html += QString(".hunk { color: %1; background: %2; font-weight: 500; "
                   "padding: 8px 12px; }")
-              .arg(m_theme.accentColor.name())
+              .arg(UIStyleHelper::readableText(m_theme, m_theme.surfaceAltColor,
+                                               m_theme.accentColor)
+                       .name())
               .arg(m_theme.surfaceAltColor.name());
   html += QString(".file { color: %1; background: %2; font-weight: 600; "
                   "padding: 10px 12px; font-size: 13px; }")
@@ -830,12 +793,14 @@ void GitDiffDialog::rebuildWord() {
   html += QString(".ln { color: %1; text-align: right; width: 50px; "
                   "padding-right: 12px; border-right: 1px solid %2; "
                   "user-select: none; background: %3; }")
-              .arg(m_theme.singleLineCommentFormat.name())
+              .arg(UIStyleHelper::mutedTextColor(m_theme).name())
               .arg(m_theme.borderColor.name())
               .arg(m_theme.surfaceColor.name());
   html += QString(".hunk { color: %1; background: %2; font-weight: 500; "
                   "padding: 8px 12px; }")
-              .arg(m_theme.accentColor.name())
+              .arg(UIStyleHelper::readableText(m_theme, m_theme.surfaceAltColor,
+                                               m_theme.accentColor)
+                       .name())
               .arg(m_theme.surfaceAltColor.name());
   html += QString(".file { color: %1; background: %2; font-weight: 600; "
                   "padding: 10px 12px; font-size: 13px; }")
@@ -1049,12 +1014,18 @@ void GitDiffDialog::updateChangeCounter() {
   if (!m_changeCounterLabel) {
     return;
   }
-  QString addStyle = QString("<span style='color: %1'>+%2</span>")
-                         .arg(m_theme.successColor.name())
-                         .arg(m_addedCount);
-  QString delStyle = QString("<span style='color: %1'>-%2</span>")
-                         .arg(m_theme.errorColor.name())
-                         .arg(m_deletedCount);
+  QString addStyle =
+      QString("<span style='color: %1'>+%2</span>")
+          .arg(UIStyleHelper::readableText(m_theme, m_theme.surfaceAltColor,
+                                           m_theme.successColor)
+                   .name())
+          .arg(m_addedCount);
+  QString delStyle =
+      QString("<span style='color: %1'>-%2</span>")
+          .arg(UIStyleHelper::readableText(m_theme, m_theme.surfaceAltColor,
+                                           m_theme.errorColor)
+                   .name())
+          .arg(m_deletedCount);
 
   if (m_changeBlocks.isEmpty()) {
     m_changeCounterLabel->setText(QString("%1  %2").arg(addStyle, delStyle));

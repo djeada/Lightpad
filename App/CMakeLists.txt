@@ -135,6 +135,7 @@ set(project_headers
     ui/dialogs/rebasetimelinedialog.h
     ui/dialogs/recoverycenterdialog.h
     ui/dialogs/stashshelfdialog.h
+    ui/dialogs/gitautorefresh.h
     ui/dialogs/commandmirrordialog.h
     ui/dialogs/branchhygienedialog.h
     ui/dialogs/worktreemapdialog.h

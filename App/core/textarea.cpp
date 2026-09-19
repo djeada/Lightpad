@@ -25,6 +25,8 @@
 #include <algorithm>
 #include <functional>
 
+#include "../theme/colorcontrast.h"
+
 #include "../completion/completioncontext.h"
 #include "../completion/completionengine.h"
 #include "../completion/completionitem.h"
@@ -1511,6 +1513,15 @@ void TextArea::updateRowColDisplay() {
                           textCursor().positionInBlock() + 1);
 }
 
+namespace {
+QColor bracketMatchForeground() {
+  const ThemeColors &c = ThemeEngine::instance().activeTheme().colors;
+  return ColorContrast::ensureOnAll(
+      c.syntaxConstant.isValid() ? c.syntaxConstant : c.accentPrimary,
+      {c.editorBg, ColorContrast::flatten(c.editorLineHighlight, c.editorBg)});
+}
+} // namespace
+
 void TextArea::drawMatchingBrackets() {
   auto _drawMatchingBrackets =
       [&](QTextCursor::MoveOperation op, const QChar &startStr,
@@ -1526,7 +1537,7 @@ void TextArea::drawMatchingBrackets() {
 
         QTextEdit::ExtraSelection selection;
 
-        selection.format.setForeground(QColor("yellow"));
+        selection.format.setForeground(bracketMatchForeground());
 
         selection.cursor = textCursor();
         selection.cursor.clearSelection();
@@ -1721,7 +1732,7 @@ void TextArea::updateExtraSelections() {
             const QChar &endStr,
             std::function<int(const QString &, int, QChar, QChar)> function) {
           QTextEdit::ExtraSelection selection;
-          selection.format.setForeground(QColor("yellow"));
+          selection.format.setForeground(bracketMatchForeground());
 
           QTextCursor current = textCursor();
           current.clearSelection();

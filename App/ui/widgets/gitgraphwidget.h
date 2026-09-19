@@ -91,6 +91,7 @@ private:
   void rebuildFilterCache();
   int commitAtY(int y) const;
   QColor laneColor(int lane) const;
+  void refreshThemeColors();
   void clampScrollOffset();
   void setScrollOffset(int offset);
   void syncScrollBarRange();
@@ -130,7 +131,12 @@ private:
   static constexpr int DOT_RADIUS = 4;
   static constexpr int SCROLLBAR_WIDTH = 12;
 
-  static const QList<QColor> s_laneColors;
+  QVector<QColor> m_laneColors;
+  QColor m_mutedText;
+  QColor m_secondaryText;
+  QColor m_dimmedText;
+  QColor m_warningText;
+  QColor m_modifiedText;
 };
 
 #endif

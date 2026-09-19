@@ -2,6 +2,7 @@
 #include "../../git/gitintegration.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "themedmessagebox.h"
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -31,6 +32,7 @@ RecoveryCenterDialog::RecoveryCenterDialog(GitIntegration *git,
   setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void RecoveryCenterDialog::buildUi() {
@@ -228,40 +230,13 @@ void RecoveryCenterDialog::onCompareWithHead() {
 
 void RecoveryCenterDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  if (m_headerLabel) {
-    styleSubduedLabel(m_headerLabel);
-  }
-  if (m_timelineTree) {
-    m_timelineTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-  }
-  if (m_descriptionLabel) {
-    m_descriptionLabel->setStyleSheet(
-        QString("color: %1;").arg(theme.foregroundColor.name()));
-  }
+  styleSubduedLabel(m_headerLabel);
   if (m_guaranteeLabel) {
     const GitRecoveryEvent *event = currentEvent();
     const bool unnamed = event && !event->reachable;
-    m_guaranteeLabel->setStyleSheet(
-        QString("color: %1;")
-            .arg((unnamed ? theme.warningColor : theme.successColor).name()));
+    styleToneLabel(m_guaranteeLabel, unnamed ? UIStyleHelper::Tone::Warning
+                                             : UIStyleHelper::Tone::Success);
   }
-  if (m_detailList) {
-    m_detailList->setStyleSheet(
-        QString("QListWidget { background: %1; color: %2; border: 1px solid "
-                "%3; }")
-            .arg(theme.surfaceColor.name(),
-                 theme.singleLineCommentFormat.name(),
-                 theme.borderColor.name()));
-  }
-  for (QPushButton *button :
-       {m_inspectButton, m_compareButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
-  if (m_recoverButton) {
-    stylePrimaryButton(m_recoverButton);
-  }
+  stylePrimaryButton(m_recoverButton);
 }

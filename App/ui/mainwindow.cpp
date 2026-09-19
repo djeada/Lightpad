@@ -73,7 +73,9 @@
 #include "../syntax/syntaxpluginregistry.h"
 #include "../test_templates/testconfiguration.h"
 #include "../test_templates/testfileclassifier.h"
+#include "../theme/colorcontrast.h"
 #include "../theme/themeengine.h"
+#include "../theme/themepalette.h"
 #include "dialogs/cmaketargetpickerdialog.h"
 #include "dialogs/commandpalette.h"
 #include "dialogs/compareanythingdialog.h"
@@ -89,6 +91,7 @@
 #include "dialogs/processpickerdialog.h"
 #include "dialogs/provenancelensdialog.h"
 #include "dialogs/rebasetimelinedialog.h"
+#include "dialogs/styleddialog.h"
 #include "uistylehelper.h"
 
 #include "../build/cmakeproject.h"
@@ -141,6 +144,21 @@
 #include "panels/spliteditorcontainer.h"
 
 namespace {
+QString statusBarTextButtonStyle() {
+  const ThemeColors &tc = ThemeEngine::instance().activeTheme().colors;
+  return QString("QToolButton {"
+                 "  color: %1;"
+                 "  padding: 0 8px;"
+                 "  font-size: 12px;"
+                 "  border: none;"
+                 "  background: transparent;"
+                 "}"
+                 "QToolButton:hover {"
+                 "  color: %2;"
+                 "}")
+      .arg(tc.textSecondary.name(), tc.textPrimary.name());
+}
+
 constexpr auto kCompoundDebugTargetPrefix = "compound:";
 
 constexpr auto kBuildDiagnosticsSource = "build";
@@ -950,7 +968,7 @@ void MainWindow::saveSettings() {
   settings.theme.write(themeJson);
   globalSettings.setValue("theme", themeJson);
   const ThemeDefinition activeThemeDefinition =
-      ThemeEngine::instance().activeTheme();
+      ThemeEngine::instance().activeThemeSource();
   const QString activeThemeName = persistedThemeName(activeThemeDefinition);
   QJsonObject activeThemeJson;
   if (activeThemeName.isEmpty()) {
@@ -1253,23 +1271,7 @@ void MainWindow::applyHighlightForFile(const QString &filePath) {
   textArea->setLanguage(languageId);
   textArea->updateSyntaxHighlightTags("", languageId);
 
-  if (m_gitIntegration) {
-    QList<GitDiffLineInfo> diffLines = m_gitIntegration->getDiffLines(filePath);
-    QList<QPair<int, int>> gutterLines;
-    gutterLines.reserve(diffLines.size());
-    for (const auto &info : diffLines) {
-      int type = 1;
-      if (info.type == GitDiffLineInfo::Type::Added) {
-        type = 0;
-      } else if (info.type == GitDiffLineInfo::Type::Deleted) {
-        type = 2;
-      }
-      gutterLines.append(qMakePair(info.lineNumber, type));
-    }
-    textArea->setGitDiffLines(gutterLines);
-  } else {
-    textArea->clearGitDiffLines();
-  }
+  updateGitGutterForCurrentFile(filePath);
 
   showGitBlameForCurrentFile(isGitBlameEnabledForFile(filePath));
   updateInlineBlameForCurrentFile();
@@ -1380,6 +1382,36 @@ void MainWindow::updateInlineBlameForCurrentFile() {
   }
   textArea->setInlineBlameEnabled(true);
   textArea->setInlineBlameData(inlineData);
+}
+
+void MainWindow::updateGitGutterForCurrentFile(const QString &path) {
+  TextArea *textArea = getCurrentTextArea();
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!textArea || (path.isEmpty() && !tabWidget)) {
+    return;
+  }
+
+  const QString filePath =
+      path.isEmpty() ? tabWidget->getFilePath(tabWidget->currentIndex()) : path;
+  if (!m_gitIntegration || filePath.isEmpty()) {
+    textArea->clearGitDiffLines();
+    return;
+  }
+
+  const QList<GitDiffLineInfo> diffLines =
+      m_gitIntegration->getDiffLines(filePath);
+  QList<QPair<int, int>> gutterLines;
+  gutterLines.reserve(diffLines.size());
+  for (const auto &info : diffLines) {
+    int type = 1;
+    if (info.type == GitDiffLineInfo::Type::Added) {
+      type = 0;
+    } else if (info.type == GitDiffLineInfo::Type::Deleted) {
+      type = 2;
+    }
+    gutterLines.append(qMakePair(info.lineNumber, type));
+  }
+  textArea->setGitDiffLines(gutterLines);
 }
 
 void MainWindow::updateGitStatusBar() {
@@ -3603,8 +3635,6 @@ void MainWindow::ensureStatusLabels() {
   Theme theme = getTheme();
   if (!problemsStatusLabel) {
     problemsStatusLabel = new QLabel(this);
-    problemsStatusLabel->setStyleSheet(
-        QString("color: %1; padding: 0 8px;").arg(theme.borderColor.name()));
     problemsStatusLabel->setText("✓ No problems");
     problemsStatusLabel->setCursor(Qt::PointingHandCursor);
 
@@ -3619,17 +3649,6 @@ void MainWindow::ensureStatusLabels() {
 
   if (!vimStatusLabel) {
     vimStatusLabel = new QLabel(this);
-    vimStatusLabel->setStyleSheet(
-        QString("QLabel {"
-                "  color: %1;"
-                "  background-color: %2;"
-                "  padding: 1px 10px;"
-                "  border-radius: 3px;"
-                "  font-weight: bold;"
-                "  font-size: 11px;"
-                "  letter-spacing: 1px;"
-                "}")
-            .arg(theme.backgroundColor.name(), theme.successColor.name()));
     vimStatusLabel->setText("");
     vimStatusLabel->setVisible(false);
     vimStatusLabel->setMinimumWidth(70);
@@ -3647,20 +3666,9 @@ void MainWindow::ensureStatusLabels() {
 
   if (!m_pythonEnvLabel) {
     m_pythonEnvLabel = new QToolButton(this);
+    m_pythonEnvLabel->setStyleSheet(statusBarTextButtonStyle());
     m_pythonEnvLabel->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_pythonEnvLabel->setAutoRaise(true);
-    m_pythonEnvLabel->setStyleSheet(
-        QString("QToolButton {"
-                "  color: %1;"
-                "  padding: 0 8px;"
-                "  font-size: 12px;"
-                "  border: none;"
-                "  background: transparent;"
-                "}"
-                "QToolButton:hover {"
-                "  color: %2;"
-                "}")
-            .arg(theme.borderColor.name(), theme.foregroundColor.name()));
     m_pythonEnvLabel->setCursor(Qt::PointingHandCursor);
     m_pythonEnvLabel->setToolTip(tr("Python environment (click to configure)"));
     m_pythonEnvLabel->setVisible(false);
@@ -5072,68 +5080,38 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
                             ? languageId
                             : LanguageCatalog::displayName(languageId);
   m_lspStatusLanguageId = languageId;
+  m_lspStatusState = status;
 
+  UIStyleHelper::Tone tone = UIStyleHelper::Tone::Neutral;
+  QString glyph;
+  QString tooltip;
   if (status == "running") {
-    m_lspStatusLabel->setText(QString::fromUtf8("● %1").arg(displayName));
-    QColor c = theme.successColor;
-    m_lspStatusLabel->setStyleSheet(
-        QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
-                "border: 1px solid rgba(%2,%3,%4,0.25); border-radius: 4px; "
-                "background: rgba(%2,%3,%4,0.08); }"
-                "QToolButton:hover { background: rgba(%2,%3,%4,0.16); }")
-            .arg(c.name())
-            .arg(c.red())
-            .arg(c.green())
-            .arg(c.blue()));
-    m_lspStatusLabel->setToolTip(
-        tr("%1 language server is running").arg(displayName));
+    tone = UIStyleHelper::Tone::Success;
+    glyph = QString::fromUtf8("●");
+    tooltip = tr("%1 language server is running").arg(displayName);
   } else if (status == "starting") {
-    m_lspStatusLabel->setText(QString::fromUtf8("◌ %1").arg(displayName));
-    QColor c = theme.warningColor;
-    m_lspStatusLabel->setStyleSheet(
-        QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
-                "border: 1px solid rgba(%2,%3,%4,0.25); border-radius: 4px; "
-                "background: rgba(%2,%3,%4,0.08); }"
-                "QToolButton:hover { background: rgba(%2,%3,%4,0.16); }")
-            .arg(c.name())
-            .arg(c.red())
-            .arg(c.green())
-            .arg(c.blue()));
-    m_lspStatusLabel->setToolTip(
-        tr("%1 language server is starting…").arg(displayName));
+    tone = UIStyleHelper::Tone::Warning;
+    glyph = QString::fromUtf8("◌");
+    tooltip = tr("%1 language server is starting…").arg(displayName);
   } else if (status == "error") {
-    m_lspStatusLabel->setText(QString::fromUtf8("✖ %1").arg(displayName));
-    QColor c = theme.errorColor;
-    m_lspStatusLabel->setStyleSheet(
-        QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
-                "border: 1px solid rgba(%2,%3,%4,0.35); border-radius: 4px; "
-                "background: rgba(%2,%3,%4,0.10); }"
-                "QToolButton:hover { background: rgba(%2,%3,%4,0.18); }")
-            .arg(c.name())
-            .arg(c.red())
-            .arg(c.green())
-            .arg(c.blue()));
-    m_lspStatusLabel->setToolTip(
-        tr("%1 language server encountered an error").arg(displayName));
+    tone = UIStyleHelper::Tone::Error;
+    glyph = QString::fromUtf8("✖");
+    tooltip = tr("%1 language server encountered an error").arg(displayName);
   } else if (status == "stopped") {
-    m_lspStatusLabel->setText(QString::fromUtf8("○ %1").arg(displayName));
-    QColor c = theme.borderColor;
-    m_lspStatusLabel->setStyleSheet(
-        QString("QToolButton { color: %1; padding: 2px 8px; font-size: 11px; "
-                "border: 1px solid rgba(%2,%3,%4,0.20); border-radius: 4px; "
-                "background: rgba(%2,%3,%4,0.08); }"
-                "QToolButton:hover { background: rgba(%2,%3,%4,0.14); }")
-            .arg(c.name())
-            .arg(c.red())
-            .arg(c.green())
-            .arg(c.blue()));
-    m_lspStatusLabel->setToolTip(
-        tr("%1 language server is disabled").arg(displayName));
+    glyph = QString::fromUtf8("○");
+    tooltip = tr("%1 language server is stopped").arg(displayName);
   } else {
     m_lspStatusLabel->setVisible(false);
     return;
   }
 
+  m_lspStatusLabel->setText(QString("%1 %2").arg(glyph, displayName));
+  m_lspStatusLabel->setToolTip(tooltip);
+  m_lspStatusLabel->setStyleSheet(
+      QString("QToolButton { %1 font-weight: normal; padding: 2px 8px; }"
+              "QToolButton:hover { border-color: %2; }")
+          .arg(UIStyleHelper::badgeStyle(theme, tone),
+               UIStyleHelper::toneColor(theme, tone).name()));
   m_lspStatusLabel->setVisible(true);
 }
 
@@ -5436,6 +5414,23 @@ void MainWindow::setupGitIntegration() {
   connect(m_gitIntegration, &GitIntegration::mergeConflictsDetected, this,
           [this](const QStringList &) { showConflictCenter(); });
 
+  m_gitIntegration->setAutoRefreshGate([]() {
+    QWidget *modal = QApplication::activeModalWidget();
+    return !QApplication::activePopupWidget() &&
+           (!modal || qobject_cast<StyledDialog *>(modal));
+  });
+  connect(m_gitIntegration, &GitIntegration::externalChangesDetected, this,
+          [this]() {
+            updateGitGutterForCurrentFile();
+            updateInlineBlameForCurrentFile();
+          });
+  connect(qApp, &QGuiApplication::applicationStateChanged, this,
+          [this](Qt::ApplicationState state) {
+            if (state == Qt::ApplicationActive && m_gitIntegration) {
+              m_gitIntegration->checkForExternalChanges();
+            }
+          });
+
   updateGitIntegrationForPath(QDir::currentPath());
 }
 
@@ -5475,20 +5470,7 @@ void MainWindow::updateGitIntegrationForPath(const QString &path) {
   QString currentFilePath = tabWidget->getFilePath(tabWidget->currentIndex());
   if (textArea && !currentFilePath.isEmpty()) {
     textArea->setGutterGitIntegration(m_gitIntegration);
-    QList<GitDiffLineInfo> diffLines =
-        m_gitIntegration->getDiffLines(currentFilePath);
-    QList<QPair<int, int>> gutterLines;
-    gutterLines.reserve(diffLines.size());
-    for (const auto &info : diffLines) {
-      int type = 1;
-      if (info.type == GitDiffLineInfo::Type::Added) {
-        type = 0;
-      } else if (info.type == GitDiffLineInfo::Type::Deleted) {
-        type = 2;
-      }
-      gutterLines.append(qMakePair(info.lineNumber, type));
-    }
-    textArea->setGitDiffLines(gutterLines);
+    updateGitGutterForCurrentFile(currentFilePath);
   }
 
   showGitBlameForCurrentFile(isGitBlameEnabledForFile(currentFilePath));
@@ -5538,6 +5520,18 @@ void MainWindow::updateProblemsStatusLabel(int errors, int warnings,
   refreshProblemsStatusForCurrentFile();
 }
 
+void MainWindow::restyleStatusBarItems() {
+  if (m_pythonEnvLabel)
+    m_pythonEnvLabel->setStyleSheet(statusBarTextButtonStyle());
+  if (vimStatusLabel)
+    updateVimStatusLabel(vimStatusLabel->text());
+  refreshProblemsStatusForCurrentFile();
+  if (m_lspStatusLabel && m_lspStatusLabel->isVisible() &&
+      !m_lspStatusState.isEmpty()) {
+    updateLspStatusLabel(m_lspStatusLanguageId, m_lspStatusState);
+  }
+}
+
 void MainWindow::refreshProblemsStatusForCurrentFile() {
   if (!problemsStatusLabel)
     return;
@@ -5565,46 +5559,45 @@ void MainWindow::refreshProblemsStatusForCurrentFile() {
   }
 
   QString text;
+  UIStyleHelper::Tone tone = UIStyleHelper::Tone::Neutral;
   if (errors > 0 || warnings > 0) {
     text = QString("⛔ %1  ⚠️ %2").arg(errors).arg(warnings);
+    tone =
+        errors > 0 ? UIStyleHelper::Tone::Error : UIStyleHelper::Tone::Warning;
   } else {
     text = "✓ No problems";
   }
   problemsStatusLabel->setText(text);
+  const QString color =
+      tone == UIStyleHelper::Tone::Neutral
+          ? ThemeEngine::instance().activeTheme().colors.textSecondary.name()
+          : UIStyleHelper::toneColor(getTheme(), tone).name();
+  problemsStatusLabel->setStyleSheet(
+      QString("color: %1; padding: 0 8px;").arg(color));
 }
 
 void MainWindow::updateVimStatusLabel(const QString &text) {
-  Theme theme = getTheme();
-  if (vimStatusLabel) {
-    vimStatusLabel->setText(text);
-    vimStatusLabel->setVisible(!text.isEmpty());
-    if (!text.isEmpty()) {
-      QString bgColor;
-      if (text == "NORMAL")
-        bgColor = theme.successColor.name();
-      else if (text == "INSERT")
-        bgColor = theme.accentColor.name();
-      else if (text == "VISUAL" || text == "V-LINE" || text == "V-BLOCK")
-        bgColor = theme.warningColor.name();
-      else if (text == "REPLACE")
-        bgColor = theme.errorColor.name();
-      else if (text == "COMMAND")
-        bgColor = theme.accentColor.lighter(140).name();
-      else
-        bgColor = theme.borderColor.name();
-      vimStatusLabel->setStyleSheet(
-          QString("QLabel {"
-                  "  color: %1;"
-                  "  background-color: %2;"
-                  "  padding: 1px 10px;"
-                  "  border-radius: 3px;"
-                  "  font-weight: bold;"
-                  "  font-size: 11px;"
-                  "  letter-spacing: 1px;"
-                  "}")
-              .arg(theme.backgroundColor.name(), bgColor));
-    }
-  }
+  if (!vimStatusLabel)
+    return;
+  vimStatusLabel->setText(text);
+  vimStatusLabel->setVisible(!text.isEmpty());
+  if (text.isEmpty())
+    return;
+
+  UIStyleHelper::Tone tone = UIStyleHelper::Tone::Neutral;
+  if (text == "NORMAL")
+    tone = UIStyleHelper::Tone::Success;
+  else if (text == "INSERT")
+    tone = UIStyleHelper::Tone::Accent;
+  else if (text == "VISUAL" || text == "V-LINE" || text == "V-BLOCK")
+    tone = UIStyleHelper::Tone::Warning;
+  else if (text == "REPLACE")
+    tone = UIStyleHelper::Tone::Error;
+  else if (text == "COMMAND")
+    tone = UIStyleHelper::Tone::Info;
+  vimStatusLabel->setStyleSheet(
+      QString("QLabel { %1 letter-spacing: 1px; padding: 1px 10px; }")
+          .arg(UIStyleHelper::badgeStyle(getTheme(), tone)));
 }
 
 void MainWindow::showVimStatusMessage(const QString &message) {
@@ -9021,12 +9014,14 @@ void MainWindow::setTheme(Theme theme) {
   setTheme(ThemeDefinition::fromClassicTheme(theme, "Custom"));
 }
 
-void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
+void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
+  ThemeEngine::instance().setActiveTheme(requestedTheme);
+  const ThemeDefinition &themeDefinition =
+      ThemeEngine::instance().activeTheme();
   Theme theme = themeDefinition.toClassicTheme();
   settings.theme = theme;
   ThemedMessageBox::setGlobalTheme(themeDefinition);
 
-  ThemeEngine::instance().setActiveTheme(themeDefinition);
   const ThemeColors &tc = themeDefinition.colors;
   const qreal glowLevel = qBound(0.0, themeDefinition.ui.glowIntensity, 1.0);
   QColor glowSource = tc.accentPrimary.lighter(130 + qRound(glowLevel * 45.0));
@@ -9076,6 +9071,26 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
   QString btnPrimaryFg = tc.btnPrimaryFg.name();
   QString btnPrimaryHover =
       glowShift(tc.btnPrimaryHover, glowSource, glowLevel, 0.32).name();
+  const QColor accentSoftSolid = QColor(accentSoftColor);
+  QString accentOnSoft =
+      ColorContrast::ensure(QColor(accentColor), accentSoftSolid).name();
+  QString textOnSoft =
+      ColorContrast::bestOf(accentSoftSolid, {tc.textPrimary, tc.textInverse})
+          .name();
+  QString btnPrimaryText =
+      ColorContrast::bestOf(tc.btnPrimaryBg,
+                            {tc.btnPrimaryFg, tc.textInverse, tc.textPrimary})
+          .name();
+  QString btnPrimaryHoverText =
+      ColorContrast::bestOf(QColor(btnPrimaryHover),
+                            {tc.btnPrimaryFg, tc.textInverse, tc.textPrimary})
+          .name();
+  QString inputSelection = tc.inputSelection.name();
+  QString inputSelectionText =
+      ColorContrast::bestOf(tc.inputSelection, {tc.inputFg, tc.textInverse})
+          .name();
+  QString popoverColor =
+      glowShift(tc.surfacePopover, glowSource, glowLevel, 0.18).name();
   QString editorFontFamily = settings.mainFont.family();
   editorFontFamily.replace("\\", "\\\\");
   editorFontFamily.replace("\"", "\\\"");
@@ -9106,7 +9121,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       fgColor +
       "; "
       "background-color: " +
-      surfaceColor +
+      popoverColor +
       "; "
       "selection-background-color: " +
       accentSoftColor +
@@ -9127,7 +9142,12 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       accentSoftColor +
       "; "
       "color: " +
-      accentColor +
+      accentOnSoft +
+      "; "
+      "}"
+      "QMenu::item:disabled { "
+      "color: " +
+      disabledText +
       "; "
       "}"
       "QMenu::separator { "
@@ -9168,7 +9188,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       accentSoftColor +
       "; "
       "color: " +
-      accentColor +
+      accentOnSoft +
       "; "
       "border-bottom: 2px solid " +
       accentColor +
@@ -9218,7 +9238,15 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       accentColor +
       "; "
       "color: " +
-      accentColor +
+      accentOnSoft +
+      "; "
+      "}"
+      "QPushButton:disabled { "
+      "color: " +
+      disabledText +
+      "; "
+      "border-color: " +
+      borderSubtle +
       "; "
       "}"
       "QPushButton:pressed { "
@@ -9240,13 +9268,16 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       btnPrimaryBg +
       "; "
       "color: " +
-      btnPrimaryFg +
+      btnPrimaryText +
       "; "
       "font-weight: bold; "
       "}"
       "QPushButton:default:hover { "
       "background-color: " +
       btnPrimaryHover +
+      "; "
+      "color: " +
+      btnPrimaryHoverText +
       "; "
       "}"
 
@@ -9267,7 +9298,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       borderColor +
       "; "
       "color: " +
-      accentColor +
+      accentOnSoft +
       "; "
       "}"
       "QToolButton:pressed { "
@@ -9278,6 +9309,11 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       "QToolButton:focus { "
       "border: 1px solid " +
       accentColor +
+      "; "
+      "}"
+      "QToolButton:disabled { "
+      "color: " +
+      disabledText +
       "; "
       "}"
 
@@ -9371,7 +9407,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       accentSoftColor +
       "; "
       "color: " +
-      fgColor +
+      textOnSoft +
       "; "
       "}"
 
@@ -9401,10 +9437,10 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       "border-radius: 6px; "
       "padding: 8px 12px; "
       "selection-background-color: " +
-      accentSoftColor +
+      inputSelection +
       "; "
       "selection-color: " +
-      accentColor +
+      inputSelectionText +
       "; "
       "}"
       "QLineEdit:focus { "
@@ -9462,7 +9498,13 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       accentSoftColor +
       "; "
       "selection-color: " +
-      accentColor +
+      textOnSoft +
+      "; "
+      "outline: none; "
+      "}"
+      "QComboBox:disabled { "
+      "color: " +
+      disabledText +
       "; "
       "}"
 
@@ -9501,7 +9543,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       "subcontrol-position: top left; "
       "padding: 0 8px; "
       "color: " +
-      accentColor +
+      ColorContrast::ensure(QColor(accentColor), QColor(bgColor)).name() +
       "; "
       "font-size: 12px; "
       "}"
@@ -9621,7 +9663,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
 
       "QToolTip { "
       "background-color: " +
-      surfaceColor +
+      popoverColor +
       "; "
       "color: " +
       fgColor +
@@ -9723,7 +9765,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       "}"
       "QTabBar::tab:selected { "
       "color: " +
-      accentColor +
+      ColorContrast::ensure(QColor(accentColor), QColor(tabActiveBg)).name() +
       "; "
       "background-color: " +
       tabActiveBg +
@@ -9795,7 +9837,8 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       surfaceAltColor +
       "; "
       "color: " +
-      accentColor +
+      ColorContrast::ensure(QColor(accentColor), QColor(surfaceAltColor))
+          .name() +
       "; "
       "border-bottom: 1px solid " +
       accentColor +
@@ -9939,6 +9982,7 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       "border-radius: 3px; "
       "}";
 
+  qApp->setPalette(ThemePalette::build(themeDefinition));
   qApp->setStyleSheet(styleSheet);
   updateAllTextAreas(&TextArea::setFont, settings.mainFont);
 
@@ -9982,6 +10026,11 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
   if (testPanel) {
     testPanel->applyTheme(theme);
   }
+  restyleStatusBarItems();
+  for (StyledDialog *dialog : findChildren<StyledDialog *>()) {
+    if (dialog->isVisible())
+      dialog->applyTheme(theme);
+  }
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); i++) {
@@ -9989,6 +10038,10 @@ void MainWindow::setTheme(const ThemeDefinition &themeDefinition) {
       if (page) {
         page->applyTheme(themeDefinition);
       }
+    }
+    for (ConflictResolverView *view :
+         tabWidget->findChildren<ConflictResolverView *>()) {
+      view->applyTheme(theme);
     }
   }
 

@@ -16,11 +16,6 @@ void BreadcrumbWidget::setupUI() {
   m_layout->setContentsMargins(8, 4, 8, 4);
   m_layout->setSpacing(2);
 
-  setStyleSheet("BreadcrumbWidget {"
-                "  background: #171c24;"
-                "  border-bottom: 1px solid #2a3241;"
-                "}");
-
   m_layout->addStretch();
 }
 

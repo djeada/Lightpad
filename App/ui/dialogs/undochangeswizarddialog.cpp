@@ -2,6 +2,7 @@
 #include "../../git/gitintegration.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "operationpreviewdialog.h"
 #include "themedmessagebox.h"
 #include <QHBoxLayout>
@@ -59,6 +60,7 @@ UndoChangesWizardDialog::UndoChangesWizardDialog(GitIntegration *git,
   setKeyboardDefault(m_executeButton);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void UndoChangesWizardDialog::buildUi() {
@@ -348,23 +350,11 @@ void UndoChangesWizardDialog::onExecute() {
 
 void UndoChangesWizardDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  if (m_headerLabel) {
-    styleTitleLabel(m_headerLabel);
-  }
+  styleTitleLabel(m_headerLabel);
   for (const char *name :
        {"undoRecommendationLabel", "undoMatrixLabel", "undoCommandLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
-  }
-  for (QRadioButton *radio : m_radios) {
-    radio->setStyleSheet(UIStyleHelper::checkBoxStyle(theme) +
-                         QString("QRadioButton { color: %1; }"
-                                 "QRadioButton:disabled { color: %2; }")
-                             .arg(theme.foregroundColor.name(),
-                                  theme.singleLineCommentFormat.name()));
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
   for (QLabel *label : m_explanations) {
     styleSubduedLabel(label);
@@ -374,22 +364,16 @@ void UndoChangesWizardDialog::applyTheme(const Theme &theme) {
   const bool destructive = option && option->destructive;
   if (m_riskList) {
     m_riskList->setStyleSheet(
-        QString("QListWidget { background: %1; color: %2; border: 1px solid "
-                "%3; }")
-            .arg(theme.surfaceColor.name(),
-                 (destructive ? theme.errorColor : theme.successColor).name(),
-                 theme.borderColor.name()));
+        UIStyleHelper::listWidgetStyle(theme) +
+        QString("QListWidget { color: %1; }")
+            .arg(UIStyleHelper::toneColor(
+                     theme, destructive ? UIStyleHelper::Tone::Error
+                                        : UIStyleHelper::Tone::Success)
+                     .name()));
   }
-  for (QPushButton *button : {m_previewButton, m_cancelButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
-  if (m_executeButton) {
-    if (destructive) {
-      styleDangerButton(m_executeButton);
-    } else {
-      stylePrimaryButton(m_executeButton);
-    }
+  if (destructive) {
+    styleDangerButton(m_executeButton);
+  } else {
+    stylePrimaryButton(m_executeButton);
   }
 }

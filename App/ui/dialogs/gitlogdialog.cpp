@@ -1,7 +1,9 @@
 #include "gitlogdialog.h"
 #include "../../git/gitintegration.h"
+#include "../../theme/colorcontrast.h"
 #include "../../ui/uistylehelper.h"
 #include "../widgets/gitgraphwidget.h"
+#include "gitautorefresh.h"
 
 #include "../uimetrics.h"
 #include "operationpreviewdialog.h"
@@ -41,6 +43,7 @@ GitLogDialog::GitLogDialog(GitIntegration *git, const Theme &theme,
   buildUi();
   applyTheme(theme);
   loadCommits();
+  reloadOnExternalGitChanges(this, m_git, [this]() { loadCommits(); });
 }
 
 void GitLogDialog::setFilePath(const QString &filePath) {
@@ -181,8 +184,6 @@ void GitLogDialog::buildUi() {
   mainLayout->addWidget(m_tabWidget);
 
   m_statusLabel = new QLabel(this);
-  m_statusLabel->setStyleSheet(
-      QStringLiteral("color: palette(mid); font-size: 11px;"));
   mainLayout->addWidget(m_statusLabel);
 }
 
@@ -470,6 +471,14 @@ void GitLogDialog::resetTo(const QString &hash) {
 
 void GitLogDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
+  m_theme = theme;
+
+  if (m_graphWidget) {
+    m_graphWidget->setTheme(theme);
+  }
+  if (m_statusLabel) {
+    m_statusLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
+  }
 
   if (m_commitTree) {
     m_commitTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
@@ -478,11 +487,17 @@ void GitLogDialog::applyTheme(const Theme &theme) {
     m_detailFiles->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }
   if (m_detailView) {
-    m_detailView->setStyleSheet(
-        QString(
-            "QTextEdit { background: %1; color: %2; border: 1px solid %3; }")
-            .arg(theme.surfaceColor.name(), theme.foregroundColor.name(),
-                 theme.borderColor.name()));
+    m_detailView->setStyleSheet(UIStyleHelper::plainTextEditStyle(theme));
+    if (!m_selectedHash.isEmpty()) {
+      showCommitDetails(m_selectedHash);
+    }
+  }
+  const QString zoomStyle = UIStyleHelper::iconButtonStyle(theme);
+  for (QToolButton *button :
+       {m_zoomOutButton, m_zoomResetButton, m_zoomInButton}) {
+    if (button) {
+      button->setStyleSheet(zoomStyle);
+    }
   }
   if (m_compareLabel) {
     styleSubduedLabel(m_compareLabel);
@@ -610,6 +625,12 @@ void GitLogDialog::showCommitDetails(const QString &hash) {
   }
 
   if (!stats.isEmpty()) {
+    const QString addedColor =
+        ColorContrast::ensure(m_theme.gitAddedColor, m_theme.surfaceColor)
+            .name();
+    const QString deletedColor =
+        ColorContrast::ensure(m_theme.gitDeletedColor, m_theme.surfaceColor)
+            .name();
     html +=
         QStringLiteral("<br><b>%1 changed %2</b><ul style=\"margin-top:2px;\">")
             .arg(stats.size())
@@ -621,11 +642,12 @@ void GitLogDialog::showCommitDetails(const QString &hash) {
         break;
       }
       html += QStringLiteral("<li><code>%1</code>&nbsp;&nbsp;"
-                             "<span style=\"color:#3fb950;\">+%2</span> "
-                             "<span style=\"color:#f85149;\">−%3</span></li>")
+                             "<span style=\"color:%4;\">+%2</span> "
+                             "<span style=\"color:%5;\">−%3</span></li>")
                   .arg(stat.filePath.toHtmlEscaped())
                   .arg(stat.additions)
-                  .arg(stat.deletions);
+                  .arg(stat.deletions)
+                  .arg(addedColor, deletedColor);
     }
     html += QLatin1String("</ul>");
   }

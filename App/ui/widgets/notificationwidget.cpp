@@ -1,14 +1,17 @@
 #include "notificationwidget.h"
+#include "../../theme/themeengine.h"
+#include "../uistylehelper.h"
 #include <QApplication>
 #include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
-#include <QPainter>
-#include <QPainterPath>
 
 NotificationWidget::NotificationWidget(QWidget *parent)
     : QFrame(parent), m_iconLabel(nullptr), m_titleLabel(nullptr),
       m_messageLabel(nullptr), m_closeButton(nullptr), m_dismissTimer(nullptr),
-      m_fadeAnimation(nullptr) {
+      m_fadeAnimation(nullptr),
+      m_theme(ThemeEngine::instance().classicTheme()) {
+  setObjectName(QStringLiteral("notificationWidget"));
+  setAttribute(Qt::WA_StyledBackground, true);
   setupUi();
   setVisible(false);
 }
@@ -24,7 +27,6 @@ void NotificationWidget::setupUi() {
   m_iconLabel = new QLabel(this);
   m_iconLabel->setFixedSize(20, 20);
   m_iconLabel->setAlignment(Qt::AlignCenter);
-  m_iconLabel->setStyleSheet("font-size: 16px; background: transparent;");
   mainLayout->addWidget(m_iconLabel, 0, Qt::AlignTop);
 
   auto *textLayout = new QVBoxLayout();
@@ -32,14 +34,11 @@ void NotificationWidget::setupUi() {
   textLayout->setSpacing(2);
 
   m_titleLabel = new QLabel(this);
-  m_titleLabel->setStyleSheet(
-      "font-weight: 600; font-size: 12px; background: transparent;");
   m_titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   m_titleLabel->setWordWrap(true);
   textLayout->addWidget(m_titleLabel);
 
   m_messageLabel = new QLabel(this);
-  m_messageLabel->setStyleSheet("font-size: 11px; background: transparent;");
   m_messageLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   m_messageLabel->setWordWrap(true);
   textLayout->addWidget(m_messageLabel);
@@ -49,16 +48,6 @@ void NotificationWidget::setupUi() {
   m_closeButton = new QPushButton("✕", this);
   m_closeButton->setFixedSize(20, 20);
   m_closeButton->setCursor(Qt::PointingHandCursor);
-  m_closeButton->setStyleSheet("QPushButton {"
-                               "  background: transparent;"
-                               "  border: none;"
-                               "  color: #8b949e;"
-                               "  font-size: 12px;"
-                               "  padding: 0;"
-                               "}"
-                               "QPushButton:hover {"
-                               "  color: #e6edf3;"
-                               "}");
   connect(m_closeButton, &QPushButton::clicked, this,
           &NotificationWidget::dismiss);
   mainLayout->addWidget(m_closeButton, 0, Qt::AlignTop);
@@ -84,6 +73,8 @@ void NotificationWidget::setupUi() {
   m_slideAnimation = new QPropertyAnimation(this, "pos", this);
   m_slideAnimation->setDuration(260);
   m_slideAnimation->setEasingCurve(QEasingCurve::OutCubic);
+
+  applyStyle(m_level);
 }
 
 void NotificationWidget::showNotification(const QString &title,
@@ -135,56 +126,45 @@ void NotificationWidget::dismiss() {
 
 void NotificationWidget::applyTheme(const Theme &theme) {
   m_theme = theme;
-  update();
-}
-
-void NotificationWidget::paintEvent(QPaintEvent *event) {
-  Q_UNUSED(event);
-  QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing);
-
-  QPainterPath path;
-  path.addRoundedRect(rect().adjusted(1, 1, -1, -1), 8, 8);
-  painter.fillPath(path, m_theme.surfaceColor);
-  painter.setPen(QPen(m_theme.borderColor, 1));
-  painter.drawPath(path);
+  applyStyle(m_level);
 }
 
 void NotificationWidget::applyStyle(Level level) {
-  QString levelColor;
+  m_level = level;
+  UIStyleHelper::Tone tone = UIStyleHelper::Tone::Info;
   QString icon;
 
   switch (level) {
   case Level::Info:
-    levelColor = m_theme.infoColor.name();
+    tone = UIStyleHelper::Tone::Info;
     icon = "ℹ";
     break;
   case Level::Warning:
-    levelColor = m_theme.warningColor.name();
+    tone = UIStyleHelper::Tone::Warning;
     icon = "⚠";
     break;
   case Level::Error:
-    levelColor = m_theme.errorColor.name();
+    tone = UIStyleHelper::Tone::Error;
     icon = "✖";
     break;
   }
 
+  const QColor toneColor = UIStyleHelper::toneColor(m_theme, tone);
   m_iconLabel->setText(icon);
   m_iconLabel->setStyleSheet(
       QString("font-size: 16px; color: %1; background: transparent;")
-          .arg(levelColor));
-  m_titleLabel->setStyleSheet(
-      QString("font-weight: 600; font-size: 12px; color: %1; background: "
-              "transparent;")
-          .arg(m_theme.foregroundColor.name()));
+          .arg(toneColor.name()));
+  m_titleLabel->setStyleSheet(UIStyleHelper::headingStyle(m_theme, 12));
   m_messageLabel->setStyleSheet(
       QString("font-size: 11px; color: %1; background: transparent;")
-          .arg(m_theme.diagnosticHintColor.name()));
+          .arg(UIStyleHelper::secondaryTextColor(m_theme).name()));
+  m_closeButton->setStyleSheet(
+      UIStyleHelper::iconButtonStyle(m_theme) +
+      QStringLiteral("QPushButton { padding: 0; font-size: 12px; }"));
 
-  setStyleSheet(QString("NotificationWidget {"
-                        "  border-left: 3px solid %1;"
-                        "}")
-                    .arg(levelColor));
+  setStyleSheet(UIStyleHelper::cardStyle(m_theme, objectName()) +
+                QString("#%1 { border-left: 3px solid %2; }")
+                    .arg(objectName(), toneColor.name()));
 }
 
 void NotificationWidget::positionInParent() {

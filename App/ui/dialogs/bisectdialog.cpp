@@ -2,6 +2,7 @@
 #include "../../git/gitintegration.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
+#include "gitautorefresh.h"
 #include "themedmessagebox.h"
 #include <QComboBox>
 #include <QFontDatabase>
@@ -29,6 +30,7 @@ BisectDialog::BisectDialog(GitIntegration *git, const Theme &theme,
   setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
+  reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
 }
 
 void BisectDialog::buildUi() {
@@ -325,51 +327,13 @@ void BisectDialog::onInspectSuspect() {
 
 void BisectDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  for (QComboBox *combo : {m_goodCombo, m_badCombo}) {
-    if (combo) {
-      combo->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
-    }
-  }
-  if (m_commandEdit) {
-    m_commandEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
-  }
-  if (m_outputView) {
-    m_outputView->setStyleSheet(
-        QString("QPlainTextEdit { background: %1; color: %2; border: 1px "
-                "solid %3; }")
-            .arg(theme.surfaceColor.name(), theme.foregroundColor.name(),
-                 theme.borderColor.name()));
-  }
-  if (m_logList) {
-    m_logList->setStyleSheet(
-        QString("QListWidget { background: %1; color: %2; border: 1px solid "
-                "%3; }")
-            .arg(theme.surfaceColor.name(),
-                 theme.singleLineCommentFormat.name(),
-                 theme.borderColor.name()));
-  }
-  if (m_statusLabel) {
-    styleTitleLabel(m_statusLabel);
-  }
+  styleTitleLabel(m_statusLabel);
   for (const char *name :
        {"bisectGoodLabel", "bisectBadLabel", "bisectCommandLabel",
         "bisectGuidanceLabel", "bisectProgressLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
+    styleSubduedLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
-  if (m_goodButton) {
-    stylePrimaryButton(m_goodButton);
-  }
-  for (QPushButton *button : {m_badButton, m_skipButton, m_inspectButton,
-                              m_startButton, m_runButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
-    }
-  }
-  if (m_resetButton) {
-    styleDangerButton(m_resetButton);
-  }
+  stylePrimaryButton(m_goodButton);
+  styleDangerButton(m_resetButton);
 }

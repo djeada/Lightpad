@@ -2,6 +2,7 @@
 #define PYTHONENVIRONMENTWIDGET_H
 
 #include "../../python/pythonprojectenvironment.h"
+#include "../../settings/theme.h"
 
 #include <QComboBox>
 #include <QGroupBox>
@@ -23,6 +24,7 @@ public:
 
   void setDebugToolsVisible(bool visible);
   void refreshStatus();
+  void applyTheme(const Theme &theme);
 
 signals:
   void preferenceChanged();
@@ -66,6 +68,7 @@ private:
   QLabel *m_statusLabel;
   QLabel *m_hintLabel;
   QProcess *m_process = nullptr;
+  Theme m_theme;
 };
 
 #endif

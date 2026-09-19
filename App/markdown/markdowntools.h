@@ -2,11 +2,29 @@
 #define MARKDOWNTOOLS_H
 
 #include "../lsp/lspclient.h"
+#include <QColor>
 #include <QList>
 #include <QMap>
 #include <QPair>
 #include <QRegularExpression>
 #include <QString>
+
+class QPalette;
+
+struct MarkdownPreviewColors {
+  QColor background;
+  QColor text;
+  QColor heading;
+  QColor muted;
+  QColor link;
+  QColor codeBackground;
+  QColor border;
+  QColor tableHeaderBackground;
+  QColor tableStripe;
+
+  static MarkdownPreviewColors fromPalette(const QPalette &palette);
+  static MarkdownPreviewColors defaults();
+};
 
 struct MarkdownHeading {
   int level;
@@ -68,6 +86,9 @@ public:
 
   static QString toHtml(const QString &markdown,
                         const QString &basePath = QString());
+  static QString toHtml(const QString &markdown, const QString &basePath,
+                        const MarkdownPreviewColors &colors);
+  static QString previewCss(const MarkdownPreviewColors &colors);
 
   static QString wrapParagraph(const QString &text, int width = 80);
   static QString normalizeHeadingSpacing(const QString &text);

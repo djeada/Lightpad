@@ -7,49 +7,48 @@
 #include <QPalette>
 #include <QStyle>
 
-QIcon GitFileSystemModel::s_modifiedIcon;
-QIcon GitFileSystemModel::s_stagedIcon;
-QIcon GitFileSystemModel::s_untrackedIcon;
-QIcon GitFileSystemModel::s_addedIcon;
-QIcon GitFileSystemModel::s_deletedIcon;
-QIcon GitFileSystemModel::s_conflictIcon;
-bool GitFileSystemModel::s_iconsInitialized = false;
+namespace {
+QIcon createBadgeIcon(const QColor &color) {
+  QPixmap pixmap(12, 12);
+  pixmap.fill(Qt::transparent);
+  QPainter painter(&pixmap);
+  painter.setRenderHint(QPainter::Antialiasing);
+  QColor border = color.darker(135);
+  border.setAlpha(240);
+  painter.setPen(QPen(border, 1.0));
+  painter.setBrush(color);
+  painter.drawEllipse(1, 1, 10, 10);
+  painter.setPen(Qt::NoPen);
+  painter.setBrush(QColor(255, 255, 255, 70));
+  painter.drawEllipse(3, 2, 4, 3);
+  return QIcon(pixmap);
+}
+} // namespace
 
-void GitFileSystemModel::initializeIcons() {
-  if (s_iconsInitialized) {
-    return;
+void GitFileSystemModel::rebuildStatusIcons() {
+  m_modifiedIcon = createBadgeIcon(m_colors.modified);
+  m_stagedIcon = createBadgeIcon(m_colors.staged);
+  m_untrackedIcon = createBadgeIcon(m_colors.untracked);
+  m_addedIcon = createBadgeIcon(m_colors.added);
+  m_deletedIcon = createBadgeIcon(m_colors.deleted);
+  m_conflictIcon = createBadgeIcon(m_colors.conflict);
+}
+
+void GitFileSystemModel::setStatusColors(const StatusColors &colors) {
+  m_colors = colors;
+  rebuildStatusIcons();
+  m_fileIconCache.clear();
+  if (rowCount() > 0 || columnCount() > 0) {
+    emit dataChanged(
+        index(0, 0), index(rowCount() - 1, 0),
+        {Qt::DecorationRole, Qt::ForegroundRole, GitStatusBadgeColorRole});
   }
-
-  auto createBadgeIcon = [](const QColor &color) -> QIcon {
-    QPixmap pixmap(12, 12);
-    pixmap.fill(Qt::transparent);
-    QPainter painter(&pixmap);
-    painter.setRenderHint(QPainter::Antialiasing);
-    QColor border = color.darker(135);
-    border.setAlpha(240);
-    painter.setPen(QPen(border, 1.0));
-    painter.setBrush(color);
-    painter.drawEllipse(1, 1, 10, 10);
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(QColor(255, 255, 255, 70));
-    painter.drawEllipse(3, 2, 4, 3);
-    return QIcon(pixmap);
-  };
-
-  s_modifiedIcon = createBadgeIcon(QColor("#d8a13c"));
-  s_stagedIcon = createBadgeIcon(QColor("#3fb97f"));
-  s_untrackedIcon = createBadgeIcon(QColor("#8b949e"));
-  s_addedIcon = createBadgeIcon(QColor("#2fbf71"));
-  s_deletedIcon = createBadgeIcon(QColor("#e35d6a"));
-  s_conflictIcon = createBadgeIcon(QColor("#c678dd"));
-
-  s_iconsInitialized = true;
 }
 
 GitFileSystemModel::GitFileSystemModel(QObject *parent)
     : QFileSystemModel(parent), m_gitIntegration(nullptr),
       m_gitStatusEnabled(true), m_refreshTimer(new QTimer(this)) {
-  initializeIcons();
+  rebuildStatusIcons();
   setFilter(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden |
             QDir::System);
 
@@ -146,7 +145,7 @@ QVariant GitFileSystemModel::data(const QModelIndex &index, int role) const {
     QString currentFilePath = filePath(index);
     if (isDir(index)) {
       if (isDirtyDirectory(currentFilePath)) {
-        return QColor("#d8a13c");
+        return m_colors.modified;
       }
     } else {
       QColor statusColor = getStatusColor(currentFilePath);
@@ -174,7 +173,7 @@ QVariant GitFileSystemModel::data(const QModelIndex &index, int role) const {
     const QString currentFilePath = filePath(index);
     if (isDir(index)) {
       if (isDirtyDirectory(currentFilePath)) {
-        return QColor("#d8a13c");
+        return m_colors.modified;
       }
       return QVariant();
     }
@@ -354,16 +353,16 @@ QIcon GitFileSystemModel::getStatusIcon(const QString &filePath) const {
   if (info.indexStatus != GitFileStatus::Clean) {
     switch (info.indexStatus) {
     case GitFileStatus::Added:
-      return s_addedIcon;
+      return m_addedIcon;
     case GitFileStatus::Modified:
-      return s_stagedIcon;
+      return m_stagedIcon;
     case GitFileStatus::Deleted:
-      return s_deletedIcon;
+      return m_deletedIcon;
     case GitFileStatus::Renamed:
     case GitFileStatus::Copied:
-      return s_stagedIcon;
+      return m_stagedIcon;
     case GitFileStatus::Unmerged:
-      return s_conflictIcon;
+      return m_conflictIcon;
     default:
       break;
     }
@@ -371,13 +370,13 @@ QIcon GitFileSystemModel::getStatusIcon(const QString &filePath) const {
 
   switch (info.workTreeStatus) {
   case GitFileStatus::Modified:
-    return s_modifiedIcon;
+    return m_modifiedIcon;
   case GitFileStatus::Untracked:
-    return s_untrackedIcon;
+    return m_untrackedIcon;
   case GitFileStatus::Deleted:
-    return s_deletedIcon;
+    return m_deletedIcon;
   case GitFileStatus::Unmerged:
-    return s_conflictIcon;
+    return m_conflictIcon;
   default:
     break;
   }
@@ -399,11 +398,11 @@ QColor GitFileSystemModel::getStatusColor(const QString &filePath) const {
     case GitFileStatus::Modified:
     case GitFileStatus::Renamed:
     case GitFileStatus::Copied:
-      return QColor("#3fb97f");
+      return m_colors.staged;
     case GitFileStatus::Deleted:
-      return QColor("#e35d6a");
+      return m_colors.deleted;
     case GitFileStatus::Unmerged:
-      return QColor("#c678dd");
+      return m_colors.conflict;
     default:
       break;
     }
@@ -411,13 +410,13 @@ QColor GitFileSystemModel::getStatusColor(const QString &filePath) const {
 
   switch (info.workTreeStatus) {
   case GitFileStatus::Modified:
-    return QColor("#d8a13c");
+    return m_colors.modified;
   case GitFileStatus::Untracked:
-    return QColor("#9aa6b2");
+    return m_colors.untracked;
   case GitFileStatus::Deleted:
-    return QColor("#e35d6a");
+    return m_colors.deleted;
   case GitFileStatus::Unmerged:
-    return QColor("#c678dd");
+    return m_colors.conflict;
   default:
     break;
   }

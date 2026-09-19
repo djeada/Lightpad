@@ -25,7 +25,13 @@ ThemeEngine &ThemeEngine::instance() {
 ThemeEngine::ThemeEngine() : QObject(nullptr) {
   registerBuiltinThemes();
   loadUserThemes();
-  m_activeTheme = m_themes.value("Hacker Dark");
+  activate(m_themes.value("Hacker Dark"));
+}
+
+void ThemeEngine::activate(const ThemeDefinition &theme) {
+  m_activeThemeSource = theme;
+  m_activeThemeSource.normalize();
+  m_activeTheme = m_activeThemeSource.readable();
 }
 
 void ThemeEngine::registerBuiltinThemes() {
@@ -53,22 +59,24 @@ const ThemeDefinition &ThemeEngine::activeTheme() const {
   return m_activeTheme;
 }
 
+const ThemeDefinition &ThemeEngine::activeThemeSource() const {
+  return m_activeThemeSource;
+}
+
 Theme ThemeEngine::classicTheme() const {
   return m_activeTheme.toClassicTheme();
 }
 
 void ThemeEngine::setActiveTheme(const QString &name) {
   if (m_themes.contains(name)) {
-    m_activeTheme = m_themes.value(name);
-    m_activeTheme.normalize();
+    activate(m_themes.value(name));
     emit themeChanged(m_activeTheme);
   }
 }
 
 void ThemeEngine::setActiveTheme(const ThemeDefinition &theme) {
-  m_activeTheme = theme;
-  m_activeTheme.normalize();
-  m_themes.insert(m_activeTheme.name, m_activeTheme);
+  activate(theme);
+  m_themes.insert(m_activeThemeSource.name, m_activeThemeSource);
   emit themeChanged(m_activeTheme);
 }
 
@@ -233,8 +241,7 @@ bool ThemeEngine::deleteUserTheme(const QString &name) {
                              : m_themes.isEmpty() ? QString()
                                                   : m_themes.firstKey();
     if (!fallback.isEmpty()) {
-      m_activeTheme = m_themes.value(fallback);
-      m_activeTheme.normalize();
+      activate(m_themes.value(fallback));
       emit themeChanged(m_activeTheme);
     }
   }

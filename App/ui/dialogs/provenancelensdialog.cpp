@@ -243,47 +243,18 @@ void ProvenanceLensDialog::onShowInGraph() {
 
 void ProvenanceLensDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  setStyleSheet(UIStyleHelper::formDialogStyle(theme));
 
-  if (m_headerLabel) {
-    styleTitleLabel(m_headerLabel);
-  }
-  if (m_latestLabel) {
-    m_latestLabel->setStyleSheet(
-        QString("color: %1;").arg(theme.foregroundColor.name()));
-  }
-  for (const char *name : {"provenanceChurnLabel", "provenancePreviousLabel",
-                           "provenanceCurrentLabel"}) {
-    if (QLabel *label = findChild<QLabel *>(QString::fromLatin1(name))) {
-      styleSubduedLabel(label);
-    }
+  styleTitleLabel(m_headerLabel);
+  styleSubduedLabel(m_churnLabel);
+  for (const char *name :
+       {"provenancePreviousLabel", "provenanceCurrentLabel"}) {
+    styleSectionLabel(findChild<QLabel *>(QString::fromLatin1(name)));
   }
   if (m_caveatLabel) {
     if (m_provenance.attributionUncertain) {
-
-      m_caveatLabel->setStyleSheet(
-          QString("color: %1;").arg(theme.warningColor.name()));
+      styleToneLabel(m_caveatLabel, UIStyleHelper::Tone::Warning);
     } else {
       styleSubduedLabel(m_caveatLabel);
-    }
-  }
-  if (m_stepsTree) {
-    m_stepsTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
-  }
-  for (QPlainTextEdit *view : {m_previousView, m_currentView}) {
-    if (view) {
-      view->setStyleSheet(
-          QString("QPlainTextEdit { background: %1; color: %2; border: 1px "
-                  "solid %3; }")
-              .arg(theme.surfaceColor.name(), theme.foregroundColor.name(),
-                   theme.borderColor.name()));
-    }
-  }
-  for (QPushButton *button :
-       {m_openCommitButton, m_parentDiffButton, m_fileHistoryButton,
-        m_graphButton, m_closeButton}) {
-    if (button) {
-      styleSecondaryButton(button);
     }
   }
 }
