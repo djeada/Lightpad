@@ -1648,9 +1648,7 @@ void DebugPanel::updateSectionSummaries() {
         BreakpointManager::instance().allFunctionBreakpoints().size();
     const int dataCount =
         BreakpointManager::instance().allDataBreakpoints().size();
-    // Count only filters the breakpoint list actually shows; a filter enabled
-    // for another adapter (e.g. debugpy's "uncaught" in a GDB session) has no
-    // row here.
+
     const QStringList enabledExceptionFilters =
         BreakpointManager::instance().enabledExceptionFilters();
     int exceptionCount = 0;
@@ -1696,8 +1694,7 @@ void DebugPanel::setDapClient(DapClient *client) {
   if (m_dapClient) {
     clearAll();
   } else {
-    // Keep the console so program output and errors stay readable after the
-    // session ends.
+
     clearSessionState();
   }
 
@@ -2409,8 +2406,7 @@ void DebugPanel::clearLocalsFallbackState() {
 }
 
 void DebugPanel::onOutputReceived(const DapOutputEvent &event) {
-  // Telemetry events are adapter bookkeeping (debugpy sends "ptvsd" and
-  // "debugpy"), not output meant for the user.
+
   if (event.category == QLatin1String("telemetry")) {
     return;
   }
@@ -3017,7 +3013,6 @@ void DebugPanel::onAddWatch() {
   m_watchInput->clear();
   int id = WatchManager::instance().addWatch(expr);
 
-  // Frame ids are adapter-defined and may start at 0 (GDB).
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped &&
       m_currentFrameId >= 0) {
     WatchManager::instance().evaluateWatch(id, m_currentFrameId);
@@ -3079,10 +3074,6 @@ void DebugPanel::onWatchUpdated(const WatchExpression &watch) {
   item->setText(2, watch.type);
   item->setData(0, Qt::UserRole + 1, watch.variablesReference);
 
-  // Child references belong to the stop that produced them, so drop the old
-  // children and refetch them with the new reference. An item that was
-  // expanded stays expanded even while the watch is out of scope, which keeps
-  // it open once the expression becomes available again.
   clearWatchChildren(item);
   m_watchPreviewRequests.remove(watch.id);
   if (watch.variablesReference > 0 && !watch.isError) {
@@ -3177,8 +3168,6 @@ void DebugPanel::populateWatchChildren(QTreeWidgetItem *parentItem,
     parentItem->addChild(childItem);
   }
 
-  // Some adapters (GDB for plain structs) report an empty value for
-  // aggregates; summarize the members instead of showing a blank cell.
   if (parentItem->text(1).trimmed().isEmpty()) {
     parentItem->setText(1, previewForVariables(children));
   }

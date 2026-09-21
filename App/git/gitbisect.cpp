@@ -67,8 +67,6 @@ void parseBisectProgress(const QString &output, GitBisectState *state) {
     state->status = GitBisectStatus::Searching;
   }
 
-  // Git 2.55 quotes the term ("is the first 'bad' commit"); older versions
-  // print it bare. Custom --term-new names appear in the same place.
   static const QRegularExpression found(
       QStringLiteral("([0-9a-f]{7,40}) is the first (?:'[^']+'|\\S+) commit"));
   const QRegularExpressionMatch foundMatch = found.match(output);

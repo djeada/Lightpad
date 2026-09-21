@@ -4,6 +4,8 @@
 #include <QColor>
 #include <QPlainTextEdit>
 
+class TerminalHighlighter;
+
 class TerminalView : public QPlainTextEdit {
   Q_OBJECT
 
@@ -19,6 +21,7 @@ protected:
   void paintEvent(QPaintEvent *event) override;
 
 private:
+  TerminalHighlighter *m_highlighter;
   QColor withAlpha(const QColor &color, qreal alpha) const;
 
   QColor m_background;

@@ -1,14 +1,95 @@
 #include "terminalview.h"
 
+#include "../../theme/colorcontrast.h"
+#include "../../theme/themeengine.h"
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
+#include <QRegularExpression>
 #include <QScrollBar>
+#include <QSyntaxHighlighter>
+#include <QTextBlock>
+#include <QTextFragment>
+
+class TerminalHighlighter : public QSyntaxHighlighter {
+public:
+  explicit TerminalHighlighter(QTextDocument *document)
+      : QSyntaxHighlighter(document) {}
+
+  QColor background, foreground;
+
+protected:
+  void highlightBlock(const QString &text) override {
+    const auto &c = ThemeEngine::instance().activeTheme().colors;
+    struct Rule {
+      QRegularExpression expression;
+      QColor ThemeColors::*color;
+      bool bold;
+    };
+    static const Rule rules[] = {
+        {QRegularExpression(QStringLiteral(
+             R"(\b\d+(?:\.\d+)?(?:\s*(?:ms|us|ns|s|MB|GB|KiB|MiB|%))?\b)")),
+         &ThemeColors::ansiCyan, false},
+        {QRegularExpression(QStringLiteral(R"([|\[\]{}]|(?:^|\s)[ABC]:)")),
+         &ThemeColors::ansiMagenta, true},
+        {QRegularExpression(
+             QStringLiteral(R"(\b(?:warning|warn|deprecated|median|range)\b)"),
+             QRegularExpression::CaseInsensitiveOption),
+         &ThemeColors::ansiYellow, true},
+        {QRegularExpression(
+             QStringLiteral(
+                 R"(\b(?:error|fatal|failed|failure|exception|traceback)\b)"),
+             QRegularExpression::CaseInsensitiveOption),
+         &ThemeColors::ansiRed, true},
+        {QRegularExpression(
+             QStringLiteral(
+                 R"(\b(?:success|passed|finished|OK)\b|exit code 0\b)"),
+             QRegularExpression::CaseInsensitiveOption),
+         &ThemeColors::ansiGreen, true},
+        {QRegularExpression(QStringLiteral(
+             R"(^[^\s]+@[^\s:]+|(?:~|/)[^\s]*[\$#]|^[╭╰]─.*?[❯$#])")),
+         &ThemeColors::ansiBlue, true},
+    };
+    for (const auto &rule : rules) {
+      const QColor color = c.*(rule.color);
+      auto matches = rule.expression.globalMatch(text);
+      while (matches.hasNext()) {
+        const auto match = matches.next();
+        const int start = match.capturedStart();
+        const int end = match.capturedEnd();
+        for (auto it = currentBlock().begin(); !it.atEnd(); ++it) {
+          const auto fragment = it.fragment();
+          const auto original = fragment.charFormat();
+          if (original.isAnchor() ||
+              original.hasProperty(QTextFormat::BackgroundBrush) ||
+              (original.hasProperty(QTextFormat::ForegroundBrush) &&
+               original.foreground().color() != foreground))
+            continue;
+          const int left =
+              qMax(start, fragment.position() - currentBlock().position());
+          const int right =
+              qMin(end, fragment.position() - currentBlock().position() +
+                            fragment.length());
+          if (left >= right)
+            continue;
+          QTextCharFormat format;
+          format.setForeground(ColorContrast::ensure(
+              color.isValid() ? color : foreground, background));
+          if (rule.bold)
+            format.setFontWeight(QFont::Bold);
+          setFormat(left, right - left, format);
+        }
+      }
+    }
+  }
+};
 
 TerminalView::TerminalView(QWidget *parent)
-    : QPlainTextEdit(parent), m_background("#101418"), m_foreground("#b8c9c1"),
-      m_accent("#7dffb2"), m_selection("#213a35"), m_border("#263832"),
-      m_glow("#7dffb2"), m_scanlines(false), m_glowIntensity(0.3) {
+    : QPlainTextEdit(parent),
+      m_highlighter(new TerminalHighlighter(document())),
+      m_background("#101418"), m_foreground("#b8c9c1"), m_accent("#7dffb2"),
+      m_selection("#213a35"), m_border("#263832"), m_glow("#7dffb2"),
+      m_scanlines(false), m_glowIntensity(0.3) {
   setFrameShape(QFrame::NoFrame);
   viewport()->setAttribute(Qt::WA_Hover, true);
   viewport()->setAutoFillBackground(false);
@@ -35,6 +116,9 @@ void TerminalView::setVisualTheme(const QColor &background,
   pal.setColor(QPalette::Highlight, m_selection);
   pal.setColor(QPalette::HighlightedText, m_foreground);
   setPalette(pal);
+  m_highlighter->background = m_background;
+  m_highlighter->foreground = m_foreground;
+  m_highlighter->rehighlight();
   viewport()->update();
 }
 
@@ -50,6 +134,7 @@ void TerminalView::paintEvent(QPaintEvent *event) {
   QPainter painter(viewport());
   painter.setRenderHint(QPainter::Antialiasing, false);
   const QRect r = viewport()->rect();
+  painter.fillRect(QRect(0, 0, 2, r.height()), withAlpha(m_accent, 0.45));
 
   const QRect cursor = cursorRect();
   if (cursor.isValid() && hasFocus()) {

@@ -27,6 +27,7 @@
 #include <QTextBlock>
 #include <QTextCharFormat>
 #include <QTextCursor>
+#include <QTextFragment>
 #include <QUrl>
 
 #ifndef Q_OS_WIN
@@ -199,9 +200,9 @@ void Terminal::setupTerminal() {
   ui->textEdit->setReadOnly(false);
   ui->textEdit->setTextInteractionFlags(Qt::TextEditorInteraction);
   ui->textEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
-  ui->textEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  ui->textEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  ui->textEdit->document()->setDocumentMargin(0);
+  ui->textEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+  ui->textEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+  ui->textEdit->document()->setDocumentMargin(12);
 
   QFont monoFont;
   QStringList fontFamilies = {"JetBrains Mono",  "Cascadia Code", "Fira Code",
@@ -972,8 +973,8 @@ bool Terminal::startShell(const QString &workingDirectory) {
   }
 
   QMap<QString, QString> ptyEnv = m_shellProfile.environment;
-  ptyEnv.insert("TERM", "ansi");
-  ptyEnv.remove("COLORTERM");
+  ptyEnv.insert("TERM", "xterm-256color");
+  ptyEnv.insert("COLORTERM", "truecolor");
   ptyEnv.insert("LIGHTPAD_TERMINAL", "1");
 
   QString shell = getShellCommand();
@@ -2255,6 +2256,7 @@ void Terminal::handleTabCompletion() {
 
 void Terminal::applyTheme(const QString &backgroundColor,
                           const QString &textColor, const QString &errorColor) {
+  const QColor previousForeground(m_textColor);
   const ThemeDefinition &td = ThemeEngine::instance().activeTheme();
   if (!backgroundColor.isEmpty()) {
     m_backgroundColor =
@@ -2275,6 +2277,27 @@ void Terminal::applyTheme(const QString &backgroundColor,
     m_linkColor = td.colors.accentPrimary.name();
   }
 
+  if (m_ansiForeground == previousForeground)
+    m_ansiForeground = QColor(m_textColor);
+  QTextCursor edit(ui->textEdit->document());
+  edit.beginEditBlock();
+  for (QTextBlock block = ui->textEdit->document()->begin(); block.isValid();
+       block = block.next()) {
+    QList<QPair<int, int>> ranges;
+    for (auto it = block.begin(); !it.atEnd(); ++it) {
+      const auto fragment = it.fragment();
+      if (fragment.charFormat().foreground().color() == previousForeground)
+        ranges.append(qMakePair(fragment.position(), fragment.length()));
+    }
+    for (const auto &range : ranges) {
+      edit.setPosition(range.first);
+      edit.setPosition(range.first + range.second, QTextCursor::KeepAnchor);
+      QTextCharFormat format;
+      format.setForeground(QColor(m_textColor));
+      edit.mergeCharFormat(format);
+    }
+  }
+  edit.endEditBlock();
   updateStyleSheet();
 }
 
