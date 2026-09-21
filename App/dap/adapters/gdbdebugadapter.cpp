@@ -69,8 +69,7 @@ public:
     config["request"] = "launch";
     config["program"] = filePath;
     config["MIMode"] = "gdb";
-    // Launch values override adapters.json, so carry over a debugger the user
-    // configured there instead of always pinning the system GDB.
+
     const QString configuredGdb = debugAdapterSettingValue(
         this->config().id, QStringLiteral("miDebuggerPath"));
     config["miDebuggerPath"] =
