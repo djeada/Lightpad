@@ -31,6 +31,13 @@ class QEvent;
 class Terminal : public QWidget {
   Q_OBJECT
 
+  // The unit test drives the terminal through its internals. Friendship keeps
+  // those members private, and therefore identically mangled, in every
+  // translation unit; "#define private public" does not, because MSVC encodes
+  // the access specifier into the symbol name and the test then fails to link
+  // against terminal.cpp.
+  friend class TestTerminal;
+
 public:
   explicit Terminal(QWidget *parent = nullptr);
   ~Terminal();

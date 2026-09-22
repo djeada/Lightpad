@@ -1,10 +1,7 @@
-// MSVC's <xkeycheck.h> hard-errors on a macroized keyword unless this opt-out
-// is defined before any standard library header is parsed.
-#define _ALLOW_KEYWORD_MACROS
-#define private public
+// Terminal declares this class a friend, which is what gives the test access
+// to the internals it exercises.
 #include "ui/panels/shellprofile.h"
 #include "ui/panels/terminal.h"
-#undef private
 #include "theme/themeengine.h"
 #include <QClipboard>
 #include <QDir>
