@@ -98,7 +98,9 @@ QList<ProcessPickerDialog::ProcessEntry> listProcessesFromPs() {
       continue;
     }
     ProcessPickerDialog::ProcessEntry entry;
-    entry.name = fields.at(0).remove(QLatin1Char('"'));
+    // at() hands back a const reference, so strip the quotes on a copy.
+    entry.name = fields.at(0);
+    entry.name.remove(QLatin1Char('"'));
     entry.pid = fields.at(1).toLongLong();
     if (entry.pid <= 0) {
       continue;

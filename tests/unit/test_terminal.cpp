@@ -1,3 +1,6 @@
+// MSVC's <xkeycheck.h> hard-errors on a macroized keyword unless this opt-out
+// is defined before any standard library header is parsed.
+#define _ALLOW_KEYWORD_MACROS
 #define private public
 #include "ui/panels/shellprofile.h"
 #include "ui/panels/terminal.h"

@@ -17,9 +17,11 @@ jobs:
           - os: ubuntu-22.04
             qt_arch: gcc_64
             qt_version: 6.6.3
+          # Qt 6.6 links the AGL framework, which the current macOS SDK no longer
+          # ships ("ld: framework 'AGL' not found"). 6.8 dropped that dependency.
           - os: macos-latest
             qt_arch: clang_64
-            qt_version: 6.6.3
+            qt_version: 6.8.2
           - os: windows-latest
             qt_arch: win64_msvc2022_64
             qt_version: 6.8.2
