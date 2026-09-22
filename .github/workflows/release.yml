@@ -17,11 +17,13 @@ jobs:
           - os: ubuntu-22.04
             qt_arch: gcc_64
             qt_version: 6.6.3
-          # Qt 6.6 links the AGL framework, which the current macOS SDK no longer
-          # ships ("ld: framework 'AGL' not found"). 6.8 dropped that dependency.
+          # Qt's FindWrapOpenGL.cmake links the AGL framework, which Apple removed
+          # from the macOS 26 SDK ("ld: framework 'AGL' not found"). The fix
+          # landed in Qt 6.9.2; 6.8.4 also has it but 6.8 patch releases past
+          # 6.8.3 are commercial-only, so open source needs the 6.9 series.
           - os: macos-latest
             qt_arch: clang_64
-            qt_version: 6.8.2
+            qt_version: 6.9.3
           - os: windows-latest
             qt_arch: win64_msvc2022_64
             qt_version: 6.8.2
