@@ -35,6 +35,29 @@
 #include <functional>
 
 namespace {
+// Re-elides a label whenever it is resized. Kept as a standalone filter so
+// LightpadPage does not gain a virtual override (some test targets link its
+// header without its translation unit).
+class LabelResizeNotifier : public QObject {
+public:
+  LabelResizeNotifier(QWidget *target, std::function<void()> onResize)
+      : QObject(target), m_target(target), m_onResize(std::move(onResize)) {}
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override {
+    if (watched == m_target && event->type() == QEvent::Resize && m_onResize) {
+      m_onResize();
+    }
+    return QObject::eventFilter(watched, event);
+  }
+
+private:
+  QWidget *m_target;
+  std::function<void()> m_onResize;
+};
+} // namespace
+
+namespace {
 class ExplorerTreeDelegate : public QStyledItemDelegate {
 public:
   explicit ExplorerTreeDelegate(QObject *parent = nullptr)
@@ -667,11 +690,11 @@ void LightpadTreeView::dropEvent(QDropEvent *event) {
 
 LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
     : QWidget(parent), mainWindow(nullptr), treeContainer(nullptr),
-      treeHeader(nullptr), treeTitleLabel(nullptr), treeFilterEdit(nullptr),
-      treeNewFileButton(nullptr), treeNewFolderButton(nullptr),
-      treeRefreshButton(nullptr), treeCollapseButton(nullptr),
-      treeExpandButton(nullptr), treeView(nullptr), textArea(nullptr),
-      minimap(nullptr), model(nullptr), m_ownsModel(true),
+      treeHeader(nullptr), treeTitleLabel(nullptr), treePathLabel(nullptr),
+      treeFilterEdit(nullptr), treeNewFileButton(nullptr),
+      treeNewFolderButton(nullptr), treeRefreshButton(nullptr),
+      treeCollapseButton(nullptr), treeExpandButton(nullptr), treeView(nullptr),
+      textArea(nullptr), minimap(nullptr), model(nullptr), m_ownsModel(true),
       m_gitIntegration(nullptr), m_treeFilterText(""), filePath(""),
       projectRootPath("") {
 
@@ -734,6 +757,16 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   treeExpandButton->setIconSize(QSize(14, 14));
   treeHeaderLayout->addWidget(treeExpandButton);
 
+  // The folder name alone is ambiguous across checkouts and worktrees, so show
+  // where the project actually lives.
+  treePathLabel = new QLabel(treeContainer);
+  treePathLabel->setObjectName("treePathLabel");
+  treePathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  treePathLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  treePathLabel->hide();
+  treePathLabel->installEventFilter(new LabelResizeNotifier(
+      treePathLabel, [this]() { updateTreePathLabel(); }));
+
   treeFilterEdit = new QLineEdit(treeContainer);
   treeFilterEdit->setObjectName("treeFilterEdit");
   treeFilterEdit->setPlaceholderText("Filter files...");
@@ -748,6 +781,7 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   minimap->setSourceEditor(textArea);
 
   treeLayout->addWidget(treeHeader);
+  treeLayout->addWidget(treePathLabel);
   treeLayout->addWidget(treeFilterEdit);
   treeLayout->addWidget(treeView, 1);
 
@@ -1115,6 +1149,30 @@ QString LightpadPage::getAssignedTemplateId() const {
   return QString();
 }
 
+void LightpadPage::updateTreePathLabel() {
+  if (!treePathLabel) {
+    return;
+  }
+
+  if (projectRootPath.isEmpty()) {
+    treePathLabel->clear();
+    treePathLabel->hide();
+    return;
+  }
+
+  const QString absolutePath =
+      QDir::toNativeSeparators(QFileInfo(projectRootPath).absoluteFilePath());
+  treePathLabel->setToolTip(absolutePath);
+
+  // Elide on the left so the part that distinguishes one checkout from another
+  // stays readable in a narrow sidebar.
+  // contentsRect() excludes the stylesheet padding, which width() does not.
+  const int available = qMax(1, treePathLabel->contentsRect().width());
+  treePathLabel->setText(treePathLabel->fontMetrics().elidedText(
+      absolutePath, Qt::ElideLeft, available));
+  treePathLabel->show();
+}
+
 void LightpadPage::setProjectRootPath(const QString &path) {
   projectRootPath = path;
   if (treeTitleLabel) {
@@ -1122,6 +1180,7 @@ void LightpadPage::setProjectRootPath(const QString &path) {
     treeTitleLabel->setText(name.isEmpty() ? tr("EXPLORER") : name.toUpper());
     treeTitleLabel->setToolTip(path);
   }
+  updateTreePathLabel();
   if (model) {
     model->setRootHeaderLabel(projectRootPath);
     treeView->setHeaderHidden(true);
@@ -1201,6 +1260,11 @@ void LightpadPage::applyTheme(const ThemeDefinition &theme) {
                 "  font-weight: 700;"
                 "  letter-spacing: 1px;"
                 "  padding: 2px 0;"
+                "}"
+                "QLabel#treePathLabel {"
+                "  color: %4;"
+                "  font-size: 10px;"
+                "  padding: 0 4px 4px 4px;"
                 "}"
                 "QLineEdit#treeFilterEdit {"
                 "  background: %6;"

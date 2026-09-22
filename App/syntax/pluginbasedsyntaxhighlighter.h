@@ -18,6 +18,11 @@ public:
 
   void setSearchKeyword(const QString &keyword);
 
+  // The find panel builds the pattern that actually drives matching (regex,
+  // whole-word and case options); the highlighter must use the same one or the
+  // highlights disagree with the match count and navigation.
+  void setSearchPattern(const QRegularExpression &pattern);
+
   QString searchKeyword() const { return m_searchKeyword; }
 
   void setVisibleBlockRange(int first, int last);
@@ -36,6 +41,7 @@ private:
 
   Theme m_theme;
   QString m_searchKeyword;
+  QRegularExpression m_searchPattern;
 
   QVector<SyntaxRule> m_rules;
 
@@ -45,6 +51,7 @@ private:
 
   int m_firstVisibleBlock = -1;
   int m_lastVisibleBlock = -1;
+  int m_lastBlockCount = -1;
 
   static constexpr int VIEWPORT_BUFFER = 50;
 };

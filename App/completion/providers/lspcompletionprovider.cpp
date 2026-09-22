@@ -6,6 +6,8 @@ LspCompletionProvider::LspCompletionProvider(LspClient *client, QObject *parent)
   if (m_client) {
     connect(m_client, &LspClient::completionReceived, this,
             &LspCompletionProvider::onCompletionReceived);
+    connect(m_client, &LspClient::requestFailed, this,
+            &LspCompletionProvider::onRequestFailed);
   }
 }
 
@@ -20,6 +22,8 @@ void LspCompletionProvider::setClient(LspClient *client) {
   if (m_client) {
     disconnect(m_client, &LspClient::completionReceived, this,
                &LspCompletionProvider::onCompletionReceived);
+    disconnect(m_client, &LspClient::requestFailed, this,
+               &LspCompletionProvider::onRequestFailed);
   }
 
   m_client = client;
@@ -27,13 +31,15 @@ void LspCompletionProvider::setClient(LspClient *client) {
   if (m_client) {
     connect(m_client, &LspClient::completionReceived, this,
             &LspCompletionProvider::onCompletionReceived);
+    connect(m_client, &LspClient::requestFailed, this,
+            &LspCompletionProvider::onRequestFailed);
   }
 }
 
 void LspCompletionProvider::requestCompletions(
     const CompletionContext &context,
     std::function<void(const QList<CompletionItem> &)> callback) {
-  if (!isEnabled()) {
+  if (!isEnabled() || context.documentUri.isEmpty()) {
     callback({});
     return;
   }
@@ -65,6 +71,29 @@ void LspCompletionProvider::onCompletionReceived(
 
   Q_UNUSED(requestId);
 
+  QList<CompletionItem> completionItems;
+  for (const LspCompletionItem &lspItem : items) {
+    completionItems.append(convertItem(lspItem));
+  }
+
+  flushPendingCallbacks(completionItems);
+}
+
+void LspCompletionProvider::onRequestFailed(int requestId,
+                                            const QString &method,
+                                            const QString &message) {
+  Q_UNUSED(requestId);
+  Q_UNUSED(message);
+
+  if (method != QLatin1String("textDocument/completion")) {
+    return;
+  }
+
+  flushPendingCallbacks({});
+}
+
+void LspCompletionProvider::flushPendingCallbacks(
+    const QList<CompletionItem> &items) {
   if (m_pendingCallbacks.isEmpty()) {
     return;
   }
@@ -73,13 +102,8 @@ void LspCompletionProvider::onCompletionReceived(
   --it;
   auto callback = it.value();
 
-  QList<CompletionItem> completionItems;
-  for (const LspCompletionItem &lspItem : items) {
-    completionItems.append(convertItem(lspItem));
-  }
-
   m_pendingCallbacks.clear();
-  callback(completionItems);
+  callback(items);
 }
 
 CompletionItem

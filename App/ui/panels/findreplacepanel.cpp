@@ -8,6 +8,7 @@
 
 #include <algorithm>
 
+#include "../../theme/themeengine.h"
 #include <QApplication>
 #include <QDebug>
 #include <QDir>
@@ -65,7 +66,7 @@ void configureSearchRows(Ui::FindReplacePanel *ui) {
   }
 
   constexpr int kLabelWidth = 58;
-  constexpr int kFieldMinWidth = 280;
+  constexpr int kFieldMinWidth = 420;
   constexpr int kFieldMaxWidth = 520;
   constexpr int kOptionButtonWidth = 42;
   constexpr int kOptionButtonHeight = 32;
@@ -115,6 +116,13 @@ void configureSearchRows(Ui::FindReplacePanel *ui) {
     ui->horizontalLayout_4->setContentsMargins(0, 0, 0, 0);
     ui->horizontalLayout_4->setSpacing(12);
     ui->horizontalLayout_4->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    // Without this the fields column absorbs the free width and pushes the
+    // option checkboxes to the far edge of the window, a screen away from the
+    // input they apply to.
+    for (int i = 0; i < ui->horizontalLayout_4->count(); ++i) {
+      ui->horizontalLayout_4->setStretch(i, 0);
+    }
+    ui->horizontalLayout_4->addStretch(1);
   }
   if (ui->verticalLayout_3) {
     ui->verticalLayout_3->setContentsMargins(0, 0, 0, 0);
@@ -174,9 +182,15 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   setReplaceVisibility(onlyFind);
 
   resultsTree = new QTreeWidget(this);
-  resultsTree->setHeaderLabels(QStringList() << "File" << "Line" << "Match");
+  resultsTree->setHeaderLabels(QStringList()
+                               << tr("File") << tr("Line:Col") << tr("Match"));
   resultsTree->setColumnCount(3);
-  resultsTree->header()->setStretchLastSection(true);
+  // The matched line is what the user reads, so give it the free space instead
+  // of leaving it elided next to an over-wide location column.
+  resultsTree->header()->setStretchLastSection(false);
+  resultsTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+  resultsTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+  resultsTree->header()->setSectionResizeMode(2, QHeaderView::Stretch);
   resultsTree->setVisible(false);
   resultsTree->setMinimumHeight(150);
 
@@ -727,7 +741,9 @@ void FindReplacePanel::on_find_clicked() {
   }
 
   if (textArea) {
-    textArea->setFocus();
+    // Keep the keyboard in the search field: stealing focus here means the
+    // next Enter (or any keystroke) lands in the editor and overwrites the
+    // selected match.
     QTextCursor newCursor(textArea->document());
 
     if (textArea->getSearchWord() != searchWord) {
@@ -767,7 +783,6 @@ void FindReplacePanel::on_findPrevious_clicked() {
   }
 
   if (textArea) {
-    textArea->setFocus();
     QTextCursor newCursor(textArea->document());
 
     if (textArea->getSearchWord() != searchWord) {
@@ -785,7 +800,6 @@ void FindReplacePanel::on_replaceSingle_clicked() {
     return;
   }
   if (textArea) {
-    textArea->setFocus();
     QString searchWord = ui->searchFind->text();
     QString replaceWord = ui->fieldReplace->text();
 
@@ -815,15 +829,19 @@ void FindReplacePanel::on_replaceSingle_clicked() {
 void FindReplacePanel::on_close_clicked() {
   if (m_vimCommandMode) {
     setVimCommandMode(false);
-    if (textArea) {
-      textArea->setFocus();
-    }
   }
-  if (textArea)
+  if (textArea) {
+    textArea->setSearchPattern(QRegularExpression());
     textArea->updateSyntaxHighlightTags();
+  }
 
   clearSearchFeedback();
   close();
+
+  // Closing the panel hands the keyboard back to where the user was working.
+  if (textArea) {
+    textArea->setFocus();
+  }
 }
 
 void FindReplacePanel::selectSearchWord(QTextCursor &cursor, int n,
@@ -904,11 +922,11 @@ void FindReplacePanel::updateCounterLabels() {
         ui->label->hide();
       }
     } else {
-      if (ui->currentIndex->isHidden()) {
-        ui->currentIndex->show();
-        ui->totalFound->show();
-        ui->label->show();
-      }
+      // "No results" hides the separator and total; they must come back on the
+      // next search that does find something.
+      ui->currentIndex->show();
+      ui->totalFound->show();
+      ui->label->show();
 
       ui->currentIndex->setText(QString::number(globalResultIndex + 1));
       ui->totalFound->setText(QString::number(globalResults.size()));
@@ -928,11 +946,9 @@ void FindReplacePanel::updateCounterLabels() {
       ui->label->hide();
     }
   } else {
-    if (ui->currentIndex->isHidden()) {
-      ui->currentIndex->show();
-      ui->totalFound->show();
-      ui->label->show();
-    }
+    ui->currentIndex->show();
+    ui->totalFound->show();
+    ui->label->show();
 
     ui->currentIndex->setText(QString::number(position + 1));
     ui->totalFound->setText(QString::number(positions.size()));
@@ -947,6 +963,7 @@ void FindReplacePanel::findInitial(QTextCursor &cursor,
     matchLengths.clear();
   }
 
+  textArea->setSearchPattern(buildSearchPattern(searchWord));
   textArea->updateSyntaxHighlightTags(searchWord);
 
   if (textArea->isVimModeEnabled() && textArea->vimMode() &&
@@ -1064,7 +1081,6 @@ void FindReplacePanel::on_replaceAll_clicked() {
     return;
   }
   if (textArea) {
-    textArea->setFocus();
     QString searchWord = ui->searchFind->text();
     QString replaceWord = ui->fieldReplace->text();
 
@@ -1091,6 +1107,7 @@ void FindReplacePanel::on_replaceAll_clicked() {
       position = -1;
       positions.clear();
       matchLengths.clear();
+      updateSearchFeedback(tr("Nothing to replace"));
       updateCounterLabels();
       return;
     }
@@ -1118,8 +1135,15 @@ void FindReplacePanel::on_replaceAll_clicked() {
     position = -1;
     positions.clear();
     matchLengths.clear();
+    textArea->setSearchPattern(QRegularExpression());
     textArea->updateSyntaxHighlightTags();
     updateCounterLabels();
+    // Without this the panel just goes quiet and it is impossible to tell a
+    // successful bulk replace from one that matched nothing.
+    const int replaced = matchRanges.size();
+    updateSearchFeedback(replaced == 1
+                             ? tr("Replaced 1 occurrence")
+                             : tr("Replaced %1 occurrences").arg(replaced));
   }
 }
 
@@ -1164,7 +1188,8 @@ void FindReplacePanel::endSearchFeedback(int matchCount) {
     return;
   }
   searchInProgress = false;
-  searchStatusLabel->setText(QString("%1 matches").arg(matchCount));
+  searchStatusLabel->setText(
+      matchCount == 1 ? tr("1 match") : tr("%1 matches").arg(matchCount));
   searchStatusLabel->setVisible(true);
 }
 
@@ -1319,6 +1344,69 @@ void FindReplacePanel::onTextAreaContentsChanged() {
   refreshTimer->start(250);
 }
 
+bool FindReplacePanel::reportPatternProblem(const QString &searchWord) {
+  const QRegularExpression pattern = buildSearchPattern(searchWord);
+  if (pattern.isValid()) {
+    setSearchFieldError(QString());
+    return true;
+  }
+
+  ++m_localSearchRequestId;
+  if (m_localSearchTask) {
+    m_localSearchTask->cancel();
+    m_localSearchTask.clear();
+  }
+
+  positions.clear();
+  matchLengths.clear();
+  position = -1;
+  globalResults.clear();
+  globalResultsByFile.clear();
+  globalResultIndex = -1;
+  if (resultsTree) {
+    resultsTree->clear();
+    resultsTree->setVisible(false);
+  }
+  if (m_paginationWidget) {
+    m_paginationWidget->setVisible(false);
+  }
+  // Leaving the previous term highlighted while the pattern is broken makes it
+  // look as though those hits are the current results.
+  if (textArea) {
+    textArea->setSearchPattern(QRegularExpression());
+    textArea->updateSyntaxHighlightTags();
+  }
+
+  const QString reason = pattern.errorString();
+  setSearchFieldError(reason);
+  updateSearchFeedback(tr("Invalid regular expression: %1").arg(reason));
+  updateCounterLabels();
+  return false;
+}
+
+void FindReplacePanel::setSearchFieldError(const QString &reason) {
+  if (!ui->searchFind) {
+    return;
+  }
+  if (m_searchFieldError == reason) {
+    return;
+  }
+  m_searchFieldError = reason;
+
+  if (reason.isEmpty()) {
+    ui->searchFind->setStyleSheet(QString());
+    ui->searchFind->setToolTip(QString());
+    return;
+  }
+
+  const QColor themed =
+      ThemeEngine::instance().activeTheme().colors.statusError;
+  ui->searchFind->setStyleSheet(
+      QString("QLineEdit { border: 1px solid %1; }")
+          .arg(themed.isValid() ? themed.name() : QString("#e74c3c")));
+  ui->searchFind->setToolTip(reason);
+}
+
 void FindReplacePanel::refreshSearchResults() {
   if (!isVisible() || m_vimCommandMode || !searchExecuted) {
     return;
@@ -1349,6 +1437,7 @@ void FindReplacePanel::refreshSearchResults() {
       m_paginationWidget->setVisible(false);
     }
     if (textArea) {
+      textArea->setSearchPattern(QRegularExpression());
       textArea->updateSyntaxHighlightTags();
     }
     clearSearchFeedback();
@@ -1363,6 +1452,12 @@ void FindReplacePanel::refreshSearchResults() {
       m_localSearchTask.clear();
     }
     clearSearchFeedback();
+    return;
+  }
+
+  // A regex the user is still typing is usually invalid for a moment. Say so
+  // instead of reporting "No results", which reads as "this text isn't here".
+  if (!reportPatternProblem(searchWord)) {
     return;
   }
 
@@ -1563,6 +1658,7 @@ void FindReplacePanel::applyLocalSearchResults(
     }
   }
 
+  textArea->setSearchPattern(buildSearchPattern(searchWord));
   textArea->updateSyntaxHighlightTags(searchWord);
   displayLocalResults(searchWord);
 
@@ -1675,12 +1771,17 @@ void FindReplacePanel::refreshGlobalResultsForCurrentFile(
     return;
   }
 
-  if (!globalResultsByFile.contains(filePath)) {
+  QRegularExpression pattern = buildSearchPattern(searchWord);
+  if (!pattern.isValid()) {
     return;
   }
 
-  QRegularExpression pattern = buildSearchPattern(searchWord);
-  if (!pattern.isValid()) {
+  // Jumping to a hit in another file has to highlight that file's matches too,
+  // otherwise only the single selected occurrence is visible.
+  textArea->setSearchPattern(pattern);
+  textArea->updateSyntaxHighlightTags(searchWord);
+
+  if (!globalResultsByFile.contains(filePath)) {
     return;
   }
 
@@ -1770,7 +1871,10 @@ void FindReplacePanel::displayGlobalResults() {
 
     QTreeWidgetItem *fileItem = new QTreeWidgetItem(resultsTree);
     fileItem->setText(0, displayPath);
-    fileItem->setText(1, QString::number(results.size()) + " matches");
+    fileItem->setToolTip(0, filePath);
+    fileItem->setText(1, results.size() == 1
+                             ? tr("1 match")
+                             : tr("%1 matches").arg(results.size()));
     fileItem->setData(0, kDataRoleFilePath, filePath);
     fileItem->setData(0, kDataRoleLineNumber, -1);
     fileItem->setData(0, kDataRoleResultScope, kScopeGlobal);
@@ -1778,8 +1882,10 @@ void FindReplacePanel::displayGlobalResults() {
     for (const GlobalSearchResult &result : results) {
       QTreeWidgetItem *resultItem = new QTreeWidgetItem(fileItem);
       resultItem->setText(0, "");
-      resultItem->setText(1, QString::number(result.lineNumber));
+      resultItem->setText(
+          1, QString("%1:%2").arg(result.lineNumber).arg(result.columnNumber));
       resultItem->setText(2, result.lineContent);
+      resultItem->setToolTip(2, result.lineContent);
       resultItem->setData(0, kDataRoleFilePath, filePath);
       resultItem->setData(0, kDataRoleLineNumber, result.lineNumber);
       resultItem->setData(0, kDataRoleColumnNumber, result.columnNumber);
@@ -1791,6 +1897,7 @@ void FindReplacePanel::displayGlobalResults() {
     fileItem->setExpanded(true);
   }
 
+  resultsTree->setColumnHidden(0, false);
   resultsTree->setVisible(true);
   updatePaginationControls();
 }
@@ -1830,8 +1937,8 @@ void FindReplacePanel::navigateToGlobalResult(int index, bool emitNavigation) {
   }
 
   if (emitNavigation) {
-    emit navigateToFile(result.filePath, result.lineNumber,
-                        result.columnNumber);
+    emit navigateToFile(result.filePath, result.lineNumber, result.columnNumber,
+                        result.matchLength);
   }
 }
 
@@ -1864,7 +1971,8 @@ void FindReplacePanel::onGlobalResultClicked(QTreeWidgetItem *item,
     }
   }
 
-  emit navigateToFile(filePath, lineNumber, columnNumber);
+  int matchLength = item->data(0, kDataRoleMatchLength).toInt();
+  emit navigateToFile(filePath, lineNumber, columnNumber, matchLength);
 
   updateCounterLabels();
 }
@@ -1912,8 +2020,11 @@ void FindReplacePanel::displayLocalResults(const QString &searchWord) {
 
     QTreeWidgetItem *resultItem = new QTreeWidgetItem(resultsTree);
     resultItem->setText(0, "Current File");
-    resultItem->setText(1, QString::number(lineNum + 1));
+    // Several matches can share a line; without the column they render as
+    // identical rows.
+    resultItem->setText(1, QString("%1:%2").arg(lineNum + 1).arg(columnNum));
     resultItem->setText(2, lineContent);
+    resultItem->setToolTip(2, lineContent);
     resultItem->setData(0, kDataRoleFilePath, filePath);
     resultItem->setData(0, kDataRoleLineNumber, lineNum + 1);
     resultItem->setData(0, kDataRoleColumnNumber, columnNum);
@@ -1922,6 +2033,7 @@ void FindReplacePanel::displayLocalResults(const QString &searchWord) {
     resultItem->setData(0, kDataRoleResultScope, kScopeLocal);
   }
 
+  resultsTree->setColumnHidden(0, true);
   resultsTree->setVisible(true);
 }
 
@@ -1946,7 +2058,7 @@ void FindReplacePanel::onLocalResultClicked(QTreeWidgetItem *item, int column) {
   }
 
   if (!itemFilePath.isEmpty() && itemFilePath != currentFilePath()) {
-    emit navigateToFile(itemFilePath, lineNumber, columnNumber);
+    emit navigateToFile(itemFilePath, lineNumber, columnNumber, matchLength);
     return;
   }
 

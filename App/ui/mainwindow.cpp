@@ -266,6 +266,8 @@ MainWindow::MainWindow(QWidget *parent)
   setCorner(Qt::BottomLeftCorner, Qt::BottomDockWidgetArea);
   setCorner(Qt::BottomRightCorner, Qt::BottomDockWidgetArea);
   ui->menubar->setNativeMenuBar(false);
+  ui->actionNew_File->setShortcut(QKeySequence::New);
+  ui->actionNew_File->setShortcutContext(Qt::ApplicationShortcut);
   ui->actionFind_in_file->setShortcut(QKeySequence::Find);
   ui->actionFind_in_file->setShortcutContext(Qt::ApplicationShortcut);
   ui->actionReplace_in_file->setShortcut(QKeySequence::Replace);
@@ -1225,9 +1227,6 @@ void MainWindow::applyLanguageOverride(const QString &languageId) {
 
   LightpadTabWidget *tabWidget = currentTabWidget();
   QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
-  if (filePath.isEmpty()) {
-    return;
-  }
 
   QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
   if (canonicalLanguageId.isEmpty()) {
@@ -1236,7 +1235,9 @@ void MainWindow::applyLanguageOverride(const QString &languageId) {
     return;
   }
 
-  setHighlightOverrideForFile(filePath, canonicalLanguageId);
+  if (!filePath.isEmpty()) {
+    setHighlightOverrideForFile(filePath, canonicalLanguageId);
+  }
   textArea->updateSyntaxHighlightTags("", canonicalLanguageId);
   textArea->setLanguage(canonicalLanguageId);
   highlightLanguage = canonicalLanguageId;
@@ -1244,7 +1245,8 @@ void MainWindow::applyLanguageOverride(const QString &languageId) {
   setLanguageHighlightLabel(displayName.isEmpty() ? canonicalLanguageId
                                                   : displayName);
 
-  if (m_languageFeatureManager) {
+  // A buffer with no path on disk cannot be handed to a language server.
+  if (m_languageFeatureManager && !filePath.isEmpty()) {
     notifyDiagnosticsFileClosed(filePath);
     notifyDiagnosticsFileOpened(filePath);
   }
@@ -2272,6 +2274,11 @@ void MainWindow::on_actionFind_in_project_triggered() {
 
 void MainWindow::on_actionNew_File_triggered() {
   currentTabWidget()->addNewTab();
+
+  // Without this the first keystroke after creating a tab is swallowed.
+  if (auto *textArea = getCurrentTextArea()) {
+    textArea->setFocus(Qt::OtherFocusReason);
+  }
 }
 
 void MainWindow::on_actionOpen_File_triggered() {
@@ -2388,6 +2395,11 @@ void MainWindow::on_actionSave_as_triggered() {
   tabWidget->setFilePath(tabIndex, filePath);
 
   save(filePath);
+
+  // The buffer only just acquired an extension, so the language (and with it
+  // highlighting and the language server) has to be resolved now.
+  applyHighlightForFile(filePath);
+  notifyDiagnosticsFileOpened(filePath);
 }
 
 void MainWindow::open(const QString &filePath) {
@@ -2942,7 +2954,8 @@ void MainWindow::showFindReplace(bool onlyFind) {
       layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
 
     connect(findReplacePanel, &FindReplacePanel::navigateToFile, this,
-            [this](const QString &filePath, int lineNumber, int columnNumber) {
+            [this](const QString &filePath, int lineNumber, int columnNumber,
+                   int matchLength) {
               if (!filePath.isEmpty()) {
                 openFileAndAddToNewTab(filePath);
               }
@@ -2954,8 +2967,14 @@ void MainWindow::showFindReplace(bool onlyFind) {
                                     qMax(0, lineNumber - 1));
                 cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
                                     qMax(0, columnNumber - 1));
+                // Select the match so the hit is visible, the same way a
+                // single-file search shows the current match.
+                if (matchLength > 0) {
+                  cursor.movePosition(QTextCursor::Right,
+                                      QTextCursor::KeepAnchor, matchLength);
+                }
                 textArea->setTextCursor(cursor);
-                textArea->setFocus();
+                textArea->ensureCursorVisible();
               }
             });
 
@@ -4973,6 +4992,29 @@ void MainWindow::setupDiagnostics() {
         }
       });
 
+  connect(
+      m_languageFeatureManager, &LanguageFeatureManager::serverUnavailable,
+      this, [this](const QString &languageId, const QString &message) {
+        LOG_DEBUG(
+            QString("LSP unavailable for '%1': %2").arg(languageId, message));
+        auto *tw = currentTabWidget();
+        if (!tw || tw->currentIndex() < 0) {
+          return;
+        }
+        const QString filePath = tw->getFilePath(tw->currentIndex());
+        if (filePath.isEmpty() ||
+            effectiveLanguageIdForFile(filePath) != languageId) {
+          return;
+        }
+        // Most file types have no language server; that is a normal state,
+        // not something to interrupt the user with.
+        if (m_notificationManager) {
+          m_notificationManager->dismiss(
+              QString::fromLatin1(kCurrentFileLspErrorNotificationKey));
+        }
+        updateLspStatusLabel(languageId, "unavailable");
+      });
+
   connect(m_languageFeatureManager, &LanguageFeatureManager::serverStarted,
           this, [this](const QString &languageId) {
             if (m_notificationManager) {
@@ -5100,6 +5142,9 @@ void MainWindow::updateLspStatusLabel(const QString &languageId,
   } else if (status == "stopped") {
     glyph = QString::fromUtf8("○");
     tooltip = tr("%1 language server is stopped").arg(displayName);
+  } else if (status == "unavailable") {
+    glyph = QString::fromUtf8("○");
+    tooltip = tr("No language server configured for %1").arg(displayName);
   } else {
     m_lspStatusLabel->setVisible(false);
     return;
@@ -5314,6 +5359,10 @@ void MainWindow::notifyDiagnosticsFileClosed(const QString &filePath) {
   m_languageFeatureManager->closeDocument(filePath);
   m_documentVersions.remove(filePath);
   clearPendingDiagnosticsChange(filePath);
+}
+
+void MainWindow::flushPendingLanguageServerChanges(const QString &filePath) {
+  flushPendingDiagnosticsChange(filePath);
 }
 
 void MainWindow::flushPendingDiagnosticsChange(const QString &filePath) {
@@ -8018,10 +8067,9 @@ void MainWindow::on_languageHighlight_clicked() {
   if (!tabWidget) {
     return;
   }
+  // An unsaved buffer has no extension to detect from, which is exactly when
+  // picking the language by hand matters most - so the menu must still open.
   QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
-  if (filePath.isEmpty()) {
-    return;
-  }
 
   QMenu menu(this);
   QActionGroup actionGroup(&menu);
@@ -8029,7 +8077,9 @@ void MainWindow::on_languageHighlight_clicked() {
 
   QAction *autoDetectAction = menu.addAction("Auto Detect");
   autoDetectAction->setCheckable(true);
-  autoDetectAction->setChecked(highlightOverrideForFile(filePath).isEmpty());
+  autoDetectAction->setChecked(filePath.isEmpty() ||
+                               highlightOverrideForFile(filePath).isEmpty());
+  autoDetectAction->setEnabled(!filePath.isEmpty());
   actionGroup.addAction(autoDetectAction);
 
   menu.addSeparator();
@@ -8042,7 +8092,11 @@ void MainWindow::on_languageHighlight_clicked() {
     QAction *action = menu.addAction(language.displayName);
     action->setCheckable(true);
     action->setData(language.id);
-    action->setChecked(effectiveLanguageIdForFile(filePath) == language.id);
+    const TextArea *activeArea = getCurrentTextArea();
+    const QString activeLanguageId =
+        filePath.isEmpty() ? (activeArea ? activeArea->language() : QString())
+                           : effectiveLanguageIdForFile(filePath);
+    action->setChecked(activeLanguageId == language.id);
     actionGroup.addAction(action);
   }
 
@@ -8054,6 +8108,9 @@ void MainWindow::on_languageHighlight_clicked() {
 
   QVariant selectedData = selectedAction->data();
   if (!selectedData.isValid()) {
+    if (filePath.isEmpty()) {
+      return;
+    }
     setHighlightOverrideForFile(filePath, "");
     applyHighlightForFile(filePath);
     return;

@@ -20,8 +20,15 @@ PluginBasedSyntaxHighlighter::PluginBasedSyntaxHighlighter(
   m_searchFormat.setBackground(QColor("#646464"));
 }
 
+void PluginBasedSyntaxHighlighter::setSearchPattern(
+    const QRegularExpression &pattern) {
+  m_searchPattern = pattern;
+  rehighlight();
+}
+
 void PluginBasedSyntaxHighlighter::setSearchKeyword(const QString &keyword) {
   m_searchKeyword = keyword;
+  m_searchPattern = QRegularExpression();
   rehighlight();
 }
 
@@ -33,7 +40,16 @@ void PluginBasedSyntaxHighlighter::setVisibleBlockRange(int first, int last) {
   int newFirst = qMax(0, first);
   int newLast = qMax(newFirst, last);
 
-  if (newFirst == m_firstVisibleBlock && newLast == m_lastVisibleBlock) {
+  // Typing a single newline is handled incrementally by QSyntaxHighlighter, but
+  // a bulk edit (paste, replace-all, reload) moves blocks past the range this
+  // highlighter was last told about, so those need an explicit pass.
+  const int blockCount = document()->blockCount();
+  const bool bulkEdit =
+      (m_lastBlockCount >= 0 && qAbs(blockCount - m_lastBlockCount) > 1);
+  m_lastBlockCount = blockCount;
+
+  if (newFirst == m_firstVisibleBlock && newLast == m_lastVisibleBlock &&
+      !bulkEdit) {
     return;
   }
 
@@ -52,6 +68,11 @@ void PluginBasedSyntaxHighlighter::setVisibleBlockRange(int first, int last) {
   int oldMax = oldLast + VIEWPORT_BUFFER;
   int newMin = m_firstVisibleBlock - VIEWPORT_BUFFER;
   int newMax = m_lastVisibleBlock + VIEWPORT_BUFFER;
+
+  if (bulkEdit) {
+    rehighlightBlockRange(0, newMax);
+    return;
+  }
 
   if (newMin < oldMin) {
     rehighlightBlockRange(0, qMin(oldMin - 1, newMax));
@@ -375,8 +396,17 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
       false);
 
   if (!m_searchKeyword.isEmpty()) {
-    QRegularExpression searchPattern(m_searchKeyword,
-                                     QRegularExpression::CaseInsensitiveOption);
+    // Fall back to a literal, case-insensitive match only when no explicit
+    // pattern was supplied (e.g. highlighting driven by something other than
+    // the find panel).
+    const QRegularExpression searchPattern =
+        m_searchPattern.isValid() && !m_searchPattern.pattern().isEmpty()
+            ? m_searchPattern
+            : QRegularExpression(QRegularExpression::escape(m_searchKeyword),
+                                 QRegularExpression::CaseInsensitiveOption);
+    if (!searchPattern.isValid()) {
+      return;
+    }
     QRegularExpressionMatchIterator matchIterator =
         searchPattern.globalMatch(text);
 

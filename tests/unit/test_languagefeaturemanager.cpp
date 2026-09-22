@@ -141,12 +141,16 @@ void TestLanguageFeatureManager::testCloseDocumentWithoutOpen() {
 void TestLanguageFeatureManager::testServerErrorEmitted() {
   DiagnosticsManager diagMgr;
   LanguageFeatureManager mgr(&diagMgr);
-  QSignalSpy spy(&mgr, &LanguageFeatureManager::serverError);
+  QSignalSpy errorSpy(&mgr, &LanguageFeatureManager::serverError);
+  QSignalSpy unavailableSpy(&mgr, &LanguageFeatureManager::serverUnavailable);
 
   mgr.openDocument("/project/file.xyz", "unknown_lang", "content");
 
-  QCOMPARE(spy.count(), 1);
-  const QList<QVariant> args = spy.takeFirst();
+  // A language with no configured server is an ordinary state, not an error:
+  // it must not be reported through the channel that raises error UI.
+  QCOMPARE(errorSpy.count(), 0);
+  QCOMPARE(unavailableSpy.count(), 1);
+  const QList<QVariant> args = unavailableSpy.takeFirst();
   QCOMPARE(args.at(0).toString(), QString("unknown_lang"));
   QVERIFY(args.at(1).toString().contains("No language server configured"));
   QVERIFY(mgr.clientForFile("/project/file.xyz") == nullptr);

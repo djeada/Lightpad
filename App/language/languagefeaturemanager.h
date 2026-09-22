@@ -56,6 +56,8 @@ public:
 signals:
   void serverStarted(const QString &languageId);
   void serverError(const QString &languageId, const QString &message);
+  // Not an error: the language simply has no server configured.
+  void serverUnavailable(const QString &languageId, const QString &message);
   void serverHealthChanged(const QString &languageId,
                            ServerHealthStatus status);
 

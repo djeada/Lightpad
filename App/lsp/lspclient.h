@@ -201,6 +201,11 @@ public:
   void didClose(const QString &uri);
 
   void requestCompletion(const QString &uri, LspPosition position);
+  // Splits a raw LSP stream into complete message payloads, consuming what it
+  // returns from `buffer`. Exposed for testing the byte-level framing.
+  static QList<QByteArray> extractMessages(QByteArray &buffer,
+                                           int maxMessages = 100);
+
   void requestHover(const QString &uri, LspPosition position);
   void requestDefinition(const QString &uri, LspPosition position);
   void requestReferences(const QString &uri, LspPosition position);
@@ -237,6 +242,8 @@ signals:
 
   void completionReceived(int requestId, const QList<LspCompletionItem> &items);
   void hoverReceived(int requestId, const QString &contents);
+  void requestFailed(int requestId, const QString &method,
+                     const QString &message);
   void definitionReceived(int requestId, const QList<LspLocation> &locations);
   void referencesReceived(int requestId, const QList<LspLocation> &locations);
   void signatureHelpReceived(int requestId,
@@ -274,7 +281,7 @@ private:
   QProcess *m_process;
   State m_state;
   int m_nextRequestId;
-  QString m_buffer;
+  QByteArray m_buffer;
   QMap<int, QString> m_pendingRequests;
   QString m_rootUri;
   int m_pendingCompletionRequestId = -1;

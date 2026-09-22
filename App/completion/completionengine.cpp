@@ -4,10 +4,17 @@
 #include <algorithm>
 
 CompletionEngine::CompletionEngine(QObject *parent)
-    : QObject(parent), m_debounceTimer(new QTimer(this)) {
+    : QObject(parent), m_debounceTimer(new QTimer(this)),
+      m_responseTimer(new QTimer(this)) {
   m_debounceTimer->setSingleShot(true);
   connect(m_debounceTimer, &QTimer::timeout, this,
           &CompletionEngine::onDebounceTimeout);
+
+  // A provider that never answers must not be able to wedge the popup for
+  // every other provider, so give the whole fan-out a deadline.
+  m_responseTimer->setSingleShot(true);
+  connect(m_responseTimer, &QTimer::timeout, this,
+          &CompletionEngine::onResponseTimeout);
 }
 
 CompletionEngine::~CompletionEngine() { cancelPendingRequests(); }
@@ -58,6 +65,7 @@ void CompletionEngine::executeCompletionRequest() {
   }
 
   m_pendingProviders = providers.size();
+  m_responseTimer->start(m_responseTimeout);
 
   int requestId = m_currentRequestId;
 
@@ -72,6 +80,7 @@ void CompletionEngine::executeCompletionRequest() {
 
 void CompletionEngine::cancelPendingRequests() {
   m_debounceTimer->stop();
+  m_responseTimer->stop();
   m_pendingProviders = 0;
   m_currentRequestId++;
 
@@ -93,9 +102,21 @@ void CompletionEngine::collectProviderResults(
   m_pendingProviders--;
 
   if (m_pendingProviders <= 0) {
+    m_responseTimer->stop();
     mergeAndSortResults();
     notifyResults();
   }
+}
+
+void CompletionEngine::onResponseTimeout() {
+  if (m_pendingProviders <= 0) {
+    return;
+  }
+
+  // Publish whatever the providers that did answer produced.
+  m_pendingProviders = 0;
+  mergeAndSortResults();
+  notifyResults();
 }
 
 void CompletionEngine::mergeAndSortResults() {

@@ -1232,9 +1232,20 @@ void Terminal::executeCommand(const QString &command, const QStringList &args,
   }
   m_runProcess->setProcessEnvironment(processEnv);
 
-  clear();
+  // Starting a run must not destroy what the previous run (or the shell)
+  // printed: the compiler errors you are working through usually live there.
+  // Reset the ANSI screen state without dropping the scrollback.
+  m_alternateScreenActive = false;
+  m_savedPrimaryScreenText.clear();
+  m_pendingAnsiText.clear();
+  resetAnsiState();
+  syncAnsiCursorToDocumentEnd();
+  m_inputStartPosition = ui->textEdit->document()->characterCount() - 1;
   m_runTranscript.clear();
   setRunInputIndicatorActive(false);
+  if (!ui->textEdit->document()->isEmpty()) {
+    appendOutput("\n");
+  }
   appendOutput(QString("$ %1 %2\n").arg(command, args.join(" ")));
   if (!workingDirectory.isEmpty()) {
     appendOutput(QString("Working directory: %1\n").arg(workingDirectory));

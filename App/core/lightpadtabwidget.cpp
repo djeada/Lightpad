@@ -116,6 +116,10 @@ LightpadTabWidget::LightpadTabWidget(QWidget *parent) : QTabWidget(parent) {
   setContentsMargins(0, 0, 0, 0);
   tabBar()->setExpanding(false);
   tabBar()->setUsesScrollButtons(true);
+  // The platform style elides tab labels on the left, which turns
+  // "Unsaved Document" into "...saved Document" and hides the start of a long
+  // file name - the part that identifies it.
+  tabBar()->setElideMode(Qt::ElideRight);
   tabBar()->setContentsMargins(0, 0, 0, 0);
   tabBar()->setObjectName("lightpadTabBar");
   tabBar()->setFocusPolicy(Qt::NoFocus);

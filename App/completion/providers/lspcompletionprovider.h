@@ -42,8 +42,11 @@ public:
 private slots:
   void onCompletionReceived(int requestId,
                             const QList<LspCompletionItem> &items);
+  void onRequestFailed(int requestId, const QString &method,
+                       const QString &message);
 
 private:
+  void flushPendingCallbacks(const QList<CompletionItem> &items);
   CompletionItem convertItem(const LspCompletionItem &lspItem) const;
   CompletionItemKind convertKind(int lspKind) const;
 

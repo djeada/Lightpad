@@ -23,6 +23,9 @@ private slots:
   void testCodeActionKindStrings();
   void testPositionComparison();
   void testRangeContainment();
+  void testFramingWithNonAsciiPayload();
+  void testFramingSplitAcrossReads();
+  void testFramingMultipleMessagesInOneRead();
 };
 
 void TestLspRegression::testDiagnosticSeverityRoundTrip() {
@@ -201,6 +204,70 @@ void TestLspRegression::testRangeContainment() {
 
   QVERIFY(inner.start.line >= outer.start.line);
   QVERIFY(inner.end.line <= outer.end.line);
+}
+
+namespace {
+QByteArray frame(const QByteArray &payload) {
+  return QByteArray("Content-Length: ") + QByteArray::number(payload.size()) +
+         "\r\n\r\n" + payload;
+}
+} // namespace
+
+void TestLspRegression::testFramingWithNonAsciiPayload() {
+  // Content-Length is a byte count. A message carrying any multi-byte
+  // character used to be sliced by character count, which corrupted it and
+  // desynchronised every message that followed.
+  const QByteArray first =
+      QString::fromUtf8(
+          "{\"m\":\"did you mean \xE2\x80\x98string\xE2\x80\x99?\"}")
+          .toUtf8();
+  const QByteArray second = QByteArray("{\"m\":\"plain\"}");
+
+  QByteArray buffer = frame(first) + frame(second);
+  const QList<QByteArray> messages = LspClient::extractMessages(buffer);
+
+  QCOMPARE(messages.size(), 2);
+  QCOMPARE(messages.at(0), first);
+  QCOMPARE(messages.at(1), second);
+  QVERIFY(buffer.isEmpty());
+
+  QJsonParseError err;
+  QJsonDocument::fromJson(messages.at(0), &err);
+  QCOMPARE(err.error, QJsonParseError::NoError);
+}
+
+void TestLspRegression::testFramingSplitAcrossReads() {
+  const QByteArray payload =
+      QString::fromUtf8("{\"arrow\":\"\xE2\x86\x92\"}").toUtf8();
+  const QByteArray full = frame(payload);
+
+  // Cut inside the multi-byte sequence.
+  const int cut = full.size() - 2;
+  QByteArray buffer = full.left(cut);
+  QList<QByteArray> messages = LspClient::extractMessages(buffer);
+  QCOMPARE(messages.size(), 0);
+
+  buffer += full.mid(cut);
+  messages = LspClient::extractMessages(buffer);
+  QCOMPARE(messages.size(), 1);
+  QCOMPARE(messages.at(0), payload);
+  QVERIFY(buffer.isEmpty());
+}
+
+void TestLspRegression::testFramingMultipleMessagesInOneRead() {
+  QByteArray buffer;
+  QList<QByteArray> expected;
+  for (int i = 0; i < 5; ++i) {
+    const QByteArray payload =
+        QByteArray("{\"id\":") + QByteArray::number(i) + "}";
+    expected.append(payload);
+    buffer += frame(payload);
+  }
+  buffer += "Content-Length: 40\r\n\r\n{\"partial\":";
+
+  const QList<QByteArray> messages = LspClient::extractMessages(buffer);
+  QCOMPARE(messages, expected);
+  QVERIFY(buffer.startsWith("Content-Length: 40"));
 }
 
 QTEST_MAIN(TestLspRegression)

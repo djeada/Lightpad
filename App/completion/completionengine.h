@@ -47,6 +47,7 @@ signals:
 
 private slots:
   void onDebounceTimeout();
+  void onResponseTimeout();
 
 private:
   void collectProviderResults(int requestId,
@@ -66,7 +67,10 @@ private:
   int m_autoTriggerDelay = 150;
   int m_maxResults = 50;
 
+  int m_responseTimeout = 2000;
+
   QTimer *m_debounceTimer;
+  QTimer *m_responseTimer;
 };
 
 #endif

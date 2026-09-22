@@ -66,8 +66,11 @@ void ProblemsPanel::setupUI() {
   m_tree->setHeaderLabels({tr("Problem"), tr("Location")});
   m_tree->setRootIsDecorated(false);
   m_tree->setAlternatingRowColors(false);
-  m_tree->header()->setStretchLastSection(true);
-  m_tree->setColumnWidth(0, 500);
+  // The message is the part worth reading, so it takes the free space and the
+  // location column only takes what it needs.
+  m_tree->header()->setStretchLastSection(false);
+  m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+  m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 
   connect(m_tree, &QTreeWidget::itemClicked, this,
           &ProblemsPanel::onItemClicked);
@@ -308,6 +311,7 @@ void ProblemsPanel::rebuildTree() {
       QString icon = severityIcon(diag.severity);
       QString message = QString("%1 %2").arg(icon).arg(diag.message);
       diagItem->setText(0, message);
+      diagItem->setToolTip(0, diag.message);
 
       QString location = QString("Ln %1, Col %2")
                              .arg(diag.range.start.line + 1)

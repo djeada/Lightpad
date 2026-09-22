@@ -49,9 +49,8 @@ void LanguageFeatureManager::openDocument(const QString &filePath,
   if (!isLanguageSupported(effectiveLang)) {
     const QString message =
         QString("No language server configured for '%1'.").arg(effectiveLang);
-    LOG_WARNING(message);
-    m_lastServerErrors[effectiveLang] = message;
-    emit serverError(effectiveLang, message);
+    LOG_DEBUG(message);
+    emit serverUnavailable(effectiveLang, message);
     return;
   }
 

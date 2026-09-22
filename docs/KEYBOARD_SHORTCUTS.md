@@ -59,11 +59,8 @@ This document lists all keyboard shortcuts available in Lightpad.
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+Space` | Trigger autocomplete |
-| `Ctrl+/` | Toggle line comment |
-| `Ctrl+Shift+/` | Toggle block comment |
 | `Ctrl+]` | Indent line |
 | `Ctrl+[` | Unindent line |
-| `Ctrl+Shift+K` | Delete line |
 
 ## View
 
@@ -77,6 +74,8 @@ This document lists all keyboard shortcuts available in Lightpad.
 | `Ctrl+\`` | Toggle terminal |
 | `Ctrl+Shift+G` | Toggle Source Control |
 | `Ctrl+Shift+K` | Toggle Merge Conflicts panel |
+| `Ctrl+Shift+M` | Toggle Problems panel |
+| `Ctrl+Shift+T` | Toggle Test panel |
 | `F3` | Next diff change when diff viewer is focused |
 | `Shift+F3` | Previous diff change when diff viewer is focused |
 

@@ -133,6 +133,9 @@ private:
   QWidget *treeContainer;
   QWidget *treeHeader;
   QLabel *treeTitleLabel;
+  QLabel *treePathLabel;
+
+  void updateTreePathLabel();
   QLineEdit *treeFilterEdit;
   QToolButton *treeNewFileButton;
   QToolButton *treeNewFolderButton;

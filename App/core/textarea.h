@@ -4,6 +4,7 @@
 #include <QList>
 #include <QMap>
 #include <QPlainTextEdit>
+#include <QRegularExpression>
 #include <QSet>
 #include <QTextCursor>
 #include <functional>
@@ -36,6 +37,10 @@ public:
   TextArea(QWidget *parent = nullptr);
   TextArea(const TextAreaSettings &settings, QWidget *parent = nullptr);
   void lineNumberAreaPaintEvent(QPaintEvent *event);
+  // Pattern the find panel actually matches with; keeps the in-editor
+  // highlights in step with the match count and navigation.
+  void setSearchPattern(const QRegularExpression &pattern);
+
   void updateSyntaxHighlightTags(QString searchKey = QString(),
                                  QString chosenLang = QString());
   void increaseFontSize();
@@ -208,6 +213,12 @@ private:
 
   int m_debugExecutionLine;
 
+  QString diagnosticMessageAt(const QPoint &viewportPos) const;
+
+  bool m_highlighterViewportRefreshScheduled = false;
+
+  QRegularExpression m_searchPattern;
+
   QList<LspDiagnostic> m_diagnostics;
 
   void setupTextArea();
@@ -231,6 +242,7 @@ private:
   void hideCompletionPopup();
   void applyLineSpacing(int percent);
   void updateHighlighterViewport();
+  void scheduleHighlighterViewportRefresh();
   void updateLineNumberAreaLayout();
   QString resolveFilePath() const;
   void invalidateCompletionRequest();

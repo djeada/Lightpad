@@ -56,8 +56,8 @@ public:
 
 signals:
 
-  void navigateToFile(const QString &filePath, int lineNumber,
-                      int columnNumber);
+  void navigateToFile(const QString &filePath, int lineNumber, int columnNumber,
+                      int matchLength = 0);
 
 private slots:
   void on_more_clicked();
@@ -104,6 +104,7 @@ private:
   bool searchInProgress;
   bool searchExecuted;
   QString activeSearchWord;
+  QString m_searchFieldError;
 
   void updateCounterLabels();
   void selectSearchWord(QTextCursor &cursor, int n, int offset = 0);
@@ -117,6 +118,8 @@ private:
   QString applyPreserveCase(const QString &replaceWord,
                             const QString &matchedText) const;
   void addToSearchHistory(const QString &searchTerm);
+  bool reportPatternProblem(const QString &searchWord);
+  void setSearchFieldError(const QString &reason);
 
   void performGlobalSearch(const QString &searchWord,
                            bool navigateToResult = true);

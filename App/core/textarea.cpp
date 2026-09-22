@@ -21,6 +21,7 @@
 #include <QTextCursor>
 #include <QTextEdit>
 #include <QTimer>
+#include <QToolTip>
 #include <QtGlobal>
 #include <algorithm>
 #include <functional>
@@ -30,8 +31,10 @@
 #include "../completion/completioncontext.h"
 #include "../completion/completionengine.h"
 #include "../completion/completionitem.h"
+#include "../completion/completionproviderregistry.h"
 #include "../completion/completionwidget.h"
 #include "../dap/breakpointmanager.h"
+#include "../diagnostics/diagnosticutils.h"
 #include "../git/gitintegration.h"
 #include "../language/languagecatalog.h"
 #include "../settings/textareasettings.h"
@@ -192,8 +195,12 @@ static int expandedPositionForTabs(const QString &text, int position,
 static bool isLastNonSpaceCharacterOpenBrace(const QString &str) {
 
   for (int i = str.size() - 1; i >= 0; i--) {
-    if (!str[i].isSpace() && str[i] == '{')
-      return true;
+    if (str[i].isSpace())
+      continue;
+    // Only a brace that is genuinely left open at the end of the line starts a
+    // new indent level. A balanced pair such as `v = {1, 2, 3};` or an f-string
+    // placeholder must not shift the next line.
+    return str[i] == '{';
   }
 
   return false;
@@ -226,6 +233,25 @@ static bool isBacktabKey(const QKeyEvent *event) {
 static bool hasCompletionDisallowedModifiers(const QKeyEvent *event) {
   return event->modifiers() &
          (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+}
+
+// Trigger sequences such as ".", "::" or "->" are how a language server is
+// asked for member completions, so they must open the popup rather than
+// dismiss it.
+static bool endsWithCompletionTrigger(const QString &textBeforeCursor,
+                                      const QString &languageId) {
+  if (textBeforeCursor.isEmpty()) {
+    return false;
+  }
+
+  const QStringList triggers =
+      CompletionProviderRegistry::instance().allTriggerCharacters(languageId);
+  for (const QString &trigger : triggers) {
+    if (!trigger.isEmpty() && textBeforeCursor.endsWith(trigger)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 static bool isTextInsertionKeyEvent(const QKeyEvent *event) {
@@ -604,16 +630,14 @@ void TextArea::setupTextArea() {
     }
   });
 
-  connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) {
-    static bool updateScheduled = false;
-    if (!updateScheduled) {
-      updateScheduled = true;
-      QTimer::singleShot(16, this, [this]() {
-        updateScheduled = false;
-        updateHighlighterViewport();
-      });
-    }
-  });
+  connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
+          [this](int) { scheduleHighlighterViewportRefresh(); });
+
+  // The highlighter only formats blocks inside the last range it was told
+  // about, so a paste or any other bulk edit has to refresh that range too -
+  // otherwise the new lines stay unhighlighted until the user scrolls.
+  connect(this, &TextArea::blockCountChanged, this,
+          [this](int) { scheduleHighlighterViewportRefresh(); });
 
   auto &breakpointManager = BreakpointManager::instance();
   auto refreshBreakpoints = [this](const QString &filePath) {
@@ -1089,8 +1113,17 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     const bool isTypingEvent = isTextInsertionKeyEvent(keyEvent);
     QString completionPrefix = textUnderCursor();
 
-    if (!isShortcut && (!isTypingEvent || completionPrefix.length() < 2 ||
-                        eow.contains(keyEvent->text().right(1)))) {
+    QTextCursor triggerCursor = textCursor();
+    triggerCursor.movePosition(QTextCursor::StartOfBlock,
+                               QTextCursor::KeepAnchor);
+    const bool isTriggerEvent =
+        !isShortcut && !keyEvent->text().isEmpty() &&
+        !hasCompletionDisallowedModifiers(keyEvent) &&
+        endsWithCompletionTrigger(triggerCursor.selectedText(), m_languageId);
+
+    if (!isShortcut && !isTriggerEvent &&
+        (!isTypingEvent || completionPrefix.length() < 2 ||
+         eow.contains(keyEvent->text().right(1)))) {
       invalidateCompletionRequest();
       hideCompletionPopup();
       return;
@@ -1101,13 +1134,20 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     CompletionContext ctx;
     ctx.documentUri = getDocumentUri();
     ctx.languageId = m_languageId;
-    ctx.prefix = completionPrefix;
+    ctx.prefix = isTriggerEvent ? QString() : completionPrefix;
     ctx.line = cursor.blockNumber();
     ctx.column = cursor.positionInBlock();
     ctx.lineText = cursor.block().text();
     ctx.triggerKind = isShortcut ? CompletionTriggerKind::Invoked
                                  : CompletionTriggerKind::TriggerCharacter;
-    ctx.isAutoComplete = !isShortcut;
+    // A trigger sequence asks for results now; it has no prefix to debounce on.
+    ctx.isAutoComplete = !isShortcut && !isTriggerEvent;
+
+    // The server must see the character that was just typed before it is asked
+    // what can follow it, otherwise every completion is one keystroke stale.
+    if (mainWindow) {
+      mainWindow->flushPendingLanguageServerChanges(resolveFilePath());
+    }
 
     m_completionEngine->requestCompletions(ctx);
     return;
@@ -1643,6 +1683,7 @@ void TextArea::updateExtraSelections() {
     }
   }
 
+  QList<QTextEdit::ExtraSelection> diagnosticSelections;
   for (const LspDiagnostic &diag : m_diagnostics) {
     int startLine = diag.range.start.line;
     int startCol = diag.range.start.character;
@@ -1703,7 +1744,7 @@ void TextArea::updateExtraSelections() {
     }
 
     selection.cursor = diagCursor;
-    extraSelections.append(selection);
+    diagnosticSelections.append(selection);
   }
 
   const bool cursorOnExecutionLine =
@@ -1786,6 +1827,8 @@ void TextArea::updateExtraSelections() {
     }
   }
 
+  extraSelections.append(diagnosticSelections);
+
   setExtraSelections(extraSelections);
 }
 
@@ -1839,6 +1882,14 @@ void TextArea::lineNumberAreaPaintEvent(QPaintEvent *event) {
   }
 }
 
+void TextArea::setSearchPattern(const QRegularExpression &pattern) {
+  m_searchPattern = pattern;
+  if (auto *pluginHighlighter =
+          qobject_cast<PluginBasedSyntaxHighlighter *>(syntaxHighlighter)) {
+    pluginHighlighter->setSearchPattern(m_searchPattern);
+  }
+}
+
 void TextArea::updateSyntaxHighlightTags(QString searchKey,
                                          QString chosenLang) {
   bool languageChanged = false;
@@ -1858,6 +1909,7 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey,
             qobject_cast<PluginBasedSyntaxHighlighter *>(syntaxHighlighter)) {
       if (searchChanged) {
         pluginHighlighter->setSearchKeyword(searchKey);
+        pluginHighlighter->setSearchPattern(m_searchPattern);
       }
       updateHighlighterViewport();
       return;
@@ -1882,12 +1934,24 @@ void TextArea::updateSyntaxHighlightTags(QString searchKey,
 
     auto *pluginHighlighter =
         new PluginBasedSyntaxHighlighter(plugin, colors, searchKey, document());
+    pluginHighlighter->setSearchPattern(m_searchPattern);
     syntaxHighlighter = pluginHighlighter;
     updateHighlighterViewport();
     return;
   }
 
   updateHighlighterViewport();
+}
+
+void TextArea::scheduleHighlighterViewportRefresh() {
+  if (m_highlighterViewportRefreshScheduled) {
+    return;
+  }
+  m_highlighterViewportRefreshScheduled = true;
+  QTimer::singleShot(16, this, [this]() {
+    m_highlighterViewportRefreshScheduled = false;
+    updateHighlighterViewport();
+  });
 }
 
 void TextArea::updateHighlighterViewport() {
@@ -1989,7 +2053,11 @@ void TextArea::setLanguage(const QString &languageId) {
 QString TextArea::language() const { return m_languageId; }
 
 QString TextArea::getDocumentUri() const {
-  return QString("file://%1").arg(objectName());
+  const QString filePath = resolveFilePath();
+  if (filePath.isEmpty()) {
+    return QString();
+  }
+  return DiagnosticUtils::filePathToUri(filePath);
 }
 
 QString TextArea::resolveFilePath() const {
@@ -2088,6 +2156,10 @@ void TextArea::triggerCompletion() {
   ctx.lineText = cursor.block().text();
   ctx.triggerKind = CompletionTriggerKind::Invoked;
   ctx.isAutoComplete = false;
+
+  if (mainWindow) {
+    mainWindow->flushPendingLanguageServerChanges(resolveFilePath());
+  }
 
   m_completionEngine->requestCompletions(ctx);
 }
@@ -2469,12 +2541,93 @@ void TextArea::mouseMoveEvent(QMouseEvent *event) {
   QPlainTextEdit::mouseMoveEvent(event);
 }
 
+namespace {
+QString severityLabel(LspDiagnosticSeverity severity) {
+  switch (severity) {
+  case LspDiagnosticSeverity::Error:
+    return QObject::tr("Error");
+  case LspDiagnosticSeverity::Warning:
+    return QObject::tr("Warning");
+  case LspDiagnosticSeverity::Information:
+    return QObject::tr("Info");
+  case LspDiagnosticSeverity::Hint:
+    return QObject::tr("Hint");
+  }
+  return QObject::tr("Info");
+}
+} // namespace
+
+QString TextArea::diagnosticMessageAt(const QPoint &viewportPos) const {
+  if (m_diagnostics.isEmpty()) {
+    return QString();
+  }
+
+  const QTextCursor cursor = cursorForPosition(viewportPos);
+  const QTextBlock block = cursor.block();
+  if (!block.isValid()) {
+    return QString();
+  }
+
+  // cursorForPosition() snaps to the closest character, so an empty area to the
+  // right of a short line would otherwise report the last diagnostic on it.
+  QTextCursor endOfBlock(block);
+  endOfBlock.movePosition(QTextCursor::EndOfBlock);
+  if (viewportPos.x() > cursorRect(endOfBlock).right()) {
+    return QString();
+  }
+
+  const int line = block.blockNumber();
+  const int column = cursor.positionInBlock();
+
+  QStringList messages;
+  for (const LspDiagnostic &diag : m_diagnostics) {
+    const int startLine = diag.range.start.line;
+    const int endLine = diag.range.end.line;
+    if (line < startLine || line > endLine) {
+      continue;
+    }
+    if (line == startLine && column < diag.range.start.character) {
+      continue;
+    }
+    if (line == endLine &&
+        diag.range.end.character > diag.range.start.character &&
+        column > diag.range.end.character) {
+      continue;
+    }
+
+    QString entry =
+        QString("%1: %2").arg(severityLabel(diag.severity), diag.message);
+    QStringList origin;
+    if (!diag.source.isEmpty()) {
+      origin << diag.source;
+    }
+    if (!diag.code.isEmpty()) {
+      origin << diag.code;
+    }
+    if (!origin.isEmpty()) {
+      entry += QString(" (%1)").arg(origin.join(QLatin1String(": ")));
+    }
+    messages << entry;
+  }
+
+  return messages.join(QLatin1String("\n\n"));
+}
+
 bool TextArea::viewportEvent(QEvent *event) {
   if (event->type() != QEvent::ToolTip || !mainWindow) {
     return QPlainTextEdit::viewportEvent(event);
   }
 
   auto *helpEvent = static_cast<QHelpEvent *>(event);
+
+  // A squiggle the user cannot read is not a diagnostic, so answer the hover
+  // with the message before anything else claims the tooltip.
+  const QString diagnosticText = diagnosticMessageAt(helpEvent->pos());
+  if (!diagnosticText.isEmpty()) {
+    QToolTip::showText(helpEvent->globalPos(), diagnosticText, viewport());
+    return true;
+  }
+
   const QTextCursor cursor = cursorForPosition(helpEvent->pos());
   const QTextBlock block = cursor.block();
   const QString text = block.text();

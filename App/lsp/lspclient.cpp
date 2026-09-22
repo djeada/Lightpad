@@ -448,53 +448,70 @@ void LspClient::sendNotification(const QString &method,
   LOG_DEBUG(QString("LSP notification: %1").arg(method));
 }
 
-void LspClient::onReadyReadStandardOutput() {
-  if (!m_process) {
-    return;
-  }
-  m_buffer += QString::fromUtf8(m_process->readAllStandardOutput());
+QList<QByteArray> LspClient::extractMessages(QByteArray &buffer,
+                                             int maxMessages) {
+  QList<QByteArray> messages;
 
-  const int maxIterations = 100;
-  int iterations = 0;
-
-  while (iterations < maxIterations) {
-    ++iterations;
-
-    int headerEnd = m_buffer.indexOf("\r\n\r\n");
+  while (messages.size() < maxMessages) {
+    const int headerEnd = buffer.indexOf("\r\n\r\n");
     if (headerEnd == -1) {
       break;
     }
 
-    QString header = m_buffer.left(headerEnd);
-    int contentLength = 0;
+    const QByteArray header = buffer.left(headerEnd);
+    int contentLength = -1;
 
-    QStringList lines = header.split("\r\n");
-    for (const QString &line : lines) {
-      if (line.startsWith("Content-Length:", Qt::CaseInsensitive)) {
-        contentLength = line.mid(15).trimmed().toInt();
+    const QList<QByteArray> lines = header.split('\n');
+    for (const QByteArray &line : lines) {
+      const QByteArray trimmed = line.trimmed();
+      if (trimmed.toLower().startsWith("content-length:")) {
+        bool ok = false;
+        const int parsed = trimmed.mid(15).trimmed().toInt(&ok);
+        if (ok) {
+          contentLength = parsed;
+        }
         break;
       }
     }
 
-    if (contentLength == 0) {
-      LOG_WARNING("LSP message without Content-Length, skipping header");
-      m_buffer = m_buffer.mid(headerEnd + 4);
+    if (contentLength < 0) {
+      buffer = buffer.mid(headerEnd + 4);
+      messages.append(QByteArray());
       continue;
     }
 
-    int messageStart = headerEnd + 4;
-    int messageEnd = messageStart + contentLength;
+    const int messageStart = headerEnd + 4;
+    const int messageEnd = messageStart + contentLength;
 
-    if (m_buffer.size() < messageEnd) {
-
+    // Content-Length counts bytes, so the framing must happen on bytes: a
+    // message holding any non-ASCII character would otherwise be sliced at the
+    // wrong offset and desynchronise every message after it.
+    if (buffer.size() < messageEnd) {
       break;
     }
 
-    QString content = m_buffer.mid(messageStart, contentLength);
-    m_buffer = m_buffer.mid(messageEnd);
+    messages.append(buffer.mid(messageStart, contentLength));
+    buffer = buffer.mid(messageEnd);
+  }
+
+  return messages;
+}
+
+void LspClient::onReadyReadStandardOutput() {
+  if (!m_process) {
+    return;
+  }
+  m_buffer += m_process->readAllStandardOutput();
+
+  const QList<QByteArray> messages = extractMessages(m_buffer, 100);
+  for (const QByteArray &content : messages) {
+    if (content.isEmpty()) {
+      LOG_WARNING("LSP message without Content-Length, skipping header");
+      continue;
+    }
 
     QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(content.toUtf8(), &parseError);
+    QJsonDocument doc = QJsonDocument::fromJson(content, &parseError);
 
     if (parseError.error != QJsonParseError::NoError) {
       LOG_ERROR(QString("Failed to parse LSP message: %1")
@@ -562,9 +579,9 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
 
   if (!errorVal.isNull() && !errorVal.isUndefined()) {
     QJsonObject errorObj = errorVal.toObject();
-    LOG_ERROR(QString("LSP error for %1: %2")
-                  .arg(method)
-                  .arg(errorObj["message"].toString()));
+    const QString errorMessage = errorObj["message"].toString();
+    LOG_ERROR(QString("LSP error for %1: %2").arg(method).arg(errorMessage));
+    emit requestFailed(id, method, errorMessage);
     return;
   }
 
