@@ -657,11 +657,14 @@ bool VimMode::executeSimpleCommand(const NormalCmd &cmd,
     if (ch.isNull() || ch == '\n') {
       emit statusMessage("NUL");
     } else {
+      // QChar::unicode() is char16_t, which Qt 6.9 no longer accepts as an
+      // integral arg(); it would otherwise be formatted as a character.
+      const int code = static_cast<int>(ch.unicode());
       emit statusMessage(QString("<%1> %2, Hex %3, Oct %4")
                              .arg(ch)
-                             .arg(ch.unicode())
-                             .arg(ch.unicode(), 2, 16, QChar('0'))
-                             .arg(ch.unicode(), 3, 8, QChar('0')));
+                             .arg(code)
+                             .arg(code, 2, 16, QChar('0'))
+                             .arg(code, 3, 8, QChar('0')));
     }
   } else if (key == "&") {
     executeEx("s");
