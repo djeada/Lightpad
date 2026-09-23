@@ -37,8 +37,7 @@ public:
   TextArea(QWidget *parent = nullptr);
   TextArea(const TextAreaSettings &settings, QWidget *parent = nullptr);
   void lineNumberAreaPaintEvent(QPaintEvent *event);
-  // Pattern the find panel actually matches with; keeps the in-editor
-  // highlights in step with the match count and navigation.
+
   void setSearchPattern(const QRegularExpression &pattern);
 
   void updateSyntaxHighlightTags(QString searchKey = QString(),

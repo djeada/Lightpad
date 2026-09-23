@@ -10,8 +10,6 @@ CompletionEngine::CompletionEngine(QObject *parent)
   connect(m_debounceTimer, &QTimer::timeout, this,
           &CompletionEngine::onDebounceTimeout);
 
-  // A provider that never answers must not be able to wedge the popup for
-  // every other provider, so give the whole fan-out a deadline.
   m_responseTimer->setSingleShot(true);
   connect(m_responseTimer, &QTimer::timeout, this,
           &CompletionEngine::onResponseTimeout);
@@ -113,7 +111,6 @@ void CompletionEngine::onResponseTimeout() {
     return;
   }
 
-  // Publish whatever the providers that did answer produced.
   m_pendingProviders = 0;
   mergeAndSortResults();
   notifyResults();

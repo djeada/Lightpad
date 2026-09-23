@@ -1245,7 +1245,6 @@ void MainWindow::applyLanguageOverride(const QString &languageId) {
   setLanguageHighlightLabel(displayName.isEmpty() ? canonicalLanguageId
                                                   : displayName);
 
-  // A buffer with no path on disk cannot be handed to a language server.
   if (m_languageFeatureManager && !filePath.isEmpty()) {
     notifyDiagnosticsFileClosed(filePath);
     notifyDiagnosticsFileOpened(filePath);
@@ -2275,7 +2274,6 @@ void MainWindow::on_actionFind_in_project_triggered() {
 void MainWindow::on_actionNew_File_triggered() {
   currentTabWidget()->addNewTab();
 
-  // Without this the first keystroke after creating a tab is swallowed.
   if (auto *textArea = getCurrentTextArea()) {
     textArea->setFocus(Qt::OtherFocusReason);
   }
@@ -2396,8 +2394,6 @@ void MainWindow::on_actionSave_as_triggered() {
 
   save(filePath);
 
-  // The buffer only just acquired an extension, so the language (and with it
-  // highlighting and the language server) has to be resolved now.
   applyHighlightForFile(filePath);
   notifyDiagnosticsFileOpened(filePath);
 }
@@ -2967,8 +2963,7 @@ void MainWindow::showFindReplace(bool onlyFind) {
                                     qMax(0, lineNumber - 1));
                 cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
                                     qMax(0, columnNumber - 1));
-                // Select the match so the hit is visible, the same way a
-                // single-file search shows the current match.
+
                 if (matchLength > 0) {
                   cursor.movePosition(QTextCursor::Right,
                                       QTextCursor::KeepAnchor, matchLength);
@@ -5006,8 +5001,7 @@ void MainWindow::setupDiagnostics() {
             effectiveLanguageIdForFile(filePath) != languageId) {
           return;
         }
-        // Most file types have no language server; that is a normal state,
-        // not something to interrupt the user with.
+
         if (m_notificationManager) {
           m_notificationManager->dismiss(
               QString::fromLatin1(kCurrentFileLspErrorNotificationKey));
@@ -8067,8 +8061,7 @@ void MainWindow::on_languageHighlight_clicked() {
   if (!tabWidget) {
     return;
   }
-  // An unsaved buffer has no extension to detect from, which is exactly when
-  // picking the language by hand matters most - so the menu must still open.
+
   QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
 
   QMenu menu(this);

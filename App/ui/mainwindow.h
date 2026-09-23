@@ -116,9 +116,6 @@ public:
   bool requestDebugHover(const QString &expression, const QPoint &globalPos,
                          QWidget *anchor, const QRect &anchorRect);
 
-  // Pushes any debounced textDocument/didChange for this file to the language
-  // server immediately. Callers that ask the server a position-sensitive
-  // question must do this first, or the server answers about stale text.
   void flushPendingLanguageServerChanges(const QString &filePath);
 
   QString runSourceFilePath() const;

@@ -35,9 +35,7 @@
 #include <functional>
 
 namespace {
-// Re-elides a label whenever it is resized. Kept as a standalone filter so
-// LightpadPage does not gain a virtual override (some test targets link its
-// header without its translation unit).
+
 class LabelResizeNotifier : public QObject {
 public:
   LabelResizeNotifier(QWidget *target, std::function<void()> onResize)
@@ -757,8 +755,6 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   treeExpandButton->setIconSize(QSize(14, 14));
   treeHeaderLayout->addWidget(treeExpandButton);
 
-  // The folder name alone is ambiguous across checkouts and worktrees, so show
-  // where the project actually lives.
   treePathLabel = new QLabel(treeContainer);
   treePathLabel->setObjectName("treePathLabel");
   treePathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -1164,9 +1160,6 @@ void LightpadPage::updateTreePathLabel() {
       QDir::toNativeSeparators(QFileInfo(projectRootPath).absoluteFilePath());
   treePathLabel->setToolTip(absolutePath);
 
-  // Elide on the left so the part that distinguishes one checkout from another
-  // stays readable in a narrow sidebar.
-  // contentsRect() excludes the stylesheet padding, which width() does not.
   const int available = qMax(1, treePathLabel->contentsRect().width());
   treePathLabel->setText(treePathLabel->fontMetrics().elidedText(
       absolutePath, Qt::ElideLeft, available));

@@ -96,6 +96,7 @@ private:
   void setupShellProfileMenu();
   QTabWidget *createTabWidget();
   void connectTerminal(Terminal *terminal);
+  void installTabCloseButton(QTabWidget *tabWidget, Terminal *terminal);
   Terminal *addTerminalToTabWidget(QTabWidget *tabWidget,
                                    const QString &workingDirectory,
                                    const QString &tabName);
@@ -117,6 +118,7 @@ private:
   QMenu *m_shellProfileMenu;
   int m_terminalCounter;
   QString m_currentWorkingDirectory;
+  QString m_tabCloseButtonStyle;
 };
 
 #endif

@@ -201,8 +201,7 @@ public:
   void didClose(const QString &uri);
 
   void requestCompletion(const QString &uri, LspPosition position);
-  // Splits a raw LSP stream into complete message payloads, consuming what it
-  // returns from `buffer`. Exposed for testing the byte-level framing.
+
   static QList<QByteArray> extractMessages(QByteArray &buffer,
                                            int maxMessages = 100);
 

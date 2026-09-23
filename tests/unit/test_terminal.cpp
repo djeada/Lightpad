@@ -1,14 +1,15 @@
-// Terminal declares this class a friend, which is what gives the test access
-// to the internals it exercises.
+
+
+#include "theme/themeengine.h"
 #include "ui/panels/shellprofile.h"
 #include "ui/panels/terminal.h"
-#include "theme/themeengine.h"
 #include <QClipboard>
 #include <QDir>
 #include <QLabel>
 #include <QMenu>
 #include <QPlainTextEdit>
 #include <QSignalSpy>
+#include <QTextBlock>
 #include <QToolButton>
 #include <QtTest/QtTest>
 
@@ -29,7 +30,7 @@ private slots:
 
   void testClear();
   void testPtyClearRedrawsPrompt();
-  void testTerminalDocumentMarginIsZero();
+  void testTerminalDocumentMargin();
   void testPtyGridFitsViewport();
   void testPtyKeepsStandardWidthBeforeLayout();
   void testPtyWidthFollowsWidgetOnceShown();
@@ -81,6 +82,28 @@ private slots:
   void testIndicatorNotShownForNonPromptOutput();
   void testIndicatorNotShownOnProcessStart();
   void testIndicatorHiddenAfterNonPromptOutput();
+  void testPtyCursorAddressingIsRelativeToScreen();
+  void testPtyScrollRegionDeleteAndInsertLines();
+  void testPtyLineFeedAtRegionBottomScrollsRegion();
+  void testPtyReverseIndexAtTopScrollsDown();
+  void testPtyLineFeedKeepsColumn();
+  void testPtyBackspaceMovesWithoutErasing();
+  void testPtyTabMovesToNextStopWithoutMovingText();
+  void testPtyUtf8SplitAcrossReadsIsDecoded();
+  void testPtyWideCharactersTakeTwoColumns();
+  void testPtyWideCharacterWrapsBeforeRightMargin();
+  void testPtyAlternateScreenRestoresColors();
+  void testPtyClearScreenKeepsScrollback();
+  void testPtyPrivateModeSgrIsIgnored();
+  void testPtyTrueColorSgr();
+  void testScrollbackTrimKeepsScreenAddressable();
+  void testPtyKeySequences();
+  void testPtyPasteData();
+  void testPtyControlKeysOverrideApplicationShortcuts();
+  void testPtyInterruptStopsForegroundJob();
+  void testNewTerminalStartsInDirectoryWithoutCd();
+  void testZoomOverridesApplicationEditorFont();
+  void testShrinkingAfterClearKeepsPromptInPlace();
 };
 
 void TestTerminal::initTestCase() {}
@@ -178,12 +201,12 @@ void TestTerminal::testPtyClearRedrawsPrompt() {
   terminal.stopShell();
 }
 
-void TestTerminal::testTerminalDocumentMarginIsZero() {
+void TestTerminal::testTerminalDocumentMargin() {
   Terminal terminal;
   QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
   QVERIFY(textEdit != nullptr);
 
-  QCOMPARE(qRound(textEdit->document()->documentMargin()), 0);
+  QCOMPARE(qRound(textEdit->document()->documentMargin()), 12);
 }
 
 void TestTerminal::testPtyGridFitsViewport() {
@@ -673,7 +696,7 @@ void TestTerminal::testPtyCursorLeftAllowsMidLineInsert() {
   QVERIFY(textEdit != nullptr);
 
   terminal.appendOutput("$ ac");
-  terminal.appendOutput("\x1b[D"
+  terminal.appendOutput("\x1b[D\x1b[1@"
                         "b");
 
   QCOMPARE(textEdit->toPlainText(), QString("$ abc"));
@@ -1048,6 +1071,360 @@ void TestTerminal::testIndicatorHiddenAfterNonPromptOutput() {
   QVERIFY(terminal.m_runInputIndicator->isHidden());
 
   terminal.stopShell();
+}
+
+namespace {
+QString withoutWidePlaceholders(QString text) {
+  text.remove(QChar(0x200B));
+  return text;
+}
+} // namespace
+
+void TestTerminal::testPtyCursorAddressingIsRelativeToScreen() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalRows = 4;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("1\r\n2\r\n3\r\n4\r\n5\r\n6");
+  terminal.onPtyReadyRead("\x1b[1;1HX");
+
+  QCOMPARE(textEdit->toPlainText(), QString("1\n2\nX\n4\n5\n6"));
+}
+
+void TestTerminal::testPtyScrollRegionDeleteAndInsertLines() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalRows = 5;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("a\r\nb\r\nc\r\nd\r\ne");
+
+  terminal.onPtyReadyRead("\x1b[2;4r\x1b[2;1H\x1b[M");
+  QCOMPARE(textEdit->toPlainText(), QString("a\nc\nd\n\ne"));
+
+  terminal.onPtyReadyRead("\x1b[2;1H\x1b[LB");
+  QCOMPARE(textEdit->toPlainText(), QString("a\nB\nc\nd\ne"));
+}
+
+void TestTerminal::testPtyLineFeedAtRegionBottomScrollsRegion() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalRows = 4;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("one\r\ntwo\r\nthree\r\nstatus");
+  terminal.onPtyReadyRead("\x1b[1;3r\x1b[3;1H\nfour");
+
+  QCOMPARE(textEdit->toPlainText(), QString("two\nthree\nfour\nstatus"));
+}
+
+void TestTerminal::testPtyReverseIndexAtTopScrollsDown() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalRows = 3;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("x\r\ny\r\nz");
+  terminal.onPtyReadyRead("\x1b[H\x1bMw");
+
+  QCOMPARE(textEdit->toPlainText(), QString("w\nx\ny"));
+}
+
+void TestTerminal::testPtyLineFeedKeepsColumn() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("ab\ncd");
+
+  QCOMPARE(textEdit->toPlainText(), QString("ab\n  cd"));
+}
+
+void TestTerminal::testPtyBackspaceMovesWithoutErasing() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("abc\bX\r\nabc\b");
+
+  QCOMPARE(textEdit->toPlainText(), QString("abX\nabc"));
+}
+
+void TestTerminal::testPtyTabMovesToNextStopWithoutMovingText() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("tab\there");
+
+  QCOMPARE(textEdit->toPlainText(), QString("tab     here"));
+}
+
+void TestTerminal::testPtyUtf8SplitAcrossReadsIsDecoded() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead(QByteArray("caf\xc3", 4));
+  terminal.onPtyReadyRead(QByteArray("\xa9 \xe2\x9c", 4));
+  terminal.onPtyReadyRead(QByteArray("\x93", 1));
+
+  QCOMPARE(textEdit->toPlainText(), QString::fromUtf8("café ✓"));
+}
+
+void TestTerminal::testPtyWideCharactersTakeTwoColumns() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalColumns = 20;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead(QString::fromUtf8("日本語").toUtf8());
+  terminal.onPtyReadyRead("\x1b[4D\x1b[1@X");
+
+  QCOMPARE(withoutWidePlaceholders(textEdit->toPlainText()),
+           QString::fromUtf8("日X本語"));
+
+  textEdit->selectAll();
+  terminal.copySelectionToClipboard();
+  QCOMPARE(QApplication::clipboard()->text(), QString::fromUtf8("日X本語"));
+}
+
+void TestTerminal::testPtyWideCharacterWrapsBeforeRightMargin() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalColumns = 5;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead(QString::fromUtf8("日本語").toUtf8());
+
+  QCOMPARE(withoutWidePlaceholders(textEdit->toPlainText()),
+           QString::fromUtf8("日本\n語"));
+}
+
+void TestTerminal::testPtyAlternateScreenRestoresColors() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("\x1b[31mred\x1b[0m\r\n");
+  terminal.onPtyReadyRead("\x1b[?1049h\x1b[Hfull screen\x1b[?1049l");
+
+  QCOMPARE(textEdit->toPlainText(), QString("red\n"));
+  QTextCursor cursor(textEdit->document());
+  cursor.setPosition(1);
+  QCOMPARE(cursor.charFormat().foreground().color(),
+           ThemeEngine::instance().activeTheme().colors.ansiRed);
+}
+
+void TestTerminal::testPtyClearScreenKeepsScrollback() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalRows = 3;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("old\r\n$ ");
+  terminal.onPtyReadyRead("\x1b[H\x1b[2J$ ");
+
+  QCOMPARE(textEdit->toPlainText(), QString("old\n$ \n$ \n\n"));
+  QCOMPARE(terminal.m_screenTop, 2);
+  QCOMPARE(terminal.m_ansiRow, 2);
+
+  terminal.onPtyReadyRead("\x1b[H\x1b[2J\x1b[3J$ ");
+  QCOMPARE(textEdit->toPlainText(), QString("$ \n\n"));
+}
+
+void TestTerminal::testPtyPrivateModeSgrIsIgnored() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("\x1b[>4;2m\x1b[?4mplain");
+
+  QTextCursor cursor(textEdit->document());
+  cursor.setPosition(1);
+  QVERIFY(!cursor.charFormat().fontUnderline());
+  QCOMPARE(cursor.charFormat().foreground().color(),
+           QColor(terminal.m_textColor));
+}
+
+void TestTerminal::testPtyTrueColorSgr() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("\x1b[38;2;10;20;30mA\x1b[38:2::40:50:60mB");
+
+  QTextCursor cursor(textEdit->document());
+  cursor.setPosition(1);
+  QCOMPARE(cursor.charFormat().foreground().color(), QColor(10, 20, 30));
+  cursor.setPosition(2);
+  QCOMPARE(cursor.charFormat().foreground().color(), QColor(40, 50, 60));
+}
+
+void TestTerminal::testScrollbackTrimKeepsScreenAddressable() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalRows = 3;
+  terminal.setScrollbackLines(5);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  QString lines;
+  for (int i = 1; i <= 20; ++i) {
+    lines += QString::number(i) + (i < 20 ? "\r\n" : "");
+  }
+  terminal.onPtyReadyRead(lines.toUtf8());
+  QCOMPARE(textEdit->toPlainText(), QString("16\n17\n18\n19\n20"));
+
+  terminal.onPtyReadyRead("\x1b[1;1HX");
+  QCOMPARE(textEdit->toPlainText(), QString("16\n17\nX8\n19\n20"));
+}
+
+void TestTerminal::testPtyKeySequences() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+
+  auto sequence = [&](int key, Qt::KeyboardModifiers mods,
+                      const QString &text = QString()) {
+    QKeyEvent event(QEvent::KeyPress, key, mods, text);
+    return terminal.ptyKeySequence(&event);
+  };
+
+  QCOMPARE(sequence(Qt::Key_Up, Qt::NoModifier), QByteArray("\x1b[A"));
+  QCOMPARE(sequence(Qt::Key_Left, Qt::ControlModifier),
+           QByteArray("\x1b[1;5D"));
+  QCOMPARE(sequence(Qt::Key_R, Qt::ControlModifier), QByteArray("\x12"));
+  QCOMPARE(sequence(Qt::Key_B, Qt::AltModifier, "b"), QByteArray("\033b"));
+  QCOMPARE(sequence(Qt::Key_Backtab, Qt::ShiftModifier), QByteArray("\x1b[Z"));
+  QCOMPARE(sequence(Qt::Key_Delete, Qt::NoModifier), QByteArray("\x1b[3~"));
+  QCOMPARE(sequence(Qt::Key_F5, Qt::NoModifier), QByteArray("\x1b[15~"));
+
+  terminal.onPtyReadyRead("\x1b[?1h");
+  QCOMPARE(sequence(Qt::Key_Up, Qt::NoModifier), QByteArray("\x1bOA"));
+  terminal.onPtyReadyRead("\x1b[?1l");
+  QCOMPARE(sequence(Qt::Key_Up, Qt::NoModifier), QByteArray("\x1b[A"));
+}
+
+void TestTerminal::testPtyPasteData() {
+  QCOMPARE(Terminal::ptyPasteData("echo a\necho b\r\n", false),
+           QByteArray("echo a\recho b\r"));
+  QCOMPARE(Terminal::ptyPasteData("ls\n", true),
+           QByteArray("\x1b[200~ls\r\x1b[201~"));
+
+  QCOMPARE(Terminal::ptyPasteData("a\x1b[201~rm -rf x\n", true),
+           QByteArray("\x1b[200~arm -rf x\r\x1b[201~"));
+}
+
+void TestTerminal::testPtyControlKeysOverrideApplicationShortcuts() {
+  Terminal terminal;
+  QTRY_VERIFY_WITH_TIMEOUT(terminal.isRunning(), 3000);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  QKeyEvent ctrlU(QEvent::ShortcutOverride, Qt::Key_U, Qt::ControlModifier);
+  QApplication::sendEvent(textEdit, &ctrlU);
+  QVERIFY(ctrlU.isAccepted());
+
+  QKeyEvent toggle(QEvent::ShortcutOverride, Qt::Key_QuoteLeft,
+                   Qt::ControlModifier);
+  toggle.ignore();
+  QApplication::sendEvent(textEdit, &toggle);
+  QVERIFY(!toggle.isAccepted());
+
+  terminal.stopShell();
+}
+
+void TestTerminal::testPtyInterruptStopsForegroundJob() {
+  Terminal terminal;
+  QTRY_VERIFY_WITH_TIMEOUT(terminal.isRunning(), 3000);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QTRY_VERIFY_WITH_TIMEOUT(!textEdit->toPlainText().trimmed().isEmpty(), 3000);
+
+  terminal.sendText("sleep 30", true);
+  QTRY_VERIFY_WITH_TIMEOUT(!terminal.isShellInForeground(), 3000);
+
+  QVERIFY(terminal.interruptActiveProcess());
+  QTRY_VERIFY_WITH_TIMEOUT(terminal.isShellInForeground(), 3000);
+
+  terminal.stopShell();
+}
+
+void TestTerminal::testNewTerminalStartsInDirectoryWithoutCd() {
+  const QString directory = QDir::tempPath();
+  Terminal terminal(nullptr, directory);
+  QTRY_VERIFY_WITH_TIMEOUT(terminal.isRunning(), 3000);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  QTRY_VERIFY_WITH_TIMEOUT(!textEdit->toPlainText().trimmed().isEmpty(), 3000);
+
+#ifdef Q_OS_LINUX
+  QTRY_COMPARE_WITH_TIMEOUT(
+      QDir(terminal.shellCurrentDirectory()).canonicalPath(),
+      QDir(directory).canonicalPath(), 3000);
+#endif
+  terminal.setWorkingDirectory(directory);
+  QTest::qWait(300);
+  QVERIFY(!textEdit->toPlainText().contains("cd -- "));
+
+  terminal.stopShell();
+}
+
+void TestTerminal::testZoomOverridesApplicationEditorFont() {
+
+  const QString previousStyleSheet = qApp->styleSheet();
+  qApp->setStyleSheet("QPlainTextEdit { font-size: 30pt; }");
+
+  Terminal terminal;
+  QTRY_VERIFY_WITH_TIMEOUT(terminal.isRunning(), 3000);
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+  terminal.resize(800, 300);
+  terminal.show();
+  textEdit->setFocus();
+  QTest::qWait(100);
+  QCOMPARE(textEdit->font().pointSize(), terminal.currentFontSize());
+  const int columnsBefore = terminal.m_terminalColumns;
+
+  QTest::keyClick(textEdit, Qt::Key_Equal, Qt::ControlModifier);
+  QCOMPARE(terminal.currentFontSize(), 12);
+  QCOMPARE(textEdit->font().pointSize(), 12);
+
+  QVERIFY(terminal.m_terminalColumns < columnsBefore);
+
+  terminal.stopShell();
+  qApp->setStyleSheet(previousStyleSheet);
+}
+
+void TestTerminal::testShrinkingAfterClearKeepsPromptInPlace() {
+  Terminal terminal;
+  terminal.stopShell();
+  QTest::qWait(200);
+  terminal.m_terminalRows = 10;
+  QPlainTextEdit *textEdit = terminal.findChild<QPlainTextEdit *>("textEdit");
+
+  terminal.onPtyReadyRead("old\r\n$ \x1b[H\x1b[2J$ ");
+  const int promptRow = terminal.m_ansiRow;
+
+  terminal.m_terminalRows = 4;
+  terminal.handleScreenResize();
+
+  QCOMPARE(terminal.m_ansiRow, promptRow);
+  QCOMPARE(textEdit->document()->blockCount(), promptRow + 1);
+  terminal.onPtyReadyRead("ls");
+  QCOMPARE(textEdit->document()->lastBlock().text(), QString("$ ls"));
 }
 
 QTEST_MAIN(TestTerminal)

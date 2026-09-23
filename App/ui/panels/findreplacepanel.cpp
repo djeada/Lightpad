@@ -116,9 +116,7 @@ void configureSearchRows(Ui::FindReplacePanel *ui) {
     ui->horizontalLayout_4->setContentsMargins(0, 0, 0, 0);
     ui->horizontalLayout_4->setSpacing(12);
     ui->horizontalLayout_4->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-    // Without this the fields column absorbs the free width and pushes the
-    // option checkboxes to the far edge of the window, a screen away from the
-    // input they apply to.
+
     for (int i = 0; i < ui->horizontalLayout_4->count(); ++i) {
       ui->horizontalLayout_4->setStretch(i, 0);
     }
@@ -185,8 +183,7 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   resultsTree->setHeaderLabels(QStringList()
                                << tr("File") << tr("Line:Col") << tr("Match"));
   resultsTree->setColumnCount(3);
-  // The matched line is what the user reads, so give it the free space instead
-  // of leaving it elided next to an over-wide location column.
+
   resultsTree->header()->setStretchLastSection(false);
   resultsTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
   resultsTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -741,9 +738,7 @@ void FindReplacePanel::on_find_clicked() {
   }
 
   if (textArea) {
-    // Keep the keyboard in the search field: stealing focus here means the
-    // next Enter (or any keystroke) lands in the editor and overwrites the
-    // selected match.
+
     QTextCursor newCursor(textArea->document());
 
     if (textArea->getSearchWord() != searchWord) {
@@ -838,7 +833,6 @@ void FindReplacePanel::on_close_clicked() {
   clearSearchFeedback();
   close();
 
-  // Closing the panel hands the keyboard back to where the user was working.
   if (textArea) {
     textArea->setFocus();
   }
@@ -922,8 +916,7 @@ void FindReplacePanel::updateCounterLabels() {
         ui->label->hide();
       }
     } else {
-      // "No results" hides the separator and total; they must come back on the
-      // next search that does find something.
+
       ui->currentIndex->show();
       ui->totalFound->show();
       ui->label->show();
@@ -1138,8 +1131,7 @@ void FindReplacePanel::on_replaceAll_clicked() {
     textArea->setSearchPattern(QRegularExpression());
     textArea->updateSyntaxHighlightTags();
     updateCounterLabels();
-    // Without this the panel just goes quiet and it is impossible to tell a
-    // successful bulk replace from one that matched nothing.
+
     const int replaced = matchRanges.size();
     updateSearchFeedback(replaced == 1
                              ? tr("Replaced 1 occurrence")
@@ -1370,8 +1362,7 @@ bool FindReplacePanel::reportPatternProblem(const QString &searchWord) {
   if (m_paginationWidget) {
     m_paginationWidget->setVisible(false);
   }
-  // Leaving the previous term highlighted while the pattern is broken makes it
-  // look as though those hits are the current results.
+
   if (textArea) {
     textArea->setSearchPattern(QRegularExpression());
     textArea->updateSyntaxHighlightTags();
@@ -1455,8 +1446,6 @@ void FindReplacePanel::refreshSearchResults() {
     return;
   }
 
-  // A regex the user is still typing is usually invalid for a moment. Say so
-  // instead of reporting "No results", which reads as "this text isn't here".
   if (!reportPatternProblem(searchWord)) {
     return;
   }
@@ -1776,8 +1765,6 @@ void FindReplacePanel::refreshGlobalResultsForCurrentFile(
     return;
   }
 
-  // Jumping to a hit in another file has to highlight that file's matches too,
-  // otherwise only the single selected occurrence is visible.
   textArea->setSearchPattern(pattern);
   textArea->updateSyntaxHighlightTags(searchWord);
 
@@ -2020,8 +2007,7 @@ void FindReplacePanel::displayLocalResults(const QString &searchWord) {
 
     QTreeWidgetItem *resultItem = new QTreeWidgetItem(resultsTree);
     resultItem->setText(0, "Current File");
-    // Several matches can share a line; without the column they render as
-    // identical rows.
+
     resultItem->setText(1, QString("%1:%2").arg(lineNum + 1).arg(columnNum));
     resultItem->setText(2, lineContent);
     resultItem->setToolTip(2, lineContent);

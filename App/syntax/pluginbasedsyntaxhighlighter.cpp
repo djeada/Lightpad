@@ -40,9 +40,6 @@ void PluginBasedSyntaxHighlighter::setVisibleBlockRange(int first, int last) {
   int newFirst = qMax(0, first);
   int newLast = qMax(newFirst, last);
 
-  // Typing a single newline is handled incrementally by QSyntaxHighlighter, but
-  // a bulk edit (paste, replace-all, reload) moves blocks past the range this
-  // highlighter was last told about, so those need an explicit pass.
   const int blockCount = document()->blockCount();
   const bool bulkEdit =
       (m_lastBlockCount >= 0 && qAbs(blockCount - m_lastBlockCount) > 1);
@@ -396,9 +393,7 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
       false);
 
   if (!m_searchKeyword.isEmpty()) {
-    // Fall back to a literal, case-insensitive match only when no explicit
-    // pattern was supplied (e.g. highlighting driven by something other than
-    // the find panel).
+
     const QRegularExpression searchPattern =
         m_searchPattern.isValid() && !m_searchPattern.pattern().isEmpty()
             ? m_searchPattern

@@ -27,6 +27,8 @@ public:
 
   qint64 writeData(const QByteArray &data);
   bool interruptProcessGroup();
+  bool isShellInForeground() const;
+  QString currentWorkingDirectory() const;
 
   void resize(int columns, int rows);
   int columns() const { return m_columns; }

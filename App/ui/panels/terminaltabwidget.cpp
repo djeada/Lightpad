@@ -78,7 +78,8 @@ QTabWidget *TerminalTabWidget::createTabWidget() {
   QTabWidget *tabWidget = new QTabWidget(this);
   tabWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   tabWidget->setAttribute(Qt::WA_StyledBackground, true);
-  tabWidget->setTabsClosable(true);
+
+  tabWidget->setTabsClosable(false);
   tabWidget->setMovable(true);
   tabWidget->setDocumentMode(true);
   tabWidget->setUsesScrollButtons(true);
@@ -222,18 +223,43 @@ Terminal *
 TerminalTabWidget::addTerminalToTabWidget(QTabWidget *tabWidget,
                                           const QString &workingDirectory,
                                           const QString &tabName) {
-  Terminal *terminal = new Terminal(this);
-  if (!workingDirectory.isEmpty()) {
-    terminal->setWorkingDirectory(workingDirectory);
-  }
+
+  Terminal *terminal = new Terminal(this, workingDirectory);
   connectTerminal(terminal);
 
   int index = tabWidget->addTab(terminal, tabName);
+  installTabCloseButton(tabWidget, terminal);
   tabWidget->setCurrentIndex(index);
   m_activeTabWidget = tabWidget;
   QTimer::singleShot(0, terminal,
                      [terminal]() { terminal->refreshTerminalSize(); });
   return terminal;
+}
+
+void TerminalTabWidget::installTabCloseButton(QTabWidget *tabWidget,
+                                              Terminal *terminal) {
+
+  QToolButton *button = new QToolButton(tabWidget->tabBar());
+  button->setObjectName("terminalTabCloseButton");
+  button->setText(QStringLiteral("\u00D7"));
+  button->setToolTip(tr("Close Terminal"));
+  button->setAutoRaise(true);
+  button->setCursor(Qt::ArrowCursor);
+  button->setFocusPolicy(Qt::NoFocus);
+  button->setFixedSize(QSize(18, 18));
+  button->setStyleSheet(m_tabCloseButtonStyle);
+  connect(button, &QToolButton::clicked, this, [this, terminal]() {
+    int index = m_tabWidget->indexOf(terminal);
+    if (index < 0 && m_splitTabWidget) {
+      const int splitIndex = m_splitTabWidget->indexOf(terminal);
+      if (splitIndex >= 0) {
+        index = m_tabWidget->count() + splitIndex;
+      }
+    }
+    closeTerminal(index);
+  });
+  tabWidget->tabBar()->setTabButton(tabWidget->indexOf(terminal),
+                                    QTabBar::RightSide, button);
 }
 
 Terminal *TerminalTabWidget::currentTerminal() {
@@ -466,6 +492,13 @@ void TerminalTabWidget::applyTheme(const Theme &theme) {
                   text.name(), accent.name());
   }
 
+  m_tabCloseButtonStyle =
+      Terminal::closeButtonStyle(text.name(), accent.name());
+  for (QToolButton *button :
+       findChildren<QToolButton *>("terminalTabCloseButton")) {
+    button->setStyleSheet(m_tabCloseButtonStyle);
+  }
+
   m_closeButton->setStyleSheet(
       UIStyleHelper::iconButtonStyle(theme) +
       QStringLiteral("QToolButton { padding: 2px; font-size: 14px; "
@@ -608,6 +641,9 @@ void TerminalTabWidget::unsplit() {
     QIcon icon = m_splitTabWidget->tabIcon(0);
     m_splitTabWidget->removeTab(0);
     int index = m_tabWidget->addTab(widget, icon, label);
+    if (Terminal *terminal = qobject_cast<Terminal *>(widget)) {
+      installTabCloseButton(m_tabWidget, terminal);
+    }
     m_tabWidget->setCurrentIndex(index);
   }
   m_splitTabWidget->setParent(nullptr);

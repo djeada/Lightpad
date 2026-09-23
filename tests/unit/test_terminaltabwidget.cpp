@@ -40,6 +40,7 @@ private slots:
   void testNewTerminalWhileProcessRunsKeepsOldTab();
   void testApplyThemeUpdatesTabStyles();
   void testSnapshotNotEmpty();
+  void testTabsHaveVisibleCloseButtons();
 };
 
 void TestTerminalTabWidget::initTestCase() {}
@@ -320,6 +321,28 @@ void TestTerminalTabWidget::testSnapshotNotEmpty() {
 
   QVERIFY(!snapshot.isNull());
   QCOMPARE(snapshot.size(), widget.size());
+
+  widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testTabsHaveVisibleCloseButtons() {
+  TerminalTabWidget widget;
+  UiTestHelpers::showWidget(widget);
+  widget.addNewTerminal();
+  QCOMPARE(widget.terminalCount(), 2);
+
+  QTabWidget *tabs = widget.findChild<QTabWidget *>("terminalTabs");
+  QVERIFY(tabs != nullptr);
+  auto *closeSecond = qobject_cast<QToolButton *>(
+      tabs->tabBar()->tabButton(1, QTabBar::RightSide));
+  QVERIFY(closeSecond != nullptr);
+  QVERIFY(closeSecond->isVisible());
+  QVERIFY(!closeSecond->text().isEmpty());
+
+  Terminal *first = widget.terminalAt(0);
+  QTest::mouseClick(closeSecond, Qt::LeftButton);
+  QCOMPARE(widget.terminalCount(), 1);
+  QCOMPARE(widget.terminalAt(0), first);
 
   widget.closeAllTerminals();
 }

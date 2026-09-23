@@ -16,6 +16,7 @@ public:
                       const QColor &accent, const QColor &selection,
                       const QColor &border, const QColor &glow, bool scanlines,
                       qreal glowIntensity);
+  void setDecorationsEnabled(bool enabled);
 
 protected:
   void paintEvent(QPaintEvent *event) override;
