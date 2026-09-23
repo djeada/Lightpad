@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QSaveFile>
 #include <QStandardPaths>
 
 FormatTemplateManager &FormatTemplateManager::instance() {
@@ -301,6 +302,12 @@ bool FormatTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
   QString configDir = dirPath + "/.lightpad";
   QString configFile = configDir + "/format_config.json";
 
+  if (!loadAssignmentsFromDir(dirPath)) {
+    LOG_ERROR(QString("Refusing to overwrite unreadable format config: %1")
+                  .arg(configFile));
+    return false;
+  }
+
   QJsonArray assignments;
   for (auto it = m_assignments.begin(); it != m_assignments.end(); ++it) {
     QFileInfo fileInfo(it.key());
@@ -371,7 +378,7 @@ bool FormatTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
   root["version"] = "1.0";
   root["assignments"] = assignments;
 
-  QFile file(configFile);
+  QSaveFile file(configFile);
   if (!file.open(QIODevice::WriteOnly)) {
     LOG_ERROR(QString("Failed to write format config: %1").arg(configFile));
     return false;
@@ -379,7 +386,10 @@ bool FormatTemplateManager::saveAssignmentsToDir(const QString &dirPath) const {
 
   QJsonDocument doc(root);
   file.write(doc.toJson(QJsonDocument::Indented));
-  file.close();
+  if (!file.commit()) {
+    LOG_ERROR(QString("Failed to write format config: %1").arg(configFile));
+    return false;
+  }
 
   LOG_INFO(QString("Saved %1 format assignments to %2")
                .arg(assignments.size())
@@ -408,10 +418,13 @@ bool FormatTemplateManager::assignTemplateToFile(
   FileFormatAssignment stored = assignment;
   stored.filePath = filePath;
 
-  m_assignments[filePath] = stored;
-
   QFileInfo fileInfo(filePath);
   QString dirPath = fileInfo.absoluteDir().path();
+  if (!loadAssignmentsFromDir(dirPath)) {
+    return false;
+  }
+
+  m_assignments[filePath] = stored;
 
   bool saved = saveAssignmentsToDir(dirPath);
 
@@ -433,13 +446,16 @@ bool FormatTemplateManager::assignTemplateToFile(
 }
 
 bool FormatTemplateManager::removeAssignment(const QString &filePath) {
+  QFileInfo fileInfo(filePath);
+  QString dirPath = fileInfo.absoluteDir().path();
+  if (!loadAssignmentsFromDir(dirPath)) {
+    return false;
+  }
+
   auto it = m_assignments.find(filePath);
   if (it == m_assignments.end()) {
     return true;
   }
-
-  QFileInfo fileInfo(filePath);
-  QString dirPath = fileInfo.absoluteDir().path();
 
   m_assignments.erase(it);
 
@@ -461,6 +477,19 @@ QString FormatTemplateManager::substituteVariables(const QString &input,
       input, manager.m_workspaceFolder, filePath,
       QFileInfo(filePath).absolutePath(),
       manager.pythonPreferenceForAssignment(assignment));
+}
+
+QString
+FormatTemplateManager::substituteCommandLineVariables(const QString &input,
+                                                      const QString &filePath) {
+  const FormatTemplateManager &manager = FormatTemplateManager::instance();
+  const FileFormatAssignment assignment =
+      manager.getAssignmentForFile(filePath);
+  return PythonProjectEnvironment::substituteCommandLineVariables(
+      input, PythonProjectEnvironment::variables(
+                 manager.m_workspaceFolder, filePath,
+                 QFileInfo(filePath).absolutePath(),
+                 manager.pythonPreferenceForAssignment(assignment)));
 }
 
 QPair<QString, QStringList>
@@ -498,10 +527,20 @@ FormatTemplateManager::buildCommand(const QString &filePath) const {
       tmpl.command, m_workspaceFolder, filePath, workingDirectory,
       pythonPreference);
 
+  const int scriptIndex = PythonProjectEnvironment::shellScriptArgumentIndex(
+      tmpl.command, tmpl.args);
   QStringList args;
-  for (const QString &arg : tmpl.args) {
-    args.append(PythonProjectEnvironment::substituteVariables(
-        arg, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
+  for (int i = 0; i < tmpl.args.size(); ++i) {
+    if (i == scriptIndex) {
+      args.append(PythonProjectEnvironment::substituteShellVariables(
+          tmpl.args.at(i), PythonProjectEnvironment::variables(
+                               m_workspaceFolder, filePath, workingDirectory,
+                               pythonPreference)));
+    } else {
+      args.append(PythonProjectEnvironment::substituteVariables(
+          tmpl.args.at(i), m_workspaceFolder, filePath, workingDirectory,
+          pythonPreference));
+    }
   }
 
   if (!assignment.customArgs.isEmpty()) {

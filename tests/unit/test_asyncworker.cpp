@@ -1,4 +1,5 @@
 #include "core/async/asyncworker.h"
+#include <QPointer>
 #include <QtTest/QtTest>
 
 class TestAsyncWorker : public QObject {
@@ -9,6 +10,7 @@ private slots:
   void testAsyncTaskCancellation();
   void testAsyncTaskProgress();
   void testAsyncThreadPool();
+  void testSubmittedTaskReportsFinishedToLateListener();
 };
 
 void TestAsyncWorker::testAsyncTaskExecution() {
@@ -61,6 +63,21 @@ void TestAsyncWorker::testAsyncThreadPool() {
 
   AsyncThreadPool &pool2 = AsyncThreadPool::instance();
   QCOMPARE(&pool, &pool2);
+}
+
+void TestAsyncWorker::testSubmittedTaskReportsFinishedToLateListener() {
+  AsyncTask *task = AsyncThreadPool::instance().submitTask([](AsyncTask *) {});
+  QPointer<AsyncTask> guard(task);
+
+  QThread::msleep(50);
+
+  QObject context;
+  int finishedCount = 0;
+  QObject::connect(task, &AsyncTask::finished, &context,
+                   [&finishedCount]() { ++finishedCount; });
+
+  QTRY_COMPARE(finishedCount, 1);
+  QTRY_VERIFY(guard.isNull());
 }
 
 QTEST_MAIN(TestAsyncWorker)

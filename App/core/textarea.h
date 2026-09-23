@@ -257,6 +257,8 @@ private:
   void drawExtraCursors();
   int m_lastCompletionRequestPosition = -1;
   bool m_extraSelectionRefreshPending = false;
+  QMetaObject::Connection m_cursorRefreshConnection;
+  QMetaObject::Connection m_selectionRefreshConnection;
 };
 
 #endif

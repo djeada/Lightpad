@@ -102,6 +102,7 @@ QJsonObject g_caps = []() {
 }();
 int g_nextSeq = 1;
 bool g_stopOnLaunch = false;
+bool g_hugeVariables = false;
 
 void trace(const QJsonObject &message) {
   if (!g_traceFile) {
@@ -219,6 +220,9 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
     QJsonObject second;
     second["name"] = QStringLiteral("\u6f22\u5b57_\u00e9\u00e8");
     second["value"] = QStringLiteral("v\u00e0lue \U0001F680");
+    if (g_hugeVariables) {
+      first["value"] = QString(3 * 1024 * 1024, QLatin1Char('x'));
+    }
     QJsonObject body;
     body["variables"] = QJsonArray{first, second};
     sendResponse(channel, seq, command, true, body);
@@ -244,6 +248,10 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
     body["description"] = QStringLiteral("Unhandled exception");
     body["breakMode"] = QStringLiteral("unhandled");
     body["details"] = details;
+    sendResponse(channel, seq, command, true, body);
+  } else if (command == "continue") {
+    QJsonObject body;
+    body["allThreadsContinued"] = true;
     sendResponse(channel, seq, command, true, body);
   } else if (command == "disconnect" || command == "terminate") {
     sendResponse(channel, seq, command, true);
@@ -331,6 +339,7 @@ int main(int argc, char **argv) {
 
   QString tracePath;
   quint16 listenPort = 0;
+  bool listenAny = false;
   const QStringList args = app.arguments().mid(1);
   for (int i = 0; i < args.size(); ++i) {
     if (args[i] == "--trace" && i + 1 < args.size()) {
@@ -339,6 +348,10 @@ int main(int argc, char **argv) {
       g_caps = QJsonDocument::fromJson(args[++i].toUtf8()).object();
     } else if (args[i] == "--stop-on-launch") {
       g_stopOnLaunch = true;
+    } else if (args[i] == "--huge-variables") {
+      g_hugeVariables = true;
+    } else if (args[i] == "--listen-any") {
+      listenAny = true;
     } else if (args[i] == "--listen" && i + 1 < args.size()) {
       listenPort = static_cast<quint16>(args[++i].toUInt());
     }
@@ -350,15 +363,21 @@ int main(int argc, char **argv) {
                       QIODevice::Text);
   }
 
-  if (listenPort > 0) {
+  if (listenPort > 0 || listenAny) {
     QTcpServer server;
     if (!server.listen(QHostAddress::LocalHost, listenPort)) {
       std::fprintf(stderr, "listen failed on port %u\n", listenPort);
       std::fflush(stderr);
       return 2;
     }
-    std::fprintf(stderr, "listening %u\n", listenPort);
-    std::fflush(stderr);
+    if (listenAny) {
+      std::fprintf(stdout, "DAP server listening at: 127.0.0.1:%u\n",
+                   server.serverPort());
+      std::fflush(stdout);
+    } else {
+      std::fprintf(stderr, "listening %u\n", listenPort);
+      std::fflush(stderr);
+    }
     if (!server.waitForNewConnection(30000)) {
       return 3;
     }

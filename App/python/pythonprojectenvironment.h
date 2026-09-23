@@ -83,6 +83,24 @@ public:
                       const QString &workingDirectory = {},
                       const PythonEnvironmentPreference &preference = {});
 
+  static QMap<QString, QString>
+  variables(const QString &workspaceFolder = {}, const QString &filePath = {},
+            const QString &workingDirectory = {},
+            const PythonEnvironmentPreference &preference = {});
+
+  static QString shellQuote(const QString &value);
+  static QString
+  substituteShellVariables(const QString &script,
+                           const QMap<QString, QString> &variables);
+  static QString
+  substituteCmdVariables(const QString &script,
+                         const QMap<QString, QString> &variables);
+  static QString
+  substituteCommandLineVariables(const QString &script,
+                                 const QMap<QString, QString> &variables);
+  static int shellScriptArgumentIndex(const QString &command,
+                                      const QStringList &args);
+
   static PythonInstallPlan requirementsInstallPlan(
       const PythonEnvironmentInfo &info, const QString &workspaceFolder = {},
       const QString &filePath = {}, const QString &workingDirectory = {},

@@ -2,8 +2,10 @@
 #define TESTOUTPUTPARSER_H
 
 #include "testconfiguration.h"
+#include <QHash>
 #include <QObject>
 #include <QRegularExpression>
+#include <QStringDecoder>
 
 class ITestOutputParser : public QObject {
   Q_OBJECT
@@ -22,6 +24,12 @@ signals:
   void testSuiteStarted(const QString &name);
   void testSuiteFinished(const QString &name, int passed, int failed);
   void outputLine(const QString &line, bool isError);
+
+protected:
+  QString decode(const QByteArray &data) { return m_decoder.decode(data); }
+
+private:
+  QStringDecoder m_decoder{QStringDecoder::Utf8};
 };
 
 class TapParser : public ITestOutputParser {
@@ -77,9 +85,11 @@ private:
   void parseLine(const QString &line);
   QString m_buffer;
   QString m_currentSuite;
+  void flushFailure();
   bool m_inFailures = false;
   QString m_failureTestName;
   QString m_failureMessage;
+  QHash<QString, TestResult> m_failedResults;
 };
 
 class CtestParser : public ITestOutputParser {

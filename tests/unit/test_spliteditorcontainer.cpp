@@ -5,8 +5,10 @@
 #include "ui/mainwindow.h"
 #include "ui/panels/spliteditorcontainer.h"
 
+#include <QPointer>
 #include <QSignalSpy>
 #include <QSplitter>
+#include <QToolButton>
 #include <QtTest>
 
 Theme::Theme() = default;
@@ -206,8 +208,17 @@ private slots:
   void testFocusEventUpdatesCurrentGroup();
   void testSnapshotNotEmpty();
   void testTabThemeUsesThemeDrivenColors();
+  void testCloseGuardCancelKeepsTab();
+  void testClosedTabPageIsDeletedAndReported();
+  void testCloseButtonAsksCloseGuard();
+  void testCloseAllTabsStopsAtCancelledTab();
+  void testCloseOtherTabsRespectsGuard();
+  void testCloseCurrentGroupCancelledByGuard();
+  void testUnsplitAllCancelledByGuard();
 
 private:
+  static QWidget *insertPlainTab(LightpadTabWidget &tabWidget,
+                                 const QString &title);
   QSplitter *findRootSplitter(SplitEditorContainer &container);
 };
 
@@ -346,6 +357,136 @@ void TestSplitEditorContainer::testTabThemeUsesThemeDrivenColors() {
   QVERIFY(closeButton->styleSheet().contains("#23435b"));
   QVERIFY(closeButton->styleSheet().contains("#61dafb"));
   QVERIFY(!closeButton->styleSheet().contains("#e81123"));
+}
+
+QWidget *TestSplitEditorContainer::insertPlainTab(LightpadTabWidget &tabWidget,
+                                                  const QString &title) {
+  auto *page = new QWidget(&tabWidget);
+  tabWidget.insertTab(tabWidget.count() - 1, page, title);
+  return page;
+}
+
+void TestSplitEditorContainer::testCloseGuardCancelKeepsTab() {
+  LightpadTabWidget tabWidget;
+  QWidget *page = insertPlainTab(tabWidget, QStringLiteral("dirty.cpp"));
+  const int countBefore = tabWidget.count();
+
+  int guardCalls = 0;
+  tabWidget.setCloseGuard([&guardCalls](LightpadTabWidget *, int) {
+    ++guardCalls;
+    return false;
+  });
+  QSignalSpy closedSpy(&tabWidget, &LightpadTabWidget::tabClosed);
+
+  QVERIFY(!tabWidget.requestCloseTab(tabWidget.indexOf(page)));
+  QVERIFY(!tabWidget.closeAllTabs());
+
+  QCOMPARE(guardCalls, 2);
+  QCOMPARE(tabWidget.count(), countBefore);
+  QVERIFY(tabWidget.indexOf(page) >= 0);
+  QCOMPARE(closedSpy.count(), 0);
+}
+
+void TestSplitEditorContainer::testClosedTabPageIsDeletedAndReported() {
+  LightpadTabWidget tabWidget;
+  QPointer<QWidget> page = insertPlainTab(tabWidget, QStringLiteral("a.cpp"));
+  insertPlainTab(tabWidget, QStringLiteral("b.cpp"));
+  tabWidget.setCloseGuard([](LightpadTabWidget *, int) { return true; });
+  QSignalSpy closedSpy(&tabWidget, &LightpadTabWidget::tabClosed);
+
+  QVERIFY(tabWidget.requestCloseTab(tabWidget.indexOf(page)));
+  QCOMPARE(closedSpy.count(), 1);
+  QVERIFY(tabWidget.indexOf(page) < 0);
+
+  QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+  QVERIFY(page.isNull());
+}
+
+void TestSplitEditorContainer::testCloseButtonAsksCloseGuard() {
+  LightpadTabWidget tabWidget;
+  QWidget *page = insertPlainTab(tabWidget, QStringLiteral("dirty.cpp"));
+  bool allowClose = false;
+  tabWidget.setCloseGuard(
+      [&allowClose](LightpadTabWidget *, int) { return allowClose; });
+
+  auto *closeButton =
+      qobject_cast<QAbstractButton *>(tabWidget.tabBar()->tabButton(
+          tabWidget.indexOf(page), QTabBar::RightSide));
+  QVERIFY(closeButton != nullptr);
+
+  closeButton->click();
+  QVERIFY(tabWidget.indexOf(page) >= 0);
+
+  allowClose = true;
+  closeButton->click();
+  QVERIFY(tabWidget.indexOf(page) < 0);
+}
+
+void TestSplitEditorContainer::testCloseAllTabsStopsAtCancelledTab() {
+  LightpadTabWidget tabWidget;
+  QWidget *first = insertPlainTab(tabWidget, QStringLiteral("first.cpp"));
+  QWidget *dirty = insertPlainTab(tabWidget, QStringLiteral("dirty.cpp"));
+  QWidget *last = insertPlainTab(tabWidget, QStringLiteral("last.cpp"));
+  tabWidget.setCloseGuard([dirty](LightpadTabWidget *owner, int index) {
+    return owner->widget(index) != dirty;
+  });
+
+  QVERIFY(!tabWidget.closeAllTabs());
+
+  QVERIFY(tabWidget.indexOf(last) < 0);
+  QVERIFY(tabWidget.indexOf(dirty) >= 0);
+  QVERIFY(tabWidget.indexOf(first) >= 0);
+}
+
+void TestSplitEditorContainer::testCloseOtherTabsRespectsGuard() {
+  LightpadTabWidget tabWidget;
+  QWidget *keep = insertPlainTab(tabWidget, QStringLiteral("keep.cpp"));
+  QWidget *dirty = insertPlainTab(tabWidget, QStringLiteral("dirty.cpp"));
+  QWidget *clean = insertPlainTab(tabWidget, QStringLiteral("clean.cpp"));
+  tabWidget.setCloseGuard([dirty](LightpadTabWidget *owner, int index) {
+    return owner->widget(index) != dirty;
+  });
+
+  auto *tabBar = qobject_cast<LightpadTabBar *>(tabWidget.tabBar());
+  QVERIFY(tabBar != nullptr);
+  emit tabBar->closeOtherTabs(tabWidget.indexOf(keep));
+
+  QVERIFY(tabWidget.indexOf(keep) >= 0);
+  QVERIFY(tabWidget.indexOf(dirty) >= 0);
+  QVERIFY(tabWidget.indexOf(clean) < 0);
+}
+
+void TestSplitEditorContainer::testCloseCurrentGroupCancelledByGuard() {
+  SplitEditorContainer container;
+  LightpadTabWidget *secondGroup = container.splitHorizontal();
+  QVERIFY(secondGroup != nullptr);
+  QWidget *dirty = insertPlainTab(*secondGroup, QStringLiteral("dirty.cpp"));
+  secondGroup->setCloseGuard([dirty](LightpadTabWidget *owner, int index) {
+    return owner->widget(index) != dirty;
+  });
+
+  QVERIFY(!container.closeCurrentGroup());
+  QCOMPARE(container.groupCount(), 2);
+  QVERIFY(secondGroup->indexOf(dirty) >= 0);
+
+  secondGroup->setCloseGuard([](LightpadTabWidget *, int) { return true; });
+  QVERIFY(container.closeCurrentGroup());
+  QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+  QCOMPARE(container.groupCount(), 1);
+}
+
+void TestSplitEditorContainer::testUnsplitAllCancelledByGuard() {
+  SplitEditorContainer container;
+  LightpadTabWidget *secondGroup = container.splitHorizontal();
+  QVERIFY(secondGroup != nullptr);
+  QWidget *dirty = insertPlainTab(*secondGroup, QStringLiteral("dirty.cpp"));
+  secondGroup->setCloseGuard([dirty](LightpadTabWidget *owner, int index) {
+    return owner->widget(index) != dirty;
+  });
+
+  QVERIFY(!container.unsplitAll());
+  QCOMPARE(container.groupCount(), 2);
+  QVERIFY(container.hasSplits());
 }
 
 QTEST_MAIN(TestSplitEditorContainer)

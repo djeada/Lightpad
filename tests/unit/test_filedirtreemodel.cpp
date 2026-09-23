@@ -27,6 +27,9 @@ private slots:
   void testDuplicateWorksForDirectories();
   void testClipboardRoundTripCopy();
   void testClipboardRoundTripCut();
+  void testRenameAndMoveReportMovedPaths();
+  void testIsInsideSeesThroughSymlinks();
+  void testCreateRejectsEscapingNames();
 
 private:
   QString path(const QString &relative) const;
@@ -254,6 +257,49 @@ void TestFileDirTreeModel::testClipboardRoundTripCut() {
   QVERIFY(!QFileInfo::exists(source));
 
   QVERIFY(!model.canPaste());
+}
+
+void TestFileDirTreeModel::testRenameAndMoveReportMovedPaths() {
+  FileDirTreeModel model;
+  QSignalSpy spy(&model, &FileDirTreeModel::pathMoved);
+
+  const QString file = makeFile("src/a.txt");
+  const QString renamed = path("src/b.txt");
+  QVERIFY(model.renameFileOrDirectory(file, renamed));
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.at(0).at(0).toString(), QFileInfo(file).absoluteFilePath());
+  QCOMPARE(spy.at(0).at(1).toString(), QFileInfo(renamed).absoluteFilePath());
+
+  const QString dest = makeDir("dest");
+  QString created;
+  QVERIFY(model.moveInto(path("src"), dest, &created));
+  QCOMPARE(spy.count(), 2);
+  QCOMPARE(spy.at(1).at(0).toString(),
+           QFileInfo(path("src")).absoluteFilePath());
+  QCOMPARE(spy.at(1).at(1).toString(), QFileInfo(created).absoluteFilePath());
+}
+
+void TestFileDirTreeModel::testIsInsideSeesThroughSymlinks() {
+  const QString folder = makeDir("real");
+  const QString link = path("link");
+  QVERIFY(QFile::link(folder, link));
+
+  QVERIFY(FileDirTreeModel::isInside(folder, link + "/new-child"));
+  QVERIFY(FileDirTreeModel::isInside(folder, link));
+
+  FileDirTreeModel model;
+  QVERIFY(!model.copyInto(folder, link));
+  QVERIFY(!QFileInfo::exists(folder + "/real"));
+}
+
+void TestFileDirTreeModel::testCreateRejectsEscapingNames() {
+  FileDirTreeModel model;
+  const QString dir = makeDir("box");
+  QVERIFY(!model.createNewFile(dir, "../escaped.txt"));
+  QVERIFY(!QFileInfo::exists(path("escaped.txt")));
+  QVERIFY(!model.createNewDirectory(dir, "a/../../out"));
+  QVERIFY(!QFileInfo::exists(path("out")));
+  QVERIFY(model.createNewFile(dir, "nested/ok.txt"));
 }
 
 QTEST_MAIN(TestFileDirTreeModel)

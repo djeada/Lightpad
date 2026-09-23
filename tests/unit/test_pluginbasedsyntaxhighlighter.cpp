@@ -1,4 +1,6 @@
 #include "settings/theme.h"
+#include "syntax/cppsyntaxplugin.h"
+#include "syntax/markdownsyntaxplugin.h"
 #include "syntax/pluginbasedsyntaxhighlighter.h"
 #include "syntax/pythonsyntaxplugin.h"
 #include "syntax/shellsyntaxplugin.h"
@@ -37,7 +39,115 @@ private slots:
   void testPythonModuleDocstringDoesNotSwallowFollowingCode();
   void testPythonMultilineStateSurvivesViewportSkippedBlocks();
   void testPythonMainThreadLoopsSurviveDirectViewportJump();
+  void testPythonStringClosingAndReopeningOnSameLine();
+  void testCppCommentDelimiterInsideStringIsNotComment();
+  void testCppLineCommentHidesBlockCommentStart();
+  void testCppBlockCommentAfterStringOnSameLine();
+  void testMarkdownCommentInsideCodeFenceDoesNotLeak();
 };
+
+void TestPluginBasedSyntaxHighlighter::
+    testPythonStringClosingAndReopeningOnSameLine() {
+  Theme theme;
+  PythonSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+
+  const QString text = "x = \"\"\"start\n"
+                       "end\"\"\" + \"\"\"again\n"
+                       "return\n"
+                       "\"\"\"\n"
+                       "return";
+  document.setPlainText(text);
+  highlighter.rehighlight();
+
+  QCOMPARE(formatAt(document, 1, 0).foreground().color(),
+           theme.quotationFormat);
+  QCOMPARE(formatAt(document, 1, 12).foreground().color(),
+           theme.quotationFormat);
+  QCOMPARE(formatAt(document, 2, 0).foreground().color(),
+           theme.quotationFormat);
+  QCOMPARE(formatAt(document, 4, 0).foreground().color(),
+           theme.keywordFormat_0);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testCppCommentDelimiterInsideStringIsNotComment() {
+  Theme theme;
+  CppSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+
+  const QString text = "const char *open = \"/*\";\n"
+                       "return 0;";
+  document.setPlainText(text);
+  highlighter.rehighlight();
+
+  QCOMPARE(formatAt(document, 0, text.indexOf("/*")).foreground().color(),
+           theme.quotationFormat);
+  QVERIFY(formatAt(document, 1, 0).foreground().color() !=
+          theme.singleLineCommentFormat);
+  QCOMPARE(document.findBlockByNumber(0).userState(), 0);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testCppLineCommentHidesBlockCommentStart() {
+  Theme theme;
+  CppSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+
+  const QString text = "int a; // see /* here\n"
+                       "return 0;";
+  document.setPlainText(text);
+  highlighter.rehighlight();
+
+  QVERIFY(formatAt(document, 1, 0).foreground().color() !=
+          theme.singleLineCommentFormat);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testCppBlockCommentAfterStringOnSameLine() {
+  Theme theme;
+  CppSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+
+  const QString text = "f(\"*/\"); /* note\n"
+                       "still comment */ return 0;";
+  document.setPlainText(text);
+  highlighter.rehighlight();
+
+  QCOMPARE(formatAt(document, 0, text.indexOf("note")).foreground().color(),
+           theme.singleLineCommentFormat);
+  QCOMPARE(formatAt(document, 1, 0).foreground().color(),
+           theme.singleLineCommentFormat);
+  const QString secondLine = "still comment */ return 0;";
+  QVERIFY(formatAt(document, 1, secondLine.indexOf("return"))
+              .foreground()
+              .color() != theme.singleLineCommentFormat);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testMarkdownCommentInsideCodeFenceDoesNotLeak() {
+  Theme theme;
+  MarkdownSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+
+  const QString text = "```\n"
+                       "<!-- inside code\n"
+                       "```\n"
+                       "after";
+  document.setPlainText(text);
+  highlighter.rehighlight();
+
+  QCOMPARE(formatAt(document, 1, 0).foreground().color(),
+           theme.singleLineCommentFormat);
+  QCOMPARE(document.findBlockByNumber(2).userState(), 0);
+  QVERIFY(formatAt(document, 3, 0).foreground().color() !=
+          theme.singleLineCommentFormat);
+}
 
 void TestPluginBasedSyntaxHighlighter::testShellCommentsOverrideKeywords() {
   Theme theme;

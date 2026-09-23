@@ -1894,7 +1894,10 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
 
 void DebugPanel::onContinued() {
   m_stepInProgress = false;
+  m_expectStopEvent = true;
+  m_hasLastStopEvent = false;
   m_hoverRequestSeq = 0;
+  m_pendingConsoleEvaluations.clear();
   QToolTip::hideText();
   m_variablesTree->clear();
   m_variableRefToItem.clear();

@@ -971,6 +971,10 @@ void Preferences::loadCurrentSettings() {
   m_bracketMatchCheck->setChecked(textSettings.matchingBracketsHighlighted);
 
   const ThemeDefinition &activeTheme = ThemeEngine::instance().activeTheme();
+  const QSignalBlocker glowBlocker(m_glowCombo);
+  const QSignalBlocker transparencyBlocker(m_transparencyCombo);
+  const QSignalBlocker scanlinesBlocker(m_scanlinesCheck);
+  const QSignalBlocker panelBordersBlocker(m_panelBordersCheck);
   if (m_glowCombo) {
     const qreal glow = activeTheme.ui.glowIntensity;
     int best = 0;

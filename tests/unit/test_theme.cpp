@@ -3,6 +3,7 @@
 #include "theme/themeengine.h"
 #include "theme/themepresets.h"
 #include "ui/uistylehelper.h"
+#include <QDir>
 #include <QFileInfo>
 #include <QJsonObject>
 #include <QRegularExpression>
@@ -58,6 +59,7 @@ private slots:
   void testUiStyleHelperHonorsPanelBorders();
   void testUiStyleHelperGlowChangesSharedStyles();
   void testThemeEngineDeletesOnlyCustomThemes();
+  void testThemeFileNamesDoNotCollide();
   void testReadablePresetsMeetContrast();
   void testReadableIsIdempotent();
   void testPresetsDeriveSemanticColorsFromOwnPalette();
@@ -252,8 +254,12 @@ void TestTheme::testThemeEngineDeletesOnlyCustomThemes() {
 
   custom = engine.saveUserTheme(custom);
 
+  const QStringList savedFiles =
+      QDir(tempDir.path() + QStringLiteral("/Lightpad/themes"))
+          .entryList({QStringLiteral("Delete_Me*.json")}, QDir::Files);
+  QCOMPARE(savedFiles.size(), 1);
   const QString filePath =
-      tempDir.path() + QStringLiteral("/Lightpad/themes/Delete_Me.json");
+      tempDir.path() + QStringLiteral("/Lightpad/themes/") + savedFiles.first();
   QVERIFY(engine.hasTheme(custom.name));
   QVERIFY(!engine.isBuiltinTheme(custom.name));
   QVERIFY(QFileInfo::exists(filePath));
@@ -281,6 +287,33 @@ void TestTheme::testThemeEngineDeletesOnlyCustomThemes() {
 
   QVERIFY(engine.deleteUserTheme(savedCopy.name));
   QVERIFY(!engine.hasTheme(savedCopy.name));
+}
+
+void TestTheme::testThemeFileNamesDoNotCollide() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  qputenv("XDG_CONFIG_HOME", tempDir.path().toUtf8());
+
+  ThemeEngine &engine = ThemeEngine::instance();
+  ThemeDefinition first = ThemePresets::minimalDark();
+  first.name = QStringLiteral("My Theme");
+  first.colors.accentPrimary = QColor(QStringLiteral("#112233"));
+  first = engine.saveUserTheme(first);
+
+  ThemeDefinition second = ThemePresets::minimalDark();
+  second.name = QStringLiteral("My_Theme");
+  second.colors.accentPrimary = QColor(QStringLiteral("#445566"));
+  second = engine.saveUserTheme(second);
+
+  engine.loadUserThemes();
+  QVERIFY(engine.hasTheme(first.name));
+  QVERIFY(engine.hasTheme(second.name));
+
+  QVERIFY(engine.deleteUserTheme(first.name));
+  QVERIFY(engine.deleteUserTheme(second.name));
+  QVERIFY(QDir(tempDir.path() + QStringLiteral("/Lightpad/themes"))
+              .entryList({QStringLiteral("*.json")}, QDir::Files)
+              .isEmpty());
 }
 
 void TestTheme::testReadablePresetsMeetContrast() {

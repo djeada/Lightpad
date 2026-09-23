@@ -41,7 +41,9 @@ public:
 
   bool hasSplits() const;
 
-  void unsplitAll();
+  bool unsplitAll();
+
+  void setCurrentTabWidget(LightpadTabWidget *tabWidget);
 
 signals:
 

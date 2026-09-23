@@ -33,8 +33,11 @@ void TestRunManager::runFailed(const TestConfiguration &config,
   if (failed.isEmpty())
     return;
 
-  QString filter = (config.outputFormat == "pytest") ? failed.join(" or ")
-                                                     : failed.join(':');
+  const QString filter = failedTestFilter(config, failed);
+  if (filter.isEmpty()) {
+    startProcess(config, workspaceFolder, QString(), QString(), RunMode::All);
+    return;
+  }
   startProcess(config, workspaceFolder, QString(), filter, RunMode::Failed);
 }
 
@@ -82,6 +85,7 @@ QStringList TestRunManager::failedTestNames() const {
 
 void TestRunManager::clearResults() {
   m_results.clear();
+  m_resultIndex.clear();
   m_passed = m_failed = m_skipped = m_errored = 0;
 }
 
@@ -91,6 +95,8 @@ void TestRunManager::startProcess(const TestConfiguration &config,
                                   const QString &testName, RunMode mode) {
   stop();
   clearResults();
+  m_stdoutBuffer.clear();
+  m_stderrBuffer.clear();
 
   m_parser = TestOutputParserFactory::createParser(config.outputFormat, this);
 
@@ -99,23 +105,36 @@ void TestRunManager::startProcess(const TestConfiguration &config,
 
   connect(m_parser, &ITestOutputParser::testFinished, this,
           [this](const TestResult &r) {
-            m_results.append(r);
-            switch (r.status) {
-            case TestStatus::Passed:
-              m_passed++;
-              break;
-            case TestStatus::Failed:
-              m_failed++;
-              break;
-            case TestStatus::Skipped:
-              m_skipped++;
-              break;
-            case TestStatus::Errored:
-              m_errored++;
-              break;
-            default:
-              break;
+            auto adjust = [this](TestStatus status, int delta) {
+              switch (status) {
+              case TestStatus::Passed:
+                m_passed += delta;
+                break;
+              case TestStatus::Failed:
+                m_failed += delta;
+                break;
+              case TestStatus::Skipped:
+                m_skipped += delta;
+                break;
+              case TestStatus::Errored:
+                m_errored += delta;
+                break;
+              default:
+                break;
+              }
+            };
+            const auto existing = r.id.isEmpty()
+                                      ? m_resultIndex.constEnd()
+                                      : m_resultIndex.constFind(r.id);
+            if (existing != m_resultIndex.constEnd()) {
+              adjust(m_results[existing.value()].status, -1);
+              m_results[existing.value()] = r;
+            } else {
+              if (!r.id.isEmpty())
+                m_resultIndex.insert(r.id, m_results.size());
+              m_results.append(r);
             }
+            adjust(r.status, 1);
             emit testFinished(r);
           });
 
@@ -124,7 +143,10 @@ void TestRunManager::startProcess(const TestConfiguration &config,
   connect(m_parser, &ITestOutputParser::testSuiteFinished, this,
           &TestRunManager::testSuiteFinished);
   connect(m_parser, &ITestOutputParser::outputLine, this,
-          &TestRunManager::outputLine);
+          [this](const QString &line, bool isError) {
+            if (m_forwardParserOutput)
+              emit outputLine(line, isError);
+          });
 
   m_process = new QProcess(this);
 
@@ -165,11 +187,8 @@ void TestRunManager::startProcess(const TestConfiguration &config,
     break;
   }
 
-  QStringList args;
-  for (const QString &arg : templateArgs) {
-    args.append(TestConfigurationManager::substituteVariables(
-        arg, filePath, workspaceFolder, testName));
-  }
+  const QStringList args = TestConfigurationManager::substituteArguments(
+      config.command, templateArgs, filePath, workspaceFolder, testName);
 
   QString command = TestConfigurationManager::substituteVariables(
       config.command, filePath, workspaceFolder, testName);
@@ -207,6 +226,8 @@ void TestRunManager::startProcess(const TestConfiguration &config,
   connect(m_process,
           QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
           &TestRunManager::onProcessFinished);
+  connect(m_process, &QProcess::errorOccurred, this,
+          &TestRunManager::onProcessError);
 
   LOG_INFO("Starting: " + command + " " + args.join(" "));
 
@@ -215,25 +236,113 @@ void TestRunManager::startProcess(const TestConfiguration &config,
   m_process->start(command, args);
 }
 
+void TestRunManager::feedParser(const QByteArray &data, bool isError) {
+  if (!m_parser || data.isEmpty())
+    return;
+  if (isError) {
+    emit outputLine(QString::fromUtf8(data), true);
+    m_forwardParserOutput = false;
+    m_parser->feed(data);
+    m_forwardParserOutput = true;
+  } else {
+    m_parser->feed(data);
+  }
+}
+
+void TestRunManager::consumeOutput(QByteArray &buffer, const QByteArray &data,
+                                   bool isError) {
+  buffer += data;
+  const int lastNewline = buffer.lastIndexOf('\n');
+  if (lastNewline < 0)
+    return;
+  const QByteArray complete = buffer.left(lastNewline + 1);
+  buffer.remove(0, lastNewline + 1);
+  feedParser(complete, isError);
+}
+
+void TestRunManager::flushOutput() {
+  if (m_process) {
+    consumeOutput(m_stdoutBuffer, m_process->readAllStandardOutput(), false);
+    consumeOutput(m_stderrBuffer, m_process->readAllStandardError(), true);
+  }
+  if (!m_stdoutBuffer.isEmpty()) {
+    feedParser(m_stdoutBuffer + '\n', false);
+    m_stdoutBuffer.clear();
+  }
+  if (!m_stderrBuffer.isEmpty()) {
+    feedParser(m_stderrBuffer + '\n', true);
+    m_stderrBuffer.clear();
+  }
+}
+
 void TestRunManager::onStdoutReady() {
-  if (m_parser && m_process)
-    m_parser->feed(m_process->readAllStandardOutput());
+  if (m_process)
+    consumeOutput(m_stdoutBuffer, m_process->readAllStandardOutput(), false);
 }
 
 void TestRunManager::onStderrReady() {
-  if (m_process) {
-    QByteArray data = m_process->readAllStandardError();
-    if (m_parser)
-      m_parser->feed(data);
-    emit outputLine(QString::fromUtf8(data), true);
-  }
+  if (m_process)
+    consumeOutput(m_stderrBuffer, m_process->readAllStandardError(), true);
 }
 
 void TestRunManager::onProcessFinished(int exitCode,
                                        QProcess::ExitStatus exitStatus) {
+  flushOutput();
   if (m_parser)
     m_parser->finish();
 
   emit processFinished(exitCode, exitStatus == QProcess::NormalExit);
   emit runFinished(m_passed, m_failed, m_skipped, m_errored);
+}
+
+void TestRunManager::onProcessError(QProcess::ProcessError error) {
+  if (error != QProcess::FailedToStart || !m_process)
+    return;
+
+  emit outputLine(tr("Failed to start %1: %2")
+                      .arg(m_process->program(), m_process->errorString()),
+                  true);
+  emit processFinished(-1, false);
+  emit runFinished(m_passed, m_failed, m_skipped, m_errored);
+}
+
+QString TestRunManager::failedTestFilter(const TestConfiguration &config,
+                                         const QStringList &names) {
+  if (names.isEmpty())
+    return {};
+  if (config.outputFormat == "pytest")
+    return names.join(" or ");
+
+  const QStringList templateArgs = !config.runFailed.args.isEmpty()
+                                       ? config.runFailed.args
+                                       : config.runSingleTest.args;
+  if (templateArgs.join(' ').contains("gtest_filter"))
+    return names.join(':');
+
+  if (config.outputFormat == "cargo_json")
+    return names.size() == 1 ? names.first() : QString();
+
+  auto escape = [](const QString &name) {
+    static const QString special = QStringLiteral("\\^$.|?*+()[]{}");
+    QString escaped;
+    for (const QChar c : name) {
+      if (special.contains(c))
+        escaped += '\\';
+      escaped += c;
+    }
+    return escaped;
+  };
+
+  QStringList patterns;
+  for (const QString &name : names) {
+    const QString base =
+        config.outputFormat == "go_json" ? name.section('/', 0, 0) : name;
+    const QString pattern = escape(base);
+    if (!pattern.isEmpty() && !patterns.contains(pattern))
+      patterns.append(pattern);
+  }
+
+  if (config.outputFormat == "go_json" || config.outputFormat == "ctest")
+    return "^(" + patterns.join('|') + ")$";
+  return patterns.join('|');
 }

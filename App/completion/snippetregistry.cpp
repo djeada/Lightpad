@@ -4,20 +4,310 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QRegularExpression>
+#include <QSet>
 
-static const QRegularExpression s_tabstopRe(R"(\$\{(\d+)(?::([^}]*))?\})");
-static const QRegularExpression s_simpleTabstopRe(R"(\$(\d+))");
+namespace {
 
-QString Snippet::expandedBody() const {
-  QString result = body;
+struct SnippetNode {
+  enum class Type { Text, Tabstop, Placeholder, Choice, Variable };
+  Type type = Type::Text;
+  QString text;
+  int index = -1;
+  QList<SnippetNode> children;
+};
 
-  result.replace(s_tabstopRe, "\\2");
+class SnippetParser {
+public:
+  explicit SnippetParser(const QString &source) : m_source(source) {}
 
-  result.replace(s_simpleTabstopRe, "");
+  QList<SnippetNode> parse() {
+    int pos = 0;
+    return parseSequence(pos, false);
+  }
 
-  return result;
+private:
+  bool atEnd(int pos) const { return pos >= m_source.size(); }
+
+  static bool isVariableStart(QChar c) {
+    return c == '_' || (c.unicode() < 128 && c.isLetter());
+  }
+
+  static bool isVariablePart(QChar c) {
+    return isVariableStart(c) || (c.unicode() < 128 && c.isDigit());
+  }
+
+  bool readInt(int &pos, int &value) const {
+    int start = pos;
+    while (!atEnd(pos) && m_source.at(pos).unicode() < 128 &&
+           m_source.at(pos).isDigit()) {
+      ++pos;
+    }
+    if (pos == start) {
+      return false;
+    }
+    value = m_source.mid(start, pos - start).toInt();
+    return true;
+  }
+
+  bool readVariableName(int &pos, QString &name) const {
+    if (atEnd(pos) || !isVariableStart(m_source.at(pos))) {
+      return false;
+    }
+    int start = pos;
+    while (!atEnd(pos) && isVariablePart(m_source.at(pos))) {
+      ++pos;
+    }
+    name = m_source.mid(start, pos - start);
+    return true;
+  }
+
+  static void appendText(QList<SnippetNode> &nodes, const QString &text) {
+    if (text.isEmpty()) {
+      return;
+    }
+    if (!nodes.isEmpty() && nodes.last().type == SnippetNode::Type::Text) {
+      nodes.last().text += text;
+      return;
+    }
+    SnippetNode node;
+    node.text = text;
+    nodes.append(node);
+  }
+
+  QList<SnippetNode> parseSequence(int &pos, bool nested) {
+    QList<SnippetNode> nodes;
+    while (!atEnd(pos)) {
+      QChar c = m_source.at(pos);
+      if (c == '\\' && pos + 1 < m_source.size()) {
+        QChar next = m_source.at(pos + 1);
+        if (next == '$' || next == '}' || next == '\\') {
+          appendText(nodes, QString(next));
+          pos += 2;
+          continue;
+        }
+      }
+      if (nested && c == '}') {
+        return nodes;
+      }
+      if (c == '$') {
+        int start = pos;
+        SnippetNode node;
+        if (parseDollar(pos, node)) {
+          nodes.append(node);
+          continue;
+        }
+        pos = start + 1;
+        appendText(nodes, QStringLiteral("$"));
+        continue;
+      }
+      appendText(nodes, QString(c));
+      ++pos;
+    }
+    return nodes;
+  }
+
+  bool parseDollar(int &pos, SnippetNode &node) {
+    int cursor = pos + 1;
+    if (atEnd(cursor)) {
+      return false;
+    }
+
+    int index = 0;
+    QString name;
+    if (readInt(cursor, index)) {
+      node.type = SnippetNode::Type::Tabstop;
+      node.index = index;
+      pos = cursor;
+      return true;
+    }
+    if (readVariableName(cursor, name)) {
+      node.type = SnippetNode::Type::Variable;
+      node.text = name;
+      pos = cursor;
+      return true;
+    }
+    if (m_source.at(cursor) != '{') {
+      return false;
+    }
+    ++cursor;
+
+    if (readInt(cursor, index)) {
+      node.index = index;
+      if (atEnd(cursor)) {
+        return false;
+      }
+      QChar c = m_source.at(cursor);
+      if (c == '}') {
+        node.type = SnippetNode::Type::Tabstop;
+        pos = cursor + 1;
+        return true;
+      }
+      if (c == ':') {
+        ++cursor;
+        node.type = SnippetNode::Type::Placeholder;
+        node.children = parseSequence(cursor, true);
+        if (atEnd(cursor)) {
+          return false;
+        }
+        pos = cursor + 1;
+        return true;
+      }
+      if (c == '|') {
+        ++cursor;
+        return parseChoice(cursor, pos, node);
+      }
+      return false;
+    }
+
+    if (readVariableName(cursor, name)) {
+      node.type = SnippetNode::Type::Variable;
+      node.text = name;
+      if (atEnd(cursor)) {
+        return false;
+      }
+      QChar c = m_source.at(cursor);
+      if (c == '}') {
+        pos = cursor + 1;
+        return true;
+      }
+      if (c == ':') {
+        ++cursor;
+        node.children = parseSequence(cursor, true);
+        if (atEnd(cursor)) {
+          return false;
+        }
+        pos = cursor + 1;
+        return true;
+      }
+      if (c == '/') {
+        int depth = 0;
+        while (!atEnd(cursor)) {
+          QChar t = m_source.at(cursor);
+          if (t == '\\') {
+            cursor += 2;
+            continue;
+          }
+          if (t == '{') {
+            ++depth;
+          } else if (t == '}') {
+            if (depth == 0) {
+              pos = cursor + 1;
+              return true;
+            }
+            --depth;
+          }
+          ++cursor;
+        }
+      }
+      return false;
+    }
+
+    return false;
+  }
+
+  bool parseChoice(int cursor, int &pos, SnippetNode &node) {
+    QStringList options;
+    QString current;
+    while (!atEnd(cursor)) {
+      QChar c = m_source.at(cursor);
+      if (c == '\\' && cursor + 1 < m_source.size()) {
+        QChar next = m_source.at(cursor + 1);
+        if (next == ',' || next == '|' || next == '\\' || next == '$' ||
+            next == '}') {
+          current += next;
+          cursor += 2;
+          continue;
+        }
+      }
+      if (c == ',') {
+        options.append(current);
+        current.clear();
+        ++cursor;
+        continue;
+      }
+      if (c == '|' && cursor + 1 < m_source.size() &&
+          m_source.at(cursor + 1) == '}') {
+        options.append(current);
+        node.type = SnippetNode::Type::Choice;
+        node.text = options.first();
+        pos = cursor + 2;
+        return true;
+      }
+      current += c;
+      ++cursor;
+    }
+    return false;
+  }
+
+  const QString &m_source;
+};
+
+class SnippetRenderer {
+public:
+  explicit SnippetRenderer(const QList<SnippetNode> &nodes) : m_nodes(nodes) {
+    collectDefinitions(nodes);
+  }
+
+  QString render() { return renderNodes(m_nodes); }
+
+private:
+  void collectDefinitions(const QList<SnippetNode> &nodes) {
+    for (const SnippetNode &node : nodes) {
+      if ((node.type == SnippetNode::Type::Placeholder ||
+           node.type == SnippetNode::Type::Choice) &&
+          !m_definitions.contains(node.index)) {
+        m_definitions.insert(node.index, &node);
+      }
+      collectDefinitions(node.children);
+    }
+  }
+
+  QString renderDefinition(int index) {
+    const SnippetNode *definition = m_definitions.value(index, nullptr);
+    if (!definition || m_active.contains(index)) {
+      return {};
+    }
+    m_active.insert(index);
+    QString value = definition->type == SnippetNode::Type::Choice
+                        ? definition->text
+                        : renderNodes(definition->children);
+    m_active.remove(index);
+    return value;
+  }
+
+  QString renderNodes(const QList<SnippetNode> &nodes) {
+    QString result;
+    for (const SnippetNode &node : nodes) {
+      switch (node.type) {
+      case SnippetNode::Type::Text:
+        result += node.text;
+        break;
+      case SnippetNode::Type::Tabstop:
+      case SnippetNode::Type::Placeholder:
+      case SnippetNode::Type::Choice:
+        result += renderDefinition(node.index);
+        break;
+      case SnippetNode::Type::Variable:
+        result += renderNodes(node.children);
+        break;
+      }
+    }
+    return result;
+  }
+
+  const QList<SnippetNode> &m_nodes;
+  QMap<int, const SnippetNode *> m_definitions;
+  QSet<int> m_active;
+};
+
+} // namespace
+
+QString Snippet::expand(const QString &body) {
+  const QList<SnippetNode> nodes = SnippetParser(body).parse();
+  return SnippetRenderer(nodes).render();
 }
+
+QString Snippet::expandedBody() const { return expand(body); }
 
 SnippetRegistry &SnippetRegistry::instance() {
   static SnippetRegistry instance;

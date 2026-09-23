@@ -123,7 +123,7 @@ LightpadTabWidget::LightpadTabWidget(QWidget *parent) : QTabWidget(parent) {
   tabBar()->setFocusPolicy(Qt::NoFocus);
 
   QWidget::connect(tabBar(), &QTabBar::tabCloseRequested, this,
-                   [this](int index) { removeTab(index); });
+                   [this](int index) { requestCloseTab(index); });
 
   setTabsClosable(true);
   setMovable(true);
@@ -225,7 +225,7 @@ void LightpadTabWidget::updateCloseButtons() {
     connect(closeButton, &QToolButton::clicked, this, [this, closeButton]() {
       for (int index = 0; index < count(); ++index) {
         if (tabBar()->tabButton(index, QTabBar::RightSide) == closeButton) {
-          removeTab(index);
+          requestCloseTab(index);
           break;
         }
       }
@@ -463,19 +463,52 @@ void LightpadTabWidget::setFilePath(int index, QString filePath) {
   }
 }
 
-void LightpadTabWidget::closeAllTabs() {
-  if (count() == 1)
-    return;
-
-  for (int i = count() - 2; i >= 0; i--)
-    removeTab(i);
+void LightpadTabWidget::setCloseGuard(CloseGuard guard) {
+  m_closeGuard = std::move(guard);
 }
 
-void LightpadTabWidget::closeCurrentTab() {
-  if (count() == 1)
+bool LightpadTabWidget::requestCloseTab(int index) {
+  if (index < 0 || index >= count() - 1)
+    return false;
+
+  QWidget *page = widget(index);
+  if (m_closeGuard && !m_closeGuard(this, index))
+    return false;
+
+  const int currentPosition = indexOf(page);
+  if (currentPosition < 0)
+    return true;
+
+  forceCloseTab(currentPosition);
+  return true;
+}
+
+void LightpadTabWidget::forceCloseTab(int index) {
+  if (index < 0 || index >= count() - 1)
     return;
 
-  removeTab(currentIndex());
+  QWidget *page = widget(index);
+  const QString filePath = getFilePath(index);
+
+  removeTab(index);
+  if (page) {
+    m_viewerFilePaths.remove(page);
+    page->deleteLater();
+  }
+
+  emit tabClosed(filePath);
+}
+
+bool LightpadTabWidget::closeAllTabs() {
+  for (int i = count() - 2; i >= 0; i--) {
+    if (!requestCloseTab(i))
+      return false;
+  }
+  return true;
+}
+
+bool LightpadTabWidget::closeCurrentTab() {
+  return requestCloseTab(currentIndex());
 }
 
 LightpadPage *LightpadTabWidget::getPage(int index) {
@@ -614,23 +647,21 @@ void LightpadTabWidget::onConfigureRunTab(int index) {
   }
 }
 
-void LightpadTabWidget::onCloseTab(int index) {
-  if (index >= 0 && index < count() - 1) {
-    removeTab(index);
-  }
-}
+void LightpadTabWidget::onCloseTab(int index) { requestCloseTab(index); }
 
 void LightpadTabWidget::onCloseOtherTabs(int index) {
   if (index < 0 || index >= count() - 1) {
     return;
   }
 
-  for (int i = count() - 2; i > index; --i) {
-    removeTab(i);
-  }
-
-  for (int i = index - 1; i >= 0; --i) {
-    removeTab(i);
+  QWidget *keep = widget(index);
+  for (int i = count() - 2; i >= 0; --i) {
+    if (widget(i) == keep) {
+      continue;
+    }
+    if (!requestCloseTab(i)) {
+      return;
+    }
   }
 }
 
@@ -639,8 +670,11 @@ void LightpadTabWidget::onCloseTabsToTheRight(int index) {
     return;
   }
 
-  for (int i = count() - 2; i > index; --i) {
-    removeTab(i);
+  QWidget *anchor = widget(index);
+  for (int i = count() - 2; i > indexOf(anchor); --i) {
+    if (!requestCloseTab(i)) {
+      return;
+    }
   }
 }
 

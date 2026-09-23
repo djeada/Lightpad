@@ -12,6 +12,7 @@
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+#include <algorithm>
 
 namespace {
 constexpr int CARD_INDEX_ROLE = Qt::UserRole + 1;
@@ -234,12 +235,11 @@ void WorktreeMapDialog::onCreate() {
     return;
   }
 
-  const bool exists =
-      m_git->getBranches().end() !=
-      std::find_if(m_git->getBranches().begin(), m_git->getBranches().end(),
-                   [&](const GitBranchInfo &candidate) {
-                     return candidate.name == branch.trimmed();
-                   });
+  const QList<GitBranchInfo> branches = m_git->getBranches();
+  const bool exists = std::any_of(branches.cbegin(), branches.cend(),
+                                  [&](const GitBranchInfo &candidate) {
+                                    return candidate.name == branch.trimmed();
+                                  });
 
   if (m_git->addWorktree(path.trimmed(), branch.trimmed(), !exists)) {
     emit repositoryChanged();

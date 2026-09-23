@@ -8,6 +8,8 @@
 #include <QTreeWidget>
 #include <QWidget>
 
+#include "findreplacesearch.h"
+
 class TextArea;
 class MainWindow;
 class QTimer;
@@ -18,15 +20,6 @@ class AsyncTask;
 namespace Ui {
 class FindReplacePanel;
 }
-
-struct GlobalSearchResult {
-  QString filePath;
-  int lineNumber;
-  int columnNumber;
-  int matchStart;
-  int matchLength;
-  QString lineContent;
-};
 
 class FindReplacePanel : public QWidget {
   Q_OBJECT
@@ -107,7 +100,8 @@ private:
   QString m_searchFieldError;
 
   void updateCounterLabels();
-  void selectSearchWord(QTextCursor &cursor, int n, int offset = 0);
+  void selectSearchWord(QTextCursor &cursor, int offset = 0);
+  bool selectionMatchesCurrent(const QTextCursor &cursor) const;
   void clearSelectionFormat(QTextCursor &cursor, int n);
   void findInitial(QTextCursor &cursor, const QString &searchWord);
   void findNext(QTextCursor &cursor, const QString &searchWord, int offset = 0);
@@ -124,10 +118,7 @@ private:
   void performGlobalSearch(const QString &searchWord,
                            bool navigateToResult = true);
   void refreshGlobalResultsForCurrentFile(const QString &searchWord);
-  void searchInFile(const QString &filePath, const QRegularExpression &pattern);
-  QVector<GlobalSearchResult>
-  collectMatchesInContent(const QString &filePath, const QString &content,
-                          const QRegularExpression &pattern) const;
+  void cancelGlobalSearch();
   int currentMatchLength(const QString &searchWord) const;
   QString replacementForMatch(const QString &replaceWord,
                               const QRegularExpressionMatch &match) const;
@@ -135,7 +126,6 @@ private:
   void displayGlobalResults();
   void navigateToGlobalResult(int index, bool emitNavigation = true);
   void updateModeUI();
-  QStringList getProjectFiles() const;
 
   void displayLocalResults(const QString &searchWord);
   void onLocalResultClicked(QTreeWidgetItem *item, int column);
@@ -148,6 +138,9 @@ private:
   QMap<QString, QVector<GlobalSearchResult>> globalResultsByFile;
   QPointer<AsyncTask> m_localSearchTask;
   int m_localSearchRequestId;
+  QPointer<AsyncTask> m_globalSearchTask;
+  int m_globalSearchRequestId;
+  QRegularExpression m_globalSearchPattern;
   static constexpr int kAsyncLocalSearchThresholdChars = 200000;
 
   int m_globalResultsPage;

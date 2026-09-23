@@ -108,6 +108,7 @@ private:
   bool m_showWip = false;
   QString m_compareAnchor;
   bool m_loadingMore = false;
+  quint64 m_loadGeneration = 0;
   bool m_historyExhausted = false;
   int m_pageSize = 100;
   int m_maxLanes;

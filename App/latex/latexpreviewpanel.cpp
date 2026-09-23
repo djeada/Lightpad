@@ -135,6 +135,18 @@ void LatexPreviewPanel::build() {
           &LatexPreviewPanel::onBuildProcessFinished);
   connect(m_buildProcess, &QProcess::readyReadStandardOutput, this,
           &LatexPreviewPanel::onBuildProcessOutput);
+  connect(m_buildProcess, &QProcess::errorOccurred, this,
+          [this](QProcess::ProcessError error) {
+            if (error != QProcess::FailedToStart || !m_buildProcess)
+              return;
+            m_building = false;
+            appendLog(QString("Failed to start %1: %2")
+                          .arg(m_buildProcess->program(),
+                               m_buildProcess->errorString()),
+                      "red");
+            m_statusLabel->setText("Build Failed");
+            emit buildFinished(false);
+          });
 
   QString engine = selectedEngine();
   QStringList args = engineArgs();

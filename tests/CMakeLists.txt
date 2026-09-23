@@ -450,6 +450,8 @@ add_executable(test_pluginbasedsyntaxhighlighter
     ${CMAKE_SOURCE_DIR}/App/syntax/pluginbasedsyntaxhighlighter.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/shellsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/syntax/pythonsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/cppsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/markdownsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -498,6 +500,9 @@ add_executable(test_completionengine
     unit/test_completionengine.cpp
     ${CMAKE_SOURCE_DIR}/App/completion/completionengine.cpp
     ${CMAKE_SOURCE_DIR}/App/completion/completionproviderregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/completion/snippetregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/completion/providers/lspcompletionprovider.cpp
+    ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -536,6 +541,12 @@ add_executable(test_dap
     ${CMAKE_SOURCE_DIR}/App/dap/watchmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugsession.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugsettings.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/debugconfigurationdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/pythonenvironmentwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -2118,6 +2129,16 @@ target_compile_definitions(test_gotosymboldialog PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GoToSymbolDialogTests COMMAND test_gotosymboldialog)
 
+# Fake LSP server used by LSP protocol round-trip tests.
+add_executable(fakelsp_server
+    unit/fakelspserver_main.cpp
+)
+
+target_link_libraries(fakelsp_server
+    PRIVATE
+    Qt6::Core
+)
+
 # LspClient test executable
 add_executable(test_lspclient
     unit/test_lspclient.cpp
@@ -2216,6 +2237,10 @@ target_link_libraries(test_languagefeaturemanager
 )
 
 target_compile_definitions(test_languagefeaturemanager PRIVATE QT_DEPRECATED_WARNINGS)
+
+target_compile_definitions(test_languagefeaturemanager PRIVATE
+    FAKE_LSP_SERVER_PATH="$<TARGET_FILE:fakelsp_server>")
+add_dependencies(test_languagefeaturemanager fakelsp_server)
 
 add_test(NAME LanguageFeatureManagerTests COMMAND test_languagefeaturemanager)
 
@@ -2347,6 +2372,7 @@ add_test(NAME DockUtilsTests COMMAND test_dockutils)
 # FindReplacePanel test executable
 add_executable(test_findreplacepanel
     unit/test_findreplacepanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/findreplacesearch.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -2562,6 +2588,10 @@ target_link_libraries(test_symbolnavigation
 )
 
 target_compile_definitions(test_symbolnavigation PRIVATE QT_DEPRECATED_WARNINGS)
+
+target_compile_definitions(test_symbolnavigation PRIVATE
+    FAKE_LSP_SERVER_PATH="$<TARGET_FILE:fakelsp_server>")
+add_dependencies(test_symbolnavigation fakelsp_server)
 
 add_test(NAME SymbolNavigationTests COMMAND test_symbolnavigation)
 
@@ -2933,6 +2963,10 @@ target_link_libraries(test_lspregression
 )
 
 target_compile_definitions(test_lspregression PRIVATE QT_DEPRECATED_WARNINGS)
+
+target_compile_definitions(test_lspregression PRIVATE
+    FAKE_LSP_SERVER_PATH="$<TARGET_FILE:fakelsp_server>")
+add_dependencies(test_lspregression fakelsp_server)
 
 add_test(NAME LspRegressionTests COMMAND test_lspregression)
 

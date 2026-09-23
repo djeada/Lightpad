@@ -2,6 +2,7 @@
 #include "lsp/lspclient.h"
 #include <QApplication>
 #include <QComboBox>
+#include <QFile>
 #include <QLabel>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -21,6 +22,7 @@ private slots:
   void testAutoBuild();
   void testCleanWithNoFile();
   void testBuildWithNoFile();
+  void testBuildReportsMissingEngine();
 };
 
 void TestLatexPreviewPanel::testIsLatexFile() {
@@ -124,6 +126,33 @@ void TestLatexPreviewPanel::testBuildWithNoFile() {
   auto *logBrowser = panel.findChild<QTextBrowser *>("latexPreviewLogBrowser");
   QVERIFY(logBrowser);
   QVERIFY(logBrowser->toPlainText().contains("No file"));
+}
+
+void TestLatexPreviewPanel::testBuildReportsMissingEngine() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString texPath = dir.filePath("doc.tex");
+  QFile tex(texPath);
+  QVERIFY(tex.open(QIODevice::WriteOnly));
+  tex.write("\\documentclass{article}\\begin{document}x\\end{document}\n");
+  tex.close();
+
+  const QByteArray previousPath = qgetenv("PATH");
+  qputenv("PATH", dir.path().toUtf8());
+
+  LatexPreviewPanel panel;
+  panel.setFilePath(texPath);
+  QSignalSpy finishSpy(&panel, &LatexPreviewPanel::buildFinished);
+  panel.build();
+  QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 1, 5000);
+  QCOMPARE(finishSpy.at(0).at(0).toBool(), false);
+
+  QSignalSpy startSpy(&panel, &LatexPreviewPanel::buildStarted);
+  panel.build();
+  QCOMPARE(startSpy.count(), 1);
+  QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 2, 5000);
+
+  qputenv("PATH", previousPath);
 }
 
 QTEST_MAIN(TestLatexPreviewPanel)

@@ -1,6 +1,8 @@
 #include "completion/completionengine.h"
 #include "completion/completionproviderregistry.h"
 #include "completion/icompletionprovider.h"
+#include "completion/providers/lspcompletionprovider.h"
+#include "completion/snippetregistry.h"
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 #include <memory>
@@ -84,6 +86,11 @@ private slots:
   void testCompletionsReadyEmittedOnce();
   void testMultipleProvidersEmitOnce();
   void testStaleCallbackIgnored();
+  void testSnippetMirrorsTakePlaceholderDefault();
+  void testSnippetNestedPlaceholders();
+  void testSnippetEscapesAndChoices();
+  void testSnippetWithoutPlaceholders();
+  void testLspProviderSurvivesClientDeletion();
 
 private:
   CompletionEngine *m_engine;
@@ -182,6 +189,57 @@ void TestCompletionEngine::testStaleCallbackIgnored() {
   deferred->deliverResults(items);
 
   QCOMPARE(spy.count(), 1);
+}
+
+void TestCompletionEngine::testSnippetMirrorsTakePlaceholderDefault() {
+  QCOMPARE(Snippet::expand("for (${1:int} ${2:i} = 0; $2 < ${3:count}; "
+                           "$2++) {\n\t$0\n}"),
+           QString("for (int i = 0; i < count; i++) {\n\t\n}"));
+  QCOMPARE(Snippet::expand("${1} and ${1:x} and $1"), QString("x and x and x"));
+
+  Snippet snippet;
+  snippet.body = "while (${1:cond}) { $1; }";
+  QCOMPARE(snippet.expandedBody(), QString("while (cond) { cond; }"));
+}
+
+void TestCompletionEngine::testSnippetNestedPlaceholders() {
+  QCOMPARE(Snippet::expand("${1:outer ${2:inner} end} $2"),
+           QString("outer inner end inner"));
+  QCOMPARE(Snippet::expand("${1:a{b}c}"), QString("a{bc}"));
+  QCOMPARE(Snippet::expand("${TM_FILENAME:default} $UNKNOWN."),
+           QString("default ."));
+}
+
+void TestCompletionEngine::testSnippetEscapesAndChoices() {
+  QCOMPARE(Snippet::expand("cost: \\$5 \\} \\\\"), QString("cost: $5 } \\"));
+  QCOMPARE(Snippet::expand("${1|one,two,three|} $1"), QString("one one"));
+  QCOMPARE(Snippet::expand("${1:\\}x}"), QString("}x"));
+  QCOMPARE(Snippet::expand("$ ${ ${x"), QString("$ ${ ${x"));
+}
+
+void TestCompletionEngine::testSnippetWithoutPlaceholders() {
+  QCOMPARE(Snippet::expand("plain text"), QString("plain text"));
+  QCOMPARE(Snippet::expand(""), QString());
+}
+
+void TestCompletionEngine::testLspProviderSurvivesClientDeletion() {
+  auto *client = new LspClient();
+  LspCompletionProvider provider(client);
+  QVERIFY(provider.client() == client);
+  delete client;
+  QVERIFY(provider.client() == nullptr);
+  QVERIFY(!provider.isEnabled());
+
+  bool called = false;
+  CompletionContext context;
+  context.documentUri = "file:///x.cpp";
+  provider.requestCompletions(context,
+                              [&called](const QList<CompletionItem> &items) {
+                                called = true;
+                                QVERIFY(items.isEmpty());
+                              });
+  QVERIFY(called);
+  provider.setClient(nullptr);
 }
 
 QTEST_MAIN(TestCompletionEngine)

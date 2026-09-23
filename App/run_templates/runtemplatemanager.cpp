@@ -8,6 +8,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QSaveFile>
 #include <QStandardPaths>
 
 namespace {
@@ -391,6 +392,12 @@ bool RunTemplateManager::saveAssignments() const {
   QString configDir = m_workspaceFolder + "/.lightpad";
   QString configFile = configDir + "/run_config.json";
 
+  if (!loadAssignments()) {
+    LOG_ERROR(QString("Refusing to overwrite unreadable run config: %1")
+                  .arg(configFile));
+    return false;
+  }
+
   QJsonArray assignmentsArray;
   for (auto it = m_assignments.begin(); it != m_assignments.end(); ++it) {
     QJsonObject obj;
@@ -479,7 +486,7 @@ bool RunTemplateManager::saveAssignments() const {
   root["version"] = "1.0";
   root["assignments"] = assignmentsArray;
 
-  QFile file(configFile);
+  QSaveFile file(configFile);
   if (!file.open(QIODevice::WriteOnly)) {
     LOG_ERROR(QString("Failed to write run config: %1").arg(configFile));
     return false;
@@ -487,7 +494,10 @@ bool RunTemplateManager::saveAssignments() const {
 
   QJsonDocument doc(root);
   file.write(doc.toJson(QJsonDocument::Indented));
-  file.close();
+  if (!file.commit()) {
+    LOG_ERROR(QString("Failed to write run config: %1").arg(configFile));
+    return false;
+  }
 
   LOG_INFO(QString("Saved %1 run assignments to %2")
                .arg(assignmentsArray.size())
@@ -513,6 +523,10 @@ bool RunTemplateManager::assignTemplateToFile(
   FileTemplateAssignment stored = assignment;
   stored.filePath = filePath;
 
+  if (!m_workspaceFolder.isEmpty() && !loadAssignments()) {
+    return false;
+  }
+
   m_assignments[filePath] = stored;
 
   bool saved = saveAssignments();
@@ -525,6 +539,10 @@ bool RunTemplateManager::assignTemplateToFile(
 }
 
 bool RunTemplateManager::removeAssignment(const QString &filePath) {
+  if (!m_workspaceFolder.isEmpty() && !loadAssignments()) {
+    return false;
+  }
+
   auto it = m_assignments.find(filePath);
   if (it == m_assignments.end()) {
     return true;
@@ -550,6 +568,19 @@ QString RunTemplateManager::substituteVariables(const QString &input,
       input, manager.m_workspaceFolder, filePath,
       QFileInfo(filePath).absolutePath(),
       manager.pythonPreferenceForAssignment(assignment));
+}
+
+QString
+RunTemplateManager::substituteCommandLineVariables(const QString &input,
+                                                   const QString &filePath) {
+  const RunTemplateManager &manager = RunTemplateManager::instance();
+  const FileTemplateAssignment assignment =
+      manager.getAssignmentForFile(filePath);
+  return PythonProjectEnvironment::substituteCommandLineVariables(
+      input, PythonProjectEnvironment::variables(
+                 manager.m_workspaceFolder, filePath,
+                 QFileInfo(filePath).absolutePath(),
+                 manager.pythonPreferenceForAssignment(assignment)));
 }
 
 QPair<QString, QStringList>
@@ -593,52 +624,32 @@ RunTemplateManager::buildCommand(const QString &filePath,
       tmpl.command, m_workspaceFolder, filePath, workingDirectory,
       pythonPreference);
 
+  const QMap<QString, QString> variables = PythonProjectEnvironment::variables(
+      m_workspaceFolder, filePath, workingDirectory, pythonPreference);
+  const int scriptIndex = PythonProjectEnvironment::shellScriptArgumentIndex(
+      tmpl.command, tmpl.args);
   QStringList args;
-  for (const QString &arg : tmpl.args) {
-    args.append(PythonProjectEnvironment::substituteVariables(
-        arg, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
-  }
+  if (scriptIndex >= 0) {
+    QStringList injection;
+    for (const QString &f : assignment.compilerFlags) {
+      injection.append(f);
+    }
+    for (const QString &a : assignment.customArgs) {
+      injection.append(a);
+    }
+    for (const QString &s : assignment.sourceFiles) {
+      injection.append(PythonProjectEnvironment::shellQuote(s));
+    }
 
-  QStringList extraFlags;
-  for (const QString &flag : assignment.compilerFlags) {
-    extraFlags.append(PythonProjectEnvironment::substituteVariables(
-        flag, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
-  }
-
-  QStringList extraArgs;
-  for (const QString &arg : assignment.customArgs) {
-    extraArgs.append(PythonProjectEnvironment::substituteVariables(
-        arg, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
-  }
-
-  QStringList extraSources;
-  for (const QString &src : assignment.sourceFiles) {
-    extraSources.append(PythonProjectEnvironment::substituteVariables(
-        src, m_workspaceFolder, filePath, workingDirectory, pythonPreference));
-  }
-
-  bool hasExtras =
-      !extraFlags.isEmpty() || !extraArgs.isEmpty() || !extraSources.isEmpty();
-
-  bool isBashC = hasExtras && (command == "bash" || command == "sh") &&
-                 args.contains("-c");
-
-  if (isBashC) {
-    int cIdx = args.indexOf("-c");
-    if (cIdx >= 0 && cIdx + 1 < args.size()) {
-      QString shellCmd = args[cIdx + 1];
-
-      QStringList injection;
-      for (const QString &f : extraFlags) {
-        injection.append(f);
-      }
-      for (const QString &a : extraArgs) {
-        injection.append(a);
-      }
-      for (const QString &s : extraSources) {
-        injection.append("\"" + s + "\"");
+    for (int i = 0; i < tmpl.args.size(); ++i) {
+      if (i != scriptIndex) {
+        args.append(PythonProjectEnvironment::substituteVariables(
+            tmpl.args.at(i), m_workspaceFolder, filePath, workingDirectory,
+            pythonPreference));
+        continue;
       }
 
+      QString shellCmd = tmpl.args.at(i);
       if (!injection.isEmpty()) {
         QString extra = " " + injection.join(" ");
 
@@ -648,14 +659,31 @@ RunTemplateManager::buildCommand(const QString &filePath,
         } else {
           shellCmd.append(extra);
         }
-        args[cIdx + 1] = shellCmd;
       }
+      args.append(PythonProjectEnvironment::substituteShellVariables(
+          shellCmd, variables));
     }
   } else {
-
-    args.append(extraFlags);
-    args.append(extraArgs);
-    args.append(extraSources);
+    for (const QString &arg : tmpl.args) {
+      args.append(PythonProjectEnvironment::substituteVariables(
+          arg, m_workspaceFolder, filePath, workingDirectory,
+          pythonPreference));
+    }
+    for (const QString &flag : assignment.compilerFlags) {
+      args.append(PythonProjectEnvironment::substituteVariables(
+          flag, m_workspaceFolder, filePath, workingDirectory,
+          pythonPreference));
+    }
+    for (const QString &arg : assignment.customArgs) {
+      args.append(PythonProjectEnvironment::substituteVariables(
+          arg, m_workspaceFolder, filePath, workingDirectory,
+          pythonPreference));
+    }
+    for (const QString &src : assignment.sourceFiles) {
+      args.append(PythonProjectEnvironment::substituteVariables(
+          src, m_workspaceFolder, filePath, workingDirectory,
+          pythonPreference));
+    }
   }
 
   return qMakePair(command, args);

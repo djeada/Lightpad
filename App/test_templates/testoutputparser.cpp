@@ -9,7 +9,7 @@
 TapParser::TapParser(QObject *parent) : ITestOutputParser(parent) {}
 
 void TapParser::feed(const QByteArray &data) {
-  m_buffer += QString::fromUtf8(data);
+  m_buffer += decode(data);
   while (m_buffer.contains('\n')) {
     int idx = m_buffer.indexOf('\n');
     QString line = m_buffer.left(idx).trimmed();
@@ -137,7 +137,7 @@ void JunitXmlParser::finish() {
 JsonTestParser::JsonTestParser(QObject *parent) : ITestOutputParser(parent) {}
 
 void JsonTestParser::feed(const QByteArray &data) {
-  m_buffer += QString::fromUtf8(data);
+  m_buffer += decode(data);
   while (m_buffer.contains('\n')) {
     int idx = m_buffer.indexOf('\n');
     QString line = m_buffer.left(idx).trimmed();
@@ -262,7 +262,7 @@ void JsonTestParser::parseLine(const QString &line) {
 PytestParser::PytestParser(QObject *parent) : ITestOutputParser(parent) {}
 
 void PytestParser::feed(const QByteArray &data) {
-  m_buffer += QString::fromUtf8(data);
+  m_buffer += decode(data);
   while (m_buffer.contains('\n')) {
     int idx = m_buffer.indexOf('\n');
     QString line = m_buffer.left(idx);
@@ -276,14 +276,42 @@ void PytestParser::finish() {
     parseLine(m_buffer);
   m_buffer.clear();
 
-  if (m_inFailures && !m_failureTestName.isEmpty()) {
-    TestResult result;
+  if (m_inFailures)
+    flushFailure();
+  m_inFailures = false;
+}
+
+void PytestParser::flushFailure() {
+  if (m_failureTestName.isEmpty())
+    return;
+
+  QString key = m_failureTestName;
+  if (!m_failedResults.contains(key))
+    key = QString(m_failureTestName).replace('.', "::");
+  if (!m_failedResults.contains(key)) {
+    key.clear();
+    for (auto it = m_failedResults.constBegin();
+         it != m_failedResults.constEnd(); ++it) {
+      if (it.key().endsWith(m_failureTestName) ||
+          m_failureTestName.endsWith(it.key())) {
+        key = it.key();
+        break;
+      }
+    }
+  }
+
+  TestResult result;
+  if (!key.isEmpty()) {
+    result = m_failedResults.take(key);
+  } else {
     result.id = m_failureTestName;
     result.name = m_failureTestName;
     result.status = TestStatus::Failed;
-    result.stackTrace = m_failureMessage;
-    emit testFinished(result);
   }
+  result.stackTrace = m_failureMessage;
+  m_failureTestName.clear();
+  m_failureMessage.clear();
+  emit testFinished(result);
 }
 
 void PytestParser::parseLine(const QString &line) {
@@ -309,45 +337,47 @@ void PytestParser::parseLine(const QString &line) {
     else if (status == "ERROR")
       result.status = TestStatus::Errored;
 
+    if (result.status == TestStatus::Failed)
+      m_failedResults.insert(result.name, result);
+
     emit testFinished(result);
     return;
   }
 
+  const QString trimmed = line.trimmed();
   static QRegularExpression failureHeaderRe(R"(^=+ FAILURES =+$)");
-  if (failureHeaderRe.match(line.trimmed()).hasMatch()) {
+  if (failureHeaderRe.match(trimmed).hasMatch()) {
     m_inFailures = true;
     return;
   }
 
-  if (m_inFailures) {
-    static QRegularExpression failNameRe(R"(^_+ (.+?) _+$)");
-    auto failMatch = failNameRe.match(line.trimmed());
-    if (failMatch.hasMatch()) {
-      if (!m_failureTestName.isEmpty()) {
-        TestResult result;
-        result.id = m_failureTestName;
-        result.name = m_failureTestName;
-        result.status = TestStatus::Failed;
-        result.stackTrace = m_failureMessage;
-        emit testFinished(result);
-      }
-      m_failureTestName = failMatch.captured(1);
-      m_failureMessage.clear();
-    } else {
-      m_failureMessage += line + "\n";
-    }
+  if (!m_inFailures)
+    return;
+
+  static QRegularExpression sectionRe(R"(^=+ .+ =+$)");
+  static QRegularExpression summaryRe(R"(^=+ .* in [\d.]+s)");
+  if (sectionRe.match(trimmed).hasMatch() ||
+      summaryRe.match(trimmed).hasMatch()) {
+    flushFailure();
+    m_inFailures = false;
+    return;
   }
 
-  static QRegularExpression summaryRe(R"(=+\s+(\d+)\s+passed)");
-  if (summaryRe.match(line.trimmed()).hasMatch()) {
-    m_inFailures = false;
+  static QRegularExpression failNameRe(R"(^_+ (.+?) _+$)");
+  auto failMatch = failNameRe.match(trimmed);
+  if (failMatch.hasMatch()) {
+    flushFailure();
+    m_failureTestName = failMatch.captured(1);
+    m_failureMessage.clear();
+  } else {
+    m_failureMessage += line + "\n";
   }
 }
 
 CtestParser::CtestParser(QObject *parent) : ITestOutputParser(parent) {}
 
 void CtestParser::feed(const QByteArray &data) {
-  m_buffer += QString::fromUtf8(data);
+  m_buffer += decode(data);
   while (m_buffer.contains('\n')) {
     int idx = m_buffer.indexOf('\n');
     QString line = m_buffer.left(idx);
@@ -462,7 +492,7 @@ void GenericRegexParser::setSkipPattern(const QString &pattern) {
 }
 
 void GenericRegexParser::feed(const QByteArray &data) {
-  m_buffer += QString::fromUtf8(data);
+  m_buffer += decode(data);
   while (m_buffer.contains('\n')) {
     int idx = m_buffer.indexOf('\n');
     QString line = m_buffer.left(idx).trimmed();

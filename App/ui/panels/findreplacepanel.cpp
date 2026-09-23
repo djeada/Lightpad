@@ -139,6 +139,7 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
       resultsTree(nullptr), searchHistoryIndex(-1),
       refreshTimer(new QTimer(this)), searchStatusLabel(nullptr),
       searchInProgress(false), searchExecuted(false), m_localSearchRequestId(0),
+      m_globalSearchTask(nullptr), m_globalSearchRequestId(0),
       m_globalResultsPage(0), m_paginationWidget(nullptr),
       m_pageInfoLabel(nullptr), m_prevPageButton(nullptr),
       m_nextPageButton(nullptr) {
@@ -295,6 +296,7 @@ FindReplacePanel::~FindReplacePanel() {
     m_localSearchTask->cancel();
     m_localSearchTask.clear();
   }
+  cancelGlobalSearch();
   delete ui;
 }
 
@@ -593,6 +595,7 @@ void FindReplacePanel::updateModeUI() {
     matchLengths.clear();
     position = -1;
   } else {
+    cancelGlobalSearch();
     globalResults.clear();
     globalResultsByFile.clear();
     globalResultIndex = -1;
@@ -685,20 +688,17 @@ QString FindReplacePanel::applyPreserveCase(const QString &replaceWord,
 
 int FindReplacePanel::currentMatchLength(const QString &searchWord) const {
   if (position >= 0 && position < matchLengths.size()) {
-    return qMax(1, matchLengths[position]);
+    return matchLengths[position];
   }
-  return qMax(1, searchWord.size());
+  return searchWord.size();
 }
 
 QString FindReplacePanel::replacementForMatch(
     const QString &replaceWord, const QRegularExpressionMatch &match) const {
-  QString replacement = replaceWord;
-  if (ui->useRegex->isChecked()) {
-    for (int i = match.lastCapturedIndex(); i >= 1; --i) {
-      replacement.replace(QString("\\%1").arg(i), match.captured(i));
-      replacement.replace(QString("$%1").arg(i), match.captured(i));
-    }
-  }
+  const QString replacement =
+      ui->useRegex->isChecked()
+          ? FindReplaceSearch::expandRegexReplacement(replaceWord, match)
+          : replaceWord;
   return applyPreserveCase(replacement, match.captured(0));
 }
 
@@ -805,16 +805,30 @@ void FindReplacePanel::on_replaceSingle_clicked() {
     addToSearchHistory(searchWord);
     searchExecuted = true;
     activeSearchWord = searchWord;
-    QTextCursor newCursor(textArea->document());
+    QTextCursor cursor = textArea->textCursor();
 
     if (textArea->getSearchWord() != searchWord) {
-      findInitial(newCursor, searchWord);
+      findInitial(cursor, searchWord);
+    } else if (!selectionMatchesCurrent(cursor)) {
+      if (!positions.isEmpty()) {
+        if (position >= 0 && position < positions.size()) {
+          --position;
+        }
+        findNext(cursor, searchWord);
+      }
+      updateCounterLabels();
+      return;
     }
 
-    replaceNext(newCursor, replaceWord);
+    if (!selectionMatchesCurrent(cursor)) {
+      updateCounterLabels();
+      return;
+    }
+
+    replaceNext(cursor, replaceWord);
 
     if (!positions.isEmpty()) {
-      findNext(newCursor, searchWord);
+      findNext(cursor, searchWord);
     }
 
     updateCounterLabels();
@@ -838,16 +852,28 @@ void FindReplacePanel::on_close_clicked() {
   }
 }
 
-void FindReplacePanel::selectSearchWord(QTextCursor &cursor, int n,
-                                        int offset) {
-  cursor.setPosition(positions[++position] - offset);
+void FindReplacePanel::selectSearchWord(QTextCursor &cursor, int offset) {
+  ++position;
+  const int length = matchLengths.value(position, 0);
+  cursor.setPosition(positions[position] - offset);
 
   if (!cursor.isNull()) {
     cursor.clearSelection();
-    cursor.setPosition(positions[position] - offset + n,
+    cursor.setPosition(positions[position] - offset + length,
                        QTextCursor::KeepAnchor);
     textArea->setTextCursor(cursor);
   }
+}
+
+bool FindReplacePanel::selectionMatchesCurrent(
+    const QTextCursor &cursor) const {
+  if (position < 0 || position >= positions.size() ||
+      position >= matchLengths.size()) {
+    return false;
+  }
+  return cursor.selectionStart() == positions[position] &&
+         cursor.selectionEnd() - cursor.selectionStart() ==
+             matchLengths[position];
 }
 
 void FindReplacePanel::clearSelectionFormat(QTextCursor &cursor, int n) {
@@ -859,17 +885,18 @@ void FindReplacePanel::clearSelectionFormat(QTextCursor &cursor, int n) {
 
 void FindReplacePanel::replaceNext(QTextCursor &cursor,
                                    const QString &replaceWord) {
-  if (!cursor.selectedText().isEmpty() && !positions.isEmpty() &&
-      position >= 0) {
+  if (selectionMatchesCurrent(cursor)) {
     const QString text = textArea->toPlainText();
     const QRegularExpression pattern =
         buildSearchPattern(ui->searchFind->text());
     const QRegularExpressionMatch match =
         pattern.match(text, positions.value(position));
+    const bool exactMatch = match.hasMatch() &&
+                            match.capturedStart() == positions[position] &&
+                            match.capturedLength() == matchLengths[position];
     QString finalReplacement =
-        match.hasMatch()
-            ? replacementForMatch(replaceWord, match)
-            : applyPreserveCase(replaceWord, cursor.selectedText());
+        exactMatch ? replacementForMatch(replaceWord, match)
+                   : applyPreserveCase(replaceWord, cursor.selectedText());
     QString matchedText = cursor.selectedText();
 
     cursor.removeSelectedText();
@@ -973,7 +1000,8 @@ void FindReplacePanel::findInitial(QTextCursor &cursor,
   }
 
   QVector<GlobalSearchResult> matches =
-      collectMatchesInContent(currentFilePath(), text, pattern);
+      FindReplaceSearch::collectMatchesInContent(currentFilePath(), text,
+                                                 pattern);
   QVector<int> allPositions;
   QVector<int> allMatchLengths;
 
@@ -1016,7 +1044,7 @@ void FindReplacePanel::findInitial(QTextCursor &cursor,
       }
     }
 
-    selectSearchWord(cursor, currentMatchLength(searchWord));
+    selectSearchWord(cursor);
   }
 
   displayLocalResults(searchWord);
@@ -1032,12 +1060,7 @@ void FindReplacePanel::findNext(QTextCursor &cursor, const QString &searchWord,
     if (position >= positions.size() - 1)
       position = -1;
 
-    if (position + 1 < positions.size()) {
-      matchLength =
-          qMax(1, matchLengths.value(position + 1, searchWord.size()));
-    }
-
-    selectSearchWord(cursor, matchLength, offset);
+    selectSearchWord(cursor, offset);
   }
 }
 
@@ -1194,78 +1217,17 @@ void FindReplacePanel::clearSearchFeedback() {
   searchStatusLabel->setVisible(false);
 }
 
-QStringList FindReplacePanel::getProjectFiles() const {
-  QStringList files;
-
-  if (projectPath.isEmpty()) {
-    return files;
+void FindReplacePanel::cancelGlobalSearch() {
+  ++m_globalSearchRequestId;
+  if (m_globalSearchTask) {
+    m_globalSearchTask->cancel();
+    m_globalSearchTask.clear();
   }
-
-  QStringList maskPatterns;
-  if (ui->fileMaskEdit) {
-    QString maskText = ui->fileMaskEdit->text().trimmed();
-    if (!maskText.isEmpty()) {
-      for (const QString &token : maskText.split(',')) {
-        QString pattern = token.trimmed();
-        if (!pattern.isEmpty()) {
-          maskPatterns.append(pattern);
-        }
-      }
-    }
-  }
-
-  QDirIterator it(projectPath, QDir::Files | QDir::NoDotAndDotDot,
-                  QDirIterator::Subdirectories);
-
-  QStringList searchableExtensions = {
-      "cpp",   "hpp",  "c",       "h",    "cc",   "cxx",  "hxx",  "py",
-      "pyw",   "js",   "jsx",     "ts",   "tsx",  "java", "go",   "rs",
-      "rb",    "php",  "swift",   "kt",   "kts",  "cs",   "html", "htm",
-      "css",   "scss", "sass",    "less", "json", "xml",  "yaml", "yml",
-      "toml",  "md",   "txt",     "rst",  "sql",  "sh",   "bash", "zsh",
-      "cmake", "make", "makefile"};
-
-  QVector<QRegularExpression> maskRegexes;
-  for (const QString &pattern : maskPatterns) {
-    QString regexPattern =
-        QRegularExpression::wildcardToRegularExpression(pattern);
-    QRegularExpression re(regexPattern,
-                          QRegularExpression::CaseInsensitiveOption);
-    if (re.isValid()) {
-      maskRegexes.append(re);
-    }
-  }
-
-  while (it.hasNext()) {
-    QString filePath = it.next();
-    QFileInfo fileInfo(filePath);
-    QString fileName = fileInfo.fileName();
-
-    if (!maskRegexes.isEmpty()) {
-      bool matched = std::any_of(maskRegexes.cbegin(), maskRegexes.cend(),
-                                 [&fileName](const QRegularExpression &re) {
-                                   return re.match(fileName).hasMatch();
-                                 });
-      if (matched) {
-        files.append(filePath);
-      }
-      continue;
-    }
-
-    QString ext = fileInfo.suffix().toLower();
-    QString fileNameLower = fileInfo.baseName().toLower();
-
-    if (searchableExtensions.contains(ext) ||
-        searchableExtensions.contains(fileNameLower)) {
-      files.append(filePath);
-    }
-  }
-
-  return files;
 }
 
 void FindReplacePanel::performGlobalSearch(const QString &searchWord,
                                            bool navigateToResult) {
+  cancelGlobalSearch();
   beginSearchFeedback(QString("Searching project..."));
 
   globalResults.clear();
@@ -1285,42 +1247,102 @@ void FindReplacePanel::performGlobalSearch(const QString &searchWord,
     return;
   }
 
-  QStringList files = getProjectFiles();
+  const QString rootPath = projectPath;
+  const QString maskText =
+      ui->fileMaskEdit ? ui->fileMaskEdit->text() : QString();
   const QString currentPath = currentFilePath();
-  const int totalFiles = files.size();
+  const QString currentContent = (!currentPath.isEmpty() && textArea)
+                                     ? textArea->toPlainText()
+                                     : QString();
+  const bool hasCurrentContent = !currentPath.isEmpty() && textArea;
+  const int requestId = m_globalSearchRequestId;
+  m_globalSearchPattern = pattern;
 
-  for (int i = 0; i < totalFiles; ++i) {
-    const QString &filePath = files[i];
-    if ((i % 100) == 0) {
-      updateSearchFeedback(QString("Searching project... %1/%2 files")
-                               .arg(i + 1)
-                               .arg(totalFiles));
+  auto results = std::make_shared<QMap<QString, QVector<GlobalSearchResult>>>();
+  AsyncTask *task = AsyncThreadPool::instance().submitTask(
+      [rootPath, maskText, currentPath, currentContent, hasCurrentContent,
+       pattern, results](AsyncTask *worker) {
+        const QStringList files = FindReplaceSearch::projectFiles(
+            rootPath, maskText, [worker]() { return worker->isCancelled(); });
+        const int totalFiles = files.size();
+        for (int i = 0; i < totalFiles; ++i) {
+          if (worker->isCancelled()) {
+            return;
+          }
+          const QString &filePath = files[i];
+          if ((i % 100) == 0) {
+            worker->reportProgress(totalFiles > 0 ? (i * 100) / totalFiles : 0,
+                                   QString("Searching project... %1/%2 files")
+                                       .arg(i + 1)
+                                       .arg(totalFiles));
+          }
+          if (hasCurrentContent && filePath == currentPath) {
+            (*results)[filePath] = FindReplaceSearch::collectMatchesInContent(
+                filePath, currentContent, pattern);
+            continue;
+          }
+          QFile file(filePath);
+          if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            continue;
+          }
+          QTextStream stream(&file);
+          const QString content = stream.readAll();
+          (*results)[filePath] = FindReplaceSearch::collectMatchesInContent(
+              filePath, content, pattern);
+        }
+      });
+  m_globalSearchTask = task;
+
+  connect(task, &AsyncTask::finished, task, &QObject::deleteLater);
+  connect(task, &AsyncTask::cancelled, task, &QObject::deleteLater);
+  connect(task, &AsyncTask::error, task, &QObject::deleteLater);
+
+  connect(task, &AsyncTask::progress, this,
+          [this, requestId](int, const QString &message) {
+            if (requestId == m_globalSearchRequestId && !message.isEmpty()) {
+              updateSearchFeedback(message);
+            }
+          });
+
+  connect(task, &AsyncTask::finished, this,
+          [this, task, requestId, results, navigateToResult]() {
+            if (m_globalSearchTask == task) {
+              m_globalSearchTask.clear();
+            }
+            if (requestId != m_globalSearchRequestId || !isGlobalMode()) {
+              return;
+            }
+
+            globalResultsByFile = std::move(*results);
+            globalResults.clear();
+            for (auto it = globalResultsByFile.cbegin();
+                 it != globalResultsByFile.cend(); ++it) {
+              globalResults += it.value();
+            }
+
+            displayGlobalResults();
+
+            if (!globalResults.isEmpty()) {
+              globalResultIndex = 0;
+              navigateToGlobalResult(0, navigateToResult);
+            }
+
+            endSearchFeedback(globalResults.size());
+            updateCounterLabels();
+          });
+
+  auto clearTask = [this, task, requestId]() {
+    if (m_globalSearchTask == task) {
+      m_globalSearchTask.clear();
     }
-    if (!currentPath.isEmpty() && filePath == currentPath && textArea) {
-      globalResultsByFile[filePath] =
-          collectMatchesInContent(filePath, textArea->toPlainText(), pattern);
-      continue;
+    if (requestId == m_globalSearchRequestId) {
+      clearSearchFeedback();
+      updateCounterLabels();
     }
-    searchInFile(filePath, pattern);
-  }
-
-  for (auto it = globalResultsByFile.cbegin(); it != globalResultsByFile.cend();
-       ++it) {
-    globalResults += it.value();
-  }
-
-  displayGlobalResults();
-
-  if (navigateToResult && !globalResults.isEmpty()) {
-    globalResultIndex = 0;
-    navigateToGlobalResult(0);
-  } else if (!globalResults.isEmpty()) {
-    globalResultIndex = 0;
-    navigateToGlobalResult(0, false);
-  }
-
-  endSearchFeedback(globalResults.size());
-  updateCounterLabels();
+  };
+  connect(task, &AsyncTask::cancelled, this, clearTask);
+  connect(task, &AsyncTask::error, this,
+          [clearTask](const QString &) { clearTask(); });
 }
 
 void FindReplacePanel::onTextAreaContentsChanged() {
@@ -1352,6 +1374,7 @@ bool FindReplacePanel::reportPatternProblem(const QString &searchWord) {
   positions.clear();
   matchLengths.clear();
   position = -1;
+  cancelGlobalSearch();
   globalResults.clear();
   globalResultsByFile.clear();
   globalResultIndex = -1;
@@ -1415,6 +1438,7 @@ void FindReplacePanel::refreshSearchResults() {
     positions.clear();
     matchLengths.clear();
     position = -1;
+    cancelGlobalSearch();
     globalResults.clear();
     globalResultsByFile.clear();
     globalResultIndex = -1;
@@ -1510,7 +1534,8 @@ void FindReplacePanel::refreshSearchResults() {
 
     QVector<int> refreshedPositions;
     QVector<GlobalSearchResult> matches =
-        collectMatchesInContent(currentFilePath(), text, pattern);
+        FindReplaceSearch::collectMatchesInContent(currentFilePath(), text,
+                                                   pattern);
     for (const GlobalSearchResult &match : matches) {
       refreshedPositions.push_back(match.matchStart);
     }
@@ -1605,8 +1630,8 @@ void FindReplacePanel::applyLocalSearchResults(
       QRegularExpressionMatch match = pattern.match(text, matchStart);
       matchLengths.append(match.hasMatch() &&
                                   match.capturedStart() == matchStart
-                              ? qMax(1, match.capturedLength())
-                              : qMax(1, searchWord.size()));
+                              ? match.capturedLength()
+                              : searchWord.size());
     }
   }
   position = -1;
@@ -1669,67 +1694,6 @@ void FindReplacePanel::applyLocalSearchResults(
   updateCounterLabels();
 }
 
-void FindReplacePanel::searchInFile(const QString &filePath,
-                                    const QRegularExpression &pattern) {
-  QFile file(filePath);
-  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    return;
-  }
-
-  QTextStream stream(&file);
-  QString content = stream.readAll();
-  file.close();
-
-  globalResultsByFile[filePath] =
-      collectMatchesInContent(filePath, content, pattern);
-}
-
-QVector<GlobalSearchResult> FindReplacePanel::collectMatchesInContent(
-    const QString &filePath, const QString &content,
-    const QRegularExpression &pattern) const {
-  QVector<GlobalSearchResult> matchesForFile;
-  QStringList lines = content.split('\n');
-
-  QVector<int> lineStarts;
-  int lineStart = 0;
-  lineStarts.reserve(lines.size());
-  for (const QString &line : lines) {
-    lineStarts.append(lineStart);
-    lineStart += line.length() + 1;
-  }
-
-  QRegularExpressionMatchIterator matches = pattern.globalMatch(content);
-  while (matches.hasNext()) {
-    QRegularExpressionMatch match = matches.next();
-    const int matchStart = match.capturedStart();
-    const int matchLength = match.capturedLength();
-    if (matchStart < 0) {
-      continue;
-    }
-
-    int lineNum = 0;
-    for (int i = 0; i < lineStarts.size(); ++i) {
-      if (i + 1 < lineStarts.size() && matchStart >= lineStarts[i + 1]) {
-        continue;
-      }
-      lineNum = i;
-      break;
-    }
-
-    GlobalSearchResult result;
-    result.filePath = filePath;
-    result.lineNumber = lineNum + 1;
-    result.columnNumber = matchStart - lineStarts.value(lineNum) + 1;
-    result.matchStart = matchStart;
-    result.matchLength = matchLength;
-    result.lineContent =
-        (lineNum < lines.size()) ? lines[lineNum].trimmed() : QString();
-    matchesForFile.append(result);
-  }
-
-  return matchesForFile;
-}
-
 QString FindReplacePanel::currentFilePath() const {
   if (!mainWindow) {
     return QString();
@@ -1749,8 +1713,13 @@ QString FindReplacePanel::currentFilePath() const {
 
 void FindReplacePanel::refreshGlobalResultsForCurrentFile(
     const QString &searchWord) {
+  const bool samePattern =
+      buildSearchPattern(searchWord) == m_globalSearchPattern;
+  if (m_globalSearchTask && samePattern) {
+    return;
+  }
   updateSearchFeedback(QString("Searching current file..."));
-  if (globalResultsByFile.isEmpty()) {
+  if (globalResultsByFile.isEmpty() || !samePattern) {
     performGlobalSearch(searchWord, false);
     return;
   }
@@ -1782,8 +1751,8 @@ void FindReplacePanel::refreshGlobalResultsForCurrentFile(
     selectedColumn = selectedResult.columnNumber;
   }
 
-  globalResultsByFile[filePath] =
-      collectMatchesInContent(filePath, textArea->toPlainText(), pattern);
+  globalResultsByFile[filePath] = FindReplaceSearch::collectMatchesInContent(
+      filePath, textArea->toPlainText(), pattern);
 
   globalResults.clear();
   for (auto it = globalResultsByFile.cbegin(); it != globalResultsByFile.cend();

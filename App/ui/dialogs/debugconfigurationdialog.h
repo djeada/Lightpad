@@ -11,6 +11,7 @@
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
@@ -21,17 +22,22 @@
 #include <QSpinBox>
 #include <QSplitter>
 #include <QTableWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <memory>
 
 class DebugConfigurationDialog : public StyledDialog {
   Q_OBJECT
+  friend class TestDap;
 
 public:
   explicit DebugConfigurationDialog(QWidget *parent = nullptr);
   ~DebugConfigurationDialog();
 
   void applyTheme(const Theme &theme) override;
+
+public slots:
+  void reject() override;
 
 private slots:
   void onConfigSelected(QListWidgetItem *current, QListWidgetItem *previous);
@@ -48,7 +54,9 @@ private slots:
 private:
   void setupUi();
   void loadConfigurations();
-  void saveCurrentToModel();
+  bool saveCurrentToModel();
+  void showValidationError(const QString &message);
+  void refreshAdapterStatus();
   void loadConfigIntoForm(const DebugConfiguration &cfg);
   void clearForm();
   DebugConfiguration
@@ -95,6 +103,14 @@ private:
 
   QPushButton *m_saveButton;
   QPushButton *m_cancelButton;
+
+  QLabel *m_validationLabel;
+  QTimer *m_statusTimer;
+  QHash<QString, QString> m_statusCache;
+  std::shared_ptr<IDebugAdapter> m_pendingStatusAdapter;
+  DebugConfiguration m_pendingStatusPreview;
+  QString m_pendingStatusKey;
+  QList<DebugConfiguration> m_originalConfigurations;
 
   QString m_currentConfigName;
   QString m_adapterOptionsSignature;

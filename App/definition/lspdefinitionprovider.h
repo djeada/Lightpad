@@ -23,6 +23,7 @@ private:
   LspClient *m_client;
   int m_nextRequestId;
   int m_activeProviderRequestId;
+  int m_activeLspRequestId = 0;
 };
 
 #endif

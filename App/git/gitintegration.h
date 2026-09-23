@@ -12,6 +12,7 @@
 #include "gitsyncmodel.h"
 #include <QByteArray>
 #include <QMap>
+#include <QMutex>
 #include <QObject>
 #include <QProcess>
 #include <QString>
@@ -19,6 +20,7 @@
 #include <functional>
 
 constexpr int GIT_COMMAND_TIMEOUT_MS = 5000;
+constexpr int GIT_LONG_COMMAND_TIMEOUT_MS = 600000;
 constexpr int GIT_AUTO_REFRESH_INTERVAL_MS = 30000;
 
 class QTimer;
@@ -260,6 +262,8 @@ public:
 
   bool discardChanges(const QString &filePath);
 
+  bool restoreFileFromHead(const QString &filePath);
+
   bool discardAllChanges();
 
   QList<GitCommitInfo> getCommitLog(int maxCount = 50,
@@ -479,13 +483,16 @@ public:
 
   QString bisectRun(const QString &command, int *exitCode = nullptr);
 
+  void bisectRunAsync(const QString &command,
+                      const std::function<void(QString, int)> &callback);
+
   QList<GitCommitInfo> getCommitsWithoutRef(int maxCount = 100) const;
 
   QString worktreeDirtySummary(const QString &worktreePath) const;
 
   QStringList getCommitRefs(const QString &hash) const;
 
-  QList<GitCommandRecord> commandHistory() const { return m_commandHistory; }
+  QList<GitCommandRecord> commandHistory() const;
   void clearCommandHistory();
 
   static GitCommandMirrorMode mirrorMode();
@@ -581,6 +588,7 @@ private:
   QList<GitFileInfo> m_statusCache;
 
   mutable QList<GitCommandRecord> m_commandHistory;
+  mutable QMutex m_commandHistoryMutex;
 
   void recordCommand(const QStringList &args, const QString &workingDirectory,
                      const QString &output, const QString &error,
@@ -588,6 +596,9 @@ private:
 
   QString executeGitCommand(const QStringList &args,
                             bool *success = nullptr) const;
+
+  QString executeGitCommandRaw(const QStringList &args,
+                               bool *success = nullptr) const;
 
   QString executeGitCommandAtPath(const QString &path, const QStringList &args,
                                   bool *success = nullptr) const;
@@ -600,7 +611,12 @@ private:
   QString executeGitCommandWithEnv(const QStringList &args,
                                    const QMap<QString, QString> &extraEnv,
                                    bool *success = nullptr,
-                                   QString *errorOutput = nullptr) const;
+                                   QString *errorOutput = nullptr,
+                                   bool *timedOut = nullptr) const;
+
+  bool runRebaseWithHelpers(const QStringList &args, QString *errorOutput);
+
+  QString commitRewriteProblem(const QString &fullHash) const;
 
   QString prepareRebaseHelpers(const QString &todoText,
                                const QStringList &messages) const;

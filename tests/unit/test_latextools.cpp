@@ -28,6 +28,7 @@ private slots:
   void testDetectPackagesMultiple();
   void testDetectMainFile();
   void testParseLatexLogErrors();
+  void testParseLatexLogFileLineErrors();
   void testParseLatexLogWarnings();
   void testParseLatexLogOverfull();
   void testParseLatexLogPackageWarnings();
@@ -275,6 +276,21 @@ void TestLatexTools::testParseLatexLogErrors() {
     }
   }
   QVERIFY2(foundError, "Should parse LaTeX error from log");
+}
+
+void TestLatexTools::testParseLatexLogFileLineErrors() {
+  const QString log = "./chapters/intro.tex:42: Undefined control sequence.\n"
+                      "l.42 \\foo\n"
+                      "./main.tex:7: LaTeX Error: File `x.sty' not found.\n";
+
+  const QList<LatexLogEntry> entries = LatexTools::parseLatexLog(log);
+  QCOMPARE(entries.size(), 2);
+  QCOMPARE(entries[0].severity, 1);
+  QCOMPARE(entries[0].lineNumber, 42);
+  QCOMPARE(entries[0].file, QString("./chapters/intro.tex"));
+  QCOMPARE(entries[0].message, QString("Undefined control sequence."));
+  QCOMPARE(entries[1].lineNumber, 7);
+  QCOMPARE(entries[1].message, QString("File `x.sty' not found."));
 }
 
 void TestLatexTools::testParseLatexLogWarnings() {

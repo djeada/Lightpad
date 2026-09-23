@@ -1,5 +1,6 @@
 #include "gitintegration.h"
 #include "../core/logging/logger.h"
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
@@ -35,6 +36,209 @@ QByteArray runFingerprintCommand(const QString &repositoryPath,
   }
   *ok = process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
   return process.readAllStandardOutput();
+}
+
+struct GitProcessResult {
+  QString output;
+  QString error;
+  int exitCode = -1;
+  bool started = false;
+  bool timedOut = false;
+  bool succeeded() const { return started && !timedOut && exitCode == 0; }
+};
+
+QString gitSubcommand(const QStringList &args) {
+  for (int i = 0; i < args.size(); ++i) {
+    const QString &arg = args.at(i);
+    if (arg == QLatin1String("-c") || arg == QLatin1String("-C")) {
+      ++i;
+      continue;
+    }
+    if (!arg.startsWith(QLatin1Char('-'))) {
+      return arg;
+    }
+  }
+  return QString();
+}
+
+int gitCommandTimeoutMs(const QStringList &args) {
+  static const QSet<QString> quickCommands = {
+      "status",       "log",           "show",
+      "diff",         "rev-parse",     "rev-list",
+      "for-each-ref", "blame",         "ls-files",
+      "cat-file",     "merge-base",    "name-rev",
+      "describe",     "shortlog",      "reflog",
+      "grep",         "symbolic-ref",  "merge-tree",
+      "diff-tree",    "ls-tree",       "show-ref",
+      "var",          "version",       "check-ignore",
+      "cherry",       "count-objects", "config",
+      "branch",       "tag",           "remote",
+      "worktree",     "stash",         "check-ref-format"};
+  static const QSet<QString> quickSubactions = {"list", "show", "log", "-v",
+                                                "get-url"};
+
+  const QString command = gitSubcommand(args);
+  if (!quickCommands.contains(command)) {
+    return GIT_LONG_COMMAND_TIMEOUT_MS;
+  }
+  if (command == QLatin1String("stash") || command == QLatin1String("remote") ||
+      command == QLatin1String("worktree")) {
+    const int index = args.indexOf(command);
+    const QString action = args.value(index + 1);
+    if (action.isEmpty() || !quickSubactions.contains(action)) {
+      return GIT_LONG_COMMAND_TIMEOUT_MS;
+    }
+  }
+  if (command == QLatin1String("tag") && (args.contains(QLatin1String("-a")) ||
+                                          args.contains(QLatin1String("-s")) ||
+                                          args.contains(QLatin1String("-m")))) {
+    return GIT_LONG_COMMAND_TIMEOUT_MS;
+  }
+  return GIT_COMMAND_TIMEOUT_MS;
+}
+
+QProcessEnvironment gitProcessEnvironment(
+    const QMap<QString, QString> &extraEnv = QMap<QString, QString>()) {
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  env.insert(QStringLiteral("GIT_TERMINAL_PROMPT"), QStringLiteral("0"));
+  for (auto it = extraEnv.constBegin(); it != extraEnv.constEnd(); ++it) {
+    env.insert(it.key(), it.value());
+  }
+  return env;
+}
+
+GitProcessResult
+runGitProcess(const QString &workingDirectory, const QStringList &args,
+              const QMap<QString, QString> &extraEnv = QMap<QString, QString>(),
+              const QByteArray *input = nullptr, int timeoutMs = -1) {
+  GitProcessResult result;
+  if (timeoutMs < 0) {
+    timeoutMs = gitCommandTimeoutMs(args);
+  }
+
+  QProcess process;
+  process.setWorkingDirectory(workingDirectory);
+  process.setProcessEnvironment(gitProcessEnvironment(extraEnv));
+  process.start("git", args);
+  if (!process.waitForStarted(GIT_COMMAND_TIMEOUT_MS)) {
+    LOG_WARNING("Git command failed to start: git " + args.join(" "));
+    result.error = QStringLiteral("Could not start git");
+    return result;
+  }
+  result.started = true;
+
+  if (input) {
+    process.write(*input);
+  }
+  process.closeWriteChannel();
+
+  if (!process.waitForFinished(timeoutMs)) {
+    LOG_WARNING("Git command timed out: git " + args.join(" "));
+    process.kill();
+    process.waitForFinished(1000);
+    result.timedOut = true;
+    result.output = QString::fromUtf8(process.readAllStandardOutput());
+    result.error =
+        QStringLiteral("git %1 did not finish within %2 seconds and was "
+                       "stopped")
+            .arg(gitSubcommand(args))
+            .arg(timeoutMs / 1000);
+    return result;
+  }
+
+  result.output = QString::fromUtf8(process.readAllStandardOutput());
+  result.error = QString::fromUtf8(process.readAllStandardError());
+  result.exitCode =
+      process.exitStatus() == QProcess::NormalExit ? process.exitCode() : -1;
+  if (result.exitCode != 0) {
+    LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " +
+              result.error);
+  }
+  return result;
+}
+
+QString trimTrailingWhitespace(QString output) {
+  int end = output.size();
+  while (end > 0) {
+    QChar ch = output[end - 1];
+    if (ch == '\n' || ch == '\r' || ch == ' ')
+      --end;
+    else
+      break;
+  }
+  output.truncate(end);
+  return output;
+}
+
+QList<GitCommitInfo> parseCommitLogRecords(const QString &output) {
+  QList<GitCommitInfo> result;
+
+  if (output.isEmpty()) {
+    return result;
+  }
+
+  const QStringList commits = output.split('\n', Qt::SkipEmptyParts);
+  result.reserve(commits.size());
+
+  for (const QString &line : commits) {
+    QStringList parts = line.split(QChar('\0'));
+    if (parts.size() < 7) {
+      continue;
+    }
+
+    GitCommitInfo info;
+    info.hash = parts[0];
+    info.shortHash = parts[1];
+    info.author = parts[2];
+    info.authorEmail = parts[3];
+    info.date = parts[4];
+    info.relativeDate = parts[5];
+    info.subject = parts[6];
+
+    if (parts.size() > 7) {
+      info.parents = parts[7].split(' ', Qt::SkipEmptyParts);
+    }
+
+    result.append(info);
+  }
+
+  return result;
+}
+
+QStringList commitLogPageArgs(int skip, int limit) {
+  const QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
+  return {"log", "--date-order", QString("--skip=%1").arg(skip),
+          QString("--max-count=%1").arg(limit),
+          QString("--pretty=format:%1").arg(format)};
+}
+
+QStringList logPageArgs(const GitLogOptions &options, int skip, int limit) {
+  QStringList args = commitLogPageArgs(skip, limit);
+
+  if (options.firstParentOnly) {
+    args << "--first-parent";
+  }
+  if (options.allRefs && options.revisionRange.isEmpty()) {
+    args << "--branches" << "--tags" << "--remotes";
+  }
+  if (!options.revisionRange.isEmpty()) {
+    args << options.revisionRange;
+  }
+  if (!options.pathFilter.isEmpty()) {
+    args << "--" << options.pathFilter;
+  }
+  return args;
+}
+
+struct GitAsyncRecord {
+  QStringList args;
+  GitProcessResult result;
+};
+
+QString shellQuote(const QString &value) {
+  QString quoted = value;
+  quoted.replace(QLatin1Char('\''), QStringLiteral("'\\''"));
+  return QLatin1Char('\'') + quoted + QLatin1Char('\'');
 }
 } // namespace
 
@@ -121,49 +325,34 @@ QString GitIntegration::findRepositoryRoot(const QString &path) const {
 
 QString GitIntegration::executeGitCommand(const QStringList &args,
                                           bool *success) const {
+  return trimTrailingWhitespace(executeGitCommandRaw(args, success));
+}
+
+QString GitIntegration::executeGitCommandRaw(const QStringList &args,
+                                             bool *success) const {
   if (!m_isValid && !args.contains("rev-parse")) {
     if (success)
       *success = false;
     return QString();
   }
 
-  QProcess process;
-  process.setWorkingDirectory(m_repositoryPath.isEmpty() ? QDir::currentPath()
-                                                         : m_repositoryPath);
-  process.start("git", args);
+  const QString workingDirectory =
+      m_repositoryPath.isEmpty() ? QDir::currentPath() : m_repositoryPath;
+  const GitProcessResult result = runGitProcess(workingDirectory, args);
 
-  if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS)) {
-    LOG_WARNING("Git command timed out: git " + args.join(" "));
-    if (success)
-      *success = false;
+  if (success) {
+    *success = result.succeeded();
+  }
+  if (!result.started) {
     return QString();
   }
 
-  if (success) {
-    *success = (process.exitCode() == 0);
+  recordCommand(args, workingDirectory, result.output, result.error,
+                result.exitCode);
+  if (result.timedOut) {
+    return QString();
   }
-
-  QString output = QString::fromUtf8(process.readAllStandardOutput());
-  int end = output.size();
-  while (end > 0) {
-    QChar ch = output[end - 1];
-    if (ch == '\n' || ch == '\r' || ch == ' ')
-      --end;
-    else
-      break;
-  }
-  output.truncate(end);
-
-  const QString error = QString::fromUtf8(process.readAllStandardError());
-  recordCommand(args, process.workingDirectory(), output, error,
-                process.exitCode());
-
-  if (process.exitCode() != 0) {
-    LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " + error);
-    return output;
-  }
-
-  return output;
+  return result.output;
 }
 
 QString GitIntegration::executeWordDiff(const QStringList &args) const {
@@ -195,7 +384,7 @@ void GitIntegration::updateCurrentBranch() {
 QList<GitFileInfo> GitIntegration::getStatus() const {
   bool success;
   QString output =
-      executeGitCommand({"status", "--porcelain", "-uall"}, &success);
+      executeGitCommand({"status", "--porcelain", "-z", "-uall"}, &success);
 
   if (!success) {
     return QList<GitFileInfo>();
@@ -221,7 +410,7 @@ GitFileInfo GitIntegration::getFileStatus(const QString &filePath) const {
 
   bool success;
   QString output = executeGitCommand(
-      {"status", "--porcelain", "-uall", "--", relativePath}, &success);
+      {"status", "--porcelain", "-z", "-uall", "--", relativePath}, &success);
 
   if (!success || output.isEmpty()) {
     return info;
@@ -243,26 +432,26 @@ GitIntegration::parseStatusOutput(const QString &output) const {
     return result;
   }
 
-  QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+  const QStringList records = output.split(QChar('\0'), Qt::SkipEmptyParts);
 
-  for (const QString &line : lines) {
-    if (line.length() < 4) {
+  for (int i = 0; i < records.size(); ++i) {
+    const QString &record = records.at(i);
+    if (record.length() < 4) {
       continue;
     }
 
     GitFileInfo info;
 
-    QChar indexChar = line[0];
-    QChar workTreeChar = line[1];
-    QString path = line.mid(3);
+    QChar indexChar = record[0];
+    QChar workTreeChar = record[1];
+    info.filePath = record.mid(3);
 
-    if (path.contains(" -> ")) {
-      QStringList parts = path.split(" -> ");
-      info.originalPath = parts[0];
-      path = parts[1];
+    const auto hasSource = [](QChar c) { return c == 'R' || c == 'C'; };
+    if ((hasSource(indexChar) || hasSource(workTreeChar)) &&
+        i + 1 < records.size()) {
+      info.originalPath = records.at(++i);
     }
 
-    info.filePath = path;
     info.indexStatus = parseStatusChar(indexChar);
     info.workTreeStatus = parseStatusChar(workTreeChar);
 
@@ -397,43 +586,40 @@ QList<GitBranchInfo> GitIntegration::getBranches() const {
 
   bool success;
   QString output = executeGitCommand(
-      {"branch", "-a",
-       "--format=%(refname:short)%(HEAD)\t%(upstream:short)\t%(symref:short)"},
+      {"for-each-ref",
+       "--format=%(refname)%00%(HEAD)%00%(upstream:short)%00%(symref)",
+       "refs/heads", "refs/remotes"},
       &success);
 
   if (!success) {
     return result;
   }
 
-  QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+  const QStringList lines = output.split('\n', Qt::SkipEmptyParts);
 
   for (const QString &line : lines) {
+    const QStringList parts = line.split(QChar('\0'));
+    const QString refname = parts.value(0);
+    if (!parts.value(3).isEmpty()) {
+      continue;
+    }
+
     GitBranchInfo info;
-
-    QString trimmedLine = line.trimmed();
-    if (trimmedLine.isEmpty()) {
-      continue;
-    }
-
-    QStringList parts = trimmedLine.split('\t');
-    QString namePart = parts.value(0).trimmed();
-    QString symref = parts.value(2).trimmed();
-
-    if (!symref.isEmpty()) {
-      continue;
-    }
-
-    if (namePart.endsWith('*')) {
-      info.isCurrent = true;
-      namePart.chop(1);
+    if (refname.startsWith("refs/heads/")) {
+      info.name = refname.mid(11);
+      info.isRemote = false;
+    } else if (refname.startsWith("refs/remotes/")) {
+      info.name = refname.mid(13);
+      info.isRemote = true;
     } else {
-      info.isCurrent = false;
+      continue;
+    }
+    if (info.name.isEmpty()) {
+      continue;
     }
 
-    info.isRemote =
-        namePart.startsWith("remotes/") || namePart.startsWith("origin/");
-    info.name = namePart;
-    info.trackingBranch = parts.value(1).trimmed();
+    info.isCurrent = !info.isRemote && parts.value(1) == "*";
+    info.trackingBranch = parts.value(2);
     info.aheadCount = 0;
     info.behindCount = 0;
 
@@ -564,7 +750,7 @@ bool GitIntegration::checkoutBranch(const QString &branchName) {
   }
 
   bool success;
-  executeGitCommand({"checkout", branchName}, &success);
+  executeGitCommand({"checkout", branchName, "--"}, &success);
 
   if (success) {
     updateCurrentBranch();
@@ -589,7 +775,7 @@ bool GitIntegration::checkoutCommit(const QString &commitHash) {
   }
 
   bool success;
-  executeGitCommand({"checkout", commitHash}, &success);
+  executeGitCommand({"checkout", commitHash, "--"}, &success);
 
   if (success) {
     updateCurrentBranch();
@@ -644,7 +830,7 @@ bool GitIntegration::createBranchFromCommit(const QString &branchName,
 
   bool success;
   QStringList args =
-      checkout ? QStringList({"checkout", "-b", branchName, commitHash})
+      checkout ? QStringList({"checkout", "-b", branchName, commitHash, "--"})
                : QStringList({"branch", branchName, commitHash});
   executeGitCommand(args, &success);
 
@@ -694,11 +880,11 @@ QString GitIntegration::getFileDiff(const QString &filePath,
 
   bool success;
   if (staged) {
-    return executeGitCommand({"diff", "--cached", "--", relativePath},
-                             &success);
+    return executeGitCommandRaw({"diff", "--cached", "--", relativePath},
+                                &success);
   }
 
-  QString diff = executeGitCommand({"diff", "--", relativePath}, &success);
+  QString diff = executeGitCommandRaw({"diff", "--", relativePath}, &success);
   if (!diff.isEmpty()) {
     return diff;
   }
@@ -712,7 +898,7 @@ QString GitIntegration::getFileDiff(const QString &filePath,
 #else
         "/dev/null";
 #endif
-    return executeGitCommand(
+    return executeGitCommandRaw(
         {"diff", "--no-index", "--", nullDevice, relativePath}, &success);
   }
 
@@ -738,6 +924,30 @@ bool GitIntegration::discardChanges(const QString &filePath) {
     emit statusChanged();
   } else {
     emit errorOccurred("Failed to discard changes: " + relativePath);
+  }
+
+  return success;
+}
+
+bool GitIntegration::restoreFileFromHead(const QString &filePath) {
+  if (!m_isValid) {
+    emit errorOccurred("Not in a git repository");
+    return false;
+  }
+
+  QString relativePath = filePath;
+  if (filePath.startsWith(m_repositoryPath)) {
+    relativePath = filePath.mid(m_repositoryPath.length() + 1);
+  }
+
+  bool success;
+  executeGitCommand({"checkout", "HEAD", "--", relativePath}, &success);
+
+  if (success) {
+    emit operationCompleted("Restored from HEAD: " + relativePath);
+    emit statusChanged();
+  } else {
+    emit errorOccurred("Failed to restore from HEAD: " + relativePath);
   }
 
   return success;
@@ -791,38 +1001,7 @@ QList<GitCommitInfo> GitIntegration::getCommitLog(int maxCount,
 
 QList<GitCommitInfo>
 GitIntegration::parseCommitLogOutput(const QString &output) const {
-  QList<GitCommitInfo> result;
-
-  if (output.isEmpty()) {
-    return result;
-  }
-
-  const QStringList commits = output.split('\n', Qt::SkipEmptyParts);
-  result.reserve(commits.size());
-
-  for (const QString &line : commits) {
-    QStringList parts = line.split(QChar('\0'));
-    if (parts.size() < 7) {
-      continue;
-    }
-
-    GitCommitInfo info;
-    info.hash = parts[0];
-    info.shortHash = parts[1];
-    info.author = parts[2];
-    info.authorEmail = parts[3];
-    info.date = parts[4];
-    info.relativeDate = parts[5];
-    info.subject = parts[6];
-
-    if (parts.size() > 7) {
-      info.parents = parts[7].split(' ', Qt::SkipEmptyParts);
-    }
-
-    result.append(info);
-  }
-
-  return result;
+  return parseCommitLogRecords(output);
 }
 
 QList<GitCommitInfo> GitIntegration::getCommitLogPage(const QString &branch,
@@ -928,33 +1107,32 @@ void GitIntegration::getCommitLogPageAsync(
   QThreadPool::globalInstance()->start([self, repoPath, branch, skip, limit,
                                         callback]() {
     QList<GitCommitInfo> page;
+    QList<GitAsyncRecord> records;
 
-    if (self && !repoPath.isEmpty() && limit > 0 && skip >= 0) {
-      const QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
-
-      QStringList args = {"log", "--date-order", QString("--skip=%1").arg(skip),
-                          QString("--max-count=%1").arg(limit),
-                          QString("--pretty=format:%1").arg(format)};
+    if (!repoPath.isEmpty() && limit > 0 && skip >= 0) {
+      QStringList args = commitLogPageArgs(skip, limit);
       if (!branch.isEmpty()) {
         args.append(branch);
       }
 
-      bool success = false;
-      const QString output =
-          self->executeGitCommandAtPath(repoPath, args, &success);
-      if (success) {
-        page = self->parseCommitLogOutput(output);
+      const GitProcessResult result = runGitProcess(repoPath, args);
+      records.append(GitAsyncRecord{args, result});
+      if (result.succeeded()) {
+        page = parseCommitLogRecords(result.output);
       }
     }
 
-    if (!self) {
-      return;
-    }
-
     QMetaObject::invokeMethod(
-        self,
-        [self, callback, page]() {
-          if (self && callback) {
+        QCoreApplication::instance(),
+        [self, callback, page, records, repoPath]() {
+          if (!self) {
+            return;
+          }
+          for (const GitAsyncRecord &record : records) {
+            self->recordCommand(record.args, repoPath, record.result.output,
+                                record.result.error, record.result.exitCode);
+          }
+          if (callback) {
             callback(page);
           }
         },
@@ -971,23 +1149,24 @@ void GitIntegration::getCommitRefsMapAsync(
 
   QThreadPool::globalInstance()->start([self, repoPath, callback]() {
     QMap<QString, QList<GitRefDecoration>> refs;
+    QList<GitAsyncRecord> records;
 
-    if (self && !repoPath.isEmpty()) {
-      bool headSuccess = false;
-      const QString headHash =
-          self->executeGitCommandAtPath(repoPath, {"rev-parse", "HEAD"},
-                                        &headSuccess)
-              .trimmed();
+    if (!repoPath.isEmpty()) {
+      const QStringList headArgs{"rev-parse", "HEAD"};
+      const GitProcessResult headResult = runGitProcess(repoPath, headArgs);
+      records.append(GitAsyncRecord{headArgs, headResult});
+      const bool headSuccess = headResult.succeeded();
+      const QString headHash = headResult.output.trimmed();
 
-      bool refsSuccess = false;
-      const QString refsOutput = self->executeGitCommandAtPath(
-          repoPath,
-          {"for-each-ref",
-           "--format=%(objectname)%00%(*objectname)%00%(refname)", "refs/heads",
-           "refs/tags", "refs/remotes"},
-          &refsSuccess);
+      const QStringList refsArgs{
+          "for-each-ref",
+          "--format=%(objectname)%00%(*objectname)%00%(refname)", "refs/heads",
+          "refs/tags", "refs/remotes"};
+      const GitProcessResult refsResult = runGitProcess(repoPath, refsArgs);
+      records.append(GitAsyncRecord{refsArgs, refsResult});
+      const QString refsOutput = refsResult.output;
 
-      if (refsSuccess && !refsOutput.isEmpty()) {
+      if (refsResult.succeeded() && !refsOutput.isEmpty()) {
         const QStringList lines = refsOutput.split('\n', Qt::SkipEmptyParts);
         for (const QString &line : lines) {
           const QStringList parts = line.split(QChar('\0'));
@@ -1029,14 +1208,17 @@ void GitIntegration::getCommitRefsMapAsync(
       }
     }
 
-    if (!self) {
-      return;
-    }
-
     QMetaObject::invokeMethod(
-        self,
-        [self, callback, refs]() {
-          if (self && callback) {
+        QCoreApplication::instance(),
+        [self, callback, refs, records, repoPath]() {
+          if (!self) {
+            return;
+          }
+          for (const GitAsyncRecord &record : records) {
+            self->recordCommand(record.args, repoPath, record.result.output,
+                                record.result.error, record.result.exitCode);
+          }
+          if (callback) {
             callback(refs);
           }
         },
@@ -1279,10 +1461,10 @@ GitDiffHunk GitIntegration::getDiffHunkAtLine(const QString &filePath,
 
   bool success;
   QString output =
-      executeGitCommand({"diff", "-U3", "--", relativePath}, &success);
+      executeGitCommandRaw({"diff", "-U3", "--", relativePath}, &success);
   if (output.isEmpty()) {
-    output = executeGitCommand({"diff", "-U3", "--cached", "--", relativePath},
-                               &success);
+    output = executeGitCommandRaw(
+        {"diff", "-U3", "--cached", "--", relativePath}, &success);
   }
   if (output.isEmpty()) {
     return result;
@@ -1290,6 +1472,9 @@ GitDiffHunk GitIntegration::getDiffHunkAtLine(const QString &filePath,
 
   QRegularExpression hunkHeader(R"(@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@.*)");
   QStringList lines = output.split('\n');
+  if (!lines.isEmpty() && lines.last().isEmpty()) {
+    lines.removeLast();
+  }
 
   int i = 0;
   while (i < lines.size()) {
@@ -1336,20 +1521,34 @@ GitIntegration::getCommitFileStats(const QString &commitHash) const {
 
   bool success;
   QString output = executeGitCommand(
-      {"show", "--numstat", "--pretty=format:", commitHash}, &success);
+      {"show", "--numstat", "-z", "--pretty=format:", commitHash, "--"},
+      &success);
   if (!success || output.isEmpty()) {
     return result;
   }
 
-  for (const QString &line : output.split('\n', Qt::SkipEmptyParts)) {
-    QStringList parts = line.split('\t');
-    if (parts.size() >= 3) {
-      GitCommitFileStat stat;
-      stat.additions = parts[0] == "-" ? 0 : parts[0].toInt();
-      stat.deletions = parts[1] == "-" ? 0 : parts[1].toInt();
-      stat.filePath = parts[2];
-      result.append(stat);
+  const QStringList records = output.split(QChar('\0'));
+  for (int i = 0; i < records.size(); ++i) {
+    QString record = records.at(i);
+    while (record.startsWith('\n')) {
+      record.remove(0, 1);
     }
+    QStringList parts = record.split('\t');
+    if (parts.size() < 3) {
+      continue;
+    }
+    GitCommitFileStat stat;
+    stat.additions = parts[0] == "-" ? 0 : parts[0].toInt();
+    stat.deletions = parts[1] == "-" ? 0 : parts[1].toInt();
+    stat.filePath = parts[2];
+    if (stat.filePath.isEmpty()) {
+      if (i + 2 >= records.size()) {
+        break;
+      }
+      i += 2;
+      stat.filePath = records.at(i);
+    }
+    result.append(stat);
   }
   return result;
 }
@@ -1623,31 +1822,23 @@ void GitIntegration::setWorkingPath(const QString &path) {
 QString GitIntegration::executeGitCommandAtPath(const QString &path,
                                                 const QStringList &args,
                                                 bool *success) const {
-  QProcess process;
-  process.setWorkingDirectory(path);
-  process.start("git", args);
-
-  if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS)) {
-    LOG_WARNING("Git command timed out: git " + args.join(" "));
-    if (success)
-      *success = false;
+  const GitProcessResult result = runGitProcess(path, args);
+  if (success) {
+    *success = result.succeeded();
+  }
+  if (!result.started) {
     return QString();
   }
 
-  if (success) {
-    *success = (process.exitCode() == 0);
+  const QString output = result.output.trimmed();
+  recordCommand(args, path, output, result.error, result.exitCode);
+
+  if (result.timedOut) {
+    return QString();
   }
-
-  const QString error = QString::fromUtf8(process.readAllStandardError());
-  const QString output =
-      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
-  recordCommand(args, path, output, error, process.exitCode());
-
-  if (process.exitCode() != 0) {
-    LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " + error);
-    return error;
+  if (result.exitCode != 0) {
+    return result.error;
   }
-
   return output;
 }
 
@@ -1883,11 +2074,12 @@ QStringList GitIntegration::getConflictedFiles() const {
   }
 
   bool success;
-  QString output =
-      executeGitCommand({"diff", "--name-only", "--diff-filter=U"}, &success);
+  QString output = executeGitCommand(
+      {"diff", "--name-only", "-z", "--diff-filter=U"}, &success);
 
   if (success && !output.isEmpty()) {
-    result = output.split('\n', Qt::SkipEmptyParts);
+    result = output.split(QChar('\0'), Qt::SkipEmptyParts);
+    result.removeDuplicates();
   }
 
   return result;
@@ -2073,8 +2265,8 @@ bool GitIntegration::isMergeInProgress() const {
     return false;
   }
 
-  QFile mergeHead(m_repositoryPath + "/.git/MERGE_HEAD");
-  return mergeHead.exists();
+  const QString gitDir = gitDirPath();
+  return !gitDir.isEmpty() && QFileInfo::exists(gitDir + "/MERGE_HEAD");
 }
 
 bool GitIntegration::mergeBranchWithOptions(const QString &branchName,
@@ -2173,12 +2365,12 @@ QStringList GitIntegration::filesChangedBetween(const QString &baseRef,
   }
 
   bool success = false;
-  const QString output =
-      executeGitCommand({"diff", "--name-only", baseRef, ref}, &success);
+  const QString output = executeGitCommand(
+      {"diff", "--name-only", "-z", baseRef, ref, "--"}, &success);
   if (!success) {
     return {};
   }
-  return output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+  return output.split(QChar('\0'), Qt::SkipEmptyParts);
 }
 
 bool GitIntegration::writeWorkingFile(const QString &filePath,
@@ -2478,8 +2670,8 @@ bool GitIntegration::resetToCommit(const QString &commitHash,
   }
 
   bool success;
-  QString output =
-      executeGitCommand({"reset", "--" + resetMode, commitHash}, &success);
+  QString output = executeGitCommand(
+      {"reset", "--" + resetMode, commitHash, "--"}, &success);
 
   if (success) {
     updateCurrentBranch();
@@ -2532,6 +2724,37 @@ bool GitIntegration::rewordCommit(const QString &commitHash,
   return false;
 }
 
+QString GitIntegration::commitRewriteProblem(const QString &fullHash) const {
+  bool success = false;
+  executeGitCommand({"merge-base", "--is-ancestor", fullHash, "HEAD"},
+                    &success);
+  if (!success) {
+    return QStringLiteral("Commit %1 is not part of the current branch")
+        .arg(fullHash.left(7));
+  }
+
+  executeGitCommand({"rev-parse", "--verify", "--quiet", fullHash + "^"},
+                    &success);
+  if (!success) {
+    return QStringLiteral("Commit %1 is the root commit and cannot be removed "
+                          "this way")
+        .arg(fullHash.left(7));
+  }
+
+  const QString merges = executeGitCommand(
+      {"rev-list", "--merges", "--count", fullHash + "^..HEAD"}, &success);
+  if (!success) {
+    return QStringLiteral("Could not inspect the history above %1")
+        .arg(fullHash.left(7));
+  }
+  if (merges.trimmed().toInt() > 0) {
+    return QStringLiteral("The history above %1 contains merge commits; "
+                          "rewriting it would flatten them")
+        .arg(fullHash.left(7));
+  }
+  return QString();
+}
+
 bool GitIntegration::dropCommit(const QString &commitHash) {
   if (!m_isValid) {
     emit errorOccurred("Not in a git repository");
@@ -2552,55 +2775,64 @@ bool GitIntegration::dropCommit(const QString &commitHash) {
     return false;
   }
 
-  if (headHash.startsWith(commitHash) || commitHash.startsWith(headHash)) {
-    executeGitCommand({"reset", "--hard", "HEAD~1"}, &success);
+  QString fullHash = executeGitCommand({"rev-parse", "--verify", "--quiet",
+                                        commitHash + "^{commit}"},
+                                       &success)
+                         .trimmed();
+  if (!success || fullHash.isEmpty()) {
+    emit errorOccurred(QString("Failed to resolve commit %1").arg(commitHash));
+    return false;
+  }
+
+  if (fullHash == headHash) {
+    QString error;
+    executeGitCommandWithInput({"reset", "--keep", "HEAD~1"}, QByteArray(),
+                               &success, &error);
     if (success) {
       updateCurrentBranch();
       emit operationCompleted(
           QString("Dropped commit %1").arg(commitHash.left(7)));
       emit statusChanged();
     } else {
-      emit errorOccurred("Failed to drop HEAD commit");
+      emit errorOccurred(
+          error.isEmpty()
+              ? QStringLiteral("Failed to drop HEAD commit")
+              : QStringLiteral("Failed to drop HEAD commit: %1").arg(error));
     }
     return success;
   }
 
-  QString fullHash =
-      executeGitCommand({"rev-parse", commitHash}, &success).trimmed();
+  const QString problem = commitRewriteProblem(fullHash);
+  if (!problem.isEmpty()) {
+    emit errorOccurred(QString("Cannot drop commit: %1").arg(problem));
+    return false;
+  }
+
+  const QStringList range =
+      executeGitCommand({"rev-list", "--reverse", fullHash + "..HEAD"},
+                        &success)
+          .split('\n', Qt::SkipEmptyParts);
   if (!success) {
-    emit errorOccurred(QString("Failed to resolve commit %1").arg(commitHash));
+    emit errorOccurred(
+        QString("Failed to list commits above %1").arg(commitHash.left(7)));
     return false;
   }
 
-  QProcess proc;
-  proc.setWorkingDirectory(m_repositoryPath);
-  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  QString todo;
+  for (const QString &hash : range) {
+    todo += QStringLiteral("pick %1\n").arg(hash.trimmed());
+  }
+  if (todo.isEmpty()) {
+    todo = QStringLiteral("noop\n");
+  }
 
-  QTemporaryFile dropScript;
-  dropScript.setAutoRemove(false);
-  dropScript.setFileTemplate(QDir::tempPath() + "/lightpad-drop-XXXXXX.sh");
-  if (!dropScript.open()) {
-    emit errorOccurred("Failed to create drop script");
+  if (prepareRebaseHelpers(todo, {}).isEmpty()) {
+    emit errorOccurred("Could not prepare the rebase plan");
     return false;
   }
-  QString shortHashForDrop = fullHash.left(7);
-  QTextStream scriptOut(&dropScript);
-  scriptOut << "#!/bin/sh\n"
-            << "grep -v '^pick " << shortHashForDrop << "' \"$1\" > \"$1.tmp\""
-            << " && mv \"$1.tmp\" \"$1\"\n";
-  dropScript.close();
-  QFile::setPermissions(dropScript.fileName(), QFileDevice::ReadOwner |
-                                                   QFileDevice::WriteOwner |
-                                                   QFileDevice::ExeOwner);
 
-  env.insert("GIT_SEQUENCE_EDITOR", dropScript.fileName());
-  proc.setProcessEnvironment(env);
-  proc.start("git", {"rebase", "-i", fullHash + "~1"});
-  proc.waitForFinished(10000);
-
-  QFile::remove(dropScript.fileName());
-
-  if (proc.exitCode() == 0) {
+  QString error;
+  if (runRebaseWithHelpers({"rebase", "-i", fullHash + "^"}, &error)) {
     updateCurrentBranch();
     emit operationCompleted(
         QString("Dropped commit %1").arg(commitHash.left(7)));
@@ -2608,10 +2840,13 @@ bool GitIntegration::dropCommit(const QString &commitHash) {
     return true;
   }
 
-  executeGitCommand({"rebase", "--abort"}, nullptr);
+  if (isRebaseInProgress()) {
+    executeGitCommand({"rebase", "--abort"}, nullptr);
+  }
+  updateCurrentBranch();
+  emit statusChanged();
   emit errorOccurred(
-      QString("Failed to drop commit %1: %2")
-          .arg(commitHash.left(7), proc.readAllStandardError().trimmed()));
+      QString("Failed to drop commit %1: %2").arg(commitHash.left(7), error));
   return false;
 }
 
@@ -2633,59 +2868,68 @@ bool GitIntegration::squashCommits(const QStringList &commitHashes,
   }
 
   bool success;
-  QString headHash =
-      executeGitCommand({"rev-parse", "HEAD"}, &success).trimmed();
-  if (!success) {
+  QSet<QString> selected;
+  for (const QString &h : commitHashes) {
+    QString full =
+        executeGitCommand({"rev-parse", "--verify", "--quiet", h + "^{commit}"},
+                          &success)
+            .trimmed();
+    if (!success || full.isEmpty()) {
+      emit errorOccurred(QString("Failed to resolve commit %1").arg(h));
+      return false;
+    }
+    selected.insert(full);
+  }
+
+  const QStringList firstParentHistory =
+      executeGitCommand({"rev-list", "--first-parent",
+                         QString("--max-count=%1").arg(selected.size()),
+                         "HEAD"},
+                        &success)
+          .split('\n', Qt::SkipEmptyParts);
+  if (!success || firstParentHistory.isEmpty()) {
     emit errorOccurred("Failed to determine HEAD commit");
     return false;
   }
 
-  QStringList fullHashes;
-  for (const QString &h : commitHashes) {
-    QString full = executeGitCommand({"rev-parse", h}, &success).trimmed();
-    if (!success) {
-      emit errorOccurred(QString("Failed to resolve commit %1").arg(h));
-      return false;
-    }
-    fullHashes.append(full);
-  }
-
-  QStringList logOutput =
-      executeGitCommand({"log", "--format=%H", "HEAD"}, &success)
-          .trimmed()
-          .split('\n');
-
-  int earliestIdx = -1;
-  for (int i = 0; i < logOutput.size(); ++i) {
-    for (const QString &fh : fullHashes) {
-      if (logOutput[i].startsWith(fh) || fh.startsWith(logOutput[i])) {
-        earliestIdx = i;
-      }
-    }
-  }
-
-  if (earliestIdx < 0) {
-    emit errorOccurred("Could not find commits in history");
+  if (QSet<QString>(firstParentHistory.cbegin(), firstParentHistory.cend()) !=
+      selected) {
+    emit errorOccurred(
+        "Only a contiguous run of commits ending at the latest commit (HEAD) "
+        "can be squashed");
     return false;
   }
 
-  QString resetTarget =
-      (earliestIdx + 1 < logOutput.size()) ? logOutput[earliestIdx + 1] : "";
+  const QString oldest = firstParentHistory.last();
+  const QString base =
+      executeGitCommand({"rev-parse", "--verify", "--quiet", oldest + "^1"},
+                        &success)
+          .trimmed();
+  const bool squashingRoot = !success || base.isEmpty();
 
-  if (resetTarget.isEmpty()) {
-    executeGitCommand({"reset", "--soft", "--root"}, &success);
-  } else {
-    executeGitCommand({"reset", "--soft", resetTarget}, &success);
+  QStringList treeArgs{"commit-tree", "HEAD^{tree}"};
+  if (!squashingRoot) {
+    treeArgs << "-p" << base;
+  }
+  treeArgs << "-F" << "-";
+
+  QByteArray message = newMessage.toUtf8();
+  if (!message.endsWith('\n')) {
+    message.append('\n');
   }
 
-  if (!success) {
-    emit errorOccurred("Failed to soft reset for squash");
+  QString error;
+  const QString newCommit =
+      executeGitCommandWithInput(treeArgs, message, &success, &error).trimmed();
+  if (!success || newCommit.isEmpty()) {
+    emit errorOccurred(
+        QString("Failed to create squashed commit: %1").arg(error));
     return false;
   }
 
-  executeGitCommand({"commit", "-m", newMessage}, &success);
+  executeGitCommand({"reset", "--soft", newCommit}, &success);
   if (!success) {
-    emit errorOccurred("Failed to create squashed commit");
+    emit errorOccurred("Failed to move the branch to the squashed commit");
     return false;
   }
 
@@ -2710,15 +2954,53 @@ bool GitIntegration::moveCommitToBranch(const QString &commitHash,
 
   bool success;
   QString currentBranch =
-      executeGitCommand({"rev-parse", "--abbrev-ref", "HEAD"}, &success)
+      executeGitCommand({"symbolic-ref", "--quiet", "--short", "HEAD"},
+                        &success)
           .trimmed();
   if (!success || currentBranch.isEmpty()) {
-    emit errorOccurred("Failed to determine current branch");
+    emit errorOccurred("Moving a commit needs a checked-out branch, but HEAD "
+                       "is detached");
     return false;
   }
 
   if (currentBranch == targetBranch) {
     emit errorOccurred("Commit is already on the target branch");
+    return false;
+  }
+
+  const QString fullHash =
+      executeGitCommand(
+          {"rev-parse", "--verify", "--quiet", commitHash + "^{commit}"},
+          &success)
+          .trimmed();
+  if (!success || fullHash.isEmpty()) {
+    emit errorOccurred(QString("Failed to resolve commit %1").arg(commitHash));
+    return false;
+  }
+
+  const QString headHash =
+      executeGitCommand({"rev-parse", "HEAD"}, &success).trimmed();
+  if (!success) {
+    emit errorOccurred("Failed to determine HEAD commit");
+    return false;
+  }
+
+  if (fullHash != headHash) {
+    const QString problem = commitRewriteProblem(fullHash);
+    if (!problem.isEmpty()) {
+      emit errorOccurred(QString("Cannot move commit: %1").arg(problem));
+      return false;
+    }
+  }
+
+  const QString targetRef = "refs/heads/" + targetBranch;
+  const QString targetTip =
+      executeGitCommand({"rev-parse", "--verify", "--quiet", targetRef},
+                        &success)
+          .trimmed();
+  if (!success || targetTip.isEmpty()) {
+    emit errorOccurred(
+        QString("Branch %1 does not exist locally").arg(targetBranch));
     return false;
   }
 
@@ -2729,29 +3011,35 @@ bool GitIntegration::moveCommitToBranch(const QString &commitHash,
     return false;
   }
 
-  executeGitCommand({"checkout", targetBranch}, &success);
+  executeGitCommand({"checkout", targetBranch, "--"}, &success);
   if (!success) {
     emit errorOccurred(
         QString("Failed to checkout branch %1").arg(targetBranch));
     return false;
   }
 
-  executeGitCommand({"cherry-pick", commitHash}, &success);
+  executeGitCommand({"cherry-pick", fullHash}, &success);
   if (!success) {
     executeGitCommand({"cherry-pick", "--abort"}, nullptr);
-    executeGitCommand({"checkout", currentBranch}, nullptr);
+    executeGitCommand({"checkout", currentBranch, "--"}, nullptr);
+    updateCurrentBranch();
     emit errorOccurred(QString("Failed to cherry-pick %1 onto %2")
                            .arg(commitHash.left(7), targetBranch));
     return false;
   }
 
-  executeGitCommand({"checkout", currentBranch}, &success);
+  executeGitCommand({"checkout", currentBranch, "--"}, &success);
   if (!success) {
+    updateCurrentBranch();
     emit errorOccurred("Failed to return to original branch");
     return false;
   }
 
-  if (!dropCommit(commitHash)) {
+  if (!dropCommit(fullHash)) {
+    const QString movedTip =
+        executeGitCommand({"rev-parse", targetRef}, nullptr).trimmed();
+    executeGitCommand({"update-ref", targetRef, targetTip, movedTip}, nullptr);
+    updateCurrentBranch();
     return false;
   }
 
@@ -2801,8 +3089,9 @@ bool GitIntegration::addWorktree(const QString &path, const QString &branch,
 
   QStringList args = {"worktree", "add"};
   if (createBranch)
-    args << "-b";
-  args << path << branch;
+    args << "-b" << branch << path;
+  else
+    args << path << branch;
 
   bool success;
   QString output = executeGitCommand(args, &success);
@@ -2841,8 +3130,8 @@ GitIntegration::getBlameTimestamps(const QString &filePath) const {
     return result;
 
   bool success;
-  QString output =
-      executeGitCommand({"blame", "--line-porcelain", filePath}, &success);
+  QString output = executeGitCommand(
+      {"blame", "--line-porcelain", "--", filePath}, &success);
   if (!success)
     return result;
 
@@ -3152,46 +3441,24 @@ QString GitIntegration::executeGitCommandWithInput(const QStringList &args,
     return QString();
   }
 
-  QProcess process;
-  process.setWorkingDirectory(m_repositoryPath.isEmpty() ? QDir::currentPath()
-                                                         : m_repositoryPath);
-  process.start("git", args);
-  if (!process.waitForStarted(GIT_COMMAND_TIMEOUT_MS)) {
-    LOG_WARNING("Git command failed to start: git " + args.join(" "));
-    if (success) {
-      *success = false;
-    }
-    return QString();
-  }
+  const QString workingDirectory =
+      m_repositoryPath.isEmpty() ? QDir::currentPath() : m_repositoryPath;
+  const GitProcessResult result =
+      runGitProcess(workingDirectory, args, {}, &input);
 
-  process.write(input);
-  process.closeWriteChannel();
-
-  if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS)) {
-    LOG_WARNING("Git command timed out: git " + args.join(" "));
-    process.kill();
-    process.waitForFinished(1000);
-    if (success) {
-      *success = false;
-    }
-    return QString();
-  }
-
-  const QString error = QString::fromUtf8(process.readAllStandardError());
   if (errorOutput) {
-    *errorOutput = error.trimmed();
+    *errorOutput = result.error.trimmed();
   }
   if (success) {
-    *success = process.exitCode() == 0;
+    *success = result.succeeded();
   }
-  if (process.exitCode() != 0) {
-    LOG_DEBUG("Git command failed: git " + args.join(" ") + " - " + error);
+  if (!result.started) {
+    return QString();
   }
 
-  const QString output = QString::fromUtf8(process.readAllStandardOutput());
-  recordCommand(args, process.workingDirectory(), output, error,
-                process.exitCode());
-  return output;
+  recordCommand(args, workingDirectory, result.output, result.error,
+                result.exitCode);
+  return result.timedOut ? QString() : result.output;
 }
 
 QString GitIntegration::getWorkingVsHeadDiff(const QString &filePath) const {
@@ -3201,7 +3468,7 @@ QString GitIntegration::getWorkingVsHeadDiff(const QString &filePath) const {
 
   bool success = false;
   const QString output =
-      executeGitCommand({"diff", "HEAD", "--", filePath}, &success);
+      executeGitCommandRaw({"diff", "HEAD", "--", filePath}, &success);
   return success ? output : QString();
 }
 
@@ -3245,29 +3512,9 @@ QList<GitCommitInfo> GitIntegration::getLogPage(const GitLogOptions &options,
     return {};
   }
 
-  const QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
-
-  QStringList args = {"log", "--date-order", QString("--skip=%1").arg(skip),
-                      QString("--max-count=%1").arg(limit),
-                      QString("--pretty=format:%1").arg(format)};
-
-  if (options.firstParentOnly) {
-    args << "--first-parent";
-  }
-  if (options.allRefs && options.revisionRange.isEmpty()) {
-
-    args << "--branches" << "--tags" << "--remotes";
-  }
-  if (!options.revisionRange.isEmpty()) {
-    args << options.revisionRange;
-  }
-  if (!options.pathFilter.isEmpty()) {
-
-    args << "--" << options.pathFilter;
-  }
-
   bool success = false;
-  const QString output = executeGitCommand(args, &success);
+  const QString output =
+      executeGitCommand(logPageArgs(options, skip, limit), &success);
   if (!success) {
     return {};
   }
@@ -3279,14 +3526,32 @@ void GitIntegration::getLogPageAsync(
     const GitLogOptions &options, int skip, int limit,
     const std::function<void(QList<GitCommitInfo>)> &callback) {
   QPointer<GitIntegration> self(this);
-  QThreadPool::globalInstance()->start([self, options, skip, limit,
+  const QString repoPath = m_isValid ? m_repositoryPath : QString();
+  QThreadPool::globalInstance()->start([self, repoPath, options, skip, limit,
                                         callback]() {
-    if (!self) {
-      return;
+    QList<GitCommitInfo> page;
+    QList<GitAsyncRecord> records;
+    if (!repoPath.isEmpty() && limit > 0 && skip >= 0) {
+      const QStringList args = logPageArgs(options, skip, limit);
+      const GitProcessResult result = runGitProcess(repoPath, args);
+      records.append(GitAsyncRecord{args, result});
+      if (result.succeeded()) {
+        page = parseCommitLogRecords(result.output);
+      }
     }
-    const QList<GitCommitInfo> page = self->getLogPage(options, skip, limit);
     QMetaObject::invokeMethod(
-        self, [callback, page]() { callback(page); }, Qt::QueuedConnection);
+        QCoreApplication::instance(),
+        [self, callback, page, records, repoPath]() {
+          if (!self) {
+            return;
+          }
+          for (const GitAsyncRecord &record : records) {
+            self->recordCommand(record.args, repoPath, record.result.output,
+                                record.result.error, record.result.exitCode);
+          }
+          callback(page);
+        },
+        Qt::QueuedConnection);
   });
 }
 
@@ -3774,7 +4039,10 @@ GitIntegration::worktreeDirtySummary(const QString &worktreePath) const {
 
 QString GitIntegration::executeGitCommandWithEnv(
     const QStringList &args, const QMap<QString, QString> &extraEnv,
-    bool *success, QString *errorOutput) const {
+    bool *success, QString *errorOutput, bool *timedOut) const {
+  if (timedOut) {
+    *timedOut = false;
+  }
   if (!m_isValid) {
     if (success) {
       *success = false;
@@ -3782,40 +4050,27 @@ QString GitIntegration::executeGitCommandWithEnv(
     return QString();
   }
 
-  QProcess process;
-  process.setWorkingDirectory(m_repositoryPath.isEmpty() ? QDir::currentPath()
-                                                         : m_repositoryPath);
+  const QString workingDirectory =
+      m_repositoryPath.isEmpty() ? QDir::currentPath() : m_repositoryPath;
+  const GitProcessResult result =
+      runGitProcess(workingDirectory, args, extraEnv);
 
-  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-  for (auto it = extraEnv.constBegin(); it != extraEnv.constEnd(); ++it) {
-    env.insert(it.key(), it.value());
+  if (errorOutput) {
+    *errorOutput = result.error.trimmed();
   }
-  process.setProcessEnvironment(env);
-
-  process.start("git", args);
-
-  if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS * 6)) {
-    LOG_WARNING("Git command timed out: git " + args.join(" "));
-    process.kill();
-    process.waitForFinished(1000);
-    if (success) {
-      *success = false;
-    }
+  if (success) {
+    *success = result.succeeded();
+  }
+  if (timedOut) {
+    *timedOut = result.timedOut;
+  }
+  if (!result.started) {
     return QString();
   }
 
-  const QString error = QString::fromUtf8(process.readAllStandardError());
-  if (errorOutput) {
-    *errorOutput = error.trimmed();
-  }
-  if (success) {
-    *success = process.exitCode() == 0;
-  }
-
-  const QString output = QString::fromUtf8(process.readAllStandardOutput());
-  recordCommand(args, process.workingDirectory(), output, error,
-                process.exitCode());
-  return output;
+  recordCommand(args, workingDirectory, result.output, result.error,
+                result.exitCode);
+  return result.timedOut ? QString() : result.output;
 }
 
 QString
@@ -3849,18 +4104,24 @@ GitIntegration::prepareRebaseHelpers(const QString &todoText,
   }
 
   QFile::remove(dir + "/counter");
+  const QStringList staleMessages =
+      QDir(dir).entryList({QStringLiteral("msg-[0-9]*")}, QDir::Files);
+  for (const QString &stale : staleMessages) {
+    QFile::remove(dir + QLatin1Char('/') + stale);
+  }
   for (int i = 0; i < messages.size(); ++i) {
     writeFile(dir + QStringLiteral("/msg-%1").arg(i + 1), messages.at(i),
               false);
   }
 
   writeFile(dir + "/seq-editor.sh",
-            QStringLiteral("#!/bin/sh\ncat \"%1/todo\" > \"$1\"\n").arg(dir),
+            QStringLiteral("#!/bin/sh\ncat %1 > \"$1\"\n")
+                .arg(shellQuote(dir + "/todo")),
             true);
 
   writeFile(dir + "/msg-editor.sh",
             QStringLiteral("#!/bin/sh\n"
-                           "d=\"%1\"\n"
+                           "d=%1\n"
                            "n=`cat \"$d/counter\" 2>/dev/null || echo 0`\n"
                            "n=`expr $n + 1`\n"
                            "echo $n > \"$d/counter\"\n"
@@ -3868,7 +4129,7 @@ GitIntegration::prepareRebaseHelpers(const QString &todoText,
                            "  cat \"$d/msg-$n\" > \"$1\"\n"
                            "fi\n"
                            "exit 0\n")
-                .arg(dir),
+                .arg(shellQuote(dir)),
             true);
 
   return dir;
@@ -3878,8 +4139,8 @@ QMap<QString, QString> GitIntegration::rebaseHelperEnvironment() const {
   const QString dir = gitDirPath() + "/lightpad-rebase";
   QMap<QString, QString> env;
   if (QFileInfo::exists(dir + "/seq-editor.sh")) {
-    env.insert("GIT_SEQUENCE_EDITOR", dir + "/seq-editor.sh");
-    env.insert("GIT_EDITOR", dir + "/msg-editor.sh");
+    env.insert("GIT_SEQUENCE_EDITOR", shellQuote(dir + "/seq-editor.sh"));
+    env.insert("GIT_EDITOR", shellQuote(dir + "/msg-editor.sh"));
   }
   return env;
 }
@@ -3901,12 +4162,13 @@ bool GitIntegration::startInteractiveRebase(const QString &onto,
     return false;
   }
 
-  bool success = false;
   QString error;
-  executeGitCommandWithEnv({"rebase", "-i", onto}, rebaseHelperEnvironment(),
-                           &success, &error);
+  const bool success = runRebaseWithHelpers({"rebase", "-i", onto}, &error);
 
-  if (success) {
+  if (success && isRebaseInProgress()) {
+    updateCurrentBranch();
+    emit operationCompleted("Rebase stopped — resolve and continue");
+  } else if (success) {
     updateCurrentBranch();
     emit operationCompleted("Rebase finished");
   } else if (isRebaseInProgress()) {
@@ -3918,6 +4180,26 @@ bool GitIntegration::startInteractiveRebase(const QString &onto,
   }
 
   emit statusChanged();
+  return success;
+}
+
+bool GitIntegration::runRebaseWithHelpers(const QStringList &args,
+                                          QString *errorOutput) {
+  bool success = false;
+  bool timedOut = false;
+  QString error;
+  executeGitCommandWithEnv(args, rebaseHelperEnvironment(), &success, &error,
+                           &timedOut);
+  if (timedOut) {
+    success = false;
+    if (isRebaseInProgress()) {
+      executeGitCommand({"rebase", "--abort"}, nullptr);
+      error += QStringLiteral("; the rebase was aborted");
+    }
+  }
+  if (errorOutput) {
+    *errorOutput = error;
+  }
   return success;
 }
 
@@ -4012,7 +4294,7 @@ QList<QPair<QString, QString>> GitIntegration::unmergedEntries() const {
 
   bool success = false;
   const QString output = executeGitCommand(
-      {"status", "--porcelain=v2", "--untracked-files=no"}, &success);
+      {"status", "--porcelain=v2", "-z", "--untracked-files=no"}, &success);
   if (!success) {
     return {};
   }
@@ -4367,16 +4649,27 @@ void GitIntegration::recordCommand(const QStringList &args,
   record.succeeded = exitCode == 0;
   record.when = QDateTime::currentDateTime();
 
-  m_commandHistory.append(record);
-  while (m_commandHistory.size() > MAX_COMMAND_HISTORY) {
-    m_commandHistory.removeFirst();
+  {
+    QMutexLocker locker(&m_commandHistoryMutex);
+    m_commandHistory.append(record);
+    while (m_commandHistory.size() > MAX_COMMAND_HISTORY) {
+      m_commandHistory.removeFirst();
+    }
   }
 
   GitIntegration *self = const_cast<GitIntegration *>(this);
   emit self->commandExecuted(record);
 }
 
-void GitIntegration::clearCommandHistory() { m_commandHistory.clear(); }
+QList<GitCommandRecord> GitIntegration::commandHistory() const {
+  QMutexLocker locker(&m_commandHistoryMutex);
+  return m_commandHistory;
+}
+
+void GitIntegration::clearCommandHistory() {
+  QMutexLocker locker(&m_commandHistoryMutex);
+  m_commandHistory.clear();
+}
 
 GitCommandMirrorMode GitIntegration::mirrorMode() {
   QSettings settings("Lightpad", "Lightpad");
@@ -4598,11 +4891,12 @@ QString GitIntegration::bisectRun(const QString &command, int *exitCode) {
 
   QProcess process;
   process.setWorkingDirectory(m_repositoryPath);
+  process.setProcessEnvironment(gitProcessEnvironment());
   process.setProcessChannelMode(QProcess::MergedChannels);
 
   process.start("git", {"bisect", "run", "sh", "-c", command});
 
-  if (!process.waitForFinished(GIT_COMMAND_TIMEOUT_MS * 120)) {
+  if (!process.waitForFinished(GIT_LONG_COMMAND_TIMEOUT_MS)) {
     process.kill();
     process.waitForFinished(1000);
     emit errorOccurred("The bisect run took too long and was stopped");
@@ -4620,6 +4914,64 @@ QString GitIntegration::bisectRun(const QString &command, int *exitCode) {
                 output, QString(), process.exitCode());
   emit statusChanged();
   return output;
+}
+
+void GitIntegration::bisectRunAsync(
+    const QString &command, const std::function<void(QString, int)> &callback) {
+  if (!m_isValid || command.trimmed().isEmpty()) {
+    if (callback) {
+      callback(QString(), -1);
+    }
+    return;
+  }
+
+  const QStringList args{"bisect", "run", "sh", "-c", command};
+  const QString repoPath = m_repositoryPath;
+
+  auto *process = new QProcess(this);
+  auto *watchdog = new QTimer(process);
+  watchdog->setSingleShot(true);
+  process->setWorkingDirectory(repoPath);
+  process->setProcessEnvironment(gitProcessEnvironment());
+  process->setProcessChannelMode(QProcess::MergedChannels);
+
+  connect(watchdog, &QTimer::timeout, process, [this, process]() {
+    process->setProperty("lightpadTimedOut", true);
+    process->kill();
+    emit errorOccurred("The bisect run took too long and was stopped");
+  });
+
+  connect(process, &QProcess::finished, this,
+          [this, process, args, repoPath,
+           callback](int code, QProcess::ExitStatus status) {
+            const bool timedOut =
+                process->property("lightpadTimedOut").toBool();
+            const int exitCode =
+                timedOut || status != QProcess::NormalExit ? -1 : code;
+            const QString output = QString::fromUtf8(process->readAll());
+            process->deleteLater();
+            recordCommand(args, repoPath, output, QString(), exitCode);
+            updateCurrentBranch();
+            emit statusChanged();
+            if (callback) {
+              callback(timedOut ? QString() : output, exitCode);
+            }
+          });
+
+  connect(process, &QProcess::errorOccurred, this,
+          [this, process, callback](QProcess::ProcessError error) {
+            if (error != QProcess::FailedToStart) {
+              return;
+            }
+            process->deleteLater();
+            emit errorOccurred("Could not start git bisect run");
+            if (callback) {
+              callback(QString(), -1);
+            }
+          });
+
+  process->start("git", args);
+  watchdog->start(GIT_LONG_COMMAND_TIMEOUT_MS);
 }
 
 namespace {

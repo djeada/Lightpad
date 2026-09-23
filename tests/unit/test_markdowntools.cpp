@@ -9,6 +9,8 @@ class TestMarkdownTools : public QObject {
   Q_OBJECT
 
 private slots:
+  void testInlineLinksAreSanitized();
+  void testInlineImageInsideLink();
   void testExtractHeadings();
   void testExtractHeadingsIgnoresFencedBlocks();
   void testGenerateAnchor();
@@ -579,6 +581,48 @@ void TestMarkdownTools::testLintOverlongLinesSkipsExceptions() {
   for (const LspDiagnostic &d : diags) {
     QVERIFY(d.code != "MD013");
   }
+}
+
+void TestMarkdownTools::testInlineLinksAreSanitized() {
+  const QString js =
+      MarkdownTools::processInlineFormatting("[click](javascript:alert(1))");
+  QVERIFY(js.contains("href=\"#\""));
+  QVERIFY(!js.contains("javascript"));
+
+  const QString spaced =
+      MarkdownTools::processInlineFormatting("[x]( JaVa\tScRiPt:alert(1))");
+  QVERIFY(!spaced.contains("alert"));
+
+  const QString breakout = MarkdownTools::processInlineFormatting(
+      "![x\" onerror=\"alert(1)](a.png) [y](b\" onmouseover=\"z)");
+  QVERIFY(!breakout.contains("onerror=\""));
+  QVERIFY(!breakout.contains("onmouseover=\""));
+  QVERIFY(breakout.contains("&quot;"));
+
+  const QString nested = MarkdownTools::processInlineFormatting(
+      "![a](x.png)](javascript:alert(1))");
+  QVERIFY(!nested.contains("href=\"javascript"));
+
+  const QString code =
+      MarkdownTools::processInlineFormatting("`[a](javascript:b)`");
+  QCOMPARE(code, QString("<code>[a](javascript:b)</code>"));
+
+  const QString ok = MarkdownTools::processInlineFormatting(
+      "[a](https://example.com/?a=1&b=2) [m](mailto:x@y.z) [r](docs/x.md) "
+      "[h](#top)");
+  QVERIFY(ok.contains("href=\"https://example.com/?a=1&amp;b=2\""));
+  QVERIFY(ok.contains("href=\"mailto:x@y.z\""));
+  QVERIFY(ok.contains("href=\"docs/x.md\""));
+  QVERIFY(ok.contains("href=\"#top\""));
+}
+
+void TestMarkdownTools::testInlineImageInsideLink() {
+  const QString html = MarkdownTools::processInlineFormatting(
+      "[![badge](https://img.example/b.svg)](https://example.com) **bold**");
+  QCOMPARE(html,
+           QString("<a href=\"https://example.com\"><img "
+                   "src=\"https://img.example/b.svg\" alt=\"badge\" "
+                   "style=\"max-width:100%;\"></a> <strong>bold</strong>"));
 }
 
 QTEST_MAIN(TestMarkdownTools)

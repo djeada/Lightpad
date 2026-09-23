@@ -367,13 +367,17 @@ void PythonEnvironmentWidget::onInstallDebugpy() {
 
 void PythonEnvironmentWidget::onProcessFinished(
     int exitCode, QProcess::ExitStatus exitStatus) {
-  Q_UNUSED(exitStatus);
-  const bool success = exitCode == 0;
+  if (!m_process || sender() != m_process) {
+    return;
+  }
+  const bool success = exitStatus == QProcess::NormalExit && exitCode == 0;
   finishProcess(m_pendingTitle, success);
 }
 
 void PythonEnvironmentWidget::onProcessError(QProcess::ProcessError error) {
-  Q_UNUSED(error);
+  if (error != QProcess::FailedToStart || !m_process || sender() != m_process) {
+    return;
+  }
   finishProcess(m_pendingTitle, false);
 }
 

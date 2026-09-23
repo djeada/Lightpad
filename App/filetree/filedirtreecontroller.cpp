@@ -98,6 +98,13 @@ void FileDirTreeController::handleRename(const QString &oldPath) {
     return;
   }
 
+  const QString trimmedName = newName.trimmed();
+  if (trimmedName.contains('/') || trimmedName.contains('\\') ||
+      trimmedName == QLatin1String(".") || trimmedName == QLatin1String("..")) {
+    showError(tr("\"%1\" is not a valid name.").arg(trimmedName));
+    return;
+  }
+
   const QString newPath =
       QDir(fileInfo.absolutePath()).absoluteFilePath(newName.trimmed());
   if (model->renameFileOrDirectory(oldPath, newPath)) {

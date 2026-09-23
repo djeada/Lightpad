@@ -1,5 +1,6 @@
 #include "lspdefinitionprovider.h"
 #include "../core/logging/logger.h"
+#include "../diagnostics/diagnosticutils.h"
 #include <QFileInfo>
 #include <QUrl>
 
@@ -9,13 +10,14 @@ LspDefinitionProvider::LspDefinitionProvider(LspClient *client, QObject *parent)
   if (m_client) {
     connect(m_client, &LspClient::definitionReceived, this,
             [this](int lspRequestId, const QList<LspLocation> &locations) {
-              Q_UNUSED(lspRequestId);
-              if (m_activeProviderRequestId == 0) {
+              if (m_activeProviderRequestId == 0 ||
+                  lspRequestId != m_activeLspRequestId) {
                 return;
               }
 
               int providerRequestId = m_activeProviderRequestId;
               m_activeProviderRequestId = 0;
+              m_activeLspRequestId = 0;
 
               QList<DefinitionTarget> targets;
               for (const LspLocation &loc : locations) {
@@ -26,6 +28,17 @@ LspDefinitionProvider::LspDefinitionProvider(LspClient *client, QObject *parent)
                 targets.append(target);
               }
               emit definitionReady(providerRequestId, targets);
+            });
+    connect(m_client, &LspClient::requestFailed, this,
+            [this](int lspRequestId, const QString &, const QString &message) {
+              if (m_activeProviderRequestId == 0 ||
+                  lspRequestId != m_activeLspRequestId) {
+                return;
+              }
+              int providerRequestId = m_activeProviderRequestId;
+              m_activeProviderRequestId = 0;
+              m_activeLspRequestId = 0;
+              emit definitionFailed(providerRequestId, message);
             });
   }
 }
@@ -61,18 +74,18 @@ int LspDefinitionProvider::requestDefinition(const DefinitionRequest &req) {
   position.line = req.line - 1;
   position.character = req.column;
 
-  m_client->requestDefinition(uri, position);
+  m_activeLspRequestId = m_client->requestDefinition(uri, position);
 
   return providerRequestId;
 }
 
 QString LspDefinitionProvider::filePathToUri(const QString &filePath) {
-  return QUrl::fromLocalFile(filePath).toString();
+  return DiagnosticUtils::filePathToUri(filePath);
 }
 
 QString LspDefinitionProvider::uriToFilePath(const QString &uri) {
   if (uri.startsWith("file://")) {
-    return QUrl(uri).toLocalFile();
+    return DiagnosticUtils::uriToFilePath(uri);
   }
   return uri;
 }

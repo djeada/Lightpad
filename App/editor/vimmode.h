@@ -233,8 +233,9 @@ private:
   void joinLines(int line, int count, bool insertSpace);
   void replaceChars(QChar ch, int count);
   void toggleCaseChars(int count);
-  bool incrementNumber(int line, int col, int delta, int endCol,
+  bool incrementNumber(int line, int col, qint64 delta, int endCol,
                        int *resultPos);
+  bool exceedsRepeatLimit(qint64 size, qint64 count);
   void undo(int count);
   void redo(int count);
 
@@ -289,6 +290,8 @@ private:
   static bool isValidRegister(QChar reg);
 
   void setMark(QChar mark, int pos);
+  void forgetLines(int first, int last, bool namedMarks);
+  void restoreDeletedMarks();
   bool markPosition(QChar mark, int &pos) const;
   void pushJump(int pos);
   void jumpOlder(int count);
@@ -298,7 +301,8 @@ private:
   void startMacroRecording(QChar reg);
   void stopMacroRecording();
   void playMacro(QChar reg, int count);
-  void replayTokens(const QStringList &tokens);
+  void replayTokens(const QStringList &tokens, bool stopOnFailure = true);
+  void failCommand();
   void repeatLastChange(int count);
   void setDotCommand(const QStringList &keys);
 
@@ -346,6 +350,8 @@ private:
   QStringList m_pending;
   bool m_passthrough = false;
   int m_replayDepth = 0;
+  bool m_abortReplay = false;
+  int m_exDepth = 0;
 
   int m_wantCol = 0;
   bool m_wantEol = false;
@@ -415,6 +421,14 @@ private:
 
   QMap<QChar, VimRegister> m_registers;
   QMap<QChar, QTextCursor> m_marks;
+  struct DeletedMark {
+    QChar mark;
+    int line = 0;
+    int col = 0;
+    int undoSteps = 0;
+  };
+  QVector<DeletedMark> m_deletedMarks;
+  QList<QTextCursor> m_globalMarks;
   QList<QTextCursor> m_jumpList;
   int m_jumpIndex = 0;
   QList<QTextCursor> m_changeList;
@@ -430,6 +444,7 @@ private:
   QString m_lastSubFlags;
   bool m_hasLastSub = false;
   QString m_lastExCommand;
+  bool m_repeatedCommandLine = false;
 
   int m_tabStop = 4;
   int m_shiftWidth = 4;
@@ -452,6 +467,8 @@ private:
   mutable QString m_lineCacheText;
 
   static const int kMaxHistory = 50;
+  static constexpr int kMaxRepeatChars = 10000000;
+  static constexpr int kMaxExDepth = 100;
 };
 
 #endif

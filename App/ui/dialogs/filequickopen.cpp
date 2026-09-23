@@ -1,6 +1,7 @@
 #include "filequickopen.h"
 #include "../uistylehelper.h"
-#include <QDirIterator>
+#include <QDir>
+#include <QFileInfo>
 #include <algorithm>
 
 FileQuickOpen::FileQuickOpen(QWidget *parent)
@@ -29,8 +30,6 @@ void FileQuickOpen::setupUI() {
 
   connect(m_searchBox, &QLineEdit::textChanged, this,
           &FileQuickOpen::onSearchTextChanged);
-  connect(m_resultsList, &QListWidget::itemActivated, this,
-          &FileQuickOpen::onItemActivated);
   connect(m_resultsList, &QListWidget::itemClicked, this,
           &FileQuickOpen::onItemClicked);
 
@@ -49,39 +48,26 @@ void FileQuickOpen::scanDirectory() {
     return;
   }
 
-  QDirIterator it(m_rootPath, QDir::Files, QDirIterator::Subdirectories);
+  static const QStringList skipDirs = {".git", "node_modules", "build",
+                                       "dist", ".cache",       "__pycache__"};
+  const QDir root(m_rootPath);
+  QStringList pending = {m_rootPath};
 
-  QStringList skipDirs = {".git", "node_modules", "build",
-                          "dist", ".cache",       "__pycache__"};
-  QString sep = QDir::separator();
+  while (!pending.isEmpty()) {
+    const QDir dir(pending.takeLast());
 
-  while (it.hasNext()) {
-    QString filePath = it.next();
-
-    bool shouldSkip = false;
-    for (const QString &skipDir : skipDirs) {
-
-      if (filePath.contains(sep + skipDir + sep) ||
-          filePath.endsWith(sep + skipDir)) {
-        shouldSkip = true;
-        break;
-      }
-
-      if (filePath.contains("/" + skipDir + "/") ||
-          filePath.endsWith("/" + skipDir)) {
-        shouldSkip = true;
-        break;
-      }
+    const QFileInfoList files = dir.entryInfoList(QDir::Files);
+    for (const QFileInfo &info : files) {
+      m_allFiles.append(root.relativeFilePath(info.filePath()));
     }
 
-    if (!shouldSkip) {
-
-      QString relativePath = filePath.mid(m_rootPath.length());
-      if (relativePath.startsWith('/') || relativePath.startsWith('\\') ||
-          relativePath.startsWith(sep)) {
-        relativePath = relativePath.mid(1);
+    const QFileInfoList subdirs =
+        dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QFileInfo &info : subdirs) {
+      if (info.isSymLink() || skipDirs.contains(info.fileName())) {
+        continue;
       }
-      m_allFiles.append(relativePath);
+      pending.append(info.filePath());
     }
   }
 
