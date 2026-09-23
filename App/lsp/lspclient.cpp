@@ -483,9 +483,6 @@ QList<QByteArray> LspClient::extractMessages(QByteArray &buffer,
     const int messageStart = headerEnd + 4;
     const int messageEnd = messageStart + contentLength;
 
-    // Content-Length counts bytes, so the framing must happen on bytes: a
-    // message holding any non-ASCII character would otherwise be sliced at the
-    // wrong offset and desynchronise every message after it.
     if (buffer.size() < messageEnd) {
       break;
     }

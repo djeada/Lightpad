@@ -214,9 +214,7 @@ QByteArray frame(const QByteArray &payload) {
 } // namespace
 
 void TestLspRegression::testFramingWithNonAsciiPayload() {
-  // Content-Length is a byte count. A message carrying any multi-byte
-  // character used to be sliced by character count, which corrupted it and
-  // desynchronised every message that followed.
+
   const QByteArray first =
       QString::fromUtf8(
           "{\"m\":\"did you mean \xE2\x80\x98string\xE2\x80\x99?\"}")
@@ -241,7 +239,6 @@ void TestLspRegression::testFramingSplitAcrossReads() {
       QString::fromUtf8("{\"arrow\":\"\xE2\x86\x92\"}").toUtf8();
   const QByteArray full = frame(payload);
 
-  // Cut inside the multi-byte sequence.
   const int cut = full.size() - 2;
   QByteArray buffer = full.left(cut);
   QList<QByteArray> messages = LspClient::extractMessages(buffer);

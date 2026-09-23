@@ -197,9 +197,7 @@ static bool isLastNonSpaceCharacterOpenBrace(const QString &str) {
   for (int i = str.size() - 1; i >= 0; i--) {
     if (str[i].isSpace())
       continue;
-    // Only a brace that is genuinely left open at the end of the line starts a
-    // new indent level. A balanced pair such as `v = {1, 2, 3};` or an f-string
-    // placeholder must not shift the next line.
+
     return str[i] == '{';
   }
 
@@ -235,9 +233,6 @@ static bool hasCompletionDisallowedModifiers(const QKeyEvent *event) {
          (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
 }
 
-// Trigger sequences such as ".", "::" or "->" are how a language server is
-// asked for member completions, so they must open the popup rather than
-// dismiss it.
 static bool endsWithCompletionTrigger(const QString &textBeforeCursor,
                                       const QString &languageId) {
   if (textBeforeCursor.isEmpty()) {
@@ -633,9 +628,6 @@ void TextArea::setupTextArea() {
   connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
           [this](int) { scheduleHighlighterViewportRefresh(); });
 
-  // The highlighter only formats blocks inside the last range it was told
-  // about, so a paste or any other bulk edit has to refresh that range too -
-  // otherwise the new lines stay unhighlighted until the user scrolls.
   connect(this, &TextArea::blockCountChanged, this,
           [this](int) { scheduleHighlighterViewportRefresh(); });
 
@@ -1140,11 +1132,9 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     ctx.lineText = cursor.block().text();
     ctx.triggerKind = isShortcut ? CompletionTriggerKind::Invoked
                                  : CompletionTriggerKind::TriggerCharacter;
-    // A trigger sequence asks for results now; it has no prefix to debounce on.
+
     ctx.isAutoComplete = !isShortcut && !isTriggerEvent;
 
-    // The server must see the character that was just typed before it is asked
-    // what can follow it, otherwise every completion is one keystroke stale.
     if (mainWindow) {
       mainWindow->flushPendingLanguageServerChanges(resolveFilePath());
     }
@@ -2568,8 +2558,6 @@ QString TextArea::diagnosticMessageAt(const QPoint &viewportPos) const {
     return QString();
   }
 
-  // cursorForPosition() snaps to the closest character, so an empty area to the
-  // right of a short line would otherwise report the last diagnostic on it.
   QTextCursor endOfBlock(block);
   endOfBlock.movePosition(QTextCursor::EndOfBlock);
   if (viewportPos.x() > cursorRect(endOfBlock).right()) {
@@ -2620,8 +2608,6 @@ bool TextArea::viewportEvent(QEvent *event) {
 
   auto *helpEvent = static_cast<QHelpEvent *>(event);
 
-  // A squiggle the user cannot read is not a diagnostic, so answer the hover
-  // with the message before anything else claims the tooltip.
   const QString diagnosticText = diagnosticMessageAt(helpEvent->pos());
   if (!diagnosticText.isEmpty()) {
     QToolTip::showText(helpEvent->globalPos(), diagnosticText, viewport());

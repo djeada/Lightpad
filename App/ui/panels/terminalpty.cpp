@@ -3,6 +3,7 @@
 #ifndef Q_OS_WIN
 
 #include <QFile>
+#include <QFileInfo>
 #include <QProcessEnvironment>
 #include <QSocketNotifier>
 #include <QTimer>
@@ -21,6 +22,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
+#include <termios.h>
 #include <unistd.h>
 
 TerminalPty::TerminalPty(QObject *parent)
@@ -76,6 +78,14 @@ bool TerminalPty::start(const QString &program, const QStringList &arguments,
   }
 
   if (childPid == 0) {
+
+    for (int sig = 1; sig < NSIG; ++sig) {
+      ::signal(sig, SIG_DFL);
+    }
+    sigset_t unblocked;
+    sigemptyset(&unblocked);
+    ::sigprocmask(SIG_SETMASK, &unblocked, nullptr);
+
     if (!cwdBytes.isEmpty()) {
       if (::chdir(cwdBytes.constData()) != 0) {
         int ignored = ::chdir(getenv("HOME") ? getenv("HOME") : "/");
@@ -87,8 +97,13 @@ bool TerminalPty::start(const QString &program, const QStringList &arguments,
       ::setenv(entry.first.constData(), entry.second.constData(), 1);
     }
 
-    ::setenv("TERM", "ansi", 1);
-    ::unsetenv("COLORTERM");
+    ::unsetenv("COLUMNS");
+    ::unsetenv("LINES");
+    ::unsetenv("TERMCAP");
+    ::unsetenv("VTE_VERSION");
+    if (!getenv("TERM")) {
+      ::setenv("TERM", "xterm-256color", 1);
+    }
     ::setenv("LIGHTPAD_TERMINAL", "1", 1);
 
     ::execvp(programBytes.constData(), argv.data());
@@ -147,6 +162,23 @@ bool TerminalPty::isRunning() const { return m_running; }
 
 qint64 TerminalPty::processId() const { return m_pid; }
 
+bool TerminalPty::isShellInForeground() const {
+  if (!m_running || m_masterFd < 0 || m_pid <= 0) {
+    return true;
+  }
+  const pid_t group = ::tcgetpgrp(m_masterFd);
+  return group <= 0 || group == static_cast<pid_t>(m_pid);
+}
+
+QString TerminalPty::currentWorkingDirectory() const {
+#ifdef Q_OS_LINUX
+  if (m_running && m_pid > 0) {
+    return QFileInfo(QStringLiteral("/proc/%1/cwd").arg(m_pid)).symLinkTarget();
+  }
+#endif
+  return QString();
+}
+
 qint64 TerminalPty::writeData(const QByteArray &data) {
   if (!m_running || m_masterFd < 0 || data.isEmpty()) {
     return -1;
@@ -195,20 +227,26 @@ void TerminalPty::readAvailable() {
     return;
   }
 
+  constexpr int kMaxBytesPerRead = 256 * 1024;
   QByteArray data;
-  char buffer[8192];
-  while (true) {
+  char buffer[16384];
+  while (data.size() < kMaxBytesPerRead) {
     ssize_t count = ::read(m_masterFd, buffer, sizeof(buffer));
     if (count > 0) {
       data.append(buffer, static_cast<int>(count));
       continue;
     }
+    if (count < 0 && errno == EINTR) {
+      continue;
+    }
     if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
       break;
     }
-    if (count == 0 || (count < 0 && errno != EINTR)) {
-      break;
+
+    if (m_readNotifier) {
+      m_readNotifier->setEnabled(false);
     }
+    break;
   }
 
   if (!data.isEmpty()) {

@@ -146,8 +146,6 @@ void TestLanguageFeatureManager::testServerErrorEmitted() {
 
   mgr.openDocument("/project/file.xyz", "unknown_lang", "content");
 
-  // A language with no configured server is an ordinary state, not an error:
-  // it must not be reported through the channel that raises error UI.
   QCOMPARE(errorSpy.count(), 0);
   QCOMPARE(unavailableSpy.count(), 1);
   const QList<QVariant> args = unavailableSpy.takeFirst();

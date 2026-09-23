@@ -18,9 +18,6 @@ public:
 
   void setSearchKeyword(const QString &keyword);
 
-  // The find panel builds the pattern that actually drives matching (regex,
-  // whole-word and case options); the highlighter must use the same one or the
-  // highlights disagree with the match count and navigation.
   void setSearchPattern(const QRegularExpression &pattern);
 
   QString searchKeyword() const { return m_searchKeyword; }

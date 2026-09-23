@@ -66,8 +66,7 @@ void ProblemsPanel::setupUI() {
   m_tree->setHeaderLabels({tr("Problem"), tr("Location")});
   m_tree->setRootIsDecorated(false);
   m_tree->setAlternatingRowColors(false);
-  // The message is the part worth reading, so it takes the free space and the
-  // location column only takes what it needs.
+
   m_tree->header()->setStretchLastSection(false);
   m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
   m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);

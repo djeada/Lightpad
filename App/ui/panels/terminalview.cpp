@@ -17,9 +17,13 @@ public:
       : QSyntaxHighlighter(document) {}
 
   QColor background, foreground;
+  bool enabled = true;
 
 protected:
   void highlightBlock(const QString &text) override {
+    if (!enabled) {
+      return;
+    }
     const auto &c = ThemeEngine::instance().activeTheme().colors;
     struct Rule {
       QRegularExpression expression;
@@ -137,7 +141,7 @@ void TerminalView::paintEvent(QPaintEvent *event) {
   painter.fillRect(QRect(0, 0, 2, r.height()), withAlpha(m_accent, 0.45));
 
   const QRect cursor = cursorRect();
-  if (cursor.isValid() && hasFocus()) {
+  if (cursor.isValid() && hasFocus() && cursorWidth() > 0) {
     QColor row = withAlpha(m_accent, 0.025 + 0.030 * m_glowIntensity);
     painter.fillRect(QRect(0, cursor.y(), r.width(), cursor.height()), row);
 
@@ -152,6 +156,11 @@ void TerminalView::paintEvent(QPaintEvent *event) {
       painter.drawLine(r.left(), y, r.right(), y);
     }
   }
+}
+
+void TerminalView::setDecorationsEnabled(bool enabled) {
+
+  m_highlighter->enabled = enabled;
 }
 
 QColor TerminalView::withAlpha(const QColor &color, qreal alpha) const {

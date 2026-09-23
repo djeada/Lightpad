@@ -7,8 +7,10 @@
 #include <QMenu>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QStringDecoder>
 #include <QStringList>
 #include <QTextCharFormat>
+#include <QTextDocumentFragment>
 #include <QTimer>
 #include <QWidget>
 
@@ -31,15 +33,11 @@ class QEvent;
 class Terminal : public QWidget {
   Q_OBJECT
 
-  // The unit test drives the terminal through its internals. Friendship keeps
-  // those members private, and therefore identically mangled, in every
-  // translation unit; "#define private public" does not, because MSVC encodes
-  // the access specifier into the symbol name and the test then fails to link
-  // against terminal.cpp.
   friend class TestTerminal;
 
 public:
-  explicit Terminal(QWidget *parent = nullptr);
+  explicit Terminal(QWidget *parent = nullptr,
+                    const QString &workingDirectory = QString());
   ~Terminal();
 
   void
@@ -166,9 +164,15 @@ private:
   void setRunInputIndicatorActive(bool active);
   void updateRunInputIndicator();
   void updateStyleSheet();
+  void setFontSize(int pointSize);
   void updateCwdLabel();
   bool handleCommonInputKey(QKeyEvent *keyEvent);
   bool handlePtyKeyPress(QKeyEvent *keyEvent);
+  QByteArray ptyKeySequence(QKeyEvent *keyEvent) const;
+  bool shouldTerminalConsumeShortcut(QKeyEvent *keyEvent) const;
+  bool isShellInForeground() const;
+  QString shellCurrentDirectory() const;
+  void placeCaretAtAnsiCursor();
   bool isPtyShellActive() const;
   void writeToShell(const QByteArray &data);
   void updatePtySize();
@@ -183,6 +187,7 @@ private:
   void copySelectionToClipboard() const;
   void insertInputText(const QString &text);
   void pasteClipboardText();
+  static QByteArray ptyPasteData(const QString &text, bool bracketed);
   void removeInputText(bool backwards);
   QString takePendingInput();
   QString getLinkAtPosition(const QPoint &pos);
@@ -192,6 +197,31 @@ private:
   QTextCursor ansiCursor(bool padToColumn = false);
   void syncAnsiCursor(const QTextCursor &cursor);
   void syncAnsiCursorToDocumentEnd();
+  int screenRows() const;
+  int screenColumns() const;
+  int scrollRegionTop() const;
+  int scrollRegionBottom() const;
+  void keepCursorOnScreen();
+  void handleScreenResize();
+  void removeLines(int first, int count);
+  void insertBlankLines(int at, int count);
+  void scrollUp(int count, int top, int bottom, bool allowScrollback);
+  void scrollDown(int count, int top, int bottom);
+  void lineFeed();
+  void reverseIndex();
+  void writePrintable(const QString &text);
+  void eraseInLine(int mode);
+  void eraseInDisplay(int mode);
+  void trimTrailingBlanksAfterCursor();
+  void saveCursorState();
+  void restoreCursorState();
+  void setPrivateMode(int mode, bool enable);
+  void applySgr(const QString &params);
+  int handleEscapeSequence(const QString &text, int index);
+  void handleCsi(const QString &body, QChar finalByte);
+  void sendTerminalReply(const QByteArray &reply);
+  void setCursorShown(bool shown);
+  void clearDocument();
   void enterAlternateScreen();
   void leaveAlternateScreen();
   bool hasProtectedInputSurface() const;
@@ -238,21 +268,45 @@ private:
   QColor m_ansiBackground;
   int m_ansiRow;
   int m_ansiColumn;
-  int m_savedAnsiRow;
-  int m_savedAnsiColumn;
   bool m_ansiBold;
   bool m_ansiDim;
   bool m_ansiItalic;
   bool m_ansiUnderline;
   bool m_ansiInverse;
-  bool m_ansiOverwriteMode;
-  bool m_ansiChunkUsedScreenOps;
+  bool m_ansiStrikeOut;
+  bool m_ansiHidden;
   bool m_alternateScreenActive;
   int m_terminalColumns;
   int m_terminalRows;
-  QString m_savedPrimaryScreenText;
+
+  int m_screenTop;
+  int m_scrollTop;
+  int m_scrollBottom;
+  bool m_autoWrap;
+  bool m_insertMode;
+  bool m_applicationCursorKeys;
+  bool m_bracketedPaste;
+  bool m_cursorShown;
+  bool m_processingPtyOutput;
+  struct SavedCursor {
+    int row = 0;
+    int column = 0;
+    QColor foreground;
+    QColor background;
+    bool bold = false;
+    bool dim = false;
+    bool italic = false;
+    bool underline = false;
+    bool inverse = false;
+    bool strikeOut = false;
+    bool hidden = false;
+  };
+  SavedCursor m_savedCursor;
+  QTextDocumentFragment m_savedPrimaryScreen;
   QString m_pendingAnsiText;
+  QStringDecoder m_ptyDecoder;
   int m_savedPrimaryInputStartPosition;
+  int m_savedPrimaryScreenTop;
   int m_savedPrimaryAnsiRow;
   int m_savedPrimaryAnsiColumn;
 
