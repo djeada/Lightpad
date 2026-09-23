@@ -1,4 +1,6 @@
 #include "ui/dialogs/gotosymboldialog.h"
+#include <QListWidget>
+#include <QSignalSpy>
 #include <QtTest/QtTest>
 
 class TestGoToSymbolDialog : public QObject {
@@ -12,6 +14,8 @@ private slots:
   void testClearSymbols();
   void testFlattenNestedSymbols();
   void testSymbolKindIcons();
+  void testEnterInListSelectsOnce();
+  void testClickSelectsOnce();
 
 private:
   GoToSymbolDialog *m_dialog;
@@ -112,6 +116,48 @@ void TestGoToSymbolDialog::testSymbolKindIcons() {
     m_dialog->setSymbols(symbols);
     QVERIFY(m_dialog != nullptr);
   }
+}
+
+void TestGoToSymbolDialog::testEnterInListSelectsOnce() {
+  QList<LspDocumentSymbol> symbols;
+  LspDocumentSymbol sym;
+  sym.name = "alpha";
+  sym.kind = LspSymbolKind::Function;
+  sym.selectionRange.start.line = 3;
+  sym.selectionRange.start.character = 2;
+  symbols.append(sym);
+  m_dialog->setSymbols(symbols);
+  m_dialog->showDialog();
+
+  QListWidget *list = m_dialog->findChild<QListWidget *>();
+  QVERIFY(list);
+  QCOMPARE(list->currentRow(), 0);
+
+  QSignalSpy spy(m_dialog, &GoToSymbolDialog::symbolSelected);
+  QTest::keyClick(list, Qt::Key_Return);
+  QCOMPARE(spy.count(), 1);
+}
+
+void TestGoToSymbolDialog::testClickSelectsOnce() {
+  QList<LspDocumentSymbol> symbols;
+  LspDocumentSymbol sym;
+  sym.name = "beta";
+  sym.kind = LspSymbolKind::Function;
+  sym.selectionRange.start.line = 7;
+  sym.selectionRange.start.character = 0;
+  symbols.append(sym);
+  m_dialog->setSymbols(symbols);
+  m_dialog->showDialog();
+
+  QListWidget *list = m_dialog->findChild<QListWidget *>();
+  QVERIFY(list);
+  QVERIFY(list->count() > 0);
+
+  QSignalSpy spy(m_dialog, &GoToSymbolDialog::symbolSelected);
+  const QRect rect = list->visualItemRect(list->item(0));
+  QTest::mouseClick(list->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    rect.center());
+  QCOMPARE(spy.count(), 1);
 }
 
 QTEST_MAIN(TestGoToSymbolDialog)

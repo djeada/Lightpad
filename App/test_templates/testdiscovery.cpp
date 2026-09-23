@@ -30,6 +30,7 @@ void CTestDiscoveryAdapter::discover(const QString &buildDir) {
           &CTestDiscoveryAdapter::onProcessFinished);
 
   m_usingJson = true;
+  reportStartFailure(m_process);
   m_process->start("ctest", {"--show-only=json-v1"});
 }
 
@@ -60,6 +61,7 @@ void CTestDiscoveryAdapter::onProcessFinished(int exitCode,
     connect(m_process,
             QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
             &CTestDiscoveryAdapter::onProcessFinished);
+    reportStartFailure(m_process);
     m_process->start("ctest", {"-N"});
     return;
   }
@@ -165,6 +167,7 @@ void GTestDiscoveryAdapter::discover(const QString &buildDir) {
           QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
           &GTestDiscoveryAdapter::onProcessFinished);
 
+  reportStartFailure(m_process);
   m_process->start(m_executablePath, {"--gtest_list_tests"});
 }
 
@@ -268,6 +271,7 @@ void PytestDiscoveryAdapter::discover(const QString &workDir) {
           QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
           &PytestDiscoveryAdapter::onProcessFinished);
 
+  reportStartFailure(m_process);
   m_process->start("python3",
                    {"-m", "pytest", "--collect-only", "-q", "--no-header"});
 }
@@ -364,6 +368,7 @@ void GoTestDiscoveryAdapter::discover(const QString &workDir) {
           QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
           &GoTestDiscoveryAdapter::onProcessFinished);
 
+  reportStartFailure(m_process);
   m_process->start("go", {"test", "-list", ".*", "./..."});
 }
 
@@ -448,6 +453,7 @@ void CargoTestDiscoveryAdapter::discover(const QString &workDir) {
           QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
           &CargoTestDiscoveryAdapter::onProcessFinished);
 
+  reportStartFailure(m_process);
   m_process->start("cargo", {"test", "--", "--list"});
 }
 
@@ -535,6 +541,7 @@ void JestDiscoveryAdapter::discover(const QString &workDir) {
           QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
           &JestDiscoveryAdapter::onProcessFinished);
 
+  reportStartFailure(m_process);
   m_process->start("npx", {"jest", "--listTests"});
 }
 

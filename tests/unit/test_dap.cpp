@@ -19,6 +19,7 @@
 #include "dap/debugsettings.h"
 #include "dap/expressiontranslator.h"
 #include "dap/watchmanager.h"
+#include "ui/dialogs/debugconfigurationdialog.h"
 
 Q_DECLARE_METATYPE(DapExceptionInfo)
 Q_DECLARE_METATYPE(QList<DapVariable>)
@@ -106,6 +107,21 @@ private slots:
   void testDapClientCapabilityGating();
   void testDapClientSocketTransport();
   void testDapClientSocketTransportDisconnectIsReported();
+  void testDapClientFramingSkipsNonProtocolOutput();
+  void testDapClientFramingSkipsOversizedFrameAcrossChunks();
+  void testDapClientFramingDrainsLargeBursts();
+  void testDapClientStoppedWithoutThreadKeepsCurrentThread();
+  void testDapClientOversizedResponseReleasesPendingRequest();
+  void testDapClientDropsResponsesCancelledByResume();
+  void testDapClientRestartWrapsLaunchArguments();
+  void testDapClientServerTransport();
+  void testDapClientServerTransportReportsEarlyExit();
+  void testBreakpointVerificationPairsByIndex();
+  void testPreferredAdapterPrefersLanguageSpecific();
+  void testCommandLineArgumentsRoundTrip();
+  void testConfigurationRenameRefusesExistingName();
+  void testDebugConfigurationDialogValidationAndCancel();
+  void testDebugConfigurationDialogDebouncesStatusProbe();
 
 private:
   QString fakeAdapterPath() const;
@@ -722,13 +738,43 @@ void TestDap::testGdbAdapterIntegration() {
   QJsonObject attachConfig = gdbAdapter->createAttachConfig(12345, "", 0);
   QCOMPARE(attachConfig["type"].toString(), QString("cppdbg"));
   QCOMPARE(attachConfig["request"].toString(), QString("attach"));
-  QCOMPARE(attachConfig["processId"].toString(), QString("12345"));
+  QCOMPARE(attachConfig["pid"].toInt(), 12345);
 
   QJsonObject remoteConfig =
       gdbAdapter->createAttachConfig(0, "192.168.1.100", 1234);
   QCOMPARE(remoteConfig["type"].toString(), QString("cppdbg"));
-  QVERIFY(remoteConfig.contains("miDebuggerServerAddress") ||
-          remoteConfig.contains("setupCommands"));
+  QCOMPARE(remoteConfig["target"].toString(), QString("192.168.1.100:1234"));
+
+  DebugConfiguration pidAttach;
+  pidAttach.adapterId = "cppdbg-gdb";
+  pidAttach.request = "attach";
+  pidAttach.processId = 4242;
+  pidAttach.program = "/path/to/program";
+  const QJsonObject pidArgs = gdbAdapter->attachArguments(pidAttach);
+  QVERIFY(pidArgs["pid"].isDouble());
+  QCOMPARE(pidArgs["pid"].toInt(), 4242);
+  QVERIFY(!pidArgs.contains("processId"));
+  QCOMPARE(pidArgs["program"].toString(), QString("/path/to/program"));
+
+  DebugConfiguration remoteAttach;
+  remoteAttach.adapterId = "cppdbg-gdb";
+  remoteAttach.request = "attach";
+  remoteAttach.adapterConfig["miDebuggerServerAddress"] = "10.0.0.2:2345";
+  const QJsonObject remoteArgs = gdbAdapter->attachArguments(remoteAttach);
+  QCOMPARE(remoteArgs["target"].toString(), QString("10.0.0.2:2345"));
+  QVERIFY(!remoteArgs.contains("miDebuggerServerAddress"));
+  QVERIFY(!remoteArgs.contains("pid"));
+  QVERIFY(!remoteArgs.contains("program"));
+
+  DebugConfiguration hostPortAttach;
+  hostPortAttach.adapterId = "cppdbg-gdb";
+  hostPortAttach.request = "attach";
+  hostPortAttach.host = "127.0.0.1";
+  hostPortAttach.port = 1234;
+  const QJsonObject hostPortArgs = gdbAdapter->attachArguments(hostPortAttach);
+  QCOMPARE(hostPortArgs["target"].toString(), QString("127.0.0.1:1234"));
+  QVERIFY(!hostPortArgs.contains("host"));
+  QVERIFY(!hostPortArgs.contains("port"));
 
   QString status = gdbAdapter->statusMessage();
   QVERIFY(!status.isEmpty());
@@ -1819,6 +1865,398 @@ void TestDap::testDapClientSocketTransportDisconnectIsReported() {
 
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Terminated, 5000);
   QVERIFY(terminatedSpy.count() >= 1);
+}
+
+namespace {
+QJsonObject outputEventMessage(int seq, const QString &text) {
+  QJsonObject message;
+  message["seq"] = seq;
+  message["type"] = "event";
+  message["event"] = "output";
+  message["body"] = QJsonObject{{"category", "console"}, {"output", text}};
+  return message;
+}
+
+class PreferenceTestAdapter : public IDebugAdapter {
+public:
+  PreferenceTestAdapter(const QString &id, const QStringList &languages,
+                        bool available)
+      : m_available(available) {
+    m_config.id = id;
+    m_config.name = id;
+    m_config.type = id;
+    m_config.languages = languages;
+    m_config.extensions = {".lpzz"};
+  }
+  DebugAdapterConfig config() const override { return m_config; }
+  bool isAvailable() const override { return m_available; }
+  QString statusMessage() const override { return {}; }
+  QJsonObject createLaunchConfig(const QString &,
+                                 const QString &) const override {
+    return {};
+  }
+  QJsonObject createAttachConfig(int, const QString &, int) const override {
+    return {};
+  }
+
+private:
+  DebugAdapterConfig m_config;
+  bool m_available;
+};
+} // namespace
+
+void TestDap::testDapClientFramingSkipsNonProtocolOutput() {
+  DapClient client;
+  QSignalSpy outputSpy(&client, &DapClient::output);
+
+  client.feedAdapterData("warning: stray adapter output\r\n\r\nmore noise");
+  client.feedAdapterData(frameMessage(outputEventMessage(1, "first")));
+  QCOMPARE(outputSpy.count(), 1);
+
+  QByteArray mixed = "garbage between frames ";
+  mixed += frameMessage(outputEventMessage(2, "second"));
+  mixed += "Content-Length: nope\r\n";
+  mixed += frameMessage(outputEventMessage(3, "third"));
+  client.feedAdapterData(mixed);
+  QCOMPARE(outputSpy.count(), 3);
+  QCOMPARE(outputSpy.at(2).at(0).value<DapOutputEvent>().output,
+           QString("third"));
+}
+
+void TestDap::testDapClientFramingSkipsOversizedFrameAcrossChunks() {
+  DapClient client;
+  QSignalSpy outputSpy(&client, &DapClient::output);
+
+  const int hugeSize = 3 * 1024 * 1024;
+  QByteArray hugeBody = "{\"type\":\"event\",\"event\":\"output\",\"body\":{";
+  hugeBody += "\"output\":\"";
+  hugeBody += QByteArray(hugeSize - hugeBody.size() - 3, 'x');
+  hugeBody += "\"}}";
+  QCOMPARE(hugeBody.size(), hugeSize);
+
+  client.feedAdapterData("Content-Length: " + QByteArray::number(hugeSize) +
+                         "\r\n\r\n");
+  const int chunk = 64 * 1024;
+  for (int i = 0; i < hugeBody.size(); i += chunk) {
+    client.feedAdapterData(hugeBody.mid(i, chunk));
+  }
+  QCOMPARE(outputSpy.count(), 0);
+
+  client.feedAdapterData(frameMessage(outputEventMessage(9, "after")));
+  QCOMPARE(outputSpy.count(), 1);
+  QCOMPARE(outputSpy.at(0).at(0).value<DapOutputEvent>().output,
+           QString("after"));
+}
+
+void TestDap::testDapClientFramingDrainsLargeBursts() {
+  DapClient client;
+  QSignalSpy outputSpy(&client, &DapClient::output);
+
+  QByteArray burst;
+  for (int i = 0; i < 250; ++i) {
+    burst += frameMessage(outputEventMessage(i + 1, QString::number(i)));
+  }
+  client.feedAdapterData(burst);
+  QTRY_COMPARE_WITH_TIMEOUT(outputSpy.count(), 250, 5000);
+  QCOMPARE(outputSpy.last().at(0).value<DapOutputEvent>().output,
+           QString("249"));
+}
+
+void TestDap::testDapClientStoppedWithoutThreadKeepsCurrentThread() {
+  DapClient client;
+
+  QJsonObject stopped;
+  stopped["seq"] = 1;
+  stopped["type"] = "event";
+  stopped["event"] = "stopped";
+  stopped["body"] = QJsonObject{{"reason", "breakpoint"}, {"threadId", 5}};
+  client.feedAdapterData(frameMessage(stopped));
+  QCOMPARE(client.currentThreadId(), 5);
+
+  stopped["seq"] = 2;
+  stopped["body"] =
+      QJsonObject{{"reason", "pause"}, {"allThreadsStopped", true}};
+  client.feedAdapterData(frameMessage(stopped));
+  QCOMPARE(client.currentThreadId(), 5);
+}
+
+void TestDap::testDapClientOversizedResponseReleasesPendingRequest() {
+  DapClient client;
+  QSignalSpy variablesSpy(&client, &DapClient::variablesReceived);
+
+  QVERIFY(client.start(fakeAdapterPath(), {"--huge-variables"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+
+  client.getVariables(1000);
+  QTRY_COMPARE_WITH_TIMEOUT(variablesSpy.count(), 1, 10000);
+  QCOMPARE(variablesSpy.at(0).at(0).toInt(), 1000);
+  QVERIFY(variablesSpy.at(0).at(1).value<QList<DapVariable>>().isEmpty());
+
+  client.getVariables(1000);
+  QTRY_COMPARE_WITH_TIMEOUT(variablesSpy.count(), 2, 10000);
+
+  client.stop(false);
+}
+
+void TestDap::testDapClientDropsResponsesCancelledByResume() {
+  DapClient client;
+  QSignalSpy stackSpy(&client, &DapClient::stackTraceReceived);
+  QSignalSpy continuedSpy(&client, &DapClient::continued);
+
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
+
+  client.getStackTrace(1);
+  client.continueExecution(1);
+  QTRY_COMPARE_WITH_TIMEOUT(continuedSpy.count(), 1, 5000);
+  QTest::qWait(100);
+  QCOMPARE(stackSpy.count(), 0);
+
+  client.getStackTrace(1);
+  QTRY_COMPARE_WITH_TIMEOUT(stackSpy.count(), 1, 5000);
+  QCOMPARE(stackSpy.at(0).at(0).toInt(), 1);
+
+  client.stop(false);
+}
+
+void TestDap::testDapClientRestartWrapsLaunchArguments() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString tracePath = dir.filePath("trace.jsonl");
+
+  DapClient client;
+  QVERIFY(
+      client.start(fakeAdapterPath(), {"--trace", tracePath, "--caps",
+                                       R"({"supportsRestartRequest":true})"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+
+  client.restart();
+  QTRY_VERIFY_WITH_TIMEOUT(
+      traceFileContains(tracePath, "\"arguments\":{\"arguments\":{"), 5000);
+
+  client.stop(false);
+}
+
+void TestDap::testDapClientServerTransport() {
+  DapClient client;
+  QSignalSpy initializedSpy(&client, &DapClient::initialized);
+
+  QVERIFY(client.startServer(fakeAdapterPath(), {"--listen-any"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 10000);
+  QCOMPARE(initializedSpy.count(), 1);
+  QVERIFY(client.isSocketTransport());
+
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+
+  client.stop(true);
+  QCOMPARE(client.state(), DapClient::State::Disconnected);
+}
+
+void TestDap::testDapClientServerTransportReportsEarlyExit() {
+  DapClient client;
+  QSignalSpy errorSpy(&client, &DapClient::error);
+  QSignalSpy terminatedSpy(&client, &DapClient::terminated);
+
+  QVERIFY(client.startServer(fakeAdapterPath(), {"--listen", "1"}));
+  QTRY_COMPARE_WITH_TIMEOUT(terminatedSpy.count(), 1, 10000);
+  QCOMPARE(client.state(), DapClient::State::Error);
+  QVERIFY(!errorSpy.isEmpty());
+}
+
+void TestDap::testBreakpointVerificationPairsByIndex() {
+  cleanupBreakpoints();
+  BreakpointManager &bm = BreakpointManager::instance();
+  DapClient client;
+  bm.setDapClient(&client);
+
+  const QString path = "/nonexistent/lightpad/bp_index_test.cpp";
+  Breakpoint first;
+  first.filePath = path;
+  first.line = 10;
+  const int firstId = bm.addBreakpoint(first);
+  Breakpoint second;
+  second.filePath = path;
+  second.line = 20;
+  const int secondId = bm.addBreakpoint(second);
+
+  bm.syncFileBreakpoints(path);
+
+  DapBreakpoint moved;
+  moved.id = 7;
+  moved.verified = true;
+  moved.line = 12;
+  DapBreakpoint failed;
+  failed.id = 8;
+  failed.verified = false;
+  failed.message = "No code at this line";
+  bm.updateVerification(path, {moved, failed});
+
+  QVERIFY(bm.breakpoint(firstId).verified);
+  QCOMPARE(bm.breakpoint(firstId).boundLine, 12);
+  QVERIFY(!bm.breakpoint(secondId).verified);
+  QCOMPARE(bm.breakpoint(secondId).verificationMessage,
+           QString("No code at this line"));
+
+  DapBreakpoint changed;
+  changed.id = 8;
+  changed.verified = true;
+  changed.line = 21;
+  bm.updateVerification(path, {changed});
+  QVERIFY(bm.breakpoint(secondId).verified);
+  QCOMPARE(bm.breakpoint(secondId).boundLine, 21);
+  QVERIFY(bm.breakpoint(secondId).verificationMessage.isEmpty());
+  QCOMPARE(bm.breakpoint(firstId).boundLine, 12);
+
+  bm.resetVerification();
+  bm.setDapClient(nullptr);
+  cleanupBreakpoints();
+}
+
+void TestDap::testPreferredAdapterPrefersLanguageSpecific() {
+  DebugAdapterRegistry &reg = DebugAdapterRegistry::instance();
+  reg.registerAdapter(std::make_shared<PreferenceTestAdapter>(
+      "aaa-generic-test", QStringList{"lpzz", "other"}, true));
+  reg.registerAdapter(std::make_shared<PreferenceTestAdapter>(
+      "zzz-specific-test", QStringList{"lpzz"}, true));
+
+  auto preferred = reg.preferredAdapterForFile("/tmp/main.lpzz");
+  QVERIFY(preferred != nullptr);
+  QCOMPARE(preferred->config().id, QString("zzz-specific-test"));
+  preferred = reg.preferredAdapterForLanguage("lpzz");
+  QVERIFY(preferred != nullptr);
+  QCOMPARE(preferred->config().id, QString("zzz-specific-test"));
+
+  reg.registerAdapter(std::make_shared<PreferenceTestAdapter>(
+      "zzz-specific-test", QStringList{"lpzz"}, false));
+  preferred = reg.preferredAdapterForFile("/tmp/main.lpzz");
+  QVERIFY(preferred != nullptr);
+  QCOMPARE(preferred->config().id, QString("aaa-generic-test"));
+
+  reg.unregisterAdapter("aaa-generic-test");
+  reg.unregisterAdapter("zzz-specific-test");
+
+  auto goAdapter = reg.adapter("go-delve");
+  QVERIFY(goAdapter != nullptr);
+  QVERIFY(goAdapter->config().serverTransport);
+  QVERIFY(goAdapter->config().arguments.contains("--listen=127.0.0.1:0"));
+}
+
+void TestDap::testCommandLineArgumentsRoundTrip() {
+  const QStringList args = {"plain", "with space", "say \"hi\"", "tab\there"};
+  const QString joined =
+      DebugConfigurationManager::joinCommandLineArguments(args);
+  QCOMPARE(DebugConfigurationManager::splitCommandLineArguments(joined), args);
+  QCOMPARE(DebugConfigurationManager::joinCommandLineArguments({"a", "b"}),
+           QString("a b"));
+}
+
+void TestDap::testConfigurationRenameRefusesExistingName() {
+  DebugConfigurationManager &manager = DebugConfigurationManager::instance();
+  const QList<DebugConfiguration> original = manager.allConfigurations();
+
+  DebugConfiguration a;
+  a.name = "Rename Test A";
+  a.program = "/a";
+  DebugConfiguration b;
+  b.name = "Rename Test B";
+  b.program = "/b";
+  manager.addConfiguration(a);
+  manager.addConfiguration(b);
+
+  DebugConfiguration renamed = a;
+  renamed.name = b.name;
+  QVERIFY(!manager.updateConfiguration(a.name, renamed));
+  QCOMPARE(manager.configuration(b.name).program, QString("/b"));
+  QCOMPARE(manager.configuration(a.name).program, QString("/a"));
+
+  manager.replaceConfigurations(original);
+}
+
+void TestDap::testDebugConfigurationDialogValidationAndCancel() {
+  DebugConfigurationManager &manager = DebugConfigurationManager::instance();
+  const QList<DebugConfiguration> original = manager.allConfigurations();
+
+  DebugConfiguration a;
+  a.name = "Dialog Test A";
+  a.type = "cppdbg";
+  a.request = "launch";
+  a.program = "/a";
+  a.args = {"one arg", "two"};
+  a.adapterConfig["MIMode"] = "gdb";
+  DebugConfiguration b;
+  b.name = "Dialog Test B";
+  b.type = "cppdbg";
+  b.request = "launch";
+  b.program = "/b";
+  manager.replaceConfigurations({a, b});
+
+  {
+    DebugConfigurationDialog dialog;
+    QCOMPARE(dialog.m_currentConfigName, a.name);
+    QCOMPARE(dialog.m_argsEdit->text(), QString("\"one arg\" two"));
+
+    dialog.m_configList->setCurrentRow(1);
+    dialog.m_configList->setCurrentRow(0);
+    QCOMPARE(manager.configuration(a.name).args, a.args);
+
+    dialog.m_adapterConfigEdit->setPlainText("{ not json");
+    dialog.m_configList->setCurrentRow(1);
+    QCOMPARE(dialog.m_configList->currentRow(), 0);
+    QVERIFY(!dialog.m_validationLabel->isHidden());
+    QVERIFY(!dialog.saveCurrentToModel());
+    QCOMPARE(manager.configuration(a.name).adapterConfig.value("MIMode"),
+             QJsonValue("gdb"));
+
+    dialog.m_adapterConfigEdit->setPlainText("{\"MIMode\": \"lldb\"}");
+    dialog.m_nameEdit->setText(b.name);
+    QVERIFY(!dialog.saveCurrentToModel());
+    QCOMPARE(manager.configuration(b.name).program, QString("/b"));
+
+    dialog.m_nameEdit->setText("Dialog Test Renamed");
+    QVERIFY(dialog.saveCurrentToModel());
+    QVERIFY(dialog.m_validationLabel->isHidden());
+    QCOMPARE(manager.configuration("Dialog Test Renamed").program,
+             QString("/a"));
+
+    dialog.reject();
+  }
+
+  QCOMPARE(manager.allConfigurations().size(), 2);
+  QCOMPARE(manager.configuration(a.name).program, QString("/a"));
+  QCOMPARE(manager.configuration(a.name).adapterConfig.value("MIMode"),
+           QJsonValue("gdb"));
+  QVERIFY(manager.configuration("Dialog Test Renamed").name.isEmpty());
+
+  manager.replaceConfigurations(original);
+}
+
+void TestDap::testDebugConfigurationDialogDebouncesStatusProbe() {
+  DebugConfigurationManager &manager = DebugConfigurationManager::instance();
+  const QList<DebugConfiguration> original = manager.allConfigurations();
+  manager.replaceConfigurations({});
+
+  {
+    DebugConfigurationDialog dialog;
+    dialog.m_typeCombo->setCurrentText("debugpy");
+    for (const QChar ch : QString("/tmp/prog")) {
+      dialog.m_programEdit->setText(dialog.m_programEdit->text() + ch);
+    }
+    QVERIFY(dialog.m_statusTimer->isActive());
+    QVERIFY(dialog.m_adapterStatusLabel->text().contains("checking"));
+    QTRY_VERIFY_WITH_TIMEOUT(!dialog.m_statusTimer->isActive(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(
+        !dialog.m_adapterStatusLabel->text().contains("checking"), 30000);
+    QVERIFY(!dialog.m_statusCache.isEmpty());
+  }
+
+  manager.replaceConfigurations(original);
 }
 
 QTEST_MAIN(TestDap)

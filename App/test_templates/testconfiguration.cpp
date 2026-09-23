@@ -12,6 +12,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QSet>
 #include <QStandardPaths>
 #include <QUuid>
@@ -123,7 +124,22 @@ bool TestConfigurationManager::saveUserConfigurations(
   QDir().mkpath(dirPath);
 
   QString configPath = dirPath + "/config.json";
-  QFile file(configPath);
+  QFile existing(configPath);
+  if (existing.exists()) {
+    if (!existing.open(QIODevice::ReadOnly))
+      return false;
+    QJsonParseError error;
+    const QJsonDocument current =
+        QJsonDocument::fromJson(existing.readAll(), &error);
+    existing.close();
+    if (error.error != QJsonParseError::NoError || !current.isObject()) {
+      LOG_WARNING("Refusing to overwrite unreadable user test config: " +
+                  configPath);
+      return false;
+    }
+  }
+
+  QSaveFile file(configPath);
   if (!file.open(QIODevice::WriteOnly))
     return false;
 
@@ -139,8 +155,7 @@ bool TestConfigurationManager::saveUserConfigurations(
     root["defaultConfiguration"] = defaultName;
 
   file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-  file.close();
-  return true;
+  return file.commit();
 }
 
 QList<TestConfiguration> TestConfigurationManager::allTemplates() const {
@@ -394,5 +409,36 @@ QString TestConfigurationManager::substituteVariables(
       input, workspaceFolder, filePath, workingDirectory);
   if (!testName.isEmpty())
     result.replace("${testName}", testName);
+  return result;
+}
+
+QString TestConfigurationManager::substituteShellVariables(
+    const QString &script, const QString &filePath,
+    const QString &workspaceFolder, const QString &testName) {
+  QString workingDirectory = workspaceFolder;
+  if (!filePath.isEmpty())
+    workingDirectory = QFileInfo(filePath).absolutePath();
+
+  QMap<QString, QString> vars = PythonProjectEnvironment::variables(
+      workspaceFolder, filePath, workingDirectory);
+  if (!testName.isEmpty())
+    vars.insert("testName", testName);
+  return PythonProjectEnvironment::substituteShellVariables(script, vars);
+}
+
+QStringList TestConfigurationManager::substituteArguments(
+    const QString &command, const QStringList &args, const QString &filePath,
+    const QString &workspaceFolder, const QString &testName) {
+  const int scriptIndex =
+      PythonProjectEnvironment::shellScriptArgumentIndex(command, args);
+  QStringList result;
+  for (int i = 0; i < args.size(); ++i) {
+    if (i == scriptIndex)
+      result.append(substituteShellVariables(args.at(i), filePath,
+                                             workspaceFolder, testName));
+    else
+      result.append(
+          substituteVariables(args.at(i), filePath, workspaceFolder, testName));
+  }
   return result;
 }

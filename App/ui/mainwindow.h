@@ -7,10 +7,12 @@
 #include <QListView>
 #include <QMainWindow>
 #include <QMap>
+#include <QPointer>
 #include <QSet>
 #include <QTimer>
 #include <memory>
 
+#include "../core/io/fileopenguard.h"
 #include "../run_templates/runtargetresolver.h"
 #include "../settings/textareasettings.h"
 #include "../settings/theme.h"
@@ -73,9 +75,10 @@ public:
   ~MainWindow();
   void keyPressEvent(QKeyEvent *event);
   bool eventFilter(QObject *watched, QEvent *event) override;
-  void openFileAndAddToNewTab(QString path);
+  void openFileAndAddToNewTab(QString path, bool reuseAnyGroup = true);
   void openPathsFromCommandLine(const QStringList &paths);
   void closeTabPage(QString filePath);
+  void retargetOpenPaths(const QString &oldPath, const QString &newPath);
   void setRowCol(int row, int col);
   void setTabWidth(int width);
   void setTabWidthLabel(QString text);
@@ -246,7 +249,7 @@ private:
   class QLabel *vimStatusLabel;
   class QToolButton *m_pythonEnvLabel;
   bool m_vimCommandPanelActive;
-  VimMode *m_connectedVimMode;
+  QPointer<VimMode> m_connectedVimMode;
   class BreadcrumbWidget *breadcrumbWidget;
   class RecentFilesManager *recentFilesManager;
 
@@ -322,6 +325,7 @@ private:
   QMetaObject::Connection m_sessionStateConnection;
   QMetaObject::Connection m_runProcessFinishedConnection;
   QMetaObject::Connection m_runProcessErrorConnection;
+  QMetaObject::Connection m_markdownPreviewTextConnection;
   QMetaObject::Connection m_formatProcessFinishedConnection;
   QMetaObject::Connection m_formatProcessErrorConnection;
 
@@ -331,6 +335,10 @@ private:
   void redo();
   void open(const QString &filePath);
   bool save(const QString &filePath, bool isAutoSave = false);
+  bool saveTab(LightpadTabWidget *tabWidget, int tabIndex);
+  bool saveTabAs(LightpadTabWidget *tabWidget, int tabIndex);
+  bool maybeSaveTab(LightpadTabWidget *tabWidget, int tabIndex);
+  bool isPreviewOnlyFile(const QString &filePath) const;
   void recordFileTimestamp(const QString &filePath);
   bool checkExternalModification(const QString &filePath) const;
   bool isFileOpenInEditor(const QString &filePath) const;
@@ -420,6 +428,7 @@ private:
   FileOpenChoice confirmLargeOrBinaryOpen(const QString &filePath);
 
   QSet<QString> m_previewOnlyFiles;
+  QHash<QString, FileOpenGuard::TextFormat> m_fileFormats;
   void ensureDebugPanel();
   void ensureTestPanel();
   void trackDockLayoutChanges(QDockWidget *dock);

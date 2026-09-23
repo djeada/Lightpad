@@ -22,7 +22,7 @@ def vimstr(keys):
         c = keys[i]
         if c == '<':
             m = re.match(r'<([A-Za-z0-9-]+)>', keys[i:])
-            if m and (m.group(1).lower() in SPECIAL or re.match(r'^[CcAa]-.$', m.group(1))):
+            if m and (m.group(1).lower() in SPECIAL or re.match(r'^[CcAa]-.$', m.group(1)) or re.match(r'^([CcAaSs]-)+[A-Za-z][A-Za-z0-9]+$', m.group(1))):
                 out += '\\<' + m.group(1) + '>'
                 i += len(m.group(0)); continue
         if c == ' ': out += '\\<Space>'
@@ -43,7 +43,7 @@ def run_vim_chunk(chunk, idx):
         script.append("call setline(1, %s)" % vlist(lines))
         script.append("call setreg('\"', '', 'v')")
         script.append("call cursor(%d, %d)" % (c['line']+1, c['col']+1))
-        script.append("silent! call feedkeys(%s, 'xtn')" % vimstr(c['keys']))
+        script.append("call feedkeys(%s, 'xtn')" % vimstr(c['keys']))
         script.append("call add(g:out, json_encode({'text': join(getline(1,'$'), \"\\n\"), 'line': line('.')-1, 'col': col('.')-1, 'reg': getreg('\"'), 'regtype': getregtype('\"')[0]}))")
     script.append("call writefile(g:out, '%s/out.jsonl')" % d)
     script.append("qa!")

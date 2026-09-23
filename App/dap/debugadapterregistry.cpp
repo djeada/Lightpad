@@ -129,25 +129,28 @@ DebugAdapterRegistry::adaptersForConfiguration(
   return result;
 }
 
-std::shared_ptr<IDebugAdapter>
-DebugAdapterRegistry::preferredAdapterForFile(const QString &filePath) const {
-  for (const auto &adapterInstance : m_adapters) {
-    if (adapterInstance->canDebug(filePath)) {
+namespace {
+std::shared_ptr<IDebugAdapter> preferLanguageSpecificAdapter(
+    const QList<std::shared_ptr<IDebugAdapter>> &candidates) {
+  for (const auto &adapterInstance : candidates) {
+    if (adapterInstance && adapterInstance->config().languages.size() == 1 &&
+        adapterInstance->isAvailable()) {
       return adapterInstance;
     }
   }
-  return nullptr;
+  return candidates.isEmpty() ? nullptr : candidates.first();
+}
+} // namespace
+
+std::shared_ptr<IDebugAdapter>
+DebugAdapterRegistry::preferredAdapterForFile(const QString &filePath) const {
+  return preferLanguageSpecificAdapter(adaptersForFile(filePath));
 }
 
 std::shared_ptr<IDebugAdapter>
 DebugAdapterRegistry::preferredAdapterForLanguage(
     const QString &languageId) const {
-  for (const auto &adapterInstance : m_adapters) {
-    if (adapterInstance->supportsLanguage(languageId)) {
-      return adapterInstance;
-    }
-  }
-  return nullptr;
+  return preferLanguageSpecificAdapter(adaptersForLanguage(languageId));
 }
 
 std::shared_ptr<IDebugAdapter>

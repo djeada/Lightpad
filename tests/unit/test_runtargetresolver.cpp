@@ -29,6 +29,7 @@ private slots:
   void testGlobbedSingleTargetStillResolves();
   void testDeliberateTemplateIsNotOverriddenByCMake();
   void testCTestTemplateRoutesToTestRun();
+  void testDoctestFileIsNotTreatedAsCTest();
   void testResolutionIsIndependentOfEditorState();
 
 private:
@@ -414,6 +415,22 @@ void TestRunTargetResolver::testCTestTemplateRoutesToTestRun() {
   QCOMPARE(target.templateId, QString("cpp_cmake_ctest"));
 
   QVERIFY(RunTemplateManager::instance().removeAssignment(sourcePath));
+}
+
+void TestRunTargetResolver::testDoctestFileIsNotTreatedAsCTest() {
+  const QString path =
+      writeFile("doctest_dir/doctest_main.cpp", "int main() {}\n");
+  QVERIFY(!path.isEmpty());
+
+  RunTargetContext context;
+  context.filePath = path;
+  context.languageId = "cpp";
+  context.projectRoot = QFileInfo(path).absolutePath();
+
+  const RunTarget target = RunTargetResolver::resolve(context);
+
+  QVERIFY(target.commandLine().contains("doctest"));
+  QVERIFY(target.kind != RunTarget::Kind::CTest);
 }
 
 void TestRunTargetResolver::testResolutionIsIndependentOfEditorState() {

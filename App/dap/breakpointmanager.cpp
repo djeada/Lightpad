@@ -252,6 +252,10 @@ void BreakpointManager::setLogMessage(int id, const QString &message) {
 }
 
 void BreakpointManager::setDapClient(DapClient *client) {
+  if (m_dapClient != client) {
+    m_pendingBreakpointSyncs.clear();
+    m_dapBreakpointIds.clear();
+  }
   m_dapClient = client;
 }
 
@@ -280,20 +284,74 @@ void BreakpointManager::syncFileBreakpoints(const QString &filePath) {
   }
 
   QList<DapSourceBreakpoint> dapBreakpoints;
+  QList<int> sentIds;
   QList<Breakpoint> bps = breakpointsForFile(filePath);
 
   for (const Breakpoint &bp : bps) {
     if (bp.enabled) {
       dapBreakpoints.append(toSourceBreakpoint(bp));
+      sentIds.append(bp.id);
     }
   }
 
-  m_dapClient->setBreakpoints(normalizePath(filePath), dapBreakpoints);
+  const QString normalizedPath = normalizePath(filePath);
+  QList<QList<int>> &pendingSyncs = m_pendingBreakpointSyncs[normalizedPath];
+  pendingSyncs.append(sentIds);
+  while (pendingSyncs.size() > 16) {
+    pendingSyncs.removeFirst();
+  }
+  m_dapClient->setBreakpoints(normalizedPath, dapBreakpoints);
+}
+
+void BreakpointManager::applyVerification(Breakpoint &bp,
+                                          const DapBreakpoint &dapBp) {
+  bp.verified = dapBp.verified;
+  bp.verificationMessage = dapBp.message;
+  if (dapBp.line > 0) {
+    bp.boundLine = dapBp.line;
+  }
+  if (dapBp.id > 0) {
+    m_dapBreakpointIds[dapBp.id] = bp.id;
+  }
+  emit breakpointChanged(bp);
 }
 
 void BreakpointManager::updateVerification(
     const QString &filePath, const QList<DapBreakpoint> &verified) {
   const QString requestedPath = normalizePath(filePath);
+
+  const int knownSingleId =
+      verified.size() == 1 && verified.first().id > 0
+          ? m_dapBreakpointIds.value(verified.first().id, 0)
+          : 0;
+
+  auto pendingIt = m_pendingBreakpointSyncs.find(requestedPath);
+  if (pendingIt != m_pendingBreakpointSyncs.end()) {
+    QList<QList<int>> &queue = pendingIt.value();
+    int matchIndex = -1;
+    for (int i = 0; i < queue.size(); ++i) {
+      if (queue.at(i).size() == verified.size() &&
+          (knownSingleId <= 0 || queue.at(i).contains(knownSingleId))) {
+        matchIndex = i;
+        break;
+      }
+    }
+    if (matchIndex >= 0) {
+      const QList<int> sentIds = queue.at(matchIndex);
+      queue.erase(queue.begin(), queue.begin() + matchIndex + 1);
+      if (queue.isEmpty()) {
+        m_pendingBreakpointSyncs.erase(pendingIt);
+      }
+      for (int i = 0; i < sentIds.size(); ++i) {
+        auto bpIt = m_breakpoints.find(sentIds.at(i));
+        if (bpIt != m_breakpoints.end()) {
+          applyVerification(bpIt.value(), verified.at(i));
+        }
+      }
+      return;
+    }
+  }
+
   QList<int> ids = m_fileBreakpoints.value(filePath);
   if (ids.isEmpty()) {
     for (auto it = m_fileBreakpoints.constBegin();
@@ -305,16 +363,26 @@ void BreakpointManager::updateVerification(
     }
   }
 
-  for (int id : ids) {
-    Breakpoint &bp = m_breakpoints[id];
+  for (const DapBreakpoint &dapBp : verified) {
+    if (dapBp.id > 0) {
+      const int localId = m_dapBreakpointIds.value(dapBp.id, 0);
+      auto bpIt = m_breakpoints.find(localId);
+      if (localId > 0 && bpIt != m_breakpoints.end()) {
+        applyVerification(bpIt.value(), dapBp);
+        continue;
+      }
+    }
 
-    for (const DapBreakpoint &dapBp : verified) {
-
-      if (dapBp.line == bp.line || dapBp.line == bp.boundLine) {
-        bp.verified = dapBp.verified;
-        bp.verificationMessage = dapBp.message;
-        bp.boundLine = dapBp.line;
-        emit breakpointChanged(bp);
+    if (dapBp.line <= 0) {
+      continue;
+    }
+    for (int id : ids) {
+      auto bpIt = m_breakpoints.find(id);
+      if (bpIt == m_breakpoints.end()) {
+        continue;
+      }
+      if (dapBp.line == bpIt->line || dapBp.line == bpIt->boundLine) {
+        applyVerification(bpIt.value(), dapBp);
         break;
       }
     }
@@ -322,6 +390,8 @@ void BreakpointManager::updateVerification(
 }
 
 void BreakpointManager::resetVerification() {
+  m_pendingBreakpointSyncs.clear();
+  m_dapBreakpointIds.clear();
   for (auto it = m_breakpoints.begin(); it != m_breakpoints.end(); ++it) {
     Breakpoint &bp = it.value();
     if (!bp.verified && bp.verificationMessage.isEmpty() && bp.boundLine <= 0) {

@@ -203,8 +203,10 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
   if (!cmd.textObject.isEmpty()) {
     int s = 0, e = 0;
     MotionType type = MotionType::Inclusive;
-    if (!evalTextObject(cmd.textObject, count, s, e, type, true))
+    if (!evalTextObject(cmd.textObject, count, s, e, type, true)) {
+      failCommand();
       return;
+    }
     if (type == MotionType::Linewise) {
       if (m_mode != VimEditMode::VisualLine)
         setMode(VimEditMode::VisualLine);
@@ -237,8 +239,10 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
       return;
     }
     MotionResult r = evalMotion(key, cmd.arg, count, false, m_visualPos, true);
-    if (!r.ok)
+    if (!r.ok) {
+      failCommand();
       return;
+    }
     if (r.jump)
       pushJump(m_visualPos);
     int target = r.pos;
@@ -322,9 +326,11 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
   }
   if (key == "<C-d>" || key == "<C-u>" || key == "<C-f>" || key == "<C-b>") {
     int line = lineOf(m_visualPos);
-    int amount = (key == "<C-d>" || key == "<C-u>")
-                     ? (count > 0 ? count : qMax(1, visibleLineCount() / 2))
-                     : c1 * qMax(1, visibleLineCount() - 2);
+    int amount =
+        (key == "<C-d>" || key == "<C-u>")
+            ? (count > 0 ? count : qMax(1, visibleLineCount() / 2))
+            : int(qMin<qint64>(qint64(c1) * qMax(1, visibleLineCount() - 2),
+                               lineCount()));
     bool down = key == "<C-d>" || key == "<C-f>";
     m_visualPos = posForWantCol(line + (down ? amount : -amount));
     updateVisualSelection();
@@ -460,10 +466,10 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
              key == "g<C-x>") {
     exitVisual(false);
     bool progressive = key.startsWith('g');
-    int delta = (key.endsWith("a>") ? 1 : -1) * c1;
+    const qint64 delta = (key.endsWith("a>") ? 1 : -1) * qint64(c1);
     QTextCursor block(doc());
     block.beginEditBlock();
-    int step = 1;
+    qint64 step = 1;
     for (int l = range.startLine; l <= range.endLine; ++l) {
       int col = 0;
       if (range.type == VimRegisterType::Charwise && l == range.startLine)
@@ -836,10 +842,26 @@ bool VimMode::handleInsertKey(const QString &token, QKeyEvent *event) {
 void VimMode::finishInsertSession() {
   if (m_insertCount > 1 && !m_insertKeys.isEmpty()) {
     const QStringList keys = m_insertKeys;
-    int repeats = m_insertCount - 1;
+    const int repeats = int(qMin<qint64>(
+        m_insertCount - 1, kMaxRepeatChars / qMax<qint64>(1, keys.size())));
     m_insertCount = 1;
+    QString plain;
+    bool simple = m_mode == VimEditMode::Insert && m_insertKind != "o" &&
+                  m_insertKind != "O" && !m_blockInsertActive;
+    for (const QString &k : keys) {
+      if (k.size() != 1) {
+        simple = false;
+        break;
+      }
+      plain += k;
+    }
+    const int cursor = m_editor->textCursor().position();
+    const bool fast = simple && cursor - m_insertStartPos == plain.size() &&
+                      textBetween(m_insertStartPos, cursor) == plain;
+    if (fast)
+      insertTextAtCursor(plain.repeated(repeats));
     m_insertRepeating = true;
-    for (int i = 0; i < repeats; ++i) {
+    for (int i = 0; i < repeats && !fast; ++i) {
       if (m_insertKind == "o" || m_insertKind == "O") {
         QTextCursor c = m_editor->textCursor();
         c.joinPreviousEditBlock();

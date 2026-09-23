@@ -1,4 +1,5 @@
 #include "textareasettings.h"
+#include "settingsmanager.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -67,7 +68,8 @@ void TextAreaSettings::read(const QJsonObject &json) {
     fontPontSize = json["fontPontSize"].toInt();
 
   if (json.contains("fontWeight") && json["fontWeight"].isDouble())
-    fontWeight = json["fontWeight"].toInt();
+    fontWeight =
+        SettingsManager::normalizeFontWeight(json["fontWeight"].toInt());
 
   if (json.contains("fontItalic") && json["fontItalic"].isBool())
     fontItalic = json["fontItalic"].toBool();

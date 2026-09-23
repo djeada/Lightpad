@@ -108,7 +108,12 @@ bool DebugSession::start(const DebugConfiguration &config,
 
   DebugAdapterConfig adapterConfig = m_adapter->configForConfiguration(config);
   m_client->setAdapterMetadata(adapterConfig.id, adapterConfig.type);
-  if (!m_client->start(adapterConfig.program, adapterConfig.arguments)) {
+  const bool started =
+      adapterConfig.serverTransport
+          ? m_client->startServer(adapterConfig.program,
+                                  adapterConfig.arguments)
+          : m_client->start(adapterConfig.program, adapterConfig.arguments);
+  if (!started) {
     m_lastError = "Failed to start debug adapter";
     setState(State::Idle);
     emit error("Failed to start debug adapter");

@@ -1,6 +1,7 @@
 #include "core/io/fileopenguard.h"
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
 
@@ -32,6 +33,15 @@ private slots:
   void testCappedReadReportsNoTruncationForSmallFiles();
   void testCappedReadDoesNotSplitMultiByteCharacters();
   void testCappedReadOnMissingFileFails();
+
+  void testUtf8DecodeKeepsUtf8AndNoBom();
+  void testUtf8BomIsRememberedAndWrittenBack();
+  void testInvalidUtf8FallsBackToLatin1RoundTrip();
+  void testLatin1FallsBackToUtf8WhenTextIsNotRepresentable();
+  void testCrlfIsDetectedAndRestoredOnEncode();
+  void testLfFileStaysLf();
+  void testAtomicWriteReplacesContentAndKeepsPermissions();
+  void testAtomicWriteFailsForMissingDirectory();
 
 private:
   QTemporaryDir m_dir;
@@ -193,6 +203,98 @@ void TestFileOpenGuard::testCappedReadOnMissingFileFails() {
   const QString text = readTextCapped(path("gone.txt"), 100, nullptr, &ok);
   QVERIFY(!ok);
   QVERIFY(text.isEmpty());
+}
+
+void TestFileOpenGuard::testUtf8DecodeKeepsUtf8AndNoBom() {
+  TextFormat format;
+  const QString text =
+      decodeText(QString::fromUtf8("h\u00e9\n").toUtf8(), &format);
+  QCOMPARE(text, QString::fromUtf8("h\u00e9\n"));
+  QVERIFY(format.encoding == TextEncoding::Utf8);
+  QVERIFY(!format.hasBom);
+  QCOMPARE(encodeText(text, &format), QString::fromUtf8("h\u00e9\n").toUtf8());
+}
+
+void TestFileOpenGuard::testUtf8BomIsRememberedAndWrittenBack() {
+  const QByteArray bytes("\xEF\xBB\xBF"
+                         "abc\n");
+  write("bom.txt", bytes);
+
+  TextFormat format;
+  bool ok = false;
+  const QString text =
+      readTextCapped(path("bom.txt"), 0, nullptr, &ok, &format);
+  QVERIFY(ok);
+  QCOMPARE(text, QStringLiteral("abc\n"));
+  QVERIFY(format.hasBom);
+  QCOMPARE(encodeText(text, &format), bytes);
+}
+
+void TestFileOpenGuard::testInvalidUtf8FallsBackToLatin1RoundTrip() {
+  const QByteArray bytes("caf\xE9 cr\xE8me\n");
+  TextFormat format;
+  const QString text = decodeText(bytes, &format);
+  QVERIFY(format.encoding == TextEncoding::Latin1);
+  QCOMPARE(text, QString::fromUtf8("caf\u00e9 cr\u00e8me\n"));
+  QVERIFY(!text.contains(QChar(0xFFFD)));
+
+  bool changed = true;
+  QCOMPARE(encodeText(text, &format, &changed), bytes);
+  QVERIFY(!changed);
+}
+
+void TestFileOpenGuard::testLatin1FallsBackToUtf8WhenTextIsNotRepresentable() {
+  TextFormat format;
+  decodeText(QByteArray("caf\xE9\n"), &format);
+  QVERIFY(format.encoding == TextEncoding::Latin1);
+
+  const QString edited = QString::fromUtf8("caf\u00e9 \u20ac\n");
+  bool changed = false;
+  const QByteArray bytes = encodeText(edited, &format, &changed);
+  QVERIFY(changed);
+  QVERIFY(format.encoding == TextEncoding::Utf8);
+  QCOMPARE(bytes, edited.toUtf8());
+}
+
+void TestFileOpenGuard::testCrlfIsDetectedAndRestoredOnEncode() {
+  const QByteArray bytes("one\r\ntwo\r\nthree\r\n");
+  TextFormat format;
+  const QString text = decodeText(bytes, &format);
+  QCOMPARE(text, QStringLiteral("one\ntwo\nthree\n"));
+  QCOMPARE(format.lineEnding, QStringLiteral("\r\n"));
+  QCOMPARE(encodeText(text + "four\n", &format),
+           QByteArray("one\r\ntwo\r\nthree\r\nfour\r\n"));
+}
+
+void TestFileOpenGuard::testLfFileStaysLf() {
+  TextFormat format;
+  const QString text = decodeText(QByteArray("a\nb\n"), &format);
+  QCOMPARE(format.lineEnding, QStringLiteral("\n"));
+  QCOMPARE(encodeText(text, &format), QByteArray("a\nb\n"));
+}
+
+void TestFileOpenGuard::testAtomicWriteReplacesContentAndKeepsPermissions() {
+  write("perm.sh", QByteArray("old contents that are longer\n"));
+  QFile original(path("perm.sh"));
+  const QFileDevice::Permissions wanted =
+      QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner;
+  QVERIFY(original.setPermissions(wanted));
+
+  QString error;
+  QVERIFY(writeFileAtomically(path("perm.sh"), QByteArray("new\n"), &error));
+  QVERIFY(error.isEmpty());
+
+  QFile reread(path("perm.sh"));
+  QVERIFY(reread.open(QIODevice::ReadOnly));
+  QCOMPARE(reread.readAll(), QByteArray("new\n"));
+  QVERIFY(QFileInfo(path("perm.sh")).permissions() & QFileDevice::ExeOwner);
+}
+
+void TestFileOpenGuard::testAtomicWriteFailsForMissingDirectory() {
+  QString error;
+  QVERIFY(!writeFileAtomically(path("no/such/dir/file.txt"), QByteArray("x"),
+                               &error));
+  QVERIFY(!error.isEmpty());
 }
 
 QTEST_MAIN(TestFileOpenGuard)

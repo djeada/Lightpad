@@ -7,7 +7,7 @@ def tid(t):
     if t not in texts: texts.append(t)
     return texts.index(t)
 selected = []
-for src, per in [('grid', 1), ('cmds', 2), ('more', 2), ('gn', 3), ('misc', 2)]:
+for src, per in [('grid', 1), ('cmds', 2), ('more', 2), ('gn', 3), ('misc', 2), ('audit', 10)]:
     data = json.load(open(f'all_{src}.json'))
     random.shuffle(data)
     seen = {}

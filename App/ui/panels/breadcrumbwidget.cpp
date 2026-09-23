@@ -31,22 +31,27 @@ void BreadcrumbWidget::setProjectRoot(const QString &rootPath) {
 
 void BreadcrumbWidget::clear() {
   m_filePath.clear();
+  clearSegments();
+}
 
+void BreadcrumbWidget::clearSegments() {
   for (QPushButton *btn : m_segments) {
     m_layout->removeWidget(btn);
-    delete btn;
+    btn->hide();
+    btn->deleteLater();
   }
   m_segments.clear();
 
   for (QLabel *sep : m_separators) {
     m_layout->removeWidget(sep);
-    delete sep;
+    sep->hide();
+    sep->deleteLater();
   }
   m_separators.clear();
 }
 
 void BreadcrumbWidget::rebuildBreadcrumbs() {
-  clear();
+  clearSegments();
 
   if (m_filePath.isEmpty()) {
     return;

@@ -1,6 +1,8 @@
 #include "core/editor/codefolding.h"
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QTextBlock>
+#include <QTextCursor>
 #include <QTextDocument>
 #include <QtTest/QtTest>
 
@@ -36,6 +38,9 @@ private slots:
   void testRestoreFoldState();
   void testNullDocument();
   void testFoldBlockAlreadyFolded();
+  void testFoldFollowsLinesInsertedAbove();
+  void testFoldFollowsLinesRemovedAbove();
+  void testReplacingTextDropsStaleFolds();
 
 private:
   QTextDocument *m_document = nullptr;
@@ -261,6 +266,48 @@ void TestCodeFolding::testFoldBlockAlreadyFolded() {
 
   QVERIFY(m_manager->foldBlock(0));
   QVERIFY(!m_manager->foldBlock(0));
+}
+
+void TestCodeFolding::testFoldFollowsLinesInsertedAbove() {
+  m_document->setPlainText("int a;\nvoid f() {\n    x;\n}\n");
+  QVERIFY(m_manager->foldBlock(1));
+
+  QTextCursor cursor(m_document);
+  cursor.insertText("// one\n// two\n");
+
+  QVERIFY(!m_manager->isFolded(1));
+  QVERIFY(m_manager->isFolded(3));
+  QCOMPARE(m_manager->foldedBlocks(), QSet<int>{3});
+  QCOMPARE(m_manager->saveFoldState().value("foldedBlocks").toArray(),
+           QJsonArray{3});
+
+  QVERIFY(m_manager->unfoldBlock(3));
+  QVERIFY(m_document->findBlockByNumber(4).isVisible());
+  QVERIFY(m_manager->foldedBlocks().isEmpty());
+}
+
+void TestCodeFolding::testFoldFollowsLinesRemovedAbove() {
+  m_document->setPlainText("int a;\nint b;\nvoid f() {\n    x;\n}\n");
+  QVERIFY(m_manager->foldBlock(2));
+
+  QTextCursor cursor(m_document);
+  cursor.movePosition(QTextCursor::NextBlock, QTextCursor::KeepAnchor);
+  cursor.removeSelectedText();
+
+  QVERIFY(m_manager->isFolded(1));
+  m_manager->toggleFoldAtLine(1);
+  QVERIFY(!m_manager->isFolded(1));
+  QVERIFY(m_document->findBlockByNumber(2).isVisible());
+}
+
+void TestCodeFolding::testReplacingTextDropsStaleFolds() {
+  m_document->setPlainText("void f() {\n    x;\n}\n");
+  QVERIFY(m_manager->foldBlock(0));
+
+  m_document->setPlainText("plain\ntext\n");
+
+  QVERIFY(m_manager->foldedBlocks().isEmpty());
+  QVERIFY(!m_manager->isFolded(0));
 }
 
 QTEST_MAIN(TestCodeFolding)

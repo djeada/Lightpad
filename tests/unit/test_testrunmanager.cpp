@@ -31,6 +31,10 @@ private slots:
   void testRunPatternUsesRunFailedOverride();
   void testClearAfterRun();
   void testRunReplacesStaleResults();
+  void testFailedToStartFinishesRun();
+  void testFailedTestFilterPerFramework();
+  void testStderrIsEmittedOnce();
+  void testShellTemplateQuotesTestName();
 
 private:
   QTemporaryDir m_tempDir;
@@ -380,6 +384,110 @@ void TestTestRunManager::testRunReplacesStaleResults() {
   QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 2, 3000);
 
   QCOMPARE(mgr.results().size(), 2);
+}
+
+void TestTestRunManager::testFailedToStartFinishesRun() {
+  TestRunManager mgr;
+  QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
+
+  TestConfiguration config;
+  config.name = "missing";
+  config.command = m_tempDir.filePath("does-not-exist-binary");
+  config.outputFormat = "tap";
+
+  mgr.runAll(config, m_tempDir.path());
+  QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 1, 3000);
+  QVERIFY(!mgr.isRunning());
+}
+
+void TestTestRunManager::testFailedTestFilterPerFramework() {
+  const QStringList names = {"Suite.One", "Suite.Two"};
+
+  TestConfiguration ctest;
+  ctest.outputFormat = "ctest";
+  QCOMPARE(TestRunManager::failedTestFilter(ctest, names),
+           QString("^(Suite\\.One|Suite\\.Two)$"));
+
+  TestConfiguration gtest;
+  gtest.outputFormat = "generic";
+  gtest.runFailed.args = {"--gtest_filter=${testName}"};
+  QCOMPARE(TestRunManager::failedTestFilter(gtest, names),
+           QString("Suite.One:Suite.Two"));
+
+  TestConfiguration go;
+  go.outputFormat = "go_json";
+  QCOMPARE(TestRunManager::failedTestFilter(
+               go, {"TestA/sub_case", "TestA/other", "TestB"}),
+           QString("^(TestA|TestB)$"));
+
+  TestConfiguration jest;
+  jest.outputFormat = "jest_json";
+  QCOMPARE(TestRunManager::failedTestFilter(jest, {"adds (1+1)", "b"}),
+           QString("adds \\(1\\+1\\)|b"));
+
+  TestConfiguration cargo;
+  cargo.outputFormat = "cargo_json";
+  QCOMPARE(TestRunManager::failedTestFilter(cargo, {"only"}), QString("only"));
+  QVERIFY(TestRunManager::failedTestFilter(cargo, {"a", "b"}).isEmpty());
+
+  TestConfiguration pytest;
+  pytest.outputFormat = "pytest";
+  QCOMPARE(TestRunManager::failedTestFilter(pytest, {"a", "b"}),
+           QString("a or b"));
+}
+
+void TestTestRunManager::testStderrIsEmittedOnce() {
+  TestRunManager mgr;
+  QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
+  QStringList lines;
+  connect(&mgr, &TestRunManager::outputLine,
+          [&lines](const QString &line, bool) { lines.append(line); });
+
+  const QString script = m_tempDir.filePath("stderr_once.sh");
+  createScript(script, "#!/bin/sh\n"
+                       "echo 'unique-stderr-line' 1>&2\n"
+                       "echo 'test_a.py::test_ok PASSED'\n");
+
+  TestConfiguration config;
+  config.name = "stderr";
+  config.command = "/bin/sh";
+  config.args = {script};
+  config.outputFormat = "pytest";
+
+  mgr.runAll(config, m_tempDir.path());
+  QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 1, 3000);
+
+  int occurrences = 0;
+  for (const QString &line : lines)
+    occurrences += line.count("unique-stderr-line");
+  QCOMPARE(occurrences, 1);
+  QCOMPARE(finishSpy.at(0).at(0).toInt(), 1);
+}
+
+void TestTestRunManager::testShellTemplateQuotesTestName() {
+  TestRunManager mgr;
+  QSignalSpy finishSpy(&mgr, &TestRunManager::runFinished);
+
+  QTemporaryDir workspace;
+  QVERIFY(workspace.isValid());
+
+  TestConfiguration config;
+  config.name = "shell";
+  config.command = "bash";
+  config.args = {"-c", "exit 0"};
+  config.runSingleTest.args = {
+      "-lc", "printf '%s' '^${testName}$' > \"${workspaceFolder}/out.txt\""};
+  config.outputFormat = "tap";
+
+  const QString hostile = "x'$(touch pwned)\"`touch pwned2`";
+  mgr.runSingleTest(config, workspace.path(), hostile);
+  QTRY_COMPARE_WITH_TIMEOUT(finishSpy.count(), 1, 5000);
+
+  QFile out(workspace.filePath("out.txt"));
+  QVERIFY(out.open(QIODevice::ReadOnly));
+  QCOMPARE(QString::fromUtf8(out.readAll()), "^" + hostile + "$");
+  QVERIFY(!QFile::exists(workspace.filePath("pwned")));
+  QVERIFY(!QFile::exists(workspace.filePath("pwned2")));
 }
 
 QTEST_MAIN(TestTestRunManager)

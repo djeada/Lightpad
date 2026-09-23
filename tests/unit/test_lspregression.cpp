@@ -2,6 +2,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTemporaryDir>
 #include <QtTest/QtTest>
 
 class TestLspRegression : public QObject {
@@ -26,7 +27,44 @@ private slots:
   void testFramingWithNonAsciiPayload();
   void testFramingSplitAcrossReads();
   void testFramingMultipleMessagesInOneRead();
+  void testNullLocationResultIsEmpty();
+  void testSingleLocationAndLocationLink();
+  void testCompletionItemPrefersTextEdit();
+  void testCompletionItemInsertTextFormat();
+  void testServerRequestsAreAnswered();
+  void testBurstOfMessagesIsFullyDrained();
+  void testDiagnosticsCarryServerVersion();
+  void testPendingRequestsFailWhenServerExits();
+
+private:
+  QString makeLogPath();
+  QStringList readLog(const QString &path) const;
+  bool startFakeServer(LspClient &client, const QString &logPath);
+
+  QTemporaryDir m_tempDir;
+  int m_logCounter = 0;
 };
+
+QString TestLspRegression::makeLogPath() {
+  return m_tempDir.filePath(QString("lsp-%1.log").arg(++m_logCounter));
+}
+
+QStringList TestLspRegression::readLog(const QString &path) const {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return {};
+  }
+  return QString::fromUtf8(file.readAll()).split('\n', Qt::SkipEmptyParts);
+}
+
+bool TestLspRegression::startFakeServer(LspClient &client,
+                                        const QString &logPath) {
+  QSignalSpy initSpy(&client, &LspClient::initialized);
+  if (!client.start(FAKE_LSP_SERVER_PATH, {"--log", logPath})) {
+    return false;
+  }
+  return initSpy.wait(5000);
+}
 
 void TestLspRegression::testDiagnosticSeverityRoundTrip() {
   LspDiagnostic diag;
@@ -265,6 +303,117 @@ void TestLspRegression::testFramingMultipleMessagesInOneRead() {
   const QList<QByteArray> messages = LspClient::extractMessages(buffer);
   QCOMPARE(messages, expected);
   QVERIFY(buffer.startsWith("Content-Length: 40"));
+}
+
+void TestLspRegression::testNullLocationResultIsEmpty() {
+  QVERIFY(LspClient::parseLocations(QJsonValue(QJsonValue::Null)).isEmpty());
+  QVERIFY(LspClient::parseLocations(QJsonValue()).isEmpty());
+  QVERIFY(LspClient::parseLocations(QJsonArray{}).isEmpty());
+}
+
+void TestLspRegression::testSingleLocationAndLocationLink() {
+  QJsonObject range{{"start", QJsonObject{{"line", 3}, {"character", 4}}},
+                    {"end", QJsonObject{{"line", 3}, {"character", 9}}}};
+  QJsonObject location{{"uri", "file:///a.cpp"}, {"range", range}};
+
+  QList<LspLocation> single = LspClient::parseLocations(location);
+  QCOMPARE(single.size(), 1);
+  QCOMPARE(single.first().uri, QString("file:///a.cpp"));
+  QCOMPARE(single.first().range.start.line, 3);
+
+  QJsonObject link{{"targetUri", "file:///b.cpp"},
+                   {"targetRange", range},
+                   {"targetSelectionRange", range}};
+  QList<LspLocation> links = LspClient::parseLocations(QJsonArray{link});
+  QCOMPARE(links.size(), 1);
+  QCOMPARE(links.first().uri, QString("file:///b.cpp"));
+  QCOMPARE(links.first().range.start.character, 4);
+}
+
+void TestLspRegression::testCompletionItemPrefersTextEdit() {
+  QJsonObject obj;
+  obj["label"] = "push_back";
+  obj["insertText"] = "stale";
+  obj["textEdit"] = QJsonObject{
+      {"range",
+       QJsonObject{{"start", QJsonObject{{"line", 0}, {"character", 0}}},
+                   {"end", QJsonObject{{"line", 0}, {"character", 2}}}}},
+      {"newText", "push_back(${1:value})"}};
+  obj["insertTextFormat"] = 2;
+
+  LspCompletionItem item = LspClient::parseCompletionItem(obj);
+  QCOMPARE(item.insertText, QString("push_back(${1:value})"));
+  QCOMPARE(item.insertTextFormat, 2);
+}
+
+void TestLspRegression::testCompletionItemInsertTextFormat() {
+  QJsonObject obj;
+  obj["label"] = "price$";
+  LspCompletionItem item = LspClient::parseCompletionItem(obj);
+  QCOMPARE(item.insertText, QString("price$"));
+  QCOMPARE(item.insertTextFormat, 1);
+}
+
+void TestLspRegression::testServerRequestsAreAnswered() {
+  QVERIFY(m_tempDir.isValid());
+  const QString logPath = makeLogPath();
+  LspClient client;
+  QVERIFY(startFakeServer(client, logPath));
+
+  QTRY_VERIFY_WITH_TIMEOUT(readLog(logPath).size() >= 4, 5000);
+  const QStringList log = readLog(logPath);
+  QVERIFY(log.contains("response cfg [null,null]"));
+  QVERIFY(log.contains("response 77 null"));
+  bool unknownRejected = false;
+  for (const QString &line : log) {
+    if (line.startsWith("response 78 ") && line.contains("-32601")) {
+      unknownRejected = true;
+    }
+  }
+  QVERIFY(unknownRejected);
+  client.stop();
+}
+
+void TestLspRegression::testBurstOfMessagesIsFullyDrained() {
+  QVERIFY(m_tempDir.isValid());
+  LspClient client;
+  QVERIFY(startFakeServer(client, makeLogPath()));
+
+  QSignalSpy diagSpy(&client, &LspClient::diagnosticsReceived);
+  client.didOpen("file:///burst.cpp", "cpp", 1, "BURST");
+  QTRY_COMPARE_WITH_TIMEOUT(diagSpy.count(), 150, 5000);
+  client.stop();
+}
+
+void TestLspRegression::testDiagnosticsCarryServerVersion() {
+  QVERIFY(m_tempDir.isValid());
+  LspClient client;
+  QVERIFY(startFakeServer(client, makeLogPath()));
+
+  QSignalSpy diagSpy(&client, &LspClient::diagnosticsReceived);
+  client.didOpen("file:///v.cpp", "cpp", 7, "hello");
+  QTRY_COMPARE_WITH_TIMEOUT(diagSpy.count(), 1, 5000);
+  QCOMPARE(diagSpy.takeFirst().at(2).toInt(), 7);
+
+  client.didChange("file:///v.cpp", 8, "NOVERSION");
+  QTRY_COMPARE_WITH_TIMEOUT(diagSpy.count(), 1, 5000);
+  QCOMPARE(diagSpy.takeFirst().at(2).toInt(), -1);
+  client.stop();
+}
+
+void TestLspRegression::testPendingRequestsFailWhenServerExits() {
+  QVERIFY(m_tempDir.isValid());
+  LspClient client;
+  QVERIFY(startFakeServer(client, makeLogPath()));
+
+  QSignalSpy failedSpy(&client, &LspClient::requestFailed);
+  client.didOpen("file:///c.cpp", "cpp", 1, "ok");
+  client.requestHover("file:///c.cpp", {0, 0});
+  client.didChange("file:///c.cpp", 2, "CRASH");
+  QTRY_VERIFY_WITH_TIMEOUT(failedSpy.count() >= 1, 5000);
+  QCOMPARE(failedSpy.first().at(1).toString(), QString("textDocument/hover"));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), LspClient::State::Disconnected,
+                            5000);
 }
 
 QTEST_MAIN(TestLspRegression)

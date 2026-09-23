@@ -50,6 +50,7 @@ public:
   DiagnosticsServerConfig serverConfig(const QString &languageId) const;
   QString lastServerError(const QString &languageId) const;
   void restartServer(const QString &languageId);
+  void setServerConfig(const DiagnosticsServerConfig &config);
 
   void loadSettingsOverrides();
 
@@ -65,24 +66,26 @@ private:
   LspClient *ensureClient(const QString &languageId);
   DiagnosticsServerConfig configForLanguage(const QString &languageId) const;
   void onDiagnosticsReceived(const QString &languageId, const QString &uri,
-                             const QList<LspDiagnostic> &diagnostics);
-
-  struct PendingDocument {
-    QString filePath;
-    QString languageId;
-    QString text;
-  };
+                             const QList<LspDiagnostic> &diagnostics,
+                             int version);
+  void onClientLost(const QString &languageId, LspClient *client);
 
   void flushPendingDocuments(const QString &languageId);
+  void queuePendingDocument(const QString &languageId, const QString &filePath);
+  bool isPendingDocument(const QString &languageId,
+                         const QString &filePath) const;
+  void detachDocument(const QString &filePath);
+  QStringList trackedFilesForLanguage(const QString &languageId) const;
 
   DiagnosticsManager *m_diagnosticsManager;
   QMap<QString, LspClient *> m_clients;
   QMap<QString, QString> m_fileToLanguage;
   QMap<QString, int> m_fileVersions;
+  QMap<QString, QString> m_fileTexts;
   QList<DiagnosticsServerConfig> m_serverConfigs;
   QMap<QString, ServerHealthStatus> m_serverHealth;
   QMap<QString, QString> m_lastServerErrors;
-  QMap<QString, QList<PendingDocument>> m_pendingDocuments;
+  QMap<QString, QStringList> m_pendingDocuments;
 };
 
 #endif

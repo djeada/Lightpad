@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QSet>
 #include <QStandardPaths>
 
@@ -337,6 +338,31 @@ QMap<QString, QString> PythonProjectEnvironment::activationEnvironment(
   return env;
 }
 
+QMap<QString, QString> PythonProjectEnvironment::variables(
+    const QString &workspaceFolder, const QString &filePath,
+    const QString &workingDirectory,
+    const PythonEnvironmentPreference &preference) {
+  const QFileInfo fileInfo(filePath);
+  const QString workspaceRoot =
+      workspaceRootForContext(workspaceFolder, filePath, workingDirectory);
+  const PythonEnvironmentInfo info =
+      resolve(preference, workspaceFolder, filePath, workingDirectory);
+
+  QMap<QString, QString> vars;
+  vars.insert("file", filePath);
+  vars.insert("fileDir", fileInfo.absoluteDir().path());
+  vars.insert("fileBasename", fileInfo.fileName());
+  vars.insert("fileBasenameNoExt", fileInfo.completeBaseName());
+  vars.insert("fileExt", fileInfo.suffix());
+  vars.insert("workspaceFolder", workspaceRoot);
+  vars.insert("python", info.interpreter);
+  vars.insert("pythonInterpreter", info.interpreter);
+  vars.insert("venv", info.venvPath);
+  vars.insert("venvBin", info.venvBinPath);
+  vars.insert("requirementsFile", info.requirementsFile);
+  return vars;
+}
+
 QString PythonProjectEnvironment::substituteVariables(
     const QString &input, const QString &workspaceFolder,
     const QString &filePath, const QString &workingDirectory,
@@ -346,25 +372,204 @@ QString PythonProjectEnvironment::substituteVariables(
   }
 
   QString result = input;
-  const QFileInfo fileInfo(filePath);
-  const QString workspaceRoot =
-      workspaceRootForContext(workspaceFolder, filePath, workingDirectory);
-  const PythonEnvironmentInfo info =
-      resolve(preference, workspaceFolder, filePath, workingDirectory);
-
-  result.replace("${file}", filePath);
-  result.replace("${fileDir}", fileInfo.absoluteDir().path());
-  result.replace("${fileBasename}", fileInfo.fileName());
-  result.replace("${fileBasenameNoExt}", fileInfo.completeBaseName());
-  result.replace("${fileExt}", fileInfo.suffix());
-  result.replace("${workspaceFolder}", workspaceRoot);
-  result.replace("${python}", info.interpreter);
-  result.replace("${pythonInterpreter}", info.interpreter);
-  result.replace("${venv}", info.venvPath);
-  result.replace("${venvBin}", info.venvBinPath);
-  result.replace("${requirementsFile}", info.requirementsFile);
+  const QMap<QString, QString> vars =
+      variables(workspaceFolder, filePath, workingDirectory, preference);
+  for (auto it = vars.constBegin(); it != vars.constEnd(); ++it) {
+    result.replace("${" + it.key() + "}", it.value());
+  }
 
   return result;
+}
+
+QString PythonProjectEnvironment::shellQuote(const QString &value) {
+  QString escaped = value;
+  escaped.replace("'", "'\\''");
+  return "'" + escaped + "'";
+}
+
+QString PythonProjectEnvironment::substituteShellVariables(
+    const QString &script, const QMap<QString, QString> &variables) {
+  enum class Context { Unquoted, Double, Single, Backtick };
+  struct Frame {
+    Context context;
+    bool commandSubstitution;
+    int parenDepth;
+    bool inBacktick;
+  };
+
+  QList<Frame> stack;
+  stack.append(Frame{Context::Unquoted, false, 0, false});
+  QString result;
+  result.reserve(script.size());
+  const int n = script.size();
+  int i = 0;
+  while (i < n) {
+    Frame &top = stack.last();
+    const QChar c = script.at(i);
+
+    if (c == '$' && i + 1 < n && script.at(i + 1) == '{') {
+      const int close = script.indexOf('}', i + 2);
+      if (close > 0) {
+        const QString name = script.mid(i + 2, close - i - 2);
+        if (variables.contains(name)) {
+          QString quoted = shellQuote(variables.value(name));
+          if (top.inBacktick) {
+            quoted.replace("\\", "\\\\");
+            quoted.replace("`", "\\`");
+            quoted.replace("$", "\\$");
+          }
+          if (top.context == Context::Double) {
+            result += "\"" + quoted + "\"";
+          } else if (top.context == Context::Single) {
+            result += "'" + quoted + "'";
+          } else {
+            result += quoted;
+          }
+          i = close + 1;
+          continue;
+        }
+      }
+    }
+
+    if (top.context == Context::Single) {
+      if (c == '\'') {
+        stack.removeLast();
+      }
+      result += c;
+      ++i;
+      continue;
+    }
+
+    if (c == '\\' && i + 1 < n) {
+      result += c;
+      result += script.at(i + 1);
+      i += 2;
+      continue;
+    }
+
+    if (c == '$' && i + 1 < n && script.at(i + 1) == '(') {
+      stack.append(Frame{Context::Unquoted, true, 0, top.inBacktick});
+      result += "$(";
+      i += 2;
+      continue;
+    }
+
+    if (c == '`') {
+      if (top.context == Context::Backtick) {
+        stack.removeLast();
+      } else {
+        stack.append(Frame{Context::Backtick, false, 0, true});
+      }
+      result += c;
+      ++i;
+      continue;
+    }
+
+    if (top.context == Context::Double) {
+      if (c == '"') {
+        stack.removeLast();
+      }
+      result += c;
+      ++i;
+      continue;
+    }
+
+    if (c == '#' && (i == 0 || script.at(i - 1).isSpace())) {
+      int end = script.indexOf('\n', i);
+      if (end < 0) {
+        end = n;
+      }
+      result += script.mid(i, end - i);
+      i = end;
+      continue;
+    }
+
+    if (c == '"') {
+      stack.append(Frame{Context::Double, false, 0, top.inBacktick});
+    } else if (c == '\'') {
+      stack.append(Frame{Context::Single, false, 0, top.inBacktick});
+    } else if (c == '(') {
+      ++top.parenDepth;
+    } else if (c == ')') {
+      if (top.parenDepth > 0) {
+        --top.parenDepth;
+      } else if (top.commandSubstitution && stack.size() > 1) {
+        stack.removeLast();
+      }
+    }
+    result += c;
+    ++i;
+  }
+
+  return result;
+}
+
+QString PythonProjectEnvironment::substituteCmdVariables(
+    const QString &script, const QMap<QString, QString> &variables) {
+  QString result;
+  result.reserve(script.size());
+  bool inDouble = false;
+  const int n = script.size();
+  int i = 0;
+  while (i < n) {
+    const QChar c = script.at(i);
+    if (c == '$' && i + 1 < n && script.at(i + 1) == '{') {
+      const int close = script.indexOf('}', i + 2);
+      if (close > 0) {
+        const QString name = script.mid(i + 2, close - i - 2);
+        if (variables.contains(name)) {
+          QString value = variables.value(name);
+          value.remove('"');
+          result += inDouble ? value : "\"" + value + "\"";
+          i = close + 1;
+          continue;
+        }
+      }
+    }
+    if (c == '"') {
+      inDouble = !inDouble;
+    }
+    result += c;
+    ++i;
+  }
+  return result;
+}
+
+QString PythonProjectEnvironment::substituteCommandLineVariables(
+    const QString &script, const QMap<QString, QString> &variables) {
+#ifdef Q_OS_WIN
+  return substituteCmdVariables(script, variables);
+#else
+  return substituteShellVariables(script, variables);
+#endif
+}
+
+int PythonProjectEnvironment::shellScriptArgumentIndex(
+    const QString &command, const QStringList &args) {
+  static const QStringList shells = {"bash", "sh", "zsh", "dash", "ksh"};
+  QString program = QFileInfo(command.trimmed()).fileName();
+  if (program.endsWith(".exe", Qt::CaseInsensitive)) {
+    program.chop(4);
+  }
+  if (!shells.contains(program)) {
+    return -1;
+  }
+
+  static const QRegularExpression commandFlag("^-[A-Za-z]*c[A-Za-z]*$");
+  for (int i = 0; i + 1 < args.size(); ++i) {
+    const QString &arg = args.at(i);
+    if (commandFlag.match(arg).hasMatch()) {
+      return i + 1;
+    }
+    if (arg == "-o" || arg == "+o" || arg == "-O" || arg == "+O") {
+      ++i;
+      continue;
+    }
+    if (!arg.startsWith('-') && !arg.startsWith('+')) {
+      return -1;
+    }
+  }
+  return -1;
 }
 
 PythonInstallPlan PythonProjectEnvironment::requirementsInstallPlan(

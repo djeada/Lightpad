@@ -37,6 +37,8 @@ public:
 
   QString lastSelectedWord() const { return m_lastSelectedWord; }
 
+  static bool isTextInput(Qt::KeyboardModifiers modifiers, const QString &text);
+
 private:
   void mergeOverlappingCursors();
 

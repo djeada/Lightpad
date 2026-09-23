@@ -63,6 +63,7 @@ private:
   QPushButton *m_badButton;
   QPushButton *m_skipButton;
   QPushButton *m_runButton;
+  bool m_automatedRunActive = false;
   QPushButton *m_inspectButton;
   QPushButton *m_resetButton;
   QPushButton *m_closeButton;

@@ -9,6 +9,8 @@
 #include <QStringList>
 #include <QTextStream>
 
+#include <functional>
+
 static const QRegularExpression s_headingRe(R"(^(#{1,6})\s+(.+)$)");
 static const QRegularExpression s_fencedBlockRe(R"(^(`{3,}|~{3,}))");
 static const QRegularExpression
@@ -975,24 +977,111 @@ QString MarkdownTools::escapeHtml(const QString &text) {
   return result;
 }
 
-QString MarkdownTools::processInlineFormatting(const QString &text) {
-  QString result = escapeHtml(text);
+namespace {
 
+QString escapeAttribute(const QString &text) {
+  QString result = MarkdownTools::escapeHtml(text);
+  result.replace('\'', "&#39;");
+  return result;
+}
+
+QString sanitizeUrl(const QString &url, bool allowDataImages) {
+  const QString trimmed = url.trimmed();
+  QString compact;
+  for (const QChar c : trimmed) {
+    if (c.unicode() > 0x20)
+      compact += c;
+  }
+  static const QRegularExpression schemeRe(R"(^([A-Za-z][A-Za-z0-9+.\-]*):)");
+  const QRegularExpressionMatch match = schemeRe.match(compact);
+  if (!match.hasMatch())
+    return trimmed;
+  const QString scheme = match.captured(1).toLower();
+  if (scheme == "http" || scheme == "https" || scheme == "mailto")
+    return trimmed;
+  if (allowDataImages && compact.startsWith("data:image/", Qt::CaseInsensitive))
+    return trimmed;
+  return QStringLiteral("#");
+}
+
+QString formatEmphasis(const QString &text) {
+  QString result = MarkdownTools::escapeHtml(text);
   result.replace(QRegularExpression(R"(\*\*\*(.+?)\*\*\*)"),
                  "<strong><em>\\1</em></strong>");
   result.replace(QRegularExpression(R"(\*\*(.+?)\*\*)"),
                  "<strong>\\1</strong>");
   result.replace(QRegularExpression(R"(\*(.+?)\*)"), "<em>\\1</em>");
   result.replace(QRegularExpression(R"(~~(.+?)~~)"), "<del>\\1</del>");
-  result.replace(QRegularExpression(R"(`([^`]+)`)"), "<code>\\1</code>");
-
-  result.replace(QRegularExpression(R"(!\[([^\]]*)\]\(([^)]*)\))"),
-                 "<img src=\"\\2\" alt=\"\\1\" style=\"max-width:100%;\">");
-
-  result.replace(QRegularExpression(R"(\[([^\]]+)\]\(([^)]*)\))"),
-                 "<a href=\"\\2\">\\1</a>");
-
   return result;
+}
+
+} // namespace
+
+QString MarkdownTools::processInlineFormatting(const QString &text) {
+  QStringList tokens;
+  auto placeholder = [&tokens](const QString &html) {
+    tokens.append(html);
+    return QString(QChar(0x1)) + QString::number(tokens.size() - 1) +
+           QChar(0x2);
+  };
+  auto restore = [&tokens](QString value) {
+    static const QRegularExpression tokenRe(QStringLiteral("\x01(\\d+)\x02"));
+    for (int pass = 0; pass < 4 && value.contains(QChar(0x1)); ++pass) {
+      QString restored;
+      int last = 0;
+      auto it = tokenRe.globalMatch(value);
+      while (it.hasNext()) {
+        const QRegularExpressionMatch m = it.next();
+        restored += value.mid(last, m.capturedStart() - last);
+        restored += tokens.value(m.captured(1).toInt());
+        last = m.capturedEnd();
+      }
+      restored += value.mid(last);
+      value = restored;
+    }
+    return value;
+  };
+  auto replaceMatches =
+      [](const QString &input, const QRegularExpression &re,
+         const std::function<QString(const QRegularExpressionMatch &)> &build) {
+        QString output;
+        int last = 0;
+        auto it = re.globalMatch(input);
+        while (it.hasNext()) {
+          const QRegularExpressionMatch m = it.next();
+          output += input.mid(last, m.capturedStart() - last);
+          output += build(m);
+          last = m.capturedEnd();
+        }
+        output += input.mid(last);
+        return output;
+      };
+
+  QString working = text;
+  working.remove(QChar(0x1));
+  working.remove(QChar(0x2));
+
+  static const QRegularExpression codeRe(R"(`([^`]+)`)");
+  working = replaceMatches(working, codeRe, [&](const auto &m) {
+    return placeholder("<code>" + escapeHtml(m.captured(1)) + "</code>");
+  });
+
+  static const QRegularExpression imageRe(R"(!\[([^\]]*)\]\(([^)]*)\))");
+  working = replaceMatches(working, imageRe, [&](const auto &m) {
+    return placeholder("<img src=\"" +
+                       escapeAttribute(sanitizeUrl(m.captured(2), true)) +
+                       "\" alt=\"" + escapeAttribute(m.captured(1)) +
+                       "\" style=\"max-width:100%;\">");
+  });
+
+  static const QRegularExpression linkRe(R"(\[([^\]]+)\]\(([^)]*)\))");
+  working = replaceMatches(working, linkRe, [&](const auto &m) {
+    return placeholder("<a href=\"" +
+                       escapeAttribute(sanitizeUrl(m.captured(2), false)) +
+                       "\">" + formatEmphasis(m.captured(1)) + "</a>");
+  });
+
+  return restore(formatEmphasis(working));
 }
 
 MarkdownPreviewColors

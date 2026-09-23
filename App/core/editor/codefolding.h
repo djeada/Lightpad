@@ -3,8 +3,10 @@
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QList>
 #include <QSet>
 #include <QString>
+#include <QTextCursor>
 
 class QTextDocument;
 class QTextBlock;
@@ -13,7 +15,7 @@ class CodeFoldingManager {
 public:
   explicit CodeFoldingManager(QTextDocument *document);
 
-  const QSet<int> &foldedBlocks() const { return m_foldedBlocks; }
+  const QSet<int> &foldedBlocks() const;
 
   bool isFolded(int blockNumber) const;
 
@@ -53,8 +55,14 @@ public:
 private:
   static bool isSingleLineComment(const QString &trimmedText);
 
+  void addFold(int blockNumber);
+  void removeFold(int blockNumber);
+  void clearFolds();
+  void syncFolds() const;
+
   QTextDocument *m_document;
-  QSet<int> m_foldedBlocks;
+  mutable QSet<int> m_foldedBlocks;
+  mutable QList<QTextCursor> m_foldAnchors;
 };
 
 #endif

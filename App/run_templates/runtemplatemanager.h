@@ -86,6 +86,8 @@ public:
 
   static QString substituteVariables(const QString &input,
                                      const QString &filePath);
+  static QString substituteCommandLineVariables(const QString &input,
+                                                const QString &filePath);
 
 signals:
 

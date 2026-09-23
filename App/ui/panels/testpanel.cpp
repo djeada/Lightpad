@@ -19,6 +19,7 @@
 #include <QSignalBlocker>
 #include <QStyle>
 #include <QStyledItemDelegate>
+#include <QTimer>
 
 namespace {
 constexpr int TestIdRole = Qt::UserRole;
@@ -257,6 +258,11 @@ TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
   setObjectName("TestPanel");
   m_runManager = new TestRunManager(this);
   m_autoTestRunner = new AutoTestRunner(m_runManager, this);
+  m_runDetailsRefreshTimer = new QTimer(this);
+  m_runDetailsRefreshTimer->setSingleShot(true);
+  m_runDetailsRefreshTimer->setInterval(100);
+  connect(m_runDetailsRefreshTimer, &QTimer::timeout, this,
+          &TestPanel::refreshRunDetails);
   setupUI();
 
   auto &configManager = TestConfigurationManager::instance();
@@ -957,9 +963,18 @@ void TestPanel::onOutputLine(const QString &line, bool isError) {
     m_lastRunOutput += line;
     if (!m_lastRunOutput.endsWith('\n'))
       m_lastRunOutput += '\n';
+    constexpr int maxRetainedOutput = 1024 * 1024;
+    if (m_lastRunOutput.size() > maxRetainedOutput) {
+      int cut = m_lastRunOutput.size() - maxRetainedOutput;
+      const int newline = m_lastRunOutput.indexOf('\n', cut);
+      if (newline >= 0)
+        cut = newline + 1;
+      m_lastRunOutput.remove(0, cut);
+    }
   }
 
-  refreshRunDetails();
+  if (!m_runDetailsRefreshTimer->isActive())
+    m_runDetailsRefreshTimer->start();
 
   if (isError)
     return;

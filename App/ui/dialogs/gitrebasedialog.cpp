@@ -1,5 +1,6 @@
 #include "gitrebasedialog.h"
 #include "../../git/gitintegration.h"
+#include "../../git/gitrebaseplan.h"
 #include "../../ui/uistylehelper.h"
 
 #include "themedmessagebox.h"
@@ -11,11 +12,12 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QTemporaryFile>
-#include <QTextStream>
+#include <QSet>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
+
+static const int MAX_REBASE_COMMITS = 50;
 
 static const QStringList REBASE_ACTIONS = {"pick",   "reword", "edit",
                                            "squash", "fixup",  "drop"};
@@ -32,19 +34,37 @@ GitRebaseDialog::GitRebaseDialog(GitIntegration *git, const Theme &theme,
 
 void GitRebaseDialog::loadCommits(const QString &upstream) {
   m_upstream = upstream;
+  m_rangeProblem.clear();
   m_commitList->clear();
   m_entries.clear();
 
   if (!m_git || !m_git->isValidRepository())
     return;
 
-  QList<GitCommitInfo> commits = m_git->getCommitLog(50);
+  QList<GitCommitInfo> commits =
+      m_git->getCommitLog(MAX_REBASE_COMMITS + 1, upstream + "..HEAD");
 
-  int count = qMin(commits.size(), 20);
+  if (commits.size() > MAX_REBASE_COMMITS) {
+    m_rangeProblem =
+        tr("More than %1 commits sit above %2. Rebase a shorter range.")
+            .arg(MAX_REBASE_COMMITS)
+            .arg(upstream);
+  }
+  for (const GitCommitInfo &commit : commits) {
+    if (commit.parents.size() > 1) {
+      m_rangeProblem = tr("The range above %1 contains merge commits, which "
+                          "this rebase would flatten.")
+                           .arg(upstream);
+      break;
+    }
+  }
+
+  int count = qMin(commits.size(), MAX_REBASE_COMMITS);
   for (int i = 0; i < count; ++i) {
     RebaseEntry entry;
     entry.action = "pick";
     entry.hash = commits[i].shortHash;
+    entry.fullHash = commits[i].hash;
     entry.subject = commits[i].subject;
     entry.author = commits[i].author;
     m_entries.append(entry);
@@ -268,8 +288,13 @@ void GitRebaseDialog::updateSummary() {
 }
 
 void GitRebaseDialog::onStartRebase() {
-  if (m_entries.isEmpty())
+  if (m_entries.isEmpty() || !m_git)
     return;
+
+  if (!m_rangeProblem.isEmpty()) {
+    ThemedMessageBox::warning(this, tr("Rebase"), m_rangeProblem);
+    return;
+  }
 
   int dropCount = 0;
   int squashCount = 0;
@@ -308,45 +333,70 @@ void GitRebaseDialog::onStartRebase() {
   if (confirmBox.exec() != ThemedMessageBox::Yes)
     return;
 
-  QString todoScript;
-
-  for (int i = m_entries.size() - 1; i >= 0; --i) {
-    todoScript += m_entries[i].action + " " + m_entries[i].hash + " " +
-                  m_entries[i].subject + "\n";
+  QSet<QString> loadedHashes;
+  for (const RebaseEntry &entry : m_entries) {
+    loadedHashes.insert(entry.fullHash);
   }
-
-  QTemporaryFile todoFile;
-  todoFile.setAutoRemove(false);
-  if (!todoFile.open()) {
-    m_statusLabel->setText(tr("Failed to create rebase script"));
+  QSet<QString> currentHashes;
+  for (const GitCommitInfo &commit :
+       m_git->getCommitLog(MAX_REBASE_COMMITS + 1, m_upstream + "..HEAD")) {
+    currentHashes.insert(commit.hash);
+  }
+  if (currentHashes != loadedHashes) {
+    ThemedMessageBox::warning(
+        this, tr("Rebase"),
+        tr("The branch changed since this list was loaded. Reopen the "
+           "rebase dialog and try again."));
     return;
   }
-  QTextStream out(&todoFile);
-  out << todoScript;
-  todoFile.close();
 
-  QString scriptPath = todoFile.fileName();
+  QList<GitRebaseEntry> planEntries;
+  for (int i = m_entries.size() - 1; i >= 0; --i) {
+    GitRebaseEntry planEntry;
+    planEntry.commit.hash = m_entries[i].fullHash;
+    planEntry.commit.shortHash = m_entries[i].hash;
+    planEntry.commit.subject = m_entries[i].subject;
+    planEntry.action = gitRebaseActionFromKeyword(m_entries[i].action);
+    if (planEntry.action != GitRebaseAction::Squash &&
+        planEntry.action != GitRebaseAction::Fixup &&
+        planEntry.action != GitRebaseAction::Drop) {
+      planEntry.newMessage = m_git->getCommitMessage(m_entries[i].fullHash);
+    }
+    planEntries.append(planEntry);
+  }
 
-  QProcess proc;
-  proc.setWorkingDirectory(m_git->repositoryPath());
-  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-  env.insert("GIT_SEQUENCE_EDITOR", QString("cp %1").arg(scriptPath));
-  proc.setProcessEnvironment(env);
-  proc.start("git", {"rebase", "-i", m_upstream});
-  proc.waitForFinished(10000);
+  GitRebasePlan plan;
+  plan.setEntries(planEntries);
+  const QStringList problems = plan.validationProblems();
+  if (!problems.isEmpty()) {
+    ThemedMessageBox::warning(this, tr("Rebase"), problems.join("\n"));
+    return;
+  }
 
-  QFile::remove(scriptPath);
+  QString lastError;
+  const auto errorConnection =
+      connect(m_git, &GitIntegration::errorOccurred, this,
+              [&lastError](const QString &error) { lastError = error; });
+  const bool ok = m_git->startInteractiveRebase(m_upstream, plan);
+  disconnect(errorConnection);
 
-  QString output = proc.readAllStandardOutput() + proc.readAllStandardError();
-  if (proc.exitCode() == 0) {
+  if (ok && !m_git->isRebaseInProgress()) {
     m_statusLabel->setText(tr("Rebase completed successfully"));
     ThemedMessageBox::information(this, tr("Rebase"),
                                   tr("Interactive rebase completed."));
     accept();
+  } else if (m_git->isRebaseInProgress()) {
+    m_statusLabel->setText(tr("Rebase stopped — resolve and continue"));
+    ThemedMessageBox::warning(
+        this, tr("Rebase"),
+        tr("The rebase stopped part-way. Resolve any conflicts or finish "
+           "editing, then continue or abort the rebase."));
+    accept();
   } else {
-    m_statusLabel->setText(tr("Rebase failed or needs conflict resolution"));
-    ThemedMessageBox::warning(this, tr("Rebase"),
-                              tr("Rebase encountered issues:\n%1").arg(output));
+    m_statusLabel->setText(tr("Rebase failed"));
+    ThemedMessageBox::warning(
+        this, tr("Rebase"),
+        tr("Rebase encountered issues:\n%1").arg(lastError));
   }
 }
 

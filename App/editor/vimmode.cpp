@@ -9,7 +9,13 @@
 #include <memory>
 
 VimMode::VimMode(QPlainTextEdit *editor, QObject *parent)
-    : QObject(parent), m_editor(editor) {}
+    : QObject(parent), m_editor(editor) {
+  connect(this, &VimMode::statusMessage, this, [this](const QString &message) {
+    static const QRegularExpression error("^E\\d+:");
+    if (error.match(message).hasMatch())
+      failCommand();
+  });
+}
 
 VimMode::~VimMode() = default;
 
@@ -51,14 +57,41 @@ std::unique_ptr<QKeyEvent> VimMode::tokenToKeyEvent(const QString &token) {
     }
     return std::make_unique<QKeyEvent>(QEvent::KeyPress, key, mods, token);
   }
-  if (token.startsWith("<C-") && token.size() == 5) {
-    QChar c = token[3];
-    int key =
-        c.isLetter() ? Qt::Key_A + (c.toUpper().unicode() - 'A') : c.unicode();
-    return std::make_unique<QKeyEvent>(QEvent::KeyPress, key,
-                                       Qt::ControlModifier, QString());
+  if (token.size() < 4 || !token.startsWith('<') || !token.endsWith('>'))
+    return nullptr;
+  QString rest = token.mid(1, token.size() - 2);
+  Qt::KeyboardModifiers mods = Qt::NoModifier;
+  while (rest.size() >= 3 && rest[1] == '-' &&
+         QString("CAS").contains(rest[0])) {
+    if (rest[0] == 'C')
+      mods |= Qt::ControlModifier;
+    else if (rest[0] == 'A')
+      mods |= Qt::AltModifier;
+    else
+      mods |= Qt::ShiftModifier;
+    rest = rest.mid(2);
   }
-  return nullptr;
+  if (!mods)
+    return nullptr;
+  int key = 0;
+  auto special = specials.constFind("<" + rest + ">");
+  if (special != specials.constEnd()) {
+    key = special->first;
+  } else if (rest == "Space") {
+    key = Qt::Key_Space;
+  } else if (rest.size() >= 2 && rest[0] == 'F' && rest.mid(1).toInt() > 0) {
+    key = Qt::Key_F1 + rest.mid(1).toInt() - 1;
+  } else if (rest.startsWith("key") && rest.mid(3).toInt() > 0) {
+    key = rest.mid(3).toInt();
+  } else if (rest.size() == 1) {
+    const QChar c = rest[0];
+    key = c.unicode() < 128 && c.isLetter()
+              ? Qt::Key_A + (c.toUpper().unicode() - 'A')
+              : c.unicode();
+  } else {
+    return nullptr;
+  }
+  return std::make_unique<QKeyEvent>(QEvent::KeyPress, key, mods, QString());
 }
 
 void VimMode::setEnabled(bool enabled) {
@@ -352,49 +385,80 @@ QString VimMode::keyEventToToken(QKeyEvent *event) {
 
 QStringList VimMode::parseKeyNotation(const QString &keys) {
   static const QMap<QString, QString> names = {
-      {"esc", "<Esc>"},
-      {"cr", "<CR>"},
-      {"enter", "<CR>"},
-      {"return", "<CR>"},
-      {"nl", "<CR>"},
-      {"bs", "<BS>"},
-      {"del", "<Del>"},
-      {"tab", "<Tab>"},
-      {"s-tab", "<S-Tab>"},
-      {"left", "<Left>"},
-      {"right", "<Right>"},
-      {"up", "<Up>"},
-      {"down", "<Down>"},
-      {"home", "<Home>"},
-      {"end", "<End>"},
-      {"pageup", "<PageUp>"},
-      {"pagedown", "<PageDown>"},
-      {"insert", "<Insert>"},
-      {"space", " "},
       {"lt", "<"},
       {"bar", "|"},
       {"bslash", "\\"},
+  };
+  static const QMap<QString, QString> specials = {
+      {"esc", "Esc"},           {"cr", "CR"},         {"enter", "CR"},
+      {"return", "CR"},         {"nl", "CR"},         {"bs", "BS"},
+      {"del", "Del"},           {"tab", "Tab"},       {"left", "Left"},
+      {"right", "Right"},       {"up", "Up"},         {"down", "Down"},
+      {"home", "Home"},         {"end", "End"},       {"pageup", "PageUp"},
+      {"pagedown", "PageDown"}, {"insert", "Insert"}, {"space", "Space"},
+  };
+  auto parseToken = [](const QString &inner) -> QString {
+    const QString lowerInner = inner.toLower();
+    if (names.contains(lowerInner))
+      return names.value(lowerInner);
+    bool ctrl = false, alt = false, shift = false;
+    QString rest = inner;
+    while (rest.size() >= 3 && rest[1] == '-' &&
+           QString("CcAaSsMm").contains(rest[0])) {
+      const QChar m = rest[0].toLower();
+      if (m == 'c')
+        ctrl = true;
+      else if (m == 's')
+        shift = true;
+      else
+        alt = true;
+      rest = rest.mid(2);
+    }
+    const QString lower = rest.toLower();
+    QString prefix;
+    if (ctrl)
+      prefix += "C-";
+    if (alt)
+      prefix += "A-";
+    if (rest.size() == 1) {
+      if (!ctrl && !alt && !shift)
+        return QString();
+      const QChar c = rest[0];
+      if (!ctrl && !alt)
+        return QString(c.toUpper());
+      if (shift && c.isLetter())
+        prefix += "S-";
+      return "<" + prefix + (c.isLetter() ? c.toLower() : c) + ">";
+    }
+    QString special;
+    if (specials.contains(lower)) {
+      special = specials.value(lower);
+    } else if (lower.size() >= 2 && lower[0] == 'f' &&
+               lower.mid(1).toInt() > 0) {
+      special = "F" + lower.mid(1);
+    } else if (lower.startsWith("key") && lower.mid(3).toInt() > 0 &&
+               (ctrl || alt)) {
+      special = "key" + lower.mid(3);
+    } else {
+      return QString();
+    }
+    if (special == "Space" && !ctrl && !alt)
+      return " ";
+    if (shift) {
+      if (special == "Tab")
+        special = "S-Tab";
+      else
+        prefix += "S-";
+    }
+    return "<" + prefix + special + ">";
   };
   QStringList tokens;
   for (int i = 0; i < keys.size(); ++i) {
     const QChar c = keys[i];
     if (c == '<') {
       int close = keys.indexOf('>', i + 1);
-      if (close > i + 1 && close - i <= 12) {
-        const QString inner = keys.mid(i + 1, close - i - 1);
-        const QString lower = inner.toLower();
-        QString token;
-        if (names.contains(lower)) {
-          token = names.value(lower);
-        } else if ((lower.startsWith("c-") || lower.startsWith("a-")) &&
-                   inner.size() == 3) {
-          token = QString("<%1-%2>")
-                      .arg(inner[0].toUpper())
-                      .arg(inner[2].isLetter() ? inner[2].toLower() : inner[2]);
-        } else if (lower.size() >= 2 && lower[0] == 'f' &&
-                   lower.mid(1).toInt() > 0) {
-          token = "<F" + lower.mid(1) + ">";
-        }
+      if (close > i + 1 && close - i <= 24) {
+        const QString token = parseToken(keys.mid(i + 1, close - i - 1));
         if (!token.isEmpty()) {
           tokens << token;
           i = close;
@@ -439,6 +503,8 @@ bool VimMode::handleKey(const QString &tokenIn, QKeyEvent *event) {
     token = "<Esc>";
 
   const bool recordMacro = m_macroRecording && m_replayDepth == 0;
+  if (m_replayDepth == 0)
+    m_abortReplay = false;
   if (recordMacro)
     m_macroKeys << token;
 
@@ -751,6 +817,47 @@ void VimMode::setMark(QChar mark, int pos) {
   m_marks[mark == '`' ? QChar('\'') : mark] = c;
 }
 
+void VimMode::forgetLines(int first, int last, bool namedMarks) {
+  if (first > last)
+    return;
+  if (namedMarks) {
+    const int steps = doc()->availableUndoSteps();
+    for (auto it = m_marks.begin(); it != m_marks.end();) {
+      const ushort m = it.key().unicode();
+      if (m >= 'a' && m <= 'z' && !it->isNull() && it->document() == doc()) {
+        const int line = it->blockNumber();
+        if (line >= first && line <= last) {
+          m_deletedMarks.append({it.key(), line, it->positionInBlock(), steps});
+          it = m_marks.erase(it);
+          continue;
+        }
+      }
+      ++it;
+    }
+    while (m_deletedMarks.size() > 200)
+      m_deletedMarks.removeFirst();
+  }
+  for (QTextCursor &c : m_globalMarks) {
+    if (c.isNull())
+      continue;
+    const int line = c.blockNumber();
+    if (line >= first && line <= last)
+      c = QTextCursor();
+  }
+}
+
+void VimMode::restoreDeletedMarks() {
+  const int steps = doc()->availableUndoSteps();
+  for (int k = m_deletedMarks.size() - 1; k >= 0; --k) {
+    const DeletedMark d = m_deletedMarks[k];
+    if (d.undoSteps < steps)
+      continue;
+    m_deletedMarks.removeAt(k);
+    if (d.line < lineCount())
+      setMark(d.mark, posOf(d.line, d.col));
+  }
+}
+
 bool VimMode::markPosition(QChar mark, int &pos) const {
   if (mark == '`')
     mark = '\'';
@@ -850,8 +957,16 @@ void VimMode::playMacro(QChar reg, int count) {
     return;
   m_lastMacroRegister = reg;
   if (reg == ':') {
-    for (int i = 0; i < count && !m_lastExCommand.isEmpty(); ++i)
-      executeEx(m_lastExCommand);
+    if (m_lastExCommand.isEmpty()) {
+      emit statusMessage("E30: No previous command line");
+      return;
+    }
+    const QString command = m_lastExCommand;
+    m_repeatedCommandLine = true;
+    ++m_replayDepth;
+    for (int i = 0; i < count && !m_abortReplay; ++i)
+      executeEx(command);
+    --m_replayDepth;
     return;
   }
   VimRegister r = getRegister(reg);
@@ -860,16 +975,21 @@ void VimMode::playMacro(QChar reg, int count) {
     return;
   }
   const QStringList tokens = parseKeyNotation(r.content);
-  for (int i = 0; i < count; ++i)
+  for (int i = 0; i < count && !m_abortReplay; ++i)
     replayTokens(tokens);
 }
 
-void VimMode::replayTokens(const QStringList &tokens) {
+void VimMode::replayTokens(const QStringList &tokens, bool stopOnFailure) {
   ++m_replayDepth;
-  for (const QString &token : tokens)
+  for (const QString &token : tokens) {
+    if (stopOnFailure && m_abortReplay)
+      break;
     handleKey(token, nullptr);
+  }
   --m_replayDepth;
 }
+
+void VimMode::failCommand() { m_abortReplay = true; }
 
 void VimMode::setDotCommand(const QStringList &keys) {
   if (m_inDotRepeat || keys.isEmpty())
@@ -890,13 +1010,15 @@ void VimMode::repeatLastChange(int count) {
   const QStringList keys = m_dotKeys;
   QTextCursor block(doc());
   block.beginEditBlock();
+  const bool outerAbort = m_abortReplay;
   m_inDotRepeat = true;
   m_dotCountOverride = m_dotCount;
-  replayTokens(keys);
+  replayTokens(keys, false);
   if (m_mode == VimEditMode::Insert || m_mode == VimEditMode::Replace)
     handleKey("<Esc>", nullptr);
   m_dotCountOverride = 0;
   m_inDotRepeat = false;
+  m_abortReplay = outerAbort;
   block.endEditBlock();
   m_dotKeys = keys;
 }
@@ -983,7 +1105,8 @@ void VimMode::scrollHalfPage(bool down, int count) {
 }
 
 void VimMode::scrollPage(bool down, int count) {
-  int amount = qMax(1, count) * qMax(1, visibleLineCount() - 2);
+  const int amount = int(qMin<qint64>(
+      qint64(qMax(1, count)) * qMax(1, visibleLineCount() - 2), lineCount()));
   int line = lineOf(cursorPos());
   int target = qBound(0, line + (down ? amount : -amount), lineCount() - 1);
   QScrollBar *bar = m_editor->verticalScrollBar();

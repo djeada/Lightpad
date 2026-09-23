@@ -3,7 +3,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QObject>
+#include <QSaveFile>
 #include <QStringDecoder>
+#include <QStringEncoder>
 
 namespace FileOpenGuard {
 
@@ -78,8 +80,107 @@ Assessment assess(const QString &filePath, qint64 largeThreshold) {
   return result;
 }
 
+QString decodeText(const QByteArray &bytes, TextFormat *format,
+                   bool truncated) {
+  static const QByteArray utf8Bom("\xEF\xBB\xBF");
+
+  TextFormat detected;
+  const bool hasBom = bytes.startsWith(utf8Bom);
+  const QByteArray payload = hasBom ? bytes.mid(utf8Bom.size()) : bytes;
+
+  QStringDecoder decoder(QStringDecoder::Utf8,
+                         truncated ? QStringConverter::Flag::Default
+                                   : QStringConverter::Flag::Stateless);
+  QString text = decoder.decode(payload);
+
+  if (decoder.hasError()) {
+    text = QString::fromLatin1(bytes);
+    detected.encoding = TextEncoding::Latin1;
+    detected.hasBom = false;
+  } else {
+    detected.encoding = TextEncoding::Utf8;
+    detected.hasBom = hasBom;
+  }
+
+  const qsizetype crlfCount = text.count(QStringLiteral("\r\n"));
+  const qsizetype lfCount = text.count(QLatin1Char('\n')) - crlfCount;
+  if (crlfCount > lfCount) {
+    detected.lineEnding = QStringLiteral("\r\n");
+  } else if (lfCount > 0) {
+    detected.lineEnding = QStringLiteral("\n");
+  }
+  if (crlfCount > 0) {
+    text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
+  }
+
+  if (format) {
+    *format = detected;
+  }
+  return text;
+}
+
+QByteArray encodeText(const QString &text, TextFormat *format,
+                      bool *encodingChanged) {
+  if (encodingChanged) {
+    *encodingChanged = false;
+  }
+
+  TextFormat fallback;
+  TextFormat &target = format ? *format : fallback;
+
+  QString output = text;
+  if (!target.lineEnding.isEmpty() && target.lineEnding != "\n") {
+    output.replace(QLatin1Char('\n'), target.lineEnding);
+  }
+
+  if (target.encoding == TextEncoding::Latin1) {
+    QStringEncoder encoder(QStringEncoder::Latin1);
+    QByteArray bytes = encoder.encode(output);
+    if (!encoder.hasError()) {
+      return bytes;
+    }
+    target.encoding = TextEncoding::Utf8;
+    target.hasBom = false;
+    if (encodingChanged) {
+      *encodingChanged = true;
+    }
+  }
+
+  QByteArray bytes = output.toUtf8();
+  if (target.hasBom) {
+    bytes.prepend("\xEF\xBB\xBF");
+  }
+  return bytes;
+}
+
+bool writeFileAtomically(const QString &filePath, const QByteArray &data,
+                         QString *errorString) {
+  QSaveFile file(filePath);
+  file.setDirectWriteFallback(true);
+  if (!file.open(QIODevice::WriteOnly)) {
+    if (errorString) {
+      *errorString = file.errorString();
+    }
+    return false;
+  }
+  if (file.write(data) != data.size()) {
+    if (errorString) {
+      *errorString = file.errorString();
+    }
+    file.cancelWriting();
+    return false;
+  }
+  if (!file.commit()) {
+    if (errorString) {
+      *errorString = file.errorString();
+    }
+    return false;
+  }
+  return true;
+}
+
 QString readTextCapped(const QString &filePath, qint64 maxBytes,
-                       bool *truncated, bool *ok) {
+                       bool *truncated, bool *ok, TextFormat *format) {
   if (truncated) {
     *truncated = false;
   }
@@ -105,9 +206,7 @@ QString readTextCapped(const QString &filePath, qint64 maxBytes,
     *ok = true;
   }
 
-  QStringDecoder decoder(QStringDecoder::Utf8);
-  QString text = decoder.decode(bytes);
-  return text;
+  return decodeText(bytes, format, limit < total);
 }
 
 } // namespace FileOpenGuard

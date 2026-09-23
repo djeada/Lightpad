@@ -39,6 +39,7 @@ private slots:
 private:
   void setupUI();
   void rebuildBreadcrumbs();
+  void clearSegments();
   QStringList getPathSegments(const QString &path) const;
   QString buildPathUpTo(int segmentIndex) const;
 

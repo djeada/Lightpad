@@ -5,6 +5,7 @@
 #include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
+#include <functional>
 
 const QString unsavedDocumentLabel = "Unsaved Document";
 const int buttonSize = 25;
@@ -40,6 +41,8 @@ class LightpadTabWidget : public QTabWidget {
   Q_OBJECT
 
 public:
+  using CloseGuard = std::function<bool(LightpadTabWidget *, int)>;
+
   LightpadTabWidget(QWidget *parent = nullptr);
   void addNewTab();
   void addViewerTab(QWidget *viewer, const QString &filePath);
@@ -50,13 +53,19 @@ public:
                 const QString &surfaceColor, const QString &hoverColor,
                 const QString &accentColor, const QString &borderColor);
   void setFilePath(int index, QString filePath);
-  void closeAllTabs();
-  void closeCurrentTab();
+  void setCloseGuard(CloseGuard guard);
+  bool requestCloseTab(int index);
+  void forceCloseTab(int index);
+  bool closeAllTabs();
+  bool closeCurrentTab();
   LightpadPage *getPage(int index);
   LightpadPage *getCurrentPage();
   QString getFilePath(int index);
   bool isViewerTab(int index) const;
   bool isPinnedRunFile(const QString &filePath) const;
+
+signals:
+  void tabClosed(const QString &filePath);
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
@@ -80,9 +89,10 @@ private slots:
 private:
   void updateCloseButtons();
   void setupTabBar();
-  MainWindow *mainWindow;
+  MainWindow *mainWindow = nullptr;
   QToolButton *newTabButton;
   QMap<QWidget *, QString> m_viewerFilePaths;
+  CloseGuard m_closeGuard;
   QString m_foregroundColor;
   QString m_backgroundColor;
   QString m_hoverColor;

@@ -122,10 +122,54 @@ QString gitComparisonDescription(const GitCompareEndpoint &base,
   return QObject::tr("Changes from %1 to %2").arg(base.label, compare.label);
 }
 
-QList<GitComparisonFile> parseComparisonFiles(const QString &numstat,
-                                              const QString &nameStatus) {
-  QList<GitComparisonFile> files;
-  QHash<QString, int> indexByPath;
+namespace {
+
+struct ParsedNumstat {
+  QString path;
+  QString oldPath;
+  QString added;
+  QString removed;
+};
+
+struct ParsedNameStatus {
+  QChar status;
+  QString path;
+  QString oldPath;
+};
+
+QString stripLeadingNewlines(QString value) {
+  while (value.startsWith(QLatin1Char('\n'))) {
+    value.remove(0, 1);
+  }
+  return value;
+}
+
+QList<ParsedNumstat> parseNumstatRecords(const QString &numstat) {
+  QList<ParsedNumstat> records;
+  if (numstat.contains(QChar('\0'))) {
+    const QStringList tokens = numstat.split(QChar('\0'));
+    for (int i = 0; i < tokens.size(); ++i) {
+      const QStringList parts =
+          stripLeadingNewlines(tokens.at(i)).split(QLatin1Char('\t'));
+      if (parts.size() < 3) {
+        continue;
+      }
+      ParsedNumstat record;
+      record.added = parts[0];
+      record.removed = parts[1];
+      record.path = parts[2];
+      if (record.path.isEmpty()) {
+        if (i + 2 >= tokens.size()) {
+          break;
+        }
+        record.oldPath = tokens.at(i + 1);
+        record.path = tokens.at(i + 2);
+        i += 2;
+      }
+      records.append(record);
+    }
+    return records;
+  }
 
   for (const QString &line :
        numstat.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
@@ -133,19 +177,47 @@ QList<GitComparisonFile> parseComparisonFiles(const QString &numstat,
     if (parts.size() < 3) {
       continue;
     }
-    GitComparisonFile file;
-
-    file.isBinary = parts[0] == QLatin1String("-");
-    file.additions = file.isBinary ? 0 : parts[0].toInt();
-    file.deletions = file.isBinary ? 0 : parts[1].toInt();
+    ParsedNumstat record;
+    record.added = parts[0];
+    record.removed = parts[1];
     if (parts.size() >= 4) {
-      file.oldPath = parts[2];
-      file.path = parts[3];
+      record.oldPath = parts[2];
+      record.path = parts[3];
     } else {
-      file.path = parts[2];
+      record.path = parts[2];
     }
-    indexByPath.insert(file.path, files.size());
-    files.append(file);
+    records.append(record);
+  }
+  return records;
+}
+
+QList<ParsedNameStatus> parseNameStatusRecords(const QString &nameStatus) {
+  QList<ParsedNameStatus> records;
+  if (nameStatus.contains(QChar('\0'))) {
+    const QStringList tokens = nameStatus.split(QChar('\0'));
+    for (int i = 0; i + 1 < tokens.size(); ++i) {
+      const QString code = stripLeadingNewlines(tokens.at(i));
+      if (code.isEmpty()) {
+        continue;
+      }
+      ParsedNameStatus record;
+      record.status = code.at(0);
+      const bool twoPaths = record.status == QLatin1Char('R') ||
+                            record.status == QLatin1Char('C');
+      if (twoPaths) {
+        if (i + 2 >= tokens.size()) {
+          break;
+        }
+        record.oldPath = tokens.at(i + 1);
+        record.path = tokens.at(i + 2);
+        i += 2;
+      } else {
+        record.path = tokens.at(i + 1);
+        i += 1;
+      }
+      records.append(record);
+    }
+    return records;
   }
 
   for (const QString &line :
@@ -154,23 +226,49 @@ QList<GitComparisonFile> parseComparisonFiles(const QString &numstat,
     if (parts.size() < 2 || parts[0].isEmpty()) {
       continue;
     }
-    const QChar status = parts[0].at(0);
-    const QString path = parts.last();
-    const auto it = indexByPath.constFind(path);
+    ParsedNameStatus record;
+    record.status = parts[0].at(0);
+    record.path = parts.last();
+    if (parts.size() >= 3) {
+      record.oldPath = parts[1];
+    }
+    records.append(record);
+  }
+  return records;
+}
+
+} // namespace
+
+QList<GitComparisonFile> parseComparisonFiles(const QString &numstat,
+                                              const QString &nameStatus) {
+  QList<GitComparisonFile> files;
+  QHash<QString, int> indexByPath;
+
+  for (const ParsedNumstat &record : parseNumstatRecords(numstat)) {
+    GitComparisonFile file;
+    file.isBinary = record.added == QLatin1String("-");
+    file.additions = file.isBinary ? 0 : record.added.toInt();
+    file.deletions = file.isBinary ? 0 : record.removed.toInt();
+    file.oldPath = record.oldPath;
+    file.path = record.path;
+    indexByPath.insert(file.path, files.size());
+    files.append(file);
+  }
+
+  for (const ParsedNameStatus &record : parseNameStatusRecords(nameStatus)) {
+    const auto it = indexByPath.constFind(record.path);
     if (it != indexByPath.constEnd()) {
-      files[it.value()].status = status;
-      if (parts.size() >= 3) {
-        files[it.value()].oldPath = parts[1];
+      files[it.value()].status = record.status;
+      if (!record.oldPath.isEmpty()) {
+        files[it.value()].oldPath = record.oldPath;
       }
       continue;
     }
 
     GitComparisonFile file;
-    file.status = status;
-    file.path = path;
-    if (parts.size() >= 3) {
-      file.oldPath = parts[1];
-    }
+    file.status = record.status;
+    file.path = record.path;
+    file.oldPath = record.oldPath;
     files.append(file);
   }
 
@@ -198,8 +296,10 @@ GitComparisonResult runGitComparison(GitIntegration *git,
 
   QStringList statArgs = diffArgs;
   statArgs.insert(1, QStringLiteral("--numstat"));
+  statArgs.insert(2, QStringLiteral("-z"));
   QStringList nameArgs = diffArgs;
   nameArgs.insert(1, QStringLiteral("--name-status"));
+  nameArgs.insert(2, QStringLiteral("-z"));
 
   const QString numstat = git->executeWordDiff(statArgs);
   const QString nameStatus = git->executeWordDiff(nameArgs);
