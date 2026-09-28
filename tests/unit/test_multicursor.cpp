@@ -23,6 +23,8 @@ private slots:
   void testLastSelectedWord();
   void testMergeOverlappingCursors();
   void testNullEditor();
+  void testTextInputAcceptsPrintableAndShifted();
+  void testTextInputRejectsControlCharacters();
 
 private:
   QPlainTextEdit *m_editor = nullptr;
@@ -197,6 +199,23 @@ void TestMultiCursor::testNullEditor() {
   nullHandler.applyToAllCursors([](QTextCursor &) {});
 
   QCOMPARE(nullHandler.cursorCount(), 1);
+}
+
+void TestMultiCursor::testTextInputAcceptsPrintableAndShifted() {
+  QVERIFY(MultiCursorHandler::isTextInput(Qt::NoModifier, "a"));
+  QVERIFY(MultiCursorHandler::isTextInput(Qt::ShiftModifier, "A"));
+  QVERIFY(MultiCursorHandler::isTextInput(Qt::ShiftModifier, "("));
+  QVERIFY(MultiCursorHandler::isTextInput(Qt::KeypadModifier, "5"));
+  QVERIFY(MultiCursorHandler::isTextInput(Qt::NoModifier, "\r"));
+}
+
+void TestMultiCursor::testTextInputRejectsControlCharacters() {
+  QVERIFY(!MultiCursorHandler::isTextInput(Qt::NoModifier, QString()));
+  QVERIFY(!MultiCursorHandler::isTextInput(Qt::NoModifier, "\b"));
+  QVERIFY(!MultiCursorHandler::isTextInput(Qt::NoModifier, "\x7f"));
+  QVERIFY(!MultiCursorHandler::isTextInput(Qt::NoModifier, "\x1b"));
+  QVERIFY(!MultiCursorHandler::isTextInput(Qt::ControlModifier, "a"));
+  QVERIFY(!MultiCursorHandler::isTextInput(Qt::AltModifier, "a"));
 }
 
 QTEST_MAIN(TestMultiCursor)

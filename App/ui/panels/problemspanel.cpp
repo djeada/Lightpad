@@ -1,4 +1,5 @@
 #include "problemspanel.h"
+#include "../../diagnostics/diagnosticutils.h"
 #include "../uistylehelper.h"
 #include <QApplication>
 #include <QClipboard>
@@ -160,7 +161,7 @@ ProblemsPanel::findDiagnosticsForFile(const QString &filePath) const {
 
   QString normalizedPath = filePath;
   if (normalizedPath.startsWith("file://")) {
-    normalizedPath = normalizedPath.mid(7);
+    normalizedPath = DiagnosticUtils::uriToFilePath(normalizedPath);
   }
 
   for (auto it = m_diagnostics.constBegin(); it != m_diagnostics.constEnd();
@@ -168,7 +169,7 @@ ProblemsPanel::findDiagnosticsForFile(const QString &filePath) const {
     QString uri = it.key();
     QString uriPath = uri;
     if (uriPath.startsWith("file://")) {
-      uriPath = uriPath.mid(7);
+      uriPath = DiagnosticUtils::uriToFilePath(uriPath);
     }
 
     if (uriPath == normalizedPath || uri == filePath) {
@@ -266,7 +267,7 @@ void ProblemsPanel::rebuildTree() {
 
     QString filePath = uri;
     if (filePath.startsWith("file://")) {
-      filePath = filePath.mid(7);
+      filePath = DiagnosticUtils::uriToFilePath(filePath);
     }
 
     if (!m_currentFilePath.isEmpty() && filePath != m_currentFilePath) {
@@ -443,7 +444,7 @@ void ProblemsPanel::clearCurrentFile() {
   if (!m_currentFilePath.isEmpty()) {
     QString uri = m_currentFilePath;
     if (!uri.startsWith("file://")) {
-      uri = "file://" + uri;
+      uri = DiagnosticUtils::filePathToUri(uri);
     }
     clearFile(uri);
   }

@@ -163,6 +163,7 @@ set(project_headers
     ui/widgets/hacker/hackerstyle.h
     ui/widgets/hacker/hackerscanlineoverlay.h
     ui/panels/findreplacepanel.h
+    ui/panels/findreplacesearch.h
     ui/panels/problemspanel.h
     ui/panels/breadcrumbwidget.h
     ui/panels/debugpanel.h
@@ -388,6 +389,7 @@ set(project_sources
     ui/widgets/hacker/hackerstyle.cpp
     ui/widgets/hacker/hackerscanlineoverlay.cpp
     ui/panels/findreplacepanel.cpp
+    ui/panels/findreplacesearch.cpp
     ui/panels/problemspanel.cpp
     ui/panels/breadcrumbwidget.cpp
     ui/panels/debugpanel.cpp

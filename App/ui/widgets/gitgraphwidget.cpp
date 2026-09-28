@@ -77,6 +77,7 @@ void GitGraphWidget::loadGraph(int maxCount) {
   m_hoverIndex = -1;
   m_loadingMore = false;
   m_historyExhausted = false;
+  ++m_loadGeneration;
 
   if (!m_git || !m_git->isValidRepository()) {
     syncScrollBarRange();
@@ -267,9 +268,10 @@ void GitGraphWidget::requestMoreCommits() {
   update();
 
   QPointer<GitGraphWidget> self(this);
+  const quint64 generation = m_loadGeneration;
   m_git->getLogPageAsync(m_logOptions, m_nodes.size(), m_pageSize,
-                         [self](QList<GitCommitInfo> page) {
-                           if (!self) {
+                         [self, generation](QList<GitCommitInfo> page) {
+                           if (!self || self->m_loadGeneration != generation) {
                              return;
                            }
 

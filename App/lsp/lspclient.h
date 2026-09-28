@@ -67,6 +67,7 @@ struct LspCompletionItem {
   QString detail;
   QString documentation;
   QString insertText;
+  int insertTextFormat = 1;
 };
 
 struct LspParameterInfo {
@@ -206,7 +207,7 @@ public:
                                            int maxMessages = 100);
 
   void requestHover(const QString &uri, LspPosition position);
-  void requestDefinition(const QString &uri, LspPosition position);
+  int requestDefinition(const QString &uri, LspPosition position);
   void requestReferences(const QString &uri, LspPosition position);
   void requestSignatureHelp(const QString &uri, LspPosition position);
   void requestDocumentSymbols(const QString &uri);
@@ -219,9 +220,9 @@ public:
   void requestFormatting(const QString &uri, int tabSize = 4,
                          bool insertSpaces = true);
 
-  void requestDeclaration(const QString &uri, LspPosition position);
+  int requestDeclaration(const QString &uri, LspPosition position);
 
-  void requestTypeDefinition(const QString &uri, LspPosition position);
+  int requestTypeDefinition(const QString &uri, LspPosition position);
 
   void requestWorkspaceSymbols(const QString &query);
 
@@ -231,13 +232,17 @@ public:
 
   bool supportsCapability(const QString &capability) const;
 
+  static QList<LspLocation> parseLocations(const QJsonValue &result);
+  static LspCompletionItem parseCompletionItem(const QJsonObject &obj);
+
 signals:
   void stateChanged(State state);
   void initialized();
   void error(const QString &message);
 
   void diagnosticsReceived(const QString &uri,
-                           const QList<LspDiagnostic> &diagnostics);
+                           const QList<LspDiagnostic> &diagnostics,
+                           int version);
 
   void completionReceived(int requestId, const QList<LspCompletionItem> &items);
   void hoverReceived(int requestId, const QString &contents);
@@ -267,7 +272,14 @@ private slots:
 private:
   void sendRequest(const QString &method, const QJsonObject &params, int id);
   void sendNotification(const QString &method, const QJsonObject &params);
+  void sendResponse(const QJsonValue &id, const QJsonValue &result);
+  void sendErrorResponse(const QJsonValue &id, int code,
+                         const QString &message);
+  void writeMessage(const QJsonObject &message);
   void handleMessage(const QJsonObject &message);
+  void handleServerRequest(const QJsonValue &id, const QString &method,
+                           const QJsonValue &params);
+  void failPendingRequests(const QString &message);
   void handleResponse(int id, const QJsonValue &result,
                       const QJsonValue &error);
   void handleNotification(const QString &method, const QJsonObject &params);

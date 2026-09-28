@@ -9,6 +9,7 @@
 #include <QMetaMethod>
 #include <QObject>
 #include <QProcess>
+#include <QSet>
 #include <QTcpSocket>
 #include <QVariant>
 
@@ -341,6 +342,8 @@ public:
 
   bool startSocket(const QString &host, quint16 port);
 
+  bool startServer(const QString &program, const QStringList &arguments = {});
+
   bool isSocketTransport() const { return m_socket != nullptr; }
 
   void feedAdapterData(const QByteArray &data);
@@ -492,6 +495,13 @@ private:
   static bool isLikelyUnsupportedRequestMessage(const QString &message);
   bool hasPendingRequestTag(const QString &tag) const;
   void clearPendingInspectionRequests();
+  void failDiscardedMessage(const QByteArray &sample, const QString &reason);
+  bool connectSocket(const QString &host, quint16 port);
+  void onServerOutput(bool isStderr);
+  void onServerFinished(int exitCode, QProcess::ExitStatus exitStatus);
+  void shutdownServerProcess();
+  void resetSessionState();
+  void abortStartup(const QString &message);
 
   QProcess *m_process;
   QTcpSocket *m_socket = nullptr;
@@ -500,7 +510,16 @@ private:
   State m_state;
   int m_nextSeq;
   QByteArray m_buffer;
+  qint64 m_skipBytes = 0;
+  QByteArray m_skipHead;
+  QByteArray m_skipTail;
+  bool m_parseScheduled = false;
   QMap<int, QString> m_pendingRequests;
+  QSet<int> m_staleRequests;
+  QProcess *m_serverProcess = nullptr;
+  QString m_serverProgram;
+  QStringList m_serverArguments;
+  QByteArray m_serverOutput;
 
   int m_currentThreadId;
   QString m_adapterId;

@@ -1,3 +1,4 @@
+#include <QDir>
 #include <QFile>
 #include <QJsonDocument>
 #include <QSignalSpy>
@@ -35,6 +36,8 @@ private slots:
 
   void testPytestBasicOutput();
   void testPytestMixedStatuses();
+  void testPytestFailureSectionAttachesToExistingResult();
+  void testParserDecodesSplitUtf8();
 
   void testJunitXmlWithFileAndLine();
 
@@ -56,6 +59,7 @@ private slots:
   void testGtestCmakeTemplateSkipsRedundantConfigure();
   void testConfigurationManagerAssignsIdsToUserConfigs();
   void testConfigurationManagerPersistsDefaultById();
+  void testConfigurationManagerKeepsUnreadableConfig();
   void testConfigurationManagerPrefersUserOverridesById();
   void testPreferredConfigurationForPythonFile();
   void testPreferredConfigurationForPythonDirectory();
@@ -362,6 +366,53 @@ void TestOutputParsers::testPytestMixedStatuses() {
   QCOMPARE(results[1].status, TestStatus::Skipped);
   QCOMPARE(results[2].status, TestStatus::Errored);
   QCOMPARE(results[3].status, TestStatus::Passed);
+}
+
+void TestOutputParsers::testPytestFailureSectionAttachesToExistingResult() {
+  PytestParser parser;
+  QList<TestResult> results;
+  connect(&parser, &ITestOutputParser::testFinished,
+          [&results](const TestResult &r) { results.append(r); });
+
+  QByteArray data =
+      "tests/test_math.py::test_add PASSED                [ 33%]\n"
+      "tests/test_math.py::TestOps::test_div FAILED       [ 66%]\n"
+      "tests/test_math.py::test_sub FAILED                [100%]\n"
+      "=================== FAILURES ===================\n"
+      "______________ TestOps.test_div ______________\n"
+      "E   ZeroDivisionError\n"
+      "______________ test_sub ______________\n"
+      "E   assert 1 == 2\n"
+      "=========== short test summary info ============\n"
+      "FAILED tests/test_math.py::test_sub - assert 1 == 2\n"
+      "========= 2 failed, 1 passed in 0.12s =========\n";
+
+  parser.feed(data);
+  parser.finish();
+
+  QCOMPARE(results.size(), 5);
+  QCOMPARE(results[3].id, results[1].id);
+  QVERIFY(results[3].stackTrace.contains("ZeroDivisionError"));
+  QCOMPARE(results[4].id, results[2].id);
+  QVERIFY(results[4].stackTrace.contains("assert 1 == 2"));
+  QVERIFY(!results[4].stackTrace.contains("short test summary"));
+}
+
+void TestOutputParsers::testParserDecodesSplitUtf8() {
+  PytestParser parser;
+  QList<TestResult> results;
+  connect(&parser, &ITestOutputParser::testFinished,
+          [&results](const TestResult &r) { results.append(r); });
+
+  const QByteArray data =
+      QString("tests/test_x.py::test_café PASSED\n").toUtf8();
+  const int split = data.indexOf("\xc3") + 1;
+  parser.feed(data.left(split));
+  parser.feed(data.mid(split));
+  parser.finish();
+
+  QCOMPARE(results.size(), 1);
+  QCOMPARE(results[0].name, QString("test_café"));
 }
 
 void TestOutputParsers::testJunitXmlWithFileAndLine() {
@@ -846,6 +897,27 @@ void TestOutputParsers::testConfigurationManagerPersistsDefaultById() {
   QCOMPARE(mgr.defaultConfigurationId(), savedId);
   QCOMPARE(mgr.defaultConfigurationName(), QString("Workspace Pytest"));
   QCOMPARE(mgr.configurationById(savedId).runFile.args.size(), 3);
+}
+
+void TestOutputParsers::testConfigurationManagerKeepsUnreadableConfig() {
+  TestConfigurationManager &mgr = TestConfigurationManager::instance();
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  QVERIFY(QDir().mkpath(tempDir.path() + "/.lightpad/test"));
+  const QString path = tempDir.path() + "/.lightpad/test/config.json";
+  const QByteArray corrupt = "{\"configurations\": [";
+  {
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write(corrupt);
+  }
+
+  QVERIFY(!mgr.loadUserConfigurations(tempDir.path()));
+  QVERIFY(!mgr.saveUserConfigurations(tempDir.path()));
+
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::ReadOnly));
+  QCOMPARE(file.readAll(), corrupt);
 }
 
 void TestOutputParsers::testConfigurationManagerPrefersUserOverridesById() {

@@ -145,6 +145,21 @@ int MultiCursorHandler::cursorCount() const {
   return m_extraCursors.size() + 1;
 }
 
+bool MultiCursorHandler::isTextInput(Qt::KeyboardModifiers modifiers,
+                                     const QString &text) {
+  const Qt::KeyboardModifiers extraModifiers =
+      modifiers & ~(Qt::ShiftModifier | Qt::KeypadModifier);
+  if (extraModifiers != Qt::NoModifier || text.isEmpty()) {
+    return false;
+  }
+  for (const QChar c : text) {
+    if (!c.isPrint() && c != QLatin1Char('\r') && c != QLatin1Char('\t')) {
+      return false;
+    }
+  }
+  return true;
+}
+
 void MultiCursorHandler::applyToAllCursors(
     const std::function<void(QTextCursor &)> &operation) {
   if (!m_editor)

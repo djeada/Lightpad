@@ -28,8 +28,6 @@ void GoToSymbolDialog::setupUI() {
 
   connect(m_searchBox, &QLineEdit::textChanged, this,
           &GoToSymbolDialog::onSearchTextChanged);
-  connect(m_resultsList, &QListWidget::itemActivated, this,
-          &GoToSymbolDialog::onItemActivated);
   connect(m_resultsList, &QListWidget::itemClicked, this,
           &GoToSymbolDialog::onItemClicked);
 

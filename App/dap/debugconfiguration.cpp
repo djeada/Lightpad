@@ -7,7 +7,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QProcess>
 #include <QSet>
+#include <algorithm>
 #include <functional>
 
 DebugConfigurationManager &DebugConfigurationManager::instance() {
@@ -114,13 +116,55 @@ void DebugConfigurationManager::removeConfiguration(const QString &name) {
   }
 }
 
-void DebugConfigurationManager::updateConfiguration(
+bool DebugConfigurationManager::updateConfiguration(
     const QString &name, const DebugConfiguration &config) {
+  if (name != config.name && m_configurations.contains(config.name)) {
+    LOG_WARNING(QString("Refusing to rename debug configuration '%1' to "
+                        "existing name '%2'")
+                    .arg(name, config.name));
+    return false;
+  }
   if (name != config.name && m_configurations.contains(name)) {
     m_configurations.remove(name);
   }
   m_configurations[config.name] = config;
   emit configurationChanged(config.name);
+  return true;
+}
+
+void DebugConfigurationManager::replaceConfigurations(
+    const QList<DebugConfiguration> &configurations) {
+  m_configurations.clear();
+  for (const DebugConfiguration &cfg : configurations) {
+    if (!cfg.name.isEmpty()) {
+      m_configurations[cfg.name] = cfg;
+    }
+  }
+  emit configurationsLoaded();
+}
+
+QString DebugConfigurationManager::joinCommandLineArguments(
+    const QStringList &arguments) {
+  QStringList quoted;
+  for (const QString &arg : arguments) {
+    const bool needsQuotes =
+        arg.contains(QLatin1Char('"')) ||
+        std::any_of(arg.begin(), arg.end(),
+                    [](const QChar &ch) { return ch.isSpace(); });
+    if (!needsQuotes) {
+      quoted.append(arg);
+      continue;
+    }
+    QString escaped = arg;
+    escaped.replace(QLatin1String("\""), QLatin1String("\"\"\""));
+    quoted.append(QLatin1Char('"') + escaped + QLatin1Char('"'));
+  }
+  return quoted.join(QLatin1Char(' '));
+}
+
+QStringList DebugConfigurationManager::splitCommandLineArguments(
+    const QString &commandLine) {
+  return QProcess::splitCommand(commandLine);
 }
 
 DebugConfiguration

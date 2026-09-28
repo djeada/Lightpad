@@ -194,6 +194,12 @@ LightpadTreeView::LightpadTreeView(LightpadPage *parent)
           &LightpadPage::updateModel);
   connect(fileController, &FileDirTreeController::fileRemoved, parentPage,
           &LightpadPage::closeTabPage);
+  connect(fileModel, &FileDirTreeModel::pathMoved, this,
+          [this](const QString &oldPath, const QString &newPath) {
+            if (parentPage && parentPage->getMainWindow()) {
+              parentPage->getMainWindow()->retargetOpenPaths(oldPath, newPath);
+            }
+          });
   connect(fileController, &FileDirTreeController::pathCreated, this,
           [this](const QString &path, bool isDirectory) {
             if (!parentPage) {

@@ -35,6 +35,7 @@
 #include <QStatusBar>
 #include <QStringListModel>
 #include <QTabBar>
+#include <QTextBlock>
 #include <QTextDocument>
 #include <QThread>
 #include <QToolButton>
@@ -218,6 +219,21 @@ QString normalizeEditorTextForSave(const QString &filePath,
     return FileManager::expandTabsToSpaces(content, tabWidth);
   }
   return FileManager::normalizeContentForSave(filePath, content, tabWidth);
+}
+
+QTextCursor cursorAtLineColumn(QTextDocument *document, int line, int column) {
+  QTextCursor cursor(document);
+  if (!document || document->blockCount() == 0) {
+    return cursor;
+  }
+  const QTextBlock block =
+      document->findBlockByNumber(qBound(0, line, document->blockCount() - 1));
+  if (!block.isValid()) {
+    return cursor;
+  }
+  cursor.setPosition(block.position() +
+                     qBound(0, column, qMax(0, block.length() - 1)));
+  return cursor;
 }
 } // namespace
 
@@ -587,8 +603,19 @@ void MainWindow::connectVimMode(TextArea *textArea) {
                   area->removeIconUnsaved();
                 closeCurrentTab();
               });
-            } else if (command == "quitAll" || command == "forceQuit") {
+            } else if (command == "quitAll") {
               later([this]() { on_actionQuit_triggered(); });
+            } else if (command == "forceQuit") {
+              later([this]() {
+                for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+                  for (int i = 0; tabWidget && i < tabWidget->count(); ++i) {
+                    LightpadPage *page = tabWidget->getPage(i);
+                    if (page && page->getTextArea())
+                      page->getTextArea()->removeIconUnsaved();
+                  }
+                }
+                on_actionQuit_triggered();
+              });
             } else if (command == "newFile") {
               later([this]() { on_actionNew_File_triggered(); });
             } else if (command == "closeSplit") {
@@ -624,14 +651,14 @@ void MainWindow::connectVimMode(TextArea *textArea) {
               LightpadTabWidget *tabWidget = currentTabWidget();
               if (tabWidget && tabWidget->count() > 1) {
                 tabWidget->setCurrentIndex((tabWidget->currentIndex() + 1) %
-                                           tabWidget->count());
+                                           (tabWidget->count() - 1));
               }
             } else if (command == "prevTab") {
               LightpadTabWidget *tabWidget = currentTabWidget();
               if (tabWidget && tabWidget->count() > 1) {
                 int idx = tabWidget->currentIndex() - 1;
                 if (idx < 0)
-                  idx = tabWidget->count() - 1;
+                  idx = tabWidget->count() - 2;
                 tabWidget->setCurrentIndex(idx);
               }
             } else if (command == "splitHorizontal") {
@@ -732,6 +759,18 @@ void MainWindow::setLanguageHighlightLabel(QString text) {
 MainWindow::~MainWindow() { delete ui; }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    if (!tabWidget) {
+      continue;
+    }
+    for (int i = 0; i < tabWidget->count(); ++i) {
+      if (!maybeSaveTab(tabWidget, i)) {
+        event->ignore();
+        return;
+      }
+    }
+  }
+
   LOG_INFO("closeEvent: saving settings before close");
   saveSettings();
 
@@ -790,7 +829,9 @@ void MainWindow::loadSettings() {
   QString fontFamily =
       globalSettings.getValue("fontFamily", "Ubuntu Mono").toString();
   int fontSize = globalSettings.getValue("fontSize", defaultFontSize).toInt();
-  int fontWeight = globalSettings.getValue("fontWeight", 50).toInt();
+  int fontWeight = SettingsManager::normalizeFontWeight(
+      globalSettings.getValue("fontWeight", static_cast<int>(QFont::Normal))
+          .toInt());
   bool fontItalic = globalSettings.getValue("fontItalic", false).toBool();
   settings.mainFont = QFont(fontFamily, fontSize, fontWeight, fontItalic);
 
@@ -1936,7 +1977,7 @@ int MainWindow::getTabWidth() { return settings.tabWidth; }
 
 int MainWindow::getFontSize() { return settings.mainFont.pointSize(); }
 
-void MainWindow::openFileAndAddToNewTab(QString filePath) {
+void MainWindow::openFileAndAddToNewTab(QString filePath, bool reuseAnyGroup) {
   LightpadTabWidget *tabWidget = currentTabWidget();
 
   QFileInfo fileInfo(filePath);
@@ -1951,24 +1992,37 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
     updateGitIntegrationForPath(filePath);
   }
 
-  for (int i = 0; i < tabWidget->count(); i++) {
-    QString tabFilePath = tabWidget->getFilePath(i);
-    if (tabFilePath != filePath) {
+  const QList<LightpadTabWidget *> searchedGroups =
+      reuseAnyGroup ? allTabWidgets() : QList<LightpadTabWidget *>{tabWidget};
+  const QString cleanFilePath = QDir::cleanPath(filePath);
+  bool closedConflictedTab = false;
+  for (LightpadTabWidget *group : searchedGroups) {
+    if (!group || closedConflictedTab) {
       continue;
     }
-
-    if (!tabWidget->isViewerTab(i) && isConflictedPath(filePath)) {
-      LightpadPage *openPage =
-          qobject_cast<LightpadPage *>(tabWidget->widget(i));
-      TextArea *openArea = openPage ? openPage->getTextArea() : nullptr;
-      if (!openArea || !openArea->changesUnsaved()) {
-        tabWidget->removeTab(i);
-        break;
+    for (int i = 0; i < group->count(); i++) {
+      const QString tabFilePath = group->getFilePath(i);
+      if (tabFilePath.isEmpty() ||
+          QDir::cleanPath(tabFilePath) != cleanFilePath) {
+        continue;
       }
-    }
 
-    tabWidget->setCurrentIndex(i);
-    return;
+      if (!group->isViewerTab(i) && isConflictedPath(filePath)) {
+        LightpadPage *openPage = group->getPage(i);
+        TextArea *openArea = openPage ? openPage->getTextArea() : nullptr;
+        if (!openArea || !openArea->changesUnsaved()) {
+          group->forceCloseTab(i);
+          closedConflictedTab = true;
+          break;
+        }
+      }
+
+      if (m_splitEditorContainer) {
+        m_splitEditorContainer->setCurrentTabWidget(group);
+      }
+      group->setCurrentIndex(i);
+      return;
+    }
   }
 
   QString extension = fileInfo.suffix().toLower();
@@ -2055,16 +2109,70 @@ void MainWindow::openFileAndAddToNewTab(QString filePath) {
 
 void MainWindow::closeTabPage(QString filePath) {
   m_previewOnlyFiles.remove(filePath);
+  const QString removedPath = QDir::cleanPath(filePath);
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
-    for (int i = 0; i < tabWidget->count(); i++) {
-      if (tabWidget->getFilePath(i) == filePath) {
-        tabWidget->removeTab(i);
-        unwatchOpenFileIfUnused(filePath);
+    for (int i = tabWidget->count() - 1; i >= 0; --i) {
+      const QString tabPath = tabWidget->getFilePath(i);
+      if (tabPath.isEmpty()) {
+        continue;
+      }
+      const QString cleanTabPath = QDir::cleanPath(tabPath);
+      if (cleanTabPath == removedPath ||
+          cleanTabPath.startsWith(removedPath + QLatin1Char('/'))) {
+        m_previewOnlyFiles.remove(tabPath);
+        tabWidget->forceCloseTab(i);
       }
     }
   }
   if (!m_restoringSession) {
+    saveSettings();
+  }
+}
+
+void MainWindow::retargetOpenPaths(const QString &oldPath,
+                                   const QString &newPath) {
+  const QString oldClean = QDir::cleanPath(oldPath);
+  const QString newClean = QDir::cleanPath(newPath);
+  bool changed = false;
+
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    for (int i = 0; i < tabWidget->count(); ++i) {
+      const QString tabPath = tabWidget->getFilePath(i);
+      if (tabPath.isEmpty()) {
+        continue;
+      }
+      const QString cleanTabPath = QDir::cleanPath(tabPath);
+      QString retargeted;
+      if (cleanTabPath == oldClean) {
+        retargeted = newClean;
+      } else if (cleanTabPath.startsWith(oldClean + QLatin1Char('/'))) {
+        retargeted = newClean + cleanTabPath.mid(oldClean.size());
+      } else {
+        continue;
+      }
+
+      tabWidget->setFilePath(i, retargeted);
+      tabWidget->setTabText(i, QFileInfo(retargeted).fileName());
+      if (m_previewOnlyFiles.remove(tabPath)) {
+        m_previewOnlyFiles.insert(retargeted);
+      }
+      unwatchOpenFileIfUnused(tabPath);
+      recordFileTimestamp(retargeted);
+      watchOpenFile(retargeted);
+      if (autoSaveManager) {
+        autoSaveManager->markSaved(tabPath);
+        LightpadPage *page = tabWidget->getPage(i);
+        TextArea *textArea = page ? page->getTextArea() : nullptr;
+        if (textArea && textArea->document()->isModified()) {
+          autoSaveManager->markModified(retargeted);
+        }
+      }
+      changed = true;
+    }
+  }
+
+  if (changed && !m_restoringSession) {
     saveSettings();
   }
 }
@@ -2090,9 +2198,7 @@ void MainWindow::openPathsFromCommandLine(const QStringList &paths) {
               page->getTextArea()->changesUnsaved()) {
             continue;
           }
-          notifyDiagnosticsFileClosed(tabPath);
-          tabWidget->removeTab(i);
-          unwatchOpenFileIfUnused(tabPath);
+          tabWidget->forceCloseTab(i);
         }
       }
       setProjectRootPath(newRoot);
@@ -2210,16 +2316,15 @@ void MainWindow::on_actionPaste_triggered() {
     getCurrentTextArea()->paste();
 }
 
-void MainWindow::on_actionNew_Window_triggered() { new MainWindow(); }
+void MainWindow::on_actionNew_Window_triggered() {
+  auto *window = new MainWindow();
+  window->setAttribute(Qt::WA_DeleteOnClose);
+}
 
 void MainWindow::on_actionClose_Tab_triggered() {
   LightpadTabWidget *tabWidget = currentTabWidget();
-  int index = tabWidget->currentIndex();
-  if (index > -1) {
-    QString filePath = tabWidget->getFilePath(index);
-    notifyDiagnosticsFileClosed(filePath);
-    tabWidget->removeTab(index);
-    unwatchOpenFileIfUnused(filePath);
+  if (tabWidget) {
+    tabWidget->requestCloseTab(tabWidget->currentIndex());
   }
 }
 
@@ -2315,31 +2420,15 @@ void MainWindow::on_actionOpen_Project_triggered() {
       return;
     }
 
-    QSet<QString> closedFiles;
     for (LightpadTabWidget *tabWidget : allTabWidgets()) {
-      if (!tabWidget) {
-        continue;
-      }
-
-      for (int i = 0; i < tabWidget->count(); ++i) {
-        const QString filePath = tabWidget->getFilePath(i);
-        if (!filePath.isEmpty()) {
-          notifyDiagnosticsFileClosed(filePath);
-          closedFiles.insert(filePath);
-        }
+      if (tabWidget && !tabWidget->closeAllTabs()) {
+        return;
       }
     }
 
-    if (m_splitEditorContainer && m_splitEditorContainer->hasSplits()) {
-      m_splitEditorContainer->unsplitAll();
-    }
-
-    if (LightpadTabWidget *tabWidget = currentTabWidget()) {
-      tabWidget->closeAllTabs();
-    }
-
-    for (const QString &filePath : closedFiles) {
-      unwatchOpenFileIfUnused(filePath);
+    if (m_splitEditorContainer && m_splitEditorContainer->hasSplits() &&
+        !m_splitEditorContainer->unsplitAll()) {
+      return;
     }
 
     m_treeCurrentPath.clear();
@@ -2381,21 +2470,116 @@ void MainWindow::on_actionSave_triggered() {
 }
 
 void MainWindow::on_actionSave_as_triggered() {
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (tabWidget) {
+    saveTabAs(tabWidget, tabWidget->currentIndex());
+  }
+}
+
+bool MainWindow::saveTab(LightpadTabWidget *tabWidget, int tabIndex) {
+  if (!tabWidget || tabIndex < 0) {
+    return false;
+  }
+  const QString filePath = tabWidget->getFilePath(tabIndex);
+  if (filePath.isEmpty()) {
+    return saveTabAs(tabWidget, tabIndex);
+  }
+  return save(filePath);
+}
+
+bool MainWindow::saveTabAs(LightpadTabWidget *tabWidget, int tabIndex) {
+  if (!tabWidget || tabIndex < 0) {
+    return false;
+  }
 
   auto filePath =
       QFileDialog::getSaveFileName(this, tr("Save Document"), QDir::homePath());
 
   if (filePath.isEmpty())
-    return;
+    return false;
 
-  LightpadTabWidget *tabWidget = currentTabWidget();
-  int tabIndex = tabWidget->currentIndex();
+  const QString previousPath = tabWidget->getFilePath(tabIndex);
+  const QString cleanPreviousPath = QDir::cleanPath(previousPath);
+  const QString cleanNewPath = QDir::cleanPath(filePath);
+  if (!previousPath.isEmpty() && m_fileFormats.contains(cleanPreviousPath) &&
+      !m_fileFormats.contains(cleanNewPath)) {
+    m_fileFormats.insert(cleanNewPath, m_fileFormats.value(cleanPreviousPath));
+  }
+
   tabWidget->setFilePath(tabIndex, filePath);
 
-  save(filePath);
+  if (!save(filePath)) {
+    tabWidget->setFilePath(tabIndex, previousPath);
+    return false;
+  }
 
-  applyHighlightForFile(filePath);
+  if (tabWidget == currentTabWidget() &&
+      tabIndex == tabWidget->currentIndex()) {
+    applyHighlightForFile(filePath);
+  }
   notifyDiagnosticsFileOpened(filePath);
+  return true;
+}
+
+bool MainWindow::maybeSaveTab(LightpadTabWidget *tabWidget, int tabIndex) {
+  if (!tabWidget) {
+    return true;
+  }
+  LightpadPage *page = tabWidget->getPage(tabIndex);
+  TextArea *textArea = page ? page->getTextArea() : nullptr;
+  if (!textArea || !textArea->changesUnsaved()) {
+    return true;
+  }
+
+  if (m_splitEditorContainer) {
+    m_splitEditorContainer->setCurrentTabWidget(tabWidget);
+  }
+  tabWidget->setCurrentIndex(tabIndex);
+
+  const QString filePath = tabWidget->getFilePath(tabIndex);
+  const QString displayName = filePath.isEmpty()
+                                  ? tabWidget->tabText(tabIndex)
+                                  : QFileInfo(filePath).fileName();
+
+  ThemedMessageBox msgBox(this);
+  msgBox.setWindowTitle(tr("Unsaved Changes"));
+  msgBox.setIcon(ThemedMessageBox::Warning);
+  msgBox.setText(
+      tr("Save changes to <b>%1</b> before closing?").arg(displayName));
+  msgBox.setInformativeText(
+      tr("Your changes will be lost if you don't save them."));
+  msgBox.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No |
+                            ThemedMessageBox::Cancel);
+  msgBox.setButtonText(ThemedMessageBox::Yes, tr("Save"));
+  msgBox.setButtonText(ThemedMessageBox::No, tr("Don't Save"));
+  msgBox.setDefaultButton(ThemedMessageBox::Yes);
+  const int result = msgBox.exec();
+
+  if (result == ThemedMessageBox::No) {
+    return true;
+  }
+  if (result != ThemedMessageBox::Yes) {
+    return false;
+  }
+
+  const int currentPosition = tabWidget->indexOf(page);
+  if (currentPosition < 0) {
+    return true;
+  }
+  return saveTab(tabWidget, currentPosition) && !textArea->changesUnsaved();
+}
+
+bool MainWindow::isPreviewOnlyFile(const QString &filePath) const {
+  if (m_previewOnlyFiles.contains(filePath)) {
+    return true;
+  }
+  const QString normalizedPath = QDir::cleanPath(filePath);
+  for (const QString &previewPath : m_previewOnlyFiles) {
+    if (QDir::cleanPath(previewPath) == normalizedPath) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void MainWindow::open(const QString &filePath) {
@@ -2404,12 +2588,23 @@ void MainWindow::open(const QString &filePath) {
 
   bool ok = false;
   bool truncated = false;
+  FileOpenGuard::TextFormat format;
   const QString content = FileOpenGuard::readTextCapped(
-      filePath, previewOnly ? FileOpenGuard::PreviewBytes : 0, &truncated, &ok);
+      filePath, previewOnly ? FileOpenGuard::PreviewBytes : 0, &truncated, &ok,
+      &format);
 
   if (!ok) {
     ThemedMessageBox::critical(this, tr("Error"), tr("Can't open file."));
     return;
+  }
+
+  m_fileFormats.insert(QDir::cleanPath(filePath), format);
+  if (format.encoding == FileOpenGuard::TextEncoding::Latin1) {
+    statusBar()->showMessage(
+        tr("%1 is not valid UTF-8, so it was opened as Latin-1 and will be "
+           "saved the same way.")
+            .arg(QFileInfo(filePath).fileName()),
+        8000);
   }
 
   LightpadTabWidget *tabWidget = currentTabWidget();
@@ -2507,12 +2702,6 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
     }
   }
 
-  QFile file(filePath);
-
-  if (!file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
-    return false;
-  }
-
   SettingsManager &sm = SettingsManager::instance();
   if (sm.getValue("trimTrailingWhitespace", false).toBool()) {
     trimTrailingWhitespace(textArea);
@@ -2543,11 +2732,31 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
     cursor.setPosition(qMin(cursorPos, textToSave.length()));
     textArea->setTextCursor(cursor);
   }
-  if (file.write(textToSave.toUtf8()) == -1) {
+  FileOpenGuard::TextFormat format = m_fileFormats.value(normalizedSavePath);
+  bool encodingChanged = false;
+  const QByteArray bytes =
+      FileOpenGuard::encodeText(textToSave, &format, &encodingChanged);
+  QString writeError;
+  if (!FileOpenGuard::writeFileAtomically(filePath, bytes, &writeError)) {
     m_internalFileWrites.remove(normalizedSavePath);
+    const QString message =
+        tr("Could not save %1: %2")
+            .arg(QFileInfo(filePath).fileName(), writeError);
+    if (isAutoSave) {
+      statusBar()->showMessage(message, 8000);
+    } else {
+      ThemedMessageBox::critical(this, tr("Save Failed"), message);
+    }
     return false;
   }
-  file.close();
+  m_fileFormats.insert(normalizedSavePath, format);
+  if (encodingChanged) {
+    statusBar()->showMessage(
+        tr("%1 now contains characters Latin-1 cannot store, so it was saved "
+           "as UTF-8.")
+            .arg(QFileInfo(filePath).fileName()),
+        8000);
+  }
 
   textArea->document()->setModified(false);
   textArea->removeIconUnsaved();
@@ -2685,6 +2894,7 @@ void MainWindow::unwatchOpenFileIfUnused(const QString &filePath) {
   m_fileTimestamps.remove(normalizedPath);
   m_externalChangePrompts.remove(normalizedPath);
   m_internalFileWrites.remove(normalizedPath);
+  m_fileFormats.remove(normalizedPath);
 }
 
 void MainWindow::recheckOpenFilesForExternalChanges() {
@@ -2780,12 +2990,17 @@ bool MainWindow::handleExternalModification(const QString &filePath,
 }
 
 bool MainWindow::reloadOpenFileFromDisk(const QString &filePath) {
-  QFile reloadFile(filePath);
-  if (!reloadFile.open(QFile::ReadOnly | QFile::Text)) {
+  const bool previewOnly = isPreviewOnlyFile(filePath);
+  bool ok = false;
+  bool truncated = false;
+  FileOpenGuard::TextFormat format;
+  const QString diskText = FileOpenGuard::readTextCapped(
+      filePath, previewOnly ? FileOpenGuard::PreviewBytes : 0, &truncated, &ok,
+      &format);
+  if (!ok) {
     return false;
   }
-  const QString diskText = QString::fromUtf8(reloadFile.readAll());
-  reloadFile.close();
+  m_fileFormats.insert(QDir::cleanPath(filePath), format);
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     if (!tabWidget) {
@@ -2807,6 +3022,9 @@ bool MainWindow::reloadOpenFileFromDisk(const QString &filePath) {
       area->setTextCursor(cursor);
       area->document()->setModified(false);
       area->removeIconUnsaved();
+      if (previewOnly) {
+        area->setReadOnly(truncated);
+      }
     }
   }
 
@@ -2849,8 +3067,12 @@ bool MainWindow::writeOpenFileToDisk(const QString &filePath) {
     return false;
   }
 
-  QFile file(filePath);
-  if (!file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
+  if (isPreviewOnlyFile(filePath)) {
+    ThemedMessageBox::warning(
+        this, tr("This is only a preview"),
+        tr("Lightpad loaded just part of %1, so overwriting it would throw "
+           "away the rest. The file has been left untouched.")
+            .arg(QFileInfo(filePath).fileName()));
     return false;
   }
 
@@ -2869,12 +3091,18 @@ bool MainWindow::writeOpenFileToDisk(const QString &filePath) {
     cursor.setPosition(qMin(cursorPos, textToSave.length()));
     textArea->setTextCursor(cursor);
   }
-  const bool ok = file.write(textToSave.toUtf8()) != -1;
-  file.close();
-  if (!ok) {
+  FileOpenGuard::TextFormat format = m_fileFormats.value(normalizedPath);
+  const QByteArray bytes = FileOpenGuard::encodeText(textToSave, &format);
+  QString writeError;
+  if (!FileOpenGuard::writeFileAtomically(normalizedPath, bytes, &writeError)) {
     m_internalFileWrites.remove(normalizedPath);
+    ThemedMessageBox::critical(
+        this, tr("Save Failed"),
+        tr("Could not save %1: %2")
+            .arg(QFileInfo(normalizedPath).fileName(), writeError));
     return false;
   }
+  m_fileFormats.insert(normalizedPath, format);
 
   textArea->document()->setModified(false);
   textArea->removeIconUnsaved();
@@ -3430,14 +3658,14 @@ void MainWindow::executeRunTarget(const RunTarget &target) {
 
   QString preRunCommand = assignment.preRunCommand.trimmed();
   if (!preRunCommand.isEmpty()) {
-    preRunCommand =
-        RunTemplateManager::substituteVariables(preRunCommand, filePath);
+    preRunCommand = RunTemplateManager::substituteCommandLineVariables(
+        preRunCommand, filePath);
   }
 
   QString postRunCommand = assignment.postRunCommand.trimmed();
   if (!postRunCommand.isEmpty()) {
-    postRunCommand =
-        RunTemplateManager::substituteVariables(postRunCommand, filePath);
+    postRunCommand = RunTemplateManager::substituteCommandLineVariables(
+        postRunCommand, filePath);
   }
 
   if (m_runProcessFinishedConnection) {
@@ -4344,10 +4572,21 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
     return;
   }
 
+  auto connectPreviewSource = [this, textArea]() {
+    disconnect(m_markdownPreviewTextConnection);
+    m_markdownPreviewTextConnection = connect(
+        textArea, &QPlainTextEdit::textChanged, m_markdownPreviewPanel,
+        [textArea, this]() {
+          if (m_markdownPreviewPanel)
+            m_markdownPreviewPanel->setMarkdown(textArea->toPlainText());
+        });
+  };
+
   if (m_markdownPreviewDock) {
     m_markdownPreviewPanel->setFilePath(filePath);
     m_markdownPreviewPanel->setMarkdown(textArea->toPlainText());
     m_markdownPreviewPanel->updatePreview();
+    connectPreviewSource();
     m_markdownPreviewDock->show();
     m_markdownPreviewDock->raise();
     return;
@@ -4368,11 +4607,7 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
   QTimer::singleShot(100, m_markdownPreviewPanel,
                      &MarkdownPreviewPanel::updatePreview);
 
-  connect(textArea, &QPlainTextEdit::textChanged, m_markdownPreviewPanel,
-          [textArea, this]() {
-            if (m_markdownPreviewPanel)
-              m_markdownPreviewPanel->setMarkdown(textArea->toPlainText());
-          });
+  connectPreviewSource();
 
   connect(m_markdownPreviewPanel, &MarkdownPreviewPanel::linkClicked, this,
           [this](const QString &path) {
@@ -4433,9 +4668,10 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
   trackDockLayoutChanges(m_latexPreviewDock);
 
   connect(m_latexPreviewPanel, &LatexPreviewPanel::diagnosticsReady, this,
-          [this, filePath](const QList<LspDiagnostic> &diags) {
-            if (m_diagnosticsManager) {
-              QString uri = DiagnosticUtils::filePathToUri(filePath);
+          [this](const QList<LspDiagnostic> &diags) {
+            if (m_diagnosticsManager && m_latexPreviewPanel) {
+              QString uri = DiagnosticUtils::filePathToUri(
+                  m_latexPreviewPanel->filePath());
               m_diagnosticsManager->upsertDiagnostics(uri, diags, "latex");
             }
           });
@@ -4482,11 +4718,8 @@ void MainWindow::setupGoToLineDialog() {
           [this](int lineNumber) {
             TextArea *textArea = getCurrentTextArea();
             if (textArea) {
-              QTextCursor cursor = textArea->textCursor();
-              cursor.movePosition(QTextCursor::Start);
-              cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
-                                  lineNumber - 1);
-              textArea->setTextCursor(cursor);
+              textArea->setTextCursor(
+                  cursorAtLineColumn(textArea->document(), lineNumber - 1, 0));
               textArea->centerCursor();
               textArea->setFocus();
             }
@@ -4607,13 +4840,8 @@ void MainWindow::setupGoToSymbolDialog() {
           [this](int line, int column) {
             TextArea *textArea = getCurrentTextArea();
             if (textArea) {
-              QTextCursor cursor = textArea->textCursor();
-              cursor.movePosition(QTextCursor::Start);
-              cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
-                                  line);
-              cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
-                                  column);
-              textArea->setTextCursor(cursor);
+              textArea->setTextCursor(
+                  cursorAtLineColumn(textArea->document(), line, column));
               textArea->centerCursor();
               textArea->setFocus();
             }
@@ -4730,13 +4958,8 @@ void MainWindow::navigateBack() {
 
     TextArea *textArea = getCurrentTextArea();
     if (textArea) {
-      QTextCursor cursor = textArea->textCursor();
-      cursor.movePosition(QTextCursor::Start);
-      cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
-                          loc.line - 1);
-      cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
-                          loc.column);
-      textArea->setTextCursor(cursor);
+      textArea->setTextCursor(
+          cursorAtLineColumn(textArea->document(), loc.line - 1, loc.column));
       textArea->centerCursor();
     }
   }
@@ -4754,13 +4977,8 @@ void MainWindow::navigateForward() {
 
     TextArea *textArea = getCurrentTextArea();
     if (textArea) {
-      QTextCursor cursor = textArea->textCursor();
-      cursor.movePosition(QTextCursor::Start);
-      cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
-                          loc.line - 1);
-      cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
-                          loc.column);
-      textArea->setTextCursor(cursor);
+      textArea->setTextCursor(
+          cursorAtLineColumn(textArea->document(), loc.line - 1, loc.column));
       textArea->centerCursor();
     }
   }
@@ -4802,6 +5020,13 @@ void MainWindow::setupSymbolNavigation() {
   const auto configs = LanguageLspDefinitionProvider::defaultConfigs();
   for (const LanguageServerConfig &config : configs) {
     auto *provider = new LanguageLspDefinitionProvider(config, this);
+    provider->setClientResolver([this](const QString &filePath) -> LspClient * {
+      if (!m_languageFeatureManager) {
+        return nullptr;
+      }
+      flushPendingLanguageServerChanges(filePath);
+      return m_languageFeatureManager->clientForFile(filePath);
+    });
     m_symbolNavService->registerProvider(provider);
   }
 
@@ -4909,13 +5134,8 @@ void MainWindow::jumpToTarget(const DefinitionTarget &target) {
 
   TextArea *textArea = getCurrentTextArea();
   if (textArea) {
-    QTextCursor cursor = textArea->textCursor();
-    cursor.movePosition(QTextCursor::Start);
-    cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
-                        target.line - 1);
-    cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
-                        target.column);
-    textArea->setTextCursor(cursor);
+    textArea->setTextCursor(cursorAtLineColumn(textArea->document(),
+                                               target.line - 1, target.column));
     textArea->centerCursor();
   }
 
@@ -5029,6 +5249,16 @@ void MainWindow::setupDiagnostics() {
               QString fp = tw->getFilePath(tw->currentIndex());
               if (!fp.isEmpty() && effectiveLanguageIdForFile(fp) == languageId)
                 updateLspStatusLabel(languageId, "running");
+            }
+          });
+
+  connect(m_languageFeatureManager, &LanguageFeatureManager::serverStarted,
+          this, [this]() {
+            auto *tw = currentTabWidget();
+            if (m_lspCompletionProvider && tw && tw->currentIndex() >= 0) {
+              m_lspCompletionProvider->setClient(
+                  m_languageFeatureManager->clientForFile(
+                      tw->getFilePath(tw->currentIndex())));
             }
           });
 
@@ -5238,20 +5468,42 @@ void MainWindow::retryLanguageServerForCurrentFile(
   }
 }
 
+static TextArea *textAreaForFile(const QList<LightpadTabWidget *> &tabWidgets,
+                                 const QString &filePath) {
+  const QString cleanPath = QDir::cleanPath(filePath);
+  for (LightpadTabWidget *tabWidget : tabWidgets) {
+    for (int i = 0; tabWidget && i < tabWidget->count(); ++i) {
+      if (QDir::cleanPath(tabWidget->getFilePath(i)) != cleanPath) {
+        continue;
+      }
+      LightpadPage *page = tabWidget->getPage(i);
+      if (page && page->getTextArea()) {
+        return page->getTextArea();
+      }
+    }
+  }
+  return nullptr;
+}
+
 void MainWindow::notifyDiagnosticsFileOpened(const QString &filePath) {
   if (!m_languageFeatureManager || filePath.isEmpty()) {
     return;
   }
 
-  TextArea *textArea = getCurrentTextArea();
-  if (!textArea) {
-    return;
+  QString text;
+  if (TextArea *textArea = textAreaForFile(allTabWidgets(), filePath)) {
+    text = textArea->toPlainText();
+  } else {
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+      return;
+    }
+    text = QString::fromUtf8(file.readAll());
   }
 
   QString languageId = effectiveLanguageIdForFile(filePath);
   m_documentVersions[filePath] = 1;
-  m_languageFeatureManager->openDocument(filePath, languageId,
-                                         textArea->toPlainText());
+  m_languageFeatureManager->openDocument(filePath, languageId, text);
 }
 
 void MainWindow::notifyDiagnosticsFileChanged(const QString &filePath,
@@ -5304,7 +5556,7 @@ void MainWindow::notifyDiagnosticsFileSaved(const QString &filePath) {
     QFileInfo fi(filePath);
     if (MarkdownPreviewPanel::isMarkdownFile(fi.suffix()) &&
         m_diagnosticsManager) {
-      TextArea *textArea = getCurrentTextArea();
+      TextArea *textArea = textAreaForFile(allTabWidgets(), filePath);
       if (textArea) {
         QList<LspDiagnostic> mdDiags =
             MarkdownTools::lint(textArea->toPlainText(), filePath);
@@ -5317,7 +5569,7 @@ void MainWindow::notifyDiagnosticsFileSaved(const QString &filePath) {
   {
     QFileInfo fi(filePath);
     if (LatexTools::isLatexFile(fi.suffix()) && m_diagnosticsManager) {
-      TextArea *textArea = getCurrentTextArea();
+      TextArea *textArea = textAreaForFile(allTabWidgets(), filePath);
       if (textArea) {
         QList<LspDiagnostic> texDiags =
             LatexTools::lint(textArea->toPlainText(), filePath);
@@ -6306,13 +6558,13 @@ void MainWindow::formatCurrentDocument() {
 
   QString preFormatCommand = assignment.preFormatCommand.trimmed();
   if (!preFormatCommand.isEmpty()) {
-    preFormatCommand =
-        FormatTemplateManager::substituteVariables(preFormatCommand, filePath);
+    preFormatCommand = FormatTemplateManager::substituteCommandLineVariables(
+        preFormatCommand, filePath);
   }
   QString postFormatCommand = assignment.postFormatCommand.trimmed();
   if (!postFormatCommand.isEmpty()) {
-    postFormatCommand =
-        FormatTemplateManager::substituteVariables(postFormatCommand, filePath);
+    postFormatCommand = FormatTemplateManager::substituteCommandLineVariables(
+        postFormatCommand, filePath);
   }
 
   auto shellProgramAndArgs =
@@ -6371,10 +6623,12 @@ void MainWindow::formatCurrentDocument() {
       return;
     }
 
-    QFile file(filePath);
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-      QString newContent = QString::fromUtf8(file.readAll());
-      file.close();
+    bool readOk = false;
+    FileOpenGuard::TextFormat format;
+    const QString newContent =
+        FileOpenGuard::readTextCapped(filePath, 0, nullptr, &readOk, &format);
+    if (readOk) {
+      m_fileFormats.insert(QDir::cleanPath(filePath), format);
 
       if (targetTextArea->toPlainText() != newContent) {
         int cursorPos = targetTextArea->textCursor().position();
@@ -6498,27 +6752,29 @@ void MainWindow::setFilePathAsTabText(QString filePath) {
 void MainWindow::closeCurrentTab() {
   auto textArea = getCurrentTextArea();
 
-  if (textArea && textArea->changesUnsaved())
+  if (textArea && textArea->changesUnsaved()) {
     on_actionSave_triggered();
+    if (textArea->changesUnsaved()) {
+      return;
+    }
+  }
 
   LightpadTabWidget *tabWidget = currentTabWidget();
-  int index = tabWidget->currentIndex();
-  QString filePath;
-  if (index >= 0) {
-    filePath = tabWidget->getFilePath(index);
-    notifyDiagnosticsFileClosed(filePath);
+  if (!tabWidget) {
+    return;
   }
-
-  tabWidget->closeCurrentTab();
-  if (!filePath.isEmpty()) {
-    unwatchOpenFileIfUnused(filePath);
-  }
-  if (!m_restoringSession) {
-    saveSettings();
-  }
+  tabWidget->forceCloseTab(tabWidget->currentIndex());
 }
 
 void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
+  if (!tabWidget || tabWidget->property("mainWindowConnected").toBool()) {
+    return;
+  }
+  tabWidget->setProperty("mainWindowConnected", true);
+
+  tabWidget->setCloseGuard([this](LightpadTabWidget *owner, int index) {
+    return maybeSaveTab(owner, index);
+  });
   QObject::connect(tabWidget, &QTabWidget::currentChanged, this,
                    [this, tabWidget](int index) {
                      updateTabWidgetContext(tabWidget, index);
@@ -6526,20 +6782,21 @@ void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
                        saveSettings();
                      }
                    });
-  QObject::connect(
-      tabWidget, &QTabWidget::tabCloseRequested, this, [this](int) {
-        QTimer::singleShot(0, this, [this]() {
-          if (m_openFileWatcher) {
-            const QStringList watchedFiles = m_openFileWatcher->files();
-            for (const QString &watchedPath : watchedFiles) {
-              unwatchOpenFileIfUnused(watchedPath);
-            }
-          }
-          if (m_globalSettingsLoaded && !m_restoringSession) {
-            saveSettings();
-          }
-        });
-      });
+  QObject::connect(tabWidget, &LightpadTabWidget::tabClosed, this,
+                   [this](const QString &filePath) {
+                     if (!filePath.isEmpty() && !isFileOpenInEditor(filePath)) {
+                       notifyDiagnosticsFileClosed(filePath);
+                       unwatchOpenFileIfUnused(filePath);
+                     }
+                     if (findReplacePanel) {
+                       findReplacePanel->setTextArea(getCurrentTextArea());
+                     }
+                     QTimer::singleShot(0, this, [this]() {
+                       if (m_globalSettingsLoaded && !m_restoringSession) {
+                         saveSettings();
+                       }
+                     });
+                   });
 }
 
 void MainWindow::refreshRunAndDebugActionLabels() {
@@ -6661,6 +6918,18 @@ void MainWindow::setupCompletionSystem() {
 
   m_lspCompletionProvider = std::make_shared<LspCompletionProvider>(nullptr);
   registry.registerProvider(m_lspCompletionProvider);
+
+  connect(qApp, &QApplication::focusChanged, this,
+          [this](QWidget *, QWidget *now) {
+            if (!now || now->window() != this || !m_lspCompletionProvider) {
+              return;
+            }
+            auto &providers = CompletionProviderRegistry::instance();
+            if (providers.getProvider(m_lspCompletionProvider->id()) !=
+                m_lspCompletionProvider) {
+              providers.registerProvider(m_lspCompletionProvider);
+            }
+          });
 
   m_completionEngine = new CompletionEngine(this);
 
@@ -8509,7 +8778,7 @@ void MainWindow::on_actionOpen_To_Side_triggered() {
   if (tabWidget) {
     int index = tabWidget->currentIndex();
     if (index >= 0) {
-      filePath = tabWidget->tabToolTip(index);
+      filePath = tabWidget->getFilePath(index);
     }
   }
 
@@ -8518,7 +8787,7 @@ void MainWindow::on_actionOpen_To_Side_triggered() {
 
   LightpadTabWidget *newGroup = m_splitEditorContainer->splitHorizontal();
   if (newGroup) {
-    openFileAndAddToNewTab(filePath);
+    openFileAndAddToNewTab(filePath, false);
     saveSettings();
   }
 }
@@ -8555,7 +8824,7 @@ void MainWindow::on_actionGit_Log_triggered() {
     if (tabWidget) {
       int index = tabWidget->currentIndex();
       if (index >= 0) {
-        QString filePath = tabWidget->tabToolTip(index);
+        QString filePath = tabWidget->getFilePath(index);
         if (!filePath.isEmpty()) {
           dialog.setFilePath(filePath);
         }

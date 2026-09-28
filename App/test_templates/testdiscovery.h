@@ -42,6 +42,19 @@ protected:
     }
     doomed->deleteLater();
   }
+
+  void reportStartFailure(QProcess *&process) {
+    QProcess *watched = process;
+    connect(watched, &QProcess::errorOccurred, this,
+            [this, watched, &process](QProcess::ProcessError error) {
+              if (error != QProcess::FailedToStart || process != watched) {
+                return;
+              }
+              const QString message = watched->errorString();
+              disposeProcess(process);
+              emit discoveryError(message);
+            });
+  }
 };
 
 class CTestDiscoveryAdapter : public ITestDiscoveryAdapter {

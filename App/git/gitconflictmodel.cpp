@@ -99,30 +99,31 @@ GitConflictClass classifyConflictCode(const QString &code) {
 QList<QPair<QString, QString>>
 parseUnmergedEntries(const QString &statusOutput) {
   QList<QPair<QString, QString>> entries;
-  for (const QString &line :
-       statusOutput.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+  const bool nulSeparated = statusOutput.contains(QChar('\0'));
+  const QStringList records = statusOutput.split(
+      nulSeparated ? QChar('\0') : QChar('\n'), Qt::SkipEmptyParts);
+  for (int i = 0; i < records.size(); ++i) {
+    const QString &line = records.at(i);
+    if (nulSeparated && line.startsWith(QLatin1String("2 "))) {
+      ++i;
+      continue;
+    }
     if (!line.startsWith(QLatin1String("u "))) {
       continue;
     }
 
-    const QStringList fields = line.split(QLatin1Char(' '), Qt::SkipEmptyParts);
-    if (fields.size() < 11) {
+    int position = -1;
+    for (int field = 0; field < 10; ++field) {
+      position = line.indexOf(QLatin1Char(' '), position + 1);
+      if (position < 0) {
+        break;
+      }
+    }
+    if (position < 0) {
       continue;
     }
-    const QString code = fields.at(1);
-
-    int position = 0;
-    int seen = 0;
-    while (position < line.size() && seen < 10) {
-      while (position < line.size() && line.at(position) == QLatin1Char(' ')) {
-        ++position;
-      }
-      while (position < line.size() && line.at(position) != QLatin1Char(' ')) {
-        ++position;
-      }
-      ++seen;
-    }
-    const QString path = line.mid(position).trimmed();
+    const QString code = line.mid(2, 2);
+    const QString path = line.mid(position + 1);
     if (!path.isEmpty()) {
       entries.append({path, code});
     }

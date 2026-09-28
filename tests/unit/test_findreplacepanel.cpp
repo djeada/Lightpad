@@ -1,4 +1,9 @@
+#include "findreplacesearch.h"
+
+#include <QDir>
+#include <QFile>
 #include <QRegularExpression>
+#include <QTemporaryDir>
 #include <QtTest/QtTest>
 
 class TestSearchPatterns : public QObject {
@@ -13,6 +18,11 @@ private slots:
   void testPreserveCase();
   void testSearchResultsLineCalculation();
   void testGlobalResultsPagination();
+  void testRegexReplacementReferences();
+  void testRegexReplacementIsSinglePass();
+  void testRegexReplacementEscapes();
+  void testCollectMatchesKeepsExactLengths();
+  void testProjectFilesHonorsMask();
 
 private:
   QRegularExpression buildSearchPattern(const QString &searchWord,
@@ -289,6 +299,95 @@ void TestSearchPatterns::testGlobalResultsPagination() {
   QCOMPARE(99 / kGlobalResultsPageSize, 0);
 
   QCOMPARE(100 / kGlobalResultsPageSize, 1);
+}
+
+void TestSearchPatterns::testRegexReplacementReferences() {
+  const QRegularExpression pattern("(a)(b)");
+  const QRegularExpressionMatch match = pattern.match("xaby");
+  QVERIFY(match.hasMatch());
+
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("\\2\\1", match),
+           QString("ba"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("$2$1", match),
+           QString("ba"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("${1}0", match),
+           QString("a0"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("<$0>", match),
+           QString("<ab>"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("<\\0>", match),
+           QString("<ab>"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("$10", match),
+           QString("a0"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("$5", match),
+           QString("$5"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("${7}", match),
+           QString("${7}"));
+}
+
+void TestSearchPatterns::testRegexReplacementIsSinglePass() {
+  const QRegularExpression pattern("\\[(.*)\\]");
+  const QRegularExpressionMatch dollar = pattern.match("[$1 \\1]");
+  QVERIFY(dollar.hasMatch());
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("<$1>", dollar),
+           QString("<$1 \\1>"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("<\\1>", dollar),
+           QString("<$1 \\1>"));
+}
+
+void TestSearchPatterns::testRegexReplacementEscapes() {
+  const QRegularExpression pattern("(x)");
+  const QRegularExpressionMatch match = pattern.match("x");
+  QVERIFY(match.hasMatch());
+
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("\\\\1", match),
+           QString("\\1"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("$$1", match),
+           QString("$1"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("a\\nb", match),
+           QString("a\\nb"));
+  QCOMPARE(FindReplaceSearch::expandRegexReplacement("cost $", match),
+           QString("cost $"));
+}
+
+void TestSearchPatterns::testCollectMatchesKeepsExactLengths() {
+  const QVector<GlobalSearchResult> digits =
+      FindReplaceSearch::collectMatchesInContent("f", "ab 12345\n7",
+                                                 QRegularExpression("\\d+"));
+  QCOMPARE(digits.size(), 2);
+  QCOMPARE(digits[0].matchStart, 3);
+  QCOMPARE(digits[0].matchLength, 5);
+  QCOMPARE(digits[1].lineNumber, 2);
+  QCOMPARE(digits[1].matchLength, 1);
+
+  const QVector<GlobalSearchResult> anchors =
+      FindReplaceSearch::collectMatchesInContent("f", "abc",
+                                                 QRegularExpression("^"));
+  QCOMPARE(anchors.size(), 1);
+  QCOMPARE(anchors[0].matchStart, 0);
+  QCOMPARE(anchors[0].matchLength, 0);
+}
+
+void TestSearchPatterns::testProjectFilesHonorsMask() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QVERIFY(QDir(dir.path()).mkpath("src/sub"));
+  for (const QString &name :
+       {QString("src/a.cpp"), QString("src/sub/b.py"), QString("src/c.bin")}) {
+    QFile file(dir.filePath(name));
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("x");
+  }
+
+  QStringList all = FindReplaceSearch::projectFiles(dir.path(), QString());
+  all.sort();
+  QCOMPARE(all, QStringList(
+                    {dir.filePath("src/a.cpp"), dir.filePath("src/sub/b.py")}));
+
+  const QStringList masked =
+      FindReplaceSearch::projectFiles(dir.path(), " *.py ");
+  QCOMPARE(masked, QStringList({dir.filePath("src/sub/b.py")}));
+
+  QVERIFY(FindReplaceSearch::projectFiles(QString(), QString()).isEmpty());
 }
 
 QTEST_MAIN(TestSearchPatterns)

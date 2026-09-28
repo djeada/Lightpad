@@ -193,7 +193,9 @@ bool SplitEditorContainer::closeCurrentGroup() {
     }
   }
 
-  m_currentTabWidget->closeAllTabs();
+  if (!m_currentTabWidget->closeAllTabs()) {
+    return false;
+  }
 
   m_tabWidgets.removeAll(m_currentTabWidget);
   m_currentTabWidget->deleteLater();
@@ -235,18 +237,29 @@ void SplitEditorContainer::focusPreviousGroup() {
 
 bool SplitEditorContainer::hasSplits() const { return groupCount() > 1; }
 
-void SplitEditorContainer::unsplitAll() {
+bool SplitEditorContainer::unsplitAll() {
   if (groupCount() <= 1) {
-    return;
+    return true;
   }
 
   LightpadTabWidget *first = nullptr;
+  for (const QPointer<LightpadTabWidget> &ptr : m_tabWidgets) {
+    if (!ptr) {
+      continue;
+    }
+    if (!first) {
+      first = ptr;
+    } else if (!ptr->closeAllTabs()) {
+      return false;
+    }
+  }
+
+  first = nullptr;
   for (QPointer<LightpadTabWidget> &ptr : m_tabWidgets) {
     if (ptr) {
       if (!first) {
         first = ptr;
       } else {
-        ptr->closeAllTabs();
         ptr->deleteLater();
         ptr = nullptr;
       }
@@ -283,6 +296,14 @@ void SplitEditorContainer::unsplitAll() {
 
   LOG_INFO("Reset to single editor view");
   emit splitCountChanged(groupCount());
+  return true;
+}
+
+void SplitEditorContainer::setCurrentTabWidget(LightpadTabWidget *tabWidget) {
+  if (tabWidget && findTabWidgetIndex(tabWidget) >= 0 &&
+      m_currentTabWidget != tabWidget) {
+    updateFocus(tabWidget);
+  }
 }
 
 bool SplitEditorContainer::eventFilter(QObject *watched, QEvent *event) {

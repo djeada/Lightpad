@@ -7,8 +7,61 @@
 CodeFoldingManager::CodeFoldingManager(QTextDocument *document)
     : m_document(document) {}
 
+const QSet<int> &CodeFoldingManager::foldedBlocks() const {
+  syncFolds();
+  return m_foldedBlocks;
+}
+
 bool CodeFoldingManager::isFolded(int blockNumber) const {
+  syncFolds();
   return m_foldedBlocks.contains(blockNumber);
+}
+
+void CodeFoldingManager::addFold(int blockNumber) {
+  if (!m_document || m_foldedBlocks.contains(blockNumber))
+    return;
+
+  QTextBlock block = m_document->findBlockByNumber(blockNumber);
+  if (!block.isValid())
+    return;
+
+  m_foldAnchors.append(QTextCursor(block));
+  m_foldedBlocks.insert(blockNumber);
+}
+
+void CodeFoldingManager::removeFold(int blockNumber) {
+  m_foldedBlocks.remove(blockNumber);
+  for (int i = m_foldAnchors.size() - 1; i >= 0; --i) {
+    if (m_foldAnchors.at(i).block().blockNumber() == blockNumber) {
+      m_foldAnchors.removeAt(i);
+    }
+  }
+}
+
+void CodeFoldingManager::clearFolds() {
+  m_foldedBlocks.clear();
+  m_foldAnchors.clear();
+}
+
+void CodeFoldingManager::syncFolds() const {
+  m_foldedBlocks.clear();
+  if (!m_document) {
+    m_foldAnchors.clear();
+    return;
+  }
+
+  QList<QTextCursor> kept;
+  for (const QTextCursor &anchor : m_foldAnchors) {
+    const QTextBlock block = anchor.block();
+    const QTextBlock next = block.next();
+    if (!block.isValid() || !next.isValid() || next.isVisible() ||
+        m_foldedBlocks.contains(block.blockNumber())) {
+      continue;
+    }
+    m_foldedBlocks.insert(block.blockNumber());
+    kept.append(anchor);
+  }
+  m_foldAnchors = kept;
 }
 
 bool CodeFoldingManager::isSingleLineComment(const QString &trimmedText) {
@@ -203,8 +256,9 @@ bool CodeFoldingManager::foldBlock(int blockNumber) {
   if (!m_document)
     return false;
 
+  syncFolds();
   if (isFoldable(blockNumber) && !m_foldedBlocks.contains(blockNumber)) {
-    m_foldedBlocks.insert(blockNumber);
+    addFold(blockNumber);
 
     int endBlock = findFoldEndBlock(blockNumber);
     QTextBlock block = m_document->findBlockByNumber(blockNumber + 1);
@@ -224,6 +278,7 @@ bool CodeFoldingManager::unfoldBlock(int blockNumber) {
   if (!m_document)
     return false;
 
+  syncFolds();
   for (int foldedBlock : m_foldedBlocks) {
     int endBlock = findFoldEndBlock(foldedBlock);
     if (blockNumber >= foldedBlock && blockNumber <= endBlock) {
@@ -233,7 +288,7 @@ bool CodeFoldingManager::unfoldBlock(int blockNumber) {
   }
 
   if (m_foldedBlocks.contains(blockNumber)) {
-    m_foldedBlocks.remove(blockNumber);
+    removeFold(blockNumber);
 
     int endBlock = findFoldEndBlock(blockNumber);
     QTextBlock block = m_document->findBlockByNumber(blockNumber + 1);
@@ -253,8 +308,9 @@ void CodeFoldingManager::toggleFoldAtLine(int line) {
   if (!m_document)
     return;
 
+  syncFolds();
   if (m_foldedBlocks.contains(line)) {
-    m_foldedBlocks.remove(line);
+    removeFold(line);
 
     int endBlock = findFoldEndBlock(line);
     QTextBlock block = m_document->findBlockByNumber(line + 1);
@@ -265,7 +321,7 @@ void CodeFoldingManager::toggleFoldAtLine(int line) {
       block = block.next();
     }
   } else if (isFoldable(line)) {
-    m_foldedBlocks.insert(line);
+    addFold(line);
 
     int endBlock = findFoldEndBlock(line);
     QTextBlock block = m_document->findBlockByNumber(line + 1);
@@ -282,12 +338,14 @@ void CodeFoldingManager::foldAll() {
   if (!m_document)
     return;
 
+  syncFolds();
+
   QTextBlock block = m_document->begin();
   while (block.isValid()) {
     if (isFoldable(block.blockNumber())) {
       int blockNum = block.blockNumber();
       if (!m_foldedBlocks.contains(blockNum)) {
-        m_foldedBlocks.insert(blockNum);
+        addFold(blockNum);
 
         int endBlock = findFoldEndBlock(blockNum);
         QTextBlock innerBlock = block.next();
@@ -307,7 +365,7 @@ void CodeFoldingManager::unfoldAll() {
   if (!m_document)
     return;
 
-  m_foldedBlocks.clear();
+  clearFolds();
 
   QTextBlock block = m_document->begin();
   while (block.isValid()) {
@@ -330,7 +388,7 @@ void CodeFoldingManager::foldToLevel(int level) {
       int blockLevel = getFoldingLevel(blockNum);
 
       if (blockLevel >= level) {
-        m_foldedBlocks.insert(blockNum);
+        addFold(blockNum);
 
         int endBlock = findFoldEndBlock(blockNum);
         QTextBlock innerBlock = block.next();
@@ -504,11 +562,13 @@ void CodeFoldingManager::foldComments() {
   if (!m_document)
     return;
 
+  syncFolds();
+
   QTextBlock block = m_document->begin();
   while (block.isValid()) {
     int blockNum = block.blockNumber();
     if (isCommentBlockStart(blockNum) && !m_foldedBlocks.contains(blockNum)) {
-      m_foldedBlocks.insert(blockNum);
+      addFold(blockNum);
 
       int endBlock = findCommentBlockEnd(blockNum);
       QTextBlock innerBlock = block.next();
@@ -527,6 +587,7 @@ void CodeFoldingManager::unfoldComments() {
   if (!m_document)
     return;
 
+  syncFolds();
   QList<int> commentBlocks;
   for (int blockNum : m_foldedBlocks) {
     if (isCommentBlockStart(blockNum)) {
@@ -535,7 +596,7 @@ void CodeFoldingManager::unfoldComments() {
   }
 
   for (int blockNum : commentBlocks) {
-    m_foldedBlocks.remove(blockNum);
+    removeFold(blockNum);
 
     int endBlock = findCommentBlockEnd(blockNum);
     QTextBlock block = m_document->findBlockByNumber(blockNum + 1);
@@ -551,6 +612,7 @@ void CodeFoldingManager::unfoldComments() {
 QJsonObject CodeFoldingManager::saveFoldState() const {
   QJsonObject state;
   QJsonArray foldedArray;
+  syncFolds();
   for (int blockNum : m_foldedBlocks) {
     foldedArray.append(blockNum);
   }

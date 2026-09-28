@@ -302,6 +302,11 @@ private:
     bool hidden = false;
   };
   SavedCursor m_savedCursor;
+  SavedCursor m_savedAlternateCursor;
+  bool m_charsetG0Graphics;
+  bool m_charsetG1Graphics;
+  bool m_shiftOut;
+  int m_wheelRemainder;
   QTextDocumentFragment m_savedPrimaryScreen;
   QString m_pendingAnsiText;
   QStringDecoder m_ptyDecoder;

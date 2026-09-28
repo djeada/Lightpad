@@ -29,6 +29,23 @@ private slots:
   void testServerHealthInitial();
   void testServerHealthErrorOnBadCommand();
   void testConfigEnabledField();
+  void testUriEncodingRoundTrip();
+  void testQueuedDocumentUsesLatestText();
+  void testReopenClosesBeforeOpening();
+  void testRestartReopensAllDocuments();
+  void testCrashedServerIsReplaced();
+  void testStaleDiagnosticsDropped();
+  void testDiagnosticsForPathWithSpaces();
+
+private:
+  QString makeLogPath();
+  QStringList readLog(const QString &path) const;
+  int countLines(const QString &path, const QString &prefix) const;
+  void useFakeServer(LanguageFeatureManager &mgr, const QString &logPath,
+                     int initDelayMs = 0);
+
+  QTemporaryDir m_tempDir;
+  int m_logCounter = 0;
 };
 
 void TestLanguageFeatureManager::testDefaultServerConfigs() {
@@ -318,6 +335,206 @@ void TestLanguageFeatureManager::testConfigEnabledField() {
   for (const DiagnosticsServerConfig &cfg : configs) {
     QVERIFY(cfg.enabled);
   }
+}
+
+QString TestLanguageFeatureManager::makeLogPath() {
+  return m_tempDir.filePath(QString("lsp-%1.log").arg(++m_logCounter));
+}
+
+QStringList TestLanguageFeatureManager::readLog(const QString &path) const {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return {};
+  }
+  return QString::fromUtf8(file.readAll()).split('\n', Qt::SkipEmptyParts);
+}
+
+int TestLanguageFeatureManager::countLines(const QString &path,
+                                           const QString &prefix) const {
+  int count = 0;
+  for (const QString &line : readLog(path)) {
+    if (line.startsWith(prefix)) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+void TestLanguageFeatureManager::useFakeServer(LanguageFeatureManager &mgr,
+                                               const QString &logPath,
+                                               int initDelayMs) {
+  DiagnosticsServerConfig config;
+  config.languageId = "cpp";
+  config.command = FAKE_LSP_SERVER_PATH;
+  config.arguments = {"--log", logPath, "--init-delay",
+                      QString::number(initDelayMs)};
+  mgr.setServerConfig(config);
+}
+
+void TestLanguageFeatureManager::testUriEncodingRoundTrip() {
+  const QString path = "/tmp/dir with space/\u00fcber.cpp";
+  const QString uri = DiagnosticUtils::filePathToUri(path);
+  QVERIFY(!uri.contains(' '));
+  QVERIFY(uri.contains("%20"));
+  QCOMPARE(DiagnosticUtils::uriToFilePath(uri), path);
+  QCOMPARE(DiagnosticUtils::normalizeUri(
+               "file:///tmp/dir%20with%20space/%C3%BCber.cpp"),
+           uri);
+  QCOMPARE(DiagnosticUtils::normalizeUri("file:///tmp/dir with space/"
+                                         "\u00fcber.cpp"),
+           uri);
+}
+
+void TestLanguageFeatureManager::testQueuedDocumentUsesLatestText() {
+  QVERIFY(m_tempDir.isValid());
+  const QString logPath = makeLogPath();
+  DiagnosticsManager diagMgr;
+  LanguageFeatureManager mgr(&diagMgr);
+  useFakeServer(mgr, logPath, 400);
+
+  const QString filePath = m_tempDir.filePath("queued.cpp");
+  const QString uri = DiagnosticUtils::filePathToUri(filePath);
+  mgr.openDocument(filePath, "cpp", "first");
+  mgr.changeDocument(filePath, 2, "second");
+  mgr.changeDocument(filePath, 3, "third");
+
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "textDocument/didOpen"), 1,
+                            5000);
+  QVERIFY(readLog(logPath).contains(
+      QString("textDocument/didOpen %1 3 third").arg(uri)));
+  QCOMPARE(countLines(logPath, "textDocument/didChange"), 0);
+
+  mgr.changeDocument(filePath, 4, "fourth");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      readLog(logPath).contains(
+          QString("textDocument/didChange %1 4 fourth").arg(uri)),
+      5000);
+}
+
+void TestLanguageFeatureManager::testReopenClosesBeforeOpening() {
+  QVERIFY(m_tempDir.isValid());
+  const QString logPath = makeLogPath();
+  DiagnosticsManager diagMgr;
+  LanguageFeatureManager mgr(&diagMgr);
+  useFakeServer(mgr, logPath);
+  QSignalSpy startedSpy(&mgr, &LanguageFeatureManager::serverStarted);
+
+  const QString filePath = m_tempDir.filePath("reopen.cpp");
+  const QString uri = DiagnosticUtils::filePathToUri(filePath);
+  mgr.openDocument(filePath, "cpp", "one");
+  QVERIFY(startedSpy.wait(5000));
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "textDocument/didOpen"), 1,
+                            5000);
+
+  mgr.openDocument(filePath, "cpp", "two");
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "textDocument/didOpen"), 2,
+                            5000);
+
+  const QStringList log = readLog(logPath);
+  const int closeIndex =
+      log.indexOf(QString("textDocument/didClose %1").arg(uri));
+  const int reopenIndex =
+      log.indexOf(QString("textDocument/didOpen %1 1 two").arg(uri));
+  QVERIFY(closeIndex >= 0);
+  QVERIFY(reopenIndex > closeIndex);
+}
+
+void TestLanguageFeatureManager::testRestartReopensAllDocuments() {
+  QVERIFY(m_tempDir.isValid());
+  const QString logPath = makeLogPath();
+  DiagnosticsManager diagMgr;
+  LanguageFeatureManager mgr(&diagMgr);
+  useFakeServer(mgr, logPath);
+
+  const QString first = m_tempDir.filePath("first.cpp");
+  const QString second = m_tempDir.filePath("second.cpp");
+  mgr.openDocument(first, "cpp", "alpha");
+  mgr.openDocument(second, "cpp", "beta");
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "textDocument/didOpen"), 2,
+                            5000);
+
+  LspClient *oldClient = mgr.clientForFile(first);
+  mgr.restartServer("cpp");
+  mgr.changeDocument(second, 2, "gamma");
+
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "initialize"), 2, 5000);
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "textDocument/didOpen"), 4,
+                            5000);
+  const QStringList log = readLog(logPath);
+  QVERIFY(log.contains(QString("textDocument/didOpen %1 1 alpha")
+                           .arg(DiagnosticUtils::filePathToUri(first))));
+  QVERIFY(log.contains(QString("textDocument/didOpen %1 2 gamma")
+                           .arg(DiagnosticUtils::filePathToUri(second))));
+  QVERIFY(mgr.clientForFile(first) != nullptr);
+  QVERIFY(mgr.clientForFile(first) != oldClient);
+  QCOMPARE(mgr.clientForFile(first), mgr.clientForFile(second));
+}
+
+void TestLanguageFeatureManager::testCrashedServerIsReplaced() {
+  QVERIFY(m_tempDir.isValid());
+  const QString logPath = makeLogPath();
+  DiagnosticsManager diagMgr;
+  LanguageFeatureManager mgr(&diagMgr);
+  useFakeServer(mgr, logPath);
+
+  const QString first = m_tempDir.filePath("crash.cpp");
+  mgr.openDocument(first, "cpp", "fine");
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "textDocument/didOpen"), 1,
+                            5000);
+
+  mgr.changeDocument(first, 2, "CRASH now");
+  QTRY_COMPARE_WITH_TIMEOUT(mgr.serverHealth("cpp"), ServerHealthStatus::Error,
+                            5000);
+  QTRY_VERIFY_WITH_TIMEOUT(mgr.clientForFile(first) == nullptr, 5000);
+
+  mgr.changeDocument(first, 3, "recovered");
+  const QString second = m_tempDir.filePath("after.cpp");
+  mgr.openDocument(second, "cpp", "next");
+
+  QTRY_COMPARE_WITH_TIMEOUT(mgr.serverHealth("cpp"),
+                            ServerHealthStatus::Running, 5000);
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "textDocument/didOpen"), 3,
+                            5000);
+  QVERIFY(readLog(logPath).contains(
+      QString("textDocument/didOpen %1 3 recovered")
+          .arg(DiagnosticUtils::filePathToUri(first))));
+}
+
+void TestLanguageFeatureManager::testStaleDiagnosticsDropped() {
+  QVERIFY(m_tempDir.isValid());
+  const QString logPath = makeLogPath();
+  DiagnosticsManager diagMgr;
+  LanguageFeatureManager mgr(&diagMgr);
+  useFakeServer(mgr, logPath);
+
+  const QString filePath = m_tempDir.filePath("stale.cpp");
+  mgr.openDocument(filePath, "cpp", "current");
+  QTRY_COMPARE_WITH_TIMEOUT(diagMgr.diagnosticsForFile(filePath).size(), 1,
+                            5000);
+  QCOMPARE(diagMgr.diagnosticsForFile(filePath).first().message,
+           QString("current"));
+
+  mgr.changeDocument(filePath, 2, "STALE");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      !diagMgr.diagnosticsForUri("file:///marker").isEmpty(), 5000);
+  QCOMPARE(diagMgr.diagnosticsForFile(filePath).first().message,
+           QString("current"));
+}
+
+void TestLanguageFeatureManager::testDiagnosticsForPathWithSpaces() {
+  QVERIFY(m_tempDir.isValid());
+  QVERIFY(QDir(m_tempDir.path()).mkpath("with space"));
+  const QString logPath = makeLogPath();
+  DiagnosticsManager diagMgr;
+  LanguageFeatureManager mgr(&diagMgr);
+  useFakeServer(mgr, logPath);
+
+  const QString filePath = m_tempDir.filePath("with space/\u00e9t\u00e9.cpp");
+  mgr.openDocument(filePath, "cpp", "spaced");
+  QTRY_COMPARE_WITH_TIMEOUT(diagMgr.diagnosticsForFile(filePath).size(), 1,
+                            5000);
+  QCOMPARE(diagMgr.diagnosticsForFile(filePath).first().message,
+           QString("spaced"));
 }
 
 QTEST_MAIN(TestLanguageFeatureManager)

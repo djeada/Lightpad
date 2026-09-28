@@ -105,9 +105,10 @@ public:
   static int wordCount(const QString &text);
   static int readingTimeMinutes(const QString &text, int wordsPerMinute = 200);
 
-private:
   static QString escapeHtml(const QString &text);
   static QString processInlineFormatting(const QString &text);
+
+private:
   static QList<LspDiagnostic> checkDuplicateHeadings(const QString &text);
   static QList<LspDiagnostic> checkBrokenLocalLinks(const QString &text,
                                                     const QString &filePath);

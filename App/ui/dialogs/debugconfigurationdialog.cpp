@@ -8,10 +8,17 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QMenu>
-#include <QRegularExpression>
+#include <QSignalBlocker>
 
 DebugConfigurationDialog::DebugConfigurationDialog(QWidget *parent)
-    : StyledDialog(parent) {
+    : StyledDialog(parent), m_validationLabel(nullptr), m_statusTimer(nullptr) {
+  m_originalConfigurations =
+      DebugConfigurationManager::instance().allConfigurations();
+  m_statusTimer = new QTimer(this);
+  m_statusTimer->setSingleShot(true);
+  m_statusTimer->setInterval(400);
+  connect(m_statusTimer, &QTimer::timeout, this,
+          &DebugConfigurationDialog::refreshAdapterStatus);
   setupUi();
   loadConfigurations();
 }
@@ -325,6 +332,12 @@ void DebugConfigurationDialog::setupUi() {
   mainLayout->addWidget(splitter, 1);
 
   QHBoxLayout *buttonLayout = new QHBoxLayout();
+  m_validationLabel = new QLabel();
+  m_validationLabel->setObjectName(QStringLiteral("validationLabel"));
+  m_validationLabel->setWordWrap(true);
+  m_validationLabel->setStyleSheet(UIStyleHelper::errorInfoLabelStyle(m_theme));
+  m_validationLabel->setVisible(false);
+  buttonLayout->addWidget(m_validationLabel, 1);
   buttonLayout->addStretch();
 
   m_saveButton = new QPushButton("Save");
@@ -361,8 +374,10 @@ void DebugConfigurationDialog::loadConfigurations() {
 
 void DebugConfigurationDialog::onConfigSelected(QListWidgetItem *current,
                                                 QListWidgetItem *previous) {
-  if (previous && !m_currentConfigName.isEmpty()) {
-    saveCurrentToModel();
+  if (previous && !m_currentConfigName.isEmpty() && !saveCurrentToModel()) {
+    QSignalBlocker blocker(m_configList);
+    m_configList->setCurrentItem(previous);
+    return;
   }
 
   if (!current) {
@@ -401,7 +416,8 @@ void DebugConfigurationDialog::loadConfigIntoForm(
   }
 
   m_programEdit->setText(cfg.program);
-  m_argsEdit->setText(cfg.args.join(" "));
+  m_argsEdit->setText(
+      DebugConfigurationManager::joinCommandLineArguments(cfg.args));
   m_cwdEdit->setText(cfg.cwd);
   m_stopOnEntryCheck->setChecked(cfg.stopOnEntry);
 
@@ -468,9 +484,9 @@ void DebugConfigurationDialog::clearForm() {
   updateAdapterUi();
 }
 
-void DebugConfigurationDialog::saveCurrentToModel() {
+bool DebugConfigurationDialog::saveCurrentToModel() {
   if (m_currentConfigName.isEmpty()) {
-    return;
+    return true;
   }
 
   DebugConfiguration cfg;
@@ -480,10 +496,8 @@ void DebugConfigurationDialog::saveCurrentToModel() {
   cfg.request = m_requestCombo->currentText();
 
   cfg.program = m_programEdit->text().trimmed();
-  QString argsText = m_argsEdit->text().trimmed();
-  if (!argsText.isEmpty()) {
-    cfg.args = argsText.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
-  }
+  cfg.args = DebugConfigurationManager::splitCommandLineArguments(
+      m_argsEdit->text().trimmed());
   cfg.cwd = m_cwdEdit->text().trimmed();
   cfg.stopOnEntry = m_stopOnEntryCheck->isChecked();
 
@@ -521,9 +535,20 @@ void DebugConfigurationDialog::saveCurrentToModel() {
   if (!adapterText.isEmpty()) {
     QJsonParseError err;
     QJsonDocument doc = QJsonDocument::fromJson(adapterText.toUtf8(), &err);
-    if (err.error == QJsonParseError::NoError && doc.isObject()) {
-      cfg.adapterConfig = doc.object();
+    if (err.error != QJsonParseError::NoError) {
+      showValidationError(tr("Additional Adapter Configuration is not valid "
+                             "JSON: %1")
+                              .arg(err.errorString()));
+      m_adapterConfigEdit->setFocus();
+      return false;
     }
+    if (!doc.isObject()) {
+      showValidationError(
+          tr("Additional Adapter Configuration must be a JSON object."));
+      m_adapterConfigEdit->setFocus();
+      return false;
+    }
+    cfg.adapterConfig = doc.object();
   }
   applyAdapterOptionsToConfig(cfg);
 
@@ -531,8 +556,22 @@ void DebugConfigurationDialog::saveCurrentToModel() {
     cfg.name = m_currentConfigName;
   }
 
-  DebugConfigurationManager::instance().updateConfiguration(m_currentConfigName,
-                                                            cfg);
+  if (cfg.name != m_currentConfigName && !DebugConfigurationManager::instance()
+                                              .configuration(cfg.name)
+                                              .name.isEmpty()) {
+    showValidationError(
+        tr("A configuration named \"%1\" already exists.").arg(cfg.name));
+    m_nameEdit->setFocus();
+    return false;
+  }
+
+  if (!DebugConfigurationManager::instance().updateConfiguration(
+          m_currentConfigName, cfg)) {
+    showValidationError(
+        tr("A configuration named \"%1\" already exists.").arg(cfg.name));
+    return false;
+  }
+  showValidationError(QString());
 
   if (cfg.name != m_currentConfigName) {
     for (int i = 0; i < m_configList->count(); ++i) {
@@ -545,6 +584,29 @@ void DebugConfigurationDialog::saveCurrentToModel() {
     }
     m_currentConfigName = cfg.name;
   }
+  return true;
+}
+
+void DebugConfigurationDialog::showValidationError(const QString &message) {
+  if (!m_validationLabel) {
+    return;
+  }
+  m_validationLabel->setText(message);
+  m_validationLabel->setVisible(!message.isEmpty());
+}
+
+void DebugConfigurationDialog::reject() {
+  const QList<DebugConfiguration> current =
+      DebugConfigurationManager::instance().allConfigurations();
+  bool changed = current.size() != m_originalConfigurations.size();
+  for (int i = 0; !changed && i < current.size(); ++i) {
+    changed = current.at(i).toJson() != m_originalConfigurations.at(i).toJson();
+  }
+  if (changed) {
+    DebugConfigurationManager::instance().replaceConfigurations(
+        m_originalConfigurations);
+  }
+  StyledDialog::reject();
 }
 
 void DebugConfigurationDialog::onAddConfig() {
@@ -761,6 +823,9 @@ void DebugConfigurationDialog::updateAdapterUi() {
       m_pythonEnvironmentWidget->setVisible(false);
     }
     rebuildAdapterOptionsUi(nullptr);
+    m_statusTimer->stop();
+    m_pendingStatusAdapter.reset();
+    m_pendingStatusKey.clear();
     m_adapterStatusLabel->setText("No registered adapter matches this type.");
     return;
   }
@@ -815,9 +880,39 @@ void DebugConfigurationDialog::updateAdapterUi() {
     }
   }
 
-  m_adapterStatusLabel->setText(
-      QString("Status: %1")
-          .arg(adapter->statusMessageForConfiguration(preview)));
+  const QString statusKey =
+      adapter->config().id + QLatin1Char('|') +
+      QString::fromUtf8(
+          QJsonDocument(preview.toJson()).toJson(QJsonDocument::Compact));
+  const auto cached = m_statusCache.constFind(statusKey);
+  if (cached != m_statusCache.constEnd()) {
+    m_statusTimer->stop();
+    m_pendingStatusAdapter.reset();
+    m_pendingStatusKey.clear();
+    m_adapterStatusLabel->setText(QString("Status: %1").arg(cached.value()));
+    return;
+  }
+
+  m_pendingStatusAdapter = adapter;
+  m_pendingStatusPreview = preview;
+  m_pendingStatusKey = statusKey;
+  m_adapterStatusLabel->setText(QStringLiteral("Status: checking..."));
+  m_statusTimer->start();
+}
+
+void DebugConfigurationDialog::refreshAdapterStatus() {
+  if (!m_pendingStatusAdapter || m_pendingStatusKey.isEmpty()) {
+    return;
+  }
+  const std::shared_ptr<IDebugAdapter> adapter = m_pendingStatusAdapter;
+  const QString key = m_pendingStatusKey;
+  m_pendingStatusAdapter.reset();
+  m_pendingStatusKey.clear();
+
+  const QString status =
+      adapter->statusMessageForConfiguration(m_pendingStatusPreview);
+  m_statusCache.insert(key, status);
+  m_adapterStatusLabel->setText(QString("Status: %1").arg(status));
 }
 
 void DebugConfigurationDialog::rebuildAdapterOptionsUi(
@@ -898,7 +993,9 @@ void DebugConfigurationDialog::onDuplicateConfig() {
     return;
   }
 
-  saveCurrentToModel();
+  if (!saveCurrentToModel()) {
+    return;
+  }
 
   QString name = current->data(Qt::UserRole).toString();
   DebugConfiguration cfg =
@@ -958,7 +1055,9 @@ void DebugConfigurationDialog::onBrowseCwd() {
 }
 
 void DebugConfigurationDialog::onSave() {
-  saveCurrentToModel();
+  if (!saveCurrentToModel()) {
+    return;
+  }
 
   if (!DebugConfigurationManager::instance().saveToLightpadDir()) {
     ThemedMessageBox::warning(this, "Debug Configurations",
@@ -977,6 +1076,8 @@ void DebugConfigurationDialog::applyTheme(const Theme &theme) {
 
   if (m_adapterStatusLabel)
     m_adapterStatusLabel->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
+  if (m_validationLabel)
+    m_validationLabel->setStyleSheet(UIStyleHelper::errorInfoLabelStyle(theme));
   if (auto *hint = findChild<QLabel *>(QStringLiteral("adapterConfigHint")))
     hint->setStyleSheet(UIStyleHelper::infoLabelStyle(theme));
   if (m_pythonEnvironmentWidget)

@@ -190,6 +190,15 @@ public:
                                      const QString &filePath,
                                      const QString &workspaceFolder,
                                      const QString &testName = QString());
+  static QString substituteShellVariables(const QString &script,
+                                          const QString &filePath,
+                                          const QString &workspaceFolder,
+                                          const QString &testName = QString());
+  static QStringList substituteArguments(const QString &command,
+                                         const QStringList &args,
+                                         const QString &filePath,
+                                         const QString &workspaceFolder,
+                                         const QString &testName = QString());
 
 signals:
   void templatesLoaded();

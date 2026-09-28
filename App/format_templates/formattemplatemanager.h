@@ -71,6 +71,8 @@ public:
 
   static QString substituteVariables(const QString &input,
                                      const QString &filePath);
+  static QString substituteCommandLineVariables(const QString &input,
+                                                const QString &filePath);
 
   void setWorkspaceFolder(const QString &folder) { m_workspaceFolder = folder; }
   QString workspaceFolder() const { return m_workspaceFolder; }

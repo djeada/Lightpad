@@ -15,6 +15,7 @@ struct DebugAdapterConfig {
   QString type;
   QString program;
   QStringList arguments;
+  bool serverTransport = false;
   QStringList languages;
 
   QStringList extensions;

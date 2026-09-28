@@ -18,7 +18,8 @@ public:
       const DebugConfiguration &configuration) const override {
     DebugAdapterConfig cfg =
         ProcessBackedDebugAdapter::configForConfiguration(configuration);
-    cfg.arguments = QStringList() << "dap";
+    cfg.arguments = QStringList() << "dap" << "--listen=127.0.0.1:0";
+    cfg.serverTransport = true;
     return cfg;
   }
 
@@ -91,7 +92,8 @@ private:
     cfg.name = "Go (Delve)";
     cfg.type = "go";
     cfg.program = "dlv";
-    cfg.arguments = QStringList() << "dap";
+    cfg.arguments = QStringList() << "dap" << "--listen=127.0.0.1:0";
+    cfg.serverTransport = true;
     cfg.languages = QStringList() << "go";
     cfg.extensions = QStringList() << ".go";
     cfg.supportsRestart = true;

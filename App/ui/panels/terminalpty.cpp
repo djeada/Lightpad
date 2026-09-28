@@ -21,14 +21,37 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#if defined(Q_OS_LINUX)
+#include <sys/syscall.h>
+#endif
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
 
+namespace {
+void closeInheritedDescriptors() {
+#if defined(Q_OS_LINUX) && defined(SYS_close_range)
+  if (::syscall(SYS_close_range, 3U, ~0U, 0U) == 0) {
+    return;
+  }
+#endif
+  long maxFd = ::sysconf(_SC_OPEN_MAX);
+  if (maxFd < 0 || maxFd > 65536) {
+    maxFd = 65536;
+  }
+  for (int fd = 3; fd < maxFd; ++fd) {
+    ::close(fd);
+  }
+}
+
+constexpr int kMaxBytesPerRead = 60 * 1024;
+constexpr int kMaxDrainBytes = 1024 * 1024;
+} // namespace
+
 TerminalPty::TerminalPty(QObject *parent)
     : QObject(parent), m_masterFd(-1), m_pid(-1), m_readNotifier(nullptr),
-      m_reapTimer(new QTimer(this)), m_running(false), m_columns(80),
-      m_rows(24) {
+      m_writeNotifier(nullptr), m_reapTimer(new QTimer(this)), m_running(false),
+      m_columns(80), m_rows(24) {
   m_reapTimer->setInterval(80);
   connect(m_reapTimer, &QTimer::timeout, this, &TerminalPty::reapChild);
 }
@@ -78,6 +101,7 @@ bool TerminalPty::start(const QString &program, const QStringList &arguments,
   }
 
   if (childPid == 0) {
+    closeInheritedDescriptors();
 
     for (int sig = 1; sig < NSIG; ++sig) {
       ::signal(sig, SIG_DFL);
@@ -118,10 +142,19 @@ bool TerminalPty::start(const QString &program, const QStringList &arguments,
   if (flags >= 0) {
     ::fcntl(m_masterFd, F_SETFL, flags | O_NONBLOCK);
   }
+  int fdFlags = ::fcntl(m_masterFd, F_GETFD, 0);
+  if (fdFlags >= 0) {
+    ::fcntl(m_masterFd, F_SETFD, fdFlags | FD_CLOEXEC);
+  }
 
   m_readNotifier = new QSocketNotifier(m_masterFd, QSocketNotifier::Read, this);
   connect(m_readNotifier, &QSocketNotifier::activated, this,
           &TerminalPty::readAvailable);
+  m_writeNotifier =
+      new QSocketNotifier(m_masterFd, QSocketNotifier::Write, this);
+  m_writeNotifier->setEnabled(false);
+  connect(m_writeNotifier, &QSocketNotifier::activated, this,
+          &TerminalPty::writePending);
   m_reapTimer->start();
   return true;
 }
@@ -129,8 +162,9 @@ bool TerminalPty::start(const QString &program, const QStringList &arguments,
 void TerminalPty::stop() {
   if (m_running && m_pid > 0) {
     pid_t pid = static_cast<pid_t>(m_pid);
-    ::kill(-pid, SIGTERM);
-    ::kill(pid, SIGTERM);
+    ::kill(-pid, SIGHUP);
+    ::kill(pid, SIGHUP);
+    ::kill(-pid, SIGCONT);
     for (int i = 0; i < 4; ++i) {
       int status = 0;
       pid_t result = ::waitpid(pid, &status, WNOHANG);
@@ -183,7 +217,35 @@ qint64 TerminalPty::writeData(const QByteArray &data) {
   if (!m_running || m_masterFd < 0 || data.isEmpty()) {
     return -1;
   }
-  return ::write(m_masterFd, data.constData(), data.size());
+  m_writeBuffer.append(data);
+  writePending();
+  return data.size();
+}
+
+void TerminalPty::writePending() {
+  if (m_masterFd < 0) {
+    m_writeBuffer.clear();
+    return;
+  }
+  while (!m_writeBuffer.isEmpty()) {
+    ssize_t written =
+        ::write(m_masterFd, m_writeBuffer.constData(), m_writeBuffer.size());
+    if (written > 0) {
+      m_writeBuffer.remove(0, static_cast<qsizetype>(written));
+      continue;
+    }
+    if (written < 0 && errno == EINTR) {
+      continue;
+    }
+    if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      break;
+    }
+    m_writeBuffer.clear();
+    break;
+  }
+  if (m_writeNotifier) {
+    m_writeNotifier->setEnabled(!m_writeBuffer.isEmpty());
+  }
 }
 
 bool TerminalPty::interruptProcessGroup() {
@@ -227,11 +289,12 @@ void TerminalPty::readAvailable() {
     return;
   }
 
-  constexpr int kMaxBytesPerRead = 256 * 1024;
   QByteArray data;
   char buffer[16384];
   while (data.size() < kMaxBytesPerRead) {
-    ssize_t count = ::read(m_masterFd, buffer, sizeof(buffer));
+    const size_t wanted = qMin(
+        sizeof(buffer), static_cast<size_t>(kMaxBytesPerRead - data.size()));
+    ssize_t count = ::read(m_masterFd, buffer, wanted);
     if (count > 0) {
       data.append(buffer, static_cast<int>(count));
       continue;
@@ -262,11 +325,51 @@ void TerminalPty::reapChild() {
   int status = 0;
   pid_t result = ::waitpid(static_cast<pid_t>(m_pid), &status, WNOHANG);
   if (result == m_pid) {
+    drainOutput();
     finishFromStatus(status);
   }
 }
 
+void TerminalPty::drainOutput() {
+  if (m_masterFd < 0) {
+    return;
+  }
+  QByteArray data;
+  char buffer[16384];
+  int total = 0;
+  while (total < kMaxDrainBytes) {
+    const size_t wanted = qMin(
+        sizeof(buffer), static_cast<size_t>(kMaxBytesPerRead - data.size()));
+    ssize_t count = ::read(m_masterFd, buffer, wanted);
+    if (count > 0) {
+      data.append(buffer, static_cast<int>(count));
+      total += static_cast<int>(count);
+      if (data.size() >= kMaxBytesPerRead) {
+        emit readyRead(data);
+        data.clear();
+        if (m_masterFd < 0) {
+          return;
+        }
+      }
+      continue;
+    }
+    if (count < 0 && errno == EINTR) {
+      continue;
+    }
+    break;
+  }
+  if (!data.isEmpty()) {
+    emit readyRead(data);
+  }
+}
+
 void TerminalPty::closeMaster() {
+  if (m_writeNotifier) {
+    m_writeNotifier->setEnabled(false);
+    m_writeNotifier->deleteLater();
+    m_writeNotifier = nullptr;
+  }
+  m_writeBuffer.clear();
   if (m_readNotifier) {
     m_readNotifier->setEnabled(false);
     m_readNotifier->deleteLater();

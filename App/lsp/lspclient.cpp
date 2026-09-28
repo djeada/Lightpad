@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QJsonDocument>
 #include <QTimer>
+#include <QUrl>
 #include <functional>
 
 LspClient::LspClient(QObject *parent)
@@ -215,7 +216,7 @@ void LspClient::requestHover(const QString &uri, LspPosition position) {
   sendRequest("textDocument/hover", params, id);
 }
 
-void LspClient::requestDefinition(const QString &uri, LspPosition position) {
+int LspClient::requestDefinition(const QString &uri, LspPosition position) {
   QJsonObject textDocument;
   textDocument["uri"] = uri;
 
@@ -226,6 +227,7 @@ void LspClient::requestDefinition(const QString &uri, LspPosition position) {
   int id = m_nextRequestId++;
   m_pendingRequests[id] = "textDocument/definition";
   sendRequest("textDocument/definition", params, id);
+  return id;
 }
 
 void LspClient::requestReferences(const QString &uri, LspPosition position) {
@@ -333,7 +335,7 @@ void LspClient::requestFormatting(const QString &uri, int tabSize,
   sendRequest("textDocument/formatting", params, id);
 }
 
-void LspClient::requestDeclaration(const QString &uri, LspPosition position) {
+int LspClient::requestDeclaration(const QString &uri, LspPosition position) {
   QJsonObject textDocument;
   textDocument["uri"] = uri;
 
@@ -344,10 +346,10 @@ void LspClient::requestDeclaration(const QString &uri, LspPosition position) {
   int id = m_nextRequestId++;
   m_pendingRequests[id] = "textDocument/declaration";
   sendRequest("textDocument/declaration", params, id);
+  return id;
 }
 
-void LspClient::requestTypeDefinition(const QString &uri,
-                                      LspPosition position) {
+int LspClient::requestTypeDefinition(const QString &uri, LspPosition position) {
   QJsonObject textDocument;
   textDocument["uri"] = uri;
 
@@ -358,6 +360,7 @@ void LspClient::requestTypeDefinition(const QString &uri,
   int id = m_nextRequestId++;
   m_pendingRequests[id] = "textDocument/typeDefinition";
   sendRequest("textDocument/typeDefinition", params, id);
+  return id;
 }
 
 void LspClient::requestWorkspaceSymbols(const QString &query) {
@@ -409,17 +412,12 @@ void LspClient::sendRequest(const QString &method, const QJsonObject &params,
     message["params"] = params;
   }
 
-  QJsonDocument doc(message);
-  QByteArray content = doc.toJson(QJsonDocument::Compact);
-
   if (!m_process) {
     LOG_WARNING("LSP: Cannot send request, process not started");
     return;
   }
 
-  QString header = QString("Content-Length: %1\r\n\r\n").arg(content.size());
-  m_process->write(header.toUtf8());
-  m_process->write(content);
+  writeMessage(message);
 
   LOG_DEBUG(QString("LSP request: %1 (id=%2)").arg(method).arg(id));
 }
@@ -433,19 +431,48 @@ void LspClient::sendNotification(const QString &method,
     message["params"] = params;
   }
 
-  QJsonDocument doc(message);
-  QByteArray content = doc.toJson(QJsonDocument::Compact);
-
   if (!m_process) {
     LOG_WARNING("LSP: Cannot send notification, process not started");
     return;
   }
 
-  QString header = QString("Content-Length: %1\r\n\r\n").arg(content.size());
-  m_process->write(header.toUtf8());
-  m_process->write(content);
+  writeMessage(message);
 
   LOG_DEBUG(QString("LSP notification: %1").arg(method));
+}
+
+void LspClient::sendResponse(const QJsonValue &id, const QJsonValue &result) {
+  QJsonObject message;
+  message["jsonrpc"] = "2.0";
+  message["id"] = id;
+  message["result"] = result;
+  writeMessage(message);
+}
+
+void LspClient::sendErrorResponse(const QJsonValue &id, int code,
+                                  const QString &errorMessage) {
+  QJsonObject errorObj;
+  errorObj["code"] = code;
+  errorObj["message"] = errorMessage;
+
+  QJsonObject message;
+  message["jsonrpc"] = "2.0";
+  message["id"] = id;
+  message["error"] = errorObj;
+  writeMessage(message);
+}
+
+void LspClient::writeMessage(const QJsonObject &message) {
+  if (!m_process) {
+    return;
+  }
+
+  const QByteArray content =
+      QJsonDocument(message).toJson(QJsonDocument::Compact);
+  const QByteArray header = QByteArray("Content-Length: ") +
+                            QByteArray::number(content.size()) + "\r\n\r\n";
+  m_process->write(header);
+  m_process->write(content);
 }
 
 QList<QByteArray> LspClient::extractMessages(QByteArray &buffer,
@@ -500,24 +527,28 @@ void LspClient::onReadyReadStandardOutput() {
   }
   m_buffer += m_process->readAllStandardOutput();
 
-  const QList<QByteArray> messages = extractMessages(m_buffer, 100);
-  for (const QByteArray &content : messages) {
-    if (content.isEmpty()) {
-      LOG_WARNING("LSP message without Content-Length, skipping header");
-      continue;
+  constexpr int batchSize = 100;
+  QList<QByteArray> messages;
+  do {
+    messages = extractMessages(m_buffer, batchSize);
+    for (const QByteArray &content : messages) {
+      if (content.isEmpty()) {
+        LOG_WARNING("LSP message without Content-Length, skipping header");
+        continue;
+      }
+
+      QJsonParseError parseError;
+      QJsonDocument doc = QJsonDocument::fromJson(content, &parseError);
+
+      if (parseError.error != QJsonParseError::NoError) {
+        LOG_ERROR(QString("Failed to parse LSP message: %1")
+                      .arg(parseError.errorString()));
+        continue;
+      }
+
+      handleMessage(doc.object());
     }
-
-    QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(content, &parseError);
-
-    if (parseError.error != QJsonParseError::NoError) {
-      LOG_ERROR(QString("Failed to parse LSP message: %1")
-                    .arg(parseError.errorString()));
-      continue;
-    }
-
-    handleMessage(doc.object());
-  }
+  } while (messages.size() == batchSize);
 }
 
 void LspClient::onReadyReadStandardError() {
@@ -547,26 +578,73 @@ void LspClient::onProcessFinished(int exitCode,
     m_process = nullptr;
   }
 
+  failPendingRequests(
+      QString("Language server exited with code %1").arg(exitCode));
   setState(State::Disconnected);
+}
+
+void LspClient::failPendingRequests(const QString &message) {
+  const QMap<int, QString> pending = m_pendingRequests;
+  m_pendingRequests.clear();
+  m_pendingCompletionRequestId = -1;
+  for (auto it = pending.constBegin(); it != pending.constEnd(); ++it) {
+    emit requestFailed(it.key(), it.value(), message);
+  }
 }
 
 void LspClient::handleMessage(const QJsonObject &message) {
   if (message.contains("id")) {
 
-    int id = message["id"].toInt();
-
     if (message.contains("method")) {
-
-      LOG_DEBUG(
-          QString("LSP server request: %1").arg(message["method"].toString()));
+      handleServerRequest(message["id"], message["method"].toString(),
+                          message["params"]);
     } else {
 
-      handleResponse(id, message["result"], message["error"]);
+      handleResponse(message["id"].toInt(), message["result"],
+                     message["error"]);
     }
   } else if (message.contains("method")) {
 
     handleNotification(message["method"].toString(),
                        message["params"].toObject());
+  }
+}
+
+void LspClient::handleServerRequest(const QJsonValue &id, const QString &method,
+                                    const QJsonValue &params) {
+  LOG_DEBUG(QString("LSP server request: %1").arg(method));
+
+  if (method == "workspace/configuration") {
+    QJsonArray results;
+    const QJsonArray items = params.toObject()["items"].toArray();
+    for (int i = 0; i < items.size(); ++i) {
+      results.append(QJsonValue::Null);
+    }
+    sendResponse(id, results);
+  } else if (method == "client/registerCapability" ||
+             method == "client/unregisterCapability" ||
+             method == "window/workDoneProgress/create" ||
+             method == "window/showMessageRequest" ||
+             method == "workspace/codeLens/refresh" ||
+             method == "workspace/semanticTokens/refresh" ||
+             method == "workspace/inlayHint/refresh" ||
+             method == "workspace/diagnostic/refresh") {
+    sendResponse(id, QJsonValue::Null);
+  } else if (method == "workspace/workspaceFolders") {
+    QJsonArray folders;
+    if (!m_rootUri.isEmpty()) {
+      QJsonObject folder;
+      folder["uri"] = m_rootUri;
+      folder["name"] = QUrl(m_rootUri).fileName();
+      folders.append(folder);
+    }
+    sendResponse(id, folders);
+  } else if (method == "workspace/applyEdit") {
+    QJsonObject result;
+    result["applied"] = false;
+    sendResponse(id, result);
+  } else {
+    sendErrorResponse(id, -32601, QString("Method not found: %1").arg(method));
   }
 }
 
@@ -596,13 +674,7 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
                                 ? result.toArray()
                                 : result.toObject()["items"].toArray();
     for (const QJsonValue &val : itemsArray) {
-      QJsonObject obj = val.toObject();
-      LspCompletionItem item;
-      item.label = obj["label"].toString();
-      item.kind = obj["kind"].toInt();
-      item.detail = obj["detail"].toString();
-      item.insertText = obj["insertText"].toString(item.label);
-      items.append(item);
+      items.append(parseCompletionItem(val.toObject()));
     }
     emit completionReceived(id, items);
   } else if (method == "textDocument/hover") {
@@ -616,27 +688,10 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
     }
     emit hoverReceived(id, contents);
   } else if (method == "textDocument/definition") {
-    QList<LspLocation> locations;
-    QJsonArray locArray =
-        result.isArray() ? result.toArray() : QJsonArray{result.toObject()};
-    for (const QJsonValue &val : locArray) {
-      QJsonObject obj = val.toObject();
-      LspLocation loc;
-      loc.uri = obj["uri"].toString();
-      loc.range = LspRange::fromJson(obj["range"].toObject());
-      locations.append(loc);
-    }
+    const QList<LspLocation> locations = parseLocations(result);
     emit definitionReceived(id, locations);
   } else if (method == "textDocument/references") {
-    QList<LspLocation> locations;
-    QJsonArray locArray = result.toArray();
-    for (const QJsonValue &val : locArray) {
-      QJsonObject obj = val.toObject();
-      LspLocation loc;
-      loc.uri = obj["uri"].toString();
-      loc.range = LspRange::fromJson(obj["range"].toObject());
-      locations.append(loc);
-    }
+    const QList<LspLocation> locations = parseLocations(result);
     emit referencesReceived(id, locations);
   } else if (method == "textDocument/signatureHelp") {
     LspSignatureHelp signatureHelp;
@@ -821,28 +876,10 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
     }
     emit formattingReceived(id, edits);
   } else if (method == "textDocument/declaration") {
-    QList<LspLocation> locations;
-    QJsonArray locArray =
-        result.isArray() ? result.toArray() : QJsonArray{result.toObject()};
-    for (const QJsonValue &val : locArray) {
-      QJsonObject obj = val.toObject();
-      LspLocation loc;
-      loc.uri = obj["uri"].toString();
-      loc.range = LspRange::fromJson(obj["range"].toObject());
-      locations.append(loc);
-    }
+    const QList<LspLocation> locations = parseLocations(result);
     emit declarationReceived(id, locations);
   } else if (method == "textDocument/typeDefinition") {
-    QList<LspLocation> locations;
-    QJsonArray locArray =
-        result.isArray() ? result.toArray() : QJsonArray{result.toObject()};
-    for (const QJsonValue &val : locArray) {
-      QJsonObject obj = val.toObject();
-      LspLocation loc;
-      loc.uri = obj["uri"].toString();
-      loc.range = LspRange::fromJson(obj["range"].toObject());
-      locations.append(loc);
-    }
+    const QList<LspLocation> locations = parseLocations(result);
     emit typeDefinitionReceived(id, locations);
   } else if (method == "workspace/symbol") {
     QList<LspDocumentSymbol> symbols;
@@ -882,8 +919,66 @@ void LspClient::handleNotification(const QString &method,
       diagnostics.append(diag);
     }
 
-    emit diagnosticsReceived(uri, diagnostics);
+    const QJsonValue versionVal = params["version"];
+    const int version = versionVal.isDouble() ? versionVal.toInt(-1) : -1;
+    emit diagnosticsReceived(uri, diagnostics, version);
   }
+}
+
+QList<LspLocation> LspClient::parseLocations(const QJsonValue &result) {
+  QJsonArray locArray;
+  if (result.isArray()) {
+    locArray = result.toArray();
+  } else if (result.isObject()) {
+    locArray.append(result);
+  }
+
+  QList<LspLocation> locations;
+  for (const QJsonValue &val : locArray) {
+    if (!val.isObject()) {
+      continue;
+    }
+    const QJsonObject obj = val.toObject();
+    LspLocation loc;
+    if (obj.contains("targetUri")) {
+      loc.uri = obj["targetUri"].toString();
+      const QJsonValue range = obj.contains("targetSelectionRange")
+                                   ? obj["targetSelectionRange"]
+                                   : obj["targetRange"];
+      loc.range = LspRange::fromJson(range.toObject());
+    } else {
+      loc.uri = obj["uri"].toString();
+      loc.range = LspRange::fromJson(obj["range"].toObject());
+    }
+    if (loc.uri.isEmpty()) {
+      continue;
+    }
+    locations.append(loc);
+  }
+  return locations;
+}
+
+LspCompletionItem LspClient::parseCompletionItem(const QJsonObject &obj) {
+  LspCompletionItem item;
+  item.label = obj["label"].toString();
+  item.kind = obj["kind"].toInt();
+  item.detail = obj["detail"].toString();
+
+  const QJsonValue docVal = obj["documentation"];
+  if (docVal.isString()) {
+    item.documentation = docVal.toString();
+  } else if (docVal.isObject()) {
+    item.documentation = docVal.toObject()["value"].toString();
+  }
+
+  const QJsonObject textEdit = obj["textEdit"].toObject();
+  if (textEdit.contains("newText")) {
+    item.insertText = textEdit["newText"].toString();
+  } else {
+    item.insertText = obj["insertText"].toString(item.label);
+  }
+  item.insertTextFormat = obj["insertTextFormat"].toInt(1);
+  return item;
 }
 
 void LspClient::doInitialize() {

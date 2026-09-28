@@ -334,47 +334,115 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
   };
 
   setCurrentBlockState(0);
-  for (int i = 0; i < m_multiLineBlocks.size(); ++i) {
-    const MultiLineBlock &block = m_multiLineBlocks[i];
-    int stateId = i + 1;
 
-    int startIndex = 0;
-    if (previousBlockState() != stateId) {
-      QRegularExpressionMatch startMatch = block.startPattern.match(text);
-      startIndex = startMatch.hasMatch() ? startMatch.capturedStart() : -1;
+  if (!m_multiLineBlocks.isEmpty()) {
+    struct PendingMatch {
+      int start = -2;
+      int length = 0;
+    };
+
+    auto nextMatch = [&](const QRegularExpression &pattern, int captureGroup,
+                         int from, PendingMatch &cached, bool requireLength) {
+      if (cached.start == -1 || cached.start >= from) {
+        return;
+      }
+      int offset = from;
+      while (offset <= text.size()) {
+        QRegularExpressionMatch match = pattern.match(text, offset);
+        if (!match.hasMatch()) {
+          break;
+        }
+        const int matchStart = match.capturedStart(captureGroup);
+        const int matchLength = match.capturedLength(captureGroup);
+        if (matchStart >= from && (!requireLength || matchLength > 0)) {
+          cached.start = matchStart;
+          cached.length = matchLength;
+          return;
+        }
+        offset = qMax(match.capturedStart() + 1, match.capturedEnd());
+      }
+      cached.start = -1;
+    };
+
+    QVector<const SyntaxRule *> skipRules;
+    for (const SyntaxRule &rule : m_rules) {
+      if (isStringLikeRule(rule.name) || isCommentLikeRule(rule.name)) {
+        skipRules.append(&rule);
+      }
+    }
+    QVector<PendingMatch> skipMatches(skipRules.size());
+    QVector<PendingMatch> blockStarts(m_multiLineBlocks.size());
+
+    int activeBlock = previousBlockState() - 1;
+    if (activeBlock >= m_multiLineBlocks.size()) {
+      activeBlock = -1;
     }
 
-    while (startIndex >= 0) {
+    int position = 0;
+    while (position <= text.size()) {
+      int regionStart = 0;
+      int searchFrom = 0;
 
-      QRegularExpressionMatch startMatch =
-          block.startPattern.match(text, startIndex);
-      int searchFrom =
-          (previousBlockState() == stateId)
-              ? startIndex
-              : startIndex +
-                    (startMatch.hasMatch() ? startMatch.capturedLength() : 1);
+      if (activeBlock < 0) {
+        int blockStart = -1;
+        int blockLength = 0;
+        for (int i = 0; i < m_multiLineBlocks.size(); ++i) {
+          nextMatch(m_multiLineBlocks[i].startPattern, 0, position,
+                    blockStarts[i], false);
+          if (blockStarts[i].start >= 0 &&
+              (blockStart < 0 || blockStarts[i].start < blockStart)) {
+            blockStart = blockStarts[i].start;
+            blockLength = blockStarts[i].length;
+            activeBlock = i;
+          }
+        }
+        if (blockStart < 0) {
+          break;
+        }
 
+        int skipStart = -1;
+        int skipEnd = -1;
+        for (int i = 0; i < skipRules.size(); ++i) {
+          nextMatch(skipRules[i]->pattern, skipRules[i]->captureGroup, position,
+                    skipMatches[i], true);
+          const PendingMatch &match = skipMatches[i];
+          if (match.start >= 0 && match.start < blockStart &&
+              (skipStart < 0 || match.start < skipStart ||
+               (match.start == skipStart &&
+                match.start + match.length > skipEnd))) {
+            skipStart = match.start;
+            skipEnd = match.start + match.length;
+          }
+        }
+        if (skipStart >= 0) {
+          activeBlock = -1;
+          position = skipEnd;
+          continue;
+        }
+
+        regionStart = blockStart;
+        searchFrom = blockStart + blockLength;
+      }
+
+      const MultiLineBlock &block = m_multiLineBlocks[activeBlock];
       QRegularExpressionMatch endMatch =
           block.endPattern.match(text, searchFrom);
-      int endIndex = endMatch.capturedStart();
-      int blockLength = 0;
-
-      if (endIndex == -1) {
-        setCurrentBlockState(stateId);
-        blockLength = text.length() - startIndex;
-      } else {
-        blockLength = endIndex - startIndex + endMatch.capturedLength();
-      }
+      const int regionEnd =
+          endMatch.hasMatch() ? endMatch.capturedEnd() : text.size();
 
       if (shouldFormat) {
-        applyFormatRange(startIndex, blockLength, block.format, true,
-                         isStringLikeRule(block.name) ? &stringCharacters
-                                                      : nullptr);
+        applyFormatRange(
+            regionStart, regionEnd - regionStart, block.format, true,
+            isStringLikeRule(block.name) ? &stringCharacters : nullptr);
       }
 
-      QRegularExpressionMatch nextStart =
-          block.startPattern.match(text, startIndex + blockLength);
-      startIndex = nextStart.hasMatch() ? nextStart.capturedStart() : -1;
+      if (!endMatch.hasMatch()) {
+        setCurrentBlockState(activeBlock + 1);
+        break;
+      }
+
+      activeBlock = -1;
+      position = qMax(regionEnd, regionStart + 1);
     }
   }
 

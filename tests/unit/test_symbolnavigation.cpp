@@ -77,7 +77,33 @@ private slots:
   void testLanguageProviderServerAvailability();
   void testLanguageProviderWithUnavailableServer();
   void testLanguageProviderRegistrationInService();
+  void testLanguageProviderCorrelatesResponses();
+  void testLanguageProviderNullAndSingleResults();
+  void testLanguageProviderReportsRequestFailure();
+  void testLanguageProviderClientStillStarting();
+  void testLspProviderUriEncodesSpaces();
+
+private:
+  static DefinitionRequest makeRequest(int line);
 };
+
+DefinitionRequest TestSymbolNavigation::makeRequest(int line) {
+  DefinitionRequest req;
+  req.filePath = "/tmp/nav test/main.cpp";
+  req.line = line;
+  req.column = 0;
+  req.languageId = "cpp";
+  return req;
+}
+
+static LanguageServerConfig fakeServerConfig() {
+  LanguageServerConfig config;
+  config.providerId = "fake";
+  config.displayName = "Fake";
+  config.supportedLanguages = {"cpp"};
+  config.serverCommand = FAKE_LSP_SERVER_PATH;
+  return config;
+}
 
 void TestSymbolNavigation::testDefinitionRequestStruct() {
   DefinitionRequest req;
@@ -508,6 +534,92 @@ void TestSymbolNavigation::testLanguageProviderRegistrationInService() {
 
   service.goToDefinition(cppReq);
   QCOMPARE(startSpy.count(), 1);
+}
+
+void TestSymbolNavigation::testLanguageProviderCorrelatesResponses() {
+  LspClient client;
+  QSignalSpy initSpy(&client, &LspClient::initialized);
+  QVERIFY(client.start(FAKE_LSP_SERVER_PATH));
+  QVERIFY(initSpy.wait(5000));
+
+  LanguageLspDefinitionProvider provider(fakeServerConfig());
+  provider.setClientResolver([&client](const QString &) { return &client; });
+  QSignalSpy readySpy(&provider, &IDefinitionProvider::definitionReady);
+
+  provider.requestDefinition(makeRequest(4));
+  const int second = provider.requestDefinition(makeRequest(8));
+
+  QTRY_COMPARE_WITH_TIMEOUT(readySpy.count(), 1, 5000);
+  QTest::qWait(100);
+  QCOMPARE(readySpy.count(), 1);
+  QCOMPARE(readySpy.first().at(0).toInt(), second);
+  const auto targets =
+      qvariant_cast<QList<DefinitionTarget>>(readySpy.first().at(1));
+  QCOMPARE(targets.size(), 1);
+  QCOMPARE(targets.first().line, 18);
+  QCOMPARE(targets.first().filePath, QString("/tmp/nav test/main.cpp"));
+  client.stop();
+}
+
+void TestSymbolNavigation::testLanguageProviderNullAndSingleResults() {
+  LspClient client;
+  QSignalSpy initSpy(&client, &LspClient::initialized);
+  QVERIFY(client.start(FAKE_LSP_SERVER_PATH));
+  QVERIFY(initSpy.wait(5000));
+
+  LanguageLspDefinitionProvider provider(fakeServerConfig());
+  provider.setClientResolver([&client](const QString &) { return &client; });
+  QSignalSpy readySpy(&provider, &IDefinitionProvider::definitionReady);
+
+  provider.requestDefinition(makeRequest(1));
+  QTRY_COMPARE_WITH_TIMEOUT(readySpy.count(), 1, 5000);
+  QVERIFY(
+      qvariant_cast<QList<DefinitionTarget>>(readySpy.first().at(1)).isEmpty());
+
+  provider.requestDefinition(makeRequest(2));
+  QTRY_COMPARE_WITH_TIMEOUT(readySpy.count(), 2, 5000);
+  const auto targets =
+      qvariant_cast<QList<DefinitionTarget>>(readySpy.at(1).at(1));
+  QCOMPARE(targets.size(), 1);
+  QCOMPARE(targets.first().line, 12);
+  client.stop();
+}
+
+void TestSymbolNavigation::testLanguageProviderReportsRequestFailure() {
+  LspClient client;
+  QSignalSpy initSpy(&client, &LspClient::initialized);
+  QVERIFY(client.start(FAKE_LSP_SERVER_PATH));
+  QVERIFY(initSpy.wait(5000));
+
+  LanguageLspDefinitionProvider provider(fakeServerConfig());
+  provider.setClientResolver([&client](const QString &) { return &client; });
+  QSignalSpy failedSpy(&provider, &IDefinitionProvider::definitionFailed);
+
+  const int reqId = provider.requestDefinition(makeRequest(3));
+  QTRY_COMPARE_WITH_TIMEOUT(failedSpy.count(), 1, 5000);
+  QCOMPARE(failedSpy.first().at(0).toInt(), reqId);
+  QCOMPARE(failedSpy.first().at(1).toString(), QString("definition failed"));
+  client.stop();
+}
+
+void TestSymbolNavigation::testLanguageProviderClientStillStarting() {
+  LspClient client;
+  LanguageLspDefinitionProvider provider(fakeServerConfig());
+  provider.setClientResolver([&client](const QString &) { return &client; });
+  QSignalSpy failedSpy(&provider, &IDefinitionProvider::definitionFailed);
+
+  provider.requestDefinition(makeRequest(5));
+  QVERIFY(failedSpy.wait(1000));
+  QVERIFY(failedSpy.first().at(1).toString().contains("still starting"));
+}
+
+void TestSymbolNavigation::testLspProviderUriEncodesSpaces() {
+  const QString uri =
+      LanguageLspDefinitionProvider::filePathToUri("/tmp/a b/c.cpp");
+  QCOMPARE(uri, QString("file:///tmp/a%20b/c.cpp"));
+  QCOMPARE(LanguageLspDefinitionProvider::uriToFilePath(uri),
+           QString("/tmp/a b/c.cpp"));
+  QCOMPARE(LspDefinitionProvider::filePathToUri("/tmp/a b/c.cpp"), uri);
 }
 
 QTEST_MAIN(TestSymbolNavigation)

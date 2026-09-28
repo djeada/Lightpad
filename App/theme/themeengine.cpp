@@ -1,6 +1,7 @@
 #include "themeengine.h"
 #include "themepresets.h"
 
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
@@ -13,7 +14,30 @@ namespace {
 QString sanitizedThemeFileName(const QString &name) {
   QString safeName = name;
   safeName.replace(QRegularExpression("[^a-zA-Z0-9_-]"), "_");
+  if (safeName != name) {
+    const QByteArray hash =
+        QCryptographicHash::hash(name.toUtf8(), QCryptographicHash::Sha1)
+            .toHex()
+            .left(8);
+    safeName += QLatin1Char('-') + QString::fromLatin1(hash);
+  }
   return safeName;
+}
+
+void removeThemeFilesNamed(const QString &directory, const QString &name) {
+  QDir dir(directory);
+  if (!dir.exists())
+    return;
+  const QStringList files = dir.entryList({"*.json"}, QDir::Files);
+  for (const QString &fileName : files) {
+    QFile file(dir.absoluteFilePath(fileName));
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+      continue;
+    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    if (doc.isObject() && doc.object().value("name").toString() == name)
+      QFile::remove(dir.absoluteFilePath(fileName));
+  }
 }
 } // namespace
 
@@ -216,6 +240,7 @@ ThemeDefinition ThemeEngine::saveUserTheme(const ThemeDefinition &theme) {
   QJsonObject json;
   normalized.write(json);
 
+  removeThemeFilesNamed(userThemesDirectory(), normalized.name);
   QFile file(userThemeFilePath(normalized.name));
   if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
     file.write(QJsonDocument(json).toJson(QJsonDocument::Indented));
@@ -234,6 +259,7 @@ bool ThemeEngine::deleteUserTheme(const QString &name) {
   const bool wasActive = m_activeTheme.name == name;
   m_themes.remove(name);
   QFile::remove(userThemeFilePath(name));
+  removeThemeFilesNamed(userThemesDirectory(), name);
 
   if (wasActive) {
     const QString fallback = m_builtinThemes.contains("Hacker Dark")

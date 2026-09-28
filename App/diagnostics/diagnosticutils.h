@@ -7,11 +7,19 @@
 namespace DiagnosticUtils {
 
 inline QString filePathToUri(const QString &filePath) {
-  return QUrl::fromLocalFile(filePath).toString();
+  return QUrl::fromLocalFile(filePath).toString(QUrl::FullyEncoded);
 }
 
 inline QString uriToFilePath(const QString &uri) {
   return QUrl(uri).toLocalFile();
+}
+
+inline QString normalizeUri(const QString &uri) {
+  const QUrl url(uri);
+  if (!url.isLocalFile()) {
+    return uri;
+  }
+  return filePathToUri(url.toLocalFile());
 }
 
 inline int clampLine(int line, int lineCount) {

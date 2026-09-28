@@ -33,8 +33,6 @@ void CommandPalette::setupUI() {
 
   connect(m_searchBox, &QLineEdit::textChanged, this,
           &CommandPalette::onSearchTextChanged);
-  connect(m_resultsList, &QListWidget::itemActivated, this,
-          &CommandPalette::onItemActivated);
   connect(m_resultsList, &QListWidget::itemClicked, this,
           &CommandPalette::onItemClicked);
 

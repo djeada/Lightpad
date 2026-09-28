@@ -82,6 +82,54 @@ const QStringList &terminalFontFamilies() {
   return families;
 }
 
+constexpr int kMaxPendingEscapeCharacters = 4096;
+
+bool isSequenceAbort(QChar ch) {
+  return ch == QChar(0x18) || ch == QChar(0x1a);
+}
+
+int stringSequenceEnd(const QString &text, int from) {
+  for (int j = from; j < text.size(); ++j) {
+    const QChar ch = text.at(j);
+    if (ch == QChar('\x07') || ch == QChar(0x9c) || isSequenceAbort(ch)) {
+      return j;
+    }
+    if (ch == QChar('\x1b')) {
+      if (j + 1 >= text.size()) {
+        return -1;
+      }
+      return text.at(j + 1) == QChar('\\') ? j + 1 : j - 1;
+    }
+  }
+  return -1;
+}
+
+int csiSequenceEnd(const QString &text, int from) {
+  for (int j = from; j < text.size(); ++j) {
+    const ushort code = text.at(j).unicode();
+    if ((code >= 0x40 && code <= 0x7e) || isSequenceAbort(text.at(j))) {
+      return j;
+    }
+    if (code == 0x1b) {
+      return j - 1;
+    }
+  }
+  return -1;
+}
+
+QChar decSpecialGraphic(QChar ch) {
+  static const char16_t table[] = {
+      0x0020, 0x25C6, 0x2592, 0x2409, 0x240C, 0x240D, 0x240A, 0x00B0,
+      0x00B1, 0x2424, 0x240B, 0x2518, 0x2510, 0x250C, 0x2514, 0x253C,
+      0x23BA, 0x23BB, 0x2500, 0x23BC, 0x23BD, 0x251C, 0x2524, 0x2534,
+      0x252C, 0x2502, 0x2264, 0x2265, 0x03C0, 0x2260, 0x00A3, 0x00B7};
+  const ushort code = ch.unicode();
+  if (code < 0x5f || code > 0x7e) {
+    return ch;
+  }
+  return QChar(table[code - 0x5f]);
+}
+
 int findTrailingIncompleteEscapeStart(const QString &text) {
   for (int i = 0; i < text.size(); ++i) {
     if (text.at(i) != QChar('\x1b')) {
@@ -94,60 +142,23 @@ int findTrailingIncompleteEscapeStart(const QString &text) {
 
     const QChar next = text.at(i + 1);
     if (next == '[') {
-      int j = i + 2;
-      while (j < text.size() &&
-             (text.at(j).unicode() < 0x40 || text.at(j).unicode() > 0x7e)) {
-        ++j;
-      }
-      if (j >= text.size()) {
+      const int end = csiSequenceEnd(text, i + 2);
+      if (end < 0) {
         return i;
       }
-      i = j;
-    } else if (next == ']') {
-      int j = i + 2;
-      bool terminated = false;
-      while (j < text.size()) {
-        if (text.at(j) == QChar('\x07')) {
-          terminated = true;
-          break;
-        }
-        if (text.at(j) == QChar('\x1b') && j + 1 < text.size() &&
-            text.at(j + 1) == QChar('\\')) {
-          terminated = true;
-          ++j;
-          break;
-        }
-        ++j;
-      }
-      if (!terminated) {
+      i = end;
+    } else if (next == ']' || next == 'P' || next == '^' || next == '_' ||
+               next == 'X') {
+      const int end = stringSequenceEnd(text, i + 2);
+      if (end < 0) {
         return i;
       }
-      i = j;
+      i = end;
     } else if (QStringLiteral(" ()#%*+,-./").contains(next)) {
       if (i + 2 >= text.size()) {
         return i;
       }
       i += 2;
-    } else if (next == 'P' || next == '^' || next == '_' || next == 'X') {
-      int j = i + 2;
-      bool terminated = false;
-      while (j < text.size()) {
-        if (text.at(j) == QChar('\x07')) {
-          terminated = true;
-          break;
-        }
-        if (text.at(j) == QChar('\x1b') && j + 1 < text.size() &&
-            text.at(j + 1) == QChar('\\')) {
-          terminated = true;
-          ++j;
-          break;
-        }
-        ++j;
-      }
-      if (!terminated) {
-        return i;
-      }
-      i = j;
     } else {
       ++i;
     }
@@ -179,13 +190,15 @@ Terminal::Terminal(QWidget *parent, const QString &workingDirectory)
       m_scrollBottom(-1), m_autoWrap(true), m_insertMode(false),
       m_applicationCursorKeys(false), m_bracketedPaste(false),
       m_cursorShown(true), m_processingPtyOutput(false),
-      m_ptyDecoder(QStringDecoder::Utf8), m_savedPrimaryInputStartPosition(0),
-      m_savedPrimaryScreenTop(0), m_savedPrimaryAnsiRow(0),
-      m_savedPrimaryAnsiColumn(0), m_baseFontSize(kDefaultFontSize),
-      m_contextMenu(nullptr), m_copyAction(nullptr), m_stopAction(nullptr),
-      m_runInputHistoryIndex(0), m_runInputIndicator(nullptr),
-      m_runInputIndicatorTimer(nullptr), m_runInputIndicatorActive(false),
-      m_runInputCursorVisible(false), m_inputIndicatorDebounceTimer(nullptr) {
+      m_charsetG0Graphics(false), m_charsetG1Graphics(false), m_shiftOut(false),
+      m_wheelRemainder(0), m_ptyDecoder(QStringDecoder::Utf8),
+      m_savedPrimaryInputStartPosition(0), m_savedPrimaryScreenTop(0),
+      m_savedPrimaryAnsiRow(0), m_savedPrimaryAnsiColumn(0),
+      m_baseFontSize(kDefaultFontSize), m_contextMenu(nullptr),
+      m_copyAction(nullptr), m_stopAction(nullptr), m_runInputHistoryIndex(0),
+      m_runInputIndicator(nullptr), m_runInputIndicatorTimer(nullptr),
+      m_runInputIndicatorActive(false), m_runInputCursorVisible(false),
+      m_inputIndicatorDebounceTimer(nullptr) {
   ui->setupUi(this);
 
   m_shellProfile = ShellProfileManager::instance().defaultProfile();
@@ -262,6 +275,10 @@ void Terminal::resetAnsiState() {
   m_scrollTop = 0;
   m_scrollBottom = -1;
   m_savedCursor = SavedCursor();
+  m_savedAlternateCursor = SavedCursor();
+  m_charsetG0Graphics = false;
+  m_charsetG1Graphics = false;
+  m_shiftOut = false;
   m_ansiBold = false;
   m_ansiDim = false;
   m_ansiItalic = false;
@@ -1210,6 +1227,9 @@ bool Terminal::startShell(const QString &workingDirectory) {
   m_applicationCursorKeys = false;
   m_bracketedPaste = false;
   setCursorShown(true);
+  leaveAlternateScreen();
+  resetAnsiState();
+  syncAnsiCursorToDocumentEnd();
 
 #ifndef Q_OS_WIN
   if (!m_shellPty) {
@@ -1427,9 +1447,17 @@ void Terminal::setWorkingDirectory(const QString &directory) {
   m_workingDirectory = target;
   updateCwdLabel();
   if (isRunning() && !alreadyThere) {
+    if (!isShellInForeground()) {
+      return;
+    }
     QString quoted = target;
     quoted.replace(QLatin1Char('\''), QLatin1String("'\\''"));
-    executeCommand(QStringLiteral("cd -- '%1'").arg(quoted));
+    const QString command = QStringLiteral("cd -- '%1'").arg(quoted);
+    if (isPtyShellActive()) {
+      writeToShell(QByteArray("\x05\x15") + command.toUtf8() + '\n');
+    } else {
+      executeCommand(command);
+    }
   }
 }
 
@@ -2041,10 +2069,9 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
       const QString selection =
           QApplication::clipboard()->text(QClipboard::Selection);
       if (!selection.isEmpty()) {
-        const QString saved = QApplication::clipboard()->text();
-        QApplication::clipboard()->setText(selection);
-        pasteClipboardText();
-        QApplication::clipboard()->setText(saved);
+        placeCaretAtAnsiCursor();
+        scrollToBottom();
+        writeToShell(ptyPasteData(selection, m_bracketedPaste));
       }
       return true;
     }
@@ -2075,7 +2102,14 @@ bool Terminal::eventFilter(QObject *obj, QEvent *event) {
       m_alternateScreenActive) {
 
     QWheelEvent *wheelEvent = static_cast<QWheelEvent *>(event);
-    const int steps = wheelEvent->angleDelta().y() / 40;
+    const int delta = wheelEvent->angleDelta().y();
+    if ((delta > 0 && m_wheelRemainder < 0) ||
+        (delta < 0 && m_wheelRemainder > 0)) {
+      m_wheelRemainder = 0;
+    }
+    m_wheelRemainder += delta;
+    const int steps = m_wheelRemainder / 40;
+    m_wheelRemainder -= steps * 40;
     if (steps != 0) {
       const QByteArray key = m_applicationCursorKeys
                                  ? QByteArray(steps > 0 ? "\x1bOA" : "\x1bOB")
@@ -2247,11 +2281,14 @@ void Terminal::appendOutput(const QString &text, bool isError) {
 
   QString output = text;
   if (output.size() > kMaxOutputChunkCharacters) {
-    const int dropped = output.size() - kMaxOutputChunkCharacters;
+    int dropped = output.size() - kMaxOutputChunkCharacters;
+    if (output.at(dropped).isLowSurrogate()) {
+      ++dropped;
+    }
     output =
         QString("\n[Lightpad truncated %1 characters of terminal output]\n")
             .arg(dropped) +
-        output.right(kMaxOutputChunkCharacters);
+        output.mid(dropped);
   }
 
   if (!isError) {
@@ -2264,6 +2301,9 @@ void Terminal::appendOutput(const QString &text, bool isError) {
     if (incompleteEscapeStart >= 0) {
       m_pendingAnsiText = output.mid(incompleteEscapeStart);
       output.truncate(incompleteEscapeStart);
+      if (m_pendingAnsiText.size() > kMaxPendingEscapeCharacters) {
+        m_pendingAnsiText.truncate(2);
+      }
     }
   }
 
@@ -3224,9 +3264,13 @@ void Terminal::reverseIndex() {
 }
 
 void Terminal::writePrintable(const QString &input) {
+  const bool graphics = m_shiftOut ? m_charsetG1Graphics : m_charsetG0Graphics;
   QString text;
   text.reserve(input.size());
-  for (const QChar ch : input) {
+  for (QChar ch : input) {
+    if (graphics) {
+      ch = decSpecialGraphic(ch);
+    }
     text.append(ch);
     if (isWideCharacter(ch.unicode())) {
       text.append(QChar(kWideCellPlaceholder));
@@ -3252,7 +3296,11 @@ void Terminal::writePrintable(const QString &input) {
 
       --take;
       if (take == 0) {
-        m_ansiColumn = columns;
+        if (m_autoWrap) {
+          m_ansiColumn = columns;
+        } else {
+          offset += 2;
+        }
         continue;
       }
     }
@@ -3276,27 +3324,37 @@ void Terminal::eraseInLine(int mode) {
   const int length = block.length() - 1;
   const int column = qMin(m_ansiColumn, screenColumns() - 1);
 
+  const bool fillBackground = m_ansiBackground.isValid() || m_ansiInverse;
+
   if (mode == 0) {
     cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
     cursor.removeSelectedText();
 
-    if (m_ansiBackground.isValid() || m_ansiInverse) {
-      const int fill = screenColumns() - m_ansiColumn;
+    if (fillBackground) {
+      const int start = qMin(m_ansiColumn, screenColumns());
+      if (length < start) {
+        cursor.insertText(QString(start - length, ' '), QTextCharFormat());
+      }
+      const int fill = screenColumns() - start;
       if (fill > 0) {
         cursor.insertText(QString(fill, ' '), currentAnsiFormat());
       }
     }
   } else if (mode == 1) {
-    const int end = qMin(length, column + 1);
+    const int end = fillBackground ? column + 1 : qMin(length, column + 1);
     if (end > 0) {
       cursor.setPosition(block.position());
-      cursor.setPosition(block.position() + end, QTextCursor::KeepAnchor);
+      cursor.setPosition(block.position() + qMin(length, end),
+                         QTextCursor::KeepAnchor);
       cursor.insertText(QString(end, ' '), currentAnsiFormat());
     }
   } else if (mode == 2) {
     cursor.setPosition(block.position());
     cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
     cursor.removeSelectedText();
+    if (fillBackground) {
+      cursor.insertText(QString(screenColumns(), ' '), currentAnsiFormat());
+    }
   }
 }
 
@@ -3379,33 +3437,36 @@ void Terminal::trimTrailingBlanksAfterCursor() {
 }
 
 void Terminal::saveCursorState() {
-  m_savedCursor.row = m_ansiRow - m_screenTop;
-  m_savedCursor.column = m_ansiColumn;
-  m_savedCursor.foreground = m_ansiForeground;
-  m_savedCursor.background = m_ansiBackground;
-  m_savedCursor.bold = m_ansiBold;
-  m_savedCursor.dim = m_ansiDim;
-  m_savedCursor.italic = m_ansiItalic;
-  m_savedCursor.underline = m_ansiUnderline;
-  m_savedCursor.inverse = m_ansiInverse;
-  m_savedCursor.strikeOut = m_ansiStrikeOut;
-  m_savedCursor.hidden = m_ansiHidden;
+  SavedCursor &saved =
+      m_alternateScreenActive ? m_savedAlternateCursor : m_savedCursor;
+  saved.row = m_ansiRow - m_screenTop;
+  saved.column = m_ansiColumn;
+  saved.foreground = m_ansiForeground;
+  saved.background = m_ansiBackground;
+  saved.bold = m_ansiBold;
+  saved.dim = m_ansiDim;
+  saved.italic = m_ansiItalic;
+  saved.underline = m_ansiUnderline;
+  saved.inverse = m_ansiInverse;
+  saved.strikeOut = m_ansiStrikeOut;
+  saved.hidden = m_ansiHidden;
 }
 
 void Terminal::restoreCursorState() {
-  m_ansiRow = m_screenTop + qBound(0, m_savedCursor.row, screenRows() - 1);
-  m_ansiColumn = qBound(0, m_savedCursor.column, screenColumns() - 1);
-  m_ansiForeground = m_savedCursor.foreground.isValid()
-                         ? m_savedCursor.foreground
-                         : QColor(m_textColor);
-  m_ansiBackground = m_savedCursor.background;
-  m_ansiBold = m_savedCursor.bold;
-  m_ansiDim = m_savedCursor.dim;
-  m_ansiItalic = m_savedCursor.italic;
-  m_ansiUnderline = m_savedCursor.underline;
-  m_ansiInverse = m_savedCursor.inverse;
-  m_ansiStrikeOut = m_savedCursor.strikeOut;
-  m_ansiHidden = m_savedCursor.hidden;
+  const SavedCursor &saved =
+      m_alternateScreenActive ? m_savedAlternateCursor : m_savedCursor;
+  m_ansiRow = m_screenTop + qBound(0, saved.row, screenRows() - 1);
+  m_ansiColumn = qBound(0, saved.column, screenColumns() - 1);
+  m_ansiForeground =
+      saved.foreground.isValid() ? saved.foreground : QColor(m_textColor);
+  m_ansiBackground = saved.background;
+  m_ansiBold = saved.bold;
+  m_ansiDim = saved.dim;
+  m_ansiItalic = saved.italic;
+  m_ansiUnderline = saved.underline;
+  m_ansiInverse = saved.inverse;
+  m_ansiStrikeOut = saved.strikeOut;
+  m_ansiHidden = saved.hidden;
 }
 
 void Terminal::setCursorShown(bool shown) {
@@ -3675,12 +3736,12 @@ void Terminal::handleCsi(const QString &body, QChar finalByte) {
     m_ansiRow = m_screenTop + qBound(0, count(0) - 1, rows - 1);
     break;
   case 'I':
-    for (int i = 0; i < count(0); ++i) {
+    for (int i = 0, n = qMin(count(0), columns); i < n; ++i) {
       m_ansiColumn = qMin(columns - 1, (m_ansiColumn / 8 + 1) * 8);
     }
     break;
   case 'Z':
-    for (int i = 0; i < count(0); ++i) {
+    for (int i = 0, n = qMin(count(0), columns); i < n; ++i) {
       m_ansiColumn = qMax(0, (qMin(m_ansiColumn, columns - 1) - 1) / 8 * 8);
     }
     break;
@@ -3731,7 +3792,8 @@ void Terminal::handleCsi(const QString &body, QChar finalByte) {
   }
   case '@': {
     QTextCursor cursor = ansiCursor(true);
-    cursor.insertText(QString(count(0), ' '), currentAnsiFormat());
+    cursor.insertText(QString(qMin(count(0), columns), ' '),
+                      currentAnsiFormat());
 
     const QTextBlock block = cursor.block();
     if (block.length() - 1 > columns) {
@@ -3791,28 +3853,20 @@ int Terminal::handleEscapeSequence(const QString &text, int index) {
   }
 
   auto skipString = [&](int from) -> int {
-    for (int j = from; j < text.length(); ++j) {
-      if (text.at(j) == QChar('\x07')) {
-        return j;
-      }
-      if (text.at(j) == QChar('\x1b') && j + 1 < text.length() &&
-          text.at(j + 1) == QChar('\\')) {
-        return j + 1;
-      }
-    }
-    return text.length() - 1;
+    const int end = stringSequenceEnd(text, from);
+    return end < 0 ? text.length() - 1 : end;
   };
 
   const QChar next = text.at(index + 1);
   switch (next.toLatin1()) {
   case '[': {
-    int j = index + 2;
-    while (j < text.length() &&
-           (text.at(j).unicode() < 0x40 || text.at(j).unicode() > 0x7e)) {
-      ++j;
-    }
-    if (j >= text.length()) {
+    const int j = csiSequenceEnd(text, index + 2);
+    if (j < 0) {
       return text.length() - 1;
+    }
+    if (j < index + 2 || text.at(j).unicode() < 0x40 ||
+        text.at(j).unicode() > 0x7e) {
+      return j;
     }
     handleCsi(text.mid(index + 2, j - index - 2), text.at(j));
     return j;
@@ -3852,6 +3906,14 @@ int Terminal::handleEscapeSequence(const QString &text, int index) {
   }
 
   if (QStringLiteral(" ()#%*+,-./").contains(next)) {
+    if (index + 2 < text.length() && (next == '(' || next == ')')) {
+      const bool graphics = text.at(index + 2) == QChar('0');
+      if (next == '(') {
+        m_charsetG0Graphics = graphics;
+      } else {
+        m_charsetG1Graphics = graphics;
+      }
+    }
     return qMin(index + 2, text.length() - 1);
   }
   return index + 1;
@@ -3884,17 +3946,18 @@ void Terminal::appendAnsiText(const QString &text, QTextCursor &cursor) {
       break;
     case '\n':
     case '\v':
+    case '\f':
       lineFeed();
 
       if (!m_processingPtyOutput) {
         m_ansiColumn = 0;
       }
       break;
-    case '\f':
-      clearDocument();
-      m_screenTop = 0;
-      m_ansiRow = 0;
-      m_ansiColumn = 0;
+    case 0x0e:
+      m_shiftOut = true;
+      break;
+    case 0x0f:
+      m_shiftOut = false;
       break;
     case '\b':
       m_ansiColumn = qMax(0, qMin(m_ansiColumn, screenColumns() - 1) - 1);

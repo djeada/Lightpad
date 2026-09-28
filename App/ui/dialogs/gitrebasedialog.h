@@ -14,6 +14,7 @@ class QLineEdit;
 struct RebaseEntry {
   QString action;
   QString hash;
+  QString fullHash;
   QString subject;
   QString author;
 };
@@ -49,6 +50,7 @@ private:
   GitIntegration *m_git;
   Theme m_theme;
   QString m_upstream;
+  QString m_rangeProblem;
 
   QTreeWidget *m_commitList;
   QPushButton *m_moveUpBtn;

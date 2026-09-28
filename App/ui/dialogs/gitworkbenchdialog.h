@@ -88,6 +88,8 @@ private slots:
   void onCommandPalette();
 
 private:
+  friend class TestGitWorkbenchDialog;
+
   void buildUi();
   void buildBranchExplorer(QVBoxLayout *layout);
   void buildCommitCanvas(QVBoxLayout *layout);
@@ -97,6 +99,8 @@ private:
 
   void loadBranches();
   void loadCommits(const QString &branch = QString());
+  int rewriteWindowSize() const;
+  QString rewriteProblem(int windowSize, QString *base) const;
   void loadStashes();
   void loadTags();
 
@@ -131,6 +135,8 @@ private:
   GitIntegration *m_git;
   bool m_rewriteMode;
   QString m_currentBranch;
+  QString m_loadedBranch;
+  QStringList m_loadedOrder;
   QList<WorkbenchRebaseEntry> m_entries;
   QList<GitBranchInfo> m_branches;
   QList<GitStashEntry> m_stashes;

@@ -33,6 +33,7 @@
 #include "../completion/completionitem.h"
 #include "../completion/completionproviderregistry.h"
 #include "../completion/completionwidget.h"
+#include "../completion/snippetregistry.h"
 #include "../dap/breakpointmanager.h"
 #include "../diagnostics/diagnosticutils.h"
 #include "../git/gitintegration.h"
@@ -92,7 +93,7 @@ public:
 
   QRectF blockBoundingRect(const QTextBlock &block) const override {
     QRectF rect = QPlainTextDocumentLayout::blockBoundingRect(block);
-    if (m_spacing > 0) {
+    if (m_spacing > 0 && block.isVisible()) {
       rect.setHeight(rect.height() + m_spacing);
     }
     return rect;
@@ -1042,16 +1043,6 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     }
   }
 
-  if (hasMultipleCursors() && !keyEvent->text().isEmpty() &&
-      keyEvent->modifiers() == Qt::NoModifier) {
-
-    QString text = keyEvent->text();
-    applyToAllCursors(
-        [&text](QTextCursor &cursor) { cursor.insertText(text); });
-    expandTabsToSpacesInDocument();
-    return;
-  }
-
   if (hasMultipleCursors() && keyEvent->key() == Qt::Key_Backspace) {
     applyToAllCursors([](QTextCursor &cursor) {
       if (!cursor.hasSelection()) {
@@ -1071,6 +1062,16 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
         cursor.removeSelectedText();
       }
     });
+    return;
+  }
+
+  if (hasMultipleCursors() && MultiCursorHandler::isTextInput(
+                                  keyEvent->modifiers(), keyEvent->text())) {
+
+    QString text = keyEvent->text();
+    applyToAllCursors(
+        [&text](QTextCursor &cursor) { cursor.insertText(text); });
+    expandTabsToSpacesInDocument();
     return;
   }
 
@@ -1836,8 +1837,8 @@ bool TextArea::event(QEvent *event) {
 
 void TextArea::updateCursorPositionChangedCallbacks() {
 
-  disconnect(this, &TextArea::cursorPositionChanged, 0, 0);
-  disconnect(this, &TextArea::selectionChanged, 0, 0);
+  disconnect(m_cursorRefreshConnection);
+  disconnect(m_selectionRefreshConnection);
 
   auto refresh = [this]() {
     invalidateCompletionRequest();
@@ -1846,8 +1847,10 @@ void TextArea::updateCursorPositionChangedCallbacks() {
     scheduleExtraSelectionsRefresh();
   };
 
-  connect(this, &TextArea::cursorPositionChanged, this, refresh);
-  connect(this, &TextArea::selectionChanged, this, refresh);
+  m_cursorRefreshConnection =
+      connect(this, &TextArea::cursorPositionChanged, this, refresh);
+  m_selectionRefreshConnection =
+      connect(this, &TextArea::selectionChanged, this, refresh);
 
   refresh();
 }
@@ -2199,14 +2202,7 @@ void TextArea::insertCompletionItem(const CompletionItem &item) {
   QString insertText = item.effectiveInsertText();
 
   if (item.isSnippet) {
-
-    static const QRegularExpression tabstopWithDefaultRe(
-        R"(\$\{(\d+):([^}]*)\})");
-    insertText.replace(tabstopWithDefaultRe, "\\2");
-    static const QRegularExpression tabstopNoDefaultRe(R"(\$\{(\d+)\})");
-    insertText.replace(tabstopNoDefaultRe, "");
-    static const QRegularExpression simpleTabstopRe(R"(\$(\d+))");
-    insertText.replace(simpleTabstopRe, "");
+    insertText = Snippet::expand(insertText);
   }
 
   tc.insertText(insertText);

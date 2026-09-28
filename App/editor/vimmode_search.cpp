@@ -57,8 +57,12 @@ QString VimMode::toRegularExpression(const QString &vim, bool *caseSensitive,
 
   auto charClass = [&](int &i) -> bool {
     int j = i + 1;
-    if (j < n && vim[j] == '^')
+    bool negated = false;
+    if (j < n && vim[j] == '^') {
+      negated = true;
       ++j;
+    }
+    const int bodyStart = j;
     if (j < n && vim[j] == ']')
       ++j;
     while (j < n && vim[j] != ']') {
@@ -73,11 +77,11 @@ QString VimMode::toRegularExpression(const QString &vim, bool *caseSensitive,
     }
     if (j >= n)
       return false;
-    QString cls = vim.mid(i, j - i + 1);
-    cls.replace("\\e", "\\x1b");
-    if (cls.startsWith("[^"))
-      cls.insert(2, "\\n");
-    out += cls;
+    QString body = vim.mid(bodyStart, j - bodyStart);
+    if (body.startsWith(']'))
+      body = "\\]" + body.mid(1);
+    body.replace("\\e", "\\x1b");
+    out += QString("[") + (negated ? "^\\n" : "") + body + "]";
     i = j;
     return true;
   };
@@ -196,18 +200,34 @@ QString VimMode::toRegularExpression(const QString &vim, bool *caseSensitive,
       case '_':
         if (i + 1 < n) {
           QChar e = vim[++i];
-          if (e == '.')
+          if (e == '.') {
             out += "[\\s\\S]";
-          else if (e == 's')
-            out += "\\s";
-          else if (e == '^')
+          } else if (e == '^') {
             out += "^";
-          else if (e == '$')
+          } else if (e == '$') {
             out += "$";
-          else
-            out += QString("(?:\\%1|\\n)").arg(e);
+          } else if (e == '[') {
+            const int mark = out.size();
+            if (charClass(i)) {
+              const QString cls = out.mid(mark);
+              out.truncate(mark);
+              out += "(?:" + cls + "|\\n)";
+            } else {
+              out += "\\[";
+            }
+          } else {
+            out += "(?:" + toRegularExpression(QString("\\") + e) + "|\\n)";
+          }
         }
         continue;
+      case '%':
+        if (magic != VeryMagic && i + 1 < n && vim[i + 1] == '(') {
+          out += "(?:";
+          ++i;
+          branchStart = true;
+          continue;
+        }
+        break;
       case 'z':
         if (i + 1 < n && vim[i + 1] == 's') {
           out += "\\K";
@@ -277,6 +297,12 @@ QString VimMode::toRegularExpression(const QString &vim, bool *caseSensitive,
       hasUpper = true;
 
     if (magic == VeryMagic) {
+      if (c == '%' && i + 1 < n && vim[i + 1] == '(') {
+        out += "(?:";
+        ++i;
+        branchStart = true;
+        continue;
+      }
       if (c == '(' || c == '|') {
         out += c;
         branchStart = true;
@@ -811,9 +837,12 @@ void VimMode::executeCommandLine() {
     setMode(VimEditMode::Normal);
     emit commandBufferChanged(QString());
     if (!text.trimmed().isEmpty()) {
-      m_lastExCommand = text;
       m_undoCursors[doc()->availableUndoSteps()] = -1;
+      m_repeatedCommandLine = false;
       executeEx(text);
+      if (!m_repeatedCommandLine)
+        m_lastExCommand = text;
+      m_repeatedCommandLine = false;
     }
     return;
   }

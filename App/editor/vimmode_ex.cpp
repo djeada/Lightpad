@@ -18,6 +18,25 @@ int findUnescapedDelim(const QString &text, QChar delim, int from) {
   return -1;
 }
 
+qint64 parseCount(const QString &text, bool *ok) {
+  *ok = !text.isEmpty();
+  qint64 value = 0;
+  for (QChar c : text) {
+    if (c.unicode() < '0' || c.unicode() > '9') {
+      *ok = false;
+      return 0;
+    }
+    value = qMin<qint64>(value * 10 + c.digitValue(), 999999999999LL);
+  }
+  return value;
+}
+
+struct DepthGuard {
+  explicit DepthGuard(int &depth) : m_depth(depth) { ++m_depth; }
+  ~DepthGuard() { --m_depth; }
+  int &m_depth;
+};
+
 QString visibleText(QString text) {
   text.replace('\n', "^J");
   text.replace('\t', "^I");
@@ -89,18 +108,22 @@ bool VimMode::parseExAddress(const QString &cmd, int &i, int curLine, int &line,
       found = true;
     }
   }
+  qint64 target = line;
   while (found && i < n && (cmd[i] == '+' || cmd[i] == '-')) {
-    int sign = cmd[i] == '+' ? 1 : -1;
+    const int sign = cmd[i] == '+' ? 1 : -1;
     ++i;
-    int value = 0;
+    qint64 value = 0;
     bool digits = false;
     while (i < n && cmd[i].isDigit()) {
-      value = value * 10 + cmd[i].digitValue();
+      value = qMin<qint64>(value * 10 + cmd[i].digitValue(), 999999999999LL);
       digits = true;
       ++i;
     }
-    line += sign * (digits ? value : 1);
+    target += sign * (digits ? value : 1);
+    target = qBound(qint64(-999999999999LL), target, qint64(999999999999LL));
   }
+  if (found)
+    line = int(qBound(qint64(-100000000), target, qint64(100000000)));
   return true;
 }
 
@@ -165,6 +188,11 @@ bool VimMode::parseExRange(const QString &cmd, int &i, int &line1, int &line2,
 }
 
 void VimMode::executeEx(const QString &command) {
+  if (m_exDepth >= kMaxExDepth) {
+    emit statusMessage("E169: Command too recursive");
+    return;
+  }
+  DepthGuard depthGuard(m_exDepth);
   QString cmd = command;
   while (cmd.startsWith(':') || cmd.startsWith(' '))
     cmd = cmd.mid(1);
@@ -200,7 +228,17 @@ void VimMode::executeEx(const QString &command) {
       "g",   "gl",   "glo",   "glob",   "globa",   "global", "v",     "vg",
       "vgl", "vglo", "vglob", "vgloba", "vglobal", "norm",   "norma", "normal"};
   if (!barArgCommands.contains(name)) {
-    for (int k = i; k < cmd.size(); ++k) {
+    int scanFrom = i;
+    if (!name.isEmpty() && QString("substitute").startsWith(name) &&
+        i < cmd.size() && !cmd[i].isLetterOrNumber() && cmd[i] != '\\' &&
+        cmd[i] != '"' && cmd[i] != '|' && !cmd[i].isSpace()) {
+      const QChar delim = cmd[i];
+      const int patternEnd = findUnescapedDelim(cmd, delim, i + 1);
+      const int replacementEnd =
+          patternEnd < 0 ? -1 : findUnescapedDelim(cmd, delim, patternEnd + 1);
+      scanFrom = replacementEnd < 0 ? cmd.size() : replacementEnd + 1;
+    }
+    for (int k = scanFrom; k < cmd.size(); ++k) {
       if (cmd[k] == '\\') {
         ++k;
         continue;
@@ -254,10 +292,10 @@ void VimMode::executeEx(const QString &command) {
       rest = rest.mid(1).trimmed();
     }
     bool ok = false;
-    int n = rest.toInt(&ok);
+    const qint64 n = parseCount(rest, &ok);
     if (ok && n > 0) {
       line1 = clampedLine2;
-      line2 = qMin(last, line1 + n - 1);
+      line2 = int(qMin<qint64>(last, qint64(line1) + n - 1));
     }
   };
 
@@ -343,6 +381,13 @@ void VimMode::executeEx(const QString &command) {
   } else if (is("put", 2)) {
     QChar reg = args.isEmpty() ? QChar() : args[0];
     VimRegister r = getRegister(reg);
+    if (r.content.isEmpty() && !reg.isNull() && reg != '"' &&
+        !(reg.unicode() < 128 && reg.isLetterOrNumber() &&
+          m_registers.contains(reg.toLower())) &&
+        !(reg == '-' && m_registers.contains(reg))) {
+      emit statusMessage(QString("E353: Nothing in register %1").arg(reg));
+      return;
+    }
     QString text = r.content;
     if (!text.endsWith('\n'))
       text += '\n';
@@ -372,6 +417,10 @@ void VimMode::executeEx(const QString &command) {
       emit statusMessage(err.isEmpty() ? "E14: Invalid address" : err);
       return;
     }
+    if (dest < -1 || dest > last) {
+      emit statusMessage("E16: Invalid range");
+      return;
+    }
     line1 = qMax(0, line1);
     line2 = qMax(0, line2);
     const bool move = name.startsWith('m');
@@ -383,6 +432,23 @@ void VimMode::executeEx(const QString &command) {
       return;
     const int n = line2 - line1 + 1;
     QString text = textBetween(lineStart(line1), lineEndPos(line2));
+    struct MovedMark {
+      QChar mark;
+      int offset;
+      int col;
+    };
+    QVector<MovedMark> movedMarks;
+    if (move) {
+      for (auto it = m_marks.constBegin(); it != m_marks.constEnd(); ++it) {
+        const ushort m = it.key().unicode();
+        if (m < 'a' || m > 'z' || it->isNull() || it->document() != doc())
+          continue;
+        const int markLine = it->blockNumber();
+        if (markLine >= line1 && markLine <= line2)
+          movedMarks.append(
+              {it.key(), markLine - line1, it->positionInBlock()});
+      }
+    }
     QTextCursor block(doc());
     block.beginEditBlock();
     auto insertAfter = [&](int after) {
@@ -417,15 +483,17 @@ void VimMode::executeEx(const QString &command) {
       firstNew = insertAfter(dest);
     }
     block.endEditBlock();
+    for (const MovedMark &m : movedMarks)
+      setMark(m.mark, posOf(firstNew + m.offset, m.col));
     setCursorPos(firstNonBlankPos(firstNew + n - 1));
   } else if (is("join", 1)) {
     bool ok = false;
-    int n = args.toInt(&ok);
+    const qint64 n = parseCount(args, &ok);
     int first = qMax(0, line1);
     int count;
     if (ok && n > 0) {
       first = clampedLine2;
-      count = n;
+      count = int(qMin<qint64>(n, lineCount()));
     } else if (hasRange && line2 > line1) {
       count = line2 - line1 + 1;
     } else {
@@ -520,12 +588,31 @@ void VimMode::executeEx(const QString &command) {
     setCursorPos(clampNormal(ok ? qMax(0, n - 1) : 0));
   } else if (name == "@" || name == "*") {
     QChar reg = args.isEmpty() ? QChar('@') : args[0];
+    if (hasRange)
+      setCursorPos(clampNormal(
+          posOf(clampedLine2, colOf(m_editor->textCursor().position()))));
+    if (reg == '@') {
+      if (m_lastMacroRegister.isNull()) {
+        emit statusMessage("E748: No previously used register");
+        return;
+      }
+      reg = m_lastMacroRegister;
+    }
     if (reg == ':') {
-      if (!m_lastExCommand.isEmpty() && !m_lastExCommand.startsWith('@'))
-        executeEx(m_lastExCommand);
-    } else {
-      setCursorPos(firstNonBlankPos(clampedLine2));
       playMacro(reg, 1);
+      return;
+    }
+    if (!isValidRegister(reg)) {
+      emit statusMessage(QString("E354: Invalid register name: '%1'").arg(reg));
+      return;
+    }
+    m_lastMacroRegister = reg;
+    const QStringList lines = getRegister(reg).content.split('\n');
+    for (const QString &line : lines) {
+      if (m_abortReplay)
+        break;
+      if (!line.trimmed().isEmpty())
+        executeEx(line);
     }
   } else {
     emit statusMessage(QString("E492: Not an editor command: %1").arg(cmd));
@@ -661,10 +748,10 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
   m_searchPattern = pattern;
 
   bool ok = false;
-  int count = countText.toInt(&ok);
+  const qint64 count = parseCount(countText, &ok);
   if (ok && count > 0) {
     line1 = line2;
-    line2 = qMin(lineCount() - 1, line1 + count - 1);
+    line2 = int(qMin<qint64>(lineCount() - 1, qint64(line1) + count - 1));
   }
 
   const bool global = flags.count('g') % 2 == 1;
@@ -699,6 +786,11 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
   int lastLine = -1;
   int newlineCount = 0;
   int scanned = 0;
+  const bool multilinePattern =
+      pattern.contains("\\n") || pattern.contains("\\_");
+  int previousEnd = -1;
+  int previousEndLine = -1;
+  int nextCol = -1;
   auto it = re.globalMatch(text);
   while (it.hasNext()) {
     auto m = it.next();
@@ -708,8 +800,21 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
     newlineCount += text.mid(scanned, s - scanned).count('\n');
     scanned = s;
     int line = line1 + newlineCount;
+    const int e = int(m.capturedEnd());
+    if (line == previousEndLine) {
+      if (s == e && s == previousEnd)
+        continue;
+      int lineEnd = text.indexOf('\n', s);
+      if (lineEnd < 0)
+        lineEnd = text.size();
+      if (!multilinePattern && nextCol >= lineEnd)
+        continue;
+    }
     if (!global && changedLines.contains(line))
       continue;
+    previousEnd = e;
+    previousEndLine = line + text.mid(s, e - s).count('\n');
+    nextCol = e > s ? e : e + 1;
     if (!global && m.capturedEnd() > s &&
         text.mid(s, m.capturedLength()).contains('\n')) {
       changedLines.insert(line);
@@ -806,21 +911,26 @@ void VimMode::exGlobal(const QString &args, int line1, int line2, bool hasRange,
   }
   QTextCursor block(doc());
   block.beginEditBlock();
+  const QList<QTextCursor> outerMarks = m_globalMarks;
+  const bool outerAbort = m_abortReplay;
+  m_globalMarks = marks;
   int previousLine = -1;
-  for (const QTextCursor &mark : marks) {
+  for (int k = 0; k < m_globalMarks.size(); ++k) {
+    const QTextCursor mark = m_globalMarks[k];
     if (mark.isNull())
       continue;
     int l = mark.blockNumber();
     if (l == previousLine && mark.position() != lineStart(l))
       continue;
-    if (re.match(lineText(l)).hasMatch() == invert)
-      continue;
     previousLine = l;
+    m_abortReplay = false;
     setCursorPos(lineStart(l));
     executeEx(command);
     if (m_mode != VimEditMode::Normal)
       handleKey("<Esc>", nullptr);
   }
+  m_globalMarks = outerMarks;
+  m_abortReplay = outerAbort;
   block.endEditBlock();
 }
 
@@ -949,7 +1059,9 @@ void VimMode::exNormal(const QString &args, int line1, int line2,
   }
   QTextCursor block(doc());
   block.beginEditBlock();
+  const bool outerAbort = m_abortReplay;
   auto runOnce = [&]() {
+    m_abortReplay = false;
     replayTokens(tokens);
     resetPending();
     if (m_mode == VimEditMode::Command) {
@@ -969,6 +1081,7 @@ void VimMode::exNormal(const QString &args, int line1, int line2,
   } else {
     runOnce();
   }
+  m_abortReplay = outerAbort;
   block.endEditBlock();
 }
 

@@ -14,7 +14,41 @@
 
 #ifdef HAVE_WEBENGINE
 #include <QWebEnginePage>
+#include <QWebEngineScript>
 #include <QWebEngineSettings>
+
+#include <functional>
+
+namespace {
+class MarkdownPreviewPage : public QWebEnginePage {
+public:
+  MarkdownPreviewPage(std::function<void(const QUrl &)> linkHandler,
+                      QObject *parent)
+      : QWebEnginePage(parent), m_linkHandler(std::move(linkHandler)) {}
+
+protected:
+  bool acceptNavigationRequest(const QUrl &url, NavigationType type,
+                               bool isMainFrame) override {
+    if (type == NavigationTypeLinkClicked && isMainFrame) {
+      QUrl withoutFragment = url;
+      withoutFragment.setFragment(QString());
+      QUrl current = this->url();
+      current.setFragment(QString());
+      if (url.hasFragment() && withoutFragment == current)
+        return true;
+      if (m_linkHandler)
+        m_linkHandler(url);
+      return false;
+    }
+    if (type == NavigationTypeFormSubmitted)
+      return false;
+    return QWebEnginePage::acceptNavigationRequest(url, type, isMainFrame);
+  }
+
+private:
+  std::function<void(const QUrl &)> m_linkHandler;
+};
+} // namespace
 #endif
 
 MarkdownPreviewPanel::MarkdownPreviewPanel(QWidget *parent)
@@ -44,28 +78,25 @@ void MarkdownPreviewPanel::setupUi() {
 #ifdef HAVE_WEBENGINE
   m_webView = new QWebEngineView(this);
   m_webView->setObjectName("markdownPreviewWebView");
+  m_webView->setPage(new MarkdownPreviewPage(
+      [this](const QUrl &url) {
+        if (url.scheme() == "http" || url.scheme() == "https" ||
+            url.scheme() == "mailto") {
+          QDesktopServices::openUrl(url);
+        } else if (url.isLocalFile() && !url.toLocalFile().isEmpty()) {
+          const QString localPath = url.toLocalFile();
+          if (QFileInfo::exists(localPath))
+            emit linkClicked(localPath);
+        }
+      },
+      m_webView));
   m_webView->page()->setBackgroundColor(palette().color(QPalette::Base));
+  m_webView->settings()->setAttribute(QWebEngineSettings::JavascriptEnabled,
+                                      false);
   m_webView->settings()->setAttribute(
-      QWebEngineSettings::LocalContentCanAccessRemoteUrls, true);
+      QWebEngineSettings::LocalContentCanAccessRemoteUrls, false);
   m_webView->settings()->setAttribute(
       QWebEngineSettings::LocalContentCanAccessFileUrls, true);
-
-  connect(m_webView->page(), &QWebEnginePage::linkHovered, this,
-          [](const QString &) {});
-  connect(m_webView, &QWebEngineView::urlChanged, this,
-          [this](const QUrl &url) {
-            if (url.scheme() == "http" || url.scheme() == "https") {
-              m_webView->stop();
-              QDesktopServices::openUrl(url);
-            } else if (url.scheme() == "file" && !url.toLocalFile().isEmpty()) {
-              QString localPath = url.toLocalFile();
-              QFileInfo fi(localPath);
-              if (fi.exists() && !isMarkdownFile(fi.suffix())) {
-                m_webView->stop();
-                emit linkClicked(localPath);
-              }
-            }
-          });
 
   layout->addWidget(m_webView, 1);
 #else
@@ -286,7 +317,7 @@ void MarkdownPreviewPanel::setSourceScrollRatio(double ratio) {
   if (m_webView) {
     QString js = QString("window.scrollTo(0, document.body.scrollHeight * %1);")
                      .arg(ratio);
-    m_webView->page()->runJavaScript(js);
+    m_webView->page()->runJavaScript(js, QWebEngineScript::ApplicationWorld);
   }
 #else
   if (m_browser) {

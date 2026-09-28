@@ -4,6 +4,8 @@
 #include <QJsonObject>
 #include <QLineEdit>
 #include <QMetaObject>
+#include <QProcess>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -32,6 +34,13 @@ private slots:
   void testEmptyFilePath();
   void testWorkspaceFolderSubstitution();
   void testRunTemplateSelectorQuoteRoundTrip();
+  void testShellSubstitutionQuotesValues_data();
+  void testShellSubstitutionQuotesValues();
+  void testShellSubstitutionLeavesUnknownVariables();
+  void testShellScriptArgumentIndex();
+  void testBuildCommandQuotesHostileFileName();
+  void testAssignmentKeepsExistingEntries();
+  void testAssignmentRefusesToOverwriteUnreadableConfig();
 
 private:
   QTemporaryDir m_tempDir;
@@ -389,6 +398,210 @@ void TestRunTemplateManager::testRunTemplateSelectorQuoteRoundTrip() {
   QCOMPARE(savedAssignment.compilerFlags, originalAssignment.compilerFlags);
 
   QVERIFY(manager.removeAssignment(testFile));
+}
+
+void TestRunTemplateManager::testShellSubstitutionQuotesValues_data() {
+  QTest::addColumn<QString>("script");
+  QTest::addColumn<QString>("expectedTemplate");
+
+  QTest::newRow("unquoted") << "printf '%s' ${v}" << "V";
+  QTest::newRow("double") << "printf '%s' \"pre ${v} post\"" << "pre V post";
+  QTest::newRow("single") << "printf '%s' 'pre ${v} post'" << "pre V post";
+  QTest::newRow("adjacent") << "printf '%s' x${v}\"${v}\"'${v}'" << "xVVV";
+  QTest::newRow("command-substitution")
+      << "printf '%s' \"$(printf '%s' \"${v}\")\"" << "V";
+  QTest::newRow("backtick") << "printf '%s' \"`printf '%s' ${v}`\"" << "V";
+  QTest::newRow("subshell") << "(printf '%s' \"${v}\") && printf '!'" << "V!";
+  QTest::newRow("escaped-quote") << "printf '%s' \\\"${v}\\\"" << "\"V\"";
+  QTest::newRow("comment") << "printf '%s' ${v} # it's ${v}" << "V";
+}
+
+void TestRunTemplateManager::testShellSubstitutionQuotesValues() {
+  QFETCH(QString, script);
+  QFETCH(QString, expectedTemplate);
+
+  if (QStandardPaths::findExecutable("bash").isEmpty()) {
+    QSKIP("bash is not available");
+  }
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+
+  const QStringList values = {"plain",
+                              "with space",
+                              "x$(touch pwned1)",
+                              "x`touch pwned2`",
+                              "a\"b",
+                              "a'b",
+                              "a\\b",
+                              "a\\\\'\"$HOME",
+                              ";touch pwned3;",
+                              "$'x'",
+                              "'\"'\"`$(touch pwned4)`"};
+
+  for (const QString &value : values) {
+    QMap<QString, QString> vars;
+    vars.insert("v", value);
+    const QString substituted =
+        PythonProjectEnvironment::substituteShellVariables(script, vars);
+
+    QProcess process;
+    process.setWorkingDirectory(dir.path());
+    process.start("bash", {"-c", substituted});
+    QVERIFY(process.waitForFinished(10000));
+    QString expected = expectedTemplate;
+    expected.replace("V", value);
+    QCOMPARE(QString::fromUtf8(process.readAllStandardOutput()), expected);
+    QVERIFY2(QDir(dir.path()).entryList(QDir::Files).isEmpty(),
+             qPrintable(substituted));
+  }
+}
+
+void TestRunTemplateManager::testShellSubstitutionLeavesUnknownVariables() {
+  QMap<QString, QString> vars;
+  vars.insert("file", "a b");
+  QCOMPARE(PythonProjectEnvironment::substituteShellVariables(
+               "echo ${HOME} ${file} $PATH", vars),
+           QString("echo ${HOME} 'a b' $PATH"));
+  QCOMPARE(PythonProjectEnvironment::substituteShellVariables(
+               "echo \"${file}\"", vars),
+           QString("echo \"\"'a b'\"\""));
+  QCOMPARE(PythonProjectEnvironment::substituteShellVariables("echo '${file}'",
+                                                              vars),
+           QString("echo '''a b'''"));
+  QCOMPARE(PythonProjectEnvironment::shellQuote("it's"), QString("'it'\\''s'"));
+}
+
+void TestRunTemplateManager::testShellScriptArgumentIndex() {
+  QCOMPARE(PythonProjectEnvironment::shellScriptArgumentIndex("bash",
+                                                              {"-c", "echo"}),
+           1);
+  QCOMPARE(PythonProjectEnvironment::shellScriptArgumentIndex("/bin/sh",
+                                                              {"-lc", "echo"}),
+           1);
+  QCOMPARE(PythonProjectEnvironment::shellScriptArgumentIndex(
+               "zsh", {"-o", "pipefail", "-ic", "echo"}),
+           3);
+  QCOMPARE(PythonProjectEnvironment::shellScriptArgumentIndex(
+               "bash", {"script.sh", "-c", "echo"}),
+           -1);
+  QCOMPARE(PythonProjectEnvironment::shellScriptArgumentIndex(
+               "python3", {"-c", "print(1)"}),
+           -1);
+}
+
+void TestRunTemplateManager::testBuildCommandQuotesHostileFileName() {
+  if (QStandardPaths::findExecutable("bash").isEmpty()) {
+    QSKIP("bash is not available");
+  }
+
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  manager.setWorkspaceFolder(dir.path());
+
+  const QString binDir = dir.path() + "/bin";
+  QVERIFY(QDir().mkpath(binDir));
+  QFile fakeCompiler(binDir + "/g++");
+  QVERIFY(fakeCompiler.open(QIODevice::WriteOnly));
+  fakeCompiler.write("#!/bin/sh\n"
+                     "printf '#!/bin/sh\\necho ran\\n' > \"$3\"\n"
+                     "chmod +x \"$3\"\n");
+  fakeCompiler.close();
+  fakeCompiler.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                              QFileDevice::ExeOwner);
+
+  const QString srcDir = dir.path() + "/src";
+  QVERIFY(QDir().mkpath(srcDir));
+  const QString hostile = srcDir + "/x$(touch pwned)a\"b'c.cpp";
+  QFile source(hostile);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  source.write("int main() { return 0; }\n");
+  source.close();
+
+  FileTemplateAssignment assignment;
+  assignment.templateId = "cpp_gcc";
+  assignment.sourceFiles = QStringList()
+                           << "${fileDir}/extra $(touch pwned2).cpp";
+  QVERIFY(manager.assignTemplateToFile(hostile, assignment));
+
+  const QPair<QString, QStringList> cmd = manager.buildCommand(hostile, "cpp");
+  QCOMPARE(cmd.first, QString("bash"));
+
+  QProcess process;
+  process.setWorkingDirectory(srcDir);
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  env.insert("PATH", binDir + ":" + env.value("PATH"));
+  process.setProcessEnvironment(env);
+  process.start(cmd.first, cmd.second);
+  QVERIFY(process.waitForFinished(10000));
+  QCOMPARE(QString::fromUtf8(process.readAllStandardOutput()).trimmed(),
+           QString("ran"));
+  QVERIFY(!QFile::exists(srcDir + "/pwned"));
+  QVERIFY(!QFile::exists(srcDir + "/pwned2"));
+  QVERIFY(QFile::exists(srcDir + "/x$(touch pwned)a\"b'c"));
+
+  QVERIFY(manager.removeAssignment(hostile));
+  manager.setWorkspaceFolder(QString());
+}
+
+void TestRunTemplateManager::testAssignmentKeepsExistingEntries() {
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QVERIFY(QDir().mkpath(dir.path() + "/.lightpad"));
+  const QString configPath = dir.path() + "/.lightpad/run_config.json";
+  {
+    QFile file(configPath);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("{\"version\":\"1.0\",\"assignments\":[{\"file\":\"a.py\","
+               "\"template\":\"python3\"}]}");
+  }
+
+  manager.setWorkspaceFolder(QString());
+  manager.setWorkspaceFolder(dir.path());
+  FileTemplateAssignment assignment;
+  assignment.templateId = "python3";
+  QVERIFY(manager.assignTemplateToFile(dir.path() + "/b.py", assignment));
+
+  QFile file(configPath);
+  QVERIFY(file.open(QIODevice::ReadOnly));
+  const QJsonArray entries =
+      QJsonDocument::fromJson(file.readAll()).object()["assignments"].toArray();
+  QCOMPARE(entries.size(), 2);
+  manager.setWorkspaceFolder(QString());
+}
+
+void TestRunTemplateManager::
+    testAssignmentRefusesToOverwriteUnreadableConfig() {
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QVERIFY(QDir().mkpath(dir.path() + "/.lightpad"));
+  const QString configPath = dir.path() + "/.lightpad/run_config.json";
+  const QByteArray corrupt = "{\"assignments\": [";
+  {
+    QFile file(configPath);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write(corrupt);
+  }
+
+  manager.setWorkspaceFolder(QString());
+  manager.setWorkspaceFolder(dir.path());
+  FileTemplateAssignment assignment;
+  assignment.templateId = "python3";
+  QVERIFY(!manager.assignTemplateToFile(dir.path() + "/b.py", assignment));
+
+  QFile file(configPath);
+  QVERIFY(file.open(QIODevice::ReadOnly));
+  QCOMPARE(file.readAll(), corrupt);
+  manager.setWorkspaceFolder(QString());
 }
 
 QTEST_MAIN(TestRunTemplateManager)

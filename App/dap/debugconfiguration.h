@@ -217,8 +217,13 @@ public:
 
   void removeConfiguration(const QString &name);
 
-  void updateConfiguration(const QString &name,
+  bool updateConfiguration(const QString &name,
                            const DebugConfiguration &config);
+
+  void replaceConfigurations(const QList<DebugConfiguration> &configurations);
+
+  static QString joinCommandLineArguments(const QStringList &arguments);
+  static QStringList splitCommandLineArguments(const QString &commandLine);
 
   DebugConfiguration configuration(const QString &name) const;
 

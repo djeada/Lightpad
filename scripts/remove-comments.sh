@@ -33,7 +33,7 @@ Examples:
 USAGE
 }
 
-log()  { (( QUIET == 0 )) && printf '%s\n' "$*"; }
+log()  { if (( QUIET == 0 )); then printf '%s\n' "$*"; fi; }
 die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 # --- arg parsing ---
@@ -112,6 +112,16 @@ def strip_cpp_comments(b: bytes) -> bytes:
                 continue
 
         c = b[i]
+
+        # Digit separator inside a numeric literal (e.g. 1'000'000)
+        if c == 0x27:
+            j = i - 1
+            while j >= 0 and (0x30 <= b[j] <= 0x39 or 0x41 <= b[j] <= 0x5A or
+                              0x61 <= b[j] <= 0x7A or b[j] in b"_'."):
+                j -= 1
+            if j + 1 < i and 0x30 <= b[j + 1] <= 0x39:
+                out.append(c); i += 1
+                continue
 
         # Regular string / char literals
         if c == 0x22 or c == 0x27:  # " or '

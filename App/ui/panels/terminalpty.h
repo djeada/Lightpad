@@ -41,15 +41,19 @@ signals:
 
 private slots:
   void readAvailable();
+  void writePending();
   void reapChild();
 
 private:
   void closeMaster();
+  void drainOutput();
   void finishFromStatus(int status);
 
   int m_masterFd;
   qint64 m_pid;
   QSocketNotifier *m_readNotifier;
+  QSocketNotifier *m_writeNotifier;
+  QByteArray m_writeBuffer;
   QTimer *m_reapTimer;
   bool m_running;
   int m_columns;

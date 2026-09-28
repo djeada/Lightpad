@@ -11,6 +11,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -225,7 +226,7 @@ void BisectDialog::reload() {
     item->setFlags(Qt::ItemIsEnabled);
   }
 
-  const bool running = m_git->isBisecting();
+  const bool running = m_git->isBisecting() && !m_automatedRunActive;
   updateStartEnabled();
   m_goodCombo->setEnabled(!running);
   m_badCombo->setEnabled(!running);
@@ -303,12 +304,19 @@ void BisectDialog::onRunAutomated() {
     return;
   }
 
-  int exitCode = 0;
-  const QString output = m_git->bisectRun(command, &exitCode);
-  applyOutput(output + QStringLiteral("\n\n") +
-              tr("git bisect run finished with exit code %1.\n%2")
-                  .arg(exitCode)
-                  .arg(gitBisectExitCodeMeaning(exitCode)));
+  m_automatedRunActive = true;
+  reload();
+  QPointer<BisectDialog> self(this);
+  m_git->bisectRunAsync(command, [self](QString output, int exitCode) {
+    if (!self) {
+      return;
+    }
+    self->m_automatedRunActive = false;
+    self->applyOutput(output + QStringLiteral("\n\n") +
+                      tr("git bisect run finished with exit code %1.\n%2")
+                          .arg(exitCode)
+                          .arg(gitBisectExitCodeMeaning(exitCode)));
+  });
 }
 
 void BisectDialog::onReset() {

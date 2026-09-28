@@ -4,6 +4,7 @@
 #include "../../lsp/lspclient.h"
 #include "../icompletionprovider.h"
 #include <QMap>
+#include <QPointer>
 #include <functional>
 
 class LspCompletionProvider : public QObject, public ICompletionProvider {
@@ -50,7 +51,7 @@ private:
   CompletionItem convertItem(const LspCompletionItem &lspItem) const;
   CompletionItemKind convertKind(int lspKind) const;
 
-  LspClient *m_client;
+  QPointer<LspClient> m_client;
   bool m_enabled = true;
 
   QMap<int, std::function<void(const QList<CompletionItem> &)>>

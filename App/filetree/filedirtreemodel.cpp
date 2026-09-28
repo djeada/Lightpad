@@ -3,12 +3,31 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QMimeData>
+#include <QRegularExpression>
 #include <QUrl>
 
 namespace {
 
 constexpr char kGnomeCopiedFiles[] = "x-special/gnome-copied-files";
 constexpr char kKdeCutSelection[] = "application/x-kde-cutselection";
+
+bool isSafeRelativeName(const QString &name) {
+  if (name.isEmpty() || QDir::isAbsolutePath(name) || name.startsWith('/') ||
+      name.startsWith('\\')) {
+    return false;
+  }
+  const QStringList parts = name.split(
+      QRegularExpression(QStringLiteral("[/\\\\]")), Qt::SkipEmptyParts);
+  if (parts.isEmpty()) {
+    return false;
+  }
+  for (const QString &part : parts) {
+    if (part == QLatin1String(".") || part == QLatin1String("..")) {
+      return false;
+    }
+  }
+  return true;
+}
 
 QString joinPath(const QString &dir, const QString &name) {
   if (dir.isEmpty()) {
@@ -35,14 +54,39 @@ bool FileDirTreeModel::isInside(const QString &parentDir, const QString &path) {
     return false;
   }
 
+  auto contains = [](const QString &parent, const QString &child) {
+    return parent == child || child.startsWith(parent.endsWith(QLatin1Char('/'))
+                                                   ? parent
+                                                   : parent + QLatin1Char('/'));
+  };
+
   const QString parent =
       QDir::cleanPath(QFileInfo(parentDir).absoluteFilePath());
   const QString child = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
-  if (parent == child) {
+  if (contains(parent, child)) {
     return true;
   }
 
-  return child.startsWith(parent + QLatin1Char('/'));
+  return contains(canonicalPath(parentDir), canonicalPath(path));
+}
+
+QString FileDirTreeModel::canonicalPath(const QString &path) {
+  const QString absolute = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+  QString current = absolute;
+  QString suffix;
+  while (true) {
+    const QString canonical = QFileInfo(current).canonicalFilePath();
+    if (!canonical.isEmpty()) {
+      return QDir::cleanPath(canonical + suffix);
+    }
+    const QFileInfo info(current);
+    const QString parent = info.absolutePath();
+    if (parent == current || info.fileName().isEmpty()) {
+      return absolute;
+    }
+    suffix = QLatin1Char('/') + info.fileName() + suffix;
+    current = parent;
+  }
 }
 
 bool FileDirTreeModel::createNewFile(const QString &dirPath,
@@ -51,6 +95,10 @@ bool FileDirTreeModel::createNewFile(const QString &dirPath,
   const QString trimmed = fileName.trimmed();
   if (trimmed.isEmpty()) {
     emit errorOccurred(tr("Enter a file name."));
+    return false;
+  }
+  if (!isSafeRelativeName(trimmed)) {
+    emit errorOccurred(tr("\"%1\" is not a valid file name.").arg(trimmed));
     return false;
   }
 
@@ -87,6 +135,10 @@ bool FileDirTreeModel::createNewDirectory(const QString &parentPath,
   const QString trimmed = dirName.trimmed();
   if (trimmed.isEmpty()) {
     emit errorOccurred(tr("Enter a folder name."));
+    return false;
+  }
+  if (!isSafeRelativeName(trimmed)) {
+    emit errorOccurred(tr("\"%1\" is not a valid folder name.").arg(trimmed));
     return false;
   }
 
@@ -154,6 +206,8 @@ bool FileDirTreeModel::renameFileOrDirectory(const QString &oldPath,
   }
 
   if (QFile::rename(oldPath, newPath)) {
+    emit pathMoved(QFileInfo(oldPath).absoluteFilePath(),
+                   QFileInfo(newPath).absoluteFilePath());
     emit modelUpdated();
     return true;
   }
@@ -352,6 +406,8 @@ bool FileDirTreeModel::moveInto(const QString &srcPath, const QString &destDir,
     if (createdPath) {
       *createdPath = target;
     }
+    emit pathMoved(srcInfo.absoluteFilePath(),
+                   QFileInfo(target).absoluteFilePath());
     emit modelUpdated();
     return true;
   }
@@ -361,6 +417,8 @@ bool FileDirTreeModel::moveInto(const QString &srcPath, const QString &destDir,
       if (createdPath) {
         *createdPath = target;
       }
+      emit pathMoved(srcInfo.absoluteFilePath(),
+                     QFileInfo(target).absoluteFilePath());
       emit modelUpdated();
       return true;
     }

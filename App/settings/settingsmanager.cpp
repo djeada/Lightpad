@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonValue>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <functional>
 
@@ -24,7 +25,7 @@ void SettingsManager::initializeDefaults() {
 
   m_defaults["fontFamily"] = "Ubuntu Mono";
   m_defaults["fontSize"] = 12;
-  m_defaults["fontWeight"] = 50;
+  m_defaults["fontWeight"] = static_cast<int>(QFont::Normal);
   m_defaults["fontItalic"] = false;
 
   m_defaults["autoIndent"] = true;
@@ -159,8 +160,11 @@ bool SettingsManager::loadSettings() {
   QString filePath = getSettingsFilePath();
 
   if (!QFileInfo(filePath).exists()) {
-    QString oldPath = "settings.json";
-    if (QFileInfo(oldPath).exists()) {
+    const QString oldPath =
+        QDir(QCoreApplication::applicationDirPath()).filePath("settings.json");
+    if (QFileInfo(oldPath).exists() &&
+        QFileInfo(oldPath).absoluteFilePath() !=
+            QFileInfo(filePath).absoluteFilePath()) {
       LOG_INFO("Found old settings file, attempting migration...");
       migrateFromOldPath(oldPath);
     }
@@ -187,16 +191,36 @@ bool SettingsManager::loadSettings() {
   QJsonParseError parseError;
   QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
 
-  if (parseError.error != QJsonParseError::NoError) {
+  if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
     LOG_ERROR(
         QString("Failed to parse settings: %1").arg(parseError.errorString()));
+    const QString backupPath = filePath + ".bak";
+    QFile::remove(backupPath);
+    const bool backedUp = QFile::copy(filePath, backupPath);
+    if (backedUp) {
+      LOG_WARNING(
+          QString("Backed up unreadable settings to: %1").arg(backupPath));
+    } else {
+      LOG_ERROR(QString("Could not back up unreadable settings; refusing to "
+                        "overwrite %1")
+                    .arg(filePath));
+    }
     m_settings = m_defaults;
-    m_loaded = true;
+    m_loaded = backedUp;
     emit settingsLoaded();
     return false;
   }
 
   m_settings = doc.object();
+
+  if (m_settings.value("fontWeight").isDouble()) {
+    const int storedWeight = m_settings.value("fontWeight").toInt();
+    const int weight = normalizeFontWeight(storedWeight);
+    if (weight != storedWeight) {
+      m_settings["fontWeight"] = weight;
+      m_dirty = true;
+    }
+  }
 
   int version = m_settings.value("settingsVersion").toInt(0);
   if (version < SETTINGS_VERSION) {
@@ -228,7 +252,7 @@ bool SettingsManager::saveSettings() {
   }
 
   QString filePath = getSettingsFilePath();
-  QFile file(filePath);
+  QSaveFile file(filePath);
 
   if (!file.open(QIODevice::WriteOnly)) {
     LOG_ERROR(
@@ -240,7 +264,10 @@ bool SettingsManager::saveSettings() {
 
   QJsonDocument doc(m_settings);
   file.write(doc.toJson(QJsonDocument::Indented));
-  file.close();
+  if (!file.commit()) {
+    LOG_ERROR(QString("Failed to write settings file: %1").arg(filePath));
+    return false;
+  }
 
   m_dirty = false;
   LOG_INFO(QString("Settings saved to: %1").arg(filePath));

@@ -58,6 +58,18 @@ private slots:
   void testRepositoryFingerprint();
   void testExternalChangesDetected();
 
+  void testDropHeadKeepsUncommittedWork();
+  void testDropOlderCommitInPathWithSpaces();
+  void testDropCommitRefusesCommitOffBranch();
+  void testSquashRequiresRunEndingAtHead();
+  void testMoveCommitRefusesDetachedHead();
+  void testStatusAndConflictsWithUnusualPaths();
+  void testMergeInProgressInLinkedWorktree();
+  void testDiffKeepsTrailingWhitespace();
+  void testRestoreFileFromHead();
+  void testBranchesIgnoreDetachedHead();
+  void testCommitFileStatsWithRename();
+
 private:
   QTemporaryDir m_tempDir;
   QString m_repoPath;
@@ -65,6 +77,10 @@ private:
   bool runGitCommand(const QStringList &args);
   bool runGitCommandAt(const QString &path, const QStringList &args);
   void createTestFile(const QString &fileName, const QString &content);
+  QString makeRepo(const QString &name);
+  QString gitOutputAt(const QString &path, const QStringList &args);
+  QString commitFileAt(const QString &path, const QString &fileName,
+                       const QString &content, const QString &message);
 };
 
 void TestGitIntegration::initTestCase() {
@@ -1296,6 +1312,312 @@ void TestGitIntegration::testExternalChangesDetected() {
   git.checkForExternalChanges();
   QTRY_COMPARE_WITH_TIMEOUT(external.count(), 4, 5000);
   QVERIFY(!git.hasMergeConflicts());
+}
+
+QString TestGitIntegration::makeRepo(const QString &name) {
+  const QString path = m_tempDir.path() + "/" + name;
+  if (!QDir().mkpath(path) || !runGitCommandAt(path, {"init", "-q"}) ||
+      !runGitCommandAt(path, {"config", "user.email", "test@test.com"}) ||
+      !runGitCommandAt(path, {"config", "user.name", "Test User"})) {
+    return QString();
+  }
+  return path;
+}
+
+QString TestGitIntegration::gitOutputAt(const QString &path,
+                                        const QStringList &args) {
+  QProcess process;
+  process.setWorkingDirectory(path);
+  process.start("git", args);
+  process.waitForFinished(GIT_COMMAND_TIMEOUT_MS);
+  return QString::fromUtf8(process.readAllStandardOutput());
+}
+
+QString TestGitIntegration::commitFileAt(const QString &path,
+                                         const QString &fileName,
+                                         const QString &content,
+                                         const QString &message) {
+  QFile file(path + "/" + fileName);
+  if (!file.open(QIODevice::WriteOnly)) {
+    return QString();
+  }
+  file.write(content.toUtf8());
+  file.close();
+  if (!runGitCommandAt(path, {"add", "--", fileName}) ||
+      !runGitCommandAt(path, {"commit", "-q", "-m", message})) {
+    return QString();
+  }
+  return gitOutputAt(path, {"rev-parse", "HEAD"}).trimmed();
+}
+
+static QString readFileAt(const QString &path) {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    return QString();
+  }
+  return QString::fromUtf8(file.readAll());
+}
+
+static void writeFileAt(const QString &path, const QString &content) {
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+  file.write(content.toUtf8());
+}
+
+void TestGitIntegration::testDropHeadKeepsUncommittedWork() {
+  const QString repo = makeRepo("drop-head-dirty");
+  QVERIFY(!repo.isEmpty());
+  QVERIFY(!commitFileAt(repo, "a.txt", "a\n", "one").isEmpty());
+  const QString head = commitFileAt(repo, "b.txt", "b\n", "two");
+  QVERIFY(!head.isEmpty());
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repo));
+
+  writeFileAt(repo + "/b.txt", "b edited\n");
+  QVERIFY(!git.dropCommit(head));
+  QCOMPARE(readFileAt(repo + "/b.txt"), QString("b edited\n"));
+  QCOMPARE(gitOutputAt(repo, {"rev-parse", "HEAD"}).trimmed(), head);
+
+  QVERIFY(runGitCommandAt(repo, {"checkout", "--", "b.txt"}));
+  writeFileAt(repo + "/a.txt", "a edited\n");
+  QVERIFY(git.dropCommit(head));
+  QCOMPARE(readFileAt(repo + "/a.txt"), QString("a edited\n"));
+  QCOMPARE(gitOutputAt(repo, {"log", "-1", "--format=%s"}).trimmed(),
+           QString("one"));
+}
+
+void TestGitIntegration::testDropOlderCommitInPathWithSpaces() {
+  const QString repo = makeRepo("repo with spaces $(touch injected)");
+  QVERIFY(!repo.isEmpty());
+  QVERIFY(!commitFileAt(repo, "a.txt", "a\n", "one").isEmpty());
+  const QString middle = commitFileAt(repo, "b.txt", "b\n", "two");
+  QVERIFY(!commitFileAt(repo, "c.txt", "c\n", "three").isEmpty());
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repo));
+  QVERIFY(git.dropCommit(middle));
+
+  QCOMPARE(gitOutputAt(repo, {"log", "--format=%s"}).trimmed(),
+           QString("three\none"));
+  QVERIFY(!QFileInfo::exists(repo + "/b.txt"));
+  QVERIFY(QFileInfo::exists(repo + "/c.txt"));
+  QVERIFY(!QFileInfo::exists(repo + "/injected"));
+  QVERIFY(!QFileInfo::exists(m_tempDir.path() + "/injected"));
+  QVERIFY(!git.isRebaseInProgress());
+}
+
+void TestGitIntegration::testDropCommitRefusesCommitOffBranch() {
+  const QString repo = makeRepo("drop-foreign");
+  QVERIFY(!repo.isEmpty());
+  QVERIFY(!commitFileAt(repo, "a.txt", "a\n", "one").isEmpty());
+  QVERIFY(runGitCommandAt(repo, {"checkout", "-q", "-b", "other"}));
+  const QString foreign = commitFileAt(repo, "f.txt", "f\n", "foreign");
+  QVERIFY(runGitCommandAt(repo, {"checkout", "-q", "-"}));
+  const QString head = commitFileAt(repo, "b.txt", "b\n", "two");
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repo));
+  QVERIFY(!git.dropCommit(foreign));
+  QCOMPARE(gitOutputAt(repo, {"rev-parse", "HEAD"}).trimmed(), head);
+  QVERIFY(!git.moveCommitToBranch(foreign, "other"));
+  QCOMPARE(gitOutputAt(repo, {"rev-parse", "HEAD"}).trimmed(), head);
+}
+
+void TestGitIntegration::testSquashRequiresRunEndingAtHead() {
+  const QString repo = makeRepo("squash-range");
+  QVERIFY(!repo.isEmpty());
+  const QString c1 = commitFileAt(repo, "a.txt", "1\n", "c1");
+  const QString c2 = commitFileAt(repo, "a.txt", "2\n", "c2");
+  const QString c3 = commitFileAt(repo, "a.txt", "3\n", "c3");
+  const QString c4 = commitFileAt(repo, "a.txt", "4\n", "c4");
+  QVERIFY(!c4.isEmpty());
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repo));
+
+  QVERIFY(!git.squashCommits({c2, c3}, "middle"));
+  QCOMPARE(gitOutputAt(repo, {"rev-parse", "HEAD"}).trimmed(), c4);
+
+  writeFileAt(repo + "/staged.txt", "staged\n");
+  QVERIFY(runGitCommandAt(repo, {"add", "staged.txt"}));
+
+  QVERIFY(git.squashCommits({c4, c3}, "c3+c4"));
+  QCOMPARE(gitOutputAt(repo, {"log", "--format=%s"}).trimmed(),
+           QString("c3+c4\nc2\nc1"));
+  QCOMPARE(gitOutputAt(repo, {"rev-parse", "HEAD~1"}).trimmed(), c2);
+  QCOMPARE(gitOutputAt(repo, {"show", "HEAD:a.txt"}), QString("4\n"));
+  QCOMPARE(gitOutputAt(repo, {"diff", "--cached", "--name-only"}).trimmed(),
+           QString("staged.txt"));
+
+  const QString newHead = gitOutputAt(repo, {"rev-parse", "HEAD"}).trimmed();
+  QVERIFY(git.squashCommits({c1, c2, newHead}, "everything"));
+  QCOMPARE(gitOutputAt(repo, {"rev-list", "--count", "HEAD"}).trimmed(),
+           QString("1"));
+  QCOMPARE(gitOutputAt(repo, {"show", "HEAD:a.txt"}), QString("4\n"));
+}
+
+void TestGitIntegration::testMoveCommitRefusesDetachedHead() {
+  const QString repo = makeRepo("move-detached");
+  QVERIFY(!repo.isEmpty());
+  QVERIFY(!commitFileAt(repo, "a.txt", "a\n", "one").isEmpty());
+  QVERIFY(runGitCommandAt(repo, {"branch", "target"}));
+  const QString head = commitFileAt(repo, "b.txt", "b\n", "two");
+  QVERIFY(runGitCommandAt(repo, {"checkout", "-q", "--detach"}));
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repo));
+  const QString targetTip =
+      gitOutputAt(repo, {"rev-parse", "target"}).trimmed();
+  QVERIFY(!git.moveCommitToBranch(head, "target"));
+  QCOMPARE(gitOutputAt(repo, {"rev-parse", "target"}).trimmed(), targetTip);
+  QCOMPARE(gitOutputAt(repo, {"rev-parse", "HEAD"}).trimmed(), head);
+}
+
+void TestGitIntegration::testStatusAndConflictsWithUnusualPaths() {
+  const QString repo = makeRepo("unusual-paths");
+  QVERIFY(!repo.isEmpty());
+  QVERIFY(!commitFileAt(repo, "old name.txt", "same\n", "base").isEmpty());
+  QVERIFY(!commitFileAt(repo, "c d.txt", "base\n", "conflict base").isEmpty());
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repo));
+
+  QVERIFY(runGitCommandAt(repo, {"mv", "old name.txt", "new name.txt"}));
+  writeFileAt(repo + QString::fromUtf8("/caf\xc3\xa9 -> x.txt"), "u\n");
+
+  const QList<GitFileInfo> status = git.getStatus();
+  QCOMPARE(status.size(), 2);
+  bool sawRename = false;
+  bool sawUnicode = false;
+  for (const GitFileInfo &info : status) {
+    if (info.indexStatus == GitFileStatus::Renamed) {
+      sawRename = true;
+      QCOMPARE(info.filePath, QString("new name.txt"));
+      QCOMPARE(info.originalPath, QString("old name.txt"));
+    } else {
+      sawUnicode = true;
+      QCOMPARE(info.filePath, QString::fromUtf8("caf\xc3\xa9 -> x.txt"));
+      QCOMPARE(info.workTreeStatus, GitFileStatus::Untracked);
+    }
+  }
+  QVERIFY(sawRename && sawUnicode);
+
+  QVERIFY(runGitCommandAt(repo, {"commit", "-q", "-m", "rename"}));
+  QVERIFY(QFile::remove(repo + QString::fromUtf8("/caf\xc3\xa9 -> x.txt")));
+  QVERIFY(runGitCommandAt(repo, {"checkout", "-q", "-b", "side"}));
+  QVERIFY(!commitFileAt(repo, "c d.txt", "side\n", "side").isEmpty());
+  QVERIFY(runGitCommandAt(repo, {"checkout", "-q", "-"}));
+  QVERIFY(!commitFileAt(repo, "c d.txt", "main\n", "main").isEmpty());
+  QVERIFY(!runGitCommandAt(repo, {"merge", "side"}));
+
+  QCOMPARE(git.getConflictedFiles(), QStringList{"c d.txt"});
+  const QList<QPair<QString, QString>> unmerged = git.unmergedEntries();
+  QCOMPARE(unmerged.size(), 1);
+  QCOMPARE(unmerged.first().first, QString("c d.txt"));
+  QCOMPARE(unmerged.first().second, QString("UU"));
+  QVERIFY(git.isMergeInProgress());
+}
+
+void TestGitIntegration::testMergeInProgressInLinkedWorktree() {
+  const QString repo = makeRepo("worktree-main");
+  QVERIFY(!repo.isEmpty());
+  QVERIFY(!commitFileAt(repo, "f.txt", "base\n", "base").isEmpty());
+  const QString mainBranch =
+      gitOutputAt(repo, {"symbolic-ref", "--short", "HEAD"}).trimmed();
+  QVERIFY(runGitCommandAt(repo, {"branch", "side"}));
+  QVERIFY(!commitFileAt(repo, "f.txt", "main\n", "main").isEmpty());
+
+  const QString linked = m_tempDir.path() + "/worktree-linked";
+  QVERIFY(runGitCommandAt(repo, {"worktree", "add", "-q", linked, "side"}));
+  QVERIFY(!commitFileAt(linked, "f.txt", "side\n", "side").isEmpty());
+  QVERIFY(!runGitCommandAt(linked, {"merge", mainBranch}));
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(linked));
+  QVERIFY(git.isMergeInProgress());
+}
+
+void TestGitIntegration::testDiffKeepsTrailingWhitespace() {
+  const QString repo = makeRepo("trailing-ws");
+  QVERIFY(!repo.isEmpty());
+  QVERIFY(!commitFileAt(repo, "t.txt", "one\n", "base").isEmpty());
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repo));
+
+  writeFileAt(repo + "/t.txt", "one\ntwo  \n");
+  const QString diff = git.getFileDiff("t.txt", false);
+  QVERIFY2(diff.endsWith("+two  \n"), qPrintable(diff));
+  QVERIFY(git.getWorkingVsHeadDiff("t.txt").endsWith("+two  \n"));
+
+  QVERIFY(git.stageHunkAtLine(repo + "/t.txt", 2));
+  QCOMPARE(gitOutputAt(repo, {"show", ":t.txt"}), QString("one\ntwo  \n"));
+}
+
+void TestGitIntegration::testRestoreFileFromHead() {
+  const QString repo = makeRepo("restore-head");
+  QVERIFY(!repo.isEmpty());
+  QVERIFY(!commitFileAt(repo, "r.txt", "committed\n", "base").isEmpty());
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repo));
+
+  writeFileAt(repo + "/r.txt", "staged\n");
+  QVERIFY(runGitCommandAt(repo, {"add", "r.txt"}));
+  writeFileAt(repo + "/r.txt", "unstaged\n");
+
+  QVERIFY(git.restoreFileFromHead("r.txt"));
+  QCOMPARE(readFileAt(repo + "/r.txt"), QString("committed\n"));
+  QVERIFY(gitOutputAt(repo, {"status", "--porcelain"}).trimmed().isEmpty());
+}
+
+void TestGitIntegration::testBranchesIgnoreDetachedHead() {
+  const QString upstream = makeRepo("branches-upstream");
+  QVERIFY(!upstream.isEmpty());
+  QVERIFY(!commitFileAt(upstream, "a.txt", "a\n", "one").isEmpty());
+  QVERIFY(!commitFileAt(upstream, "b.txt", "b\n", "two").isEmpty());
+
+  const QString clone = m_tempDir.path() + "/branches-clone";
+  QVERIFY(runGitCommandAt(m_tempDir.path(), {"clone", "-q", upstream, clone}));
+  QVERIFY(runGitCommandAt(clone, {"branch", "origin/lookalike"}));
+  QVERIFY(runGitCommandAt(clone, {"checkout", "-q", "--detach", "HEAD~1"}));
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(clone));
+
+  bool sawLookalike = false;
+  bool sawRemote = false;
+  for (const GitBranchInfo &branch : git.getBranches()) {
+    QVERIFY2(!branch.name.contains("detached"), qPrintable(branch.name));
+    QVERIFY(!branch.isCurrent);
+    QVERIFY(branch.name != "origin/HEAD");
+    if (branch.name == "origin/lookalike") {
+      sawLookalike = true;
+      QVERIFY(!branch.isRemote);
+    }
+    if (branch.isRemote) {
+      sawRemote = true;
+      QVERIFY(branch.name.startsWith("origin/"));
+    }
+  }
+  QVERIFY(sawLookalike);
+  QVERIFY(sawRemote);
+}
+
+void TestGitIntegration::testCommitFileStatsWithRename() {
+  const QString repo = makeRepo("numstat-rename");
+  QVERIFY(!repo.isEmpty());
+  QVERIFY(!commitFileAt(repo, "old name.txt", "l1\nl2\nl3\nl4\n", "base")
+               .isEmpty());
+  QVERIFY(runGitCommandAt(repo, {"mv", "old name.txt", "new name.txt"}));
+  QVERIFY(runGitCommandAt(repo, {"commit", "-q", "-m", "rename"}));
+
+  GitIntegration git;
+  QVERIFY(git.setRepositoryPath(repo));
+  const QList<GitCommitFileStat> stats = git.getCommitFileStats("HEAD");
+  QCOMPARE(stats.size(), 1);
+  QCOMPARE(stats.first().filePath, QString("new name.txt"));
 }
 
 QTEST_MAIN(TestGitIntegration)

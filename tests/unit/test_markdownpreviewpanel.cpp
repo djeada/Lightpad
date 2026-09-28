@@ -7,6 +7,7 @@
 #include <QToolBar>
 
 #ifdef HAVE_WEBENGINE
+#include <QWebEngineSettings>
 #include <QWebEngineView>
 #else
 #include <QTextBrowser>
@@ -22,6 +23,7 @@ private slots:
   void testUpdatePreview();
   void testLinkClickedSignal();
   void testWidgetStructure();
+  void testPreviewDisablesScriptsAndRemoteAccess();
   void testWordCountLabel();
   void testExportToHtml();
   void testSyncScrollEnabled();
@@ -102,6 +104,20 @@ void TestMarkdownPreviewPanel::testWidgetStructure() {
   auto *toolbar = panel.findChild<QToolBar *>("markdownPreviewToolbar");
   QVERIFY(toolbar);
   QVERIFY(!toolbar->actions().isEmpty());
+}
+
+void TestMarkdownPreviewPanel::testPreviewDisablesScriptsAndRemoteAccess() {
+#ifdef HAVE_WEBENGINE
+  MarkdownPreviewPanel panel;
+  auto *webView = panel.findChild<QWebEngineView *>("markdownPreviewWebView");
+  QVERIFY(webView);
+  QVERIFY(!webView->settings()->testAttribute(
+      QWebEngineSettings::JavascriptEnabled));
+  QVERIFY(!webView->settings()->testAttribute(
+      QWebEngineSettings::LocalContentCanAccessRemoteUrls));
+#else
+  QSKIP("WebEngine preview not built");
+#endif
 }
 
 void TestMarkdownPreviewPanel::testWordCountLabel() {

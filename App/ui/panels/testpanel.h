@@ -13,6 +13,7 @@
 #include <QProgressBar>
 #include <QSplitter>
 #include <QTextEdit>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QTreeWidget>
@@ -161,6 +162,7 @@ private:
   QStringList m_lastRunArgs;
   QString m_lastRunWorkingDirectory;
   QString m_lastRunOutput;
+  QTimer *m_runDetailsRefreshTimer = nullptr;
   int m_lastRunExitCode = 0;
   bool m_lastRunExitedNormally = true;
   bool m_hasRunContext = false;

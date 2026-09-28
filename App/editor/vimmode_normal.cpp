@@ -208,7 +208,8 @@ VimMode::Parse VimMode::parseCommand(const QStringList &keys, NormalCmd &cmd,
     if (i >= n)
       return Parse::Incomplete;
     if (count1 > 0 || count2 > 0)
-      cmd.count = qMax(1, count1) * qMax(1, count2);
+      cmd.count = int(qMin<qint64>(99999999, qint64(qMax(1, count1)) *
+                                                 qint64(qMax(1, count2))));
     QString t2 = keys[i];
     if (t2 == "v" || t2 == "V" || t2 == "<C-v>") {
       cmd.force = t2 == "<C-v>" ? QChar(0x16) : t2[0];
@@ -367,8 +368,10 @@ void VimMode::executeNormal(const NormalCmd &cmdIn, const QStringList &keys) {
     const int from = cursorPos();
     MotionResult r =
         evalMotion(cmd.key, cmd.arg, cmd.count, false, from, false);
-    if (!r.ok)
+    if (!r.ok) {
+      failCommand();
       return;
+    }
     if (r.jump)
       pushJump(from);
     if (m_insertOneCommand && r.wantEol) {
@@ -397,8 +400,10 @@ void VimMode::executeOperatorMotion(const NormalCmd &cmd,
     const int last = lineCount() - 1;
     int endLine = line + qMax(1, count) - 1;
     if (endLine > last) {
-      if (line == last && count > 1)
+      if (line == last && count > 1) {
+        failCommand();
         return;
+      }
       endLine = last;
     }
     range = lineRange(line, endLine);
@@ -410,8 +415,10 @@ void VimMode::executeOperatorMotion(const NormalCmd &cmd,
   } else if (!cmd.textObject.isEmpty()) {
     int s = 0, e = 0;
     MotionType type = MotionType::Exclusive;
-    if (!evalTextObject(cmd.textObject, count, s, e, type, false))
+    if (!evalTextObject(cmd.textObject, count, s, e, type, false)) {
+      failCommand();
       return;
+    }
     range = motionRange(s, e, type);
     m_opCursor = s;
   } else {
@@ -433,8 +440,10 @@ void VimMode::executeOperatorMotion(const NormalCmd &cmd,
     } else {
       r = evalMotion(cmd.key, cmd.arg, count, true, from, false);
     }
-    if (!r.ok)
+    if (!r.ok) {
+      failCommand();
       return;
+    }
     MotionType type = r.type;
     if (cmd.force == 'v') {
       if (type == MotionType::Linewise || type == MotionType::Inclusive)
@@ -554,6 +563,8 @@ bool VimMode::executeSimpleCommand(const NormalCmd &cmd,
         key.startsWith('[') || key.startsWith(']'));
     setDotCommand(keys);
   } else if (key == "J" || key == "gJ") {
+    if (line >= lineCount() - 1)
+      failCommand();
     joinLines(line, c1, key == "J");
     setDotCommand(keys);
   } else if (key == "r") {
@@ -595,6 +606,8 @@ bool VimMode::executeSimpleCommand(const NormalCmd &cmd,
       setCursorPos(result);
       recordChangePosition(result);
       setDotCommand(keys);
+    } else {
+      failCommand();
     }
   } else if (key == "ZZ") {
     emit commandExecuted("save");

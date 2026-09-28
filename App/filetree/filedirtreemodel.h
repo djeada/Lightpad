@@ -45,11 +45,13 @@ public:
   QString addUniqueSuffix(const QString &fileName);
 
   static bool isInside(const QString &parentDir, const QString &path);
+  static QString canonicalPath(const QString &path);
 
 signals:
   void modelUpdated();
   void errorOccurred(const QString &error);
   void clipboardChanged();
+  void pathMoved(const QString &oldPath, const QString &newPath);
 
 private:
   QStringList clipboardPaths() const;

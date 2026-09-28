@@ -1,6 +1,7 @@
 #ifndef BREAKPOINTMANAGER_H
 #define BREAKPOINTMANAGER_H
 
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
@@ -206,6 +207,7 @@ private:
   BreakpointManager &operator=(const BreakpointManager &) = delete;
 
   DapSourceBreakpoint toSourceBreakpoint(const Breakpoint &bp) const;
+  void applyVerification(Breakpoint &bp, const DapBreakpoint &dapBp);
 
   int m_nextId;
   QMap<int, Breakpoint> m_breakpoints;
@@ -220,6 +222,8 @@ private:
   QStringList m_enabledExceptionFilters;
 
   QPointer<DapClient> m_dapClient;
+  QMap<QString, QList<QList<int>>> m_pendingBreakpointSyncs;
+  QHash<int, int> m_dapBreakpointIds;
   QString m_workspaceFolder;
 };
 

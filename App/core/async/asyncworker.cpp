@@ -112,6 +112,7 @@ void AsyncThreadPool::submit(AsyncWorker *worker) {
   connect(worker, &AsyncWorker::finished, thread, &QThread::quit);
   connect(worker, &AsyncWorker::cancelled, thread, &QThread::quit);
   connect(worker, &AsyncWorker::error, thread, &QThread::quit);
+  connect(thread, &QThread::finished, worker, &QObject::deleteLater);
   connect(thread, &QThread::finished, thread, &QThread::deleteLater);
   connect(thread, &QThread::finished, this, [this, thread, worker]() {
     QMutexLocker locker(&m_mutex);
@@ -125,7 +126,8 @@ void AsyncThreadPool::submit(AsyncWorker *worker) {
     m_workers.append(worker);
   }
 
-  thread->start();
+  QMetaObject::invokeMethod(
+      thread, [thread]() { thread->start(); }, Qt::QueuedConnection);
   LOG_DEBUG("Submitted worker to thread pool");
 }
 

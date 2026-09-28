@@ -73,6 +73,13 @@ private slots:
   void testClipboardRegister();
   void testRegexTranslation();
   void testPendingKeysDisplay();
+  void testModifiedKeyTokensRoundTrip();
+  void testMacroReplaysModifiedKeys();
+  void testMacroAbortsOnFailedMotion();
+  void testExRecursionIsLimited();
+  void testPutFromUnsetRegister();
+  void testHugeRepeatIsRefused();
+  void testCountedInsertRepeatsText();
 
 private:
   QPlainTextEdit *m_editor;
@@ -689,6 +696,15 @@ void TestVimMode::testRegexTranslation() {
   QCOMPARE(matches("\\Va.c", "abc a.c"), QString("a.c"));
   QCOMPARE(matches("foo\\zsbar", "foobar"), QString("bar"));
   QCOMPARE(matches("(x)", "(x)"), QString("(x)"));
+  QCOMPARE(matches("\\%(ab\\)\\+", "xababy"), QString("abab"));
+  QCOMPARE(matches("\\v%(a|b)+", "xabba!"), QString("abba"));
+  QCOMPARE(matches("[^]a]", "]ab"), QString("b"));
+  QCOMPARE(matches("[]a]", "x]"), QString("]"));
+  QCOMPARE(matches("\\_a\\+", "1ab\ncd2"), QString("ab\ncd"));
+  QCOMPARE(matches("\\_x\\+", "g1f\n9z"), QString("1f\n9"));
+  QCOMPARE(matches("\\_l\\+", "Aab\ncD"), QString("ab\nc"));
+  QCOMPARE(matches("\\_u\\+", "aAB\nCd"), QString("AB\nC"));
+  QCOMPARE(matches("\\_[xy]\\+", "axy\nyz"), QString("xy\ny"));
   QCOMPARE(VimMode::escapePattern("a.b*c/"), QString("a\\.b\\*c\\/"));
 }
 
@@ -701,6 +717,127 @@ void TestVimMode::testPendingKeysDisplay() {
   m_vim->feedKeys("<Esc>");
   QVERIFY(m_vim->pendingKeys().isEmpty());
   QVERIFY(!spy.isEmpty());
+}
+
+void TestVimMode::testModifiedKeyTokensRoundTrip() {
+  const QList<QPair<int, Qt::KeyboardModifiers>> keys = {
+      {Qt::Key_Right, Qt::ControlModifier},
+      {Qt::Key_Right, Qt::ShiftModifier},
+      {Qt::Key_Down, Qt::ShiftModifier},
+      {Qt::Key_End, Qt::ControlModifier},
+      {Qt::Key_Home, Qt::ControlModifier | Qt::ShiftModifier},
+      {Qt::Key_A, Qt::ControlModifier | Qt::ShiftModifier},
+      {Qt::Key_Space, Qt::ControlModifier},
+      {Qt::Key_X, Qt::AltModifier},
+      {Qt::Key_X, Qt::ControlModifier | Qt::AltModifier},
+      {Qt::Key_F5, Qt::ControlModifier},
+      {Qt::Key_F2, Qt::ShiftModifier},
+      {Qt::Key_Tab, Qt::ControlModifier},
+      {Qt::Key_Backtab, Qt::ControlModifier | Qt::ShiftModifier},
+      {Qt::Key_Return, Qt::ControlModifier},
+      {Qt::Key_Launch0, Qt::ControlModifier},
+  };
+  QStringList tokens;
+  for (const auto &key : keys) {
+    QKeyEvent event(QEvent::KeyPress, key.first, key.second);
+    const QString token = VimMode::keyEventToToken(&event);
+    QVERIFY(token.startsWith('<') && token.endsWith('>'));
+    tokens << token;
+    std::unique_ptr<QKeyEvent> synthetic = VimMode::tokenToKeyEvent(token);
+    QVERIFY2(synthetic, qPrintable(token));
+    QCOMPARE(VimMode::keyEventToToken(synthetic.get()), token);
+  }
+  QCOMPARE(VimMode::parseKeyNotation(VimMode::tokensToNotation(tokens)),
+           tokens);
+  QCOMPARE(VimMode::parseKeyNotation("<c-s-A><s-right><C-SPACE><M-x>"),
+           QStringList({"<C-S-a>", "<S-Right>", "<C-Space>", "<A-x>"}));
+}
+
+void TestVimMode::testMacroReplaysModifiedKeys() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("alpha beta gamma\nsecond line here");
+  vim.setEnabled(true);
+  vim.feedKeys("qa");
+  QKeyEvent ctrlRight(QEvent::KeyPress, Qt::Key_Right, Qt::ControlModifier);
+  QVERIFY(vim.processKeyEvent(&ctrlRight));
+  vim.feedKeys("q");
+  QCOMPARE(vim.registerContent('a'), QString("<C-Right>"));
+  vim.feedKeys("0@a");
+  QCOMPARE(editor.toPlainText(), QString("alpha beta gamma\nsecond line here"));
+  QCOMPARE(editor.textCursor().position(), 6);
+  QCOMPARE(vim.mode(), VimEditMode::Normal);
+}
+
+void TestVimMode::testMacroAbortsOnFailedMotion() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abc\ndef\nghi");
+  vim.setEnabled(true);
+  vim.feedKeys("qa0xjq99999999@a");
+  QCOMPARE(editor.toPlainText(), QString("bc\nef\nhi"));
+  QCOMPARE(editor.textCursor().blockNumber(), 2);
+  vim.feedKeys("gg0qbxjq5@b");
+  QCOMPARE(editor.toPlainText(), QString("c\nf\ni"));
+}
+
+void TestVimMode::testExRecursionIsLimited() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("one\ntwo\nthree");
+  vim.setEnabled(true);
+  QSignalSpy spy(&vim, &VimMode::statusMessage);
+  vim.feedKeys("qa@aq:@a<CR>");
+  bool tooRecursive = false;
+  for (const QList<QVariant> &args : spy)
+    tooRecursive |= args.at(0).toString().startsWith("E169");
+  QVERIFY(tooRecursive);
+  vim.feedKeys(":s/o/0/<CR>:1@:<CR>:*:<CR>:silent @:<CR>:g/./@:<CR>@:");
+  QCOMPARE(editor.toPlainText(), QString("0ne\ntwo\nthree"));
+  QCOMPARE(vim.mode(), VimEditMode::Normal);
+}
+
+void TestVimMode::testPutFromUnsetRegister() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("l1\nl2\nl3");
+  vim.setEnabled(true);
+  QSignalSpy spy(&vim, &VimMode::statusMessage);
+  vim.feedKeys(":2put x<CR>");
+  QCOMPARE(editor.toPlainText(), QString("l1\nl2\nl3"));
+  QVERIFY(!spy.isEmpty());
+  QCOMPARE(spy.last().at(0).toString(), QString("E353: Nothing in register x"));
+  vim.feedKeys("\"xyy:3put x<CR>");
+  QCOMPARE(editor.toPlainText(), QString("l1\nl2\nl3\nl1"));
+}
+
+void TestVimMode::testHugeRepeatIsRefused() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abc\ndef");
+  vim.setEnabled(true);
+  QSignalSpy spy(&vim, &VimMode::statusMessage);
+  vim.feedKeys("yy99999999p");
+  QCOMPARE(editor.toPlainText(), QString("abc\ndef"));
+  QVERIFY(!spy.isEmpty());
+  QCOMPARE(spy.last().at(0).toString(),
+           QString("E1240: Resulting text too long"));
+  vim.feedKeys("yl99999999P");
+  QCOMPARE(editor.toPlainText(), QString("abc\ndef"));
+  vim.feedKeys("yy3p");
+  QCOMPARE(editor.toPlainText(), QString("abc\nabc\nabc\nabc\ndef"));
+}
+
+void TestVimMode::testCountedInsertRepeatsText() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("xy");
+  vim.setEnabled(true);
+  vim.feedKeys("2000iab<Esc>");
+  QCOMPARE(editor.toPlainText(), QString("ab").repeated(2000) + "xy");
+  QCOMPARE(editor.textCursor().position(), 3999);
+  vim.feedKeys("u");
+  QCOMPARE(editor.toPlainText(), QString("xy"));
 }
 
 QTEST_MAIN(TestVimMode)

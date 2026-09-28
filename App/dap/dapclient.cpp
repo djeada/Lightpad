@@ -3,20 +3,37 @@
 
 #include <QDir>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QTimer>
 
 namespace {
 
-constexpr int MAX_MESSAGE_PARSE_ITERATIONS = 100;
+constexpr int MAX_MESSAGES_PER_PARSE = 100;
 
-constexpr int MAX_DAP_BUFFER_BYTES = 4 * 1024 * 1024;
+constexpr int MAX_DAP_HEADER_BYTES = 8192;
 
-constexpr int MAX_DAP_MESSAGE_BYTES = 2 * 1024 * 1024;
+constexpr qint64 MAX_DAP_MESSAGE_BYTES = 2 * 1024 * 1024;
+
+constexpr int DISCARDED_FRAME_SAMPLE_BYTES = 4096;
 
 constexpr int MAX_PENDING_REQUESTS = 2048;
 
-int lastHeaderStart(const QByteArray &buffer) {
-  return buffer.lastIndexOf("Content-Length:");
+constexpr int INITIALIZE_TIMEOUT_MS = 30000;
+
+constexpr int SERVER_LISTEN_TIMEOUT_MS = 30000;
+
+constexpr const char *CONTENT_LENGTH_HEADER = "Content-Length:";
+
+int findHeaderStart(const QByteArray &buffer, int from = 0) {
+  const int canonical = buffer.indexOf(CONTENT_LENGTH_HEADER, from);
+  const int lower = buffer.indexOf("content-length:", from);
+  if (canonical < 0) {
+    return lower;
+  }
+  if (lower < 0) {
+    return canonical;
+  }
+  return qMin(canonical, lower);
 }
 } // namespace
 
@@ -31,11 +48,17 @@ DapClient::DapClient(QObject *parent)
 DapClient::~DapClient() { stop(); }
 
 bool DapClient::startSocket(const QString &host, quint16 port) {
-  if (m_process || m_socket) {
+  if (m_process || m_socket || m_serverProcess) {
     LOG_WARNING("DAP client already started");
     return false;
   }
 
+  m_serverProgram.clear();
+  m_serverArguments.clear();
+  return connectSocket(host, port);
+}
+
+bool DapClient::connectSocket(const QString &host, quint16 port) {
 #ifdef QT_NO_NETWORK
   Q_UNUSED(host);
   Q_UNUSED(port);
@@ -84,8 +107,11 @@ bool DapClient::startSocket(const QString &host, quint16 port) {
                    .arg(m_socketHost)
                    .arg(m_socketPort)
                    .arg(errorMsg));
-    m_socket->deleteLater();
-    m_socket = nullptr;
+    if (m_socket) {
+      m_socket->disconnect(this);
+      m_socket->deleteLater();
+      m_socket = nullptr;
+    }
     return false;
   }
 
@@ -96,6 +122,184 @@ bool DapClient::startSocket(const QString &host, quint16 port) {
 
   return true;
 #endif
+}
+
+bool DapClient::startServer(const QString &program,
+                            const QStringList &arguments) {
+  if (m_process || m_socket || m_serverProcess) {
+    LOG_WARNING("DAP client already started");
+    return false;
+  }
+
+  m_serverProgram = program;
+  m_serverArguments = arguments;
+  m_serverOutput.clear();
+
+  QProcess *server = new QProcess(this);
+  m_serverProcess = server;
+  server->setProgram(program);
+  server->setArguments(arguments);
+
+  connect(server, &QProcess::readyReadStandardOutput, this,
+          [this]() { onServerOutput(false); });
+  connect(server, &QProcess::readyReadStandardError, this,
+          [this]() { onServerOutput(true); });
+  connect(server, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+          this, &DapClient::onServerFinished);
+
+  setState(State::Connecting);
+  server->start();
+
+  if (!server->waitForStarted(5000)) {
+    LOG_ERROR(QString("Failed to start debug adapter: %1").arg(program));
+    m_serverProcess = nullptr;
+    server->disconnect(this);
+    server->deleteLater();
+    setState(State::Error);
+    emit error("Failed to start debug adapter");
+    return false;
+  }
+
+  LOG_INFO(QString("Started debug adapter server: %1").arg(program));
+
+  QTimer::singleShot(SERVER_LISTEN_TIMEOUT_MS, this, [this, server]() {
+    if (m_serverProcess == server && !m_socket) {
+      abortStartup(QString("Debug adapter did not report a listening address "
+                           "within %1 seconds")
+                       .arg(SERVER_LISTEN_TIMEOUT_MS / 1000));
+    }
+  });
+
+  return true;
+}
+
+void DapClient::onServerOutput(bool isStderr) {
+  if (!m_serverProcess) {
+    return;
+  }
+
+  const QByteArray data = isStderr ? m_serverProcess->readAllStandardError()
+                                   : m_serverProcess->readAllStandardOutput();
+  if (data.isEmpty()) {
+    return;
+  }
+
+  DapOutputEvent evt;
+  evt.category = isStderr ? QStringLiteral("stderr") : QStringLiteral("stdout");
+  evt.output = QString::fromUtf8(data);
+
+  if (m_socket) {
+    emit output(evt);
+    return;
+  }
+
+  m_serverOutput += data;
+  if (m_serverOutput.size() > 65536) {
+    m_serverOutput = m_serverOutput.right(65536);
+  }
+
+  static const QRegularExpression listeningPattern(
+      QStringLiteral("listening at:?\\s*\\[?([^\\s\\]]*?)\\]?:(\\d+)"),
+      QRegularExpression::CaseInsensitiveOption);
+  const QRegularExpressionMatch match =
+      listeningPattern.match(QString::fromUtf8(m_serverOutput));
+  if (!match.hasMatch()) {
+    emit output(evt);
+    return;
+  }
+
+  QString host = match.captured(1);
+  if (host.isEmpty() || host == QLatin1String("::") ||
+      host == QLatin1String("0.0.0.0") || host == QLatin1String("localhost")) {
+    host = QStringLiteral("127.0.0.1");
+  }
+  const quint16 port = static_cast<quint16>(match.captured(2).toUInt());
+  m_serverOutput.clear();
+
+  if (!connectSocket(host, port)) {
+    shutdownServerProcess();
+  }
+}
+
+void DapClient::onServerFinished(int exitCode,
+                                 QProcess::ExitStatus exitStatus) {
+  QProcess *finished = qobject_cast<QProcess *>(sender());
+  if (!finished || finished != m_serverProcess) {
+    return;
+  }
+
+  const QString output =
+      QString::fromUtf8(m_serverOutput + finished->readAllStandardOutput() +
+                        finished->readAllStandardError())
+          .trimmed();
+  m_serverProcess = nullptr;
+  finished->deleteLater();
+
+  if (m_socket || m_stopping) {
+    return;
+  }
+
+  QString message =
+      exitStatus == QProcess::CrashExit
+          ? QString("Debug adapter crashed before accepting a connection: %1")
+                .arg(m_serverProgram)
+          : QString("Debug adapter exited with code %1 before accepting a "
+                    "connection: %2")
+                .arg(exitCode)
+                .arg(m_serverProgram);
+  if (!output.isEmpty()) {
+    message += QString("\n\n%1").arg(output.left(4000));
+  }
+  resetSessionState();
+  setState(State::Error);
+  emit error(message);
+  emit terminated();
+}
+
+void DapClient::shutdownServerProcess() {
+  QProcess *server = m_serverProcess;
+  if (!server) {
+    return;
+  }
+  m_serverProcess = nullptr;
+  server->disconnect(this);
+
+  if (server->state() != QProcess::NotRunning) {
+    server->terminate();
+    QTimer::singleShot(2000, server, [server]() {
+      if (server->state() != QProcess::NotRunning) {
+        server->kill();
+      }
+      server->deleteLater();
+    });
+  } else {
+    server->deleteLater();
+  }
+}
+
+void DapClient::abortStartup(const QString &message) {
+  LOG_ERROR(QString("DAP: %1").arg(message));
+  stop(false);
+  setState(State::Error);
+  emit error(message);
+  emit terminated();
+}
+
+void DapClient::resetSessionState() {
+  m_buffer.clear();
+  m_skipBytes = 0;
+  m_skipHead.clear();
+  m_skipTail.clear();
+  m_pendingRequests.clear();
+  m_staleRequests.clear();
+  m_currentThreadId = 0;
+  m_capabilities = QJsonObject();
+  m_functionBreakpointsConfigured = false;
+  m_deferredFunctionBreakpoints.clear();
+  m_hasDeferredFunctionBreakpoints = false;
+  m_dataBreakpointsSupported = true;
+  m_dataBreakpointsConfigured = false;
+  m_pausePending = false;
 }
 
 void DapClient::feedAdapterData(const QByteArray &data) {
@@ -114,6 +318,8 @@ bool DapClient::start(const QString &program, const QStringList &arguments) {
     return false;
   }
 
+  m_serverProgram.clear();
+  m_serverArguments.clear();
   m_process = new QProcess(this);
   m_process->setProgram(program);
   m_process->setArguments(arguments);
@@ -147,7 +353,7 @@ bool DapClient::start(const QString &program, const QStringList &arguments) {
 }
 
 void DapClient::stop(bool terminateDebuggee) {
-  if (!m_process && !m_socket) {
+  if (!m_process && !m_socket && !m_serverProcess) {
     return;
   }
 
@@ -175,17 +381,9 @@ void DapClient::stop(bool terminateDebuggee) {
   }
 
   shutdownChannel();
+  shutdownServerProcess();
 
-  m_buffer.clear();
-  m_pendingRequests.clear();
-  m_currentThreadId = 0;
-  m_capabilities = QJsonObject();
-  m_functionBreakpointsConfigured = false;
-  m_deferredFunctionBreakpoints.clear();
-  m_hasDeferredFunctionBreakpoints = false;
-  m_dataBreakpointsSupported = true;
-  m_dataBreakpointsConfigured = false;
-  m_pausePending = false;
+  resetSessionState();
   m_stopping = false;
   setState(State::Disconnected);
 
@@ -279,16 +477,8 @@ void DapClient::onChannelClosed() {
   LOG_INFO("Debug adapter connection closed");
 
   shutdownChannel();
-  m_buffer.clear();
-  m_pendingRequests.clear();
-  m_currentThreadId = 0;
-  m_capabilities = QJsonObject();
-  m_functionBreakpointsConfigured = false;
-  m_deferredFunctionBreakpoints.clear();
-  m_hasDeferredFunctionBreakpoints = false;
-  m_dataBreakpointsSupported = true;
-  m_dataBreakpointsConfigured = false;
-  m_pausePending = false;
+  shutdownServerProcess();
+  resetSessionState();
 
   if (m_stopping || previousState == State::Terminated ||
       previousState == State::Disconnected) {
@@ -616,9 +806,19 @@ void DapClient::stepOut(int threadId) {
 
 void DapClient::restart() {
   if (supportsRestartRequest()) {
+    QJsonObject args;
+    args["arguments"] = m_launchConfig;
     int seq = m_nextSeq++;
     m_pendingRequests[seq] = "restart";
-    sendRequest("restart", m_launchConfig, seq);
+    sendRequest("restart", args, seq);
+  } else if (!m_serverProgram.isEmpty()) {
+    const QString serverProgram = m_serverProgram;
+    const QStringList serverArguments = m_serverArguments;
+
+    stop(!m_isAttach);
+    if (!startServer(serverProgram, serverArguments)) {
+      emit error("Restart failed: could not relaunch debug adapter");
+    }
   } else if (m_socket) {
 #ifdef QT_NO_NETWORK
     emit error("Restart failed: socket transport unavailable");
@@ -860,87 +1060,171 @@ void DapClient::onReadyReadStandardOutput() {
 void DapClient::handleAdapterData(const QByteArray &data) {
   m_buffer += data;
 
-  if (m_buffer.size() > MAX_DAP_BUFFER_BYTES) {
-    const int headerPos = lastHeaderStart(m_buffer);
-    if (headerPos >= 0) {
-      m_buffer = m_buffer.mid(headerPos);
-    } else {
-      LOG_WARNING("DAP: Discarding oversized non-protocol stdout buffer");
-      m_buffer.clear();
-      return;
+  int parsed = 0;
+  while (true) {
+    if (m_skipBytes > 0) {
+      const qint64 available = qMin<qint64>(m_skipBytes, m_buffer.size());
+      if (available <= 0) {
+        break;
+      }
+      const QByteArray chunk = m_buffer.left(static_cast<int>(available));
+      if (m_skipHead.size() < DISCARDED_FRAME_SAMPLE_BYTES) {
+        m_skipHead += chunk.left(DISCARDED_FRAME_SAMPLE_BYTES -
+                                 static_cast<int>(m_skipHead.size()));
+      }
+      m_skipTail = (m_skipTail + chunk.right(DISCARDED_FRAME_SAMPLE_BYTES))
+                       .right(DISCARDED_FRAME_SAMPLE_BYTES);
+      m_buffer.remove(0, static_cast<int>(available));
+      m_skipBytes -= available;
+      if (m_skipBytes > 0) {
+        break;
+      }
+      const QByteArray sample = m_skipHead + m_skipTail;
+      m_skipHead.clear();
+      m_skipTail.clear();
+      failDiscardedMessage(sample, QStringLiteral("response too large"));
+      continue;
     }
 
-    if (m_buffer.size() > MAX_DAP_BUFFER_BYTES) {
-      LOG_WARNING("DAP: Trimming oversized protocol buffer tail");
-      m_buffer = m_buffer.right(MAX_DAP_BUFFER_BYTES);
-    }
-  }
-
-  int iterations = 0;
-
-  while (iterations < MAX_MESSAGE_PARSE_ITERATIONS) {
-    ++iterations;
-
-    const int headerEnd = m_buffer.indexOf("\r\n\r\n");
-    if (headerEnd == -1) {
+    if (parsed >= MAX_MESSAGES_PER_PARSE) {
+      if (!m_parseScheduled) {
+        m_parseScheduled = true;
+        QTimer::singleShot(0, this, [this]() {
+          m_parseScheduled = false;
+          handleAdapterData({});
+        });
+      }
       break;
     }
 
+    const int headerStart = findHeaderStart(m_buffer);
+    if (headerStart < 0) {
+      const int keep = static_cast<int>(qstrlen(CONTENT_LENGTH_HEADER)) - 1;
+      if (m_buffer.size() > keep) {
+        const QByteArray garbage = m_buffer.left(m_buffer.size() - keep);
+        if (!garbage.trimmed().isEmpty()) {
+          LOG_WARNING(QString("DAP: Discarding %1 bytes of non-protocol output")
+                          .arg(garbage.size()));
+        }
+        m_buffer.remove(0, garbage.size());
+      }
+      break;
+    }
+    if (headerStart > 0) {
+      if (!m_buffer.left(headerStart).trimmed().isEmpty()) {
+        LOG_WARNING(QString("DAP: Discarding %1 bytes of non-protocol output")
+                        .arg(headerStart));
+      }
+      m_buffer.remove(0, headerStart);
+    }
+
+    const int headerEnd = m_buffer.indexOf("\r\n\r\n");
+    if (headerEnd == -1) {
+      if (m_buffer.size() > MAX_DAP_HEADER_BYTES) {
+        LOG_WARNING("DAP: Header without terminator, resynchronizing");
+        m_buffer.remove(0, 1);
+        continue;
+      }
+      break;
+    }
+
+    const int nextHeader = findHeaderStart(m_buffer, 1);
+    if (nextHeader > 0 && nextHeader < headerEnd) {
+      LOG_WARNING("DAP: Discarding truncated header");
+      m_buffer.remove(0, nextHeader);
+      continue;
+    }
+
     const QByteArray header = m_buffer.left(headerEnd);
-    int contentLength = 0;
+    qint64 contentLength = 0;
     bool lengthOk = false;
 
     const QList<QByteArray> lines = header.split('\n');
     for (QByteArray line : lines) {
       line = line.trimmed();
       if (line.toLower().startsWith("content-length:")) {
-        contentLength = line.mid(15).trimmed().toInt(&lengthOk);
+        contentLength = line.mid(15).trimmed().toLongLong(&lengthOk);
         break;
       }
     }
 
     if (!lengthOk || contentLength <= 0) {
       LOG_WARNING("DAP message without Content-Length, skipping header");
-      m_buffer = m_buffer.mid(headerEnd + 4);
-      continue;
-    }
-    if (contentLength > MAX_DAP_MESSAGE_BYTES) {
-      LOG_WARNING(QString("DAP message too large (%1 bytes), discarding frame")
-                      .arg(contentLength));
-
-      const int messageStart = headerEnd + 4;
-      const int messageEnd = messageStart + contentLength;
-      if (m_buffer.size() >= messageEnd) {
-        m_buffer = m_buffer.mid(messageEnd);
-      } else {
-
-        m_buffer.clear();
-      }
+      m_buffer.remove(0, headerEnd + 4);
       continue;
     }
 
     const int messageStart = headerEnd + 4;
-    const int messageEnd = messageStart + contentLength;
+    if (contentLength > MAX_DAP_MESSAGE_BYTES) {
+      LOG_WARNING(QString("DAP message too large (%1 bytes), discarding frame")
+                      .arg(contentLength));
+      m_buffer.remove(0, messageStart);
+      m_skipBytes = contentLength;
+      m_skipHead.clear();
+      m_skipTail.clear();
+      continue;
+    }
 
+    const int messageEnd = messageStart + static_cast<int>(contentLength);
     if (m_buffer.size() < messageEnd) {
-
       break;
     }
 
-    const QByteArray content = m_buffer.mid(messageStart, contentLength);
-    m_buffer = m_buffer.mid(messageEnd);
+    const QByteArray content =
+        m_buffer.mid(messageStart, static_cast<int>(contentLength));
+    m_buffer.remove(0, messageEnd);
+    ++parsed;
 
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson(content, &parseError);
 
-    if (parseError.error != QJsonParseError::NoError) {
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
       LOG_ERROR(QString("Failed to parse DAP message: %1")
                     .arg(parseError.errorString()));
+      failDiscardedMessage(content, QStringLiteral("malformed response"));
       continue;
     }
 
     handleMessage(doc.object());
   }
+}
+
+void DapClient::failDiscardedMessage(const QByteArray &sample,
+                                     const QString &reason) {
+  static const QRegularExpression typePattern(
+      QStringLiteral("\"type\"\\s*:\\s*\"response\""));
+  static const QRegularExpression seqPattern(
+      QStringLiteral("\"request_seq\"\\s*:\\s*(\\d+)"));
+  static const QRegularExpression commandPattern(
+      QStringLiteral("\"command\"\\s*:\\s*\"([A-Za-z]+)\""));
+
+  const QString text = QString::fromUtf8(sample);
+  if (!typePattern.match(text).hasMatch()) {
+    return;
+  }
+  const QRegularExpressionMatch seqMatch = seqPattern.match(text);
+  if (!seqMatch.hasMatch()) {
+    return;
+  }
+  const int requestSeq = seqMatch.captured(1).toInt();
+  if (m_staleRequests.remove(requestSeq)) {
+    return;
+  }
+  if (!m_pendingRequests.contains(requestSeq)) {
+    return;
+  }
+
+  QString command = commandPattern.match(text).captured(1);
+  if (command.isEmpty()) {
+    const QString tag = m_pendingRequests.value(requestSeq);
+    command = tag.section(':', 0, 0);
+  }
+  LOG_WARNING(QString("DAP: Dropping %1 for request %2 (%3)")
+                  .arg(reason)
+                  .arg(requestSeq)
+                  .arg(command));
+  handleResponse(requestSeq, command, false, QJsonValue(),
+                 QString("Adapter sent a %1").arg(reason));
 }
 
 void DapClient::onReadyReadStandardError() {
@@ -981,16 +1265,7 @@ void DapClient::onProcessFinished(int exitCode,
 
   m_process = nullptr;
   finishedProcess->deleteLater();
-  m_buffer.clear();
-  m_pendingRequests.clear();
-  m_currentThreadId = 0;
-  m_capabilities = QJsonObject();
-  m_functionBreakpointsConfigured = false;
-  m_deferredFunctionBreakpoints.clear();
-  m_hasDeferredFunctionBreakpoints = false;
-  m_dataBreakpointsSupported = true;
-  m_dataBreakpointsConfigured = false;
-  m_pausePending = false;
+  resetSessionState();
 
   if (m_stopping || previousState == State::Terminated ||
       previousState == State::Disconnected) {
@@ -1054,6 +1329,13 @@ void DapClient::handleMessage(const QJsonObject &message) {
 void DapClient::handleResponse(int requestSeq, const QString &command,
                                bool success, const QJsonValue &body,
                                const QString &message) {
+  if (m_staleRequests.remove(requestSeq)) {
+    LOG_DEBUG(QString("DAP: Dropping stale %1 response (seq=%2)")
+                  .arg(command)
+                  .arg(requestSeq));
+    return;
+  }
+
   QString pendingCommand = m_pendingRequests.take(requestSeq);
 
   if (!success) {
@@ -1295,7 +1577,9 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
                   .arg(static_cast<int>(evt.reason))
                   .arg(evt.threadId)
                   .arg(evt.allThreadsStopped));
-    m_currentThreadId = evt.threadId;
+    if (evt.threadId > 0) {
+      m_currentThreadId = evt.threadId;
+    }
     setState(State::Stopped);
     emit stopped(evt);
     if (m_hasDeferredFunctionBreakpoints) {
@@ -1390,6 +1674,15 @@ void DapClient::doInitialize() {
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "initialize";
   sendRequest("initialize", args, seq);
+
+  QTimer::singleShot(INITIALIZE_TIMEOUT_MS, this, [this, seq]() {
+    if (m_state == State::Initializing &&
+        m_pendingRequests.value(seq) == QLatin1String("initialize")) {
+      abortStartup(QString("Debug adapter did not respond to initialize "
+                           "within %1 seconds")
+                       .arg(INITIALIZE_TIMEOUT_MS / 1000));
+    }
+  });
 }
 
 void DapClient::setState(State state) {
@@ -1411,6 +1704,9 @@ bool DapClient::hasPendingRequestTag(const QString &tag) const {
 }
 
 void DapClient::clearPendingInspectionRequests() {
+  if (m_staleRequests.size() > MAX_PENDING_REQUESTS) {
+    m_staleRequests.clear();
+  }
   auto it = m_pendingRequests.begin();
   while (it != m_pendingRequests.end()) {
     const QString &tag = it.value();
@@ -1419,6 +1715,7 @@ void DapClient::clearPendingInspectionRequests() {
         tag.startsWith("scopes:") || tag.startsWith("variables:") ||
         tag.startsWith("evaluate:");
     if (isInspectionRequest) {
+      m_staleRequests.insert(it.key());
       it = m_pendingRequests.erase(it);
       continue;
     }

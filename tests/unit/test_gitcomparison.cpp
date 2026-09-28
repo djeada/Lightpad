@@ -25,6 +25,7 @@ private slots:
   void testParseComparisonFiles();
   void testParseComparisonFilesBinary();
   void testParseComparisonFilesRename();
+  void testParseComparisonFilesNulSeparated();
 
   void testHeadToWorkingShowsAdditions();
   void testWorkingToHeadShowsDeletions();
@@ -161,6 +162,27 @@ void TestGitComparison::testParseComparisonFilesRename() {
   QCOMPARE(files.first().path, QString("new.txt"));
   QCOMPARE(files.first().oldPath, QString("old.txt"));
   QCOMPARE(files.first().statusText(), QString("renamed"));
+}
+
+void TestGitComparison::testParseComparisonFilesNulSeparated() {
+  const QString numstat = QString("2\t0\ta b.txt") + QChar('\0') +
+                          QString("1\t1\t") + QChar('\0') +
+                          QString("old name.txt") + QChar('\0') +
+                          QString("new => name.txt") + QChar('\0');
+  const QString nameStatus = QString("M") + QChar('\0') + QString("a b.txt") +
+                             QChar('\0') + QString("R090") + QChar('\0') +
+                             QString("old name.txt") + QChar('\0') +
+                             QString("new => name.txt") + QChar('\0');
+
+  const QList<GitComparisonFile> files =
+      parseComparisonFiles(numstat, nameStatus);
+  QCOMPARE(files.size(), 2);
+  QCOMPARE(files.at(0).path, QString("a b.txt"));
+  QCOMPARE(files.at(0).additions, 2);
+  QCOMPARE(files.at(0).statusText(), QString("modified"));
+  QCOMPARE(files.at(1).path, QString("new => name.txt"));
+  QCOMPARE(files.at(1).oldPath, QString("old name.txt"));
+  QCOMPARE(files.at(1).statusText(), QString("renamed"));
 }
 
 void TestGitComparison::testHeadToWorkingShowsAdditions() {

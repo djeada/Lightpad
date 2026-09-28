@@ -27,6 +27,8 @@ static const QRegularExpression s_endEnvRe(R"(\\end\{([^}]*)\})");
 static const QRegularExpression s_commentRe(R"((?:^|[^\\])%.*)");
 
 static const QRegularExpression s_logErrorRe(R"(^!\s+(.*))");
+static const QRegularExpression s_logFileLineErrorRe(
+    R"(^((?:[A-Za-z]:)?[^:\s][^:]*\.[A-Za-z]+):(\d+):\s+(.*)$)");
 static const QRegularExpression
     s_logLatexErrorRe(R"(^!\s+LaTeX Error:\s+(.*))");
 static const QRegularExpression s_logWarningRe(R"(^LaTeX Warning:\s+(.*))");
@@ -300,6 +302,19 @@ QList<LatexLogEntry> LatexTools::parseLatexLog(const QString &logContent) {
       entry.severity = 1;
       entry.message = latexErrMatch.captured(1).trimmed();
       entry.file = currentFile;
+      entries.append(entry);
+      continue;
+    }
+
+    QRegularExpressionMatch fileLineMatch = s_logFileLineErrorRe.match(line);
+    if (fileLineMatch.hasMatch()) {
+      LatexLogEntry entry;
+      entry.lineNumber = fileLineMatch.captured(2).toInt();
+      entry.severity = 1;
+      entry.message = fileLineMatch.captured(3).trimmed();
+      if (entry.message.startsWith("LaTeX Error:"))
+        entry.message = entry.message.mid(12).trimmed();
+      entry.file = fileLineMatch.captured(1);
       entries.append(entry);
       continue;
     }

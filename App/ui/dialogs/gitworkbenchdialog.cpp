@@ -1,4 +1,5 @@
 #include "gitworkbenchdialog.h"
+#include "../../git/gitrebaseplan.h"
 #include "../../theme/colorcontrast.h"
 #include "../../ui/uistylehelper.h"
 #include "gitautorefresh.h"
@@ -13,6 +14,7 @@
 #include <QDir>
 #include <QFile>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QKeyEvent>
@@ -1245,8 +1247,14 @@ void GitWorkbenchDialog::loadTags() {
 }
 
 void GitWorkbenchDialog::loadCommits(const QString &branch) {
+  if (m_rewriteMode && !branch.isEmpty()) {
+    onToggleRewriteMode();
+  }
+
   m_commitTree->clear();
   m_entries.clear();
+  m_loadedOrder.clear();
+  m_loadedBranch = branch;
   m_hashToEntryIndex.clear();
   m_selectedCommitHash.clear();
   m_commitRefsCache.clear();
@@ -1277,6 +1285,7 @@ void GitWorkbenchDialog::loadCommits(const QString &branch) {
     entry.parents = c.parents;
     entry.refs = m_commitRefsCache.value(c.hash);
     m_entries.append(entry);
+    m_loadedOrder.append(c.hash);
     m_hashToEntryIndex[c.hash] = i;
 
     auto *item = new QTreeWidgetItem(m_commitTree);
@@ -1368,6 +1377,9 @@ void GitWorkbenchDialog::onToggleRewriteMode() {
   m_backupCheckbox->setVisible(m_rewriteMode);
 
   if (m_rewriteMode) {
+    if (!m_loadedBranch.isEmpty()) {
+      loadCommits();
+    }
 
     m_commitTree->setHeaderLabels(
         {tr("Commit"), tr("Hash"), tr("Author"), tr("Date"), tr("Action")});
@@ -2488,15 +2500,102 @@ void GitWorkbenchDialog::onPickAll() {
   showPlanInspector();
 }
 
+int GitWorkbenchDialog::rewriteWindowSize() const {
+  int size = 0;
+  const int limit = qMin(m_entries.size(), 30);
+  for (int i = 0; i < limit; ++i) {
+    if (m_entries[i].action != "pick" || i >= m_loadedOrder.size() ||
+        m_entries[i].hash != m_loadedOrder[i]) {
+      size = i + 1;
+    }
+  }
+  return size;
+}
+
+QString GitWorkbenchDialog::rewriteProblem(int windowSize,
+                                           QString *base) const {
+  if (!m_loadedBranch.isEmpty()) {
+    return tr("The commit list shows another branch. Rewrite mode only "
+              "works on the checked-out branch.");
+  }
+  if (windowSize <= 0 || windowSize > m_loadedOrder.size()) {
+    return tr("Nothing to rewrite.");
+  }
+
+  QHash<QString, QStringList> parentsByHash;
+  for (const auto &entry : m_entries) {
+    parentsByHash.insert(entry.hash, entry.parents);
+  }
+
+  const GitCommitInfo head = m_git->getCommitDetails("HEAD");
+  if (head.hash.isEmpty() || head.hash != m_loadedOrder.first()) {
+    return tr("The branch changed since the list was loaded. Reload and try "
+              "again.");
+  }
+
+  for (int i = 0; i < windowSize; ++i) {
+    const QStringList parents = parentsByHash.value(m_loadedOrder[i]);
+    if (parents.size() > 1) {
+      return tr("Commit %1 is a merge. Rewriting across merges is not "
+                "supported here.")
+          .arg(m_loadedOrder[i].left(8));
+    }
+    if (parents.isEmpty()) {
+      return tr("The root commit cannot be rewritten here.");
+    }
+    if (i + 1 < windowSize && parents.first() != m_loadedOrder[i + 1]) {
+      return tr("The commits to rewrite are not a straight line of history.");
+    }
+  }
+
+  if (base) {
+    *base = parentsByHash.value(m_loadedOrder[windowSize - 1]).first();
+  }
+  return QString();
+}
+
 void GitWorkbenchDialog::onApplyRebase() {
   if (m_entries.isEmpty() || !m_git)
     return;
+
+  const int limit = rewriteWindowSize();
+  QString base;
+  const QString problem = rewriteProblem(limit, &base);
+  if (!problem.isEmpty()) {
+    ThemedMessageBox::warning(this, tr("Rewrite"), problem);
+    return;
+  }
+
+  QList<GitRebaseEntry> planEntries;
+  for (int i = limit - 1; i >= 0; --i) {
+    const auto &entry = m_entries[i];
+    GitRebaseEntry planEntry;
+    planEntry.commit.hash = entry.hash;
+    planEntry.commit.shortHash = entry.shortHash;
+    planEntry.commit.subject = entry.subject;
+    planEntry.action = entry.action == "drop-keep"
+                           ? GitRebaseAction::Fixup
+                           : gitRebaseActionFromKeyword(entry.action);
+    if (planEntry.action != GitRebaseAction::Squash &&
+        planEntry.action != GitRebaseAction::Fixup &&
+        planEntry.action != GitRebaseAction::Drop) {
+      planEntry.newMessage = m_git->getCommitMessage(entry.hash);
+    }
+    planEntries.append(planEntry);
+  }
+
+  GitRebasePlan plan;
+  plan.setEntries(planEntries);
+  const QStringList planProblems = plan.validationProblems();
+  if (!planProblems.isEmpty()) {
+    ThemedMessageBox::warning(this, tr("Rewrite"), planProblems.join("\n"));
+    return;
+  }
 
   OperationRisk risk = assessRebaseRisk();
 
   int dropCount = 0, squashCount = 0, rewordCount = 0, editCount = 0;
   int dropKeepCount = 0;
-  int limit = qMin(m_entries.size(), 30);
   for (int i = 0; i < limit; ++i) {
     const auto &a = m_entries[i].action;
     if (a == "drop")
@@ -2545,57 +2644,39 @@ void GitWorkbenchDialog::onApplyRebase() {
     backupProc.waitForFinished(5000);
   }
 
-  QString todoScript;
-  for (int i = limit - 1; i >= 0; --i) {
-    QString scriptAction = m_entries[i].action;
-    if (scriptAction == "drop-keep")
-      scriptAction = "fixup";
-    todoScript += scriptAction + " " + m_entries[i].shortHash + " " +
-                  m_entries[i].subject + "\n";
+  QString lastError;
+  const auto errorConnection =
+      connect(m_git, &GitIntegration::errorOccurred, this,
+              [&lastError](const QString &error) { lastError = error; });
+  const bool ok = m_git->startInteractiveRebase(base, plan);
+  disconnect(errorConnection);
+
+  QString backupMsg;
+  if (m_backupCheckbox->isChecked()) {
+    backupMsg = tr("\n\nSafety backup ref created. "
+                   "Use 'git reflog' to recover if needed.");
   }
 
-  QTemporaryFile todoFile;
-  todoFile.setAutoRemove(false);
-  if (!todoFile.open()) {
-    m_commitStatusLabel->setText(tr("Failed to create rebase script"));
-    return;
-  }
-  QTextStream out(&todoFile);
-  out << todoScript;
-  todoFile.close();
-
-  QString scriptPath = todoFile.fileName();
-  QString upstream = QString("HEAD~%1").arg(limit);
-
-  QProcess proc;
-  proc.setWorkingDirectory(m_git->repositoryPath());
-  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-  env.insert("GIT_SEQUENCE_EDITOR", QString("cp %1").arg(scriptPath));
-  proc.setProcessEnvironment(env);
-  proc.start("git", {"rebase", "-i", upstream});
-  proc.waitForFinished(15000);
-
-  QFile::remove(scriptPath);
-
-  QString output = proc.readAllStandardOutput() + proc.readAllStandardError();
-  if (proc.exitCode() == 0) {
+  if (ok && !m_git->isRebaseInProgress()) {
     m_commitStatusLabel->setText(tr("Rewrite completed successfully"));
-
-    QString backupMsg;
-    if (m_backupCheckbox->isChecked()) {
-      backupMsg = tr("\n\nSafety backup ref created. "
-                     "Use 'git reflog' to recover if needed.");
-    }
-
     ThemedMessageBox::information(
         this, tr("Rewrite Complete"),
         tr("Interactive rebase completed successfully.%1").arg(backupMsg));
     accept();
-  } else {
+  } else if (m_git->isRebaseInProgress()) {
     m_commitStatusLabel->setText(
-        tr("Rewrite failed or needs conflict resolution"));
-    ThemedMessageBox::warning(this, tr("Rewrite Issue"),
-                              tr("Rebase encountered issues:\n%1").arg(output));
+        tr("Rewrite stopped — resolve and continue the rebase"));
+    ThemedMessageBox::warning(
+        this, tr("Rewrite Paused"),
+        tr("The rebase stopped part-way. Resolve any conflicts or finish "
+           "editing, then continue or abort the rebase.%1")
+            .arg(backupMsg));
+    accept();
+  } else {
+    m_commitStatusLabel->setText(tr("Rewrite failed"));
+    ThemedMessageBox::warning(
+        this, tr("Rewrite Issue"),
+        tr("Rebase encountered issues:\n%1").arg(lastError));
   }
 }
 

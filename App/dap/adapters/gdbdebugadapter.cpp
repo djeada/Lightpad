@@ -109,27 +109,60 @@ public:
 
     if (processId > 0) {
       config["name"] = QString("Attach to process %1").arg(processId);
-      config["processId"] = QString::number(processId);
-      config["program"] = "";
+      config["pid"] = processId;
     } else if (!host.isEmpty() && port > 0) {
       config["name"] = QString("Remote debug %1:%2").arg(host).arg(port);
-      config["miDebuggerServerAddress"] = QString("%1:%2").arg(host).arg(port);
-      config["program"] = "";
-
-      QJsonArray setupCommands;
-      QJsonObject targetRemote;
-      targetRemote["description"] = "Connect to remote gdbserver";
-      targetRemote["text"] = QString("target remote %1:%2").arg(host).arg(port);
-      targetRemote["ignoreFailures"] = false;
-      setupCommands.append(targetRemote);
-      config["setupCommands"] = setupCommands;
+      config["target"] = QString("%1:%2").arg(host).arg(port);
     } else {
       config["name"] = "Attach to process";
       config["processId"] = "${command:pickProcess}";
-      config["program"] = "";
     }
 
     return config;
+  }
+
+  QJsonObject
+  attachArguments(const DebugConfiguration &configuration) const override {
+    QJsonObject arguments =
+        ProcessBackedDebugAdapter::attachArguments(configuration);
+
+    if (!arguments.contains("pid") && arguments.contains("processId")) {
+      const QJsonValue processId = arguments.value("processId");
+      const int pid = processId.isString() ? processId.toString().toInt()
+                                           : processId.toInt(0);
+      if (pid > 0) {
+        arguments["pid"] = pid;
+      }
+    } else if (arguments.value("pid").isString()) {
+      const int pid = arguments.value("pid").toString().toInt();
+      if (pid > 0) {
+        arguments["pid"] = pid;
+      } else {
+        arguments.remove("pid");
+      }
+    }
+    arguments.remove("processId");
+
+    if (!arguments.contains("pid") && !arguments.contains("target")) {
+      const QString serverAddress =
+          arguments.value("miDebuggerServerAddress").toString().trimmed();
+      const QString host = arguments.value("host").toString().trimmed();
+      const int port = arguments.value("port").toInt();
+      if (!serverAddress.isEmpty()) {
+        arguments["target"] = serverAddress;
+      } else if (port > 0) {
+        arguments["target"] = QString("%1:%2").arg(host).arg(port);
+      }
+    }
+    arguments.remove("miDebuggerServerAddress");
+    arguments.remove("host");
+    arguments.remove("port");
+
+    if (arguments.value("program").toString().isEmpty()) {
+      arguments.remove("program");
+    }
+
+    return arguments;
   }
 
   QString installCommand() const override {

@@ -14,6 +14,9 @@
 #include <QUuid>
 #include <QVBoxLayout>
 
+#include <algorithm>
+#include <functional>
+
 namespace {
 constexpr int ConfigIdRole = Qt::UserRole;
 constexpr int IsUserConfigRole = Qt::UserRole + 1;
@@ -615,8 +618,12 @@ void TestConfigurationDialog::onRemoveEnvVar() {
     return;
   }
 
-  for (int i = rows.size() - 1; i >= 0; --i)
-    m_envTable->removeRow(rows[i].row());
+  QList<int> rowNumbers;
+  for (const QModelIndex &index : rows)
+    rowNumbers.append(index.row());
+  std::sort(rowNumbers.begin(), rowNumbers.end(), std::greater<int>());
+  for (const int row : rowNumbers)
+    m_envTable->removeRow(row);
 }
 
 void TestConfigurationDialog::onSave() {

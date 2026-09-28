@@ -16,6 +16,8 @@ struct Snippet {
   bool hasPlaceholders() const { return body.contains('$'); }
 
   QString expandedBody() const;
+
+  static QString expand(const QString &body);
 };
 
 class SnippetRegistry {

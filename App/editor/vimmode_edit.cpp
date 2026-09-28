@@ -2,6 +2,7 @@
 
 #include <QRegularExpression>
 #include <QTextBlock>
+#include <limits>
 
 namespace {
 
@@ -86,6 +87,7 @@ void VimMode::operatorDelete(const Range &range, QChar reg, bool change,
     storeDeleted(reg, text, VimRegisterType::Linewise, true);
     const int sl = range.startLine;
     const int el = range.endLine;
+    forgetLines(change ? sl + 1 : sl, el, true);
     if (change) {
       QString indent = indentForNewLine(sl);
       replaceRange(lineStart(sl), lineEndPos(el), indent);
@@ -108,6 +110,12 @@ void VimMode::operatorDelete(const Range &range, QChar reg, bool change,
   }
   case VimRegisterType::Charwise: {
     storeDeleted(reg, text, VimRegisterType::Charwise, forceNumbered);
+    const int firstLine = lineOf(range.start);
+    const int lastLine = lineOf(range.end);
+    if (lastLine > firstLine) {
+      forgetLines(firstLine + 1, lastLine - 1, true);
+      forgetLines(lastLine, lastLine, false);
+    }
     replaceRange(range.start, range.end, QString());
     if (change) {
       QTextCursor c = m_editor->textCursor();
@@ -364,6 +372,8 @@ void VimMode::put(QChar reg, int count, bool after, bool moveAfter,
     return;
   }
   const int c1 = qMax(1, count);
+  if (exceedsRepeatLimit(r.content.size() + 1, c1))
+    return;
   QTextCursor block(doc());
   block.beginEditBlock();
   if (r.blockwise) {
@@ -462,6 +472,8 @@ void VimMode::putBlock(const VimRegister &r, int count, bool after,
   int width = 0;
   for (const QString &p : parts)
     width = qMax(width, vcolOf(p, p.size()));
+  if (exceedsRepeatLimit(qint64(width + 1) * parts.size(), count))
+    return;
   const int pos = cursorPos();
   const int line = lineOf(pos);
   const QString curText = lineText(line);
@@ -508,10 +520,12 @@ void VimMode::putBlock(const VimRegister &r, int count, bool after,
 
 void VimMode::visualPut(QChar reg, int count, bool keepRegister) {
   VimRegister r = getRegister(reg);
+  const int c1 = qMax(1, count);
+  if (exceedsRepeatLimit(r.content.size() + 1, c1))
+    return;
   const VimEditMode mode = m_mode;
   const Range range = visualRange();
   exitVisual(false);
-  const int c1 = qMax(1, count);
   const QString deleted = rangeText(range);
   QTextCursor block(doc());
   block.beginEditBlock();
@@ -566,8 +580,9 @@ void VimMode::joinLines(int line, int count, bool insertSpace) {
   int joins = qMax(2, count) - 1;
   if (line >= last)
     return;
-  if (line + joins > last)
+  if (joins > last - line)
     joins = last - line;
+  forgetLines(line + 1, line + joins, false);
   QTextCursor block(doc());
   block.beginEditBlock();
   int cursorCol = 0;
@@ -650,7 +665,14 @@ void VimMode::toggleCaseChars(int count) {
   setCursorPos(clampNormal(pos + n));
 }
 
-bool VimMode::incrementNumber(int line, int col, int delta, int endCol,
+bool VimMode::exceedsRepeatLimit(qint64 size, qint64 count) {
+  if (count <= 1 || size * count <= kMaxRepeatChars)
+    return false;
+  emit statusMessage("E1240: Resulting text too long");
+  return true;
+}
+
+bool VimMode::incrementNumber(int line, int col, qint64 delta, int endCol,
                               int *resultPos) {
   QString text = lineText(line);
   if (endCol >= 0) {
@@ -677,7 +699,7 @@ bool VimMode::incrementNumber(int line, int col, int delta, int endCol,
       quint64 value = digits.toULongLong(&ok, 16);
       if (!ok)
         return false;
-      value += static_cast<qint64>(delta);
+      value += static_cast<quint64>(delta);
       bool upper = false;
       for (QChar c : digits) {
         if (c.isLetter()) {
@@ -697,7 +719,7 @@ bool VimMode::incrementNumber(int line, int col, int delta, int endCol,
       quint64 value = digits.toULongLong(&ok, 2);
       if (!ok)
         return false;
-      value += static_cast<qint64>(delta);
+      value += static_cast<quint64>(delta);
       QString out = QString::number(value, 2);
       if (out.size() < digits.size())
         out = QString(digits.size() - out.size(), '0') + out;
@@ -712,17 +734,30 @@ bool VimMode::incrementNumber(int line, int col, int delta, int endCol,
       if (negative)
         --start;
       bool ok = false;
-      qint64 value = digits.toLongLong(&ok);
-      if (!ok)
-        return false;
-      if (negative)
-        value = -value;
-      value += delta;
-      QString out = QString::number(qAbs(value));
+      quint64 value = digits.toULongLong(&ok);
+      const bool overflow = !ok;
+      if (overflow)
+        value = std::numeric_limits<quint64>::max();
+      const quint64 magnitude =
+          delta < 0 ? quint64(0) - quint64(delta) : quint64(delta);
+      const bool subtract = (delta < 0) != negative;
+      const quint64 old = value;
+      if (!overflow)
+        value = subtract ? value - magnitude : value + magnitude;
+      if (subtract && value > old) {
+        value = ~value + 1;
+        negative = !negative;
+      } else if (!subtract && value < old) {
+        value = ~value;
+        negative = !negative;
+      }
+      if (value == 0)
+        negative = false;
+      QString out = QString::number(value);
       if (digits.size() > 1 && digits.startsWith('0') &&
           out.size() < digits.size())
         out = QString(digits.size() - out.size(), '0') + out;
-      replacement = (value < 0 ? "-" : "") + out;
+      replacement = (negative ? "-" : "") + out;
     }
     replaceRange(lineStart(line) + start, lineStart(line) + end, replacement);
     if (resultPos)
@@ -750,6 +785,7 @@ void VimMode::undo(int count) {
     m_editor->undo();
   }
   disconnect(conn);
+  restoreDeletedMarks();
   int target = m_editor->textCursor().position();
   const int steps = doc()->availableUndoSteps();
   if (minPos >= 0 && minAdded > 0 && charAt(minPos) == '\n' &&

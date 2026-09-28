@@ -159,12 +159,64 @@ def misc_cases():
     return cases
 
 
+def audit_cases():
+    L = "l1\nl2\nl3\nl4\nl5"
+    M = "l1\nl2 x\nl3\nl4\nl5"
+    A = "abc\ndef\nghi"
+    E = "\nab c\nq"
+    G = "a\na\na\nc\nd"
+    R = "x ababc\nfoo\nbar ]a q"
+    groups = [
+        (L, 2, 0, [":d 2147483647<CR>", ":j 2147483647<CR>", ":.+4294967298d<CR>",
+                   ":.-4294967298d<CR>", ":.+2147483647d<CR>", ":m 99<CR>", ":t 99<CR>",
+                   ":m-5<CR>", ":m 6<CR>", ":m 5<CR>", ":t0<CR>", "46341d46341j",
+                   "2d99999999j", ":s/l/X/<CR>j:@:<CR>j@:", ":s/l/X/<CR>j:1@:<CR>",
+                   ":s/l/X/<CR>j:3@:<CR>j@:", ":s/l/X/<CR>:g/./@:<CR>",
+                   ":s/l/X/<CR>j:silent @:<CR>", ":s/l/X/<CR>:norm 3@:<CR>",
+                   ":s/l/X/<CR>j:@:<CR>j:@:<CR>"]),
+        (M, 0, 0, ["jmadd'ax", "jmadd`ax", "jmaddu'ax", "jmaVjd'ax", "jmaggvjjd'ax",
+                   "jmakJ'ax", "jma:2m4<CR>'ax", "jma:2d<CR>gg:'a<CR>x", "jmakdd'ax",
+                   "jmajdd'ax", "jmacc<Esc>'ax"]),
+        (A, 0, 0, ["qaqqa0xj@aq@a", "qa0xjq3@a", "qafzxq@a",
+                   "qa/zzz<CR>xq@a", "qa0xj:s/q/r/<CR>q2@a", "qa0xj:foo<CR>xq@a",
+                   "qa0xjq:2,3normal 3@a<CR>", "qaxjq:g/./normal 3@a<CR>",
+                   ":g/./normal xfzx<CR>"]),
+        (E, 0, 0, ["qa<C-a>Aq<Esc>jq2@a", "qaJAq<Esc>jq2@a", "qahAq<Esc>jq2@a",
+                   "qa$lAq<Esc>jq2@a", "qaXAq<Esc>jq2@a"]),
+        (G, 0, 0, [":g/a/+1d<CR>", ":g/a/.,+1d<CR>", ":g/c/-1,.d<CR>", ":g/a/+1j<CR>",
+                   ":g/a/+1s/a/x/<CR>"]),
+        ("a/b ab", 0, 0, [":s/x*/-/g<CR>", ":s/b*/-/g<CR>", ":s/\\<\\|\\>/|/g<CR>",
+                          ":s/a\\zs/-/g<CR>", ":s/$/-/g<CR>", ":s/x*/-/<CR>"]),
+        ("x*y\n\nab", 0, 0, [":%s/x*/-/g<CR>", ":%s/b*/-/g<CR>"]),
+        (R, 0, 0, ["/\\%(ab\\)\\+c<CR>", "/\\v%(ab)+c<CR>", "/[^]a]q<CR>", "/[]a]<CR>",
+                   ":%s/\\%(ab\\)\\+/Z/<CR>", ":%s/[^]a ]/-/g<CR>",
+                   "/o\\_a\\+r<CR>", "/c\\_[a-z]\\+r<CR>"]),
+        ("a1\n2g", 0, 0, ["/1\\_x\\+g<CR>"]),
+        ("AB\nCd\nef", 0, 0, ["/B\\_u\\+d<CR>", "/d\\_l\\+f<CR>", "/B\\_a\\+f<CR>"]),
+        ("x 9223372036854775807 y", 0, 0, ["<C-a>", "2<C-a>", "<C-x>"]),
+        ("x -9223372036854775808 y", 0, 0, ["<C-x>", "<C-a>"]),
+        ("x 99999999999999999999 y", 0, 0, ["<C-a>", "<C-x>"]),
+        ("x 5 y", 0, 0, ["99999999<C-x>", "99999999<C-a>"]),
+        ("x 0xffffffffffffffff y", 0, 0, ["<C-a>"]),
+        ("alpha beta gamma\nsecond line", 0, 0, ["qa<C-Right>q0@ax", "qa<S-Right>q0@ax",
+                                                "qa<S-Down>qgg@ax"]),
+        ("ab", 0, 0, ["200ixy<Esc>", "3ia<CR>b<Esc>"]),
+        ("one\ntwo\nthree", 0, 0, [":s/o/0/<CR>:1@:<CR>:silent @:<CR>:g/./@:<CR>@:"]),
+    ]
+    cases = []
+    for text, line, col, keys in groups:
+        for k in keys:
+            cases.append({"text": text, "line": line, "col": col, "keys": k, "checkreg": False})
+    return cases
+
+
 SUITES = {
     "grid": grid_cases,
     "cmds": command_cases,
     "more": more_cases,
     "gn": search_match_cases,
     "misc": misc_cases,
+    "audit": audit_cases,
 }
 
 if __name__ == "__main__":

@@ -305,7 +305,7 @@ void StagingCanvasDialog::buildActionBar(QVBoxLayout *layout) {
                "Git cannot bring them back."))) {
       return;
     }
-    if (m_git->discardChanges(path)) {
+    if (m_git->restoreFileFromHead(path)) {
       reload();
       emit repositoryChanged();
     }

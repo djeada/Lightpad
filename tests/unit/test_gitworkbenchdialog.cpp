@@ -115,6 +115,8 @@ private slots:
   void testMultiSelectContextMenuShowsCount();
   void testSelectionBarObjectNames();
 
+  void testRewriteModeReloadsCheckedOutBranch();
+
 private:
   void setupRepo();
   void createCommits(int count);
@@ -1264,6 +1266,33 @@ void TestGitWorkbenchDialog::testSelectionBarObjectNames() {
 
   auto *hintLabel = dialog.findChild<QLabel *>("selectionHintLabel");
   QVERIFY(hintLabel != nullptr);
+}
+
+void TestGitWorkbenchDialog::testRewriteModeReloadsCheckedOutBranch() {
+  GitWorkbenchDialog dialog(m_git, m_theme);
+  const GitCommitInfo head = m_git->getCommitDetails("HEAD");
+  const GitCommitInfo feature = m_git->getCommitDetails("feature/test");
+  QVERIFY(head.hash != feature.hash);
+
+  dialog.loadCommits("feature/test");
+  QCOMPARE(dialog.m_entries.first().hash, feature.hash);
+  QVERIFY(!dialog.rewriteProblem(1, nullptr).isEmpty());
+
+  dialog.onToggleRewriteMode();
+  QVERIFY(dialog.m_rewriteMode);
+  QVERIFY(dialog.m_loadedBranch.isEmpty());
+  QCOMPARE(dialog.m_entries.first().hash, head.hash);
+
+  QCOMPARE(dialog.rewriteWindowSize(), 0);
+  dialog.m_entries[1].action = "drop";
+  QCOMPARE(dialog.rewriteWindowSize(), 2);
+
+  QString base;
+  QVERIFY(dialog.rewriteProblem(2, &base).isEmpty());
+  QCOMPARE(base, m_git->getCommitDetails("HEAD~2").hash);
+
+  dialog.loadCommits("feature/test");
+  QVERIFY(!dialog.m_rewriteMode);
 }
 
 QTEST_MAIN(TestGitWorkbenchDialog)

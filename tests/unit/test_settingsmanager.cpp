@@ -1,6 +1,8 @@
 #include "settings/settingsmanager.h"
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
+#include <QFont>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
@@ -19,6 +21,8 @@ private slots:
   void testHasKey();
   void testResetToDefaults();
   void testLoadSaveSettings();
+  void testCorruptSettingsAreBackedUp();
+  void testFontWeightMigratesFromQt5Scale();
 
 private:
   QTemporaryDir m_tempDir;
@@ -154,6 +158,57 @@ void TestSettingsManager::testLoadSaveSettings() {
   QCOMPARE(sm.getValue("currentFilePath").toString(),
            QString("/tmp/example.cpp"));
   QCOMPARE(sm.getValue("showTerminalDock").toBool(), true);
+
+  sm.resetToDefaults();
+  sm.saveSettings();
+}
+
+void TestSettingsManager::testCorruptSettingsAreBackedUp() {
+  SettingsManager &sm = SettingsManager::instance();
+  QVERIFY(QDir().mkpath(sm.getSettingsDirectory()));
+  const QString path = sm.getSettingsFilePath();
+  const QByteArray corrupt = "{ \"fontFamily\": \"Precious\", ";
+
+  QFile::remove(path + ".bak");
+  {
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    file.write(corrupt);
+  }
+
+  QVERIFY(!sm.loadSettings());
+  QVERIFY(QFile::exists(path + ".bak"));
+  QFile backup(path + ".bak");
+  QVERIFY(backup.open(QIODevice::ReadOnly));
+  QCOMPARE(backup.readAll(), corrupt);
+
+  QVERIFY(sm.saveSettings());
+  QVERIFY(sm.loadSettings());
+
+  QFile::remove(path + ".bak");
+  sm.resetToDefaults();
+  sm.saveSettings();
+}
+
+void TestSettingsManager::testFontWeightMigratesFromQt5Scale() {
+  QCOMPARE(SettingsManager::normalizeFontWeight(50),
+           static_cast<int>(QFont::Normal));
+  QCOMPARE(SettingsManager::normalizeFontWeight(75),
+           static_cast<int>(QFont::Bold));
+  QCOMPARE(SettingsManager::normalizeFontWeight(25),
+           static_cast<int>(QFont::Light));
+  QCOMPARE(SettingsManager::normalizeFontWeight(0),
+           static_cast<int>(QFont::Normal));
+  QCOMPARE(SettingsManager::normalizeFontWeight(600), 600);
+
+  SettingsManager &sm = SettingsManager::instance();
+  sm.resetToDefaults();
+  QCOMPARE(sm.getValue("fontWeight").toInt(), static_cast<int>(QFont::Normal));
+
+  sm.setValue("fontWeight", 75);
+  QVERIFY(sm.saveSettings());
+  QVERIFY(sm.loadSettings());
+  QCOMPARE(sm.getValue("fontWeight").toInt(), static_cast<int>(QFont::Bold));
 
   sm.resetToDefaults();
   sm.saveSettings();

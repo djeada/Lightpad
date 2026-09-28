@@ -35,8 +35,6 @@ void RecentFilesDialog::setupUI() {
 
   connect(m_searchBox, &QLineEdit::textChanged, this,
           &RecentFilesDialog::onSearchTextChanged);
-  connect(m_resultsList, &QListWidget::itemActivated, this,
-          &RecentFilesDialog::onItemActivated);
   connect(m_resultsList, &QListWidget::itemClicked, this,
           &RecentFilesDialog::onItemClicked);
 

@@ -7,6 +7,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QSet>
 
 namespace {
@@ -53,7 +54,10 @@ bool looksLikeStructuredTestRun(const QString &templateId,
       templateId == QLatin1String("cpp_make_test")) {
     return true;
   }
-  return commandLine.contains(QLatin1String("ctest"), Qt::CaseInsensitive);
+  static const QRegularExpression ctestCommand(
+      QStringLiteral(R"re((^|[\s;&|("'/\\])ctest(\.exe)?($|[\s;&|)"']))re"),
+      QRegularExpression::CaseInsensitiveOption);
+  return ctestCommand.match(commandLine).hasMatch();
 }
 
 } // namespace

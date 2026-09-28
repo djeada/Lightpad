@@ -118,7 +118,7 @@ LspCompletionProvider::convertItem(const LspCompletionItem &lspItem) const {
   item.priority = basePriority();
   item.providerId = id();
 
-  item.isSnippet = item.insertText.contains('$');
+  item.isSnippet = lspItem.insertTextFormat == 2;
 
   return item;
 }
