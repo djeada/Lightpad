@@ -38,6 +38,7 @@ jobs:
             qt6-base-dev \
             qt6-base-dev-tools \
             qt6-pdf-dev \
+            libqt6sql6-sqlite \
             gcovr
 
       - name: Configure CMake

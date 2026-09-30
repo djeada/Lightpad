@@ -76,8 +76,23 @@ This document lists all keyboard shortcuts available in Lightpad.
 | `Ctrl+Shift+K` | Toggle Merge Conflicts panel |
 | `Ctrl+Shift+M` | Toggle Problems panel |
 | `Ctrl+Shift+T` | Toggle Test panel |
+| `Ctrl+Shift+D` | Toggle Database panel |
 | `F3` | Next diff change when diff viewer is focused |
 | `Shift+F3` | Previous diff change when diff viewer is focused |
+
+## Database
+
+See [DATABASE_TOOLS.md](DATABASE_TOOLS.md).
+
+| Shortcut | Action |
+|----------|--------|
+| `F9` | Run the statement under the caret (or the selection) against the active connection |
+| `Shift+F9` | Run the whole script |
+| `Ctrl+F9` | Show the execution plan of the statement |
+| `Ctrl+Shift+Q` | New SQL query in an editor tab |
+| `Ctrl+Enter` / `Ctrl+Shift+Enter` | In the database console: run statement / run everything |
+| `Alt+Up` / `Alt+Down` | In the database console: previous / next statement from history |
+| `Ctrl+Space` | SQL completion (tables, columns, keywords) |
 
 ## Merge Conflict Resolver
 

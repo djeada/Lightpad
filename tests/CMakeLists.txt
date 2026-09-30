@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 enable_testing()
 
 # Find Qt6 Test module
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Test Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Test Network Sql)
 find_package(Qt6 QUIET COMPONENTS Pdf PdfWidgets)
 find_package(Python3 QUIET COMPONENTS Interpreter)
 
@@ -2971,6 +2971,81 @@ add_dependencies(test_lspregression fakelsp_server)
 add_test(NAME LspRegressionTests COMMAND test_lspregression)
 
 # Set environment variable for headless testing
+# Database tools: the engine independent core (no GUI)
+set(DATABASE_CORE_SOURCES
+    ${CMAKE_SOURCE_DIR}/App/database/dbtypes.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/sqlstatementsplitter.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/dbcatalog.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/idbsession.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/sqlcompletion.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/clidialect.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/clisession.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/sqlitesession.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/dbconnection.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/connectionstore.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/queryhistory.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/dockerdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/resultexporter.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/columnprofiler.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/databasemanager.cpp
+)
+
+foreach(db_test test_sqlstatementsplitter test_databasecore test_databaselive)
+    add_executable(${db_test}
+        unit/${db_test}.cpp
+        ${DATABASE_CORE_SOURCES}
+    )
+    target_include_directories(${db_test} PRIVATE ${CMAKE_SOURCE_DIR}/App)
+    target_link_libraries(${db_test}
+        PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Sql
+        Qt6::Test
+    )
+    target_compile_definitions(${db_test} PRIVATE QT_DEPRECATED_WARNINGS)
+endforeach()
+
+add_test(NAME SqlStatementSplitterTests COMMAND test_sqlstatementsplitter)
+add_test(NAME DatabaseCoreTests COMMAND test_databasecore)
+add_test(NAME DatabaseLiveTests COMMAND test_databaselive)
+set_tests_properties(DatabaseLiveTests PROPERTIES TIMEOUT 120)
+
+
+# Database panel widgets (result grid, insights, console, panel with SQLite)
+add_executable(test_databasepanel
+    unit/test_databasepanel.cpp
+    ${DATABASE_CORE_SOURCES}
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/databasepanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/dbresultview.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/dbinsightsview.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/sqlconsoleedit.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/connectiondialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/queryhistorydialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+target_include_directories(test_databasepanel PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/settings
+)
+target_link_libraries(test_databasepanel
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Sql
+    Qt6::Test
+)
+target_compile_definitions(test_databasepanel PRIVATE QT_DEPRECATED_WARNINGS)
+add_test(NAME DatabasePanelTests COMMAND test_databasepanel)
+set_tests_properties(DatabasePanelTests PROPERTIES TIMEOUT 120)
+
 set(TEST_LIST
     LoggerTests 
     ThemeTests 
@@ -3068,6 +3143,7 @@ set(TEST_TARGETS
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap test_dap_integration test_cmakeproject
     test_runtargetresolver test_filedirtreemodel test_compilerdiagnosticparser
     test_dockerfilesyntaxplugin
+    test_sqlstatementsplitter test_databasecore test_databaselive test_databasepanel
     test_pluginbasedsyntaxhighlighter
     test_gitintegration test_gitrepositorystate test_gitdiffmodel test_stagingcanvasdialog test_gitgraphwidget test_gitlogdialog test_gitcomparison test_compareanythingdialog test_gitsyncmodel test_branchsyncradardialog test_commitplan test_commitcraftingdialog test_gitfiletimeline test_gitoperationpreview test_gitintegrationadvice test_gitundoplan test_gittimetravel test_gitrebaseplan test_gitconflictmodel test_gitrecovery test_gitstashshelf test_gitcommandlog test_gitbranchhygiene test_gitworktreemap test_gitbisect test_gitprovenance test_gitsandbox test_repositorystatemapwidget test_gitfilesystemmodel test_gitworkbenchdialog test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_dockutils

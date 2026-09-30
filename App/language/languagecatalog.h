@@ -43,6 +43,7 @@ public:
         {"py", "Python", {"py", "pyw", "pyi"}},
         {"rust", "Rust", {"rs"}},
         {"sh", "Shell", {"sh", "bash", "zsh"}},
+        {"sql", "SQL", {"sql", "ddl", "dml", "psql", "tsql"}},
         {"ts", "TypeScript", {"ts", "tsx"}},
         {"wgsl", "WGSL", {"wgsl"}},
         {"yaml", "YAML", {"yaml", "yml"}},
@@ -180,6 +181,9 @@ private:
     addAlias(aliases, "c++", "cpp");
     addAlias(aliases, "cxx", "cpp");
     addAlias(aliases, "yml", "yaml");
+    addAlias(aliases, "sql", "sql");
+    addAlias(aliases, "tsql", "sql");
+    addAlias(aliases, "postgresql", "sql");
     addAlias(aliases, "go", "go");
     addAlias(aliases, "java", "java");
     addAlias(aliases, "rust", "rust");

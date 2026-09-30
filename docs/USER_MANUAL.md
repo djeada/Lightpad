@@ -200,6 +200,13 @@ Matching brackets are highlighted when the cursor is on a bracket. Toggle:
 The current line is subtly highlighted. Toggle:
 - **Preferences** → **Editor** → **Highlight current line**
 
+### Databases
+
+Open **Database → Database Panel** (`Ctrl+Shift+D`) to connect to SQLite,
+SQL Server, PostgreSQL or MySQL/MariaDB - directly or inside a Docker
+container - browse tables, run SQL from `.sql` files (`F9`) or the console, and
+inspect, export and profile results. See [DATABASE_TOOLS.md](DATABASE_TOOLS.md).
+
 ### Autocompletion
 
 Trigger autocompletion with `Ctrl+Space`. See [AUTOCOMPLETION.md](../App/AUTOCOMPLETION.md) for details.
