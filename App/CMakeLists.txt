@@ -4,7 +4,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Network Sql)
 find_package(Qt6 QUIET COMPONENTS Pdf PdfWidgets WebEngineWidgets)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/build)
@@ -60,10 +60,27 @@ set(project_headers
     completion/providers/lspcompletionprovider.h
     completion/providers/plugincompletionprovider.h
     completion/providers/snippetcompletionprovider.h
+    completion/providers/sqlcompletionprovider.h
     core/editor/texttransforms.h
     core/editor/linenumberarea.h
     core/editor/multicursor.h
     core/editor/codefolding.h
+    database/dbtypes.h
+    database/sqlkeywords.h
+    database/sqlcompletion.h
+    database/sqlstatementsplitter.h
+    database/dbcatalog.h
+    database/clidialect.h
+    database/idbsession.h
+    database/clisession.h
+    database/sqlitesession.h
+    database/dbconnection.h
+    database/connectionstore.h
+    database/queryhistory.h
+    database/dockerdiscovery.h
+    database/resultexporter.h
+    database/columnprofiler.h
+    database/databasemanager.h
     dap/dapclient.h
     dap/expressiontranslator.h
     dap/idebugadapter.h
@@ -102,6 +119,13 @@ set(project_headers
     git/gitbisect.h
     git/gitprovenance.h
     git/gitsandbox.h
+    ui/panels/dbglyphs.h
+    ui/panels/dbresultview.h
+    ui/panels/dbinsightsview.h
+    ui/panels/sqlconsoleedit.h
+    ui/panels/databasepanel.h
+    ui/dialogs/connectiondialog.h
+    ui/dialogs/queryhistorydialog.h
     ui/dialogs/commandpalette.h
     ui/dialogs/styleddialog.h
     ui/dialogs/styledpopupdialog.h
@@ -204,6 +228,7 @@ set(project_headers
     syntax/cppsyntaxplugin.h
     syntax/csssyntaxplugin.h
     syntax/dockerfilesyntaxplugin.h
+    syntax/sqlsyntaxplugin.h
     syntax/gosyntaxplugin.h
     syntax/glslsyntaxplugin.h
     syntax/hlslsyntaxplugin.h
@@ -286,10 +311,26 @@ set(project_sources
     completion/providers/lspcompletionprovider.cpp
     completion/providers/plugincompletionprovider.cpp
     completion/providers/snippetcompletionprovider.cpp
+    completion/providers/sqlcompletionprovider.cpp
     core/editor/texttransforms.cpp
     core/editor/linenumberarea.cpp
     core/editor/multicursor.cpp
     core/editor/codefolding.cpp
+    database/dbtypes.cpp
+    database/sqlstatementsplitter.cpp
+    database/dbcatalog.cpp
+    database/idbsession.cpp
+    database/sqlcompletion.cpp
+    database/clidialect.cpp
+    database/clisession.cpp
+    database/sqlitesession.cpp
+    database/dbconnection.cpp
+    database/connectionstore.cpp
+    database/queryhistory.cpp
+    database/dockerdiscovery.cpp
+    database/resultexporter.cpp
+    database/columnprofiler.cpp
+    database/databasemanager.cpp
     dap/dapclient.cpp
     dap/expressiontranslator.cpp
     dap/debugadapterregistry.cpp
@@ -329,6 +370,12 @@ set(project_sources
     git/gitbisect.cpp
     git/gitprovenance.cpp
     git/gitsandbox.cpp
+    ui/panels/dbresultview.cpp
+    ui/panels/dbinsightsview.cpp
+    ui/panels/sqlconsoleedit.cpp
+    ui/panels/databasepanel.cpp
+    ui/dialogs/connectiondialog.cpp
+    ui/dialogs/queryhistorydialog.cpp
     ui/dialogs/commandpalette.cpp
     ui/dialogs/styleddialog.cpp
     ui/dialogs/styledpopupdialog.cpp
@@ -430,6 +477,7 @@ set(project_sources
     syntax/cppsyntaxplugin.cpp
     syntax/csssyntaxplugin.cpp
     syntax/dockerfilesyntaxplugin.cpp
+    syntax/sqlsyntaxplugin.cpp
     syntax/gosyntaxplugin.cpp
     syntax/glslsyntaxplugin.cpp
     syntax/hlslsyntaxplugin.cpp
@@ -452,6 +500,7 @@ set(project_sources
     definition/symbolnavigationservice.cpp
     core/lightpadtabwidget.cpp
     ui/mainwindow.cpp
+    ui/mainwindow_database.cpp
     ui/popup.cpp
     ui/dialogs/preferences.cpp
     ui/dialogs/pythonenvironmentdialog.cpp
@@ -519,7 +568,8 @@ target_link_libraries(Lightpad
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
-    Qt6::Network)
+    Qt6::Network
+    Qt6::Sql)
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(Lightpad PRIVATE util)

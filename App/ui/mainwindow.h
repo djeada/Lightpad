@@ -43,6 +43,7 @@ class VimMode;
 class LightpadTreeView;
 class DebugPanel;
 class TestPanel;
+class DatabasePanel;
 class SymbolNavigationService;
 class DiagnosticsManager;
 class LanguageFeatureManager;
@@ -290,6 +291,12 @@ private:
   LatexPreviewPanel *m_latexPreviewPanel;
   QDockWidget *m_latexPreviewDock;
   QLabel *m_testStatusLabel;
+  DatabasePanel *databasePanel = nullptr;
+  QDockWidget *databaseDock = nullptr;
+  QToolButton *m_databaseStatusButton = nullptr;
+  QMenu *m_databaseMenu = nullptr;
+  QMenu *m_databaseConnectionsMenu = nullptr;
+  QAction *m_databaseToggleAction = nullptr;
   QString m_activeDebugSessionId;
   bool m_debugStartInProgress;
 
@@ -431,6 +438,17 @@ private:
   QHash<QString, FileOpenGuard::TextFormat> m_fileFormats;
   void ensureDebugPanel();
   void ensureTestPanel();
+
+  void setupDatabaseMenu();
+  void ensureDatabasePanel();
+  void showDatabasePanel(bool focusConsole = false);
+  void toggleDatabasePanel();
+  void runSqlFromEditor(bool runAll, bool explain);
+  void openSqlInEditor(const QString &title, const QString &sql);
+  void newSqlQuery();
+  void updateDatabaseStatusChip();
+  void rebuildDatabaseConnectionsMenu();
+  void registerSqlCompletion();
   void trackDockLayoutChanges(QDockWidget *dock);
   void tabifyBottomDock(QDockWidget *dock);
   void polishDockTabBars();

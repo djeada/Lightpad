@@ -117,6 +117,7 @@
 #include "panels/breadcrumbwidget.h"
 #include "panels/conflictcenterpanel.h"
 #include "panels/conflictresolverview.h"
+#include "panels/databasepanel.h"
 #include "panels/debugpanel.h"
 #include "panels/findreplacepanel.h"
 #include "panels/problemspanel.h"
@@ -377,6 +378,7 @@ MainWindow::MainWindow(QWidget *parent)
 
   setupTextArea();
   setupTabWidget();
+  setupDatabaseMenu();
   setupCommandPalette();
   setupGoToLineDialog();
   setupGoToSymbolDialog();
@@ -932,6 +934,8 @@ void MainWindow::saveSettings() {
   globalSettings.setValue("showProblemsDock",
                           m_problemsDock && m_problemsDock->isVisible());
   globalSettings.setValue("showTestDock", testDock && testDock->isVisible());
+  globalSettings.setValue("showDatabaseDock",
+                          databaseDock && databaseDock->isVisible());
   globalSettings.setValue("showMarkdownPreviewDock",
                           m_markdownPreviewDock &&
                               m_markdownPreviewDock->isVisible());
@@ -1028,6 +1032,9 @@ void MainWindow::saveSettings() {
   if (testPanel) {
     testPanel->saveState();
   }
+  if (databasePanel) {
+    databasePanel->saveState();
+  }
   persistTreeStateToSettings();
   globalSettings.saveSettings();
 }
@@ -1046,6 +1053,8 @@ void MainWindow::restoreSessionUiState() {
       globalSettings.getValue("showProblemsDock", false).toBool();
   const bool showTestDock =
       globalSettings.getValue("showTestDock", false).toBool();
+  const bool showDatabaseDock =
+      globalSettings.getValue("showDatabaseDock", false).toBool();
   const QString dockStateBase64 =
       globalSettings.getValue("mainWindowDockState", "").toString();
 
@@ -1060,6 +1069,7 @@ void MainWindow::restoreSessionUiState() {
     ensureSourceControlPanel();
     ensureDebugPanel();
     ensureTestPanel();
+    ensureDatabasePanel();
   }
 
   if (showSourceControlDock) {
@@ -1088,6 +1098,10 @@ void MainWindow::restoreSessionUiState() {
       testDock->show();
       testDock->raise();
     }
+  }
+
+  if (showDatabaseDock) {
+    showDatabasePanel();
   }
 
   const QString markdownPreviewFilePath =
@@ -1226,6 +1240,10 @@ void MainWindow::syncViewToggleActionStates() {
   }
   if (ui->actionToggle_Test_Panel) {
     ui->actionToggle_Test_Panel->setChecked(testDock && testDock->isVisible());
+  }
+  if (m_databaseToggleAction) {
+    m_databaseToggleAction->setChecked(databaseDock &&
+                                       databaseDock->isVisible());
   }
   if (ui->actionToggle_Problems) {
     ui->actionToggle_Problems->setChecked(m_problemsDock &&
@@ -4484,7 +4502,7 @@ void MainWindow::trackDockLayoutChanges(QDockWidget *dock) {
 
 void MainWindow::tabifyBottomDock(QDockWidget *dock) {
   QList<QDockWidget *> bottomDocks = {m_terminalDock, m_problemsDock, debugDock,
-                                      testDock};
+                                      testDock, databaseDock};
   for (QDockWidget *existing : bottomDocks) {
     if (existing && existing != dock && existing->isVisible()) {
       tabifyDockWidget(existing, dock);
@@ -5821,6 +5839,7 @@ void MainWindow::restyleStatusBarItems() {
   if (vimStatusLabel)
     updateVimStatusLabel(vimStatusLabel->text());
   refreshProblemsStatusForCurrentFile();
+  updateDatabaseStatusChip();
   if (m_lspStatusLabel && m_lspStatusLabel->isVisible() &&
       !m_lspStatusState.isEmpty()) {
     updateLspStatusLabel(m_lspStatusLanguageId, m_lspStatusState);
@@ -6915,6 +6934,7 @@ void MainWindow::setupCompletionSystem() {
   registry.registerProvider(std::make_shared<SnippetCompletionProvider>());
 
   registry.registerProvider(std::make_shared<PluginCompletionProvider>());
+  registerSqlCompletion();
 
   m_lspCompletionProvider = std::make_shared<LspCompletionProvider>(nullptr);
   registry.registerProvider(m_lspCompletionProvider);
@@ -10343,6 +10363,9 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
   }
   if (testPanel) {
     testPanel->applyTheme(theme);
+  }
+  if (databasePanel) {
+    databasePanel->applyTheme(theme);
   }
   restyleStatusBarItems();
   for (StyledDialog *dialog : findChildren<StyledDialog *>()) {

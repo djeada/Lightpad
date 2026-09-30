@@ -14,15 +14,17 @@ Lightpad is a Qt 6-based code editor with a modern UI, built-in language tooling
 - Multi-cursor editing and split editors (horizontal/vertical)
 - Problems panel, breadcrumbs, minimap, and integrated terminal
 - Run and format templates with per-project assignments
+- Database workbench: SQLite, SQL Server, PostgreSQL and MySQL/MariaDB (also inside Docker containers) with multiple connections, schema browser, result grids, exports, column insights and schema-aware SQL completion
 - Image viewer and optional PDF viewer (Qt6Pdf)
 
 ## Supported languages (built-in syntax plugins)
-Cpp, Python, JavaScript, TypeScript, Java, Rust, Go, HTML, CSS, JSON, YAML, Markdown, LaTeX, Shell, Make, CMake, Bazel, Meson, Ninja
+Cpp, Python, JavaScript, TypeScript, Java, Rust, Go, HTML, CSS, JSON, YAML, Markdown, LaTeX, Shell, SQL, Make, CMake, Bazel, Meson, Ninja
 
 ## Build requirements
 - C++17 compiler
 - CMake 3.16+
-- Qt 6 (Core, Widgets, Gui)
+- Qt 6 (Core, Widgets, Gui, Sql)
+  - SQLite connections need the Qt SQLite driver (Debian/Ubuntu: `libqt6sql6-sqlite`)
 - Optional: Qt6Pdf + Qt6PdfWidgets for the PDF viewer
   - Disable with `-DENABLE_PDF_SUPPORT=OFF`
 
@@ -99,6 +101,7 @@ Plugins are discovered from:
 - Go to Definition: docs/GO_TO_DEFINITION.md
 - Plugin development: docs/PLUGIN_DEVELOPMENT.md
 - Syntax plugins: docs/SYNTAX_PLUGINS.md
+- Database tools: docs/DATABASE_TOOLS.md
 
 ## Contributing
 See CONTRIBUTING.md for the workflow and guidelines.

@@ -21,6 +21,7 @@
 #include "syntax/pythonsyntaxplugin.h"
 #include "syntax/rustsyntaxplugin.h"
 #include "syntax/shellsyntaxplugin.h"
+#include "syntax/sqlsyntaxplugin.h"
 #include "syntax/syntaxpluginregistry.h"
 #include "syntax/typescriptsyntaxplugin.h"
 #include "syntax/wgslsyntaxplugin.h"
@@ -53,6 +54,7 @@ void registerBuiltInSyntaxPlugins() {
   registry.registerPlugin(std::make_unique<MetalSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<RustSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<ShellSyntaxPlugin>());
+  registry.registerPlugin(std::make_unique<SqlSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<TypeScriptSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<WgslSyntaxPlugin>());
   registry.registerPlugin(std::make_unique<YamlSyntaxPlugin>());
