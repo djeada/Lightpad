@@ -478,6 +478,8 @@ set(project_sources
     editor/vimmode_edit.cpp
     editor/vimmode_search.cpp
     editor/vimmode_ex.cpp
+    editor/vimmode_expr.cpp
+    editor/vimmode_exextra.cpp
     i18n/i18n.cpp
     python/pythonprojectenvironment.cpp
     lsp/lspclient.cpp

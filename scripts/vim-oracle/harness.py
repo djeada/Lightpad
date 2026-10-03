@@ -54,9 +54,9 @@ def run_vim_chunk(chunk, idx):
     return res
 def main():
     cases = json.load(open(sys.argv[1]))
-    n = 150
+    n = int(os.environ.get("VIM_ORACLE_CHUNK", "150"))
     chunks = [cases[i:i+n] for i in range(0, len(cases), n)]
-    with ThreadPoolExecutor(8) as ex:
+    with ThreadPoolExecutor(int(os.environ.get("VIM_ORACLE_JOBS", "3"))) as ex:
         results = list(ex.map(run_vim_chunk, chunks, range(len(chunks))))
     expected = [r for ch in results for r in ch]
     json.dump(cases, open(os.path.join(HERE,'cases_in.json'),'w'))

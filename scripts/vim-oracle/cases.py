@@ -8,6 +8,8 @@ import json
 import random
 import sys
 
+from new_cases import new_cases
+
 
 def grid_cases():
     random.seed(1)
@@ -217,6 +219,7 @@ SUITES = {
     "gn": search_match_cases,
     "misc": misc_cases,
     "audit": audit_cases,
+    "wb": new_cases,
 }
 
 if __name__ == "__main__":

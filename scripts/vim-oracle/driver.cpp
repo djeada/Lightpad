@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
       vim.feedKeys("<Esc>");
     QTextCursor tc = ed.textCursor();
     QJsonObject r;
-    r["text"] = ed.toPlainText();
+    r["text"] = ed.toPlainText().replace(QChar(0), QChar('\n'));
     r["line"] = tc.blockNumber();
     r["col"] = tc.positionInBlock();
     VimRegister reg = vim.registerValue('"');

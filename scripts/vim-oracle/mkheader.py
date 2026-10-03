@@ -1,13 +1,22 @@
-"""Build tests/unit/vim_oracle_cases.h from harness.py results (all_*.json)."""
+"""Build the oracle case headers from harness.py results (all_*.json).
 
-import json, os, random
+    python3 mkheader.py        # tests/unit/vim_oracle_cases.h (original suites)
+    python3 mkheader.py wb     # tests/unit/vim_oracle_cases_wb.h (second wave)
+
+Only cases where our result already equals Vim's are written, so the unit test
+asserts the behavior Vim 9.1 produced.
+"""
+
+import json, os, random, sys
 random.seed(7)
+wave = len(sys.argv) > 1 and sys.argv[1] == 'wb'
 texts = []
 def tid(t):
     if t not in texts: texts.append(t)
     return texts.index(t)
 selected = []
-for src, per in [('grid', 1), ('cmds', 2), ('more', 2), ('gn', 3), ('misc', 2), ('audit', 10)]:
+suites = [('wb', 3)] if wave else [('grid', 1), ('cmds', 2), ('more', 2), ('gn', 3), ('misc', 2), ('audit', 10)]
+for src, per in suites:
     data = json.load(open(f'all_{src}.json'))
     random.shuffle(data)
     seen = {}
@@ -27,21 +36,24 @@ def cstr(s):
         elif ch == '"': out += '\\"'
         elif ch == '\n': out += '\\n'
         elif ch == '\t': out += '\\t'
-        elif ord(ch) < 32: out += '\\x%02x' % ord(ch)
+        elif ord(ch) < 32: out += '\\x%02x" "' % ord(ch)
         else: out += ch
     return out + '"'
-lines = ['#ifndef VIM_ORACLE_CASES_H', '#define VIM_ORACLE_CASES_H', '',
-
- 'struct VimOracleCase {', '  int text;', '  int line;', '  int col;', '  const char *keys;', '  const char *expectedText;', '  int expectedLine;', '  int expectedCol;', '  const char *expectedRegister;', '};', '',
- 'static const char *const kVimOracleTexts[] = {']
+suffix = 'Wb' if wave else ''
+guard = 'VIM_ORACLE_CASES_WB_H' if wave else 'VIM_ORACLE_CASES_H'
+lines = ['#ifndef ' + guard, '#define ' + guard, '']
+if not wave:
+    lines += ['struct VimOracleCase {', '  int text;', '  int line;', '  int col;', '  const char *keys;', '  const char *expectedText;', '  int expectedLine;', '  int expectedCol;', '  const char *expectedRegister;', '};', '']
+lines.append('static const char *const kVimOracle%sTexts[] = {' % suffix)
 for t in texts: lines.append('    ' + cstr(t) + ',')
 lines.append('};')
 lines.append('')
-lines.append('static const VimOracleCase kVimOracleCases[] = {')
+lines.append('static const VimOracleCase kVimOracle%sCases[] = {' % suffix)
 for (t, l, c, k, et, el, ec, reg) in selected:
     lines.append('    {%d, %d, %d, %s, %s, %d, %d, %s},' % (t, l, c, cstr(k), cstr(et), el, ec, cstr(reg) if reg is not None else 'nullptr'))
 lines.append('};')
 lines.append('')
 lines.append('#endif')
-open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'tests', 'unit', 'vim_oracle_cases.h'), 'w').write('\n'.join(lines) + '\n')
+name = 'vim_oracle_cases_wb.h' if wave else 'vim_oracle_cases.h'
+open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'tests', 'unit', name), 'w').write('\n'.join(lines) + '\n')
 print(len(selected), len(texts))

@@ -19,7 +19,8 @@ const QSet<QString> &motionKeys() {
       "gE",        "g_",       "g0",       "g^",      "g$",        "gm",
       "gj",        "gk",       "g*",       "g#",      "go",        "[(",
       "[{",        "])",       "]}",       "[[",      "]]",        "[]",
-      "][",        "/",        "?"};
+      "][",        "/",        "?",        "]'",       "]`",        "['",
+      "[`"};
   return keys;
 }
 
@@ -56,7 +57,7 @@ const QSet<QString> &visualCommands() {
       "s",      "C",      "S",     "R",  "J",     "gJ",    ">",     "<",
       "=",      "~",      "u",     "U",  "g~",    "gu",    "gU",    "g?",
       "gq",     "gw",     "p",     "P",  "I",     "A",     "<C-a>", "<C-x>",
-      "g<C-a>", "g<C-x>", "<C-c>", "zf", "<C-e>", "<C-y>", "<C-d>", "<C-u>",
+      "g<C-a>", "g<C-x>", "<C-c>", "zf", "<C-e>", "<C-y>", "<C-d>", "<C-u>", "!",
       "<C-f>",  "<C-b>",  "zz",    "zt", "zb",    "gn",    "gN"};
   return keys;
 }
@@ -77,7 +78,7 @@ bool VimMode::isMotionCommand(const QString &key) {
 }
 
 bool VimMode::isOperatorKey(const QString &key) {
-  static const QSet<QString> ops = {"d",  "c",  "y",  "<",  ">",  "=",
+  static const QSet<QString> ops = {"d",  "c",  "y",  "<",  ">",  "=",  "!",
                                     "g~", "gu", "gU", "g?", "gq", "gw"};
   return ops.contains(key);
 }
@@ -312,6 +313,11 @@ bool VimMode::handleNormalKey(const QString &token) {
   }
 
   m_pending << token;
+  if (token == "=" && m_pending.size() == 2 && m_pending[0] == "\"") {
+    m_cmdOperatorKeys.clear();
+    enterCommandLine('=', QString());
+    return true;
+  }
   NormalCmd cmd;
   Parse p = parseCommand(m_pending, cmd, false);
   if (p == Parse::Incomplete) {
@@ -488,7 +494,7 @@ void VimMode::executeOperatorMotion(const NormalCmd &cmd,
   if (cmd.op == "c") {
     m_insertEditOpen = doc()->revision() != revision;
     startInsertSession(1, "c", keys);
-  } else if (cmd.op != "y") {
+  } else if (cmd.op != "y" && cmd.op != "!") {
     setDotCommand(keys);
   }
 }

@@ -4631,8 +4631,8 @@ static const VimOracleCase kVimOracleCases[] = {
      "return 0;\n}\n    if (x) {\n        call(a, \"str\", 'c');",
      7, 8, ""},
     {9, 0, 5, "ma``x",
-     "one to three\nfour five six\nseven eight nine\nten eleven twelve", 0, 5,
-     "w"},
+     "ne two three\nfour five six\nseven eight nine\nten eleven twelve", 0, 0,
+     "o"},
     {9, 0, 5, "2afoo <Esc>",
      "one twfoo foo o three\nfour five six\nseven eight nine\nten eleven "
      "twelve",

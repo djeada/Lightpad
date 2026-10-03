@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "vimmode.h"
 
 #include <QRegularExpression>
@@ -634,6 +635,48 @@ VimMode::MotionResult VimMode::evalMotion(const QString &key, QChar arg,
     } else {
       r.pos = pos;
     }
+  } else if (key == "]'" || key == "]`" || key == "['" || key == "[`") {
+    const bool forward = key[0] == ']';
+    const bool lineMode = key[1] == '\'';
+    QVector<int> positions;
+    for (auto it = m_marks.constBegin(); it != m_marks.constEnd(); ++it) {
+      const ushort m = it.key().unicode();
+      if (m < 'a' || m > 'z' || it->isNull() || it->document() != doc())
+        continue;
+      positions << qBound(0, it->position(), docLength());
+    }
+    std::sort(positions.begin(), positions.end());
+    if (lineMode) {
+      QVector<int> lines;
+      for (int p : positions) {
+        const int l = lineOf(p);
+        if (lines.isEmpty() || lines.last() != l)
+          lines << l;
+      }
+      positions = lines;
+    }
+    const int cur = lineMode ? line : fromPos;
+    QVector<int> candidates;
+    for (int p : positions) {
+      if (forward ? p > cur : p < cur)
+        candidates << p;
+    }
+    if (candidates.isEmpty()) {
+      r.jump = true;
+      if (lineMode)
+        toLine(line, true);
+      else
+        r.pos = fromPos;
+      return r;
+    }
+    const int steps = qMin<int>(c1, candidates.size());
+    const int target = forward ? candidates[steps - 1]
+                               : candidates[candidates.size() - steps];
+    r.jump = true;
+    if (lineMode)
+      toLine(target, true);
+    else
+      r.pos = target;
   } else if (key == "[(" || key == "[{" || key == "])" || key == "]}") {
     QChar open = key[1] == '(' || key[1] == ')' ? '(' : '{';
     QChar close = open == '(' ? ')' : '}';
@@ -744,7 +787,9 @@ VimMode::Range VimMode::motionRange(int a, int b, MotionType type) const {
       return lineRange(sl, el - 1);
     e = lineEndPos(el - 1);
   }
-  return charRange(s, e);
+  Range exclusiveRange = charRange(s, e);
+  exclusiveRange.exclusiveEnd = true;
+  return exclusiveRange;
 }
 
 QString VimMode::rangeText(const Range &range) const {

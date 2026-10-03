@@ -34,6 +34,7 @@ struct VimRegister {
 
 class VimMode : public QObject {
   Q_OBJECT
+  friend class VimExprEvaluator;
 
 public:
   explicit VimMode(QPlainTextEdit *editor, QObject *parent = nullptr);
@@ -66,7 +67,8 @@ public:
   static QString toRegularExpression(const QString &vimPattern,
                                      bool *caseSensitive = nullptr,
                                      bool ignoreCase = false,
-                                     bool smartCase = false);
+                                     bool smartCase = false,
+                                     const VimMode *context = nullptr);
 
   void setTabWidth(int width);
   void setAutoIndent(bool enabled);
@@ -105,6 +107,7 @@ public:
     int startVcol = 0;
     int endVcol = 0;
     bool toEol = false;
+    bool exclusiveEnd = false;
     VimRegisterType type = VimRegisterType::Charwise;
   };
 
@@ -256,7 +259,7 @@ private:
               bool quiet = false);
   MotionResult searchMotion(bool reverse, int count, int fromPos);
   bool doSearchCommand(const QString &input, bool forward, int count,
-                       MotionResult &result);
+                       MotionResult &result, int fromPos = -1);
   bool prepareWordSearch(bool forward, bool wholeWord, int fromPos,
                          int &searchFrom);
   QRegularExpression compilePattern(const QString &vimPattern) const;
@@ -280,8 +283,21 @@ private:
   void exRegisters();
   void exMarks();
   QString expandReplacement(const QString &replacement,
-                            const QRegularExpressionMatch &match) const;
+                            const QRegularExpressionMatch &match);
 
+  bool evalExpression(const QString &expr, QString *result,
+                      bool *isList = nullptr,
+                      const QRegularExpressionMatch *match = nullptr,
+                      QString *error = nullptr);
+  bool evalExpressionRepr(const QString &expr, QString *result,
+                          QString *error = nullptr, bool rawString = true);
+  void exLet(const QString &args);
+  void autoWrapForInsert(QChar typed);
+  void exFilter(const QString &command, int line1, int line2);
+  void exRead(const QString &args, int line);
+  void exAlign(const QString &kind, const QString &args, int line1, int line2);
+  void exDelmarks(const QString &args, bool bang);
+  bool runShell(const QString &command, const QString &input, QString *output);
   void setRegister(QChar reg, const QString &text, VimRegisterType type);
   VimRegister getRegister(QChar reg) const;
   void storeDeleted(QChar reg, const QString &text, VimRegisterType type,
@@ -439,6 +455,12 @@ private:
   QStringList m_macroKeys;
   QChar m_lastMacroRegister;
 
+  QMap<QString, QString> m_variables;
+  QString m_exprRegister;
+  int m_exprLine = -1;
+  int m_exprCol = -1;
+  bool m_exprRegisterLinewise = false;
+  QString m_lastShellCommand;
   QString m_lastSubPattern;
   QString m_lastSubReplacement;
   QString m_lastSubFlags;
@@ -457,7 +479,7 @@ private:
   bool m_joinSpaces = false;
   bool m_clipboardUnnamed = false;
   bool m_autoIndent = false;
-  int m_textWidth = 79;
+  int m_textWidth = 0;
   QString m_nrFormats = "bin,hex";
 
   mutable const QTextDocument *m_lineCacheDoc = nullptr;
