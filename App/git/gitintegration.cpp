@@ -5251,3 +5251,5 @@ QByteArray GitIntegration::repositoryFingerprint(const QString &repositoryPath,
 
   return hash.result();
 }
+
+#include "gitintegration_extras.inc"

@@ -101,6 +101,7 @@ set(project_headers
     git/gitcomparison.h
     git/gitcommittypes.h
     git/gitsyncmodel.h
+    git/gitsubmodulemodel.h
     git/commitplan.h
     git/gitfiletimeline.h
     git/gitoperationpreview.h
@@ -142,6 +143,7 @@ set(project_headers
     ui/dialogs/gitdiffdialog.h
     ui/dialogs/mergestartdialog.h
     ui/dialogs/gitremotedialog.h
+    ui/dialogs/gitrepotoolsdialog.h
     ui/dialogs/gitstashdialog.h
     ui/dialogs/gitlogdialog.h
     ui/dialogs/gitfilehistorydialog.h
@@ -352,6 +354,7 @@ set(project_sources
     git/gitdiffmodel.cpp
     git/gitcomparison.cpp
     git/gitsyncmodel.cpp
+    git/gitsubmodulemodel.cpp
     git/commitplan.cpp
     git/gitfiletimeline.cpp
     git/gitoperationpreview.cpp
@@ -392,6 +395,7 @@ set(project_sources
     ui/dialogs/gitdiffdialog.cpp
     ui/dialogs/mergestartdialog.cpp
     ui/dialogs/gitremotedialog.cpp
+    ui/dialogs/gitrepotoolsdialog.cpp
     ui/dialogs/gitstashdialog.cpp
     ui/dialogs/gitlogdialog.cpp
     ui/dialogs/gitfilehistorydialog.cpp

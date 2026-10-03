@@ -11,6 +11,7 @@
 #include "../dialogs/gitrebasedialog.h"
 #include "../dialogs/gitremotedialog.h"
 #include "../dialogs/gitstashdialog.h"
+#include "../dialogs/gitrepotoolsdialog.h"
 #include "../dialogs/integrationadvisordialog.h"
 #include "../dialogs/mergestartdialog.h"
 #include "../dialogs/operationpreviewdialog.h"
@@ -471,6 +472,22 @@ void SourceControlPanel::setupRepoUI() {
   connect(m_worktreeBtn, &QPushButton::clicked, this,
           &SourceControlPanel::openWorktreeMap);
   remoteOpsLayout->addWidget(m_worktreeBtn);
+
+  m_repoToolsBtn = new QPushButton("🧰 Tools", m_branchSection);
+  m_repoToolsBtn->setToolTip(
+      tr("Remotes, tags, submodules, untracked-file cleanup, and "
+         "cherry-pick/revert and fixup controls"));
+  connect(m_repoToolsBtn, &QPushButton::clicked, this, [this]() {
+    if (!m_git || !m_git->isValidRepository()) {
+      return;
+    }
+    GitRepoToolsDialog dialog(m_git, this);
+    connect(&dialog, &GitRepoToolsDialog::repositoryChanged, this,
+            [this]() { refresh(); });
+    dialog.applyTheme(m_theme);
+    dialog.exec();
+  });
+  remoteOpsLayout->addWidget(m_repoToolsBtn);
 
   branchLayout->addWidget(remoteOpsRow);
   mainLayout->addWidget(m_branchSection);
@@ -1493,6 +1510,8 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
   menu.addSeparator();
   QAction *rebaseAction =
       menu.addAction(tr("🔀 Interactive Rebase from Here..."));
+  QAction *fixupAction = menu.addAction(
+      tr("🩹 Create Fixup for This Commit (staged changes)"));
 
   QAction *selected = menu.exec(m_historyTree->mapToGlobal(pos));
   if (!selected)
@@ -1666,6 +1685,10 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
                "Are you sure you want to proceed?")
                 .arg(shortHash))) {
       m_git->resetToCommit(commitHash, "hard");
+      refresh();
+    }
+  } else if (selected == fixupAction) {
+    if (m_git->commitFixup(commitHash)) {
       refresh();
     }
   } else if (selected == rebaseAction) {
