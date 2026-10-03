@@ -9,6 +9,7 @@
 #include "gitoperationpreview.h"
 #include "gitrebaseplan.h"
 #include "gitrepositorystate.h"
+#include "gitsubmodulemodel.h"
 #include "gitsyncmodel.h"
 #include <QByteArray>
 #include <QMap>
@@ -380,6 +381,34 @@ public:
   bool stashClear();
 
   bool stashBranch(const QString &branchName, int index);
+
+  bool renameRemote(const QString &oldName, const QString &newName);
+  bool setRemoteUrl(const QString &name, const QString &url,
+                    bool pushUrl = false);
+  bool pruneRemote(const QString &name);
+  bool pushTag(const QString &remoteName, const QString &tagName);
+  bool deleteRemoteTag(const QString &remoteName, const QString &tagName);
+
+  enum class SequencerKind { None, CherryPick, Revert };
+  SequencerKind sequencerKind() const;
+  bool cherryPickCommits(const QStringList &commitHashes);
+  bool sequencerContinue();
+  bool sequencerSkip();
+  bool sequencerAbort();
+
+  bool commitFixup(const QString &targetHash, bool squashStyle = false);
+  bool autosquashRebase(const QString &onto);
+  QStringList pendingFixupSubjects(const QString &onto) const;
+
+  QStringList cleanPreview(bool includeIgnored = false) const;
+  bool cleanPaths(const QStringList &paths, bool includeIgnored = false);
+
+  QList<GitSubmoduleInfo> submodules() const;
+  bool addSubmodule(const QString &url, const QString &path);
+  bool initUpdateSubmodules(const QStringList &paths = QStringList(),
+                            bool recursive = true);
+  bool syncSubmodules();
+  bool removeSubmodule(const QString &path);
 
   void refresh();
 
