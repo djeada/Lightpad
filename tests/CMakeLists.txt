@@ -2988,9 +2988,14 @@ set(DATABASE_CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/App/database/resultexporter.cpp
     ${CMAKE_SOURCE_DIR}/App/database/columnprofiler.cpp
     ${CMAKE_SOURCE_DIR}/App/database/databasemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/sqlparams.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/sqllint.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/schemadiff.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/csvimport.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/resultedit.cpp
 )
 
-foreach(db_test test_sqlstatementsplitter test_databasecore test_databaselive)
+foreach(db_test test_sqlstatementsplitter test_databasecore test_databaselive test_databasetools)
     add_executable(${db_test}
         unit/${db_test}.cpp
         ${DATABASE_CORE_SOURCES}
@@ -3009,6 +3014,7 @@ endforeach()
 
 add_test(NAME SqlStatementSplitterTests COMMAND test_sqlstatementsplitter)
 add_test(NAME DatabaseCoreTests COMMAND test_databasecore)
+add_test(NAME DatabaseToolsTests COMMAND test_databasetools)
 add_test(NAME DatabaseLiveTests COMMAND test_databaselive)
 set_tests_properties(DatabaseLiveTests PROPERTIES TIMEOUT 120)
 

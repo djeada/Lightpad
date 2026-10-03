@@ -1,6 +1,10 @@
 #include "databasepanel.h"
 
+#include "../../database/csvimport.h"
 #include "../../database/dbcatalog.h"
+#include "../../database/schemadiff.h"
+#include "../../database/sqllint.h"
+#include "../../database/sqlparams.h"
 #include "../../database/resultexporter.h"
 #include "../../database/sqlstatementsplitter.h"
 #include "../../settings/settingsmanager.h"
@@ -13,6 +17,13 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDateTime>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QFormLayout>
+#include <QLineEdit>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -1243,6 +1254,22 @@ void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
     }
     menu.addAction(tr("Use for queries"), this,
                    [this, id]() { m_manager->setActive(id); });
+    if (conn->isConnected()) {
+      QMenu *tools = menu.addMenu(tr("Schema tools"));
+      tools->addAction(tr("Generate DDL for all tables"), this,
+                       [this, conn]() { showSchemaDdl(conn); });
+      tools->addAction(tr("Import CSV into a new table…"), this,
+                       [this, conn]() { importCsv(conn); });
+      QMenu *cmp = tools->addMenu(tr("Migration script to match"));
+      for (DbConnection *other : m_manager->connections()) {
+        if (other != conn && other->isConnected() &&
+            other->profile().engine == conn->profile().engine) {
+          cmp->addAction(other->profile().name, this,
+                         [this, conn, other]() { showSchemaDiff(conn, other); });
+        }
+      }
+      cmp->setEnabled(!cmp->isEmpty());
+    }
     menu.addAction(tr("New SQL file"), this, [this, conn]() {
       emit openInEditorRequested(
           tr("query.sql"),
@@ -1478,11 +1505,15 @@ quint64 DatabasePanel::execute(DbConnection *conn,
                   .arg(conn->profile().name));
     return 0;
   }
+  if (!bindParameters(conn, &statements)) {
+    return 0;
+  }
   if (!ensurePassword(conn) || !confirmStatements(conn, statements)) {
     return 0;
   }
   hookConnection(conn);
   clearResults();
+  lintStatements(conn, statements);
 
   m_pendingRun = Run();
   m_pendingRun.conn = conn;
@@ -1803,6 +1834,143 @@ DbConnection *DatabasePanel::connectionForScript(const QString &script) const {
     return m_manager->connectionByName(directive);
   }
   return activeConnection();
+}
+
+bool DatabasePanel::bindParameters(DbConnection *conn, QStringList *statements) {
+  QStringList names;
+  for (const QString &st : *statements) {
+    for (const QString &n : SqlParams::findParameters(st)) {
+      if (!names.contains(n)) {
+        names << n;
+      }
+    }
+  }
+  if (names.isEmpty()) {
+    return true;
+  }
+  QDialog dlg(this);
+  dlg.setWindowTitle(tr("Query parameters"));
+  auto *form = new QFormLayout(&dlg);
+  QVector<QLineEdit *> edits;
+  for (const QString &n : names) {
+    auto *e = new QLineEdit(m_paramValues.value(n), &dlg);
+    e->setPlaceholderText(tr("value, NULL, 42 or text"));
+    form->addRow(QStringLiteral(":") + n, e);
+    edits << e;
+  }
+  auto *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                   &dlg);
+  connect(box, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+  connect(box, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+  form->addRow(box);
+  if (!edits.isEmpty()) {
+    edits.first()->setFocus();
+  }
+  if (dlg.exec() != QDialog::Accepted) {
+    setStatus(tr("Run cancelled"));
+    return false;
+  }
+  QHash<QString, QString> values;
+  for (int i = 0; i < names.size(); ++i) {
+    values.insert(names[i], edits[i]->text());
+    m_paramValues.insert(names[i], edits[i]->text());
+  }
+  for (QString &st : *statements) {
+    st = SqlParams::bind(st, values, conn->profile().engine);
+  }
+  return true;
+}
+
+void DatabasePanel::lintStatements(DbConnection *conn, const QStringList &statements) {
+  const DbSchema *schema = conn->schema().isEmpty() ? nullptr : &conn->schema();
+  int count = 0;
+  for (const QString &st : statements) {
+    for (const SqlIssue &issue :
+         SqlLint::lint(st, conn->profile().engine, schema)) {
+      if (issue.severity == SqlIssue::Severity::Info) {
+        continue;
+      }
+      ++count;
+      if (count <= 8) {
+        const QString snippet = st.mid(issue.start, issue.length).simplified();
+        logMessage(tr("Lint: %1%2").arg(
+                       issue.message,
+                       snippet.isEmpty() ? QString()
+                                         : QStringLiteral("  [%1]").arg(snippet.left(40))),
+                   issue.severity == SqlIssue::Severity::Error);
+      }
+    }
+  }
+  if (count > 8) {
+    logMessage(tr("Lint: %1 more warning(s)").arg(count - 8), false);
+  }
+}
+
+void DatabasePanel::showSchemaDdl(DbConnection *conn) {
+  setConsoleText(QStringLiteral("-- schema of %1\n\n%2\n")
+                     .arg(conn->profile().name,
+                          SchemaDiff::schemaDdl(conn->profile().engine, conn->schema())));
+}
+
+void DatabasePanel::showSchemaDiff(DbConnection *from, DbConnection *to) {
+  const DbSchemaDiff d = SchemaDiff::diff(from->schema(), to->schema());
+  QString text = QStringLiteral("-- migration: %1  ->  %2\n").arg(
+      from->profile().name, to->profile().name);
+  if (d.isEmpty()) {
+    text += QStringLiteral("-- schemas are identical\n");
+  } else {
+    for (const QString &line : SchemaDiff::summary(d)) {
+      text += QStringLiteral("--   %1\n").arg(line);
+    }
+    text += QLatin1Char('\n') +
+            SchemaDiff::migrationSql(from->profile().engine, d, true) +
+            QLatin1Char('\n');
+  }
+  setConsoleText(text);
+  setStatus(d.isEmpty() ? tr("Schemas are identical")
+                        : tr("Migration script generated; review it before running"));
+}
+
+void DatabasePanel::importCsv(DbConnection *conn) {
+  const QString path = QFileDialog::getOpenFileName(
+      this, tr("Import CSV"), QString(),
+      tr("Delimited text (*.csv *.tsv *.txt);;All files (*)"));
+  if (path.isEmpty()) {
+    return;
+  }
+  QFile f(path);
+  if (!f.open(QIODevice::ReadOnly)) {
+    setStatus(tr("Cannot read %1").arg(path));
+    return;
+  }
+  const CsvImport::Table table = CsvImport::parse(QString::fromUtf8(f.readAll()));
+  if (!table.ok) {
+    setStatus(tr("Import failed: %1").arg(table.error));
+    return;
+  }
+  bool ok = false;
+  const QString name = QInputDialog::getText(
+      this, tr("Import CSV"), tr("New table name:"), QLineEdit::Normal,
+      QFileInfo(path).completeBaseName(), &ok);
+  if (!ok || name.trimmed().isEmpty()) {
+    return;
+  }
+  const DbEngine e = conn->profile().engine;
+  const auto cols = CsvImport::inferColumns(table);
+  QStringList warnings;
+  QStringList stmts;
+  stmts << CsvImport::createTableSql(e, name.trimmed(), cols);
+  stmts << CsvImport::insertSql(e, name.trimmed(), cols, table, 500, &warnings);
+  QString text = tr("-- import of %1: %2 row(s), %3 column(s); review, then run all (Ctrl+Shift+Enter)\n")
+                     .arg(QFileInfo(path).fileName())
+                     .arg(table.rows.size())
+                     .arg(cols.size());
+  for (const QString &w : warnings.mid(0, 10)) {
+    text += QStringLiteral("-- warning: %1\n").arg(w);
+  }
+  text += stmts.join(QStringLiteral("\n\n")) + QLatin1Char('\n');
+  m_manager->setActive(conn->profile().id);
+  setConsoleText(text);
 }
 
 void DatabasePanel::setConsoleText(const QString &sql, bool focus) {

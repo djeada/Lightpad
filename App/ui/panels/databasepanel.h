@@ -143,6 +143,11 @@ private:
 
   bool ensurePassword(DbConnection *conn);
   bool confirmStatements(DbConnection *conn, const QStringList &statements);
+  bool bindParameters(DbConnection *conn, QStringList *statements);
+  void lintStatements(DbConnection *conn, const QStringList &statements);
+  void showSchemaDdl(DbConnection *conn);
+  void showSchemaDiff(DbConnection *from, DbConnection *to);
+  void importCsv(DbConnection *conn);
   quint64 execute(DbConnection *conn, const QStringList &statements,
                   bool stopOnError, const QString &tableName = QString(),
                   bool profileAfter = false, bool explain = false);
@@ -200,6 +205,7 @@ private:
   QSet<QString> m_hooked;
   QHash<quint64, Run> m_runs;
   Run m_pendingRun;
+  QHash<QString, QString> m_paramValues;
   QHash<QString, quint64> m_activeRunByConnection;
   QPointer<QueryHistoryDialog> m_historyDialog;
   int m_historyCursor = -1;

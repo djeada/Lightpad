@@ -81,6 +81,11 @@ set(project_headers
     database/resultexporter.h
     database/columnprofiler.h
     database/databasemanager.h
+    database/sqlparams.h
+    database/sqllint.h
+    database/schemadiff.h
+    database/csvimport.h
+    database/resultedit.h
     dap/dapclient.h
     dap/expressiontranslator.h
     dap/idebugadapter.h
@@ -331,6 +336,11 @@ set(project_sources
     database/resultexporter.cpp
     database/columnprofiler.cpp
     database/databasemanager.cpp
+    database/sqlparams.cpp
+    database/sqllint.cpp
+    database/schemadiff.cpp
+    database/csvimport.cpp
+    database/resultedit.cpp
     dap/dapclient.cpp
     dap/expressiontranslator.cpp
     dap/debugadapterregistry.cpp
