@@ -11,8 +11,6 @@ class QPushButton;
 class QTabWidget;
 class QTableWidget;
 
-// Remotes, tags, submodules, untracked-file cleanup, and the
-// cherry-pick/revert sequencer plus fixup autosquash, in one place.
 class GitRepoToolsDialog : public StyledDialog {
   Q_OBJECT
 

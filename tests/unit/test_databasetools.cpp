@@ -8,8 +8,7 @@
 
 namespace {
 
-DbTableInfo table(const QString &name,
-                  std::initializer_list<DbColumnInfo> cols,
+DbTableInfo table(const QString &name, std::initializer_list<DbColumnInfo> cols,
                   const QString &schema = QStringLiteral("public")) {
   DbTableInfo t;
   t.schema = schema;
@@ -95,15 +94,16 @@ void TestDatabaseTools::paramsBindEscapes() {
   QHash<QString, QString> my;
   my["p"] = "a\\b";
   QCOMPARE(SqlParams::bind(":p", my, DbEngine::MySql), QString("'a\\\\b'"));
-  QCOMPARE(SqlParams::literalFromInput("true", DbEngine::SqlServer), QString("1"));
+  QCOMPARE(SqlParams::literalFromInput("true", DbEngine::SqlServer),
+           QString("1"));
   QCOMPARE(SqlParams::literalFromInput("true", DbEngine::PostgreSql),
            QString("TRUE"));
 }
 
 void TestDatabaseTools::paramsBindReportsMissing() {
   QStringList missing;
-  const QString out =
-      SqlParams::bind("SELECT :a, :b", {{"a", "1"}}, DbEngine::Sqlite, &missing);
+  const QString out = SqlParams::bind("SELECT :a, :b", {{"a", "1"}},
+                                      DbEngine::Sqlite, &missing);
   QCOMPARE(out, QString("SELECT 1, :b"));
   QCOMPARE(missing, QStringList({"b"}));
 }
@@ -114,7 +114,8 @@ void TestDatabaseTools::lintCleanQueryHasNoIssues() {
       "SELECT u.id, u.name, o.total FROM users u JOIN orders o ON o.user_id = "
       "u.id WHERE u.email IS NOT NULL;",
       DbEngine::PostgreSql, &s);
-  QVERIFY2(issues.isEmpty(), qPrintable(issues.isEmpty() ? "" : issues[0].message));
+  QVERIFY2(issues.isEmpty(),
+           qPrintable(issues.isEmpty() ? "" : issues[0].message));
 }
 
 void TestDatabaseTools::lintUnknownTableSuggests() {
@@ -125,17 +126,18 @@ void TestDatabaseTools::lintUnknownTableSuggests() {
   QVERIFY(issues[0].message.contains("did you mean 'users'"));
   QCOMPARE(issues[0].start, 14);
   QCOMPARE(issues[0].length, 5);
-  // system schemas and temp tables are not flagged
+
   QVERIFY(SqlLint::lint("SELECT * FROM information_schema.tables",
                         DbEngine::PostgreSql, &s)
               .isEmpty());
-  QVERIFY(SqlLint::lint("SELECT * FROM #tmp", DbEngine::SqlServer, &s).isEmpty());
+  QVERIFY(
+      SqlLint::lint("SELECT * FROM #tmp", DbEngine::SqlServer, &s).isEmpty());
 }
 
 void TestDatabaseTools::lintUnknownColumn() {
   const DbSchema s = sampleSchema();
-  const auto issues = SqlLint::lint("SELECT u.nmae FROM users u",
-                                    DbEngine::PostgreSql, &s);
+  const auto issues =
+      SqlLint::lint("SELECT u.nmae FROM users u", DbEngine::PostgreSql, &s);
   QCOMPARE(issues.size(), 1);
   QVERIFY(issues[0].message.contains("no column 'nmae'"));
   QVERIFY(issues[0].message.contains("did you mean 'name'"));
@@ -146,10 +148,11 @@ void TestDatabaseTools::lintUnknownColumn() {
 
 void TestDatabaseTools::lintAliasesAndCtes() {
   const DbSchema s = sampleSchema();
-  QVERIFY(SqlLint::lint("WITH recent AS (SELECT id FROM users) SELECT r.id FROM "
-                        "recent r",
-                        DbEngine::PostgreSql, &s)
-              .isEmpty());
+  QVERIFY(
+      SqlLint::lint("WITH recent AS (SELECT id FROM users) SELECT r.id FROM "
+                    "recent r",
+                    DbEngine::PostgreSql, &s)
+          .isEmpty());
   const auto dup = SqlLint::lint("SELECT 1 FROM users a, orders a",
                                  DbEngine::PostgreSql, &s);
   QVERIFY(hasIssue(dup, "used more than once"));
@@ -166,8 +169,9 @@ void TestDatabaseTools::lintStructural() {
                    "Unmatched"));
   QVERIFY(hasIssue(SqlLint::lint("SELECT 1 /* x", DbEngine::Sqlite, nullptr),
                    "block comment"));
-  // quotes and comments hide parentheses
-  QVERIFY(SqlLint::lint("SELECT '(' -- )\n", DbEngine::Sqlite, nullptr).isEmpty());
+
+  QVERIFY(
+      SqlLint::lint("SELECT '(' -- )\n", DbEngine::Sqlite, nullptr).isEmpty());
 }
 
 void TestDatabaseTools::lintNullComparisonAndMissingWhere() {
@@ -177,10 +181,10 @@ void TestDatabaseTools::lintNullComparisonAndMissingWhere() {
                    "IS NULL"));
   QVERIFY(hasIssue(SqlLint::lint("DELETE FROM users", DbEngine::PostgreSql, &s),
                    "without WHERE"));
-  QVERIFY(!hasIssue(SqlLint::lint("DELETE FROM users WHERE id = 1",
-                                  DbEngine::PostgreSql, &s),
-                    "without WHERE"));
-  // assigning NULL in SET is fine
+  QVERIFY(!hasIssue(
+      SqlLint::lint("DELETE FROM users WHERE id = 1", DbEngine::PostgreSql, &s),
+      "without WHERE"));
+
   QVERIFY(SqlLint::lint("UPDATE users SET email = NULL WHERE id = 1",
                         DbEngine::PostgreSql, &s)
               .isEmpty());
@@ -191,31 +195,35 @@ void TestDatabaseTools::lintInsertColumnCount() {
   QVERIFY(hasIssue(SqlLint::lint("INSERT INTO users (id, name) VALUES (1)",
                                  DbEngine::PostgreSql, &s),
                    "2 column(s) listed but 1 value(s)"));
-  QVERIFY(SqlLint::lint("INSERT INTO users (id, name) VALUES (1, 'a'), (2, 'b')",
-                        DbEngine::PostgreSql, &s)
-              .isEmpty());
+  QVERIFY(
+      SqlLint::lint("INSERT INTO users (id, name) VALUES (1, 'a'), (2, 'b')",
+                    DbEngine::PostgreSql, &s)
+          .isEmpty());
   QVERIFY(hasIssue(SqlLint::lint("INSERT INTO users (id, nope) VALUES (1, 2)",
                                  DbEngine::PostgreSql, &s),
                    "no column 'nope'"));
-  // function calls with commas count as one value
-  QVERIFY(SqlLint::lint("INSERT INTO users (id, name) VALUES (1, coalesce('a','b'))",
-                        DbEngine::PostgreSql, &s)
+
+  QVERIFY(SqlLint::lint(
+              "INSERT INTO users (id, name) VALUES (1, coalesce('a','b'))",
+              DbEngine::PostgreSql, &s)
               .isEmpty());
 }
 
 void TestDatabaseTools::lintWithoutCatalogOnlyStructural() {
-  QVERIFY(SqlLint::lint("SELECT * FROM whatever", DbEngine::Sqlite, nullptr).isEmpty());
+  QVERIFY(SqlLint::lint("SELECT * FROM whatever", DbEngine::Sqlite, nullptr)
+              .isEmpty());
   DbSchema empty;
-  QVERIFY(SqlLint::lint("SELECT * FROM whatever", DbEngine::Sqlite, &empty).isEmpty());
+  QVERIFY(SqlLint::lint("SELECT * FROM whatever", DbEngine::Sqlite, &empty)
+              .isEmpty());
 }
 
 void TestDatabaseTools::diffDetectsChanges() {
   DbSchema a = sampleSchema();
   DbSchema b = sampleSchema();
-  b.tables[0].columns[1].type = "varchar(80)";       // users.name type
-  b.tables[0].columns[2].nullable = false;           // users.email NOT NULL
+  b.tables[0].columns[1].type = "varchar(80)";
+  b.tables[0].columns[2].nullable = false;
   b.tables[0].columns.append({"age", "integer", true, false});
-  b.tables[1].columns.removeLast();                  // orders.total dropped
+  b.tables[1].columns.removeLast();
   b.tables << table("tags", {{"id", "integer", false, true}});
   a.tables << table("legacy", {{"id", "integer", false, true}});
 
@@ -238,7 +246,8 @@ void TestDatabaseTools::diffDetectsChanges() {
 
 void TestDatabaseTools::diffMigrationSqlPerEngine() {
   DbSchema a;
-  a.tables << table("t", {{"id", "integer", false, true}, {"v", "text", true, false}});
+  a.tables << table(
+      "t", {{"id", "integer", false, true}, {"v", "text", true, false}});
   DbSchema b = a;
   b.tables[0].columns[1].type = "varchar(10)";
   b.tables[0].columns[1].nullable = false;
@@ -246,7 +255,8 @@ void TestDatabaseTools::diffMigrationSqlPerEngine() {
   const DbSchemaDiff d = SchemaDiff::diff(a, b);
 
   const QString pg = SchemaDiff::migrationSql(DbEngine::PostgreSql, d);
-  QVERIFY(pg.contains("ALTER TABLE \"public\".\"t\" ADD COLUMN \"extra\" integer;"));
+  QVERIFY(pg.contains(
+      "ALTER TABLE \"public\".\"t\" ADD COLUMN \"extra\" integer;"));
   QVERIFY(pg.contains("ALTER COLUMN \"v\" TYPE varchar(10);"));
   QVERIFY(pg.contains("ALTER COLUMN \"v\" SET NOT NULL;"));
 
@@ -272,15 +282,17 @@ void TestDatabaseTools::diffNoDropsOption() {
   DbSchema a;
   a.tables << table("gone", {{"id", "integer", false, true}});
   const DbSchemaDiff d = SchemaDiff::diff(a, DbSchema());
-  QVERIFY(SchemaDiff::migrationSql(DbEngine::PostgreSql, d).contains("DROP TABLE"));
+  QVERIFY(
+      SchemaDiff::migrationSql(DbEngine::PostgreSql, d).contains("DROP TABLE"));
   const QString safe = SchemaDiff::migrationSql(DbEngine::PostgreSql, d, false);
   QVERIFY(!safe.contains("DROP TABLE"));
   QVERIFY(safe.contains("omitted"));
 }
 
 void TestDatabaseTools::csvParseQuotesAndDelimiters() {
-  const auto t = CsvImport::parse(
-      "id;name;note\r\n1;\"Smith; J\";\"line1\nline2\"\r\n2;\"say \"\"hi\"\"\";\r\n");
+  const auto t =
+      CsvImport::parse("id;name;note\r\n1;\"Smith; "
+                       "J\";\"line1\nline2\"\r\n2;\"say \"\"hi\"\"\";\r\n");
   QVERIFY(t.ok);
   QCOMPARE(t.delimiter, QChar(';'));
   QCOMPARE(t.header, QStringList({"id", "name", "note"}));
@@ -316,7 +328,7 @@ void TestDatabaseTools::csvInferTypes() {
   QCOMPARE(cols[3].kind, K::Boolean);
   QCOMPARE(cols[4].kind, K::Date);
   QCOMPARE(cols[5].kind, K::Timestamp);
-  QCOMPARE(cols[6].kind, K::Text); // leading zero must survive
+  QCOMPARE(cols[6].kind, K::Text);
   QCOMPARE(cols[7].kind, K::Text);
   QCOMPARE(cols[8].kind, K::Text);
 }
@@ -334,7 +346,8 @@ void TestDatabaseTools::csvCreateAndInsert() {
   QVERIFY(ins[0].contains("(1, 'O''Neil', TRUE)"));
   QVERIFY(ins[0].contains("(2, '', FALSE)"));
 
-  const QStringList ms = CsvImport::insertSql(DbEngine::SqlServer, "p", cols, t);
+  const QStringList ms =
+      CsvImport::insertSql(DbEngine::SqlServer, "p", cols, t);
   QVERIFY(ms[0].contains("N'O''Neil'"));
   QVERIFY(ms[0].contains(", 1)"));
 
@@ -397,7 +410,6 @@ void TestDatabaseTools::editRejectsWithoutKey() {
   QVERIFY(!p.ok());
   QVERIFY(p.errors[0].contains("no primary key"));
 
-  // key not selected
   const DbSchema s = sampleSchema();
   DbResultSet noId;
   noId.columns = {{"name", ""}};
@@ -425,30 +437,39 @@ void TestDatabaseTools::editRejectsBadNumberAndNull() {
 
   ResultEdit::CellEdit nul;
   nul.row = 0;
-  nul.column = 1; // name is NOT NULL
+  nul.column = 1;
   nul.setNull = true;
   p = ResultEdit::buildUpdates(DbEngine::PostgreSql, s.tables[0], userResult(),
                                {nul});
   QVERIFY(p.errors[0].contains("does not allow NULL"));
 
   QString lit;
-  QVERIFY(ResultEdit::literalFor(DbEngine::MySql, {"f", "tinyint(1)"}, "5", &lit));
+  QVERIFY(
+      ResultEdit::literalFor(DbEngine::MySql, {"f", "tinyint(1)"}, "5", &lit));
   QCOMPARE(lit, QString("5"));
-  QVERIFY(ResultEdit::literalFor(DbEngine::PostgreSql, {"f", "boolean"}, "yes", &lit));
+  QVERIFY(ResultEdit::literalFor(DbEngine::PostgreSql, {"f", "boolean"}, "yes",
+                                 &lit));
   QCOMPARE(lit, QString("TRUE"));
-  QVERIFY(!ResultEdit::literalFor(DbEngine::PostgreSql, {"f", "boolean"}, "maybe", &lit));
-  QVERIFY(ResultEdit::literalFor(DbEngine::SqlServer, {"f", "nvarchar"}, "a", &lit));
+  QVERIFY(!ResultEdit::literalFor(DbEngine::PostgreSql, {"f", "boolean"},
+                                  "maybe", &lit));
+  QVERIFY(ResultEdit::literalFor(DbEngine::SqlServer, {"f", "nvarchar"}, "a",
+                                 &lit));
   QCOMPARE(lit, QString("N'a'"));
 }
 
 void TestDatabaseTools::pagingPerEngine() {
-  QCOMPARE(ResultEdit::pagedSql(DbEngine::PostgreSql, "SELECT * FROM t;", 50, 2),
-           QString("SELECT * FROM t\nLIMIT 50 OFFSET 100;"));
+  QCOMPARE(
+      ResultEdit::pagedSql(DbEngine::PostgreSql, "SELECT * FROM t;", 50, 2),
+      QString("SELECT * FROM t\nLIMIT 50 OFFSET 100;"));
   QCOMPARE(ResultEdit::pagedSql(DbEngine::Sqlite, "-- c\nSELECT 1", 10, 0),
            QString("SELECT 1\nLIMIT 10 OFFSET 0;"));
-  QVERIFY(ResultEdit::pagedSql(DbEngine::MySql, "SELECT * FROM t LIMIT 5", 10, 1).isEmpty());
-  QVERIFY(ResultEdit::pagedSql(DbEngine::PostgreSql, "DELETE FROM t", 10, 1).isEmpty());
-  QVERIFY(ResultEdit::pagedSql(DbEngine::SqlServer, "SELECT * FROM t", 10, 1).isEmpty());
+  QVERIFY(
+      ResultEdit::pagedSql(DbEngine::MySql, "SELECT * FROM t LIMIT 5", 10, 1)
+          .isEmpty());
+  QVERIFY(ResultEdit::pagedSql(DbEngine::PostgreSql, "DELETE FROM t", 10, 1)
+              .isEmpty());
+  QVERIFY(ResultEdit::pagedSql(DbEngine::SqlServer, "SELECT * FROM t", 10, 1)
+              .isEmpty());
   QCOMPARE(ResultEdit::pagedSql(DbEngine::SqlServer,
                                 "SELECT * FROM t ORDER BY id", 10, 3),
            QString("SELECT * FROM t ORDER BY id\nOFFSET 30 ROWS FETCH NEXT 10 "

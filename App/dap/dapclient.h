@@ -260,8 +260,8 @@ struct DapDataBreakpointInfo {
 
   static DapDataBreakpointInfo fromJson(const QJsonObject &obj) {
     DapDataBreakpointInfo info;
-    info.dataId = obj["dataId"].isString() ? obj["dataId"].toString()
-                                           : QString();
+    info.dataId =
+        obj["dataId"].isString() ? obj["dataId"].toString() : QString();
     info.description = obj["description"].toString();
     for (const auto &val : obj["accessTypes"].toArray()) {
       info.accessTypes.append(val.toString());

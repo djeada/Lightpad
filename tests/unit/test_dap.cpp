@@ -2303,12 +2303,10 @@ void TestDap::testDapClientDataBreakpointInfoRoundTrip() {
 
   client.dataBreakpointInfo(1000, "x", 100);
   QTRY_COMPARE_WITH_TIMEOUT(okSpy.count(), 1, 5000);
-  DapDataBreakpointInfo info =
-      okSpy.at(0).at(1).value<DapDataBreakpointInfo>();
+  DapDataBreakpointInfo info = okSpy.at(0).at(1).value<DapDataBreakpointInfo>();
   QVERIFY(info.isValid());
   QCOMPARE(info.dataId, QString("addr:x"));
-  QCOMPARE(info.accessTypes,
-           (QStringList{"read", "write", "readWrite"}));
+  QCOMPARE(info.accessTypes, (QStringList{"read", "write", "readWrite"}));
 
   client.dataBreakpointInfo(1000, "unwatchable", 100);
   QTRY_COMPARE_WITH_TIMEOUT(okSpy.count(), 2, 5000);
@@ -2337,7 +2335,8 @@ void TestDap::testDapClientMemoryAndDisassembly() {
 
   client.disassemble("0x1000", 3);
   QTRY_COMPARE_WITH_TIMEOUT(disSpy.count(), 1, 5000);
-  const auto ins = disSpy.at(0).at(1).value<QList<DapDisassembledInstruction>>();
+  const auto ins =
+      disSpy.at(0).at(1).value<QList<DapDisassembledInstruction>>();
   QCOMPARE(ins.size(), 3);
   QCOMPARE(ins.at(2).instruction, QString("ret"));
   QCOMPARE(ins.at(0).address, QString("0x1000"));

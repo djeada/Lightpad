@@ -84,8 +84,8 @@ DbSchemaDiff diff(const DbSchema &from, const DbSchema &to) {
     }
     td.oldPrimaryKey = t.primaryKey();
     td.newPrimaryKey = b.primaryKey();
-    td.primaryKeyChanged =
-        td.oldPrimaryKey.join('\n').toLower() != td.newPrimaryKey.join('\n').toLower();
+    td.primaryKeyChanged = td.oldPrimaryKey.join('\n').toLower() !=
+                           td.newPrimaryKey.join('\n').toLower();
     if (!td.isEmpty()) {
       d.changedTables.append(td);
     }
@@ -121,9 +121,9 @@ QStringList summary(const DbSchemaDiff &d) {
 }
 
 static QString columnDef(DbEngine e, const DbColumnInfo &c) {
-  return QStringLiteral("%1 %2%3")
-      .arg(DbCatalog::quoteIdentifier(e, c.name), typeOrText(c),
-           c.nullable ? QString() : QStringLiteral(" NOT NULL"));
+  return QStringLiteral("%1 %2%3").arg(
+      DbCatalog::quoteIdentifier(e, c.name), typeOrText(c),
+      c.nullable ? QString() : QStringLiteral(" NOT NULL"));
 }
 
 static QString pkList(DbEngine e, const QStringList &cols) {
@@ -146,10 +146,11 @@ QString migrationSql(DbEngine e, const DbSchemaDiff &d, bool includeDrops) {
     const QString tn = tableName(e, t.schema, t.name);
     for (const DbColumnInfo &c : t.addedColumns) {
       stmts << QStringLiteral("ALTER TABLE %1 ADD %2%3;")
-                   .arg(tn, e == DbEngine::PostgreSql || e == DbEngine::MySql ||
-                                    e == DbEngine::Sqlite
-                                ? QStringLiteral("COLUMN ")
-                                : QString(),
+                   .arg(tn,
+                        e == DbEngine::PostgreSql || e == DbEngine::MySql ||
+                                e == DbEngine::Sqlite
+                            ? QStringLiteral("COLUMN ")
+                            : QString(),
                         columnDef(e, c));
     }
     for (const DbColumnChange &c : t.changedColumns) {
@@ -186,16 +187,19 @@ QString migrationSql(DbEngine e, const DbSchemaDiff &d, bool includeDrops) {
     }
     if (t.primaryKeyChanged) {
       if (e == DbEngine::Sqlite) {
-        stmts << QStringLiteral("-- SQLite cannot change the primary key of %1; "
-                                "rebuild the table")
+        stmts << QStringLiteral(
+                     "-- SQLite cannot change the primary key of %1; "
+                     "rebuild the table")
                      .arg(t.name);
       } else {
         if (!t.oldPrimaryKey.isEmpty()) {
           stmts << (e == DbEngine::MySql
-                        ? QStringLiteral("ALTER TABLE %1 DROP PRIMARY KEY;").arg(tn)
+                        ? QStringLiteral("ALTER TABLE %1 DROP PRIMARY KEY;")
+                              .arg(tn)
                         : QStringLiteral("ALTER TABLE %1 DROP CONSTRAINT %2;")
-                              .arg(tn, DbCatalog::quoteIdentifier(
-                                           e, t.name + QStringLiteral("_pkey"))));
+                              .arg(tn,
+                                   DbCatalog::quoteIdentifier(
+                                       e, t.name + QStringLiteral("_pkey"))));
         }
         if (!t.newPrimaryKey.isEmpty()) {
           stmts << QStringLiteral("ALTER TABLE %1 ADD PRIMARY KEY (%2);")

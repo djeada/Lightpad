@@ -194,8 +194,8 @@ private:
     Val v = parseAdd();
     while (true) {
       skipSpace();
-      static const QStringList ops = {"==", "!=", ">=", "<=", "=~", "!~",
-                                      ">",  "<"};
+      static const QStringList ops = {
+          "==", "!=", ">=", "<=", "=~", "!~", ">", "<"};
       QString op;
       for (const QString &o : ops) {
         if (peekIs(o)) {
@@ -229,12 +229,12 @@ private:
         if (op == "!~")
           result = !result;
       } else if (v.type == Val::Str && r.type == Val::Str) {
-        const int cmp = QString::compare(
-            v.s, r.s,
-            (ignoreCase || (!matchCase && m_vim->m_ignoreCase))
-                ? Qt::CaseInsensitive
-                : Qt::CaseSensitive);
-        result = op == "==" ? cmp == 0
+        const int cmp =
+            QString::compare(v.s, r.s,
+                             (ignoreCase || (!matchCase && m_vim->m_ignoreCase))
+                                 ? Qt::CaseInsensitive
+                                 : Qt::CaseSensitive);
+        result = op == "=="   ? cmp == 0
                  : op == "!=" ? cmp != 0
                  : op == ">"  ? cmp > 0
                  : op == ">=" ? cmp >= 0
@@ -242,7 +242,7 @@ private:
                               : cmp <= 0;
       } else {
         const qint64 a = toNum(v), b = toNum(r);
-        result = op == "==" ? a == b
+        result = op == "=="   ? a == b
                  : op == "!=" ? a != b
                  : op == ">"  ? a > b
                  : op == ">=" ? a >= b
@@ -260,8 +260,8 @@ private:
       if (peekIs("..")) {
         m_pos += 2;
         v = Val::str(toStr(v) + toStr(parseMul()));
-      } else if (peekIs(".") && !(m_pos + 1 < m_text.size() &&
-                                  m_text[m_pos + 1].isDigit())) {
+      } else if (peekIs(".") &&
+                 !(m_pos + 1 < m_text.size() && m_text[m_pos + 1].isDigit())) {
         ++m_pos;
         v = Val::str(toStr(v) + toStr(parseMul()));
       } else if (peekIs("+")) {
@@ -291,10 +291,11 @@ private:
         ++m_pos;
         const qint64 d = toNum(parseUnary());
         const qint64 a = toNum(v);
-        v = Val::num(d == 0 ? (a == 0 ? Q_INT64_C(-9223372036854775807) - 1
-                                      : (a > 0 ? Q_INT64_C(9223372036854775807)
-                                               : -Q_INT64_C(9223372036854775807)))
-                            : a / d);
+        v = Val::num(d == 0
+                         ? (a == 0 ? Q_INT64_C(-9223372036854775807) - 1
+                                   : (a > 0 ? Q_INT64_C(9223372036854775807)
+                                            : -Q_INT64_C(9223372036854775807)))
+                         : a / d);
       } else if (peekIs("%")) {
         ++m_pos;
         const qint64 d = toNum(parseUnary());
@@ -442,16 +443,15 @@ private:
         if (digits == 0)
           out += d;
         else
-          out += QString::fromUcs4(reinterpret_cast<const char32_t *>(&value),
-                                   1);
+          out +=
+              QString::fromUcs4(reinterpret_cast<const char32_t *>(&value), 1);
         break;
       }
       case '<': {
         int close = m_text.indexOf('>', m_pos);
         if (close > 0) {
-          const QStringList toks =
-              VimMode::parseKeyNotation("<" + m_text.mid(m_pos, close - m_pos) +
-                                        ">");
+          const QStringList toks = VimMode::parseKeyNotation(
+              "<" + m_text.mid(m_pos, close - m_pos) + ">");
           if (toks.size() == 1) {
             const QString t = toks[0];
             QString raw;
@@ -521,8 +521,8 @@ private:
         while (m_pos < m_text.size() &&
                QString("0123456789abcdefABCDEF").contains(m_text[m_pos]))
           ++m_pos;
-        return Val::num(m_text.mid(start + 2, m_pos - start - 2)
-                            .toLongLong(nullptr, 16));
+        return Val::num(
+            m_text.mid(start + 2, m_pos - start - 2).toLongLong(nullptr, 16));
       }
       while (m_pos < m_text.size() && m_text[m_pos].isDigit())
         ++m_pos;
@@ -663,13 +663,14 @@ private:
     }
     if (name == "col") {
       const QString w = S(0);
-      const int pos = m_vim->m_exprLine >= 0
-                          ? m_vim->lineStart(m_vim->m_exprLine) +
-                                qMax(0, m_vim->m_exprCol)
-                          : m_vim->cursorPos();
+      const int pos =
+          m_vim->m_exprLine >= 0
+              ? m_vim->lineStart(m_vim->m_exprLine) + qMax(0, m_vim->m_exprCol)
+              : m_vim->cursorPos();
       const int line = m_vim->lineOf(pos);
       if (w == ".")
-        return Val::num(m_vim->lineText(line).left(pos - m_vim->lineStart(line))
+        return Val::num(m_vim->lineText(line)
+                            .left(pos - m_vim->lineStart(line))
                             .toUtf8()
                             .size() +
                         1);
@@ -679,7 +680,7 @@ private:
     }
     if (name == "getline") {
       const QString w = S(0);
-      int l = w == "." ? m_vim->lineOf(m_vim->cursorPos())
+      int l = w == "."   ? m_vim->lineOf(m_vim->cursorPos())
               : w == "$" ? m_vim->lineCount() - 1
                          : int(toNum(arg(0))) - 1;
       if (l < 0 || l >= m_vim->lineCount())
@@ -857,8 +858,8 @@ private:
     }
     if (name == "getreg") {
       const QString r = a.isEmpty() ? QString("\"") : S(0);
-      return Val::str(m_vim->getRegister(r.isEmpty() ? QChar('"') : r[0])
-                          .content);
+      return Val::str(
+          m_vim->getRegister(r.isEmpty() ? QChar('"') : r[0]).content);
     }
     if (name == "printf")
       return Val::str(formatPrintf(a));
@@ -869,12 +870,12 @@ private:
                           : -1);
     }
     if (name == "virtcol")
-      return Val::num(m_vim->vcolOf(m_vim->lineText(m_vim->lineOf(
-                                        m_vim->cursorPos())),
-                                    m_vim->colOf(m_vim->cursorPos())) +
-                      1);
+      return Val::num(
+          m_vim->vcolOf(m_vim->lineText(m_vim->lineOf(m_vim->cursorPos())),
+                        m_vim->colOf(m_vim->cursorPos())) +
+          1);
     if (name == "type")
-      return Val::num(arg(0).type == Val::Num ? 0
+      return Val::num(arg(0).type == Val::Num   ? 0
                       : arg(0).type == Val::Str ? 1
                                                 : 3);
     fail(QString("E117: Unknown function: %1").arg(name));
@@ -941,7 +942,9 @@ private:
         numeric = true;
       } else if (conv == 'x' || conv == 'X' || conv == 'o' || conv == 'b' ||
                  conv == 'B') {
-        const int base = conv == 'o' ? 8 : (conv == 'b' || conv == 'B') ? 2 : 16;
+        const int base = conv == 'o'                    ? 8
+                         : (conv == 'b' || conv == 'B') ? 2
+                                                        : 16;
         piece = QString::number(quint64(toNum(v)), base);
         if (conv == 'X')
           piece = piece.toUpper();
@@ -963,9 +966,9 @@ private:
         if (left) {
           piece += QString(pad, ' ');
         } else if (zero && numeric) {
-          const bool sign = !piece.isEmpty() &&
-                            (piece[0] == '-' || piece[0] == '+' ||
-                             piece[0] == ' ');
+          const bool sign =
+              !piece.isEmpty() &&
+              (piece[0] == '-' || piece[0] == '+' || piece[0] == ' ');
           piece.insert(sign ? 1 : 0, QString(pad, '0'));
         } else {
           piece.prepend(QString(pad, ' '));
@@ -977,8 +980,8 @@ private:
   }
 };
 
-bool VimMode::evalExpression(const QString &expr, QString *result,
-                             bool *isList, const QRegularExpressionMatch *match,
+bool VimMode::evalExpression(const QString &expr, QString *result, bool *isList,
+                             const QRegularExpressionMatch *match,
                              QString *error) {
   VimExprEvaluator ev(this, expr, match);
   Val v;

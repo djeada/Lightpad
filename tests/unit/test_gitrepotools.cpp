@@ -128,9 +128,9 @@ void TestGitRepoTools::testParseSubmoduleStatusEmptyAndMalformed() {
 
 void TestGitRepoTools::testSubmoduleSummary() {
   QCOMPARE(gitSubmoduleSummary({}), QString("No submodules"));
-  const auto mods = parseSubmoduleStatus(
-      "-1111111111111111111111111111111111111111 a\n"
-      "+2222222222222222222222222222222222222222 b (x)\n");
+  const auto mods =
+      parseSubmoduleStatus("-1111111111111111111111111111111111111111 a\n"
+                           "+2222222222222222222222222222222222222222 b (x)\n");
   const QString s = gitSubmoduleSummary(mods);
   QVERIFY(s.contains("2 submodule"));
   QVERIFY(s.contains("1 not initialized"));
@@ -216,8 +216,7 @@ void TestGitRepoTools::testCherryPickCommits() {
   QVERIFY(g.cherryPickCommits({c1, c2}));
   QVERIFY(QFileInfo::exists(repo + "/x.txt"));
   QVERIFY(QFileInfo::exists(repo + "/y.txt"));
-  QCOMPARE(out(repo, {"log", "--format=%s", "-2"}),
-           QString("add y\nadd x"));
+  QCOMPARE(out(repo, {"log", "--format=%s", "-2"}), QString("add y\nadd x"));
   QVERIFY(!g.cherryPickCommits({}));
 }
 
@@ -237,7 +236,6 @@ void TestGitRepoTools::testSequencerContinueAfterConflict() {
   QCOMPARE(g.sequencerKind(), GitIntegration::SequencerKind::CherryPick);
   QCOMPARE(g.repositoryState().operation, GitOperation::CherryPick);
 
-  // Continue with unresolved conflicts must fail and keep the operation.
   QVERIFY(!g.sequencerContinue());
   QCOMPARE(g.sequencerKind(), GitIntegration::SequencerKind::CherryPick);
 
@@ -339,7 +337,6 @@ void TestGitRepoTools::testFixupAndAutosquash() {
            QString("fixup! feature a"));
   QCOMPARE(g.pendingFixupSubjects(root).size(), 1);
 
-  // A dirty worktree is autostashed.
   write(repo + "/untracked-change.txt", "u\n");
   write(repo + "/root.txt", "dirty\n");
 
@@ -422,7 +419,6 @@ void TestGitRepoTools::testSubmoduleLifecycle() {
   QCOMPARE(mods[0].path, QString("vendor/lib"));
   QCOMPARE(mods[0].state, GitSubmoduleState::Current);
 
-  // Clone: submodule starts uninitialized, then init/update brings it in.
   const QString clone = m_tempDir.path() + "/sub-clone";
   QVERIFY(git(m_tempDir.path(), {"clone", "-q", repo, clone}));
   QVERIFY(git(clone, {"config", "protocol.file.allow", "always"}));
@@ -437,7 +433,6 @@ void TestGitRepoTools::testSubmoduleLifecycle() {
   QCOMPARE(mods[0].state, GitSubmoduleState::Current);
   QVERIFY(QFileInfo::exists(clone + "/vendor/lib/lib.txt"));
 
-  // Advance the submodule checkout: super reports it out of date.
   const QString subWork = clone + "/vendor/lib";
   QVERIFY(git(subWork, {"config", "user.email", "t@t.com"}));
   QVERIFY(git(subWork, {"config", "user.name", "T"}));

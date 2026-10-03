@@ -28,12 +28,12 @@
 #include <QPointer>
 #include <QProcess>
 #include <QProcessEnvironment>
-#include <QStandardPaths>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QSizePolicy>
 #include <QStackedWidget>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QStringListModel>
 #include <QTabBar>
@@ -176,11 +176,13 @@ ExternalTerminalLaunch buildExternalTerminalLaunch(const QStringList &command) {
     const char *program;
     const char *separator;
   };
-  static const Candidate candidates[] = {
-      {"x-terminal-emulator", "-e"}, {"gnome-terminal", "--"},
-      {"konsole", "-e"},             {"xfce4-terminal", "-x"},
-      {"kitty", ""},                 {"alacritty", "-e"},
-      {"xterm", "-e"}};
+  static const Candidate candidates[] = {{"x-terminal-emulator", "-e"},
+                                         {"gnome-terminal", "--"},
+                                         {"konsole", "-e"},
+                                         {"xfce4-terminal", "-x"},
+                                         {"kitty", ""},
+                                         {"alacritty", "-e"},
+                                         {"xterm", "-e"}};
   for (const Candidate &candidate : candidates) {
     const QString resolved = QStandardPaths::findExecutable(candidate.program);
     if (resolved.isEmpty()) {
@@ -6477,10 +6479,10 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
             external.setProgram(launch.program);
             external.setArguments(launch.arguments);
             const QString externalCwd =
-                cwd.isEmpty() ? (m_projectRootPath.isEmpty()
-                                     ? QDir::currentPath()
-                                     : m_projectRootPath)
-                              : cwd;
+                cwd.isEmpty()
+                    ? (m_projectRootPath.isEmpty() ? QDir::currentPath()
+                                                   : m_projectRootPath)
+                    : cwd;
             external.setWorkingDirectory(externalCwd);
             QProcessEnvironment processEnv =
                 QProcessEnvironment::systemEnvironment();

@@ -985,7 +985,8 @@ int DapClient::completions(const QString &text, int column, int frameId) {
   const int seq = m_nextSeq++;
   if (!supportsCompletionsRequest()) {
     QTimer::singleShot(0, this, [this, seq]() {
-      emit completionsFailed(seq, "completions is not supported by the adapter");
+      emit completionsFailed(seq,
+                             "completions is not supported by the adapter");
     });
     return seq;
   }
@@ -1121,9 +1122,10 @@ void DapClient::sendRequest(const QString &command,
   LOG_DEBUG(QString("DAP request: %1 (seq=%2)").arg(command).arg(seq));
 
   static const QSet<QString> timedCommands = {
-      "threads",    "stackTrace",   "scopes",     "variables",
-      "evaluate",   "setVariable",  "exceptionInfo", "completions",
-      "readMemory", "disassemble",  "dataBreakpointInfo"};
+      "threads",       "stackTrace",        "scopes",
+      "variables",     "evaluate",          "setVariable",
+      "exceptionInfo", "completions",       "readMemory",
+      "disassemble",   "dataBreakpointInfo"};
   if (m_requestTimeoutMs > 0 && timedCommands.contains(command)) {
     QTimer::singleShot(m_requestTimeoutMs, this, [this, seq, command]() {
       if (!m_pendingRequests.contains(seq)) {
@@ -1132,9 +1134,9 @@ void DapClient::sendRequest(const QString &command,
       LOG_WARNING(
           QString("DAP: %1 request %2 timed out").arg(command).arg(seq));
       emit requestTimedOut(command);
-      handleResponse(seq, command, false, QJsonValue(),
-                     QString("Request timed out after %1 ms")
-                         .arg(m_requestTimeoutMs));
+      handleResponse(
+          seq, command, false, QJsonValue(),
+          QString("Request timed out after %1 ms").arg(m_requestTimeoutMs));
       m_staleRequests.insert(seq);
     });
   }

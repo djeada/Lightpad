@@ -10,8 +10,8 @@
 #include "../dialogs/gitlogdialog.h"
 #include "../dialogs/gitrebasedialog.h"
 #include "../dialogs/gitremotedialog.h"
-#include "../dialogs/gitstashdialog.h"
 #include "../dialogs/gitrepotoolsdialog.h"
+#include "../dialogs/gitstashdialog.h"
 #include "../dialogs/integrationadvisordialog.h"
 #include "../dialogs/mergestartdialog.h"
 #include "../dialogs/operationpreviewdialog.h"
@@ -1510,8 +1510,8 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
   menu.addSeparator();
   QAction *rebaseAction =
       menu.addAction(tr("🔀 Interactive Rebase from Here..."));
-  QAction *fixupAction = menu.addAction(
-      tr("🩹 Create Fixup for This Commit (staged changes)"));
+  QAction *fixupAction =
+      menu.addAction(tr("🩹 Create Fixup for This Commit (staged changes)"));
 
   QAction *selected = menu.exec(m_historyTree->mapToGlobal(pos));
   if (!selected)

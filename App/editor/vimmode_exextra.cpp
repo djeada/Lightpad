@@ -136,8 +136,8 @@ void VimMode::exAlign(const QString &kind, const QString &args, int line1,
       if (kind == "left") {
         indent = width;
       } else {
-        const int len = vcolOf(trimmedRight, trimmedRight.size()) -
-                        vcolOf(trimmedRight, s);
+        const int len =
+            vcolOf(trimmedRight, trimmedRight.size()) - vcolOf(trimmedRight, s);
         indent = kind == "center" ? (width - len) / 2 : width - len;
         if (indent < 0)
           indent = 0;
@@ -219,7 +219,10 @@ void VimMode::exLet(const QString &args) {
   if (op == "=") {
     evalExpressionRepr(m.captured(3), &repr, nullptr, false);
   } else {
-    const QString expr = key + (op == ".=" ? " . " : op == "+=" ? " + " : " - ") +
+    const QString expr = key +
+                         (op == ".="   ? " . "
+                          : op == "+=" ? " + "
+                                       : " - ") +
                          "(" + m.captured(3) + ")";
     evalExpressionRepr(expr, &repr, nullptr, false);
   }

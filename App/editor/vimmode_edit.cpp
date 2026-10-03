@@ -82,7 +82,8 @@ void VimMode::applyOperator(const QString &op, const Range &range, QChar reg,
                            : range.start;
   setMark('[', startPos);
   if (op == "y") {
-    setMark(']', qMax(startPos, range.exclusiveEnd ? range.end : range.end - 1));
+    setMark(']',
+            qMax(startPos, range.exclusiveEnd ? range.end : range.end - 1));
   } else {
     setMark(']', cursorPos());
     if (op != "c")
@@ -228,23 +229,21 @@ void VimMode::operatorShift(const Range &range, bool right, int amount) {
       while (ws < text.size() && (text[ws] == ' ' || text[ws] == '\t'))
         ++ws;
       const int existing = vcolOf(text, ws) - startVcol;
-      const int newWidth =
-          right ? existing + total : qMax(0, existing - total);
+      const int newWidth = right ? existing + total : qMax(0, existing - total);
       QString fill;
       if (m_expandTab) {
         fill = QString(newWidth, ' ');
       } else {
         const int tabs = ((startVcol % m_tabStop) + newWidth) / m_tabStop;
-        const int spaces = tabs ? ((startVcol % m_tabStop) + newWidth) % m_tabStop
-                                : newWidth;
+        const int spaces =
+            tabs ? ((startVcol % m_tabStop) + newWidth) % m_tabStop : newWidth;
         fill = QString(tabs, '\t') + QString(spaces, ' ');
       }
       if (fill != text.mid(tc, ws - tc))
         replaceRange(lineStart(l) + tc, lineStart(l) + ws, fill);
     }
-    setCursorPos(clampNormal(
-        lineStart(range.startLine) +
-        colForVcol(lineText(range.startLine), startVcol)));
+    setCursorPos(clampNormal(lineStart(range.startLine) +
+                             colForVcol(lineText(range.startLine), startVcol)));
     return;
   }
   for (int l = range.startLine; l <= range.endLine; ++l) {

@@ -100,7 +100,8 @@ void GitRepoToolsDialog::report(bool ok, const QString &message) {
 QWidget *GitRepoToolsDialog::buildRemotesTab() {
   auto *page = new QWidget(this);
   auto *v = new QVBoxLayout(page);
-  m_remoteTable = makeTable({tr("Name"), tr("Fetch URL"), tr("Push URL")}, page);
+  m_remoteTable =
+      makeTable({tr("Name"), tr("Fetch URL"), tr("Push URL")}, page);
   v->addWidget(m_remoteTable, 1);
 
   auto *row = new QHBoxLayout();
@@ -119,9 +120,9 @@ QWidget *GitRepoToolsDialog::buildRemotesTab() {
     if (name.isEmpty())
       return;
     bool ok = false;
-    const QString next = QInputDialog::getText(
-        this, tr("Rename Remote"), tr("New name for %1:").arg(name),
-        QLineEdit::Normal, name, &ok);
+    const QString next = QInputDialog::getText(this, tr("Rename Remote"),
+                                               tr("New name for %1:").arg(name),
+                                               QLineEdit::Normal, name, &ok);
     if (ok && !next.trimmed().isEmpty() && next != name) {
       report(m_git->renameRemote(name, next.trimmed()),
              tr("Renamed remote %1 to %2").arg(name, next.trimmed()));
@@ -178,15 +179,14 @@ QWidget *GitRepoToolsDialog::buildTagsTab() {
 
   connect(create, &QPushButton::clicked, this, [this]() {
     bool ok = false;
-    const QString name = QInputDialog::getText(
-        this, tr("New Tag"), tr("Tag name (on HEAD):"), QLineEdit::Normal,
-        QString(), &ok);
+    const QString name =
+        QInputDialog::getText(this, tr("New Tag"), tr("Tag name (on HEAD):"),
+                              QLineEdit::Normal, QString(), &ok);
     if (!ok || name.trimmed().isEmpty())
       return;
-    const QString message =
-        QInputDialog::getText(this, tr("New Tag"),
-                              tr("Message (leave empty for a lightweight tag):"),
-                              QLineEdit::Normal, QString(), &ok);
+    const QString message = QInputDialog::getText(
+        this, tr("New Tag"), tr("Message (leave empty for a lightweight tag):"),
+        QLineEdit::Normal, QString(), &ok);
     if (!ok)
       return;
     report(m_git->createTag(name.trimmed(), QString(), message.trimmed()),
@@ -211,9 +211,10 @@ QWidget *GitRepoToolsDialog::buildTagsTab() {
     const QString tag = selectedTag();
     const QString remote = m_tagRemote->currentText();
     if (!tag.isEmpty() && !remote.isEmpty() &&
-        confirm(this, tr("Delete Remote Tag"),
-                tr("Delete tag %1 on %2? Others who fetched it keep their copy.")
-                    .arg(tag, remote))) {
+        confirm(
+            this, tr("Delete Remote Tag"),
+            tr("Delete tag %1 on %2? Others who fetched it keep their copy.")
+                .arg(tag, remote))) {
       report(m_git->deleteRemoteTag(remote, tag),
              tr("Deleted %1 on %2").arg(tag, remote));
     }
@@ -243,9 +244,9 @@ QWidget *GitRepoToolsDialog::buildSubmodulesTab() {
 
   connect(add, &QPushButton::clicked, this, [this]() {
     bool ok = false;
-    const QString url = QInputDialog::getText(
-        this, tr("Add Submodule"), tr("Repository URL:"), QLineEdit::Normal,
-        QString(), &ok);
+    const QString url =
+        QInputDialog::getText(this, tr("Add Submodule"), tr("Repository URL:"),
+                              QLineEdit::Normal, QString(), &ok);
     if (!ok || url.trimmed().isEmpty())
       return;
     const QString path = QInputDialog::getText(
@@ -268,7 +269,8 @@ QWidget *GitRepoToolsDialog::buildSubmodulesTab() {
         confirm(this, tr("Remove Submodule"),
                 tr("Remove submodule %1 from the working tree and index?")
                     .arg(path))) {
-      report(m_git->removeSubmodule(path), tr("Removed submodule %1").arg(path));
+      report(m_git->removeSubmodule(path),
+             tr("Removed submodule %1").arg(path));
     }
   });
   return page;
@@ -331,9 +333,8 @@ QWidget *GitRepoToolsDialog::buildSequencerTab() {
   row->addWidget(m_seqAbort);
   row->addStretch();
   v->addLayout(row);
-  connect(m_seqContinue, &QPushButton::clicked, this, [this]() {
-    report(m_git->sequencerContinue(), tr("Continued"));
-  });
+  connect(m_seqContinue, &QPushButton::clicked, this,
+          [this]() { report(m_git->sequencerContinue(), tr("Continued")); });
   connect(m_seqSkip, &QPushButton::clicked, this, [this]() {
     report(m_git->sequencerSkip(), tr("Skipped the current commit"));
   });
@@ -357,7 +358,8 @@ QWidget *GitRepoToolsDialog::buildSequencerTab() {
   auto *baseRow = new QHBoxLayout();
   baseRow->addWidget(new QLabel(tr("Base:"), page));
   m_autosquashBase = new QLineEdit(page);
-  m_autosquashBase->setPlaceholderText(tr("branch or commit, e.g. origin/main"));
+  m_autosquashBase->setPlaceholderText(
+      tr("branch or commit, e.g. origin/main"));
   auto *check = new QPushButton(tr("Check"), page);
   auto *run = new QPushButton(tr("Autosquash"), page);
   baseRow->addWidget(m_autosquashBase, 1);
@@ -384,7 +386,8 @@ QWidget *GitRepoToolsDialog::buildSequencerTab() {
                      .arg(base))) {
       return;
     }
-    report(m_git->autosquashRebase(base), tr("Autosquashed above %1").arg(base));
+    report(m_git->autosquashRebase(base),
+           tr("Autosquashed above %1").arg(base));
   });
   return page;
 }
@@ -393,7 +396,9 @@ QString GitRepoToolsDialog::selectedRemote() const {
   return cellAt(m_remoteTable, 0);
 }
 
-QString GitRepoToolsDialog::selectedTag() const { return cellAt(m_tagTable, 0); }
+QString GitRepoToolsDialog::selectedTag() const {
+  return cellAt(m_tagTable, 0);
+}
 
 void GitRepoToolsDialog::refreshRemotes() {
   m_remoteTable->setRowCount(0);

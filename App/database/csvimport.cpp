@@ -12,7 +12,7 @@ QChar detectDelimiter(const QString &text) {
   QChar best = ',';
   int bestScore = -1;
   for (QChar cand : candidates) {
-    // count delimiters outside quotes on the first lines
+
     int lines = 0, count = 0, lineCount = 0;
     bool inQuote = false;
     int firstLineCount = -1;
@@ -165,7 +165,8 @@ QVector<Column> inferColumns(const Table &table) {
   static const QRegularExpression realRe(
       QStringLiteral("^[-+]?(\\d+\\.\\d*|\\.\\d+|\\d+)([eE][-+]?\\d+)?$"));
   static const QRegularExpression boolRe(
-      QStringLiteral("^(true|false)$"), QRegularExpression::CaseInsensitiveOption);
+      QStringLiteral("^(true|false)$"),
+      QRegularExpression::CaseInsensitiveOption);
   QVector<Column> cols;
   for (int c = 0; c < table.header.size(); ++c) {
     bool allInt = true, allBig = false, allReal = true, allBool = true,
@@ -191,18 +192,21 @@ QVector<Column> inferColumns(const Table &table) {
           }
         }
       }
-      if (allReal && (!realRe.match(v).hasMatch() ||
-                      (v.size() > 1 && v.startsWith('0') && !v.startsWith("0.")))) {
+      if (allReal &&
+          (!realRe.match(v).hasMatch() ||
+           (v.size() > 1 && v.startsWith('0') && !v.startsWith("0.")))) {
         allReal = false;
       }
       if (allBool && !boolRe.match(v).hasMatch()) {
         allBool = false;
       }
-      if (allDate && (v.size() != 10 || !QDate::fromString(v, Qt::ISODate).isValid())) {
+      if (allDate &&
+          (v.size() != 10 || !QDate::fromString(v, Qt::ISODate).isValid())) {
         allDate = false;
       }
       if (allTs) {
-        const QDateTime dt = QDateTime::fromString(QString(v).replace(' ', 'T'), Qt::ISODate);
+        const QDateTime dt =
+            QDateTime::fromString(QString(v).replace(' ', 'T'), Qt::ISODate);
         if (!dt.isValid() || v.size() < 16) {
           allTs = false;
         }
@@ -260,7 +264,8 @@ QString sqlTypeName(DbEngine e, ColumnKind k) {
       return QStringLiteral("BOOLEAN");
     }
   case ColumnKind::Date:
-    return e == DbEngine::Sqlite ? QStringLiteral("TEXT") : QStringLiteral("DATE");
+    return e == DbEngine::Sqlite ? QStringLiteral("TEXT")
+                                 : QStringLiteral("DATE");
   case ColumnKind::Timestamp:
     switch (e) {
     case DbEngine::PostgreSql:
@@ -285,7 +290,8 @@ QString createTableSql(DbEngine e, const QString &tableName,
   QStringList lines;
   for (const Column &c : columns) {
     lines << QStringLiteral("  %1 %2%3")
-                 .arg(DbCatalog::quoteIdentifier(e, c.name), sqlTypeName(e, c.kind),
+                 .arg(DbCatalog::quoteIdentifier(e, c.name),
+                      sqlTypeName(e, c.kind),
                       c.nullable ? QString() : QStringLiteral(" NOT NULL"));
   }
   return QStringLiteral("CREATE TABLE %1 (\n%2\n);")

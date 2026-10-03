@@ -1,5 +1,5 @@
-#include <algorithm>
 #include "vimmode.h"
+#include <algorithm>
 
 #include <QRegularExpression>
 #include <QTextBlock>
@@ -670,8 +670,8 @@ VimMode::MotionResult VimMode::evalMotion(const QString &key, QChar arg,
       return r;
     }
     const int steps = qMin<int>(c1, candidates.size());
-    const int target = forward ? candidates[steps - 1]
-                               : candidates[candidates.size() - steps];
+    const int target =
+        forward ? candidates[steps - 1] : candidates[candidates.size() - steps];
     r.jump = true;
     if (lineMode)
       toLine(target, true);

@@ -187,8 +187,8 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
       ritArgs["kind"] = g_runInTerminalKind;
       ritArgs["title"] = QStringLiteral("Fake Debuggee");
       ritArgs["cwd"] = QStringLiteral("/tmp");
-      ritArgs["args"] = QJsonArray{QStringLiteral("echo"),
-                                   QStringLiteral("hello")};
+      ritArgs["args"] =
+          QJsonArray{QStringLiteral("echo"), QStringLiteral("hello")};
       rit["arguments"] = ritArgs;
       sendMessage(channel, rit);
     }
@@ -305,9 +305,9 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
     } else {
       body["dataId"] = QStringLiteral("addr:") + name;
       body["description"] = name;
-      body["accessTypes"] = QJsonArray{QStringLiteral("read"),
-                                       QStringLiteral("write"),
-                                       QStringLiteral("readWrite")};
+      body["accessTypes"] =
+          QJsonArray{QStringLiteral("read"), QStringLiteral("write"),
+                     QStringLiteral("readWrite")};
       body["canPersist"] = false;
     }
     sendResponse(channel, seq, command, true, body);
@@ -340,7 +340,8 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
       QJsonObject ins;
       ins["address"] = QStringLiteral("0x%1").arg(0x1000 + i * 4, 0, 16);
       ins["instructionBytes"] = QStringLiteral("90 90");
-      ins["instruction"] = i == 2 ? QStringLiteral("ret") : QStringLiteral("nop");
+      ins["instruction"] =
+          i == 2 ? QStringLiteral("ret") : QStringLiteral("nop");
       instructions.append(ins);
     }
     QJsonObject body;

@@ -2877,9 +2877,9 @@ void TextArea::setDebugInlineValues(const QString &filePath, int stopLine,
     return resolved.isEmpty() ? path : resolved;
   };
   const QString own = resolveFilePath();
-  m_debugInlineFile =
-      (!own.isEmpty() && canonical(own) == canonical(filePath)) ? filePath
-                                                               : QString();
+  m_debugInlineFile = (!own.isEmpty() && canonical(own) == canonical(filePath))
+                          ? filePath
+                          : QString();
   m_debugInlineStopLine = stopLine;
   m_debugInlineValues = values;
   viewport()->update();
@@ -2895,8 +2895,9 @@ void TextArea::clearDebugInlineValues() {
   viewport()->update();
 }
 
-QString TextArea::debugInlineTextForLine(const QString &lineText,
-                                         const QHash<QString, QString> &values) {
+QString
+TextArea::debugInlineTextForLine(const QString &lineText,
+                                 const QHash<QString, QString> &values) {
   static const QRegularExpression identifier(
       QStringLiteral("[A-Za-z_][A-Za-z0-9_]*"));
   QStringList seen;

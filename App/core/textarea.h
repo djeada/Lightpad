@@ -144,8 +144,8 @@ public:
                             const QHash<QString, QString> &values);
   void clearDebugInlineValues();
   bool hasDebugInlineValues() const { return !m_debugInlineValues.isEmpty(); }
-  static QString debugInlineTextForLine(
-      const QString &lineText, const QHash<QString, QString> &values);
+  static QString debugInlineTextForLine(const QString &lineText,
+                                        const QHash<QString, QString> &values);
 
   void setDebugExecutionLine(int line);
   int debugExecutionLine() const { return m_debugExecutionLine; }

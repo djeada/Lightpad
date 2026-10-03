@@ -81,7 +81,8 @@ bool VimMode::parseExAddress(const QString &cmd, int &i, int curLine, int &line,
       i += 2;
       found = true;
     } else if (c == '/' || c == '?' ||
-               (c == '\\' && i + 1 < n && QString("/?&").contains(cmd[i + 1]))) {
+               (c == '\\' && i + 1 < n &&
+                QString("/?&").contains(cmd[i + 1]))) {
       int searchLine = curLine;
       while (i < n && (cmd[i] == '/' || cmd[i] == '?' || cmd[i] == '\\')) {
         QChar kind = cmd[i];
@@ -616,7 +617,8 @@ void VimMode::executeEx(const QString &command) {
     }
   } else if (shellCommand || is("read", 1)) {
     if (is("read", 1) || shellCommand)
-      exRead(shellCommand ? afterName : args, hasRange ? line2 : lineOf(cursorPos()));
+      exRead(shellCommand ? afterName : args,
+             hasRange ? line2 : lineOf(cursorPos()));
   } else if (is("let", 3)) {
     exLet(args);
   } else if (is("execute", 3)) {
@@ -626,8 +628,9 @@ void VimMode::executeEx(const QString &command) {
     else
       emit statusMessage(error);
   } else if (is("center", 2) || is("left", 2) || is("right", 2)) {
-    exAlign(name.startsWith("ce") ? "center" : name.startsWith("le") ? "left"
-                                                                      : "right",
+    exAlign(name.startsWith("ce")   ? "center"
+            : name.startsWith("le") ? "left"
+                                    : "right",
             args, hasRange ? qMax(0, line1) : lineOf(cursorPos()),
             hasRange ? clampedLine2 : lineOf(cursorPos()));
   } else if (is("delmarks", 4)) {
@@ -689,8 +692,7 @@ QString VimMode::expandReplacement(const QString &replacement,
   if (replacement.startsWith("\\=")) {
     QString result, error;
     bool isList = false;
-    if (!evalExpression(replacement.mid(2), &result, &isList, &match,
-                        &error)) {
+    if (!evalExpression(replacement.mid(2), &result, &isList, &match, &error)) {
       emit statusMessage(error);
       return QString();
     }
@@ -883,8 +885,8 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
   int nextCol = -1;
   const bool visualOnly = pattern.contains("\\%V");
   int vStart = 0, vEnd = 0;
-  const bool haveVisual = visualOnly && markPosition('<', vStart) &&
-                          markPosition('>', vEnd);
+  const bool haveVisual =
+      visualOnly && markPosition('<', vStart) && markPosition('>', vEnd);
   auto inVisual = [&](int absPos) {
     if (!haveVisual)
       return false;
@@ -937,7 +939,8 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
     lastLine = line;
     m_exprLine = line;
     m_exprCol = base + s - lineStart(line);
-    const QString expanded = countOnly ? QString() : expandReplacement(replacement, m);
+    const QString expanded =
+        countOnly ? QString() : expandReplacement(replacement, m);
     m_exprLine = -1;
     m_exprCol = -1;
     edits.append({base + s, base + int(m.capturedEnd()), expanded});

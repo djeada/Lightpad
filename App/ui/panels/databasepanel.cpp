@@ -2,10 +2,10 @@
 
 #include "../../database/csvimport.h"
 #include "../../database/dbcatalog.h"
+#include "../../database/resultexporter.h"
 #include "../../database/schemadiff.h"
 #include "../../database/sqllint.h"
 #include "../../database/sqlparams.h"
-#include "../../database/resultexporter.h"
 #include "../../database/sqlstatementsplitter.h"
 #include "../../settings/settingsmanager.h"
 #include "../dialogs/connectiondialog.h"
@@ -23,10 +23,10 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
-#include <QLineEdit>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
+#include <QLineEdit>
 #include <QMenu>
 #include <QPainter>
 #include <QScrollBar>
@@ -1264,8 +1264,9 @@ void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
       for (DbConnection *other : m_manager->connections()) {
         if (other != conn && other->isConnected() &&
             other->profile().engine == conn->profile().engine) {
-          cmp->addAction(other->profile().name, this,
-                         [this, conn, other]() { showSchemaDiff(conn, other); });
+          cmp->addAction(other->profile().name, this, [this, conn, other]() {
+            showSchemaDiff(conn, other);
+          });
         }
       }
       cmp->setEnabled(!cmp->isEmpty());
@@ -1836,7 +1837,8 @@ DbConnection *DatabasePanel::connectionForScript(const QString &script) const {
   return activeConnection();
 }
 
-bool DatabasePanel::bindParameters(DbConnection *conn, QStringList *statements) {
+bool DatabasePanel::bindParameters(DbConnection *conn,
+                                   QStringList *statements) {
   QStringList names;
   for (const QString &st : *statements) {
     for (const QString &n : SqlParams::findParameters(st)) {
@@ -1858,8 +1860,8 @@ bool DatabasePanel::bindParameters(DbConnection *conn, QStringList *statements) 
     form->addRow(QStringLiteral(":") + n, e);
     edits << e;
   }
-  auto *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
-                                   &dlg);
+  auto *box = new QDialogButtonBox(
+      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
   connect(box, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
   connect(box, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
   form->addRow(box);
@@ -1881,7 +1883,8 @@ bool DatabasePanel::bindParameters(DbConnection *conn, QStringList *statements) 
   return true;
 }
 
-void DatabasePanel::lintStatements(DbConnection *conn, const QStringList &statements) {
+void DatabasePanel::lintStatements(DbConnection *conn,
+                                   const QStringList &statements) {
   const DbSchema *schema = conn->schema().isEmpty() ? nullptr : &conn->schema();
   int count = 0;
   for (const QString &st : statements) {
@@ -1893,10 +1896,11 @@ void DatabasePanel::lintStatements(DbConnection *conn, const QStringList &statem
       ++count;
       if (count <= 8) {
         const QString snippet = st.mid(issue.start, issue.length).simplified();
-        logMessage(tr("Lint: %1%2").arg(
-                       issue.message,
-                       snippet.isEmpty() ? QString()
-                                         : QStringLiteral("  [%1]").arg(snippet.left(40))),
+        logMessage(tr("Lint: %1%2")
+                       .arg(issue.message, snippet.isEmpty()
+                                               ? QString()
+                                               : QStringLiteral("  [%1]").arg(
+                                                     snippet.left(40))),
                    issue.severity == SqlIssue::Severity::Error);
       }
     }
@@ -1907,15 +1911,16 @@ void DatabasePanel::lintStatements(DbConnection *conn, const QStringList &statem
 }
 
 void DatabasePanel::showSchemaDdl(DbConnection *conn) {
-  setConsoleText(QStringLiteral("-- schema of %1\n\n%2\n")
-                     .arg(conn->profile().name,
-                          SchemaDiff::schemaDdl(conn->profile().engine, conn->schema())));
+  setConsoleText(
+      QStringLiteral("-- schema of %1\n\n%2\n")
+          .arg(conn->profile().name,
+               SchemaDiff::schemaDdl(conn->profile().engine, conn->schema())));
 }
 
 void DatabasePanel::showSchemaDiff(DbConnection *from, DbConnection *to) {
   const DbSchemaDiff d = SchemaDiff::diff(from->schema(), to->schema());
-  QString text = QStringLiteral("-- migration: %1  ->  %2\n").arg(
-      from->profile().name, to->profile().name);
+  QString text = QStringLiteral("-- migration: %1  ->  %2\n")
+                     .arg(from->profile().name, to->profile().name);
   if (d.isEmpty()) {
     text += QStringLiteral("-- schemas are identical\n");
   } else {
@@ -1927,8 +1932,9 @@ void DatabasePanel::showSchemaDiff(DbConnection *from, DbConnection *to) {
             QLatin1Char('\n');
   }
   setConsoleText(text);
-  setStatus(d.isEmpty() ? tr("Schemas are identical")
-                        : tr("Migration script generated; review it before running"));
+  setStatus(d.isEmpty()
+                ? tr("Schemas are identical")
+                : tr("Migration script generated; review it before running"));
 }
 
 void DatabasePanel::importCsv(DbConnection *conn) {
@@ -1943,7 +1949,8 @@ void DatabasePanel::importCsv(DbConnection *conn) {
     setStatus(tr("Cannot read %1").arg(path));
     return;
   }
-  const CsvImport::Table table = CsvImport::parse(QString::fromUtf8(f.readAll()));
+  const CsvImport::Table table =
+      CsvImport::parse(QString::fromUtf8(f.readAll()));
   if (!table.ok) {
     setStatus(tr("Import failed: %1").arg(table.error));
     return;
@@ -1961,7 +1968,8 @@ void DatabasePanel::importCsv(DbConnection *conn) {
   QStringList stmts;
   stmts << CsvImport::createTableSql(e, name.trimmed(), cols);
   stmts << CsvImport::insertSql(e, name.trimmed(), cols, table, 500, &warnings);
-  QString text = tr("-- import of %1: %2 row(s), %3 column(s); review, then run all (Ctrl+Shift+Enter)\n")
+  QString text = tr("-- import of %1: %2 row(s), %3 column(s); review, then "
+                    "run all (Ctrl+Shift+Enter)\n")
                      .arg(QFileInfo(path).fileName())
                      .arg(table.rows.size())
                      .arg(cols.size());

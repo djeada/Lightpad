@@ -12,8 +12,6 @@
 #include <QClipboard>
 #include <QDialog>
 #include <QDialogButtonBox>
-#include <QPointer>
-#include <QTabWidget>
 #include <QFontDatabase>
 #include <QFrame>
 #include <QGuiApplication>
@@ -26,11 +24,13 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPalette>
+#include <QPointer>
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QSignalBlocker>
 #include <QStyle>
 #include <QStyledItemDelegate>
+#include <QTabWidget>
 #include <QTextBlock>
 #include <QTextCharFormat>
 #include <QTextCursor>
@@ -1462,12 +1462,12 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
   QAction *refresh = menu.addAction(tr("Refresh"));
 
   const QString memoryReference = item->data(0, Qt::UserRole + 2).toString();
-  const bool canWatchData = m_dapClient && m_dapClient->supportsDataBreakpoints() &&
+  const bool canWatchData = m_dapClient &&
+                            m_dapClient->supportsDataBreakpoints() &&
                             item->parent() != nullptr;
-  const bool canViewMemory =
-      m_dapClient && !memoryReference.isEmpty() &&
-      (m_dapClient->supportsReadMemoryRequest() ||
-       m_dapClient->supportsDisassembleRequest());
+  const bool canViewMemory = m_dapClient && !memoryReference.isEmpty() &&
+                             (m_dapClient->supportsReadMemoryRequest() ||
+                              m_dapClient->supportsDisassembleRequest());
   QAction *breakOnChange = nullptr;
   QAction *viewMemory = nullptr;
   if (canWatchData || canViewMemory) {
@@ -1944,13 +1944,12 @@ void DebugPanel::setDapClient(DapClient *client) {
                 return;
               }
               if (!info.isValid()) {
-                appendConsoleLine(
-                    tr("Cannot break on '%1': %2")
-                        .arg(m_dataBreakpointRequestName,
-                             info.description.isEmpty()
-                                 ? tr("not watchable")
-                                 : info.description),
-                    consoleErrorColor());
+                appendConsoleLine(tr("Cannot break on '%1': %2")
+                                      .arg(m_dataBreakpointRequestName,
+                                           info.description.isEmpty()
+                                               ? tr("not watchable")
+                                               : info.description),
+                                  consoleErrorColor());
                 return;
               }
               QString accessType = QStringLiteral("write");
@@ -1958,9 +1957,10 @@ void DebugPanel::setDapClient(DapClient *client) {
                 bool ok = false;
                 accessType = QInputDialog::getItem(
                     this, tr("Data Breakpoint"), tr("Break when value is:"),
-                    info.accessTypes, info.accessTypes.indexOf("write") >= 0
-                                          ? info.accessTypes.indexOf("write")
-                                          : 0,
+                    info.accessTypes,
+                    info.accessTypes.indexOf("write") >= 0
+                        ? info.accessTypes.indexOf("write")
+                        : 0,
                     false, &ok);
                 if (!ok) {
                   return;
@@ -3297,9 +3297,9 @@ void DebugPanel::refreshBreakpointList() {
     item->setFlags(item->flags() | Qt::ItemIsUserCheckable |
                    Qt::ItemIsSelectable | Qt::ItemIsEnabled);
     item->setCheckState(0, bp.enabled ? Qt::Checked : Qt::Unchecked);
-    item->setText(1, QString("\u25C6 %1")
-                         .arg(bp.description.isEmpty() ? bp.dataId
-                                                       : bp.description));
+    item->setText(
+        1, QString("\u25C6 %1")
+               .arg(bp.description.isEmpty() ? bp.dataId : bp.description));
     item->setText(2, tr("data (%1)").arg(bp.accessType));
     item->setData(0, Qt::UserRole + 2, bp.id);
     item->setData(0, Qt::UserRole + 4, QStringLiteral("data"));
@@ -3953,8 +3953,9 @@ bool DebugPanel::eventFilter(QObject *watched, QEvent *event) {
       recallConsoleHistory(1);
       return true;
     }
-    if (keyEvent->key() == Qt::Key_Tab && keyEvent->modifiers() == Qt::NoModifier &&
-        m_dapClient && m_dapClient->supportsCompletionsRequest()) {
+    if (keyEvent->key() == Qt::Key_Tab &&
+        keyEvent->modifiers() == Qt::NoModifier && m_dapClient &&
+        m_dapClient->supportsCompletionsRequest()) {
       requestConsoleCompletions();
       return true;
     }

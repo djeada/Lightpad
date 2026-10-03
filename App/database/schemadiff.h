@@ -32,8 +32,8 @@ struct DbTableDiff {
 };
 
 struct DbSchemaDiff {
-  QVector<DbTableInfo> addedTables;   // present only in 'to'
-  QVector<DbTableInfo> droppedTables; // present only in 'from'
+  QVector<DbTableInfo> addedTables;
+  QVector<DbTableInfo> droppedTables;
   QVector<DbTableDiff> changedTables;
 
   bool isEmpty() const {
@@ -44,19 +44,13 @@ struct DbSchemaDiff {
 
 namespace SchemaDiff {
 
-// Describes what has to change to turn 'from' into 'to'. Views are compared by
-// presence only.
 DbSchemaDiff diff(const DbSchema &from, const DbSchema &to);
 
-// Human readable summary ("+ table x", "~ x: +col a, -col b, ~col c").
 QStringList summary(const DbSchemaDiff &diff);
 
-// Migration script for the engine. Destructive statements (DROP) are emitted
-// last and can be left out with includeDrops = false.
 QString migrationSql(DbEngine engine, const DbSchemaDiff &diff,
                      bool includeDrops = true);
 
-// Full DDL for every table of the schema.
 QString schemaDdl(DbEngine engine, const DbSchema &schema);
 
 } // namespace SchemaDiff

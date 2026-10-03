@@ -489,8 +489,7 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
     }
     block.endEditBlock();
     setCursorPos(clampNormal(
-        range.type == VimRegisterType::Linewise
-            ? lineStart(range.startLine)
+        range.type == VimRegisterType::Linewise ? lineStart(range.startLine)
         : range.type == VimRegisterType::Blockwise
             ? lineStart(range.startLine) +
                   colForVcol(lineText(range.startLine), range.startVcol)
@@ -950,8 +949,8 @@ void VimMode::finishInsertSession() {
 
   int pos = m_editor->textCursor().position();
   setMark('^', pos);
-  const bool typed = !m_insertKeys.isEmpty() && pos > m_insertStartPos &&
-                     !m_blockInsertActive;
+  const bool typed =
+      !m_insertKeys.isEmpty() && pos > m_insertStartPos && !m_blockInsertActive;
   if (typed) {
     setMark('[', m_insertStartPos);
     setMark(']', pos);

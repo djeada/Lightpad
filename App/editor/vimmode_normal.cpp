@@ -19,7 +19,7 @@ const QSet<QString> &motionKeys() {
       "gE",        "g_",       "g0",       "g^",      "g$",        "gm",
       "gj",        "gk",       "g*",       "g#",      "go",        "[(",
       "[{",        "])",       "]}",       "[[",      "]]",        "[]",
-      "][",        "/",        "?",        "]'",       "]`",        "['",
+      "][",        "/",        "?",        "]'",      "]`",        "['",
       "[`"};
   return keys;
 }
@@ -57,8 +57,8 @@ const QSet<QString> &visualCommands() {
       "s",      "C",      "S",     "R",  "J",     "gJ",    ">",     "<",
       "=",      "~",      "u",     "U",  "g~",    "gu",    "gU",    "g?",
       "gq",     "gw",     "p",     "P",  "I",     "A",     "<C-a>", "<C-x>",
-      "g<C-a>", "g<C-x>", "<C-c>", "zf", "<C-e>", "<C-y>", "<C-d>", "<C-u>", "!",
-      "<C-f>",  "<C-b>",  "zz",    "zt", "zb",    "gn",    "gN"};
+      "g<C-a>", "g<C-x>", "<C-c>", "zf", "<C-e>", "<C-y>", "<C-d>", "<C-u>",
+      "!",      "<C-f>",  "<C-b>", "zz", "zt",    "zb",    "gn",    "gN"};
   return keys;
 }
 
@@ -78,7 +78,7 @@ bool VimMode::isMotionCommand(const QString &key) {
 }
 
 bool VimMode::isOperatorKey(const QString &key) {
-  static const QSet<QString> ops = {"d",  "c",  "y",  "<",  ">",  "=",  "!",
+  static const QSet<QString> ops = {"d",  "c",  "y",  "<",  ">",  "=", "!",
                                     "g~", "gu", "gU", "g?", "gq", "gw"};
   return ops.contains(key);
 }

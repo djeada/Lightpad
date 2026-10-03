@@ -29,7 +29,7 @@ QList<GitSubmoduleInfo> parseSubmoduleStatus(const QString &output) {
     }
     info.hash = line.left(space);
     QString rest = line.mid(space + 1);
-    // The trailing "(describe)" is only present for checked-out modules.
+
     if (rest.endsWith(QLatin1Char(')'))) {
       const int open = rest.lastIndexOf(QStringLiteral(" ("));
       if (open > 0) {

@@ -44,7 +44,7 @@ QVector<Found> scan(const QString &s) {
       const int e = s.indexOf(QLatin1String("*/"), i + 2);
       i = e < 0 ? n : e + 2;
     } else if (c == '$') {
-      // dollar quoting: $tag$ ... $tag$
+
       int j = i + 1;
       while (j < n && isIdentChar(s[j])) {
         ++j;
@@ -106,7 +106,8 @@ QString literalFromInput(const QString &input, DbEngine engine) {
   if (number.match(t).hasMatch()) {
     return t;
   }
-  const bool isTrue = t.compare(QLatin1String("true"), Qt::CaseInsensitive) == 0;
+  const bool isTrue =
+      t.compare(QLatin1String("true"), Qt::CaseInsensitive) == 0;
   const bool isFalse =
       t.compare(QLatin1String("false"), Qt::CaseInsensitive) == 0;
   if (isTrue || isFalse) {

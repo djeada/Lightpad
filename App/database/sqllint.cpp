@@ -8,13 +8,16 @@ namespace {
 
 struct Tok {
   enum Type { Word, Quoted, String, Number, Punct } type = Punct;
-  QString text; // identifiers are unquoted
+  QString text;
   int start = 0;
   int length = 0;
   bool is(const char *kw) const {
-    return type == Word && text.compare(QLatin1String(kw), Qt::CaseInsensitive) == 0;
+    return type == Word &&
+           text.compare(QLatin1String(kw), Qt::CaseInsensitive) == 0;
   }
-  bool isPunct(char c) const { return type == Punct && text.size() == 1 && text[0] == c; }
+  bool isPunct(char c) const {
+    return type == Punct && text.size() == 1 && text[0] == c;
+  }
   bool isName() const { return type == Word || type == Quoted; }
 };
 
@@ -23,8 +26,12 @@ struct Tokenized {
   QVector<SqlIssue> issues;
 };
 
-bool identStart(QChar c) { return c.isLetter() || c == '_' || c == '#' || c == '@'; }
-bool identChar(QChar c) { return c.isLetterOrNumber() || c == '_' || c == '$' || c == '#' || c == '@'; }
+bool identStart(QChar c) {
+  return c.isLetter() || c == '_' || c == '#' || c == '@';
+}
+bool identChar(QChar c) {
+  return c.isLetterOrNumber() || c == '_' || c == '$' || c == '#' || c == '@';
+}
 
 Tokenized tokenize(const QString &s) {
   Tokenized r;
@@ -108,7 +115,7 @@ Tokenized tokenize(const QString &s) {
       Tok t;
       t.type = Tok::Punct;
       t.start = i;
-      // keep two-character operators together
+
       const QString two = s.mid(i, 2);
       if (two == QLatin1String("<>") || two == QLatin1String("!=") ||
           two == QLatin1String("<=") || two == QLatin1String(">=") ||
@@ -145,13 +152,13 @@ int editDistance(const QString &a, const QString &b) {
 
 const QSet<QString> &stopWords() {
   static const QSet<QString> w = {
-      "where",  "on",     "inner",    "left",      "right",  "full",
-      "cross",  "join",   "group",    "order",     "having", "limit",
-      "union",  "set",    "using",    "natural",   "outer",  "values",
-      "select", "from",   "offset",   "fetch",     "for",    "window",
-      "except", "intersect", "returning", "with",  "lateral", "output",
-      "when",   "then",   "else",     "end",       "and",    "or",
-      "into",   "top",    "straight_join", "apply", "pivot", "unpivot"};
+      "where",  "on",        "inner",         "left",    "right",   "full",
+      "cross",  "join",      "group",         "order",   "having",  "limit",
+      "union",  "set",       "using",         "natural", "outer",   "values",
+      "select", "from",      "offset",        "fetch",   "for",     "window",
+      "except", "intersect", "returning",     "with",    "lateral", "output",
+      "when",   "then",      "else",          "end",     "and",     "or",
+      "into",   "top",       "straight_join", "apply",   "pivot",   "unpivot"};
   return w;
 }
 
@@ -159,14 +166,15 @@ bool isSystemSchema(const QString &s) {
   const QString l = s.toLower();
   return l == QLatin1String("information_schema") ||
          l == QLatin1String("pg_catalog") || l == QLatin1String("sys") ||
-         l == QLatin1String("mysql") || l == QLatin1String("performance_schema") ||
+         l == QLatin1String("mysql") ||
+         l == QLatin1String("performance_schema") ||
          l == QLatin1String("pg_temp") || l == QLatin1String("sqlite_master") ||
-         l == QLatin1String("sqlite_temp_master") || l == QLatin1String("main") ||
-         l == QLatin1String("temp");
+         l == QLatin1String("sqlite_temp_master") ||
+         l == QLatin1String("main") || l == QLatin1String("temp");
 }
 
 struct TableRef {
-  QString alias; // lower case
+  QString alias;
   const DbTableInfo *table = nullptr;
 };
 
@@ -185,7 +193,7 @@ const DbTableInfo *resolve(const DbSchema &schema, const QStringList &parts,
         return &t;
       }
     }
-    // schema unknown to the catalog (e.g. other database): do not complain
+
     bool schemaSeen = false;
     for (const DbTableInfo &t : schema.tables) {
       if (t.schema.compare(sch, Qt::CaseInsensitive) == 0) {
@@ -223,7 +231,6 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
   }
   const bool haveCatalog = schema && !schema->isEmpty();
 
-  // balanced parentheses
   int depth = 0;
   for (const Tok &t : toks) {
     if (t.isPunct('(')) {
@@ -240,11 +247,12 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
         QStringLiteral("Missing %1 closing parenthesis").arg(depth));
   }
 
-  // CTE names
   QSet<QString> cte;
   for (int i = 0; i + 2 < toks.size(); ++i) {
-    if (toks[i].isName() && toks[i + 1].is("as") && toks[i + 2].isPunct('(') && i > 0 &&
-        (toks[i - 1].is("with") || toks[i - 1].isPunct(',') || toks[i - 1].is("recursive"))) {
+    if (toks[i].isName() && toks[i + 1].is("as") && toks[i + 2].isPunct('(') &&
+        i > 0 &&
+        (toks[i - 1].is("with") || toks[i - 1].isPunct(',') ||
+         toks[i - 1].is("recursive"))) {
       cte.insert(toks[i].text.toLower());
     }
   }
@@ -260,16 +268,17 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
   if ((isUpdate || isDelete) && !hasWhere) {
     add(out, SqlIssue::Severity::Warning, toks[0],
         QStringLiteral("%1 without WHERE affects every row")
-            .arg(isUpdate ? QStringLiteral("UPDATE") : QStringLiteral("DELETE")));
+            .arg(isUpdate ? QStringLiteral("UPDATE")
+                          : QStringLiteral("DELETE")));
   }
 
-  // "= NULL"
   for (int i = 0; i + 1 < toks.size(); ++i) {
     if (toks[i].type == Tok::Punct &&
-        (toks[i].text == QLatin1String("=") || toks[i].text == QLatin1String("<>") ||
+        (toks[i].text == QLatin1String("=") ||
+         toks[i].text == QLatin1String("<>") ||
          toks[i].text == QLatin1String("!=")) &&
         toks[i + 1].is("null") && i > 0 && !toks[i - 1].is("set")) {
-      // skip assignments in UPDATE ... SET col = NULL (first '=' after SET/commas)
+
       bool inSet = false;
       if (isUpdate) {
         inSet = true;
@@ -286,8 +295,10 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
       if (!inSet) {
         add(out, SqlIssue::Severity::Warning, toks[i + 1],
             toks[i].text == QLatin1String("=")
-                ? QStringLiteral("Comparing with NULL is never true; use IS NULL")
-                : QStringLiteral("Comparing with NULL is never true; use IS NOT NULL"));
+                ? QStringLiteral(
+                      "Comparing with NULL is never true; use IS NULL")
+                : QStringLiteral(
+                      "Comparing with NULL is never true; use IS NOT NULL"));
       }
     }
   }
@@ -296,12 +307,10 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
     return;
   }
 
-  // table references
   QVector<TableRef> refs;
   QSet<int> consumed;
   QHash<QString, int> aliasSeen;
   auto parseRef = [&](int &i, bool allowParen) {
-    // returns after the ref (and alias) at i
     if (i >= toks.size() || !toks[i].isName()) {
       return;
     }
@@ -310,24 +319,27 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
     parts << toks[i].text;
     consumed.insert(i);
     ++i;
-    while (i + 1 < toks.size() && toks[i].isPunct('.') && toks[i + 1].isName()) {
+    while (i + 1 < toks.size() && toks[i].isPunct('.') &&
+           toks[i + 1].isName()) {
       consumed.insert(i + 1);
       parts << toks[i + 1].text;
       i += 2;
     }
     if (!allowParen && i < toks.size() && toks[i].isPunct('(')) {
-      return; // table function
+      return;
     }
     bool known = true;
     const DbTableInfo *t = nullptr;
-    const bool local = toks[first].text.startsWith('#') || toks[first].text.startsWith('@');
+    const bool local =
+        toks[first].text.startsWith('#') || toks[first].text.startsWith('@');
     if (local || (parts.size() == 1 && cte.contains(parts[0].toLower()))) {
       known = false;
     } else {
       t = resolve(*schema, parts, &known);
     }
     if (!t && known) {
-      QString msg = QStringLiteral("Unknown table or view '%1'").arg(parts.join('.'));
+      QString msg =
+          QStringLiteral("Unknown table or view '%1'").arg(parts.join('.'));
       int best = 3;
       QString hint;
       for (const DbTableInfo &c : schema->tables) {
@@ -349,12 +361,14 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
     }
     QString alias = parts.last().toLower();
     int aliasTok = -1;
-    if (i < toks.size() && toks[i].is("as") && i + 1 < toks.size() && toks[i + 1].isName()) {
+    if (i < toks.size() && toks[i].is("as") && i + 1 < toks.size() &&
+        toks[i + 1].isName()) {
       alias = toks[i + 1].text.toLower();
       aliasTok = i + 1;
       i += 2;
     } else if (i < toks.size() && toks[i].isName() &&
-               !(toks[i].type == Tok::Word && stopWords().contains(toks[i].text.toLower()))) {
+               !(toks[i].type == Tok::Word &&
+                 stopWords().contains(toks[i].text.toLower()))) {
       alias = toks[i].text.toLower();
       aliasTok = i;
       ++i;
@@ -363,7 +377,8 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
       consumed.insert(aliasTok);
       if (aliasSeen.contains(alias)) {
         add(out, SqlIssue::Severity::Warning, toks[aliasTok],
-            QStringLiteral("Alias '%1' is used more than once").arg(toks[aliasTok].text));
+            QStringLiteral("Alias '%1' is used more than once")
+                .arg(toks[aliasTok].text));
       }
     }
     aliasSeen.insert(alias, 1);
@@ -398,10 +413,9 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
     }
   }
 
-  // qualified columns: alias.column
   for (int i = 0; i + 2 < toks.size(); ++i) {
-    if (!toks[i].isName() || !toks[i + 1].isPunct('.') || consumed.contains(i) ||
-        (i > 0 && toks[i - 1].isPunct('.'))) {
+    if (!toks[i].isName() || !toks[i + 1].isPunct('.') ||
+        consumed.contains(i) || (i > 0 && toks[i - 1].isPunct('.'))) {
       continue;
     }
     const Tok &colTok = toks[i + 2];
@@ -409,7 +423,7 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
       continue;
     }
     if (i + 3 < toks.size() && toks[i + 3].isPunct('.')) {
-      continue; // schema.table.column and friends
+      continue;
     }
     const QString q = toks[i].text.toLower();
     const TableRef *hit = nullptr;
@@ -448,7 +462,6 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
     }
   }
 
-  // INSERT INTO t (a, b) VALUES (x)
   if (toks[0].is("insert") && toks.size() > 4 && !refs.isEmpty()) {
     int i = 0;
     while (i < toks.size() && !toks[i].is("into")) {

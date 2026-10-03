@@ -21,8 +21,8 @@ ValueKind kindOfType(const QString &sqlType) {
   return ValueKind::Text;
 }
 
-bool literalFor(DbEngine engine, const DbColumnInfo &column, const QString &text,
-                QString *literal, QString *error) {
+bool literalFor(DbEngine engine, const DbColumnInfo &column,
+                const QString &text, QString *literal, QString *error) {
   const QString t = text.trimmed();
   switch (kindOfType(column.type)) {
   case ValueKind::Number: {
@@ -69,12 +69,14 @@ bool literalFor(DbEngine engine, const DbColumnInfo &column, const QString &text
   if (engine == DbEngine::MySql) {
     s.replace('\\', QLatin1String("\\\\"));
   }
-  *literal = (engine == DbEngine::SqlServer ? QStringLiteral("N'") : QStringLiteral("'")) +
+  *literal = (engine == DbEngine::SqlServer ? QStringLiteral("N'")
+                                            : QStringLiteral("'")) +
              s + QLatin1Char('\'');
   return true;
 }
 
-static const DbColumnInfo *columnByName(const DbTableInfo &t, const QString &name) {
+static const DbColumnInfo *columnByName(const DbTableInfo &t,
+                                        const QString &name) {
   for (const DbColumnInfo &c : t.columns) {
     if (c.name.compare(name, Qt::CaseInsensitive) == 0) {
       return &c;
@@ -93,10 +95,12 @@ static int resultColumn(const DbResultSet &r, const QString &name) {
 }
 
 Preview buildUpdates(DbEngine engine, const DbTableInfo &table,
-                     const DbResultSet &result, const QVector<CellEdit> &edits) {
+                     const DbResultSet &result,
+                     const QVector<CellEdit> &edits) {
   Preview p;
   if (table.isView) {
-    p.errors << QStringLiteral("'%1' is a view and cannot be edited").arg(table.name);
+    p.errors << QStringLiteral("'%1' is a view and cannot be edited")
+                    .arg(table.name);
     return p;
   }
   const QStringList pk = table.primaryKey();
@@ -134,7 +138,8 @@ Preview buildUpdates(DbEngine engine, const DbTableInfo &table,
       if (e.column < 0 || e.column >= result.columns.size()) {
         continue;
       }
-      const DbColumnInfo *col = columnByName(table, result.columns[e.column].name);
+      const DbColumnInfo *col =
+          columnByName(table, result.columns[e.column].name);
       if (!col) {
         p.errors << QStringLiteral("Column '%1' does not belong to '%2'")
                         .arg(result.columns[e.column].name, table.name);
@@ -144,7 +149,8 @@ Preview buildUpdates(DbEngine engine, const DbTableInfo &table,
       QString lit;
       if (e.setNull) {
         if (!col->nullable) {
-          p.errors << QStringLiteral("Column '%1' does not allow NULL").arg(col->name);
+          p.errors << QStringLiteral("Column '%1' does not allow NULL")
+                          .arg(col->name);
           bad = true;
           continue;
         }
@@ -157,7 +163,8 @@ Preview buildUpdates(DbEngine engine, const DbTableInfo &table,
           continue;
         }
       }
-      sets << QStringLiteral("%1 = %2").arg(DbCatalog::quoteIdentifier(engine, col->name), lit);
+      sets << QStringLiteral("%1 = %2").arg(
+          DbCatalog::quoteIdentifier(engine, col->name), lit);
     }
     if (bad || sets.isEmpty()) {
       continue;
@@ -213,8 +220,9 @@ QString pagedSql(DbEngine engine, const QString &selectSql, int pageSize,
   }
   const qint64 offset = qint64(page) * pageSize;
   if (engine == DbEngine::SqlServer) {
-    static const QRegularExpression order(QStringLiteral("\\border\\s+by\\b"),
-                                          QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression order(
+        QStringLiteral("\\border\\s+by\\b"),
+        QRegularExpression::CaseInsensitiveOption);
     if (!order.match(sql).hasMatch()) {
       return {};
     }
@@ -223,7 +231,10 @@ QString pagedSql(DbEngine engine, const QString &selectSql, int pageSize,
         .arg(offset)
         .arg(pageSize);
   }
-  return QStringLiteral("%1\nLIMIT %2 OFFSET %3;").arg(sql).arg(pageSize).arg(offset);
+  return QStringLiteral("%1\nLIMIT %2 OFFSET %3;")
+      .arg(sql)
+      .arg(pageSize)
+      .arg(offset);
 }
 
 } // namespace ResultEdit

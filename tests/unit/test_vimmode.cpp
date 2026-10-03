@@ -861,7 +861,8 @@ void TestVimMode::testCountedInsertRepeatsText() {
 
 void TestVimMode::testMatchesVimWb_data() {
   QTest::addColumn<int>("index");
-  const int count = int(sizeof(kVimOracleWbCases) / sizeof(kVimOracleWbCases[0]));
+  const int count =
+      int(sizeof(kVimOracleWbCases) / sizeof(kVimOracleWbCases[0]));
   for (int i = 0; i < count; ++i) {
     QTest::newRow(qPrintable(QString("%1: %2").arg(i).arg(
         QString::fromUtf8(kVimOracleWbCases[i].keys))))
@@ -1013,8 +1014,7 @@ void TestVimMode::testTextWidthWrap() {
   QCOMPARE(editor.textCursor().blockNumber(), 2);
   editor.setPlainText("- one two three four five six");
   vim.feedKeys(":set tw=12<CR>gqq");
-  QCOMPARE(editor.toPlainText(),
-           QString("- one two\n  three four\nfive six"));
+  QCOMPARE(editor.toPlainText(), QString("- one two\n  three four\nfive six"));
 }
 
 void TestVimMode::testNextMarkMotions() {

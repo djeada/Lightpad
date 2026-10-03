@@ -237,133 +237,131 @@ QString VimMode::toRegularExpression(const QString &vim, bool *caseSensitive,
   };
 
   auto percentAtom = [&](int &i) -> bool {
-        if (i + 1 >= n)
-          return false;
-        const QChar f = vim[i + 1];
-        if (f == '(') {
-          groupStack.append({out.size(), branchOut});
-          out += "(?:";
-          branchOut = out.size();
-          iterSpecial = true;
-          ++i;
-          branchStart = true;
-          return true;
+    if (i + 1 >= n)
+      return false;
+    const QChar f = vim[i + 1];
+    if (f == '(') {
+      groupStack.append({out.size(), branchOut});
+      out += "(?:";
+      branchOut = out.size();
+      iterSpecial = true;
+      ++i;
+      branchStart = true;
+      return true;
+    }
+    if (f == '^') {
+      out += "\\A";
+      ++i;
+      return true;
+    }
+    if (f == '$') {
+      out += "\\z";
+      ++i;
+      return true;
+    }
+    if (f == 'V') {
+      visualFilter = true;
+      iterSpecial = true;
+      ++i;
+      return true;
+    }
+    if (f == 'd' || f == 'x' || f == 'X' || f == 'u' || f == 'U' || f == 'o') {
+      const int base = f == 'd' ? 10 : f == 'o' ? 8 : 16;
+      const int maxDigits = f == 'x'   ? 2
+                            : f == 'X' ? 2
+                            : f == 'u' ? 4
+                            : f == 'U' ? 8
+                            : f == 'o' ? 4
+                                       : 10;
+      int j = i + 2;
+      QString digits;
+      while (j < n && digits.size() < maxDigits) {
+        bool ok = false;
+        QString(vim[j]).toUInt(&ok, base);
+        if (!ok)
+          break;
+        digits += vim[j++];
+      }
+      if (!digits.isEmpty()) {
+        out += literalChar(digits.toUInt(nullptr, base));
+        i = j - 1;
+        return true;
+      }
+      return false;
+    }
+    if (f == '[') {
+      int j = i + 2;
+      QStringList atoms;
+      bool closed = false;
+      while (j < n) {
+        if (vim[j] == ']') {
+          closed = true;
+          break;
         }
-        if (f == '^') {
-          out += "\\A";
-          ++i;
-          return true;
+        if (vim[j] == '\\' && j + 1 < n) {
+          atoms << toRegularExpression(vim.mid(j, 2));
+          j += 2;
+        } else {
+          atoms << QRegularExpression::escape(QString(vim[j]));
+          ++j;
         }
-        if (f == '$') {
-          out += "\\z";
-          ++i;
-          return true;
-        }
-        if (f == 'V') {
-          visualFilter = true;
-          iterSpecial = true;
-          ++i;
-          return true;
-        }
-        if (f == 'd' || f == 'x' || f == 'X' || f == 'u' || f == 'U' ||
-            f == 'o') {
-          const int base = f == 'd' ? 10 : f == 'o' ? 8 : 16;
-          const int maxDigits = f == 'x'   ? 2
-                                : f == 'X' ? 2
-                                : f == 'u' ? 4
-                                : f == 'U' ? 8
-                                : f == 'o' ? 4
-                                           : 10;
-          int j = i + 2;
-          QString digits;
-          while (j < n && digits.size() < maxDigits) {
-            bool ok = false;
-            QString(vim[j]).toUInt(&ok, base);
-            if (!ok)
-              break;
-            digits += vim[j++];
-          }
-          if (!digits.isEmpty()) {
-            out += literalChar(digits.toUInt(nullptr, base));
-            i = j - 1;
-            return true;
-          }
-          return false;
-        }
-        if (f == '[') {
-          int j = i + 2;
-          QStringList atoms;
-          bool closed = false;
-          while (j < n) {
-            if (vim[j] == ']') {
-              closed = true;
-              break;
-            }
-            if (vim[j] == '\\' && j + 1 < n) {
-              atoms << toRegularExpression(vim.mid(j, 2));
-              j += 2;
-            } else {
-              atoms << QRegularExpression::escape(QString(vim[j]));
-              ++j;
-            }
-          }
-          if (closed && !atoms.isEmpty()) {
-            QString seq;
-            for (int k = atoms.size() - 1; k >= 0; --k)
-              seq = "(?:" + atoms[k] + seq + ")?";
-            out += seq;
-            i = j;
-            return true;
-          }
-          return false;
-        }
-        {
-          int j = i + 1;
-          QChar cmp;
-          if (j < n && (vim[j] == '<' || vim[j] == '>')) {
-            cmp = vim[j];
-            ++j;
-          }
-          if (j + 1 < n && vim[j] == '\'') {
-            int pos = 0;
-            if (ctx && ctx->markPosition(vim[j + 1], pos))
-              out += positionTest(cmp, ctx->lineOf(pos) + 1,
-                                  ctx->colOf(pos) + 1, true);
-            else
-              out += "(?!)";
-            i = j + 1;
-            return true;
-          }
-          if (j + 1 < n && vim[j] == '.' &&
-              (vim[j + 1] == 'l' || vim[j + 1] == 'c' || vim[j + 1] == 'v')) {
-            const int pos = ctx ? ctx->cursorPos() : 0;
-            out += positionTest(cmp, ctx ? ctx->lineOf(pos) + 1 : 1,
-                                ctx ? ctx->colOf(pos) + 1 : 1,
-                                vim[j + 1] != 'l', vim[j + 1] != 'l');
-            i = j + 1;
-            return true;
-          }
-          if (j < n && vim[j] == '#' && cmp.isNull()) {
-            const int pos = ctx ? ctx->cursorPos() : 0;
-            out += positionTest(QChar(), ctx ? ctx->lineOf(pos) + 1 : 1,
-                                ctx ? ctx->colOf(pos) + 1 : 1, true);
-            i = j;
-            return true;
-          }
-          int k = j;
-          int num = 0;
-          while (k < n && vim[k].isDigit()) {
-            num = qMin(99999999, num * 10 + vim[k].digitValue());
-            ++k;
-          }
-          if (k > j && k < n &&
-              (vim[k] == 'l' || vim[k] == 'c' || vim[k] == 'v')) {
-            out += positionTest(cmp, num, num, vim[k] != 'l', vim[k] != 'l');
-            i = k;
-            return true;
-          }
-        }
-        return false;
+      }
+      if (closed && !atoms.isEmpty()) {
+        QString seq;
+        for (int k = atoms.size() - 1; k >= 0; --k)
+          seq = "(?:" + atoms[k] + seq + ")?";
+        out += seq;
+        i = j;
+        return true;
+      }
+      return false;
+    }
+    {
+      int j = i + 1;
+      QChar cmp;
+      if (j < n && (vim[j] == '<' || vim[j] == '>')) {
+        cmp = vim[j];
+        ++j;
+      }
+      if (j + 1 < n && vim[j] == '\'') {
+        int pos = 0;
+        if (ctx && ctx->markPosition(vim[j + 1], pos))
+          out += positionTest(cmp, ctx->lineOf(pos) + 1, ctx->colOf(pos) + 1,
+                              true);
+        else
+          out += "(?!)";
+        i = j + 1;
+        return true;
+      }
+      if (j + 1 < n && vim[j] == '.' &&
+          (vim[j + 1] == 'l' || vim[j + 1] == 'c' || vim[j + 1] == 'v')) {
+        const int pos = ctx ? ctx->cursorPos() : 0;
+        out += positionTest(cmp, ctx ? ctx->lineOf(pos) + 1 : 1,
+                            ctx ? ctx->colOf(pos) + 1 : 1, vim[j + 1] != 'l',
+                            vim[j + 1] != 'l');
+        i = j + 1;
+        return true;
+      }
+      if (j < n && vim[j] == '#' && cmp.isNull()) {
+        const int pos = ctx ? ctx->cursorPos() : 0;
+        out += positionTest(QChar(), ctx ? ctx->lineOf(pos) + 1 : 1,
+                            ctx ? ctx->colOf(pos) + 1 : 1, true);
+        i = j;
+        return true;
+      }
+      int k = j;
+      int num = 0;
+      while (k < n && vim[k].isDigit()) {
+        num = qMin(99999999, num * 10 + vim[k].digitValue());
+        ++k;
+      }
+      if (k > j && k < n && (vim[k] == 'l' || vim[k] == 'c' || vim[k] == 'v')) {
+        out += positionTest(cmp, num, num, vim[k] != 'l', vim[k] != 'l');
+        i = k;
+        return true;
+      }
+    }
+    return false;
     return false;
   };
 
@@ -728,8 +726,7 @@ bool VimMode::search(const QString &pattern, bool forward, int count,
         const int curEol = lineEndPos(curLine);
         const int nextLine = curEol + 1;
         int offset = lineStart(curLine);
-        for (int guard = 0; guard < 100000 && offset <= text.size();
-             ++guard) {
+        for (int guard = 0; guard < 100000 && offset <= text.size(); ++guard) {
           QRegularExpressionMatch cand = re.match(text, offset);
           if (!cand.hasMatch())
             break;
@@ -904,8 +901,8 @@ bool VimMode::doSearchCommand(const QString &input, bool forward, int count,
   result = searchMotion(false, count, fromPos >= 0 ? fromPos : cursorPos());
   if (result.ok && !chained.isEmpty()) {
     MotionResult second;
-    const bool ok = doSearchCommand(chained.mid(1), chained[0] == '/', 1, second,
-                                    result.pos);
+    const bool ok = doSearchCommand(chained.mid(1), chained[0] == '/', 1,
+                                    second, result.pos);
     if (!ok) {
       result.ok = false;
       return false;
@@ -1199,8 +1196,8 @@ void VimMode::executeCommandLine() {
     bool isList = false;
     const bool ok = evalExpression(text, &result, &isList, nullptr, &error);
     emit commandBufferChanged(QString());
-    const bool toInsert = returnMode == VimEditMode::Insert ||
-                          returnMode == VimEditMode::Replace;
+    const bool toInsert =
+        returnMode == VimEditMode::Insert || returnMode == VimEditMode::Replace;
     if (toInsert) {
       setMode(returnMode);
       if (ok)
