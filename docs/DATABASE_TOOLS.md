@@ -91,6 +91,23 @@ In `.sql` files and in the console: table, view and column names of the
 connection (`u.` after `FROM users u` lists the columns of `users`), schemas,
 keywords, functions and types. Keywords follow the case you type.
 
+## Parameters, linting and schema tools
+
+* **Query parameters.** `:name` in a statement (outside strings, comments and
+  `::` casts) opens a small form on run; values are bound as escaped literals
+  (`NULL`, numbers and `true`/`false` stay bare, everything else is quoted).
+* **Lint.** Before a run, the Messages log lists catalog-aware warnings:
+  unknown tables (with "did you mean"), unknown `alias.column`, `= NULL`,
+  `UPDATE`/`DELETE` without `WHERE`, `INSERT` column/value count mismatches,
+  unbalanced quotes and parentheses. Warnings never block a run.
+* **Schema tools** (connection context menu): generate DDL for all tables,
+  import a CSV into a new table (types are inferred; the `CREATE`/`INSERT`
+  script lands in the console for review), and a migration script that turns
+  one connection's schema into another's (same engine; `DROP`s come last).
+* The core also provides inline-edit `UPDATE` generation keyed on the primary
+  key (`ResultEdit`) and SQL paging (`ResultEdit::pagedSql`); these are
+  unit-tested but not yet wired to the result grid UI.
+
 ## Safety
 
 * **Read-only** connections refuse anything but reads (`SELECT`, `SHOW`,
@@ -150,7 +167,7 @@ engine that has a scriptable CLI means implementing one `CliDialect`.
 ## Testing
 
 ```
-ctest -R "SqlStatementSplitter|DatabaseCore|DatabasePanel|DatabaseLive"
+ctest -R "SqlStatementSplitter|DatabaseCore|DatabaseTools|DatabasePanel|DatabaseLive"
 ```
 
 `DatabaseLiveTests` always exercises SQLite. To run the same workflow against
