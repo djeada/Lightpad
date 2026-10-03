@@ -56,6 +56,9 @@ signals:
 
   void restartDebugRequested();
 
+  void inlineValuesChanged(const QString &filePath, int line,
+                           const QHash<QString, QString> &values);
+
 public slots:
 
   void onStopped(const DapStoppedEvent &event);
@@ -279,6 +282,23 @@ private:
   QAction *m_consoleClearAction = nullptr;
   QAction *m_consoleWrapAction = nullptr;
   QLineEdit *m_consoleFindInput = nullptr;
+
+  void clearInlineValues();
+  void publishInlineValues();
+  QHash<QString, QString> m_inlineValues;
+
+  void requestConsoleCompletions();
+  void applyConsoleCompletion(const DapCompletionItem &item);
+  void showMemoryViewer(const QString &memoryReference, const QString &title);
+  void requestDataBreakpointForVariable(QTreeWidgetItem *item);
+
+  int m_completionRequestSeq = 0;
+  QString m_completionText;
+  int m_completionColumn = 0;
+  QList<DapCompletionItem> m_completionItems;
+  int m_completionCycleIndex = -1;
+  int m_dataBreakpointRequestSeq = 0;
+  QString m_dataBreakpointRequestName;
 
   bool m_localsFallbackPending;
   int m_localsFallbackFrameId;

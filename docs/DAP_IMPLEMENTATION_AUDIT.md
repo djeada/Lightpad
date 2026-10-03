@@ -106,8 +106,10 @@ Parsing is byte-based on `QByteArray` with buffer/message caps (`App/dap/dapclie
 ### 6.2 `runInTerminal` — IMPLEMENTED
 
 Reverse requests spawn the command in an integrated terminal tab
-(`App/ui/mainwindow.cpp`) and reply with the real pid. Note: the requested terminal
-`kind` is currently ignored (integrated is always used).
+(`App/ui/mainwindow.cpp`) and reply with the real pid. `kind: "external"` launches the command in a detached
+system terminal emulator (x-terminal-emulator, gnome-terminal, konsole, xfce4-terminal,
+kitty, alacritty, xterm; Linux/BSD) and falls back to the integrated terminal when none
+is available or on other platforms.
 
 ### 6.3 Adapter-specific launch/attach arguments — FORWARDED
 
@@ -151,15 +153,31 @@ program (stdio) or reconnecting (socket).
   evaluate/setVariable/exceptionInfo → disconnect, plus capability-gating assertions
   via a request trace file.
 
-## 8) Still missing (not required for basic debugging)
+## 8) Added in the debugging improvement pass
+
+- Client requests: `completions`, `dataBreakpointInfo`, `readMemory`, `disassemble`
+  (capability-gated; unsupported adapters fail fast via `*Failed` signals) and the
+  client now advertises `supportsMemoryReferences`.
+- Robustness: inspection requests (threads, stackTrace, scopes, variables, evaluate,
+  setVariable, exceptionInfo, completions, memory, disassembly, dataBreakpointInfo) time
+  out after `DapClient::requestTimeoutMs()` (default 30 s), report an error, emit
+  `requestTimedOut`, and late replies are discarded. Adapter crashes terminate the session.
+- UI: Tab completion in the debug console (via `completions`), "Break on Value Change..."
+  in the Variables context menu (via `dataBreakpointInfo`, shown in the Breakpoints list with
+  enable/remove; cleared when the session ends because data ids are session specific),
+  "View Memory / Disassembly" viewer for variables with a `memoryReference`, and inline
+  variable values in the editor at the stopped location.
+- Tests: fake adapter gained `completions`, `dataBreakpointInfo`, `setDataBreakpoints`,
+  `readMemory`, `disassemble`, `--hang-on`, `--crash-on`, `--stop-reason`,
+  `--run-in-terminal`; covered in `tests/unit/test_dap.cpp`.
+
+## 9) Still missing
 
 - `setInstructionBreakpoints`, `gotoTargets`/`goto`, `stepBack`/`reverseContinue`,
-  completions in the debug console, `dataBreakpointInfo` UI, memory read/write UI,
-  disassembly view, modules request, progress/cancel UI.
+  modules request, progress/cancel UI, memory write, Java adapter preset.
 
-## 9) Recommended next steps
+## 10) Recommended next steps
 
-1. Inline variable values in the editor during stops.
-2. Debug-console completions via the `completions` request.
-3. Data-breakpoint creation UI (manager/persistence already exist).
-4. External-terminal `kind` support in `runInTerminal`.
+1. Language-server based `inlineValues` (current inline values are a name-matching heuristic).
+2. Disassembly stepping (`granularity: instruction`) and instruction breakpoints.
+3. Per-session picker UI for compound launch configurations.

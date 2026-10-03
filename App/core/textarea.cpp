@@ -2421,6 +2421,43 @@ void TextArea::paintEvent(QPaintEvent *event) {
     }
   }
 
+  if (!m_debugInlineValues.isEmpty() && m_debugInlineStopLine > 0 &&
+      !m_debugInlineFile.isEmpty()) {
+    QPainter painter(viewport());
+    QFontMetrics fm(mainFont);
+    QFont ghostFont = mainFont;
+    ghostFont.setItalic(true);
+    painter.setFont(ghostFont);
+    painter.setPen(QColor(110, 150, 200, 190));
+
+    const int firstLine = qMax(1, m_debugInlineStopLine - 40);
+    QTextBlock block = firstVisibleBlock();
+    while (block.isValid()) {
+      const QRectF geom =
+          blockBoundingGeometry(block).translated(contentOffset());
+      if (geom.top() > event->rect().bottom()) {
+        break;
+      }
+      const int lineNumber = block.blockNumber() + 1;
+      if (block.isVisible() && geom.bottom() >= event->rect().top() &&
+          lineNumber >= firstLine && lineNumber <= m_debugInlineStopLine) {
+        const QString text =
+            debugInlineTextForLine(block.text(), m_debugInlineValues);
+        if (!text.isEmpty()) {
+          QTextCursor blockStart(block);
+          blockStart.setPosition(block.position());
+          const int xPos = cursorRect(blockStart).left() +
+                           fm.horizontalAdvance(block.text()) +
+                           fm.horizontalAdvance(QStringLiteral("    "));
+          painter.drawText(xPos, static_cast<int>(geom.top()),
+                           qMax(0, viewport()->width() - xPos), fm.height(),
+                           Qt::AlignVCenter | Qt::AlignLeft, text);
+        }
+      }
+      block = block.next();
+    }
+  }
+
   if (m_inlineBlameEnabled && !m_inlineBlameData.isEmpty()) {
     int currentLine = textCursor().blockNumber() + 1;
     auto it = m_inlineBlameData.find(currentLine);
@@ -2832,6 +2869,61 @@ void TextArea::setCodeLensEnabled(bool enabled) {
 }
 
 bool TextArea::isCodeLensEnabled() const { return m_codeLensEnabled; }
+
+void TextArea::setDebugInlineValues(const QString &filePath, int stopLine,
+                                    const QHash<QString, QString> &values) {
+  auto canonical = [](const QString &path) {
+    const QString resolved = QFileInfo(path).canonicalFilePath();
+    return resolved.isEmpty() ? path : resolved;
+  };
+  const QString own = resolveFilePath();
+  m_debugInlineFile =
+      (!own.isEmpty() && canonical(own) == canonical(filePath)) ? filePath
+                                                               : QString();
+  m_debugInlineStopLine = stopLine;
+  m_debugInlineValues = values;
+  viewport()->update();
+}
+
+void TextArea::clearDebugInlineValues() {
+  if (m_debugInlineValues.isEmpty()) {
+    return;
+  }
+  m_debugInlineValues.clear();
+  m_debugInlineFile.clear();
+  m_debugInlineStopLine = 0;
+  viewport()->update();
+}
+
+QString TextArea::debugInlineTextForLine(const QString &lineText,
+                                         const QHash<QString, QString> &values) {
+  static const QRegularExpression identifier(
+      QStringLiteral("[A-Za-z_][A-Za-z0-9_]*"));
+  QStringList seen;
+  QStringList parts;
+  auto it = identifier.globalMatch(lineText);
+  while (it.hasNext()) {
+    const QRegularExpressionMatch match = it.next();
+    const QString name = match.captured(0);
+    if (seen.contains(name) || !values.contains(name)) {
+      continue;
+    }
+    const int start = match.capturedStart(0);
+    if (start > 0 && lineText.at(start - 1) == QLatin1Char('.')) {
+      continue;
+    }
+    seen << name;
+    QString value = values.value(name).simplified();
+    if (value.size() > 48) {
+      value = value.left(45) + QStringLiteral("...");
+    }
+    parts << QStringLiteral("%1 = %2").arg(name, value);
+    if (parts.size() >= 4) {
+      break;
+    }
+  }
+  return parts.join(QStringLiteral(", "));
+}
 
 void TextArea::setDebugExecutionLine(int line) {
   const int normalizedLine = line > 0 ? line : 0;

@@ -1,6 +1,7 @@
 #ifndef CODEEDITOR_H
 #define CODEEDITOR_H
 
+#include <QHash>
 #include <QList>
 #include <QMap>
 #include <QPlainTextEdit>
@@ -139,6 +140,13 @@ public:
   void setInlineBlameEnabled(bool enabled);
   bool isInlineBlameEnabled() const;
 
+  void setDebugInlineValues(const QString &filePath, int stopLine,
+                            const QHash<QString, QString> &values);
+  void clearDebugInlineValues();
+  bool hasDebugInlineValues() const { return !m_debugInlineValues.isEmpty(); }
+  static QString debugInlineTextForLine(
+      const QString &lineText, const QHash<QString, QString> &values);
+
   void setDebugExecutionLine(int line);
   int debugExecutionLine() const { return m_debugExecutionLine; }
 
@@ -211,6 +219,9 @@ private:
   bool m_codeLensEnabled;
 
   int m_debugExecutionLine;
+  QString m_debugInlineFile;
+  int m_debugInlineStopLine = 0;
+  QHash<QString, QString> m_debugInlineValues;
 
   QString diagnosticMessageAt(const QPoint &viewportPos) const;
 

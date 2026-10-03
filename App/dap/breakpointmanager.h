@@ -154,7 +154,12 @@ public:
   void syncFunctionBreakpoints();
 
   int addDataBreakpoint(const QString &dataId,
-                        const QString &accessType = "write");
+                        const QString &accessType = "write",
+                        const QString &description = QString());
+
+  void setDataBreakpointEnabled(int id, bool enabled);
+
+  void clearDataBreakpoints();
 
   void removeDataBreakpoint(int id);
 

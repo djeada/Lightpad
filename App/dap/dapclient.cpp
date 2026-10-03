@@ -649,6 +649,22 @@ bool DapClient::supportsSetVariable() const {
   return m_capabilities.value("supportsSetVariable").toBool(true);
 }
 
+bool DapClient::supportsCompletionsRequest() const {
+  return m_capabilities.value("supportsCompletionsRequest").toBool(false);
+}
+
+bool DapClient::supportsReadMemoryRequest() const {
+  return m_capabilities.value("supportsReadMemoryRequest").toBool(false);
+}
+
+bool DapClient::supportsDisassembleRequest() const {
+  return m_capabilities.value("supportsDisassembleRequest").toBool(false);
+}
+
+bool DapClient::supportsDataBreakpoints() const {
+  return m_capabilities.value("supportsDataBreakpoints").toBool(false);
+}
+
 bool DapClient::supportsExceptionInfoRequest() const {
   return m_capabilities.value("supportsExceptionInfoRequest").toBool(false);
 }
@@ -965,6 +981,93 @@ void DapClient::exceptionInfo(int threadId) {
   sendRequest("exceptionInfo", args, seq);
 }
 
+int DapClient::completions(const QString &text, int column, int frameId) {
+  const int seq = m_nextSeq++;
+  if (!supportsCompletionsRequest()) {
+    QTimer::singleShot(0, this, [this, seq]() {
+      emit completionsFailed(seq, "completions is not supported by the adapter");
+    });
+    return seq;
+  }
+  QJsonObject args;
+  args["text"] = text;
+  args["column"] = column;
+  if (frameId >= 0)
+    args["frameId"] = frameId;
+  m_pendingRequests[seq] = "completions";
+  sendRequest("completions", args, seq);
+  return seq;
+}
+
+int DapClient::dataBreakpointInfo(int variablesReference, const QString &name,
+                                  int frameId) {
+  const int seq = m_nextSeq++;
+  if (!supportsDataBreakpoints()) {
+    QTimer::singleShot(0, this, [this, seq]() {
+      emit dataBreakpointInfoFailed(
+          seq, "data breakpoints are not supported by the adapter");
+    });
+    return seq;
+  }
+  QJsonObject args;
+  if (variablesReference > 0)
+    args["variablesReference"] = variablesReference;
+  args["name"] = name;
+  if (frameId >= 0)
+    args["frameId"] = frameId;
+  m_pendingRequests[seq] = "dataBreakpointInfo";
+  sendRequest("dataBreakpointInfo", args, seq);
+  return seq;
+}
+
+int DapClient::dataBreakpointInfoForExpression(const QString &expression,
+                                               int frameId) {
+  return dataBreakpointInfo(0, expression, frameId);
+}
+
+int DapClient::readMemory(const QString &memoryReference, int count,
+                          int offset) {
+  const int seq = m_nextSeq++;
+  if (!supportsReadMemoryRequest()) {
+    QTimer::singleShot(0, this, [this, seq]() {
+      emit memoryFailed(seq, "readMemory is not supported by the adapter");
+    });
+    return seq;
+  }
+  QJsonObject args;
+  args["memoryReference"] = memoryReference;
+  args["count"] = count;
+  if (offset != 0)
+    args["offset"] = offset;
+  m_pendingRequests[seq] = "readMemory";
+  sendRequest("readMemory", args, seq);
+  return seq;
+}
+
+int DapClient::disassemble(const QString &memoryReference, int instructionCount,
+                           int instructionOffset, int offset,
+                           bool resolveSymbols) {
+  const int seq = m_nextSeq++;
+  if (!supportsDisassembleRequest()) {
+    QTimer::singleShot(0, this, [this, seq]() {
+      emit disassemblyFailed(seq,
+                             "disassemble is not supported by the adapter");
+    });
+    return seq;
+  }
+  QJsonObject args;
+  args["memoryReference"] = memoryReference;
+  args["instructionCount"] = instructionCount;
+  if (instructionOffset != 0)
+    args["instructionOffset"] = instructionOffset;
+  if (offset != 0)
+    args["offset"] = offset;
+  args["resolveSymbols"] = resolveSymbols;
+  m_pendingRequests[seq] = "disassemble";
+  sendRequest("disassemble", args, seq);
+  return seq;
+}
+
 void DapClient::respondToRunInTerminal(int requestSeq, bool success,
                                        qint64 processId,
                                        const QString &message) {
@@ -1016,6 +1119,25 @@ void DapClient::sendRequest(const QString &command,
   writeToAdapter(content);
 
   LOG_DEBUG(QString("DAP request: %1 (seq=%2)").arg(command).arg(seq));
+
+  static const QSet<QString> timedCommands = {
+      "threads",    "stackTrace",   "scopes",     "variables",
+      "evaluate",   "setVariable",  "exceptionInfo", "completions",
+      "readMemory", "disassemble",  "dataBreakpointInfo"};
+  if (m_requestTimeoutMs > 0 && timedCommands.contains(command)) {
+    QTimer::singleShot(m_requestTimeoutMs, this, [this, seq, command]() {
+      if (!m_pendingRequests.contains(seq)) {
+        return;
+      }
+      LOG_WARNING(
+          QString("DAP: %1 request %2 timed out").arg(command).arg(seq));
+      emit requestTimedOut(command);
+      handleResponse(seq, command, false, QJsonValue(),
+                     QString("Request timed out after %1 ms")
+                         .arg(m_requestTimeoutMs));
+      m_staleRequests.insert(seq);
+    });
+  }
 }
 
 void DapClient::sendResponse(int requestSeq, const QString &command,
@@ -1358,6 +1480,23 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
       return;
     }
 
+    if (command == "completions") {
+      emit completionsFailed(requestSeq, message);
+      return;
+    }
+    if (command == "dataBreakpointInfo") {
+      emit dataBreakpointInfoFailed(requestSeq, message);
+      return;
+    }
+    if (command == "readMemory") {
+      emit memoryFailed(requestSeq, message);
+      return;
+    }
+    if (command == "disassemble") {
+      emit disassemblyFailed(requestSeq, message);
+      return;
+    }
+
     if (command == "setFunctionBreakpoints") {
       const QString lowered = message.toLower();
       if (lowered.contains("notstopped")) {
@@ -1555,6 +1694,23 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
   } else if (command == "setDataBreakpoints") {
     LOG_DEBUG(QString("Data breakpoints set: %1")
                   .arg(bodyObj["breakpoints"].toArray().count()));
+  } else if (command == "completions") {
+    QList<DapCompletionItem> items;
+    for (const auto &val : bodyObj["targets"].toArray()) {
+      items.append(DapCompletionItem::fromJson(val.toObject()));
+    }
+    emit completionsReceived(requestSeq, items);
+  } else if (command == "dataBreakpointInfo") {
+    emit dataBreakpointInfoReceived(requestSeq,
+                                    DapDataBreakpointInfo::fromJson(bodyObj));
+  } else if (command == "readMemory") {
+    emit memoryReceived(requestSeq, DapMemoryChunk::fromJson(bodyObj));
+  } else if (command == "disassemble") {
+    QList<DapDisassembledInstruction> items;
+    for (const auto &val : bodyObj["instructions"].toArray()) {
+      items.append(DapDisassembledInstruction::fromJson(val.toObject()));
+    }
+    emit disassemblyReceived(requestSeq, items);
   } else if (command == "exceptionInfo") {
     int threadId = m_currentThreadId;
     if (pendingCommand.startsWith("exceptionInfo:")) {
@@ -1670,6 +1826,7 @@ void DapClient::doInitialize() {
   args["supportsVariableType"] = true;
   args["supportsVariablePaging"] = true;
   args["supportsRunInTerminalRequest"] = true;
+  args["supportsMemoryReferences"] = true;
 
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "initialize";
