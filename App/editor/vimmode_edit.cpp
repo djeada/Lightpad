@@ -35,6 +35,18 @@ void VimMode::setAutoIndent(bool enabled) { m_autoIndent = enabled; }
 
 void VimMode::applyOperator(const QString &op, const Range &range, QChar reg,
                             int count, bool fromVisual) {
+  if (op == "!") {
+    const int curLine = lineOf(cursorPos());
+    QString prompt;
+    if (range.startLine == range.endLine && range.startLine == curLine)
+      prompt = ".";
+    else if (range.startLine == curLine)
+      prompt = QString(".,.+%1").arg(range.endLine - range.startLine);
+    else
+      prompt = QString("%1,%2").arg(range.startLine + 1).arg(range.endLine + 1);
+    enterCommandLine(':', prompt + "!");
+    return;
+  }
   if (op != "y") {
     int undoPos = range.start;
     if (range.type == VimRegisterType::Linewise)
@@ -70,7 +82,7 @@ void VimMode::applyOperator(const QString &op, const Range &range, QChar reg,
                            : range.start;
   setMark('[', startPos);
   if (op == "y") {
-    setMark(']', qMax(startPos, range.end - 1));
+    setMark(']', qMax(startPos, range.exclusiveEnd ? range.end : range.end - 1));
   } else {
     setMark(']', cursorPos());
     if (op != "c")
@@ -204,6 +216,37 @@ void VimMode::operatorCase(const QString &op, const Range &range) {
 }
 
 void VimMode::operatorShift(const Range &range, bool right, int amount) {
+  if (range.type == VimRegisterType::Blockwise) {
+    const int total = m_shiftWidth * amount;
+    const int startVcol = range.startVcol;
+    for (int l = range.startLine; l <= range.endLine; ++l) {
+      const QString text = lineText(l);
+      if (vcolOf(text, text.size()) <= startVcol)
+        continue;
+      const int tc = colForVcol(text, startVcol);
+      int ws = tc;
+      while (ws < text.size() && (text[ws] == ' ' || text[ws] == '\t'))
+        ++ws;
+      const int existing = vcolOf(text, ws) - startVcol;
+      const int newWidth =
+          right ? existing + total : qMax(0, existing - total);
+      QString fill;
+      if (m_expandTab) {
+        fill = QString(newWidth, ' ');
+      } else {
+        const int tabs = ((startVcol % m_tabStop) + newWidth) / m_tabStop;
+        const int spaces = tabs ? ((startVcol % m_tabStop) + newWidth) % m_tabStop
+                                : newWidth;
+        fill = QString(tabs, '\t') + QString(spaces, ' ');
+      }
+      if (fill != text.mid(tc, ws - tc))
+        replaceRange(lineStart(l) + tc, lineStart(l) + ws, fill);
+    }
+    setCursorPos(clampNormal(
+        lineStart(range.startLine) +
+        colForVcol(lineText(range.startLine), startVcol)));
+    return;
+  }
   for (int l = range.startLine; l <= range.endLine; ++l) {
     const QString text = lineText(l);
     if (text.isEmpty())
@@ -281,22 +324,85 @@ void VimMode::operatorFormat(const Range &range, bool keepCursor) {
   int l = range.startLine;
   int lastLine = range.endLine;
   int lastFormatted = range.endLine;
+  struct Leader {
+    QString text;
+    bool first = false;
+  };
+  auto leaderOf = [](const QString &s) -> Leader {
+    Leader result;
+    int i = 0;
+    while (i < s.size() && (s[i] == ' ' || s[i] == '\t'))
+      ++i;
+    const QString rest = s.mid(i);
+    int len = 0;
+    auto blankAfter = [&](int at) {
+      return at >= rest.size() || rest[at] == ' ' || rest[at] == '\t';
+    };
+    if (rest.startsWith("//"))
+      len = 2;
+    else if (rest.startsWith("XCOMM"))
+      len = 5;
+    else if (rest.startsWith('#') && blankAfter(1))
+      len = 1;
+    else if (rest.startsWith('%'))
+      len = 1;
+    else if (rest.startsWith('>')) {
+      int k = 0;
+      while (k < rest.size() && (rest[k] == '>' || rest[k] == ' '))
+        ++k;
+      while (k > 0 && rest[k - 1] == ' ')
+        --k;
+      len = k;
+    } else if (rest.startsWith('-') && rest.size() > 1 && blankAfter(1)) {
+      len = 1;
+      result.first = true;
+    }
+    if (len == 0)
+      return result;
+    int end = len;
+    while (end < rest.size() && (rest[end] == ' ' || rest[end] == '\t'))
+      ++end;
+    result.text = s.left(i + end);
+    return result;
+  };
+  auto isBlankPar = [&](int line) {
+    const QString t = lineText(line);
+    const Leader ld = leaderOf(t);
+    return t.mid(ld.text.size()).trimmed().isEmpty();
+  };
+  auto sameLeader = [&](const Leader &a, const Leader &b) {
+    if (a.first)
+      return b.text.isEmpty();
+    if (a.text.isEmpty())
+      return b.text.isEmpty();
+    return a.text.trimmed() == b.text.trimmed();
+  };
   while (l <= lastLine) {
-    if (lineText(l).trimmed().isEmpty()) {
+    if (isBlankPar(l)) {
       ++l;
       continue;
     }
+    const Leader lead1 = leaderOf(lineText(l));
     int pEnd = l;
-    while (pEnd + 1 <= lastLine && !lineText(pEnd + 1).trimmed().isEmpty())
+    while (pEnd + 1 <= lastLine && !isBlankPar(pEnd + 1) &&
+           sameLeader(lead1, leaderOf(lineText(pEnd + 1))))
       ++pEnd;
     const QString first = lineText(l);
-    const int indentLen = firstNonBlankCol(l);
-    const QString indent = first.left(indentLen);
-    const QString nextIndent = m_autoIndent ? indent : QString();
+    const int indentLen =
+        lead1.text.isEmpty() ? firstNonBlankCol(l) : int(lead1.text.size());
+    QString nextIndent;
+    if (!lead1.text.isEmpty() && !lead1.first)
+      nextIndent = lead1.text;
+    else if (m_autoIndent)
+      nextIndent = first.left(firstNonBlankCol(l));
+    QString firstWrapIndent = nextIndent;
+    if (lead1.first)
+      firstWrapIndent = QString(vcolOf(lead1.text, lead1.text.size()), ' ');
+    bool firstWrap = true;
     QString joined = first;
     for (int k = l + 1; k <= pEnd; ++k) {
       const QString next = lineText(k);
-      int lead = 0;
+      int lead = leaderOf(next).text.size();
       while (lead < next.size() && (next[lead] == ' ' || next[lead] == '\t'))
         ++lead;
       if (lead >= next.size())
@@ -336,8 +442,10 @@ void VimMode::operatorFormat(const Range &range, bool keepCursor) {
       if (s <= currentIndent || e >= current.size())
         break;
       out << current.left(s);
-      current = nextIndent + current.mid(e);
-      currentIndent = nextIndent.size();
+      const QString lineIndent = firstWrap ? firstWrapIndent : nextIndent;
+      firstWrap = false;
+      current = lineIndent + current.mid(e);
+      currentIndent = lineIndent.size();
     }
     out << current;
     const QString replacement = out.join('\n');
@@ -537,11 +645,42 @@ void VimMode::visualPut(QChar reg, int count, bool keepRegister) {
     m_editor->setTextCursor(c);
     if (r.blockwise) {
       putBlock(r, c1, false, false);
+    } else if (r.linewise) {
+      QString content = r.content;
+      if (!content.endsWith('\n'))
+        content += '\n';
+      const QString text = content.repeated(c1);
+      const int line = qMin(range.endLine, lineCount() - 1);
+      if (line == lineCount() - 1)
+        replaceRange(lineEndPos(line), lineEndPos(line),
+                     "\n" + text.left(text.size() - 1));
+      else
+        replaceRange(lineStart(line + 1), lineStart(line + 1), text);
+      setCursorPos(firstNonBlankPos(line + 1));
+    } else if (!r.content.contains('\n')) {
+      const QString text = r.content.repeated(c1);
+      const int firstLine = range.startLine;
+      for (int l = range.endLine; l >= range.startLine; --l) {
+        const QString lt = lineText(l);
+        if (vcolOf(lt, lt.size()) < range.startVcol)
+          continue;
+        const int at = lineStart(l) + colForVcol(lt, range.startVcol);
+        replaceRange(at, at, text);
+      }
+      setCursorPos(clampNormal(
+          lineStart(firstLine) +
+          colForVcol(lineText(firstLine), range.startVcol) + text.size() - 1));
     } else {
       const QString text = r.content.repeated(c1);
       replaceRange(c.position(), c.position(), text);
       setCursorPos(clampNormal(c.position() + text.size() - 1));
     }
+  } else if (r.blockwise && range.type != VimRegisterType::Linewise) {
+    replaceRange(range.start, range.end, QString());
+    QTextCursor c = m_editor->textCursor();
+    c.setPosition(qBound(0, range.start, docLength()));
+    m_editor->setTextCursor(c);
+    putBlock(r, c1, false, false);
   } else if (range.type == VimRegisterType::Linewise) {
     QString text = r.content;
     if (r.linewise && text.endsWith('\n'))
@@ -806,6 +945,11 @@ void VimMode::undo(int count) {
   c.setPosition(clampNormal(target));
   m_editor->setTextCursor(c);
   setCursorPos(c.position());
+  if (minPos >= 0) {
+    const int markLine = lineOf(qBound(0, minPos, docLength()));
+    setMark('[', lineStart(markLine));
+    setMark(']', lineStart(markLine));
+  }
 }
 
 void VimMode::redo(int count) {
