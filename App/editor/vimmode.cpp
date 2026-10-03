@@ -483,7 +483,10 @@ QStringList VimMode::parseKeyNotation(const QString &keys) {
       tokens << "<BS>";
       break;
     default:
-      tokens << QString(c);
+      if (c.unicode() >= 1 && c.unicode() <= 26)
+        tokens << QString("<C-%1>").arg(QChar('a' + c.unicode() - 1));
+      else
+        tokens << QString(c);
       break;
     }
   }
@@ -706,7 +709,7 @@ void VimMode::replaceRange(int start, int end, const QString &text) {
 bool VimMode::isValidRegister(QChar reg) {
   if (reg.unicode() < 128 && reg.isLetterOrNumber())
     return true;
-  return QString("\"-_+*/:.%").contains(reg);
+  return QString("\"-_+*/:.%=").contains(reg);
 }
 
 void VimMode::setRegister(QChar reg, const QString &text,
@@ -755,6 +758,11 @@ VimRegister VimMode::getRegister(QChar reg) const {
     return r;
   }
   VimRegister r;
+  if (reg == '=') {
+    r.content = m_exprRegister;
+    r.linewise = m_exprRegisterLinewise;
+    return r;
+  }
   if (reg == '/') {
     r.content = m_searchPattern;
     return r;
@@ -784,6 +792,9 @@ void VimMode::storeDeleted(QChar reg, const QString &text, VimRegisterType type,
           m_registers[QChar('0' + i)] = m_registers[from];
       }
       setRegister('1', text, type);
+      if (forceNumbered && type != VimRegisterType::Linewise &&
+          !text.contains('\n'))
+        setRegister('-', text, type);
     } else {
       setRegister('-', text, type);
     }
@@ -862,8 +873,13 @@ bool VimMode::markPosition(QChar mark, int &pos) const {
   if (mark == '`')
     mark = '\'';
   auto it = m_marks.constFind(mark);
-  if (it == m_marks.constEnd() || it->isNull() || it->document() != doc())
+  if (it == m_marks.constEnd() || it->isNull() || it->document() != doc()) {
+    if (mark == '\'') {
+      pos = 0;
+      return true;
+    }
     return false;
+  }
   pos = qBound(0, it->position(), docLength());
   return true;
 }
@@ -938,9 +954,25 @@ void VimMode::stopMacroRecording() {
   if (!m_macroKeys.isEmpty())
     m_macroKeys.removeLast();
   m_macroRecording = false;
-  setRegister(m_macroRegister, tokensToNotation(m_macroKeys),
-              VimRegisterType::Charwise);
-  m_lastMacroRegister = m_macroRegister.toLower();
+  QString raw;
+  for (const QString &t : m_macroKeys) {
+    if (t == "<Esc>")
+      raw += QChar(0x1b);
+    else if (t == "<CR>")
+      raw += QChar('\r');
+    else if (t == "<Tab>")
+      raw += QChar('\t');
+    else if (t == "<BS>")
+      raw += QChar(0x08);
+    else if (t.size() == 5 && t.startsWith("<C-") && t.endsWith('>') &&
+             t[3].unicode() < 128 && t[3].isLower())
+      raw += QChar(t[3].unicode() - 'a' + 1);
+    else if (t == "<lt>")
+      raw += QChar('<');
+    else
+      raw += t;
+  }
+  setRegister(m_macroRegister, raw, VimRegisterType::Charwise);
   emit macroRecordingChanged(false, QChar());
   emit statusMessage(QString("Recorded @%1").arg(m_macroRegister));
 }

@@ -228,6 +228,85 @@ struct DapExceptionInfo {
   }
 };
 
+struct DapCompletionItem {
+  QString label;
+  QString text;
+  QString type;
+  QString sortText;
+  int start = -1;
+  int length = 0;
+
+  static DapCompletionItem fromJson(const QJsonObject &obj) {
+    DapCompletionItem item;
+    item.label = obj["label"].toString();
+    item.text = obj["text"].toString();
+    item.type = obj["type"].toString();
+    item.sortText = obj["sortText"].toString();
+    item.start = obj.contains("start") ? obj["start"].toInt() : -1;
+    item.length = obj["length"].toInt();
+    return item;
+  }
+
+  QString insertText() const { return text.isEmpty() ? label : text; }
+};
+
+struct DapDataBreakpointInfo {
+  QString dataId;
+  QString description;
+  QStringList accessTypes;
+  bool canPersist = false;
+
+  bool isValid() const { return !dataId.isEmpty(); }
+
+  static DapDataBreakpointInfo fromJson(const QJsonObject &obj) {
+    DapDataBreakpointInfo info;
+    info.dataId =
+        obj["dataId"].isString() ? obj["dataId"].toString() : QString();
+    info.description = obj["description"].toString();
+    for (const auto &val : obj["accessTypes"].toArray()) {
+      info.accessTypes.append(val.toString());
+    }
+    info.canPersist = obj["canPersist"].toBool();
+    return info;
+  }
+};
+
+struct DapMemoryChunk {
+  QString address;
+  int unreadableBytes = 0;
+  QByteArray data;
+
+  static DapMemoryChunk fromJson(const QJsonObject &obj) {
+    DapMemoryChunk chunk;
+    chunk.address = obj["address"].toString();
+    chunk.unreadableBytes = obj["unreadableBytes"].toInt();
+    chunk.data = QByteArray::fromBase64(obj["data"].toString().toLatin1());
+    return chunk;
+  }
+};
+
+struct DapDisassembledInstruction {
+  QString address;
+  QString instructionBytes;
+  QString instruction;
+  QString symbol;
+  DapSource source;
+  int line = 0;
+
+  static DapDisassembledInstruction fromJson(const QJsonObject &obj) {
+    DapDisassembledInstruction ins;
+    ins.address = obj["address"].toString();
+    ins.instructionBytes = obj["instructionBytes"].toString();
+    ins.instruction = obj["instruction"].toString();
+    ins.symbol = obj["symbol"].toString();
+    ins.line = obj["line"].toInt();
+    if (obj.contains("location")) {
+      ins.source = DapSource::fromJson(obj["location"].toObject());
+    }
+    return ins;
+  }
+};
+
 struct DapOutputEvent {
   QString category;
   QString output;
@@ -376,6 +455,10 @@ public:
   bool supportsTerminateRequest() const;
   bool supportsSetVariable() const;
   bool supportsExceptionInfoRequest() const;
+  bool supportsCompletionsRequest() const;
+  bool supportsReadMemoryRequest() const;
+  bool supportsDisassembleRequest() const;
+  bool supportsDataBreakpoints() const;
   QJsonObject capabilities() const { return m_capabilities; }
 
   void setBreakpoints(const QString &sourcePath,
@@ -415,6 +498,23 @@ public:
                    const QString &value);
 
   void exceptionInfo(int threadId);
+
+  int completions(const QString &text, int column, int frameId = -1);
+
+  int dataBreakpointInfo(int variablesReference, const QString &name,
+                         int frameId = -1);
+
+  int dataBreakpointInfoForExpression(const QString &expression,
+                                      int frameId = -1);
+
+  int readMemory(const QString &memoryReference, int count, int offset = 0);
+
+  int disassemble(const QString &memoryReference, int instructionCount,
+                  int instructionOffset = 0, int offset = 0,
+                  bool resolveSymbols = true);
+
+  void setRequestTimeoutMs(int ms) { m_requestTimeoutMs = ms; }
+  int requestTimeoutMs() const { return m_requestTimeoutMs; }
 
   void respondToRunInTerminal(int requestSeq, bool success,
                               qint64 processId = 0,
@@ -466,6 +566,18 @@ signals:
                    const QString &type);
   void exceptionInfoReceived(int threadId, const DapExceptionInfo &info);
   void exceptionInfoError(int threadId, const QString &errorMessage);
+  void completionsReceived(int requestSeq,
+                           const QList<DapCompletionItem> &items);
+  void completionsFailed(int requestSeq, const QString &errorMessage);
+  void dataBreakpointInfoReceived(int requestSeq,
+                                  const DapDataBreakpointInfo &info);
+  void dataBreakpointInfoFailed(int requestSeq, const QString &errorMessage);
+  void memoryReceived(int requestSeq, const DapMemoryChunk &chunk);
+  void memoryFailed(int requestSeq, const QString &errorMessage);
+  void disassemblyReceived(int requestSeq,
+                           const QList<DapDisassembledInstruction> &items);
+  void disassemblyFailed(int requestSeq, const QString &errorMessage);
+  void requestTimedOut(const QString &command);
 
 private slots:
   void onReadyReadStandardOutput();
@@ -531,6 +643,7 @@ private:
   bool m_dataBreakpointsConfigured;
   bool m_pausePending;
   bool m_stopping = false;
+  int m_requestTimeoutMs = 30000;
 
   QJsonObject m_launchConfig;
   bool m_isAttach;

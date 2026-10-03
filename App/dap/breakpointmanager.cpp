@@ -464,9 +464,36 @@ void BreakpointManager::syncFunctionBreakpoints() {
   m_dapClient->setFunctionBreakpoints(functionNames);
 }
 
+void BreakpointManager::setDataBreakpointEnabled(int id, bool enabled) {
+  auto it = m_dataBreakpoints.find(id);
+  if (it == m_dataBreakpoints.end() || it->enabled == enabled) {
+    return;
+  }
+  it->enabled = enabled;
+  emit dataBreakpointsChanged();
+  if (m_dapClient && m_dapClient->isDebugging()) {
+    syncDataBreakpoints();
+  }
+}
+
+void BreakpointManager::clearDataBreakpoints() {
+  if (m_dataBreakpoints.isEmpty()) {
+    return;
+  }
+  m_dataBreakpoints.clear();
+  emit dataBreakpointsChanged();
+}
+
 int BreakpointManager::addDataBreakpoint(const QString &dataId,
-                                         const QString &accessType) {
+                                         const QString &accessType,
+                                         const QString &description) {
+  for (const DataBreakpoint &existing : std::as_const(m_dataBreakpoints)) {
+    if (existing.dataId == dataId && existing.accessType == accessType) {
+      return existing.id;
+    }
+  }
   DataBreakpoint dbp;
+  dbp.description = description;
   dbp.id = m_nextDataBpId++;
   dbp.dataId = dataId;
   dbp.accessType = accessType;

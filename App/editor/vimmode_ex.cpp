@@ -80,28 +80,42 @@ bool VimMode::parseExAddress(const QString &cmd, int &i, int curLine, int &line,
       line = lineOf(pos);
       i += 2;
       found = true;
-    } else if (c == '/' || c == '?') {
-      int end = findUnescapedDelim(cmd, c, i + 1);
-      QString pattern = end < 0 ? cmd.mid(i + 1) : cmd.mid(i + 1, end - i - 1);
-      i = end < 0 ? n : end + 1;
-      if (pattern.isEmpty())
-        pattern = m_searchPattern;
-      if (pattern.isEmpty()) {
-        error = "E35: No previous regular expression";
-        return false;
+    } else if (c == '/' || c == '?' ||
+               (c == '\\' && i + 1 < n &&
+                QString("/?&").contains(cmd[i + 1]))) {
+      int searchLine = curLine;
+      while (i < n && (cmd[i] == '/' || cmd[i] == '?' || cmd[i] == '\\')) {
+        QChar kind = cmd[i];
+        QString pattern;
+        QChar dir = kind;
+        if (kind == '\\') {
+          if (i + 1 >= n || !QString("/?&").contains(cmd[i + 1]))
+            break;
+          dir = cmd[i + 1] == '?' ? '?' : '/';
+          pattern = cmd[i + 1] == '&' ? m_lastSubPattern : m_searchPattern;
+          i += 2;
+        } else {
+          int end = findUnescapedDelim(cmd, kind, i + 1);
+          pattern = end < 0 ? cmd.mid(i + 1) : cmd.mid(i + 1, end - i - 1);
+          i = end < 0 ? n : end + 1;
+          if (pattern.isEmpty())
+            pattern = m_searchPattern;
+        }
+        if (pattern.isEmpty()) {
+          error = "E35: No previous regular expression";
+          return false;
+        }
+        m_searchPattern = pattern;
+        int from = dir == '/' ? lineEndPos(searchLine) : lineStart(searchLine);
+        int ms = 0, me = 0;
+        if (!search(pattern, dir == '/', 1, from, ms, me, nullptr, true)) {
+          error = QString("E486: Pattern not found: %1").arg(pattern);
+          return false;
+        }
+        const int hit = lineOf(ms);
+        searchLine = hit;
       }
-      m_searchPattern = pattern;
-      int from = c == '/' ? lineEndPos(curLine) : lineStart(curLine);
-      int ms = 0, me = 0;
-      if (!search(pattern, c == '/', 1, from, ms, me, nullptr, true)) {
-        error = QString("E486: Pattern not found: %1").arg(pattern);
-        return false;
-      }
-      line = lineOf(ms);
-      if (line == curLine) {
-        error = QString("E486: Pattern not found: %1").arg(pattern);
-        return false;
-      }
+      line = searchLine;
       found = true;
     } else if (c == '+' || c == '-') {
       line = curLine;
@@ -227,7 +241,12 @@ void VimMode::executeEx(const QString &command) {
   static const QStringList barArgCommands = {
       "g",   "gl",   "glo",   "glob",   "globa",   "global", "v",     "vg",
       "vgl", "vglo", "vglob", "vgloba", "vglobal", "norm",   "norma", "normal"};
-  if (!barArgCommands.contains(name)) {
+  const QString afterName = cmd.mid(i).trimmed();
+  const bool shellCommand =
+      name == "!" ||
+      (!name.isEmpty() && afterName.startsWith('!') &&
+       (QString("read").startsWith(name) || QString("write").startsWith(name)));
+  if (!barArgCommands.contains(name) && !shellCommand) {
     int scanFrom = i;
     if (!name.isEmpty() && QString("substitute").startsWith(name) &&
         i < cmd.size() && !cmd[i].isLetterOrNumber() && cmd[i] != '\\' &&
@@ -253,7 +272,8 @@ void VimMode::executeEx(const QString &command) {
     }
   }
   bool bang = false;
-  if (!name.isEmpty() && name != "!" && i < cmd.size() && cmd[i] == '!') {
+  if (!name.isEmpty() && name != "!" && i < cmd.size() && cmd[i] == '!' &&
+      !QString("substitute").startsWith(name)) {
     bang = true;
     ++i;
   }
@@ -276,7 +296,6 @@ void VimMode::executeEx(const QString &command) {
 
   if (name.isEmpty()) {
     if (hasRange) {
-      pushJump(cursorPos());
       setCursorPos(firstNonBlankPos(qBound(0, line2, last)));
     } else {
       emit statusMessage(QString("E492: Not an editor command: %1").arg(cmd));
@@ -299,7 +318,14 @@ void VimMode::executeEx(const QString &command) {
     }
   };
 
-  if (is("write", 1) || name == "w") {
+  if (shellCommand && name != "!" && QString("write").startsWith(name)) {
+    const int wl1 = hasRange ? qMax(0, line1) : 0;
+    const int wl2 = hasRange ? clampedLine2 : last;
+    QString text = textBetween(lineStart(wl1), lineEndPos(wl2)) + "\n";
+    QString output;
+    runShell(afterName.mid(1), text, &output);
+    emit statusMessage(output.trimmed().replace('\n', ' '));
+  } else if (is("write", 1) || name == "w") {
     emit commandExecuted("save");
   } else if (is("wq", 2) || name == "x" || is("xit", 2) || is("exit", 3)) {
     if (name == "x" || name.startsWith("xi") || name.startsWith("exi")) {
@@ -380,8 +406,18 @@ void VimMode::executeEx(const QString &command) {
     operatorYank(lineRange(qMax(0, line1), qMax(0, line2)), reg, false);
   } else if (is("put", 2)) {
     QChar reg = args.isEmpty() ? QChar() : args[0];
+    if (reg == '=') {
+      QString res, err;
+      if (!evalExpression(args.mid(1).trimmed(), &res, nullptr, nullptr,
+                          &err)) {
+        emit statusMessage(err);
+        return;
+      }
+      m_exprRegister = res;
+      m_exprRegisterLinewise = true;
+    }
     VimRegister r = getRegister(reg);
-    if (r.content.isEmpty() && !reg.isNull() && reg != '"' &&
+    if (r.content.isEmpty() && !reg.isNull() && reg != '"' && reg != '=' &&
         !(reg.unicode() < 128 && reg.isLetterOrNumber() &&
           m_registers.contains(reg.toLower())) &&
         !(reg == '-' && m_registers.contains(reg))) {
@@ -428,8 +464,10 @@ void VimMode::executeEx(const QString &command) {
       emit statusMessage("E134: Cannot move a range of lines into itself");
       return;
     }
-    if (move && (dest == line2 || dest == line1 - 1))
+    if (move && (dest == line2 || dest == line1 - 1)) {
+      setCursorPos(firstNonBlankPos(line2));
       return;
+    }
     const int n = line2 - line1 + 1;
     QString text = textBetween(lineStart(line1), lineEndPos(line2));
     struct MovedMark {
@@ -570,7 +608,33 @@ void VimMode::executeEx(const QString &command) {
   } else if (is("help", 1)) {
     emit statusMessage("Help is not available; see the Vim documentation");
   } else if (name == "!") {
-    emit statusMessage("Shell commands are not supported");
+    if (hasRange) {
+      exFilter(rawArgs, qMax(0, line1), clampedLine2);
+    } else {
+      QString output;
+      runShell(rawArgs, QString(), &output);
+      emit statusMessage(output.trimmed().replace('\n', ' '));
+    }
+  } else if (shellCommand || is("read", 1)) {
+    if (is("read", 1) || shellCommand)
+      exRead(shellCommand ? afterName : args,
+             hasRange ? line2 : lineOf(cursorPos()));
+  } else if (is("let", 3)) {
+    exLet(args);
+  } else if (is("execute", 3)) {
+    QString result, error;
+    if (evalExpression(args, &result, nullptr, nullptr, &error))
+      executeEx(result);
+    else
+      emit statusMessage(error);
+  } else if (is("center", 2) || is("left", 2) || is("right", 2)) {
+    exAlign(name.startsWith("ce")   ? "center"
+            : name.startsWith("le") ? "left"
+                                    : "right",
+            args, hasRange ? qMax(0, line1) : lineOf(cursorPos()),
+            hasRange ? clampedLine2 : lineOf(cursorPos()));
+  } else if (is("delmarks", 4)) {
+    exDelmarks(args, bang);
   } else if (is("file", 1)) {
     emit statusMessage(
         QString("%1 lines --%2%%--")
@@ -579,7 +643,11 @@ void VimMode::executeEx(const QString &command) {
   } else if (is("print", 1) || name == "#" || is("number", 2)) {
     emit statusMessage(lineText(clampedLine2));
   } else if (is("echo", 2)) {
-    emit statusMessage(args);
+    QString result, error;
+    if (evalExpressionRepr(args, &result, &error))
+      emit statusMessage(result);
+    else
+      emit statusMessage(error);
   } else if (is("silent", 3)) {
     executeEx(args);
   } else if (is("goto", 2)) {
@@ -620,7 +688,16 @@ void VimMode::executeEx(const QString &command) {
 }
 
 QString VimMode::expandReplacement(const QString &replacement,
-                                   const QRegularExpressionMatch &match) const {
+                                   const QRegularExpressionMatch &match) {
+  if (replacement.startsWith("\\=")) {
+    QString result, error;
+    bool isList = false;
+    if (!evalExpression(replacement.mid(2), &result, &isList, &match, &error)) {
+      emit statusMessage(error);
+      return QString();
+    }
+    return isList ? result + "\n" : result;
+  }
   QString out;
   QChar oneShot;
   QChar continuous;
@@ -646,8 +723,12 @@ QString VimMode::expandReplacement(const QString &replacement,
       QChar d = replacement[++i];
       if (d.isDigit()) {
         append(match.captured(d.digitValue()));
-      } else if (d == 'n' || d == 'r') {
+      } else if (d == 'n') {
+        out += QChar(0);
+      } else if (d == 'r') {
         out += '\n';
+      } else if (d == 'b') {
+        out += QChar(0x08);
       } else if (d == 't') {
         out += '\t';
       } else if (d == 'u' || d == 'l') {
@@ -679,9 +760,10 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
   QString flags;
   QString countText;
 
-  const bool repeat = cmdName == "&" || cmdName == "&&" || cmdName == "~" ||
-                      args.isEmpty() || args[0].isLetterOrNumber() ||
-                      args[0] == '&' || args[0] == ' ';
+  const bool repeat =
+      cmdName == "&" || cmdName == "&&" || cmdName == "~" || args.isEmpty() ||
+      QString("0123456789cegriIp|\"").contains(args[0]) ||
+      (args[0] == '&' && !cmdName.isEmpty() && cmdName[0] != 's');
   if (repeat) {
     if (!m_hasLastSub) {
       emit statusMessage("E35: No previous regular expression");
@@ -699,8 +781,15 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
     while (k < rest.size() && rest[k].isLetter())
       flags += rest[k++];
     countText = rest.mid(k).trimmed();
+    if (flags.contains('r') && !m_searchPattern.isEmpty())
+      pattern = m_searchPattern;
   } else {
     const QChar delim = args[0];
+    if (delim.isLetter() && delim.unicode() < 128) {
+      emit statusMessage("E146: Regular expressions can't be delimited by "
+                         "letters");
+      return;
+    }
     int end = findUnescapedDelim(args, delim, 1);
     pattern = end < 0 ? args.mid(1) : args.mid(1, end - 1);
     QString rest = end < 0 ? QString() : args.mid(end + 1);
@@ -710,7 +799,10 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
     if (delim != '/') {
       pattern.replace(QString("\\") + delim, QString(delim));
     }
-    for (int k = 0; k < rawRepl.size(); ++k) {
+    const bool exprReplacement = rawRepl.startsWith("\\=");
+    if (exprReplacement)
+      replacement = rawRepl;
+    for (int k = 0; !exprReplacement && k < rawRepl.size(); ++k) {
       if (rawRepl[k] == '\\' && k + 1 < rawRepl.size()) {
         if (rawRepl[k + 1] == delim) {
           replacement += delim;
@@ -791,12 +883,36 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
   int previousEnd = -1;
   int previousEndLine = -1;
   int nextCol = -1;
+  const bool visualOnly = pattern.contains("\\%V");
+  int vStart = 0, vEnd = 0;
+  const bool haveVisual =
+      visualOnly && markPosition('<', vStart) && markPosition('>', vEnd);
+  auto inVisual = [&](int absPos) {
+    if (!haveVisual)
+      return false;
+    const int a = qMin(vStart, vEnd), b = qMax(vStart, vEnd);
+    const int pl = lineOf(absPos);
+    if (m_lastVisualMode == VimEditMode::VisualLine)
+      return pl >= lineOf(a) && pl <= lineOf(b);
+    if (m_lastVisualMode == VimEditMode::VisualBlock) {
+      if (pl < lineOf(a) || pl > lineOf(b))
+        return false;
+      const int v1 = vcolOf(lineText(lineOf(vStart)), colOf(vStart));
+      const int v2 = vcolOf(lineText(lineOf(vEnd)), colOf(vEnd));
+      const int v = vcolOf(lineText(pl), absPos - lineStart(pl));
+      return m_lastVisualToEol ? v >= qMin(v1, v2)
+                               : (v >= qMin(v1, v2) && v <= qMax(v1, v2));
+    }
+    return absPos >= a && absPos <= b;
+  };
   auto it = re.globalMatch(text);
   while (it.hasNext()) {
     auto m = it.next();
     int s = m.capturedStart();
     if (base + s > rangeEnd)
       break;
+    if (visualOnly && !inVisual(base + s))
+      continue;
     newlineCount += text.mid(scanned, s - scanned).count('\n');
     scanned = s;
     int line = line1 + newlineCount;
@@ -821,8 +937,13 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
     }
     changedLines.insert(line);
     lastLine = line;
-    edits.append({base + s, base + int(m.capturedEnd()),
-                  countOnly ? QString() : expandReplacement(replacement, m)});
+    m_exprLine = line;
+    m_exprCol = base + s - lineStart(line);
+    const QString expanded =
+        countOnly ? QString() : expandReplacement(replacement, m);
+    m_exprLine = -1;
+    m_exprCol = -1;
+    edits.append({base + s, base + int(m.capturedEnd()), expanded});
   }
 
   if (edits.isEmpty()) {
@@ -831,7 +952,7 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
     return;
   }
   if (countOnly) {
-    setCursorPos(firstNonBlankPos(line1));
+    setCursorPos(firstNonBlankPos(lineOf(cursorPos())));
     emit statusMessage(QString("%1 match%2 on %3 line%4")
                            .arg(edits.size())
                            .arg(edits.size() == 1 ? "" : "es")

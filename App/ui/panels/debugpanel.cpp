@@ -10,6 +10,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFontDatabase>
 #include <QFrame>
 #include <QGuiApplication>
@@ -22,11 +24,13 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPalette>
+#include <QPointer>
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QSignalBlocker>
 #include <QStyle>
 #include <QStyledItemDelegate>
+#include <QTabWidget>
 #include <QTextBlock>
 #include <QTextCharFormat>
 #include <QTextCursor>
@@ -1457,6 +1461,25 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
   collapse->setEnabled(expandable && item->isExpanded());
   QAction *refresh = menu.addAction(tr("Refresh"));
 
+  const QString memoryReference = item->data(0, Qt::UserRole + 2).toString();
+  const bool canWatchData = m_dapClient &&
+                            m_dapClient->supportsDataBreakpoints() &&
+                            item->parent() != nullptr;
+  const bool canViewMemory = m_dapClient && !memoryReference.isEmpty() &&
+                             (m_dapClient->supportsReadMemoryRequest() ||
+                              m_dapClient->supportsDisassembleRequest());
+  QAction *breakOnChange = nullptr;
+  QAction *viewMemory = nullptr;
+  if (canWatchData || canViewMemory) {
+    menu.addSeparator();
+  }
+  if (canWatchData) {
+    breakOnChange = menu.addAction(tr("Break on Value Change..."));
+  }
+  if (canViewMemory) {
+    viewMemory = menu.addAction(tr("View Memory / Disassembly"));
+  }
+
   QAction *chosen = menu.exec(m_variablesTree->viewport()->mapToGlobal(pos));
   if (!chosen) {
     return;
@@ -1477,7 +1500,173 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
   } else if (chosen == refresh) {
 
     setCurrentFrame(m_currentFrameId);
+  } else if (breakOnChange && chosen == breakOnChange) {
+    requestDataBreakpointForVariable(item);
+  } else if (viewMemory && chosen == viewMemory) {
+    showMemoryViewer(memoryReference, name);
   }
+}
+
+void DebugPanel::requestDataBreakpointForVariable(QTreeWidgetItem *item) {
+  if (!m_dapClient || !item) {
+    return;
+  }
+  m_dataBreakpointRequestName = item->text(0);
+  m_dataBreakpointRequestSeq = m_dapClient->dataBreakpointInfo(
+      item->data(0, Qt::UserRole + 3).toInt(), item->text(0),
+      m_currentFrameId > 0 ? m_currentFrameId : -1);
+}
+
+void DebugPanel::requestConsoleCompletions() {
+  if (!m_dapClient || !m_consoleInput ||
+      m_dapClient->state() != DapClient::State::Stopped ||
+      !m_dapClient->supportsCompletionsRequest()) {
+    return;
+  }
+  const QString text = m_consoleInput->text();
+  const int column = m_consoleInput->cursorPosition() + 1;
+  if (!m_completionItems.isEmpty() && text == m_completionText) {
+    m_completionCycleIndex =
+        (m_completionCycleIndex + 1) % m_completionItems.size();
+    applyConsoleCompletion(m_completionItems.at(m_completionCycleIndex));
+    return;
+  }
+  m_completionText = text;
+  m_completionColumn = column;
+  m_completionItems.clear();
+  m_completionCycleIndex = -1;
+  m_completionRequestSeq = m_dapClient->completions(
+      text, column, m_currentFrameId > 0 ? m_currentFrameId : -1);
+}
+
+void DebugPanel::applyConsoleCompletion(const DapCompletionItem &item) {
+  const QString base = m_completionText;
+  const int cursorIndex = qBound(0, m_completionColumn - 1, base.size());
+  int start = item.start >= 0 ? item.start : cursorIndex;
+  int length = item.length > 0 ? item.length : cursorIndex - start;
+  if (item.start < 0) {
+    int wordStart = cursorIndex;
+    while (wordStart > 0 && (base.at(wordStart - 1).isLetterOrNumber() ||
+                             base.at(wordStart - 1) == QLatin1Char('_'))) {
+      --wordStart;
+    }
+    start = wordStart;
+    length = cursorIndex - wordStart;
+  }
+  start = qBound(0, start, base.size());
+  length = qBound(0, length, base.size() - start);
+  QString result = base;
+  result.replace(start, length, item.insertText());
+  m_consoleInput->setText(result);
+  m_consoleInput->setCursorPosition(start + item.insertText().size());
+  m_completionText = result;
+  m_completionColumn = m_consoleInput->cursorPosition() + 1;
+}
+
+void DebugPanel::showMemoryViewer(const QString &memoryReference,
+                                  const QString &title) {
+  if (!m_dapClient) {
+    return;
+  }
+  auto *dialog = new QDialog(this);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  dialog->setWindowTitle(tr("Memory: %1 (%2)").arg(title, memoryReference));
+  dialog->resize(720, 420);
+  auto *layout = new QVBoxLayout(dialog);
+  auto *tabs = new QTabWidget(dialog);
+  layout->addWidget(tabs);
+
+  QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+  auto *hexView = new QPlainTextEdit(dialog);
+  hexView->setReadOnly(true);
+  hexView->setFont(mono);
+  hexView->setLineWrapMode(QPlainTextEdit::NoWrap);
+  hexView->setPlainText(tr("Loading..."));
+  tabs->addTab(hexView, tr("Hex"));
+
+  auto *disView = new QPlainTextEdit(dialog);
+  disView->setReadOnly(true);
+  disView->setFont(mono);
+  disView->setLineWrapMode(QPlainTextEdit::NoWrap);
+  disView->setPlainText(tr("Loading..."));
+  tabs->addTab(disView, tr("Disassembly"));
+
+  auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+  connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+  layout->addWidget(buttons);
+
+  QPointer<DapClient> client = m_dapClient;
+  auto memSeq = QSharedPointer<int>::create(-1);
+  auto disSeq = QSharedPointer<int>::create(-1);
+
+  connect(client, &DapClient::memoryReceived, hexView,
+          [hexView, memSeq](int seq, const DapMemoryChunk &chunk) {
+            if (seq != *memSeq) {
+              return;
+            }
+            QStringList lines;
+            bool ok = false;
+            const qulonglong base = chunk.address.toULongLong(&ok, 0);
+            for (int i = 0; i < chunk.data.size(); i += 16) {
+              const QByteArray row = chunk.data.mid(i, 16);
+              QString hex;
+              QString ascii;
+              for (int j = 0; j < 16; ++j) {
+                if (j < row.size()) {
+                  const uchar c = static_cast<uchar>(row.at(j));
+                  hex += QStringLiteral("%1 ").arg(c, 2, 16, QLatin1Char('0'));
+                  ascii += (c >= 32 && c < 127) ? QChar(c) : QChar('.');
+                } else {
+                  hex += QStringLiteral("   ");
+                }
+              }
+              const QString addr =
+                  ok ? QStringLiteral("0x%1").arg(base + i, 8, 16,
+                                                  QLatin1Char('0'))
+                     : QStringLiteral("+%1").arg(i, 4, 16, QLatin1Char('0'));
+              lines << QStringLiteral("%1  %2 %3").arg(addr, hex, ascii);
+            }
+            if (chunk.unreadableBytes > 0) {
+              lines << QObject::tr("(%1 bytes unreadable)")
+                           .arg(chunk.unreadableBytes);
+            }
+            hexView->setPlainText(lines.join(QLatin1Char('\n')));
+          });
+  connect(client, &DapClient::memoryFailed, hexView,
+          [hexView, memSeq](int seq, const QString &message) {
+            if (seq == *memSeq) {
+              hexView->setPlainText(message);
+            }
+          });
+  connect(client, &DapClient::disassemblyReceived, disView,
+          [disView, disSeq](int seq,
+                            const QList<DapDisassembledInstruction> &items) {
+            if (seq != *disSeq) {
+              return;
+            }
+            QStringList lines;
+            for (const DapDisassembledInstruction &ins : items) {
+              QString line = QStringLiteral("%1  %2  %3")
+                                 .arg(ins.address, -14)
+                                 .arg(ins.instructionBytes, -24)
+                                 .arg(ins.instruction);
+              if (!ins.symbol.isEmpty()) {
+                line += QStringLiteral("   ; <%1>").arg(ins.symbol);
+              }
+              lines << line;
+            }
+            disView->setPlainText(lines.join(QLatin1Char('\n')));
+          });
+  connect(client, &DapClient::disassemblyFailed, disView,
+          [disView, disSeq](int seq, const QString &message) {
+            if (seq == *disSeq) {
+              disView->setPlainText(message);
+            }
+          });
+
+  *memSeq = client->readMemory(memoryReference, 256);
+  *disSeq = client->disassemble(memoryReference, 64, -8);
+  dialog->show();
 }
 
 void DebugPanel::showConsoleContextMenu(const QPoint &pos) {
@@ -1722,6 +1911,81 @@ void DebugPanel::setDapClient(DapClient *client) {
             &DebugPanel::onEvaluateError);
     connect(m_dapClient, &DapClient::exceptionInfoReceived, this,
             &DebugPanel::onExceptionInfoReceived);
+    connect(m_dapClient, &DapClient::completionsReceived, this,
+            [this](int seq, const QList<DapCompletionItem> &items) {
+              if (seq != m_completionRequestSeq || items.isEmpty()) {
+                return;
+              }
+              if (m_consoleInput->text() != m_completionText) {
+                return;
+              }
+              m_completionItems = items;
+              if (items.size() == 1) {
+                m_completionCycleIndex = 0;
+                applyConsoleCompletion(items.first());
+                m_completionItems.clear();
+                return;
+              }
+              QStringList labels;
+              for (const DapCompletionItem &item : items) {
+                labels << item.label;
+                if (labels.size() >= 30) {
+                  break;
+                }
+              }
+              appendConsoleLine(labels.join(QStringLiteral("  ")),
+                                consoleMutedColor());
+              m_completionCycleIndex = 0;
+              applyConsoleCompletion(items.first());
+            });
+    connect(m_dapClient, &DapClient::dataBreakpointInfoReceived, this,
+            [this](int seq, const DapDataBreakpointInfo &info) {
+              if (seq != m_dataBreakpointRequestSeq) {
+                return;
+              }
+              if (!info.isValid()) {
+                appendConsoleLine(tr("Cannot break on '%1': %2")
+                                      .arg(m_dataBreakpointRequestName,
+                                           info.description.isEmpty()
+                                               ? tr("not watchable")
+                                               : info.description),
+                                  consoleErrorColor());
+                return;
+              }
+              QString accessType = QStringLiteral("write");
+              if (info.accessTypes.size() > 1) {
+                bool ok = false;
+                accessType = QInputDialog::getItem(
+                    this, tr("Data Breakpoint"), tr("Break when value is:"),
+                    info.accessTypes,
+                    info.accessTypes.indexOf("write") >= 0
+                        ? info.accessTypes.indexOf("write")
+                        : 0,
+                    false, &ok);
+                if (!ok) {
+                  return;
+                }
+              } else if (info.accessTypes.size() == 1) {
+                accessType = info.accessTypes.first();
+              }
+              BreakpointManager::instance().addDataBreakpoint(
+                  info.dataId, accessType,
+                  info.description.isEmpty() ? m_dataBreakpointRequestName
+                                             : info.description);
+            });
+    connect(m_dapClient, &DapClient::dataBreakpointInfoFailed, this,
+            [this](int seq, const QString &message) {
+              if (seq == m_dataBreakpointRequestSeq) {
+                appendConsoleLine(tr("Data breakpoint failed: %1").arg(message),
+                                  consoleErrorColor());
+              }
+            });
+    connect(m_dapClient, &DapClient::requestTimedOut, this,
+            [this](const QString &command) {
+              appendConsoleLine(
+                  tr("Debug adapter did not answer '%1' in time.").arg(command),
+                  consoleErrorColor());
+            });
     connect(m_dapClient, &DapClient::exited, this, [this](int exitCode) {
       appendConsoleLine(tr("Program exited with code %1.").arg(exitCode),
                         consoleMutedColor());
@@ -1763,6 +2027,7 @@ void DebugPanel::clearAll() {
 }
 
 void DebugPanel::clearSessionState() {
+  clearInlineValues();
   m_callStackTree->clear();
   m_variablesTree->clear();
   m_variableRefToItem.clear();
@@ -1792,7 +2057,28 @@ void DebugPanel::clearSessionState() {
   updateSectionSummaries();
 }
 
+void DebugPanel::clearInlineValues() {
+  if (m_inlineValues.isEmpty()) {
+    return;
+  }
+  m_inlineValues.clear();
+  emit inlineValuesChanged(QString(), 0, {});
+}
+
+void DebugPanel::publishInlineValues() {
+  for (const DapStackFrame &frame : std::as_const(m_stackFrames)) {
+    if (frame.id == m_currentFrameId && !frame.source.path.isEmpty() &&
+        frame.line > 0) {
+      emit inlineValuesChanged(frame.source.path, frame.line, m_inlineValues);
+      return;
+    }
+  }
+}
+
 void DebugPanel::setCurrentFrame(int frameId) {
+  if (frameId != m_currentFrameId) {
+    clearInlineValues();
+  }
   m_currentFrameId = frameId;
 
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
@@ -1816,6 +2102,7 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
     return;
   }
 
+  clearInlineValues();
   m_expectStopEvent = false;
   m_hasLastStopEvent = true;
   m_lastStoppedThreadId = eventThreadId;
@@ -1893,6 +2180,7 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
 }
 
 void DebugPanel::onContinued() {
+  clearInlineValues();
   m_stepInProgress = false;
   m_expectStopEvent = true;
   m_hasLastStopEvent = false;
@@ -2224,6 +2512,8 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     item->setText(2, var.type);
     item->setData(0, Qt::UserRole, var.variablesReference);
     item->setData(0, Qt::UserRole + 1, var.evaluateName);
+    item->setData(0, Qt::UserRole + 2, var.memoryReference);
+    item->setData(0, Qt::UserRole + 3, variablesReference);
     item->setIcon(0, variableIcon(var));
 
     QString path = var.name;
@@ -2257,6 +2547,21 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     }
 
     parentItem->addChild(item);
+  }
+
+  if (!parentItem->parent()) {
+    const QString scopeName = parentItem->text(0).trimmed().toLower();
+    if (!scopeName.contains(QLatin1String("global")) &&
+        !scopeName.contains(QLatin1String("register")) &&
+        !scopeName.contains(QLatin1String("static"))) {
+      for (const DapVariable &var : variables) {
+        if (!var.name.isEmpty() && !var.value.isEmpty() &&
+            !var.name.startsWith(QLatin1Char('['))) {
+          m_inlineValues.insert(var.name, var.value);
+        }
+      }
+      publishInlineValues();
+    }
   }
 
   requestAggregatePreviews(variables, parentItem);
@@ -2558,6 +2863,15 @@ void DebugPanel::onBreakpointItemChanged(QTreeWidgetItem *item, int column) {
     return;
   }
 
+  if (kind == QLatin1String("data")) {
+    const int dataId = item->data(0, Qt::UserRole + 2).toInt();
+    if (dataId > 0) {
+      BreakpointManager::instance().setDataBreakpointEnabled(
+          dataId, item->checkState(0) == Qt::Checked);
+    }
+    return;
+  }
+
   if (kind == QLatin1String("exception")) {
     const QString filterId = item->data(0, Qt::UserRole + 5).toString();
     if (filterId.isEmpty()) {
@@ -2634,6 +2948,15 @@ void DebugPanel::onBreakpointsContextMenuRequested(const QPoint &pos) {
             breakpointId, !breakpoint.enabled);
       } else if (chosen == removeAction) {
         BreakpointManager::instance().removeFunctionBreakpoint(breakpointId);
+      }
+      return;
+    }
+
+    if (kind == QLatin1String("data")) {
+      QAction *removeAction = menu.addAction(tr("Remove Data Breakpoint"));
+      QAction *chosen = menu.exec(m_breakpointsTree->mapToGlobal(pos));
+      if (chosen == removeAction) {
+        BreakpointManager::instance().removeDataBreakpoint(breakpointId);
       }
       return;
     }
@@ -2964,6 +3287,23 @@ void DebugPanel::refreshBreakpointList() {
     item->setData(0, Qt::UserRole + 2, bp.id);
     item->setData(0, Qt::UserRole + 4, QStringLiteral("function"));
     item->setIcon(0, style()->standardIcon(QStyle::SP_CommandLink));
+    m_breakpointsTree->addTopLevelItem(item);
+  }
+
+  const QList<DataBreakpoint> dataBreakpoints =
+      BreakpointManager::instance().allDataBreakpoints();
+  for (const DataBreakpoint &bp : dataBreakpoints) {
+    QTreeWidgetItem *item = new QTreeWidgetItem();
+    item->setFlags(item->flags() | Qt::ItemIsUserCheckable |
+                   Qt::ItemIsSelectable | Qt::ItemIsEnabled);
+    item->setCheckState(0, bp.enabled ? Qt::Checked : Qt::Unchecked);
+    item->setText(
+        1, QString("\u25C6 %1")
+               .arg(bp.description.isEmpty() ? bp.dataId : bp.description));
+    item->setText(2, tr("data (%1)").arg(bp.accessType));
+    item->setData(0, Qt::UserRole + 2, bp.id);
+    item->setData(0, Qt::UserRole + 4, QStringLiteral("data"));
+    item->setIcon(0, style()->standardIcon(QStyle::SP_DialogApplyButton));
     m_breakpointsTree->addTopLevelItem(item);
   }
 
@@ -3611,6 +3951,12 @@ bool DebugPanel::eventFilter(QObject *watched, QEvent *event) {
     }
     if (keyEvent->key() == Qt::Key_Down) {
       recallConsoleHistory(1);
+      return true;
+    }
+    if (keyEvent->key() == Qt::Key_Tab &&
+        keyEvent->modifiers() == Qt::NoModifier && m_dapClient &&
+        m_dapClient->supportsCompletionsRequest()) {
+      requestConsoleCompletions();
       return true;
     }
   }

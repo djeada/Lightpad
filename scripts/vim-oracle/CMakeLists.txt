@@ -14,6 +14,8 @@ add_executable(driver
     ${APP_DIR}/editor/vimmode_edit.cpp
     ${APP_DIR}/editor/vimmode_search.cpp
     ${APP_DIR}/editor/vimmode_ex.cpp
+    ${APP_DIR}/editor/vimmode_expr.cpp
+    ${APP_DIR}/editor/vimmode_exextra.cpp
     ${APP_DIR}/core/logging/logger.cpp
 )
 target_include_directories(driver PRIVATE ${APP_DIR})

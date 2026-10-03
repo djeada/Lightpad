@@ -81,6 +81,11 @@ set(project_headers
     database/resultexporter.h
     database/columnprofiler.h
     database/databasemanager.h
+    database/sqlparams.h
+    database/sqllint.h
+    database/schemadiff.h
+    database/csvimport.h
+    database/resultedit.h
     dap/dapclient.h
     dap/expressiontranslator.h
     dap/idebugadapter.h
@@ -101,6 +106,7 @@ set(project_headers
     git/gitcomparison.h
     git/gitcommittypes.h
     git/gitsyncmodel.h
+    git/gitsubmodulemodel.h
     git/commitplan.h
     git/gitfiletimeline.h
     git/gitoperationpreview.h
@@ -142,6 +148,7 @@ set(project_headers
     ui/dialogs/gitdiffdialog.h
     ui/dialogs/mergestartdialog.h
     ui/dialogs/gitremotedialog.h
+    ui/dialogs/gitrepotoolsdialog.h
     ui/dialogs/gitstashdialog.h
     ui/dialogs/gitlogdialog.h
     ui/dialogs/gitfilehistorydialog.h
@@ -331,6 +338,11 @@ set(project_sources
     database/resultexporter.cpp
     database/columnprofiler.cpp
     database/databasemanager.cpp
+    database/sqlparams.cpp
+    database/sqllint.cpp
+    database/schemadiff.cpp
+    database/csvimport.cpp
+    database/resultedit.cpp
     dap/dapclient.cpp
     dap/expressiontranslator.cpp
     dap/debugadapterregistry.cpp
@@ -352,6 +364,7 @@ set(project_sources
     git/gitdiffmodel.cpp
     git/gitcomparison.cpp
     git/gitsyncmodel.cpp
+    git/gitsubmodulemodel.cpp
     git/commitplan.cpp
     git/gitfiletimeline.cpp
     git/gitoperationpreview.cpp
@@ -392,6 +405,7 @@ set(project_sources
     ui/dialogs/gitdiffdialog.cpp
     ui/dialogs/mergestartdialog.cpp
     ui/dialogs/gitremotedialog.cpp
+    ui/dialogs/gitrepotoolsdialog.cpp
     ui/dialogs/gitstashdialog.cpp
     ui/dialogs/gitlogdialog.cpp
     ui/dialogs/gitfilehistorydialog.cpp
@@ -464,6 +478,8 @@ set(project_sources
     editor/vimmode_edit.cpp
     editor/vimmode_search.cpp
     editor/vimmode_ex.cpp
+    editor/vimmode_expr.cpp
+    editor/vimmode_exextra.cpp
     i18n/i18n.cpp
     python/pythonprojectenvironment.cpp
     lsp/lspclient.cpp

@@ -191,6 +191,7 @@ private:
   QLabel *m_conflictFilesHeaderLabel;
   QPushButton *m_compareBranchesBtn;
   QPushButton *m_worktreeBtn;
+  QPushButton *m_repoToolsBtn = nullptr;
   QPushButton *m_discardAllBtn;
   QPushButton *m_stagingCanvasBtn;
   QPushButton *m_syncRadarBtn;

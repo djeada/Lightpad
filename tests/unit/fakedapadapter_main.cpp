@@ -13,6 +13,7 @@
 #include <QTcpSocket>
 
 #include <cstdio>
+#include <cstdlib>
 
 #ifdef Q_OS_WIN
 #include <fcntl.h>
@@ -103,6 +104,10 @@ QJsonObject g_caps = []() {
 int g_nextSeq = 1;
 bool g_stopOnLaunch = false;
 bool g_hugeVariables = false;
+QString g_stopReason = QStringLiteral("breakpoint");
+QStringList g_hangOn;
+QStringList g_crashOn;
+QString g_runInTerminalKind;
 
 void trace(const QJsonObject &message) {
   if (!g_traceFile) {
@@ -160,14 +165,36 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
   const int seq = request.value("seq").toInt();
   const QString command = request.value("command").toString();
 
+  if (g_crashOn.contains(command)) {
+    std::fflush(stdout);
+    std::_Exit(7);
+  }
+  if (g_hangOn.contains(command)) {
+    return;
+  }
+
   if (command == "initialize") {
     sendResponse(channel, seq, command, true, g_caps);
     sendEvent(channel, "initialized");
   } else if (command == "launch" || command == "attach") {
     sendResponse(channel, seq, command, true);
+    if (!g_runInTerminalKind.isEmpty() && command == "launch") {
+      QJsonObject rit;
+      rit["seq"] = g_nextSeq++;
+      rit["type"] = "request";
+      rit["command"] = QStringLiteral("runInTerminal");
+      QJsonObject ritArgs;
+      ritArgs["kind"] = g_runInTerminalKind;
+      ritArgs["title"] = QStringLiteral("Fake Debuggee");
+      ritArgs["cwd"] = QStringLiteral("/tmp");
+      ritArgs["args"] =
+          QJsonArray{QStringLiteral("echo"), QStringLiteral("hello")};
+      rit["arguments"] = ritArgs;
+      sendMessage(channel, rit);
+    }
     if (g_stopOnLaunch && command == "launch") {
       QJsonObject stoppedBody;
-      stoppedBody["reason"] = "breakpoint";
+      stoppedBody["reason"] = g_stopReason;
       stoppedBody["threadId"] = 1;
       stoppedBody["allThreadsStopped"] = true;
       sendEvent(channel, "stopped", stoppedBody);
@@ -217,6 +244,7 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
     first["name"] = QStringLiteral("x");
     first["value"] = QStringLiteral("41");
     first["type"] = QStringLiteral("int");
+    first["memoryReference"] = QStringLiteral("0x1000");
     QJsonObject second;
     second["name"] = QStringLiteral("\u6f22\u5b57_\u00e9\u00e8");
     second["value"] = QStringLiteral("v\u00e0lue \U0001F680");
@@ -248,6 +276,76 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
     body["description"] = QStringLiteral("Unhandled exception");
     body["breakMode"] = QStringLiteral("unhandled");
     body["details"] = details;
+    sendResponse(channel, seq, command, true, body);
+  } else if (command == "completions") {
+    const QString text =
+        request.value("arguments").toObject().value("text").toString();
+    QJsonArray targets;
+    for (const QString &name : {QStringLiteral("foo"), QStringLiteral("foobar"),
+                                QStringLiteral("other")}) {
+      if (text.isEmpty() || name.startsWith(text)) {
+        QJsonObject item;
+        item["label"] = name;
+        item["type"] = QStringLiteral("variable");
+        item["start"] = 0;
+        item["length"] = text.size();
+        targets.append(item);
+      }
+    }
+    QJsonObject body;
+    body["targets"] = targets;
+    sendResponse(channel, seq, command, true, body);
+  } else if (command == "dataBreakpointInfo") {
+    const QString name =
+        request.value("arguments").toObject().value("name").toString();
+    QJsonObject body;
+    if (name == QLatin1String("unwatchable")) {
+      body["dataId"] = QJsonValue(QJsonValue::Null);
+      body["description"] = QStringLiteral("cannot watch");
+    } else {
+      body["dataId"] = QStringLiteral("addr:") + name;
+      body["description"] = name;
+      body["accessTypes"] =
+          QJsonArray{QStringLiteral("read"), QStringLiteral("write"),
+                     QStringLiteral("readWrite")};
+      body["canPersist"] = false;
+    }
+    sendResponse(channel, seq, command, true, body);
+  } else if (command == "setDataBreakpoints") {
+    const QJsonArray in =
+        request.value("arguments").toObject().value("breakpoints").toArray();
+    QJsonArray out;
+    for (int i = 0; i < in.size(); ++i) {
+      QJsonObject bp;
+      bp["verified"] = true;
+      out.append(bp);
+    }
+    QJsonObject body;
+    body["breakpoints"] = out;
+    sendResponse(channel, seq, command, true, body);
+  } else if (command == "readMemory") {
+    const int count =
+        request.value("arguments").toObject().value("count").toInt();
+    QByteArray bytes;
+    for (int i = 0; i < count; ++i) {
+      bytes.append(static_cast<char>(i & 0xff));
+    }
+    QJsonObject body;
+    body["address"] = QStringLiteral("0x1000");
+    body["data"] = QString::fromLatin1(bytes.toBase64());
+    sendResponse(channel, seq, command, true, body);
+  } else if (command == "disassemble") {
+    QJsonArray instructions;
+    for (int i = 0; i < 3; ++i) {
+      QJsonObject ins;
+      ins["address"] = QStringLiteral("0x%1").arg(0x1000 + i * 4, 0, 16);
+      ins["instructionBytes"] = QStringLiteral("90 90");
+      ins["instruction"] =
+          i == 2 ? QStringLiteral("ret") : QStringLiteral("nop");
+      instructions.append(ins);
+    }
+    QJsonObject body;
+    body["instructions"] = instructions;
     sendResponse(channel, seq, command, true, body);
   } else if (command == "continue") {
     QJsonObject body;
@@ -322,6 +420,9 @@ int runSession(Channel *channel) {
 
     const QJsonObject message = doc.object();
     const QString type = message.value("type").toString();
+    if (type == "response") {
+      trace(message);
+    }
     if (type == "request") {
       handleRequest(channel, message);
       if (message.value("command").toString() == "disconnect" ||
@@ -348,6 +449,14 @@ int main(int argc, char **argv) {
       g_caps = QJsonDocument::fromJson(args[++i].toUtf8()).object();
     } else if (args[i] == "--stop-on-launch") {
       g_stopOnLaunch = true;
+    } else if (args[i] == "--stop-reason" && i + 1 < args.size()) {
+      g_stopReason = args[++i];
+    } else if (args[i] == "--hang-on" && i + 1 < args.size()) {
+      g_hangOn.append(args[++i]);
+    } else if (args[i] == "--crash-on" && i + 1 < args.size()) {
+      g_crashOn.append(args[++i]);
+    } else if (args[i] == "--run-in-terminal" && i + 1 < args.size()) {
+      g_runInTerminalKind = args[++i];
     } else if (args[i] == "--huge-variables") {
       g_hugeVariables = true;
     } else if (args[i] == "--listen-any") {

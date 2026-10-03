@@ -181,6 +181,8 @@ add_executable(test_vimmode
     ${CMAKE_SOURCE_DIR}/App/editor/vimmode_edit.cpp
     ${CMAKE_SOURCE_DIR}/App/editor/vimmode_search.cpp
     ${CMAKE_SOURCE_DIR}/App/editor/vimmode_ex.cpp
+    ${CMAKE_SOURCE_DIR}/App/editor/vimmode_expr.cpp
+    ${CMAKE_SOURCE_DIR}/App/editor/vimmode_exextra.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -799,6 +801,7 @@ add_executable(test_gitintegration
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -819,6 +822,31 @@ target_compile_definitions(test_gitintegration PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GitIntegrationTests COMMAND test_gitintegration)
 
+# Git repository tools (remotes, sequencer, fixup, clean, submodules)
+add_executable(test_gitrepotools
+    unit/test_gitrepotools.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+target_include_directories(test_gitrepotools PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/App/git
+)
+target_link_libraries(test_gitrepotools PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+target_compile_definitions(test_gitrepotools PRIVATE QT_DEPRECATED_WARNINGS)
+add_test(NAME GitRepoToolsTests COMMAND test_gitrepotools)
+
 # GitRepositoryState test executable
 add_executable(test_gitrepositorystate
     unit/test_gitrepositorystate.cpp
@@ -833,6 +861,7 @@ add_executable(test_gitrepositorystate
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -894,6 +923,7 @@ add_executable(test_gitdiffmodel
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -928,6 +958,7 @@ add_executable(test_gitfilesystemmodel
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/filetree/gitfilesystemmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -968,6 +999,7 @@ add_executable(test_gitworkbenchdialog
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1010,6 +1042,7 @@ add_executable(test_stagingcanvasdialog
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1050,6 +1083,7 @@ add_executable(test_gitgraphwidget
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1094,6 +1128,7 @@ add_executable(test_gitlogdialog
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1132,6 +1167,7 @@ add_executable(test_gitcomparison
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 
@@ -1169,6 +1205,7 @@ add_executable(test_compareanythingdialog
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1205,6 +1242,7 @@ add_executable(test_gitsyncmodel
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1244,6 +1282,7 @@ add_executable(test_branchsyncradardialog
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
@@ -1307,6 +1346,7 @@ add_executable(test_commitcraftingdialog
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/commitplan.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
@@ -1345,6 +1385,7 @@ add_executable(test_gitfiletimeline
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1378,6 +1419,7 @@ add_executable(test_gitoperationpreview
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1412,6 +1454,7 @@ add_executable(test_gitintegrationadvice
     ${CMAKE_SOURCE_DIR}/App/git/gitintegrationadvice.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1446,6 +1489,7 @@ add_executable(test_gitundoplan
     ${CMAKE_SOURCE_DIR}/App/git/gitundoplan.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1480,6 +1524,7 @@ add_executable(test_gittimetravel
     ${CMAKE_SOURCE_DIR}/App/git/gittimetravel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1513,6 +1558,7 @@ add_executable(test_gitrebaseplan
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1546,6 +1592,7 @@ add_executable(test_gitconflictmodel
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1626,6 +1673,7 @@ add_executable(test_gitmergeplan
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1666,6 +1714,7 @@ add_executable(test_mergestartdialog
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1709,6 +1758,7 @@ add_executable(test_conflictresolverview
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1754,6 +1804,7 @@ add_executable(test_conflictcenterpanel
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1791,6 +1842,7 @@ add_executable(test_gitrecovery
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1826,6 +1878,7 @@ add_executable(test_gitstashshelf
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1861,6 +1914,7 @@ add_executable(test_gitcommandlog
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1897,6 +1951,7 @@ add_executable(test_gitbranchhygiene
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1934,6 +1989,7 @@ add_executable(test_gitworktreemap
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -1972,6 +2028,7 @@ add_executable(test_gitbisect
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -2011,6 +2068,7 @@ add_executable(test_gitprovenance
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -2051,6 +2109,7 @@ add_executable(test_gitsandbox
     ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
@@ -2988,9 +3047,14 @@ set(DATABASE_CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/App/database/resultexporter.cpp
     ${CMAKE_SOURCE_DIR}/App/database/columnprofiler.cpp
     ${CMAKE_SOURCE_DIR}/App/database/databasemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/sqlparams.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/sqllint.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/schemadiff.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/csvimport.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/resultedit.cpp
 )
 
-foreach(db_test test_sqlstatementsplitter test_databasecore test_databaselive)
+foreach(db_test test_sqlstatementsplitter test_databasecore test_databaselive test_databasetools)
     add_executable(${db_test}
         unit/${db_test}.cpp
         ${DATABASE_CORE_SOURCES}
@@ -3009,6 +3073,7 @@ endforeach()
 
 add_test(NAME SqlStatementSplitterTests COMMAND test_sqlstatementsplitter)
 add_test(NAME DatabaseCoreTests COMMAND test_databasecore)
+add_test(NAME DatabaseToolsTests COMMAND test_databasetools)
 add_test(NAME DatabaseLiveTests COMMAND test_databaselive)
 set_tests_properties(DatabaseLiveTests PROPERTIES TIMEOUT 120)
 
@@ -3141,7 +3206,7 @@ set(TEST_TARGETS
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap test_dap_integration test_cmakeproject
-    test_runtargetresolver test_filedirtreemodel test_compilerdiagnosticparser
+    test_gitrepotools test_runtargetresolver test_filedirtreemodel test_compilerdiagnosticparser
     test_dockerfilesyntaxplugin
     test_sqlstatementsplitter test_databasecore test_databaselive test_databasepanel
     test_pluginbasedsyntaxhighlighter

@@ -248,7 +248,7 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
     int target = r.pos;
     m_visualPos = target;
     if (m_mode == VimEditMode::VisualBlock)
-      m_visualToEol = r.wantEol;
+      m_visualToEol = r.wantEol || (r.keepWantCol && m_visualToEol);
     if (!r.keepWantCol) {
       int line = lineOf(target);
       m_wantCol = vcolOf(lineText(line), target - lineStart(line));
@@ -282,7 +282,7 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
     }
     return;
   }
-  if (key == ":") {
+  if (key == ":" || key == "!") {
     const int startPos =
         m_mode == VimEditMode::VisualLine
             ? lineStart(lineOf(qMin(m_visualAnchor, m_visualPos)))
@@ -290,7 +290,7 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
     exitVisual();
     setCursorPos(clampNormal(startPos));
     m_cmdFromVisual = false;
-    enterCommandLine(':', "'<,'>");
+    enterCommandLine(':', key == "!" ? QString("'<,'>!") : QString("'<,'>"));
     return;
   }
   if (key == "gv") {
@@ -355,12 +355,12 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
   } else if (key == "y" || key == "Y") {
     if (key == "Y" && mode != VimEditMode::VisualBlock)
       range = lineRange(range.startLine, range.endLine);
-    if (key == "Y" && mode == VimEditMode::VisualBlock)
-      range.toEol = true;
     exitVisual(false);
     applyOperator("y", range, reg, count, true);
   } else if (key == "c" || key == "s" || key == "C" || key == "S" ||
              key == "R") {
+    if (mode == VimEditMode::VisualBlock && (key == "S" || key == "R"))
+      mode = VimEditMode::VisualLine;
     if (mode == VimEditMode::VisualBlock) {
       if (key == "C")
         range.toEol = true;
@@ -488,9 +488,12 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
         ++step;
     }
     block.endEditBlock();
-    setCursorPos(clampNormal(range.type == VimRegisterType::Linewise
-                                 ? lineStart(range.startLine)
-                                 : range.start));
+    setCursorPos(clampNormal(
+        range.type == VimRegisterType::Linewise ? lineStart(range.startLine)
+        : range.type == VimRegisterType::Blockwise
+            ? lineStart(range.startLine) +
+                  colForVcol(lineText(range.startLine), range.startVcol)
+            : range.start));
     finishChange();
   } else if (key == "zf") {
     exitVisual();
@@ -657,8 +660,17 @@ void VimMode::insertTextAtCursor(const QString &text) {
 
 bool VimMode::handleInsertKey(const QString &token, QKeyEvent *event) {
   if (m_insertRegisterPending) {
+    if (token == "<C-r>" || token == "<C-o>" || token == "<C-p>")
+      return true;
     m_insertRegisterPending = false;
     updatePendingKeys();
+    if (token == "=") {
+      m_insertKeys << token;
+      if (m_dotRecordingActive)
+        m_dotRecording << token;
+      enterCommandLine('=', QString());
+      return true;
+    }
     if (token.size() == 1 && isValidRegister(token[0])) {
       m_insertKeys << token;
       if (m_dotRecordingActive)
@@ -835,6 +847,8 @@ bool VimMode::handleInsertKey(const QString &token, QKeyEvent *event) {
     return true;
   }
 
+  if (token.size() == 1 && m_textWidth > 0 && !token[0].isSpace())
+    autoWrapForInsert(token[0]);
   dispatchToEditor(token, event);
   return true;
 }
@@ -914,7 +928,7 @@ void VimMode::finishInsertSession() {
       QTextCursor restore = m_editor->textCursor();
       restore.setPosition(lineStart(first) +
                           colForVcol(lineText(first), m_blockInsertStartVcol) +
-                          1);
+                          (m_insertKind == "c" ? grown : 1));
       m_editor->setTextCursor(restore);
     }
   }
@@ -935,8 +949,14 @@ void VimMode::finishInsertSession() {
 
   int pos = m_editor->textCursor().position();
   setMark('^', pos);
+  const bool typed =
+      !m_insertKeys.isEmpty() && pos > m_insertStartPos && !m_blockInsertActive;
+  if (typed) {
+    setMark('[', m_insertStartPos);
+    setMark(']', pos);
+  }
   if (doc()->revision() != 0)
-    recordChangePosition(qMax(0, pos - 1));
+    recordChangePosition(typed ? m_insertStartPos : qMax(0, pos - 1));
 
   if (m_dotRecordingActive) {
     m_dotRecording << "<Esc>";

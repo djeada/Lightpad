@@ -27,11 +27,13 @@
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QSizePolicy>
 #include <QStackedWidget>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QStringListModel>
 #include <QTabBar>
@@ -162,6 +164,45 @@ QString statusBarTextButtonStyle() {
 }
 
 constexpr auto kCompoundDebugTargetPrefix = "compound:";
+
+struct ExternalTerminalLaunch {
+  QString program;
+  QStringList arguments;
+};
+
+ExternalTerminalLaunch buildExternalTerminalLaunch(const QStringList &command) {
+#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
+  struct Candidate {
+    const char *program;
+    const char *separator;
+  };
+  static const Candidate candidates[] = {{"x-terminal-emulator", "-e"},
+                                         {"gnome-terminal", "--"},
+                                         {"konsole", "-e"},
+                                         {"xfce4-terminal", "-x"},
+                                         {"kitty", ""},
+                                         {"alacritty", "-e"},
+                                         {"xterm", "-e"}};
+  for (const Candidate &candidate : candidates) {
+    const QString resolved = QStandardPaths::findExecutable(candidate.program);
+    if (resolved.isEmpty()) {
+      continue;
+    }
+    ExternalTerminalLaunch launch;
+    launch.program = resolved;
+    if (qstrlen(candidate.separator) > 0) {
+      launch.arguments << QString::fromLatin1(candidate.separator);
+    }
+    launch.arguments << command;
+    return launch;
+  }
+#elif defined(Q_OS_MACOS)
+  Q_UNUSED(command);
+#else
+  Q_UNUSED(command);
+#endif
+  return {};
+}
 
 constexpr auto kBuildDiagnosticsSource = "build";
 constexpr auto kCurrentFileLspErrorNotificationKey = "current-file-lsp-error";
@@ -4338,6 +4379,24 @@ void MainWindow::ensureDebugPanel() {
               textArea->setFocus();
             }
           });
+  connect(debugPanel, &DebugPanel::inlineValuesChanged, this,
+          [this](const QString &filePath, int line,
+                 const QHash<QString, QString> &values) {
+            if (values.isEmpty() || filePath.isEmpty()) {
+              updateAllTextAreas(&TextArea::clearDebugInlineValues);
+              return;
+            }
+            const QString canonical =
+                QFileInfo(filePath).canonicalFilePath().isEmpty()
+                    ? filePath
+                    : QFileInfo(filePath).canonicalFilePath();
+            for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+              const auto textAreas = tabWidget->findChildren<TextArea *>();
+              for (TextArea *area : textAreas) {
+                area->setDebugInlineValues(canonical, line, values);
+              }
+            }
+          });
   connect(debugPanel, &DebugPanel::startDebugRequested, this,
           &MainWindow::startDebuggingForCurrentFile);
   connect(debugPanel, &DebugPanel::restartDebugRequested, this, [this]() {
@@ -6402,7 +6461,6 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
           int requestSeq, const QString &kind, const QString &title,
           const QStringList &commandLine, const QString &cwd,
           const QMap<QString, QString> &env) {
-        Q_UNUSED(kind);
         Q_UNUSED(title);
 
         if (!client || commandLine.isEmpty()) {
@@ -6411,6 +6469,39 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
                                            tr("Invalid terminal command"));
           }
           return;
+        }
+
+        if (kind == QLatin1String("external")) {
+          const ExternalTerminalLaunch launch =
+              buildExternalTerminalLaunch(commandLine);
+          if (!launch.program.isEmpty()) {
+            QProcess external;
+            external.setProgram(launch.program);
+            external.setArguments(launch.arguments);
+            const QString externalCwd =
+                cwd.isEmpty()
+                    ? (m_projectRootPath.isEmpty() ? QDir::currentPath()
+                                                   : m_projectRootPath)
+                    : cwd;
+            external.setWorkingDirectory(externalCwd);
+            QProcessEnvironment processEnv =
+                QProcessEnvironment::systemEnvironment();
+            for (auto it = env.constBegin(); it != env.constEnd(); ++it) {
+              processEnv.insert(it.key(), it.value());
+            }
+            external.setProcessEnvironment(processEnv);
+            qint64 externalPid = 0;
+            if (external.startDetached(&externalPid)) {
+              client->respondToRunInTerminal(requestSeq, true, externalPid);
+              return;
+            }
+            LOG_WARNING(QString("Failed to start external terminal %1; "
+                                "falling back to integrated terminal")
+                            .arg(launch.program));
+          } else {
+            LOG_WARNING("No external terminal emulator found; falling back to "
+                        "the integrated terminal");
+          }
         }
 
         TerminalTabWidget *tabs = ensureTerminalWidget();
@@ -6491,6 +6582,7 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
 void MainWindow::clearDebugSession() {
   m_activeDebugSessionId.clear();
   BreakpointManager::instance().resetVerification();
+  BreakpointManager::instance().clearDataBreakpoints();
   if (debugPanel) {
     debugPanel->setDapClient(nullptr);
   }

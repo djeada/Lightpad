@@ -22,6 +22,10 @@
 #include "ui/dialogs/debugconfigurationdialog.h"
 
 Q_DECLARE_METATYPE(DapExceptionInfo)
+Q_DECLARE_METATYPE(DapDataBreakpointInfo)
+Q_DECLARE_METATYPE(DapMemoryChunk)
+Q_DECLARE_METATYPE(QList<DapCompletionItem>)
+Q_DECLARE_METATYPE(QList<DapDisassembledInstruction>)
 Q_DECLARE_METATYPE(QList<DapVariable>)
 
 class TestDap : public QObject {
@@ -115,6 +119,13 @@ private slots:
   void testDapClientDropsResponsesCancelledByResume();
   void testDapClientRestartWrapsLaunchArguments();
   void testDapClientServerTransport();
+  void testDapClientCompletionsRoundTrip();
+  void testDapClientDataBreakpointInfoRoundTrip();
+  void testDapClientMemoryAndDisassembly();
+  void testDapClientUnsupportedInspectionRequestsFailFast();
+  void testDapClientRequestTimeout();
+  void testDapClientAdapterCrashTerminatesSession();
+  void testDapClientForwardsRunInTerminalKind();
   void testDapClientServerTransportReportsEarlyExit();
   void testBreakpointVerificationPairsByIndex();
   void testPreferredAdapterPrefersLanguageSpecific();
@@ -137,6 +148,11 @@ private:
 
 void TestDap::initTestCase() {
   qRegisterMetaType<DapExceptionInfo>("DapExceptionInfo");
+  qRegisterMetaType<DapDataBreakpointInfo>("DapDataBreakpointInfo");
+  qRegisterMetaType<DapMemoryChunk>("DapMemoryChunk");
+  qRegisterMetaType<QList<DapCompletionItem>>("QList<DapCompletionItem>");
+  qRegisterMetaType<QList<DapDisassembledInstruction>>(
+      "QList<DapDisassembledInstruction>");
   qRegisterMetaType<QList<DapVariable>>("QList<DapVariable>");
   cleanupBreakpoints();
 }
@@ -2257,6 +2273,167 @@ void TestDap::testDebugConfigurationDialogDebouncesStatusProbe() {
   }
 
   manager.replaceConfigurations(original);
+}
+
+void TestDap::testDapClientCompletionsRoundTrip() {
+  DapClient client;
+  QSignalSpy spy(&client, &DapClient::completionsReceived);
+  client.start(fakeAdapterPath(),
+               {"--caps", R"({"supportsCompletionsRequest":true})"});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  QVERIFY(client.supportsCompletionsRequest());
+
+  const int seq = client.completions("foo", 4, 100);
+  QTRY_COMPARE_WITH_TIMEOUT(spy.count(), 1, 5000);
+  QCOMPARE(spy.at(0).at(0).toInt(), seq);
+  const auto items = spy.at(0).at(1).value<QList<DapCompletionItem>>();
+  QCOMPARE(items.size(), 2);
+  QCOMPARE(items.at(0).label, QString("foo"));
+  QCOMPARE(items.at(1).insertText(), QString("foobar"));
+  QCOMPARE(items.at(0).length, 3);
+  client.stop(false);
+}
+
+void TestDap::testDapClientDataBreakpointInfoRoundTrip() {
+  DapClient client;
+  QSignalSpy okSpy(&client, &DapClient::dataBreakpointInfoReceived);
+  client.start(fakeAdapterPath(),
+               {"--caps", R"({"supportsDataBreakpoints":true})"});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+
+  client.dataBreakpointInfo(1000, "x", 100);
+  QTRY_COMPARE_WITH_TIMEOUT(okSpy.count(), 1, 5000);
+  DapDataBreakpointInfo info = okSpy.at(0).at(1).value<DapDataBreakpointInfo>();
+  QVERIFY(info.isValid());
+  QCOMPARE(info.dataId, QString("addr:x"));
+  QCOMPARE(info.accessTypes, (QStringList{"read", "write", "readWrite"}));
+
+  client.dataBreakpointInfo(1000, "unwatchable", 100);
+  QTRY_COMPARE_WITH_TIMEOUT(okSpy.count(), 2, 5000);
+  info = okSpy.at(1).at(1).value<DapDataBreakpointInfo>();
+  QVERIFY(!info.isValid());
+  QCOMPARE(info.description, QString("cannot watch"));
+  client.stop(false);
+}
+
+void TestDap::testDapClientMemoryAndDisassembly() {
+  DapClient client;
+  QSignalSpy memSpy(&client, &DapClient::memoryReceived);
+  QSignalSpy disSpy(&client, &DapClient::disassemblyReceived);
+  client.start(
+      fakeAdapterPath(),
+      {"--caps",
+       R"({"supportsReadMemoryRequest":true,"supportsDisassembleRequest":true})"});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+
+  client.readMemory("0x1000", 32);
+  QTRY_COMPARE_WITH_TIMEOUT(memSpy.count(), 1, 5000);
+  const auto chunk = memSpy.at(0).at(1).value<DapMemoryChunk>();
+  QCOMPARE(chunk.address, QString("0x1000"));
+  QCOMPARE(chunk.data.size(), 32);
+  QCOMPARE(static_cast<unsigned char>(chunk.data.at(31)), 31u);
+
+  client.disassemble("0x1000", 3);
+  QTRY_COMPARE_WITH_TIMEOUT(disSpy.count(), 1, 5000);
+  const auto ins =
+      disSpy.at(0).at(1).value<QList<DapDisassembledInstruction>>();
+  QCOMPARE(ins.size(), 3);
+  QCOMPARE(ins.at(2).instruction, QString("ret"));
+  QCOMPARE(ins.at(0).address, QString("0x1000"));
+  client.stop(false);
+}
+
+void TestDap::testDapClientUnsupportedInspectionRequestsFailFast() {
+  QTemporaryDir dir;
+  const QString tracePath = dir.filePath("t.jsonl");
+  DapClient client;
+  QSignalSpy compSpy(&client, &DapClient::completionsFailed);
+  QSignalSpy dataSpy(&client, &DapClient::dataBreakpointInfoFailed);
+  QSignalSpy memSpy(&client, &DapClient::memoryFailed);
+  QSignalSpy disSpy(&client, &DapClient::disassemblyFailed);
+  client.start(fakeAdapterPath(),
+               {"--trace", tracePath, "--caps",
+                R"({"supportsConfigurationDoneRequest":true})"});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+
+  client.completions("a", 1);
+  client.dataBreakpointInfo(1, "a");
+  client.readMemory("0x1", 4);
+  client.disassemble("0x1", 4);
+  QTRY_COMPARE_WITH_TIMEOUT(compSpy.count(), 1, 2000);
+  QTRY_COMPARE_WITH_TIMEOUT(dataSpy.count(), 1, 2000);
+  QTRY_COMPARE_WITH_TIMEOUT(memSpy.count(), 1, 2000);
+  QTRY_COMPARE_WITH_TIMEOUT(disSpy.count(), 1, 2000);
+
+  int count = 0;
+  traceFileContains(tracePath, "\"completions\"", &count);
+  QCOMPARE(count, 0);
+  traceFileContains(tracePath, "\"readMemory\"", &count);
+  QCOMPARE(count, 0);
+  client.stop(false);
+}
+
+void TestDap::testDapClientRequestTimeout() {
+  DapClient client;
+  client.setRequestTimeoutMs(300);
+  QSignalSpy timeoutSpy(&client, &DapClient::requestTimedOut);
+  QSignalSpy evalErrorSpy(&client, &DapClient::evaluateError);
+  QSignalSpy evalOkSpy(&client, &DapClient::evaluateResult);
+  QSignalSpy varSpy(&client, &DapClient::variablesReceived);
+  client.start(fakeAdapterPath(), {"--hang-on", "evaluate"});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+
+  client.evaluate("1+1", 100);
+  QTRY_COMPARE_WITH_TIMEOUT(evalErrorSpy.count(), 1, 3000);
+  QCOMPARE(timeoutSpy.count(), 1);
+  QCOMPARE(timeoutSpy.at(0).at(0).toString(), QString("evaluate"));
+  QVERIFY(evalErrorSpy.at(0).at(1).toString().contains("timed out"));
+  QCOMPARE(evalOkSpy.count(), 0);
+
+  client.getVariables(1000);
+  QTRY_COMPARE_WITH_TIMEOUT(varSpy.count(), 1, 3000);
+  QCOMPARE(timeoutSpy.count(), 1);
+  client.stop(false);
+}
+
+void TestDap::testDapClientAdapterCrashTerminatesSession() {
+  DapClient client;
+  QSignalSpy terminatedSpy(&client, &DapClient::terminated);
+  client.start(fakeAdapterPath(), {"--crash-on", "threads"});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+
+  client.getThreads();
+  QTRY_VERIFY_WITH_TIMEOUT(terminatedSpy.count() >= 1, 5000);
+  QVERIFY(client.state() == DapClient::State::Terminated ||
+          client.state() == DapClient::State::Error ||
+          client.state() == DapClient::State::Disconnected);
+
+  client.getThreads();
+  client.evaluate("x", 1);
+  client.stop(false);
+}
+
+void TestDap::testDapClientForwardsRunInTerminalKind() {
+  QTemporaryDir dir;
+  const QString tracePath = dir.filePath("t.jsonl");
+  DapClient client;
+  QSignalSpy ritSpy(&client, &DapClient::runInTerminalRequested);
+  client.start(fakeAdapterPath(),
+               {"--trace", tracePath, "--run-in-terminal", "external"});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(ritSpy.count(), 1, 5000);
+  QCOMPARE(ritSpy.at(0).at(1).toString(), QString("external"));
+  QCOMPARE(ritSpy.at(0).at(2).toString(), QString("Fake Debuggee"));
+  QCOMPARE(ritSpy.at(0).at(3).toStringList(), (QStringList{"echo", "hello"}));
+
+  client.respondToRunInTerminal(ritSpy.at(0).at(0).toInt(), true, 4242);
+  QTRY_VERIFY_WITH_TIMEOUT(traceFileContains(tracePath, "4242"), 5000);
+  client.stop(false);
 }
 
 QTEST_MAIN(TestDap)

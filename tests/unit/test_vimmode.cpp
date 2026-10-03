@@ -1,5 +1,6 @@
 #include "editor/vimmode.h"
 #include "vim_oracle_cases.h"
+#include "vim_oracle_cases_wb.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QPlainTextEdit>
@@ -80,6 +81,24 @@ private slots:
   void testPutFromUnsetRegister();
   void testHugeRepeatIsRefused();
   void testCountedInsertRepeatsText();
+  void testMatchesVimWb_data();
+  void testMatchesVimWb();
+  void testExpressionRegister();
+  void testLetAndExecute();
+  void testSubstituteExpression();
+  void testFilterCommands();
+  void testReadCommand();
+  void testAlignCommands();
+  void testBlockShift();
+  void testBlockVisualYankLine();
+  void testTextWidthWrap();
+  void testNextMarkMotions();
+  void testSearchContinuesAfterMatch();
+  void testSearchOffsetsAndChains();
+  void testSearchAtoms();
+  void testDeleteMarks();
+  void testChangeMarks();
+  void testExAddressSearchForms();
 
 private:
   QPlainTextEdit *m_editor;
@@ -553,7 +572,7 @@ void TestVimMode::testMacroRegisterContent() {
   m_editor->setPlainText("a\nb\nc");
   m_vim->setEnabled(true);
   m_vim->feedKeys("qqA;<Esc>jq");
-  QCOMPARE(m_vim->registerContent('q'), QString("A;<Esc>j"));
+  QCOMPARE(m_vim->registerContent('q'), QString("A;\x1bj"));
   m_vim->feedKeys("@q");
   QCOMPARE(m_editor->toPlainText(), QString("a;\nb;\nc"));
   m_vim->feedKeys("@@");
@@ -838,6 +857,267 @@ void TestVimMode::testCountedInsertRepeatsText() {
   QCOMPARE(editor.textCursor().position(), 3999);
   vim.feedKeys("u");
   QCOMPARE(editor.toPlainText(), QString("xy"));
+}
+
+void TestVimMode::testMatchesVimWb_data() {
+  QTest::addColumn<int>("index");
+  const int count =
+      int(sizeof(kVimOracleWbCases) / sizeof(kVimOracleWbCases[0]));
+  for (int i = 0; i < count; ++i) {
+    QTest::newRow(qPrintable(QString("%1: %2").arg(i).arg(
+        QString::fromUtf8(kVimOracleWbCases[i].keys))))
+        << i;
+  }
+}
+
+void TestVimMode::testMatchesVimWb() {
+  QFETCH(int, index);
+  const VimOracleCase &c = kVimOracleWbCases[index];
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText(QString::fromUtf8(kVimOracleWbTexts[c.text]));
+  placeCursor(&editor, c.line, c.col);
+  vim.setEnabled(true);
+  vim.feedKeys(QString::fromUtf8(c.keys));
+  if (vim.mode() != VimEditMode::Normal || !vim.pendingKeys().isEmpty())
+    vim.feedKeys("<Esc>");
+
+  QCOMPARE(editor.toPlainText().replace(QChar(0), QChar('\n')),
+           QString::fromUtf8(c.expectedText));
+  QTextCursor cursor = editor.textCursor();
+  QCOMPARE(cursor.blockNumber(), c.expectedLine);
+  QCOMPARE(cursor.positionInBlock(), c.expectedCol);
+  if (c.expectedRegister)
+    QCOMPARE(vim.registerContent('"'), QString::fromUtf8(c.expectedRegister));
+}
+
+void TestVimMode::testExpressionRegister() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abc");
+  vim.setEnabled(true);
+  vim.feedKeys("\"=2*3+1<CR>p");
+  QCOMPARE(editor.toPlainText(), QString("a7bc"));
+  vim.feedKeys("u\"=\"x\" . 'y'<CR>P");
+  QCOMPARE(editor.toPlainText(), QString("xyabc"));
+  vim.feedKeys("u:put =toupper('x').repeat('y',2)<CR>");
+  QCOMPARE(editor.toPlainText(), QString("abc\nXyy"));
+  vim.feedKeys("uA<C-r>=printf('%03d', 7)<CR>!<Esc>");
+  QCOMPARE(editor.toPlainText(), QString("abc007!"));
+  vim.feedKeys("u:put =[1, 2, 3][1]<CR>");
+  QCOMPARE(editor.toPlainText(), QString("abc\n2"));
+}
+
+void TestVimMode::testLetAndExecute() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abc def");
+  vim.setEnabled(true);
+  vim.feedKeys(":let @a=\"w\"<CR>:let @a.=\"x\"<CR>@a");
+  QCOMPARE(editor.toPlainText(), QString("abc ef"));
+  vim.feedKeys("u:let n = 1<CR>:let n += 2<CR>:exe 'normal gg0' . n . 'x'<CR>");
+  QCOMPARE(editor.toPlainText(), QString(" def"));
+  vim.feedKeys(":let @/ = 'e'<CR>gg0nx");
+  QCOMPARE(editor.toPlainText(), QString(" df"));
+}
+
+void TestVimMode::testSubstituteExpression() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("1 and 22 and 3\nx");
+  vim.setEnabled(true);
+  vim.feedKeys(":1s/\\d\\+/\\=submatch(0)*2/g<CR>");
+  QCOMPARE(editor.toPlainText(), QString("2 and 44 and 6\nx"));
+  vim.feedKeys(":%s/a/\\=line('.').col('.')/g<CR>");
+  QCOMPARE(editor.toPlainText(), QString("2 13nd 44 110nd 6\nx"));
+  vim.feedKeys(":2s/x/\\=['p','q']/<CR>");
+  QCOMPARE(editor.toPlainText(), QString("2 13nd 44 110nd 6\np\nq\n"));
+}
+
+void TestVimMode::testFilterCommands() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("c\nb\na");
+  vim.setEnabled(true);
+  vim.feedKeys(":%!sort<CR>");
+  QCOMPARE(editor.toPlainText(), QString("a\nb\nc"));
+  vim.feedKeys("gg!jtr a-z A-Z<CR>");
+  QCOMPARE(editor.toPlainText(), QString("A\nB\nc"));
+  vim.feedKeys("G!!tr a-z A-Z<CR>");
+  QCOMPARE(editor.toPlainText(), QString("A\nB\nC"));
+  vim.feedKeys("ggVj!tac<CR>");
+  QCOMPARE(editor.toPlainText(), QString("B\nA\nC"));
+  vim.feedKeys(":1,2!tr A-Z a-z|tac<CR>");
+  QCOMPARE(editor.toPlainText(), QString("a\nb\nC"));
+  vim.feedKeys(":%!true<CR>");
+  QCOMPARE(editor.toPlainText(), QString(""));
+}
+
+void TestVimMode::testReadCommand() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("c\nb");
+  vim.setEnabled(true);
+  vim.feedKeys(":r !echo hi<CR>");
+  QCOMPARE(editor.toPlainText(), QString("c\nhi\nb"));
+  QCOMPARE(editor.textCursor().blockNumber(), 1);
+  vim.feedKeys(":0r !printf 'x\\ny'<CR>");
+  QCOMPARE(editor.toPlainText(), QString("x\ny\nc\nhi\nb"));
+  QCOMPARE(editor.textCursor().blockNumber(), 1);
+}
+
+void TestVimMode::testAlignCommands() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abc\nde");
+  vim.setEnabled(true);
+  vim.feedKeys(":%center 10<CR>");
+  QCOMPARE(editor.toPlainText(), QString("   abc\n    de"));
+  vim.feedKeys(":%right 10<CR>");
+  QCOMPARE(editor.toPlainText(), QString("       abc\n        de"));
+  vim.feedKeys(":%left 3<CR>");
+  QCOMPARE(editor.toPlainText(), QString("   abc\n   de"));
+  QCOMPARE(editor.textCursor().positionInBlock(), 3);
+}
+
+void TestVimMode::testBlockShift() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abcd\nefgh");
+  vim.setEnabled(true);
+  vim.feedKeys("l<C-v>j>");
+  QCOMPARE(editor.toPlainText(), QString("a    bcd\ne    fgh"));
+  QCOMPARE(editor.textCursor().positionInBlock(), 1);
+  vim.feedKeys("<C-v>j<");
+  QCOMPARE(editor.toPlainText(), QString("abcd\nefgh"));
+}
+
+void TestVimMode::testBlockVisualYankLine() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abcd\nefgh");
+  vim.setEnabled(true);
+  vim.feedKeys("l<C-v>jY");
+  QCOMPARE(vim.registerContent('"'), QString("b\nf"));
+  QVERIFY(vim.registerValue('"').blockwise);
+  vim.feedKeys("l<C-v>jSX<Esc>");
+  QCOMPARE(editor.toPlainText(), QString("X"));
+}
+
+void TestVimMode::testTextWidthWrap() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("foo bar baz qux quux");
+  vim.setEnabled(true);
+  vim.feedKeys(":set tw=10<CR>A zz<Esc>");
+  QCOMPARE(editor.toPlainText(), QString("foo bar\nbaz qux\nquux zz"));
+  QCOMPARE(editor.textCursor().blockNumber(), 2);
+  editor.setPlainText("- one two three four five six");
+  vim.feedKeys(":set tw=12<CR>gqq");
+  QCOMPARE(editor.toPlainText(), QString("- one two\n  three four\nfive six"));
+}
+
+void TestVimMode::testNextMarkMotions() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("  a\n  b\n  c\n  d\n  e");
+  vim.setEnabled(true);
+  vim.feedKeys("jmajjmbgg]'x");
+  QCOMPARE(editor.toPlainText(), QString("  a\n  \n  c\n  d\n  e"));
+  vim.feedKeys("]`x");
+  QCOMPARE(editor.toPlainText(), QString("  a\n  \n  c\n d\n  e"));
+  vim.feedKeys("G['x");
+  QCOMPARE(editor.toPlainText(), QString("  a\n  \n  c\n \n  e"));
+}
+
+void TestVimMode::testSearchContinuesAfterMatch() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("aaaa\nfoo bar baz");
+  vim.setEnabled(true);
+  vim.feedKeys("/aa<CR>x");
+  QCOMPARE(editor.toPlainText(), QString("aaa\nfoo bar baz"));
+  QCOMPARE(editor.textCursor().positionInBlock(), 2);
+  vim.feedKeys("/\\w\\+<CR>");
+  QCOMPARE(editor.textCursor().blockNumber(), 1);
+  QCOMPARE(editor.textCursor().positionInBlock(), 0);
+  vim.feedKeys("/\\w\\+<CR>");
+  QCOMPARE(editor.textCursor().positionInBlock(), 4);
+}
+
+void TestVimMode::testSearchOffsetsAndChains() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abc abc abc");
+  vim.setEnabled(true);
+  vim.feedKeys("/b/e+1<CR>");
+  QCOMPARE(editor.textCursor().positionInBlock(), 2);
+  vim.feedKeys("gg0/b/b+1<CR>");
+  QCOMPARE(editor.textCursor().positionInBlock(), 2);
+  vim.feedKeys("gg0/a/b+1<CR>");
+  QCOMPARE(editor.textCursor().positionInBlock(), 1);
+  vim.feedKeys("gg0/b/;/c<CR>");
+  QCOMPARE(editor.textCursor().positionInBlock(), 2);
+  vim.feedKeys("gg0:s&b&X&<CR>");
+  QCOMPARE(editor.toPlainText(), QString("aXc abc abc"));
+}
+
+void TestVimMode::testSearchAtoms() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("foo bar\nfood baz\nbar foo");
+  vim.setEnabled(true);
+  vim.feedKeys("/\\%2lba<CR>");
+  QCOMPARE(editor.textCursor().blockNumber(), 1);
+  QCOMPARE(editor.textCursor().positionInBlock(), 5);
+  vim.feedKeys("gg0/fo\\%[od]<CR>");
+  QCOMPARE(editor.textCursor().blockNumber(), 1);
+  vim.feedKeys("gg0/\\(foo\\)\\@<=d<CR>");
+  QCOMPARE(editor.textCursor().blockNumber(), 1);
+  QCOMPARE(editor.textCursor().positionInBlock(), 3);
+  vim.feedKeys("gg0/.*bar\\&.*food<CR>");
+  QCOMPARE(editor.toPlainText(), QString("foo bar\nfood baz\nbar foo"));
+  vim.feedKeys("gg0/\\%d98<CR>");
+  QCOMPARE(editor.textCursor().positionInBlock(), 4);
+  vim.feedKeys("gg0/\\v(foo)@=.<CR>x");
+  QCOMPARE(editor.toPlainText(), QString("foo bar\nood baz\nbar foo"));
+}
+
+void TestVimMode::testDeleteMarks() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("a\nb\nc");
+  vim.setEnabled(true);
+  vim.feedKeys("jmajmb:delmarks a<CR>'ax");
+  QCOMPARE(editor.toPlainText(), QString("a\nb\n"));
+  vim.feedKeys("ggmcjmd:delm!<CR>");
+  vim.feedKeys("'bx");
+  QCOMPARE(editor.toPlainText(), QString("a\n\n"));
+}
+
+void TestVimMode::testChangeMarks() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abc");
+  vim.setEnabled(true);
+  vim.feedKeys("ixyz<Esc>`[iQ<Esc>");
+  QCOMPARE(editor.toPlainText(), QString("Qxyzabc"));
+  vim.feedKeys("`]iR<Esc>");
+  QCOMPARE(editor.toPlainText(), QString("QRxyzabc"));
+}
+
+void TestVimMode::testExAddressSearchForms() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("a\nb\nfoo\nfoo\nz");
+  vim.setEnabled(true);
+  vim.feedKeys(":/foo//foo/d<CR>");
+  QCOMPARE(editor.toPlainText(), QString("a\nb\nfoo\nz"));
+  vim.feedKeys("gg:/b/;+1d<CR>");
+  QCOMPARE(editor.toPlainText(), QString("a\nz"));
+  editor.setPlainText("x\nfoo\ny");
+  vim.feedKeys("2G/foo<CR>gg:\\/d<CR>");
+  QCOMPARE(editor.toPlainText(), QString("x\ny"));
 }
 
 QTEST_MAIN(TestVimMode)
