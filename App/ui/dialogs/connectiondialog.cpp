@@ -65,6 +65,7 @@ ConnectionDialog::ConnectionDialog(QWidget *parent) : StyledDialog(parent) {
           [this](const QString &msg) {
             m_dockerStatus->setText(msg);
             m_containerList->clear();
+            m_containerList->setVisible(false);
           });
   connect(m_discovery, &DockerDiscovery::credentialsFound, this,
           &ConnectionDialog::onCredentials);
@@ -119,6 +120,8 @@ void ConnectionDialog::buildUi() {
   m_containerList = new QListWidget(dockerBox);
   m_containerList->setMinimumHeight(78);
   m_containerList->setMaximumHeight(96);
+  // Shown once discovery finds a database container to pick.
+  m_containerList->setVisible(false);
   dockerLayout->addWidget(m_containerList);
   auto *dockerRow = new QHBoxLayout();
   m_dockerStatus = new QLabel(dockerBox);
@@ -185,7 +188,9 @@ void ConnectionDialog::buildUi() {
   m_host = new QLineEdit(QStringLiteral("localhost"), formHost);
   m_port = new QSpinBox(formHost);
   m_port->setRange(0, 65535);
-  m_port->setFixedWidth(140);
+  // Ports are typed, not stepped through; arrow keys and the wheel still work.
+  m_port->setButtonSymbols(QAbstractSpinBox::NoButtons);
+  m_port->setFixedWidth(96);
   auto *hostRow = new QHBoxLayout();
   hostRow->addWidget(m_host, 1);
   hostRow->addWidget(new QLabel(tr("Port"), formHost));
@@ -304,6 +309,9 @@ void ConnectionDialog::applyTheme(const Theme &theme) {
   styleSubduedLabel(m_dockerStatus);
   stylePrimaryButton(m_saveConnectButton);
   m_containerList->setIconSize(QSize(14, 14));
+  // Keep the port box level with the host field next to it.
+  m_host->ensurePolished();
+  m_port->setFixedHeight(m_host->sizeHint().height());
 }
 
 void ConnectionDialog::setProfile(const DbConnectionProfile &p) {
@@ -483,6 +491,7 @@ void ConnectionDialog::onContainersFound(
       item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
     }
   }
+  m_containerList->setVisible(databases > 0);
   m_dockerStatus->setText(
       databases > 0
           ? tr("%n database container(s) found. Click one to fill in the form.",
