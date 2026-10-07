@@ -22,6 +22,7 @@
 #include <QTextEdit>
 #include <QTimer>
 #include <QToolTip>
+#include <QWheelEvent>
 #include <QtGlobal>
 #include <algorithm>
 #include <functional>
@@ -685,6 +686,7 @@ void TextArea::increaseFontSize() { setFontSize(mainFont.pointSize() + 1); }
 void TextArea::decreaseFontSize() { setFontSize(mainFont.pointSize() - 1); }
 
 void TextArea::setFontSize(int size) {
+  size = qBound(kMinFontSize, size, kMaxFontSize);
   auto doc = document();
 
   if (doc) {
@@ -824,6 +826,28 @@ void TextArea::resizeEvent(QResizeEvent *e) {
 void TextArea::focusOutEvent(QFocusEvent *event) {
   hideCompletionPopup();
   QPlainTextEdit::focusOutEvent(event);
+}
+
+void TextArea::wheelEvent(QWheelEvent *event) {
+  if (!(event->modifiers() & Qt::ControlModifier)) {
+    m_wheelZoomRemainder = 0;
+    QPlainTextEdit::wheelEvent(event);
+    return;
+  }
+
+  // Touchpads deliver many small deltas, so only change the size once a full
+  // wheel notch has accumulated.
+  m_wheelZoomRemainder += event->angleDelta().y();
+  const int steps = m_wheelZoomRemainder / QWheelEvent::DefaultDeltasPerStep;
+  m_wheelZoomRemainder -= steps * QWheelEvent::DefaultDeltasPerStep;
+  if (steps != 0) {
+    if (mainWindow) {
+      mainWindow->stepEditorFontSize(steps);
+    } else {
+      setFontSize(fontSize() + steps);
+    }
+  }
+  event->accept();
 }
 
 void TextArea::keyPressEvent(QKeyEvent *keyEvent) {

@@ -75,6 +75,9 @@ public:
   explicit MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
   void keyPressEvent(QKeyEvent *event);
+  // Grows (positive) or shrinks (negative) the font of every editor by that
+  // many points and saves the new size.
+  void stepEditorFontSize(int steps);
   bool eventFilter(QObject *watched, QEvent *event) override;
   void openFileAndAddToNewTab(QString path, bool reuseAnyGroup = true);
   void openPathsFromCommandLine(const QStringList &paths);
