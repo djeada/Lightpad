@@ -2322,19 +2322,22 @@ void MainWindow::on_actionToggle_Undo_triggered() { undo(); }
 void MainWindow::on_actionToggle_Redo_triggered() { redo(); }
 
 void MainWindow::on_actionIncrease_Font_Size_triggered() {
-  updateAllTextAreas(&TextArea::increaseFontSize);
-  if (!getCurrentTextArea()) {
-    return;
-  }
-  settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
-  SettingsManager::instance().setValue("fontSize",
-                                       settings.mainFont.pointSize());
-  SettingsManager::instance().saveSettings();
-  settings.saveSettings(textAreaSettingsPath());
+  stepEditorFontSize(1);
 }
 
 void MainWindow::on_actionDecrease_Font_Size_triggered() {
-  updateAllTextAreas(&TextArea::decreaseFontSize);
+  stepEditorFontSize(-1);
+}
+
+void MainWindow::stepEditorFontSize(int steps) {
+  if (steps == 0) {
+    return;
+  }
+  const auto step =
+      steps > 0 ? &TextArea::increaseFontSize : &TextArea::decreaseFontSize;
+  for (int i = 0; i < qAbs(steps); ++i) {
+    updateAllTextAreas(step);
+  }
   if (!getCurrentTextArea()) {
     return;
   }

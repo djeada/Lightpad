@@ -35,6 +35,10 @@ class TextArea : public QPlainTextEdit {
   friend class LineNumberArea;
 
 public:
+  // Same range the Preferences font size spinner offers.
+  static constexpr int kMinFontSize = 6;
+  static constexpr int kMaxFontSize = 72;
+
   TextArea(QWidget *parent = nullptr);
   TextArea(const TextAreaSettings &settings, QWidget *parent = nullptr);
   void lineNumberAreaPaintEvent(QPaintEvent *event);
@@ -158,6 +162,7 @@ protected:
   void resizeEvent(QResizeEvent *event) override;
   void focusOutEvent(QFocusEvent *event) override;
   void keyPressEvent(QKeyEvent *event) override;
+  void wheelEvent(QWheelEvent *event) override;
   bool event(QEvent *event) override;
   void contextMenuEvent(QContextMenuEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
@@ -226,6 +231,7 @@ private:
   QString diagnosticMessageAt(const QPoint &viewportPos) const;
 
   bool m_highlighterViewportRefreshScheduled = false;
+  int m_wheelZoomRemainder = 0;
 
   QRegularExpression m_searchPattern;
 
