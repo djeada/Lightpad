@@ -2,6 +2,7 @@
 #include "../../theme/themedefinition.h"
 #include "../uistylehelper.h"
 #include <QAbstractSpinBox>
+#include <QComboBox>
 #include <QRadioButton>
 #include <QTreeWidget>
 
@@ -127,8 +128,16 @@ void StyledDialog::applySemanticStyles() {
 
   for (auto *w : findChildren<QGroupBox *>())
     w->setStyleSheet(s.groupBox);
-  for (auto *w : findChildren<QLineEdit *>())
+  for (auto *w : findChildren<QLineEdit *>()) {
+    // Spin boxes and editable combo boxes own an inner line edit that their
+    // own style sheet covers. The full line edit padding does not fit inside
+    // them and crushes the text.
+    QWidget *owner = w->parentWidget();
+    if (qobject_cast<QAbstractSpinBox *>(owner) ||
+        qobject_cast<QComboBox *>(owner))
+      continue;
     w->setStyleSheet(s.lineEdit);
+  }
   for (auto *w : findChildren<QComboBox *>())
     w->setStyleSheet(s.comboBox);
   for (auto *w : findChildren<QCheckBox *>())
