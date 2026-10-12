@@ -757,6 +757,19 @@ add_test(NAME CompletionEngineTests COMMAND test_completionengine)
 add_test(NAME DapTests COMMAND test_dap)
 add_test(NAME DapIntegrationTests COMMAND test_dap_integration)
 set_tests_properties(DapIntegrationTests PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE)
+if(Python3_Interpreter_FOUND AND NOT WIN32)
+    # Starts the real binary headless; see the script for what it guards.
+    add_test(
+        NAME AppLaunchSmoke
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/app_launch_smoke_test.py $<TARGET_FILE:Lightpad> 5
+    )
+    set_tests_properties(AppLaunchSmoke PROPERTIES
+        SKIP_RETURN_CODE 2
+        LABELS "integration"
+        TIMEOUT 60
+    )
+endif()
+
 if(Python3_Interpreter_FOUND)
     add_test(
         NAME DapDebugpySmoke
