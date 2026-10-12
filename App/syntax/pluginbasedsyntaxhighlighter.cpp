@@ -79,6 +79,35 @@ void PluginBasedSyntaxHighlighter::setVisibleBlockRange(int first, int last) {
   }
 }
 
+namespace {
+enum RuleKind : quint8 {
+  RuleString = 1,
+  RuleInterpolated = 2,
+  RuleEscape = 4,
+  RuleComment = 8,
+};
+
+// Classified once when rules are loaded; highlightBlock runs per line and used
+// to lower-case and search every rule name on every call.
+quint8 classifyRuleName(const QString &name) {
+  quint8 kind = 0;
+  if (name.contains(QLatin1String("string"), Qt::CaseInsensitive) ||
+      name.contains(QLatin1String("quotation"), Qt::CaseInsensitive)) {
+    kind |= RuleString;
+  }
+  if (name.contains(QLatin1String("interpolated"), Qt::CaseInsensitive)) {
+    kind |= RuleInterpolated;
+  }
+  if (name.contains(QLatin1String("escape"), Qt::CaseInsensitive)) {
+    kind |= RuleEscape;
+  }
+  if (name.contains(QLatin1String("comment"), Qt::CaseInsensitive)) {
+    kind |= RuleComment;
+  }
+  return kind;
+}
+} // namespace
+
 void PluginBasedSyntaxHighlighter::loadRulesFromPlugin(ISyntaxPlugin *plugin,
                                                        const Theme &theme) {
   if (!plugin) {
@@ -87,8 +116,11 @@ void PluginBasedSyntaxHighlighter::loadRulesFromPlugin(ISyntaxPlugin *plugin,
 
   m_rules = plugin->syntaxRules();
 
+  m_ruleKinds.clear();
+  m_ruleKinds.reserve(m_rules.size());
   for (SyntaxRule &rule : m_rules) {
     rule.format = applyThemeToFormat(rule, theme);
+    m_ruleKinds.append(classifyRuleName(rule.name));
   }
 
   m_multiLineBlocks = plugin->multiLineBlocks();
@@ -240,19 +272,6 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     }
   };
 
-  auto isStringLikeRule = [](const QString &ruleName) {
-    QString normalized = ruleName.toLower();
-    return normalized.contains("string") || normalized.contains("quotation");
-  };
-
-  auto isInterpolatedStringRule = [](const QString &ruleName) {
-    return ruleName.toLower().contains("interpolated");
-  };
-
-  auto isEscapeLikeRule = [](const QString &ruleName) {
-    return ruleName.toLower().contains("escape");
-  };
-
   auto applyInterpolatedStringRange = [&](int start, int length,
                                           const QTextCharFormat &format,
                                           QBitArray *trackedCharacters) {
@@ -298,17 +317,14 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     }
   };
 
-  auto isCommentLikeRule = [](const QString &ruleName) {
-    QString normalized = ruleName.toLower();
-    return normalized.contains("comment");
-  };
-
-  auto applyRules = [&](const std::function<bool(const QString &)> &predicate,
+  auto applyRules = [&](const std::function<bool(quint8)> &predicate,
                         bool protect, QBitArray *trackedCharacters = nullptr,
                         bool allowProtected = false,
                         const QBitArray *requiredMask = nullptr) {
-    for (const SyntaxRule &rule : m_rules) {
-      if (!predicate(rule.name)) {
+    for (int ruleIndex = 0; ruleIndex < m_rules.size(); ++ruleIndex) {
+      const SyntaxRule &rule = m_rules.at(ruleIndex);
+      const quint8 kind = m_ruleKinds.at(ruleIndex);
+      if (!predicate(kind)) {
         continue;
       }
 
@@ -322,7 +338,7 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
         if (start < 0 || length <= 0) {
           continue;
         }
-        if (protect && isInterpolatedStringRule(rule.name)) {
+        if (protect && (kind & RuleInterpolated)) {
           applyInterpolatedStringRange(start, length, rule.format,
                                        trackedCharacters);
         } else {
@@ -365,9 +381,9 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     };
 
     QVector<const SyntaxRule *> skipRules;
-    for (const SyntaxRule &rule : m_rules) {
-      if (isStringLikeRule(rule.name) || isCommentLikeRule(rule.name)) {
-        skipRules.append(&rule);
+    for (int ruleIndex = 0; ruleIndex < m_rules.size(); ++ruleIndex) {
+      if (m_ruleKinds.at(ruleIndex) & (RuleString | RuleComment)) {
+        skipRules.append(&m_rules.at(ruleIndex));
       }
     }
     QVector<PendingMatch> skipMatches(skipRules.size());
@@ -433,7 +449,8 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
       if (shouldFormat) {
         applyFormatRange(
             regionStart, regionEnd - regionStart, block.format, true,
-            isStringLikeRule(block.name) ? &stringCharacters : nullptr);
+            (classifyRuleName(block.name) & RuleString) ? &stringCharacters
+                                                    : nullptr);
       }
 
       if (!endMatch.hasMatch()) {
@@ -450,13 +467,14 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
     return;
   }
 
-  applyRules(isStringLikeRule, true, &stringCharacters);
-  applyRules(isEscapeLikeRule, false, nullptr, true, &stringCharacters);
-  applyRules(isCommentLikeRule, true);
+  applyRules([](quint8 kind) { return kind & RuleString; }, true,
+             &stringCharacters);
+  applyRules([](quint8 kind) { return kind & RuleEscape; }, false, nullptr, true,
+             &stringCharacters);
+  applyRules([](quint8 kind) { return kind & RuleComment; }, true);
   applyRules(
-      [&](const QString &ruleName) {
-        return !isStringLikeRule(ruleName) && !isCommentLikeRule(ruleName) &&
-               !isEscapeLikeRule(ruleName);
+      [](quint8 kind) {
+        return !(kind & (RuleString | RuleComment | RuleEscape));
       },
       false);
 

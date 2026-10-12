@@ -749,6 +749,7 @@ add_test(NAME I18nTests COMMAND test_i18n)
 add_test(NAME AccessibilityTests COMMAND test_accessibility)
 add_test(NAME RunTemplateManagerTests COMMAND test_runtemplatemanager)
 add_test(NAME FormatTemplateManagerTests COMMAND test_formattemplatemanager)
+add_test(NAME TerminalTests COMMAND test_terminal)
 add_test(NAME TerminalTabWidgetTests COMMAND test_terminaltabwidget)
 add_test(NAME SyntaxPluginRegistryTests COMMAND test_syntaxpluginregistry)
 add_test(NAME CompletionProviderRegistryTests COMMAND test_completionproviderregistry)
@@ -756,6 +757,19 @@ add_test(NAME CompletionEngineTests COMMAND test_completionengine)
 add_test(NAME DapTests COMMAND test_dap)
 add_test(NAME DapIntegrationTests COMMAND test_dap_integration)
 set_tests_properties(DapIntegrationTests PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE)
+if(Python3_Interpreter_FOUND AND NOT WIN32)
+    # Starts the real binary headless; see the script for what it guards.
+    add_test(
+        NAME AppLaunchSmoke
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/app_launch_smoke_test.py $<TARGET_FILE:Lightpad> 5
+    )
+    set_tests_properties(AppLaunchSmoke PROPERTIES
+        SKIP_RETURN_CODE 2
+        LABELS "integration"
+        TIMEOUT 60
+    )
+endif()
+
 if(Python3_Interpreter_FOUND)
     add_test(
         NAME DapDebugpySmoke
@@ -3124,6 +3138,7 @@ set(TEST_LIST
     AccessibilityTests 
     RunTemplateManagerTests 
     FormatTemplateManagerTests 
+    TerminalTests 
     TerminalTabWidgetTests
     SyntaxPluginRegistryTests 
     LatexSyntaxPluginTests
@@ -3193,7 +3208,7 @@ if(REGISTERED_TESTS)
 endif()
 
 # Set timeout for terminal tests that may take longer due to shell process management
-set_tests_properties(TerminalTabWidgetTests PROPERTIES TIMEOUT 90)
+set_tests_properties(TerminalTests TerminalTabWidgetTests PROPERTIES TIMEOUT 90)
 
 # Set timeout for git tests that may take longer due to git operations
 set_tests_properties(GitIntegrationTests PROPERTIES TIMEOUT 30)

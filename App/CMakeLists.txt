@@ -517,6 +517,15 @@ set(project_sources
     core/lightpadtabwidget.cpp
     ui/mainwindow.cpp
     ui/mainwindow_database.cpp
+    ui/mainwindow_run.cpp
+    ui/mainwindow_panels.cpp
+    ui/mainwindow_navigation.cpp
+    ui/mainwindow_diagnostics.cpp
+    ui/mainwindow_debug.cpp
+    ui/mainwindow_actions.cpp
+    ui/mainwindow_git.cpp
+    ui/mainwindow_theme.cpp
+    ui/mainwindow_projecttree.cpp
     ui/popup.cpp
     ui/dialogs/preferences.cpp
     ui/dialogs/pythonenvironmentdialog.cpp
