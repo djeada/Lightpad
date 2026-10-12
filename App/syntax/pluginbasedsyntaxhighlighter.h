@@ -41,6 +41,7 @@ private:
   QRegularExpression m_searchPattern;
 
   QVector<SyntaxRule> m_rules;
+  QVector<quint8> m_ruleKinds;
 
   QVector<MultiLineBlock> m_multiLineBlocks;
 
