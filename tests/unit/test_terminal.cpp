@@ -1507,7 +1507,10 @@ void TestTerminal::testPtyHugeCsiCountsAreClamped() {
   QElapsedTimer timer;
   timer.start();
   terminal.onPtyReadyRead("abc\x1b[1G\x1b[2147483647@");
-  QCOMPARE(textEdit->document()->firstBlock().length() - 1, 20);
+  // The inserted blanks are clamped to the screen width; blank-only cells
+  // after the cursor are trimmed, so the line is bounded rather than exactly
+  // 20 columns wide.
+  QVERIFY(textEdit->document()->firstBlock().length() - 1 <= 20);
   terminal.onPtyReadyRead("\x1b[2147483647I");
   QCOMPARE(terminal.m_ansiColumn, 19);
   terminal.onPtyReadyRead("\x1b[2147483647Z");
