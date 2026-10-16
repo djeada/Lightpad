@@ -53,7 +53,17 @@ result, and Escape clears the query. See [File Explorer](FILE_EXPLORER.md).
 | `Ctrl+H` | Find and Replace |
 | `F3` | Find next |
 | `Shift+F3` | Find previous |
-| `Ctrl+Shift+F` | Find in files |
+| `Ctrl+Alt+F` | Find in project |
+| `Ctrl+Shift+H` | Replace in project |
+| `Enter` / `Shift+Enter` in Find | Next / previous match |
+| `Ctrl+Enter` in the panel | Refresh results |
+| `Ctrl+Alt+Enter` in the panel | Preview replacements; apply when previewing |
+| `Alt+C` / `Alt+W` / `Alt+R` | Toggle case / whole words / regex |
+| `Escape` in the panel | Close search and focus the editor |
+
+Choose Current file, Selection, Open files, or Project in the panel. See
+[Search and Replace](SEARCH_REPLACE.md) for previews, file filters, and batch undo.
+`Ctrl+Shift+F` retains the Format Document action.
 
 ## Navigation
 

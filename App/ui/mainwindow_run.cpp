@@ -17,17 +17,19 @@ void MainWindow::showFindReplace(bool onlyFind) {
               }
               TextArea *textArea = getCurrentTextArea();
               if (textArea) {
-                QTextCursor cursor = textArea->textCursor();
-                cursor.movePosition(QTextCursor::Start);
-                cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
-                                    qMax(0, lineNumber - 1));
-                cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
-                                    qMax(0, columnNumber - 1));
-
-                if (matchLength > 0) {
-                  cursor.movePosition(QTextCursor::Right,
-                                      QTextCursor::KeepAnchor, matchLength);
-                }
+                const QTextBlock block =
+                    textArea->document()->findBlockByNumber(
+                        qMax(0, lineNumber - 1));
+                if (!block.isValid())
+                  return;
+                QTextCursor cursor(textArea->document());
+                cursor.setPosition(
+                    block.position() +
+                    qBound(0, columnNumber - 1, block.length() - 1));
+                cursor.setPosition(
+                    qMin(cursor.position() + matchLength,
+                         textArea->document()->characterCount() - 1),
+                    QTextCursor::KeepAnchor);
                 textArea->setTextCursor(cursor);
                 textArea->ensureCursorVisible();
               }

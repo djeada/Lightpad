@@ -52,6 +52,8 @@ MainWindow::MainWindow(QWidget *parent)
   ui->actionFind_in_file->setShortcutContext(Qt::ApplicationShortcut);
   ui->actionReplace_in_file->setShortcut(QKeySequence::Replace);
   ui->actionReplace_in_file->setShortcutContext(Qt::ApplicationShortcut);
+  ui->actionFind_in_project->setShortcut(QKeySequence("Ctrl+Alt+F"));
+  ui->actionReplace_in_project->setShortcut(QKeySequence("Ctrl+Shift+H"));
   if (ui->actionEdit_Test_Configurations) {
     connect(ui->actionEdit_Test_Configurations, &QAction::triggered, this,
             &MainWindow::openTestConfigurationDialog);
@@ -521,9 +523,20 @@ void MainWindow::setLanguageHighlightLabel(QString text) {
   ui->languageHighlight->setText(text);
 }
 
-MainWindow::~MainWindow() { delete ui; }
+MainWindow::~MainWindow() {
+  if (findReplacePanel)
+    findReplacePanel->setMainWindow(nullptr);
+  delete ui;
+}
 
 void MainWindow::closeEvent(QCloseEvent *event) {
+  if (findReplacePanel && findReplacePanel->isBusy()) {
+    event->ignore();
+    statusBar()->showMessage(
+        tr("Wait for the replacement batch to finish, or stop it in Search."),
+        5000);
+    return;
+  }
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     if (!tabWidget) {
       continue;
@@ -1674,6 +1687,14 @@ void MainWindow::keyPressEvent(QKeyEvent *keyEvent) {
   else if (keyEvent->matches(QKeySequence::Replace))
     showFindReplace(false);
 
+  else if (keyEvent->key() == Qt::Key_F3 && findReplacePanel &&
+           !findReplacePanel->isVimCommandMode()) {
+    if (keyEvent->modifiers().testFlag(Qt::ShiftModifier))
+      findReplacePanel->findPrevious();
+    else
+      findReplacePanel->findNext();
+  }
+
   else if (keyEvent->key() == Qt::Key_Escape && m_vimCommandPanelActive) {
     hideVimCommandPanel();
   }
@@ -2137,6 +2158,12 @@ void MainWindow::on_actionFind_in_file_triggered() {
   if (findReplacePanel) {
     findReplacePanel->setGlobalMode(false);
 
+    if (auto *area = getCurrentTextArea()) {
+      const QString selected = area->textCursor().selectedText();
+      if (!selected.isEmpty() && !selected.contains(QChar::ParagraphSeparator))
+        findReplacePanel->setSearchText(selected);
+    }
+
     TextArea *textArea = getCurrentTextArea();
     if (textArea && textArea->isVimModeEnabled() && textArea->vimMode()) {
       QString vimPattern = textArea->vimMode()->searchPattern();
@@ -2597,6 +2624,8 @@ void MainWindow::recordFileTimestamp(const QString &filePath) {
 
 bool MainWindow::checkExternalModification(const QString &filePath) const {
   const QString normalizedPath = QDir::cleanPath(filePath);
+  if (m_searchReplaceWrites.contains(normalizedPath))
+    return false;
   if (normalizedPath.isEmpty() || !m_fileTimestamps.contains(normalizedPath)) {
     return false;
   }
@@ -2635,6 +2664,8 @@ void MainWindow::setupOpenFileWatcher() {
   connect(m_openFileWatcher, &QFileSystemWatcher::fileChanged, this,
           [this](const QString &path) {
             const QString filePath = QDir::cleanPath(path);
+            if (m_searchReplaceWrites.contains(filePath))
+              return;
             if (m_internalFileWrites.remove(filePath)) {
               watchOpenFile(filePath);
               return;

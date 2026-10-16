@@ -31,7 +31,8 @@ int parseGroupReference(const QString &text, int start, int groupCount,
 namespace FindReplaceSearch {
 
 QString expandRegexReplacement(const QString &replaceWord,
-                               const QRegularExpressionMatch &match) {
+                               const QRegularExpressionMatch &match,
+                               bool escapeSequences) {
   const int groupCount = match.regularExpression().captureCount();
   QString result;
   result.reserve(replaceWord.size());
@@ -43,6 +44,13 @@ QString expandRegexReplacement(const QString &replaceWord,
         i + 1 < replaceWord.size() ? replaceWord.at(i + 1) : QChar();
 
     if (c == '\\') {
+      if (escapeSequences && (next == 'n' || next == 'r' || next == 't')) {
+        result += next == 'n'   ? QChar('\n')
+                  : next == 'r' ? QChar('\r')
+                                : QChar('\t');
+        i += 2;
+        continue;
+      }
       if (next == '\\') {
         result += '\\';
         i += 2;
@@ -75,6 +83,12 @@ QString expandRegexReplacement(const QString &replaceWord,
           const int group = allDigits ? digits.toInt(&ok) : -1;
           if (ok && group <= groupCount) {
             result += match.captured(group);
+            i = close + 1;
+            continue;
+          }
+          if (!allDigits &&
+              match.regularExpression().namedCaptureGroups().contains(digits)) {
+            result += match.captured(digits);
             i = close + 1;
             continue;
           }
@@ -121,14 +135,9 @@ collectMatchesInContent(const QString &filePath, const QString &content,
       continue;
     }
 
-    int lineNum = 0;
-    for (int i = 0; i < lineStarts.size(); ++i) {
-      if (i + 1 < lineStarts.size() && matchStart >= lineStarts[i + 1]) {
-        continue;
-      }
-      lineNum = i;
-      break;
-    }
+    const int lineNum =
+        std::upper_bound(lineStarts.cbegin(), lineStarts.cend(), matchStart) -
+        lineStarts.cbegin() - 1;
 
     GlobalSearchResult result;
     result.filePath = filePath;

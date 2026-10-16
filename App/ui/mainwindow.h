@@ -232,6 +232,7 @@ private slots:
 
 private:
   friend class AutoSaveManager;
+  friend class FindReplacePanel;
   Ui::MainWindow *ui;
   Popup *popupTabWidth;
   Preferences *preferences;
@@ -268,6 +269,7 @@ private:
   QFileSystemWatcher *m_openFileWatcher;
   QSet<QString> m_externalChangePrompts;
   QSet<QString> m_internalFileWrites;
+  QSet<QString> m_searchReplaceWrites;
   GitIntegration *m_gitIntegration;
   SourceControlPanel *sourceControlPanel;
   QDockWidget *sourceControlDock;

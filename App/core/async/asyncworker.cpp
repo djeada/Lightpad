@@ -109,16 +109,24 @@ void AsyncThreadPool::submit(AsyncWorker *worker) {
   worker->moveToThread(thread);
 
   connect(thread, &QThread::started, worker, &AsyncWorker::start);
-  connect(worker, &AsyncWorker::finished, thread, &QThread::quit);
-  connect(worker, &AsyncWorker::cancelled, thread, &QThread::quit);
-  connect(worker, &AsyncWorker::error, thread, &QThread::quit);
+  // quit() is thread-safe. A queued quit would depend on the GUI event loop
+  // still running, and deadlock waitAll() when closing during a search.
+  connect(worker, &AsyncWorker::finished, thread, &QThread::quit,
+          Qt::DirectConnection);
+  connect(worker, &AsyncWorker::cancelled, thread, &QThread::quit,
+          Qt::DirectConnection);
+  connect(worker, &AsyncWorker::error, thread, &QThread::quit,
+          Qt::DirectConnection);
   connect(thread, &QThread::finished, worker, &QObject::deleteLater);
   connect(thread, &QThread::finished, thread, &QThread::deleteLater);
-  connect(thread, &QThread::finished, this, [this, thread, worker]() {
-    QMutexLocker locker(&m_mutex);
-    m_threads.removeOne(thread);
-    m_workers.removeOne(worker);
-  });
+  connect(
+      thread, &QThread::finished, this,
+      [this, thread, worker]() {
+        QMutexLocker locker(&m_mutex);
+        m_threads.removeOne(thread);
+        m_workers.removeOne(worker);
+      },
+      Qt::DirectConnection);
 
   {
     QMutexLocker locker(&m_mutex);

@@ -867,6 +867,14 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       borderColor +
       "; "
       "}"
+      "QWidget#FindReplacePanel QToolButton:checked { background-color: " +
+      accentSoftColor + "; color: " + accentOnSoft + "; border: 1px solid " +
+      accentColor +
+      "; }"
+      "QWidget#FindReplacePanel QPushButton#applyReplacements { "
+      "background-color: " +
+      btnPrimaryBg + "; color: " + btnPrimaryText +
+      "; font-weight: bold; }"
       "QWidget#Terminal { "
       "background-color: " +
       terminalBgColor +
