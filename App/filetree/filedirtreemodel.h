@@ -46,6 +46,7 @@ public:
 
   static bool isInside(const QString &parentDir, const QString &path);
   static QString canonicalPath(const QString &path);
+  static QStringList topLevelPaths(const QStringList &paths);
 
 signals:
   void modelUpdated();
@@ -62,6 +63,7 @@ private:
   bool removeRecursively(const QString &path);
 
   static QDir::Filters entryFilters();
+  bool validateDestination(const QString &directory);
 };
 
 #endif

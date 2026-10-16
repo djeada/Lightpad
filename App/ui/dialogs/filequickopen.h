@@ -8,6 +8,11 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QVBoxLayout>
+#include <atomic>
+#include <memory>
+
+class QLabel;
+class QTimer;
 
 class FileQuickOpen : public StyledPopupDialog {
   Q_OBJECT
@@ -30,6 +35,7 @@ signals:
 protected:
   void keyPressEvent(QKeyEvent *event) override;
   bool eventFilter(QObject *obj, QEvent *event) override;
+  void hideEvent(QHideEvent *event) override;
 
 private slots:
   void onSearchTextChanged(const QString &text);
@@ -38,9 +44,8 @@ private slots:
 
 private:
   void setupUI();
-  void scanDirectory();
   void updateResults(const QString &query);
-  int fuzzyMatch(const QString &pattern, const QString &text);
+  void runSearch();
   void selectFile(int row);
   void selectNext();
   void selectPrevious();
@@ -49,8 +54,11 @@ private:
   QListWidget *m_resultsList;
   QVBoxLayout *m_layout;
   QString m_rootPath;
-  QStringList m_allFiles;
   QStringList m_filteredFiles;
+  QLabel *m_status;
+  QTimer *m_searchTimer;
+  std::shared_ptr<std::atomic_bool> m_cancelled;
+  int m_request = 0;
 };
 
 #endif

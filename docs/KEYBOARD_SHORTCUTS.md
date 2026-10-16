@@ -13,6 +13,24 @@ This document lists all keyboard shortcuts available in Lightpad.
 | `Ctrl+W` | Close current tab |
 | `Ctrl+Q` | Quit application |
 
+## File Explorer
+
+These shortcuts apply while the file tree has focus.
+
+| Shortcut | Action |
+|----------|--------|
+| `F2` | Rename the selected file or folder |
+| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy, cut, paste files |
+| `Ctrl+D` | Duplicate selected entries |
+| `Ctrl+Alt+N` | Create a file in the selected folder |
+| `Ctrl+Shift+N` | Create a folder |
+| `Delete` | Move selected entries to trash |
+| `Shift+Delete` | Delete selected entries permanently |
+| `Enter` | Open a file or expand/collapse a folder |
+
+In the explorer search field, Down focuses results, Enter opens the selected
+result, and Escape clears the query. See [File Explorer](FILE_EXPLORER.md).
+
 ## Edit Operations
 
 | Shortcut | Action |

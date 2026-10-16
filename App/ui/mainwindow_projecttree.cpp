@@ -1,7 +1,7 @@
 #include "mainwindow_internal.h"
 
 void MainWindow::setProjectRootPath(const QString &path) {
-  QString normalizedPath = QDir::cleanPath(path);
+  QString normalizedPath = path.isEmpty() ? QString() : QDir::cleanPath(path);
   if (!normalizedPath.isEmpty()) {
     normalizedPath = QFileInfo(normalizedPath).absoluteFilePath();
   }
@@ -56,7 +56,8 @@ void MainWindow::setProjectRootPath(const QString &path) {
         if (!normalizedPath.isEmpty()) {
           page->setModelRootIndex(normalizedPath);
         }
-        page->setTreeFilterText(m_treeFilterText);
+        page->setTreeSearchOptions(m_treeSearchOptions);
+        page->setExplorerWidth(m_explorerWidth);
       }
     }
   }
@@ -221,8 +222,12 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
   if (m_treeScrollValueInitialized) {
     treeView->verticalScrollBar()->setValue(m_treeScrollValue);
   }
-  if (auto *page = qobject_cast<LightpadPage *>(treeView->parentWidget())) {
-    page->setTreeFilterText(m_treeFilterText);
+  for (QWidget *owner = treeView->parentWidget(); owner;
+       owner = owner->parentWidget()) {
+    if (auto *page = qobject_cast<LightpadPage *>(owner)) {
+      page->setTreeSearchOptions(m_treeSearchOptions);
+      break;
+    }
   }
 
   QObject::disconnect(treeView, &LightpadTreeView::runTestsRequested, this,
@@ -259,17 +264,44 @@ void MainWindow::registerTreeView(LightpadTreeView *treeView) {
 }
 
 void MainWindow::setTreeFilterText(const QString &text) {
-  m_treeFilterText = text;
+  auto options = m_treeSearchOptions;
+  options.query = text;
+  setTreeSearchOptions(options);
+}
+
+void MainWindow::setTreeSearchOptions(const ProjectSearch::Options &options) {
+  m_treeSearchOptions = options;
+  m_treeSearchOptions.rootPath = m_projectRootPath;
+  m_treeFilterText = options.query;
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); i++) {
       auto page = tabWidget->getPage(i);
       if (page) {
-        page->setTreeFilterText(m_treeFilterText);
+        page->setTreeSearchOptions(m_treeSearchOptions);
       }
     }
   }
 }
+
+ProjectSearch::Options MainWindow::getTreeSearchOptions() const {
+  return m_treeSearchOptions;
+}
+
+void MainWindow::setExplorerWidth(int width) {
+  width = qBound(240, width, 900);
+  if (m_explorerWidth == width)
+    return;
+  m_explorerWidth = width;
+  for (LightpadTabWidget *tabs : allTabWidgets()) {
+    for (int i = 0; i < tabs->count(); ++i) {
+      if (auto *page = tabs->getPage(i))
+        page->setExplorerWidth(width);
+    }
+  }
+}
+
+int MainWindow::getExplorerWidth() const { return m_explorerWidth; }
 
 QString MainWindow::getTreeFilterText() const { return m_treeFilterText; }
 
@@ -469,6 +501,9 @@ void MainWindow::loadTreeStateFromSettings(const QString &rootPath) {
   m_treeScrollValue = 0;
   m_treeScrollValueInitialized = false;
   m_treeFilterText.clear();
+  m_treeSearchOptions = {};
+  m_treeSearchOptions.rootPath = rootPath;
+  m_explorerWidth = 300;
 
   if (rootPath.isEmpty()) {
     return;
@@ -505,6 +540,24 @@ void MainWindow::loadTreeStateFromSettings(const QString &rootPath) {
   }
 
   m_treeFilterText = state.value("filterText").toString();
+  m_explorerWidth = qBound(240, state.value("width").toInt(300), 900);
+  m_treeSearchOptions.query = m_treeFilterText;
+  const QJsonObject search = state.value("search").toObject();
+  m_treeSearchOptions.mode = search.value("contents").toBool()
+                                 ? ProjectSearch::Mode::Contents
+                                 : ProjectSearch::Mode::FileNames;
+  m_treeSearchOptions.includes = search.value("includes").toString();
+  if (search.contains("excludes")) {
+    m_treeSearchOptions.excludes = search.value("excludes").toString();
+  }
+  m_treeSearchOptions.caseSensitive = search.value("caseSensitive").toBool();
+  m_treeSearchOptions.wholeWord = search.value("wholeWord").toBool();
+  m_treeSearchOptions.regularExpression = search.value("regex").toBool();
+  m_treeSearchOptions.includeHidden = search.value("hidden").toBool(true);
+  const QString scope = search.value("scope").toString();
+  if (!scope.isEmpty() && isPathWithinRoot(scope, normalizedRoot)) {
+    m_treeSearchOptions.scopePath = scope;
+  }
 }
 
 void MainWindow::persistTreeStateToSettings() {
@@ -516,6 +569,7 @@ void MainWindow::persistTreeStateToSettings() {
   QJsonObject treeStates =
       globalSettings.getSettingsObject().value("treeStateByRoot").toObject();
   QJsonObject state;
+  state["width"] = m_explorerWidth;
 
   QJsonArray expanded;
   for (const QString &path : m_treeExpandedPaths) {
@@ -534,8 +588,36 @@ void MainWindow::persistTreeStateToSettings() {
   if (!m_treeFilterText.isEmpty()) {
     state["filterText"] = m_treeFilterText;
   }
+  state["search"] = QJsonObject{
+      {"contents", m_treeSearchOptions.mode == ProjectSearch::Mode::Contents},
+      {"includes", m_treeSearchOptions.includes},
+      {"excludes", m_treeSearchOptions.excludes},
+      {"caseSensitive", m_treeSearchOptions.caseSensitive},
+      {"wholeWord", m_treeSearchOptions.wholeWord},
+      {"regex", m_treeSearchOptions.regularExpression},
+      {"hidden", m_treeSearchOptions.includeHidden},
+      {"scope", m_treeSearchOptions.scopePath}};
   treeStates[normalizedRoot.isEmpty() ? m_projectRootPath : normalizedRoot] =
       state;
   globalSettings.setValue("treeStateByRoot", treeStates);
 }
 
+bool MainWindow::preparePathsForRemoval(const QStringList &paths) {
+  for (LightpadTabWidget *tabs : allTabWidgets()) {
+    for (int i = 0; i < tabs->count(); ++i) {
+      const QString file = tabs->getFilePath(i);
+      if (file.isEmpty())
+        continue;
+      for (const QString &path : paths) {
+        const QString cleanFile = QDir::cleanPath(file);
+        const QString cleanPath = QDir::cleanPath(path);
+        if (cleanFile == cleanPath || cleanFile.startsWith(cleanPath + '/')) {
+          if (!maybeSaveTab(tabs, i))
+            return false;
+          break;
+        }
+      }
+    }
+  }
+  return true;
+}

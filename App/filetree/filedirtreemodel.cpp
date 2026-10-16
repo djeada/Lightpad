@@ -5,6 +5,7 @@
 #include <QMimeData>
 #include <QRegularExpression>
 #include <QUrl>
+#include <algorithm>
 
 namespace {
 
@@ -12,7 +13,8 @@ constexpr char kGnomeCopiedFiles[] = "x-special/gnome-copied-files";
 constexpr char kKdeCutSelection[] = "application/x-kde-cutselection";
 
 bool isSafeRelativeName(const QString &name) {
-  if (name.isEmpty() || QDir::isAbsolutePath(name) || name.startsWith('/') ||
+  if (name.isEmpty() || name.contains(QChar::Null) ||
+      QDir::isAbsolutePath(name) || name.startsWith('/') ||
       name.startsWith('\\')) {
     return false;
   }
@@ -36,6 +38,11 @@ QString joinPath(const QString &dir, const QString &name) {
   return QDir::cleanPath(dir + QLatin1Char('/') + name);
 }
 
+bool entryExists(const QString &path) {
+  const QFileInfo info(path);
+  return info.exists() || info.isSymLink();
+}
+
 } // namespace
 
 FileDirTreeModel::FileDirTreeModel(QObject *parent) : QObject(parent) {
@@ -47,6 +54,47 @@ FileDirTreeModel::FileDirTreeModel(QObject *parent) : QObject(parent) {
 
 QDir::Filters FileDirTreeModel::entryFilters() {
   return QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System;
+}
+
+QStringList FileDirTreeModel::topLevelPaths(const QStringList &paths) {
+  QStringList normalized;
+  for (const QString &path : paths) {
+    if (!path.isEmpty()) {
+      const QString absolute =
+          QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+      if (!normalized.contains(absolute)) {
+        normalized.append(absolute);
+      }
+    }
+  }
+  QStringList result;
+  for (const QString &path : normalized) {
+    const bool hasSelectedParent = std::any_of(
+        normalized.cbegin(), normalized.cend(), [&](const QString &other) {
+          const QFileInfo parent(other);
+          return other != path && parent.isDir() && !parent.isSymLink() &&
+                 path.startsWith(other.endsWith('/') ? other : other + '/');
+        });
+    if (!hasSelectedParent) {
+      result.append(path);
+    }
+  }
+  return result;
+}
+
+bool FileDirTreeModel::validateDestination(const QString &directory) {
+  const QFileInfo info(directory);
+  if (directory.isEmpty() || !info.isDir()) {
+    emit errorOccurred(
+        tr("The destination folder no longer exists: %1").arg(directory));
+    return false;
+  }
+  if (!info.isWritable()) {
+    emit errorOccurred(
+        tr("The destination folder is read-only: %1").arg(directory));
+    return false;
+  }
+  return true;
 }
 
 bool FileDirTreeModel::isInside(const QString &parentDir, const QString &path) {
@@ -102,8 +150,17 @@ bool FileDirTreeModel::createNewFile(const QString &dirPath,
     return false;
   }
 
+  if (!validateDestination(dirPath)) {
+    return false;
+  }
+
   const QString fullPath = joinPath(dirPath, trimmed);
-  if (QFileInfo::exists(fullPath)) {
+  if (!isInside(canonicalPath(dirPath), canonicalPath(fullPath))) {
+    emit errorOccurred(
+        tr("The new file must stay inside the selected folder."));
+    return false;
+  }
+  if (entryExists(fullPath)) {
     emit errorOccurred(tr("\"%1\" already exists.").arg(trimmed));
     return false;
   }
@@ -115,7 +172,7 @@ bool FileDirTreeModel::createNewFile(const QString &dirPath,
   }
 
   QFile file(fullPath);
-  if (!file.open(QIODevice::WriteOnly)) {
+  if (!file.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
     emit errorOccurred(
         tr("Could not create \"%1\": %2").arg(trimmed, file.errorString()));
     return false;
@@ -142,8 +199,17 @@ bool FileDirTreeModel::createNewDirectory(const QString &parentPath,
     return false;
   }
 
+  if (!validateDestination(parentPath)) {
+    return false;
+  }
+
   const QString fullPath = joinPath(parentPath, trimmed);
-  if (QFileInfo::exists(fullPath)) {
+  if (!isInside(canonicalPath(parentPath), canonicalPath(fullPath))) {
+    emit errorOccurred(
+        tr("The new folder must stay inside the selected folder."));
+    return false;
+  }
+  if (entryExists(fullPath)) {
     emit errorOccurred(tr("\"%1\" already exists.").arg(trimmed));
     return false;
   }
@@ -190,11 +256,16 @@ bool FileDirTreeModel::removeFileOrDirectory(const QString &path,
 
 bool FileDirTreeModel::renameFileOrDirectory(const QString &oldPath,
                                              const QString &newPath) {
+  if (oldPath.isEmpty() || newPath.isEmpty() || !entryExists(oldPath) ||
+      newPath.contains(QChar::Null)) {
+    emit errorOccurred(tr("Choose an existing item and a valid new name."));
+    return false;
+  }
   if (QDir::cleanPath(oldPath) == QDir::cleanPath(newPath)) {
     return true;
   }
 
-  if (QFileInfo::exists(newPath)) {
+  if (entryExists(newPath)) {
     emit errorOccurred(
         tr("\"%1\" already exists.").arg(QFileInfo(newPath).fileName()));
     return false;
@@ -202,6 +273,10 @@ bool FileDirTreeModel::renameFileOrDirectory(const QString &oldPath,
 
   if (QFileInfo(oldPath).isDir() && isInside(oldPath, newPath)) {
     emit errorOccurred(tr("A folder cannot be moved inside itself."));
+    return false;
+  }
+
+  if (!validateDestination(QFileInfo(newPath).absolutePath())) {
     return false;
   }
 
@@ -220,14 +295,13 @@ bool FileDirTreeModel::renameFileOrDirectory(const QString &oldPath,
 bool FileDirTreeModel::duplicateEntry(const QString &path,
                                       QString *createdPath) {
   const QFileInfo info(path);
-  if (!info.exists()) {
+  if (!info.exists() && !info.isSymLink()) {
     emit errorOccurred(tr("\"%1\" no longer exists.").arg(path));
     return false;
   }
 
   const QString newPath = addUniqueSuffix(path);
-  const bool ok = info.isDir() ? copyRecursively(path, newPath)
-                               : QFile::copy(path, newPath);
+  const bool ok = copyRecursively(path, newPath);
   if (!ok) {
     emit errorOccurred(tr("Could not duplicate \"%1\".").arg(info.fileName()));
     return false;
@@ -313,18 +387,20 @@ ClipboardOperation FileDirTreeModel::clipboardOperation() const {
 }
 
 bool FileDirTreeModel::copyToClipboard(const QStringList &paths) {
-  if (paths.isEmpty()) {
+  const QStringList sources = topLevelPaths(paths);
+  if (sources.isEmpty()) {
     return false;
   }
-  writeClipboard(paths, ClipboardOperation::Copy);
+  writeClipboard(sources, ClipboardOperation::Copy);
   return true;
 }
 
 bool FileDirTreeModel::cutToClipboard(const QStringList &paths) {
-  if (paths.isEmpty()) {
+  const QStringList sources = topLevelPaths(paths);
+  if (sources.isEmpty()) {
     return false;
   }
-  writeClipboard(paths, ClipboardOperation::Cut);
+  writeClipboard(sources, ClipboardOperation::Cut);
   return true;
 }
 
@@ -332,7 +408,8 @@ bool FileDirTreeModel::canPaste() const { return !clipboardPaths().isEmpty(); }
 
 bool FileDirTreeModel::pasteFromClipboard(const QString &destPath,
                                           QStringList *createdPaths) {
-  const QStringList sources = clipboardPaths();
+  const QStringList originalClipboard = clipboardPaths();
+  const QStringList sources = topLevelPaths(originalClipboard);
   if (sources.isEmpty()) {
     emit errorOccurred(tr("The clipboard holds no files to paste."));
     return false;
@@ -342,14 +419,14 @@ bool FileDirTreeModel::pasteFromClipboard(const QString &destPath,
   if (QFileInfo(destPath).isFile()) {
     targetDir = QFileInfo(destPath).absolutePath();
   }
-  if (targetDir.isEmpty()) {
-    emit errorOccurred(tr("No folder to paste into."));
+  if (!validateDestination(targetDir)) {
     return false;
   }
 
   const ClipboardOperation operation = clipboardOperation();
   bool anySucceeded = false;
   QStringList results;
+  QStringList remaining;
 
   for (const QString &source : sources) {
     QString created;
@@ -359,13 +436,20 @@ bool FileDirTreeModel::pasteFromClipboard(const QString &destPath,
     if (ok) {
       anySucceeded = true;
       results << created;
+    } else {
+      remaining << source;
     }
   }
 
-  if (anySucceeded && operation == ClipboardOperation::Cut) {
-
+  if (anySucceeded && operation == ClipboardOperation::Cut &&
+      clipboardPaths() == originalClipboard &&
+      clipboardOperation() == ClipboardOperation::Cut) {
     if (QClipboard *clipboard = QGuiApplication::clipboard()) {
-      clipboard->clear();
+      if (remaining.isEmpty()) {
+        clipboard->clear();
+      } else {
+        writeClipboard(remaining, ClipboardOperation::Cut);
+      }
     }
   }
 
@@ -380,6 +464,9 @@ bool FileDirTreeModel::pasteFromClipboard(const QString &destPath,
 
 bool FileDirTreeModel::moveInto(const QString &srcPath, const QString &destDir,
                                 QString *createdPath) {
+  if (!validateDestination(destDir)) {
+    return false;
+  }
   const QFileInfo srcInfo(srcPath);
   if (!srcInfo.exists() && !srcInfo.isSymLink()) {
     emit errorOccurred(tr("\"%1\" no longer exists.").arg(srcPath));
@@ -392,7 +479,7 @@ bool FileDirTreeModel::moveInto(const QString &srcPath, const QString &destDir,
     return false;
   }
 
-  if (QDir::cleanPath(srcInfo.absolutePath()) == QDir::cleanPath(destDir)) {
+  if (canonicalPath(srcInfo.absolutePath()) == canonicalPath(destDir)) {
 
     if (createdPath) {
       *createdPath = srcInfo.absoluteFilePath();
@@ -433,6 +520,9 @@ bool FileDirTreeModel::moveInto(const QString &srcPath, const QString &destDir,
 
 bool FileDirTreeModel::copyInto(const QString &srcPath, const QString &destDir,
                                 QString *createdPath) {
+  if (!validateDestination(destDir)) {
+    return false;
+  }
   const QFileInfo srcInfo(srcPath);
   if (!srcInfo.exists() && !srcInfo.isSymLink()) {
     emit errorOccurred(tr("\"%1\" no longer exists.").arg(srcPath));
@@ -464,12 +554,15 @@ QString FileDirTreeModel::getAbsolutePath(const QString &path) {
 }
 
 QString FileDirTreeModel::addUniqueSuffix(const QString &fileName) {
-  if (!QFileInfo::exists(fileName)) {
+  if (!entryExists(fileName)) {
     return fileName;
   }
 
   const QFileInfo fileInfo(fileName);
-  QString secondPart = fileInfo.completeSuffix();
+  // Dotted folder names and dotfiles are names, not multi-part extensions.
+  QString secondPart = fileInfo.isDir() || fileInfo.fileName().startsWith('.')
+                           ? QString()
+                           : fileInfo.completeSuffix();
   QString firstPart;
   if (!secondPart.isEmpty()) {
     secondPart = "." + secondPart;
@@ -481,7 +574,7 @@ QString FileDirTreeModel::addUniqueSuffix(const QString &fileName) {
   for (int index = 1;; index++) {
     const QString candidate =
         QString("%1 (%2)%3").arg(firstPart).arg(index).arg(secondPart);
-    if (!QFileInfo::exists(candidate)) {
+    if (!entryExists(candidate)) {
       return candidate;
     }
   }
@@ -503,7 +596,7 @@ bool FileDirTreeModel::copyRecursively(const QString &srcPath,
     return false;
   }
 
-  if (!QDir().mkpath(destPath)) {
+  if (!QDir().mkdir(destPath)) {
     return false;
   }
 
@@ -511,6 +604,7 @@ bool FileDirTreeModel::copyRecursively(const QString &srcPath,
   const QStringList entries = srcDir.entryList(entryFilters());
   for (const QString &entry : entries) {
     if (!copyRecursively(joinPath(srcPath, entry), joinPath(destPath, entry))) {
+      removeRecursively(destPath);
       return false;
     }
   }

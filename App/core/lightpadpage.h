@@ -4,6 +4,8 @@
 #include "../filetree/filedirtreecontroller.h"
 #include "../filetree/filedirtreemodel.h"
 #include "../filetree/gitfilesystemmodel.h"
+#include "../filetree/lightpadtreeview.h"
+#include "../filetree/projectsearch.h"
 #include "textarea.h"
 
 #include <QFileSystemModel>
@@ -14,70 +16,11 @@ class LightpadPage;
 class Minimap;
 class GitIntegration;
 class QLabel;
-class QLineEdit;
 class QToolButton;
+class ExplorerSearchWidget;
+class QSplitter;
 struct Theme;
 class ThemeDefinition;
-
-class LightpadTreeView : public QTreeView {
-
-  Q_OBJECT
-
-public:
-  LightpadTreeView(LightpadPage *parent = nullptr);
-  ~LightpadTreeView();
-
-  QStringList selectedPaths() const;
-
-  QString targetDirectory() const;
-
-  QString rootPath() const;
-
-  FileDirTreeController *fileOperationsController() const {
-    return fileController;
-  }
-
-  void promptNewFile();
-  void promptNewFolder();
-
-signals:
-  void runTestsRequested(const QString &path);
-  void runFileRequested(const QString &path);
-  void debugFileRequested(const QString &path);
-  void toggleTestMarkerRequested(const QString &path, bool markAsTest);
-  void revealInFileManagerRequested(const QString &path);
-  void openInTerminalRequested(const QString &directory);
-
-protected:
-  void keyPressEvent(QKeyEvent *event) override;
-  void contextMenuEvent(QContextMenuEvent *event) override;
-  void dragEnterEvent(QDragEnterEvent *event) override;
-  void dragMoveEvent(QDragMoveEvent *event) override;
-  void dropEvent(QDropEvent *event) override;
-
-private:
-  LightpadPage *parentPage;
-  FileDirTreeModel *fileModel;
-  FileDirTreeController *fileController;
-
-  void setupShortcuts();
-  void showContextMenu(const QPoint &pos);
-  void buildRootMenu(QMenu &menu);
-  void buildEntryMenu(QMenu &menu, const QString &filePath,
-                      const QStringList &selection);
-
-  QString dropDirectoryAt(const QPoint &position) const;
-  bool acceptsDropOf(const QStringList &sources,
-                     const QString &destination) const;
-  void performDrop(const QStringList &sources, const QString &destination,
-                   bool copy);
-  void copySelection();
-  void cutSelection();
-  void pasteIntoTarget();
-  void renameSelection();
-  void duplicateSelection();
-  void deleteSelection(DeleteMode mode);
-};
 
 class LightpadPage : public QWidget {
 
@@ -117,6 +60,8 @@ public:
   void refreshGitStatus();
   void setTreeFilterText(const QString &text);
   QString getTreeFilterText() const;
+  void setTreeSearchOptions(const ProjectSearch::Options &options);
+  void setExplorerWidth(int width);
   void activateTreeIndex(const QModelIndex &index);
 
   void revealPath(const QString &path);
@@ -125,10 +70,6 @@ public:
   MainWindow *getMainWindow() const;
 
 private:
-  void applyTreeFilter();
-  bool updateTreeVisibilityRecursive(const QModelIndex &parent,
-                                     const QString &needle);
-
   MainWindow *mainWindow;
   QWidget *treeContainer;
   QWidget *treeHeader;
@@ -136,20 +77,19 @@ private:
   QLabel *treePathLabel;
 
   void updateTreePathLabel();
-  QLineEdit *treeFilterEdit;
+  ExplorerSearchWidget *treeSearch;
   QToolButton *treeNewFileButton;
   QToolButton *treeNewFolderButton;
-  QToolButton *treeRefreshButton;
-  QToolButton *treeCollapseButton;
-  QToolButton *treeExpandButton;
+  QToolButton *treeMoreButton;
   QTreeView *treeView;
+  QWidget *editorContainer;
+  QSplitter *m_explorerSplitter = nullptr;
   TextArea *textArea;
   Minimap *minimap;
   GitFileSystemModel *model;
   bool m_ownsModel;
   GitIntegration *m_gitIntegration;
   QString m_treeFilterText;
-  QMetaObject::Connection m_directoryLoadedConnection;
   QString filePath;
   QString projectRootPath;
 };

@@ -13,6 +13,7 @@ private slots:
   void testGoForward();
   void testRecordLocationIfSignificant();
   void testClear();
+  void testRetargetFolderKeepsBackAndForwardLocations();
 
 private:
   NavigationHistory *m_history;
@@ -23,6 +24,22 @@ void TestNavigationHistory::initTestCase() {
 }
 
 void TestNavigationHistory::cleanupTestCase() { delete m_history; }
+
+void TestNavigationHistory::testRetargetFolderKeepsBackAndForwardLocations() {
+  NavigationHistory history;
+  history.recordLocation({"/project/src/first.cpp", 12, 3});
+  history.recordLocation({"/project/src/second.cpp", 20, 4});
+  history.recordLocation({"/project/src-neighbor/keep.cpp", 30, 5});
+  history.goBack();
+  history.retargetPaths("/project/src", "/project/lib");
+  QCOMPARE(history.currentLocation().filePath, "/project/lib/second.cpp");
+  QCOMPARE(history.goBack().filePath, "/project/lib/first.cpp");
+  const auto next = history.goForward();
+  QCOMPARE(next.filePath, "/project/lib/second.cpp");
+  QCOMPARE(next.line, 20);
+  QCOMPARE(next.column, 4);
+  QCOMPARE(history.goForward().filePath, "/project/src-neighbor/keep.cpp");
+}
 
 void TestNavigationHistory::testCreation() {
   QVERIFY(m_history != nullptr);

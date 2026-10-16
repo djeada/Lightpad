@@ -1,8 +1,12 @@
 #include "filequickopen.h"
+#include "../../core/async/asyncworker.h"
+#include "../../filetree/projectsearch.h"
 #include "../uistylehelper.h"
 #include <QDir>
 #include <QFileInfo>
-#include <algorithm>
+#include <QHideEvent>
+#include <QLabel>
+#include <QTimer>
 
 FileQuickOpen::FileQuickOpen(QWidget *parent)
     : StyledPopupDialog(parent), m_searchBox(nullptr), m_resultsList(nullptr),
@@ -10,7 +14,10 @@ FileQuickOpen::FileQuickOpen(QWidget *parent)
   setupUI();
 }
 
-FileQuickOpen::~FileQuickOpen() {}
+FileQuickOpen::~FileQuickOpen() {
+  if (m_cancelled)
+    m_cancelled->store(true);
+}
 
 void FileQuickOpen::setupUI() {
   setMinimumWidth(600);
@@ -21,8 +28,13 @@ void FileQuickOpen::setupUI() {
   m_layout->setSpacing(4);
 
   m_searchBox = new QLineEdit(this);
+  m_searchBox->setObjectName("quickOpenSearch");
   m_searchBox->setPlaceholderText(tr("Search files by name..."));
   m_layout->addWidget(m_searchBox);
+  m_status = new QLabel(this);
+  m_status->setObjectName("quickOpenStatus");
+  m_status->setTextFormat(Qt::PlainText);
+  m_layout->addWidget(m_status);
 
   m_resultsList = new QListWidget(this);
   m_resultsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -34,44 +46,24 @@ void FileQuickOpen::setupUI() {
           &FileQuickOpen::onItemClicked);
 
   m_searchBox->installEventFilter(this);
+  m_searchTimer = new QTimer(this);
+  m_searchTimer->setSingleShot(true);
+  m_searchTimer->setInterval(120);
+  connect(m_searchTimer, &QTimer::timeout, this, &FileQuickOpen::runSearch);
 }
 
 void FileQuickOpen::setRootDirectory(const QString &path) {
-  m_rootPath = path;
-  scanDirectory();
-}
-
-void FileQuickOpen::scanDirectory() {
-  m_allFiles.clear();
-
-  if (m_rootPath.isEmpty() || !QDir(m_rootPath).exists()) {
+  if (m_rootPath == path)
     return;
-  }
-
-  static const QStringList skipDirs = {".git", "node_modules", "build",
-                                       "dist", ".cache",       "__pycache__"};
-  const QDir root(m_rootPath);
-  QStringList pending = {m_rootPath};
-
-  while (!pending.isEmpty()) {
-    const QDir dir(pending.takeLast());
-
-    const QFileInfoList files = dir.entryInfoList(QDir::Files);
-    for (const QFileInfo &info : files) {
-      m_allFiles.append(root.relativeFilePath(info.filePath()));
-    }
-
-    const QFileInfoList subdirs =
-        dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
-    for (const QFileInfo &info : subdirs) {
-      if (info.isSymLink() || skipDirs.contains(info.fileName())) {
-        continue;
-      }
-      pending.append(info.filePath());
-    }
-  }
-
-  m_allFiles.sort(Qt::CaseInsensitive);
+  ++m_request;
+  if (m_cancelled)
+    m_cancelled->store(true);
+  m_searchTimer->stop();
+  m_resultsList->clear();
+  m_filteredFiles.clear();
+  m_rootPath = path;
+  if (isVisible())
+    updateResults(m_searchBox->text());
 }
 
 void FileQuickOpen::showDialog() {
@@ -141,97 +133,70 @@ void FileQuickOpen::onItemClicked(QListWidgetItem *item) {
   onItemActivated(item);
 }
 
-void FileQuickOpen::updateResults(const QString &query) {
+void FileQuickOpen::updateResults(const QString &) {
+  ++m_request;
+  if (m_cancelled)
+    m_cancelled->store(true);
   m_resultsList->clear();
   m_filteredFiles.clear();
-
-  QList<QPair<int, QString>> scored;
-
-  for (const QString &file : m_allFiles) {
-    int score = 0;
-    if (query.isEmpty()) {
-      score = 1000;
-    } else {
-
-      QString fileName = QFileInfo(file).fileName();
-      score = fuzzyMatch(query.toLower(), fileName.toLower());
-
-      if (score == 0) {
-        score = fuzzyMatch(query.toLower(), file.toLower()) / 2;
-      }
-    }
-
-    if (score > 0) {
-      scored.append(qMakePair(score, file));
-    }
-  }
-
-  std::sort(scored.begin(), scored.end(),
-            [](const QPair<int, QString> &a, const QPair<int, QString> &b) {
-              return a.first > b.first;
-            });
-
-  int maxResults = 20;
-  for (int i = 0; i < qMin(scored.size(), maxResults); ++i) {
-    QString filePath = scored[i].second;
-    m_filteredFiles.append(filePath);
-
-    QListWidgetItem *item = new QListWidgetItem();
-
-    QString fileName = QFileInfo(filePath).fileName();
-    QString dirPath = QFileInfo(filePath).path();
-
-    QString displayText = fileName;
-    if (!dirPath.isEmpty() && dirPath != ".") {
-      displayText += "  (" + dirPath + ")";
-    }
-
-    item->setText(displayText);
-    item->setData(Qt::UserRole, filePath);
-    m_resultsList->addItem(item);
-  }
-
-  if (m_resultsList->count() > 0) {
-    m_resultsList->setCurrentRow(0);
-  }
-
-  int itemHeight = 35;
-  int newHeight = qMin(m_resultsList->count() * itemHeight + 60, 450);
-  setFixedHeight(newHeight);
+  m_status->setText(tr("Searching project files…"));
+  m_searchTimer->start();
 }
 
-int FileQuickOpen::fuzzyMatch(const QString &pattern, const QString &text) {
-  if (pattern.isEmpty())
-    return 1000;
-
-  if (text.contains(pattern))
-    return 2000 + (1000 - text.indexOf(pattern));
-
-  int patternIdx = 0;
-  int score = 0;
-  int lastMatchIdx = -1;
-
-  for (int i = 0; i < text.length() && patternIdx < pattern.length(); ++i) {
-    if (text[i] == pattern[patternIdx]) {
-
-      if (lastMatchIdx == i - 1) {
-        score += 15;
-      }
-
-      if (i == 0 || text[i - 1] == '/' || text[i - 1] == '\\' ||
-          text[i - 1] == '.' || text[i - 1] == '_' || text[i - 1] == '-') {
-        score += 10;
-      }
-      score += 10;
-      lastMatchIdx = i;
-      patternIdx++;
+void FileQuickOpen::runSearch() {
+  const int request = m_request;
+  auto token = std::make_shared<std::atomic_bool>(false);
+  m_cancelled = token;
+  ProjectSearch::Options options;
+  options.rootPath = m_rootPath;
+  options.query = m_searchBox->text().trimmed().isEmpty() ? QStringLiteral("*")
+                                                          : m_searchBox->text();
+  options.includeDirectories = false;
+  options.maxResults = 50;
+  auto results = std::make_shared<ProjectSearch::Results>();
+  auto *task = new AsyncTask([options, token, results](AsyncTask *) {
+    *results =
+        ProjectSearch::search(options, [token]() { return token->load(); });
+  });
+  connect(task, &AsyncWorker::finished, this, [this, request, results]() {
+    if (request != m_request)
+      return;
+    m_cancelled.reset();
+    m_resultsList->clear();
+    m_filteredFiles.clear();
+    for (const auto &match : results->matches) {
+      m_filteredFiles.append(match.relativePath);
+      auto *item = new QListWidgetItem(m_resultsList);
+      item->setText(QFileInfo(match.relativePath).fileName() +
+                    QStringLiteral("  ·  ") +
+                    QFileInfo(match.relativePath).path());
+      item->setToolTip(match.filePath);
+      item->setData(Qt::UserRole, match.relativePath);
     }
-  }
+    m_status->setText(
+        !results->error.isEmpty()    ? results->error
+        : results->matches.isEmpty() ? tr("No matching files")
+        : results->matches.size() == 1
+            ? tr("1 file · Enter to open")
+            : tr("%n files · Enter to open", nullptr, results->matches.size()));
+    if (m_resultsList->count())
+      m_resultsList->setCurrentRow(0);
+    setFixedHeight(qBound(160, m_resultsList->count() * 35 + 90, 450));
+  });
+  connect(task, &AsyncWorker::error, this,
+          [this, request](const QString &error) {
+            if (request == m_request)
+              m_status->setText(error);
+          });
+  AsyncThreadPool::instance().submit(task);
+}
 
-  if (patternIdx != pattern.length())
-    return 0;
-
-  return score;
+void FileQuickOpen::hideEvent(QHideEvent *event) {
+  ++m_request;
+  m_searchTimer->stop();
+  if (m_cancelled)
+    m_cancelled->store(true);
+  StyledPopupDialog::hideEvent(event);
 }
 
 void FileQuickOpen::selectFile(int row) {

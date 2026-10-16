@@ -13,6 +13,7 @@
 #include <memory>
 
 #include "../core/io/fileopenguard.h"
+#include "../filetree/projectsearch.h"
 #include "../run_templates/runtargetresolver.h"
 #include "../settings/textareasettings.h"
 #include "../settings/theme.h"
@@ -83,6 +84,7 @@ public:
   void openPathsFromCommandLine(const QStringList &paths);
   void closeTabPage(QString filePath);
   void retargetOpenPaths(const QString &oldPath, const QString &newPath);
+  bool preparePathsForRemoval(const QStringList &paths);
   void setRowCol(int row, int col);
   void setTabWidth(int width);
   void setTabWidthLabel(QString text);
@@ -586,6 +588,8 @@ private:
   bool m_treeScrollValueInitialized;
   bool m_treeScrollSyncing;
   QString m_treeFilterText;
+  ProjectSearch::Options m_treeSearchOptions;
+  int m_explorerWidth = 300;
   QString m_treeCurrentPath;
   bool m_treeSelectionSyncing;
 
@@ -596,6 +600,10 @@ public:
   GitFileSystemModel *getFileTreeModel() const;
   void setTreeFilterText(const QString &text);
   QString getTreeFilterText() const;
+  void setTreeSearchOptions(const ProjectSearch::Options &options);
+  ProjectSearch::Options getTreeSearchOptions() const;
+  void setExplorerWidth(int width);
+  int getExplorerWidth() const;
   void registerTreeView(LightpadTreeView *treeView);
 };
 

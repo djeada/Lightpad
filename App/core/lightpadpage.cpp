@@ -1,34 +1,23 @@
 #include "lightpadpage.h"
+#include "../filetree/explorersearchwidget.h"
 #include "../git/gitintegration.h"
 #include "../run_templates/runtemplatemanager.h"
-#include "../test_templates/testfileclassifier.h"
 #include "../theme/colorcontrast.h"
 #include "../theme/themeengine.h"
 #include "../ui/mainwindow.h"
 #include "../ui/panels/minimap.h"
 #include "../ui/uistylehelper.h"
 #include <QAction>
-#include <QApplication>
-#include <QContextMenuEvent>
 #include <QDir>
-#include <QDragEnterEvent>
-#include <QDragMoveEvent>
-#include <QDropEvent>
 #include <QFileInfo>
-#include <QFont>
-#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QLineEdit>
 #include <QMenu>
-#include <QMimeData>
-#include <QPainter>
-#include <QSignalBlocker>
 #include <QSizePolicy>
-#include <QStatusBar>
+#include <QSplitter>
 #include <QStyle>
-#include <QStyleOptionViewItem>
-#include <QStyledItemDelegate>
+#include <QTextBlock>
+#include <QTextCursor>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QtGlobal>
@@ -55,652 +44,14 @@ private:
 };
 } // namespace
 
-namespace {
-class ExplorerTreeDelegate : public QStyledItemDelegate {
-public:
-  explicit ExplorerTreeDelegate(QObject *parent = nullptr)
-      : QStyledItemDelegate(parent) {}
-
-  void setTheme(const ThemeDefinition &theme) {
-    m_textColor = theme.colors.textPrimary;
-    m_hoverBackground = ColorContrast::flatten(theme.colors.treeHoverBg,
-                                               theme.colors.surfaceBase);
-    m_selectedBackground = ColorContrast::flatten(theme.colors.treeSelectedBg,
-                                                  theme.colors.surfaceBase);
-    m_selectedBorder = theme.colors.accentPrimary;
-  }
-
-  void paint(QPainter *painter, const QStyleOptionViewItem &option,
-             const QModelIndex &index) const override {
-    if (!painter) {
-      return;
-    }
-
-    QStyleOptionViewItem opt(option);
-    initStyleOption(&opt, index);
-
-    const bool isSelected = opt.state.testFlag(QStyle::State_Selected);
-    const bool isHovered = opt.state.testFlag(QStyle::State_MouseOver);
-    const QRect rowRect = opt.rect.adjusted(4, 1, -4, -1);
-
-    painter->save();
-    painter->setRenderHint(QPainter::Antialiasing, true);
-
-    if (isSelected || isHovered) {
-      const QColor bg = isSelected ? m_selectedBackground : m_hoverBackground;
-      const QColor border = isSelected ? m_selectedBorder : bg.lighter(112);
-      painter->setPen(border);
-      painter->setBrush(bg);
-      painter->drawRoundedRect(rowRect, 7, 7);
-      if (isSelected) {
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(m_selectedBorder);
-        painter->drawRoundedRect(QRect(rowRect.left() + 2, rowRect.top() + 4, 3,
-                                       rowRect.height() - 8),
-                                 1, 1);
-      }
-    }
-
-    const QString badge = index.data(GitStatusBadgeRole).toString();
-    const QColor badgeColor =
-        index.data(GitStatusBadgeColorRole).value<QColor>();
-    const int badgeSpace = (!badge.isEmpty() && badgeColor.isValid()) ? 18 : 0;
-
-    opt.rect = rowRect.adjusted(6, 0, -4 - badgeSpace, 0);
-    opt.showDecorationSelected = false;
-    opt.state &= ~QStyle::State_HasFocus;
-    if (index.model() && index.model()->hasChildren(index)) {
-      opt.font.setWeight(QFont::DemiBold);
-    }
-    const QColor rowBackground =
-        isSelected ? m_selectedBackground
-                   : (isHovered ? m_hoverBackground : QColor());
-    const QVariant itemForeground = index.data(Qt::ForegroundRole);
-    QColor textColor = itemForeground.canConvert<QColor>()
-                           ? itemForeground.value<QColor>()
-                           : m_textColor;
-    if (!textColor.isValid())
-      textColor = m_textColor;
-    if (rowBackground.isValid())
-      textColor = ColorContrast::ensure(textColor, rowBackground,
-                                        ColorContrast::SecondaryTextRatio);
-    opt.palette.setColor(QPalette::Highlight, Qt::transparent);
-    opt.palette.setColor(QPalette::HighlightedText, textColor);
-    opt.palette.setColor(QPalette::Text, textColor);
-
-    QStyledItemDelegate::paint(painter, opt, index);
-
-    if (!badge.isEmpty() && badgeColor.isValid()) {
-      QFont badgeFont = opt.font;
-      badgeFont.setPixelSize(10);
-      badgeFont.setWeight(QFont::Bold);
-      painter->setFont(badgeFont);
-      painter->setPen(rowBackground.isValid()
-                          ? ColorContrast::ensure(badgeColor, rowBackground,
-                                                  ColorContrast::GlyphRatio)
-                          : badgeColor);
-      QRect badgeRect(rowRect.right() - 18, rowRect.top(), 16,
-                      rowRect.height());
-      painter->drawText(badgeRect, Qt::AlignCenter, badge);
-    }
-
-    painter->restore();
-  }
-
-  QSize sizeHint(const QStyleOptionViewItem &option,
-                 const QModelIndex &index) const override {
-    QSize size = QStyledItemDelegate::sizeHint(option, index);
-    size.setHeight(qMax(size.height(), 24));
-    return size + QSize(0, 2);
-  }
-
-private:
-  QColor m_textColor = QApplication::palette().color(QPalette::Text);
-  QColor m_hoverBackground =
-      QApplication::palette().color(QPalette::AlternateBase);
-  QColor m_selectedBackground =
-      QApplication::palette().color(QPalette::Highlight);
-  QColor m_selectedBorder = QApplication::palette().color(QPalette::Link);
-};
-} // namespace
-
-LightpadTreeView::LightpadTreeView(LightpadPage *parent)
-    : QTreeView(parent), parentPage(parent),
-      fileModel(new FileDirTreeModel(this)),
-      fileController(new FileDirTreeController(fileModel, this)) {
-
-  setDragEnabled(true);
-  setAcceptDrops(true);
-  setDropIndicatorShown(true);
-  setDragDropMode(QAbstractItemView::DragDrop);
-  setDefaultDropAction(Qt::MoveAction);
-  setAnimated(true);
-  setMouseTracking(true);
-  setFrameShape(QFrame::NoFrame);
-  setIndentation(14);
-  setUniformRowHeights(true);
-  setIconSize(QSize(18, 18));
-  setSelectionBehavior(QAbstractItemView::SelectRows);
-
-  setSelectionMode(QAbstractItemView::ExtendedSelection);
-  setAllColumnsShowFocus(false);
-  setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-  setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
-  setItemDelegate(new ExplorerTreeDelegate(this));
-
-  setupShortcuts();
-
-  connect(fileController, &FileDirTreeController::actionCompleted, parentPage,
-          &LightpadPage::updateModel);
-  connect(fileController, &FileDirTreeController::fileRemoved, parentPage,
-          &LightpadPage::closeTabPage);
-  connect(fileModel, &FileDirTreeModel::pathMoved, this,
-          [this](const QString &oldPath, const QString &newPath) {
-            if (parentPage && parentPage->getMainWindow()) {
-              parentPage->getMainWindow()->retargetOpenPaths(oldPath, newPath);
-            }
-          });
-  connect(fileController, &FileDirTreeController::pathCreated, this,
-          [this](const QString &path, bool isDirectory) {
-            if (!parentPage) {
-              return;
-            }
-            parentPage->revealPath(path);
-
-            if (!isDirectory && parentPage->getMainWindow()) {
-              parentPage->getMainWindow()->openFileAndAddToNewTab(path);
-            }
-          });
-  connect(fileController, &FileDirTreeController::statusMessage, this,
-          [this](const QString &message) {
-            if (parentPage && parentPage->getMainWindow()) {
-              parentPage->getMainWindow()->statusBar()->showMessage(message,
-                                                                    5000);
-            }
-          });
-}
-
-LightpadTreeView::~LightpadTreeView() {}
-
-void LightpadTreeView::setupShortcuts() {
-  struct ShortcutSpec {
-    QKeySequence sequence;
-    std::function<void()> handler;
-  };
-
-  const QList<ShortcutSpec> specs = {
-      {QKeySequence(Qt::Key_F2), [this]() { renameSelection(); }},
-      {QKeySequence::Delete, [this]() { deleteSelection(DeleteMode::Trash); }},
-      {QKeySequence(Qt::SHIFT | Qt::Key_Delete),
-       [this]() { deleteSelection(DeleteMode::Permanent); }},
-      {QKeySequence::Copy, [this]() { copySelection(); }},
-      {QKeySequence::Cut, [this]() { cutSelection(); }},
-      {QKeySequence::Paste, [this]() { pasteIntoTarget(); }},
-      {QKeySequence(Qt::CTRL | Qt::Key_D), [this]() { duplicateSelection(); }},
-      {QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N),
-       [this]() { promptNewFolder(); }},
-      {QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_N),
-       [this]() { promptNewFile(); }},
-  };
-
-  for (const ShortcutSpec &spec : specs) {
-    auto *action = new QAction(this);
-    action->setShortcut(spec.sequence);
-    action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
-    connect(action, &QAction::triggered, this, spec.handler);
-    addAction(action);
-  }
-}
-
-QStringList LightpadTreeView::selectedPaths() const {
-  if (!parentPage) {
-    return {};
-  }
-
-  QStringList paths;
-  const QModelIndexList indexes =
-      selectionModel() ? selectionModel()->selectedRows(0) : QModelIndexList();
-  for (const QModelIndex &index : indexes) {
-    const QString path = parentPage->getFilePath(index);
-    if (!path.isEmpty() && !paths.contains(path)) {
-      paths << path;
-    }
-  }
-  return paths;
-}
-
-QString LightpadTreeView::rootPath() const {
-  if (!parentPage) {
-    return QString();
-  }
-
-  const QString projectRoot = parentPage->getProjectRootPath();
-  if (!projectRoot.isEmpty()) {
-    return projectRoot;
-  }
-
-  const QModelIndex root = rootIndex();
-  return root.isValid() ? parentPage->getFilePath(root) : QString();
-}
-
-QString LightpadTreeView::targetDirectory() const {
-  const QStringList selection = selectedPaths();
-  if (!selection.isEmpty()) {
-    const QFileInfo info(selection.first());
-    if (info.isDir()) {
-      return info.absoluteFilePath();
-    }
-    if (info.exists()) {
-      return info.absolutePath();
-    }
-  }
-  return rootPath();
-}
-
-void LightpadTreeView::promptNewFile() {
-  const QString directory = targetDirectory();
-  if (!directory.isEmpty()) {
-    fileController->handleNewFile(directory);
-  }
-}
-
-void LightpadTreeView::promptNewFolder() {
-  const QString directory = targetDirectory();
-  if (!directory.isEmpty()) {
-    fileController->handleNewDirectory(directory);
-  }
-}
-
-void LightpadTreeView::copySelection() {
-  const QStringList selection = selectedPaths();
-  if (!selection.isEmpty()) {
-    fileController->handleCopy(selection);
-  }
-}
-
-void LightpadTreeView::cutSelection() {
-  const QStringList selection = selectedPaths();
-  if (!selection.isEmpty()) {
-    fileController->handleCut(selection);
-  }
-}
-
-void LightpadTreeView::pasteIntoTarget() {
-  const QString directory = targetDirectory();
-  if (!directory.isEmpty()) {
-    fileController->handlePaste(directory);
-  }
-}
-
-void LightpadTreeView::renameSelection() {
-  const QStringList selection = selectedPaths();
-  if (selection.size() == 1) {
-    fileController->handleRename(selection.first());
-  }
-}
-
-void LightpadTreeView::duplicateSelection() {
-  const QStringList selection = selectedPaths();
-  for (const QString &path : selection) {
-    fileController->handleDuplicate(path);
-  }
-}
-
-void LightpadTreeView::deleteSelection(DeleteMode mode) {
-  const QStringList selection = selectedPaths();
-  if (!selection.isEmpty()) {
-    fileController->handleRemove(selection, mode);
-  }
-}
-
-void LightpadTreeView::keyPressEvent(QKeyEvent *event) {
-  if (!event) {
-    return;
-  }
-
-  if ((event->key() == Qt::Key_Enter) || (event->key() == Qt::Key_Return)) {
-    QModelIndex idx = currentIndex();
-    if (idx.isValid() && parentPage) {
-      parentPage->activateTreeIndex(idx);
-      event->accept();
-      return;
-    }
-  }
-
-  QTreeView::keyPressEvent(event);
-}
-
-void LightpadTreeView::contextMenuEvent(QContextMenuEvent *event) {
-  if (!event) {
-    return;
-  }
-  showContextMenu(event->pos());
-  event->accept();
-}
-
-void LightpadTreeView::showContextMenu(const QPoint &pos) {
-  if (!parentPage) {
-    return;
-  }
-
-  QMenu menu;
-  if (parentPage->getMainWindow()) {
-    menu.setStyleSheet(UIStyleHelper::contextMenuStyle(
-        parentPage->getMainWindow()->getTheme()));
-  }
-
-  const QModelIndex idx = indexAt(pos);
-  if (!idx.isValid()) {
-
-    if (QItemSelectionModel *selection = selectionModel()) {
-      selection->clearSelection();
-    }
-    buildRootMenu(menu);
-  } else {
-    QStringList selection = selectedPaths();
-    const QString clickedPath = parentPage->getFilePath(idx);
-    if (!selection.contains(clickedPath)) {
-      setCurrentIndex(idx);
-      selection = QStringList{clickedPath};
-    }
-    buildEntryMenu(menu, clickedPath, selection);
-  }
-
-  if (!menu.isEmpty()) {
-    menu.exec(viewport()->mapToGlobal(pos));
-  }
-}
-
-void LightpadTreeView::buildRootMenu(QMenu &menu) {
-  const QString root = rootPath();
-  if (root.isEmpty()) {
-    return;
-  }
-
-  const QString rootName = QFileInfo(root).fileName();
-  QAction *header = menu.addAction(
-      tr("%1 (project root)").arg(rootName.isEmpty() ? root : rootName));
-  header->setEnabled(false);
-  menu.addSeparator();
-
-  connect(menu.addAction(tr("New File…")), &QAction::triggered, this,
-          [this, root]() { fileController->handleNewFile(root); });
-  connect(menu.addAction(tr("New Folder…")), &QAction::triggered, this,
-          [this, root]() { fileController->handleNewDirectory(root); });
-
-  QAction *pasteAction = menu.addAction(tr("Paste"));
-  pasteAction->setEnabled(fileModel->canPaste());
-  connect(pasteAction, &QAction::triggered, this,
-          [this, root]() { fileController->handlePaste(root); });
-
-  menu.addSeparator();
-  connect(menu.addAction(tr("Reveal in File Manager")), &QAction::triggered,
-          this, [this, root]() { emit revealInFileManagerRequested(root); });
-  connect(menu.addAction(tr("Open in Terminal")), &QAction::triggered, this,
-          [this, root]() { emit openInTerminalRequested(root); });
-  connect(menu.addAction(tr("Copy Path")), &QAction::triggered, this,
-          [this, root]() {
-            fileController->handleCopyAbsolutePath(QStringList{root});
-          });
-
-  menu.addSeparator();
-  connect(menu.addAction(tr("Refresh")), &QAction::triggered, parentPage,
-          &LightpadPage::updateModel);
-  connect(menu.addAction(tr("Collapse All")), &QAction::triggered, this,
-          &QTreeView::collapseAll);
-}
-
-void LightpadTreeView::buildEntryMenu(QMenu &menu, const QString &filePath,
-                                      const QStringList &selection) {
-  const QFileInfo fileInfo(filePath);
-  const bool isDirectory = fileInfo.isDir();
-  const bool multiple = selection.size() > 1;
-  const QString name = fileInfo.fileName();
-  const QString subject =
-      multiple ? tr("%n items", nullptr, selection.size()) : name;
-  const QString containingDir =
-      isDirectory ? fileInfo.absoluteFilePath() : fileInfo.absolutePath();
-
-  if (!multiple && !isDirectory) {
-    connect(menu.addAction(tr("Run %1").arg(name)), &QAction::triggered, this,
-            [this, filePath]() { emit runFileRequested(filePath); });
-    connect(menu.addAction(tr("Debug %1").arg(name)), &QAction::triggered, this,
-            [this, filePath]() { emit debugFileRequested(filePath); });
-    menu.addSeparator();
-    connect(menu.addAction(tr("Open")), &QAction::triggered, this,
-            [this, filePath]() {
-              if (parentPage && parentPage->getMainWindow()) {
-                parentPage->getMainWindow()->openFileAndAddToNewTab(filePath);
-              }
-            });
-    menu.addSeparator();
-  }
-
-  if (!multiple) {
-    connect(menu.addAction(tr("New File…")), &QAction::triggered, this,
-            [this, containingDir]() {
-              fileController->handleNewFile(containingDir);
-            });
-    connect(menu.addAction(tr("New Folder…")), &QAction::triggered, this,
-            [this, containingDir]() {
-              fileController->handleNewDirectory(containingDir);
-            });
-    menu.addSeparator();
-  }
-
-  connect(menu.addAction(tr("Cut")), &QAction::triggered, this,
-          [this, selection]() { fileController->handleCut(selection); });
-  connect(menu.addAction(tr("Copy")), &QAction::triggered, this,
-          [this, selection]() { fileController->handleCopy(selection); });
-
-  QAction *pasteAction = menu.addAction(tr("Paste"));
-  pasteAction->setEnabled(fileModel->canPaste());
-  connect(pasteAction, &QAction::triggered, this, [this, containingDir]() {
-    fileController->handlePaste(containingDir);
-  });
-
-  menu.addSeparator();
-
-  if (!multiple) {
-    connect(menu.addAction(tr("Rename…")), &QAction::triggered, this,
-            [this, filePath]() { fileController->handleRename(filePath); });
-    connect(menu.addAction(tr("Duplicate")), &QAction::triggered, this,
-            [this, filePath]() { fileController->handleDuplicate(filePath); });
-  }
-
-  connect(menu.addAction(tr("Move %1 to Trash").arg(subject)),
-          &QAction::triggered, this, [this, selection]() {
-            fileController->handleRemove(selection, DeleteMode::Trash);
-          });
-  connect(menu.addAction(tr("Delete Permanently…")), &QAction::triggered, this,
-          [this, selection]() {
-            fileController->handleRemove(selection, DeleteMode::Permanent);
-          });
-
-  menu.addSeparator();
-
-  TestFileClassifier &classifier = TestFileClassifier::instance();
-  const bool currentlyTest = isDirectory ? classifier.isTestDirectory(filePath)
-                                         : classifier.isTestFile(filePath);
-  if (!multiple) {
-    connect(menu.addAction(isDirectory ? tr("Run Tests in Folder")
-                                       : tr("Run as Test")),
-            &QAction::triggered, this,
-            [this, filePath]() { emit runTestsRequested(filePath); });
-
-    if (!isDirectory) {
-      connect(menu.addAction(currentlyTest ? tr("Unmark as Test File")
-                                           : tr("Mark as Test File")),
-              &QAction::triggered, this, [this, filePath, currentlyTest]() {
-                emit toggleTestMarkerRequested(filePath, !currentlyTest);
-              });
-    }
-    menu.addSeparator();
-  }
-
-  const QString root = rootPath();
-  connect(menu.addAction(tr("Copy Path")), &QAction::triggered, this,
-          [this, selection]() {
-            fileController->handleCopyAbsolutePath(selection);
-          });
-  QAction *relativeAction = menu.addAction(tr("Copy Relative Path"));
-  relativeAction->setEnabled(!root.isEmpty());
-  connect(relativeAction, &QAction::triggered, this, [this, selection, root]() {
-    fileController->handleCopyRelativePath(selection, root);
-  });
-
-  if (!multiple) {
-    menu.addSeparator();
-    connect(
-        menu.addAction(tr("Reveal in File Manager")), &QAction::triggered, this,
-        [this, filePath]() { emit revealInFileManagerRequested(filePath); });
-    connect(menu.addAction(tr("Open in Terminal")), &QAction::triggered, this,
-            [this, containingDir]() {
-              emit openInTerminalRequested(containingDir);
-            });
-  }
-}
-
-QString LightpadTreeView::dropDirectoryAt(const QPoint &position) const {
-  const QModelIndex index = indexAt(position);
-  if (!index.isValid() || !parentPage) {
-
-    return rootPath();
-  }
-
-  const QString path = parentPage->getFilePath(index);
-  const QFileInfo info(path);
-  return info.isDir() ? info.absoluteFilePath() : info.absolutePath();
-}
-
-bool LightpadTreeView::acceptsDropOf(const QStringList &sources,
-                                     const QString &destination) const {
-  if (destination.isEmpty() || sources.isEmpty()) {
-    return false;
-  }
-
-  for (const QString &source : sources) {
-    const QFileInfo info(source);
-    if (!info.exists() && !info.isSymLink()) {
-      continue;
-    }
-
-    if (info.isDir() && FileDirTreeModel::isInside(source, destination)) {
-      return false;
-    }
-    return true;
-  }
-  return false;
-}
-
-void LightpadTreeView::performDrop(const QStringList &sources,
-                                   const QString &destination, bool copy) {
-  QString lastCreated;
-  bool anySucceeded = false;
-
-  for (const QString &source : sources) {
-    QString created;
-    const bool ok = copy ? fileModel->copyInto(source, destination, &created)
-                         : fileModel->moveInto(source, destination, &created);
-    if (ok) {
-      anySucceeded = true;
-      lastCreated = created;
-    }
-  }
-
-  if (!anySucceeded) {
-    return;
-  }
-
-  if (parentPage) {
-    parentPage->updateModel();
-    if (!lastCreated.isEmpty()) {
-      parentPage->revealPath(lastCreated);
-    }
-  }
-}
-
-void LightpadTreeView::dragEnterEvent(QDragEnterEvent *event) {
-  if (event->mimeData()->hasUrls()) {
-    event->acceptProposedAction();
-  } else {
-    QTreeView::dragEnterEvent(event);
-  }
-}
-
-void LightpadTreeView::dragMoveEvent(QDragMoveEvent *event) {
-  if (!event->mimeData()->hasUrls()) {
-    QTreeView::dragMoveEvent(event);
-    return;
-  }
-
-  QStringList sources;
-  const QList<QUrl> urls = event->mimeData()->urls();
-  for (const QUrl &url : urls) {
-    const QString local = url.toLocalFile();
-    if (!local.isEmpty()) {
-      sources << local;
-    }
-  }
-
-  const QPoint position =
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-      event->position().toPoint();
-#else
-      event->pos();
-#endif
-
-  if (acceptsDropOf(sources, dropDirectoryAt(position))) {
-    event->acceptProposedAction();
-  } else {
-    event->ignore();
-  }
-}
-
-void LightpadTreeView::dropEvent(QDropEvent *event) {
-  if (!event->mimeData()->hasUrls()) {
-    QTreeView::dropEvent(event);
-    return;
-  }
-
-  const QPoint dropPos =
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-      event->position().toPoint();
-#else
-      event->pos();
-#endif
-
-  const QString destination = dropDirectoryAt(dropPos);
-
-  QStringList sources;
-  const QList<QUrl> urls = event->mimeData()->urls();
-  for (const QUrl &url : urls) {
-    const QString local = url.toLocalFile();
-    if (!local.isEmpty()) {
-      sources << local;
-    }
-  }
-
-  if (!acceptsDropOf(sources, destination)) {
-    event->ignore();
-    return;
-  }
-
-  const bool copy = event->modifiers().testFlag(Qt::ControlModifier) ||
-                    event->dropAction() == Qt::CopyAction;
-  performDrop(sources, destination, copy);
-  event->acceptProposedAction();
-}
-
 LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
     : QWidget(parent), mainWindow(nullptr), treeContainer(nullptr),
       treeHeader(nullptr), treeTitleLabel(nullptr), treePathLabel(nullptr),
-      treeFilterEdit(nullptr), treeNewFileButton(nullptr),
-      treeNewFolderButton(nullptr), treeRefreshButton(nullptr),
-      treeCollapseButton(nullptr), treeExpandButton(nullptr), treeView(nullptr),
-      textArea(nullptr), minimap(nullptr), model(nullptr), m_ownsModel(true),
-      m_gitIntegration(nullptr), m_treeFilterText(""), filePath(""),
-      projectRootPath("") {
+      treeSearch(nullptr), treeNewFileButton(nullptr),
+      treeNewFolderButton(nullptr), treeMoreButton(nullptr), treeView(nullptr),
+      editorContainer(nullptr), textArea(nullptr), minimap(nullptr),
+      model(nullptr), m_ownsModel(true), m_gitIntegration(nullptr),
+      m_treeFilterText(""), filePath(""), projectRootPath("") {
 
   auto *layoutHor = new QHBoxLayout(this);
   layoutHor->setContentsMargins(0, 0, 0, 0);
@@ -709,7 +60,6 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   treeContainer->setObjectName("treeContainer");
   treeContainer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
   treeContainer->setMinimumWidth(240);
-  treeContainer->setMaximumWidth(420);
   auto *treeLayout = new QVBoxLayout(treeContainer);
   treeLayout->setContentsMargins(8, 8, 8, 8);
   treeLayout->setSpacing(8);
@@ -722,12 +72,14 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
 
   treeTitleLabel = new QLabel("EXPLORER", treeHeader);
   treeTitleLabel->setObjectName("treeTitleLabel");
-  treeHeaderLayout->addWidget(treeTitleLabel);
-  treeHeaderLayout->addStretch(1);
+  treeTitleLabel->setTextFormat(Qt::PlainText);
+  treeTitleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+  treeHeaderLayout->addWidget(treeTitleLabel, 1);
 
   treeNewFileButton = new QToolButton(treeHeader);
   treeNewFileButton->setObjectName("treeToolButton");
   treeNewFileButton->setToolTip(tr("New file (Ctrl+Alt+N)"));
+  treeNewFileButton->setAccessibleName(tr("New file"));
   treeNewFileButton->setIcon(style()->standardIcon(QStyle::SP_FileIcon));
   treeNewFileButton->setIconSize(QSize(14, 14));
   treeHeaderLayout->addWidget(treeNewFileButton);
@@ -735,44 +87,32 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   treeNewFolderButton = new QToolButton(treeHeader);
   treeNewFolderButton->setObjectName("treeToolButton");
   treeNewFolderButton->setToolTip(tr("New folder (Ctrl+Shift+N)"));
+  treeNewFolderButton->setAccessibleName(tr("New folder"));
   treeNewFolderButton->setIcon(
       style()->standardIcon(QStyle::SP_FileDialogNewFolder));
   treeNewFolderButton->setIconSize(QSize(14, 14));
   treeHeaderLayout->addWidget(treeNewFolderButton);
 
-  treeRefreshButton = new QToolButton(treeHeader);
-  treeRefreshButton->setObjectName("treeToolButton");
-  treeRefreshButton->setToolTip("Refresh file tree");
-  treeRefreshButton->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
-  treeRefreshButton->setIconSize(QSize(14, 14));
-  treeHeaderLayout->addWidget(treeRefreshButton);
-
-  treeCollapseButton = new QToolButton(treeHeader);
-  treeCollapseButton->setObjectName("treeToolButton");
-  treeCollapseButton->setToolTip("Collapse all");
-  treeCollapseButton->setIcon(style()->standardIcon(QStyle::SP_ArrowUp));
-  treeCollapseButton->setIconSize(QSize(14, 14));
-  treeHeaderLayout->addWidget(treeCollapseButton);
-
-  treeExpandButton = new QToolButton(treeHeader);
-  treeExpandButton->setObjectName("treeToolButton");
-  treeExpandButton->setToolTip("Expand one level");
-  treeExpandButton->setIcon(style()->standardIcon(QStyle::SP_ArrowDown));
-  treeExpandButton->setIconSize(QSize(14, 14));
-  treeHeaderLayout->addWidget(treeExpandButton);
+  treeMoreButton = new QToolButton(treeHeader);
+  treeMoreButton->setObjectName("treeToolButton");
+  treeMoreButton->setText(QString(QChar(0x22ef)));
+  treeMoreButton->setToolTip(tr("Explorer actions"));
+  treeMoreButton->setAccessibleName(tr("Explorer actions"));
+  treeMoreButton->setPopupMode(QToolButton::InstantPopup);
+  auto *treeMenu = new QMenu(treeMoreButton);
+  treeMoreButton->setMenu(treeMenu);
+  treeHeaderLayout->addWidget(treeMoreButton);
 
   treePathLabel = new QLabel(treeContainer);
   treePathLabel->setObjectName("treePathLabel");
+  treePathLabel->setTextFormat(Qt::PlainText);
   treePathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
   treePathLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
   treePathLabel->hide();
   treePathLabel->installEventFilter(new LabelResizeNotifier(
       treePathLabel, [this]() { updateTreePathLabel(); }));
 
-  treeFilterEdit = new QLineEdit(treeContainer);
-  treeFilterEdit->setObjectName("treeFilterEdit");
-  treeFilterEdit->setPlaceholderText("Filter files...");
-  treeFilterEdit->setClearButtonEnabled(true);
+  treeSearch = new ExplorerSearchWidget(treeContainer);
 
   treeView = new LightpadTreeView(this);
   treeView->setExpandsOnDoubleClick(false);
@@ -784,20 +124,34 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
 
   treeLayout->addWidget(treeHeader);
   treeLayout->addWidget(treePathLabel);
-  treeLayout->addWidget(treeFilterEdit);
+  treeLayout->addWidget(treeSearch);
   treeLayout->addWidget(treeView, 1);
 
-  layoutHor->addWidget(treeContainer);
-  layoutHor->addWidget(textArea);
-  layoutHor->addWidget(minimap);
+  editorContainer = new QWidget(this);
+  auto *editorLayout = new QHBoxLayout(editorContainer);
+  editorLayout->setContentsMargins(0, 0, 0, 0);
+  editorLayout->setSpacing(0);
+  editorLayout->addWidget(textArea, 1);
+  editorLayout->addWidget(minimap);
+  auto *splitter = new QSplitter(Qt::Horizontal, this);
+  m_explorerSplitter = splitter;
+  splitter->setObjectName("explorerSplitter");
+  splitter->setChildrenCollapsible(false);
+  splitter->addWidget(treeContainer);
+  splitter->addWidget(editorContainer);
+  splitter->setStretchFactor(0, 0);
+  splitter->setStretchFactor(1, 1);
+  splitter->setSizes({300, 900});
+  layoutHor->addWidget(splitter);
+  connect(splitter, &QSplitter::splitterMoved, this, [this]() {
+    if (mainWindow && treeContainer->isVisible()) {
+      mainWindow->setExplorerWidth(m_explorerSplitter->sizes().first());
+    }
+  });
 
   if (treeViewHidden) {
     treeContainer->hide();
   }
-
-  layoutHor->setStretch(0, 0);
-  layoutHor->setStretch(1, 1);
-  layoutHor->setStretch(2, 0);
 
   setLayout(layoutHor);
 
@@ -815,26 +169,72 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
       view->promptNewFolder();
     }
   });
-  connect(treeRefreshButton, &QToolButton::clicked, this, [this]() {
-    updateModel();
-    refreshGitStatus();
-  });
-  connect(treeCollapseButton, &QToolButton::clicked, treeView,
-          &QTreeView::collapseAll);
-  connect(treeExpandButton, &QToolButton::clicked, this, [this]() {
-    if (!treeView) {
-      return;
-    }
-    treeView->expandToDepth(1);
-  });
-  connect(treeFilterEdit, &QLineEdit::textChanged, this,
-          [this](const QString &text) {
-            if (mainWindow) {
-              mainWindow->setTreeFilterText(text);
-              return;
-            }
-            setTreeFilterText(text);
+  connect(treeMenu->addAction(tr("Reveal Active File")), &QAction::triggered,
+          this, [this]() { revealPath(filePath); });
+  treeMenu->addSeparator();
+  connect(treeMenu->addAction(tr("Refresh")), &QAction::triggered, this,
+          [this]() {
+            updateModel();
+            refreshGitStatus();
+            treeSearch->refresh();
           });
+  connect(treeMenu->addAction(tr("Collapse All")), &QAction::triggered,
+          treeView, &QTreeView::collapseAll);
+  connect(treeMenu->addAction(tr("Expand One Level")), &QAction::triggered,
+          this, [this]() { treeView->expandToDepth(1); });
+  treeMenu->addSeparator();
+  connect(
+      treeMenu->addAction(tr("Find Files…")), &QAction::triggered, this,
+      [this]() { treeSearch->focusSearch(ProjectSearch::Mode::FileNames); });
+  connect(treeMenu->addAction(tr("Search Contents…")), &QAction::triggered,
+          this,
+          [this]() { treeSearch->focusSearch(ProjectSearch::Mode::Contents); });
+  connect(treeSearch, &ExplorerSearchWidget::optionsChanged, this, [this]() {
+    m_treeFilterText = treeSearch->options().query;
+    if (mainWindow) {
+      mainWindow->setTreeSearchOptions(treeSearch->options());
+    }
+  });
+  connect(treeSearch, &ExplorerSearchWidget::searchActiveChanged, this,
+          [this](bool active) {
+            treeView->setVisible(!active);
+            auto *layout = qobject_cast<QVBoxLayout *>(treeContainer->layout());
+            layout->setStretchFactor(treeSearch, active ? 1 : 0);
+          });
+  connect(treeSearch, &ExplorerSearchWidget::revealRequested, this,
+          &LightpadPage::revealPath);
+  auto *view = qobject_cast<LightpadTreeView *>(treeView);
+  connect(treeSearch, &ExplorerSearchWidget::entryContextMenuRequested, view,
+          &LightpadTreeView::showPathContextMenu);
+  connect(view, &LightpadTreeView::findInFolderRequested, treeSearch,
+          &ExplorerSearchWidget::searchInFolder);
+  connect(view->fileOperationsController(),
+          &FileDirTreeController::actionCompleted, treeSearch,
+          &ExplorerSearchWidget::refresh);
+  connect(
+      treeSearch, &ExplorerSearchWidget::navigateRequested, this,
+      [this](const QString &path, int line, int column, int length) {
+        if (!mainWindow)
+          return;
+        mainWindow->openFileAndAddToNewTab(path);
+        TextArea *area = mainWindow->getCurrentTextArea();
+        if (area && line > 0) {
+          const QTextBlock block =
+              area->document()->findBlockByNumber(line - 1);
+          if (block.isValid()) {
+            QTextCursor cursor(block);
+            cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
+                                qMin(qMax(0, column - 1), block.length() - 1));
+            cursor.movePosition(
+                QTextCursor::Right, QTextCursor::KeepAnchor,
+                qMin(length, block.length() - 1 - cursor.positionInBlock()));
+            area->setTextCursor(cursor);
+            area->centerCursor();
+          }
+        }
+        if (area)
+          area->setFocus();
+      });
 }
 
 QTreeView *LightpadPage::getTreeView() { return treeView; }
@@ -861,72 +261,26 @@ bool LightpadPage::isMinimapVisible() const {
 
 void LightpadPage::setTreeFilterText(const QString &text) {
   m_treeFilterText = text;
-  if (treeFilterEdit && treeFilterEdit->text() != text) {
-    QSignalBlocker blocker(treeFilterEdit);
-    treeFilterEdit->setText(text);
-  }
-  applyTreeFilter();
+  treeSearch->setSearchText(text);
 }
 
 QString LightpadPage::getTreeFilterText() const { return m_treeFilterText; }
 
-void LightpadPage::applyTreeFilter() {
-  if (!treeView || !model) {
-    return;
-  }
-
-  const QString needle = m_treeFilterText.trimmed();
-  treeView->setUpdatesEnabled(false);
-
-  const QModelIndex root = treeView->rootIndex();
-  updateTreeVisibilityRecursive(root, needle);
-
-  if (!needle.isEmpty()) {
-    treeView->expandToDepth(2);
-  }
-
-  treeView->setUpdatesEnabled(true);
-  treeView->viewport()->update();
+void LightpadPage::setTreeSearchOptions(const ProjectSearch::Options &options) {
+  m_treeFilterText = options.query;
+  auto localOptions = options;
+  localOptions.rootPath = projectRootPath;
+  treeSearch->setOptions(localOptions);
 }
 
-bool LightpadPage::updateTreeVisibilityRecursive(const QModelIndex &parent,
-                                                 const QString &needle) {
-  if (!model || !treeView) {
-    return false;
-  }
-
-  bool anyVisible = false;
-  const int rowCount = model->rowCount(parent);
-  for (int row = 0; row < rowCount; ++row) {
-    const QModelIndex idx = model->index(row, 0, parent);
-    if (!idx.isValid()) {
-      continue;
-    }
-
-    if (!needle.isEmpty() && model->canFetchMore(idx)) {
-      model->fetchMore(idx);
-    }
-
-    bool hasVisibleChild = false;
-    if (model->hasChildren(idx)) {
-      hasVisibleChild = updateTreeVisibilityRecursive(idx, needle);
-    }
-
-    const QString label = model->data(idx, Qt::DisplayRole).toString();
-    const bool selfMatch =
-        needle.isEmpty() || label.contains(needle, Qt::CaseInsensitive);
-    const bool visible = selfMatch || hasVisibleChild;
-
-    treeView->setRowHidden(row, parent, !visible);
-    anyVisible = anyVisible || visible;
-  }
-
-  return anyVisible;
+void LightpadPage::setExplorerWidth(int width) {
+  m_explorerSplitter->setSizes(
+      {width, qMax(240, m_explorerSplitter->width() - width -
+                            m_explorerSplitter->handleWidth())});
 }
 
 void LightpadPage::setModelRootIndex(QString path) {
   treeView->setRootIndex(model->index(path));
-  applyTreeFilter();
   if (mainWindow) {
     auto *view = qobject_cast<LightpadTreeView *>(treeView);
     if (view) {
@@ -938,6 +292,17 @@ void LightpadPage::setModelRootIndex(QString path) {
 void LightpadPage::revealPath(const QString &path) {
   if (path.isEmpty() || !model || !treeView) {
     return;
+  }
+  if (!projectRootPath.isEmpty() &&
+      !FileDirTreeModel::isInside(projectRootPath, path)) {
+    return;
+  }
+  if (!m_treeFilterText.isEmpty()) {
+    if (mainWindow) {
+      mainWindow->setTreeFilterText({});
+    } else {
+      setTreeFilterText({});
+    }
   }
 
   const QModelIndex index = model->index(path);
@@ -988,13 +353,13 @@ void LightpadPage::setCustomContentWidget(QWidget *widget) {
   if (!widget || !textArea)
     return;
 
-  auto *layout = qobject_cast<QHBoxLayout *>(this->layout());
+  auto *layout = qobject_cast<QHBoxLayout *>(editorContainer->layout());
   if (!layout)
     return;
 
   layout->replaceWidget(textArea, widget);
   textArea->setVisible(false);
-  widget->setParent(this);
+  widget->setParent(editorContainer);
   widget->setVisible(true);
 
   if (minimap) {
@@ -1025,7 +390,8 @@ void LightpadPage::setMainWindow(MainWindow *window) {
     if (view) {
       mainWindow->registerTreeView(view);
     }
-    setTreeFilterText(mainWindow->getTreeFilterText());
+    setTreeSearchOptions(mainWindow->getTreeSearchOptions());
+    setExplorerWidth(mainWindow->getExplorerWidth());
     applyTheme(ThemeEngine::instance().activeTheme());
   }
 }
@@ -1084,14 +450,6 @@ void LightpadPage::updateModel() {
     treeView->setModel(model);
   }
   model->sort(0, Qt::AscendingOrder);
-  disconnect(m_directoryLoadedConnection);
-  m_directoryLoadedConnection = connect(
-      model, &QFileSystemModel::directoryLoaded, this, [this](const QString &) {
-        if (!m_treeFilterText.trimmed().isEmpty()) {
-          applyTreeFilter();
-        }
-      });
-
   treeView->setColumnHidden(1, true);
   treeView->setColumnHidden(2, true);
   treeView->setColumnHidden(3, true);
@@ -1103,7 +461,6 @@ void LightpadPage::updateModel() {
   }
 
   treeView->setHeaderHidden(true);
-  applyTreeFilter();
 }
 
 QString LightpadPage::getFilePath() { return filePath; }
@@ -1174,10 +531,11 @@ void LightpadPage::updateTreePathLabel() {
 
 void LightpadPage::setProjectRootPath(const QString &path) {
   projectRootPath = path;
+  treeSearch->setRootPath(path);
   if (treeTitleLabel) {
     const QString name = QFileInfo(path).fileName();
-    treeTitleLabel->setText(name.isEmpty() ? tr("EXPLORER") : name.toUpper());
-    treeTitleLabel->setToolTip(path);
+    treeTitleLabel->setText(tr("EXPLORER"));
+    treeTitleLabel->setToolTip(name.isEmpty() ? path : name);
   }
   updateTreePathLabel();
   if (model) {
@@ -1188,7 +546,6 @@ void LightpadPage::setProjectRootPath(const QString &path) {
     } else {
       treeView->setRootIndex(model->index(projectRootPath));
     }
-    applyTreeFilter();
   }
 }
 
@@ -1254,6 +611,7 @@ void LightpadPage::applyTheme(const ThemeDefinition &theme) {
                 "  border-bottom: 1px solid %3;"
                 "}"
                 "QLabel#treeTitleLabel {"
+                "  background: transparent;"
                 "  color: %4;"
                 "  font-size: 10px;"
                 "  font-weight: 700;"
@@ -1261,6 +619,7 @@ void LightpadPage::applyTheme(const ThemeDefinition &theme) {
                 "  padding: 2px 0;"
                 "}"
                 "QLabel#treePathLabel {"
+                "  background: transparent;"
                 "  color: %4;"
                 "  font-size: 10px;"
                 "  padding: 0 4px 4px 4px;"
@@ -1316,13 +675,13 @@ void LightpadPage::applyTheme(const ThemeDefinition &theme) {
     model->setStatusColors(colors);
   }
 
-  if (treeView) {
-    treeView->setStyleSheet(UIStyleHelper::treeViewStyle(theme));
-    if (auto *delegate =
-            dynamic_cast<ExplorerTreeDelegate *>(treeView->itemDelegate())) {
-      delegate->setTheme(theme);
-    }
-    treeView->viewport()->update();
+  treeSearch->applyTheme(theme);
+  if (treeMoreButton && treeMoreButton->menu()) {
+    treeMoreButton->menu()->setStyleSheet(
+        UIStyleHelper::contextMenuStyle(theme));
+  }
+  if (auto *view = qobject_cast<LightpadTreeView *>(treeView)) {
+    view->applyTheme(theme);
   }
 }
 

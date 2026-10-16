@@ -39,6 +39,7 @@ public:
   bool canGoForward() const;
 
   void clear();
+  void retargetPaths(const QString &oldPath, const QString &newPath);
 
   NavigationLocation currentLocation() const;
 

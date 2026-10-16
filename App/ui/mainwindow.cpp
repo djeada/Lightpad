@@ -1902,6 +1902,36 @@ void MainWindow::retargetOpenPaths(const QString &oldPath,
   const QString oldClean = QDir::cleanPath(oldPath);
   const QString newClean = QDir::cleanPath(newPath);
   bool changed = false;
+  const auto retarget = [&](const QString &path) {
+    const QString clean = QDir::cleanPath(path);
+    return clean == oldClean || clean.startsWith(oldClean + '/')
+               ? newClean + clean.mid(oldClean.size())
+               : path;
+  };
+  QSet<QString> expanded;
+  for (const QString &path : m_treeExpandedPaths)
+    expanded.insert(retarget(path));
+  m_treeExpandedPaths = expanded;
+  if (!m_treeCurrentPath.isEmpty())
+    m_treeCurrentPath = retarget(m_treeCurrentPath);
+  if (!m_treeSearchOptions.scopePath.isEmpty()) {
+    auto options = m_treeSearchOptions;
+    options.scopePath = retarget(options.scopePath);
+    if (!isPathWithinRoot(options.scopePath, m_projectRootPath))
+      options.scopePath.clear();
+    setTreeSearchOptions(options);
+  }
+  if (navigationHistory)
+    navigationHistory->retargetPaths(oldPath, newPath);
+  if (recentFilesManager) {
+    for (const QString &recent : recentFilesManager->recentFiles()) {
+      const QString updated = retarget(recent);
+      if (updated != recent) {
+        recentFilesManager->removeFile(recent);
+        recentFilesManager->addFile(updated);
+      }
+    }
+  }
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); ++i) {

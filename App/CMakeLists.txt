@@ -279,6 +279,9 @@ set(project_headers
     filetree/filedirtreemodel.h
     filetree/filedirtreecontroller.h
     filetree/gitfilesystemmodel.h
+    filetree/lightpadtreeview.h
+    filetree/projectsearch.h
+    filetree/explorersearchwidget.h
     run_templates/runtemplatemanager.h
     run_templates/runconfiguration.h
     run_templates/runtargetresolver.h
@@ -546,6 +549,9 @@ set(project_sources
     filetree/filedirtreemodel.cpp
     filetree/filedirtreecontroller.cpp
     filetree/gitfilesystemmodel.cpp
+    filetree/lightpadtreeview.cpp
+    filetree/projectsearch.cpp
+    filetree/explorersearchwidget.cpp
     run_templates/runtemplatemanager.cpp
     run_templates/runconfiguration.cpp
     run_templates/runtargetresolver.cpp

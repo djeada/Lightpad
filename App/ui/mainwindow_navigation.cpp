@@ -172,12 +172,13 @@ void MainWindow::showFileQuickOpen() {
     setupFileQuickOpen();
   }
 
-  QString rootPath = QDir::currentPath();
+  QString rootPath =
+      m_projectRootPath.isEmpty() ? QDir::currentPath() : m_projectRootPath;
 
   LightpadTabWidget *tabWidget = currentTabWidget();
   auto tabIndex = tabWidget->currentIndex();
   auto filePath = tabWidget->getFilePath(tabIndex);
-  if (!filePath.isEmpty()) {
+  if (m_projectRootPath.isEmpty() && !filePath.isEmpty()) {
     QFileInfo fileInfo(filePath);
     rootPath = fileInfo.absolutePath();
 
