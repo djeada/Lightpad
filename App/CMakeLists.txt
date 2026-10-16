@@ -39,7 +39,6 @@ endif()
 # add_subdirectory(libs)
 
 set(project_ui 
-    ui/panels/findreplacepanel.ui
     ui/mainwindow.ui
     ui/dialogs/runconfigurations.ui
     ui/dialogs/shortcuts.ui
@@ -195,6 +194,7 @@ set(project_headers
     ui/widgets/hacker/hackerscanlineoverlay.h
     ui/panels/findreplacepanel.h
     ui/panels/findreplacesearch.h
+    search/searchreplaceengine.h
     ui/panels/problemspanel.h
     ui/panels/breadcrumbwidget.h
     ui/panels/debugpanel.h
@@ -453,7 +453,9 @@ set(project_sources
     ui/widgets/hacker/hackerstyle.cpp
     ui/widgets/hacker/hackerscanlineoverlay.cpp
     ui/panels/findreplacepanel.cpp
+    ui/panels/findreplaceintegration.cpp
     ui/panels/findreplacesearch.cpp
+    search/searchreplaceengine.cpp
     ui/panels/problemspanel.cpp
     ui/panels/breadcrumbwidget.cpp
     ui/panels/debugpanel.cpp

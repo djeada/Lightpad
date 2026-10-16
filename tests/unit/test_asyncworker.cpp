@@ -1,5 +1,7 @@
 #include "core/async/asyncworker.h"
 #include <QPointer>
+#include <QProcess>
+#include <QSemaphore>
 #include <QtTest/QtTest>
 
 class TestAsyncWorker : public QObject {
@@ -11,6 +13,7 @@ private slots:
   void testAsyncTaskProgress();
   void testAsyncThreadPool();
   void testSubmittedTaskReportsFinishedToLateListener();
+  void testWaitAllDoesNotNeedTheGuiEventLoop();
 };
 
 void TestAsyncWorker::testAsyncTaskExecution() {
@@ -80,5 +83,41 @@ void TestAsyncWorker::testSubmittedTaskReportsFinishedToLateListener() {
   QTRY_VERIFY(guard.isNull());
 }
 
-QTEST_MAIN(TestAsyncWorker)
+void TestAsyncWorker::testWaitAllDoesNotNeedTheGuiEventLoop() {
+  QProcess process;
+  auto environment = QProcessEnvironment::systemEnvironment();
+  environment.insert("LIGHTPAD_TEST_POOL_SHUTDOWN", "1");
+  process.setProcessEnvironment(environment);
+  process.start(QCoreApplication::applicationFilePath(), {});
+  QVERIFY(process.waitForStarted());
+  const bool finished = process.waitForFinished(3000);
+  if (!finished) {
+    process.kill();
+    process.waitForFinished();
+  }
+  QVERIFY2(finished, "Waiting for a search worker must not depend on the GUI "
+                     "event loop processing quit signals");
+  QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+  QCOMPARE(process.exitCode(), 0);
+}
+
+int main(int argc, char **argv) {
+  QApplication app(argc, argv);
+  if (qEnvironmentVariableIsSet("LIGHTPAD_TEST_POOL_SHUTDOWN")) {
+    QSemaphore started, release;
+    auto &pool = AsyncThreadPool::instance();
+    pool.submitTask([&](AsyncTask *) {
+      started.release();
+      release.acquire();
+    });
+    QCoreApplication::processEvents();
+    started.acquire();
+    release.release();
+    pool.waitAll();
+    QCoreApplication::processEvents();
+    return 0;
+  }
+  TestAsyncWorker test;
+  return QTest::qExec(&test, argc, argv);
+}
 #include "test_asyncworker.moc"

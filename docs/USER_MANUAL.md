@@ -224,7 +224,14 @@ Trigger autocompletion with `Ctrl+Space`. See [AUTOCOMPLETION.md](../App/AUTOCOM
 
 1. Press `Ctrl+H` or go to Edit → Replace
 2. Enter search term and replacement
-3. Click Replace or Replace All
+3. Choose Current file, Selection, Open files, or Project in the scope selector
+4. Click Replace to change the selected match, or Preview changes to review a batch
+5. In the preview, uncheck matches or files to exclude, then click Apply replacements
+
+Open editors remain unsaved; closed project files are saved with atomic writes.
+Undo replacement restores the last batch if the affected files have not changed.
+See [Search and Replace](SEARCH_REPLACE.md) for matching rules, file filters,
+keyboard shortcuts, supported encodings, and replacement safeguards.
 
 ### Find Options
 

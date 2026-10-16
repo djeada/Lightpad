@@ -92,6 +92,11 @@ void MainWindow::on_actionReplace_in_file_triggered() {
   showFindReplace(false);
   if (findReplacePanel) {
     findReplacePanel->setGlobalMode(false);
+    if (auto *area = getCurrentTextArea()) {
+      const QString selected = area->textCursor().selectedText();
+      if (!selected.isEmpty() && !selected.contains(QChar::ParagraphSeparator))
+        findReplacePanel->setSearchText(selected);
+    }
     findReplacePanel->setFocusOnSearchBox();
   }
 }

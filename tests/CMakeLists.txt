@@ -2493,6 +2493,30 @@ target_compile_definitions(test_findreplacepanel PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME FindReplacePanelTests COMMAND test_findreplacepanel)
 
+add_executable(test_searchreplaceengine
+    unit/test_searchreplaceengine.cpp
+    ${CMAKE_SOURCE_DIR}/App/search/searchreplaceengine.cpp
+    ${CMAKE_SOURCE_DIR}/App/filetree/projectsearch.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/findreplacesearch.cpp
+)
+target_include_directories(test_searchreplaceengine PRIVATE ${CMAKE_SOURCE_DIR}/App)
+target_link_libraries(test_searchreplaceengine PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME SearchReplaceEngineTests COMMAND test_searchreplaceengine)
+
+add_executable(test_searchreplacewidget
+    unit/test_searchreplacewidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/findreplacepanel.h
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/findreplacepanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/search/searchreplaceengine.cpp
+    ${CMAKE_SOURCE_DIR}/App/filetree/projectsearch.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/findreplacesearch.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/async/asyncworker.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+target_include_directories(test_searchreplacewidget PRIVATE ${CMAKE_SOURCE_DIR}/App)
+target_link_libraries(test_searchreplacewidget PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME SearchReplaceWidgetTests COMMAND test_searchreplacewidget)
+
 # ImageViewer test executable
 add_executable(test_imageviewer
     unit/test_imageviewer.cpp
@@ -3257,6 +3281,8 @@ set(TEST_TARGETS
     test_spliteditorcontainer
     test_imageviewer
     test_markdowntools
+    test_searchreplaceengine
+    test_searchreplacewidget
     test_markdownpreviewpanel
     test_latextools
     test_latexpreviewpanel

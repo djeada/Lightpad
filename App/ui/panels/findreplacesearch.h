@@ -19,7 +19,8 @@ struct GlobalSearchResult {
 namespace FindReplaceSearch {
 
 QString expandRegexReplacement(const QString &replaceWord,
-                               const QRegularExpressionMatch &match);
+                               const QRegularExpressionMatch &match,
+                               bool escapeSequences = false);
 
 QVector<GlobalSearchResult>
 collectMatchesInContent(const QString &filePath, const QString &content,
