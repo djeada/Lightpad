@@ -35,7 +35,6 @@ class TextArea : public QPlainTextEdit {
   friend class LineNumberArea;
 
 public:
-  // Same range the Preferences font size spinner offers.
   static constexpr int kMinFontSize = 6;
   static constexpr int kMaxFontSize = 72;
 
@@ -75,6 +74,11 @@ public:
   int fontSize();
   QString getSearchWord();
   bool changesUnsaved();
+
+  QString getDocumentUri() const;
+  void toggleLineComment();
+  void moveLines(bool up);
+  void duplicateLines(bool up);
 
   void addCursorAbove();
   void addCursorBelow();
@@ -187,6 +191,8 @@ private:
   CompletionEngine *m_completionEngine;
   CompletionWidget *m_completionWidget;
   QString m_languageId;
+  bool m_updatingLineNumberLayout = false;
+  int m_lineNumberMarginWidth = -1;
   QString searchWord;
   bool areChangesUnsaved;
   bool autoIndent;
@@ -253,7 +259,6 @@ private:
   void insertCompletion(const QString &completion);
   void insertCompletionItem(const CompletionItem &item);
   QString textUnderCursor() const;
-  QString getDocumentUri() const;
   void showCompletionPopup();
   void hideCompletionPopup();
   void applyLineSpacing(int percent);

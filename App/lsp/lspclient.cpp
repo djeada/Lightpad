@@ -203,7 +203,7 @@ void LspClient::cancelPendingCompletionRequest() {
   }
 }
 
-void LspClient::requestHover(const QString &uri, LspPosition position) {
+int LspClient::requestHover(const QString &uri, LspPosition position) {
   QJsonObject textDocument;
   textDocument["uri"] = uri;
 
@@ -214,6 +214,7 @@ void LspClient::requestHover(const QString &uri, LspPosition position) {
   int id = m_nextRequestId++;
   m_pendingRequests[id] = "textDocument/hover";
   sendRequest("textDocument/hover", params, id);
+  return id;
 }
 
 int LspClient::requestDefinition(const QString &uri, LspPosition position) {
@@ -272,8 +273,8 @@ void LspClient::requestDocumentSymbols(const QString &uri) {
   sendRequest("textDocument/documentSymbol", params, id);
 }
 
-void LspClient::requestRename(const QString &uri, LspPosition position,
-                              const QString &newName) {
+int LspClient::requestRename(const QString &uri, LspPosition position,
+                             const QString &newName) {
   QJsonObject textDocument;
   textDocument["uri"] = uri;
 
@@ -285,6 +286,7 @@ void LspClient::requestRename(const QString &uri, LspPosition position,
   int id = m_nextRequestId++;
   m_pendingRequests[id] = "textDocument/rename";
   sendRequest("textDocument/rename", params, id);
+  return id;
 }
 
 void LspClient::requestCodeAction(const QString &uri, LspRange range,
@@ -564,8 +566,9 @@ void LspClient::onProcessError(QProcess::ProcessError processError) {
                    .arg(m_process->program(), errorMsg);
   }
   LOG_ERROR(QString("LSP process error: %1").arg(errorMsg));
-  setState(State::Error);
+
   emit error(errorMsg);
+  setState(State::Error);
 }
 
 void LspClient::onProcessFinished(int exitCode,
@@ -678,13 +681,26 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
     }
     emit completionReceived(id, items);
   } else if (method == "textDocument/hover") {
+
+    auto flatten = [](const QJsonValue &value) {
+      if (value.isString()) {
+        return value.toString();
+      }
+      return value.toObject()["value"].toString();
+    };
     QString contents;
-    QJsonObject obj = result.toObject();
-    QJsonValue contentsVal = obj["contents"];
-    if (contentsVal.isString()) {
-      contents = contentsVal.toString();
-    } else if (contentsVal.isObject()) {
-      contents = contentsVal.toObject()["value"].toString();
+    const QJsonValue contentsVal = result.toObject()["contents"];
+    if (contentsVal.isArray()) {
+      QStringList parts;
+      for (const QJsonValue &part : contentsVal.toArray()) {
+        const QString text = flatten(part);
+        if (!text.trimmed().isEmpty()) {
+          parts << text;
+        }
+      }
+      contents = parts.join(QStringLiteral("\n\n"));
+    } else {
+      contents = flatten(contentsVal);
     }
     emit hoverReceived(id, contents);
   } else if (method == "textDocument/definition") {

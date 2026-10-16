@@ -416,8 +416,14 @@ void MainWindow::on_actionToggle_Terminal_triggered() {
   if (!visible) {
     m_terminalDock->show();
     m_terminalDock->raise();
+    if (Terminal *terminal = terminalWidget->currentTerminal()) {
+      terminal->setFocus();
+    }
   } else {
     m_terminalDock->hide();
+    if (TextArea *editor = getCurrentTextArea()) {
+      editor->setFocus();
+    }
   }
   syncViewToggleActionStates();
 }
@@ -530,6 +536,42 @@ void MainWindow::on_actionToggle_Vim_Mode_triggered() {
   saveSettings();
 }
 
+void MainWindow::on_actionSelect_All_triggered() {
+  if (TextArea *textArea = getCurrentTextArea()) {
+    textArea->selectAll();
+  }
+}
+
+void MainWindow::on_actionToggle_Line_Comment_triggered() {
+  if (TextArea *textArea = getCurrentTextArea()) {
+    textArea->toggleLineComment();
+  }
+}
+
+void MainWindow::on_actionMove_Line_Up_triggered() {
+  if (TextArea *textArea = getCurrentTextArea()) {
+    textArea->moveLines(true);
+  }
+}
+
+void MainWindow::on_actionMove_Line_Down_triggered() {
+  if (TextArea *textArea = getCurrentTextArea()) {
+    textArea->moveLines(false);
+  }
+}
+
+void MainWindow::on_actionDuplicate_Line_Down_triggered() {
+  if (TextArea *textArea = getCurrentTextArea()) {
+    textArea->duplicateLines(false);
+  }
+}
+
+void MainWindow::on_actionDuplicate_Line_Up_triggered() {
+  if (TextArea *textArea = getCurrentTextArea()) {
+    textArea->duplicateLines(true);
+  }
+}
+
 void MainWindow::on_actionFold_Current_triggered() {
   TextArea *textArea = getCurrentTextArea();
   if (textArea) {
@@ -571,4 +613,3 @@ void MainWindow::on_actionUnfold_Comments_triggered() {
     textArea->unfoldComments();
   }
 }
-

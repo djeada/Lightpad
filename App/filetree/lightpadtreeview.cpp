@@ -664,8 +664,7 @@ void LightpadTreeView::startDrag(Qt::DropActions) {
   mime->setUrls(urls);
   auto *drag = new QDrag(this);
   drag->setMimeData(mime);
-  // Our destination owns the filesystem move; QAbstractItemView must not
-  // remove source rows again when the drag returns MoveAction.
+
   drag->exec(Qt::CopyAction | Qt::MoveAction, Qt::MoveAction);
   drag->deleteLater();
 }
@@ -692,7 +691,7 @@ void LightpadTreeView::dragMoveEvent(QDragMoveEvent *event) {
 
   const QString destination = dropDirectoryAt(position);
   const Qt::DropAction action = dropAction(event);
-  // Preserve Qt's autoscroll and hover-to-expand behaviour.
+
   QTreeView::dragMoveEvent(event);
   if (action != Qt::IgnoreAction && acceptsDropOf(sources, destination)) {
     m_dropDestination = destination;

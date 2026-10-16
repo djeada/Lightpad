@@ -50,6 +50,8 @@ signals:
 
   void locationClicked(const QString &filePath, int line, int column);
 
+  void executionLocationChanged(const QString &filePath, int line);
+
   void startDebugRequested();
 
   void stopDebugRequested();
@@ -167,6 +169,7 @@ private:
                                  const QString &message, bool isError = false);
   void clearLocalsFallbackState();
   void clearSessionState();
+  void recoverExecutionRequest();
   void resetWatchValues();
   void clearWatchChildren(QTreeWidgetItem *item);
   void populateWatchChildren(QTreeWidgetItem *parentItem,

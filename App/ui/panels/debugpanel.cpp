@@ -2,6 +2,7 @@
 
 #include "../../core/logging/logger.h"
 #include "../../dap/debugadapterregistry.h"
+#include "../../dap/debugsettings.h"
 #include "debugglyphs.h"
 
 #include "../../theme/colorcontrast.h"
@@ -12,6 +13,8 @@
 #include <QClipboard>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDir>
+#include <QFileInfo>
 #include <QFontDatabase>
 #include <QFrame>
 #include <QGuiApplication>
@@ -1889,7 +1892,19 @@ void DebugPanel::setDapClient(DapClient *client) {
 
   if (m_dapClient) {
     connect(m_dapClient, &DapClient::stateChanged, this,
-            &DebugPanel::updateToolbarState);
+            [this](DapClient::State state) {
+              if (state == DapClient::State::Running) {
+                onContinued();
+              } else if (state != DapClient::State::Stopped) {
+                clearSessionState();
+              }
+              updateToolbarState();
+            });
+    connect(m_dapClient, &DapClient::error, this,
+            [this](const QString &message) {
+              appendConsoleLine(message, consoleErrorColor());
+              recoverExecutionRequest();
+            });
     connect(m_dapClient, &DapClient::stopped, this, &DebugPanel::onStopped);
     connect(m_dapClient, &DapClient::continued, this,
             [this](int, bool) { onContinued(); });
@@ -1985,6 +2000,7 @@ void DebugPanel::setDapClient(DapClient *client) {
               appendConsoleLine(
                   tr("Debug adapter did not answer '%1' in time.").arg(command),
                   consoleErrorColor());
+              recoverExecutionRequest();
             });
     connect(m_dapClient, &DapClient::exited, this, [this](int exitCode) {
       appendConsoleLine(tr("Program exited with code %1.").arg(exitCode),
@@ -2027,6 +2043,7 @@ void DebugPanel::clearAll() {
 }
 
 void DebugPanel::clearSessionState() {
+  emit executionLocationChanged(QString(), 0);
   clearInlineValues();
   m_callStackTree->clear();
   m_variablesTree->clear();
@@ -2180,6 +2197,7 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
 }
 
 void DebugPanel::onContinued() {
+  emit executionLocationChanged(QString(), 0);
   clearInlineValues();
   m_stepInProgress = false;
   m_expectStopEvent = true;
@@ -2187,6 +2205,10 @@ void DebugPanel::onContinued() {
   m_hoverRequestSeq = 0;
   m_pendingConsoleEvaluations.clear();
   QToolTip::hideText();
+  m_callStackTree->clear();
+  m_stackFrames.clear();
+  m_currentFrameId = 0;
+  m_threadSelector->setEnabled(false);
   m_variablesTree->clear();
   m_variableRefToItem.clear();
   m_pendingTreeSummaries.clear();
@@ -2203,12 +2225,27 @@ void DebugPanel::onTerminated() {
   updateToolbarState();
 }
 
+void DebugPanel::recoverExecutionRequest() {
+  if (!m_stepInProgress) {
+    return;
+  }
+  m_stepInProgress = false;
+  m_expectStopEvent = true;
+  updateToolbarState();
+  if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped &&
+      m_currentThreadId > 0) {
+    m_dapClient->getStackTrace(m_currentThreadId, 0,
+                               MAX_STACK_FRAMES_PER_REFRESH);
+  }
+}
+
 void DebugPanel::onContinue() {
   if (m_stepInProgress)
     return;
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
     m_expectStopEvent = true;
     m_stepInProgress = true;
+    emit executionLocationChanged(QString(), 0);
     updateToolbarState();
     m_dapClient->continueExecution(activeThreadId());
   } else {
@@ -2231,6 +2268,7 @@ void DebugPanel::onStepOver() {
     if (threadId > 0) {
       m_expectStopEvent = true;
       m_stepInProgress = true;
+      emit executionLocationChanged(QString(), 0);
       updateToolbarState();
       m_dapClient->stepOver(threadId);
     }
@@ -2245,6 +2283,7 @@ void DebugPanel::onStepInto() {
     if (threadId > 0) {
       m_expectStopEvent = true;
       m_stepInProgress = true;
+      emit executionLocationChanged(QString(), 0);
       updateToolbarState();
       m_dapClient->stepInto(threadId);
     }
@@ -2259,13 +2298,17 @@ void DebugPanel::onStepOut() {
     if (threadId > 0) {
       m_expectStopEvent = true;
       m_stepInProgress = true;
+      emit executionLocationChanged(QString(), 0);
       updateToolbarState();
       m_dapClient->stepOut(threadId);
     }
   }
 }
 
-void DebugPanel::onRestart() { emit restartDebugRequested(); }
+void DebugPanel::onRestart() {
+  emit executionLocationChanged(QString(), 0);
+  emit restartDebugRequested();
+}
 
 void DebugPanel::onStop() {
   if (m_dapClient && m_dapClient->isDebugging()) {
@@ -2275,6 +2318,10 @@ void DebugPanel::onStop() {
 }
 
 void DebugPanel::onThreadsReceived(const QList<DapThread> &threads) {
+  if (!m_dapClient || m_dapClient->state() != DapClient::State::Stopped ||
+      m_stepInProgress) {
+    return;
+  }
   m_threads = threads;
 
   bool hasCurrentThread = false;
@@ -2322,7 +2369,8 @@ void DebugPanel::onStackTraceReceived(int threadId,
                                       int totalFrames) {
   Q_UNUSED(totalFrames);
 
-  if (threadId != m_currentThreadId) {
+  if (!m_dapClient || m_dapClient->state() != DapClient::State::Stopped ||
+      m_stepInProgress || threadId != m_currentThreadId) {
     return;
   }
 
@@ -2348,13 +2396,46 @@ void DebugPanel::onStackTraceReceived(int threadId,
   }
 
   if (!frames.isEmpty()) {
-    int activeIndex = 0;
+    const DebugSettings &settings = DebugSettings::instance();
+    const QString workspaceFolder = settings.workspaceFolder();
+    const QFileInfo workspaceInfo(workspaceFolder);
+    const QDir workspaceDir(workspaceInfo.canonicalFilePath().isEmpty()
+                                ? workspaceFolder
+                                : workspaceInfo.canonicalFilePath());
+    const bool preferWorkspaceSource =
+        !workspaceFolder.isEmpty() &&
+        settings.generalSettings()
+            .value("general")
+            .toObject()
+            .value(DebugSettings::KEY_JUST_MY_CODE)
+            .toBool(true);
+
+    int activeIndex = -1;
+    int firstSourceIndex = -1;
     for (int i = 0; i < frames.size(); ++i) {
       const DapStackFrame &frame = frames.at(i);
-      if (frame.presentationHint != "subtle" && !frame.source.path.isEmpty()) {
+      if (frame.source.path.isEmpty() || frame.line <= 0) {
+        continue;
+      }
+      const QFileInfo sourceInfo(
+          workspaceDir.absoluteFilePath(frame.source.path));
+      if (!sourceInfo.isFile()) {
+        continue;
+      }
+      if (firstSourceIndex < 0 && frame.presentationHint != "subtle") {
+        firstSourceIndex = i;
+      }
+
+      const QString relativePath =
+          workspaceDir.relativeFilePath(sourceInfo.canonicalFilePath());
+      if (preferWorkspaceSource && QDir::isRelativePath(relativePath) &&
+          relativePath != ".." && !relativePath.startsWith("../")) {
         activeIndex = i;
         break;
       }
+    }
+    if (activeIndex < 0) {
+      activeIndex = firstSourceIndex >= 0 ? firstSourceIndex : 0;
     }
 
     const DapStackFrame &activeFrame = frames.at(activeIndex);
@@ -2364,9 +2445,16 @@ void DebugPanel::onStackTraceReceived(int threadId,
     m_callStackTree->blockSignals(false);
     setCurrentFrame(activeFrame.id);
 
-    if (!activeFrame.source.path.isEmpty()) {
-      emit locationClicked(activeFrame.source.path, activeFrame.line,
+    const QFileInfo activeSource(
+        workspaceDir.absoluteFilePath(activeFrame.source.path));
+    if (!activeFrame.source.path.isEmpty() && activeFrame.line > 0 &&
+        activeSource.isFile()) {
+      emit locationClicked(activeSource.canonicalFilePath(), activeFrame.line,
                            activeFrame.column);
+      emit executionLocationChanged(activeSource.canonicalFilePath(),
+                                    activeFrame.line);
+    } else {
+      emit executionLocationChanged(QString(), 0);
     }
 
     WatchManager::instance().evaluateAll(activeFrame.id);
@@ -2378,7 +2466,8 @@ void DebugPanel::onStackTraceReceived(int threadId,
 
 void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
 
-  if (frameId != m_currentFrameId) {
+  if (!m_dapClient || m_dapClient->state() != DapClient::State::Stopped ||
+      m_stepInProgress || frameId != m_currentFrameId) {
     return;
   }
 
@@ -2775,7 +2864,8 @@ void DebugPanel::onExceptionInfoReceived(int threadId,
 
 void DebugPanel::onCallStackItemClicked(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column);
-  if (!item) {
+  if (!item || !m_dapClient ||
+      m_dapClient->state() != DapClient::State::Stopped || m_stepInProgress) {
     return;
   }
 
@@ -2787,8 +2877,11 @@ void DebugPanel::onCallStackItemClicked(QTreeWidgetItem *item, int column) {
   setCurrentFrame(frameId);
   WatchManager::instance().evaluateAll(frameId);
 
-  if (!filePath.isEmpty()) {
+  if (!filePath.isEmpty() && line > 0) {
     emit locationClicked(filePath, line, col);
+    emit executionLocationChanged(filePath, line);
+  } else {
+    emit executionLocationChanged(QString(), 0);
   }
 }
 

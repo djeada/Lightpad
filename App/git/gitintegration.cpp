@@ -292,8 +292,44 @@ bool GitIntegration::setRepositoryPath(const QString &path) {
     startFingerprintCheck(false);
   }
 
+  hideProjectMetadata();
+  QTimer::singleShot(3000, this, [this]() { hideProjectMetadata(); });
+
   LOG_INFO("Git repository found at: " + m_repositoryPath);
   return true;
+}
+
+void GitIntegration::hideProjectMetadata() {
+  if (!m_isValid || m_repositoryPath.isEmpty()) {
+    return;
+  }
+  const QString metadataDir = m_repositoryPath + QStringLiteral("/.lightpad");
+  const QString gitDir = m_repositoryPath + QStringLiteral("/.git");
+  if (!QFileInfo(metadataDir).isDir() || !QFileInfo(gitDir).isDir()) {
+    return;
+  }
+
+  QDir().mkpath(gitDir + QStringLiteral("/info"));
+  QFile exclude(gitDir + QStringLiteral("/info/exclude"));
+  const QByteArray entry = ".lightpad/";
+  if (exclude.exists() && exclude.open(QIODevice::ReadOnly)) {
+    const QList<QByteArray> lines = exclude.readAll().split('\n');
+    exclude.close();
+    for (const QByteArray &line : lines) {
+      const QByteArray trimmed = line.trimmed();
+      if (trimmed == entry || trimmed == ".lightpad" ||
+          trimmed == "/.lightpad/" || trimmed == "/.lightpad") {
+        return;
+      }
+    }
+  }
+  if (!exclude.open(QIODevice::WriteOnly | QIODevice::Append)) {
+    return;
+  }
+  if (exclude.size() > 0) {
+    exclude.write("\n");
+  }
+  exclude.write("# Lightpad project metadata\n" + entry + "\n");
 }
 
 QString GitIntegration::repositoryPath() const { return m_repositoryPath; }
@@ -1381,20 +1417,21 @@ GitIntegration::getBlameInfo(const QString &filePath) const {
         current.date = dt.toString(Qt::ISODate);
         qint64 secsAgo =
             QDateTime::currentDateTime().toSecsSinceEpoch() - timestamp;
+        auto ago = [](qint64 n, const char *unit) {
+          return QString("%1 %2%3 ago").arg(n).arg(unit).arg(n == 1 ? "" : "s");
+        };
         if (secsAgo < 60)
           current.relativeDate = "just now";
         else if (secsAgo < 3600)
-          current.relativeDate = QString("%1 minutes ago").arg(secsAgo / 60);
+          current.relativeDate = ago(secsAgo / 60, "minute");
         else if (secsAgo < 86400)
-          current.relativeDate = QString("%1 hours ago").arg(secsAgo / 3600);
+          current.relativeDate = ago(secsAgo / 3600, "hour");
         else if (secsAgo < 2592000)
-          current.relativeDate = QString("%1 days ago").arg(secsAgo / 86400);
+          current.relativeDate = ago(secsAgo / 86400, "day");
         else if (secsAgo < 31536000)
-          current.relativeDate =
-              QString("%1 months ago").arg(secsAgo / 2592000);
+          current.relativeDate = ago(secsAgo / 2592000, "month");
         else
-          current.relativeDate =
-              QString("%1 years ago").arg(secsAgo / 31536000);
+          current.relativeDate = ago(secsAgo / 31536000, "year");
         continue;
       }
 

@@ -1053,4 +1053,3 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
     saveSettings();
   }
 }
-

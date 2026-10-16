@@ -223,6 +223,11 @@ void Minimap::updateViewportRect() {
   int visibleLineCount =
       m_sourceEditor->height() / m_sourceEditor->fontMetrics().lineSpacing();
 
+  if (totalLines <= visibleLineCount) {
+    m_viewportRect = QRect();
+    return;
+  }
+
   qreal lineHeightMinimap = m_lineHeight;
   int totalMinimapHeight = static_cast<int>(totalLines * lineHeightMinimap);
 

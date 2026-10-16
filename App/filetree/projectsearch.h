@@ -44,7 +44,7 @@ struct Match {
   QString filePath;
   QString relativePath;
   bool isDirectory = false;
-  int line = 0; // One based; zero for filename results.
+  int line = 0;
   int column = 0;
   int length = 0;
   QString preview;
@@ -62,12 +62,10 @@ struct Results {
   QString error;
 };
 
-// Pure filesystem work: never touches a view or a GUI model. Call on a worker.
 Results search(const Options &options,
                const std::function<bool()> &isCancelled = {},
                const std::function<void(int)> &progress = {});
 
-// Returns -1 for no match. Higher scores prefer exact names over path matches.
 int fileNameScore(const QString &query, const QString &relativePath,
                   Qt::CaseSensitivity sensitivity = Qt::CaseInsensitive);
 

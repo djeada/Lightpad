@@ -17,6 +17,9 @@ private slots:
   void testTrimLines();
   void testEmptyInput();
   void testSingleLine();
+  void testLineCommentPrefix();
+  void testToggleCommentAddsAtMinIndent();
+  void testToggleCommentRemoves();
 };
 
 void TestTextTransforms::testSortLinesAscending() {
@@ -93,6 +96,29 @@ void TestTextTransforms::testSingleLine() {
   QCOMPARE(TextTransforms::sortLinesAscending("single"), QString("single"));
   QCOMPARE(TextTransforms::reverseLines("single"), QString("single"));
   QCOMPARE(TextTransforms::removeDuplicateLines("single"), QString("single"));
+}
+
+void TestTextTransforms::testLineCommentPrefix() {
+  QCOMPARE(TextTransforms::lineCommentPrefix("cpp"), QString("//"));
+  QCOMPARE(TextTransforms::lineCommentPrefix("py"), QString("#"));
+  QCOMPARE(TextTransforms::lineCommentPrefix("sql"), QString("--"));
+  QVERIFY(TextTransforms::lineCommentPrefix("json").isEmpty());
+}
+
+void TestTextTransforms::testToggleCommentAddsAtMinIndent() {
+  const QStringList in = {"    int a;", "", "        int b;"};
+  const QStringList out = TextTransforms::toggleLineComments(in, "//");
+  QCOMPARE(out, QStringList({"    // int a;", "", "    //     int b;"}));
+}
+
+void TestTextTransforms::testToggleCommentRemoves() {
+  const QStringList in = {"  // a", "  //b", ""};
+  QCOMPARE(TextTransforms::toggleLineComments(in, "//"),
+           QStringList({"  a", "  b", ""}));
+
+  const QStringList mixed = {"// a", "b"};
+  QCOMPARE(TextTransforms::toggleLineComments(mixed, "//"),
+           QStringList({"// // a", "// b"}));
 }
 
 QTEST_MAIN(TestTextTransforms)

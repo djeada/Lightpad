@@ -267,7 +267,17 @@ QIcon GitFileSystemModel::getBaseIcon(const QModelIndex &index,
 }
 
 QIcon GitFileSystemModel::getFileTypeIcon(const QString &filePath) const {
-  const QString suffix = QFileInfo(filePath).suffix().toLower();
+  const QFileInfo info(filePath);
+  QString suffix = info.suffix().toLower();
+  const QString baseName = info.fileName().toLower();
+  if (baseName == QLatin1String("cmakelists.txt")) {
+    suffix = QStringLiteral("cmake");
+  } else if (baseName == QLatin1String("makefile") ||
+             baseName == QLatin1String("gnumakefile")) {
+    suffix = QStringLiteral("make");
+  } else if (baseName == QLatin1String("dockerfile")) {
+    suffix = QStringLiteral("docker");
+  }
   const QString cacheKey =
       suffix.isEmpty() ? QStringLiteral("__plain__") : suffix;
   auto cached = m_fileIconCache.constFind(cacheKey);
@@ -287,6 +297,13 @@ QIcon GitFileSystemModel::getFileTypeIcon(const QString &filePath) const {
   const QColor fold = darkPalette ? paper.lighter(112) : paper.darker(104);
   const QColor accent = colorForFileExtension(suffix);
 
+  const QColor tinted =
+      suffix.isEmpty()
+          ? paper
+          : QColor::fromRgbF(paper.redF() * 0.62 + accent.redF() * 0.38,
+                             paper.greenF() * 0.62 + accent.greenF() * 0.38,
+                             paper.blueF() * 0.62 + accent.blueF() * 0.38);
+
   QPixmap pixmap(18, 18);
   pixmap.fill(Qt::transparent);
   QPainter painter(&pixmap);
@@ -301,7 +318,7 @@ QIcon GitFileSystemModel::getFileTypeIcon(const QString &filePath) const {
   body.closeSubpath();
 
   painter.setPen(QPen(stroke, 1.0));
-  painter.setBrush(paper);
+  painter.setBrush(tinted);
   painter.drawPath(body);
 
   QPolygonF foldedCorner;
@@ -312,7 +329,7 @@ QIcon GitFileSystemModel::getFileTypeIcon(const QString &filePath) const {
 
   painter.setPen(Qt::NoPen);
   painter.setBrush(accent);
-  painter.drawRoundedRect(QRectF(5.5, 12.0, 7.0, 2.0), 1.0, 1.0);
+  painter.drawRoundedRect(QRectF(5.5, 11.0, 7.0, 3.0), 1.0, 1.0);
 
   QIcon icon = QIcon(pixmap);
   if (icon.isNull()) {
@@ -337,7 +354,8 @@ QColor GitFileSystemModel::colorForFileExtension(const QString &extension) {
       {"css", QColor("#61afef")},   {"sh", QColor("#8bd49c")},
       {"bash", QColor("#8bd49c")},  {"zsh", QColor("#8bd49c")},
       {"go", QColor("#56d4dd")},    {"rs", QColor("#f08f68")},
-      {"java", QColor("#f89820")},  {"kt", QColor("#c792ea")}};
+      {"java", QColor("#f89820")},  {"kt", QColor("#c792ea")},
+      {"make", QColor("#c792ea")},  {"docker", QColor("#4ea5ff")}};
 
   return extensionColors.value(extension, QColor("#9aa6b2"));
 }

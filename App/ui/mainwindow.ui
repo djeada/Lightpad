@@ -309,6 +309,14 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <addaction name="actionCopy"/>
     <addaction name="actionPaste"/>
     <addaction name="separator"/>
+    <addaction name="actionSelect_All"/>
+    <addaction name="separator"/>
+    <addaction name="actionToggle_Line_Comment"/>
+    <addaction name="actionMove_Line_Up"/>
+    <addaction name="actionMove_Line_Down"/>
+    <addaction name="actionDuplicate_Line_Down"/>
+    <addaction name="actionDuplicate_Line_Up"/>
+    <addaction name="separator"/>
     <addaction name="menuTransform_Text"/>
     <addaction name="menuSort_Lines"/>
     <addaction name="separator"/>
@@ -331,39 +339,58 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
      <addaction name="actionFold_Comments"/>
      <addaction name="actionUnfold_Comments"/>
     </widget>
+    <widget class="QMenu" name="menuViewGit">
+     <property name="title">
+      <string>Git</string>
+     </property>
+     <addaction name="actionGit_Log"/>
+     <addaction name="actionGit_Compare"/>
+     <addaction name="actionGit_File_History"/>
+     <addaction name="actionGit_Provenance"/>
+     <addaction name="actionGit_Rebase"/>
+     <addaction name="actionGit_Workbench"/>
+     <addaction name="separator"/>
+     <addaction name="actionToggle_Heatmap"/>
+     <addaction name="actionToggle_CodeLens"/>
+    </widget>
+    <widget class="QMenu" name="menuEditorLayout">
+     <property name="title">
+      <string>Editor Layout</string>
+     </property>
+     <addaction name="actionSplit_Horizontally"/>
+     <addaction name="actionSplit_Vertically"/>
+     <addaction name="actionOpen_To_Side"/>
+     <addaction name="separator"/>
+     <addaction name="actionClose_Editor_Group"/>
+     <addaction name="actionFocus_Next_Group"/>
+     <addaction name="actionFocus_Previous_Group"/>
+     <addaction name="actionUnsplit_All"/>
+    </widget>
+    <widget class="QMenu" name="menuZoom">
+     <property name="title">
+      <string>Zoom</string>
+     </property>
+     <addaction name="actionIncrease_Font_Size"/>
+     <addaction name="actionDecrease_Font_Size"/>
+     <addaction name="actionReset_Font_Size"/>
+    </widget>
     <addaction name="actionToggle_Full_Screen"/>
-    <addaction name="actionToggle_Minimap"/>
+    <addaction name="separator"/>
     <addaction name="actionToggle_Terminal"/>
     <addaction name="actionToggle_Source_Control"/>
     <addaction name="actionToggle_Merge_Conflicts"/>
     <addaction name="actionToggle_Test_Panel"/>
     <addaction name="actionToggle_Problems"/>
-    <addaction name="actionGit_Log"/>
-    <addaction name="actionGit_Compare"/>
-    <addaction name="actionGit_File_History"/>
-    <addaction name="actionGit_Provenance"/>
-    <addaction name="actionGit_Rebase"/>
-    <addaction name="actionGit_Workbench"/>
     <addaction name="separator"/>
-    <addaction name="actionToggle_Heatmap"/>
-    <addaction name="actionToggle_CodeLens"/>
+    <addaction name="actionToggle_Minimap"/>
     <addaction name="actionToggle_Word_Wrap"/>
     <addaction name="actionToggle_Vim_Mode"/>
     <addaction name="actionPreview_Markdown"/>
     <addaction name="separator"/>
     <addaction name="menuFolding"/>
-    <addaction name="separator"/>
-    <addaction name="actionSplit_Horizontally"/>
-    <addaction name="actionSplit_Vertically"/>
-    <addaction name="actionOpen_To_Side"/>
-    <addaction name="actionClose_Editor_Group"/>
-    <addaction name="actionFocus_Next_Group"/>
-    <addaction name="actionFocus_Previous_Group"/>
-    <addaction name="actionUnsplit_All"/>
-    <addaction name="separator"/>
-    <addaction name="actionIncrease_Font_Size"/>
-    <addaction name="actionDecrease_Font_Size"/>
-    <addaction name="actionReset_Font_Size"/>
+    <addaction name="menuEditorLayout"/>
+    <addaction name="menuViewGit"/>
+    <addaction name="menuZoom"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -425,14 +452,44 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
      <addaction name="menuFormat"/>
      <addaction name="menuHelp"/>
    </widget>
+  <action name="actionSelect_All">
+   <property name="text">
+    <string>Select All&#9;Ctrl+A</string>
+   </property>
+  </action>
+  <action name="actionToggle_Line_Comment">
+   <property name="text">
+    <string>Toggle Line Comment&#9;Ctrl+/</string>
+   </property>
+  </action>
+  <action name="actionMove_Line_Up">
+   <property name="text">
+    <string>Move Line Up&#9;Alt+Up</string>
+   </property>
+  </action>
+  <action name="actionMove_Line_Down">
+   <property name="text">
+    <string>Move Line Down&#9;Alt+Down</string>
+   </property>
+  </action>
+  <action name="actionDuplicate_Line_Down">
+   <property name="text">
+    <string>Duplicate Line Down&#9;Shift+Alt+Down</string>
+   </property>
+  </action>
+  <action name="actionDuplicate_Line_Up">
+   <property name="text">
+    <string>Duplicate Line Up&#9;Shift+Alt+Up</string>
+   </property>
+  </action>
   <action name="actionToggle_Undo">
    <property name="text">
-    <string>Undo</string>
+    <string>Undo&#9;Ctrl+Z</string>
    </property>
   </action>
   <action name="actionToggle_Redo">
    <property name="text">
-    <string>Redo</string>
+    <string>Redo&#9;Ctrl+Y</string>
    </property>
   </action>
   <action name="actionToggle_Full_Screen">
@@ -487,17 +544,17 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   </action>
   <action name="actionCut">
    <property name="text">
-    <string>Cut</string>
+    <string>Cut&#9;Ctrl+X</string>
    </property>
   </action>
   <action name="actionCopy">
    <property name="text">
-    <string>Copy</string>
+    <string>Copy&#9;Ctrl+C</string>
    </property>
   </action>
   <action name="actionPaste">
    <property name="text">
-    <string>Paste</string>
+    <string>Paste&#9;Ctrl+V</string>
    </property>
   </action>
   <action name="actionSave_All">
@@ -538,6 +595,9 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   <action name="actionFind_in_project">
    <property name="text">
     <string>Find in project</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Alt+F</string>
    </property>
   </action>
   <action name="actionReplace_in_file">
@@ -603,7 +663,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
     <string>Format Document</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+Shift+F</string>
+    <string>Shift+Alt+F</string>
    </property>
   </action>
   <action name="actionEdit_Format_Configurations">

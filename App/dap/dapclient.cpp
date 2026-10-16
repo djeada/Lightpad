@@ -1090,6 +1090,13 @@ void DapClient::sendRequest(const QString &command,
                         "open")
                     .arg(command));
     m_pendingRequests.remove(seq);
+    if (command == "continue" || command == "next" || command == "stepIn" ||
+        command == "stepOut" || command == "pause" || command == "restart") {
+      QTimer::singleShot(0, this, [this, command]() {
+        emit error(
+            QString("%1 failed: debug adapter is disconnected").arg(command));
+      });
+    }
     return;
   }
 
@@ -1121,11 +1128,23 @@ void DapClient::sendRequest(const QString &command,
 
   LOG_DEBUG(QString("DAP request: %1 (seq=%2)").arg(command).arg(seq));
 
-  static const QSet<QString> timedCommands = {
-      "threads",       "stackTrace",        "scopes",
-      "variables",     "evaluate",          "setVariable",
-      "exceptionInfo", "completions",       "readMemory",
-      "disassemble",   "dataBreakpointInfo"};
+  static const QSet<QString> timedCommands = {"threads",
+                                              "stackTrace",
+                                              "scopes",
+                                              "variables",
+                                              "evaluate",
+                                              "setVariable",
+                                              "exceptionInfo",
+                                              "completions",
+                                              "readMemory",
+                                              "disassemble",
+                                              "dataBreakpointInfo",
+                                              "continue",
+                                              "next",
+                                              "stepIn",
+                                              "stepOut",
+                                              "pause",
+                                              "restart"};
   if (m_requestTimeoutMs > 0 && timedCommands.contains(command)) {
     QTimer::singleShot(m_requestTimeoutMs, this, [this, seq, command]() {
       if (!m_pendingRequests.contains(seq)) {
@@ -1729,6 +1748,9 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
   LOG_DEBUG(QString("DAP event: %1").arg(event));
 
   if (event == "stopped") {
+    if (m_stopping || m_state == State::Terminated || m_state == State::Error) {
+      return;
+    }
     DapStoppedEvent evt = DapStoppedEvent::fromJson(body);
     LOG_DEBUG(QString("DAP: Stopped event — reason=%1, threadId=%2, "
                       "allThreadsStopped=%3")
@@ -1747,13 +1769,21 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
       setFunctionBreakpoints(deferred);
     }
   } else if (event == "continued") {
+    if (m_stopping || m_state == State::Terminated || m_state == State::Error) {
+      return;
+    }
     clearPendingInspectionRequests();
     setState(State::Running);
     emit continued(body["threadId"].toInt(),
                    body["allThreadsContinued"].toBool(true));
   } else if (event == "exited") {
+    clearPendingInspectionRequests();
+    m_currentThreadId = 0;
     emit exited(body["exitCode"].toInt());
+    setState(State::Terminated);
   } else if (event == "terminated") {
+    clearPendingInspectionRequests();
+    m_currentThreadId = 0;
     setState(State::Terminated);
     emit terminated();
   } else if (event == "thread") {

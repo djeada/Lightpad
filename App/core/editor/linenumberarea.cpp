@@ -672,8 +672,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
     const QList<Breakpoint> breakpoints =
         BreakpointManager::instance().breakpointsForFile(filePath);
     for (const Breakpoint &bp : breakpoints) {
-      int displayLine =
-          (bp.verified && bp.boundLine > 0) ? bp.boundLine : bp.line;
+      const int displayLine = bp.displayLine();
       if (displayLine <= 0) {
         continue;
       }

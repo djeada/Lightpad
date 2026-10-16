@@ -41,7 +41,14 @@ result, and Escape clears the query. See [File Explorer](FILE_EXPLORER.md).
 | `Ctrl+C` | Copy |
 | `Ctrl+V` | Paste |
 | `Ctrl+A` | Select all |
-| `Ctrl+D` | Duplicate line |
+| `Ctrl+/` | Toggle line comment |
+| `Alt+Up` / `Alt+Down` | Move line(s) up / down |
+| `Shift+Alt+Up` / `Shift+Alt+Down` | Duplicate line(s) up / down |
+| `Ctrl+D` | Add a cursor at the next occurrence of the word or selection |
+| `Ctrl+Shift+L` | Add cursors at every occurrence |
+| `Ctrl+Alt+Up` / `Ctrl+Alt+Down` | Add a cursor above / below |
+| `F2` | Rename the symbol under the caret (needs a running language server) |
+| `Shift+Alt+F` | Format document |
 | `Tab` | Indent |
 | `Shift+Tab` | Unindent |
 
@@ -63,7 +70,7 @@ result, and Escape clears the query. See [File Explorer](FILE_EXPLORER.md).
 
 Choose Current file, Selection, Open files, or Project in the panel. See
 [Search and Replace](SEARCH_REPLACE.md) for previews, file filters, and batch undo.
-`Ctrl+Shift+F` retains the Format Document action.
+`Shift+Alt+F` formats the current document.
 
 ## Navigation
 

@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QGuiApplication>
 #include <QKeyEvent>
+#include <QRegularExpression>
 #include <QScreen>
 #include <QScrollBar>
 
@@ -22,7 +23,7 @@ CompletionWidget::CompletionWidget(QWidget *parent)
   m_docLabel->setWordWrap(true);
   m_docLabel->setTextFormat(Qt::RichText);
   m_docLabel->setVisible(false);
-  m_docLabel->setMaximumHeight(100);
+  m_docLabel->setMaximumHeight(140);
 
   m_layout->setContentsMargins(0, 0, 0, 0);
   m_layout->setSpacing(0);
@@ -289,6 +290,57 @@ void CompletionWidget::onItemDoubleClicked(const QModelIndex &index) {
   }
 }
 
+namespace {
+
+QString formatDocumentation(const QString &raw) {
+  static const QRegularExpression tag(QStringLiteral(
+      R"([@\\](brief|param|tparam|returns?|since|headerfile|)"
+      R"(ingroup|see|note|warning|throws?|details|code|endcode)\b)"));
+
+  QString text = raw.toHtmlEscaped();
+  QString out;
+  int last = 0;
+  QString pendingTag;
+  auto flush = [&](const QString &chunk) {
+    const QString body = chunk.simplified();
+    if (body.isEmpty()) {
+      return;
+    }
+    if (pendingTag.isEmpty() || pendingTag == "brief" ||
+        pendingTag == "details") {
+      out += body + QLatin1String("<br>");
+    } else if (pendingTag == "ingroup" || pendingTag == "headerfile" ||
+               pendingTag == "since" || pendingTag == "code" ||
+               pendingTag == "endcode") {
+
+    } else if (pendingTag == "param" || pendingTag == "tparam") {
+      const int sp = body.indexOf(' ');
+      const QString name = sp > 0 ? body.left(sp) : body;
+      const QString rest = sp > 0 ? body.mid(sp + 1) : QString();
+      out += QStringLiteral("<b>%1</b> %2<br>").arg(name, rest);
+    } else {
+      QString label = pendingTag;
+      label[0] = label[0].toUpper();
+      out += QStringLiteral("<b>%1:</b> %2<br>").arg(label, body);
+    }
+  };
+
+  auto it = tag.globalMatch(text);
+  while (it.hasNext()) {
+    const auto m = it.next();
+    flush(text.mid(last, m.capturedStart() - last));
+    pendingTag = m.captured(1);
+    last = m.capturedEnd();
+  }
+  flush(text.mid(last));
+
+  if (out.endsWith(QLatin1String("<br>"))) {
+    out.chop(4);
+  }
+  return out;
+}
+} // namespace
+
 void CompletionWidget::updateDocumentation() {
   if (!m_showDocumentation) {
     m_docLabel->setVisible(false);
@@ -297,7 +349,7 @@ void CompletionWidget::updateDocumentation() {
 
   CompletionItem item = selectedItem();
   if (!item.documentation.isEmpty()) {
-    m_docLabel->setText(item.documentation);
+    m_docLabel->setText(formatDocumentation(item.documentation));
     m_docLabel->setVisible(true);
   } else if (!item.detail.isEmpty()) {
     m_docLabel->setText(item.detail);

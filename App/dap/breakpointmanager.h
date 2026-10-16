@@ -29,6 +29,10 @@ struct Breakpoint {
   QString verificationMessage;
   int boundLine = 0;
 
+  int displayLine() const {
+    return verified && boundLine > 0 ? boundLine : line;
+  }
+
   QJsonObject toJson() const {
     QJsonObject obj;
     obj["id"] = id;

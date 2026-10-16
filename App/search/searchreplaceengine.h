@@ -30,9 +30,8 @@ struct Snapshot {
   QString key;
   QString path;
   QString label;
-  QString content; // QTextDocument coordinates: LF and UTF-16 code units.
-  QByteArray
-      bytes; // Exact original bytes for closed files, including BOM/EOLs.
+  QString content;
+  QByteArray bytes;
   bool openBuffer = false;
 };
 
@@ -88,7 +87,7 @@ struct DiskReport {
   bool success = false;
   QString error;
   QStringList touchedPaths;
-  QVector<DiskChange> retained; // Changes that could not be rolled back.
+  QVector<DiskChange> retained;
 };
 
 QString fileKey(const QString &path);
@@ -102,9 +101,6 @@ Results search(const Request &request,
                const std::function<void(int)> &progress = {});
 QVector<Change> selectedChanges(const Results &results);
 
-// Preflight the entire batch, write with QSaveFile, and roll back earlier
-// writes if any later write fails. Never overwrite a file changed since its
-// snapshot.
 DiskReport applyDiskChanges(const QVector<DiskChange> &changes,
                             const std::function<bool()> &cancelled = {},
                             const std::function<void(int, int)> &progress = {});

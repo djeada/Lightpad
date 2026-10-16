@@ -196,6 +196,8 @@ public:
 
   bool setRepositoryPath(const QString &path);
 
+  void hideProjectMetadata();
+
   QString repositoryPath() const;
 
   QString workingPath() const;

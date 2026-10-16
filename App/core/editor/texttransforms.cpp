@@ -80,4 +80,78 @@ QString trimLines(const QString &text) {
   return lines.join('\n');
 }
 
+QString lineCommentPrefix(const QString &language) {
+  static const QSet<QString> slash = {"c",    "cpp",  "go",   "glsl",
+                                      "hlsl", "java", "js",   "ts",
+                                      "rust", "wgsl", "metal"};
+  static const QSet<QString> hash = {"py",         "sh",    "yaml",
+                                     "dockerfile", "make",  "cmake",
+                                     "bazel",      "meson", "ninja"};
+  if (slash.contains(language)) {
+    return QStringLiteral("//");
+  }
+  if (hash.contains(language)) {
+    return QStringLiteral("#");
+  }
+  if (language == QLatin1String("sql")) {
+    return QStringLiteral("--");
+  }
+  if (language == QLatin1String("latex")) {
+    return QStringLiteral("%");
+  }
+  return {};
+}
+
+QStringList toggleLineComments(const QStringList &lines,
+                               const QString &prefix) {
+  if (prefix.isEmpty()) {
+    return lines;
+  }
+
+  auto indentOf = [](const QString &line) {
+    int i = 0;
+    while (i < line.size() && line.at(i).isSpace()) {
+      ++i;
+    }
+    return i;
+  };
+
+  bool anyCode = false;
+  bool allCommented = true;
+  int minIndent = -1;
+  for (const QString &line : lines) {
+    if (line.trimmed().isEmpty()) {
+      continue;
+    }
+    anyCode = true;
+    const int indent = indentOf(line);
+    minIndent = minIndent < 0 ? indent : qMin(minIndent, indent);
+    if (!line.mid(indent).startsWith(prefix)) {
+      allCommented = false;
+    }
+  }
+  if (!anyCode) {
+    return lines;
+  }
+
+  QStringList result;
+  result.reserve(lines.size());
+  for (const QString &line : lines) {
+    if (line.trimmed().isEmpty()) {
+      result.append(line);
+    } else if (allCommented) {
+      const int indent = indentOf(line);
+      int cut = indent + prefix.size();
+      if (cut < line.size() && line.at(cut) == ' ') {
+        ++cut;
+      }
+      result.append(line.left(indent) + line.mid(cut));
+    } else {
+      result.append(line.left(minIndent) + prefix + QLatin1Char(' ') +
+                    line.mid(minIndent));
+    }
+  }
+  return result;
+}
+
 } // namespace TextTransforms

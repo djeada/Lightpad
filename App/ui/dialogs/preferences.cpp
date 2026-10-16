@@ -714,8 +714,9 @@ Preferences::Preferences(MainWindow *parent)
     : QDialog(nullptr), m_mainWindow(parent) {
   setAttribute(Qt::WA_DeleteOnClose, true);
   setWindowTitle("Preferences");
-  setMinimumSize(480, 560);
-  resize(520, 640);
+
+  setMinimumSize(660, 560);
+  resize(740, 700);
 
   buildUi();
   loadCurrentSettings();
@@ -755,6 +756,7 @@ void Preferences::buildUi() {
   auto *scrollArea = new QScrollArea(this);
   scrollArea->setWidgetResizable(true);
   scrollArea->setFrameShape(QFrame::NoFrame);
+  scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
   auto *scrollWidget = new QWidget();
   auto *mainLayout = new QVBoxLayout(scrollWidget);
@@ -809,7 +811,7 @@ void Preferences::buildUi() {
   }
   mainLayout->addSpacing(8);
 
-  mainLayout->addWidget(createSectionHeader("▶ FONT"));
+  mainLayout->addWidget(createSectionHeader("◆ FONT"));
   mainLayout->addWidget(createSeparator());
 
   auto *fontRow = new QHBoxLayout();
@@ -847,7 +849,7 @@ void Preferences::buildUi() {
 
   mainLayout->addSpacing(8);
 
-  mainLayout->addWidget(createSectionHeader("▶ EDITOR"));
+  mainLayout->addWidget(createSectionHeader("◆ EDITOR"));
   mainLayout->addWidget(createSeparator());
 
   auto *tabRow = new QHBoxLayout();
@@ -875,7 +877,7 @@ void Preferences::buildUi() {
 
   mainLayout->addSpacing(8);
 
-  mainLayout->addWidget(createSectionHeader("▶ DISPLAY"));
+  mainLayout->addWidget(createSectionHeader("◆ DISPLAY"));
   mainLayout->addWidget(createSeparator());
 
   m_lineNumbersCheck = new QCheckBox("Show line numbers", this);
@@ -889,7 +891,7 @@ void Preferences::buildUi() {
 
   mainLayout->addSpacing(8);
 
-  mainLayout->addWidget(createSectionHeader("▶ THEME TOKENS"));
+  mainLayout->addWidget(createSectionHeader("◆ THEME TOKENS"));
   mainLayout->addWidget(createSeparator());
 
   auto *colorGrid = new QGridLayout();

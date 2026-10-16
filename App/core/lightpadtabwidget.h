@@ -21,6 +21,8 @@ public:
 
 protected:
   void contextMenuEvent(QContextMenuEvent *event) override;
+  QSize tabSizeHint(int index) const override;
+  QSize minimumTabSizeHint(int index) const override;
 
 signals:
   void closeTab(int index);

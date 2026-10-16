@@ -13,8 +13,6 @@
 #include <QTimer>
 #include <algorithm>
 
-// Keep application integration separate from the panel: the actual widget is
-// also exercised with ordinary QPlainTextEdit documents in its tests.
 void FindReplacePanel::setTextArea(TextArea *area) {
   QString path;
   if (area) {

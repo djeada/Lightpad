@@ -346,7 +346,7 @@ void TestFileDirTreeModel::testFailedCutItemsStayOnClipboard() {
   QCOMPARE(mime->urls().size(), 1);
   QCOMPARE(mime->urls().first().toLocalFile(), missing);
   QVERIFY(mime->data("x-special/gnome-copied-files").startsWith("cut\n"));
-  // A retry still moves the formerly missing item rather than copying it.
+
   makeFile("partial-cut/missing.txt", "recovered");
   QVERIFY(model.pasteFromClipboard(destination));
   QVERIFY(!QFileInfo::exists(missing));

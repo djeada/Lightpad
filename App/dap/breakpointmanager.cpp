@@ -34,9 +34,14 @@ BreakpointManager::BreakpointManager()
 
 Breakpoint BreakpointManager::toggleBreakpoint(const QString &filePath,
                                                int line) {
-  if (hasBreakpoint(filePath, line)) {
-    Breakpoint existing = breakpointAt(filePath, line);
-    removeBreakpoint(existing.id);
+  const Breakpoint existing = breakpointAt(filePath, line);
+  if (existing.id > 0) {
+    const QList<Breakpoint> breakpoints = breakpointsForFile(filePath);
+    for (const Breakpoint &bp : breakpoints) {
+      if (bp.displayLine() == line || bp.id == existing.id) {
+        removeBreakpoint(bp.id);
+      }
+    }
     return existing;
   } else {
     Breakpoint bp;
@@ -51,6 +56,7 @@ Breakpoint BreakpointManager::toggleBreakpoint(const QString &filePath,
 int BreakpointManager::addBreakpoint(const Breakpoint &bp) {
   Breakpoint newBp = bp;
   newBp.id = m_nextId++;
+  newBp.filePath = normalizePath(newBp.filePath);
 
   m_breakpoints[newBp.id] = newBp;
   m_fileBreakpoints[newBp.filePath].append(newBp.id);
@@ -142,17 +148,18 @@ void BreakpointManager::clearAll() {
 }
 
 void BreakpointManager::clearFile(const QString &filePath) {
-  QList<int> ids = m_fileBreakpoints.take(filePath);
+  const QString normalizedPath = normalizePath(filePath);
+  QList<int> ids = m_fileBreakpoints.take(normalizedPath);
 
   for (int id : ids) {
     Breakpoint bp = m_breakpoints.take(id);
-    emit breakpointRemoved(id, filePath, bp.line);
+    emit breakpointRemoved(id, normalizedPath, bp.line);
   }
 
-  emit fileBreakpointsChanged(filePath);
+  emit fileBreakpointsChanged(normalizedPath);
 
   if (m_dapClient && m_dapClient->isDebugging()) {
-    syncFileBreakpoints(filePath);
+    syncFileBreakpoints(normalizedPath);
   }
 }
 
@@ -163,7 +170,7 @@ Breakpoint BreakpointManager::breakpoint(int id) const {
 QList<Breakpoint>
 BreakpointManager::breakpointsForFile(const QString &filePath) const {
   QList<Breakpoint> result;
-  QList<int> ids = m_fileBreakpoints.value(filePath);
+  QList<int> ids = m_fileBreakpoints.value(normalizePath(filePath));
   for (int id : ids) {
     result.append(m_breakpoints.value(id));
   }
@@ -175,26 +182,24 @@ QList<Breakpoint> BreakpointManager::allBreakpoints() const {
 }
 
 bool BreakpointManager::hasBreakpoint(const QString &filePath, int line) const {
-  QList<int> ids = m_fileBreakpoints.value(filePath);
-  for (int id : ids) {
-    const Breakpoint &bp = m_breakpoints.value(id);
-    if (bp.line == line) {
-      return true;
-    }
-  }
-  return false;
+  return breakpointAt(filePath, line).id > 0;
 }
 
 Breakpoint BreakpointManager::breakpointAt(const QString &filePath,
                                            int line) const {
-  QList<int> ids = m_fileBreakpoints.value(filePath);
+  Breakpoint displayed;
+  Breakpoint requested;
+  const QList<int> ids = m_fileBreakpoints.value(normalizePath(filePath));
   for (int id : ids) {
     const Breakpoint &bp = m_breakpoints.value(id);
+    if (bp.displayLine() == line && (displayed.id <= 0 || bp.enabled)) {
+      displayed = bp;
+    }
     if (bp.line == line) {
-      return bp;
+      requested = bp;
     }
   }
-  return Breakpoint();
+  return displayed.id > 0 ? displayed : requested;
 }
 
 void BreakpointManager::setEnabled(int id, bool enabled) {
@@ -608,7 +613,7 @@ void BreakpointManager::loadFromJson(const QJsonObject &json) {
         const QJsonObject bpObj = bpValue.toObject();
         Breakpoint bp;
         bp.id = m_nextId++;
-        bp.filePath = filePath;
+        bp.filePath = normalizePath(filePath);
         bp.line = bpObj["line"].toInt();
         bp.column = bpObj["column"].toInt();
         bp.enabled = bpObj["enabled"].toBool(true);
@@ -625,6 +630,7 @@ void BreakpointManager::loadFromJson(const QJsonObject &json) {
     for (const QJsonValue &val : breakpointsArray) {
       Breakpoint bp = Breakpoint::fromJson(val.toObject());
       bp.id = m_nextId++;
+      bp.filePath = normalizePath(bp.filePath);
       m_breakpoints[bp.id] = bp;
       m_fileBreakpoints[bp.filePath].append(bp.id);
     }

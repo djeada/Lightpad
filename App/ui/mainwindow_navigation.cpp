@@ -1,4 +1,7 @@
+#include "../core/editor/documentsymbols.h"
 #include "mainwindow_internal.h"
+#include <algorithm>
+#include <memory>
 
 void MainWindow::showCommandPalette() {
   if (commandPalette) {
@@ -55,96 +58,33 @@ void MainWindow::showGoToSymbolDialog() {
 
     QList<LspDocumentSymbol> symbols;
 
-    QTextBlock block = textArea->document()->begin();
-    while (block.isValid()) {
-      QString text = block.text().trimmed();
-
-      if (text.contains('(') && !text.startsWith("//") &&
-          !text.startsWith("/*")) {
-
-        int parenPos = text.indexOf('(');
-        QString beforeParen = text.left(parenPos).trimmed();
-
-        QStringList parts = beforeParen.split(QRegularExpression("\\s+"));
-        if (!parts.isEmpty()) {
-          QString name = parts.last();
-
-          while (!name.isEmpty() && (name[0] == '*' || name[0] == '&')) {
-            name = name.mid(1);
-          }
-
-          if (!name.isEmpty() && name[0].isLetter()) {
-            LspDocumentSymbol sym;
-            sym.name = name;
-            sym.kind = LspSymbolKind::Function;
-            sym.selectionRange.start.line = block.blockNumber();
-            sym.selectionRange.start.character = 0;
-            sym.range = sym.selectionRange;
-
-            if (beforeParen.startsWith("class ") ||
-                beforeParen.startsWith("struct ")) {
-              sym.kind = LspSymbolKind::Class;
-            }
-
-            symbols.append(sym);
-          }
-        }
+    QString language;
+    if (LightpadTabWidget *tw = currentTabWidget()) {
+      const QString path = tw->getFilePath(tw->currentIndex());
+      language = LanguageCatalog::normalize(effectiveLanguageIdForFile(path));
+    }
+    const auto found = DocumentSymbols::scan(textArea->toPlainText(), language);
+    for (const DocumentSymbols::Symbol &s : found) {
+      LspDocumentSymbol sym;
+      sym.name = s.name;
+      switch (s.kind) {
+      case DocumentSymbols::Kind::Class:
+        sym.kind = LspSymbolKind::Class;
+        break;
+      case DocumentSymbols::Kind::Method:
+        sym.kind = LspSymbolKind::Method;
+        break;
+      case DocumentSymbols::Kind::Heading:
+        sym.kind = LspSymbolKind::Namespace;
+        break;
+      default:
+        sym.kind = LspSymbolKind::Function;
+        break;
       }
-
-      else if (text.startsWith("class ") || text.startsWith("struct ")) {
-        QStringList parts = text.split(QRegularExpression("\\s+"));
-        if (parts.size() >= 2) {
-          QString name = parts[1];
-
-          name = name.split(QRegularExpression("[:{]")).first();
-
-          if (!name.isEmpty()) {
-            LspDocumentSymbol sym;
-            sym.name = name;
-            sym.kind = LspSymbolKind::Class;
-            sym.selectionRange.start.line = block.blockNumber();
-            sym.selectionRange.start.character = 0;
-            sym.range = sym.selectionRange;
-            symbols.append(sym);
-          }
-        }
-      }
-
-      else if (text.startsWith("def ") || text.startsWith("class ")) {
-        QString keyword = text.startsWith("def ") ? "def " : "class ";
-        QString rest = text.mid(keyword.length());
-        int endPos = rest.indexOf(QRegularExpression("[:(]"));
-        if (endPos > 0) {
-          QString name = rest.left(endPos).trimmed();
-
-          LspDocumentSymbol sym;
-          sym.name = name;
-          sym.kind = text.startsWith("def ") ? LspSymbolKind::Function
-                                             : LspSymbolKind::Class;
-          sym.selectionRange.start.line = block.blockNumber();
-          sym.selectionRange.start.character = 0;
-          sym.range = sym.selectionRange;
-          symbols.append(sym);
-        }
-      }
-
-      else if (text.startsWith("function ")) {
-        QString rest = text.mid(9);
-        int endPos = rest.indexOf('(');
-        if (endPos > 0) {
-          QString name = rest.left(endPos).trimmed();
-
-          LspDocumentSymbol sym;
-          sym.name = name;
-          sym.kind = LspSymbolKind::Function;
-          sym.selectionRange.start.line = block.blockNumber();
-          sym.selectionRange.start.character = 0;
-          sym.range = sym.selectionRange;
-          symbols.append(sym);
-        }
-      }
-
-      block = block.next();
+      sym.selectionRange.start.line = s.line;
+      sym.selectionRange.start.character = s.column;
+      sym.range = sym.selectionRange;
+      symbols.append(sym);
     }
 
     goToSymbolDialog->setSymbols(symbols);
@@ -417,6 +357,124 @@ void MainWindow::goToDefinitionAtCursor() {
   m_symbolNavService->goToDefinition(req);
 }
 
+void MainWindow::renameSymbolAtCursor() {
+  TextArea *textArea = getCurrentTextArea();
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!textArea || !tabWidget || !m_languageFeatureManager) {
+    return;
+  }
+
+  const QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
+  if (filePath.isEmpty()) {
+    statusBar()->showMessage(tr("Save the file before renaming symbols"), 4000);
+    return;
+  }
+
+  LspClient *client = m_languageFeatureManager->clientForFile(filePath);
+  if (!client) {
+    statusBar()->showMessage(
+        tr("Rename needs a running language server for this file"), 5000);
+    return;
+  }
+
+  QTextCursor cursor = textArea->textCursor();
+  QTextCursor word = cursor;
+  word.select(QTextCursor::WordUnderCursor);
+  const QString current = word.selectedText();
+  if (current.isEmpty()) {
+    statusBar()->showMessage(tr("Place the caret on a symbol to rename it"),
+                             4000);
+    return;
+  }
+
+  bool ok = false;
+  const QString newName = QInputDialog::getText(
+      this, tr("Rename Symbol"), tr("New name for '%1':").arg(current),
+      QLineEdit::Normal, current, &ok);
+  if (!ok || newName.isEmpty() || newName == current) {
+    return;
+  }
+
+  flushPendingLanguageServerChanges(filePath);
+
+  const QString uri = textArea->getDocumentUri();
+  const LspPosition position{cursor.blockNumber(), cursor.positionInBlock()};
+  const int requestId = client->requestRename(uri, position, newName);
+
+  auto connection = std::make_shared<QMetaObject::Connection>();
+  *connection = connect(
+      client, &LspClient::renameReceived, this,
+      [this, requestId, connection](int id, const LspWorkspaceEdit &edit) {
+        if (id != requestId) {
+          return;
+        }
+        QObject::disconnect(*connection);
+
+        if (edit.changes.isEmpty()) {
+          statusBar()->showMessage(
+              tr("The language server could not rename this symbol"), 5000);
+          return;
+        }
+
+        int editCount = 0;
+        for (auto it = edit.changes.begin(); it != edit.changes.end(); ++it) {
+          const QString path = QUrl(it.key()).toLocalFile();
+          if (path.isEmpty()) {
+            continue;
+          }
+          if (!isFileOpenInEditor(path)) {
+            openFileAndAddToNewTab(path);
+          }
+          TextArea *target = nullptr;
+          for (LightpadTabWidget *tw : allTabWidgets()) {
+            for (int i = 0; tw && i < tw->count() && !target; ++i) {
+              if (QDir::cleanPath(tw->getFilePath(i)) ==
+                  QDir::cleanPath(path)) {
+                if (auto *page = tw->getPage(i)) {
+                  target = page->getTextArea();
+                }
+              }
+            }
+          }
+          if (!target) {
+            continue;
+          }
+
+          QList<LspTextEdit> edits = it.value();
+          std::sort(edits.begin(), edits.end(),
+                    [](const LspTextEdit &a, const LspTextEdit &b) {
+                      if (a.range.start.line != b.range.start.line) {
+                        return a.range.start.line > b.range.start.line;
+                      }
+                      return a.range.start.character > b.range.start.character;
+                    });
+          QTextDocument *doc = target->document();
+          QTextCursor tc(doc);
+          tc.beginEditBlock();
+          for (const LspTextEdit &e : edits) {
+            const QTextBlock startBlock =
+                doc->findBlockByNumber(e.range.start.line);
+            const QTextBlock endBlock =
+                doc->findBlockByNumber(e.range.end.line);
+            if (!startBlock.isValid() || !endBlock.isValid()) {
+              continue;
+            }
+            tc.setPosition(
+                startBlock.position() +
+                qMin(e.range.start.character, startBlock.length() - 1));
+            tc.setPosition(endBlock.position() + qMin(e.range.end.character,
+                                                      endBlock.length() - 1),
+                           QTextCursor::KeepAnchor);
+            tc.insertText(e.newText);
+            ++editCount;
+          }
+          tc.endEditBlock();
+        }
+        statusBar()->showMessage(
+            tr("Renamed: %n occurrence(s) changed", nullptr, editCount), 5000);
+      });
+}
+
 void MainWindow::handleDefinitionResults(
     const QList<DefinitionTarget> &targets) {
   if (targets.size() == 1) {
@@ -467,4 +525,3 @@ void MainWindow::jumpToTarget(const DefinitionTarget &target) {
     navigationHistory->recordLocation(loc);
   }
 }
-

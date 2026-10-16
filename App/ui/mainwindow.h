@@ -76,8 +76,7 @@ public:
   explicit MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
   void keyPressEvent(QKeyEvent *event);
-  // Grows (positive) or shrinks (negative) the font of every editor by that
-  // many points and saves the new size.
+
   void stepEditorFontSize(int steps);
   bool eventFilter(QObject *watched, QEvent *event) override;
   void openFileAndAddToNewTab(QString path, bool reuseAnyGroup = true);
@@ -120,8 +119,12 @@ public:
                        const QString &originalFilePath);
   LightpadTabWidget *currentTabWidget() const;
   void goToDefinitionAtCursor();
+  void renameSymbolAtCursor();
   void runFileByPath(const QString &filePath);
   void debugFileByPath(const QString &filePath);
+  bool requestLspHover(TextArea *area, int line, int column,
+                       const QPoint &globalPos, QWidget *anchor,
+                       const QRect &anchorRect);
   bool requestDebugHover(const QString &expression, const QPoint &globalPos,
                          QWidget *anchor, const QRect &anchorRect);
 
@@ -146,6 +149,12 @@ private slots:
   void on_actionIncrease_Font_Size_triggered();
   void on_actionDecrease_Font_Size_triggered();
   void on_actionReset_Font_Size_triggered();
+  void on_actionSelect_All_triggered();
+  void on_actionToggle_Line_Comment_triggered();
+  void on_actionMove_Line_Up_triggered();
+  void on_actionMove_Line_Down_triggered();
+  void on_actionDuplicate_Line_Down_triggered();
+  void on_actionDuplicate_Line_Up_triggered();
   void on_actionCut_triggered();
   void on_actionCopy_triggered();
   void on_actionPaste_triggered();
@@ -193,7 +202,7 @@ private slots:
   void on_actionToggle_Problems_triggered();
 
   void on_actionPreview_Markdown_triggered();
-  void on_actionPreview_LaTeX_triggered();
+  void previewLatexDocument();
 
   void on_actionOpen_To_Side_triggered();
 

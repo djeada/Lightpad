@@ -62,6 +62,7 @@ private:
   LightpadTabWidget *createTabWidget();
   void updateFocus(LightpadTabWidget *tabWidget);
   void cleanupEmptySplitters();
+  void updateSidebarHosting();
   QSplitter *findParentSplitter(QWidget *widget) const;
   int findTabWidgetIndex(LightpadTabWidget *tabWidget) const;
 
