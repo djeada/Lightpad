@@ -9,31 +9,29 @@ void MainWindow::showFindReplace(bool onlyFind) {
     if (layout != 0)
       layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
 
-    connect(findReplacePanel, &FindReplacePanel::navigateToFile, this,
-            [this](const QString &filePath, int lineNumber, int columnNumber,
-                   int matchLength) {
-              if (!filePath.isEmpty()) {
-                openFileAndAddToNewTab(filePath);
-              }
-              TextArea *textArea = getCurrentTextArea();
-              if (textArea) {
-                const QTextBlock block =
-                    textArea->document()->findBlockByNumber(
-                        qMax(0, lineNumber - 1));
-                if (!block.isValid())
-                  return;
-                QTextCursor cursor(textArea->document());
-                cursor.setPosition(
-                    block.position() +
-                    qBound(0, columnNumber - 1, block.length() - 1));
-                cursor.setPosition(
-                    qMin(cursor.position() + matchLength,
-                         textArea->document()->characterCount() - 1),
-                    QTextCursor::KeepAnchor);
-                textArea->setTextCursor(cursor);
-                textArea->ensureCursorVisible();
-              }
-            });
+    connect(
+        findReplacePanel, &FindReplacePanel::navigateToFile, this,
+        [this](const QString &filePath, int lineNumber, int columnNumber,
+               int matchLength) {
+          if (!filePath.isEmpty()) {
+            openFileAndAddToNewTab(filePath);
+          }
+          TextArea *textArea = getCurrentTextArea();
+          if (textArea) {
+            const QTextBlock block = textArea->document()->findBlockByNumber(
+                qMax(0, lineNumber - 1));
+            if (!block.isValid())
+              return;
+            QTextCursor cursor(textArea->document());
+            cursor.setPosition(block.position() +
+                               qBound(0, columnNumber - 1, block.length() - 1));
+            cursor.setPosition(qMin(cursor.position() + matchLength,
+                                    textArea->document()->characterCount() - 1),
+                               QTextCursor::KeepAnchor);
+            textArea->setTextCursor(cursor);
+            textArea->ensureCursorVisible();
+          }
+        });
 
     connect(findReplacePanel, &QObject::destroyed, this, [this]() {
       findReplacePanel = nullptr;
@@ -168,6 +166,10 @@ TerminalTabWidget *MainWindow::ensureTerminalWidget() {
   if (!terminalWidget) {
     terminalWidget = new TerminalTabWidget();
     terminalWidget->applyTheme(getTheme());
+    if (!m_projectRootPath.isEmpty() &&
+        QDir::cleanPath(m_projectRootPath) != QDir::currentPath()) {
+      terminalWidget->resetForWorkspace(m_projectRootPath);
+    }
 
     connect(terminalWidget, &TerminalTabWidget::closeRequested, this, [this]() {
       if (m_terminalDock) {
@@ -1076,7 +1078,13 @@ void MainWindow::refreshDebugTargetButton() {
 
   const QString quickSource = runSourceFilePath();
   const RunTarget quickTarget = resolveRunTargetForFile(quickSource);
-  const QString quickName = quickTarget.isValid()
+
+  const bool debuggable =
+      quickTarget.isValid() ||
+      (!quickSource.isEmpty() &&
+       DebugAdapterRegistry::instance().preferredAdapterForFile(quickSource));
+  const QString quickName = !debuggable ? QString()
+                            : quickTarget.isValid()
                                 ? quickTarget.displayName()
                                 : QFileInfo(quickSource).fileName();
 
@@ -1918,4 +1926,3 @@ bool MainWindow::startCompoundDebugConfigurationByName(
   m_debugStartInProgress = false;
   return !startedSessionIds.isEmpty();
 }
-

@@ -632,8 +632,10 @@ void MainWindow::updateSourceControlDockTitle(const QString &repoRoot,
   }
 
   if (isRepo && !repoRoot.isEmpty()) {
+    const QString absolute = QDir(repoRoot).absolutePath();
     sourceControlDock->setWindowTitle(
-        tr("Source Control — %1").arg(QDir(repoRoot).absolutePath()));
+        tr("Source Control — %1").arg(QFileInfo(absolute).fileName()));
+    sourceControlDock->setToolTip(absolute);
     return;
   }
 
@@ -814,4 +816,3 @@ bool MainWindow::isAutoSaveEnabled() const {
   }
   return SettingsManager::instance().getValue("autoSaveFiles", true).toBool();
 }
-

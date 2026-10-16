@@ -512,7 +512,6 @@ void MainWindow::ensureDebugPanel() {
             if (!targetPath.isEmpty()) {
               openFileAndAddToNewTab(targetPath);
             }
-            updateAllTextAreas(&TextArea::setDebugExecutionLine, 0);
             TextArea *textArea = getCurrentTextArea();
             if (textArea) {
               QTextCursor cursor = textArea->textCursor();
@@ -524,9 +523,24 @@ void MainWindow::ensureDebugPanel() {
               cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
                                   targetColumn);
               textArea->setTextCursor(cursor);
-              textArea->setDebugExecutionLine(line);
               textArea->centerCursor();
               textArea->setFocus();
+            }
+          });
+  connect(debugPanel, &DebugPanel::executionLocationChanged, this,
+          [this](const QString &filePath, int line) {
+            updateAllTextAreas(&TextArea::setDebugExecutionLine, 0);
+            if (filePath.isEmpty() || line <= 0 || !debugPanel->dapClient() ||
+                debugPanel->dapClient()->state() != DapClient::State::Stopped) {
+              return;
+            }
+            LightpadTabWidget *tabs = currentTabWidget();
+            TextArea *area = getCurrentTextArea();
+            if (tabs && area &&
+                QFileInfo(tabs->getFilePath(tabs->currentIndex()))
+                        .canonicalFilePath() ==
+                    QFileInfo(filePath).canonicalFilePath()) {
+              area->setDebugExecutionLine(line);
             }
           });
   connect(debugPanel, &DebugPanel::inlineValuesChanged, this,
@@ -853,7 +867,7 @@ void MainWindow::on_actionPreview_Markdown_triggered() {
   LOG_INFO(QString("Opened Markdown preview for: %1").arg(filePath));
 }
 
-void MainWindow::on_actionPreview_LaTeX_triggered() {
+void MainWindow::previewLatexDocument() {
   TextArea *textArea = getCurrentTextArea();
   if (!textArea)
     return;
@@ -907,4 +921,3 @@ void MainWindow::on_actionPreview_LaTeX_triggered() {
 
   LOG_INFO(QString("Opened LaTeX build panel for: %1").arg(filePath));
 }
-

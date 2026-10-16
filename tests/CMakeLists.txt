@@ -543,6 +543,7 @@ add_executable(test_dap
     ${CMAKE_SOURCE_DIR}/App/dap/watchmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugsession.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugsettings.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/debugpanel.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/debugconfigurationdialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
@@ -2921,6 +2922,24 @@ target_compile_definitions(test_runconfiguration PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME RunConfigurationTests COMMAND test_runconfiguration)
 
+# DocumentSymbols test executable
+add_executable(test_documentsymbols
+    unit/test_documentsymbols.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/editor/documentsymbols.cpp
+)
+
+target_include_directories(test_documentsymbols PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+)
+
+target_link_libraries(test_documentsymbols
+    PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME DocumentSymbolsTests COMMAND test_documentsymbols)
+
 # TextTransforms test executable
 add_executable(test_texttransforms
     unit/test_texttransforms.cpp
@@ -3293,6 +3312,7 @@ set(TEST_TARGETS
     test_testfileclassifier
     test_problemspanel
     test_texttransforms
+    test_documentsymbols
     test_codefolding
     test_multicursor
     test_diagnosticsregression

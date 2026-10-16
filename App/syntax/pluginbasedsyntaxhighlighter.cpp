@@ -87,8 +87,6 @@ enum RuleKind : quint8 {
   RuleComment = 8,
 };
 
-// Classified once when rules are loaded; highlightBlock runs per line and used
-// to lower-case and search every rule name on every call.
 quint8 classifyRuleName(const QString &name) {
   quint8 kind = 0;
   if (name.contains(QLatin1String("string"), Qt::CaseInsensitive) ||
@@ -450,7 +448,7 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
         applyFormatRange(
             regionStart, regionEnd - regionStart, block.format, true,
             (classifyRuleName(block.name) & RuleString) ? &stringCharacters
-                                                    : nullptr);
+                                                        : nullptr);
       }
 
       if (!endMatch.hasMatch()) {
@@ -469,8 +467,8 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
 
   applyRules([](quint8 kind) { return kind & RuleString; }, true,
              &stringCharacters);
-  applyRules([](quint8 kind) { return kind & RuleEscape; }, false, nullptr, true,
-             &stringCharacters);
+  applyRules([](quint8 kind) { return kind & RuleEscape; }, false, nullptr,
+             true, &stringCharacters);
   applyRules([](quint8 kind) { return kind & RuleComment; }, true);
   applyRules(
       [](quint8 kind) {

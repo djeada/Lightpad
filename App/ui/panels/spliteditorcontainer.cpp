@@ -3,6 +3,7 @@
 #include "../../core/logging/logger.h"
 #include "../mainwindow.h"
 
+#include "../../core/lightpadpage.h"
 #include <QApplication>
 #include <QFocusEvent>
 #include <QVBoxLayout>
@@ -125,6 +126,14 @@ LightpadTabWidget *SplitEditorContainer::split(SplitOrientation orientation) {
 
   if (parentSplitter->orientation() == qtOrientation) {
     parentSplitter->insertWidget(index + 1, newTabWidget);
+
+    const int groups = parentSplitter->count();
+    const int total = qtOrientation == Qt::Horizontal
+                          ? parentSplitter->width()
+                          : parentSplitter->height();
+    if (groups > 0 && total > 0) {
+      parentSplitter->setSizes(QList<int>(groups, total / groups));
+    }
   } else {
 
     QSplitter *newSplitter = new QSplitter(qtOrientation, this);
@@ -150,6 +159,7 @@ LightpadTabWidget *SplitEditorContainer::split(SplitOrientation orientation) {
                .arg(orientation == SplitOrientation::Horizontal ? "horizontal"
                                                                 : "vertical"));
 
+  updateSidebarHosting();
   emit splitCountChanged(groupCount());
 
   updateFocus(newTabWidget);
@@ -207,6 +217,7 @@ bool SplitEditorContainer::closeCurrentGroup() {
     updateFocus(nextFocus);
   }
 
+  updateSidebarHosting();
   LOG_INFO("Closed editor group");
   emit splitCountChanged(groupCount());
 
@@ -294,6 +305,7 @@ bool SplitEditorContainer::unsplitAll() {
     updateFocus(first);
   }
 
+  updateSidebarHosting();
   LOG_INFO("Reset to single editor view");
   emit splitCountChanged(groupCount());
   return true;
@@ -345,6 +357,31 @@ LightpadTabWidget *SplitEditorContainer::createTabWidget() {
   m_tabWidgets.append(tabWidget);
 
   return tabWidget;
+}
+
+void SplitEditorContainer::updateSidebarHosting() {
+
+  LightpadTabWidget *host = nullptr;
+  QWidget *node = m_rootSplitter;
+  while (node) {
+    if (auto *tw = qobject_cast<LightpadTabWidget *>(node)) {
+      host = tw;
+      break;
+    }
+    auto *splitter = qobject_cast<QSplitter *>(node);
+    node = (splitter && splitter->count() > 0) ? splitter->widget(0) : nullptr;
+  }
+  for (LightpadTabWidget *tw : allTabWidgets()) {
+    if (!tw) {
+      continue;
+    }
+    tw->setProperty("lightpadSidebarHost", tw == host);
+    for (int i = 0; i < tw->count(); ++i) {
+      if (auto *page = qobject_cast<LightpadPage *>(tw->widget(i))) {
+        page->refreshTreeVisibility();
+      }
+    }
+  }
 }
 
 void SplitEditorContainer::updateFocus(LightpadTabWidget *tabWidget) {

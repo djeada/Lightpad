@@ -130,7 +130,7 @@ int ProjectSearch::fileNameScore(const QString &query,
     } else if (relativePath.contains(token, sensitivity)) {
       score += 400;
     } else {
-      // Subsequence matching lets "mwp" find "mainwindow_projecttree.cpp".
+
       int position = 0;
       int gaps = 0;
       for (const QChar ch : token) {
@@ -255,7 +255,7 @@ ProjectSearch::search(const Options &options,
           match.isDirectory = isDirectory;
           match.score = score;
           results.matches.append(match);
-          // Keep memory bounded while still considering better matches later.
+
           if (results.matches.size() > 2 * limit) {
             std::sort(results.matches.begin(), results.matches.end(),
                       betterMatch);

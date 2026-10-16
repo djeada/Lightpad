@@ -183,8 +183,7 @@ private slots:
     panel->setScope(SearchReplace::Scope::OpenFiles);
     replacement()->setText("dog");
     search("cat");
-    // The current editor entry is supplied by the provider, so it is not
-    // counted twice.
+
     QVERIFY(status()->text().startsWith("3 matches"));
     preview();
     applyBatch();
@@ -435,15 +434,13 @@ private slots:
     replacement()->setText("dog");
     search("cat");
     preview();
-    connect(
-        panel.get(), &FindReplacePanel::navigateToFile, panel.get(),
-        [&](const QString &, int, int, int) {
-          docs.append({{}, path, "a", &opened});
-          panel->setEditor(&opened, path);
-          opened.setPlainText(
-              "cat"); // MainWindow creates the editor before loading its text.
-          opened.document()->setModified(false);
-        });
+    connect(panel.get(), &FindReplacePanel::navigateToFile, panel.get(),
+            [&](const QString &, int, int, int) {
+              docs.append({{}, path, "a", &opened});
+              panel->setEditor(&opened, path);
+              opened.setPlainText("cat");
+              opened.document()->setModified(false);
+            });
     panel->findNext();
     QVERIFY(apply()->isVisible());
     QCOMPARE(opened.textCursor().selectedText(), "cat");

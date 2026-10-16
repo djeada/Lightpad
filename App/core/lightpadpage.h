@@ -33,6 +33,7 @@ public:
   TextArea *getTextArea();
   Minimap *getMinimap();
   void setTreeViewVisible(bool flag);
+  void refreshTreeVisibility();
   void setMinimapVisible(bool flag);
   bool isMinimapVisible() const;
   void setModelRootIndex(QString path);
@@ -90,6 +91,7 @@ private:
   bool m_ownsModel;
   GitIntegration *m_gitIntegration;
   QString m_treeFilterText;
+  bool m_treeWanted = false;
   QString filePath;
   QString projectRootPath;
 };

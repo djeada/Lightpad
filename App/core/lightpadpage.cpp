@@ -244,9 +244,24 @@ TextArea *LightpadPage::getTextArea() { return textArea; }
 Minimap *LightpadPage::getMinimap() { return minimap; }
 
 void LightpadPage::setTreeViewVisible(bool flag) {
-  if (treeContainer) {
-    treeContainer->setVisible(flag);
+  m_treeWanted = flag;
+  refreshTreeVisibility();
+}
+
+void LightpadPage::refreshTreeVisibility() {
+  if (!treeContainer) {
+    return;
   }
+
+  bool hosting = true;
+  for (QWidget *w = parentWidget(); w; w = w->parentWidget()) {
+    const QVariant host = w->property("lightpadSidebarHost");
+    if (host.isValid()) {
+      hosting = host.toBool();
+      break;
+    }
+  }
+  treeContainer->setVisible(m_treeWanted && hosting);
 }
 
 void LightpadPage::setMinimapVisible(bool flag) {

@@ -559,7 +559,7 @@ QString FileDirTreeModel::addUniqueSuffix(const QString &fileName) {
   }
 
   const QFileInfo fileInfo(fileName);
-  // Dotted folder names and dotfiles are names, not multi-part extensions.
+
   QString secondPart = fileInfo.isDir() || fileInfo.fileName().startsWith('.')
                            ? QString()
                            : fileInfo.completeSuffix();

@@ -61,6 +61,7 @@ set(project_headers
     completion/providers/snippetcompletionprovider.h
     completion/providers/sqlcompletionprovider.h
     core/editor/texttransforms.h
+    core/editor/documentsymbols.h
     core/editor/linenumberarea.h
     core/editor/multicursor.h
     core/editor/codefolding.h
@@ -297,6 +298,7 @@ set(project_headers
     theme/themeengine.h
     theme/themepresets.h
     ui/uistylehelper.h
+    ui/glyphfallback.h
     ui/uimetrics.h
     ui/viewers/imageviewer.h
     markdown/markdowntools.h
@@ -323,6 +325,7 @@ set(project_sources
     completion/providers/snippetcompletionprovider.cpp
     completion/providers/sqlcompletionprovider.cpp
     core/editor/texttransforms.cpp
+    core/editor/documentsymbols.cpp
     core/editor/linenumberarea.cpp
     core/editor/multicursor.cpp
     core/editor/codefolding.cpp
@@ -569,6 +572,7 @@ set(project_sources
     theme/themeengine.cpp
     theme/themepresets.cpp
     ui/uistylehelper.cpp
+    ui/glyphfallback.cpp
     ui/viewers/imageviewer.cpp
     markdown/markdowntools.cpp
     markdown/markdownpreviewpanel.cpp

@@ -206,13 +206,13 @@ public:
   static QList<QByteArray> extractMessages(QByteArray &buffer,
                                            int maxMessages = 100);
 
-  void requestHover(const QString &uri, LspPosition position);
+  int requestHover(const QString &uri, LspPosition position);
   int requestDefinition(const QString &uri, LspPosition position);
   void requestReferences(const QString &uri, LspPosition position);
   void requestSignatureHelp(const QString &uri, LspPosition position);
   void requestDocumentSymbols(const QString &uri);
-  void requestRename(const QString &uri, LspPosition position,
-                     const QString &newName);
+  int requestRename(const QString &uri, LspPosition position,
+                    const QString &newName);
 
   void requestCodeAction(const QString &uri, LspRange range,
                          const QList<LspDiagnostic> &diagnostics = {});

@@ -1,4 +1,6 @@
 #include "mainwindow_internal.h"
+#include <QToolTip>
+#include <memory>
 
 void MainWindow::runCurrentScript() { runPath(runSourceFilePath()); }
 
@@ -347,6 +349,52 @@ void MainWindow::debugFileByPath(const QString &filePath) {
   startDebuggingForFile(filePath);
 }
 
+bool MainWindow::requestLspHover(TextArea *area, int line, int column,
+                                 const QPoint &globalPos, QWidget *anchor,
+                                 const QRect &anchorRect) {
+  if (!m_languageFeatureManager || !area || area != getCurrentTextArea()) {
+    return false;
+  }
+  LightpadTabWidget *tabWidget = currentTabWidget();
+  if (!tabWidget) {
+    return false;
+  }
+  const QString filePath = tabWidget->getFilePath(tabWidget->currentIndex());
+  if (filePath.isEmpty()) {
+    return false;
+  }
+  LspClient *client = m_languageFeatureManager->clientForFile(filePath);
+  if (!client || !client->isReady()) {
+    return false;
+  }
+
+  flushPendingLanguageServerChanges(filePath);
+
+  const int requestId =
+      client->requestHover(area->getDocumentUri(), LspPosition{line, column});
+  auto connection = std::make_shared<QMetaObject::Connection>();
+  QPointer<QWidget> anchorGuard(anchor);
+  *connection =
+      connect(client, &LspClient::hoverReceived, this,
+              [requestId, connection, globalPos, anchorGuard,
+               anchorRect](int id, const QString &contents) {
+                if (id != requestId) {
+                  return;
+                }
+                QObject::disconnect(*connection);
+                const QString text = contents.trimmed();
+                if (text.isEmpty() || !anchorGuard) {
+                  return;
+                }
+
+                QTextDocument doc;
+                doc.setMarkdown(text);
+                QString html = doc.toHtml();
+                QToolTip::showText(globalPos, html, anchorGuard, anchorRect);
+              });
+  return true;
+}
+
 bool MainWindow::requestDebugHover(const QString &expression,
                                    const QPoint &globalPos, QWidget *anchor,
                                    const QRect &anchorRect) {
@@ -523,15 +571,17 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
       });
   m_sessionErrorConnection = connect(
       session, &DebugSession::error, this, [this](const QString &message) {
-        ThemedMessageBox::warning(this, tr("Debug Session Error"), message);
+        statusBar()->showMessage(tr("Debug: %1").arg(message), 10000);
+        if (m_notificationManager) {
+          m_notificationManager->showError(tr("Debug Session Error"), message);
+        }
       });
   m_sessionStateConnection =
       connect(session, &DebugSession::stateChanged, this,
               [this](DebugSession::State state) {
-                if (state == DebugSession::State::Running ||
-                    state == DebugSession::State::Terminated ||
-                    state == DebugSession::State::Idle) {
+                if (state != DebugSession::State::Stopped) {
                   updateAllTextAreas(&TextArea::setDebugExecutionLine, 0);
+                  updateAllTextAreas(&TextArea::clearDebugInlineValues);
                 } else if (state == DebugSession::State::Stopped && debugDock) {
                   debugDock->show();
                   debugDock->raise();
@@ -541,6 +591,7 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
 
 void MainWindow::clearDebugSession() {
   m_activeDebugSessionId.clear();
+  BreakpointManager::instance().setDapClient(nullptr);
   BreakpointManager::instance().resetVerification();
   BreakpointManager::instance().clearDataBreakpoints();
   if (debugPanel) {
@@ -572,5 +623,5 @@ void MainWindow::clearDebugSession() {
     m_sessionStateConnection = {};
   }
   updateAllTextAreas(&TextArea::setDebugExecutionLine, 0);
+  updateAllTextAreas(&TextArea::clearDebugInlineValues);
 }
-

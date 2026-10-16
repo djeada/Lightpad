@@ -1,8 +1,5 @@
 #pragma once
 
-// Private helpers shared by the MainWindow implementation files.
-// Not part of the public interface; include only from mainwindow*.cpp.
-
 #include <QAbstractItemView>
 #include <QActionGroup>
 #include <QApplication>
@@ -156,7 +153,6 @@
 #pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
-
 namespace {
 QString statusBarTextButtonStyle() {
   const ThemeColors &tc = ThemeEngine::instance().activeTheme().colors;
@@ -289,7 +285,6 @@ QTextCursor cursorAtLineColumn(QTextDocument *document, int line, int column) {
 }
 } // namespace
 
-// Member template; defined here so every mainwindow*.cpp can instantiate it.
 template <typename... Args>
 void MainWindow::updateAllTextAreas(void (TextArea::*f)(Args... args),
                                     Args... args) {

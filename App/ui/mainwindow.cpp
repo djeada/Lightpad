@@ -1,6 +1,5 @@
 #include "mainwindow_internal.h"
 
-
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), popupTabWidth(nullptr),
       preferences(nullptr), findReplacePanel(nullptr), terminalWidget(nullptr),
@@ -150,6 +149,18 @@ MainWindow::MainWindow(QWidget *parent)
   setupFileQuickOpen();
   setupRecentFilesDialog();
   setupBreadcrumb();
+
+  for (QAction *menuAction : menuBar()->actions()) {
+    if (QMenu *menu = menuAction->menu()) {
+      connect(menu, &QMenu::aboutToHide, this, [this]() {
+        QTimer::singleShot(0, this, [this]() {
+          if (!QApplication::activePopupWidget()) {
+            menuBar()->setActiveAction(nullptr);
+          }
+        });
+      });
+    }
+  }
   setupGitIntegration();
   ensureDebugPanel();
   TestConfigurationManager::instance().loadTemplates();
@@ -895,7 +906,7 @@ void MainWindow::restoreSessionUiState() {
       !latexPreviewFilePath.isEmpty() &&
       QFileInfo(latexPreviewFilePath).exists()) {
     openFileAndAddToNewTab(latexPreviewFilePath);
-    on_actionPreview_LaTeX_triggered();
+    previewLatexDocument();
   }
 
   if (!dockStateBase64.isEmpty()) {
@@ -1210,10 +1221,14 @@ void MainWindow::updateInlineBlameForCurrentFile() {
   QList<GitBlameLineInfo> blameLines = m_gitIntegration->getBlameInfo(filePath);
   QMap<int, QString> inlineData;
   for (const auto &info : blameLines) {
-    QString text = QString("%1, %2 \u2022 %3")
-                       .arg(info.author)
-                       .arg(info.relativeDate)
-                       .arg(info.summary);
+    const bool uncommitted =
+        info.shortHash.isEmpty() ||
+        info.shortHash.count(QLatin1Char('0')) == info.shortHash.size();
+    QString text = uncommitted ? tr("You \u2022 Uncommitted changes")
+                               : QString("%1, %2 \u2022 %3")
+                                     .arg(info.author)
+                                     .arg(info.relativeDate)
+                                     .arg(info.summary);
     inlineData.insert(info.lineNumber, text);
   }
   textArea->setInlineBlameEnabled(true);
@@ -1270,8 +1285,7 @@ void MainWindow::updateGitStatusBar() {
   }
 
   QString branch = m_gitIntegration->currentBranch();
-  m_gitBranchLabel->setText(
-      QString("\xF0\x9F\x94\x80 %1").arg(branch.isEmpty() ? "HEAD" : branch));
+  m_gitBranchLabel->setText(branch.isEmpty() ? QStringLiteral("HEAD") : branch);
 
   int ahead = 0, behind = 0;
   if (m_gitIntegration->getAheadBehind(ahead, behind)) {
@@ -1743,6 +1757,11 @@ void MainWindow::keyPressEvent(QKeyEvent *keyEvent) {
   else if (keyEvent->key() == Qt::Key_F12 &&
            keyEvent->modifiers() == Qt::NoModifier) {
     goToDefinitionAtCursor();
+  }
+
+  else if (keyEvent->key() == Qt::Key_F2 &&
+           keyEvent->modifiers() == Qt::NoModifier) {
+    renameSymbolAtCursor();
   }
 
   else if (keyEvent->modifiers() == Qt::ControlModifier &&
@@ -3350,6 +3369,12 @@ void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,
     if (view) {
       registerTreeView(view);
     }
+    if (tabWidget == currentTabWidget() && !filePath.isEmpty()) {
+      page->revealPath(filePath);
+    }
+  }
+  if (tabWidget == currentTabWidget()) {
+    updateBreadcrumb(filePath);
   }
 
   updatePythonEnvironmentLabel();
@@ -3527,4 +3552,3 @@ void MainWindow::setupTextArea() {
       textArea->setCompleter(completer);
   }
 }
-

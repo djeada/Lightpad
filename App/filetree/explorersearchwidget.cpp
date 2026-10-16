@@ -540,7 +540,7 @@ void ExplorerSearchWidget::activateItem(QTreeWidgetItem *item) {
   if (!found) {
     return;
   }
-  // Opening/revealing may synchronously clear results or switch the active tab.
+
   const ProjectSearch::Match match = *found;
   if (match.isDirectory) {
     emit revealRequested(match.filePath);

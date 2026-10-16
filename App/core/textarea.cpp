@@ -28,6 +28,7 @@
 #include <functional>
 
 #include "../theme/colorcontrast.h"
+#include "editor/texttransforms.h"
 
 #include "../completion/completioncontext.h"
 #include "../completion/completionengine.h"
@@ -635,7 +636,12 @@ void TextArea::setupTextArea() {
 
   auto &breakpointManager = BreakpointManager::instance();
   auto refreshBreakpoints = [this](const QString &filePath) {
-    if (!filePath.isEmpty() && filePath == resolveFilePath()) {
+    const QString editorPath = resolveFilePath();
+    const QString canonicalPath = QFileInfo(filePath).canonicalFilePath();
+    if (!filePath.isEmpty() &&
+        (filePath == editorPath ||
+         (!canonicalPath.isEmpty() &&
+          canonicalPath == QFileInfo(editorPath).canonicalFilePath()))) {
       updateExtraSelections();
       if (lineNumberArea) {
         lineNumberArea->update();
@@ -835,8 +841,6 @@ void TextArea::wheelEvent(QWheelEvent *event) {
     return;
   }
 
-  // Touchpads deliver many small deltas, so only change the size once a full
-  // wheel notch has accumulated.
   m_wheelZoomRemainder += event->angleDelta().y();
   const int steps = m_wheelZoomRemainder / QWheelEvent::DefaultDeltasPerStep;
   m_wheelZoomRemainder -= steps * QWheelEvent::DefaultDeltasPerStep;
@@ -885,6 +889,24 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
       addCursorBelow();
       return;
     }
+  }
+
+  if (keyEvent->modifiers() == Qt::ControlModifier &&
+      keyEvent->key() == Qt::Key_Slash) {
+    toggleLineComment();
+    return;
+  }
+
+  if (keyEvent->modifiers() == Qt::AltModifier &&
+      (keyEvent->key() == Qt::Key_Up || keyEvent->key() == Qt::Key_Down)) {
+    moveLines(keyEvent->key() == Qt::Key_Up);
+    return;
+  }
+
+  if (keyEvent->modifiers() == (Qt::ShiftModifier | Qt::AltModifier) &&
+      (keyEvent->key() == Qt::Key_Up || keyEvent->key() == Qt::Key_Down)) {
+    duplicateLines(keyEvent->key() == Qt::Key_Up);
+    return;
   }
 
   if (keyEvent->modifiers() == Qt::ControlModifier &&
@@ -1537,6 +1559,24 @@ void TextArea::handleKeyEnterPressed() {
 
     cursor.setPosition(pos, cursor.MoveAnchor);
     cursor.insertText(QString(" ").repeated(n));
+
+    const QString trimmedPrev = prevLine.trimmed();
+    const QString rest = cursor.block().text().mid(cursor.positionInBlock());
+    if (!trimmedPrev.isEmpty() && !rest.isEmpty()) {
+      const QChar opener = trimmedPrev.back();
+      const QChar closer =
+          rest.trimmed().isEmpty() ? QChar() : rest.trimmed()[0];
+      const bool matched = (opener == '{' && closer == '}') ||
+                           (opener == '(' && closer == ')') ||
+                           (opener == '[' && closer == ']');
+      if (matched) {
+        const int caret = cursor.position();
+        cursor.insertText(
+            QStringLiteral("\n") +
+            QString(" ").repeated(leadingSpaces(prevLine, tabWidth)));
+        cursor.setPosition(caret);
+      }
+    }
     setTextCursor(cursor);
   }
 }
@@ -1640,8 +1680,7 @@ void TextArea::updateExtraSelections() {
     const QList<Breakpoint> breakpoints =
         BreakpointManager::instance().breakpointsForFile(filePath);
     for (const Breakpoint &bp : breakpoints) {
-      int displayLine =
-          (bp.verified && bp.boundLine > 0) ? bp.boundLine : bp.line;
+      const int displayLine = bp.displayLine();
       if (displayLine <= 0) {
         continue;
       }
@@ -2253,6 +2292,152 @@ void TextArea::invalidateCompletionRequest() {
   m_lastCompletionRequestPosition = -1;
 }
 
+namespace {
+struct BlockRange {
+  int first;
+  int last;
+};
+
+BlockRange selectedBlockRange(const QTextCursor &cursor) {
+  QTextDocument *doc = cursor.document();
+  const int start = cursor.selectionStart();
+  int end = cursor.selectionEnd();
+  const int first = doc->findBlock(start).blockNumber();
+  QTextBlock lastBlock = doc->findBlock(end);
+
+  if (end > start && lastBlock.position() == end &&
+      lastBlock.blockNumber() > first) {
+    lastBlock = lastBlock.previous();
+  }
+  return {first, lastBlock.blockNumber()};
+}
+} // namespace
+
+void TextArea::toggleLineComment() {
+  const QString prefix = TextTransforms::lineCommentPrefix(
+      LanguageCatalog::normalize(m_languageId).isEmpty()
+          ? m_languageId.trimmed().toLower()
+          : LanguageCatalog::normalize(m_languageId));
+  if (prefix.isEmpty() || isReadOnly()) {
+    return;
+  }
+
+  QTextCursor cursor = textCursor();
+  const BlockRange range = selectedBlockRange(cursor);
+  QStringList lines;
+  for (int i = range.first; i <= range.last; ++i) {
+    lines << document()->findBlockByNumber(i).text();
+  }
+  const QStringList toggled = TextTransforms::toggleLineComments(lines, prefix);
+  if (toggled == lines) {
+    return;
+  }
+
+  const bool hadSelection = cursor.hasSelection();
+  cursor.beginEditBlock();
+  for (int i = range.first; i <= range.last; ++i) {
+    if (toggled[i - range.first] == lines[i - range.first]) {
+      continue;
+    }
+    QTextCursor edit(document()->findBlockByNumber(i));
+    edit.movePosition(QTextCursor::StartOfBlock);
+    edit.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    edit.insertText(toggled[i - range.first]);
+  }
+  cursor.endEditBlock();
+
+  if (hadSelection) {
+    QTextCursor sel(document());
+    QTextBlock lastBlock = document()->findBlockByNumber(range.last);
+    sel.setPosition(document()->findBlockByNumber(range.first).position());
+    sel.setPosition(lastBlock.position() + lastBlock.length() - 1,
+                    QTextCursor::KeepAnchor);
+    setTextCursor(sel);
+  }
+}
+
+void TextArea::moveLines(bool up) {
+  if (isReadOnly()) {
+    return;
+  }
+  QTextCursor cursor = textCursor();
+  const BlockRange range = selectedBlockRange(cursor);
+  const int neighbour = up ? range.first - 1 : range.last + 1;
+  if (neighbour < 0 || neighbour >= document()->blockCount()) {
+    return;
+  }
+
+  const int anchorOffset =
+      cursor.anchor() - document()->findBlock(cursor.anchor()).position();
+  const int posOffset =
+      cursor.position() - document()->findBlock(cursor.position()).position();
+  const int anchorBlock = document()->findBlock(cursor.anchor()).blockNumber();
+  const int posBlock = document()->findBlock(cursor.position()).blockNumber();
+  const int delta = up ? -1 : 1;
+
+  QStringList lines;
+  for (int i = range.first; i <= range.last; ++i) {
+    lines << document()->findBlockByNumber(i).text();
+  }
+  const QString neighbourText = document()->findBlockByNumber(neighbour).text();
+
+  const int top = qMin(range.first, neighbour);
+  const int bottom = qMax(range.last, neighbour);
+  QStringList replacement;
+  if (up) {
+    replacement = lines;
+    replacement << neighbourText;
+  } else {
+    replacement << neighbourText;
+    replacement += lines;
+  }
+
+  QTextCursor edit(document()->findBlockByNumber(top));
+  edit.beginEditBlock();
+  edit.movePosition(QTextCursor::StartOfBlock);
+  QTextBlock bottomBlock = document()->findBlockByNumber(bottom);
+  edit.setPosition(bottomBlock.position() + bottomBlock.length() - 1,
+                   QTextCursor::KeepAnchor);
+  edit.insertText(replacement.join('\n'));
+  edit.endEditBlock();
+
+  QTextCursor restored(document());
+  QTextBlock a = document()->findBlockByNumber(anchorBlock + delta);
+  QTextBlock p = document()->findBlockByNumber(posBlock + delta);
+  restored.setPosition(a.position() + qMin(anchorOffset, a.length() - 1));
+  restored.setPosition(p.position() + qMin(posOffset, p.length() - 1),
+                       QTextCursor::KeepAnchor);
+  setTextCursor(restored);
+}
+
+void TextArea::duplicateLines(bool up) {
+  if (isReadOnly()) {
+    return;
+  }
+  QTextCursor cursor = textCursor();
+  const BlockRange range = selectedBlockRange(cursor);
+  QStringList lines;
+  for (int i = range.first; i <= range.last; ++i) {
+    lines << document()->findBlockByNumber(i).text();
+  }
+  const int count = range.last - range.first + 1;
+  const int caretOffset = cursor.positionInBlock();
+  const int caretBlock = cursor.blockNumber();
+
+  QTextCursor edit(document());
+  edit.beginEditBlock();
+  QTextBlock lastBlock = document()->findBlockByNumber(range.last);
+  edit.setPosition(lastBlock.position() + lastBlock.length() - 1);
+  edit.insertText(QStringLiteral("\n") + lines.join('\n'));
+  edit.endEditBlock();
+
+  const int targetBlock = up ? caretBlock : caretBlock + count;
+  QTextBlock t = document()->findBlockByNumber(targetBlock);
+  QTextCursor restored(document());
+  restored.setPosition(t.position() + qMin(caretOffset, t.length() - 1));
+  setTextCursor(restored);
+}
+
 void TextArea::addCursorAbove() {
   if (m_multiCursor) {
     m_multiCursor->addCursorAbove();
@@ -2718,6 +2903,12 @@ bool TextArea::viewportEvent(QEvent *event) {
                                     viewport(), wordRect)) {
     return true;
   }
+
+  if (mainWindow->requestLspHover(this, block.blockNumber(), start,
+                                  helpEvent->globalPos(), viewport(),
+                                  wordRect)) {
+    return true;
+  }
   return QPlainTextEdit::viewportEvent(event);
 }
 
@@ -2964,11 +3155,21 @@ void TextArea::updateLineNumberAreaLayout() {
     return;
   }
 
-  int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
-  setViewportMargins(width, 0, 0, 0);
+  if (m_updatingLineNumberLayout) {
+    return;
+  }
+  m_updatingLineNumberLayout = true;
+
+  const int width = showLineNumberArea ? lineNumberArea->calculateWidth() : 0;
+  if (width != m_lineNumberMarginWidth) {
+    m_lineNumberMarginWidth = width;
+    setViewportMargins(width, 0, 0, 0);
+  }
   lineNumberArea->setFixedWidth(width);
   lineNumberArea->setGeometry(0, 0, width, height());
   viewport()->update();
+
+  m_updatingLineNumberLayout = false;
 }
 
 void TextArea::startColumnSelection(const QPoint &pos) {

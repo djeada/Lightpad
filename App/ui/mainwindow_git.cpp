@@ -435,4 +435,3 @@ void MainWindow::updateCodeLensForCurrentFile() {
 
   textArea->setCodeLensEntries(entries);
 }
-

@@ -109,8 +109,7 @@ void AsyncThreadPool::submit(AsyncWorker *worker) {
   worker->moveToThread(thread);
 
   connect(thread, &QThread::started, worker, &AsyncWorker::start);
-  // quit() is thread-safe. A queued quit would depend on the GUI event loop
-  // still running, and deadlock waitAll() when closing during a search.
+
   connect(worker, &AsyncWorker::finished, thread, &QThread::quit,
           Qt::DirectConnection);
   connect(worker, &AsyncWorker::cancelled, thread, &QThread::quit,

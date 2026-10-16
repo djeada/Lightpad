@@ -26,6 +26,24 @@ constexpr int kInactiveTabTextAlpha = 176;
 
 LightpadTabBar::LightpadTabBar(QWidget *parent) : QTabBar(parent) {}
 
+QSize LightpadTabBar::tabSizeHint(int index) const {
+  QSize size = QTabBar::tabSizeHint(index);
+  const QFontMetrics fm(font());
+  int needed = fm.horizontalAdvance(tabText(index)) + 40;
+  if (QWidget *button = tabButton(index, QTabBar::RightSide)) {
+    needed += button->sizeHint().width() + 8;
+  }
+  if (!tabIcon(index).isNull()) {
+    needed += iconSize().width() + 6;
+  }
+  size.setWidth(qMax(size.width(), needed));
+  return size;
+}
+
+QSize LightpadTabBar::minimumTabSizeHint(int index) const {
+  return tabSizeHint(index);
+}
+
 void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
   int index = tabAt(event->pos());
 
@@ -250,6 +268,7 @@ void LightpadTabWidget::addNewTab() {
     }
 
     insertTab(count() - 1, newPage, unsavedDocumentLabel);
+    newPage->refreshTreeVisibility();
     setCurrentIndex(count() - 2);
   }
 }
@@ -569,6 +588,7 @@ void LightpadTabWidget::addViewerTab(QWidget *viewer, const QString &filePath,
 
   m_viewerFilePaths[page] = filePath;
   insertTab(count() - 1, page, tabTitle);
+  page->refreshTreeVisibility();
   setCurrentIndex(count() - 2);
 }
 

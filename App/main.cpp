@@ -1,3 +1,4 @@
+#include "ui/glyphfallback.h"
 #include <QApplication>
 
 #include "syntax/bazelsyntaxplugin.h"
@@ -66,6 +67,7 @@ int main(int argv, char **args) {
   app.setOrganizationName("Lightpad");
   app.setWindowIcon(QIcon(":/resources/icons/app.png"));
   app.setStyle(new HackerStyle());
+  app.installEventFilter(new GlyphFallback(&app));
 
   registerBuiltInSyntaxPlugins();
 

@@ -34,7 +34,7 @@ private slots:
         search(buffer(QString::fromUtf8("😀 a.b\n  A.B aXb"), "a.b", "z"));
     QCOMPARE(results.matchCount, 2);
     const auto &hits = results.files.first().occurrences;
-    QCOMPARE(hits.at(0).location.columnNumber, 4); // UTF-16, as in QTextCursor.
+    QCOMPARE(hits.at(0).location.columnNumber, 4);
     QCOMPARE(hits.at(1).location.lineNumber, 2);
     QCOMPARE(hits.at(1).location.columnNumber, 3);
     QCOMPARE(selectedChanges(results).first().after,
@@ -96,8 +96,7 @@ private slots:
     request.options.wholeWord = true;
     QCOMPARE(search(request).matchCount, 1);
     QCOMPARE(selectedChanges(search(request)).first().after, "cat scatter dog");
-    request.selectionEnd =
-        14; // Never replace a match crossing the captured range.
+    request.selectionEnd = 14;
     QCOMPARE(search(request).matchCount, 0);
   }
   void zeroLengthRegexAndNoOps() {

@@ -280,8 +280,8 @@ FindReplacePanel::FindReplacePanel(bool onlyFind, QWidget *parent)
   m_tree->setAllColumnsShowFocus(true);
   m_tree->setTextElideMode(Qt::ElideRight);
   m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
-  m_tree->setMinimumHeight(160);
-  m_tree->setMaximumHeight(260);
+  m_tree->setMinimumHeight(80);
+  m_tree->setMaximumHeight(200);
   m_tree->header()->setStretchLastSection(true);
   m_tree->header()->setSectionResizeMode(0, QHeaderView::Interactive);
   m_tree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -591,7 +591,7 @@ void FindReplacePanel::watchDocuments() {
                 [this, document, previous = document->toPlainText()]() mutable {
                   const QString current = document->toPlainText();
                   if (current == previous)
-                    return; // Syntax highlighting also emits contentsChanged.
+                    return;
                   previous = current;
                   ++m_generations[document];
                   if (!m_applying && !m_navigating)
@@ -1385,8 +1385,7 @@ bool FindReplacePanel::validateBuffers(const Batch &batch, bool undo,
       return false;
     }
   }
-  // A file may have been opened while the disk worker was running. Do not let
-  // that newly opened document become stale after a write or a rollback.
+
   for (const auto &disk : batch.disks) {
     for (const auto &doc : open) {
       if (!doc.editor || doc.key != SearchReplace::fileKey(disk.path))
@@ -1460,8 +1459,7 @@ void FindReplacePanel::executeBatch(Batch batch, bool undo) {
     paths.append(disk.path);
   if (m_diskGuard)
     m_diskGuard(paths, true);
-  // Freeze affected editors for the short commit phase. QPointer still handles
-  // tab closure, and the second validation catches programmatic document edits.
+
   auto frozen =
       std::make_shared<QVector<QPair<QPointer<QPlainTextEdit>, bool>>>();
   for (const auto &doc : documents()) {
@@ -1504,9 +1502,7 @@ void FindReplacePanel::executeBatch(Batch batch, bool undo) {
       validationError = tr("Replacement cancelled.");
     if (report->success &&
         (cancel->load() || !validateBuffers(batch, undo, &validationError))) {
-      // Editors can change through commands even while read-only. Restore the
-      // disk half before reporting the conflict; this also runs off the UI
-      // thread.
+
       QVector<SearchReplace::DiskChange> reverse;
       for (const auto &write : writes)
         reverse.append({write.path, write.after, write.before});
@@ -1525,8 +1521,7 @@ void FindReplacePanel::executeBatch(Batch batch, bool undo) {
                 invalidate();
                 m_timer->stop();
                 if (!rollback->success) {
-                  // The original writes may remain. Retain guarded undo instead
-                  // of losing the only recovery snapshot.
+
                   m_undo = {};
                   m_undo.disks = writes;
                   if (undo)
@@ -1573,8 +1568,7 @@ void FindReplacePanel::executeBatch(Batch batch, bool undo) {
           buffer.undoSteps = buffer.document->availableUndoSteps();
         }
       }
-      // Mirror successful disk writes into files opened since the preview (or
-      // opened between apply and undo), preserving their clean saved state.
+
       QSet<QTextDocument *> mirrored;
       for (const auto &doc : documents()) {
         if (!doc.editor || mirrored.contains(doc.editor->document()))

@@ -22,6 +22,10 @@ QString reverseLines(const QString &text);
 
 QString trimLines(const QString &text);
 
+QString lineCommentPrefix(const QString &normalizedLanguage);
+
+QStringList toggleLineComments(const QStringList &lines, const QString &prefix);
+
 } // namespace TextTransforms
 
 #endif

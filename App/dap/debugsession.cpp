@@ -203,11 +203,20 @@ void DebugSession::onClientStateChanged(DapClient::State state) {
     break;
 
   case DapClient::State::Terminated:
-    setState(State::Terminated);
-    break;
-
   case DapClient::State::Error:
+  case DapClient::State::Disconnected:
+    if (m_state == State::Idle) {
+      break;
+    }
     setState(State::Terminated);
+    QMetaObject::invokeMethod(
+        this,
+        [this]() {
+          if (m_state == State::Terminated && !m_restarting) {
+            reportTermination();
+          }
+        },
+        Qt::QueuedConnection);
     break;
 
   default:

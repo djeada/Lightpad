@@ -68,6 +68,8 @@ Minimap *LightpadPage::getMinimap() { return minimap; }
 
 void LightpadPage::setTreeViewVisible(bool flag) { Q_UNUSED(flag); }
 
+void LightpadPage::refreshTreeVisibility() {}
+
 void LightpadPage::setModelRootIndex(QString path) { Q_UNUSED(path); }
 
 void LightpadPage::setCustomContentWidget(QWidget *widget) {
@@ -180,7 +182,7 @@ DEFINE_MAINWINDOW_SLOT(on_actionToggle_Merge_Conflicts_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionToggle_Test_Panel_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionToggle_Problems_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionPreview_Markdown_triggered)
-DEFINE_MAINWINDOW_SLOT(on_actionPreview_LaTeX_triggered)
+DEFINE_MAINWINDOW_SLOT(previewLatexDocument)
 DEFINE_MAINWINDOW_SLOT(on_actionOpen_To_Side_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionGit_Log_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionGit_Compare_triggered)
@@ -197,6 +199,12 @@ DEFINE_MAINWINDOW_SLOT(on_actionSort_Lines_Ascending_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionSort_Lines_Descending_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionToggle_Word_Wrap_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionToggle_Vim_Mode_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionSelect_All_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionToggle_Line_Comment_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionMove_Line_Up_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionMove_Line_Down_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionDuplicate_Line_Down_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionDuplicate_Line_Up_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionFold_Current_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionUnfold_Current_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionFold_All_triggered)
