@@ -11,6 +11,8 @@ Lightpad is a Qt 6-based code editor with a modern UI, built-in language tooling
 - Debug Adapter Protocol (DAP) client with breakpoints, sessions, watches, and debug console
 - Git integration: status, diff gutter, staging, commits, branches, remotes, and stash
 - Command palette, file quick open, go to symbol/line
+- Resizable file explorer with background filename/content search, folder scopes,
+  glob filters, multi-file operations and external drag-and-drop imports
 - Multi-cursor editing and split editors (horizontal/vertical)
 - Problems panel, breadcrumbs, minimap, and integrated terminal
 - Run and format templates with per-project assignments
@@ -98,6 +100,7 @@ Plugins are discovered from:
 ## Documentation
 - User manual: docs/USER_MANUAL.md
 - Keyboard shortcuts: docs/KEYBOARD_SHORTCUTS.md
+- File explorer and project search: docs/FILE_EXPLORER.md
 - Go to Definition: docs/GO_TO_DEFINITION.md
 - Plugin development: docs/PLUGIN_DEVELOPMENT.md
 - Syntax plugins: docs/SYNTAX_PLUGINS.md

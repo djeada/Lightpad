@@ -3,9 +3,11 @@
 
 #include <QClipboard>
 #include <QDir>
+#include <QFileDialog>
 #include <QGuiApplication>
 #include <QInputDialog>
 #include <QLineEdit>
+#include <utility>
 
 FileDirTreeController::FileDirTreeController(FileDirTreeModel *model,
                                              QWidget *parent)
@@ -65,23 +67,27 @@ void FileDirTreeController::handleNewDirectory(const QString &parentPath) {
 
 void FileDirTreeController::handleRemove(const QStringList &paths,
                                          DeleteMode mode) {
-  if (paths.isEmpty() || !confirmDeletion(paths, mode)) {
+  const QStringList sources = FileDirTreeModel::topLevelPaths(paths);
+  if (sources.isEmpty() || !confirmDeletion(sources, mode) ||
+      (m_removalGuard && !m_removalGuard(sources))) {
     return;
   }
 
-  bool anyRemoved = false;
-  for (const QString &path : paths) {
+  m_batching = true;
+  QStringList removed;
+  for (const QString &path : sources) {
     if (model->removeFileOrDirectory(path, mode)) {
-      anyRemoved = true;
+      removed.append(path);
       emit fileRemoved(path);
     }
   }
 
-  if (anyRemoved) {
+  finishBatch();
+  if (!removed.isEmpty()) {
     emit actionCompleted();
     emit statusMessage(mode == DeleteMode::Trash
-                           ? tr("Moved %1 to the trash").arg(describe(paths))
-                           : tr("Deleted %1").arg(describe(paths)));
+                           ? tr("Moved %1 to the trash").arg(describe(removed))
+                           : tr("Deleted %1").arg(describe(removed)));
   }
 }
 
@@ -121,6 +127,63 @@ void FileDirTreeController::handleDuplicate(const QString &path) {
   }
 }
 
+void FileDirTreeController::handleDuplicate(const QStringList &paths) {
+  m_batching = true;
+  QStringList created;
+  for (const QString &path : FileDirTreeModel::topLevelPaths(paths)) {
+    QString duplicate;
+    if (model->duplicateEntry(path, &duplicate)) {
+      created.append(duplicate);
+    }
+  }
+  finishBatch();
+  if (!created.isEmpty()) {
+    emit actionCompleted();
+    emit pathCreated(created.first(), QFileInfo(created.first()).isDir());
+    emit statusMessage(tr("Duplicated %1").arg(describe(created)));
+  }
+}
+
+QStringList FileDirTreeController::handleTransfer(const QStringList &paths,
+                                                  const QString &destination,
+                                                  bool copy) {
+  m_batching = true;
+  QStringList created;
+  for (const QString &path : FileDirTreeModel::topLevelPaths(paths)) {
+    QString target;
+    if (copy ? model->copyInto(path, destination, &target)
+             : model->moveInto(path, destination, &target)) {
+      created.append(target);
+    }
+  }
+  finishBatch();
+  if (!created.isEmpty()) {
+    emit actionCompleted();
+    emit statusMessage(copy ? tr("Copied %1").arg(describe(created))
+                            : tr("Moved %1").arg(describe(created)));
+  }
+  return created;
+}
+
+void FileDirTreeController::handleTransferTo(const QStringList &paths,
+                                             const QString &startDirectory,
+                                             bool copy) {
+  const QString destination = QFileDialog::getExistingDirectory(
+      parentWidget, copy ? tr("Copy to Folder") : tr("Move to Folder"),
+      startDirectory);
+  if (!destination.isEmpty()) {
+    const QStringList created = handleTransfer(paths, destination, copy);
+    if (!created.isEmpty()) {
+      emit pathCreated(created.first(), QFileInfo(created.first()).isDir());
+    }
+  }
+}
+
+void FileDirTreeController::setRemovalGuard(
+    std::function<bool(const QStringList &)> guard) {
+  m_removalGuard = std::move(guard);
+}
+
 void FileDirTreeController::handleCopy(const QStringList &paths) {
   if (model->copyToClipboard(paths)) {
     emit statusMessage(tr("Copied %1").arg(describe(paths)));
@@ -134,8 +197,11 @@ void FileDirTreeController::handleCut(const QStringList &paths) {
 }
 
 void FileDirTreeController::handlePaste(const QString &destPath) {
+  m_batching = true;
   QStringList createdPaths;
-  if (!model->pasteFromClipboard(destPath, &createdPaths)) {
+  const bool pasted = model->pasteFromClipboard(destPath, &createdPaths);
+  finishBatch();
+  if (!pasted) {
     return;
   }
 
@@ -183,7 +249,19 @@ void FileDirTreeController::handleCopyRelativePath(const QStringList &paths,
 }
 
 void FileDirTreeController::showError(const QString &message) {
+  if (m_batching) {
+    m_errors.append(message);
+    return;
+  }
   ThemedMessageBox::warning(parentWidget, tr("File Explorer"), message);
+}
+
+void FileDirTreeController::finishBatch() {
+  m_batching = false;
+  if (!m_errors.isEmpty()) {
+    const QStringList errors = std::exchange(m_errors, {});
+    showError(errors.join(QStringLiteral("\n\n")));
+  }
 }
 
 bool FileDirTreeController::confirmDeletion(const QStringList &paths,

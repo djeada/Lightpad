@@ -43,6 +43,18 @@ void LightpadTreeView::dropEvent(QDropEvent *event) {
   QTreeView::dropEvent(event);
 }
 
+void LightpadTreeView::dragLeaveEvent(QDragLeaveEvent *event) {
+  QTreeView::dragLeaveEvent(event);
+}
+
+void LightpadTreeView::startDrag(Qt::DropActions actions) {
+  QTreeView::startDrag(actions);
+}
+
+void LightpadTreeView::paintEvent(QPaintEvent *event) {
+  QTreeView::paintEvent(event);
+}
+
 LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
     : QWidget(parent), mainWindow(nullptr), treeView(nullptr),
       textArea(nullptr), minimap(nullptr), model(nullptr),

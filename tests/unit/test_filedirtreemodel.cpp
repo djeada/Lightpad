@@ -1,8 +1,14 @@
+#include <QClipboard>
 #include <QDir>
 #include <QFile>
+#include <QGuiApplication>
+#include <QMimeData>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
+#ifndef Q_OS_WIN
+#include <sys/stat.h>
+#endif
 
 #include "filetree/filedirtreemodel.h"
 
@@ -30,6 +36,14 @@ private slots:
   void testRenameAndMoveReportMovedPaths();
   void testIsInsideSeesThroughSymlinks();
   void testCreateRejectsEscapingNames();
+  void testNestedSelectionsAreOperatedOnOnce();
+  void testFailedCutItemsStayOnClipboard();
+  void testInvalidDestinationsLeaveSourcesIntact();
+  void testCreateRejectsEscapingSymlink();
+  void testDanglingSymlinkIsACollision();
+  void testDuplicatePreservesFileSymlinks();
+  void testDotfileAndDottedFolderSuffixes();
+  void testFailedCopyRollsBackPartialDirectory();
 
 private:
   QString path(const QString &relative) const;
@@ -300,6 +314,126 @@ void TestFileDirTreeModel::testCreateRejectsEscapingNames() {
   QVERIFY(!model.createNewDirectory(dir, "a/../../out"));
   QVERIFY(!QFileInfo::exists(path("out")));
   QVERIFY(model.createNewFile(dir, "nested/ok.txt"));
+}
+
+void TestFileDirTreeModel::testNestedSelectionsAreOperatedOnOnce() {
+  FileDirTreeModel model;
+  const QString parent = makeDir("selection-parent");
+  const QString child = makeFile("selection-parent/note.txt");
+  const QString destination = makeDir("selection-dest");
+  QCOMPARE(FileDirTreeModel::topLevelPaths({child, parent, child}),
+           QStringList{parent});
+  QVERIFY(model.copyToClipboard({child, parent, parent}));
+  QStringList created;
+  QVERIFY(model.pasteFromClipboard(destination, &created));
+  QCOMPARE(created.size(), 1);
+  QVERIFY(QFileInfo::exists(created.first() + "/note.txt"));
+  QVERIFY(!QFileInfo::exists(destination + "/note.txt"));
+}
+
+void TestFileDirTreeModel::testFailedCutItemsStayOnClipboard() {
+  FileDirTreeModel model;
+  const QString source = makeFile("partial-cut/source.txt", "keep me");
+  const QString missing = path("partial-cut/missing.txt");
+  const QString destination = makeDir("partial-cut-dest");
+  QVERIFY(model.cutToClipboard({source, missing}));
+  QStringList created;
+  QVERIFY(model.pasteFromClipboard(destination, &created));
+  QCOMPARE(created.size(), 1);
+  QVERIFY(!QFileInfo::exists(source));
+  QVERIFY(model.canPaste());
+  const auto *mime = QGuiApplication::clipboard()->mimeData();
+  QCOMPARE(mime->urls().size(), 1);
+  QCOMPARE(mime->urls().first().toLocalFile(), missing);
+  QVERIFY(mime->data("x-special/gnome-copied-files").startsWith("cut\n"));
+  // A retry still moves the formerly missing item rather than copying it.
+  makeFile("partial-cut/missing.txt", "recovered");
+  QVERIFY(model.pasteFromClipboard(destination));
+  QVERIFY(!QFileInfo::exists(missing));
+  QVERIFY(!model.canPaste());
+}
+
+void TestFileDirTreeModel::testInvalidDestinationsLeaveSourcesIntact() {
+  FileDirTreeModel model;
+  const QString source = makeFile("bad-dest-source.txt", "original");
+  const QString notDirectory = makeFile("not-a-directory", "do not replace");
+  QVERIFY(!model.copyInto(source, notDirectory));
+  QVERIFY(!model.moveInto(source, path("missing-destination")));
+  QVERIFY(QFileInfo::exists(source));
+  QVERIFY(!model.createNewFile(path("missing-parent"), "file.txt"));
+}
+
+void TestFileDirTreeModel::testCreateRejectsEscapingSymlink() {
+#ifdef Q_OS_WIN
+  QSKIP("Creating symlinks may require elevation");
+#endif
+  FileDirTreeModel model;
+  const QString root = makeDir("creation-root");
+  const QString outside = makeDir("creation-outside");
+  QVERIFY(QFile::link(outside, root + "/escape"));
+  QVERIFY(!model.createNewFile(root, "escape/new.txt"));
+  QVERIFY(!model.createNewDirectory(root, "escape/new-folder"));
+  QVERIFY(!QFileInfo::exists(outside + "/new.txt"));
+  QVERIFY(!QFileInfo::exists(outside + "/new-folder"));
+}
+
+void TestFileDirTreeModel::testDanglingSymlinkIsACollision() {
+#ifdef Q_OS_WIN
+  QSKIP("Creating symlinks may require elevation");
+#endif
+  FileDirTreeModel model;
+  const QString root = makeDir("dangling-collision");
+  const QString target = makeFile("dangling-target");
+  QVERIFY(QFile::link(target, root + "/note.txt"));
+  QVERIFY(QFile::remove(target));
+  QVERIFY(!model.createNewFile(root, "note.txt"));
+  const QString source = makeFile("dangling-src/note.txt", "safe");
+  QString created;
+  QVERIFY(model.copyInto(source, root, &created));
+  QVERIFY(QFileInfo(root + "/note.txt").isSymLink());
+  QCOMPARE(QFileInfo(created).fileName(), "note (1).txt");
+}
+
+void TestFileDirTreeModel::testDuplicatePreservesFileSymlinks() {
+#ifdef Q_OS_WIN
+  QSKIP("Creating symlinks may require elevation");
+#endif
+  FileDirTreeModel model;
+  const QString target = makeFile("link-file-target.txt", "original");
+  const QString link = path("link-file.txt");
+  QVERIFY(QFile::link(target, link));
+  QString duplicate;
+  QVERIFY(model.duplicateEntry(link, &duplicate));
+  QVERIFY(QFileInfo(duplicate).isSymLink());
+  QCOMPARE(QFileInfo(duplicate).symLinkTarget(), target);
+}
+
+void TestFileDirTreeModel::testDotfileAndDottedFolderSuffixes() {
+  FileDirTreeModel model;
+  const QString directory = makeDir("project.v1");
+  const QString dotfile = makeFile(".env.local");
+  QCOMPARE(model.addUniqueSuffix(directory), path("project.v1 (1)"));
+  QCOMPARE(model.addUniqueSuffix(dotfile), path(".env.local (1)"));
+}
+
+void TestFileDirTreeModel::testFailedCopyRollsBackPartialDirectory() {
+#ifdef Q_OS_WIN
+  QSKIP("Named pipes are a Unix fixture");
+#else
+  FileDirTreeModel model;
+  const QString source = makeDir("rollback-source");
+  makeFile("rollback-source/a-first.txt", "must survive");
+  const QByteArray fifo = QFile::encodeName(source + "/z-pipe");
+  if (::mkfifo(fifo.constData(), 0600) != 0) {
+    QSKIP("This environment cannot create named pipes");
+  }
+  const QString destination = makeDir("rollback-destination");
+  QVERIFY(!model.copyInto(source, destination));
+  QVERIFY(QDir(destination)
+              .entryList(QDir::NoDotAndDotDot | QDir::AllEntries)
+              .isEmpty());
+  QVERIFY(QFileInfo::exists(source + "/a-first.txt"));
+#endif
 }
 
 QTEST_MAIN(TestFileDirTreeModel)

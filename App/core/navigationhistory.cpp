@@ -1,4 +1,25 @@
 #include "navigationhistory.h"
+#include <QDir>
+
+void NavigationHistory::retargetPaths(const QString &oldPath,
+                                      const QString &newPath) {
+  if (oldPath.isEmpty() || newPath.isEmpty())
+    return;
+  const QString oldRoot = QDir::cleanPath(oldPath);
+  const QString newRoot = QDir::cleanPath(newPath);
+  auto update = [&](NavigationLocation &location) {
+    const QString path = QDir::cleanPath(location.filePath);
+    if (path == oldRoot || path.startsWith(oldRoot + '/')) {
+      location.filePath = newRoot + path.mid(oldRoot.size());
+    }
+  };
+  update(m_currentLocation);
+  for (auto &location : m_backStack)
+    update(location);
+  for (auto &location : m_forwardStack)
+    update(location);
+  emit navigationStateChanged();
+}
 
 NavigationHistory::NavigationHistory(QObject *parent)
     : QObject(parent), m_maxHistorySize(DEFAULT_MAX_HISTORY_SIZE) {}
