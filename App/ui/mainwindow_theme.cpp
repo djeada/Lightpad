@@ -156,11 +156,12 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       surfaceColor +
       "; "
       "border-bottom: 1px solid " +
-      accentColor +
+      borderSubtle +
       "; "
       "spacing: 2px; "
       "padding: 3px 6px; "
       "min-height: 28px; "
+      "font-size: 13px; "
       "font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace'; "
       "font-weight: 600; "
       "}"
@@ -275,6 +276,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "color: " +
       secondaryText +
       "; "
+      "font-size: 12px; "
       "border: 1px solid transparent; "
       "padding: 6px 10px; "
       "background-color: transparent; "
@@ -410,7 +412,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "border: none; "
       "font-weight: 600; "
       "text-transform: uppercase; "
-      "font-size: 11px; "
+      "font-size: 12px; "
       "letter-spacing: 1px; "
       "}"
 
@@ -741,6 +743,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "}"
 
       "QTabBar::tab { "
+      "font-size: 12px; "
       "background-color: " +
       surfaceColor +
       "; "
@@ -784,7 +787,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       secondaryText +
       "; "
       "border-top: 1px solid " +
-      accentColor +
+      borderSubtle +
       "; "
       "font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace'; "
       "}"
@@ -793,13 +796,13 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "background-color: " +
       surfaceColor +
       "; "
-      "border-top: 2px solid " +
-      accentColor +
+      "border-top: 1px solid " +
+      borderSubtle +
       "; "
       "}"
       "QWidget#backgroundBottom QLabel { "
       "font-family: 'JetBrains Mono','Fira Code','Ubuntu Mono',monospace; "
-      "font-size: 11px; "
+      "font-size: 12px; "
       "padding: 0 10px; "
       "border-right: 1px solid " +
       borderColor +
@@ -809,7 +812,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "min-height: 28px; "
       "max-height: 28px; "
       "font-family: 'JetBrains Mono','Fira Code','Ubuntu Mono',monospace; "
-      "font-size: 11px; "
+      "font-size: 12px; "
       "padding: 0 10px; "
       "border-right: 1px solid " +
       borderColor +
@@ -822,6 +825,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "}"
       "QDockWidget::title { "
       "text-align: left; "
+      "font-size: 12px; "
       "padding: 4px 10px; "
       "background-color: " +
       surfaceAltColor +
@@ -831,7 +835,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
           .name() +
       "; "
       "border-bottom: 1px solid " +
-      accentColor +
+      borderSubtle +
       "; "
       "font-weight: bold; "
       "letter-spacing: 1px; "
