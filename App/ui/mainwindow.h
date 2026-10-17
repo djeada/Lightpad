@@ -461,6 +461,7 @@ private:
   QHash<QString, FileOpenGuard::TextFormat> m_fileFormats;
   void ensureDebugPanel();
   void ensureTestPanel();
+  void revealTestDock(bool firstOpen);
 
   void setupDatabaseMenu();
   void ensureDatabasePanel();
