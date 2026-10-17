@@ -3,6 +3,8 @@
 #include "../dialogs/testconfigurationdialog.h"
 #include "../dialogs/themedmessagebox.h"
 #include "../uistylehelper.h"
+#include "../workspaceicons.h"
+#include "debugglyphs.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -20,6 +22,7 @@
 #include <QStyle>
 #include <QStyledItemDelegate>
 #include <QTimer>
+#include <QWidgetAction>
 
 namespace {
 constexpr int TestIdRole = Qt::UserRole;
@@ -306,15 +309,29 @@ void TestPanel::setupUI() {
   headerLayout->setSpacing(0);
 
   setupToolbar();
-  headerLayout->addWidget(m_toolbar);
+  auto *actions = new QHBoxLayout;
+  actions->setContentsMargins(6, 4, 6, 0);
+  actions->setSpacing(6);
+  actions->addWidget(m_toolbar, 1);
+  actions->addWidget(m_configCombo);
+  actions->addWidget(m_optionsButton);
+  headerLayout->addLayout(actions);
 
+  auto *filters = new QHBoxLayout;
+  filters->setContentsMargins(10, 6, 10, 6);
+  filters->setSpacing(8);
   m_searchEdit = new QLineEdit(m_headerShell);
   m_searchEdit->setObjectName("testSearchEdit");
   m_searchEdit->setPlaceholderText(tr("Filter tests by name..."));
   m_searchEdit->setClearButtonEnabled(true);
+  m_searchEdit->setAccessibleName(tr("Filter tests by name"));
+  m_searchEdit->setMinimumWidth(80);
+  m_searchEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   connect(m_searchEdit, &QLineEdit::textChanged, this,
           &TestPanel::onSearchTextChanged);
-  headerLayout->addWidget(m_searchEdit);
+  filters->addWidget(m_searchEdit, 1);
+  filters->addWidget(m_filterCombo);
+  headerLayout->addLayout(filters);
 
   layout->addWidget(m_headerShell);
 
@@ -355,16 +372,35 @@ void TestPanel::setupUI() {
   connect(m_tree, &QTreeWidget::customContextMenuRequested, this,
           &TestPanel::onContextMenu);
 
-  m_emptyStateLabel = new QLabel(treeContainer);
+  m_emptyState = new QWidget(treeContainer);
+  m_emptyState->setObjectName("testEmptyStatePanel");
+  auto *emptyLayout = new QVBoxLayout(m_emptyState);
+  emptyLayout->setContentsMargins(16, 8, 16, 8);
+  emptyLayout->setSpacing(6);
+  emptyLayout->addStretch();
+  m_emptyStateLabel = new QLabel(m_emptyState);
   m_emptyStateLabel->setObjectName("testEmptyState");
   m_emptyStateLabel->setAlignment(Qt::AlignCenter);
   m_emptyStateLabel->setText(
       tr("No tests discovered yet.\nUse \"Discover\" to find tests or "
          "\"Run All\" to execute them."));
   m_emptyStateLabel->setWordWrap(true);
+  emptyLayout->addWidget(m_emptyStateLabel);
+  m_emptyAction = new QPushButton(tr("Discover tests"), m_emptyState);
+  m_emptyAction->setObjectName("testEmptyAction");
+  emptyLayout->addWidget(m_emptyAction, 0, Qt::AlignHCenter);
+  emptyLayout->addStretch();
+  connect(m_emptyAction, &QPushButton::clicked, this, [this]() {
+    if (m_tree->topLevelItemCount() > 0) {
+      m_filterCombo->setCurrentIndex(0);
+      m_searchEdit->clear();
+    } else {
+      discoverTests();
+    }
+  });
 
-  treeLayout->addWidget(m_tree);
-  treeLayout->addWidget(m_emptyStateLabel);
+  treeLayout->addWidget(m_tree, 1);
+  treeLayout->addWidget(m_emptyState, 1);
 
   m_detailSection = new QWidget(this);
   m_detailSection->setObjectName("testDetailSection");
@@ -372,14 +408,13 @@ void TestPanel::setupUI() {
   detailLayout->setContentsMargins(0, 0, 0, 0);
   detailLayout->setSpacing(0);
 
-  m_detailToggleButton = new QToolButton(m_detailSection);
+  m_detailToggleButton = new QToolButton(this);
   m_detailToggleButton->setObjectName("testDetailToggle");
   m_detailToggleButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
   m_detailToggleButton->setText(tr("Run Details"));
   m_detailToggleButton->setCheckable(true);
   m_detailToggleButton->setChecked(false);
   m_detailToggleButton->setArrowType(Qt::RightArrow);
-  detailLayout->addWidget(m_detailToggleButton);
 
   m_detailPane = new QTextEdit(m_detailSection);
   m_detailPane->setObjectName("testDetailPane");
@@ -398,12 +433,20 @@ void TestPanel::setupUI() {
   m_splitter->setStretchFactor(1, 1);
   setDetailsExpanded(false);
 
-  layout->addWidget(m_splitter);
+  layout->addWidget(m_splitter, 1);
 
+  auto *footer = new QWidget(this);
+  footer->setObjectName("testFooter");
+  auto *footerLayout = new QHBoxLayout(footer);
+  footerLayout->setContentsMargins(10, 0, 6, 0);
+  footerLayout->setSpacing(8);
   m_statusLabel = new QLabel(this);
   m_statusLabel->setObjectName("statusLabel");
-  m_statusLabel->setContentsMargins(8, 4, 8, 4);
-  layout->addWidget(m_statusLabel);
+  m_statusLabel->setMinimumWidth(0);
+  m_statusLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  footerLayout->addWidget(m_statusLabel, 1);
+  footerLayout->addWidget(m_detailToggleButton);
+  layout->addWidget(footer);
 
   updateStatusLabel();
   updateEmptyState();
@@ -421,11 +464,14 @@ void TestPanel::setupToolbar() {
                            tr("Run All"), this, &TestPanel::runAll);
   m_runAllAction->setObjectName("runAllAction");
   m_runAllAction->setToolTip(tr("Run All Tests"));
+  m_toolbar->widgetForAction(m_runAllAction)
+      ->setObjectName("runAllTestsButton");
 
   m_runFailedAction =
       m_toolbar->addAction(style()->standardIcon(QStyle::SP_BrowserReload),
                            tr("Run Failed"), this, &TestPanel::runFailed);
   m_runFailedAction->setToolTip(tr("Re-run Failed Tests"));
+  m_runFailedAction->setEnabled(false);
 
   m_stopAction =
       m_toolbar->addAction(style()->standardIcon(QStyle::SP_MediaStop),
@@ -438,25 +484,35 @@ void TestPanel::setupToolbar() {
       this, &TestPanel::discoverTests);
   m_discoverAction->setToolTip(tr("Discover Tests"));
 
+  m_optionsButton = new QToolButton(this);
+  m_optionsButton->setObjectName("testOptions");
+  m_optionsButton->setText(tr("Options"));
+  m_optionsButton->setToolTip(
+      tr("Test configuration, automatic runs, and clear results"));
+  m_optionsButton->setAccessibleName(tr("Test panel options"));
+  m_optionsButton->setPopupMode(QToolButton::InstantPopup);
+  auto *options = new QMenu(m_optionsButton);
+  m_optionsButton->setMenu(options);
+
   m_clearAction =
-      m_toolbar->addAction(style()->standardIcon(QStyle::SP_DialogResetButton),
-                           tr("Clear"), this, [this]() {
-                             m_tree->clear();
-                             m_detailPane->clear();
-                             m_suiteItems.clear();
-                             m_testItems.clear();
-                             m_testResults.clear();
-                             m_passedCount = m_failedCount = m_skippedCount =
-                                 m_erroredCount = 0;
-                             resetRunContext();
-                             updateStatusLabel();
-                             updateEmptyState();
-                           });
+      options->addAction(style()->standardIcon(QStyle::SP_DialogResetButton),
+                         tr("Clear"), this, [this]() {
+                           m_tree->clear();
+                           m_detailPane->clear();
+                           m_suiteItems.clear();
+                           m_testItems.clear();
+                           m_testResults.clear();
+                           m_passedCount = m_failedCount = m_skippedCount =
+                               m_erroredCount = 0;
+                           resetRunContext();
+                           updateStatusLabel();
+                           updateEmptyState();
+                         });
   m_clearAction->setToolTip(tr("Clear Results"));
 
-  m_toolbar->addSeparator();
+  options->addSeparator();
 
-  m_autoRunAction = m_toolbar->addAction(
+  m_autoRunAction = options->addAction(
       style()->standardIcon(QStyle::SP_DialogApplyButton), tr("Auto"));
   m_autoRunAction->setObjectName("autoRunAction");
   m_autoRunAction->setCheckable(true);
@@ -464,8 +520,15 @@ void TestPanel::setupToolbar() {
   m_autoRunAction->setToolTip(tr("Toggle Auto-run Tests on Save"));
   connect(m_autoRunAction, &QAction::toggled, this,
           &TestPanel::onAutoRunToggled);
+  connect(m_autoRunAction, &QAction::toggled, this, [this](bool enabled) {
+    m_optionsButton->setText(enabled ? tr("Auto on save") : tr("Options"));
+  });
 
-  m_autoRunModeCombo = new QComboBox(this);
+  auto *autoRunRow = new QWidget(options);
+  auto *autoRunLayout = new QHBoxLayout(autoRunRow);
+  autoRunLayout->setContentsMargins(12, 6, 12, 6);
+  autoRunLayout->addWidget(new QLabel(tr("On save"), autoRunRow));
+  m_autoRunModeCombo = new QComboBox(autoRunRow);
   m_autoRunModeCombo->setObjectName("autoRunModeCombo");
   m_autoRunModeCombo->addItem(tr("All on Save"));
   m_autoRunModeCombo->addItem(tr("File on Save"));
@@ -478,40 +541,48 @@ void TestPanel::setupToolbar() {
   connect(m_autoRunModeCombo,
           QOverload<int>::of(&QComboBox::currentIndexChanged), this,
           &TestPanel::onAutoRunModeChanged);
-  m_toolbar->addWidget(m_autoRunModeCombo);
-
-  m_toolbar->addSeparator();
+  autoRunLayout->addWidget(m_autoRunModeCombo);
+  auto *autoRunWidget = new QWidgetAction(options);
+  autoRunWidget->setDefaultWidget(autoRunRow);
+  options->addAction(autoRunWidget);
 
   m_filterCombo = new QComboBox(this);
   m_filterCombo->setObjectName("filterCombo");
-  m_filterCombo->addItem(tr("All"));
+  m_filterCombo->addItem(tr("All results"));
   m_filterCombo->addItem(tr("Failed"));
   m_filterCombo->addItem(tr("Passed"));
   m_filterCombo->addItem(tr("Skipped"));
+  m_filterCombo->setAccessibleName(tr("Filter tests by status"));
   connect(m_filterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &TestPanel::onFilterChanged);
   m_filterCombo->setMinimumContentsLength(6);
   m_filterCombo->setSizeAdjustPolicy(
       QComboBox::AdjustToMinimumContentsLengthWithIcon);
-  m_toolbar->addWidget(m_filterCombo);
-
-  m_toolbar->addSeparator();
+  m_filterCombo->setMaximumWidth(140);
 
   m_configCombo = new QComboBox(this);
   m_configCombo->setObjectName("configCombo");
+  m_configCombo->setAccessibleName(tr("Test configuration"));
+  m_configCombo->setToolTip(
+      tr("Choose the configuration used to discover and run tests"));
   m_configCombo->setMinimumContentsLength(10);
   m_configCombo->setSizeAdjustPolicy(
       QComboBox::AdjustToMinimumContentsLengthWithIcon);
   connect(m_configCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &TestPanel::onConfigChanged);
-  m_toolbar->addWidget(m_configCombo);
+  m_configCombo->setMinimumWidth(120);
+  m_configCombo->setMaximumWidth(220);
 
-  m_toolbar->addSeparator();
+  options->addSeparator();
 
-  m_configureAction = m_toolbar->addAction(
+  m_configureAction = options->addAction(
       style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Configure"),
       this, &TestPanel::openConfigurationDialog);
   m_configureAction->setToolTip(tr("Edit Test Configurations"));
+  for (auto *action : {m_runFailedAction, m_stopAction})
+    if (auto *button =
+            qobject_cast<QToolButton *>(m_toolbar->widgetForAction(action)))
+      button->setToolButtonStyle(Qt::ToolButtonIconOnly);
 }
 
 void TestPanel::applyTheme(const Theme &theme) {
@@ -523,121 +594,140 @@ void TestPanel::applyTheme(const Theme &theme) {
   const QColor textColor =
       UIStyleHelper::readableText(theme, panelSurface, theme.foregroundColor);
   const QColor secondaryText = UIStyleHelper::secondaryTextColor(theme);
-  const QColor borderColor = theme.borderColor;
+  const QColor borderColor = ColorContrast::mix(headerSurface, textColor, 0.14);
   const QColor hoverBg = theme.hoverColor;
   const QColor accentColor =
       theme.accentColor.isValid() ? theme.accentColor : theme.testRunningColor;
   const QColor progressTrack = theme.surfaceAltColor.isValid()
                                    ? theme.surfaceAltColor
                                    : theme.surfaceColor;
-  const QString sideBorders =
-      theme.panelBorders ? QStringLiteral("border-left: 1px solid %1;"
-                                          "border-right: 1px solid %1;")
-                               .arg(borderColor.name())
-                         : QString();
+  const QString sideBorders;
 
   if (auto *delegate =
           dynamic_cast<TestTreeDelegate *>(m_tree->itemDelegate())) {
     delegate->setTheme(theme);
   }
+  m_runAllAction->setIcon(
+      DebugGlyphs::icon(DebugGlyphs::Glyph::Play, textColor));
+  m_runFailedAction->setIcon(
+      DebugGlyphs::icon(DebugGlyphs::Glyph::Restart, secondaryText));
+  m_stopAction->setIcon(
+      DebugGlyphs::icon(DebugGlyphs::Glyph::Stop, secondaryText));
+  m_discoverAction->setIcon(
+      WorkspaceIcons::icon(WorkspaceIcons::Glyph::Search, secondaryText));
 
   setStyleSheet(
       UIStyleHelper::panelStyle(theme, objectName()) +
       UIStyleHelper::panelHeaderStyle(theme, m_headerShell->objectName()) +
-      QString("QWidget#testPanel { %1 }"
-              "QToolBar#testToolbar {"
-              "  background: transparent;"
-              "  border: 0;"
-              "  padding: 4px 6px;"
-              "  spacing: 4px;"
-              "}"
-              "QLineEdit#testSearchEdit {"
-              "  background: %2;"
-              "  color: %3;"
-              "  border: none;"
-              "  border-top: 1px solid %4;"
-              "  padding: 6px 10px;"
-              "  font-size: 12px;"
-              "}"
-              "QLineEdit#testSearchEdit:focus {"
-              "  border-bottom: 2px solid %5;"
-              "}"
-              "QProgressBar#testProgressBar {"
-              "  background: %6;"
-              "  border: none;"
-              "  max-height: 3px;"
-              "}"
-              "QProgressBar#testProgressBar::chunk {"
-              "  background: %5;"
-              "}"
-              "QTreeWidget#testTree {"
-              "  background: %2;"
-              "  color: %3;"
-              "  border: none;"
-              "  outline: none;"
-              "  padding: 2px;"
-              "}"
-              "QTreeWidget#testTree::item {"
-              "  height: 28px;"
-              "}"
-              "QTreeWidget#testTree::item:hover,"
-              "QTreeWidget#testTree::item:selected {"
-              "  background: transparent;"
-              "}"
-              "QHeaderView::section {"
-              "  %7"
-              "  background: %8;"
-              "  border: 0;"
-              "  border-bottom: 1px solid %4;"
-              "  padding: 6px 8px;"
-              "}"
-              "QWidget#testDetailSection {"
-              "  background: %2;"
-              "  border-top: 1px solid %4;"
-              "}"
-              "QToolButton#testDetailToggle {"
-              "  background: %8;"
-              "  color: %9;"
-              "  border: none;"
-              "  border-bottom: 1px solid %4;"
-              "  border-radius: 0;"
-              "  padding: 6px 10px;"
-              "  text-align: left;"
-              "  font-size: 11px;"
-              "  font-weight: 600;"
-              "}"
-              "QToolButton#testDetailToggle:hover {"
-              "  background: %10;"
-              "  color: %3;"
-              "}"
-              "QToolButton#testDetailToggle:checked {"
-              "  background: %8;"
-              "}"
-              "QTextEdit#testDetailPane {"
-              "  background: %2;"
-              "  color: %3;"
-              "  border: none;"
-              "  padding: 8px;"
-              "  font-family: monospace;"
-              "  font-size: 12px;"
-              "}"
-              "QLabel#statusLabel {"
-              "  color: %9;"
-              "  border-top: 1px solid %4;"
-              "  padding: 5px 10px;"
-              "  font-size: 12px;"
-              "}"
-              "QSplitter::handle {"
-              "  background: %4;"
-              "  height: 1px;"
-              "}")
+      QString(
+          "QWidget#testPanel { %1 }"
+          "QToolBar#testToolbar {"
+          "  background: transparent;"
+          "  border: 0;"
+          "  padding: 0;"
+          "  spacing: 4px;"
+          "}"
+          "QToolBar#testToolbar QToolButton { padding: 4px 8px; min-height: "
+          "20px; font-size: 12px; }"
+          "QToolButton#runAllTestsButton { background: %10; color: %3; "
+          "font-weight: 600; }"
+          "QToolButton#testOptions { padding: 4px 8px; font-size: 12px; }"
+          "QLineEdit#testSearchEdit {"
+          "  background: %2;"
+          "  color: %3;"
+          "  border: 1px solid %4;"
+          "  border-radius: 4px;"
+          "  padding: 4px 8px;"
+          "  font-size: 13px;"
+          "}"
+          "QLineEdit#testSearchEdit:focus {"
+          "  border-color: %5;"
+          "}"
+          "QProgressBar#testProgressBar {"
+          "  background: %6;"
+          "  border: none;"
+          "  max-height: 3px;"
+          "}"
+          "QProgressBar#testProgressBar::chunk {"
+          "  background: %5;"
+          "}"
+          "QTreeWidget#testTree {"
+          "  background: %2;"
+          "  color: %3;"
+          "  border: none;"
+          "  outline: none;"
+          "  padding: 2px;"
+          "}"
+          "QTreeWidget#testTree::item {"
+          "  height: 28px;"
+          "}"
+          "QTreeWidget#testTree::item:hover,"
+          "QTreeWidget#testTree::item:selected {"
+          "  background: transparent;"
+          "}"
+          "QHeaderView::section {"
+          "  %7"
+          "  background: %8;"
+          "  border: 0;"
+          "  border-bottom: 1px solid %4;"
+          "  padding: 6px 8px;"
+          "}"
+          "QWidget#testDetailSection {"
+          "  background: %2;"
+          "  border-top: 1px solid %4;"
+          "}"
+          "QToolButton#testDetailToggle {"
+          "  background: %8;"
+          "  color: %9;"
+          "  border: none;"
+          "  border-radius: 0;"
+          "  padding: 4px 6px;"
+          "  text-align: left;"
+          "  font-size: 12px;"
+          "  font-weight: 600;"
+          "}"
+          "QToolButton#testDetailToggle:hover {"
+          "  background: %10;"
+          "  color: %3;"
+          "}"
+          "QToolButton#testDetailToggle:checked {"
+          "  background: %8;"
+          "}"
+          "QTextEdit#testDetailPane {"
+          "  background: %2;"
+          "  color: %3;"
+          "  border: none;"
+          "  padding: 8px;"
+          "  font-family: monospace;"
+          "  font-size: 12px;"
+          "}"
+          "QLabel#statusLabel {"
+          "  color: %9;"
+          "  background: transparent;"
+          "  padding: 4px 0;"
+          "  font-size: 12px;"
+          "}"
+          "QWidget#testFooter { background: %8; border-top: 1px solid %4; }"
+          "QWidget#testEmptyStatePanel { background: %2; }"
+          "QPushButton#testEmptyAction { padding: 4px 12px; font-size: 12px; }"
+          "QSplitter::handle {"
+          "  background: transparent;"
+          "  border-top: 1px solid %4;"
+          "  height: 5px;"
+          "}"
+          "QSplitter::handle:hover {"
+          "  background: %10;"
+          "}")
           .arg(sideBorders, panelSurface.name(), textColor.name(),
                borderColor.name(), accentColor.name(), progressTrack.name(),
                UIStyleHelper::sectionLabelStyle(theme), headerSurface.name(),
                secondaryText.name())
           .arg(hoverBg.name()));
 
-  m_emptyStateLabel->setStyleSheet(UIStyleHelper::emptyStateStyle(theme));
+  m_emptyStateLabel->setStyleSheet(
+      QString(
+          "color: %1; background: transparent; font-size: 13px; padding: 0;")
+          .arg(ColorContrast::ensure(secondaryText, panelSurface).name()));
 
   QString comboStyle = UIStyleHelper::comboBoxStyle(theme);
   m_filterCombo->setStyleSheet(comboStyle);
@@ -696,6 +786,7 @@ void TestPanel::setWorkspaceFolder(const QString &folder) {
       m_autoRunModeCombo->setCurrentIndex(modeIdx);
   }
   syncAutoRunConfiguration();
+  updateEmptyState();
 }
 
 void TestPanel::runAll() {
@@ -828,6 +919,7 @@ void TestPanel::onTestStarted(const TestResult &result) {
   item->setText(2, "");
 
   m_testResults[result.id] = result;
+  applySearchFilter();
 }
 
 void TestPanel::onTestFinished(const TestResult &result) {
@@ -1130,6 +1222,11 @@ void TestPanel::updateStatusLabel() {
     m_statusLabel->setText(label);
     return;
   }
+  if (total == 0) {
+    m_statusLabel->setTextFormat(Qt::PlainText);
+    m_statusLabel->setText(tr("Ready"));
+    return;
+  }
 
   QColor successColor = m_theme.testPassedColor;
   QColor errorColor = m_theme.testFailedColor;
@@ -1424,12 +1521,15 @@ void TestPanel::setDetailsExpanded(bool expanded) {
 
   m_detailToggleButton->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
   m_detailPane->setVisible(expanded);
+  m_detailSection->setVisible(expanded);
+  if (!expanded)
+    return;
 
   QList<int> sizes = m_splitter->sizes();
   if (sizes.size() != 2)
     return;
 
-  if (expanded) {
+  {
     const int total =
         qMax(m_splitter->sizes().value(0) + m_splitter->sizes().value(1), 1);
     const int desiredDetails = qMax(140, total / 5);
@@ -1438,12 +1538,6 @@ void TestPanel::setDetailsExpanded(bool expanded) {
       sizes[0] = qMax(0, total - desiredDetails);
       m_splitter->setSizes(sizes);
     }
-  } else {
-    const int collapsedHeight = m_detailToggleButton->sizeHint().height() + 2;
-    const int total = qMax(sizes[0] + sizes[1], collapsedHeight);
-    sizes[1] = collapsedHeight;
-    sizes[0] = qMax(0, total - collapsedHeight);
-    m_splitter->setSizes(sizes);
   }
 }
 
@@ -1757,7 +1851,7 @@ void TestPanel::populateTreeFromDiscovery(const QList<DiscoveredTest> &tests) {
       m_tree->addTopLevelItem(item);
     m_testItems[test.id] = item;
   }
-  updateEmptyState();
+  applySearchFilter();
 }
 
 void TestPanel::notifyFileSaved(const QString &filePath) {
@@ -1828,81 +1922,63 @@ void TestPanel::onSearchTextChanged(const QString &text) {
 }
 
 void TestPanel::applySearchFilter() {
-  QString searchText = m_searchEdit->text().trimmed();
-  int filterIndex = m_filterCombo->currentIndex();
-
+  const QString search = m_searchEdit->text().trimmed();
+  const int status = m_filterCombo->currentIndex();
   for (auto it = m_testItems.begin(); it != m_testItems.end(); ++it) {
-    QTreeWidgetItem *item = it.value();
-    bool visible = true;
-
-    if (m_testResults.contains(it.key())) {
-      const TestResult &result = m_testResults[it.key()];
-      switch (filterIndex) {
-      case 1:
-        visible = (result.status == TestStatus::Failed ||
-                   result.status == TestStatus::Errored);
-        break;
-      case 2:
-        visible = (result.status == TestStatus::Passed);
-        break;
-      case 3:
-        visible = (result.status == TestStatus::Skipped);
-        break;
-      default:
-        visible = true;
-        break;
-      }
+    auto *item = it.value();
+    const auto result = m_testResults.constFind(it.key());
+    bool visible = status == 0;
+    if (result != m_testResults.constEnd()) {
+      visible |= status == 1 && (result->status == TestStatus::Failed ||
+                                 result->status == TestStatus::Errored);
+      visible |= status == 2 && result->status == TestStatus::Passed;
+      visible |= status == 3 && result->status == TestStatus::Skipped;
     }
-
-    if (visible && !searchText.isEmpty()) {
-      visible = item->text(0).contains(searchText, Qt::CaseInsensitive);
+    if (visible && !search.isEmpty()) {
+      visible = item->text(0).contains(search, Qt::CaseInsensitive) ||
+                (item->parent() &&
+                 item->parent()->text(0).contains(search, Qt::CaseInsensitive));
     }
-
     item->setHidden(!visible);
   }
-
-  for (auto it = m_suiteItems.begin(); it != m_suiteItems.end(); ++it) {
-    QTreeWidgetItem *suite = it.value();
-    bool hasVisible = false;
-
-    if (!searchText.isEmpty() &&
-        suite->text(0).contains(searchText, Qt::CaseInsensitive)) {
-
-      suite->setHidden(false);
-      for (int i = 0; i < suite->childCount(); ++i) {
-        suite->child(i)->setHidden(false);
-      }
-      continue;
-    }
-
-    for (int i = 0; i < suite->childCount(); ++i) {
-      if (!suite->child(i)->isHidden()) {
-        hasVisible = true;
-        break;
-      }
-    }
-    suite->setHidden(!hasVisible);
+  for (auto *suite : m_suiteItems) {
+    bool visible = false;
+    for (int i = 0; i < suite->childCount(); ++i)
+      visible |= !suite->child(i)->isHidden();
+    suite->setHidden(!visible);
   }
+  updateEmptyState();
 }
 
 void TestPanel::updateEmptyState() {
-  bool hasItems = m_tree->topLevelItemCount() > 0 || !m_testItems.isEmpty();
-  if (!hasItems) {
-    if (m_runManager && m_runManager->isRunning()) {
+  const bool hasItems = m_tree->topLevelItemCount() > 0;
+  bool hasVisibleItems = false;
+  for (int i = 0; i < m_tree->topLevelItemCount(); ++i)
+    hasVisibleItems |= !m_tree->topLevelItem(i)->isHidden();
+  const bool running = m_runManager && m_runManager->isRunning();
+  if (!hasVisibleItems) {
+    if (hasItems) {
+      m_emptyStateLabel->setText(tr("No tests match these filters."));
+      m_emptyAction->setText(tr("Clear filters"));
+    } else if (running) {
       m_emptyStateLabel->setText(
-          tr("Running tests...\nSee the details pane below for the active "
-             "command and live output."));
+          tr("Running tests…\nLive output is available in Run Details."));
     } else if (m_hasRunContext) {
-      m_emptyStateLabel->setText(
-          tr("No tests were reported for the last run.\nSee the details pane "
-             "below for the executed command, working directory, and raw "
-             "output."));
+      m_emptyStateLabel->setText(tr("No tests were reported.\nOpen Run Details "
+                                    "to inspect the command and output."));
     } else {
       m_emptyStateLabel->setText(
-          tr("No tests discovered yet.\nUse \"Discover\" to find tests or "
-             "\"Run All\" to execute them."));
+          m_workspaceFolder.isEmpty()
+              ? tr("Open a workspace to discover tests.")
+              : tr("No tests discovered yet. Choose a configuration, then "
+                   "discover tests."));
+      m_emptyAction->setText(tr("Discover tests"));
     }
   }
-  m_emptyStateLabel->setVisible(!hasItems);
-  m_tree->setVisible(hasItems);
+  m_emptyAction->setVisible(hasItems || (!running && !m_hasRunContext));
+  m_emptyAction->setEnabled(hasItems || !m_workspaceFolder.isEmpty());
+  m_emptyState->setVisible(!hasVisibleItems);
+  m_emptyStateLabel->setVisible(!hasVisibleItems);
+  m_tree->setVisible(hasVisibleItems);
+  m_detailToggleButton->setEnabled(hasItems || m_hasRunContext);
 }

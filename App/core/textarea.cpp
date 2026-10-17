@@ -817,6 +817,24 @@ void TextArea::applySelectionPalette(const Theme &theme) {
   }
 }
 
+void TextArea::applyTheme(const Theme &theme) {
+  highlightColor = theme.highlightColor;
+  lineNumberAreaPenColor = theme.lineNumberAreaColor;
+  defaultPenColor = theme.foregroundColor;
+  backgroundColor = theme.backgroundColor;
+  applySelectionPalette(theme);
+  // Rules and extra selections cache colors independently of the widget
+  // palette. Refresh both when switching between dark and light themes.
+  delete syntaxHighlighter;
+  syntaxHighlighter = nullptr;
+  if (mainWindow)
+    updateSyntaxHighlightTags(searchWord, highlightLang);
+  updateExtraSelections();
+  viewport()->update();
+  if (lineNumberArea)
+    lineNumberArea->update();
+}
+
 QString TextArea::getSearchWord() { return searchWord; }
 
 bool TextArea::changesUnsaved() { return document()->isModified(); }

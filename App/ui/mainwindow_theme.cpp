@@ -1,4 +1,6 @@
 #include "mainwindow_internal.h"
+#include "workspaceicons.h"
+#include <QFontDatabase>
 
 void MainWindow::setTheme(Theme theme) {
   setTheme(ThemeDefinition::fromClassicTheme(theme, "Custom"));
@@ -84,6 +86,10 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
   QString editorFontFamily = settings.mainFont.family();
   editorFontFamily.replace("\\", "\\\\");
   editorFontFamily.replace("\"", "\\\"");
+  QString uiFontFamily =
+      QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
+  uiFontFamily.replace("\\", "\\\\");
+  uiFontFamily.replace("\"", "\\\"");
   QString editorFontSizeRule;
   if (settings.mainFont.pointSize() > 0) {
     editorFontSizeRule =
@@ -99,8 +105,9 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "color: " +
       fgColor +
       "; "
-      "font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', "
-      "'SF Mono', Menlo, Monaco, 'Courier New', monospace; "
+      "font-family: \"" +
+      uiFontFamily +
+      "\"; font-size: 13px; "
       "}"
       "QDialog { background-color: " +
       bgColor + "; border: 1px solid " + accentColor +
@@ -156,19 +163,19 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       surfaceColor +
       "; "
       "border-bottom: 1px solid " +
-      accentColor +
+      borderSubtle +
       "; "
       "spacing: 2px; "
       "padding: 3px 6px; "
       "min-height: 28px; "
-      "font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace'; "
-      "font-weight: 600; "
+      "font-size: 13px; "
+      "font-weight: 500; "
       "}"
       "QMenuBar::item { "
       "color: " +
       secondaryText +
       "; "
-      "padding: 5px 12px; "
+      "padding: 4px 9px; "
       "margin: 0 1px; "
       "border-radius: 3px; "
       "border-bottom: 2px solid transparent; "
@@ -275,6 +282,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "color: " +
       secondaryText +
       "; "
+      "font-size: 12px; "
       "border: 1px solid transparent; "
       "padding: 6px 10px; "
       "background-color: transparent; "
@@ -330,15 +338,12 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "; "
       "}"
 
+      "QToolButton#runButton::menu-button, "
       "QToolButton#testButton::menu-button, "
       "QToolButton#debugButton::menu-button { "
       "background: transparent; "
       "border: none; "
-      "width: 14px; "
-      "}"
-      "QToolButton#testButton::menu-arrow, "
-      "QToolButton#debugButton::menu-arrow { "
-      "image: none; "
+      "width: 18px; "
       "}"
       "QToolButton#languageHighlight, QToolButton#tabWidth { "
       "background-color: transparent; "
@@ -410,7 +415,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "border: none; "
       "font-weight: 600; "
       "text-transform: uppercase; "
-      "font-size: 11px; "
+      "font-size: 12px; "
       "letter-spacing: 1px; "
       "}"
 
@@ -500,10 +505,10 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
 
       "QPlainTextEdit { "
       "color: " +
-      fgColor +
+      tc.editorFg.name() +
       "; "
       "background-color: " +
-      bgColor +
+      tc.editorBg.name() +
       "; "
       "font-family: \"" +
       editorFontFamily + "\"; " + editorFontSizeRule +
@@ -665,18 +670,25 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "padding: 6px 10px; "
       "}"
 
-      "QSplitter::handle { "
-      "background-color: " +
+      // A wide grab area with a thin visual divider is easier to resize.
+      "QSplitter::handle { background-color: transparent; }"
+      "QSplitter::handle:horizontal { "
+      "width: 5px; "
+      "border-left: 1px solid " +
+      borderSubtle +
+      "; "
+      "}"
+      "QSplitter::handle:vertical { "
+      "height: 5px; "
+      "border-top: 1px solid " +
       borderSubtle +
       "; "
       "}"
       "QSplitter::handle:hover { "
       "background-color: " +
-      accentColor +
+      accentSoftColor +
       "; "
       "}"
-      "QSplitter::handle:horizontal { width: 1px; }"
-      "QSplitter::handle:vertical { height: 1px; }"
 
       "QDockWidget { "
       "color: " +
@@ -729,10 +741,10 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
 
       "QMainWindow::separator { "
       "background-color: " +
-      borderColor +
+      borderSubtle +
       "; "
-      "width: 2px; "
-      "height: 2px; "
+      "width: 6px; "
+      "height: 6px; "
       "}"
       "QMainWindow::separator:hover { "
       "background-color: " +
@@ -741,6 +753,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "}"
 
       "QTabBar::tab { "
+      "font-size: 12px; "
       "background-color: " +
       surfaceColor +
       "; "
@@ -750,7 +763,6 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "padding: 7px 16px; "
       "border: none; "
       "border-bottom: 3px solid transparent; "
-      "font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace'; "
       "font-weight: 500; "
       "}"
       "QTabBar::tab:selected { "
@@ -784,58 +796,67 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       secondaryText +
       "; "
       "border-top: 1px solid " +
-      accentColor +
+      borderSubtle +
       "; "
-      "font-family: 'Ubuntu Mono', 'JetBrains Mono', 'Monospace'; "
+      "font-size: 12px; min-height: 26px; "
       "}"
+      "QStatusBar::item { border: none; }"
+      "QWidget#toolPanelTitleBar { background: " + surfaceAltColor +
+      "; border-bottom: 1px solid " + borderSubtle + "; }"
+      "QWidget#toolPanelTitleBar QLabel { background: transparent; color: " +
+      secondaryText + "; font-size: 12px; }"
+      "QWidget#toolPanelTitleBar QToolButton { color: " + fgColor +
+      "; background: transparent; border: none; min-width: 22px; max-width: 22px; "
+      "min-height: 22px; max-height: 22px; padding: 0; font-size: 16px; }"
+      "QWidget#toolPanelTitleBar QToolButton:hover { background: " + accentSoftColor + "; }"
+
+      "QWidget#workspaceHeader { background-color: " +
+      surfaceColor + "; border-bottom: 1px solid " + borderSubtle +
+      "; }"
+      "QWidget#workspaceHeader QToolButton { min-height: 22px; max-height: "
+      "22px; "
+      "padding: 4px 8px; font-size: 12px; }"
+      "QWidget#workspaceHeader QToolButton#workspaceFileSearch { background: " +
+      inputBg + "; border: 1px solid " + borderSubtle + "; color: " + fgColor +
+      "; }"
+      "QWidget#workspaceHeader QToolButton#runButton { background: " +
+      accentSoftColor + "; color: " + textOnSoft +
+      "; font-weight: 600; }"
 
       "QWidget#backgroundBottom { "
       "background-color: " +
       surfaceColor +
       "; "
-      "border-top: 2px solid " +
-      accentColor +
-      "; "
+      "border: none; "
       "}"
       "QWidget#backgroundBottom QLabel { "
-      "font-family: 'JetBrains Mono','Fira Code','Ubuntu Mono',monospace; "
-      "font-size: 11px; "
-      "padding: 0 10px; "
-      "border-right: 1px solid " +
-      borderColor +
-      "; "
+      "font-size: 12px; "
+      "padding: 0 6px; border: none; "
       "}"
       "QWidget#backgroundBottom QToolButton { "
-      "min-height: 28px; "
-      "max-height: 28px; "
-      "font-family: 'JetBrains Mono','Fira Code','Ubuntu Mono',monospace; "
-      "font-size: 11px; "
-      "padding: 0 10px; "
-      "border-right: 1px solid " +
-      borderColor +
-      "; "
+      "min-height: 22px; "
+      "max-height: 22px; "
+      "font-size: 12px; "
+      "padding: 0 6px; border: none; "
       "}"
       "QDockWidget { "
-      "titlebar-close-icon: none; "
-      "titlebar-normal-icon: none; "
-      "font-family: 'JetBrains Mono','Fira Code','Ubuntu Mono',monospace; "
+      "font-size: 12px; "
       "}"
       "QDockWidget::title { "
       "text-align: left; "
+      "font-size: 12px; "
       "padding: 4px 10px; "
       "background-color: " +
       surfaceAltColor +
       "; "
       "color: " +
-      ColorContrast::ensure(QColor(accentColor), QColor(surfaceAltColor))
+      ColorContrast::ensure(QColor(secondaryText), QColor(surfaceAltColor))
           .name() +
       "; "
       "border-bottom: 1px solid " +
-      accentColor +
+      borderSubtle +
       "; "
-      "font-weight: bold; "
-      "letter-spacing: 1px; "
-      "text-transform: uppercase; "
+      "font-weight: 500; "
       "}"
       "QDockWidget#terminalDock { "
       "background-color: " +
@@ -982,6 +1003,15 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
 
   qApp->setPalette(ThemePalette::build(themeDefinition));
   qApp->setStyleSheet(styleSheet);
+  const auto chromeIcon = [&](WorkspaceIcons::Glyph glyph) {
+    return WorkspaceIcons::icon(
+        glyph, ColorContrast::ensure(tc.textSecondary, QColor(surfaceColor)));
+  };
+  ui->runButton->setIcon(
+      WorkspaceIcons::icon(WorkspaceIcons::Glyph::Run, QColor(textOnSoft)));
+  ui->debugButton->setIcon(chromeIcon(WorkspaceIcons::Glyph::Debug));
+  ui->testButton->setIcon(chromeIcon(WorkspaceIcons::Glyph::Tests));
+  ui->magicButton->setIcon(chromeIcon(WorkspaceIcons::Glyph::Format));
   updateAllTextAreas(&TextArea::setFont, settings.mainFont);
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
@@ -1046,7 +1076,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
     }
   }
 
-  updateAllTextAreas(&TextArea::applySelectionPalette, theme);
+  updateAllTextAreas(&TextArea::applyTheme, theme);
   setScanlineEffectEnabled(themeDefinition.ui.scanlineEffect);
 
   if (m_globalSettingsLoaded && !m_restoringSession) {

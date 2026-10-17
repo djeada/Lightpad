@@ -28,6 +28,10 @@ LightpadTabBar::LightpadTabBar(QWidget *parent) : QTabBar(parent) {}
 
 QSize LightpadTabBar::tabSizeHint(int index) const {
   QSize size = QTabBar::tabSizeHint(index);
+  if (index == count() - 1) {
+    size.setWidth(40);
+    return size;
+  }
   const QFontMetrics fm(font());
   int needed = fm.horizontalAdvance(tabText(index)) + 40;
   if (QWidget *button = tabButton(index, QTabBar::RightSide)) {
@@ -36,12 +40,15 @@ QSize LightpadTabBar::tabSizeHint(int index) const {
   if (!tabIcon(index).isNull()) {
     needed += iconSize().width() + 6;
   }
-  size.setWidth(qMax(size.width(), needed));
+  size.setWidth(qBound(100, qMax(size.width(), needed), 240));
   return size;
 }
 
 QSize LightpadTabBar::minimumTabSizeHint(int index) const {
-  return tabSizeHint(index);
+  auto size = tabSizeHint(index);
+  if (index != count() - 1)
+    size.setWidth(100);
+  return size;
 }
 
 void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
@@ -135,7 +142,7 @@ LightpadTabWidget::LightpadTabWidget(QWidget *parent) : QTabWidget(parent) {
   tabBar()->setExpanding(false);
   tabBar()->setUsesScrollButtons(true);
 
-  tabBar()->setElideMode(Qt::ElideRight);
+  tabBar()->setElideMode(Qt::ElideMiddle);
   tabBar()->setContentsMargins(0, 0, 0, 0);
   tabBar()->setObjectName("lightpadTabBar");
   tabBar()->setFocusPolicy(Qt::NoFocus);
@@ -148,13 +155,15 @@ LightpadTabWidget::LightpadTabWidget(QWidget *parent) : QTabWidget(parent) {
 
   newTabButton = new QToolButton(this);
   newTabButton->setObjectName("AddTabButton");
-  newTabButton->setIcon(QIcon(":/resources/icons/add_dark.png"));
-  newTabButton->setIconSize(QSize(25, 25));
-  newTabButton->setFixedSize(newTabButton->iconSize());
+  newTabButton->setText(QStringLiteral("+"));
+  newTabButton->setToolTip(tr("New tab (Ctrl+N)"));
+  newTabButton->setAccessibleName(tr("New tab"));
+  newTabButton->setFixedSize(QSize(28, 28));
 
   addTab(new QWidget(), QString());
   setTabEnabled(0, false);
-  tabBar()->setTabButton(0, QTabBar::RightSide, newTabButton);
+  tabBar()->setTabVisible(0, false);
+  setCornerWidget(newTabButton, Qt::TopRightCorner);
 
   QWidget::connect(newTabButton, &QToolButton::clicked, this,
                    [this] { addNewTab(); });
@@ -221,12 +230,13 @@ void LightpadTabWidget::updateCloseButtons() {
 
   for (int i = 0; i < count(); ++i) {
     if (i == count() - 1) {
-      tabBar()->setTabButton(i, QTabBar::RightSide, newTabButton);
+      tabBar()->setTabVisible(i, false);
+      newTabButton->setEnabled(true);
       continue;
     }
 
     QWidget *existingButton = tabBar()->tabButton(i, QTabBar::RightSide);
-    if (existingButton && existingButton != newTabButton) {
+    if (existingButton && existingButton->objectName() == "TabCloseButton") {
 
       existingButton->setStyleSheet(closeButtonStyle);
       continue;
@@ -249,6 +259,8 @@ void LightpadTabWidget::updateCloseButtons() {
       }
     });
     tabBar()->setTabButton(i, QTabBar::RightSide, closeButton);
+    if (existingButton && existingButton != newTabButton)
+      existingButton->deleteLater();
   }
 }
 
@@ -294,6 +306,8 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
                                  const QString &hoverColor,
                                  const QString &accentColor,
                                  const QString &borderColor) {
+  setElideMode(Qt::ElideMiddle);
+  setUsesScrollButtons(true);
   m_foregroundColor = foregroundColor;
   m_backgroundColor = backgroundColor;
   m_hoverColor = hoverColor;
@@ -303,7 +317,6 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
   QColor foreground(foregroundColor);
   QColor surface(surfaceColor);
   QColor hover(hoverColor);
-  QColor border(borderColor);
 
   const QString inactiveText = QColor(foreground.red(), foreground.green(),
                                       foreground.blue(), kInactiveTabTextAlpha)
@@ -313,7 +326,6 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
   const QString hoverTabBackground = surface.darker(104).name();
   const QString addButtonBackground = surface.darker(108).name();
   const QString addButtonHoverBackground = surface.darker(100).name();
-  const QString addButtonBorder = border.name();
   const QString closeHoverBackground = hover.name();
   const QString closePressedBackground = accentColor;
   const QString paneBackground = background.darker(102).name();
@@ -407,11 +419,7 @@ void LightpadTabWidget::setTheme(const QString &backgroundColor,
       addButtonBackground +
       "; "
       "border-radius: 0px; "
-      "padding: 4px; "
-      "border: 1px solid " +
-      addButtonBorder +
-      "; "
-      "margin: 4px 0px 4px 6px; "
+      "padding: 0; border: none; margin: 0; font-size: 18px; "
       "color: " +
       foregroundColor +
       "; "

@@ -46,6 +46,19 @@ When you first launch Lightpad:
 
 ## Basic Usage
 
+### Workspace Controls
+
+Use **Go to file…** (`Ctrl+P`) in the workspace header to find a file. Run,
+Debug, and Test show the current target; their arrows open the target menus.
+Long names keep their full descriptions in tooltips. The breadcrumb hides at
+narrow widths, while the file tabs remain available.
+
+Language, indentation, diagnostics, and cursor position live in the bottom
+status bar. Tool panels have Close and Float/Dock buttons. The Tests panel
+separates run controls from name/status filters; **Options** contains automatic
+runs and configuration settings. **Clear filters** restores hidden results
+without losing them.
+
 ### Opening Files
 
 - **Menu:** File → Open (or `Ctrl+O`)

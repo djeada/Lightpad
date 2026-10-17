@@ -194,10 +194,7 @@ void MainWindow::runTestsForCurrentContext() {
       testPanel->runAll();
   }
 
-  if (testDock) {
-    testDock->show();
-    testDock->raise();
-  }
+  revealTestDock();
   syncViewToggleActionStates();
 }
 

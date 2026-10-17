@@ -223,6 +223,7 @@ void MainWindow::updateDatabaseStatusChip() {
     return;
   }
   DbConnection *c = DatabaseManager::instance().activeConnection();
+  m_databaseStatusButton->setVisible(c != nullptr);
   m_databaseStatusButton->setStyleSheet(databaseChipStyle());
   if (!c) {
     m_databaseStatusButton->setIcon(DbGlyphs::icon(

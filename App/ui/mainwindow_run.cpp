@@ -7,7 +7,7 @@ void MainWindow::showFindReplace(bool onlyFind) {
     auto layout = qobject_cast<QBoxLayout *>(ui->centralwidget->layout());
 
     if (layout != 0)
-      layout->insertWidget(layout->count() - 1, findReplacePanel, 0);
+      layout->addWidget(findReplacePanel, 0);
 
     connect(
         findReplacePanel, &FindReplacePanel::navigateToFile, this,
@@ -681,8 +681,9 @@ void MainWindow::refreshTestTargetButton() {
     }
   }
 
-  const QString buttonText =
-      selectedConfig.isValid() ? selectedConfig.name : tr("Test");
+  const QString buttonText = selectedConfig.isValid()
+                                 ? tr("Test: %1").arg(selectedConfig.name)
+                                 : tr("Test");
   const QString tooltip =
       selectedConfig.isValid()
           ? tr("Run tests with configuration: %1").arg(selectedConfig.name)
@@ -753,10 +754,7 @@ void MainWindow::rebuildTestTargetMenu() {
     ensureTestPanel();
     if (testPanel && !m_projectRootPath.isEmpty())
       testPanel->setWorkspaceFolder(m_projectRootPath);
-    if (testDock) {
-      testDock->show();
-      testDock->raise();
-    }
+    revealTestDock();
     syncViewToggleActionStates();
   });
 
@@ -804,17 +802,6 @@ QString MainWindow::selectedCompoundDebugConfigurationName() const {
   return {};
 }
 
-namespace {
-QString elideMiddle(const QString &text, int maxLength) {
-  if (text.length() <= maxLength || maxLength < 8) {
-    return text;
-  }
-  const int head = maxLength / 2 - 1;
-  const int tail = maxLength - head - 1;
-  return text.left(head) + QChar(0x2026) + text.right(tail);
-}
-} // namespace
-
 void MainWindow::refreshRunTargetButton() {
   if (!ui->runButton) {
     return;
@@ -830,7 +817,7 @@ void MainWindow::refreshRunTargetButton() {
   } else if (target.needsTargetChoice) {
     label = tr("Run: choose target…");
   } else {
-    label = tr("Run: %1").arg(elideMiddle(target.displayName(), 28));
+    label = tr("Run: %1").arg(target.displayName());
   }
   if (pinned) {
 
@@ -1091,14 +1078,14 @@ void MainWindow::refreshDebugTargetButton() {
   QString buttonText;
   QString tooltip;
   if (!selectedCompoundName.isEmpty()) {
-    buttonText = tr("Compound: %1").arg(selectedCompoundName);
+    buttonText = tr("Debug: %1").arg(selectedCompoundName);
     tooltip =
         tr("Start compound debug configuration: %1").arg(selectedCompoundName);
   } else if (!selectedName.isEmpty()) {
-    buttonText = selectedName;
+    buttonText = tr("Debug: %1").arg(selectedName);
     tooltip = tr("Start debug configuration: %1").arg(selectedName);
   } else if (!quickName.isEmpty()) {
-    buttonText = tr("Debug: %1").arg(elideMiddle(quickName, 26));
+    buttonText = tr("Debug: %1").arg(quickName);
     tooltip = tr("Debug %1")
                   .arg(QDir::toNativeSeparators(quickTarget.isValid()
                                                     ? quickTarget.targetPath()
