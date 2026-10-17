@@ -7,12 +7,14 @@
 #include "../ui/mainwindow.h"
 #include "../ui/panels/minimap.h"
 #include "../ui/uistylehelper.h"
+#include "../ui/workspaceicons.h"
 #include <QAction>
 #include <QDir>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
+#include <QPalette>
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QStyle>
@@ -47,7 +49,7 @@ private:
 LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
     : QWidget(parent), mainWindow(nullptr), treeContainer(nullptr),
       treeHeader(nullptr), treeTitleLabel(nullptr), treePathLabel(nullptr),
-      treeSearch(nullptr), treeNewFileButton(nullptr),
+      treeSearch(nullptr), treeSearchButton(nullptr), treeNewFileButton(nullptr),
       treeNewFolderButton(nullptr), treeMoreButton(nullptr), treeView(nullptr),
       editorContainer(nullptr), textArea(nullptr), minimap(nullptr),
       model(nullptr), m_ownsModel(true), m_gitIntegration(nullptr),
@@ -75,6 +77,16 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   treeTitleLabel->setTextFormat(Qt::PlainText);
   treeTitleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   treeHeaderLayout->addWidget(treeTitleLabel, 1);
+
+  treeSearchButton = new QToolButton(treeHeader);
+  treeSearchButton->setObjectName("treeToolButton");
+  treeSearchButton->setToolTip(tr("Search files and contents"));
+  treeSearchButton->setAccessibleName(tr("Toggle explorer search"));
+  treeSearchButton->setCheckable(true);
+  treeSearchButton->setIcon(WorkspaceIcons::icon(
+      WorkspaceIcons::Glyph::Search, palette().color(QPalette::ButtonText), 14));
+  treeSearchButton->setIconSize(QSize(14, 14));
+  treeHeaderLayout->addWidget(treeSearchButton);
 
   treeNewFileButton = new QToolButton(treeHeader);
   treeNewFileButton->setObjectName("treeToolButton");
@@ -113,6 +125,7 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
       treePathLabel, [this]() { updateTreePathLabel(); }));
 
   treeSearch = new ExplorerSearchWidget(treeContainer);
+  treeSearch->hide();
 
   treeView = new LightpadTreeView(this);
   treeView->setExpandsOnDoubleClick(false);
@@ -159,6 +172,20 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
       treeView, &QAbstractItemView::doubleClicked, this,
       [this](const QModelIndex &index) { activateTreeIndex(index); });
 
+  connect(treeSearchButton, &QToolButton::toggled, this,
+          [this, treeLayout](bool visible) {
+            treeSearch->setVisible(visible);
+            treeSearchButton->setToolTip(
+                visible ? tr("Hide explorer search")
+                        : tr("Search files and contents"));
+            if (visible) {
+              treeSearch->focusSearch(treeSearch->options().mode);
+            } else {
+              treeView->show();
+              treeLayout->setStretchFactor(treeSearch, 0);
+              treeView->setFocus();
+            }
+          });
   connect(treeNewFileButton, &QToolButton::clicked, this, [this]() {
     if (auto *view = qobject_cast<LightpadTreeView *>(treeView)) {
       view->promptNewFile();
@@ -185,10 +212,15 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   treeMenu->addSeparator();
   connect(
       treeMenu->addAction(tr("Find Files…")), &QAction::triggered, this,
-      [this]() { treeSearch->focusSearch(ProjectSearch::Mode::FileNames); });
+      [this]() {
+        treeSearchButton->setChecked(true);
+        treeSearch->focusSearch(ProjectSearch::Mode::FileNames);
+      });
   connect(treeMenu->addAction(tr("Search Contents…")), &QAction::triggered,
-          this,
-          [this]() { treeSearch->focusSearch(ProjectSearch::Mode::Contents); });
+          this, [this]() {
+            treeSearchButton->setChecked(true);
+            treeSearch->focusSearch(ProjectSearch::Mode::Contents);
+          });
   connect(treeSearch, &ExplorerSearchWidget::optionsChanged, this, [this]() {
     m_treeFilterText = treeSearch->options().query;
     if (mainWindow) {
@@ -197,6 +229,7 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   });
   connect(treeSearch, &ExplorerSearchWidget::searchActiveChanged, this,
           [this](bool active) {
+            active = active && treeSearchButton->isChecked();
             treeView->setVisible(!active);
             auto *layout = qobject_cast<QVBoxLayout *>(treeContainer->layout());
             layout->setStretchFactor(treeSearch, active ? 1 : 0);
@@ -206,8 +239,11 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   auto *view = qobject_cast<LightpadTreeView *>(treeView);
   connect(treeSearch, &ExplorerSearchWidget::entryContextMenuRequested, view,
           &LightpadTreeView::showPathContextMenu);
-  connect(view, &LightpadTreeView::findInFolderRequested, treeSearch,
-          &ExplorerSearchWidget::searchInFolder);
+  connect(view, &LightpadTreeView::findInFolderRequested, this,
+          [this](const QString &path) {
+            treeSearchButton->setChecked(true);
+            treeSearch->searchInFolder(path);
+          });
   connect(view->fileOperationsController(),
           &FileDirTreeController::actionCompleted, treeSearch,
           &ExplorerSearchWidget::refresh);
@@ -663,6 +699,10 @@ void LightpadPage::applyTheme(const ThemeDefinition &theme) {
                 "}"
                 "QToolButton#treeToolButton:pressed {"
                 "  background: %9;"
+                "}"
+                "QToolButton#treeToolButton:checked {"
+                "  background: %9;"
+                "  border-color: %8;"
                 "}")
             .arg(panelTop, panelBottom, panelBorder, muted, fg, filterBg,
                  filterFocusBg, accent, pressed));
@@ -691,6 +731,8 @@ void LightpadPage::applyTheme(const ThemeDefinition &theme) {
   }
 
   treeSearch->applyTheme(theme);
+  treeSearchButton->setIcon(WorkspaceIcons::icon(
+      WorkspaceIcons::Glyph::Search, theme.colors.textPrimary, 14));
   if (treeMoreButton && treeMoreButton->menu()) {
     treeMoreButton->menu()->setStyleSheet(
         UIStyleHelper::contextMenuStyle(theme));

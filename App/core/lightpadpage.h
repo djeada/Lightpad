@@ -79,6 +79,7 @@ private:
 
   void updateTreePathLabel();
   ExplorerSearchWidget *treeSearch;
+  QToolButton *treeSearchButton;
   QToolButton *treeNewFileButton;
   QToolButton *treeNewFolderButton;
   QToolButton *treeMoreButton;
