@@ -156,7 +156,7 @@ QByteArray encodeText(const QString &text, TextFormat *format,
 bool writeFileAtomically(const QString &filePath, const QByteArray &data,
                          QString *errorString) {
   QSaveFile file(filePath);
-  file.setDirectWriteFallback(true);
+  file.setDirectWriteFallback(false);
   if (!file.open(QIODevice::WriteOnly)) {
     if (errorString) {
       *errorString = file.errorString();

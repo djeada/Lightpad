@@ -1,4 +1,27 @@
+#include "../core/documentrecovery.h"
 #include "mainwindow_internal.h"
+
+namespace {
+void replaceEditorContentsKeepingUndo(TextArea *area, const QString &text) {
+  if (area->toPlainText() == text)
+    return;
+  const auto previous = area->textCursor();
+  const int vertical = area->verticalScrollBar()->value();
+  const int horizontal = area->horizontalScrollBar()->value();
+  QTextCursor edit(area->document());
+  edit.beginEditBlock();
+  edit.select(QTextCursor::Document);
+  edit.insertText(text);
+  edit.endEditBlock();
+  QTextCursor restored(area->document());
+  restored.setPosition(qBound(0, previous.anchor(), int(text.size())));
+  restored.setPosition(qBound(0, previous.position(), int(text.size())),
+                       QTextCursor::KeepAnchor);
+  area->setTextCursor(restored);
+  area->verticalScrollBar()->setValue(vertical);
+  area->horizontalScrollBar()->setValue(horizontal);
+}
+} // namespace
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), popupTabWidth(nullptr),
@@ -278,6 +301,7 @@ MainWindow::MainWindow(QWidget *parent)
 
   loadSettings();
   setWindowTitle("LightPad");
+  setupDocumentRecovery();
 }
 
 LightpadTabWidget *MainWindow::currentTabWidget() const {
@@ -535,8 +559,12 @@ void MainWindow::setLanguageHighlightLabel(QString text) {
 }
 
 MainWindow::~MainWindow() {
+  m_globalSettingsLoaded = false;
   if (findReplacePanel)
     findReplacePanel->setMainWindow(nullptr);
+  hide();
+  delete m_documentRecovery;
+  m_documentRecovery = nullptr;
   delete ui;
 }
 
@@ -568,6 +596,11 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   }
 
   QMainWindow::closeEvent(event);
+  if (event->isAccepted() && m_documentRecovery) {
+    QString error;
+    if (!m_documentRecovery->finishSession(&error))
+      LOG_WARNING("Recovery cleanup: " + error);
+  }
 }
 
 QString MainWindow::textAreaSettingsPath() const {
@@ -1997,6 +2030,8 @@ void MainWindow::retargetOpenPaths(const QString &oldPath,
       unwatchOpenFileIfUnused(tabPath);
       recordFileTimestamp(retargeted);
       watchOpenFile(retargeted);
+      if (auto *page = tabWidget->getPage(i))
+        trackRecoveryEditor(page->getTextArea());
       if (autoSaveManager) {
         autoSaveManager->markSaved(tabPath);
         LightpadPage *page = tabWidget->getPage(i);
@@ -2337,6 +2372,11 @@ bool MainWindow::saveTabAs(LightpadTabWidget *tabWidget, int tabIndex) {
   if (!tabWidget || tabIndex < 0) {
     return false;
   }
+  if (findReplacePanel && findReplacePanel->isBusy()) {
+    statusBar()->showMessage(
+        tr("Wait for the replacement batch before saving."), 5000);
+    return false;
+  }
 
   auto filePath =
       QFileDialog::getSaveFileName(this, tr("Save Document"), QDir::homePath());
@@ -2347,6 +2387,36 @@ bool MainWindow::saveTabAs(LightpadTabWidget *tabWidget, int tabIndex) {
   const QString previousPath = tabWidget->getFilePath(tabIndex);
   const QString cleanPreviousPath = QDir::cleanPath(previousPath);
   const QString cleanNewPath = QDir::cleanPath(filePath);
+  const auto identity = [](const QString &path) {
+    const QFileInfo info(path);
+    return info.canonicalFilePath().isEmpty() ? info.absoluteFilePath()
+                                              : info.canonicalFilePath();
+  };
+  auto *savingPage = tabWidget->getPage(tabIndex);
+  for (auto *group : allTabWidgets()) {
+    for (int i = 0; i < group->count(); ++i) {
+      const QString otherPath = group->getFilePath(i);
+      if (group->getPage(i) != savingPage && !otherPath.isEmpty() &&
+          identity(otherPath) == identity(filePath)) {
+        ThemedMessageBox::warning(
+            this, tr("File Already Open"),
+            tr("This destination is open in another editor. Choose a different "
+               "path or close that editor before saving here."));
+        return false;
+      }
+    }
+  }
+  const bool hadFormat = m_fileFormats.contains(cleanNewPath);
+  const auto previousFormat = m_fileFormats.value(cleanNewPath);
+  if (previousPath.isEmpty() && savingPage &&
+      savingPage->getTextArea()->property("recoveryFormat").isValid()) {
+    const auto data =
+        savingPage->getTextArea()->property("recoveryFormat").toMap();
+    m_fileFormats.insert(
+        cleanNewPath,
+        {FileOpenGuard::TextEncoding(data.value("encoding").toInt()),
+         data.value("bom").toBool(), data.value("lineEnding").toString()});
+  }
   if (!previousPath.isEmpty() && m_fileFormats.contains(cleanPreviousPath) &&
       !m_fileFormats.contains(cleanNewPath)) {
     m_fileFormats.insert(cleanNewPath, m_fileFormats.value(cleanPreviousPath));
@@ -2356,6 +2426,12 @@ bool MainWindow::saveTabAs(LightpadTabWidget *tabWidget, int tabIndex) {
 
   if (!save(filePath)) {
     tabWidget->setFilePath(tabIndex, previousPath);
+    if (hadFormat)
+      m_fileFormats.insert(cleanNewPath, previousFormat);
+    else
+      m_fileFormats.remove(cleanNewPath);
+    if (savingPage)
+      trackRecoveryEditor(savingPage->getTextArea());
     return false;
   }
 
@@ -2473,6 +2549,7 @@ void MainWindow::open(const QString &filePath) {
 
   recordFileTimestamp(filePath);
   watchOpenFile(filePath);
+  trackRecoveryEditor(getCurrentTextArea());
 }
 
 bool MainWindow::save(const QString &filePath, bool isAutoSave) {
@@ -2536,6 +2613,14 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
   if (!textArea || !targetTabWidget || targetTabIndex < 0) {
     return false;
   }
+  if (textArea->isReadOnly() ||
+      (findReplacePanel && findReplacePanel->isBusy())) {
+    if (!isAutoSave)
+      statusBar()->showMessage(
+          tr("This editor is read-only or a replacement batch is active."),
+          5000);
+    return false;
+  }
 
   if (checkExternalModification(filePath)) {
     if (isAutoSave) {
@@ -2549,6 +2634,8 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
   }
 
   SettingsManager &sm = SettingsManager::instance();
+  QTextCursor saveEdits(textArea->document());
+  saveEdits.beginEditBlock();
   if (sm.getValue("trimTrailingWhitespace", false).toBool()) {
     trimTrailingWhitespace(textArea);
   }
@@ -2571,13 +2658,8 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
   const QString languageId = effectiveLanguageIdForFile(filePath);
   const QString textToSave = normalizeEditorTextForSave(
       filePath, languageId, textArea->toPlainText(), getTabWidth());
-  if (textToSave != textArea->toPlainText()) {
-    const int cursorPos = textArea->textCursor().position();
-    textArea->setPlainText(textToSave);
-    QTextCursor cursor = textArea->textCursor();
-    cursor.setPosition(qMin(cursorPos, textToSave.length()));
-    textArea->setTextCursor(cursor);
-  }
+  replaceEditorContentsKeepingUndo(textArea, textToSave);
+  saveEdits.endEditBlock();
   FileOpenGuard::TextFormat format = m_fileFormats.value(normalizedSavePath);
   bool encodingChanged = false;
   const QByteArray bytes =
@@ -2606,6 +2688,7 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
 
   textArea->document()->setModified(false);
   textArea->removeIconUnsaved();
+  trackRecoveryEditor(textArea);
 
   recordFileTimestamp(filePath);
   watchOpenFile(filePath);
@@ -2916,6 +2999,9 @@ bool MainWindow::writeOpenFileToDisk(const QString &filePath) {
   if (!textArea) {
     return false;
   }
+  if (textArea->isReadOnly() ||
+      (findReplacePanel && findReplacePanel->isBusy()))
+    return false;
 
   if (isPreviewOnlyFile(filePath)) {
     ThemedMessageBox::warning(
@@ -2934,13 +3020,7 @@ bool MainWindow::writeOpenFileToDisk(const QString &filePath) {
   const QString languageId = effectiveLanguageIdForFile(filePath);
   const QString textToSave = normalizeEditorTextForSave(
       filePath, languageId, textArea->toPlainText(), getTabWidth());
-  if (textToSave != textArea->toPlainText()) {
-    const int cursorPos = textArea->textCursor().position();
-    textArea->setPlainText(textToSave);
-    QTextCursor cursor = textArea->textCursor();
-    cursor.setPosition(qMin(cursorPos, textToSave.length()));
-    textArea->setTextCursor(cursor);
-  }
+  replaceEditorContentsKeepingUndo(textArea, textToSave);
   FileOpenGuard::TextFormat format = m_fileFormats.value(normalizedPath);
   const QByteArray bytes = FileOpenGuard::encodeText(textToSave, &format);
   QString writeError;
@@ -3265,20 +3345,9 @@ void MainWindow::setFilePathAsTabText(QString filePath) {
 }
 
 void MainWindow::closeCurrentTab() {
-  auto textArea = getCurrentTextArea();
-
-  if (textArea && textArea->changesUnsaved()) {
-    on_actionSave_triggered();
-    if (textArea->changesUnsaved()) {
-      return;
-    }
-  }
-
   LightpadTabWidget *tabWidget = currentTabWidget();
-  if (!tabWidget) {
-    return;
-  }
-  tabWidget->forceCloseTab(tabWidget->currentIndex());
+  if (tabWidget)
+    tabWidget->requestCloseTab(tabWidget->currentIndex());
 }
 
 void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
@@ -3286,6 +3355,11 @@ void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
     return;
   }
   tabWidget->setProperty("mainWindowConnected", true);
+  connect(tabWidget, &LightpadTabWidget::editorClosed, this,
+          [this](QPlainTextEdit *editor) {
+            if (m_documentRecovery)
+              m_documentRecovery->forget(editor);
+          });
 
   tabWidget->setCloseGuard([this](LightpadTabWidget *owner, int index) {
     return maybeSaveTab(owner, index);
@@ -3472,6 +3546,7 @@ void MainWindow::setupTextArea() {
     textArea->setFont(settings.mainFont);
     textArea->setTabWidth(settings.tabWidth);
     textArea->setVimModeEnabled(settings.vimModeEnabled);
+    trackRecoveryEditor(textArea);
 
     if (autoSaveManager && !textArea->property("autoSaveHooked").toBool()) {
       connect(textArea->document(), &QTextDocument::modificationChanged, this,

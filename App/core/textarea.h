@@ -194,7 +194,6 @@ private:
   bool m_updatingLineNumberLayout = false;
   int m_lineNumberMarginWidth = -1;
   QString searchWord;
-  bool areChangesUnsaved;
   bool autoIndent;
   bool showLineNumberArea;
   bool lineHighlighted;
