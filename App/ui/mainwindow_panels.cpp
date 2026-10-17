@@ -700,6 +700,29 @@ void MainWindow::ensureTestPanel() {
           });
 }
 
+void MainWindow::revealTestDock(bool firstOpen) {
+  if (!testDock) {
+    return;
+  }
+
+  // Reuse the existing bottom panel geometry when a sibling is already open.
+  const bool bottomPanelVisible =
+      (m_terminalDock && m_terminalDock->isVisible()) ||
+      (m_problemsDock && m_problemsDock->isVisible()) ||
+      (debugDock && debugDock->isVisible()) ||
+      (databaseDock && databaseDock->isVisible());
+
+  testDock->show();
+  testDock->raise();
+
+  // Only compact the initial layout. Never overwrite a restored or resized
+  // layout when the user reopens the Tests panel.
+  if (firstOpen && !bottomPanelVisible && !testDock->isFloating()) {
+    resizeDocks({testDock}, {qBound(160, height() / 5, 240)},
+                Qt::Vertical);
+  }
+}
+
 void MainWindow::trackDockLayoutChanges(QDockWidget *dock) {
   if (!dock) {
     return;
@@ -774,12 +797,11 @@ void MainWindow::setActiveDebugTarget(const QString &target) {
 }
 
 void MainWindow::on_actionToggle_Test_Panel_triggered() {
+  const bool firstOpen = !testDock;
   ensureTestPanel();
 
-  bool visible = testDock->isVisible();
-  if (!visible) {
-    testDock->show();
-    testDock->raise();
+  if (!testDock->isVisible()) {
+    revealTestDock(firstOpen);
   } else {
     testDock->hide();
   }
