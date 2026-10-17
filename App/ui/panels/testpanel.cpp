@@ -628,8 +628,12 @@ void TestPanel::applyTheme(const Theme &theme) {
               "  font-size: 12px;"
               "}"
               "QSplitter::handle {"
-              "  background: %4;"
-              "  height: 1px;"
+              "  background: transparent;"
+              "  border-top: 1px solid %4;"
+              "  height: 5px;"
+              "}"
+              "QSplitter::handle:hover {"
+              "  background: %10;"
               "}")
           .arg(sideBorders, panelSurface.name(), textColor.name(),
                borderColor.name(), accentColor.name(), progressTrack.name(),
