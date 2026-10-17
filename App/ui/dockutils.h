@@ -3,8 +3,15 @@
 
 #include <QDockWidget>
 #include <QMainWindow>
+#include <QtGlobal>
 
 namespace DockUtils {
+
+// Give a newly opened bottom panel enough room for controls without taking
+// over the editor. Later resizes and restored layouts are user-owned.
+inline int preferredInitialBottomDockHeight(int windowHeight) {
+  return qBound(160, windowHeight / 5, 240);
+}
 
 inline Qt::DockWidgetAreas toolPanelAllowedAreas() {
   return Qt::AllDockWidgetAreas;
