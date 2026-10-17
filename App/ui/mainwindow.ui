@@ -136,6 +136,9 @@ qproperty-icon: url(":/resources/icons/run.png");
         </item>
         <item>
          <widget class="QToolButton" name="testButton">
+         <property name="toolTip">
+          <string>Run tests (use the arrow to select a test target)</string>
+         </property>
           <property name="text">
            <string>...</string>
           </property>
@@ -158,6 +161,9 @@ qproperty-icon: url(":/resources/icons/debug.png");
         </item>
        <item>
         <widget class="QToolButton" name="magicButton">
+         <property name="toolTip">
+          <string>Format current document</string>
+         </property>
          <property name="minimumSize">
           <size>
            <width>28</width>
@@ -192,6 +198,9 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
        </item>
        <item>
         <widget class="QToolButton" name="languageHighlight">
+         <property name="toolTip">
+          <string>Choose syntax highlighting language</string>
+         </property>
          <property name="styleSheet">
           <string notr="true"/>
          </property>
@@ -218,6 +227,9 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
        </item>
        <item>
         <widget class="QToolButton" name="tabWidth">
+         <property name="toolTip">
+          <string>Change indentation tab width</string>
+         </property>
          <property name="styleSheet">
           <string notr="true"/>
          </property>
