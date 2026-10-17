@@ -12,6 +12,7 @@ private slots:
   void testMainWindowDockOptionsSupportDockRearrangement();
   void testDockStateRestoreKeepsHiddenDockPosition();
   void testFloatingDockHasResizeFrame();
+  void testInitialBottomDockHeightKeepsEditorSpace();
 };
 
 void TestDockUtils::testToolPanelsAllowAllDockAreas() {
@@ -94,6 +95,12 @@ void TestDockUtils::testFloatingDockHasResizeFrame() {
 
   QVERIFY(dock.isFloating());
   QVERIFY(dock.windowFlags().testFlag(Qt::Window));
+}
+
+void TestDockUtils::testInitialBottomDockHeightKeepsEditorSpace() {
+  QCOMPARE(DockUtils::preferredInitialBottomDockHeight(400), 160);
+  QCOMPARE(DockUtils::preferredInitialBottomDockHeight(1000), 200);
+  QCOMPARE(DockUtils::preferredInitialBottomDockHeight(2000), 240);
 }
 
 QTEST_MAIN(TestDockUtils)
