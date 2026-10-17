@@ -120,7 +120,7 @@
         </spacer>
        </item>
         <item>
-         <widget class="QToolButton" name="runButton">
+         <widget class="ElidingToolButton" name="runButton">
           <property name="styleSheet">
            <string notr="true">QToolButton {
 qproperty-icon: url(":/resources/icons/run.png");
@@ -135,7 +135,7 @@ qproperty-icon: url(":/resources/icons/run.png");
          </widget>
         </item>
         <item>
-         <widget class="QToolButton" name="testButton">
+         <widget class="ElidingToolButton" name="testButton">
           <property name="toolTip">
            <string>Run tests (use the arrow to select a test target)</string>
           </property>
@@ -145,7 +145,7 @@ qproperty-icon: url(":/resources/icons/run.png");
          </widget>
         </item>
          <item>
-          <widget class="QToolButton" name="debugButton">
+          <widget class="ElidingToolButton" name="debugButton">
           <property name="styleSheet">
            <string notr="true">QToolButton {
 qproperty-icon: url(":/resources/icons/debug.png");
@@ -976,6 +976,11 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   </action>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>ElidingToolButton</class>
+   <extends>QToolButton</extends>
+   <header>ui/widgets/elidingtoolbutton.h</header>
+  </customwidget>
   <customwidget>
    <class>LightpadTabWidget</class>
    <extends>QTabWidget</extends>

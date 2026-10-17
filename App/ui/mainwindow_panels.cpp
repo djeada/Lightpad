@@ -687,6 +687,7 @@ void MainWindow::ensureTestPanel() {
 
   testDock = new QDockWidget(tr("Tests"), this);
   testDock->setObjectName("testDock");
+  testDock->setProperty("initialLayoutPending", true);
   DockUtils::configureToolPanelDock(testDock);
   testDock->setWidget(testPanel);
   addDockWidget(Qt::BottomDockWidgetArea, testDock);
@@ -700,30 +701,37 @@ void MainWindow::ensureTestPanel() {
           });
 }
 
-void MainWindow::revealTestDock(bool firstOpen) {
+void MainWindow::revealTestDock() {
   if (!testDock) {
     return;
   }
 
   // Reuse the existing bottom panel geometry when a sibling is already open.
-  const bool bottomPanelVisible =
-      (m_terminalDock && m_terminalDock->isVisible()) ||
-      (m_problemsDock && m_problemsDock->isVisible()) ||
-      (debugDock && debugDock->isVisible()) ||
-      (databaseDock && databaseDock->isVisible());
+  bool bottomPanelVisible = false;
+  for (auto *dock : {m_terminalDock, m_problemsDock, debugDock, databaseDock}) {
+    if (dock && dock->isVisible() && !dock->isFloating() &&
+        dockWidgetArea(dock) == Qt::BottomDockWidgetArea)
+      bottomPanelVisible = true;
+  }
+  const bool firstOpen = testDock->property("initialLayoutPending").toBool();
+  testDock->setProperty("initialLayoutPending", false);
 
   testDock->show();
   testDock->raise();
 
   // Only compact the initial layout. Never overwrite a restored or resized
   // layout when the user reopens the Tests panel.
-  if (firstOpen && !bottomPanelVisible && !testDock->isFloating()) {
-    resizeDocks({testDock},
-                {DockUtils::preferredInitialBottomDockHeight(height())},
-                Qt::Vertical);
+  if (firstOpen && !bottomPanelVisible && !testDock->isFloating() &&
+      dockWidgetArea(testDock) == Qt::BottomDockWidgetArea) {
     // visibilityChanged saves when the dock first appears, before the resize.
     // Persist again after Qt has had a chance to finish arranging the docks.
     QTimer::singleShot(0, this, [this]() {
+      if (!testDock || !testDock->isVisible() || testDock->isFloating() ||
+          dockWidgetArea(testDock) != Qt::BottomDockWidgetArea)
+        return;
+      resizeDocks({testDock},
+                  {DockUtils::preferredInitialBottomDockHeight(height())},
+                  Qt::Vertical);
       if (m_globalSettingsLoaded && !m_restoringSession) {
         saveSettings();
       }
@@ -757,8 +765,12 @@ void MainWindow::trackDockLayoutChanges(QDockWidget *dock) {
 void MainWindow::tabifyBottomDock(QDockWidget *dock) {
   QList<QDockWidget *> bottomDocks = {m_terminalDock, m_problemsDock, debugDock,
                                       testDock, databaseDock};
+  const auto bottomSibling = [this, dock](QDockWidget *candidate) {
+    return candidate && candidate != dock && !candidate->isFloating() &&
+           dockWidgetArea(candidate) == Qt::BottomDockWidgetArea;
+  };
   for (QDockWidget *existing : bottomDocks) {
-    if (existing && existing != dock && existing->isVisible()) {
+    if (bottomSibling(existing) && existing->isVisible()) {
       tabifyDockWidget(existing, dock);
       polishDockTabBars();
       return;
@@ -766,7 +778,7 @@ void MainWindow::tabifyBottomDock(QDockWidget *dock) {
   }
 
   for (QDockWidget *existing : bottomDocks) {
-    if (existing && existing != dock) {
+    if (bottomSibling(existing)) {
       tabifyDockWidget(existing, dock);
       break;
     }
@@ -805,15 +817,10 @@ void MainWindow::setActiveDebugTarget(const QString &target) {
 }
 
 void MainWindow::on_actionToggle_Test_Panel_triggered() {
-  const bool firstOpen =
-      !testDock && SettingsManager::instance()
-                       .getValue("mainWindowDockState", QString())
-                       .toString()
-                       .isEmpty();
   ensureTestPanel();
 
   if (!testDock->isVisible()) {
-    revealTestDock(firstOpen);
+    revealTestDock();
   } else {
     testDock->hide();
   }

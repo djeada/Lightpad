@@ -235,6 +235,9 @@ private slots:
   void testCloseOtherTabsRespectsGuard();
   void testCloseCurrentGroupCancelledByGuard();
   void testUnsplitAllCancelledByGuard();
+  void testLongTabsLeaveRoomForOtherFiles();
+  void testNestedSplittersKeepUsableGrabAreas();
+  void testManyTabsScrollAndKeepNewTabVisible();
 
 private:
   static QWidget *insertPlainTab(LightpadTabWidget &tabWidget,
@@ -507,6 +510,52 @@ void TestSplitEditorContainer::testUnsplitAllCancelledByGuard() {
   QVERIFY(!container.unsplitAll());
   QCOMPARE(container.groupCount(), 2);
   QVERIFY(container.hasSplits());
+}
+
+void TestSplitEditorContainer::testLongTabsLeaveRoomForOtherFiles() {
+  LightpadTabWidget tabs;
+  insertPlainTab(tabs, QString(180, 'x') + ".cpp");
+  insertPlainTab(tabs, "main.cpp");
+  tabs.resize(800, 400);
+  tabs.show();
+  QTest::qWait(20);
+  auto *bar = tabs.findChild<LightpadTabBar *>();
+  QVERIFY(bar);
+  QVERIFY(bar->tabRect(0).width() <= 240);
+  QVERIFY(bar->tabRect(1).right() < tabs.width());
+  QVERIFY(bar->tabRect(tabs.count() - 1).width() <= 40);
+  QCOMPARE(tabs.tabText(0), QString(180, 'x') + ".cpp");
+}
+
+void TestSplitEditorContainer::testNestedSplittersKeepUsableGrabAreas() {
+  SplitEditorContainer container;
+  container.resize(1000, 700);
+  container.show();
+  container.splitHorizontal();
+  container.splitVertical();
+  for (auto *splitter : container.findChildren<QSplitter *>())
+    QVERIFY(splitter->handleWidth() >= 5);
+}
+
+void TestSplitEditorContainer::testManyTabsScrollAndKeepNewTabVisible() {
+  LightpadTabWidget tabs;
+  for (int i = 0; i < 12; ++i)
+    insertPlainTab(tabs, QString("document_with_a_long_name_%1.cpp").arg(i));
+  tabs.setUsesScrollButtons(false);
+  tabs.setTheme("#101418", "#c5d1dc", "#181e24", "#202a31", "#7effc5",
+                "#27333a");
+  tabs.resize(500, 400);
+  tabs.show();
+  tabs.setCurrentIndex(10);
+  QTest::qWait(20);
+  QVERIFY(tabs.usesScrollButtons());
+  auto *plus = tabs.findChild<QToolButton *>("AddTabButton");
+  QVERIFY(plus);
+  QVERIFY(plus->isVisible());
+  QCOMPARE(tabs.cornerWidget(Qt::TopRightCorner), plus);
+  QVERIFY(tabs.rect().contains(plus->mapTo(&tabs, plus->rect().center())));
+  auto *bar = tabs.findChild<LightpadTabBar *>();
+  QVERIFY(bar->tabRect(10).intersects(bar->rect()));
 }
 
 QTEST_MAIN(TestSplitEditorContainer)

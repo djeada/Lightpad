@@ -147,12 +147,6 @@ void MainWindow::showThemeGallery() {
 }
 
 void MainWindow::runTestsForCurrentContext() {
-  // A dock created while restoring an earlier layout is not a fresh panel.
-  const bool firstOpen =
-      !testDock && SettingsManager::instance()
-                       .getValue("mainWindowDockState", QString())
-                       .toString()
-                       .isEmpty();
   ensureTestPanel();
 
   QString currentFilePath;
@@ -200,7 +194,7 @@ void MainWindow::runTestsForCurrentContext() {
       testPanel->runAll();
   }
 
-  revealTestDock(firstOpen);
+  revealTestDock();
   syncViewToggleActionStates();
 }
 

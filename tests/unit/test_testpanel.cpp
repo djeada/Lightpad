@@ -2,6 +2,7 @@
 #include <QFile>
 #include <QLineEdit>
 #include <QProgressBar>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTextEdit>
@@ -58,6 +59,10 @@ private slots:
   void testEmptyStateLabelVisibleInitially();
   void testEmptyStateHiddenAfterDiscovery();
   void testSearchFilterByName();
+  void testEmptyActionDiscoversTests();
+  void testNoMatchesCanClearFiltersWithoutLosingTests();
+  void testSuiteSearchRespectsStatusFilter();
+  void testCompactPanelKeepsEmptyStateVisible();
   void testDirectoryRunShowsRunDetailsAndUsesWorkspaceRoot();
   void testDirectoryRunScopesGoogleTestsToSelectedSubdir();
 
@@ -1472,6 +1477,92 @@ void TestTestPanel::testStatusLabelClearedOnNewRun() {
   emit runMgr->runStarted();
   QVERIFY(!statusLabel->text().contains("first run output"));
   QVERIFY(statusLabel->text().contains("Running tests"));
+}
+
+void TestTestPanel::testEmptyActionDiscoversTests() {
+  class Adapter : public ITestDiscoveryAdapter {
+  public:
+    int calls = 0;
+    QString adapterId() const override { return "fixture"; }
+    void discover(const QString &) override {
+      ++calls;
+      DiscoveredTest test;
+      test.id = test.name = "discovered_test";
+      emit discoveryFinished({test});
+    }
+    void cancel() override {}
+  } adapter;
+  TestPanel panel;
+  panel.setWorkspaceFolder(m_tempDir.path());
+  panel.setDiscoveryAdapter(&adapter);
+  panel.resize(760, 220);
+  panel.show();
+  auto *action = panel.findChild<QPushButton *>("testEmptyAction");
+  QVERIFY(action);
+  QVERIFY(action->isVisible());
+  QTest::mouseClick(action, Qt::LeftButton);
+  QCOMPARE(adapter.calls, 1);
+  QCOMPARE(findTree(panel)->topLevelItemCount(), 1);
+  QVERIFY(findEmptyStateLabel(panel)->isHidden());
+}
+
+void TestTestPanel::testNoMatchesCanClearFiltersWithoutLosingTests() {
+  TestPanel panel;
+  panel.show();
+  auto *manager = findRunManager(panel);
+  TestResult result;
+  result.id = "test.alpha";
+  result.name = "alpha";
+  result.status = TestStatus::Passed;
+  emit manager->testFinished(result);
+  findSearchEdit(panel)->setText("missing");
+  auto *empty = findEmptyStateLabel(panel);
+  QVERIFY(empty->isVisible());
+  QVERIFY(empty->text().contains("No tests match"));
+  auto *action = panel.findChild<QPushButton *>("testEmptyAction");
+  QVERIFY(action->isVisible());
+  QTest::mouseClick(action, Qt::LeftButton);
+  QVERIFY(findSearchEdit(panel)->text().isEmpty());
+  QVERIFY(!findTree(panel)->topLevelItem(0)->isHidden());
+  QCOMPARE(findTree(panel)->topLevelItemCount(), 1);
+  QVERIFY(empty->isHidden());
+}
+
+void TestTestPanel::testSuiteSearchRespectsStatusFilter() {
+  TestPanel panel;
+  auto *manager = findRunManager(panel);
+  TestResult passed;
+  passed.id = "suite.passed";
+  passed.name = "passed";
+  passed.suite = "Recovery";
+  passed.status = TestStatus::Passed;
+  TestResult failed = passed;
+  failed.id = "suite.failed";
+  failed.name = "failed";
+  failed.status = TestStatus::Failed;
+  emit manager->testFinished(passed);
+  emit manager->testFinished(failed);
+  findFilterCombo(panel)->setCurrentIndex(1);
+  findSearchEdit(panel)->setText("Recovery");
+  auto *suite = findTree(panel)->topLevelItem(0);
+  QVERIFY(!suite->isHidden());
+  QCOMPARE(suite->childCount(), 2);
+  QVERIFY(suite->child(0)->isHidden());
+  QVERIFY(!suite->child(1)->isHidden());
+}
+
+void TestTestPanel::testCompactPanelKeepsEmptyStateVisible() {
+  TestPanel panel;
+  panel.resize(760, 220);
+  panel.show();
+  QTest::qWait(20);
+  QCOMPARE(panel.size(), QSize(760, 220));
+  auto *empty = findEmptyStateLabel(panel);
+  QVERIFY(empty->isVisible());
+  QVERIFY(empty->height() >= empty->fontMetrics().height());
+  QVERIFY(panel.rect().contains(empty->mapTo(&panel, empty->rect().center())));
+  QVERIFY(findDetailPane(panel)->isHidden());
+  QVERIFY(panel.findChild<QWidget *>("testDetailSection")->isHidden());
 }
 
 QTEST_MAIN(TestTestPanel)

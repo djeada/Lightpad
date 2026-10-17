@@ -1,6 +1,9 @@
 #include "ui/dockutils.h"
+#include "ui/widgets/elidingtoolbutton.h"
 
 #include <QMainWindow>
+#include <QMenu>
+#include <QTimer>
 #include <QtTest>
 
 class TestDockUtils : public QObject {
@@ -13,6 +16,8 @@ private slots:
   void testDockStateRestoreKeepsHiddenDockPosition();
   void testFloatingDockHasResizeFrame();
   void testInitialBottomDockHeightKeepsEditorSpace();
+  void testConstrainedTargetButtonKeepsLabelAndSplitMenu();
+  void testTitleBarControlsCloseAndRedock();
 };
 
 void TestDockUtils::testToolPanelsAllowAllDockAreas() {
@@ -101,6 +106,62 @@ void TestDockUtils::testInitialBottomDockHeightKeepsEditorSpace() {
   QCOMPARE(DockUtils::preferredInitialBottomDockHeight(400), 160);
   QCOMPARE(DockUtils::preferredInitialBottomDockHeight(1000), 200);
   QCOMPARE(DockUtils::preferredInitialBottomDockHeight(2000), 240);
+}
+
+void TestDockUtils::testConstrainedTargetButtonKeepsLabelAndSplitMenu() {
+  ElidingToolButton button;
+  const QString label =
+      "Run: a_very_long_target_name_that_must_not_expand_the_window";
+  button.setText(label);
+  button.setAccessibleName(label);
+  button.setToolTip(label);
+  button.setPopupMode(QToolButton::MenuButtonPopup);
+  QMenu menu;
+  auto *target = menu.addAction("Choose a different target");
+  button.setMenu(&menu);
+  button.resize(128, 32);
+  button.show();
+  QTest::qWait(10);
+  QVERIFY(button.sizeHint().width() <= 200);
+  QCOMPARE(button.text(), label);
+  QCOMPARE(button.accessibleName(), label);
+  QSignalSpy clicked(&button, &QToolButton::clicked);
+  QSignalSpy changed(target, &QAction::triggered);
+  QTest::mouseClick(&button, Qt::LeftButton, Qt::NoModifier, QPoint(18, 16));
+  QCOMPARE(clicked.count(), 1);
+  QTimer::singleShot(0, &menu, [&]() {
+    target->trigger();
+    menu.close();
+  });
+  QTest::mouseClick(&button, Qt::LeftButton, Qt::NoModifier, QPoint(124, 16));
+  QCOMPARE(changed.count(), 1);
+  QCOMPARE(clicked.count(), 1);
+  QCOMPARE(button.text(), label);
+}
+
+void TestDockUtils::testTitleBarControlsCloseAndRedock() {
+  QMainWindow window;
+  QDockWidget dock("Tests", &window);
+  dock.setWidget(new QWidget(&dock));
+  DockUtils::configureToolPanelDock(&dock);
+  window.addDockWidget(Qt::BottomDockWidgetArea, &dock);
+  window.show();
+  auto *close = dock.findChild<QToolButton *>("toolPanelClose");
+  auto *undock = dock.findChild<QToolButton *>("toolPanelFloat");
+  QVERIFY(close);
+  QVERIFY(undock);
+  QVERIFY(close->isVisible());
+  QVERIFY(undock->isVisible());
+  undock->click();
+  QVERIFY(dock.isFloating());
+  undock->click();
+  QVERIFY(!dock.isFloating());
+  dock.setFeatures(QDockWidget::DockWidgetMovable);
+  QVERIFY(close->isHidden());
+  QVERIFY(undock->isHidden());
+  dock.setFeatures(DockUtils::toolPanelFeatures());
+  close->click();
+  QVERIFY(dock.isHidden());
 }
 
 QTEST_MAIN(TestDockUtils)

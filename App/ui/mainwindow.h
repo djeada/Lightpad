@@ -279,6 +279,7 @@ private:
   DocumentRecovery *m_documentRecovery = nullptr;
   QPointer<DocumentRecoveryDialog> m_documentRecoveryDialog;
   void setupDocumentRecovery();
+  void setupWorkspaceChrome();
   void trackRecoveryEditor(TextArea *area);
   void showDocumentRecovery();
   QHash<QString, QDateTime> m_fileTimestamps;
@@ -461,7 +462,7 @@ private:
   QHash<QString, FileOpenGuard::TextFormat> m_fileFormats;
   void ensureDebugPanel();
   void ensureTestPanel();
-  void revealTestDock(bool firstOpen);
+  void revealTestDock();
 
   void setupDatabaseMenu();
   void ensureDatabasePanel();

@@ -55,7 +55,7 @@ void SplitEditorContainer::setupUI() {
 
   m_rootSplitter = new QSplitter(Qt::Horizontal, this);
   m_rootSplitter->setObjectName("splitEditorRootSplitter");
-  m_rootSplitter->setHandleWidth(2);
+  m_rootSplitter->setHandleWidth(6);
   m_rootSplitter->setChildrenCollapsible(false);
   layout->addWidget(m_rootSplitter);
 
@@ -137,7 +137,7 @@ LightpadTabWidget *SplitEditorContainer::split(SplitOrientation orientation) {
   } else {
 
     QSplitter *newSplitter = new QSplitter(qtOrientation, this);
-    newSplitter->setHandleWidth(2);
+    newSplitter->setHandleWidth(6);
     newSplitter->setChildrenCollapsible(false);
 
     QList<int> parentSizes = parentSplitter->sizes();

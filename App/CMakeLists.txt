@@ -261,6 +261,8 @@ set(project_headers
     definition/languagelspdefinitionprovider.h
     definition/symbolnavigationservice.h
     core/lightpadtabwidget.h
+    ui/widgets/elidingtoolbutton.h
+    ui/workspaceicons.h
     ui/mainwindow.h
     ui/popup.h
     ui/dialogs/preferences.h
@@ -533,6 +535,7 @@ set(project_sources
     ui/mainwindow_database.cpp
     ui/mainwindow_run.cpp
     ui/mainwindow_recovery.cpp
+    ui/mainwindow_workspace.cpp
     ui/mainwindow_panels.cpp
     ui/mainwindow_navigation.cpp
     ui/mainwindow_diagnostics.cpp

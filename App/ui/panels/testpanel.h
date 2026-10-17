@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QProgressBar>
+#include <QPushButton>
 #include <QSplitter>
 #include <QTextEdit>
 #include <QTimer>
@@ -116,6 +117,7 @@ private:
 
   QWidget *m_headerShell;
   QToolBar *m_toolbar;
+  QToolButton *m_optionsButton;
   QAction *m_runAllAction;
   QAction *m_runFailedAction;
   QAction *m_stopAction;
@@ -136,6 +138,8 @@ private:
   QTextEdit *m_detailPane;
   QLabel *m_statusLabel;
   QLabel *m_emptyStateLabel;
+  QWidget *m_emptyState;
+  QPushButton *m_emptyAction;
 
   TestRunManager *m_runManager;
   AutoTestRunner *m_autoTestRunner;

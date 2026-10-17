@@ -59,6 +59,7 @@ public:
   void highlihtCurrentLine(bool flag);
   void highlihtMatchingBracket(bool flag);
   void loadSettings(const TextAreaSettings settings);
+  void applyTheme(const Theme &theme);
   void applySelectionPalette(const Theme &theme);
 
   void setCompleter(QCompleter *completer);

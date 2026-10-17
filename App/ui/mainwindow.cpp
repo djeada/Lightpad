@@ -299,6 +299,7 @@ MainWindow::MainWindow(QWidget *parent)
   connect(&WatchManager::instance(), &WatchManager::allWatchesCleared, this,
           [saveWatches]() { saveWatches(); });
 
+  setupWorkspaceChrome();
   loadSettings();
   setWindowTitle("LightPad");
   setupDocumentRecovery();
@@ -943,8 +944,10 @@ void MainWindow::restoreSessionUiState() {
   }
 
   if (!dockStateBase64.isEmpty()) {
-    QMainWindow::restoreState(
+    const bool restored = QMainWindow::restoreState(
         QByteArray::fromBase64(dockStateBase64.toLatin1()));
+    if (restored && testDock)
+      testDock->setProperty("initialLayoutPending", false);
     polishDockTabBars();
   }
   setCorner(Qt::BottomLeftCorner, Qt::BottomDockWidgetArea);
