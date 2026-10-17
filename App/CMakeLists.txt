@@ -141,6 +141,7 @@ set(project_headers
     ui/dialogs/gotolinedialog.h
     ui/dialogs/gotosymboldialog.h
     ui/dialogs/recentfilesdialog.h
+    ui/dialogs/documentrecoverydialog.h
     ui/dialogs/filequickopen.h
     ui/dialogs/languageserverstatusdialog.h
     ui/dialogs/themegallerydialog.h
@@ -212,6 +213,8 @@ set(project_headers
     core/formatter.h
     core/io/filemanager.h
     core/io/fileopenguard.h
+    core/io/recoverystore.h
+    core/documentrecovery.h
     core/lightpadpage.h
     core/logging/logger.h
     core/recentfilesmanager.h
@@ -404,6 +407,7 @@ set(project_sources
     ui/dialogs/gotolinedialog.cpp
     ui/dialogs/gotosymboldialog.cpp
     ui/dialogs/recentfilesdialog.cpp
+    ui/dialogs/documentrecoverydialog.cpp
     ui/dialogs/filequickopen.cpp
     ui/dialogs/languageserverstatusdialog.cpp
     ui/dialogs/themegallerydialog.cpp
@@ -474,6 +478,8 @@ set(project_sources
     core/formatter.cpp
     core/io/filemanager.cpp
     core/io/fileopenguard.cpp
+    core/io/recoverystore.cpp
+    core/documentrecovery.cpp
     core/lightpadpage.cpp
     core/logging/logger.cpp
     core/recentfilesmanager.cpp
@@ -526,6 +532,7 @@ set(project_sources
     ui/mainwindow.cpp
     ui/mainwindow_database.cpp
     ui/mainwindow_run.cpp
+    ui/mainwindow_recovery.cpp
     ui/mainwindow_panels.cpp
     ui/mainwindow_navigation.cpp
     ui/mainwindow_diagnostics.cpp

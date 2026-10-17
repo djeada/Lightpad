@@ -2,6 +2,7 @@
 #define LIGHTPADTABWIDGET_H
 
 #include <QMap>
+#include <QPlainTextEdit>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
@@ -67,6 +68,7 @@ public:
   bool isPinnedRunFile(const QString &filePath) const;
 
 signals:
+  void editorClosed(QPlainTextEdit *editor);
   void tabClosed(const QString &filePath);
 
 protected:

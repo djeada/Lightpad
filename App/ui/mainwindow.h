@@ -19,6 +19,8 @@
 #include "../settings/theme.h"
 
 class MainWindow;
+class DocumentRecovery;
+class DocumentRecoveryDialog;
 class TerminalTabWidget;
 class Popup;
 class FindReplacePanel;
@@ -274,6 +276,11 @@ private:
   SymbolNavigationService *m_symbolNavService;
 
   class AutoSaveManager *autoSaveManager;
+  DocumentRecovery *m_documentRecovery = nullptr;
+  QPointer<DocumentRecoveryDialog> m_documentRecoveryDialog;
+  void setupDocumentRecovery();
+  void trackRecoveryEditor(TextArea *area);
+  void showDocumentRecovery();
   QHash<QString, QDateTime> m_fileTimestamps;
   QFileSystemWatcher *m_openFileWatcher;
   QSet<QString> m_externalChangePrompts;

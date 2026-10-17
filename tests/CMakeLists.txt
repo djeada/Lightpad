@@ -1701,6 +1701,33 @@ target_compile_definitions(test_fileopenguard PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME FileOpenGuardTests COMMAND test_fileopenguard)
 
+add_executable(test_recoverystore
+    unit/test_recoverystore.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/io/recoverystore.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/io/fileopenguard.cpp
+)
+target_link_libraries(test_recoverystore PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME RecoveryStoreTests COMMAND test_recoverystore)
+set_tests_properties(RecoveryStoreTests PROPERTIES TIMEOUT 30)
+
+add_executable(test_documentrecovery
+    unit/test_documentrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/documentrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/io/recoverystore.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/io/fileopenguard.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/async/asyncworker.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/documentrecoverydialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themedefinition.cpp
+)
+target_link_libraries(test_documentrecovery PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME DocumentRecoveryTests COMMAND test_documentrecovery)
+set_tests_properties(DocumentRecoveryTests PROPERTIES TIMEOUT 45)
+
 # Merge planning: which branch copies can be brought in, and what happens if you do.
 add_executable(test_gitmergeplan
     unit/test_gitmergeplan.cpp
@@ -3300,6 +3327,8 @@ set(TEST_TARGETS
     test_spliteditorcontainer
     test_imageviewer
     test_markdowntools
+    test_recoverystore
+    test_documentrecovery
     test_searchreplaceengine
     test_searchreplacewidget
     test_markdownpreviewpanel

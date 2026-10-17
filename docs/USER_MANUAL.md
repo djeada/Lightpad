@@ -211,6 +211,16 @@ inspect, export and profile results. See [DATABASE_TOOLS.md](DATABASE_TOOLS.md).
 
 Trigger autocompletion with `Ctrl+Space`. See [AUTOCOMPLETION.md](../App/AUTOCOMPLETION.md) for details.
 
+## Recover Unsaved Work
+
+Use **File → Recover Unsaved Documents…** to review recovery drafts from interrupted
+sessions. Preview and select drafts, then restore them into new unsaved tabs.
+Untitled documents are protected too, even when Auto Save is off. Source files
+remain unchanged until you choose where to save the recovered text.
+
+See [Document Recovery](DOCUMENT_RECOVERY.md) for checkpoint timing, limits,
+Save / Don't Save / Cancel behavior, and storage details.
+
 ## Find and Replace
 
 ### Basic Find

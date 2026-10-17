@@ -528,8 +528,8 @@ TextArea::TextArea(QWidget *parent)
       backgroundColor(QColor(Qt::gray).darker(200)), bufferText(""),
       highlightLang(""), syntaxHighlighter(nullptr), m_completer(nullptr),
       m_completionEngine(nullptr), m_completionWidget(nullptr),
-      m_languageId("plaintext"), searchWord(""), areChangesUnsaved(false),
-      autoIndent(true), showLineNumberArea(true), lineHighlighted(true),
+      m_languageId("plaintext"), searchWord(""), autoIndent(true),
+      showLineNumberArea(true), lineHighlighted(true),
       matchingBracketsHighlighted(true), prevWordCount(1),
       m_multiCursor(nullptr), m_columnSelectionActive(false),
       m_showWhitespace(false), m_showIndentGuides(false), m_vimMode(nullptr),
@@ -571,7 +571,7 @@ TextArea::TextArea(const TextAreaSettings &settings, QWidget *parent)
       bufferText(""), highlightLang(""), syntaxHighlighter(nullptr),
       m_completer(nullptr), m_completionEngine(nullptr),
       m_completionWidget(nullptr), m_languageId("plaintext"), searchWord(""),
-      areChangesUnsaved(false), autoIndent(settings.autoIndent),
+      autoIndent(settings.autoIndent),
       showLineNumberArea(settings.showLineNumberArea),
       lineHighlighted(settings.lineHighlighted),
       matchingBracketsHighlighted(settings.matchingBracketsHighlighted),
@@ -620,13 +620,10 @@ void TextArea::setupTextArea() {
     }
   });
 
-  connect(document(), &QTextDocument::undoCommandAdded, this, [&] {
-    if (!areChangesUnsaved) {
-
-      setTabWidgetIcon(s_unsavedIcon);
-      areChangesUnsaved = true;
-    }
-  });
+  connect(document(), &QTextDocument::modificationChanged, this,
+          [this](bool modified) {
+            setTabWidgetIcon(modified ? s_unsavedIcon : QIcon());
+          });
 
   connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
           [this](int) { scheduleHighlighterViewportRefresh(); });
@@ -755,8 +752,8 @@ void TextArea::setTabWidth(int width) {
 }
 
 void TextArea::removeIconUnsaved() {
+  document()->setModified(false);
   setTabWidgetIcon(QIcon());
-  areChangesUnsaved = false;
 }
 
 void TextArea::setAutoIdent(bool flag) { autoIndent = flag; }
@@ -822,7 +819,7 @@ void TextArea::applySelectionPalette(const Theme &theme) {
 
 QString TextArea::getSearchWord() { return searchWord; }
 
-bool TextArea::changesUnsaved() { return areChangesUnsaved; }
+bool TextArea::changesUnsaved() { return document()->isModified(); }
 
 void TextArea::resizeEvent(QResizeEvent *e) {
   QPlainTextEdit::resizeEvent(e);
@@ -1402,24 +1399,15 @@ void TextArea::insertFromMimeData(const QMimeData *source) {
 }
 
 void TextArea::setTabWidgetIcon(QIcon icon) {
-  auto page = qobject_cast<LightpadPage *>(parentWidget());
-
-  if (page) {
-
-    auto stackedWidget =
-        qobject_cast<QStackedWidget *>(parentWidget()->parentWidget());
-
-    if (stackedWidget) {
-
-      auto tabWidget = qobject_cast<LightpadTabWidget *>(
-          parentWidget()->parentWidget()->parentWidget());
-
-      if (tabWidget) {
-        auto index = tabWidget->indexOf(page);
-
-        if (index != -1)
-          tabWidget->setTabIcon(index, icon);
-      }
+  LightpadPage *page = nullptr;
+  for (auto *owner = parentWidget(); owner; owner = owner->parentWidget()) {
+    if (!page)
+      page = qobject_cast<LightpadPage *>(owner);
+    if (auto *tabs = qobject_cast<LightpadTabWidget *>(owner)) {
+      const int index = page ? tabs->indexOf(page) : -1;
+      if (index >= 0)
+        tabs->setTabIcon(index, icon);
+      return;
     }
   }
 }

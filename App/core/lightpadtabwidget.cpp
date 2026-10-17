@@ -509,6 +509,11 @@ void LightpadTabWidget::forceCloseTab(int index) {
   QWidget *page = widget(index);
   const QString filePath = getFilePath(index);
 
+  if (!isViewerTab(index)) {
+    if (auto *editorPage = getPage(index))
+      emit editorClosed(editorPage->getTextArea());
+  }
+
   removeTab(index);
   if (page) {
     m_viewerFilePaths.remove(page);

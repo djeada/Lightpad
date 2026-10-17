@@ -15,6 +15,7 @@ Lightpad is a Qt 6-based code editor with a modern UI, built-in language tooling
   glob filters, multi-file operations and external drag-and-drop imports
 - Search and replace across selections, open editors, or the project, with
   regex, selective previews, atomic file writes and batch undo
+- Recovery drafts for unsaved and untitled documents, with preview and selective restoration
 - Multi-cursor editing and split editors (horizontal/vertical)
 - Problems panel, breadcrumbs, minimap, and integrated terminal
 - Run and format templates with per-project assignments
@@ -104,6 +105,7 @@ Plugins are discovered from:
 - Keyboard shortcuts: docs/KEYBOARD_SHORTCUTS.md
 - File explorer and project search: docs/FILE_EXPLORER.md
 - Search and replace across editors and project files: [docs/SEARCH_REPLACE.md](docs/SEARCH_REPLACE.md)
+- Unsaved documents and recovery: [docs/DOCUMENT_RECOVERY.md](docs/DOCUMENT_RECOVERY.md)
 - Go to Definition: docs/GO_TO_DEFINITION.md
 - Plugin development: docs/PLUGIN_DEVELOPMENT.md
 - Syntax plugins: docs/SYNTAX_PLUGINS.md
