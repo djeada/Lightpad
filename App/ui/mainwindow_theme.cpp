@@ -667,18 +667,19 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "padding: 6px 10px; "
       "}"
 
-      "QSplitter::handle { "
-      "background-color: " +
-      borderSubtle +
-      "; "
+      // A wide grab area with a thin visual divider is easier to resize.
+      "QSplitter::handle { background-color: transparent; }"
+      "QSplitter::handle:horizontal { "
+      "width: 5px; "
+      "border-left: 1px solid " + borderSubtle + "; "
+      "}"
+      "QSplitter::handle:vertical { "
+      "height: 5px; "
+      "border-top: 1px solid " + borderSubtle + "; "
       "}"
       "QSplitter::handle:hover { "
-      "background-color: " +
-      accentColor +
-      "; "
+      "background-color: " + accentSoftColor + "; "
       "}"
-      "QSplitter::handle:horizontal { width: 1px; }"
-      "QSplitter::handle:vertical { height: 1px; }"
 
       "QDockWidget { "
       "color: " +
@@ -731,10 +732,10 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
 
       "QMainWindow::separator { "
       "background-color: " +
-      borderColor +
+      borderSubtle +
       "; "
-      "width: 2px; "
-      "height: 2px; "
+      "width: 6px; "
+      "height: 6px; "
       "}"
       "QMainWindow::separator:hover { "
       "background-color: " +
@@ -831,7 +832,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       surfaceAltColor +
       "; "
       "color: " +
-      ColorContrast::ensure(QColor(accentColor), QColor(surfaceAltColor))
+      ColorContrast::ensure(QColor(secondaryText), QColor(surfaceAltColor))
           .name() +
       "; "
       "border-bottom: 1px solid " +
