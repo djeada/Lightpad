@@ -147,6 +147,7 @@ void MainWindow::showThemeGallery() {
 }
 
 void MainWindow::runTestsForCurrentContext() {
+  const bool firstOpen = !testDock;
   ensureTestPanel();
 
   QString currentFilePath;
@@ -194,10 +195,7 @@ void MainWindow::runTestsForCurrentContext() {
       testPanel->runAll();
   }
 
-  if (testDock) {
-    testDock->show();
-    testDock->raise();
-  }
+  revealTestDock(firstOpen);
   syncViewToggleActionStates();
 }
 
