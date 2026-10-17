@@ -718,8 +718,16 @@ void MainWindow::revealTestDock(bool firstOpen) {
   // Only compact the initial layout. Never overwrite a restored or resized
   // layout when the user reopens the Tests panel.
   if (firstOpen && !bottomPanelVisible && !testDock->isFloating()) {
-    resizeDocks({testDock}, {qBound(160, height() / 5, 240)},
+    resizeDocks({testDock},
+                {DockUtils::preferredInitialBottomDockHeight(height())},
                 Qt::Vertical);
+    // visibilityChanged saves when the dock first appears, before the resize.
+    // Persist again after Qt has had a chance to finish arranging the docks.
+    QTimer::singleShot(0, this, [this]() {
+      if (m_globalSettingsLoaded && !m_restoringSession) {
+        saveSettings();
+      }
+    });
   }
 }
 
@@ -797,7 +805,11 @@ void MainWindow::setActiveDebugTarget(const QString &target) {
 }
 
 void MainWindow::on_actionToggle_Test_Panel_triggered() {
-  const bool firstOpen = !testDock;
+  const bool firstOpen =
+      !testDock && SettingsManager::instance()
+                       .getValue("mainWindowDockState", QString())
+                       .toString()
+                       .isEmpty();
   ensureTestPanel();
 
   if (!testDock->isVisible()) {
