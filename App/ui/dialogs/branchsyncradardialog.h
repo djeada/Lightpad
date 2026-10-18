@@ -2,7 +2,7 @@
 #define BRANCHSYNCRADARDIALOG_H
 
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class QComboBox;
 class QLabel;
@@ -11,7 +11,7 @@ class QRadioButton;
 class QTreeWidget;
 class QVBoxLayout;
 
-class BranchSyncRadarDialog : public StyledDialog {
+class BranchSyncRadarDialog : public GitDialog {
   Q_OBJECT
 
 public:

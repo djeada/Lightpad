@@ -37,6 +37,9 @@ public:
   static QString treeViewStyle(const Theme &theme);
   static QString treeViewStyle(const ThemeDefinition &theme);
 
+  static QString scrollBarStyle(const Theme &theme);
+  static QString scrollBarStyle(const ThemeDefinition &theme);
+
   static QString contextMenuStyle(const Theme &theme);
   static QString contextMenuStyle(const ThemeDefinition &theme);
 

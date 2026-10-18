@@ -2,7 +2,7 @@
 #define GITLOGDIALOG_H
 
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class QVBoxLayout;
 
@@ -19,7 +19,7 @@ class QCheckBox;
 class QPushButton;
 class QToolButton;
 
-class GitLogDialog : public StyledDialog {
+class GitLogDialog : public GitDialog {
   Q_OBJECT
 
 public:
@@ -35,6 +35,7 @@ public:
 signals:
 
   void viewCommitDiff(const QString &commitHash);
+  void inspectObjectRequested(const QString &hash);
 
   void compareRequested(const QString &from, const QString &to);
 
@@ -64,6 +65,7 @@ private:
   void buildUi();
   void applyTheme(const Theme &theme) override;
   void loadCommits();
+  void syncCommitList();
   void showContextMenuForCommit(const QString &hash, const QPoint &pos);
   void showCommitDetails(const QString &hash);
   void selectInList(const QString &hash, bool reveal = true);
@@ -78,6 +80,7 @@ private:
 
   GitIntegration *m_git;
   QString m_filePath;
+  QString m_revisionRange;
   Theme m_theme;
 
   QLineEdit *m_searchField;
@@ -93,6 +96,7 @@ private:
   QToolButton *m_zoomInButton;
   QToolButton *m_zoomOutButton;
   QToolButton *m_zoomResetButton;
+  QPushButton *m_loadMoreButton = nullptr;
   QTreeWidget *m_detailFiles;
   QPushButton *m_detailDiffButton;
   QPushButton *m_detailBranchButton;

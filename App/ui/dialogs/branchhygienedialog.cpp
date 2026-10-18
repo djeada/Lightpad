@@ -33,13 +33,15 @@ void BranchHygieneDialog::setPinnedBranches(const QStringList &names) {
 
 BranchHygieneDialog::BranchHygieneDialog(GitIntegration *git,
                                          const Theme &theme, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_baseCombo(nullptr),
+    : GitDialog(parent), m_git(git), m_baseCombo(nullptr),
       m_filterEdit(nullptr), m_branchTree(nullptr), m_detailLabel(nullptr),
       m_warningLabel(nullptr), m_stateList(nullptr), m_pinButton(nullptr),
       m_deleteButton(nullptr), m_cleanupButton(nullptr),
       m_upstreamButton(nullptr), m_graphButton(nullptr),
       m_closeButton(nullptr) {
   setWindowTitle(tr("Branch hygiene"));
+  setGitDescription(
+      tr("Review merged, stale and untracked branches before cleanup."));
   setMinimumSize(900, 600);
   resize(1040, 700);
 
@@ -152,6 +154,7 @@ void BranchHygieneDialog::buildUi() {
 
   footer->addStretch();
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("hygieneCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   footer->addWidget(m_closeButton);
@@ -432,7 +435,7 @@ void BranchHygieneDialog::onShowInGraph() {
 }
 
 void BranchHygieneDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   if (m_filterEdit) {
     m_filterEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));

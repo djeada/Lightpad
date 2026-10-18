@@ -16,6 +16,7 @@ private slots:
   void initTestCase();
   void cleanupTestCase();
   void testInvalidRepository();
+  void testRejectsInvalidGitMetadata();
   void testFindRepository();
   void testGetStatus();
   void testStageFile();
@@ -448,6 +449,29 @@ void TestGitIntegration::testInitRepository() {
 
   QVERIFY(git.stageFile("test.txt"));
   QVERIFY(git.commit("Initial commit"));
+}
+
+void TestGitIntegration::testRejectsInvalidGitMetadata() {
+  const QString fake = m_tempDir.path() + "/empty-git-directory";
+  QVERIFY(QDir().mkpath(fake + "/.git"));
+  GitIntegration git;
+  QVERIFY(!git.setRepositoryPath(fake));
+  QVERIFY(!git.isValidRepository());
+
+  const QString broken = m_tempDir.path() + "/broken-gitfile";
+  QVERIFY(QDir().mkpath(broken));
+  QFile file(broken + "/.git");
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("gitdir: does-not-exist\n");
+  file.close();
+  QVERIFY(!git.setRepositoryPath(broken));
+#ifndef Q_OS_WIN
+  const QString spaced = m_tempDir.path() + "/valid with trailing space ";
+  QVERIFY(QDir().mkpath(spaced));
+  QVERIFY(runGitCommandAt(spaced, {"init"}));
+  QVERIFY(git.setRepositoryPath(spaced));
+  QCOMPARE(git.repositoryPath(), spaced);
+#endif
 }
 
 void TestGitIntegration::testRemoteOperations() {

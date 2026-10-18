@@ -2,7 +2,7 @@
 #define PROVENANCELENSDIALOG_H
 
 #include "../../git/gitprovenance.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QLabel;
@@ -11,7 +11,7 @@ class QPushButton;
 class QTreeWidget;
 class QVBoxLayout;
 
-class ProvenanceLensDialog : public StyledDialog {
+class ProvenanceLensDialog : public GitDialog {
   Q_OBJECT
 
 public:

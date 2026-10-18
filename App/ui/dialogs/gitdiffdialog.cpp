@@ -1,4 +1,5 @@
 #include "gitdiffdialog.h"
+#include "../widgets/flowlayout.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -35,7 +36,7 @@ constexpr int kDiffPreviewLimit = 80000;
 GitDiffDialog::GitDiffDialog(GitIntegration *git, const QString &targetId,
                              DiffTarget target, bool staged, const Theme &theme,
                              QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_targetId(targetId), m_target(target),
+    : GitDialog(parent), m_git(git), m_targetId(targetId), m_target(target),
       m_staged(staged), m_diffText(), m_wordDiffText(), m_summaryText(),
       m_viewMode(DiffViewMode::Unified), m_commitAuthor(), m_commitDate(),
       m_commitMessage(), m_mainSplitter(nullptr), m_fileListPanel(nullptr),
@@ -52,6 +53,7 @@ GitDiffDialog::GitDiffDialog(GitIntegration *git, const QString &targetId,
       m_theme(theme) {
   setModal(true);
   setWindowTitle(tr("Diff Viewer"));
+  setGitDescription(tr("Review file changes and compare versions."));
   if (m_target == DiffTarget::File) {
     QFileInfo info(m_targetId);
     m_summaryText =
@@ -110,7 +112,7 @@ void GitDiffDialog::setDiffText(const QString &diffText) {
         item->setData(Qt::UserRole + 1, statsText);
         m_fileList->addItem(item);
       }
-      m_fileListHeader->setText(tr("FILES (%1)").arg(m_files.size()));
+      m_fileListHeader->setText(tr("Files (%1)").arg(m_files.size()));
     }
   }
 
@@ -251,8 +253,11 @@ void GitDiffDialog::buildUi() {
 
   auto *headerWidget = new QWidget(this);
   headerWidget->setObjectName("diffHeader");
-  auto *headerLayout = new QHBoxLayout(headerWidget);
-  headerLayout->setContentsMargins(16, 12, 16, 12);
+  auto *headerBox = new QVBoxLayout(headerWidget);
+  headerBox->setContentsMargins(12, 8, 12, 8);
+  headerBox->setSpacing(8);
+  auto *headerLayout = new QHBoxLayout;
+  headerLayout->setContentsMargins(0, 0, 0, 0);
   headerLayout->setSpacing(12);
 
   m_summaryLabel = new QLabel(tr("Diff"), this);
@@ -264,6 +269,10 @@ void GitDiffDialog::buildUi() {
   headerLayout->addWidget(m_changeCounterLabel);
 
   headerLayout->addStretch(1);
+  headerBox->addLayout(headerLayout);
+  auto *tools = new QWidget(headerWidget);
+  auto *toolLayout = new FlowLayout(tools, 0, 8, 8);
+  headerBox->addWidget(tools);
 
   auto *viewGroup = new QWidget(this);
   viewGroup->setObjectName("toolbarGroup");
@@ -280,7 +289,7 @@ void GitDiffDialog::buildUi() {
   m_wrapToggle->setChecked(true);
   viewLayout->addWidget(m_wrapToggle);
 
-  headerLayout->addWidget(viewGroup);
+  toolLayout->addWidget(viewGroup);
 
   auto *navGroup = new QWidget(this);
   navGroup->setObjectName("toolbarGroup");
@@ -288,15 +297,15 @@ void GitDiffDialog::buildUi() {
   navLayout->setContentsMargins(8, 4, 8, 4);
   navLayout->setSpacing(4);
 
-  m_prevButton = new QPushButton(tr("◀ Prev"), this);
+  m_prevButton = new QPushButton(tr("Previous change"), this);
   m_prevButton->setToolTip(tr("Previous change (↑)"));
   navLayout->addWidget(m_prevButton);
 
-  m_nextButton = new QPushButton(tr("Next ▶"), this);
+  m_nextButton = new QPushButton(tr("Next change"), this);
   m_nextButton->setToolTip(tr("Next change (↓)"));
   navLayout->addWidget(m_nextButton);
 
-  headerLayout->addWidget(navGroup);
+  toolLayout->addWidget(navGroup);
 
   auto *searchGroup = new QWidget(this);
   searchGroup->setObjectName("toolbarGroup");
@@ -328,9 +337,9 @@ void GitDiffDialog::buildUi() {
   m_findNextButton->setToolTip(tr("Find next"));
   searchLayout->addWidget(m_findNextButton);
 
-  headerLayout->addWidget(searchGroup);
+  toolLayout->addWidget(searchGroup);
 
-  m_copyButton = new QPushButton(tr("Copy All"), this);
+  m_copyButton = new QPushButton(tr("Copy diff"), this);
   m_copyButton->setObjectName("copyButton");
   headerLayout->addWidget(m_copyButton);
 
@@ -353,7 +362,7 @@ void GitDiffDialog::buildUi() {
   fileListLayout->setContentsMargins(0, 0, 0, 0);
   fileListLayout->setSpacing(0);
 
-  m_fileListHeader = new QLabel(tr("FILES"), this);
+  m_fileListHeader = new QLabel(tr("Files"), this);
   m_fileListHeader->setObjectName("fileListHeader");
   fileListLayout->addWidget(m_fileListHeader);
 
@@ -427,7 +436,7 @@ void GitDiffDialog::buildUi() {
 }
 
 void GitDiffDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   const QString muted = UIStyleHelper::mutedTextColor(theme).name();
   const QString border = theme.borderColor.name();
@@ -454,7 +463,7 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
           .arg(surfaceAlt, border, muted, theme.foregroundColor.name(),
                surface);
 
-  setStyleSheet(styles);
+  setStyleSheet(UIStyleHelper::formDialogStyle(theme) + styles);
 
   const QString buttonStyle = UIStyleHelper::secondaryButtonStyle(theme);
   for (QPushButton *btn :
@@ -463,7 +472,7 @@ void GitDiffDialog::applyTheme(const Theme &theme) {
       btn->setStyleSheet(buttonStyle);
   }
 
-  stylePrimaryButton(m_copyButton);
+  styleSecondaryButton(m_copyButton);
 
   if (m_searchField) {
     m_searchField->setStyleSheet(
@@ -605,7 +614,7 @@ void GitDiffDialog::rebuildUnified() {
       int bIdx = filename.lastIndexOf(" b/");
       if (bIdx > 0)
         filename = filename.mid(bIdx + 3);
-      html += QString("<tr><td colspan=\"3\" class=\"file\">📄 %1</td></tr>")
+      html += QString("<tr><td colspan=\"3\" class=\"file\">%1</td></tr>")
                   .arg(htmlEscape(filename));
     } else if (line.prefix == '@') {
       html += QString("<tr><td colspan=\"3\" class=\"hunk\">%1</td></tr>")
@@ -697,7 +706,7 @@ void GitDiffDialog::rebuildSplit() {
       int bIdx = filename.lastIndexOf(" b/");
       if (bIdx > 0)
         filename = filename.mid(bIdx + 3);
-      html += QString("<tr><td colspan=\"7\" class=\"file\">📄 %1</td></tr>")
+      html += QString("<tr><td colspan=\"7\" class=\"file\">%1</td></tr>")
                   .arg(htmlEscape(filename));
       i++;
     } else if (line.prefix == '@') {
@@ -828,7 +837,7 @@ void GitDiffDialog::rebuildWord() {
       int bIdx = filename.lastIndexOf(" b/");
       if (bIdx > 0)
         filename = filename.mid(bIdx + 3);
-      html += QString("<tr><td colspan=\"2\" class=\"file\">📄 %1</td></tr>")
+      html += QString("<tr><td colspan=\"2\" class=\"file\">%1</td></tr>")
                   .arg(htmlEscape(filename));
     } else if (line.prefix == '@') {
       html += QString("<tr><td colspan=\"2\" class=\"hunk\">%1</td></tr>")

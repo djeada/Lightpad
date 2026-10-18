@@ -108,6 +108,8 @@ void MainWindow::setPinnedRunFilePath(const QString &) {}
 
 void MainWindow::openRunConfigurationForFile(const QString &) {}
 
+void MainWindow::showGitObjects(const QString &) {}
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(nullptr) {}
 
 MainWindow::~MainWindow() = default;
@@ -185,6 +187,7 @@ DEFINE_MAINWINDOW_SLOT(on_actionPreview_Markdown_triggered)
 DEFINE_MAINWINDOW_SLOT(previewLatexDocument)
 DEFINE_MAINWINDOW_SLOT(on_actionOpen_To_Side_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionGit_Log_triggered)
+DEFINE_MAINWINDOW_SLOT(on_actionGit_Objects_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionGit_Compare_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionGit_File_History_triggered)
 DEFINE_MAINWINDOW_SLOT(on_actionGit_Provenance_triggered)

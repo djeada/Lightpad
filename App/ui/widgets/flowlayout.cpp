@@ -55,6 +55,8 @@ QLayoutItem *FlowLayout::takeAt(int index) {
 QSize FlowLayout::minimumSize() const {
   QSize size;
   for (const QLayoutItem *item : m_items) {
+    if (item->isEmpty())
+      continue;
     size = size.expandedTo(item->minimumSize());
   }
   const QMargins margins = contentsMargins();
@@ -78,6 +80,8 @@ int FlowLayout::doLayout(const QRect &rect, bool testOnly) const {
   int lineHeight = 0;
 
   for (QLayoutItem *item : m_items) {
+    if (item->isEmpty())
+      continue;
     const QSize hint = item->sizeHint();
     int nextX = x + hint.width() + horizontalSpacing();
     if (nextX - horizontalSpacing() > effective.right() && lineHeight > 0) {

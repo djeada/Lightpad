@@ -2,7 +2,7 @@
 #define COMMANDMIRRORDIALOG_H
 
 #include "../../git/gitcommandlog.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QComboBox;
@@ -13,7 +13,7 @@ class QPushButton;
 class QTreeWidget;
 class QVBoxLayout;
 
-class CommandMirrorDialog : public StyledDialog {
+class CommandMirrorDialog : public GitDialog {
   Q_OBJECT
 
 public:

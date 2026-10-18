@@ -28,6 +28,8 @@
 #include "../uistylehelper.h"
 #include "../widgets/flowlayout.h"
 #include <QApplication>
+#include <QAction>
+#include <QToolButton>
 #include <QBoxLayout>
 #include <QClipboard>
 #include <QComboBox>
@@ -114,7 +116,7 @@ SourceControlPanel::SourceControlPanel(QWidget *parent)
       m_commitMessage(nullptr), m_commitButton(nullptr),
       m_amendCheckbox(nullptr), m_stageAllButton(nullptr),
       m_unstageAllButton(nullptr), m_refreshButton(nullptr),
-      m_pushButton(nullptr), m_pullButton(nullptr), m_fetchButton(nullptr),
+      m_pushAction(nullptr), m_pullAction(nullptr), m_fetchButton(nullptr),
       m_stashButton(nullptr), m_stagedLabel(nullptr), m_stagedTree(nullptr),
       m_changesLabel(nullptr), m_changesTree(nullptr), m_historyHeader(nullptr),
       m_historyLabel(nullptr), m_historyTree(nullptr),
@@ -124,10 +126,10 @@ SourceControlPanel::SourceControlPanel(QWidget *parent)
       m_commitHeaderLabel(nullptr), m_stagedHeader(nullptr),
       m_changesHeader(nullptr), m_noRepoDescLabel(nullptr),
       m_conflictWarningHeader(nullptr), m_conflictFilesHeaderLabel(nullptr),
-      m_mergeButton(nullptr), m_compareBranchesBtn(nullptr),
-      m_worktreeBtn(nullptr), m_discardAllBtn(nullptr),
+      m_mergeAction(nullptr), m_compareAction(nullptr),
+      m_worktreeAction(nullptr), m_discardAllBtn(nullptr),
       m_stagingCanvasBtn(nullptr), m_syncRadarBtn(nullptr), m_craftBtn(nullptr),
-      m_integrateBtn(nullptr), m_historyExpanded(false),
+      m_integrateAction(nullptr), m_historyExpanded(false),
       m_updatingBranchSelector(false), m_updatingTree(false), m_stagedCount(0),
       m_changesCount(0), m_refreshTimer(new QTimer(this)), m_theme(),
       m_themeInitialized(false) {
@@ -153,42 +155,30 @@ void SourceControlPanel::setupUI() {
   m_headerTitleLabel->setSizePolicy(QSizePolicy::Ignored,
                                     QSizePolicy::Preferred);
   m_headerTitleLabel->setMinimumWidth(0);
-  headerLayout->addWidget(m_headerTitleLabel);
+  headerLayout->addWidget(m_headerTitleLabel, 1);
 
-  headerLayout->addStretch();
-
-  QPushButton *sandboxButton = new QPushButton("⚗", m_headerWidget);
-  sandboxButton->setObjectName(QStringLiteral("whatIfSandboxButton"));
-  sandboxButton->setFixedSize(24, 24);
-  sandboxButton->setToolTip(
-      tr("What-if sandbox — try merges, rebases and resets on a copy of the "
-         "graph without touching the repository"));
-  connect(sandboxButton, &QPushButton::clicked, this,
+  auto *workspaceMenu = new QMenu(m_headerWidget);
+  auto *sandboxAction = workspaceMenu->addAction(tr("What-if sandbox…"));
+  sandboxAction->setObjectName(QStringLiteral("whatIfSandboxAction"));
+  connect(sandboxAction, &QAction::triggered, this,
           &SourceControlPanel::openWhatIfSandbox);
-  headerLayout->addWidget(sandboxButton);
-
-  QPushButton *mirrorButton = new QPushButton("⌨", m_headerWidget);
-  mirrorButton->setObjectName(QStringLiteral("commandMirrorButton"));
-  mirrorButton->setFixedSize(24, 24);
-  mirrorButton->setToolTip(
-      tr("Command Mirror — the exact Git commands behind everything here"));
-  connect(mirrorButton, &QPushButton::clicked, this,
+  auto *mirrorAction = workspaceMenu->addAction(tr("Command history…"));
+  connect(mirrorAction, &QAction::triggered, this,
           &SourceControlPanel::openCommandMirror);
-  headerLayout->addWidget(mirrorButton);
-
-  QPushButton *recoveryButton = new QPushButton("⏱", m_headerWidget);
-  recoveryButton->setObjectName(QStringLiteral("recoveryCenterButton"));
-  recoveryButton->setFixedSize(24, 24);
-  recoveryButton->setToolTip(
-      tr("Recovery Center — everywhere your refs have been, and how to get "
-         "back to any of them"));
-  connect(recoveryButton, &QPushButton::clicked, this,
+  auto *recoveryAction = workspaceMenu->addAction(tr("Recovery center…"));
+  connect(recoveryAction, &QAction::triggered, this,
           &SourceControlPanel::openRecoveryCenter);
-  headerLayout->addWidget(recoveryButton);
+  auto *workspaceTools = new QToolButton(m_headerWidget);
+  workspaceTools->setObjectName(QStringLiteral("sourceControlWorkspaceMenu"));
+  workspaceTools->setText(tr("Tools"));
+  workspaceTools->setAccessibleName(tr("Repository workspaces"));
+  workspaceTools->setToolTip(tr("Simulation, command history and recovery"));
+  workspaceTools->setMenu(workspaceMenu);
+  workspaceTools->setPopupMode(QToolButton::InstantPopup);
+  headerLayout->addWidget(workspaceTools);
 
-  m_refreshButton = new QPushButton("↻", m_headerWidget);
-  m_refreshButton->setFixedSize(24, 24);
-  m_refreshButton->setToolTip(tr("Refresh"));
+  m_refreshButton = new QPushButton(tr("Refresh"), m_headerWidget);
+  m_refreshButton->setToolTip(tr("Refresh repository status"));
   connect(m_refreshButton, &QPushButton::clicked, this,
           &SourceControlPanel::onRefreshClicked);
   headerLayout->addWidget(m_refreshButton);
@@ -235,11 +225,6 @@ void SourceControlPanel::setupNoRepoUI() {
   layout->setContentsMargins(20, 40, 20, 20);
   layout->setSpacing(16);
 
-  QLabel *iconLabel = new QLabel("🗃️", m_noRepoWidget);
-  iconLabel->setStyleSheet("font-size: 48px;");
-  iconLabel->setAlignment(Qt::AlignCenter);
-  layout->addWidget(iconLabel);
-
   m_noRepoLabel = new QLabel(tr("No Git Repository"), m_noRepoWidget);
   m_noRepoLabel->setAlignment(Qt::AlignCenter);
   layout->addWidget(m_noRepoLabel);
@@ -275,10 +260,6 @@ void SourceControlPanel::setupMergeConflictUI() {
   m_conflictWarningHeader = new QWidget(m_conflictWidget);
   QHBoxLayout *warningLayout = new QHBoxLayout(m_conflictWarningHeader);
   warningLayout->setContentsMargins(12, 8, 12, 8);
-
-  QLabel *warningIcon = new QLabel("⚠️", m_conflictWarningHeader);
-  warningIcon->setStyleSheet("font-size: 18px;");
-  warningLayout->addWidget(warningIcon);
 
   m_conflictLabel =
       new QLabel(tr("Merge Conflicts Detected"), m_conflictWarningHeader);
@@ -351,7 +332,7 @@ void SourceControlPanel::setupRepoUI() {
   branchHeaderLayout->setSpacing(6);
 
   m_branchIcon = new QLabel("⎇", m_branchSection);
-  branchHeaderLayout->addWidget(m_branchIcon);
+  m_branchIcon->hide();
 
   m_branchLabel = new QLabel(tr("Branch"), m_branchSection);
   branchHeaderLayout->addWidget(m_branchLabel);
@@ -365,21 +346,19 @@ void SourceControlPanel::setupRepoUI() {
   m_branchSelector->setMinimumWidth(0);
   m_branchSelector->setSizeAdjustPolicy(
       QComboBox::AdjustToMinimumContentsLengthWithIcon);
-  m_branchSelector->setMinimumContentsLength(8);
+  m_branchSelector->setMinimumContentsLength(4);
   m_branchSelector->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   connect(m_branchSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &SourceControlPanel::onBranchSelectorChanged);
   branchSelectorLayout->addWidget(m_branchSelector, 1);
 
-  m_newBranchButton = new QPushButton("+", m_branchSection);
-  m_newBranchButton->setFixedSize(28, 28);
+  m_newBranchButton = new QPushButton(tr("New…"), m_branchSection);
   m_newBranchButton->setToolTip(tr("Create New Branch"));
   connect(m_newBranchButton, &QPushButton::clicked, this,
           &SourceControlPanel::onCreateBranchClicked);
   branchSelectorLayout->addWidget(m_newBranchButton);
 
-  m_deleteBranchButton = new QPushButton("🗑", m_branchSection);
-  m_deleteBranchButton->setFixedSize(28, 28);
+  m_deleteBranchButton = new QPushButton(tr("Manage…"), m_branchSection);
   m_deleteBranchButton->setToolTip(
       tr("Branch hygiene — which branches are merged, stale, checked out "
          "elsewhere or holding the only copy of some commits"));
@@ -399,19 +378,21 @@ void SourceControlPanel::setupRepoUI() {
       new FlowLayout(remoteOpsRow, 0, UiMetrics::SpaceSm, UiMetrics::SpaceSm);
   remoteOpsLayout->setSizeConstraint(QLayout::SetNoConstraint);
 
-  m_pullButton = new QPushButton("⬇ Pull", m_branchSection);
-  m_pullButton->setToolTip(tr("Pull from Remote"));
-  connect(m_pullButton, &QPushButton::clicked, this,
+  auto *moreMenu = new QMenu(m_branchSection);
+  moreMenu->setToolTipsVisible(true);
+  m_pullAction = new QAction(tr("Pull…"), moreMenu);
+  m_pullAction->setToolTip(tr("Pull from Remote"));
+  connect(m_pullAction, &QAction::triggered, this,
           &SourceControlPanel::onPullClicked);
-  remoteOpsLayout->addWidget(m_pullButton);
+  moreMenu->addAction(m_pullAction);
 
-  m_pushButton = new QPushButton("⬆ Push", m_branchSection);
-  m_pushButton->setToolTip(tr("Push to Remote"));
-  connect(m_pushButton, &QPushButton::clicked, this,
+  m_pushAction = new QAction(tr("Push…"), moreMenu);
+  m_pushAction->setToolTip(tr("Push to Remote"));
+  connect(m_pushAction, &QAction::triggered, this,
           &SourceControlPanel::onPushClicked);
-  remoteOpsLayout->addWidget(m_pushButton);
+  moreMenu->addAction(m_pushAction);
 
-  m_fetchButton = new QPushButton("🔄 Fetch", m_branchSection);
+  m_fetchButton = new QPushButton(tr("Fetch"), m_branchSection);
   m_fetchButton->setToolTip(
       tr("Fetch from the remote. This updates remote-tracking refs only — it "
          "never changes your branch or your files."));
@@ -419,32 +400,32 @@ void SourceControlPanel::setupRepoUI() {
           &SourceControlPanel::onFetchClicked);
   remoteOpsLayout->addWidget(m_fetchButton);
 
-  m_stashButton = new QPushButton("📦 Stash", m_branchSection);
+  m_stashButton = new QPushButton(tr("Stashes…"), m_branchSection);
   m_stashButton->setToolTip(
       tr("Open the stash shelf — read, compare and replay stashed work"));
   connect(m_stashButton, &QPushButton::clicked, this,
           &SourceControlPanel::onStashClicked);
   remoteOpsLayout->addWidget(m_stashButton);
 
-  m_mergeButton = new QPushButton("🔀 Merge…", m_branchSection);
-  m_mergeButton->setObjectName(QStringLiteral("sourceControlMergeButton"));
-  m_mergeButton->setToolTip(
+  m_mergeAction = new QAction(tr("Merge branches…"), moreMenu);
+  m_mergeAction->setObjectName(QStringLiteral("sourceControlMergeButton"));
+  m_mergeAction->setToolTip(
       tr("Combine two branches — pick the work to bring in, see exactly what "
          "will change, and decide up front what happens if the same lines "
          "disagree"));
-  connect(m_mergeButton, &QPushButton::clicked, this,
+  connect(m_mergeAction, &QAction::triggered, this,
           &SourceControlPanel::onMergeClicked);
-  remoteOpsLayout->addWidget(m_mergeButton);
+  moreMenu->addAction(m_mergeAction);
 
-  m_integrateBtn = new QPushButton("⤵ Bring changes…", m_branchSection);
-  m_integrateBtn->setToolTip(
+  m_integrateAction = new QAction(tr("Integrate changes…"), moreMenu);
+  m_integrateAction->setToolTip(
       tr("Choose between merge, rebase, cherry-pick and apply-without-commit "
          "by what you are trying to do, with a preview of each"));
-  connect(m_integrateBtn, &QPushButton::clicked, this,
+  connect(m_integrateAction, &QAction::triggered, this,
           &SourceControlPanel::openIntegrationAdvisor);
-  remoteOpsLayout->addWidget(m_integrateBtn);
+  moreMenu->addAction(m_integrateAction);
 
-  m_syncRadarBtn = new QPushButton("📡 Sync", m_branchSection);
+  m_syncRadarBtn = new QPushButton(tr("Sync…"), m_branchSection);
   m_syncRadarBtn->setToolTip(
       tr("Open the Branch Sync Radar — what is coming in, what is going out, "
          "and what merge, rebase or fast-forward would each do"));
@@ -452,42 +433,55 @@ void SourceControlPanel::setupRepoUI() {
           &SourceControlPanel::openSyncRadar);
   remoteOpsLayout->addWidget(m_syncRadarBtn);
 
-  m_compareBranchesBtn =
-      new QPushButton("\u2194 Compare\u2026", m_branchSection);
-  m_compareBranchesBtn->setToolTip(
+  m_compareAction = new QAction(tr("Compare revisions…"), moreMenu);
+  m_compareAction->setToolTip(
       tr("Compare any two states — branches, commits, tags, stashes, the "
          "index or the working tree"));
-  connect(m_compareBranchesBtn, &QPushButton::clicked, this, [this]() {
+  connect(m_compareAction, &QAction::triggered, this, [this]() {
     if (!m_git || !m_git->isValidRepository()) {
       return;
     }
     emit compareRequested(QString(), QString(), QString());
   });
-  remoteOpsLayout->addWidget(m_compareBranchesBtn);
+  moreMenu->addAction(m_compareAction);
 
-  m_worktreeBtn = new QPushButton("📂 Worktrees", m_branchSection);
-  m_worktreeBtn->setToolTip(
+  m_worktreeAction = new QAction(tr("Worktrees…"), moreMenu);
+  m_worktreeAction->setToolTip(
       tr("Worktree map — every working directory attached to this repository, "
          "with its own branch and its own uncommitted work"));
-  connect(m_worktreeBtn, &QPushButton::clicked, this,
+  connect(m_worktreeAction, &QAction::triggered, this,
           &SourceControlPanel::openWorktreeMap);
-  remoteOpsLayout->addWidget(m_worktreeBtn);
+  moreMenu->addAction(m_worktreeAction);
 
-  m_repoToolsBtn = new QPushButton("🧰 Tools", m_branchSection);
-  m_repoToolsBtn->setToolTip(
+  m_repoToolsAction = new QAction(tr("Repository tools…"), moreMenu);
+  m_repoToolsAction->setToolTip(
       tr("Remotes, tags, submodules, untracked-file cleanup, and "
          "cherry-pick/revert and fixup controls"));
-  connect(m_repoToolsBtn, &QPushButton::clicked, this, [this]() {
+  connect(m_repoToolsAction, &QAction::triggered, this, [this]() {
     if (!m_git || !m_git->isValidRepository()) {
       return;
     }
     GitRepoToolsDialog dialog(m_git, this);
+    connect(&dialog, &GitRepoToolsDialog::inspectObjectsRequested, this,
+            [this]() { emit inspectObjectRequested(QString()); });
     connect(&dialog, &GitRepoToolsDialog::repositoryChanged, this,
             [this]() { refresh(); });
     dialog.applyTheme(m_theme);
     dialog.exec();
   });
-  remoteOpsLayout->addWidget(m_repoToolsBtn);
+  moreMenu->addAction(m_repoToolsAction);
+
+  moreMenu->addSeparator();
+  auto *inspect = moreMenu->addAction(tr("Objects and packfiles…"));
+  connect(inspect, &QAction::triggered, this,
+          [this]() { emit inspectObjectRequested(QString()); });
+  auto *more = new QToolButton(m_branchSection);
+  more->setObjectName(QStringLiteral("sourceControlActionsMenu"));
+  more->setText(tr("More"));
+  more->setAccessibleName(tr("More repository actions"));
+  more->setPopupMode(QToolButton::InstantPopup);
+  more->setMenu(moreMenu);
+  remoteOpsLayout->addWidget(more);
 
   branchLayout->addWidget(remoteOpsRow);
   mainLayout->addWidget(m_branchSection);
@@ -497,7 +491,7 @@ void SourceControlPanel::setupRepoUI() {
   commitLayout->setContentsMargins(8, 10, 8, 10);
   commitLayout->setSpacing(8);
 
-  m_commitHeaderLabel = new QLabel(tr("💬 Commit Message"), m_commitSection);
+  m_commitHeaderLabel = new QLabel(tr("Commit Message"), m_commitSection);
   commitLayout->addWidget(m_commitHeaderLabel);
 
   m_commitMessage = new QTextEdit(m_commitSection);
@@ -523,7 +517,7 @@ void SourceControlPanel::setupRepoUI() {
   QHBoxLayout *commitButtonLayout = new QHBoxLayout();
   commitButtonLayout->setSpacing(8);
 
-  m_commitButton = new QPushButton(tr("✓ Commit"), m_commitSection);
+  m_commitButton = new QPushButton(tr("Commit"), m_commitSection);
   m_commitButton->setMinimumHeight(32);
   m_commitButton->setToolTip(tr("Commit Staged Changes"));
   connect(m_commitButton, &QPushButton::clicked, this,
@@ -537,14 +531,10 @@ void SourceControlPanel::setupRepoUI() {
   QHBoxLayout *stagedHeaderLayout = new QHBoxLayout(m_stagedHeader);
   stagedHeaderLayout->setContentsMargins(8, 6, 8, 6);
 
-  QLabel *stagedIcon = new QLabel("📦", m_stagedHeader);
-  stagedIcon->setStyleSheet("font-size: 12px;");
-  stagedHeaderLayout->addWidget(stagedIcon);
-
   m_stagedLabel = new QLabel(tr("Staged Changes"), m_stagedHeader);
-  stagedHeaderLayout->addWidget(m_stagedLabel);
-
-  stagedHeaderLayout->addStretch();
+  m_stagedLabel->setMinimumWidth(0);
+  m_stagedLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  stagedHeaderLayout->addWidget(m_stagedLabel, 1);
 
   m_unstageAllButton = new QPushButton("−", m_stagedHeader);
   m_unstageAllButton->setFixedSize(22, 22);
@@ -575,7 +565,7 @@ void SourceControlPanel::setupRepoUI() {
             if (item && m_statusLabel) {
               QString path = item->data(0, Qt::UserRole).toString();
               if (!path.isEmpty()) {
-                m_statusLabel->setText(QString("📁 %1").arg(path));
+                m_statusLabel->setText(QString("%1").arg(path));
               }
             }
           });
@@ -585,14 +575,10 @@ void SourceControlPanel::setupRepoUI() {
   QHBoxLayout *changesHeaderLayout = new QHBoxLayout(m_changesHeader);
   changesHeaderLayout->setContentsMargins(8, 6, 8, 6);
 
-  QLabel *changesIcon = new QLabel("📝", m_changesHeader);
-  changesIcon->setStyleSheet("font-size: 12px;");
-  changesHeaderLayout->addWidget(changesIcon);
-
   m_changesLabel = new QLabel(tr("Changes"), m_changesHeader);
-  changesHeaderLayout->addWidget(m_changesLabel);
-
-  changesHeaderLayout->addStretch();
+  m_changesLabel->setMinimumWidth(0);
+  m_changesLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  changesHeaderLayout->addWidget(m_changesLabel, 1);
 
   m_craftBtn = new QPushButton("✂", m_changesHeader);
   m_craftBtn->setFixedSize(22, 22);
@@ -649,7 +635,7 @@ void SourceControlPanel::setupRepoUI() {
             if (item && m_statusLabel) {
               QString path = item->data(0, Qt::UserRole).toString();
               if (!path.isEmpty()) {
-                m_statusLabel->setText(QString("📁 %1").arg(path));
+                m_statusLabel->setText(QString("%1").arg(path));
               }
             }
           });
@@ -664,16 +650,12 @@ void SourceControlPanel::setupRepoUI() {
   m_historyToggleButton->setFixedSize(16, 16);
   historyHeaderLayout->addWidget(m_historyToggleButton);
 
-  QLabel *historyIcon = new QLabel("📜", m_historyHeader);
-  historyIcon->setStyleSheet("font-size: 12px;");
-  historyHeaderLayout->addWidget(historyIcon);
-
   m_historyLabel = new QLabel(tr("Recent Commits"), m_historyHeader);
-  historyHeaderLayout->addWidget(m_historyLabel);
+  m_historyLabel->setMinimumWidth(0);
+  m_historyLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  historyHeaderLayout->addWidget(m_historyLabel, 1);
 
-  historyHeaderLayout->addStretch();
-
-  m_historyGraphBtn = new QPushButton(tr("🌱 Graph"), m_historyHeader);
+  m_historyGraphBtn = new QPushButton(tr("Graph…"), m_historyHeader);
   m_historyGraphBtn->setToolTip(tr("Open the commit graph view"));
   m_historyGraphBtn->setVisible(false);
   historyHeaderLayout->addWidget(m_historyGraphBtn);
@@ -682,6 +664,8 @@ void SourceControlPanel::setupRepoUI() {
       return;
     }
     GitLogDialog logDialog(m_git, m_theme, this);
+    connect(&logDialog, &GitLogDialog::inspectObjectRequested, this,
+            &SourceControlPanel::inspectObjectRequested);
     connect(
         &logDialog, &GitLogDialog::viewCommitDiff, [this](const QString &hash) {
           QString diff = m_git->getCommitDiff(hash);
@@ -709,7 +693,7 @@ void SourceControlPanel::setupRepoUI() {
     refresh();
   });
 
-  m_historyRebaseBtn = new QPushButton(tr("🔀 Rebase"), m_historyHeader);
+  m_historyRebaseBtn = new QPushButton(tr("Rebase…"), m_historyHeader);
   m_historyRebaseBtn->setToolTip(
       tr("Open the rebase timeline — reorder, squash, reword or drop commits "
          "with the resulting history shown as you edit"));
@@ -718,66 +702,10 @@ void SourceControlPanel::setupRepoUI() {
   connect(m_historyRebaseBtn, &QPushButton::clicked, this,
           &SourceControlPanel::openRebaseTimeline);
 
-  m_historyGraphBtn = new QPushButton(tr("🌱 Graph"), m_historyHeader);
-  m_historyGraphBtn->setToolTip(tr("Open the commit graph view"));
-  m_historyGraphBtn->setVisible(false);
-  historyHeaderLayout->addWidget(m_historyGraphBtn);
-  connect(m_historyGraphBtn, &QPushButton::clicked, [this]() {
-    if (!m_git || !m_git->isValidRepository()) {
-      return;
-    }
-    GitLogDialog logDialog(m_git, m_theme, this);
-    connect(
-        &logDialog, &GitLogDialog::viewCommitDiff, [this](const QString &hash) {
-          QString diff = m_git->getCommitDiff(hash);
-          GitCommitInfo info = m_git->getCommitDetails(hash);
-          GitDiffDialog *diffDialog =
-              new GitDiffDialog(m_git, hash, GitDiffDialog::DiffTarget::Commit,
-                                false, m_theme, this);
-          diffDialog->setDiffText(diff);
-          diffDialog->setCommitInfo(info.author, info.date, info.subject);
-          diffDialog->setAttribute(Qt::WA_DeleteOnClose);
-          diffDialog->show();
-        });
-    connect(&logDialog, &GitLogDialog::compareRequested, this,
-            [this](const QString &from, const QString &to) {
-              emit compareRequested(from, to, QString());
-            });
-    connect(&logDialog, &GitLogDialog::repositoryChanged, this,
-            &SourceControlPanel::scheduleRefresh);
-    connect(&logDialog, &GitLogDialog::workingTreeRequested, this,
-            [this]() { openStagingCanvas(QString()); });
-    connect(
-        &logDialog, &GitLogDialog::undoCommitRequested, this,
-        [this](const QString &hash) { openUndoWizard(hash, QStringList()); });
-    logDialog.exec();
-    refresh();
-  });
-
-  m_historyRebaseBtn = new QPushButton(tr("🔀 Rebase"), m_historyHeader);
-  m_historyRebaseBtn->setToolTip(tr("Open interactive rebase dialog"));
-  m_historyRebaseBtn->setVisible(false);
-  historyHeaderLayout->addWidget(m_historyRebaseBtn);
-  connect(m_historyRebaseBtn, &QPushButton::clicked, [this]() {
-    if (!m_git || !m_git->isValidRepository())
-      return;
-    if (confirmDestructive(
-            tr("Interactive Rebase"),
-            tr("Start interactive rebase?\n\nThis will allow you to reorder, "
-               "squash, edit, or drop commits. This is a potentially "
-               "destructive operation that rewrites history."))) {
-      GitRebaseDialog rebaseDialog(m_git, m_theme, this);
-      rebaseDialog.loadCommits("HEAD~10");
-      if (rebaseDialog.exec() == QDialog::Accepted) {
-        refresh();
-      }
-    }
-  });
-
   mainLayout->addWidget(m_historyHeader);
 
   m_historySearchEdit = new QLineEdit(m_repoWidget);
-  m_historySearchEdit->setPlaceholderText(tr("🔍 Search commits..."));
+  m_historySearchEdit->setPlaceholderText(tr("Search commits..."));
   m_historySearchEdit->setClearButtonEnabled(true);
   m_historySearchEdit->setVisible(false);
   mainLayout->addWidget(m_historySearchEdit);
@@ -932,16 +860,16 @@ void SourceControlPanel::updateUIState() {
     m_stackedWidget->setCurrentWidget(m_noRepoWidget);
     if (m_statusLabel)
       m_statusLabel->setText(tr("No Git repository"));
-    if (m_pullButton)
-      m_pullButton->setEnabled(false);
-    if (m_pushButton)
-      m_pushButton->setEnabled(false);
+    if (m_pullAction)
+      m_pullAction->setEnabled(false);
+    if (m_pushAction)
+      m_pushAction->setEnabled(false);
     if (m_fetchButton)
       m_fetchButton->setEnabled(false);
     if (m_stashButton)
       m_stashButton->setEnabled(false);
-    if (m_mergeButton)
-      m_mergeButton->setEnabled(false);
+    if (m_mergeAction)
+      m_mergeAction->setEnabled(false);
     if (m_stageAllButton)
       m_stageAllButton->setEnabled(false);
     if (m_unstageAllButton)
@@ -968,18 +896,17 @@ void SourceControlPanel::updateUIState() {
       }
     }
     if (m_statusLabel)
-      m_statusLabel->setText(
-          tr("⚠️ Merge conflicts - resolve before continuing"));
-    if (m_pullButton)
-      m_pullButton->setEnabled(false);
-    if (m_pushButton)
-      m_pushButton->setEnabled(false);
+      m_statusLabel->setText(tr("Merge conflicts - resolve before continuing"));
+    if (m_pullAction)
+      m_pullAction->setEnabled(false);
+    if (m_pushAction)
+      m_pushAction->setEnabled(false);
     if (m_fetchButton)
       m_fetchButton->setEnabled(false);
     if (m_stashButton)
       m_stashButton->setEnabled(false);
-    if (m_mergeButton)
-      m_mergeButton->setEnabled(false);
+    if (m_mergeAction)
+      m_mergeAction->setEnabled(false);
     if (m_stageAllButton)
       m_stageAllButton->setEnabled(false);
     if (m_unstageAllButton)
@@ -990,16 +917,16 @@ void SourceControlPanel::updateUIState() {
 
     m_stackedWidget->setCurrentWidget(
         findChild<QScrollArea *>(QStringLiteral("sourceControlScroll")));
-    if (m_pullButton)
-      m_pullButton->setEnabled(true);
-    if (m_pushButton)
-      m_pushButton->setEnabled(true);
+    if (m_pullAction)
+      m_pullAction->setEnabled(true);
+    if (m_pushAction)
+      m_pushAction->setEnabled(true);
     if (m_fetchButton)
       m_fetchButton->setEnabled(true);
     if (m_stashButton)
       m_stashButton->setEnabled(true);
-    if (m_mergeButton)
-      m_mergeButton->setEnabled(true);
+    if (m_mergeAction)
+      m_mergeAction->setEnabled(true);
     if (m_stageAllButton)
       m_stageAllButton->setEnabled(true);
     if (m_unstageAllButton)
@@ -1429,7 +1356,7 @@ void SourceControlPanel::onItemContextMenu(const QPoint &pos) {
             QString value = relativePath;
             if (!value.isEmpty()) {
               QApplication::clipboard()->setText(value);
-              QToolTip::showText(QCursor::pos(), tr("✓ Copied: %1").arg(value),
+              QToolTip::showText(QCursor::pos(), tr("Copied: %1").arg(value),
                                  this, QRect(), 2000);
             }
           });
@@ -1476,42 +1403,40 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
   QMenu menu(this);
   menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
 
-  QAction *viewDiffAction = menu.addAction(tr("👁 View Diff"));
-  QAction *copyHashAction = menu.addAction(tr("📋 Copy Commit Hash"));
+  QAction *viewDiffAction = menu.addAction(tr("View Diff"));
+  QAction *copyHashAction = menu.addAction(tr("Copy Commit Hash"));
   menu.addSeparator();
   QAction *checkoutAction = menu.addAction(tr("⎋ Checkout Commit"));
   QAction *createBranchAction =
-      menu.addAction(tr("🌿 Create Branch from Here..."));
-  QAction *cherryPickAction = menu.addAction(tr("🍒 Cherry-Pick Commit"));
-  QAction *moveToBranchAction =
-      menu.addAction(tr("📤 Move Commit to Branch..."));
+      menu.addAction(tr("Create Branch from Here..."));
+  QAction *cherryPickAction = menu.addAction(tr("Cherry-Pick Commit"));
+  QAction *moveToBranchAction = menu.addAction(tr("Move Commit to Branch..."));
   menu.addSeparator();
-  QAction *rewordAction = menu.addAction(tr("✏️ Edit Commit Message..."));
+  QAction *rewordAction = menu.addAction(tr("Edit Commit Message..."));
   QAction *revertAction = menu.addAction(tr("↩ Revert Commit"));
-  QAction *dropAction = menu.addAction(tr("🗑 Drop Commit"));
+  QAction *dropAction = menu.addAction(tr("Drop Commit"));
 
   menu.addSeparator();
 
   QAction *squashAction = nullptr;
   if (multiSelect) {
     squashAction = menu.addAction(
-        tr("📦 Squash %1 Selected Commits...").arg(selectedItems.size()));
+        tr("Squash %1 Selected Commits...").arg(selectedItems.size()));
   }
 
-  QMenu *resetMenu = menu.addMenu(tr("⚡ Reset to Commit"));
+  QMenu *resetMenu = menu.addMenu(tr("Reset to Commit"));
   resetMenu->setStyleSheet(menu.styleSheet());
   QAction *resetSoftAction =
       resetMenu->addAction(tr("Soft (keep changes staged)"));
   QAction *resetMixedAction =
       resetMenu->addAction(tr("Mixed (keep changes unstaged)"));
   QAction *resetHardAction =
-      resetMenu->addAction(tr("⚠️ Hard (discard all changes)"));
+      resetMenu->addAction(tr("Hard (discard all changes)"));
 
   menu.addSeparator();
-  QAction *rebaseAction =
-      menu.addAction(tr("🔀 Interactive Rebase from Here..."));
+  QAction *rebaseAction = menu.addAction(tr("Interactive Rebase from Here..."));
   QAction *fixupAction =
-      menu.addAction(tr("🩹 Create Fixup for This Commit (staged changes)"));
+      menu.addAction(tr("Create Fixup for This Commit (staged changes)"));
 
   QAction *selected = menu.exec(m_historyTree->mapToGlobal(pos));
   if (!selected)
@@ -1527,12 +1452,12 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
       }
       QApplication::clipboard()->setText(hashes.join("\n"));
       QToolTip::showText(QCursor::pos(),
-                         tr("✓ Copied %1 commit hashes").arg(hashes.size()),
-                         this, QRect(), 2000);
+                         tr("Copied %1 commit hashes").arg(hashes.size()), this,
+                         QRect(), 2000);
     } else {
       QApplication::clipboard()->setText(commitHash);
-      QToolTip::showText(QCursor::pos(), tr("✓ Copied: %1").arg(shortHash),
-                         this, QRect(), 2000);
+      QToolTip::showText(QCursor::pos(), tr("Copied: %1").arg(shortHash), this,
+                         QRect(), 2000);
     }
   } else if (selected == checkoutAction) {
     if (confirmDestructive(
@@ -1622,7 +1547,7 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
   } else if (selected == dropAction) {
     if (confirmDestructive(
             tr("Drop Commit"),
-            tr("⚠️ Drop commit %1?\n\n"
+            tr("Drop commit %1?\n\n"
                "This will permanently remove this commit from history. "
                "This action rewrites history and cannot be easily undone.")
                 .arg(shortHash))) {
@@ -1648,7 +1573,7 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
     if (ok && !newMsg.trimmed().isEmpty()) {
       if (confirmDestructive(
               tr("Squash Commits"),
-              tr("⚠️ Squash %1 commits into one?\n\n"
+              tr("Squash %1 commits into one?\n\n"
                  "This will combine the selected commits into a single "
                  "commit. This rewrites history and cannot be easily undone.")
                   .arg(hashes.size()))) {
@@ -1679,7 +1604,7 @@ void SourceControlPanel::onHistoryContextMenu(const QPoint &pos) {
   } else if (selected == resetHardAction) {
     if (confirmDestructive(
             tr("Reset (Hard)"),
-            tr("⚠️ Hard reset to commit %1?\n\n"
+            tr("Hard reset to commit %1?\n\n"
                "WARNING: This will PERMANENTLY DISCARD all changes after "
                "this commit. This action cannot be undone.\n\n"
                "Are you sure you want to proceed?")
@@ -1755,11 +1680,11 @@ void SourceControlPanel::updateCounts() {
   }
   if (m_statusLabel) {
     if (m_stagedCount == 0 && m_changesCount == 0) {
-      m_statusLabel->setText(tr("✓ Working tree clean - No changes to commit"));
+      m_statusLabel->setText(tr("Working tree clean - No changes to commit"));
       m_statusLabel->setToolTip(
           tr("All changes have been committed or there are no modifications."));
     } else {
-      QString statusText = QString(tr("📊 %1 staged, %2 changed"))
+      QString statusText = QString(tr("%1 staged, %2 changed"))
                                .arg(m_stagedCount)
                                .arg(m_changesCount);
       m_statusLabel->setText(statusText);
@@ -1779,14 +1704,14 @@ void SourceControlPanel::updateCounts() {
   if (m_stagedTree) {
     m_stagedTree->setToolTip(
         m_stagedCount == 0
-            ? tr("💡 No staged changes. Stage files to prepare them for "
+            ? tr("No staged changes. Stage files to prepare them for "
                  "commit.")
             : tr("Double-click to open file, right-click for options"));
   }
   if (m_changesTree) {
     m_changesTree->setToolTip(
         m_changesCount == 0
-            ? tr("✓ Working tree clean - No unstaged changes")
+            ? tr("Working tree clean - No unstaged changes")
             : tr("Double-click to open file, right-click for options"));
   }
 }
@@ -1809,7 +1734,7 @@ void SourceControlPanel::updateHeaderTitle() {
     return;
   }
 
-  m_headerTitleLabel->setText(QDir(repoRoot).absolutePath());
+  m_headerTitleLabel->setText(tr("Source Control"));
   m_headerTitleLabel->setToolTip(repoRoot);
 }
 
@@ -2695,9 +2620,7 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
                  UIStyleHelper::mutedTextColor(theme).name()));
   }
 
-  for (QPushButton *button :
-       {m_pullButton, m_pushButton, m_fetchButton, m_stashButton, m_mergeButton,
-        m_compareBranchesBtn, m_worktreeBtn, m_syncRadarBtn, m_integrateBtn}) {
+  for (QPushButton *button : {m_fetchButton, m_stashButton, m_syncRadarBtn}) {
     if (button) {
       button->setStyleSheet(
           UIStyleHelper::secondaryButtonStyle(theme) +
@@ -2797,6 +2720,10 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_historyTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   }
 
+  m_commitButton->setProperty("uiRole", "primary");
+  m_initRepoButton->setProperty("uiRole", "primary");
+  m_abortMergeButton->setProperty("uiRole", "danger");
+  GitUi::polish(this, theme);
   recolorItems();
 }
 

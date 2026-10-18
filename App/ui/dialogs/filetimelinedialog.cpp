@@ -43,7 +43,7 @@ QColor diffLineColor(const Theme &theme, const QString &line) {
 FileTimelineDialog::FileTimelineDialog(GitIntegration *git,
                                        const QString &filePath,
                                        const Theme &theme, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_filePath(filePath),
+    : GitDialog(parent), m_git(git), m_filePath(filePath),
       m_hasWorkingTreePoint(false), m_exhausted(false), m_lineRangeStart(-1),
       m_lineRangeEnd(-1), m_headerLabel(nullptr), m_followRenamesCheck(nullptr),
       m_allBranchesCheck(nullptr), m_firstParentCheck(nullptr),
@@ -54,6 +54,8 @@ FileTimelineDialog::FileTimelineDialog(GitIntegration *git,
       m_openCommitButton(nullptr), m_showInGraphButton(nullptr),
       m_refreshButton(nullptr), m_closeButton(nullptr) {
   setWindowTitle(tr("File Evolution Timeline"));
+  setGitDescription(
+      tr("Follow a file through history and inspect earlier versions."));
   setMinimumSize(900, 580);
   resize(1100, 700);
 
@@ -266,6 +268,7 @@ void FileTimelineDialog::buildActions(QVBoxLayout *layout) {
 
   actions->addStretch();
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("timelineCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   actions->addWidget(m_closeButton);
@@ -522,7 +525,7 @@ void FileTimelineDialog::onShowInGraph() {
 }
 
 void FileTimelineDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   if (m_diffView) {
     for (int i = 0; i < m_diffView->count(); ++i) {

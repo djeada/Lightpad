@@ -2,7 +2,7 @@
 #define COMPAREANYTHINGDIALOG_H
 
 #include "../../git/gitcomparison.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class QComboBox;
 class QLabel;
@@ -13,7 +13,7 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QVBoxLayout;
 
-class CompareAnythingDialog : public StyledDialog {
+class CompareAnythingDialog : public GitDialog {
   Q_OBJECT
 
 public:

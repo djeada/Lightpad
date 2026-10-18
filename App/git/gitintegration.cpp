@@ -207,7 +207,7 @@ QList<GitCommitInfo> parseCommitLogRecords(const QString &output) {
 
 QStringList commitLogPageArgs(int skip, int limit) {
   const QString format = "%H%x00%h%x00%an%x00%ae%x00%aI%x00%ar%x00%s%x00%P";
-  return {"log", "--date-order", QString("--skip=%1").arg(skip),
+  return {"log", "--topo-order", QString("--skip=%1").arg(skip),
           QString("--max-count=%1").arg(limit),
           QString("--pretty=format:%1").arg(format)};
 }
@@ -219,7 +219,7 @@ QStringList logPageArgs(const GitLogOptions &options, int skip, int limit) {
     args << "--first-parent";
   }
   if (options.allRefs && options.revisionRange.isEmpty()) {
-    args << "--branches" << "--tags" << "--remotes";
+    args << "--all";
   }
   if (!options.revisionRange.isEmpty()) {
     args << options.revisionRange;
@@ -340,22 +340,32 @@ QString GitIntegration::currentBranch() const { return m_currentBranch; }
 
 QString GitIntegration::findRepositoryRoot(const QString &path) const {
   QDir dir(path);
-
-  QFileInfo info(path);
+  const QFileInfo info(path);
   if (info.isFile()) {
     dir = info.dir();
   }
+  if (!dir.exists())
+    return QString();
 
-  while (true) {
-    if (dir.exists(".git")) {
-      return dir.absolutePath();
-    }
-
-    if (!dir.cdUp()) {
-      break;
-    }
+  // Let Git validate gitfiles, linked worktrees and repository boundaries.
+  // The existence of a directory named .git alone does not make a repository.
+  const auto decodedPath = [](QString output) {
+    if (output.endsWith('\n'))
+      output.chop(1);
+    return QDir::cleanPath(output);
+  };
+  const auto root =
+      runGitProcess(dir.absolutePath(), {"rev-parse", "--show-toplevel"});
+  if (root.succeeded())
+    return decodedPath(root.output);
+  const auto bare =
+      runGitProcess(dir.absolutePath(), {"rev-parse", "--is-bare-repository"});
+  if (bare.succeeded() && bare.output.trimmed() == "true") {
+    const auto gitDir =
+        runGitProcess(dir.absolutePath(), {"rev-parse", "--absolute-git-dir"});
+    if (gitDir.succeeded())
+      return decodedPath(gitDir.output);
   }
-
   return QString();
 }
 

@@ -2,7 +2,7 @@
 #define MERGESTARTDIALOG_H
 
 #include "../../git/gitmergeplan.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QComboBox;
@@ -13,7 +13,7 @@ class QPushButton;
 class QRadioButton;
 class QVBoxLayout;
 
-class MergeStartDialog : public StyledDialog {
+class MergeStartDialog : public GitDialog {
   Q_OBJECT
 
 public:

@@ -20,11 +20,13 @@ constexpr int RECORD_INDEX_ROLE = Qt::UserRole + 1;
 
 CommandMirrorDialog::CommandMirrorDialog(GitIntegration *git,
                                          const Theme &theme, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_modeCombo(nullptr),
+    : GitDialog(parent), m_git(git), m_modeCombo(nullptr),
       m_searchEdit(nullptr), m_commandTree(nullptr),
       m_explanationLabel(nullptr), m_riskLabel(nullptr), m_outputView(nullptr),
       m_copyButton(nullptr), m_clearButton(nullptr), m_closeButton(nullptr) {
   setWindowTitle(tr("Command Mirror"));
+  setGitDescription(
+      tr("Inspect the Git commands and results behind your actions."));
   setMinimumSize(860, 560);
   resize(1000, 660);
 
@@ -128,6 +130,7 @@ void CommandMirrorDialog::buildUi() {
 
   footer->addStretch();
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("mirrorCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   footer->addWidget(m_closeButton);
@@ -247,7 +250,7 @@ void CommandMirrorDialog::onClear() {
 }
 
 void CommandMirrorDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   if (m_searchEdit) {
     m_searchEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));

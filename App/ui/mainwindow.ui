@@ -356,6 +356,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
       <string>Git</string>
      </property>
      <addaction name="actionGit_Log"/>
+     <addaction name="actionGit_Objects"/>
      <addaction name="actionGit_Compare"/>
      <addaction name="actionGit_File_History"/>
      <addaction name="actionGit_Provenance"/>
@@ -891,7 +892,15 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   </action>
   <action name="actionGit_Log">
    <property name="text">
-    <string>Git Log</string>
+    <string>Commit Graph (DAG)</string>
+   </property>
+  </action>
+  <action name="actionGit_Objects">
+   <property name="text">
+    <string>Objects &amp; Packfiles...</string>
+   </property>
+   <property name="toolTip">
+    <string>Browse packfiles, search object hashes across storage, and explore object relationships</string>
    </property>
   </action>
   <action name="actionGit_Compare">

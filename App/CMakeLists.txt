@@ -101,6 +101,7 @@ set(project_headers
     dap/debugsession.h
     dap/debugsettings.h
     git/gitintegration.h
+    git/gitobjectdatabase.h
     git/gitrepositorystate.h
     git/gitdiffmodel.h
     git/gitcomparison.h
@@ -150,6 +151,7 @@ set(project_headers
     ui/dialogs/mergestartdialog.h
     ui/dialogs/gitremotedialog.h
     ui/dialogs/gitrepotoolsdialog.h
+    ui/dialogs/gitobjectexplorerdialog.h
     ui/dialogs/gitstashdialog.h
     ui/dialogs/gitlogdialog.h
     ui/dialogs/gitfilehistorydialog.h
@@ -371,6 +373,7 @@ set(project_sources
     dap/debugsession.cpp
     dap/debugsettings.cpp
     git/gitintegration.cpp
+    git/gitobjectdatabase.cpp
     git/gitrepositorystate.cpp
     git/gitdiffmodel.cpp
     git/gitcomparison.cpp
@@ -418,6 +421,7 @@ set(project_sources
     ui/dialogs/mergestartdialog.cpp
     ui/dialogs/gitremotedialog.cpp
     ui/dialogs/gitrepotoolsdialog.cpp
+    ui/dialogs/gitobjectexplorerdialog.cpp
     ui/dialogs/gitstashdialog.cpp
     ui/dialogs/gitlogdialog.cpp
     ui/dialogs/gitfilehistorydialog.cpp
@@ -601,6 +605,15 @@ set(project_resources
     format_templates/format_templates.qrc
     test_templates/test_templates.qrc)
 
+add_library(lightpad_git_ui STATIC
+    ui/gitui.cpp
+    ui/gitui.h
+    ui/dialogs/gitdialog.cpp
+    ui/dialogs/gitdialog.h
+    ui/widgets/flowlayout.cpp
+)
+target_link_libraries(lightpad_git_ui PUBLIC Qt6::Widgets)
+
 add_executable(Lightpad 
     ${project_headers} 
     ${project_sources}
@@ -612,6 +625,7 @@ endif()
 
 target_link_libraries(Lightpad
     PRIVATE
+    lightpad_git_ui
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets

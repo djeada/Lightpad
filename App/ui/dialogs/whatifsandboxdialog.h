@@ -2,7 +2,7 @@
 #define WHATIFSANDBOXDIALOG_H
 
 #include "../../git/gitsandbox.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QComboBox;
@@ -11,7 +11,7 @@ class QListWidget;
 class QPushButton;
 class QVBoxLayout;
 
-class WhatIfSandboxDialog : public StyledDialog {
+class WhatIfSandboxDialog : public GitDialog {
   Q_OBJECT
 
 public:

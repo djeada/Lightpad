@@ -21,7 +21,7 @@ ProvenanceLensDialog::ProvenanceLensDialog(GitIntegration *git,
                                            const QString &filePath,
                                            int startLine, int endLine,
                                            const Theme &theme, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_headerLabel(nullptr),
+    : GitDialog(parent), m_git(git), m_headerLabel(nullptr),
       m_latestLabel(nullptr), m_churnLabel(nullptr), m_caveatLabel(nullptr),
       m_stepsTree(nullptr), m_previousView(nullptr), m_currentView(nullptr),
       m_openCommitButton(nullptr), m_parentDiffButton(nullptr),
@@ -30,6 +30,8 @@ ProvenanceLensDialog::ProvenanceLensDialog(GitIntegration *git,
   m_provenance = buildLineProvenance(git, filePath, startLine, endLine);
 
   setWindowTitle(tr("Where this code came from"));
+  setGitDescription(
+      tr("Trace the commits and authors behind the selected code."));
   setMinimumSize(820, 560);
   resize(960, 660);
 
@@ -187,6 +189,7 @@ void ProvenanceLensDialog::buildUi() {
 
   footer->addStretch();
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("provenanceCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   footer->addWidget(m_closeButton);
@@ -242,7 +245,7 @@ void ProvenanceLensDialog::onShowInGraph() {
 }
 
 void ProvenanceLensDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   styleTitleLabel(m_headerLabel);
   styleSubduedLabel(m_churnLabel);

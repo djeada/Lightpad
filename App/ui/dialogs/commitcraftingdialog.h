@@ -3,7 +3,7 @@
 
 #include "../../git/commitplan.h"
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <QColor>
 #include <QMap>
 
@@ -16,7 +16,7 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QVBoxLayout;
 
-class CommitCraftingDialog : public StyledDialog {
+class CommitCraftingDialog : public GitDialog {
   Q_OBJECT
 
 public:

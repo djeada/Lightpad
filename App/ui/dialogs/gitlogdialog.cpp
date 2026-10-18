@@ -19,6 +19,8 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QPushButton>
+#include <QShortcut>
+#include <QSignalBlocker>
 #include <QSplitter>
 #include <QTabWidget>
 #include <QTextEdit>
@@ -29,7 +31,7 @@
 
 GitLogDialog::GitLogDialog(GitIntegration *git, const Theme &theme,
                            QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_theme(theme), m_compareLabel(nullptr),
+    : GitDialog(parent), m_git(git), m_theme(theme), m_compareLabel(nullptr),
       m_firstParentCheck(nullptr), m_allBranchesCheck(nullptr),
       m_zoomInButton(nullptr), m_zoomOutButton(nullptr),
       m_zoomResetButton(nullptr), m_detailFiles(nullptr),
@@ -38,6 +40,7 @@ GitLogDialog::GitLogDialog(GitIntegration *git, const Theme &theme,
       m_detailRevertButton(nullptr), m_detailResetButton(nullptr),
       m_detailCompareHeadButton(nullptr) {
   setWindowTitle(tr("Commit Graph"));
+  setGitDescription(tr("Explore commit history, branches and merges."));
   setMinimumSize(860, 520);
   resize(1080, 660);
   buildUi();
@@ -48,14 +51,23 @@ GitLogDialog::GitLogDialog(GitIntegration *git, const Theme &theme,
 
 void GitLogDialog::setFilePath(const QString &filePath) {
   m_filePath = filePath;
+  m_revisionRange.clear();
   loadCommits();
 }
 
 void GitLogDialog::refresh() { loadCommits(); }
 
 void GitLogDialog::selectCommit(const QString &hash) {
-  if (hash.isEmpty()) {
+  if (hash.isEmpty() || !m_git || !m_git->isValidRepository()) {
     return;
+  }
+  if (!m_graphWidget->containsCommit(hash)) {
+    const GitCommitInfo commit = m_git->getCommitDetails(hash);
+    if (commit.hash.isEmpty())
+      return;
+    m_revisionRange = commit.hash;
+    m_filePath.clear();
+    loadCommits();
   }
   m_graphWidget->selectCommit(hash, true);
   showCommitDetails(hash);
@@ -97,9 +109,11 @@ void GitLogDialog::buildUi() {
   connect(m_graphWidget, &GitGraphWidget::commitDoubleClicked, this,
           [this](const QString &hash) { emit viewCommitDiff(hash); });
   connect(m_graphWidget, &GitGraphWidget::commitsAppended, this,
-          [this](int totalLoaded) {
-            m_statusLabel->setText(tr("%1 commits loaded").arg(totalLoaded));
-          });
+          [this](int) { syncCommitList(); });
+  connect(m_graphWidget, &GitGraphWidget::historyExhausted, this, [this]() {
+    if (m_loadMoreButton)
+      m_loadMoreButton->setEnabled(false);
+  });
   connect(m_graphWidget, &GitGraphWidget::contextMenuRequested, this,
           &GitLogDialog::onGraphContextMenu);
   connect(m_graphWidget, &GitGraphWidget::workingTreeSelected, this,
@@ -151,6 +165,7 @@ void GitLogDialog::buildUi() {
   listLayout->setContentsMargins(0, 0, 0, 0);
 
   m_commitTree = new QTreeWidget(listTab);
+  m_commitTree->setObjectName("graphCommitList");
   m_commitTree->setHeaderLabels(
       {tr("Hash"), tr("Subject"), tr("Author"), tr("Date")});
   m_commitTree->setRootIsDecorated(false);
@@ -183,15 +198,37 @@ void GitLogDialog::buildUi() {
 
   mainLayout->addWidget(m_tabWidget);
 
+  auto *status = new QHBoxLayout;
   m_statusLabel = new QLabel(this);
-  mainLayout->addWidget(m_statusLabel);
+  m_statusLabel->setWordWrap(true);
+  status->addWidget(m_statusLabel, 1);
+  m_loadMoreButton = new QPushButton(tr("Load More History"), this);
+  m_loadMoreButton->setObjectName("graphLoadMoreButton");
+  connect(m_loadMoreButton, &QPushButton::clicked, this, [this]() {
+    m_loadMoreButton->setEnabled(false);
+    m_graphWidget->loadMore();
+  });
+  status->addWidget(m_loadMoreButton);
+  auto *objects = new QPushButton(tr("Objects & Packfiles"), this);
+  objects->setObjectName("graphObjectsButton");
+  objects->setToolTip(tr(
+      "Inspect the selected commit object or search hashes across packfiles"));
+  connect(objects, &QPushButton::clicked, this,
+          [this]() { emit inspectObjectRequested(m_selectedHash); });
+  status->addWidget(objects);
+  mainLayout->addLayout(status);
+  auto *find = new QShortcut(QKeySequence::Find, this);
+  connect(find, &QShortcut::activated, this, [this]() {
+    m_searchField->setFocus();
+    m_searchField->selectAll();
+  });
 }
 
 void GitLogDialog::buildControlBar(QVBoxLayout *layout) {
   QHBoxLayout *bar = new QHBoxLayout();
   bar->setSpacing(UiMetrics::ToolbarSpacing);
 
-  m_allBranchesCheck = new QCheckBox(tr("All branches"), this);
+  m_allBranchesCheck = new QCheckBox(tr("All refs"), this);
   m_allBranchesCheck->setObjectName(QStringLiteral("graphAllBranchesCheck"));
   m_allBranchesCheck->setChecked(true);
   m_allBranchesCheck->setToolTip(
@@ -330,6 +367,7 @@ void GitLogDialog::buildDetailActions(QWidget *parent, QVBoxLayout *layout) {
 GitLogOptions GitLogDialog::currentLogOptions() const {
   GitLogOptions options;
   options.pathFilter = m_filePath;
+  options.revisionRange = m_revisionRange;
   options.allRefs = m_allBranchesCheck && m_allBranchesCheck->isChecked();
   options.firstParentOnly =
       m_firstParentCheck && m_firstParentCheck->isChecked();
@@ -340,6 +378,7 @@ void GitLogDialog::onScopeChanged() {
   if (m_updatingScope) {
     return;
   }
+  m_revisionRange.clear();
   loadCommits();
 }
 
@@ -470,7 +509,7 @@ void GitLogDialog::resetTo(const QString &hash) {
 }
 
 void GitLogDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
   m_theme = theme;
 
   if (m_graphWidget) {
@@ -520,6 +559,9 @@ void GitLogDialog::applyTheme(const Theme &theme) {
 }
 
 void GitLogDialog::loadCommits() {
+  const QString previousSelection = m_selectedHash;
+  m_selectedHash.clear();
+  updateDetailActions(false);
   if (m_commitTree) {
     m_commitTree->clear();
   }
@@ -529,36 +571,43 @@ void GitLogDialog::loadCommits() {
     return;
   }
 
-  QList<GitCommitInfo> commits;
-  if (!m_filePath.isEmpty()) {
-    commits = m_git->getCommitLog(100, m_filePath);
-  } else {
-    commits = m_git->getCommitLog(100);
-  }
-
-  for (const GitCommitInfo &commit : commits) {
-    auto *item = new QTreeWidgetItem(m_commitTree);
-    item->setText(0, commit.shortHash);
-    item->setText(1, commit.subject);
-    item->setText(2, commit.author);
-    item->setText(3, commit.relativeDate);
-    item->setData(0, Qt::UserRole, commit.hash);
-    item->setToolTip(1, commit.subject);
-  }
-
   m_graphWidget->setLogOptions(currentLogOptions());
+  const auto commits = m_graphWidget->loadedCommits();
+  syncCommitList();
   m_graphWidget->setWorkingTreeState(m_git->repositoryState());
   onCompareAnchorChanged(m_graphWidget->compareAnchor());
 
   if (m_graphWidget->hasWorkingTreeNode()) {
+    m_selectedHash.clear();
     showWorkingTreeDetails();
     updateDetailActions(false);
   } else if (!commits.isEmpty()) {
-    m_graphWidget->selectCommit(commits.first().hash);
-    showCommitDetails(commits.first().hash);
+    const QString hash = m_graphWidget->containsCommit(previousSelection)
+                             ? previousSelection
+                             : commits.first().hash;
+    m_graphWidget->selectCommit(hash);
+    selectInList(hash);
+    showCommitDetails(hash);
+  } else {
+    m_detailView->clear();
+    m_detailFiles->clear();
   }
+}
 
-  m_statusLabel->setText(tr("%1 commits").arg(commits.size()));
+void GitLogDialog::syncCommitList() {
+  QSignalBlocker blocker(m_commitTree);
+  m_commitTree->clear();
+  for (const auto &commit : m_graphWidget->loadedCommits()) {
+    auto *item =
+        new QTreeWidgetItem(m_commitTree, {commit.shortHash, commit.subject,
+                                           commit.author, commit.relativeDate});
+    item->setData(0, Qt::UserRole, commit.hash);
+    item->setToolTip(0, commit.hash);
+    item->setToolTip(1, commit.subject);
+  }
+  onSearchChanged(m_searchField->text());
+  selectInList(m_selectedHash, false);
+  m_loadMoreButton->setEnabled(m_graphWidget->canLoadMore());
 }
 
 void GitLogDialog::showCommitDetails(const QString &hash) {
@@ -695,32 +744,27 @@ void GitLogDialog::onGraphCommitSelected(const QString &hash) {
 }
 
 void GitLogDialog::onSearchChanged(const QString &text) {
-
+  m_graphWidget->setFilter(text);
   if (m_commitTree) {
     for (int i = 0; i < m_commitTree->topLevelItemCount(); ++i) {
       QTreeWidgetItem *item = m_commitTree->topLevelItem(i);
-      bool matches = text.isEmpty();
-      if (!matches) {
-        for (int col = 0; col < 4; ++col) {
-          if (item->text(col).contains(text, Qt::CaseInsensitive)) {
-            matches = true;
-            break;
-          }
-        }
-      }
+      const bool matches =
+          m_graphWidget->matchesCommit(item->data(0, Qt::UserRole).toString());
       item->setHidden(!matches);
     }
   }
 
-  m_graphWidget->setFilter(text);
-
   if (m_statusLabel) {
     m_statusLabel->setText(
         text.trimmed().isEmpty()
-            ? tr("%1 commits").arg(m_graphWidget->loadedCommitCount())
-            : tr("%1 of %2 commits match")
+            ? tr("%1 loaded commits").arg(m_graphWidget->loadedCommitCount())
+            : tr("%1 of %2 loaded commits match")
                   .arg(m_graphWidget->matchingCommitCount())
                   .arg(m_graphWidget->loadedCommitCount()));
+    if (!m_revisionRange.isEmpty())
+      m_statusLabel->setText(
+          tr("History rooted at %1 · %2")
+              .arg(m_revisionRange.left(12), m_statusLabel->text()));
   }
 }
 
@@ -735,6 +779,7 @@ void GitLogDialog::showContextMenuForCommit(const QString &hash,
   menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
 
   QAction *viewDiff = menu.addAction(tr("View diff"));
+  QAction *inspectObject = menu.addAction(tr("Inspect object in packfiles…"));
   QAction *compareHead = menu.addAction(tr("Compare with HEAD"));
   QAction *compareFrom = menu.addAction(tr("Compare from here…"));
   menu.addSeparator();
@@ -772,18 +817,19 @@ void GitLogDialog::showContextMenuForCommit(const QString &hash,
 
   if (parentActions.contains(chosen)) {
     const QString parentHash = chosen->data().toString();
-    m_graphWidget->selectCommit(parentHash, true);
-    showCommitDetails(parentHash);
+    selectCommit(parentHash);
     return;
   }
 
   if (chosen == viewDiff) {
     emit viewCommitDiff(hash);
+  } else if (chosen == inspectObject) {
+    emit inspectObjectRequested(hash);
   } else if (chosen == compareHead) {
     emit compareRequested(hash, QStringLiteral("HEAD"));
   } else if (chosen == compareFrom) {
     m_graphWidget->selectCommit(hash, false);
-    onCompareAnchorChanged(hash);
+    m_graphWidget->setCompareAnchor(hash);
     m_compareLabel->setText(
         tr("Comparing from %1 — Ctrl+click the second commit")
             .arg(hash.left(7)));

@@ -2,7 +2,7 @@
 #define UNDOCHANGESWIZARDDIALOG_H
 
 #include "../../git/gitundoplan.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <QMap>
 
 class QLabel;
@@ -11,7 +11,7 @@ class QPushButton;
 class QRadioButton;
 class QVBoxLayout;
 
-class UndoChangesWizardDialog : public StyledDialog {
+class UndoChangesWizardDialog : public GitDialog {
   Q_OBJECT
 
 public:

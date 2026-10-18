@@ -2,7 +2,7 @@
 #define BISECTDIALOG_H
 
 #include "../../git/gitbisect.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QComboBox;
@@ -13,7 +13,7 @@ class QPlainTextEdit;
 class QPushButton;
 class QVBoxLayout;
 
-class BisectDialog : public StyledDialog {
+class BisectDialog : public GitDialog {
   Q_OBJECT
 
 public:

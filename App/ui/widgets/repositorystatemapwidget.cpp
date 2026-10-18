@@ -9,7 +9,7 @@
 
 namespace {
 
-constexpr int AUTO_COLLAPSE_WIDTH = 200;
+constexpr int AUTO_COLLAPSE_WIDTH = 360;
 constexpr int MAX_CHIP_TEXT_CHARS = 24;
 
 QString countOf(int count, const QString &singular, const QString &plural) {

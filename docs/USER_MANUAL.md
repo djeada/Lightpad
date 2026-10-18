@@ -173,6 +173,15 @@ fixed** only becomes available once nothing is left undecided; until then the
 file stays unmerged as far as Git is concerned, so partial work is never
 mistaken for a finished file.
 
+### Git Objects and Packfiles
+
+Use **View → Git → Objects & Packfiles…** to search full or abbreviated hashes
+across packfiles and loose objects. Select a pack to browse its index, inspect
+text or binary contents, follow object relationships, or verify its integrity.
+**Object DAG** explores dependencies; **Commit Graph (DAG)** shows branch and
+merge topology. See [Git objects, packfiles, and DAGs](GIT_OBJECT_EXPLORER.md)
+for storage scopes, navigation, and shortcuts.
+
 ### Opening Large or Binary Files
 
 Reading a file into the editor costs far more memory than the file itself: the

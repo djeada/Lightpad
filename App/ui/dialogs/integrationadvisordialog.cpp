@@ -51,18 +51,20 @@ QString glyphFor(PreviewNode::State state) {
 IntegrationAdvisorDialog::IntegrationAdvisorDialog(GitIntegration *git,
                                                    const Theme &theme,
                                                    QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_sourceCombo(nullptr),
+    : GitDialog(parent), m_git(git), m_sourceCombo(nullptr),
       m_commitCombo(nullptr), m_targetLabel(nullptr),
       m_recommendationLabel(nullptr), m_riskLabel(nullptr),
       m_commandLabel(nullptr), m_topologyList(nullptr), m_expertCheck(nullptr),
       m_questionnaire(nullptr), m_expertBar(nullptr), m_previewButton(nullptr),
       m_executeButton(nullptr), m_cancelButton(nullptr), m_updating(false) {
   setWindowTitle(tr("Bring changes over"));
+  setGitDescription(
+      tr("Choose how to bring another branch or commit into your work."));
   setMinimumSize(820, 620);
   resize(940, 700);
 
   buildUi();
-  setKeyboardDefault(m_executeButton);
+  setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
   reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
@@ -223,11 +225,12 @@ void IntegrationAdvisorDialog::buildFooter(QVBoxLayout *layout) {
   footer->addWidget(m_previewButton);
 
   m_cancelButton = new QPushButton(tr("Cancel"), this);
+  m_cancelButton->setProperty("gitDismiss", true);
   m_cancelButton->setObjectName(QStringLiteral("advisorCancelButton"));
   connect(m_cancelButton, &QPushButton::clicked, this, &QDialog::reject);
   footer->addWidget(m_cancelButton);
 
-  m_executeButton = new QPushButton(tr("Do it"), this);
+  m_executeButton = new QPushButton(tr("Apply changes"), this);
   m_executeButton->setObjectName(QStringLiteral("advisorExecuteButton"));
   connect(m_executeButton, &QPushButton::clicked, this,
           &IntegrationAdvisorDialog::onExecute);
@@ -496,7 +499,7 @@ void IntegrationAdvisorDialog::onExecute() {
 }
 
 void IntegrationAdvisorDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   for (QLabel *label : m_consequences) {
     styleSubduedLabel(label);

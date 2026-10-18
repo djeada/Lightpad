@@ -30,7 +30,7 @@ QString objectNameFor(GitTimeTravelMode mode) {
 TimeTravelDialog::TimeTravelDialog(GitIntegration *git,
                                    const QString &commitHash,
                                    const Theme &theme, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_commitHash(commitHash),
+    : GitDialog(parent), m_git(git), m_commitHash(commitHash),
       m_headerLabel(nullptr), m_checkoutLabel(nullptr), m_commandLabel(nullptr),
       m_branchNameEdit(nullptr), m_worktreePathEdit(nullptr),
       m_graphButton(nullptr), m_executeButton(nullptr),
@@ -41,11 +41,13 @@ TimeTravelDialog::TimeTravelDialog(GitIntegration *git,
   m_options = gitTimeTravelOptions(commitHash, m_commit.shortHash);
 
   setWindowTitle(tr("Time travel"));
+  setGitDescription(
+      tr("Choose how to inspect or continue from an earlier commit."));
   setMinimumSize(720, 520);
   resize(820, 580);
 
   buildUi();
-  setKeyboardDefault(m_executeButton);
+  setKeyboardDefault(nullptr);
   applyTheme(theme);
   updateSelectedOption();
 }
@@ -135,11 +137,12 @@ void TimeTravelDialog::buildUi() {
   footer->addStretch();
 
   m_cancelButton = new QPushButton(tr("Cancel"), this);
+  m_cancelButton->setProperty("gitDismiss", true);
   m_cancelButton->setObjectName(QStringLiteral("timeTravelCancelButton"));
   connect(m_cancelButton, &QPushButton::clicked, this, &QDialog::reject);
   footer->addWidget(m_cancelButton);
 
-  m_executeButton = new QPushButton(tr("Go"), this);
+  m_executeButton = new QPushButton(tr("Open revision"), this);
   m_executeButton->setObjectName(QStringLiteral("timeTravelExecuteButton"));
   connect(m_executeButton, &QPushButton::clicked, this,
           &TimeTravelDialog::onExecute);
@@ -249,7 +252,7 @@ void TimeTravelDialog::onExecute() {
 }
 
 void TimeTravelDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   styleTitleLabel(m_headerLabel);
   for (QLabel *label : m_explanations) {

@@ -50,8 +50,10 @@ bool confirm(QWidget *parent, const QString &title, const QString &text) {
 } // namespace
 
 GitRepoToolsDialog::GitRepoToolsDialog(GitIntegration *git, QWidget *parent)
-    : StyledDialog(parent), m_git(git) {
+    : GitDialog(parent), m_git(git) {
   setWindowTitle(tr("Repository Tools"));
+  setGitDescription(
+      tr("Manage remotes, tags, submodules and repository maintenance."));
   resize(760, 520);
 
   auto *layout = new QVBoxLayout(this);
@@ -65,11 +67,20 @@ GitRepoToolsDialog::GitRepoToolsDialog(GitIntegration *git, QWidget *parent)
 
   m_status = new QLabel(this);
   m_status->setWordWrap(true);
+  m_status->setTextFormat(Qt::PlainText);
   layout->addWidget(m_status);
+  connect(m_git, &GitIntegration::errorOccurred, this,
+          [this](const QString &error) { m_lastError = error; });
 
   auto *buttons = new QHBoxLayout();
+  auto *objects = new QPushButton(tr("Objects && Packfiles…"), this);
+  objects->setObjectName("repoToolsObjectsButton");
+  connect(objects, &QPushButton::clicked, this,
+          &GitRepoToolsDialog::inspectObjectsRequested);
+  buttons->addWidget(objects);
   buttons->addStretch();
   auto *close = new QPushButton(tr("Close"), this);
+  close->setProperty("gitDismiss", true);
   connect(close, &QPushButton::clicked, this, &QDialog::accept);
   buttons->addWidget(close);
   layout->addLayout(buttons);
@@ -90,7 +101,8 @@ void GitRepoToolsDialog::refreshAll() {
 }
 
 void GitRepoToolsDialog::report(bool ok, const QString &message) {
-  m_status->setText(message);
+  m_status->setText(ok ? message : tr("Operation failed. %1").arg(m_lastError));
+  m_lastError.clear();
   if (ok) {
     emit repositoryChanged();
   }
@@ -114,6 +126,15 @@ QWidget *GitRepoToolsDialog::buildRemotesTab() {
   }
   row->addStretch();
   v->addLayout(row);
+  const auto updateSelection = [this, rename, seturl, prune, remove]() {
+    const bool selected = !selectedRemote().isEmpty();
+    for (auto *button : {rename, seturl, prune, remove})
+      button->setEnabled(selected);
+  };
+  connect(m_remoteTable, &QTableWidget::itemSelectionChanged, this,
+          updateSelection);
+  updateSelection();
+  remove->setProperty("uiRole", "danger");
 
   connect(rename, &QPushButton::clicked, this, [this]() {
     const QString name = selectedRemote();
@@ -161,6 +182,8 @@ QWidget *GitRepoToolsDialog::buildTagsTab() {
   auto *page = new QWidget(this);
   auto *v = new QVBoxLayout(page);
   m_tagTable = makeTable({tr("Tag"), tr("Commit"), tr("Type")}, page);
+  m_tagTable->setProperty(
+      "gitEmptyText", tr("No tags yet. Create a tag for the current commit."));
   v->addWidget(m_tagTable, 1);
 
   auto *row = new QHBoxLayout();
@@ -176,6 +199,17 @@ QWidget *GitRepoToolsDialog::buildTagsTab() {
   row->addWidget(push);
   row->addWidget(delRemote);
   v->addLayout(row);
+  const auto updateActions = [this, del, push, delRemote]() {
+    const bool selected = !selectedTag().isEmpty();
+    del->setEnabled(selected);
+    push->setEnabled(selected && m_tagRemote->count() > 0);
+    delRemote->setEnabled(selected && m_tagRemote->count() > 0);
+  };
+  connect(m_tagTable, &QTableWidget::itemSelectionChanged, this, updateActions);
+  connect(m_tagRemote, &QComboBox::currentIndexChanged, this, updateActions);
+  updateActions();
+  del->setProperty("uiRole", "danger");
+  delRemote->setProperty("uiRole", "danger");
 
   connect(create, &QPushButton::clicked, this, [this]() {
     bool ok = false;
@@ -241,6 +275,12 @@ QWidget *GitRepoToolsDialog::buildSubmodulesTab() {
   }
   row->addStretch();
   v->addLayout(row);
+  remove->setEnabled(false);
+  remove->setProperty("uiRole", "danger");
+  connect(m_submoduleTable, &QTableWidget::itemSelectionChanged, this,
+          [this, remove]() {
+            remove->setEnabled(!cellAt(m_submoduleTable, 0).isEmpty());
+          });
 
   connect(add, &QPushButton::clicked, this, [this]() {
     bool ok = false;

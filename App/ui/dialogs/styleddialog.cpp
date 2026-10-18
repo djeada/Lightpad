@@ -172,24 +172,30 @@ void StyledDialog::setKeyboardDefault(QPushButton *button) {
 }
 
 void StyledDialog::stylePrimaryButton(QPushButton *btn) {
-  if (btn)
+  if (btn) {
+    btn->setProperty("uiRole", "primary");
     btn->setStyleSheet(m_hasSemanticStyles
                            ? m_semanticStyles.primaryButton
                            : UIStyleHelper::primaryButtonStyle(m_theme));
+  }
 }
 
 void StyledDialog::styleSecondaryButton(QPushButton *btn) {
-  if (btn)
+  if (btn) {
+    btn->setProperty("uiRole", "secondary");
     btn->setStyleSheet(m_hasSemanticStyles
                            ? m_semanticStyles.secondaryButton
                            : UIStyleHelper::secondaryButtonStyle(m_theme));
+  }
 }
 
 void StyledDialog::styleDangerButton(QPushButton *btn) {
-  if (btn)
+  if (btn) {
+    btn->setProperty("uiRole", "danger");
     btn->setStyleSheet(m_hasSemanticStyles
                            ? m_semanticStyles.dangerButton
                            : UIStyleHelper::dangerButtonStyle(m_theme));
+  }
 }
 
 void StyledDialog::styleTitleLabel(QLabel *label) {

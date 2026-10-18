@@ -1,7 +1,7 @@
 #ifndef GITDIFFDIALOG_H
 #define GITDIFFDIALOG_H
 
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <QPointer>
 
 class GitIntegration;
@@ -16,7 +16,7 @@ class QSplitter;
 class QFrame;
 class QScrollArea;
 
-class GitDiffDialog : public StyledDialog {
+class GitDiffDialog : public GitDialog {
   Q_OBJECT
 
 public:

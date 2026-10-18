@@ -24,8 +24,10 @@ static const QStringList REBASE_ACTIONS = {"pick",   "reword", "edit",
 
 GitRebaseDialog::GitRebaseDialog(GitIntegration *git, const Theme &theme,
                                  QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_theme(theme) {
+    : GitDialog(parent), m_git(git), m_theme(theme) {
   setWindowTitle(tr("Interactive Rebase"));
+  setGitDescription(
+      tr("Prepare an ordered plan before rewriting commit history."));
   setMinimumSize(800, 520);
   resize(920, 600);
   buildUi();
@@ -405,7 +407,8 @@ void GitRebaseDialog::buildUi() {
   mainLayout->setContentsMargins(12, 12, 12, 12);
   mainLayout->setSpacing(8);
 
-  m_titleLabel = new QLabel(tr("🔀 Interactive Rebase"), this);
+  m_titleLabel = new QLabel(tr("Interactive Rebase"), this);
+  useGitHeading(m_titleLabel);
   mainLayout->addWidget(m_titleLabel);
 
   auto *headerLabel = new QLabel(
@@ -418,7 +421,7 @@ void GitRebaseDialog::buildUi() {
 
   m_searchEdit = new QLineEdit(this);
   m_searchEdit->setPlaceholderText(
-      tr("🔍 Filter commits by hash, author, or message..."));
+      tr("Filter commits by hash, author, or message..."));
   m_searchEdit->setClearButtonEnabled(true);
   mainLayout->addWidget(m_searchEdit);
   connect(m_searchEdit, &QLineEdit::textChanged, this,
@@ -429,8 +432,8 @@ void GitRebaseDialog::buildUi() {
 
   m_moveUpBtn = new QPushButton(tr("▲ Up"), this);
   m_moveDownBtn = new QPushButton(tr("▼ Down"), this);
-  m_squashBtn = new QPushButton(tr("📦 Squash"), this);
-  m_dropBtn = new QPushButton(tr("🗑 Drop"), this);
+  m_squashBtn = new QPushButton(tr("Squash"), this);
+  m_dropBtn = new QPushButton(tr("Drop"), this);
   m_pickAllBtn = new QPushButton(tr("↺ Reset All"), this);
 
   m_moveUpBtn->setToolTip(tr("Move selected commit up (earlier in history)"));
@@ -499,7 +502,8 @@ void GitRebaseDialog::buildUi() {
   auto *buttonLayout = new QHBoxLayout();
   buttonLayout->addStretch();
   m_cancelBtn = new QPushButton(tr("Cancel"), this);
-  m_startBtn = new QPushButton(tr("▶ Start Rebase"), this);
+  m_cancelBtn->setProperty("gitDismiss", true);
+  m_startBtn = new QPushButton(tr("Start rebase"), this);
   buttonLayout->addWidget(m_cancelBtn);
   buttonLayout->addWidget(m_startBtn);
   mainLayout->addLayout(buttonLayout);
@@ -510,7 +514,7 @@ void GitRebaseDialog::buildUi() {
 }
 
 void GitRebaseDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   stylePrimaryButton(m_startBtn);
   styleDangerButton(m_dropBtn);

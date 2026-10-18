@@ -2,7 +2,7 @@
 #define BRANCHHYGIENEDIALOG_H
 
 #include "../../git/gitbranchhygiene.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QComboBox;
@@ -14,7 +14,7 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QVBoxLayout;
 
-class BranchHygieneDialog : public StyledDialog {
+class BranchHygieneDialog : public GitDialog {
   Q_OBJECT
 
 public:

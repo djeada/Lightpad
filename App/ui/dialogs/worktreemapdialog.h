@@ -2,7 +2,7 @@
 #define WORKTREEMAPDIALOG_H
 
 #include "../../git/gitworktreemap.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QLabel;
@@ -11,7 +11,7 @@ class QPushButton;
 class QTreeWidget;
 class QVBoxLayout;
 
-class WorktreeMapDialog : public StyledDialog {
+class WorktreeMapDialog : public GitDialog {
   Q_OBJECT
 
 public:

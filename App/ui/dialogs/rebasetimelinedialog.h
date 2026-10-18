@@ -2,7 +2,7 @@
 #define REBASETIMELINEDIALOG_H
 
 #include "../../git/gitrebaseplan.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QComboBox;
@@ -14,7 +14,7 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QVBoxLayout;
 
-class RebaseTimelineDialog : public StyledDialog {
+class RebaseTimelineDialog : public GitDialog {
   Q_OBJECT
 
 public:

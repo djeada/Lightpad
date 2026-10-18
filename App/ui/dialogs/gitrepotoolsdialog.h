@@ -2,7 +2,7 @@
 #define GITREPOTOOLSDIALOG_H
 
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class QLabel;
 class QLineEdit;
@@ -11,7 +11,7 @@ class QPushButton;
 class QTabWidget;
 class QTableWidget;
 
-class GitRepoToolsDialog : public StyledDialog {
+class GitRepoToolsDialog : public GitDialog {
   Q_OBJECT
 
 public:
@@ -24,6 +24,7 @@ public:
 
 signals:
   void repositoryChanged();
+  void inspectObjectsRequested();
 
 private:
   QWidget *buildRemotesTab();
@@ -42,6 +43,7 @@ private:
   QString selectedTag() const;
 
   GitIntegration *m_git;
+  QString m_lastError;
   QTabWidget *m_tabs = nullptr;
   QLabel *m_status = nullptr;
 
