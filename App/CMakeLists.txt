@@ -101,6 +101,7 @@ set(project_headers
     dap/debugsession.h
     dap/debugsettings.h
     git/gitintegration.h
+    git/gitobjectdatabase.h
     git/gitrepositorystate.h
     git/gitdiffmodel.h
     git/gitcomparison.h
@@ -150,6 +151,7 @@ set(project_headers
     ui/dialogs/mergestartdialog.h
     ui/dialogs/gitremotedialog.h
     ui/dialogs/gitrepotoolsdialog.h
+    ui/dialogs/gitobjectexplorerdialog.h
     ui/dialogs/gitstashdialog.h
     ui/dialogs/gitlogdialog.h
     ui/dialogs/gitfilehistorydialog.h
@@ -371,6 +373,7 @@ set(project_sources
     dap/debugsession.cpp
     dap/debugsettings.cpp
     git/gitintegration.cpp
+    git/gitobjectdatabase.cpp
     git/gitrepositorystate.cpp
     git/gitdiffmodel.cpp
     git/gitcomparison.cpp
@@ -418,6 +421,7 @@ set(project_sources
     ui/dialogs/mergestartdialog.cpp
     ui/dialogs/gitremotedialog.cpp
     ui/dialogs/gitrepotoolsdialog.cpp
+    ui/dialogs/gitobjectexplorerdialog.cpp
     ui/dialogs/gitstashdialog.cpp
     ui/dialogs/gitlogdialog.cpp
     ui/dialogs/gitfilehistorydialog.cpp

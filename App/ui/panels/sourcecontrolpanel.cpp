@@ -482,6 +482,8 @@ void SourceControlPanel::setupRepoUI() {
       return;
     }
     GitRepoToolsDialog dialog(m_git, this);
+    connect(&dialog, &GitRepoToolsDialog::inspectObjectsRequested, this,
+            [this]() { emit inspectObjectRequested(QString()); });
     connect(&dialog, &GitRepoToolsDialog::repositoryChanged, this,
             [this]() { refresh(); });
     dialog.applyTheme(m_theme);
@@ -682,6 +684,8 @@ void SourceControlPanel::setupRepoUI() {
       return;
     }
     GitLogDialog logDialog(m_git, m_theme, this);
+    connect(&logDialog, &GitLogDialog::inspectObjectRequested, this,
+            &SourceControlPanel::inspectObjectRequested);
     connect(
         &logDialog, &GitLogDialog::viewCommitDiff, [this](const QString &hash) {
           QString diff = m_git->getCommitDiff(hash);
@@ -717,62 +721,6 @@ void SourceControlPanel::setupRepoUI() {
   historyHeaderLayout->addWidget(m_historyRebaseBtn);
   connect(m_historyRebaseBtn, &QPushButton::clicked, this,
           &SourceControlPanel::openRebaseTimeline);
-
-  m_historyGraphBtn = new QPushButton(tr("🌱 Graph"), m_historyHeader);
-  m_historyGraphBtn->setToolTip(tr("Open the commit graph view"));
-  m_historyGraphBtn->setVisible(false);
-  historyHeaderLayout->addWidget(m_historyGraphBtn);
-  connect(m_historyGraphBtn, &QPushButton::clicked, [this]() {
-    if (!m_git || !m_git->isValidRepository()) {
-      return;
-    }
-    GitLogDialog logDialog(m_git, m_theme, this);
-    connect(
-        &logDialog, &GitLogDialog::viewCommitDiff, [this](const QString &hash) {
-          QString diff = m_git->getCommitDiff(hash);
-          GitCommitInfo info = m_git->getCommitDetails(hash);
-          GitDiffDialog *diffDialog =
-              new GitDiffDialog(m_git, hash, GitDiffDialog::DiffTarget::Commit,
-                                false, m_theme, this);
-          diffDialog->setDiffText(diff);
-          diffDialog->setCommitInfo(info.author, info.date, info.subject);
-          diffDialog->setAttribute(Qt::WA_DeleteOnClose);
-          diffDialog->show();
-        });
-    connect(&logDialog, &GitLogDialog::compareRequested, this,
-            [this](const QString &from, const QString &to) {
-              emit compareRequested(from, to, QString());
-            });
-    connect(&logDialog, &GitLogDialog::repositoryChanged, this,
-            &SourceControlPanel::scheduleRefresh);
-    connect(&logDialog, &GitLogDialog::workingTreeRequested, this,
-            [this]() { openStagingCanvas(QString()); });
-    connect(
-        &logDialog, &GitLogDialog::undoCommitRequested, this,
-        [this](const QString &hash) { openUndoWizard(hash, QStringList()); });
-    logDialog.exec();
-    refresh();
-  });
-
-  m_historyRebaseBtn = new QPushButton(tr("🔀 Rebase"), m_historyHeader);
-  m_historyRebaseBtn->setToolTip(tr("Open interactive rebase dialog"));
-  m_historyRebaseBtn->setVisible(false);
-  historyHeaderLayout->addWidget(m_historyRebaseBtn);
-  connect(m_historyRebaseBtn, &QPushButton::clicked, [this]() {
-    if (!m_git || !m_git->isValidRepository())
-      return;
-    if (confirmDestructive(
-            tr("Interactive Rebase"),
-            tr("Start interactive rebase?\n\nThis will allow you to reorder, "
-               "squash, edit, or drop commits. This is a potentially "
-               "destructive operation that rewrites history."))) {
-      GitRebaseDialog rebaseDialog(m_git, m_theme, this);
-      rebaseDialog.loadCommits("HEAD~10");
-      if (rebaseDialog.exec() == QDialog::Accepted) {
-        refresh();
-      }
-    }
-  });
 
   mainLayout->addWidget(m_historyHeader);
 

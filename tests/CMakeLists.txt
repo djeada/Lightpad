@@ -1109,6 +1109,26 @@ target_compile_definitions(test_stagingcanvasdialog PRIVATE QT_DEPRECATED_WARNIN
 add_test(NAME StagingCanvasDialogTests COMMAND test_stagingcanvasdialog)
 
 # Commit graph: topology, WIP node, scope controls and comparison anchors.
+add_executable(test_gitobjectdatabase
+    unit/test_gitobjectdatabase.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitobjectdatabase.cpp
+)
+target_link_libraries(test_gitobjectdatabase PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME GitObjectDatabaseTests COMMAND test_gitobjectdatabase)
+set_tests_properties(GitObjectDatabaseTests PROPERTIES TIMEOUT 60)
+
+add_executable(test_gitobjectexplorer
+    unit/test_gitobjectexplorer.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitobjectdatabase.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitobjectexplorerdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+)
+target_link_libraries(test_gitobjectexplorer PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME GitObjectExplorerTests COMMAND test_gitobjectexplorer)
+set_tests_properties(GitObjectExplorerTests PROPERTIES TIMEOUT 60)
+
 add_executable(test_gitgraphwidget
     unit/test_gitgraphwidget.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/widgets/gitgraphwidget.cpp
@@ -3314,6 +3334,7 @@ set_tests_properties(GitWorkbenchDialogTests PROPERTIES TIMEOUT 30)
 
 # Custom target to run all tests
 set(TEST_TARGETS
+    test_gitobjectdatabase test_gitobjectexplorer
     test_logger test_theme test_filemanager test_document test_settingsmanager 
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget

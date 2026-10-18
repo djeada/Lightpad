@@ -209,6 +209,7 @@ private slots:
   void on_actionOpen_To_Side_triggered();
 
   void on_actionGit_Log_triggered();
+  void on_actionGit_Objects_triggered();
   void on_actionGit_Compare_triggered();
   void on_actionGit_File_History_triggered();
   void on_actionGit_Provenance_triggered();
@@ -223,6 +224,7 @@ public:
 private slots:
   void on_actionGit_Rebase_triggered();
   void on_actionGit_Workbench_triggered();
+  void showGitObjects(const QString &hash = QString());
   void on_actionToggle_Heatmap_triggered(bool checked);
   void on_actionToggle_CodeLens_triggered(bool checked);
 

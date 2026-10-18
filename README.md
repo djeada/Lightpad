@@ -10,6 +10,8 @@ Lightpad is a Qt 6-based code editor with a modern UI, built-in language tooling
 - LSP features: completion, hover, go-to definition, references, rename, and diagnostics
 - Debug Adapter Protocol (DAP) client with breakpoints, sessions, watches, and debug console
 - Git integration: status, diff gutter, staging, commits, branches, remotes, and stash
+- Git object explorer: packfile browsing, hash search across packs and loose
+  objects, object previews and dependency DAGs, and pack integrity checks
 - Command palette, file quick open, go to symbol/line
 - Resizable file explorer with background filename/content search, folder scopes,
   glob filters, multi-file operations and external drag-and-drop imports
@@ -106,6 +108,7 @@ Plugins are discovered from:
 - File explorer and project search: docs/FILE_EXPLORER.md
 - Search and replace across editors and project files: [docs/SEARCH_REPLACE.md](docs/SEARCH_REPLACE.md)
 - Unsaved documents and recovery: [docs/DOCUMENT_RECOVERY.md](docs/DOCUMENT_RECOVERY.md)
+- Git objects, packfiles and DAGs: [docs/GIT_OBJECT_EXPLORER.md](docs/GIT_OBJECT_EXPLORER.md)
 - Go to Definition: docs/GO_TO_DEFINITION.md
 - Plugin development: docs/PLUGIN_DEVELOPMENT.md
 - Syntax plugins: docs/SYNTAX_PLUGINS.md

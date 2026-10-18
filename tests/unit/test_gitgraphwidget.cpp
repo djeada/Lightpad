@@ -18,6 +18,8 @@ private slots:
 
   void testLoadsCommits();
   void testAllRefsIncludesOtherBranches();
+  void testAllRefsIncludesDetachedHead();
+  void testExplicitCompareAnchor();
   void testFirstParentFlattensMerges();
   void testPathFilterLimitsCommits();
   void testWorkingTreeNodeAppearsWhenDirty();
@@ -132,6 +134,29 @@ void TestGitGraphWidget::testFirstParentFlattensMerges() {
            qPrintable(QString("full=%1 flat=%2")
                           .arg(full->loadedCommitCount())
                           .arg(flat->loadedCommitCount())));
+}
+
+void TestGitGraphWidget::testAllRefsIncludesDetachedHead() {
+  QVERIFY(git({"checkout", "--detach", "HEAD"}));
+  writeFile("detached.txt", "work without a branch\n");
+  QVERIFY(git({"add", "."}));
+  QVERIFY(git({"commit", "-m", "Detached work"}));
+  QScopedPointer<GitGraphWidget> graph(makeGraph(true));
+  QCOMPARE(graph->loadedCommitCount(), 3);
+  QVERIFY(graph->containsCommit(m_git->getCommitDetails("HEAD").hash));
+}
+
+void TestGitGraphWidget::testExplicitCompareAnchor() {
+  QScopedPointer<GitGraphWidget> graph(makeGraph());
+  const QString hash = m_git->getCommitDetails("HEAD").hash;
+  QSignalSpy anchor(graph.data(), &GitGraphWidget::compareAnchorChanged);
+  graph->setCompareAnchor(hash);
+  QCOMPARE(graph->compareAnchor(), hash);
+  QCOMPARE(anchor.count(), 1);
+  graph->setCompareAnchor("missing");
+  QCOMPARE(graph->compareAnchor(), hash);
+  graph->clearCompareAnchor();
+  QVERIFY(graph->compareAnchor().isEmpty());
 }
 
 void TestGitGraphWidget::testPathFilterLimitsCommits() {

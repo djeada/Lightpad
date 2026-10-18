@@ -1,4 +1,5 @@
 #include "mainwindow_internal.h"
+#include "dialogs/gitobjectexplorerdialog.h"
 
 void MainWindow::on_actionGit_Log_triggered() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
@@ -8,6 +9,8 @@ void MainWindow::on_actionGit_Log_triggered() {
   }
 
   GitLogDialog dialog(m_gitIntegration, settings.theme, this);
+  connect(&dialog, &GitLogDialog::inspectObjectRequested, this,
+          &MainWindow::showGitObjects);
   connect(&dialog, &GitLogDialog::compareRequested, this,
           [this](const QString &from, const QString &to) {
             showCompareAnything(from, to);
@@ -26,20 +29,41 @@ void MainWindow::on_actionGit_Log_triggered() {
     }
   });
 
-  TextArea *textArea = getCurrentTextArea();
-  if (textArea) {
-    LightpadTabWidget *tabWidget = currentTabWidget();
-    if (tabWidget) {
-      int index = tabWidget->currentIndex();
-      if (index >= 0) {
-        QString filePath = tabWidget->getFilePath(index);
-        if (!filePath.isEmpty()) {
-          dialog.setFilePath(filePath);
-        }
-      }
-    }
-  }
+  dialog.exec();
+}
 
+void MainWindow::on_actionGit_Objects_triggered() { showGitObjects(); }
+
+void MainWindow::showGitObjects(const QString &hash) {
+  if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
+    ThemedMessageBox::information(this, tr("Git Objects & Packfiles"),
+                                  tr("Open a Git repository first."));
+    return;
+  }
+  GitObjectExplorerDialog dialog(m_gitIntegration->repositoryPath(),
+                                 settings.theme, this);
+  if (!hash.isEmpty())
+    dialog.searchHash(hash);
+  connect(&dialog, &GitObjectExplorerDialog::viewCommitRequested, this,
+          [this, &dialog](const QString &commit) {
+            GitLogDialog graph(m_gitIntegration, settings.theme, &dialog);
+            connect(&graph, &GitLogDialog::inspectObjectRequested, this,
+                    &MainWindow::showGitObjects);
+            connect(&graph, &GitLogDialog::compareRequested, this,
+                    [this](const QString &from, const QString &to) {
+                      showCompareAnything(from, to);
+                    });
+            connect(&graph, &GitLogDialog::viewCommitDiff, this,
+                    [this](const QString &target) {
+                      GitDiffDialog diff(m_gitIntegration, target,
+                                         GitDiffDialog::DiffTarget::Commit,
+                                         false, settings.theme, this);
+                      diff.setDiffText(m_gitIntegration->getCommitDiff(target));
+                      diff.exec();
+                    });
+            graph.selectCommit(commit);
+            graph.exec();
+          });
   dialog.exec();
 }
 
@@ -253,6 +277,10 @@ void MainWindow::showGitWorkbench() {
   }
 
   GitWorkbenchDialog dialog(m_gitIntegration, settings.theme, this);
+  connect(&dialog, &GitWorkbenchDialog::inspectObjectRequested, this,
+          &MainWindow::showGitObjects);
+  connect(&dialog, &GitWorkbenchDialog::commitGraphRequested, this,
+          &MainWindow::on_actionGit_Log_triggered);
   connect(&dialog, &GitWorkbenchDialog::viewCommitDiff,
           [this](const QString &hash) {
             QString diff = m_gitIntegration->getCommitDiff(hash);

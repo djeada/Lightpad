@@ -46,6 +46,8 @@ public:
 
 signals:
   void viewCommitDiff(const QString &commitHash);
+  void inspectObjectRequested(const QString &hash);
+  void commitGraphRequested();
 
 protected:
   void keyPressEvent(QKeyEvent *event) override;

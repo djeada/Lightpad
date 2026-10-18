@@ -384,6 +384,8 @@ void MainWindow::ensureSourceControlPanel() {
 
   sourceControlPanel = new SourceControlPanel(this);
   sourceControlPanel->setGitIntegration(m_gitIntegration);
+  connect(sourceControlPanel, &SourceControlPanel::inspectObjectRequested, this,
+          &MainWindow::showGitObjects);
   sourceControlPanel->setWorkingPath(
       m_projectRootPath.isEmpty() ? QDir::currentPath() : m_projectRootPath);
 

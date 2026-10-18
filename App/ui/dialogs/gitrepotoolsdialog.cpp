@@ -65,9 +65,17 @@ GitRepoToolsDialog::GitRepoToolsDialog(GitIntegration *git, QWidget *parent)
 
   m_status = new QLabel(this);
   m_status->setWordWrap(true);
+  m_status->setTextFormat(Qt::PlainText);
   layout->addWidget(m_status);
+  connect(m_git, &GitIntegration::errorOccurred, this,
+          [this](const QString &error) { m_lastError = error; });
 
   auto *buttons = new QHBoxLayout();
+  auto *objects = new QPushButton(tr("Objects & Packfiles…"), this);
+  objects->setObjectName("repoToolsObjectsButton");
+  connect(objects, &QPushButton::clicked, this,
+          &GitRepoToolsDialog::inspectObjectsRequested);
+  buttons->addWidget(objects);
   buttons->addStretch();
   auto *close = new QPushButton(tr("Close"), this);
   connect(close, &QPushButton::clicked, this, &QDialog::accept);
@@ -90,7 +98,8 @@ void GitRepoToolsDialog::refreshAll() {
 }
 
 void GitRepoToolsDialog::report(bool ok, const QString &message) {
-  m_status->setText(message);
+  m_status->setText(ok ? message : tr("Operation failed. %1").arg(m_lastError));
+  m_lastError.clear();
   if (ok) {
     emit repositoryChanged();
   }

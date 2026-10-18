@@ -32,6 +32,11 @@ private slots:
   void testCompareRequestIsForwarded();
   void testCommitDetailsListChangedFiles();
   void testMergeCommitShowsBothParents();
+  void testListAndGraphShareScopeAndFilters();
+  void testFilterSurvivesRefresh();
+  void testInspectObjectSignal();
+  void testPagedHistoryStaysInSync();
+  void testSelectUnreachableCommit();
 
 private:
   QTemporaryDir m_tempDir;
@@ -225,6 +230,112 @@ void TestGitLogDialog::testMergeCommitShowsBothParents() {
   const QString text = details->toPlainText();
   QVERIFY2(text.contains("Parents"), qPrintable(text));
   QVERIFY2(text.contains("a merge commit"), qPrintable(text));
+}
+
+void TestGitLogDialog::testListAndGraphShareScopeAndFilters() {
+  QVERIFY(git({"checkout", "-b", "side"}));
+  writeFile("side.txt", "side\n");
+  QVERIFY(git({"add", "."}));
+  QVERIFY(git({"commit", "-m", "Side branch work"}));
+  const QString sideHash = m_git->getCommitDetails("HEAD").hash;
+  QVERIFY(git({"checkout", "main"}));
+  GitLogDialog dialog(m_git, Theme());
+  auto *graph = dialog.findChild<GitGraphWidget *>();
+  auto *list = dialog.findChild<QTreeWidget *>("graphCommitList");
+  if (!list) {
+    for (auto *tree : dialog.findChildren<QTreeWidget *>())
+      if (tree->columnCount() == 4)
+        list = tree;
+  }
+  QVERIFY(list);
+  QCOMPARE(list->topLevelItemCount(), graph->loadedCommitCount());
+  auto *search = dialog.findChild<QLineEdit *>("graphSearchField");
+  search->setText(sideHash);
+  int visible = 0;
+  for (int i = 0; i < list->topLevelItemCount(); ++i)
+    visible += !list->topLevelItem(i)->isHidden();
+  QCOMPARE(visible, 1);
+  QCOMPARE(graph->matchingCommitCount(), 1);
+  search->clear();
+  dialog.findChild<QCheckBox *>("graphAllBranchesCheck")->setChecked(false);
+  QCOMPARE(list->topLevelItemCount(), 2);
+  QCOMPARE(list->topLevelItemCount(), graph->loadedCommitCount());
+}
+
+void TestGitLogDialog::testFilterSurvivesRefresh() {
+  GitLogDialog dialog(m_git, Theme());
+  auto *search = dialog.findChild<QLineEdit *>("graphSearchField");
+  search->setText("Add a");
+  dialog.refresh();
+  QCOMPARE(dialog.findChild<GitGraphWidget *>()->matchingCommitCount(), 1);
+  for (auto *tree : dialog.findChildren<QTreeWidget *>()) {
+    if (tree->columnCount() == 4) {
+      int visible = 0;
+      for (int i = 0; i < tree->topLevelItemCount(); ++i)
+        visible += !tree->topLevelItem(i)->isHidden();
+      QCOMPARE(visible, 1);
+    }
+  }
+}
+
+void TestGitLogDialog::testInspectObjectSignal() {
+  GitLogDialog dialog(m_git, Theme());
+  const QString hash = m_git->getCommitDetails("HEAD").hash;
+  dialog.selectCommit(hash);
+  QSignalSpy spy(&dialog, &GitLogDialog::inspectObjectRequested);
+  dialog.findChild<QPushButton *>("graphObjectsButton")->click();
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.first().first().toString(), hash);
+}
+
+void TestGitLogDialog::testPagedHistoryStaysInSync() {
+  QByteArray input;
+  for (int i = 0; i < 205; ++i) {
+    input += "commit refs/heads/main\ncommitter Ada <dev@example.com> " +
+             QByteArray::number(1700000000 + i) + " +0000\n";
+    const QByteArray message = "History " + QByteArray::number(i);
+    input +=
+        "data " + QByteArray::number(message.size()) + '\n' + message + '\n';
+    if (i == 0)
+      input += "from refs/heads/main^0\n";
+    input += '\n';
+  }
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"fast-import", "--quiet"});
+  QVERIFY(process.waitForStarted());
+  process.write(input);
+  process.closeWriteChannel();
+  QVERIFY(process.waitForFinished());
+  QCOMPARE(process.exitCode(), 0);
+  QVERIFY(git({"reset", "--hard", "HEAD"}));
+  GitLogDialog dialog(m_git, Theme());
+  auto *graph = dialog.findChild<GitGraphWidget *>();
+  QCOMPARE(graph->loadedCommitCount(), 200);
+  auto *more = dialog.findChild<QPushButton *>("graphLoadMoreButton");
+  QVERIFY(more->isEnabled());
+  more->click();
+  QTRY_COMPARE(graph->loadedCommitCount(), 207);
+  for (auto *tree : dialog.findChildren<QTreeWidget *>())
+    if (tree->columnCount() == 4)
+      QCOMPARE(tree->topLevelItemCount(), 207);
+  QVERIFY(!more->isEnabled());
+}
+
+void TestGitLogDialog::testSelectUnreachableCommit() {
+  QVERIFY(git({"checkout", "--detach", "HEAD"}));
+  writeFile("lost.txt", "recoverable\n");
+  QVERIFY(git({"add", "."}));
+  QVERIFY(git({"commit", "-m", "Unreferenced work"}));
+  const QString hash = m_git->getCommitDetails("HEAD").hash;
+  QVERIFY(git({"checkout", "main"}));
+  GitLogDialog dialog(m_git, Theme());
+  QVERIFY(!dialog.findChild<GitGraphWidget *>()->containsCommit(hash));
+  dialog.selectCommit(hash);
+  QCOMPARE(dialog.findChild<GitGraphWidget *>()->selectedHash(), hash);
+  QVERIFY(dialog.findChild<QTextEdit *>("graphDetailView")
+              ->toPlainText()
+              .contains("Unreferenced work"));
 }
 
 QTEST_MAIN(TestGitLogDialog)

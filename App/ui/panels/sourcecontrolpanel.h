@@ -49,6 +49,7 @@ signals:
   void openWorktreeRequested(const QString &path);
 
   void conflictCenterRequested();
+  void inspectObjectRequested(const QString &hash);
 
   void commitDiffRequested(const QString &commitHash, const QString &shortHash);
 

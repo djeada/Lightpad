@@ -42,6 +42,7 @@ public:
   int rowHeight() const { return m_rowHeight; }
 
   QString compareAnchor() const { return m_compareAnchor; }
+  void setCompareAnchor(const QString &hash);
   void clearCompareAnchor();
 
   void setFilter(const QString &filter);
@@ -50,6 +51,13 @@ public:
   int loadedCommitCount() const { return m_nodes.size(); }
 
   int matchingCommitCount() const;
+  QList<GitCommitInfo> loadedCommits() const;
+  bool matchesCommit(const QString &hash) const;
+  bool containsCommit(const QString &hash) const {
+    return m_hashToIndex.contains(hash);
+  }
+  bool canLoadMore() const { return !m_loadingMore && !m_historyExhausted; }
+  void loadMore() { requestMoreCommits(); }
   QString selectedHash() const;
 
   void selectCommit(const QString &hash, bool emitSignal = false);

@@ -243,6 +243,25 @@ void GitWorkbenchDialog::buildUi() {
   titleLayout->addWidget(titleLabel);
   titleLayout->addStretch();
 
+  auto *graphButton = new QPushButton(tr("Commit DAG"), titleBar);
+  graphButton->setObjectName("workbenchCommitGraphButton");
+  graphButton->setToolTip(
+      tr("Explore branches and merges in the commit graph"));
+  connect(graphButton, &QPushButton::clicked, this,
+          &GitWorkbenchDialog::commitGraphRequested);
+  titleLayout->addWidget(graphButton);
+  auto *objectsButton = new QPushButton(tr("Objects & Packfiles"), titleBar);
+  objectsButton->setObjectName("workbenchObjectsButton");
+  objectsButton->setToolTip(tr(
+      "Browse packfiles and locate object hashes across repository storage"));
+  connect(objectsButton, &QPushButton::clicked, this, [this]() {
+    emit inspectObjectRequested(
+        m_commitTree->currentItem()
+            ? m_commitTree->currentItem()->data(0, Qt::UserRole + 1).toString()
+            : QString());
+  });
+  titleLayout->addWidget(objectsButton);
+
   auto *shortcutHint = new QLabel(
       tr("J/K navigate  \xc2\xb7  S squash  \xc2\xb7  D drop  \xc2\xb7  "
          "R reword  \xc2\xb7  Ctrl+K commands"),
