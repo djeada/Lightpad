@@ -2,7 +2,7 @@
 #define GITSTASHDIALOG_H
 
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <QCheckBox>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -12,7 +12,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-class GitStashDialog : public StyledDialog {
+class GitStashDialog : public GitDialog {
   Q_OBJECT
 
 public:
@@ -59,7 +59,6 @@ private:
   QPushButton *m_closeButton;
   QLabel *m_statusLabel;
   QLabel *m_detailsLabel;
-  QLabel *m_iconLabel = nullptr;
   QLabel *m_titleLabel = nullptr;
   QLabel *m_subtitleLabel = nullptr;
   UIStyleHelper::Tone m_statusTone = UIStyleHelper::Tone::Neutral;

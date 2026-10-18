@@ -31,14 +31,16 @@ const QList<GitRebaseAction> &selectableActions() {
 
 RebaseTimelineDialog::RebaseTimelineDialog(GitIntegration *git,
                                            const Theme &theme, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_rebaseRunning(false),
-      m_updating(false), m_countSpin(nullptr), m_ontoLabel(nullptr),
-      m_publishedLabel(nullptr), m_timelineTree(nullptr),
-      m_previewList(nullptr), m_problemList(nullptr), m_progressLabel(nullptr),
-      m_upButton(nullptr), m_downButton(nullptr), m_autosquashButton(nullptr),
-      m_startButton(nullptr), m_continueButton(nullptr), m_skipButton(nullptr),
-      m_abortButton(nullptr), m_closeButton(nullptr) {
+    : GitDialog(parent), m_git(git), m_rebaseRunning(false), m_updating(false),
+      m_countSpin(nullptr), m_ontoLabel(nullptr), m_publishedLabel(nullptr),
+      m_timelineTree(nullptr), m_previewList(nullptr), m_problemList(nullptr),
+      m_progressLabel(nullptr), m_upButton(nullptr), m_downButton(nullptr),
+      m_autosquashButton(nullptr), m_startButton(nullptr),
+      m_continueButton(nullptr), m_skipButton(nullptr), m_abortButton(nullptr),
+      m_closeButton(nullptr) {
   setWindowTitle(tr("Rebase timeline"));
+  setGitDescription(
+      tr("Reorder, combine and edit commits with a preview of the result."));
   setMinimumSize(880, 620);
   resize(1020, 720);
 
@@ -202,6 +204,7 @@ void RebaseTimelineDialog::buildFooter(QVBoxLayout *layout) {
   footer->addStretch();
 
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("rebaseCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::reject);
   footer->addWidget(m_closeButton);
@@ -518,7 +521,7 @@ void RebaseTimelineDialog::keyPressEvent(QKeyEvent *event) {
 }
 
 void RebaseTimelineDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   for (QListWidget *list : {m_previewList, m_problemList}) {
     if (list) {

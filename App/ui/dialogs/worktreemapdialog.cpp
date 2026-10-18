@@ -20,11 +20,13 @@ constexpr int CARD_INDEX_ROLE = Qt::UserRole + 1;
 
 WorktreeMapDialog::WorktreeMapDialog(GitIntegration *git, const Theme &theme,
                                      QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_worktreeTree(nullptr),
+    : GitDialog(parent), m_git(git), m_worktreeTree(nullptr),
       m_detailLabel(nullptr), m_warningLabel(nullptr), m_createButton(nullptr),
       m_openButton(nullptr), m_graphButton(nullptr), m_pruneButton(nullptr),
       m_removeButton(nullptr), m_closeButton(nullptr) {
   setWindowTitle(tr("Worktrees"));
+  setGitDescription(
+      tr("Manage the working directories attached to this repository."));
   setMinimumSize(840, 520);
   resize(960, 600);
 
@@ -123,6 +125,7 @@ void WorktreeMapDialog::buildUi() {
 
   footer->addStretch();
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("worktreeCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   footer->addWidget(m_closeButton);
@@ -297,7 +300,7 @@ void WorktreeMapDialog::onShowInGraph() {
 }
 
 void WorktreeMapDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   styleSubduedLabel(findChild<QLabel *>(QStringLiteral("worktreeHeaderLabel")));
   if (m_warningLabel) {

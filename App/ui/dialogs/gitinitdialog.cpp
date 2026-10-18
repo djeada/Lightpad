@@ -4,11 +4,12 @@
 #include <QFileDialog>
 
 GitInitDialog::GitInitDialog(const QString &projectPath, QWidget *parent)
-    : StyledDialog(parent), m_projectPath(projectPath), m_pathEdit(nullptr),
+    : GitDialog(parent), m_projectPath(projectPath), m_pathEdit(nullptr),
       m_browseButton(nullptr), m_initialCommitCheckbox(nullptr),
       m_gitIgnoreCheckbox(nullptr), m_remoteEdit(nullptr),
       m_initButton(nullptr), m_cancelButton(nullptr) {
   setWindowTitle(tr("Initialize Git Repository"));
+  setGitDescription(tr("Create a repository and choose its initial settings."));
   setMinimumSize(500, 350);
   setupUI();
 }
@@ -21,8 +22,6 @@ void GitInitDialog::setupUI() {
   mainLayout->setContentsMargins(24, 24, 24, 24);
 
   QHBoxLayout *headerLayout = new QHBoxLayout();
-  m_iconLabel = new QLabel("🗃️", this);
-  headerLayout->addWidget(m_iconLabel);
 
   QVBoxLayout *titleLayout = new QVBoxLayout();
   m_titleLabel = new QLabel(tr("Initialize Git Repository"), this);
@@ -36,6 +35,7 @@ void GitInitDialog::setupUI() {
   titleLayout->addWidget(m_subtitleLabel);
   headerLayout->addLayout(titleLayout, 1);
   mainLayout->addLayout(headerLayout);
+  useGitHeading(m_titleLabel, m_subtitleLabel);
 
   QGroupBox *pathGroup = new QGroupBox(tr("Repository Location"), this);
   QVBoxLayout *pathLayout = new QVBoxLayout(pathGroup);
@@ -44,7 +44,6 @@ void GitInitDialog::setupUI() {
   m_pathEdit = new QLineEdit(m_projectPath, this);
   m_pathEdit->setPlaceholderText(tr("Path to initialize repository"));
   m_browseButton = new QPushButton(tr("Browse..."), this);
-  m_browseButton->setFixedWidth(100);
   connect(m_browseButton, &QPushButton::clicked, this,
           &GitInitDialog::onBrowseClicked);
   pathInputLayout->addWidget(m_pathEdit);
@@ -87,13 +86,12 @@ void GitInitDialog::setupUI() {
   buttonLayout->addStretch();
 
   m_cancelButton = new QPushButton(tr("Cancel"), this);
-  m_cancelButton->setFixedWidth(100);
+  m_cancelButton->setProperty("gitDismiss", true);
   connect(m_cancelButton, &QPushButton::clicked, this,
           &GitInitDialog::onCancelClicked);
   buttonLayout->addWidget(m_cancelButton);
 
   m_initButton = new QPushButton(tr("Initialize"), this);
-  m_initButton->setFixedWidth(120);
   m_initButton->setDefault(true);
   connect(m_initButton, &QPushButton::clicked, this,
           &GitInitDialog::onInitClicked);
@@ -150,9 +148,8 @@ void GitInitDialog::onBrowseClicked() {
 }
 
 void GitInitDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
   stylePrimaryButton(m_initButton);
-  m_iconLabel->setStyleSheet("font-size: 28px; background: transparent;");
   m_titleLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 17));
   m_subtitleLabel->setStyleSheet(UIStyleHelper::subduedLabelStyle(theme) +
                                  " font-size: 12px;");

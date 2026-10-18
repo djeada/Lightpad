@@ -31,7 +31,7 @@
 
 GitLogDialog::GitLogDialog(GitIntegration *git, const Theme &theme,
                            QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_theme(theme), m_compareLabel(nullptr),
+    : GitDialog(parent), m_git(git), m_theme(theme), m_compareLabel(nullptr),
       m_firstParentCheck(nullptr), m_allBranchesCheck(nullptr),
       m_zoomInButton(nullptr), m_zoomOutButton(nullptr),
       m_zoomResetButton(nullptr), m_detailFiles(nullptr),
@@ -40,6 +40,7 @@ GitLogDialog::GitLogDialog(GitIntegration *git, const Theme &theme,
       m_detailRevertButton(nullptr), m_detailResetButton(nullptr),
       m_detailCompareHeadButton(nullptr) {
   setWindowTitle(tr("Commit Graph"));
+  setGitDescription(tr("Explore commit history, branches and merges."));
   setMinimumSize(860, 520);
   resize(1080, 660);
   buildUi();
@@ -508,7 +509,7 @@ void GitLogDialog::resetTo(const QString &hash) {
 }
 
 void GitLogDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
   m_theme = theme;
 
   if (m_graphWidget) {

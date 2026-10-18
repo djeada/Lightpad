@@ -3332,9 +3332,93 @@ set_tests_properties(GitIntegrationTests PROPERTIES TIMEOUT 30)
 set_tests_properties(GitFileSystemModelTests PROPERTIES TIMEOUT 30)
 set_tests_properties(GitWorkbenchDialogTests PROPERTIES TIMEOUT 30)
 
+# Full Git UI gallery and shared interaction/layout regression checks.
+add_executable(test_gituiconsistency
+    unit/test_gituiconsistency.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/commitplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitbisect.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitbranchhygiene.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcommandlog.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitcomparison.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitconflictresolution.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitdiffmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitfiletimeline.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegration.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitintegrationadvice.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitmergeplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitobjectdatabase.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitoperationpreview.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitprovenance.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrebaseplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitrepositorystate.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsandbox.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitstashshelf.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsubmodulemodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitsyncmodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gittimetravel.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitundoplan.cpp
+    ${CMAKE_SOURCE_DIR}/App/git/gitworktreemap.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitinitdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitremotedialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitstashdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitrepotoolsdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitlogdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitdiffdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitfilehistorydialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitobjectexplorerdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitworkbenchdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitrebasedialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/branchhygienedialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/branchsyncradardialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/bisectdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/commandmirrordialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/commitcraftingdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/compareanythingdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/filetimelinedialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/integrationadvisordialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/mergestartdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/operationpreviewdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/provenancelensdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/rebasetimelinedialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/recoverycenterdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/stagingcanvasdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/stashshelfdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/timetraveldialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/undochangeswizarddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/whatifsandboxdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/worktreemapdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/sourcecontrolpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/conflictcenterpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/conflictresolverview.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/repositorystatemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/gitgraphwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+target_include_directories(test_gituiconsistency PRIVATE ${CMAKE_SOURCE_DIR}/App)
+target_link_libraries(test_gituiconsistency PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test lightpad_git_ui)
+add_test(NAME GitUiConsistencyTests COMMAND test_gituiconsistency)
+set_tests_properties(GitUiConsistencyTests PROPERTIES
+    TIMEOUT 120
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # Custom target to run all tests
+get_property(LIGHTPAD_TEST_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(test_target IN LISTS LIGHTPAD_TEST_TARGETS)
+    get_target_property(test_sources ${test_target} SOURCES)
+    if(test_sources MATCHES "/App/ui/dialogs/" OR
+       test_sources MATCHES "/App/ui/panels/(sourcecontrolpanel|conflictcenterpanel|conflictresolverview)")
+        target_link_libraries(${test_target} PRIVATE lightpad_git_ui)
+    endif()
+endforeach()
+
 set(TEST_TARGETS
-    test_gitobjectdatabase test_gitobjectexplorer
+    test_gitobjectdatabase test_gitobjectexplorer test_gituiconsistency
     test_logger test_theme test_filemanager test_document test_settingsmanager 
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget

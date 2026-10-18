@@ -113,14 +113,17 @@ public:
 GitObjectExplorerDialog::GitObjectExplorerDialog(const QString &repositoryPath,
                                                  const Theme &theme,
                                                  QWidget *parent)
-    : StyledDialog(parent), m_repositoryPath(repositoryPath) {
+    : GitDialog(parent), m_repositoryPath(repositoryPath) {
   setWindowTitle(
       tr("Git Objects & Packfiles — %1").arg(QDir(repositoryPath).dirName()));
+  setGitDescription(
+      tr("Inspect stored objects, locate hashes and explore dependencies."));
   resize(1220, 800);
   setMinimumSize(820, 560);
   auto *layout = new QVBoxLayout(this);
   auto *heading = new QHBoxLayout;
   auto *title = new QLabel(tr("Objects & Packfiles"), this);
+  useGitHeading(title);
   QFont titleFont = title->font();
   titleFont.setPointSize(titleFont.pointSize() + 4);
   titleFont.setBold(true);
@@ -129,7 +132,7 @@ GitObjectExplorerDialog::GitObjectExplorerDialog(const QString &repositoryPath,
   heading->addStretch();
   auto *refreshButton = new QPushButton(tr("Refresh"), this);
   refreshButton->setObjectName("objectRefreshButton");
-  auto *cancelButton = new QPushButton(tr("Cancel"), this);
+  auto *cancelButton = new QPushButton(tr("Stop"), this);
   cancelButton->setToolTip(
       tr("Stop background inspection, search or verification"));
   heading->addWidget(refreshButton);
@@ -144,7 +147,7 @@ GitObjectExplorerDialog::GitObjectExplorerDialog(const QString &repositoryPath,
   auto *storage = new QWidget(splitter);
   auto *storageLayout = new QVBoxLayout(storage);
   storageLayout->setContentsMargins(0, 0, 0, 0);
-  storageLayout->addWidget(new QLabel(tr("STORAGE"), storage));
+  storageLayout->addWidget(new QLabel(tr("Storage"), storage));
   m_packs =
       table("objectPackTable",
             {tr("Packfile"), tr("Objects"), tr("Size"), tr("State")}, storage);
@@ -187,6 +190,9 @@ GitObjectExplorerDialog::GitObjectExplorerDialog(const QString &repositoryPath,
   m_objects->setColumnWidth(0, 145);
   m_objects->header()->setSectionResizeMode(3, QHeaderView::Interactive);
   m_objects->setColumnWidth(3, 190);
+  m_objects->setProperty("gitEmptyText",
+                         tr("No matching objects. Try another hash prefix or "
+                            "search all storage."));
   m_objects->setSortingEnabled(true);
   m_objects->sortItems(0, Qt::AscendingOrder);
   m_objects->header()->setToolTip(
@@ -281,7 +287,7 @@ GitObjectExplorerDialog::GitObjectExplorerDialog(const QString &repositoryPath,
   m_verification->setPlainText(
       tr("Select a pack and choose Verify Selected Pack to check its contents "
          "and index checksums."));
-  m_detailTabs->addTab(m_verification, tr("Pack Verification"));
+  m_detailTabs->addTab(m_verification, tr("Verification"));
   detailLayout->addWidget(m_detailTabs, 1);
   vertical->addWidget(detail);
   vertical->setSizes({260, 350});
@@ -308,6 +314,7 @@ GitObjectExplorerDialog::GitObjectExplorerDialog(const QString &repositoryPath,
   splitter->setSizes({350, 850});
   layout->addWidget(splitter, 1);
   auto *close = new QPushButton(tr("Close"), this);
+  close->setProperty("gitDismiss", true);
   auto *footer = new QHBoxLayout;
   footer->addWidget(new QLabel(
       tr("Read-only inspection · local objects · no checkout required"), this));
@@ -796,7 +803,7 @@ void GitObjectExplorerDialog::verifySelectedPack() {
 }
 
 void GitObjectExplorerDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
   for (auto *tree : {m_packs, m_objects, m_links})
     tree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
   m_dag->setBackgroundBrush(theme.backgroundColor);

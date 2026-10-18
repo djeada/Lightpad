@@ -1,7 +1,7 @@
 #ifndef GITFILEHISTORYDIALOG_H
 #define GITFILEHISTORYDIALOG_H
 
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class QTreeWidget;
 class QTreeWidgetItem;
@@ -11,7 +11,7 @@ class QSplitter;
 class GitIntegration;
 struct GitCommitInfo;
 
-class GitFileHistoryDialog : public StyledDialog {
+class GitFileHistoryDialog : public GitDialog {
   Q_OBJECT
 
 public:

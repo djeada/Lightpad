@@ -6,7 +6,7 @@
 
 GitRemoteDialog::GitRemoteDialog(GitIntegration *git, Mode mode,
                                  QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_mode(mode), m_remoteSelector(nullptr),
+    : GitDialog(parent), m_git(git), m_mode(mode), m_remoteSelector(nullptr),
       m_branchSelector(nullptr), m_setUpstreamCheckbox(nullptr),
       m_forceCheckbox(nullptr), m_pushButton(nullptr), m_pullButton(nullptr),
       m_fetchButton(nullptr), m_progressBar(nullptr), m_statusLabel(nullptr),
@@ -29,6 +29,8 @@ GitRemoteDialog::GitRemoteDialog(GitIntegration *git, Mode mode,
     break;
   }
   setWindowTitle(title);
+  setGitDescription(
+      tr("Manage remotes and transfer commits between repositories."));
   setMinimumSize(550, 450);
   setupUI();
   refresh();
@@ -44,36 +46,29 @@ void GitRemoteDialog::setupUI() {
 
   QHBoxLayout *headerLayout = new QHBoxLayout();
 
-  QString iconText;
   QString titleText;
   QString subtitleText;
 
   switch (m_mode) {
   case Mode::Push:
-    iconText = "⬆️";
     titleText = tr("Push Changes");
     subtitleText = tr("Upload your commits to a remote repository");
     break;
   case Mode::Pull:
-    iconText = "⬇️";
     titleText = tr("Pull Changes");
     subtitleText =
         tr("Download and integrate changes from a remote repository");
     break;
   case Mode::Fetch:
-    iconText = "🔄";
     titleText = tr("Fetch Changes");
     subtitleText = tr("Download changes without merging");
     break;
   case Mode::ManageRemotes:
-    iconText = "🌐";
     titleText = tr("Manage Remotes");
     subtitleText = tr("Add, remove, or modify remote repositories");
     break;
   }
 
-  m_iconLabel = new QLabel(iconText, this);
-  headerLayout->addWidget(m_iconLabel);
 
   QVBoxLayout *titleLayout = new QVBoxLayout();
   m_titleLabel = new QLabel(titleText, this);
@@ -83,10 +78,12 @@ void GitRemoteDialog::setupUI() {
   headerLayout->addLayout(titleLayout, 1);
 
   mainLayout->addLayout(headerLayout);
+  useGitHeading(m_titleLabel, m_subtitleLabel);
 
   if (m_mode != Mode::ManageRemotes) {
 
-    QGroupBox *selectionGroup = new QGroupBox(tr("Remote & Branch"), this);
+    QGroupBox *selectionGroup = new QGroupBox(
+        m_mode == Mode::Fetch ? tr("Remote") : tr("Remote and branch"), this);
     QVBoxLayout *selectionLayout = new QVBoxLayout(selectionGroup);
 
     QHBoxLayout *remoteLayout = new QHBoxLayout();
@@ -101,40 +98,48 @@ void GitRemoteDialog::setupUI() {
     remoteLayout->addWidget(m_remoteSelector, 1);
     selectionLayout->addLayout(remoteLayout);
 
-    QHBoxLayout *branchLayout = new QHBoxLayout();
-    QLabel *branchLabel = new QLabel(tr("Branch:"), this);
-    branchLabel->setFixedWidth(80);
-    m_branchSelector = new QComboBox(this);
-    m_branchSelector->setMinimumWidth(200);
-    branchLayout->addWidget(branchLabel);
-    branchLayout->addWidget(m_branchSelector, 1);
-    selectionLayout->addLayout(branchLayout);
+    if (m_mode != Mode::Fetch) {
+      QHBoxLayout *branchLayout = new QHBoxLayout();
+      QLabel *branchLabel = new QLabel(tr("Branch:"), this);
+      branchLabel->setFixedWidth(80);
+      m_branchSelector = new QComboBox(this);
+      m_branchSelector->setMinimumWidth(200);
+      branchLayout->addWidget(branchLabel);
+      branchLayout->addWidget(m_branchSelector, 1);
+      selectionLayout->addLayout(branchLayout);
+    }
 
     mainLayout->addWidget(selectionGroup);
 
-    QGroupBox *optionsGroup = new QGroupBox(tr("Options"), this);
-    QVBoxLayout *optionsLayout = new QVBoxLayout(optionsGroup);
-
     if (m_mode == Mode::Push) {
-      m_setUpstreamCheckbox =
-          new QCheckBox(tr("Set upstream (tracking branch)"), this);
-      m_setUpstreamCheckbox->setToolTip(tr(
-          "Set the remote branch as the tracking branch for the local branch"));
-      optionsLayout->addWidget(m_setUpstreamCheckbox);
+      QGroupBox *optionsGroup = new QGroupBox(tr("Options"), this);
+      QVBoxLayout *optionsLayout = new QVBoxLayout(optionsGroup);
 
-      m_forceCheckbox = new QCheckBox(tr("Force push (dangerous!)"), this);
-      m_forceCheckbox->setToolTip(tr("Force push even if it would overwrite "
-                                     "remote changes. Use with caution!"));
-      optionsLayout->addWidget(m_forceCheckbox);
+      if (m_mode == Mode::Push) {
+        m_setUpstreamCheckbox =
+            new QCheckBox(tr("Set upstream (tracking branch)"), this);
+        m_setUpstreamCheckbox->setToolTip(
+            tr("Set the remote branch as the tracking branch for the local "
+               "branch"));
+        optionsLayout->addWidget(m_setUpstreamCheckbox);
+
+        m_forceCheckbox = new QCheckBox(tr("Force with lease"), this);
+        m_forceCheckbox->setToolTip(
+            tr("Replace remote history only if the remote still matches "
+               "the last fetched state."));
+        optionsLayout->addWidget(m_forceCheckbox);
+      }
+
+      mainLayout->addWidget(optionsGroup);
     }
-
-    mainLayout->addWidget(optionsGroup);
   } else {
 
     QGroupBox *remotesGroup = new QGroupBox(tr("Configured Remotes"), this);
     QVBoxLayout *remotesLayout = new QVBoxLayout(remotesGroup);
 
     m_remoteList = new QListWidget(this);
+    m_remoteList->setProperty(
+        "gitEmptyText", tr("No remotes configured. Add a name and URL below."));
     remotesLayout->addWidget(m_remoteList);
 
     QHBoxLayout *addRemoteLayout = new QHBoxLayout();
@@ -167,7 +172,20 @@ void GitRemoteDialog::setupUI() {
             &GitRemoteDialog::onAddRemoteClicked);
     buttonsLayout->addWidget(m_addRemoteButton);
 
+    m_addRemoteButton->setEnabled(false);
+    const auto updateAdd = [this]() {
+      m_addRemoteButton->setEnabled(
+          !m_remoteNameEdit->text().trimmed().isEmpty() &&
+          !m_remoteUrlEdit->text().trimmed().isEmpty());
+    };
+    connect(m_remoteNameEdit, &QLineEdit::textChanged, this, updateAdd);
+    connect(m_remoteUrlEdit, &QLineEdit::textChanged, this, updateAdd);
     m_removeRemoteButton = new QPushButton(tr("Remove"), this);
+    m_removeRemoteButton->setEnabled(false);
+    connect(m_remoteList, &QListWidget::itemSelectionChanged, this, [this]() {
+      m_removeRemoteButton->setEnabled(
+          !m_remoteList->selectedItems().isEmpty());
+    });
     connect(m_removeRemoteButton, &QPushButton::clicked, this,
             &GitRemoteDialog::onRemoveRemoteClicked);
     buttonsLayout->addWidget(m_removeRemoteButton);
@@ -216,6 +234,7 @@ void GitRemoteDialog::setupUI() {
   buttonLayout->addStretch();
 
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   connect(m_closeButton, &QPushButton::clicked, this,
           &GitRemoteDialog::onCloseClicked);
   buttonLayout->addWidget(m_closeButton);
@@ -226,6 +245,18 @@ void GitRemoteDialog::setupUI() {
 void GitRemoteDialog::refresh() {
   updateRemoteList();
   updateBranchList();
+  const bool hasRemote = m_remoteSelector && m_remoteSelector->count() > 0;
+  const bool hasBranch = m_branchSelector && m_branchSelector->count() > 0;
+  if (m_pushButton)
+    m_pushButton->setEnabled(hasRemote && hasBranch);
+  if (m_pullButton)
+    m_pullButton->setEnabled(hasRemote && hasBranch);
+  if (m_fetchButton)
+    m_fetchButton->setEnabled(hasRemote);
+  if (m_remoteSelector && !hasRemote)
+    setStatus(
+        tr("No remotes configured. Add one in Repository Tools → Remotes."),
+        UIStyleHelper::Tone::Neutral);
 }
 
 void GitRemoteDialog::updateRemoteList() {
@@ -303,16 +334,31 @@ void GitRemoteDialog::onPushClicked() {
   setStatus(tr("Pushing to %1/%2...").arg(remote).arg(branch),
             UIStyleHelper::Tone::Neutral);
 
-  bool success = m_git->push(remote, branch, setUpstream);
+  const bool forceWithLease = m_forceCheckbox && m_forceCheckbox->isChecked();
+  if (forceWithLease && ThemedMessageBox::question(
+                            this, tr("Force with Lease"),
+                            tr("Replace history on %1/%2? The push will be "
+                               "rejected if the remote "
+                               "has changed since your last fetch.")
+                                .arg(remote, branch),
+                            ThemedMessageBox::Yes | ThemedMessageBox::No,
+                            ThemedMessageBox::No) != ThemedMessageBox::Yes) {
+    m_progressBar->hide();
+    setStatus(tr("Push canceled"), UIStyleHelper::Tone::Neutral);
+    return;
+  }
+  bool success = m_git->pushWithForce(remote, branch, setUpstream,
+                                      forceWithLease ? GitPushForce::WithLease
+                                                     : GitPushForce::None);
 
   m_progressBar->hide();
 
   if (success) {
-    setStatus(tr("✓ Successfully pushed to %1/%2").arg(remote).arg(branch),
+    setStatus(tr("Successfully pushed to %1/%2").arg(remote).arg(branch),
               UIStyleHelper::Tone::Success);
     emit operationCompleted(QString("Pushed to %1/%2").arg(remote).arg(branch));
   } else {
-    setStatus(tr("✗ Push failed"), UIStyleHelper::Tone::Error);
+    setStatus(tr("Push failed"), UIStyleHelper::Tone::Error);
   }
 }
 
@@ -338,16 +384,16 @@ void GitRemoteDialog::onPullClicked() {
   m_progressBar->hide();
 
   if (success) {
-    setStatus(tr("✓ Successfully pulled from %1/%2").arg(remote).arg(branch),
+    setStatus(tr("Successfully pulled from %1/%2").arg(remote).arg(branch),
               UIStyleHelper::Tone::Success);
     emit operationCompleted(
         QString("Pulled from %1/%2").arg(remote).arg(branch));
   } else {
     if (m_git->hasMergeConflicts()) {
-      setStatus(tr("⚠ Pull completed with merge conflicts"),
+      setStatus(tr("Pull completed with merge conflicts"),
                 UIStyleHelper::Tone::Warning);
     } else {
-      setStatus(tr("✗ Pull failed"), UIStyleHelper::Tone::Error);
+      setStatus(tr("Pull failed"), UIStyleHelper::Tone::Error);
     }
   }
 }
@@ -372,11 +418,11 @@ void GitRemoteDialog::onFetchClicked() {
   m_progressBar->hide();
 
   if (success) {
-    setStatus(tr("✓ Successfully fetched from %1").arg(remote),
+    setStatus(tr("Successfully fetched from %1").arg(remote),
               UIStyleHelper::Tone::Success);
     emit operationCompleted(QString("Fetched from %1").arg(remote));
   } else {
-    setStatus(tr("✗ Fetch failed"), UIStyleHelper::Tone::Error);
+    setStatus(tr("Fetch failed"), UIStyleHelper::Tone::Error);
   }
 }
 
@@ -397,10 +443,9 @@ void GitRemoteDialog::onAddRemoteClicked() {
     m_remoteNameEdit->clear();
     m_remoteUrlEdit->clear();
     updateRemoteList();
-    setStatus(tr("✓ Remote '%1' added").arg(name),
-              UIStyleHelper::Tone::Success);
+    setStatus(tr("Remote '%1' added").arg(name), UIStyleHelper::Tone::Success);
   } else {
-    setStatus(tr("✗ Failed to add remote"), UIStyleHelper::Tone::Error);
+    setStatus(tr("Failed to add remote"), UIStyleHelper::Tone::Error);
   }
 }
 
@@ -425,10 +470,10 @@ void GitRemoteDialog::onRemoveRemoteClicked() {
   if (result == ThemedMessageBox::Yes) {
     if (m_git->removeRemote(name)) {
       updateRemoteList();
-      setStatus(tr("✓ Remote '%1' removed").arg(name),
+      setStatus(tr("Remote '%1' removed").arg(name),
                 UIStyleHelper::Tone::Success);
     } else {
-      setStatus(tr("✗ Failed to remove remote"), UIStyleHelper::Tone::Error);
+      setStatus(tr("Failed to remove remote"), UIStyleHelper::Tone::Error);
     }
   }
 }
@@ -436,7 +481,7 @@ void GitRemoteDialog::onRemoveRemoteClicked() {
 void GitRemoteDialog::onCloseClicked() { accept(); }
 
 void GitRemoteDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   stylePrimaryButton(m_pushButton);
   stylePrimaryButton(m_pullButton);
@@ -460,8 +505,6 @@ void GitRemoteDialog::applyTheme(const Theme &theme) {
 }
 
 void GitRemoteDialog::applyHeroHeaderStyle() {
-  if (m_iconLabel)
-    m_iconLabel->setStyleSheet("font-size: 28px; background: transparent;");
   if (m_titleLabel)
     m_titleLabel->setStyleSheet(UIStyleHelper::headingStyle(m_theme, 17));
   if (m_subtitleLabel)

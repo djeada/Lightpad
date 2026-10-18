@@ -1,7 +1,7 @@
 #ifndef GITINITDIALOG_H
 #define GITINITDIALOG_H
 
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <QCheckBox>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -10,7 +10,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-class GitInitDialog : public StyledDialog {
+class GitInitDialog : public GitDialog {
   Q_OBJECT
 
 public:
@@ -50,7 +50,6 @@ private:
   QLineEdit *m_remoteEdit;
   QPushButton *m_initButton;
   QPushButton *m_cancelButton;
-  QLabel *m_iconLabel = nullptr;
   QLabel *m_titleLabel = nullptr;
   QLabel *m_subtitleLabel = nullptr;
 };

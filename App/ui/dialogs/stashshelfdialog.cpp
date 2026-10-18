@@ -23,7 +23,7 @@ constexpr int FILE_PATH_ROLE = Qt::UserRole + 2;
 
 StashShelfDialog::StashShelfDialog(GitIntegration *git, const Theme &theme,
                                    QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_searchEdit(nullptr),
+    : GitDialog(parent), m_git(git), m_searchEdit(nullptr),
       m_shelfList(nullptr), m_detailLabel(nullptr), m_conflictLabel(nullptr),
       m_applyExplanation(nullptr), m_fileTree(nullptr), m_applyButton(nullptr),
       m_popButton(nullptr), m_dropButton(nullptr),
@@ -31,6 +31,7 @@ StashShelfDialog::StashShelfDialog(GitIntegration *git, const Theme &theme,
       m_baseButton(nullptr), m_compareButton(nullptr),
       m_newStashButton(nullptr), m_closeButton(nullptr) {
   setWindowTitle(tr("Stash shelf"));
+  setGitDescription(tr("Inspect, compare and restore saved work."));
   setMinimumSize(880, 600);
   resize(1000, 680);
 
@@ -167,6 +168,7 @@ void StashShelfDialog::buildUi() {
   shelfActions->addWidget(m_newStashButton);
 
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("stashCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   shelfActions->addWidget(m_closeButton);
@@ -420,7 +422,7 @@ void StashShelfDialog::onCompareWithWorkingTree() {
 }
 
 void StashShelfDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   if (m_searchEdit) {
     m_searchEdit->setStyleSheet(UIStyleHelper::searchBoxStyle(theme));

@@ -18,7 +18,7 @@ constexpr int COMMIT_ID_ROLE = Qt::UserRole + 1;
 
 WhatIfSandboxDialog::WhatIfSandboxDialog(GitIntegration *git,
                                          const Theme &theme, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_bannerLabel(nullptr),
+    : GitDialog(parent), m_git(git), m_bannerLabel(nullptr),
       m_leftRefCombo(nullptr), m_rightRefCombo(nullptr), m_graphList(nullptr),
       m_journalList(nullptr), m_unreachableLabel(nullptr),
       m_limitationList(nullptr), m_mergeButton(nullptr),
@@ -27,6 +27,8 @@ WhatIfSandboxDialog::WhatIfSandboxDialog(GitIntegration *git,
       m_resetSandboxButton(nullptr), m_applyButton(nullptr),
       m_closeButton(nullptr) {
   setWindowTitle(tr("What-if sandbox"));
+  setGitDescription(
+      tr("Simulate history changes before applying them to the repository."));
   setMinimumSize(900, 640);
   resize(1040, 720);
 
@@ -157,7 +159,7 @@ void WhatIfSandboxDialog::buildUi() {
   footer->addWidget(m_resetSandboxButton);
   footer->addStretch();
 
-  m_applyButton = new QPushButton(tr("Do this for real…"), this);
+  m_applyButton = new QPushButton(tr("Apply simulation…"), this);
   m_applyButton->setObjectName(QStringLiteral("sandboxApplyButton"));
   m_applyButton->setToolTip(
       tr("Turns the simulation into real operations, each with its own "
@@ -167,6 +169,7 @@ void WhatIfSandboxDialog::buildUi() {
   footer->addWidget(m_applyButton);
 
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("sandboxCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   footer->addWidget(m_closeButton);
@@ -320,7 +323,7 @@ void WhatIfSandboxDialog::onApplyPlan() {
 }
 
 void WhatIfSandboxDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   if (m_bannerLabel) {
     m_bannerLabel->setStyleSheet(

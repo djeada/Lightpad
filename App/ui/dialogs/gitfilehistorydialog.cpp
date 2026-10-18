@@ -16,13 +16,17 @@
 GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
                                            const QString &filePath,
                                            QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_filePath(filePath) {
+    : GitDialog(parent), m_git(git), m_filePath(filePath) {
   setWindowTitle(tr("File History — %1").arg(QFileInfo(filePath).fileName()));
+  setGitDescription(
+      tr("Review revisions and inspect the changes to this file."));
   resize(750, 500);
 
   auto *layout = new QVBoxLayout(this);
 
-  m_titleLabel = new QLabel(tr("History for: <b>%1</b>").arg(filePath), this);
+  m_titleLabel = new QLabel(filePath, this);
+  m_titleLabel->setTextFormat(Qt::PlainText);
+  m_titleLabel->setWordWrap(true);
   layout->addWidget(m_titleLabel);
 
   auto *splitter = new QSplitter(Qt::Vertical, this);
@@ -52,6 +56,7 @@ GitFileHistoryDialog::GitFileHistoryDialog(GitIntegration *git,
 
   auto *buttonLayout = new QHBoxLayout;
   auto *closeBtn = new QPushButton(tr("Close"), this);
+  closeBtn->setProperty("gitDismiss", true);
   buttonLayout->addStretch();
   buttonLayout->addWidget(closeBtn);
   layout->addLayout(buttonLayout);
@@ -156,7 +161,7 @@ void GitFileHistoryDialog::showCommitDetails(const GitCommitInfo &info) {
 }
 
 void GitFileHistoryDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
   styleTitleLabel(m_titleLabel);
   if (m_git && !m_currentHash.isEmpty()) {
     showCommitDetails(m_git->getCommitDetails(m_currentHash));

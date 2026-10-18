@@ -293,7 +293,6 @@ void MainWindow::showGitWorkbench() {
             diffDialog->setAttribute(Qt::WA_DeleteOnClose);
             diffDialog->show();
           });
-  dialog.loadRepository();
   dialog.exec();
 }
 

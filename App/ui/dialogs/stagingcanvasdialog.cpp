@@ -71,7 +71,7 @@ QString markerFor(GitDiffLineType type) {
 
 StagingCanvasDialog::StagingCanvasDialog(GitIntegration *git,
                                          const Theme &theme, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_fileTree(nullptr),
+    : GitDialog(parent), m_git(git), m_fileTree(nullptr),
       m_compareSelector(nullptr), m_columnSplitter(nullptr),
       m_workingColumn(nullptr), m_workingHeader(nullptr),
       m_workingList(nullptr), m_indexColumn(nullptr), m_indexHeader(nullptr),
@@ -83,6 +83,8 @@ StagingCanvasDialog::StagingCanvasDialog(GitIntegration *git,
       m_reloading(false), m_flashTimer(new QTimer(this)),
       m_flashTarget(nullptr) {
   setWindowTitle(tr("Staging Canvas"));
+  setGitDescription(
+      tr("Review and select the exact changes to include in the index."));
   setMinimumSize(900, 560);
   resize(1100, 680);
 
@@ -111,6 +113,7 @@ void StagingCanvasDialog::buildUi() {
 
   QLabel *title = new QLabel(tr("Staging Canvas"), this);
   title->setObjectName(QStringLiteral("stagingTitleLabel"));
+  useGitHeading(title);
   title->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
   topBar->addWidget(title);
 
@@ -324,6 +327,7 @@ void StagingCanvasDialog::buildActionBar(QVBoxLayout *layout) {
   actions->addWidget(m_amendButton);
 
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("stagingCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   actions->addWidget(m_closeButton);
@@ -857,7 +861,7 @@ void StagingCanvasDialog::keyPressEvent(QKeyEvent *event) {
 }
 
 void StagingCanvasDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   const QColor mutedText = UIStyleHelper::mutedTextColor(theme);
   const auto styleColumn = [&](QLabel *header, QListWidget *list,

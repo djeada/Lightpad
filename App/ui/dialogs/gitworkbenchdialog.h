@@ -2,7 +2,7 @@
 #define GITWORKBENCHDIALOG_H
 
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <QCheckBox>
 
 class QComboBox;
@@ -35,7 +35,7 @@ struct WorkbenchRebaseEntry {
   QList<GitCommitFileStat> fileStats;
 };
 
-class GitWorkbenchDialog : public StyledDialog {
+class GitWorkbenchDialog : public GitDialog {
   Q_OBJECT
 
 public:

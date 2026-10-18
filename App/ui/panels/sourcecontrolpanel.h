@@ -18,6 +18,7 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+class QAction;
 
 class GitInitDialog;
 class GitRemoteDialog;
@@ -156,11 +157,11 @@ private:
   QPushButton *m_stageAllButton;
   QPushButton *m_unstageAllButton;
   QPushButton *m_refreshButton;
-  QPushButton *m_pushButton;
-  QPushButton *m_pullButton;
+  QAction *m_pushAction;
+  QAction *m_pullAction;
   QPushButton *m_fetchButton;
   QPushButton *m_stashButton;
-  QPushButton *m_mergeButton;
+  QAction *m_mergeAction;
   QLabel *m_stagedLabel;
   QTreeWidget *m_stagedTree;
   QLabel *m_changesLabel;
@@ -190,14 +191,14 @@ private:
   QLabel *m_noRepoDescLabel;
   QWidget *m_conflictWarningHeader;
   QLabel *m_conflictFilesHeaderLabel;
-  QPushButton *m_compareBranchesBtn;
-  QPushButton *m_worktreeBtn;
-  QPushButton *m_repoToolsBtn = nullptr;
+  QAction *m_compareAction;
+  QAction *m_worktreeAction;
+  QAction *m_repoToolsAction = nullptr;
   QPushButton *m_discardAllBtn;
   QPushButton *m_stagingCanvasBtn;
   QPushButton *m_syncRadarBtn;
   QPushButton *m_craftBtn;
-  QPushButton *m_integrateBtn;
+  QAction *m_integrateAction;
 
   bool m_historyExpanded;
   bool m_updatingBranchSelector;

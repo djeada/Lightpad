@@ -1,4 +1,5 @@
 #include "conflictcenterpanel.h"
+#include "../gitui.h"
 #include "../../git/gitconflictresolution.h"
 #include "../../git/gitintegration.h"
 #include "../dialogs/themedmessagebox.h"
@@ -332,6 +333,9 @@ void ConflictCenterPanel::updateFromContext() {
   m_abortButton->setEnabled(active);
 
   m_finishButton->setEnabled(active && remaining == 0);
+  for (auto *button : {m_openButton, m_keepAllOursButton, m_keepAllTheirsButton,
+                       m_abortButton, m_finishButton})
+    button->setVisible(active);
 
   if (!active) {
     m_fileTree->clear();
@@ -585,5 +589,9 @@ void ConflictCenterPanel::applyTheme(const Theme &theme) {
       UIStyleHelper::secondaryButtonStyle(theme));
   m_abortButton->setStyleSheet(UIStyleHelper::secondaryButtonStyle(theme));
 
+  m_openButton->setProperty("uiRole", "primary");
+  m_finishButton->setProperty("uiRole", "primary");
+  m_abortButton->setProperty("uiRole", "danger");
+  GitUi::polish(this, theme);
   updateFromContext();
 }

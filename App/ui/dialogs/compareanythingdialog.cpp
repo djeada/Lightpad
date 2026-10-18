@@ -80,7 +80,7 @@ GitCompareEndpoint decodeEndpoint(const QString &encoded) {
 CompareAnythingDialog::CompareAnythingDialog(GitIntegration *git,
                                              const Theme &theme,
                                              QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_presetCombo(nullptr),
+    : GitDialog(parent), m_git(git), m_presetCombo(nullptr),
       m_baseCombo(nullptr), m_compareCombo(nullptr), m_recentCombo(nullptr),
       m_swapButton(nullptr), m_compareButton(nullptr), m_summaryLabel(nullptr),
       m_mergeBaseLabel(nullptr), m_fileTree(nullptr), m_diffView(nullptr),
@@ -88,6 +88,8 @@ CompareAnythingDialog::CompareAnythingDialog(GitIntegration *git,
       m_onlyBaseLabel(nullptr), m_onlyCompareLabel(nullptr),
       m_populating(false) {
   setWindowTitle(tr("Compare Anything"));
+  setGitDescription(
+      tr("Compare branches, commits, tags, stashes or local changes."));
   setMinimumSize(900, 560);
   resize(1120, 700);
 
@@ -625,7 +627,7 @@ void CompareAnythingDialog::renderDiffLines(const QString &diffText) {
 }
 
 void CompareAnythingDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   stylePrimaryButton(m_compareButton);
   for (const char *name :

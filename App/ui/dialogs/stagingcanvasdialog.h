@@ -3,7 +3,7 @@
 
 #include "../../git/gitdiffmodel.h"
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <QSet>
 
 class QComboBox;
@@ -17,7 +17,7 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QVBoxLayout;
 
-class StagingCanvasDialog : public StyledDialog {
+class StagingCanvasDialog : public GitDialog {
   Q_OBJECT
 
 public:

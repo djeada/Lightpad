@@ -2,7 +2,7 @@
 #define GITREPOTOOLSDIALOG_H
 
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class QLabel;
 class QLineEdit;
@@ -11,7 +11,7 @@ class QPushButton;
 class QTabWidget;
 class QTableWidget;
 
-class GitRepoToolsDialog : public StyledDialog {
+class GitRepoToolsDialog : public GitDialog {
   Q_OBJECT
 
 public:

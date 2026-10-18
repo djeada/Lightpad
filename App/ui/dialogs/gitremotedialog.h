@@ -2,7 +2,7 @@
 #define GITREMOTEDIALOG_H
 
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGroupBox>
@@ -15,7 +15,7 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
-class GitRemoteDialog : public StyledDialog {
+class GitRemoteDialog : public GitDialog {
   Q_OBJECT
 
 public:
@@ -74,7 +74,6 @@ private:
   QPushButton *m_removeRemoteButton;
 
   QPushButton *m_closeButton;
-  QLabel *m_iconLabel = nullptr;
   QLabel *m_titleLabel = nullptr;
   QLabel *m_subtitleLabel = nullptr;
   UIStyleHelper::Tone m_statusTone = UIStyleHelper::Tone::Neutral;

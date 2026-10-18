@@ -1,7 +1,7 @@
 # Git objects, packfiles, and DAGs
 
 Open **View → Git → Objects & Packfiles…**, or choose **Objects & Packfiles**
-in the Git Workbench, Commit Graph, or Source Control's **Tools** dialog.
+in the Git Workbench, Commit Graph, or Source Control's **More → Objects and packfiles…** menu.
 The command palette also lists the menu command.
 
 ## Find a hash anywhere in local storage
@@ -35,7 +35,7 @@ available. Both original v1 indexes and v2 indexes with 64-bit offsets are read.
 
 Browsing reads pack headers and indexes; **Indexed** does not mean the pack's
 contents have been fully verified. **Verify Selected Pack** runs Git's integrity
-check and displays the result in **Pack Verification**. Missing or malformed
+check and displays the result in **Verification**. Missing or malformed
 indexes are reported without hiding readable copies elsewhere in storage.
 
 ## Explore contents and dependencies
@@ -82,7 +82,7 @@ returns to the normal repository view.
 | Next inspected object | Alt+Right |
 
 Scans, hash searches, previews, and verification run in the background.
-**Cancel** stops those operations; closing the explorer also cancels its work.
+**Stop** cancels those operations; closing the explorer also cancels its work.
 Inspection uses local data and disables lazy fetching, replacement objects,
 optional Git locks, and credential prompts. Objects absent from a partial clone
 or submodule store can appear as unavailable; opening a gitlink does not fetch
@@ -94,3 +94,27 @@ change the repository. Refresh after another process fetches, repacks, or prunes
 Implementation references: Git's [pack/index format](https://git-scm.com/docs/gitformat-pack),
 [cat-file](https://git-scm.com/docs/git-cat-file), and
 [verify-pack](https://git-scm.com/docs/git-verify-pack) documentation.
+
+## Shared Git interface
+
+Git dialogs use shared headings, spacing, control styles, empty states and
+wrapping action rows. The Diff toolbar wraps by tool group; Undo keeps long
+explanations in a scrollable body with its actions visible. The Workbench
+inspector scrolls independently, and its initial history loads on opening.
+
+In Source Control, **Fetch**, **Stashes…** and **Sync…** remain visible.
+**More** contains pull, push, merge, integration, comparison, worktrees,
+repository tools and object inspection. **Tools** in the panel header opens
+simulation, command history and recovery. At narrow dock widths, the repository
+state map collapses to a summary with the full state available in its tooltip.
+
+Fetch asks only for a remote. Push's **Force with lease** option checks that the
+remote still matches the last fetched state. Selection-dependent remote/tag
+commands stay disabled until their inputs are available. Pressing Enter in a
+browsing or revision field does not implicitly start a repository change.
+
+`GitUiConsistencyTests` exercises every Git dialog, Source Control and both
+conflict surfaces in dark/light themes at compact sizes. It checks action and
+label clipping, scroll viewport widths, safe keyboard defaults, selection states,
+repeat theme application and wrapped action interaction. For a screenshot
+gallery, set `LIGHTPAD_GIT_UI_CAPTURE_DIR` when running `test_gituiconsistency`.

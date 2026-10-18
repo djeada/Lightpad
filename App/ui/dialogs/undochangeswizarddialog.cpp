@@ -10,6 +10,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QScrollArea>
 #include <QVBoxLayout>
 
 namespace {
@@ -48,16 +49,18 @@ const QList<GitUndoGoal> &allGoals() {
 UndoChangesWizardDialog::UndoChangesWizardDialog(GitIntegration *git,
                                                  const Theme &theme,
                                                  QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_headerLabel(nullptr),
+    : GitDialog(parent), m_git(git), m_headerLabel(nullptr),
       m_recommendationLabel(nullptr), m_matrixLabel(nullptr),
       m_commandLabel(nullptr), m_riskList(nullptr), m_previewButton(nullptr),
       m_executeButton(nullptr), m_cancelButton(nullptr), m_updating(false) {
   setWindowTitle(tr("Undo changes"));
+  setGitDescription(
+      tr("Choose what to undo and review how local work will be affected."));
   setMinimumSize(780, 640);
   resize(900, 720);
 
   buildUi();
-  setKeyboardDefault(m_executeButton);
+  setKeyboardDefault(nullptr);
   applyTheme(theme);
   reload();
   reloadOnExternalGitChanges(this, m_git, [this]() { reload(); });
@@ -69,19 +72,30 @@ void UndoChangesWizardDialog::buildUi() {
                              UiMetrics::SpaceLg, UiMetrics::SpaceLg);
   layout->setSpacing(UiMetrics::SpaceMd);
 
+  auto *scroll = new QScrollArea(this);
+  scroll->setObjectName(QStringLiteral("undoOptionsScroll"));
+  scroll->setWidgetResizable(true);
+  scroll->setFrameShape(QFrame::NoFrame);
+  scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  auto *content = new QWidget(scroll);
+  auto *body = new QVBoxLayout(content);
+  body->setContentsMargins(0, 0, 8, 0);
+  body->setSpacing(UiMetrics::SpaceMd);
   m_headerLabel = new QLabel(this);
   m_headerLabel->setObjectName(QStringLiteral("undoHeaderLabel"));
   m_headerLabel->setWordWrap(true);
-  layout->addWidget(m_headerLabel);
+  body->addWidget(m_headerLabel);
 
   m_recommendationLabel = new QLabel(this);
   m_recommendationLabel->setObjectName(
       QStringLiteral("undoRecommendationLabel"));
   m_recommendationLabel->setWordWrap(true);
-  layout->addWidget(m_recommendationLabel);
+  body->addWidget(m_recommendationLabel);
 
-  buildOptions(layout);
-  buildMatrix(layout);
+  buildOptions(body);
+  buildMatrix(body);
+  scroll->setWidget(content);
+  layout->addWidget(scroll, 1);
   buildFooter(layout);
 }
 
@@ -139,6 +153,7 @@ void UndoChangesWizardDialog::buildFooter(QVBoxLayout *layout) {
   footer->addWidget(m_previewButton);
 
   m_cancelButton = new QPushButton(tr("Cancel"), this);
+  m_cancelButton->setProperty("gitDismiss", true);
   m_cancelButton->setObjectName(QStringLiteral("undoCancelButton"));
   connect(m_cancelButton, &QPushButton::clicked, this, &QDialog::reject);
   footer->addWidget(m_cancelButton);
@@ -349,7 +364,7 @@ void UndoChangesWizardDialog::onExecute() {
 }
 
 void UndoChangesWizardDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   styleTitleLabel(m_headerLabel);
   for (const char *name :

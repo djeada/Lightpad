@@ -2,7 +2,7 @@
 #define OPERATIONPREVIEWDIALOG_H
 
 #include "../../git/gitoperationpreview.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class QCheckBox;
 class QLabel;
@@ -10,7 +10,7 @@ class QListWidget;
 class QPushButton;
 class QVBoxLayout;
 
-class OperationPreviewDialog : public StyledDialog {
+class OperationPreviewDialog : public GitDialog {
   Q_OBJECT
 
 public:

@@ -37,8 +37,10 @@ QString copyDescription(const GitMergeSource &source) {
 
 MergeStartDialog::MergeStartDialog(GitIntegration *git, const Theme &theme,
                                    QWidget *parent)
-    : StyledDialog(parent), m_git(git) {
+    : GitDialog(parent), m_git(git) {
   setWindowTitle(tr("Combine two branches"));
+  setGitDescription(
+      tr("Review the source, destination and expected merge result."));
   setObjectName(QStringLiteral("mergeStartDialog"));
   setMinimumSize(620, 560);
   resize(720, 700);
@@ -65,6 +67,7 @@ void MergeStartDialog::buildUi() {
       this);
   subtitle->setObjectName(QStringLiteral("mergeSubtitleLabel"));
   subtitle->setWordWrap(true);
+  useGitHeading(title, subtitle);
   layout->addWidget(subtitle);
 
   QScrollArea *scroll = new QScrollArea(this);
@@ -251,6 +254,7 @@ void MergeStartDialog::buildActions(QVBoxLayout *layout) {
   actions->addStretch();
 
   m_cancelButton = new QPushButton(tr("Cancel"), this);
+  m_cancelButton->setProperty("gitDismiss", true);
   m_cancelButton->setObjectName(QStringLiteral("mergeCancelButton"));
   connect(m_cancelButton, &QPushButton::clicked, this,
           &MergeStartDialog::reject);
@@ -263,7 +267,7 @@ void MergeStartDialog::buildActions(QVBoxLayout *layout) {
   actions->addWidget(m_startButton);
 
   layout->addLayout(actions);
-  setKeyboardDefault(m_startButton);
+  setKeyboardDefault(nullptr);
 }
 
 void MergeStartDialog::loadChoices() {
@@ -471,7 +475,7 @@ void MergeStartDialog::updateStartButton() {
 }
 
 void MergeStartDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   const QString scrollRules =
       QStringLiteral(

@@ -605,6 +605,15 @@ set(project_resources
     format_templates/format_templates.qrc
     test_templates/test_templates.qrc)
 
+add_library(lightpad_git_ui STATIC
+    ui/gitui.cpp
+    ui/gitui.h
+    ui/dialogs/gitdialog.cpp
+    ui/dialogs/gitdialog.h
+    ui/widgets/flowlayout.cpp
+)
+target_link_libraries(lightpad_git_ui PUBLIC Qt6::Widgets)
+
 add_executable(Lightpad 
     ${project_headers} 
     ${project_sources}
@@ -616,6 +625,7 @@ endif()
 
 target_link_libraries(Lightpad
     PRIVATE
+    lightpad_git_ui
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets

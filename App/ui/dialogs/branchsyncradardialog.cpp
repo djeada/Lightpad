@@ -26,7 +26,7 @@ QString divergenceStyle(const Theme &theme, bool diverged) {
 BranchSyncRadarDialog::BranchSyncRadarDialog(GitIntegration *git,
                                              const Theme &theme,
                                              QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_headerLabel(nullptr),
+    : GitDialog(parent), m_git(git), m_headerLabel(nullptr),
       m_summaryLabel(nullptr), m_mergeBaseLabel(nullptr),
       m_incomingLabel(nullptr), m_outgoingLabel(nullptr),
       m_divergenceLabel(nullptr), m_strategyPreview(nullptr),
@@ -36,6 +36,8 @@ BranchSyncRadarDialog::BranchSyncRadarDialog(GitIntegration *git,
       m_fetchButton(nullptr), m_pullButton(nullptr), m_pushButton(nullptr),
       m_upstreamButton(nullptr), m_closeButton(nullptr) {
   setWindowTitle(tr("Branch Sync Radar"));
+  setGitDescription(
+      tr("Review incoming and outgoing commits before synchronizing."));
   setMinimumSize(820, 560);
   resize(980, 660);
 
@@ -218,6 +220,7 @@ void BranchSyncRadarDialog::buildStrategyBar(QVBoxLayout *layout) {
   actions->addStretch();
 
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("radarCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   actions->addWidget(m_closeButton);
@@ -469,7 +472,7 @@ void BranchSyncRadarDialog::onSetUpstreamClicked() {
 }
 
 void BranchSyncRadarDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   styleTitleLabel(m_headerLabel);
   for (const char *name :

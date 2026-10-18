@@ -1,7 +1,7 @@
 #ifndef GITREBASEDIALOG_H
 #define GITREBASEDIALOG_H
 
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QTreeWidget;
@@ -19,7 +19,7 @@ struct RebaseEntry {
   QString author;
 };
 
-class GitRebaseDialog : public StyledDialog {
+class GitRebaseDialog : public GitDialog {
   Q_OBJECT
 
 public:

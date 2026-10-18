@@ -60,7 +60,7 @@ CommitChangeRef readChange(const QTreeWidgetItem *item) {
 
 CommitCraftingDialog::CommitCraftingDialog(GitIntegration *git,
                                            const Theme &theme, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_headerLabel(nullptr),
+    : GitDialog(parent), m_git(git), m_headerLabel(nullptr),
       m_unassignedLabel(nullptr), m_bucketStatsLabel(nullptr),
       m_unassignedTree(nullptr), m_bucketTree(nullptr), m_promptList(nullptr),
       m_bucketNameEdit(nullptr), m_messageEdit(nullptr),
@@ -68,6 +68,7 @@ CommitCraftingDialog::CommitCraftingDialog(GitIntegration *git,
       m_assignButton(nullptr), m_returnButton(nullptr), m_commitButton(nullptr),
       m_refreshButton(nullptr), m_closeButton(nullptr), m_updating(false) {
   setWindowTitle(tr("Commit Crafting Workspace"));
+  setGitDescription(tr("Organize working changes into focused commits."));
   setMinimumSize(900, 620);
   resize(1080, 740);
 
@@ -114,6 +115,7 @@ void CommitCraftingDialog::buildUi() {
   QHBoxLayout *footer = new QHBoxLayout();
   footer->addStretch();
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("craftCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   footer->addWidget(m_closeButton);
@@ -393,7 +395,7 @@ void CommitCraftingDialog::refreshPrompts() {
 
   for (const ReviewPrompt &prompt : m_prompts) {
     const QString glyph = prompt.kind == ReviewPrompt::Kind::CoupledChange
-                              ? QStringLiteral("💡")
+                              ? tr("Suggestion:")
                               : QStringLiteral("⚠");
     QListWidgetItem *item = new QListWidgetItem(
         glyph + QStringLiteral(" ") + prompt.text, m_promptList);
@@ -648,7 +650,7 @@ void CommitCraftingDialog::keyPressEvent(QKeyEvent *event) {
 }
 
 void CommitCraftingDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   m_promptWarningColor = theme.warningColor;
   m_promptNormalColor = theme.foregroundColor;

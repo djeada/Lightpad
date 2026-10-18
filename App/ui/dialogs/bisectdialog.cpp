@@ -17,13 +17,14 @@
 
 BisectDialog::BisectDialog(GitIntegration *git, const Theme &theme,
                            QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_goodCombo(nullptr),
-      m_badCombo(nullptr), m_commandEdit(nullptr), m_statusLabel(nullptr),
-      m_guidanceLabel(nullptr), m_progressLabel(nullptr), m_outputView(nullptr),
-      m_logList(nullptr), m_startButton(nullptr), m_goodButton(nullptr),
-      m_badButton(nullptr), m_skipButton(nullptr), m_runButton(nullptr),
-      m_inspectButton(nullptr), m_resetButton(nullptr), m_closeButton(nullptr) {
+    : GitDialog(parent), m_git(git), m_goodCombo(nullptr), m_badCombo(nullptr),
+      m_commandEdit(nullptr), m_statusLabel(nullptr), m_guidanceLabel(nullptr),
+      m_progressLabel(nullptr), m_outputView(nullptr), m_logList(nullptr),
+      m_startButton(nullptr), m_goodButton(nullptr), m_badButton(nullptr),
+      m_skipButton(nullptr), m_runButton(nullptr), m_inspectButton(nullptr),
+      m_resetButton(nullptr), m_closeButton(nullptr) {
   setWindowTitle(tr("Guided bisect"));
+  setGitDescription(tr("Find the commit that introduced a regression."));
   setMinimumSize(860, 620);
   resize(980, 700);
 
@@ -123,7 +124,7 @@ void BisectDialog::buildUi() {
       tr("e.g. make test — exit 0 good, 1-127 bad, 125 cannot test"));
   automated->addWidget(m_commandEdit, 1);
 
-  m_runButton = new QPushButton(tr("Run it"), this);
+  m_runButton = new QPushButton(tr("Run test"), this);
   m_runButton->setObjectName(QStringLiteral("bisectRunButton"));
   m_runButton->setToolTip(
       tr("Runs the command at every candidate and reads the verdict from its "
@@ -154,7 +155,7 @@ void BisectDialog::buildUi() {
   layout->addWidget(m_logList);
 
   QHBoxLayout *footer = new QHBoxLayout();
-  m_resetButton = new QPushButton(tr("Reset the search"), this);
+  m_resetButton = new QPushButton(tr("End bisect"), this);
   m_resetButton->setObjectName(QStringLiteral("bisectResetButton"));
   m_resetButton->setToolTip(
       tr("Ends the bisect and puts your checkout back where it started."));
@@ -163,6 +164,7 @@ void BisectDialog::buildUi() {
   footer->addStretch();
 
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("bisectCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   footer->addWidget(m_closeButton);
@@ -334,7 +336,7 @@ void BisectDialog::onInspectSuspect() {
 }
 
 void BisectDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   styleTitleLabel(m_statusLabel);
   for (const char *name :

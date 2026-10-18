@@ -486,6 +486,13 @@ QString treeViewStyleImpl(const Style &s) {
              c.scrollThumbHover.isValid() ? c.scrollThumbHover : c.textMuted);
 }
 
+QString scrollBarStyleImpl(const Style &s) {
+  const auto &c = s.c;
+  return scrollBarRules(
+      c.scrollThumb.isValid() ? c.scrollThumb : c.borderDefault,
+      c.scrollThumbHover.isValid() ? c.scrollThumbHover : c.textMuted);
+}
+
 QString contextMenuStyleImpl(const Style &s) {
   const ThemeColors &c = s.c;
   const QColor bg = glowSurface(s, c.surfacePopover, 0.55);
@@ -1292,6 +1299,7 @@ LP_STYLE_PAIR(resultListStyle)
 LP_STYLE_PAIR(panelHeaderStyle)
 LP_STYLE_PAIR(treeWidgetStyle)
 LP_STYLE_PAIR(treeViewStyle)
+LP_STYLE_PAIR(scrollBarStyle)
 LP_STYLE_PAIR(contextMenuStyle)
 LP_STYLE_PAIR(comboBoxStyle)
 LP_STYLE_PAIR(checkBoxStyle)

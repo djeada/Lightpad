@@ -2,7 +2,7 @@
 #define TIMETRAVELDIALOG_H
 
 #include "../../git/gittimetravel.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <QMap>
 
 class GitIntegration;
@@ -13,7 +13,7 @@ class QPushButton;
 class QRadioButton;
 class QVBoxLayout;
 
-class TimeTravelDialog : public StyledDialog {
+class TimeTravelDialog : public GitDialog {
   Q_OBJECT
 
 public:

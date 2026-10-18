@@ -2,7 +2,7 @@
 #define INTEGRATIONADVISORDIALOG_H
 
 #include "../../git/gitintegrationadvice.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <QMap>
 
 class QCheckBox;
@@ -13,7 +13,7 @@ class QPushButton;
 class QRadioButton;
 class QVBoxLayout;
 
-class IntegrationAdvisorDialog : public StyledDialog {
+class IntegrationAdvisorDialog : public GitDialog {
   Q_OBJECT
 
 public:

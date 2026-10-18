@@ -3,12 +3,14 @@
 #include "themedmessagebox.h"
 
 GitStashDialog::GitStashDialog(GitIntegration *git, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_stashList(nullptr),
+    : GitDialog(parent), m_git(git), m_stashList(nullptr),
       m_messageEdit(nullptr), m_includeUntrackedCheckbox(nullptr),
       m_stashButton(nullptr), m_popButton(nullptr), m_applyButton(nullptr),
       m_dropButton(nullptr), m_clearButton(nullptr), m_closeButton(nullptr),
       m_statusLabel(nullptr), m_detailsLabel(nullptr) {
   setWindowTitle(tr("Git Stash"));
+  setGitDescription(
+      tr("Save unfinished changes and restore them when you need them."));
   setMinimumSize(600, 500);
   setupUI();
   refresh();
@@ -24,8 +26,6 @@ void GitStashDialog::setupUI() {
 
   QHBoxLayout *headerLayout = new QHBoxLayout();
 
-  m_iconLabel = new QLabel("📦", this);
-  headerLayout->addWidget(m_iconLabel);
 
   QVBoxLayout *titleLayout = new QVBoxLayout();
   m_titleLabel = new QLabel(tr("Stash Changes"), this);
@@ -36,6 +36,7 @@ void GitStashDialog::setupUI() {
   headerLayout->addLayout(titleLayout, 1);
 
   mainLayout->addLayout(headerLayout);
+  useGitHeading(m_titleLabel, m_subtitleLabel);
 
   QGroupBox *newStashGroup = new QGroupBox(tr("Stash Current Changes"), this);
   QVBoxLayout *newStashLayout = new QVBoxLayout(newStashGroup);
@@ -69,6 +70,8 @@ void GitStashDialog::setupUI() {
   QVBoxLayout *listLayout = new QVBoxLayout(listGroup);
 
   m_stashList = new QListWidget(this);
+  m_stashList->setProperty(
+      "gitEmptyText", tr("No saved stashes. Save your current changes above."));
   connect(m_stashList, &QListWidget::itemClicked, this,
           &GitStashDialog::onStashSelected);
   listLayout->addWidget(m_stashList);
@@ -122,6 +125,7 @@ void GitStashDialog::setupUI() {
   bottomLayout->addWidget(m_statusLabel, 1);
 
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   connect(m_closeButton, &QPushButton::clicked, this,
           &GitStashDialog::onCloseClicked);
   bottomLayout->addWidget(m_closeButton);
@@ -214,7 +218,7 @@ void GitStashDialog::onStashClicked() {
     refresh();
     emit stashOperationCompleted(tr("Changes stashed"));
   } else {
-    setStatus(tr("✗ Failed to stash changes"), UIStyleHelper::Tone::Error);
+    setStatus(tr("Failed to stash changes"), UIStyleHelper::Tone::Error);
   }
 }
 
@@ -231,7 +235,7 @@ void GitStashDialog::onPopClicked() {
       setStatus(tr("⚠ Stash popped with conflicts"),
                 UIStyleHelper::Tone::Warning);
     } else {
-      setStatus(tr("✗ Failed to pop stash"), UIStyleHelper::Tone::Error);
+      setStatus(tr("Failed to pop stash"), UIStyleHelper::Tone::Error);
     }
   }
 }
@@ -255,7 +259,7 @@ void GitStashDialog::onApplyClicked() {
       setStatus(tr("⚠ Stash applied with conflicts"),
                 UIStyleHelper::Tone::Warning);
     } else {
-      setStatus(tr("✗ Failed to apply stash"), UIStyleHelper::Tone::Error);
+      setStatus(tr("Failed to apply stash"), UIStyleHelper::Tone::Error);
     }
   }
 }
@@ -284,7 +288,7 @@ void GitStashDialog::onDropClicked() {
       refresh();
       emit stashOperationCompleted(QString(tr("Stash %1 dropped")).arg(index));
     } else {
-      setStatus(tr("✗ Failed to drop stash"), UIStyleHelper::Tone::Error);
+      setStatus(tr("Failed to drop stash"), UIStyleHelper::Tone::Error);
     }
   }
 }
@@ -305,7 +309,7 @@ void GitStashDialog::onClearClicked() {
       refresh();
       emit stashOperationCompleted(tr("All stashes cleared"));
     } else {
-      setStatus(tr("✗ Failed to clear stashes"), UIStyleHelper::Tone::Error);
+      setStatus(tr("Failed to clear stashes"), UIStyleHelper::Tone::Error);
     }
   }
 }
@@ -313,7 +317,7 @@ void GitStashDialog::onClearClicked() {
 void GitStashDialog::onCloseClicked() { accept(); }
 
 void GitStashDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   stylePrimaryButton(m_stashButton);
   styleDangerButton(m_dropButton);
@@ -326,8 +330,6 @@ void GitStashDialog::applyTheme(const Theme &theme) {
 }
 
 void GitStashDialog::applyHeroHeaderStyle() {
-  if (m_iconLabel)
-    m_iconLabel->setStyleSheet("font-size: 28px; background: transparent;");
   if (m_titleLabel)
     m_titleLabel->setStyleSheet(UIStyleHelper::headingStyle(m_theme, 17));
   if (m_subtitleLabel)

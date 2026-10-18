@@ -2,7 +2,7 @@
 #define STASHSHELFDIALOG_H
 
 #include "../../git/gitstashshelf.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QLabel;
@@ -12,7 +12,7 @@ class QPushButton;
 class QTreeWidget;
 class QVBoxLayout;
 
-class StashShelfDialog : public StyledDialog {
+class StashShelfDialog : public GitDialog {
   Q_OBJECT
 
 public:

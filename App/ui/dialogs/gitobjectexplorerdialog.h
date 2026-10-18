@@ -2,7 +2,7 @@
 #define GITOBJECTEXPLORERDIALOG_H
 
 #include "../../git/gitobjectdatabase.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 #include <atomic>
 #include <memory>
 
@@ -11,7 +11,7 @@ class QGraphicsView;
 class QTreeWidget;
 class QTimer;
 
-class GitObjectExplorerDialog : public StyledDialog {
+class GitObjectExplorerDialog : public GitDialog {
   Q_OBJECT
 public:
   explicit GitObjectExplorerDialog(const QString &repositoryPath,

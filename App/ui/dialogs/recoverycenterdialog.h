@@ -2,7 +2,7 @@
 #define RECOVERYCENTERDIALOG_H
 
 #include "../../git/gitrecovery.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class GitIntegration;
 class QLabel;
@@ -11,7 +11,7 @@ class QPushButton;
 class QTreeWidget;
 class QVBoxLayout;
 
-class RecoveryCenterDialog : public StyledDialog {
+class RecoveryCenterDialog : public GitDialog {
   Q_OBJECT
 
 public:

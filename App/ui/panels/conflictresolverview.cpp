@@ -1,4 +1,5 @@
 #include "conflictresolverview.h"
+#include "../gitui.h"
 #include "../../git/gitintegration.h"
 #include "../../theme/colorcontrast.h"
 #include "../uimetrics.h"
@@ -324,6 +325,7 @@ void ConflictResolverView::rebuildBody() {
     m_bodyLayout->addStretch();
     updateHeader();
     updateToolbar();
+    GitUi::polish(this, m_theme);
     return;
   }
 
@@ -348,6 +350,7 @@ void ConflictResolverView::rebuildBody() {
   }
 
   m_bodyLayout->addStretch();
+  GitUi::polish(this, m_theme);
   updateHeader();
   updateToolbar();
 
@@ -919,5 +922,7 @@ void ConflictResolverView::applyTheme(const Theme &theme) {
                      "%2; border-radius: 4px; }")
           .arg(theme.surfaceAltColor.name(), theme.accentColor.name()));
 
+  m_doneButton->setProperty("uiRole", "primary");
   rebuildBody();
+  GitUi::polish(this, theme);
 }

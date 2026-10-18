@@ -19,12 +19,13 @@ constexpr int EVENT_INDEX_ROLE = Qt::UserRole + 1;
 
 RecoveryCenterDialog::RecoveryCenterDialog(GitIntegration *git,
                                            const Theme &theme, QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_headerLabel(nullptr),
+    : GitDialog(parent), m_git(git), m_headerLabel(nullptr),
       m_timelineTree(nullptr), m_descriptionLabel(nullptr),
       m_guaranteeLabel(nullptr), m_detailList(nullptr),
       m_recoverButton(nullptr), m_inspectButton(nullptr),
       m_compareButton(nullptr), m_closeButton(nullptr) {
   setWindowTitle(tr("Recovery Center"));
+  setGitDescription(tr("Find earlier work and create a branch to recover it."));
   setMinimumSize(880, 600);
   resize(1000, 680);
 
@@ -113,6 +114,7 @@ void RecoveryCenterDialog::buildUi() {
   footer->addStretch();
 
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->setProperty("gitDismiss", true);
   m_closeButton->setObjectName(QStringLiteral("recoveryCloseButton"));
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
   footer->addWidget(m_closeButton);
@@ -229,7 +231,7 @@ void RecoveryCenterDialog::onCompareWithHead() {
 }
 
 void RecoveryCenterDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   styleSubduedLabel(m_headerLabel);
   if (m_guaranteeLabel) {

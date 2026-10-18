@@ -2,7 +2,7 @@
 #define GITLOGDIALOG_H
 
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class QVBoxLayout;
 
@@ -19,7 +19,7 @@ class QCheckBox;
 class QPushButton;
 class QToolButton;
 
-class GitLogDialog : public StyledDialog {
+class GitLogDialog : public GitDialog {
   Q_OBJECT
 
 public:

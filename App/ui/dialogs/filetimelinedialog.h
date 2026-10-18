@@ -2,7 +2,7 @@
 #define FILETIMELINEDIALOG_H
 
 #include "../../git/gitintegration.h"
-#include "styleddialog.h"
+#include "gitdialog.h"
 
 class QCheckBox;
 class QLabel;
@@ -15,7 +15,7 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QVBoxLayout;
 
-class FileTimelineDialog : public StyledDialog {
+class FileTimelineDialog : public GitDialog {
   Q_OBJECT
 
 public:

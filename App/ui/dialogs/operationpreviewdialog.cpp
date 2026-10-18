@@ -61,7 +61,7 @@ bool OperationPreviewDialog::confirm(GitIntegration *git,
 OperationPreviewDialog::OperationPreviewDialog(
     GitIntegration *git, const GitOperationRequest &request, const Theme &theme,
     QWidget *parent)
-    : StyledDialog(parent), m_git(git), m_headlineLabel(nullptr),
+    : GitDialog(parent), m_git(git), m_headlineLabel(nullptr),
       m_riskLabel(nullptr), m_rationaleLabel(nullptr), m_layersLabel(nullptr),
       m_beforeLabel(nullptr), m_afterLabel(nullptr), m_beforeList(nullptr),
       m_afterList(nullptr), m_riskList(nullptr), m_commandLabel(nullptr),
@@ -71,6 +71,7 @@ OperationPreviewDialog::OperationPreviewDialog(
   m_preview = previewGitOperation(git, request);
 
   setWindowTitle(tr("%1 — preview").arg(gitOperationKindName(request.kind)));
+  setGitDescription(tr("Review the expected changes before continuing."));
   setMinimumSize(820, 560);
   resize(960, 660);
 
@@ -218,6 +219,7 @@ void OperationPreviewDialog::buildDetails(QVBoxLayout *layout) {
   actions->addStretch();
 
   m_cancelButton = new QPushButton(tr("Cancel"), this);
+  m_cancelButton->setProperty("gitDismiss", true);
   m_cancelButton->setObjectName(QStringLiteral("previewCancelButton"));
   connect(m_cancelButton, &QPushButton::clicked, this, &QDialog::reject);
   actions->addWidget(m_cancelButton);
@@ -252,7 +254,7 @@ void OperationPreviewDialog::fillGraph(QListWidget *list,
 }
 
 void OperationPreviewDialog::applyTheme(const Theme &theme) {
-  StyledDialog::applyTheme(theme);
+  GitDialog::applyTheme(theme);
 
   UIStyleHelper::Tone riskTone = UIStyleHelper::Tone::Success;
   switch (m_preview.effect.risk) {
