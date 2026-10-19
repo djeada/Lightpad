@@ -288,7 +288,7 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
         }
         values.append(value);
       }
-      // debugpy also includes synthetic members for indexed requests.
+
       values.prepend(QJsonObject{{"name", "special variables"},
                                  {"variablesReference", 9998}});
       values.append(QJsonObject{{"name", "len()"},

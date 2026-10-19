@@ -14,7 +14,7 @@ async def main():
     reader = asyncio.create_task(worker("reader", gate), name="io-reader")
     writer = asyncio.create_task(worker("writer", gate), name="io-writer")
     await asyncio.sleep(0)
-    inspection_marker = "tasks-ready"  # ASYNC_INSPECT
+    inspection_marker = "tasks-ready"  
     writer.cancel()
     gate.set()
     results = await asyncio.gather(reader, writer, return_exceptions=True)

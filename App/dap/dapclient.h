@@ -507,8 +507,6 @@ public:
   void getVariables(int variablesReference, const QString &filter = {},
                     int start = 0, int count = 0);
 
-  // Independent, correlated requests keep inspector pages out of scope/watch
-  // responses, even when they refer to the same object.
   int inspectVariables(int variablesReference, const QString &filter = {},
                        int start = 0, int count = 100);
 

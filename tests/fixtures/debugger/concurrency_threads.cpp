@@ -29,7 +29,7 @@ void worker(int id) {
   } else {
     while (!betaReady)
       std::this_thread::yield();
-    volatile int inspectionMarker = payload.id; // CPP_THREAD_INSPECT
+    volatile int inspectionMarker = payload.id;
     {
       std::lock_guard<std::mutex> lock(mutex);
       released = true;

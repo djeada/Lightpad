@@ -34,6 +34,7 @@
 #include <QPalette>
 #include <QPointer>
 #include <QRegularExpression>
+#include <QScrollArea>
 #include <QScrollBar>
 #include <QSignalBlocker>
 #include <QSplitter>
@@ -54,6 +55,16 @@ constexpr int MAX_DEBUG_CONSOLE_BLOCKS = 2000;
 constexpr int MAX_DEBUG_CONSOLE_ENTRY_CHARS = 8192;
 constexpr int MAX_EAGER_SCOPE_LOADS = 1;
 constexpr int MAX_STACK_FRAMES_PER_REFRESH = 64;
+
+QWidget *scrollableInspectorPage(QWidget *content, QWidget *parent) {
+  auto *scroll = new QScrollArea(parent);
+  scroll->setFrameShape(QFrame::NoFrame);
+  scroll->setWidgetResizable(true);
+
+  scroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
+  scroll->setWidget(content);
+  return scroll;
+}
 
 QString fillStyleTemplate(
     QString style,
@@ -373,7 +384,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
       UIStyleHelper::panelStyle(theme, objectName()) +
       fillStyleTemplate(
           QStringLiteral(
-              "QWidget#debugPanel {"
+              "QWidget#debugPanel, QWidget#debugPanelContent {"
               "  background: {panelBg};"
               "  color: {fg};"
               "}"
@@ -678,15 +689,22 @@ void DebugPanel::applyTheme(const Theme &theme) {
 
 void DebugPanel::setupUI() {
   setObjectName("debugPanel");
-  QVBoxLayout *mainLayout = new QVBoxLayout(this);
-  mainLayout->setContentsMargins(10, 10, 10, 10);
-  mainLayout->setSpacing(8);
+  auto *outerLayout = new QVBoxLayout(this);
+  outerLayout->setContentsMargins(0, 0, 0, 0);
+  auto *content = new QWidget(this);
+  content->setObjectName("debugPanelContent");
+  auto *scroll = scrollableInspectorPage(content, this);
+  scroll->setObjectName("debugPanelScroll");
+  outerLayout->addWidget(scroll);
+  QVBoxLayout *mainLayout = new QVBoxLayout(content);
+  mainLayout->setContentsMargins(6, 6, 6, 6);
+  mainLayout->setSpacing(4);
 
   setupToolbar();
   QWidget *toolbarShell = new QWidget(this);
   toolbarShell->setObjectName("debugToolbarShell");
   QHBoxLayout *toolbarShellLayout = new QHBoxLayout(toolbarShell);
-  toolbarShellLayout->setContentsMargins(10, 8, 10, 8);
+  toolbarShellLayout->setContentsMargins(10, 4, 10, 4);
   toolbarShellLayout->setSpacing(0);
   toolbarShellLayout->addWidget(m_toolbar);
   mainLayout->addWidget(toolbarShell);
@@ -772,7 +790,8 @@ void DebugPanel::setupUI() {
   m_inspectorStack->addWidget(breakpointsPage);
   m_inspectorStack->addWidget(consolePage);
   m_concurrencyPanel = new DebugConcurrencyPanel(this);
-  m_inspectorStack->addWidget(m_concurrencyPanel);
+  m_inspectorStack->addWidget(
+      scrollableInspectorPage(m_concurrencyPanel, m_inspectorStack));
   connect(m_concurrencyPanel, &DebugConcurrencyPanel::clientSelected, this,
           &DebugPanel::setDapClient);
   connect(m_concurrencyPanel, &DebugConcurrencyPanel::threadSelected, this,
@@ -804,6 +823,12 @@ void DebugPanel::setupUI() {
 
   setCurrentInspectorTab(0);
   updateSectionSummaries();
+}
+
+QSize DebugPanel::sizeHint() const {
+  const QSize hint = QWidget::sizeHint();
+
+  return QSize(hint.width(), 160);
 }
 
 QToolButton *DebugPanel::createInspectorTabButton(const QString &label,
@@ -855,7 +880,7 @@ QWidget *DebugPanel::createInspectorPage(QWidget *content,
   }
 
   hostLayout->addWidget(card);
-  return pageHost;
+  return scrollableInspectorPage(pageHost, this);
 }
 
 void DebugPanel::setCurrentInspectorTab(int index) {

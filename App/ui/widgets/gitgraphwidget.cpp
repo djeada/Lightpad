@@ -295,55 +295,54 @@ void GitGraphWidget::requestMoreCommits() {
 
   QPointer<GitGraphWidget> self(this);
   const quint64 generation = m_loadGeneration;
-  m_git->getLogPageAsync(m_logOptions, m_nodes.size(), m_pageSize,
-                         [self, generation](QList<GitCommitInfo> page) {
-                           if (!self || self->m_loadGeneration != generation) {
-                             return;
-                           }
+  m_git->getLogPageAsync(
+      m_logOptions, m_nodes.size(), m_pageSize,
+      [self, generation](QList<GitCommitInfo> page) {
+        if (!self || self->m_loadGeneration != generation) {
+          return;
+        }
 
-                           self->m_loadingMore = false;
+        self->m_loadingMore = false;
 
-                           if (page.isEmpty()) {
-                             self->m_historyExhausted = true;
-                             emit self->historyExhausted();
-                             self->update();
-                             return;
-                           }
+        if (page.isEmpty()) {
+          self->m_historyExhausted = true;
+          emit self->historyExhausted();
+          self->update();
+          return;
+        }
 
-                           if (page.size() < self->m_pageSize) {
-                             self->m_historyExhausted = true;
-                             emit self->historyExhausted();
-                           }
+        if (page.size() < self->m_pageSize) {
+          self->m_historyExhausted = true;
+          emit self->historyExhausted();
+        }
 
-                           const int previousScroll = self->m_scrollOffset;
-                           for (const GitCommitInfo &info : page) {
-                             if (self->m_hashToIndex.contains(info.hash)) {
-                               continue;
-                             }
-                             GraphCommitNode node;
-                             node.info = info;
-                             node.parents = info.parents;
-                             if (self->m_logOptions.firstParentOnly &&
-                                 node.parents.size() > 1)
-                               node.parents = {node.parents.first()};
-                             node.column = 0;
-                             node.color = Qt::white;
-                             self->m_nodes.append(node);
-                           }
+        const int previousScroll = self->m_scrollOffset;
+        for (const GitCommitInfo &info : page) {
+          if (self->m_hashToIndex.contains(info.hash)) {
+            continue;
+          }
+          GraphCommitNode node;
+          node.info = info;
+          node.parents = info.parents;
+          if (self->m_logOptions.firstParentOnly && node.parents.size() > 1)
+            node.parents = {node.parents.first()};
+          node.column = 0;
+          node.color = Qt::white;
+          self->m_nodes.append(node);
+        }
 
-                           self->m_hashToIndex.clear();
-                           for (int i = 0; i < self->m_nodes.size(); ++i) {
-                             self->m_hashToIndex[self->m_nodes[i].info.hash] =
-                                 i;
-                           }
+        self->m_hashToIndex.clear();
+        for (int i = 0; i < self->m_nodes.size(); ++i) {
+          self->m_hashToIndex[self->m_nodes[i].info.hash] = i;
+        }
 
-                           self->layoutGraph();
-                           self->rebuildFilterCache();
-                           self->relayout();
-                           self->setScrollOffset(previousScroll);
-                           self->update();
-                           emit self->commitsAppended(self->m_nodes.size());
-                         });
+        self->layoutGraph();
+        self->rebuildFilterCache();
+        self->relayout();
+        self->setScrollOffset(previousScroll);
+        self->update();
+        emit self->commitsAppended(self->m_nodes.size());
+      });
 }
 
 void GitGraphWidget::layoutGraph() {
@@ -661,8 +660,6 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
   edgePen.setCapStyle(Qt::RoundCap);
   edgePen.setJoinStyle(Qt::RoundJoin);
 
-  // An edge can cross the viewport even when its child is above it. Iterate
-  // loaded edges, then cull by both endpoints rather than by the child row.
   for (int i = 0; i < m_nodes.size(); ++i) {
     const GraphCommitNode &node = m_nodes[i];
     const bool dimmed = !rowMatches(i);

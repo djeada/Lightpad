@@ -76,8 +76,7 @@ void GitDialog::prepareLayout() {
 
 void GitDialog::applyTheme(const Theme &theme) {
   StyledDialog::applyTheme(theme);
-  // Derived workspaces may apply domain colors after the common controls.
-  // Geometry is prepared after construction and once again before showing.
+
   prepareLayout();
   GitUi::polish(this, theme);
 }

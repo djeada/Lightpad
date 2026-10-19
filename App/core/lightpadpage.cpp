@@ -49,11 +49,12 @@ private:
 LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
     : QWidget(parent), mainWindow(nullptr), treeContainer(nullptr),
       treeHeader(nullptr), treeTitleLabel(nullptr), treePathLabel(nullptr),
-      treeSearch(nullptr), treeSearchButton(nullptr), treeNewFileButton(nullptr),
-      treeNewFolderButton(nullptr), treeMoreButton(nullptr), treeView(nullptr),
-      editorContainer(nullptr), textArea(nullptr), minimap(nullptr),
-      model(nullptr), m_ownsModel(true), m_gitIntegration(nullptr),
-      m_treeFilterText(""), filePath(""), projectRootPath("") {
+      treeSearch(nullptr), treeSearchButton(nullptr),
+      treeNewFileButton(nullptr), treeNewFolderButton(nullptr),
+      treeMoreButton(nullptr), treeView(nullptr), editorContainer(nullptr),
+      textArea(nullptr), minimap(nullptr), model(nullptr), m_ownsModel(true),
+      m_gitIntegration(nullptr), m_treeFilterText(""), filePath(""),
+      projectRootPath("") {
 
   auto *layoutHor = new QHBoxLayout(this);
   layoutHor->setContentsMargins(0, 0, 0, 0);
@@ -83,8 +84,9 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   treeSearchButton->setToolTip(tr("Search files and contents"));
   treeSearchButton->setAccessibleName(tr("Toggle explorer search"));
   treeSearchButton->setCheckable(true);
-  treeSearchButton->setIcon(WorkspaceIcons::icon(
-      WorkspaceIcons::Glyph::Search, palette().color(QPalette::ButtonText), 14));
+  treeSearchButton->setIcon(
+      WorkspaceIcons::icon(WorkspaceIcons::Glyph::Search,
+                           palette().color(QPalette::ButtonText), 14));
   treeSearchButton->setIconSize(QSize(14, 14));
   treeHeaderLayout->addWidget(treeSearchButton);
 
@@ -175,9 +177,9 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   connect(treeSearchButton, &QToolButton::toggled, this,
           [this, treeLayout](bool visible) {
             treeSearch->setVisible(visible);
-            treeSearchButton->setToolTip(
-                visible ? tr("Hide explorer search")
-                        : tr("Search files and contents"));
+            treeSearchButton->setToolTip(visible
+                                             ? tr("Hide explorer search")
+                                             : tr("Search files and contents"));
             if (visible) {
               treeSearch->focusSearch(treeSearch->options().mode);
             } else {
@@ -210,12 +212,11 @@ LightpadPage::LightpadPage(QWidget *parent, bool treeViewHidden)
   connect(treeMenu->addAction(tr("Expand One Level")), &QAction::triggered,
           this, [this]() { treeView->expandToDepth(1); });
   treeMenu->addSeparator();
-  connect(
-      treeMenu->addAction(tr("Find Files…")), &QAction::triggered, this,
-      [this]() {
-        treeSearchButton->setChecked(true);
-        treeSearch->focusSearch(ProjectSearch::Mode::FileNames);
-      });
+  connect(treeMenu->addAction(tr("Find Files…")), &QAction::triggered, this,
+          [this]() {
+            treeSearchButton->setChecked(true);
+            treeSearch->focusSearch(ProjectSearch::Mode::FileNames);
+          });
   connect(treeMenu->addAction(tr("Search Contents…")), &QAction::triggered,
           this, [this]() {
             treeSearchButton->setChecked(true);
@@ -731,8 +732,8 @@ void LightpadPage::applyTheme(const ThemeDefinition &theme) {
   }
 
   treeSearch->applyTheme(theme);
-  treeSearchButton->setIcon(WorkspaceIcons::icon(
-      WorkspaceIcons::Glyph::Search, theme.colors.textPrimary, 14));
+  treeSearchButton->setIcon(WorkspaceIcons::icon(WorkspaceIcons::Glyph::Search,
+                                                 theme.colors.textPrimary, 14));
   if (treeMoreButton && treeMoreButton->menu()) {
     treeMoreButton->menu()->setStyleSheet(
         UIStyleHelper::contextMenuStyle(theme));

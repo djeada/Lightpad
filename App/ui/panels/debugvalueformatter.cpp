@@ -12,7 +12,6 @@ QString formatPart(const QString &input, int depth, int width) {
     return text;
   }
 
-  // Find a container, also allowing a dictionary key or a named field prefix.
   int opening = -1;
   QChar quote;
   bool escaped = false;
@@ -64,7 +63,7 @@ QString formatPart(const QString &input, int depth, int width) {
         return text;
       stack.chop(1);
       if (stack.isEmpty()) {
-        // A partial/truncated repr or trailing prose must remain untouched.
+
         if (i != text.size() - 1)
           return text;
         const QString last = text.mid(start, i - start).trimmed();
@@ -109,8 +108,7 @@ QString DebugValueFormatter::summary(const QString &value, int length) {
 }
 
 QString DebugValueFormatter::tableCell(const QString &value) {
-  // NumPy 2 represents scalars as np.float32(...), etc. Keep every digit,
-  // while making numeric tables and spreadsheet copies directly readable.
+
   static const QRegularExpression scalar(
       QStringLiteral("^np\\.(?:float|u?int)(?:8|16|32|64|128|256)?\\(([-+0-9."
                      "eE]+|nan|[-+]?inf)\\)$"));

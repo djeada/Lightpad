@@ -9,7 +9,7 @@ from vtkmodules.vtkRenderingCore import (
     vtkRenderer,
     vtkRenderWindow,
 )
-import vtkmodules.vtkRenderingOpenGL2  # Register the OpenGL rendering backend.
+import vtkmodules.vtkRenderingOpenGL2  
 
 sphere = vtkSphereSource()
 sphere.SetThetaResolution(16)
@@ -37,7 +37,7 @@ window.SetOffScreenRendering(True)
 window.SetSize(64, 64)
 window.AddRenderer(renderer)
 window.Render()
-coordinates[0, 0] = 99.0  # INSPECT: pause after rendering, before mutation.
+coordinates[0, 0] = 99.0  
 mesh.Modified()
 print("vtk-debug-ok", mesh.GetNumberOfPoints(), mesh.GetPoint(0)[0])
 window.Finalize()

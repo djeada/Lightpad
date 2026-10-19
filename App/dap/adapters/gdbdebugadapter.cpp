@@ -128,8 +128,7 @@ public:
         ProcessBackedDebugAdapter::launchArguments(configuration);
     const QJsonArray environment = arguments.value("environment").toArray();
     if (arguments.contains("env") || !environment.isEmpty()) {
-      // GDB DAP replaces the whole inferior environment when env is supplied.
-      // Preserve DISPLAY, PATH and driver settings before applying overrides.
+
       QJsonObject merged;
       const QProcessEnvironment inherited =
           QProcessEnvironment::systemEnvironment();

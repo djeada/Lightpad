@@ -301,8 +301,7 @@ void DebugValueInspector::loadChildren(QTreeWidgetItem *item, int start,
   const int total = item->data(0, IndexedCount).toInt() > 0
                         ? item->data(0, IndexedCount).toInt()
                         : item->data(0, NamedCount).toInt();
-  // GDB requires count to stay within the advertised children, including the
-  // last page. Do not discard these counts from evaluate/variables responses.
+
   const int count =
       total > 0 ? qMin(PageSize, qMax(1, total - start)) : PageSize;
   const int reference = referenceOverride > 0 ? referenceOverride
@@ -331,8 +330,7 @@ void DebugValueInspector::receiveChildren(int seq,
       std::any_of(
           variables.cbegin(), variables.cend(),
           [](const DapVariable &value) { return isIndex(value.name); })) {
-    // Some NumPy resolvers honor count but ignore start. Ask for a bounded
-    // prefix, then keep only the requested index range below.
+
     const int total = parent->data(0, IndexedCount).toInt();
     const int wanted = total > 0 ? qMin(total, request.start + PageSize)
                                  : request.start + PageSize;
@@ -342,9 +340,7 @@ void DebugValueInspector::receiveChildren(int seq,
       m_requests.insert(retry, {parent, request.start, true});
     return;
   }
-  // debugpy exposes NumPy's rows under an extra [0:n] child, rather than
-  // directly on the ndarray. Follow that adapter-provided reference without
-  // evaluating .tolist(), which would copy an entire scientific data set.
+
   if (parent->data(0, Indexed).toBool() &&
       std::none_of(
           variables.cbegin(), variables.cend(),
@@ -382,13 +378,11 @@ void DebugValueInspector::receiveChildren(int seq,
       }
     }
   }
-  // Some adapters (including debugpy) include synthetic attribute groups and
-  // len() even for an indexed request. They are not sequence elements.
+
   QList<DapVariable> members;
   for (const DapVariable &value : variables) {
     if (parent->data(0, Indexed).toBool()) {
-      // debugpy represents long sequences with a "more" reference and range
-      // buckets instead of DAP start/count. Follow those references lazily.
+
       if (value.name == QLatin1String("more") && value.variablesReference > 0)
         parent->setData(0, MoreReference, value.variablesReference);
       if (value.name == QLatin1String("len()")) {
@@ -398,8 +392,7 @@ void DebugValueInspector::receiveChildren(int seq,
           parent->setData(0, IndexedCount, total);
       }
       const qlonglong index = indexForName(value.name);
-      // Adapters may ignore start/count for synthetic NumPy row groups.
-      // Select by the actual index so subsequent pages never duplicate rows.
+
       if (index < request.start || index >= request.start + PageSize)
         continue;
     }

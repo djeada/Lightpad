@@ -1,28 +1,23 @@
-// Render every Git surface against a real repository. These checks catch
-// clipped action rows and accidental operation defaults across shared UI
-// changes.
+
+
 #include "git/gitintegration.h"
-#include "ui/panels/sourcecontrolpanel.h"
-#include "ui/panels/conflictcenterpanel.h"
-#include "ui/panels/conflictresolverview.h"
-#include "ui/widgets/flowlayout.h"
-#include "ui/dialogs/gitinitdialog.h"
-#include "ui/dialogs/gitremotedialog.h"
-#include "ui/dialogs/gitstashdialog.h"
-#include "ui/dialogs/gitrepotoolsdialog.h"
-#include "ui/dialogs/gitlogdialog.h"
-#include "ui/dialogs/gitdiffdialog.h"
-#include "ui/dialogs/gitfilehistorydialog.h"
-#include "ui/dialogs/gitobjectexplorerdialog.h"
-#include "ui/dialogs/gitworkbenchdialog.h"
-#include "ui/dialogs/gitrebasedialog.h"
+#include "ui/dialogs/bisectdialog.h"
 #include "ui/dialogs/branchhygienedialog.h"
 #include "ui/dialogs/branchsyncradardialog.h"
-#include "ui/dialogs/bisectdialog.h"
 #include "ui/dialogs/commandmirrordialog.h"
 #include "ui/dialogs/commitcraftingdialog.h"
 #include "ui/dialogs/compareanythingdialog.h"
 #include "ui/dialogs/filetimelinedialog.h"
+#include "ui/dialogs/gitdiffdialog.h"
+#include "ui/dialogs/gitfilehistorydialog.h"
+#include "ui/dialogs/gitinitdialog.h"
+#include "ui/dialogs/gitlogdialog.h"
+#include "ui/dialogs/gitobjectexplorerdialog.h"
+#include "ui/dialogs/gitrebasedialog.h"
+#include "ui/dialogs/gitremotedialog.h"
+#include "ui/dialogs/gitrepotoolsdialog.h"
+#include "ui/dialogs/gitstashdialog.h"
+#include "ui/dialogs/gitworkbenchdialog.h"
 #include "ui/dialogs/integrationadvisordialog.h"
 #include "ui/dialogs/mergestartdialog.h"
 #include "ui/dialogs/operationpreviewdialog.h"
@@ -35,17 +30,21 @@
 #include "ui/dialogs/undochangeswizarddialog.h"
 #include "ui/dialogs/whatifsandboxdialog.h"
 #include "ui/dialogs/worktreemapdialog.h"
+#include "ui/panels/conflictcenterpanel.h"
+#include "ui/panels/conflictresolverview.h"
+#include "ui/panels/sourcecontrolpanel.h"
+#include "ui/widgets/flowlayout.h"
 #include <QApplication>
 #include <QDir>
 #include <QFile>
 #include <QGroupBox>
 #include <QProcess>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QThreadPool>
-#include <QScrollArea>
-#include <QScrollBar>
 #include <QtTest>
 #include <memory>
 
@@ -355,8 +354,7 @@ void TestGitUiConsistency::surfaces() {
       issues << QString("Clipped button text: %1 (%2px)")
                     .arg(button->text())
                     .arg(button->width());
-    // Compare and explicit confirmation forms may use Enter. Browsing must not
-    // unexpectedly invoke a repository-changing command from an input field.
+
     if (button->isDefault() && name != "init" && name != "preview" &&
         name != "compare" && !button->property("gitDismiss").toBool())
       issues << QString("Unexpected default action: %1").arg(button->text());

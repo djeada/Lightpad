@@ -27,9 +27,8 @@
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
 #include "../widgets/flowlayout.h"
-#include <QApplication>
 #include <QAction>
-#include <QToolButton>
+#include <QApplication>
 #include <QBoxLayout>
 #include <QClipboard>
 #include <QComboBox>
@@ -47,6 +46,7 @@
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QTimer>
+#include <QToolButton>
 #include <QToolTip>
 
 namespace {

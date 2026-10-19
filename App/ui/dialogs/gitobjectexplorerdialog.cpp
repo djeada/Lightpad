@@ -10,8 +10,8 @@
 #include <QGraphicsScene>
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsView>
-#include <QHeaderView>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QMenu>
 #include <QPainter>
 #include <QPointer>
@@ -57,8 +57,6 @@ void cancel(std::shared_ptr<std::atomic_bool> &token) {
     token->store(true);
 }
 
-// Own the receiver check on the GUI thread. Workers retain only immutable
-// values and cancellation tokens, and never dereference a dialog pointer.
 template <typename Work, typename Done>
 std::shared_ptr<std::atomic_bool> background(GitObjectExplorerDialog *dialog,
                                              Work work, Done done) {
@@ -697,7 +695,6 @@ void GitObjectExplorerDialog::drawDag(const GitObjectDetails &details) {
   auto addNode = [&](const QString &hash, const QString &label, qreal x,
                      qreal y, bool root) {
     auto *node = new ObjectNode(QRectF(0, 0, 220, 60), [this, hash]() {
-      // Queue scene changes until the item has finished handling its event.
       QTimer::singleShot(0, this, [this, hash]() { inspect(hash); });
     });
     node->setPos(x, y);
@@ -718,8 +715,7 @@ void GitObjectExplorerDialog::drawDag(const GitObjectDetails &details) {
     text->setAcceptedMouseButtons(Qt::NoButton);
   };
   const int shown = qMin(24, int(details.links.size()));
-  // Four columns keep wide trees readable. Shared targets are represented once
-  // and retain all labels in the relationship table.
+
   addNode(details.hash, details.type, 360, 0, true);
   QSet<QString> drawn;
   int index = 0;

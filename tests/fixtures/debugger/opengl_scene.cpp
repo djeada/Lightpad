@@ -1,4 +1,4 @@
-// Real offscreen OpenGL rendering with debugger-friendly graphics state.
+
 #include <QGuiApplication>
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
   const GLenum graphicsError = gl->glGetError();
   const char *graphicsVersion =
       reinterpret_cast<const char *>(gl->glGetString(GL_VERSION));
-  scene.model[0][0] = 2.0f; // INSPECT: actual GPU work has completed.
+  scene.model[0][0] = 2.0f;
   std::printf("opengl-debug-ok %u %u %u %s\n", graphicsError,
               scene.vertexBuffer, scene.texture, graphicsVersion);
   gl->glDeleteBuffers(1, &scene.vertexBuffer);

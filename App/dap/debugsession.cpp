@@ -568,8 +568,7 @@ DebugSessionManager::startChildSession(const QString &parentId,
   child.name = configuration.value("name").toString(
       pid > 0 ? QString("Process %1").arg(pid) : "Child process");
   child.adapterConfig = configuration;
-  // The parent's launcher can capture inherited stdout, but that stream mixes
-  // all workers. Attached children need their own DAP output events as well.
+
   if (parent->client()->adapterType() == "debugpy" &&
       !child.adapterConfig.contains("redirectOutput"))
     child.adapterConfig["redirectOutput"] = true;

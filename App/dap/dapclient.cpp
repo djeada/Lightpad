@@ -1868,8 +1868,7 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
     }
     DapStoppedEvent evt = DapStoppedEvent::fromJson(body);
     m_pauseRequested = false;
-    // A fast step can stop before its earlier Continue response arrives.
-    // That response must not resume the newly paused snapshot.
+
     for (auto it = m_pendingRequests.begin(); it != m_pendingRequests.end();) {
       if (it.value().startsWith("continue:")) {
         m_staleRequests.insert(it.key());

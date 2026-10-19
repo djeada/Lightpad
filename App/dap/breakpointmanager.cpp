@@ -266,8 +266,7 @@ void BreakpointManager::setDapClient(DapClient *client) {
   if (m_dapClient != client) {
     m_pendingBreakpointSyncs.clear();
     m_dapBreakpointIds.clear();
-    // Adapter data IDs belong to the process that created them. Keep each
-    // process's watchpoints when focus moves without sending them to siblings.
+
     if (m_dapClient)
       m_sessionDataBreakpoints[m_dapClient] = m_dataBreakpoints;
     m_dataBreakpoints = m_sessionDataBreakpoints.value(client);

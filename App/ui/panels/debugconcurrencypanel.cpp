@@ -95,7 +95,7 @@ DebugConcurrencyPanel::DebugConcurrencyPanel(QWidget *parent)
                 manager.session(item->data(0, Qt::UserRole).toString());
             if (!session)
               return;
-            // Focusing a process rebuilds the tree and deletes this item.
+
             const int thread = item->data(0, Qt::UserRole + 1).toInt();
             manager.setFocusedSession(session->id());
             emit clientSelected(session->client());

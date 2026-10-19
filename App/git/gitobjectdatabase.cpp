@@ -390,8 +390,7 @@ GitObjectSearchResult GitObjectDatabase::search(const GitObjectStore &store,
       continue;
     }
     const quint32 first = prefix.isEmpty() ? 0 : index.lowerBound(prefix);
-    // 'g' sorts immediately after every possible hex suffix, including odd
-    // prefixes. The range is found in O(log n) without reading every hash.
+
     const quint32 last =
         prefix.isEmpty() ? index.count : index.lowerBound(prefix + 'g');
     const qint64 count = qint64(last) - first;
@@ -450,8 +449,7 @@ GitObjectDetails GitObjectDatabase::inspect(const QString &repositoryPath,
                                             const QString &hash,
                                             const Cancelled &cancelled) {
   GitObjectDetails details;
-  // Only full object IDs reach plumbing; expressions, options and ambiguous
-  // prefixes are resolved by selecting a search result first.
+
   if (!isHash(hash, 40, 40) && !isHash(hash, 64, 64)) {
     details.error =
         QStringLiteral("Select a full object ID from the search results.");

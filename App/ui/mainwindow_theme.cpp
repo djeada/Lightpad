@@ -670,7 +670,6 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "padding: 6px 10px; "
       "}"
 
-      // A wide grab area with a thin visual divider is easier to resize.
       "QSplitter::handle { background-color: transparent; }"
       "QSplitter::handle:horizontal { "
       "width: 5px; "
@@ -801,14 +800,20 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "font-size: 12px; min-height: 26px; "
       "}"
       "QStatusBar::item { border: none; }"
-      "QWidget#toolPanelTitleBar { background: " + surfaceAltColor +
-      "; border-bottom: 1px solid " + borderSubtle + "; }"
+      "QWidget#toolPanelTitleBar { background: " +
+      surfaceAltColor + "; border-bottom: 1px solid " + borderSubtle +
+      "; }"
       "QWidget#toolPanelTitleBar QLabel { background: transparent; color: " +
-      secondaryText + "; font-size: 12px; }"
-      "QWidget#toolPanelTitleBar QToolButton { color: " + fgColor +
-      "; background: transparent; border: none; min-width: 22px; max-width: 22px; "
+      secondaryText +
+      "; font-size: 12px; }"
+      "QWidget#toolPanelTitleBar QToolButton { color: " +
+      fgColor +
+      "; background: transparent; border: none; min-width: 22px; max-width: "
+      "22px; "
       "min-height: 22px; max-height: 22px; padding: 0; font-size: 16px; }"
-      "QWidget#toolPanelTitleBar QToolButton:hover { background: " + accentSoftColor + "; }"
+      "QWidget#toolPanelTitleBar QToolButton:hover { background: " +
+      accentSoftColor +
+      "; }"
 
       "QWidget#workspaceHeader { background-color: " +
       surfaceColor + "; border-bottom: 1px solid " + borderSubtle +

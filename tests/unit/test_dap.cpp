@@ -21,6 +21,7 @@
 #include "dap/expressiontranslator.h"
 #include "dap/watchmanager.h"
 #include "ui/dialogs/debugconfigurationdialog.h"
+#include "ui/dockutils.h"
 #include "ui/panels/debugconcurrencypanel.h"
 #include "ui/panels/debugpanel.h"
 #include "ui/panels/debugvalueformatter.h"
@@ -30,6 +31,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMainWindow>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScopeGuard>
@@ -170,6 +172,8 @@ private slots:
   void testAsyncioTaskInspection();
   void testProcessScopedDataBreakpoints();
   void testContinueCancelsPendingPause();
+  void testTabbedDebugDockCanShrinkBelowTwentyPercent();
+  void testTabbedDebugDockCanShrinkBelowTwentyPercent_data();
 
 private:
   QString fakeAdapterPath() const;
@@ -2685,8 +2689,7 @@ void TestDap::testInspectorWithRealDebugpy() {
       table->item(2, 3) && table->item(2, 3)->text() == "423.24", 10000);
   QCOMPARE(table->item(0, 3)->text(), QString("933.52"));
   QCOMPARE(table->item(1, 3)->text(), QString());
-  // Capture the real adapter-driven widget for manual visual review when
-  // requested.
+
   if (!qEnvironmentVariableIsEmpty("LIGHTPAD_INSPECTOR_SCREENSHOT")) {
     inspector.applyTheme(Theme());
     inspector.resize(1000, 600);
@@ -2819,8 +2822,6 @@ void TestDap::testVtkPythonObjectsAndArrays() {
       table->item(7, 2) && !table->item(7, 2)->text().isEmpty(), 10000);
   QCOMPARE(table->columnCount(), 3);
 
-  // NumPy wraps the actual VTK native array; this must remain expandable even
-  // when its adapter representation is abbreviated and has metadata groups.
   QVERIFY(evaluateDebugObject(client, frame.id, "velocity", &value));
   inspector.setValue(value);
   QTRY_VERIFY_WITH_TIMEOUT(
@@ -3332,8 +3333,7 @@ void TestDap::testPythonChildProcesses() {
     QTest::qWait(100);
     debugPanel.grab().save(qEnvironmentVariable("LIGHTPAD_PROCESS_SCREENSHOT"));
   }
-  // Removing a breakpoint must reach both children, including the unfocused
-  // one.
+
   breakpoints.removeBreakpoint(source, breakpoint.line);
   QTest::qWait(250);
   manager.continueAllSessions();
@@ -3448,7 +3448,7 @@ void TestDap::testAsyncioTaskInspection() {
     QTest::qWait(100);
     panel.grab().save(qEnvironmentVariable("LIGHTPAD_CONCURRENCY_SCREENSHOT"));
   }
-  // Inspect the cancellation request before the event loop delivers it.
+
   client.stepOver(client.currentThreadId());
   QVERIFY(waitForDebugSignal(stopped, 2));
   client.stepOver(client.currentThreadId());
@@ -3518,6 +3518,54 @@ void TestDap::testContinueCancelsPendingPause() {
   QTRY_VERIFY_WITH_TIMEOUT(!client.hasPendingPause(), 5000);
   QCOMPARE(client.state(), DapClient::State::Running);
   client.stop(false);
+}
+
+void TestDap::testTabbedDebugDockCanShrinkBelowTwentyPercent_data() {
+  QTest::addColumn<int>("windowHeight");
+  QTest::newRow("small-window") << 600;
+  QTest::newRow("laptop") << 768;
+  QTest::newRow("desktop") << 1050;
+  QTest::newRow("large-desktop") << 1440;
+}
+
+void TestDap::testTabbedDebugDockCanShrinkBelowTwentyPercent() {
+  QFETCH(int, windowHeight);
+  QMainWindow window;
+  window.setDockOptions(DockUtils::mainWindowDockOptions());
+  window.resize(1400, windowHeight);
+  auto *editor = new QWidget(&window);
+  window.setCentralWidget(editor);
+  auto *debug = new QDockWidget("Debug", &window);
+  DockUtils::configureToolPanelDock(debug);
+  auto *panel = new DebugPanel(debug);
+  panel->applyTheme(Theme());
+  debug->setWidget(panel);
+  window.addDockWidget(Qt::BottomDockWidgetArea, debug);
+  auto *terminal = new QDockWidget("Terminal", &window);
+  DockUtils::configureToolPanelDock(terminal);
+  terminal->setWidget(new QPlainTextEdit(terminal));
+  window.addDockWidget(Qt::BottomDockWidgetArea, terminal);
+  window.tabifyDockWidget(debug, terminal);
+  window.show();
+  terminal->raise();
+  QTest::qWait(50);
+  window.resizeDocks({terminal}, {1}, Qt::Vertical);
+  QTest::qWait(50);
+  QVERIFY2(window.height() - editor->height() <= window.height() / 5,
+           "A tabbed debug panel must allow the bottom area to shrink below "
+           "20% of the window");
+  debug->raise();
+  for (auto *button : panel->findChildren<QToolButton *>("debugInspectorTab")) {
+    button->click();
+    QCoreApplication::processEvents();
+    QVERIFY2(
+        window.height() - editor->height() <= window.height() / 5,
+        qPrintable("Opening " + button->text() + " expanded the bottom dock"));
+  }
+
+  window.resizeDocks({debug}, {window.height() / 2}, Qt::Vertical);
+  QCoreApplication::processEvents();
+  QVERIFY(debug->height() > window.height() / 5);
 }
 
 QTEST_MAIN(TestDap)

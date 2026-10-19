@@ -823,8 +823,7 @@ void TextArea::applyTheme(const Theme &theme) {
   defaultPenColor = theme.foregroundColor;
   backgroundColor = theme.backgroundColor;
   applySelectionPalette(theme);
-  // Rules and extra selections cache colors independently of the widget
-  // palette. Refresh both when switching between dark and light themes.
+
   delete syntaxHighlighter;
   syntaxHighlighter = nullptr;
   if (mainWindow)

@@ -21,17 +21,13 @@ struct Draft {
   QDateTime updated;
   int cursor = 0;
   FileOpenGuard::TextFormat format;
-  QByteArray
-      fingerprint; // Exact stored snapshot, checked before transfer/discard.
+  QByteArray fingerprint;
 };
 struct Scan {
   QVector<Draft> drafts;
   QStringList warnings;
 };
 
-// Each window holds its own session lock. Other running windows' drafts are
-// never offered or removed. Destruction releases the lock and keeps snapshots;
-// finish() is reserved for a completed, explicitly approved normal close.
 class Store {
 public:
   explicit Store(QString rootPath, qint64 maxTextBytes = 64LL * 1024 * 1024);

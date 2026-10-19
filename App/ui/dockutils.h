@@ -10,8 +10,6 @@
 
 namespace DockUtils {
 
-// Give a newly opened bottom panel enough room for controls without taking
-// over the editor. Later resizes and restored layouts are user-owned.
 inline int preferredInitialBottomDockHeight(int windowHeight) {
   return qBound(160, windowHeight / 5, 240);
 }
@@ -83,8 +81,7 @@ inline void configureToolPanelDock(QDockWidget *dock) {
         closeButton->setVisible(
             features.testFlag(QDockWidget::DockWidgetClosable));
       });
-  // Unhandled mouse events propagate to QDockWidget, retaining native dragging
-  // and double-click docking behavior.
+
   dock->setTitleBarWidget(titleBar);
 
   QObject::connect(

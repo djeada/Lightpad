@@ -26,7 +26,6 @@ void MainWindow::setupWorkspaceChrome() {
   if (!central || !metadata)
     return;
 
-  // One command row above the editor; one status row below every tool panel.
   auto *header = new WorkspaceHeader(ui->centralwidget);
   header->setObjectName("workspaceHeader");
   auto *commands = new QHBoxLayout(header);
@@ -85,8 +84,7 @@ void MainWindow::setupWorkspaceChrome() {
   ui->backgroundBottom->setSizePolicy(QSizePolicy::Preferred,
                                       QSizePolicy::Preferred);
   statusBar()->setSizeGripEnabled(false);
-  // Leave room for transient save, recovery, and run messages. Normal status
-  // widgets temporarily yield that space; editor metadata stays on the right.
+
   for (auto *indicator : {m_gitBranchLabel, m_gitSyncLabel, m_gitDirtyLabel}) {
     if (indicator) {
       statusBar()->removeWidget(indicator);

@@ -66,10 +66,6 @@ struct GitObjectDetails {
   QString error;
 };
 
-// Read-only plumbing. These value-based APIs can run entirely off the UI
-// thread. Index lookups do not inflate packs or walk reachable history, so
-// unreachable objects and duplicate copies in different packs remain
-// discoverable.
 class GitObjectDatabase {
 public:
   using Cancelled = std::function<bool()>;

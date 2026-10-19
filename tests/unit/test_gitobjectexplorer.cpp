@@ -2,8 +2,8 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
-#include <QGraphicsView>
 #include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QProcess>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -123,7 +123,7 @@ void TestGitObjectExplorer::testInvalidSearchAndClosingDuringWork() {
                   ->text()
                   .contains("hexadecimal"));
   dialog->searchHash(m_hash);
-  delete dialog; // queued workers must not retain or call the destroyed dialog
+  delete dialog;
   QVERIFY(QThreadPool::globalInstance()->waitForDone(10000));
   QCoreApplication::processEvents();
 }

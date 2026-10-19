@@ -32,6 +32,7 @@ class DebugPanel : public QWidget {
 public:
   explicit DebugPanel(QWidget *parent = nullptr);
   ~DebugPanel();
+  QSize sizeHint() const override;
 
   void setDapClient(DapClient *client);
 
