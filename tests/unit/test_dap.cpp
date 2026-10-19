@@ -11,6 +11,7 @@
 
 #include <QCoreApplication>
 
+#include "core/logging/logger.h"
 #include "dap/breakpointmanager.h"
 #include "dap/dapclient.h"
 #include "dap/debugadapterregistry.h"
@@ -20,6 +21,24 @@
 #include "dap/expressiontranslator.h"
 #include "dap/watchmanager.h"
 #include "ui/dialogs/debugconfigurationdialog.h"
+#include "ui/dockutils.h"
+#include "ui/panels/debugconcurrencypanel.h"
+#include "ui/panels/debugpanel.h"
+#include "ui/panels/debugvalueformatter.h"
+#include "ui/panels/debugvalueinspector.h"
+#include <QApplication>
+#include <QClipboard>
+#include <QComboBox>
+#include <QLabel>
+#include <QLineEdit>
+#include <QMainWindow>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QScopeGuard>
+#include <QTabWidget>
+#include <QTableWidget>
+#include <QToolButton>
+#include <QTreeWidget>
 
 Q_DECLARE_METATYPE(DapExceptionInfo)
 Q_DECLARE_METATYPE(DapDataBreakpointInfo)
@@ -133,6 +152,28 @@ private slots:
   void testConfigurationRenameRefusesExistingName();
   void testDebugConfigurationDialogValidationAndCancel();
   void testDebugConfigurationDialogDebouncesStatusProbe();
+  void testNestedValueFormatting();
+  void testInspectorCorrelatesRequests();
+  void testInspectorMatrixAndRaggedRows();
+  void testInspectorPagingAndSnapshot();
+  void testInspectorPagingAndSnapshot_data();
+  void testInspectorReportsErrors();
+  void testInspectorWithRealDebugpy();
+  void testVtkPythonObjectsAndArrays();
+  void testOpenGLCppObjectsAndMatrices();
+  void testGdbLaunchEnvironmentPreservesGraphicsContext();
+  void testConsoleResultOpensStructuredInspector();
+  void testPartialThreadExecution();
+  void testSelectedThreadExecutionArguments();
+  void testPythonThreadSelection();
+  void testCppThreadSelection();
+  void testPythonChildProcesses_data();
+  void testPythonChildProcesses();
+  void testAsyncioTaskInspection();
+  void testProcessScopedDataBreakpoints();
+  void testContinueCancelsPendingPause();
+  void testTabbedDebugDockCanShrinkBelowTwentyPercent();
+  void testTabbedDebugDockCanShrinkBelowTwentyPercent_data();
 
 private:
   QString fakeAdapterPath() const;
@@ -147,6 +188,8 @@ private:
 };
 
 void TestDap::initTestCase() {
+  if (qEnvironmentVariableIsSet("LIGHTPAD_DAP_TRACE"))
+    Logger::instance().setLogLevel(LogLevel::Debug);
   qRegisterMetaType<DapExceptionInfo>("DapExceptionInfo");
   qRegisterMetaType<DapDataBreakpointInfo>("DapDataBreakpointInfo");
   qRegisterMetaType<DapMemoryChunk>("DapMemoryChunk");
@@ -2434,6 +2477,1095 @@ void TestDap::testDapClientForwardsRunInTerminalKind() {
   client.respondToRunInTerminal(ritSpy.at(0).at(0).toInt(), true, 4242);
   QTRY_VERIFY_WITH_TIMEOUT(traceFileContains(tracePath, "4242"), 5000);
   client.stop(false);
+}
+
+void TestDap::testNestedValueFormatting() {
+  QCOMPARE(DebugValueFormatter::format("[[1, 2], [3, 4]]"),
+           QString("[\n    [1, 2],\n    [3, 4]\n]"));
+  QCOMPARE(
+      DebugValueFormatter::format("{'matrix': [[1], [2]], 'text': 'a,b:[c]'}"),
+      QString("{\n    'matrix': [\n        [1],\n        [2]\n    ],\n    "
+              "'text': 'a,b:[c]'\n}"));
+  const QString escaped = QStringLiteral("['it\\'s [fine], really', [1, 2]]");
+  QVERIFY(
+      DebugValueFormatter::format(escaped).contains("'it\\'s [fine], really'"));
+  QCOMPARE(DebugValueFormatter::format("[1, 2, ..."), QString("[1, 2, ..."));
+  QCOMPARE(DebugValueFormatter::format("'a,b:[c]'"), QString("'a,b:[c]'"));
+  QCOMPARE(DebugValueFormatter::format("[[1], [2])"), QString("[[1], [2])"));
+  QCOMPARE(DebugValueFormatter::format("[1, 2, 3]"), QString("[1, 2, 3]"));
+  QVERIFY(DebugValueFormatter::format(QString(70000, 'x')).contains("limited"));
+  QCOMPARE(DebugValueFormatter::tableCell("np.float32(1.75)"), QString("1.75"));
+  QCOMPARE(DebugValueFormatter::tableCell("np.float64(1.2345678901234567)"),
+           QString("1.2345678901234567"));
+  QCOMPARE(DebugValueFormatter::tableCell("np.int64(-123)"), QString("-123"));
+  QCOMPARE(DebugValueFormatter::tableCell("'np.float32(1.75)'"),
+           QString("'np.float32(1.75)'"));
+}
+
+void TestDap::testInspectorCorrelatesRequests() {
+  DapClient client;
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
+  QSignalSpy scopeSpy(&client, &DapClient::variablesReceived);
+  QSignalSpy inspectionSpy(&client, &DapClient::inspectionVariablesReceived);
+  client.getVariables(3000);
+  const int pageOne = client.inspectVariables(3000, "indexed", 0, 100);
+  const int pageTwo = client.inspectVariables(3000, "indexed", 100, 100);
+  QVERIFY(pageOne > 0 && pageTwo > pageOne);
+  QTRY_COMPARE_WITH_TIMEOUT(inspectionSpy.count(), 2, 5000);
+  QCOMPARE(scopeSpy.count(), 1);
+  QCOMPARE(inspectionSpy.at(0).at(0).toInt(), pageOne);
+  QCOMPARE(inspectionSpy.at(1).at(0).toInt(), pageTwo);
+  QCOMPARE(inspectionSpy.at(1).at(1).value<QList<DapVariable>>().at(1).name,
+           QString("100"));
+  client.stop(false);
+}
+
+void TestDap::testInspectorMatrixAndRaggedRows() {
+  DapClient client;
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  DapVariable matrix;
+  matrix.name = "matrix";
+  matrix.evaluateName = "matrix";
+  matrix.type = "list";
+  matrix.value = "[[0.25, 1.25, 2.25], [10.25, 11.25], [20.25, 21.25, 22.25]]";
+  matrix.variablesReference = 2000;
+  matrix.evaluateName = "matrix";
+  inspector.setValue(matrix);
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  auto *tabs = inspector.findChild<QTabWidget *>("debugValueTabs");
+  QVERIFY(table && tabs);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(2, 2) && table->item(2, 2)->text() == "22.25", 5000);
+  QCOMPARE(table->rowCount(), 3);
+  QCOMPARE(table->columnCount(), 3);
+  QCOMPARE(table->item(1, 2)->text(), QString());
+  QCOMPARE(tabs->currentIndex(), 1);
+  table->setRangeSelected(QTableWidgetSelectionRange(0, 0, 1, 1), true);
+  for (auto *button : inspector.findChildren<QPushButton *>()) {
+    if (button->text() == "Copy")
+      button->click();
+  }
+  QCOMPARE(QApplication::clipboard()->text(),
+           QString("0.25\t1.25\n10.25\t11.25"));
+  auto *filter = inspector.findChild<QLineEdit *>("debugValueFilter");
+  filter->setText("22.25");
+  QVERIFY(table->isRowHidden(0));
+  QVERIFY(!table->isRowHidden(2));
+  filter->clear();
+  QVERIFY(!table->isRowHidden(0));
+  QSignalSpy watchSpy(&inspector, &DebugValueInspector::addWatchRequested);
+  for (auto *button : inspector.findChildren<QPushButton *>()) {
+    if (button->text() == "Add to Watches")
+      button->click();
+  }
+  QCOMPARE(watchSpy.count(), 1);
+  QCOMPARE(watchSpy.first().first().toString(), QString("matrix"));
+  client.stop(false);
+}
+
+void TestDap::testInspectorPagingAndSnapshot_data() {
+  QTest::addColumn<int>("reference");
+  QTest::newRow("adapter-pages") << 3000;
+  QTest::newRow("adapter-ignores-paging") << 4000;
+  QTest::newRow("adapter-ignores-start") << 5000;
+  QTest::newRow("adapter-more-reference") << 6000;
+}
+
+void TestDap::testInspectorPagingAndSnapshot() {
+  QFETCH(int, reference);
+  DapClient client;
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  DapVariable list;
+  list.name = "large";
+  list.type = "list";
+  list.variablesReference = reference;
+  list.indexedVariables = 250;
+  inspector.setValue(list);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  QTRY_COMPARE_WITH_TIMEOUT(root->childCount(), 101, 5000);
+  auto *next = root->child(100);
+  tree->itemActivated(next, 0);
+  QTRY_COMPARE_WITH_TIMEOUT(root->childCount(), 201, 5000);
+  QCOMPARE(root->child(100)->text(0), QString("100"));
+  next = root->child(200);
+  tree->itemActivated(next, 0);
+  QTRY_COMPARE_WITH_TIMEOUT(root->childCount(), 250, 5000);
+  QCOMPARE(root->child(249)->text(1), QString("249"));
+  QSignalSpy responseSpy(&client, &DapClient::inspectionVariablesReceived);
+  client.continueExecution(1);
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+  QVERIFY(inspector.findChild<QLabel *>("debugValueStatus")
+              ->text()
+              .contains("Snapshot"));
+  root->setExpanded(false);
+  root->setExpanded(true);
+  QCOMPARE(responseSpy.count(), 0);
+  QCOMPARE(root->childCount(), 250);
+  QCOMPARE(client.inspectVariables(3000), 0);
+  client.stop(false);
+}
+
+void TestDap::testInspectorReportsErrors() {
+  DapClient client;
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  DapVariable missing;
+  missing.name = "missing";
+  missing.variablesReference = 9999;
+  inspector.setValue(missing);
+  auto *status = inspector.findChild<QLabel *>("debugValueStatus");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      status->text().contains("Object is no longer available"), 5000);
+  client.stop(false);
+}
+
+void TestDap::testInspectorWithRealDebugpy() {
+  const QString python = QStandardPaths::findExecutable("python3");
+  QProcess probe;
+  probe.start(python, {"-c", "import debugpy"});
+  if (!probe.waitForFinished(10000) || probe.exitCode() != 0)
+    QSKIP("debugpy is not installed");
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QFile script(dir.filePath("matrix.py"));
+  QVERIFY(script.open(QIODevice::WriteOnly));
+  script.write("matrix = [[7.0, 4.88, 2.67, 933.52], [4.88, 4.3432], [2.67, "
+               "1.4981, 1.0791, 423.24]]\nprint(matrix)\n");
+  script.close();
+  DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
+  QSignalSpy adapterReady(&client, &DapClient::adapterInitialized);
+  QSignalSpy stopped(&client, &DapClient::stopped);
+  QSignalSpy stack(&client, &DapClient::stackTraceReceived);
+  QSignalSpy evaluated(&client, &DapClient::evaluateResponse);
+  QVERIFY(client.start(python, {"-m", "debugpy.adapter"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 15000);
+  client.launch(QJsonObject{{"program", script.fileName()},
+                            {"cwd", dir.path()},
+                            {"console", "internalConsole"}});
+  QTRY_COMPARE_WITH_TIMEOUT(adapterReady.count(), 1, 15000);
+  DapSourceBreakpoint breakpoint;
+  breakpoint.line = 2;
+  client.setBreakpoints(script.fileName(), {breakpoint});
+  client.configurationDone();
+  QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 1, 15000);
+  client.getStackTrace(client.currentThreadId());
+  QTRY_COMPARE_WITH_TIMEOUT(stack.count(), 1, 5000);
+  const auto frames = stack.first().at(1).value<QList<DapStackFrame>>();
+  QVERIFY(!frames.isEmpty());
+  client.evaluate("matrix", frames.first().id, "repl");
+  QTRY_COMPARE_WITH_TIMEOUT(evaluated.count(), 1, 5000);
+  DapVariable matrix;
+  matrix.name = "matrix";
+  matrix.value = evaluated.first().at(2).toString();
+  matrix.type = evaluated.first().at(3).toString();
+  matrix.variablesReference = evaluated.first().at(4).toInt();
+  QVERIFY2(matrix.variablesReference > 0, qPrintable(matrix.value));
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  inspector.setValue(matrix);
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  QTRY_VERIFY_WITH_TIMEOUT(tree->topLevelItem(0)->childCount() > 0, 5000);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(2, 3) && table->item(2, 3)->text() == "423.24", 10000);
+  QCOMPARE(table->item(0, 3)->text(), QString("933.52"));
+  QCOMPARE(table->item(1, 3)->text(), QString());
+
+  if (!qEnvironmentVariableIsEmpty("LIGHTPAD_INSPECTOR_SCREENSHOT")) {
+    inspector.applyTheme(Theme());
+    inspector.resize(1000, 600);
+    inspector.show();
+    QTest::qWait(100);
+    inspector.grab().save(
+        qEnvironmentVariable("LIGHTPAD_INSPECTOR_SCREENSHOT"));
+  }
+  client.stop(true);
+}
+
+namespace {
+bool waitForDebugSignal(QSignalSpy &spy, int count = 1, int timeout = 15000) {
+  QElapsedTimer timer;
+  timer.start();
+  while (spy.count() < count && timer.elapsed() < timeout) {
+    spy.wait(qMax(1, timeout - static_cast<int>(timer.elapsed())));
+  }
+  return spy.count() >= count;
+}
+
+int graphicsInspectionLine(const QString &path) {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly))
+    return 0;
+  const auto lines = file.readAll().split('\n');
+  for (int i = 0; i < lines.size(); ++i) {
+    if (lines.at(i).contains("INSPECT:"))
+      return i + 1;
+  }
+  return 0;
+}
+
+bool currentDebugFrame(DapClient &client, DapStackFrame *frame) {
+  QSignalSpy stack(&client, &DapClient::stackTraceReceived);
+  client.getStackTrace(client.currentThreadId());
+  if (!waitForDebugSignal(stack))
+    return false;
+  const auto frames = stack.last().at(1).value<QList<DapStackFrame>>();
+  if (frames.isEmpty())
+    return false;
+  *frame = frames.first();
+  return true;
+}
+
+bool evaluateDebugObject(DapClient &client, int frame,
+                         const QString &expression, DapVariable *value) {
+  QSignalSpy evaluated(&client, &DapClient::evaluateValueReceived);
+  QSignalSpy failed(&client, &DapClient::evaluateResponseError);
+  const int request = client.evaluate(expression, frame, "watch");
+  QElapsedTimer timer;
+  timer.start();
+  auto result = [&]() -> int {
+    for (int i = 0; i < evaluated.size(); ++i)
+      if (evaluated.at(i).at(0).toInt() == request)
+        return i;
+    return -1;
+  };
+  auto requestFailed = [&]() {
+    return std::any_of(
+        failed.cbegin(), failed.cend(),
+        [request](const auto &args) { return args.at(0).toInt() == request; });
+  };
+  while (result() < 0 && timer.elapsed() < 15000 && !requestFailed())
+    evaluated.wait(qMax(1, 15000 - static_cast<int>(timer.elapsed())));
+  if (result() < 0) {
+    if (!failed.isEmpty())
+      qWarning() << failed.last();
+    return false;
+  }
+  *value = evaluated.at(result()).at(1).value<DapVariable>();
+  value->name = expression;
+  value->evaluateName = expression;
+  return true;
+}
+} // namespace
+
+void TestDap::testVtkPythonObjectsAndArrays() {
+  const QString python = qEnvironmentVariable(
+      "LIGHTPAD_VTK_PYTHON", QStandardPaths::findExecutable("python3"));
+  QProcess probe;
+  probe.start(python, {"-c", "import debugpy, vtkmodules, numpy"});
+  if (!probe.waitForFinished(10000) || probe.exitCode() != 0) {
+    QSKIP("Set LIGHTPAD_VTK_PYTHON to a Python interpreter with VTK, NumPy and "
+          "debugpy");
+  }
+  const QString script = QFINDTESTDATA("../fixtures/debugger/vtk_scene.py");
+  QVERIFY(!script.isEmpty());
+  DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
+  QSignalSpy ready(&client, &DapClient::initialized);
+  QSignalSpy adapterReady(&client, &DapClient::adapterInitialized);
+  QSignalSpy stopped(&client, &DapClient::stopped);
+  QSignalSpy exited(&client, &DapClient::exited);
+  QVERIFY(client.start(python, {"-m", "debugpy.adapter"}));
+  QVERIFY(waitForDebugSignal(ready));
+  client.launch(QJsonObject{{"program", script},
+                            {"cwd", QFileInfo(script).absolutePath()},
+                            {"console", "internalConsole"}});
+  QVERIFY(waitForDebugSignal(adapterReady));
+  DapSourceBreakpoint breakpoint;
+  breakpoint.line = graphicsInspectionLine(script);
+  QVERIFY(breakpoint.line > 0);
+  client.setBreakpoints(script, {breakpoint});
+  client.configurationDone();
+  QVERIFY(waitForDebugSignal(stopped));
+  DapStackFrame frame;
+  QVERIFY(currentDebugFrame(client, &frame));
+  QCOMPARE(frame.line, breakpoint.line);
+
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(client, frame.id, "mesh", &value));
+  QVERIFY(value.variablesReference > 0);
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  inspector.setValue(value);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  QTRY_VERIFY_WITH_TIMEOUT(tree->topLevelItem(0)->childCount() > 0, 10000);
+  QVERIFY(evaluateDebugObject(client, frame.id, "mesh.GetNumberOfPoints()",
+                              &value));
+  QCOMPARE(value.value, QString("226"));
+  QVERIFY(evaluateDebugObject(
+      client, frame.id, "actor.GetMapper().GetInput().GetNumberOfPoints()",
+      &value));
+  QCOMPARE(value.value, QString("226"));
+  QVERIFY(evaluateDebugObject(client, frame.id, "point_rows", &value));
+  inspector.setValue(value);
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(7, 2) && !table->item(7, 2)->text().isEmpty(), 10000);
+  QCOMPARE(table->columnCount(), 3);
+
+  QVERIFY(evaluateDebugObject(client, frame.id, "velocity", &value));
+  inspector.setValue(value);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(1, 2) && table->item(1, 2)->text() == "1.75", 10000);
+  QCOMPARE(table->columnCount(), 3);
+  QVERIFY(evaluateDebugObject(client, frame.id, "coordinates", &value));
+  inspector.setValue(value);
+  auto *root = tree->topLevelItem(0);
+  QTRY_COMPARE_WITH_TIMEOUT(root->childCount(), 101, 10000);
+  tree->itemActivated(root->child(100), 0);
+  QTRY_COMPARE_WITH_TIMEOUT(root->childCount(), 201, 10000);
+  tree->itemActivated(root->child(200), 0);
+  QTRY_COMPARE_WITH_TIMEOUT(root->childCount(), 226, 10000);
+  QCOMPARE(root->child(225)->text(0).toInt(), 225);
+  if (!qEnvironmentVariableIsEmpty("LIGHTPAD_VTK_SCREENSHOT")) {
+    inspector.applyTheme(Theme());
+    inspector.resize(1000, 600);
+    inspector.show();
+    QTest::qWait(100);
+    inspector.grab().save(qEnvironmentVariable("LIGHTPAD_VTK_SCREENSHOT"));
+  }
+  client.stepOver(client.currentThreadId());
+  QVERIFY(waitForDebugSignal(stopped, 2));
+  QVERIFY(inspector.findChild<QLabel *>("debugValueStatus")
+              ->text()
+              .contains("Snapshot"));
+  QVERIFY(currentDebugFrame(client, &frame));
+  QVERIFY(evaluateDebugObject(client, frame.id, "mesh.GetPoint(0)[0]", &value));
+  QCOMPARE(value.value, QString("99.0"));
+  client.continueExecution(client.currentThreadId());
+  QVERIFY(waitForDebugSignal(exited));
+  QCOMPARE(exited.last().first().toInt(), 0);
+  client.stop(true);
+  QTest::qWait(100);
+}
+
+void TestDap::testOpenGLCppObjectsAndMatrices() {
+  const QString compiler = QStandardPaths::findExecutable("c++");
+  const QString gdb = QStandardPaths::findExecutable("gdb");
+  if (compiler.isEmpty() || gdb.isEmpty() ||
+      qEnvironmentVariableIsEmpty("DISPLAY")) {
+    QSKIP("OpenGL debugging needs c++, GDB DAP, and DISPLAY (or xvfb-run)");
+  }
+  QProcess flags;
+  flags.start("pkg-config", {"--cflags", "--libs", "Qt6Gui", "Qt6OpenGL"});
+  if (!flags.waitForFinished(10000) || flags.exitCode() != 0)
+    QSKIP("Qt6 OpenGL development libraries are not installed");
+  const QString source = QFINDTESTDATA("../fixtures/debugger/opengl_scene.cpp");
+  QVERIFY(!source.isEmpty());
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString binary = dir.filePath("opengl_scene");
+  QStringList args = {"-g", "-O0", "-std=c++17", "-fPIC", source, "-o", binary};
+  args +=
+      QProcess::splitCommand(QString::fromUtf8(flags.readAllStandardOutput()));
+  QProcess build;
+  build.start(compiler, args);
+  QVERIFY(build.waitForFinished(60000));
+  QVERIFY2(build.exitCode() == 0, build.readAllStandardError().constData());
+  DapClient client;
+  client.setAdapterMetadata("cppdbg-gdb", "cppdbg");
+  QSignalSpy ready(&client, &DapClient::initialized);
+  QSignalSpy adapterReady(&client, &DapClient::adapterInitialized);
+  QSignalSpy stopped(&client, &DapClient::stopped);
+  QSignalSpy exited(&client, &DapClient::exited);
+  QVERIFY(client.start(gdb, {"--interpreter=dap"}));
+  QVERIFY(waitForDebugSignal(ready));
+  QVERIFY(waitForDebugSignal(adapterReady));
+  DapSourceBreakpoint breakpoint;
+  breakpoint.line = graphicsInspectionLine(source);
+  QVERIFY(breakpoint.line > 0);
+  client.setBreakpoints(source, {breakpoint});
+  client.configurationDone();
+  DebugConfiguration configuration;
+  configuration.program = binary;
+  configuration.cwd = dir.path();
+  configuration.env["QT_QPA_PLATFORM"] = "xcb";
+  const auto adapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
+  QVERIFY(adapter);
+  client.launch(adapter->launchArguments(configuration));
+  QVERIFY(waitForDebugSignal(stopped));
+  DapStackFrame frame;
+  QVERIFY(currentDebugFrame(client, &frame));
+  QCOMPARE(frame.line, breakpoint.line);
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(client, frame.id, "graphicsError", &value));
+  QCOMPARE(value.value, QString("0"));
+  QVERIFY(evaluateDebugObject(client, frame.id, "scene.vertexBuffer", &value));
+  QVERIFY(value.value.toUInt() > 0);
+  QVERIFY(evaluateDebugObject(client, frame.id, "scene.texture", &value));
+  QVERIFY(value.value.toUInt() > 0);
+  QVERIFY(evaluateDebugObject(client, frame.id, "scene.model", &value));
+  QVERIFY(value.variablesReference > 0);
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  inspector.setValue(value);
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(3, 3) && table->item(3, 3)->text() == "1", 10000);
+  QCOMPARE(table->rowCount(), 4);
+  QCOMPARE(table->columnCount(), 4);
+  QCOMPARE(table->item(0, 1)->text(), QString("0"));
+  QVERIFY(evaluateDebugObject(client, frame.id, "scene.vertices", &value));
+  inspector.setValue(value);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  QTRY_COMPARE_WITH_TIMEOUT(tree->topLevelItem(0)->childCount(), 3, 10000);
+  auto *vertex = tree->topLevelItem(0)->child(0);
+  vertex->setExpanded(true);
+  QTRY_COMPARE_WITH_TIMEOUT(vertex->childCount(), 2, 10000);
+  QCOMPARE(vertex->child(0)->text(0), QString("position"));
+  vertex->child(0)->setExpanded(true);
+  QTRY_COMPARE_WITH_TIMEOUT(vertex->child(0)->childCount(), 3, 10000);
+  QCOMPARE(vertex->child(0)->child(0)->text(1), QString("-0.5"));
+  client.stepOver(client.currentThreadId());
+  QVERIFY(waitForDebugSignal(stopped, 2));
+  QVERIFY(currentDebugFrame(client, &frame));
+  QVERIFY(evaluateDebugObject(client, frame.id, "scene.model[0][0]", &value));
+  QCOMPARE(value.value, QString("2"));
+  client.continueExecution(client.currentThreadId());
+  QVERIFY(waitForDebugSignal(exited));
+  QCOMPARE(exited.last().first().toInt(), 0);
+  client.stop(true);
+}
+
+void TestDap::testGdbLaunchEnvironmentPreservesGraphicsContext() {
+  const auto adapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
+  QVERIFY(adapter);
+  DebugConfiguration configuration;
+  configuration.program = "/tmp/graphics-test";
+  configuration.env["QT_QPA_PLATFORM"] = "xcb";
+  configuration.adapterConfig["environment"] = QJsonArray{QJsonObject{
+      {"name", "LIGHTPAD_GRAPHICS_DRIVER"}, {"value", "test-driver"}}};
+  const QJsonObject arguments = adapter->launchArguments(configuration);
+  const QJsonObject environment = arguments["env"].toObject();
+  QCOMPARE(environment["PATH"].toString(), qEnvironmentVariable("PATH"));
+  if (qEnvironmentVariableIsSet("DISPLAY"))
+    QCOMPARE(environment["DISPLAY"].toString(),
+             qEnvironmentVariable("DISPLAY"));
+  QCOMPARE(environment["QT_QPA_PLATFORM"].toString(), QString("xcb"));
+  QCOMPARE(environment["LIGHTPAD_GRAPHICS_DRIVER"].toString(),
+           QString("test-driver"));
+  QVERIFY(!arguments.contains("environment"));
+}
+
+void TestDap::testConsoleResultOpensStructuredInspector() {
+  DapClient client;
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
+  DebugPanel panel;
+  panel.setDapClient(&client);
+  panel.setCurrentFrame(100);
+  auto *input = panel.findChild<QLineEdit *>("debugConsoleInput");
+  auto *table =
+      panel.findChild<DebugValueInspector *>("debugConsoleValueInspector")
+          ->findChild<QTableWidget *>("debugValueTable");
+  QVERIFY(input && table);
+  input->setText("matrix");
+  input->returnPressed();
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(2, 2) && table->item(2, 2)->text() == "22.25", 5000);
+  const auto *console = panel.findChild<QPlainTextEdit *>("debugConsoleOutput");
+  QVERIFY(console->toPlainText().contains("[\n"));
+  QCOMPARE(table->item(1, 2)->text(), QString());
+  client.continueExecution(1);
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+  QVERIFY(panel.findChild<DebugValueInspector *>("debugConsoleValueInspector")
+              ->findChild<QLabel *>("debugValueStatus")
+              ->text()
+              .contains("Snapshot"));
+  client.stop(false);
+}
+
+namespace {
+QString concurrencyPython() {
+  static const QString python = []() {
+    const QString candidate = QStandardPaths::findExecutable("python3");
+    QProcess probe;
+    probe.start(candidate, {"-c", "import debugpy"});
+    return probe.waitForFinished(10000) && probe.exitCode() == 0 ? candidate
+                                                                 : QString();
+  }();
+  return python;
+}
+
+int concurrencyMarkerLine(const QString &path) {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly))
+    return 0;
+  const auto lines = file.readAll().split('\n');
+  for (int i = 0; i < lines.size(); ++i)
+    if (lines.at(i).contains("_INSPECT"))
+      return i + 1;
+  return 0;
+}
+
+bool workerFrame(DapClient &client, int thread, const QString &source,
+                 DapStackFrame *frame) {
+  if (!client.selectThread(thread))
+    return false;
+  QSignalSpy stack(&client, &DapClient::stackTraceReceived);
+  client.getStackTrace(thread);
+  if (!waitForDebugSignal(stack))
+    return false;
+  for (const auto &entry : stack.last().at(1).value<QList<DapStackFrame>>()) {
+    if (QFileInfo(entry.source.path).canonicalFilePath() ==
+            QFileInfo(source).canonicalFilePath() &&
+        entry.name.contains("worker")) {
+      *frame = entry;
+      return true;
+    }
+  }
+  return false;
+}
+} // namespace
+
+void TestDap::testPartialThreadExecution() {
+  DapClient client;
+  auto event = [&client](const QString &name, const QJsonObject &body) {
+    client.feedAdapterData(frameMessage(
+        QJsonObject{{"type", "event"}, {"event", name}, {"body", body}}));
+  };
+  for (int id : {1, 2})
+    event("thread", {{"threadId", id}, {"reason", "started"}});
+  event(
+      "stopped",
+      {{"threadId", 1}, {"reason", "breakpoint"}, {"allThreadsStopped", true}});
+  QVERIFY(client.selectThread(2));
+  event("continued", {{"threadId", 2}, {"allThreadsContinued", false}});
+  QCOMPARE(client.state(), DapClient::State::Stopped);
+  QVERIFY(client.isThreadStopped(1));
+  QVERIFY(!client.isThreadStopped(2));
+  QCOMPARE(client.currentThreadId(), 1);
+  QVERIFY(!client.selectThread(2));
+  event("stopped",
+        {{"threadId", 2}, {"reason", "step"}, {"allThreadsStopped", false}});
+  event("continued", {{"threadId", 1}, {"allThreadsContinued", false}});
+  QCOMPARE(client.currentThreadId(), 2);
+  QVERIFY(client.isThreadStopped(2));
+  event("thread", {{"threadId", 2}, {"reason", "exited"}});
+  QCOMPARE(client.state(), DapClient::State::Running);
+  QCOMPARE(client.currentThreadId(), 0);
+}
+
+void TestDap::testSelectedThreadExecutionArguments() {
+  for (bool supported : {false, true}) {
+    QTemporaryDir dir;
+    const QString trace = dir.filePath("requests.jsonl");
+    DapClient client;
+    QVERIFY(
+        client.start(fakeAdapterPath(),
+                     {"--trace", trace, "--caps",
+                      QString("{\"supportsSingleThreadExecutionRequests\":%1}")
+                          .arg(supported ? "true" : "false")}));
+    QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+    client.feedAdapterData(frameMessage(QJsonObject{
+        {"type", "event"},
+        {"event", "stopped"},
+        {"body", QJsonObject{{"threadId", 1}, {"allThreadsStopped", true}}}}));
+    QVERIFY(client.selectThread(2));
+    client.continueExecution(0, true);
+    QTRY_VERIFY_WITH_TIMEOUT(traceFileContains(trace, "\"continue\""), 5000);
+    QFile file(trace);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QJsonObject arguments;
+    for (const auto &line : file.readAll().split('\n')) {
+      auto request = QJsonDocument::fromJson(line).object();
+      if (request["command"] == "continue")
+        arguments = request["arguments"].toObject();
+    }
+    QCOMPARE(arguments["threadId"].toInt(), 2);
+    QCOMPARE(arguments["singleThread"].toBool(), supported);
+    client.stop(false);
+  }
+}
+
+void TestDap::testPythonThreadSelection() {
+  const QString python = concurrencyPython();
+  if (python.isEmpty())
+    QSKIP("Python concurrency integration tests require python3 with debugpy");
+  const QString source =
+      QFINDTESTDATA("../fixtures/debugger/concurrency_threads.py");
+  DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
+  QSignalSpy ready(&client, &DapClient::initialized);
+  QSignalSpy configured(&client, &DapClient::adapterInitialized);
+  QSignalSpy stopped(&client, &DapClient::stopped);
+  QSignalSpy exited(&client, &DapClient::exited);
+  QVERIFY(client.start(python, {"-m", "debugpy.adapter"}));
+  QVERIFY(waitForDebugSignal(ready));
+  client.launch({{"program", source}, {"console", "internalConsole"}});
+  QVERIFY(waitForDebugSignal(configured));
+  DapSourceBreakpoint breakpoint;
+  breakpoint.line = concurrencyMarkerLine(source);
+  QVERIFY(breakpoint.line > 0);
+  client.setBreakpoints(source, {breakpoint});
+  client.configurationDone();
+  QVERIFY(waitForDebugSignal(stopped));
+  const int alpha = client.currentThreadId();
+  QSignalSpy threads(&client, &DapClient::threadsReceived);
+  client.getThreads();
+  QVERIFY(waitForDebugSignal(threads));
+  int beta = 0;
+  for (const auto &thread : threads.last().at(0).value<QList<DapThread>>())
+    if (thread.name == "beta")
+      beta = thread.id;
+  QVERIFY(beta > 0 && beta != alpha);
+  DebugPanel panel;
+  panel.setDapClient(&client);
+  client.getThreads();
+  auto *selector = panel.findChild<QComboBox *>("debugThreadSelector");
+  QTRY_VERIFY_WITH_TIMEOUT(selector->findData(beta) >= 0, 5000);
+  selector->setCurrentIndex(selector->findData(beta));
+  QCOMPARE(client.currentThreadId(), beta);
+  DapStackFrame frame;
+  QVERIFY(workerFrame(client, beta, source, &frame));
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(client, frame.id, "payload['worker']", &value));
+  QCOMPARE(value.value, QString("'beta'"));
+  selector->setCurrentIndex(selector->findData(alpha));
+  QCOMPARE(client.currentThreadId(), alpha);
+  QVERIFY(workerFrame(client, alpha, source, &frame));
+  QVERIFY(evaluateDebugObject(client, frame.id, "payload['worker']", &value));
+  QCOMPARE(value.value, QString("'alpha'"));
+  client.continueExecution();
+  QVERIFY(waitForDebugSignal(exited));
+  QCOMPARE(exited.last().first().toInt(), 0);
+  client.stop(true);
+}
+
+void TestDap::testCppThreadSelection() {
+  if (QStandardPaths::findExecutable("gdb").isEmpty() ||
+      QStandardPaths::findExecutable("c++").isEmpty())
+    QSKIP("C++ concurrency debugging requires a compiler and GDB with DAP "
+          "support");
+#ifndef Q_OS_LINUX
+  QSKIP("The named native thread fixture currently uses Linux pthread names");
+#endif
+  const QString source =
+      QFINDTESTDATA("../fixtures/debugger/concurrency_threads.cpp");
+  QTemporaryDir dir;
+  const QString binary = dir.filePath("threads");
+  QProcess compiler;
+  compiler.start("c++",
+                 {"-g", "-O0", "-std=c++17", "-pthread", source, "-o", binary});
+  QVERIFY(compiler.waitForFinished(30000));
+  QVERIFY2(compiler.exitCode() == 0,
+           compiler.readAllStandardError().constData());
+  DapClient client;
+  client.setAdapterMetadata("cppdbg-gdb", "cppdbg");
+  QSignalSpy ready(&client, &DapClient::initialized);
+  QSignalSpy configured(&client, &DapClient::adapterInitialized);
+  QSignalSpy stopped(&client, &DapClient::stopped);
+  QSignalSpy exited(&client, &DapClient::exited);
+  QVERIFY(client.start("gdb", {"--interpreter=dap"}));
+  QVERIFY(waitForDebugSignal(ready));
+  QVERIFY(waitForDebugSignal(configured));
+  DapSourceBreakpoint breakpoint;
+  breakpoint.line = concurrencyMarkerLine(source);
+  QVERIFY(breakpoint.line > 0);
+  client.setBreakpoints(source, {breakpoint});
+  client.configurationDone();
+  DebugConfiguration config;
+  config.program = binary;
+  client.launch(DebugAdapterRegistry::instance()
+                    .adapter("cppdbg-gdb")
+                    ->launchArguments(config));
+  QVERIFY(waitForDebugSignal(stopped));
+  const int alpha = client.currentThreadId();
+  QSignalSpy threads(&client, &DapClient::threadsReceived);
+  client.getThreads();
+  QVERIFY(waitForDebugSignal(threads));
+  int beta = 0;
+  for (const auto &thread : threads.last().at(0).value<QList<DapThread>>())
+    if (thread.name == "beta")
+      beta = thread.id;
+  QVERIFY(beta > 0 && beta != alpha);
+  DapStackFrame frame;
+  QVERIFY(workerFrame(client, beta, source, &frame));
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(client, frame.id, "payload.id", &value));
+  QCOMPARE(value.value, QString("2"));
+  QVERIFY(workerFrame(client, alpha, source, &frame));
+  QVERIFY(evaluateDebugObject(client, frame.id, "payload.id", &value));
+  QCOMPARE(value.value, QString("1"));
+  client.continueExecution();
+  QVERIFY(waitForDebugSignal(exited));
+  QCOMPARE(exited.last().first().toInt(), 0);
+  client.stop(true);
+}
+
+void TestDap::testPythonChildProcesses_data() {
+  QTest::addColumn<QString>("method");
+  QTest::newRow("spawn") << QString("spawn");
+#ifdef Q_OS_UNIX
+  QTest::newRow("fork") << QString("fork");
+#endif
+}
+
+void TestDap::testPythonChildProcesses() {
+  cleanupWatches();
+  const QString python = concurrencyPython();
+  if (python.isEmpty())
+    QSKIP("Python concurrency integration tests require python3 with debugpy");
+  QFETCH(QString, method);
+  const QString source =
+      QFINDTESTDATA("../fixtures/debugger/concurrency_processes.py");
+  auto &manager = DebugSessionManager::instance();
+  auto &breakpoints = BreakpointManager::instance();
+  auto cleanup = qScopeGuard([&]() {
+    manager.stopAllSessions(true);
+    breakpoints.clearAll();
+  });
+  breakpoints.clearAll();
+  Breakpoint breakpoint;
+  breakpoint.filePath = source;
+  breakpoint.line = concurrencyMarkerLine(source);
+  QVERIFY(breakpoint.line > 0);
+  breakpoints.addBreakpoint(breakpoint);
+  DebugConfiguration config;
+  config.name = "Multiprocessing test";
+  config.adapterId = "python-debugpy";
+  config.type = "debugpy";
+  config.request = "launch";
+  config.program = source;
+  config.cwd = QFileInfo(source).absolutePath();
+  config.pythonMode = PythonProjectEnvironment::customInterpreterMode();
+  config.pythonInterpreter = python;
+  config.env["LIGHTPAD_MP_METHOD"] = method;
+  config.adapterConfig = {{"console", "internalConsole"}, {"subProcess", true}};
+  QSignalSpy stops(&manager, &DebugSessionManager::sessionStopped);
+  QSignalSpy errors(&manager, &DebugSessionManager::sessionError);
+  DebugPanel debugPanel;
+  for (auto *button :
+       debugPanel.findChildren<QToolButton *>("debugInspectorTab"))
+    if (button->text() == "Concurrency")
+      button->click();
+  debugPanel.resize(1350, 700);
+  debugPanel.applyTheme(Theme());
+  debugPanel.show();
+  const QString root = manager.startSession(config);
+  QVERIFY2(!root.isEmpty(), qPrintable(manager.lastError()));
+  QVERIFY2(waitForDebugSignal(stops, 2, 30000),
+           qPrintable(manager.lastError()));
+  QCOMPARE(errors.count(), 0);
+  QSet<int> workers;
+  QSet<int> pids;
+  QStringList childIds;
+  QMap<QString, int> childWorkers;
+  for (auto *session : manager.allSessions()) {
+    if (session->parentSessionId() != root ||
+        session->state() != DebugSession::State::Stopped)
+      continue;
+    childIds << session->id();
+    pids.insert(session->processId());
+    QVERIFY(!session->configuration()
+                 .adapterConfig["connect"]
+                 .toObject()
+                 .isEmpty());
+    DapStackFrame frame;
+    QVERIFY(currentDebugFrame(*session->client(), &frame));
+    DapVariable value;
+    QVERIFY(evaluateDebugObject(*session->client(), frame.id,
+                                "payload['worker']", &value));
+    workers.insert(value.value.toInt());
+    childWorkers[session->id()] = value.value.toInt();
+    QVERIFY(evaluateDebugObject(*session->client(), frame.id, "phase", &value));
+    QCOMPARE(value.value, QString("0"));
+    manager.setFocusedSession(session->id());
+    QCOMPARE(breakpoints.dapClient(), session->client());
+  }
+  QCOMPARE(workers, (QSet<int>{1, 2}));
+  QCOMPARE(pids.size(), 2);
+  QVERIFY(!pids.contains(0));
+  auto *panel = debugPanel.findChild<DebugConcurrencyPanel *>();
+  panel->refresh();
+  auto *tree = panel->findChild<QTreeWidget *>("debugProcessesTree");
+  QVERIFY(tree);
+  bool foundParent = false;
+  for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+    auto *item = tree->topLevelItem(i);
+    if (item->data(0, Qt::UserRole).toString() != root)
+      continue;
+    int children = 0;
+    for (int j = 0; j < item->childCount(); ++j)
+      if (childIds.contains(item->child(j)->data(0, Qt::UserRole).toString()))
+        ++children;
+    QCOMPARE(children, 2);
+    foundParent = true;
+  }
+  QVERIFY(foundParent);
+  const QString selectedChild = childIds.first();
+  const auto items =
+      tree->findItems(QString(), Qt::MatchContains | Qt::MatchRecursive);
+  for (auto *item : items) {
+    if (item->data(0, Qt::UserRole).toString() == selectedChild &&
+        item->data(0, Qt::UserRole + 1).toInt() == 0) {
+      tree->setCurrentItem(item);
+      tree->itemActivated(item, 0);
+      break;
+    }
+  }
+  QCOMPARE(manager.focusedSession()->id(), selectedChild);
+  manager.pauseAllSessions();
+  QVERIFY(waitForDebugSignal(stops, 3));
+  QCOMPARE(manager.session(root)->state(), DebugSession::State::Stopped);
+  if (!qEnvironmentVariableIsEmpty("LIGHTPAD_PROCESS_SCREENSHOT")) {
+    QTest::qWait(100);
+    debugPanel.grab().save(qEnvironmentVariable("LIGHTPAD_PROCESS_SCREENSHOT"));
+  }
+
+  breakpoints.removeBreakpoint(source, breakpoint.line);
+  QTest::qWait(250);
+  manager.continueAllSessions();
+  QTRY_COMPARE_WITH_TIMEOUT(manager.sessionCount(), 0, 30000);
+  QVERIFY2(errors.isEmpty(),
+           errors.isEmpty() ? "" : qPrintable(errors.last().at(1).toString()));
+  QCOMPARE(stops.count(), 3);
+  QString output;
+  QSet<QString> retained;
+  for (const auto &session : manager.recentSessions()) {
+    if (childIds.contains(session.id) || session.id == root) {
+      retained.insert(session.id);
+      output += session.output;
+      if (childWorkers.contains(session.id))
+        QVERIFY2(
+            session.output.contains(
+                QString("process-debug-ok %1 1").arg(childWorkers[session.id])),
+            qPrintable(session.name + ": " + session.output));
+    }
+  }
+  QVERIFY(retained.contains(root));
+  for (const auto &id : childIds)
+    QVERIFY(retained.contains(id));
+  QVERIFY2(output.contains("process-debug-ok 1 1"), qPrintable(output));
+  QVERIFY2(output.contains("process-debug-ok 2 1"), qPrintable(output));
+  QVERIFY2(output.contains("parent-debug-ok"), qPrintable(output));
+}
+
+void TestDap::testAsyncioTaskInspection() {
+  const QString python = concurrencyPython();
+  if (python.isEmpty())
+    QSKIP("Python concurrency integration tests require python3 with debugpy");
+  const QString source =
+      QFINDTESTDATA("../fixtures/debugger/concurrency_async.py");
+  DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
+  QSignalSpy ready(&client, &DapClient::initialized);
+  QSignalSpy configured(&client, &DapClient::adapterInitialized);
+  QSignalSpy stopped(&client, &DapClient::stopped);
+  QSignalSpy exited(&client, &DapClient::exited);
+  QVERIFY(client.start(python, {"-m", "debugpy.adapter"}));
+  QVERIFY(waitForDebugSignal(ready));
+  client.launch({{"program", source}, {"console", "internalConsole"}});
+  QVERIFY(waitForDebugSignal(configured));
+  DapSourceBreakpoint breakpoint;
+  breakpoint.line = concurrencyMarkerLine(source);
+  QVERIFY(breakpoint.line > 0);
+  client.setBreakpoints(source, {breakpoint});
+  client.configurationDone();
+  QVERIFY(waitForDebugSignal(stopped));
+  DapStackFrame frame;
+  QVERIFY(currentDebugFrame(client, &frame));
+  DebugConcurrencyPanel panel;
+  panel.setFrameContext(&client, frame.id);
+  panel.inspectAsyncTasks();
+  auto *table = panel.findChild<QTableWidget *>("debugValueTable");
+  QVERIFY(table);
+  QTRY_COMPARE_WITH_TIMEOUT(table->rowCount(), 3, 15000);
+  QTRY_VERIFY_WITH_TIMEOUT(table->item(2, 0), 15000);
+  QTRY_VERIFY_WITH_TIMEOUT(table->columnCount() > 1 && table->item(2, 1) &&
+                               !table->item(2, 1)->text().isEmpty(),
+                           15000);
+  QString cells;
+  for (int row = 0; row < table->rowCount(); ++row)
+    for (int column = 0; column < table->columnCount(); ++column)
+      if (table->item(row, column))
+        cells += table->item(row, column)->text() + "\n";
+  QVERIFY2(cells.contains("io-reader") && cells.contains("io-writer") &&
+               cells.contains("driver"),
+           qPrintable(cells));
+  QVERIFY(cells.contains("current") && cells.contains("waiting"));
+  int framesColumn = -1;
+  for (int i = 0; i < table->columnCount(); ++i)
+    if (table->horizontalHeaderItem(i)->text().contains("Frames"))
+      framesColumn = i;
+  QVERIFY(framesColumn >= 0);
+  table->cellActivated(1, framesColumn);
+  auto *tree = panel.findChild<QTreeWidget *>("debugValueTree");
+  auto *frames = tree->currentItem();
+  QVERIFY(frames && frames->text(0).contains("Frames"));
+  QTRY_VERIFY_WITH_TIMEOUT(frames->childCount() > 0, 5000);
+  auto *taskFrame = frames->child(0);
+  taskFrame->setExpanded(true);
+  auto namedChild = [](QTreeWidgetItem *item, const QString &name) {
+    for (int i = 0; i < item->childCount(); ++i)
+      if (item->child(i)->text(0) == name ||
+          item->child(i)->text(0) == "'" + name + "'")
+        return item->child(i);
+    return static_cast<QTreeWidgetItem *>(nullptr);
+  };
+  QTRY_VERIFY_WITH_TIMEOUT(namedChild(taskFrame, "Locals"), 5000);
+  auto *locals = namedChild(taskFrame, "Locals");
+  locals->setExpanded(true);
+  QTRY_VERIFY_WITH_TIMEOUT(namedChild(locals, "payload"), 5000);
+  auto *payload = namedChild(locals, "payload");
+  payload->setExpanded(true);
+  QTRY_VERIFY_WITH_TIMEOUT(namedChild(payload, "worker"), 5000);
+  QCOMPARE(namedChild(payload, "worker")->text(1), QString("'reader'"));
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(
+      client, frame.id,
+      "next(t for t in __import__('asyncio').all_tasks() if t.get_name() == "
+      "'io-reader').get_coro().cr_frame.f_locals['payload']['worker']",
+      &value));
+  QCOMPARE(value.value, QString("'reader'"));
+  if (!qEnvironmentVariableIsEmpty("LIGHTPAD_CONCURRENCY_SCREENSHOT")) {
+    panel.applyTheme(Theme());
+    panel.resize(1150, 650);
+    panel.findChild<QTabWidget *>()->setCurrentIndex(1);
+    panel.findChild<QTabWidget *>("debugValueTabs")->setCurrentIndex(1);
+    panel.show();
+    QTest::qWait(100);
+    panel.grab().save(qEnvironmentVariable("LIGHTPAD_CONCURRENCY_SCREENSHOT"));
+  }
+
+  client.stepOver(client.currentThreadId());
+  QVERIFY(waitForDebugSignal(stopped, 2));
+  client.stepOver(client.currentThreadId());
+  QVERIFY(waitForDebugSignal(stopped, 3));
+  QVERIFY(currentDebugFrame(client, &frame));
+  panel.setFrameContext(&client, frame.id);
+  panel.inspectAsyncTasks();
+  auto hasCancellingTask = [table]() {
+    for (int row = 0; row < table->rowCount(); ++row)
+      for (int column = 0; column < table->columnCount(); ++column)
+        if (table->item(row, column) &&
+            table->item(row, column)->text() == "'cancelling'")
+          return true;
+    return false;
+  };
+  QTRY_VERIFY_WITH_TIMEOUT(hasCancellingTask(), 10000);
+  client.continueExecution();
+  QVERIFY(waitForDebugSignal(exited));
+  QCOMPARE(exited.last().first().toInt(), 0);
+  QVERIFY(
+      !panel.findChild<QPushButton *>("debugInspectAsyncTasks")->isEnabled());
+  QVERIFY(panel.findChild<QLabel *>("debugValueStatus")
+              ->text()
+              .contains("Snapshot"));
+  client.stop(true);
+}
+
+void TestDap::testProcessScopedDataBreakpoints() {
+  auto &manager = BreakpointManager::instance();
+  manager.clearAll();
+  DapClient first;
+  DapClient second;
+  auto cleanup = qScopeGuard([&]() {
+    manager.setDapClient(nullptr);
+    manager.clearAll();
+  });
+  manager.setDapClient(&first);
+  manager.addDataBreakpoint("process-owned-id", "write", "first worker");
+  manager.setDapClient(&second);
+  QVERIFY(manager.allDataBreakpoints().isEmpty());
+  manager.addDataBreakpoint("process-owned-id", "write", "second worker");
+  manager.setDapClient(&first);
+  QCOMPARE(manager.allDataBreakpoints().size(), 1);
+  QCOMPARE(manager.allDataBreakpoints().first().description,
+           QString("first worker"));
+  manager.setDapClient(&second);
+  QCOMPARE(manager.allDataBreakpoints().first().description,
+           QString("second worker"));
+  manager.clearAll();
+  manager.setDapClient(&first);
+  QVERIFY(manager.allDataBreakpoints().isEmpty());
+}
+
+void TestDap::testContinueCancelsPendingPause() {
+  QTemporaryDir dir;
+  const QString trace = dir.filePath("requests.jsonl");
+  DapClient client;
+  QVERIFY(client.start(fakeAdapterPath(),
+                       {"--trace", trace, "--hang-on", "pause"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/test-program"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Running, 5000);
+  client.pauseAllThreads();
+  QTRY_VERIFY_WITH_TIMEOUT(traceFileContains(trace, "\"pause\""), 5000);
+  QVERIFY(client.hasPendingPause());
+  client.continueExecution();
+  QTRY_VERIFY_WITH_TIMEOUT(!client.hasPendingPause(), 5000);
+  QCOMPARE(client.state(), DapClient::State::Running);
+  client.stop(false);
+}
+
+void TestDap::testTabbedDebugDockCanShrinkBelowTwentyPercent_data() {
+  QTest::addColumn<int>("windowHeight");
+  QTest::newRow("small-window") << 600;
+  QTest::newRow("laptop") << 768;
+  QTest::newRow("desktop") << 1050;
+  QTest::newRow("large-desktop") << 1440;
+}
+
+void TestDap::testTabbedDebugDockCanShrinkBelowTwentyPercent() {
+  QFETCH(int, windowHeight);
+  QMainWindow window;
+  window.setDockOptions(DockUtils::mainWindowDockOptions());
+  window.resize(1400, windowHeight);
+  auto *editor = new QWidget(&window);
+  window.setCentralWidget(editor);
+  auto *debug = new QDockWidget("Debug", &window);
+  DockUtils::configureToolPanelDock(debug);
+  auto *panel = new DebugPanel(debug);
+  panel->applyTheme(Theme());
+  debug->setWidget(panel);
+  window.addDockWidget(Qt::BottomDockWidgetArea, debug);
+  auto *terminal = new QDockWidget("Terminal", &window);
+  DockUtils::configureToolPanelDock(terminal);
+  terminal->setWidget(new QPlainTextEdit(terminal));
+  window.addDockWidget(Qt::BottomDockWidgetArea, terminal);
+  window.tabifyDockWidget(debug, terminal);
+  window.show();
+  terminal->raise();
+  QTest::qWait(50);
+  window.resizeDocks({terminal}, {1}, Qt::Vertical);
+  QTest::qWait(50);
+  QVERIFY2(window.height() - editor->height() <= window.height() / 5,
+           "A tabbed debug panel must allow the bottom area to shrink below "
+           "20% of the window");
+  debug->raise();
+  for (auto *button : panel->findChildren<QToolButton *>("debugInspectorTab")) {
+    button->click();
+    QCoreApplication::processEvents();
+    QVERIFY2(
+        window.height() - editor->height() <= window.height() / 5,
+        qPrintable("Opening " + button->text() + " expanded the bottom dock"));
+  }
+
+  window.resizeDocks({debug}, {window.height() / 2}, Qt::Vertical);
+  QCoreApplication::processEvents();
+  QVERIFY(debug->height() > window.height() / 5);
 }
 
 QTEST_MAIN(TestDap)

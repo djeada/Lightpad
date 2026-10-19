@@ -240,6 +240,64 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
     body["scopes"] = QJsonArray{scope};
     sendResponse(channel, seq, command, true, body);
   } else if (command == "variables") {
+    const QJsonObject args = request.value("arguments").toObject();
+    const int reference = args["variablesReference"].toInt();
+    if (reference == 9999) {
+      sendResponse(channel, seq, command, false, {},
+                   "Object is no longer available");
+      return;
+    }
+    if (reference == 6000 || reference == 6100) {
+      QJsonArray values;
+      const int start = reference == 6000 ? 0 : 100;
+      const int end = reference == 6000 ? 100 : 250;
+      for (int i = start; i < end; ++i) {
+        values.append(QJsonObject{{"name", QString::number(i)},
+                                  {"value", QString::number(i)},
+                                  {"type", "int"}});
+      }
+      if (reference == 6000) {
+        values.append(QJsonObject{{"name", "more"},
+                                  {"variablesReference", 6100},
+                                  {"type", "MoreItemsRange"}});
+        values.append(QJsonObject{{"name", "len()"}, {"value", "250"}});
+      }
+      sendResponse(channel, seq, command, true,
+                   QJsonObject{{"variables", values}});
+      return;
+    }
+    if (reference == 2000 || (reference >= 2100 && reference < 2103) ||
+        reference == 3000 || reference == 4000 || reference == 5000) {
+      QJsonArray values;
+      const int size = reference >= 3000 ? 250 : reference == 2101 ? 2 : 3;
+      const int start = reference >= 4000 ? 0 : args["start"].toInt();
+      const int count = reference == 4000 ? size : args["count"].toInt(size);
+      for (int i = start; i < qMin(size, start + count); ++i) {
+        QJsonObject value{
+            {"name", QString::number(i)},
+            {"type", reference == 2000 ? "list" : "float"},
+            {"value",
+             reference == 2000
+                 ? "[...]"
+                 : QString::number(reference >= 3000
+                                       ? i
+                                       : (reference - 2100) * 10 + i + 0.25)}};
+        if (reference == 2000) {
+          value["variablesReference"] = 2100 + i;
+          value["indexedVariables"] = i == 1 ? 2 : 3;
+        }
+        values.append(value);
+      }
+
+      values.prepend(QJsonObject{{"name", "special variables"},
+                                 {"variablesReference", 9998}});
+      values.append(QJsonObject{{"name", "len()"},
+                                {"type", "int"},
+                                {"value", QString::number(size)}});
+      sendResponse(channel, seq, command, true,
+                   QJsonObject{{"variables", values}});
+      return;
+    }
     QJsonObject first;
     first["name"] = QStringLiteral("x");
     first["value"] = QStringLiteral("41");
@@ -260,6 +318,13 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
     QJsonObject body;
     body["result"] = expression;
     body["variablesReference"] = 0;
+    if (expression == QLatin1String("matrix")) {
+      body["result"] =
+          "[[0.25, 1.25, 2.25], [10.25, 11.25], [20.25, 21.25, 22.25]]";
+      body["type"] = "list";
+      body["variablesReference"] = 2000;
+      body["indexedVariables"] = 3;
+    }
     sendResponse(channel, seq, command, true, body);
   } else if (command == "setVariable") {
     const QJsonObject args = request.value("arguments").toObject();

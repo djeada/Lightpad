@@ -24,9 +24,12 @@ public:
   QString id() const { return m_id; }
 
   QString name() const { return m_configuration.name; }
+  QString parentSessionId() const { return m_parentSessionId; }
+  int processId() const { return m_processId; }
 
   State state() const { return m_state; }
   QString lastError() const { return m_lastError; }
+  QString outputHistory() const { return m_outputHistory; }
 
   DapClient *client() const { return m_client.get(); }
 
@@ -35,7 +38,8 @@ public:
   std::shared_ptr<IDebugAdapter> adapter() const { return m_adapter; }
 
   bool start(const DebugConfiguration &config,
-             std::shared_ptr<IDebugAdapter> adapter);
+             std::shared_ptr<IDebugAdapter> adapter, const QString &host = {},
+             quint16 port = 0);
 
   void stop(bool terminate = true);
 
@@ -80,6 +84,13 @@ private slots:
   void onClientError(const QString &message);
 
 private:
+  friend class DebugSessionManager;
+  void syncSessionBreakpoints();
+  void syncSourceBreakpoints(const QString &filePath);
+  void syncFunctionBreakpoints();
+  QString m_parentSessionId;
+  int m_processId = 0;
+  QSet<QString> m_breakpointFiles;
   void setState(State state);
   void startConfigurationSequence();
   void sendLaunchOrAttach();
@@ -98,6 +109,15 @@ private:
   bool m_terminationReported = false;
   bool m_restarting = false;
   QString m_lastError;
+  QString m_outputHistory;
+};
+
+struct DebugSessionSnapshot {
+  QString id;
+  QString parentId;
+  QString name;
+  int processId = 0;
+  QString output;
 };
 
 class DebugSessionManager : public QObject {
@@ -118,6 +138,11 @@ public:
   void stopSession(const QString &sessionId, bool terminate = true);
 
   void stopAllSessions(bool terminate = true);
+  void continueAllSessions();
+  void pauseAllSessions();
+  QList<DebugSessionSnapshot> recentSessions() const {
+    return m_recentSessions;
+  }
 
   DebugSession *session(const QString &sessionId) const;
 
@@ -139,6 +164,8 @@ signals:
   void sessionError(const QString &sessionId, const QString &message);
   void focusedSessionChanged(const QString &sessionId);
   void allSessionsEnded();
+  void sessionsChanged();
+  void sessionOutputChanged(const QString &sessionId);
 
 private slots:
   void onSessionStateChanged(DebugSession::State state);
@@ -151,10 +178,17 @@ private:
   DebugSessionManager &operator=(const DebugSessionManager &) = delete;
 
   QString generateSessionId();
+  QString startSessionImpl(const DebugConfiguration &config,
+                           std::shared_ptr<IDebugAdapter> adapter,
+                           const QString &parentId, const QString &host = {},
+                           quint16 port = 0);
+  QString startChildSession(const QString &parentId, const QString &request,
+                            const QJsonObject &configuration);
 
   QMap<QString, DebugSession *> m_sessions;
   QString m_focusedSessionId;
   QString m_lastError;
+  QList<DebugSessionSnapshot> m_recentSessions;
   int m_nextSessionNumber;
 };
 

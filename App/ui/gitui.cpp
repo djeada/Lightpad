@@ -18,16 +18,14 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSplitter>
-#include <QTableWidget>
 #include <QTabBar>
+#include <QTableWidget>
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QVariant>
 
 namespace {
-// Nested QBoxLayouts can retain a one-line size hint after a flow row wraps.
-// Keep its minimum height tied to the actual available width, including after
-// theme/font changes, so the next row never paints over an action.
+
 class ActionGroup : public QWidget {
 public:
   explicit ActionGroup(QWidget *parent) : QWidget(parent) {

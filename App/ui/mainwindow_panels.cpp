@@ -617,7 +617,12 @@ void MainWindow::ensureDebugPanel() {
           [this](const QString &sessionId) { attachDebugSession(sessionId); });
   connect(&DebugSessionManager::instance(),
           &DebugSessionManager::sessionStarted, this,
-          [this](const QString &sessionId) { attachDebugSession(sessionId); });
+          [this](const QString &sessionId) {
+            DebugSession *session =
+                DebugSessionManager::instance().session(sessionId);
+            if (session && session->parentSessionId().isEmpty())
+              attachDebugSession(sessionId);
+          });
   connect(&DebugSessionManager::instance(),
           &DebugSessionManager::allSessionsEnded, this,
           [this]() { clearDebugSession(); });
@@ -708,7 +713,6 @@ void MainWindow::revealTestDock() {
     return;
   }
 
-  // Reuse the existing bottom panel geometry when a sibling is already open.
   bool bottomPanelVisible = false;
   for (auto *dock : {m_terminalDock, m_problemsDock, debugDock, databaseDock}) {
     if (dock && dock->isVisible() && !dock->isFloating() &&
@@ -721,12 +725,9 @@ void MainWindow::revealTestDock() {
   testDock->show();
   testDock->raise();
 
-  // Only compact the initial layout. Never overwrite a restored or resized
-  // layout when the user reopens the Tests panel.
   if (firstOpen && !bottomPanelVisible && !testDock->isFloating() &&
       dockWidgetArea(testDock) == Qt::BottomDockWidgetArea) {
-    // visibilityChanged saves when the dock first appears, before the resize.
-    // Persist again after Qt has had a chance to finish arranging the docks.
+
     QTimer::singleShot(0, this, [this]() {
       if (!testDock || !testDock->isVisible() || testDock->isFloating() ||
           dockWidgetArea(testDock) != Qt::BottomDockWidgetArea)

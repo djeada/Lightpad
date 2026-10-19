@@ -23,6 +23,8 @@
 #include "../../settings/theme.h"
 
 class DapClient;
+class DebugValueInspector;
+class DebugConcurrencyPanel;
 
 class DebugPanel : public QWidget {
   Q_OBJECT
@@ -30,6 +32,7 @@ class DebugPanel : public QWidget {
 public:
   explicit DebugPanel(QWidget *parent = nullptr);
   ~DebugPanel();
+  QSize sizeHint() const override;
 
   void setDapClient(DapClient *client);
 
@@ -88,9 +91,7 @@ private slots:
   void onScopesReceived(int frameId, const QList<DapScope> &scopes);
   void onVariablesReceived(int variablesReference,
                            const QList<DapVariable> &variables);
-  void onEvaluateResult(int requestSeq, const QString &expression,
-                        const QString &result, const QString &type,
-                        int variablesReference);
+  void onEvaluateResult(int requestSeq, const DapVariable &value);
   void onOutputReceived(const DapOutputEvent &event);
   void onExceptionInfoReceived(int threadId, const DapExceptionInfo &info);
 
@@ -120,6 +121,7 @@ private:
   void setupWatches();
   void setupBreakpoints();
   void setupConsole();
+  void refreshProcessSelector();
   QToolButton *createToolbarButton(QAction *action,
                                    const QString &role = QString());
   QWidget *createToolbarDivider();
@@ -151,6 +153,9 @@ private:
   void applyTransportIcons();
   QString emptyStateTextFor(const QTreeWidget *tree) const;
   void showVariablesContextMenu(const QPoint &pos);
+  void inspectVariableItem(QTreeWidgetItem *item, bool watch = false);
+  void rememberVariableExpansion();
+  static QString variableItemPath(const QTreeWidgetItem *item);
   QString expressionForVariableItem(const QTreeWidgetItem *item) const;
   bool paintTreeEmptyState(QTreeWidget *tree);
   void recallConsoleHistory(int direction);
@@ -203,6 +208,7 @@ private:
 
   QTreeWidget *m_variablesTree = nullptr;
   QMap<int, QTreeWidgetItem *> m_variableRefToItem;
+  QSet<QString> m_expandedVariablePaths;
 
   QTreeWidget *m_breakpointsTree = nullptr;
   QToolButton *m_addFunctionBreakpointButton = nullptr;
@@ -216,9 +222,14 @@ private:
   QSet<int> m_watchPreviewRequests;
 
   QComboBox *m_threadSelector = nullptr;
+  QComboBox *m_processSelector = nullptr;
+  DebugConcurrencyPanel *m_concurrencyPanel = nullptr;
 
   QPlainTextEdit *m_consoleOutput = nullptr;
   QLineEdit *m_consoleInput = nullptr;
+  QWidget *m_consoleContent = nullptr;
+  DebugValueInspector *m_consoleValueInspector = nullptr;
+  QAction *m_consoleInspectorAction = nullptr;
 
   int m_currentThreadId;
   int m_currentFrameId;
@@ -242,31 +253,6 @@ private:
     int activeRequestSeq = 0;
   };
   QList<PendingConsoleEvaluation> m_pendingConsoleEvaluations;
-
-  struct ConsoleExpansionNode {
-    QString name;
-    QString value;
-    int reference = 0;
-    int depth = 0;
-    QList<int> children;
-  };
-  struct ConsoleExpansion {
-    QString expression;
-    QString type;
-    QList<ConsoleExpansionNode> nodes;
-    int pendingRequests = 0;
-  };
-  QHash<int, ConsoleExpansion> m_consoleExpansions;
-
-  QHash<int, QPair<int, int>> m_consoleExpansionNodeByRef;
-  int m_nextConsoleExpansionId = 1;
-
-  void startConsoleExpansion(const QString &expression, const QString &type,
-                             int variablesReference);
-  bool applyConsoleExpansion(int variablesReference,
-                             const QList<DapVariable> &variables);
-  QString renderConsoleExpansion(const ConsoleExpansion &expansion,
-                                 int nodeIndex) const;
 
   QHash<int, QTreeWidgetItem *> m_pendingTreeSummaries;
 

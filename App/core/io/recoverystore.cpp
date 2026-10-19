@@ -251,7 +251,7 @@ bool Recovery::Store::transfer(const Draft &draft, const QString &id,
   copy.sessionId = m_session;
   copy.id = id;
   if (!save(copy, error))
-    return false; // Durable destination precedes removing the source.
+    return false;
   if (!QFile::remove(recordPath(m_root, draft.sessionId, draft.id)))
     return failure(error, QObject::tr("The original recovery copy could not be "
                                       "removed; it was retained."));

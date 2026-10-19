@@ -544,6 +544,9 @@ add_executable(test_dap
     ${CMAKE_SOURCE_DIR}/App/dap/debugsession.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugsettings.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/debugpanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/debugconcurrencypanel.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/debugvalueformatter.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/debugvalueinspector.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/debugconfigurationdialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp

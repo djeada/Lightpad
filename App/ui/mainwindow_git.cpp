@@ -1,5 +1,5 @@
-#include "mainwindow_internal.h"
 #include "dialogs/gitobjectexplorerdialog.h"
+#include "mainwindow_internal.h"
 
 void MainWindow::on_actionGit_Log_triggered() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {

@@ -1,7 +1,7 @@
 #include "conflictresolverview.h"
-#include "../gitui.h"
 #include "../../git/gitintegration.h"
 #include "../../theme/colorcontrast.h"
+#include "../gitui.h"
 #include "../uimetrics.h"
 #include "../uistylehelper.h"
 #include "../widgets/flowlayout.h"

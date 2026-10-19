@@ -3,6 +3,7 @@
 #include "processbackeddebugadapter.h"
 
 #include <QFileInfo>
+#include <QProcessEnvironment>
 
 namespace {
 class GdbDebugAdapter : public ProcessBackedDebugAdapter {
@@ -119,6 +120,33 @@ public:
     }
 
     return config;
+  }
+
+  QJsonObject
+  launchArguments(const DebugConfiguration &configuration) const override {
+    QJsonObject arguments =
+        ProcessBackedDebugAdapter::launchArguments(configuration);
+    const QJsonArray environment = arguments.value("environment").toArray();
+    if (arguments.contains("env") || !environment.isEmpty()) {
+
+      QJsonObject merged;
+      const QProcessEnvironment inherited =
+          QProcessEnvironment::systemEnvironment();
+      for (const QString &key : inherited.keys())
+        merged[key] = inherited.value(key);
+      for (const QJsonValue &entry : environment) {
+        const QJsonObject variable = entry.toObject();
+        const QString name = variable.value("name").toString();
+        if (!name.isEmpty())
+          merged[name] = variable.value("value");
+      }
+      const QJsonObject overrides = arguments.value("env").toObject();
+      for (auto it = overrides.begin(); it != overrides.end(); ++it)
+        merged[it.key()] = it.value();
+      arguments["env"] = merged;
+    }
+    arguments.remove("environment");
+    return arguments;
   }
 
   QJsonObject

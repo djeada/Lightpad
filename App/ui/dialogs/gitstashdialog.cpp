@@ -26,7 +26,6 @@ void GitStashDialog::setupUI() {
 
   QHBoxLayout *headerLayout = new QHBoxLayout();
 
-
   QVBoxLayout *titleLayout = new QVBoxLayout();
   m_titleLabel = new QLabel(tr("Stash Changes"), this);
   m_subtitleLabel =

@@ -137,6 +137,7 @@ public:
   void setLogMessage(int id, const QString &message);
 
   void setDapClient(DapClient *client);
+  DapClient *dapClient() const { return m_dapClient; }
 
   void syncAllBreakpoints();
 
@@ -226,6 +227,7 @@ private:
   int m_nextFunctionBpId;
 
   QMap<int, DataBreakpoint> m_dataBreakpoints;
+  QHash<DapClient *, QMap<int, DataBreakpoint>> m_sessionDataBreakpoints;
   int m_nextDataBpId;
 
   QStringList m_enabledExceptionFilters;

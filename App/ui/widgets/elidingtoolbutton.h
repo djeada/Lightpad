@@ -5,8 +5,6 @@
 #include <QStylePainter>
 #include <QToolButton>
 
-// Keep the full action label and accessible name while fitting long target
-// names into the workspace header. The split-menu hit target stays native.
 class ElidingToolButton : public QToolButton {
 public:
   using QToolButton::QToolButton;

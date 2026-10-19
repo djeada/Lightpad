@@ -470,15 +470,31 @@ public:
 
   void setExceptionBreakpoints(const QStringList &filterIds);
 
-  void continueExecution(int threadId = 0);
+  void continueExecution(int threadId = 0, bool singleThread = false);
 
   void pause(int threadId = 0);
+  void pauseAllThreads();
+  bool hasPendingPause() const {
+    return m_pausePending || m_pauseAllPending || m_pauseRequested;
+  }
 
-  void stepOver(int threadId);
+  void stepOver(int threadId, bool singleThread = false);
 
-  void stepInto(int threadId);
+  void stepInto(int threadId, bool singleThread = false);
 
-  void stepOut(int threadId);
+  void stepOut(int threadId, bool singleThread = false);
+
+  bool selectThread(int threadId);
+  bool isThreadStopped(int threadId) const;
+  bool allThreadsStopped() const { return m_allThreadsStopped; }
+  bool supportsSingleThreadExecution() const {
+    return m_capabilities.value("supportsSingleThreadExecutionRequests")
+        .toBool();
+  }
+  int processId() const { return m_processId; }
+  QString processName() const { return m_processName; }
+  void respondToStartDebugging(int requestSeq, bool success,
+                               const QString &message = {});
 
   void restart();
 
@@ -490,6 +506,9 @@ public:
 
   void getVariables(int variablesReference, const QString &filter = {},
                     int start = 0, int count = 0);
+
+  int inspectVariables(int variablesReference, const QString &filter = {},
+                       int start = 0, int count = 100);
 
   int evaluate(const QString &expression, int frameId = -1,
                const QString &context = "repl");
@@ -541,6 +560,9 @@ signals:
   void stopped(const DapStoppedEvent &event);
   void continued(int threadId, bool allThreadsContinued);
   void threadEvent(int threadId, const QString &reason);
+  void processChanged(int processId, const QString &name);
+  void childSessionRequested(int requestSeq, const QString &request,
+                             const QJsonObject &configuration);
 
   void output(const DapOutputEvent &event);
   void runInTerminalRequested(int requestSeq, const QString &kind,
@@ -554,9 +576,14 @@ signals:
   void scopesReceived(int frameId, const QList<DapScope> &scopes);
   void variablesReceived(int variablesReference,
                          const QList<DapVariable> &variables);
+  void variablesFailed(int variablesReference, const QString &message);
+  void inspectionVariablesReceived(int requestSeq,
+                                   const QList<DapVariable> &variables);
+  void inspectionVariablesFailed(int requestSeq, const QString &message);
   void evaluateResponse(int requestSeq, const QString &expression,
                         const QString &result, const QString &type,
                         int variablesReference);
+  void evaluateValueReceived(int requestSeq, const DapVariable &value);
   void evaluateResult(const QString &expression, const QString &result,
                       const QString &type, int variablesReference);
   void evaluateResponseError(int requestSeq, const QString &expression,
@@ -607,6 +634,7 @@ private:
   static bool isLikelyUnsupportedRequestMessage(const QString &message);
   bool hasPendingRequestTag(const QString &tag) const;
   void clearPendingInspectionRequests();
+  void applyContinued(int threadId, bool allThreads);
   void failDiscardedMessage(const QByteArray &sample, const QString &reason);
   bool connectSocket(const QString &host, quint16 port);
   void onServerOutput(bool isStderr);
@@ -616,6 +644,11 @@ private:
   void abortStartup(const QString &message);
 
   QProcess *m_process;
+  QSet<int> m_knownThreads;
+  QSet<int> m_stoppedThreads;
+  bool m_allThreadsStopped = false;
+  int m_processId = 0;
+  QString m_processName;
   QTcpSocket *m_socket = nullptr;
   QString m_socketHost;
   quint16 m_socketPort = 0;
@@ -642,6 +675,8 @@ private:
   bool m_dataBreakpointsSupported;
   bool m_dataBreakpointsConfigured;
   bool m_pausePending;
+  bool m_pauseAllPending = false;
+  bool m_pauseRequested = false;
   bool m_stopping = false;
   int m_requestTimeoutMs = 30000;
 

@@ -66,8 +66,7 @@ void DocumentRecovery::track(QPlainTextEdit *editor, const QString &path,
               } else
                 clear(editor);
             });
-    // Destruction alone is not a discard instruction. A window may be torn down
-    // after an error; only the actual tab-close path calls forget().
+
     connect(editor, &QObject::destroyed, this, [this, editor]() {
       m_documents.remove(editor);
       updateTimer();

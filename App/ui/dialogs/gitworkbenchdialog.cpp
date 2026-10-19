@@ -47,8 +47,6 @@ const QMap<QString, QString> GitWorkbenchDialog::ACTION_ICONS = {
     {"pick", "✓"},  {"reword", "✏"}, {"edit", "⚙"},     {"squash", "◫"},
     {"fixup", "⊕"}, {"drop", "✕"},   {"drop-keep", "◌"}};
 
-// An inspector should scroll for the selected page, rather than reserve the
-// minimum height of every hidden form in the stack.
 class InspectorStack : public QStackedWidget {
 public:
   explicit InspectorStack(QWidget *parent) : QStackedWidget(parent) {

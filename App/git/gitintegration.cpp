@@ -347,8 +347,6 @@ QString GitIntegration::findRepositoryRoot(const QString &path) const {
   if (!dir.exists())
     return QString();
 
-  // Let Git validate gitfiles, linked worktrees and repository boundaries.
-  // The existence of a directory named .git alone does not make a repository.
   const auto decodedPath = [](QString output) {
     if (output.endsWith('\n'))
       output.chop(1);

@@ -69,7 +69,6 @@ void GitRemoteDialog::setupUI() {
     break;
   }
 
-
   QVBoxLayout *titleLayout = new QVBoxLayout();
   m_titleLabel = new QLabel(titleText, this);
   m_subtitleLabel = new QLabel(subtitleText, this);

@@ -1,8 +1,8 @@
 #ifndef GITDIALOG_H
 #define GITDIALOG_H
 
-#include "styleddialog.h"
 #include "../gitui.h"
+#include "styleddialog.h"
 
 class GitDialog : public StyledDialog {
 public:

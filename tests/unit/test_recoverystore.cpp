@@ -154,8 +154,7 @@ private slots:
     }
     Store reader(root.path(), 4);
     QVERIFY(reader.start());
-    // A reader that can show the record may still target a smaller-capacity
-    // store.
+
     Store inspector(root.path());
     QVERIFY(inspector.start());
     const auto record = inspector.scan().drafts.first();

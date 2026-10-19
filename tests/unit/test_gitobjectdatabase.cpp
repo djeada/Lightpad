@@ -1,12 +1,12 @@
 #include "git/gitobjectdatabase.h"
-#include <QDir>
 #include <QCryptographicHash>
+#include <QDir>
 #include <QFile>
 #include <QProcess>
 #include <QSet>
 #include <QTemporaryDir>
-#include <QtTest/QtTest>
 #include <QtEndian>
+#include <QtTest/QtTest>
 
 class TestGitObjectDatabase : public QObject {
   Q_OBJECT
@@ -120,7 +120,7 @@ void TestGitObjectDatabase::testSearchEveryPackAndDuplicateCopy() {
     QCOMPARE(info.packVersion, 2);
   }
   const auto result = GitObjectDatabase::search(store, m_head.left(5));
-  QCOMPARE(result.totalMatches, 3); // two packs plus the original loose object
+  QCOMPARE(result.totalMatches, 3);
   QCOMPARE(result.objects.size(), 3);
   QSet<QString> paths;
   for (const auto &object : result.objects) {
@@ -362,7 +362,7 @@ void TestGitObjectDatabase::testMalformedAndMissingIndexes() {
   QVERIFY(!store.packs.first().error.isEmpty());
   auto result = GitObjectDatabase::search(store, m_head);
   QVERIFY(!result.errors.isEmpty());
-  QCOMPARE(result.totalMatches, 1); // the readable loose copy still appears
+  QCOMPARE(result.totalMatches, 1);
   QVERIFY(QFile::remove(idx));
   store = GitObjectDatabase::scan(m_repo);
   QVERIFY(!store.packs.first().error.isEmpty());
