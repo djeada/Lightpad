@@ -202,6 +202,9 @@ set(project_headers
     ui/panels/problemspanel.h
     ui/panels/breadcrumbwidget.h
     ui/panels/debugpanel.h
+    ui/panels/debugconcurrencypanel.h
+    ui/panels/debugvalueformatter.h
+    ui/panels/debugvalueinspector.h
     ui/panels/debugglyphs.h
     ui/panels/sourcecontrolpanel.h
     ui/panels/conflictcenterpanel.h
@@ -472,6 +475,9 @@ set(project_sources
     ui/panels/problemspanel.cpp
     ui/panels/breadcrumbwidget.cpp
     ui/panels/debugpanel.cpp
+    ui/panels/debugconcurrencypanel.cpp
+    ui/panels/debugvalueformatter.cpp
+    ui/panels/debugvalueinspector.cpp
     ui/panels/sourcecontrolpanel.cpp
     ui/panels/conflictcenterpanel.cpp
     ui/panels/conflictresolverview.cpp

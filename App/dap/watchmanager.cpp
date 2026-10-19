@@ -68,11 +68,14 @@ void WatchManager::clearAll() {
 }
 
 void WatchManager::setDapClient(DapClient *client) {
+  if (m_dapClient == client)
+    return;
   if (m_dapClient) {
     disconnect(m_dapClient, nullptr, this, nullptr);
   }
 
   m_dapClient = client;
+  invalidateValues();
 
   if (m_dapClient) {
     connect(m_dapClient, &DapClient::evaluateResponse, this,
@@ -81,6 +84,19 @@ void WatchManager::setDapClient(DapClient *client) {
             &WatchManager::onEvaluateError);
     connect(m_dapClient, &DapClient::variablesReceived, this,
             &WatchManager::onVariablesReceived);
+  }
+}
+
+void WatchManager::invalidateValues() {
+  m_pendingEvaluations.clear();
+  m_pendingVariables.clear();
+  for (auto it = m_watches.begin(); it != m_watches.end(); ++it) {
+    it->value = "<not evaluated>";
+    it->type.clear();
+    it->variablesReference = 0;
+    it->isError = false;
+    it->errorMessage.clear();
+    emit watchUpdated(it.value());
   }
 }
 

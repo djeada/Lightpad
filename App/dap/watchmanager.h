@@ -55,6 +55,7 @@ public:
   void setDapClient(DapClient *client);
 
   void evaluateAll(int frameId);
+  void invalidateValues();
 
   void evaluateWatch(int id, int frameId);
 

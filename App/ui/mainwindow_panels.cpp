@@ -617,7 +617,12 @@ void MainWindow::ensureDebugPanel() {
           [this](const QString &sessionId) { attachDebugSession(sessionId); });
   connect(&DebugSessionManager::instance(),
           &DebugSessionManager::sessionStarted, this,
-          [this](const QString &sessionId) { attachDebugSession(sessionId); });
+          [this](const QString &sessionId) {
+            DebugSession *session =
+                DebugSessionManager::instance().session(sessionId);
+            if (session && session->parentSessionId().isEmpty())
+              attachDebugSession(sessionId);
+          });
   connect(&DebugSessionManager::instance(),
           &DebugSessionManager::allSessionsEnded, this,
           [this]() { clearDebugSession(); });

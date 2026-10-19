@@ -110,6 +110,90 @@ Notes:
 - Projects without `CMakeLists.txt` keep the single-file behavior: the current
   file is compiled with `-g -O0` when its binary is missing or stale.
 
+### Inspecting Debugger Values
+
+While paused at a breakpoint, double-click a variable or watch (or choose
+**Inspect Value…** in its context menu) to open a resizable value inspector.
+The debug console also shows an inspector beside the latest expression result;
+drag the divider to resize it or use **Inspector** to hide it. **Detach** opens
+the console and inspector together in a larger window.
+
+- **Tree** expands nested lists, dictionaries, and objects on demand. Large
+  indexed collections load 100 items at a time; double-click **Load next 100
+  items…** or select it and press Enter for the next page.
+- **Table** aligns nested sequences by column index and records by field name.
+  Nested lists open here automatically. Row and column headers identify each
+  element, and ragged rows leave missing cells blank. The preview shows up to
+  50 rows and 50 columns; use Tree for more. Select cells and use **Copy** or
+  `Ctrl+C` to copy tab-separated values into a spreadsheet.
+  Double-click a cell (or press Enter) to open its value in Tree, including
+  nested objects and task-frame locals.
+- **Text** shows the selected value with nested containers indented. The
+  formatter preserves quoted strings and leaves incomplete adapter output
+  unchanged. Text previews are limited to 65,536 characters.
+
+The filter searches loaded names, values, and types without fetching the whole
+object. **Add to Watches** follows an expression while stepping. Variable trees
+remember expanded paths across steps, and full values remain available in
+tooltips and the inspector even when their inline previews are shortened.
+
+After execution resumes, an open inspector keeps its loaded values as a
+clearly marked snapshot. Evaluate the expression again at the next pause to
+refresh it; old object references are never used to fetch new children.
+
+For Python, install `debugpy` into the Python environment selected for the
+project (for example, `.venv/bin/python -m pip install debugpy`).
+
+Adapters may impose their own container limits; evaluate a narrower slice to
+inspect a different part of a large array. Reproducible VTK and OpenGL debugger
+tests are documented in [the graphics fixtures](../tests/fixtures/debugger/README.md).
+
+![VTK coordinates in the debugger value inspector](debugger-vtk-inspector.png)
+
+### Processes, Threads, and Async Tasks
+
+The debugger toolbar has separate process and thread selectors. Selecting a
+paused thread changes the stack, variables, watches, console frame, and the
+thread used by Continue and Step. Switching context clears old values before
+loading the new frame.
+
+Open **Concurrency → Processes & threads** for the process hierarchy, thread
+names and IDs, and paused/running states. Double-click a process to focus it,
+a paused thread to inspect its stack, or a running thread to request a pause.
+Each process has its own output; the last 20 finished sessions retain recent
+output here. **Pause all processes**, **Continue all processes**, and **Stop all**
+operate across sessions. Stopping a parent also stops its child sessions.
+
+Python debugpy sessions automatically follow subprocesses when `subProcess`
+is enabled (the Python quick configuration enables it). Source, function,
+and exception breakpoint edits reach background child sessions as well.
+Data watchpoints stay with the process that created them.
+Automatically attached Python children capture stdout and stderr for their own
+consoles unless `redirectOutput` is explicitly disabled. The parent's inherited
+stream can also include worker output.
+
+![Processes and paused worker threads](debugger-processes.png)
+
+**Run selected thread only** enables single-thread Continue and Step when
+the adapter advertises support. Otherwise the control is disabled and the
+adapter's normal execution behavior applies. A partial resume keeps other
+paused threads available for inspection. Python threads blocked in native
+calls may not suspend until they return to Python; debugpy can expose their
+stack while refusing variable evaluation. Lightpad displays that failure
+instead of presenting empty locals as a successful result.
+
+For asyncio, pause in a Python frame inside the event-loop thread, then open
+**Concurrency → Async tasks → Inspect asyncio tasks**. The table shows up to
+50 unfinished tasks in that loop with names, states, coroutines, await objects,
+and up to 12 stack frames each. Open a **Frames** cell to expand frame locals;
+**Object** exposes the task itself. Inspection is explicit and evaluates in
+the selected frame. It does not run or resume a coroutine. The result becomes
+a snapshot when execution resumes or the selected frame changes; inspect
+again at the next pause. Completed tasks and other event loops are outside
+this snapshot.
+
+![Asyncio task table](debugger-async-tasks.png)
+
 ### Syntax Highlighting
 
 Lightpad automatically detects the programming language based on file extension:

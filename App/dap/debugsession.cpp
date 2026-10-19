@@ -69,6 +69,37 @@ DebugSession::DebugSession(const QString &id, QObject *parent)
           &DebugSession::onClientError);
   connect(m_client.get(), &DapClient::exceptionInfoReceived, this,
           &DebugSession::exceptionInfoReceived);
+  connect(m_client.get(), &DapClient::processChanged, this,
+          [this](int pid, const QString &) { m_processId = pid; });
+  auto &breakpoints = BreakpointManager::instance();
+  connect(&breakpoints, &BreakpointManager::fileBreakpointsChanged, this,
+          [this](const QString &file) {
+            if (m_adapterInitializedReceived && m_client->isReady() &&
+                BreakpointManager::instance().dapClient() != m_client.get())
+              syncSourceBreakpoints(file);
+          });
+  connect(&breakpoints, &BreakpointManager::allBreakpointsCleared, this,
+          [this]() {
+            if (m_client->isReady() &&
+                BreakpointManager::instance().dapClient() != m_client.get()) {
+              for (const QString &file : std::as_const(m_breakpointFiles))
+                m_client->setBreakpoints(file, {});
+            }
+            m_breakpointFiles.clear();
+          });
+  connect(&breakpoints, &BreakpointManager::functionBreakpointsChanged, this,
+          [this]() {
+            if (m_adapterInitializedReceived && m_client->isReady() &&
+                BreakpointManager::instance().dapClient() != m_client.get())
+              syncFunctionBreakpoints();
+          });
+  connect(&breakpoints, &BreakpointManager::exceptionBreakpointsChanged, this,
+          [this]() {
+            if (m_adapterInitializedReceived && m_client->isReady() &&
+                BreakpointManager::instance().dapClient() != m_client.get())
+              m_client->setExceptionBreakpoints(
+                  BreakpointManager::instance().enabledExceptionFilters());
+          });
 }
 
 DebugSession::~DebugSession() {
@@ -78,7 +109,8 @@ DebugSession::~DebugSession() {
 }
 
 bool DebugSession::start(const DebugConfiguration &config,
-                         std::shared_ptr<IDebugAdapter> adapter) {
+                         std::shared_ptr<IDebugAdapter> adapter,
+                         const QString &host, quint16 port) {
   if (m_state != State::Idle) {
     LOG_WARNING(QString("Session %1 already started").arg(m_id));
     return false;
@@ -109,7 +141,8 @@ bool DebugSession::start(const DebugConfiguration &config,
   DebugAdapterConfig adapterConfig = m_adapter->configForConfiguration(config);
   m_client->setAdapterMetadata(adapterConfig.id, adapterConfig.type);
   const bool started =
-      adapterConfig.serverTransport
+      !host.isEmpty() && port > 0 ? m_client->startSocket(host, port)
+      : adapterConfig.serverTransport
           ? m_client->startServer(adapterConfig.program,
                                   adapterConfig.arguments)
           : m_client->start(adapterConfig.program, adapterConfig.arguments);
@@ -172,8 +205,6 @@ void DebugSession::onClientStateChanged(DapClient::State state) {
   case DapClient::State::Ready:
 
     if (m_state == State::Starting) {
-      BreakpointManager::instance().setDapClient(m_client.get());
-
       const bool launchesFirst =
           m_adapter && m_adapter->launchesBeforeInitialized();
 
@@ -236,8 +267,7 @@ void DebugSession::onClientAdapterInitialized() {
 
   if (m_launchRequestSent) {
 
-    BreakpointManager::instance().setDapClient(m_client.get());
-    BreakpointManager::instance().syncAllBreakpoints();
+    syncSessionBreakpoints();
     if (!m_configurationDoneSent) {
       m_client->configurationDone();
       m_configurationDoneSent = true;
@@ -253,8 +283,7 @@ void DebugSession::startConfigurationSequence() {
     return;
   }
 
-  BreakpointManager::instance().setDapClient(m_client.get());
-  BreakpointManager::instance().syncAllBreakpoints();
+  syncSessionBreakpoints();
 
   if (!m_configurationDoneSent) {
     m_client->configurationDone();
@@ -262,6 +291,46 @@ void DebugSession::startConfigurationSequence() {
   }
 
   sendLaunchOrAttach();
+}
+
+void DebugSession::syncSourceBreakpoints(const QString &filePath) {
+  QList<DapSourceBreakpoint> source;
+  for (const Breakpoint &bp :
+       BreakpointManager::instance().breakpointsForFile(filePath)) {
+    if (!bp.enabled)
+      continue;
+    DapSourceBreakpoint entry;
+    entry.line = bp.line;
+    entry.column = bp.column;
+    entry.condition = bp.condition;
+    entry.hitCondition = bp.hitCondition;
+    entry.logMessage = bp.logMessage;
+    source << entry;
+  }
+  m_breakpointFiles.insert(filePath);
+  m_client->setBreakpoints(filePath, source);
+}
+
+void DebugSession::syncFunctionBreakpoints() {
+  QStringList names;
+  for (const auto &bp : BreakpointManager::instance().allFunctionBreakpoints())
+    if (bp.enabled)
+      names << bp.functionName;
+  m_client->setFunctionBreakpoints(names);
+}
+
+void DebugSession::syncSessionBreakpoints() {
+  auto &manager = BreakpointManager::instance();
+  for (const auto &bp : manager.allBreakpoints())
+    m_breakpointFiles.insert(bp.filePath);
+  if (manager.dapClient() == m_client.get()) {
+    manager.syncAllBreakpoints();
+  } else {
+    for (const QString &file : std::as_const(m_breakpointFiles))
+      syncSourceBreakpoints(file);
+    syncFunctionBreakpoints();
+    m_client->setExceptionBreakpoints(manager.enabledExceptionFilters());
+  }
 }
 
 void DebugSession::sendLaunchOrAttach() {
@@ -308,6 +377,11 @@ void DebugSession::reportTermination() {
 }
 
 void DebugSession::onClientOutput(const DapOutputEvent &event) {
+  if (event.category != QLatin1String("telemetry")) {
+    m_outputHistory += event.output;
+    if (m_outputHistory.size() > 131072)
+      m_outputHistory = m_outputHistory.right(131072);
+  }
   emit outputReceived(event);
 }
 
@@ -377,9 +451,29 @@ QString DebugSessionManager::startSession(const DebugConfiguration &config) {
 QString
 DebugSessionManager::startSession(const DebugConfiguration &config,
                                   std::shared_ptr<IDebugAdapter> adapter) {
+  return startSessionImpl(config, adapter, {});
+}
+
+QString DebugSessionManager::startSessionImpl(
+    const DebugConfiguration &config, std::shared_ptr<IDebugAdapter> adapter,
+    const QString &parentId, const QString &host, quint16 port) {
   QString sessionId = generateSessionId();
 
   DebugSession *session = new DebugSession(sessionId, this);
+  session->m_parentSessionId = parentId;
+  connect(session, &DebugSession::outputReceived, this,
+          [this, sessionId]() { emit sessionOutputChanged(sessionId); });
+  connect(
+      session->client(), &DapClient::childSessionRequested, this,
+      [this, sessionId, client = session->client()](
+          int seq, const QString &request, const QJsonObject &configuration) {
+        const QString child =
+            startChildSession(sessionId, request, configuration);
+        if (seq >= 0)
+          client->respondToStartDebugging(seq, !child.isEmpty(), m_lastError);
+      });
+  connect(session->client(), &DapClient::processChanged, this,
+          [this]() { emit sessionsChanged(); });
 
   connect(session, &DebugSession::stateChanged, this,
           &DebugSessionManager::onSessionStateChanged);
@@ -387,6 +481,9 @@ DebugSessionManager::startSession(const DebugConfiguration &config,
           &DebugSessionManager::onSessionTerminated);
   connect(session, &DebugSession::stopped, this,
           [this, sessionId](const DapStoppedEvent &event) {
+            DebugSession *focused = focusedSession();
+            if (!focused || focused->state() != DebugSession::State::Stopped)
+              setFocusedSession(sessionId);
             emit sessionStopped(sessionId, event);
           });
   connect(session, &DebugSession::error, this,
@@ -395,7 +492,7 @@ DebugSessionManager::startSession(const DebugConfiguration &config,
             emit sessionError(sessionId, message);
           });
 
-  if (!session->start(config, adapter)) {
+  if (!session->start(config, adapter, host, port)) {
     if (!session->lastError().isEmpty()) {
       m_lastError = session->lastError();
     } else {
@@ -415,6 +512,7 @@ DebugSessionManager::startSession(const DebugConfiguration &config,
   }
 
   emit sessionStarted(sessionId);
+  emit sessionsChanged();
 
   return sessionId;
 }
@@ -441,6 +539,59 @@ QString DebugSessionManager::quickStart(const QString &filePath,
   return startSession(config);
 }
 
+QString
+DebugSessionManager::startChildSession(const QString &parentId,
+                                       const QString &request,
+                                       const QJsonObject &configuration) {
+  DebugSession *parent = session(parentId);
+  if (!parent || !parent->adapter() ||
+      (request != "attach" && request != "launch")) {
+    m_lastError = "Invalid child debug session request";
+    return {};
+  }
+  const int pid = configuration.value("subProcessId").toInt();
+  if (pid > 0) {
+    for (DebugSession *existing : allSessions())
+      if (existing->parentSessionId() == parentId &&
+          existing->configuration()
+                  .adapterConfig.value("subProcessId")
+                  .toInt() == pid)
+        return existing->id();
+  }
+  if (m_sessions.size() >= 128) {
+    m_lastError = "Debug session limit reached (128)";
+    emit sessionError(parentId, m_lastError);
+    return {};
+  }
+  DebugConfiguration child = parent->configuration();
+  child.request = request;
+  child.name = configuration.value("name").toString(
+      pid > 0 ? QString("Process %1").arg(pid) : "Child process");
+  child.adapterConfig = configuration;
+  // The parent's launcher can capture inherited stdout, but that stream mixes
+  // all workers. Attached children need their own DAP output events as well.
+  if (parent->client()->adapterType() == "debugpy" &&
+      !child.adapterConfig.contains("redirectOutput"))
+    child.adapterConfig["redirectOutput"] = true;
+  child.processId = 0;
+  child.processIdExpression.clear();
+  child.stopOnEntry = false;
+  const QJsonObject connection = configuration.value("connect").toObject();
+  QString host;
+  int port = 0;
+  if (request == "attach" && !connection.isEmpty()) {
+    host = connection.value("host").toString("127.0.0.1");
+    port = connection.value("port").toInt();
+    if (host.isEmpty() || port < 1 || port > 65535) {
+      m_lastError = "Child adapter returned an invalid connection";
+      emit sessionError(parentId, m_lastError);
+      return {};
+    }
+  }
+  return startSessionImpl(child, parent->adapter(), parentId, host,
+                          static_cast<quint16>(port));
+}
+
 void DebugSessionManager::stopSession(const QString &sessionId,
                                       bool terminate) {
 
@@ -449,6 +600,9 @@ void DebugSessionManager::stopSession(const QString &sessionId,
     return;
   }
 
+  for (DebugSession *child : allSessions())
+    if (child->parentSessionId() == sessionId)
+      stopSession(child->id(), terminate);
   session->stop(terminate);
 }
 
@@ -457,6 +611,20 @@ void DebugSessionManager::stopAllSessions(bool terminate) {
   for (DebugSession *session : sessions) {
     session->stop(terminate);
   }
+}
+
+void DebugSessionManager::continueAllSessions() {
+  for (DebugSession *session : allSessions())
+    if (session->state() == DebugSession::State::Stopped ||
+        session->client()->hasPendingPause())
+      session->continueExecution();
+}
+
+void DebugSessionManager::pauseAllSessions() {
+  for (DebugSession *session : allSessions())
+    if (session->state() == DebugSession::State::Running ||
+        session->state() == DebugSession::State::Stopped)
+      session->client()->pauseAllThreads();
 }
 
 DebugSession *DebugSessionManager::session(const QString &sessionId) const {
@@ -476,8 +644,13 @@ DebugSession *DebugSessionManager::focusedSession() const {
 }
 
 void DebugSessionManager::setFocusedSession(const QString &sessionId) {
+  if (!sessionId.isEmpty() && !m_sessions.contains(sessionId))
+    return;
   if (m_focusedSessionId != sessionId) {
     m_focusedSessionId = sessionId;
+    DebugSession *focused = session(sessionId);
+    BreakpointManager::instance().setDapClient(focused ? focused->client()
+                                                       : nullptr);
     emit focusedSessionChanged(sessionId);
   }
 }
@@ -495,6 +668,7 @@ bool DebugSessionManager::hasActiveSessions() const {
 
 void DebugSessionManager::onSessionStateChanged(DebugSession::State state) {
   Q_UNUSED(state);
+  emit sessionsChanged();
 }
 
 void DebugSessionManager::onSessionTerminated() {
@@ -508,7 +682,14 @@ void DebugSessionManager::onSessionTerminated() {
   if (m_sessions.value(sessionId) != senderSession) {
     return;
   }
+
+  m_recentSessions.prepend({sessionId, senderSession->parentSessionId(),
+                            senderSession->name(), senderSession->processId(),
+                            senderSession->outputHistory()});
+  while (m_recentSessions.size() > 20)
+    m_recentSessions.removeLast();
   m_sessions.remove(sessionId);
+  emit sessionsChanged();
   senderSession->disconnect(this);
 
   senderSession->deleteLater();
@@ -521,6 +702,7 @@ void DebugSessionManager::onSessionTerminated() {
         if (m_focusedSessionId == sessionId) {
           if (m_sessions.isEmpty()) {
             m_focusedSessionId.clear();
+            BreakpointManager::instance().setDapClient(nullptr);
             emit allSessionsEnded();
           } else {
             setFocusedSession(m_sessions.firstKey());

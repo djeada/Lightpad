@@ -2,8 +2,13 @@
 
 #include "../../core/logging/logger.h"
 #include "../../dap/debugadapterregistry.h"
+#include "../../dap/debugsession.h"
 #include "../../dap/debugsettings.h"
+#include "../dialogs/styleddialog.h"
+#include "debugconcurrencypanel.h"
 #include "debugglyphs.h"
+#include "debugvalueformatter.h"
+#include "debugvalueinspector.h"
 
 #include "../../theme/colorcontrast.h"
 #include "../uimetrics.h"
@@ -31,6 +36,7 @@
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QSignalBlocker>
+#include <QSplitter>
 #include <QStyle>
 #include <QStyledItemDelegate>
 #include <QTabWidget>
@@ -263,7 +269,7 @@ QList<QPair<QString, QString>> parseInfoLocalsOutput(const QString &raw) {
 
 DebugPanel::DebugPanel(QWidget *parent)
     : QWidget(parent), m_dapClient(nullptr), m_currentThreadId(0),
-      m_currentFrameId(0), m_programmaticVariablesExpand(false),
+      m_currentFrameId(-1), m_programmaticVariablesExpand(false),
       m_variablesNameColumnUserSized(false),
       m_variablesNameColumnAutofitting(false), m_stepInProgress(false),
       m_expectStopEvent(true), m_hasLastStopEvent(false),
@@ -273,6 +279,15 @@ DebugPanel::DebugPanel(QWidget *parent)
       m_themeInitialized(false) {
   setupUI();
   updateToolbarState();
+  auto &sessions = DebugSessionManager::instance();
+  connect(&sessions, &DebugSessionManager::sessionsChanged, this,
+          &DebugPanel::refreshProcessSelector);
+  connect(&sessions, &DebugSessionManager::focusedSessionChanged, this,
+          [this](const QString &id) {
+            if (auto *session = DebugSessionManager::instance().session(id))
+              setDapClient(session->client());
+            refreshProcessSelector();
+          });
 
   connect(&BreakpointManager::instance(), &BreakpointManager::breakpointAdded,
           this, &DebugPanel::refreshBreakpointList);
@@ -322,6 +337,12 @@ DebugPanel::~DebugPanel() {}
 void DebugPanel::applyTheme(const Theme &theme) {
   m_theme = theme;
   m_themeInitialized = true;
+  if (m_consoleValueInspector)
+    m_consoleValueInspector->applyTheme(theme);
+  if (m_concurrencyPanel)
+    m_concurrencyPanel->applyTheme(theme);
+  if (m_processSelector)
+    m_processSelector->setStyleSheet(UIStyleHelper::comboBoxStyle(theme));
 
   applyTransportIcons();
 
@@ -733,7 +754,7 @@ void DebugPanel::setupUI() {
 
   setupConsole();
   m_consolePage =
-      createInspectorPage(m_consoleOutput, m_consoleToolbar, m_consoleInput);
+      createInspectorPage(m_consoleContent, m_consoleToolbar, m_consoleInput);
   QWidget *consolePage = m_consolePage;
 
   for (QTreeWidget *tree :
@@ -750,9 +771,28 @@ void DebugPanel::setupUI() {
   m_inspectorStack->addWidget(watchesPage);
   m_inspectorStack->addWidget(breakpointsPage);
   m_inspectorStack->addWidget(consolePage);
+  m_concurrencyPanel = new DebugConcurrencyPanel(this);
+  m_inspectorStack->addWidget(m_concurrencyPanel);
+  connect(m_concurrencyPanel, &DebugConcurrencyPanel::clientSelected, this,
+          &DebugPanel::setDapClient);
+  connect(m_concurrencyPanel, &DebugConcurrencyPanel::threadSelected, this,
+          [this](DapClient *client, int thread) {
+            setDapClient(client);
+            if (!client->selectThread(thread))
+              return;
+            onContinued();
+            m_currentThreadId = thread;
+            client->getThreads();
+            client->getStackTrace(thread, 0, MAX_STACK_FRAMES_PER_REFRESH);
+          });
+  connect(m_concurrencyPanel, &DebugConcurrencyPanel::watchRequested, this,
+          [](const QString &expression) {
+            WatchManager::instance().addWatch(expression);
+          });
 
-  const QStringList tabLabels = {tr("Stack"), tr("Variables"), tr("Watches"),
-                                 tr("Breakpoints"), tr("Console")};
+  const QStringList tabLabels = {tr("Stack"),   tr("Variables"),
+                                 tr("Watches"), tr("Breakpoints"),
+                                 tr("Console"), tr("Concurrency")};
   for (int i = 0; i < tabLabels.size(); ++i) {
     tabBarLayout->addWidget(createInspectorTabButton(tabLabels.at(i), i));
   }
@@ -1002,6 +1042,22 @@ void DebugPanel::setupToolbar() {
   QHBoxLayout *metaLayout = new QHBoxLayout(metaGroup);
   metaLayout->setContentsMargins(0, 0, 0, 0);
   metaLayout->setSpacing(10);
+  m_processSelector = new QComboBox(metaGroup);
+  m_processSelector->setObjectName("debugProcessSelector");
+  m_processSelector->setToolTip(tr("Select the process/session for the stack, "
+                                   "variables, watches and console"));
+  m_processSelector->setMaximumWidth(260);
+  m_processSelector->setPlaceholderText(tr("No process"));
+  m_processSelector->setEnabled(false);
+  connect(m_processSelector, QOverload<int>::of(&QComboBox::activated), this,
+          [this](int index) {
+            const QString id = m_processSelector->itemData(index).toString();
+            if (auto *session = DebugSessionManager::instance().session(id)) {
+              DebugSessionManager::instance().setFocusedSession(id);
+              setDapClient(session->client());
+            }
+          });
+  metaLayout->addWidget(m_processSelector);
   metaLayout->addWidget(m_threadSelector);
   metaLayout->addWidget(m_debugStatusLabel);
 
@@ -1135,6 +1191,8 @@ void DebugPanel::setupVariables() {
 
   connect(m_variablesTree, &QTreeWidget::itemExpanded, this,
           &DebugPanel::onVariableItemExpanded);
+  connect(m_variablesTree, &QTreeWidget::itemDoubleClicked, this,
+          [this](QTreeWidgetItem *item, int) { inspectVariableItem(item); });
 }
 
 void DebugPanel::setupWatches() {
@@ -1169,18 +1227,31 @@ void DebugPanel::setupWatches() {
 
   connect(m_watchTree, &QTreeWidget::itemExpanded, this,
           &DebugPanel::onWatchItemExpanded);
+  connect(
+      m_watchTree, &QTreeWidget::itemDoubleClicked, this,
+      [this](QTreeWidgetItem *item, int) { inspectVariableItem(item, true); });
 
   m_watchTree->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(m_watchTree, &QTreeWidget::customContextMenuRequested, this,
           [this](const QPoint &pos) {
             QTreeWidgetItem *item = m_watchTree->itemAt(pos);
-            if (!item || item->parent())
+            if (!item)
               return;
 
             QMenu menu;
-            QAction *removeAction = menu.addAction(tr("Remove Watch"));
+            QAction *inspectAction = menu.addAction(tr("Inspect Value…"));
+            QAction *copyAction = menu.addAction(tr("Copy Value"));
+            QAction *removeAction =
+                item->parent() ? nullptr : menu.addAction(tr("Remove Watch"));
             QAction *chosen = menu.exec(m_watchTree->mapToGlobal(pos));
-            if (chosen == removeAction) {
+            if (chosen == inspectAction) {
+              inspectVariableItem(item, true);
+            } else if (chosen == copyAction) {
+              QGuiApplication::clipboard()->setText(
+                  item->data(0, Qt::UserRole + 4).isValid()
+                      ? item->data(0, Qt::UserRole + 4).toString()
+                      : item->text(1));
+            } else if (removeAction && chosen == removeAction) {
               int watchId = item->data(0, Qt::UserRole).toInt();
               WatchManager::instance().removeWatch(watchId);
             }
@@ -1242,7 +1313,7 @@ void DebugPanel::setupConsole() {
   m_consoleOutput->setUndoRedoEnabled(false);
   m_consoleOutput->document()->setMaximumBlockCount(MAX_DEBUG_CONSOLE_BLOCKS);
   QFont fixedFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-  fixedFont.setPointSize(9);
+  fixedFont.setPointSize(qMax(10, font().pointSize()));
   m_consoleOutput->setFont(fixedFont);
   m_consoleOutput->setFrameShape(QFrame::NoFrame);
   m_consoleOutput->setWordWrapMode(QTextOption::NoWrap);
@@ -1263,6 +1334,22 @@ void DebugPanel::setupConsole() {
 
   connect(m_consoleInput, &QLineEdit::returnPressed, this,
           &DebugPanel::onConsoleInput);
+
+  auto *splitter = new QSplitter(Qt::Horizontal, this);
+  splitter->setObjectName("debugConsoleSplitter");
+  splitter->setChildrenCollapsible(false);
+  splitter->addWidget(m_consoleOutput);
+  m_consoleValueInspector = new DebugValueInspector(splitter);
+  m_consoleValueInspector->setObjectName("debugConsoleValueInspector");
+  splitter->addWidget(m_consoleValueInspector);
+  splitter->setStretchFactor(0, 1);
+  splitter->setStretchFactor(1, 2);
+  splitter->setSizes({420, 620});
+  m_consoleContent = splitter;
+  connect(m_consoleValueInspector, &DebugValueInspector::addWatchRequested,
+          this, [](const QString &expression) {
+            WatchManager::instance().addWatch(expression);
+          });
 
   setupConsoleToolbar();
   updateConsoleInputAffordances();
@@ -1296,11 +1383,22 @@ void DebugPanel::setupConsoleToolbar() {
     m_consoleOutput->setWordWrapMode(
         wrap ? QTextOption::WrapAtWordBoundaryOrAnywhere : QTextOption::NoWrap);
   });
+  m_consoleWrapAction->setChecked(true);
+
+  m_consoleInspectorAction = new QAction(tr("Inspector"), this);
+  m_consoleInspectorAction->setCheckable(true);
+  m_consoleInspectorAction->setChecked(true);
+  m_consoleInspectorAction->setToolTip(
+      tr("Show the latest evaluated value as a tree, table or formatted text"));
+  connect(m_consoleInspectorAction, &QAction::toggled, m_consoleValueInspector,
+          &QWidget::setVisible);
 
   m_consoleClearAction = new QAction(tr("Clear"), this);
   m_consoleClearAction->setToolTip(tr("Clear the console output"));
-  connect(m_consoleClearAction, &QAction::triggered, this,
-          [this]() { m_consoleOutput->clear(); });
+  connect(m_consoleClearAction, &QAction::triggered, this, [this]() {
+    m_consoleOutput->clear();
+    m_consoleValueInspector->clear();
+  });
 
   m_consoleDetachAction = new QAction(tr("Detach"), this);
   m_consoleDetachAction->setToolTip(
@@ -1308,8 +1406,8 @@ void DebugPanel::setupConsoleToolbar() {
   connect(m_consoleDetachAction, &QAction::triggered, this,
           &DebugPanel::toggleConsoleDetached);
 
-  for (QAction *action :
-       {m_consoleWrapAction, m_consoleDetachAction, m_consoleClearAction}) {
+  for (QAction *action : {m_consoleInspectorAction, m_consoleWrapAction,
+                          m_consoleDetachAction, m_consoleClearAction}) {
     QToolButton *button = new QToolButton(m_consoleToolbar);
     button->setDefaultAction(action);
     button->setToolButtonStyle(Qt::ToolButtonTextOnly);
@@ -1333,7 +1431,7 @@ void DebugPanel::toggleConsoleDetached() {
   m_consoleWindow->setWindowTitle(tr("Debug Console"));
   m_consoleWindow->setStyleSheet(styleSheet());
   m_consoleWindow->setAttribute(Qt::WA_DeleteOnClose, false);
-  m_consoleWindow->resize(900, 520);
+  m_consoleWindow->resize(1100, 640);
 
   auto *layout = new QVBoxLayout(m_consoleWindow);
   layout->setContentsMargins(UiMetrics::PanelMargin, UiMetrics::PanelMargin,
@@ -1439,11 +1537,16 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
   }
 
   const QString name = item->text(0);
-  const QString value = item->text(1);
+  const QString value = item->data(0, Qt::UserRole + 4).isValid()
+                            ? item->data(0, Qt::UserRole + 4).toString()
+                            : item->text(1);
   const QString expression = expressionForVariableItem(item);
 
   QMenu menu(m_variablesTree);
   menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
+
+  QAction *inspect = menu.addAction(tr("Inspect Value…"));
+  menu.addSeparator();
 
   QAction *copyName = menu.addAction(tr("Copy Name"));
   QAction *copyValue = menu.addAction(tr("Copy Value"));
@@ -1488,7 +1591,9 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
     return;
   }
 
-  if (chosen == copyName) {
+  if (chosen == inspect) {
+    inspectVariableItem(item);
+  } else if (chosen == copyName) {
     QGuiApplication::clipboard()->setText(name);
   } else if (chosen == copyValue) {
     QGuiApplication::clipboard()->setText(value);
@@ -1507,6 +1612,64 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
     requestDataBreakpointForVariable(item);
   } else if (viewMemory && chosen == viewMemory) {
     showMemoryViewer(memoryReference, name);
+  }
+}
+
+void DebugPanel::inspectVariableItem(QTreeWidgetItem *item, bool watch) {
+  if (!item)
+    return;
+  DapVariable value;
+  value.name = item->text(0);
+  value.value = item->data(0, Qt::UserRole + 4).isValid()
+                    ? item->data(0, Qt::UserRole + 4).toString()
+                    : item->text(1);
+  value.type = item->text(2);
+  value.variablesReference =
+      item->data(0, Qt::UserRole + (watch ? 1 : 0)).toInt();
+  value.evaluateName =
+      watch ? (item->parent() ? item->data(0, Qt::UserRole + 5).toString()
+                              : item->text(0))
+            : expressionForVariableItem(item);
+  if (!watch) {
+    value.indexedVariables = item->data(0, Qt::UserRole + 5).toInt();
+    value.namedVariables = item->data(0, Qt::UserRole + 6).toInt();
+  }
+  auto *dialog = new StyledDialog(this);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  dialog->setWindowTitle(tr("Inspect — %1").arg(value.name));
+  dialog->resize(900, 620);
+  auto *layout = new QVBoxLayout(dialog);
+  auto *inspector = new DebugValueInspector(dialog);
+  layout->addWidget(inspector);
+  inspector->setDapClient(m_dapClient);
+  inspector->setValue(value);
+  connect(inspector, &DebugValueInspector::addWatchRequested, this,
+          [](const QString &expression) {
+            WatchManager::instance().addWatch(expression);
+          });
+  if (m_themeInitialized) {
+    dialog->applyTheme(m_theme);
+    inspector->applyTheme(m_theme);
+  }
+  dialog->show();
+}
+
+QString DebugPanel::variableItemPath(const QTreeWidgetItem *item) {
+  QStringList parts;
+  for (; item; item = item->parent())
+    parts.prepend(item->text(0));
+  return parts.join(QChar(0x1f));
+}
+
+void DebugPanel::rememberVariableExpansion() {
+  if (m_variablesTree->topLevelItemCount() == 0)
+    return;
+  m_expandedVariablePaths.clear();
+  QTreeWidgetItemIterator it(m_variablesTree);
+  while (*it) {
+    if ((*it)->isExpanded())
+      m_expandedVariablePaths.insert(variableItemPath(*it));
+    ++it;
   }
 }
 
@@ -1877,14 +2040,53 @@ void DebugPanel::updateSectionSummaries() {
   }
 }
 
+void DebugPanel::refreshProcessSelector() {
+  if (!m_processSelector)
+    return;
+  const QSignalBlocker blocker(m_processSelector);
+  m_processSelector->clear();
+  for (DebugSession *session : DebugSessionManager::instance().allSessions()) {
+    const QString state =
+        session->state() == DebugSession::State::Stopped   ? tr("Paused")
+        : session->state() == DebugSession::State::Running ? tr("Running")
+                                                           : tr("Starting");
+    const QString label =
+        QString("%1%2%3 · %4")
+            .arg(session->parentSessionId().isEmpty() ? QString()
+                                                      : QStringLiteral("↳ "),
+                 session->name(),
+                 session->processId() > 0
+                     ? QString(" [%1]").arg(session->processId())
+                     : QString(),
+                 state);
+    m_processSelector->addItem(label, session->id());
+    m_processSelector->setItemData(m_processSelector->count() - 1, label,
+                                   Qt::ToolTipRole);
+    if (session->client() == m_dapClient)
+      m_processSelector->setCurrentIndex(m_processSelector->count() - 1);
+  }
+  m_processSelector->setEnabled(m_processSelector->count() > 0);
+}
+
 void DebugPanel::setDapClient(DapClient *client) {
+  if (m_dapClient == client)
+    return;
   if (m_dapClient) {
     disconnect(m_dapClient, nullptr, this, nullptr);
   }
 
   m_dapClient = client;
+  m_consoleValueInspector->setDapClient(client);
+  m_concurrencyPanel->setFrameContext(client, -1);
   if (m_dapClient) {
     clearAll();
+    for (DebugSession *session :
+         DebugSessionManager::instance().allSessions()) {
+      if (session->client() == client) {
+        m_consoleOutput->setPlainText(session->outputHistory());
+        break;
+      }
+    }
   } else {
 
     clearSessionState();
@@ -1907,7 +2109,31 @@ void DebugPanel::setDapClient(DapClient *client) {
             });
     connect(m_dapClient, &DapClient::stopped, this, &DebugPanel::onStopped);
     connect(m_dapClient, &DapClient::continued, this,
-            [this](int, bool) { onContinued(); });
+            [this](int thread, bool all) {
+              if (all || !m_dapClient->isThreadStopped(m_currentThreadId)) {
+                onContinued();
+                if (m_dapClient->state() == DapClient::State::Stopped) {
+                  m_currentThreadId = m_dapClient->currentThreadId();
+                  m_dapClient->getThreads();
+                }
+              } else if (thread == m_lastStoppedThreadId) {
+                m_expectStopEvent = true;
+                m_hasLastStopEvent = false;
+              }
+            });
+    connect(m_dapClient, &DapClient::threadEvent, this,
+            [this](int thread, const QString &reason) {
+              if (reason == QLatin1String("exited") &&
+                  thread == m_currentThreadId) {
+                onContinued();
+                m_currentThreadId = m_dapClient->currentThreadId();
+              }
+              QTimer::singleShot(0, this, [this]() {
+                if (m_dapClient &&
+                    m_dapClient->state() == DapClient::State::Stopped)
+                  m_dapClient->getThreads();
+              });
+            });
     connect(m_dapClient, &DapClient::terminated, this,
             &DebugPanel::onTerminated);
     connect(m_dapClient, &DapClient::threadsReceived, this,
@@ -1918,9 +2144,20 @@ void DebugPanel::setDapClient(DapClient *client) {
             &DebugPanel::onScopesReceived);
     connect(m_dapClient, &DapClient::variablesReceived, this,
             &DebugPanel::onVariablesReceived);
+    connect(m_dapClient, &DapClient::variablesFailed, this,
+            [this](int reference, const QString &message) {
+              if (auto *item = m_variableRefToItem.value(reference)) {
+                item->setText(1, tr("Unavailable"));
+                item->setToolTip(1, message);
+              }
+              appendConsoleLine(
+                  tr("Variables unavailable for the selected frame: %1")
+                      .arg(message),
+                  consoleMutedColor());
+            });
     connect(m_dapClient, &DapClient::output, this,
             &DebugPanel::onOutputReceived);
-    connect(m_dapClient, &DapClient::evaluateResponse, this,
+    connect(m_dapClient, &DapClient::evaluateValueReceived, this,
             &DebugPanel::onEvaluateResult);
     connect(m_dapClient, &DapClient::evaluateResponseError, this,
             &DebugPanel::onEvaluateError);
@@ -2035,14 +2272,17 @@ void DebugPanel::setDapClient(DapClient *client) {
 
   updateToolbarState();
   updateSectionSummaries();
+  refreshProcessSelector();
 }
 
 void DebugPanel::clearAll() {
   clearSessionState();
   m_consoleOutput->clear();
+  m_consoleValueInspector->clear();
 }
 
 void DebugPanel::clearSessionState() {
+  m_consoleValueInspector->invalidate();
   emit executionLocationChanged(QString(), 0);
   clearInlineValues();
   m_callStackTree->clear();
@@ -2061,14 +2301,14 @@ void DebugPanel::clearSessionState() {
   m_lastStoppedReason = DapStoppedReason::Unknown;
   m_pendingConsoleEvaluations.clear();
   m_hoverRequestSeq = 0;
-  m_consoleExpansions.clear();
-  m_consoleExpansionNodeByRef.clear();
   m_previousVariableValues.clear();
+  m_expandedVariablePaths.clear();
   resetWatchValues();
   m_threads.clear();
   m_stackFrames.clear();
   m_currentThreadId = 0;
-  m_currentFrameId = 0;
+  m_currentFrameId = -1;
+  m_concurrencyPanel->setFrameContext(m_dapClient, -1);
   m_threadSelector->clear();
   m_threadSelector->setEnabled(false);
   updateSectionSummaries();
@@ -2097,6 +2337,7 @@ void DebugPanel::setCurrentFrame(int frameId) {
     clearInlineValues();
   }
   m_currentFrameId = frameId;
+  m_concurrencyPanel->setFrameContext(m_dapClient, frameId);
 
   if (m_dapClient && m_dapClient->state() == DapClient::State::Stopped) {
     m_dapClient->getScopes(frameId);
@@ -2104,11 +2345,6 @@ void DebugPanel::setCurrentFrame(int frameId) {
 }
 
 void DebugPanel::onStopped(const DapStoppedEvent &event) {
-  if (!m_expectStopEvent && event.allThreadsStopped) {
-    LOG_DEBUG("DebugPanel: Ignoring redundant allThreadsStopped event");
-    return;
-  }
-
   const int eventThreadId =
       event.threadId > 0 ? event.threadId : m_currentThreadId;
   const bool duplicateStop = !m_expectStopEvent && m_hasLastStopEvent &&
@@ -2174,6 +2410,7 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
         consoleMutedColor());
   }
 
+  rememberVariableExpansion();
   m_variablesTree->clear();
   m_variableRefToItem.clear();
   m_pendingTreeSummaries.clear();
@@ -2197,6 +2434,7 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
 }
 
 void DebugPanel::onContinued() {
+  m_concurrencyPanel->setFrameContext(m_dapClient, -1);
   emit executionLocationChanged(QString(), 0);
   clearInlineValues();
   m_stepInProgress = false;
@@ -2207,8 +2445,10 @@ void DebugPanel::onContinued() {
   QToolTip::hideText();
   m_callStackTree->clear();
   m_stackFrames.clear();
-  m_currentFrameId = 0;
+  m_currentFrameId = -1;
+  WatchManager::instance().invalidateValues();
   m_threadSelector->setEnabled(false);
+  rememberVariableExpansion();
   m_variablesTree->clear();
   m_variableRefToItem.clear();
   m_pendingTreeSummaries.clear();
@@ -2247,7 +2487,8 @@ void DebugPanel::onContinue() {
     m_stepInProgress = true;
     emit executionLocationChanged(QString(), 0);
     updateToolbarState();
-    m_dapClient->continueExecution(activeThreadId());
+    m_dapClient->continueExecution(activeThreadId(),
+                                   m_concurrencyPanel->singleThreadExecution());
   } else {
     emit startDebugRequested();
   }
@@ -2270,7 +2511,8 @@ void DebugPanel::onStepOver() {
       m_stepInProgress = true;
       emit executionLocationChanged(QString(), 0);
       updateToolbarState();
-      m_dapClient->stepOver(threadId);
+      m_dapClient->stepOver(threadId,
+                            m_concurrencyPanel->singleThreadExecution());
     }
   }
 }
@@ -2285,7 +2527,8 @@ void DebugPanel::onStepInto() {
       m_stepInProgress = true;
       emit executionLocationChanged(QString(), 0);
       updateToolbarState();
-      m_dapClient->stepInto(threadId);
+      m_dapClient->stepInto(threadId,
+                            m_concurrencyPanel->singleThreadExecution());
     }
   }
 }
@@ -2300,7 +2543,8 @@ void DebugPanel::onStepOut() {
       m_stepInProgress = true;
       emit executionLocationChanged(QString(), 0);
       updateToolbarState();
-      m_dapClient->stepOut(threadId);
+      m_dapClient->stepOut(threadId,
+                           m_concurrencyPanel->singleThreadExecution());
     }
   }
 }
@@ -2330,17 +2574,29 @@ void DebugPanel::onThreadsReceived(const QList<DapThread> &threads) {
   m_threadSelector->clear();
   for (const DapThread &thread : threads) {
     m_threadSelector->addItem(
-        QString("Thread %1: %2").arg(thread.id).arg(thread.name), thread.id);
-    if (thread.id == m_currentThreadId) {
+        QString("%1 · %2 · %3")
+            .arg(thread.id)
+            .arg(thread.name, m_dapClient->isThreadStopped(thread.id)
+                                  ? tr("Paused")
+                                  : tr("Running")),
+        thread.id);
+    if (thread.id == m_currentThreadId &&
+        m_dapClient->isThreadStopped(thread.id)) {
       m_threadSelector->setCurrentIndex(m_threadSelector->count() - 1);
       hasCurrentThread = true;
     }
   }
 
   if (!threads.isEmpty() && !hasCurrentThread) {
-    m_currentThreadId = threads.first().id;
-    m_threadSelector->setCurrentIndex(0);
-    hasCurrentThread = true;
+    for (int i = 0; i < threads.size(); ++i) {
+      if (m_dapClient->isThreadStopped(threads.at(i).id)) {
+        m_currentThreadId = threads.at(i).id;
+        m_dapClient->selectThread(m_currentThreadId);
+        m_threadSelector->setCurrentIndex(i);
+        hasCurrentThread = true;
+        break;
+      }
+    }
   }
 
   m_threadSelector->setEnabled(!threads.isEmpty());
@@ -2471,6 +2727,7 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     return;
   }
 
+  rememberVariableExpansion();
   m_variablesTree->clear();
   m_variableRefToItem.clear();
   m_pendingTreeSummaries.clear();
@@ -2574,8 +2831,6 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     populateWatchChildren(watchChild, variables, true);
   }
 
-  applyConsoleExpansion(variablesReference, variables);
-
   const auto summaryFor = m_pendingTreeSummaries.find(variablesReference);
   if (summaryFor != m_pendingTreeSummaries.end()) {
     QTreeWidgetItem *aggregateItem = summaryFor.value();
@@ -2597,12 +2852,15 @@ void DebugPanel::onVariablesReceived(int variablesReference,
   for (const DapVariable &var : variables) {
     QTreeWidgetItem *item = new QTreeWidgetItem();
     item->setText(0, var.name);
-    item->setText(1, var.value);
+    item->setText(1, DebugValueFormatter::summary(var.value));
     item->setText(2, var.type);
     item->setData(0, Qt::UserRole, var.variablesReference);
     item->setData(0, Qt::UserRole + 1, var.evaluateName);
     item->setData(0, Qt::UserRole + 2, var.memoryReference);
     item->setData(0, Qt::UserRole + 3, variablesReference);
+    item->setData(0, Qt::UserRole + 4, var.value);
+    item->setData(0, Qt::UserRole + 5, var.indexedVariables);
+    item->setData(0, Qt::UserRole + 6, var.namedVariables);
     item->setIcon(0, variableIcon(var));
 
     QString path = var.name;
@@ -2621,7 +2879,7 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     QStringList tip;
     tip << var.name;
     if (!var.value.isEmpty()) {
-      tip << var.value;
+      tip << DebugValueFormatter::format(var.value);
     }
     if (!var.type.isEmpty()) {
       tip << QStringLiteral("(%1)").arg(var.type);
@@ -2636,6 +2894,10 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     }
 
     parentItem->addChild(item);
+    if (var.variablesReference > 0 &&
+        m_expandedVariablePaths.contains(variableItemPath(item))) {
+      item->setExpanded(true);
+    }
   }
 
   if (!parentItem->parent()) {
@@ -2646,7 +2908,8 @@ void DebugPanel::onVariablesReceived(int variablesReference,
       for (const DapVariable &var : variables) {
         if (!var.name.isEmpty() && !var.value.isEmpty() &&
             !var.name.startsWith(QLatin1Char('['))) {
-          m_inlineValues.insert(var.name, var.value);
+          m_inlineValues.insert(var.name,
+                                DebugValueFormatter::summary(var.value, 96));
         }
       }
       publishInlineValues();
@@ -3435,7 +3698,15 @@ void DebugPanel::onThreadSelected(int index) {
 
   int threadId = m_threadSelector->itemData(index).toInt();
   if (threadId > 0 && threadId != m_currentThreadId) {
+    if (!m_dapClient->selectThread(threadId)) {
+      const QSignalBlocker blocker(m_threadSelector);
+      m_threadSelector->setCurrentIndex(
+          m_threadSelector->findData(m_currentThreadId));
+      return;
+    }
+    onContinued();
     m_currentThreadId = threadId;
+    m_threadSelector->setEnabled(true);
     m_dapClient->getStackTrace(m_currentThreadId, 0,
                                MAX_STACK_FRAMES_PER_REFRESH);
   }
@@ -3504,10 +3775,12 @@ void DebugPanel::onWatchUpdated(const WatchExpression &watch) {
     item->setForeground(1, m_themeInitialized ? m_theme.errorColor
                                               : QColor(Qt::red));
   } else {
-    item->setText(1, watch.value);
+    item->setText(1, DebugValueFormatter::summary(watch.value));
     item->setForeground(1, palette().color(QPalette::Text));
   }
   item->setText(2, watch.type);
+  item->setData(0, Qt::UserRole + 4, watch.value);
+  item->setToolTip(1, DebugValueFormatter::format(watch.value));
   item->setData(0, Qt::UserRole + 1, watch.variablesReference);
 
   clearWatchChildren(item);
@@ -3592,9 +3865,12 @@ void DebugPanel::populateWatchChildren(QTreeWidgetItem *parentItem,
   for (const DapVariable &var : children) {
     QTreeWidgetItem *childItem = new QTreeWidgetItem();
     childItem->setText(0, var.name);
-    childItem->setText(1, var.value);
+    childItem->setText(1, DebugValueFormatter::summary(var.value));
     childItem->setText(2, var.type);
     childItem->setData(0, Qt::UserRole + 1, var.variablesReference);
+    childItem->setData(0, Qt::UserRole + 4, var.value);
+    childItem->setData(0, Qt::UserRole + 5, var.evaluateName);
+    childItem->setToolTip(1, DebugValueFormatter::format(var.value));
     childItem->setIcon(0, variableIcon(var));
 
     if (var.variablesReference > 0) {
@@ -3623,14 +3899,18 @@ void DebugPanel::resetWatchValues() {
     item->setText(1, tr("<not evaluated>"));
     item->setText(2, QString());
     item->setData(0, Qt::UserRole + 1, 0);
+    item->setData(0, Qt::UserRole + 4, QVariant());
+    item->setToolTip(1, QString());
     item->setForeground(1, palette().color(QPalette::Text));
     item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
   }
 }
 
-void DebugPanel::onEvaluateResult(int requestSeq, const QString &expression,
-                                  const QString &result, const QString &type,
-                                  int variablesReference) {
+void DebugPanel::onEvaluateResult(int requestSeq,
+                                  const DapVariable &evaluatedValue) {
+  const QString &result = evaluatedValue.value;
+  const QString &type = evaluatedValue.type;
+  const int variablesReference = evaluatedValue.variablesReference;
   if (m_localsFallbackPending && requestSeq == m_localsFallbackRequestSeq) {
     const int scopeRef = m_localsFallbackScopeRef;
     const bool staleFrame = m_localsFallbackFrameId != m_currentFrameId;
@@ -3641,7 +3921,6 @@ void DebugPanel::onEvaluateResult(int requestSeq, const QString &expression,
     return;
   }
 
-  Q_UNUSED(expression);
   if (m_hoverRequestSeq > 0 && requestSeq == m_hoverRequestSeq) {
     m_hoverRequestSeq = 0;
     if (m_hoverAnchor && m_hoverAnchor->isVisible()) {
@@ -3682,125 +3961,23 @@ void DebugPanel::onEvaluateResult(int requestSeq, const QString &expression,
       m_pendingConsoleEvaluations.at(pendingIndex).userExpression;
   m_pendingConsoleEvaluations.removeAt(pendingIndex);
 
-  if (result.trimmed().isEmpty() && variablesReference > 0 && m_dapClient) {
-    startConsoleExpansion(displayExpression, type, variablesReference);
-    return;
-  }
-
-  QString line = QString("%1 = %2").arg(displayExpression, result);
-  if (!type.isEmpty()) {
+  DapVariable value = evaluatedValue;
+  value.name = displayExpression;
+  value.evaluateName = displayExpression;
+  value.value = result;
+  value.type = type;
+  value.variablesReference = variablesReference;
+  m_consoleValueInspector->setValue(value);
+  const QString formatted = DebugValueFormatter::format(result);
+  QString line = displayExpression;
+  if (!type.isEmpty())
     line += QString(" (%1)").arg(type);
-  }
+  line +=
+      formatted.contains('\n') ? QStringLiteral(" =\n") : QStringLiteral(" = ");
+  line += formatted.isEmpty() && variablesReference > 0
+              ? tr("Expandable value — see the value inspector")
+              : formatted;
   appendConsoleLine(line, palette().color(QPalette::Text), true);
-}
-
-void DebugPanel::startConsoleExpansion(const QString &expression,
-                                       const QString &type,
-                                       int variablesReference) {
-  const int id = m_nextConsoleExpansionId++;
-
-  ConsoleExpansion expansion;
-  expansion.expression = expression;
-  expansion.type = type;
-
-  ConsoleExpansionNode root;
-  root.name = expression;
-  root.reference = variablesReference;
-  expansion.nodes.append(root);
-  expansion.pendingRequests = 1;
-
-  m_consoleExpansions.insert(id, expansion);
-  m_consoleExpansionNodeByRef.insert(variablesReference, {id, 0});
-  m_dapClient->getVariables(variablesReference);
-}
-
-bool DebugPanel::applyConsoleExpansion(int variablesReference,
-                                       const QList<DapVariable> &variables) {
-
-  constexpr int kMaxDepth = 3;
-  constexpr int kMaxNodes = 64;
-
-  const auto located = m_consoleExpansionNodeByRef.find(variablesReference);
-  if (located == m_consoleExpansionNodeByRef.end()) {
-    return false;
-  }
-  const int expansionId = located.value().first;
-  const int nodeIndex = located.value().second;
-  m_consoleExpansionNodeByRef.erase(located);
-
-  const auto found = m_consoleExpansions.find(expansionId);
-  if (found == m_consoleExpansions.end()) {
-    return false;
-  }
-  ConsoleExpansion &expansion = found.value();
-  expansion.pendingRequests = qMax(0, expansion.pendingRequests - 1);
-
-  const int childDepth = expansion.nodes.at(nodeIndex).depth + 1;
-  for (const DapVariable &var : variables) {
-    if (expansion.nodes.size() >= kMaxNodes) {
-      break;
-    }
-    ConsoleExpansionNode child;
-    child.name = var.name;
-    child.value = var.value.trimmed();
-    child.reference = var.variablesReference;
-    child.depth = childDepth;
-    expansion.nodes.append(child);
-    const int childIndex = expansion.nodes.size() - 1;
-    expansion.nodes[nodeIndex].children.append(childIndex);
-
-    if (child.value.isEmpty() && child.reference > 0 &&
-        childDepth < kMaxDepth && m_dapClient &&
-        !m_consoleExpansionNodeByRef.contains(child.reference)) {
-      m_consoleExpansionNodeByRef.insert(child.reference,
-                                         {expansionId, childIndex});
-      expansion.pendingRequests++;
-      m_dapClient->getVariables(child.reference);
-    }
-  }
-
-  if (expansion.pendingRequests > 0) {
-    return true;
-  }
-
-  const ConsoleExpansion finished = expansion;
-  m_consoleExpansions.erase(found);
-
-  QString line = QString("%1 = %2").arg(finished.expression,
-                                        renderConsoleExpansion(finished, 0));
-  if (!finished.type.isEmpty()) {
-    line += QString(" (%1)").arg(finished.type);
-  }
-  appendConsoleLine(line, palette().color(QPalette::Text), true);
-  return true;
-}
-
-QString DebugPanel::renderConsoleExpansion(const ConsoleExpansion &expansion,
-                                           int nodeIndex) const {
-  constexpr int kMaxChildrenShown = 12;
-
-  if (nodeIndex < 0 || nodeIndex >= expansion.nodes.size()) {
-    return QStringLiteral("{...}");
-  }
-  const ConsoleExpansionNode &node = expansion.nodes.at(nodeIndex);
-  if (node.children.isEmpty()) {
-    if (!node.value.isEmpty()) {
-      return node.value;
-    }
-    return node.reference > 0 ? QStringLiteral("{...}") : QStringLiteral("{}");
-  }
-
-  QStringList parts;
-  for (int childIndex : node.children) {
-    if (parts.size() >= kMaxChildrenShown) {
-      parts << QStringLiteral("...");
-      break;
-    }
-    const ConsoleExpansionNode &child = expansion.nodes.at(childIndex);
-    parts << QString("%1 = %2").arg(
-        child.name, renderConsoleExpansion(expansion, childIndex));
-  }
-  return QString("{%1}").arg(parts.join(QStringLiteral(", ")));
 }
 
 void DebugPanel::onEvaluateError(int requestSeq, const QString &expression,

@@ -294,12 +294,19 @@ void DapClient::resetSessionState() {
   m_staleRequests.clear();
   m_currentThreadId = 0;
   m_capabilities = QJsonObject();
+  m_knownThreads.clear();
+  m_stoppedThreads.clear();
+  m_allThreadsStopped = false;
+  m_processId = 0;
+  m_processName.clear();
   m_functionBreakpointsConfigured = false;
   m_deferredFunctionBreakpoints.clear();
   m_hasDeferredFunctionBreakpoints = false;
   m_dataBreakpointsSupported = true;
   m_dataBreakpointsConfigured = false;
   m_pausePending = false;
+  m_pauseAllPending = false;
+  m_pauseRequested = false;
 }
 
 void DapClient::feedAdapterData(const QByteArray &data) {
@@ -456,7 +463,8 @@ void DapClient::shutdownChannel() {
     sock->disconnect(this);
     sock->flush();
     sock->disconnectFromHost();
-    if (!sock->waitForDisconnected(1000)) {
+    if (sock->state() != QAbstractSocket::UnconnectedState &&
+        !sock->waitForDisconnected(1000)) {
       sock->abort();
     }
     sock->deleteLater();
@@ -756,14 +764,16 @@ void DapClient::setExceptionBreakpoints(const QStringList &filterIds) {
   sendRequest("setExceptionBreakpoints", args, seq);
 }
 
-void DapClient::continueExecution(int threadId) {
+void DapClient::continueExecution(int threadId, bool singleThread) {
   clearPendingInspectionRequests();
 
   QJsonObject args;
   args["threadId"] = threadId > 0 ? threadId : m_currentThreadId;
+  if (singleThread && supportsSingleThreadExecution())
+    args["singleThread"] = true;
 
   int seq = m_nextSeq++;
-  m_pendingRequests[seq] = "continue";
+  m_pendingRequests[seq] = QString("continue:%1").arg(args["threadId"].toInt());
   sendRequest("continue", args, seq);
 }
 
@@ -783,41 +793,97 @@ void DapClient::pause(int threadId) {
   args["threadId"] = resolvedThreadId;
 
   int seq = m_nextSeq++;
+  m_pauseRequested = true;
   m_pendingRequests[seq] = "pause";
   sendRequest("pause", args, seq);
 }
 
-void DapClient::stepOver(int threadId) {
+void DapClient::pauseAllThreads() {
+  if (!isDebugging() || allThreadsStopped())
+    return;
+  m_pauseAllPending = true;
+  getThreads();
+}
+
+void DapClient::stepOver(int threadId, bool singleThread) {
   clearPendingInspectionRequests();
 
   QJsonObject args;
   args["threadId"] = threadId > 0 ? threadId : m_currentThreadId;
+  if (singleThread && supportsSingleThreadExecution())
+    args["singleThread"] = true;
 
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "next";
   sendRequest("next", args, seq);
 }
 
-void DapClient::stepInto(int threadId) {
+void DapClient::stepInto(int threadId, bool singleThread) {
   clearPendingInspectionRequests();
 
   QJsonObject args;
   args["threadId"] = threadId > 0 ? threadId : m_currentThreadId;
+  if (singleThread && supportsSingleThreadExecution())
+    args["singleThread"] = true;
 
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "stepIn";
   sendRequest("stepIn", args, seq);
 }
 
-void DapClient::stepOut(int threadId) {
+void DapClient::stepOut(int threadId, bool singleThread) {
   clearPendingInspectionRequests();
 
   QJsonObject args;
   args["threadId"] = threadId > 0 ? threadId : m_currentThreadId;
+  if (singleThread && supportsSingleThreadExecution())
+    args["singleThread"] = true;
 
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = "stepOut";
   sendRequest("stepOut", args, seq);
+}
+
+bool DapClient::isThreadStopped(int threadId) const {
+  return m_state == State::Stopped && threadId > 0 &&
+         (m_allThreadsStopped || m_stoppedThreads.contains(threadId));
+}
+
+bool DapClient::selectThread(int threadId) {
+  if (!isThreadStopped(threadId))
+    return false;
+  if (m_currentThreadId != threadId)
+    clearPendingInspectionRequests();
+  m_currentThreadId = threadId;
+  return true;
+}
+
+void DapClient::applyContinued(int threadId, bool allThreads) {
+  m_pausePending = false;
+  m_pauseAllPending = false;
+  m_pauseRequested = false;
+  clearPendingInspectionRequests();
+  if (allThreads) {
+    m_stoppedThreads.clear();
+    m_allThreadsStopped = false;
+  } else {
+    if (m_allThreadsStopped) {
+      m_stoppedThreads = m_knownThreads;
+      if (m_currentThreadId > 0)
+        m_stoppedThreads.insert(m_currentThreadId);
+    }
+    m_allThreadsStopped = false;
+    m_stoppedThreads.remove(threadId);
+    if (m_currentThreadId == threadId && !m_stoppedThreads.isEmpty())
+      m_currentThreadId = *m_stoppedThreads.cbegin();
+  }
+  setState(m_stoppedThreads.isEmpty() ? State::Running : State::Stopped);
+  emit continued(threadId, allThreads);
+}
+
+void DapClient::respondToStartDebugging(int requestSeq, bool success,
+                                        const QString &message) {
+  sendResponse(requestSeq, "startDebugging", success, {}, message);
 }
 
 void DapClient::restart() {
@@ -924,6 +990,25 @@ void DapClient::getVariables(int variablesReference, const QString &filter,
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = pendingTag;
   sendRequest("variables", args, seq);
+}
+
+int DapClient::inspectVariables(int variablesReference, const QString &filter,
+                                int start, int count) {
+  if (!hasLiveChannel() || m_state != State::Stopped ||
+      variablesReference <= 0) {
+    return 0;
+  }
+  QJsonObject args{{"variablesReference", variablesReference},
+                   {"start", qMax(0, start)},
+                   {"count", qBound(1, count, 10000)}};
+  if (!filter.isEmpty()) {
+    args["filter"] = filter;
+  }
+  const int seq = m_nextSeq++;
+  m_pendingRequests[seq] =
+      QString("inspectionVariables:%1").arg(variablesReference);
+  sendRequest("variables", args, seq);
+  return seq;
 }
 
 int DapClient::evaluate(const QString &expression, int frameId,
@@ -1530,6 +1615,10 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     }
 
     if (command == "variables") {
+      if (pendingCommand.startsWith("inspectionVariables:")) {
+        emit inspectionVariablesFailed(requestSeq, message);
+        return;
+      }
       int varRef = 0;
       if (pendingCommand.startsWith("variables:")) {
         varRef = pendingCommand.mid(10).toInt();
@@ -1537,11 +1626,15 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
       LOG_WARNING(QString("DAP: variables request failed: %1")
                       .arg(message.isEmpty() ? "Unknown error" : message));
       emit variablesReceived(varRef, {});
+      emit variablesFailed(varRef, message);
       return;
     }
 
-    if (command == "threads" && m_pausePending) {
+    if (command == "pause")
+      m_pauseRequested = false;
+    if (command == "threads" && (m_pausePending || m_pauseAllPending)) {
       m_pausePending = false;
+      m_pauseAllPending = false;
       emit error(QString("Pause failed: %1")
                      .arg(message.isEmpty() ? "unable to resolve active thread"
                                             : message));
@@ -1636,15 +1729,27 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     emit breakpointsSet(sourcePath, breakpoints);
   } else if (command == "threads") {
     QList<DapThread> threads;
+    m_knownThreads.clear();
     QJsonArray threadArray = bodyObj["threads"].toArray();
     for (const auto &val : threadArray) {
       threads.append(DapThread::fromJson(val.toObject()));
+      m_knownThreads.insert(threads.last().id);
     }
     if (m_currentThreadId <= 0 && !threads.isEmpty()) {
       m_currentThreadId = threads.first().id;
     }
     emit threadsReceived(threads);
-    if (m_pausePending) {
+    if (m_pauseAllPending) {
+      m_pauseAllPending = false;
+      m_pausePending = false;
+      for (const auto &thread : threads) {
+        if (!isThreadStopped(thread.id)) {
+          pause(thread.id);
+          if (!supportsSingleThreadExecution())
+            break;
+        }
+      }
+    } else if (m_pausePending) {
       m_pausePending = false;
       if (m_currentThreadId > 0) {
         pause(m_currentThreadId);
@@ -1688,7 +1793,11 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
     for (const auto &val : varArray) {
       variables.append(DapVariable::fromJson(val.toObject()));
     }
-    emit variablesReceived(varRef, variables);
+    if (pendingCommand.startsWith("inspectionVariables:")) {
+      emit inspectionVariablesReceived(requestSeq, variables);
+    } else {
+      emit variablesReceived(varRef, variables);
+    }
   } else if (command == "evaluate") {
     if (pendingCommand.isEmpty()) {
       return;
@@ -1698,6 +1807,9 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
       expression = pendingCommand.mid(9);
     }
 
+    QJsonObject valueObject = bodyObj;
+    valueObject["value"] = bodyObj["result"];
+    emit evaluateValueReceived(requestSeq, DapVariable::fromJson(valueObject));
     emit evaluateResponse(requestSeq, expression, bodyObj["result"].toString(),
                           bodyObj["type"].toString(),
                           bodyObj["variablesReference"].toInt());
@@ -1705,9 +1817,12 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
                         bodyObj["type"].toString(),
                         bodyObj["variablesReference"].toInt());
   } else if (command == "continue") {
-    clearPendingInspectionRequests();
-    setState(State::Running);
-    emit continued(bodyObj["threadId"].toInt(),
+    if (!pendingCommand.startsWith("continue:"))
+      return;
+    const int requestedThread = pendingCommand.startsWith("continue:")
+                                    ? pendingCommand.mid(9).toInt()
+                                    : m_currentThreadId;
+    applyContinued(bodyObj["threadId"].toInt(requestedThread),
                    bodyObj["allThreadsContinued"].toBool(true));
   } else if (command == "setVariable") {
     emit variableSet(bodyObj["name"].toString(), bodyObj["value"].toString(),
@@ -1752,6 +1867,17 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
       return;
     }
     DapStoppedEvent evt = DapStoppedEvent::fromJson(body);
+    m_pauseRequested = false;
+    // A fast step can stop before its earlier Continue response arrives.
+    // That response must not resume the newly paused snapshot.
+    for (auto it = m_pendingRequests.begin(); it != m_pendingRequests.end();) {
+      if (it.value().startsWith("continue:")) {
+        m_staleRequests.insert(it.key());
+        it = m_pendingRequests.erase(it);
+      } else {
+        ++it;
+      }
+    }
     LOG_DEBUG(QString("DAP: Stopped event — reason=%1, threadId=%2, "
                       "allThreadsStopped=%3")
                   .arg(static_cast<int>(evt.reason))
@@ -1759,7 +1885,10 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
                   .arg(evt.allThreadsStopped));
     if (evt.threadId > 0) {
       m_currentThreadId = evt.threadId;
+      m_knownThreads.insert(evt.threadId);
+      m_stoppedThreads.insert(evt.threadId);
     }
+    m_allThreadsStopped = m_allThreadsStopped || evt.allThreadsStopped;
     setState(State::Stopped);
     emit stopped(evt);
     if (m_hasDeferredFunctionBreakpoints) {
@@ -1772,9 +1901,7 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
     if (m_stopping || m_state == State::Terminated || m_state == State::Error) {
       return;
     }
-    clearPendingInspectionRequests();
-    setState(State::Running);
-    emit continued(body["threadId"].toInt(),
+    applyContinued(body["threadId"].toInt(m_currentThreadId),
                    body["allThreadsContinued"].toBool(true));
   } else if (event == "exited") {
     clearPendingInspectionRequests();
@@ -1787,7 +1914,30 @@ void DapClient::handleEvent(const QString &event, const QJsonObject &body) {
     setState(State::Terminated);
     emit terminated();
   } else if (event == "thread") {
+    const int thread = body["threadId"].toInt();
+    if (body["reason"] == "exited") {
+      m_knownThreads.remove(thread);
+      m_stoppedThreads.remove(thread);
+      if (m_currentThreadId == thread)
+        m_currentThreadId =
+            !m_stoppedThreads.isEmpty()
+                ? *m_stoppedThreads.cbegin()
+                : (m_allThreadsStopped && !m_knownThreads.isEmpty()
+                       ? *m_knownThreads.cbegin()
+                       : 0);
+      if (m_state == State::Stopped && !m_allThreadsStopped &&
+          m_stoppedThreads.isEmpty())
+        setState(State::Running);
+    } else {
+      m_knownThreads.insert(thread);
+    }
     emit threadEvent(body["threadId"].toInt(), body["reason"].toString());
+  } else if (event == "process") {
+    m_processId = body["systemProcessId"].toInt();
+    m_processName = body["name"].toString();
+    emit processChanged(m_processId, m_processName);
+  } else if (event == "debugpyAttach") {
+    emit childSessionRequested(-1, "attach", body);
   } else if (event == "output") {
     DapOutputEvent evt = DapOutputEvent::fromJson(body);
     emit output(evt);
@@ -1806,7 +1956,15 @@ void DapClient::handleReverseRequest(int seq, const QString &command,
                                      const QJsonObject &arguments) {
   LOG_DEBUG(QString("DAP reverse request: %1").arg(command));
 
-  if (command == "runInTerminal") {
+  if (command == "startDebugging") {
+    if (!isSignalConnected(
+            QMetaMethod::fromSignal(&DapClient::childSessionRequested))) {
+      respondToStartDebugging(seq, false, "No child session handler available");
+      return;
+    }
+    emit childSessionRequested(seq, arguments["request"].toString("attach"),
+                               arguments["configuration"].toObject());
+  } else if (command == "runInTerminal") {
     QStringList commandLine;
     const QJsonArray argsArray = arguments["args"].toArray();
     for (const QJsonValue &argValue : argsArray) {
@@ -1856,6 +2014,8 @@ void DapClient::doInitialize() {
   args["pathFormat"] = "path";
 
   args["supportsVariableType"] = true;
+  args["supportsStartDebuggingRequest"] = isSignalConnected(
+      QMetaMethod::fromSignal(&DapClient::childSessionRequested));
   args["supportsVariablePaging"] = true;
   args["supportsRunInTerminalRequest"] = true;
   args["supportsMemoryReferences"] = true;
@@ -1902,7 +2062,7 @@ void DapClient::clearPendingInspectionRequests() {
     const bool isInspectionRequest =
         tag == "threads" || tag.startsWith("stackTrace:") ||
         tag.startsWith("scopes:") || tag.startsWith("variables:") ||
-        tag.startsWith("evaluate:");
+        tag.startsWith("evaluate:") || tag.startsWith("inspectionVariables:");
     if (isInspectionRequest) {
       m_staleRequests.insert(it.key());
       it = m_pendingRequests.erase(it);

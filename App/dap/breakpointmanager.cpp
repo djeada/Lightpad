@@ -118,6 +118,12 @@ void BreakpointManager::clearAll() {
   m_fileBreakpoints.clear();
   m_functionBreakpoints.clear();
   m_dataBreakpoints.clear();
+  for (auto it = m_sessionDataBreakpoints.begin();
+       it != m_sessionDataBreakpoints.end(); ++it) {
+    if (it.key() && it.key() != m_dapClient && it.key()->isDebugging())
+      it.key()->setDataBreakpoints({});
+    it.value().clear();
+  }
   m_enabledExceptionFilters.clear();
 
   emit allBreakpointsCleared();
@@ -260,6 +266,24 @@ void BreakpointManager::setDapClient(DapClient *client) {
   if (m_dapClient != client) {
     m_pendingBreakpointSyncs.clear();
     m_dapBreakpointIds.clear();
+    // Adapter data IDs belong to the process that created them. Keep each
+    // process's watchpoints when focus moves without sending them to siblings.
+    if (m_dapClient)
+      m_sessionDataBreakpoints[m_dapClient] = m_dataBreakpoints;
+    m_dataBreakpoints = m_sessionDataBreakpoints.value(client);
+    if (client && !m_sessionDataBreakpoints.contains(client)) {
+      m_sessionDataBreakpoints.insert(client, {});
+      connect(client, &QObject::destroyed, this, [this, client]() {
+        m_sessionDataBreakpoints.remove(client);
+        if (!m_dapClient) {
+          m_dataBreakpoints.clear();
+          emit dataBreakpointsChanged();
+        }
+      });
+    }
+    m_dapClient = client;
+    emit dataBreakpointsChanged();
+    return;
   }
   m_dapClient = client;
 }
