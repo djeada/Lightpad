@@ -1,0 +1,92 @@
+"""Third audit wave: manual folds, key mappings and abbreviations, Tabs cut by
+blockwise operators, [count]v reselection and Visual-mode dot repeat."""
+
+
+def feature_cases():
+    C = "foo(bar) baz\n  if (x) {\n    y;\n  }\nend"
+    T = "alpha beta gamma\ndelta epsilon\nzeta eta theta\niota kappa\nlambda mu\nnu xi"
+    P = "one two\nthree four\n\nfive six\nseven\n\neight nine\nten"
+    TAB = "a\tb\nabcdefgh\nxyz\n\tlead\nab\tc\td"
+    W = "one two three four five six\nseven eight nine ten\neleven twelve"
+    groups = [
+     (C, 1, 3, ["zfjj", "zfjk", "zfjjk", "zfjgg2j", "zfjzojj", "zfjw", "zfjb",
+                "zfje", "zfjggw", "zfjGb", "zfjl", "zfj$", "zfj0", "zfjzoj0",
+                "zfjdj", "zfjdk", "zfjyj", "zfj>>", "zfj>j", "zfjJ", "zfjcc<Esc>",
+                "zfjgUU", "zfj~", "zfjx", "zfjX", "zfjD", "zfjp", "zfjyyGp",
+                "zfjzd", "zfjzD", "zfjzE", "zfjzdj", "zfjzEj", "zfjzojzfkzc",
+                "zfjzojzfkzcj", "zfjzojzfkzcjzo", "zfjzojzfkzojzc", "zfjzojzfkzojzC",
+                "zfjzojzfkzojzO", "zfjzojzfkzMj", "zfjzojzfkzRj", "zfjzojzfkzojzaj",
+                "zfjzajj", "zfjzAj", "zfjzojzv", "zfjznj", "zfjznzNj", "zfjzijzij",
+                "zfjzxj", "zfjzojzXj", "zfjzmj", "zfjzozrj", "zF", "2zF", "2zFj",
+                "zFj", "3zFzoj", "zfapj", "zfipj", "zf}j", "zf%j", "Vjzfj", "vjzfj",
+                "jVzfgg", ":2,3fold<CR>j", ":2,3fold<CR>k", ":2,3fold<CR>:2d<CR>",
+                ":2,3fold<CR>:2y<CR>P", ":2,3fold<CR>:2s/./X/<CR>", ":2,3fold<CR>:.,.+1d<CR>",
+                ":2,3fold<CR>:3foldopen<CR>j", ":2,3fold<CR>zo:2foldclose<CR>j",
+                ":2,4fold<CR>:2,3fold<CR>zo:%foldclose!<CR>j", ":2,4fold<CR>:3fold<CR>j",
+                ":1,5fold<CR>zo:2,3fold<CR>j", ":2,3fold<CR>:4,5fold<CR>ggzjzjx",
+                ":2,3fold<CR>:4,5fold<CR>Gzkzkx", ":2,3fold<CR>:4,5fold<CR>gg2zjx",
+                ":2,3fold<CR>zo[zx", ":2,3fold<CR>zoj[zx", ":2,3fold<CR>zo]zx",
+                ":2,4fold<CR>:3,4fold<CR>zOjj[zx", ":2,4fold<CR>:3,4fold<CR>zOjj2[zx",
+                ":2,3fold<CR>:%folddoclosed s/^/#/<CR>", ":2,3fold<CR>:%folddoopen s/^/#/<CR>",
+                ":2,3fold<CR>gg/y<CR>x", ":2,3fold<CR>ggjdd", ":2,3fold<CR>ggjyyp",
+                ":2,3fold<CR>ggj>>", ":2,3fold<CR>ggjgUU", ":2,3fold<CR>ggjJ",
+                ":2,3fold<CR>ggjdw", ":2,3fold<CR>ggjde", ":2,3fold<CR>ggjd$",
+                ":2,3fold<CR>ggjdG", ":2,3fold<CR>Gdgg", ":2,3fold<CR>Gkdk",
+                ":2,3fold<CR>ggd2j", ":2,3fold<CR>gg3dd", ":2,3fold<CR>ggjvjd",
+                ":2,3fold<CR>ggjVd", ":2,3fold<CR>ggjzfj", ":2,3fold<CR>ggjzfjzoj",
+                ":2,3fold<CR>Gzfggj"]),
+     (T, 1, 3, [":nnoremap Q dw<CR>Q", ":nnoremap Q dw<CR>2Q", ":nnoremap Q dw<CR>\"aQ\"ap",
+                ":nmap Q dw<CR>:nmap R Q<CR>R", ":nnoremap Q dw<CR>:nnoremap R Q<CR>R",
+                ":nmap x dd<CR>x", ":nnoremap x dd<CR>2x", ":nmap j jx<CR>j",
+                ":nnoremap l h<CR>:nnoremap h l<CR>lx", ":nmap l h<CR>:nmap h l<CR>hx",
+                ":nnoremap w e<CR>dw", ":onoremap w e<CR>dw", ":onoremap w e<CR>cwX<Esc>",
+                ":onoremap p i(<CR>dp", ":onoremap L $<CR>dL", ":xnoremap L $<CR>vLd",
+                ":vnoremap L e<CR>vLd", ":xnoremap x y<CR>vex$p", ":nnoremap ,d dd<CR>,d",
+                ":nnoremap ,d dd<CR>,dj,d", ":nnoremap ,d dd<CR>:nnoremap ,dd x<CR>,dd",
+                ":nnoremap ,d dd<CR>:nnoremap ,dd x<CR>,dw", ":nnoremap <lt>Space>x dd<CR> x",
+                ":let mapleader=','<CR>:nnoremap <Leader>x dd<CR>,x",
+                ":nnoremap <expr> Q 'dw'<CR>Q", ":nnoremap Q <Nop><CR>Qx",
+                ":nnoremap Q dw<CR>:nunmap Q<CR>Q", ":map Q x<CR>Q", ":map Q x<CR>dQ",
+                ":map Q x<CR>vjQ", ":noremap Q x<CR>vQ", ":inoremap jk <lt>Esc><CR>ijkx",
+                ":inoremap jk <lt>Esc><CR>ijxjk", ":inoremap jk <lt>Esc><CR>ajjkx",
+                ":imap jj <lt>Esc>x<CR>ijj", ":inoremap ( ()<lt>Left><CR>ifoo(bar<Esc>",
+                ":inoremap <lt>C-l> <lt>Right><CR>ia<C-l>b<Esc>", ":cnoremap QQ s/a/X/g<CR>:QQ<CR>",
+                ":map! QQ alpha<CR>iQQ<Esc>", ":nnoremap Q dw<CR>:normal Q<CR>",
+                ":nnoremap Q dw<CR>:normal! Q<CR>", ":nnoremap Q dw<CR>qaQjq@a",
+                ":nnoremap Q dw<CR>Q.", ":nnoremap Q dw<CR>Qu", ":nnoremap Q 2x<CR>Q.",
+                ":nnoremap Q xx<CR>Qu", ":nnoremap Q :s/e/E/<lt>CR><CR>Q",
+                ":nnoremap Q :s/e/E/<lt>CR>j<CR>QQ", ":nmap Q <lt>Plug>x<CR>Q",
+                ":iabbrev teh the<CR>oteh x<Esc>", ":iabbrev teh the<CR>osteh tehx teh.<Esc>",
+                ":iab ab alpha beta<CR>oab<CR>x<Esc>", ":iab ab alpha<CR>oab<C-]>x<Esc>",
+                ":iab ab alpha<CR>oab<Esc>", ":iab ab alpha<CR>:iuna ab<CR>oab <Esc>",
+                ":iab #i #include<CR>o#i <Esc>", ":cabbrev QQ s/a/X/<CR>:QQ<CR>"]),
+     (TAB, 0, 0, ["<C-v>jld", "<C-v>jly", "<C-v>jlyGp", "l<C-v>jlcX<Esc>", "l<C-v>jly$p",
+                  "l<C-v>jlrX", "l<C-v>jjr1", "l<C-v>jjy$p", "<C-v>jlp", "l<C-v>jd",
+                  "ll<C-v>jd", "<C-v>jIX<Esc>", "l<C-v>jjU", "l<C-v>jj~", "jl<C-v>jjd",
+                  "jl<C-v>jjy", "jl<C-v>jjrX", "jl<C-v>jjcX<Esc>", "jjjl<C-v>jd",
+                  "jjjl<C-v>jy", "jjjl<C-v>jr-", "jjjl<C-v>jc-<Esc>", "jjj<C-v>jld",
+                  "jjjjl<C-v>ly", "jjjjll<C-v>d", "jjjjll<C-v>ld", "jjjj$<C-v>hd",
+                  "l<C-v>jjd", "l<C-v>jjy", "lj", "lj<C-v>d", "jjjlj", "jjjlk",
+                  "ljx", "jjjjllkx", ":set ts=8<CR>l<C-v>jd", ":set ts=8<CR>jjjl<C-v>jd",
+                  ":set ts=2<CR>l<C-v>jjd", ":set noet<CR>l<C-v>jjy$p",
+                  "<C-v>jl>", "jl<C-v>jj>", "jjj<C-v>j>", "jjj<C-v>j<"]),
+     (W, 0, 4, ["v3ld3vd", "v3ld2vd", "vjld3vd", "vjld2vd", "Vd2Vd", "Vjd2Vd",
+                "<C-v>jld2<C-v>d", "<C-v>jjld3<C-v>d", "3vd", "3Vd", "3<C-v>d",
+                "v$d2vd", "vey2vd", "vey$2vd", "viwd3vd", "v2ld.", "v2ldj.",
+                "vjd.", "vjdj.", "vj$d.", "Vjd.", "<C-v>jld.", "<C-v>jldw.",
+                "<C-v>j$d.", "<C-v>jlcX<Esc>w.", "<C-v>jIX<Esc>w.", "<C-v>jAX<Esc>w.",
+                "v2l~w.", "vjUjj.", "v2lrxw.", "Vj>.", "v2ly3vd", "v2l<Esc>3vd",
+                "v2ly2vy$p", "vjyGvd", "v2ld2.", "v2ld3.", "<C-v>jld3.",
+                "Vjd3.", "V>3."]),
+     (P, 0, 2, ["3J", "jjjjjjj3J", "jjjjjjj$3J", "jjjjjjj2J", "jjjjjjjJ", "jjjjjj3J",
+                "3J.", "D", "jjD", "wDj.\"1p", "jjD\"1p", "ddu", "2ddu", "jddu",
+                "0ddu", "$ddu", "dju", "dku", "3ddu", "Vjdu", "ddjddu", "/\\Vo$<CR>",
+                "/\\Vo\\$<CR>", "/\\Vfour$<CR>", "/o$<CR>", "/\\vo$<CR>",
+                ":s/o/X/&&<CR>", ":s/o/X/g&<CR>"]),
+    ]
+    cases = []
+    for text, line, col, keys in groups:
+        for k in keys:
+            cases.append({"text": text, "line": line, "col": col, "keys": k,
+                          "remap": True})
+    return cases

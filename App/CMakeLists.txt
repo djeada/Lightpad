@@ -506,6 +506,8 @@ set(project_sources
     editor/vimmode_ex.cpp
     editor/vimmode_expr.cpp
     editor/vimmode_exextra.cpp
+    editor/vimmode_map.cpp
+    editor/vimmode_fold.cpp
     i18n/i18n.cpp
     python/pythonprojectenvironment.cpp
     lsp/lspclient.cpp
@@ -554,6 +556,7 @@ set(project_sources
     ui/mainwindow_git.cpp
     ui/mainwindow_theme.cpp
     ui/mainwindow_projecttree.cpp
+    ui/mainwindow_vim.cpp
     ui/popup.cpp
     ui/dialogs/preferences.cpp
     ui/dialogs/pythonenvironmentdialog.cpp

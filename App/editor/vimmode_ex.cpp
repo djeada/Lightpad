@@ -1,5 +1,7 @@
 #include "vimmode.h"
 
+#include <QDir>
+
 #include <QSet>
 #include <QTextBlock>
 #include <algorithm>
@@ -123,6 +125,11 @@ bool VimMode::parseExAddress(const QString &cmd, int &i, int curLine, int &line,
     }
   }
   qint64 target = line;
+  // Offsets in a second address count a closed fold as one line.
+  int foldEnd = 0;
+  if (found && m_exSecondAddress && i < n && (cmd[i] == '+' || cmd[i] == '-') &&
+      closedFoldAt(line, nullptr, &foldEnd))
+    target = foldEnd;
   while (found && i < n && (cmd[i] == '+' || cmd[i] == '-')) {
     const int sign = cmd[i] == '+' ? 1 : -1;
     ++i;
@@ -185,7 +192,10 @@ bool VimMode::parseExRange(const QString &cmd, int &i, int &line1, int &line2,
     ++i;
     int b = cur;
     bool found2 = false;
-    if (!parseExAddress(cmd, i, cur, b, found2, error))
+    m_exSecondAddress = true;
+    const bool parsed = parseExAddress(cmd, i, cur, b, found2, error);
+    m_exSecondAddress = false;
+    if (!parsed)
       return false;
     if (!found2)
       b = cur;
@@ -208,9 +218,9 @@ void VimMode::executeEx(const QString &command) {
   }
   DepthGuard depthGuard(m_exDepth);
   QString cmd = command;
-  while (cmd.startsWith(':') || cmd.startsWith(' '))
+  while (cmd.startsWith(':') || cmd.startsWith(' ') || cmd.startsWith('\t'))
     cmd = cmd.mid(1);
-  if (cmd.trimmed().isEmpty())
+  if (cmd.trimmed().isEmpty() || cmd.startsWith('"'))
     return;
 
   int i = 0;
@@ -246,7 +256,8 @@ void VimMode::executeEx(const QString &command) {
       name == "!" ||
       (!name.isEmpty() && afterName.startsWith('!') &&
        (QString("read").startsWith(name) || QString("write").startsWith(name)));
-  if (!barArgCommands.contains(name) && !shellCommand) {
+  if (!barArgCommands.contains(name) && !shellCommand &&
+      !name.startsWith("foldd")) {
     int scanFrom = i;
     if (!name.isEmpty() && QString("substitute").startsWith(name) &&
         i < cmd.size() && !cmd[i].isLetterOrNumber() && cmd[i] != '\\' &&
@@ -277,6 +288,28 @@ void VimMode::executeEx(const QString &command) {
     bang = true;
     ++i;
   }
+  // Commands that work on whole lines include closed folds completely.
+  if (m_globalMarks.isEmpty() && !name.isEmpty()) {
+    static const QList<QPair<QString, int>> wholeFold = {
+        {"delete", 1},     {"yank", 1},   {">", 1},        {"<", 1},
+        {"substitute", 1}, {"&", 1},      {"&&", 2},       {"~", 1},
+        {"join", 1},       {"move", 1},   {"copy", 2},     {"t", 1},
+        {"normal", 4},     {"fold", 2},   {"foldopen", 5}, {"foldclose", 5},
+        {"!", 1},          {"center", 2}, {"left", 2},     {"right", 2},
+        {"retab", 3},      {"sort", 3},   {"global", 1},   {"vglobal", 1},
+        {"print", 1},      {"number", 2}, {"#", 1},        {"=", 1}};
+    bool whole = hasRange && line1 != line2;
+    for (const auto &entry : wholeFold)
+      whole = whole ||
+              (name.size() >= entry.second && entry.first.startsWith(name));
+    if (whole) {
+      int s = 0, e = 0;
+      if (closedFoldAt(line1, &s, nullptr))
+        line1 = s;
+      if (closedFoldAt(line2, nullptr, &e))
+        line2 = e;
+    }
+  }
   if (line2 >= lineCount()) {
     if (!name.isEmpty()) {
       emit statusMessage("E16: Invalid range");
@@ -303,6 +336,9 @@ void VimMode::executeEx(const QString &command) {
     return;
   }
 
+  if (exMapCommand(name, rawArgs, bang))
+    return;
+
   auto countArg = [&](const QString &text, QChar *reg) {
     QString rest = text;
     if (reg && !rest.isEmpty() && !rest[0].isDigit() &&
@@ -325,6 +361,8 @@ void VimMode::executeEx(const QString &command) {
     QString output;
     runShell(afterName.mid(1), text, &output);
     emit statusMessage(output.trimmed().replace('\n', ' '));
+  } else if ((is("write", 1) || name == "w") && !args.isEmpty()) {
+    emit commandExecuted(QString("writeAs:%1").arg(expandFileName(args)));
   } else if (is("write", 1) || name == "w") {
     emit commandExecuted("save");
   } else if (is("wq", 2) || name == "x" || is("xit", 2) || is("exit", 3)) {
@@ -348,36 +386,63 @@ void VimMode::executeEx(const QString &command) {
     if (doc()->isModified())
       emit commandExecuted("save");
   } else if (is("saveas", 3)) {
-    emit commandExecuted("saveAs");
+    emit commandExecuted(args.isEmpty()
+                             ? QString("saveAs")
+                             : QString("saveAs:%1").arg(expandFileName(args)));
+  } else if ((is("edit", 1) || is("buffer", 1)) && args == "#") {
+    emit commandExecuted("alternateTab");
   } else if (is("edit", 1)) {
     if (!args.isEmpty())
-      emit commandExecuted(QString("edit:%1").arg(args));
+      emit commandExecuted(QString("edit:%1").arg(expandFileName(args)));
     else if (bang)
       emit commandExecuted("reload");
   } else if (is("enew", 3)) {
     emit commandExecuted("newFile");
-  } else if (is("tabedit", 4) || is("tabnew", 4)) {
-    emit commandExecuted(args.isEmpty() ? QString("newFile")
-                                        : QString("edit:%1").arg(args));
+  } else if (is("tabedit", 4) || is("tabnew", 6)) {
+    emit commandExecuted(args.isEmpty()
+                             ? QString("newFile")
+                             : QString("edit:%1").arg(expandFileName(args)));
   } else if (is("split", 2) || is("new", 3)) {
     emit commandExecuted("splitHorizontal");
     if (!args.isEmpty())
-      emit commandExecuted(QString("edit:%1").arg(args));
+      emit commandExecuted(QString("edit:%1").arg(expandFileName(args)));
   } else if (is("vsplit", 2) || is("vnew", 3)) {
     emit commandExecuted("splitVertical");
     if (!args.isEmpty())
-      emit commandExecuted(QString("edit:%1").arg(args));
+      emit commandExecuted(QString("edit:%1").arg(expandFileName(args)));
   } else if (is("close", 3)) {
     emit commandExecuted("closeSplit");
   } else if (is("only", 2)) {
     emit commandExecuted("unsplitAll");
+  } else if (is("tabnext", 4) && !args.isEmpty() && args[0].isDigit()) {
+    emit commandExecuted(QString("tab:%1").arg(args.toInt()));
   } else if (is("bnext", 2) || is("tabnext", 4)) {
-    emit commandExecuted("nextTab");
-    emit statusMessage("Next buffer");
+    const int times = qMax(1, args.toInt());
+    for (int i = 0; i < times; ++i)
+      emit commandExecuted("nextTab");
   } else if (is("bprevious", 2) || is("bNext", 2) || is("tabprevious", 4) ||
              is("tabNext", 4)) {
-    emit commandExecuted("prevTab");
-    emit statusMessage("Previous buffer");
+    const int times = qMax(1, args.toInt());
+    for (int i = 0; i < times; ++i)
+      emit commandExecuted("prevTab");
+  } else if (is("tabfirst", 4) || is("tabrewind", 4) || is("bfirst", 2) ||
+             is("brewind", 2)) {
+    emit commandExecuted("tab:1");
+  } else if (is("tablast", 4) || is("blast", 2)) {
+    emit commandExecuted("lastTab");
+  } else if (is("tabonly", 4)) {
+    emit commandExecuted("closeOtherTabs");
+  } else if (is("buffer", 1) && !args.isEmpty()) {
+    bool ok = false;
+    const int number = args.toInt(&ok);
+    emit commandExecuted(ok ? QString("tab:%1").arg(number)
+                            : QString("bufferName:%1").arg(args));
+  } else if (is("buffers", 7) || is("ls", 2) || is("files", 5)) {
+    emit commandExecuted("listBuffers");
+  } else if (is("jumps", 2)) {
+    exJumps();
+  } else if (is("changes", 7)) {
+    exChanges();
   } else if (is("bdelete", 2) || is("tabclose", 4)) {
     emit commandExecuted(bang ? "closeWithoutSaving" : "quit");
   } else if (is("nohlsearch", 3)) {
@@ -554,9 +619,18 @@ void VimMode::executeEx(const QString &command) {
                   amount);
     block.endEditBlock();
     setCursorPos(firstNonBlankPos(qMax(0, line2)));
+  } else if (is("fold", 2) || is("foldopen", 5) || is("foldclose", 5) ||
+             is("folddoopen", 5) || is("folddoclosed", 7)) {
+    exFoldCommand(name, args, qMax(0, line1), clampedLine2, hasRange, bang);
   } else if (is("normal", 4)) {
     exNormal(rawArgs.startsWith(' ') ? rawArgs.mid(1) : rawArgs, line1, line2,
-             hasRange);
+             hasRange, !bang);
+  } else if (is("source", 2)) {
+    QString error;
+    if (args.isEmpty())
+      emit statusMessage("E471: Argument required");
+    else if (!sourceFile(args, &error) || !error.isEmpty())
+      emit statusMessage(error);
   } else if (is("substitute", 1) || name == "&" || name == "&&" ||
              name == "~") {
     exSubstitute(rawArgs, qMax(0, line1), qMax(0, line2), hasRange, name);
@@ -824,6 +898,11 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
     }
     while (k < rest.size() && rest[k].isLetter())
       flags += rest[k++];
+    if (k < rest.size() && rest[k] == '&') {
+      emit statusMessage(
+          QString("E488: Trailing characters: %1").arg(rest.mid(k)));
+      return;
+    }
     countText = rest.mid(k).trimmed();
     if (pattern.isEmpty())
       pattern = m_searchPattern;
@@ -958,6 +1037,26 @@ void VimMode::exSubstitute(const QString &argsIn, int line1, int line2,
                            .arg(edits.size() == 1 ? "" : "es")
                            .arg(changedLines.size())
                            .arg(changedLines.size() == 1 ? "" : "s"));
+    return;
+  }
+
+  if (flags.contains('c')) {
+    if (!m_globalMarks.isEmpty()) {
+      emit statusMessage("E: the [c] flag is not supported inside :global");
+      return;
+    }
+    m_subEdits.clear();
+    for (const Edit &edit : edits)
+      m_subEdits.append({edit.start, edit.end, edit.replacement});
+    m_subIndex = 0;
+    m_subDelta = 0;
+    m_subAccepted = 0;
+    m_subLastStart = -1;
+    m_subEditOpen = false;
+    m_subLines.clear();
+    m_subConfirmActive = true;
+    setMark('\'', cursorPos());
+    showSubConfirmMatch();
     return;
   }
 
@@ -1163,8 +1262,8 @@ void VimMode::exSort(const QString &args, bool reverse, int line1, int line2) {
   setCursorPos(firstNonBlankPos(line1));
 }
 
-void VimMode::exNormal(const QString &args, int line1, int line2,
-                       bool hasRange) {
+void VimMode::exNormal(const QString &args, int line1, int line2, bool hasRange,
+                       bool remap) {
   QStringList tokens;
   for (QChar c : args)
     tokens << QString(c);
@@ -1183,8 +1282,10 @@ void VimMode::exNormal(const QString &args, int line1, int line2,
   const bool outerAbort = m_abortReplay;
   auto runOnce = [&]() {
     m_abortReplay = false;
-    replayTokens(tokens);
+    replayTokens(tokens, true, remap);
     resetPending();
+    if (m_subConfirmActive)
+      finishSubConfirm(true);
     if (m_mode == VimEditMode::Command) {
       m_incsearchOrigin = -1;
       handleKey("<Esc>", nullptr);
@@ -1220,6 +1321,11 @@ void VimMode::exSet(const QString &args) {
       {{"expandtab", "et"}, &m_expandTab},
       {{"autoindent", "ai"}, &m_autoIndent},
       {{"joinspaces", "js"}, &m_joinSpaces},
+      {{"timeout", "to"}, &m_timeout},
+      {{"number", "nu"}, &m_optNumber},
+      {{"wrap"}, &m_optWrap},
+      {{"list"}, &m_optList},
+      {{"cursorline", "cul"}, &m_optCursorLine},
   };
   struct IntOption {
     QStringList names;
@@ -1229,6 +1335,7 @@ void VimMode::exSet(const QString &args) {
       {{"tabstop", "ts"}, &m_tabStop},
       {{"shiftwidth", "sw"}, &m_shiftWidth},
       {{"textwidth", "tw"}, &m_textWidth},
+      {{"timeoutlen", "tm"}, &m_timeoutLen},
   };
 
   const QStringList words = args.split(' ', Qt::SkipEmptyParts);
@@ -1286,6 +1393,11 @@ void VimMode::exSet(const QString &args) {
             QString("%1%2").arg(*opt.value ? "" : "no", opt.names.first()));
       } else {
         *opt.value = toggle ? !*opt.value : setTo;
+        if (opt.value == &m_optNumber || opt.value == &m_optWrap ||
+            opt.value == &m_optList || opt.value == &m_optCursorLine)
+          emit commandExecuted(
+              QString("option:%1:%2")
+                  .arg(opt.names.first(), *opt.value ? "on" : "off"));
         if (opt.value == &m_hlSearch) {
           if (m_hlSearch)
             highlightSearch();
@@ -1394,4 +1506,151 @@ void VimMode::exMarks() {
   emit statusMessage(parts.isEmpty() ? QString("No marks set")
                                      : parts.join("   "));
   emit commandExecuted("showMarks");
+}
+
+void VimMode::showSubConfirmMatch() {
+  const SubEdit &edit = m_subEdits[m_subIndex];
+  const int start = edit.start + m_subDelta;
+  const int end = edit.end + m_subDelta;
+  QTextCursor c = m_editor->textCursor();
+  c.setPosition(qBound(0, start, docLength()));
+  m_editor->setTextCursor(c);
+  setCursorPos(clampNormal(start));
+  if (end > start) {
+    QTextCursor selection = m_editor->textCursor();
+    selection.setPosition(qBound(0, end, docLength()));
+    selection.setPosition(start, QTextCursor::KeepAnchor);
+    m_editor->setTextCursor(selection);
+  }
+  m_editor->ensureCursorVisible();
+  QString shown = edit.replacement;
+  shown.replace('\n', "^M");
+  emit statusMessage(QString("replace with %1 (y/n/a/q/l/^E/^Y)?").arg(shown));
+}
+
+void VimMode::applySubConfirmEdit() {
+  const SubEdit &edit = m_subEdits[m_subIndex];
+  const int start = edit.start + m_subDelta;
+  const int end = edit.end + m_subDelta;
+  QTextCursor c(doc());
+  if (m_subEditOpen) {
+    c.joinPreviousEditBlock();
+  } else {
+    c.beginEditBlock();
+    m_subEditOpen = true;
+  }
+  m_subLines.insert(lineOf(start));
+  replaceRange(start, end, edit.replacement);
+  c.endEditBlock();
+  m_subDelta += edit.replacement.size() - (edit.end - edit.start);
+  m_subLastStart = start;
+  ++m_subAccepted;
+}
+
+void VimMode::finishSubConfirm(bool atCurrent) {
+  int target = m_subLastStart;
+  if (atCurrent && m_subIndex < m_subEdits.size())
+    target = m_subEdits[m_subIndex].start + m_subDelta;
+  else if (target < 0 && !m_subEdits.isEmpty())
+    target = m_subEdits[qMin(m_subIndex, int(m_subEdits.size()) - 1)].start +
+             m_subDelta;
+  m_subConfirmActive = false;
+  m_subEdits.clear();
+  QTextCursor c = m_editor->textCursor();
+  c.clearSelection();
+  m_editor->setTextCursor(c);
+  setCursorPos(clampNormal(qBound(0, target, docLength())));
+  if (m_subAccepted > 0)
+    recordChangePosition(cursorPos());
+  emit statusMessage(m_subAccepted > 2 || m_subLines.size() > 2
+                         ? QString("%1 substitution%2 on %3 line%4")
+                               .arg(m_subAccepted)
+                               .arg(m_subAccepted == 1 ? "" : "s")
+                               .arg(m_subLines.size())
+                               .arg(m_subLines.size() == 1 ? "" : "s")
+                         : QString());
+  highlightSearch();
+}
+
+bool VimMode::handleSubConfirmKey(const QString &token) {
+  if (token == "<C-e>" || token == "<C-y>") {
+    scrollLines(token == "<C-e>" ? 1 : -1, false);
+    return true;
+  }
+  if (token == "q" || token == "<Esc>" || token == "<C-c>") {
+    finishSubConfirm(true);
+    return true;
+  }
+  if (token == "l") {
+    applySubConfirmEdit();
+    finishSubConfirm(false);
+    return true;
+  }
+  if (token == "a") {
+    while (m_subIndex < m_subEdits.size()) {
+      applySubConfirmEdit();
+      ++m_subIndex;
+    }
+    finishSubConfirm(false);
+    return true;
+  }
+  if (token != "y" && token != "n")
+    return true;
+  if (token == "y")
+    applySubConfirmEdit();
+  else
+    m_subLastStart = m_subEdits[m_subIndex].start + m_subDelta;
+  ++m_subIndex;
+  if (m_subIndex >= m_subEdits.size())
+    finishSubConfirm(false);
+  else
+    showSubConfirmMatch();
+  return true;
+}
+
+QString VimMode::expandFileName(const QString &name) const {
+  QString path = name.trimmed();
+  if (path.startsWith("$MYVIMRC"))
+    path = defaultVimrcPath() + path.mid(8);
+  if (path == "~" || path.startsWith("~/"))
+    path = QDir::homePath() + path.mid(1);
+  return path;
+}
+
+void VimMode::exJumps() {
+  QStringList parts;
+  for (int i = 0; i < m_jumpList.size(); ++i) {
+    const QTextCursor &c = m_jumpList[i];
+    if (c.isNull() || c.document() != doc())
+      continue;
+    const int distance = qAbs(m_jumpIndex - i);
+    parts << QString("%1%2 %3:%4 %5")
+                 .arg(i == m_jumpIndex ? ">" : " ")
+                 .arg(distance)
+                 .arg(c.blockNumber() + 1)
+                 .arg(c.positionInBlock())
+                 .arg(visibleText(c.block().text().trimmed()));
+  }
+  if (m_jumpIndex >= m_jumpList.size())
+    parts << ">";
+  emit statusMessage(parts.isEmpty() ? QString("No jumps") : parts.join("   "));
+}
+
+void VimMode::exChanges() {
+  QStringList parts;
+  for (int i = 0; i < m_changeList.size(); ++i) {
+    const QTextCursor &c = m_changeList[i];
+    if (c.isNull() || c.document() != doc())
+      continue;
+    parts << QString("%1%2 %3:%4 %5")
+                 .arg(i == m_changeIndex ? ">" : " ")
+                 .arg(qAbs(m_changeIndex - i))
+                 .arg(c.blockNumber() + 1)
+                 .arg(c.positionInBlock())
+                 .arg(visibleText(c.block().text().trimmed()));
+  }
+  if (m_changeIndex >= m_changeList.size())
+    parts << ">";
+  emit statusMessage(parts.isEmpty() ? QString("No changes")
+                                     : parts.join("   "));
 }

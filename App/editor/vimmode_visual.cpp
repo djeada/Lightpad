@@ -1,5 +1,7 @@
 #include "vimmode.h"
 
+#include <QSet>
+
 #include <QTextBlock>
 #include <memory>
 
@@ -16,6 +18,7 @@ void VimMode::startVisual(VimEditMode mode, int anchor, int pos) {
   m_visualAnchor = qBound(0, anchor, docLength());
   m_visualPos = qBound(0, pos, docLength());
   m_visualToEol = false;
+  m_blockStartOverride = m_blockEndOverride = -1;
   setMode(mode);
   updateVisualSelection();
 }
@@ -27,7 +30,7 @@ void VimMode::storeVisualMarks() {
     s = lineStart(lineOf(s));
     e = lineEndPos(lineOf(e));
   } else if (m_mode == VimEditMode::VisualBlock) {
-    Range r = blockRange(m_visualAnchor, m_visualPos, m_visualToEol);
+    Range r = visualRange();
     s = lineStart(r.startLine) + colForVcol(lineText(r.startLine), r.startVcol);
     e = lineStart(r.endLine) + colForVcol(lineText(r.endLine), r.endVcol);
   }
@@ -106,41 +109,48 @@ QVector<QPair<int, int>> VimMode::visualBlockRanges() const {
   return ranges;
 }
 
-QStringList VimMode::visualDotPrefix() const {
-  QString prefix;
-  Range r = visualRange();
-  int lines = r.endLine - r.startLine;
-  switch (m_mode) {
-  case VimEditMode::VisualLine:
-    prefix = "V";
-    if (lines > 0)
-      prefix += QString("%1j").arg(lines);
-    break;
-  case VimEditMode::VisualBlock:
-    prefix = "<C-v>";
-    if (lines > 0)
-      prefix += QString("%1j").arg(lines);
-    if (r.toEol)
-      prefix += "$";
-    else if (r.endVcol > r.startVcol)
-      prefix += QString("%1l").arg(r.endVcol - r.startVcol);
-    break;
-  default: {
-    prefix = "v";
-    int s = qMin(m_visualAnchor, m_visualPos);
-    int e = qMax(m_visualAnchor, m_visualPos);
-    if (lines > 0) {
-      prefix += QString("%1j0").arg(lines);
-      int col = colOf(e);
-      if (col > 0)
-        prefix += QString("%1l").arg(col);
-    } else if (e > s) {
-      prefix += QString("%1l").arg(e - s);
+// Vim repeats a Visual operation on an area of the same size at the cursor
+// (redo_VIsual) instead of replaying the movements that made the selection.
+QStringList VimMode::visualDotPrefix() {
+  measureVisual(m_redoVisualMode, m_redoVisualLines, m_redoVisualVcol);
+  return {"<VisualRedo>"};
+}
+
+void VimMode::startRedoVisual() {
+  const int pos = cursorPos();
+  const int line = lineOf(pos);
+  const int target = qMin(lineCount() - 1, line + m_redoVisualLines - 1);
+  const QString text = lineText(target);
+  // In Visual mode the cursor may sit just past the end of the line.
+  const int maxCol = text.size();
+  const VimEditMode mode = m_redoVisualMode;
+  if (mode == VimEditMode::VisualLine) {
+    startVisual(mode, pos, lineStart(target) + qMin(colOf(pos), maxCol));
+    return;
+  }
+  if (mode == VimEditMode::Visual) {
+    int endPos;
+    if (m_redoVisualVcol < 0) {
+      endPos = lineStart(target) + text.size();
+    } else {
+      const int want = m_redoVisualLines <= 1
+                           ? wantColFor(line, colOf(pos)) + m_redoVisualVcol - 1
+                           : m_redoVisualVcol;
+      endPos = lineStart(target) + qMin(colForVcol(text, want), maxCol);
     }
-    break;
+    startVisual(mode, pos, endPos);
+    m_wantEol = m_redoVisualVcol < 0;
+    return;
   }
-  }
-  return parseKeyNotation(prefix);
+  const int startVcol = vcolOf(lineText(line), colOf(pos));
+  const int endVcol =
+      m_redoVisualVcol < 0 ? startVcol : startVcol + m_redoVisualVcol - 1;
+  startVisual(mode, pos,
+              lineStart(target) + qMin(colForVcol(text, endVcol), maxCol));
+  m_visualToEol = m_redoVisualVcol < 0;
+  m_blockStartOverride = startVcol;
+  m_blockEndOverride = endVcol;
+  updateVisualSelection();
 }
 
 bool VimMode::handleVisualKey(const QString &token) {
@@ -191,12 +201,100 @@ bool VimMode::handleVisualKey(const QString &token) {
   return true;
 }
 
+// The size of the Visual area the way Vim stores it for reselecting and
+// repeating: the line count and either a width (one line or a block) or
+// the end column; -1 stands for "up to the end of the line".
+void VimMode::measureVisual(VimEditMode &mode, int &lines, int &vcol) const {
+  const Range r = visualRange();
+  mode = m_mode;
+  lines = r.endLine - r.startLine + 1;
+  if (m_visualToEol || (m_mode != VimEditMode::VisualBlock && m_wantEol)) {
+    vcol = -1;
+  } else if (m_mode == VimEditMode::VisualBlock) {
+    vcol = r.endVcol - r.startVcol + 1;
+  } else {
+    const int s = qMin(m_visualAnchor, m_visualPos);
+    const int e = qMax(m_visualAnchor, m_visualPos);
+    const QString endText = lineText(lineOf(e));
+    const int endCol = colOf(e);
+    // The last screen column of the end character (a Tab spans several).
+    const int endVcol = endCol < endText.size()
+                            ? vcolOf(endText, endCol + 1) - 1
+                            : vcolOf(endText, endCol);
+    vcol = lines <= 1 ? endVcol - vcolOf(lineText(lineOf(s)), colOf(s)) + 1
+                      : endVcol;
+  }
+}
+
+// Remember the size of the area an operator is applied to, which is what
+// "[count]v" reselects (Vim's resel_VIsual_*).
+void VimMode::rememberVisualSize() {
+  m_haveResel = true;
+  measureVisual(m_reselMode, m_reselLines, m_reselVcol);
+}
+
+void VimMode::startCountedVisual(VimEditMode mode, int count) {
+  const int pos = cursorPos();
+  const int line = lineOf(pos);
+  const int last = lineCount() - 1;
+  if (m_haveResel) {
+    mode = m_reselMode;
+    int target = line;
+    if (mode != VimEditMode::Visual || m_reselLines > 1)
+      target = qMin(last, line + m_reselLines * count - 1);
+    const QString text = lineText(target);
+    // Like coladvance() in Visual mode, the end may be just past the line.
+    const int maxCol = text.size();
+    int col = colOf(pos);
+    if (m_reselVcol < 0) {
+      col = qMax(0, maxCol - 1);
+    } else if (mode == VimEditMode::Visual) {
+      const int want = m_reselLines <= 1 ? vcolOf(lineText(line), colOf(pos)) +
+                                               m_reselVcol * count - 1
+                                         : m_reselVcol;
+      col = qMin(colForVcol(text, want), maxCol);
+    } else if (mode == VimEditMode::VisualBlock) {
+      const int want =
+          vcolOf(lineText(line), colOf(pos)) + m_reselVcol * count - 1;
+      col = qMin(colForVcol(text, want), maxCol);
+    } else {
+      col = qMin(colForVcol(text, m_wantCol), maxCol);
+    }
+    startVisual(mode, pos, lineStart(target) + col);
+    if (m_reselVcol < 0) {
+      m_wantEol = true;
+      if (mode == VimEditMode::VisualBlock)
+        m_visualToEol = true;
+      if (mode == VimEditMode::Visual)
+        m_visualPos = lineStart(target) + text.size();
+      updateVisualSelection();
+    }
+    return;
+  }
+  int target = pos;
+  if (mode == VimEditMode::VisualLine)
+    target =
+        lineStart(qMin(last, line + count - 1)) +
+        qMin(colOf(pos), qMax(0, lineLength(qMin(last, line + count - 1)) - 1));
+  else
+    target = lineStart(line) +
+             qMin(colOf(pos) + count - 1, qMax(0, lineLength(line) - 1));
+  startVisual(mode, pos, target);
+}
+
 void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
   NormalCmd cmd = cmdIn;
   if (m_dotCountOverride > 0) {
     m_dotCountOverride = 0;
   }
   const QString &key = cmd.key;
+  static const QSet<QString> operators = {
+      "d", "x", "<Del>", "X",  "D",     "y",     "Y",      "c",     "s",
+      "C", "S", "R",     "J",  "gJ",    ">",     "<",      "=",     "~",
+      "u", "U", "g~",    "gu", "gU",    "g?",    "gq",     "gw",    "r",
+      "I", "A", "!",     "zf", "<C-a>", "<C-x>", "g<C-a>", "g<C-x>"};
+  if (cmd.textObject.isEmpty() && operators.contains(key))
+    rememberVisualSize();
   const int count = cmd.count;
   const int c1 = qMax(1, count);
 
@@ -247,11 +345,12 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
       pushJump(m_visualPos);
     int target = r.pos;
     m_visualPos = target;
+    m_blockStartOverride = m_blockEndOverride = -1;
     if (m_mode == VimEditMode::VisualBlock)
       m_visualToEol = r.wantEol || (r.keepWantCol && m_visualToEol);
     if (!r.keepWantCol) {
       int line = lineOf(target);
-      m_wantCol = vcolOf(lineText(line), target - lineStart(line));
+      m_wantCol = wantColFor(line, target - lineStart(line));
       m_wantEol = r.wantEol;
     }
     updateVisualSelection();
@@ -310,7 +409,7 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
   }
   if (key == "gn" || key == "gN") {
     int s = 0, e = 0;
-    if (selectSearchMatch(key == "gn", s, e)) {
+    if (selectSearchMatch(key == "gn", s, e, true)) {
       m_visualPos = key == "gn" ? e : s;
       updateVisualSelection();
     }
@@ -376,8 +475,8 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
       m_blockInsertVcol = range.startVcol;
       m_blockInsertStartVcol = range.startVcol;
       const QString text = lineText(range.startLine);
-      setCursorPos(lineStart(range.startLine) +
-                   colForVcol(text, range.startVcol));
+      m_blockInsertCol = colForVcol(text, range.startVcol);
+      setCursorPos(lineStart(range.startLine) + m_blockInsertCol);
       m_blockInsertLineLength = lineLength(range.startLine);
       startInsertSession(1, "c", dotKeys);
       return;
@@ -395,13 +494,12 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
     block.beginEditBlock();
     if (range.type == VimRegisterType::Blockwise) {
       for (int l = range.startLine; l <= range.endLine; ++l) {
-        const QString text = lineText(l);
-        int from = colForVcol(text, range.startVcol);
-        int to =
-            range.toEol ? text.size() : colForVcol(text, range.endVcol + 1);
-        if (to > from)
-          replaceRange(lineStart(l) + from, lineStart(l) + to,
-                       QString(to - from, cmd.arg));
+        const BlockSpan span = blockSpan(lineText(l), range);
+        if (span.isShort || span.to <= span.from)
+          continue;
+        replaceRange(lineStart(l) + span.from, lineStart(l) + span.to,
+                     QString(span.before, ' ') + QString(span.inside, cmd.arg) +
+                         QString(span.after, ' '));
       }
       setCursorPos(lineStart(range.startLine) +
                    colForVcol(lineText(range.startLine), range.startVcol));
@@ -496,13 +594,17 @@ void VimMode::executeVisual(const NormalCmd &cmdIn, const QStringList &keys) {
             : range.start));
     finishChange();
   } else if (key == "zf") {
-    exitVisual();
-    emit commandExecuted("fold");
+    const Range r = visualRange();
+    exitVisual(false);
+    createFold(r.startLine, r.endLine);
+    setCursorPos(clampNormal(
+        lineStart(r.startLine) +
+        (m_lastVisualMode == VimEditMode::VisualLine ? 0 : colOf(r.start))));
   }
 }
 
 void VimMode::blockInsert(bool append) {
-  Range r = blockRange(m_visualAnchor, m_visualPos, m_visualToEol);
+  Range r = visualRange();
   QStringList dotKeys = visualDotPrefix();
   dotKeys << (append ? "A" : "I");
   exitVisual(false);
@@ -521,6 +623,9 @@ void VimMode::blockInsert(bool append) {
     col = text.size();
   } else {
     col = colForVcol(text, m_blockInsertVcol);
+    // Appending after a Tab cut by the block edge goes after the Tab.
+    if (append && !blockSpan(text, r).isShort)
+      col = blockSpan(text, r).to;
     int lineVcol = vcolOf(text, text.size());
     if (append && lineVcol < m_blockInsertVcol) {
       QTextCursor b(doc());
@@ -535,6 +640,7 @@ void VimMode::blockInsert(bool append) {
   QTextCursor c = m_editor->textCursor();
   c.setPosition(lineStart(r.startLine) + col);
   m_editor->setTextCursor(c);
+  m_blockInsertCol = col;
   m_blockInsertLineLength = lineLength(r.startLine);
   startInsertSession(1, append ? "blockA" : "blockI", dotKeys);
 }
@@ -709,13 +815,21 @@ bool VimMode::handleInsertKey(const QString &token, QKeyEvent *event) {
 
   static const QStringList handledCtrl = {
       "<C-w>", "<C-u>", "<C-h>", "<C-t>", "<C-d>", "<C-r>", "<C-v>",
-      "<C-q>", "<C-o>", "<C-e>", "<C-y>", "<C-a>", "<C-c>"};
+      "<C-q>", "<C-o>", "<C-e>", "<C-y>", "<C-a>", "<C-c>", "<C-]>"};
   const bool editKey =
       token.size() == 1 || token == "<CR>" || token == "<BS>" ||
       token == "<Del>" || token == "<Tab>" || token == "<S-Tab>" ||
       token == "<Esc>" || token == "<Insert>" || handledCtrl.contains(token);
   if (!editKey)
     return false;
+
+  if (!m_insertRepeating &&
+      (token == "<C-]>" || token == "<CR>" || token == "<Esc>" ||
+       token == "<Tab>" ||
+       (token.size() == 1 && !token[0].isLetterOrNumber() && token[0] != '_')))
+    expandAbbreviation('i');
+  if (token == "<C-]>")
+    return true;
 
   if (!m_insertRepeating) {
     m_insertKeys << token;
@@ -899,9 +1013,8 @@ void VimMode::finishInsertSession() {
     const int grown = lineLength(first) - m_blockInsertLineLength;
     if (lineOf(cur) == first && grown > 0 && m_blockInsertLastLine > first) {
       const QString firstText = lineText(first);
-      int insertCol = m_blockInsertToEol
-                          ? m_blockInsertLineLength
-                          : colForVcol(firstText, m_blockInsertVcol);
+      int insertCol =
+          m_blockInsertToEol ? m_blockInsertLineLength : m_blockInsertCol;
       if (m_blockInsertToEol)
         insertCol = m_blockInsertLineLength;
       const QString inserted = firstText.mid(insertCol, grown);
@@ -922,6 +1035,28 @@ void VimMode::finishInsertSession() {
           continue;
         }
         int col = colForVcol(text, m_blockInsertVcol);
+        if (!m_blockInsertAppend) {
+          // Inserting inside a Tab splits it into spaces around the text.
+          Range block;
+          block.startVcol = block.endVcol = m_blockInsertVcol;
+          const BlockSpan span = blockSpan(text, block);
+          if (!span.isShort && span.before > 0) {
+            const int width =
+                vcolOf(text, span.from + 1) - vcolOf(text, span.from);
+            replaceRange(lineStart(l) + span.from, lineStart(l) + span.from + 1,
+                         QString(span.before, ' ') + inserted +
+                             QString(width - span.before, ' '));
+            continue;
+          }
+        }
+        if (m_blockInsertAppend) {
+          Range block;
+          block.startVcol = m_blockInsertStartVcol;
+          block.endVcol = m_blockInsertVcol - 1;
+          const BlockSpan span = blockSpan(text, block);
+          if (!span.isShort)
+            col = span.to;
+        }
         replaceRange(lineStart(l) + col, lineStart(l) + col, inserted);
       }
       c.endEditBlock();

@@ -47,13 +47,25 @@ void VimMode::applyOperator(const QString &op, const Range &range, QChar reg,
     enterCommandLine(':', prompt + "!");
     return;
   }
+  if (op == "zf") {
+    createFold(range.startLine, range.endLine);
+    if (!fromVisual)
+      setCursorPos(clampNormal(m_opCursor >= 0 ? m_opCursor : range.start));
+    return;
+  }
   if (op != "y") {
     int undoPos = range.start;
-    if (range.type == VimRegisterType::Linewise)
-      undoPos =
-          -2 - colOf(qMax(0, m_undoCursors.value(doc()->availableUndoSteps(),
-                                                 cursorPos())));
-    else if (range.type == VimRegisterType::Blockwise)
+    if (range.type == VimRegisterType::Linewise && fromVisual) {
+      undoPos = lineStart(range.startLine);
+    } else if (range.type == VimRegisterType::Linewise) {
+      const int before = qMax(
+          0, m_undoCursors.value(doc()->availableUndoSteps(), cursorPos()));
+      // Undoing a multi-line delete puts the cursor back where it was; a
+      // single line only keeps the column up to its indent.
+      undoPos = op == "d" && range.endLine > range.startLine
+                    ? before
+                    : -2 - colOf(before);
+    } else if (range.type == VimRegisterType::Blockwise)
       undoPos = lineStart(range.startLine) +
                 colForVcol(lineText(range.startLine), range.startVcol);
     m_undoCursors[doc()->availableUndoSteps()] = undoPos;
@@ -81,6 +93,15 @@ void VimMode::applyOperator(const QString &op, const Range &range, QChar reg,
                            ? lineStart(range.startLine)
                            : range.start;
   setMark('[', startPos);
+  if (op == "gq" || op == "gw") {
+    // '[ is where the operator started, '] the indent of the last
+    // formatted line.
+    if (m_opCursor >= 0 && !fromVisual)
+      setMark('[', m_opCursor);
+    setMark(']', firstNonBlankPos(m_formatEndLine));
+    recordChangePosition(cursorPos());
+    return;
+  }
   if (op == "y") {
     setMark(']',
             qMax(startPos, range.exclusiveEnd ? range.end : range.end - 1));
@@ -118,11 +139,22 @@ void VimMode::operatorDelete(const Range &range, QChar reg, bool change,
     const int lines = el - sl + 1;
     if (lines > 2)
       emit statusMessage(QString("%1 fewer lines").arg(lines));
-    setCursorPos(firstNonBlankPos(qMin(sl, lineCount() - 1)));
+    int target = sl;
+    // Past the end, a closed fold on the last line takes the cursor to its
+    // first line.
+    if (target > lineCount() - 1) {
+      target = lineCount() - 1;
+      int foldStart = 0;
+      if (closedFoldAt(target, &foldStart, nullptr))
+        target = foldStart;
+    }
+    setCursorPos(firstNonBlankPos(target));
     return;
   }
   case VimRegisterType::Charwise: {
-    storeDeleted(reg, text, VimRegisterType::Charwise, forceNumbered);
+    // Deleting nothing (D on an empty line) leaves the registers alone.
+    if (!text.isEmpty())
+      storeDeleted(reg, text, VimRegisterType::Charwise, forceNumbered);
     const int firstLine = lineOf(range.start);
     const int lastLine = lineOf(range.end);
     if (lastLine > firstLine) {
@@ -140,17 +172,22 @@ void VimMode::operatorDelete(const Range &range, QChar reg, bool change,
     return;
   }
   case VimRegisterType::Blockwise: {
+    m_nextBlockWidth = range.toEol ? -1 : range.endVcol - range.startVcol + 1;
     storeDeleted(reg, text, VimRegisterType::Blockwise, true);
+    m_nextBlockWidth = -1;
+    int startCol = -1;
     for (int l = range.endLine; l >= range.startLine; --l) {
-      const QString lt = lineText(l);
-      int from = colForVcol(lt, range.startVcol);
-      int to = range.toEol ? lt.size() : colForVcol(lt, range.endVcol + 1);
-      if (from < lt.size() && to > from)
-        replaceRange(lineStart(l) + from, lineStart(l) + qMin(to, lt.size()),
-                     QString());
+      const BlockSpan span = blockSpan(lineText(l), range);
+      if (l == range.startLine)
+        startCol = span.from + span.before;
+      if (span.isShort || span.to <= span.from)
+        continue;
+      // A Tab cut by the block edge leaves its remaining columns as spaces.
+      replaceRange(lineStart(l) + span.from, lineStart(l) + span.to,
+                   QString(span.before + span.after, ' '));
     }
     int pos = lineStart(range.startLine) +
-              colForVcol(lineText(range.startLine), range.startVcol);
+              qMin(startCol, lineLength(range.startLine));
     if (change) {
       QTextCursor c = m_editor->textCursor();
       c.setPosition(pos);
@@ -165,7 +202,10 @@ void VimMode::operatorDelete(const Range &range, QChar reg, bool change,
 
 void VimMode::operatorYank(const Range &range, QChar reg, bool moveCursor) {
   const QString text = rangeText(range);
+  if (range.type == VimRegisterType::Blockwise && !range.toEol)
+    m_nextBlockWidth = range.endVcol - range.startVcol + 1;
   storeYanked(reg, text, range.type);
+  m_nextBlockWidth = -1;
   const int lines = range.endLine - range.startLine + 1;
   if (lines > 2 && range.type != VimRegisterType::Charwise)
     emit statusMessage(QString("%1 lines yanked").arg(lines));
@@ -454,6 +494,7 @@ void VimMode::operatorFormat(const Range &range, bool keepCursor) {
     lastLine += delta;
     l = l + out.size();
   }
+  m_formatEndLine = qMin(lastLine, lineCount() - 1);
   if (keepCursor && savedNonBlank >= 0) {
     int p = lineStart(range.startLine);
     int seen = 0;
@@ -490,8 +531,12 @@ void VimMode::put(QChar reg, int count, bool after, bool moveAfter,
     return;
   }
   const int pos = cursorPos();
-  const int line = lineOf(pos);
+  int line = lineOf(pos);
   if (r.linewise) {
+    // Lines go below (or above) a closed fold as a whole.
+    int foldStart = 0, foldEnd = 0;
+    if (closedFoldAt(line, &foldStart, &foldEnd))
+      line = after ? foldEnd : foldStart;
     QString content = r.content;
     if (!content.endsWith('\n'))
       content += '\n';
@@ -579,6 +624,8 @@ void VimMode::putBlock(const VimRegister &r, int count, bool after,
   int width = 0;
   for (const QString &p : parts)
     width = qMax(width, vcolOf(p, p.size()));
+  if (r.blockWidth >= 0)
+    width = r.blockWidth;
   if (exceedsRepeatLimit(qint64(width + 1) * parts.size(), count))
     return;
   const int pos = cursorPos();
@@ -601,7 +648,8 @@ void VimMode::putBlock(const VimRegister &r, int count, bool after,
     for (int k = 0; k < count; ++k) {
       piece += parts[i];
       if (k + 1 < count || !atEnd)
-        piece += QString(width - vcolOf(parts[i], parts[i].size()), ' ');
+        piece +=
+            QString(qMax(0, width - vcolOf(parts[i], parts[i].size())), ' ');
     }
     int insertCol;
     if (lineVcol < vcol) {
@@ -949,6 +997,7 @@ void VimMode::undo(int count) {
     setMark('[', lineStart(markLine));
     setMark(']', lineStart(markLine));
   }
+  openFoldsForCursor();
 }
 
 void VimMode::redo(int count) {
@@ -976,4 +1025,5 @@ void VimMode::redo(int count) {
   c.setPosition(clampNormal(target));
   m_editor->setTextCursor(c);
   setCursorPos(c.position());
+  openFoldsForCursor();
 }

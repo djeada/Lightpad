@@ -8,11 +8,14 @@
 #include <QPair>
 #include <QPlainTextEdit>
 #include <QRegularExpression>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QTextCursor>
 #include <QVector>
 #include <memory>
+
+class QTimer;
 
 enum class VimEditMode {
   Normal,
@@ -30,6 +33,7 @@ struct VimRegister {
   QString content;
   bool linewise = false;
   bool blockwise = false;
+  int blockWidth = -1;
 };
 
 class VimMode : public QObject {
@@ -77,6 +81,11 @@ public:
   bool shouldOverrideShortcut(QKeyEvent *event) const;
 
   void feedKeys(const QString &keys);
+  void executeCommand(const QString &command);
+  bool sourceFile(const QString &path, QString *error = nullptr);
+  static QString defaultVimrcPath();
+  void loadUserConfig();
+  static void clearAllMappings();
 
   QVector<QPair<int, int>> visualBlockRanges() const;
 
@@ -139,6 +148,55 @@ private:
     int col = 0;
   };
 
+  struct VimFold {
+    QTextCursor start;
+    QTextCursor end;
+    bool closed = true;
+  };
+
+  void normalizeFolds();
+  QList<int> foldsContaining(int line) const;
+  bool vimFoldClosedAt(int line, int *start, int *end) const;
+  bool closedFoldAt(int line, int *start, int *end) const;
+  int foldLinesDown(int line, int count, bool *ok = nullptr) const;
+  int foldLinesUp(int line, int count, bool *ok = nullptr) const;
+  void createFold(int first, int last);
+  void applyFoldDisplay();
+  void forgetFolds(int first, int last);
+  void openFoldsAt(int line, bool recursive, int count);
+  void closeFoldsAt(int line, bool recursive, int count);
+  void setFoldLevel(int level);
+  int maxFoldDepth() const;
+  bool executeFoldCommand(const QString &key, int count);
+  void exFoldCommand(const QString &name, const QString &args, int line1,
+                     int line2, bool hasRange, bool bang);
+  void openFoldsForCursor();
+
+  struct SubEdit {
+    int start = 0;
+    int end = 0;
+    QString replacement;
+  };
+  bool handleSubConfirmKey(const QString &token);
+  void showSubConfirmMatch();
+  void applySubConfirmEdit();
+  void finishSubConfirm(bool atCurrent);
+
+  struct TypeaheadKey {
+    QString token;
+    bool remap = true;
+    QKeyEvent *event = nullptr;
+    bool fromMap = false;
+  };
+
+  bool inputKey(const QString &token, QKeyEvent *event, bool remap);
+  bool dispatchKey(const QString &token, QKeyEvent *event);
+  void processTypeahead(bool timedOut);
+  void flushTypeahead();
+  QChar currentMapMode() const;
+  bool awaitingCharArgument() const;
+  bool exMapCommand(const QString &name, const QString &args, bool bang);
+  bool expandAbbreviation(QChar mode);
   bool handleKey(const QString &token, QKeyEvent *event);
   bool handleNormalKey(const QString &token);
   bool handleVisualKey(const QString &token);
@@ -155,7 +213,9 @@ private:
   static bool isTextObjectChar(const QString &key);
   static bool isMotionCommand(const QString &key);
   static bool tokenToArg(const QString &token, QChar &arg, bool allowNewline);
-  QStringList visualDotPrefix() const;
+  QStringList visualDotPrefix();
+  void startRedoVisual();
+  void measureVisual(VimEditMode &mode, int &lines, int &vcol) const;
 
   void executeNormal(const NormalCmd &cmd, const QStringList &keys);
   void executeVisual(const NormalCmd &cmd, const QStringList &keys);
@@ -178,6 +238,17 @@ private:
   void operatorReindent(const Range &range);
   void operatorFormat(const Range &range, bool keepCursor);
 
+  struct BlockSpan {
+    int from = 0;
+    int to = 0;
+    int before = 0;
+    int after = 0;
+    int inside = 0;
+    bool isShort = true;
+  };
+  BlockSpan blockSpan(const QString &text, const Range &range) const;
+  QString blockPart(const QString &text, const Range &range) const;
+  int wantColFor(int line, int col) const;
   QString rangeText(const Range &range) const;
   Range lineRange(int firstLine, int lastLine) const;
   Range charRange(int start, int endExclusive) const;
@@ -219,7 +290,8 @@ private:
                             MotionType &type);
   bool selectTagObject(int count, bool around, int &start, int &end,
                        MotionType &type);
-  bool selectSearchMatch(bool forward, int &start, int &end);
+  bool selectSearchMatch(bool forward, int &start, int &end,
+                         bool extend = false);
 
   void enterInsert(const QString &how, int count, const QStringList &keys);
   void startInsertSession(int count, const QString &kind,
@@ -243,6 +315,8 @@ private:
   void redo(int count);
 
   void startVisual(VimEditMode mode, int anchor, int pos);
+  void startCountedVisual(VimEditMode mode, int count);
+  void rememberVisualSize();
   void exitVisual(bool keepCursor = true);
   void updateVisualSelection();
   void storeVisualMarks();
@@ -278,9 +352,13 @@ private:
   void exGlobal(const QString &args, int line1, int line2, bool hasRange,
                 bool invert);
   void exSort(const QString &args, bool reverse, int line1, int line2);
-  void exNormal(const QString &args, int line1, int line2, bool hasRange);
+  void exNormal(const QString &args, int line1, int line2, bool hasRange,
+                bool remap = true);
   void exSet(const QString &args);
   void exRegisters();
+  void exJumps();
+  void exChanges();
+  QString expandFileName(const QString &name) const;
   void exMarks();
   QString expandReplacement(const QString &replacement,
                             const QRegularExpressionMatch &match);
@@ -317,7 +395,8 @@ private:
   void startMacroRecording(QChar reg);
   void stopMacroRecording();
   void playMacro(QChar reg, int count);
-  void replayTokens(const QStringList &tokens, bool stopOnFailure = true);
+  void replayTokens(const QStringList &tokens, bool stopOnFailure = true,
+                    bool remap = false);
   void failCommand();
   void repeatLastChange(int count);
   void setDotCommand(const QStringList &keys);
@@ -364,6 +443,37 @@ private:
   VimEditMode m_mode = VimEditMode::Normal;
 
   QStringList m_pending;
+  QList<TypeaheadKey> m_typeahead;
+  QTimer *m_mapTimer = nullptr;
+  int m_mapDepth = 0;
+  QKeyEvent *m_unhandledEvent = nullptr;
+  bool m_expandingAbbreviation = false;
+  int m_sourceDepth = 0;
+  bool m_subConfirmActive = false;
+  QVector<SubEdit> m_subEdits;
+  int m_subIndex = 0;
+  int m_subDelta = 0;
+  int m_subAccepted = 0;
+  int m_subLastStart = -1;
+  bool m_subEditOpen = false;
+  QSet<int> m_subLines;
+  bool m_userConfigLoaded = false;
+  bool m_haveResel = false;
+  VimEditMode m_reselMode = VimEditMode::Visual;
+  int m_reselLines = 1;
+  int m_reselVcol = 1;
+  int m_nextBlockWidth = -1;
+  int m_formatEndLine = 0;
+  bool m_exSecondAddress = false;
+  VimEditMode m_redoVisualMode = VimEditMode::Visual;
+  int m_redoVisualLines = 1;
+  int m_redoVisualVcol = 1;
+  int m_blockStartOverride = -1;
+  int m_blockEndOverride = -1;
+  QList<VimFold> m_folds;
+  QList<QTextCursor> m_foldHidden;
+  bool m_foldEnable = true;
+  int m_foldLevel = 0;
   bool m_passthrough = false;
   int m_replayDepth = 0;
   bool m_abortReplay = false;
@@ -406,6 +516,7 @@ private:
   int m_blockInsertLastLine = 0;
   int m_blockInsertVcol = 0;
   int m_blockInsertLineLength = 0;
+  int m_blockInsertCol = 0;
 
   int m_visualAnchor = 0;
   int m_visualPos = 0;
@@ -481,6 +592,12 @@ private:
   bool m_autoIndent = false;
   int m_textWidth = 0;
   QString m_nrFormats = "bin,hex";
+  bool m_timeout = true;
+  bool m_optNumber = true;
+  bool m_optWrap = false;
+  bool m_optList = false;
+  bool m_optCursorLine = true;
+  int m_timeoutLen = 1000;
 
   mutable const QTextDocument *m_lineCacheDoc = nullptr;
   mutable int m_lineCacheLine = -1;

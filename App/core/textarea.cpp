@@ -884,6 +884,27 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
       keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Up ||
       keyEvent->key() == Qt::Key_Down || keyEvent->key() == Qt::Key_PageUp ||
       keyEvent->key() == Qt::Key_PageDown;
+  const bool vimInsert = m_vimMode && m_vimMode->isEnabled() &&
+                         (m_vimMode->mode() == VimEditMode::Insert ||
+                          m_vimMode->mode() == VimEditMode::Replace);
+  // Vim's Insert-mode CTRL-N / CTRL-P: open the completion popup, or move
+  // through it when it is already showing.
+  if (vimInsert && keyEvent->modifiers() == Qt::ControlModifier &&
+      (keyEvent->key() == Qt::Key_N || keyEvent->key() == Qt::Key_P)) {
+    const bool next = keyEvent->key() == Qt::Key_N;
+    if (m_completionWidget && m_completionWidget->isVisible()) {
+      if (next)
+        m_completionWidget->selectNext();
+      else
+        m_completionWidget->selectPrevious();
+    } else {
+      triggerCompletion();
+    }
+    return;
+  }
+  if (vimInsert && completionPopupVisible &&
+      keyEvent->key() == Qt::Key_Escape)
+    hideCompletionPopup();
   if (m_vimMode && m_vimMode->isEnabled() &&
       !(completionPopupVisible && completionKey &&
         m_vimMode->mode() == VimEditMode::Insert)) {
@@ -2554,6 +2575,49 @@ void TextArea::paintEvent(QPaintEvent *event) {
     }
   }
 
+  // A closed fold (Vim's or the editor's own) shows how many lines it hides
+  // after its first line.
+  {
+    QPainter painter(viewport());
+    const QFontMetrics fm(mainFont);
+    QTextBlock block = firstVisibleBlock();
+    while (block.isValid()) {
+      const QRectF rect =
+          blockBoundingGeometry(block).translated(contentOffset());
+      if (rect.top() > event->rect().bottom())
+        break;
+      QTextBlock next = block.next();
+      int hidden = 0;
+      while (next.isValid() && !next.isVisible()) {
+        ++hidden;
+        next = next.next();
+      }
+      if (hidden > 0 && block.isVisible()) {
+        QTextCursor end(block);
+        end.movePosition(QTextCursor::EndOfBlock);
+        const QRect endRect = cursorRect(end);
+        const QString label = hidden == 1
+                                  ? tr("\u22ef 1 more line")
+                                  : tr("\u22ef %1 more lines").arg(hidden);
+        const int padding = fm.horizontalAdvance(' ');
+        const QRect box(endRect.right() + 2 * padding, endRect.top() + 1,
+                        fm.horizontalAdvance(label) + 2 * padding,
+                        endRect.height() - 2);
+        QColor text = palette().color(QPalette::Text);
+        QColor fill = text;
+        fill.setAlpha(32);
+        text.setAlpha(170);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(fill);
+        painter.drawRoundedRect(box, 3, 3);
+        painter.setPen(text);
+        painter.setFont(mainFont);
+        painter.drawText(box, Qt::AlignCenter, label);
+      }
+      block = next;
+    }
+  }
+
   if (m_showWhitespace) {
     QPainter painter(viewport());
     painter.setPen(QPen(QColor(128, 128, 128, 80), 1));
@@ -2988,6 +3052,8 @@ bool TextArea::showIndentGuides() const { return m_showIndentGuides; }
 void TextArea::setVimModeEnabled(bool enabled) {
   if (m_vimMode) {
     m_vimMode->setEnabled(enabled);
+    if (enabled)
+      m_vimMode->loadUserConfig();
   }
 }
 

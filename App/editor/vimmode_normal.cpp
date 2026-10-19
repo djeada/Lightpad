@@ -46,7 +46,10 @@ const QSet<QString> &normalCommands() {
       "<C-w>h",     "<C-w>j",   "<C-w>k",     "<C-w>l",     "<C-w>p",
       "<C-w>q",     "<C-w>c",   "<C-w>o",     "<C-w><C-w>", "<C-w><C-s>",
       "<C-w><C-v>", "K",        "gn",         "gN",         "gf",
-      "<C-]>"};
+      "<C-]>",      "zF",       "zd",         "zD",         "zE",
+      "zj",         "zk",       "[z",         "]z",         "zn",
+      "zN",         "zi",       "zx",         "zX",         "zr",
+      "zm",         "<C-^>",    "<C-6>",      "gx",         "<VisualRedo>"};
   return keys;
 }
 
@@ -78,8 +81,8 @@ bool VimMode::isMotionCommand(const QString &key) {
 }
 
 bool VimMode::isOperatorKey(const QString &key) {
-  static const QSet<QString> ops = {"d",  "c",  "y",  "<",  ">",  "=", "!",
-                                    "g~", "gu", "gU", "g?", "gq", "gw"};
+  static const QSet<QString> ops = {"d",  "c",  "y",  "<",  ">",  "=",  "!",
+                                    "g~", "gu", "gU", "g?", "gq", "gw", "zf"};
   return ops.contains(key);
 }
 
@@ -226,11 +229,11 @@ VimMode::Parse VimMode::parseCommand(const QStringList &keys, NormalCmd &cmd,
       return i + 1 == n ? Parse::Complete : Parse::Invalid;
     }
     if (key.size() == 2) {
-      if (t2 == key.mid(1)) {
+      if (t2 == key.mid(1) && key != "zf") {
         cmd.doubledOp = true;
         return i + 1 == n ? Parse::Complete : Parse::Invalid;
       }
-      if (t2 == "g") {
+      if (t2 == key.left(1)) {
         if (i + 1 >= n)
           return Parse::Incomplete;
         if (keys[i + 1] == key.mid(1)) {
@@ -388,6 +391,14 @@ void VimMode::executeNormal(const NormalCmd &cmdIn, const QStringList &keys) {
     setCursorPos(clampNormal(r.pos), !r.keepWantCol);
     if (r.wantEol)
       m_wantEol = true;
+    // 'foldopen': everything except vertical moves opens a closed fold.
+    static const QSet<QString> vertical = {
+        "j",  "k",  "<Down>", "<Up>", "<C-j>", "<C-n>",    "<C-p>",
+        "gj", "gk", "+",      "-",    "<CR>",  "<C-m>",    "_",
+        "G",  "gg", "H",      "M",    "L",     "<C-Home>", "<C-End>"};
+    if (!m_folds.isEmpty() && !vertical.contains(cmd.key) &&
+        cursorPos() != from)
+      openFoldsForCursor();
     return;
   }
 
@@ -402,22 +413,28 @@ void VimMode::executeOperatorMotion(const NormalCmd &cmd,
   m_opForceNumbered = false;
 
   if (cmd.doubledOp) {
-    const int line = lineOf(from);
-    const int last = lineCount() - 1;
-    int endLine = line + qMax(1, count) - 1;
-    if (endLine > last) {
-      if (line == last && count > 1) {
-        failCommand();
-        return;
-      }
-      endLine = last;
+    int line = lineOf(from);
+    bool ok = true;
+    int endLine = foldLinesDown(line, qMax(1, count) - 1, &ok);
+    if (!ok && count > 1) {
+      failCommand();
+      return;
     }
+    // A closed fold is always operated on as a whole.
+    int foldStart = 0, foldEnd = 0;
+    int opFrom = from;
+    if (closedFoldAt(line, &foldStart, nullptr)) {
+      line = foldStart;
+      opFrom = lineStart(line);
+    }
+    if (closedFoldAt(endLine, nullptr, &foldEnd))
+      endLine = foldEnd;
     range = lineRange(line, endLine);
     if (cmd.op == "y" || cmd.op == "d" || cmd.op == "<" || cmd.op == ">" ||
         cmd.op == "c")
-      m_opCursor = from;
+      m_opCursor = opFrom;
     else
-      m_opCursor = qMin(from, lineStart(endLine) + firstNonBlankCol(endLine));
+      m_opCursor = qMin(opFrom, lineStart(endLine) + firstNonBlankCol(endLine));
   } else if (!cmd.textObject.isEmpty()) {
     int s = 0, e = 0;
     MotionType type = MotionType::Exclusive;
@@ -451,6 +468,25 @@ void VimMode::executeOperatorMotion(const NormalCmd &cmd,
       return;
     }
     MotionType type = r.type;
+    // Closed folds are included completely: for a forward motion the start
+    // and (usually) the end, for a backward one only when it is linewise.
+    int lo = qMin(from, r.pos);
+    int hi = qMax(from, r.pos);
+    int foldStart = 0, foldEnd = 0;
+    if (r.pos >= from) {
+      if (closedFoldAt(lineOf(lo), &foldStart, nullptr))
+        lo = lineStart(foldStart);
+      if ((colOf(hi) > 0 || type != MotionType::Exclusive) &&
+          closedFoldAt(lineOf(hi), nullptr, &foldEnd))
+        hi = lineEndPos(foldEnd);
+    } else if (type == MotionType::Linewise) {
+      if (closedFoldAt(lineOf(lo), &foldStart, nullptr))
+        lo = lineStart(foldStart);
+      if (closedFoldAt(lineOf(hi), nullptr, &foldEnd))
+        hi = lineEndPos(foldEnd);
+    }
+    const bool foldAdjusted =
+        lo != qMin(from, r.pos) || hi != qMax(from, r.pos);
     if (cmd.force == 'v') {
       if (type == MotionType::Linewise || type == MotionType::Inclusive)
         type = MotionType::Exclusive;
@@ -464,7 +500,8 @@ void VimMode::executeOperatorMotion(const NormalCmd &cmd,
     } else if (cmd.force == QChar(0x16)) {
       range = blockRange(from, r.pos, false);
     } else {
-      range = motionRange(from, r.pos, type);
+      range = foldAdjusted ? motionRange(lo, hi, type)
+                           : motionRange(from, r.pos, type);
     }
     static const QSet<QString> numbered = {"%", "(", ")", "`", "/",
                                            "?", "n", "N", "{", "}"};
@@ -475,6 +512,8 @@ void VimMode::executeOperatorMotion(const NormalCmd &cmd,
     if (r.jump)
       setMark('\'', from);
     m_opCursor = (cmd.key == "_" && cmd.op == "y") ? from : qMin(from, r.pos);
+    if (foldAdjusted)
+      m_opCursor = lo;
   }
 
   if (cmd.op == "d" && cmd.force.isNull() &&
@@ -519,12 +558,14 @@ bool VimMode::executeSimpleCommand(const NormalCmd &cmd,
   if (key == "i" || key == "a" || key == "I" || key == "A" || key == "gI" ||
       key == "gi" || key == "o" || key == "O" || key == "<Insert>") {
     enterInsert(key == "<Insert>" ? "i" : key, c1, keys);
-  } else if (key == "v") {
-    startVisual(VimEditMode::Visual, pos, pos);
-  } else if (key == "V") {
-    startVisual(VimEditMode::VisualLine, pos, pos);
-  } else if (key == "<C-v>" || key == "<C-q>") {
-    startVisual(VimEditMode::VisualBlock, pos, pos);
+  } else if (key == "v" || key == "V" || key == "<C-v>" || key == "<C-q>") {
+    const VimEditMode mode = key == "v"   ? VimEditMode::Visual
+                             : key == "V" ? VimEditMode::VisualLine
+                                          : VimEditMode::VisualBlock;
+    if (count > 0 && !m_inDotRepeat)
+      startCountedVisual(mode, count);
+    else
+      startVisual(mode, pos, pos);
   } else if (key == "gv") {
     int s = 0, e = 0;
     if (!markPosition('<', s) || !markPosition('>', e))
@@ -569,8 +610,16 @@ bool VimMode::executeSimpleCommand(const NormalCmd &cmd,
         key.startsWith('[') || key.startsWith(']'));
     setDotCommand(keys);
   } else if (key == "J" || key == "gJ") {
-    if (line >= lineCount() - 1)
+    if (line >= lineCount() - 1) {
+      // A count above two is reduced to the lines left; on the last line
+      // that joins nothing but still moves to the start of the line.
+      if (c1 > 2) {
+        setCursorPos(lineStart(line));
+        setDotCommand(keys);
+        return true;
+      }
       failCommand();
+    }
     joinLines(line, c1, key == "J");
     setDotCommand(keys);
   } else if (key == "r") {
@@ -626,16 +675,11 @@ bool VimMode::executeSimpleCommand(const NormalCmd &cmd,
     scrollCursorTo(0, key == "z<CR>");
   } else if (key == "zb" || key == "z-") {
     scrollCursorTo(2, key == "z-");
-  } else if (key == "zo" || key == "zO" || key == "zv") {
-    emit commandExecuted("unfold");
-  } else if (key == "zc" || key == "zC") {
-    emit commandExecuted("fold");
-  } else if (key == "za" || key == "zA") {
-    emit commandExecuted("toggleFold");
-  } else if (key == "zR") {
-    emit commandExecuted("unfoldAll");
-  } else if (key == "zM") {
-    emit commandExecuted("foldAll");
+  } else if (key == "<VisualRedo>") {
+    startRedoVisual();
+  } else if (key == "zF") {
+    asOperator("zf", QString(), true);
+  } else if (executeFoldCommand(key, count)) {
   } else if (key == "<C-e>") {
     scrollLines(c1, false);
   } else if (key == "<C-y>") {
@@ -690,9 +734,32 @@ bool VimMode::executeSimpleCommand(const NormalCmd &cmd,
   } else if (key == "g&") {
     executeEx("%s//~/&");
   } else if (key == "gt") {
-    emit commandExecuted("nextTab");
+    // "{count}gt" goes to tab page {count}.
+    emit commandExecuted(count > 0 ? QString("tab:%1").arg(count)
+                                   : QString("nextTab"));
   } else if (key == "gT") {
-    emit commandExecuted("prevTab");
+    for (int i = 0; i < c1; ++i)
+      emit commandExecuted("prevTab");
+  } else if (key == "<C-^>" || key == "<C-6>") {
+    emit commandExecuted(count > 0 ? QString("tab:%1").arg(count)
+                                   : QString("alternateTab"));
+  } else if (key == "gx") {
+    const QString text = lineText(line);
+    int s = colOf(pos), e = s;
+    auto urlChar = [](QChar c) {
+      return !c.isSpace() && !QString("\"'<>()[]{}`").contains(c);
+    };
+    while (s > 0 && urlChar(text[s - 1]))
+      --s;
+    while (e < text.size() && urlChar(text[e]))
+      ++e;
+    QString target = text.mid(s, e - s);
+    while (!target.isEmpty() && QString(".,;:!?").contains(target.back()))
+      target.chop(1);
+    if (target.isEmpty())
+      emit statusMessage("E446: No file name under cursor");
+    else
+      emit commandExecuted(QString("openUrl:%1").arg(target));
   } else if (key == "gf") {
     const QString text = lineText(line);
     int s = colOf(pos), e = s;
