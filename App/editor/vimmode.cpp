@@ -5,6 +5,7 @@
 #include <QClipboard>
 #include <QScrollBar>
 #include <QTextBlock>
+#include <QTimer>
 #include <algorithm>
 #include <memory>
 
@@ -99,6 +100,11 @@ void VimMode::setEnabled(bool enabled) {
     return;
   m_enabled = enabled;
   m_pending.clear();
+  m_typeahead.clear();
+  if (m_mapTimer)
+    m_mapTimer->stop();
+  m_subConfirmActive = false;
+  m_subEdits.clear();
   m_insertOneCommand = false;
   m_insertEditOpen = false;
   m_blockInsertActive = false;
@@ -166,7 +172,10 @@ void VimMode::setCommandText(const QString &text) {
 }
 
 QString VimMode::pendingKeys() const {
-  QString keys = tokensToNotation(m_pending);
+  QStringList waiting;
+  for (const TypeaheadKey &key : m_typeahead)
+    waiting << key.token;
+  QString keys = tokensToNotation(m_pending + waiting);
   if (m_insertRegisterPending || m_cmdRegisterPending)
     keys += "\"";
   return keys;
@@ -215,7 +224,7 @@ bool VimMode::processKeyEvent(QKeyEvent *event) {
   QString token = keyEventToToken(event);
   if (token.isEmpty())
     return false;
-  return handleKey(token, event);
+  return inputKey(token, event, true);
 }
 
 bool VimMode::shouldOverrideShortcut(QKeyEvent *event) const {
@@ -233,7 +242,7 @@ bool VimMode::shouldOverrideShortcut(QKeyEvent *event) const {
     return QString("abdefgiloqruvwxy[]").contains(c);
   case VimEditMode::Insert:
   case VimEditMode::Replace:
-    return QString("adehortuvwy[").contains(c);
+    return QString("adehnoprtuvwy[]").contains(c);
   case VimEditMode::Command:
     return QString("chruvw[").contains(c);
   }
@@ -244,7 +253,8 @@ void VimMode::feedKeys(const QString &keys) {
   if (!m_enabled)
     return;
   for (const QString &token : parseKeyNotation(keys))
-    handleKey(token, nullptr);
+    inputKey(token, nullptr, true);
+  flushTypeahead();
 }
 
 QString VimMode::keyEventToToken(QKeyEvent *event) {
@@ -396,6 +406,7 @@ QStringList VimMode::parseKeyNotation(const QString &keys) {
       {"right", "Right"},       {"up", "Up"},         {"down", "Down"},
       {"home", "Home"},         {"end", "End"},       {"pageup", "PageUp"},
       {"pagedown", "PageDown"}, {"insert", "Insert"}, {"space", "Space"},
+      {"plug", "Plug"},
   };
   auto parseToken = [](const QString &inner) -> QString {
     const QString lowerInner = inner.toLower();
@@ -505,17 +516,22 @@ bool VimMode::handleKey(const QString &tokenIn, QKeyEvent *event) {
   if (token == "<C-[>")
     token = "<Esc>";
 
-  const bool recordMacro = m_macroRecording && m_replayDepth == 0;
   if (m_replayDepth == 0)
     m_abortReplay = false;
-  if (recordMacro)
-    m_macroKeys << token;
+  if (m_subConfirmActive)
+    return handleSubConfirmKey(token);
+  // <Plug> sequences only exist for plugin mappings, which are not
+  // available; executing one fails like an unmapped key would.
+  if (token == "<Plug>") {
+    failCommand();
+    return true;
+  }
 
   if (m_mode == VimEditMode::Normal || m_mode == VimEditMode::Insert) {
     const int pos = m_editor->textCursor().position();
     if (pos != m_lastSyncedPos) {
       const int line = lineOf(pos);
-      m_wantCol = vcolOf(lineText(line), pos - lineStart(line));
+      m_wantCol = wantColFor(line, pos - lineStart(line));
       m_wantEol = false;
     }
   }
@@ -541,9 +557,9 @@ bool VimMode::handleKey(const QString &tokenIn, QKeyEvent *event) {
     break;
   }
 
+  if (!m_folds.isEmpty() || !m_foldHidden.isEmpty())
+    applyFoldDisplay();
   m_lastSyncedPos = m_editor->textCursor().position();
-  if (!handled && recordMacro && m_macroRecording && !m_macroKeys.isEmpty())
-    m_macroKeys.removeLast();
   return handled;
 }
 
@@ -652,9 +668,20 @@ void VimMode::setCursorPos(int pos, bool updateWantCol) {
   }
   if (updateWantCol) {
     int line = lineOf(pos);
-    m_wantCol = vcolOf(lineText(line), pos - lineStart(line));
+    m_wantCol = wantColFor(line, pos - lineStart(line));
     m_wantEol = false;
   }
+}
+
+// The column vertical motions aim for. On a Tab the Normal-mode cursor sits
+// on its last screen column, so that is what Vim remembers.
+int VimMode::wantColFor(int line, int col) const {
+  const QString &text = cachedLine(line);
+  int vcol = vcolOf(text, col);
+  if (col < text.size() && text[col] == '\t' && m_mode != VimEditMode::Insert &&
+      m_mode != VimEditMode::Replace)
+    vcol += m_tabStop - (vcol % m_tabStop) - 1;
+  return vcol;
 }
 
 int VimMode::clampNormal(int pos) const {
@@ -720,6 +747,8 @@ void VimMode::setRegister(QChar reg, const QString &text,
   value.content = text;
   value.linewise = type == VimRegisterType::Linewise;
   value.blockwise = type == VimRegisterType::Blockwise;
+  if (value.blockwise)
+    value.blockWidth = m_nextBlockWidth;
   if (reg.unicode() < 128 && reg.isUpper()) {
     QChar lower = reg.toLower();
     if (m_registers.contains(lower)) {
@@ -831,6 +860,8 @@ void VimMode::setMark(QChar mark, int pos) {
 void VimMode::forgetLines(int first, int last, bool namedMarks) {
   if (first > last)
     return;
+  if (!m_folds.isEmpty())
+    forgetFolds(first, last);
   if (namedMarks) {
     const int steps = doc()->availableUndoSteps();
     for (auto it = m_marks.begin(); it != m_marks.end();) {
@@ -1008,16 +1039,27 @@ void VimMode::playMacro(QChar reg, int count) {
   }
   const QStringList tokens = parseKeyNotation(r.content);
   for (int i = 0; i < count && !m_abortReplay; ++i)
-    replayTokens(tokens);
+    replayTokens(tokens, true, true);
 }
 
-void VimMode::replayTokens(const QStringList &tokens, bool stopOnFailure) {
+void VimMode::replayTokens(const QStringList &tokens, bool stopOnFailure,
+                           bool remap) {
   ++m_replayDepth;
+  // Replayed keys get their own typeahead so they run before whatever is
+  // still queued from the mapping that triggered them.
+  const QList<TypeaheadKey> outer = m_typeahead;
+  m_typeahead.clear();
   for (const QString &token : tokens) {
     if (stopOnFailure && m_abortReplay)
       break;
-    handleKey(token, nullptr);
+    if (remap)
+      inputKey(token, nullptr, true);
+    else
+      handleKey(token, nullptr);
   }
+  if (!(stopOnFailure && m_abortReplay))
+    flushTypeahead();
+  m_typeahead = outer;
   --m_replayDepth;
 }
 

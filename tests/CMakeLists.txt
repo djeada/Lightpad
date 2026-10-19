@@ -183,6 +183,8 @@ add_executable(test_vimmode
     ${CMAKE_SOURCE_DIR}/App/editor/vimmode_ex.cpp
     ${CMAKE_SOURCE_DIR}/App/editor/vimmode_expr.cpp
     ${CMAKE_SOURCE_DIR}/App/editor/vimmode_exextra.cpp
+    ${CMAKE_SOURCE_DIR}/App/editor/vimmode_map.cpp
+    ${CMAKE_SOURCE_DIR}/App/editor/vimmode_fold.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 

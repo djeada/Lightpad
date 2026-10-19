@@ -9,6 +9,7 @@ import random
 import sys
 
 from new_cases import new_cases
+from feature_cases import feature_cases
 
 
 def grid_cases():
@@ -220,6 +221,7 @@ SUITES = {
     "misc": misc_cases,
     "audit": audit_cases,
     "wb": new_cases,
+    "fx": feature_cases,
 }
 
 if __name__ == "__main__":

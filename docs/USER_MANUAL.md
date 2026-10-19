@@ -386,6 +386,7 @@ Lightpad supports VIM-style modal editing:
 1. Enable VIM mode in **Preferences** → **Editor** → **VIM Mode**
 2. The editor starts in Normal mode
 3. See [KEYBOARD_SHORTCUTS.md](KEYBOARD_SHORTCUTS.md) for VIM commands
+4. Put your own mappings, abbreviations and `:set` options in the `vimrc` file next to Lightpad's `settings.json` (on Linux `~/.config/Lightpad/Lightpad/vimrc`); Lightpad runs it when Vim mode starts (`:e $MYVIMRC` opens it, `:source` reloads a file)
 
 ## Language Server Protocol (LSP)
 

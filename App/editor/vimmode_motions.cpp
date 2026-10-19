@@ -96,6 +96,11 @@ bool VimMode::skipChars(TextPos &p, int cls, bool forward, bool bigword) const {
 
 bool VimMode::fwdWord(TextPos &p, int count, bool bigword, bool eol) const {
   while (--count >= 0) {
+    int foldEnd = 0;
+    if (closedFoldAt(p.line, nullptr, &foldEnd)) {
+      p.line = foldEnd;
+      p.col = qMax(0, int(cachedLine(p.line).size()) - 1);
+    }
     int sclass = charClass(p, bigword);
     bool lastLine = p.line == lineCount() - 1;
     int i = incPos(p);
@@ -124,6 +129,11 @@ bool VimMode::fwdWord(TextPos &p, int count, bool bigword, bool eol) const {
 bool VimMode::endWord(TextPos &p, int count, bool bigword, bool stop,
                       bool empty) const {
   while (--count >= 0) {
+    int foldEnd = 0;
+    if (closedFoldAt(p.line, nullptr, &foldEnd)) {
+      p.line = foldEnd;
+      p.col = qMax(0, int(cachedLine(p.line).size()) - 1);
+    }
     int sclass = charClass(p, bigword);
     if (incPos(p) == -1)
       return false;
@@ -152,6 +162,11 @@ bool VimMode::endWord(TextPos &p, int count, bool bigword, bool stop,
 
 bool VimMode::bckWord(TextPos &p, int count, bool bigword, bool stop) const {
   while (--count >= 0) {
+    int foldStart = 0;
+    if (closedFoldAt(p.line, &foldStart, nullptr)) {
+      p.line = foldStart;
+      p.col = 0;
+    }
     int sclass = charClass(p, bigword);
     if (decPos(p) == -1)
       return false;
@@ -458,23 +473,15 @@ VimMode::MotionResult VimMode::evalMotion(const QString &key, QChar arg,
     r.pos = lineStart(p.line) + p.col;
   } else if (key == "j" || key == "<Down>" || key == "<C-j>" ||
              key == "<C-n>" || key == "gj") {
-    if (line >= last)
-      r.ok = false;
-    toLine(line + c1, false);
+    toLine(foldLinesDown(line, c1, &r.ok), false);
   } else if (key == "k" || key == "<Up>" || key == "<C-p>" || key == "gk") {
-    if (line <= 0)
-      r.ok = false;
-    toLine(line - c1, false);
+    toLine(foldLinesUp(line, c1, &r.ok), false);
   } else if (key == "+" || key == "<CR>" || key == "<C-m>") {
-    if (line >= last)
-      r.ok = false;
-    toLine(line + c1, true);
+    toLine(foldLinesDown(line, c1, &r.ok), true);
   } else if (key == "-") {
-    if (line <= 0)
-      r.ok = false;
-    toLine(line - c1, true);
+    toLine(foldLinesUp(line, c1, &r.ok), true);
   } else if (key == "_") {
-    toLine(line + c1 - 1, true);
+    toLine(foldLinesDown(line, c1 - 1), true);
   } else if (key == "0" || key == "<Home>" || key == "g0") {
     r.pos = start;
   } else if (key == "^" || key == "g^") {
@@ -759,10 +766,24 @@ VimMode::Range VimMode::visualRange() const {
   int s = qMin(m_visualAnchor, m_visualPos);
   int e = qMax(m_visualAnchor, m_visualPos);
   switch (m_mode) {
-  case VimEditMode::VisualLine:
-    return lineRange(lineOf(s), lineOf(e));
-  case VimEditMode::VisualBlock:
-    return blockRange(m_visualAnchor, m_visualPos, m_visualToEol);
+  case VimEditMode::VisualLine: {
+    // Closed folds are always selected as a whole.
+    int first = lineOf(s), last = lineOf(e);
+    int foldStart = 0, foldEnd = 0;
+    if (closedFoldAt(first, &foldStart, nullptr))
+      first = foldStart;
+    if (closedFoldAt(last, nullptr, &foldEnd))
+      last = foldEnd;
+    return lineRange(first, last);
+  }
+  case VimEditMode::VisualBlock: {
+    Range r = blockRange(m_visualAnchor, m_visualPos, m_visualToEol);
+    if (m_blockStartOverride >= 0) {
+      r.startVcol = m_blockStartOverride;
+      r.endVcol = qMax(m_blockStartOverride, m_blockEndOverride);
+    }
+    return r;
+  }
   default: {
     Range r = charRange(s, qMin(e + 1, docLength()));
     r.endLine = lineOf(e);
@@ -792,6 +813,62 @@ VimMode::Range VimMode::motionRange(int a, int b, MotionType type) const {
   return exclusiveRange;
 }
 
+// Like Vim's block_prep(): the characters of a line touched by a block,
+// with the number of screen columns of a straddling character (a Tab) that
+// lie before the block start or after the block end.
+VimMode::BlockSpan VimMode::blockSpan(const QString &text,
+                                      const Range &range) const {
+  BlockSpan span;
+  const int n = text.size();
+  auto width = [&](int index, int vcol) {
+    return text[index] == '\t' ? m_tabStop - (vcol % m_tabStop) : 1;
+  };
+  int vcol = 0;
+  int i = 0;
+  while (i < n) {
+    const int w = width(i, vcol);
+    if (vcol + w > range.startVcol)
+      break;
+    vcol += w;
+    ++i;
+  }
+  if (i >= n) {
+    span.from = span.to = n;
+    return span;
+  }
+  span.isShort = false;
+  span.from = i;
+  span.before = range.startVcol - vcol;
+  int j = i;
+  int v = vcol;
+  while (j < n && (range.toEol || v <= range.endVcol)) {
+    v += width(j, v);
+    ++j;
+  }
+  span.to = j;
+  span.after = range.toEol ? 0 : qMax(0, v - 1 - range.endVcol);
+  span.inside =
+      (range.toEol ? v - 1 : qMin(v - 1, range.endVcol)) - range.startVcol + 1;
+  return span;
+}
+
+QString VimMode::blockPart(const QString &text, const Range &range) const {
+  const BlockSpan span = blockSpan(text, range);
+  if (span.isShort)
+    return QString();
+  QString part;
+  int vcol = vcolOf(text, span.from);
+  const int last = range.toEol ? INT_MAX : range.endVcol;
+  for (int k = span.from; k < span.to; ++k) {
+    const int w = text[k] == '\t' ? m_tabStop - (vcol % m_tabStop) : 1;
+    const int overlap =
+        qMin(vcol + w - 1, last) - qMax(vcol, range.startVcol) + 1;
+    part += overlap == w ? QString(text[k]) : QString(qMax(0, overlap), ' ');
+    vcol += w;
+  }
+  return part;
+}
+
 QString VimMode::rangeText(const Range &range) const {
   switch (range.type) {
   case VimRegisterType::Linewise:
@@ -801,9 +878,7 @@ QString VimMode::rangeText(const Range &range) const {
     QStringList parts;
     for (int l = range.startLine; l <= range.endLine; ++l) {
       const QString text = lineText(l);
-      int from = colForVcol(text, range.startVcol);
-      int to = range.toEol ? text.size() : colForVcol(text, range.endVcol + 1);
-      QString part = text.mid(from, qMax(0, to - from));
+      QString part = blockPart(text, range);
       if (!range.toEol && vcolOf(text, text.size()) < range.startVcol)
         part = QString(range.endVcol - range.startVcol + 1, ' ');
       parts << part;
@@ -1177,8 +1252,14 @@ bool VimMode::selectParagraphObject(int count, bool include, int &start,
   auto extendVisual = [&]() {
     int endLine = lineOf(m_visualPos);
     for (int c = 0; c < count; ++c) {
-      if (endLine >= last)
+      if (endLine >= last) {
+        if (c == 0) {
+          // Vim still moves the cursor to the start of the line.
+          m_visualPos = lineStart(endLine);
+          updateVisualSelection();
+        }
         return c > 0;
+      }
       const bool white = lineWhite(endLine + 1);
       ++endLine;
       while (endLine < last && lineWhite(endLine + 1) == white)
@@ -1370,7 +1451,8 @@ bool VimMode::selectTagObject(int count, bool include, int &start, int &end,
   return true;
 }
 
-bool VimMode::selectSearchMatch(bool forward, int &start, int &end) {
+bool VimMode::selectSearchMatch(bool forward, int &start, int &end,
+                                bool extend) {
   if (m_searchPattern.isEmpty()) {
     emit statusMessage("E35: No previous regular expression");
     return false;
@@ -1391,11 +1473,15 @@ bool VimMode::selectSearchMatch(bool forward, int &start, int &end) {
       firstStart = m.capturedStart();
       firstEnd = m.capturedEnd();
     }
-    if (forward && foundStart < 0 && m.capturedEnd() > pos) {
+    // In Visual mode the search starts next to the cursor so that the
+    // selection grows to the following match.
+    if (forward && foundStart < 0 &&
+        (extend ? m.capturedStart() > pos : m.capturedEnd() > pos)) {
       foundStart = m.capturedStart();
       foundEnd = m.capturedEnd();
     }
-    if (!forward && m.capturedStart() <= pos) {
+    if (!forward &&
+        (extend ? m.capturedStart() < pos : m.capturedStart() <= pos)) {
       foundStart = m.capturedStart();
       foundEnd = m.capturedEnd();
     }

@@ -1,9 +1,12 @@
 #include "editor/vimmode.h"
 #include "vim_oracle_cases.h"
+#include "vim_oracle_cases_fx.h"
 #include "vim_oracle_cases_wb.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QPlainTextEdit>
+#include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTextBlock>
 #include <QtTest/QtTest>
 
@@ -21,10 +24,12 @@ protected:
   }
 };
 
+// Like Vim's cursor(), a column past the end lands on the last character.
 void placeCursor(QPlainTextEdit *editor, int line, int col) {
   QTextCursor cursor(editor->document());
-  cursor.setPosition(editor->document()->findBlockByNumber(line).position() +
-                     col);
+  const QTextBlock block = editor->document()->findBlockByNumber(line);
+  cursor.setPosition(block.position() +
+                     qBound(0, col, qMax(0, block.length() - 2)));
   editor->setTextCursor(cursor);
 }
 
@@ -83,6 +88,8 @@ private slots:
   void testCountedInsertRepeatsText();
   void testMatchesVimWb_data();
   void testMatchesVimWb();
+  void testMatchesVimFx_data();
+  void testMatchesVimFx();
   void testExpressionRegister();
   void testLetAndExecute();
   void testSubstituteExpression();
@@ -99,6 +106,17 @@ private slots:
   void testDeleteMarks();
   void testChangeMarks();
   void testExAddressSearchForms();
+  void testNormalMappings();
+  void testInsertMappingWaitsForTimeout();
+  void testOperatorPendingAndVisualMappings();
+  void testMappingListingAndUnmap();
+  void testAbbreviations();
+  void testSourceVimrc();
+  void testMappingEdgeCases();
+  void testSubstituteConfirm();
+  void testFoldsHideLines();
+  void testEditorCommandsFromVim();
+  void testCountedVisualReselect();
 
 private:
   QPlainTextEdit *m_editor;
@@ -116,12 +134,15 @@ void TestVimMode::cleanupTestCase() {
 }
 
 void TestVimMode::init() {
-
+  VimMode::clearAllMappings();
   m_vim->setEnabled(false);
   m_editor->clear();
 }
 
-void TestVimMode::cleanup() { m_vim->setEnabled(false); }
+void TestVimMode::cleanup() {
+  m_vim->setEnabled(false);
+  VimMode::clearAllMappings();
+}
 
 void TestVimMode::testEnableDisable() {
   QVERIFY(!m_vim->isEnabled());
@@ -891,6 +912,40 @@ void TestVimMode::testMatchesVimWb() {
     QCOMPARE(vim.registerContent('"'), QString::fromUtf8(c.expectedRegister));
 }
 
+void TestVimMode::testMatchesVimFx_data() {
+  QTest::addColumn<int>("index");
+  const int count =
+      int(sizeof(kVimOracleFxCases) / sizeof(kVimOracleFxCases[0]));
+  for (int i = 0; i < count; ++i) {
+    QTest::newRow(qPrintable(QString("%1: %2").arg(i).arg(
+        QString::fromUtf8(kVimOracleFxCases[i].keys))))
+        << i;
+  }
+}
+
+// Folds, key mappings, abbreviations, Tabs cut by blockwise operators and
+// [count]v, compared against Vim 9.1 with remapping enabled.
+void TestVimMode::testMatchesVimFx() {
+  QFETCH(int, index);
+  const VimOracleCase &c = kVimOracleFxCases[index];
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText(QString::fromUtf8(kVimOracleFxTexts[c.text]));
+  placeCursor(&editor, c.line, c.col);
+  vim.setEnabled(true);
+  vim.feedKeys(QString::fromUtf8(c.keys));
+  if (vim.mode() != VimEditMode::Normal || !vim.pendingKeys().isEmpty())
+    vim.feedKeys("<Esc>");
+
+  QCOMPARE(editor.toPlainText().replace(QChar(0), QChar('\n')),
+           QString::fromUtf8(c.expectedText));
+  QTextCursor cursor = editor.textCursor();
+  QCOMPARE(cursor.blockNumber(), c.expectedLine);
+  QCOMPARE(cursor.positionInBlock(), c.expectedCol);
+  if (c.expectedRegister)
+    QCOMPARE(vim.registerContent('"'), QString::fromUtf8(c.expectedRegister));
+}
+
 void TestVimMode::testExpressionRegister() {
   QPlainTextEdit editor;
   VimMode vim(&editor);
@@ -1118,6 +1173,343 @@ void TestVimMode::testExAddressSearchForms() {
   editor.setPlainText("x\nfoo\ny");
   vim.feedKeys("2G/foo<CR>gg:\\/d<CR>");
   QCOMPARE(editor.toPlainText(), QString("x\ny"));
+}
+
+void TestVimMode::testNormalMappings() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("one two three\nfour five");
+  vim.setEnabled(true);
+  vim.feedKeys(":nnoremap Q dw<CR>Q");
+  QCOMPARE(editor.toPlainText(), QString("two three\nfour five"));
+  // Counts apply to the mapped command, and recursive maps expand again.
+  vim.feedKeys(":nmap X Q<CR>2X");
+  QCOMPARE(editor.toPlainText(), QString("\nfour five"));
+  vim.feedKeys("u:let mapleader = ','<CR>:nnoremap <lt>leader>d dd<CR>,d");
+  QCOMPARE(editor.toPlainText(), QString("four five"));
+  // A noremap rhs is not remapped, a map rhs starting with its lhs is safe.
+  editor.setPlainText("abc");
+  vim.feedKeys("gg0:nnoremap x l<CR>:nnoremap l x<CR>x");
+  QCOMPARE(editor.toPlainText(), QString("abc"));
+  QCOMPARE(editor.textCursor().positionInBlock(), 1);
+  vim.feedKeys(":nmap j jx<CR>j");
+  QCOMPARE(editor.toPlainText(), QString("abc"));
+  // Character arguments are never remapped.
+  vim.feedKeys(":nunmap x<CR>fl");
+  QCOMPARE(editor.textCursor().positionInBlock(), 1);
+  vim.feedKeys(":nmap a b<CR>:nmap b a<CR>a");
+  QVERIFY(editor.toPlainText() == "abc");
+  // :normal! ignores mappings while :normal uses them.
+  editor.setPlainText("abc");
+  vim.feedKeys("gg0:nnoremap x dd<CR>:normal! x<CR>");
+  QCOMPARE(editor.toPlainText(), QString("bc"));
+  vim.feedKeys(":normal x<CR>");
+  QCOMPARE(editor.toPlainText(), QString(""));
+}
+
+void TestVimMode::testInsertMappingWaitsForTimeout() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("");
+  vim.setEnabled(true);
+  vim.feedKeys(":inoremap jk <lt>Esc><CR>");
+  QKeyEvent i(QEvent::KeyPress, Qt::Key_I, Qt::NoModifier, "i");
+  vim.processKeyEvent(&i);
+  QKeyEvent j(QEvent::KeyPress, Qt::Key_J, Qt::NoModifier, "j");
+  QKeyEvent k(QEvent::KeyPress, Qt::Key_K, Qt::NoModifier, "k");
+  QKeyEvent x(QEvent::KeyPress, Qt::Key_X, Qt::NoModifier, "x");
+  QVERIFY(vim.processKeyEvent(&j));
+  QCOMPARE(editor.toPlainText(), QString(""));
+  QCOMPARE(vim.pendingKeys(), QString("j"));
+  QVERIFY(vim.processKeyEvent(&k));
+  QCOMPARE(vim.mode(), VimEditMode::Normal);
+  QCOMPARE(editor.toPlainText(), QString(""));
+
+  vim.processKeyEvent(&i);
+  vim.processKeyEvent(&j);
+  vim.processKeyEvent(&x);
+  QCOMPARE(editor.toPlainText(), QString("jx"));
+  QCOMPARE(vim.mode(), VimEditMode::Insert);
+
+  vim.feedKeys("<Esc>:set timeoutlen=20<CR>a");
+  vim.processKeyEvent(&j);
+  QTRY_COMPARE_WITH_TIMEOUT(editor.toPlainText(), QString("jxj"), 2000);
+  QCOMPARE(vim.mode(), VimEditMode::Insert);
+  QCOMPARE(vim.pendingKeys(), QString());
+}
+
+void TestVimMode::testOperatorPendingAndVisualMappings() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("foo(bar, baz) end");
+  vim.setEnabled(true);
+  vim.feedKeys(":onoremap p i(<CR>fbdp");
+  QCOMPARE(editor.toPlainText(), QString("foo() end"));
+  vim.feedKeys("u0:xnoremap L e<CR>vLd");
+  QCOMPARE(editor.toPlainText(), QString("(bar, baz) end"));
+  // Normal-mode mappings do not fire in Operator-pending mode.
+  editor.setPlainText("a b c");
+  vim.feedKeys("gg0:nnoremap w x<CR>dw");
+  QCOMPARE(editor.toPlainText(), QString("b c"));
+  vim.feedKeys(":nnoremap <expr> W 'x'<CR>W");
+  QCOMPARE(editor.toPlainText(), QString(" c"));
+  vim.feedKeys(":nnoremap Z <lt>Nop><CR>Z");
+  QCOMPARE(editor.toPlainText(), QString(" c"));
+}
+
+void TestVimMode::testMappingListingAndUnmap() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  vim.setEnabled(true);
+  QStringList messages;
+  connect(&vim, &VimMode::statusMessage,
+          [&messages](const QString &m) { messages << m; });
+  vim.feedKeys(":nnoremap <lt>Space>w :w<lt>CR><CR>:nmap<CR>");
+  QVERIFY(messages.last().contains("n   "));
+  QVERIFY(messages.last().contains("*:w<CR>"));
+  vim.feedKeys(":nunmap <lt>Space>w<CR>:nmap<CR>");
+  QCOMPARE(messages.last(), QString("No mapping found"));
+  vim.feedKeys(":nunmap Q<CR>");
+  QCOMPARE(messages.last(), QString("E31: No such mapping"));
+  vim.feedKeys(":map! zz yy<CR>:imap<CR>");
+  QVERIFY(messages.last().startsWith("i  zz"));
+  vim.feedKeys(":mapclear!<CR>:imap<CR>");
+  QCOMPARE(messages.last(), QString("No mapping found"));
+}
+
+void TestVimMode::testAbbreviations() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("");
+  vim.setEnabled(true);
+  vim.feedKeys(":iabbrev teh the<CR>iteh cat tehx steh.<Esc>");
+  QCOMPARE(editor.toPlainText(), QString("the cat tehx steh."));
+  vim.feedKeys(":iab ret return<CR>o  ret<C-]>;<Esc>");
+  QCOMPARE(editor.toPlainText(), QString("the cat tehx steh.\n  return;"));
+  vim.feedKeys(":iunabbrev teh<CR>oteh <Esc>");
+  QCOMPARE(editor.toPlainText(),
+           QString("the cat tehx steh.\n  return;\nteh "));
+  vim.feedKeys(":cabbrev W w<CR>");
+  QSignalSpy executed(&vim, &VimMode::commandExecuted);
+  vim.feedKeys(":W<CR>");
+  QCOMPARE(executed.count(), 1);
+  QCOMPARE(executed.first().first().toString(), QString("save"));
+}
+
+void TestVimMode::testSourceVimrc() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QFile rc(dir.filePath("vimrc"));
+  QVERIFY(rc.open(QIODevice::WriteOnly));
+  rc.write("\" comment line\n"
+           "set sw=2\n"
+           "let mapleader = ' '\n"
+           "nnoremap <leader>x dd\n"
+           "if has('nvim')\n"
+           "  nnoremap Q gg\n"
+           "else\n"
+           "  nnoremap Q G\n"
+           "endif\n"
+           "function! Foo()\n"
+           "  echo 'x'\n"
+           "endfunction\n"
+           "inoremap jj\n"
+           "  \\ <Esc>\n");
+  rc.close();
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("a\nb\nc");
+  vim.setEnabled(true);
+  QString error;
+  QVERIFY(vim.sourceFile(rc.fileName(), &error));
+  vim.feedKeys(" x>>");
+  QCOMPARE(editor.toPlainText(), QString("  b\nc"));
+  vim.feedKeys("Q");
+  QCOMPARE(editor.textCursor().blockNumber(), 1);
+  vim.feedKeys("Ajj");
+  QCOMPARE(vim.mode(), VimEditMode::Normal);
+  QVERIFY(!vim.sourceFile(dir.filePath("missing"), &error));
+  QVERIFY(error.startsWith("E484"));
+  vim.feedKeys(QString(":source %1<CR>").arg(rc.fileName()));
+  QCOMPARE(vim.mode(), VimEditMode::Normal);
+}
+
+void TestVimMode::testMappingEdgeCases() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abcdef");
+  vim.setEnabled(true);
+  QStringList messages;
+  connect(&vim, &VimMode::statusMessage,
+          [&messages](const QString &m) { messages << m; });
+  // Mutually recursive mappings stop with E223 instead of hanging.
+  vim.feedKeys(":nmap a b<CR>:nmap b a<CR>a");
+  QVERIFY(messages.contains("E223: Recursive mapping"));
+  QCOMPARE(editor.toPlainText(), QString("abcdef"));
+  // Plugin mappings do nothing, and the rest of the mapping is dropped.
+  vim.feedKeys(":nmap Q <lt>Plug>(foo)x<CR>Q");
+  QCOMPARE(editor.toPlainText(), QString("abcdef"));
+  // Macros record the typed keys, not what the mapping expanded to.
+  vim.feedKeys(":nnoremap Z x<CR>qaZq");
+  QCOMPARE(editor.toPlainText(), QString("bcdef"));
+  QCOMPARE(vim.registerContent('a'), QString("Z"));
+  vim.feedKeys(":nunmap Z<CR>@a<Esc>");
+  QCOMPARE(editor.toPlainText(), QString("bcdef"));
+  // A failing command inside a mapping abandons the rest of it.
+  vim.feedKeys(":nnoremap W fzx<CR>0W");
+  QCOMPARE(editor.toPlainText(), QString("bcdef"));
+  // Comments and blank lines are ignored on the command line.
+  messages.clear();
+  vim.feedKeys(":\" just a comment<CR>");
+  QVERIFY(messages.isEmpty());
+}
+
+void TestVimMode::testSubstituteConfirm() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("a1 a2 a3\na4");
+  vim.setEnabled(true);
+  QStringList messages;
+  connect(&vim, &VimMode::statusMessage,
+          [&messages](const QString &m) { messages << m; });
+  vim.feedKeys(":%s/a/X/gc<CR>");
+  QVERIFY(messages.last().startsWith("replace with X (y/n/a/q/l"));
+  QCOMPARE(editor.textCursor().selectedText(), QString("a"));
+  vim.feedKeys("yn");
+  QCOMPARE(editor.toPlainText(), QString("X1 a2 a3\na4"));
+  QCOMPARE(editor.textCursor().selectionStart(), 6);
+  vim.feedKeys("y");
+  QCOMPARE(editor.toPlainText(), QString("X1 a2 X3\na4"));
+  // Keys other than the answers are ignored while asking.
+  vim.feedKeys("dd");
+  QCOMPARE(editor.toPlainText(), QString("X1 a2 X3\na4"));
+  vim.feedKeys("q");
+  QVERIFY(!editor.textCursor().hasSelection());
+  QCOMPARE(editor.textCursor().blockNumber(), 1);
+  // Every accepted replacement is undone in one step.
+  vim.feedKeys("u");
+  QCOMPARE(editor.toPlainText(), QString("a1 a2 a3\na4"));
+
+  vim.feedKeys(":%s/a/X/gc<CR>na");
+  QCOMPARE(editor.toPlainText(), QString("a1 X2 X3\nX4"));
+  vim.feedKeys("u:%s/a/X/gc<CR>l");
+  QCOMPARE(editor.toPlainText(), QString("X1 a2 a3\na4"));
+  QCOMPARE(editor.textCursor().positionInBlock(), 0);
+  vim.feedKeys("u:%s/a/X/gc<CR><Esc>");
+  QCOMPARE(editor.toPlainText(), QString("a1 a2 a3\na4"));
+  vim.feedKeys("x");
+  QCOMPARE(editor.toPlainText(), QString("1 a2 a3\na4"));
+}
+
+void TestVimMode::testFoldsHideLines() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("l1\nl2\nl3\nl4\nl5");
+  vim.setEnabled(true);
+  auto visible = [&editor](int line) {
+    return editor.document()->findBlockByNumber(line).isVisible();
+  };
+  vim.feedKeys("jzfj");
+  QVERIFY(visible(1));
+  QVERIFY(!visible(2));
+  QVERIFY(visible(3));
+  vim.feedKeys("zo");
+  QVERIFY(visible(2));
+  vim.feedKeys("zc");
+  QVERIFY(!visible(2));
+  vim.feedKeys("zn");
+  QVERIFY(visible(2));
+  vim.feedKeys("zN");
+  QVERIFY(!visible(2));
+  // A nested fold stays hidden inside a closed outer one.
+  vim.feedKeys("zcggzfGzo");
+  QVERIFY(!visible(2));
+  QVERIFY(visible(4));
+  vim.feedKeys("zR");
+  QVERIFY(visible(2));
+  vim.feedKeys("zM");
+  QVERIFY(!visible(1));
+  QVERIFY(!visible(4));
+  vim.feedKeys("zE");
+  for (int line = 0; line < 5; ++line)
+    QVERIFY(visible(line));
+  // Deleting a closed fold removes it together with its lines.
+  vim.feedKeys(":2,3fold<CR>:2d<CR>");
+  QCOMPARE(editor.toPlainText(), QString("l1\nl4\nl5"));
+  for (int line = 0; line < 3; ++line)
+    QVERIFY(visible(line));
+  QStringList messages;
+  connect(&vim, &VimMode::statusMessage,
+          [&messages](const QString &m) { messages << m; });
+  vim.feedKeys("zd");
+  QCOMPARE(messages.last(), QString("E490: No fold found"));
+}
+
+void TestVimMode::testEditorCommandsFromVim() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("see https://example.com/a.b, ok\nx");
+  vim.setEnabled(true);
+  QStringList commands;
+  connect(&vim, &VimMode::commandExecuted,
+          [&commands](const QString &c) { commands << c; });
+  vim.feedKeys("3gt");
+  QCOMPARE(commands.last(), QString("tab:3"));
+  vim.feedKeys("gt");
+  QCOMPARE(commands.last(), QString("nextTab"));
+  vim.feedKeys("<C-^>");
+  QCOMPARE(commands.last(), QString("alternateTab"));
+  vim.feedKeys(":tabn 2<CR>");
+  QCOMPARE(commands.last(), QString("tab:2"));
+  vim.feedKeys(":b 4<CR>");
+  QCOMPARE(commands.last(), QString("tab:4"));
+  vim.feedKeys(":b main<CR>");
+  QCOMPARE(commands.last(), QString("bufferName:main"));
+  vim.feedKeys(":tablast<CR>");
+  QCOMPARE(commands.last(), QString("lastTab"));
+  vim.feedKeys(":ls<CR>");
+  QCOMPARE(commands.last(), QString("listBuffers"));
+  vim.feedKeys(":e #<CR>");
+  QCOMPARE(commands.last(), QString("alternateTab"));
+  vim.feedKeys(":w copy.txt<CR>");
+  QCOMPARE(commands.last(), QString("writeAs:copy.txt"));
+  vim.feedKeys(":sav ~/new.txt<CR>");
+  QCOMPARE(commands.last(), QString("saveAs:%1/new.txt").arg(QDir::homePath()));
+  vim.feedKeys(":e $MYVIMRC<CR>");
+  QCOMPARE(commands.last(),
+           QString("edit:%1").arg(VimMode::defaultVimrcPath()));
+  vim.feedKeys(":set nonumber<CR>");
+  QCOMPARE(commands.last(), QString("option:number:off"));
+  vim.feedKeys(":set wrap<CR>");
+  QCOMPARE(commands.last(), QString("option:wrap:on"));
+  vim.feedKeys("K");
+  QCOMPARE(commands.last(), QString("hover"));
+  vim.feedKeys("0fhgx");
+  QCOMPARE(commands.last(), QString("openUrl:https://example.com/a.b"));
+
+  QStringList messages;
+  connect(&vim, &VimMode::statusMessage,
+          [&messages](const QString &m) { messages << m; });
+  vim.feedKeys("Gggx:changes<CR>");
+  QVERIFY(messages.last().contains("1:0"));
+  vim.feedKeys(":jumps<CR>");
+  QVERIFY(messages.last().contains("2:0"));
+}
+
+void TestVimMode::testCountedVisualReselect() {
+  QPlainTextEdit editor;
+  VimMode vim(&editor);
+  editor.setPlainText("abcdefghij\nklmnopqrst");
+  vim.setEnabled(true);
+  // Without an earlier Visual operation [count]v selects count characters.
+  vim.feedKeys("3vd");
+  QCOMPARE(editor.toPlainText(), QString("defghij\nklmnopqrst"));
+  // Afterwards it reselects count times the size of the last one.
+  vim.feedKeys("2vd");
+  QCOMPARE(editor.toPlainText(), QString("j\nklmnopqrst"));
+  // The reselection keeps the earlier mode, even when started with V.
+  vim.feedKeys("u3Vd");
+  QCOMPARE(editor.toPlainText(), QString("klmnopqrst"));
 }
 
 QTEST_MAIN(TestVimMode)

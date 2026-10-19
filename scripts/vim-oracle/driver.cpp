@@ -15,13 +15,15 @@ int main(int argc, char **argv) {
   QJsonArray out;
   for (const auto &cv : cases) {
     QJsonObject c = cv.toObject();
+    VimMode::clearAllMappings();
     QPlainTextEdit ed;
     ed.resize(600, 400);
     VimMode vim(&ed);
     ed.setPlainText(c["text"].toString());
     QTextCursor cur(ed.document());
     QTextBlock b = ed.document()->findBlockByNumber(c["line"].toInt());
-    cur.setPosition(b.position() + c["col"].toInt());
+    cur.setPosition(b.position() +
+                    qBound(0, c["col"].toInt(), qMax(0, b.length() - 2)));
     ed.setTextCursor(cur);
     vim.setEnabled(true);
     vim.feedKeys(c["keys"].toString());

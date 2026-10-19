@@ -468,9 +468,8 @@ void MainWindow::connectVimMode(TextArea *textArea) {
               on_actionSplit_Horizontally_triggered();
             } else if (command == "splitVertical") {
               on_actionSplit_Vertically_triggered();
-            } else if (command.startsWith("edit:")) {
-              const QString path = command.mid(QString("edit:").size());
-              later([this, path]() { openFileAndAddToNewTab(path); });
+            } else {
+              handleVimEditorCommand(textArea, command);
             }
           });
 
@@ -2371,7 +2370,8 @@ bool MainWindow::saveTab(LightpadTabWidget *tabWidget, int tabIndex) {
   return save(filePath);
 }
 
-bool MainWindow::saveTabAs(LightpadTabWidget *tabWidget, int tabIndex) {
+bool MainWindow::saveTabAs(LightpadTabWidget *tabWidget, int tabIndex,
+                           const QString &presetPath) {
   if (!tabWidget || tabIndex < 0) {
     return false;
   }
@@ -2381,8 +2381,10 @@ bool MainWindow::saveTabAs(LightpadTabWidget *tabWidget, int tabIndex) {
     return false;
   }
 
-  auto filePath =
-      QFileDialog::getSaveFileName(this, tr("Save Document"), QDir::homePath());
+  QString filePath = presetPath;
+  if (filePath.isEmpty())
+    filePath = QFileDialog::getSaveFileName(this, tr("Save Document"),
+                                            QDir::homePath());
 
   if (filePath.isEmpty())
     return false;
@@ -3369,6 +3371,12 @@ void MainWindow::setupTabWidgetConnections(LightpadTabWidget *tabWidget) {
   });
   QObject::connect(tabWidget, &QTabWidget::currentChanged, this,
                    [this, tabWidget](int index) {
+                     QWidget *page = tabWidget->widget(index);
+                     if (page && page != m_vimCurrentPage &&
+                         index < tabWidget->count() - 1) {
+                       m_vimAlternatePage = m_vimCurrentPage;
+                       m_vimCurrentPage = page;
+                     }
                      updateTabWidgetContext(tabWidget, index);
                      if (m_globalSettingsLoaded && !m_restoringSession) {
                        saveSettings();

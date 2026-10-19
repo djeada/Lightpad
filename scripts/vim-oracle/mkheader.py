@@ -2,6 +2,7 @@
 
     python3 mkheader.py        # tests/unit/vim_oracle_cases.h (original suites)
     python3 mkheader.py wb     # tests/unit/vim_oracle_cases_wb.h (second wave)
+    python3 mkheader.py fx     # tests/unit/vim_oracle_cases_fx.h (folds, maps)
 
 Only cases where our result already equals Vim's are written, so the unit test
 asserts the behavior Vim 9.1 produced.
@@ -9,13 +10,13 @@ asserts the behavior Vim 9.1 produced.
 
 import json, os, random, sys
 random.seed(7)
-wave = len(sys.argv) > 1 and sys.argv[1] == 'wb'
+wave = sys.argv[1] if len(sys.argv) > 1 else None
 texts = []
 def tid(t):
     if t not in texts: texts.append(t)
     return texts.index(t)
 selected = []
-suites = [('wb', 3)] if wave else [('grid', 1), ('cmds', 2), ('more', 2), ('gn', 3), ('misc', 2), ('audit', 10)]
+suites = [(wave, 3)] if wave else [('grid', 1), ('cmds', 2), ('more', 2), ('gn', 3), ('misc', 2), ('audit', 10)]
 for src, per in suites:
     data = json.load(open(f'all_{src}.json'))
     random.shuffle(data)
@@ -39,8 +40,8 @@ def cstr(s):
         elif ord(ch) < 32: out += '\\x%02x" "' % ord(ch)
         else: out += ch
     return out + '"'
-suffix = 'Wb' if wave else ''
-guard = 'VIM_ORACLE_CASES_WB_H' if wave else 'VIM_ORACLE_CASES_H'
+suffix = wave.capitalize() if wave else ''
+guard = 'VIM_ORACLE_CASES_%s_H' % wave.upper() if wave else 'VIM_ORACLE_CASES_H'
 lines = ['#ifndef ' + guard, '#define ' + guard, '']
 if not wave:
     lines += ['struct VimOracleCase {', '  int text;', '  int line;', '  int col;', '  const char *keys;', '  const char *expectedText;', '  int expectedLine;', '  int expectedCol;', '  const char *expectedRegister;', '};', '']
@@ -54,6 +55,6 @@ for (t, l, c, k, et, el, ec, reg) in selected:
 lines.append('};')
 lines.append('')
 lines.append('#endif')
-name = 'vim_oracle_cases_wb.h' if wave else 'vim_oracle_cases.h'
+name = 'vim_oracle_cases_%s.h' % wave if wave else 'vim_oracle_cases.h'
 open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'tests', 'unit', name), 'w').write('\n'.join(lines) + '\n')
 print(len(selected), len(texts))

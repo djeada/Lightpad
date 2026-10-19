@@ -655,7 +655,8 @@ QString VimMode::toRegularExpression(const QString &vim, bool *caseSensitive,
       out += "^";
       continue;
     }
-    if (c == '$') {
+    // After \V a plain '$' is literal; only "\$" means end-of-line.
+    if (c == '$' && magic != VeryNoMagic) {
       const QString rest = vim.mid(i + 1);
       bool atEnd = rest.isEmpty() || rest.startsWith("\\|") ||
                    rest.startsWith("\\)") || rest.startsWith("\\n") ||
@@ -1073,6 +1074,12 @@ bool VimMode::handleCommandKey(const QString &token) {
     leaveCommandLine();
     return true;
   }
+  if (m_cmdType == ':' &&
+      (token == "<CR>" || token == "<C-]>" ||
+       (token.size() == 1 && !token[0].isLetterOrNumber() && token[0] != '_')))
+    expandAbbreviation('c');
+  if (token == "<C-]>")
+    return true;
   if (token == "<CR>") {
     executeCommandLine();
     return true;
@@ -1286,4 +1293,5 @@ void VimMode::executeCommandLine() {
   }
   pushJump(cursorPos());
   setCursorPos(clampNormal(r.pos));
+  openFoldsForCursor();
 }

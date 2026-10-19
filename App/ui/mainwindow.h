@@ -270,6 +270,8 @@ private:
   class QToolButton *m_pythonEnvLabel;
   bool m_vimCommandPanelActive;
   QPointer<VimMode> m_connectedVimMode;
+  QPointer<QWidget> m_vimAlternatePage;
+  QPointer<QWidget> m_vimCurrentPage;
   class BreadcrumbWidget *breadcrumbWidget;
   class RecentFilesManager *recentFilesManager;
 
@@ -369,7 +371,10 @@ private:
   void open(const QString &filePath);
   bool save(const QString &filePath, bool isAutoSave = false);
   bool saveTab(LightpadTabWidget *tabWidget, int tabIndex);
-  bool saveTabAs(LightpadTabWidget *tabWidget, int tabIndex);
+  bool saveTabAs(LightpadTabWidget *tabWidget, int tabIndex,
+                 const QString &presetPath = QString());
+  QString resolveVimPath(const QString &path) const;
+  void handleVimEditorCommand(TextArea *textArea, const QString &command);
   bool maybeSaveTab(LightpadTabWidget *tabWidget, int tabIndex);
   bool isPreviewOnlyFile(const QString &filePath) const;
   void recordFileTimestamp(const QString &filePath);
