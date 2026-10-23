@@ -31,6 +31,7 @@ Cpp, Python, JavaScript, TypeScript, Java, Rust, Go, HTML, CSS, JSON, YAML, Mark
 ## Build requirements
 - C++17 compiler
 - CMake 3.16+
+- zlib development library (Debian/Ubuntu: `zlib1g-dev`)
 - Qt 6 (Core, Widgets, Gui, Sql)
   - SQLite connections need the Qt SQLite driver (Debian/Ubuntu: `libqt6sql6-sqlite`)
 - Optional: Qt6Pdf + Qt6PdfWidgets for the PDF viewer
@@ -67,7 +68,7 @@ Use `make install INSTALL_ARGS=--dry-run` to preview what it will do.
 
 ## Build on macOS
 ```bash
-brew install qt cmake
+brew install qt cmake zlib
 git clone https://github.com/djeada/Lightpad.git
 cd Lightpad
 cmake -S . -B build -DBUILD_TESTS=ON
@@ -76,9 +77,10 @@ cmake --build build
 ```
 
 ## Build on Windows
-1. Install Qt 6 and CMake.
-2. Configure and build with CMake (CLI or GUI).
-3. The binary is produced in the build output directory.
+1. Install Qt 6, CMake, and vcpkg.
+2. Install zlib with `vcpkg install zlib:x64-windows-static-md`.
+3. Configure CMake with your Qt prefix, `-DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake`, and `-DVCPKG_TARGET_TRIPLET=x64-windows-static-md`, then build.
+4. The binary is produced in the build output directory.
 
 ## Diagnostics
 For plugin and startup diagnostics, run:

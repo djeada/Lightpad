@@ -92,9 +92,9 @@ private:
   int contentHeight() const;
   void requestMoreCommits();
   void loadRefDecorations();
-  void drawRefBadges(QPainter &painter, const GraphCommitNode &node, int y,
-                     const QFontMetrics &fm, const QColor &fgColor,
-                     bool dimmed) const;
+  int drawRefBadges(QPainter &painter, const GraphCommitNode &node, int y,
+                    int startX, int maxX, const QColor &fgColor,
+                    bool dimmed) const;
   bool rowMatches(int index) const;
   void rebuildFilterCache();
   int commitAtY(int y) const;

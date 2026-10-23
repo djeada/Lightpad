@@ -1,70 +1,49 @@
 #include "dialogs/gitobjectexplorerdialog.h"
+#include "dialogs/gitrepositorybrowser.h"
 #include "mainwindow_internal.h"
 
-void MainWindow::on_actionGit_Log_triggered() {
-  if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
-    ThemedMessageBox::information(this, tr("Git Log"),
-                                  tr("No valid Git repository found."));
-    return;
-  }
-
-  GitLogDialog dialog(m_gitIntegration, settings.theme, this);
-  connect(&dialog, &GitLogDialog::inspectObjectRequested, this,
-          &MainWindow::showGitObjects);
-  connect(&dialog, &GitLogDialog::compareRequested, this,
-          [this](const QString &from, const QString &to) {
-            showCompareAnything(from, to);
-          });
-  connect(&dialog, &GitLogDialog::viewCommitDiff, this,
-          [this](const QString &hash) {
-            GitDiffDialog diffDialog(m_gitIntegration, hash,
-                                     GitDiffDialog::DiffTarget::Commit, false,
-                                     settings.theme, this);
-            diffDialog.setDiffText(m_gitIntegration->getCommitDiff(hash));
-            diffDialog.exec();
-          });
-  connect(&dialog, &GitLogDialog::repositoryChanged, this, [this]() {
-    if (sourceControlPanel) {
-      sourceControlPanel->refresh();
-    }
-  });
-
-  dialog.exec();
-}
+void MainWindow::on_actionGit_Log_triggered() { showGitBrowser(true); }
 
 void MainWindow::on_actionGit_Objects_triggered() { showGitObjects(); }
 
 void MainWindow::showGitObjects(const QString &hash) {
+  showGitBrowser(false, hash);
+}
+
+void MainWindow::showGitBrowser(bool history, const QString &hash) {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
-    ThemedMessageBox::information(this, tr("Git Objects & Packfiles"),
+    ThemedMessageBox::information(this, tr("Git Explorer"),
                                   tr("Open a Git repository first."));
     return;
   }
-  GitObjectExplorerDialog dialog(m_gitIntegration->repositoryPath(),
-                                 settings.theme, this);
-  if (!hash.isEmpty())
-    dialog.searchHash(hash);
-  connect(&dialog, &GitObjectExplorerDialog::viewCommitRequested, this,
-          [this, &dialog](const QString &commit) {
-            GitLogDialog graph(m_gitIntegration, settings.theme, &dialog);
-            connect(&graph, &GitLogDialog::inspectObjectRequested, this,
-                    &MainWindow::showGitObjects);
-            connect(&graph, &GitLogDialog::compareRequested, this,
-                    [this](const QString &from, const QString &to) {
-                      showCompareAnything(from, to);
-                    });
-            connect(&graph, &GitLogDialog::viewCommitDiff, this,
-                    [this](const QString &target) {
-                      GitDiffDialog diff(m_gitIntegration, target,
-                                         GitDiffDialog::DiffTarget::Commit,
-                                         false, settings.theme, this);
-                      diff.setDiffText(m_gitIntegration->getCommitDiff(target));
-                      diff.exec();
-                    });
-            graph.selectCommit(commit);
-            graph.exec();
-          });
-  dialog.exec();
+  const QString repository = m_gitIntegration->repositoryPath();
+  GitRepositoryBrowser *browser = nullptr;
+  for (auto *candidate : findChildren<GitRepositoryBrowser *>(
+           "gitRepositoryBrowser", Qt::FindDirectChildrenOnly))
+    if (candidate->repositoryPath() == repository) {
+      browser = candidate;
+      break;
+    }
+  if (!browser) {
+    browser = new GitRepositoryBrowser(repository, settings.theme, this);
+    connect(browser, &GitRepositoryBrowser::fileOpenRequested, this,
+            [this, repository](const QString &path) {
+              openFileAndAddToNewTab(QDir(repository).filePath(path));
+            });
+    connect(browser, &GitRepositoryBrowser::repositoryChanged, this,
+            [this, repository]() {
+              if (sourceControlPanel &&
+                  m_gitIntegration->repositoryPath() == repository)
+                sourceControlPanel->refresh();
+            });
+  }
+  browser->show();
+  if (history)
+    browser->showHistory(hash);
+  else
+    browser->showObject(hash);
+  browser->raise();
+  browser->activateWindow();
 }
 
 void MainWindow::on_actionGit_Compare_triggered() { showCompareAnything(); }

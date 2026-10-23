@@ -1320,7 +1320,9 @@ QString GitIntegration::getCommitDiff(const QString &commitHash) const {
 
   bool success;
   QString diff =
-      executeGitCommand({"show", "--pretty=format:", commitHash}, &success);
+      executeGitCommand({"show", "--diff-merges=first-parent", "--no-ext-diff",
+                         "--no-textconv", "--pretty=format:", commitHash, "--"},
+                        &success);
 
   return success ? diff : QString();
 }
@@ -1565,9 +1567,10 @@ GitIntegration::getCommitFileStats(const QString &commitHash) const {
   }
 
   bool success;
-  QString output = executeGitCommand(
-      {"show", "--numstat", "-z", "--pretty=format:", commitHash, "--"},
-      &success);
+  QString output =
+      executeGitCommand({"show", "--diff-merges=first-parent", "--numstat",
+                         "-z", "--pretty=format:", commitHash, "--"},
+                        &success);
   if (!success || output.isEmpty()) {
     return result;
   }

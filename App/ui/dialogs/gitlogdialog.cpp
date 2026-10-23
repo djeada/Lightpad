@@ -2,12 +2,14 @@
 #include "../../git/gitintegration.h"
 #include "../../theme/colorcontrast.h"
 #include "../../ui/uistylehelper.h"
+#include "../widgets/flowlayout.h"
 #include "../widgets/gitgraphwidget.h"
 #include "gitautorefresh.h"
 
 #include "../uimetrics.h"
 #include "operationpreviewdialog.h"
 #include "themedmessagebox.h"
+#include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
 #include <QGuiApplication>
@@ -18,11 +20,13 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMetaMethod>
 #include <QPushButton>
 #include <QShortcut>
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QTabWidget>
+#include <QTextBrowser>
 #include <QTextEdit>
 #include <QToolButton>
 #include <QTreeWidget>
@@ -41,8 +45,8 @@ GitLogDialog::GitLogDialog(GitIntegration *git, const Theme &theme,
       m_detailCompareHeadButton(nullptr) {
   setWindowTitle(tr("Commit Graph"));
   setGitDescription(tr("Explore commit history, branches and merges."));
-  setMinimumSize(860, 520);
-  resize(1080, 660);
+  setMinimumSize(480, 520);
+  resize(1260, 900);
   buildUi();
   applyTheme(theme);
   loadCommits();
@@ -132,19 +136,44 @@ void GitLogDialog::buildUi() {
   detailLayout->setSpacing(UiMetrics::SpaceSm);
 
   QSplitter *detailSplitter = new QSplitter(Qt::Horizontal, detailPane);
-  m_detailView = new QTextEdit(detailSplitter);
+  detailSplitter->setObjectName("graphInspectorSplitter");
+  detailSplitter->setChildrenCollapsible(false);
+  auto *detailBrowser = new QTextBrowser(detailSplitter);
+  detailBrowser->setOpenLinks(false);
+  connect(detailBrowser, &QTextBrowser::anchorClicked, this,
+          [this](const QUrl &url) {
+            if (url.scheme() == "commit")
+              selectCommit(url.path());
+            else if (url.scheme() == "object")
+              emit inspectObjectRequested(url.path());
+          });
+  m_detailView = detailBrowser;
   m_detailView->setObjectName(QStringLiteral("graphDetailView"));
   m_detailView->setReadOnly(true);
   detailSplitter->addWidget(m_detailView);
 
   m_detailFiles = new QTreeWidget(detailSplitter);
   m_detailFiles->setObjectName(QStringLiteral("graphDetailFiles"));
+  m_detailFiles->setToolTip(tr("Click a changed file to open its diff"));
+  m_detailFiles->viewport()->setCursor(Qt::PointingHandCursor);
+  connect(m_detailFiles, &QTreeWidget::itemClicked, this,
+          [this](QTreeWidgetItem *item) {
+            if (!m_selectedHash.isEmpty()) {
+              if (isSignalConnected(QMetaMethod::fromSignal(
+                      &GitLogDialog::viewCommitFileDiff)))
+                emit viewCommitFileDiff(m_selectedHash, item->text(0));
+              else
+                emit viewCommitDiff(m_selectedHash);
+            }
+          });
   m_detailFiles->setColumnCount(2);
   m_detailFiles->setHeaderLabels({tr("Changed file"), tr("± lines")});
   m_detailFiles->setRootIsDecorated(false);
-  m_detailFiles->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-  m_detailFiles->header()->setSectionResizeMode(1,
-                                                QHeaderView::ResizeToContents);
+  m_detailFiles->setProperty("gitFlexibleColumns", true);
+  m_detailFiles->header()->setSectionResizeMode(QHeaderView::Interactive);
+  m_detailFiles->header()->setStretchLastSection(false);
+  m_detailFiles->setColumnWidth(0, 220);
+  m_detailFiles->setColumnWidth(1, 80);
   detailSplitter->addWidget(m_detailFiles);
   detailSplitter->setSizes({420, 320});
   detailLayout->addWidget(detailSplitter, 1);
@@ -155,6 +184,7 @@ void GitLogDialog::buildUi() {
   graphSplitter->addWidget(detailPane);
   graphSplitter->setStretchFactor(0, 3);
   graphSplitter->setStretchFactor(1, 2);
+  graphSplitter->setSizes({440, 260});
   m_commitTree = nullptr;
 
   graphLayout->addWidget(graphSplitter);
@@ -173,13 +203,12 @@ void GitLogDialog::buildUi() {
   m_commitTree->setAlternatingRowColors(true);
   m_commitTree->setContextMenuPolicy(Qt::CustomContextMenu);
   m_commitTree->header()->setStretchLastSection(false);
-  m_commitTree->header()->setSectionResizeMode(0,
-                                               QHeaderView::ResizeToContents);
-  m_commitTree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
-  m_commitTree->header()->setSectionResizeMode(2,
-                                               QHeaderView::ResizeToContents);
-  m_commitTree->header()->setSectionResizeMode(3,
-                                               QHeaderView::ResizeToContents);
+  m_commitTree->setProperty("gitFlexibleColumns", true);
+  m_commitTree->header()->setSectionResizeMode(QHeaderView::Interactive);
+  m_commitTree->setColumnWidth(0, 100);
+  m_commitTree->setColumnWidth(1, 280);
+  m_commitTree->setColumnWidth(2, 140);
+  m_commitTree->setColumnWidth(3, 160);
   connect(m_commitTree, &QTreeWidget::currentItemChanged, this,
           &GitLogDialog::onCommitSelected);
   connect(m_commitTree, &QTreeWidget::customContextMenuRequested, this,
@@ -225,8 +254,8 @@ void GitLogDialog::buildUi() {
 }
 
 void GitLogDialog::buildControlBar(QVBoxLayout *layout) {
-  QHBoxLayout *bar = new QHBoxLayout();
-  bar->setSpacing(UiMetrics::ToolbarSpacing);
+  auto *bar =
+      new FlowLayout(nullptr, 0, UiMetrics::ToolbarSpacing, UiMetrics::SpaceSm);
 
   m_allBranchesCheck = new QCheckBox(tr("All refs"), this);
   m_allBranchesCheck->setObjectName(QStringLiteral("graphAllBranchesCheck"));
@@ -248,11 +277,10 @@ void GitLogDialog::buildControlBar(QVBoxLayout *layout) {
           &GitLogDialog::onScopeChanged);
   bar->addWidget(m_firstParentCheck);
 
-  bar->addStretch();
-
   m_compareLabel = new QLabel(this);
+  m_compareLabel->setWordWrap(true);
+  m_compareLabel->setMinimumWidth(0);
   m_compareLabel->setObjectName(QStringLiteral("graphCompareLabel"));
-  bar->addWidget(m_compareLabel);
 
   const auto makeZoom = [&](QToolButton **button, const QString &text,
                             const QString &name, const QString &tip) {
@@ -278,6 +306,7 @@ void GitLogDialog::buildControlBar(QVBoxLayout *layout) {
           [this]() { m_graphWidget->zoomIn(); });
 
   layout->addLayout(bar);
+  layout->addWidget(m_compareLabel);
 }
 
 void GitLogDialog::buildDetailActions(QWidget *parent, QVBoxLayout *layout) {
@@ -315,6 +344,34 @@ void GitLogDialog::buildDetailActions(QWidget *parent, QVBoxLayout *layout) {
              QStringLiteral("graphResetButton"),
              tr("Move the current branch to this commit"));
 
+  auto *inspectButton = new QPushButton(tr("Inspect object"), parent);
+  inspectButton->setObjectName("graphInspectSelectedButton");
+  actions->addWidget(inspectButton);
+  connect(inspectButton, &QPushButton::clicked, this, [this]() {
+    if (!m_selectedHash.isEmpty())
+      emit inspectObjectRequested(m_selectedHash);
+  });
+  auto *copyButton = new QPushButton(tr("Copy hash"), parent);
+  copyButton->setObjectName("graphCopySelectedButton");
+  actions->addWidget(copyButton);
+  connect(copyButton, &QPushButton::clicked, this,
+          [this]() { QApplication::clipboard()->setText(m_selectedHash); });
+  auto *more = new QToolButton(parent);
+  more->setText(tr("Actions…"));
+  more->setObjectName("graphMoreActionsButton");
+  more->setPopupMode(QToolButton::InstantPopup);
+  auto *menu = new QMenu(more);
+  menu->setObjectName("graphCommitActionsMenu");
+  for (auto *button :
+       {m_detailBranchButton, m_detailTagButton, m_detailCherryPickButton,
+        m_detailRevertButton, m_detailResetButton}) {
+    actions->removeWidget(button);
+    button->hide();
+    auto *action = menu->addAction(button->text());
+    connect(action, &QAction::triggered, button, &QPushButton::click);
+  }
+  more->setMenu(menu);
+  actions->addWidget(more);
   actions->addStretch();
   layout->addLayout(actions);
 
@@ -436,6 +493,13 @@ void GitLogDialog::updateDetailActions(bool commitSelected) {
       button->setEnabled(commitSelected);
     }
   }
+  if (auto *menu = findChild<QMenu *>("graphCommitActionsMenu"))
+    for (auto *action : menu->actions())
+      action->setEnabled(commitSelected);
+  for (const auto &name :
+       {"graphInspectSelectedButton", "graphCopySelectedButton"})
+    if (auto *button = findChild<QPushButton *>(name))
+      button->setEnabled(commitSelected);
 }
 
 void GitLogDialog::createBranchAt(const QString &hash) {
@@ -527,6 +591,10 @@ void GitLogDialog::applyTheme(const Theme &theme) {
   }
   if (m_detailView) {
     m_detailView->setStyleSheet(UIStyleHelper::plainTextEditStyle(theme));
+    m_detailView->document()->setDefaultStyleSheet(
+        QStringLiteral("a { color: %1; text-decoration: underline; }")
+            .arg(ColorContrast::ensure(theme.accentColor, theme.backgroundColor)
+                     .name()));
     if (!m_selectedHash.isEmpty()) {
       showCommitDetails(m_selectedHash);
     }
@@ -618,9 +686,9 @@ void GitLogDialog::showCommitDetails(const QString &hash) {
   GitCommitInfo details = m_git->getCommitDetails(hash);
 
   QString html = QStringLiteral("<table width=\"100%\" cellspacing=\"0\">");
-  html +=
-      QStringLiteral("<tr><td><b>Commit</b></td><td><code>%1</code></td></tr>")
-          .arg(details.hash.left(12).toHtmlEscaped());
+  html += QStringLiteral("<tr><td><b>Commit</b></td><td><a "
+                         "href=\"object:%1\"><code>%2</code></a></td></tr>")
+              .arg(details.hash, details.hash.left(12));
   html +=
       QStringLiteral("<tr><td><b>Author</b></td><td>%1 &lt;%2&gt;</td></tr>")
           .arg(details.author.toHtmlEscaped(),
@@ -632,7 +700,8 @@ void GitLogDialog::showCommitDetails(const QString &hash) {
   if (!details.parents.isEmpty()) {
     QStringList shortParents;
     for (const QString &parent : details.parents) {
-      shortParents << parent.left(7);
+      shortParents << QStringLiteral("<a href=\"commit:%1\">%2</a>")
+                          .arg(parent, parent.left(7));
     }
     html += QStringLiteral("<tr><td><b>%1</b></td><td><code>%2</code>%3</td>"
                            "</tr>")
@@ -658,6 +727,7 @@ void GitLogDialog::showCommitDetails(const QString &hash) {
   }
 
   m_selectedHash = hash;
+  emit objectSelected(hash);
   updateDetailActions(true);
 
   const QList<GitCommitFileStat> stats = m_git->getCommitFileStats(hash);

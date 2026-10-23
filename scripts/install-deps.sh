@@ -58,6 +58,7 @@ if [[ "$(uname -s)" == "Linux" ]] && command -v apt-get >/dev/null 2>&1; then
     cmake
     ninja-build
     pkg-config
+    zlib1g-dev
     qt6-base-dev
     qt6-base-dev-tools
     qt6-tools-dev-tools
@@ -82,6 +83,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     ninja
     pkg-config
     qt
+    zlib
   )
 
   echo "Installing Lightpad dependencies with Homebrew..."
@@ -97,6 +99,7 @@ Install these tools manually:
   - CMake 3.16+
   - pkg-config
   - Ninja (recommended)
+  - zlib development library
   - Qt 6 development packages
   - Optional: Qt6Pdf / Qt6PdfWidgets / Qt6WebEngineWidgets
 EOF

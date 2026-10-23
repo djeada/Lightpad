@@ -28,6 +28,7 @@ public:
                 bool staged, const Theme &theme, QWidget *parent = nullptr);
 
   void setDiffText(const QString &diffText);
+  void selectFile(const QString &filePath);
   void setCommitInfo(const QString &author, const QString &date,
                      const QString &message);
 

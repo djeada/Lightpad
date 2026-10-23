@@ -15,6 +15,7 @@
 #include "ui/dialogs/gitobjectexplorerdialog.h"
 #include "ui/dialogs/gitrebasedialog.h"
 #include "ui/dialogs/gitremotedialog.h"
+#include "ui/dialogs/gitrepositorybrowser.h"
 #include "ui/dialogs/gitrepotoolsdialog.h"
 #include "ui/dialogs/gitstashdialog.h"
 #include "ui/dialogs/gitworkbenchdialog.h"
@@ -34,14 +35,21 @@
 #include "ui/panels/conflictresolverview.h"
 #include "ui/panels/sourcecontrolpanel.h"
 #include "ui/widgets/flowlayout.h"
+#include "ui/widgets/gitgraphwidget.h"
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QGraphicsItem>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QGroupBox>
+#include <QHeaderView>
 #include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSignalSpy>
+#include <QSplitter>
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QThreadPool>
@@ -72,6 +80,9 @@ private slots:
   void surfaces();
   void remoteSelectionStates();
   void actionWrappingPreservesInteraction();
+  void browserDoesNotBlockNavigation();
+  void diffIncludesFilesBeyondOldPreviewLimit();
+  void browserColumnsCanShrink();
   void cleanupTestCase() { QThreadPool::globalInstance()->waitForDone(); }
 
 private:
@@ -172,6 +183,9 @@ void TestGitUiConsistency::surfaces_data() {
                              "diff",
                              "filehistory",
                              "objects",
+                             "objects-dag",
+                             "objects-disk",
+                             "browser",
                              "workbench",
                              "workbench-inspect",
                              "workbench-rewrite",
@@ -212,7 +226,10 @@ void TestGitUiConsistency::surfaces_data() {
 std::unique_ptr<QWidget> TestGitUiConsistency::create(const QString &name,
                                                       const Theme &theme) {
   QWidget *surface = nullptr;
-  if (name == "init")
+  if (name == "browser") {
+    surface = new GitRepositoryBrowser(m_repo.path(), theme);
+    surface->setAttribute(Qt::WA_DeleteOnClose, false);
+  } else if (name == "init")
     surface = new GitInitDialog(m_repo.path());
   else if (name == "push")
     surface = new GitRemoteDialog(&m_git, GitRemoteDialog::Mode::Push);
@@ -238,9 +255,14 @@ std::unique_ptr<QWidget> TestGitUiConsistency::create(const QString &name,
     surface = diff;
   } else if (name == "filehistory")
     surface = new GitFileHistoryDialog(&m_git, "sample.txt");
-  else if (name == "objects") {
+  else if (name.startsWith("objects")) {
     auto *objects = new GitObjectExplorerDialog(m_repo.path(), theme);
     objects->searchHash(m_git.getCommitDetails("HEAD").hash);
+    if (name == "objects-dag")
+      objects->findChild<QTabWidget *>("objectDetailTabs")->setCurrentIndex(2);
+    if (name == "objects-disk")
+      objects->findChild<QTabWidget *>("objectDetailTabs")
+          ->setCurrentWidget(objects->findChild<QWidget *>("objectDiskPage"));
     surface = objects;
   } else if (name.startsWith("workbench")) {
     auto *workbench = new GitWorkbenchDialog(&m_git, theme);
@@ -319,6 +341,156 @@ std::unique_ptr<QWidget> TestGitUiConsistency::create(const QString &name,
   return std::unique_ptr<QWidget>(surface);
 }
 
+void TestGitUiConsistency::browserDoesNotBlockNavigation() {
+  auto browser = std::make_unique<GitRepositoryBrowser>(m_repo.path(), Theme());
+  browser->setAttribute(Qt::WA_DeleteOnClose, false);
+  browser->resize(1800, 960);
+  browser->show();
+  const QString head = QString::fromLatin1(git({"rev-parse", "HEAD"}));
+  const QString tree = QString::fromLatin1(git({"rev-parse", "HEAD^{tree}"}));
+  browser->showObject(head);
+  auto *objects = browser->findChild<GitObjectExplorerDialog *>();
+  auto *history = browser->findChild<GitLogDialog *>();
+  auto *summary = objects->findChild<QLabel *>("objectDetailSummary");
+  QTRY_VERIFY(summary->text().contains(head));
+  QVERIFY(!QApplication::activeModalWidget());
+
+  // Single-click a real card in the embedded view. Its contents must appear
+  // without closing a window or switching out of the graph.
+  auto *dag = objects->findChild<QGraphicsView *>("objectDagView");
+  QGraphicsItem *card = nullptr;
+  for (auto *item : dag->scene()->items())
+    if (item->data(0).toString() == tree) {
+      card = item;
+      break;
+    }
+  QVERIFY(card);
+  dag->centerOn(card);
+  QTest::mouseClick(dag->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    dag->mapFromScene(card->sceneBoundingRect().center()));
+  QTRY_VERIFY(summary->text().contains(tree));
+  auto *preview = objects->findChild<QPlainTextEdit *>("objectDagPreview");
+  QVERIFY(preview->isVisible());
+  QTRY_VERIFY(preview->toPlainText().contains("sample.txt"));
+
+  // Split view leaves both panes interactive. Selecting a history row locates
+  // that commit across storage even if a pack was previously selected.
+  QTest::mouseClick(browser->findChild<QPushButton *>("gitBrowserMode2"),
+                    Qt::LeftButton);
+  QVERIFY(objects->isVisible());
+  QVERIFY(history->isVisible());
+  QVERIFY(!QApplication::activeModalWidget());
+  auto *graph = history->findChild<GitGraphWidget *>();
+  QTRY_VERIFY(graph->height() >= 200);
+  QCoreApplication::processEvents();
+  const auto commits = graph->loadedCommits();
+  QVERIFY(commits.size() > 1);
+  graph->findChild<QScrollBar *>()->setValue(0);
+  const int row = 1 + (graph->hasWorkingTreeNode() ? 1 : 0);
+  QTest::mouseClick(graph, Qt::LeftButton, Qt::NoModifier,
+                    QPoint(graph->width() / 2,
+                           graph->rowHeight() * row + graph->rowHeight() / 2));
+  QCOMPARE(graph->selectedHash(), commits.at(1).hash);
+  QTRY_VERIFY(summary->text().contains(commits.at(1).hash));
+  auto *packs = objects->findChild<QTreeWidget *>("objectPackTable");
+  QVERIFY(packs->isEnabled());
+  QTest::mouseClick(packs->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    packs->visualItemRect(packs->topLevelItem(1)).center());
+  QVERIFY(objects->findChild<QPushButton *>("objectVerifyButton")->isEnabled());
+  QTRY_VERIFY(
+      objects->findChild<QTreeWidget *>("objectResultsTable")->isVisible());
+  QVERIFY(
+      objects->findChild<QLineEdit *>("objectHashSearch")->text().isEmpty());
+
+  QTest::mouseClick(history->findChild<QPushButton *>("graphViewDiffButton"),
+                    Qt::LeftButton);
+  auto *diff = browser->findChild<GitDiffDialog *>();
+  QVERIFY(diff);
+  QVERIFY(diff->isVisible());
+  QVERIFY(!QApplication::activeModalWidget());
+  QTest::mouseClick(history->findChild<QPushButton *>("graphViewDiffButton"),
+                    Qt::LeftButton);
+  QCOMPARE(browser->findChildren<GitDiffDialog *>().size(), 1);
+  diff->close();
+
+  QPushButton unrelated("Editor remains usable");
+  unrelated.show();
+  QSignalSpy clicked(&unrelated, &QPushButton::clicked);
+  QTest::mouseClick(&unrelated, Qt::LeftButton);
+  QCOMPARE(clicked.count(), 1);
+  const int dialogs = browser->findChildren<GitObjectExplorerDialog *>().size();
+  history->inspectObjectRequested(head);
+  QTRY_VERIFY(summary->text().contains(head));
+  QCOMPARE(browser->findChildren<GitObjectExplorerDialog *>().size(), dialogs);
+  QCOMPARE(browser->repositoryPath(), m_repo.path());
+}
+
+void TestGitUiConsistency::browserColumnsCanShrink() {
+  auto browser = std::make_unique<GitRepositoryBrowser>(m_repo.path(), Theme());
+  browser->setAttribute(Qt::WA_DeleteOnClose, false);
+  browser->resize(1400, 900);
+  browser->show();
+  browser->showObject(QString::fromLatin1(git({"rev-parse", "HEAD"})));
+  auto *mode = browser->findChild<QPushButton *>("gitBrowserMode2");
+  mode->click();
+  QCoreApplication::processEvents();
+  QVERIFY(!browser->isMaximized());
+  auto *split = browser->findChild<QSplitter *>("gitBrowserSplitter");
+  QVERIFY(split);
+  split->setSizes({400, 960});
+  QCoreApplication::processEvents();
+  QVERIFY2(split->sizes().first() <= 420,
+           qPrintable(QString("Objects pane is pinned to %1px")
+                          .arg(split->sizes().first())));
+  split->setSizes({960, 400});
+  QCoreApplication::processEvents();
+  QVERIFY2(split->sizes().last() <= 420,
+           qPrintable(QString("History pane is pinned to %1px")
+                          .arg(split->sizes().last())));
+  auto *storage = browser->findChild<QSplitter *>("objectStorageSplitter");
+  storage->setSizes({140, 780});
+  QCoreApplication::processEvents();
+  QVERIFY2(storage->sizes().first() <= 160,
+           qPrintable(QString("Storage pane is pinned to %1px")
+                          .arg(storage->sizes().first())));
+
+  for (const auto &name :
+       {"objectPackTable", "objectResultsTable", "objectRelationsTable",
+        "objectExplorationTrail", "graphDetailFiles", "graphCommitList"}) {
+    auto *tree = browser->findChild<QTreeWidget *>(name);
+    QVERIFY(tree);
+    for (int column = 0; column < tree->columnCount(); ++column) {
+      QCOMPARE(tree->header()->sectionResizeMode(column),
+               QHeaderView::Interactive);
+      tree->header()->resizeSection(column, 40);
+      QCOMPARE(tree->header()->sectionSize(column), 40);
+    }
+  }
+  // An explicit split remains selected when moving between view modes.
+  const QList<int> chosen = split->sizes();
+  browser->findChild<QPushButton *>("gitBrowserMode0")->click();
+  mode->click();
+  QCoreApplication::processEvents();
+  QVERIFY(qAbs(split->sizes().first() - chosen.first()) < 25);
+}
+
+void TestGitUiConsistency::diffIncludesFilesBeyondOldPreviewLimit() {
+  QString patch = "diff --git a/large.txt b/large.txt\n--- a/large.txt\n+++ "
+                  "b/large.txt\n@@ -0,0 +1,1000 @@\n";
+  for (int i = 0; i < 1000; ++i)
+    patch += "+" + QString(110, 'x') + "\n";
+  patch += "diff --git a/later.txt b/later.txt\n--- a/later.txt\n+++ "
+           "b/later.txt\n@@ -0,0 +1 @@\n+later-file-content\n";
+  GitDiffDialog diff(&m_git, "HEAD", GitDiffDialog::DiffTarget::Commit, false,
+                     Theme());
+  diff.setDiffText(patch);
+  auto *files = diff.findChild<QListWidget *>("fileList");
+  QVERIFY(files);
+  QCOMPARE(files->count(), 2);
+  diff.selectFile("later.txt");
+  QCOMPARE(files->currentRow(), 1);
+}
+
 void TestGitUiConsistency::surfaces() {
   QFETCH(QString, name);
   QFETCH(bool, light);
@@ -331,7 +503,7 @@ void TestGitUiConsistency::surfaces() {
                         qMax(640, surface->minimumHeight()));
   surface->resize(requested);
   surface->show();
-  QTest::qWait(name == "objects" ? 200 : 25);
+  QTest::qWait(name.startsWith("objects") ? 200 : 25);
   QCOMPARE(surface->width(), requested.width());
   QStringList issues;
   for (auto *button : surface->findChildren<QPushButton *>()) {

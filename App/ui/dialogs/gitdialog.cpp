@@ -42,7 +42,9 @@ void GitDialog::prepareLayout() {
   if (!outer)
     return;
   const bool edgeToEdge = property("gitEdgeToEdge").toBool();
-  const int margin = edgeToEdge ? 0 : UiMetrics::SpaceXl;
+  const int margin = edgeToEdge                         ? 0
+                     : property("gitEmbedded").toBool() ? 8
+                                                        : UiMetrics::SpaceXl;
   outer->setContentsMargins(margin, margin, margin, margin);
   outer->setSpacing(edgeToEdge ? 0 : UiMetrics::SpaceLg);
   if (!m_gitHeading) {

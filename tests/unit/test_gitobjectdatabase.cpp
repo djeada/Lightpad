@@ -19,6 +19,8 @@ private slots:
   void testVersionOneIndex();
   void testLargeOffsetsAndInvalidFanout();
   void testDeltaEncodedObjects();
+  void testReadSelectedStoredCopies();
+  void testDecodeLimitAndCorruptLooseCopy();
   void testSha256Repository();
   void testWorktreeAndBareRepository();
   void testAlternateObjectStore();
@@ -206,6 +208,12 @@ void TestGitObjectDatabase::testSha256Repository() {
   QCOMPARE(result.objects.first().hash, hash);
   QCOMPARE(GitObjectDatabase::inspect(path, hash).preview,
            QByteArray("sha256 data"));
+  for (const auto &location : result.objects) {
+    const auto decoded = GitObjectDatabase::readStoredObject(store, location);
+    QVERIFY2(decoded.error.isEmpty(), qPrintable(decoded.error));
+    QVERIFY(decoded.hashVerified);
+    QCOMPARE(decoded.preview, QByteArray("sha256 data"));
+  }
 }
 
 void TestGitObjectDatabase::testLargeOffsetsAndInvalidFanout() {
@@ -271,8 +279,116 @@ void TestGitObjectDatabase::testDeltaEncodedObjects() {
       QVERIFY(object.deltaBase.startsWith("offset "));
       QCOMPARE(GitObjectDatabase::inspect(m_repo, object.hash).size, 32 * 1024);
     }
+    const auto decoded = GitObjectDatabase::readStoredObject(
+        GitObjectDatabase::scan(m_repo), object);
+    QVERIFY2(decoded.error.isEmpty(), qPrintable(decoded.error));
+    QVERIFY(decoded.hashVerified);
+    QCOMPARE(decoded.preview.trimmed(), git({"cat-file", "blob", object.hash}));
+    if (object.representation == "ofs-delta") {
+      QVERIFY(!decoded.baseHash.isEmpty());
+      QVERIFY(!decoded.deltaOperations.isEmpty());
+    }
   }
   QVERIFY(foundDelta);
+  const QString refName = QString::fromLatin1(
+      git({"pack-objects", "--window=50", "--depth=50", prefix},
+          hashes.join('\n').toLatin1() + '\n'));
+  const auto store = GitObjectDatabase::scan(m_repo);
+  const auto refs =
+      GitObjectDatabase::search(store, "", prefix + '-' + refName + ".pack");
+  bool foundRef = false;
+  for (const auto &object : refs.objects) {
+    const auto decoded = GitObjectDatabase::readStoredObject(store, object);
+    QVERIFY2(decoded.error.isEmpty(), qPrintable(decoded.error));
+    QVERIFY(decoded.hashVerified);
+    foundRef |= object.representation == "ref-delta";
+  }
+  QVERIFY(foundRef);
+}
+
+void TestGitObjectDatabase::testReadSelectedStoredCopies() {
+  const QString packPath = pack({m_head, m_tree, m_blob});
+  const auto store = GitObjectDatabase::scan(m_repo);
+  const auto looseOnly =
+      GitObjectDatabase::search(store, "", {}, 0, 250, {}, true);
+  QCOMPARE(looseOnly.totalMatches, 3);
+  for (const auto &location : looseOnly.objects) {
+    QVERIFY(location.packPath.isEmpty());
+    const auto decoded = GitObjectDatabase::readStoredObject(store, location);
+    QVERIFY2(decoded.error.isEmpty(), qPrintable(decoded.error));
+    QVERIFY(decoded.hashVerified);
+    QCOMPARE(decoded.preview.trimmed(),
+             git({"cat-file", decoded.type, location.hash}));
+    QVERIFY(decoded.header.endsWith('\0'));
+    QCOMPARE(decoded.storedSize, QFileInfo(location.loosePath).size());
+  }
+  const auto copies = GitObjectDatabase::search(store, m_head, packPath);
+  QCOMPARE(copies.objects.size(), 1);
+  const auto location = copies.objects.first();
+  const auto decoded = GitObjectDatabase::readStoredObject(store, location);
+  QVERIFY2(decoded.error.isEmpty(), qPrintable(decoded.error));
+  QVERIFY(decoded.hashVerified);
+  QCOMPARE(decoded.preview.trimmed(), git({"cat-file", "commit", m_head}));
+  QVERIFY(decoded.dataOffset > location.offset);
+  QFile file(packPath);
+  QVERIFY(file.open(QIODevice::ReadOnly));
+  QVERIFY(file.seek(location.offset));
+  QCOMPARE(decoded.storedPreview, file.read(decoded.storedSize));
+  file.close();
+  auto stale = location;
+  ++stale.offset;
+  QVERIFY(GitObjectDatabase::readStoredObject(store, stale)
+              .error.contains("changed"));
+  QVERIFY(GitObjectDatabase::readStoredObject(store, location, [] {
+            return true;
+          }).error.contains("Cancelled"));
+  // Corrupt only this copy, leaving the valid loose object available. The
+  // physical reader must report corruption instead of silently reading it.
+  QVERIFY(file.setPermissions(file.permissions() | QFile::WriteOwner));
+  QVERIFY(file.open(QIODevice::ReadWrite));
+  const qint64 last = location.offset + decoded.storedSize - 1;
+  QVERIFY(file.seek(last));
+  const char changed = file.read(1).at(0) ^ 0x55;
+  QVERIFY(file.seek(last));
+  QCOMPARE(file.write(&changed, 1), 1);
+  file.close();
+  QVERIFY(
+      !GitObjectDatabase::readStoredObject(store, location).error.isEmpty());
+  QVERIFY(GitObjectDatabase::inspect(m_repo, m_head).error.isEmpty());
+}
+
+void TestGitObjectDatabase::testDecodeLimitAndCorruptLooseCopy() {
+  const QString packedPath = pack({m_blob});
+  auto store = GitObjectDatabase::scan(m_repo);
+  const auto loose =
+      GitObjectDatabase::search(store, m_blob, {}, 0, 250, {}, true)
+          .objects.first();
+  QFile file(loose.loosePath);
+  QVERIFY(file.setPermissions(file.permissions() | QFile::WriteOwner));
+  QVERIFY(file.open(QIODevice::ReadWrite));
+  QVERIFY(file.seek(file.size() - 1));
+  const char changed = file.read(1).at(0) ^ 0x55;
+  QVERIFY(file.seek(file.size() - 1));
+  QCOMPARE(file.write(&changed, 1), 1);
+  file.close();
+  QVERIFY(!GitObjectDatabase::readStoredObject(store, loose).error.isEmpty());
+  const auto packed =
+      GitObjectDatabase::search(store, m_blob, packedPath).objects.first();
+  QVERIFY(GitObjectDatabase::readStoredObject(store, packed).hashVerified);
+
+  const QString large = blob(QByteArray(33 * 1024 * 1024, 'x'));
+  const QString largePack = pack({large});
+  store = GitObjectDatabase::scan(m_repo);
+  const auto locations = GitObjectDatabase::search(store, large);
+  QCOMPARE(locations.objects.size(), 2);
+  for (const auto &location : locations.objects) {
+    const auto decoded = GitObjectDatabase::readStoredObject(store, location);
+    QVERIFY2(decoded.error.isEmpty(), qPrintable(decoded.error));
+    QVERIFY(decoded.truncated);
+    QVERIFY(!decoded.hashVerified);
+    QCOMPARE(decoded.size, 33 * 1024 * 1024);
+    QCOMPARE(decoded.preview, QByteArray(256 * 1024, 'x'));
+  }
 }
 
 void TestGitObjectDatabase::testWorktreeAndBareRepository() {
@@ -344,6 +460,14 @@ void TestGitObjectDatabase::testBoundedPreviewAndLiteralObjectContents() {
   QVERIFY(details.truncated);
   QCOMPARE(details.size, 1024 * 1024);
   QCOMPARE(details.preview.size(), 256 * 1024);
+  const auto store = GitObjectDatabase::scan(m_repo);
+  const auto stored = GitObjectDatabase::search(store, large).objects.first();
+  const auto decoded = GitObjectDatabase::readStoredObject(store, stored);
+  QVERIFY2(decoded.error.isEmpty(), qPrintable(decoded.error));
+  QVERIFY(decoded.hashVerified);
+  QVERIFY(decoded.truncated);
+  QCOMPARE(decoded.preview.size(), 256 * 1024);
+  QCOMPARE(decoded.size, 1024 * 1024);
   const QString replacement = blob("replacement contents");
   git({"replace", m_blob, replacement});
   QCOMPARE(GitObjectDatabase::inspect(m_repo, m_blob).preview,
