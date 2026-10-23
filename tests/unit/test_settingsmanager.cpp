@@ -73,6 +73,15 @@ void TestSettingsManager::testGetSettingsDirectory() {
 }
 
 void TestSettingsManager::testDefaultValues() {
+  for (const QString &language : {QString("js"), QString("ts")}) {
+    const QString prefix = "languageServers." + language;
+    auto &settings = SettingsManager::instance();
+    QCOMPARE(settings.getValue(prefix + ".command").toString(),
+             QString("typescript-language-server"));
+    QCOMPARE(settings.getValue(prefix + ".arguments").toStringList(),
+             QStringList{"--stdio"});
+    QVERIFY(settings.getValue(prefix + ".enabled").toBool());
+  }
   SettingsManager &sm = SettingsManager::instance();
   sm.resetToDefaults();
 

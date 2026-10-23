@@ -8,7 +8,9 @@ class TypeScriptSyntaxPlugin : public BaseSyntaxPlugin {
 public:
   QString languageId() const override { return "ts"; }
   QString languageName() const override { return "TypeScript"; }
-  QStringList fileExtensions() const override { return {"ts", "tsx"}; }
+  QStringList fileExtensions() const override {
+    return {"ts", "tsx", "mts", "cts"};
+  }
 
   QVector<SyntaxRule> syntaxRules() const override;
   QVector<MultiLineBlock> multiLineBlocks() const override;

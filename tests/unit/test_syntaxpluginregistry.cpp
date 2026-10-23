@@ -287,6 +287,11 @@ void TestSyntaxPluginRegistry::testAllBuiltInPlugins() {
   QVERIFY(registry.isExtensionSupported("rs"));
   QVERIFY(registry.isExtensionSupported("sh"));
   QVERIFY(registry.isExtensionSupported("ts"));
+  for (const QString &extension : {QString("mts"), QString("cts")}) {
+    auto *plugin = registry.getPluginByExtension(extension);
+    QVERIFY(plugin != nullptr);
+    QCOMPARE(plugin->languageId(), QString("ts"));
+  }
   QVERIFY(registry.isExtensionSupported("wgsl"));
   QVERIFY(registry.isExtensionSupported("yaml"));
   QVERIFY(registry.isExtensionSupported("yml"));

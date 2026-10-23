@@ -229,6 +229,7 @@ set(project_headers
     i18n/i18n.h
     python/pythonprojectenvironment.h
     language/languagecatalog.h
+    language/projectroot.h
     language/languagefeaturemanager.h
     diagnostics/diagnosticsmanager.h
     diagnostics/compilerdiagnosticparser.h

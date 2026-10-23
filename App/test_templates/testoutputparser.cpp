@@ -465,6 +465,84 @@ void CtestParser::appendOutput(const QString &testId, const QString &line) {
   it->stdoutOutput += line;
 }
 
+CargoTestParser::CargoTestParser(QObject *parent) : ITestOutputParser(parent) {}
+
+void CargoTestParser::feed(const QByteArray &data) {
+  m_buffer += decode(data);
+  int newline;
+  while ((newline = m_buffer.indexOf('\n')) >= 0) {
+    const QString line = m_buffer.left(newline);
+    m_buffer.remove(0, newline + 1);
+    parseLine(line);
+  }
+}
+
+void CargoTestParser::finish() {
+  if (!m_buffer.isEmpty()) {
+    parseLine(m_buffer);
+  }
+  m_buffer.clear();
+  flushFailure();
+}
+
+void CargoTestParser::flushFailure() {
+  if (m_failedTests.contains(m_failureTest) && !m_failureOutput.isEmpty()) {
+    TestResult result = m_failedTests.value(m_failureTest);
+    result.message = m_failureOutput.join('\n').trimmed();
+    emit testFinished(result);
+  }
+  m_failureTest.clear();
+  m_failureOutput.clear();
+}
+
+void CargoTestParser::parseLine(const QString &line) {
+  emit outputLine(line, false);
+  const QString trimmed = line.trimmed();
+  static const QRegularExpression failureHeader(R"(^---- (.+) stdout ----$)");
+  const auto failure = failureHeader.match(trimmed);
+  if (failure.hasMatch()) {
+    flushFailure();
+    m_failureTest = failure.captured(1);
+    return;
+  }
+  if (trimmed == "failures:" || trimmed.startsWith("test result:")) {
+    flushFailure();
+    return;
+  }
+  if (!m_failureTest.isEmpty()) {
+    m_failureOutput.append(line);
+    return;
+  }
+
+  static const QRegularExpression testLine(
+      R"(^test (.+?) \.\.\. (ok|FAILED|ignored)(?:, (.*))?$)");
+  const auto match = testLine.match(trimmed);
+  if (!match.hasMatch()) {
+    return;
+  }
+
+  TestResult result;
+  result.name = match.captured(1);
+  const QString panicSuffix = " - should panic";
+  if (result.name.endsWith(panicSuffix)) {
+    result.name.chop(panicSuffix.size());
+  }
+  result.id = result.name;
+  const int separator = result.name.lastIndexOf("::");
+  if (separator >= 0) {
+    result.suite = result.name.left(separator);
+  }
+  const QString status = match.captured(2);
+  result.status = status == "ok"       ? TestStatus::Passed
+                  : status == "FAILED" ? TestStatus::Failed
+                                       : TestStatus::Skipped;
+  result.message = match.captured(3);
+  if (result.status == TestStatus::Failed) {
+    m_failedTests.insert(result.id, result);
+  }
+  emit testFinished(result);
+}
+
 GenericRegexParser::GenericRegexParser(QObject *parent)
     : ITestOutputParser(parent) {
   m_passRegex.setPattern(R"(^PASS:\s*(.+)$)");
@@ -556,6 +634,8 @@ TestOutputParserFactory::createParser(const QString &formatId,
     return new PytestParser(parent);
   if (formatId == "ctest")
     return new CtestParser(parent);
+  if (formatId == "cargo")
+    return new CargoTestParser(parent);
   if (formatId == "generic")
     return new GenericRegexParser(parent);
 

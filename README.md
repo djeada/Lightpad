@@ -21,6 +21,7 @@ Lightpad is a Qt 6-based code editor with a modern UI, built-in language tooling
 - Multi-cursor editing and split editors (horizontal/vertical)
 - Problems panel, breadcrumbs, minimap, and integrated terminal
 - Run and format templates with per-project assignments
+- Project-aware Cargo, Go package, and npm runs, with Rust/Go checks and Node.js language tooling
 - Database workbench: SQLite, SQL Server, PostgreSQL and MySQL/MariaDB (also inside Docker containers) with multiple connections, schema browser, result grids, exports, column insights and schema-aware SQL completion
 - Image viewer and optional PDF viewer (Qt6Pdf)
 
@@ -112,6 +113,7 @@ Plugins are discovered from:
 - Go to Definition: docs/GO_TO_DEFINITION.md
 - Plugin development: docs/PLUGIN_DEVELOPMENT.md
 - Syntax plugins: docs/SYNTAX_PLUGINS.md
+- Rust, Go, and Node.js workflows: [docs/RUST_GO_NODEJS.md](docs/RUST_GO_NODEJS.md)
 - Database tools: docs/DATABASE_TOOLS.md
 
 ## Contributing

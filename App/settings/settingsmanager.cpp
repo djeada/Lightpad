@@ -115,6 +115,14 @@ void SettingsManager::initializeDefaults() {
   goServer["enabled"] = true;
   languageServersDefaults["go"] = goServer;
 
+  QJsonObject typescriptServer;
+  typescriptServer["command"] = "typescript-language-server";
+  typescriptServer["arguments"] = QJsonArray({"--stdio"});
+  typescriptServer["environment"] = QJsonArray();
+  typescriptServer["enabled"] = true;
+  languageServersDefaults["js"] = typescriptServer;
+  languageServersDefaults["ts"] = typescriptServer;
+
   m_defaults["languageServers"] = languageServersDefaults;
 
   m_settings = m_defaults;

@@ -429,6 +429,10 @@ void TestTestRunManager::testFailedTestFilterPerFramework() {
   cargo.outputFormat = "cargo_json";
   QCOMPARE(TestRunManager::failedTestFilter(cargo, {"only"}), QString("only"));
   QVERIFY(TestRunManager::failedTestFilter(cargo, {"a", "b"}).isEmpty());
+  cargo.outputFormat = "cargo";
+  QCOMPARE(TestRunManager::failedTestFilter(cargo, {"tests::only"}),
+           QString("tests::only"));
+  QVERIFY(TestRunManager::failedTestFilter(cargo, {"a", "b"}).isEmpty());
 
   TestConfiguration pytest;
   pytest.outputFormat = "pytest";

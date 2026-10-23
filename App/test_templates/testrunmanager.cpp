@@ -319,7 +319,7 @@ QString TestRunManager::failedTestFilter(const TestConfiguration &config,
   if (templateArgs.join(' ').contains("gtest_filter"))
     return names.join(':');
 
-  if (config.outputFormat == "cargo_json")
+  if (config.outputFormat == "cargo_json" || config.outputFormat == "cargo")
     return names.size() == 1 ? names.first() : QString();
 
   auto escape = [](const QString &name) {

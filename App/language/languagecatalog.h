@@ -44,7 +44,7 @@ public:
         {"rust", "Rust", {"rs"}},
         {"sh", "Shell", {"sh", "bash", "zsh"}},
         {"sql", "SQL", {"sql", "ddl", "dml", "psql", "tsql"}},
-        {"ts", "TypeScript", {"ts", "tsx"}},
+        {"ts", "TypeScript", {"ts", "tsx", "mts", "cts"}},
         {"wgsl", "WGSL", {"wgsl"}},
         {"yaml", "YAML", {"yaml", "yml"}},
     };
@@ -169,6 +169,9 @@ private:
     addAlias(aliases, "python", "py");
     addAlias(aliases, "js", "js");
     addAlias(aliases, "javascript", "js");
+    addAlias(aliases, "node", "js");
+    addAlias(aliases, "nodejs", "js");
+    addAlias(aliases, "node.js", "js");
     addAlias(aliases, "ts", "ts");
     addAlias(aliases, "typescript", "ts");
     addAlias(aliases, "cpp", "cpp");

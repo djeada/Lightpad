@@ -1,6 +1,7 @@
 #include "runtemplatemanager.h"
 #include "../core/logging/logger.h"
 #include "../language/languagecatalog.h"
+#include "../language/projectroot.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -34,6 +35,14 @@ QStringList templateMatchKeysForFilePath(const QString &filePath) {
   appendKey(fileInfo.suffix());
   appendKey(fileInfo.fileName());
   return keys;
+}
+
+QString templateProjectRoot(const RunTemplate &runTemplate,
+                            const QString &filePath,
+                            const QString &workspaceFolder) {
+  const QString root =
+      ProjectRoot::find(filePath, runTemplate.projectMarkers, workspaceFolder);
+  return root.isEmpty() ? QFileInfo(filePath).absolutePath() : root;
 }
 } // namespace
 
@@ -191,6 +200,9 @@ RunTemplate RunTemplateManager::parseTemplate(const QJsonObject &obj) const {
   }
   tmpl.command = obj.value("command").toString();
   tmpl.workingDirectory = obj.value("workingDirectory").toString("${fileDir}");
+  for (const QJsonValue &marker : obj.value("projectMarkers").toArray()) {
+    tmpl.projectMarkers.append(marker.toString());
+  }
 
   QJsonArray extArray = obj.value("extensions").toArray();
   for (const QJsonValue &ext : extArray) {
@@ -609,16 +621,7 @@ RunTemplateManager::buildCommand(const QString &filePath,
   const PythonEnvironmentPreference pythonPreference =
       pythonPreferenceForAssignment(assignment);
 
-  QString workingDirectory = assignment.workingDirectory;
-  if (workingDirectory.isEmpty()) {
-    workingDirectory = tmpl.workingDirectory;
-  }
-  if (workingDirectory.isEmpty()) {
-    workingDirectory = "${fileDir}";
-  }
-  workingDirectory = PythonProjectEnvironment::substituteVariables(
-      workingDirectory, m_workspaceFolder, filePath,
-      QFileInfo(filePath).absolutePath(), pythonPreference);
+  const QString workingDirectory = getWorkingDirectory(filePath, languageId);
 
   QString command = PythonProjectEnvironment::substituteVariables(
       tmpl.command, m_workspaceFolder, filePath, workingDirectory,
@@ -700,28 +703,24 @@ RunTemplateManager::getWorkingDirectory(const QString &filePath,
   const PythonEnvironmentPreference pythonPreference =
       pythonPreferenceForAssignment(assignment);
 
-  if (!assignment.workingDirectory.isEmpty()) {
-    return PythonProjectEnvironment::substituteVariables(
-        assignment.workingDirectory, m_workspaceFolder, filePath,
-        QFileInfo(filePath).absolutePath(), pythonPreference);
-  }
-
   QString templateId = assignment.templateId;
   if (templateId.isEmpty()) {
     templateId = resolveTemplateIdForFile(filePath, languageId);
   }
 
-  if (templateId.isEmpty()) {
-    return QFileInfo(filePath).absoluteDir().path();
-  }
-
   RunTemplate tmpl = getTemplateById(templateId);
-  if (!tmpl.isValid()) {
-    return QFileInfo(filePath).absoluteDir().path();
+  QString workingDirectory = assignment.workingDirectory;
+  if (workingDirectory.isEmpty()) {
+    workingDirectory = tmpl.workingDirectory;
   }
+  if (workingDirectory.isEmpty()) {
+    workingDirectory = "${fileDir}";
+  }
+  workingDirectory.replace(
+      "${projectRoot}", templateProjectRoot(tmpl, filePath, m_workspaceFolder));
 
   return PythonProjectEnvironment::substituteVariables(
-      tmpl.workingDirectory, m_workspaceFolder, filePath,
+      workingDirectory, m_workspaceFolder, filePath,
       QFileInfo(filePath).absolutePath(), pythonPreference);
 }
 
@@ -795,6 +794,42 @@ QString
 RunTemplateManager::resolveTemplateIdForFile(const QString &filePath,
                                              const QString &languageId) const {
   QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
+  const QString suffix = QFileInfo(filePath).suffix().toLower();
+  const QString detectedLanguageId =
+      canonicalLanguageId.isEmpty()
+          ? LanguageCatalog::languageForExtension(suffix)
+          : canonicalLanguageId;
+  QString projectTemplate;
+  if (detectedLanguageId == "rust" &&
+      !ProjectRoot::find(filePath, {"Cargo.toml"}, m_workspaceFolder)
+           .isEmpty()) {
+    projectTemplate = "rust_cargo_run";
+  } else if (detectedLanguageId == "go" &&
+             !ProjectRoot::find(filePath, {"go.mod", "go.work"},
+                                m_workspaceFolder)
+                  .isEmpty()) {
+    const bool testFile =
+        suffix == "go" &&
+        QFileInfo(filePath).completeBaseName().endsWith("_test");
+    projectTemplate = testFile ? "go_test" : "go_run_package";
+  } else if (detectedLanguageId == "js" || detectedLanguageId == "ts") {
+    const QString packageRoot =
+        ProjectRoot::find(filePath, {"package.json"}, m_workspaceFolder);
+    QFile packageFile(QDir(packageRoot).filePath("package.json"));
+    if (!packageRoot.isEmpty() && packageFile.open(QIODevice::ReadOnly)) {
+      const QJsonObject scripts = QJsonDocument::fromJson(packageFile.readAll())
+                                      .object()
+                                      .value("scripts")
+                                      .toObject();
+      if (!scripts.value("start").toString().trimmed().isEmpty()) {
+        projectTemplate = "npm_start";
+      }
+    }
+  }
+  if (!projectTemplate.isEmpty() &&
+      getTemplateById(projectTemplate).isValid()) {
+    return projectTemplate;
+  }
   if (!canonicalLanguageId.isEmpty()) {
     QList<RunTemplate> languageTemplates =
         getTemplatesForLanguageId(canonicalLanguageId);

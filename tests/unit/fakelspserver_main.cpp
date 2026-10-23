@@ -186,6 +186,7 @@ int main(int argc, char **argv) {
 
     if (method == "initialize") {
       logLine("initialize");
+      logLine("rootUri " + params["rootUri"].toString());
       if (g_initDelayMs > 0) {
         QThread::msleep(static_cast<unsigned long>(g_initDelayMs));
       }
@@ -206,6 +207,7 @@ int main(int argc, char **argv) {
       return 0;
     } else if (method == "textDocument/didOpen") {
       const QJsonObject doc = params["textDocument"].toObject();
+      logLine("languageId " + doc["languageId"].toString());
       handleDocument(method, doc["uri"].toString(), doc["version"].toInt(),
                      doc["text"].toString());
     } else if (method == "textDocument/didChange") {
