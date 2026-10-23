@@ -15,6 +15,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Option to build tests
 option(BUILD_TESTS "Build the test suite" ON)
 
+find_package(ZLIB REQUIRED)
+
 # Add the App subdirectory
 add_subdirectory(App)
 

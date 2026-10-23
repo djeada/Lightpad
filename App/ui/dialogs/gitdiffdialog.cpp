@@ -30,7 +30,7 @@
 #include "../uistylehelper.h"
 
 namespace {
-constexpr int kDiffPreviewLimit = 80000;
+constexpr int kDiffPreviewLimit = 256 * 1024;
 }
 
 GitDiffDialog::GitDiffDialog(GitIntegration *git, const QString &targetId,
@@ -68,6 +68,15 @@ GitDiffDialog::GitDiffDialog(GitIntegration *git, const QString &targetId,
   applyTheme(theme);
 }
 
+void GitDiffDialog::selectFile(const QString &filePath) {
+  for (int i = 0; i < m_files.size(); ++i)
+    if (m_files.at(i).filename == filePath) {
+      m_fileList->setCurrentRow(i);
+      scrollToFile(i);
+      return;
+    }
+}
+
 void GitDiffDialog::setDiffText(const QString &diffText) {
   m_diffText = diffText.left(kDiffPreviewLimit);
   m_wordDiffText.clear();
@@ -81,7 +90,9 @@ void GitDiffDialog::setDiffText(const QString &diffText) {
   m_totalAdded = m_addedCount;
   m_totalDeleted = m_deletedCount;
   if (m_summaryLabel) {
-    m_summaryLabel->setText(m_summaryText);
+    m_summaryLabel->setText(m_summaryText + (diffText.size() > kDiffPreviewLimit
+                                                 ? tr(" · preview truncated")
+                                                 : QString()));
   }
   if (m_changeCounterLabel) {
     m_changeCounterLabel->setText(
@@ -1116,8 +1127,9 @@ QString GitDiffDialog::resolveWordDiff() {
     return QString();
   }
   if (m_target == DiffTarget::Commit) {
-    return m_git->executeWordDiff({"show", "--word-diff", "--color=never",
-                                   "--pretty=format:", m_targetId});
+    return m_git->executeWordDiff({"show", "--diff-merges=first-parent",
+                                   "--word-diff", "--color=never",
+                                   "--pretty=format:", m_targetId, "--"});
   }
   QString relativePath = m_targetId;
   if (!m_git->repositoryPath().isEmpty() &&

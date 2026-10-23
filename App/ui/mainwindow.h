@@ -244,6 +244,8 @@ private slots:
   void on_actionUnfold_Comments_triggered();
 
 private:
+  void showGitBrowser(bool history, const QString &hash = QString());
+
   friend class AutoSaveManager;
   friend class FindReplacePanel;
   Ui::MainWindow *ui;

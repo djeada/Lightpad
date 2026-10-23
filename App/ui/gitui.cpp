@@ -232,7 +232,8 @@ void GitUi::polish(QWidget *surface, const Theme &theme) {
     tree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
     tree->setUniformRowHeights(true);
     tree->setAllColumnsShowFocus(true);
-    tree->header()->setMinimumSectionSize(48);
+    tree->header()->setMinimumSectionSize(
+        tree->property("gitFlexibleColumns").toBool() ? 24 : 48);
     emptyState(tree,
                tree->property("gitEmptyText").isValid()
                    ? tree->property("gitEmptyText").toString()

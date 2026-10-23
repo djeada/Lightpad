@@ -555,6 +555,7 @@ set(project_sources
     ui/mainwindow_debug.cpp
     ui/mainwindow_actions.cpp
     ui/mainwindow_git.cpp
+    ui/dialogs/gitrepositorybrowser.cpp
     ui/mainwindow_theme.cpp
     ui/mainwindow_projecttree.cpp
     ui/mainwindow_vim.cpp
@@ -635,6 +636,7 @@ endif()
 
 target_link_libraries(Lightpad
     PRIVATE
+    ZLIB::ZLIB
     lightpad_git_ui
     Qt6::Core
     Qt6::Gui

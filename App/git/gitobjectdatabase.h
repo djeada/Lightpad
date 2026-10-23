@@ -3,6 +3,7 @@
 
 #include <QByteArray>
 #include <QList>
+#include <QMetaType>
 #include <QStringList>
 #include <functional>
 
@@ -40,6 +41,7 @@ struct GitObjectLocation {
   QString representation;
   QString deltaBase;
 };
+Q_DECLARE_METATYPE(GitObjectLocation)
 
 struct GitObjectSearchResult {
   QList<GitObjectLocation> objects;
@@ -66,19 +68,37 @@ struct GitObjectDetails {
   QString error;
 };
 
+struct GitStoredObject {
+  GitObjectLocation location;
+  QString type;
+  qint64 size = 0;
+  qint64 storedSize = 0;
+  quint64 dataOffset = 0;
+  QString baseHash;
+  QStringList deltaOperations;
+  QByteArray header;
+  QByteArray storedPreview;
+  QByteArray preview;
+  bool truncated = false;
+  bool hashVerified = false;
+  QString error;
+};
+
 class GitObjectDatabase {
 public:
   using Cancelled = std::function<bool()>;
   static GitObjectStore scan(const QString &repositoryPath,
                              const Cancelled &cancelled = {});
-  static GitObjectSearchResult search(const GitObjectStore &store,
-                                      const QString &hashPrefix,
-                                      const QString &packPath = {},
-                                      qint64 skip = 0, int limit = 250,
-                                      const Cancelled &cancelled = {});
+  static GitObjectSearchResult
+  search(const GitObjectStore &store, const QString &hashPrefix,
+         const QString &packPath = {}, qint64 skip = 0, int limit = 250,
+         const Cancelled &cancelled = {}, bool looseOnly = false);
   static GitObjectDetails inspect(const QString &repositoryPath,
                                   const QString &hash,
                                   const Cancelled &cancelled = {});
+  static GitStoredObject readStoredObject(const GitObjectStore &store,
+                                          const GitObjectLocation &location,
+                                          const Cancelled &cancelled = {});
   static QString verifyPack(const QString &repositoryPath,
                             const QString &indexPath, bool *ok,
                             const Cancelled &cancelled = {});

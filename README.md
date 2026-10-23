@@ -31,6 +31,7 @@ Cpp, Python, JavaScript, TypeScript, Java, Rust, Go, HTML, CSS, JSON, YAML, Mark
 ## Build requirements
 - C++17 compiler
 - CMake 3.16+
+- zlib development library (Debian/Ubuntu: `zlib1g-dev`)
 - Qt 6 (Core, Widgets, Gui, Sql)
   - SQLite connections need the Qt SQLite driver (Debian/Ubuntu: `libqt6sql6-sqlite`)
 - Optional: Qt6Pdf + Qt6PdfWidgets for the PDF viewer

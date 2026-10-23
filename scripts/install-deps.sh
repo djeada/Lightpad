@@ -58,6 +58,7 @@ if [[ "$(uname -s)" == "Linux" ]] && command -v apt-get >/dev/null 2>&1; then
     cmake
     ninja-build
     pkg-config
+    zlib1g-dev
     qt6-base-dev
     qt6-base-dev-tools
     qt6-tools-dev-tools
@@ -82,6 +83,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     ninja
     pkg-config
     qt
+    zlib
   )
 
   echo "Installing Lightpad dependencies with Homebrew..."

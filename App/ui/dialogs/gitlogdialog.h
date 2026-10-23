@@ -35,7 +35,9 @@ public:
 signals:
 
   void viewCommitDiff(const QString &commitHash);
+  void viewCommitFileDiff(const QString &commitHash, const QString &filePath);
   void inspectObjectRequested(const QString &hash);
+  void objectSelected(const QString &hash);
 
   void compareRequested(const QString &from, const QString &to);
 

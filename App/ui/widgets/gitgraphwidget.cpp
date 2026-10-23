@@ -18,6 +18,8 @@ GitGraphWidget::GitGraphWidget(GitIntegration *git, const Theme &theme,
       m_scrollOffset(0), m_selectedIndex(-1) {
   setMouseTracking(true);
   setFocusPolicy(Qt::StrongFocus);
+  setMinimumHeight(140);
+  setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   refreshThemeColors();
 
   m_scrollBar = new QScrollBar(Qt::Vertical, this);
@@ -408,7 +410,6 @@ void GitGraphWidget::layoutGraph() {
 }
 
 void GitGraphWidget::relayout() {
-  setMinimumHeight(contentHeight());
   syncScrollBarRange();
   clampScrollOffset();
   update();
@@ -483,17 +484,17 @@ void GitGraphWidget::applyZoom(int deltaRows) {
   relayout();
 }
 
-void GitGraphWidget::drawRefBadges(QPainter &painter,
-                                   const GraphCommitNode &node, int y,
-                                   const QFontMetrics &fm,
-                                   const QColor &fgColor, bool dimmed) const {
+int GitGraphWidget::drawRefBadges(QPainter &painter,
+                                  const GraphCommitNode &node, int y,
+                                  int startX, int maxX, const QColor &fgColor,
+                                  bool dimmed) const {
   auto it = m_refs.constFind(node.info.hash);
   if (it == m_refs.constEnd() || it->isEmpty()) {
-    return;
+    return startX;
   }
 
   QFont badgeFont = painter.font();
-  badgeFont.setPointSize(qMax(7, badgeFont.pointSize() - 2));
+  badgeFont.setPointSize(qMax(8, badgeFont.pointSize() - 1));
   painter.setFont(badgeFont);
   const QFontMetrics badgeFm(badgeFont);
 
@@ -515,12 +516,16 @@ void GitGraphWidget::drawRefBadges(QPainter &painter,
   const QColor remoteFg = dimmed ? m_dimmedText : m_secondaryText;
   const QColor dimFg = dimmed ? m_dimmedText : fgColor;
 
-  int x = GRAPH_LEFT_MARGIN + (m_maxLanes + 1) * LANE_WIDTH +
-          TEXT_LEFT_PADDING + 72;
+  int x = startX;
+  int drawn = 0;
 
-  const int pillHeight = qMin(m_rowHeight - 10, 20);
+  const int pillHeight = qMin(m_rowHeight - 2, 22);
 
   for (const GitRefDecoration &decoration : *it) {
+    const bool more = drawn + 1 < it->size();
+    const int available = maxX - x - (more ? 35 : 0);
+    if (available < 45 || drawn >= 2)
+      break;
 
     QString glyph;
     switch (decoration.kind) {
@@ -547,6 +552,7 @@ void GitGraphWidget::drawRefBadges(QPainter &painter,
       label = tr("HEAD → ") + label;
     }
 
+    label = badgeFm.elidedText(label, Qt::ElideMiddle, available - 14);
     int textWidth = badgeFm.horizontalAdvance(label);
     int pillWidth = textWidth + 14;
 
@@ -614,7 +620,15 @@ void GitGraphWidget::drawRefBadges(QPainter &painter,
     }
 
     x += pillWidth + 5;
+    ++drawn;
   }
+  if (drawn < it->size() && maxX - x >= 25) {
+    painter.setPen(remoteFg);
+    painter.drawText(QRect(x, y, maxX - x, m_rowHeight), Qt::AlignVCenter,
+                     QStringLiteral("+%1").arg(it->size() - drawn));
+    x += 30;
+  }
+  return x == startX ? startX : x + 8;
 }
 
 void GitGraphWidget::paintEvent(QPaintEvent *) {
@@ -623,7 +637,7 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
 
   QColor bgColor = m_theme.backgroundColor;
   QColor fgColor = m_theme.foregroundColor;
-  QColor selColor = m_theme.highlightColor;
+  QColor selColor = m_theme.accentColor;
 
   painter.fillRect(rect(), bgColor);
 
@@ -639,7 +653,10 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
   const QColor muted = m_mutedText;
   const QColor veryMuted = m_dimmedText;
 
-  int graphWidth = GRAPH_LEFT_MARGIN + (m_maxLanes + 1) * LANE_WIDTH;
+  const int laneWidth =
+      qMin(LANE_WIDTH, qMax(6, (width() / 4 - GRAPH_LEFT_MARGIN) /
+                                   qMax(1, m_maxLanes + 1)));
+  int graphWidth = GRAPH_LEFT_MARGIN + (m_maxLanes + 1) * laneWidth;
   int textX = graphWidth + TEXT_LEFT_PADDING;
 
   QFont commitFont = font();
@@ -664,7 +681,7 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
     const GraphCommitNode &node = m_nodes[i];
     const bool dimmed = !rowMatches(i);
     int y = rowForIndex(i) * m_rowHeight - m_scrollOffset + m_rowHeight / 2;
-    int x = GRAPH_LEFT_MARGIN + node.column * LANE_WIDTH + LANE_WIDTH / 2;
+    int x = GRAPH_LEFT_MARGIN + node.column * laneWidth + laneWidth / 2;
 
     for (const QString &parentHash : node.parents) {
       auto it = m_hashToIndex.find(parentHash);
@@ -678,7 +695,7 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
       if ((y < 0 && py < 0) || (y > height() && py > height()))
         continue;
       int px =
-          GRAPH_LEFT_MARGIN + parentNode.column * LANE_WIDTH + LANE_WIDTH / 2;
+          GRAPH_LEFT_MARGIN + parentNode.column * laneWidth + laneWidth / 2;
 
       edgePen.setColor(node.color);
       painter.setPen(edgePen);
@@ -703,7 +720,7 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
     const bool dimmed = !rowMatches(i);
 
     int y = rowForIndex(i) * m_rowHeight - m_scrollOffset;
-    int cx = GRAPH_LEFT_MARGIN + node.column * LANE_WIDTH + LANE_WIDTH / 2;
+    int cx = GRAPH_LEFT_MARGIN + node.column * laneWidth + laneWidth / 2;
     int cy = y + m_rowHeight / 2;
 
     if (hovered && !selected) {
@@ -772,27 +789,15 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
     painter.drawText(textX, y, 70, m_rowHeight, Qt::AlignVCenter,
                      node.info.shortHash);
 
-    drawRefBadges(painter, node, y, fm, fgColor, dimmed);
-
+    painter.setFont(commitFont);
+    const int authorWidth = qBound(130, width() / 5, 240);
+    const int authorX = width() - authorWidth - SCROLLBAR_WIDTH - 12;
+    const int badgesX = textX + 75;
+    const int badgeBudget = qMin(260, qMax(0, (authorX - badgesX) / 2));
+    const int subjectX = drawRefBadges(painter, node, y, badgesX,
+                                       badgesX + badgeBudget, fgColor, dimmed);
     painter.setFont(commitFont);
     painter.setPen(dimmed ? veryMuted : fgColor);
-    int authorX = width() - 250;
-    int subjectX = textX + 75;
-
-    if (refIt != m_refs.constEnd() && !refIt->isEmpty()) {
-      QFont badgeFont = commitFont;
-      badgeFont.setPointSize(qMax(7, badgeFont.pointSize() - 2));
-      const QFontMetrics badgeFm(badgeFont);
-      for (const GitRefDecoration &decoration : *refIt) {
-
-        int width = badgeFm.horizontalAdvance(decoration.name) +
-                    badgeFm.horizontalAdvance(QStringLiteral("⎇ "));
-        if (decoration.isHead) {
-          width += badgeFm.horizontalAdvance(tr("HEAD → "));
-        }
-        subjectX += width + 19;
-      }
-    }
 
     int subjectW = authorX - subjectX - 10;
     if (subjectW > 40) {
@@ -804,8 +809,8 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
 
     painter.setPen(dimmed ? veryMuted : muted);
     QString meta = node.info.author + "  " + node.info.relativeDate;
-    painter.drawText(authorX, y, 240, m_rowHeight, Qt::AlignVCenter,
-                     fm.elidedText(meta, Qt::ElideRight, 240));
+    painter.drawText(authorX, y, authorWidth, m_rowHeight, Qt::AlignVCenter,
+                     fm.elidedText(meta, Qt::ElideRight, authorWidth));
   }
 
   if (m_showWip) {
@@ -823,7 +828,7 @@ void GitGraphWidget::paintEvent(QPaintEvent *) {
         }
       }
       const int lane = headIndex < 0 ? 0 : m_nodes[headIndex].column;
-      const int cx = GRAPH_LEFT_MARGIN + lane * LANE_WIDTH + LANE_WIDTH / 2;
+      const int cx = GRAPH_LEFT_MARGIN + lane * laneWidth + laneWidth / 2;
       const int cy = y + m_rowHeight / 2;
 
       if (m_selectedIndex == WIP_INDEX) {
@@ -966,6 +971,8 @@ void GitGraphWidget::mouseMoveEvent(QMouseEvent *event) {
     tip +=
         QLatin1Char('\n') + node.info.author + " · " + node.info.relativeDate;
     tip += QLatin1Char('\n') + node.info.hash;
+    for (const auto &ref : m_refs.value(node.info.hash))
+      tip += QLatin1Char('\n') + ref.name;
     QToolTip::showText(event->globalPosition().toPoint(), tip, this);
   } else {
     QToolTip::hideText();
@@ -1079,6 +1086,8 @@ void GitGraphWidget::resizeEvent(QResizeEvent *event) {
   QWidget::resizeEvent(event);
   m_scrollBar->setGeometry(width() - SCROLLBAR_WIDTH, 0, SCROLLBAR_WIDTH,
                            height());
-  m_scrollBar->setPageStep(qMax(1, height()));
+  syncScrollBarRange();
   clampScrollOffset();
+  if (m_selectedIndex >= 0)
+    selectCommit(selectedHash());
 }

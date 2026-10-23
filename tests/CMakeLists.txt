@@ -1118,7 +1118,7 @@ add_executable(test_gitobjectdatabase
     unit/test_gitobjectdatabase.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitobjectdatabase.cpp
 )
-target_link_libraries(test_gitobjectdatabase PRIVATE Qt6::Core Qt6::Test)
+target_link_libraries(test_gitobjectdatabase PRIVATE Qt6::Core Qt6::Test ZLIB::ZLIB)
 add_test(NAME GitObjectDatabaseTests COMMAND test_gitobjectdatabase)
 set_tests_properties(GitObjectDatabaseTests PROPERTIES TIMEOUT 60)
 
@@ -1130,7 +1130,7 @@ add_executable(test_gitobjectexplorer
     ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
 )
-target_link_libraries(test_gitobjectexplorer PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+target_link_libraries(test_gitobjectexplorer PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test ZLIB::ZLIB)
 add_test(NAME GitObjectExplorerTests COMMAND test_gitobjectexplorer)
 set_tests_properties(GitObjectExplorerTests PROPERTIES TIMEOUT 60)
 
@@ -3340,6 +3340,7 @@ set_tests_properties(GitWorkbenchDialogTests PROPERTIES TIMEOUT 30)
 # Full Git UI gallery and shared interaction/layout regression checks.
 add_executable(test_gituiconsistency
     unit/test_gituiconsistency.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/gitrepositorybrowser.cpp
     ${CMAKE_SOURCE_DIR}/App/git/commitplan.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitbisect.cpp
     ${CMAKE_SOURCE_DIR}/App/git/gitbranchhygiene.cpp
@@ -3406,7 +3407,7 @@ add_executable(test_gituiconsistency
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
 )
 target_include_directories(test_gituiconsistency PRIVATE ${CMAKE_SOURCE_DIR}/App)
-target_link_libraries(test_gituiconsistency PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test lightpad_git_ui)
+target_link_libraries(test_gituiconsistency PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test lightpad_git_ui ZLIB::ZLIB)
 add_test(NAME GitUiConsistencyTests COMMAND test_gituiconsistency)
 set_tests_properties(GitUiConsistencyTests PROPERTIES
     TIMEOUT 120

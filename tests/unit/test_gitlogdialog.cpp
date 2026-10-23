@@ -10,8 +10,10 @@
 #include <QLineEdit>
 #include <QProcess>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <QTextBrowser>
 #include <QTextEdit>
 #include <QTreeWidget>
 #include <QtTest/QtTest>
@@ -230,6 +232,35 @@ void TestGitLogDialog::testMergeCommitShowsBothParents() {
   const QString text = details->toPlainText();
   QVERIFY2(text.contains("Parents"), qPrintable(text));
   QVERIFY2(text.contains("a merge commit"), qPrintable(text));
+  // A conflict-free merge has no combined patch. The file list and patch must
+  // both describe the change against its first parent instead.
+  const QString patch = m_git->getCommitDiff("HEAD");
+  QVERIFY(patch.contains("diff --git a/c.txt b/c.txt"));
+  QVERIFY(patch.contains("+c1"));
+  const auto mergeFiles = m_git->getCommitFileStats("HEAD");
+  QCOMPARE(mergeFiles.size(), 1);
+  QCOMPARE(mergeFiles.first().filePath, QString("c.txt"));
+  dialog.resize(1260, 900);
+  dialog.show();
+  QCoreApplication::processEvents();
+  const QString parent = m_git->getCommitDetails("HEAD").parents.first();
+  auto *browser = qobject_cast<QTextBrowser *>(details);
+  QVERIFY(browser);
+  QTextCursor link = browser->document()->find(parent.left(7));
+  QVERIFY(!link.isNull());
+  link.setPosition(link.selectionStart() + 2);
+  browser->setTextCursor(link);
+  browser->ensureCursorVisible();
+  QTest::mouseClick(browser->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    browser->cursorRect(link).center());
+  QCOMPARE(graph->selectedHash(), parent);
+  QSignalSpy fileDiff(&dialog, &GitLogDialog::viewCommitFileDiff);
+  auto *files = dialog.findChild<QTreeWidget *>("graphDetailFiles");
+  QVERIFY(files->topLevelItemCount() > 0);
+  QTest::mouseClick(files->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    files->visualItemRect(files->topLevelItem(0)).center());
+  QCOMPARE(fileDiff.count(), 1);
+  QCOMPARE(fileDiff.first().at(0).toString(), parent);
 }
 
 void TestGitLogDialog::testListAndGraphShareScopeAndFilters() {
@@ -312,6 +343,20 @@ void TestGitLogDialog::testPagedHistoryStaysInSync() {
   GitLogDialog dialog(m_git, Theme());
   auto *graph = dialog.findChild<GitGraphWidget *>();
   QCOMPARE(graph->loadedCommitCount(), 200);
+  const QString target = m_git->getCommitDetails("HEAD~50").hash;
+  dialog.selectCommit(target);
+  dialog.resize(1080, 800);
+  dialog.show();
+  auto *details = dialog.findChild<QTextEdit *>("graphDetailView");
+  auto *scroll = graph->findChild<QScrollBar *>();
+  QTRY_VERIFY(scroll->maximum() > 0);
+  QVERIFY(graph->height() < dialog.height());
+  QVERIFY(details->isVisible());
+  QVERIFY(details->visibleRegion().boundingRect().height() > 40);
+  QCOMPARE(graph->selectedHash(), target);
+  const int targetTop = 50 * graph->rowHeight() - scroll->value();
+  QVERIFY(targetTop >= 0);
+  QVERIFY(targetTop + graph->rowHeight() <= graph->height());
   auto *more = dialog.findChild<QPushButton *>("graphLoadMoreButton");
   QVERIFY(more->isEnabled());
   more->click();
