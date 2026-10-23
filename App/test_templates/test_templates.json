@@ -77,15 +77,18 @@
       "language": "Rust",
       "extensions": ["rs"],
       "command": "cargo",
-      "args": ["test", "--", "--format=json", "-Z", "unstable-options"],
+      "args": ["test", "--", "--format=pretty", "--color=never"],
       "runSingleTest": {
-        "args": ["test", "${testName}", "--", "--format=json", "-Z", "unstable-options"]
+        "args": ["test", "${testName}", "--", "--exact", "--format=pretty", "--color=never"]
       },
       "runFailed": {
-        "args": ["test", "${testName}", "--", "--format=json", "-Z", "unstable-options"]
+        "args": ["test", "${testName}", "--", "--exact", "--format=pretty", "--color=never"]
+      },
+      "runSuite": {
+        "args": ["test", "${testName}", "--", "--format=pretty", "--color=never"]
       },
       "workingDirectory": "${workspaceFolder}",
-      "outputFormat": "cargo_json"
+      "outputFormat": "cargo"
     },
     {
       "id": "jest",

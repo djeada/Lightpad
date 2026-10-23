@@ -33,6 +33,8 @@ private slots:
   void testJsonJestFormat();
 
   void testJsonCargoFormat();
+  void testStableCargoOutput();
+  void testStableCargoTemplate();
 
   void testPytestBasicOutput();
   void testPytestMixedStatuses();
@@ -583,6 +585,9 @@ void TestOutputParsers::testGenericRegexCustomPatterns() {
 }
 
 void TestOutputParsers::testParserFactory() {
+  std::unique_ptr<ITestOutputParser> stableCargo(
+      TestOutputParserFactory::createParser("cargo"));
+  QCOMPARE(stableCargo->formatId(), QString("cargo"));
   auto *tap = TestOutputParserFactory::createParser("tap");
   QVERIFY(tap != nullptr);
   QCOMPARE(tap->formatId(), QString("tap"));
@@ -1342,6 +1347,60 @@ void TestOutputParsers::testCtestDiscoveryAndResultIdsMatch() {
 
   QCOMPARE(results[0].id, discovered[0].id);
   QCOMPARE(results[1].id, discovered[1].id);
+}
+
+void TestOutputParsers::testStableCargoOutput() {
+  CargoTestParser parser;
+  QMap<QString, TestResult> results;
+  connect(
+      &parser, &ITestOutputParser::testFinished,
+      [&results](const TestResult &result) { results[result.id] = result; });
+  // Feed byte by byte to cover arbitrary process chunk boundaries and UTF-8.
+  const QByteArray output =
+      QString::fromUtf8(
+          "running 4 tests\n"
+          "test tests::addition ... ok\n"
+          "test tests::panic - should panic ... ok\n"
+          "test tests::slow ... ignored, needs a database\n"
+          "test tests::failure ... FAILED\n"
+          "\nfailures:\n\n"
+          "---- tests::failure stdout ----\n"
+          "thread 'tests::failure' panicked at src/lib.rs:12:9:\n"
+          "expected café\n\n"
+          "failures:\n    tests::failure\n\n"
+          "test result: FAILED. 2 passed; 1 failed; 1 ignored; 0 measured\n"
+          "test doc_example (line 2) ... ok")
+          .toUtf8();
+  for (const char byte : output) {
+    parser.feed(QByteArray(1, byte));
+  }
+  parser.finish();
+  QCOMPARE(results.size(), 5);
+  QCOMPARE(results["tests::addition"].status, TestStatus::Passed);
+  QCOMPARE(results["tests::panic"].status, TestStatus::Passed);
+  QCOMPARE(results["tests::slow"].status, TestStatus::Skipped);
+  QCOMPARE(results["tests::slow"].message, QString("needs a database"));
+  QCOMPARE(results["tests::failure"].status, TestStatus::Failed);
+  QCOMPARE(results["tests::failure"].suite, QString("tests"));
+  QVERIFY(
+      results["tests::failure"].message.contains(QString::fromUtf8("café")));
+  QVERIFY(!results["tests::failure"].message.contains("test result:"));
+  QCOMPARE(results["doc_example (line 2)"].status, TestStatus::Passed);
+  const auto discovered = CargoTestDiscoveryAdapter::parseListOutput(
+      "tests::addition: test\ntests::failure: test\n");
+  QVERIFY(results.contains(discovered[0].id));
+  QVERIFY(results.contains(discovered[1].id));
+}
+
+void TestOutputParsers::testStableCargoTemplate() {
+  auto &manager = TestConfigurationManager::instance();
+  manager.loadTemplates();
+  const auto config = manager.templateById("cargo_test");
+  QVERIFY(config.isValid());
+  QCOMPARE(config.outputFormat, QString("cargo"));
+  QVERIFY(!config.args.contains("-Z"));
+  QVERIFY(!config.args.contains("--format=json"));
+  QVERIFY(config.runSingleTest.args.contains("--exact"));
 }
 
 QTEST_MAIN(TestOutputParsers)

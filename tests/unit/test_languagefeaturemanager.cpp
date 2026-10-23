@@ -11,6 +11,10 @@ class TestLanguageFeatureManager : public QObject {
 
 private slots:
   void testDefaultServerConfigs();
+  void testNodeLanguageIds_data();
+  void testNodeLanguageIds();
+  void testDetectAdditionalProjectRoots_data();
+  void testDetectAdditionalProjectRoots();
   void testSupportedLanguages();
   void testIsLanguageSupported();
   void testResolveLanguageIdByExtension();
@@ -89,6 +93,8 @@ void TestLanguageFeatureManager::testSupportedLanguages() {
   QVERIFY(langs.contains("py"));
   QVERIFY(langs.contains("rust"));
   QVERIFY(langs.contains("go"));
+  QVERIFY(langs.contains("js"));
+  QVERIFY(langs.contains("ts"));
 }
 
 void TestLanguageFeatureManager::testIsLanguageSupported() {
@@ -535,6 +541,82 @@ void TestLanguageFeatureManager::testDiagnosticsForPathWithSpaces() {
                             5000);
   QCOMPARE(diagMgr.diagnosticsForFile(filePath).first().message,
            QString("spaced"));
+}
+
+void TestLanguageFeatureManager::testNodeLanguageIds_data() {
+  QTest::addColumn<QString>("extension");
+  QTest::addColumn<QString>("language");
+  QTest::addColumn<QString>("protocolId");
+  QTest::newRow("javascript")
+      << QString("js") << QString("js") << QString("javascript");
+  QTest::newRow("commonjs")
+      << QString("cjs") << QString("node.js") << QString("javascript");
+  QTest::newRow("esm") << QString("mjs") << QString("JavaScript")
+                       << QString("javascript");
+  QTest::newRow("jsx") << QString("jsx") << QString("js")
+                       << QString("javascriptreact");
+  QTest::newRow("typescript")
+      << QString("ts") << QString("ts") << QString("typescript");
+  QTest::newRow("tsx") << QString("tsx") << QString("ts")
+                       << QString("typescriptreact");
+  QTest::newRow("typescript esm")
+      << QString("mts") << QString("ts") << QString("typescript");
+  QTest::newRow("typescript commonjs")
+      << QString("cts") << QString("ts") << QString("typescript");
+}
+
+void TestLanguageFeatureManager::testNodeLanguageIds() {
+  QFETCH(QString, extension);
+  QFETCH(QString, language);
+  QFETCH(QString, protocolId);
+  DiagnosticsManager diagnostics;
+  LanguageFeatureManager manager(&diagnostics);
+  const QString canonical = LanguageCatalog::normalize(language);
+  const auto defaultConfig = manager.serverConfig(canonical);
+  QCOMPARE(defaultConfig.command, QString("typescript-language-server"));
+  QCOMPARE(defaultConfig.arguments, QStringList{"--stdio"});
+
+  const QString logPath = makeLogPath();
+  DiagnosticsServerConfig config;
+  config.languageId = canonical;
+  config.command = FAKE_LSP_SERVER_PATH;
+  config.arguments = {"--log", logPath};
+  manager.setServerConfig(config);
+  const QString first = m_tempDir.filePath("first." + extension);
+  QCOMPARE(manager.resolveLanguageId(first), canonical);
+  manager.openDocument(first, language, "export const value = 1;");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      readLog(logPath).contains("languageId " + protocolId), 5000);
+  QVERIFY(readLog(logPath).contains(
+      "rootUri " + DiagnosticUtils::filePathToUri(m_tempDir.path())));
+  // Also exercise the immediate didOpen path after initialization.
+  const QString second = m_tempDir.filePath("second." + extension);
+  manager.openDocument(second, language, "export const other = 2;");
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "languageId " + protocolId), 2,
+                            5000);
+  QCOMPARE(manager.clientForFile(first), manager.clientForFile(second));
+}
+
+void TestLanguageFeatureManager::testDetectAdditionalProjectRoots_data() {
+  QTest::addColumn<QString>("marker");
+  for (const char *marker :
+       {"go.work", "package.json", "tsconfig.json", "jsconfig.json"}) {
+    QTest::newRow(marker) << QString::fromLatin1(marker);
+  }
+}
+
+void TestLanguageFeatureManager::testDetectAdditionalProjectRoots() {
+  QFETCH(QString, marker);
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  QVERIFY(QDir(project.path()).mkpath("src/nested"));
+  QFile file(project.filePath(marker));
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("{}");
+  file.close();
+  QCOMPARE(LanguageFeatureManager::detectProjectRoot(
+               project.filePath("src/nested/main.js")),
+           project.path());
 }
 
 QTEST_MAIN(TestLanguageFeatureManager)

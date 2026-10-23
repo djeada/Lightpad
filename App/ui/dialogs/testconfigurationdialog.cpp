@@ -150,8 +150,8 @@ void TestConfigurationDialog::setupUi() {
   m_outputFormatCombo->setView(new QListView(m_outputFormatCombo));
   m_outputFormatCombo->setMaxVisibleItems(8);
   m_outputFormatCombo->setMinimumContentsLength(14);
-  m_outputFormatCombo->addItems(
-      {"generic", "pytest", "ctest", "go_json", "cargo_json", "jest_json"});
+  m_outputFormatCombo->addItems({"generic", "pytest", "ctest", "go_json",
+                                 "cargo", "cargo_json", "jest_json"});
   basicLayout->addRow(tr("Output format:"), m_outputFormatCombo);
 
   m_testFilePatternEdit = new QLineEdit(basicGroup);

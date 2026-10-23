@@ -2,9 +2,23 @@
 #include "../core/logging/logger.h"
 #include "../diagnostics/diagnosticutils.h"
 #include "../settings/settingsmanager.h"
+#include "projectroot.h"
 
 #include <QDir>
 #include <QFileInfo>
+
+namespace {
+QString protocolLanguageId(const QString &languageId, const QString &filePath) {
+  const QString suffix = QFileInfo(filePath).suffix().toLower();
+  if (languageId == "js") {
+    return suffix == "jsx" ? "javascriptreact" : "javascript";
+  }
+  if (languageId == "ts") {
+    return suffix == "tsx" ? "typescriptreact" : "typescript";
+  }
+  return languageId;
+}
+} // namespace
 
 LanguageFeatureManager::LanguageFeatureManager(
     DiagnosticsManager *diagnosticsManager, QObject *parent)
@@ -31,6 +45,8 @@ QList<DiagnosticsServerConfig> LanguageFeatureManager::defaultServerConfigs() {
       {"py", "pylsp", {}},
       {"rust", "rust-analyzer", {}},
       {"go", "gopls", {"serve"}},
+      {"js", "typescript-language-server", {"--stdio"}},
+      {"ts", "typescript-language-server", {"--stdio"}},
       {"dockerfile", "docker-langserver", {"--stdio"}},
   };
 }
@@ -38,8 +54,12 @@ QList<DiagnosticsServerConfig> LanguageFeatureManager::defaultServerConfigs() {
 void LanguageFeatureManager::openDocument(const QString &filePath,
                                           const QString &languageId,
                                           const QString &text) {
-  QString effectiveLang =
-      languageId.isEmpty() ? resolveLanguageId(filePath) : languageId;
+  QString effectiveLang = languageId.isEmpty()
+                              ? resolveLanguageId(filePath)
+                              : LanguageCatalog::normalize(languageId);
+  if (effectiveLang.isEmpty() && !languageId.isEmpty()) {
+    effectiveLang = languageId;
+  }
 
   if (effectiveLang.isEmpty()) {
     LOG_DEBUG(
@@ -81,7 +101,7 @@ void LanguageFeatureManager::openDocument(const QString &filePath,
   }
 
   if (client->isReady()) {
-    client->didOpen(uri, effectiveLang, 1, text);
+    client->didOpen(uri, protocolLanguageId(effectiveLang, filePath), 1, text);
     LOG_DEBUG(QString("didOpen sent for %1 [%2]").arg(filePath, effectiveLang));
   } else {
     queuePendingDocument(effectiveLang, filePath);
@@ -357,6 +377,10 @@ void LanguageFeatureManager::onClientLost(const QString &languageId,
 QString LanguageFeatureManager::detectProjectRoot(const QString &filePath) {
   static const QStringList projectMarkers = {"Cargo.toml",
                                              "go.mod",
+                                             "go.work",
+                                             "package.json",
+                                             "tsconfig.json",
+                                             "jsconfig.json",
                                              "pyproject.toml",
                                              "requirements.txt",
                                              "setup.py",
@@ -365,20 +389,8 @@ QString LanguageFeatureManager::detectProjectRoot(const QString &filePath) {
                                              "latexmkrc",
                                              ".latexmkrc"};
 
-  QDir dir = QFileInfo(filePath).absoluteDir();
-  QString prevPath;
-
-  while (dir.absolutePath() != prevPath) {
-    for (const QString &marker : projectMarkers) {
-      if (QFileInfo::exists(dir.filePath(marker))) {
-        return dir.absolutePath();
-      }
-    }
-    prevPath = dir.absolutePath();
-    dir.cdUp();
-  }
-
-  return QFileInfo(filePath).absolutePath();
+  const QString root = ProjectRoot::find(filePath, projectMarkers);
+  return root.isEmpty() ? QFileInfo(filePath).absolutePath() : root;
 }
 
 ServerHealthStatus
@@ -413,7 +425,8 @@ void LanguageFeatureManager::flushPendingDocuments(const QString &languageId) {
     }
     QString uri = DiagnosticUtils::filePathToUri(filePath);
     int version = m_fileVersions.value(filePath, 1);
-    client->didOpen(uri, languageId, version, m_fileTexts.value(filePath));
+    client->didOpen(uri, protocolLanguageId(languageId, filePath), version,
+                    m_fileTexts.value(filePath));
     LOG_DEBUG(QString("Flushed queued didOpen for %1 [%2]")
                   .arg(filePath, languageId));
   }

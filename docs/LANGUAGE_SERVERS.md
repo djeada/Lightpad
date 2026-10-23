@@ -1,6 +1,6 @@
 # Language Server Setup Guide
 
-Lightpad provides built-in support for language servers across **Rust, Go, Python, and C++**. Language servers power IDE features including diagnostics, code completion, hover information, go-to-definition, find references, rename, formatting, and code actions.
+Lightpad provides built-in support for language servers across **Rust, Go, JavaScript/TypeScript, Python, and C++**. Language servers power IDE features including diagnostics, code completion, hover information, go-to-definition, find references, rename, formatting, and code actions.
 
 ## Supported Languages
 
@@ -10,6 +10,8 @@ Lightpad provides built-in support for language servers across **Rust, Go, Pytho
 | Python | pylsp | `pylsp` | _(none)_ |
 | Rust | rust-analyzer | `rust-analyzer` | _(none)_ |
 | Go | gopls | `gopls` | `serve` |
+| JavaScript / Node.js | typescript-language-server | `typescript-language-server` | `--stdio` |
+| TypeScript | typescript-language-server | `typescript-language-server` | `--stdio` |
 
 ## Installation
 
@@ -77,7 +79,23 @@ go install golang.org/x/tools/gopls@latest
 
 Make sure `$GOPATH/bin` (or `$HOME/go/bin`) is in your `PATH`.
 
-Lightpad detects Go projects via `go.mod`.
+Lightpad detects Go projects via `go.mod` or `go.work`.
+
+### JavaScript / TypeScript / Node.js
+
+Install Node.js and npm, then install the language server and TypeScript:
+
+```bash
+npm install -g typescript typescript-language-server
+```
+
+Lightpad configures `typescript-language-server --stdio` for both `js` and `ts`.
+It detects projects using `package.json`, `tsconfig.json`, or `jsconfig.json`.
+JavaScript module extensions `.mjs`/`.cjs` and TypeScript module extensions
+`.mts`/`.cts` are recognized, as are JSX/TSX React language IDs.
+
+See [Rust, Go, and Node.js workflows](RUST_GO_NODEJS.md) for project runs,
+formatting, and tests.
 
 ## Configuration
 
@@ -110,6 +128,16 @@ Language server settings are stored in the Lightpad settings file. You can confi
       "command": "gopls",
       "arguments": ["serve"],
       "environment": [],
+      "enabled": true
+    },
+    "js": {
+      "command": "typescript-language-server",
+      "arguments": ["--stdio"],
+      "enabled": true
+    },
+    "ts": {
+      "command": "typescript-language-server",
+      "arguments": ["--stdio"],
       "enabled": true
     }
   }
@@ -146,7 +174,9 @@ Lightpad automatically detects the project root directory for each opened file b
 | Marker File | Language |
 |-------------|----------|
 | `Cargo.toml` | Rust |
-| `go.mod` | Go |
+| `go.mod`, `go.work` | Go |
+| `package.json`, `jsconfig.json` | JavaScript / Node.js |
+| `tsconfig.json` | TypeScript |
 | `pyproject.toml` | Python |
 | `requirements.txt` | Python |
 | `setup.py` | Python |
@@ -198,6 +228,7 @@ Lightpad tracks the health of each language server:
    which pylsp        # Python
    which rust-analyzer  # Rust
    which gopls        # Go
+   which typescript-language-server  # JavaScript/TypeScript
    ```
 
 2. **Check the settings** — Make sure `languageServers.<lang>.enabled` is `true` and `command` points to the correct executable.

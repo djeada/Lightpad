@@ -1167,13 +1167,16 @@ void TestPanel::onContextMenu(const QPoint &pos) {
       m_runManager->runSuite(config, m_workspaceFolder, testName);
     });
   } else {
-    QAction *runAction =
-        menu.addAction(tr("Run This Test"), [this, testName, filePath]() {
+    QAction *runAction = menu.addAction(
+        tr("Run This Test"), [this, testId, testName, filePath]() {
           TestConfiguration config = currentConfiguration();
           if (!config.isValid())
             return;
           recordRunRequest(config, tr("Test"), filePath);
-          m_runManager->runSingleTest(config, m_workspaceFolder, testName,
+          const bool cargo = config.outputFormat == "cargo" ||
+                             config.outputFormat == "cargo_json";
+          const QString name = cargo && !testId.isEmpty() ? testId : testName;
+          m_runManager->runSingleTest(config, m_workspaceFolder, name,
                                       filePath);
         });
     Q_UNUSED(runAction)

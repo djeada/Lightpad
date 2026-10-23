@@ -108,6 +108,23 @@ private:
   QString m_currentTestId;
 };
 
+class CargoTestParser : public ITestOutputParser {
+  Q_OBJECT
+public:
+  explicit CargoTestParser(QObject *parent = nullptr);
+  QString formatId() const override { return "cargo"; }
+  void feed(const QByteArray &data) override;
+  void finish() override;
+
+private:
+  void parseLine(const QString &line);
+  void flushFailure();
+  QString m_buffer;
+  QString m_failureTest;
+  QStringList m_failureOutput;
+  QHash<QString, TestResult> m_failedTests;
+};
+
 class GenericRegexParser : public ITestOutputParser {
   Q_OBJECT
 public:

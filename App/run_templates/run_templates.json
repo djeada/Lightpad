@@ -233,6 +233,22 @@
       "env": {}
     },
     {
+      "id": "go_run_package",
+      "name": "Go Run Package",
+      "description": "Run all source files in the current Go package",
+      "language": "Go",
+      "extensions": [
+        "go"
+      ],
+      "command": "go",
+      "args": [
+        "run",
+        "."
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
       "id": "go_build_run",
       "name": "Go Build & Run",
       "description": "Build and run Go binary",
@@ -266,13 +282,52 @@
       "env": {}
     },
     {
+      "id": "go_build",
+      "name": "Go Build Module",
+      "description": "Build every package in the Go module",
+      "language": "Go",
+      "extensions": [
+        "go"
+      ],
+      "command": "go",
+      "args": [
+        "build",
+        "./..."
+      ],
+      "workingDirectory": "${projectRoot}",
+      "env": {},
+      "projectMarkers": [
+        "go.mod"
+      ]
+    },
+    {
+      "id": "go_vet",
+      "name": "Go Vet",
+      "description": "Check packages in the Go module with go vet",
+      "language": "Go",
+      "extensions": [
+        "go"
+      ],
+      "command": "go",
+      "args": [
+        "vet",
+        "./..."
+      ],
+      "workingDirectory": "${projectRoot}",
+      "env": {},
+      "projectMarkers": [
+        "go.mod"
+      ]
+    },
+    {
       "id": "nodejs",
       "name": "Node.js",
       "description": "Run JavaScript with Node.js",
       "language": "JavaScript",
       "extensions": [
         "js",
-        "mjs"
+        "mjs",
+        "cjs"
       ],
       "command": "node",
       "args": [
@@ -284,15 +339,109 @@
     {
       "id": "nodejs_esm",
       "name": "Node.js (ESM)",
-      "description": "Run JavaScript as ES module",
+      "description": "Run an ES module (.mjs or a package with type: module)",
       "language": "JavaScript",
       "extensions": [
         "js",
-        "mjs"
+        "mjs",
+        "cjs"
       ],
       "command": "node",
       "args": [
-        "--experimental-modules",
+        "${file}"
+      ],
+      "workingDirectory": "${fileDir}",
+      "env": {}
+    },
+    {
+      "id": "npm_start",
+      "name": "Node.js (npm start)",
+      "description": "Run the package start script",
+      "language": "JavaScript",
+      "extensions": [
+        "js",
+        "jsx",
+        "mjs",
+        "cjs",
+        "ts",
+        "tsx",
+        "mts",
+        "cts"
+      ],
+      "command": "npm",
+      "args": [
+        "start"
+      ],
+      "workingDirectory": "${projectRoot}",
+      "env": {},
+      "projectMarkers": [
+        "package.json"
+      ]
+    },
+    {
+      "id": "npm_build",
+      "name": "Node.js (npm build)",
+      "description": "Run the package build script",
+      "language": "JavaScript",
+      "extensions": [
+        "js",
+        "jsx",
+        "mjs",
+        "cjs",
+        "ts",
+        "tsx",
+        "mts",
+        "cts"
+      ],
+      "command": "npm",
+      "args": [
+        "run",
+        "build"
+      ],
+      "workingDirectory": "${projectRoot}",
+      "env": {},
+      "projectMarkers": [
+        "package.json"
+      ]
+    },
+    {
+      "id": "npm_test",
+      "name": "Node.js (npm test)",
+      "description": "Run the package test script",
+      "language": "JavaScript",
+      "extensions": [
+        "js",
+        "jsx",
+        "mjs",
+        "cjs",
+        "ts",
+        "tsx",
+        "mts",
+        "cts"
+      ],
+      "command": "npm",
+      "args": [
+        "test"
+      ],
+      "workingDirectory": "${projectRoot}",
+      "env": {},
+      "projectMarkers": [
+        "package.json"
+      ]
+    },
+    {
+      "id": "nodejs_test",
+      "name": "Node.js Test",
+      "description": "Run tests with the built-in Node.js test runner",
+      "language": "JavaScript",
+      "extensions": [
+        "js",
+        "mjs",
+        "cjs"
+      ],
+      "command": "node",
+      "args": [
+        "--test",
         "${file}"
       ],
       "workingDirectory": "${fileDir}",
@@ -322,7 +471,9 @@
       "language": "TypeScript",
       "extensions": [
         "ts",
-        "tsx"
+        "tsx",
+        "mts",
+        "cts"
       ],
       "command": "npx",
       "args": [
@@ -339,7 +490,9 @@
       "language": "TypeScript",
       "extensions": [
         "ts",
-        "tsx"
+        "tsx",
+        "mts",
+        "cts"
       ],
       "command": "npx",
       "args": [
@@ -457,8 +610,11 @@
       "args": [
         "run"
       ],
-      "workingDirectory": "${fileDir}",
-      "env": {}
+      "workingDirectory": "${projectRoot}",
+      "env": {},
+      "projectMarkers": [
+        "Cargo.toml"
+      ]
     },
     {
       "id": "rust_cargo_test",
@@ -472,8 +628,66 @@
       "args": [
         "test"
       ],
-      "workingDirectory": "${fileDir}",
-      "env": {}
+      "workingDirectory": "${projectRoot}",
+      "env": {},
+      "projectMarkers": [
+        "Cargo.toml"
+      ]
+    },
+    {
+      "id": "rust_cargo_check",
+      "name": "Rust Check (Cargo)",
+      "description": "Check the Cargo package without producing binaries",
+      "language": "Rust",
+      "extensions": [
+        "rs"
+      ],
+      "command": "cargo",
+      "args": [
+        "check"
+      ],
+      "workingDirectory": "${projectRoot}",
+      "env": {},
+      "projectMarkers": [
+        "Cargo.toml"
+      ]
+    },
+    {
+      "id": "rust_cargo_build",
+      "name": "Rust Build (Cargo)",
+      "description": "Build the Cargo package",
+      "language": "Rust",
+      "extensions": [
+        "rs"
+      ],
+      "command": "cargo",
+      "args": [
+        "build"
+      ],
+      "workingDirectory": "${projectRoot}",
+      "env": {},
+      "projectMarkers": [
+        "Cargo.toml"
+      ]
+    },
+    {
+      "id": "rust_cargo_clippy",
+      "name": "Rust Clippy",
+      "description": "Lint all Cargo targets with Clippy",
+      "language": "Rust",
+      "extensions": [
+        "rs"
+      ],
+      "command": "cargo",
+      "args": [
+        "clippy",
+        "--all-targets"
+      ],
+      "workingDirectory": "${projectRoot}",
+      "env": {},
+      "projectMarkers": [
+        "Cargo.toml"
+      ]
     },
     {
       "id": "ruby",

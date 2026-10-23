@@ -21,6 +21,7 @@ struct RunTemplate {
   QString command;
   QStringList args;
   QString workingDirectory;
+  QStringList projectMarkers;
   QMap<QString, QString> env;
 
   bool isValid() const { return !id.isEmpty() && !command.isEmpty(); }

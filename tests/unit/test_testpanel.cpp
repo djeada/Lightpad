@@ -1,11 +1,13 @@
 #include <QDir>
 #include <QFile>
 #include <QLineEdit>
+#include <QMenu>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTextEdit>
+#include <QTimer>
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QtTest>
@@ -30,6 +32,7 @@ private slots:
   void testInitialTreeEmpty();
   void testConfigurationComboRefreshesAfterTemplateLoad();
   void testCtestDiscoveryUsesBuildDirectory();
+  void testCargoContextMenuRunsQualifiedName();
 
   void testDiscoveryPopulatesTree();
   void testDiscoveryWithSuites();
@@ -201,6 +204,69 @@ void TestTestPanel::testCtestDiscoveryUsesBuildDirectory() {
   panel.discoverTests();
 
   QCOMPARE(adapter.lastPath, QDir(m_tempDir.path()).absoluteFilePath("build"));
+}
+
+void TestTestPanel::testCargoContextMenuRunsQualifiedName() {
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  TestPanel panel;
+  panel.setWorkspaceFolder(project.path());
+  TestConfiguration config;
+  config.id = "cargo_exact_test";
+  config.name = "Cargo exact test";
+  config.command = "/bin/true";
+  config.outputFormat = "cargo";
+  config.runSingleTest.args = {"${testName}"};
+  TestConfigurationManager::instance().addConfiguration(config);
+  auto *combo = findConfigCombo(panel);
+  QVERIFY(combo != nullptr);
+  const int index = combo->findData(config.id);
+  QVERIFY(index >= 0);
+  combo->setCurrentIndex(index);
+
+  class CargoDiscovery : public ITestDiscoveryAdapter {
+  public:
+    QString adapterId() const override { return "cargo"; }
+    void discover(const QString &) override {
+      DiscoveredTest test;
+      test.id = "tests::nested::addition";
+      test.name = "addition";
+      emit discoveryFinished({test});
+    }
+    void cancel() override {}
+  } adapter;
+  panel.setDiscoveryAdapter(&adapter);
+  adapter.discover(project.path());
+  panel.show();
+  QCoreApplication::processEvents();
+  auto *tree = findTree(panel);
+  QVERIFY(tree != nullptr);
+  QCOMPARE(tree->topLevelItemCount(), 1);
+  const QPoint point = tree->visualItemRect(tree->topLevelItem(0)).center();
+  QSignalSpy started(findRunManager(panel), &TestRunManager::processStarted);
+  QSignalSpy finished(findRunManager(panel), &TestRunManager::runFinished);
+  bool triggered = false;
+  QTimer::singleShot(0, &panel, [&]() {
+    auto *menu = panel.findChild<QMenu *>();
+    if (!menu)
+      return;
+    for (auto *action : menu->actions()) {
+      if (action->text() == "Run This Test") {
+        action->trigger();
+        triggered = true;
+        break;
+      }
+    }
+    menu->close();
+  });
+  QVERIFY(
+      QMetaObject::invokeMethod(&panel, "onContextMenu", Q_ARG(QPoint, point)));
+  QVERIFY(triggered);
+  QTRY_COMPARE(started.size(), 1);
+  QCOMPARE(started.first().at(1).toStringList(),
+           QStringList{"tests::nested::addition"});
+  QTRY_COMPARE(finished.size(), 1);
+  TestConfigurationManager::instance().removeConfiguration(config.id);
 }
 
 void TestTestPanel::testDiscoveryPopulatesTree() {

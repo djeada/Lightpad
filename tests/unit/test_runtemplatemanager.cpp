@@ -41,6 +41,10 @@ private slots:
   void testBuildCommandQuotesHostileFileName();
   void testAssignmentKeepsExistingEntries();
   void testAssignmentRefusesToOverwriteUnreadableConfig();
+  void testProjectRunDefaults_data();
+  void testProjectRunDefaults();
+  void testNearestPackageAndExplicitAssignment();
+  void testProjectDetectionStopsAtWorkspaceAndRepository();
 
 private:
   QTemporaryDir m_tempDir;
@@ -601,6 +605,159 @@ void TestRunTemplateManager::
   QFile file(configPath);
   QVERIFY(file.open(QIODevice::ReadOnly));
   QCOMPARE(file.readAll(), corrupt);
+  manager.setWorkspaceFolder(QString());
+}
+
+void TestRunTemplateManager::testProjectRunDefaults_data() {
+  QTest::addColumn<QString>("marker");
+  QTest::addColumn<QByteArray>("manifest");
+  QTest::addColumn<QString>("source");
+  QTest::addColumn<QString>("language");
+  QTest::addColumn<QString>("templateId");
+  QTest::addColumn<QString>("program");
+  QTest::addColumn<QStringList>("arguments");
+  QTest::addColumn<QString>("directory");
+
+  QTest::newRow("cargo module")
+      << QStringLiteral("Cargo.toml")
+      << QByteArray("[package]\nname = 'demo'\n")
+      << QStringLiteral("src/nested/helper.rs") << QStringLiteral("rust")
+      << QStringLiteral("rust_cargo_run") << QStringLiteral("cargo")
+      << QStringList{"run"} << QStringLiteral(".");
+  QTest::newRow("go package with siblings")
+      << QStringLiteral("go.mod") << QByteArray("module example.com/demo\n")
+      << QStringLiteral("cmd/app/main.go") << QStringLiteral("go")
+      << QStringLiteral("go_run_package") << QStringLiteral("go")
+      << QStringList{"run", "."} << QStringLiteral("cmd/app");
+  QTest::newRow("go workspace")
+      << QStringLiteral("go.work") << QByteArray("go 1.22\nuse ./app\n")
+      << QStringLiteral("app/main.go") << QStringLiteral("")
+      << QStringLiteral("go_run_package") << QStringLiteral("go")
+      << QStringList{"run", "."} << QStringLiteral("app");
+  QTest::newRow("go test file")
+      << QStringLiteral("go.mod") << QByteArray("module example.com/demo\n")
+      << QStringLiteral("pkg/math_test.go") << QStringLiteral("go")
+      << QStringLiteral("go_test") << QStringLiteral("go")
+      << QStringList{"test", "-v", "./..."} << QStringLiteral("pkg");
+  QTest::newRow("npm commonjs")
+      << QStringLiteral("package.json")
+      << QByteArray(R"({"scripts":{"start":"node src/main.cjs"}})")
+      << QStringLiteral("src/main.cjs") << QStringLiteral("nodejs")
+      << QStringLiteral("npm_start") << QStringLiteral("npm")
+      << QStringList{"start"} << QStringLiteral(".");
+  QTest::newRow("npm typescript")
+      << QStringLiteral("package.json")
+      << QByteArray(R"({"scripts":{"start":"tsx src/main.ts"}})")
+      << QStringLiteral("src/main.ts") << QStringLiteral("ts")
+      << QStringLiteral("npm_start") << QStringLiteral("npm")
+      << QStringList{"start"} << QStringLiteral(".");
+  QTest::newRow("standalone commonjs")
+      << QStringLiteral("") << QByteArray()
+      << QStringLiteral("scripts/main.cjs") << QStringLiteral("")
+      << QStringLiteral("nodejs") << QStringLiteral("node")
+      << QStringList{"${file}"} << QStringLiteral("scripts");
+  QTest::newRow("package without start")
+      << QStringLiteral("package.json")
+      << QByteArray(R"({"scripts":{"build":"tsc"}})")
+      << QStringLiteral("src/main.mjs") << QStringLiteral("js")
+      << QStringLiteral("nodejs") << QStringLiteral("node")
+      << QStringList{"${file}"} << QStringLiteral("src");
+  QTest::newRow("malformed package")
+      << QStringLiteral("package.json") << QByteArray("{ broken")
+      << QStringLiteral("src/main.js") << QStringLiteral("js")
+      << QStringLiteral("nodejs") << QStringLiteral("node")
+      << QStringList{"${file}"} << QStringLiteral("src");
+  QTest::newRow("invalid start type")
+      << QStringLiteral("package.json")
+      << QByteArray(R"({"scripts":{"start":true}})")
+      << QStringLiteral("src/main.js") << QStringLiteral("js")
+      << QStringLiteral("nodejs") << QStringLiteral("node")
+      << QStringList{"${file}"} << QStringLiteral("src");
+}
+
+void TestRunTemplateManager::testProjectRunDefaults() {
+  QFETCH(QString, marker);
+  QFETCH(QByteArray, manifest);
+  QFETCH(QString, source);
+  QFETCH(QString, language);
+  QFETCH(QString, templateId);
+  QFETCH(QString, program);
+  QFETCH(QStringList, arguments);
+  QFETCH(QString, directory);
+  QTemporaryDir project(m_tempDir.path() + "/project with spaces-XXXXXX");
+  QVERIFY(project.isValid());
+  if (!marker.isEmpty()) {
+    QFile file(project.filePath(marker));
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write(manifest);
+  }
+  const QString sourcePath = project.filePath(source);
+  QVERIFY(QDir().mkpath(QFileInfo(sourcePath).absolutePath()));
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+  manager.setWorkspaceFolder(project.path());
+  QCOMPARE(manager.effectiveTemplateIdForFile(sourcePath, language),
+           templateId);
+  const auto command = manager.buildCommand(sourcePath, language);
+  QCOMPARE(command.first, program);
+  arguments.replaceInStrings("${file}", sourcePath);
+  QCOMPARE(command.second, arguments);
+  QCOMPARE(manager.getWorkingDirectory(sourcePath, language),
+           QDir::cleanPath(project.filePath(directory)));
+  manager.setWorkspaceFolder(QString());
+}
+
+void TestRunTemplateManager::testNearestPackageAndExplicitAssignment() {
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  QVERIFY(QDir(project.path()).mkpath("packages/child/src"));
+  for (const QString &relative :
+       {QString("package.json"), QString("packages/child/package.json")}) {
+    QFile file(project.filePath(relative));
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write(R"({"scripts":{"start":"node index.js"}})");
+  }
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+  manager.setWorkspaceFolder(project.path());
+  const QString path = project.filePath("packages/child/src/helper.js");
+  QCOMPARE(manager.effectiveTemplateIdForFile(path), QString("npm_start"));
+  QCOMPARE(manager.getWorkingDirectory(path),
+           project.filePath("packages/child"));
+
+  FileTemplateAssignment assignment;
+  assignment.templateId = "nodejs";
+  assignment.workingDirectory = "${workspaceFolder}/custom";
+  assignment.customArgs = {"--flag"};
+  assignment.customEnv.insert("NODE_ENV", "test");
+  QVERIFY(manager.assignTemplateToFile(path, assignment));
+  QCOMPARE(manager.effectiveTemplateIdForFile(path), QString("nodejs"));
+  QCOMPARE(manager.buildCommand(path).second, QStringList({path, "--flag"}));
+  QCOMPARE(manager.getWorkingDirectory(path), project.filePath("custom"));
+  QCOMPARE(manager.getEnvironment(path).value("NODE_ENV"), QString("test"));
+  manager.setWorkspaceFolder(QString());
+}
+
+void TestRunTemplateManager::
+    testProjectDetectionStopsAtWorkspaceAndRepository() {
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  QVERIFY(QDir(project.path()).mkpath("workspace/src"));
+  QFile manifest(project.filePath("Cargo.toml"));
+  QVERIFY(manifest.open(QIODevice::WriteOnly));
+  manifest.write("[package]\nname = 'parent'\n");
+  manifest.close();
+  const QString path = project.filePath("workspace/src/main.rs");
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+  manager.setWorkspaceFolder(project.filePath("workspace"));
+  QCOMPARE(manager.effectiveTemplateIdForFile(path), QString("rust_run"));
+
+  manager.setWorkspaceFolder(project.path());
+  QFile gitBoundary(project.filePath("workspace/.git"));
+  QVERIFY(gitBoundary.open(QIODevice::WriteOnly));
+  gitBoundary.close();
+  QCOMPARE(manager.effectiveTemplateIdForFile(path), QString("rust_run"));
   manager.setWorkspaceFolder(QString());
 }
 

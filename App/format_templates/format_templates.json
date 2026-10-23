@@ -216,7 +216,11 @@
         "less",
         "md",
         "yaml",
-        "yml"
+        "yml",
+        "mjs",
+        "cjs",
+        "mts",
+        "cts"
       ],
       "command": "prettier",
       "args": [
@@ -234,7 +238,11 @@
         "js",
         "jsx",
         "ts",
-        "tsx"
+        "tsx",
+        "mjs",
+        "cjs",
+        "mts",
+        "cts"
       ],
       "command": "prettier",
       "args": [
@@ -256,7 +264,11 @@
         "tsx",
         "json",
         "html",
-        "css"
+        "css",
+        "mjs",
+        "cjs",
+        "mts",
+        "cts"
       ],
       "command": "prettier",
       "args": [
@@ -275,7 +287,11 @@
         "js",
         "jsx",
         "ts",
-        "tsx"
+        "tsx",
+        "mjs",
+        "cjs",
+        "mts",
+        "cts"
       ],
       "command": "eslint",
       "args": [
