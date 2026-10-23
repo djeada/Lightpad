@@ -99,6 +99,7 @@ Install these tools manually:
   - CMake 3.16+
   - pkg-config
   - Ninja (recommended)
+  - zlib development library
   - Qt 6 development packages
   - Optional: Qt6Pdf / Qt6PdfWidgets / Qt6WebEngineWidgets
 EOF
