@@ -3543,7 +3543,11 @@ void TestDap::testTabbedDebugDockCanShrinkBelowTwentyPercent() {
   window.addDockWidget(Qt::BottomDockWidgetArea, debug);
   auto *terminal = new QDockWidget("Terminal", &window);
   DockUtils::configureToolPanelDock(terminal);
-  terminal->setWidget(new QPlainTextEdit(terminal));
+  auto *terminalContent = new QPlainTextEdit(terminal);
+  // Measure the debug panel's constraints, not QPlainTextEdit's unrelated
+  // minimum height in the sibling tab.
+  terminalContent->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
+  terminal->setWidget(terminalContent);
   window.addDockWidget(Qt::BottomDockWidgetArea, terminal);
   window.tabifyDockWidget(debug, terminal);
   window.show();
