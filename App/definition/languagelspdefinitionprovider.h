@@ -57,6 +57,10 @@ private:
   int m_nextRequestId;
   int m_activeProviderRequestId;
   int m_activeLspRequestId;
+  QString m_activeUri;
+  QString m_activeSourceFile;
+  LspPosition m_activePosition{0, 0};
+  int m_fallbackStage = 0;
 };
 
 #endif

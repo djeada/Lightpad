@@ -77,6 +77,9 @@ public:
   bool changesUnsaved();
 
   QString getDocumentUri() const;
+  void setDocumentUriOverride(const QString &uri) {
+    m_documentUriOverride = uri;
+  }
   void toggleLineComment();
   void moveLines(bool up);
   void duplicateLines(bool up);
@@ -278,6 +281,7 @@ private slots:
 private:
   void drawExtraCursors();
   int m_lastCompletionRequestPosition = -1;
+  QString m_documentUriOverride;
   bool m_extraSelectionRefreshPending = false;
   QMetaObject::Connection m_cursorRefreshConnection;
   QMetaObject::Connection m_selectionRefreshConnection;

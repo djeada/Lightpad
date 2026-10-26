@@ -69,7 +69,8 @@ int LspDefinitionProvider::requestDefinition(const DefinitionRequest &req) {
 
   m_activeProviderRequestId = providerRequestId;
 
-  QString uri = filePathToUri(req.filePath);
+  QString uri =
+      req.documentUri.isEmpty() ? filePathToUri(req.filePath) : req.documentUri;
   LspPosition position;
   position.line = req.line - 1;
   position.character = req.column;
@@ -84,7 +85,7 @@ QString LspDefinitionProvider::filePathToUri(const QString &filePath) {
 }
 
 QString LspDefinitionProvider::uriToFilePath(const QString &uri) {
-  if (uri.startsWith("file://")) {
+  if (QUrl(uri).isLocalFile()) {
     return DiagnosticUtils::uriToFilePath(uri);
   }
   return uri;

@@ -50,6 +50,8 @@ class TestSymbolNavigation : public QObject {
   Q_OBJECT
 
 private slots:
+  void testExternalLibraryFallback_data();
+  void testExternalLibraryFallback();
   void testDefinitionRequestStruct();
   void testDefinitionTargetStruct();
   void testDefinitionTargetValid();
@@ -620,6 +622,52 @@ void TestSymbolNavigation::testLspProviderUriEncodesSpaces() {
   QCOMPARE(LanguageLspDefinitionProvider::uriToFilePath(uri),
            QString("/tmp/a b/c.cpp"));
   QCOMPARE(LspDefinitionProvider::filePathToUri("/tmp/a b/c.cpp"), uri);
+  QCOMPARE(
+      LanguageLspDefinitionProvider::uriToFilePath("file:/tmp/a%20b/c.cpp"),
+      QString("/tmp/a b/c.cpp"));
+}
+
+void TestSymbolNavigation::testExternalLibraryFallback_data() {
+  QTest::addColumn<QString>("declaration");
+  QTest::addColumn<QString>("typeDefinition");
+  QTest::addColumn<bool>("enableDeclaration");
+  QTest::addColumn<QString>("expected");
+  QTest::newRow("declaration") << QString("file:///external/header.hpp")
+                               << QString("file:///external/type.hpp") << true
+                               << QString("/external/header.hpp");
+  QTest::newRow("type-definition")
+      << QString() << QString("file:///external/types.pyi") << false
+      << QString("/external/types.pyi");
+  QTest::newRow("empty-declaration")
+      << QString() << QString("file:///external/types.pyi") << true
+      << QString("/external/types.pyi");
+}
+
+void TestSymbolNavigation::testExternalLibraryFallback() {
+  QFETCH(QString, declaration);
+  QFETCH(QString, typeDefinition);
+  QFETCH(bool, enableDeclaration);
+  QFETCH(QString, expected);
+  LspClient client;
+  QStringList arguments;
+  if (enableDeclaration)
+    arguments << "--declaration-uri" << declaration;
+  if (!typeDefinition.isEmpty())
+    arguments << "--type-definition-uri" << typeDefinition;
+  QSignalSpy initialized(&client, &LspClient::initialized);
+  QVERIFY(client.start(FAKE_LSP_SERVER_PATH, arguments));
+  QVERIFY(initialized.wait(5000));
+  LanguageLspDefinitionProvider provider(fakeServerConfig());
+  provider.setClientResolver([&](const QString &) { return &client; });
+  QSignalSpy ready(&provider, &IDefinitionProvider::definitionReady);
+  const int id = provider.requestDefinition(makeRequest(1));
+  QTRY_COMPARE_WITH_TIMEOUT(ready.count(), 1, 5000);
+  QCOMPARE(ready.first().at(0).toInt(), id);
+  const auto targets =
+      qvariant_cast<QList<DefinitionTarget>>(ready.first().at(1));
+  QCOMPARE(targets.size(), 1);
+  QCOMPARE(targets.first().filePath, expected);
+  QCOMPARE(targets.first().line, 5);
 }
 
 QTEST_MAIN(TestSymbolNavigation)

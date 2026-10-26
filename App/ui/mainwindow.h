@@ -280,6 +280,7 @@ private:
   class NavigationHistory *navigationHistory;
 
   SymbolNavigationService *m_symbolNavService;
+  int m_externalDefinitionGeneration = 0;
 
   class AutoSaveManager *autoSaveManager;
   DocumentRecovery *m_documentRecovery = nullptr;

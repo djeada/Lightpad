@@ -1,4 +1,5 @@
 #include <QByteArray>
+#include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -15,6 +16,14 @@ namespace {
 
 QString g_logPath;
 int g_initDelayMs = 0;
+bool g_traceContext = false;
+QString g_definitionUri;
+QString g_hoverText;
+QString g_declarationUri;
+QString g_typeDefinitionUri;
+bool g_declarationEnabled = false;
+QString g_documentContent;
+QString g_contentScheme;
 
 void logLine(const QString &line) {
   if (g_logPath.isEmpty()) {
@@ -154,6 +163,21 @@ int main(int argc, char **argv) {
       g_logPath = QString::fromLocal8Bit(argv[++i]);
     } else if (arg == "--init-delay" && i + 1 < argc) {
       g_initDelayMs = QString::fromLocal8Bit(argv[++i]).toInt();
+    } else if (arg == "--trace-context") {
+      g_traceContext = true;
+    } else if (arg == "--definition-uri" && i + 1 < argc) {
+      g_definitionUri = QString::fromLocal8Bit(argv[++i]);
+    } else if (arg == "--hover-text" && i + 1 < argc) {
+      g_hoverText = QString::fromLocal8Bit(argv[++i]);
+    } else if (arg == "--declaration-uri" && i + 1 < argc) {
+      g_declarationEnabled = true;
+      g_declarationUri = QString::fromLocal8Bit(argv[++i]);
+    } else if (arg == "--type-definition-uri" && i + 1 < argc) {
+      g_typeDefinitionUri = QString::fromLocal8Bit(argv[++i]);
+    } else if (arg == "--document-content" && i + 1 < argc) {
+      g_documentContent = QString::fromLocal8Bit(argv[++i]);
+    } else if (arg == "--content-scheme" && i + 1 < argc) {
+      g_contentScheme = QString::fromLocal8Bit(argv[++i]);
     }
   }
 
@@ -187,6 +211,22 @@ int main(int argc, char **argv) {
     if (method == "initialize") {
       logLine("initialize");
       logLine("rootUri " + params["rootUri"].toString());
+      if (g_traceContext) {
+        logLine("cwd " + QDir::currentPath());
+        logLine("environment " + qEnvironmentVariable("LIGHTPAD_LSP_TEST_ENV"));
+        logLine("initializationOptions " +
+                QString::fromUtf8(
+                    QJsonDocument(params["initializationOptions"].toObject())
+                        .toJson(QJsonDocument::Compact)));
+        sendServerRequest(
+            "cfg-sections", "workspace/configuration",
+            QJsonObject{
+                {"items",
+                 QJsonArray{
+                     QJsonObject{{"section", "pylsp.plugins.jedi.environment"}},
+                     QJsonObject{{"section", "python.pythonPath"}},
+                     QJsonObject{{"section", "example"}}}}});
+      }
       if (g_initDelayMs > 0) {
         QThread::msleep(static_cast<unsigned long>(g_initDelayMs));
       }
@@ -200,7 +240,21 @@ int main(int argc, char **argv) {
       capabilities["textDocumentSync"] = 1;
       capabilities["definitionProvider"] = true;
       capabilities["completionProvider"] = QJsonObject{};
+      capabilities["hoverProvider"] = true;
+      capabilities["declarationProvider"] = g_declarationEnabled;
+      capabilities["typeDefinitionProvider"] = !g_typeDefinitionUri.isEmpty();
+      if (!g_contentScheme.isEmpty()) {
+        capabilities["workspace"] = QJsonObject{
+            {"textDocumentContent",
+             QJsonObject{{"schemes", QJsonArray{g_contentScheme}}}}};
+      }
       respond(id, QJsonObject{{"capabilities", capabilities}});
+    } else if (method == "workspace/didChangeConfiguration") {
+      if (g_traceContext) {
+        logLine("settings " +
+                QString::fromUtf8(QJsonDocument(params["settings"].toObject())
+                                      .toJson(QJsonDocument::Compact)));
+      }
     } else if (method == "shutdown") {
       respond(id, QJsonValue::Null);
     } else if (method == "exit") {
@@ -226,7 +280,9 @@ int main(int argc, char **argv) {
       const QString uri = params["textDocument"].toObject()["uri"].toString();
       const int line = params["position"].toObject()["line"].toInt();
       logLine(QString("%1 %2 %3").arg(method, uri).arg(line));
-      if (line == 0) {
+      if (!g_definitionUri.isEmpty()) {
+        respond(id, locationFor(g_definitionUri, 4));
+      } else if (line == 0) {
         respond(id, QJsonValue::Null);
       } else if (line == 1) {
         respond(id, locationFor(uri, line + 10));
@@ -242,8 +298,24 @@ int main(int argc, char **argv) {
       } else {
         respond(id, QJsonArray{locationFor(uri, line + 10)});
       }
+    } else if (method == "workspace/textDocumentContent") {
+      respond(id, QJsonObject{{"text", g_documentContent}});
+    } else if (method == "java/classFileContents") {
+      respond(id, g_documentContent);
+    } else if (method == "textDocument/declaration" ||
+               method == "textDocument/typeDefinition") {
+      const QString uri = method == "textDocument/declaration"
+                              ? g_declarationUri
+                              : g_typeDefinitionUri;
+      respond(id, uri.isEmpty() ? QJsonValue(QJsonValue::Null)
+                                : QJsonValue(locationFor(uri, 4)));
     } else if (method == "textDocument/hover") {
       logLine(method);
+      if (!g_hoverText.isEmpty()) {
+        respond(id,
+                QJsonObject{{"contents", QJsonObject{{"kind", "markdown"},
+                                                     {"value", g_hoverText}}}});
+      }
     } else if (!id.isUndefined()) {
       respond(id, QJsonValue::Null);
     }

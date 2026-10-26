@@ -1,3 +1,4 @@
+#include "definition/languagelspdefinitionprovider.h"
 #include "diagnostics/diagnosticutils.h"
 #include "language/languagefeaturemanager.h"
 #include <QDir>
@@ -40,6 +41,12 @@ private slots:
   void testCrashedServerIsReplaced();
   void testStaleDiagnosticsDropped();
   void testDiagnosticsForPathWithSpaces();
+  void testProjectServerContext_data();
+  void testProjectServerContext();
+  void testPythonExternalLibrary();
+  void testPythonExternalLibrary_data();
+  void testPythonServerFallback();
+  void testExternalDocumentKeepsServerContext();
 
 private:
   QString makeLogPath();
@@ -66,7 +73,7 @@ void TestLanguageFeatureManager::testDefaultServerConfigs() {
     }
     if (cfg.languageId == "py") {
       hasPy = true;
-      QCOMPARE(cfg.command, QString("pylsp"));
+      QCOMPARE(cfg.command, QString("basedpyright-langserver"));
     }
     if (cfg.languageId == "rust") {
       hasRust = true;
@@ -120,6 +127,9 @@ void TestLanguageFeatureManager::testResolveLanguageIdByExtension() {
   QCOMPARE(mgr.resolveLanguageId("/project/script.pyw"), QString("py"));
   QCOMPARE(mgr.resolveLanguageId("/project/main.rs"), QString("rust"));
   QCOMPARE(mgr.resolveLanguageId("/project/main.go"), QString("go"));
+  QCOMPARE(mgr.resolveLanguageId("/project/Dockerfile"), QString("dockerfile"));
+  QCOMPARE(mgr.resolveLanguageId("/project/Containerfile"),
+           QString("dockerfile"));
 }
 
 void TestLanguageFeatureManager::testResolveLanguageIdWithOverride() {
@@ -617,6 +627,294 @@ void TestLanguageFeatureManager::testDetectAdditionalProjectRoots() {
   QCOMPARE(LanguageFeatureManager::detectProjectRoot(
                project.filePath("src/nested/main.js")),
            project.path());
+}
+
+void TestLanguageFeatureManager::testProjectServerContext_data() {
+  QTest::addColumn<QString>("language");
+  QTest::addColumn<QString>("extension");
+  QTest::addColumn<QString>("marker");
+  QTest::addColumn<QString>("protocolId");
+  QTest::newRow("C++") << QString("cpp") << QString("cpp")
+                       << QString("CMakeLists.txt") << QString("cpp");
+  QTest::newRow("C") << QString("c") << QString("c")
+                     << QString("CMakeLists.txt") << QString("c");
+  QTest::newRow("C with shared clangd configuration")
+      << QString("cpp") << QString("c") << QString("CMakeLists.txt")
+      << QString("c");
+  QTest::newRow("Python") << QString("py") << QString("py")
+                          << QString("pyproject.toml") << QString("python");
+  QTest::newRow("Rust") << QString("rust") << QString("rs")
+                        << QString("Cargo.toml") << QString("rust");
+  QTest::newRow("Go") << QString("go") << QString("go") << QString("go.mod")
+                      << QString("go");
+  QTest::newRow("JavaScript")
+      << QString("js") << QString("js") << QString("package.json")
+      << QString("javascript");
+  QTest::newRow("TypeScript")
+      << QString("ts") << QString("ts") << QString("tsconfig.json")
+      << QString("typescript");
+  QTest::newRow("Java") << QString("java") << QString("java")
+                        << QString("pom.xml") << QString("java");
+  QTest::newRow("Dockerfile")
+      << QString("dockerfile") << QString("dockerfile")
+      << QString("package.json") << QString("dockerfile");
+}
+
+void TestLanguageFeatureManager::testProjectServerContext() {
+  QFETCH(QString, language);
+  QFETCH(QString, extension);
+  QFETCH(QString, marker);
+  QFETCH(QString, protocolId);
+  QTemporaryDir first;
+  QTemporaryDir second;
+  QVERIFY(first.isValid() && second.isValid());
+  for (const QString &root : {first.path(), second.path()}) {
+    QFile file(QDir(root).filePath(marker));
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("{}");
+  }
+  const QString logPath = makeLogPath();
+  const QString externalUri = DiagnosticUtils::filePathToUri(
+      m_tempDir.filePath("external library." + extension));
+  DiagnosticsManager diagnostics;
+  LanguageFeatureManager manager(&diagnostics);
+  QVERIFY(manager.isLanguageSupported(language));
+  auto config = manager.serverConfig(language);
+  config.command = FAKE_LSP_SERVER_PATH;
+  config.arguments = {
+      "--log",     logPath,        "--trace-context",        "--definition-uri",
+      externalUri, "--hover-text", "External library member"};
+  config.environmentVariables = {
+      "LIGHTPAD_LSP_TEST_ENV=${workspaceFolder}=value"};
+  config.settings = QJsonObject{{"example", QJsonObject{{"imports", true}}}};
+  config.initializationOptions = QJsonObject{{"librarySupport", true}};
+  manager.setServerConfig(config);
+  const QString a = first.filePath("main." + extension);
+  const QString b = second.filePath("main." + extension);
+  manager.openDocument(a, language, "library.member");
+  manager.openDocument(b, language, "library.member");
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "languageId " + protocolId), 2,
+                            5000);
+  QVERIFY(manager.clientForFile(a) != manager.clientForFile(b));
+  for (const QString &root : {first.path(), second.path()}) {
+    QVERIFY(readLog(logPath).contains("rootUri " +
+                                      DiagnosticUtils::filePathToUri(root)));
+    QVERIFY(readLog(logPath).contains("cwd " + root));
+    QVERIFY(readLog(logPath).contains("environment " + root + "=value"));
+  }
+  QVERIFY(readLog(logPath).contains(
+      "initializationOptions {\"librarySupport\":true}"));
+  QTRY_VERIFY_WITH_TIMEOUT(countLines(logPath, "settings ") == 2, 5000);
+  auto *client = manager.clientForFile(a);
+  QSignalSpy hover(client, &LspClient::hoverReceived);
+  QSignalSpy definition(client, &LspClient::definitionReceived);
+  client->requestHover(DiagnosticUtils::filePathToUri(a), {0, 10});
+  client->requestDefinition(DiagnosticUtils::filePathToUri(a), {0, 10});
+  QTRY_COMPARE_WITH_TIMEOUT(hover.count(), 1, 5000);
+  QTRY_COMPARE_WITH_TIMEOUT(definition.count(), 1, 5000);
+  QCOMPARE(hover.first().at(1).toString(), QString("External library member"));
+  const auto locations =
+      qvariant_cast<QList<LspLocation>>(definition.first().at(1));
+  QCOMPARE(locations.size(), 1);
+  QCOMPARE(locations.first().uri, externalUri);
+  const QString externalPath = DiagnosticUtils::uriToFilePath(externalUri);
+  manager.inheritDocumentContext(externalPath, a);
+  manager.openDocument(externalPath, language, "external library member");
+  QCOMPARE(manager.clientForFile(externalPath), manager.clientForFile(a));
+  QCOMPARE(manager.documentUriForFile(externalPath), externalUri);
+  QVERIFY(!manager.isExternalDocument(externalPath));
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "languageId " + protocolId), 3,
+                            5000);
+  manager.changeDocument(externalPath, 2, "edited library member");
+  manager.inheritDocumentContext(externalPath, b);
+  QCOMPARE(manager.clientForFile(externalPath), manager.clientForFile(b));
+  QTRY_VERIFY_WITH_TIMEOUT(
+      readLog(logPath).contains("textDocument/didOpen " + externalUri +
+                                " 1 edited library member"),
+      5000);
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "languageId " + protocolId), 4,
+                            5000);
+  manager.restartServer(language);
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "languageId " + protocolId), 7,
+                            5000);
+  QVERIFY(manager.clientForFile(a) != manager.clientForFile(b));
+  QCOMPARE(manager.clientForFile(externalPath), manager.clientForFile(b));
+}
+
+void TestLanguageFeatureManager::testPythonServerFallback() {
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  const QString environment = project.filePath(".venv");
+  const QString bin = PythonProjectEnvironment::venvBinPath(environment);
+  QVERIFY(QDir().mkpath(bin));
+#ifdef Q_OS_WIN
+  const QString pythonName = "python.exe";
+  const QString serverName = "pylsp.exe";
+#else
+  const QString pythonName = "python";
+  const QString serverName = "pylsp";
+#endif
+  const QString python = PythonProjectEnvironment::globalPythonInterpreter();
+  if (python.isEmpty())
+    QSKIP("Python interpreter not installed");
+  QVERIFY(QFile::copy(python, QDir(bin).filePath(pythonName)));
+  QVERIFY(QFile::copy(FAKE_LSP_SERVER_PATH, QDir(bin).filePath(serverName)));
+  QFile marker(QDir(environment).filePath("pyvenv.cfg"));
+  QVERIFY(marker.open(QIODevice::WriteOnly));
+  marker.write("home = .\n");
+  marker.close();
+  LanguageFeatureManager manager(nullptr);
+  auto config = manager.serverConfig("py");
+  config.command = "basedpyright-langserver";
+  config.arguments = {"--stdio"};
+  config.environmentVariables = {"PATH=" + bin};
+  manager.setServerConfig(config);
+  const QString file = project.filePath("example.py");
+  manager.openDocument(file, "py", "print('hello')");
+  QTRY_VERIFY_WITH_TIMEOUT(manager.clientForFile(file) &&
+                               manager.clientForFile(file)->isReady(),
+                           5000);
+  QCOMPARE(manager.clientForFile(file)->program(),
+           QDir(bin).filePath(serverName));
+  auto *process = manager.clientForFile(file)->findChild<QProcess *>();
+  QVERIFY(process && process->arguments().isEmpty());
+}
+
+void TestLanguageFeatureManager::testExternalDocumentKeepsServerContext() {
+  QTemporaryDir project;
+  QTemporaryDir cache;
+  QVERIFY(project.isValid() && cache.isValid());
+  QFile marker(project.filePath("pom.xml"));
+  QVERIFY(marker.open(QIODevice::WriteOnly));
+  marker.write("<project/>");
+  marker.close();
+  const QString source = project.filePath("Main.java");
+  const QString external = cache.filePath("Library.java");
+  const QString uri = "jdt://contents/library/Library.class?jar=example";
+  const QString log = makeLogPath();
+  LanguageFeatureManager manager(nullptr);
+  auto config = manager.serverConfig("java");
+  config.command = FAKE_LSP_SERVER_PATH;
+  config.arguments = {"--log", log, "--trace-context"};
+  manager.setServerConfig(config);
+  manager.openDocument(source, "java", "class Main {}");
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(log, "languageId java"), 1, 5000);
+  auto *original = manager.clientForFile(source);
+  manager.openExternalDocument(external, uri, source, "class Library {}");
+  QCOMPARE(manager.clientForFile(external), original);
+  QCOMPARE(manager.documentUriForFile(external), uri);
+  QVERIFY(manager.isExternalDocument(external));
+  QTRY_VERIFY_WITH_TIMEOUT(readLog(log).contains("textDocument/didOpen " + uri +
+                                                 " 1 class Library {}"),
+                           5000);
+  manager.closeDocument(source);
+  manager.restartServer("java");
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(log, "initialize"), 2, 5000);
+  QTRY_VERIFY_WITH_TIMEOUT(manager.clientForFile(external) &&
+                               manager.clientForFile(external)->isReady(),
+                           5000);
+  QVERIFY(manager.clientForFile(external) != original);
+  manager.saveDocument(external);
+  QTRY_VERIFY_WITH_TIMEOUT(readLog(log).contains("textDocument/didSave " + uri),
+                           5000);
+  manager.closeDocument(external);
+  QVERIFY(!manager.isExternalDocument(external));
+}
+
+void TestLanguageFeatureManager::testPythonExternalLibrary_data() {
+  QTest::addColumn<QString>("server");
+  QTest::addColumn<QStringList>("arguments");
+  QTest::addColumn<bool>("compiledDefinitions");
+  const QString pylsp = qEnvironmentVariable("LIGHTPAD_TEST_PYLSP");
+  const QString basedpyright =
+      qEnvironmentVariable("LIGHTPAD_TEST_BASEDPYRIGHT");
+  if (!pylsp.isEmpty()) {
+    QTest::newRow("pylsp") << pylsp << QStringList{} << false;
+  }
+  if (!basedpyright.isEmpty()) {
+    QTest::newRow("basedpyright")
+        << basedpyright << QStringList{"--stdio"} << true;
+  }
+  if (pylsp.isEmpty() && basedpyright.isEmpty()) {
+    QTest::newRow("optional") << QString{} << QStringList{} << false;
+  }
+}
+
+void TestLanguageFeatureManager::testPythonExternalLibrary() {
+  QFETCH(QString, server);
+  QFETCH(QStringList, arguments);
+  QFETCH(bool, compiledDefinitions);
+  const QString interpreter = qEnvironmentVariable("LIGHTPAD_TEST_PYTHON");
+  if (server.isEmpty() || interpreter.isEmpty()) {
+    QSKIP("Set LIGHTPAD_TEST_PYTHON and LIGHTPAD_TEST_PYLSP or "
+          "LIGHTPAD_TEST_BASEDPYRIGHT to test NumPy in a "
+          "separate interpreter");
+  }
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  QFile marker(project.filePath("pyproject.toml"));
+  QVERIFY(marker.open(QIODevice::WriteOnly));
+  marker.write(
+      "[project]\nname = 'external-library-test'\nversion = '0.1.0'\n");
+  marker.close();
+  const QString path = project.filePath("example.py");
+  const QString source = "import numpy as np\nvalues = np.array([1, 2, "
+                         "3])\nlength = np.linalg.norm(values)\n";
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write(source.toUtf8());
+  file.close();
+  LanguageFeatureManager manager(nullptr);
+  manager.setWorkspaceFolder(project.path());
+  manager.setPythonEnvironmentResolver([interpreter](const QString &) {
+    return PythonEnvironmentPreference{
+        "customInterpreter", interpreter, {}, {}};
+  });
+  auto config = manager.serverConfig("py");
+  config.command = server;
+  config.arguments = arguments;
+  manager.setServerConfig(config);
+  manager.openDocument(path, "python", source);
+  QTRY_VERIFY_WITH_TIMEOUT(manager.clientForFile(path) &&
+                               manager.clientForFile(path)->isReady(),
+                           15000);
+  auto *client = manager.clientForFile(path);
+  QSignalSpy hover(client, &LspClient::hoverReceived);
+  LanguageLspDefinitionProvider provider(
+      {"python-test", "Python", {"py"}, server, arguments});
+  provider.setClientResolver([client](const QString &) { return client; });
+  QSignalSpy definition(&provider, &IDefinitionProvider::definitionReady);
+  QList<QPair<int, QString>> symbols{{1, "np"}, {2, "norm"}};
+  if (compiledDefinitions)
+    symbols.append({1, "array"});
+  for (const auto &symbol : symbols) {
+    hover.clear();
+    definition.clear();
+    const int column =
+        source.split('\n').at(symbol.first).indexOf(symbol.second) + 1;
+    client->requestHover(DiagnosticUtils::filePathToUri(path),
+                         {symbol.first, column});
+    DefinitionRequest request;
+    request.filePath = path;
+    request.languageId = "py";
+    request.line = symbol.first + 1;
+    request.column = column;
+    provider.requestDefinition(request);
+    QTRY_COMPARE_WITH_TIMEOUT(hover.count(), 1, 20000);
+    QVERIFY2(!hover.first().at(1).toString().trimmed().isEmpty(),
+             qPrintable(symbol.second));
+    QTRY_COMPARE_WITH_TIMEOUT(definition.count(), 1, 20000);
+    const auto locations =
+        qvariant_cast<QList<DefinitionTarget>>(definition.first().at(1));
+    QVERIFY2(!locations.isEmpty(), qPrintable(symbol.second));
+    const QString target = locations.first().filePath;
+    QDir environmentRoot(QFileInfo(interpreter).absolutePath());
+    QVERIFY(environmentRoot.cdUp());
+    QVERIFY2(target.startsWith(environmentRoot.absolutePath() + '/'),
+             qPrintable(target));
+    QVERIFY2(target.contains("numpy"), qPrintable(target));
+    QVERIFY2(QFileInfo::exists(target), qPrintable(target));
+  }
 }
 
 QTEST_MAIN(TestLanguageFeatureManager)

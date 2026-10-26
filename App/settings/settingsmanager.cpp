@@ -95,8 +95,8 @@ void SettingsManager::initializeDefaults() {
   languageServersDefaults["cpp"] = cppServer;
 
   QJsonObject pyServer;
-  pyServer["command"] = "pylsp";
-  pyServer["arguments"] = QJsonArray();
+  pyServer["command"] = "basedpyright-langserver";
+  pyServer["arguments"] = QJsonArray{"--stdio"};
   pyServer["environment"] = QJsonArray();
   pyServer["enabled"] = true;
   languageServersDefaults["py"] = pyServer;

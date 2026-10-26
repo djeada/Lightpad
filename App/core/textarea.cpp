@@ -2135,6 +2135,9 @@ void TextArea::setLanguage(const QString &languageId) {
 QString TextArea::language() const { return m_languageId; }
 
 QString TextArea::getDocumentUri() const {
+  if (!m_documentUriOverride.isEmpty()) {
+    return m_documentUriOverride;
+  }
   const QString filePath = resolveFilePath();
   if (filePath.isEmpty()) {
     return QString();
@@ -2973,7 +2976,7 @@ bool TextArea::viewportEvent(QEvent *event) {
     return true;
   }
 
-  if (mainWindow->requestLspHover(this, block.blockNumber(), start,
+  if (mainWindow->requestLspHover(this, block.blockNumber(), column,
                                   helpEvent->globalPos(), viewport(),
                                   wordRect)) {
     return true;

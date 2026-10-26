@@ -13,7 +13,9 @@ LspClient::LspClient(QObject *parent)
 
 LspClient::~LspClient() { stop(); }
 
-bool LspClient::start(const QString &program, const QStringList &arguments) {
+bool LspClient::start(const QString &program, const QStringList &arguments,
+                      const QString &workingDirectory,
+                      const QProcessEnvironment &environment) {
   if (m_process) {
     LOG_WARNING("LSP client already started");
     return false;
@@ -22,6 +24,8 @@ bool LspClient::start(const QString &program, const QStringList &arguments) {
   m_process = new QProcess(this);
   m_process->setProgram(program);
   m_process->setArguments(arguments);
+  m_process->setWorkingDirectory(workingDirectory);
+  m_process->setProcessEnvironment(environment);
 
   connect(m_process, &QProcess::readyReadStandardOutput, this,
           &LspClient::onReadyReadStandardOutput);
@@ -376,6 +380,35 @@ void LspClient::requestWorkspaceSymbols(const QString &query) {
 
 void LspClient::setRootUri(const QString &rootUri) { m_rootUri = rootUri; }
 
+int LspClient::requestDocumentContent(const QString &uri) {
+  const QString scheme = QUrl(uri).scheme();
+  QString method;
+  if (m_capabilities.documentContentSchemes.contains(scheme)) {
+    method = "workspace/textDocumentContent";
+  } else if (scheme == "jdt") {
+    method = "java/classFileContents";
+  } else {
+    return -1;
+  }
+  const int id = m_nextRequestId++;
+  m_pendingRequests[id] = method;
+  m_pendingContentUris[id] = uri;
+  sendRequest(method, QJsonObject{{"uri", uri}}, id);
+  return id;
+}
+
+void LspClient::setConfiguration(const QJsonObject &configuration) {
+  m_configuration = configuration;
+  if (isReady()) {
+    sendNotification("workspace/didChangeConfiguration",
+                     QJsonObject{{"settings", m_configuration}});
+  }
+}
+
+void LspClient::setInitializationOptions(const QJsonObject &options) {
+  m_initializationOptions = options;
+}
+
 const LspServerCapabilities &LspClient::serverCapabilities() const {
   return m_capabilities;
 }
@@ -589,6 +622,7 @@ void LspClient::onProcessFinished(int exitCode,
 void LspClient::failPendingRequests(const QString &message) {
   const QMap<int, QString> pending = m_pendingRequests;
   m_pendingRequests.clear();
+  m_pendingContentUris.clear();
   m_pendingCompletionRequestId = -1;
   for (auto it = pending.constBegin(); it != pending.constEnd(); ++it) {
     emit requestFailed(it.key(), it.value(), message);
@@ -620,8 +654,20 @@ void LspClient::handleServerRequest(const QJsonValue &id, const QString &method,
   if (method == "workspace/configuration") {
     QJsonArray results;
     const QJsonArray items = params.toObject()["items"].toArray();
-    for (int i = 0; i < items.size(); ++i) {
-      results.append(QJsonValue::Null);
+    for (const QJsonValue &item : items) {
+      const QString section = item.toObject()["section"].toString();
+      QJsonValue value = m_configuration.isEmpty()
+                             ? QJsonValue(QJsonValue::Null)
+                             : QJsonValue(m_configuration);
+      if (m_configuration.contains(section)) {
+        value = m_configuration.value(section);
+      } else if (!section.isEmpty()) {
+        for (const QString &part : section.split('.')) {
+          value = value.toObject().value(part);
+        }
+      }
+      results.append(value.isUndefined() ? QJsonValue(QJsonValue::Null)
+                                         : value);
     }
     sendResponse(id, results);
   } else if (method == "client/registerCapability" ||
@@ -656,6 +702,7 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
   QString method = m_pendingRequests.take(id);
 
   if (!errorVal.isNull() && !errorVal.isUndefined()) {
+    m_pendingContentUris.remove(id);
     QJsonObject errorObj = errorVal.toObject();
     const QString errorMessage = errorObj["message"].toString();
     LOG_ERROR(QString("LSP error for %1: %2").arg(method).arg(errorMessage));
@@ -669,8 +716,19 @@ void LspClient::handleResponse(int id, const QJsonValue &result,
     parseServerCapabilities(caps);
     setState(State::Ready);
     sendNotification("initialized", {});
+    if (!m_configuration.isEmpty()) {
+      sendNotification("workspace/didChangeConfiguration",
+                       QJsonObject{{"settings", m_configuration}});
+    }
     emit initialized();
     LOG_INFO("LSP client initialized");
+  } else if (method == "workspace/textDocumentContent" ||
+             method == "java/classFileContents") {
+    const QString uri = m_pendingContentUris.take(id);
+    const QString text = result.isString()
+                             ? result.toString()
+                             : result.toObject()["text"].toString();
+    emit documentContentReceived(id, uri, text);
   } else if (method == "textDocument/completion") {
     QList<LspCompletionItem> items;
     QJsonArray itemsArray = result.isArray()
@@ -1030,6 +1088,10 @@ void LspClient::doInitialize() {
 
   QJsonObject workspaceCaps;
   workspaceCaps["symbol"] = QJsonObject{{"dynamicRegistration", false}};
+  workspaceCaps["configuration"] = true;
+  workspaceCaps["workspaceFolders"] = true;
+  workspaceCaps["textDocumentContent"] =
+      QJsonObject{{"dynamicRegistration", false}};
   capabilities["workspace"] = workspaceCaps;
 
   QJsonObject params;
@@ -1037,6 +1099,13 @@ void LspClient::doInitialize() {
   params["rootUri"] =
       m_rootUri.isEmpty() ? QJsonValue::Null : QJsonValue(m_rootUri);
   params["capabilities"] = capabilities;
+  if (!m_rootUri.isEmpty()) {
+    params["workspaceFolders"] = QJsonArray{
+        QJsonObject{{"uri", m_rootUri}, {"name", QUrl(m_rootUri).fileName()}}};
+  }
+  if (!m_initializationOptions.isEmpty()) {
+    params["initializationOptions"] = m_initializationOptions;
+  }
 
   int id = m_nextRequestId++;
   m_pendingRequests[id] = "initialize";
@@ -1044,6 +1113,14 @@ void LspClient::doInitialize() {
 }
 
 void LspClient::parseServerCapabilities(const QJsonObject &caps) {
+  m_capabilities.documentContentSchemes.clear();
+  const auto schemes = caps["workspace"]
+                           .toObject()["textDocumentContent"]
+                           .toObject()["schemes"]
+                           .toArray();
+  for (const auto &scheme : schemes) {
+    m_capabilities.documentContentSchemes.append(scheme.toString());
+  }
   auto isTruthy = [](const QJsonValue &v) {
     return v.isBool() ? v.toBool() : v.isObject();
   };

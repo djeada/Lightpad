@@ -9,6 +9,8 @@ class TestLspRegression : public QObject {
   Q_OBJECT
 
 private slots:
+  void testVirtualDocumentContent_data();
+  void testVirtualDocumentContent();
   void testDiagnosticSeverityRoundTrip();
   void testPositionBoundaryValues();
   void testRangeWithZeroLength();
@@ -414,6 +416,40 @@ void TestLspRegression::testPendingRequestsFailWhenServerExits() {
   QCOMPARE(failedSpy.first().at(1).toString(), QString("textDocument/hover"));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), LspClient::State::Disconnected,
                             5000);
+}
+
+void TestLspRegression::testVirtualDocumentContent_data() {
+  QTest::addColumn<QString>("uri");
+  QTest::addColumn<QString>("scheme");
+  QTest::newRow("JDT legacy")
+      << QString("jdt://contents/library/External.class?jar=example")
+      << QString();
+  QTest::newRow("JDT standard")
+      << QString("jdt://contents/library/External.class?jar=example")
+      << QString("jdt");
+  QTest::newRow("custom standard scheme")
+      << QString("dependency://library/external.rs") << QString("dependency");
+}
+
+void TestLspRegression::testVirtualDocumentContent() {
+  QFETCH(QString, uri);
+  QFETCH(QString, scheme);
+  const QString text = "// External source: \u00fc\npublic class External {}\n";
+  QStringList arguments{"--document-content", text};
+  if (!scheme.isEmpty())
+    arguments << "--content-scheme" << scheme;
+  LspClient client;
+  QSignalSpy initialized(&client, &LspClient::initialized);
+  QVERIFY(client.start(FAKE_LSP_SERVER_PATH, arguments));
+  QVERIFY(initialized.wait(5000));
+  QSignalSpy contents(&client, &LspClient::documentContentReceived);
+  const int id = client.requestDocumentContent(uri);
+  QVERIFY(id >= 0);
+  QTRY_COMPARE_WITH_TIMEOUT(contents.count(), 1, 5000);
+  QCOMPARE(contents.first().at(0).toInt(), id);
+  QCOMPARE(contents.first().at(1).toString(), uri);
+  QCOMPARE(contents.first().at(2).toString(), text);
+  QCOMPARE(client.requestDocumentContent("unsupported://unknown/file"), -1);
 }
 
 QTEST_MAIN(TestLspRegression)
