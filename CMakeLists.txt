@@ -17,6 +17,12 @@ option(BUILD_TESTS "Build the test suite" ON)
 
 find_package(ZLIB REQUIRED)
 
+# forkpty is opaque to GCC's coverage runtime. Do not let execvp flush the
+# parent's inherited counters in the child after descriptor cleanup.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(-fno-builtin-execvp)
+endif()
+
 # Add the App subdirectory
 add_subdirectory(App)
 

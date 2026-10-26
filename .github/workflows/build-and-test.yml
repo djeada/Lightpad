@@ -53,7 +53,10 @@ jobs:
 
       - name: Generate coverage report
         run: |
+          # Protocol helpers can be killed while writing profiles. They contain
+          # no application code, so skip their raw data before invoking gcov.
           gcovr --root . --filter 'App/' \
+            --gcov-exclude-directories '.*/CMakeFiles/(fakelsp_server|fakedap_adapter)\.dir$' \
             --exclude '.*autogen.*' --exclude '.*moc_.*' --exclude '.*qrc_.*' \
             --print-summary \
             --xml coverage.xml
