@@ -6,6 +6,7 @@
 #include <QMap>
 #include <QObject>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QTimer>
 
 struct LspPosition {
@@ -165,6 +166,7 @@ struct LspServerCapabilities {
   bool codeActionProvider = false;
   bool semanticTokensProvider = false;
   int textDocumentSyncKind = 1;
+  QStringList documentContentSchemes;
 };
 
 class LspClient : public QObject {
@@ -184,13 +186,20 @@ public:
   explicit LspClient(QObject *parent = nullptr);
   ~LspClient();
 
-  bool start(const QString &program, const QStringList &arguments = {});
+  bool start(const QString &program, const QStringList &arguments = {},
+             const QString &workingDirectory = {},
+             const QProcessEnvironment &environment =
+                 QProcessEnvironment::systemEnvironment());
 
   void stop();
 
   State state() const;
 
   bool isReady() const;
+  QString program() const {
+    return m_process ? m_process->program() : QString();
+  }
+  QString rootUri() const { return m_rootUri; }
 
   void didOpen(const QString &uri, const QString &languageId, int version,
                const QString &text);
@@ -223,10 +232,13 @@ public:
   int requestDeclaration(const QString &uri, LspPosition position);
 
   int requestTypeDefinition(const QString &uri, LspPosition position);
+  int requestDocumentContent(const QString &uri);
 
   void requestWorkspaceSymbols(const QString &query);
 
   void setRootUri(const QString &rootUri);
+  void setConfiguration(const QJsonObject &configuration);
+  void setInitializationOptions(const QJsonObject &options);
 
   const LspServerCapabilities &serverCapabilities() const;
 
@@ -260,6 +272,8 @@ signals:
   void declarationReceived(int requestId, const QList<LspLocation> &locations);
   void typeDefinitionReceived(int requestId,
                               const QList<LspLocation> &locations);
+  void documentContentReceived(int requestId, const QString &uri,
+                               const QString &text);
   void workspaceSymbolsReceived(int requestId,
                                 const QList<LspDocumentSymbol> &symbols);
 
@@ -294,7 +308,10 @@ private:
   int m_nextRequestId;
   QByteArray m_buffer;
   QMap<int, QString> m_pendingRequests;
+  QMap<int, QString> m_pendingContentUris;
   QString m_rootUri;
+  QJsonObject m_configuration;
+  QJsonObject m_initializationOptions;
   int m_pendingCompletionRequestId = -1;
   LspServerCapabilities m_capabilities;
 

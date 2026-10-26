@@ -10,6 +10,7 @@ struct DefinitionRequest {
   int line;
   int column;
   QString languageId;
+  QString documentUri;
 };
 
 struct DefinitionTarget {
@@ -17,6 +18,7 @@ struct DefinitionTarget {
   int line;
   int column;
   QString label;
+  QString sourceFilePath;
 
   bool isValid() const { return !filePath.isEmpty(); }
 };

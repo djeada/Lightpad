@@ -82,7 +82,7 @@ Session manager that owns per-language `LspClient` instances.
 | Language | Server | Command |
 |---|---|---|
 | C / C++ | clangd | `clangd` |
-| Python  | pylsp  | `pylsp`  |
+| Python  | Basedpyright (pylsp fallback) | `basedpyright-langserver --stdio` |
 
 Additional languages (Rust, Go, TypeScript, Java) will follow in later phases.
 

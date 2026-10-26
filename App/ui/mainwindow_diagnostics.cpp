@@ -11,21 +11,33 @@ void MainWindow::setupDiagnostics() {
   QJsonObject diagSettings =
       sm.getValue("diagnostics", QJsonObject()).toJsonObject();
   bool enabled = diagSettings.value("enabled").toBool(true);
-  if (!enabled) {
-    return;
-  }
-
   setupNotificationManager();
 
-  m_diagnosticsManager = new DiagnosticsManager(this);
-  m_languageFeatureManager =
-      new LanguageFeatureManager(m_diagnosticsManager, this);
+  m_diagnosticsManager = enabled ? new DiagnosticsManager(this) : nullptr;
+  m_languageFeatureManager = new LanguageFeatureManager(
+      enabled ? m_diagnosticsManager : nullptr, this);
+  m_languageFeatureManager->setPythonEnvironmentResolver(
+      [](const QString &filePath) {
+        const auto assignment =
+            RunTemplateManager::instance().getAssignmentForFile(filePath);
+        return PythonEnvironmentPreference{
+            assignment.pythonMode, assignment.pythonInterpreter,
+            assignment.pythonVenvPath, assignment.pythonRequirementsFile};
+      });
+  connect(&RunTemplateManager::instance(),
+          &RunTemplateManager::assignmentChanged, m_languageFeatureManager,
+          [this](const QString &filePath) {
+            if (effectiveLanguageIdForFile(filePath) == "py") {
+              m_languageFeatureManager->restartServer("py");
+            }
+          });
 
-  connect(m_diagnosticsManager, &DiagnosticsManager::diagnosticsChanged, this,
-          &MainWindow::onDiagnosticsChanged);
-
-  connect(m_diagnosticsManager, &DiagnosticsManager::countsChanged, this,
-          &MainWindow::updateProblemsStatusLabel);
+  if (m_diagnosticsManager) {
+    connect(m_diagnosticsManager, &DiagnosticsManager::diagnosticsChanged, this,
+            &MainWindow::onDiagnosticsChanged);
+    connect(m_diagnosticsManager, &DiagnosticsManager::countsChanged, this,
+            &MainWindow::updateProblemsStatusLabel);
+  }
 
   connect(
       m_languageFeatureManager, &LanguageFeatureManager::serverError, this,
@@ -341,9 +353,19 @@ void MainWindow::notifyDiagnosticsFileOpened(const QString &filePath) {
   if (!m_languageFeatureManager || filePath.isEmpty()) {
     return;
   }
+  if (m_languageFeatureManager->isExternalDocument(filePath)) {
+    if (auto *area = textAreaForFile(allTabWidgets(), filePath)) {
+      area->setDocumentUriOverride(
+          m_languageFeatureManager->documentUriForFile(filePath));
+      area->setReadOnly(true);
+    }
+    m_documentVersions[filePath] = 1;
+    return;
+  }
 
   QString text;
   if (TextArea *textArea = textAreaForFile(allTabWidgets(), filePath)) {
+    textArea->setDocumentUriOverride({});
     text = textArea->toPlainText();
   } else {
     QFile file(filePath);
@@ -355,6 +377,7 @@ void MainWindow::notifyDiagnosticsFileOpened(const QString &filePath) {
 
   QString languageId = effectiveLanguageIdForFile(filePath);
   m_documentVersions[filePath] = 1;
+  m_languageFeatureManager->setWorkspaceFolder(m_projectRootPath);
   m_languageFeatureManager->openDocument(filePath, languageId, text);
 }
 
@@ -368,15 +391,16 @@ void MainWindow::notifyDiagnosticsFileChanged(const QString &filePath,
   QJsonObject diagSettings =
       sm.getValue("diagnostics", QJsonObject()).toJsonObject();
   bool onType = diagSettings.value("onType").toBool(true);
-  if (!onType) {
-    return;
-  }
-
   int version = m_documentVersions.value(filePath, 0) + 1;
   m_documentVersions[filePath] = version;
   const QString uri = DiagnosticUtils::filePathToUri(filePath);
   if (m_diagnosticsManager) {
     m_diagnosticsManager->trackDocumentVersion(uri, version);
+  }
+
+  if (!onType) {
+    m_pendingDiagnosticsTexts[filePath] = text;
+    return;
   }
 
   const int debounceMs = qMax(0, diagSettings.value("debounceMs").toInt(200));

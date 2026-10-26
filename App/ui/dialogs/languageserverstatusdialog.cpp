@@ -19,6 +19,7 @@
 #include <QProcessEnvironment>
 #include <QPushButton>
 #include <QStandardPaths>
+#include <QUrl>
 #include <QVBoxLayout>
 
 namespace {
@@ -171,6 +172,9 @@ void LanguageServerStatusDialog::refreshDetails() {
   const QString lastError =
       m_manager ? m_manager->lastServerError(m_languageId) : QString();
   const QString command = m_commandEdit->text().trimmed();
+  auto *client = m_manager ? m_manager->clientForFile(m_filePath) : nullptr;
+  const QString activeCommand =
+      client && client->isReady() ? client->program() : QString();
   const QString resolvedCommand =
       command.isEmpty() ? QString() : QStandardPaths::findExecutable(command);
   const QString displayName =
@@ -219,6 +223,8 @@ void LanguageServerStatusDialog::refreshDetails() {
       << QString("Resolved executable: %1")
              .arg(displayValue(QDir::toNativeSeparators(resolvedCommand),
                                "(not found on PATH)"))
+      << QString("Running executable: %1")
+             .arg(displayValue(activeCommand, "(not running)"))
       << QString("Arguments: %1")
              .arg(displayValue(m_argumentsEdit->text().trimmed(), "(none)"))
       << QString("Workspace: %1")
@@ -227,7 +233,10 @@ void LanguageServerStatusDialog::refreshDetails() {
              .arg(displayValue(QDir::toNativeSeparators(m_filePath)))
       << QString("Detected project root: %1")
              .arg(displayValue(QDir::toNativeSeparators(
-                 LanguageFeatureManager::detectProjectRoot(m_filePath))))
+                 client && client->isReady()
+                     ? QUrl(client->rootUri()).toLocalFile()
+                     : LanguageFeatureManager::detectProjectRoot(
+                           m_filePath, m_workspaceFolder))))
       << QString("Last error: %1").arg(displayValue(lastError, "(none)"));
 
   if (m_languageId == "py" && !m_filePath.trimmed().isEmpty()) {
@@ -242,6 +251,8 @@ void LanguageServerStatusDialog::refreshDetails() {
     const PythonEnvironmentInfo info = PythonProjectEnvironment::resolve(
         preference, m_workspaceFolder, m_filePath,
         QFileInfo(m_filePath).absolutePath());
+    const QString package =
+        command.contains("pylsp") ? "python-lsp-server" : "basedpyright";
 
     lines << "" << "Python environment for this file:"
           << QString("  Interpreter: %1")
@@ -257,10 +268,11 @@ void LanguageServerStatusDialog::refreshDetails() {
           << QString("  Suggested install: %1")
                  .arg(
                      info.interpreter.isEmpty()
-                         ? QString("Resolve a Python interpreter, then install "
-                                   "python-lsp-server into it.")
-                         : QString("%1 -m pip install python-lsp-server")
-                               .arg(info.interpreter));
+                         ? QString(
+                               "Resolve a Python interpreter, then install %1.")
+                               .arg(package)
+                         : QString("%1 -m pip install %2")
+                               .arg(info.interpreter, package));
   }
 
   lines << ""

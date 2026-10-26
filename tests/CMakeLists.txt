@@ -2344,7 +2344,10 @@ add_test(NAME DiagnosticsManagerTests COMMAND test_diagnosticsmanager)
 # LanguageFeatureManager test executable
 add_executable(test_languagefeaturemanager
     unit/test_languagefeaturemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/definition/idefinitionprovider.cpp
+    ${CMAKE_SOURCE_DIR}/App/definition/languagelspdefinitionprovider.cpp
     ${CMAKE_SOURCE_DIR}/App/language/languagefeaturemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/diagnostics/diagnosticsmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/settingsmanager.cpp

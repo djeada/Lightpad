@@ -4,9 +4,11 @@
 #include "../diagnostics/diagnosticsmanager.h"
 #include "../language/languagecatalog.h"
 #include "../lsp/lspclient.h"
+#include "../python/pythonprojectenvironment.h"
 #include <QMap>
 #include <QObject>
 #include <QString>
+#include <functional>
 
 struct DiagnosticsServerConfig {
   QString languageId;
@@ -14,6 +16,8 @@ struct DiagnosticsServerConfig {
   QStringList arguments;
   QStringList environmentVariables;
   bool enabled = true;
+  QJsonObject settings;
+  QJsonObject initializationOptions;
 };
 
 enum class ServerHealthStatus { Unknown, Starting, Running, Error, Stopped };
@@ -32,6 +36,10 @@ public:
                       const QString &text);
   void saveDocument(const QString &filePath);
   void closeDocument(const QString &filePath);
+  void openExternalDocument(const QString &filePath, const QString &uri,
+                            const QString &sourceFile, const QString &text);
+  QString documentUriForFile(const QString &filePath) const;
+  bool isExternalDocument(const QString &filePath) const;
 
   LspClient *clientForFile(const QString &filePath) const;
 
@@ -44,7 +52,8 @@ public:
 
   static QList<DiagnosticsServerConfig> defaultServerConfigs();
 
-  static QString detectProjectRoot(const QString &filePath);
+  static QString detectProjectRoot(const QString &filePath,
+                                   const QString &workspaceFolder = {});
 
   ServerHealthStatus serverHealth(const QString &languageId) const;
   DiagnosticsServerConfig serverConfig(const QString &languageId) const;
@@ -53,6 +62,9 @@ public:
   void setServerConfig(const DiagnosticsServerConfig &config);
 
   void loadSettingsOverrides();
+  void setWorkspaceFolder(const QString &folder);
+  void setPythonEnvironmentResolver(
+      std::function<PythonEnvironmentPreference(const QString &)> resolver);
 
 signals:
   void serverStarted(const QString &languageId);
@@ -63,12 +75,12 @@ signals:
                            ServerHealthStatus status);
 
 private:
-  LspClient *ensureClient(const QString &languageId);
+  LspClient *ensureClient(const QString &languageId, const QString &filePath);
   DiagnosticsServerConfig configForLanguage(const QString &languageId) const;
   void onDiagnosticsReceived(const QString &languageId, const QString &uri,
                              const QList<LspDiagnostic> &diagnostics,
                              int version);
-  void onClientLost(const QString &languageId, LspClient *client);
+  void onClientLost(const QString &clientKey, LspClient *client);
 
   void flushPendingDocuments(const QString &languageId);
   void queuePendingDocument(const QString &languageId, const QString &filePath);
@@ -79,6 +91,10 @@ private:
 
   DiagnosticsManager *m_diagnosticsManager;
   QMap<QString, LspClient *> m_clients;
+  QMap<QString, QString> m_clientLanguages;
+  QMap<QString, QString> m_fileToClient;
+  QMap<QString, QString> m_documentUris;
+  QMap<QString, QString> m_externalSources;
   QMap<QString, QString> m_fileToLanguage;
   QMap<QString, int> m_fileVersions;
   QMap<QString, QString> m_fileTexts;
@@ -86,6 +102,9 @@ private:
   QMap<QString, ServerHealthStatus> m_serverHealth;
   QMap<QString, QString> m_lastServerErrors;
   QMap<QString, QStringList> m_pendingDocuments;
+  QString m_workspaceFolder;
+  std::function<PythonEnvironmentPreference(const QString &)>
+      m_pythonEnvironmentResolver;
 };
 
 #endif

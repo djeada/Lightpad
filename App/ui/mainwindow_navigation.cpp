@@ -1,5 +1,7 @@
 #include "../core/editor/documentsymbols.h"
 #include "mainwindow_internal.h"
+#include <QCryptographicHash>
+#include <QSaveFile>
 #include <algorithm>
 #include <memory>
 
@@ -277,8 +279,16 @@ void MainWindow::setupNavigationHistory() {
 void MainWindow::setupSymbolNavigation() {
   m_symbolNavService = new SymbolNavigationService(this);
 
-  const auto configs = LanguageLspDefinitionProvider::defaultConfigs();
-  for (const LanguageServerConfig &config : configs) {
+  const QStringList languages =
+      m_languageFeatureManager ? m_languageFeatureManager->supportedLanguages()
+                               : QStringList{};
+  for (const QString &language : languages) {
+    const auto server = m_languageFeatureManager->serverConfig(language);
+    const LanguageServerConfig config{"lsp-" + language,
+                                      LanguageCatalog::displayName(language),
+                                      {language},
+                                      server.command,
+                                      server.arguments};
     auto *provider = new LanguageLspDefinitionProvider(config, this);
     provider->setClientResolver([this](const QString &filePath) -> LspClient * {
       if (!m_languageFeatureManager) {
@@ -315,6 +325,7 @@ void MainWindow::setupSymbolNavigation() {
 }
 
 void MainWindow::goToDefinitionAtCursor() {
+  ++m_externalDefinitionGeneration;
   if (!m_symbolNavService) {
     return;
   }
@@ -353,6 +364,7 @@ void MainWindow::goToDefinitionAtCursor() {
   req.line = cursor.blockNumber() + 1;
   req.column = cursor.positionInBlock();
   req.languageId = languageId;
+  req.documentUri = textArea->getDocumentUri();
 
   m_symbolNavService->goToDefinition(req);
 }
@@ -507,6 +519,93 @@ void MainWindow::jumpToTarget(const DefinitionTarget &target) {
   if (!target.isValid()) {
     return;
   }
+
+  const QUrl uri(target.filePath);
+  if (!uri.scheme().isEmpty() && uri.scheme() != "file" &&
+      !QFileInfo(target.filePath).isAbsolute()) {
+    auto *client =
+        m_languageFeatureManager
+            ? m_languageFeatureManager->clientForFile(target.sourceFilePath)
+            : nullptr;
+    if (!client || !client->isReady()) {
+      statusBar()->showMessage(
+          tr("The language server is not available for this library source"),
+          5000);
+      return;
+    }
+    const int requestId = client->requestDocumentContent(target.filePath);
+    if (requestId < 0) {
+      statusBar()->showMessage(
+          tr("The language server cannot open this library source"), 5000);
+      return;
+    }
+    const int generation = ++m_externalDefinitionGeneration;
+    auto *context = new QObject(this);
+    connect(
+        client, &LspClient::documentContentReceived, context,
+        [this, context, target, uri, requestId,
+         generation](int id, const QString &, const QString &text) {
+          if (id != requestId)
+            return;
+          context->deleteLater();
+          if (generation != m_externalDefinitionGeneration)
+            return;
+          if (text.isEmpty()) {
+            statusBar()->showMessage(
+                tr("No source content was provided for this library"), 5000);
+            return;
+          }
+          const QString cache =
+              QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+          const QString directory = QDir(cache).filePath("lsp-sources");
+          QString name = QFileInfo(uri.path()).fileName();
+          if (name.endsWith(".class"))
+            name = name.left(name.size() - 6) + ".java";
+          if (name.isEmpty())
+            name = "library-source.txt";
+          const QString hash = QString::fromLatin1(
+              QCryptographicHash::hash(target.filePath.toUtf8(),
+                                       QCryptographicHash::Sha256)
+                  .toHex());
+          const QString path = QDir(directory).filePath(hash + "-" + name);
+          QSaveFile file(path);
+          const QByteArray bytes = text.toUtf8();
+          if (cache.isEmpty() || !QDir().mkpath(directory) ||
+              !file.open(QIODevice::WriteOnly) ||
+              file.write(bytes) != bytes.size() || !file.commit()) {
+            statusBar()->showMessage(tr("Could not open the library source"),
+                                     5000);
+            return;
+          }
+          m_languageFeatureManager->openExternalDocument(
+              path, target.filePath, target.sourceFilePath, text);
+          auto localTarget = target;
+          localTarget.filePath = path;
+          jumpToTarget(localTarget);
+          if (auto *area = getCurrentTextArea())
+            area->setReadOnly(true);
+          if (auto *tabs = currentTabWidget())
+            tabs->setTabText(tabs->currentIndex(), name);
+          statusBar()->showMessage(tr("External library source (read-only)"),
+                                   3000);
+        });
+    connect(client, &LspClient::requestFailed, context,
+            [this, context, requestId, generation](int id, const QString &,
+                                                   const QString &message) {
+              if (id != requestId)
+                return;
+              context->deleteLater();
+              if (generation == m_externalDefinitionGeneration)
+                statusBar()->showMessage(message, 5000);
+            });
+    QTimer::singleShot(15000, context, [this, context, generation]() {
+      if (generation == m_externalDefinitionGeneration)
+        statusBar()->showMessage(tr("Library source request timed out"), 5000);
+      context->deleteLater();
+    });
+    return;
+  }
+  ++m_externalDefinitionGeneration;
 
   openFileAndAddToNewTab(target.filePath);
 

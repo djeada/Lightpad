@@ -56,8 +56,12 @@ int LanguageLspDefinitionProvider::requestDefinition(
   position.character = req.column;
 
   m_activeProviderRequestId = providerRequestId;
-  m_activeLspRequestId =
-      client->requestDefinition(filePathToUri(req.filePath), position);
+  m_activeUri =
+      req.documentUri.isEmpty() ? filePathToUri(req.filePath) : req.documentUri;
+  m_activeSourceFile = req.filePath;
+  m_activePosition = position;
+  m_fallbackStage = 0;
+  m_activeLspRequestId = client->requestDefinition(m_activeUri, position);
 
   return providerRequestId;
 }
@@ -74,6 +78,10 @@ void LanguageLspDefinitionProvider::attachClient(LspClient *client) {
   m_activeClient = client;
   connect(client, &LspClient::definitionReceived, this,
           &LanguageLspDefinitionProvider::onDefinitionReceived);
+  connect(client, &LspClient::declarationReceived, this,
+          &LanguageLspDefinitionProvider::onDefinitionReceived);
+  connect(client, &LspClient::typeDefinitionReceived, this,
+          &LanguageLspDefinitionProvider::onDefinitionReceived);
   connect(client, &LspClient::requestFailed, this,
           &LanguageLspDefinitionProvider::onRequestFailed);
 }
@@ -85,6 +93,27 @@ void LanguageLspDefinitionProvider::onDefinitionReceived(
     return;
   }
 
+  // External libraries may expose a declaration or stub instead of an
+  // implementation. Keep the original request active while trying those.
+  if (locations.isEmpty()) {
+    if (m_fallbackStage < 1) {
+      m_fallbackStage = 1;
+      if (m_activeClient->serverCapabilities().declarationProvider) {
+        m_activeLspRequestId =
+            m_activeClient->requestDeclaration(m_activeUri, m_activePosition);
+        return;
+      }
+    }
+    if (m_fallbackStage < 2) {
+      m_fallbackStage = 2;
+      if (m_activeClient->serverCapabilities().typeDefinitionProvider) {
+        m_activeLspRequestId = m_activeClient->requestTypeDefinition(
+            m_activeUri, m_activePosition);
+        return;
+      }
+    }
+  }
+
   int providerRequestId = m_activeProviderRequestId;
   m_activeProviderRequestId = 0;
   m_activeLspRequestId = 0;
@@ -93,6 +122,7 @@ void LanguageLspDefinitionProvider::onDefinitionReceived(
   for (const LspLocation &loc : locations) {
     DefinitionTarget target;
     target.filePath = uriToFilePath(loc.uri);
+    target.sourceFilePath = m_activeSourceFile;
     target.line = loc.range.start.line + 1;
     target.column = loc.range.start.character;
     targets.append(target);
@@ -143,7 +173,7 @@ QString LanguageLspDefinitionProvider::filePathToUri(const QString &filePath) {
 }
 
 QString LanguageLspDefinitionProvider::uriToFilePath(const QString &uri) {
-  if (uri.startsWith("file://")) {
+  if (QUrl(uri).isLocalFile()) {
     return DiagnosticUtils::uriToFilePath(uri);
   }
   return uri;
@@ -157,7 +187,11 @@ QList<LanguageServerConfig> LanguageLspDefinitionProvider::defaultConfigs() {
        "clangd",
        {"--background-index"}},
 
-      {"pylsp", "Python Language Server", {"py"}, "pylsp", {}},
+      {"basedpyright",
+       "Python Language Server",
+       {"py"},
+       "basedpyright-langserver",
+       {"--stdio"}},
 
       {"rust-analyzer", "rust-analyzer", {"rust"}, "rust-analyzer", {}},
 
@@ -170,5 +204,10 @@ QList<LanguageServerConfig> LanguageLspDefinitionProvider::defaultConfigs() {
        {"--stdio"}},
 
       {"jdtls", "Eclipse JDT Language Server (Java)", {"java"}, "jdtls", {}},
+      {"docker-langserver",
+       "Dockerfile Language Server",
+       {"dockerfile"},
+       "docker-langserver",
+       {"--stdio"}},
   };
 }

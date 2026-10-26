@@ -7,7 +7,7 @@ Lightpad supports Go to Definition for multiple programming languages via Langua
 | Language | Server | Command | Website |
 |----------|--------|---------|---------|
 | C / C++ | clangd | `clangd` | https://clangd.llvm.org |
-| Python | pylsp | `pylsp` | https://github.com/python-lsp/python-lsp-server |
+| Python | Basedpyright (pylsp fallback) | `basedpyright-langserver --stdio` | https://docs.basedpyright.com |
 | Rust | rust-analyzer | `rust-analyzer` | https://rust-analyzer.github.io |
 | Go | gopls | `gopls` | https://pkg.go.dev/golang.org/x/tools/gopls |
 | TypeScript / JavaScript | typescript-language-server | `typescript-language-server` | https://github.com/typescript-language-server/typescript-language-server |
@@ -40,21 +40,20 @@ Download the LLVM installer from https://releases.llvm.org and ensure `clangd` i
 
 > clangd works best when your project has a `compile_commands.json` file. For CMake projects, add `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON` to your build command.
 
-### Python — pylsp
+### Python — Basedpyright or pylsp
 
 ```bash
-pip install python-lsp-server
+python -m pip install basedpyright
 ```
 
-Or with extra features:
-```bash
-pip install "python-lsp-server[all]"
-```
+Lightpad starts `basedpyright-langserver --stdio` and analyzes the interpreter
+selected in **Python Environment**. This includes libraries installed only in a
+project virtual environment. The server itself may be installed globally.
 
-Verify installation:
-```bash
-pylsp --help
-```
+The existing `pylsp` command is supported and is used as a fallback when available.
+For compiled libraries whose definitions pylsp does not return, use Basedpyright
+to navigate to shipped type stubs. See [Language Server Setup](LANGUAGE_SERVERS.md)
+for configuration details.
 
 ### Rust — rust-analyzer
 
@@ -163,6 +162,8 @@ Servers are started lazily — only when you first request a definition for that
 
 - **1 result:** Lightpad jumps directly to the definition.
 - **Multiple results:** A quick-pick popup lets you choose which definition to navigate to.
+- **No implementation:** Lightpad tries a declaration or type definition if the server supports it.
+- **Virtual library source:** Java JAR sources and other server-provided documents open read-only and keep their original language-server URI.
 - **No results:** A status bar message says "No definition found".
 - **Server not installed:** A message tells you which server to install for the language.
 
@@ -175,7 +176,7 @@ The required language server is not installed or not on your PATH. Follow the in
 Check that the server binary is accessible:
 ```bash
 which clangd       # C/C++
-which pylsp         # Python
+which basedpyright-langserver  # Python (or pylsp)
 which rust-analyzer # Rust
 which gopls         # Go
 which typescript-language-server  # TypeScript/JS
@@ -186,7 +187,7 @@ which jdtls         # Java
 
 - Make sure the language server has finished indexing your project. Large projects may take a moment.
 - For C/C++, ensure a `compile_commands.json` file exists in your project root.
-- For Python, ensure your virtual environment is activated before starting Lightpad.
+- For Python, select the interpreter containing your dependencies in **Python Environment**. Activation before starting Lightpad is not required.
 - For Go, ensure your project has a `go.mod` file.
 
 ### Diagnostics

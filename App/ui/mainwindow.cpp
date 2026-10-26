@@ -142,12 +142,11 @@ MainWindow::MainWindow(QWidget *parent)
 
   setupNavigationHistory();
 
-  setupSymbolNavigation();
-
   setupAutoSave();
   setupOpenFileWatcher();
 
   setupDiagnostics();
+  setupSymbolNavigation();
 
   setupCompletionSystem();
 

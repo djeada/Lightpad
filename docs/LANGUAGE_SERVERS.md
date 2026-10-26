@@ -1,17 +1,19 @@
 # Language Server Setup Guide
 
-Lightpad provides built-in support for language servers across **Rust, Go, JavaScript/TypeScript, Python, and C++**. Language servers power IDE features including diagnostics, code completion, hover information, go-to-definition, find references, rename, formatting, and code actions.
+Lightpad provides built-in support for language servers across **C/C++, Python, Rust, Go, JavaScript/TypeScript, Java, and Dockerfile**. Language servers power IDE features including diagnostics, code completion, hover information, go-to-definition, find references, rename, formatting, and code actions.
 
 ## Supported Languages
 
 | Language | Server | Command | Default Arguments |
 |----------|--------|---------|-------------------|
 | C/C++ | clangd | `clangd` | `--background-index` |
-| Python | pylsp | `pylsp` | _(none)_ |
+| Python | Basedpyright (pylsp fallback) | `basedpyright-langserver` | `--stdio` |
 | Rust | rust-analyzer | `rust-analyzer` | _(none)_ |
 | Go | gopls | `gopls` | `serve` |
 | JavaScript / Node.js | typescript-language-server | `typescript-language-server` | `--stdio` |
 | TypeScript | typescript-language-server | `typescript-language-server` | `--stdio` |
+| Java | Eclipse JDT LS | `jdtls` | _(workspace data directory added automatically)_ |
+| Dockerfile | Docker language server | `docker-langserver` | `--stdio` |
 
 ## Installation
 
@@ -35,22 +37,41 @@ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S . -B build
 ```
 Lightpad will automatically detect `compile_commands.json` or `CMakeLists.txt` to set the workspace root.
 
-### Python — pylsp
+### Python — Basedpyright or pylsp
 
-Python Language Server (pylsp) provides completion, diagnostics, hover, and formatting.
+Basedpyright is the default Python server. It provides hover information and
+navigation into library source and type stubs, including compiled APIs such as
+NumPy's `array`:
 
-**Install via pip:**
 ```bash
-pip install python-lsp-server
+python -m pip install basedpyright
+basedpyright-langserver --stdio
 ```
 
-**Optional plugins:**
+Lightpad uses the interpreter selected in **Python Environment**, including a
+project virtual environment or a custom interpreter. The language server may be
+installed separately from that environment: library lookup uses the selected
+interpreter, not the interpreter that happens to run Lightpad or the server.
+Saving a different interpreter restarts Python analysis with the new selection.
+
+If Basedpyright is unavailable, Lightpad can use `pylsp` from the project or
+system PATH. Existing explicit `pylsp` settings remain supported:
+
 ```bash
-pip install pylsp-mypy   # Type checking
-pip install python-lsp-ruff  # Fast linting
+python -m pip install python-lsp-server
 ```
 
-Lightpad detects Python projects via `pyproject.toml`, `requirements.txt`, or `setup.py`.
+Some compiled APIs return documentation but no navigable definition with pylsp.
+For these, select `basedpyright-langserver` with arguments `["--stdio"]` in the
+language server settings. Library-provided `.pyi` files are valid definition
+targets; native implementation source need not be installed.
+
+Server configuration references:
+[Basedpyright settings](https://docs.basedpyright.com/latest/configuration/language-server-settings/)
+and [pylsp settings](https://github.com/python-lsp/python-lsp-server/blob/develop/CONFIGURATION.md).
+
+Lightpad detects `pyproject.toml`, `requirements.txt`, `setup.py`, `setup.cfg`,
+`Pipfile`, and project `.venv`/`venv` directories.
 
 ### Rust — rust-analyzer
 
@@ -113,8 +134,8 @@ Language server settings are stored in the Lightpad settings file. You can confi
       "enabled": true
     },
     "py": {
-      "command": "pylsp",
-      "arguments": [],
+      "command": "basedpyright-langserver",
+      "arguments": ["--stdio"],
       "environment": [],
       "enabled": true
     },
@@ -152,6 +173,8 @@ Language server settings are stored in the Lightpad settings file. You can confi
 | `arguments` | string[] | Command-line arguments passed to the server |
 | `environment` | string[] | Environment variables (e.g., `["RUST_LOG=info"]`) |
 | `enabled` | boolean | Set to `false` to disable a specific language server |
+| `settings` | object | Server settings sent through `workspace/didChangeConfiguration` and returned to `workspace/configuration` requests |
+| `initializationOptions` | object | Server-specific initialization options |
 
 ### Disabling a Language Server
 
@@ -183,7 +206,21 @@ Lightpad automatically detects the project root directory for each opened file b
 | `CMakeLists.txt` | C/C++ |
 | `compile_commands.json` | C/C++ |
 
-The detected root directory is communicated to the language server as the workspace root URI, enabling multi-file features like cross-file references and project-wide diagnostics.
+Each language/project uses its own server session; Python sessions also use the
+selected interpreter. The project root is set before initialization as the
+workspace root, workspace folder, and server working directory. This keeps
+external dependency lookup attached to the correct project when multiple
+projects are open.
+
+Configured `environment` entries are applied to the server process. Commands,
+arguments, and environment values support `${workspaceFolder}`, `${fileDir}`,
+`${file}`, and `${python}`. Project-local `node_modules/.bin` servers are detected
+for JavaScript and TypeScript. JDT LS receives a separate workspace data directory
+for each Java project.
+
+Java projects also recognize `pom.xml`, `build.gradle`, and `build.gradle.kts`.
+Servers for additional languages can be configured under `languageServers`;
+their definitions use the same navigation path as the built-in servers.
 
 ## Server Capabilities
 
@@ -225,7 +262,7 @@ Lightpad tracks the health of each language server:
 1. **Check the executable is in your PATH:**
    ```bash
    which clangd      # C++
-   which pylsp        # Python
+   which basedpyright-langserver  # Python (or pylsp)
    which rust-analyzer  # Rust
    which gopls        # Go
    which typescript-language-server  # JavaScript/TypeScript
@@ -251,10 +288,23 @@ Lightpad tracks the health of each language server:
    ```bash
    clangd --background-index
    rust-analyzer
-   pylsp
+   basedpyright-langserver --stdio
    gopls serve
    ```
 
 2. **Update the server** to the latest version.
 
 3. **Check project configuration** — Ensure `compile_commands.json` (for C++) or `Cargo.toml` (for Rust) is valid.
+
+## External library navigation
+
+Hover requests use the identifier under the pointer, including the member in a
+dotted expression such as `np.array`. Ctrl+B, F12, and Ctrl+Click first request a
+definition, then try declarations and type definitions when the server provides
+those capabilities. This supports libraries that expose headers or type stubs
+rather than implementation files.
+
+Server-provided virtual source documents, including Java JAR class sources, open
+read-only. Their original URI and project server are retained for further hover
+and navigation. Disabling diagnostic display does not disable these language
+features, and definition/hover requests flush pending document edits.
