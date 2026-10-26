@@ -36,6 +36,8 @@ public:
                       const QString &text);
   void saveDocument(const QString &filePath);
   void closeDocument(const QString &filePath);
+  void inheritDocumentContext(const QString &filePath,
+                              const QString &sourceFile);
   void openExternalDocument(const QString &filePath, const QString &uri,
                             const QString &sourceFile, const QString &text);
   QString documentUriForFile(const QString &filePath) const;

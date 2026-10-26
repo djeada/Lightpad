@@ -607,6 +607,13 @@ void MainWindow::jumpToTarget(const DefinitionTarget &target) {
   }
   ++m_externalDefinitionGeneration;
 
+  if (m_languageFeatureManager && !target.sourceFilePath.isEmpty()) {
+    // Headers and library files outside the project still need its compiler
+    // settings or selected interpreter when they are opened through navigation.
+    flushPendingLanguageServerChanges(target.filePath);
+    m_languageFeatureManager->inheritDocumentContext(target.filePath,
+                                                     target.sourceFilePath);
+  }
   openFileAndAddToNewTab(target.filePath);
 
   TextArea *textArea = getCurrentTextArea();

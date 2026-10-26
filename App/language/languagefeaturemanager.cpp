@@ -193,6 +193,22 @@ bool LanguageFeatureManager::isExternalDocument(const QString &filePath) const {
   return m_documentUris.contains(filePath);
 }
 
+void LanguageFeatureManager::inheritDocumentContext(const QString &filePath,
+                                                    const QString &sourceFile) {
+  if (!m_fileToLanguage.contains(sourceFile)) {
+    return;
+  }
+  const QString origin = m_externalSources.value(sourceFile, sourceFile);
+  if (filePath == origin || m_externalSources.value(filePath) == origin) {
+    return;
+  }
+  m_externalSources[filePath] = origin;
+  if (m_fileToLanguage.contains(filePath)) {
+    openDocument(filePath, m_fileToLanguage.value(filePath),
+                 m_fileTexts.value(filePath));
+  }
+}
+
 void LanguageFeatureManager::openExternalDocument(const QString &filePath,
                                                   const QString &uri,
                                                   const QString &sourceFile,
@@ -237,9 +253,14 @@ LanguageFeatureManager::resolveLanguageId(const QString &filePath,
     }
   }
 
-  int dotIndex = filePath.lastIndexOf('.');
-  if (dotIndex >= 0) {
-    QString ext = filePath.mid(dotIndex + 1);
+  const QFileInfo info(filePath);
+  const QString namedLanguage =
+      LanguageCatalog::languageForExtension(info.fileName());
+  if (!namedLanguage.isEmpty()) {
+    return namedLanguage;
+  }
+  if (!info.suffix().isEmpty()) {
+    QString ext = info.suffix();
     QString lang = LanguageCatalog::languageForExtension(ext);
     if (!lang.isEmpty()) {
       return lang;

@@ -60,31 +60,37 @@ Pure-function utilities shared across the pipeline:
 
 ### LanguageFeatureManager (`App/language/languagefeaturemanager.h/.cpp`)
 
-Session manager that owns per-language `LspClient` instances.
+Session manager that owns `LspClient` instances for each language and project.
 
 - Resolves the effective language id for a file (override → extension-based).
 - Looks up server command + arguments from a built-in config table.
-- Lazy-starts a single `LspClient` per language; reuses it for all files of
-  that language within a workspace.
+- Initializes each client with its project root, working directory, environment,
+  and server configuration. Python sessions also use the selected interpreter.
+- Reuses the originating project session for library definitions, including
+  files outside the project and server-provided virtual sources.
 - Forwards `diagnosticsReceived` from each client to `DiagnosticsManager`.
+- Keeps hover and navigation available when diagnostic display is disabled.
 
 ### Feature Flags (Settings)
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `diagnostics.enabled` | bool | `true` | Master toggle |
+| `diagnostics.enabled` | bool | `true` | Enable diagnostic display |
 | `diagnostics.onType` | bool | `true` | Fire `didChange` while typing |
 | `diagnostics.onSave` | bool | `true` | Fire `didSave` on save |
 | `diagnostics.debounceMs` | int | `200` | Debounce interval for on-type |
 
-## Supported Languages (Phase 1)
+## Supported Languages
 
 | Language | Server | Command |
 |---|---|---|
 | C / C++ | clangd | `clangd` |
 | Python  | Basedpyright (pylsp fallback) | `basedpyright-langserver --stdio` |
-
-Additional languages (Rust, Go, TypeScript, Java) will follow in later phases.
+| Rust | rust-analyzer | `rust-analyzer` |
+| Go | gopls | `gopls serve` |
+| JavaScript / TypeScript | TypeScript language server | `typescript-language-server --stdio` |
+| Java | Eclipse JDT LS | `jdtls` |
+| Dockerfile | Docker language server | `docker-langserver --stdio` |
 
 ## Stale-Result Protection
 

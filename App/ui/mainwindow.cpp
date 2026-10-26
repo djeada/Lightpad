@@ -1356,6 +1356,9 @@ QString MainWindow::detectLanguageIdForFile(const QString &filePath) const {
   const QFileInfo info(filePath);
   const QString fileName = info.fileName();
   const QString fileNameLower = fileName.toLower();
+  if (fileNameLower == "dockerfile" || fileNameLower == "containerfile") {
+    return "dockerfile";
+  }
   if (fileNameLower == "makefile" || fileNameLower == "gnumakefile") {
     return "make";
   }

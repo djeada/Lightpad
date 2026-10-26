@@ -127,6 +127,9 @@ void TestLanguageFeatureManager::testResolveLanguageIdByExtension() {
   QCOMPARE(mgr.resolveLanguageId("/project/script.pyw"), QString("py"));
   QCOMPARE(mgr.resolveLanguageId("/project/main.rs"), QString("rust"));
   QCOMPARE(mgr.resolveLanguageId("/project/main.go"), QString("go"));
+  QCOMPARE(mgr.resolveLanguageId("/project/Dockerfile"), QString("dockerfile"));
+  QCOMPARE(mgr.resolveLanguageId("/project/Containerfile"),
+           QString("dockerfile"));
 }
 
 void TestLanguageFeatureManager::testResolveLanguageIdWithOverride() {
@@ -714,10 +717,28 @@ void TestLanguageFeatureManager::testProjectServerContext() {
       qvariant_cast<QList<LspLocation>>(definition.first().at(1));
   QCOMPARE(locations.size(), 1);
   QCOMPARE(locations.first().uri, externalUri);
-  manager.restartServer(language);
+  const QString externalPath = DiagnosticUtils::uriToFilePath(externalUri);
+  manager.inheritDocumentContext(externalPath, a);
+  manager.openDocument(externalPath, language, "external library member");
+  QCOMPARE(manager.clientForFile(externalPath), manager.clientForFile(a));
+  QCOMPARE(manager.documentUriForFile(externalPath), externalUri);
+  QVERIFY(!manager.isExternalDocument(externalPath));
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "languageId " + protocolId), 3,
+                            5000);
+  manager.changeDocument(externalPath, 2, "edited library member");
+  manager.inheritDocumentContext(externalPath, b);
+  QCOMPARE(manager.clientForFile(externalPath), manager.clientForFile(b));
+  QTRY_VERIFY_WITH_TIMEOUT(
+      readLog(logPath).contains("textDocument/didOpen " + externalUri +
+                                " 1 edited library member"),
+      5000);
   QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "languageId " + protocolId), 4,
                             5000);
+  manager.restartServer(language);
+  QTRY_COMPARE_WITH_TIMEOUT(countLines(logPath, "languageId " + protocolId), 7,
+                            5000);
   QVERIFY(manager.clientForFile(a) != manager.clientForFile(b));
+  QCOMPARE(manager.clientForFile(externalPath), manager.clientForFile(b));
 }
 
 void TestLanguageFeatureManager::testPythonServerFallback() {

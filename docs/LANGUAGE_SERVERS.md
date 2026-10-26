@@ -306,5 +306,7 @@ rather than implementation files.
 
 Server-provided virtual source documents, including Java JAR class sources, open
 read-only. Their original URI and project server are retained for further hover
-and navigation. Disabling diagnostic display does not disable these language
-features, and definition/hover requests flush pending document edits.
+and navigation. Native library files and headers also retain the originating
+project context, including its interpreter and compiler settings. Disabling
+diagnostic display does not disable these language features, and
+definition/hover requests flush pending document edits.
