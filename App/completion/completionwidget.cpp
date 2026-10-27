@@ -279,15 +279,14 @@ void CompletionWidget::onSelectionChanged() {
 
 void CompletionWidget::onItemClicked(const QModelIndex &index) {
   if (index.isValid()) {
-    emit itemSelected(m_model->itemAt(index.row()));
+    emit itemAccepted(m_model->itemAt(index.row()));
+    hide();
   }
 }
 
 void CompletionWidget::onItemDoubleClicked(const QModelIndex &index) {
-  if (index.isValid()) {
-    emit itemAccepted(m_model->itemAt(index.row()));
-    hide();
-  }
+  if (isVisible())
+    onItemClicked(index);
 }
 
 namespace {

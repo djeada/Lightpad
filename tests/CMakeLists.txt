@@ -525,6 +525,16 @@ target_link_libraries(test_completionengine
 
 target_compile_definitions(test_completionengine PRIVATE QT_DEPRECATED_WARNINGS)
 
+add_executable(test_completioninsertion
+    unit/test_completioninsertion.cpp
+    ${CMAKE_SOURCE_DIR}/App/completion/completioninsertion.cpp
+    ${CMAKE_SOURCE_DIR}/App/completion/snippetregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+target_link_libraries(test_completioninsertion PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME CompletionInsertionTests COMMAND test_completioninsertion)
+
 # DAP (Debug Adapter Protocol) test executable
 add_executable(test_dap
     unit/test_dap.cpp
@@ -3476,7 +3486,7 @@ set(TEST_TARGETS
     test_logger test_theme test_filemanager test_document test_settingsmanager 
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
-    test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap test_dap_integration test_cmakeproject
+    test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_completioninsertion test_dap test_dap_integration test_cmakeproject
     test_gitrepotools test_runtargetresolver test_filedirtreemodel test_filedirtreecontroller test_projectsearch test_explorersearchwidget test_commandpalette test_compilerdiagnosticparser
     test_dockerfilesyntaxplugin
     test_sqlstatementsplitter test_databasecore test_databaselive test_databasepanel

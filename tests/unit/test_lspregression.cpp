@@ -346,6 +346,22 @@ void TestLspRegression::testCompletionItemPrefersTextEdit() {
   LspCompletionItem item = LspClient::parseCompletionItem(obj);
   QCOMPARE(item.insertText, QString("push_back(${1:value})"));
   QCOMPARE(item.insertTextFormat, 2);
+  QVERIFY(item.textEditRange.has_value());
+  QCOMPARE(item.textEditRange->start.character, 0);
+  QCOMPARE(item.textEditRange->end.character, 2);
+
+  obj["textEdit"] = QJsonObject{
+      {"insert",
+       QJsonObject{{"start", QJsonObject{{"line", 2}, {"character", 4}}},
+                   {"end", QJsonObject{{"line", 2}, {"character", 6}}}}},
+      {"replace",
+       QJsonObject{{"start", QJsonObject{{"line", 2}, {"character", 4}}},
+                   {"end", QJsonObject{{"line", 2}, {"character", 12}}}}},
+      {"newText", "push_back($0)"}};
+  item = LspClient::parseCompletionItem(obj);
+  QVERIFY(item.textEditRange.has_value());
+  QCOMPARE(item.textEditRange->start.line, 2);
+  QCOMPARE(item.textEditRange->end.character, 12);
 }
 
 void TestLspRegression::testCompletionItemInsertTextFormat() {

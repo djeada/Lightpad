@@ -46,6 +46,14 @@ The completion system uses a provider-based architecture:
 
 ## Usage
 
+### Accepting a Completion in the Editor
+
+Press Enter or Tab, or click a suggestion once, to replace the identifier at
+the cursor. Server-provided edit ranges are preserved. Function and method
+completions add call parentheses when needed and reuse existing argument lists.
+The cursor moves inside the call, or selects the first snippet placeholder.
+Each accepted completion can be undone in one step.
+
 ### Basic Usage
 
 ```cpp
