@@ -32,6 +32,7 @@ void SettingsManager::initializeDefaults() {
   m_defaults["showLineNumberArea"] = true;
   m_defaults["lineHighlighted"] = true;
   m_defaults["matchingBracketsHighlighted"] = true;
+  m_defaults["inlineBlameEnabled"] = false;
   m_defaults["tabWidth"] = 4;
   m_defaults["trimTrailingWhitespace"] = false;
   m_defaults["insertFinalNewline"] = false;

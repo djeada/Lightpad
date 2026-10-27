@@ -889,6 +889,12 @@ void Preferences::buildUi() {
   m_bracketMatchCheck = new QCheckBox("Highlight matching brackets", this);
   mainLayout->addWidget(m_bracketMatchCheck);
 
+  m_inlineBlameCheck = new QCheckBox(tr("Show inline Git blame"), this);
+  m_inlineBlameCheck->setToolTip(
+      tr("Show who last changed the current line, with commit details, "
+         "beside the code."));
+  mainLayout->addWidget(m_inlineBlameCheck);
+
   mainLayout->addSpacing(8);
 
   mainLayout->addWidget(createSectionHeader("◆ THEME TOKENS"));
@@ -971,6 +977,7 @@ void Preferences::loadCurrentSettings() {
   m_lineNumbersCheck->setChecked(textSettings.showLineNumberArea);
   m_currentLineCheck->setChecked(textSettings.lineHighlighted);
   m_bracketMatchCheck->setChecked(textSettings.matchingBracketsHighlighted);
+  m_inlineBlameCheck->setChecked(m_mainWindow->isInlineBlameEnabled());
 
   const ThemeDefinition &activeTheme = ThemeEngine::instance().activeTheme();
   const QSignalBlocker glowBlocker(m_glowCombo);
@@ -1076,6 +1083,9 @@ void Preferences::connectSignals() {
       persistAll();
     }
   });
+
+  connect(m_inlineBlameCheck, &QCheckBox::toggled, m_mainWindow,
+          &MainWindow::setInlineBlameEnabled);
 
   for (auto it = m_colorSwatches.begin(); it != m_colorSwatches.end(); ++it) {
     const QString role = it.key();

@@ -553,7 +553,6 @@ void MainWindow::setupGitIntegration() {
   }
 
   m_gitIntegration = new GitIntegration(this);
-  m_inlineBlameEnabled = true;
 
   m_gitBranchLabel = new QLabel(this);
   m_gitBranchLabel->setToolTip(tr("Current branch (click to switch)"));

@@ -111,6 +111,8 @@ public:
   void showGitBlameForCurrentFile(bool enable);
   bool isGitBlameEnabledForFile(const QString &filePath) const;
   void setGitBlameEnabledForFile(const QString &filePath, bool enabled);
+  void setInlineBlameEnabled(bool enabled);
+  bool isInlineBlameEnabled() const;
   void updateInlineBlameForCurrentFile();
   void updateGitStatusBar();
   void updateGitGutterForCurrentFile(const QString &path = QString());

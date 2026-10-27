@@ -68,6 +68,7 @@ private:
   QCheckBox *m_lineNumbersCheck;
   QCheckBox *m_currentLineCheck;
   QCheckBox *m_bracketMatchCheck;
+  QCheckBox *m_inlineBlameCheck;
 
   QListWidget *m_themeList;
   QWidget *m_themePreview;
