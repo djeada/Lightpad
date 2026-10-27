@@ -306,6 +306,13 @@ Matching brackets are highlighted when the cursor is on a bracket. Toggle:
 The current line is subtly highlighted. Toggle:
 - **Preferences** → **Editor** → **Highlight current line**
 
+### Inline Git Blame
+
+To show who last changed the current line and its commit details beside the
+code, enable **Preferences** → **Display** → **Show inline Git blame**. It is
+off by default. Changes apply immediately to all open editors and are saved
+for future sessions.
+
 ### Databases
 
 Open **Database → Database Panel** (`Ctrl+Shift+D`) to connect to SQLite,

@@ -633,6 +633,8 @@ void MainWindow::loadSettings() {
   SettingsManager &globalSettings = SettingsManager::instance();
   globalSettings.loadSettings();
   m_restoringSession = true;
+  setInlineBlameEnabled(
+      globalSettings.getValue("inlineBlameEnabled", false).toBool());
 
   m_pinnedRunFilePath =
       globalSettings.getValue("pinnedRunTarget", QString()).toString();
@@ -1233,11 +1235,30 @@ void MainWindow::setGitBlameEnabledForFile(const QString &filePath,
   }
 }
 
+void MainWindow::setInlineBlameEnabled(bool enabled) {
+  m_inlineBlameEnabled = enabled;
+  updateAllTextAreas(&TextArea::setInlineBlameEnabled, enabled);
+  if (!enabled) {
+    updateAllTextAreas(&TextArea::clearInlineBlameData);
+  }
+  updateInlineBlameForCurrentFile();
+
+  auto &globalSettings = SettingsManager::instance();
+  if (globalSettings.getValue("inlineBlameEnabled", false).toBool() != enabled) {
+    globalSettings.setValue("inlineBlameEnabled", enabled);
+    globalSettings.saveSettings();
+  }
+}
+
+bool MainWindow::isInlineBlameEnabled() const { return m_inlineBlameEnabled; }
+
 void MainWindow::updateInlineBlameForCurrentFile() {
   TextArea *textArea = getCurrentTextArea();
   if (!textArea || !m_gitIntegration || !m_inlineBlameEnabled) {
-    if (textArea)
+    if (textArea) {
+      textArea->setInlineBlameEnabled(false);
       textArea->clearInlineBlameData();
+    }
     return;
   }
 
