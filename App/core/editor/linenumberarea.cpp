@@ -17,6 +17,7 @@
 #include "../../dap/breakpointmanager.h"
 #include "../../ui/mainwindow.h"
 #include "../../ui/uistylehelper.h"
+#include "../../ui/widgets/gitblamewidget.h"
 #include "codefolding.h"
 
 namespace {
@@ -61,12 +62,48 @@ QColor diagnosticColorFor(const Theme &theme, LspDiagnosticSeverity severity) {
 
 LineNumberArea::LineNumberArea(TextArea *editor, QWidget *parent)
     : QWidget(parent ? parent : editor), m_editor(editor),
-      m_gitIntegration(nullptr), m_backgroundColor(QColor(40, 40, 40)),
+      m_blameWidget(new GitBlameWidget(this)), m_gitIntegration(nullptr),
+      m_backgroundColor(QColor(40, 40, 40)),
       m_textColor(QColor(Qt::gray).lighter(150)), m_heatmapEnabled(false),
       m_blameTextWidth(0), m_foldingEnabled(true) {
   if (editor) {
     m_font = editor->font();
   }
+  m_blameWidget->hide();
+  connect(m_blameWidget, &GitBlameWidget::lineSelected, this, [this](int line) {
+    if (!m_editor)
+      return;
+    const QTextBlock block = m_editor->document()->findBlockByNumber(line - 1);
+    if (block.isValid()) {
+      m_editor->setTextCursor(QTextCursor(block));
+      m_editor->ensureCursorVisible();
+    }
+  });
+  connect(m_blameWidget, &GitBlameWidget::openCommitRequested, this,
+          [this](const QString &hash) {
+            if (m_editor && m_editor->mainWindow) {
+              m_editor->setFocus();
+              m_editor->mainWindow->showGitCommit(hash);
+            }
+          });
+  connect(m_blameWidget, &GitBlameWidget::fileHistoryRequested, this,
+          [this](int) {
+            if (m_editor && m_editor->mainWindow) {
+              m_editor->setFocus();
+              m_editor->mainWindow->showFileHistory();
+            }
+          });
+  connect(m_blameWidget, &GitBlameWidget::hideRequested, this, [this]() {
+    if (m_editor && m_editor->mainWindow)
+      m_editor->mainWindow->setGitBlameEnabledForFile(resolveFilePath(), false);
+    if (m_editor)
+      m_editor->clearGitBlameLines();
+  });
+  connect(m_blameWidget, &GitBlameWidget::returnToEditorRequested, this,
+          [this]() {
+            if (m_editor)
+              m_editor->setFocus();
+          });
 }
 
 QSize LineNumberArea::sizeHint() const { return QSize(calculateWidth(), 0); }
@@ -89,13 +126,14 @@ int LineNumberArea::calculateWidth() const {
     space += FOLD_INDICATOR_WIDTH;
   }
   if (m_blameTextWidth > 0) {
-    space += BLAME_PADDING + m_blameTextWidth;
+    space += blameAreaWidth();
   }
   return space;
 }
 
 void LineNumberArea::setFont(const QFont &font) {
   m_font = font;
+  m_blameWidget->setEditorFont(font);
   QWidget::setFont(font);
   updateBlameTextWidth();
   update();
@@ -123,6 +161,7 @@ void LineNumberArea::clearGitDiffLines() {
 
 void LineNumberArea::setGitBlameLines(const QMap<int, QString> &blameLines) {
   m_gitBlameLines = blameLines;
+  m_blameWidget->setData({});
   updateBlameTextWidth();
   updateGeometry();
   update();
@@ -130,10 +169,20 @@ void LineNumberArea::setGitBlameLines(const QMap<int, QString> &blameLines) {
 
 void LineNumberArea::clearGitBlameLines() {
   m_gitBlameLines.clear();
+  m_blameWidget->setData({});
+  m_blameWidget->hide();
   m_blameTextWidth = 0;
   updateGeometry();
   update();
   QToolTip::hideText();
+}
+
+void LineNumberArea::markBlameOutdated() {
+  m_gitBlameLines.clear();
+  m_blameWidget->markOutdated();
+  updateBlameTextWidth();
+  updateGeometry();
+  update();
 }
 
 void LineNumberArea::setFoldingEnabled(bool enabled) {
@@ -155,7 +204,14 @@ void LineNumberArea::clearDiagnosticLines() {
 
 void LineNumberArea::setRichBlameData(
     const QMap<int, GitBlameLineInfo> &blameData) {
-  m_richBlameData = blameData;
+  m_blameWidget->setData(blameData);
+  updateBlameTextWidth();
+  updateGeometry();
+  update();
+}
+
+void LineNumberArea::setBlameTheme(const Theme &theme) {
+  m_blameWidget->applyTheme(theme);
 }
 
 void LineNumberArea::setGitIntegration(GitIntegration *git) {
@@ -222,30 +278,6 @@ QColor LineNumberArea::heatmapColor(qint64 timestamp) const {
   return QColor(r, g, b, 45);
 }
 
-QString
-LineNumberArea::buildRichBlameTooltip(const GitBlameLineInfo &info) const {
-  const Theme theme = currentThemeFor(m_editor);
-  QString html = QStringLiteral(
-      "<div style='font-family: sans-serif; padding: 4px;'>"
-      "<div style='font-size: 13px; font-weight: bold; "
-      "margin-bottom: 4px;'>%1</div>"
-      "<div style='color: %7; font-size: 11px; margin-bottom: 6px;'>"
-      "<b>%2</b> &lt;%3&gt;<br>"
-      "%4 (%5)</div>"
-      "<div style='font-size: 12px; padding: 4px; "
-      "background: %8; border-radius: 3px;'>%6</div>"
-      "</div>");
-
-  return html.arg(info.shortHash.toHtmlEscaped())
-      .arg(info.author.toHtmlEscaped())
-      .arg(info.authorEmail.toHtmlEscaped())
-      .arg(info.date.toHtmlEscaped())
-      .arg(info.relativeDate.toHtmlEscaped())
-      .arg(info.summary.toHtmlEscaped())
-      .arg(UIStyleHelper::secondaryTextColor(theme).name(),
-           theme.surfaceAltColor.name());
-}
-
 QString LineNumberArea::buildDiffHunkTooltip(const GitDiffHunk &hunk) const {
   if (hunk.lines.isEmpty()) {
     return QString();
@@ -289,6 +321,10 @@ QString LineNumberArea::buildDiffHunkTooltip(const GitDiffHunk &hunk) const {
 }
 
 void LineNumberArea::updateBlameTextWidth() {
+  if (m_blameWidget->hasContent()) {
+    m_blameTextWidth = 244;
+    return;
+  }
   if (m_gitBlameLines.isEmpty()) {
     m_blameTextWidth = 0;
     return;
@@ -333,9 +369,15 @@ int LineNumberArea::lineAtPosition(int y) const {
 }
 
 int LineNumberArea::numberAreaWidth() const {
-  const int areaWidth = width();
-  return areaWidth -
-         (m_blameTextWidth > 0 ? (m_blameTextWidth + BLAME_PADDING) : 0);
+  return width() - blameAreaWidth();
+}
+
+int LineNumberArea::blameAreaWidth() const {
+  return m_blameTextWidth > 0
+             ? BLAME_PADDING +
+                   qMin(m_blameTextWidth,
+                        qMax(80, m_editor ? m_editor->width() / 3 : 244))
+             : 0;
 }
 
 QString LineNumberArea::resolveFilePath() const {
@@ -423,55 +465,11 @@ bool LineNumberArea::event(QEvent *event) {
         }
 
         if (hoverX > numArea) {
-          auto richIt = m_richBlameData.find(lineNum);
-          if (richIt != m_richBlameData.end()) {
-            QString tooltip = buildRichBlameTooltip(richIt.value());
-
-            if (m_gitIntegration) {
-              QList<GitCommitFileStat> stats =
-                  m_gitIntegration->getCommitFileStats(
-                      richIt.value().shortHash);
-              if (!stats.isEmpty()) {
-                const Theme statsTheme = currentThemeFor(m_editor);
-                tooltip +=
-                    QStringLiteral(
-                        "<div style='margin-top: 6px; font-size: 11px; "
-                        "color: %1; border-top: 1px solid %2; "
-                        "padding-top: 4px;'>")
-                        .arg(UIStyleHelper::secondaryTextColor(statsTheme)
-                                 .name(),
-                             statsTheme.borderColor.name());
-                int shown = 0;
-                for (const auto &stat : stats) {
-                  if (shown >= 8) {
-                    tooltip +=
-                        QStringLiteral("<div>... and %1 more files</div>")
-                            .arg(stats.size() - shown);
-                    break;
-                  }
-                  tooltip +=
-                      QString("<div><span style='color:%1;'>+%2</span> "
-                              "<span style='color:%3;'>-%4</span> %5</div>")
-                          .arg(statsTheme.diffAddedColor.name())
-                          .arg(stat.additions)
-                          .arg(statsTheme.diffRemovedColor.name())
-                          .arg(stat.deletions)
-                          .arg(stat.filePath.toHtmlEscaped());
-                  ++shown;
-                }
-                tooltip += QStringLiteral("</div>");
-              }
-            }
-
-            QToolTip::showText(helpEvent->globalPos(), tooltip, this);
+          auto it = m_gitBlameLines.find(lineNum);
+          if (it != m_gitBlameLines.end()) {
+            QToolTip::showText(helpEvent->globalPos(), it.value(), this);
           } else {
-
-            auto it = m_gitBlameLines.find(lineNum);
-            if (it != m_gitBlameLines.end()) {
-              QToolTip::showText(helpEvent->globalPos(), it.value(), this);
-            } else {
-              QToolTip::hideText();
-            }
+            QToolTip::hideText();
           }
         } else {
           QToolTip::hideText();
@@ -665,6 +663,9 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
   const int numberStartX = DIFF_INDICATOR_WIDTH + BREAKPOINT_AREA_WIDTH;
   const int numberTextWidth =
       numberArea - numberStartX - (m_foldingEnabled ? FOLD_INDICATOR_WIDTH : 0);
+  QVector<GitBlameWidget::VisibleLine> visibleLines;
+  m_blameWidget->setGeometry(numberArea, 0, blameAreaWidth(), height());
+  m_blameWidget->setVisible(m_blameWidget->hasContent());
 
   QString filePath = resolveFilePath();
   QMap<int, Breakpoint> breakpointLines;
@@ -682,7 +683,11 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
     }
   }
 
-  while (block.isValid() && top <= event->rect().bottom()) {
+  while (block.isValid() && top <= height()) {
+    if (block.isVisible()) {
+      visibleLines.append({blockNumber + 1, qRound(top),
+                           qMax(fontHeight, qRound(bottom - top))});
+    }
     if (block.isVisible() && bottom >= event->rect().top()) {
       QString number = QString::number(blockNumber + 1);
       const int blockTop = qRound(top);
@@ -817,7 +822,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
         }
       }
 
-      if (m_blameTextWidth > 0) {
+      if (m_blameTextWidth > 0 && !m_blameWidget->hasContent()) {
         auto it = m_gitBlameLines.find(lineNum);
         if (it != m_gitBlameLines.end()) {
           QRect blameRect(numberArea + BLAME_PADDING, blockTop,
@@ -840,4 +845,6 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
     bottom = top + m_editor->blockBoundingRect(block).height();
     ++blockNumber;
   }
+  m_blameWidget->setVisibleLines(visibleLines,
+                                 m_editor->textCursor().blockNumber() + 1);
 }

@@ -129,6 +129,7 @@ public:
   void clearGitDiffLines();
   void setGitBlameLines(const QMap<int, QString> &blameLines);
   void clearGitBlameLines();
+  void markGitBlameOutdated();
 
   void setRichBlameData(const QMap<int, GitBlameLineInfo> &blameData);
   void setGutterGitIntegration(GitIntegration *git);

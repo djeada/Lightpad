@@ -15,6 +15,8 @@ class TextArea;
 class QPaintEvent;
 class QContextMenuEvent;
 class QMouseEvent;
+class GitBlameWidget;
+struct Theme;
 
 class LineNumberArea : public QWidget {
   Q_OBJECT
@@ -37,8 +39,10 @@ public:
   void clearGitDiffLines();
   void setGitBlameLines(const QMap<int, QString> &blameLines);
   void clearGitBlameLines();
+  void markBlameOutdated();
 
   void setRichBlameData(const QMap<int, GitBlameLineInfo> &blameData);
+  void setBlameTheme(const Theme &theme);
 
   void setGitIntegration(GitIntegration *git);
 
@@ -63,19 +67,19 @@ private:
   void updateBlameTextWidth();
   int lineAtPosition(int y) const;
   int numberAreaWidth() const;
+  int blameAreaWidth() const;
   QString resolveFilePath() const;
-  QString buildRichBlameTooltip(const GitBlameLineInfo &info) const;
   QString buildDiffHunkTooltip(const GitDiffHunk &hunk) const;
   QColor heatmapColor(qint64 timestamp) const;
 
   TextArea *m_editor;
+  GitBlameWidget *m_blameWidget;
   GitIntegration *m_gitIntegration;
   QFont m_font;
   QColor m_backgroundColor;
   QColor m_textColor;
   QList<QPair<int, int>> m_gitDiffLines;
   QMap<int, QString> m_gitBlameLines;
-  QMap<int, GitBlameLineInfo> m_richBlameData;
   QMap<int, qint64> m_heatmapTimestamps;
   qint64 m_heatmapMinTimestamp = 0;
   qint64 m_heatmapMaxTimestamp = 0;

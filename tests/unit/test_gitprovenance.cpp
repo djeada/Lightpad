@@ -24,6 +24,7 @@ private slots:
   void testFileLinesSlicing();
   void testFileLinesAtRevision();
   void testInvalidInput();
+  void testBlameKeepsFullCommitIdentityAndWorkingTreeLines();
 
 private:
   QTemporaryDir m_tempDir;
@@ -179,6 +180,27 @@ void TestGitProvenance::testInvalidInput() {
 
   GitIntegration empty;
   QVERIFY(!buildLineProvenance(&empty, "auth.cpp", 1, 1).valid);
+}
+
+void TestGitProvenance::testBlameKeepsFullCommitIdentityAndWorkingTreeLines() {
+  QProcess process;
+  process.setWorkingDirectory(m_repoPath);
+  process.start("git", {"rev-parse", "HEAD"});
+  QVERIFY(process.waitForFinished(5000));
+  QCOMPARE(process.exitCode(), 0);
+  const QString head =
+      QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+  auto lines = m_git->getBlameInfo("auth.cpp");
+  QCOMPARE(lines.size(), 4);
+  QCOMPARE(lines.at(1).commitHash, head);
+  QCOMPARE(lines.at(1).shortHash, head.left(7));
+  QCOMPARE(lines.at(1).author, QString("Grace Hopper"));
+
+  writeFile("auth.cpp", "one\nunsaved in Git\nthree\nfour\n");
+  lines = m_git->getBlameInfo("auth.cpp");
+  QCOMPARE(lines.size(), 4);
+  QCOMPARE(lines.at(1).commitHash, QString(head.size(), '0'));
+  QCOMPARE(lines.at(0).author, QString("Ada Lovelace"));
 }
 
 QTEST_MAIN(TestGitProvenance)

@@ -130,13 +130,14 @@ struct GitMergeOptions {
 };
 
 struct GitBlameLineInfo {
-  int lineNumber;
+  int lineNumber = 0;
   QString author;
   QString authorEmail;
   QString summary;
   QString shortHash;
   QString relativeDate;
   QString date;
+  QString commitHash;
 };
 
 struct GitDiffHunk {
