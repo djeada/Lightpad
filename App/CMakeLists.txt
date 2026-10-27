@@ -179,6 +179,7 @@ set(project_headers
     ui/dialogs/processpickerdialog.h
     ui/dialogs/cmaketargetpickerdialog.h
     ui/widgets/gitgraphwidget.h
+    ui/widgets/gitblamewidget.h
     ui/widgets/flowlayout.h
     ui/widgets/repositorystatemapwidget.h
     ui/widgets/notificationwidget.h
@@ -452,6 +453,7 @@ set(project_sources
     ui/dialogs/processpickerdialog.cpp
     ui/dialogs/cmaketargetpickerdialog.cpp
     ui/widgets/gitgraphwidget.cpp
+    ui/widgets/gitblamewidget.cpp
     ui/widgets/flowlayout.cpp
     ui/widgets/repositorystatemapwidget.cpp
     ui/widgets/notificationwidget.cpp

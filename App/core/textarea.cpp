@@ -623,6 +623,11 @@ void TextArea::setupTextArea() {
   connect(document(), &QTextDocument::modificationChanged, this,
           [this](bool modified) {
             setTabWidgetIcon(modified ? s_unsavedIcon : QIcon());
+            if (modified) {
+              if (!m_gitBlameLines.isEmpty())
+                markGitBlameOutdated();
+              clearInlineBlameData();
+            }
           });
 
   connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
@@ -830,8 +835,10 @@ void TextArea::applyTheme(const Theme &theme) {
     updateSyntaxHighlightTags(searchWord, highlightLang);
   updateExtraSelections();
   viewport()->update();
-  if (lineNumberArea)
+  if (lineNumberArea) {
+    lineNumberArea->setBlameTheme(theme);
     lineNumberArea->update();
+  }
 }
 
 QString TextArea::getSearchWord() { return searchWord; }
@@ -3096,9 +3103,18 @@ void TextArea::clearGitBlameLines() {
   }
 }
 
+void TextArea::markGitBlameOutdated() {
+  m_gitBlameLines.clear();
+  if (lineNumberArea) {
+    lineNumberArea->markBlameOutdated();
+    updateLineNumberAreaLayout();
+  }
+}
+
 void TextArea::setRichBlameData(const QMap<int, GitBlameLineInfo> &blameData) {
   if (lineNumberArea) {
     lineNumberArea->setRichBlameData(blameData);
+    updateLineNumberAreaLayout();
   }
 }
 

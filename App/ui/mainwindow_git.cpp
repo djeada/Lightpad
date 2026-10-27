@@ -146,6 +146,17 @@ void MainWindow::on_actionGit_Provenance_triggered() {
   dialog.exec();
 }
 
+void MainWindow::showGitCommit(const QString &hash) {
+  if (!m_gitIntegration || !m_gitIntegration->isValidRepository() ||
+      hash.isEmpty())
+    return;
+  GitDiffDialog dialog(m_gitIntegration, hash,
+                       GitDiffDialog::DiffTarget::Commit, false, settings.theme,
+                       this);
+  dialog.setDiffText(m_gitIntegration->getCommitDiff(hash));
+  dialog.exec();
+}
+
 void MainWindow::showFileHistory() {
   if (!m_gitIntegration || !m_gitIntegration->isValidRepository()) {
     ThemedMessageBox::information(this, tr("File History"),

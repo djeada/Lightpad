@@ -1385,7 +1385,7 @@ GitIntegration::getBlameInfo(const QString &filePath) const {
     GitBlameLineInfo current;
     bool hasCurrent = false;
     QRegularExpression headerPattern(
-        R"(^([0-9a-f]{7,40})\s+\d+\s+(\d+)(?:\s+\d+)?)");
+        R"(^([0-9a-f]{7,64})\s+\d+\s+(\d+)(?:\s+\d+)?)");
 
     for (const QString &line : lines) {
       if (line.startsWith('\t')) {
@@ -1400,6 +1400,7 @@ GitIntegration::getBlameInfo(const QString &filePath) const {
       if (headerMatch.hasMatch()) {
         current = GitBlameLineInfo();
         current.shortHash = headerMatch.captured(1).left(7);
+        current.commitHash = headerMatch.captured(1);
         current.lineNumber = headerMatch.captured(2).toInt();
         hasCurrent = true;
         continue;
@@ -1456,7 +1457,8 @@ GitIntegration::getBlameInfo(const QString &filePath) const {
     }
   }
 
-  output = executeGitCommand({"blame", "--", relativePath}, &success);
+  output = executeGitCommand({"blame", "--long", "--root", "--", relativePath},
+                             &success);
   if (!success || output.isEmpty()) {
     return result;
   }
@@ -1464,7 +1466,7 @@ GitIntegration::getBlameInfo(const QString &filePath) const {
   QStringList blameLines = output.split('\n', Qt::SkipEmptyParts);
   int lineIndex = 1;
   QRegularExpression blamePattern(
-      R"(^([0-9a-f]{7,40})\s+\((.+?)\s+(\d{4}-\d{2}-\d{2})\s+.+?\)\s(.*)$)");
+      R"(^([0-9a-f]{7,64})\s+\((.+?)\s+(\d{4}-\d{2}-\d{2})\s+.+?\)\s(.*)$)");
 
   for (const QString &blameLine : blameLines) {
     QRegularExpressionMatch match = blamePattern.match(blameLine);
@@ -1476,6 +1478,7 @@ GitIntegration::getBlameInfo(const QString &filePath) const {
     GitBlameLineInfo info;
     info.lineNumber = lineIndex++;
     info.shortHash = match.captured(1).left(7);
+    info.commitHash = match.captured(1);
     info.author = match.captured(2).trimmed();
     info.relativeDate = match.captured(3);
     info.summary = match.captured(4).trimmed();

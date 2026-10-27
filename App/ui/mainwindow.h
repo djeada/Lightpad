@@ -119,6 +119,7 @@ public:
   void updateHeatmapForCurrentFile();
   void updateCodeLensForCurrentFile();
   void showFileHistory();
+  void showGitCommit(const QString &hash);
   void openReadOnlyTab(const QString &content, const QString &title,
                        const QString &originalFilePath);
   LightpadTabWidget *currentTabWidget() const;

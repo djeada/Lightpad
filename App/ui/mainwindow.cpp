@@ -1204,7 +1204,18 @@ void MainWindow::showGitBlameForCurrentFile(bool enable) {
     return;
   }
 
+  if (textArea->document()->isModified()) {
+    textArea->markGitBlameOutdated();
+    statusBar()->showMessage(
+        tr("Save the file to refresh blame for the edited lines."), 5000);
+    return;
+  }
+
   QList<GitBlameLineInfo> blameLines = m_gitIntegration->getBlameInfo(filePath);
+  if (blameLines.isEmpty()) {
+    statusBar()->showMessage(tr("Git blame is unavailable for this file."),
+                             5000);
+  }
   QMap<int, QString> blameMap;
   QMap<int, GitBlameLineInfo> richBlameMap;
   for (const auto &info : blameLines) {
@@ -1268,7 +1279,8 @@ void MainWindow::updateInlineBlameForCurrentFile() {
     filePath = tabWidget->getFilePath(tabWidget->currentIndex());
   }
 
-  if (filePath.isEmpty() || !m_gitIntegration->isValidRepository()) {
+  if (filePath.isEmpty() || !m_gitIntegration->isValidRepository() ||
+      textArea->document()->isModified()) {
     textArea->clearInlineBlameData();
     return;
   }
@@ -2733,6 +2745,12 @@ bool MainWindow::save(const QString &filePath, bool isAutoSave) {
   }
 
   notifyDiagnosticsFileSaved(filePath);
+
+  if (targetTabWidget == currentTabWidget() &&
+      targetTabIndex == targetTabWidget->currentIndex()) {
+    showGitBlameForCurrentFile(isGitBlameEnabledForFile(filePath));
+    updateInlineBlameForCurrentFile();
+  }
 
   if (autoSaveManager) {
     autoSaveManager->markSaved(filePath);

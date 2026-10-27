@@ -306,6 +306,18 @@ Matching brackets are highlighted when the cursor is on a bracket. Toggle:
 The current line is subtly highlighted. Toggle:
 - **Preferences** → **Editor** → **Highlight current line**
 
+### Git Blame Annotations
+
+Right-click the line-number gutter and enable **Git Blame** to show grouped
+annotations beside the code. Each group shows the author and age; longer
+groups also show the commit summary. Click an annotation to inspect the
+change, open its commit diff, copy the full SHA, or open the file history.
+
+Use the Up and Down keys in the annotations to select a line, Enter to inspect
+it, and Escape to return to the editor. Right-click an annotation to hide
+blame. Editing retires old attribution without moving the code column; save
+the file to refresh it. Uncommitted lines are marked explicitly.
+
 ### Inline Git Blame
 
 To show who last changed the current line and its commit details beside the

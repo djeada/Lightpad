@@ -2216,6 +2216,18 @@ target_compile_definitions(test_gitprovenance PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME GitProvenanceTests COMMAND test_gitprovenance)
 
+add_executable(test_gitblamewidget
+    unit/test_gitblamewidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/gitblamewidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themedefinition.cpp
+)
+target_link_libraries(test_gitblamewidget PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME GitBlameWidgetTests COMMAND test_gitblamewidget)
+set_tests_properties(GitBlameWidgetTests PROPERTIES TIMEOUT 30)
+
 # What-if sandbox: graph simulation that never touches the repository.
 add_executable(test_gitsandbox
     unit/test_gitsandbox.cpp
@@ -3472,6 +3484,7 @@ set(TEST_TARGETS
     test_gitintegration test_gitrepositorystate test_gitdiffmodel test_stagingcanvasdialog test_gitgraphwidget test_gitlogdialog test_gitcomparison test_compareanythingdialog test_gitsyncmodel test_branchsyncradardialog test_commitplan test_commitcraftingdialog test_gitfiletimeline test_gitoperationpreview test_gitintegrationadvice test_gitundoplan test_gittimetravel test_gitrebaseplan test_gitconflictmodel test_gitrecovery test_gitstashshelf test_gitcommandlog test_gitbranchhygiene test_gitworktreemap test_gitbisect test_gitprovenance test_gitsandbox test_repositorystatemapwidget test_gitfilesystemmodel test_gitworkbenchdialog test_gotolinedialog test_gotosymboldialog test_lspclient test_diagnosticsmanager test_languagefeaturemanager test_recentfilesmanager test_navigationhistory test_minimap test_findreplacepanel
     test_dockutils
     test_spliteditorcontainer
+    test_gitblamewidget
     test_imageviewer
     test_markdowntools
     test_recoverystore
