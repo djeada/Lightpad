@@ -3,6 +3,7 @@
 
 #include <QFile>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QTextStream>
 #include <QtGlobal>
 
@@ -89,7 +90,15 @@ FileManager::FileResult FileManager::readFile(const QString &filePath) {
   }
 
   QTextStream stream(&file);
-  result.content = stream.readAll();
+  const QString content = stream.readAll();
+  if (file.error() != QFileDevice::NoError) {
+    result.errorMessage =
+        QString("Cannot read %1: %2").arg(filePath, file.errorString());
+    LOG_ERROR(result.errorMessage);
+    emit fileError(filePath, result.errorMessage);
+    return result;
+  }
+  result.content = content;
   result.success = true;
   file.close();
 
@@ -111,10 +120,11 @@ FileManager::FileResult FileManager::writeFile(const QString &filePath,
     return result;
   }
 
-  QFile file(filePath);
-  if (!file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
+  QSaveFile file(filePath);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
     result.errorMessage =
-        QString("Cannot open file for writing: %1").arg(filePath);
+        QString("Cannot open %1 for writing: %2")
+            .arg(filePath, file.errorString());
     LOG_ERROR(result.errorMessage);
     emit fileError(filePath, result.errorMessage);
     return result;
@@ -122,7 +132,22 @@ FileManager::FileResult FileManager::writeFile(const QString &filePath,
 
   QTextStream stream(&file);
   stream << normalizeContentForSave(filePath, content);
-  file.close();
+  stream.flush();
+  if (stream.status() != QTextStream::Ok) {
+    result.errorMessage =
+        QString("Cannot write %1: %2").arg(filePath, file.errorString());
+    file.cancelWriting();
+    LOG_ERROR(result.errorMessage);
+    emit fileError(filePath, result.errorMessage);
+    return result;
+  }
+  if (!file.commit()) {
+    result.errorMessage =
+        QString("Cannot save %1: %2").arg(filePath, file.errorString());
+    LOG_ERROR(result.errorMessage);
+    emit fileError(filePath, result.errorMessage);
+    return result;
+  }
 
   result.success = true;
   LOG_INFO(QString("Successfully saved file: %1").arg(filePath));

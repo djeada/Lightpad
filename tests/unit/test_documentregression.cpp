@@ -23,6 +23,7 @@ private slots:
   void testContentChangeSignalMultipleTimes();
   void testModificationStateAfterMultipleEdits();
   void testFilePathWithSpecialCharacters();
+  void testFailedSaveAsKeepsOriginalPathAndUnsavedChanges();
 
 private:
   QTemporaryDir m_tempDir;
@@ -31,6 +32,27 @@ private:
 void TestDocumentRegression::initTestCase() { QVERIFY(m_tempDir.isValid()); }
 
 void TestDocumentRegression::cleanupTestCase() {}
+
+void TestDocumentRegression::testFailedSaveAsKeepsOriginalPathAndUnsavedChanges() {
+  const QString original = m_tempDir.filePath("save-retry.txt");
+  Document document;
+  document.setFilePath(original);
+  document.setContent("saved contents");
+  QVERIFY(document.save());
+  document.setContent("unsaved edits");
+  QSignalSpy saved(&document, &Document::saved);
+  QVERIFY(!document.saveAs(m_tempDir.filePath("missing/folder/new.txt")));
+  QCOMPARE(saved.count(), 0);
+  QCOMPARE(document.filePath(), original);
+  QCOMPARE(document.content(), QString("unsaved edits"));
+  QVERIFY(document.isModified());
+  QCOMPARE(FileManager::instance().readFile(original).content,
+           QString("saved contents"));
+  QVERIFY(document.save());
+  QVERIFY(!document.isModified());
+  QCOMPARE(FileManager::instance().readFile(original).content,
+           QString("unsaved edits"));
+}
 
 void TestDocumentRegression::testReopenAfterSave() {
   QString filePath = m_tempDir.path() + "/reopen_test.txt";

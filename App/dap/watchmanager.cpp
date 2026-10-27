@@ -84,6 +84,16 @@ void WatchManager::setDapClient(DapClient *client) {
             &WatchManager::onEvaluateError);
     connect(m_dapClient, &DapClient::variablesReceived, this,
             &WatchManager::onVariablesReceived);
+    connect(m_dapClient, &DapClient::stateChanged, this,
+            [this](DapClient::State state) {
+              if (state != DapClient::State::Stopped) {
+                invalidateValues();
+              }
+            });
+    connect(m_dapClient, &DapClient::restarting, this,
+            &WatchManager::invalidateValues);
+    connect(m_dapClient, &QObject::destroyed, this,
+            &WatchManager::invalidateValues);
   }
 }
 

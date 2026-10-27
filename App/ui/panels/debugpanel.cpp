@@ -2161,6 +2161,10 @@ void DebugPanel::setDapClient(DapClient *client) {
             });
     connect(m_dapClient, &DapClient::terminated, this,
             &DebugPanel::onTerminated);
+    connect(m_dapClient, &DapClient::restarting, this, [this]() {
+      clearSessionState();
+      updateToolbarState();
+    });
     connect(m_dapClient, &DapClient::threadsReceived, this,
             &DebugPanel::onThreadsReceived);
     connect(m_dapClient, &DapClient::stackTraceReceived, this,

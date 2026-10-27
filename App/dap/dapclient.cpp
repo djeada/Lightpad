@@ -887,6 +887,11 @@ void DapClient::respondToStartDebugging(int requestSeq, bool success,
 }
 
 void DapClient::restart() {
+  // A native restart can reuse the adapter without a continued/terminated
+  // event. Retire the previous stop's requests before notifying consumers.
+  clearPendingInspectionRequests();
+  emit restarting();
+
   if (supportsRestartRequest()) {
     QJsonObject args;
     args["arguments"] = m_launchConfig;

@@ -97,6 +97,11 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
   QAction *revealInExplorerAction =
       menu.addAction(tr("Reveal in File Explorer"));
 
+  for (QAction *action : {copyAbsolutePathAction, copyRelativePathAction,
+                          copyFileNameAction, revealInExplorerAction}) {
+    action->setEnabled(!filePath.isEmpty());
+  }
+
   if (index >= count() - 2) {
     closeToRightAction->setEnabled(false);
   }

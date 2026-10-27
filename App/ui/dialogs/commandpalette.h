@@ -6,6 +6,7 @@
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPointer>
 #include <QSettings>
 #include <QVBoxLayout>
 
@@ -13,8 +14,8 @@ struct CommandItem {
   QString id;
   QString name;
   QString shortcut;
-  QAction *action;
-  int score;
+  QString category;
+  QPointer<QAction> action;
 };
 
 class CommandPalette : public StyledPopupDialog {
@@ -58,6 +59,7 @@ private:
 
   QLineEdit *m_searchBox;
   QListWidget *m_resultsList;
+  QLabel *m_emptyState;
   QVBoxLayout *m_layout;
   QList<CommandItem> m_commands;
   QList<int> m_filteredIndices;

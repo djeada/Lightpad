@@ -24,12 +24,21 @@ void CommandPalette::setupUI() {
   m_layout->setSpacing(4);
 
   m_searchBox = new QLineEdit(this);
+  m_searchBox->setObjectName("commandPaletteSearch");
+  m_searchBox->setAccessibleName(tr("Search commands"));
   m_searchBox->setPlaceholderText(tr("Type a command..."));
   m_layout->addWidget(m_searchBox);
 
   m_resultsList = new QListWidget(this);
+  m_resultsList->setObjectName("commandPaletteResults");
+  m_resultsList->setAccessibleName(tr("Available commands"));
   m_resultsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   m_layout->addWidget(m_resultsList);
+  m_emptyState = new QLabel(this);
+  m_emptyState->setObjectName("commandPaletteEmptyState");
+  m_emptyState->setWordWrap(true);
+  m_emptyState->hide();
+  m_layout->addWidget(m_emptyState);
 
   connect(m_searchBox, &QLineEdit::textChanged, this,
           &CommandPalette::onSearchTextChanged);
@@ -42,6 +51,10 @@ void CommandPalette::setupUI() {
 void CommandPalette::registerAction(QAction *action, const QString &category) {
   if (!action || action->text().isEmpty())
     return;
+  for (const auto &command : std::as_const(m_commands)) {
+    if (command.action == action)
+      return;
+  }
 
   CommandItem item;
   item.id =
@@ -50,8 +63,8 @@ void CommandPalette::registerAction(QAction *action, const QString &category) {
       category.isEmpty() ? action->text() : category + ": " + action->text();
   item.name.remove('&');
   item.shortcut = action->shortcut().toString(QKeySequence::NativeText);
+  item.category = category;
   item.action = action;
-  item.score = 0;
 
   m_commands.append(item);
 }
@@ -154,6 +167,16 @@ void CommandPalette::updateResults(const QString &query) {
   QList<QPair<int, int>> scored;
 
   for (int i = 0; i < m_commands.size(); ++i) {
+    CommandItem &command = m_commands[i];
+    if (!command.action || !command.action->isEnabled() ||
+        !command.action->isVisible())
+      continue;
+    command.name = command.category.isEmpty()
+                       ? command.action->text()
+                       : command.category + ": " + command.action->text();
+    command.name.remove('&');
+    command.shortcut =
+        command.action->shortcut().toString(QKeySequence::NativeText);
     int score = 0;
     if (query.isEmpty()) {
 
@@ -194,6 +217,9 @@ void CommandPalette::updateResults(const QString &query) {
       displayText = "⏱ " + displayText;
     }
     item->setText(displayText);
+    item->setToolTip(cmd.action->statusTip().isEmpty()
+                         ? cmd.action->toolTip()
+                         : cmd.action->statusTip());
     item->setData(Qt::UserRole, idx);
     m_resultsList->addItem(item);
   }
@@ -201,9 +227,15 @@ void CommandPalette::updateResults(const QString &query) {
   if (m_resultsList->count() > 0) {
     m_resultsList->setCurrentRow(0);
   }
+  const bool empty = m_resultsList->count() == 0;
+  m_resultsList->setVisible(!empty);
+  m_emptyState->setVisible(empty);
+  m_emptyState->setText(query.isEmpty()
+                            ? tr("No commands are available in this context.")
+                            : tr("No matching commands. Try another search."));
 
   int itemHeight = 35;
-  int newHeight = qMin(m_resultsList->count() * itemHeight + 60, 400);
+  int newHeight = qBound(110, m_resultsList->count() * itemHeight + 60, 400);
   setFixedHeight(newHeight);
 }
 
@@ -248,12 +280,16 @@ void CommandPalette::executeCommand(int row) {
   if (cmdIdx < 0 || cmdIdx >= m_commands.size())
     return;
 
-  addToRecentCommands(m_commands[cmdIdx].id);
+  QPointer<QAction> action = m_commands[cmdIdx].action;
+  if (!action || !action->isEnabled() || !action->isVisible()) {
+    updateResults(m_searchBox->text());
+    return;
+  }
 
+  addToRecentCommands(m_commands[cmdIdx].id);
   hide();
 
-  QAction *action = m_commands[cmdIdx].action;
-  if (action && action->isEnabled()) {
+  if (action) {
     action->trigger();
   }
 }

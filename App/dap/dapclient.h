@@ -549,6 +549,7 @@ signals:
 
   void launched();
   void attached();
+  void restarting();
   void terminated();
   void exited(int exitCode);
 

@@ -686,6 +686,25 @@ set_target_properties(test_filedirtreemodel PROPERTIES
 
 add_test(NAME FileDirTreeModelTests COMMAND test_filedirtreemodel)
 
+add_executable(test_filedirtreecontroller
+    unit/test_filedirtreecontroller.cpp
+    ${CMAKE_SOURCE_DIR}/App/filetree/filedirtreemodel.cpp
+    ${CMAKE_SOURCE_DIR}/App/filetree/filedirtreecontroller.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+)
+target_include_directories(test_filedirtreecontroller PRIVATE
+    ${CMAKE_SOURCE_DIR}/App
+)
+target_link_libraries(test_filedirtreecontroller PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test
+)
+set_target_properties(test_filedirtreecontroller PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/bin"
+)
+add_test(NAME FileDirTreeControllerTests COMMAND test_filedirtreecontroller)
+
 add_executable(test_projectsearch
     unit/test_projectsearch.cpp
     ${CMAKE_SOURCE_DIR}/App/filetree/projectsearch.cpp
@@ -711,6 +730,20 @@ target_link_libraries(test_explorersearchwidget PRIVATE
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
 add_test(NAME ExplorerSearchWidgetTests COMMAND test_explorersearchwidget)
 set_tests_properties(ExplorerSearchWidgetTests PROPERTIES TIMEOUT 30)
+
+add_executable(test_commandpalette
+    unit/test_commandpalette.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/commandpalette.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styledpopupdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
+    ${CMAKE_SOURCE_DIR}/App/theme/themedefinition.cpp
+)
+target_link_libraries(test_commandpalette PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME CommandPaletteTests COMMAND test_commandpalette)
+set_tests_properties(CommandPaletteTests PROPERTIES TIMEOUT 30)
 
 # Run target resolution: what the Run button promises must be what launches.
 qt_add_resources(RUN_TARGET_RESOLVER_RESOURCES ${CMAKE_SOURCE_DIR}/App/run_templates/run_templates.qrc)
@@ -3432,7 +3465,7 @@ set(TEST_TARGETS
     test_asyncworker test_pluginmanager test_vimmode test_i18n test_accessibility 
     test_runtemplatemanager test_formattemplatemanager test_terminal test_terminaltabwidget
     test_syntaxpluginregistry test_completionproviderregistry test_completionengine test_dap test_dap_integration test_cmakeproject
-    test_gitrepotools test_runtargetresolver test_filedirtreemodel test_projectsearch test_explorersearchwidget test_compilerdiagnosticparser
+    test_gitrepotools test_runtargetresolver test_filedirtreemodel test_filedirtreecontroller test_projectsearch test_explorersearchwidget test_commandpalette test_compilerdiagnosticparser
     test_dockerfilesyntaxplugin
     test_sqlstatementsplitter test_databasecore test_databaselive test_databasepanel
     test_pluginbasedsyntaxhighlighter

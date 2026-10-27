@@ -29,6 +29,7 @@ void FileQuickOpen::setupUI() {
 
   m_searchBox = new QLineEdit(this);
   m_searchBox->setObjectName("quickOpenSearch");
+  m_searchBox->setAccessibleName(tr("Search project files"));
   m_searchBox->setPlaceholderText(tr("Search files by name..."));
   m_layout->addWidget(m_searchBox);
   m_status = new QLabel(this);
@@ -37,6 +38,8 @@ void FileQuickOpen::setupUI() {
   m_layout->addWidget(m_status);
 
   m_resultsList = new QListWidget(this);
+  m_resultsList->setObjectName("quickOpenResults");
+  m_resultsList->setAccessibleName(tr("Matching project files"));
   m_resultsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   m_layout->addWidget(m_resultsList);
 
@@ -176,6 +179,9 @@ void FileQuickOpen::runSearch() {
     m_status->setText(
         !results->error.isEmpty()    ? results->error
         : results->matches.isEmpty() ? tr("No matching files")
+        : results->truncated
+            ? tr("Showing the first %n files · refine your search", nullptr,
+                 results->matches.size())
         : results->matches.size() == 1
             ? tr("1 file · Enter to open")
             : tr("%n files · Enter to open", nullptr, results->matches.size()));
@@ -206,6 +212,14 @@ void FileQuickOpen::selectFile(int row) {
   QString relativePath = m_filteredFiles[row];
   QString fullPath =
       QDir::cleanPath(m_rootPath + QDir::separator() + relativePath);
+  const QFileInfo file(fullPath);
+  if (!file.isFile() || !file.isReadable()) {
+    m_filteredFiles.removeAt(row);
+    delete m_resultsList->takeItem(row);
+    m_status->setText(tr("\"%1\" is no longer available. Choose another file "
+                         "or search again.").arg(file.fileName()));
+    return;
+  }
 
   hide();
 
