@@ -47,6 +47,7 @@ set(project_ui
 set(project_headers 
     accessibility/accessibilitymanager.h
     completion/completionitem.h
+    completion/completioninsertion.h
     completion/completioncontext.h
     completion/icompletionprovider.h
     completion/completionproviderregistry.h
@@ -338,6 +339,7 @@ set(project_sources
     core/editor/texttransforms.cpp
     core/editor/documentsymbols.cpp
     core/editor/linenumberarea.cpp
+    completion/completioninsertion.cpp
     core/editor/multicursor.cpp
     core/editor/codefolding.cpp
     database/dbtypes.cpp

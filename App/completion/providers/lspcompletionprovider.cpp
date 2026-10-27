@@ -110,8 +110,15 @@ CompletionItem
 LspCompletionProvider::convertItem(const LspCompletionItem &lspItem) const {
   CompletionItem item;
   item.label = lspItem.label;
-  item.insertText =
-      lspItem.insertText.isEmpty() ? lspItem.label : lspItem.insertText;
+  item.insertText = lspItem.insertText.isEmpty() && !lspItem.textEditRange
+                        ? lspItem.label
+                        : lspItem.insertText;
+  if (lspItem.textEditRange) {
+    const auto &range = *lspItem.textEditRange;
+    item.textEditRange =
+        CompletionItem::EditRange{range.start.line, range.start.character,
+                                  range.end.line, range.end.character};
+  }
   item.detail = lspItem.detail;
   item.documentation = lspItem.documentation;
   item.kind = convertKind(lspItem.kind);

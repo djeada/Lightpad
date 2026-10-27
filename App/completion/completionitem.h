@@ -3,6 +3,7 @@
 
 #include <QIcon>
 #include <QString>
+#include <optional>
 
 enum class CompletionItemKind {
   Text = 1,
@@ -33,6 +34,12 @@ enum class CompletionItemKind {
 };
 
 struct CompletionItem {
+  struct EditRange {
+    int startLine;
+    int startCharacter;
+    int endLine;
+    int endCharacter;
+  };
 
   QString label;
 
@@ -55,6 +62,7 @@ struct CompletionItem {
   QIcon icon;
 
   QString providerId;
+  std::optional<EditRange> textEditRange;
 
   QString effectiveFilterText() const {
     return filterText.isEmpty() ? label : filterText;
@@ -65,7 +73,7 @@ struct CompletionItem {
   }
 
   QString effectiveInsertText() const {
-    return insertText.isEmpty() ? label : insertText;
+    return insertText.isEmpty() && !textEditRange ? label : insertText;
   }
 
   bool operator<(const CompletionItem &other) const {

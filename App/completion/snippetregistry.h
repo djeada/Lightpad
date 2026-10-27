@@ -7,6 +7,12 @@
 #include <QStringList>
 
 struct Snippet {
+  struct Expansion {
+    QString text;
+    int cursorOffset = 0;
+    int selectionLength = 0;
+    bool hasTabstop = false;
+  };
   QString prefix;
   QString label;
   QString body;
@@ -18,6 +24,7 @@ struct Snippet {
   QString expandedBody() const;
 
   static QString expand(const QString &body);
+  static Expansion expandWithSelection(const QString &body);
 };
 
 class SnippetRegistry {

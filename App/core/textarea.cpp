@@ -32,6 +32,7 @@
 
 #include "../completion/completioncontext.h"
 #include "../completion/completionengine.h"
+#include "../completion/completioninsertion.h"
 #include "../completion/completionitem.h"
 #include "../completion/completionproviderregistry.h"
 #include "../completion/completionwidget.h"
@@ -1205,6 +1206,7 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
 
     QTextCursor cursor = textCursor();
     m_lastCompletionRequestPosition = cursor.position();
+    m_lastCompletionRequestRevision = document()->revision();
     CompletionContext ctx;
     ctx.documentUri = getDocumentUri();
     ctx.languageId = m_languageId;
@@ -2071,20 +2073,19 @@ void TextArea::setCompleter(QCompleter *completer) {
 QCompleter *TextArea::completer() const { return m_completer; }
 
 void TextArea::insertCompletion(const QString &completion) {
-  if (m_completer->widget() != this)
+  if (!m_completer || m_completer->widget() != this || isReadOnly())
     return;
   QTextCursor tc = textCursor();
-  int extra = completion.length() - m_completer->completionPrefix().length();
-  tc.movePosition(QTextCursor::EndOfWord);
-  tc.insertText(completion.right(extra));
+  CompletionItem item;
+  item.insertText = completion;
+  if (!CompletionInsertion::apply(tc, item))
+    return;
   setTextCursor(tc);
   expandTabsToSpacesInDocument();
 }
 
 QString TextArea::textUnderCursor() const {
-  QTextCursor tc = textCursor();
-  tc.select(QTextCursor::WordUnderCursor);
-  return tc.selectedText();
+  return CompletionInsertion::prefix(textCursor());
 }
 
 void TextArea::setCompletionEngine(CompletionEngine *engine) {
@@ -2233,6 +2234,7 @@ void TextArea::triggerCompletion() {
 
   CompletionContext ctx;
   m_lastCompletionRequestPosition = cursor.position();
+  m_lastCompletionRequestRevision = document()->revision();
   ctx.documentUri = getDocumentUri();
   ctx.languageId = m_languageId;
   ctx.prefix = prefix;
@@ -2250,7 +2252,8 @@ void TextArea::triggerCompletion() {
 }
 
 void TextArea::onCompletionsReady(const QList<CompletionItem> &items) {
-  if (m_lastCompletionRequestPosition != textCursor().position()) {
+  if (m_lastCompletionRequestPosition != textCursor().position() ||
+      m_lastCompletionRequestRevision != document()->revision()) {
     hideCompletionPopup();
     return;
   }
@@ -2285,19 +2288,11 @@ void TextArea::onCompletionAccepted(const CompletionItem &item) {
 }
 
 void TextArea::insertCompletionItem(const CompletionItem &item) {
+  if (isReadOnly())
+    return;
   QTextCursor tc = textCursor();
-  QString prefix = textUnderCursor();
-
-  tc.movePosition(QTextCursor::EndOfWord);
-  tc.movePosition(QTextCursor::StartOfWord, QTextCursor::KeepAnchor);
-
-  QString insertText = item.effectiveInsertText();
-
-  if (item.isSnippet) {
-    insertText = Snippet::expand(insertText);
-  }
-
-  tc.insertText(insertText);
+  if (!CompletionInsertion::apply(tc, item))
+    return;
   setTextCursor(tc);
   expandTabsToSpacesInDocument();
 }
@@ -2319,6 +2314,7 @@ void TextArea::hideCompletionPopup() {
 
 void TextArea::invalidateCompletionRequest() {
   m_lastCompletionRequestPosition = -1;
+  m_lastCompletionRequestRevision = -1;
 }
 
 namespace {

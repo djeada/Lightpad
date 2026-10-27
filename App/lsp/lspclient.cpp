@@ -1048,6 +1048,11 @@ LspCompletionItem LspClient::parseCompletionItem(const QJsonObject &obj) {
   const QJsonObject textEdit = obj["textEdit"].toObject();
   if (textEdit.contains("newText")) {
     item.insertText = textEdit["newText"].toString();
+    const QJsonObject range = textEdit.contains("range")
+                                  ? textEdit["range"].toObject()
+                                  : textEdit["replace"].toObject();
+    if (range.contains("start") && range.contains("end"))
+      item.textEditRange = LspRange::fromJson(range);
   } else {
     item.insertText = obj["insertText"].toString(item.label);
   }

@@ -250,6 +250,19 @@ public:
 
   QString render() { return renderNodes(m_nodes); }
 
+  Snippet::Expansion expandWithSelection() {
+    Snippet::Expansion expanded;
+    expanded.text = render();
+    auto first = m_offsets.upperBound(0);
+    if (first == m_offsets.end())
+      first = m_offsets.find(0);
+    expanded.hasTabstop = first != m_offsets.end();
+    expanded.cursorOffset =
+        expanded.hasTabstop ? first->first : expanded.text.size();
+    expanded.selectionLength = expanded.hasTabstop ? first->second : 0;
+    return expanded;
+  }
+
 private:
   void collectDefinitions(const QList<SnippetNode> &nodes) {
     for (const SnippetNode &node : nodes) {
@@ -262,7 +275,7 @@ private:
     }
   }
 
-  QString renderDefinition(int index) {
+  QString renderDefinition(int index, int offset) {
     const SnippetNode *definition = m_definitions.value(index, nullptr);
     if (!definition || m_active.contains(index)) {
       return {};
@@ -270,12 +283,12 @@ private:
     m_active.insert(index);
     QString value = definition->type == SnippetNode::Type::Choice
                         ? definition->text
-                        : renderNodes(definition->children);
+                        : renderNodes(definition->children, offset);
     m_active.remove(index);
     return value;
   }
 
-  QString renderNodes(const QList<SnippetNode> &nodes) {
+  QString renderNodes(const QList<SnippetNode> &nodes, int offset = 0) {
     QString result;
     for (const SnippetNode &node : nodes) {
       switch (node.type) {
@@ -284,11 +297,16 @@ private:
         break;
       case SnippetNode::Type::Tabstop:
       case SnippetNode::Type::Placeholder:
-      case SnippetNode::Type::Choice:
-        result += renderDefinition(node.index);
+      case SnippetNode::Type::Choice: {
+        const int start = offset + result.size();
+        const QString value = renderDefinition(node.index, start);
+        if (!m_offsets.contains(node.index))
+          m_offsets[node.index] = qMakePair(start, value.size());
+        result += value;
         break;
+      }
       case SnippetNode::Type::Variable:
-        result += renderNodes(node.children);
+        result += renderNodes(node.children, offset + result.size());
         break;
       }
     }
@@ -298,6 +316,7 @@ private:
   const QList<SnippetNode> &m_nodes;
   QMap<int, const SnippetNode *> m_definitions;
   QSet<int> m_active;
+  QMap<int, QPair<int, int>> m_offsets;
 };
 
 } // namespace
@@ -305,6 +324,11 @@ private:
 QString Snippet::expand(const QString &body) {
   const QList<SnippetNode> nodes = SnippetParser(body).parse();
   return SnippetRenderer(nodes).render();
+}
+
+Snippet::Expansion Snippet::expandWithSelection(const QString &body) {
+  const QList<SnippetNode> nodes = SnippetParser(body).parse();
+  return SnippetRenderer(nodes).expandWithSelection();
 }
 
 QString Snippet::expandedBody() const { return expand(body); }

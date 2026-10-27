@@ -281,6 +281,7 @@ private slots:
 private:
   void drawExtraCursors();
   int m_lastCompletionRequestPosition = -1;
+  int m_lastCompletionRequestRevision = -1;
   QString m_documentUriOverride;
   bool m_extraSelectionRefreshPending = false;
   QMetaObject::Connection m_cursorRefreshConnection;

@@ -8,6 +8,7 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QTimer>
+#include <optional>
 
 struct LspPosition {
   int line;
@@ -69,6 +70,7 @@ struct LspCompletionItem {
   QString documentation;
   QString insertText;
   int insertTextFormat = 1;
+  std::optional<LspRange> textEditRange;
 };
 
 struct LspParameterInfo {
