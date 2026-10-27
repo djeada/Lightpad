@@ -3050,6 +3050,14 @@ target_link_libraries(test_documentsymbols
 
 add_test(NAME DocumentSymbolsTests COMMAND test_documentsymbols)
 
+# Indentation test executable
+add_executable(test_indentation
+    unit/test_indentation.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/editor/indentation.cpp
+)
+target_link_libraries(test_indentation PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME IndentationTests COMMAND test_indentation)
+
 # TextTransforms test executable
 add_executable(test_texttransforms
     unit/test_texttransforms.cpp
@@ -3511,6 +3519,7 @@ set(TEST_TARGETS
     test_testfileclassifier
     test_problemspanel
     test_texttransforms
+    test_indentation
     test_documentsymbols
     test_codefolding
     test_multicursor

@@ -200,6 +200,7 @@ private:
   int m_lineNumberMarginWidth = -1;
   QString searchWord;
   bool autoIndent;
+  int m_tabWidth = 4;
   bool showLineNumberArea;
   bool lineHighlighted;
   bool matchingBracketsHighlighted;
@@ -252,7 +253,6 @@ private:
   bool handleAutoPairKey(QKeyEvent *event);
   bool handleAutoPairBackspace(QKeyEvent *event);
   void closeParentheses(QString startStr, QString endStr);
-  void handleKeyEnterPressed();
   void drawCurrentLineHighlight();
   void clearLineHighlight();
   void updateRowColDisplay();

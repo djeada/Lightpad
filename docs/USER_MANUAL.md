@@ -292,7 +292,19 @@ Line numbers are displayed by default. Toggle them in:
 
 ### Auto-Indentation
 
-Lightpad automatically indents new lines based on the previous line. Configure:
+Enter preserves the current indentation and adds a level for Python block
+headers (`if`, `def`, `class`, and similar statements ending in `:`). Continued
+expressions keep their indentation; opening brackets can create an indented
+line with the closing bracket on its own line. Colons and brackets inside
+comments or strings do not start new blocks.
+
+Backspace within leading spaces or tabs returns to the previous indentation
+stop. With a tab width of 4, eight leading spaces become four, and six become
+four. After code, Backspace keeps its normal character deletion behavior.
+Enter and indentation deletion also work with multiple cursors and undo in
+one step. Python's new indentation uses spaces.
+
+Configure the indentation width and automatic indentation in:
 - **Preferences** → **Editor** → **Auto indent**
 - **Preferences** → **Editor** → **Tab width**
 
