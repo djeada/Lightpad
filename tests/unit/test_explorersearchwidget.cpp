@@ -208,6 +208,25 @@ private slots:
                  "No matching files");
   }
 
+  void quickOpenKeepsTheDialogOpenWhenAResultDisappears() {
+    const QString path = createFile("disappearing-file.txt", "contents");
+    FileQuickOpen dialog;
+    dialog.setRootDirectory(m_root.path());
+    dialog.showDialog();
+    auto *edit = dialog.findChild<QLineEdit *>("quickOpenSearch");
+    auto *list = dialog.findChild<QListWidget *>("quickOpenResults");
+    edit->setText("disappearing-file");
+    QTRY_COMPARE(list->count(), 1);
+    QVERIFY(QFile::remove(path));
+    QSignalSpy selected(&dialog, &FileQuickOpen::fileSelected);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(selected.count(), 0);
+    QVERIFY(dialog.isVisible());
+    QCOMPARE(list->count(), 0);
+    QVERIFY(dialog.findChild<QLabel *>("quickOpenStatus")->text()
+                .contains("no longer available"));
+  }
+
   void quickOpenRefreshesWhenReopened() {
     FileQuickOpen dialog;
     dialog.setRootDirectory(m_root.path());

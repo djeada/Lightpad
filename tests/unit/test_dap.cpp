@@ -39,6 +39,7 @@
 #include <QTableWidget>
 #include <QToolButton>
 #include <QTreeWidget>
+#include <memory>
 
 Q_DECLARE_METATYPE(DapExceptionInfo)
 Q_DECLARE_METATYPE(DapDataBreakpointInfo)
@@ -103,6 +104,8 @@ private slots:
   void testWatchPersistence();
   void testWatchUpdate();
   void testWatchEvaluationWithoutClient();
+  void testWatchValuesFollowClientLifecycle_data();
+  void testWatchValuesFollowClientLifecycle();
 
   void testDapClientEvaluateErrorSignal();
   void testDapClientVariableSetSignal();
@@ -137,6 +140,8 @@ private slots:
   void testDapClientOversizedResponseReleasesPendingRequest();
   void testDapClientDropsResponsesCancelledByResume();
   void testDapClientRestartWrapsLaunchArguments();
+  void testDapClientRestartDropsOldInspectionResponses();
+  void testNativeRestartClearsDebugPanel();
   void testDapClientServerTransport();
   void testDapClientCompletionsRoundTrip();
   void testDapClientDataBreakpointInfoRoundTrip();
@@ -2099,6 +2104,119 @@ void TestDap::testDapClientRestartWrapsLaunchArguments() {
   QTRY_VERIFY_WITH_TIMEOUT(
       traceFileContains(tracePath, "\"arguments\":{\"arguments\":{"), 5000);
 
+  client.stop(false);
+}
+
+void TestDap::testDapClientRestartDropsOldInspectionResponses() {
+  DapClient client;
+  QVERIFY(client.start(fakeAdapterPath(),
+                        {"--stop-on-launch", "--caps",
+                         R"({"supportsRestartRequest":true})"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
+
+  QSignalSpy stack(&client, &DapClient::stackTraceReceived);
+  QSignalSpy values(&client, &DapClient::evaluateResponse);
+  QSignalSpy restarting(&client, &DapClient::restarting);
+  client.getStackTrace(1);
+  client.evaluate("oldValue", 100, "watch");
+  client.restart();
+  QCOMPARE(restarting.count(), 1);
+
+  // The responses were already on their way when Restart was requested.
+  // Wait for a new response as a barrier; only that response may be delivered.
+  const int fresh = client.evaluate("freshValue", 100, "watch");
+  QTRY_COMPARE_WITH_TIMEOUT(values.count(), 1, 5000);
+  QCOMPARE(values.first().first().toInt(), fresh);
+  QCOMPARE(stack.count(), 0);
+  client.stop(false);
+}
+
+void TestDap::testWatchValuesFollowClientLifecycle_data() {
+  QTest::addColumn<QString>("action");
+  QTest::newRow("continue") << QString("continue");
+  QTest::newRow("native-restart") << QString("restart");
+  QTest::newRow("stop") << QString("stop");
+  QTest::newRow("adapter-destroyed") << QString("destroy");
+}
+
+void TestDap::testWatchValuesFollowClientLifecycle() {
+  QFETCH(QString, action);
+  auto &watches = WatchManager::instance();
+  watches.clearAll();
+  auto cleanup = qScopeGuard([&]() {
+    watches.setDapClient(nullptr);
+    watches.clearAll();
+  });
+  auto client = std::make_unique<DapClient>();
+  QVERIFY(client->start(fakeAdapterPath(),
+                         {"--stop-on-launch", "--caps",
+                          R"({"supportsRestartRequest":true})"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client->state(), DapClient::State::Ready, 5000);
+  client->launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client->state(), DapClient::State::Stopped, 5000);
+  watches.setDapClient(client.get());
+  const int id = watches.addWatch("matrix");
+  watches.evaluateWatch(id, 100);
+  QTRY_VERIFY_WITH_TIMEOUT(!watches.watch(id).value.isEmpty() &&
+                               watches.watch(id).value != "<not evaluated>",
+                           5000);
+  QCOMPARE(watches.watch(id).variablesReference, 2000);
+  QCOMPARE(watches.watch(id).type, QString("list"));
+  watches.evaluateWatch(id, 100);
+
+  if (action == "continue")
+    client->continueExecution(1);
+  else if (action == "restart")
+    client->restart();
+  else if (action == "stop")
+    client->stop(false);
+  else
+    client.reset();
+
+  QTRY_COMPARE_WITH_TIMEOUT(watches.watch(id).value,
+                             QString("<not evaluated>"), 5000);
+  QCOMPARE(watches.watch(id).expression, QString("matrix"));
+  QVERIFY(watches.watch(id).type.isEmpty());
+  QCOMPARE(watches.watch(id).variablesReference, 0);
+  QVERIFY(!watches.watch(id).isError);
+}
+
+void TestDap::testNativeRestartClearsDebugPanel() {
+  auto &watches = WatchManager::instance();
+  watches.clearAll();
+  auto cleanup = qScopeGuard([&]() {
+    watches.setDapClient(nullptr);
+    watches.clearAll();
+  });
+  DapClient client;
+  QVERIFY(client.start(fakeAdapterPath(),
+                        {"--stop-on-launch", "--caps",
+                         R"({"supportsRestartRequest":true})"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  watches.setDapClient(&client);
+  DebugPanel panel;
+  panel.setDapClient(&client);
+  const int id = watches.addWatch("oldValue");
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
+  auto *variables = panel.findChild<QTreeWidget *>("debugVariablesTree");
+  auto *stack = panel.findChild<QTreeWidget *>("debugCallStackTree");
+  auto *watchTree = panel.findChild<QTreeWidget *>("debugWatchTree");
+  QVERIFY(variables);
+  QVERIFY(stack);
+  QVERIFY(watchTree);
+  QTRY_VERIFY_WITH_TIMEOUT(variables->topLevelItemCount() > 0, 5000);
+  QTRY_VERIFY_WITH_TIMEOUT(!watches.watch(id).value.isEmpty() &&
+                               watches.watch(id).value != "<not evaluated>",
+                           5000);
+
+  client.restart();
+  QCOMPARE(variables->topLevelItemCount(), 0);
+  QCOMPARE(stack->topLevelItemCount(), 0);
+  QCOMPARE(watchTree->topLevelItem(0)->text(1), QString("<not evaluated>"));
+  QCOMPARE(watchTree->topLevelItem(0)->childCount(), 0);
   client.stop(false);
 }
 

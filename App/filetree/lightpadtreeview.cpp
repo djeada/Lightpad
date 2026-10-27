@@ -466,6 +466,10 @@ void LightpadTreeView::buildRootMenu(QMenu &menu) {
           [this, root]() {
             fileController->handleCopyAbsolutePath(QStringList{root});
           });
+  connect(menu.addAction(tr("Copy File Name")), &QAction::triggered, this,
+          [this, root]() {
+            fileController->handleCopyFileName(QStringList{root});
+          });
 
   menu.addSeparator();
   connect(menu.addAction(tr("Refresh")), &QAction::triggered, parentPage,
@@ -595,6 +599,10 @@ void LightpadTreeView::buildEntryMenu(QMenu &menu, const QString &filePath,
   connect(relativeAction, &QAction::triggered, this, [this, selection, root]() {
     fileController->handleCopyRelativePath(selection, root);
   });
+  connect(menu.addAction(tr("Copy File Name")), &QAction::triggered, this,
+          [this, selection]() {
+            fileController->handleCopyFileName(selection);
+          });
 
   if (!multiple) {
     menu.addSeparator();

@@ -193,6 +193,8 @@ void DebugValueInspector::setDapClient(DapClient *client) {
   connect(client, &QObject::destroyed, this, &DebugValueInspector::invalidate);
   connect(client, &DapClient::continued, this,
           &DebugValueInspector::invalidate);
+  connect(client, &DapClient::restarting, this,
+          &DebugValueInspector::invalidate);
 }
 
 bool DebugValueInspector::isIndexed(const DapVariable &value) {

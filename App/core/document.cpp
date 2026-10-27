@@ -107,7 +107,6 @@ bool Document::save() {
       FileManager::instance().writeFile(m_filePath, m_content);
 
   if (!result.success) {
-    updateState(State::Error);
     emit error(result.errorMessage);
     return false;
   }

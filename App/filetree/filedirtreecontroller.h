@@ -30,6 +30,7 @@ public:
   void handleCopy(const QStringList &paths);
   void handleCut(const QStringList &paths);
   void handlePaste(const QString &destPath);
+  void handleCopyFileName(const QStringList &paths);
   void handleCopyAbsolutePath(const QStringList &paths);
   void handleCopyRelativePath(const QStringList &paths,
                               const QString &basePath);
@@ -51,6 +52,7 @@ private:
   void showError(const QString &message);
   void finishBatch();
   bool confirmDeletion(const QStringList &paths, DeleteMode mode);
+  bool confirmMove(const QStringList &paths, const QString &destination);
   static QString describe(const QStringList &paths);
 };
 

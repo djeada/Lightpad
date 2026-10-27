@@ -147,9 +147,14 @@ void FileDirTreeController::handleDuplicate(const QStringList &paths) {
 QStringList FileDirTreeController::handleTransfer(const QStringList &paths,
                                                   const QString &destination,
                                                   bool copy) {
+  const QStringList sources = FileDirTreeModel::topLevelPaths(paths);
+  if (sources.isEmpty() || (!copy && !confirmMove(sources, destination))) {
+    return {};
+  }
+
   m_batching = true;
   QStringList created;
-  for (const QString &path : FileDirTreeModel::topLevelPaths(paths)) {
+  for (const QString &path : sources) {
     QString target;
     if (copy ? model->copyInto(path, destination, &target)
              : model->moveInto(path, destination, &target)) {
@@ -211,6 +216,19 @@ void FileDirTreeController::handlePaste(const QString &destPath) {
     const QString &first = createdPaths.first();
     emit pathCreated(first, QFileInfo(first).isDir());
   }
+}
+
+void FileDirTreeController::handleCopyFileName(const QStringList &paths) {
+  if (paths.isEmpty()) {
+    return;
+  }
+
+  QStringList names;
+  for (const QString &path : paths) {
+    names.append(QFileInfo(path).fileName());
+  }
+  QGuiApplication::clipboard()->setText(names.join(QLatin1Char('\n')));
+  emit statusMessage(tr("Copied name: %1").arg(names.join(", ")));
 }
 
 void FileDirTreeController::handleCopyAbsolutePath(const QStringList &paths) {
@@ -288,4 +306,21 @@ bool FileDirTreeController::confirmDeletion(const QStringList &paths,
                                     ThemedMessageBox::Yes |
                                         ThemedMessageBox::No) ==
          ThemedMessageBox::Yes;
+}
+
+bool FileDirTreeController::confirmMove(const QStringList &paths,
+                                       const QString &destination) {
+  ThemedMessageBox box(parentWidget);
+  box.setWindowTitle(tr("Move Files"));
+  box.setIcon(ThemedMessageBox::Question);
+  box.setText(tr("Move %1 to \"%2\"?")
+                  .arg(describe(paths), QDir::toNativeSeparators(destination)));
+  box.setInformativeText(tr("The selected files and folders will leave their "
+                            "current locations."));
+  box.setDetailedText(paths.join(QLatin1Char('\n')));
+  box.setStandardButtons(ThemedMessageBox::Yes | ThemedMessageBox::No);
+  box.setButtonText(ThemedMessageBox::Yes, tr("Move"));
+  box.setButtonText(ThemedMessageBox::No, tr("Cancel"));
+  box.setDefaultButton(ThemedMessageBox::No);
+  return box.exec() == ThemedMessageBox::Yes;
 }

@@ -1,7 +1,13 @@
 #include "core/io/filemanager.h"
 #include <QFile>
 #include <QTemporaryDir>
+#include <QScopeGuard>
+#include <QSignalSpy>
 #include <QtTest/QtTest>
+#ifdef Q_OS_UNIX
+#include <csignal>
+#include <sys/resource.h>
+#endif
 
 class TestFileManager : public QObject {
   Q_OBJECT
@@ -21,6 +27,8 @@ private slots:
   void testPythonWriteExpandsTabsToSpaces();
   void testShebangPythonWriteExpandsTabsToSpaces();
   void testNonPythonWritePreservesTabs();
+  void testFailedWritePreservesExistingContents();
+  void testReadDirectoryReportsAnError();
 
 private:
   QTemporaryDir m_tempDir;
@@ -149,6 +157,47 @@ void TestFileManager::testNonPythonWritePreservesTabs() {
   QVERIFY(result.success);
   auto readResult = fm.readFile(path);
   QCOMPARE(readResult.content, QString("a\tb\n"));
+}
+
+void TestFileManager::testFailedWritePreservesExistingContents() {
+#ifndef Q_OS_UNIX
+  QSKIP("Write failure injection uses the Unix file size limit");
+#else
+  const QString path = m_tempDir.filePath("failed-write.txt");
+  auto &manager = FileManager::instance();
+  QVERIFY(manager.writeFile(path, "original contents").success);
+  QSignalSpy saved(&manager, &FileManager::fileSaved);
+  QSignalSpy errors(&manager, &FileManager::fileError);
+  struct rlimit previous;
+  QVERIFY(getrlimit(RLIMIT_FSIZE, &previous) == 0);
+  const auto previousHandler = std::signal(SIGXFSZ, SIG_IGN);
+  QVERIFY(previousHandler != SIG_ERR);
+  auto restore = qScopeGuard([&]() {
+    setrlimit(RLIMIT_FSIZE, &previous);
+    std::signal(SIGXFSZ, previousHandler);
+  });
+  struct rlimit limited = previous;
+  limited.rlim_cur = qMin<rlim_t>(1024, previous.rlim_max);
+  QVERIFY(setrlimit(RLIMIT_FSIZE, &limited) == 0);
+
+  const auto result = manager.writeFile(path, QString(8192, 'x'));
+  QVERIFY(!result.success);
+  QVERIFY(!result.errorMessage.isEmpty());
+  QCOMPARE(saved.count(), 0);
+  QCOMPARE(errors.count(), 1);
+  QCOMPARE(manager.readFile(path).content, QString("original contents"));
+#endif
+}
+
+void TestFileManager::testReadDirectoryReportsAnError() {
+  auto &manager = FileManager::instance();
+  QSignalSpy opened(&manager, &FileManager::fileOpened);
+  QSignalSpy errors(&manager, &FileManager::fileError);
+  const auto result = manager.readFile(m_tempDir.path());
+  QVERIFY(!result.success);
+  QVERIFY(!result.errorMessage.isEmpty());
+  QCOMPARE(opened.count(), 0);
+  QCOMPARE(errors.count(), 1);
 }
 
 QTEST_MAIN(TestFileManager)
