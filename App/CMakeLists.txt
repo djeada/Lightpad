@@ -62,6 +62,7 @@ set(project_headers
     completion/providers/snippetcompletionprovider.h
     completion/providers/sqlcompletionprovider.h
     core/editor/texttransforms.h
+    core/editor/indentation.h
     core/editor/documentsymbols.h
     core/editor/linenumberarea.h
     core/editor/multicursor.h
@@ -338,6 +339,7 @@ set(project_sources
     completion/providers/snippetcompletionprovider.cpp
     completion/providers/sqlcompletionprovider.cpp
     core/editor/texttransforms.cpp
+    core/editor/indentation.cpp
     core/editor/documentsymbols.cpp
     core/editor/linenumberarea.cpp
     completion/completioninsertion.cpp

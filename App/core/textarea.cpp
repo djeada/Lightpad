@@ -48,6 +48,7 @@
 #include "../theme/themeengine.h"
 #include "../ui/mainwindow.h"
 #include "editor/codefolding.h"
+#include "editor/indentation.h"
 #include "editor/linenumberarea.h"
 #include "editor/multicursor.h"
 #include "editor/texttransforms.h"
@@ -150,26 +151,6 @@ static int findOpeningParentheses(const QString &text, int pos, QChar startStr,
   return ++pos;
 }
 
-static int leadingSpaces(const QString &str, int tabWidth) {
-
-  const int width = qMax(1, tabWidth);
-  int column = 0;
-
-  for (int i = 0; i < str.size(); i++) {
-
-    if (str[i] == '\x9') {
-      column += width - (column % width);
-    }
-
-    else if (!str[i].isSpace())
-      return column;
-    else
-      ++column;
-  }
-
-  return column;
-}
-
 static int expandedPositionForTabs(const QString &text, int position,
                                    int tabWidth) {
   const int width = qMax(1, tabWidth);
@@ -194,18 +175,6 @@ static int expandedPositionForTabs(const QString &text, int position,
   }
 
   return expandedPosition;
-}
-
-static bool isLastNonSpaceCharacterOpenBrace(const QString &str) {
-
-  for (int i = str.size() - 1; i >= 0; i--) {
-    if (str[i].isSpace())
-      continue;
-
-    return str[i] == '{';
-  }
-
-  return false;
 }
 
 static int numberOfDigits(int x) {
@@ -546,6 +515,7 @@ TextArea::TextArea(QWidget *parent)
   QPlainTextEdit::setFont(mainFont);
   QPlainTextEdit::setStyleSheet(editorFontStyleSheet(mainFont));
   setupTextArea();
+  setTabWidth(m_tabWidth);
   document()->setDefaultFont(mainFont);
   document()->setDocumentMargin(editorDocumentMargin);
 
@@ -590,6 +560,7 @@ TextArea::TextArea(const TextAreaSettings &settings, QWidget *parent)
   QPlainTextEdit::setFont(mainFont);
   QPlainTextEdit::setStyleSheet(editorFontStyleSheet(mainFont));
   setupTextArea();
+  setTabWidth(settings.tabWidth);
   document()->setDefaultFont(mainFont);
   document()->setDocumentMargin(editorDocumentMargin);
 
@@ -701,6 +672,7 @@ void TextArea::setFontSize(int size) {
   if (doc) {
     mainFont.setPointSize(size);
     QPlainTextEdit::setFont(mainFont);
+    setTabWidth(m_tabWidth);
     if (viewport()) {
       viewport()->setFont(mainFont);
     }
@@ -718,6 +690,7 @@ void TextArea::setFontSize(int size) {
 void TextArea::setFont(QFont font) {
   mainFont = font;
   QPlainTextEdit::setFont(mainFont);
+  setTabWidth(m_tabWidth);
   if (viewport()) {
     viewport()->setFont(mainFont);
   }
@@ -753,8 +726,10 @@ void TextArea::setMainWindow(MainWindow *window) {
 int TextArea::fontSize() { return mainFont.pointSize(); }
 
 void TextArea::setTabWidth(int width) {
-  QFontMetrics metrics(mainFont);
-  setTabStopDistance(QFontMetricsF(mainFont).horizontalAdvance(' ') * width);
+  m_tabWidth = qMax(1, width);
+  setTabStopDistance(QFontMetricsF(mainFont).horizontalAdvance(' ') *
+                     m_tabWidth);
+  viewport()->update();
 }
 
 void TextArea::removeIconUnsaved() {
@@ -795,6 +770,7 @@ void TextArea::loadSettings(const TextAreaSettings settings) {
   }
   applySelectionPalette(theme);
   setAutoIdent(settings.autoIndent);
+  setTabWidth(settings.tabWidth);
   showLineNumbers(settings.showLineNumberArea);
   highlihtCurrentLine(settings.lineHighlighted);
   highlihtMatchingBracket(settings.matchingBracketsHighlighted);
@@ -1032,15 +1008,71 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
   const Qt::KeyboardModifiers disallowedTabModifiers =
       Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier;
 
+  const bool plainEditingKey =
+      !(keyEvent->modifiers() & disallowedTabModifiers);
+  if (plainEditingKey &&
+      (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter)) {
+    if (!isReadOnly()) {
+      EditorIndentation::Options options;
+      options.language = normalizedPairingLanguage(m_languageId);
+      if ((options.language.isEmpty() || options.language == "plaintext") &&
+          shouldExpandTabsToSpaces())
+        options.language = "py";
+      options.width = effectiveTabWidth();
+      options.enabled = autoIndent;
+      options.expandTabs = shouldExpandTabsToSpaces();
+      applyToAllCursors([&options](QTextCursor &cursor) {
+        EditorIndentation::insertNewline(cursor, options);
+      });
+      ensureCursorVisible();
+      invalidateCompletionRequest();
+      hideCompletionPopup();
+    }
+    keyEvent->accept();
+    return;
+  }
+
+  if (keyEvent->key() == Qt::Key_Backspace &&
+      keyEvent->modifiers() == Qt::NoModifier) {
+    if (isReadOnly()) {
+      keyEvent->accept();
+      return;
+    }
+    if (hasMultipleCursors()) {
+      const int width = effectiveTabWidth();
+      applyToAllCursors([width](QTextCursor &cursor) {
+        if (cursor.hasSelection())
+          cursor.removeSelectedText();
+        else if (!EditorIndentation::backspace(cursor, width))
+          cursor.deletePreviousChar();
+      });
+      ensureCursorVisible();
+      invalidateCompletionRequest();
+      hideCompletionPopup();
+      keyEvent->accept();
+      return;
+    }
+    QTextCursor cursor = textCursor();
+    if (EditorIndentation::backspace(cursor, effectiveTabWidth())) {
+      setTextCursor(cursor);
+      ensureCursorVisible();
+      invalidateCompletionRequest();
+      hideCompletionPopup();
+      keyEvent->accept();
+      return;
+    }
+  }
+
   if ((isPlainTab || isBacktab) &&
       !(keyEvent->modifiers() & disallowedTabModifiers)) {
+    if (isReadOnly()) {
+      keyEvent->accept();
+      return;
+    }
     QTextCursor cursor = textCursor();
     const bool hasSelection = cursor.hasSelection();
 
-    int tabWidth = 4;
-    if (mainWindow) {
-      tabWidth = qMax(1, mainWindow->getTabWidth());
-    }
+    const int tabWidth = effectiveTabWidth();
 
     if (hasSelection || isBacktab) {
       int startPosition =
@@ -1132,17 +1164,6 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     }
   }
 
-  if (hasMultipleCursors() && keyEvent->key() == Qt::Key_Backspace) {
-    applyToAllCursors([](QTextCursor &cursor) {
-      if (!cursor.hasSelection()) {
-        cursor.deletePreviousChar();
-      } else {
-        cursor.removeSelectedText();
-      }
-    });
-    return;
-  }
-
   if (hasMultipleCursors() && keyEvent->key() == Qt::Key_Delete) {
     applyToAllCursors([](QTextCursor &cursor) {
       if (!cursor.hasSelection()) {
@@ -1179,8 +1200,6 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
 
     QPlainTextEdit::keyPressEvent(keyEvent);
 
-    if (keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return)
-      handleKeyEnterPressed();
     expandTabsToSpacesInDocument();
   }
 
@@ -1577,43 +1596,6 @@ void TextArea::closeParentheses(QString startStr, QString endStr) {
   }
 
   setTextCursor(cursor);
-}
-
-void TextArea::handleKeyEnterPressed() {
-  if (mainWindow && autoIndent) {
-    auto cursor = textCursor();
-    auto pos = cursor.position();
-    cursor.movePosition(QTextCursor::PreviousBlock);
-
-    const auto prevLine = cursor.block().text();
-    auto tabWidth = mainWindow->getTabWidth();
-    auto n = leadingSpaces(prevLine, tabWidth);
-
-    if (isLastNonSpaceCharacterOpenBrace(prevLine))
-      n += tabWidth;
-
-    cursor.setPosition(pos, cursor.MoveAnchor);
-    cursor.insertText(QString(" ").repeated(n));
-
-    const QString trimmedPrev = prevLine.trimmed();
-    const QString rest = cursor.block().text().mid(cursor.positionInBlock());
-    if (!trimmedPrev.isEmpty() && !rest.isEmpty()) {
-      const QChar opener = trimmedPrev.back();
-      const QChar closer =
-          rest.trimmed().isEmpty() ? QChar() : rest.trimmed()[0];
-      const bool matched = (opener == '{' && closer == '}') ||
-                           (opener == '(' && closer == ')') ||
-                           (opener == '[' && closer == ']');
-      if (matched) {
-        const int caret = cursor.position();
-        cursor.insertText(
-            QStringLiteral("\n") +
-            QString(" ").repeated(leadingSpaces(prevLine, tabWidth)));
-        cursor.setPosition(caret);
-      }
-    }
-    setTextCursor(cursor);
-  }
 }
 
 void TextArea::drawCurrentLineHighlight() {
@@ -2174,12 +2156,7 @@ QString TextArea::resolveFilePath() const {
   return filePath;
 }
 
-int TextArea::effectiveTabWidth() const {
-  if (mainWindow) {
-    return qMax(1, mainWindow->getTabWidth());
-  }
-  return 4;
-}
+int TextArea::effectiveTabWidth() const { return m_tabWidth; }
 
 bool TextArea::shouldExpandTabsToSpaces() const {
   const QString normalizedLanguage = LanguageCatalog::normalize(m_languageId);
@@ -2542,7 +2519,8 @@ void TextArea::paintEvent(QPaintEvent *event) {
 
     QFontMetrics fm(mainFont);
     int spaceWidth = fm.horizontalAdvance(' ');
-    int indentWidth = spaceWidth * 4;
+    const int width = effectiveTabWidth();
+    int indentWidth = spaceWidth * width;
 
     QTextBlock block = firstVisibleBlock();
     int top =
@@ -2553,22 +2531,15 @@ void TextArea::paintEvent(QPaintEvent *event) {
       if (block.isVisible() && bottom >= event->rect().top()) {
         QString text = block.text();
 
-        int indent = 0;
-        for (QChar c : text) {
-          if (c == ' ')
-            indent++;
-          else if (c == '\t')
-            indent += 4;
-          else
-            break;
-        }
+        const int indent = EditorIndentation::visualColumn(
+            EditorIndentation::leadingWhitespace(text), width);
 
         QTextCursor blockStart(block);
         blockStart.setPosition(block.position());
         QRect startRect = cursorRect(blockStart);
         int xOffset = startRect.left();
 
-        int numGuides = indent / 4;
+        int numGuides = indent / width;
         for (int i = 1; i <= numGuides; ++i) {
           int x = xOffset + (i * indentWidth) - indentWidth;
           painter.drawLine(x, top, x, bottom);
