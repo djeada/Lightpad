@@ -21,7 +21,7 @@ QString exportResult(const DbResultSet &result, Format format,
                      const QString &tableName = QStringLiteral("table_name"),
                      DbEngine engine = DbEngine::PostgreSql);
 
-QString sqlLiteral(const QVariant &value);
+QString sqlLiteral(const QVariant &value, DbEngine engine = DbEngine::Sqlite);
 
 } // namespace ResultExporter
 

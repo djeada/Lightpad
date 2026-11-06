@@ -3268,6 +3268,7 @@ foreach(db_test test_sqlstatementsplitter test_databasecore test_databaselive te
         Qt6::Gui
         Qt6::Widgets
         Qt6::Sql
+        SQLite::SQLite3
         Qt6::Test
     )
     target_compile_definitions(${db_test} PRIVATE QT_DEPRECATED_WARNINGS)
@@ -3307,6 +3308,7 @@ target_link_libraries(test_databasepanel
     Qt6::Gui
     Qt6::Widgets
     Qt6::Sql
+    SQLite::SQLite3
     Qt6::Test
 )
 target_compile_definitions(test_databasepanel PRIVATE QT_DEPRECATED_WARNINGS)

@@ -45,6 +45,7 @@ private slots:
 
 private:
   void buildUi();
+  void fitToContents();
   void updateVisibility();
   void updateAutoName();
   void setTestStatus(const QString &text, bool ok, bool busy = false);
@@ -91,6 +92,7 @@ private:
 
   QString m_id;
   bool m_nameEdited = false;
+  bool m_discoveryStarted = false;
   bool m_settingProfile = false;
   bool m_connectAfterSave = false;
   std::function<QString(const QString &)> m_uniqueName;

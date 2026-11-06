@@ -1,5 +1,6 @@
 #include "../core/documentrecovery.h"
 #include "mainwindow_internal.h"
+#include "panels/databasepanel.h"
 
 namespace {
 void replaceEditorContentsKeepingUndo(TextArea *area, const QString &text) {
@@ -1860,6 +1861,20 @@ void MainWindow::openFileAndAddToNewTab(QString filePath, bool reuseAnyGroup) {
   QFileInfo fileInfo(filePath);
   if (filePath.isEmpty() || !fileInfo.exists() || fileInfo.isDir())
     return;
+
+  QFile sqliteFile(filePath);
+  if (sqliteFile.open(QIODevice::ReadOnly)) {
+    const QByteArray header = sqliteFile.read(16);
+    const QString suffix = fileInfo.suffix().toLower();
+    if (header == QByteArray("SQLite format 3\0", 16) ||
+        (fileInfo.size() == 0 &&
+         QStringList{"db", "sqlite", "sqlite3", "db3", "s3db"}.contains(
+             suffix))) {
+      showDatabasePanel();
+      databasePanel->openSqliteFile(fileInfo.absoluteFilePath());
+      return;
+    }
+  }
 
   if (!m_restoringSession) {
     ensureProjectRootForPath(filePath);

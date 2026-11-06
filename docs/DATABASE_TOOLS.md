@@ -6,7 +6,7 @@ look at the results as grids, exports and column statistics.
 
 | Engine                | How Lightpad talks to it                                   |
 |-----------------------|------------------------------------------------------------|
-| SQLite                | Qt SQL (`QSQLITE`), on its own thread                      |
+| SQLite                | Native SQLite, on its own worker thread                      |
 | SQL Server            | `sqlcmd`, on this machine or inside a Docker container     |
 | PostgreSQL            | `psql`, on this machine or inside a Docker container       |
 | MySQL / MariaDB       | `mysql` / `mariadb`, on this machine or inside a container |
@@ -22,8 +22,10 @@ nothing installed on the host but Docker.
 2. Click **+** (New connection). Running database containers are listed at the
    top of the dialog; click one and the engine, container, user, database and
    (when the image was started with one) the password are filled in.
-3. **Test connection**, then **Save & Connect**.
-4. Type SQL in the console and press `Ctrl+Enter`, or open a `.sql` file and
+3. For SQLite, use **Browse…** for an existing file or **New…** to create one.
+   SQLite files can also be opened directly from the IDE's file explorer.
+4. **Test connection**, then **Save & Connect**.
+5. Type SQL in the console and press `Ctrl+Enter`, or open a `.sql` file and
    press `F9`.
 
 ## Running SQL
@@ -36,6 +38,10 @@ nothing installed on the host but Docker.
 | Editor tab | `Shift+F9` | The whole script |
 | Editor tab / console | `Ctrl+F9` | The execution plan (`EXPLAIN`, `SHOWPLAN_ALL`) |
 | Console | `Alt+Up` / `Alt+Down` | Older / newer statements from the history |
+
+The toolbar labels these actions **Run statement** (or **Run selection**) and
+**Run script**. For setup scripts containing `CREATE TABLE` followed by `INSERT`,
+choose **Run script** so the table is created before the data is inserted.
 
 The statement under the caret is highlighted lightly in the console. Statements
 are split on `;` with awareness of quotes, comments, PostgreSQL `$$ … $$`
@@ -67,8 +73,25 @@ header when you have more than one connection.
 * **Insights** — per-column profile of the result: kind, completeness (NULLs),
   distinct values, min/max, mean/median and the most frequent values.
 
-At most 10 000 rows per result are kept in memory; the grid says when a result
-was cut off.
+SQLite SQL results stop fetching after 10 000 rows (or approximately 64 MiB),
+with one additional row checked to detect more data. The total is marked unknown
+when fetching stops early. At least one row is retained so a single large value
+can still be saved. Other engines retain at most 10 000 rows per result.
+
+**Table browsing.** Double-click a table or view, or choose **Browse data…**.
+Use **Previous**, **Next**, **Reload**, and the page-size selector (25–1000 rows).
+Only one page is retained. Filtering searches the entire table; clicking a header
+sorts in the database. Both reset browsing to the first page. Page queries use a
+stable order and fetch one additional row to enable **Next**, without a mandatory
+`COUNT(*)`. Pages use SQL offsets, so deep pages may take longer and concurrent
+changes can shift rows between pages. **Count rows** remains an explicit action.
+Copy, export, and Insights use the loaded page. SQL result filters explicitly
+say **Filter loaded rows**.
+
+**Binary values.** BLOBs remain byte arrays. Double-click to inspect a bounded
+hex or UTF-8 preview and use **Save bytes…** to save the complete value. Text values
+can also be saved; very large text previews are bounded. CSV/JSON encode BLOBs
+as hex strings, and SQL exports use the engine's binary-literal syntax.
 
 ## Schema browser
 
@@ -76,12 +99,18 @@ Each connection is a tree of schemas → tables/views → columns (with types,
 `NOT NULL` and primary keys). The filter box matches table and column names.
 Right-click a table for:
 
-* **Preview data** (also double-click), **Count rows**, **Show columns**
+* **Browse data…** (also double-click), **Count rows**, **Show columns**
 * **Profile columns…** — loads up to 10 000 rows and opens Insights
 * **Generate SQL** — `SELECT` with all columns, `INSERT`/`UPDATE` templates,
-  approximate `CREATE TABLE`
+  original SQLite creation SQL (approximate `CREATE TABLE` for other engines)
 
-The tree refreshes by itself after `CREATE`/`ALTER`/`DROP`. SQL Server and
+SQLite's **Inspect structure…** opens Columns, Indexes, Foreign keys, Triggers,
+and Creation SQL tabs. Generated/hidden fields and defaults are included.
+SQLite creation SQL comes from the original schema, preserving constraints and
+expressions. Attached databases and temporary tables appear under their own
+schema names. Catalog queries are not subject to the user result-row cap.
+
+The tree refreshes by itself after `CREATE`/`ALTER`/`DROP` (and SQLite `ATTACH`/`DETACH`). SQL Server and
 PostgreSQL show the database selected in the toolbar; MySQL shows every
 database as a node.
 
@@ -105,8 +134,8 @@ keywords, functions and types. Keywords follow the case you type.
   script lands in the console for review), and a migration script that turns
   one connection's schema into another's (same engine; `DROP`s come last).
 * The core also provides inline-edit `UPDATE` generation keyed on the primary
-  key (`ResultEdit`) and SQL paging (`ResultEdit::pagedSql`); these are
-  unit-tested but not yet wired to the result grid UI.
+  key (`ResultEdit`); inline editing is not yet wired to the result grid UI.
+  Table browsing uses dedicated SQL paging in `DbCatalog::tablePageSql`.
 
 ## Safety
 
@@ -126,8 +155,10 @@ keywords, functions and types. Keywords follow the case you type.
 ## Limits worth knowing
 
 * Query cancellation stops the client process for server engines; the session
-  reconnects on the next query (transactions in flight are lost). SQLite queries
-  cannot be interrupted — the result is discarded when the query finishes.
+  reconnects on the next query (transactions in flight are lost). SQLite uses
+  native interruption and a progress callback: cancellation stops the active query
+  and skips the remaining statements in the batch. The connection stays usable.
+  SQLite may roll back an explicit write transaction when it is interrupted.
 * The clients print no column types and no distinction between `NULL` and the
   text `NULL` for SQL Server and MySQL/MariaDB (PostgreSQL uses a sentinel), so
   result values are text; sorting and Insights infer numbers from the text.
@@ -145,7 +176,7 @@ App/database/                 (no GUI, unit-tested)
   sqlstatementsplitter        splitting, classification, safety analysis
   clidialect         psql / mysql / sqlcmd: launch, framing, output parsers
   clisession         persistent client process, markers per statement, cancel
-  sqlitesession      QtSql on a worker thread
+  sqlitesession      native SQLite on a worker thread, bounded reads and interruption
   dbconnection       session + queue + schema cache + read-only guard
   databasemanager    connections, active selection, history
   dbcatalog          catalog queries, schema model, SQL templates

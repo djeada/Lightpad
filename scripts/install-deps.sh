@@ -59,6 +59,7 @@ if [[ "$(uname -s)" == "Linux" ]] && command -v apt-get >/dev/null 2>&1; then
     ninja-build
     pkg-config
     zlib1g-dev
+    libsqlite3-dev
     qt6-base-dev
     qt6-base-dev-tools
     qt6-tools-dev-tools
@@ -84,6 +85,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     pkg-config
     qt
     zlib
+    sqlite
   )
 
   echo "Installing Lightpad dependencies with Homebrew..."
@@ -100,6 +102,7 @@ Install these tools manually:
   - pkg-config
   - Ninja (recommended)
   - zlib development library
+  - SQLite development library
   - Qt 6 development packages
   - Optional: Qt6Pdf / Qt6PdfWidgets / Qt6WebEngineWidgets
 EOF

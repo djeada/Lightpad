@@ -162,8 +162,9 @@ SqlConsoleEdit::SqlConsoleEdit(QWidget *parent) : QPlainTextEdit(parent) {
   setTabStopDistance(fontMetrics().horizontalAdvance(' ') * 4);
   setLineWrapMode(QPlainTextEdit::NoWrap);
   setPlaceholderText(
-      tr("Write SQL here.  Ctrl+Enter runs the statement under the caret "
-         "(or the selection), Ctrl+Shift+Enter runs everything."));
+      tr("Write SQL here. Run statement (Ctrl+Enter) executes the current "
+         "statement or selection. Run script (Ctrl+Shift+Enter) executes "
+         "everything."));
   m_highlighter = new SqlHighlighter(document());
 
   m_completionModel = new QStandardItemModel(this);

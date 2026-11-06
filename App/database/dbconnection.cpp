@@ -4,6 +4,7 @@
 #include "sqlitesession.h"
 #include "sqlstatementsplitter.h"
 
+#include <QRegularExpression>
 #include <atomic>
 
 namespace {
@@ -86,6 +87,7 @@ void DbConnection::connectToServer(const QString &password) {
   m_password = password;
   m_hasPassword = true;
   m_schema = DbSchema();
+  m_schemaError.clear();
   m_databases.clear();
   setState(DbConnectionState::Connecting);
   createSession();
@@ -116,6 +118,7 @@ void DbConnection::disconnectFromServer() {
   m_hasActive = false;
   m_userRequestActive = false;
   m_schema = DbSchema();
+  m_schemaError.clear();
   m_databases.clear();
   m_schemaLoading = false;
   setState(DbConnectionState::Disconnected);
@@ -248,6 +251,7 @@ void DbConnection::pump() {
   if (m_active.purpose == Purpose::Schema) {
     m_schemaLoading = true;
   }
+  m_session->setMaxRows(m_active.purpose == Purpose::User ? m_maxRows : 0);
   m_session->execute(m_active.id, m_active.statements, m_active.stopOnError);
 }
 
@@ -260,7 +264,12 @@ void DbConnection::onStatementFinished(quint64 id, int index,
     if (r.ok) {
       const SqlStatementKind kind =
           SqlStatementSplitter::classify(r.sql, m_profile.engine);
-      if (kind == SqlStatementKind::Ddl) {
+      static const QRegularExpression attachment(
+          QStringLiteral("^\\s*(ATTACH|DETACH)\\b"),
+          QRegularExpression::CaseInsensitiveOption);
+      if (kind == SqlStatementKind::Ddl ||
+          attachment.match(SqlStatementSplitter::stripComments(r.sql))
+              .hasMatch()) {
         m_schemaDirty = true;
       }
     }
@@ -269,6 +278,11 @@ void DbConnection::onStatementFinished(quint64 id, int index,
   }
   if (!r.ok) {
     m_metaFailed = true;
+    if (m_active.purpose == Purpose::Schema ||
+        m_active.purpose == Purpose::SchemaDatabases) {
+      m_schemaError = r.error;
+      emit schemaError(r.error);
+    }
   } else if (!r.resultSets.isEmpty()) {
     m_metaRows = r.resultSets.first();
   }
@@ -294,9 +308,25 @@ void DbConnection::onRequestFinished(quint64 id, bool cancelled) {
   case Purpose::Schema:
     m_schemaLoading = false;
     if (!m_metaFailed) {
+      m_schemaError.clear();
       m_schema = DbCatalog::buildSchema(m_metaRows);
     }
     emit schemaLoaded();
+    break;
+  case Purpose::SchemaDatabases:
+    if (!m_metaFailed && !cancelled) {
+      QStringList schemas = DbCatalog::parseDatabaseList(m_metaRows);
+      if (!schemas.contains(QStringLiteral("temp")))
+        schemas << QStringLiteral("temp");
+      Request schema;
+      schema.id = g_nextRequestId++;
+      schema.purpose = Purpose::Schema;
+      schema.statements = {DbCatalog::sqliteSchemaQuery(schemas)};
+      enqueue(schema);
+    } else {
+      m_schemaLoading = false;
+      emit schemaLoaded();
+    }
     break;
   case Purpose::Databases:
     if (!m_metaFailed) {
@@ -338,8 +368,12 @@ void DbConnection::refreshSchema() {
   }
   Request r;
   r.id = g_nextRequestId++;
-  r.purpose = Purpose::Schema;
-  r.statements = {DbCatalog::schemaQuery(m_profile.engine)};
+  r.purpose = m_profile.engine == DbEngine::Sqlite ? Purpose::SchemaDatabases
+                                                   : Purpose::Schema;
+  r.statements = {
+      m_profile.engine == DbEngine::Sqlite
+          ? QStringLiteral("SELECT name FROM pragma_database_list ORDER BY seq")
+          : DbCatalog::schemaQuery(m_profile.engine)};
   m_schemaLoading = true;
   enqueue(r);
 }

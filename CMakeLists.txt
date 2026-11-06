@@ -16,6 +16,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(BUILD_TESTS "Build the test suite" ON)
 
 find_package(ZLIB REQUIRED)
+find_package(SQLite3 3.37 REQUIRED)
 
 # forkpty is opaque to GCC's coverage runtime. Do not let execvp flush the
 # parent's inherited counters in the child after descriptor cleanup.

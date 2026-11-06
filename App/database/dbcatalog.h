@@ -13,6 +13,8 @@ struct DbColumnInfo {
   QString type;
   bool nullable = true;
   bool primaryKey = false;
+  QString defaultValue;
+  int hidden = 0; // SQLite: 1 = hidden, 2/3 = virtual/stored generated column.
 };
 
 struct DbTableInfo {
@@ -20,6 +22,7 @@ struct DbTableInfo {
   QString name;
   bool isView = false;
   QVector<DbColumnInfo> columns;
+  QString createSql;
 
   QStringList primaryKey() const;
 };
@@ -39,6 +42,7 @@ struct DbSchema {
 namespace DbCatalog {
 
 QString schemaQuery(DbEngine engine);
+QString sqliteSchemaQuery(const QStringList &schemas);
 QString databaseListQuery(DbEngine engine);
 
 QString useDatabaseStatement(DbEngine engine, const QString &database);
@@ -50,6 +54,11 @@ QString quoteIdentifier(DbEngine engine, const QString &name);
 QString qualifiedName(DbEngine engine, const DbTableInfo &table);
 
 QString selectTopSql(DbEngine engine, const DbTableInfo &table, int limit);
+QString tablePageSql(DbEngine engine, const DbTableInfo &table, int pageSize,
+                     qint64 page, const QString &filter = {},
+                     const QString &sortColumn = {}, bool descending = false,
+                     qint64 offset = -1);
+QStringList sqliteTableDetailsQueries(const DbTableInfo &table);
 QString countSql(DbEngine engine, const DbTableInfo &table);
 QString selectColumnsSql(DbEngine engine, const DbTableInfo &table);
 QString insertTemplateSql(DbEngine engine, const DbTableInfo &table);

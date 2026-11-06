@@ -643,6 +643,7 @@ endif()
 target_link_libraries(Lightpad
     PRIVATE
     ZLIB::ZLIB
+    SQLite::SQLite3
     lightpad_git_ui
     Qt6::Core
     Qt6::Gui

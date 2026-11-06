@@ -71,14 +71,19 @@ ConnectionDialog::ConnectionDialog(QWidget *parent) : StyledDialog(parent) {
           &ConnectionDialog::onCredentials);
   buildUi();
   onEngineChanged();
-  refreshContainers();
 
-  const QScreen *screen = QGuiApplication::primaryScreen();
+  fitToContents();
+}
+
+void ConnectionDialog::fitToContents() {
+  m_body->layout()->activate();
+  const QScreen *display = screen();
   const int maxHeight =
-      screen ? screen->availableGeometry().height() * 90 / 100 : 800;
-
-  const int wanted = m_body->sizeHint().height() + 230;
-  resize(680, qMin(qMax(wanted, 620), maxHeight));
+      display ? display->availableGeometry().height() * 90 / 100 : 800;
+  const auto engine = static_cast<DbEngine>(m_engine->currentData().toInt());
+  const int minimum = DbEngineInfo::usesFile(engine) ? 380 : 620;
+  resize(qMax(width(), 680),
+         qMin(qMax(m_body->sizeHint().height() + 220, minimum), maxHeight));
 }
 
 void ConnectionDialog::buildUi() {
@@ -167,6 +172,7 @@ void ConnectionDialog::buildUi() {
   for (DbEngine e : DbEngineInfo::allEngines()) {
     m_engine->addItem(DbEngineInfo::displayName(e), int(e));
   }
+  m_engine->setCurrentIndex(m_engine->findData(int(DbEngine::Sqlite)));
   m_form->addRow(tr("Database type"), m_engine);
 
   m_direct = new QRadioButton(tr("Direct (client on this machine)"), formHost);
@@ -217,9 +223,14 @@ void ConnectionDialog::buildUi() {
   m_form->addRow(tr("Database"), m_database);
 
   m_file = new QLineEdit(formHost);
+  m_file->setObjectName("dbSqliteFile");
   m_file->setPlaceholderText(tr("path to a .db / .sqlite file"));
   m_browse = new QPushButton(tr("Browse…"), formHost);
+  m_browse->setObjectName("dbBrowseSqliteFile");
+  m_browse->setToolTip(tr("Open an existing SQLite database"));
   m_newFile = new QPushButton(tr("New…"), formHost);
+  m_newFile->setObjectName("dbNewSqliteFile");
+  m_newFile->setToolTip(tr("Create a new SQLite database file"));
   auto *fileRow = new QHBoxLayout();
   fileRow->addWidget(m_file, 1);
   fileRow->addWidget(m_browse);
@@ -337,6 +348,7 @@ void ConnectionDialog::setProfile(const DbConnectionProfile &p) {
   m_color->setCurrentIndex(colorIndex >= 0 ? colorIndex : 0);
   m_settingProfile = false;
   updateVisibility();
+  fitToContents();
 }
 
 DbConnectionProfile ConnectionDialog::profile() const {
@@ -403,6 +415,8 @@ void ConnectionDialog::onEngineChanged() {
       tr("default: %1").arg(DbEngineInfo::clientName(engine)));
   updateVisibility();
   updateAutoName();
+  if (isVisible())
+    fitToContents();
 }
 
 void ConnectionDialog::onTransportChanged() {
@@ -431,6 +445,14 @@ void ConnectionDialog::updateVisibility() {
   show(m_clientPath, server);
   show(m_extraArgs, server);
   m_dockerBox->setVisible(server);
+  if (auto *subtitle = findChild<QLabel *>("dbDialogSubtitle")) {
+    subtitle->setText(
+        file ? tr("Open an existing SQLite file, or create a new database.")
+             : tr("Connect to a database server directly or inside a Docker "
+                  "container."));
+  }
+  if (server && !m_discoveryStarted)
+    refreshContainers();
   if (file && m_docker->isChecked()) {
     m_direct->setChecked(true);
   }
@@ -459,6 +481,7 @@ void ConnectionDialog::updateAutoName() {
 }
 
 void ConnectionDialog::refreshContainers() {
+  m_discoveryStarted = true;
   m_dockerStatus->setText(tr("Looking for database containers…"));
   m_discovery->refresh();
 }
