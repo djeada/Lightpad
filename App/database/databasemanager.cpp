@@ -132,7 +132,8 @@ void DatabaseManager::recordHistory(const DbConnection *conn,
   e.error = r.error;
   e.elapsedMs = r.elapsedMs;
   if (!r.resultSets.isEmpty()) {
-    e.rows = r.resultSets.first().totalRows;
+    const auto &result = r.resultSets.first();
+    e.rows = result.totalRowsKnown ? result.totalRows : result.rows.size();
   } else {
     e.rows = r.rowsAffected;
   }

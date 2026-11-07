@@ -64,7 +64,6 @@ bool isDefaultSchema(const QString &schema) {
          schema == QLatin1String("main") || schema.isEmpty();
 }
 
-constexpr int kPreviewRows = 200;
 constexpr int kTypeRole = Qt::UserRole + 6;
 
 class SchemaTreeDelegate : public QStyledItemDelegate {
@@ -156,10 +155,26 @@ void DatabasePanel::buildUi() {
   auto *leftLayout = new QVBoxLayout(left);
   leftLayout->setContentsMargins(0, 0, 0, 0);
   leftLayout->setSpacing(0);
+  auto *browserHeader = new QWidget(left);
+  browserHeader->setObjectName("dbBrowserHeader");
+  auto *browserHeading = new QHBoxLayout(browserHeader);
+  browserHeading->setContentsMargins(10, 6, 6, 6);
+  auto *browserTitle = new QLabel(tr("Database browser"), browserHeader);
+  QFont headingFont = browserTitle->font();
+  headingFont.setBold(true);
+  browserTitle->setFont(headingFont);
+  browserHeading->addWidget(browserTitle, 1);
+  auto *addConnection = new QToolButton(browserHeader);
+  addConnection->setDefaultAction(m_addAction);
+  addConnection->setToolButtonStyle(Qt::ToolButtonIconOnly);
+  addConnection->setAutoRaise(true);
+  browserHeading->addWidget(addConnection);
+  leftLayout->addWidget(browserHeader);
   m_filter = new QLineEdit(left);
   m_filter->setObjectName("dbFilter");
-  m_filter->setPlaceholderText(tr("Filter tables and columns…"));
+  m_filter->setPlaceholderText(tr("Find a table or column…"));
   m_filter->setClearButtonEnabled(true);
+  m_filter->setAccessibleName(tr("Find a table or column"));
   leftLayout->addWidget(m_filter);
 
   m_tree = new QTreeWidget(left);
@@ -200,19 +215,22 @@ void DatabasePanel::buildUi() {
   m_outputTabs->setDocumentMode(true);
 
   m_resultStack = new QStackedWidget(m_outputTabs);
-  m_resultsEmpty =
-      new QLabel(tr("Run a query to see its results here.\n\nCtrl+Enter runs "
-                    "the statement under the caret, "
-                    "Ctrl+Shift+Enter runs everything.\nIn any .sql file, F9 "
-                    "runs the statement and Shift+F9 the whole script."),
-                 m_resultStack);
+  m_resultsEmpty = new QLabel(
+      tr("Browse a table or run a query\n\n"
+         "Add a connection, then double-click a table to browse its rows.\n"
+         "Ctrl+Enter runs SQL in the console · F9 runs SQL from an editor."),
+      m_resultStack);
   m_resultsEmpty->setAlignment(Qt::AlignCenter);
+  m_resultsEmpty->setWordWrap(true);
+  m_resultsEmpty->setContentsMargins(24, 24, 24, 24);
   m_resultsEmpty->setObjectName("dbResultsEmpty");
   m_resultTabs = new QTabWidget(m_resultStack);
   m_resultTabs->setObjectName("dbResultTabs");
   m_resultTabs->setTabsClosable(true);
   m_resultTabs->setDocumentMode(true);
   m_resultTabs->setMovable(true);
+  m_resultTabs->setElideMode(Qt::ElideRight);
+  m_resultTabs->setUsesScrollButtons(true);
   m_resultStack->addWidget(m_resultsEmpty);
   m_resultStack->addWidget(m_resultTabs);
   m_outputTabs->addTab(m_resultStack, tr("Results"));
@@ -250,8 +268,12 @@ void DatabasePanel::buildUi() {
   sl->addWidget(m_runningLabel);
   root->addWidget(statusBar);
 
+  m_schemaFilterTimer.setSingleShot(true);
+  m_schemaFilterTimer.setInterval(150);
   connect(m_filter, &QLineEdit::textChanged, this,
-          &DatabasePanel::onFilterChanged);
+          [this] { m_schemaFilterTimer.start(); });
+  connect(&m_schemaFilterTimer, &QTimer::timeout, this,
+          [this] { onFilterChanged(m_filter->text()); });
   connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
           &DatabasePanel::onTreeDoubleClicked);
   connect(m_tree, &QTreeWidget::customContextMenuRequested, this,
@@ -264,6 +286,11 @@ void DatabasePanel::buildUi() {
           &DatabasePanel::runStatement);
   connect(m_console, &SqlConsoleEdit::runScriptRequested, this,
           &DatabasePanel::runScript);
+  connect(m_console, &QPlainTextEdit::selectionChanged, this, [this]() {
+    m_runAction->setText(m_console->textCursor().hasSelection()
+                             ? tr("Run selection")
+                             : tr("Run statement"));
+  });
   connect(m_console, &SqlConsoleEdit::historyStep, this, [this](int direction) {
     DbConnection *c = activeConnection();
     const auto entries = m_manager->history().search(
@@ -321,7 +348,11 @@ void DatabasePanel::buildToolbar() {
   m_connectionCombo = new QComboBox(m_toolbar);
   m_connectionCombo->setObjectName("dbConnectionCombo");
   m_connectionCombo->setMinimumWidth(190);
-  m_connectionCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+  m_connectionCombo->setSizeAdjustPolicy(
+      QComboBox::AdjustToMinimumContentsLengthWithIcon);
+  m_connectionCombo->setMinimumContentsLength(18);
+  m_connectionCombo->setMaximumWidth(280);
+  m_connectionCombo->setAccessibleName(tr("Active database connection"));
   m_connectionCombo->setToolTip(tr("Connection that queries run against"));
   m_toolbar->addWidget(m_connectionCombo);
 
@@ -347,11 +378,19 @@ void DatabasePanel::buildToolbar() {
   m_databaseComboAction = m_toolbar->addWidget(m_databaseCombo);
   m_toolbar->addSeparator();
 
-  m_runAction = m_toolbar->addAction(tr("Run"));
+  m_runAction = m_toolbar->addAction(tr("Run statement"));
+  m_runAction->setObjectName("dbRunStatement");
   m_runAction->setToolTip(
       tr("Run the statement under the caret or the selection (Ctrl+Enter)"));
-  m_runAllAction = m_toolbar->addAction(tr("Run all"));
+  m_runAllAction = m_toolbar->addAction(tr("Run script"));
+  m_runAllAction->setObjectName("dbRunScript");
   m_runAllAction->setToolTip(tr("Run the whole script (Ctrl+Shift+Enter)"));
+  for (QAction *action : {m_runAction, m_runAllAction}) {
+    if (auto *button =
+            qobject_cast<QToolButton *>(m_toolbar->widgetForAction(action))) {
+      button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    }
+  }
   m_stopAction = m_toolbar->addAction(tr("Stop"));
   m_stopAction->setToolTip(tr("Cancel the running query"));
   m_explainAction = m_toolbar->addAction(tr("Explain"));
@@ -478,6 +517,9 @@ void DatabasePanel::applyTheme(const Theme &theme) {
           "1px solid %3;"
           "  selection-background-color: %8; selection-color: %6; outline: "
           "none; }"
+          "QWidget#dbBrowserHeader { background: %2; color: %6; border-bottom: "
+          "1px solid %3; }"
+          "QWidget#dbBrowserHeader QLabel { color: %6; }"
           "QWidget#dbBrowser { background: %1; border-right: 1px solid %3; }"
           "QLineEdit#dbFilter { background: %1; color: %6; border: none; "
           "border-bottom: 1px solid %3;"
@@ -583,6 +625,14 @@ void DatabasePanel::hookConnection(DbConnection *conn) {
     return;
   }
   m_hooked.insert(conn->profile().id);
+  connect(conn, &DbConnection::schemaError, this,
+          [this, conn](const QString &message) {
+            logMessage(
+                tr("Could not load the schema of %1").arg(conn->profile().name),
+                true, message);
+            setStatus(
+                tr("Schema refresh failed · %1").arg(conn->profile().name));
+          });
   connect(conn, &DbConnection::requestStarted, this, [this, conn](quint64 id) {
     if (m_pendingRun.conn == conn) {
       m_pendingRun.id = id;
@@ -884,7 +934,7 @@ void DatabasePanel::refreshToolbar() {
   m_stopAction->setEnabled(running);
   m_explainAction->setEnabled(c && !running);
   m_refreshAction->setEnabled(c);
-  m_manageAction->setEnabled(true);
+  m_manageAction->setEnabled(c != nullptr);
 }
 
 bool DatabasePanel::isRunning() const {
@@ -959,12 +1009,20 @@ void DatabasePanel::populateColumns(QTreeWidgetItem *tableItem) {
   const QColor muted = UIStyleHelper::mutedTextColor(m_theme);
   const QColor accent =
       m_theme.warningColor.isValid() ? m_theme.warningColor : text;
+  const QString filter = m_filter->text().trimmed();
+  const bool matchingColumnsOnly =
+      !filter.isEmpty() && !table->name.contains(filter, Qt::CaseInsensitive);
   for (const DbColumnInfo &col : table->columns) {
+    if (matchingColumnsOnly && !col.name.contains(filter, Qt::CaseInsensitive))
+      continue;
     auto *item = new QTreeWidgetItem(tableItem);
     item->setText(0, col.name);
     item->setData(
         0, kTypeRole,
-        col.type + (col.nullable ? QString() : QStringLiteral("  NOT NULL")));
+        col.type + (col.nullable ? QString() : QStringLiteral("  NOT NULL")) +
+            (col.hidden >= 2   ? tr("  generated")
+             : col.hidden == 1 ? tr("  hidden")
+                               : QString()));
     item->setIcon(0, DbGlyphs::icon(col.primaryKey ? DbGlyphs::Glyph::Key
                                                    : DbGlyphs::Glyph::Column,
                                     col.primaryKey ? accent : muted));
@@ -972,6 +1030,10 @@ void DatabasePanel::populateColumns(QTreeWidgetItem *tableItem) {
     item->setData(0, RoleConnection, conn->profile().id);
     item->setData(0, RoleSchema, table->schema);
     item->setData(0, RoleName, col.name);
+    item->setData(
+        0, Qt::UserRole + 5,
+        QStringLiteral("c:%1:%2:%3:%4")
+            .arg(conn->profile().id, table->schema, table->name, col.name));
     item->setToolTip(
         0, QStringLiteral("%1 %2%3%4")
                .arg(col.name, col.type,
@@ -1015,6 +1077,13 @@ void DatabasePanel::populateConnectionItem(QTreeWidgetItem *item,
   }
 
   const DbSchema &schema = conn->schema();
+  if (!conn->lastSchemaError().isEmpty()) {
+    auto *error = hint(tr("Schema refresh failed"),
+                       stateColor(DbConnectionState::Failed));
+    error->setToolTip(0, conn->lastSchemaError());
+    if (schema.isEmpty())
+      return;
+  }
   if (schema.isEmpty()) {
     hint(conn->schemaLoading() ? tr("Loading schema…") : tr("No tables"),
          muted);
@@ -1079,8 +1148,9 @@ void DatabasePanel::populateConnectionItem(QTreeWidgetItem *item,
     for (const DbTableInfo *t : visible) {
       QTreeWidgetItem *ti = addTableItem(parent, conn, *t);
       ++shown;
-      if (!filter.isEmpty()) {
-        Q_UNUSED(ti)
+      if (!filter.isEmpty() && !t->name.contains(filter, Qt::CaseInsensitive)) {
+        populateColumns(ti);
+        ti->setExpanded(true);
       } else if (m_expanded.contains(itemKey(ti))) {
         ti->setExpanded(true);
         populateColumns(ti);
@@ -1119,8 +1189,7 @@ void DatabasePanel::rebuildTree() {
     empty->setForeground(0, muted);
     empty->setData(0, RoleKind, KindHint);
     auto *add = new QTreeWidgetItem(m_tree);
-    add->setText(0,
-                 tr("Click + to add SQLite, SQL Server, PostgreSQL or MySQL"));
+    add->setText(0, tr("Add a connection to get started"));
     add->setForeground(0, muted);
     add->setData(0, RoleKind, KindHint);
   }
@@ -1196,12 +1265,11 @@ void DatabasePanel::onTreeDoubleClicked(QTreeWidgetItem *item, int) {
   DbConnection *conn = connectionFromItem(item);
   switch (item->data(0, RoleKind).toInt()) {
   case KindConnection:
-    m_manager->setActive(conn->profile().id);
-    if (conn->isConnected()) {
+    if (conn->isConnected())
       item->setExpanded(!item->isExpanded());
-    } else {
+    m_manager->setActive(conn->profile().id);
+    if (!conn->isConnected())
       connectConnection(conn->profile().id);
-    }
     break;
   case KindHint:
     if (conn && !conn->isConnected()) {
@@ -1211,8 +1279,9 @@ void DatabasePanel::onTreeDoubleClicked(QTreeWidgetItem *item, int) {
     break;
   case KindTable:
     if (const DbTableInfo *t = tableFromItem(item)) {
+      const DbTableInfo table = *t;
       m_manager->setActive(conn->profile().id);
-      previewTable(conn, *t);
+      previewTable(conn, table);
     }
     break;
   case KindColumn: {
@@ -1294,11 +1363,19 @@ void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
       return;
     }
     const DbTableInfo table = *t;
-    menu.addAction(tr("Preview data (%1 rows)").arg(kPreviewRows), this,
+    menu.addAction(tr("Browse data…"), this,
                    [this, c, table]() { previewTable(c, table); });
     menu.addAction(tr("Count rows"), this, [this, c, table]() {
       execute(c, {DbCatalog::countSql(c->profile().engine, table)}, true);
     });
+    if (c->profile().engine == DbEngine::Sqlite) {
+      menu.addAction(tr("Inspect structure…"), this, [this, c, table] {
+        execute(c, DbCatalog::sqliteTableDetailsQueries(table), false,
+                table.name, false, false, nullptr,
+                {tr("Columns"), tr("Indexes"), tr("Foreign keys"),
+                 tr("Triggers"), tr("Creation SQL")});
+      });
+    }
     menu.addAction(tr("Show columns"), this,
                    [this, c, table]() { showTableColumns(c, table); });
     menu.addAction(tr("Profile columns…"), this, [this, c, table]() {
@@ -1311,8 +1388,9 @@ void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
           QStringLiteral("update"), QStringLiteral("create")}) {
       const QString label = what == "select"   ? tr("SELECT columns")
                             : what == "insert" ? tr("INSERT template")
-                            : what == "update"
-                                ? tr("UPDATE template")
+                            : what == "update" ? tr("UPDATE template")
+                            : c->profile().engine == DbEngine::Sqlite
+                                ? tr("Creation SQL")
                                 : tr("CREATE TABLE (approximation)");
       gen->addAction(label, this,
                      [this, c, table, what]() { generateSql(c, table, what); });
@@ -1349,23 +1427,79 @@ void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
 }
 
 void DatabasePanel::previewTable(DbConnection *conn, const DbTableInfo &table) {
-  execute(
-      conn,
-      {DbCatalog::selectTopSql(conn->profile().engine, table, kPreviewRows)},
-      true, DbCatalog::qualifiedName(conn->profile().engine, table));
+  if (m_activeRunByConnection.contains(conn->profile().id)) {
+    setStatus(tr("Stop the running query before opening a table."));
+    return;
+  }
+  clearResults();
+  DbResultSet empty;
+  for (const auto &column : table.columns) {
+    if (column.hidden != 1)
+      empty.columns.append({column.name, column.type});
+  }
+  Run run;
+  run.engine = conn->profile().engine;
+  run.tableName =
+      table.schema.isEmpty() ? table.name : table.schema + "." + table.name;
+  addResultTab(empty, run, run.tableName, -1);
+  auto *view = qobject_cast<DbResultView *>(m_resultTabs->widget(0));
+  view->configureTableBrowser(table, run.engine);
+  m_resultTabs->setTabToolTip(
+      0, tr("%1 · %2").arg(conn->profile().name,
+                           DbCatalog::qualifiedName(run.engine, table)));
+  const QPointer<DbConnection> connection(conn);
+  connect(view, &DbResultView::pageRequested, this,
+          [this, view, connection, name = run.tableName] {
+            if (!connection) {
+              view->setPageError(tr("This connection was removed. Open the "
+                                    "table again from a connection."));
+              view->setLoading(false);
+            } else if (execute(connection, {view->pageSql()}, true, name, false,
+                               false, view) == 0) {
+              view->setPageError(tr("Could not load this page. Finish the "
+                                    "running query, then reload."));
+              view->setLoading(false);
+            }
+          });
+  view->reloadPage();
+}
+
+void DatabasePanel::openSqliteFile(const QString &path) {
+  const QString absolute = QFileInfo(path).absoluteFilePath();
+  for (auto *connection : m_manager->connections()) {
+    if (connection->profile().engine == DbEngine::Sqlite &&
+        QFileInfo(connection->profile().filePath).absoluteFilePath() ==
+            absolute) {
+      m_manager->setActive(connection->profile().id);
+      connectConnection(connection->profile().id, false);
+      return;
+    }
+  }
+  DbConnectionProfile profile;
+  profile.name = m_manager->uniqueName(QFileInfo(path).completeBaseName());
+  profile.engine = DbEngine::Sqlite;
+  profile.filePath = absolute;
+  const QString id = m_manager->saveProfile(profile);
+  m_manager->setActive(id);
+  connectConnection(id, false);
 }
 
 void DatabasePanel::showTableColumns(DbConnection *conn,
                                      const DbTableInfo &table) {
   DbResultSet rs;
-  rs.columns = {{QStringLiteral("column"), {}},
-                {QStringLiteral("type"), {}},
-                {QStringLiteral("nullable"), {}},
-                {QStringLiteral("key"), {}}};
+  rs.columns = {
+      {QStringLiteral("column"), {}},   {QStringLiteral("type"), {}},
+      {QStringLiteral("nullable"), {}}, {QStringLiteral("key"), {}},
+      {QStringLiteral("default"), {}},  {QStringLiteral("extra"), {}}};
   for (const DbColumnInfo &c : table.columns) {
     rs.rows.append({c.name, c.type,
                     c.nullable ? QStringLiteral("YES") : QStringLiteral("NO"),
-                    c.primaryKey ? QStringLiteral("PRIMARY KEY") : QString()});
+                    c.primaryKey ? QStringLiteral("PRIMARY KEY") : QString(),
+                    c.defaultValue,
+                    c.hidden == 1   ? tr("hidden")
+                    : c.hidden == 2 ? tr("generated (virtual)")
+                    : c.hidden == 3 ? tr("generated (stored)")
+                                    : QString()});
   }
   rs.totalRows = rs.rows.size();
   clearResults();
@@ -1485,7 +1619,9 @@ bool DatabasePanel::confirmStatements(DbConnection *conn,
 quint64 DatabasePanel::execute(DbConnection *conn,
                                const QStringList &statementsIn,
                                bool stopOnError, const QString &tableName,
-                               bool profileAfter, bool explain) {
+                               bool profileAfter, bool explain,
+                               DbResultView *resultView,
+                               const QStringList &resultTitles) {
   QStringList statements;
   for (const QString &s : statementsIn) {
     if (!SqlStatementSplitter::stripComments(s).trimmed().isEmpty()) {
@@ -1513,8 +1649,10 @@ quint64 DatabasePanel::execute(DbConnection *conn,
     return 0;
   }
   hookConnection(conn);
-  clearResults();
-  lintStatements(conn, statements);
+  if (!resultView)
+    clearResults();
+  if (!resultView && resultTitles.isEmpty())
+    lintStatements(conn, statements);
 
   m_pendingRun = Run();
   m_pendingRun.conn = conn;
@@ -1524,6 +1662,9 @@ quint64 DatabasePanel::execute(DbConnection *conn,
   m_pendingRun.profileAfter = profileAfter;
   m_pendingRun.explain = explain;
   m_pendingRun.statements = statements.size();
+  m_pendingRun.resultView = resultView;
+  m_pendingRun.browsing = resultView != nullptr;
+  m_pendingRun.resultTitles = resultTitles;
   m_pendingRun.timer.start();
 
   const QString header =
@@ -1579,10 +1720,14 @@ void DatabasePanel::onStatementFinished(DbConnection *conn, quint64 id,
   Run &run = it.value();
   ++run.finished;
   run.elapsedMs += r.elapsedMs;
-  m_manager->recordHistory(conn, r);
+  if (!run.browsing)
+    m_manager->recordHistory(conn, r);
 
   if (!r.ok) {
     ++run.errors;
+    if (run.resultView)
+      run.resultView->setPageError(
+          tr("Could not load this page.\n%1").arg(r.error));
     logMessage(tr("Failed after %1 · %2")
                    .arg(formatDuration(r.elapsedMs), oneLine(r.sql, 100)),
                true, r.error);
@@ -1593,7 +1738,6 @@ void DatabasePanel::onStatementFinished(DbConnection *conn, quint64 id,
     for (const DbResultSet &rs : r.resultSets) {
       ++part;
       ++run.results;
-      run.rows += rs.totalRows;
       QString title = run.explain ? tr("Plan") : QString();
       if (title.isEmpty()) {
         title = run.tableName.isEmpty() || run.statements != 1
@@ -1603,10 +1747,27 @@ void DatabasePanel::onStatementFinished(DbConnection *conn, quint64 id,
           title = tr("Statement %1.%2").arg(index + 1).arg(part);
         }
       }
-      addResultTab(rs, run, title, r.elapsedMs);
+      if (run.browsing) {
+        if (run.resultView) {
+          run.resultView->setPageResult(rs, r.elapsedMs);
+          run.rows += run.resultView->result().rows.size();
+          const int tab = m_resultTabs->indexOf(run.resultView);
+          if (tab >= 0)
+            m_resultTabs->setTabText(tab, run.tableName);
+        }
+      } else {
+        run.rows += rs.rows.size();
+        if (index < run.resultTitles.size())
+          title = run.resultTitles[index];
+        addResultTab(rs, run, title, r.elapsedMs);
+      }
     }
-    logMessage(tr("%1 row(s) in %2 · %3")
-                   .arg(r.resultSets.first().totalRows)
+    logMessage(tr("%1 row(s)%2 in %3 · %4")
+                   .arg(run.browsing && run.resultView
+                            ? run.resultView->result().rows.size()
+                            : r.resultSets.first().rows.size())
+                   .arg(r.resultSets.first().truncated ? tr(" loaded (limited)")
+                                                       : QString())
                    .arg(formatDuration(r.elapsedMs), oneLine(r.sql, 100)),
                false, r.messages.join('\n'));
   } else {
@@ -1635,12 +1796,22 @@ void DatabasePanel::onRequestFinished(DbConnection *conn, quint64 id,
     m_runningLabel->clear();
   }
 
+  if (run.resultView) {
+    if (cancelled)
+      run.resultView->setPageError(
+          tr("Page loading cancelled. Reload to try again."));
+    run.resultView->setLoading(false);
+  }
   const qint64 total = run.timer.elapsed();
   QString summary;
   if (cancelled) {
     summary = tr("Cancelled after %1").arg(formatDuration(total));
-    logMessage(summary + tr(" — the session will reconnect on the next query."),
-               true);
+    logMessage(
+        summary +
+            (run.engine == DbEngine::Sqlite
+                 ? QString()
+                 : tr(" — the session will reconnect on the next query.")),
+        true);
   } else if (run.errors > 0) {
     summary = tr("Finished with %n error(s) in %1", nullptr, run.errors)
                   .arg(formatDuration(total));

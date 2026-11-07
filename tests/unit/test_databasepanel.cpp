@@ -5,9 +5,12 @@
 #include "ui/panels/dbresultview.h"
 #include "ui/panels/sqlconsoleedit.h"
 
+#include <QClipboard>
 #include <QFile>
-#include <QSqlDatabase>
+#include <QHeaderView>
+#include <QMenu>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QtTest/QtTest>
 
 namespace {
@@ -63,6 +66,10 @@ private slots:
   void resultViewCopiesSelectionInFormats();
   void resultViewExportsVisibleRowsToFile();
   void resultViewReportsTruncation();
+  void resultViewSavesBlobBytes();
+  void panelBrowsesPagesAndFiltersWholeTable();
+  void panelInspectsSqliteStructure();
+  void panelOpensSqliteFileOnce();
 
   void insightsListsEveryColumn();
 
@@ -71,6 +78,7 @@ private slots:
   void consoleHistoryShortcut();
 
   void panelRunsScriptAndShowsResults();
+  void panelRunScriptExecutesCitySetup();
   void panelSurfacesErrorsInMessages();
   void panelBuildsSchemaTreeAndFilters();
   void panelRunsFromEditorWithConnectionDirective();
@@ -168,6 +176,10 @@ void TestDatabasePanel::resultViewExportsVisibleRowsToFile() {
   QFile g(path);
   QVERIFY(g.open(QIODevice::ReadOnly));
   QCOMPARE(QString::fromUtf8(g.readAll()), QString("name\n"));
+  QVERIFY(QMetaObject::invokeMethod(
+      &view, "copyAs", Qt::DirectConnection,
+      Q_ARG(ResultExporter::Format, ResultExporter::Format::Csv)));
+  QCOMPARE(QApplication::clipboard()->text(), QString("name\n"));
   QVERIFY(!view.exportToFile(dir.filePath("missing/dir/out.csv"),
                              ResultExporter::Format::Csv));
 }
@@ -298,9 +310,6 @@ QStringList treeTexts(QTreeWidget *tree) {
 } // namespace
 
 void TestDatabasePanel::panelRunsScriptAndShowsResults() {
-  if (!QSqlDatabase::isDriverAvailable("QSQLITE")) {
-    QSKIP("Qt SQLite driver not installed");
-  }
   PanelFixture fx;
   QVERIFY(fx.init());
   QVERIFY(fx.connectPanel());
@@ -323,10 +332,74 @@ void TestDatabasePanel::panelRunsScriptAndShowsResults() {
   QCOMPARE(fx.panel->insights()->table()->rowCount(), 2);
 }
 
+void TestDatabasePanel::panelRunScriptExecutesCitySetup() {
+  PanelFixture fx;
+  QVERIFY(fx.init());
+  QVERIFY(fx.connectPanel());
+  const QString script = QStringLiteral(R"SQL(DROP TABLE IF EXISTS CITY;
+CREATE TABLE CITY (
+    ID INTEGER PRIMARY KEY,
+    NAME VARCHAR(50),
+    COUNTRYCODE CHAR(3),
+    DISTRICT VARCHAR(30),
+    POPULATION INTEGER
+);
+INSERT INTO CITY VALUES
+    (1, 'Oakland', 'USA', 'California', 110000),
+    (2, 'Fresno', 'USA', 'California', 130001),
+    (3, 'Salinas', 'USA', 'California', 100000),
+    (4, 'Concord', 'USA', 'California', 120000),
+    (5, 'Albany', 'USA', 'New York', 90000),
+    (1661, 'Tokyo', 'JPN', 'Tokyo', 8310000),
+    (1662, 'Osaka', 'JPN', 'Osaka', 2600000),
+    (6, 'Cairo', 'EGY', 'Cairo', 9000000),
+    (7, 'Nairobi', 'KEN', 'Nairobi', 3500000),
+    (8, 'Paris', 'FRA', 'Ile-de-France', 2200000),
+    (9, 'Sydney', 'AUS', 'New South Wales', 5000000);)SQL");
+  fx.panel->setConsoleText(script);
+  fx.panel->console()->moveCursor(QTextCursor::End);
+  auto *toolbar = fx.panel->findChild<QToolBar *>("dbToolbar");
+  auto *statementAction = fx.panel->findChild<QAction *>("dbRunStatement");
+  auto *scriptAction = fx.panel->findChild<QAction *>("dbRunScript");
+  QVERIFY(toolbar && statementAction && scriptAction);
+  auto *statementButton =
+      qobject_cast<QToolButton *>(toolbar->widgetForAction(statementAction));
+  auto *scriptButton =
+      qobject_cast<QToolButton *>(toolbar->widgetForAction(scriptAction));
+  QVERIFY(statementButton && scriptButton);
+
+  // Running the statement at the caret reproduces the missing-table error.
+  QTest::mouseClick(statementButton, Qt::LeftButton);
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() &&
+           fx.panel->messages()->toPlainText().contains("no such table: CITY");
+  }));
+  QVERIFY(!fx.manager->activeConnection()->schema().findByName("CITY"));
+
+  // Run script must include setup statements even when only INSERT is selected.
+  QTextCursor cursor = fx.panel->console()->textCursor();
+  cursor.setPosition(script.indexOf("INSERT INTO"));
+  cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+  fx.panel->console()->setTextCursor(cursor);
+  QCOMPARE(statementButton->text(), QString("Run selection"));
+  QTest::mouseClick(scriptButton, Qt::LeftButton);
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() &&
+           fx.manager->activeConnection()->schema().findByName("CITY");
+  }));
+  fx.panel->runSql(
+      "SELECT COUNT(*) FROM CITY; SELECT NAME FROM CITY WHERE ID = 1661;");
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() && fx.panel->resultTabs()->count() == 2;
+  }));
+  auto *count = qobject_cast<DbResultView *>(fx.panel->resultTabs()->widget(0));
+  auto *city = qobject_cast<DbResultView *>(fx.panel->resultTabs()->widget(1));
+  QVERIFY(count && city);
+  QCOMPARE(count->result().rows[0][0].toInt(), 11);
+  QCOMPARE(city->result().rows[0][0].toString(), QString("Tokyo"));
+}
+
 void TestDatabasePanel::panelSurfacesErrorsInMessages() {
-  if (!QSqlDatabase::isDriverAvailable("QSQLITE")) {
-    QSKIP("Qt SQLite driver not installed");
-  }
   PanelFixture fx;
   QVERIFY(fx.init());
   QVERIFY(fx.connectPanel());
@@ -341,9 +414,6 @@ void TestDatabasePanel::panelSurfacesErrorsInMessages() {
 }
 
 void TestDatabasePanel::panelBuildsSchemaTreeAndFilters() {
-  if (!QSqlDatabase::isDriverAvailable("QSQLITE")) {
-    QSKIP("Qt SQLite driver not installed");
-  }
   PanelFixture fx;
   QVERIFY(fx.init());
   QVERIFY(fx.connectPanel());
@@ -372,9 +442,6 @@ void TestDatabasePanel::panelBuildsSchemaTreeAndFilters() {
 }
 
 void TestDatabasePanel::panelRunsFromEditorWithConnectionDirective() {
-  if (!QSqlDatabase::isDriverAvailable("QSQLITE")) {
-    QSKIP("Qt SQLite driver not installed");
-  }
   PanelFixture fx;
   QVERIFY(fx.init());
 
@@ -421,9 +488,6 @@ void TestDatabasePanel::panelRunsFromEditorWithConnectionDirective() {
 }
 
 void TestDatabasePanel::panelRecordsHistory() {
-  if (!QSqlDatabase::isDriverAvailable("QSQLITE")) {
-    QSKIP("Qt SQLite driver not installed");
-  }
   PanelFixture fx;
   QVERIFY(fx.init());
   QVERIFY(fx.connectPanel());
@@ -446,9 +510,6 @@ void TestDatabasePanel::panelRecordsHistory() {
 }
 
 void TestDatabasePanel::panelReadOnlyConnectionRefusesWrites() {
-  if (!QSqlDatabase::isDriverAvailable("QSQLITE")) {
-    QSKIP("Qt SQLite driver not installed");
-  }
   PanelFixture fx;
   QVERIFY(fx.init(true));
   QVERIFY(fx.connectPanel());
@@ -458,6 +519,188 @@ void TestDatabasePanel::panelReadOnlyConnectionRefusesWrites() {
   }));
   fx.panel->runSql("SELECT 1");
   QVERIFY(waitUntil([&]() { return fx.panel->resultTabs()->count() == 1; }));
+}
+
+void TestDatabasePanel::resultViewSavesBlobBytes() {
+  QTemporaryDir dir;
+  DbResultView view;
+  view.applyTheme(testTheme());
+  const QByteArray bytes = QByteArray::fromHex("000102ff000a");
+  view.setResult(makeResult({"payload"}, {{bytes}}), DbEngine::Sqlite, "items");
+  QCOMPARE(
+      view.model()->index(0, 0).data(DbResultModel::RawValueRole).toByteArray(),
+      bytes);
+  QVERIFY(view.model()->index(0, 0).data().toString().contains("BLOB"));
+  QVERIFY(
+      view.saveCellValue(view.proxy()->index(0, 0), dir.filePath("value.bin")));
+  QFile file(dir.filePath("value.bin"));
+  QVERIFY(file.open(QIODevice::ReadOnly));
+  QCOMPARE(file.readAll(), bytes);
+  view.table()->selectAll();
+  QVERIFY(view.selectionAs(ResultExporter::Format::SqlInsert, true)
+              .contains("X'000102ff000a'"));
+  QVERIFY(view.selectionAs(ResultExporter::Format::Json, true)
+              .contains("0x000102ff000a"));
+  QVERIFY(QMetaObject::invokeMethod(
+      &view, "showCellValue", Q_ARG(QModelIndex, view.proxy()->index(0, 0))));
+  auto *tabs = view.findChild<QTabWidget *>();
+  QVERIFY(tabs);
+  QCOMPARE(tabs->count(), 2);
+}
+
+void TestDatabasePanel::panelBrowsesPagesAndFiltersWholeTable() {
+  PanelFixture fx;
+  QVERIFY(fx.init());
+  QVERIFY(fx.connectPanel());
+  fx.panel->runSql("CREATE TABLE people (id INTEGER PRIMARY KEY, name TEXT); "
+                   "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM "
+                   "n WHERE x<501) "
+                   "INSERT INTO people SELECT x, CASE x WHEN 501 THEN "
+                   "'last_row_%' ELSE 'person_'||x END FROM n;");
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() &&
+           !fx.manager->activeConnection()->schemaLoading();
+  }));
+  QTreeWidgetItem *table = nullptr;
+  for (QTreeWidgetItemIterator it(fx.panel->tree()); *it; ++it)
+    if ((*it)->text(0) == "people")
+      table = *it;
+  QVERIFY(table);
+  fx.panel->tree()->itemDoubleClicked(table, 0);
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() && fx.panel->resultTabs()->count() == 1;
+  }));
+  auto *view = qobject_cast<DbResultView *>(fx.panel->resultTabs()->widget(0));
+  QVERIFY(view && view->isTableBrowser());
+  QCOMPARE(view->model()->rowCount(), 200);
+  auto *next = view->findChild<QToolButton *>("dbNextPage");
+  auto *previous = view->findChild<QToolButton *>("dbPreviousPage");
+  QVERIFY(next->isEnabled());
+  QVERIFY(!previous->isEnabled());
+  next->click();
+  QVERIFY(waitUntil([&] { return !fx.panel->isRunning(); }));
+  QCOMPARE(view->result().rows[0][0].toInt(), 201);
+  next->click();
+  QVERIFY(waitUntil([&] { return !fx.panel->isRunning(); }));
+  QCOMPARE(view->result().rows.size(), 101);
+  QCOMPARE(view->result().rows[0][0].toInt(), 401);
+  QVERIFY(!next->isEnabled());
+  auto *filter = view->findChild<QLineEdit *>("dbResultFilter");
+  filter->setText("last_row_%");
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() && view->model()->rowCount() == 1;
+  }));
+  QCOMPARE(view->result().rows[0][0].toInt(), 501);
+  filter->setText("' OR 1=1 --");
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() && view->model()->rowCount() == 0;
+  }));
+  filter->clear();
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() && view->model()->rowCount() == 200;
+  }));
+  auto *header = view->table()->horizontalHeader();
+  const QPoint columnCenter(header->sectionViewportPosition(0) +
+                                header->sectionSize(0) / 2,
+                            header->height() / 2);
+  QTest::mouseClick(header->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    columnCenter);
+  const auto firstOrder = header->sortIndicatorOrder();
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() &&
+           view->result().rows[0][0].toInt() ==
+               (firstOrder == Qt::AscendingOrder ? 1 : 501);
+  }));
+  QTest::mouseClick(header->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    columnCenter);
+  QVERIFY(header->sortIndicatorOrder() != firstOrder);
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() &&
+           view->result().rows[0][0].toInt() ==
+               (header->sortIndicatorOrder() == Qt::AscendingOrder ? 1 : 501);
+  }));
+  if (header->sortIndicatorOrder() != Qt::DescendingOrder) {
+    QTest::mouseClick(header->viewport(), Qt::LeftButton, Qt::NoModifier,
+                      columnCenter);
+    QVERIFY(waitUntil([&] {
+      return !fx.panel->isRunning() && view->result().rows[0][0].toInt() == 501;
+    }));
+  }
+  QCOMPARE(view->result().rows.last()[0].toInt(), 302);
+  // A smaller session cap must not skip rows when moving to the next page.
+  fx.manager->activeConnection()->setMaxRows(50);
+  view->reloadPage();
+  QVERIFY(waitUntil([&] { return !fx.panel->isRunning(); }));
+  QCOMPARE(view->result().rows.size(), 50);
+  next->click();
+  QVERIFY(waitUntil([&] { return !fx.panel->isRunning(); }));
+  QCOMPARE(view->result().rows[0][0].toInt(), 451);
+}
+
+void TestDatabasePanel::panelInspectsSqliteStructure() {
+  PanelFixture fx;
+  QVERIFY(fx.init());
+  QVERIFY(fx.connectPanel());
+  fx.panel->runSql("CREATE TABLE things (id INTEGER PRIMARY KEY, n TEXT "
+                   "DEFAULT 'x', upper_n TEXT GENERATED ALWAYS AS (upper(n)) "
+                   "STORED, parent INTEGER REFERENCES things(id));"
+                   "CREATE INDEX things_n ON things(n);"
+                   "CREATE TRIGGER things_trigger AFTER INSERT ON things BEGIN "
+                   "SELECT 1; END;");
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() &&
+           !fx.manager->activeConnection()->schemaLoading();
+  }));
+  QTreeWidgetItem *table = nullptr;
+  for (QTreeWidgetItemIterator it(fx.panel->tree()); *it; ++it)
+    if ((*it)->text(0) == "things")
+      table = *it;
+  QVERIFY(table);
+  fx.panel->tree()->scrollToItem(table);
+  const QPoint pos = fx.panel->tree()->visualItemRect(table).center();
+  QTimer::singleShot(0, fx.panel.get(), [] {
+    auto *menu = qobject_cast<QMenu *>(QApplication::activePopupWidget());
+    if (!menu)
+      return;
+    for (auto *action : menu->actions()) {
+      if (action->text().startsWith("Inspect structure")) {
+        action->trigger();
+        menu->close();
+        return;
+      }
+    }
+    menu->close();
+  });
+  QVERIFY(QMetaObject::invokeMethod(fx.panel.get(), "onTreeContextMenu",
+                                    Q_ARG(QPoint, pos)));
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() && fx.panel->resultTabs()->count() == 5;
+  }));
+  QVERIFY(fx.panel->resultTabs()->tabText(0).startsWith("Columns"));
+  QVERIFY(fx.panel->resultTabs()->tabText(1).startsWith("Indexes"));
+  QVERIFY(fx.panel->resultTabs()->tabText(2).startsWith("Foreign keys"));
+  QVERIFY(fx.panel->resultTabs()->tabText(3).startsWith("Triggers"));
+  QVERIFY(fx.panel->resultTabs()->tabText(4).startsWith("Creation SQL"));
+  QCOMPARE(qobject_cast<DbResultView *>(fx.panel->resultTabs()->widget(0))
+               ->result()
+               .rows.size(),
+           4);
+}
+
+void TestDatabasePanel::panelOpensSqliteFileOnce() {
+  PanelFixture fx;
+  QVERIFY(fx.init());
+  const QString path = fx.dir.filePath("second.db");
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.close();
+  fx.panel->openSqliteFile(path);
+  QVERIFY(
+      waitUntil([&] { return fx.manager->activeConnection()->isConnected(); }));
+  const QString id = fx.manager->activeId();
+  fx.panel->openSqliteFile(path);
+  QCOMPARE(fx.manager->activeId(), id);
+  QCOMPARE(fx.manager->profiles().size(), 2);
 }
 
 QTEST_MAIN(TestDatabasePanel)

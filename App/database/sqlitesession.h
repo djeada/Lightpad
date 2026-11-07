@@ -4,8 +4,10 @@
 #include "idbsession.h"
 
 #include <QThread>
+#include <memory>
 
 class SqliteWorker;
+struct SqliteControl;
 
 class SqliteSession : public IDbSession {
   Q_OBJECT
@@ -24,13 +26,12 @@ public:
   void cancel() override;
 
 private:
-  friend class SqliteWorker;
   DbConnectionProfile m_profile;
   QThread m_thread;
   SqliteWorker *m_worker = nullptr;
+  std::shared_ptr<SqliteControl> m_control;
   bool m_open = false;
   bool m_busy = false;
-  quint64 m_activeRequest = 0;
   quint64 m_generation = 0;
 };
 

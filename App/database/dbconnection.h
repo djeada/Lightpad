@@ -37,6 +37,7 @@ public:
 
   const DbSchema &schema() const { return m_schema; }
   bool schemaLoading() const { return m_schemaLoading; }
+  QString lastSchemaError() const { return m_schemaError; }
   QStringList databases() const { return m_databases; }
   QString currentDatabase() const { return m_profile.database; }
 
@@ -60,11 +61,12 @@ signals:
                          const DbStatementResult &result);
   void requestFinished(quint64 requestId, bool cancelled);
   void schemaLoaded();
+  void schemaError(const QString &message);
   void databasesLoaded();
   void databaseChanged(const QString &database);
 
 private:
-  enum class Purpose { User, Schema, Databases, UseDatabase };
+  enum class Purpose { User, Schema, SchemaDatabases, Databases, UseDatabase };
   struct Request {
     quint64 id = 0;
     Purpose purpose = Purpose::User;
@@ -93,6 +95,7 @@ private:
   bool m_hasPassword = false;
 
   DbSchema m_schema;
+  QString m_schemaError;
   QStringList m_databases;
   bool m_schemaLoading = false;
   bool m_schemaDirty = false;

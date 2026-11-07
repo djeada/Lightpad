@@ -51,18 +51,18 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Install zlib (Windows)
+      - name: Install database and compression libraries (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install zlib:x64-windows-static-md
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install zlib:x64-windows-static-md sqlite3:x64-windows-static-md
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Install zlib (Linux)
+      - name: Install database and compression libraries (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y zlib1g-dev
+          sudo apt-get install -y zlib1g-dev libsqlite3-dev
 
       - name: Install Qt (Windows fast path)
         if: runner.os == 'Windows'

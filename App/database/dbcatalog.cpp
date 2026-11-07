@@ -79,13 +79,7 @@ namespace DbCatalog {
 QString schemaQuery(DbEngine engine) {
   switch (engine) {
   case DbEngine::Sqlite:
-    return QStringLiteral(
-        "SELECT 'main', m.name, CASE m.type WHEN 'view' THEN 'VIEW' ELSE "
-        "'BASE TABLE' END, p.name, p.type, CASE WHEN p.\"notnull\" = 1 THEN "
-        "'NO' ELSE 'YES' END, CASE WHEN p.pk > 0 THEN 'YES' ELSE 'NO' END, "
-        "p.cid + 1 FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE "
-        "m.type IN ('table', 'view') AND m.name NOT LIKE 'sqlite_%' ORDER BY "
-        "m.name, p.cid");
+    return sqliteSchemaQuery({QStringLiteral("main"), QStringLiteral("temp")});
   case DbEngine::PostgreSql:
     return QStringLiteral(
         "SELECT c.table_schema, c.table_name, t.table_type, c.column_name, "
@@ -191,7 +185,14 @@ DbSchema buildSchema(const DbResultSet &rows) {
     col.primaryKey =
         row.size() > 6 && row[6].toString().compare(QLatin1String("YES"),
                                                     Qt::CaseInsensitive) == 0;
-    current->columns.append(col);
+    if (row.size() > 8)
+      col.defaultValue = row[8].toString();
+    if (row.size() > 9)
+      col.hidden = row[9].toInt();
+    if (row.size() > 10 && !row[10].isNull())
+      current->createSql = row[10].toString();
+    if (!row[3].isNull())
+      current->columns.append(col);
   }
   return schema;
 }
@@ -230,7 +231,7 @@ QString quoteIdentifier(DbEngine engine, const QString &name) {
 
 QString qualifiedName(DbEngine engine, const DbTableInfo &table) {
 
-  if (table.schema.isEmpty() || engine == DbEngine::Sqlite) {
+  if (table.schema.isEmpty()) {
     return quoteIdentifier(engine, table.name);
   }
   return quoteIdentifier(engine, table.schema) + QLatin1Char('.') +
@@ -267,11 +268,19 @@ QString selectColumnsSql(DbEngine engine, const DbTableInfo &table) {
 QString insertTemplateSql(DbEngine engine, const DbTableInfo &table) {
   QStringList placeholders;
   for (const DbColumnInfo &c : table.columns) {
+    if (c.hidden != 0)
+      continue;
     placeholders << QStringLiteral("/* %1 */ NULL").arg(c.name);
   }
   return QStringLiteral("INSERT INTO %1 (%2)\nVALUES (%3);")
       .arg(qualifiedName(engine, table))
-      .arg(quotedColumns(engine, table).join(QStringLiteral(", ")))
+      .arg([&]() {
+        QStringList names;
+        for (const auto &c : table.columns)
+          if (c.hidden == 0)
+            names << quoteIdentifier(engine, c.name);
+        return names.join(", ");
+      }())
       .arg(placeholders.join(QStringLiteral(", ")));
 }
 
@@ -279,6 +288,8 @@ QString updateTemplateSql(DbEngine engine, const DbTableInfo &table) {
   QStringList sets;
   QStringList where;
   for (const DbColumnInfo &c : table.columns) {
+    if (c.hidden != 0)
+      continue;
     const QString q = quoteIdentifier(engine, c.name);
     if (c.primaryKey) {
       where << QStringLiteral("%1 = /* value */ NULL").arg(q);
@@ -288,6 +299,8 @@ QString updateTemplateSql(DbEngine engine, const DbTableInfo &table) {
   }
   if (sets.isEmpty()) {
     for (const DbColumnInfo &c : table.columns) {
+      if (c.hidden != 0)
+        continue;
       sets << QStringLiteral("%1 = /* value */ NULL")
                   .arg(quoteIdentifier(engine, c.name));
     }
@@ -302,6 +315,10 @@ QString updateTemplateSql(DbEngine engine, const DbTableInfo &table) {
 }
 
 QString createTableSql(DbEngine engine, const DbTableInfo &table) {
+  if (engine == DbEngine::Sqlite && !table.createSql.isEmpty()) {
+    return table.createSql +
+           (table.createSql.trimmed().endsWith(';') ? "" : ";");
+  }
   QStringList lines;
   for (const DbColumnInfo &c : table.columns) {
     QString line = QStringLiteral("  %1 %2")
@@ -338,6 +355,150 @@ QString explainPrefix(DbEngine engine) {
     break;
   }
   return {};
+}
+
+static QString stringLiteral(DbEngine engine, QString text) {
+  if (engine == DbEngine::MySql)
+    text.replace('\\', "\\\\");
+  text.replace('\'', "''");
+  return (engine == DbEngine::SqlServer ? "N'" : "'") + text + '\'';
+}
+
+QString sqliteSchemaQuery(const QStringList &schemas) {
+  QStringList queries;
+  for (const QString &schema : schemas) {
+    const QString literal = stringLiteral(DbEngine::Sqlite, schema);
+    queries
+        << QStringLiteral(
+               "SELECT %1 AS schema_name, m.name AS table_name, "
+               "CASE m.type WHEN 'view' THEN 'VIEW' ELSE 'BASE TABLE' END AS "
+               "table_type, "
+               "p.name AS column_name, p.type, CASE WHEN p.\"notnull\" = 1 OR "
+               "(p.pk > 0 AND upper(p.type) = 'INTEGER' AND NOT EXISTS "
+               "(SELECT 1 FROM pragma_index_list(m.name, %1) WHERE origin = "
+               "'pk')) "
+               "THEN 'NO' ELSE 'YES' END, CASE WHEN p.pk > 0 THEN 'YES' ELSE "
+               "'NO' END, "
+               "p.cid + 1 AS ordinal, p.dflt_value, p.hidden, CASE WHEN p.cid "
+               "= 0 THEN m.sql END "
+               "FROM %2.sqlite_schema m LEFT JOIN pragma_table_xinfo(m.name, "
+               "%1) p ON 1=1 "
+               "WHERE m.type IN ('table', 'view') AND m.name NOT GLOB "
+               "'sqlite_*'")
+               .arg(literal, quoteIdentifier(DbEngine::Sqlite, schema));
+  }
+  return queries.join(" UNION ALL ") + " ORDER BY 1, 2, 8";
+}
+
+QString tablePageSql(DbEngine engine, const DbTableInfo &table, int pageSize,
+                     qint64 page, const QString &filter,
+                     const QString &sortColumn, bool descending,
+                     qint64 offset) {
+  if (pageSize < 1 || pageSize > 1000 || page < 0 ||
+      page > Q_INT64_C(1000000000))
+    return {};
+  QStringList columns;
+  QStringList names;
+  for (const auto &column : table.columns) {
+    if (column.hidden == 1)
+      continue;
+    columns << quoteIdentifier(engine, column.name);
+    names << column.name;
+  }
+  if (columns.isEmpty())
+    return {};
+  QString sql =
+      "SELECT " + columns.join(", ") + " FROM " + qualifiedName(engine, table);
+  if (!filter.isEmpty()) {
+    QStringList predicates;
+    QString pattern = filter;
+    pattern.replace('!', "!!").replace('%', "!%").replace('_', "!_");
+    const QString literal = stringLiteral(engine, "%" + pattern + "%");
+    for (const auto &column : columns) {
+      const QString cast =
+          engine == DbEngine::SqlServer
+              ? "CONVERT(NVARCHAR(MAX), " + column + ")"
+              : "CAST(" + column + " AS " +
+                    (engine == DbEngine::MySql ? "CHAR" : "TEXT") + ")";
+      predicates << "LOWER(COALESCE(" + cast + ", 'NULL')) LIKE LOWER(" +
+                        literal + ") ESCAPE '!'";
+      if (engine == DbEngine::Sqlite) {
+        predicates << "(typeof(" + column +
+                          ") = 'blob' AND instr(lower('0x' || hex(" + column +
+                          ")), lower(" + stringLiteral(engine, filter) +
+                          ")) > 0)";
+      }
+    }
+    sql += " WHERE (" + predicates.join(" OR ") + ")";
+  }
+  QStringList order;
+  if (names.contains(sortColumn)) {
+    order << quoteIdentifier(engine, sortColumn) +
+                 (descending ? " DESC" : " ASC");
+  }
+  for (const auto &column : table.columns) {
+    if (column.primaryKey && column.name != sortColumn)
+      order << quoteIdentifier(engine, column.name);
+  }
+  if (engine == DbEngine::Sqlite && table.primaryKey().isEmpty() &&
+      !table.isView) {
+    for (const auto &name : {QStringLiteral("_rowid_"), QStringLiteral("rowid"),
+                             QStringLiteral("oid")}) {
+      if (!names.contains(name, Qt::CaseInsensitive)) {
+        order << quoteIdentifier(engine, name);
+        break;
+      }
+    }
+  }
+  if (order.isEmpty())
+    order = columns;
+  sql += " ORDER BY " + order.join(", ");
+  if (offset < 0)
+    offset = page * pageSize;
+  return engine == DbEngine::SqlServer
+             ? sql + QString(" OFFSET %1 ROWS FETCH NEXT %2 ROWS ONLY;")
+                         .arg(offset)
+                         .arg(pageSize + 1)
+             : sql + QString(" LIMIT %1 OFFSET %2;")
+                         .arg(pageSize + 1)
+                         .arg(offset);
+}
+
+QStringList sqliteTableDetailsQueries(const DbTableInfo &table) {
+  const QString schema = table.schema.isEmpty() ? "main" : table.schema;
+  const QString name = stringLiteral(DbEngine::Sqlite, table.name);
+  const QString schemaLiteral = stringLiteral(DbEngine::Sqlite, schema);
+  const QString catalog =
+      quoteIdentifier(DbEngine::Sqlite, schema) + ".sqlite_schema";
+  return {"SELECT name AS column_name, type, \"notnull\" AS not_null, "
+          "dflt_value AS default_value, "
+          "pk AS primary_key_position, CASE hidden WHEN 1 THEN 'hidden' WHEN 2 "
+          "THEN 'generated (virtual)' "
+          "WHEN 3 THEN 'generated (stored)' ELSE '' END AS extra FROM "
+          "pragma_table_xinfo(" +
+              name + ", " + schemaLiteral + ") ORDER BY cid;",
+          "SELECT l.name AS index_name, l.\"unique\" AS is_unique, l.origin, "
+          "l.partial, x.seqno AS position, "
+          "x.name AS column_name, x.desc AS descending, x.coll AS collation, "
+          "m.sql AS definition "
+          "FROM pragma_index_list(" +
+              name + ", " + schemaLiteral +
+              ") l LEFT JOIN pragma_index_xinfo(l.name, " + schemaLiteral +
+              ") x ON x.key = 1 "
+              "LEFT JOIN " +
+              catalog + " m ON m.name = l.name ORDER BY l.name, x.seqno;",
+          "SELECT id, seq AS position, \"table\" AS referenced_table, \"from\" "
+          "AS column_name, \"to\" AS referenced_column, "
+          "on_update, on_delete, match FROM pragma_foreign_key_list(" +
+              name + ", " + schemaLiteral + ") ORDER BY id, seq;",
+          "SELECT name AS trigger_name, sql AS definition FROM " + catalog +
+              " WHERE type = 'trigger' AND tbl_name = " + name +
+              " ORDER BY name;",
+          "SELECT type, name, sql AS definition FROM " + catalog +
+              " WHERE tbl_name = " + name +
+              " AND sql IS NOT NULL "
+              "ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'view' THEN 0 WHEN "
+              "'index' THEN 1 ELSE 2 END, name;"};
 }
 
 } // namespace DbCatalog

@@ -45,6 +45,9 @@ QString displayText(const QVariant &v) {
   if (v.isNull() || !v.isValid()) {
     return QStringLiteral("NULL");
   }
+  if (v.typeId() == QMetaType::QByteArray) {
+    return QStringLiteral("0x") + QString::fromLatin1(v.toByteArray().toHex());
+  }
   if (v.typeId() == QMetaType::Bool) {
     return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
   }
@@ -54,9 +57,17 @@ QString displayText(const QVariant &v) {
   return v.toString();
 }
 
-QString sqlLiteral(const QVariant &v) {
+QString sqlLiteral(const QVariant &v, DbEngine engine) {
   if (v.isNull() || !v.isValid()) {
     return QStringLiteral("NULL");
+  }
+  if (v.typeId() == QMetaType::QByteArray) {
+    const QString hex = QString::fromLatin1(v.toByteArray().toHex());
+    if (engine == DbEngine::SqlServer)
+      return "0x" + hex;
+    if (engine == DbEngine::PostgreSql)
+      return "decode('" + hex + "', 'hex')";
+    return "X'" + hex + "'";
   }
   switch (v.typeId()) {
   case QMetaType::Int:
@@ -168,7 +179,7 @@ QString exportResult(const DbResultSet &rs, Format format,
         } else if (v.typeId() == QMetaType::Double) {
           obj.insert(rs.columns[c].name, v.toDouble());
         } else {
-          obj.insert(rs.columns[c].name, v.toString());
+          obj.insert(rs.columns[c].name, displayText(v));
         }
       }
       arr.append(obj);
@@ -210,7 +221,7 @@ QString exportResult(const DbResultSet &rs, Format format,
     for (int r : rows) {
       QStringList vals;
       for (int c : cols) {
-        vals << sqlLiteral(cell(r, c));
+        vals << sqlLiteral(cell(r, c), engine);
       }
       out += QStringLiteral("INSERT INTO %1 (%2) VALUES (%3);\n")
                  .arg(tableName, names.join(QStringLiteral(", ")),

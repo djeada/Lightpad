@@ -195,14 +195,11 @@ void DbInsightsView::setResult(const DbResultSet &result,
   m_empty->hide();
   m_table->show();
   m_header->setText(
-      tr("%1%2 rows × %3 columns")
+      tr("%1%2 loaded rows × %3 columns")
           .arg(title.isEmpty() ? QString() : title + QStringLiteral(" · "))
           .arg(QLocale().toString(qint64(result.rows.size())))
           .arg(result.columns.size()) +
-      (result.truncated ? tr(" (first %1 of %2 rows)")
-                              .arg(result.rows.size())
-                              .arg(result.totalRows)
-                        : QString()));
+      (result.truncated ? tr(" · sample; more rows available") : QString()));
   m_header->show();
 }
 

@@ -67,6 +67,8 @@ struct DbResultSet {
   QVector<QVector<QVariant>> rows;
   bool truncated = false;
   qint64 totalRows = 0;
+  // False when fetching stopped at a limit; totalRows is then a lower bound.
+  bool totalRowsKnown = true;
 
   bool isEmpty() const { return columns.isEmpty(); }
 };

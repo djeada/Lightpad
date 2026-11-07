@@ -480,7 +480,7 @@ void TestDatabaseCore::catalogQuotingAndTemplates() {
   lite.schema = "main";
   lite.name = "t";
   QCOMPARE(DbCatalog::selectTopSql(DbEngine::Sqlite, lite, 3),
-           QString("SELECT * FROM \"t\" LIMIT 3;"));
+           QString("SELECT * FROM \"main\".\"t\" LIMIT 3;"));
   QVERIFY(DbCatalog::useDatabaseStatement(DbEngine::Sqlite, "x").isEmpty());
   QCOMPARE(DbCatalog::useDatabaseStatement(DbEngine::SqlServer, "my db"),
            QString("USE [my db]"));

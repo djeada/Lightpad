@@ -1,14 +1,19 @@
 #include "dbresultview.h"
 
 #include "../../database/columnprofiler.h"
+#include "../dialogs/styleddialog.h"
 #include "../uistylehelper.h"
 #include "dbglyphs.h"
+#include <QLocale>
+#include <QSaveFile>
+#include <QSignalBlocker>
 
 #include <QApplication>
 #include <QClipboard>
 #include <QDialog>
 #include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -17,6 +22,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QShortcut>
+#include <QTabWidget>
 #include <QVBoxLayout>
 #include <algorithm>
 
@@ -92,12 +98,19 @@ QVariant DbResultModel::data(const QModelIndex &index, int role) const {
   const bool isNull = value.isNull() || !value.isValid();
   switch (role) {
   case Qt::DisplayRole:
-    return isNull ? QStringLiteral("NULL")
-                  : singleLine(ResultExporter::displayText(value));
+    if (isNull)
+      return QStringLiteral("NULL");
+    if (value.typeId() == QMetaType::QByteArray)
+      return tr("BLOB · %1")
+          .arg(QLocale().formattedDataSize(value.toByteArray().size()));
+    return singleLine(ResultExporter::displayText(value));
   case Qt::ToolTipRole: {
     if (isNull) {
       return QStringLiteral("NULL");
     }
+    if (value.typeId() == QMetaType::QByteArray)
+      return tr("Binary value (%1 bytes). Double-click to inspect or save it.")
+          .arg(value.toByteArray().size());
     QString text = ResultExporter::displayText(value);
     if (text.size() > 2000) {
       text = text.left(2000) + QChar(0x2026);
@@ -166,6 +179,11 @@ bool DbResultSortProxy::lessThan(const QModelIndex &l,
   if (an || bn) {
     return an && !bn;
   }
+  if (a.typeId() == QMetaType::LongLong && b.typeId() == QMetaType::LongLong)
+    return a.toLongLong() < b.toLongLong();
+  if (a.typeId() == QMetaType::QByteArray &&
+      b.typeId() == QMetaType::QByteArray)
+    return a.toByteArray() < b.toByteArray();
   double x = 0;
   double y = 0;
   if (ColumnProfiler::parseNumber(a, &x) &&
@@ -217,15 +235,20 @@ DbResultView::DbResultView(QWidget *parent) : QWidget(parent) {
 
   m_filter = new QLineEdit(bar);
   m_filter->setObjectName("dbResultFilter");
-  m_filter->setPlaceholderText(tr("Filter rows…"));
+  m_filter->setPlaceholderText(tr("Filter loaded rows…"));
+  m_filter->setAccessibleName(tr("Filter result rows"));
+  m_filter->setToolTip(tr("Search the rows loaded in this result. Use SQL "
+                          "WHERE to search the database."));
   m_filter->setClearButtonEnabled(true);
   m_filter->setMaximumWidth(260);
   barLayout->addWidget(m_filter);
 
   m_summary = new QLabel(bar);
   m_summary->setObjectName("dbResultSummary");
-  m_summary->setTextFormat(Qt::RichText);
-  barLayout->addWidget(m_summary, 1);
+  m_summary->setTextFormat(Qt::PlainText);
+  m_summary->setWordWrap(true);
+  m_summary->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  barLayout->addStretch(1);
 
   m_copyButton = new QToolButton(bar);
   m_copyButton->setText(tr("Copy"));
@@ -236,7 +259,7 @@ DbResultView::DbResultView(QWidget *parent) : QWidget(parent) {
 
   m_exportButton = new QToolButton(bar);
   m_exportButton->setText(tr("Export"));
-  m_exportButton->setToolTip(tr("Save the rows to a file"));
+  m_exportButton->setToolTip(tr("Save the visible rows to a file"));
   m_exportButton->setPopupMode(QToolButton::InstantPopup);
   m_exportButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
   barLayout->addWidget(m_exportButton);
@@ -247,6 +270,15 @@ DbResultView::DbResultView(QWidget *parent) : QWidget(parent) {
   m_insightsButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
   barLayout->addWidget(m_insightsButton);
   layout->addWidget(bar);
+
+  m_empty = new QLabel(this);
+  m_empty->setTextFormat(Qt::PlainText);
+  m_empty->setWordWrap(true);
+  m_empty->setObjectName("dbResultEmpty");
+  m_empty->setAlignment(Qt::AlignCenter);
+  m_empty->setContentsMargins(20, 24, 20, 24);
+  m_empty->hide();
+  layout->addWidget(m_empty);
 
   m_table = new QTableView(this);
   m_table->setObjectName("dbResultTable");
@@ -268,6 +300,67 @@ DbResultView::DbResultView(QWidget *parent) : QWidget(parent) {
   m_table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
   m_table->setCornerButtonEnabled(true);
   layout->addWidget(m_table, 1);
+
+  auto *footer = new QWidget(this);
+  footer->setObjectName("dbResultFooter");
+  auto *footerLayout = new QHBoxLayout(footer);
+  footerLayout->setContentsMargins(10, 5, 8, 5);
+  footerLayout->addWidget(m_summary, 1);
+  m_pager = new QWidget(footer);
+  auto *pages = new QHBoxLayout(m_pager);
+  pages->setContentsMargins(0, 0, 0, 0);
+  pages->setSpacing(6);
+  m_pageSize = new QComboBox(m_pager);
+  m_pageSize->setObjectName("dbPageSize");
+  m_pageSize->setAccessibleName(tr("Rows per page"));
+  for (int size : {25, 50, 100, 200, 500, 1000})
+    m_pageSize->addItem(tr("%1 / page").arg(size), size);
+  m_pageSize->setCurrentIndex(3);
+  pages->addWidget(m_pageSize);
+  m_previous = new QToolButton(m_pager);
+  m_previous->setObjectName("dbPreviousPage");
+  m_previous->setText(tr("Previous"));
+  m_previous->setAccessibleName(tr("Previous page"));
+  pages->addWidget(m_previous);
+  m_next = new QToolButton(m_pager);
+  m_next->setObjectName("dbNextPage");
+  m_next->setText(tr("Next"));
+  m_next->setAccessibleName(tr("Next page"));
+  pages->addWidget(m_next);
+  m_reload = new QToolButton(m_pager);
+  m_reload->setObjectName("dbReloadPage");
+  m_reload->setText(tr("Reload"));
+  m_reload->setToolTip(tr("Reload this page from the database"));
+  pages->addWidget(m_reload);
+  m_pager->hide();
+  footerLayout->addWidget(m_pager);
+  layout->addWidget(footer);
+  connect(m_previous, &QToolButton::clicked, this, [this] {
+    --m_page;
+    requestPage();
+  });
+  connect(m_next, &QToolButton::clicked, this, [this] {
+    const qint64 offset = m_pageOffsets[m_page] + m_model->rowCount();
+    m_pageOffsets.resize(m_page + 1);
+    m_pageOffsets.append(offset);
+    ++m_page;
+    requestPage();
+  });
+  connect(m_reload, &QToolButton::clicked, this, [this] { requestPage(); });
+  connect(m_pageSize, QOverload<int>::of(&QComboBox::activated), this,
+          [this] { requestPage(true); });
+  m_filterTimer.setSingleShot(true);
+  m_filterTimer.setInterval(300);
+  connect(&m_filterTimer, &QTimer::timeout, this,
+          [this] { requestPage(true); });
+  connect(m_table->horizontalHeader(), &QHeaderView::sortIndicatorChanged, this,
+          [this](int column, Qt::SortOrder order) {
+            if (!m_browsing)
+              return;
+            m_sortColumn = m_model->result().columns.value(column).name;
+            m_sortOrder = order;
+            requestPage(true);
+          });
 
   auto *copyMenu = new QMenu(m_copyButton);
   copyMenu->addAction(tr("Copy"), QKeySequence::Copy, this,
@@ -309,8 +402,13 @@ DbResultView::DbResultView(QWidget *parent) : QWidget(parent) {
   connect(m_insightsButton, &QToolButton::clicked, this,
           &DbResultView::insightsRequested);
   connect(m_filter, &QLineEdit::textChanged, this, [this](const QString &t) {
-    m_proxy->setFilterText(t);
-    updateSummary();
+    if (m_browsing) {
+      m_filterTimer.start();
+      updateSummary();
+    } else {
+      m_proxy->setFilterText(t);
+      updateSummary();
+    }
   });
   connect(m_table, &QTableView::customContextMenuRequested, this,
           &DbResultView::showContextMenu);
@@ -335,7 +433,9 @@ void DbResultView::setResult(const DbResultSet &result, DbEngine engine,
   m_elapsedMs = elapsedMs;
   m_filter->clear();
   m_proxy->setFilterText(QString());
+  const QSignalBlocker headerBlocker(m_table->horizontalHeader());
   m_table->horizontalHeader()->setSortIndicator(-1, Qt::AscendingOrder);
+  m_proxy->sort(-1);
   m_model->setResult(result);
   fitColumns();
   updateSummary();
@@ -359,33 +459,140 @@ void DbResultView::fitColumns() {
 }
 
 void DbResultView::updateSummary() {
-  const DbResultSet &rs = m_model->result();
+  const auto &result = m_model->result();
   const int shown = m_proxy->rowCount();
-  const QColor muted = UIStyleHelper::mutedTextColor(m_theme);
   QStringList parts;
-  if (shown != rs.rows.size()) {
-    parts << tr("%1 of %2 rows").arg(shown).arg(rs.rows.size());
+  if (m_browsing) {
+    const qint64 offset = m_pageOffsets.value(m_page);
+    parts << (shown ? tr("Rows %1–%2").arg(offset + 1).arg(offset + shown)
+                    : tr("0 rows"));
+    parts << tr("Page %1").arg(m_page + 1);
+    if (m_hasNext)
+      parts << tr("More rows available");
   } else {
-    parts << tr("%n row(s)", nullptr, shown);
+    parts << (shown == result.rows.size() ? tr("%n row(s)", nullptr, shown)
+                                          : tr("%1 of %2 loaded rows")
+                                                .arg(shown)
+                                                .arg(result.rows.size()));
+    if (result.truncated) {
+      parts << (result.totalRowsKnown
+                    ? tr("First %1 of %2 rows")
+                          .arg(result.rows.size())
+                          .arg(result.totalRows)
+                    : tr("Result limited · more rows available"));
+    }
   }
-  parts << tr("%n column(s)", nullptr, rs.columns.size());
-  if (m_elapsedMs >= 0) {
+  parts << tr("%n column(s)", nullptr, result.columns.size());
+  if (m_elapsedMs >= 0)
     parts << (m_elapsedMs >= 1000
                   ? tr("%1 s").arg(m_elapsedMs / 1000.0, 0, 'f', 2)
                   : tr("%1 ms").arg(m_elapsedMs));
+  if (m_loading)
+    parts << tr("Loading…");
+  m_summary->setText(parts.join(QStringLiteral(" · ")));
+  m_summary->setToolTip(
+      m_browsing
+          ? tr("Filtering and sorting apply to the whole table. Export saves "
+               "this page.")
+          : tr("Filtering, sorting, insights and export use the loaded rows."));
+  const bool ready = !m_loading && !m_filterTimer.isActive();
+  m_previous->setEnabled(ready && m_page > 0);
+  m_next->setEnabled(ready && m_hasNext && shown > 0);
+  m_reload->setEnabled(!m_loading);
+  m_pageSize->setEnabled(!m_loading);
+  m_empty->setVisible(!m_loading && shown == 0);
+  m_empty->setText(!m_pageError.isEmpty() ? m_pageError
+                   : !m_filter->text().isEmpty()
+                       ? tr("No rows match your filter.\nClear the filter to "
+                            "see the rows again.")
+                       : (m_browsing
+                              ? tr("This table has no rows on this page.")
+                              : tr("This query returned no rows.")));
+  m_exportButton->setEnabled(shown > 0 && !m_loading);
+  m_insightsButton->setEnabled(shown > 0 && !m_loading);
+}
+
+void DbResultView::configureTableBrowser(const DbTableInfo &table,
+                                         DbEngine engine) {
+  m_browsing = true;
+  m_browseTable = table;
+  m_engine = engine;
+  m_tableName = DbCatalog::qualifiedName(engine, table);
+  m_filter->setPlaceholderText(tr("Filter entire table…"));
+  m_filter->setToolTip(
+      tr("Search all rows in this table, including rows on other pages."));
+  m_pager->show();
+  m_table->setSortingEnabled(false);
+  m_table->horizontalHeader()->setSectionsClickable(true);
+  m_table->horizontalHeader()->setSortIndicatorShown(true);
+  m_proxy->sort(-1);
+  updateSummary();
+}
+
+QString DbResultView::pageSql() const {
+  return DbCatalog::tablePageSql(
+      m_engine, m_browseTable, m_pageSize->currentData().toInt(), m_page,
+      m_filter->text(), m_sortColumn, m_sortOrder == Qt::DescendingOrder,
+      m_pageOffsets.value(m_page));
+}
+
+void DbResultView::requestPage(bool reset) {
+  if (m_filterTimer.isActive()) {
+    m_filterTimer.stop();
+    reset = true;
   }
-  QString html = QStringLiteral("<span style='color:%1'>%2</span>")
-                     .arg(muted.name(), parts.join(QStringLiteral(" · ")));
-  if (rs.truncated) {
-    html +=
-        QStringLiteral(" &nbsp;<span style='color:%1'><b>%2</b></span>")
-            .arg(m_theme.warningColor.isValid() ? m_theme.warningColor.name()
-                                                : QStringLiteral("#d29922"),
-                 tr("Showing the first %1 of %2 rows")
-                     .arg(rs.rows.size())
-                     .arg(rs.totalRows));
+  m_resetPending = m_resetPending || reset;
+  if (m_loading) {
+    m_reloadPending = true;
+    return;
   }
-  m_summary->setText(html);
+  if (m_resetPending) {
+    m_page = 0;
+    m_pageOffsets = {0};
+    m_resetPending = false;
+  }
+  m_pageError.clear();
+  setLoading(true);
+  emit pageRequested();
+}
+
+void DbResultView::setLoading(bool loading) {
+  m_loading = loading;
+  updateSummary();
+  if (!loading && m_reloadPending) {
+    m_reloadPending = false;
+    QTimer::singleShot(0, this, [this] { requestPage(); });
+  }
+}
+
+void DbResultView::setPageResult(const DbResultSet &result, qint64 elapsedMs) {
+  DbResultSet page = result;
+  const int size = m_pageSize->currentData().toInt();
+  m_hasNext = page.rows.size() > size || page.truncated;
+  if (page.rows.size() > size)
+    page.rows.resize(size);
+  page.truncated = m_hasNext;
+  page.totalRowsKnown = !m_hasNext;
+  page.totalRows =
+      m_pageOffsets.value(m_page) + page.rows.size() + (m_hasNext ? 1 : 0);
+  m_elapsedMs = elapsedMs;
+  m_model->setResult(page);
+  if (m_page == 0)
+    fitColumns();
+  m_table->scrollToTop();
+  updateSummary();
+}
+
+void DbResultView::setPageError(const QString &message) {
+  m_filterTimer.stop();
+  m_reloadPending = false;
+  m_resetPending = false;
+  m_pageError = message;
+  m_hasNext = false;
+  DbResultSet empty;
+  empty.columns = m_model->result().columns;
+  m_model->setResult(empty);
+  updateSummary();
 }
 
 void DbResultView::selectedRowsAndColumns(QVector<int> *rows,
@@ -455,8 +662,11 @@ void DbResultView::copyAs(ResultExporter::Format format) {
     for (int r = 0; r < m_proxy->rowCount(); ++r) {
       rows.append(m_proxy->mapToSource(m_proxy->index(r, 0)).row());
     }
+    DbResultSet source = m_model->result();
+    if (rows.isEmpty())
+      source.rows.clear();
     text = ResultExporter::exportResult(
-        m_model->result(), format, rows, {}, true,
+        source, format, rows, {}, true,
         m_tableName.isEmpty() ? QStringLiteral("table_name") : m_tableName,
         m_engine);
   }
@@ -481,46 +691,140 @@ bool DbResultView::exportToFile(const QString &path,
   }
   const QString text = ResultExporter::exportResult(source, format, rows, {},
                                                     true, table, m_engine);
-  QFile file(path);
+  QSaveFile file(path);
   if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
     return false;
   }
-  return file.write(text.toUtf8()) >= 0;
+  const QByteArray bytes = text.toUtf8();
+  return file.write(bytes) == bytes.size() && file.commit();
+}
+
+bool DbResultView::saveCellValue(const QModelIndex &index,
+                                 const QString &path) const {
+  if (!index.isValid())
+    return false;
+  const QVariant value =
+      m_proxy->mapToSource(index).data(DbResultModel::RawValueRole);
+  if (!value.isValid() || value.isNull())
+    return false;
+  const QByteArray bytes = value.typeId() == QMetaType::QByteArray
+                               ? value.toByteArray()
+                               : ResultExporter::displayText(value).toUtf8();
+  QSaveFile file(path);
+  return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() &&
+         file.commit();
 }
 
 void DbResultView::showCellValue(const QModelIndex &index) {
-  if (!index.isValid()) {
+  if (!index.isValid())
     return;
-  }
-  const QModelIndex src = m_proxy->mapToSource(index);
-  const QVariant v = src.data(DbResultModel::RawValueRole);
-  QString text =
-      v.isNull() ? QStringLiteral("NULL") : ResultExporter::displayText(v);
-  const QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8());
-  if (!doc.isNull() && (doc.isObject() || doc.isArray())) {
-    text = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
-  }
-  auto *dialog = new QDialog(this);
+  const QModelIndex source = m_proxy->mapToSource(index);
+  const QVariant value = source.data(DbResultModel::RawValueRole);
+  const bool binary = value.typeId() == QMetaType::QByteArray;
+  auto *dialog = new StyledDialog(this);
   dialog->setAttribute(Qt::WA_DeleteOnClose);
-  dialog->setWindowTitle(m_model->result().columns.value(src.column()).name);
-  dialog->resize(560, 380);
+  dialog->setWindowTitle(
+      tr("Value · %1")
+          .arg(m_model->result().columns.value(source.column()).name));
+  dialog->resize(720, 480);
   auto *layout = new QVBoxLayout(dialog);
-  auto *edit = new QPlainTextEdit(dialog);
-  edit->setReadOnly(true);
-  edit->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-  edit->setPlainText(text);
-  layout->addWidget(edit);
+  layout->setContentsMargins(16, 16, 16, 16);
+  layout->setSpacing(12);
+  auto *description = new QLabel(dialog);
+  description->setTextFormat(Qt::PlainText);
+  layout->addWidget(description);
+  auto *tabs = new QTabWidget(dialog);
+  tabs->setDocumentMode(true);
+  layout->addWidget(tabs, 1);
+  auto addText = [&](const QString &title, const QString &text) {
+    auto *edit = new QPlainTextEdit(tabs);
+    edit->setReadOnly(true);
+    edit->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    edit->setPlainText(text);
+    tabs->addTab(edit, title);
+  };
+  constexpr int previewBytes = 64 * 1024;
+  QString copyText;
+  if (binary) {
+    const QByteArray bytes = value.toByteArray();
+    const QByteArray preview = bytes.left(previewBytes);
+    QString hex;
+    for (qsizetype offset = 0; offset < preview.size(); offset += 16) {
+      const QByteArray line = preview.mid(offset, 16);
+      QString ascii;
+      for (unsigned char byte : line)
+        ascii += byte >= 32 && byte < 127 ? QChar(byte) : QChar('.');
+      hex += QString("%1  %2  %3\n")
+                 .arg(offset, 8, 16, QChar('0'))
+                 .arg(QString::fromLatin1(line.toHex(' ')).leftJustified(47),
+                      ascii);
+    }
+    addText(tr("Hex"), hex);
+    addText(tr("Text (UTF-8)"), QString::fromUtf8(preview));
+    description->setText(tr("Binary value · %1 bytes%2")
+                             .arg(bytes.size())
+                             .arg(bytes.size() > previewBytes
+                                      ? tr(" · preview of the first 64 KiB; "
+                                           "save to inspect all bytes")
+                                      : QString()));
+  } else {
+    const QString full = value.isNull() ? QStringLiteral("NULL")
+                                        : ResultExporter::displayText(value);
+    constexpr int previewChars = 256 * 1024;
+    QString text = full.left(previewChars);
+    if (full.size() <= previewChars) {
+      const QJsonDocument json = QJsonDocument::fromJson(text.toUtf8());
+      if (json.isObject() || json.isArray())
+        text = QString::fromUtf8(json.toJson(QJsonDocument::Indented));
+    }
+    addText(tr("Text"), text);
+    copyText = full;
+    description->setText(
+        value.isNull() ? tr("NULL value")
+                       : tr("Text value · %1 characters%2")
+                             .arg(full.size())
+                             .arg(full.size() > previewChars
+                                      ? tr(" · preview of the first 256 KiB; "
+                                           "save to inspect the full value")
+                                      : QString()));
+  }
   auto *buttons = new QHBoxLayout();
+  auto *save =
+      new QPushButton(binary ? tr("Save bytes…") : tr("Save value…"), dialog);
+  save->setEnabled(!value.isNull());
+  buttons->addWidget(save);
+  connect(
+      save, &QPushButton::clicked, dialog,
+      [this, dialog, value, binary, description] {
+        const QString path = QFileDialog::getSaveFileName(
+            dialog, tr("Save cell value"), binary ? "value.bin" : "value.txt");
+        if (path.isEmpty())
+          return;
+        const QByteArray bytes =
+            binary ? value.toByteArray()
+                   : ResultExporter::displayText(value).toUtf8();
+        QSaveFile file(path);
+        if (file.open(QIODevice::WriteOnly) &&
+            file.write(bytes) == bytes.size() && file.commit()) {
+          description->setText(tr("Saved %1").arg(QFileInfo(path).fileName()));
+          emit statusMessage(tr("Saved %1").arg(path));
+        } else {
+          description->setText(
+              tr("Could not save the value: %1").arg(file.errorString()));
+        }
+      });
   buttons->addStretch();
-  auto *copy = new QPushButton(tr("Copy"), dialog);
-  connect(copy, &QPushButton::clicked, dialog,
-          [text]() { QApplication::clipboard()->setText(text); });
+  auto *copy = new QPushButton(binary ? tr("Copy hex") : tr("Copy"), dialog);
+  connect(copy, &QPushButton::clicked, dialog, [value, binary, copyText] {
+    QApplication::clipboard()->setText(
+        binary ? QString::fromLatin1(value.toByteArray().toHex()) : copyText);
+  });
+  buttons->addWidget(copy);
   auto *close = new QPushButton(tr("Close"), dialog);
   connect(close, &QPushButton::clicked, dialog, &QDialog::accept);
-  buttons->addWidget(copy);
   buttons->addWidget(close);
   layout->addLayout(buttons);
-  dialog->setStyleSheet(styleSheet());
+  dialog->applyTheme(m_theme);
   dialog->show();
 }
 
@@ -588,6 +892,11 @@ void DbResultView::applyTheme(const Theme &theme) {
 
   setStyleSheet(
       QString(
+          "QLabel#dbResultEmpty { color: %10; }"
+          "QWidget#dbResultFooter { background: %1; border-top: 1px solid %2; }"
+          "QLabel#dbResultSummary { color: %10; }"
+          "QComboBox#dbPageSize { background: %3; color: %4; border: 1px solid "
+          "%2; padding: 3px 6px; border-radius: 4px; }"
           "QWidget#dbResultBar { background: %1; border-bottom: 1px solid %2; }"
           "QLineEdit#dbResultFilter { background: %3; color: %4; border: 1px "
           "solid %2;"
@@ -596,6 +905,7 @@ void DbResultView::applyTheme(const Theme &theme) {
           "QToolButton { background: transparent; color: %4; border: 1px solid "
           "transparent;"
           "  border-radius: 4px; padding: 3px 8px; }"
+          "QToolButton:disabled { color: %10; }"
           "QToolButton:hover { background: %6; border-color: %2; }"
           "QToolButton::menu-button { border: none; width: 12px; }"
           "QToolButton::menu-indicator { image: none; width: 0; }"

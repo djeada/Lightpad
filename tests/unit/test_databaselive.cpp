@@ -4,7 +4,6 @@
 
 #include <QEventLoop>
 #include <QSignalSpy>
-#include <QSqlDatabase>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QtTest/QtTest>
@@ -152,6 +151,12 @@ private slots:
   void sqliteReadOnlyProfileRefusesWrites();
   void sqliteMissingFileFailsToOpen();
   void sqliteRowLimit();
+  void sqliteLimitStopsUnboundedResults();
+  void sqliteCancellationInterruptsBatch();
+  void sqliteCompleteSchemaAndStructure();
+  void sqliteLargeSchemaIsComplete();
+  void sqliteBlobValuesArePreserved();
+  void sqliteLimitedReturningStillWritesAllRows();
   void sqliteSchemaAndDisconnect();
   void sqliteDisconnectInsideResultHandler();
 
@@ -167,10 +172,7 @@ private:
   bool m_sqliteAvailable = false;
 };
 
-void TestDatabaseLive::initTestCase() {
-  m_sqliteAvailable =
-      QSqlDatabase::isDriverAvailable(QStringLiteral("QSQLITE"));
-}
+void TestDatabaseLive::initTestCase() { m_sqliteAvailable = true; }
 
 static DbConnectionProfile sqliteProfile(const QString &path,
                                          bool readOnly = false) {
@@ -295,8 +297,147 @@ void TestDatabaseLive::sqliteRowLimit() {
   QVERIFY2(out.results[0].ok, qPrintable(out.results[0].error));
   const auto &rs = out.results[0].resultSets[0];
   QCOMPARE(rs.rows.size(), 50);
-  QCOMPARE(rs.totalRows, qint64(500));
+  QCOMPARE(rs.totalRows, qint64(51));
+  QVERIFY(!rs.totalRowsKnown);
   QVERIFY(rs.truncated);
+}
+
+void TestDatabaseLive::sqliteLimitStopsUnboundedResults() {
+  DbConnection conn(sqliteProfile(makeSqliteFile(m_dir, "unbounded.db")));
+  conn.setMaxRows(10);
+  QVERIFY(connectAndWait(conn, ""));
+  QTimer::singleShot(3000, &conn, &DbConnection::cancel);
+  auto out = run(conn, {"WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 "
+                        "FROM n) SELECT x FROM n"});
+  QVERIFY(out.finished);
+  QVERIFY(!out.cancelled);
+  QCOMPARE(out.results[0].resultSets[0].rows.size(), 10);
+  QVERIFY(out.results[0].resultSets[0].truncated);
+}
+
+void TestDatabaseLive::sqliteCancellationInterruptsBatch() {
+  DbConnection conn(sqliteProfile(makeSqliteFile(m_dir, "cancel.db")));
+  QVERIFY(connectAndWait(conn, ""));
+  QTimer::singleShot(30, &conn, &DbConnection::cancel);
+  QElapsedTimer timer;
+  timer.start();
+  auto out = run(conn,
+                 {"WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM "
+                  "n WHERE x<1000000000) SELECT sum(x) FROM n",
+                  "CREATE TABLE must_not_run (id INT)"},
+                 false);
+  QVERIFY(out.finished);
+  QVERIFY(out.cancelled);
+  QVERIFY(timer.elapsed() < 3000);
+  auto next =
+      run(conn, {"SELECT count(*) FROM sqlite_master WHERE name='must_not_run'",
+                 "SELECT 42"});
+  QVERIFY(next.finished);
+  QCOMPARE(cell(next.results[0], 0, 0).toInt(), 0);
+  QCOMPARE(cell(next.results[1], 0, 0).toInt(), 42);
+}
+
+void TestDatabaseLive::sqliteCompleteSchemaAndStructure() {
+  DbConnection conn(sqliteProfile(makeSqliteFile(m_dir, "structure.db")));
+  QVERIFY(connectAndWait(conn, ""));
+  auto out = run(
+      conn,
+      {"CREATE TABLE people (id INTEGER PRIMARY KEY, name TEXT "
+       "DEFAULT 'guest', upper_name TEXT GENERATED ALWAYS AS "
+       "(upper(name)) STORED, ref INTEGER REFERENCES people(id))",
+       "CREATE UNIQUE INDEX people_name ON people(name)",
+       "CREATE TRIGGER people_trigger AFTER INSERT ON people BEGIN "
+       "SELECT 1; END",
+       "CREATE TABLE sqliteLegitimateName (id INT)",
+       "CREATE TABLE composite_key (a INTEGER, b INTEGER, PRIMARY KEY(a, b))",
+       "ATTACH DATABASE ':memory:' AS extra",
+       "CREATE TABLE extra.people (other TEXT)",
+       "CREATE TEMP TABLE people (temporary_field INT)"});
+  QVERIFY(out.finished);
+  for (const auto &result : out.results)
+    QVERIFY2(result.ok, qPrintable(result.error));
+  QVERIFY(waitForTable(conn, "sqliteLegitimateName"));
+  QTRY_VERIFY(conn.schema().find("extra", "people"));
+  QTRY_VERIFY(conn.schema().find("temp", "people"));
+  const auto *table = conn.schema().find("main", "people");
+  QVERIFY(table);
+  QCOMPARE(table->columns.size(), 4);
+  QVERIFY(conn.schema().find("main", "composite_key")->columns[0].nullable);
+  QVERIFY(!table->columns[0].nullable);
+  QCOMPARE(table->columns[1].defaultValue, QString("'guest'"));
+  QCOMPARE(table->columns[2].hidden, 3);
+  QVERIFY(table->createSql.contains("GENERATED ALWAYS"));
+  auto details = run(conn, DbCatalog::sqliteTableDetailsQueries(*table));
+  QCOMPARE(details.results.size(), 5);
+  for (const auto &result : details.results)
+    QVERIFY2(result.ok, qPrintable(result.error));
+  QCOMPARE(details.results[0].resultSets[0].rows.size(), 4);
+  QCOMPARE(details.results[1].resultSets[0].rows.size(), 1);
+  QCOMPARE(details.results[2].resultSets[0].rows.size(), 1);
+  QCOMPARE(details.results[3].resultSets[0].rows.size(), 1);
+  QCOMPARE(details.results[4].resultSets[0].rows.size(), 3);
+  auto qualified =
+      run(conn, {DbCatalog::selectTopSql(DbEngine::Sqlite, *table, 1)});
+  QCOMPARE(qualified.results[0].resultSets[0].columns[0].name, QString("id"));
+}
+
+void TestDatabaseLive::sqliteLargeSchemaIsComplete() {
+  DbConnection conn(sqliteProfile(makeSqliteFile(m_dir, "large_schema.db")));
+  QVERIFY(connectAndWait(conn, ""));
+  QStringList columns;
+  for (int c = 0; c < 100; ++c)
+    columns << QString("c%1 INTEGER").arg(c);
+  QStringList statements = {"BEGIN"};
+  for (int t = 0; t < 101; ++t)
+    statements
+        << QString("CREATE TABLE t%1 (%2)").arg(t).arg(columns.join(','));
+  statements << "COMMIT";
+  auto out = run(conn, statements);
+  QVERIFY(out.finished);
+  QTRY_COMPARE(conn.schema().columnCount(), 10100);
+  QCOMPARE(conn.schema().tables.size(), 101);
+}
+
+void TestDatabaseLive::sqliteBlobValuesArePreserved() {
+  DbConnection conn(sqliteProfile(makeSqliteFile(m_dir, "blobs.db")));
+  QVERIFY(connectAndWait(conn, ""));
+  auto out = run(conn, {"SELECT X'000102ff', X'', NULL, 9223372036854775807"});
+  const auto &rows = out.results[0];
+  QCOMPARE(cell(rows, 0, 0).typeId(), int(QMetaType::QByteArray));
+  QCOMPARE(cell(rows, 0, 0).toByteArray(), QByteArray::fromHex("000102ff"));
+  QCOMPARE(cell(rows, 0, 1).typeId(), int(QMetaType::QByteArray));
+  QVERIFY(!cell(rows, 0, 1).isNull());
+  QVERIFY(cell(rows, 0, 2).isNull());
+  QCOMPARE(cell(rows, 0, 3).toLongLong(), Q_INT64_C(9223372036854775807));
+  DbTableInfo table;
+  table.schema = "main";
+  table.name = "blobs";
+  table.columns = {{"payload", "BLOB"}};
+  auto filtered = run(
+      conn,
+      {"CREATE TABLE blobs (payload BLOB)",
+       "INSERT INTO blobs VALUES (X'000102ff'), (X'abcd')",
+       DbCatalog::tablePageSql(DbEngine::Sqlite, table, 25, 0, "0x000102ff")});
+  QVERIFY(filtered.results[2].ok);
+  QCOMPARE(filtered.results[2].resultSets[0].rows.size(), 1);
+}
+
+void TestDatabaseLive::sqliteLimitedReturningStillWritesAllRows() {
+  DbConnection conn(sqliteProfile(makeSqliteFile(m_dir, "returning.db")));
+  conn.setMaxRows(3);
+  QVERIFY(connectAndWait(conn, ""));
+  auto out =
+      run(conn, {"CREATE TABLE t (id INTEGER PRIMARY KEY)",
+                 "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n "
+                 "WHERE x<20) INSERT INTO t SELECT x FROM n RETURNING id",
+                 "SELECT count(*) FROM t"});
+  QVERIFY(out.finished);
+  QCOMPARE(out.results.size(), 3);
+  for (const auto &result : out.results)
+    QVERIFY2(result.ok, qPrintable(result.error));
+  QCOMPARE(out.results[1].resultSets[0].rows.size(), 3);
+  QVERIFY(out.results[1].resultSets[0].truncated);
+  QCOMPARE(cell(out.results[2], 0, 0).toInt(), 20);
 }
 
 void TestDatabaseLive::sqliteSchemaAndDisconnect() {

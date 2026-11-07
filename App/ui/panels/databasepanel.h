@@ -47,6 +47,7 @@ public:
   void runSql(const QString &sql);
   void setConsoleText(const QString &sql, bool focus = true);
   void focusConsole();
+  void openSqliteFile(const QString &path);
 
   bool isRunning() const;
   SqlConsoleEdit *console() const { return m_console; }
@@ -121,6 +122,9 @@ private:
     qint64 rows = 0;
     qint64 elapsedMs = 0;
     QElapsedTimer timer;
+    QPointer<DbResultView> resultView;
+    bool browsing = false;
+    QStringList resultTitles;
   };
 
   void buildUi();
@@ -150,7 +154,9 @@ private:
   void importCsv(DbConnection *conn);
   quint64 execute(DbConnection *conn, const QStringList &statements,
                   bool stopOnError, const QString &tableName = QString(),
-                  bool profileAfter = false, bool explain = false);
+                  bool profileAfter = false, bool explain = false,
+                  DbResultView *resultView = nullptr,
+                  const QStringList &resultTitles = {});
   void previewTable(DbConnection *conn, const DbTableInfo &table);
   void showTableColumns(DbConnection *conn, const DbTableInfo &table);
   void generateSql(DbConnection *conn, const DbTableInfo &table,
@@ -200,6 +206,7 @@ private:
   QLabel *m_status = nullptr;
   QLabel *m_runningLabel = nullptr;
   QTimer m_runningTimer;
+  QTimer m_schemaFilterTimer;
 
   QSet<QString> m_expanded;
   QSet<QString> m_hooked;
