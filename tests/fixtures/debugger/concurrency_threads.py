@@ -9,12 +9,12 @@ def worker(name):
     payload = {"worker": name, "matrix": [[1, 2], [3, 4]]}
     if name == "beta":
         beta_ready.set()
-        
+
         while not release.wait(0.05):
             pass
     else:
         assert beta_ready.wait(30)
-        inspection_marker = payload["worker"]  
+        inspection_marker = payload["worker"]
         release.set()
     print("thread-debug-ok", payload["worker"], flush=True)
 

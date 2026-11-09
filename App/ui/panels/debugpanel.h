@@ -74,6 +74,7 @@ public slots:
 
 protected:
   bool eventFilter(QObject *watched, QEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
 
 private slots:
 
@@ -114,6 +115,9 @@ private slots:
                        const QString &errorMessage);
 
 private:
+  void updateToolbarDensity();
+  int m_toolbarTextWidth = 0;
+  bool m_toolbarCompact = false;
   void setupUI();
   void setupToolbar();
   void setupCallStack();

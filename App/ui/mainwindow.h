@@ -21,6 +21,8 @@
 class MainWindow;
 class DocumentRecovery;
 class DocumentRecoveryDialog;
+class DebugSession;
+class Terminal;
 class TerminalTabWidget;
 class Popup;
 class FindReplacePanel;
@@ -361,6 +363,7 @@ private:
   QMetaObject::Connection m_breakpointsSetConnection;
   QMetaObject::Connection m_breakpointChangedConnection;
   QMetaObject::Connection m_runInTerminalConnection;
+  QHash<QString, QPointer<Terminal>> m_debugInferiorTerminals;
   QMetaObject::Connection m_sessionTerminatedConnection;
   QMetaObject::Connection m_sessionErrorConnection;
   QMetaObject::Connection m_sessionStateConnection;
@@ -581,6 +584,7 @@ private:
                              const QString &outputPath,
                              QString *errorMessage) const;
   void attachDebugSession(const QString &sessionId);
+  void hookInferiorTerminal(DebugSession *session);
   void clearDebugSession();
   QList<LightpadTabWidget *> allTabWidgets() const;
   void closeEvent(QCloseEvent *event);

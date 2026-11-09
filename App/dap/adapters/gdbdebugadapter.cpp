@@ -62,6 +62,23 @@ public:
              capabilities.isEmpty() ? "" : QString(" (%1)").arg(capabilities));
   }
 
+  // GDB's DAP server leaves the debuggee with /dev/null as stdin, so scanf,
+  // getchar, std::cin etc. see EOF immediately. Running the debuggee on its own
+  // pseudo terminal makes interactive programs behave as they do in a shell.
+  bool needsInferiorTerminal(
+      const DebugConfiguration &configuration) const override {
+#ifdef Q_OS_WIN
+    Q_UNUSED(configuration);
+    return false;
+#else
+    return configuration.request != QLatin1String("attach");
+#endif
+  }
+
+  QString inferiorTtyCommand(const QString &ttyPath) const override {
+    return QStringLiteral("set inferior-tty %1").arg(ttyPath);
+  }
+
   QJsonObject createLaunchConfig(const QString &filePath,
                                  const QString &workingDir) const override {
     QJsonObject config;

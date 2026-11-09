@@ -402,6 +402,134 @@ bool MainWindow::requestDebugHover(const QString &expression,
                                                           anchor, anchorRect);
 }
 
+// Adapters such as GDB's DAP server give the debuggee no stdin, so scanf/cin
+// see EOF. For those, run the debuggee on the pty of a dedicated terminal tab:
+// a placeholder process owns the pty and reports its tty name, which the
+// session hands to the debugger before launch.
+void MainWindow::hookInferiorTerminal(DebugSession *session) {
+  static const char *const kHooked = "lightpadInferiorTerminalHooked";
+  if (!session || session->property(kHooked).toBool()) {
+    return;
+  }
+  session->setProperty(kHooked, true);
+
+  const QString sessionId = session->id();
+  QPointer<DebugSession> guarded(session);
+  connect(session, &DebugSession::inferiorTerminalRequested, this,
+          [this, guarded, sessionId]() {
+            if (!guarded) {
+              return;
+            }
+#ifdef Q_OS_WIN
+            guarded->provideInferiorTerminal({});
+#else
+        TerminalTabWidget *tabs = ensureTerminalWidget();
+        if (!tabs) {
+          guarded->provideInferiorTerminal({});
+          return;
+        }
+
+        const bool keepDebugPanelInFront = debugDock && debugDock->isVisible();
+        showTerminalPanel();
+        if (keepDebugPanelInFront) {
+          debugDock->raise();
+        }
+
+        QString cwd = guarded->configuration().cwd;
+        if (cwd.isEmpty()) {
+          cwd = m_projectRootPath.isEmpty() ? QDir::currentPath()
+                                            : m_projectRootPath;
+        }
+
+        QPointer<Terminal> terminal = m_debugInferiorTerminals.value(sessionId);
+        if (terminal) {
+          terminal->stopShell();
+          terminal->clear();
+        } else {
+          terminal = tabs->addNewTerminal(cwd);
+          m_debugInferiorTerminals.insert(sessionId, terminal);
+        }
+
+        const QString ttyFile = QDir::temp().filePath(
+            QStringLiteral("lightpad-debug-tty-%1")
+                .arg(QUuid::createUuid().toString(QUuid::Id128)));
+        const ShellProfile defaultProfile =
+            ShellProfileManager::instance().defaultProfile();
+        const QString pidFile = ttyFile + QStringLiteral(".pid");
+        // The debuggee has no controlling terminal, so Ctrl+C typed here would
+        // reach nobody. The placeholder owns the pty instead and forwards
+        // SIGINT to the debuggee, which the debugger reports as a pause.
+        terminal->setShellProfile(ShellProfile(
+            tr("Debuggee I/O"), QStringLiteral("/bin/sh"),
+            {QStringLiteral("-c"),
+             QStringLiteral(
+                 "trap '' QUIT; "
+                 "trap 'p=$(cat \"$2\" 2>/dev/null); "
+                 "[ -n \"$p\" ] && kill -INT \"$p\" 2>/dev/null' INT; "
+                 "tty > \"$1\"; "
+                 "while :; do sleep 3600 & wait $!; done"),
+             QStringLiteral("lightpad-debug"), ttyFile, pidFile}));
+        if (!terminal->isRunning()) {
+          terminal->startShell(cwd);
+        }
+
+        auto finish = [guarded, terminal, ttyFile](const QString &tty) {
+          QFile::remove(ttyFile);
+          if (guarded) {
+            guarded->provideInferiorTerminal(tty);
+          } else if (terminal) {
+            terminal->stopShell();
+          }
+        };
+
+        auto *poll = new QTimer(terminal);
+        auto attempts = QSharedPointer<int>::create(0);
+        connect(poll, &QTimer::timeout, poll,
+                [poll, attempts, ttyFile, finish]() {
+                  QFile file(ttyFile);
+                  QString tty;
+                  if (file.open(QIODevice::ReadOnly)) {
+                    tty = QString::fromLocal8Bit(file.readAll()).trimmed();
+                  }
+                  const bool ready = tty.startsWith(QLatin1String("/dev/"));
+                  if (ready || ++*attempts >= 80) {
+                    poll->stop();
+                    poll->deleteLater();
+                    finish(ready ? tty : QString());
+                  }
+                });
+        poll->start(50);
+
+        if (guarded->client()) {
+          connect(guarded->client(), &DapClient::processChanged, terminal,
+                  [pidFile](int pid, const QString &) {
+                    QFile file(pidFile);
+                    if (pid > 0 &&
+                        file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                      file.write(QByteArray::number(pid));
+                    }
+                  });
+        }
+
+        // Release the placeholder once the session is over, and leave the tab
+        // with a normal shell profile so it stays usable.
+        connect(
+            guarded, &DebugSession::terminated, terminal,
+            [terminal, defaultProfile, pidFile]() {
+              QFile::remove(pidFile);
+              if (!terminal) {
+                return;
+              }
+              terminal->stopShell();
+              terminal->setShellProfile(defaultProfile);
+            },
+            Qt::SingleShotConnection);
+#endif
+          });
+  connect(session, &DebugSession::terminated, this,
+          [this, sessionId]() { m_debugInferiorTerminals.remove(sessionId); });
+}
+
 void MainWindow::attachDebugSession(const QString &sessionId) {
   if (sessionId.isEmpty()) {
     return;
@@ -422,6 +550,7 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
   }
 
   m_activeDebugSessionId = sessionId;
+  hookInferiorTerminal(session);
   DebugSessionManager::instance().setFocusedSession(sessionId);
   debugPanel->setDapClient(session->client());
   WatchManager::instance().setDapClient(session->client());
