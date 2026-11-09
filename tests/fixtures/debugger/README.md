@@ -1,7 +1,7 @@
 # Debugger integration fixtures
 
 These scenes run through Lightpad's real DAP client and value inspector, rather
-than a simulated debugger. Both finish graphics work before the `INSPECT:`
+than a simulated debugger. Both finish graphics work before the inspection line
 breakpoint, then mutate data so stepping and stale snapshots can be checked.
 
 `vtk_scene.py` creates and renders a VTK sphere offscreen, attaches a three

@@ -40,6 +40,12 @@
 #include <QToolButton>
 #include <QTreeWidget>
 #include <memory>
+#ifndef Q_OS_WIN
+#include <fcntl.h>
+#include <poll.h>
+#include <stdlib.h>
+#include <unistd.h>
+#endif
 
 Q_DECLARE_METATYPE(DapExceptionInfo)
 Q_DECLARE_METATYPE(DapDataBreakpointInfo)
@@ -167,6 +173,9 @@ private slots:
   void testVtkPythonObjectsAndArrays();
   void testOpenGLCppObjectsAndMatrices();
   void testGdbLaunchEnvironmentPreservesGraphicsContext();
+  void testGdbDebuggeeReadsStdinFromProvidedTerminal();
+  void testGdbDebuggeeLaunchesWithoutTerminal();
+  void testDebugToolbarCollapsesToIconsWhenNarrow();
   void testConsoleResultOpensStructuredInspector();
   void testPartialThreadExecution();
   void testSelectedThreadExecutionArguments();
@@ -2109,9 +2118,9 @@ void TestDap::testDapClientRestartWrapsLaunchArguments() {
 
 void TestDap::testDapClientRestartDropsOldInspectionResponses() {
   DapClient client;
-  QVERIFY(client.start(fakeAdapterPath(),
-                        {"--stop-on-launch", "--caps",
-                         R"({"supportsRestartRequest":true})"}));
+  QVERIFY(
+      client.start(fakeAdapterPath(), {"--stop-on-launch", "--caps",
+                                       R"({"supportsRestartRequest":true})"}));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
   client.launch(QJsonObject{{"program", "/tmp/app"}});
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
@@ -2150,9 +2159,9 @@ void TestDap::testWatchValuesFollowClientLifecycle() {
     watches.clearAll();
   });
   auto client = std::make_unique<DapClient>();
-  QVERIFY(client->start(fakeAdapterPath(),
-                         {"--stop-on-launch", "--caps",
-                          R"({"supportsRestartRequest":true})"}));
+  QVERIFY(
+      client->start(fakeAdapterPath(), {"--stop-on-launch", "--caps",
+                                        R"({"supportsRestartRequest":true})"}));
   QTRY_COMPARE_WITH_TIMEOUT(client->state(), DapClient::State::Ready, 5000);
   client->launch(QJsonObject{{"program", "/tmp/app"}});
   QTRY_COMPARE_WITH_TIMEOUT(client->state(), DapClient::State::Stopped, 5000);
@@ -2175,8 +2184,8 @@ void TestDap::testWatchValuesFollowClientLifecycle() {
   else
     client.reset();
 
-  QTRY_COMPARE_WITH_TIMEOUT(watches.watch(id).value,
-                             QString("<not evaluated>"), 5000);
+  QTRY_COMPARE_WITH_TIMEOUT(watches.watch(id).value, QString("<not evaluated>"),
+                            5000);
   QCOMPARE(watches.watch(id).expression, QString("matrix"));
   QVERIFY(watches.watch(id).type.isEmpty());
   QCOMPARE(watches.watch(id).variablesReference, 0);
@@ -2191,9 +2200,9 @@ void TestDap::testNativeRestartClearsDebugPanel() {
     watches.clearAll();
   });
   DapClient client;
-  QVERIFY(client.start(fakeAdapterPath(),
-                        {"--stop-on-launch", "--caps",
-                         R"({"supportsRestartRequest":true})"}));
+  QVERIFY(
+      client.start(fakeAdapterPath(), {"--stop-on-launch", "--caps",
+                                       R"({"supportsRestartRequest":true})"}));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
   watches.setDapClient(&client);
   DebugPanel panel;
@@ -2829,16 +2838,23 @@ bool waitForDebugSignal(QSignalSpy &spy, int count = 1, int timeout = 15000) {
   return spy.count() >= count;
 }
 
-int graphicsInspectionLine(const QString &path) {
+// Fixture breakpoints are located by code, not comments: the repository's
+// comment stripper would otherwise erase any marker.
+int firstLineContaining(const QString &path, const QByteArrayList &needles) {
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly))
     return 0;
   const auto lines = file.readAll().split('\n');
-  for (int i = 0; i < lines.size(); ++i) {
-    if (lines.at(i).contains("INSPECT:"))
-      return i + 1;
-  }
+  for (int i = 0; i < lines.size(); ++i)
+    for (const QByteArray &needle : needles)
+      if (lines.at(i).contains(needle))
+        return i + 1;
   return 0;
+}
+
+int graphicsInspectionLine(const QString &path) {
+  return firstLineContaining(
+      path, {"scene.model[0][0] = 2.0f;", "coordinates[0, 0] = 99.0"});
 }
 
 bool currentDebugFrame(DapClient &client, DapStackFrame *frame) {
@@ -3084,6 +3100,173 @@ void TestDap::testGdbLaunchEnvironmentPreservesGraphicsContext() {
   QVERIFY(!arguments.contains("environment"));
 }
 
+#ifndef Q_OS_WIN
+namespace {
+// Builds a tiny interactive C program and starts it under the real GDB adapter.
+// `terminal` receives the pty master (or -1) once the session has asked for a
+// debuggee terminal; `provide` decides which tty path the session is given.
+struct InteractiveGdbRun {
+  QTemporaryDir dir;
+  QString binary;
+  QString skipReason;
+};
+
+bool buildInteractiveProgram(InteractiveGdbRun &run) {
+  const QString compiler = QStandardPaths::findExecutable("cc");
+  const QString gdb = QStandardPaths::findExecutable("gdb");
+  if (compiler.isEmpty() || gdb.isEmpty()) {
+    run.skipReason = "needs a C compiler and GDB with DAP support";
+    return false;
+  }
+  const auto adapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
+  if (!adapter || !adapter->isAvailable()) {
+    run.skipReason = "GDB DAP is not usable on this system";
+    return false;
+  }
+  if (!run.dir.isValid()) {
+    run.skipReason = "temporary directory unavailable";
+    return false;
+  }
+  const QString source = run.dir.filePath("interactive.c");
+  QFile file(source);
+  if (!file.open(QIODevice::WriteOnly))
+    return false;
+  file.write("#include <stdio.h>\n"
+             "int main(void) {\n"
+             "  int n = 0;\n"
+             "  printf(\"enter: \");\n"
+             "  if (scanf(\"%d\", &n) != 1) { puts(\"no-input\"); return 1; }\n"
+             "  printf(\"got %d\\n\", n * 2);\n"
+             "  return 0;\n"
+             "}\n");
+  file.close();
+  run.binary = run.dir.filePath("interactive");
+  QProcess build;
+  build.start(compiler, {"-g", "-O0", source, "-o", run.binary});
+  if (!build.waitForFinished(60000) || build.exitCode() != 0)
+    return false;
+  return true;
+}
+
+DebugConfiguration interactiveConfiguration(const InteractiveGdbRun &run) {
+  DebugConfiguration configuration;
+  configuration.name = "interactive";
+  configuration.type = "cppdbg";
+  configuration.adapterId = "cppdbg-gdb";
+  configuration.request = "launch";
+  configuration.program = run.binary;
+  configuration.cwd = run.dir.path();
+  return configuration;
+}
+} // namespace
+
+void TestDap::testGdbDebuggeeReadsStdinFromProvidedTerminal() {
+  InteractiveGdbRun run;
+  if (!buildInteractiveProgram(run)) {
+    if (!run.skipReason.isEmpty())
+      QSKIP(qPrintable(run.skipReason));
+    QFAIL("Failed to build the interactive fixture");
+  }
+
+  const int master = posix_openpt(O_RDWR | O_NOCTTY);
+  QVERIFY(master >= 0);
+  auto closeMaster = qScopeGuard([master]() { ::close(master); });
+  QVERIFY(grantpt(master) == 0 && unlockpt(master) == 0);
+  const QString slave = QString::fromLocal8Bit(ptsname(master));
+  QVERIFY(!slave.isEmpty());
+
+  DebugSession session("stdin-terminal-test");
+  QSignalSpy requested(&session, &DebugSession::inferiorTerminalRequested);
+  QSignalSpy terminated(&session, &DebugSession::terminated);
+  QString consoleOutput;
+  connect(&session, &DebugSession::outputReceived, &session,
+          [&consoleOutput](const DapOutputEvent &event) {
+            consoleOutput += event.output;
+          });
+  connect(&session, &DebugSession::inferiorTerminalRequested, &session,
+          [&]() { session.provideInferiorTerminal(slave); });
+
+  const auto adapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
+  QVERIFY(session.start(interactiveConfiguration(run), adapter));
+
+  // Type the answer the way a user would; the line discipline holds it until
+  // the debuggee reads it.
+  QVERIFY(::write(master, "21\n", 3) == 3);
+
+  QByteArray terminalOutput;
+  auto drainTerminal = [&terminalOutput, master]() {
+    char buffer[512];
+    pollfd fd{master, POLLIN, 0};
+    while (::poll(&fd, 1, 0) > 0) {
+      const ssize_t n = ::read(master, buffer, sizeof(buffer));
+      if (n <= 0)
+        break;
+      terminalOutput.append(buffer, int(n));
+    }
+    return terminalOutput.contains("got 42");
+  };
+  QTRY_VERIFY_WITH_TIMEOUT(drainTerminal(), 20000);
+  QCOMPARE(requested.count(), 1);
+  QVERIFY(!terminalOutput.contains("no-input"));
+  QVERIFY2(consoleOutput.contains("Debuggee I/O"), qPrintable(consoleOutput));
+  QTRY_COMPARE_WITH_TIMEOUT(terminated.count(), 1, 10000);
+}
+
+void TestDap::testGdbDebuggeeLaunchesWithoutTerminal() {
+  InteractiveGdbRun run;
+  if (!buildInteractiveProgram(run)) {
+    if (!run.skipReason.isEmpty())
+      QSKIP(qPrintable(run.skipReason));
+    QFAIL("Failed to build the interactive fixture");
+  }
+
+  DebugSession session("no-terminal-test");
+  QSignalSpy terminated(&session, &DebugSession::terminated);
+  QString output;
+  connect(&session, &DebugSession::outputReceived, &session,
+          [&output](const DapOutputEvent &event) { output += event.output; });
+  // A UI that cannot supply a terminal must not block the launch.
+  connect(&session, &DebugSession::inferiorTerminalRequested, &session,
+          [&session]() { session.provideInferiorTerminal({}); });
+
+  const auto adapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
+  QVERIFY(session.start(interactiveConfiguration(run), adapter));
+  QTRY_COMPARE_WITH_TIMEOUT(terminated.count(), 1, 20000);
+  QVERIFY2(output.contains("no-input"), qPrintable(output));
+}
+#else
+void TestDap::testGdbDebuggeeReadsStdinFromProvidedTerminal() {
+  QSKIP("GDB debuggee terminals use a POSIX pty");
+}
+
+void TestDap::testGdbDebuggeeLaunchesWithoutTerminal() {
+  QSKIP("GDB debuggee terminals use a POSIX pty");
+}
+#endif
+
+void TestDap::testDebugToolbarCollapsesToIconsWhenNarrow() {
+  DebugPanel panel;
+  panel.resize(1200, 400);
+  panel.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&panel));
+  const auto buttons = panel.findChildren<QToolButton *>("debugToolbarButton");
+  QVERIFY(buttons.size() >= 7);
+  for (const QToolButton *button : buttons)
+    QCOMPARE(button->toolButtonStyle(), Qt::ToolButtonTextBesideIcon);
+
+  panel.resize(340, 400);
+  QTRY_COMPARE(buttons.first()->toolButtonStyle(), Qt::ToolButtonIconOnly);
+  for (const QToolButton *button : buttons) {
+    QCOMPARE(button->toolButtonStyle(), Qt::ToolButtonIconOnly);
+    QVERIFY(!button->icon().isNull());
+    QVERIFY(!button->toolTip().isEmpty());
+  }
+
+  panel.resize(1200, 400);
+  QTRY_COMPARE(buttons.first()->toolButtonStyle(),
+               Qt::ToolButtonTextBesideIcon);
+}
+
 void TestDap::testConsoleResultOpensStructuredInspector() {
   DapClient client;
   QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
@@ -3127,14 +3310,8 @@ QString concurrencyPython() {
 }
 
 int concurrencyMarkerLine(const QString &path) {
-  QFile file(path);
-  if (!file.open(QIODevice::ReadOnly))
-    return 0;
-  const auto lines = file.readAll().split('\n');
-  for (int i = 0; i < lines.size(); ++i)
-    if (lines.at(i).contains("_INSPECT"))
-      return i + 1;
-  return 0;
+  return firstLineContaining(path,
+                             {"inspection_marker =", "inspectionMarker ="});
 }
 
 bool workerFrame(DapClient &client, int thread, const QString &source,

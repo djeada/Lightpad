@@ -1097,6 +1097,46 @@ void DebugPanel::setupToolbar() {
   toolbarLayout->addWidget(metaGroup);
 }
 
+// When the toolbar no longer fits, the transport buttons drop their text labels
+// (tooltips and shortcuts remain) instead of being clipped by the scroll area.
+void DebugPanel::resizeEvent(QResizeEvent *event) {
+  QWidget::resizeEvent(event);
+  updateToolbarDensity();
+}
+
+void DebugPanel::updateToolbarDensity() {
+  if (!m_toolbar) {
+    return;
+  }
+  const auto buttons = m_toolbar->findChildren<QToolButton *>(
+      QStringLiteral("debugToolbarButton"));
+  if (buttons.isEmpty()) {
+    return;
+  }
+
+  // Measure the toolbar with text labels; once compact, keep the last
+  // measurement so widening restores the labels without flapping.
+  if (!m_toolbarCompact) {
+    m_toolbarTextWidth = m_toolbar->sizeHint().width();
+  }
+
+  constexpr int kPanelChrome = 48;
+  const bool compact = width() < m_toolbarTextWidth + kPanelChrome;
+  if (compact == m_toolbarCompact) {
+    return;
+  }
+  m_toolbarCompact = compact;
+  for (QToolButton *button : buttons) {
+    button->setToolButtonStyle(compact ? Qt::ToolButtonIconOnly
+                                       : Qt::ToolButtonTextBesideIcon);
+  }
+  const auto dividers =
+      m_toolbar->findChildren<QFrame *>(QStringLiteral("debugToolbarDivider"));
+  for (QFrame *divider : dividers) {
+    divider->setVisible(!compact);
+  }
+}
+
 void DebugPanel::applyTransportIcons() {
 
   const QColor neutral = m_themeInitialized ? m_theme.foregroundColor

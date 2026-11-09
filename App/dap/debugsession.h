@@ -7,6 +7,8 @@
 #include <QString>
 #include <memory>
 
+class QTimer;
+
 #include "dapclient.h"
 #include "debugconfiguration.h"
 #include "idebugadapter.h"
@@ -74,6 +76,14 @@ signals:
   void outputReceived(const DapOutputEvent &event);
   void error(const QString &message);
   void exceptionInfoReceived(int threadId, const DapExceptionInfo &info);
+  // Emitted before launch when the adapter needs a terminal for the debuggee's
+  // stdin/stdout. The receiver must answer with provideInferiorTerminal().
+  void inferiorTerminalRequested();
+
+public slots:
+  // Supplies the tty device the debuggee should use (empty to launch without
+  // one) and continues the launch.
+  void provideInferiorTerminal(const QString &ttyPath);
 
 private slots:
   void onClientStateChanged(DapClient::State state);
@@ -103,6 +113,9 @@ private:
   void reportTermination();
 
   bool m_launchRequestSent;
+  bool m_awaitingInferiorTerminal = false;
+  bool m_inferiorTerminalResolved = false;
+  QTimer *m_inferiorTerminalTimer = nullptr;
   bool m_adapterInitializedReceived;
   bool m_configurationDoneSent;
 

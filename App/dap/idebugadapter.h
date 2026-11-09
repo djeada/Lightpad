@@ -100,6 +100,20 @@ public:
 
   virtual bool launchesBeforeInitialized() const { return false; }
 
+  // True when the adapter gives the debuggee no usable stdin/stdout of its own
+  // (e.g. GDB's DAP server), so the session should ask the UI for a terminal
+  // and point the debuggee's console at it via inferiorTtyCommand().
+  virtual bool
+  needsInferiorTerminal(const DebugConfiguration &configuration) const {
+    Q_UNUSED(configuration);
+    return false;
+  }
+
+  virtual QString inferiorTtyCommand(const QString &ttyPath) const {
+    Q_UNUSED(ttyPath);
+    return {};
+  }
+
   virtual QJsonObject
   createLaunchConfig(const QString &filePath,
                      const QString &workingDir = {}) const = 0;

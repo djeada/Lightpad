@@ -43,6 +43,7 @@
 #include <QTextDocument>
 #include <QThread>
 #include <QToolButton>
+#include <QUuid>
 #include <QVBoxLayout>
 #include <cstdio>
 #include <cstring>

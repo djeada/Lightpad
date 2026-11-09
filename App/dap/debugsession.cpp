@@ -4,6 +4,8 @@
 #include "debugadapterregistry.h"
 
 #include <QFileInfo>
+#include <QMetaMethod>
+#include <QTimer>
 
 namespace {
 QString
@@ -120,6 +122,8 @@ bool DebugSession::start(const DebugConfiguration &config,
   m_adapter = adapter;
   m_lastError.clear();
   m_launchRequestSent = false;
+  m_awaitingInferiorTerminal = false;
+  m_inferiorTerminalResolved = false;
   m_adapterInitializedReceived = false;
   m_configurationDoneSent = false;
 
@@ -178,6 +182,8 @@ void DebugSession::restart() {
   if (!m_client->supportsRestartRequest()) {
 
     m_launchRequestSent = false;
+    m_awaitingInferiorTerminal = false;
+    m_inferiorTerminalResolved = false;
     m_adapterInitializedReceived = false;
     m_configurationDoneSent = false;
     m_terminationReported = false;
@@ -333,8 +339,53 @@ void DebugSession::syncSessionBreakpoints() {
   }
 }
 
+void DebugSession::provideInferiorTerminal(const QString &ttyPath) {
+  if (!m_awaitingInferiorTerminal) {
+    return;
+  }
+  m_awaitingInferiorTerminal = false;
+  m_inferiorTerminalResolved = true;
+  if (m_inferiorTerminalTimer)
+    m_inferiorTerminalTimer->stop();
+  if (m_state == State::Idle || m_state == State::Terminated) {
+    return;
+  }
+
+  if (!ttyPath.isEmpty() && m_adapter) {
+    const QString command = m_adapter->inferiorTtyCommand(ttyPath);
+    if (!command.isEmpty()) {
+      m_client->evaluate(command);
+      DapOutputEvent note;
+      note.category = QStringLiteral("console");
+      note.output = QStringLiteral(
+          "Program input and output are in the \"Debuggee I/O\" terminal "
+          "tab.\n");
+      emit m_client->output(note);
+    }
+  }
+  sendLaunchOrAttach();
+}
+
 void DebugSession::sendLaunchOrAttach() {
-  if (m_launchRequestSent) {
+  if (m_launchRequestSent || m_awaitingInferiorTerminal) {
+    return;
+  }
+
+  if (m_configuration.request != "attach" && !m_inferiorTerminalResolved &&
+      m_adapter && m_adapter->needsInferiorTerminal(m_configuration) &&
+      isSignalConnected(
+          QMetaMethod::fromSignal(&DebugSession::inferiorTerminalRequested))) {
+    m_awaitingInferiorTerminal = true;
+    emit inferiorTerminalRequested();
+    // Never block the launch on a UI that fails to answer.
+    if (!m_inferiorTerminalTimer) {
+      m_inferiorTerminalTimer = new QTimer(this);
+      m_inferiorTerminalTimer->setSingleShot(true);
+      m_inferiorTerminalTimer->setInterval(5000);
+      connect(m_inferiorTerminalTimer, &QTimer::timeout, this,
+              [this]() { provideInferiorTerminal({}); });
+    }
+    m_inferiorTerminalTimer->start();
     return;
   }
 
