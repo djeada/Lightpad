@@ -159,6 +159,8 @@ struct DapVariable {
   int indexedVariables = 0;
   QString evaluateName;
   QString memoryReference;
+  bool hasIndexedVariables = false;
+  bool hasNamedVariables = false;
 
   static DapVariable fromJson(const QJsonObject &obj) {
     DapVariable var;
@@ -168,6 +170,8 @@ struct DapVariable {
     var.variablesReference = obj["variablesReference"].toInt();
     var.namedVariables = obj["namedVariables"].toInt();
     var.indexedVariables = obj["indexedVariables"].toInt();
+    var.hasIndexedVariables = obj.contains("indexedVariables");
+    var.hasNamedVariables = obj.contains("namedVariables");
     var.evaluateName = obj["evaluateName"].toString();
     var.memoryReference = obj["memoryReference"].toString();
     return var;
@@ -501,6 +505,12 @@ public:
   void getThreads();
 
   void getStackTrace(int threadId, int startFrame = 0, int levels = 0);
+  QList<DapStackFrame> cachedStackFrames(int threadId) const {
+    return m_stackFrames.value(threadId);
+  }
+  int cachedStackFrameCount(int threadId) const {
+    return m_stackFrameCounts.value(threadId);
+  }
 
   void getScopes(int frameId);
 
@@ -511,7 +521,13 @@ public:
                        int start = 0, int count = 100);
 
   int evaluate(const QString &expression, int frameId = -1,
-               const QString &context = "repl");
+               const QString &context = "repl", bool interactive = false);
+  bool hasPendingInteractiveEvaluation() const {
+    return !m_interactiveEvaluations.isEmpty();
+  }
+  bool evaluationExecutedTarget(int requestSeq) const {
+    return m_executingEvaluations.contains(requestSeq);
+  }
 
   void setVariable(int variablesReference, const QString &name,
                    const QString &value);
@@ -550,6 +566,8 @@ signals:
   void launched();
   void attached();
   void restarting();
+  void inspectionInvalidated();
+  void interactiveEvaluationFinished();
   void terminated();
   void exited(int exitCode);
 
@@ -634,7 +652,7 @@ private:
   void setState(State state);
   static bool isLikelyUnsupportedRequestMessage(const QString &message);
   bool hasPendingRequestTag(const QString &tag) const;
-  void clearPendingInspectionRequests();
+  void clearPendingInspectionRequests(bool preserveInteractive = false);
   void applyContinued(int threadId, bool allThreads);
   void failDiscardedMessage(const QByteArray &sample, const QString &reason);
   bool connectSocket(const QString &host, quint16 port);
@@ -662,6 +680,10 @@ private:
   bool m_parseScheduled = false;
   QMap<int, QString> m_pendingRequests;
   QSet<int> m_staleRequests;
+  QSet<int> m_interactiveEvaluations;
+  QSet<int> m_executingEvaluations;
+  QHash<int, QList<DapStackFrame>> m_stackFrames;
+  QHash<int, int> m_stackFrameCounts;
   QProcess *m_serverProcess = nullptr;
   QString m_serverProgram;
   QStringList m_serverArguments;

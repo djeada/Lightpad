@@ -492,6 +492,12 @@ void MainWindow::ensureDebugPanel() {
 
   connect(debugPanel, &DebugPanel::locationClicked, this,
           [this](const QString &filePath, int line, int column) {
+            // A delayed stack response must not take focus from program input.
+            QPointer<QWidget> terminalFocus;
+            if (terminalWidget && QApplication::focusWidget() &&
+                terminalWidget->isAncestorOf(QApplication::focusWidget())) {
+              terminalFocus = QApplication::focusWidget();
+            }
             QString targetPath = filePath;
             QFileInfo sourceInfo(targetPath);
             if (!targetPath.isEmpty() && sourceInfo.isRelative()) {
@@ -526,7 +532,11 @@ void MainWindow::ensureDebugPanel() {
                                   targetColumn);
               textArea->setTextCursor(cursor);
               textArea->centerCursor();
-              textArea->setFocus();
+              if (terminalFocus) {
+                terminalFocus->setFocus(Qt::OtherFocusReason);
+              } else {
+                textArea->setFocus();
+              }
             }
           });
   connect(debugPanel, &DebugPanel::executionLocationChanged, this,
@@ -565,6 +575,8 @@ void MainWindow::ensureDebugPanel() {
           });
   connect(debugPanel, &DebugPanel::startDebugRequested, this,
           &MainWindow::startDebuggingForCurrentFile);
+  connect(debugPanel, &DebugPanel::showProgramIoRequested, this,
+          [this]() { showDebugTerminal(m_activeDebugSessionId); });
   connect(debugPanel, &DebugPanel::restartDebugRequested, this, [this]() {
     if (!m_activeDebugSessionId.isEmpty()) {
       if (DebugSession *session =

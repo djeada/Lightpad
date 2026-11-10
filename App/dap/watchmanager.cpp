@@ -46,6 +46,11 @@ void WatchManager::updateWatch(int id, const QString &expression) {
   m_watches[id].value.clear();
   m_watches[id].type.clear();
   m_watches[id].variablesReference = 0;
+  m_watches[id].indexedVariables = 0;
+  m_watches[id].namedVariables = 0;
+  m_watches[id].hasIndexedVariables = false;
+  m_watches[id].hasNamedVariables = false;
+  m_watches[id].memoryReference.clear();
   m_watches[id].isError = false;
   m_watches[id].errorMessage.clear();
 
@@ -78,7 +83,7 @@ void WatchManager::setDapClient(DapClient *client) {
   invalidateValues();
 
   if (m_dapClient) {
-    connect(m_dapClient, &DapClient::evaluateResponse, this,
+    connect(m_dapClient, &DapClient::evaluateValueReceived, this,
             &WatchManager::onEvaluateResult);
     connect(m_dapClient, &DapClient::evaluateResponseError, this,
             &WatchManager::onEvaluateError);
@@ -92,6 +97,8 @@ void WatchManager::setDapClient(DapClient *client) {
             });
     connect(m_dapClient, &DapClient::restarting, this,
             &WatchManager::invalidateValues);
+    connect(m_dapClient, &DapClient::inspectionInvalidated, this,
+            &WatchManager::invalidateValues);
     connect(m_dapClient, &QObject::destroyed, this,
             &WatchManager::invalidateValues);
   }
@@ -104,6 +111,11 @@ void WatchManager::invalidateValues() {
     it->value = "<not evaluated>";
     it->type.clear();
     it->variablesReference = 0;
+    it->indexedVariables = 0;
+    it->namedVariables = 0;
+    it->hasIndexedVariables = false;
+    it->hasNamedVariables = false;
+    it->memoryReference.clear();
     it->isError = false;
     it->errorMessage.clear();
     emit watchUpdated(it.value());
@@ -157,10 +169,16 @@ void WatchManager::getWatchChildren(int watchId, int variablesReference) {
   m_dapClient->getVariables(variablesReference);
 }
 
-void WatchManager::onEvaluateResult(int requestSeq, const QString &expression,
-                                    const QString &result, const QString &type,
-                                    int variablesReference) {
-  Q_UNUSED(expression);
+void WatchManager::cancelWatchChildren(int watchId) {
+  for (auto it = m_pendingVariables.begin(); it != m_pendingVariables.end();) {
+    if (it.value() == watchId)
+      it = m_pendingVariables.erase(it);
+    else
+      ++it;
+  }
+}
+
+void WatchManager::onEvaluateResult(int requestSeq, const DapVariable &value) {
   if (!m_pendingEvaluations.contains(requestSeq)) {
     return;
   }
@@ -173,9 +191,14 @@ void WatchManager::onEvaluateResult(int requestSeq, const QString &expression,
   }
 
   WatchExpression &watch = m_watches[watchId];
-  watch.value = result;
-  watch.type = type;
-  watch.variablesReference = variablesReference;
+  watch.value = value.value;
+  watch.type = value.type;
+  watch.variablesReference = value.variablesReference;
+  watch.indexedVariables = value.indexedVariables;
+  watch.namedVariables = value.namedVariables;
+  watch.hasIndexedVariables = value.hasIndexedVariables;
+  watch.hasNamedVariables = value.hasNamedVariables;
+  watch.memoryReference = value.memoryReference;
   watch.isError = false;
   watch.errorMessage.clear();
 
@@ -224,6 +247,11 @@ void WatchManager::onEvaluateError(int requestSeq, const QString &expression,
   watch.value.clear();
   watch.type.clear();
   watch.variablesReference = 0;
+  watch.indexedVariables = 0;
+  watch.namedVariables = 0;
+  watch.hasIndexedVariables = false;
+  watch.hasNamedVariables = false;
+  watch.memoryReference.clear();
   watch.isError = true;
   watch.errorMessage = errorMessage;
 

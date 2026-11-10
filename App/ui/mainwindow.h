@@ -363,7 +363,7 @@ private:
   QMetaObject::Connection m_breakpointsSetConnection;
   QMetaObject::Connection m_breakpointChangedConnection;
   QMetaObject::Connection m_runInTerminalConnection;
-  QHash<QString, QPointer<Terminal>> m_debugInferiorTerminals;
+  QHash<QString, QPointer<Terminal>> m_debugTerminals;
   QMetaObject::Connection m_sessionTerminatedConnection;
   QMetaObject::Connection m_sessionErrorConnection;
   QMetaObject::Connection m_sessionStateConnection;
@@ -585,6 +585,8 @@ private:
                              QString *errorMessage) const;
   void attachDebugSession(const QString &sessionId);
   void hookInferiorTerminal(DebugSession *session);
+  void registerDebugTerminal(const QString &sessionId, Terminal *terminal);
+  void showDebugTerminal(const QString &sessionId);
   void clearDebugSession();
   QList<LightpadTabWidget *> allTabWidgets() const;
   void closeEvent(QCloseEvent *event);

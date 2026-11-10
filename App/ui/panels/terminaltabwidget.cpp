@@ -178,12 +178,13 @@ void TerminalTabWidget::setupShellProfileMenu() {
   }
 }
 
-Terminal *TerminalTabWidget::addNewTerminal(const QString &workingDirectory) {
+Terminal *TerminalTabWidget::addNewTerminal(const QString &workingDirectory,
+                                            const QString &title) {
   QString workDir =
       workingDirectory.isEmpty() ? m_currentWorkingDirectory : workingDirectory;
-  return addTerminalToTabWidget(m_activeTabWidget ? m_activeTabWidget
-                                                  : m_tabWidget,
-                                workDir, generateTerminalName());
+  return addTerminalToTabWidget(
+      m_activeTabWidget ? m_activeTabWidget : m_tabWidget, workDir,
+      title.isEmpty() ? generateTerminalName() : title);
 }
 
 Terminal *
@@ -269,6 +270,27 @@ Terminal *TerminalTabWidget::currentTerminal() {
     terminal = qobject_cast<Terminal *>(m_tabWidget->currentWidget());
   }
   return terminal;
+}
+
+bool TerminalTabWidget::setCurrentTerminal(Terminal *terminal) {
+  if (!terminal) {
+    return false;
+  }
+  for (QTabWidget *tabs : {m_tabWidget, m_splitTabWidget}) {
+    if (!tabs) {
+      continue;
+    }
+    const int index = tabs->indexOf(terminal);
+    if (index >= 0) {
+      tabs->setCurrentIndex(index);
+      m_activeTabWidget = tabs;
+      terminal->refreshTerminalSize();
+      terminal->setFocus(Qt::OtherFocusReason);
+      updateRunningState();
+      return true;
+    }
+  }
+  return false;
 }
 
 Terminal *TerminalTabWidget::terminalAt(int index) {
