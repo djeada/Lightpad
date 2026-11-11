@@ -12,10 +12,13 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QScopedValueRollback>
 #include <QScrollBar>
+#include <QSet>
 #include <QShortcut>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -32,18 +35,30 @@ constexpr int Expression = Qt::UserRole + 1;
 constexpr int RawValue = Qt::UserRole + 2;
 constexpr int IndexedCount = Qt::UserRole + 3;
 constexpr int NamedCount = Qt::UserRole + 4;
-constexpr int Indexed = Qt::UserRole + 5;
 constexpr int Loaded = Qt::UserRole + 6;
 constexpr int PageAction = Qt::UserRole + 7;
 constexpr int PageStart = Qt::UserRole + 8;
 constexpr int MoreReference = Qt::UserRole + 9;
 constexpr int ReadError = Qt::UserRole + 10;
-constexpr int KnownCount = Qt::UserRole + 11;
 constexpr int PointerRow = Qt::UserRole + 12;
 constexpr int StringBytes = Qt::UserRole + 13;
+constexpr int Variable = Qt::UserRole + 14;
+constexpr int NamedChildren = Qt::UserRole + 15;
+constexpr int PrefixPaging = Qt::UserRole + 16;
+constexpr int NextOffset = Qt::UserRole + 17;
+constexpr int FixedArray = Qt::UserRole + 18;
+constexpr int RepeatedReference = Qt::UserRole + 19;
+constexpr int MoreStart = Qt::UserRole + 20;
 constexpr int PageSize = 100;
+constexpr int MaxTreeItems = 10000;
 constexpr int TableRows = 50;
 constexpr int TableColumns = 50;
+
+void removePage(QTreeWidgetItem *parent) {
+  const int last = parent->childCount() - 1;
+  if (last >= 0 && parent->child(last)->data(0, PageAction).toBool())
+    delete parent->takeChild(last);
+}
 } // namespace
 
 DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
@@ -210,6 +225,9 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
   m_tree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
   m_tree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
   m_tree->setColumnWidth(0, 220);
+  m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_tree, &QTreeWidget::customContextMenuRequested, this,
+          &DebugValueInspector::showTreeMenu);
   connect(m_tree, &QTreeWidget::itemExpanded, this,
           [this](QTreeWidgetItem *item) {
             if (!item->data(0, Loaded).toBool())
@@ -249,16 +267,12 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
             if (rootIndex < 0 || rootIndex >= m_root->childCount())
               return;
             auto *row = m_root->child(rootIndex);
-            auto *target = row;
-            const auto *header = m_table->horizontalHeaderItem(columnIndex);
-            if (header) {
-              for (int i = 0; i < row->childCount(); ++i) {
-                if (row->child(i)->text(0) == header->text()) {
-                  target = row->child(i);
-                  break;
-                }
-              }
-            }
+            auto *target =
+                cell->data(Qt::UserRole + 2).isValid()
+                    ? row->child(cell->data(Qt::UserRole + 2).toInt())
+                    : row;
+            if (!target)
+              return;
             m_tabs->setCurrentIndex(0);
             row->setExpanded(true);
             target->setExpanded(true);
@@ -328,17 +342,19 @@ void DebugValueInspector::setDapClient(DapClient *client) {
             ++m_readErrors;
             item->setData(0, ReadError, true);
             item->setData(0, RawValue, tr("<unreadable: %1>").arg(message));
-            refreshDisplay();
+            finishElementPage();
           });
   connect(client, &DapClient::inspectionVariablesFailed, this,
           [this](int seq, const QString &message) {
             if (!m_requests.contains(seq))
               return;
             const Request request = m_requests.take(seq);
-            request.item->setData(0, Loaded, false);
             m_status->setText(
-                tr("Could not load children: %1. Collapse and expand to retry.")
-                    .arg(message));
+                request.start == 0
+                    ? tr("Could not load children: %1. Collapse "
+                         "and expand to retry.")
+                          .arg(message)
+                    : tr("Could not load the next page: %1.").arg(message));
           });
   connect(client, &DapClient::stateChanged, this,
           [this](DapClient::State state) {
@@ -361,24 +377,51 @@ void DebugValueInspector::setDapClient(DapClient *client) {
           });
 }
 
-bool DebugValueInspector::isNative() const {
-  if (!m_client)
+bool DebugValueInspector::supportsNativeBuffers() const {
+  return m_client && DebugValueFormatter::supportsNativeBuffers(
+                         m_client->adapterId(), m_client->adapterType());
+}
+
+bool DebugValueInspector::usesDelve() const {
+  return m_client && (m_client->adapterId() == "go-delve" ||
+                      m_client->adapterType() == "go");
+}
+
+bool DebugValueInspector::usesJsDebug() const {
+  return m_client && (m_client->adapterId() == "node-debug" ||
+                      m_client->adapterType() == "node" ||
+                      m_client->adapterType() == "pwa-node");
+}
+
+bool DebugValueInspector::pagesByIndex(const QString &filter) const {
+  // Delve counts map entries, and js-debug counts array slots including holes.
+  return filter == QLatin1String("indexed") && (usesDelve() || usesJsDebug());
+}
+
+bool DebugValueInspector::isPythonSequence(const QTreeWidgetItem *item) const {
+  if (!m_client || (m_client->adapterId() != "python-debugpy" &&
+                    m_client->adapterType() != "debugpy"))
     return false;
-  const QString adapter =
-      (m_client->adapterId() + ' ' + m_client->adapterType()).toLower();
-  return adapter.contains("gdb") || adapter.contains("lldb") ||
-         adapter.contains("cppdbg") || adapter.contains("cppvsdbg");
+  const QString type = item->text(2);
+  return type == "list" || type == "tuple" || type == "ndarray";
 }
 
-bool DebugValueInspector::isIndexed(const DapVariable &value) {
-  const QString type = value.type.toLower();
-  return value.hasIndexedVariables || value.indexedVariables > 0 ||
-         type == "list" || type == "tuple" || type == "ndarray" ||
-         type == "array" || type.endsWith(']');
+bool DebugValueInspector::hasChildren(const QTreeWidgetItem *item) {
+  return item->childCount() > 0 ||
+         item->childIndicatorPolicy() == QTreeWidgetItem::ShowIndicator;
 }
 
-bool DebugValueInspector::isIndex(const QString &name) {
-  return indexForName(name) >= 0;
+bool DebugValueInspector::hasKnownEmptyChildren(
+    const DapVariable &value) const {
+  if (value.indexedVariables > 0 || value.namedVariables > 0)
+    return false;
+  if (value.hasIndexedVariables && value.hasNamedVariables)
+    return true;
+  // GDB reports a count for exactly one kind of children.
+  return m_client &&
+         (m_client->adapterId().contains("gdb", Qt::CaseInsensitive) ||
+          m_client->adapterType().compare("gdb", Qt::CaseInsensitive) == 0) &&
+         (value.hasIndexedVariables || value.hasNamedVariables);
 }
 
 qlonglong DebugValueInspector::indexForName(QString name) {
@@ -415,18 +458,18 @@ DebugValueInspector::itemDisplayValue(const QTreeWidgetItem *item) const {
     const int count = item->data(0, IndexedCount).toInt();
     text = count > 0 ? tr("[%1 elements]").arg(count) : QStringLiteral("{…}");
   }
+  if (item->data(0, RepeatedReference).toBool())
+    return tr("%1 (already in this branch)").arg(text);
   return text;
 }
 
 void DebugValueInspector::updateItem(QTreeWidgetItem *item,
                                      const DapVariable &value) {
   item->setText(0, value.name);
-  item->setText(
-      1, DebugValueFormatter::summary(displayValue(value.value, value.type)));
   item->setText(2, value.type);
   item->setData(0, Reference, value.variablesReference);
   QString expression = value.evaluateName;
-  if (expression.isEmpty() && item->parent()) {
+  if (expression.isEmpty() && item->parent() && supportsNativeBuffers()) {
     expression = DebugValueFormatter::childExpression(
         item->parent()->data(0, Expression).toString(), item->parent()->text(2),
         value.name);
@@ -435,14 +478,47 @@ void DebugValueInspector::updateItem(QTreeWidgetItem *item,
   item->setData(0, RawValue, value.value);
   item->setData(0, IndexedCount, value.indexedVariables);
   item->setData(0, NamedCount, value.namedVariables);
-  item->setData(0, KnownCount,
-                value.hasIndexedVariables || value.hasNamedVariables ||
-                    value.indexedVariables > 0 || value.namedVariables > 0);
-  item->setData(0, Indexed, isIndexed(value));
+  item->setData(0, Variable, QVariant::fromValue(value));
+  const int length = supportsNativeBuffers() && value.variablesReference == 0
+                         ? DebugValueFormatter::arrayLength(value.type)
+                         : 0;
+  const bool fixedArray = length > 0 && !expression.isEmpty();
+  item->setData(0, FixedArray, fixedArray);
+  QByteArray bytes;
+  const bool cachedCharacters =
+      length > 0 && expression.isEmpty() &&
+      DebugValueFormatter::isCharacterArray(value.type) &&
+      DebugValueFormatter::stringBytes(value.value, &bytes) && !bytes.isEmpty();
+  if (fixedArray) {
+    item->setData(0, IndexedCount, qMin(length, MaxTreeItems));
+  } else if (cachedCharacters) {
+    bytes.truncate(length);
+    item->setData(0, IndexedCount, bytes.size());
+    item->setData(0, StringBytes, bytes);
+  }
+  bool repeated = false;
+  if (value.variablesReference > 0 && !item->data(0, NamedChildren).toBool()) {
+    for (auto *ancestor = item->parent(); ancestor;
+         ancestor = ancestor->parent()) {
+      if (ancestor->data(0, NamedChildren).toBool())
+        continue;
+      const auto previous = ancestor->data(0, Variable).value<DapVariable>();
+      if (previous.variablesReference == value.variablesReference ||
+          (supportsNativeBuffers() && !value.memoryReference.isEmpty() &&
+           previous.memoryReference == value.memoryReference &&
+           previous.type == value.type)) {
+        repeated = true;
+        break;
+      }
+    }
+  }
+  item->setData(0, RepeatedReference, repeated);
   item->setText(1, DebugValueFormatter::summary(itemDisplayValue(item)));
   for (int c = 0; c < 3; ++c)
     item->setToolTip(c, DebugValueFormatter::format(value.value));
-  if (value.variablesReference > 0)
+  if ((value.variablesReference > 0 && !hasKnownEmptyChildren(value) &&
+       !repeated) ||
+      fixedArray || cachedCharacters)
     item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
   else
     item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
@@ -451,6 +527,7 @@ void DebugValueInspector::updateItem(QTreeWidgetItem *item,
 void DebugValueInspector::clearValue() {
   m_requests.clear();
   m_elementRequests.clear();
+  m_arrayPages.clear();
   m_lengthRequest = 0;
   m_lengthResolved = false;
   m_root = nullptr;
@@ -462,7 +539,6 @@ void DebugValueInspector::clearValue() {
   m_bufferLayout = 0;
   m_readErrors = 0;
   m_stringView = false;
-  m_stringBytes.clear();
   m_arrayControls->hide();
   m_tree->clear();
   m_table->clear();
@@ -494,12 +570,15 @@ void DebugValueInspector::clear() {
 }
 
 void DebugValueInspector::setValue(const DapVariable &value, int frameId,
-                                   const QString &lengthExpression) {
+                                   const QString &lengthExpression,
+                                   int threadId) {
   clear();
   m_frameId = frameId;
   m_expression = value.evaluateName;
   m_valueName = value.name;
-  m_threadId = m_client ? m_client->currentThreadId() : 0;
+  m_threadId = threadId > 0 ? threadId
+               : m_client   ? m_client->currentThreadId()
+                            : 0;
   if (m_client)
     bindFrame(m_client->cachedStackFrames(m_threadId));
   // A console call is a result to inspect; stepping must not call it again.
@@ -544,9 +623,9 @@ void DebugValueInspector::renderValue(const DapVariable &value,
           ? tr("Expand a row to inspect its children. Table view aligns nested "
                "sequences and records.")
           : tr("Formatted adapter value. Select text to copy any part."));
-  const bool array = isNative() && !value.evaluateName.isEmpty() &&
-                     (value.type.contains('*') || value.type.contains('[') ||
-                      !value.memoryReference.isEmpty());
+  const bool array =
+      supportsNativeBuffers() && !value.evaluateName.isEmpty() &&
+      DebugValueFormatter::canViewBuffer(value.type, value.memoryReference);
   m_arrayControls->setVisible(array);
   m_arrayControls->setEnabled(m_live);
   const int knownLength = DebugValueFormatter::arrayLength(value.type);
@@ -577,36 +656,39 @@ void DebugValueInspector::renderValue(const DapVariable &value,
   }
   // GDB presents char arrays as strings without any expandable children.
   if (array && knownLength > 0 && value.variablesReference == 0 && m_live) {
-    viewArray();
+    m_tabs->setCurrentIndex(preserveView ? tab : 1);
+    m_root->setExpanded(true);
+    restoreView();
     return;
   }
   if (array && (!lengthExpression.isEmpty() ||
                 DebugValueFormatter::pointerDepth(value.type) >= 2)) {
-    // A dereference of char** is only its first string, not the whole array.
-    m_root->setData(0, Loaded, true);
-    m_root->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-    m_tabs->setCurrentIndex(preserveView ? tab : 1);
     m_status->setText(tr("Pointer to rows. Set the outer Elements count or "
                          "a length expression to inspect all rows."));
     if (!lengthExpression.isEmpty() && m_live) {
       m_lengthExpression->setText(lengthExpression);
       applyArrayView();
+    } else {
+      restoreView();
     }
     return;
   }
-  if (isNative() && value.variablesReference == 0 &&
-      DebugValueFormatter::stringBytes(value.value, &m_stringBytes)) {
+  QByteArray bytes;
+  if (supportsNativeBuffers() && value.variablesReference == 0 &&
+      DebugValueFormatter::stringBytes(value.value, &bytes)) {
     m_stringView = true;
-    m_root->setData(0, Loaded, true);
-    m_root->setData(0, Indexed, true);
-    m_root->setData(0, IndexedCount, m_stringBytes.size());
-    m_root->setData(0, StringBytes, m_stringBytes);
+    m_root->setData(0, IndexedCount, bytes.size());
+    m_root->setData(0, StringBytes, bytes);
+    if (!bytes.isEmpty())
+      m_root->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
     loadStringPage(m_root, 0);
     if (!preserveView && m_displayFormat->currentIndex() > 0)
       m_tabs->setCurrentIndex(1);
     m_status->setText(
         tr("%1 bytes. Text shows the string; Table shows character values.")
-            .arg(m_stringBytes.size()));
+            .arg(bytes.size()));
+  } else if (hasKnownEmptyChildren(value)) {
+    m_status->setText(tr("Empty collection — 0 elements."));
   }
   m_root->setExpanded(true);
   restoreView();
@@ -685,7 +767,10 @@ void DebugValueInspector::receiveFrames(int threadId,
 QString DebugValueInspector::itemPath(const QTreeWidgetItem *item) const {
   if (!item || item == m_root)
     return {};
-  return itemPath(item->parent()) + QChar(0x1f) + item->text(0);
+  const QString name = item->text(0);
+  return itemPath(item->parent()) +
+         (item->data(0, NamedChildren).toBool() ? 'n' : 'v') +
+         QString::number(name.size()) + ':' + name;
 }
 
 void DebugValueInspector::rememberView() {
@@ -698,8 +783,9 @@ void DebugValueInspector::rememberView() {
     int count = item->childCount();
     if (count && item->child(count - 1)->data(0, PageAction).toBool())
       --count;
-    m_savedNodes.insert(itemPath(item), {count, item->isExpanded(),
-                                         item->data(0, Loaded).toBool()});
+    m_savedNodes.insert(itemPath(item),
+                        {item->data(0, NextOffset).toInt(), item->isExpanded(),
+                         item->data(0, Loaded).toBool()});
     for (int i = 0; i < count; ++i)
       visit(item->child(i));
   };
@@ -729,7 +815,7 @@ void DebugValueInspector::restoreView() {
     if (count) {
       auto *page = item->child(count - 1);
       if (page->data(0, PageAction).toBool() &&
-          state.children > page->data(0, PageStart).toInt())
+          state.nextPage > page->data(0, PageStart).toInt())
         loadChildren(item, page->data(0, PageStart).toInt());
     }
     for (int i = 0; i < item->childCount(); ++i) {
@@ -739,7 +825,8 @@ void DebugValueInspector::restoreView() {
     }
   };
   visit(m_root);
-  if (m_requests.isEmpty() && m_elementRequests.isEmpty() && !m_lengthRequest) {
+  if (m_requests.isEmpty() && m_elementRequests.isEmpty() &&
+      m_arrayPages.isEmpty() && !m_lengthRequest) {
     m_restoreView = false;
     m_savedNodes.clear();
     m_tree->verticalScrollBar()->setValue(m_treeScroll);
@@ -749,7 +836,7 @@ void DebugValueInspector::restoreView() {
 }
 
 void DebugValueInspector::applyArrayView() {
-  if (!m_live || !m_client || !isNative())
+  if (!m_live || !m_client || !supportsNativeBuffers())
     return;
   const QString length = m_lengthExpression->text().trimmed();
   if (!length.isEmpty()) {
@@ -764,7 +851,7 @@ void DebugValueInspector::applyArrayView() {
 }
 
 void DebugValueInspector::viewArray() {
-  if (!m_live || !m_client || !isNative())
+  if (!m_live || !m_client || !supportsNativeBuffers())
     return;
   const QString expression = m_arrayExpression->text().trimmed();
   if (expression.isEmpty()) {
@@ -778,6 +865,7 @@ void DebugValueInspector::viewArray() {
   }
   m_requests.clear();
   m_elementRequests.clear();
+  m_arrayPages.clear();
   m_lengthRequest = 0;
   m_root = nullptr;
   m_tree->clear();
@@ -799,10 +887,10 @@ void DebugValueInspector::viewArray() {
           ? DebugValueFormatter::pointerDepth(m_value.type)
           : DebugValueFormatter::pointerDepth(m_bufferElementType) + 1;
   if (m_bufferLayout == 0 && depth >= 2 && m_bufferColumns > 1) {
-    static const QRegularExpression characterType(QStringLiteral("\\bchar\\b"));
-    const QString type =
-        m_bufferElementType.isEmpty() ? m_value.type : m_bufferElementType;
-    m_bufferLayout = characterType.match(type).hasMatch() ? 3 : 2;
+    const QString rowType = m_bufferElementType.isEmpty()
+                                ? DebugValueFormatter::pointeeType(m_value.type)
+                                : m_bufferElementType;
+    m_bufferLayout = DebugValueFormatter::isCharacterPointer(rowType) ? 3 : 2;
   }
   if (m_bufferLayout == 3 && m_displayFormat->currentIndex() == 0)
     m_displayFormat->setCurrentIndex(4);
@@ -821,6 +909,8 @@ void DebugValueInspector::viewArray() {
   array.evaluateName = base;
   m_root = appendValue(nullptr, array);
   m_root->setData(0, Loaded, true);
+  if (array.indexedVariables > 0)
+    m_root->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
   m_root->setExpanded(true);
   m_tree->setCurrentItem(m_root);
   const QString element =
@@ -844,49 +934,50 @@ void DebugValueInspector::viewArray() {
 }
 
 void DebugValueInspector::loadArrayPage(QTreeWidgetItem *parent, int start) {
-  if (!m_live || !m_client || !parent || !m_elementRequests.isEmpty())
+  if (!m_live || !m_client || !parent ||
+      start != parent->data(0, NextOffset).toInt())
     return;
-  if (m_itemCount >= 10000) {
+  if (m_itemCount >= MaxTreeItems) {
     m_status->setText(tr("Tree preview limited to 10,000 items."));
     return;
   }
-  if (parent->childCount() &&
-      parent->child(parent->childCount() - 1)->data(0, PageAction).toBool())
-    delete parent->takeChild(parent->childCount() - 1);
+  if (!m_elementRequests.isEmpty()) {
+    const auto page = qMakePair(parent, start);
+    if (!m_arrayPages.contains(page))
+      m_arrayPages.append(page);
+    return;
+  }
   const int total = parent->data(0, IndexedCount).toInt();
-  const int end = qMin(total, start + qMin(PageSize, 10000 - m_itemCount));
+  const int end =
+      qMin(total, start + qMin(PageSize, MaxTreeItems - m_itemCount));
   const QString base = parent->data(0, Expression).toString();
+  removePage(parent);
   parent->setData(0, Loaded, true);
+  const bool automatic = parent->data(0, FixedArray).toBool() ||
+                         (m_restoreView && !m_explicitRefresh);
   for (int index = start; index < end; ++index) {
     DapVariable value;
     value.name = QString::number(index);
     value.value = tr("Loading…");
     value.evaluateName = QStringLiteral("(%1)[%2]").arg(base).arg(index);
     auto *item = appendValue(parent, value);
-    const int seq = m_client->evaluate(
-        value.evaluateName, m_frameId,
-        m_restoreView && !m_explicitRefresh ? "hover" : "watch");
+    const int seq = m_client->evaluate(value.evaluateName, m_frameId,
+                                       automatic ? "hover" : "watch");
     m_elementRequests.insert(seq, item);
   }
-  if (end < total) {
-    auto *page = new QTreeWidgetItem(parent);
-    page->setText(0,
-                  tr("Load next %1 items…").arg(qMin(PageSize, total - end)));
-    page->setData(0, PageAction, true);
-    page->setData(0, PageStart, end);
-  }
+  addPage(parent, end, qMin(PageSize, total - end));
   refreshDisplay();
 }
 
 void DebugValueInspector::loadStringPage(QTreeWidgetItem *parent, int start) {
-  if (!parent || m_itemCount >= 10000)
+  if (!parent || m_itemCount >= MaxTreeItems ||
+      start != parent->data(0, NextOffset).toInt())
     return;
   const QByteArray bytes = parent->data(0, StringBytes).toByteArray();
-  if (parent->childCount() &&
-      parent->child(parent->childCount() - 1)->data(0, PageAction).toBool())
-    delete parent->takeChild(parent->childCount() - 1);
   const int end = qMin(static_cast<int>(bytes.size()),
-                       start + qMin(PageSize, 10000 - m_itemCount));
+                       start + qMin(PageSize, MaxTreeItems - m_itemCount));
+  removePage(parent);
+  parent->setData(0, Loaded, true);
   for (int index = start; index < end; ++index) {
     DapVariable character;
     character.name = QString::number(index);
@@ -898,14 +989,7 @@ void DebugValueInspector::loadStringPage(QTreeWidgetItem *parent, int start) {
                           DebugValueFormatter::DisplayFormat::Character);
     appendValue(parent, character);
   }
-  if (end < bytes.size() && m_itemCount < 10000) {
-    auto *page = new QTreeWidgetItem(parent);
-    page->setText(
-        0, tr("Load next %1 characters…")
-               .arg(qMin(PageSize, static_cast<int>(bytes.size()) - end)));
-    page->setData(0, PageAction, true);
-    page->setData(0, PageStart, end);
-  }
+  addPage(parent, end, qMin(PageSize, static_cast<int>(bytes.size()) - end));
   refreshDisplay();
 }
 
@@ -948,10 +1032,7 @@ void DebugValueInspector::receiveElement(int seq, const DapVariable &value) {
   if (item->parent() == m_root && m_bufferLayout == 2) {
     if (DebugValueFormatter::pointerDepth(element.type) > 0) {
       item->setData(0, PointerRow, true);
-      item->setData(0, Indexed, true);
       item->setData(0, IndexedCount, m_bufferColumns);
-      item->setData(0, NamedCount, 0);
-      item->setData(0, KnownCount, true);
       item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
     } else {
       item->setData(0, ReadError, true);
@@ -965,11 +1046,19 @@ void DebugValueInspector::receiveElement(int seq, const DapVariable &value) {
       if (m_arrayLayout->currentIndex() == 0 && m_bufferColumns > 1)
         bytes.truncate(m_bufferColumns);
       item->setData(0, StringBytes, bytes);
-      item->setData(0, Indexed, true);
       item->setData(0, IndexedCount, bytes.size());
-      item->setData(0, Loaded, true);
       loadStringPage(item, 0);
     }
+  }
+  finishElementPage();
+}
+
+void DebugValueInspector::finishElementPage() {
+  if (!m_elementRequests.isEmpty())
+    return;
+  while (!m_arrayPages.isEmpty() && m_elementRequests.isEmpty()) {
+    const auto page = m_arrayPages.takeFirst();
+    loadArrayPage(page.first, page.second);
   }
   refreshDisplay();
 }
@@ -1019,6 +1108,7 @@ void DebugValueInspector::invalidate() {
   m_live = false;
   m_requests.clear();
   m_elementRequests.clear();
+  m_arrayPages.clear();
   m_lengthRequest = 0;
   if (!m_client || !m_client->evaluationExecutedTarget(m_refreshRequest))
     m_refreshRequest = 0;
@@ -1035,51 +1125,79 @@ void DebugValueInspector::invalidate() {
                  "value."));
 }
 
+QString DebugValueInspector::childFilter(const QTreeWidgetItem *item) const {
+  if (item->data(0, NamedChildren).toBool())
+    return QStringLiteral("named");
+  const auto value = item->data(0, Variable).value<DapVariable>();
+  if (value.indexedVariables > 0 &&
+      (value.hasNamedVariables || value.namedVariables > 0 || usesDelve() ||
+       usesJsDebug()))
+    return QStringLiteral("indexed");
+  return {};
+}
+
 void DebugValueInspector::loadChildren(QTreeWidgetItem *item, int start,
                                        int referenceOverride) {
-  if (item && item->data(0, StringBytes).isValid()) {
+  if (!item || start != item->data(0, NextOffset).toInt())
+    return;
+  if (item->data(0, StringBytes).isValid()) {
     loadStringPage(item, start);
     return;
   }
-  if ((m_bufferView && item == m_root) ||
-      (item && item->data(0, PointerRow).toBool())) {
+  if ((m_bufferView && item == m_root) || item->data(0, PointerRow).toBool() ||
+      item->data(0, FixedArray).toBool()) {
     loadArrayPage(item, start);
     return;
   }
-  if (!m_live || !m_client || !item || item->data(0, Reference).toInt() <= 0)
+  if (!m_live || !m_client || item->data(0, Reference).toInt() <= 0 ||
+      item->data(0, RepeatedReference).toBool())
     return;
   for (const Request &request : std::as_const(m_requests)) {
     if (request.item == item)
       return;
   }
-  if (m_itemCount >= 10000) {
+  const QString filter = childFilter(item);
+  const int count =
+      pagesByIndex(filter)
+          ? std::min({PageSize, MaxTreeItems - m_itemCount,
+                      item->data(0, IndexedCount).toInt() - start})
+          : qMin(PageSize, MaxTreeItems - m_itemCount);
+  if (count <= 0) {
     m_status->setText(tr("Tree preview limited to 10,000 items. Inspect a "
                          "narrower expression to continue."));
     return;
   }
-  const QString filter =
-      item->data(0, Indexed).toBool() ? QStringLiteral("indexed") : QString();
-  const int total = item->data(0, IndexedCount).toInt() > 0
-                        ? item->data(0, IndexedCount).toInt()
-                        : item->data(0, NamedCount).toInt();
-  if (total == 0 && item->data(0, KnownCount).toBool()) {
-    item->setData(0, Loaded, true);
-    item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-    m_status->setText(tr("Empty collection — 0 elements."));
-    return;
-  }
 
-  const int count =
-      total > 0 ? qMin(PageSize, qMax(1, total - start)) : PageSize;
-  const int reference = referenceOverride > 0 ? referenceOverride
-                        : start > 0 && item->data(0, MoreReference).toInt() > 0
-                            ? item->data(0, MoreReference).toInt()
-                            : item->data(0, Reference).toInt();
-  const int seq = m_client->inspectVariables(reference, filter, start, count);
+  const int continuation = item->data(0, MoreReference).toInt();
+  const int reference =
+      referenceOverride > 0 ? referenceOverride
+      : continuation > 0 && start >= item->data(0, MoreStart).toInt()
+          ? continuation
+          : item->data(0, Reference).toInt();
+  const bool prefix = item->data(0, PrefixPaging).toBool();
+  const int seq = m_client->inspectVariables(
+      reference, filter, prefix ? 0 : start,
+      prefix ? qMin(MaxTreeItems, start + count) : count);
   if (seq > 0) {
-    m_requests.insert(seq, {item, start});
+    m_requests.insert(seq, {item, start, count, reference, prefix});
     m_status->setText(tr("Loading children…"));
   }
+}
+
+bool DebugValueInspector::repeatsPrefix(const QList<DapVariable> &variables,
+                                        const QTreeWidgetItem *item,
+                                        int count) {
+  int matched = 0;
+  for (int i = 0; i < item->childCount() && matched < count; ++i) {
+    const auto *child = item->child(i);
+    if (child->data(0, NamedChildren).toBool())
+      continue;
+    const auto &value = variables.at(matched);
+    if (child->text(0) != value.name || child->text(2) != value.type)
+      return false;
+    ++matched;
+  }
+  return matched == count;
 }
 
 void DebugValueInspector::receiveChildren(int seq,
@@ -1087,132 +1205,196 @@ void DebugValueInspector::receiveChildren(int seq,
   if (!m_requests.contains(seq) || !m_live)
     return;
   const Request request = m_requests.take(seq);
-  QTreeWidgetItem *parent = request.item;
-  if (parent->data(0, Indexed).toBool() && request.start > 0 &&
-      !request.prefixRetry &&
-      std::none_of(variables.cbegin(), variables.cend(),
-                   [&](const DapVariable &value) {
-                     return indexForName(value.name) >= request.start;
-                   }) &&
-      std::any_of(
-          variables.cbegin(), variables.cend(),
-          [](const DapVariable &value) { return isIndex(value.name); })) {
-
-    const int total = parent->data(0, IndexedCount).toInt();
-    const int wanted = total > 0 ? qMin(total, request.start + PageSize)
-                                 : request.start + PageSize;
-    const int retry = m_client->inspectVariables(
-        parent->data(0, Reference).toInt(), "indexed", 0, qMin(10000, wanted));
-    if (retry > 0)
-      m_requests.insert(retry, {parent, request.start, true});
+  auto *parent = request.item;
+  if (isPythonSequence(parent)) {
+    receiveSequenceChildren(request, variables);
     return;
   }
 
-  if (parent->data(0, Indexed).toBool() &&
-      std::none_of(
-          variables.cbegin(), variables.cend(),
-          [](const DapVariable &value) { return isIndex(value.name); })) {
-    for (const DapVariable &value : variables) {
-      const QString name = value.name.trimmed();
-      if (name.startsWith('[') && name.endsWith(']') && name.contains(':') &&
-          value.variablesReference > 0 &&
-          value.variablesReference != parent->data(0, Reference).toInt()) {
-        bool beginOk = false;
-        bool endOk = false;
-        const int colon = name.indexOf(':');
-        const int begin = name.mid(1, colon - 1).toInt(&beginOk);
-        const int end = name.mid(colon + 1).chopped(1).toInt(&endOk);
-        if (!beginOk || !endOk || request.start < begin || request.start >= end)
-          continue;
-        if (request.start == 0) {
-          parent->setData(0, Reference, value.variablesReference);
-          parent->setData(0, IndexedCount, end);
-        }
+  const QString filter = childFilter(parent);
+  const bool byIndex = pagesByIndex(filter);
+  const bool delveIndexed = usesDelve() && filter == QLatin1String("indexed");
+  if (!byIndex && request.start == 0 && variables.size() > request.count)
+    parent->setData(0, PrefixPaging, true);
+  if (!byIndex && !request.prefix && request.start > 0 &&
+      !variables.isEmpty() &&
+      repeatsPrefix(variables, parent,
+                    qMin(request.start, static_cast<int>(variables.size())))) {
+    // Some adapters honor count while always returning children from zero.
+    parent->setData(0, PrefixPaging, true);
+    loadChildren(parent, request.start, request.reference);
+    return;
+  }
+
+  const int indexed = parent->data(0, IndexedCount).toInt();
+  const int named = parent->data(0, NamedCount).toInt();
+  const int total = filter == QLatin1String("indexed") ? indexed
+                    : filter == QLatin1String("named") ? named
+                                                       : qMax(indexed, named);
+  if (request.start == 0 && filter == QLatin1String("indexed") && named > 0 &&
+      m_itemCount < MaxTreeItems) {
+    DapVariable properties;
+    properties.name = tr("Named children");
+    properties.variablesReference = request.reference;
+    properties.namedVariables = named;
+    auto *group = new QTreeWidgetItem(parent);
+    group->setData(0, NamedChildren, true);
+    ++m_itemCount;
+    updateItem(group, properties);
+  }
+
+  if (byIndex && usesJsDebug() && named == 0) {
+    // js-debug's Map and Set repeat their named properties on every indexed
+    // page. Keep them once and page the backing entries by their slot indices.
+    QList<DapVariable> members;
+    const int next = request.start + request.count;
+    QSet<QString> loadedNames;
+    for (int i = 0; i < parent->childCount(); ++i) {
+      const auto *child = parent->child(i);
+      if (!child->data(0, PageAction).toBool())
+        loadedNames.insert(child->text(0));
+    }
+    for (const auto &value : variables) {
+      const qlonglong index = indexForName(value.name);
+      if (!loadedNames.contains(value.name) ||
+          (index >= request.start && index < next))
+        members.append(value);
+    }
+    appendChildren(request, members, next, next < total);
+    return;
+  }
+
+  const int offset = request.prefix ? request.start : 0;
+  const int available = qMax(0, static_cast<int>(variables.size()) - offset);
+  // Delve can return two variables per map entry, but its start/count use
+  // entries. Keep both the key and the value and advance by entries.
+  const int shown = qMin(available, request.count * (delveIndexed ? 2 : 1));
+  const int next = request.start + (byIndex ? request.count : shown);
+  const bool more = byIndex
+                        ? next < total
+                        : shown > 0 && (total > next || available > shown ||
+                                        (total == 0 && shown == request.count));
+  appendChildren(request, variables.mid(offset, shown), next, more);
+}
+
+void DebugValueInspector::receiveSequenceChildren(
+    const Request &request, const QList<DapVariable> &variables) {
+  auto *parent = request.item;
+  const bool hasIndices = std::any_of(
+      variables.cbegin(), variables.cend(),
+      [](const DapVariable &value) { return indexForName(value.name) >= 0; });
+
+  if (!hasIndices) {
+    // debugpy exposes NumPy arrays and long sequences through range nodes.
+    static const QRegularExpression range(
+        QStringLiteral(R"(^\[(\d+):(\d+)\]$)"));
+    for (const auto &value : variables) {
+      const auto match = range.match(value.name.trimmed());
+      if (!match.hasMatch() || value.variablesReference <= 0 ||
+          value.variablesReference == request.reference)
+        continue;
+      const int begin = match.captured(1).toInt();
+      const int end = match.captured(2).toInt();
+      if (request.start < begin || request.start >= end)
+        continue;
+      if (request.start == 0 && parent->text(2) == QLatin1String("ndarray")) {
+        parent->setData(0, Reference, value.variablesReference);
+        parent->setData(0, IndexedCount, end);
         if (parent == m_root) {
           QStringList details;
-          for (const DapVariable &metadata : variables) {
-            if (metadata.name == QLatin1String("shape") ||
-                metadata.name == QLatin1String("dtype"))
-              details << (metadata.name == QLatin1String("dtype")
-                              ? metadata.value
-                              : metadata.name + " " + metadata.value);
+          for (const auto &metadata : variables) {
+            if (metadata.name == QLatin1String("shape"))
+              details << metadata.name + ' ' + metadata.value;
+            else if (metadata.name == QLatin1String("dtype"))
+              details << metadata.value;
           }
           if (!details.isEmpty())
             m_title->setText(m_value.name + "  ·  " + details.join("  ·  "));
         }
-        loadChildren(parent, request.start, value.variablesReference);
-        return;
       }
+      loadChildren(parent, request.start, value.variablesReference);
+      return;
     }
   }
 
-  QList<DapVariable> members;
-  for (const DapVariable &value : variables) {
-    if (parent->data(0, Indexed).toBool()) {
-
-      if (value.name == QLatin1String("more") && value.variablesReference > 0)
-        parent->setData(0, MoreReference, value.variablesReference);
-      if (value.name == QLatin1String("len()")) {
-        bool ok = false;
-        const int total = value.value.toInt(&ok);
-        if (ok)
-          parent->setData(0, IndexedCount, total);
-      }
+  QList<DapVariable> elements;
+  QList<DapVariable> properties;
+  int continuation = 0;
+  qlonglong lastIndex = -1;
+  for (const auto &value : variables) {
+    if (value.name == QLatin1String("more") &&
+        (value.type == QLatin1String("MoreItems") ||
+         value.type == QLatin1String("MoreItemsRange")) &&
+        value.variablesReference > 0) {
+      continuation = value.variablesReference;
+    } else if (value.name == QLatin1String("len()")) {
+      bool ok = false;
+      const int total = value.value.toInt(&ok);
+      if (ok && total >= 0)
+        parent->setData(0, IndexedCount, total);
+    } else {
       const qlonglong index = indexForName(value.name);
-
-      if (index < request.start || index >= request.start + PageSize)
-        continue;
+      lastIndex = qMax(lastIndex, index);
+      if (index >= request.start && index < request.start + request.count)
+        elements.append(value);
+      else if (index < 0 && request.start == 0 &&
+               value.name != QLatin1String("special variables") &&
+               value.name != QLatin1String("function variables"))
+        properties.append(value);
     }
-    members << value;
   }
-  if (parent->data(0, Indexed).toBool()) {
-    std::stable_sort(members.begin(), members.end(),
-                     [](const DapVariable &a, const DapVariable &b) {
-                       return indexForName(a.name) < indexForName(b.name);
-                     });
+  if (continuation > 0) {
+    parent->setData(0, MoreReference, continuation);
+    parent->setData(0, MoreStart,
+                    lastIndex < MaxTreeItems ? lastIndex + 1 : MaxTreeItems);
   }
-  if (request.start == 0) {
-    qDeleteAll(parent->takeChildren());
-  } else if (parent->childCount() && parent->child(parent->childCount() - 1)
-                                         ->data(0, PageAction)
-                                         .toBool()) {
-    delete parent->takeChild(parent->childCount() - 1);
+  if (elements.isEmpty() && hasIndices && request.start > 0 &&
+      !request.prefix) {
+    parent->setData(0, PrefixPaging, true);
+    loadChildren(parent, request.start, request.reference);
+    return;
   }
-  const int shown = qMin(PageSize, static_cast<int>(members.size()));
-  for (int i = 0; i < shown; ++i)
-    appendValue(parent, members.at(i));
-  parent->setData(0, Loaded, true);
-  const int next = request.start + shown;
+  std::stable_sort(elements.begin(), elements.end(),
+                   [](const DapVariable &a, const DapVariable &b) {
+                     return indexForName(a.name) < indexForName(b.name);
+                   });
   const int total = parent->data(0, IndexedCount).toInt();
-  const bool more = parent->data(0, Indexed).toBool() && shown == PageSize &&
-                    (total == 0 || next < total);
-  if (more) {
-    auto *page = new QTreeWidgetItem(parent);
-    page->setText(0, tr("Load next %1 items…").arg(PageSize));
-    page->setToolTip(0,
-                     tr("Double-click or press Enter to load another page."));
-    page->setData(0, PageAction, true);
-    page->setData(0, PageStart, next);
-  }
-  m_status->setText(
-      members.size() > PageSize
-          ? tr("Adapter returned %1 members; showing the first %2. Inspect a "
-               "narrower expression for more.")
-                .arg(members.size())
-                .arg(PageSize)
-          : tr("%1 children loaded%2. Expand rows for details.")
-                .arg(next)
-                .arg(total > 0 ? tr(" of %1").arg(total) : QString()));
-  if (parent == m_root && m_autoTable && isIndexed(m_value)) {
-    if (isNative())
+  const int next = request.start + elements.size();
+  const bool more =
+      !elements.isEmpty() &&
+      (total > next || (total == 0 && elements.size() == request.count));
+  appendChildren(request, elements + properties, next, more);
+}
+
+void DebugValueInspector::appendChildren(const Request &request,
+                                         const QList<DapVariable> &variables,
+                                         int next, bool more) {
+  auto *parent = request.item;
+  removePage(parent);
+  const int shown =
+      qMin(static_cast<int>(variables.size()), MaxTreeItems - m_itemCount);
+  for (int i = 0; i < shown; ++i)
+    appendValue(parent, variables.at(i));
+  parent->setData(0, Loaded, true);
+  if (parent->childCount() == 0 && !more)
+    parent->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+  addPage(parent, next, more ? PageSize : 0);
+  m_status->setText(m_itemCount >= MaxTreeItems
+                        ? tr("Tree preview limited to 10,000 items. Inspect a "
+                             "narrower expression to continue.")
+                    : parent->childCount() == 0
+                        ? tr("Empty collection — 0 elements.")
+                        : tr("%1 children loaded. Expand rows for details.")
+                              .arg(parent->childCount() - (more ? 1 : 0)));
+
+  if (parent == m_root && m_autoTable && !variables.isEmpty() &&
+      (m_value.indexedVariables > 0 ||
+       indexForName(variables.first().name) >= 0)) {
+    const bool nested = std::any_of(
+        variables.cbegin(), variables.cend(),
+        [](const DapVariable &value) { return value.variablesReference > 0; });
+    if (supportsNativeBuffers() || nested)
       m_tabs->setCurrentIndex(1);
-    for (const DapVariable &value : members) {
-      if (isIndex(value.name) &&
-          (isIndexed(value) || value.type == QLatin1String("dict"))) {
-        m_tabs->setCurrentIndex(1);
-        break;
-      }
-    }
   }
   if (m_tabs->currentIndex() == 1)
     updateTable();
@@ -1221,24 +1403,38 @@ void DebugValueInspector::receiveChildren(int seq,
   restoreView();
 }
 
-void DebugValueInspector::updateTable() {
-  if (!m_root)
+void DebugValueInspector::addPage(QTreeWidgetItem *parent, int next,
+                                  int count) {
+  parent->setData(0, NextOffset, next);
+  if (count <= 0 || m_itemCount >= MaxTreeItems)
     return;
+  auto *page = new QTreeWidgetItem(parent);
+  page->setText(0, parent->data(0, StringBytes).isValid()
+                       ? tr("Load next %1 characters…").arg(count)
+                       : tr("Load next %1 items…").arg(count));
+  page->setToolTip(0, tr("Double-click or press Enter to load another page."));
+  page->setData(0, PageAction, true);
+  page->setData(0, PageStart, next);
+}
+
+void DebugValueInspector::updateTable() {
+  if (!m_root || m_updatingTable)
+    return;
+  const QScopedValueRollback updating(m_updatingTable, true);
   QList<QTreeWidgetItem *> rows;
   const bool pointerRows = m_bufferLayout == 2 || m_bufferLayout == 3;
   const int rowLimit =
       TableRows * (m_bufferView && !pointerRows ? m_bufferColumns : 1);
   for (int i = 0; i < m_root->childCount() && rows.size() < rowLimit; ++i) {
     auto *item = m_root->child(i);
-    if (!item->data(0, PageAction).toBool())
+    if (!item->data(0, PageAction).toBool() &&
+        !item->data(0, NamedChildren).toBool())
       rows << item;
   }
   QStringList columns;
   bool nested = false;
   for (auto *row : rows) {
-    if (row->data(0, Reference).toInt() > 0 ||
-        row->data(0, PointerRow).toBool() ||
-        row->data(0, StringBytes).isValid()) {
+    if (hasChildren(row)) {
       nested = true;
       if (!row->data(0, Loaded).toBool())
         loadChildren(row);
@@ -1246,9 +1442,7 @@ void DebugValueInspector::updateTable() {
            ++i) {
         auto *cell = row->child(i);
         if (!cell->data(0, PageAction).toBool() &&
-            cell->text(0) != QLatin1String("special variables") &&
-            cell->text(0) != QLatin1String("function variables") &&
-            cell->text(0) != QLatin1String("len()") &&
+            !cell->data(0, NamedChildren).toBool() &&
             !columns.contains(cell->text(0)))
           columns << cell->text(0);
       }
@@ -1303,9 +1497,7 @@ void DebugValueInspector::updateTable() {
           cells.insert(cell->text(0), cell);
       }
       for (int c = 0; c < columns.size(); ++c) {
-        const bool scalar = !nested || (row->data(0, Reference).toInt() <= 0 &&
-                                        !row->data(0, PointerRow).toBool() &&
-                                        !row->data(0, StringBytes).isValid());
+        const bool scalar = !nested || !hasChildren(row);
         auto *item =
             scalar ? (c == 0 ? row : nullptr) : cells.value(columns.at(c));
         const QString text =
@@ -1314,7 +1506,11 @@ void DebugValueInspector::updateTable() {
         auto *cell =
             new QTableWidgetItem(DebugValueFormatter::summary(display, 256));
         cell->setData(Qt::UserRole, display);
-        cell->setData(Qt::UserRole + 1, m_root->indexOfChild(row));
+        if (item) {
+          cell->setData(Qt::UserRole + 1, m_root->indexOfChild(row));
+          if (item != row)
+            cell->setData(Qt::UserRole + 2, row->indexOfChild(item));
+        }
         cell->setToolTip(
             tr("Double-click or press Enter to inspect in Tree.\n%1")
                 .arg(DebugValueFormatter::format(text)));
@@ -1343,7 +1539,8 @@ void DebugValueInspector::updateTable() {
             .arg(m_elementRequests.isEmpty() ? QString() : tr(" · reading…"))
             .arg(m_readErrors ? tr(" · %1 unreadable").arg(m_readErrors)
                               : QString()));
-  } else if (m_requests.isEmpty() && m_live) {
+  } else if (m_requests.isEmpty() && m_elementRequests.isEmpty() && m_live &&
+             m_itemCount < MaxTreeItems) {
     m_status->setText(tr("%1 rows × %2 columns shown · preview limited to %3 "
                          "rows and %4 columns. Blank cells represent missing "
                          "entries; use Tree to inspect more.")
@@ -1352,6 +1549,33 @@ void DebugValueInspector::updateTable() {
                           .arg(TableRows)
                           .arg(TableColumns));
   }
+}
+
+void DebugValueInspector::showTreeMenu(const QPoint &pos) {
+  auto *item = m_tree->itemAt(pos);
+  if (!m_live || !item || item == m_root ||
+      !item->data(0, Variable).isValid() ||
+      item->data(0, NamedChildren).toBool())
+    return;
+  const QPersistentModelIndex index(m_tree->indexFromItem(item));
+  const auto value = item->data(0, Variable).value<DapVariable>();
+  QMenu menu(m_tree);
+  QAction *inspect = menu.addAction(tr("Inspect Value…"));
+  QAction *array = nullptr;
+  if (supportsNativeBuffers() &&
+      !item->data(0, Expression).toString().isEmpty() &&
+      DebugValueFormatter::canViewBuffer(value.type, value.memoryReference))
+    array = menu.addAction(tr("View as Array / Buffer…"));
+  const QAction *selected = menu.exec(m_tree->viewport()->mapToGlobal(pos));
+  if (!selected || !m_live || !index.isValid())
+    return;
+  item = m_tree->itemFromIndex(index);
+  if (!item)
+    return;
+  auto child = item->data(0, Variable).value<DapVariable>();
+  child.evaluateName = item->data(0, Expression).toString();
+  if (selected == inspect || selected == array)
+    emit inspectValueRequested(child, m_frameId, m_threadId, selected == array);
 }
 
 void DebugValueInspector::filterTree() {

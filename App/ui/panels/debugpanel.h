@@ -162,9 +162,14 @@ private:
   void showVariablesContextMenu(const QPoint &pos);
   void inspectVariableItem(QTreeWidgetItem *item, bool watch = false,
                            bool array = false);
+  void openValueInspector(const DapVariable &value, int frameId, int threadId,
+                          bool array);
   void rememberVariableExpansion();
   static QString variableItemPath(const QTreeWidgetItem *item);
   QString expressionForVariableItem(const QTreeWidgetItem *item) const;
+  bool supportsNativeBuffers() const;
+  QString nativeChildExpression(const QString &parent, const QString &type,
+                                const QString &name) const;
   QString arrayLengthExpression(const DapVariable &value) const;
   void projectNativePointerArrays();
   bool paintTreeEmptyState(QTreeWidget *tree);

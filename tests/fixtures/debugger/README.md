@@ -43,10 +43,10 @@ describes the shared native storage exercised by the stepping test.
 
 ## C and C++ collections
 
-`native_collections.c` and `native_collections.cpp` exercise fixed arrays,
-multidimensional arrays, malloc buffers, structs and linked nodes, vectors,
-nested vectors, vectors of strings, empty vectors, `std::string`, character
-buffers with embedded NUL bytes, and arrays of C strings.
+`native_collections.c` and `native_collections.cpp` exercise fixed and
+multidimensional arrays, pointers to fixed-size rows, malloc buffers, structs,
+unions, linked nodes, vectors, maps, tuples, sets, `std::array`, strings, and
+character buffers with embedded NUL bytes.
 
 Double-click a variable or watch to open the inspector. Fixed arrays and vectors
 have indexed tables; strings have text and character/code views. The Display
@@ -54,6 +54,9 @@ selector switches between automatic, decimal, hexadecimal, binary and character
 representations. For a raw pointer, set Elements and choose View array. Element
 type can reinterpret a buffer, and Columns arranges contiguous elements into
 rows. Pointer lengths are explicit; unloaded memory is read only while paused.
+Expand a fixed-size array inside a record or collection to inspect its elements.
+For a nested raw pointer, right-click its row and choose **View as Array /
+Buffer…** to enter a length in the original stack frame.
 
 Pointer-to-pointer values preserve their outer dimension. When an in-scope
 length such as `count` is available, the Variables and Watches trees expose all
@@ -65,6 +68,7 @@ strings. Contiguous rows reshapes a single buffer.
 ```bash
 QT_QPA_PLATFORM=offscreen build/tests/bin/test_dap \
   testNativeScalarFormats testNativeCollections testNativeCCollections \
+  testNativeCppNestedCollections testInspectorNestedNativeBuffers \
   testNativeVariablesRemainStructured testNativeBufferPagingAndSnapshot \
   testNativeBufferReportsErrors
 ```
@@ -104,6 +108,25 @@ string and character-grid views after stepping.
 These tests compile the fixtures and drive the production widgets through real
 GDB DAP sessions. Set `LIGHTPAD_NATIVE_SCREENSHOT=/path/to/native` to capture the
 collection views, one PNG per data case.
+
+## Collections from other debug adapters
+
+The Tree pages named and indexed children, including map entries, object
+properties, and nested collection members. Values that expose both kinds put
+named properties in **Named children**. Repeated references to an ancestor are
+marked in the Tree. Available children and previews depend on the debug adapter
+and its pretty-printers.
+
+`testInspectorWithRealDebugpy` checks a Python dictionary of tuples and sets
+across three pages, then steps and verifies that the expanded value updates.
+The test adapter covers sparse JavaScript arrays, Go maps with separate key and
+value rows, and pagination for named Rust and C++ values.
+
+```bash
+QT_QPA_PLATFORM=offscreen build/tests/bin/test_dap \
+  testInspectorPagesNamedChildren testInspectorMixedCollections \
+  testInspectorWithRealDebugpy
+```
 
 ## Concurrency fixtures
 

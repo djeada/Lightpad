@@ -1,6 +1,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+union Sample {
+  int id;
+  char bytes[4];
+};
+
+struct Packet {
+  char label[4];
+  int (*row)[3];
+  union Sample sample;
+  struct Packet *next;
+};
+
 int main(void) {
   int fixed[3] = {10, 20, 30};
   char first[] = "alpha";
@@ -20,8 +32,12 @@ int main(void) {
   int secondRow[3] = {10, 20, 30};
   int *matrix[2] = {firstRow, secondRow};
   int **matrixPointers = matrix;
+  struct Packet packet = {
+      {'X', '\0', 'Y', 'Z'}, &firstRow, {.bytes = {'A', '\0', 'B', 'C'}}, NULL};
+  packet.next = &packet;
   int checkpoint = fixed[0];
   free(heap);
   free(buffer);
-  return checkpoint == 10 && words[1][0] == 'b' ? 0 : 2;
+  return checkpoint == 10 && words[1][0] == 'b' && packet.row[0][2] == 3 ? 0
+                                                                         : 2;
 }

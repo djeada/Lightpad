@@ -175,6 +175,7 @@ private slots:
   void testNativeBufferReportsErrors();
   void testNativeVariablesRemainStructured();
   void testNativeCCollections();
+  void testNativeCppNestedCollections();
   void testStringSortPointerArray_data();
   void testStringSortPointerArray();
   void testStringSortConsoleFunctionCall();
@@ -187,6 +188,11 @@ private slots:
   void testInspectorMatrixAndRaggedRows();
   void testInspectorPagingAndSnapshot();
   void testInspectorPagingAndSnapshot_data();
+  void testInspectorPagesNamedChildren_data();
+  void testInspectorPagesNamedChildren();
+  void testInspectorMixedCollections_data();
+  void testInspectorMixedCollections();
+  void testInspectorNestedNativeBuffers();
   void testInspectorReportsErrors();
   void testInspectorWithRealDebugpy();
   void testVtkPythonObjectsAndArrays();
@@ -2719,14 +2725,31 @@ void TestDap::testNativeScalarFormats() {
            QString("\"hello\""));
   QCOMPARE(childExpression("records", "Record [2]", "[1]"),
            QString("(records)[1]"));
+  QVERIFY(childExpression("map", "std::map<int, int>", "[1]").isEmpty());
   QCOMPARE(childExpression("node", "Node *", "value"), QString("(*(node))"));
   QCOMPARE(childExpression("node", "Node *", "next"), QString("(node)->next"));
   QCOMPARE(childExpression("record", "Record", "id"), QString("(record).id"));
   QCOMPARE(arrayLength("int [2][3]"), 2);
+  QCOMPARE(arrayLength("char (&)[4]"), 4);
+  QCOMPARE(arrayLength("int (*[2])[3]"), 2);
+  QCOMPARE(arrayLength("int (*[2])(int)"), 2);
+  QCOMPARE(arrayLength("int (*)[3]"), 0);
+  QCOMPARE(arrayLength("int [][3]"), 0);
+  QCOMPARE(arrayLength("std::vector<int [3]>"), 0);
+  QCOMPARE(pointeeType("int (* const)[3]"), QString("int [3]"));
+  QCOMPARE(pointerDepth("char (**)[3]"), 2);
   QCOMPARE(pointerDepth("char **"), 2);
   QCOMPARE(pointerDepth("char * const * volatile"), 2);
   QCOMPARE(pointerDepth("std::vector<char *>"), 0);
   QCOMPARE(pointeeType("char **"), QString("char *"));
+  QVERIFY(isCharacterPointer("const unsigned char *"));
+  QVERIFY(!isCharacterPointer("char (*)[3]"));
+  QVERIFY(!isCharacterPointer("std::vector<char> *"));
+  QVERIFY(isCharacterArray("const char [3]"));
+  QVERIFY(!isCharacterArray("char [3][2]"));
+  QCOMPARE(childExpression("row", "int (&)[3]", "value"), QString("(row)"));
+  QCOMPARE(childExpression("record", "Record<char *>", "id"),
+           QString("(record).id"));
   QCOMPARE(
       scalar("0x1234 -> 0x4567 \"wkue\"", "char **", DisplayFormat::Natural),
       QString("0x1234 -> 0x4567 \"wkue\""));
@@ -2761,6 +2784,7 @@ void TestDap::testInspectorCorrelatesRequests() {
 
 void TestDap::testInspectorMatrixAndRaggedRows() {
   DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
   QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
   client.launch(QJsonObject{{"program", "/tmp/app"}});
@@ -2818,6 +2842,7 @@ void TestDap::testInspectorPagingAndSnapshot_data() {
 void TestDap::testInspectorPagingAndSnapshot() {
   QFETCH(int, reference);
   DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
   QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
   client.launch(QJsonObject{{"program", "/tmp/app"}});
@@ -2855,6 +2880,204 @@ void TestDap::testInspectorPagingAndSnapshot() {
   client.stop(false);
 }
 
+namespace {
+QTreeWidgetItem *childNamed(QTreeWidgetItem *parent, const QString &name) {
+  if (parent)
+    for (int i = 0; i < parent->childCount(); ++i)
+      if (parent->child(i)->text(0) == name)
+        return parent->child(i);
+  return nullptr;
+}
+} // namespace
+
+void TestDap::testInspectorPagesNamedChildren_data() {
+  QTest::addColumn<QString>("adapterId");
+  QTest::addColumn<QString>("adapterType");
+  QTest::addColumn<QString>("type");
+  QTest::addColumn<int>("reference");
+  QTest::newRow("gdb-map") << "cppdbg-gdb" << "cppdbg"
+                           << "std::map<std::string, int>" << 7000;
+  QTest::newRow("debugpy-dict-returns-all")
+      << "python-debugpy" << "debugpy" << "dict" << 7100;
+  QTest::newRow("rust-record-ignores-start")
+      << "rust-codelldb" << "lldb" << "Record<[i32; 4]>" << 7200;
+}
+
+void TestDap::testInspectorPagesNamedChildren() {
+  QFETCH(QString, adapterId);
+  QFETCH(QString, adapterType);
+  QFETCH(QString, type);
+  QFETCH(int, reference);
+  DapClient client;
+  client.setAdapterMetadata(adapterId, adapterType);
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE(client.state(), DapClient::State::Ready);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE(client.state(), DapClient::State::Stopped);
+
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  DapVariable value;
+  value.name = value.evaluateName = "collection";
+  value.type = type;
+  value.variablesReference = reference;
+  if (reference == 7000) {
+    value.hasNamedVariables = true;
+    value.namedVariables = 205;
+  } else if (reference == 7200) {
+    value.memoryReference = "0x1234";
+  }
+  inspector.setValue(value);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  QVERIFY(inspector.findChild<QWidget *>("debugArrayControls")->isHidden());
+  QTRY_COMPARE(root->childCount(), 101);
+  QCOMPARE(root->child(99)->text(0), QString("key-99"));
+  tree->itemActivated(root->child(100), 0);
+  QTRY_COMPARE(root->childCount(), 201);
+  QCOMPARE(root->child(100)->text(0), QString("key-100"));
+  tree->itemActivated(root->child(200), 0);
+  QTRY_COMPARE(root->childCount(), 205);
+  QCOMPARE(root->child(204)->text(0), QString("key-204"));
+  client.stop(false);
+}
+
+void TestDap::testInspectorMixedCollections_data() {
+  QTest::addColumn<int>("reference");
+  QTest::newRow("sparse-javascript-array") << 7300;
+  QTest::newRow("javascript-map-with-repeated-properties") << 7301;
+  QTest::newRow("go-map-with-expandable-keys-and-values") << 7400;
+}
+
+void TestDap::testInspectorMixedCollections() {
+  QFETCH(int, reference);
+  const bool goMap = reference == 7400;
+  const bool jsMap = reference == 7301;
+  DapClient client;
+  client.setAdapterMetadata(goMap ? "go-delve" : "node-debug",
+                            goMap ? "go" : "node");
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE(client.state(), DapClient::State::Ready);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE(client.state(), DapClient::State::Stopped);
+
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  DapVariable value;
+  value.name = value.evaluateName = "mixed";
+  value.type = goMap ? "map[Key]Record" : jsMap ? "object" : "Array";
+  value.variablesReference = reference;
+  value.hasIndexedVariables = true;
+  value.hasNamedVariables = !jsMap;
+  value.indexedVariables = goMap ? 101 : jsMap ? 105 : 205;
+  value.namedVariables = jsMap ? 0 : 1;
+  inspector.setValue(value);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  if (jsMap) {
+    QTRY_COMPARE(root->childCount(), 102);
+    QCOMPARE(root->child(100)->text(0), QString("size"));
+    tree->itemActivated(root->child(101), 0);
+    QTRY_COMPARE(root->childCount(), 106);
+    QCOMPARE(root->child(105)->text(0), QString("104"));
+    client.stop(false);
+    return;
+  }
+  QTRY_COMPARE(root->childCount(), goMap ? 202 : 3);
+
+  auto *properties = childNamed(root, "Named children");
+  QVERIFY(properties);
+  properties->setExpanded(true);
+  QTRY_COMPARE(properties->childCount(), goMap ? 1 : 3);
+  QTreeWidgetItem *nested = nullptr;
+  if (goMap) {
+    QCOMPARE(properties->child(0)->text(0), QString("len()"));
+    nested = childNamed(root, "[key 0]");
+    QVERIFY(childNamed(root, "[val 0]"));
+    tree->itemActivated(root->child(201), 0);
+    QTRY_COMPARE(root->childCount(), 203);
+    QCOMPARE(root->child(201)->text(0), QString("[key 100]"));
+    QCOMPARE(root->child(202)->text(0), QString("[val 100]"));
+  } else {
+    QCOMPARE(root->child(1)->text(0), QString("2"));
+    QCOMPARE(properties->child(1)->text(0), QString("special variables"));
+    nested = childNamed(properties, "label");
+    QSignalSpy pages(&client, &DapClient::inspectionVariablesReceived);
+    tree->itemActivated(root->child(2), 0);
+    QTRY_COMPARE(pages.count(), 1);
+    QCOMPARE(root->childCount(), 3);
+    QVERIFY(root->child(2)->text(0).startsWith("Load next"));
+    tree->itemActivated(root->child(2), 0);
+    QTRY_COMPARE(root->child(2)->text(0), QString("204"));
+  }
+  QVERIFY(nested);
+  nested->setExpanded(true);
+  QTRY_VERIFY(childNamed(nested, "tuple"));
+  auto *tuple = childNamed(nested, "tuple");
+  tuple->setExpanded(true);
+  QTRY_COMPARE(tuple->childCount(), 1);
+  QCOMPARE(tuple->child(0)->text(0), QString("Some(λ)"));
+  QCOMPARE(tuple->child(0)->text(1), QString("42"));
+  auto *cycle = childNamed(nested, "self");
+  QVERIFY(cycle);
+  QVERIFY(cycle->text(1).contains("already in this branch"));
+  QCOMPARE(cycle->childIndicatorPolicy(), QTreeWidgetItem::DontShowIndicator);
+  client.stop(false);
+}
+
+void TestDap::testInspectorNestedNativeBuffers() {
+  DapClient client;
+  client.setAdapterMetadata("cppdbg-gdb", "cppdbg");
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE(client.state(), DapClient::State::Ready);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE(client.state(), DapClient::State::Stopped);
+
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  DapVariable value;
+  value.name = value.evaluateName = "record";
+  value.type = "struct Record";
+  value.variablesReference = 7600;
+  QSignalSpy evaluated(&client, &DapClient::evaluateValueReceived);
+  inspector.setValue(value, 100);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  QTRY_COMPARE(root->childCount(), 4);
+  QCOMPARE(evaluated.count(), 0);
+
+  auto *data = childNamed(root, "data");
+  auto *other = childNamed(root, "other");
+  QVERIFY(data && other);
+  data->setExpanded(true);
+  other->setExpanded(true);
+  QTRY_COMPARE(evaluated.count(), 6);
+  QCOMPARE(data->childCount(), 3);
+  QCOMPARE(data->child(1)->text(1), QString("0"));
+  QCOMPARE(data->child(2)->text(1), QString("66"));
+  QCOMPARE(other->child(2)->text(1), QString("68"));
+
+  auto *row = childNamed(root, "row");
+  QVERIFY(row);
+  row->setExpanded(true);
+  QTRY_COMPARE(row->childCount(), 1);
+  auto *array = row->child(0);
+  array->setExpanded(true);
+  QTRY_COMPARE(evaluated.count(), 9);
+  QCOMPARE(array->childCount(), 3);
+  QCOMPARE(array->child(2)->text(1), QString("30"));
+
+  auto *tuple = childNamed(root, "tuple");
+  QVERIFY(tuple);
+  tuple->setExpanded(true);
+  QTRY_COMPARE(tuple->childCount(), 1);
+  tuple->child(0)->setExpanded(true);
+  QTRY_COMPARE(tuple->child(0)->childCount(), 3);
+  QCOMPARE(tuple->child(0)->child(1)->text(1), QString("0 '\\0'"));
+  QCOMPARE(evaluated.count(), 9);
+  client.stop(false);
+}
+
 void TestDap::testInspectorReportsErrors() {
   DapClient client;
   QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
@@ -2884,14 +3107,18 @@ void TestDap::testInspectorWithRealDebugpy() {
   QFile script(dir.filePath("matrix.py"));
   QVERIFY(script.open(QIODevice::WriteOnly));
   script.write("matrix = [[7.0, 4.88, 2.67, 933.52], [4.88, 4.3432], [2.67, "
-               "1.4981, 1.0791, 423.24]]\nprint(matrix)\n");
+               "1.4981, 1.0791, 423.24]]\n"
+               "records = {f'key-{i:03}': {'leaf': (i, {'tags': {2, 3}})} "
+               "for i in range(205)}\n"
+               "records['key-204']['leaf'] = (999, {'tags': {2, 3}})\n"
+               "print(matrix, len(records))\n");
   script.close();
   DapClient client;
   client.setAdapterMetadata("python-debugpy", "debugpy");
   QSignalSpy adapterReady(&client, &DapClient::adapterInitialized);
   QSignalSpy stopped(&client, &DapClient::stopped);
   QSignalSpy stack(&client, &DapClient::stackTraceReceived);
-  QSignalSpy evaluated(&client, &DapClient::evaluateResponse);
+  QSignalSpy evaluated(&client, &DapClient::evaluateValueReceived);
   QVERIFY(client.start(python, {"-m", "debugpy.adapter"}));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 15000);
   client.launch(QJsonObject{{"program", script.fileName()},
@@ -2899,7 +3126,7 @@ void TestDap::testInspectorWithRealDebugpy() {
                             {"console", "internalConsole"}});
   QTRY_COMPARE_WITH_TIMEOUT(adapterReady.count(), 1, 15000);
   DapSourceBreakpoint breakpoint;
-  breakpoint.line = 2;
+  breakpoint.line = 3;
   client.setBreakpoints(script.fileName(), {breakpoint});
   client.configurationDone();
   QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 1, 15000);
@@ -2909,11 +3136,8 @@ void TestDap::testInspectorWithRealDebugpy() {
   QVERIFY(!frames.isEmpty());
   client.evaluate("matrix", frames.first().id, "repl");
   QTRY_COMPARE_WITH_TIMEOUT(evaluated.count(), 1, 5000);
-  DapVariable matrix;
+  auto matrix = evaluated.first().at(1).value<DapVariable>();
   matrix.name = "matrix";
-  matrix.value = evaluated.first().at(2).toString();
-  matrix.type = evaluated.first().at(3).toString();
-  matrix.variablesReference = evaluated.first().at(4).toInt();
   QVERIFY2(matrix.variablesReference > 0, qPrintable(matrix.value));
   DebugValueInspector inspector;
   inspector.setDapClient(&client);
@@ -2934,6 +3158,44 @@ void TestDap::testInspectorWithRealDebugpy() {
     inspector.grab().save(
         qEnvironmentVariable("LIGHTPAD_INSPECTOR_SCREENSHOT"));
   }
+  client.evaluate("records", frames.first().id, "watch");
+  QTRY_COMPARE_WITH_TIMEOUT(evaluated.count(), 2, 5000);
+  auto records = evaluated.last().at(1).value<DapVariable>();
+  records.name = records.evaluateName = "records";
+  inspector.setValue(records, frames.first().id);
+  auto *root = tree->topLevelItem(0);
+  QTRY_COMPARE(root->childCount(), 101);
+  tree->itemActivated(root->child(100), 0);
+  QTRY_COMPARE(root->childCount(), 201);
+  tree->itemActivated(root->child(200), 0);
+  const auto lastKey = [&]() {
+    return childNamed(tree->topLevelItem(0), "'key-204'");
+  };
+  const auto leaf = [&]() { return childNamed(lastKey(), "'leaf'"); };
+  QTRY_VERIFY(lastKey());
+  lastKey()->setExpanded(true);
+  QTRY_VERIFY(leaf());
+  leaf()->setExpanded(true);
+  QTRY_VERIFY(leaf()->childCount() >= 2);
+  QCOMPARE(leaf()->child(0)->text(1), QString("204"));
+
+  auto *dict = leaf()->child(1);
+  dict->setExpanded(true);
+  QTRY_VERIFY(childNamed(dict, "'tags'"));
+  auto *tags = childNamed(dict, "'tags'");
+  tags->setExpanded(true);
+  QTRY_VERIFY(tags->childCount() >= 2);
+  QSet<QString> tagValues;
+  for (int i = 0; i < tags->childCount(); ++i)
+    tagValues.insert(tags->child(i)->text(1));
+  QVERIFY(tagValues.contains("2") && tagValues.contains("3"));
+
+  client.stepOver(client.currentThreadId());
+  QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 2, 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(leaf() && leaf()->childCount() >= 2 &&
+                               leaf()->child(0)->text(1) == "999",
+                           10000);
+  QVERIFY(lastKey()->isExpanded() && leaf()->isExpanded());
   client.stop(true);
 }
 
@@ -3332,10 +3594,72 @@ void TestDap::testNativeCCollections() {
   QTRY_VERIFY_WITH_TIMEOUT(
       table->item(3, 0) && table->item(3, 0)->text() == "10", 10000);
   QCOMPARE(table->item(1, 0)->text(), QString("0"));
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "packet", &value));
+  inspector.setValue(value, run.frame.id);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  QTRY_VERIFY(childNamed(root, "sample"));
+  auto *sample = childNamed(root, "sample");
+  sample->setExpanded(true);
+  QTRY_VERIFY(childNamed(sample, "bytes"));
+  auto *bytes = childNamed(sample, "bytes");
+  bytes->setExpanded(true);
+  QTRY_VERIFY(bytes->childCount() == 4 && bytes->child(2)->text(1) == "66");
+  QCOMPARE(bytes->child(1)->text(1), QString("0"));
+
+  auto *row = childNamed(root, "row");
+  QVERIFY(row);
+  row->setExpanded(true);
+  QTRY_VERIFY(row->childCount() > 0);
+  auto *array = row->child(0);
+  array->setExpanded(true);
+  QTRY_VERIFY(array->childCount() == 3 && array->child(2)->text(1) == "3");
+
   run.client.stop(true);
 }
 
 #ifndef Q_OS_WIN
+void TestDap::testNativeCppNestedCollections() {
+  const QString skip = nativeCollectionSkipReason();
+  if (!skip.isEmpty())
+    QSKIP(qPrintable(skip));
+  NativeCollectionRun run;
+  QVERIFY2(run.start(), qPrintable(run.error));
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "nested", &value));
+  DebugValueInspector inspector;
+  inspector.setDapClient(&run.client);
+  inspector.setValue(value, run.frame.id);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  QTRY_COMPARE(root->childCount(), 2);
+  QCOMPARE(root->child(0)->text(1), QString("7"));
+  auto *tuple = root->child(1);
+  tuple->setExpanded(true);
+  QTRY_COMPARE(tuple->childCount(), 3);
+
+  auto *set = tuple->child(0);
+  set->setExpanded(true);
+  QTRY_COMPARE(set->childCount(), 2);
+  QCOMPARE(set->child(1)->text(1), QString("23"));
+
+  auto *array = tuple->child(1);
+  array->setExpanded(true);
+  QTRY_VERIFY(array->childCount() > 0);
+  if (array->childCount() == 1) {
+    array = array->child(0);
+    array->setExpanded(true);
+  }
+  QTRY_COMPARE(array->childCount(), 2);
+  QCOMPARE(array->child(1)->text(1), QString("37"));
+
+  auto *record = tuple->child(2);
+  record->setExpanded(true);
+  QTRY_VERIFY(childNamed(record, "id"));
+  QCOMPARE(childNamed(record, "id")->text(1), QString("41"));
+  run.client.stop(true);
+}
+
 namespace {
 struct StringSortRun {
   QTemporaryDir dir;
@@ -4292,6 +4616,7 @@ void TestDap::testDebugToolbarCollapsesToIconsWhenNarrow() {
 
 void TestDap::testConsoleResultOpensStructuredInspector() {
   DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
   QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
   client.launch(QJsonObject{{"program", "/tmp/app"}});

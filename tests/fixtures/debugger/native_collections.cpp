@@ -1,5 +1,9 @@
+#include <array>
 #include <cstdlib>
+#include <map>
+#include <set>
 #include <string>
+#include <tuple>
 #include <vector>
 
 struct Record {
@@ -32,6 +36,10 @@ int main() {
   std::vector<std::string> names = {"alpha", "", "beta"};
   std::vector<int> empty;
   Record records[2] = {{1, "first"}, {2, "second"}};
+  using Entry = std::tuple<std::set<int>, std::array<int, 2>, Record>;
+  std::map<int, Entry> nested{
+      {7, Entry{std::set<int>{17, 23}, std::array<int, 2>{31, 37},
+                Record{41, "nested"}}}};
   Node tail = {22, nullptr};
   Node head = {11, &tail};
   Node *node = &head;

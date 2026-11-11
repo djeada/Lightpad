@@ -159,6 +159,75 @@ void sendEvent(Channel *channel, const QString &event,
   sendMessage(channel, message);
 }
 
+QJsonArray collectionVariables(int reference, const QJsonObject &args) {
+  const int start = args["start"].toInt();
+  const int count = args["count"].toInt(205);
+  const QString filter = args["filter"].toString();
+  QJsonArray children;
+  if (reference <= 7200) {
+    const int offset = reference == 7000 ? start : 0;
+    const int end = reference == 7100 ? 205 : qMin(205, offset + count);
+    for (int i = offset; i < end; ++i)
+      children.append(QJsonObject{{"name", QStringLiteral("key-%1").arg(i)},
+                                  {"type", "int"},
+                                  {"value", QString::number(i)}});
+  } else if (reference == 7300) {
+    if (filter == "named") {
+      return {QJsonObject{{"name", "label"},
+                          {"value", "{…}"},
+                          {"variablesReference", 7500}},
+              QJsonObject{{"name", "special variables"}, {"value", "custom"}},
+              QJsonObject{{"name", "length"}, {"value", "205"}}};
+    }
+    for (const int slot : {2, 204}) {
+      if (start <= slot && slot < start + count)
+        children.append(QJsonObject{{"name", QString::number(slot)},
+                                    {"type", "number"},
+                                    {"value", "42"}});
+    }
+  } else if (reference == 7301) {
+    for (int i = start; i < qMin(105, start + count); ++i)
+      children.append(QJsonObject{
+          {"name", QString::number(i)}, {"type", "object"}, {"value", "{…}"}});
+    children.append(QJsonObject{{"name", "size"}, {"value", "105"}});
+  } else if (reference == 7400) {
+    if (filter == "named")
+      return {QJsonObject{{"name", "len()"}, {"value", "101"}}};
+    for (int i = start; i < qMin(101, start + count); ++i) {
+      children.append(QJsonObject{{"name", QStringLiteral("[key %1]").arg(i)},
+                                  {"value", "{…}"},
+                                  {"variablesReference", i == 0 ? 7500 : 0}});
+      children.append(QJsonObject{{"name", QStringLiteral("[val %1]").arg(i)},
+                                  {"value", "{…}"},
+                                  {"variablesReference", i == 0 ? 7501 : 0}});
+    }
+  } else if (reference == 7500) {
+    return {QJsonObject{{"name", "tuple"}, {"variablesReference", 7501}},
+            QJsonObject{{"name", "self"}, {"variablesReference", 7500}}};
+  } else if (reference == 7501) {
+    return {QJsonObject{{"name", "Some(λ)"}, {"value", "42"}}};
+  } else if (reference == 7600) {
+    return {
+        QJsonObject{
+            {"name", "data"}, {"value", "\"A\\000B\""}, {"type", "char [3]"}},
+        QJsonObject{
+            {"name", "other"}, {"value", "\"C\\000D\""}, {"type", "char [3]"}},
+        QJsonObject{{"name", "row"},
+                    {"value", "0x1234"},
+                    {"type", "int (*)[3]"},
+                    {"variablesReference", 7601}},
+        QJsonObject{{"name", "tuple"},
+                    {"type", "std::tuple<char [3]>"},
+                    {"variablesReference", 7602}}};
+  } else if (reference == 7601) {
+    return {QJsonObject{{"name", "value"}, {"type", "int [3]"}}};
+  } else if (reference == 7602) {
+    return {QJsonObject{
+        {"name", "[0]"}, {"type", "char [3]"}, {"value", "\"E\\000F\""}}};
+  }
+  return children;
+}
+
 void handleRequest(Channel *channel, const QJsonObject &request) {
   trace(request);
 
@@ -247,6 +316,12 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
                    "Object is no longer available");
       return;
     }
+    if (reference >= 7000 && reference <= 7602) {
+      sendResponse(
+          channel, seq, command, true,
+          QJsonObject{{"variables", collectionVariables(reference, args)}});
+      return;
+    }
     if (reference == 6000 || reference == 6100) {
       QJsonArray values;
       const int start = reference == 6000 ? 0 : 100;
@@ -324,6 +399,15 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
       body["type"] = "list";
       body["variablesReference"] = 2000;
       body["indexedVariables"] = 3;
+    } else if (expression.startsWith("((record).data)[") ||
+               expression.startsWith("((record).other)[") ||
+               expression.startsWith("((*((record).row)))[")) {
+      const int index = expression.at(expression.size() - 2).digitValue();
+      const bool row = expression.startsWith("((*");
+      const int first = expression.startsWith("((record).data)") ? 65 : 67;
+      const int byte = index == 1 ? 0 : first + index / 2;
+      body["type"] = row ? "int" : "char";
+      body["result"] = QString::number(row ? 10 * (index + 1) : byte);
     }
     sendResponse(channel, seq, command, true, body);
   } else if (command == "setVariable") {

@@ -1427,6 +1427,8 @@ void DebugPanel::setupConsole() {
           this, [](const QString &expression) {
             WatchManager::instance().addWatch(expression);
           });
+  connect(m_consoleValueInspector, &DebugValueInspector::inspectValueRequested,
+          this, &DebugPanel::openValueInspector);
 
   setupConsoleToolbar();
   updateConsoleInputAffordances();
@@ -1606,15 +1608,29 @@ DebugPanel::expressionForVariableItem(const QTreeWidgetItem *item) const {
   }
   if (!item->parent())
     return {};
-  const QString parentExpression = expressionForVariableItem(item->parent());
-  if (parentExpression.isEmpty())
+  if (!item->parent()->parent())
     return item->text(0);
-  return DebugValueFormatter::childExpression(
-      parentExpression, item->parent()->text(2), item->text(0));
+  return nativeChildExpression(expressionForVariableItem(item->parent()),
+                               item->parent()->text(2), item->text(0));
+}
+
+bool DebugPanel::supportsNativeBuffers() const {
+  return m_dapClient &&
+         DebugValueFormatter::supportsNativeBuffers(m_dapClient->adapterId(),
+                                                    m_dapClient->adapterType());
+}
+
+QString DebugPanel::nativeChildExpression(const QString &parent,
+                                          const QString &type,
+                                          const QString &name) const {
+  return supportsNativeBuffers()
+             ? DebugValueFormatter::childExpression(parent, type, name)
+             : QString();
 }
 
 QString DebugPanel::arrayLengthExpression(const DapVariable &value) const {
-  if (DebugValueFormatter::pointerDepth(value.type) < 2)
+  if (!supportsNativeBuffers() ||
+      DebugValueFormatter::pointerDepth(value.type) < 2)
     return {};
   const QString name = value.evaluateName.trimmed();
   static const QRegularExpression identifier("^[A-Za-z_][A-Za-z_0-9]*$");
@@ -1696,13 +1712,15 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
                             ? item->data(0, Qt::UserRole + 4).toString()
                             : item->text(1);
   const QString expression = expressionForVariableItem(item);
+  const QString memoryReference = item->data(0, Qt::UserRole + 2).toString();
 
   QMenu menu(m_variablesTree);
   menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
 
   QAction *inspect = menu.addAction(tr("Inspect Value…"));
   QAction *inspectArray = nullptr;
-  if (item->text(2).contains('*') || item->text(2).contains('['))
+  if (supportsNativeBuffers() && !expression.isEmpty() &&
+      DebugValueFormatter::canViewBuffer(item->text(2), memoryReference))
     inspectArray = menu.addAction(tr("View as Array / Buffer…"));
   menu.addSeparator();
 
@@ -1725,7 +1743,6 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
   collapse->setEnabled(expandable && item->isExpanded());
   QAction *refresh = menu.addAction(tr("Refresh"));
 
-  const QString memoryReference = item->data(0, Qt::UserRole + 2).toString();
   const bool canWatchData = m_dapClient &&
                             m_dapClient->supportsDataBreakpoints() &&
                             item->parent() != nullptr;
@@ -1802,6 +1819,11 @@ void DebugPanel::inspectVariableItem(QTreeWidgetItem *item, bool watch,
   }
   value.hasIndexedVariables = item->data(0, Qt::UserRole + 10).toBool();
   value.hasNamedVariables = item->data(0, Qt::UserRole + 11).toBool();
+  openValueInspector(value, m_currentFrameId, 0, array);
+}
+
+void DebugPanel::openValueInspector(const DapVariable &value, int frameId,
+                                    int threadId, bool array) {
   auto *dialog = new StyledDialog(this);
   dialog->setAttribute(Qt::WA_DeleteOnClose);
   dialog->setWindowTitle(tr("Inspect — %1").arg(value.name));
@@ -1810,7 +1832,11 @@ void DebugPanel::inspectVariableItem(QTreeWidgetItem *item, bool watch,
   auto *inspector = new DebugValueInspector(dialog);
   layout->addWidget(inspector);
   inspector->setDapClient(m_dapClient);
-  inspector->setValue(value, m_currentFrameId, arrayLengthExpression(value));
+  const QString length =
+      frameId == m_currentFrameId ? arrayLengthExpression(value) : QString();
+  inspector->setValue(value, frameId, length, threadId);
+  connect(inspector, &DebugValueInspector::inspectValueRequested, this,
+          &DebugPanel::openValueInspector);
   connect(inspector, &DebugValueInspector::addWatchRequested, this,
           [](const QString &expression) {
             WatchManager::instance().addWatch(expression);
@@ -3047,12 +3073,12 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     item->setText(1, DebugValueFormatter::summary(var.value));
     item->setText(2, var.type);
     item->setData(0, Qt::UserRole, var.variablesReference);
-    item->setData(0, Qt::UserRole + 1,
-                  var.evaluateName.isEmpty()
-                      ? DebugValueFormatter::childExpression(
-                            expressionForVariableItem(parentItem),
-                            parentItem->text(2), var.name)
-                      : var.evaluateName);
+    item->setData(
+        0, Qt::UserRole + 1,
+        var.evaluateName.isEmpty()
+            ? nativeChildExpression(expressionForVariableItem(parentItem),
+                                    parentItem->text(2), var.name)
+            : var.evaluateName);
     item->setData(0, Qt::UserRole + 2, var.memoryReference);
     item->setData(0, Qt::UserRole + 3, variablesReference);
     item->setData(0, Qt::UserRole + 4, var.value);
@@ -4081,12 +4107,12 @@ void DebugPanel::populateWatchChildren(QTreeWidgetItem *parentItem,
     const QString parentExpression =
         parentItem->parent() ? parentItem->data(0, Qt::UserRole + 5).toString()
                              : parentItem->text(0);
-    childItem->setData(
-        0, Qt::UserRole + 5,
-        var.evaluateName.isEmpty()
-            ? DebugValueFormatter::childExpression(
-                  parentExpression, parentItem->text(2), var.name)
-            : var.evaluateName);
+    childItem->setData(0, Qt::UserRole + 5,
+                       var.evaluateName.isEmpty()
+                           ? nativeChildExpression(parentExpression,
+                                                   parentItem->text(2),
+                                                   var.name)
+                           : var.evaluateName);
     childItem->setData(0, Qt::UserRole + 7, var.indexedVariables);
     childItem->setData(0, Qt::UserRole + 8, var.namedVariables);
     childItem->setData(0, Qt::UserRole + 9, var.memoryReference);

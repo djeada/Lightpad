@@ -25,7 +25,7 @@ public:
   explicit DebugValueInspector(QWidget *parent = nullptr);
   void setDapClient(DapClient *client);
   void setValue(const DapVariable &value, int frameId = -1,
-                const QString &lengthExpression = QString());
+                const QString &lengthExpression = {}, int threadId = 0);
   void focusArrayControls();
   void clear();
   void invalidate();
@@ -33,25 +33,41 @@ public:
 
 signals:
   void addWatchRequested(const QString &expression);
+  void inspectValueRequested(const DapVariable &value, int frameId,
+                             int threadId, bool array);
 
 private:
   struct Request {
     QTreeWidgetItem *item = nullptr;
     int start = 0;
-    bool prefixRetry = false;
+    int count = 0;
+    int reference = 0;
+    bool prefix = false;
   };
   void loadChildren(QTreeWidgetItem *item, int start = 0,
                     int referenceOverride = 0);
   void receiveChildren(int seq, const QList<DapVariable> &variables);
+  void receiveSequenceChildren(const Request &request,
+                               const QList<DapVariable> &variables);
+  void appendChildren(const Request &request,
+                      const QList<DapVariable> &variables, int next, bool more);
+  void addPage(QTreeWidgetItem *parent, int next, int count);
   void updateTable();
   void filterTree();
   void copySelection();
-  bool isNative() const;
+  void showTreeMenu(const QPoint &pos);
+  bool supportsNativeBuffers() const;
+  bool usesDelve() const;
+  bool usesJsDebug() const;
+  bool pagesByIndex(const QString &filter) const;
+  bool isPythonSequence(const QTreeWidgetItem *item) const;
+  QString childFilter(const QTreeWidgetItem *item) const;
   void applyArrayView();
   void viewArray();
   void loadArrayPage(QTreeWidgetItem *parent, int start);
   void loadStringPage(QTreeWidgetItem *parent, int start);
   void receiveElement(int seq, const DapVariable &value);
+  void finishElementPage();
   void refreshDisplay();
   void clearValue();
   void renderValue(const DapVariable &value, bool preserveView = false,
@@ -66,8 +82,10 @@ private:
   void updateItem(QTreeWidgetItem *item, const DapVariable &value);
   QString displayValue(const QString &value, const QString &type) const;
   QString itemDisplayValue(const QTreeWidgetItem *item) const;
-  static bool isIndexed(const DapVariable &value);
-  static bool isIndex(const QString &name);
+  static bool hasChildren(const QTreeWidgetItem *item);
+  bool hasKnownEmptyChildren(const DapVariable &value) const;
+  static bool repeatsPrefix(const QList<DapVariable> &variables,
+                            const QTreeWidgetItem *item, int count);
   static qlonglong indexForName(QString name);
   QTreeWidgetItem *appendValue(QTreeWidgetItem *parent,
                                const DapVariable &value);
@@ -85,7 +103,7 @@ private:
   QCheckBox *m_liveUpdates = nullptr;
   QPushButton *m_refresh = nullptr;
   struct NodeView {
-    int children = 0;
+    int nextPage = 0;
     bool expanded = false;
     bool loaded = false;
   };
@@ -99,6 +117,7 @@ private:
   DapVariable m_value;
   QHash<int, Request> m_requests;
   QHash<int, QTreeWidgetItem *> m_elementRequests;
+  QList<QPair<QTreeWidgetItem *, int>> m_arrayPages;
   int m_frameId = -1;
   int m_lengthRequest = 0;
   bool m_lengthResolved = false;
@@ -107,7 +126,6 @@ private:
   int m_bufferLayout = 0;
   int m_readErrors = 0;
   QString m_bufferElementType;
-  QByteArray m_stringBytes;
   bool m_stringView = false;
   QWidget *m_arrayControls = nullptr;
   QLineEdit *m_arrayExpression = nullptr;
@@ -128,6 +146,7 @@ private:
   QTreeWidgetItem *m_root = nullptr;
   bool m_live = false;
   bool m_autoTable = true;
+  bool m_updatingTable = false;
   int m_itemCount = 0;
 };
 

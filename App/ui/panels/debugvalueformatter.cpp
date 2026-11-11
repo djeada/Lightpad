@@ -7,6 +7,28 @@
 namespace {
 QString indent(int depth) { return QString(depth * 4, QLatin1Char(' ')); }
 
+QString arrayDimensions(const QString &type) {
+  const QString declaration = type.trimmed();
+  static const QRegularExpression trailing(
+      QStringLiteral(R"((?:\[\s*[0-9]*\s*\]\s*)+$)"));
+  const auto dimensions = trailing.match(declaration);
+  const QString prefix =
+      dimensions.hasMatch()
+          ? declaration.left(dimensions.capturedStart()).trimmed()
+          : declaration;
+  static const QRegularExpression arrayOfPointers(QStringLiteral(
+      R"(\(\s*\*[^()\[\]]*((?:\[\s*[0-9]*\s*\]\s*)+)\)\s*(?:\(.*\))?$)"));
+  const auto grouped = arrayOfPointers.match(prefix);
+  if (grouped.hasMatch())
+    return grouped.captured(1);
+
+  static const QRegularExpression arrayReference(
+      QStringLiteral(R"(\(\s*&&?\s*\)$)"));
+  if (!prefix.endsWith(')') || arrayReference.match(prefix).hasMatch())
+    return dimensions.captured();
+  return {};
+}
+
 QString formatPart(const QString &input, int depth, int width) {
   const QString text = input.trimmed();
   if (depth > 16 || text.isEmpty()) {
@@ -119,7 +141,7 @@ QString DebugValueFormatter::tableCell(const QString &value) {
 
 QString DebugValueFormatter::scalar(const QString &value, const QString &type,
                                     DisplayFormat display) {
-  if (type.contains("char") && pointerDepth(type) == 1) {
+  if (isCharacterPointer(type)) {
     QByteArray bytes;
     if (stringBytes(value, &bytes))
       return value.mid(value.indexOf('"')).trimmed();
@@ -214,46 +236,99 @@ QString DebugValueFormatter::childExpression(const QString &parent,
                                              const QString &name) {
   if (parent.isEmpty())
     return {};
-  static const QRegularExpression index(QStringLiteral("^\\[?([0-9]+)\\]?$"));
+  static const QRegularExpression index(
+      QStringLiteral(R"(^(?:\[([0-9]+)\]|([0-9]+))$)"));
   const auto match = index.match(name.trimmed());
-  if (match.hasMatch())
-    return QStringLiteral("(%1)[%2]").arg(parent, match.captured(1));
-  if (name == QLatin1String("value") &&
-      (parentType.contains('*') || parentType.contains('&')))
-    return QStringLiteral("(*(%1))").arg(parent);
+  if (match.hasMatch()) {
+    // A pretty-printer's ordinal can label a map entry or a tuple field.
+    if (arrayDimensions(parentType).isEmpty() &&
+        pointeeType(parentType).isEmpty())
+      return {};
+    return QStringLiteral("(%1)[%2]")
+        .arg(parent, match.captured(match.lastCapturedIndex()));
+  }
+  const bool pointer = !pointeeType(parentType).isEmpty();
+  if (name == QLatin1String("value")) {
+    if (pointer)
+      return QStringLiteral("(*(%1))").arg(parent);
+    static const QRegularExpression reference(
+        QStringLiteral(R"((?:&&?\s*$|\(\s*&&?\s*\)\s*\[))"));
+    if (reference.match(parentType).hasMatch())
+      return QStringLiteral("(%1)").arg(parent);
+  }
   static const QRegularExpression member(
       QStringLiteral("^[A-Za-z_][A-Za-z_0-9]*$"));
   if (member.match(name).hasMatch())
-    return QStringLiteral("(%1)%2%3")
-        .arg(parent, parentType.contains('*') ? "->" : ".", name);
+    return QStringLiteral("(%1)%2%3").arg(parent, pointer ? "->" : ".", name);
   return {};
+}
+
+bool DebugValueFormatter::supportsNativeBuffers(const QString &adapterId,
+                                                const QString &adapterType) {
+  const QString id = adapterId.toLower();
+  const QString type = adapterType.toLower();
+  if (id.startsWith("rust") || type == QLatin1String("rust"))
+    return false;
+  const QString adapter = id + ' ' + type;
+  return adapter.contains("gdb") || adapter.contains("lldb") ||
+         adapter.contains("cppdbg") || adapter.contains("cppvsdbg");
+}
+
+bool DebugValueFormatter::canViewBuffer(const QString &type,
+                                        const QString &memoryReference) {
+  return !pointeeType(type).isEmpty() || !arrayDimensions(type).isEmpty() ||
+         !memoryReference.isEmpty();
 }
 
 int DebugValueFormatter::arrayLength(const QString &type) {
   static const QRegularExpression dimension(
-      QStringLiteral("\\[\\s*([0-9]+)\\s*\\]"));
-  const auto match = dimension.match(type);
-  if (!match.hasMatch())
-    return 0;
-  bool ok = false;
-  const int count = match.captured(1).toInt(&ok);
-  return ok && count > 0 ? count : 0;
+      QStringLiteral(R"(^\[\s*([0-9]+)\s*\])"));
+  return dimension.match(arrayDimensions(type)).captured(1).toInt();
 }
 
 QString DebugValueFormatter::pointeeType(const QString &type) {
   static const QRegularExpression pointer(QStringLiteral(
-      "\\*\\s*(?:(?:const|volatile|restrict|__restrict)\\s*)*$"));
-  const auto match = pointer.match(type.trimmed());
-  return match.hasMatch() ? type.trimmed().left(match.capturedStart()).trimmed()
-                          : QString();
+      R"(\*\s*(?:(?:const|volatile|restrict|__restrict(?:__)?)\b\s*)*$)"));
+  const QString declaration = type.trimmed();
+  const auto match = pointer.match(declaration);
+  if (match.hasMatch())
+    return declaration.left(match.capturedStart()).trimmed();
+
+  static const QRegularExpression pointerToArray(
+      QStringLiteral(R"(\(\s*(\*[^()]*)\)\s*((?:\[\s*[0-9]*\s*\]\s*)+)$)"));
+  const auto grouped = pointerToArray.match(declaration);
+  if (!grouped.hasMatch())
+    return {};
+  const QString declarator = grouped.captured(1);
+  const auto outer = pointer.match(declarator);
+  if (!outer.hasMatch())
+    return {};
+  const QString remaining = declarator.left(outer.capturedStart()).trimmed();
+  const QString base = declaration.left(grouped.capturedStart()).trimmed();
+  return remaining.isEmpty()
+             ? base + ' ' + grouped.captured(2)
+             : base + " (" + remaining + ')' + grouped.captured(2);
 }
 
-int DebugValueFormatter::pointerDepth(QString type) {
+int DebugValueFormatter::pointerDepth(const QString &type) {
   int depth = 0;
   for (QString pointee = pointeeType(type); !pointee.isEmpty();
        pointee = pointeeType(pointee))
     ++depth;
   return depth;
+}
+
+bool DebugValueFormatter::isCharacterPointer(const QString &type) {
+  QString pointee = pointeeType(type);
+  static const QRegularExpression qualifiers(
+      QStringLiteral(R"(\b(?:const|volatile|signed|unsigned)\b)"));
+  return pointee.remove(qualifiers).trimmed() == QLatin1String("char");
+}
+
+bool DebugValueFormatter::isCharacterArray(const QString &type) {
+  static const QRegularExpression characters(QStringLiteral(
+      R"(^\s*(?:(?:const|volatile|signed|unsigned)\s+)*char(?:\s+(?:const|volatile))*\s*\[\s*[0-9]+\s*\]\s*$)"));
+  return characters.match(type).hasMatch();
 }
 
 bool DebugValueFormatter::stringBytes(const QString &value, QByteArray *bytes) {
