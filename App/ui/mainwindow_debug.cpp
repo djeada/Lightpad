@@ -429,25 +429,19 @@ void MainWindow::hookInferiorTerminal(DebugSession *session) {
           return;
         }
 
-        const bool keepDebugPanelInFront = debugDock && debugDock->isVisible();
-        showTerminalPanel();
-        if (keepDebugPanelInFront) {
-          debugDock->raise();
-        }
-
         QString cwd = guarded->configuration().cwd;
         if (cwd.isEmpty()) {
           cwd = m_projectRootPath.isEmpty() ? QDir::currentPath()
                                             : m_projectRootPath;
         }
 
-        QPointer<Terminal> terminal = m_debugInferiorTerminals.value(sessionId);
+        QPointer<Terminal> terminal = m_debugTerminals.value(sessionId);
         if (terminal) {
           terminal->stopShell();
           terminal->clear();
         } else {
-          terminal = tabs->addNewTerminal(cwd);
-          m_debugInferiorTerminals.insert(sessionId, terminal);
+          terminal = tabs->addNewTerminal(cwd, tr("Debuggee I/O"));
+          registerDebugTerminal(sessionId, terminal);
         }
 
         const QString ttyFile = QDir::temp().filePath(
@@ -473,10 +467,19 @@ void MainWindow::hookInferiorTerminal(DebugSession *session) {
           terminal->startShell(cwd);
         }
 
-        auto finish = [guarded, terminal, ttyFile](const QString &tty) {
+        auto finish = [this, guarded, terminal, ttyFile,
+                       sessionId](const QString &tty) {
           QFile::remove(ttyFile);
           if (guarded) {
+            if (terminal && !tty.isEmpty()) {
+              terminal->appendNotice(
+                  tr("Program input and output. Type here and press Enter to "
+                     "send input."));
+            }
             guarded->provideInferiorTerminal(tty);
+            if (!tty.isEmpty()) {
+              showDebugTerminal(sessionId);
+            }
           } else if (terminal) {
             terminal->stopShell();
           }
@@ -526,8 +529,42 @@ void MainWindow::hookInferiorTerminal(DebugSession *session) {
             Qt::SingleShotConnection);
 #endif
           });
-  connect(session, &DebugSession::terminated, this,
-          [this, sessionId]() { m_debugInferiorTerminals.remove(sessionId); });
+  connect(session, &DebugSession::terminated, this, [this, sessionId]() {
+    m_debugTerminals.remove(sessionId);
+    if (m_activeDebugSessionId == sessionId && debugPanel) {
+      debugPanel->setProgramIoAvailable(false);
+    }
+  });
+}
+
+void MainWindow::registerDebugTerminal(const QString &sessionId,
+                                       Terminal *terminal) {
+  m_debugTerminals.insert(sessionId, terminal);
+  if (m_activeDebugSessionId == sessionId && debugPanel) {
+    debugPanel->setProgramIoAvailable(true);
+  }
+  // Skip this callback during teardown, after MainWindow's members are gone.
+  connect(
+      terminal, &QObject::destroyed, this,
+      [this, sessionId]() {
+        if (m_debugTerminals.value(sessionId)) {
+          return;
+        }
+        m_debugTerminals.remove(sessionId);
+        if (m_activeDebugSessionId == sessionId && debugPanel) {
+          debugPanel->setProgramIoAvailable(false);
+        }
+      },
+      Qt::QueuedConnection);
+}
+
+void MainWindow::showDebugTerminal(const QString &sessionId) {
+  Terminal *terminal = m_debugTerminals.value(sessionId);
+  if (!terminalWidget || !terminal) {
+    return;
+  }
+  showTerminalPanel();
+  terminalWidget->setCurrentTerminal(terminal);
 }
 
 void MainWindow::attachDebugSession(const QString &sessionId) {
@@ -553,6 +590,7 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
   hookInferiorTerminal(session);
   DebugSessionManager::instance().setFocusedSession(sessionId);
   debugPanel->setDapClient(session->client());
+  debugPanel->setProgramIoAvailable(m_debugTerminals.value(sessionId));
   WatchManager::instance().setDapClient(session->client());
   if (debugDock) {
     debugDock->show();
@@ -594,12 +632,10 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
               });
   m_runInTerminalConnection = connect(
       session->client(), &DapClient::runInTerminalRequested, this,
-      [this, client = session->client()](
-          int requestSeq, const QString &kind, const QString &title,
-          const QStringList &commandLine, const QString &cwd,
-          const QMap<QString, QString> &env) {
-        Q_UNUSED(title);
-
+      [this, client = session->client(),
+       sessionId](int requestSeq, const QString &kind, const QString &title,
+                  const QStringList &commandLine, const QString &cwd,
+                  const QMap<QString, QString> &env) {
         if (!client || commandLine.isEmpty()) {
           if (client) {
             client->respondToRunInTerminal(requestSeq, false, 0,
@@ -648,12 +684,6 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
           return;
         }
 
-        const bool keepDebugPanelInFront = debugDock && debugDock->isVisible();
-        showTerminalPanel();
-        if (keepDebugPanelInFront) {
-          debugDock->raise();
-        }
-
         QStringList args = commandLine;
         const QString program = args.takeFirst();
         const QString workingDirectory =
@@ -662,7 +692,9 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
                           : cwd;
 
         QPointer<DapClient> clientPtr(client);
-        QPointer<Terminal> terminal = tabs->addNewTerminal(workingDirectory);
+        QPointer<Terminal> terminal = tabs->addNewTerminal(
+            workingDirectory, title.isEmpty() ? tr("Debuggee I/O") : title);
+        registerDebugTerminal(sessionId, terminal);
         QSharedPointer<bool> responded = QSharedPointer<bool>::create(false);
 
         connect(
@@ -690,6 +722,7 @@ void MainWindow::attachDebugSession(const QString &sessionId) {
             Qt::SingleShotConnection);
 
         terminal->executeCommand(program, args, workingDirectory, env);
+        showDebugTerminal(sessionId);
       });
 
   m_sessionTerminatedConnection =

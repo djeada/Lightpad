@@ -235,6 +235,7 @@ void Terminal::setupTerminal() {
   ui->cwdLabel->hide();
 
   ui->textEdit->setReadOnly(false);
+  setFocusProxy(ui->textEdit);
   ui->textEdit->setTextInteractionFlags(Qt::TextEditorInteraction);
   ui->textEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
 

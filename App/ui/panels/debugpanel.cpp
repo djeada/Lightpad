@@ -49,6 +49,7 @@
 #include <QToolButton>
 #include <QToolTip>
 #include <algorithm>
+#include <functional>
 
 namespace {
 constexpr int MAX_DEBUG_CONSOLE_BLOCKS = 2000;
@@ -817,6 +818,17 @@ void DebugPanel::setupUI() {
   }
   tabBarLayout->addStretch(1);
 
+  m_programIoButton = new QToolButton(m_inspectorTabBar);
+  m_programIoButton->setObjectName("debugProgramIoButton");
+  m_programIoButton->setText(tr("Program I/O"));
+  m_programIoButton->setToolTip(
+      tr("Open the program terminal to read output and type input"));
+  m_programIoButton->setCursor(Qt::PointingHandCursor);
+  m_programIoButton->setEnabled(false);
+  connect(m_programIoButton, &QToolButton::clicked, this,
+          &DebugPanel::showProgramIoRequested);
+  tabBarLayout->insertWidget(0, m_programIoButton);
+
   inspectorLayout->addWidget(m_inspectorTabBar);
   inspectorLayout->addWidget(m_inspectorStack, 1);
   mainLayout->addWidget(m_inspectorShell, 1);
@@ -1415,6 +1427,8 @@ void DebugPanel::setupConsole() {
           this, [](const QString &expression) {
             WatchManager::instance().addWatch(expression);
           });
+  connect(m_consoleValueInspector, &DebugValueInspector::inspectValueRequested,
+          this, &DebugPanel::openValueInspector);
 
   setupConsoleToolbar();
   updateConsoleInputAffordances();
@@ -1592,7 +1606,99 @@ DebugPanel::expressionForVariableItem(const QTreeWidgetItem *item) const {
   if (!evaluateName.isEmpty()) {
     return evaluateName;
   }
-  return item->parent() ? item->text(0) : QString();
+  if (!item->parent())
+    return {};
+  if (!item->parent()->parent())
+    return item->text(0);
+  return nativeChildExpression(expressionForVariableItem(item->parent()),
+                               item->parent()->text(2), item->text(0));
+}
+
+bool DebugPanel::supportsNativeBuffers() const {
+  return m_dapClient &&
+         DebugValueFormatter::supportsNativeBuffers(m_dapClient->adapterId(),
+                                                    m_dapClient->adapterType());
+}
+
+QString DebugPanel::nativeChildExpression(const QString &parent,
+                                          const QString &type,
+                                          const QString &name) const {
+  return supportsNativeBuffers()
+             ? DebugValueFormatter::childExpression(parent, type, name)
+             : QString();
+}
+
+QString DebugPanel::arrayLengthExpression(const DapVariable &value) const {
+  if (!supportsNativeBuffers() ||
+      DebugValueFormatter::pointerDepth(value.type) < 2)
+    return {};
+  const QString name = value.evaluateName.trimmed();
+  static const QRegularExpression identifier("^[A-Za-z_][A-Za-z_0-9]*$");
+  if (!identifier.match(name).hasMatch())
+    return {};
+  QStringList candidates = {name + "_count", name + "Count", name + "_length",
+                            name + "Length", name + "_size", name + "Size"};
+  candidates << (name == QLatin1String("argv") ? "argc" : "count");
+  for (const QString &candidate : candidates) {
+    QTreeWidgetItem *length = nullptr;
+    bool ambiguous = false;
+    for (int scope = 0; scope < m_variablesTree->topLevelItemCount(); ++scope) {
+      const auto *parent = m_variablesTree->topLevelItem(scope);
+      const QString scopeName = parent->text(0).toLower();
+      if (!scopeName.contains("local") && !scopeName.contains("arg"))
+        continue;
+      for (int i = 0; i < parent->childCount(); ++i) {
+        auto *item = parent->child(i);
+        if (item->text(0) == candidate) {
+          ambiguous = length != nullptr;
+          length = item;
+        }
+      }
+    }
+    if (!length || ambiguous)
+      continue;
+    bool valid = false;
+    const qlonglong count =
+        length->data(0, Qt::UserRole + 4).toString().toLongLong(&valid);
+    if (valid && count >= 0 && count <= 10000)
+      return candidate;
+  }
+  return {};
+}
+
+void DebugPanel::projectNativePointerArrays() {
+  if (!m_dapClient || m_dapClient->state() != DapClient::State::Stopped ||
+      m_currentFrameId < 0 ||
+      (!m_dapClient->adapterId().contains("gdb", Qt::CaseInsensitive) &&
+       m_dapClient->adapterType().compare("gdb", Qt::CaseInsensitive) != 0))
+    return;
+  auto project = [this](QTreeWidgetItem *item, bool watch) {
+    if (item->data(0, Qt::UserRole + 10).toBool() ||
+        item->data(0, Qt::UserRole + 12).toBool())
+      return;
+    DapVariable value;
+    value.type = item->text(2);
+    value.evaluateName =
+        watch ? item->text(0) : expressionForVariableItem(item);
+    const QString length = arrayLengthExpression(value);
+    if (length.isEmpty())
+      return;
+    auto *tree = watch ? m_watchTree : m_variablesTree;
+    const int reference = item->data(0, Qt::UserRole + (watch ? 1 : 0)).toInt();
+    item->setData(0, Qt::UserRole + 12, true);
+    const int seq = m_dapClient->evaluate(
+        QStringLiteral("(*(%1))@(%2)").arg(value.evaluateName, length),
+        m_currentFrameId, "watch");
+    m_nativeArrayRequests.insert(seq, {tree->indexFromItem(item), watch,
+                                       m_currentFrameId, reference, length});
+  };
+  for (int s = 0; s < m_variablesTree->topLevelItemCount(); ++s) {
+    auto *scope = m_variablesTree->topLevelItem(s);
+    for (int i = 0; i < scope->childCount(); ++i)
+      project(scope->child(i), false);
+  }
+  for (int i = 0; i < m_watchTree->topLevelItemCount(); ++i)
+    project(m_watchTree->topLevelItem(i), true);
 }
 
 void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
@@ -1606,11 +1712,16 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
                             ? item->data(0, Qt::UserRole + 4).toString()
                             : item->text(1);
   const QString expression = expressionForVariableItem(item);
+  const QString memoryReference = item->data(0, Qt::UserRole + 2).toString();
 
   QMenu menu(m_variablesTree);
   menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
 
   QAction *inspect = menu.addAction(tr("Inspect Value…"));
+  QAction *inspectArray = nullptr;
+  if (supportsNativeBuffers() && !expression.isEmpty() &&
+      DebugValueFormatter::canViewBuffer(item->text(2), memoryReference))
+    inspectArray = menu.addAction(tr("View as Array / Buffer…"));
   menu.addSeparator();
 
   QAction *copyName = menu.addAction(tr("Copy Name"));
@@ -1632,7 +1743,6 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
   collapse->setEnabled(expandable && item->isExpanded());
   QAction *refresh = menu.addAction(tr("Refresh"));
 
-  const QString memoryReference = item->data(0, Qt::UserRole + 2).toString();
   const bool canWatchData = m_dapClient &&
                             m_dapClient->supportsDataBreakpoints() &&
                             item->parent() != nullptr;
@@ -1658,6 +1768,8 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
 
   if (chosen == inspect) {
     inspectVariableItem(item);
+  } else if (inspectArray && chosen == inspectArray) {
+    inspectVariableItem(item, false, true);
   } else if (chosen == copyName) {
     QGuiApplication::clipboard()->setText(name);
   } else if (chosen == copyValue) {
@@ -1680,7 +1792,8 @@ void DebugPanel::showVariablesContextMenu(const QPoint &pos) {
   }
 }
 
-void DebugPanel::inspectVariableItem(QTreeWidgetItem *item, bool watch) {
+void DebugPanel::inspectVariableItem(QTreeWidgetItem *item, bool watch,
+                                     bool array) {
   if (!item)
     return;
   DapVariable value;
@@ -1698,7 +1811,19 @@ void DebugPanel::inspectVariableItem(QTreeWidgetItem *item, bool watch) {
   if (!watch) {
     value.indexedVariables = item->data(0, Qt::UserRole + 5).toInt();
     value.namedVariables = item->data(0, Qt::UserRole + 6).toInt();
+    value.memoryReference = item->data(0, Qt::UserRole + 2).toString();
+  } else {
+    value.indexedVariables = item->data(0, Qt::UserRole + 7).toInt();
+    value.namedVariables = item->data(0, Qt::UserRole + 8).toInt();
+    value.memoryReference = item->data(0, Qt::UserRole + 9).toString();
   }
+  value.hasIndexedVariables = item->data(0, Qt::UserRole + 10).toBool();
+  value.hasNamedVariables = item->data(0, Qt::UserRole + 11).toBool();
+  openValueInspector(value, m_currentFrameId, 0, array);
+}
+
+void DebugPanel::openValueInspector(const DapVariable &value, int frameId,
+                                    int threadId, bool array) {
   auto *dialog = new StyledDialog(this);
   dialog->setAttribute(Qt::WA_DeleteOnClose);
   dialog->setWindowTitle(tr("Inspect — %1").arg(value.name));
@@ -1707,7 +1832,11 @@ void DebugPanel::inspectVariableItem(QTreeWidgetItem *item, bool watch) {
   auto *inspector = new DebugValueInspector(dialog);
   layout->addWidget(inspector);
   inspector->setDapClient(m_dapClient);
-  inspector->setValue(value);
+  const QString length =
+      frameId == m_currentFrameId ? arrayLengthExpression(value) : QString();
+  inspector->setValue(value, frameId, length, threadId);
+  connect(inspector, &DebugValueInspector::inspectValueRequested, this,
+          &DebugPanel::openValueInspector);
   connect(inspector, &DebugValueInspector::addWatchRequested, this,
           [](const QString &expression) {
             WatchManager::instance().addWatch(expression);
@@ -1717,6 +1846,8 @@ void DebugPanel::inspectVariableItem(QTreeWidgetItem *item, bool watch) {
     inspector->applyTheme(m_theme);
   }
   dialog->show();
+  if (array)
+    inspector->focusArrayControls();
 }
 
 QString DebugPanel::variableItemPath(const QTreeWidgetItem *item) {
@@ -1978,7 +2109,10 @@ void DebugPanel::updateConsoleInputAffordances() {
                              : tr("Evaluate in %1…").arg(frameLabel));
   } else if (state == DapClient::State::Running) {
     m_consoleInput->setPlaceholderText(
-        tr("Pause execution to evaluate expressions"));
+        m_programIoButton->isEnabled()
+            ? tr("For program input, open Program I/O. Pause to evaluate "
+                 "expressions.")
+            : tr("Pause execution to evaluate expressions"));
   } else {
     m_consoleInput->setPlaceholderText(
         tr("Start debugging to evaluate expressions"));
@@ -2141,6 +2275,7 @@ void DebugPanel::setDapClient(DapClient *client) {
   }
 
   m_dapClient = client;
+  setProgramIoAvailable(false);
   m_consoleValueInspector->setDapClient(client);
   m_concurrencyPanel->setFrameContext(client, -1);
   if (m_dapClient) {
@@ -2215,7 +2350,15 @@ void DebugPanel::setDapClient(DapClient *client) {
             &DebugPanel::onVariablesReceived);
     connect(m_dapClient, &DapClient::variablesFailed, this,
             [this](int reference, const QString &message) {
+              m_pendingVariableRequests.remove(reference);
+              m_pendingScopeVariableLoads.remove(reference);
               if (auto *item = m_variableRefToItem.value(reference)) {
+                if (!item->parent() &&
+                    item->text(0).contains("local", Qt::CaseInsensitive) &&
+                    hasLocalsFallbackCommand()) {
+                  requestLocalsFallback(reference);
+                  return;
+                }
                 item->setText(1, tr("Unavailable"));
                 item->setToolTip(1, message);
               }
@@ -2344,6 +2487,13 @@ void DebugPanel::setDapClient(DapClient *client) {
   refreshProcessSelector();
 }
 
+void DebugPanel::setProgramIoAvailable(bool available) {
+  m_programIoButton->setEnabled(available);
+  updateConsoleInputAffordances();
+  m_callStackTree->viewport()->update();
+  m_variablesTree->viewport()->update();
+}
+
 void DebugPanel::clearAll() {
   clearSessionState();
   m_consoleOutput->clear();
@@ -2351,6 +2501,7 @@ void DebugPanel::clearAll() {
 }
 
 void DebugPanel::clearSessionState() {
+  m_nativeArrayRequests.clear();
   m_consoleValueInspector->invalidate();
   emit executionLocationChanged(QString(), 0);
   clearInlineValues();
@@ -2368,7 +2519,8 @@ void DebugPanel::clearSessionState() {
   m_hasLastStopEvent = false;
   m_lastStoppedThreadId = 0;
   m_lastStoppedReason = DapStoppedReason::Unknown;
-  m_pendingConsoleEvaluations.clear();
+  if (!m_dapClient || !m_dapClient->hasPendingInteractiveEvaluation())
+    m_pendingConsoleEvaluations.clear();
   m_hoverRequestSeq = 0;
   m_previousVariableValues.clear();
   m_expandedVariablePaths.clear();
@@ -2469,7 +2621,8 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
                      : tr("Stopped: %1").arg(event.description);
   }
 
-  appendConsoleLine(reasonText, consoleInfoColor());
+  if (event.rawReason != QLatin1String("function call"))
+    appendConsoleLine(reasonText, consoleInfoColor());
 
   if (event.reason == DapStoppedReason::Exception && m_dapClient &&
       !m_dapClient->supportsExceptionInfoRequest()) {
@@ -2503,6 +2656,7 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
 }
 
 void DebugPanel::onContinued() {
+  m_nativeArrayRequests.clear();
   m_concurrencyPanel->setFrameContext(m_dapClient, -1);
   emit executionLocationChanged(QString(), 0);
   clearInlineValues();
@@ -2510,7 +2664,8 @@ void DebugPanel::onContinued() {
   m_expectStopEvent = true;
   m_hasLastStopEvent = false;
   m_hoverRequestSeq = 0;
-  m_pendingConsoleEvaluations.clear();
+  if (!m_dapClient || !m_dapClient->hasPendingInteractiveEvaluation())
+    m_pendingConsoleEvaluations.clear();
   QToolTip::hideText();
   m_callStackTree->clear();
   m_stackFrames.clear();
@@ -2797,6 +2952,7 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
   }
 
   rememberVariableExpansion();
+  m_nativeArrayRequests.clear();
   m_variablesTree->clear();
   m_variableRefToItem.clear();
   m_pendingTreeSummaries.clear();
@@ -2833,8 +2989,6 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     }
   }
   int eagerLoadsRemaining = MAX_EAGER_SCOPE_LOADS;
-  const bool preferLocalsFallback = hasLocalsFallbackCommand();
-
   for (const DapScope &scope : scopes) {
     const QString lowered = scope.name.trimmed().toLower();
     const bool registerScope = lowered.contains("register");
@@ -2842,8 +2996,8 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     const bool autoLoadScope =
         eagerScopeRefs.contains(scope.variablesReference) &&
         eagerLoadsRemaining > 0;
-    const bool shouldLoadLocals = localScope && !scope.expensive &&
-                                  !registerScope && !preferLocalsFallback;
+    const bool shouldLoadLocals =
+        localScope && !scope.expensive && !registerScope;
     const bool shouldLoadScopeVariables =
         shouldLoadLocals ||
         (!scope.expensive && !registerScope && !localScope && autoLoadScope);
@@ -2866,12 +3020,7 @@ void DebugPanel::onScopesReceived(int frameId, const QList<DapScope> &scopes) {
     m_variablesTree->addTopLevelItem(scopeItem);
 
     if (scope.variablesReference > 0) {
-      if (localScope && preferLocalsFallback && !scope.expensive &&
-          !registerScope) {
-        m_variableRefToItem[scope.variablesReference] = scopeItem;
-        scopeItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-        requestLocalsFallback(scope.variablesReference);
-      } else if (shouldLoadScopeVariables) {
+      if (shouldLoadScopeVariables) {
         m_variableRefToItem[scope.variablesReference] = scopeItem;
         m_pendingScopeVariableLoads.insert(scope.variablesReference);
         m_pendingVariableRequests.insert(scope.variablesReference);
@@ -2924,12 +3073,19 @@ void DebugPanel::onVariablesReceived(int variablesReference,
     item->setText(1, DebugValueFormatter::summary(var.value));
     item->setText(2, var.type);
     item->setData(0, Qt::UserRole, var.variablesReference);
-    item->setData(0, Qt::UserRole + 1, var.evaluateName);
+    item->setData(
+        0, Qt::UserRole + 1,
+        var.evaluateName.isEmpty()
+            ? nativeChildExpression(expressionForVariableItem(parentItem),
+                                    parentItem->text(2), var.name)
+            : var.evaluateName);
     item->setData(0, Qt::UserRole + 2, var.memoryReference);
     item->setData(0, Qt::UserRole + 3, variablesReference);
     item->setData(0, Qt::UserRole + 4, var.value);
     item->setData(0, Qt::UserRole + 5, var.indexedVariables);
     item->setData(0, Qt::UserRole + 6, var.namedVariables);
+    item->setData(0, Qt::UserRole + 10, var.hasIndexedVariables);
+    item->setData(0, Qt::UserRole + 11, var.hasNamedVariables);
     item->setIcon(0, variableIcon(var));
 
     QString path = var.name;
@@ -3003,6 +3159,7 @@ void DebugPanel::onVariablesReceived(int variablesReference,
 
   m_pendingScopeVariableLoads.remove(variablesReference);
 
+  projectNativePointerArrays();
   QTimer::singleShot(0, this, [this]() { fitVariablesNameColumn(); });
   updateSectionSummaries();
 }
@@ -3227,10 +3384,7 @@ void DebugPanel::onVariableItemExpanded(QTreeWidgetItem *item) {
     if (scopeName.contains(QLatin1String("local"))) {
       const int localScopeRef = item->data(0, Qt::UserRole).toInt();
       if (localScopeRef > 0 && item->childCount() == 0) {
-        if (hasLocalsFallbackCommand()) {
-          requestLocalsFallback(localScopeRef);
-        } else if (m_dapClient &&
-                   !m_pendingVariableRequests.contains(localScopeRef)) {
+        if (m_dapClient && !m_pendingVariableRequests.contains(localScopeRef)) {
           m_variableRefToItem[localScopeRef] = item;
           m_pendingVariableRequests.insert(localScopeRef);
           m_dapClient->getVariables(localScopeRef);
@@ -3811,6 +3965,11 @@ void DebugPanel::onWatchAdded(const WatchExpression &watch) {
   item->setText(2, watch.type);
   item->setData(0, Qt::UserRole, watch.id);
   item->setData(0, Qt::UserRole + 1, watch.variablesReference);
+  item->setData(0, Qt::UserRole + 7, watch.indexedVariables);
+  item->setData(0, Qt::UserRole + 8, watch.namedVariables);
+  item->setData(0, Qt::UserRole + 9, watch.memoryReference);
+  item->setData(0, Qt::UserRole + 10, watch.hasIndexedVariables);
+  item->setData(0, Qt::UserRole + 11, watch.hasNamedVariables);
 
   if (watch.variablesReference > 0) {
     item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
@@ -3851,6 +4010,12 @@ void DebugPanel::onWatchUpdated(const WatchExpression &watch) {
   item->setData(0, Qt::UserRole + 4, watch.value);
   item->setToolTip(1, DebugValueFormatter::format(watch.value));
   item->setData(0, Qt::UserRole + 1, watch.variablesReference);
+  item->setData(0, Qt::UserRole + 7, watch.indexedVariables);
+  item->setData(0, Qt::UserRole + 8, watch.namedVariables);
+  item->setData(0, Qt::UserRole + 9, watch.memoryReference);
+  item->setData(0, Qt::UserRole + 10, watch.hasIndexedVariables);
+  item->setData(0, Qt::UserRole + 11, watch.hasNamedVariables);
+  item->setData(0, Qt::UserRole + 12, false);
 
   clearWatchChildren(item);
   m_watchPreviewRequests.remove(watch.id);
@@ -3867,6 +4032,7 @@ void DebugPanel::onWatchUpdated(const WatchExpression &watch) {
   } else {
     item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
   }
+  projectNativePointerArrays();
   updateSectionSummaries();
 }
 
@@ -3938,7 +4104,20 @@ void DebugPanel::populateWatchChildren(QTreeWidgetItem *parentItem,
     childItem->setText(2, var.type);
     childItem->setData(0, Qt::UserRole + 1, var.variablesReference);
     childItem->setData(0, Qt::UserRole + 4, var.value);
-    childItem->setData(0, Qt::UserRole + 5, var.evaluateName);
+    const QString parentExpression =
+        parentItem->parent() ? parentItem->data(0, Qt::UserRole + 5).toString()
+                             : parentItem->text(0);
+    childItem->setData(0, Qt::UserRole + 5,
+                       var.evaluateName.isEmpty()
+                           ? nativeChildExpression(parentExpression,
+                                                   parentItem->text(2),
+                                                   var.name)
+                           : var.evaluateName);
+    childItem->setData(0, Qt::UserRole + 7, var.indexedVariables);
+    childItem->setData(0, Qt::UserRole + 8, var.namedVariables);
+    childItem->setData(0, Qt::UserRole + 9, var.memoryReference);
+    childItem->setData(0, Qt::UserRole + 10, var.hasIndexedVariables);
+    childItem->setData(0, Qt::UserRole + 11, var.hasNamedVariables);
     childItem->setToolTip(1, DebugValueFormatter::format(var.value));
     childItem->setIcon(0, variableIcon(var));
 
@@ -3977,6 +4156,62 @@ void DebugPanel::resetWatchValues() {
 
 void DebugPanel::onEvaluateResult(int requestSeq,
                                   const DapVariable &evaluatedValue) {
+  const auto projection = m_nativeArrayRequests.find(requestSeq);
+  if (projection != m_nativeArrayRequests.end()) {
+    const NativeArrayRequest pending = projection.value();
+    m_nativeArrayRequests.erase(projection);
+    auto *tree = pending.watch ? m_watchTree : m_variablesTree;
+    auto *item =
+        pending.index.isValid() ? tree->itemFromIndex(pending.index) : nullptr;
+    if (!item || pending.frameId != m_currentFrameId ||
+        item->data(0, Qt::UserRole + (pending.watch ? 1 : 0)).toInt() !=
+            pending.originalReference ||
+        evaluatedValue.variablesReference <= 0 ||
+        !evaluatedValue.hasIndexedVariables)
+      return;
+    const bool expanded = item->isExpanded();
+    if (pending.watch) {
+      WatchManager::instance().cancelWatchChildren(
+          item->data(0, Qt::UserRole).toInt());
+      clearWatchChildren(item);
+    } else {
+      std::function<void(QTreeWidgetItem *)> forget =
+          [&](QTreeWidgetItem *node) {
+            const int ref = node->data(0, Qt::UserRole).toInt();
+            if (m_variableRefToItem.value(ref) == node)
+              m_variableRefToItem.remove(ref);
+            m_pendingTreeSummaries.remove(ref);
+            m_pendingVariableRequests.remove(ref);
+            for (int c = 0; c < node->childCount(); ++c)
+              forget(node->child(c));
+          };
+      forget(item);
+      qDeleteAll(item->takeChildren());
+    }
+    item->setData(0, Qt::UserRole + (pending.watch ? 1 : 0),
+                  evaluatedValue.variablesReference);
+    item->setData(0, Qt::UserRole + (pending.watch ? 7 : 5),
+                  evaluatedValue.indexedVariables);
+    item->setData(0, Qt::UserRole + (pending.watch ? 8 : 6), 0);
+    item->setData(0, Qt::UserRole + 10, true);
+    item->setData(0, Qt::UserRole + 11, false);
+    item->setText(1, tr("[%1 rows · %2]")
+                         .arg(evaluatedValue.indexedVariables)
+                         .arg(pending.lengthExpression));
+    item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+    if (expanded) {
+      if (pending.watch) {
+        WatchManager::instance().getWatchChildren(
+            item->data(0, Qt::UserRole).toInt(),
+            evaluatedValue.variablesReference);
+      } else {
+        m_variableRefToItem.insert(evaluatedValue.variablesReference, item);
+        m_pendingVariableRequests.insert(evaluatedValue.variablesReference);
+        m_dapClient->getVariables(evaluatedValue.variablesReference);
+      }
+    }
+    return;
+  }
   const QString &result = evaluatedValue.value;
   const QString &type = evaluatedValue.type;
   const int variablesReference = evaluatedValue.variablesReference;
@@ -4036,7 +4271,8 @@ void DebugPanel::onEvaluateResult(int requestSeq,
   value.value = result;
   value.type = type;
   value.variablesReference = variablesReference;
-  m_consoleValueInspector->setValue(value);
+  m_consoleValueInspector->setValue(value, m_currentFrameId,
+                                    arrayLengthExpression(value));
   const QString formatted = DebugValueFormatter::format(result);
   QString line = displayExpression;
   if (!type.isEmpty())
@@ -4051,6 +4287,8 @@ void DebugPanel::onEvaluateResult(int requestSeq,
 
 void DebugPanel::onEvaluateError(int requestSeq, const QString &expression,
                                  const QString &errorMessage) {
+  if (m_nativeArrayRequests.remove(requestSeq))
+    return;
   if (m_hoverRequestSeq > 0 && requestSeq == m_hoverRequestSeq) {
     m_hoverRequestSeq = 0;
     return;
@@ -4072,7 +4310,8 @@ void DebugPanel::onEvaluateError(int requestSeq, const QString &expression,
     PendingConsoleEvaluation &pending =
         m_pendingConsoleEvaluations[pendingIndex];
     const int nextAttempt = pending.activeAttemptIndex + 1;
-    if (nextAttempt < pending.attempts.size()) {
+    if (nextAttempt < pending.attempts.size() &&
+        !m_dapClient->evaluationExecutedTarget(requestSeq)) {
       pending.activeAttemptIndex = nextAttempt;
       pending.activeRequestSeq = 0;
       dispatchPendingConsoleEvaluation(pendingIndex);
@@ -4162,8 +4401,8 @@ void DebugPanel::dispatchPendingConsoleEvaluation(int pendingIndex) {
 
   const QString context =
       attempt.context.isEmpty() ? QStringLiteral("repl") : attempt.context;
-  pending.activeRequestSeq =
-      m_dapClient->evaluate(attempt.expression, m_currentFrameId, context);
+  pending.activeRequestSeq = m_dapClient->evaluate(
+      attempt.expression, m_currentFrameId, context, true);
 }
 
 void DebugPanel::requestAggregatePreviews(const QList<DapVariable> &variables,
@@ -4224,14 +4463,24 @@ QString DebugPanel::emptyStateTextFor(const QTreeWidget *tree) const {
   }
   if (tree == m_callStackTree) {
     if (running) {
-      return tr("Running.\nPause or hit a breakpoint to see the call stack.");
+      return m_programIoButton->isEnabled()
+                 ? tr("Running.\nFor program input and output, open Program "
+                      "I/O.\n"
+                      "Pause or hit a breakpoint to see the call stack.")
+                 : tr("Running.\nPause or hit a breakpoint to see the call "
+                      "stack.");
     }
     return paused ? QString()
                   : tr("Not debugging.\nPress F5 to start a debug session.");
   }
   if (tree == m_variablesTree) {
     if (running) {
-      return tr("Running.\nPause or hit a breakpoint to inspect variables.");
+      return m_programIoButton->isEnabled()
+                 ? tr("Running.\nFor program input and output, open Program "
+                      "I/O.\n"
+                      "Pause or hit a breakpoint to inspect variables.")
+                 : tr("Running.\nPause or hit a breakpoint to inspect "
+                      "variables.");
     }
     return paused ? QString()
                   : tr("Not debugging.\nPress F5 to start a debug session.");

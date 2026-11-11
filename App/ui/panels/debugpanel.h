@@ -7,6 +7,7 @@
 #include <QHash>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPersistentModelIndex>
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QSet>
@@ -35,6 +36,7 @@ public:
   QSize sizeHint() const override;
 
   void setDapClient(DapClient *client);
+  void setProgramIoAvailable(bool available);
 
   DapClient *dapClient() const { return m_dapClient; }
 
@@ -60,6 +62,7 @@ signals:
   void stopDebugRequested();
 
   void restartDebugRequested();
+  void showProgramIoRequested();
 
   void inlineValuesChanged(const QString &filePath, int line,
                            const QHash<QString, QString> &values);
@@ -157,10 +160,18 @@ private:
   void applyTransportIcons();
   QString emptyStateTextFor(const QTreeWidget *tree) const;
   void showVariablesContextMenu(const QPoint &pos);
-  void inspectVariableItem(QTreeWidgetItem *item, bool watch = false);
+  void inspectVariableItem(QTreeWidgetItem *item, bool watch = false,
+                           bool array = false);
+  void openValueInspector(const DapVariable &value, int frameId, int threadId,
+                          bool array);
   void rememberVariableExpansion();
   static QString variableItemPath(const QTreeWidgetItem *item);
   QString expressionForVariableItem(const QTreeWidgetItem *item) const;
+  bool supportsNativeBuffers() const;
+  QString nativeChildExpression(const QString &parent, const QString &type,
+                                const QString &name) const;
+  QString arrayLengthExpression(const DapVariable &value) const;
+  void projectNativePointerArrays();
   bool paintTreeEmptyState(QTreeWidget *tree);
   void recallConsoleHistory(int direction);
   void findInConsole(bool backwards);
@@ -207,6 +218,7 @@ private:
   QButtonGroup *m_inspectorTabGroup = nullptr;
   QList<QToolButton *> m_inspectorTabButtons;
   QStackedWidget *m_inspectorStack = nullptr;
+  QToolButton *m_programIoButton = nullptr;
 
   QTreeWidget *m_callStackTree = nullptr;
 
@@ -259,6 +271,14 @@ private:
   QList<PendingConsoleEvaluation> m_pendingConsoleEvaluations;
 
   QHash<int, QTreeWidgetItem *> m_pendingTreeSummaries;
+  struct NativeArrayRequest {
+    QPersistentModelIndex index;
+    bool watch = false;
+    int frameId = -1;
+    int originalReference = 0;
+    QString lengthExpression;
+  };
+  QHash<int, NativeArrayRequest> m_nativeArrayRequests;
 
   QHash<QString, QString> m_previousVariableValues;
 

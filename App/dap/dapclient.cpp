@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QScopeGuard>
 #include <QTimer>
 
 namespace {
@@ -292,6 +293,10 @@ void DapClient::resetSessionState() {
   m_skipTail.clear();
   m_pendingRequests.clear();
   m_staleRequests.clear();
+  m_interactiveEvaluations.clear();
+  m_executingEvaluations.clear();
+  m_stackFrames.clear();
+  m_stackFrameCounts.clear();
   m_currentThreadId = 0;
   m_capabilities = QJsonObject();
   m_knownThreads.clear();
@@ -862,7 +867,11 @@ void DapClient::applyContinued(int threadId, bool allThreads) {
   m_pausePending = false;
   m_pauseAllPending = false;
   m_pauseRequested = false;
-  clearPendingInspectionRequests();
+  // GDB emits continued/stopped around calls made by evaluate. Keep the
+  // explicit console request alive until its result arrives. User execution
+  // commands retire it before reaching this path.
+  m_executingEvaluations.unite(m_interactiveEvaluations);
+  clearPendingInspectionRequests(true);
   if (allThreads) {
     m_stoppedThreads.clear();
     m_allThreadsStopped = false;
@@ -1017,7 +1026,7 @@ int DapClient::inspectVariables(int variablesReference, const QString &filter,
 }
 
 int DapClient::evaluate(const QString &expression, int frameId,
-                        const QString &context) {
+                        const QString &context, bool interactive) {
   QJsonObject args;
   args["expression"] = expression;
   if (frameId >= 0)
@@ -1028,7 +1037,11 @@ int DapClient::evaluate(const QString &expression, int frameId,
 
   int seq = m_nextSeq++;
   m_pendingRequests[seq] = QString("evaluate:%1").arg(expression);
+  if (interactive)
+    m_interactiveEvaluations.insert(seq);
   sendRequest("evaluate", args, seq);
+  if (!m_pendingRequests.contains(seq))
+    m_interactiveEvaluations.remove(seq);
   return seq;
 }
 
@@ -1570,6 +1583,11 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
   }
 
   QString pendingCommand = m_pendingRequests.take(requestSeq);
+  const auto finishEvaluation = qScopeGuard([this, requestSeq]() {
+    m_executingEvaluations.remove(requestSeq);
+    if (m_interactiveEvaluations.remove(requestSeq))
+      emit interactiveEvaluationFinished();
+  });
 
   if (!success) {
     if (command == "configurationDone") {
@@ -1774,6 +1792,8 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
       frames.append(DapStackFrame::fromJson(val.toObject()));
     }
     int totalFrames = bodyObj["totalFrames"].toInt(frames.size());
+    m_stackFrames.insert(threadId, frames);
+    m_stackFrameCounts.insert(threadId, totalFrames);
     emit stackTraceReceived(threadId, frames, totalFrames);
   } else if (command == "scopes") {
     int frameId = 0;
@@ -2056,7 +2076,14 @@ bool DapClient::hasPendingRequestTag(const QString &tag) const {
   return m_pendingRequests.values().contains(tag);
 }
 
-void DapClient::clearPendingInspectionRequests() {
+void DapClient::clearPendingInspectionRequests(bool preserveInteractive) {
+  m_stackFrames.clear();
+  m_stackFrameCounts.clear();
+  if (!preserveInteractive) {
+    m_interactiveEvaluations.clear();
+    m_executingEvaluations.clear();
+  }
+  emit inspectionInvalidated();
   if (m_staleRequests.size() > MAX_PENDING_REQUESTS) {
     m_staleRequests.clear();
   }
@@ -2067,7 +2094,8 @@ void DapClient::clearPendingInspectionRequests() {
         tag == "threads" || tag.startsWith("stackTrace:") ||
         tag.startsWith("scopes:") || tag.startsWith("variables:") ||
         tag.startsWith("evaluate:") || tag.startsWith("inspectionVariables:");
-    if (isInspectionRequest) {
+    if (isInspectionRequest &&
+        !(preserveInteractive && m_interactiveEvaluations.contains(it.key()))) {
       m_staleRequests.insert(it.key());
       it = m_pendingRequests.erase(it);
       continue;

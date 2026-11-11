@@ -21,13 +21,15 @@ public:
   explicit TerminalTabWidget(QWidget *parent = nullptr);
   ~TerminalTabWidget();
 
-  Terminal *addNewTerminal(const QString &workingDirectory = QString());
+  Terminal *addNewTerminal(const QString &workingDirectory = QString(),
+                           const QString &title = QString());
 
   Terminal *
   addNewTerminalWithProfile(const QString &profileName,
                             const QString &workingDirectory = QString());
 
   Terminal *currentTerminal();
+  bool setCurrentTerminal(Terminal *terminal);
 
   QString currentRunTranscript() const;
   void appendNotice(const QString &text, bool isError = false);

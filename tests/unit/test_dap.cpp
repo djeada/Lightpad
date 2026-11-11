@@ -27,6 +27,7 @@
 #include "ui/panels/debugvalueformatter.h"
 #include "ui/panels/debugvalueinspector.h"
 #include <QApplication>
+#include <QCheckBox>
 #include <QClipboard>
 #include <QComboBox>
 #include <QLabel>
@@ -35,6 +36,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScopeGuard>
+#include <QSpinBox>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QToolButton>
@@ -48,6 +50,7 @@
 #endif
 
 Q_DECLARE_METATYPE(DapExceptionInfo)
+Q_DECLARE_METATYPE(DapStoppedEvent)
 Q_DECLARE_METATYPE(DapDataBreakpointInfo)
 Q_DECLARE_METATYPE(DapMemoryChunk)
 Q_DECLARE_METATYPE(QList<DapCompletionItem>)
@@ -145,6 +148,7 @@ private slots:
   void testDapClientStoppedWithoutThreadKeepsCurrentThread();
   void testDapClientOversizedResponseReleasesPendingRequest();
   void testDapClientDropsResponsesCancelledByResume();
+  void testDapClientKeepsInteractiveEvaluationDuringFunctionCall();
   void testDapClientRestartWrapsLaunchArguments();
   void testDapClientRestartDropsOldInspectionResponses();
   void testNativeRestartClearsDebugPanel();
@@ -164,10 +168,31 @@ private slots:
   void testDebugConfigurationDialogValidationAndCancel();
   void testDebugConfigurationDialogDebouncesStatusProbe();
   void testNestedValueFormatting();
+  void testNativeScalarFormats();
+  void testNativeCollections_data();
+  void testNativeCollections();
+  void testNativeBufferPagingAndSnapshot();
+  void testNativeBufferReportsErrors();
+  void testNativeVariablesRemainStructured();
+  void testNativeCCollections();
+  void testNativeCppNestedCollections();
+  void testStringSortPointerArray_data();
+  void testStringSortPointerArray();
+  void testStringSortConsoleFunctionCall();
+  void testStringSortInspectorFollowsSteps_data();
+  void testStringSortInspectorFollowsSteps();
+  void testStringSortInspectorFollowsCallerFrame();
+  void testNativeInspectorLiveCollections();
+  void testPointerRowsMatrix();
   void testInspectorCorrelatesRequests();
   void testInspectorMatrixAndRaggedRows();
   void testInspectorPagingAndSnapshot();
   void testInspectorPagingAndSnapshot_data();
+  void testInspectorPagesNamedChildren_data();
+  void testInspectorPagesNamedChildren();
+  void testInspectorMixedCollections_data();
+  void testInspectorMixedCollections();
+  void testInspectorNestedNativeBuffers();
   void testInspectorReportsErrors();
   void testInspectorWithRealDebugpy();
   void testVtkPythonObjectsAndArrays();
@@ -175,6 +200,7 @@ private slots:
   void testGdbLaunchEnvironmentPreservesGraphicsContext();
   void testGdbDebuggeeReadsStdinFromProvidedTerminal();
   void testGdbDebuggeeLaunchesWithoutTerminal();
+  void testProgramIoButtonFollowsSelectedClient();
   void testDebugToolbarCollapsesToIconsWhenNarrow();
   void testConsoleResultOpensStructuredInspector();
   void testPartialThreadExecution();
@@ -2096,6 +2122,52 @@ void TestDap::testDapClientDropsResponsesCancelledByResume() {
   client.stop(false);
 }
 
+void TestDap::testDapClientKeepsInteractiveEvaluationDuringFunctionCall() {
+  DapClient client;
+  QVERIFY(client.start(fakeAdapterPath(),
+                       {"--stop-on-launch", "--hang-on", "evaluate"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
+  const int passive = client.evaluate("oldValue", 100, "watch");
+  const int interactive = client.evaluate("compare(a, b)", 100, "watch", true);
+  QSignalSpy result(&client, &DapClient::evaluateResponse);
+  QSignalSpy finished(&client, &DapClient::interactiveEvaluationFinished);
+  auto event = [&](const QString &name, const QJsonObject &body) {
+    client.feedAdapterData(frameMessage(QJsonObject{
+        {"seq", 99}, {"type", "event"}, {"event", name}, {"body", body}}));
+  };
+  auto response = [&](int seq) {
+    client.feedAdapterData(frameMessage(
+        QJsonObject{{"seq", 100},
+                    {"type", "response"},
+                    {"command", "evaluate"},
+                    {"request_seq", seq},
+                    {"success", true},
+                    {"body", QJsonObject{{"result", "42"}, {"type", "int"}}}}));
+  };
+  event("continued", {{"threadId", 1}, {"allThreadsContinued", true}});
+  QVERIFY(client.hasPendingInteractiveEvaluation());
+  QVERIFY(client.evaluationExecutedTarget(interactive));
+  event("stopped", {{"reason", "function call"},
+                    {"threadId", 1},
+                    {"allThreadsStopped", true}});
+  response(passive);
+  QCOMPARE(result.count(), 0);
+  response(interactive);
+  QCOMPARE(result.count(), 1);
+  QCOMPARE(result.first().first().toInt(), interactive);
+  QCOMPARE(result.first().at(2).toString(), QString("42"));
+  QCOMPARE(finished.count(), 1);
+  QVERIFY(!client.hasPendingInteractiveEvaluation());
+  const int cancelled = client.evaluate("compare(a, b)", 100, "watch", true);
+  client.stepOver(1);
+  response(cancelled);
+  QCOMPARE(result.count(), 1);
+  QVERIFY(!client.hasPendingInteractiveEvaluation());
+  client.stop(false);
+}
+
 void TestDap::testDapClientRestartWrapsLaunchArguments() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());
@@ -2629,6 +2701,66 @@ void TestDap::testNestedValueFormatting() {
            QString("'np.float32(1.75)'"));
 }
 
+void TestDap::testNativeScalarFormats() {
+  using namespace DebugValueFormatter;
+  QCOMPARE(scalar("65 'A'", "char", DisplayFormat::Decimal), QString("65"));
+  QCOMPARE(scalar("65 'A'", "char", DisplayFormat::Hexadecimal),
+           QString("0x41"));
+  QCOMPARE(scalar("65", "int", DisplayFormat::Binary), QString("0b1000001"));
+  QCOMPARE(scalar("65", "int", DisplayFormat::Character), QString("'A'"));
+  QCOMPARE(scalar("10", "int", DisplayFormat::Character), QString("'\\n'"));
+  QCOMPARE(scalar("0", "int", DisplayFormat::Character), QString("'\\0'"));
+  QCOMPARE(scalar("-1", "signed char", DisplayFormat::Character),
+           QString("'\\xff'"));
+  QCOMPARE(scalar("'\\n'", "char", DisplayFormat::Decimal), QString("10"));
+  QCOMPARE(scalar("18446744073709551615", "unsigned long long",
+                  DisplayFormat::Hexadecimal),
+           QString("0xffffffffffffffff"));
+  QCOMPARE(scalar("-9223372036854775808", "long long", DisplayFormat::Decimal),
+           QString("-9223372036854775808"));
+  QCOMPARE(scalar("1", "double", DisplayFormat::Character), QString("1"));
+  QCOMPARE(scalar("0x1234", "int *", DisplayFormat::Decimal),
+           QString("0x1234"));
+  QCOMPARE(scalar("0x1234 \"hello\"", "const char *", DisplayFormat::Natural),
+           QString("\"hello\""));
+  QCOMPARE(childExpression("records", "Record [2]", "[1]"),
+           QString("(records)[1]"));
+  QVERIFY(childExpression("map", "std::map<int, int>", "[1]").isEmpty());
+  QCOMPARE(childExpression("node", "Node *", "value"), QString("(*(node))"));
+  QCOMPARE(childExpression("node", "Node *", "next"), QString("(node)->next"));
+  QCOMPARE(childExpression("record", "Record", "id"), QString("(record).id"));
+  QCOMPARE(arrayLength("int [2][3]"), 2);
+  QCOMPARE(arrayLength("char (&)[4]"), 4);
+  QCOMPARE(arrayLength("int (*[2])[3]"), 2);
+  QCOMPARE(arrayLength("int (*[2])(int)"), 2);
+  QCOMPARE(arrayLength("int (*)[3]"), 0);
+  QCOMPARE(arrayLength("int [][3]"), 0);
+  QCOMPARE(arrayLength("std::vector<int [3]>"), 0);
+  QCOMPARE(pointeeType("int (* const)[3]"), QString("int [3]"));
+  QCOMPARE(pointerDepth("char (**)[3]"), 2);
+  QCOMPARE(pointerDepth("char **"), 2);
+  QCOMPARE(pointerDepth("char * const * volatile"), 2);
+  QCOMPARE(pointerDepth("std::vector<char *>"), 0);
+  QCOMPARE(pointeeType("char **"), QString("char *"));
+  QVERIFY(isCharacterPointer("const unsigned char *"));
+  QVERIFY(!isCharacterPointer("char (*)[3]"));
+  QVERIFY(!isCharacterPointer("std::vector<char> *"));
+  QVERIFY(isCharacterArray("const char [3]"));
+  QVERIFY(!isCharacterArray("char [3][2]"));
+  QCOMPARE(childExpression("row", "int (&)[3]", "value"), QString("(row)"));
+  QCOMPARE(childExpression("record", "Record<char *>", "id"),
+           QString("(record).id"));
+  QCOMPARE(
+      scalar("0x1234 -> 0x4567 \"wkue\"", "char **", DisplayFormat::Natural),
+      QString("0x1234 -> 0x4567 \"wkue\""));
+  QByteArray bytes;
+  QVERIFY(stringBytes("\"A\\000B\\n\"", &bytes));
+  QCOMPARE(bytes, QByteArray("A\0B\n", 4));
+  QVERIFY(stringBytes("0x1234 \"\\\\\\\"\\x41\"", &bytes));
+  QCOMPARE(bytes, QByteArray("\\\"A"));
+  QVERIFY(!stringBytes("\"truncated\"...", &bytes));
+}
+
 void TestDap::testInspectorCorrelatesRequests() {
   DapClient client;
   QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
@@ -2652,6 +2784,7 @@ void TestDap::testInspectorCorrelatesRequests() {
 
 void TestDap::testInspectorMatrixAndRaggedRows() {
   DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
   QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
   client.launch(QJsonObject{{"program", "/tmp/app"}});
@@ -2709,6 +2842,7 @@ void TestDap::testInspectorPagingAndSnapshot_data() {
 void TestDap::testInspectorPagingAndSnapshot() {
   QFETCH(int, reference);
   DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
   QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
   client.launch(QJsonObject{{"program", "/tmp/app"}});
@@ -2746,6 +2880,204 @@ void TestDap::testInspectorPagingAndSnapshot() {
   client.stop(false);
 }
 
+namespace {
+QTreeWidgetItem *childNamed(QTreeWidgetItem *parent, const QString &name) {
+  if (parent)
+    for (int i = 0; i < parent->childCount(); ++i)
+      if (parent->child(i)->text(0) == name)
+        return parent->child(i);
+  return nullptr;
+}
+} // namespace
+
+void TestDap::testInspectorPagesNamedChildren_data() {
+  QTest::addColumn<QString>("adapterId");
+  QTest::addColumn<QString>("adapterType");
+  QTest::addColumn<QString>("type");
+  QTest::addColumn<int>("reference");
+  QTest::newRow("gdb-map") << "cppdbg-gdb" << "cppdbg"
+                           << "std::map<std::string, int>" << 7000;
+  QTest::newRow("debugpy-dict-returns-all")
+      << "python-debugpy" << "debugpy" << "dict" << 7100;
+  QTest::newRow("rust-record-ignores-start")
+      << "rust-codelldb" << "lldb" << "Record<[i32; 4]>" << 7200;
+}
+
+void TestDap::testInspectorPagesNamedChildren() {
+  QFETCH(QString, adapterId);
+  QFETCH(QString, adapterType);
+  QFETCH(QString, type);
+  QFETCH(int, reference);
+  DapClient client;
+  client.setAdapterMetadata(adapterId, adapterType);
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE(client.state(), DapClient::State::Ready);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE(client.state(), DapClient::State::Stopped);
+
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  DapVariable value;
+  value.name = value.evaluateName = "collection";
+  value.type = type;
+  value.variablesReference = reference;
+  if (reference == 7000) {
+    value.hasNamedVariables = true;
+    value.namedVariables = 205;
+  } else if (reference == 7200) {
+    value.memoryReference = "0x1234";
+  }
+  inspector.setValue(value);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  QVERIFY(inspector.findChild<QWidget *>("debugArrayControls")->isHidden());
+  QTRY_COMPARE(root->childCount(), 101);
+  QCOMPARE(root->child(99)->text(0), QString("key-99"));
+  tree->itemActivated(root->child(100), 0);
+  QTRY_COMPARE(root->childCount(), 201);
+  QCOMPARE(root->child(100)->text(0), QString("key-100"));
+  tree->itemActivated(root->child(200), 0);
+  QTRY_COMPARE(root->childCount(), 205);
+  QCOMPARE(root->child(204)->text(0), QString("key-204"));
+  client.stop(false);
+}
+
+void TestDap::testInspectorMixedCollections_data() {
+  QTest::addColumn<int>("reference");
+  QTest::newRow("sparse-javascript-array") << 7300;
+  QTest::newRow("javascript-map-with-repeated-properties") << 7301;
+  QTest::newRow("go-map-with-expandable-keys-and-values") << 7400;
+}
+
+void TestDap::testInspectorMixedCollections() {
+  QFETCH(int, reference);
+  const bool goMap = reference == 7400;
+  const bool jsMap = reference == 7301;
+  DapClient client;
+  client.setAdapterMetadata(goMap ? "go-delve" : "node-debug",
+                            goMap ? "go" : "node");
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE(client.state(), DapClient::State::Ready);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE(client.state(), DapClient::State::Stopped);
+
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  DapVariable value;
+  value.name = value.evaluateName = "mixed";
+  value.type = goMap ? "map[Key]Record" : jsMap ? "object" : "Array";
+  value.variablesReference = reference;
+  value.hasIndexedVariables = true;
+  value.hasNamedVariables = !jsMap;
+  value.indexedVariables = goMap ? 101 : jsMap ? 105 : 205;
+  value.namedVariables = jsMap ? 0 : 1;
+  inspector.setValue(value);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  if (jsMap) {
+    QTRY_COMPARE(root->childCount(), 102);
+    QCOMPARE(root->child(100)->text(0), QString("size"));
+    tree->itemActivated(root->child(101), 0);
+    QTRY_COMPARE(root->childCount(), 106);
+    QCOMPARE(root->child(105)->text(0), QString("104"));
+    client.stop(false);
+    return;
+  }
+  QTRY_COMPARE(root->childCount(), goMap ? 202 : 3);
+
+  auto *properties = childNamed(root, "Named children");
+  QVERIFY(properties);
+  properties->setExpanded(true);
+  QTRY_COMPARE(properties->childCount(), goMap ? 1 : 3);
+  QTreeWidgetItem *nested = nullptr;
+  if (goMap) {
+    QCOMPARE(properties->child(0)->text(0), QString("len()"));
+    nested = childNamed(root, "[key 0]");
+    QVERIFY(childNamed(root, "[val 0]"));
+    tree->itemActivated(root->child(201), 0);
+    QTRY_COMPARE(root->childCount(), 203);
+    QCOMPARE(root->child(201)->text(0), QString("[key 100]"));
+    QCOMPARE(root->child(202)->text(0), QString("[val 100]"));
+  } else {
+    QCOMPARE(root->child(1)->text(0), QString("2"));
+    QCOMPARE(properties->child(1)->text(0), QString("special variables"));
+    nested = childNamed(properties, "label");
+    QSignalSpy pages(&client, &DapClient::inspectionVariablesReceived);
+    tree->itemActivated(root->child(2), 0);
+    QTRY_COMPARE(pages.count(), 1);
+    QCOMPARE(root->childCount(), 3);
+    QVERIFY(root->child(2)->text(0).startsWith("Load next"));
+    tree->itemActivated(root->child(2), 0);
+    QTRY_COMPARE(root->child(2)->text(0), QString("204"));
+  }
+  QVERIFY(nested);
+  nested->setExpanded(true);
+  QTRY_VERIFY(childNamed(nested, "tuple"));
+  auto *tuple = childNamed(nested, "tuple");
+  tuple->setExpanded(true);
+  QTRY_COMPARE(tuple->childCount(), 1);
+  QCOMPARE(tuple->child(0)->text(0), QString("Some(λ)"));
+  QCOMPARE(tuple->child(0)->text(1), QString("42"));
+  auto *cycle = childNamed(nested, "self");
+  QVERIFY(cycle);
+  QVERIFY(cycle->text(1).contains("already in this branch"));
+  QCOMPARE(cycle->childIndicatorPolicy(), QTreeWidgetItem::DontShowIndicator);
+  client.stop(false);
+}
+
+void TestDap::testInspectorNestedNativeBuffers() {
+  DapClient client;
+  client.setAdapterMetadata("cppdbg-gdb", "cppdbg");
+  QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
+  QTRY_COMPARE(client.state(), DapClient::State::Ready);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE(client.state(), DapClient::State::Stopped);
+
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  DapVariable value;
+  value.name = value.evaluateName = "record";
+  value.type = "struct Record";
+  value.variablesReference = 7600;
+  QSignalSpy evaluated(&client, &DapClient::evaluateValueReceived);
+  inspector.setValue(value, 100);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  QTRY_COMPARE(root->childCount(), 4);
+  QCOMPARE(evaluated.count(), 0);
+
+  auto *data = childNamed(root, "data");
+  auto *other = childNamed(root, "other");
+  QVERIFY(data && other);
+  data->setExpanded(true);
+  other->setExpanded(true);
+  QTRY_COMPARE(evaluated.count(), 6);
+  QCOMPARE(data->childCount(), 3);
+  QCOMPARE(data->child(1)->text(1), QString("0"));
+  QCOMPARE(data->child(2)->text(1), QString("66"));
+  QCOMPARE(other->child(2)->text(1), QString("68"));
+
+  auto *row = childNamed(root, "row");
+  QVERIFY(row);
+  row->setExpanded(true);
+  QTRY_COMPARE(row->childCount(), 1);
+  auto *array = row->child(0);
+  array->setExpanded(true);
+  QTRY_COMPARE(evaluated.count(), 9);
+  QCOMPARE(array->childCount(), 3);
+  QCOMPARE(array->child(2)->text(1), QString("30"));
+
+  auto *tuple = childNamed(root, "tuple");
+  QVERIFY(tuple);
+  tuple->setExpanded(true);
+  QTRY_COMPARE(tuple->childCount(), 1);
+  tuple->child(0)->setExpanded(true);
+  QTRY_COMPARE(tuple->child(0)->childCount(), 3);
+  QCOMPARE(tuple->child(0)->child(1)->text(1), QString("0 '\\0'"));
+  QCOMPARE(evaluated.count(), 9);
+  client.stop(false);
+}
+
 void TestDap::testInspectorReportsErrors() {
   DapClient client;
   QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
@@ -2775,14 +3107,18 @@ void TestDap::testInspectorWithRealDebugpy() {
   QFile script(dir.filePath("matrix.py"));
   QVERIFY(script.open(QIODevice::WriteOnly));
   script.write("matrix = [[7.0, 4.88, 2.67, 933.52], [4.88, 4.3432], [2.67, "
-               "1.4981, 1.0791, 423.24]]\nprint(matrix)\n");
+               "1.4981, 1.0791, 423.24]]\n"
+               "records = {f'key-{i:03}': {'leaf': (i, {'tags': {2, 3}})} "
+               "for i in range(205)}\n"
+               "records['key-204']['leaf'] = (999, {'tags': {2, 3}})\n"
+               "print(matrix, len(records))\n");
   script.close();
   DapClient client;
   client.setAdapterMetadata("python-debugpy", "debugpy");
   QSignalSpy adapterReady(&client, &DapClient::adapterInitialized);
   QSignalSpy stopped(&client, &DapClient::stopped);
   QSignalSpy stack(&client, &DapClient::stackTraceReceived);
-  QSignalSpy evaluated(&client, &DapClient::evaluateResponse);
+  QSignalSpy evaluated(&client, &DapClient::evaluateValueReceived);
   QVERIFY(client.start(python, {"-m", "debugpy.adapter"}));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 15000);
   client.launch(QJsonObject{{"program", script.fileName()},
@@ -2790,7 +3126,7 @@ void TestDap::testInspectorWithRealDebugpy() {
                             {"console", "internalConsole"}});
   QTRY_COMPARE_WITH_TIMEOUT(adapterReady.count(), 1, 15000);
   DapSourceBreakpoint breakpoint;
-  breakpoint.line = 2;
+  breakpoint.line = 3;
   client.setBreakpoints(script.fileName(), {breakpoint});
   client.configurationDone();
   QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 1, 15000);
@@ -2800,11 +3136,8 @@ void TestDap::testInspectorWithRealDebugpy() {
   QVERIFY(!frames.isEmpty());
   client.evaluate("matrix", frames.first().id, "repl");
   QTRY_COMPARE_WITH_TIMEOUT(evaluated.count(), 1, 5000);
-  DapVariable matrix;
+  auto matrix = evaluated.first().at(1).value<DapVariable>();
   matrix.name = "matrix";
-  matrix.value = evaluated.first().at(2).toString();
-  matrix.type = evaluated.first().at(3).toString();
-  matrix.variablesReference = evaluated.first().at(4).toInt();
   QVERIFY2(matrix.variablesReference > 0, qPrintable(matrix.value));
   DebugValueInspector inspector;
   inspector.setDapClient(&client);
@@ -2825,6 +3158,44 @@ void TestDap::testInspectorWithRealDebugpy() {
     inspector.grab().save(
         qEnvironmentVariable("LIGHTPAD_INSPECTOR_SCREENSHOT"));
   }
+  client.evaluate("records", frames.first().id, "watch");
+  QTRY_COMPARE_WITH_TIMEOUT(evaluated.count(), 2, 5000);
+  auto records = evaluated.last().at(1).value<DapVariable>();
+  records.name = records.evaluateName = "records";
+  inspector.setValue(records, frames.first().id);
+  auto *root = tree->topLevelItem(0);
+  QTRY_COMPARE(root->childCount(), 101);
+  tree->itemActivated(root->child(100), 0);
+  QTRY_COMPARE(root->childCount(), 201);
+  tree->itemActivated(root->child(200), 0);
+  const auto lastKey = [&]() {
+    return childNamed(tree->topLevelItem(0), "'key-204'");
+  };
+  const auto leaf = [&]() { return childNamed(lastKey(), "'leaf'"); };
+  QTRY_VERIFY(lastKey());
+  lastKey()->setExpanded(true);
+  QTRY_VERIFY(leaf());
+  leaf()->setExpanded(true);
+  QTRY_VERIFY(leaf()->childCount() >= 2);
+  QCOMPARE(leaf()->child(0)->text(1), QString("204"));
+
+  auto *dict = leaf()->child(1);
+  dict->setExpanded(true);
+  QTRY_VERIFY(childNamed(dict, "'tags'"));
+  auto *tags = childNamed(dict, "'tags'");
+  tags->setExpanded(true);
+  QTRY_VERIFY(tags->childCount() >= 2);
+  QSet<QString> tagValues;
+  for (int i = 0; i < tags->childCount(); ++i)
+    tagValues.insert(tags->child(i)->text(1));
+  QVERIFY(tagValues.contains("2") && tagValues.contains("3"));
+
+  client.stepOver(client.currentThreadId());
+  QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 2, 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(leaf() && leaf()->childCount() >= 2 &&
+                               leaf()->child(0)->text(1) == "999",
+                           10000);
+  QVERIFY(lastKey()->isExpanded() && leaf()->isExpanded());
   client.stop(true);
 }
 
@@ -2899,7 +3270,944 @@ bool evaluateDebugObject(DapClient &client, int frame,
   value->evaluateName = expression;
   return true;
 }
+
+QString nativeCollectionSkipReason() {
+  const auto adapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
+  if (QStandardPaths::findExecutable("c++").isEmpty() || !adapter ||
+      !adapter->isAvailable())
+    return "C++ collections need a C++ compiler and usable GDB DAP";
+  return {};
+}
+
+struct NativeCollectionRun {
+  QTemporaryDir dir;
+  DapClient client;
+  DapStackFrame frame;
+  QString source;
+  QString error;
+
+  bool start(bool c = false) {
+    source = c ? QFINDTESTDATA("../fixtures/debugger/native_collections.c")
+               : QFINDTESTDATA("../fixtures/debugger/native_collections.cpp");
+    const QString binary = dir.filePath("native_collections");
+    QProcess compiler;
+    compiler.start(
+        c ? "cc" : "c++",
+        {"-g", "-O0", c ? "-std=c11" : "-std=c++17", source, "-o", binary});
+    if (!compiler.waitForFinished(30000) || compiler.exitCode() != 0) {
+      error = QString::fromUtf8(compiler.readAllStandardError());
+      return false;
+    }
+    client.setAdapterMetadata("cppdbg-gdb", "cppdbg");
+    QSignalSpy ready(&client, &DapClient::initialized);
+    QSignalSpy initialized(&client, &DapClient::adapterInitialized);
+    QSignalSpy stopped(&client, &DapClient::stopped);
+    if (!client.start(QStandardPaths::findExecutable("gdb"),
+                      {"--interpreter=dap"}) ||
+        !waitForDebugSignal(ready) || !waitForDebugSignal(initialized)) {
+      error = "GDB failed to initialize";
+      return false;
+    }
+    DapSourceBreakpoint breakpoint;
+    breakpoint.line =
+        firstLineContaining(source, {"int checkpoint = fixed[0];"});
+    client.setBreakpoints(source, {breakpoint});
+    client.configurationDone();
+    client.launch(QJsonObject{{"program", binary}, {"cwd", dir.path()}});
+    if (!waitForDebugSignal(stopped) || !currentDebugFrame(client, &frame)) {
+      error = "GDB did not stop in the collection fixture";
+      return false;
+    }
+    return true;
+  }
+};
 } // namespace
+
+void TestDap::testNativeCollections_data() {
+  QTest::addColumn<QString>("expression");
+  QTest::addColumn<int>("rowCount");
+  QTest::addColumn<int>("columnCount");
+  QTest::addColumn<QString>("first");
+  QTest::addColumn<QString>("last");
+  QTest::newRow("c-array") << "fixed" << 6 << 1 << "65" << "-1";
+  QTest::newRow("c-matrix") << "matrix" << 2 << 3 << "1" << "6";
+  QTest::newRow("vector") << "values" << 4 << 1 << "12" << "48";
+  QTest::newRow("nested-vector") << "rows" << 2 << 3 << "7" << "11";
+  QTest::newRow("string-vector")
+      << "names" << 3 << 1 << "\"alpha\"" << "\"beta\"";
+  QTest::newRow("char-pointer-array")
+      << "words" << 3 << 1 << "\"alpha\"" << "\"\"";
+  QTest::newRow("struct-array")
+      << "records" << 2 << 2 << "1" << "\"second\\000\"";
+  QTest::newRow("dynamic-char-pointer-array")
+      << "wordPointers" << 3 << 1 << "\"alpha\"" << "\"\"";
+  QTest::newRow("character-buffer") << "characters" << 6 << 1 << "65" << "39";
+  QTest::newRow("std-string-with-nul") << "text" << 4 << 1 << "65" << "10";
+  QTest::newRow("char-pointer-string") << "message" << 5 << 1 << "104" << "111";
+}
+
+void TestDap::testNativeCollections() {
+  const QString skip = nativeCollectionSkipReason();
+  if (!skip.isEmpty())
+    QSKIP(qPrintable(skip));
+  QFETCH(QString, expression);
+  QFETCH(int, rowCount);
+  QFETCH(int, columnCount);
+  QFETCH(QString, first);
+  QFETCH(QString, last);
+  NativeCollectionRun run;
+  QVERIFY2(run.start(), qPrintable(run.error));
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, expression, &value));
+  DebugValueInspector inspector;
+  inspector.setDapClient(&run.client);
+  inspector.setValue(value, run.frame.id);
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  auto *tabs = inspector.findChild<QTabWidget *>("debugValueTabs");
+  auto *format = inspector.findChild<QComboBox *>("debugValueDisplayFormat");
+  if (expression == "wordPointers") {
+    inspector.findChild<QSpinBox *>("debugArrayCount")->setValue(3);
+    inspector.findChild<QPushButton *>("debugArrayApply")->click();
+  }
+  if (expression == "characters" || expression == "text" ||
+      expression == "message")
+    format->setCurrentIndex(1);
+  tabs->setCurrentIndex(1);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(rowCount - 1, columnCount - 1) &&
+          table->item(rowCount - 1, columnCount - 1)->text() == last,
+      10000);
+  QCOMPARE(table->rowCount(), rowCount);
+  QCOMPARE(table->columnCount(), columnCount);
+  QCOMPARE(table->item(0, 0)->text(), first);
+  if (expression == "text")
+    QCOMPARE(table->item(1, 0)->text(), QString("0"));
+  if (expression == "fixed") {
+    format->setCurrentIndex(2);
+    QCOMPARE(table->item(0, 0)->text(), QString("0x41"));
+    format->setCurrentIndex(3);
+    QCOMPARE(table->item(0, 0)->text(), QString("0b1000001"));
+    format->setCurrentIndex(4);
+    QCOMPARE(table->item(0, 0)->text(), QString("'A'"));
+  }
+  if (expression == "names")
+    QCOMPARE(table->item(1, 0)->text(), QString("\"\""));
+  if (expression == "rows")
+    QCOMPARE(table->item(0, 2)->text(), QString());
+  if (!qEnvironmentVariableIsEmpty("LIGHTPAD_NATIVE_SCREENSHOT")) {
+    inspector.applyTheme(Theme());
+    inspector.resize(1000, 620);
+    inspector.show();
+    QTest::qWait(50);
+    inspector.grab().save(qEnvironmentVariable("LIGHTPAD_NATIVE_SCREENSHOT") +
+                          "-" + QTest::currentDataTag() + ".png");
+  }
+  run.client.stop(true);
+}
+
+void TestDap::testNativeBufferPagingAndSnapshot() {
+  const QString skip = nativeCollectionSkipReason();
+  if (!skip.isEmpty())
+    QSKIP(qPrintable(skip));
+  NativeCollectionRun run;
+  QVERIFY2(run.start(), qPrintable(run.error));
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "heap", &value));
+  DebugValueInspector inspector;
+  inspector.setDapClient(&run.client);
+  inspector.setValue(value, run.frame.id);
+  inspector.findChild<QSpinBox *>("debugArrayCount")->setValue(240);
+  inspector.findChild<QSpinBox *>("debugArrayColumns")->setValue(5);
+  inspector.findChild<QPushButton *>("debugArrayApply")->click();
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  auto *root = tree->topLevelItem(0);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(19, 4) && table->item(19, 4)->text() == "297", 10000);
+  QCOMPARE(root->childCount(), 101);
+  tree->itemActivated(root->child(100), 0);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      root->childCount() == 201 && root->child(199)->text(1) == "597", 10000);
+  tree->itemActivated(root->child(200), 0);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(47, 4) && table->item(47, 4)->text() == "717", 10000);
+  QCOMPARE(root->childCount(), 240);
+
+  QSignalSpy watch(&inspector, &DebugValueInspector::addWatchRequested);
+  for (auto *button : inspector.findChildren<QPushButton *>())
+    if (button->text() == "Add to Watches")
+      button->click();
+  QCOMPARE(watch.count(), 1);
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id,
+                              watch.first().first().toString(), &value));
+  QCOMPARE(value.indexedVariables, 240);
+
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "untyped", &value));
+  inspector.setValue(value, run.frame.id);
+  inspector.findChild<QSpinBox *>("debugArrayCount")->setValue(4);
+  inspector.findChild<QComboBox *>("debugArrayElementType")
+      ->setCurrentText("int");
+  inspector.findChild<QPushButton *>("debugArrayApply")->click();
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(3, 0) && table->item(3, 0)->text() == "9", 10000);
+
+  // A new selection must not receive the previous buffer's late replies.
+  inspector.findChild<QSpinBox *>("debugArrayCount")->setValue(100);
+  inspector.findChild<QPushButton *>("debugArrayApply")->click();
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "fixed", &value));
+  inspector.setValue(value, run.frame.id);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(5, 0) && table->item(5, 0)->text() == "-1", 10000);
+  QCOMPARE(table->rowCount(), 6);
+  QSignalSpy stopped(&run.client, &DapClient::stopped);
+  run.client.stepOver(run.client.currentThreadId());
+  QVERIFY(waitForDebugSignal(stopped));
+  QTRY_VERIFY_WITH_TIMEOUT(
+      inspector.findChild<QPushButton *>("debugArrayApply")->isEnabled(),
+      10000);
+  inspector.findChild<QComboBox *>("debugValueDisplayFormat")
+      ->setCurrentIndex(2);
+  QCOMPARE(table->item(0, 0)->text(), QString("0x41"));
+  run.client.stop(true);
+}
+
+void TestDap::testNativeBufferReportsErrors() {
+  const QString skip = nativeCollectionSkipReason();
+  if (!skip.isEmpty())
+    QSKIP(qPrintable(skip));
+  NativeCollectionRun run;
+  QVERIFY2(run.start(), qPrintable(run.error));
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "missing", &value));
+  DebugValueInspector inspector;
+  inspector.setDapClient(&run.client);
+  inspector.setValue(value, run.frame.id);
+  inspector.findChild<QSpinBox *>("debugArrayCount")->setValue(2);
+  inspector.findChild<QPushButton *>("debugArrayApply")->click();
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  QTRY_VERIFY_WITH_TIMEOUT(table->item(1, 0) &&
+                               table->item(1, 0)->text().contains("unreadable"),
+                           10000);
+  QVERIFY(inspector.findChild<QLabel *>("debugValueStatus")
+              ->text()
+              .contains("unreadable"));
+  QCOMPARE(run.client.state(), DapClient::State::Stopped);
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "empty", &value));
+  inspector.setValue(value, run.frame.id);
+  QVERIFY(inspector.findChild<QLabel *>("debugValueStatus")
+              ->text()
+              .contains("Empty"));
+  QCOMPARE(table->rowCount(), 0);
+  run.client.stop(true);
+}
+
+void TestDap::testNativeVariablesRemainStructured() {
+  const QString skip = nativeCollectionSkipReason();
+  if (!skip.isEmpty())
+    QSKIP(qPrintable(skip));
+  NativeCollectionRun run;
+  QVERIFY2(run.start(), qPrintable(run.error));
+  DebugPanel panel;
+  panel.setDapClient(&run.client);
+  auto *variables = panel.findChild<QTreeWidget *>("debugVariablesTree");
+  QVERIFY(variables);
+  auto find = [variables](const QString &name) -> QTreeWidgetItem * {
+    const auto items =
+        variables->findItems(name, Qt::MatchExactly | Qt::MatchRecursive);
+    return items.isEmpty() ? nullptr : items.first();
+  };
+  QTRY_VERIFY_WITH_TIMEOUT(find("fixed") && find("values") && find("node"),
+                           10000);
+  QVERIFY(find("fixed")->text(2).contains("int"));
+  QVERIFY(find("fixed")->data(0, Qt::UserRole).toInt() > 0);
+  QCOMPARE(find("values")->data(0, Qt::UserRole + 5).toInt(), 4);
+  find("fixed")->setExpanded(true);
+  QTRY_COMPARE_WITH_TIMEOUT(find("fixed")->childCount(), 6, 10000);
+  QCOMPARE(find("fixed")->child(1)->data(0, Qt::UserRole + 1).toString(),
+           QString("(fixed)[1]"));
+  find("node")->setExpanded(true);
+  QTRY_VERIFY_WITH_TIMEOUT(find("node")->childCount() > 0, 10000);
+  auto *pointee = find("node")->child(0);
+  QCOMPARE(pointee->data(0, Qt::UserRole + 1).toString(), QString("(*(node))"));
+  pointee->setExpanded(true);
+  QTRY_VERIFY_WITH_TIMEOUT(pointee->childCount() > 0, 10000);
+  QCOMPARE(pointee->child(0)->data(0, Qt::UserRole + 1).toString(),
+           QString("((*(node))).key"));
+
+  variables->itemDoubleClicked(find("heap"), 1);
+  const auto dialogs = panel.findChildren<QDialog *>();
+  QVERIFY(!dialogs.isEmpty());
+  auto *inspector = dialogs.last()->findChild<DebugValueInspector *>();
+  QVERIFY(inspector);
+  inspector->findChild<QSpinBox *>("debugArrayCount")->setValue(4);
+  inspector->findChild<QPushButton *>("debugArrayApply")->click();
+  auto *table = inspector->findChild<QTableWidget *>("debugValueTable");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(3, 0) && table->item(3, 0)->text() == "9", 10000);
+  dialogs.last()->close();
+
+  auto &watches = WatchManager::instance();
+  watches.clearAll();
+  auto cleanup = qScopeGuard([&watches]() {
+    watches.clearAll();
+    watches.setDapClient(nullptr);
+  });
+  const int id = watches.addWatch("values");
+  watches.evaluateWatch(id, run.frame.id);
+  QTRY_COMPARE_WITH_TIMEOUT(watches.watch(id).indexedVariables, 4, 10000);
+  QVERIFY(watches.watch(id).hasIndexedVariables);
+  run.client.stop(true);
+}
+
+void TestDap::testNativeCCollections() {
+  const QString skip = nativeCollectionSkipReason();
+  if (!skip.isEmpty() || QStandardPaths::findExecutable("cc").isEmpty())
+    QSKIP("C collections need cc and usable GDB DAP");
+  NativeCollectionRun run;
+  QVERIFY2(run.start(true), qPrintable(run.error));
+  DebugValueInspector inspector;
+  inspector.setDapClient(&run.client);
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  auto *tabs = inspector.findChild<QTabWidget *>("debugValueTabs");
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "fixed", &value));
+  inspector.setValue(value, run.frame.id);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(2, 0) && table->item(2, 0)->text() == "30", 10000);
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "words", &value));
+  inspector.setValue(value, run.frame.id);
+  tabs->setCurrentIndex(1);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(1, 0) && table->item(1, 0)->text() == "\"beta\"", 10000);
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "heap", &value));
+  inspector.setValue(value, run.frame.id);
+  inspector.findChild<QSpinBox *>("debugArrayCount")->setValue(4);
+  inspector.findChild<QPushButton *>("debugArrayApply")->click();
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(3, 0) && table->item(3, 0)->text() == "43", 10000);
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "buffer", &value));
+  inspector.setValue(value, run.frame.id);
+  inspector.findChild<QSpinBox *>("debugArrayCount")->setValue(4);
+  inspector.findChild<QPushButton *>("debugArrayApply")->click();
+  inspector.findChild<QComboBox *>("debugValueDisplayFormat")
+      ->setCurrentIndex(1);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(3, 0) && table->item(3, 0)->text() == "10", 10000);
+  QCOMPARE(table->item(1, 0)->text(), QString("0"));
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "packet", &value));
+  inspector.setValue(value, run.frame.id);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  QTRY_VERIFY(childNamed(root, "sample"));
+  auto *sample = childNamed(root, "sample");
+  sample->setExpanded(true);
+  QTRY_VERIFY(childNamed(sample, "bytes"));
+  auto *bytes = childNamed(sample, "bytes");
+  bytes->setExpanded(true);
+  QTRY_VERIFY(bytes->childCount() == 4 && bytes->child(2)->text(1) == "66");
+  QCOMPARE(bytes->child(1)->text(1), QString("0"));
+
+  auto *row = childNamed(root, "row");
+  QVERIFY(row);
+  row->setExpanded(true);
+  QTRY_VERIFY(row->childCount() > 0);
+  auto *array = row->child(0);
+  array->setExpanded(true);
+  QTRY_VERIFY(array->childCount() == 3 && array->child(2)->text(1) == "3");
+
+  run.client.stop(true);
+}
+
+#ifndef Q_OS_WIN
+void TestDap::testNativeCppNestedCollections() {
+  const QString skip = nativeCollectionSkipReason();
+  if (!skip.isEmpty())
+    QSKIP(qPrintable(skip));
+  NativeCollectionRun run;
+  QVERIFY2(run.start(), qPrintable(run.error));
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "nested", &value));
+  DebugValueInspector inspector;
+  inspector.setDapClient(&run.client);
+  inspector.setValue(value, run.frame.id);
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  auto *root = tree->topLevelItem(0);
+  QTRY_COMPARE(root->childCount(), 2);
+  QCOMPARE(root->child(0)->text(1), QString("7"));
+  auto *tuple = root->child(1);
+  tuple->setExpanded(true);
+  QTRY_COMPARE(tuple->childCount(), 3);
+
+  auto *set = tuple->child(0);
+  set->setExpanded(true);
+  QTRY_COMPARE(set->childCount(), 2);
+  QCOMPARE(set->child(1)->text(1), QString("23"));
+
+  auto *array = tuple->child(1);
+  array->setExpanded(true);
+  QTRY_VERIFY(array->childCount() > 0);
+  if (array->childCount() == 1) {
+    array = array->child(0);
+    array->setExpanded(true);
+  }
+  QTRY_COMPARE(array->childCount(), 2);
+  QCOMPARE(array->child(1)->text(1), QString("37"));
+
+  auto *record = tuple->child(2);
+  record->setExpanded(true);
+  QTRY_VERIFY(childNamed(record, "id"));
+  QCOMPARE(childNamed(record, "id")->text(1), QString("41"));
+  run.client.stop(true);
+}
+
+namespace {
+struct StringSortRun {
+  QTemporaryDir dir;
+  DapClient client;
+  DapStackFrame frame;
+  QString source;
+  QString error;
+  int master = -1;
+  int slave = -1;
+
+  ~StringSortRun() {
+    client.stop(true);
+    if (slave >= 0)
+      ::close(slave);
+    if (master >= 0)
+      ::close(master);
+  }
+
+  QByteArray output() const {
+    QByteArray result;
+    char buffer[4096];
+    for (ssize_t n = ::read(master, buffer, sizeof(buffer)); n > 0;
+         n = ::read(master, buffer, sizeof(buffer)))
+      result.append(buffer, static_cast<int>(n));
+    return result.replace("\r\n", "\n");
+  }
+
+  bool start(const QByteArray &line) {
+    source = QFINDTESTDATA("../fixtures/debugger/string_sort.c");
+    const QString binary = dir.filePath("string_sort");
+    QProcess compiler;
+    compiler.start("cc", {"-g", "-O0", "-std=c11", source, "-o", binary});
+    if (!compiler.waitForFinished(30000) || compiler.exitCode() != 0) {
+      error = QString::fromUtf8(compiler.readAllStandardError());
+      return false;
+    }
+    master = posix_openpt(O_RDWR | O_NOCTTY | O_NONBLOCK);
+    if (master < 0 || grantpt(master) != 0 || unlockpt(master) != 0) {
+      error = "Could not create the input terminal";
+      return false;
+    }
+    const QString tty = QString::fromLocal8Bit(ptsname(master));
+    slave = ::open(tty.toLocal8Bit().constData(), O_RDWR | O_NOCTTY);
+    client.setAdapterMetadata("cppdbg-gdb", "cppdbg");
+    QSignalSpy ready(&client, &DapClient::initialized);
+    QSignalSpy initialized(&client, &DapClient::adapterInitialized);
+    QSignalSpy stopped(&client, &DapClient::stopped);
+    if (!client.start(QStandardPaths::findExecutable("gdb"),
+                      {"--interpreter=dap"}) ||
+        !waitForDebugSignal(ready) || !waitForDebugSignal(initialized)) {
+      error = "Could not initialize GDB";
+      return false;
+    }
+    client.evaluate("set inferior-tty " + tty);
+    DapSourceBreakpoint breakpoint;
+    breakpoint.line = firstLineContaining(source, {line});
+    client.setBreakpoints(source, {breakpoint});
+    client.configurationDone();
+    client.launch(QJsonObject{{"program", binary}, {"cwd", dir.path()}});
+    const QByteArray input("4\nwkue\nqoi\nsbv\nfekls\n");
+    if (::write(master, input.constData(), static_cast<size_t>(input.size())) !=
+            input.size() ||
+        !waitForDebugSignal(stopped) || !currentDebugFrame(client, &frame)) {
+      error = "The input program did not reach the inspection breakpoint";
+      return false;
+    }
+    output(); // Discard the terminal's input echo.
+    return true;
+  }
+};
+} // namespace
+#endif
+
+void TestDap::testStringSortPointerArray_data() {
+  QTest::addColumn<QByteArray>("line");
+  QTest::addColumn<bool>("watch");
+  QTest::addColumn<bool>("sorted");
+  QTest::newRow("main-before-sort")
+      << QByteArray("int (*const comparators[])") << false << false;
+  QTest::newRow("function-argument")
+      << QByteArray("for (int i = 1; i < count; ++i)") << false << false;
+  QTest::newRow("function-argument-watch")
+      << QByteArray("for (int i = 1; i < count; ++i)") << true << false;
+  QTest::newRow("main-after-sort")
+      << QByteArray("for (int j = 0; j < count; ++j)") << false << true;
+}
+
+void TestDap::testStringSortPointerArray() {
+#ifdef Q_OS_WIN
+  QSKIP("The scanf regression uses a POSIX terminal");
+#else
+  if (!nativeCollectionSkipReason().isEmpty() ||
+      QStandardPaths::findExecutable("cc").isEmpty())
+    QSKIP("The scanf regression needs cc and GDB DAP");
+  QFETCH(QByteArray, line);
+  QFETCH(bool, watch);
+  QFETCH(bool, sorted);
+  StringSortRun run;
+  QVERIFY2(run.start(line), qPrintable(run.error));
+  DebugPanel panel;
+  panel.applyTheme(Theme());
+  panel.setDapClient(&run.client);
+  auto *variables = panel.findChild<QTreeWidget *>("debugVariablesTree");
+  auto variable = [variables](const QString &name) -> QTreeWidgetItem * {
+    const auto items =
+        variables->findItems(name, Qt::MatchExactly | Qt::MatchRecursive);
+    return items.isEmpty() ? nullptr : items.first();
+  };
+  QTRY_VERIFY_WITH_TIMEOUT(variable("strings") && variable("count"), 10000);
+  QVERIFY(variable("strings")->text(2).contains("**"));
+  QTreeWidgetItem *target = variable("strings");
+  QTreeWidget *tree = variables;
+  auto &watches = WatchManager::instance();
+  auto cleanup = qScopeGuard([&watches]() {
+    watches.clearAll();
+    watches.setDapClient(nullptr);
+  });
+  if (watch) {
+    watches.clearAll();
+    const int id = watches.addWatch("strings");
+    watches.evaluateWatch(id, run.frame.id);
+    tree = panel.findChild<QTreeWidget *>("debugWatchTree");
+    QTRY_VERIFY_WITH_TIMEOUT(tree->topLevelItemCount() &&
+                                 !tree->topLevelItem(0)->text(2).isEmpty(),
+                             10000);
+    target = tree->topLevelItem(0);
+  }
+  const QStringList words = sorted ? QStringList{"fekls", "qoi", "sbv", "wkue"}
+                                   : QStringList{"wkue", "qoi", "sbv", "fekls"};
+  QTRY_COMPARE_WITH_TIMEOUT(
+      target->data(0, Qt::UserRole + (watch ? 7 : 5)).toInt(), 4, 10000);
+  target->setExpanded(true);
+  QTRY_COMPARE_WITH_TIMEOUT(target->childCount(), 4, 10000);
+  for (int row = 0; row < 4; ++row)
+    QVERIFY(target->child(row)->text(1).contains('"' + words.at(row) + '"'));
+  tree->itemDoubleClicked(target, 1);
+  const auto dialogs = panel.findChildren<QDialog *>();
+  QVERIFY(!dialogs.isEmpty());
+  auto *inspector = dialogs.last()->findChild<DebugValueInspector *>();
+  QVERIFY(inspector);
+  auto *table = inspector->findChild<QTableWidget *>("debugValueTable");
+  auto *length =
+      inspector->findChild<QLineEdit *>("debugArrayLengthExpression");
+  QCOMPARE(length->text(), QString("count"));
+  QTRY_VERIFY_WITH_TIMEOUT(table->item(3, 0) && table->item(3, 0)->text() ==
+                                                    '"' + words.at(3) + '"',
+                           10000);
+  QCOMPARE(inspector->findChild<QSpinBox *>("debugArrayCount")->value(), 4);
+  QCOMPARE(table->rowCount(), 4);
+  QCOMPARE(table->columnCount(), 1);
+  for (int row = 0; row < 4; ++row)
+    QCOMPARE(table->item(row, 0)->text(), '"' + words.at(row) + '"');
+  if (!qEnvironmentVariableIsEmpty("LIGHTPAD_STRING_SORT_SCREENSHOT")) {
+    QTest::qWait(50);
+    dialogs.last()->grab().save(
+        qEnvironmentVariable("LIGHTPAD_STRING_SORT_SCREENSHOT") + "-" +
+        QTest::currentDataTag() + "-strings.png");
+  }
+
+  inspector->findChild<QSpinBox *>("debugArrayColumns")->setValue(2);
+  inspector->findChild<QPushButton *>("debugArrayApply")->click();
+  QTRY_VERIFY_WITH_TIMEOUT(table->columnCount() == 2 && table->item(3, 1) &&
+                               table->item(3, 1)->text() ==
+                                   '\'' + words.at(3).mid(1, 1) + '\'',
+                           10000);
+  QCOMPARE(table->rowCount(), 4);
+  inspector->findChild<QSpinBox *>("debugArrayColumns")->setValue(1);
+  inspector->findChild<QComboBox *>("debugArrayLayout")->setCurrentIndex(3);
+  QVERIFY(!inspector->findChild<QSpinBox *>("debugArrayColumns")->isEnabled());
+  inspector->findChild<QPushButton *>("debugArrayApply")->click();
+  QTRY_VERIFY_WITH_TIMEOUT(table->columnCount() == 5 && table->item(0, 0) &&
+                               table->item(0, 0)->text() ==
+                                   '\'' + words.at(0).left(1) + '\'',
+                           10000);
+  QCOMPARE(table->rowCount(), 4);
+  for (int row = 0; row < 4; ++row) {
+    for (int column = 0; column < 5; ++column) {
+      QCOMPARE(table->item(row, column)->text(),
+               column < words.at(row).size()
+                   ? '\'' + words.at(row).mid(column, 1) + '\''
+                   : QString());
+    }
+  }
+  if (!qEnvironmentVariableIsEmpty("LIGHTPAD_STRING_SORT_SCREENSHOT")) {
+    dialogs.last()->show();
+    QTest::qWait(50);
+    dialogs.last()->grab().save(
+        qEnvironmentVariable("LIGHTPAD_STRING_SORT_SCREENSHOT") + "-" +
+        QTest::currentDataTag() + ".png");
+  }
+  inspector->findChild<QComboBox *>("debugValueDisplayFormat")
+      ->setCurrentIndex(1);
+  QCOMPARE(table->item(0, 0)->text(),
+           QString::number(words.at(0).at(0).unicode()));
+  dialogs.last()->close();
+
+  QSignalSpy exited(&run.client, &DapClient::exited);
+  run.client.setBreakpoints(run.source, {});
+  run.client.continueExecution();
+  QVERIFY(waitForDebugSignal(exited));
+  QCOMPARE(exited.last().first().toInt(), 0);
+  const QByteArray expected("fekls\nqoi\nsbv\nwkue\n\nwkue\nsbv\nqoi\nfekls\n\n"
+                            "qoi\nsbv\nwkue\nfekls\n\nqoi\nsbv\nwkue\nfekls\n");
+  QByteArray output;
+  QTRY_VERIFY_WITH_TIMEOUT((output += run.output(), output.contains(expected)),
+                           5000);
+#endif
+}
+
+void TestDap::testStringSortConsoleFunctionCall() {
+#ifdef Q_OS_WIN
+  QSKIP("The function-call regression uses a POSIX input terminal");
+#else
+  if (!nativeCollectionSkipReason().isEmpty())
+    QSKIP("Function evaluation needs GDB DAP");
+  StringSortRun run;
+  QVERIFY2(run.start("while (j > 0 && compare("), qPrintable(run.error));
+  DebugPanel panel;
+  panel.setDapClient(&run.client);
+  auto *variables = panel.findChild<QTreeWidget *>("debugVariablesTree");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      !variables->findItems("value", Qt::MatchExactly | Qt::MatchRecursive)
+           .isEmpty(),
+      10000);
+  auto *input = panel.findChild<QLineEdit *>("debugConsoleInput");
+  auto *output = panel.findChild<QPlainTextEdit *>("debugConsoleOutput");
+  const QString expression = "compare(strings[j - 1], value)";
+  DapVariable strings;
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "strings", &strings));
+  DebugValueInspector liveStrings;
+  liveStrings.setDapClient(&run.client);
+  liveStrings.setValue(strings, run.frame.id, "count");
+  auto *liveTable = liveStrings.findChild<QTableWidget *>("debugValueTable");
+  QTRY_VERIFY_WITH_TIMEOUT(liveTable->item(1, 0) &&
+                               liveTable->item(1, 0)->text() == "\"qoi\"",
+                           10000);
+  QSignalSpy evaluated(&run.client, &DapClient::evaluateResponse);
+  input->setText(expression);
+  input->returnPressed();
+  auto returnedNumber = [&]() {
+    for (const auto &response : evaluated) {
+      bool numeric = false;
+      const int value = response.at(2).toString().toInt(&numeric);
+      if (response.at(1).toString() == expression && numeric && value > 0)
+        return true;
+    }
+    return false;
+  };
+  QTRY_VERIFY2_WITH_TIMEOUT(returnedNumber(), qPrintable(output->toPlainText()),
+                            5000);
+  QVERIFY(output->toPlainText().contains(expression + " (int)"));
+  QCOMPARE(run.client.state(), DapClient::State::Stopped);
+  QVERIFY(!output->toPlainText().split('\n').contains("Stopped"));
+  auto *inspector =
+      panel.findChild<DebugValueInspector *>("debugConsoleValueInspector");
+  QVERIFY(
+      !inspector->findChild<QCheckBox *>("debugValueLiveUpdates")->isChecked());
+  // The same explicit call can be made again after its temporary stop.
+  evaluated.clear();
+  input->setText(expression);
+  input->returnPressed();
+  QTRY_VERIFY2_WITH_TIMEOUT(returnedNumber(), qPrintable(output->toPlainText()),
+                            5000);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      liveStrings.findChild<QPushButton *>("debugArrayApply")->isEnabled(),
+      10000);
+  QTRY_VERIFY_WITH_TIMEOUT(liveTable->item(1, 0) &&
+                               liveTable->item(1, 0)->text() == "\"qoi\"",
+                           10000);
+  // A breakpoint inside the call is an actual interruption. Report its error
+  // once; retrying via the REPL could execute the expression a second time.
+  run.client.setFunctionBreakpoints({"lexicographic_sort"});
+  QSignalSpy errors(&run.client, &DapClient::evaluateResponseError);
+  input->setText(expression);
+  input->returnPressed();
+  auto callErrors = [&]() {
+    return std::count_if(
+        errors.cbegin(), errors.cend(), [&](const QList<QVariant> &response) {
+          return response.at(1).toString().contains(expression);
+        });
+  };
+  QTRY_COMPARE_WITH_TIMEOUT(callErrors(), 1, 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(output->toPlainText().contains(expression + ":"),
+                           10000);
+  QVERIFY(!run.client.hasPendingInteractiveEvaluation());
+#endif
+}
+
+void TestDap::testStringSortInspectorFollowsSteps_data() {
+  QTest::addColumn<bool>("characters");
+  QTest::newRow("strings") << false;
+  QTest::newRow("character-grid") << true;
+}
+
+void TestDap::testStringSortInspectorFollowsSteps() {
+#ifdef Q_OS_WIN
+  QSKIP("The sorting regression uses a POSIX input terminal");
+#else
+  if (!nativeCollectionSkipReason().isEmpty())
+    QSKIP("Live native inspection needs GDB DAP");
+  QFETCH(bool, characters);
+  StringSortRun run;
+  QVERIFY2(run.start("strings[j] = strings[j - 1]"), qPrintable(run.error));
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "strings", &value));
+  DebugValueInspector inspector;
+  inspector.setDapClient(&run.client);
+  inspector.setValue(value, run.frame.id, "count");
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  auto *layout = inspector.findChild<QComboBox *>("debugArrayLayout");
+  auto *format = inspector.findChild<QComboBox *>("debugValueDisplayFormat");
+  auto *apply = inspector.findChild<QPushButton *>("debugArrayApply");
+  auto *filter = inspector.findChild<QLineEdit *>("debugValueFilter");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(1, 0) && table->item(1, 0)->text() == "\"qoi\"", 10000);
+  if (characters) {
+    layout->setCurrentIndex(3);
+    apply->click();
+    QTRY_VERIFY_WITH_TIMEOUT(
+        table->item(3, 4) && table->item(3, 4)->text() == "'s'", 10000);
+    format->setCurrentIndex(1);
+  }
+  filter->setText("strings");
+  auto cell = [&](const QString &word) {
+    return characters ? QString::number(word.front().unicode())
+                      : '"' + word + '"';
+  };
+  QSignalSpy stopped(&run.client, &DapClient::stopped);
+  auto step = [&]() {
+    stopped.clear();
+    run.client.stepOver(run.client.currentThreadId());
+    return waitForDebugSignal(stopped);
+  };
+  QVERIFY(step()); // Shift wkue into slot 1.
+  QTRY_VERIFY_WITH_TIMEOUT(table->item(1, 0) &&
+                               table->item(1, 0)->text() == cell("wkue") &&
+                               apply->isEnabled(),
+                           10000);
+  QCOMPARE(layout->currentIndex(), characters ? 3 : 0);
+  QCOMPARE(format->currentIndex(), characters ? 1 : 0);
+  QCOMPARE(filter->text(), QString("strings"));
+  QCOMPARE(
+      inspector.findChild<QLineEdit *>("debugArrayLengthExpression")->text(),
+      QString("count"));
+  QCOMPARE(inspector.findChild<QSpinBox *>("debugArrayCount")->value(), 4);
+  auto *tabs = inspector.findChild<QTabWidget *>("debugValueTabs");
+  tabs->setCurrentIndex(0);
+  QVERIFY(step()); // --j
+  QVERIFY(step()); // while condition
+  QVERIFY(step()); // Insert qoi at slot 0.
+  QTRY_VERIFY_WITH_TIMEOUT(apply->isEnabled(), 10000);
+  QCOMPARE(tabs->currentIndex(), 0);
+  tabs->setCurrentIndex(1);
+  QTRY_VERIFY_WITH_TIMEOUT(table->item(0, 0) &&
+                               table->item(0, 0)->text() == cell("qoi") &&
+                               apply->isEnabled(),
+                           10000);
+  QCOMPARE(table->item(1, 0)->text(), cell("wkue"));
+  QCOMPARE(table->rowCount(), 4);
+  QCOMPARE(table->columnCount(), characters ? 5 : 1);
+  QVERIFY(!inspector.findChild<QLabel *>("debugValueStatus")
+               ->text()
+               .contains("Snapshot"));
+  // Live can be disabled for a snapshot, then Refresh reads the latest pause.
+  inspector.findChild<QCheckBox *>("debugValueLiveUpdates")->setChecked(false);
+  QVERIFY(step());
+  QTRY_VERIFY_WITH_TIMEOUT(inspector.findChild<QLabel *>("debugValueStatus")
+                               ->text()
+                               .contains("Snapshot"),
+                           10000);
+  tabs->setCurrentIndex(2);
+  inspector.findChild<QPushButton *>("debugValueRefresh")->click();
+  QTRY_VERIFY_WITH_TIMEOUT(apply->isEnabled(), 10000);
+  QCOMPARE(tabs->currentIndex(), 2);
+  tabs->setCurrentIndex(1);
+  QCOMPARE(table->item(0, 0)->text(), cell("qoi"));
+  QCOMPARE(format->currentIndex(), characters ? 1 : 0);
+  if (!qEnvironmentVariableIsEmpty("LIGHTPAD_LIVE_INSPECTOR_SCREENSHOT")) {
+    filter->clear();
+    inspector.findChild<QCheckBox *>("debugValueLiveUpdates")->setChecked(true);
+    inspector.resize(1000, 620);
+    inspector.applyTheme(Theme());
+    inspector.show();
+    QTest::qWait(50);
+    inspector.grab().save(
+        qEnvironmentVariable("LIGHTPAD_LIVE_INSPECTOR_SCREENSHOT") + "-" +
+        QTest::currentDataTag() + ".png");
+  }
+#endif
+}
+
+void TestDap::testStringSortInspectorFollowsCallerFrame() {
+#ifdef Q_OS_WIN
+  QSKIP("The sorting regression uses a POSIX input terminal");
+#else
+  if (!nativeCollectionSkipReason().isEmpty())
+    QSKIP("Live native inspection needs GDB DAP");
+  StringSortRun run;
+  QVERIFY2(run.start("while (j > 0 && compare("), qPrintable(run.error));
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "strings", &value));
+  DebugValueInspector inspector;
+  inspector.setDapClient(&run.client);
+  inspector.setValue(value, run.frame.id, "count");
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  auto *apply = inspector.findChild<QPushButton *>("debugArrayApply");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(3, 0) && table->item(3, 0)->text() == "\"fekls\"", 10000);
+  QSignalSpy stopped(&run.client, &DapClient::stopped);
+  QSignalSpy refreshed(&run.client, &DapClient::evaluateResponse);
+  run.client.stepInto(run.client.currentThreadId());
+  QVERIFY(waitForDebugSignal(stopped));
+  QTRY_VERIFY_WITH_TIMEOUT(apply->isEnabled(), 10000);
+  QVERIFY(run.client.cachedStackFrames(run.client.currentThreadId())
+              .first()
+              .name.startsWith("lexicographic_sort"));
+  QVERIFY(std::any_of(refreshed.cbegin(), refreshed.cend(),
+                      [](const QList<QVariant> &response) {
+                        return response.at(1).toString() == "strings";
+                      }));
+  QCOMPARE(table->item(1, 0)->text(), QString("\"qoi\""));
+  stopped.clear();
+  run.client.stepOut(run.client.currentThreadId());
+  QVERIFY(waitForDebugSignal(stopped));
+  QTRY_VERIFY_WITH_TIMEOUT(apply->isEnabled(), 10000);
+  // A returned function's locals must never be read from the caller instead.
+  run.client.setBreakpoints(
+      run.source, {DapSourceBreakpoint{
+                      firstLineContaining(run.source, {"puts(strings[j]);"})}});
+  stopped.clear();
+  run.client.continueExecution();
+  QVERIFY(waitForDebugSignal(stopped));
+  QTRY_VERIFY_WITH_TIMEOUT(inspector.findChild<QLabel *>("debugValueStatus")
+                               ->text()
+                               .contains("out of scope"),
+                           10000);
+  QVERIFY(!apply->isEnabled());
+#endif
+}
+
+void TestDap::testNativeInspectorLiveCollections() {
+  if (!nativeCollectionSkipReason().isEmpty())
+    QSKIP("Live native inspection needs GDB DAP");
+  NativeCollectionRun run;
+  QVERIFY2(run.start(), qPrintable(run.error));
+  DebugValueInspector heap, vector, text;
+  for (auto *inspector : {&heap, &vector, &text})
+    inspector->setDapClient(&run.client);
+  DapVariable value;
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "heap", &value));
+  heap.setValue(value, run.frame.id);
+  heap.findChild<QSpinBox *>("debugArrayCount")->setValue(240);
+  heap.findChild<QSpinBox *>("debugArrayColumns")->setValue(5);
+  heap.findChild<QComboBox *>("debugArrayElementType")->setCurrentText("int");
+  heap.findChild<QPushButton *>("debugArrayApply")->click();
+  auto *heapTree = heap.findChild<QTreeWidget *>("debugValueTree");
+  auto *heapTable = heap.findChild<QTableWidget *>("debugValueTable");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      heapTable->item(19, 4) && heapTable->item(19, 4)->text() == "297", 10000);
+  heapTree->itemActivated(heapTree->topLevelItem(0)->child(100), 0);
+  QTRY_COMPARE_WITH_TIMEOUT(heapTree->topLevelItem(0)->childCount(), 201,
+                            10000);
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "values", &value));
+  vector.setValue(value, run.frame.id);
+  auto *vectorTable = vector.findChild<QTableWidget *>("debugValueTable");
+  QTRY_VERIFY_WITH_TIMEOUT(vectorTable->item(0, 0) &&
+                               vectorTable->item(0, 0)->text() == "12",
+                           10000);
+  QVERIFY(evaluateDebugObject(run.client, run.frame.id, "text", &value));
+  text.setValue(value, run.frame.id);
+  text.findChild<QComboBox *>("debugValueDisplayFormat")->setCurrentIndex(2);
+  auto *textTable = text.findChild<QTableWidget *>("debugValueTable");
+  QTRY_VERIFY_WITH_TIMEOUT(
+      textTable->item(0, 0) && textTable->item(0, 0)->text() == "0x41", 10000);
+  const int line = firstLineContaining(run.source, {"std::free(heap);"});
+  run.client.setBreakpoints(run.source, {DapSourceBreakpoint{line}});
+  QSignalSpy stopped(&run.client, &DapClient::stopped);
+  run.client.continueExecution();
+  QVERIFY(waitForDebugSignal(stopped));
+  QTRY_VERIFY_WITH_TIMEOUT(
+      heapTable->item(0, 1) && heapTable->item(0, 1)->text() == "999", 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(vectorTable->item(0, 0) &&
+                               vectorTable->item(0, 0)->text() == "77",
+                           10000);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      textTable->item(0, 0) && textTable->item(0, 0)->text() == "0x5a", 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(heapTree->topLevelItem(0)->childCount() == 201 &&
+                               heapTree->topLevelItem(0)->child(199)->text(1) ==
+                                   "597",
+                           10000);
+  QCOMPARE(heap.findChild<QSpinBox *>("debugArrayColumns")->value(), 5);
+  QCOMPARE(heap.findChild<QComboBox *>("debugArrayElementType")->currentText(),
+           QString("int"));
+  QCOMPARE(
+      text.findChild<QComboBox *>("debugValueDisplayFormat")->currentIndex(),
+      2);
+}
+
+void TestDap::testPointerRowsMatrix() {
+  if (!nativeCollectionSkipReason().isEmpty())
+    QSKIP("Pointer matrices need GDB DAP");
+  NativeCollectionRun run;
+  QVERIFY2(run.start(true), qPrintable(run.error));
+  DapVariable value;
+  QVERIFY(
+      evaluateDebugObject(run.client, run.frame.id, "matrixPointers", &value));
+  DebugValueInspector inspector;
+  inspector.setDapClient(&run.client);
+  inspector.setValue(value, run.frame.id);
+  auto *table = inspector.findChild<QTableWidget *>("debugValueTable");
+  inspector.findChild<QSpinBox *>("debugArrayCount")->setValue(2);
+  inspector.findChild<QSpinBox *>("debugArrayColumns")->setValue(3);
+  inspector.findChild<QPushButton *>("debugArrayApply")->click();
+  QTRY_VERIFY_WITH_TIMEOUT(
+      table->item(1, 2) && table->item(1, 2)->text() == "30", 10000);
+  QCOMPARE(table->rowCount(), 2);
+  QCOMPARE(table->columnCount(), 3);
+  QCOMPARE(table->item(0, 2)->text(), QString("3"));
+  QCOMPARE(table->item(1, 0)->text(), QString("10"));
+
+  auto *length = inspector.findChild<QLineEdit *>("debugArrayLengthExpression");
+  length->setText("-1");
+  inspector.findChild<QPushButton *>("debugArrayApply")->click();
+  QTRY_VERIFY_WITH_TIMEOUT(inspector.findChild<QLabel *>("debugValueStatus")
+                               ->text()
+                               .contains("must be an integer"),
+                           5000);
+  QCOMPARE(table->rowCount(), 2);
+  length->setText("0");
+  inspector.findChild<QPushButton *>("debugArrayApply")->click();
+  QTRY_COMPARE_WITH_TIMEOUT(table->rowCount(), 0, 5000);
+  QCOMPARE(inspector.findChild<QSpinBox *>("debugArrayCount")->value(), 0);
+
+  value = {};
+  value.name = value.evaluateName = "strings";
+  value.type = "char **";
+  value.value = "\"wkue\"";
+  inspector.setValue(value, run.frame.id);
+  QCOMPARE(inspector.findChild<QTreeWidget *>("debugValueTree")
+               ->topLevelItem(0)
+               ->childCount(),
+           0);
+  QCOMPARE(table->rowCount(), 0);
+  QVERIFY(inspector.findChild<QLabel *>("debugValueStatus")
+              ->text()
+              .contains("outer"));
+  run.client.stop(true);
+}
 
 void TestDap::testVtkPythonObjectsAndArrays() {
   const QString python = qEnvironmentVariable(
@@ -3178,6 +4486,7 @@ void TestDap::testGdbDebuggeeReadsStdinFromProvidedTerminal() {
   DebugSession session("stdin-terminal-test");
   QSignalSpy requested(&session, &DebugSession::inferiorTerminalRequested);
   QSignalSpy terminated(&session, &DebugSession::terminated);
+  QSignalSpy stopped(&session, &DebugSession::stopped);
   QString consoleOutput;
   connect(&session, &DebugSession::outputReceived, &session,
           [&consoleOutput](const DapOutputEvent &event) {
@@ -3187,6 +4496,9 @@ void TestDap::testGdbDebuggeeReadsStdinFromProvidedTerminal() {
           [&]() { session.provideInferiorTerminal(slave); });
 
   const auto adapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
+  BreakpointManager::instance().toggleBreakpoint(
+      run.dir.filePath("interactive.c"), 6);
+  auto clearBreakpoints = qScopeGuard([this]() { cleanupBreakpoints(); });
   QVERIFY(session.start(interactiveConfiguration(run), adapter));
 
   // Type the answer the way a user would; the line discipline holds it until
@@ -3203,10 +4515,17 @@ void TestDap::testGdbDebuggeeReadsStdinFromProvidedTerminal() {
         break;
       terminalOutput.append(buffer, int(n));
     }
-    return terminalOutput.contains("got 42");
+    return terminalOutput.contains("enter: ");
   };
   QTRY_VERIFY_WITH_TIMEOUT(drainTerminal(), 20000);
   QCOMPARE(requested.count(), 1);
+  QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 1, 10000);
+  QCOMPARE(session.state(), DebugSession::State::Stopped);
+  QCOMPARE(qvariant_cast<DapStoppedEvent>(stopped.first().first()).reason,
+           DapStoppedReason::Breakpoint);
+  session.continueExecution();
+  QTRY_VERIFY_WITH_TIMEOUT((drainTerminal(), terminalOutput.contains("got 42")),
+                           10000);
   QVERIFY(!terminalOutput.contains("no-input"));
   QVERIFY2(consoleOutput.contains("Debuggee I/O"), qPrintable(consoleOutput));
   QTRY_COMPARE_WITH_TIMEOUT(terminated.count(), 1, 10000);
@@ -3244,6 +4563,34 @@ void TestDap::testGdbDebuggeeLaunchesWithoutTerminal() {
 }
 #endif
 
+void TestDap::testProgramIoButtonFollowsSelectedClient() {
+  DebugPanel panel;
+  auto *button = panel.findChild<QToolButton *>("debugProgramIoButton");
+  QVERIFY(button);
+  QVERIFY(!button->isEnabled());
+  QSignalSpy requested(&panel, &DebugPanel::showProgramIoRequested);
+  button->click();
+  QCOMPARE(requested.count(), 0);
+
+  DapClient first;
+  DapClient second;
+  panel.setDapClient(&first);
+  panel.setProgramIoAvailable(true);
+  QVERIFY(button->isEnabled());
+  panel.resize(340, 400);
+  panel.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&panel));
+  QVERIFY(!button->visibleRegion().isEmpty());
+  button->click();
+  QCOMPARE(requested.count(), 1);
+
+  panel.setDapClient(&second);
+  QVERIFY(!button->isEnabled());
+  panel.setProgramIoAvailable(true);
+  panel.setDapClient(nullptr);
+  QVERIFY(!button->isEnabled());
+}
+
 void TestDap::testDebugToolbarCollapsesToIconsWhenNarrow() {
   DebugPanel panel;
   panel.resize(1200, 400);
@@ -3269,6 +4616,7 @@ void TestDap::testDebugToolbarCollapsesToIconsWhenNarrow() {
 
 void TestDap::testConsoleResultOpensStructuredInspector() {
   DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
   QVERIFY(client.start(fakeAdapterPath(), {"--stop-on-launch"}));
   QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
   client.launch(QJsonObject{{"program", "/tmp/app"}});

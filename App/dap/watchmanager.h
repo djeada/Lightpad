@@ -18,6 +18,11 @@ struct WatchExpression {
   int variablesReference = 0;
   bool isError = false;
   QString errorMessage;
+  int indexedVariables = 0;
+  int namedVariables = 0;
+  bool hasIndexedVariables = false;
+  bool hasNamedVariables = false;
+  QString memoryReference;
 
   QJsonObject toJson() const {
     QJsonObject obj;
@@ -60,6 +65,7 @@ public:
   void evaluateWatch(int id, int frameId);
 
   void getWatchChildren(int watchId, int variablesReference);
+  void cancelWatchChildren(int watchId);
 
   QJsonObject saveToJson() const;
 
@@ -90,9 +96,7 @@ signals:
   void watchChildrenReceived(int watchId, const QList<DapVariable> &children);
 
 private slots:
-  void onEvaluateResult(int requestSeq, const QString &expression,
-                        const QString &result, const QString &type,
-                        int variablesReference);
+  void onEvaluateResult(int requestSeq, const DapVariable &value);
   void onEvaluateError(int requestSeq, const QString &expression,
                        const QString &errorMessage);
   void onVariablesReceived(int variablesReference,

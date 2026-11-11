@@ -23,6 +23,7 @@ private slots:
 
   void testTerminalCount();
   void testCurrentTerminal();
+  void testSelectNamedTerminalAcrossPanes();
 
   void testAvailableShellProfiles();
   void testIsSplit();
@@ -72,6 +73,29 @@ void TestTerminalTabWidget::testCurrentTerminal() {
   Terminal *current = widget.currentTerminal();
   QVERIFY(current != nullptr);
 
+  widget.closeAllTerminals();
+}
+
+void TestTerminalTabWidget::testSelectNamedTerminalAcrossPanes() {
+  TerminalTabWidget widget;
+  UiTestHelpers::showWidget(widget);
+  Terminal *debuggee = widget.addNewTerminal(QString(), "Debuggee I/O");
+  auto *tabs = widget.findChild<QTabWidget *>("terminalTabs");
+  QVERIFY(tabs);
+  QCOMPARE(tabs->tabText(tabs->indexOf(debuggee)), QString("Debuggee I/O"));
+
+  widget.splitHorizontal();
+  Terminal *other = widget.currentTerminal();
+  QVERIFY(other != debuggee);
+  QVERIFY(widget.setCurrentTerminal(debuggee));
+  QCOMPARE(widget.currentTerminal(), debuggee);
+  QTRY_VERIFY(debuggee->isAncestorOf(QApplication::focusWidget()));
+
+  QVERIFY(widget.setCurrentTerminal(other));
+  QCOMPARE(widget.currentTerminal(), other);
+  QTRY_VERIFY(other->isAncestorOf(QApplication::focusWidget()));
+  QVERIFY(!widget.setCurrentTerminal(nullptr));
+  QCOMPARE(widget.currentTerminal(), other);
   widget.closeAllTerminals();
 }
 
