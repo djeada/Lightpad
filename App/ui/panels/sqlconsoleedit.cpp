@@ -1,4 +1,6 @@
 #include "sqlconsoleedit.h"
+#include "../../database/sqlquerycontext.h"
+#include "../paneltypography.h"
 
 #include "../../database/sqlkeywords.h"
 #include "../../database/sqlstatementsplitter.h"
@@ -8,6 +10,7 @@
 #include <QApplication>
 #include <QFontDatabase>
 #include <QKeyEvent>
+#include <QScreen>
 #include <QScrollBar>
 #include <QTextBlock>
 #include <algorithm>
@@ -256,18 +259,11 @@ bool SqlConsoleEdit::event(QEvent *e) {
 }
 
 QString SqlConsoleEdit::prefixAtCursor(int *start) const {
-  const QTextCursor c = textCursor();
-  const QString block = c.block().text();
-  int pos = c.positionInBlock();
-  int i = pos;
-  while (i > 0 && (block[i - 1].isLetterOrNumber() || block[i - 1] == '_' ||
-                   block[i - 1] == '$')) {
-    --i;
-  }
-  if (start) {
-    *start = c.block().position() + i;
-  }
-  return block.mid(i, pos - i);
+  const auto prefix =
+      SqlQueryContext::identifierPrefix(toPlainText(), textCursor().position());
+  if (start)
+    *start = prefix.start;
+  return prefix.text;
 }
 
 void SqlConsoleEdit::showCompletions(bool explicitRequest) {
@@ -280,7 +276,7 @@ void SqlConsoleEdit::showCompletions(bool explicitRequest) {
   const SqlStatement st =
       SqlStatementSplitter::statementAt(script, caret, m_engine);
   int stmtStart = st.text.isEmpty() ? caret : st.start;
-  QString full = st.text;
+  QString full = script.mid(st.start, st.end - st.start);
 
   if (!st.text.isEmpty() && caret > st.start + 0 &&
       script.mid(st.start, st.end - st.start).endsWith(';') &&
@@ -314,20 +310,30 @@ void SqlConsoleEdit::showCompletions(bool explicitRequest) {
   m_suggestions.resize(qMin(m_suggestions.size(), 200));
 
   m_completionModel->clear();
+  auto *popup = m_completer->popup();
+  popup->setAccessibleName(tr("SQL completions"));
+  popup->setFont(font());
+  popup->setStyleSheet(PanelTypography::styleForFont(
+      UIStyleHelper::resultListStyle(m_theme), font()));
   for (int i = 0; i < m_suggestions.size(); ++i) {
     const SqlSuggestion &s = m_suggestions[i];
     auto *item = new QStandardItem(
         s.detail.isEmpty() ? s.label
                            : s.label + QStringLiteral("    ") + s.detail);
     item->setData(i, Qt::UserRole);
+    item->setToolTip(s.label + '\n' + s.detail);
+    item->setSizeHint(QSize(fontMetrics().horizontalAdvance(item->text()) + 24,
+                            fontMetrics().height() + 12));
     m_completionModel->appendRow(item);
   }
   m_completer->setCompletionPrefix(QString());
   QRect rect = cursorRect();
   rect.setLeft(rect.left() - fontMetrics().horizontalAdvance(prefix));
-  rect.setWidth(m_completer->popup()->sizeHintForColumn(0) +
-                m_completer->popup()->verticalScrollBar()->sizeHint().width() +
-                16);
+  const int maxWidth = qMax(260, screen()->availableGeometry().width() - 40);
+  popup->setMaximumWidth(maxWidth);
+  rect.setWidth(
+      qMin(maxWidth, popup->sizeHintForColumn(0) +
+                         popup->verticalScrollBar()->sizeHint().width() + 16));
   m_completer->complete(rect);
   m_completer->popup()->setCurrentIndex(
       m_completer->completionModel()->index(0, 0));
@@ -343,12 +349,15 @@ void SqlConsoleEdit::insertCompletion(const QModelIndex &index) {
   if (idx < 0 || idx >= m_suggestions.size()) {
     return;
   }
-  int start = 0;
-  prefixAtCursor(&start);
+  const auto prefix =
+      SqlQueryContext::identifierPrefix(toPlainText(), textCursor().position());
   QTextCursor c = textCursor();
-  c.setPosition(start);
-  c.setPosition(textCursor().position(), QTextCursor::KeepAnchor);
-  c.insertText(m_suggestions[idx].insertText);
+  c.setPosition(prefix.start);
+  c.setPosition(prefix.end, QTextCursor::KeepAnchor);
+  QString insert = m_suggestions[idx].insertText;
+  if (insert.endsWith('(') && toPlainText().mid(prefix.end, 1) == "(")
+    insert.chop(1);
+  c.insertText(insert);
   setTextCursor(c);
 }
 
@@ -408,6 +417,11 @@ void SqlConsoleEdit::keyPressEvent(QKeyEvent *event) {
   }
 
   QPlainTextEdit::keyPressEvent(event);
+
+  if (event->key() == Qt::Key_Backspace || event->key() == Qt::Key_Delete) {
+    showCompletions(false);
+    return;
+  }
 
   const QString typed = event->text();
   if (typed.isEmpty() || ctrl || (event->modifiers() & Qt::AltModifier)) {

@@ -307,15 +307,12 @@ void MainWindow::announceRunTarget(const RunTarget &target) {
 }
 
 void MainWindow::runPath(const QString &filePath) {
-  if (filePath.isEmpty()) {
-    noScriptAssignedWarning();
-    return;
+  if (!filePath.isEmpty()) {
+    save(filePath);
+    ensureProjectRootForPath(filePath);
   }
 
-  save(filePath);
-
   invalidateRunTargetCache();
-  ensureProjectRootForPath(filePath);
   executeRunTarget(resolveRunTargetForFile(filePath));
 }
 
@@ -383,11 +380,16 @@ void MainWindow::runStructuredTestTarget(const RunTarget &target) {
     testPanel->setWorkspaceFolder(m_projectRootPath);
   }
 
-  const QString configId = target.templateId == QLatin1String("cpp_make_test")
+  const QString configId = target.kind == RunTarget::Kind::Pytest
+                               ? QStringLiteral("pytest")
+                           : target.templateId == QLatin1String("cpp_make_test")
                                ? QStringLiteral("gtest_make")
                                : QStringLiteral("gtest_cmake");
-  bool launched = testPanel->runWithConfigurationId(configId, target.filePath);
-  if (!launched) {
+  const QString testFile = target.templateId == "python_pytest_workspace"
+                               ? QString()
+                               : target.filePath;
+  bool launched = testPanel->runWithConfigurationId(configId, testFile);
+  if (!launched && target.kind != RunTarget::Kind::Pytest) {
     launched = testPanel->runWithConfigurationId(QStringLiteral("gtest_cmake"),
                                                  target.filePath);
   }
@@ -426,7 +428,8 @@ void MainWindow::executeRunTarget(const RunTarget &target) {
     return;
   }
 
-  if (target.kind == RunTarget::Kind::CTest) {
+  if (target.kind == RunTarget::Kind::CTest ||
+      target.kind == RunTarget::Kind::Pytest) {
     runStructuredTestTarget(target);
     return;
   }
@@ -467,6 +470,30 @@ void MainWindow::executeRunTarget(const RunTarget &target) {
 
   showTerminalPanel();
   announceRunTarget(resolved);
+
+  if (resolved.kind == RunTarget::Kind::PythonBackend) {
+    // Keep the server alive while lint, tests and other tasks use other tabs.
+    if (m_backendTerminal && m_backendTerminal->hasActiveRunProcess() &&
+        m_backendTerminalRoot == m_projectRootPath) {
+      terminalWidget->setCurrentTerminal(m_backendTerminal);
+      statusBar()->showMessage(tr("The backend server is already running."),
+                               5000);
+      return;
+    }
+    m_backendTerminal = terminalWidget->addNewTerminal(
+        resolved.workingDirectory, resolved.displayName());
+    m_backendTerminalRoot = m_projectRootPath;
+    terminalWidget->setCurrentTerminal(m_backendTerminal);
+    m_backendTerminal->executeCommand(resolved.program, resolved.arguments,
+                                      resolved.workingDirectory,
+                                      resolved.environment);
+    return;
+  }
+
+  if (terminalWidget->currentTerminal() == m_backendTerminal &&
+      m_backendTerminal && m_backendTerminal->hasActiveRunProcess())
+    terminalWidget->setCurrentTerminal(terminalWidget->addNewTerminal(
+        resolved.workingDirectory, resolved.displayName()));
 
   const QString filePath = resolved.filePath;
   const QPair<QString, QStringList> command =
@@ -903,8 +930,11 @@ void MainWindow::rebuildRunTargetMenu() {
             [this, sourcePath]() { runPath(sourcePath); });
     QAction *debugNow =
         m_runTargetMenu->addAction(tr("Debug %1").arg(target.displayName()));
+    const QString debugPath = target.kind == RunTarget::Kind::PythonBackend
+                                  ? target.filePath
+                                  : sourcePath;
     connect(debugNow, &QAction::triggered, this,
-            [this, sourcePath]() { startDebuggingForFile(sourcePath); });
+            [this, debugPath]() { startDebuggingForFile(debugPath); });
   }
 
   m_runTargetMenu->addSeparator();

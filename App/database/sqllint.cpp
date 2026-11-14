@@ -1,4 +1,5 @@
 #include "sqllint.h"
+#include "sqlquerycontext.h"
 
 #include <QHash>
 #include <QSet>
@@ -223,9 +224,9 @@ void add(QVector<SqlIssue> &out, SqlIssue::Severity sev, const Tok &t,
   out.append(is);
 }
 
-void lintStatement(const QVector<Tok> &toks, DbEngine engine,
-                   const DbSchema *schema, QVector<SqlIssue> &out) {
-  Q_UNUSED(engine);
+void lintStatement(const QString &sql, const QVector<Tok> &toks,
+                   DbEngine engine, const DbSchema *schema,
+                   QVector<SqlIssue> &out) {
   if (toks.isEmpty()) {
     return;
   }
@@ -245,16 +246,6 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
   if (depth > 0) {
     add(out, SqlIssue::Severity::Error, toks.first(),
         QStringLiteral("Missing %1 closing parenthesis").arg(depth));
-  }
-
-  QSet<QString> cte;
-  for (int i = 0; i + 2 < toks.size(); ++i) {
-    if (toks[i].isName() && toks[i + 1].is("as") && toks[i + 2].isPunct('(') &&
-        i > 0 &&
-        (toks[i - 1].is("with") || toks[i - 1].isPunct(',') ||
-         toks[i - 1].is("recursive"))) {
-      cte.insert(toks[i].text.toLower());
-    }
   }
 
   const bool isUpdate = toks[0].is("update");
@@ -308,6 +299,12 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
   }
 
   QVector<TableRef> refs;
+  QVector<int> positions;
+  positions.reserve(toks.size());
+  for (const auto &token : toks)
+    positions << token.start;
+  const auto contexts =
+      SqlQueryContext::analyzePositions(sql, positions, engine, schema);
   QSet<int> consumed;
   QHash<QString, int> aliasSeen;
   auto parseRef = [&](int &i, bool allowParen) {
@@ -315,6 +312,7 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
       return;
     }
     const int first = i;
+    const auto &context = contexts[first];
     QStringList parts;
     parts << toks[i].text;
     consumed.insert(i);
@@ -332,7 +330,13 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
     const DbTableInfo *t = nullptr;
     const bool local =
         toks[first].text.startsWith('#') || toks[first].text.startsWith('@');
-    if (local || (parts.size() == 1 && cte.contains(parts[0].toLower()))) {
+    bool commonTable = false;
+    if (parts.size() == 1) {
+      for (const auto &cte : context.commonTables)
+        if (cte.name.compare(parts[0], Qt::CaseInsensitive) == 0)
+          commonTable = true;
+    }
+    if (local || commonTable) {
       known = false;
     } else {
       t = resolve(*schema, parts, &known);
@@ -375,13 +379,15 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
     }
     if (aliasTok >= 0) {
       consumed.insert(aliasTok);
-      if (aliasSeen.contains(alias)) {
+      const QString scopedAlias =
+          QString::number(context.scopeStart) + ':' + alias;
+      if (aliasSeen.contains(scopedAlias)) {
         add(out, SqlIssue::Severity::Warning, toks[aliasTok],
             QStringLiteral("Alias '%1' is used more than once")
                 .arg(toks[aliasTok].text));
       }
     }
-    aliasSeen.insert(alias, 1);
+    aliasSeen.insert(QString::number(context.scopeStart) + ':' + alias, 1);
     TableRef r;
     r.alias = alias;
     r.table = t;
@@ -426,29 +432,30 @@ void lintStatement(const QVector<Tok> &toks, DbEngine engine,
       continue;
     }
     const QString q = toks[i].text.toLower();
-    const TableRef *hit = nullptr;
-    for (const TableRef &r : refs) {
-      if (r.alias == q) {
+    const auto &context = contexts[i];
+    const SqlQueryContext::Source *hit = nullptr;
+    for (const auto &r : context.sources) {
+      if (r.alias.compare(q, Qt::CaseInsensitive) == 0) {
         hit = &r;
         break;
       }
     }
-    if (!hit || !hit->table || colTok.isPunct('*')) {
+    if (!hit || !hit->columnsKnown || colTok.isPunct('*')) {
       continue;
     }
     bool found = false;
-    for (const DbColumnInfo &c : hit->table->columns) {
+    for (const DbColumnInfo &c : hit->columns) {
       if (c.name.compare(colTok.text, Qt::CaseInsensitive) == 0) {
         found = true;
         break;
       }
     }
-    if (!found && !hit->table->columns.isEmpty()) {
+    if (!found) {
       QString msg = QStringLiteral("Table '%1' has no column '%2'")
-                        .arg(hit->table->name, colTok.text);
+                        .arg(hit->name, colTok.text);
       int best = 3;
       QString hint;
-      for (const DbColumnInfo &c : hit->table->columns) {
+      for (const DbColumnInfo &c : hit->columns) {
         const int d = editDistance(c.name, colTok.text);
         if (d < best) {
           best = d;
@@ -544,13 +551,13 @@ QVector<SqlIssue> lint(const QString &sql, DbEngine engine,
   QVector<Tok> current;
   for (const Tok &t : tk.toks) {
     if (t.isPunct(';')) {
-      lintStatement(current, engine, schema, out);
+      lintStatement(sql, current, engine, schema, out);
       current.clear();
     } else {
       current.append(t);
     }
   }
-  lintStatement(current, engine, schema, out);
+  lintStatement(sql, current, engine, schema, out);
   std::sort(out.begin(), out.end(), [](const SqlIssue &a, const SqlIssue &b) {
     return a.start < b.start;
   });

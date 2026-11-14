@@ -1,15 +1,22 @@
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
+#include <QHeaderView>
 #include <QLineEdit>
 #include <QMenu>
+#include <QProcess>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QStandardPaths>
+#include <QTabWidget>
 #include <QTemporaryDir>
+#include <QTextBrowser>
 #include <QTextEdit>
 #include <QTimer>
 #include <QToolButton>
 #include <QTreeWidget>
+#include <QUrlQuery>
 #include <QtTest>
 
 #include "test_templates/autotestrunner.h"
@@ -33,6 +40,7 @@ private slots:
   void testConfigurationComboRefreshesAfterTemplateLoad();
   void testCtestDiscoveryUsesBuildDirectory();
   void testCargoContextMenuRunsQualifiedName();
+  void testPytestDebugUsesFullNodeIds();
 
   void testDiscoveryPopulatesTree();
   void testDiscoveryWithSuites();
@@ -87,6 +95,14 @@ private slots:
   void testStatusLabelTruncatesLongStdoutLine();
   void testStatusLabelIgnoresStderrLines();
   void testStatusLabelClearedOnNewRun();
+  void testPytestSingleClickAndEnterOpenExactDefinition();
+  void testPytestSelectedRunPreservesOtherResults();
+  void testTestDetailsKeepCapturedOutputAndSourceLinks();
+  void testReadableColumnsAndNumericTimingSort();
+  void testWorkspaceChangeClearsOldTests();
+  void testDiscoveryCanBeCancelled();
+  void testNativeLanguageWorkflows_data();
+  void testNativeLanguageWorkflows();
 
 private:
   QTemporaryDir m_tempDir;
@@ -267,6 +283,53 @@ void TestTestPanel::testCargoContextMenuRunsQualifiedName() {
            QStringList{"tests::nested::addition"});
   QTRY_COMPARE(finished.size(), 1);
   TestConfigurationManager::instance().removeConfiguration(config.id);
+}
+
+void TestTestPanel::testPytestDebugUsesFullNodeIds() {
+  QTemporaryDir project;
+  TestPanel panel;
+  TestConfigurationManager::instance().loadTemplates();
+  panel.setWorkspaceFolder(project.path());
+  auto *combo = findConfigCombo(panel);
+  const int index = combo->findData("pytest");
+  QVERIFY(index >= 0);
+  combo->setCurrentIndex(index);
+  class Discovery : public ITestDiscoveryAdapter {
+  public:
+    QString adapterId() const override { return "pytest"; }
+    void discover(const QString &) override {
+      emit discoveryFinished(
+          {{"test_post[author role]", "TestEndpoints",
+            "tests/test_api.py::TestEndpoints::test_post[author role]",
+            "tests/test_api.py", 8}});
+    }
+    void cancel() override {}
+  } adapter;
+  panel.setDiscoveryAdapter(&adapter);
+  adapter.discover(project.path());
+  auto *tree = findTree(panel);
+  auto *suite = tree->topLevelItem(0);
+  QVERIFY(suite != nullptr);
+  auto *item = suite->child(0);
+  QVERIFY(item != nullptr);
+  item->setSelected(true);
+  QSignalSpy debug(&panel, &TestPanel::debugTestsRequested);
+  panel.debugSelectedTests();
+  QCOMPARE(debug.count(), 1);
+  QCOMPARE(
+      debug.first().first().toStringList(),
+      QStringList{"tests/test_api.py::TestEndpoints::test_post[author role]"});
+  tree->clearSelection();
+  suite->setSelected(true);
+  panel.debugSelectedTests();
+  QCOMPARE(debug.count(), 2);
+  QCOMPARE(debug.last().first().toStringList(),
+           debug.first().first().toStringList());
+  panel.debugAllTests();
+  QVERIFY(debug.last().first().toStringList().isEmpty());
+  panel.debugTestFile("tests/test_api.py");
+  QCOMPARE(debug.last().first().toStringList(),
+           QStringList{"tests/test_api.py"});
 }
 
 void TestTestPanel::testDiscoveryPopulatesTree() {
@@ -623,7 +686,7 @@ void TestTestPanel::testSearchEditExists() {
   TestPanel panel;
   QLineEdit *searchEdit = findSearchEdit(panel);
   QVERIFY(searchEdit != nullptr);
-  QVERIFY(searchEdit->placeholderText().contains("Filter"));
+  QVERIFY(searchEdit->placeholderText().contains("Search"));
 }
 
 void TestTestPanel::testApplyThemeUpdatesStylesheet() {
@@ -671,7 +734,7 @@ void TestTestPanel::testRunDetailsCollapsedByDefault() {
   QVERIFY(detailToggle != nullptr);
   QVERIFY(detailPane != nullptr);
   QCOMPARE(detailToggle->isChecked(), false);
-  QCOMPARE(detailPane->isHidden(), true);
+  QVERIFY(!detailPane->isVisible());
 }
 
 void TestTestPanel::testClickingTestExpandsDetailsPane() {
@@ -845,10 +908,10 @@ void TestTestPanel::testDirectoryRunShowsRunDetailsAndUsesWorkspaceRoot() {
   QCOMPARE(processSpy.at(0).at(0).toString(), QString("/bin/echo"));
   QCOMPARE(processSpy.at(0).at(2).toString(), m_tempDir.path());
 
-  QTextEdit *detailPane = findDetailPane(panel);
+  QTextEdit *detailPane = panel.findChild<QTextEdit *>("testRunOutput");
   QVERIFY(detailPane != nullptr);
   QTRY_VERIFY(detailPane->toPlainText().contains(
-      "Configuration: Panel Echo Directory Run"));
+      "Result: No tests were reported for this run."));
   const QString detailText = detailPane->toPlainText();
   QVERIFY(detailText.contains("Scope: Directory"));
   QVERIFY(detailText.contains("Target: " + testsDir));
@@ -1406,7 +1469,10 @@ void TestTestPanel::testTestItemHasDetailChildrenOnFailure() {
 
   emit runMgr->runStarted();
 
-  QCOMPARE(tree->topLevelItemCount(), 0);
+  QCOMPARE(tree->topLevelItemCount(), 1);
+  QCOMPARE(tree->topLevelItem(0), item);
+  QCOMPARE(item->childCount(), 0);
+  QCOMPARE(item->text(1), QString("Queued"));
 
   TestResult passedResult;
   passedResult.id = "test_pass";
@@ -1415,8 +1481,8 @@ void TestTestPanel::testTestItemHasDetailChildrenOnFailure() {
   passedResult.status = TestStatus::Passed;
   emit runMgr->testFinished(passedResult);
 
-  QCOMPARE(tree->topLevelItemCount(), 1);
-  QTreeWidgetItem *passedItem = tree->topLevelItem(0);
+  QCOMPARE(tree->topLevelItemCount(), 2);
+  QTreeWidgetItem *passedItem = tree->topLevelItem(1);
   QVERIFY(passedItem != nullptr);
   QCOMPARE(passedItem->childCount(), 0);
 }
@@ -1447,7 +1513,10 @@ void TestTestPanel::testDetailChildrenClearedOnRerun() {
 
   emit runMgr->runStarted();
 
-  QCOMPARE(tree->topLevelItemCount(), 0);
+  QCOMPARE(tree->topLevelItemCount(), 1);
+  QCOMPARE(tree->topLevelItem(0), item);
+  QCOMPARE(item->childCount(), 0);
+  QCOMPARE(item->text(1), QString("Queued"));
 
   TestResult secondRun;
   secondRun.id = "test1";
@@ -1627,8 +1696,389 @@ void TestTestPanel::testCompactPanelKeepsEmptyStateVisible() {
   QVERIFY(empty->isVisible());
   QVERIFY(empty->height() >= empty->fontMetrics().height());
   QVERIFY(panel.rect().contains(empty->mapTo(&panel, empty->rect().center())));
-  QVERIFY(findDetailPane(panel)->isHidden());
+  QVERIFY(!findDetailPane(panel)->isVisible());
   QVERIFY(panel.findChild<QWidget *>("testDetailSection")->isHidden());
+}
+
+void TestTestPanel::testPytestSingleClickAndEnterOpenExactDefinition() {
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  QDir(project.path()).mkpath("tests");
+  const QString path = project.filePath("tests/test_routes.py");
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("class TestOther:\n"
+             "    def test_endpoint(self):\n"
+             "        pass\n\n"
+             "class TestAPI:\n"
+             "    @decorator\n"
+             "    async def test_endpoint(self):\n"
+             "        pass\n");
+  file.close();
+  TestPanel panel;
+  panel.setWorkspaceFolder(project.path());
+  panel.resize(1000, 650);
+  panel.show();
+  TestResult result;
+  result.id = "tests/test_routes.py::TestAPI::test_endpoint[author role]";
+  result.name = "TestAPI::test_endpoint[author role]";
+  result.filePath = "tests/test_routes.py";
+  result.status = TestStatus::Passed;
+  // This runner has no source-line metadata and no preceding discovery.
+  emit findRunManager(panel)->testFinished(result);
+  auto *tree = findTree(panel);
+  tree->expandAll();
+  auto *item = tree->topLevelItem(0)->child(0);
+  QSignalSpy navigated(&panel, &TestPanel::locationClicked);
+  QTest::qWait(20);
+  QTest::mouseClick(tree->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    tree->visualItemRect(item).center());
+  QVERIFY(!navigated.isEmpty());
+  QCOMPARE(navigated.last().at(0).toString(), path);
+  QCOMPARE(navigated.last().at(1).toInt(), 7);
+  tree->setFocus();
+  QTest::keyClick(tree, Qt::Key_Return);
+  QCOMPARE(navigated.size(), 2);
+  QCOMPARE(navigated.last().at(1).toInt(), 7);
+  auto *browser = panel.findChild<QTextBrowser *>("testDetailPane");
+  QVERIFY(browser->toPlainText().contains("test_routes.py:7"));
+}
+
+void TestTestPanel::testPytestSelectedRunPreservesOtherResults() {
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  const QString path = project.filePath("test_routes.py");
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("def test_endpoint(): pass\ndef test_other(): pass\n");
+  file.close();
+  const QString script = project.filePath("runner.sh");
+  QFile run(script);
+  QVERIFY(run.open(QIODevice::WriteOnly));
+  run.write(
+      "echo "
+      "'@@LIGHTPAD_PYTEST@@{\"event\":\"finished\",\"id\":\"test_routes.py::"
+      "test_endpoint\","
+      "\"name\":\"test_endpoint\",\"status\":\"passed\",\"durationMs\":4}'\n");
+  run.close();
+  TestPanel panel;
+  panel.setWorkspaceFolder(project.path());
+  TestConfiguration config;
+  config.id = "panel_selected_pytest";
+  config.name = config.id;
+  config.command = "/bin/sh";
+  config.args = {script};
+  config.outputFormat = "pytest";
+  auto &configs = TestConfigurationManager::instance();
+  configs.addConfiguration(config);
+  findConfigCombo(panel)->setCurrentIndex(
+      findConfigCombo(panel)->findData(config.id));
+  auto *runner = findRunManager(panel);
+  TestResult first;
+  first.id = "test_routes.py::test_endpoint";
+  first.name = "test_endpoint";
+  first.filePath = path;
+  first.line = 1;
+  first.status = TestStatus::Failed;
+  first.message = "old failure";
+  emit runner->testFinished(first);
+  TestResult other = first;
+  other.id = "test_routes.py::test_other";
+  other.name = "test_other";
+  other.line = 2;
+  other.status = TestStatus::Passed;
+  other.message.clear();
+  emit runner->testFinished(other);
+  auto *tree = findTree(panel);
+  auto *group = tree->topLevelItem(0);
+  auto *selected = group->child(0);
+  tree->setCurrentItem(selected);
+  QSignalSpy process(runner, &TestRunManager::processStarted);
+  QSignalSpy finished(runner, &TestRunManager::runFinished);
+  panel.runSelectedTests();
+  QCOMPARE(process.size(), 1);
+  QVERIFY(
+      process.first().at(1).toStringList().contains(path + "::test_endpoint"));
+  QCOMPARE(group->childCount(), 2);
+  QCOMPARE(selected->text(1), QString("Queued"));
+  QCOMPARE(selected->childCount(), 0);
+  QCOMPARE(group->child(1)->text(1), QString("Passed"));
+  QTRY_COMPARE(finished.size(), 1);
+  QCOMPARE(panel.passedCount(), 1);
+  QCOMPARE(tree->currentItem(), selected);
+  QVERIFY(selected->isSelected());
+  QCOMPARE(group->childCount(), 2);
+  QCOMPARE(selected->text(1), QString("Passed"));
+  QCOMPARE(group->child(1)->text(1), QString("Passed"));
+  configs.removeConfiguration(config.id);
+}
+
+void TestTestPanel::testTestDetailsKeepCapturedOutputAndSourceLinks() {
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  const QString path = project.filePath("test_routes.py");
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("def test_endpoint():\n    assert False\n");
+  file.close();
+  TestPanel panel;
+  panel.setWorkspaceFolder(project.path());
+  TestResult result;
+  result.id = "test_routes.py::test_endpoint";
+  result.name = "test_endpoint";
+  result.filePath = path;
+  result.line = 1;
+  result.status = TestStatus::Failed;
+  result.stackTrace = "test_routes.py:2: AssertionError";
+  result.stdoutOutput = "response body: <html>failed</html>";
+  result.stderrOutput = "database stderr";
+  auto *runner = findRunManager(panel);
+  emit runner->testFinished(result);
+  auto *tree = findTree(panel);
+  auto *item = tree->topLevelItem(0)->child(0);
+  emit tree->itemClicked(item, 0);
+  auto *browser = panel.findChild<QTextBrowser *>("testDetailPane");
+  QVERIFY(browser->toPlainText().contains(result.stdoutOutput));
+  QVERIFY(browser->toPlainText().contains(result.stderrOutput));
+  QVERIFY(browser->toHtml().contains("lightpad-source://failure"));
+  QVERIFY(
+      !browser->toHtml().contains("<html>failed</html>")); // Output is escaped.
+  QSignalSpy navigated(&panel, &TestPanel::locationClicked);
+  QUrl link("lightpad-source://failure");
+  QUrlQuery query;
+  query.addQueryItem("file", path);
+  query.addQueryItem("line", "2");
+  link.setQuery(query);
+  emit browser->anchorClicked(link);
+  QCOMPARE(navigated.size(), 1);
+  QCOMPARE(navigated.first().at(1).toInt(), 2);
+  emit runner->outputLine("unrelated run output", false);
+  QTest::qWait(120);
+  QVERIFY(browser->toPlainText().contains(result.stdoutOutput));
+  QVERIFY(!browser->toPlainText().contains("unrelated run output"));
+}
+
+void TestTestPanel::testReadableColumnsAndNumericTimingSort() {
+  TestPanel panel;
+  panel.resize(1200, 700);
+  panel.applyTheme(Theme());
+  panel.setContentFont(QFont("Monospace", 24));
+  panel.show();
+  auto *tree = findTree(panel);
+  QVERIFY(tree->isColumnHidden(2));
+  TestResult result;
+  result.id = "slow";
+  result.name = "test_endpoint_with_a_very_long_name_and_many_conditions_that_"
+                "must_remain_readable";
+  result.status = TestStatus::Passed;
+  result.durationMs = 12000;
+  // Manual widths must not prevent the first reported duration from appearing.
+  tree->setColumnWidth(0, 500);
+  auto *runner = findRunManager(panel);
+  emit runner->testFinished(result);
+  result.id = "fast";
+  result.name = "test_fast";
+  result.durationMs = 900;
+  emit runner->testFinished(result);
+  QTest::qWait(20);
+  QCOMPARE(tree->font().pointSize(), 24);
+  QCOMPARE(tree->header()->font().pointSize(), 24);
+  QVERIFY(!tree->isColumnHidden(2));
+  QVERIFY(tree->visualItemRect(tree->topLevelItem(0)).height() >
+          tree->fontMetrics().height() * 2);
+  tree->sortItems(2, Qt::AscendingOrder);
+  QCOMPARE(tree->topLevelItem(0)->data(0, Qt::UserRole).toString(),
+           QString("fast"));
+  tree->sortItems(2, Qt::DescendingOrder);
+  QCOMPARE(tree->topLevelItem(0)->data(0, Qt::UserRole).toString(),
+           QString("slow"));
+}
+
+void TestTestPanel::testWorkspaceChangeClearsOldTests() {
+  TestPanel panel;
+  panel.setWorkspaceFolder(m_tempDir.path());
+  TestResult result;
+  result.id = "old";
+  result.name = "old";
+  result.status = TestStatus::Failed;
+  emit findRunManager(panel)->testFinished(result);
+  QCOMPARE(findTree(panel)->topLevelItemCount(), 1);
+  QTemporaryDir nextProject;
+  QVERIFY(nextProject.isValid());
+  panel.setWorkspaceFolder(nextProject.path());
+  QCOMPARE(findTree(panel)->topLevelItemCount(), 0);
+  QCOMPARE(panel.failedCount(), 0);
+  QVERIFY(findDetailPane(panel)->toPlainText().isEmpty());
+}
+
+void TestTestPanel::testDiscoveryCanBeCancelled() {
+  class SlowDiscovery : public ITestDiscoveryAdapter {
+  public:
+    bool cancelled = false;
+    QString adapterId() const override { return "pytest"; }
+    void discover(const QString &) override {}
+    void cancel() override { cancelled = true; }
+  } discovery;
+  TestPanel panel;
+  panel.setWorkspaceFolder(m_tempDir.path());
+  panel.setDiscoveryAdapter(&discovery);
+  panel.discoverTests();
+  QVERIFY(!findConfigCombo(panel)->isEnabled());
+  QVERIFY(!panel.findChild<QAction *>("runSelectedTestsAction")->isEnabled());
+  panel.stopTests();
+  QVERIFY(discovery.cancelled);
+  QVERIFY(findConfigCombo(panel)->isEnabled());
+  QVERIFY(findProgressBar(panel)->isHidden());
+  QCOMPARE(findStatusLabel(panel)->text(), QString("Discovery cancelled"));
+}
+
+void TestTestPanel::testNativeLanguageWorkflows_data() {
+  QTest::addColumn<QString>("language");
+  QTest::addColumn<QString>("configurationId");
+  QTest::addColumn<int>("passed");
+  QTest::addColumn<QString>("failureText");
+  QTest::newRow("C++-GoogleTest-CTest")
+      << QString("cpp") << QString("gtest_cmake") << 1
+      << QString("C++ response payload");
+  QTest::newRow("C-CTest") << QString("c") << QString("ctest_c") << 1
+                           << QString("Assertion failed");
+  QTest::newRow("Rust-Cargo") << QString("rust") << QString("cargo_test") << 2
+                              << QString("Rust failure payload");
+  QTest::newRow("Node.js-Jest")
+      << QString("node") << QString("jest") << 1 << QString("Expected");
+}
+
+void TestTestPanel::testNativeLanguageWorkflows() {
+  if (!qEnvironmentVariableIsSet("LIGHTPAD_TEST_UI_LANGUAGES"))
+    QSKIP("Set LIGHTPAD_TEST_UI_LANGUAGES=1 for real C/C++/Rust/Node.js UI "
+          "checks.");
+  QFETCH(QString, language);
+  QFETCH(QString, configurationId);
+  QFETCH(int, passed);
+  QFETCH(QString, failureText);
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  const QString fixture =
+      QStringLiteral(LIGHTPAD_TEST_UI_FIXTURES) + '/' + language;
+  QDirIterator files(fixture, QDir::Files, QDirIterator::Subdirectories);
+  while (files.hasNext()) {
+    const QString source = files.next();
+    const QString target =
+        project.filePath(QDir(fixture).relativeFilePath(source));
+    QDir().mkpath(QFileInfo(target).absolutePath());
+    QVERIFY(QFile::copy(source, target));
+  }
+  auto runTool = [&](const QString &program, const QStringList &args) {
+    QProcess process;
+    process.setWorkingDirectory(project.path());
+    process.setProcessChannelMode(QProcess::MergedChannels);
+    process.start(program, args);
+    if (!process.waitForFinished(30000) || process.exitCode() != 0) {
+      qWarning().noquote() << process.errorString() << process.readAll();
+      return false;
+    }
+    return true;
+  };
+  if (language == "cpp" || language == "c") {
+    QStringList arguments{"-S", project.path(), "-B",
+                          project.filePath("build")};
+    const QString gtest = qEnvironmentVariable("LIGHTPAD_TEST_GTEST_SOURCE");
+    if (language == "cpp" && !gtest.isEmpty())
+      arguments << "-DLIGHTPAD_GTEST_SOURCE_DIR=" + gtest;
+    QVERIFY(runTool("cmake", arguments));
+    QVERIFY(runTool("cmake", {"--build", project.filePath("build"), "-j4"}));
+  } else if (language == "node") {
+    const QString modules =
+        qEnvironmentVariable("LIGHTPAD_TEST_JEST_NODE_MODULES");
+    QVERIFY2(!modules.isEmpty(), "Set LIGHTPAD_TEST_JEST_NODE_MODULES to a "
+                                 "node_modules directory containing Jest.");
+    QVERIFY(QFile::link(modules, project.filePath("node_modules")));
+  }
+  TestPanel panel;
+  QVERIFY(TestConfigurationManager::instance().loadTemplates());
+  panel.setWorkspaceFolder(project.path());
+  auto *config = findConfigCombo(panel);
+  const int index = config->findData(configurationId);
+  QVERIFY(index >= 0);
+  config->setCurrentIndex(index);
+  panel.applyTheme(Theme());
+  panel.setContentFont(QFont("Monospace", 17));
+  panel.resize(1400, 850);
+  panel.show();
+  panel.discoverTests();
+  QTRY_VERIFY_WITH_TIMEOUT(
+      findStatusLabel(panel)->text().startsWith("Discovered") ||
+          findStatusLabel(panel)->text().startsWith("Discovery error"),
+      30000);
+  QVERIFY2(!findStatusLabel(panel)->text().startsWith("Discovery error"),
+           qPrintable(findStatusLabel(panel)->text()));
+  auto *tree = findTree(panel);
+  auto leaves = [&]() {
+    QList<QTreeWidgetItem *> result;
+    for (QTreeWidgetItemIterator it(tree); *it; ++it)
+      if (!(*it)->data(0, Qt::UserRole + 3).toBool() &&
+          !(*it)->data(0, Qt::UserRole + 4).toBool())
+        result << *it;
+    return result;
+  };
+  const int total = passed + 2;
+  QCOMPARE(leaves().size(), total);
+  QSignalSpy navigated(&panel, &TestPanel::locationClicked);
+  auto *discovered = leaves().first();
+  for (QTreeWidgetItemIterator it(tree); *it; ++it)
+    if ((*it)->data(0, Qt::UserRole + 3).toBool())
+      (*it)->setExpanded(true);
+  emit tree->itemClicked(discovered, 0);
+  QVERIFY(!navigated.isEmpty());
+  QVERIFY(QFileInfo(navigated.last().first().toString()).isFile());
+  QVERIFY(navigated.last().at(1).toInt() > 0);
+  auto *runner = findRunManager(panel);
+  QSignalSpy finished(runner, &TestRunManager::runFinished);
+  panel.runAll();
+  QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 30000);
+  QCOMPARE(panel.passedCount(), passed);
+  QCOMPARE(panel.failedCount(), 1);
+  QCOMPARE(panel.skippedCount(), 1);
+  QCOMPARE(panel.erroredCount(), 0);
+  QCOMPARE(leaves().size(),
+           total); // Discovery and results must reuse the same rows.
+  QVERIFY(leaves().contains(discovered));
+  QTreeWidgetItem *pass = nullptr, *failure = nullptr;
+  for (auto *item : leaves()) {
+    if (item->text(1) == "Passed")
+      pass = item;
+    if (item->text(1) == "Failed")
+      failure = item;
+  }
+  QVERIFY(pass && failure);
+  tree->clearSelection();
+  tree->setCurrentItem(failure);
+  emit tree->itemClicked(failure, 0);
+  QVERIFY(findDetailPane(panel)->toPlainText().contains(failureText));
+  const QString definition = navigated.last().first().toString();
+  QVERIFY2(!definition.endsWith("CMakeLists.txt") &&
+               !definition.endsWith(".cmake"),
+           qPrintable(definition));
+  QVERIFY(navigated.last().at(1).toInt() > 0);
+  panel.setContentFont(QFont("Monospace", 24));
+  QTest::qWait(50);
+  QCOMPARE(tree->font().pointSize(), 24);
+  QCOMPARE(tree->header()->font().pointSize(), 24);
+  panel.grab().save("/tmp/lightpad-tests-ui-" + language + "-24pt.png");
+  tree->clearSelection();
+  pass->setSelected(true);
+  failure->setSelected(true);
+  panel.runSelectedTests();
+  QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 2, 30000);
+  QCOMPARE(panel.passedCount(), 1);
+  QCOMPARE(panel.failedCount(), 1);
+  QCOMPARE(panel.skippedCount(), 0);
+  QCOMPARE(leaves().size(), total);
+  panel.runFailed();
+  QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 3, 30000);
+  QCOMPARE(panel.passedCount(), 0);
+  QCOMPARE(panel.failedCount(), 1);
+  QCOMPARE(leaves().size(), total);
 }
 
 QTEST_MAIN(TestTestPanel)

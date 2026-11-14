@@ -5,6 +5,8 @@
 #include <QList>
 #include <QObject>
 #include <QProcess>
+#include <QTemporaryDir>
+#include <memory>
 
 struct DiscoveredTest {
   QString name;
@@ -12,6 +14,7 @@ struct DiscoveredTest {
   QString id;
   QString filePath;
   int line = -1;
+  bool isFile = false;
 };
 
 class ITestDiscoveryAdapter : public QObject {
@@ -112,6 +115,11 @@ public:
   ~PytestDiscoveryAdapter() override;
 
   QString adapterId() const override { return "pytest"; }
+  void setTestConfiguration(const TestConfiguration &config,
+                            const QString &workspaceFolder) {
+    m_configuration = config;
+    m_workspaceFolder = workspaceFolder;
+  }
   void discover(const QString &workDir) override;
   void cancel() override;
 
@@ -121,6 +129,9 @@ private slots:
   void onProcessFinished(int exitCode, QProcess::ExitStatus status);
 
 private:
+  TestConfiguration m_configuration;
+  QString m_workspaceFolder;
+  std::unique_ptr<QTemporaryDir> m_reporterDirectory;
   QProcess *m_process = nullptr;
 };
 
@@ -181,6 +192,7 @@ private slots:
   void onProcessFinished(int exitCode, QProcess::ExitStatus status);
 
 private:
+  std::unique_ptr<QTemporaryDir> m_reporterDirectory;
   QProcess *m_process = nullptr;
 };
 

@@ -44,6 +44,7 @@ public:
 
   void setCurrentFrame(int frameId);
   void applyTheme(const Theme &theme);
+  void setContentFont(const QFont &font);
 
   QList<QAction *> transportActions() const;
 

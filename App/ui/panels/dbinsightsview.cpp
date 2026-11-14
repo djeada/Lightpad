@@ -1,4 +1,5 @@
 #include "dbinsightsview.h"
+#include "../paneltypography.h"
 
 #include "../uistylehelper.h"
 
@@ -57,7 +58,6 @@ public:
     }
     painter->setPen(text);
     QFont f = option.font;
-    f.setPointSizeF(f.pointSizeF() * 0.85);
     painter->setFont(f);
     painter->drawText(QRectF(cell.left(), option.rect.top(), cell.width(),
                              bar.top() - option.rect.top() + 1),
@@ -68,7 +68,7 @@ public:
   QSize sizeHint(const QStyleOptionViewItem &option,
                  const QModelIndex &index) const override {
     QSize s = QStyledItemDelegate::sizeHint(option, index);
-    s.setHeight(qMax(s.height(), 40));
+    s.setHeight(qMax(s.height(), option.fontMetrics.height() + 22));
     return s;
   }
 };
@@ -233,4 +233,5 @@ void DbInsightsView::applyTheme(const Theme &theme) {
                theme.borderColor.name(), muted.name(),
                theme.backgroundColor.name(), text.name(), selection.name()));
   m_table->viewport()->update();
+  PanelTypography::apply(this, PanelTypography::contentFont(this));
 }

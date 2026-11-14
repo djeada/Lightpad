@@ -10,6 +10,7 @@
 #include "test_templates/testconfiguration.h"
 #include "test_templates/testdiscovery.h"
 #include "test_templates/testoutputparser.h"
+#include "test_templates/testsource.h"
 
 Q_DECLARE_METATYPE(TestResult)
 Q_DECLARE_METATYPE(DiscoveredTest)
@@ -39,6 +40,8 @@ private slots:
   void testPytestBasicOutput();
   void testPytestMixedStatuses();
   void testPytestFailureSectionAttachesToExistingResult();
+  void testPytestStructuredMetadataAndOutput();
+  void testPytestStructuredDiscoveryLocations();
   void testParserDecodesSplitUtf8();
 
   void testJunitXmlWithFileAndLine();
@@ -93,6 +96,9 @@ private slots:
 
   void testPytestDiscoveryAndResultIdsMatch();
   void testCtestDiscoveryAndResultIdsMatch();
+  void testCtestRealJsonMetadata();
+  void testJestCurrentOutputLocations();
+  void testRustQualifiedDefinitions();
 };
 
 void TestOutputParsers::initTestCase() {
@@ -368,6 +374,72 @@ void TestOutputParsers::testPytestMixedStatuses() {
   QCOMPARE(results[1].status, TestStatus::Skipped);
   QCOMPARE(results[2].status, TestStatus::Errored);
   QCOMPARE(results[3].status, TestStatus::Passed);
+}
+
+void TestOutputParsers::testPytestStructuredMetadataAndOutput() {
+  PytestParser parser;
+  QSignalSpy finished(&parser, &ITestOutputParser::testFinished);
+  QSignalSpy started(&parser, &ITestOutputParser::testStarted);
+  QSignalSpy total(&parser, &ITestOutputParser::totalTestsChanged);
+  QSignalSpy output(&parser, &ITestOutputParser::outputLine);
+  parser.feed("@@LIGHTPAD_PYTEST@@{\"event\":\"session\",\"total\":1}\n");
+  const QJsonObject metadata{
+      {"event", "started"},
+      {"id", "tests/test_api.py::TestAPI::test_endpoint[author role]"},
+      {"name", "TestAPI::test_endpoint[author role]"},
+      {"file", "/workspace/tests/test_api.py"},
+      {"line", 42}};
+  parser.feed("tests/test_api.py ");
+  parser.feed("@@LIGHTPAD_PYTEST@@" +
+              QJsonDocument(metadata).toJson(QJsonDocument::Compact) + '\n');
+  QJsonObject result = metadata;
+  result["event"] = "finished";
+  result["status"] = "error";
+  result["durationMs"] = 1204;
+  result["message"] = "fixture failed";
+  result["traceback"] = "tests/conftest.py:12: RuntimeError";
+  result["stdout"] = QString::fromUtf8("setup: żółć");
+  result["stderr"] = "database unavailable";
+  const auto record = "@@LIGHTPAD_PYTEST@@" +
+                      QJsonDocument(result).toJson(QJsonDocument::Compact) +
+                      '\n';
+  parser.feed(record.left(record.size() / 2));
+  parser.feed(record.mid(record.size() / 2));
+  parser.feed(
+      "tests/test_api.py::TestAPI::test_endpoint[author role] ERROR [100%]\n");
+  parser.finish();
+  QCOMPARE(total.size(), 1);
+  QCOMPARE(total.first().first().toInt(), 1);
+  QCOMPARE(started.size(), 1);
+  QCOMPARE(finished.size(),
+           1); // Human pytest output must not duplicate the result.
+  const auto parsed = finished.first().first().value<TestResult>();
+  QCOMPARE(parsed.id, metadata["id"].toString());
+  QCOMPARE(parsed.name, metadata["name"].toString());
+  QCOMPARE(parsed.filePath, QString("/workspace/tests/test_api.py"));
+  QCOMPARE(parsed.line, 42);
+  QCOMPARE(parsed.durationMs, 1204);
+  QCOMPARE(parsed.status, TestStatus::Errored);
+  QCOMPARE(parsed.stackTrace, result["traceback"].toString());
+  QCOMPARE(parsed.stdoutOutput, result["stdout"].toString());
+  QCOMPARE(parsed.stderrOutput, result["stderr"].toString());
+  for (const auto &line : output)
+    QVERIFY(!line.first().toString().contains("@@LIGHTPAD_PYTEST@@"));
+}
+
+void TestOutputParsers::testPytestStructuredDiscoveryLocations() {
+  const auto tests = PytestDiscoveryAdapter::parseCollectOutput(
+      "tests/test_api.py::TestAPI::test_endpoint[author role]\n"
+      "@@LIGHTPAD_PYTEST@@{\"event\":\"session\",\"total\":1}\n"
+      "@@LIGHTPAD_PYTEST@@{\"event\":\"collected\",\"id\":\"tests/"
+      "test_api.py::TestAPI::test_endpoint[author role]\","
+      "\"name\":\"TestAPI::test_endpoint[author "
+      "role]\",\"file\":\"/workspace/tests/test_api.py\",\"line\":42}\n"
+      "1 test collected in 0.01s\n");
+  QCOMPARE(tests.size(), 1);
+  QCOMPARE(tests.first().name, QString("TestAPI::test_endpoint[author role]"));
+  QCOMPARE(tests.first().filePath, QString("/workspace/tests/test_api.py"));
+  QCOMPARE(tests.first().line, 42);
 }
 
 void TestOutputParsers::testPytestFailureSectionAttachesToExistingResult() {
@@ -1036,7 +1108,8 @@ void TestOutputParsers::testCtestDiscoveryParseJsonOutput() {
   QCOMPARE(tests[0].id, QString("1"));
   QCOMPARE(tests[1].name, QString("ThemeTests"));
   QCOMPARE(tests[1].id, QString("2"));
-  QCOMPARE(tests[1].filePath, QString("/home/user/project/build"));
+  QVERIFY(
+      tests[1].filePath.isEmpty()); // A working directory is not a source file.
   QCOMPARE(tests[2].name, QString("DocumentTests"));
   QCOMPARE(tests[2].id, QString("3"));
 }
@@ -1401,6 +1474,76 @@ void TestOutputParsers::testStableCargoTemplate() {
   QVERIFY(!config.args.contains("-Z"));
   QVERIFY(!config.args.contains("--format=json"));
   QVERIFY(config.runSingleTest.args.contains("--exact"));
+}
+
+void TestOutputParsers::testCtestRealJsonMetadata() {
+  const auto tests = CTestDiscoveryAdapter::parseJsonOutput(R"({
+    "backtraceGraph":{"files":["/project/CMakeLists.txt"],"nodes":[{"file":0,"line":8}]},
+    "tests":[{"name":"case one","backtrace":0,"properties":[{"name":"WORKING_DIRECTORY","value":"/project/build"}]},
+             {"name":"case two","backtrace":99}]
+  })");
+  QCOMPARE(tests.size(), 2);
+  QCOMPARE(tests[0].id, QString("1"));
+  QCOMPARE(tests[1].id, QString("2"));
+  QCOMPARE(tests[0].filePath, QString("/project/CMakeLists.txt"));
+  QCOMPARE(tests[0].line, 8);
+  QVERIFY(tests[1].filePath.isEmpty());
+  CtestParser parser;
+  QSignalSpy results(&parser, &ITestOutputParser::testFinished);
+  parser.feed("Start 1: case one\n1/2 Test #1: case one ............... Passed "
+              "0.02 sec\n"
+              "Start 2: case two\n2/2 Test #2: case two ............... "
+              "***Skipped 0.00 sec\n");
+  parser.finish();
+  QCOMPARE(results.size(), 2);
+  QCOMPARE(results[0].first().value<TestResult>().id, tests[0].id);
+  QCOMPARE(results[1].first().value<TestResult>().status, TestStatus::Skipped);
+}
+
+void TestOutputParsers::testJestCurrentOutputLocations() {
+  JsonTestParser parser;
+  QSignalSpy results(&parser, &ITestOutputParser::testFinished);
+  QSignalSpy output(&parser, &ITestOutputParser::outputLine);
+  parser.feed(
+      R"({"testResults":[{"name":"/project/api.test.js","assertionResults":[{"fullName":"HTTP response [author]","status":"failed","duration":7,"location":{"line":12,"column":3},"failureMessages":["Expected 418\nat api.test.js:14:3"]},{"fullName":"HTTP skipped","status":"pending","duration":null,"location":{"line":18}}]}]})"
+      "\n");
+  parser.finish();
+  QCOMPARE(results.size(), 2);
+  const auto failed = results[0].first().value<TestResult>();
+  QCOMPARE(failed.filePath, QString("/project/api.test.js"));
+  QCOMPARE(failed.line, 12);
+  QCOMPARE(failed.durationMs, 7);
+  QVERIFY(failed.stackTrace.contains("api.test.js:14:3"));
+  QCOMPARE(results[1].first().value<TestResult>().durationMs, -1);
+  for (const auto &line : output)
+    QVERIFY(!line.first().toString().contains("assertionResults"));
+}
+
+void TestOutputParsers::testRustQualifiedDefinitions() {
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  QDir(project.path()).mkpath("src");
+  const QString source = project.filePath("src/lib.rs");
+  QFile file(source);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("// mod fake { fn duplicate() {} }\n"
+             "mod tests {\n"
+             "  #[test] fn duplicate() {}\n"
+             "  mod nested {\n"
+             "    #[test] fn duplicate() {}\n"
+             "  }\n}\n");
+  file.close();
+  QString path;
+  int line = 0;
+  QVERIFY(TestSource::rustDefinition(project.path(), "tests::duplicate", &path,
+                                     &line));
+  QCOMPARE(path, source);
+  QCOMPARE(line, 3);
+  QVERIFY(TestSource::rustDefinition(project.path(), "tests::nested::duplicate",
+                                     &path, &line));
+  QCOMPARE(line, 5);
+  QVERIFY(!TestSource::rustDefinition(project.path(), "fake::duplicate", &path,
+                                      &line));
 }
 
 QTEST_MAIN(TestOutputParsers)

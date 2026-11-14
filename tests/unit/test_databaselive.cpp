@@ -3,6 +3,7 @@
 #include "database/dbconnection.h"
 
 #include <QEventLoop>
+#include <QFile>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -159,6 +160,9 @@ private slots:
   void sqliteLimitedReturningStillWritesAllRows();
   void sqliteSchemaAndDisconnect();
   void sqliteDisconnectInsideResultHandler();
+  void sqliteStorageIncludesIndexesAttachedAndTemporaryTables();
+  void sqliteLargeDatabaseDefersTableSizes();
+  void sqliteStorageCancellationPreservesUserQuery();
 
   void missingClientProgramGivesAHelpfulError();
   void sqlServerWorkflow();
@@ -494,6 +498,115 @@ void TestDatabaseLive::sqliteDisconnectInsideResultHandler() {
   QCOMPARE(cell(out.results[0], 0, 0).toInt(), 2);
 }
 
+void TestDatabaseLive::
+    sqliteStorageIncludesIndexesAttachedAndTemporaryTables() {
+  DbConnection conn(sqliteProfile(makeSqliteFile(m_dir, "storage.db")));
+  QVERIFY(connectAndWait(conn, ""));
+  conn.setMaxRows(1);
+  const auto out =
+      run(conn, {"CREATE TABLE things(id INTEGER PRIMARY KEY, name TEXT "
+                 "UNIQUE, payload BLOB)",
+                 "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n "
+                 "WHERE i<50) INSERT INTO things(name,payload) SELECT 'item "
+                 "'||i, randomblob(8192) FROM n",
+                 "CREATE INDEX things_payload ON things(payload)",
+                 "CREATE VIEW things_view AS SELECT name FROM things",
+                 "ATTACH ':memory:' AS \"other db\"",
+                 "CREATE TABLE \"other db\".things(id INTEGER)",
+                 "CREATE TEMP TABLE scratch(n TEXT)"});
+  QVERIFY(out.finished);
+  for (const auto &r : out.results)
+    QVERIFY2(r.ok, qPrintable(r.error));
+  QTRY_VERIFY_WITH_TIMEOUT(!conn.schemaLoading() && !conn.statisticsLoading(),
+                           15000);
+  QVERIFY2(conn.lastStatisticsError().isEmpty(),
+           qPrintable(conn.lastStatisticsError()));
+  const auto &stats = conn.statistics();
+  QVERIFY(stats.updatedAt.isValid());
+  QVERIFY(stats.databases.contains("main"));
+  QVERIFY(stats.databases.contains("other db"));
+  QVERIFY(stats.databases.contains("temp"));
+  QCOMPARE(stats.databases.value("main").totalBytes,
+           QFileInfo(conn.profile().filePath).size());
+  const auto *table = stats.table("main", "things");
+  QVERIFY(table);
+  QVERIFY(table->dataBytes >= 50 * 8192);
+  QVERIFY(table->indexBytes > 0);
+  QCOMPARE(table->totalBytes, table->dataBytes + table->indexBytes);
+  QVERIFY(stats.databases.value("main").totalBytes >= table->totalBytes);
+  QCOMPARE(table->rows, qint64(-1));
+  QVERIFY(stats.table("other db", "things"));
+  QVERIFY(stats.table("temp", "scratch"));
+  QVERIFY(!stats.table("main", "things_view"));
+  conn.setExactRowCount("main", "things", 50);
+  QCOMPARE(conn.statistics().table("main", "things")->rows, qint64(50));
+  QVERIFY(!conn.statistics().table("main", "things")->rowsEstimated);
+  QSignalSpy results(&conn, &DbConnection::statementFinished);
+  QSignalSpy requests(&conn, &DbConnection::requestStarted);
+  conn.refreshStatistics(true);
+  QTRY_VERIFY_WITH_TIMEOUT(!conn.statisticsLoading(), 15000);
+  QCOMPARE(results.size(), 0);
+  QCOMPARE(requests.size(), 0);
+  conn.disconnectFromServer();
+
+  auto profile = conn.profile();
+  profile.readOnly = true;
+  DbConnection readonly(profile);
+  QVERIFY(connectAndWait(readonly, ""));
+  QTRY_VERIFY_WITH_TIMEOUT(
+      !readonly.schemaLoading() && !readonly.statisticsLoading(), 15000);
+  QVERIFY2(readonly.lastStatisticsError().isEmpty(),
+           qPrintable(readonly.lastStatisticsError()));
+  QVERIFY(readonly.statistics().table("main", "things"));
+}
+
+void TestDatabaseLive::sqliteLargeDatabaseDefersTableSizes() {
+  const auto profile = sqliteProfile(makeSqliteFile(m_dir, "large-storage.db"));
+  {
+    DbConnection seed(profile);
+    QVERIFY(connectAndWait(seed, ""));
+    QVERIFY(run(seed, {"CREATE TABLE sample(id INTEGER)"}).results.value(0).ok);
+    seed.disconnectFromServer();
+  }
+  QFile file(profile.filePath);
+  QVERIFY(file.open(QIODevice::ReadWrite));
+  QVERIFY(file.resize(129LL * 1024 * 1024));
+  file.close();
+  DbConnection conn(profile);
+  QVERIFY(connectAndWait(conn, ""));
+  QTRY_VERIFY_WITH_TIMEOUT(!conn.schemaLoading() && !conn.statisticsLoading(),
+                           15000);
+  QVERIFY(conn.statistics().tableSizesDeferred);
+  QVERIFY(!conn.statistics().table("main", "sample"));
+  QVERIFY(conn.statistics().databases.value("main").totalBytes > 0);
+  conn.refreshStatistics(true);
+  QTRY_VERIFY_WITH_TIMEOUT(!conn.statisticsLoading(), 15000);
+  QVERIFY(!conn.statistics().tableSizesDeferred);
+  QVERIFY(conn.statistics().table("main", "sample"));
+}
+
+void TestDatabaseLive::sqliteStorageCancellationPreservesUserQuery() {
+  DbConnection conn(sqliteProfile(makeSqliteFile(m_dir, "cancel-storage.db")));
+  QVERIFY(connectAndWait(conn, ""));
+  QTRY_VERIFY_WITH_TIMEOUT(!conn.schemaLoading() && !conn.statisticsLoading(),
+                           15000);
+  QSignalSpy finished(&conn, &DbConnection::requestFinished);
+  const auto id = conn.execute({"WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL "
+                                "SELECT i+1 FROM n) SELECT sum(i) FROM n"});
+  QVERIFY(conn.isBusy());
+  conn.refreshStatistics(true);
+  QVERIFY(conn.statisticsLoading());
+  conn.cancelStatistics();
+  QVERIFY(!conn.statisticsLoading());
+  QVERIFY(conn.isBusy());
+  QCOMPARE(finished.size(), 0);
+  conn.cancel();
+  QTRY_VERIFY_WITH_TIMEOUT(!finished.isEmpty(), 5000);
+  QCOMPARE(finished.first()[0].toULongLong(), id);
+  QVERIFY(finished.first()[1].toBool());
+  QVERIFY(run(conn, {"SELECT 42"}).results.value(0).ok);
+}
+
 void TestDatabaseLive::engineWorkflow(DbEngine engine, const EnvTarget &target,
                                       const QString &database,
                                       const QString &suffix) {
@@ -584,6 +697,19 @@ void TestDatabaseLive::engineWorkflow(DbEngine engine, const EnvTarget &target,
   QVERIFY(!info->columns[1].nullable);
   QVERIFY(info->columns[2].nullable);
   QVERIFY(!conn.databases().isEmpty());
+
+  QTRY_VERIFY_WITH_TIMEOUT(!conn.schemaLoading() && !conn.statisticsLoading(),
+                           15000);
+  QVERIFY2(conn.lastStatisticsError().isEmpty(),
+           qPrintable(conn.lastStatisticsError()));
+  const auto *storage = conn.statistics().table(info->schema, table);
+  QVERIFY2(storage, "table storage missing");
+  QVERIFY(storage->totalBytes > 0);
+  QVERIFY(storage->dataBytes >= 0);
+  QVERIFY(storage->indexBytes >= 0);
+  QCOMPARE(storage->totalBytes, storage->dataBytes + storage->indexBytes);
+  QVERIFY(storage->rowsEstimated);
+  QVERIFY(!conn.statistics().databases.isEmpty());
 
   if (engine == DbEngine::PostgreSql) {
 

@@ -57,6 +57,8 @@ class NotificationManager;
 class MarkdownPreviewPanel;
 class LatexPreviewPanel;
 struct DebugConfiguration;
+struct TestConfiguration;
+struct PythonBackendProject;
 struct DefinitionTarget;
 #ifdef HAVE_PDF_SUPPORT
 class PdfViewer;
@@ -481,6 +483,16 @@ private:
   void revealTestDock();
 
   void setupDatabaseMenu();
+  void updateInspectionFonts();
+  void setupBackendMenu();
+  void openBackendDatabase();
+  void configureBackend();
+  void openBackendEnvironment(const PythonBackendProject &project);
+  void runBackendCommand(const QString &title, const QString &program,
+                         const QStringList &arguments,
+                         const PythonBackendProject &project);
+  QPointer<Terminal> m_backendTerminal;
+  QString m_backendTerminalRoot;
   void ensureDatabasePanel();
   void showDatabasePanel(bool focusConsole = false);
   void toggleDatabasePanel();
@@ -573,6 +585,8 @@ private:
   bool startCompoundDebugConfigurationByName(const QString &compoundName);
   void startDebuggingForCurrentFile();
   void startDebuggingForFile(const QString &filePath);
+  void startDebuggingTests(const QStringList &targets,
+                           const TestConfiguration &configuration);
   void updateRunAndDebugActionLabels(const QString &fileName);
   void refreshRunAndDebugActionLabels();
 

@@ -1,291 +1,249 @@
 #include "sqlcompletion.h"
-
 #include "sqlkeywords.h"
-#include "sqlstatementsplitter.h"
-
+#include "sqlquerycontext.h"
 #include <QRegularExpression>
 #include <QSet>
 #include <algorithm>
 
 namespace {
-
-const QSet<QString> &nonAliasWords() {
-  static const QSet<QString> words = {
-      "where",   "on",        "inner", "left",   "right",  "full",      "cross",
-      "join",    "group",     "order", "having", "limit",  "union",     "set",
-      "using",   "natural",   "outer", "values", "select", "from",      "into",
-      "offset",  "fetch",     "for",   "window", "except", "intersect", "as",
-      "lateral", "returning", "top",   "with"};
-  return words;
-}
-
-QString unquote(QString s) {
-  s = s.trimmed();
-  if (s.size() >= 2 && ((s.startsWith('"') && s.endsWith('"')) ||
-                        (s.startsWith('`') && s.endsWith('`')) ||
-                        (s.startsWith('[') && s.endsWith(']')))) {
-    return s.mid(1, s.size() - 2);
+QString prefixName(QString name) {
+  if (name.startsWith('"') || name.startsWith('`') || name.startsWith('[')) {
+    const QChar quote = name[0], close = quote == '[' ? QChar(']') : quote;
+    name.remove(0, 1);
+    if (name.endsWith(close))
+      name.chop(1);
+    name.replace(QString(close) + close, QString(close));
   }
-  return s;
+  return name;
 }
-
-QString qualifierBefore(const QString &text, int end) {
-  int i = end;
-
-  if (i <= 0 || text[i - 1] != '.') {
-    return {};
-  }
-  --i;
-  int stop = i;
-  while (i > 0) {
-    const QChar c = text[i - 1];
-    if (c == '"' || c == '`' || c == ']') {
-      const QChar open = c == ']' ? QChar('[') : c;
-      int j = text.lastIndexOf(open, i - 2);
-      if (j < 0) {
-        break;
-      }
-      i = j;
-    } else if (c.isLetterOrNumber() || c == '_' || c == '$' || c == '.') {
-      --i;
-    } else {
-      break;
-    }
-  }
-  return text.mid(i, stop - i);
-}
-
 int rank(const QString &candidate, const QString &prefix) {
-  if (prefix.isEmpty()) {
+  if (prefix.isEmpty() || candidate.startsWith(prefix, Qt::CaseSensitive))
     return 0;
-  }
-  if (candidate.startsWith(prefix, Qt::CaseSensitive)) {
-    return 0;
-  }
-  if (candidate.startsWith(prefix, Qt::CaseInsensitive)) {
+  if (candidate.startsWith(prefix, Qt::CaseInsensitive))
     return 1;
-  }
-  if (candidate.contains(prefix, Qt::CaseInsensitive)) {
-    return 2;
-  }
-  return -1;
+  return candidate.contains(prefix, Qt::CaseInsensitive) ? 2 : -1;
 }
-
 } // namespace
 
 namespace SqlCompletion {
-
 QString identifierForInsert(DbEngine engine, const QString &name) {
-  static const QRegularExpression plain(QStringLiteral("^[a-z_][a-z0-9_]*$"));
-  static const QRegularExpression plainMixed(
-      QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
-  const QString lower = name.toLower();
-  const bool reserved = SqlKeywords::keywords().contains(name.toUpper());
-
-  const bool needsQuote =
-      reserved ||
-      (engine == DbEngine::PostgreSql ? !plain.match(name).hasMatch()
-                                      : !plainMixed.match(name).hasMatch());
-  Q_UNUSED(lower)
-  return needsQuote ? DbCatalog::quoteIdentifier(engine, name) : name;
+  static const QRegularExpression plain("^[a-z_][a-z0-9_]*$");
+  static const QRegularExpression mixed("^[A-Za-z_][A-Za-z0-9_]*$");
+  const bool quote =
+      SqlKeywords::keywords().contains(name.toUpper()) ||
+      !(engine == DbEngine::PostgreSql ? plain : mixed).match(name).hasMatch();
+  return quote ? DbCatalog::quoteIdentifier(engine, name) : name;
 }
 
 QHash<QString, QString> aliasMap(const QString &statement) {
-  QHash<QString, QString> map;
-  const QString sql = SqlStatementSplitter::stripComments(statement);
-  static const QRegularExpression re(
-      QStringLiteral("\\b(?:FROM|JOIN|UPDATE|INTO|TABLE)\\s+"
-                     "((?:(?:\"[^\"]+\"|`[^`]+`|\\[[^\\]]+\\]|[A-Za-z_][\\w$]*)"
-                     "\\.?){1,3})"
-                     "(?:\\s+(?:AS\\s+)?(\"[^\"]+\"|`[^`]+`|\\[[^\\]]+\\]|"
-                     "[A-Za-z_][\\w$]*))?"),
-      QRegularExpression::CaseInsensitiveOption);
-  auto it = re.globalMatch(sql);
-  while (it.hasNext()) {
-    const auto m = it.next();
-    const QString table = m.captured(1);
-    const QString alias = unquote(m.captured(2));
-    QString bare = table;
-    const int dot = bare.lastIndexOf('.');
-    if (dot >= 0) {
-      bare = bare.mid(dot + 1);
-    }
-    map.insert(unquote(bare).toLower(), table);
-    if (!alias.isEmpty() && !nonAliasWords().contains(alias.toLower())) {
-      map.insert(alias.toLower(), table);
-    }
+  QHash<QString, QString> aliases;
+  const auto context = SqlQueryContext::analyze(statement, statement.size(),
+                                                DbEngine::PostgreSql);
+  for (const auto &source : context.sources) {
+    if (source.name.isEmpty())
+      continue;
+    aliases[source.name.toLower()] = source.qualifiedName;
+    if (!source.alias.isEmpty())
+      aliases[source.alias.toLower()] = source.qualifiedName;
   }
-  return map;
+  return aliases;
 }
-
 QStringList referencedTables(const QString &statement) {
-  QStringList out;
-  const auto map = aliasMap(statement);
-  for (auto it = map.begin(); it != map.end(); ++it) {
-    if (!out.contains(it.value())) {
-      out << it.value();
-    }
-  }
-  return out;
+  QStringList names;
+  for (const auto &name : aliasMap(statement))
+    if (!names.contains(name))
+      names << name;
+  return names;
 }
 
 QVector<SqlSuggestion> suggest(const DbSchema *schema, DbEngine engine,
                                const QString &before, const QString &full,
                                const QString &prefixIn) {
-  QVector<SqlSuggestion> out;
-  const QString prefix = unquote(prefixIn);
-  const int prefixStart = before.size() - prefixIn.size();
-  const QString qualifier = qualifierBefore(before, prefixStart);
-
+  QVector<SqlSuggestion> suggestions;
+  const QString prefix = prefixName(prefixIn);
+  const int prefixStart = qMax(0, int(before.size() - prefixIn.size()));
+  const auto context =
+      SqlQueryContext::analyze(full, prefixStart, engine, schema);
+  if (context.inCommentOrString)
+    return suggestions;
+  const auto qualifier = SqlQueryContext::qualifierBefore(before, prefixStart);
+  const bool quotedPrefix = prefixIn.startsWith('"') ||
+                            prefixIn.startsWith('`') ||
+                            prefixIn.startsWith('[');
+  auto identifier = [&](const QString &name) {
+    if (!quotedPrefix)
+      return identifierForInsert(engine, name);
+    const QChar open = prefixIn[0], close = open == '[' ? QChar(']') : open;
+    QString escaped = name;
+    escaped.replace(QString(close), QString(close) + close);
+    return QString(open) + escaped + close;
+  };
+  QSet<QString> seen;
   auto add = [&](const QString &label, const QString &insert,
                  const QString &detail, SqlSuggestion::Kind kind,
-                 int basePrio) {
-    const int r = rank(label, prefix);
-    if (r < 0) {
+                 int priority) {
+    if (label.isEmpty())
       return;
-    }
-    SqlSuggestion s;
-    s.label = label;
-    s.insertText = insert;
-    s.detail = detail;
-    s.kind = kind;
-    s.priority = basePrio + r * 10;
-    out.append(s);
+    const int match = rank(label, prefix);
+    const QString key = QString::number(int(kind)) + ':' + insert;
+    if (match < 0 || seen.contains(key))
+      return;
+    seen.insert(key);
+    suggestions << SqlSuggestion{label, insert, detail, kind,
+                                 priority + match * 10};
   };
-
-  auto addColumns = [&](const DbTableInfo &t, bool withTable, int prio) {
-    for (const DbColumnInfo &c : t.columns) {
-      QString detail = c.type;
-      if (c.primaryKey) {
+  auto columns = [&](const SqlQueryContext::Source &source, bool showSource,
+                     int priority, const QHash<QString, int> &duplicates = {}) {
+    for (const auto &column : source.columns) {
+      QString detail = column.type;
+      if (column.primaryKey)
         detail += QStringLiteral(" · key");
-      }
-      if (withTable) {
-        detail = t.name + QStringLiteral(" · ") + detail;
-      }
-      add(c.name, identifierForInsert(engine, c.name), detail,
-          SqlSuggestion::Kind::Column, prio);
+      if (showSource)
+        detail = (source.alias.isEmpty() ? source.name : source.alias) + " · " +
+                 detail;
+      QString insert = identifier(column.name);
+      if (duplicates.value(column.name.toLower()) > 1 &&
+          !source.alias.isEmpty())
+        insert = identifierForInsert(engine, source.alias) + '.' + insert;
+      add(column.name, insert, detail, SqlSuggestion::Kind::Column, priority);
     }
   };
-
   if (!qualifier.isEmpty()) {
-    if (!schema) {
-      return out;
-    }
-    const auto aliases = aliasMap(full);
-    QString key = unquote(qualifier.section('.', -1)).toLower();
-    const DbTableInfo *table = nullptr;
-    if (qualifier.contains('.')) {
-      table = schema->findByName(qualifier);
-    }
-    if (!table && aliases.contains(key)) {
-      table = schema->findByName(aliases.value(key));
-    }
-    if (!table) {
-      table = schema->findByName(qualifier);
-    }
-    if (table) {
-      addColumns(*table, false, 10);
-
-      std::stable_sort(out.begin(), out.end(),
-                       [](const SqlSuggestion &a, const SqlSuggestion &b) {
-                         return a.priority < b.priority;
-                       });
-      return out;
-    }
-
-    const QString schemaName = unquote(qualifier.section('.', -1));
-    for (const DbTableInfo &t : schema->tables) {
-      if (t.schema.compare(schemaName, Qt::CaseInsensitive) == 0) {
-        add(t.name, identifierForInsert(engine, t.name),
-            t.isView ? QStringLiteral("view") : QStringLiteral("table"),
-            t.isView ? SqlSuggestion::Kind::View : SqlSuggestion::Kind::Table,
-            10);
+    const QString name = qualifier.last();
+    const SqlQueryContext::Source *match = nullptr;
+    for (const auto &source : context.sources) {
+      const bool hit =
+          qualifier.size() == 1
+              ? source.alias.compare(name, Qt::CaseInsensitive) == 0
+              : source.alias == source.name &&
+                    source.name.compare(name, Qt::CaseInsensitive) == 0 &&
+                    source.schema.compare(qualifier[qualifier.size() - 2],
+                                          Qt::CaseInsensitive) == 0;
+      if (hit) {
+        match = &source;
+        break;
       }
     }
-    return out;
-  }
-
-  static const QRegularExpression lastKeyword(
-      QStringLiteral("\\b(SELECT|FROM|JOIN|INTO|UPDATE|TABLE|WHERE|ON|BY|SET|"
-                     "HAVING|AND|OR|VALUES|WHEN|THEN|ELSE|DISTINCT|TOP)\\b"
-                     "(?![\\s\\S]*\\b(?:SELECT|FROM|JOIN|INTO|UPDATE|TABLE|"
-                     "WHERE|ON|BY|SET|HAVING|VALUES)\\b)"),
-      QRegularExpression::CaseInsensitiveOption);
-  const QString head =
-      SqlStatementSplitter::stripComments(before.left(prefixStart));
-  const auto lk = lastKeyword.match(head);
-  const QString kw = lk.hasMatch() ? lk.captured(1).toUpper() : QString();
-  const bool wantsTables = kw == "FROM" || kw == "JOIN" || kw == "INTO" ||
-                           kw == "UPDATE" || kw == "TABLE";
-  const bool wantsColumns = kw == "SELECT" || kw == "WHERE" || kw == "ON" ||
-                            kw == "BY" || kw == "SET" || kw == "HAVING" ||
-                            kw == "AND" || kw == "OR" || kw == "WHEN" ||
-                            kw == "THEN" || kw == "ELSE" || kw == "DISTINCT" ||
-                            kw == "TOP" || kw == "VALUES";
-
-  if (schema) {
-    const int tablePrio = wantsTables ? 10 : 60;
-    const int schemaPrio = wantsTables ? 20 : 70;
-    const int columnPrio = wantsColumns ? 10 : 50;
-    for (const DbTableInfo &t : schema->tables) {
-      add(t.name, identifierForInsert(engine, t.name),
-          (t.isView ? QStringLiteral("view") : QStringLiteral("table")) +
-              (t.schema.isEmpty() || engine == DbEngine::Sqlite
-                   ? QString()
-                   : QStringLiteral(" · ") + t.schema),
-          t.isView ? SqlSuggestion::Kind::View : SqlSuggestion::Kind::Table,
-          tablePrio);
+    if (!match && qualifier.size() == 1)
+      for (const auto &cte : context.commonTables)
+        if (cte.name.compare(name, Qt::CaseInsensitive) == 0) {
+          match = &cte;
+          break;
+        }
+    const bool tablePosition =
+        context.keyword == "FROM" || context.keyword == "JOIN" ||
+        context.keyword == "INTO" || context.keyword == "UPDATE" ||
+        context.keyword == "TABLE";
+    if (match && !(tablePosition && !match->columnsKnown &&
+                   match->kind == SqlQueryContext::SourceKind::Table)) {
+      columns(*match, false, 10);
+      std::stable_sort(
+          suggestions.begin(), suggestions.end(),
+          [](const auto &a, const auto &b) { return a.priority < b.priority; });
+      return suggestions;
+    } else if (schema) {
+      const DbTableInfo *table =
+          qualifier.size() > 1
+              ? schema->find(qualifier[qualifier.size() - 2], name)
+              : schema->findByName(name);
+      if (table) {
+        SqlQueryContext::Source source;
+        source.columns = table->columns;
+        columns(source, false, 10);
+      } else
+        for (const auto &candidate : schema->tables)
+          if (candidate.schema.compare(name, Qt::CaseInsensitive) == 0)
+            add(candidate.name, identifier(candidate.name),
+                candidate.isView ? "view" : "table",
+                candidate.isView ? SqlSuggestion::Kind::View
+                                 : SqlSuggestion::Kind::Table,
+                10);
     }
-    if (wantsTables || prefix.size() >= 1) {
-      QSet<QString> seen;
-      for (const DbTableInfo &t : schema->tables) {
-        if (!t.schema.isEmpty() && engine != DbEngine::Sqlite &&
-            !seen.contains(t.schema)) {
-          seen.insert(t.schema);
-          add(t.schema, identifierForInsert(engine, t.schema),
-              QStringLiteral("schema"), SqlSuggestion::Kind::Schema,
-              schemaPrio);
+  } else {
+    const QString keyword = context.keyword;
+    const bool tablesWanted = keyword == "FROM" || keyword == "JOIN" ||
+                              keyword == "INTO" || keyword == "UPDATE" ||
+                              keyword == "TABLE";
+    const bool columnsWanted = !tablesWanted && !keyword.isEmpty();
+    QSet<QString> commonNames;
+    for (const auto &cte : context.commonTables) {
+      commonNames.insert(cte.name.toLower());
+      add(cte.name, identifier(cte.name),
+          QStringLiteral("CTE · %1 columns").arg(cte.columns.size()),
+          SqlSuggestion::Kind::Table, tablesWanted ? 5 : 55);
+    }
+    if (schema) {
+      QHash<QString, int> names;
+      for (const auto &table : schema->tables)
+        ++names[table.name.toLower()];
+      QSet<QString> schemas;
+      for (const auto &table : schema->tables) {
+        if (!commonNames.contains(table.name.toLower())) {
+          const QString insert =
+              names[table.name.toLower()] > 1 && !table.schema.isEmpty()
+                  ? identifierForInsert(engine, table.schema) + '.' +
+                        identifier(table.name)
+                  : identifier(table.name);
+          add(table.name, insert,
+              (table.isView ? "view" : "table") +
+                  (table.schema.isEmpty() ? QString() : " · " + table.schema),
+              table.isView ? SqlSuggestion::Kind::View
+                           : SqlSuggestion::Kind::Table,
+              tablesWanted ? 10 : 60);
+        }
+        if (!table.schema.isEmpty() && !schemas.contains(table.schema) &&
+            engine != DbEngine::Sqlite) {
+          schemas.insert(table.schema);
+          add(table.schema, identifier(table.schema), "schema",
+              SqlSuggestion::Kind::Schema, tablesWanted ? 20 : 70);
         }
       }
     }
-    if (wantsColumns || kw.isEmpty()) {
-      QSet<QString> done;
-      for (const QString &ref : referencedTables(full)) {
-        if (const DbTableInfo *t = schema->findByName(ref)) {
-          const QString id = t->schema + '.' + t->name;
-          if (!done.contains(id)) {
-            done.insert(id);
-            addColumns(*t, true, columnPrio);
-          }
-        }
+    if (columnsWanted || keyword.isEmpty()) {
+      QHash<QString, int> duplicates;
+      for (const auto &source : context.sources)
+        for (const auto &column : source.columns)
+          ++duplicates[column.name.toLower()];
+      for (const auto &source : context.sources) {
+        columns(source, true, 10, duplicates);
+        if (!source.alias.isEmpty() && source.alias != source.name)
+          add(source.alias, identifier(source.alias) + '.',
+              source.kind == SqlQueryContext::SourceKind::Subquery
+                  ? "subquery alias"
+                  : "table alias · " + source.name,
+              SqlSuggestion::Kind::Table, 30);
       }
+      const bool aliasesAllowed =
+          keyword == "ORDER BY" ||
+          (keyword == "GROUP BY" && engine != DbEngine::SqlServer) ||
+          (keyword == "HAVING" &&
+           (engine == DbEngine::Sqlite || engine == DbEngine::MySql));
+      if (aliasesAllowed)
+        for (const auto &column : context.outputAliases)
+          add(column.name, identifier(column.name), "SELECT alias",
+              SqlSuggestion::Kind::Column, 5);
+    }
+    if (!quotedPrefix) {
+      const bool lower = !prefixIn.isEmpty() && prefixIn == prefixIn.toLower();
+      auto cased = [&](const QString &name) {
+        return lower ? name.toLower() : name;
+      };
+      for (const auto &name : SqlKeywords::keywords())
+        add(cased(name), cased(name), "keyword", SqlSuggestion::Kind::Keyword,
+            40);
+      for (const auto &name : SqlKeywords::functions())
+        add(cased(name), cased(name) + '(', "function",
+            SqlSuggestion::Kind::Function, 45);
+      for (const auto &name : SqlKeywords::types())
+        add(cased(name), cased(name), "type", SqlSuggestion::Kind::Type, 50);
     }
   }
-
-  const bool lower = !prefixIn.isEmpty() && prefixIn == prefixIn.toLower();
-  auto cased = [&](const QString &w) { return lower ? w.toLower() : w; };
-  const int kwPrio = 40;
-  for (const QString &k : SqlKeywords::keywords()) {
-    add(cased(k), cased(k), QStringLiteral("keyword"),
-        SqlSuggestion::Kind::Keyword, kwPrio);
-  }
-  for (const QString &f : SqlKeywords::functions()) {
-    add(cased(f), cased(f) + QStringLiteral("("), QStringLiteral("function"),
-        SqlSuggestion::Kind::Function, kwPrio + 5);
-  }
-  for (const QString &t : SqlKeywords::types()) {
-    add(cased(t), cased(t), QStringLiteral("type"), SqlSuggestion::Kind::Type,
-        kwPrio + 10);
-  }
-
-  std::stable_sort(out.begin(), out.end(),
-                   [](const SqlSuggestion &a, const SqlSuggestion &b) {
-                     if (a.priority != b.priority) {
+  std::stable_sort(suggestions.begin(), suggestions.end(),
+                   [](const auto &a, const auto &b) {
+                     if (a.priority != b.priority)
                        return a.priority < b.priority;
-                     }
                      return a.label.compare(b.label, Qt::CaseInsensitive) < 0;
                    });
-  return out;
+  return suggestions;
 }
-
 } // namespace SqlCompletion

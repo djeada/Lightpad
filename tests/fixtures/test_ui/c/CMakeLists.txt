@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+project(CChecks C)
+enable_testing()
+add_executable(c_tests test_math.c)
+add_test(NAME test_addition COMMAND c_tests pass)
+add_test(NAME test_failure COMMAND c_tests fail)
+add_test(NAME test_skipped COMMAND c_tests skip)
+set_tests_properties(test_skipped PROPERTIES SKIP_RETURN_CODE 77)

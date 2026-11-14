@@ -1,4 +1,8 @@
 #include "testdiscovery.h"
+#include "pytestintegration.h"
+#include "python/pythonbackendproject.h"
+#include "python/pythonprojectenvironment.h"
+#include "testsource.h"
 
 #include "core/logging/logger.h"
 
@@ -35,6 +39,8 @@ void CTestDiscoveryAdapter::discover(const QString &buildDir) {
 }
 
 void CTestDiscoveryAdapter::cancel() {
+  if (m_process)
+    m_process->disconnect(this);
   if (m_process && m_process->state() != QProcess::NotRunning) {
     m_process->kill();
     m_process->waitForFinished(3000);
@@ -99,20 +105,27 @@ CTestDiscoveryAdapter::parseJsonOutput(const QByteArray &data) {
   QJsonObject root = doc.object();
   QJsonArray tests = root["tests"].toArray();
 
+  int ordinal = 0;
+  const QJsonObject graph = root["backtraceGraph"].toObject();
   for (const QJsonValue &val : tests) {
+    ++ordinal;
     QJsonObject testObj = val.toObject();
     DiscoveredTest test;
     test.name = testObj["name"].toString();
-    test.id = QString::number(testObj["index"].toInt());
-
-    if (test.id == "0")
-      test.id = test.name;
-
-    QJsonArray properties = testObj["properties"].toArray();
-    for (const QJsonValue &propVal : properties) {
-      QJsonObject prop = propVal.toObject();
-      if (prop["name"].toString() == "WORKING_DIRECTORY")
-        test.filePath = prop["value"].toString();
+    test.id = QString::number(ordinal);
+    if (testObj.contains("backtrace")) {
+      const auto nodes = graph["nodes"].toArray();
+      const int backtrace = testObj["backtrace"].toInt(-1);
+      const auto node = backtrace >= 0 && backtrace < nodes.size()
+                            ? nodes.at(backtrace).toObject()
+                            : QJsonObject();
+      if (node.contains("file") && node.contains("line")) {
+        const auto files = graph["files"].toArray();
+        const int index = node["file"].toInt(-1);
+        if (index >= 0 && index < files.size())
+          test.filePath = files.at(index).toString();
+        test.line = node["line"].toInt();
+      }
     }
 
     if (!test.name.isEmpty())
@@ -172,6 +185,8 @@ void GTestDiscoveryAdapter::discover(const QString &buildDir) {
 }
 
 void GTestDiscoveryAdapter::cancel() {
+  if (m_process)
+    m_process->disconnect(this);
   if (m_process && m_process->state() != QProcess::NotRunning) {
     m_process->kill();
     m_process->waitForFinished(3000);
@@ -272,11 +287,45 @@ void PytestDiscoveryAdapter::discover(const QString &workDir) {
           &PytestDiscoveryAdapter::onProcessFinished);
 
   reportStartFailure(m_process);
-  m_process->start("python3",
-                   {"-m", "pytest", "--collect-only", "-q", "--no-header"});
+  const QString workspace =
+      m_workspaceFolder.isEmpty() ? workDir : m_workspaceFolder;
+  const auto backend = PythonBackendProject::discover(workspace);
+  const auto python =
+      PythonProjectEnvironment::resolve(backend.pythonPreference(), workspace);
+  auto environment = QProcessEnvironment::systemEnvironment();
+  auto extra = PythonProjectEnvironment::activationEnvironment(python);
+  if (backend.isValid())
+    extra["PYTHONPATH"] = backend.environment().value("PYTHONPATH");
+  for (auto it = extra.begin(); it != extra.end(); ++it)
+    environment.insert(it.key(), it.value());
+  for (auto it = m_configuration.env.begin(); it != m_configuration.env.end();
+       ++it)
+    environment.insert(it.key(), PythonProjectEnvironment::substituteVariables(
+                                     it.value(), workspace, {}, workDir,
+                                     backend.pythonPreference()));
+  QString program =
+      python.interpreter.isEmpty() ? QString("python3") : python.interpreter;
+  QStringList arguments{"-m", "pytest"};
+  if (PytestIntegration::supports(m_configuration.command,
+                                  m_configuration.args)) {
+    program = m_configuration.command == "${python}"
+                  ? program
+                  : TestConfigurationManager::substituteVariables(
+                        m_configuration.command, {}, workspace);
+    arguments = TestConfigurationManager::substituteArguments(
+        m_configuration.command, m_configuration.args, {}, workspace, {});
+  }
+  arguments << "--collect-only" << "-q" << "--no-header";
+  m_reporterDirectory = std::make_unique<QTemporaryDir>();
+  PytestIntegration::install(*m_reporterDirectory, environment, arguments,
+                             program);
+  m_process->setProcessEnvironment(environment);
+  m_process->start(program, arguments);
 }
 
 void PytestDiscoveryAdapter::cancel() {
+  if (m_process)
+    m_process->disconnect(this);
   if (m_process && m_process->state() != QProcess::NotRunning) {
     m_process->kill();
     m_process->waitForFinished(3000);
@@ -296,6 +345,13 @@ void PytestDiscoveryAdapter::onProcessFinished(int exitCode,
 
   if (status != QProcess::NormalExit || (exitCode != 0 && exitCode != 5)) {
     QString err = QString::fromUtf8(stderrData).trimmed();
+    QStringList outputLines;
+    for (const QString &line : QString::fromUtf8(stdoutData).split('\n'))
+      if (PytestIntegration::record(line).isEmpty())
+        outputLines << line;
+    const QString output = outputLines.join('\n').trimmed();
+    if (!output.isEmpty())
+      err = output + (err.isEmpty() ? QString() : '\n' + err);
     if (err.isEmpty())
       err = tr("pytest exited with code %1").arg(exitCode);
     emit discoveryError(err);
@@ -311,10 +367,21 @@ void PytestDiscoveryAdapter::onProcessFinished(int exitCode,
 QList<DiscoveredTest>
 PytestDiscoveryAdapter::parseCollectOutput(const QString &output) {
   QList<DiscoveredTest> results;
+  QList<DiscoveredTest> structured;
 
   const QStringList lines = output.split('\n');
   for (const QString &rawLine : lines) {
     QString line = rawLine.trimmed();
+    const auto record = PytestIntegration::record(line);
+    if (record.value("event") == "collected") {
+      DiscoveredTest test;
+      test.id = record.value("id").toString();
+      test.name = record.value("name").toString();
+      test.filePath = record.value("file").toString();
+      test.line = record.value("line").toInt(-1);
+      structured << test;
+      continue;
+    }
     if (line.isEmpty() || line.startsWith("no tests") ||
         line.startsWith("===") || line.startsWith("---"))
       continue;
@@ -345,7 +412,7 @@ PytestDiscoveryAdapter::parseCollectOutput(const QString &output) {
       results.append(test);
   }
 
-  return results;
+  return structured.isEmpty() ? results : structured;
 }
 
 GoTestDiscoveryAdapter::GoTestDiscoveryAdapter(QObject *parent)
@@ -373,6 +440,8 @@ void GoTestDiscoveryAdapter::discover(const QString &workDir) {
 }
 
 void GoTestDiscoveryAdapter::cancel() {
+  if (m_process)
+    m_process->disconnect(this);
   if (m_process && m_process->state() != QProcess::NotRunning) {
     m_process->kill();
     m_process->waitForFinished(3000);
@@ -458,6 +527,8 @@ void CargoTestDiscoveryAdapter::discover(const QString &workDir) {
 }
 
 void CargoTestDiscoveryAdapter::cancel() {
+  if (m_process)
+    m_process->disconnect(this);
   if (m_process && m_process->state() != QProcess::NotRunning) {
     m_process->kill();
     m_process->waitForFinished(3000);
@@ -472,6 +543,7 @@ void CargoTestDiscoveryAdapter::onProcessFinished(int exitCode,
 
   QByteArray stdoutData = m_process->readAllStandardOutput();
   QByteArray stderrData = m_process->readAllStandardError();
+  const QString workspace = m_process->workingDirectory();
 
   disposeProcess(m_process);
 
@@ -484,6 +556,8 @@ void CargoTestDiscoveryAdapter::onProcessFinished(int exitCode,
   }
 
   QList<DiscoveredTest> tests = parseListOutput(QString::fromUtf8(stdoutData));
+  for (auto &test : tests)
+    TestSource::rustDefinition(workspace, test.id, &test.filePath, &test.line);
   LOG_INFO(QString("Cargo test discovery found %1 tests").arg(tests.size()));
   emit discoveryFinished(tests);
 }
@@ -542,10 +616,23 @@ void JestDiscoveryAdapter::discover(const QString &workDir) {
           &JestDiscoveryAdapter::onProcessFinished);
 
   reportStartFailure(m_process);
-  m_process->start("npx", {"jest", "--listTests"});
+  m_reporterDirectory = std::make_unique<QTemporaryDir>();
+  QFile source(":/test_templates/lightpad_jest_discover.cjs");
+  const QString script = m_reporterDirectory->filePath("discover.cjs");
+  QFile target(script);
+  if (!source.open(QIODevice::ReadOnly) || !target.open(QIODevice::WriteOnly)) {
+    disposeProcess(m_process);
+    emit discoveryError(tr("Cannot load the bundled Jest discovery script."));
+    return;
+  }
+  target.write(source.readAll());
+  target.close();
+  m_process->start("node", {script});
 }
 
 void JestDiscoveryAdapter::cancel() {
+  if (m_process)
+    m_process->disconnect(this);
   if (m_process && m_process->state() != QProcess::NotRunning) {
     m_process->kill();
     m_process->waitForFinished(3000);
@@ -579,6 +666,24 @@ void JestDiscoveryAdapter::onProcessFinished(int exitCode,
 QList<DiscoveredTest>
 JestDiscoveryAdapter::parseListOutput(const QString &output) {
   QList<DiscoveredTest> results;
+  const auto document = QJsonDocument::fromJson(output.toUtf8());
+  if (document.isArray()) {
+    for (const auto &value : document.array()) {
+      if (value.isString()) {
+        const QString file = value.toString();
+        results << DiscoveredTest{
+            QFileInfo(file).fileName(), file, file, file, 1, true};
+      } else {
+        const auto entry = value.toObject();
+        const QString file = entry["file"].toString();
+        results << DiscoveredTest{
+            entry["name"].toString(), file,
+            entry["id"].toString(),   file,
+            entry["line"].toInt(-1),  entry["isFile"].toBool()};
+      }
+    }
+    return results;
+  }
 
   const QStringList lines = output.split('\n');
   for (const QString &rawLine : lines) {
@@ -591,6 +696,7 @@ JestDiscoveryAdapter::parseListOutput(const QString &output) {
     test.filePath = line;
     test.name = fi.fileName();
     test.id = line;
+    test.isFile = true;
 
     test.suite = fi.dir().dirName();
 
@@ -606,7 +712,8 @@ TestDiscoveryAdapterFactory::createForConfiguration(const QString &configId,
                                                     QObject *parent) {
   if (configId == "pytest")
     return new PytestDiscoveryAdapter(parent);
-  if (configId == "gtest_cmake" || configId == "gtest_make")
+  if (configId == "gtest_cmake" || configId == "gtest_make" ||
+      configId == "ctest_c")
     return new CTestDiscoveryAdapter(parent);
   if (configId == "go_test")
     return new GoTestDiscoveryAdapter(parent);

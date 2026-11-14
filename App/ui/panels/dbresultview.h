@@ -68,6 +68,7 @@ public:
                  const QString &tableName = QString(), qint64 elapsedMs = -1);
   const DbResultSet &result() const { return m_model->result(); }
   void applyTheme(const Theme &theme);
+  void setContentFont(const QFont &font);
   void configureTableBrowser(const DbTableInfo &table, DbEngine engine);
   void setPageResult(const DbResultSet &result, qint64 elapsedMs);
   void setLoading(bool loading);

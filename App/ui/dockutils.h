@@ -46,6 +46,35 @@ inline void configureToolPanelDock(QDockWidget *dock) {
   layout->addWidget(title, 1);
   QObject::connect(dock, &QDockWidget::windowTitleChanged, title,
                    &QLabel::setText);
+  auto *expandButton = new QToolButton(titleBar);
+  expandButton->setObjectName("toolPanelExpand");
+  expandButton->setText(QObject::tr("Expand"));
+  expandButton->setToolTip(
+      QObject::tr("Expand this panel in a full-size window"));
+  expandButton->setAccessibleName(QObject::tr("Expand panel"));
+  expandButton->setAutoRaise(true);
+  expandButton->setStyleSheet("QToolButton { min-width: 72px; max-width: "
+                              "16777215px; padding: 0 8px; font-size: 12px; }");
+  layout->addWidget(expandButton);
+  QObject::connect(expandButton, &QToolButton::clicked, dock, [dock]() {
+    if (dock->isFloating()) {
+      dock->setFloating(false);
+    } else {
+      dock->setFloating(true);
+      dock->showMaximized();
+    }
+  });
+  QObject::connect(
+      dock, &QDockWidget::topLevelChanged, expandButton,
+      [expandButton](bool floating) {
+        expandButton->setText(floating ? QObject::tr("Restore")
+                                       : QObject::tr("Expand"));
+        const auto description =
+            floating ? QObject::tr("Return panel to the workspace")
+                     : QObject::tr("Expand this panel in a full-size window");
+        expandButton->setToolTip(description);
+        expandButton->setAccessibleName(description);
+      });
   auto *floatButton = new QToolButton(titleBar);
   floatButton->setObjectName("toolPanelFloat");
   floatButton->setText(QStringLiteral("\u2197"));

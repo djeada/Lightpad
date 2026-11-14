@@ -22,6 +22,7 @@ Lightpad is a Qt 6-based code editor with a modern UI, built-in language tooling
 - Problems panel, breadcrumbs, minimap, and integrated terminal
 - Run and format templates with per-project assignments
 - Project-aware Cargo, Go package, and npm runs, with Rust/Go checks and Node.js language tooling
+- FastAPI/Flask backend detection, shared Python environments, project database discovery, and pytest endpoint debugging
 - Database workbench: SQLite, SQL Server, PostgreSQL and MySQL/MariaDB (also inside Docker containers) with multiple connections, schema browser, result grids, exports, column insights and schema-aware SQL completion
 - Image viewer and optional PDF viewer (Qt6Pdf)
 
@@ -93,6 +94,7 @@ Lightpad stores project-specific settings in a `.lightpad/` directory at the pro
 - `run_config.json` for run template assignments
 - `format_config.json` for formatter assignments
 - `highlight_config.json` for language overrides
+- `backend.json` for optional Python web application settings and project tasks
 - `debug/launch.json`, `debug/breakpoints.json`, `debug/watches.json`
 
 User settings are stored in:
@@ -117,6 +119,7 @@ Plugins are discovered from:
 - Syntax plugins: docs/SYNTAX_PLUGINS.md
 - Rust, Go, and Node.js workflows: [docs/RUST_GO_NODEJS.md](docs/RUST_GO_NODEJS.md)
 - Database tools: docs/DATABASE_TOOLS.md
+- Python backend workflows and gap audit: [docs/PYTHON_BACKENDS.md](docs/PYTHON_BACKENDS.md)
 
 ## Contributing
 See CONTRIBUTING.md for the workflow and guidelines.

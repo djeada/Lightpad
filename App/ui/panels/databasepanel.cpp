@@ -1,4 +1,5 @@
 #include "databasepanel.h"
+#include "../paneltypography.h"
 
 #include "../../database/csvimport.h"
 #include "../../database/dbcatalog.h"
@@ -26,7 +27,9 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QLineEdit>
+#include <QLocale>
 #include <QMenu>
 #include <QPainter>
 #include <QScrollBar>
@@ -82,8 +85,13 @@ public:
     initStyleOption(&opt, index);
     const QFontMetrics fm(opt.font);
 
-    const int maxNote = qMax(40, option.rect.width() * 45 / 100);
-    const QString shown = fm.elidedText(note, Qt::ElideRight, maxNote);
+    const int nameWidth =
+        fm.horizontalAdvance(opt.text) + opt.decorationSize.width() + 16;
+    if (option.rect.width() < nameWidth + fm.horizontalAdvance(note) + 16) {
+      QStyledItemDelegate::paint(painter, option, index);
+      return;
+    }
+    const QString shown = note;
     const int noteWidth = fm.horizontalAdvance(shown) + 10;
     QStyleOptionViewItem nameOpt = opt;
     nameOpt.rect.adjust(0, 0, -noteWidth, 0);
@@ -164,6 +172,19 @@ void DatabasePanel::buildUi() {
   headingFont.setBold(true);
   browserTitle->setFont(headingFont);
   browserHeading->addWidget(browserTitle, 1);
+  m_browserActions = new QToolButton(browserHeader);
+  m_browserActions->setObjectName("dbObjectActions");
+  m_browserActions->setText(tr("Actions"));
+  m_browserActions->setToolTip(
+      tr("Actions for the selected connection, table, or column (Shift+F10)"));
+  m_browserActions->setEnabled(false);
+  browserHeading->addWidget(m_browserActions);
+  connect(m_browserActions, &QToolButton::clicked, this, [this] {
+    if (auto *item = m_tree->currentItem()) {
+      m_tree->scrollToItem(item);
+      onTreeContextMenu(QPoint(-1, -1));
+    }
+  });
   auto *addConnection = new QToolButton(browserHeader);
   addConnection->setDefaultAction(m_addAction);
   addConnection->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -179,8 +200,11 @@ void DatabasePanel::buildUi() {
 
   m_tree = new QTreeWidget(left);
   m_tree->setObjectName("dbTree");
-  m_tree->setColumnCount(1);
-  m_tree->setHeaderHidden(true);
+  m_tree->setHeaderLabels({tr("Object"), tr("Size")});
+  m_tree->header()->setStretchLastSection(false);
+  m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+  m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+  m_tree->setAccessibleName(tr("Database objects and storage sizes"));
   m_tree->setItemDelegate(new SchemaTreeDelegate(m_tree));
   m_tree->setTextElideMode(Qt::ElideRight);
   m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -189,6 +213,11 @@ void DatabasePanel::buildUi() {
   m_tree->setAnimated(false);
   m_tree->setEditTriggers(QAbstractItemView::NoEditTriggers);
   m_tree->setExpandsOnDoubleClick(false);
+  m_tree->installEventFilter(this);
+  connect(m_tree, &QTreeWidget::itemSelectionChanged, this, [this] {
+    m_browserActions->setEnabled(connectionFromItem(m_tree->currentItem()) !=
+                                 nullptr);
+  });
   leftLayout->addWidget(m_tree, 1);
   m_mainSplitter->addWidget(left);
 
@@ -202,6 +231,20 @@ void DatabasePanel::buildUi() {
   m_colorStrip = new QWidget(consoleHost);
   m_colorStrip->setFixedHeight(3);
   consoleLayout->addWidget(m_colorStrip);
+  auto *consoleHeading = new QWidget(consoleHost);
+  consoleHeading->setObjectName("dbConsoleHeading");
+  auto *headingLayout = new QHBoxLayout(consoleHeading);
+  headingLayout->setContentsMargins(10, 5, 10, 5);
+  auto *consoleTitle = new QLabel(tr("SQL Console"), consoleHeading);
+  auto consoleHeadingFont = consoleTitle->font();
+  consoleHeadingFont.setBold(true);
+  consoleTitle->setFont(consoleHeadingFont);
+  headingLayout->addWidget(consoleTitle);
+  headingLayout->addStretch(1);
+  auto *consoleHint = new QLabel(tr("Ctrl+Enter to run"), consoleHeading);
+  consoleHint->setWordWrap(true);
+  headingLayout->addWidget(consoleHint);
+  consoleLayout->addWidget(consoleHeading);
   m_console = new SqlConsoleEdit(consoleHost);
   consoleLayout->addWidget(m_console, 1);
   m_console->setSchemaProvider([this]() -> const DbSchema * {
@@ -245,6 +288,20 @@ void DatabasePanel::buildUi() {
 
   m_insights = new DbInsightsView(m_outputTabs);
   m_outputTabs->addTab(m_insights, tr("Insights"));
+  m_storage = new DbStorageView(m_outputTabs);
+  m_outputTabs->addTab(m_storage, tr("Storage"));
+  connect(m_storage, &DbStorageView::browseTableRequested, this,
+          [this](const QString &schema, const QString &name) {
+            if (auto *conn = activeConnection())
+              if (const auto *table = conn->schema().find(schema, name))
+                previewTable(conn, *table);
+          });
+  connect(m_storage, &DbStorageView::countRowsRequested, this,
+          [this](const QString &schema, const QString &name) {
+            if (auto *conn = activeConnection())
+              if (const auto *table = conn->schema().find(schema, name))
+                countRows(conn, *table);
+          });
   m_rightSplitter->addWidget(m_outputTabs);
 
   m_rightSplitter->setStretchFactor(0, 1);
@@ -527,12 +584,12 @@ void DatabasePanel::applyTheme(const Theme &theme) {
           "QLineEdit#dbFilter:focus { border-bottom: 1px solid %7; }"
           "QTreeWidget#dbTree { background: %1; color: %6; border: none; "
           "outline: none; }"
-          "QTreeWidget#dbTree::item { height: 24px; }"
+          "QTreeWidget#dbTree::item { padding: 4px 8px; }"
           "QTreeWidget#dbTree::item:hover { background: %4; }"
           "QTreeWidget#dbTree::item:selected { background: %8; color: %6; }"
           "QSplitter::handle { background: %3; }"
-          "QSplitter::handle:horizontal { width: 1px; }"
-          "QSplitter::handle:vertical { height: 1px; }"
+          "QSplitter::handle:horizontal { width: 6px; }"
+          "QSplitter::handle:vertical { height: 6px; }"
           "QTabWidget#dbOutputTabs::pane, QTabWidget#dbResultTabs::pane { "
           "border: none;"
           "  border-top: 1px solid %3; background: %1; }"
@@ -568,6 +625,7 @@ void DatabasePanel::applyTheme(const Theme &theme) {
   }
   m_console->applyTheme(theme);
   m_insights->applyTheme(theme);
+  m_storage->applyTheme(theme);
   for (int i = 0; i < m_resultTabs->count(); ++i) {
     if (auto *v = qobject_cast<DbResultView *>(m_resultTabs->widget(i))) {
       v->applyTheme(theme);
@@ -580,6 +638,22 @@ void DatabasePanel::applyTheme(const Theme &theme) {
   rebuildTree();
   refreshToolbar();
   onActiveChanged();
+  setContentFont(PanelTypography::contentFont(this));
+}
+
+void DatabasePanel::setContentFont(const QFont &font) {
+  const qreal previousSize = PanelTypography::contentFont(this).pointSizeF();
+  PanelTypography::apply(this, font);
+  m_storage->fitColumns();
+  if (!qFuzzyCompare(previousSize, font.pointSizeF())) {
+    const int width =
+        QFontMetrics(font).horizontalAdvance("long_column_name") + 200;
+    m_mainSplitter->setSizes({width, qMax(400, window()->width() - width)});
+    for (auto *result : findChildren<DbResultView *>())
+      result->setContentFont(font);
+  }
+  if (m_historyDialog)
+    PanelTypography::apply(m_historyDialog, font);
 }
 
 void DatabasePanel::saveState() const {
@@ -659,6 +733,8 @@ void DatabasePanel::hookConnection(DbConnection *conn) {
       refreshCombos();
     }
   });
+  connect(conn, &DbConnection::statisticsChanged, this,
+          [this, conn] { refreshStorageIndicators(conn); });
 }
 
 void DatabasePanel::onProfilesChanged() {
@@ -672,6 +748,7 @@ void DatabasePanel::onProfilesChanged() {
 
 void DatabasePanel::onActiveChanged() {
   DbConnection *c = activeConnection();
+  m_storage->setConnection(c);
   m_console->setEngine(c ? c->profile().engine : DbEngine::PostgreSql);
   m_historyCursor = -1;
   const QString color = c ? c->profile().color : QString();
@@ -1234,6 +1311,8 @@ void DatabasePanel::rebuildTree() {
   m_tree->setUpdatesEnabled(true);
   m_tree->verticalScrollBar()->setValue(scroll);
   m_rebuildingTree = false;
+  for (auto *conn : m_manager->connections())
+    refreshStorageIndicators(conn);
 }
 
 void DatabasePanel::onFilterChanged(const QString &) { rebuildTree(); }
@@ -1297,17 +1376,27 @@ void DatabasePanel::onTreeDoubleClicked(QTreeWidgetItem *item, int) {
 }
 
 void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
-  QTreeWidgetItem *item = m_tree->itemAt(pos);
+  QTreeWidgetItem *item =
+      pos == QPoint(-1, -1) ? m_tree->currentItem() : m_tree->itemAt(pos);
+  const QPoint menuPosition = item && pos == QPoint(-1, -1)
+                                  ? m_tree->visualItemRect(item).center()
+                                  : pos;
   if (!item) {
     QMenu menu(this);
     menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
     menu.addAction(tr("New connection…"), this, &DatabasePanel::newConnection);
+    PanelTypography::apply(&menu, PanelTypography::contentFont(this));
     menu.exec(m_tree->viewport()->mapToGlobal(pos));
     return;
   }
   DbConnection *conn = connectionFromItem(item);
+  if (!conn)
+    return;
+  m_tree->setCurrentItem(item);
   QMenu menu(this);
+  menu.setObjectName("dbObjectMenu");
   menu.setStyleSheet(UIStyleHelper::contextMenuStyle(m_theme));
+  connect(conn, &QObject::destroyed, &menu, &QMenu::close);
 
   switch (item->data(0, RoleKind).toInt()) {
   case KindConnection: {
@@ -1324,6 +1413,10 @@ void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
     menu.addAction(tr("Use for queries"), this,
                    [this, id]() { m_manager->setActive(id); });
     if (conn->isConnected()) {
+      menu.addAction(tr("Storage overview…"), this,
+                     [this, conn] { showStorage(conn); });
+      menu.addAction(tr("Refresh sizes"), conn,
+                     [conn] { conn->refreshStatistics(true); });
       QMenu *tools = menu.addMenu(tr("Schema tools"));
       tools->addAction(tr("Generate DDL for all tables"), this,
                        [this, conn]() { showSchemaDdl(conn); });
@@ -1365,9 +1458,11 @@ void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
     const DbTableInfo table = *t;
     menu.addAction(tr("Browse data…"), this,
                    [this, c, table]() { previewTable(c, table); });
-    menu.addAction(tr("Count rows"), this, [this, c, table]() {
-      execute(c, {DbCatalog::countSql(c->profile().engine, table)}, true);
-    });
+    menu.addAction(tr("Storage and row count…"), this,
+                   [this, c, table] { showStorage(c, &table); });
+    menu.addAction(tr("Count rows"), this,
+                   [this, c, table]() { countRows(c, table); });
+    menu.addAction(tr("Refresh sizes"), c, [c] { c->refreshStatistics(true); });
     if (c->profile().engine == DbEngine::Sqlite) {
       menu.addAction(tr("Inspect structure…"), this, [this, c, table] {
         execute(c, DbCatalog::sqliteTableDetailsQueries(table), false,
@@ -1410,10 +1505,19 @@ void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
     menu.addAction(tr("Copy name"), this,
                    [name]() { QApplication::clipboard()->setText(name); });
     menu.addAction(tr("Insert into console"), this, [this, conn, name]() {
+      m_manager->setActive(conn->profile().id);
       m_console->insertPlainText(
           DbCatalog::quoteIdentifier(conn->profile().engine, name));
       m_console->setFocus();
     });
+    if (const auto *table = tableFromItem(item->parent())) {
+      const DbTableInfo copy = *table;
+      menu.addSeparator();
+      menu.addAction(tr("Browse table…"), this,
+                     [this, conn, copy] { previewTable(conn, copy); });
+      menu.addAction(tr("Table storage…"), this,
+                     [this, conn, copy] { showStorage(conn, &copy); });
+    }
     break;
   }
   case KindSchema:
@@ -1423,10 +1527,103 @@ void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
   default:
     return;
   }
-  menu.exec(m_tree->viewport()->mapToGlobal(pos));
+  PanelTypography::apply(&menu, PanelTypography::contentFont(this));
+  menu.exec(m_tree->viewport()->mapToGlobal(menuPosition));
+}
+
+bool DatabasePanel::eventFilter(QObject *watched, QEvent *event) {
+  if (watched == m_tree && event->type() == QEvent::KeyPress) {
+    const auto *key = static_cast<QKeyEvent *>(event);
+    if (key->key() == Qt::Key_Menu ||
+        (key->key() == Qt::Key_F10 &&
+         key->modifiers().testFlag(Qt::ShiftModifier))) {
+      if (auto *item = m_tree->currentItem()) {
+        m_tree->scrollToItem(item);
+        onTreeContextMenu(QPoint(-1, -1));
+      }
+      return true;
+    }
+    if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
+      onTreeDoubleClicked(m_tree->currentItem(), 0);
+      return true;
+    }
+  }
+  return QWidget::eventFilter(watched, event);
+}
+
+void DatabasePanel::showStorage(DbConnection *connection,
+                                const DbTableInfo *table) {
+  m_manager->setActive(connection->profile().id);
+  m_outputTabs->setCurrentWidget(m_storage);
+  m_storage->setConnection(connection);
+  if (table)
+    m_storage->selectTable(table->schema, table->name);
+}
+
+void DatabasePanel::countRows(DbConnection *connection,
+                              const DbTableInfo &table) {
+  const DbTableInfo copy = table;
+  showStorage(connection, &copy);
+  const auto id = execute(
+      connection, {DbCatalog::countSql(connection->profile().engine, copy)},
+      true, copy.name, false, false, nullptr, {}, true);
+  auto run = m_runs.find(id);
+  if (run != m_runs.end()) {
+    run->countedSchema = copy.schema;
+    run->countedTable = copy.name;
+  }
+}
+
+void DatabasePanel::refreshStorageIndicators(DbConnection *connection) {
+  if (m_rebuildingTree)
+    return;
+  const auto &statistics = connection->statistics();
+  for (QTreeWidgetItemIterator it(m_tree); *it; ++it) {
+    auto *item = *it;
+    if (connectionFromItem(item) != connection)
+      continue;
+    const auto kind = item->data(0, RoleKind).toInt();
+    const DbStorageInfo *info = nullptr;
+    if (kind == KindTable)
+      info = statistics.table(item->data(0, RoleSchema).toString(),
+                              item->data(0, RoleName).toString());
+    else if (kind == KindConnection || kind == KindSchema) {
+      const QString database =
+          kind == KindSchema ? item->data(0, RoleSchema).toString()
+          : connection->profile().engine == DbEngine::Sqlite
+              ? QString("main")
+              : connection->currentDatabase();
+      const auto found = statistics.databases.constFind(database);
+      if (found != statistics.databases.cend())
+        info = &found.value();
+    } else
+      continue;
+    const QString size =
+        (info && info->sizeEstimated && info->totalBytes >= 0
+             ? QString::fromUtf8("≈ ")
+             : QString()) +
+        DbStatisticsQueries::formatBytes(info ? info->totalBytes : -1);
+    item->setText(1, size);
+    item->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
+    QString detail =
+        info && info->totalBytes >= 0
+            ? tr("%1 bytes allocated").arg(QLocale().toString(info->totalBytes))
+            : tr("Size unavailable. Open Storage for details.");
+    if (info && info->rows >= 0)
+      detail += tr("\nRows: %1")
+                    .arg(DbStatisticsQueries::formatRows(info->rows,
+                                                         info->rowsEstimated));
+    if (statistics.tableSizesDeferred)
+      detail += tr(
+          "\nRefresh sizes to load table allocations for this large database.");
+    if (!connection->lastStatisticsError().isEmpty())
+      detail += '\n' + connection->lastStatisticsError();
+    item->setToolTip(1, detail);
+  }
 }
 
 void DatabasePanel::previewTable(DbConnection *conn, const DbTableInfo &table) {
+  m_manager->setActive(conn->profile().id);
   if (m_activeRunByConnection.contains(conn->profile().id)) {
     setStatus(tr("Stop the running query before opening a table."));
     return;
@@ -1621,7 +1818,8 @@ quint64 DatabasePanel::execute(DbConnection *conn,
                                bool stopOnError, const QString &tableName,
                                bool profileAfter, bool explain,
                                DbResultView *resultView,
-                               const QStringList &resultTitles) {
+                               const QStringList &resultTitles,
+                               bool keepResults) {
   QStringList statements;
   for (const QString &s : statementsIn) {
     if (!SqlStatementSplitter::stripComments(s).trimmed().isEmpty()) {
@@ -1649,7 +1847,7 @@ quint64 DatabasePanel::execute(DbConnection *conn,
     return 0;
   }
   hookConnection(conn);
-  if (!resultView)
+  if (!resultView && !keepResults)
     clearResults();
   if (!resultView && resultTitles.isEmpty())
     lintStatements(conn, statements);
@@ -1689,6 +1887,7 @@ quint64 DatabasePanel::execute(DbConnection *conn,
 void DatabasePanel::addResultTab(const DbResultSet &rs, const Run &run,
                                  const QString &title, qint64 elapsedMs) {
   auto *view = new DbResultView(m_resultTabs);
+  view->setContentFont(PanelTypography::contentFont(this));
   view->applyTheme(m_theme);
   view->setResult(rs, run.engine, run.tableName, elapsedMs);
   connect(view, &DbResultView::statusMessage, this, &DatabasePanel::setStatus);
@@ -1734,6 +1933,17 @@ void DatabasePanel::onStatementFinished(DbConnection *conn, quint64 id,
     return;
   }
   if (r.hasRows()) {
+    if (!run.countedTable.isEmpty() && !r.resultSets.first().rows.isEmpty() &&
+        !r.resultSets.first().rows.first().isEmpty()) {
+      bool ok = false;
+      const qint64 count =
+          r.resultSets.first().rows.first().first().toLongLong(&ok);
+      if (ok && count >= 0) {
+        run.rows = count;
+        conn->setExactRowCount(run.countedSchema, run.countedTable, count);
+      }
+      return;
+    }
     int part = 0;
     for (const DbResultSet &rs : r.resultSets) {
       ++part;
@@ -1816,11 +2026,15 @@ void DatabasePanel::onRequestFinished(DbConnection *conn, quint64 id,
     summary = tr("Finished with %n error(s) in %1", nullptr, run.errors)
                   .arg(formatDuration(total));
   } else {
-    summary = tr("Done in %1").arg(formatDuration(total));
+    summary = run.countedTable.isEmpty()
+                  ? tr("Done in %1").arg(formatDuration(total))
+                  : tr("%1: %2 rows counted in %3")
+                        .arg(run.countedTable, QLocale().toString(run.rows),
+                             formatDuration(total));
     if (run.results > 0) {
       summary += tr(" · %n result set(s)", nullptr, run.results);
     }
-    if (run.rows > 0) {
+    if (run.rows > 0 && run.countedTable.isEmpty()) {
       summary += tr(" · %1 row(s)").arg(run.rows);
     }
   }
@@ -1836,7 +2050,7 @@ void DatabasePanel::onRequestFinished(DbConnection *conn, quint64 id,
     }
   } else if (run.errors > 0) {
     m_outputTabs->setCurrentWidget(m_messages);
-  } else if (!cancelled) {
+  } else if (!cancelled && run.countedTable.isEmpty()) {
     m_outputTabs->setCurrentWidget(m_messages);
   }
   refreshToolbar();
@@ -2165,6 +2379,7 @@ void DatabasePanel::focusConsole() { m_console->setFocus(); }
 void DatabasePanel::showHistory() {
   if (!m_historyDialog) {
     m_historyDialog = new QueryHistoryDialog(&m_manager->history(), this);
+    PanelTypography::apply(m_historyDialog, PanelTypography::contentFont(this));
     m_historyDialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(m_historyDialog, &QueryHistoryDialog::insertRequested, this,
             [this](const QString &sql) { setConsoleText(sql); });

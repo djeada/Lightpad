@@ -31,6 +31,9 @@ private slots:
   void testCTestTemplateRoutesToTestRun();
   void testDoctestFileIsNotTreatedAsCTest();
   void testResolutionIsIndependentOfEditorState();
+  void testBackendLaunchUsesProjectContext();
+  void testBackendRunsWithoutAnEditor();
+  void testBackendPreservesScriptAssignmentsAndTests();
 
 private:
   QString makeCMakeProject();
@@ -94,6 +97,77 @@ void TestRunTargetResolver::testEmptyPathExplainsItself() {
   QCOMPARE(target.kind, RunTarget::Kind::None);
   QVERIFY(!target.unavailableReason.isEmpty());
   QVERIFY(target.commandLine().isEmpty());
+}
+
+void TestRunTargetResolver::testBackendLaunchUsesProjectContext() {
+  const QString root = m_tempDir.path() + "/backend-run";
+  const QString entry =
+      writeFile("backend-run/src/main.py",
+                "from fastapi import FastAPI\napp = FastAPI()\n");
+  const QString router =
+      writeFile("backend-run/src/routers/posts.py", "# router\n");
+  writeFile("backend-run/.env", "LP_TEST_SERVER_CONFIG=loaded\n");
+  RunTemplateManager::instance().setWorkspaceFolder(root);
+  RunTargetContext context;
+  context.filePath = router;
+  context.projectRoot = root;
+  context.languageId = "python";
+  const auto target = RunTargetResolver::resolve(context);
+  QVERIFY(target.isValid());
+  QCOMPARE(target.kind, RunTarget::Kind::PythonBackend);
+  QCOMPARE(target.workingDirectory, root);
+  QCOMPARE(target.arguments.mid(0, 3),
+           QStringList({"-m", "uvicorn", "main:app"}));
+  QVERIFY(target.arguments.contains("--reload"));
+  QCOMPARE(target.environment.value("LP_TEST_SERVER_CONFIG"), "loaded");
+  QVERIFY(target.environment.value("PYTHONPATH").startsWith(root + "/src"));
+  QVERIFY(!target.commandLine().contains(entry));
+
+  FileTemplateAssignment preference;
+  preference.pythonMode = "customInterpreter";
+  preference.pythonInterpreter = "/missing/entry/python";
+  QVERIFY(
+      RunTemplateManager::instance().assignTemplateToFile(entry, preference));
+  const QJsonObject settings{{"pythonMode", "customInterpreter"},
+                             {"pythonInterpreter", target.program}};
+  writeFile("backend-run/.lightpad/backend.json",
+            QString::fromUtf8(QJsonDocument(settings).toJson()));
+  context.filePath = entry;
+  QCOMPARE(RunTargetResolver::resolve(context).program, target.program);
+}
+
+void TestRunTargetResolver::testBackendRunsWithoutAnEditor() {
+  const QString root = m_tempDir.path() + "/backend-empty";
+  writeFile("backend-empty/app.py",
+            "from flask import Flask\napp = Flask(__name__)\n");
+  RunTemplateManager::instance().setWorkspaceFolder(root);
+  RunTargetContext context;
+  context.projectRoot = root;
+  const auto target = RunTargetResolver::resolve(context);
+  QCOMPARE(target.kind, RunTarget::Kind::PythonBackend);
+  QVERIFY(target.arguments.contains("flask"));
+  QCOMPARE(target.filePath, root + "/app.py");
+}
+
+void TestRunTargetResolver::testBackendPreservesScriptAssignmentsAndTests() {
+  const QString root = m_tempDir.path() + "/backend-script";
+  const QString entry =
+      writeFile("backend-script/main.py",
+                "from fastapi import FastAPI\napp = FastAPI()\n");
+  const QString test =
+      writeFile("backend-script/tests/test_app.py", "# test\n");
+  RunTemplateManager::instance().setWorkspaceFolder(root);
+  RunTargetContext context;
+  context.projectRoot = root;
+  context.filePath = entry;
+  context.languageId = "python";
+  FileTemplateAssignment assignment;
+  assignment.templateId = "python3";
+  QVERIFY(
+      RunTemplateManager::instance().assignTemplateToFile(entry, assignment));
+  QCOMPARE(RunTargetResolver::resolve(context).kind, RunTarget::Kind::Template);
+  context.filePath = test;
+  QCOMPARE(RunTargetResolver::resolve(context).kind, RunTarget::Kind::Pytest);
 }
 
 void TestRunTargetResolver::testScriptResolvesToTheFileItself() {

@@ -10,6 +10,7 @@
 #include <QStringList>
 
 #include "../python/pythonprojectenvironment.h"
+struct TestConfiguration;
 
 struct DebugConfiguration {
   QString name;
@@ -244,6 +245,9 @@ public:
   DebugConfiguration
   createQuickConfig(const QString &filePath,
                     const QString &languageId = QString()) const;
+  DebugConfiguration
+  createPytestConfig(const QStringList &targets,
+                     const TestConfiguration &testConfig) const;
 
   bool loadFromLightpadDir();
 

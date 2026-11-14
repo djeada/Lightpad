@@ -232,7 +232,32 @@ bool MainWindow::compileSourceForDebug(const QString &filePath,
 }
 
 void MainWindow::startDebuggingForCurrentFile() {
-  startDebuggingForFile(runSourceFilePath());
+  const auto target = currentRunTarget();
+  startDebuggingForFile(target.kind == RunTarget::Kind::PythonBackend
+                            ? target.filePath
+                            : runSourceFilePath());
+}
+
+void MainWindow::startDebuggingTests(const QStringList &targets,
+                                     const TestConfiguration &configuration) {
+  if (m_projectRootPath.isEmpty() || configuration.outputFormat != "pytest")
+    return;
+  DebugSettings::instance().initialize(m_projectRootPath);
+  auto &configurations = DebugConfigurationManager::instance();
+  configurations.setWorkspaceFolder(m_projectRootPath);
+  BreakpointManager::instance().setWorkspaceFolder(m_projectRootPath);
+  const auto config = configurations.createPytestConfig(targets, configuration);
+  const QString id = DebugSessionManager::instance().startSession(config);
+  if (id.isEmpty()) {
+    ThemedMessageBox::warning(this, tr("Debug Tests"),
+                              DebugSessionManager::instance().lastError());
+    return;
+  }
+  attachDebugSession(id);
+  if (debugDock) {
+    debugDock->show();
+    debugDock->raise();
+  }
 }
 
 void MainWindow::startDebuggingForFile(const QString &filePath) {

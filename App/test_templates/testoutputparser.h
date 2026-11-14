@@ -24,6 +24,7 @@ signals:
   void testSuiteStarted(const QString &name);
   void testSuiteFinished(const QString &name, int passed, int failed);
   void outputLine(const QString &line, bool isError);
+  void totalTestsChanged(int total);
 
 protected:
   QString decode(const QByteArray &data) { return m_decoder.decode(data); }
@@ -90,6 +91,7 @@ private:
   QString m_failureTestName;
   QString m_failureMessage;
   QHash<QString, TestResult> m_failedResults;
+  bool m_structuredOutput = false;
 };
 
 class CtestParser : public ITestOutputParser {

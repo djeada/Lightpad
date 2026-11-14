@@ -118,6 +118,12 @@ The debug console also shows an inspector beside the latest expression result;
 drag the divider to resize it or use **Inspector** to hide it. **Detach** opens
 the console and inspector together in a larger window.
 
+Debug trees, console text, headers and value inspectors follow the editor font
+size, including changes made with `Ctrl++` and `Ctrl+-`. The console uses its
+full width until an expression opens the value inspector. The debug section
+tabs scroll horizontally when they do not fit. Use **Expand** in a panel's title
+bar to open it in a full-size window, then **Restore** to return it to the workspace.
+
 - **Tree** expands nested lists, dictionaries, and objects on demand. Large
   indexed collections load 100 items at a time; double-click **Load next 100
   items…** or select it and press Enter for the next page.
@@ -488,6 +494,10 @@ Increase font size for readability:
 - `Ctrl++` to zoom in
 - `Ctrl+-` to zoom out
 - `Ctrl+0` to reset
+
+The Debug and Database panels use the same size for inspection text. Their
+rows, headers and controls grow with the font, including SQL results and
+detached inspectors. Splitter handles can be dragged to give a view more room.
 
 ### Keyboard Navigation
 

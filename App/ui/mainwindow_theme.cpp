@@ -1,4 +1,5 @@
 #include "mainwindow_internal.h"
+#include "paneltypography.h"
 #include "workspaceicons.h"
 #include <QFontDatabase>
 
@@ -1067,6 +1068,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
     if (dialog->isVisible())
       dialog->applyTheme(theme);
   }
+  updateInspectionFonts();
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); i++) {
@@ -1086,5 +1088,18 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
 
   if (m_globalSettingsLoaded && !m_restoringSession) {
     saveSettings();
+  }
+}
+
+void MainWindow::updateInspectionFonts() {
+  if (debugPanel)
+    debugPanel->setContentFont(settings.mainFont);
+  if (databasePanel)
+    databasePanel->setContentFont(settings.mainFont);
+  if (testPanel)
+    testPanel->setContentFont(settings.mainFont);
+  for (QDockWidget *dock : {debugDock, databaseDock, testDock}) {
+    if (dock && dock->titleBarWidget())
+      PanelTypography::apply(dock->titleBarWidget(), settings.mainFont);
   }
 }

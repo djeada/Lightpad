@@ -1013,8 +1013,9 @@ int DapClient::inspectVariables(int variablesReference, const QString &filter,
     return 0;
   }
   QJsonObject args{{"variablesReference", variablesReference},
-                   {"start", qMax(0, start)},
-                   {"count", qBound(1, count, 10000)}};
+                   {"start", qMax(0, start)}};
+  if (count > 0)
+    args["count"] = qBound(1, count, 10000);
   if (!filter.isEmpty()) {
     args["filter"] = filter;
   }

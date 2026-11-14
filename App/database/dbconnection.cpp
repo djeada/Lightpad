@@ -4,6 +4,7 @@
 #include "sqlitesession.h"
 #include "sqlstatementsplitter.h"
 
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <atomic>
 
@@ -89,6 +90,10 @@ void DbConnection::connectToServer(const QString &password) {
   m_schema = DbSchema();
   m_schemaError.clear();
   m_databases.clear();
+  m_statistics = {};
+  m_statisticsError.clear();
+  m_sqliteFiles.clear();
+  m_sqliteSchemas.clear();
   setState(DbConnectionState::Connecting);
   createSession();
   m_session->open(password);
@@ -121,6 +126,9 @@ void DbConnection::disconnectFromServer() {
   m_schemaError.clear();
   m_databases.clear();
   m_schemaLoading = false;
+  m_statisticsLoading = false;
+  m_statistics = {};
+  emit statisticsChanged();
   setState(DbConnectionState::Disconnected);
 }
 
@@ -181,6 +189,7 @@ void DbConnection::failPendingRequests(const QString &message) {
     emit requestFinished(r.id, false);
   }
   m_schemaLoading = false;
+  m_statisticsLoading = false;
 }
 
 quint64 DbConnection::execute(const QStringList &statements, bool stopOnError) {
@@ -272,8 +281,18 @@ void DbConnection::onStatementFinished(quint64 id, int index,
               .hasMatch()) {
         m_schemaDirty = true;
       }
+      if (kind == SqlStatementKind::Dml || kind == SqlStatementKind::Ddl)
+        m_statisticsDirty = true;
     }
     emit statementFinished(id, index, r);
+    return;
+  }
+  if (m_active.purpose == Purpose::Statistics) {
+    if (r.ok) {
+      for (const auto &rows : r.resultSets)
+        DbStatisticsQueries::merge(m_pendingStatistics, rows);
+    } else if (!m_statisticsErrors.contains(r.error))
+      m_statisticsErrors << r.error;
     return;
   }
   if (!r.ok) {
@@ -303,6 +322,9 @@ void DbConnection::onRequestFinished(quint64 id, bool cancelled) {
 
       m_schemaDirty = false;
       refreshSchema();
+    } else if (m_statisticsDirty) {
+      m_statisticsDirty = false;
+      refreshStatistics();
     }
     break;
   case Purpose::Schema:
@@ -312,12 +334,21 @@ void DbConnection::onRequestFinished(quint64 id, bool cancelled) {
       m_schema = DbCatalog::buildSchema(m_metaRows);
     }
     emit schemaLoaded();
+    if (!m_metaFailed && !cancelled) {
+      m_statisticsDirty = false;
+      refreshStatistics();
+    }
     break;
   case Purpose::SchemaDatabases:
     if (!m_metaFailed && !cancelled) {
       QStringList schemas = DbCatalog::parseDatabaseList(m_metaRows);
       if (!schemas.contains(QStringLiteral("temp")))
         schemas << QStringLiteral("temp");
+      m_sqliteSchemas = schemas;
+      m_sqliteFiles.clear();
+      for (const auto &row : m_metaRows.rows)
+        if (row.size() >= 2)
+          m_sqliteFiles[row[0].toString()] = row[1].toString();
       Request schema;
       schema.id = g_nextRequestId++;
       schema.purpose = Purpose::Schema;
@@ -337,9 +368,29 @@ void DbConnection::onRequestFinished(quint64 id, bool cancelled) {
   case Purpose::UseDatabase:
     if (!m_metaFailed) {
       m_profile.database = done.argument;
+      m_statistics = {};
+      emit statisticsChanged();
       emit databaseChanged(done.argument);
       refreshSchema();
     }
+    break;
+  case Purpose::Statistics:
+    m_statisticsLoading = false;
+    if (!cancelled) {
+      m_pendingStatistics.updatedAt = QDateTime::currentDateTime();
+      for (auto it = m_pendingStatistics.databases.begin();
+           it != m_pendingStatistics.databases.end(); ++it) {
+        const QString file = m_sqliteFiles.value(it.key());
+        if (!file.isEmpty())
+          it->walBytes = QFileInfo(file + "-wal").exists()
+                             ? QFileInfo(file + "-wal").size()
+                             : 0;
+      }
+      m_statistics = m_pendingStatistics;
+    }
+    m_statisticsError = cancelled ? tr("Storage refresh cancelled")
+                                  : m_statisticsErrors.join('\n');
+    emit statisticsChanged();
     break;
   }
   pump();
@@ -372,10 +423,72 @@ void DbConnection::refreshSchema() {
                                                    : Purpose::Schema;
   r.statements = {
       m_profile.engine == DbEngine::Sqlite
-          ? QStringLiteral("SELECT name FROM pragma_database_list ORDER BY seq")
+          ? QStringLiteral(
+                "SELECT name, file FROM pragma_database_list ORDER BY seq")
           : DbCatalog::schemaQuery(m_profile.engine)};
   m_schemaLoading = true;
   enqueue(r);
+}
+
+void DbConnection::refreshStatistics(bool includeLargeTables) {
+  if (!isConnected() || m_statisticsLoading)
+    return;
+  m_pendingStatistics = {};
+  m_statisticsErrors.clear();
+  m_statisticsError.clear();
+  QStringList schemas = m_sqliteSchemas;
+  if (schemas.isEmpty())
+    schemas << "main";
+  bool defer = false;
+  if (m_profile.engine == DbEngine::Sqlite && !includeLargeTables) {
+    constexpr qint64 automaticLimit = 128 * 1024 * 1024;
+    for (const QString &file : m_sqliteFiles)
+      if (QFileInfo(file).size() + QFileInfo(file + "-wal").size() >
+          automaticLimit)
+        defer = true;
+  }
+  m_pendingStatistics.tableSizesDeferred = defer;
+  Request request;
+  request.id = g_nextRequestId++;
+  request.purpose = Purpose::Statistics;
+  request.stopOnError = false;
+  request.statements =
+      DbStatisticsQueries::databaseQueries(m_profile.engine, schemas);
+  if (!defer)
+    request.statements << DbStatisticsQueries::tableQueries(m_profile.engine,
+                                                            schemas);
+  m_statisticsLoading = true;
+  emit statisticsChanged();
+  enqueue(request);
+}
+
+void DbConnection::cancelStatistics() {
+  QQueue<Request> keep;
+  while (!m_queue.isEmpty()) {
+    const auto request = m_queue.dequeue();
+    if (request.purpose != Purpose::Statistics)
+      keep.enqueue(request);
+  }
+  m_queue = keep;
+  if (m_hasActive && m_active.purpose == Purpose::Statistics)
+    m_session->cancel();
+  else if (m_statisticsLoading) {
+    m_statisticsLoading = false;
+    m_statisticsError = tr("Storage refresh cancelled");
+    emit statisticsChanged();
+  }
+}
+
+void DbConnection::setExactRowCount(const QString &schema, const QString &table,
+                                    qint64 rows) {
+  if (rows < 0)
+    return;
+  auto &info = m_statistics.tables[{schema, table}];
+  info.schema = schema;
+  info.table = table;
+  info.rows = rows;
+  info.rowsEstimated = false;
+  emit statisticsChanged();
 }
 
 void DbConnection::switchDatabase(const QString &database) {

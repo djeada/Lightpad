@@ -166,6 +166,7 @@ MainWindow::MainWindow(QWidget *parent)
   setupTextArea();
   setupTabWidget();
   setupDatabaseMenu();
+  setupBackendMenu();
   setupCommandPalette();
   setupGoToLineDialog();
   setupGoToSymbolDialog();
@@ -1256,7 +1257,8 @@ void MainWindow::setInlineBlameEnabled(bool enabled) {
   updateInlineBlameForCurrentFile();
 
   auto &globalSettings = SettingsManager::instance();
-  if (globalSettings.getValue("inlineBlameEnabled", false).toBool() != enabled) {
+  if (globalSettings.getValue("inlineBlameEnabled", false).toBool() !=
+      enabled) {
     globalSettings.setValue("inlineBlameEnabled", enabled);
     globalSettings.saveSettings();
   }
@@ -2207,6 +2209,7 @@ void MainWindow::stepEditorFontSize(int steps) {
     return;
   }
   settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
+  updateInspectionFonts();
   SettingsManager::instance().setValue("fontSize",
                                        settings.mainFont.pointSize());
   SettingsManager::instance().saveSettings();
@@ -2219,6 +2222,7 @@ void MainWindow::on_actionReset_Font_Size_triggered() {
     return;
   }
   settings.mainFont.setPointSize(getCurrentTextArea()->fontSize());
+  updateInspectionFonts();
   SettingsManager::instance().setValue("fontSize",
                                        settings.mainFont.pointSize());
   SettingsManager::instance().saveSettings();

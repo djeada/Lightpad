@@ -18,6 +18,7 @@ private slots:
   void testInitialBottomDockHeightKeepsEditorSpace();
   void testConstrainedTargetButtonKeepsLabelAndSplitMenu();
   void testTitleBarControlsCloseAndRedock();
+  void testExpandPanelAndReturnToWorkspace();
 };
 
 void TestDockUtils::testToolPanelsAllowAllDockAreas() {
@@ -162,6 +163,26 @@ void TestDockUtils::testTitleBarControlsCloseAndRedock() {
   dock.setFeatures(DockUtils::toolPanelFeatures());
   close->click();
   QVERIFY(dock.isHidden());
+}
+
+void TestDockUtils::testExpandPanelAndReturnToWorkspace() {
+  QMainWindow window;
+  window.setCentralWidget(new QWidget(&window));
+  QDockWidget dock("Database", &window);
+  DockUtils::configureToolPanelDock(&dock);
+  dock.setWidget(new QWidget(&dock));
+  window.addDockWidget(Qt::BottomDockWidgetArea, &dock);
+  window.show();
+  auto *expand = dock.findChild<QToolButton *>("toolPanelExpand");
+  QVERIFY(expand);
+  expand->click();
+  QVERIFY(dock.isFloating());
+  QVERIFY(dock.isMaximized());
+  QCOMPARE(expand->text(), QString("Restore"));
+  expand->click();
+  QVERIFY(!dock.isFloating());
+  QCOMPARE(window.dockWidgetArea(&dock), Qt::BottomDockWidgetArea);
+  QVERIFY(window.centralWidget()->isVisible());
 }
 
 QTEST_MAIN(TestDockUtils)

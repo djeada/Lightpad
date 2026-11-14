@@ -1,4 +1,5 @@
 #include "debugpanel.h"
+#include "../paneltypography.h"
 
 #include "../../core/logging/logger.h"
 #include "../../dap/debugadapterregistry.h"
@@ -661,9 +662,7 @@ void DebugPanel::applyTheme(const Theme &theme) {
     }
     tree->setStyleSheet(treeStyle);
     if (tree->header()) {
-      tree->header()->setDefaultSectionSize(24);
       tree->header()->setMinimumSectionSize(20);
-      tree->header()->setFixedHeight(22);
     }
     if (auto *delegate =
             dynamic_cast<DebugTreeDelegate *>(tree->itemDelegate())) {
@@ -686,6 +685,26 @@ void DebugPanel::applyTheme(const Theme &theme) {
         UIStyleHelper::readableText(theme, focusSurface, fg));
     m_consoleOutput->setPalette(consolePalette);
   }
+  setContentFont(PanelTypography::contentFont(this));
+}
+
+void DebugPanel::setContentFont(const QFont &font) {
+  PanelTypography::apply(this, font);
+  applyTransportIcons();
+  if (m_consoleWindow)
+    PanelTypography::apply(m_consoleWindow, font);
+  m_toolbarCompact = false;
+  for (auto *button :
+       m_toolbar->findChildren<QToolButton *>("debugToolbarButton"))
+    button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+  m_toolbarTextWidth = 0;
+  updateToolbarDensity();
+  if (auto *tabs = findChild<QScrollArea *>("debugInspectorTabScroll")) {
+    m_inspectorTabBar->adjustSize();
+    tabs->setFixedHeight(m_inspectorTabBar->sizeHint().height() +
+                         tabs->horizontalScrollBar()->sizeHint().height() + 2);
+  }
+  fitVariablesNameColumn();
 }
 
 void DebugPanel::setupUI() {
@@ -810,9 +829,9 @@ void DebugPanel::setupUI() {
             WatchManager::instance().addWatch(expression);
           });
 
-  const QStringList tabLabels = {tr("Stack"),   tr("Variables"),
-                                 tr("Watches"), tr("Breakpoints"),
-                                 tr("Console"), tr("Concurrency")};
+  const QStringList tabLabels = {tr("Call Stack"), tr("Variables"),
+                                 tr("Watches"),    tr("Breakpoints"),
+                                 tr("Console"),    tr("Concurrency")};
   for (int i = 0; i < tabLabels.size(); ++i) {
     tabBarLayout->addWidget(createInspectorTabButton(tabLabels.at(i), i));
   }
@@ -829,7 +848,14 @@ void DebugPanel::setupUI() {
           &DebugPanel::showProgramIoRequested);
   tabBarLayout->insertWidget(0, m_programIoButton);
 
-  inspectorLayout->addWidget(m_inspectorTabBar);
+  auto *tabScroll = new QScrollArea(m_inspectorShell);
+  tabScroll->setObjectName("debugInspectorTabScroll");
+  tabScroll->setFrameShape(QFrame::NoFrame);
+  tabScroll->setWidgetResizable(true);
+  tabScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  tabBarLayout->setSizeConstraint(QLayout::SetMinimumSize);
+  tabScroll->setWidget(m_inspectorTabBar);
+  inspectorLayout->addWidget(tabScroll);
   inspectorLayout->addWidget(m_inspectorStack, 1);
   mainLayout->addWidget(m_inspectorShell, 1);
 
@@ -840,7 +866,7 @@ void DebugPanel::setupUI() {
 QSize DebugPanel::sizeHint() const {
   const QSize hint = QWidget::sizeHint();
 
-  return QSize(hint.width(), 160);
+  return QSize(hint.width(), qMax(320, fontMetrics().height() * 14));
 }
 
 QToolButton *DebugPanel::createInspectorTabButton(const QString &label,
@@ -905,6 +931,10 @@ void DebugPanel::setCurrentInspectorTab(int index) {
     if (QToolButton *button = m_inspectorTabButtons.at(i)) {
       const QSignalBlocker blocker(button);
       button->setChecked(i == index);
+      if (i == index) {
+        if (auto *scroll = findChild<QScrollArea *>("debugInspectorTabScroll"))
+          scroll->ensureWidgetVisible(button);
+      }
     }
   }
 
@@ -1172,7 +1202,8 @@ void DebugPanel::applyTransportIcons() {
 
   for (const auto &entry : glyphs) {
     if (entry.action) {
-      entry.action->setIcon(DebugGlyphs::icon(entry.glyph, entry.color));
+      entry.action->setIcon(DebugGlyphs::icon(
+          entry.glyph, entry.color, qMax(18, fontMetrics().height() - 4)));
     }
   }
 }
@@ -1471,6 +1502,7 @@ void DebugPanel::setupConsoleToolbar() {
       tr("Show the latest evaluated value as a tree, table or formatted text"));
   connect(m_consoleInspectorAction, &QAction::toggled, m_consoleValueInspector,
           &QWidget::setVisible);
+  m_consoleInspectorAction->setChecked(false);
 
   m_consoleClearAction = new QAction(tr("Clear"), this);
   m_consoleClearAction->setToolTip(tr("Clear the console output"));
@@ -1509,6 +1541,7 @@ void DebugPanel::toggleConsoleDetached() {
   m_consoleWindow = new QWidget(window(), Qt::Window);
   m_consoleWindow->setWindowTitle(tr("Debug Console"));
   m_consoleWindow->setStyleSheet(styleSheet());
+  PanelTypography::apply(m_consoleWindow, PanelTypography::contentFont(this));
   m_consoleWindow->setAttribute(Qt::WA_DeleteOnClose, false);
   m_consoleWindow->resize(1100, 640);
 
@@ -1519,6 +1552,7 @@ void DebugPanel::toggleConsoleDetached() {
 
   m_inspectorStack->removeWidget(m_consolePage);
   layout->addWidget(m_consolePage);
+  PanelTypography::apply(m_consoleWindow, PanelTypography::contentFont(this));
   m_consolePage->show();
 
   m_consoleWindow->installEventFilter(this);
@@ -1830,6 +1864,7 @@ void DebugPanel::openValueInspector(const DapVariable &value, int frameId,
   dialog->resize(900, 620);
   auto *layout = new QVBoxLayout(dialog);
   auto *inspector = new DebugValueInspector(dialog);
+  PanelTypography::apply(inspector, PanelTypography::contentFont(this));
   layout->addWidget(inspector);
   inspector->setDapClient(m_dapClient);
   const QString length =
@@ -1845,6 +1880,7 @@ void DebugPanel::openValueInspector(const DapVariable &value, int frameId,
     dialog->applyTheme(m_theme);
     inspector->applyTheme(m_theme);
   }
+  PanelTypography::apply(dialog, PanelTypography::contentFont(this));
   dialog->show();
   if (array)
     inspector->focusArrayControls();
@@ -2028,6 +2064,7 @@ void DebugPanel::showMemoryViewer(const QString &memoryReference,
 
   *memSeq = client->readMemory(memoryReference, 256);
   *disSeq = client->disassemble(memoryReference, 64, -8);
+  PanelTypography::apply(dialog, PanelTypography::contentFont(this));
   dialog->show();
 }
 
@@ -4271,6 +4308,7 @@ void DebugPanel::onEvaluateResult(int requestSeq,
   value.value = result;
   value.type = type;
   value.variablesReference = variablesReference;
+  m_consoleInspectorAction->setChecked(true);
   m_consoleValueInspector->setValue(value, m_currentFrameId,
                                     arrayLengthExpression(value));
   const QString formatted = DebugValueFormatter::format(result);

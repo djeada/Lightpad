@@ -32,7 +32,7 @@ QString pathSeparator() {
 QStringList venvDirectoryNames() { return {".venv", "venv", "env"}; }
 
 QStringList requirementsCandidates() {
-  return {"requirements.txt", "requirements-dev.txt", "pyproject.toml",
+  return {"requirements-dev.txt", "requirements.txt", "pyproject.toml",
           "setup.py"};
 }
 

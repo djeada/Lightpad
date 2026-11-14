@@ -1,4 +1,5 @@
 #include "dbresultview.h"
+#include "../paneltypography.h"
 
 #include "../../database/columnprofiler.h"
 #include "../dialogs/styleddialog.h"
@@ -441,6 +442,11 @@ void DbResultView::setResult(const DbResultSet &result, DbEngine engine,
   updateSummary();
 }
 
+void DbResultView::setContentFont(const QFont &font) {
+  PanelTypography::apply(this, font);
+  fitColumns();
+}
+
 void DbResultView::fitColumns() {
   m_table->ensurePolished();
   const QFontMetrics fm(m_table->font());
@@ -454,7 +460,9 @@ void DbResultView::fitColumns() {
           m_model->index(r, c).data(Qt::DisplayRole).toString();
       width = qMax(width, fm.horizontalAdvance(text.left(60)) + 28);
     }
-    m_table->setColumnWidth(c, qBound(90, width, 400));
+    m_table->setColumnWidth(c,
+                            qBound(qMax(90, fm.averageCharWidth() * 8), width,
+                                   qMax(400, fm.averageCharWidth() * 40)));
   }
 }
 
@@ -825,6 +833,7 @@ void DbResultView::showCellValue(const QModelIndex &index) {
   buttons->addWidget(close);
   layout->addLayout(buttons);
   dialog->applyTheme(m_theme);
+  PanelTypography::apply(dialog, PanelTypography::contentFont(this));
   dialog->show();
 }
 
@@ -924,5 +933,6 @@ void DbResultView::applyTheme(const Theme &theme) {
                theme.backgroundColor.name(), text.name(),
                theme.accentColor.name(), theme.hoverColor.name(), alt.name(),
                selection.name(), selectionText.name(), muted.name()));
+  PanelTypography::apply(this, PanelTypography::contentFont(this));
   updateSummary();
 }

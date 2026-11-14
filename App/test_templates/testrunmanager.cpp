@@ -1,6 +1,8 @@
 #include "testrunmanager.h"
+#include "pytestintegration.h"
 
 #include "core/logging/logger.h"
+#include "python/pythonbackendproject.h"
 #include "python/pythonprojectenvironment.h"
 
 TestRunManager::TestRunManager(QObject *parent) : QObject(parent) {}
@@ -32,6 +34,31 @@ void TestRunManager::runFailed(const TestConfiguration &config,
   QStringList failed = failedTestNames();
   if (failed.isEmpty())
     return;
+
+  if ((config.outputFormat == "cargo" || config.outputFormat == "cargo_json") &&
+      QFileInfo(config.command).baseName() == "cargo" && failed.size() > 1) {
+    auto selected = config;
+    if (!selected.args.contains("--"))
+      selected.args << "--";
+    selected.args << "--exact" << failed;
+    startProcess(selected, workspaceFolder, {}, {}, RunMode::All);
+    return;
+  }
+
+  if (config.outputFormat == "pytest" &&
+      PytestIntegration::supports(config.command, config.args)) {
+    QStringList ids;
+    for (const auto &result : m_results)
+      if ((result.status == TestStatus::Failed ||
+           result.status == TestStatus::Errored) &&
+          result.id.contains("::"))
+        ids << result.id;
+    if (!ids.isEmpty()) {
+      auto selected = PytestIntegration::withTargets(config, ids);
+      startProcess(selected, workspaceFolder, {}, {}, RunMode::All);
+      return;
+    }
+  }
 
   const QString filter = failedTestFilter(config, failed);
   if (filter.isEmpty()) {
@@ -97,51 +124,61 @@ void TestRunManager::startProcess(const TestConfiguration &config,
   clearResults();
   m_stdoutBuffer.clear();
   m_stderrBuffer.clear();
+  m_selectedTestIds.clear();
+  for (const auto &id :
+       QJsonDocument::fromJson(
+           config.env.value("LIGHTPAD_JEST_SELECTION").toUtf8())
+           .array())
+    m_selectedTestIds.insert(id.toString());
 
   m_parser = TestOutputParserFactory::createParser(config.outputFormat, this);
 
   connect(m_parser, &ITestOutputParser::testStarted, this,
           [this](const TestResult &r) { emit testStarted(r); });
 
-  connect(m_parser, &ITestOutputParser::testFinished, this,
-          [this](const TestResult &r) {
-            auto adjust = [this](TestStatus status, int delta) {
-              switch (status) {
-              case TestStatus::Passed:
-                m_passed += delta;
-                break;
-              case TestStatus::Failed:
-                m_failed += delta;
-                break;
-              case TestStatus::Skipped:
-                m_skipped += delta;
-                break;
-              case TestStatus::Errored:
-                m_errored += delta;
-                break;
-              default:
-                break;
-              }
-            };
-            const auto existing = r.id.isEmpty()
-                                      ? m_resultIndex.constEnd()
-                                      : m_resultIndex.constFind(r.id);
-            if (existing != m_resultIndex.constEnd()) {
-              adjust(m_results[existing.value()].status, -1);
-              m_results[existing.value()] = r;
-            } else {
-              if (!r.id.isEmpty())
-                m_resultIndex.insert(r.id, m_results.size());
-              m_results.append(r);
-            }
-            adjust(r.status, 1);
-            emit testFinished(r);
-          });
+  connect(
+      m_parser, &ITestOutputParser::testFinished, this,
+      [this](const TestResult &r) {
+        if (!m_selectedTestIds.isEmpty() && !m_selectedTestIds.contains(r.id))
+          return;
+        auto adjust = [this](TestStatus status, int delta) {
+          switch (status) {
+          case TestStatus::Passed:
+            m_passed += delta;
+            break;
+          case TestStatus::Failed:
+            m_failed += delta;
+            break;
+          case TestStatus::Skipped:
+            m_skipped += delta;
+            break;
+          case TestStatus::Errored:
+            m_errored += delta;
+            break;
+          default:
+            break;
+          }
+        };
+        const auto existing = r.id.isEmpty() ? m_resultIndex.constEnd()
+                                             : m_resultIndex.constFind(r.id);
+        if (existing != m_resultIndex.constEnd()) {
+          adjust(m_results[existing.value()].status, -1);
+          m_results[existing.value()] = r;
+        } else {
+          if (!r.id.isEmpty())
+            m_resultIndex.insert(r.id, m_results.size());
+          m_results.append(r);
+        }
+        adjust(r.status, 1);
+        emit testFinished(r);
+      });
 
   connect(m_parser, &ITestOutputParser::testSuiteStarted, this,
           &TestRunManager::testSuiteStarted);
   connect(m_parser, &ITestOutputParser::testSuiteFinished, this,
           &TestRunManager::testSuiteFinished);
+  connect(m_parser, &ITestOutputParser::totalTestsChanged, this,
+          &TestRunManager::totalTestsChanged);
   connect(m_parser, &ITestOutputParser::outputLine, this,
           [this](const QString &line, bool isError) {
             if (m_forwardParserOutput)
@@ -187,7 +224,7 @@ void TestRunManager::startProcess(const TestConfiguration &config,
     break;
   }
 
-  const QStringList args = TestConfigurationManager::substituteArguments(
+  QStringList args = TestConfigurationManager::substituteArguments(
       config.command, templateArgs, filePath, workspaceFolder, testName);
 
   QString command = TestConfigurationManager::substituteVariables(
@@ -199,14 +236,21 @@ void TestRunManager::startProcess(const TestConfiguration &config,
     workDir = workspaceFolder;
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  env.remove("LIGHTPAD_PYTEST_SELECTION");
+  env.remove("LIGHTPAD_PYTEST_REPORTING");
   const bool usesPythonEnvironment =
       config.outputFormat == "pytest" ||
       config.language.compare("Python", Qt::CaseInsensitive) == 0 ||
       config.command.contains("${python}");
   if (usesPythonEnvironment) {
+    const auto backend = PythonBackendProject::discover(workspaceFolder);
+    if (backend.isValid())
+      env.insert("PYTHONPATH", backend.environment().value("PYTHONPATH"));
     const PythonEnvironmentInfo pythonEnvironment =
-        PythonProjectEnvironment::resolve({}, workspaceFolder, filePath,
-                                          workDir);
+        PythonProjectEnvironment::resolve(backend.pythonPreference(),
+                                          workspaceFolder, filePath, workDir);
+    if (config.command.trimmed() == "${python}" && pythonEnvironment.found)
+      command = pythonEnvironment.interpreter;
     const QMap<QString, QString> activationEnv =
         PythonProjectEnvironment::activationEnvironment(pythonEnvironment);
     for (auto it = activationEnv.begin(); it != activationEnv.end(); ++it)
@@ -215,6 +259,10 @@ void TestRunManager::startProcess(const TestConfiguration &config,
   for (auto it = config.env.begin(); it != config.env.end(); ++it) {
     env.insert(it.key(), TestConfigurationManager::substituteVariables(
                              it.value(), filePath, workspaceFolder, testName));
+  }
+  if (config.outputFormat == "pytest") {
+    m_reporterDirectory = std::make_unique<QTemporaryDir>();
+    PytestIntegration::install(*m_reporterDirectory, env, args, command);
   }
   m_process->setProcessEnvironment(env);
   m_process->setWorkingDirectory(workDir);
@@ -342,7 +390,8 @@ QString TestRunManager::failedTestFilter(const TestConfiguration &config,
       patterns.append(pattern);
   }
 
-  if (config.outputFormat == "go_json" || config.outputFormat == "ctest")
+  if (config.outputFormat == "go_json" || config.outputFormat == "ctest" ||
+      config.outputFormat == "jest_json")
     return "^(" + patterns.join('|') + ")$";
   return patterns.join('|');
 }

@@ -488,6 +488,7 @@ void MainWindow::ensureDebugPanel() {
   debugPanel = new DebugPanel(this);
   debugPanel->setObjectName("debugPanel");
   debugPanel->applyTheme(getTheme());
+  debugPanel->setContentFont(settings.mainFont);
   debugPanel->hide();
 
   connect(debugPanel, &DebugPanel::locationClicked, this,
@@ -522,14 +523,10 @@ void MainWindow::ensureDebugPanel() {
             }
             TextArea *textArea = getCurrentTextArea();
             if (textArea) {
-              QTextCursor cursor = textArea->textCursor();
-              cursor.movePosition(QTextCursor::Start);
               int targetLine = line > 0 ? line - 1 : 0;
               int targetColumn = column > 0 ? column - 1 : 0;
-              cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
-                                  targetLine);
-              cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
-                                  targetColumn);
+              const QTextCursor cursor = cursorAtLineColumn(
+                  textArea->document(), targetLine, targetColumn);
               textArea->setTextCursor(cursor);
               textArea->centerCursor();
               if (terminalFocus) {
@@ -608,6 +605,7 @@ void MainWindow::ensureDebugPanel() {
   debugDock->setObjectName("debugDock");
   DockUtils::configureToolPanelDock(debugDock);
   debugDock->setWidget(debugPanel);
+  updateInspectionFonts();
   addDockWidget(Qt::BottomDockWidgetArea, debugDock);
   tabifyBottomDock(debugDock);
   trackDockLayoutChanges(debugDock);
@@ -649,6 +647,7 @@ void MainWindow::ensureTestPanel() {
   testPanel = new TestPanel(this);
   testPanel->setObjectName("testPanel");
   testPanel->applyTheme(getTheme());
+  testPanel->setContentFont(settings.mainFont);
 
   if (!m_projectRootPath.isEmpty()) {
     testPanel->setWorkspaceFolder(m_projectRootPath);
@@ -656,9 +655,11 @@ void MainWindow::ensureTestPanel() {
 
   testPanel->restoreState();
 
+  connect(testPanel, &TestPanel::debugTestsRequested, this,
+          &MainWindow::startDebuggingTests);
+
   connect(testPanel, &TestPanel::locationClicked, this,
           [this](const QString &filePath, int line, int column) {
-            Q_UNUSED(column)
             if (!filePath.isEmpty()) {
               QString targetPath = filePath;
               QFileInfo fi(targetPath);
@@ -669,10 +670,8 @@ void MainWindow::ensureTestPanel() {
               openFileAndAddToNewTab(targetPath);
               TextArea *textArea = getCurrentTextArea();
               if (textArea && line > 0) {
-                QTextCursor cursor = textArea->textCursor();
-                cursor.movePosition(QTextCursor::Start);
-                cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor,
-                                    line - 1);
+                const QTextCursor cursor =
+                    cursorAtLineColumn(textArea->document(), line - 1, column);
                 textArea->setTextCursor(cursor);
                 textArea->centerCursor();
                 textArea->setFocus();
@@ -709,6 +708,7 @@ void MainWindow::ensureTestPanel() {
   testDock->setProperty("initialLayoutPending", true);
   DockUtils::configureToolPanelDock(testDock);
   testDock->setWidget(testPanel);
+  updateInspectionFonts();
   addDockWidget(Qt::BottomDockWidgetArea, testDock);
   tabifyBottomDock(testDock);
   trackDockLayoutChanges(testDock);
@@ -725,28 +725,20 @@ void MainWindow::revealTestDock() {
     return;
   }
 
-  bool bottomPanelVisible = false;
-  for (auto *dock : {m_terminalDock, m_problemsDock, debugDock, databaseDock}) {
-    if (dock && dock->isVisible() && !dock->isFloating() &&
-        dockWidgetArea(dock) == Qt::BottomDockWidgetArea)
-      bottomPanelVisible = true;
-  }
   const bool firstOpen = testDock->property("initialLayoutPending").toBool();
   testDock->setProperty("initialLayoutPending", false);
 
   testDock->show();
   testDock->raise();
 
-  if (firstOpen && !bottomPanelVisible && !testDock->isFloating() &&
+  if (firstOpen && !testDock->isFloating() &&
       dockWidgetArea(testDock) == Qt::BottomDockWidgetArea) {
 
     QTimer::singleShot(0, this, [this]() {
       if (!testDock || !testDock->isVisible() || testDock->isFloating() ||
           dockWidgetArea(testDock) != Qt::BottomDockWidgetArea)
         return;
-      resizeDocks({testDock},
-                  {DockUtils::preferredInitialBottomDockHeight(height())},
-                  Qt::Vertical);
+      resizeDocks({testDock}, {qBound(320, height() / 2, 600)}, Qt::Vertical);
       if (m_globalSettingsLoaded && !m_restoringSession) {
         saveSettings();
       }
