@@ -28,6 +28,12 @@ nothing installed on the host but Docker.
 5. Type SQL in the console and press `Ctrl+Enter`, or open a `.sql` file and
    press `F9`.
 
+The schema browser, SQL Console, completion popup, result grids, Messages,
+Storage and Insights follow the
+editor font size. `Ctrl++` / `Ctrl+-` update inspection text and row heights as
+well. Drag the dividers to resize sections, or use **Expand** in the panel title
+bar for a full-size window; **Restore** returns it to the workspace.
+
 ## Running SQL
 
 | Where | Shortcut | What runs |
@@ -100,9 +106,15 @@ Each connection is a tree of schemas → tables/views → columns (with types,
 Right-click a table for:
 
 * **Browse data…** (also double-click), **Count rows**, **Show columns**
+* **Storage and row count…** — open the selected table in the Storage tab
 * **Profile columns…** — loads up to 10 000 rows and opens Insights
 * **Generate SQL** — `SELECT` with all columns, `INSERT`/`UPDATE` templates,
   original SQLite creation SQL (approximate `CREATE TABLE` for other engines)
+
+Select an object and use **Actions**, `Shift+F10`, or the Menu key for the same
+context menu. `Enter` opens a selected table. A column's menu also opens its
+parent table or its storage details. **Object** and **Size** are separate
+columns; full names, types, and byte counts are available in tooltips.
 
 SQLite's **Inspect structure…** opens Columns, Indexes, Foreign keys, Triggers,
 and Creation SQL tabs. Generated/hidden fields and defaults are included.
@@ -114,11 +126,58 @@ The tree refreshes by itself after `CREATE`/`ALTER`/`DROP` (and SQLite `ATTACH`/
 PostgreSQL show the database selected in the toolbar; MySQL shows every
 database as a node.
 
+## Database and table storage
+
+The browser shows database and table allocations beside their names. Open
+**Storage** for sortable **Rows**, **Data**, **Indexes**, and **Total** columns.
+Sizes use binary units (KiB, MiB, GiB); tooltips show the full byte count.
+`≈` marks estimates and `—` means unavailable. Ordinary views have no table
+allocation. Select a table to **Browse table** or **Count rows**; counting updates
+the displayed total without replacing open query grids.
+
+* **SQLite:** database page allocations and per-table/index pages from `dbstat`.
+  Database totals include internal and free pages; database tooltips list free
+  space and WAL size separately. Attached and temporary databases are included.
+  Automatic table-size inspection is deferred when a database file plus its WAL
+  exceeds 128 MiB. **Refresh sizes** explicitly loads those table allocations.
+  SQLite builds without `dbstat` still show database totals and explain why table
+  sizes are unavailable.
+* **PostgreSQL:** table, index, and TOAST allocations; row counts are planner
+  estimates. Partition parents report their own storage, with children listed
+  separately.
+* **MySQL / MariaDB:** catalog allocations and row estimates, which depend on
+  the storage engine. Database totals sum visible table allocations.
+* **SQL Server:** reserved table/index pages and estimated row counts. Database
+  allocation includes data and log files. Table statistics require database-state
+  permissions; missing permissions leave sizes unavailable.
+
+Schema changes refresh storage metadata, as do completed writes. **Refresh sizes**
+can refresh it on demand and changes to **Cancel refresh** while loading. Metadata
+queries stay out of query history and result tabs; cancelling a queued refresh
+leaves a running user query alone. Server-engine cancellation can reconnect the
+client, as described below. Exact `COUNT(*)` queries run only when requested.
+
 ## Completion
 
 In `.sql` files and in the console: table, view and column names of the
 connection (`u.` after `FROM users u` lists the columns of `users`), schemas,
 keywords, functions and types. Keywords follow the case you type.
+
+Completion also follows CTEs (including explicit column lists, chained and
+recursive CTEs), derived-table aliases, projected `*` / `alias.*`, and aliases
+of computed expressions. For example, `WITH counts AS (SELECT author_id,
+COUNT(*) AS post_count FROM posts GROUP BY author_id) SELECT c. FROM counts c`
+offers `author_id` and `post_count` after `c.`. CTE names are offered after
+`FROM` even without a connected database. Nested scopes keep inner aliases from
+leaking into the outer query; correlated subqueries can see outer aliases.
+
+Quoted identifiers retain their quotes when accepted, and completion replaces
+the whole identifier when the cursor is in its middle. Ambiguous columns are
+inserted with a qualifying alias. SELECT aliases are offered in `ORDER BY` and
+other clauses supported by the selected engine. Suggestions are suppressed in
+comments and string literals. Computed CTE/derived columns should have explicit
+aliases: expression names and table-function result types are not inferred from
+the server. Completion and catalog diagnostics share the same query scopes.
 
 ## Parameters, linting and schema tools
 
@@ -180,9 +239,11 @@ App/database/                 (no GUI, unit-tested)
   dbconnection       session + queue + schema cache + read-only guard
   databasemanager    connections, active selection, history
   dbcatalog          catalog queries, schema model, SQL templates
-  sqlcompletion      schema-aware suggestions
+  dbstatistics       database/table allocations and row estimates
+  sqlquerycontext    SQL scopes, CTEs, derived columns and visible aliases
+  sqlcompletion      query- and schema-aware suggestions
   resultexporter, columnprofiler, dockerdiscovery, connectionstore, queryhistory
-App/ui/panels/                databasepanel, dbresultview, dbinsightsview, sqlconsoleedit
+App/ui/panels/                databasepanel, dbresultview, dbinsightsview, dbstorageview, sqlconsoleedit
 App/ui/dialogs/               connectiondialog, queryhistorydialog
 App/ui/mainwindow_database.cpp  dock, menu, status chip, F9 commands, completion provider
 App/syntax/sqlsyntaxplugin      SQL highlighting for .sql files

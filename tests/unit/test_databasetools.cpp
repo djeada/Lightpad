@@ -52,6 +52,7 @@ private slots:
   void lintUnknownTableSuggests();
   void lintUnknownColumn();
   void lintAliasesAndCtes();
+  void lintCteAndSubqueryScopes();
   void lintStructural();
   void lintNullComparisonAndMissingWhere();
   void lintInsertColumnCount();
@@ -158,6 +159,37 @@ void TestDatabaseTools::lintAliasesAndCtes() {
   QVERIFY(hasIssue(dup, "used more than once"));
   QVERIFY(SqlLint::lint("SELECT * FROM public.users", DbEngine::PostgreSql, &s)
               .isEmpty());
+}
+
+void TestDatabaseTools::lintCteAndSubqueryScopes() {
+  const auto schema = sampleSchema();
+  const QStringList valid = {
+      "WITH recent(key, address) AS (SELECT id, email FROM users) SELECT "
+      "r.address FROM recent r",
+      "WITH RECURSIVE tree(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM tree "
+      "WHERE n<5) SELECT t.n FROM tree t",
+      "SELECT d.address FROM (SELECT email AS address FROM users) d",
+      "SELECT d.count FROM (SELECT count(*) FROM users) d",
+      "SELECT u.email FROM users u WHERE EXISTS (SELECT u.total FROM orders u)",
+      "WITH a AS (SELECT u.id FROM users u), b AS (SELECT u.email FROM users "
+      "u) SELECT b.email FROM b",
+      "WITH a AS (SELECT id FROM users) SELECT * FROM (WITH a AS (SELECT total "
+      "FROM orders) SELECT a.total FROM a) d"};
+  for (const auto &sql : valid) {
+    const auto issues = SqlLint::lint(sql, DbEngine::PostgreSql, &schema);
+    QVERIFY2(
+        issues.isEmpty(),
+        qPrintable(sql + "\n" +
+                   (issues.isEmpty() ? QString() : issues.first().message)));
+  }
+  QVERIFY(hasIssue(SqlLint::lint("WITH recent(key) AS (SELECT id FROM users) "
+                                 "SELECT r.nope FROM recent r",
+                                 DbEngine::PostgreSql, &schema),
+                   "no column 'nope'"));
+  QVERIFY(hasIssue(SqlLint::lint("SELECT u.nope FROM users u WHERE EXISTS "
+                                 "(SELECT u.total FROM orders u)",
+                                 DbEngine::PostgreSql, &schema),
+                   "no column 'nope'"));
 }
 
 void TestDatabaseTools::lintStructural() {

@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -17,6 +18,7 @@
 #include "dap/debugconfiguration.h"
 #include "dap/debugsession.h"
 #include "dap/debugsettings.h"
+#include "test_templates/testconfiguration.h"
 
 #include "build/cmakeproject.h"
 
@@ -160,6 +162,7 @@ private slots:
   void sessionLevelLaunchHitsBreakpointAndExits();
   void pythonBreakpointVariablesAndEvaluate();
   void pythonUncaughtExceptionSurfacesTraceback();
+  void pytestEndpointBreakpointInspectsRequest();
   void cmakeBuildFeedsDebugSession();
   void cmakeQuickStartUsesTargetOwningTheOpenFile();
   void stoppingSessionReportsTerminationOnce();
@@ -176,6 +179,96 @@ void TestDapIntegration::initTestCase() {
 
 void TestDapIntegration::cleanupTestCase() {
   BreakpointManager::instance().clearAll();
+}
+
+void TestDapIntegration::pytestEndpointBreakpointInspectsRequest() {
+  const QString python =
+      qEnvironmentVariable("LIGHTPAD_TEST_PYTHON", findTool("python3"));
+  QProcess probe;
+  probe.start(python, {"-c", "import debugpy, pytest, fastapi, httpx"});
+  if (!probe.waitForFinished(15000) || probe.exitCode() != 0)
+    QSKIP("Endpoint debugging needs debugpy, pytest, fastapi and httpx; set "
+          "LIGHTPAD_TEST_PYTHON");
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  QDir().mkpath(project.filePath("src"));
+  QDir().mkpath(project.filePath("tests"));
+  const QString source = project.filePath("src/api.py");
+  QFile api(source);
+  QVERIFY(api.open(QIODevice::WriteOnly));
+  api.write("from fastapi import FastAPI\n"
+            "app = FastAPI()\n"
+            "@app.get('/double/{value}')\n"
+            "def double(value: int):\n"
+            "    result = value * 2\n"
+            "    return {'result': result}\n");
+  api.close();
+  QFile tests(project.filePath("tests/test_api.py"));
+  QVERIFY(tests.open(QIODevice::WriteOnly));
+  tests.write("import pytest\n"
+              "from fastapi.testclient import TestClient\n"
+              "from api import app\n"
+              "class TestEndpoints:\n"
+              "    @pytest.mark.parametrize('value', [21, 7])\n"
+              "    def test_double(self, value):\n"
+              "        with TestClient(app) as client:\n"
+              "            response = client.get(f'/double/{value}')\n"
+              "        assert response.json() == {'result': value * 2}\n");
+  tests.close();
+
+  auto &manager = DebugConfigurationManager::instance();
+  const QString previousRoot = manager.workspaceFolder();
+  const auto cleanup =
+      qScopeGuard([&]() { manager.setWorkspaceFolder(previousRoot); });
+  manager.setWorkspaceFolder(project.path());
+  TestConfiguration testConfig;
+  testConfig.args = {"-m", "pytest", "-v", "--tb=short",
+                     project.filePath("tests")};
+  const QString node = "tests/test_api.py::TestEndpoints::test_double[21]";
+  auto config = manager.createPytestConfig({node}, testConfig);
+  config.pythonMode = "customInterpreter";
+  config.pythonInterpreter = python;
+  auto adapter = DebugAdapterRegistry::instance().adapter("python-debugpy");
+  QVERIFY(adapter != nullptr);
+  auto launch = adapter->launchArguments(config);
+  launch["console"] = "internalConsole";
+  QVERIFY(!launch.contains("program"));
+  QCOMPARE(launch.value("module").toString(), "pytest");
+  DapClient client;
+  client.setAdapterMetadata("python-debugpy", "debugpy");
+  QSignalSpy ready(&client, &DapClient::initialized);
+  QSignalSpy initialized(&client, &DapClient::adapterInitialized);
+  QSignalSpy stopped(&client, &DapClient::stopped);
+  QSignalSpy exited(&client, &DapClient::exited);
+  QVERIFY(client.start(python, {"-m", "debugpy.adapter"}));
+  QTRY_COMPARE_WITH_TIMEOUT(ready.count(), 1, kAdapterTimeoutMs);
+  client.launch(launch);
+  QTRY_COMPARE_WITH_TIMEOUT(initialized.count(), 1, kAdapterTimeoutMs);
+  DapSourceBreakpoint breakpoint;
+  breakpoint.line = 5;
+  client.setBreakpoints(source, {breakpoint});
+  client.configurationDone();
+  QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 1, kAdapterTimeoutMs);
+  const auto stop = stopped.first().first().value<DapStoppedEvent>();
+  QCOMPARE(stop.reason, DapStoppedReason::Breakpoint);
+  QSignalSpy stack(&client, &DapClient::stackTraceReceived);
+  client.getStackTrace(stop.threadId);
+  QTRY_VERIFY_WITH_TIMEOUT(!stack.isEmpty(), kAdapterTimeoutMs);
+  const auto frames = stack.last().at(1).value<QList<DapStackFrame>>();
+  QVERIFY(!frames.isEmpty());
+  QCOMPARE(QFileInfo(frames.first().source.path).canonicalFilePath(),
+           QFileInfo(source).canonicalFilePath());
+  QCOMPARE(frames.first().line, 5);
+  QSignalSpy evaluated(&client, &DapClient::evaluateResult);
+  client.evaluate("value", frames.first().id, "watch");
+  QTRY_VERIFY_WITH_TIMEOUT(!evaluated.isEmpty(), kAdapterTimeoutMs);
+  QCOMPARE(evaluated.last().at(1).toString(), "21");
+  client.continueExecution(stop.threadId);
+  QTRY_COMPARE_WITH_TIMEOUT(exited.count(), 1, kAdapterTimeoutMs);
+  QCOMPARE(exited.first().first().toInt(), 0);
+  QCOMPARE(stopped.count(), 1);
+  client.stop(true);
+  QTest::qWait(2100); // Let the adapter's asynchronous shutdown finish.
 }
 
 void TestDapIntegration::cppBreakpointInspectEvaluateContinue() {

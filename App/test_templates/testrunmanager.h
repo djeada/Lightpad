@@ -6,6 +6,9 @@
 #include <QHash>
 #include <QObject>
 #include <QProcess>
+#include <QSet>
+#include <QTemporaryDir>
+#include <memory>
 
 class TestRunManager : public QObject {
   Q_OBJECT
@@ -49,6 +52,7 @@ signals:
   void processFinished(int exitCode, bool normalExit);
   void runStarted();
   void runFinished(int passed, int failed, int skipped, int errored);
+  void totalTestsChanged(int total);
 
 private slots:
   void onStdoutReady();
@@ -72,9 +76,11 @@ private:
   ITestOutputParser *m_parser = nullptr;
   QList<TestResult> m_results;
   QHash<QString, int> m_resultIndex;
+  QSet<QString> m_selectedTestIds;
   QByteArray m_stdoutBuffer;
   QByteArray m_stderrBuffer;
   bool m_forwardParserOutput = true;
+  std::unique_ptr<QTemporaryDir> m_reporterDirectory;
   int m_passed = 0;
   int m_failed = 0;
   int m_skipped = 0;

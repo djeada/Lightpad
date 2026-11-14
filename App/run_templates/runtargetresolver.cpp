@@ -2,6 +2,7 @@
 
 #include "../build/cmakeproject.h"
 #include "../language/languagecatalog.h"
+#include "../python/pythonbackendproject.h"
 #include "runtemplatemanager.h"
 
 #include <QCoreApplication>
@@ -64,6 +65,8 @@ bool looksLikeStructuredTestRun(const QString &templateId,
 
 QString RunTarget::displayName() const {
   switch (kind) {
+  case Kind::PythonBackend:
+    return templateName;
   case Kind::CMakeExecutable:
     if (!cmakeTargetName.isEmpty()) {
       return cmakeTargetName;
@@ -71,6 +74,7 @@ QString RunTarget::displayName() const {
     break;
   case Kind::None:
   case Kind::Template:
+  case Kind::Pytest:
   case Kind::CTest:
     break;
   }
@@ -105,6 +109,13 @@ QString RunTarget::rationale() const {
   switch (kind) {
   case Kind::None:
     return unavailableReason;
+  case Kind::PythonBackend:
+    return QCoreApplication::translate(
+        "RunTarget", "Starts the project web server using its Python "
+                     "environment, .env and import directory.");
+  case Kind::Pytest:
+    return QCoreApplication::translate(
+        "RunTarget", "Runs pytest and reports results in the Tests panel.");
   case Kind::Template:
     return templateName.isEmpty()
                ? QCoreApplication::translate("RunTarget",
@@ -202,6 +213,15 @@ RunTarget RunTargetResolver::resolve(const RunTargetContext &context) {
   target.filePath = context.filePath.trimmed();
   target.languageId = LanguageCatalog::normalize(context.languageId);
 
+  const PythonBackendProject backend =
+      PythonBackendProject::discover(context.projectRoot);
+  if (backend.ownsFile(target.filePath) &&
+      (target.filePath.isEmpty() || RunTemplateManager::instance()
+                                        .getAssignmentForFile(target.filePath)
+                                        .templateId.isEmpty())) {
+    return backendTarget(backend, target.filePath);
+  }
+
   if (target.filePath.isEmpty()) {
     target.unavailableReason = QCoreApplication::translate(
         "RunTarget", "Open and save a file to run it.");
@@ -226,6 +246,31 @@ RunTarget RunTargetResolver::resolve(const RunTargetContext &context) {
       templates.getWorkingDirectory(target.filePath, target.languageId);
   target.environment =
       templates.getEnvironment(target.filePath, target.languageId);
+
+  const QString filename = QFileInfo(target.filePath).fileName();
+  const bool defaultPytest =
+      target.languageId == "py" &&
+      (filename.startsWith("test_") || filename.endsWith("_test.py")) &&
+      templates.getAssignmentForFile(target.filePath).templateId.isEmpty();
+  if (defaultPytest || target.templateId == "python_pytest_file" ||
+      target.templateId == "python_pytest_workspace") {
+    target.kind = RunTarget::Kind::Pytest;
+    if (defaultPytest) {
+      const auto python = PythonProjectEnvironment::resolve(
+          backend.pythonPreference(), context.projectRoot, target.filePath);
+      target.program = python.interpreter;
+      target.templateId = "python_pytest_file";
+      target.templateName = "pytest";
+      target.arguments = {"-m", "pytest", "--tb=short", "-v", target.filePath};
+      target.workingDirectory = context.projectRoot.isEmpty()
+                                    ? QFileInfo(target.filePath).absolutePath()
+                                    : context.projectRoot;
+    }
+    if (backend.isValid())
+      target.environment["PYTHONPATH"] =
+          backend.environment().value("PYTHONPATH");
+    return target;
+  }
 
   if (looksLikeStructuredTestRun(target.templateId, target.commandLine())) {
     target.kind = RunTarget::Kind::CTest;
@@ -316,5 +361,59 @@ RunTarget RunTargetResolver::resolve(const RunTargetContext &context) {
   }
 
   target.kind = RunTarget::Kind::Template;
+  return target;
+}
+
+RunTarget RunTargetResolver::backendTarget(const PythonBackendProject &project,
+                                           const QString &filePath) {
+  RunTarget target;
+  if (!project.isValid()) {
+    target.unavailableReason = project.error.isEmpty()
+                                   ? QString("No Python web application found.")
+                                   : project.error;
+    return target;
+  }
+  const QString sourcePath = filePath.isEmpty() ? project.entryFile : filePath;
+  target.filePath =
+      project.entryFile.isEmpty() ? sourcePath : project.entryFile;
+  target.languageId = "py";
+  target.templateId = "python_backend";
+  target.templateName = project.name();
+  const auto assignment =
+      RunTemplateManager::instance().getAssignmentForFile(sourcePath);
+  PythonEnvironmentPreference preference = project.pythonPreference();
+  if (!assignment.pythonMode.isEmpty() &&
+      !project.settings.contains("pythonMode"))
+    preference.mode = assignment.pythonMode;
+  if (!assignment.pythonInterpreter.isEmpty() &&
+      !project.settings.contains("pythonInterpreter"))
+    preference.customInterpreter = assignment.pythonInterpreter;
+  if (!assignment.pythonVenvPath.isEmpty() &&
+      !project.settings.contains("pythonVenvPath"))
+    preference.venvPath = assignment.pythonVenvPath;
+  if (!assignment.pythonRequirementsFile.isEmpty() &&
+      !project.settings.contains("pythonRequirementsFile"))
+    preference.requirementsFile = assignment.pythonRequirementsFile;
+  const auto python = PythonProjectEnvironment::resolve(
+      preference, project.root, target.filePath, project.workingDirectory);
+  if (!python.found) {
+    target.unavailableReason = python.statusMessage;
+    return target;
+  }
+  target.kind = RunTarget::Kind::PythonBackend;
+  target.program = python.interpreter;
+  target.arguments = QStringList{"-m", project.module()} +
+                     project.serverArguments() + assignment.customArgs;
+  target.workingDirectory = project.workingDirectory;
+  target.environment = PythonProjectEnvironment::activationEnvironment(python);
+  const auto environment = project.environment();
+  for (auto it = environment.begin(); it != environment.end(); ++it)
+    target.environment[it.key()] = it.value();
+  for (auto it = assignment.customEnv.begin(); it != assignment.customEnv.end();
+       ++it)
+    target.environment[it.key()] =
+        PythonProjectEnvironment::substituteVariables(
+            it.value(), project.root, target.filePath, project.workingDirectory,
+            preference);
   return target;
 }

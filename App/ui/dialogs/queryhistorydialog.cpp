@@ -1,4 +1,5 @@
 #include "queryhistorydialog.h"
+#include "../paneltypography.h"
 
 #include "../panels/dbglyphs.h"
 #include "themedmessagebox.h"
@@ -115,6 +116,7 @@ void QueryHistoryDialog::applyTheme(const Theme &theme) {
   styleSubduedLabel(m_meta);
   styleDangerButton(m_clear);
   reload();
+  PanelTypography::apply(this, PanelTypography::contentFont(this));
 }
 
 void QueryHistoryDialog::reload() {

@@ -2,6 +2,7 @@
 
 #include "../../database/databasemanager.h"
 #include "../../database/sqlcompletion.h"
+#include "../../database/sqlquerycontext.h"
 #include "../../database/sqlstatementsplitter.h"
 
 #include <QTextStream>
@@ -83,7 +84,7 @@ void SqlCompletionProvider::requestCompletions(
     }
     if (cursor >= st.start) {
       stmtStart = st.start;
-      full = st.text;
+      full = text.mid(st.start, st.end - st.start);
     }
     if (cursor <= st.end) {
       break;
@@ -94,17 +95,31 @@ void SqlCompletionProvider::requestCompletions(
     full = before;
   }
 
-  const auto suggestions =
-      SqlCompletion::suggest(schema, engine, before, full, context.prefix);
+  const auto suggestions = SqlCompletion::suggest(
+      schema, engine, before, full,
+      SqlQueryContext::identifierPrefix(text, cursor).text);
+  const auto prefix = SqlQueryContext::identifierPrefix(text, cursor);
+  auto position = [&](int offset) {
+    const QString head = text.left(offset);
+    return QPair<int, int>{head.count('\n'),
+                           offset - head.lastIndexOf('\n') - 1};
+  };
+  const auto start = position(prefix.start), end = position(prefix.end);
   items.reserve(suggestions.size());
   for (const SqlSuggestion &s : suggestions) {
     CompletionItem item;
     item.label = s.label;
     item.insertText = s.insertText;
+    if (s.kind == SqlSuggestion::Kind::Function &&
+        item.insertText.endsWith('('))
+      item.insertText.chop(
+          1); // The editor inserts or reuses the call parentheses.
     item.detail = s.detail;
     item.kind = kindFor(s.kind);
     item.priority = s.priority;
     item.providerId = id();
+    item.textEditRange = CompletionItem::EditRange{start.first, start.second,
+                                                   end.first, end.second};
     items.append(item);
   }
   callback(items);

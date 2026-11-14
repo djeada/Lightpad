@@ -1,7 +1,10 @@
 #include "testpanel.h"
+#include "../../test_templates/pytestintegration.h"
+#include "../../test_templates/testsource.h"
 #include "../../theme/colorcontrast.h"
 #include "../dialogs/testconfigurationdialog.h"
 #include "../dialogs/themedmessagebox.h"
+#include "../paneltypography.h"
 #include "../uistylehelper.h"
 #include "../workspaceicons.h"
 #include "debugglyphs.h"
@@ -14,15 +17,23 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QKeyEvent>
 #include <QMenu>
 #include <QPainter>
 #include <QRegularExpression>
+#include <QResizeEvent>
+#include <QScrollBar>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QStyle>
 #include <QStyledItemDelegate>
+#include <QTextLayout>
 #include <QTimer>
+#include <QUrlQuery>
 #include <QWidgetAction>
+#include <QtMath>
+#include <algorithm>
+#include <functional>
 
 namespace {
 constexpr int TestIdRole = Qt::UserRole;
@@ -30,6 +41,84 @@ constexpr int FilePathRole = Qt::UserRole + 1;
 constexpr int LineNumberRole = Qt::UserRole + 2;
 constexpr int IsSuiteRole = Qt::UserRole + 3;
 constexpr int IsDetailItemRole = Qt::UserRole + 4;
+constexpr int StatusRole = Qt::UserRole + 5;
+constexpr int GenerationRole = Qt::UserRole + 6;
+constexpr int DurationRole = Qt::UserRole + 7;
+constexpr int SourceColumn = 3;
+constexpr int IsFileGroupRole = Qt::UserRole + 8;
+
+QString statusText(TestStatus status) {
+  switch (status) {
+  case TestStatus::Queued:
+    return QObject::tr("Not run");
+  case TestStatus::Running:
+    return QObject::tr("Running");
+  case TestStatus::Passed:
+    return QObject::tr("Passed");
+  case TestStatus::Failed:
+    return QObject::tr("Failed");
+  case TestStatus::Skipped:
+    return QObject::tr("Skipped");
+  case TestStatus::Errored:
+    return QObject::tr("Error");
+  }
+  return {};
+}
+
+QString durationText(int milliseconds) {
+  return milliseconds < 0 ? QString::fromUtf8("—")
+         : milliseconds < 1000
+             ? QObject::tr("%1 ms").arg(milliseconds)
+             : QObject::tr("%1 s").arg(milliseconds / 1000.0, 0, 'f', 2);
+}
+
+QIcon testStatusIcon(TestStatus status, const QColor &color, int size) {
+  size = qMax(18, size);
+  const qreal ratio = qApp->devicePixelRatio();
+  QPixmap pixmap(QSize(size, size) * ratio);
+  pixmap.setDevicePixelRatio(ratio);
+  pixmap.fill(Qt::transparent);
+  QPainter painter(&pixmap);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.scale(size / 20.0, size / 20.0);
+  painter.setPen(QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  painter.setBrush(Qt::NoBrush);
+  if (status == TestStatus::Passed) {
+    QPainterPath check;
+    check.moveTo(4, 10);
+    check.lineTo(8, 14);
+    check.lineTo(16, 5);
+    painter.drawPath(check);
+  } else if (status == TestStatus::Failed) {
+    painter.drawLine(QPointF(5, 5), QPointF(15, 15));
+    painter.drawLine(QPointF(15, 5), QPointF(5, 15));
+  } else if (status == TestStatus::Errored) {
+    painter.drawEllipse(QRectF(3, 3, 14, 14));
+    painter.drawLine(QPointF(10, 6), QPointF(10, 10));
+    painter.drawPoint(QPointF(10, 14));
+  } else if (status == TestStatus::Running) {
+    painter.drawArc(QRectF(3, 3, 14, 14), 40 * 16, 280 * 16);
+  } else {
+    painter.drawEllipse(QRectF(4, 4, 12, 12));
+    if (status == TestStatus::Skipped)
+      painter.drawLine(QPointF(5, 15), QPointF(15, 5));
+  }
+  return QIcon(pixmap);
+}
+
+class TestTreeItem : public QTreeWidgetItem {
+public:
+  using QTreeWidgetItem::QTreeWidgetItem;
+  bool operator<(const QTreeWidgetItem &other) const override {
+    const int column = treeWidget() ? treeWidget()->sortColumn() : 0;
+    if (column == 2)
+      return data(0, DurationRole).toInt() <
+             other.data(0, DurationRole).toInt();
+    if (column == 1)
+      return data(0, StatusRole).toInt() < other.data(0, StatusRole).toInt();
+    return text(column).compare(other.text(column), Qt::CaseInsensitive) < 0;
+  }
+};
 
 void appendUnique(QStringList &values, const QString &value) {
   const QString trimmed = value.trimmed();
@@ -237,18 +326,84 @@ public:
     opt.palette.setColor(QPalette::HighlightedText, text);
     opt.palette.setColor(QPalette::Text, text);
 
-    QStyledItemDelegate::paint(painter, opt, index);
+    if (index.column() == 0) {
+      const QWidget *widget = option.widget;
+      QStyle *style = widget ? widget->style() : QApplication::style();
+      const QRect textRect =
+          style->subElementRect(QStyle::SE_ItemViewItemText, &opt, widget);
+      QTextLayout textLayout(opt.text, opt.font);
+      const qreal height = layoutText(textLayout, textRect.width());
+      opt.text.clear();
+      style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, widget);
+      painter->setPen(text);
+      textLayout.draw(
+          painter, QPointF(textRect.left(),
+                           opt.rect.top() +
+                               qMax(0.0, (opt.rect.height() - height) / 2.0)));
+    } else {
+      QStyledItemDelegate::paint(painter, opt, index);
+    }
     painter->restore();
   }
 
   QSize sizeHint(const QStyleOptionViewItem &option,
                  const QModelIndex &index) const override {
-    QSize size = QStyledItemDelegate::sizeHint(option, index);
-    size.setHeight(qMax(size.height(), 22));
-    return size + QSize(0, 2);
+    QStyleOptionViewItem opt(option);
+    initStyleOption(&opt, index);
+    QSize size = QStyledItemDelegate::sizeHint(opt, index);
+    if (index.column() == 0) {
+      if (auto *tree = qobject_cast<QTreeWidget *>(parent())) {
+        int indentation = tree->indentation();
+        for (auto ancestor = index.parent(); ancestor.isValid();
+             ancestor = ancestor.parent())
+          indentation += tree->indentation();
+        opt.rect = QRect(0, 0, tree->columnWidth(0) - indentation, 1000)
+                       .adjusted(10, 1, -8, -1);
+        const QRect textRect = tree->style()->subElementRect(
+            QStyle::SE_ItemViewItemText, &opt, tree);
+        QTextLayout text(opt.text, opt.font);
+        const qreal height = layoutText(text, textRect.width());
+        size.setHeight(qMax(size.height(), qCeil(height) + 12));
+      }
+    }
+    size.setHeight(qMax(size.height(), opt.fontMetrics.height() + 12));
+    return size;
+  }
+
+protected:
+  void initStyleOption(QStyleOptionViewItem *option,
+                       const QModelIndex &index) const override {
+    QStyledItemDelegate::initStyleOption(option, index);
+    if (index.column() == 0) {
+      option->text.replace("_", QString::fromUtf8("_\u200b"));
+      option->text.replace("::", QString::fromUtf8("::\u200b"));
+      option->features |= QStyleOptionViewItem::WrapText;
+      option->textElideMode = Qt::ElideNone;
+    } else {
+      option->features &= ~QStyleOptionViewItem::WrapText;
+      option->textElideMode =
+          index.column() == SourceColumn ? Qt::ElideMiddle : Qt::ElideRight;
+    }
   }
 
 private:
+  static qreal layoutText(QTextLayout &text, int width) {
+    QTextOption wrapping;
+    wrapping.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+    text.setTextOption(wrapping);
+    text.beginLayout();
+    qreal height = 0;
+    for (;;) {
+      auto line = text.createLine();
+      if (!line.isValid())
+        break;
+      line.setLineWidth(qMax(20, width));
+      line.setPosition(QPointF(0, height));
+      height += line.height();
+    }
+    text.endLayout();
+    return height;
+  }
   QColor m_textColor;
   QColor m_baseBackground;
   QColor m_hoverBackground;
@@ -288,11 +443,21 @@ TestPanel::TestPanel(QWidget *parent) : QWidget(parent) {
           &TestPanel::onProcessStarted);
   connect(m_runManager, &TestRunManager::processFinished, this,
           &TestPanel::onProcessFinished);
+  connect(m_runManager, &TestRunManager::totalTestsChanged, this,
+          [this](int total) {
+            m_expectedTests = total;
+            m_progressBar->setRange(0, qMax(1, total));
+            m_progressBar->setValue(m_completedRunIds.size());
+          });
 
   refreshConfigurations();
 }
 
 TestPanel::~TestPanel() {
+  disconnect(m_runManager, nullptr, this, nullptr);
+  m_runManager->stop();
+  if (m_discoveryAdapter)
+    disconnect(m_discoveryAdapter, nullptr, this, nullptr);
   if (m_ownsDiscoveryAdapter)
     delete m_discoveryAdapter;
 }
@@ -322,7 +487,7 @@ void TestPanel::setupUI() {
   filters->setSpacing(8);
   m_searchEdit = new QLineEdit(m_headerShell);
   m_searchEdit->setObjectName("testSearchEdit");
-  m_searchEdit->setPlaceholderText(tr("Filter tests by name..."));
+  m_searchEdit->setPlaceholderText(tr("Search test names, files, or IDs"));
   m_searchEdit->setClearButtonEnabled(true);
   m_searchEdit->setAccessibleName(tr("Filter tests by name"));
   m_searchEdit->setMinimumWidth(80);
@@ -343,7 +508,9 @@ void TestPanel::setupUI() {
   m_progressBar->setVisible(false);
   layout->addWidget(m_progressBar);
 
-  m_splitter = new QSplitter(Qt::Vertical, this);
+  m_splitter = new QSplitter(Qt::Horizontal, this);
+  m_splitter->setObjectName("testDetailsSplitter");
+  m_splitter->setChildrenCollapsible(false);
 
   auto *treeContainer = new QWidget(this);
   auto *treeLayout = new QVBoxLayout(treeContainer);
@@ -352,18 +519,68 @@ void TestPanel::setupUI() {
 
   m_tree = new QTreeWidget(treeContainer);
   m_tree->setObjectName("testTree");
-  m_tree->setHeaderLabels({tr("Test"), tr("Status"), tr("Duration")});
+  m_tree->setAccessibleName(tr("Tests and results"));
+  m_tree->setHeaderLabels(
+      {tr("Test"), tr("Result"), tr("Time"), tr("Definition")});
   m_tree->setRootIsDecorated(true);
   m_tree->setAlternatingRowColors(false);
-  m_tree->setUniformRowHeights(true);
+  m_tree->setUniformRowHeights(false);
+  m_tree->setWordWrap(true);
+  m_tree->setTextElideMode(Qt::ElideNone);
+  m_tree->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+  m_tree->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
   m_tree->setSelectionBehavior(QAbstractItemView::SelectRows);
-  m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+  m_tree->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_tree->setAllColumnsShowFocus(true);
   m_tree->setMouseTracking(true);
   m_tree->header()->setStretchLastSection(false);
-  m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-  m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-  m_tree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+  m_tree->header()->setSectionResizeMode(QHeaderView::Interactive);
+  m_tree->header()->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_tree->header(), &QHeaderView::customContextMenuRequested, this,
+          [this](const QPoint &point) {
+            QMenu menu(this);
+            menu.addAction(tr("Fit Columns"), this, [this]() {
+              m_userSizedColumns = false;
+              fitTestColumns();
+            });
+            for (int column = 1; column < m_tree->columnCount(); ++column) {
+              auto *action = menu.addAction(m_tree->headerItem()->text(column));
+              action->setCheckable(true);
+              action->setChecked(!m_tree->isColumnHidden(column));
+              connect(action, &QAction::toggled, this,
+                      [this, column](bool visible) {
+                        m_userSizedColumns = true;
+                        m_tree->setColumnHidden(column, !visible);
+                      });
+            }
+            menu.exec(m_tree->header()->mapToGlobal(point));
+          });
+  m_tree->header()->setSectionsClickable(true);
+  connect(
+      m_tree->header(), &QHeaderView::sectionClicked, this, [this](int column) {
+        const auto order =
+            m_tree->header()->sortIndicatorSection() == column &&
+                    m_tree->header()->sortIndicatorOrder() == Qt::AscendingOrder
+                ? Qt::DescendingOrder
+                : Qt::AscendingOrder;
+        m_tree->setSortingEnabled(true);
+        m_tree->sortItems(column, order);
+      });
+  m_tree->setColumnHidden(2, true);
+  connect(m_splitter, &QSplitter::splitterMoved, this,
+          [this]() { fitTestColumns(); });
+  connect(m_tree->header(), &QHeaderView::sectionResized, this, [this]() {
+    if (!m_fittingColumns &&
+        QApplication::mouseButtons().testFlag(Qt::LeftButton))
+      m_userSizedColumns = true;
+    m_tree->doItemsLayout();
+  });
+  m_tree->installEventFilter(this);
+  m_tree->viewport()->installEventFilter(this);
+  connect(m_tree, &QTreeWidget::itemSelectionChanged, this,
+          &TestPanel::updateSelectionActions);
+  connect(m_tree, &QTreeWidget::currentItemChanged, this,
+          [this](QTreeWidgetItem *item) { showItemDetails(item); });
   m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
   m_tree->setItemDelegate(new TestTreeDelegate(m_tree));
   connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
@@ -416,13 +633,25 @@ void TestPanel::setupUI() {
   m_detailToggleButton->setChecked(false);
   m_detailToggleButton->setArrowType(Qt::RightArrow);
 
-  m_detailPane = new QTextEdit(m_detailSection);
+  m_detailTabs = new QTabWidget(m_detailSection);
+  m_detailTabs->setObjectName("testDetailTabs");
+  auto *browser = new QTextBrowser(m_detailTabs);
+  browser->setOpenLinks(false);
+  connect(browser, &QTextBrowser::anchorClicked, this,
+          &TestPanel::openSourceLink);
+  m_detailPane = browser;
   m_detailPane->setObjectName("testDetailPane");
   m_detailPane->setReadOnly(true);
+  m_detailPane->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
   m_detailPane->setMinimumHeight(100);
   m_detailPane->setPlaceholderText(
       tr("Select a test to view its output and details"));
-  detailLayout->addWidget(m_detailPane);
+  m_detailTabs->addTab(m_detailPane, tr("Selected test"));
+  m_runOutputPane = new QTextEdit(m_detailTabs);
+  m_runOutputPane->setObjectName("testRunOutput");
+  m_runOutputPane->setReadOnly(true);
+  m_detailTabs->addTab(m_runOutputPane, tr("Run output"));
+  detailLayout->addWidget(m_detailTabs);
 
   connect(m_detailToggleButton, &QToolButton::toggled, this,
           [this](bool checked) { setDetailsExpanded(checked); });
@@ -467,11 +696,26 @@ void TestPanel::setupToolbar() {
   m_toolbar->widgetForAction(m_runAllAction)
       ->setObjectName("runAllTestsButton");
 
+  m_runSelectedAction = m_toolbar->addAction(
+      style()->standardIcon(QStyle::SP_MediaPlay), tr("Run Selected"), this,
+      &TestPanel::runSelectedTests);
+  m_runSelectedAction->setObjectName("runSelectedTestsAction");
+  m_runSelectedAction->setToolTip(
+      tr("Run selected tests or all tests in selected groups (Ctrl+Enter)"));
+  m_runSelectedAction->setEnabled(false);
+
   m_runFailedAction =
       m_toolbar->addAction(style()->standardIcon(QStyle::SP_BrowserReload),
                            tr("Run Failed"), this, &TestPanel::runFailed);
   m_runFailedAction->setToolTip(tr("Re-run Failed Tests"));
   m_runFailedAction->setEnabled(false);
+
+  m_debugAction =
+      m_toolbar->addAction(style()->standardIcon(QStyle::SP_ComputerIcon),
+                           tr("Debug"), this, &TestPanel::debugSelectedTests);
+  m_debugAction->setObjectName("debugTestsAction");
+  m_debugAction->setToolTip(
+      tr("Debug selected pytest tests, or all tests if none are selected"));
 
   m_stopAction =
       m_toolbar->addAction(style()->standardIcon(QStyle::SP_MediaStop),
@@ -494,20 +738,52 @@ void TestPanel::setupToolbar() {
   auto *options = new QMenu(m_optionsButton);
   m_optionsButton->setMenu(options);
 
-  m_clearAction =
-      options->addAction(style()->standardIcon(QStyle::SP_DialogResetButton),
-                         tr("Clear"), this, [this]() {
-                           m_tree->clear();
-                           m_detailPane->clear();
-                           m_suiteItems.clear();
-                           m_testItems.clear();
-                           m_testResults.clear();
-                           m_passedCount = m_failedCount = m_skippedCount =
-                               m_erroredCount = 0;
-                           resetRunContext();
-                           updateStatusLabel();
-                           updateEmptyState();
-                         });
+  m_openSourceAction = options->addAction(tr("Go to Test Definition"), this,
+                                          &TestPanel::openSelectedTest);
+  m_openSourceAction->setObjectName("goToTestDefinition");
+  m_openSourceAction->setToolTip(
+      tr("Open the selected test's definition (Enter)"));
+  m_openSourceAction->setEnabled(false);
+  options->addAction(tr("Expand All"), this, [this]() {
+    for (auto *group : m_suiteItems)
+      group->setExpanded(true);
+  });
+  options->addAction(tr("Collapse All"), this,
+                     [this]() { m_tree->collapseAll(); });
+  options->addAction(tr("Fit Columns"), this, [this]() {
+    m_userSizedColumns = false;
+    fitTestColumns();
+  });
+  options->addSeparator();
+
+  m_clearAction = options->addAction(
+      style()->standardIcon(QStyle::SP_DialogResetButton), tr("Clear Results"),
+      this, [this]() {
+        m_detailPane->clear();
+        m_runOutputPane->clear();
+        m_testResults.clear();
+        m_runManager->clearResults();
+        m_completedRunIds.clear();
+        m_hasDurations = false;
+        for (auto *item : m_testItems) {
+          item->setText(1, tr("Not run"));
+          item->setText(2, QString::fromUtf8("—"));
+          item->setData(0, StatusRole, static_cast<int>(TestStatus::Queued));
+          item->setData(0, DurationRole, -1);
+          while (item->childCount())
+            delete item->takeChild(0);
+          updateTreeItemIcon(item, TestStatus::Queued);
+        }
+        m_passedCount = m_failedCount = m_skippedCount = m_erroredCount = 0;
+        resetRunContext();
+        updateSuiteSummaries();
+        updateStatusLabel();
+        updateEmptyState();
+        applyFilter();
+        fitTestColumns();
+        updateSelectionActions();
+        emit countsChanged(0, 0, 0, 0);
+      });
   m_clearAction->setToolTip(tr("Clear Results"));
 
   options->addSeparator();
@@ -579,7 +855,7 @@ void TestPanel::setupToolbar() {
       style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Configure"),
       this, &TestPanel::openConfigurationDialog);
   m_configureAction->setToolTip(tr("Edit Test Configurations"));
-  for (auto *action : {m_runFailedAction, m_stopAction})
+  for (auto *action : {m_stopAction})
     if (auto *button =
             qobject_cast<QToolButton *>(m_toolbar->widgetForAction(action)))
       button->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -658,9 +934,7 @@ void TestPanel::applyTheme(const Theme &theme) {
           "  outline: none;"
           "  padding: 2px;"
           "}"
-          "QTreeWidget#testTree::item {"
-          "  height: 28px;"
-          "}"
+          "QTreeWidget#testTree::item { padding: 4px 2px; }"
           "QTreeWidget#testTree::item:hover,"
           "QTreeWidget#testTree::item:selected {"
           "  background: transparent;"
@@ -693,7 +967,7 @@ void TestPanel::applyTheme(const Theme &theme) {
           "QToolButton#testDetailToggle:checked {"
           "  background: %8;"
           "}"
-          "QTextEdit#testDetailPane {"
+          "QTextEdit#testDetailPane, QTextEdit#testRunOutput {"
           "  background: %2;"
           "  color: %3;"
           "  border: none;"
@@ -733,6 +1007,17 @@ void TestPanel::applyTheme(const Theme &theme) {
   m_filterCombo->setStyleSheet(comboStyle);
   m_configCombo->setStyleSheet(comboStyle);
   m_autoRunModeCombo->setStyleSheet(comboStyle);
+  m_detailTabs->setStyleSheet(
+      QString(
+          "QTabWidget::pane { border: none; background: %1; }"
+          "QTabBar::tab { background: %2; color: %3; border: none; padding: "
+          "8px 12px; }"
+          "QTabBar::tab:selected { color: %4; border-bottom: 2px solid %4; }")
+          .arg(panelSurface.name(), headerSurface.name(), secondaryText.name(),
+               accentColor.name()));
+  const QColor link = ColorContrast::ensure(accentColor, panelSurface);
+  m_detailPane->document()->setDefaultStyleSheet("a { color: " + link.name() +
+                                                 "; }");
 
   for (auto it = m_testItems.constBegin(); it != m_testItems.constEnd(); ++it) {
     const auto result = m_testResults.constFind(it.key());
@@ -742,6 +1027,252 @@ void TestPanel::applyTheme(const Theme &theme) {
   if (!m_runManager || !m_runManager->isRunning())
     updateStatusLabel();
   m_tree->viewport()->update();
+  setContentFont(PanelTypography::contentFont(this));
+}
+
+void TestPanel::setContentFont(const QFont &font) {
+  const qreal oldSize = m_tree->font().pointSizeF();
+  PanelTypography::apply(this, font);
+  if (m_userSizedColumns && oldSize > 0 &&
+      m_tree->font().pointSizeF() != oldSize) {
+    m_fittingColumns = true;
+    const qreal scale = m_tree->font().pointSizeF() / oldSize;
+    for (int column = 0; column < m_tree->columnCount(); ++column)
+      m_tree->setColumnWidth(column,
+                             qRound(m_tree->columnWidth(column) * scale));
+    m_fittingColumns = false;
+  }
+  m_configCombo->setMaximumWidth(
+      qMax(220, fontMetrics().horizontalAdvance("Workspace pytest") + 48));
+  m_filterCombo->setMaximumWidth(
+      qMax(180, fontMetrics().horizontalAdvance("All results") + 48));
+  const int iconSize = m_toolbar->iconSize().width();
+  const QColor text = m_theme.foregroundColor.isValid()
+                          ? m_theme.foregroundColor
+                          : palette().color(QPalette::Text);
+  const QColor secondary = m_theme.surfaceColor.isValid()
+                               ? UIStyleHelper::secondaryTextColor(m_theme)
+                               : text;
+  m_runAllAction->setIcon(
+      DebugGlyphs::icon(DebugGlyphs::Glyph::Play, text, iconSize));
+  m_runSelectedAction->setIcon(
+      DebugGlyphs::icon(DebugGlyphs::Glyph::Play, secondary, iconSize));
+  m_runFailedAction->setIcon(
+      DebugGlyphs::icon(DebugGlyphs::Glyph::Restart, secondary, iconSize));
+  m_stopAction->setIcon(
+      DebugGlyphs::icon(DebugGlyphs::Glyph::Stop, secondary, iconSize));
+  m_discoverAction->setIcon(
+      WorkspaceIcons::icon(WorkspaceIcons::Glyph::Search, secondary, iconSize));
+  m_debugAction->setIcon(
+      WorkspaceIcons::icon(WorkspaceIcons::Glyph::Debug, secondary, iconSize));
+  for (auto *item : m_testItems)
+    updateTreeItemIcon(
+        item, static_cast<TestStatus>(item->data(0, StatusRole).toInt()));
+  updateSuiteSummaries();
+  fitTestColumns();
+  if (auto *item = m_tree->currentItem())
+    m_tree->scrollToItem(item);
+}
+
+void TestPanel::resizeEvent(QResizeEvent *event) {
+  QWidget::resizeEvent(event);
+  const auto orientation = width() >= 1100 ? Qt::Horizontal : Qt::Vertical;
+  if (m_splitter->orientation() != orientation)
+    m_splitter->setOrientation(orientation);
+  if (!m_userSizedColumns)
+    fitTestColumns();
+}
+
+bool TestPanel::eventFilter(QObject *watched, QEvent *event) {
+  if (watched == m_tree->viewport() && event->type() == QEvent::Resize &&
+      !m_userSizedColumns)
+    QTimer::singleShot(0, this, &TestPanel::fitTestColumns);
+  if (watched == m_tree && event->type() == QEvent::KeyPress) {
+    const auto *key = static_cast<QKeyEvent *>(event);
+    if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
+      if (key->modifiers() & Qt::ControlModifier)
+        runSelectedTests();
+      else
+        openSelectedTest();
+      return true;
+    }
+  }
+  return QWidget::eventFilter(watched, event);
+}
+
+void TestPanel::fitTestColumns() {
+  if (!m_tree || m_userSizedColumns)
+    return;
+  m_fittingColumns = true;
+  const QFontMetrics metrics(m_tree->font());
+  const int available = qMax(360, m_tree->viewport()->width());
+  const int status = qMax(metrics.horizontalAdvance(tr("Running")),
+                          qMax(metrics.horizontalAdvance(
+                                   tr("%1 failed").arg(m_testItems.size())),
+                               metrics.horizontalAdvance(
+                                   tr("%1 tests").arg(m_testItems.size())))) +
+                     48;
+  const int time =
+      m_hasDurations ? metrics.horizontalAdvance("120.00 s") + 24 : 0;
+  const int sourceWidth = qMin(420, qMax(260, available / 4));
+  const int readableName =
+      metrics.horizontalAdvance("test_endpoint_with_multiple_conditions");
+  const bool showSource =
+      available >= qMax(1000, readableName + status + time + sourceWidth);
+  const int source = showSource ? sourceWidth : 0;
+  m_tree->setColumnHidden(2, !m_hasDurations);
+  m_tree->setColumnHidden(SourceColumn, !showSource);
+  m_tree->setColumnWidth(0, qMax(320, available - status - time - source - 8));
+  m_tree->setColumnWidth(1, status);
+  m_tree->setColumnWidth(2, qMax(80, time));
+  m_tree->setColumnWidth(SourceColumn, qMax(180, source));
+  m_fittingColumns = false;
+  m_tree->doItemsLayout();
+}
+
+void TestPanel::updateSelectionActions() {
+  const bool idle = !m_running && !m_discovering;
+  const auto config = currentConfiguration();
+  m_runAllAction->setEnabled(idle && config.isValid());
+  m_runSelectedAction->setEnabled(idle && config.isValid() &&
+                                  !m_tree->selectedItems().isEmpty());
+  bool hasFailures = false;
+  for (const auto &result : m_testResults)
+    hasFailures |= result.status == TestStatus::Failed ||
+                   result.status == TestStatus::Errored;
+  m_runFailedAction->setEnabled(idle && hasFailures);
+  m_debugAction->setEnabled(idle && config.isValid() &&
+                            config.outputFormat == "pytest");
+  m_stopAction->setEnabled(!idle);
+  m_configCombo->setEnabled(idle);
+  m_configureAction->setEnabled(idle);
+  m_discoverAction->setEnabled(idle && m_discoveryAdapter &&
+                               !m_workspaceFolder.isEmpty());
+  m_clearAction->setEnabled(idle);
+  if (m_openSourceAction)
+    m_openSourceAction->setEnabled(m_tree->currentItem() != nullptr);
+}
+
+void TestPanel::openSelectedTest() {
+  onItemDoubleClicked(m_tree->currentItem(), 0);
+}
+
+void TestPanel::runSelectedTests() {
+  runItems(m_tree->selectedItems(), tr("Selected tests"));
+}
+
+void TestPanel::runItems(const QList<QTreeWidgetItem *> &selection,
+                         const QString &scope) {
+  auto config = currentConfiguration();
+  if (!config.isValid() || m_running || m_discovering)
+    return;
+  QList<QTreeWidgetItem *> leaves;
+  QStringList files;
+  QSet<QString> ids;
+  std::function<void(QTreeWidgetItem *)> collect = [&](QTreeWidgetItem *item) {
+    if (!item)
+      return;
+    if (item->data(0, IsDetailItemRole).toBool())
+      item = item->parent();
+    if (!item)
+      return;
+    if (item->data(0, IsSuiteRole).toBool()) {
+      if (config.outputFormat == "jest_json" &&
+          item->data(0, IsFileGroupRole).toBool()) {
+        files << item->data(0, FilePathRole).toString();
+        return;
+      }
+      if (item->childCount() == 0 && item->data(0, IsFileGroupRole).toBool())
+        files << item->data(0, FilePathRole).toString();
+      for (int i = 0; i < item->childCount(); ++i)
+        collect(item->child(i));
+    } else {
+      const QString id = item->data(0, TestIdRole).toString();
+      if (!ids.contains(id)) {
+        ids.insert(id);
+        leaves << item;
+      }
+    }
+  };
+  for (auto *item : selection)
+    collect(item);
+  files.removeDuplicates();
+  if (config.outputFormat == "jest_json" && !files.isEmpty()) {
+    leaves.erase(std::remove_if(leaves.begin(), leaves.end(),
+                                [&](QTreeWidgetItem *item) {
+                                  const bool included = files.contains(
+                                      item->data(0, FilePathRole).toString());
+                                  if (included)
+                                    ids.remove(
+                                        item->data(0, TestIdRole).toString());
+                                  return included;
+                                }),
+                 leaves.end());
+    if (!leaves.isEmpty()) {
+      m_statusLabel->setText(tr("Run Jest file groups separately from "
+                                "individual cases in other files."));
+      return;
+    }
+  }
+  if (leaves.isEmpty() && files.isEmpty())
+    return;
+  recordRunRequest(config, scope);
+  m_runTargets = ids.values();
+  m_runTargets << files;
+  if (config.outputFormat == "pytest") {
+    QStringList targets;
+    for (auto *item : leaves)
+      targets << pytestTargets(item);
+    if (targets.isEmpty())
+      return;
+    m_runTargets = targets;
+    m_runManager->runAll(PytestIntegration::withTargets(config, targets),
+                         m_workspaceFolder);
+  } else if (config.outputFormat == "jest_json") {
+    config.env["LIGHTPAD_JEST_SELECTION"] =
+        PytestIntegration::selectionValue(ids.values());
+    QStringList names;
+    for (auto *item : leaves) {
+      names << item->text(0);
+      files << item->data(0, FilePathRole).toString();
+    }
+    files.removeAll(QString());
+    files.removeDuplicates();
+    if (names.isEmpty()) {
+      config.args << "--runTestsByPath" << files;
+      m_runManager->runAll(config, m_workspaceFolder);
+    } else {
+      config.runFailed.args << "--runTestsByPath" << files;
+      m_runManager->runPattern(config, m_workspaceFolder,
+                               TestRunManager::failedTestFilter(config, names));
+    }
+  } else if (config.outputFormat == "ctest") {
+    QStringList names;
+    for (auto *item : leaves)
+      names << item->text(0);
+    m_runManager->runPattern(config, m_workspaceFolder,
+                             TestRunManager::failedTestFilter(config, names));
+  } else if ((config.outputFormat == "cargo" ||
+              config.outputFormat == "cargo_json") &&
+             leaves.size() > 1) {
+    if (QFileInfo(config.command).baseName() != "cargo") {
+      m_statusLabel->setText(
+          tr("This configuration supports one selected Rust test at a time."));
+      return;
+    }
+    if (!config.args.contains("--"))
+      config.args << "--";
+    config.args << "--exact" << ids.values();
+    m_runManager->runAll(config, m_workspaceFolder);
+  } else if (!leaves.isEmpty()) {
+    auto *item = leaves.first();
+    const bool cargo =
+        config.outputFormat == "cargo" || config.outputFormat == "cargo_json";
+    const QString name =
+        cargo ? item->data(0, TestIdRole).toString() : item->text(0);
+    m_runManager->runSingleTest(config, m_workspaceFolder, name,
+                                item->data(0, FilePathRole).toString());
+  }
 }
 
 static QString workspaceConfigurationKey(const QString &folder) {
@@ -767,6 +1298,26 @@ static QString workspaceConfigurationId(const QString &folder) {
 }
 
 void TestPanel::setWorkspaceFolder(const QString &folder) {
+  if (QDir::cleanPath(m_workspaceFolder) != QDir::cleanPath(folder)) {
+    if (m_discovering || m_running)
+      stopTests();
+    m_tree->clear();
+    m_suiteItems.clear();
+    m_testItems.clear();
+    m_testResults.clear();
+    m_discoveredTests.clear();
+    m_runManager->clearResults();
+    m_completedRunIds.clear();
+    m_runTargets.clear();
+    m_passedCount = m_failedCount = m_skippedCount = m_erroredCount = 0;
+    m_hasDurations = false;
+    m_runGeneration = 0;
+    m_searchEdit->clear();
+    m_detailPane->clear();
+    m_runOutputPane->clear();
+    resetRunContext();
+    emit countsChanged(0, 0, 0, 0);
+  }
   m_workspaceFolder = folder;
   TestConfigurationManager::instance().setWorkspaceFolder(folder);
   TestConfigurationManager::instance().loadUserConfigurations(folder);
@@ -786,23 +1337,83 @@ void TestPanel::setWorkspaceFolder(const QString &folder) {
       m_autoRunModeCombo->setCurrentIndex(modeIdx);
   }
   syncAutoRunConfiguration();
+  updateStatusLabel();
+  updateSelectionActions();
   updateEmptyState();
 }
 
 void TestPanel::runAll() {
   TestConfiguration config = currentConfiguration();
-  if (!config.isValid())
+  if (!config.isValid() || m_running || m_discovering)
     return;
   recordRunRequest(config, tr("Workspace"));
   m_runManager->runAll(config, m_workspaceFolder);
 }
 
 void TestPanel::runFailed() {
-  TestConfiguration config = currentConfiguration();
-  if (!config.isValid())
+  QList<QTreeWidgetItem *> failures;
+  for (auto it = m_testResults.cbegin(); it != m_testResults.cend(); ++it)
+    if (it->status == TestStatus::Failed || it->status == TestStatus::Errored)
+      if (auto *item = findTestItem(it.key()))
+        failures << item;
+  runItems(failures, tr("Failed tests"));
+}
+
+QStringList TestPanel::pytestTargets(QTreeWidgetItem *item) const {
+  QStringList targets;
+  if (item && item->data(0, IsDetailItemRole).toBool())
+    item = item->parent();
+  if (!item)
+    return targets;
+  if (item->data(0, IsSuiteRole).toBool()) {
+    for (int i = 0; i < item->childCount(); ++i)
+      targets << pytestTargets(item->child(i));
+  } else {
+    const QString id = item->data(0, TestIdRole).toString();
+    if (id.contains("::")) {
+      // Definition metadata can point to an inherited method in another module.
+      // Pytest must run the collecting module from the node ID.
+      const QString collectingFile = TestSource::existingFile(
+          id.section("::", 0, 0), m_workspaceFolder, m_lastRunWorkingDirectory);
+      targets << (collectingFile.isEmpty()
+                      ? id
+                      : collectingFile + id.mid(id.indexOf("::")));
+    }
+  }
+  targets.removeDuplicates();
+  return targets;
+}
+
+void TestPanel::debugAllTests() {
+  const auto config = currentConfiguration();
+  if (config.outputFormat != "pytest") {
+    m_statusLabel->setText(
+        tr("Select a pytest configuration to debug Python tests."));
     return;
-  recordRunRequest(config, tr("Failed tests"));
-  m_runManager->runFailed(config, m_workspaceFolder);
+  }
+  emit debugTestsRequested({}, config);
+}
+
+void TestPanel::debugSelectedTests() {
+  const auto config = currentConfiguration();
+  if (config.outputFormat != "pytest") {
+    m_statusLabel->setText(
+        tr("Select a pytest configuration to debug Python tests."));
+    return;
+  }
+  QStringList targets;
+  for (auto *item : m_tree->selectedItems())
+    targets << pytestTargets(item);
+  targets.removeDuplicates();
+  if (!m_tree->selectedItems().isEmpty() && targets.isEmpty())
+    return;
+  emit debugTestsRequested(targets, config);
+}
+
+void TestPanel::debugTestFile(const QString &filePath) {
+  const auto config = currentConfiguration();
+  if (config.outputFormat == "pytest" && !filePath.isEmpty())
+    emit debugTestsRequested({filePath}, config);
 }
 
 void TestPanel::runCurrentFile(const QString &filePath) {
@@ -869,7 +1480,25 @@ bool TestPanel::runWithConfigurationId(const QString &configId,
   return true;
 }
 
-void TestPanel::stopTests() { m_runManager->stop(); }
+void TestPanel::stopTests() {
+  if (m_discovering) {
+    m_discovering = false;
+    m_discoveryAdapter->cancel();
+    m_discoverAction->setEnabled(true);
+    m_stopAction->setEnabled(false);
+    m_runAllAction->setEnabled(true);
+    m_progressBar->hide();
+    m_statusLabel->setText(tr("Discovery cancelled"));
+    updateSelectionActions();
+    return;
+  }
+  if (!m_running && !m_runManager->isRunning())
+    return;
+  m_cancelled = true;
+  m_runManager->stop();
+  m_statusLabel->setText(
+      tr("Cancelled · %1 test(s) completed").arg(m_completedRunIds.size()));
+}
 
 void TestPanel::openConfigurationDialog() {
   if (m_workspaceFolder.isEmpty()) {
@@ -898,138 +1527,236 @@ void TestPanel::openConfigurationDialog() {
   dialog->show();
 }
 
-void TestPanel::onTestStarted(const TestResult &result) {
-  m_lastRunProducedResults = true;
-  QTreeWidgetItem *suiteItem = findOrCreateSuiteItem(result.suite);
-
+QTreeWidgetItem *TestPanel::updateTestItem(const TestResult &result) {
+  QString suite = result.suite;
+  if (result.id.section("::", 0, 0).endsWith(".py"))
+    suite = result.id.section("::", 0, 0);
+  QTreeWidgetItem *group = findOrCreateSuiteItem(suite);
   QTreeWidgetItem *item = findTestItem(result.id);
   if (!item) {
-    item = new QTreeWidgetItem();
-    if (suiteItem)
-      suiteItem->addChild(item);
+    item = new TestTreeItem();
+    if (group)
+      group->addChild(item);
     else
       m_tree->addTopLevelItem(item);
     m_testItems[result.id] = item;
   }
-
   item->setText(0, result.name);
   item->setData(0, TestIdRole, result.id);
-  updateTreeItemIcon(item, TestStatus::Running);
-  item->setText(1, tr("Running"));
-  item->setText(2, "");
+  item->setData(0, StatusRole, static_cast<int>(result.status));
+  item->setData(0, GenerationRole, m_runGeneration);
+  item->setData(0, DurationRole, result.durationMs);
+  if (!result.filePath.isEmpty())
+    item->setData(0, FilePathRole, result.filePath);
+  if (result.line > 0)
+    item->setData(0, LineNumberRole, result.line);
+  if (const auto it = m_discoveredTests.constFind(result.id);
+      it != m_discoveredTests.constEnd()) {
+    if (item->data(0, FilePathRole).toString().isEmpty())
+      item->setData(0, FilePathRole, it->filePath);
+    if (item->data(0, LineNumberRole).toInt() <= 0 && it->line > 0)
+      item->setData(0, LineNumberRole, it->line);
+  }
+  item->setText(1, statusText(result.status));
+  item->setText(2, durationText(result.durationMs));
+  item->setTextAlignment(2, Qt::AlignRight | Qt::AlignVCenter);
+  if (result.durationMs >= 0 && !m_hasDurations) {
+    m_hasDurations = true;
+    if (m_userSizedColumns) {
+      m_fittingColumns = true;
+      m_tree->setColumnHidden(2, false);
+      m_tree->setColumnWidth(
+          2, QFontMetrics(m_tree->font()).horizontalAdvance("120.00 s") + 24);
+      m_fittingColumns = false;
+    }
+    fitTestColumns();
+  }
+  QString path;
+  int line = 0;
+  if (resolveSourceLocation(item, &path, &line)) {
+    const QString shown = m_workspaceFolder.isEmpty()
+                              ? path
+                              : QDir(m_workspaceFolder).relativeFilePath(path);
+    const QString filename = QFileInfo(path).fileName();
+    item->setText(SourceColumn,
+                  line > 0 ? filename + ':' + QString::number(line) : filename);
+    item->setToolTip(SourceColumn,
+                     shown + '\n' + path + ':' + QString::number(line));
+  }
+  const QString tooltip =
+      result.id + '\n' + statusText(result.status) +
+      (result.durationMs >= 0 ? " · " + durationText(result.durationMs)
+                              : QString()) +
+      (result.message.isEmpty() ? QString() : '\n' + result.message);
+  item->setToolTip(0, tooltip);
+  item->setToolTip(1, statusText(result.status));
+  item->setToolTip(2,
+                   result.durationMs >= 0
+                       ? durationText(result.durationMs)
+                       : tr("The runner did not report timing for this test."));
+  updateTreeItemIcon(item, result.status);
+  return item;
+}
 
+void TestPanel::onTestStarted(const TestResult &result) {
+  auto *item = updateTestItem(result);
+  while (item->childCount())
+    delete item->takeChild(0);
   m_testResults[result.id] = result;
+  if (m_tree->currentItem() == item)
+    showItemDetails(item);
+  updateSuiteSummaries();
   applySearchFilter();
 }
 
 void TestPanel::onTestFinished(const TestResult &result) {
   m_lastRunProducedResults = true;
-  QTreeWidgetItem *suiteItem = findOrCreateSuiteItem(result.suite);
-
-  QTreeWidgetItem *item = findTestItem(result.id);
-  if (!item) {
-    item = new QTreeWidgetItem();
-    if (suiteItem)
-      suiteItem->addChild(item);
-    else
-      m_tree->addTopLevelItem(item);
-    m_testItems[result.id] = item;
-  }
-
-  item->setText(0, result.name);
-  item->setData(0, TestIdRole, result.id);
-  if (!result.filePath.isEmpty()) {
-    item->setData(0, FilePathRole, result.filePath);
-    if (result.line >= 0)
-      item->setData(0, LineNumberRole, result.line);
-  } else if (m_discoveredTests.contains(result.id)) {
-    const DiscoveredTest &dt = m_discoveredTests[result.id];
-    if (!dt.filePath.isEmpty()) {
-      item->setData(0, FilePathRole, dt.filePath);
-      if (dt.line >= 0)
-        item->setData(0, LineNumberRole, dt.line);
-    }
-  } else {
-
-    if (const DiscoveredTest *dt = findDiscoveredTestByName(result.name)) {
-      item->setData(0, FilePathRole, dt->filePath);
-      if (dt->line >= 0)
-        item->setData(0, LineNumberRole, dt->line);
-    }
-  }
-
-  updateTreeItemIcon(item, result.status);
-
-  switch (result.status) {
-  case TestStatus::Passed:
-    item->setText(1, tr("Passed"));
-    break;
-  case TestStatus::Failed:
-    item->setText(1, tr("Failed"));
-    break;
-  case TestStatus::Skipped:
-    item->setText(1, tr("Skipped"));
-    break;
-  case TestStatus::Errored:
-    item->setText(1, tr("Error"));
-    break;
-  default:
-    item->setText(1, "");
-    break;
-  }
-
-  if (result.durationMs >= 0)
-    item->setText(2, QString::number(result.durationMs) + " ms");
-
+  auto *item = updateTestItem(result);
   m_testResults[result.id] = result;
-
-  while (item->childCount() > 0)
+  m_completedRunIds.insert(result.id);
+  while (item->childCount())
     delete item->takeChild(0);
-
-  auto addDetailChild = [&](const QString &label, const QString &content) {
-    if (content.isEmpty())
+  auto addDetail = [&](const QString &title, const QString &text) {
+    if (text.isEmpty())
       return;
     auto *child = new QTreeWidgetItem(item);
-    const QString firstLine = content.split('\n').first().trimmed();
-    child->setText(0, label + firstLine);
+    child->setText(0, title + text.section('\n', 0, 0).trimmed());
     child->setData(0, TestIdRole, result.id);
     child->setData(0, IsDetailItemRole, true);
-    child->setToolTip(0, content);
+    child->setToolTip(0, text);
   };
-
-  if (!result.message.isEmpty())
-    addDetailChild(tr("Message: "), result.message);
-  if (!result.stackTrace.isEmpty())
-    addDetailChild(tr("Stack Trace: "), result.stackTrace);
-  if (!result.stdoutOutput.isEmpty())
-    addDetailChild(tr("stdout: "), result.stdoutOutput);
-  if (!result.stderrOutput.isEmpty())
-    addDetailChild(tr("stderr: "), result.stderrOutput);
-
+  addDetail(tr("Message: "), result.message);
+  addDetail(tr("Stack Trace: "), result.stackTrace);
+  addDetail(tr("stdout: "), result.stdoutOutput);
+  addDetail(tr("stderr: "), result.stderrOutput);
+  m_passedCount = m_failedCount = m_skippedCount = m_erroredCount = 0;
+  for (const QString &id : m_completedRunIds) {
+    switch (m_testResults.value(id).status) {
+    case TestStatus::Passed:
+      ++m_passedCount;
+      break;
+    case TestStatus::Failed:
+      ++m_failedCount;
+      break;
+    case TestStatus::Skipped:
+      ++m_skippedCount;
+      break;
+    case TestStatus::Errored:
+      ++m_erroredCount;
+      break;
+    default:
+      break;
+    }
+  }
+  if (m_expectedTests > 0)
+    m_progressBar->setValue(m_completedRunIds.size());
+  updateSuiteSummaries();
   applyFilter();
+  if (m_tree->currentItem() == item)
+    showItemDetails(item);
+  if (m_runManager->isRunning())
+    updateRunningStatusLabel();
+}
+
+void TestPanel::updateSuiteSummaries() {
+  for (auto *group : m_suiteItems) {
+    int total = 0, passed = 0, failed = 0, running = 0, elapsed = 0;
+    bool timed = false;
+    for (int i = 0; i < group->childCount(); ++i) {
+      auto *item = group->child(i);
+      if (item->data(0, IsDetailItemRole).toBool())
+        continue;
+      ++total;
+      const auto result =
+          m_testResults.constFind(item->data(0, TestIdRole).toString());
+      if (result == m_testResults.constEnd())
+        continue;
+      passed += result->status == TestStatus::Passed;
+      failed += result->status == TestStatus::Failed ||
+                result->status == TestStatus::Errored;
+      running += result->status == TestStatus::Running;
+      if (result->durationMs >= 0) {
+        elapsed += result->durationMs;
+        timed = true;
+      }
+    }
+    group->setText(1, total == 0                 ? tr("Test file")
+                      : running                  ? tr("Running")
+                      : failed                   ? tr("%1 failed").arg(failed)
+                      : passed == total && total ? tr("Passed")
+                                                 : tr("%1 tests").arg(total));
+    group->setText(2, timed ? durationText(elapsed) : QString());
+    group->setData(0, DurationRole, timed ? elapsed : -1);
+    group->setData(0, StatusRole,
+                   static_cast<int>(running  ? TestStatus::Running
+                                    : failed ? TestStatus::Failed
+                                    : passed == total && total
+                                        ? TestStatus::Passed
+                                        : TestStatus::Queued));
+    group->setToolTip(0,
+                      group->text(0) + tr("\n%1 tests · %2 passed · %3 failed")
+                                           .arg(total)
+                                           .arg(passed)
+                                           .arg(failed));
+    updateTreeItemIcon(group, running                    ? TestStatus::Running
+                              : failed                   ? TestStatus::Failed
+                              : passed == total && total ? TestStatus::Passed
+                                                         : TestStatus::Queued);
+  }
 }
 
 void TestPanel::onRunStarted() {
-  m_tree->clear();
-  m_suiteItems.clear();
-  m_testItems.clear();
-  m_testResults.clear();
+  m_running = true;
+  ++m_runGeneration;
+  m_cancelled = false;
+  m_expectedTests = 0;
+  m_completedRunIds.clear();
   m_passedCount = m_failedCount = m_skippedCount = m_erroredCount = 0;
   m_latestStdoutLine.clear();
   m_lastRunProducedResults = false;
-
+  for (auto it = m_testItems.begin(); it != m_testItems.end(); ++it) {
+    bool scheduled = m_runTargets.isEmpty();
+    for (QString target : m_runTargets) {
+      if (QFileInfo(target.section("::", 0, 0)).isAbsolute()) {
+        const int separator = target.indexOf("::");
+        const QString file = separator >= 0 ? target.left(separator) : target;
+        target = QDir(m_workspaceFolder).relativeFilePath(file) +
+                 (separator >= 0 ? target.mid(separator) : QString());
+      }
+      scheduled |= it.key() == target || it.key().startsWith(target + "::") ||
+                   it.key().startsWith(target + '/');
+    }
+    if (!scheduled)
+      continue;
+    m_testResults.remove(it.key());
+    auto *item = it.value();
+    item->setText(1, tr("Queued"));
+    item->setText(2, QString::fromUtf8("—"));
+    item->setData(0, StatusRole, static_cast<int>(TestStatus::Queued));
+    item->setData(0, DurationRole, -1);
+    item->setData(0, GenerationRole, m_runGeneration);
+    while (item->childCount())
+      delete item->takeChild(0);
+    updateTreeItemIcon(item, TestStatus::Queued);
+  }
   m_stopAction->setEnabled(true);
   m_runAllAction->setEnabled(false);
+  m_runSelectedAction->setEnabled(false);
   m_runFailedAction->setEnabled(false);
+  m_discoverAction->setEnabled(false);
+  m_clearAction->setEnabled(false);
   m_progressBar->setRange(0, 0);
   m_progressBar->setVisible(true);
+  updateSuiteSummaries();
   updateRunningStatusLabel();
   refreshRunDetails();
   updateEmptyState();
+  updateSelectionActions();
 }
 
 void TestPanel::onRunFinished(int passed, int failed, int skipped,
                               int errored) {
+  m_running = false;
   m_passedCount = passed;
   m_failedCount = failed;
   m_skippedCount = skipped;
@@ -1038,12 +1765,33 @@ void TestPanel::onRunFinished(int passed, int failed, int skipped,
   m_stopAction->setEnabled(false);
   m_runAllAction->setEnabled(true);
   m_runFailedAction->setEnabled(failed > 0 || errored > 0);
+  m_discoverAction->setEnabled(true);
+  m_clearAction->setEnabled(true);
   m_progressBar->setVisible(false);
 
+  for (auto *item : m_testItems) {
+    if (item->data(0, StatusRole).toInt() ==
+            static_cast<int>(TestStatus::Running) ||
+        item->text(1) == tr("Queued")) {
+      item->setText(1, m_cancelled ? tr("Cancelled") : tr("Not run"));
+      item->setData(0, StatusRole, static_cast<int>(TestStatus::Queued));
+      const QString id = item->data(0, TestIdRole).toString();
+      if (m_testResults.contains(id))
+        m_testResults[id].status = TestStatus::Queued;
+    }
+  }
+
   updateStatusLabel();
+  updateSuiteSummaries();
   refreshRunDetails();
   updateEmptyState();
   emit countsChanged(passed, failed, skipped, errored);
+  updateSelectionActions();
+  showItemDetails(m_tree->currentItem());
+  if (m_lastRunExitCode != 0 && !m_cancelled && failed + errored == 0) {
+    setDetailsExpanded(true);
+    m_detailTabs->setCurrentWidget(m_runOutputPane);
+  }
 }
 
 void TestPanel::onOutputLine(const QString &line, bool isError) {
@@ -1080,6 +1828,12 @@ void TestPanel::onOutputLine(const QString &line, bool isError) {
 void TestPanel::onProcessStarted(const QString &command,
                                  const QStringList &args,
                                  const QString &workingDirectory) {
+  if (!m_hasRunContext || !m_lastRunCommand.isEmpty()) {
+    const QString file = m_autoTestRunner->mode() == AutoRunMode::AllOnSave
+                             ? QString()
+                             : m_autoTestRunner->lastFilePath();
+    recordRunRequest(currentConfiguration(), tr("Automatic run"), file);
+  }
   m_lastRunCommand = command;
   m_lastRunArgs = args;
   m_lastRunWorkingDirectory = workingDirectory;
@@ -1104,28 +1858,124 @@ void TestPanel::onItemClicked(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column)
   if (!item)
     return;
+  if (item->data(0, IsDetailItemRole).toBool())
+    item = item->parent();
+  m_tree->setCurrentItem(item, 0, QItemSelectionModel::NoUpdate);
+  showItemDetails(item);
+  setDetailsExpanded(true);
+  m_detailTabs->setCurrentWidget(m_detailPane);
+  const QString id = item->data(0, TestIdRole).toString();
+  QTimer::singleShot(0, this, [this, id]() {
+    auto *selected = m_testItems.value(id, m_suiteItems.value(id));
+    if (selected)
+      m_tree->scrollToItem(selected);
+  });
+  if (!(QApplication::keyboardModifiers() &
+        (Qt::ControlModifier | Qt::ShiftModifier)))
+    onItemDoubleClicked(item, 0);
+}
 
-  QString filePath = item->data(0, FilePathRole).toString();
-  int line = item->data(0, LineNumberRole).toInt();
-  if (!filePath.isEmpty())
-    emit locationClicked(filePath, line, 0);
+void TestPanel::openSourceLink(const QUrl &url) {
+  if (url.scheme() != "lightpad-source")
+    return;
+  const QUrlQuery query(url);
+  const QString path =
+      TestSource::existingFile(query.queryItemValue("file"), m_workspaceFolder,
+                               m_lastRunWorkingDirectory);
+  if (!path.isEmpty())
+    emit locationClicked(path, qMax(1, query.queryItemValue("line").toInt()),
+                         0);
+}
 
-  QString testId = item->data(0, TestIdRole).toString();
-  if (m_testResults.contains(testId)) {
-    const TestResult &result = m_testResults[testId];
-    QString detail;
-    if (!result.message.isEmpty())
-      detail += tr("Message: ") + result.message + "\n\n";
-    if (!result.stackTrace.isEmpty())
-      detail += tr("Stack Trace:\n") + result.stackTrace + "\n\n";
-    if (!result.stdoutOutput.isEmpty())
-      detail += tr("stdout:\n") + result.stdoutOutput + "\n\n";
-    if (!result.stderrOutput.isEmpty())
-      detail += tr("stderr:\n") + result.stderrOutput + "\n";
-    m_detailPane->setPlainText(detail.isEmpty() ? tr("No details available")
-                                                : detail);
-    setDetailsExpanded(true);
+void TestPanel::showItemDetails(QTreeWidgetItem *item) {
+  if (!item)
+    return;
+  if (item->data(0, IsDetailItemRole).toBool())
+    item = item->parent();
+  if (!item)
+    return;
+  const QString id = item->data(0, TestIdRole).toString();
+  QString title = item->text(0).toHtmlEscaped();
+  title.replace('_', QString::fromUtf8("_\u200b"));
+  title.replace("::", QString::fromUtf8("::\u200b"));
+  QString html = "<p><b>" + title + "</b></p>";
+  if (item->data(0, IsSuiteRole).toBool()) {
+    html +=
+        "<p>" + item->toolTip(0).toHtmlEscaped().replace('\n', "<br>") + "</p>";
+  } else {
+    html += "<p><b>" + item->text(1).toHtmlEscaped() + "</b>";
+    if (m_testResults.contains(id)) {
+      const auto &result = m_testResults[id];
+      if (result.durationMs >= 0)
+        html += " · " + durationText(result.durationMs);
+    }
+    html += "</p>";
+    if (m_testResults.contains(id) &&
+        item->data(0, GenerationRole).toInt() < m_runGeneration)
+      html += "<p>" + tr("This result is from an earlier run.") + "</p>";
+    QString path;
+    int line = 0;
+    if (resolveSourceLocation(item, &path, &line)) {
+      QUrl link("lightpad-source://definition");
+      QUrlQuery query;
+      query.addQueryItem("file", path);
+      query.addQueryItem("line", QString::number(qMax(1, line)));
+      link.setQuery(query);
+      html += "<p><a href=\"" + link.toString().toHtmlEscaped() + "\">" +
+              tr("Go to test definition: %1:%2")
+                  .arg(QDir(m_workspaceFolder).relativeFilePath(path))
+                  .arg(qMax(1, line))
+                  .toHtmlEscaped() +
+              "</a></p>";
+    }
+    html += "<p><b>" + tr("Test ID") + "</b><br>" + id.toHtmlEscaped() + "</p>";
+    const auto result = m_testResults.constFind(id);
+    if (result != m_testResults.constEnd()) {
+      auto section = [&](const QString &title, const QString &text) {
+        if (text.isEmpty())
+          return;
+        QString rendered;
+        const QRegularExpression frame(
+            R"frame((?:File "([^"]+)", line (\d+)|([^\n"'()]+?\.(?:py|cpp|cc|cxx|c|h|js|jsx|mjs|cjs|ts|tsx|go|rs)):(\d+)(?::|$)))frame");
+        for (const QString &row : text.split('\n')) {
+          const auto match = frame.match(row);
+          const QString file = match.captured(1).isEmpty() ? match.captured(3)
+                                                           : match.captured(1);
+          QString path = TestSource::existingFile(
+              file.trimmed(), m_workspaceFolder, m_lastRunWorkingDirectory);
+          // Stack frames can prefix a path with "at" or "panicked at".
+          for (int i = 0; path.isEmpty() && i < file.size(); ++i)
+            if (file[i].isSpace())
+              path = TestSource::existingFile(file.mid(i + 1).trimmed(),
+                                              m_workspaceFolder,
+                                              m_lastRunWorkingDirectory);
+          if (!path.isEmpty()) {
+            QUrl link("lightpad-source://failure");
+            QUrlQuery query;
+            query.addQueryItem("file", path);
+            query.addQueryItem("line", match.captured(2).isEmpty()
+                                           ? match.captured(4)
+                                           : match.captured(2));
+            link.setQuery(query);
+            rendered += "<a href=\"" + link.toString().toHtmlEscaped() + "\">" +
+                        row.toHtmlEscaped() + "</a>\n";
+          } else
+            rendered += row.toHtmlEscaped() + '\n';
+        }
+        html += "<h4>" + title.toHtmlEscaped() +
+                "</h4><pre style='white-space: pre-wrap'>" + rendered +
+                "</pre>";
+      };
+      section(tr("Message"), result->message);
+      section(tr("Traceback"), result->stackTrace);
+      section(tr("Captured stdout"), result->stdoutOutput);
+      section(tr("Captured stderr"), result->stderrOutput);
+      if (result->message.isEmpty() && result->stackTrace.isEmpty() &&
+          result->stdoutOutput.isEmpty() && result->stderrOutput.isEmpty())
+        html += "<p>" + tr("No captured output for this test.") + "</p>";
+    }
   }
+  m_detailPane->setHtml(html);
 }
 
 void TestPanel::onFilterChanged(int index) {
@@ -1137,6 +1987,7 @@ void TestPanel::onConfigChanged(int index) {
   Q_UNUSED(index)
   syncAutoRunConfiguration();
   updateDiscoveryAdapterForConfig();
+  updateSelectionActions();
 }
 
 void TestPanel::onContextMenu(const QPoint &pos) {
@@ -1150,7 +2001,10 @@ void TestPanel::onContextMenu(const QPoint &pos) {
   }
 
   if (item->data(0, IsDetailItemRole).toBool())
+    item = item->parent();
+  if (!item)
     return;
+  m_tree->setCurrentItem(item, 0, QItemSelectionModel::NoUpdate);
 
   QString testId = item->data(0, TestIdRole).toString();
   QString testName = item->text(0);
@@ -1158,28 +2012,23 @@ void TestPanel::onContextMenu(const QPoint &pos) {
 
   bool isSuite = item->data(0, IsSuiteRole).toBool();
 
-  if (isSuite) {
-    menu.addAction(tr("Run Suite"), [this, testName]() {
-      TestConfiguration config = currentConfiguration();
-      if (!config.isValid())
-        return;
-      recordRunRequest(config, tr("Suite"), testName);
-      m_runManager->runSuite(config, m_workspaceFolder, testName);
-    });
-  } else {
-    QAction *runAction = menu.addAction(
-        tr("Run This Test"), [this, testId, testName, filePath]() {
-          TestConfiguration config = currentConfiguration();
-          if (!config.isValid())
-            return;
-          recordRunRequest(config, tr("Test"), filePath);
-          const bool cargo = config.outputFormat == "cargo" ||
-                             config.outputFormat == "cargo_json";
-          const QString name = cargo && !testId.isEmpty() ? testId : testName;
-          m_runManager->runSingleTest(config, m_workspaceFolder, name,
-                                      filePath);
-        });
-    Q_UNUSED(runAction)
+  const bool idle = !m_running && !m_discovering;
+  if (idle && currentConfiguration().outputFormat == "pytest") {
+    const QStringList targets = pytestTargets(item);
+    if (!targets.isEmpty()) {
+      menu.addAction(isSuite ? tr("Debug Suite") : tr("Debug This Test"),
+                     [this, targets]() {
+                       emit debugTestsRequested(targets,
+                                                currentConfiguration());
+                     });
+    }
+  }
+
+  if (idle) {
+    menu.addAction(isSuite ? tr("Run Suite") : tr("Run This Test"),
+                   [this, item, isSuite]() {
+                     runItems({item}, isSuite ? tr("Suite") : tr("Test"));
+                   });
   }
 
   QString sourceFilePath;
@@ -1193,21 +2042,16 @@ void TestPanel::onContextMenu(const QPoint &pos) {
   menu.addAction(tr("Copy Name"), [testName]() {
     QApplication::clipboard()->setText(testName);
   });
+  menu.addAction(tr("Copy Test ID"),
+                 [testId]() { QApplication::clipboard()->setText(testId); });
 
   menu.addSeparator();
 
   if (m_testResults.contains(testId)) {
-    menu.addAction(tr("Show Output"), [this, testId]() {
-      const TestResult &result = m_testResults[testId];
-      QString detail;
-      if (!result.message.isEmpty())
-        detail += result.message + "\n\n";
-      if (!result.stackTrace.isEmpty())
-        detail += result.stackTrace + "\n\n";
-      if (!result.stdoutOutput.isEmpty())
-        detail += result.stdoutOutput;
-      m_detailPane->setPlainText(detail);
+    menu.addAction(tr("Show Output"), [this, item]() {
+      showItemDetails(item);
       setDetailsExpanded(true);
+      m_detailTabs->setCurrentWidget(m_detailPane);
     });
   }
 
@@ -1237,15 +2081,14 @@ void TestPanel::updateStatusLabel() {
   QColor mutedColor = UIStyleHelper::secondaryTextColor(m_theme);
 
   QString text =
-      QString("<span style='color:%6'>"
-              "<span style='color:%1'>\u2714 %2</span>"
+      QString("<span style='color:%6'>Last run: "
+              "<span style='color:%1'>%2 passed</span>"
               " &nbsp; "
-              "<span style='color:%3'>\u2718 %4</span>"
+              "<span style='color:%3'>%4 failed</span>"
               " &nbsp; "
-              "<span style='color:%5'>\u25CB %7</span>"
+              "<span style='color:%5'>%7 skipped</span>"
               " &nbsp; "
-              "<span style='color:%8'>\u26A0 %9</span>"
-              " &nbsp;&nbsp; Total: %10"
+              "<span style='color:%8'>%9 errors</span>"
               "</span>")
           .arg(successColor.name())
           .arg(m_passedCount)
@@ -1256,15 +2099,21 @@ void TestPanel::updateStatusLabel() {
           .arg(m_skippedCount)
           .arg(UIStyleHelper::toneColor(m_theme, UIStyleHelper::Tone::Warning)
                    .name())
-          .arg(m_erroredCount)
-          .arg(total);
+          .arg(m_erroredCount);
   m_statusLabel->setTextFormat(Qt::RichText);
   m_statusLabel->setText(text);
+  m_statusLabel->setToolTip(
+      tr("Last run: %1 tests completed. %2 tests in the explorer.")
+          .arg(total)
+          .arg(m_testItems.size()));
 }
 
 void TestPanel::updateRunningStatusLabel() {
   constexpr int kMaxLen = 120;
-  QString label = tr("Running tests...");
+  QString label = m_expectedTests > 0 ? tr("Running tests… %1 / %2 completed")
+                                            .arg(m_completedRunIds.size())
+                                            .arg(m_expectedTests)
+                                      : tr("Running tests...");
   if (!m_latestStdoutLine.isEmpty()) {
     QString display = m_latestStdoutLine;
     if (display.length() > kMaxLen)
@@ -1277,34 +2126,29 @@ void TestPanel::updateRunningStatusLabel() {
 
 void TestPanel::updateTreeItemIcon(QTreeWidgetItem *item, TestStatus status) {
   QColor color;
-  QStyle::StandardPixmap statusIcon = QStyle::SP_FileIcon;
   switch (status) {
   case TestStatus::Passed:
     color = m_theme.testPassedColor;
-    statusIcon = QStyle::SP_DialogApplyButton;
     break;
   case TestStatus::Failed:
     color = m_theme.testFailedColor;
-    statusIcon = QStyle::SP_MessageBoxCritical;
     break;
   case TestStatus::Skipped:
     color = m_theme.testSkippedColor;
-    statusIcon = QStyle::SP_DialogCancelButton;
     break;
   case TestStatus::Errored:
     color = m_theme.testFailedColor;
-    statusIcon = QStyle::SP_MessageBoxWarning;
     break;
   case TestStatus::Running:
     color = m_theme.testRunningColor;
-    statusIcon = QStyle::SP_BrowserReload;
     break;
   case TestStatus::Queued:
     color = m_theme.testQueuedColor;
-    statusIcon = QStyle::SP_ArrowRight;
     break;
   }
-  item->setIcon(0, style()->standardIcon(statusIcon));
+  if (!color.isValid())
+    color = palette().color(QPalette::Text);
+  item->setIcon(0, testStatusIcon(status, color, m_tree->iconSize().width()));
   item->setForeground(1, QBrush(color));
 }
 
@@ -1315,8 +2159,10 @@ QTreeWidgetItem *TestPanel::findOrCreateSuiteItem(const QString &suite) {
   if (m_suiteItems.contains(suite))
     return m_suiteItems[suite];
 
-  auto *item = new QTreeWidgetItem();
-  item->setText(0, suite);
+  auto *item = new TestTreeItem();
+  item->setText(0, QFileInfo(suite).isAbsolute() && QFileInfo(suite).isFile()
+                       ? QDir(m_workspaceFolder).relativeFilePath(suite)
+                       : suite);
   item->setData(0, TestIdRole, suite);
   item->setData(0, IsSuiteRole, true);
   m_tree->addTopLevelItem(item);
@@ -1333,12 +2179,16 @@ QTreeWidgetItem *TestPanel::findTestItem(const QString &id) {
 
 const DiscoveredTest *
 TestPanel::findDiscoveredTestByName(const QString &name) const {
+  const DiscoveredTest *match = nullptr;
   for (auto it = m_discoveredTests.cbegin(); it != m_discoveredTests.cend();
        ++it) {
-    if (it.value().name == name && !it.value().filePath.isEmpty())
-      return &it.value();
+    if (it.value().name == name && !it.value().filePath.isEmpty()) {
+      if (match && match->filePath != it->filePath)
+        return nullptr;
+      match = &it.value();
+    }
   }
-  return nullptr;
+  return match;
 }
 
 bool TestPanel::supportsGoogleTestPathScoping(
@@ -1438,6 +2288,9 @@ void TestPanel::recordRunRequest(const TestConfiguration &config,
                                  const QString &scope,
                                  const QString &targetPath) {
   m_lastRunConfigurationName = config.name;
+  m_runTargets.clear();
+  if (!targetPath.isEmpty() && QFileInfo(targetPath).exists())
+    m_runTargets << targetPath;
   m_lastRunScope = scope;
   m_lastRunTargetPath = targetPath;
   m_lastRunCommand.clear();
@@ -1456,16 +2309,11 @@ void TestPanel::refreshRunDetails() {
   if (!m_hasRunContext)
     return;
 
-  QTreeWidgetItem *currentItem = m_tree->currentItem();
-  if (currentItem && currentItem->data(0, IsDetailItemRole).toBool())
-    currentItem = currentItem->parent();
-  if (currentItem) {
-    const QString testId = currentItem->data(0, TestIdRole).toString();
-    if (m_testResults.contains(testId))
-      return;
-  }
-
-  m_detailPane->setPlainText(buildRunDetailsText());
+  auto *scroll = m_runOutputPane->verticalScrollBar();
+  const int position = scroll->value();
+  const bool follow = position >= scroll->maximum();
+  m_runOutputPane->setPlainText(buildRunDetailsText());
+  scroll->setValue(follow ? scroll->maximum() : position);
 }
 
 QString TestPanel::buildRunDetailsText() const {
@@ -1491,19 +2339,20 @@ QString TestPanel::buildRunDetailsText() const {
   lines << tr("Command: %1")
                .arg(commandLine.isEmpty() ? tr("Preparing...") : commandLine);
 
-  QString state = m_runManager && m_runManager->isRunning() ? tr("Running")
-                                                            : tr("Finished");
-  if (!m_runManager || !m_runManager->isRunning()) {
+  QString state = m_running ? tr("Running") : tr("Finished");
+  if (m_cancelled)
+    state = tr("Cancelled");
+  else if (!m_running) {
     state += tr(" (exit code %1%2)")
                  .arg(m_lastRunExitCode)
                  .arg(m_lastRunExitedNormally ? QString() : tr(", abnormal"));
   }
   lines << tr("State: %1").arg(state);
 
-  if (!m_runManager || !m_runManager->isRunning()) {
+  if (!m_running) {
     if (m_lastRunProducedResults) {
-      lines
-          << tr("Result: %1 test item(s) reported.").arg(m_testResults.size());
+      lines << tr("Result: %1 test item(s) reported.")
+                   .arg(m_completedRunIds.size());
     } else {
       lines << tr("Result: No tests were reported for this run.");
     }
@@ -1523,7 +2372,6 @@ void TestPanel::setDetailsExpanded(bool expanded) {
     m_detailToggleButton->setChecked(expanded);
 
   m_detailToggleButton->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
-  m_detailPane->setVisible(expanded);
   m_detailSection->setVisible(expanded);
   if (!expanded)
     return;
@@ -1535,7 +2383,7 @@ void TestPanel::setDetailsExpanded(bool expanded) {
   {
     const int total =
         qMax(m_splitter->sizes().value(0) + m_splitter->sizes().value(1), 1);
-    const int desiredDetails = qMax(140, total / 5);
+    const int desiredDetails = qMax(180, total * 2 / 5);
     if (sizes[1] < desiredDetails) {
       sizes[1] = desiredDetails;
       sizes[0] = qMax(0, total - desiredDetails);
@@ -1555,18 +2403,52 @@ bool TestPanel::resolveSourceLocation(QTreeWidgetItem *item, QString *filePath,
       return false;
   }
 
-  if (item->data(0, IsSuiteRole).toBool())
-    return false;
+  if (item->data(0, IsSuiteRole).toBool()) {
+    const QString path =
+        TestSource::existingFile(item->data(0, TestIdRole).toString(),
+                                 m_workspaceFolder, m_lastRunWorkingDirectory);
+    if (path.isEmpty())
+      return false;
+    *filePath = path;
+    *line = 1;
+    return true;
+  }
 
   QString resolvedPath;
   const QString itemPath = item->data(0, FilePathRole).toString();
   const int itemLine = item->data(0, LineNumberRole).toInt();
-  if (resolveNavigableFilePath(itemPath, m_workspaceFolder, &resolvedPath)) {
+  resolvedPath = TestSource::existingFile(itemPath, m_workspaceFolder,
+                                          m_lastRunWorkingDirectory);
+  if (currentConfiguration().outputFormat == "ctest" &&
+      (resolvedPath.isEmpty() || resolvedPath.endsWith(".cmake") ||
+       resolvedPath.endsWith("CMakeLists.txt"))) {
+    if (resolveWorkspaceSourceLocation(item, filePath, line)) {
+      item->setData(0, FilePathRole, *filePath);
+      item->setData(0, LineNumberRole, *line);
+      return true;
+    }
+  }
+  if (!resolvedPath.isEmpty()) {
     *filePath = resolvedPath;
     *line = itemLine >= 0 ? itemLine : 0;
+    if (*line <= 0 && resolvedPath.endsWith(".py")) {
+      const QString id = item->data(0, TestIdRole).toString();
+      const QString name =
+          id.contains("::") ? id.mid(id.indexOf("::") + 2) : item->text(0);
+      *line = TestSource::pythonDefinitionLine(resolvedPath, name);
+      item->setData(0, LineNumberRole, *line);
+    }
     if (resolvedPath != itemPath)
       item->setData(0, FilePathRole, resolvedPath);
     return true;
+  }
+
+  const QString id = item->data(0, TestIdRole).toString();
+  const QString fromId = TestSource::existingFile(
+      id.section("::", 0, 0), m_workspaceFolder, m_lastRunWorkingDirectory);
+  if (!fromId.isEmpty()) {
+    item->setData(0, FilePathRole, fromId);
+    return resolveSourceLocation(item, filePath, line);
   }
 
   if (const DiscoveredTest *dt = findDiscoveredTestByName(item->text(0))) {
@@ -1596,11 +2478,19 @@ bool TestPanel::resolveWorkspaceSourceLocation(QTreeWidgetItem *item,
     return false;
 
   const TestConfiguration config = currentConfiguration();
+  if (config.outputFormat == "cargo" || config.outputFormat == "cargo_json")
+    return TestSource::rustDefinition(m_workspaceFolder,
+                                      item->data(0, TestIdRole).toString(),
+                                      filePath, line);
   const bool shouldUseCppLookup =
       config.outputFormat == "ctest" ||
       config.language.compare("C++", Qt::CaseInsensitive) == 0;
   if (!shouldUseCppLookup)
     return false;
+  if ((config.language == "C" || item->text(0).startsWith("test_")) &&
+      TestSource::namedCDefinition(m_workspaceFolder, item->text(0), filePath,
+                                   line))
+    return true;
 
   QString suiteName;
   QString testName = item->text(0).trimmed();
@@ -1645,10 +2535,8 @@ bool TestPanel::resolveWorkspaceSourceLocation(QTreeWidgetItem *item,
   const QString lightpadRoot =
       QDir(workspaceRoot).absoluteFilePath(".lightpad") + '/';
 
-  QDirIterator it(workspaceRoot, nameFilters, QDir::Files,
-                  QDirIterator::Subdirectories);
-  while (it.hasNext()) {
-    const QString candidatePath = it.next();
+  for (const QString &candidatePath :
+       TestSource::sourceFiles(workspaceRoot, nameFilters)) {
     if (candidatePath.startsWith(buildRoot) ||
         candidatePath.startsWith(gitRoot) ||
         candidatePath.startsWith(lightpadRoot)) {
@@ -1786,6 +2674,10 @@ QString TestPanel::discoveryRootForConfiguration(
   if (!config.discoveryDirectory.isEmpty()) {
     discoveryRoot = TestConfigurationManager::substituteVariables(
         config.discoveryDirectory, QString(), m_workspaceFolder);
+  } else if (config.outputFormat == "pytest" &&
+             !config.workingDirectory.isEmpty()) {
+    discoveryRoot = TestConfigurationManager::substituteVariables(
+        config.workingDirectory, QString(), m_workspaceFolder);
   } else if (m_discoveryAdapter && m_discoveryAdapter->adapterId() == "ctest" &&
              !m_workspaceFolder.isEmpty()) {
     discoveryRoot = QDir(m_workspaceFolder).absoluteFilePath("build");
@@ -1802,7 +2694,7 @@ QString TestPanel::discoveryRootForConfiguration(
 }
 
 void TestPanel::discoverTests() {
-  if (m_workspaceFolder.isEmpty())
+  if (m_workspaceFolder.isEmpty() || m_running || m_discovering)
     return;
 
   if (!m_discoveryAdapter) {
@@ -1812,52 +2704,110 @@ void TestPanel::discoverTests() {
 
   m_statusLabel->setText(tr("Discovering tests..."));
   m_discoverAction->setEnabled(false);
+  m_discovering = true;
+  m_stopAction->setEnabled(true);
+  m_runAllAction->setEnabled(false);
+  m_progressBar->setRange(0, 0);
+  m_progressBar->show();
+  updateSelectionActions();
+  updateEmptyState();
+
+  if (auto *pytest = qobject_cast<PytestDiscoveryAdapter *>(m_discoveryAdapter))
+    pytest->setTestConfiguration(currentConfiguration(), m_workspaceFolder);
 
   m_discoveryAdapter->discover(
       discoveryRootForConfiguration(currentConfiguration()));
 }
 
 void TestPanel::onDiscoveryFinished(const QList<DiscoveredTest> &tests) {
+  m_discovering = false;
+  m_stopAction->setEnabled(false);
+  m_runAllAction->setEnabled(true);
+  m_progressBar->hide();
   m_discoverAction->setEnabled(true);
   populateTreeFromDiscovery(tests);
-  m_statusLabel->setText(tr("Discovered %1 tests").arg(tests.size()));
+  int files = 0;
+  for (const auto &test : tests)
+    files += test.isFile;
+  QString summary = tr("Discovered %1 tests").arg(tests.size() - files);
+  if (files)
+    summary += " · " + (files == 1 ? tr("1 test file")
+                                   : tr("%1 test files").arg(files));
+  m_statusLabel->setText(summary);
+  updateSelectionActions();
 }
 
 void TestPanel::onDiscoveryError(const QString &message) {
+  m_discovering = false;
+  m_stopAction->setEnabled(false);
+  m_runAllAction->setEnabled(true);
+  m_progressBar->hide();
   m_discoverAction->setEnabled(true);
   m_statusLabel->setText(tr("Discovery error: %1").arg(message));
+  m_statusLabel->setToolTip(message);
+  m_runOutputPane->setPlainText(tr("Test discovery failed\n\n%1").arg(message));
+  setDetailsExpanded(true);
+  m_detailTabs->setCurrentWidget(m_runOutputPane);
+  updateSelectionActions();
+  updateEmptyState();
 }
 
 void TestPanel::populateTreeFromDiscovery(const QList<DiscoveredTest> &tests) {
+  if (m_runManager->isRunning())
+    return;
+  const QString selectedId =
+      m_tree->currentItem()
+          ? m_tree->currentItem()->data(0, TestIdRole).toString()
+          : QString();
   m_tree->clear();
   m_suiteItems.clear();
   m_testItems.clear();
   m_discoveredTests.clear();
-
-  for (const DiscoveredTest &test : tests) {
+  QSet<QString> discoveredIds;
+  for (const auto &test : tests) {
     m_discoveredTests[test.id] = test;
-    QTreeWidgetItem *suiteItem = findOrCreateSuiteItem(test.suite);
-
-    auto *item = new QTreeWidgetItem();
-    item->setText(0, test.name);
-    item->setData(0, TestIdRole, test.id);
-    if (!test.filePath.isEmpty())
-      item->setData(0, FilePathRole, test.filePath);
-    if (test.line >= 0)
-      item->setData(0, LineNumberRole, test.line);
-    updateTreeItemIcon(item, TestStatus::Queued);
-    item->setText(1, tr("Not Run"));
-
-    if (suiteItem)
-      suiteItem->addChild(item);
-    else
-      m_tree->addTopLevelItem(item);
-    m_testItems[test.id] = item;
+    discoveredIds.insert(test.id);
+    if (test.isFile) {
+      auto *group = findOrCreateSuiteItem(test.filePath);
+      group->setData(0, IsFileGroupRole, true);
+      group->setData(0, FilePathRole, test.filePath);
+      group->setData(0, LineNumberRole, 1);
+      group->setToolTip(
+          0,
+          test.filePath + '\n' +
+              tr("Run this file to include dynamically generated test cases."));
+      continue;
+    }
+    TestResult result = m_testResults.value(test.id);
+    result.id = test.id;
+    result.name = test.name;
+    result.suite = test.suite;
+    result.filePath = test.filePath;
+    if (test.line > 0)
+      result.line = test.line;
+    updateTestItem(result);
   }
+  for (auto it = m_testResults.begin(); it != m_testResults.end();) {
+    if (!discoveredIds.contains(it.key()) && !m_suiteItems.contains(it->suite))
+      it = m_testResults.erase(it);
+    else {
+      if (!m_testItems.contains(it.key()))
+        updateTestItem(it.value());
+      ++it;
+    }
+  }
+  if (auto *selected =
+          m_testItems.value(selectedId, m_suiteItems.value(selectedId)))
+    m_tree->setCurrentItem(selected);
+  updateSuiteSummaries();
   applySearchFilter();
+  fitTestColumns();
+  updateSelectionActions();
 }
 
 void TestPanel::notifyFileSaved(const QString &filePath) {
+  if (m_discovering)
+    return;
   syncAutoRunConfiguration();
   m_autoTestRunner->notifyFileSaved(filePath);
 }
@@ -1896,6 +2846,11 @@ void TestPanel::saveState() const {
                       m_configCombo->currentData());
   }
   settings.setValue("lastFilter", m_filterCombo->currentIndex());
+  if (m_userSizedColumns) {
+    settings.setValue("headerState", m_tree->header()->saveState());
+    settings.setValue("headerFontSize", m_tree->font().pointSizeF());
+  } else
+    settings.remove("headerState");
   settings.endGroup();
 }
 
@@ -1905,6 +2860,9 @@ void TestPanel::restoreState() {
   QString lastConfigId = settings.value("lastConfigurationId").toString();
   QString lastConfig = settings.value("lastConfiguration").toString();
   int lastFilter = settings.value("lastFilter", 0).toInt();
+  const QByteArray headerState = settings.value("headerState").toByteArray();
+  const qreal headerFontSize =
+      settings.value("headerFontSize", m_tree->font().pointSizeF()).toDouble();
   settings.endGroup();
 
   int idx =
@@ -1917,6 +2875,18 @@ void TestPanel::restoreState() {
     m_configCombo->setCurrentIndex(idx);
   if (lastFilter >= 0 && lastFilter < m_filterCombo->count())
     m_filterCombo->setCurrentIndex(lastFilter);
+  if (!headerState.isEmpty()) {
+    m_fittingColumns = true;
+    m_userSizedColumns = m_tree->header()->restoreState(headerState);
+    m_tree->setColumnHidden(2, !m_hasDurations);
+    if (m_userSizedColumns && headerFontSize > 0) {
+      const qreal scale = m_tree->font().pointSizeF() / headerFontSize;
+      for (int column = 0; column < m_tree->columnCount(); ++column)
+        m_tree->setColumnWidth(column,
+                               qRound(m_tree->columnWidth(column) * scale));
+    }
+    m_fittingColumns = false;
+  }
 }
 
 void TestPanel::onSearchTextChanged(const QString &text) {
@@ -1939,13 +2909,22 @@ void TestPanel::applySearchFilter() {
     }
     if (visible && !search.isEmpty()) {
       visible = item->text(0).contains(search, Qt::CaseInsensitive) ||
+                item->data(0, FilePathRole)
+                    .toString()
+                    .contains(search, Qt::CaseInsensitive) ||
+                item->data(0, TestIdRole)
+                    .toString()
+                    .contains(search, Qt::CaseInsensitive) ||
                 (item->parent() &&
                  item->parent()->text(0).contains(search, Qt::CaseInsensitive));
     }
     item->setHidden(!visible);
   }
   for (auto *suite : m_suiteItems) {
-    bool visible = false;
+    bool visible = suite->childCount() == 0 &&
+                   suite->data(0, IsFileGroupRole).toBool() && status == 0 &&
+                   (search.isEmpty() ||
+                    suite->text(0).contains(search, Qt::CaseInsensitive));
     for (int i = 0; i < suite->childCount(); ++i)
       visible |= !suite->child(i)->isHidden();
     suite->setHidden(!visible);
@@ -1958,11 +2937,13 @@ void TestPanel::updateEmptyState() {
   bool hasVisibleItems = false;
   for (int i = 0; i < m_tree->topLevelItemCount(); ++i)
     hasVisibleItems |= !m_tree->topLevelItem(i)->isHidden();
-  const bool running = m_runManager && m_runManager->isRunning();
+  const bool running = m_running || m_discovering;
   if (!hasVisibleItems) {
     if (hasItems) {
       m_emptyStateLabel->setText(tr("No tests match these filters."));
       m_emptyAction->setText(tr("Clear filters"));
+    } else if (m_discovering) {
+      m_emptyStateLabel->setText(tr("Discovering tests…"));
     } else if (running) {
       m_emptyStateLabel->setText(
           tr("Running tests…\nLive output is available in Run Details."));

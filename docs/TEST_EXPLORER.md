@@ -10,7 +10,7 @@ Lightpad includes a built-in **Test Explorer** that can discover, run, and displ
 | C / C++    | CTest (CMake)           | `CTestDiscoveryAdapter`    | `CtestParser`     |
 | C / C++    | GoogleTest (via CTest)  | `CTestDiscoveryAdapter`    | `CtestParser`     |
 | Go         | `go test`               | `GoTestDiscoveryAdapter`   | `JsonTestParser`  |
-| Rust       | `cargo test`            | `CargoTestDiscoveryAdapter`| `JsonTestParser`  |
+| Rust       | `cargo test` (stable)   | `CargoTestDiscoveryAdapter`| `CargoTestParser` |
 | JavaScript | Jest                    | `JestDiscoveryAdapter`     | `JsonTestParser`  |
 
 Additional output formats are available through the generic parsers (TAP, JUnit XML, generic regex).
@@ -31,6 +31,18 @@ The panel docks at the bottom of the window by default and can also be placed on
 
 The adapter runs the framework-specific list command in the background (for example `pytest --collect-only -q`, `ctest --show-only=json-v1`, `go test -list .* ./...`, or `cargo test -- --list`) and parses the output into a structured tree.
 
+For C projects, select **CTest (C)**. CMake projects should have a configured
+`build/` directory before discovery; Run All also configures and builds it.
+CTest registration locations, C function definitions, GoogleTest macros, and
+Rust module-qualified functions support source navigation. Ambiguous source
+matches are left unresolved.
+
+Jest discovery uses the project's installed Jest and its source parser to list
+static `describe`/`test`/`it` declarations without running their bodies. Dynamic
+declarations remain available through their file group; running that file adds
+the exact generated cases and locations from Jest. No package is downloaded by
+Discover or Run.
+
 ## Running Tests
 
 The toolbar provides several ways to run tests:
@@ -38,16 +50,18 @@ The toolbar provides several ways to run tests:
 | Action         | Description                                           |
 |----------------|-------------------------------------------------------|
 | **Run All**    | Runs every test using the selected configuration.     |
-| **Run Failed** | Re-runs only the tests that failed in the last run.   |
-| **Stop**       | Kills the running test process.                       |
-| **Clear**      | Removes all results from the tree.                    |
+| **Run Selected** | Runs the selected cases or groups; Ctrl+Enter also runs the selection. |
+| **Run Failed** | Re-runs failed cases currently shown in the explorer. |
+| **Stop**       | Cancels execution or discovery.                       |
+| **Clear Results** | Clears outcomes while retaining the discovered list. |
 
 You can also right-click a test or suite in the tree for contextual actions:
 
-- **Run This Test** — runs a single test by name.
+- **Run This Test** — runs the selected test using its framework selector.
 - **Run Suite** — runs all tests in the selected suite.
 - **Go to Source** — opens the source file at the relevant line.
 - **Copy Name** — copies the test name to the clipboard.
+- **Copy Test ID** — copies its full identity.
 - **Show Output** — displays the full output for the selected test.
 
 ### Running Tests for a File
@@ -69,13 +83,29 @@ Use the **filter dropdown** in the toolbar to show only a subset of results:
 
 ## Viewing Failure Details
 
-Click or double-click a test in the tree to view its details in the **output pane** below the tree. For failed tests this includes:
+Click a test, or select it and press **Enter**, to open its source definition.
+Ctrl/Shift-click selects multiple cases. The **Run Details** area has separate
+**Selected test** and **Run output** tabs, placed beside the list in wide panels
+and below it in narrow panels. Selected-test details include:
 
 - Error message
 - Stack trace (when provided by the framework)
 - Captured stdout / stderr
 
-Double-clicking a test with a known source location opens the corresponding file and scrolls to the relevant line.
+Definition and recognized traceback links open source locations. Run output
+shows the command, working directory, exit status, and live output separately.
+Reruns preserve the catalog, selection, and other outcomes. Details identify
+outcomes from earlier runs.
+
+Names wrap, row heights and controls follow the editor font, and **Time** is
+hidden until timing is reported. Stable Cargo output has no per-case timing.
+Sort by clicking a heading, resize by dragging its boundary, and choose columns
+from the heading's context menu. **Options → Fit Columns** restores automatic
+sizing. Manual column sizes are saved. The dock's **Expand** control gives the
+panel more room.
+
+Repeatable C/C++/Rust/Node.js UI checks and their dependencies are documented in
+[the integration fixtures](../tests/fixtures/test_ui/README.md).
 
 ## Test Configurations
 

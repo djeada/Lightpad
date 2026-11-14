@@ -1,4 +1,5 @@
 #include "debugconcurrencypanel.h"
+#include "../paneltypography.h"
 
 #include "../../dap/debugsession.h"
 #include "../uistylehelper.h"
@@ -406,4 +407,5 @@ void DebugConcurrencyPanel::applyTheme(const Theme &theme) {
                 UIStyleHelper::tabWidgetStyle(theme) +
                 UIStyleHelper::checkBoxStyle(theme));
   m_tasks->applyTheme(theme);
+  PanelTypography::apply(this, PanelTypography::contentFont(this));
 }

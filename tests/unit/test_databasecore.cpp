@@ -1,12 +1,15 @@
+#include "completion/providers/sqlcompletionprovider.h"
 #include "database/clidialect.h"
 #include "database/columnprofiler.h"
 #include "database/connectionstore.h"
 #include "database/databasemanager.h"
 #include "database/dbcatalog.h"
+#include "database/dbstatistics.h"
 #include "database/dockerdiscovery.h"
 #include "database/queryhistory.h"
 #include "database/resultexporter.h"
 #include "database/sqlcompletion.h"
+#include "database/sqlquerycontext.h"
 
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -66,6 +69,12 @@ private slots:
   void completionKeywordCasing();
   void completionQuotesAwkwardNames();
   void completionWithoutSchemaStillOffersKeywords();
+  void completionQueryScopes_data();
+  void completionQueryScopes();
+  void completionCommonTablesAndAmbiguousColumns();
+  void completionQuotedPrefixesAndComments();
+  void storageMetadataPreservesUnknownAndLargeValues();
+  void editorCompletionUsesCteColumnsAndFullQuotedRange();
 
   void connectionStoreRoundTrip();
   void connectionStoreUniqueNames();
@@ -796,6 +805,204 @@ void TestDatabaseCore::completionWithoutSchemaStillOffersKeywords() {
   QVERIFY(SqlCompletion::suggest(nullptr, DbEngine::SqlServer, "SELECT u.",
                                  "SELECT u.", "")
               .isEmpty());
+}
+
+void TestDatabaseCore::completionQueryScopes_data() {
+  QTest::addColumn<QString>("sql");
+  QTest::addColumn<QStringList>("expected");
+  QTest::newRow("explicit CTE columns")
+      << "WITH recent(user_key, address) AS (SELECT id, email FROM users) "
+         "SELECT r.| FROM recent r"
+      << QStringList{"user_key", "address"};
+  QTest::newRow("CTE expression aliases")
+      << "WITH counts AS (SELECT user_id, COUNT(*) AS post_count FROM orders "
+         "GROUP BY user_id) SELECT c.| FROM counts c"
+      << QStringList{"user_id", "post_count"};
+  QTest::newRow("chained CTEs and wildcard")
+      << "WITH a AS (SELECT id, email AS address FROM users), b AS (SELECT a.* "
+         "FROM a) SELECT b.| FROM b"
+      << QStringList{"id", "address"};
+  QTest::newRow("materialized CTE")
+      << "WITH a AS NOT MATERIALIZED (SELECT id FROM users) SELECT a.| FROM a"
+      << QStringList{"id"};
+  QTest::newRow("recursive explicit")
+      << "WITH RECURSIVE tree(n, parent) AS (SELECT 1, 0 UNION ALL SELECT t.| "
+         "FROM tree t) SELECT * FROM tree"
+      << QStringList{"n", "parent"};
+  QTest::newRow("recursive inferred")
+      << "WITH RECURSIVE tree AS (SELECT 1 AS n UNION ALL SELECT t.| FROM tree "
+         "t) SELECT * FROM tree"
+      << QStringList{"n"};
+  QTest::newRow("derived table") << "SELECT d.| FROM (SELECT user_id, SUM(1) "
+                                    "total FROM orders GROUP BY user_id) AS d"
+                                 << QStringList{"user_id", "total"};
+  QTest::newRow("derived column list")
+      << "SELECT d.| FROM (SELECT id, email FROM users) d(key, address)"
+      << QStringList{"key", "address"};
+  QTest::newRow("nested CTE shadow")
+      << "WITH a AS (SELECT id FROM users) SELECT * FROM (WITH a AS (SELECT "
+         "email FROM users) SELECT a.| FROM a) nested"
+      << QStringList{"email"};
+  QTest::newRow("CTE definition sees previous CTE")
+      << "WITH a AS (SELECT id FROM users), b AS (SELECT a.| FROM a) SELECT * "
+         "FROM b"
+      << QStringList{"id"};
+  QTest::newRow("correlated subquery")
+      << "SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE "
+         "o.user_id = u.|)"
+      << QStringList{"id", "email"};
+  QTest::newRow("nested alias shadows outer")
+      << "SELECT * FROM users x WHERE EXISTS (SELECT x.| FROM orders x)"
+      << QStringList{"id", "user_id", "Total Amount"};
+  QTest::newRow("inner aliases stay inside")
+      << "SELECT inner_alias.| FROM users u WHERE EXISTS (SELECT * FROM orders "
+         "inner_alias)"
+      << QStringList{};
+  QTest::newRow("CTE aliases stay inside")
+      << "WITH a AS (SELECT u.id FROM users u) SELECT u.| FROM a"
+      << QStringList{};
+  QTest::newRow("union branches separate aliases")
+      << "SELECT first_alias.| FROM users u UNION ALL SELECT * FROM orders "
+         "first_alias"
+      << QStringList{};
+  QTest::newRow("comments and literals are not sources")
+      << "SELECT fake.|, 'FROM orders fake' FROM users u /* JOIN orders fake */"
+      << QStringList{};
+  QTest::newRow("quoted CTE and column")
+      << "WITH \"Post Stats\"(\"Total Amount\", \"order\") AS (SELECT 1, 2) "
+         "SELECT p.| FROM \"Post Stats\" p"
+      << QStringList{"Total Amount", "order"};
+  QTest::newRow("wildcard join projection")
+      << "WITH joined AS (SELECT u.*, o.user_id FROM users u JOIN orders o ON "
+         "u.id=o.user_id) SELECT j.| FROM joined j"
+      << QStringList{"id", "email", "user_id"};
+}
+
+void TestDatabaseCore::completionQueryScopes() {
+  QFETCH(QString, sql);
+  QFETCH(QStringList, expected);
+  const int cursor = sql.indexOf('|');
+  QVERIFY(cursor >= 0);
+  sql.remove(cursor, 1);
+  const auto schema = shopSchema();
+  const auto suggestions = SqlCompletion::suggest(&schema, DbEngine::PostgreSql,
+                                                  sql.left(cursor), sql, "");
+  QCOMPARE(labels(suggestions), expected);
+}
+
+void TestDatabaseCore::completionCommonTablesAndAmbiguousColumns() {
+  const QString cte = "WITH recent(id) AS (SELECT 1) SELECT * FROM rec";
+  const auto tables =
+      SqlCompletion::suggest(nullptr, DbEngine::PostgreSql, cte, cte, "rec");
+  QVERIFY(labels(tables).contains("recent"));
+  QCOMPARE(tables.first().detail, QString("CTE · 1 columns"));
+  const auto schema = shopSchema();
+  const QString sql = "SELECT  FROM users u JOIN orders o ON o.user_id=u.id";
+  const auto columns =
+      SqlCompletion::suggest(&schema, DbEngine::PostgreSql, "SELECT ", sql, "");
+  QStringList identifiers;
+  for (const auto &item : columns)
+    if (item.label == "id")
+      identifiers << item.insertText;
+  QCOMPARE(identifiers, (QStringList{"u.id", "o.id"}));
+  const QString alias =
+      "SELECT COUNT(*) AS post_count FROM orders ORDER BY post_";
+  const auto aliases = SqlCompletion::suggest(&schema, DbEngine::PostgreSql,
+                                              alias, alias, "post_");
+  QVERIFY(labels(aliases).contains("post_count"));
+  const QString forward =
+      "WITH a AS (SELECT * FROM b|), b AS (SELECT 1 AS id) SELECT * FROM a";
+  const int cursor = forward.indexOf('|');
+  QString clean = forward;
+  clean.remove(cursor, 1);
+  const auto context =
+      SqlQueryContext::analyze(clean, cursor, DbEngine::PostgreSql, &schema);
+  for (const auto &common : context.commonTables)
+    QVERIFY(common.name != "b");
+}
+
+void TestDatabaseCore::completionQuotedPrefixesAndComments() {
+  const auto schema = shopSchema();
+  const QString sql = "SELECT o.\"Total A\" FROM orders o";
+  const int cursor = sql.indexOf(" A") + 2;
+  const auto prefix = SqlQueryContext::identifierPrefix(sql, cursor);
+  QCOMPARE(prefix.text, QString("\"Total A"));
+  QCOMPARE(sql.mid(prefix.start, prefix.end - prefix.start),
+           QString("\"Total A\""));
+  const auto suggestions = SqlCompletion::suggest(
+      &schema, DbEngine::PostgreSql, sql.left(cursor), sql, prefix.text);
+  QCOMPARE(suggestions.size(), 1);
+  QCOMPARE(suggestions.first().insertText, QString("\"Total Amount\""));
+  const QStringList literals = {"SELECT 'FROM users u",
+                                "SELECT $$FROM users u$$", "SELECT 1 -- u.id",
+                                "SELECT /* u.id */"};
+  for (const auto &text : literals)
+    QVERIFY2(
+        SqlCompletion::suggest(&schema, DbEngine::PostgreSql, text, text, "")
+            .isEmpty(),
+        qPrintable(text));
+  const QString mysqlComment = "SELECT 1 # FROM orders fake";
+  QVERIFY(SqlCompletion::suggest(&schema, DbEngine::MySql, mysqlComment,
+                                 mysqlComment, "")
+              .isEmpty());
+  const QString mysqlLiteral = "SELECT 'it\\'s FROM orders fake";
+  QVERIFY(SqlCompletion::suggest(&schema, DbEngine::MySql, mysqlLiteral,
+                                 mysqlLiteral, "")
+              .isEmpty());
+  const auto qualifiers =
+      SqlQueryContext::qualifierBefore("SELECT [my alias].", 18);
+  QCOMPARE(qualifiers, QStringList{"my alias"});
+}
+
+void TestDatabaseCore::editorCompletionUsesCteColumnsAndFullQuotedRange() {
+  const QString document = "SELECT 1;\n  WITH recent AS (SELECT 1 AS \"Total "
+                           "Amount\") SELECT r.\"Total A\" FROM recent r";
+  SqlCompletionProvider provider;
+  provider.setDocumentTextProvider([&](const QString &) { return document; });
+  const int offset = document.lastIndexOf("Total A\"") + 7;
+  auto context = CompletionContext::createInvoked(
+      "file:///query.sql", "sql", "A", 1, offset - document.indexOf('\n') - 1);
+  QList<CompletionItem> items;
+  provider.requestCompletions(context,
+                              [&](const auto &result) { items = result; });
+  QCOMPARE(items.size(), 1);
+  QCOMPARE(items.first().insertText, QString("\"Total Amount\""));
+  QVERIFY(items.first().textEditRange.has_value());
+  const auto range = *items.first().textEditRange;
+  QCOMPARE(range.startLine, 1);
+  QCOMPARE(range.endLine, 1);
+  QCOMPARE(range.endCharacter - range.startCharacter, 9);
+  const QString line = document.section('\n', 1);
+  QCOMPARE(
+      line.mid(range.startCharacter, range.endCharacter - range.startCharacter),
+      QString("\"Total A\""));
+}
+
+void TestDatabaseCore::storageMetadataPreservesUnknownAndLargeValues() {
+  DbStatistics statistics;
+  DbStatisticsQueries::merge(
+      statistics,
+      makeResult(
+          {"OBJECT_TYPE", "schema_name", "table_name", "row_count",
+           "data_bytes", "index_bytes", "total_bytes", "rows_estimated"},
+          {{"table", "public", "large", qint64(6000000000LL),
+            qint64(5000000000000LL), QVariant(), qint64(6000000000000LL), 1},
+           {"table", "public", "empty", 0, 0, 0, 0, 0},
+           {"table", "public", "unknown", QVariant(), QVariant(), QVariant(),
+            QVariant(), 0}}));
+  const auto *large = statistics.table("public", "large");
+  QVERIFY(large);
+  QCOMPARE(large->rows, qint64(6000000000LL));
+  QCOMPARE(large->indexBytes, qint64(-1));
+  QVERIFY(large->rowsEstimated);
+  QCOMPARE(statistics.table("public", "empty")->rows, qint64(0));
+  QCOMPARE(statistics.table("public", "unknown")->totalBytes, qint64(-1));
+  QVERIFY(!statistics.table("other", "large"));
+  QCOMPARE(DbStatisticsQueries::formatBytes(-1), QString::fromUtf8("—"));
+  QVERIFY(DbStatisticsQueries::formatBytes(1024).contains("KiB"));
+  QVERIFY(DbStatisticsQueries::formatBytes(5000000000000LL).contains("TiB"));
+  QVERIFY(DbStatisticsQueries::formatRows(6000000000LL, true)
+              .startsWith(QString::fromUtf8("≈ ")));
 }
 
 void TestDatabaseCore::connectionStoreRoundTrip() {

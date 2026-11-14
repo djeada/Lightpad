@@ -5,6 +5,7 @@
 #include "../../settings/theme.h"
 #include "dbinsightsview.h"
 #include "dbresultview.h"
+#include "dbstorageview.h"
 #include "sqlconsoleedit.h"
 
 #include <QComboBox>
@@ -25,6 +26,7 @@
 #include <QWidget>
 
 class QueryHistoryDialog;
+class QToolButton;
 
 class DatabasePanel : public QWidget {
   Q_OBJECT
@@ -35,6 +37,7 @@ public:
 
   DatabaseManager *manager() const { return m_manager; }
   void applyTheme(const Theme &theme);
+  void setContentFont(const QFont &font);
   void saveState() const;
   void restoreState();
 
@@ -56,6 +59,7 @@ public:
   QTabWidget *outputTabs() const { return m_outputTabs; }
   QPlainTextEdit *messages() const { return m_messages; }
   DbInsightsView *insights() const { return m_insights; }
+  DbStorageView *storage() const { return m_storage; }
   QComboBox *connectionCombo() const { return m_connectionCombo; }
 
 signals:
@@ -89,6 +93,9 @@ private slots:
   void onDatabaseComboActivated(int index);
   void onFilterChanged(const QString &text);
   void updateRunningLabel();
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
   enum ItemKind {
@@ -125,6 +132,8 @@ private:
     QPointer<DbResultView> resultView;
     bool browsing = false;
     QStringList resultTitles;
+    QString countedSchema;
+    QString countedTable;
   };
 
   void buildUi();
@@ -137,6 +146,10 @@ private:
                                 const DbTableInfo &table);
   void refreshCombos();
   void refreshToolbar();
+  void refreshStorageIndicators(DbConnection *connection);
+  void showStorage(DbConnection *connection,
+                   const DbTableInfo *table = nullptr);
+  void countRows(DbConnection *connection, const DbTableInfo &table);
   QIcon stateIcon(DbConnectionState state, const QString &color) const;
   QColor stateColor(DbConnectionState state) const;
 
@@ -156,7 +169,8 @@ private:
                   bool stopOnError, const QString &tableName = QString(),
                   bool profileAfter = false, bool explain = false,
                   DbResultView *resultView = nullptr,
-                  const QStringList &resultTitles = {});
+                  const QStringList &resultTitles = {},
+                  bool keepResults = false);
   void previewTable(DbConnection *conn, const DbTableInfo &table);
   void showTableColumns(DbConnection *conn, const DbTableInfo &table);
   void generateSql(DbConnection *conn, const DbTableInfo &table,
@@ -202,6 +216,8 @@ private:
   QTabWidget *m_resultTabs = nullptr;
   QPlainTextEdit *m_messages = nullptr;
   DbInsightsView *m_insights = nullptr;
+  DbStorageView *m_storage = nullptr;
+  QToolButton *m_browserActions = nullptr;
   QProgressBar *m_progress = nullptr;
   QLabel *m_status = nullptr;
   QLabel *m_runningLabel = nullptr;

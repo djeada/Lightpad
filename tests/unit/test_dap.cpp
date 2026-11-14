@@ -1,6 +1,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QHeaderView>
 #include <QHostAddress>
 #include <QJsonDocument>
 #include <QProcess>
@@ -20,6 +21,7 @@
 #include "dap/debugsettings.h"
 #include "dap/expressiontranslator.h"
 #include "dap/watchmanager.h"
+#include "test_templates/testconfiguration.h"
 #include "ui/dialogs/debugconfigurationdialog.h"
 #include "ui/dockutils.h"
 #include "ui/panels/debugconcurrencypanel.h"
@@ -105,6 +107,7 @@ private slots:
   void testCompoundConfigurationLoading();
   void testQuickConfigPreservesAdapterDefaults();
   void testQuickConfigCreatedEvenWhenAdapterUnavailable();
+  void testPytestDebugConfigurationUsesFullSelector();
   void testConfigurationManagerSingleton();
 
   void testWatchManagerSingleton();
@@ -202,6 +205,7 @@ private slots:
   void testGdbDebuggeeLaunchesWithoutTerminal();
   void testProgramIoButtonFollowsSelectedClient();
   void testDebugToolbarCollapsesToIconsWhenNarrow();
+  void testLargeInspectionFontSurvivesThemesAndDetaching();
   void testConsoleResultOpensStructuredInspector();
   void testPartialThreadExecution();
   void testSelectedThreadExecutionArguments();
@@ -648,6 +652,14 @@ void TestDap::testPythonLaunchArgumentsUseResolvedInterpreter() {
   QCOMPARE(launchArguments["program"].toString(), QString("/tmp/example.py"));
   QCOMPARE(launchArguments["env"].toObject()["PYTHONUNBUFFERED"].toString(),
            QString("1"));
+
+  configuration.program.clear();
+  configuration.adapterConfig["module"] = "uvicorn";
+  configuration.args = {"main:app", "--port", "8000"};
+  const auto moduleLaunch = pythonAdapter->launchArguments(configuration);
+  QCOMPARE(moduleLaunch.value("module").toString(), "uvicorn");
+  QVERIFY(!moduleLaunch.contains("program"));
+  QCOMPARE(moduleLaunch.value("args").toArray().first().toString(), "main:app");
 }
 
 void TestDap::testAdapterLookupByFile() {
@@ -1420,6 +1432,40 @@ void TestDap::testConfigurationManagerSingleton() {
   DebugConfigurationManager &mgr2 = DebugConfigurationManager::instance();
 
   QCOMPARE(&mgr1, &mgr2);
+}
+
+void TestDap::testPytestDebugConfigurationUsesFullSelector() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QDir().mkpath(dir.filePath("src"));
+  QFile file(dir.filePath("src/main.py"));
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("from fastapi import FastAPI\napp = FastAPI()\n");
+  file.close();
+  auto &manager = DebugConfigurationManager::instance();
+  const QString previous = manager.workspaceFolder();
+  const auto cleanup =
+      qScopeGuard([&]() { manager.setWorkspaceFolder(previous); });
+  manager.setWorkspaceFolder(dir.path());
+  TestConfiguration pytest;
+  pytest.args = {"-m", "pytest", "-v"};
+  pytest.env["ENDPOINT_TEST_MODE"] = "test";
+  const QString node =
+      "tests/test_api.py::TestEndpoints::test_post[author role]";
+  const auto config = manager.createPytestConfig({node}, pytest);
+  QCOMPARE(config.adapterConfig.value("module").toString(), "pytest");
+  QVERIFY(config.program.isEmpty());
+  QCOMPARE(config.cwd, dir.path());
+  QCOMPARE(config.args.last(), node);
+  QVERIFY(config.args.contains("-s"));
+  QVERIFY(!config.args.contains("-m"));
+  QCOMPARE(config.env.value("ENDPOINT_TEST_MODE"), "test");
+  QVERIFY(config.env.value("PYTHONPATH").startsWith(dir.filePath("src")));
+  QVERIFY(config.env.contains("PYTEST_ADDOPTS"));
+  const auto quick =
+      manager.createQuickConfig(dir.filePath("tests/test_api.py"), "python");
+  QCOMPARE(quick.adapterConfig.value("module").toString(), "pytest");
+  QCOMPARE(quick.args.last(), dir.filePath("tests/test_api.py"));
 }
 
 void TestDap::cleanupWatches() { WatchManager::instance().clearAll(); }
@@ -5213,6 +5259,60 @@ void TestDap::testTabbedDebugDockCanShrinkBelowTwentyPercent() {
   window.resizeDocks({debug}, {window.height() / 2}, Qt::Vertical);
   QCoreApplication::processEvents();
   QVERIFY(debug->height() > window.height() / 5);
+}
+
+void TestDap::testLargeInspectionFontSurvivesThemesAndDetaching() {
+  const QString originalStyle = qApp->styleSheet();
+  const auto restoreStyle =
+      qScopeGuard([&]() { qApp->setStyleSheet(originalStyle); });
+  qApp->setStyleSheet(
+      "QWidget { font-size: 13px; } QHeaderView::section { font-size: 10px; }");
+  DebugPanel panel;
+  panel.applyTheme(Theme());
+  panel.resize(1100, 600);
+  QFont font("monospace", 24);
+  panel.setContentFont(font);
+  panel.show();
+  QCoreApplication::processEvents();
+  for (auto *tree : panel.findChildren<QTreeWidget *>()) {
+    QCOMPARE(tree->font().pointSizeF(), 24.0);
+    if (!tree->isHeaderHidden())
+      QVERIFY(tree->header()->height() >= tree->fontMetrics().height() + 10);
+  }
+  auto *output = panel.findChild<QPlainTextEdit *>("debugConsoleOutput");
+  auto *input = panel.findChild<QLineEdit *>("debugConsoleInput");
+  auto *find = panel.findChild<QLineEdit *>("debugConsoleFind");
+  QVERIFY(output && input && find);
+  auto *transport = panel.findChild<QToolButton *>("debugToolbarButton");
+  QVERIFY(transport);
+  QVERIFY(transport->icon().actualSize(transport->iconSize()).height() >=
+          panel.fontMetrics().height() - 4);
+  QCOMPARE(output->font().pointSizeF(), 24.0);
+  QCOMPARE(input->font().pointSizeF(), 24.0);
+  QVERIFY(find->minimumHeight() >= find->fontMetrics().height() + 12);
+  panel.applyTheme(Theme());
+  QCOMPARE(output->font().pointSizeF(), 24.0);
+  for (auto *button : panel.findChildren<QToolButton *>("debugInspectorTab")) {
+    QCOMPARE(button->font().pointSizeF(), 24.0);
+    button->click();
+    QCoreApplication::processEvents();
+  }
+  auto *inspectorTitle = panel.findChild<QLabel *>("debugValueTitle");
+  QVERIFY(inspectorTitle);
+  QCOMPARE(inspectorTitle->font().pointSizeF(), 24.0);
+  QAction *detach = nullptr;
+  for (auto *action : panel.findChildren<QAction *>())
+    if (action->text() == "Detach")
+      detach = action;
+  QVERIFY(detach);
+  detach->trigger();
+  QCoreApplication::processEvents();
+  QCOMPARE(output->font().pointSizeF(), 24.0);
+  font.setPointSize(18);
+  panel.setContentFont(font);
+  QCOMPARE(output->font().pointSizeF(), 18.0);
+  QCOMPARE(inspectorTitle->font().pointSizeF(), 18.0);
+  detach->trigger();
 }
 
 QTEST_MAIN(TestDap)

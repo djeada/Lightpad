@@ -6,9 +6,12 @@
 #include "ui/panels/sqlconsoleedit.h"
 
 #include <QClipboard>
+#include <QCompleter>
+#include <QDialog>
 #include <QFile>
 #include <QHeaderView>
 #include <QMenu>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QtTest/QtTest>
@@ -76,6 +79,7 @@ private slots:
   void consoleFindsStatementUnderCaret();
   void consoleRunShortcuts();
   void consoleHistoryShortcut();
+  void consoleCompletesCtesAndReplacesQuotedIdentifiers();
 
   void panelRunsScriptAndShowsResults();
   void panelRunScriptExecutesCitySetup();
@@ -84,7 +88,61 @@ private slots:
   void panelRunsFromEditorWithConnectionDirective();
   void panelRecordsHistory();
   void panelReadOnlyConnectionRefusesWrites();
+  void largeFontReachesSqlTreeResultsAndDialogs();
+  void storageAndContextActionsPreserveResults();
 };
+
+void TestDatabasePanel::largeFontReachesSqlTreeResultsAndDialogs() {
+  const QString originalStyle = qApp->styleSheet();
+  const auto restoreStyle =
+      qScopeGuard([&]() { qApp->setStyleSheet(originalStyle); });
+  qApp->setStyleSheet("QWidget { font-size: 12px; } QHeaderView::section { "
+                      "font-size: 10px; } QTabBar::tab { font-size: 11px; }");
+  QTemporaryDir dir;
+  DatabaseManager manager(dir.filePath("connections.json"),
+                          dir.filePath("history.json"));
+  DatabasePanel panel(&manager);
+  panel.applyTheme(testTheme());
+  QFont font("monospace", 24);
+  panel.setContentFont(font);
+  panel.resize(1200, 700);
+  panel.show();
+  QCOMPARE(panel.console()->font().pointSizeF(), 24.0);
+  QCOMPARE(panel.tree()->font().pointSizeF(), 24.0);
+  QFile databaseFile(dir.filePath("readability.db"));
+  QVERIFY(databaseFile.open(QIODevice::WriteOnly));
+  databaseFile.close();
+  panel.openSqliteFile(databaseFile.fileName());
+  QVERIFY(waitUntil([&]() {
+    return manager.activeConnection() &&
+           manager.activeConnection()->isConnected();
+  }));
+  panel.runSql("SELECT 42 AS id, 'A readable result' AS title;");
+  QVERIFY(waitUntil([&]() { return panel.resultTabs()->count() == 1; }));
+  auto *result = qobject_cast<DbResultView *>(panel.resultTabs()->widget(0));
+  QVERIFY(result);
+  QCOMPARE(result->table()->font().pointSizeF(), 24.0);
+  QVERIFY(result->table()->verticalHeader()->defaultSectionSize() >=
+          result->table()->fontMetrics().height() + 10);
+  QVERIFY(result->table()->horizontalHeader()->height() >=
+          result->table()->fontMetrics().height());
+  panel.applyTheme(testTheme());
+  QCOMPARE(result->table()->font().pointSizeF(), 24.0);
+  const auto index = result->proxy()->index(0, 1);
+  QVERIFY(QMetaObject::invokeMethod(result, "showCellValue",
+                                    Q_ARG(QModelIndex, index)));
+  auto *dialog = result->findChild<QDialog *>();
+  QVERIFY(dialog);
+  auto *text = dialog->findChild<QPlainTextEdit *>();
+  QVERIFY(text);
+  QCOMPARE(text->font().pointSizeF(), 24.0);
+  font.setPointSize(18);
+  panel.setContentFont(font);
+  QCOMPARE(panel.console()->font().pointSizeF(), 18.0);
+  QCOMPARE(result->table()->font().pointSizeF(), 18.0);
+  QCOMPARE(text->font().pointSizeF(), 18.0);
+  dialog->close();
+}
 
 void TestDatabasePanel::resultViewShowsNullsAndAlignsNumbers() {
   DbResultView view;
@@ -307,7 +365,159 @@ QStringList treeTexts(QTreeWidget *tree) {
   return out;
 }
 
+bool useContextAction(DatabasePanel *panel, const std::function<void()> &open,
+                      const QString &name, QStringList *labels = nullptr,
+                      qreal *fontSize = nullptr) {
+  bool found = false;
+  QTimer::singleShot(0, panel, [&] {
+    auto *menu = qobject_cast<QMenu *>(QApplication::activePopupWidget());
+    if (!menu)
+      return;
+    if (fontSize)
+      *fontSize = menu->font().pointSizeF();
+    for (auto *action : menu->actions()) {
+      if (labels)
+        *labels << action->text();
+      if (action->text().startsWith(name) && !name.isEmpty()) {
+        found = true;
+        action->trigger();
+        break;
+      }
+    }
+    menu->close();
+  });
+  open();
+  return found;
+}
+
 } // namespace
+
+void TestDatabasePanel::consoleCompletesCtesAndReplacesQuotedIdentifiers() {
+  SqlConsoleEdit edit;
+  edit.applyTheme(testTheme());
+  edit.setFont(QFont("monospace", 24));
+  edit.resize(1000, 400);
+  edit.show();
+  edit.setFocus();
+  const QString sql = "SELECT 1;\n\n  WITH recent AS (SELECT 'x' AS \"Total "
+                      "Amount\") SELECT r.\"Total A\" FROM recent r";
+  edit.setPlainText(sql);
+  auto cursor = edit.textCursor();
+  cursor.setPosition(sql.lastIndexOf("Total A") + 7);
+  edit.setTextCursor(cursor);
+  QTest::keyClick(&edit, Qt::Key_Space, Qt::ControlModifier);
+  auto *completer = edit.findChild<QCompleter *>();
+  QVERIFY(completer);
+  QVERIFY(completer->popup()->isVisible());
+  QCOMPARE(completer->popup()->font().pointSizeF(), 24.0);
+  QVERIFY(completer->popup()->sizeHintForRow(0) >=
+          edit.fontMetrics().height() + 10);
+  QCOMPARE(completer->completionModel()->rowCount(), 1);
+  QTest::keyClick(&edit, Qt::Key_Tab);
+  QCOMPARE(edit.toPlainText(),
+           QString(sql).replace("r.\"Total A\"", "r.\"Total Amount\""));
+  QVERIFY(!completer->popup()->isVisible());
+
+  edit.setPlainText("SELECT cou(*)");
+  cursor = edit.textCursor();
+  cursor.setPosition(10);
+  edit.setTextCursor(cursor);
+  QTest::keyClick(&edit, Qt::Key_Space, Qt::ControlModifier);
+  QVERIFY(completer->popup()->isVisible());
+  QTest::keyClick(&edit, Qt::Key_Tab);
+  QCOMPARE(edit.toPlainText(), QString("SELECT count(*)"));
+
+  edit.setPlainText("SELECT 'FROM recent r");
+  edit.moveCursor(QTextCursor::End);
+  QTest::keyClick(&edit, Qt::Key_Space, Qt::ControlModifier);
+  QVERIFY(!completer->popup()->isVisible());
+}
+
+void TestDatabasePanel::storageAndContextActionsPreserveResults() {
+  PanelFixture fx;
+  QVERIFY(fx.init());
+  QVERIFY(fx.connectPanel());
+  fx.panel->setContentFont(QFont("monospace", 24));
+  fx.panel->runSql("CREATE TABLE things(id INTEGER PRIMARY KEY, name TEXT);"
+                   "CREATE INDEX things_name ON things(name);"
+                   "CREATE VIEW things_view AS SELECT name FROM things;"
+                   "INSERT INTO things(name) VALUES ('a'), ('b'), ('c');"
+                   "SELECT 'keep this result' AS note;");
+  auto *connection = fx.manager->activeConnection();
+  QVERIFY(waitUntil([&] {
+    return !fx.panel->isRunning() && !connection->schemaLoading() &&
+           !connection->statisticsLoading();
+  }));
+  QCOMPARE(fx.panel->resultTabs()->count(), 1);
+  QPointer<QWidget> result = fx.panel->resultTabs()->widget(0);
+  auto *tree = fx.panel->tree();
+  QVERIFY(!tree->isHeaderHidden());
+  QCOMPARE(tree->columnCount(), 2);
+  QTreeWidgetItem *table = nullptr;
+  for (QTreeWidgetItemIterator it(tree); *it; ++it)
+    if ((*it)->text(0) == "things")
+      table = *it;
+  QVERIFY(table);
+  QVERIFY(table->text(1).contains("KiB"));
+  tree->scrollToItem(table);
+  tree->setCurrentItem(table);
+  tree->setFocus();
+  qreal menuFont = 0;
+  QStringList menuLabels;
+  QVERIFY(useContextAction(
+      fx.panel.get(),
+      [&] { QTest::keyClick(tree, Qt::Key_F10, Qt::ShiftModifier); },
+      "Storage and row count", &menuLabels, &menuFont));
+  QCOMPARE(menuFont, 24.0);
+  QVERIFY(menuLabels.contains("Browse data…"));
+  QCOMPARE(fx.panel->outputTabs()->currentWidget(), fx.panel->storage());
+  auto *storageTree =
+      fx.panel->storage()->findChild<QTreeWidget *>("dbStorageTree");
+  QVERIFY(storageTree);
+  QCOMPARE(storageTree->font().pointSizeF(), 24.0);
+  QVERIFY(storageTree->currentItem());
+  QCOMPARE(storageTree->currentItem()->text(0), QString("things"));
+  QCOMPARE(storageTree->currentItem()->text(1), QString::fromUtf8("—"));
+  auto *count = fx.panel->storage()->findChild<QPushButton *>("dbStorageCount");
+  QVERIFY(count && count->isEnabled());
+  count->click();
+  QVERIFY(!count->isEnabled());
+  QVERIFY(waitUntil([&] { return !fx.panel->isRunning(); }));
+  QVERIFY(count->isEnabled());
+  QCOMPARE(connection->statistics().table("main", "things")->rows, qint64(3));
+  QCOMPARE(storageTree->currentItem()->text(1), QString("3"));
+  storageTree->sortItems(4, Qt::DescendingOrder);
+  auto *database = storageTree->topLevelItem(0);
+  QCOMPARE(database->childCount(), 2);
+  QCOMPARE(database->child(0)->text(0), QString("things"));
+  QCOMPARE(database->child(1)->text(0), QString("things_view (view)"));
+  storageTree->sortItems(1, Qt::AscendingOrder);
+  QCOMPARE(database->child(0)->text(0), QString("things"));
+  storageTree->sortItems(1, Qt::DescendingOrder);
+  QCOMPARE(database->child(0)->text(0), QString("things"));
+  QCOMPARE(fx.panel->outputTabs()->currentWidget(), fx.panel->storage());
+  QCOMPARE(fx.panel->resultTabs()->count(), 1);
+  QCOMPARE(fx.panel->resultTabs()->widget(0), result.data());
+
+  auto *actions = fx.panel->findChild<QToolButton *>("dbObjectActions");
+  QVERIFY(actions && actions->isEnabled());
+  QVERIFY(useContextAction(
+      fx.panel.get(), [&] { actions->click(); }, "Copy qualified name"));
+  QCOMPARE(QApplication::clipboard()->text(), QString("\"main\".\"things\""));
+  QVERIFY(useContextAction(
+      fx.panel.get(), [&] { QTest::keyClick(tree, Qt::Key_Menu); },
+      "Refresh sizes"));
+  QVERIFY(waitUntil([&] { return !connection->statisticsLoading(); }));
+  QCOMPARE(tree->currentItem(), table);
+  QCOMPARE(fx.panel->resultTabs()->widget(0), result.data());
+  table->setExpanded(true);
+  QVERIFY(table->childCount() > 0);
+  tree->setCurrentItem(table->child(0));
+  QVERIFY(useContextAction(
+      fx.panel.get(), [&] { actions->click(); }, "Table storage"));
+  QCOMPARE(fx.panel->outputTabs()->currentWidget(), fx.panel->storage());
+  QCOMPARE(storageTree->currentItem()->text(0), QString("things"));
+}
 
 void TestDatabasePanel::panelRunsScriptAndShowsResults() {
   PanelFixture fx;

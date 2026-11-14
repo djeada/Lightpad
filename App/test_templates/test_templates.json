@@ -56,6 +56,27 @@
       "testFilePattern": "test_*.cpp"
     },
     {
+      "id": "ctest_c",
+      "name": "CTest (C)",
+      "language": "C",
+      "extensions": ["c", "h"],
+      "command": "bash",
+      "args": ["-lc", "(test -f \"${workspaceFolder}/build/CMakeCache.txt\" || cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\") && cmake --build \"${workspaceFolder}/build\" -j2 && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V"],
+      "runSingleTest": {
+        "args": ["-lc", "(test -f \"${workspaceFolder}/build/CMakeCache.txt\" || cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\") && cmake --build \"${workspaceFolder}/build\" -j2 && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '^${testName}$'"]
+      },
+      "runFailed": {
+        "args": ["-lc", "(test -f \"${workspaceFolder}/build/CMakeCache.txt\" || cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\") && cmake --build \"${workspaceFolder}/build\" -j2 && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '${testName}'"]
+      },
+      "runSuite": {
+        "args": ["-lc", "(test -f \"${workspaceFolder}/build/CMakeCache.txt\" || cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\") && cmake --build \"${workspaceFolder}/build\" -j2 && ctest --test-dir \"${workspaceFolder}/build\" --output-on-failure -V -R '^${testName}'"]
+      },
+      "workingDirectory": "${workspaceFolder}",
+      "discoveryDirectory": "${workspaceFolder}/build",
+      "outputFormat": "ctest",
+      "testFilePattern": "test_*.c"
+    },
+    {
       "id": "go_test",
       "name": "Go Test",
       "language": "Go",
@@ -96,16 +117,22 @@
       "language": "JavaScript",
       "extensions": ["js", "jsx", "ts", "tsx"],
       "command": "npx",
-      "args": ["jest", "--verbose", "--json", "--outputFile=/dev/stderr"],
+      "args": ["--no-install", "jest", "--runInBand", "--json", "--testLocationInResults", "--no-colors"],
       "runSingleTest": {
-        "args": ["jest", "--verbose", "-t", "${testName}", "--json", "--outputFile=/dev/stderr"]
+        "args": ["--no-install", "jest", "--runInBand", "--json", "--testLocationInResults", "--no-colors", "--testNamePattern", "${testName}", "--runTestsByPath", "${file}"]
       },
       "runFailed": {
-        "args": ["jest", "--verbose", "-t", "${testName}", "--json", "--outputFile=/dev/stderr"]
+        "args": ["--no-install", "jest", "--runInBand", "--json", "--testLocationInResults", "--no-colors", "--testNamePattern", "${testName}"]
       },
       "workingDirectory": "${workspaceFolder}",
       "outputFormat": "jest_json",
-      "testFilePattern": "*.test.{js,jsx,ts,tsx}"
+      "testFilePattern": "*.test.{js,jsx,ts,tsx}",
+      "runFile": {
+        "args": ["--no-install", "jest", "--runInBand", "--json", "--testLocationInResults", "--no-colors", "--runTestsByPath", "${file}"]
+      },
+      "runSuite": {
+        "args": ["--no-install", "jest", "--runInBand", "--json", "--testLocationInResults", "--no-colors", "--runTestsByPath", "${file}"]
+      }
     }
   ]
 }

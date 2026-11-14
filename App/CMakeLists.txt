@@ -231,6 +231,7 @@ set(project_headers
     editor/vimmode.h
     i18n/i18n.h
     python/pythonprojectenvironment.h
+    python/pythonbackendproject.h
     language/languagecatalog.h
     language/projectroot.h
     language/languagefeaturemanager.h
@@ -273,6 +274,7 @@ set(project_headers
     ui/widgets/elidingtoolbutton.h
     ui/workspaceicons.h
     ui/mainwindow.h
+    ui/paneltypography.h
     ui/popup.h
     ui/dialogs/preferences.h
     ui/dialogs/pythonenvironmentdialog.h
@@ -303,6 +305,8 @@ set(project_headers
     format_templates/formattemplatemanager.h
     test_templates/testconfiguration.h
     test_templates/testdiscovery.h
+    test_templates/pytestintegration.h
+    test_templates/testsource.h
     test_templates/testoutputparser.h
     test_templates/testrunmanager.h
     test_templates/autotestrunner.h
@@ -348,8 +352,12 @@ set(project_sources
     database/dbtypes.cpp
     database/sqlstatementsplitter.cpp
     database/dbcatalog.cpp
+    database/dbstatistics.cpp
+    database/dbstatistics.h
     database/idbsession.cpp
     database/sqlcompletion.cpp
+    database/sqlquerycontext.cpp
+    database/sqlquerycontext.h
     database/clidialect.cpp
     database/clisession.cpp
     database/sqlitesession.cpp
@@ -408,6 +416,8 @@ set(project_sources
     git/gitsandbox.cpp
     ui/panels/dbresultview.cpp
     ui/panels/dbinsightsview.cpp
+    ui/panels/dbstorageview.cpp
+    ui/panels/dbstorageview.h
     ui/panels/sqlconsoleedit.cpp
     ui/panels/databasepanel.cpp
     ui/dialogs/connectiondialog.cpp
@@ -517,6 +527,7 @@ set(project_sources
     editor/vimmode_fold.cpp
     i18n/i18n.cpp
     python/pythonprojectenvironment.cpp
+    python/pythonbackendproject.cpp
     lsp/lspclient.cpp
     language/languagefeaturemanager.cpp
     diagnostics/diagnosticsmanager.cpp
@@ -552,6 +563,7 @@ set(project_sources
     core/lightpadtabwidget.cpp
     ui/mainwindow.cpp
     ui/mainwindow_database.cpp
+    ui/mainwindow_backend.cpp
     ui/mainwindow_run.cpp
     ui/mainwindow_recovery.cpp
     ui/mainwindow_workspace.cpp

@@ -1,5 +1,7 @@
 <RCC>
     <qresource prefix="/test_templates">
         <file>test_templates.json</file>
+        <file>lightpad_pytest.py</file>
+        <file>lightpad_jest_discover.cjs</file>
     </qresource>
 </RCC>

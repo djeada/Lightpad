@@ -240,6 +240,7 @@ qt_add_resources(RUN_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/run_templates/ru
 add_executable(test_runtemplatemanager
     unit/test_runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/runtemplateselector.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
@@ -269,6 +270,7 @@ qt_add_resources(FORMAT_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/format_templa
 add_executable(test_formattemplatemanager
     unit/test_formattemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/format_templates/formattemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${FORMAT_TEMPLATE_RESOURCES}
@@ -290,6 +292,7 @@ target_compile_definitions(test_formattemplatemanager PRIVATE QT_DEPRECATED_WARN
 add_executable(test_terminal
     unit/test_terminal.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminal.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminalpty.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminalview.cpp
@@ -325,6 +328,7 @@ target_compile_definitions(test_terminal PRIVATE QT_DEPRECATED_WARNINGS)
 add_executable(test_terminaltabwidget
     unit/test_terminaltabwidget.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminaltabwidget.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminal.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/terminalpty.cpp
@@ -539,6 +543,7 @@ add_test(NAME CompletionInsertionTests COMMAND test_completioninsertion)
 add_executable(test_dap
     unit/test_dap.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/dapclient.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/expressiontranslator.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugadapterregistry.cpp
@@ -606,6 +611,7 @@ add_executable(test_dap_integration
     unit/test_dap_integration.cpp
     ${CMAKE_SOURCE_DIR}/App/build/cmakeproject.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/dapclient.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/expressiontranslator.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugadapterregistry.cpp
@@ -764,6 +770,7 @@ add_executable(test_runtargetresolver
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/build/cmakeproject.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${RUN_TARGET_RESOLVER_RESOURCES}
 )
@@ -787,6 +794,21 @@ set_target_properties(test_runtargetresolver PROPERTIES
 )
 
 add_test(NAME RunTargetResolverTests COMMAND test_runtargetresolver)
+
+add_executable(test_pythonbackendproject
+    unit/test_pythonbackendproject.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+)
+target_include_directories(test_pythonbackendproject PRIVATE ${CMAKE_SOURCE_DIR}/App)
+target_link_libraries(test_pythonbackendproject PRIVATE Qt6::Core Qt6::Test)
+set_target_properties(test_pythonbackendproject PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/bin")
+add_test(NAME PythonBackendProjectTests COMMAND test_pythonbackendproject)
+set_tests_properties(PythonBackendProjectTests PROPERTIES TIMEOUT 30)
 
 # CMake project support (detection, parsing, configure/build round-trip).
 add_executable(test_cmakeproject
@@ -2403,6 +2425,7 @@ add_executable(test_languagefeaturemanager
     ${CMAKE_SOURCE_DIR}/App/definition/languagelspdefinitionprovider.cpp
     ${CMAKE_SOURCE_DIR}/App/language/languagefeaturemanager.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/diagnostics/diagnosticsmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/lsp/lspclient.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/settingsmanager.cpp
@@ -2832,6 +2855,8 @@ add_test(NAME SymbolNavigationTests COMMAND test_symbolnavigation)
 
 # TestOutputParsers test executable
 qt_add_resources(TEST_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/test_templates/test_templates.qrc)
+target_sources(test_dap PRIVATE ${TEST_TEMPLATE_RESOURCES})
+target_sources(test_dap_integration PRIVATE ${TEST_TEMPLATE_RESOURCES})
 
 add_executable(test_testoutputparsers
     unit/test_testoutputparsers.cpp
@@ -2839,6 +2864,7 @@ add_executable(test_testoutputparsers
     ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${TEST_TEMPLATE_RESOURCES}
 )
@@ -2869,6 +2895,7 @@ add_executable(test_autotestrunner
     ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${TEST_TEMPLATE_RESOURCES}
 )
@@ -2922,6 +2949,7 @@ add_executable(test_testrunmanager
     ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${TEST_TEMPLATE_RESOURCES}
 )
@@ -2957,6 +2985,7 @@ add_executable(test_testpanel
     ${CMAKE_SOURCE_DIR}/App/test_templates/testoutputparser.cpp
     ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${TEST_TEMPLATE_RESOURCES}
@@ -2978,6 +3007,7 @@ target_link_libraries(test_testpanel
 )
 
 target_compile_definitions(test_testpanel PRIVATE QT_DEPRECATED_WARNINGS)
+target_compile_definitions(test_testpanel PRIVATE LIGHTPAD_TEST_UI_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/test_ui")
 
 add_test(NAME TestPanelTests COMMAND test_testpanel)
 
@@ -3237,8 +3267,10 @@ set(DATABASE_CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/App/database/dbtypes.cpp
     ${CMAKE_SOURCE_DIR}/App/database/sqlstatementsplitter.cpp
     ${CMAKE_SOURCE_DIR}/App/database/dbcatalog.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/dbstatistics.cpp
     ${CMAKE_SOURCE_DIR}/App/database/idbsession.cpp
     ${CMAKE_SOURCE_DIR}/App/database/sqlcompletion.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/sqlquerycontext.cpp
     ${CMAKE_SOURCE_DIR}/App/database/clidialect.cpp
     ${CMAKE_SOURCE_DIR}/App/database/clisession.cpp
     ${CMAKE_SOURCE_DIR}/App/database/sqlitesession.cpp
@@ -3275,6 +3307,8 @@ foreach(db_test test_sqlstatementsplitter test_databasecore test_databaselive te
 endforeach()
 
 add_test(NAME SqlStatementSplitterTests COMMAND test_sqlstatementsplitter)
+target_sources(test_databasecore PRIVATE
+    ${CMAKE_SOURCE_DIR}/App/completion/providers/sqlcompletionprovider.cpp)
 add_test(NAME DatabaseCoreTests COMMAND test_databasecore)
 add_test(NAME DatabaseToolsTests COMMAND test_databasetools)
 add_test(NAME DatabaseLiveTests COMMAND test_databaselive)
@@ -3288,6 +3322,7 @@ add_executable(test_databasepanel
     ${CMAKE_SOURCE_DIR}/App/ui/panels/databasepanel.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/dbresultview.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/dbinsightsview.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/panels/dbstorageview.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/sqlconsoleedit.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/connectiondialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/queryhistorydialog.cpp

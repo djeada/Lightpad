@@ -793,6 +793,7 @@ void MainWindow::setFont(QFont newFont) {
   updateAllTextAreas(&TextArea::setFont, newFont);
   font = newFont;
   settings.mainFont = newFont;
+  updateInspectionFonts();
 
   SettingsManager &sm = SettingsManager::instance();
   sm.setValue("fontFamily", newFont.family());

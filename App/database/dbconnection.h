@@ -2,6 +2,7 @@
 #define DBCONNECTION_H
 
 #include "dbcatalog.h"
+#include "dbstatistics.h"
 #include "idbsession.h"
 
 #include <QDeadlineTimer>
@@ -40,6 +41,9 @@ public:
   QString lastSchemaError() const { return m_schemaError; }
   QStringList databases() const { return m_databases; }
   QString currentDatabase() const { return m_profile.database; }
+  const DbStatistics &statistics() const { return m_statistics; }
+  bool statisticsLoading() const { return m_statisticsLoading; }
+  QString lastStatisticsError() const { return m_statisticsError; }
 
   void connectToServer(const QString &password);
 
@@ -50,6 +54,10 @@ public:
   void cancel();
 
   void refreshSchema();
+  void refreshStatistics(bool includeLargeTables = false);
+  void cancelStatistics();
+  void setExactRowCount(const QString &schema, const QString &table,
+                        qint64 rows);
   void switchDatabase(const QString &database);
 
   void setMaxRows(int rows);
@@ -64,9 +72,17 @@ signals:
   void schemaError(const QString &message);
   void databasesLoaded();
   void databaseChanged(const QString &database);
+  void statisticsChanged();
 
 private:
-  enum class Purpose { User, Schema, SchemaDatabases, Databases, UseDatabase };
+  enum class Purpose {
+    User,
+    Schema,
+    SchemaDatabases,
+    Databases,
+    UseDatabase,
+    Statistics
+  };
   struct Request {
     quint64 id = 0;
     Purpose purpose = Purpose::User;
@@ -99,6 +115,14 @@ private:
   QStringList m_databases;
   bool m_schemaLoading = false;
   bool m_schemaDirty = false;
+  DbStatistics m_statistics;
+  DbStatistics m_pendingStatistics;
+  QMap<QString, QString> m_sqliteFiles;
+  QStringList m_sqliteSchemas;
+  QString m_statisticsError;
+  QStringList m_statisticsErrors;
+  bool m_statisticsLoading = false;
+  bool m_statisticsDirty = false;
 
   QQueue<Request> m_queue;
   Request m_active;

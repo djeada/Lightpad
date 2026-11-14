@@ -1,4 +1,5 @@
 #include "testoutputparser.h"
+#include "pytestintegration.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -154,14 +155,16 @@ void JsonTestParser::finish() {
 }
 
 void JsonTestParser::parseLine(const QString &line) {
-  emit outputLine(line, false);
-
   QJsonParseError error;
   QJsonDocument doc = QJsonDocument::fromJson(line.toUtf8(), &error);
-  if (error.error != QJsonParseError::NoError)
+  if (error.error != QJsonParseError::NoError) {
+    emit outputLine(line, false);
     return;
+  }
 
   QJsonObject obj = doc.object();
+  if (!obj.contains("testResults"))
+    emit outputLine(line, false);
 
   if (obj.contains("Action")) {
     QString action = obj["Action"].toString();
@@ -200,9 +203,13 @@ void JsonTestParser::parseLine(const QString &line) {
     for (const QJsonValue &suiteVal : results) {
       QJsonObject suiteObj = suiteVal.toObject();
       QString suiteName = suiteObj["testFilePath"].toString();
+      if (suiteName.isEmpty())
+        suiteName = suiteObj["name"].toString();
       emit testSuiteStarted(suiteName);
 
-      QJsonArray tests = suiteObj["testResults"].toArray();
+      QJsonArray tests = suiteObj.contains("assertionResults")
+                             ? suiteObj["assertionResults"].toArray()
+                             : suiteObj["testResults"].toArray();
       for (const QJsonValue &testVal : tests) {
         QJsonObject testObj = testVal.toObject();
         TestResult result;
@@ -210,8 +217,10 @@ void JsonTestParser::parseLine(const QString &line) {
         if (result.name.isEmpty())
           result.name = testObj["title"].toString();
         result.suite = suiteName;
+        result.filePath = suiteName;
+        result.line = testObj["location"].toObject()["line"].toInt(-1);
         result.id = result.suite + "::" + result.name;
-        result.durationMs = testObj["duration"].toInt();
+        result.durationMs = testObj["duration"].toInt(-1);
 
         QString status = testObj["status"].toString();
         result.status = (status == "passed")   ? TestStatus::Passed
@@ -225,9 +234,12 @@ void JsonTestParser::parseLine(const QString &line) {
           for (const QJsonValue &m : testObj["failureMessages"].toArray())
             msgs.append(m.toString());
           result.message = msgs.join("\n");
+          result.stackTrace = result.message;
+          result.message = result.message.section('\n', 0, 0);
         }
 
         emit testFinished(result);
+        emit outputLine(result.name + " — " + status, false);
       }
     }
     return;
@@ -315,7 +327,42 @@ void PytestParser::flushFailure() {
 }
 
 void PytestParser::parseLine(const QString &line) {
+  const auto record = PytestIntegration::record(line);
+  if (!record.isEmpty()) {
+    m_structuredOutput = true;
+    const QString event = record.value("event").toString();
+    if (event == "session") {
+      emit totalTestsChanged(record.value("total").toInt());
+      return;
+    }
+    TestResult result;
+    result.id = record.value("id").toString();
+    result.name = record.value("name").toString();
+    result.filePath = record.value("file").toString();
+    result.suite = result.id.section("::", 0, 0);
+    result.line = record.value("line").toInt(-1);
+    if (event == "collected" || event == "started") {
+      result.status =
+          event == "started" ? TestStatus::Running : TestStatus::Queued;
+      emit testStarted(result);
+    } else if (event == "finished") {
+      const QString status = record.value("status").toString();
+      result.status = status == "passed"    ? TestStatus::Passed
+                      : status == "skipped" ? TestStatus::Skipped
+                      : status == "error"   ? TestStatus::Errored
+                                            : TestStatus::Failed;
+      result.durationMs = record.value("durationMs").toInt(-1);
+      result.message = record.value("message").toString();
+      result.stackTrace = record.value("traceback").toString();
+      result.stdoutOutput = record.value("stdout").toString();
+      result.stderrOutput = record.value("stderr").toString();
+      emit testFinished(result);
+    }
+    return;
+  }
   emit outputLine(line, false);
+  if (m_structuredOutput)
+    return;
 
   static QRegularExpression resultRe(
       R"(^(.+?)::(.+?)\s+(PASSED|FAILED|SKIPPED|ERROR|XFAIL|XPASS)(?:\s+\[\s*\d+%\])?$)");
@@ -398,7 +445,7 @@ void CtestParser::parseLine(const QString &line) {
   emit outputLine(line, false);
 
   static QRegularExpression resultRe(
-      R"(^\s*\d+/\d+\s+Test\s+#(\d+):\s+(\S+)\s+\.+\s*(Passed|Failed|\*\*\*Failed|Not Run|Timeout)\s+(\d+\.\d+)\s+sec$)");
+      R"(^\s*\d+/\d+\s+Test\s+#(\d+):\s+(.+?)\s+\.{2,}\s*(.+?)\s+(\d+(?:\.\d+)?)\s+sec(?:\s+.*)?$)");
   auto match = resultRe.match(line.trimmed());
   if (match.hasMatch()) {
     const QString testId = match.captured(1);
@@ -410,8 +457,10 @@ void CtestParser::parseLine(const QString &line) {
     QString status = match.captured(3);
     if (status == "Passed")
       result.status = TestStatus::Passed;
-    else if (status == "Not Run")
+    else if (status.contains("Not Run") || status.contains("Skipped"))
       result.status = TestStatus::Skipped;
+    else if (status.contains("Timeout") || status.contains("Exception"))
+      result.status = TestStatus::Errored;
     else
       result.status = TestStatus::Failed;
 
@@ -424,7 +473,7 @@ void CtestParser::parseLine(const QString &line) {
     return;
   }
 
-  static QRegularExpression startRe(R"(^\s*Start\s+(\d+):\s+(\S+)\s*$)");
+  static QRegularExpression startRe(R"(^\s*Start\s+(\d+):\s+(.+?)\s*$)");
   auto startMatch = startRe.match(line.trimmed());
   if (startMatch.hasMatch()) {
     TestResult result;

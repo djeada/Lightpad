@@ -5,10 +5,14 @@
 #include <QString>
 #include <QStringList>
 
+struct PythonBackendProject;
+
 struct RunTarget {
   enum class Kind {
     None,
     Template,
+    PythonBackend,
+    Pytest,
     CMakeExecutable,
     CTest,
   };
@@ -62,6 +66,8 @@ struct RunTargetContext {
 class RunTargetResolver {
 public:
   static RunTarget resolve(const RunTargetContext &context);
+  static RunTarget backendTarget(const PythonBackendProject &project,
+                                 const QString &filePath = {});
 
   static bool isOverridableTemplate(const QString &templateId);
 

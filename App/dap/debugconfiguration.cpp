@@ -1,7 +1,10 @@
 #include "debugconfiguration.h"
 #include "../core/logging/logger.h"
 #include "../language/languagecatalog.h"
+#include "../python/pythonbackendproject.h"
+#include "../test_templates/testconfiguration.h"
 #include "debugadapterregistry.h"
+#include "test_templates/pytestintegration.h"
 
 #include <QDir>
 #include <QFile>
@@ -312,6 +315,17 @@ DebugConfigurationManager::createQuickConfig(const QString &filePath,
   DebugConfiguration config;
 
   QString canonicalLanguageId = LanguageCatalog::normalize(languageId);
+  const QString filename = QFileInfo(filePath).fileName();
+  if (canonicalLanguageId == "py" &&
+      (filename.startsWith("test_") || filename.endsWith("_test.py"))) {
+    TestConfiguration pytest;
+    pytest.name = "pytest";
+    pytest.command = "${python}";
+    pytest.args = {"-m", "pytest", "-v", "--tb=short"};
+    pytest.outputFormat = "pytest";
+    pytest.workingDirectory = "${workspaceFolder}";
+    return createPytestConfig({filePath}, pytest);
+  }
 
   auto adapter =
       DebugAdapterRegistry::instance().preferredAdapterForFile(filePath);
@@ -333,6 +347,23 @@ DebugConfigurationManager::createQuickConfig(const QString &filePath,
 
   QFileInfo fi(filePath);
   config.name = QString("Debug %1").arg(fi.fileName());
+
+  const auto backend = PythonBackendProject::discover(m_workspaceFolder);
+  if (canonicalLanguageId == "py" && backend.ownsFile(filePath)) {
+    config.name = "Debug " + backend.name();
+    config.program.clear();
+    config.cwd = backend.workingDirectory;
+    config.args = backend.serverArguments(true);
+    config.env = backend.environment();
+    config.adapterConfig["module"] = backend.module();
+    config.adapterConfig["jinja"] = true;
+    config.adapterConfig["subProcess"] = true;
+    const auto preference = backend.pythonPreference();
+    config.pythonMode = preference.mode;
+    config.pythonInterpreter = preference.customInterpreter;
+    config.pythonVenvPath = preference.venvPath;
+    config.pythonRequirementsFile = preference.requirementsFile;
+  }
 
   if (config.type == "cppdbg") {
     config.stopOnEntry = false;
@@ -357,6 +388,57 @@ QString DebugConfigurationManager::lightpadLaunchConfigPath() const {
     return QString();
   }
   return m_workspaceFolder + "/.lightpad/debug/launch.json";
+}
+
+DebugConfiguration DebugConfigurationManager::createPytestConfig(
+    const QStringList &targets, const TestConfiguration &testConfig) const {
+  DebugConfiguration config;
+  config.name =
+      targets.isEmpty() ? "Debug pytest" : "Debug " + targets.join(", ");
+  config.adapterId = "python-debugpy";
+  config.type = "debugpy";
+  config.request = "launch";
+  const auto backend = PythonBackendProject::discover(m_workspaceFolder);
+  const auto preference = backend.pythonPreference();
+  config.pythonMode = preference.mode;
+  config.pythonInterpreter = preference.customInterpreter;
+  config.pythonVenvPath = preference.venvPath;
+  config.pythonRequirementsFile = preference.requirementsFile;
+  const QString file =
+      targets.isEmpty() ? QString() : targets.first().section("::", 0, 0);
+  config.cwd = PythonProjectEnvironment::substituteVariables(
+      testConfig.workingDirectory, m_workspaceFolder, file, m_workspaceFolder,
+      preference);
+  if (config.cwd.isEmpty())
+    config.cwd = m_workspaceFolder;
+  config.args = testConfig.args;
+  if (config.args.size() >= 2 && config.args.at(0) == "-m" &&
+      config.args.at(1) == "pytest")
+    config.args = config.args.mid(2);
+  for (QString &arg : config.args)
+    arg = PythonProjectEnvironment::substituteVariables(
+        arg, m_workspaceFolder, file, config.cwd, preference);
+  // Coverage/capture options from pytest.ini and PYTEST_ADDOPTS can hide output
+  // or replace the debugger's trace function. Debug runs use explicit options.
+  config.args << "-s" << "-o" << "addopts=";
+  config.args << targets;
+  const auto python = PythonProjectEnvironment::resolve(
+      preference, m_workspaceFolder, file, config.cwd);
+  config.env = PythonProjectEnvironment::activationEnvironment(python);
+  if (backend.isValid())
+    config.env["PYTHONPATH"] = backend.environment().value("PYTHONPATH");
+  for (auto it = testConfig.env.begin(); it != testConfig.env.end(); ++it)
+    config.env[it.key()] = PythonProjectEnvironment::substituteVariables(
+        it.value(), m_workspaceFolder, file, config.cwd, preference);
+  config.env["PYTEST_ADDOPTS"] = "";
+  config.env["PYTHONUNBUFFERED"] = "1";
+  if (!targets.isEmpty())
+    config.env["LIGHTPAD_PYTEST_SELECTION"] =
+        PytestIntegration::selectionValue(targets);
+  config.adapterConfig["module"] = "pytest";
+  config.adapterConfig["justMyCode"] = false;
+  config.adapterConfig["subProcess"] = true;
+  return config;
 }
 
 bool DebugConfigurationManager::loadFromLightpadDir() {

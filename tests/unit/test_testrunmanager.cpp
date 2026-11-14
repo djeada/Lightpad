@@ -3,10 +3,12 @@
 #include <QtTest>
 
 #include "test_templates/testconfiguration.h"
+#include "test_templates/testdiscovery.h"
 #include "test_templates/testoutputparser.h"
 #include "test_templates/testrunmanager.h"
 
 Q_DECLARE_METATYPE(TestResult)
+Q_DECLARE_METATYPE(DiscoveredTest)
 
 class TestTestRunManager : public QObject {
   Q_OBJECT
@@ -35,6 +37,7 @@ private slots:
   void testFailedTestFilterPerFramework();
   void testStderrIsEmittedOnce();
   void testShellTemplateQuotesTestName();
+  void testRealPytestReportingAndExactRerun();
 
 private:
   QTemporaryDir m_tempDir;
@@ -43,6 +46,7 @@ private:
 
 void TestTestRunManager::initTestCase() {
   qRegisterMetaType<TestResult>("TestResult");
+  qRegisterMetaType<QList<DiscoveredTest>>("QList<DiscoveredTest>");
   QVERIFY(m_tempDir.isValid());
 }
 
@@ -423,7 +427,7 @@ void TestTestRunManager::testFailedTestFilterPerFramework() {
   TestConfiguration jest;
   jest.outputFormat = "jest_json";
   QCOMPARE(TestRunManager::failedTestFilter(jest, {"adds (1+1)", "b"}),
-           QString("adds \\(1\\+1\\)|b"));
+           QString("^(adds \\(1\\+1\\)|b)$"));
 
   TestConfiguration cargo;
   cargo.outputFormat = "cargo_json";
@@ -492,6 +496,106 @@ void TestTestRunManager::testShellTemplateQuotesTestName() {
   QCOMPARE(QString::fromUtf8(out.readAll()), "^" + hostile + "$");
   QVERIFY(!QFile::exists(workspace.filePath("pwned")));
   QVERIFY(!QFile::exists(workspace.filePath("pwned2")));
+}
+
+void TestTestRunManager::testRealPytestReportingAndExactRerun() {
+  const QString python = qEnvironmentVariable("LIGHTPAD_TEST_PYTHON");
+  if (python.isEmpty())
+    QSKIP("Set LIGHTPAD_TEST_PYTHON to an interpreter with pytest for this "
+          "integration check.");
+  QTemporaryDir project;
+  QVERIFY(project.isValid());
+  const QString path = project.filePath("test_endpoints.py");
+  const QByteArray source =
+      "import pytest, sys\n"
+      "@pytest.fixture\n"
+      "def captured():\n"
+      "    print('setup output')\n"
+      "    yield\n"
+      "    print('teardown stderr', file=sys.stderr)\n"
+      "@pytest.mark.parametrize('role', ['author role', 'admin'])\n"
+      "def test_endpoint(captured, role):\n"
+      "    print('body: ' + role)\n"
+      "    assert role == 'admin'\n"
+      "class TestOther:\n"
+      "    def test_endpoint(self): pass\n"
+      "@pytest.fixture\n"
+      "def broken(): raise RuntimeError('fixture unavailable')\n"
+      "def test_fixture_error(broken): pass\n"
+      "@pytest.mark.xfail(reason='expected failure')\n"
+      "def test_expected_failure(): assert False\n";
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  QCOMPARE(file.write(source), source.size());
+  file.close();
+  TestConfiguration config;
+  config.id = "real_pytest";
+  config.name = config.id;
+  config.command = python;
+  config.args = {"-m", "pytest", "-q", "--tb=short", project.path()};
+  config.outputFormat = "pytest";
+  PytestDiscoveryAdapter discovery;
+  discovery.setTestConfiguration(config, project.path());
+  QSignalSpy discovered(&discovery, &ITestDiscoveryAdapter::discoveryFinished);
+  QSignalSpy discoveryError(&discovery, &ITestDiscoveryAdapter::discoveryError);
+  discovery.discover(project.path());
+  QTRY_VERIFY_WITH_TIMEOUT(!discovered.isEmpty() || !discoveryError.isEmpty(),
+                           15000);
+  QVERIFY2(discoveryError.isEmpty(),
+           qPrintable(discoveryError.isEmpty()
+                          ? QString()
+                          : discoveryError.first().first().toString()));
+  const auto tests = discovered.first().first().value<QList<DiscoveredTest>>();
+  QCOMPARE(tests.size(), 5);
+  for (const auto &test : tests) {
+    QVERIFY(test.line > 0);
+    QCOMPARE(test.filePath, path);
+    if (test.id.contains("::test_endpoint["))
+      QCOMPARE(test.line, 8);
+  }
+  TestRunManager runner;
+  QSignalSpy finished(&runner, &TestRunManager::runFinished);
+  QSignalSpy results(&runner, &TestRunManager::testFinished);
+  QSignalSpy process(&runner, &TestRunManager::processStarted);
+  QSignalSpy output(&runner, &TestRunManager::outputLine);
+  runner.runAll(config, project.path());
+  QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 15000);
+  QCOMPARE(results.size(), 5);
+  QCOMPARE(finished.first().at(0).toInt(), 2);
+  QCOMPARE(finished.first().at(1).toInt(), 1);
+  QCOMPARE(finished.first().at(2).toInt(), 1);
+  QCOMPARE(finished.first().at(3).toInt(), 1);
+  for (const auto &result : runner.results()) {
+    QVERIFY(result.durationMs >= 0);
+    QVERIFY(result.line > 0);
+    QCOMPARE(result.filePath, path);
+    if (result.id.endsWith("[author role]")) {
+      QCOMPARE(result.status, TestStatus::Failed);
+      QVERIFY(result.stackTrace.contains("AssertionError"));
+      QVERIFY(result.stdoutOutput.contains("setup output"));
+      QVERIFY(result.stdoutOutput.contains("body: author role"));
+      QCOMPARE(result.stderrOutput.count("teardown stderr"), 1);
+    }
+  }
+  for (const auto &line : output)
+    QVERIFY(!line.first().toString().contains("@@LIGHTPAD_PYTEST@@"));
+  // Repair both failures, then rerun their exact IDs, including the spaced
+  // parameter.
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+  auto repaired = source;
+  repaired.replace("assert role == 'admin'", "assert role");
+  repaired.replace("raise RuntimeError('fixture unavailable')", "return True");
+  file.write(repaired);
+  file.close();
+  results.clear();
+  runner.runFailed(config, project.path());
+  QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 2, 15000);
+  QCOMPARE(results.size(), 2);
+  QCOMPARE(finished.last().at(0).toInt(), 2);
+  const auto arguments = process.last().at(1).toStringList();
+  QVERIFY(arguments.contains("test_endpoints.py::test_endpoint[author role]"));
+  QVERIFY(arguments.contains("test_endpoints.py::test_fixture_error"));
+  QVERIFY(!arguments.contains("-k"));
 }
 
 QTEST_MAIN(TestTestRunManager)

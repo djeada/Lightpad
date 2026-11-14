@@ -1,4 +1,5 @@
 #include "debugvalueinspector.h"
+#include "../paneltypography.h"
 
 #include "../uistylehelper.h"
 #include "debugvalueformatter.h"
@@ -1157,11 +1158,28 @@ void DebugValueInspector::loadChildren(QTreeWidgetItem *item, int start,
       return;
   }
   const QString filter = childFilter(item);
-  const int count =
-      pagesByIndex(filter)
-          ? std::min({PageSize, MaxTreeItems - m_itemCount,
-                      item->data(0, IndexedCount).toInt() - start})
-          : qMin(PageSize, MaxTreeItems - m_itemCount);
+  int count = pagesByIndex(filter)
+                  ? std::min({PageSize, MaxTreeItems - m_itemCount,
+                              item->data(0, IndexedCount).toInt() - start})
+                  : qMin(PageSize, MaxTreeItems - m_itemCount);
+  const bool gdb =
+      m_client->adapterId().contains("gdb", Qt::CaseInsensitive) ||
+      m_client->adapterType().compare("gdb", Qt::CaseInsensitive) == 0;
+  const auto value = item->data(0, Variable).value<DapVariable>();
+  const bool knownCount =
+      value.hasIndexedVariables || value.hasNamedVariables ||
+      value.indexedVariables > 0 || value.namedVariables > 0;
+  if (gdb && knownCount) {
+    // GDB rejects a page that extends past the collection's last child.
+    const int total = value.indexedVariables + value.namedVariables;
+    count = qMin(count, qMax(0, total - start));
+    if (total == 0) {
+      item->setData(0, Loaded, true);
+      item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+      m_status->setText(tr("Empty collection — 0 elements."));
+      return;
+    }
+  }
   if (count <= 0) {
     m_status->setText(tr("Tree preview limited to 10,000 items. Inspect a "
                          "narrower expression to continue."));
@@ -1175,9 +1193,11 @@ void DebugValueInspector::loadChildren(QTreeWidgetItem *item, int start,
           ? continuation
           : item->data(0, Reference).toInt();
   const bool prefix = item->data(0, PrefixPaging).toBool();
-  const int seq = m_client->inspectVariables(
-      reference, filter, prefix ? 0 : start,
-      prefix ? qMin(MaxTreeItems, start + count) : count);
+  const int seq =
+      m_client->inspectVariables(reference, filter, prefix ? 0 : start,
+                                 gdb && !knownCount ? 0
+                                 : prefix ? qMin(MaxTreeItems, start + count)
+                                          : count);
   if (seq > 0) {
     m_requests.insert(seq, {item, start, count, reference, prefix});
     m_status->setText(tr("Loading children…"));
@@ -1674,4 +1694,5 @@ void DebugValueInspector::applyTheme(const Theme &theme) {
                 UIStyleHelper::scrollBarStyle(theme) +
                 QString("QTableWidget { alternate-background-color: %1; }")
                     .arg(theme.surfaceAltColor.name()));
+  PanelTypography::apply(this, PanelTypography::contentFont(this));
 }

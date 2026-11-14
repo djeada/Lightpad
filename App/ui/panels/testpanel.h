@@ -12,7 +12,10 @@
 #include <QLineEdit>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QSet>
 #include <QSplitter>
+#include <QTabWidget>
+#include <QTextBrowser>
 #include <QTextEdit>
 #include <QTimer>
 #include <QToolBar>
@@ -29,6 +32,7 @@ public:
   ~TestPanel();
 
   void applyTheme(const Theme &theme);
+  void setContentFont(const QFont &font);
   void setWorkspaceFolder(const QString &folder);
 
   void setDiscoveryAdapter(ITestDiscoveryAdapter *adapter);
@@ -48,9 +52,13 @@ public:
 signals:
   void locationClicked(const QString &filePath, int line, int column);
   void countsChanged(int passed, int failed, int skipped, int errored);
+  void debugTestsRequested(const QStringList &targets,
+                           const TestConfiguration &configuration);
 
 public slots:
   void runAll();
+  void runSelectedTests();
+  void openSelectedTest();
   void runFailed();
   void runCurrentFile(const QString &filePath);
   void runTestsForPath(const QString &path);
@@ -58,7 +66,14 @@ public slots:
                               const QString &filePath = QString());
   void stopTests();
   void discoverTests();
+  void debugAllTests();
+  void debugSelectedTests();
+  void debugTestFile(const QString &filePath);
   void openConfigurationDialog();
+
+protected:
+  void resizeEvent(QResizeEvent *event) override;
+  bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
   void onTestStarted(const TestResult &result);
@@ -83,6 +98,15 @@ private slots:
 private:
   void setupUI();
   void setupToolbar();
+  QStringList pytestTargets(QTreeWidgetItem *item) const;
+  void runItems(const QList<QTreeWidgetItem *> &selection,
+                const QString &scope);
+  QTreeWidgetItem *updateTestItem(const TestResult &result);
+  void updateSuiteSummaries();
+  void updateSelectionActions();
+  void showItemDetails(QTreeWidgetItem *item);
+  void fitTestColumns();
+  void openSourceLink(const QUrl &url);
   void updateStatusLabel();
   void updateRunningStatusLabel();
   void updateTreeItemIcon(QTreeWidgetItem *item, TestStatus status);
@@ -119,6 +143,9 @@ private:
   QToolBar *m_toolbar;
   QToolButton *m_optionsButton;
   QAction *m_runAllAction;
+  QAction *m_runSelectedAction = nullptr;
+  QAction *m_openSourceAction = nullptr;
+  QAction *m_debugAction = nullptr;
   QAction *m_runFailedAction;
   QAction *m_stopAction;
   QAction *m_clearAction;
@@ -136,6 +163,8 @@ private:
   QWidget *m_detailSection;
   QToolButton *m_detailToggleButton;
   QTextEdit *m_detailPane;
+  QTabWidget *m_detailTabs = nullptr;
+  QTextEdit *m_runOutputPane = nullptr;
   QLabel *m_statusLabel;
   QLabel *m_emptyStateLabel;
   QWidget *m_emptyState;
@@ -157,6 +186,16 @@ private:
   QMap<QString, QTreeWidgetItem *> m_testItems;
   QMap<QString, TestResult> m_testResults;
   QMap<QString, DiscoveredTest> m_discoveredTests;
+  QStringList m_runTargets;
+  QSet<QString> m_completedRunIds;
+  int m_expectedTests = 0;
+  bool m_cancelled = false;
+  bool m_discovering = false;
+  bool m_running = false;
+  bool m_fittingColumns = false;
+  bool m_userSizedColumns = false;
+  bool m_hasDurations = false;
+  int m_runGeneration = 0;
 
   QString m_latestStdoutLine;
   QString m_lastRunConfigurationName;

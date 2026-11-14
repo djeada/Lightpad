@@ -2,6 +2,7 @@
 
 #include "abstractdebugadapter.h"
 #include "pythonruntime.h"
+#include "test_templates/pytestintegration.h"
 
 #include <QFileInfo>
 
@@ -75,6 +76,8 @@ public:
   launchArguments(const DebugConfiguration &configuration) const override {
     QJsonObject arguments =
         AbstractDebugAdapter::launchArguments(configuration);
+    if (!arguments.value("module").toString().isEmpty())
+      arguments.remove("program");
 
     const QString python = preferredPythonInterpreterCandidate(
         &configuration, configuration.program, configuration.cwd);
@@ -85,6 +88,25 @@ public:
     QJsonObject env = arguments["env"].toObject();
     if (!env.contains("PYTHONUNBUFFERED")) {
       env["PYTHONUNBUFFERED"] = "1";
+    }
+    if (arguments.value("module") == "pytest" &&
+        env.contains("LIGHTPAD_PYTEST_SELECTION")) {
+      // Keep the selection plugin available for concurrent sessions and
+      // restarts.
+      static QTemporaryDir reporterDirectory;
+      QProcessEnvironment reporterEnvironment;
+      reporterEnvironment.insert(
+          "PYTHONPATH",
+          env.value("PYTHONPATH").toString(qEnvironmentVariable("PYTHONPATH")));
+      QStringList pytestArgs;
+      for (const auto &arg : arguments.value("args").toArray())
+        pytestArgs << arg.toString();
+      if (PytestIntegration::install(reporterDirectory, reporterEnvironment,
+                                     pytestArgs, "pytest")) {
+        arguments["args"] = QJsonArray::fromStringList(pytestArgs);
+        env["PYTHONPATH"] = reporterEnvironment.value("PYTHONPATH");
+        env["LIGHTPAD_PYTEST_REPORTING"] = "0";
+      }
     }
     arguments["env"] = env;
 

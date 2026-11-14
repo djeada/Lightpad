@@ -258,6 +258,7 @@ void MainWindow::ensureDatabasePanel() {
   databasePanel->setObjectName("databasePanelWidget");
   databasePanel->applyTheme(getTheme());
   databasePanel->restoreState();
+  databasePanel->setContentFont(settings.mainFont);
   connect(databasePanel, &DatabasePanel::openInEditorRequested, this,
           &MainWindow::openSqlInEditor);
   connect(
@@ -268,6 +269,7 @@ void MainWindow::ensureDatabasePanel() {
   databaseDock->setObjectName("databaseDock");
   DockUtils::configureToolPanelDock(databaseDock);
   databaseDock->setWidget(databasePanel);
+  updateInspectionFonts();
   addDockWidget(Qt::BottomDockWidgetArea, databaseDock);
   tabifyBottomDock(databaseDock);
   trackDockLayoutChanges(databaseDock);
