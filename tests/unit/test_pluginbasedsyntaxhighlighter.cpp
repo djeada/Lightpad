@@ -1,13 +1,47 @@
 #include "settings/theme.h"
 #include "syntax/cppsyntaxplugin.h"
+#include "syntax/glslsyntaxplugin.h"
+#include "syntax/gosyntaxplugin.h"
+#include "syntax/hlslsyntaxplugin.h"
+#include "syntax/javasyntaxplugin.h"
 #include "syntax/markdownsyntaxplugin.h"
+#include "syntax/metalsyntaxplugin.h"
 #include "syntax/pluginbasedsyntaxhighlighter.h"
 #include "syntax/pythonsyntaxplugin.h"
+#include "syntax/rustsyntaxplugin.h"
 #include "syntax/shellsyntaxplugin.h"
+#include "syntax/typescriptsyntaxplugin.h"
+#include "syntax/wgslsyntaxplugin.h"
 #include <QTextBlock>
+#include <QTextCursor>
 #include <QTextDocument>
 #include <QTextLayout>
 #include <QtTest/QtTest>
+#include <memory>
+
+static std::unique_ptr<ISyntaxPlugin>
+pluginForLanguage(const QString &language) {
+  std::unique_ptr<ISyntaxPlugin> plugin;
+  if (language == "java")
+    plugin = std::make_unique<JavaSyntaxPlugin>();
+  if (language == "typescript")
+    plugin = std::make_unique<TypeScriptSyntaxPlugin>();
+  if (language == "cpp")
+    plugin = std::make_unique<CppSyntaxPlugin>();
+  if (language == "rust")
+    plugin = std::make_unique<RustSyntaxPlugin>();
+  if (language == "go")
+    plugin = std::make_unique<GoSyntaxPlugin>();
+  if (language == "glsl")
+    plugin = std::make_unique<GlslSyntaxPlugin>();
+  if (language == "hlsl")
+    plugin = std::make_unique<HlslSyntaxPlugin>();
+  if (language == "metal")
+    plugin = std::make_unique<MetalSyntaxPlugin>();
+  if (language == "wgsl")
+    plugin = std::make_unique<WgslSyntaxPlugin>();
+  return plugin;
+}
 
 static QTextCharFormat formatAt(const QTextDocument &document, int blockNumber,
                                 int column) {
@@ -30,6 +64,19 @@ class TestPluginBasedSyntaxHighlighter : public QObject {
   Q_OBJECT
 
 private slots:
+  void testMemberAccess_data();
+  void testMemberAccess();
+  void testCppExpressionsAndExplicitTypeContexts();
+  void testCppRawStringProtection();
+  void testImportedJavaAndTypeScriptTypes_data();
+  void testImportedJavaAndTypeScriptTypes();
+  void testCustomTypes_data();
+  void testCustomTypes();
+  void testTypeIndexIgnoresLiteralsAndComments();
+  void testTypeIndexTracksEditsAndViewport();
+  void testCppAliasesAndControlFlow();
+  void testTypeScriptLiteralsAndDollarNames();
+  void testExternalTypesInDeclarations();
   void testShellCommentsOverrideKeywords();
   void testShellStringsOverrideKeywords();
   void testPythonMultilineBlocksOverrideKeywords();
@@ -469,6 +516,264 @@ void TestPluginBasedSyntaxHighlighter::
            theme.functionFormat);
   QCOMPARE(formatAt(document, 61, 0).foreground().color(),
            theme.keywordFormat_0);
+}
+
+void TestPluginBasedSyntaxHighlighter::testCustomTypes_data() {
+  QTest::addColumn<QString>("language");
+  QTest::addColumn<QString>("declaration");
+  QTest::newRow("cpp-struct")
+      << "cpp" << "struct custom_record { int count; };";
+  QTest::newRow("cpp-typedef-struct")
+      << "cpp" << "typedef struct { int count; } custom_record;";
+  QTest::newRow("cpp-callback")
+      << "cpp" << "typedef void (*custom_record)(int);";
+  QTest::newRow("cpp-aligned-struct")
+      << "cpp" << "struct alignas(16) custom_record {};";
+  QTest::newRow("cpp-class") << "cpp" << "class custom_record final {};";
+  QTest::newRow("cpp-enum") << "cpp" << "enum class custom_record { Ready };";
+  QTest::newRow("java-record")
+      << "java" << "record custom_record(int count) {}";
+  QTest::newRow("typescript-interface")
+      << "typescript" << "interface custom_record { count: number }";
+  QTest::newRow("typescript-alias")
+      << "typescript" << "type custom_record = { count: number };";
+  QTest::newRow("rust") << "rust" << "pub struct custom_record(i32);";
+  QTest::newRow("go") << "go" << "type custom_record struct { Count int }";
+  QTest::newRow("glsl") << "glsl" << "struct custom_record { vec3 normal; };";
+  QTest::newRow("hlsl") << "hlsl" << "struct custom_record { float3 normal; };";
+  QTest::newRow("metal") << "metal"
+                         << "struct custom_record { float3 normal; };";
+  QTest::newRow("wgsl") << "wgsl" << "struct custom_record { normal: vec3f }";
+}
+
+void TestPluginBasedSyntaxHighlighter::testCustomTypes() {
+  QFETCH(QString, language);
+  QFETCH(QString, declaration);
+  auto plugin = pluginForLanguage(language);
+  QVERIFY(plugin);
+  Theme theme;
+  theme.typeFormat = QColor("#60e0ac");
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(plugin.get(), theme, "", &document);
+  document.setPlainText(declaration + "\ncustom_record\ncustom_record ()\n"
+                                      "// custom_record\n\"custom_record\"");
+  highlighter.rehighlight();
+  QCOMPARE(formatAt(document, 0, declaration.indexOf("custom_record"))
+               .foreground()
+               .color(),
+           theme.classFormat);
+  QCOMPARE(
+      formatAt(document, 0, declaration.indexOf("custom_record")).fontWeight(),
+      int(QFont::Bold));
+  for (int block : {1, 2}) {
+    QCOMPARE(formatAt(document, block, 0).foreground().color(),
+             theme.typeFormat);
+    QCOMPARE(formatAt(document, block, 0).fontWeight(), int(QFont::Normal));
+  }
+  QCOMPARE(formatAt(document, 3, 3).foreground().color(),
+           theme.singleLineCommentFormat);
+  QCOMPARE(formatAt(document, 4, 1).foreground().color(),
+           theme.quotationFormat);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testTypeIndexIgnoresLiteralsAndComments() {
+  Theme theme;
+  theme.keywordFormat_2 = QColor("#ba84d1");
+  CppSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+  document.setPlainText("// struct LineGhost {};\n"
+                        "/* struct BlockGhost {}; */\n"
+                        "\"struct StringGhost {};\"\n"
+                        "R\"tag(struct RawGhost {}; \"quotes\")tag\"\n"
+                        "LineGhost BlockGhost StringGhost RawGhost\n"
+                        "struct Real {};\nobject.Real; pointer->Real;\n"
+                        "/* unfinished\nstruct Hidden {};\n");
+  highlighter.rehighlight();
+  for (const auto &name :
+       {"LineGhost", "BlockGhost", "StringGhost", "RawGhost"}) {
+    const QString line = document.findBlockByNumber(4).text();
+    QVERIFY(formatAt(document, 4, line.indexOf(name)).foreground().color() !=
+            theme.classFormat);
+  }
+  QVERIFY(formatAt(document, 6, 7).foreground().color() != theme.classFormat);
+  QVERIFY(formatAt(document, 6, 22).foreground().color() != theme.classFormat);
+}
+
+void TestPluginBasedSyntaxHighlighter::testTypeIndexTracksEditsAndViewport() {
+  Theme theme;
+  CppSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+  document.setPlainText("record();\n" + QString(150, '\n') +
+                        "struct record {};\n");
+  highlighter.setVisibleBlockRange(0, 1);
+  highlighter.rehighlight();
+  QCOMPARE(formatAt(document, 0, 0).foreground().color(), theme.classFormat);
+  QTextCursor cursor(&document);
+  cursor.setPosition(document.toPlainText().indexOf("struct record"));
+  cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+  cursor.removeSelectedText();
+  QTRY_VERIFY(formatAt(document, 0, 0).foreground().color() !=
+              theme.classFormat);
+  cursor.insertText("struct record {};\n");
+  QTRY_COMPARE(formatAt(document, 0, 0).foreground().color(),
+               theme.classFormat);
+}
+
+void TestPluginBasedSyntaxHighlighter::testCppAliasesAndControlFlow() {
+  Theme theme;
+  CppSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+  document.setPlainText("using UserId = unsigned;\ntypedef unsigned count_t;\n"
+                        "UserId id; count_t count;\n"
+                        "if (ready) update ();\nwhile(ready) update();\n"
+                        "sizeof(UserId);\n");
+  highlighter.rehighlight();
+  QCOMPARE(formatAt(document, 0, 6).foreground().color(), theme.classFormat);
+  QCOMPARE(formatAt(document, 1, 17).foreground().color(), theme.classFormat);
+  QCOMPARE(formatAt(document, 2, 0).foreground().color(), theme.classFormat);
+  QCOMPARE(formatAt(document, 2, 11).foreground().color(), theme.classFormat);
+  QCOMPARE(formatAt(document, 3, 0).foreground().color(),
+           theme.keywordFormat_1);
+  QCOMPARE(formatAt(document, 4, 0).foreground().color(),
+           theme.keywordFormat_1);
+  QCOMPARE(formatAt(document, 5, 0).foreground().color(),
+           theme.keywordFormat_0);
+  QCOMPARE(formatAt(document, 3, 11).foreground().color(),
+           theme.functionFormat);
+}
+
+void TestPluginBasedSyntaxHighlighter::testExternalTypesInDeclarations() {
+  Theme theme;
+  CppSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+  document.setPlainText(
+      "External value;\nexternal_t *value;\n"
+      "void process(const External &value);\nreturn value;\n");
+  highlighter.rehighlight();
+  QCOMPARE(formatAt(document, 0, 0).foreground().color(), theme.classFormat);
+  QCOMPARE(formatAt(document, 1, 0).foreground().color(), theme.classFormat);
+  QCOMPARE(formatAt(document, 2, 19).foreground().color(), theme.classFormat);
+  QCOMPARE(formatAt(document, 3, 0).foreground().color(),
+           theme.keywordFormat_1);
+}
+
+void TestPluginBasedSyntaxHighlighter::testTypeScriptLiteralsAndDollarNames() {
+  Theme theme;
+  TypeScriptSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+  document.setPlainText(
+      "const label = 'interface Ghost {}';\nGhost();\n"
+      "interface $Model { id: number }\nconst model: $Model = {};\n");
+  highlighter.rehighlight();
+  QCOMPARE(formatAt(document, 1, 0).foreground().color(), theme.functionFormat);
+  QCOMPARE(formatAt(document, 2, 10).foreground().color(), theme.classFormat);
+  QCOMPARE(formatAt(document, 3, 13).foreground().color(), theme.typeFormat);
+}
+
+void TestPluginBasedSyntaxHighlighter::testMemberAccess_data() {
+  QTest::addColumn<QString>("language");
+  for (const auto &language : {"cpp", "rust", "go", "glsl", "hlsl", "metal",
+                               "wgsl", "java", "typescript"})
+    QTest::newRow(language) << QString(language);
+}
+
+void TestPluginBasedSyntaxHighlighter::testMemberAccess() {
+  QFETCH(QString, language);
+  auto plugin = pluginForLanguage(language);
+  Theme theme;
+  theme.keywordFormat_2 = QColor("#ba84d1");
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(plugin.get(), theme, "", &document);
+  document.setPlainText("mesh.position.x;\nmesh.update ();\n"
+                        "// mesh.position\n\"mesh.position\"\n...spread;\n");
+  highlighter.rehighlight();
+  QCOMPARE(formatAt(document, 0, 5).foreground().color(),
+           theme.keywordFormat_2);
+  QCOMPARE(formatAt(document, 0, 14).foreground().color(),
+           theme.keywordFormat_2);
+  QCOMPARE(formatAt(document, 1, 5).foreground().color(), theme.functionFormat);
+  QCOMPARE(formatAt(document, 2, 8).foreground().color(),
+           theme.singleLineCommentFormat);
+  QCOMPARE(formatAt(document, 3, 6).foreground().color(),
+           theme.quotationFormat);
+  QVERIFY(formatAt(document, 4, 3).foreground().color() !=
+          theme.keywordFormat_2);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testCppExpressionsAndExplicitTypeContexts() {
+  Theme theme;
+  theme.typeFormat = QColor("#60e0ac");
+  CppSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+  document.setPlainText(
+      "left * right;\nflags & mask;\n"
+      "new vendor::External ();\nstatic_cast<vendor::External *>(value);\n"
+      "struct lower_type {};\nlower_type* value;\n"
+      "object->position;\nobject->update ();\n"
+      "External *value;\nexternal_t &value;\n");
+  highlighter.rehighlight();
+  QVERIFY(formatAt(document, 0, 0).foreground().color() != theme.typeFormat);
+  QVERIFY(formatAt(document, 1, 0).foreground().color() != theme.typeFormat);
+  QCOMPARE(formatAt(document, 2, 12).foreground().color(), theme.typeFormat);
+  QCOMPARE(formatAt(document, 3, 20).foreground().color(), theme.typeFormat);
+  QCOMPARE(formatAt(document, 3, 0).foreground().color(),
+           theme.keywordFormat_1);
+  QCOMPARE(formatAt(document, 5, 0).foreground().color(), theme.typeFormat);
+  QCOMPARE(formatAt(document, 6, 8).foreground().color(),
+           theme.keywordFormat_2);
+  QCOMPARE(formatAt(document, 7, 8).foreground().color(), theme.functionFormat);
+  QCOMPARE(formatAt(document, 8, 0).foreground().color(), theme.typeFormat);
+  QCOMPARE(formatAt(document, 9, 0).foreground().color(), theme.typeFormat);
+}
+
+void TestPluginBasedSyntaxHighlighter::testCppRawStringProtection() {
+  Theme theme;
+  CppSyntaxPlugin plugin;
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(&plugin, theme, "", &document);
+  const QString raw =
+      R"cpp(auto s = R"tag("quotes" /* mesh.position \n struct Ghost {}; )tag";)cpp";
+  document.setPlainText(raw + "\nGhost();\nreturn 0;\n");
+  highlighter.rehighlight();
+  for (const auto &part : {"quotes", "/*", "position", "\\n", "Ghost"})
+    QCOMPARE(formatAt(document, 0, raw.indexOf(part)).foreground().color(),
+             theme.quotationFormat);
+  QCOMPARE(formatAt(document, 1, 0).foreground().color(), theme.functionFormat);
+  QCOMPARE(formatAt(document, 2, 0).foreground().color(),
+           theme.keywordFormat_1);
+  QCOMPARE(document.firstBlock().userState(), 0);
+}
+
+void TestPluginBasedSyntaxHighlighter::
+    testImportedJavaAndTypeScriptTypes_data() {
+  QTest::addColumn<QString>("language");
+  QTest::newRow("java") << "java";
+  QTest::newRow("typescript") << "typescript";
+}
+
+void TestPluginBasedSyntaxHighlighter::testImportedJavaAndTypeScriptTypes() {
+  QFETCH(QString, language);
+  auto plugin = pluginForLanguage(language);
+  Theme theme;
+  theme.typeFormat = QColor("#60e0ac");
+  QTextDocument document;
+  PluginBasedSyntaxHighlighter highlighter(plugin.get(), theme, "", &document);
+  document.setPlainText(
+      "new library.External ();\nclass Local extends External {}\n"
+      "class Local implements Contract {}\nvalue instanceof External\n");
+  highlighter.rehighlight();
+  QCOMPARE(formatAt(document, 0, 12).foreground().color(), theme.typeFormat);
+  QCOMPARE(formatAt(document, 1, 20).foreground().color(), theme.typeFormat);
+  QCOMPARE(formatAt(document, 2, 23).foreground().color(), theme.typeFormat);
+  QCOMPARE(formatAt(document, 3, 17).foreground().color(), theme.typeFormat);
 }
 
 QTEST_MAIN(TestPluginBasedSyntaxHighlighter)

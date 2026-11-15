@@ -141,6 +141,23 @@ QStringList HlslSyntaxPlugin::getTertiaryKeywords() {
 QVector<SyntaxRule> HlslSyntaxPlugin::syntaxRules() const {
   QVector<SyntaxRule> rules;
 
+  // Lower priority than keywords: a type before a variable/parameter name.
+  SyntaxRule declaredType;
+  declaredType.pattern = QRegularExpression(
+      R"(\b([A-Za-z_]\w*)(?=\s+(?:const\s+)?[A-Za-z_]\w*\s*[;=,()\[{}]))");
+  declaredType.name = "type_reference";
+  declaredType.captureGroup = 1;
+  rules.append(declaredType);
+
+  // A bare "left * right" is also an expression. Only infer pointer types
+  // from a type-like spelling; declared local names are resolved by the index.
+  SyntaxRule indirectType;
+  indirectType.pattern = QRegularExpression(
+      R"(\b([A-Z][A-Za-z0-9_]*|[A-Za-z_]\w*_t)(?=\s*(?:const\s+)?[*&]+\s*[A-Za-z_]\w*\s*[;=,()\[{}]))");
+  indirectType.name = "type_reference";
+  indirectType.captureGroup = 1;
+  rules.append(indirectType);
+
   for (const QString &keyword : getPrimaryKeywords()) {
     SyntaxRule rule;
     rule.pattern = QRegularExpression("\\b" + keyword + "\\b");
@@ -180,8 +197,19 @@ QVector<SyntaxRule> HlslSyntaxPlugin::syntaxRules() const {
   stringRule.name = "string";
   rules.append(stringRule);
 
+  // Method calls are refined by the function rule below; field accesses keep
+  // the member color, including chains such as mesh.position.x.
+  SyntaxRule memberRule;
+  memberRule.pattern = QRegularExpression(
+      R"((?:(?<!\.)\.(?!\.)|->)\s*([A-Za-z_$][A-Za-z0-9_$]*))");
+  memberRule.name = "member";
+  memberRule.captureGroup = 1;
+  rules.append(memberRule);
+
   SyntaxRule functionRule;
-  functionRule.pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()");
+  functionRule.pattern = QRegularExpression(
+      QStringLiteral("\\b(?!(?:%1)\\b)[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()")
+          .arg(keywords().join('|')));
   functionRule.name = "function";
   rules.append(functionRule);
 
@@ -189,6 +217,14 @@ QVector<SyntaxRule> HlslSyntaxPlugin::syntaxRules() const {
   commentRule.pattern = QRegularExpression("//[^\n]*");
   commentRule.name = "comment";
   rules.append(commentRule);
+
+  // Capture the declared name, keeping the keyword in its own color.
+  SyntaxRule typeDefinition0;
+  typeDefinition0.pattern = QRegularExpression(
+      R"(\b(?:struct|class|cbuffer|tbuffer)\s+([A-Za-z_]\w*))");
+  typeDefinition0.name = "type_definition";
+  typeDefinition0.captureGroup = 1;
+  rules.append(typeDefinition0);
 
   return rules;
 }

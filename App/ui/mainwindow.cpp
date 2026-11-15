@@ -661,6 +661,7 @@ void MainWindow::loadSettings() {
   settings.mainFont = QFont(fontFamily, fontSize, fontWeight, fontItalic);
 
   updateAllTextAreas(&TextArea::loadSettings, settings);
+  globalSettings.setValue("tabWidth", settings.tabWidth);
   const QJsonObject savedThemeObject =
       globalSettings.getSettingsObject().value("theme").toObject();
   if (!savedThemeObject.isEmpty()) {
@@ -2181,6 +2182,7 @@ TextAreaSettings MainWindow::getSettings() { return settings; }
 void MainWindow::setTabWidth(int width) {
   updateAllTextAreas(&TextArea::setTabWidth, width);
   settings.tabWidth = width;
+  SettingsManager::instance().setValue("tabWidth", width);
   saveSettings();
 }
 

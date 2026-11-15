@@ -52,6 +52,7 @@ bool matches(QChar open, QChar close) {
 Context contextBefore(const QTextCursor &cursor,
                       const EditorIndentation::Options &options) {
   const bool python = options.language == "py";
+  const bool sql = options.language == "sql";
   static const QSet<QString> hashComments = {
       "py", "yaml", "sh", "cmake", "make", "dockerfile", "bazel", "meson"};
   static const QSet<QString> slashComments = {"c",    "cpp",  "java",  "js",
@@ -102,11 +103,13 @@ Context contextBefore(const QTextCursor &cursor,
         }
         continue;
       }
+      if (sql && ch == '-' && i + 1 < text.size() && text[i + 1] == '-')
+        break;
       if ((hashComments.contains(options.language) && ch == '#') ||
           (slashComments.contains(options.language) && ch == '/' &&
            i + 1 < text.size() && text[i + 1] == '/'))
         break;
-      if (slashComments.contains(options.language) && ch == '/' &&
+      if ((sql || slashComments.contains(options.language)) && ch == '/' &&
           i + 1 < text.size() && text[i + 1] == '*') {
         blockComment = true;
         ++i;
@@ -115,7 +118,7 @@ Context contextBefore(const QTextCursor &cursor,
       // A string is a token, but its contents cannot open a block or a pair.
       if (ch == '\'' || ch == '"' ||
           (ch == '`' &&
-           (options.language == "js" || options.language == "ts"))) {
+           (sql || options.language == "js" || options.language == "ts"))) {
         code[i] = 's';
         if (!context.openings.isEmpty())
           context.openings.last().followedByCode = true;
@@ -264,4 +267,53 @@ bool EditorIndentation::backspace(QTextCursor &cursor, int width) {
   cursor.removeSelectedText();
   cursor.endEditBlock();
   return true;
+}
+
+void EditorIndentation::tab(QTextCursor &cursor, int width, bool expandTabs,
+                            bool outdent) {
+  width = qMax(1, width);
+  if (!cursor.hasSelection() && !outdent) {
+    const int column = visualColumn(
+        cursor.block().text().left(cursor.positionInBlock()), width);
+    cursor.insertText(expandTabs ? QString(width - column % width, ' ')
+                                 : QString("\t"));
+    return;
+  }
+  const bool selected = cursor.hasSelection();
+  const bool backwards = cursor.position() < cursor.anchor();
+  auto *document = cursor.document();
+  const int first = document->findBlock(cursor.selectionStart()).blockNumber();
+  const int end = selected ? cursor.selectionEnd() - 1 : cursor.position();
+  const int last = document->findBlock(end).blockNumber();
+  const int oldColumn = cursor.positionInBlock();
+  int removed = 0;
+  cursor.beginEditBlock();
+  for (int line = first; line <= last; ++line) {
+    QTextBlock block = document->findBlockByNumber(line);
+    QTextCursor edit(block);
+    if (outdent) {
+      const QString text = block.text();
+      int count = 0;
+      if (text.startsWith('\t'))
+        count = 1;
+      else
+        while (count < width && count < text.size() && text[count] == ' ')
+          ++count;
+      edit.setPosition(block.position() + count, QTextCursor::KeepAnchor);
+      edit.removeSelectedText();
+      removed = count;
+    } else {
+      edit.insertText(expandTabs ? QString(width, ' ') : QString("\t"));
+    }
+  }
+  cursor.endEditBlock();
+  const int start = document->findBlockByNumber(first).position();
+  if (selected) {
+    const auto block = document->findBlockByNumber(last);
+    const int finish = block.position() + block.length() - 1;
+    cursor.setPosition(backwards ? finish : start);
+    cursor.setPosition(backwards ? start : finish, QTextCursor::KeepAnchor);
+  } else {
+    cursor.setPosition(start + qMax(0, oldColumn - removed));
+  }
 }

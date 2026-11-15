@@ -38,6 +38,7 @@ public:
     m_schemaProvider = std::move(provider);
   }
   void applyTheme(const Theme &theme);
+  void setTabWidth(int width);
 
   QString selectionOrCurrentStatement() const;
 
@@ -58,6 +59,7 @@ private:
   void showCompletions(bool explicitRequest);
   QString prefixAtCursor(int *start) const;
 
+  int m_tabWidth = 4;
   DbEngine m_engine = DbEngine::PostgreSql;
   std::function<const DbSchema *()> m_schemaProvider;
   SqlHighlighter *m_highlighter;

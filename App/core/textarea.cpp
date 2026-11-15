@@ -41,6 +41,7 @@
 #include "../diagnostics/diagnosticutils.h"
 #include "../git/gitintegration.h"
 #include "../language/languagecatalog.h"
+#include "../settings/settingsmanager.h"
 #include "../settings/textareasettings.h"
 #include "../syntax/pluginbasedsyntaxhighlighter.h"
 #include "../syntax/syntaxpluginregistry.h"
@@ -467,22 +468,6 @@ static AutoPairContext autoPairContextForText(const QString &text,
   return context;
 }
 
-static int selectionEndBlock(const QTextCursor &cursor) {
-  int selectionStart = cursor.selectionStart();
-  int selectionEnd = cursor.selectionEnd();
-
-  QTextCursor endCursor(cursor.document());
-  endCursor.setPosition(selectionEnd);
-
-  int endBlock = endCursor.blockNumber();
-
-  if (selectionEnd > selectionStart && endCursor.positionInBlock() == 0) {
-    endBlock--;
-  }
-
-  return endBlock;
-}
-
 void TextArea::initializeIconCache() {
   if (!s_iconsInitialized) {
     s_unsavedIcon = QIcon(":/resources/icons/unsaved.png");
@@ -860,6 +845,13 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     return;
   }
 
+  // Selection editing and Shift+Tab must not accept a completion.
+  if (textCursor().hasSelection() || isBacktabKey(keyEvent)) {
+    hideCompletionPopup();
+    if (m_completer)
+      m_completer->popup()->hide();
+  }
+
   const bool completionPopupVisible =
       (m_completionWidget && m_completionWidget->isVisible()) ||
       (m_completer && m_completer->popup()->isVisible());
@@ -886,8 +878,7 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     }
     return;
   }
-  if (vimInsert && completionPopupVisible &&
-      keyEvent->key() == Qt::Key_Escape)
+  if (vimInsert && completionPopupVisible && keyEvent->key() == Qt::Key_Escape)
     hideCompletionPopup();
   if (m_vimMode && m_vimMode->isEnabled() &&
       !(completionPopupVisible && completionKey &&
@@ -1020,7 +1011,9 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
         options.language = "py";
       options.width = effectiveTabWidth();
       options.enabled = autoIndent;
-      options.expandTabs = shouldExpandTabsToSpaces();
+      options.expandTabs =
+          shouldExpandTabsToSpaces() ||
+          SettingsManager::instance().getValue("insertSpaces", true).toBool();
       applyToAllCursors([&options](QTextCursor &cursor) {
         EditorIndentation::insertNewline(cursor, options);
       });
@@ -1069,99 +1062,18 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
       keyEvent->accept();
       return;
     }
-    QTextCursor cursor = textCursor();
-    const bool hasSelection = cursor.hasSelection();
-
-    const int tabWidth = effectiveTabWidth();
-
-    if (hasSelection || isBacktab) {
-      int startPosition =
-          hasSelection ? cursor.selectionStart() : cursor.block().position();
-      int startColumn = hasSelection ? 0 : cursor.positionInBlock();
-
-      QTextCursor startCursor(document());
-      startCursor.setPosition(startPosition);
-      int startBlock = startCursor.blockNumber();
-      int endBlock = hasSelection ? selectionEndBlock(cursor) : startBlock;
-
-      if (endBlock < startBlock) {
-        endBlock = startBlock;
-      }
-
-      int removedFromCurrentLine = 0;
-      cursor.beginEditBlock();
-      for (int blockIndex = startBlock; blockIndex <= endBlock; ++blockIndex) {
-        QTextBlock block = document()->findBlockByNumber(blockIndex);
-        if (!block.isValid()) {
-          continue;
-        }
-
-        QTextCursor lineCursor(block);
-        lineCursor.movePosition(QTextCursor::StartOfBlock);
-
-        if (isBacktab) {
-          const QString lineText = block.text();
-          int removeCount = 0;
-          if (lineText.startsWith('\t')) {
-            removeCount = 1;
-          } else {
-            while (removeCount < tabWidth && removeCount < lineText.size() &&
-                   lineText[removeCount] == ' ') {
-              ++removeCount;
-            }
-          }
-
-          if (removeCount > 0) {
-            lineCursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
-                                    removeCount);
-            lineCursor.removeSelectedText();
-
-            if (!hasSelection && blockIndex == startBlock) {
-              removedFromCurrentLine = removeCount;
-            }
-          }
-        } else {
-          lineCursor.insertText(QString(" ").repeated(tabWidth));
-        }
-      }
-      cursor.endEditBlock();
-
-      if (hasSelection) {
-        QTextBlock selectionStartBlock =
-            document()->findBlockByNumber(startBlock);
-        QTextBlock selectionEndBlock = document()->findBlockByNumber(endBlock);
-
-        if (selectionStartBlock.isValid() && selectionEndBlock.isValid()) {
-          QTextCursor selectionCursor(document());
-          selectionCursor.setPosition(selectionStartBlock.position());
-
-          QTextCursor blockEndCursor(selectionEndBlock);
-          blockEndCursor.movePosition(QTextCursor::EndOfBlock);
-
-          selectionCursor.setPosition(blockEndCursor.position(),
-                                      QTextCursor::KeepAnchor);
-          setTextCursor(selectionCursor);
-        }
-      } else if (isBacktab) {
-        QTextBlock currentBlock = document()->findBlockByNumber(startBlock);
-        if (currentBlock.isValid()) {
-          int currentLineLength = qMax(0, currentBlock.length() - 1);
-          int nextColumn = qMin(currentLineLength,
-                                qMax(0, startColumn - removedFromCurrentLine));
-          QTextCursor updatedCursor(currentBlock);
-          updatedCursor.movePosition(QTextCursor::StartOfBlock);
-          updatedCursor.movePosition(QTextCursor::Right,
-                                     QTextCursor::MoveAnchor, nextColumn);
-          setTextCursor(updatedCursor);
-        }
-      } else {
-        cursor.insertText(QString(" ").repeated(tabWidth));
-        setTextCursor(cursor);
-      }
-
-      keyEvent->accept();
-      return;
-    }
+    const int width = effectiveTabWidth();
+    const bool expand =
+        shouldExpandTabsToSpaces() ||
+        SettingsManager::instance().getValue("insertSpaces", true).toBool();
+    applyToAllCursors([=](QTextCursor &cursor) {
+      EditorIndentation::tab(cursor, width, expand, isBacktab);
+    });
+    invalidateCompletionRequest();
+    hideCompletionPopup();
+    ensureCursorVisible();
+    keyEvent->accept();
+    return;
   }
 
   if (hasMultipleCursors() && keyEvent->key() == Qt::Key_Delete) {

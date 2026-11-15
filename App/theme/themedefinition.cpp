@@ -174,6 +174,7 @@ Theme ThemeDefinition::toClassicTheme() const {
   t.functionFormat = colors.syntaxFunction;
   t.quotationFormat = colors.syntaxString;
   t.classFormat = colors.syntaxClass;
+  t.typeFormat = colors.syntaxType;
   t.numberFormat = colors.syntaxNumber;
   t.operatorFormat = colors.syntaxOperator;
   t.constantFormat = colors.syntaxConstant;
@@ -258,7 +259,7 @@ ThemeDefinition ThemeDefinition::fromClassicTheme(const Theme &c,
   d.colors.syntaxClass = c.classFormat;
   d.colors.syntaxNumber = c.numberFormat;
   d.colors.syntaxOperator = c.operatorFormat;
-  d.colors.syntaxType = c.classFormat;
+  d.colors.syntaxType = c.typeFormat;
   d.colors.syntaxConstant = c.constantFormat;
   d.colors.syntaxTag = c.keywordFormat_0;
   d.colors.syntaxAttribute = c.quotationFormat;

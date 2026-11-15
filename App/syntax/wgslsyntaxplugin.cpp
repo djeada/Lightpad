@@ -174,8 +174,19 @@ QVector<SyntaxRule> WgslSyntaxPlugin::syntaxRules() const {
   stringRule.name = "string";
   rules.append(stringRule);
 
+  // Method calls are refined by the function rule below; field accesses keep
+  // the member color, including chains such as mesh.position.x.
+  SyntaxRule memberRule;
+  memberRule.pattern = QRegularExpression(
+      R"((?:(?<!\.)\.(?!\.)|->)\s*([A-Za-z_$][A-Za-z0-9_$]*))");
+  memberRule.name = "member";
+  memberRule.captureGroup = 1;
+  rules.append(memberRule);
+
   SyntaxRule functionRule;
-  functionRule.pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()");
+  functionRule.pattern = QRegularExpression(
+      QStringLiteral("\\b(?!(?:%1)\\b)[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()")
+          .arg(keywords().join('|')));
   functionRule.name = "function";
   rules.append(functionRule);
 
@@ -183,6 +194,14 @@ QVector<SyntaxRule> WgslSyntaxPlugin::syntaxRules() const {
   commentRule.pattern = QRegularExpression("//[^\n]*");
   commentRule.name = "comment";
   rules.append(commentRule);
+
+  // Capture the declared name, keeping the keyword in its own color.
+  SyntaxRule typeDefinition0;
+  typeDefinition0.pattern =
+      QRegularExpression(R"(\b(?:struct|alias|type)\s+([A-Za-z_]\w*))");
+  typeDefinition0.name = "type_definition";
+  typeDefinition0.captureGroup = 1;
+  rules.append(typeDefinition0);
 
   return rules;
 }

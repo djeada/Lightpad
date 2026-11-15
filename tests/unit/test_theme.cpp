@@ -184,8 +184,20 @@ void TestTheme::testMatrixKeepsSemanticStatusColors() {
 
 void TestTheme::testLegacyThemeBridgeCarriesExpandedSemanticTokens() {
   const ThemeDefinition preset = ThemePresets::githubDark();
-  const Theme classic = preset.toClassicTheme();
+  Theme classic = preset.toClassicTheme();
 
+  QCOMPARE(classic.typeFormat, preset.colors.syntaxType);
+  QCOMPARE(
+      ThemeDefinition::fromClassicTheme(classic, "Roundtrip").colors.syntaxType,
+      preset.colors.syntaxType);
+  QJsonObject saved;
+  classic.write(saved);
+  Theme restored;
+  restored.read(saved);
+  QCOMPARE(restored.typeFormat, classic.typeFormat);
+  saved.remove("typeFormat");
+  restored.read(saved);
+  QCOMPARE(restored.typeFormat, restored.classFormat);
   QCOMPARE(classic.infoColor, preset.colors.statusInfo);
   QCOMPARE(classic.diagnosticErrorColor, preset.colors.diagnosticError);
   QCOMPARE(classic.gitModifiedColor, preset.colors.gitModified);

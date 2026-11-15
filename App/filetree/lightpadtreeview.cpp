@@ -85,10 +85,10 @@ public:
 
     if (isSelected || isHovered) {
       const QColor bg = isSelected ? m_selectedBackground : m_hoverBackground;
-      const QColor border = isSelected ? m_selectedBorder : bg.lighter(112);
-      painter->setPen(border);
+      const bool keyboardFocus = opt.state.testFlag(QStyle::State_HasFocus);
+      painter->setPen(keyboardFocus ? QPen(m_selectedBorder) : QPen(Qt::NoPen));
       painter->setBrush(bg);
-      painter->drawRoundedRect(rowRect, 7, 7);
+      painter->drawRoundedRect(rowRect, 4, 4);
       if (isSelected) {
         painter->setPen(Qt::NoPen);
         painter->setBrush(m_selectedBorder);
@@ -129,7 +129,7 @@ public:
 
     if (!badge.isEmpty() && badgeColor.isValid()) {
       QFont badgeFont = opt.font;
-      badgeFont.setPixelSize(10);
+      badgeFont.setPointSizeF(qMax(9.0, opt.font.pointSizeF() - 1.0));
       badgeFont.setWeight(QFont::Bold);
       painter->setFont(badgeFont);
       painter->setPen(rowBackground.isValid()

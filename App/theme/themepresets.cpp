@@ -1087,25 +1087,25 @@ ThemeDefinition matrix() {
 
   auto &c = t.colors;
 
-  c.editorBg = QColor("#000000");
-  c.editorFg = QColor("#7ee787");
-  c.editorGutter = QColor("#000000");
-  c.editorGutterFg = QColor("#1f7a36");
-  c.editorLineHighlight = QColor("#0a0a0a");
-  c.editorSelection = QColor("#003300");
-  c.editorSelectionFg = QColor("#d9ffe0");
+  c.editorBg = QColor("#080f0c");
+  c.editorFg = QColor("#c0ddcc");
+  c.editorGutter = QColor("#0b1510");
+  c.editorGutterFg = QColor("#648573");
+  c.editorLineHighlight = QColor("#10241a");
+  c.editorSelection = QColor("#204b35");
+  c.editorSelectionFg = QColor("#e4ffed");
   c.editorCursor = QColor("#00ff66");
-  c.editorFindMatch = QColor("#e6c22955");
-  c.editorFindMatchActive = QColor("#ffd94d99");
-  c.editorBracketMatch = QColor("#00ff0040");
-  c.editorIndentGuide = QColor("#0a1a0a");
-  c.editorWhitespace = QColor("#0a2a0a");
+  c.editorFindMatch = QColor(230, 194, 41, 85);
+  c.editorFindMatchActive = QColor(255, 217, 77, 153);
+  c.editorBracketMatch = QColor(83, 232, 139, 48);
+  c.editorIndentGuide = QColor("#1b3427");
+  c.editorWhitespace = QColor("#2b4938");
 
   c.syntaxKeyword = QColor("#5ef1ff");
   c.syntaxKeyword2 = QColor("#ffb454");
   c.syntaxKeyword3 = QColor("#8aff80");
   c.syntaxString = QColor("#ffd866");
-  c.syntaxComment = QColor("#3b7f47");
+  c.syntaxComment = QColor("#739781");
   c.syntaxFunction = QColor("#72d6ff");
   c.syntaxClass = QColor("#f6e27a");
   c.syntaxNumber = QColor("#ffaf5f");
@@ -1117,69 +1117,69 @@ ThemeDefinition matrix() {
   c.syntaxRegex = QColor("#ff9cf0");
   c.syntaxEscape = QColor("#ffab57");
 
-  c.surfaceBase = QColor("#000000");
-  c.surfaceRaised = QColor("#0a0a0a");
-  c.surfaceOverlay = QColor("#111111");
-  c.surfaceSunken = QColor("#000000");
-  c.surfacePopover = QColor("#0d0d0d");
+  c.surfaceBase = QColor("#0b1410");
+  c.surfaceRaised = QColor("#101e17");
+  c.surfaceOverlay = QColor("#172b20");
+  c.surfaceSunken = QColor("#070e0a");
+  c.surfacePopover = QColor("#15261c");
 
-  c.borderDefault = QColor("#0f4a1d");
-  c.borderSubtle = QColor("#001a00");
-  c.borderStrong = QColor("#1c7a31");
+  c.borderDefault = QColor("#2a4836");
+  c.borderSubtle = QColor("#1c3225");
+  c.borderStrong = QColor("#426b50");
   c.borderFocus = QColor("#00ff66");
 
-  c.textPrimary = QColor("#7ee787");
-  c.textSecondary = QColor("#37b24d");
-  c.textMuted = QColor("#1f7a36");
-  c.textDisabled = QColor("#0f4a1d");
-  c.textInverse = QColor("#000000");
+  c.textPrimary = QColor("#c6e4d1");
+  c.textSecondary = QColor("#98bba5");
+  c.textMuted = QColor("#769782");
+  c.textDisabled = QColor("#506858");
+  c.textInverse = QColor("#07150c");
   c.textLink = QColor("#33d6ff");
 
-  c.btnPrimaryBg = QColor("#00ff66");
-  c.btnPrimaryFg = QColor("#031507");
-  c.btnPrimaryHover = QColor("#3dff85");
-  c.btnPrimaryActive = QColor("#00cc55");
-  c.btnSecondaryBg = QColor("#003300");
-  c.btnSecondaryFg = QColor("#7ee787");
-  c.btnSecondaryHover = QColor("#004400");
-  c.btnSecondaryActive = QColor("#002200");
+  c.btnPrimaryBg = QColor("#53e88b");
+  c.btnPrimaryFg = QColor("#07150c");
+  c.btnPrimaryHover = QColor("#7bf0a6");
+  c.btnPrimaryActive = QColor("#36c975");
+  c.btnSecondaryBg = QColor("#172b20");
+  c.btnSecondaryFg = QColor("#c6e4d1");
+  c.btnSecondaryHover = QColor("#203c2b");
+  c.btnSecondaryActive = QColor("#12251b");
   c.btnDangerBg = QColor("#ff5c57");
   c.btnDangerFg = QColor("#ffffff");
   c.btnDangerHover = QColor("#ff7a76");
   c.btnDangerActive = QColor("#d94841");
-  c.btnGhostHover = QColor("#0a0a0a");
-  c.btnGhostActive = QColor("#111111");
+  c.btnGhostHover = QColor("#172f21");
+  c.btnGhostActive = QColor("#20432e");
 
-  c.inputBg = QColor("#0a0a0a");
-  c.inputFg = QColor("#7ee787");
-  c.inputBorder = QColor("#0f4a1d");
+  c.inputBg = QColor("#09120d");
+  c.inputFg = QColor("#c6e4d1");
+  c.inputBorder = QColor("#2a4836");
   c.inputBorderFocus = QColor("#00ff66");
-  c.inputPlaceholder = QColor("#005500");
-  c.inputSelection = QColor("#0b3517");
+  c.inputPlaceholder = QColor("#769782");
+  c.inputSelection = QColor("#204b35");
 
-  c.accentPrimary = QColor("#00ff66");
-  c.accentSoft = QColor("#0b3517");
-  c.accentGlow = QColor("#00ff6640");
+  c.accentPrimary = QColor("#53e88b");
+  c.accentSoft = QColor("#1b402b");
+  c.accentGlow = QColor(83, 232, 139, 28);
 
-  c.scrollTrack = QColor("#000000");
-  c.scrollThumb = QColor("#0f4a1d");
-  c.scrollThumbHover = QColor("#1c7a31");
+  c.scrollTrack = QColor("#0b1410");
+  c.scrollThumb = QColor("#31533e");
+  c.scrollThumbHover = QColor("#4a795a");
 
-  c.tabBg = QColor("#000000");
-  c.tabActiveBg = QColor("#0a0a0a");
-  c.tabActiveBorder = QColor("#00ff66");
-  c.tabHoverBg = QColor("#050505");
-  c.tabFg = QColor("#1f7a36");
-  c.tabActiveFg = QColor("#7ee787");
+  c.tabBg = QColor("#0b1410");
+  c.tabActiveBg = QColor("#14271c");
+  c.tabActiveBorder = QColor("#53e88b");
+  c.tabHoverBg = QColor("#152c1e");
+  c.tabFg = QColor("#98bba5");
+  c.tabActiveFg = QColor("#e4ffed");
 
-  c.treeSelectedBg = QColor("#001a00");
-  c.treeHoverBg = QColor("#050505");
-  c.treeIndentGuide = QColor("#0a1a0a");
+  c.treeSelectedBg = QColor("#1b402b");
+  c.treeHoverBg = QColor("#142d1f");
+  c.treeIndentGuide = QColor("#294835");
 
-  c.termBg = QColor("#000000");
-  c.termFg = QColor("#7ee787");
+  c.termBg = QColor("#080f0c");
+  c.termFg = QColor("#b5dcc3");
   c.termCursor = QColor("#00ff66");
-  c.termSelection = QColor("#0b3517");
+  c.termSelection = QColor("#204b35");
 
   c.ansiBlack = QColor("#000000");
   c.ansiRed = QColor("#ff5c57");
@@ -1204,10 +1204,10 @@ ThemeDefinition matrix() {
   c.statusError = QColor("#ff5c57");
   c.statusInfo = QColor("#33d6ff");
 
-  t.ui.borderRadius = 0;
-  t.ui.glowIntensity = 0.45;
-  t.ui.animationSpeed = "fancy";
-  t.ui.scanlineEffect = true;
+  t.ui.borderRadius = 6;
+  t.ui.glowIntensity = 0.10;
+  t.ui.animationSpeed = "subtle";
+  t.ui.scanlineEffect = false;
 
   t.rederiveSemanticColors();
   return t;

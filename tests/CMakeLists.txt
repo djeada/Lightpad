@@ -462,6 +462,14 @@ add_executable(test_pluginbasedsyntaxhighlighter
     ${CMAKE_SOURCE_DIR}/App/syntax/markdownsyntaxplugin.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/rustsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/gosyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/glslsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/hlslsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/metalsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/wgslsyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/javasyntaxplugin.cpp
+    ${CMAKE_SOURCE_DIR}/App/syntax/typescriptsyntaxplugin.cpp
 )
 
 target_include_directories(test_pluginbasedsyntaxhighlighter PRIVATE
@@ -3332,6 +3340,7 @@ add_executable(test_databasepanel
     ${CMAKE_SOURCE_DIR}/App/settings/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${CMAKE_SOURCE_DIR}/App/core/editor/indentation.cpp
 )
 target_include_directories(test_databasepanel PRIVATE
     ${CMAKE_SOURCE_DIR}/App
