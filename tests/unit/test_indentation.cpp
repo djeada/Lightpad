@@ -22,6 +22,21 @@ private slots:
     doc.undo();
     QCOMPARE(doc.toPlainText(), QString("one\ntwo\nthree"));
   }
+  void languageIndentationPolicy() {
+    QVERIFY(EditorIndentation::useSpaces("py", false));
+    QVERIFY(!EditorIndentation::useSpaces("make", true));
+    QVERIFY(EditorIndentation::useSpaces("cpp", true));
+    QVERIFY(!EditorIndentation::useSpaces("cpp", false));
+  }
+  void explicitTabsForNewBlocks() {
+    QTextDocument doc("if (ready) {}");
+    QTextCursor cursor(&doc);
+    cursor.setPosition(12);
+    EditorIndentation::insertNewline(cursor, {"cpp", 4, true, false, true});
+    QCOMPARE(doc.toPlainText(), QString("if (ready) {\n\t\n}"));
+    doc.undo();
+    QCOMPARE(doc.toPlainText(), QString("if (ready) {}"));
+  }
   void tabsUseStopsAndLiteralTabs() {
     QTextDocument doc("ab");
     QTextCursor c(&doc);

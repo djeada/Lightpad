@@ -472,20 +472,17 @@ void SqlConsoleEdit::keyPressEvent(QKeyEvent *event) {
       (event->key() == Qt::Key_Tab || backtab ||
        event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
     if (!isReadOnly()) {
+      const bool spaces =
+          SettingsManager::instance().getValue("insertSpaces", true).toBool();
       QTextCursor cursor = textCursor();
       if (event->key() == Qt::Key_Tab || backtab)
-        EditorIndentation::tab(
-            cursor, m_tabWidth,
-            SettingsManager::instance().getValue("insertSpaces", true).toBool(),
-            backtab);
+        EditorIndentation::tab(cursor, m_tabWidth, spaces, backtab);
       else
         EditorIndentation::insertNewline(
             cursor,
             {"sql", m_tabWidth,
              SettingsManager::instance().getValue("autoIndent", true).toBool(),
-             SettingsManager::instance()
-                 .getValue("insertSpaces", true)
-                 .toBool()});
+             spaces, !spaces});
       setTextCursor(cursor);
       ensureCursorVisible();
     }

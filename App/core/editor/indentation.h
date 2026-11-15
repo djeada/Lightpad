@@ -11,7 +11,11 @@ struct Options {
   int width = 4;
   bool enabled = true;
   bool expandTabs = false;
+  bool preferTabs = false;
 };
+
+// Python requires spaces; Make recipes require literal tabs.
+bool useSpaces(const QString &language, bool preference);
 
 int visualColumn(const QString &text, int width);
 QString leadingWhitespace(const QString &text);

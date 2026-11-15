@@ -20,9 +20,10 @@ QString normalizedIndent(const QString &indent,
 QString nextIndent(const QString &indent,
                    const EditorIndentation::Options &options) {
   const QString base = normalizedIndent(indent, options);
-  return base + (!options.expandTabs && indent.contains('\t')
-                     ? QStringLiteral("\t")
-                     : QString(qMax(1, options.width), ' '));
+  return base +
+         (!options.expandTabs && (options.preferTabs || indent.contains('\t'))
+              ? QStringLiteral("\t")
+              : QString(qMax(1, options.width), ' '));
 }
 
 struct Opening {
@@ -158,6 +159,14 @@ Context contextBefore(const QTextCursor &cursor,
   return context;
 }
 } // namespace
+
+bool EditorIndentation::useSpaces(const QString &language, bool preference) {
+  if (language == "py")
+    return true;
+  if (language == "make")
+    return false;
+  return preference;
+}
 
 int EditorIndentation::visualColumn(const QString &text, int width) {
   width = qMax(1, width);

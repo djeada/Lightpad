@@ -1013,7 +1013,11 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
       options.enabled = autoIndent;
       options.expandTabs =
           shouldExpandTabsToSpaces() ||
-          SettingsManager::instance().getValue("insertSpaces", true).toBool();
+          EditorIndentation::useSpaces(LanguageCatalog::normalize(m_languageId),
+                                       SettingsManager::instance()
+                                           .getValue("insertSpaces", true)
+                                           .toBool());
+      options.preferTabs = !options.expandTabs;
       applyToAllCursors([&options](QTextCursor &cursor) {
         EditorIndentation::insertNewline(cursor, options);
       });
@@ -1065,7 +1069,10 @@ void TextArea::keyPressEvent(QKeyEvent *keyEvent) {
     const int width = effectiveTabWidth();
     const bool expand =
         shouldExpandTabsToSpaces() ||
-        SettingsManager::instance().getValue("insertSpaces", true).toBool();
+        EditorIndentation::useSpaces(LanguageCatalog::normalize(m_languageId),
+                                     SettingsManager::instance()
+                                         .getValue("insertSpaces", true)
+                                         .toBool());
     applyToAllCursors([=](QTextCursor &cursor) {
       EditorIndentation::tab(cursor, width, expand, isBacktab);
     });

@@ -79,6 +79,8 @@ Choose Current file, Selection, Open files, or Project in the panel. See
 | `Ctrl+G` | Go to line |
 | `Ctrl+Tab` | Next tab |
 | `Ctrl+Shift+Tab` | Previous tab |
+| `Ctrl+PageUp` / `Ctrl+PageDown` | Previous / next editor tab (SQL result tab when the Database panel has focus) |
+| `Ctrl+Shift+PageUp` / `Ctrl+Shift+PageDown` | Move the current editor or SQL result tab left / right |
 | `Ctrl+1-9` | Switch to tab 1-9 |
 | `Home` | Go to start of line |
 | `End` | Go to end of line |
@@ -128,6 +130,8 @@ See [DATABASE_TOOLS.md](DATABASE_TOOLS.md).
 | `Ctrl+Enter` / `Ctrl+Shift+Enter` | In the database console: run statement / run everything |
 | `Alt+Up` / `Alt+Down` | In the database console: previous / next statement from history |
 | `Ctrl+Space` | SQL completion (tables, columns, keywords) |
+| `Tab` / `Shift+Tab` | Indent / outdent selected console lines |
+| `Enter` / `Tab` with completion open | Accept the selected suggestion |
 
 ## Merge Conflict Resolver
 

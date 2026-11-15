@@ -904,9 +904,12 @@ void Preferences::buildUi() {
   tabRow->addStretch();
   mainLayout->addLayout(tabRow);
 
-  auto *spacesCheck = new QCheckBox(tr("Insert spaces instead of tab characters"), this);
-  spacesCheck->setChecked(SettingsManager::instance().getValue("insertSpaces", true).toBool());
-  spacesCheck->setToolTip(tr("Tab aligns to the next tab stop. Python always uses spaces."));
+  auto *spacesCheck =
+      new QCheckBox(tr("Insert spaces instead of tab characters"), this);
+  spacesCheck->setChecked(
+      SettingsManager::instance().getValue("insertSpaces", true).toBool());
+  spacesCheck->setToolTip(tr("Tab aligns to the next tab stop. Python uses "
+                             "spaces; Makefiles use tabs."));
   connect(spacesCheck, &QCheckBox::toggled, this, [](bool enabled) {
     auto &settings = SettingsManager::instance();
     settings.setValue("insertSpaces", enabled);

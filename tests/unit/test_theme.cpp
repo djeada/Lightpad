@@ -180,6 +180,10 @@ void TestTheme::testMatrixKeepsSemanticStatusColors() {
   QVERIFY(matrix.colors.syntaxKeyword != matrix.colors.syntaxClass);
   QVERIFY(matrix.colors.syntaxFunction != matrix.colors.syntaxString);
   QVERIFY(matrix.colors.syntaxType != matrix.colors.syntaxKeyword2);
+  QCOMPARE(matrix.colors.editorBg, QColor("#000000"));
+  QCOMPARE(matrix.colors.accentPrimary, QColor("#00ff66"));
+  QCOMPARE(matrix.ui.borderRadius, 0);
+  QVERIFY(matrix.ui.scanlineEffect);
 }
 
 void TestTheme::testLegacyThemeBridgeCarriesExpandedSemanticTokens() {
